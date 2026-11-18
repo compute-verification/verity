@@ -224,7 +224,6 @@
  "not_yet": [
   "session/session.json",
   "session/leak-guard.json",
-  "endpoint/report.json",
   "leak-guard.json",
   "job.json",
   "custody.json",

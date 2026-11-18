@@ -1,5 +1,5 @@
 """`pouw_h1_registered_device`: H1's registered values hashed by `pouw_cuda/registered_rows.cu`, held byte for byte to
-`pouw_h1_registered.commit`'s NumPy path and to core's `registered.Registered.commit`. Over random rows of 16-bit words (one row
+`pouw_h1_registered.commit`'s NumPy path and to core's `registered_value.Registered.commit`. Over random rows of 16-bit words (one row
 to a few thousand, one word to a z/y record's 3072, a row whose bytes sit 2 and 4 bytes off an 8-byte boundary), under each
 domain binding, nonces past 2^32 and 2^63, given salts and a public table's or the ok rows' (`PublicSalts`, SHA-512's
 under a u8 or a u32be counter, on the device derived where they're hashed, its rows built on the hash's stream): the ``b || c`` strings,
@@ -26,12 +26,13 @@ import shutil
 import numpy as np
 import pytest
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.commitments.merkle import tree_levels
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, hm96_salt, rows_domain
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity_torch.pouw.h1 import registered_device as D
 from verity_torch.pouw.h1 import tables_device as TD
 
@@ -49,14 +50,14 @@ def _words(n: int, w: int) -> np.ndarray:
 
 
 def _numpy(words, nonce, given=None, **binding):
-    dom = G.domain(PROGRAM, "h1/v", words.shape[1], words.shape[0], G.WORD_BITS, **binding)
+    dom = RV.domain(PROGRAM, "h1/v", words.shape[1], words.shape[0], RV.WORD_BITS, **binding)
     return NR._numpy(words, KEY, nonce, given, dom.domain_id), dom.domain_id
 
 
 def _core(words, nonce, given=None, **binding):
     n = len(words)
     salts = ([hm96_salt(KEY, nonce, j) for j in range(n)] if given is None else [given[192 * j:192 * (j + 1)] for j in range(n)])
-    return G.Registered.commit(PROGRAM, "h1/v", words.tolist(), salts, schema=G.SCHEMA_V2, **binding)
+    return RV.Registered.commit(PROGRAM, "h1/v", words.tolist(), salts, schema=G.SCHEMA_V2, **binding)
 
 
 def _gpu():

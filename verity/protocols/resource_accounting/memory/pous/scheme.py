@@ -28,12 +28,17 @@ has no Lean constant of its own (`StreamedWipe.bound` adds the sampling term `(g
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from fractions import Fraction
 from typing import Any
 
 from verity.commitments import domains
+from verity.protocol import Channel
+from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.prover import workload
-from verity.protocols.resource_accounting.scheme import Charge, Order, Scheme, register
+from verity.protocols.resource_accounting.memory.pous.verifier import period, wipe_period
+from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
+from verity.protocols.resource_accounting.scheme import VERIFIER, Charge, Lacks, Order, Reading, Scheme, register
 
 TRUSTED_DEVICE = "Verity.Assumptions.TrustedDevice"
 #: PoUS's own term, `δscheme`: P2's ideal-model ε, `Pous.Params.εMax` = 2^-λ at λ = `Pous.Params.secParam` = 128, beside
@@ -41,6 +46,12 @@ TRUSTED_DEVICE = "Verity.Assumptions.TrustedDevice"
 POUS_TERM = "Pous.Params.εMax"
 #: what PoUS's help is bounded by once something bounds it: `perfect-isolation` (`schemes.p2.P2_CLAIMS`) has no Lean name
 HELP_BOUND = "perfect-isolation (a claim of schemes.p2.P2_CLAIMS; no Lean statement bounds the help yet)"
+#: the party that runs PoUS's and the wipe's challenges, on the auditor's host
+MEMORY_ATTESTER = WP.CHALLENGER
+#: the wipe's own term, unsaid, and why
+WIPE_TERM = Lacks("Pous.Guarantees.StreamedWipe's compression term k·C(N,g+1)·2^(M+E)/2^(q+(g+1)b) has no Lean constant "
+                  "of its own, and Adv_PRF (StreamedWipe.prfAdvantage) has no value; neither is a Verity.Scheme "
+                  "instance yet (its incorrect labels depend on the revealed history)")
 
 
 def _pous_requests(ctx: Any) -> Any:
@@ -58,12 +69,32 @@ def _pous_attach(exchange: Any, ctx: Any) -> Any:
     return served.attach(exchange, ctx, POUS.option.partition(":")[2])
 
 
+def _wipe_attach() -> Any:
+    raise LookupError("wipe attaches through no hook of a served run: it runs before the workload's engine loads, as "
+                      "its own session with the memory attester (`verifier.wipe_parties`), started by its piece")
+
+
+def _pous_reading(row: Mapping[str, Any]) -> Reading:
+    q = row["quantity"]
+    return Reading(int(q["s_bits"]), Fraction(str(q["eps"])), "quantity.eps", {"certified": bool(q["certified"])})
+
+
+def _wipe_reading(row: Mapping[str, Any]) -> Reading:
+    """A wipe's ``k`` is its public's, else, in a wipe from before `verity/wipe/v0` published it, its profile's."""
+    a = row["answer"]
+    pub = a.get("public") or {}
+    return Reading(int(pub["foreign_bits"]), Fraction(str(pub["eps"])), "answer.public.eps",
+                   {"k": pub.get("k", (a.get("profile") or {}).get("k")), "r": pub.get("r"),
+                    "M": int(pub["memory_bits"]), "certified": bool(pub["certified"])})
+
+
 POUS = register(Scheme(
     name="pous",
     messages=workload.MESSAGES,
     protocol=domains.POUS_P2_RUN,
     resource="memory",
-    blocks=(),
+    blocks=Lacks("the memory attester's session answers and checks its challenges outside the workload's circuit: no "
+                 "block of the circuit carries its cost"),
     assumptions=("Verity.Vocab.PousSound", TRUSTED_DEVICE, "Pous.P2.Assumptions.P2RingRoundSecureWide",
                  "Pous.Period.RingDeviceAt"),
     log=(Order("weights", "salt"), Order("store", "challenges")),
@@ -88,13 +119,28 @@ POUS = register(Scheme(
     under="the bits the device holds through the period, in bits",
     requests=_pous_requests,
     attach=_pous_attach,
+    parties=(*CS.MANIFEST.parties, VERIFIER),
+    channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER.name, ("SignedRun",), after=("End",))),
+    channel_schemas=CS.MANIFEST.messages,
+    colocated=(),
+    needs=frozenset({"store"}),
+    depends=(),
+    record="space",
+    symbol="S0",
+    published=("bits", Fraction(1)),
+    check=period.answer,
+    reader=_pous_reading,
+    premises=(),
+    **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
+                    Lacks("not a kernel scheme")),
 ))
 
 WIPE = register(Scheme(
     name="wipe",
     protocol=domains.WIPE_PROTOCOL,
     resource="memory",
-    blocks=(),
+    blocks=Lacks("the wipe runs before the engine loads, outside the workload's circuit: no block of the circuit "
+                 "carries its cost"),
     assumptions=("Verity.Vocab.WipeSound", TRUSTED_DEVICE),
     log=(Order("fill", "reveal"),),
     charges=(),
@@ -108,6 +154,22 @@ WIPE = register(Scheme(
         "coins-at-rate": "the memory attester's own coins",
         "one-design": "its own: `k` indices of the fill, revealed one at a time",
     },
+    delta_scheme=WIPE_TERM,
+    attach=lambda exchange, ctx: _wipe_attach(),
+    parties=(*WP.MANIFEST.parties, VERIFIER),
+    channels=(*WP.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER.name, ("WipeReport",), after=("End",))),
+    channel_schemas=WP.MANIFEST.messages,
+    colocated=(),
+    needs=frozenset(),
+    depends=(),
+    record="wipe",
+    symbol="foreign_bits",
+    published=("bits", Fraction(1)),
+    check=wipe_period.answer,
+    reader=_wipe_reading,
+    premises=("Verity.Vocab.WipeSound",),
+    **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
+                    Lacks("not a kernel scheme")),
 ))
 
 __all__ = ["POUS", "WIPE"]

@@ -50,7 +50,7 @@
 # whose A5 line is the audit's verdict, whose REGISTERED line the window's kind, commitment and run root length, and whose
 # COINS line (also summary.json's ``coins``) the coins, the card and which check accepted. No other file of the row is
 # published (with A5_KEEP=1 they stay on the machine): match/spec.json holds the prompts, commit/ the token record, the bundle and
-# the slim keep (the committed store with its salts, the weights key, the opened weights, the requests and served tokens),
+# the slim keep (the committed store with its salts, the opened weights and their salts, the requests and served tokens),
 # and stages.txt, row.log and the stages' logs can quote a served token on a FAIL. Under KEPT, beside the row dir: each
 # stage's output, the row dir's sizes and what `row run` writes for a research run (result.json, its evidence/ copies of
 # the row's records and the Commit's window, which the stages get KEPT for, never the published run dir).
@@ -69,6 +69,7 @@ PART=${A5_PARTITION:-$TREE/benchmarks/one_stage/llama32_1b_rope_d64_l0.json}
 ROOT=${A5_ROOT:-$WORK/a5-llama1b}
 BASE=$ROOT/${RESEARCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}
 D=$BASE/$ROW WD=$BASE/serving-rows FW=${A5_FLOCK_WORK:-$ROOT/flock-work} KEPT=$BASE/unpublished
+export VERITY_PROTOCOLS_CONFIG=${VERITY_PROTOCOLS_CONFIG:-"{\"private\": \"$ROOT/private\"}"}  # where a replay bundle's keys and salts go
 VENV=${VENV:-$WORK/venv312} HF_HOME=${HF_HOME:-$WORK/hf} A5_COINS=${A5_COINS:-dev} A5_PLAIN=${A5_PLAIN:-}
 CLEAN_PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 BOOT="(cd adapters/vllm && WORK=$WORK bash verity_vllm/ops/pod_bootstrap.sh --cases $ROLE)"
@@ -131,7 +132,7 @@ PB=$!
 
 export PY=$VENV/bin/python PY312=$VENV/bin/python HF_HOME HF_HUB_OFFLINE=1
 if [ -z "${CUDA_HOME:-}" ]; then
-  for c in /usr/local/cuda-12.9 /usr/local/cuda-12 /usr/local/cuda-13.0 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done
+  for v in 12.9 13.0 ""; do CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit ${v:+"$v"} 2> /dev/null) && break; done
 fi
 if [ ! -f "$CUDA_HOME/include/cusparse.h" ]; then  # a toolkit without the math libraries' headers: the venv's wheels hold them
   for lib in cusparse cusolver cufft curand; do

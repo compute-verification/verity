@@ -76,7 +76,7 @@
 # (the default) or servedrop:K. SERVE=row runs row ROW's Commit under the audit, `verity-vllm row run ROW CHECKPOINT
 # REPO REV` with the checkpoint `verity-vllm epoch resolve ROW` names and REMOTE_VERIFIER at the verifier: its Commit
 # puts the store binder on its engine and proves the store in lockstep with its first instrumented run, a pass an
-# engine step (`verity_vllm.protocols.poub.remote.CommitSession`: one GPU, synchronous scheduling declared
+# engine step (`verity.protocols.resource_accounting.memory.poub.prover.commit_session.CommitSession`: one GPU, synchronous scheduling declared
 # in the row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). ROW is a row
 # id whose file `verity_vllm.config.row_file` finds (ROW_FILE: that file instead): a stored row whose target declares
 # the synchronous scheduling a session needs, such as
@@ -92,9 +92,8 @@
 #      no GPU visible (STAGES, default
 #      build,commit, in a config run, CONFIG_RUN default 1: the Build, the word check and one instrumented Commit,
 #      the run the session audits; BUILD_GPU=1 leaves the Build to the lease) in SWEEP_DIR (default: scratch removed
-#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; the Commit's three public records are kept in
-#      out/row: commit/verdict.json, commit/steps.jsonl and commit/remote_session.json; nothing else of the sweep, which
-#      holds committed values, salts, token digests and the run's logs). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
+#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; never inside the run's directory: the row's
+#      public records, keep.py's ROW, are kept in out/row, and nothing else of it). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
 #      holds no vLLM), CUDA_HOME/bin (--cuda-bin) and ROW_ARGS (such as --norm-tap-so PATH);
 #   3. ROLE=both: builds the Lean verifier (LEAN_EXE: that executable instead), starts the verifier on VERIFIER_CPUS
 #      and goes on once it listens;
@@ -134,9 +133,9 @@
 # work while its lease is held to a lease program whose text names --cores: PROVER_CPUS and, under ROLE=both,
 # VERIFIER_CPUS, which the lease counts with every other lease's against the node's CPU quota (75 where they pass
 # it under NOWAIT=1); to a program that names none it declares none, and says so. A served line's CUDA_HOME defaults
-# to CUDA_ROOT/cuda-V (CUDA_ROOT default /usr/local) for the CUDA version V the prover's torch is built for, else
-# cuda-MAJOR, else cuda-13.0, else cuda, and is refused (exit 3) where its nvcc is not V's major version; any other
-# line's to /usr/local/cuda-13.0. ROLE=prover takes PORT; ROLE=both and
+# to the machine's toolkit at the CUDA version V the prover's torch is built for (13.0 where it has no torch), and is
+# refused (exit 3) where the machine lists none at V or its nvcc is not V's major version; any other line's to the
+# machine's toolkit at 13.0. ROLE=prover takes PORT; ROLE=both and
 # ROLE=verifier pick one nothing listens on when it is not stated. Scratch is under TMPDIR (default /tmp), removed
 # at exit.
 #
@@ -164,7 +163,7 @@
 # make the sessions paced; ROLE=both SERVE=node, the node's session on this machine with its verifier and a local
 # challenger beside it, defaults them to 1:1000:2773:7 (seven stretches of a second, a live coin a pass) and 0 (the
 # pass its calibration measured), builds the Lean verifier before the lease, as a served line does, and ends by the
-# verdict line. VERIFIER_ARGS='--node FILE --hbm-bytes N' states the node the share is of (default: the figures').
+# verdict line. VERIFIER_ARGS='--hbm-bytes N' states the share of the node the store is on (default: the figures').
 # The verifier reads the audited node's figures from FIGURES, by default out/figures.json, which `sheets.py NODE_KIND`
 # writes, NODE_KIND a node file's name (ROLE=both on a GPU: the node file of this machine's card). The north-star run,
 # the verifier on a second node's CPUs:
@@ -213,20 +212,17 @@ PY=${PY:-$(first_of -x "$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python" ${VPY:+"$V
 [ -x "$PY" ] || refuse "PY=$PY is not an executable"
 export PY PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 if [ -z "${CUDA_HOME:-}" ] && [ -n "$SERVED" ]; then
-  # the toolkit of the CUDA version the prover's torch is built for, where the node has it
-  CUDA_ROOT=${CUDA_ROOT:-/usr/local}
+  # the machine's toolkit at the CUDA version the prover's torch is built for (13.0 where it has no torch to ask)
   TV=$("$VPY" -c 'import torch; print(torch.version.cuda or "")' 2> /dev/null)
   TM=${TV%%.*}
-  [ "$TV" = 13.0 ] && TV=
-  TOOLKITS=(${TV:+"$CUDA_ROOT/cuda-$TV"} ${TM:+"$CUDA_ROOT/cuda-$TM"} "$CUDA_ROOT/cuda-13.0" "$CUDA_ROOT/cuda")
-  CUDA_HOME=$(first_of -d "${TOOLKITS[@]}") ||
-    refuse "no CUDA toolkit: CUDA_HOME is not set, and none of ${TOOLKITS[*]} is a directory"
+  CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit "${TV:-13.0}") ||
+    refuse "no CUDA toolkit ${TV:-13.0}: CUDA_HOME is not set, and the machine's record lists none (machine.py, above)"
   # the Commit's collector is built by torch's JIT, which checks no nvcc against the CUDA torch is built for
   NV=$("$CUDA_HOME/bin/nvcc" --version 2> /dev/null | sed -n 's/.*release \([0-9]*\)\..*/\1/p')
   [ -z "$TM" ] || [ "$NV" = "$TM" ] || refuse "the vLLM venv's torch is built for CUDA $TM, and $CUDA_HOME's nvcc is" \
     "CUDA ${NV:-unknown}: install a CUDA $TM toolkit and state CUDA_HOME"
 fi
-export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
+export CUDA_HOME=${CUDA_HOME:-$(python3 benchmarks/kernels/machine.py toolkit 13.0)}
 export PATH=$CUDA_HOME/bin:$(dirname "$PY"):$PATH
 [ -n "$SERVED" ] && . adapters/vllm/verity_vllm/ops/cuda_headers.sh && cuda_headers "$VPY"
 [ -x "$HOME/.elan/bin/lake" ] && export PATH="$HOME/.elan/bin:$PATH"
@@ -340,6 +336,18 @@ if [ "$ROLE" != prover ] && [ -z "${CLOSE:-}" ]; then
   fi
   VERIFY+=(--figures "$FIGURES")
 fi
+eval "KEYARGS=(${VERIFIER_ARGS:-})"
+for ((k = 0; k < ${#KEYARGS[@]}; k++)); do
+  case ${KEYARGS[k]} in
+    --challenger-key=*) KEYDIR=${KEYARGS[k]#*=} ;;
+    --challenger-key) KEYDIR=${KEYARGS[k + 1]:-} ;;
+    *) continue ;;
+  esac
+  case $(realpath -m "$KEYDIR")/ in
+    "$(realpath -m "$RESEARCH_RUN_DIR")"/*) refuse "--challenger-key $KEYDIR is inside the run's directory, which custody" \
+      "uploads: the challenger's key directory holds its seed; give one outside it" ;;
+  esac
+done
 if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
   mkdir -p "$(dirname "$REGISTRY")" || exit 3
@@ -434,20 +442,19 @@ card_free() { # NOWAIT=1 with GPU: 75 where a compute process is on those cards,
 }
 if [ -n "$SERVED" ]; then
   card_free || exit 75
-  keep_row() { # the Commit's public records, by path, into out/row: the rest of the sweep is private
+  keep_row() { # the row's public records (keep.py's ROW), into out/row
     [ -d "$SWEEP/$ROW" ] || return 0
-    local f
-    mkdir -p "$O/row"
-    for f in commit/verdict.json commit/steps.jsonl commit/remote_session.json; do
-      [ -f "$SWEEP/$ROW/$f" ] && (cd "$SWEEP/$ROW" && cp --parents "$f" "$O/row/")
-    done
-    return 0
+    "$PY" $RS/keep.py row "$SWEEP/$ROW" "$O/row"
   }
   drop_connection() { # a verifier still waiting for its prover ends at a connection opened and dropped
     (exec 3<> "/dev/tcp/127.0.0.1/$PORT") 2> /dev/null
   }
   if [ "$SERVED" = row ]; then
     SWEEP=${SWEEP_DIR:-$B/sweep}
+    case $(realpath -m "$SWEEP")/ in
+      "$(realpath -m "$RESEARCH_RUN_DIR")"/*) refuse "SWEEP_DIR=$SWEEP is inside the run's directory, which custody uploads:" \
+        "the row's Commit directory holds private files (its tokens, replays and timelines); give a scratch directory" ;;
+    esac
     mkdir -p "$SWEEP" || refuse "SWEEP_DIR=$SWEEP can't be made"
     export NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-$B/nc_build} CONFIG_RUN=${CONFIG_RUN:-1}
     read -r CK REPO REV _ < <("$VV" epoch resolve "$ROW")

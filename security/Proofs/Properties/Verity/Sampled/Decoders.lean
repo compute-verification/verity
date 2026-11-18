@@ -513,7 +513,7 @@ def Slot.isLink : Slot → Bool
 
 /-- **The coin count a rep round's message closes with**: its last eight bytes, little-endian, the length field of the
 header of the squeeze that answers it. -/
-def tailCount (m : Claims.Msg) : ℕ := (Flock.u64OfLE ⟨m.toArray⟩ (m.length - 8)).toNat
+def tailCount (m : Hash.Msg) : ℕ := (Flock.u64OfLE ⟨m.toArray⟩ (m.length - 8)).toNat
 
 theorem tailCount_sq (pre : List UInt8) (kind : UInt8) {n : ℕ} (hn : n < 2 ^ 64) :
     tailCount (pre ++ (FlockSoundness.Refine.Frame.sq kind n).enc) = n := by
@@ -543,27 +543,27 @@ theorem tailCount_sq (pre : List UInt8) (kind : UInt8) {n : ℕ} (hn : n < 2 ^ 6
     Nat.mod_eq_of_lt hn]
 
 /-- **`Commit`'s roots in the link's message**: past `Σ`'s 64 bytes, one table's `root_B`. -/
-def linkRoots (m : Claims.Msg) : Array ByteArray := #[⟨(m.drop 64).toArray⟩]
+def linkRoots (m : Hash.Msg) : Array ByteArray := #[⟨(m.drop 64).toArray⟩]
 
 /-- Round `i`'s most likely message, where the layout `L` puts the link's opening there. -/
-def linkAt {R : ℕ} (L : Fin R → Slot) (modes : Fin R → Option Claims.Msg) (i : Fin R) : Option Claims.Msg :=
+def linkAt {R : ℕ} (L : Fin R → Slot) (modes : Fin R → Option Hash.Msg) (i : Fin R) : Option Hash.Msg :=
   if (L i).isLink then modes i else none
 
 /-- **A rep round's submission** at `J` tables: its table and rep, its message, and the coin count it closes with;
 none at the link's opening or at a table past `J`. -/
-def slotSub (J : ℕ) : Slot → Claims.Msg → Option (SubmitJ J)
+def slotSub (J : ℕ) : Slot → Hash.Msg → Option (SubmitJ J)
   | .rep t r _, m => if h : t < J then some ⟨⟨t, h⟩, r, ⟨m.toArray⟩, tailCount m⟩ else none
   | .link, _ => none
 
 /-- Round `i`'s submission, from its most likely message. -/
-def subAt {R : ℕ} (J : ℕ) (L : Fin R → Slot) (modes : Fin R → Option Claims.Msg) (i : Fin R) :
+def subAt {R : ℕ} (J : ℕ) (L : Fin R → Slot) (modes : Fin R → Option Hash.Msg) (i : Fin R) :
     Option (SubmitJ J) :=
   (modes i).bind (slotSub J (L i))
 
 /-- **The decoders at the layout `L`**: the registration by `reg`; `Commit`'s roots from the first round a stop fixes
 that is the link's opening (`linkRoots`); a submission from the first round a stop fixes that is a rep round
 (`slotSub`); and the proof files v2 reads in the play's output (`proofsIn`). -/
-def decodersAt {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L : Fin R → Slot) : Decoders R Reg where
+def decodersAt {R : ℕ} {Reg : Type} (reg : Option Hash.Msg → Reg) (L : Fin R → Slot) : Decoders R Reg where
   reg := reg
   root modes := (((List.finRange R).findSome? (linkAt L modes)).map linkRoots).getD #[]
   sub J modes := (List.finRange R).findSome? (subAt J L modes)
@@ -586,13 +586,13 @@ theorem findSome?_of_single {α β : Type} {f : α → Option β} {i : α} (hf :
     · rw [hf x hx]
       exact findSome?_of_single hf ((List.mem_cons.1 h).resolve_left fun h' => hx h'.symm)
 
-theorem decodersAt_reg {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L : Fin R → Slot) :
+theorem decodersAt_reg {R : ℕ} {Reg : Type} (reg : Option Hash.Msg → Reg) (L : Fin R → Slot) :
     (decodersAt reg L).reg = reg := rfl
 
 /-- **The roots at a stop that fixes one link round**: where round `i` is the link's opening with the most likely
 message `m` and the stop fixes no other link round, the decoded roots are `linkRoots m`. -/
-theorem root_single {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L : Fin R → Slot)
-    {modes : Fin R → Option Claims.Msg} {i : Fin R} {m : Claims.Msg} (hi : (L i).isLink = true)
+theorem root_single {R : ℕ} {Reg : Type} (reg : Option Hash.Msg → Reg) (L : Fin R → Slot)
+    {modes : Fin R → Option Hash.Msg} {i : Fin R} {m : Hash.Msg} (hi : (L i).isLink = true)
     (hm : modes i = some m) (hs : ∀ j, j ≠ i → (L j).isLink = true → modes j = none) :
     (decodersAt reg L).root modes = linkRoots m := by
   have hf : ∀ j, j ≠ i → linkAt L modes j = none := fun j hj => by
@@ -607,8 +607,8 @@ theorem root_single {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L 
 /-- **The submission at a stop that fixes one rep round**: where round `i` is round `k` of table `t`'s rep `r` stream,
 with `t < J`, with the most likely message `m`, and the stop fixes no other round, the decoded submission is `m` at
 that table and rep, with the coin count `m` closes with. -/
-theorem sub_single {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L : Fin R → Slot) (J : ℕ)
-    {modes : Fin R → Option Claims.Msg} {i : Fin R} {m : Claims.Msg} {t k : ℕ} {r : Fin 2}
+theorem sub_single {R : ℕ} {Reg : Type} (reg : Option Hash.Msg → Reg) (L : Fin R → Slot) (J : ℕ)
+    {modes : Fin R → Option Hash.Msg} {i : Fin R} {m : Hash.Msg} {t k : ℕ} {r : Fin 2}
     (hi : L i = .rep t r k) (ht : t < J) (hm : modes i = some m) (hs : ∀ j, j ≠ i → modes j = none) :
     (decodersAt reg L).sub J modes = some ⟨⟨t, ht⟩, r, ⟨m.toArray⟩, tailCount m⟩ := by
   have hf : ∀ j, j ≠ i → subAt J L modes j = none := fun j hj => by
@@ -618,8 +618,8 @@ theorem sub_single {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L :
   exact dite_eq_left ht
 
 /-- **No submission at a stop that fixes no rep round.** -/
-theorem sub_eq_none {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L : Fin R → Slot) (J : ℕ)
-    {modes : Fin R → Option Claims.Msg} (h : ∀ i, (L i).isLink = false → modes i = none) :
+theorem sub_eq_none {R : ℕ} {Reg : Type} (reg : Option Hash.Msg → Reg) (L : Fin R → Slot) (J : ℕ)
+    {modes : Fin R → Option Hash.Msg} (h : ∀ i, (L i).isLink = false → modes i = none) :
     (decodersAt reg L).sub J modes = none := by
   show (List.finRange R).findSome? (subAt J L modes) = none
   refine List.findSome?_eq_none_iff.2 fun i _ => ?_
@@ -630,7 +630,7 @@ theorem sub_eq_none {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L 
     rw [h i (by rw [hL]; rfl), Option.bind_none]
 
 /-- **The proof files decoded are the ones v2 reads** in what the prover sent. -/
-theorem proofs_of_sent {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L : Fin R → Slot)
+theorem proofs_of_sent {R : ℕ} {Reg : Type} (reg : Option Hash.Msg → Reg) (L : Fin R → Slot)
     {o : Verity.Exchange} {proofs : Array ByteArray} (h : sentProofs o.sent = some proofs) :
     (decodersAt reg L).proofs o = proofs := by
   show (sentProofs o.sent).getD #[] = proofs
@@ -660,7 +660,7 @@ theorem setup_one {I : FlockSoundness.Discharge.Exec.Inputs} {own : Option ByteA
   · exact absurd h1 (by show ¬ 1 < I.count; omega)
 
 /-- **At one table with `Σ` 64 bytes, the roots read from the link's message are the decoded session's `root_B`.** -/
-theorem linkRoots_linkMsg {spec : SessionSpec} {record : String} {sess : RunRecord} {t : String} {m : Claims.Msg}
+theorem linkRoots_linkMsg {spec : SessionSpec} {record : String} {sess : RunRecord} {t : String} {m : Hash.Msg}
     (hd : Flock.Record.decode spec record = .ok sess) (ht : spec.tables = #[t]) (hσ : spec.sigma.size = 64)
     (hm : linkMsg record spec.tables = some m) : linkRoots m = sess.rootB := by
   have h := rootBOf_linkMsg hd ht
@@ -673,8 +673,8 @@ theorem linkRoots_linkMsg {spec : SessionSpec} {record : String} {sess : RunReco
 
 /-- **The roots decoded at a stop that fixes one link round** are the decoded session's `root_B`, where that round's
 message is the link's message the record reads. -/
-theorem root_record {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L : Fin R → Slot)
-    {modes : Fin R → Option Claims.Msg} {i : Fin R} {m : Claims.Msg} {spec : SessionSpec} {record : String}
+theorem root_record {R : ℕ} {Reg : Type} (reg : Option Hash.Msg → Reg) (L : Fin R → Slot)
+    {modes : Fin R → Option Hash.Msg} {i : Fin R} {m : Hash.Msg} {spec : SessionSpec} {record : String}
     {sess : RunRecord} {t : String} (hi : (L i).isLink = true) (hm : modes i = some m)
     (hs : ∀ j, j ≠ i → (L j).isLink = true → modes j = none) (hd : Flock.Record.decode spec record = .ok sess)
     (ht : spec.tables = #[t]) (hσ : spec.sigma.size = 64) (hl : linkMsg record spec.tables = some m) :
@@ -736,7 +736,7 @@ theorem verifyRep_of_accepted {spec : SessionSpec} {tabs : Array Flock.Setup} {r
 run consumed every round, so each retained round ends with the header of a squeeze of its coin count
 (`zk_rep_counts`), and S12 keeps the count within the header's eight bytes. -/
 theorem rep_tailCount {spec : SessionSpec} {record : String} {sess : RunRecord} {st : Flock.Setup}
-    {sch : Flock.Schedule} {tPad i r : ℕ} {bytes cap : ByteArray} {y : StreamRec} {k : ℕ} {m : Claims.Msg}
+    {sch : Flock.Schedule} {tPad i r : ℕ} {bytes cap : ByteArray} {y : StreamRec} {k : ℕ} {m : Hash.Msg}
     (hv : Flock.Zk.verifyRep spec st sch tPad sess i r bytes = .ok cap)
     (hsch : Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (hd : Flock.Record.decode spec record = .ok sess) (hret : spec.retainRounds = true)
@@ -763,7 +763,7 @@ rep of the first table. -/
 theorem rep_tailCount_accepted {spec : SessionSpec} {tabs : Array Flock.Setup} {record : String}
     {proofs : Array ByteArray} {sess : RunRecord} (hv : Flock.Zk.verify spec tabs record proofs = .ok ())
     (hd : Flock.Record.decode spec record = .ok sess) (hret : spec.retainRounds = true) (r : Fin 2)
-    {y : StreamRec} {k : ℕ} {m : Claims.Msg}
+    {y : StreamRec} {k : ℕ} {m : Hash.Msg}
     (hy : sess.streams.find? (·.name == repStreamName spec.tables[0]! r.val) = some y) (hk : k < y.rounds.size)
     (hm : roundMsg record (repStreamName spec.tables[0]! r.val) k = some m) : tailCount m = y.rounds[k].n := by
   obtain ⟨h0, sch, tPad, c, hsch, hrep⟩ := verifyRep_of_accepted hv hd r
@@ -773,7 +773,7 @@ theorem rep_tailCount_accepted {spec : SessionSpec} {tabs : Array Flock.Setup} {
 has the message `m` and the log shows its coins as `roundBits fieldEnc c`, the decoded round has `m`'s bytes, their
 digest, `c`'s count and `c`, as `repsOf_stream` reads an answered submission. -/
 theorem answered_of_record {spec : SessionSpec} {record : String} {sess : RunRecord} {J : Json} {name : String}
-    {y : StreamRec} {k : ℕ} {m : Claims.Msg} {b : ByteArray} {n : ℕ} {c : Fin n → 𝔽}
+    {y : StreamRec} {k : ℕ} {m : Hash.Msg} {b : ByteArray} {n : ℕ} {c : Fin n → 𝔽}
     (hd : Flock.Record.decode spec record = .ok sess) (hJ : Flock.JsonParse.parse record = .ok J)
     (hret : spec.retainRounds = true) (hn : (name == _root_.Spot.Challenger.TREE_SESSION) = false)
     (hy : sess.streams.find? (·.name == name) = some y) (hk : k < y.rounds.size)

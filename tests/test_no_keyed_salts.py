@@ -70,9 +70,8 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py": "@compute-accounting",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/requests.py": "@compute-accounting",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/requests.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py": "@compute-accounting",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/ncp.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/weights.py": "@compute-accounting",
 }
@@ -110,8 +109,8 @@ WRITES = re.compile(r"\.(?:send|write|write_bytes|write_text|dump|dumps|save|sav
 #: its writer takes its directory from one function that names that store, outside every run's output, and the file's name
 #: is on the adapter's private list (`verity_vllm.pipeline.research_outputs.PRIVATE`), with a check here that reads both.
 WRITTEN: dict[str, str] = {
-    # `keys.bin` goes into the replay bundle, `<out>/replay_bundle_p<pair>/store/`, inside the commit's output, private by the
-    # bundle directory's name alone
+    # a replay bundle's `keys.bin` goes to its private part under `replay_bundle.private_root`, outside the run's directory, but
+    # `dump_files` without `keys_to` still writes it beside the store, and the name is on no private list
     "adapters/vllm/verity_vllm/commit/store_dump.py": "@vllm",
 }
 LANES = {"@compute-accounting", "@kernels", "@lean", "@memory-accounting", "@network-accounting", "@proofs", "@vllm"}

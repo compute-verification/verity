@@ -39,6 +39,7 @@ from verity.circuits import library
 
 from . import circuit_types as CT
 from . import layouts as LY
+from verity.commitments.domains import FLOCK_IR_BLOCK
 
 WORD = 128
 KONST = -1
@@ -451,7 +452,7 @@ class Derivation:
 def circuit_description(d: Derived, name: str | None = None) -> str:
     """The rows as ``ir_lower.circuit_description`` writes them (dense, 0 .. size - 1), then one ``READ`` line per read's table-direct
     side in these rows."""
-    head = ["flock-ir-unit/v2", name or d.name, d.size, d.const]
+    head = [FLOCK_IR_BLOCK, name or d.name, d.size, d.const]
     for groups in (d.in_groups, d.out_groups):
         head.append(len(groups))
         for word, words, bits in groups:

@@ -54,6 +54,7 @@ import dataclasses
 import gzip
 import hashlib
 import io
+import itertools
 import json
 import os
 import pickle
@@ -77,7 +78,7 @@ else:
     torch = pytest.importorskip("torch")
 
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.answers as AN
-import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.challenger as PHC
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.challenger as PHC
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.commit as CT
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.handoff as HO
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.kept as KP
@@ -85,19 +86,20 @@ import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.live 
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.model_key as MK
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.prover as PV
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.registered as NR
-import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.requests as RQ
-import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sample as PHD
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.requests as RQ
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.sample as PHD
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sampled as DN
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.sampled_rows as DR
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.served as SV
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.served_files as SF
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.static as ST
-import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.window as PHW
+import verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.window as PHW
 import verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.words as W
 import verity_torch.pouw.h1.receipts as RC
 import verity_torch.pouw.h1.registered_device as RGD
 import verity_torch.pouw.h1.tables_device as TBD
 from verity.circuits.codec import canonical_json
+from verity.commitments.crypto import lms
 from verity.circuits.refs import Affine, Strided
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
@@ -115,6 +117,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Cha
 from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError, LiveRecord
+from verity.commitments import registered_value as RV
 
 import verity_vllm.protocols.pouw.h1_hooks as PHK
 import verity_vllm.protocols.pouw.h1_ranks as PHR
@@ -124,7 +127,6 @@ from tests.protocols import test_pouw_h1_commit as TC
 from tests.protocols import test_pouw_h1_handoff as TH
 from tests.protocols import test_pouw_h1_ranks as TR
 from tests.protocols import test_pouw_h1_served as TS
-from tests.protocols import test_pouw_pearl_c_served as PCS
 from tests.protocols.test_pouw_h1 import (
     AUDITOR,
     KEY,
@@ -335,9 +337,8 @@ def test_a_sample_session_or_a_period_without_what_it_goes_with_is_refused():
     name."""
     def refused(entry, settings):
         return PO.refusals(PO.Context(stage="serve", enabled=(entry,), settings=settings))
-    other = {"pouw": {"coins": Challenger(0, CH.entropy(0))}}
     period = {"period": "p1", "lane": "vllm"}
-    for entry, settings in ((_entry(), _settings()), ("pouw:ncp-v1", other)):
+    for entry, settings in ((_entry(), _settings()),):
         assert refused(entry, settings) == ()
         no_window = (f"{entry}: the pouw setting 'draw_session' is the draw session of H1's window "
                      f"({PH.SCHEME}) on the challenger at 'challenger'")
@@ -989,16 +990,78 @@ def test_a_value_holds_one_row_for_each_of_its_rows():
             NR.commit(circuit, "v", words, KEY, 5, rows=rows)
 
 
+#: a Pearl-C pass's weights, its salt session and the auditor's challenger key over that session's ledger (five leaves:
+#: reserve, open, record, close, end)
+SALT_ROOTS = {0: b"\x05" * 64}
+SALT_SID = CH.session_id(1)
+SALT_PRIVATE, SALT_KEY = CH.challenger_key(3, H=5)
+
+
+def _salt_only(seed: int) -> LC.LiveChallenger:
+    """A Pearl-C salt session's challenger: the salt coin alone, derived from `seed`."""
+    return LC.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, CH.entropy(seed))
+
+
+class _SaltSession:
+    """Session `SALT_SID` of the challenger gate `gate` (`challenger_host.Gate`, its ledger under `SALT_KEY`), reserved
+    with `families` and, once the gate opens it (`open`), served by `challenger` on a socket pair with its record and
+    close signed under `SALT_KEY` at the gate's next leaves. `end` has the gate end it over its ``out/`` once its client
+    has closed it; `tree` is its tree as the gate's ``fetch`` gives it."""
+
+    def __init__(self, tmp_path, monkeypatch, gate, families, challenger):
+        self.gate, self.challenger, self.monkeypatch = gate, challenger, monkeypatch
+        self.tree = tmp_path / "session"
+        self.directory = self.tree / "out"
+        self.reason: str | None = None
+        self.client: Any = None
+        self._thread: threading.Thread | None = None
+        gate.reserve(SALT_SID, families)
+
+    def open(self, sid, root):
+        assert sid == SALT_SID and self.client is None
+        reply = self.gate.open(sid, root)
+        self.directory.mkdir(parents=True)
+        (self.directory / R.HELLOS).write_text("")
+        session = R.open_session(self.challenger, SALT_KEY, f"{CH.HOST}.{sid}",
+                                 lambda m: lms.sign_at(SALT_PRIVATE, self.gate.take(), m).encode(), self.directory, sid)
+        ours, theirs = socket.socketpair()
+        self._thread = threading.Thread(target=self._serve, args=(ours, session), daemon=True)
+        self._thread.start()
+        self.client = R.RemoteChallenger(theirs)
+        self.monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at, secret=None: self.client))
+        return {**reply, "commitment": self.challenger.commitment.root.hex()}
+
+    def _serve(self, sock, session):
+        with sock:
+            self.reason = R.serve(sock, session, itertools.count().__next__)
+
+    def end(self):
+        assert self._thread is not None, "end before open"
+        self._thread.join()
+        self.gate.end(SALT_SID, self.directory, self.reason is None)
+        return self.reason
+
+
+def _salt_ended_over(out, families, root, **override):
+    """A ledger of one session `SALT_SID` reserved with `families`, opened on `root` and ended over `out` with its end's
+    fields replaced by `override`: what a gate would sign for a session served otherwise."""
+    g = CH.Gate(SALT_PRIVATE, SALT_KEY)
+    g.reserve(SALT_SID, families)
+    g.open(SALT_SID, root)
+    g.end(SALT_SID, out, **override)
+    return g.ledger()
+
+
 def _salt_pass(tmp_path, monkeypatch, challenger, after=None):
-    """A Pearl-C pass over `test_pouw_pearl_c_served`'s weights, epoch 0, with what `salt_session_reason` reads of the
+    """A Pearl-C pass over `SALT_ROOTS`, epoch 0, with what `salt_session_reason` reads of the
     pass its install records, and its session on a gate's ledger: reserved with the salt coin alone, opened on the
     epoch's root R, served by ``challenger``, its salt coin taken after ``after`` (R unless given), closed by its
     client and ended. The pass, the gate, the session, R."""
-    gate = CH.Gate(PCS.PRIVATE, PCS.KEY)
-    session = PCS._GateSession(tmp_path, monkeypatch, gate, Wd.SALT_FAMILIES, challenger)
-    weights = weights_root(PCS.ROOTS)
+    gate = CH.Gate(SALT_PRIVATE, SALT_KEY)
+    session = _SaltSession(tmp_path, monkeypatch, gate, Wd.SALT_FAMILIES, challenger)
+    weights = weights_root(SALT_ROOTS)
     root = PS.epoch_open_root(weights, 0)
-    answer = session.open(PCS.SID, root.hex())
+    answer = session.open(SALT_SID, root.hex())
     opening = LiveRecord(session.client, Wd.SALT).record(root if after is None else after)
     session.client.close()
     assert session.end() is None
@@ -1013,8 +1076,8 @@ def test_a_pearl_c_pass_is_held_to_a_hex_weights_root_and_to_coins_and_a_salt_co
     """`salt_session_reason` refuses a pass whose weights' root isn't 128 lowercase hex before it looks for a session,
     one whose coins or salt opening don't parse, and one whose salt opening isn't the session's salt coin 0 opened
     after its epoch's root: opened after another root, another coin of the epoch, or a coin that doesn't open."""
-    served_pass, gate, session, _root = _salt_pass(tmp_path, monkeypatch, PCS.salt_only(5))
-    ledger, fetch = gate.ledger(), {PCS.SID: session.tree}.get
+    served_pass, gate, session, _root = _salt_pass(tmp_path, monkeypatch, _salt_only(5))
+    ledger, fetch = gate.ledger(), {SALT_SID: session.tree}.get
 
     def why(**edit):
         return PHC.salt_session_reason({**served_pass, **edit}, ledger, fetch)
@@ -1040,18 +1103,18 @@ def test_a_pearl_c_passs_session_signs_the_salt_coin_alone_and_logs_its_epochs_r
     claimed the salt coin alone the signed coins still say otherwise."""
     for name in ("another-root", "a-round-beside"):
         (tmp_path / name).mkdir()
-    served_pass, gate, session, root = _salt_pass(tmp_path / "another-root", monkeypatch, PCS.salt_only(6),
+    served_pass, gate, session, root = _salt_pass(tmp_path / "another-root", monkeypatch, _salt_only(6),
                                                   after=bytes(range(64)))
-    assert PHC.salt_session_reason(served_pass, gate.ledger(), {PCS.SID: session.tree}.get) == (
-        f"session {PCS.SID}'s signed log does not show the epoch root alone as the root its salt coin followed")
+    assert PHC.salt_session_reason(served_pass, gate.ledger(), {SALT_SID: session.tree}.get) == (
+        f"session {SALT_SID}'s signed log does not show the epoch root alone as the root its salt coin followed")
     served_pass, gate, session, root = _salt_pass(tmp_path / "a-round-beside", monkeypatch,
                                                   Wd.live_challenger(0, 1, CH.entropy(7)))
-    fetch, released = {PCS.SID: session.tree}.get, {Wd.ROUND: 0, Wd.SALT: 1}
+    fetch, released = {SALT_SID: session.tree}.get, {Wd.ROUND: 0, Wd.SALT: 1}
     assert PHC.salt_session_reason(served_pass, gate.ledger(), fetch) == (
-        f"session {PCS.SID} released {released}, not its one salt coin: a refused pass")
-    claimed = PCS._ended_over(session.directory, Wd.SALT_FAMILIES, root.hex(), released={Wd.SALT: 1})
+        f"session {SALT_SID} released {released}, not its one salt coin: a refused pass")
+    claimed = _salt_ended_over(session.directory, Wd.SALT_FAMILIES, root.hex(), released={Wd.SALT: 1})
     assert PHC.salt_session_reason(served_pass, claimed, fetch) == (
-        f"session {PCS.SID}'s signed coins: the coin commitment's coins are not a Pearl-C salt session's: its salt "
+        f"session {SALT_SID}'s signed coins: the coin commitment's coins are not a Pearl-C salt session's: its salt "
         "coin alone")
 
 
@@ -1666,14 +1729,13 @@ def test_the_hosts_table_roots_take_n_rows_of_8_bit_codes_and_n_32_bit_words():
 
 
 def test_the_hosts_libraries_are_refused_where_no_cxx_compiler_is_on_the_path(monkeypatch):
-    """The host's twins of the device's hashing are built with the system's C++ compiler, the first of g++, c++ and
-    clang++ on the path. With none there, each library is refused by what is missing."""
-    asked: list[str] = []
-    monkeypatch.setattr(RGD.shutil, "which", lambda name: asked.append(name))
+    """The host's twins of the device's hashing are built with the serving device's C++ compiler. With none, each library
+    is refused by what is missing."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as pouw_device
+    monkeypatch.setattr(pouw_device, "compiler", lambda: None)
     for lib in (RGD.host_lib, RGD.zy_host_lib):
-        with pytest.raises(RuntimeError, match=r"^no C\+\+ compiler on the path$"):
+        with pytest.raises(RuntimeError, match=r"^no C\+\+ compiler configured or on the path$"):
             lib.__wrapped__()
-    assert asked == ["g++", "c++", "clang++"] * 2
 
 
 def test_a_compiled_call_shape_is_whole_tiles_and_its_units_in_one_seed_group(window, monkeypatch):
@@ -1837,7 +1899,7 @@ def test_a_values_rows_in_a_host_tensor_are_committed_as_the_same_rows_in_an_arr
     assert tensor.dtype == torch.uint16 and tuple(tensor.shape) == (3, 4)
     of_array = NR.commit(circuit, "v", words, KEY, 7, keep_rows=True)
     of_tensor = NR.commit(circuit, "v", tensor, KEY, 7, keep_rows=True)
-    assert isinstance(of_array, DN.G.Registered) and isinstance(of_tensor, DN.G.Registered)
+    assert isinstance(of_array, RV.Registered) and isinstance(of_tensor, RV.Registered)
     assert of_tensor.root == of_array.root and of_tensor.leaves == 3
     assert [bytes(row) for row in of_tensor.rows] == [bytes(row) for row in of_array.rows]
     for other in (tensor.view(torch.int16), tensor.view(torch.uint8), tensor[0]):
@@ -1860,14 +1922,14 @@ def test_the_tables_of_a_call_that_served_no_rows_are_rebuilt_from_no_record_and
     no_y: np.ndarray = np.zeros((0, 32), np.int16)
     words = SV.record_words(no_z, no_y, 32, PH.TILE)
     same = NR.commit(circuit, "h1/zy@0", words, KEY, SV.nonce(0, "zy"), keep_rows=True, window=root)
-    assert isinstance(same, DN.G.Registered) and (value.value, value.leaves, value.root) == ("h1/zy@0", 1, same.root)
+    assert isinstance(same, RV.Registered) and (value.value, value.leaves, value.root) == ("h1/zy@0", 1, same.root)
     assert value.root != NR.commit(circuit, "h1/zy@0", words, KEY, SV.nonce(0, "zy")).root
     assert not np.count_nonzero(words)
     no_codes: np.ndarray = np.zeros((0, K), np.int8)
     zero = SV.Served.a_words(SimpleNamespace(m=32), SimpleNamespace(k=K), no_codes, np.zeros(0, "<f4"))
     table = DN.a_value(win, tmp_path, KEY, 0)
     same = NR.commit(circuit, f"h1/a/{K}@0", zero, KEY, SV.nonce(0, "a"), keep_rows=True, window=root)
-    assert isinstance(same, DN.G.Registered) and (table.value, table.root) == (f"h1/a/{K}@0", same.root)
+    assert isinstance(same, RV.Registered) and (table.value, table.root) == (f"h1/a/{K}@0", same.root)
     assert table.leaves == same.leaves == len(zero) and not np.count_nonzero(zero)
     assert list(tmp_path.iterdir()) == []
 
@@ -1876,7 +1938,7 @@ def test_a_statements_port_that_reads_no_row_at_a_sampled_proof_block_is_refused
     """`call_rows` takes each port's row at each sampled proof block from credit's file. A port whose reads begin
     past a sampled proof block reads no row there: the call's rows are refused by the port and the call, before a
     value is read."""
-    reg = {"ports": {CR.PUB_PORT: {DN.G.READS_FROM: 2, "reads": [0, 1], "value": "pub"}}}
+    reg = {"ports": {CR.PUB_PORT: {RV.READS_FROM: 2, "reads": [0, 1], "value": "pub"}}}
     with pytest.raises(Refused, match=f"^port {CR.PUB_PORT} reads no row at a drawn unit of call 3$"):
         DN.call_rows({}, 3, [2, 1], reg, {}, None, None)
 

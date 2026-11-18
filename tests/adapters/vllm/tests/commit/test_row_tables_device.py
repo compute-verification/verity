@@ -24,7 +24,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
 from verity_vllm.commit import row_tables as RTB
 from verity_vllm.commit import row_tables_device as D
 
-CTX, KEY = bytes(range(64)), bytes(range(100, 132))
+CTX = bytes(range(64))
 STEPS = [
     {"model.layers.0.mlp.down_proj": (1, 2)},
     {"model.layers.0.self_attn.qkv_proj": (3, 1020), "model.layers.0.mlp.down_proj": (5, 1022), "lm_head": (2, 2046)},
@@ -53,22 +53,24 @@ def test_the_table_domain_ids_are_row_tables():
 @pytest.mark.parametrize("shapes", STEPS, ids=["one-row", "segment-edges", "llama-shapes"])
 def test_the_cpu_twin_is_the_cpu_reference(shapes, engine_step):
     outs = outputs(shapes, engine_step)
-    assert D.host_step(CTX, engine_step, outs, KEY) == RTB.step_roots(CTX, engine_step, outs, KEY)
+    got = D.host_step(CTX, engine_step, outs)
+    assert got == RTB.step_roots(CTX, engine_step, outs, salts=got.salts)
 
 
 def test_tables_that_share_one_rows_list_are_ranked_alike():
     outs = outputs({"model.layers.0.self_attn.qkv_proj": (6, 4096), "model.layers.0.mlp.down_proj": (6, 14336)}, 5)
     ids = outs["model.layers.0.mlp.down_proj"][0]
     outs = {op: (ids, c, s) for op, (_ids, c, s) in outs.items()}
-    assert D.host_step(CTX, 9, outs, KEY) == RTB.step_roots(CTX, 9, outs, KEY)
+    got = D.host_step(CTX, 9, outs)
+    assert got == RTB.step_roots(CTX, 9, outs, salts=got.salts)
 
 
 def test_the_plan_refuses_what_step_roots_refuses():
     for bad in [{"x": ([("r", 0)], 1, 3)}, {"x": ([("r", 0), ("r", 0)], 2, 4)}, {"x": ([("r", 0)], 2, 4)}, {}]:
         with pytest.raises(ValueError):
-            D.plan(CTX, 1, bad, KEY)
+            D.plan(CTX, 1, bad)
     with pytest.raises(ValueError):
-        D.plan(bytes(32), 1, {"x": ([("r", 0)], 1, 4)}, KEY)
+        D.plan(bytes(32), 1, {"x": ([("r", 0)], 1, 4)})
 
 
 #: a compiler that records what it is given (its arguments, its directory and the files there) and writes its -o
@@ -159,7 +161,7 @@ def test_the_device_build_is_called_as_its_source_declares_it(monkeypatch):
         handed.append(given)
         return lib
 
-    monkeypatch.setattr(K, "nvcc", lambda: "an-nvcc")
+    monkeypatch.setattr(K.PD, "nvcc", lambda: "an-nvcc")
     monkeypatch.setattr(K, "_build", build)
     assert K.device_lib.__wrapped__("90") is lib
     assert handed == [("an-nvcc", K.DEVICE_SOURCES, (*K.NVCC_FLAGS, "-gencode=arch=compute_90,code=sm_90"), "librow_table_cuda.so")]
@@ -183,10 +185,11 @@ def _on(torch, outs: dict) -> dict:
 def test_the_device_path_is_the_cpu_reference(shapes):
     torch = _cuda()
     outs = outputs(shapes, 11)
-    pending = D.step_roots(CTX, 2**33 + 5, _on(torch, outs), KEY)
+    pending = D.step_roots(CTX, 2**33 + 5, _on(torch, outs))
     assert isinstance(pending, D.Pending)
-    assert pending.result() == RTB.step_roots(CTX, 2**33 + 5, outs, KEY)
-    timed = D.step_roots(CTX, 2**33 + 5, _on(torch, outs), KEY, timing=True)
+    salts = pending.result().salts
+    assert pending.result() == RTB.step_roots(CTX, 2**33 + 5, outs, salts=salts)
+    timed = D.step_roots(CTX, 2**33 + 5, _on(torch, outs), salts=salts, timing=True)
     assert timed.kernel_ms() > 0 and timed.result() == pending.result()
 
 
@@ -200,15 +203,16 @@ def test_the_side_stream_reads_the_codes_the_serving_stream_wrote_before_the_lau
     for op, (_ids, c, s) in dev.items():
         c.copy_(torch.from_numpy(outs[op][1]), non_blocking=True)
         s.copy_(torch.from_numpy(outs[op][2]), non_blocking=True)
-    assert D.step_roots(CTX, 3, dev, KEY).result() == RTB.step_roots(CTX, 3, outs, KEY)
+    got = D.step_roots(CTX, 3, dev).result()
+    assert got == RTB.step_roots(CTX, 3, outs, salts=got.salts)
 
 
 def test_record_ready_hands_over_the_ready_steps_in_launch_order():
     torch = _cuda()
     steps = {s: outputs(STEPS[s % 3], 20 + s) for s in range(4)}
-    queue = deque(D.step_roots(CTX, s, _on(torch, o), KEY) for s, o in steps.items())
+    queue = deque(D.step_roots(CTX, s, _on(torch, o)) for s, o in steps.items())
     queue[-1].done.synchronize()
     got: list[RTB.StepRoots] = []
     assert D.record_ready(queue, got.append) == 4 and not queue
-    assert got == [RTB.step_roots(CTX, s, o, KEY) for s, o in steps.items()]
+    assert got == [RTB.step_roots(CTX, s, o, salts=g.salts) for (s, o), g in zip(steps.items(), got, strict=True)]
     assert D.record_ready(queue, got.append) == 0

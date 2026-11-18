@@ -60,9 +60,9 @@ variable {g : Game Exchange} {σ : Strategy g} {R : ℕ}
 
 /-- **The play on a tape through a position at a play's end is that end**, at a position that keeps the invariant
 (`run_tape_ret`, on any tape through it). -/
-theorem run_ret_through {Ks₀ : Fin R → DigestCut Claims.Msg g} {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀)
+theorem run_ret_through {Ks₀ : Fin R → DigestCut Hash.Msg g} {q : Pos g σ Hash.Msg (Fin R)} (hi : q.Inv Ks₀)
     {y : Exchange} (hy : q.g' = .ret y) (w : CoinTape q.g' q.s') : CoinTape.run g σ (q.back w) = y := by
-  have key : ∀ p : Pos g σ Claims.Msg (Fin R), p.g' = .ret y → ∀ t, CoinTape.run p.g' p.s' t = y :=
+  have key : ∀ p : Pos g σ Hash.Msg (Fin R), p.g' = .ret y → ∀ t, CoinTape.run p.g' p.s' t = y :=
     fun ⟨_, _, _, _, _⟩ hg t => by
       subst hg
       rfl
@@ -76,11 +76,11 @@ frame `.opening i s n` that some live round whose cut `q` fixes picks, the round
 live ones that pick it, with the cuts `q` fixes at the bytes it answers (`CutsAt`), every description of `q`'s
 opening asking for its `n` coins, and the walk from `q`, consumed, on any rewriting of the tape there stopping where
 `StopOf` says from the log before that frame, at the live rounds that don't pick it (`stopOf_next`). -/
-theorem stop_frame_through {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
+theorem stop_frame_through {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Hash.Msg}
     {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
-    (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {Ks₀ : Fin R → DigestCut Claims.Msg g}
-    {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀) {pre₀ : List Release} {f : List Release → Game Exchange}
+    (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {Ks₀ : Fin R → DigestCut Hash.Msg g}
+    {q : Pos g σ Hash.Msg (Fin R)} (hi : q.Inv Ks₀) {pre₀ : List Release} {f : List Release → Game Exchange}
     {a : Fin R → Prop} (hf : ∀ log, f log = finish sg θ F c rq (pre₀ ++ log)) (hS : StopOf P rv pre₀ f a q)
     {z : CoinTape g σ} (hz : ∃ w, z = q.back w) :
     ∃ L, NoPick P a pre₀ L ∧
@@ -138,8 +138,8 @@ variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} {D
 answers there, the trace's end a later position than the stop with its coins written in and consumed, is off `B'`,
 and `Q` holds of each answered stop's next position (`RoundsReach.weaken`, on a trace to its end). -/
 theorem RoundsEnd.weaken {B' : RoundHold} {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ}
-    {rs : Fin J → Fin 2 → List Flock.Round} {p q : Pos g σ Claims.Msg (Fin R)} {out : LiveOutJ J mPts}
-    (Q : Pos g σ Claims.Msg (Fin R) → Prop)
+    {rs : Fin J → Fin 2 → List Flock.Round} {p q : Pos g σ Hash.Msg (Fin R)} {out : LiveOutJ J mPts}
+    (Q : Pos g σ Hash.Msg (Fin R) → Prop)
     (hstep : ∀ q (φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'), Q q →
       Q (q.toStop.rewrite φ).consume)
     (he : RoundsEnd D M dg J B rootB pts N rs p q out)
@@ -166,8 +166,8 @@ end a later position than its first stop with them written in and consumed, are 
 trace answers at a position `Q` holds of is off `B'`, `Q` holding past the first stop and of each answered stop's
 next position. -/
 theorem MemberReach.weaken {BL' : ExecutionPhaseLinkHold} {B' : ExecutionPhaseRoundHold} {i : ℕ}
-    {m : Flock.Guarantees.MemberV5 Reg nJ} {p q : Pos g σ Claims.Msg (Fin R)}
-    {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} (Q : Pos g σ Claims.Msg (Fin R) → Prop)
+    {m : Flock.Guarantees.MemberV5 Reg nJ} {p q : Pos g σ Hash.Msg (Fin R)}
+    {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} (Q : Pos g σ Hash.Msg (Fin R) → Prop)
     (hstep : ∀ q (φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'), Q q →
       Q (q.toStop.rewrite φ).consume)
     (h : MemberReach D M BL B S Rg i m p q out)
@@ -330,7 +330,7 @@ theorem Member.tabs_eq {nJ : ℕ} (m : Member nJ) (t : ℕ) (S : Finset (Fin nJ)
 session `u`'s record (`SessionRead`), decoded at a session of two link points, the opening that first opens the
 `u`-th tree asks for `spec.mPts + spec.mPts` coins (`SessionRead.linkCount`, `link_count`). -/
 theorem SessionRead.link_n {Lg : List Release} {tables : Array String} {u : ℕ} {text : String} {J : Json}
-    {sess : Flock.RunRecord} {w : Claims.Msg} (hR : SessionRead Lg tables u text J sess w)
+    {sess : Flock.RunRecord} {w : Hash.Msg} (hR : SessionRead Lg tables u text J sess w)
     {spec : Flock.SessionSpec} (hd : Flock.Record.decode spec text = .ok sess) (hp2 : spec.points = 2)
     {L₁ L₂ : List Release} {x : Release} {i s n : ℕ} (he : Lg = L₁ ++ x :: L₂) (hx : x.frame = .opening i s n)
     (hni : i ∉ openedTrees L₁) (hlen : (openedTrees L₁).length = u) : n = spec.mPts + spec.mPts := by
@@ -343,21 +343,21 @@ theorem SessionRead.link_n {Lg : List Release} {tables : Array String} {u : ℕ}
 the frame's count to the record's round's (`SessionRead.roundCount`), `tailCount` of the round's message
 (`rep_tailCount_accepted`), which is `w` (`session_stop_msg`). -/
 theorem session_stop_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R : ℕ}
-    {tb : String} (per : ℕ) (ev : ℕ → Exchange → Option Claims.Msg) (record₀ : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) {rd : Reading R}
+    {tb : String} (per : ℕ) (ev : ℕ → Exchange → Option Hash.Msg) (record₀ : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) {rd : Reading R}
     (hrd : rd = executionPhaseReadingAt #[tb] per (sessionReveal #[tb] ev) record₀ recordDigest)
-    {σ : Strategy (V.game θ F c)} {q : Pos (V.game θ F c) σ Claims.Msg (Fin R)}
+    {σ : Strategy (V.game θ F c)} {q : Pos (V.game θ F c) σ Hash.Msg (Fin R)}
     (hq : q.Inv (roundCuts V θ F c rd)) {z : CoinTape (V.game θ F c) σ} (hz : ∃ y, z = q.back y)
     (hn : NoMiss V θ F c rd σ z) {j : Fin R} {u : ℕ} {ρ : Fin 2} {k : ℕ}
     (hLj : slotOf (#[tb] : Array String).size per (j.val % per) = .rep 0 ρ k) (hju : j.val / per = u)
     (hj : (q.Ks j).isHere = true)
-    {w : Claims.Msg} (hw : q.modes j = some w) {bits : List Bool} {m L' : List Release} {i s n : ℕ}
+    {w : Hash.Msg} (hw : q.modes j = some w) {bits : List Bool} {m L' : List Release} {i s n : ℕ}
     {b : ByteArray} (hlog : (CoinTape.run (V.game θ F c) σ z).log = m ++ ⟨.opening i s n, b, bits⟩ :: L')
     (hcut : CutsAt rd.reveal q m (CoinTape.run (V.game θ F c) σ z).log)
     (hτ : (openedTrees m)[u]? = some i) (hk : openedOf m i s = k)
     (hname : ((helloSpecs m)[i]?.bind fun sp => sp.streams[s]?) = some (repStreamName tb ρ.val))
     {text : String} {J : Json} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {proofs : Array ByteArray}
-    {sess : Flock.RunRecord} {w₀ : Claims.Msg}
+    {sess : Flock.RunRecord} {w₀ : Hash.Msg}
     (hrec : sentRecordAt u (CoinTape.run (V.game θ F c) σ z).sent = some text)
     (hR : SessionRead (CoinTape.run (V.game θ F c) σ z).log #[tb] u text J sess w₀)
     (hd : Flock.Record.decode spec text = .ok sess) (hv : Flock.Zk.verify spec tabs text proofs = .ok ())

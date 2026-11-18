@@ -199,7 +199,7 @@ variable [S : ZkSetup]
 
 /-- **The slot's count is short of both of table `j`'s reps' rounds**: `zkCapDist` is the rep's rounds before
 Ligerito and the cap's round inside it (`zkRdAt_cap`), below the rep's rounds (`zkRd_facts`). -/
-theorem zk_slot_lt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zk_slot_lt {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -221,7 +221,7 @@ end Gen
 
 /-- **The slot's count is short of both of table `j`'s reps' rounds**: `zkCapDist` is the rep's rounds before
 Ligerito and the cap's round inside it (`zkRdAt_cap`), below the rep's rounds (`zkRd_facts`). -/
-theorem zk_slot_lt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+theorem zk_slot_lt {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -241,7 +241,7 @@ variable [S : ZkSetup]
 /-- **`ZkBatchAlign` holds at every message**: the masked simulator's live strategy submits its rounds on
 `zkStreams` (`zkLive_sched`), split at table `j` (`zkStreams_split`), so the simulated strategy follows `SchedC`
 (`schedC_simAtJZ`) at the slot's count (`zk_slot_lt`). -/
-theorem zkBatchAlign (x : Claims.Msg) : ZkBatchAlign x := by
+theorem zkBatchAlign (x : Hash.Msg) : ZkBatchAlign x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u _
   have hkR := zk_slot_lt hs hin hset h0 L hz hk hlay j r ℓ
   have hjS : j < sts.size := by rw [← zk_tables_length hset]; exact hj
@@ -265,7 +265,7 @@ end Gen
 /-- **`ZkBatchAlign` holds at every message**: the masked simulator's live strategy submits its rounds on
 `zkStreams` (`zkLive_sched`), split at table `j` (`zkStreams_split`), so the simulated strategy follows `SchedC`
 (`schedC_simAtJZ`) at the slot's count (`zk_slot_lt`). -/
-theorem zkBatchAlign (x : Claims.Msg) : ZkBatchAlign x :=
+theorem zkBatchAlign (x : Hash.Msg) : ZkBatchAlign x :=
   Gen.zkBatchAlign (S := S₀) (x := x)
 
 namespace Gen
@@ -273,13 +273,13 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **`ZkSlotAlign` holds at every message.** -/
-theorem zkSlotAlign (x : Claims.Msg) : ZkSlotAlign x :=
+theorem zkSlotAlign (x : Hash.Msg) : ZkSlotAlign x :=
   zkSlotAlign_of_batch (zkBatchAlign x)
 
 end Gen
 
 /-- **`ZkSlotAlign` holds at every message.** -/
-theorem zkSlotAlign (x : Claims.Msg) : ZkSlotAlign x :=
+theorem zkSlotAlign (x : Hash.Msg) : ZkSlotAlign x :=
   Gen.zkSlotAlign (S := S₀) (x := x)
 
 end FlockDeploy.KS

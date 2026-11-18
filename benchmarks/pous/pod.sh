@@ -125,13 +125,13 @@ GO=$([ "${GATES_ONLY:-0}" = 1 ] && echo --gates-only)
 mkdir -p "$W" "$O/bench"
 nvcc_release() { "$1/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9]*\)\.\([0-9]*\).*/\1 \2/p'; }
 # The installed CUDA toolkit for torch's JIT build and P2 v1's library; nothing is installed or changed on the system (a
-# shared node's toolkit is the node's): CUDA_HOME, /usr/local/cuda, or a /usr/local/cuda-13.0, -12.9 or -12.8, the first that
-# is CUDA 13 or CUDA 12 (at least 12.8 on a Blackwell GPU: sm_100, sm_120)
+# shared node's toolkit is the node's): CUDA_HOME, else the machine's toolkit (benchmarks/kernels/machine.py), its default or
+# at 13.0, 12.9 or 12.8, the first that is CUDA 13 or CUDA 12 (at least 12.8 on a Blackwell GPU: sm_100, sm_120)
 cuda_home() {
   local need=0 cc home major minor
   cc=$(smi --query-gpu=compute_cap --format=csv,noheader | head -1)
   [ "${cc%%.*}" -ge 10 ] 2>/dev/null && need=8
-  for home in ${CUDA_HOME:-} /usr/local/cuda /usr/local/cuda-13.0 /usr/local/cuda-12.9 /usr/local/cuda-12.8; do
+  for home in ${CUDA_HOME:-} $(for v in "" 13.0 12.9 12.8; do python3 benchmarks/kernels/machine.py toolkit $v 2> /dev/null; done); do
     read -r major minor <<< "$(nvcc_release "$home")"
     [ "${major:-0}" = 13 ] && { echo "$home"; return 0; }
     [ "${major:-0}" = 12 ] && [ "${minor:-0}" -ge "$need" ] && { echo "$home"; return 0; }
@@ -189,17 +189,15 @@ if [ "$IMPL" = vllm-gpu ]; then
   (cd "$W/impl/integrations/vllm" && bash verity_vllm/ops/pod_bootstrap.sh --cpu --cases QWEN05 --out "$O/bootstrap") \
     > "$O/bootstrap.log" 2>&1 || { tail -30 "$O/bootstrap.log"; exit 3; }
   PY=${VENV:-/workspace/venv312}/bin/python
-  export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} PATH=/usr/local/cuda/bin:$PATH
-  # torch cu129 needs a CUDA 12.9 driver; below R575 a datacenter GPU runs it through NVIDIA's forward-compatibility libraries
+  CUDA_HOME=${CUDA_HOME:-$(python3 benchmarks/kernels/machine.py toolkit)} || { echo "no CUDA toolkit (machine.py, above)"; exit 3; }
+  export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
+  # torch cu129 needs a CUDA 12.9 driver; below R575 a datacenter GPU runs it through NVIDIA's forward-compatibility
+  # libraries, the 12.9 toolkit's compat/ (cuda-compat-12-9)
   DRV=$(smi --query-gpu=driver_version --format=csv,noheader | head -1 | cut -d. -f1)
   if [ "$DRV" -lt 575 ]; then
-    if [ ! -e /usr/local/cuda-12.9/compat/libcuda.so.1 ]; then
-      . /etc/os-release; CUDA_REPO=ubuntu${VERSION_ID/./}
-      dpkg -s cuda-keyring >/dev/null 2>&1 || { wget -q https://developer.download.nvidia.com/compute/cuda/repos/$CUDA_REPO/x86_64/cuda-keyring_1.1-1_all.deb && dpkg -i cuda-keyring_1.1-1_all.deb; } || exit 3
-      export DEBIAN_FRONTEND=noninteractive
-      apt-get update -qq && apt-get install -y -qq --no-install-recommends cuda-compat-12-9 >/dev/null || exit 3
-    fi
-    export LD_LIBRARY_PATH=/usr/local/cuda-12.9/compat:${LD_LIBRARY_PATH:-}
+    COMPAT=$(python3 benchmarks/kernels/machine.py toolkit 12.9)/compat && [ -e "$COMPAT/libcuda.so.1" ] \
+      || { echo "driver R$DRV: torch cu129 needs CUDA 12.9's compat/libcuda.so.1 (cuda-compat-12-9): no 12.9 toolkit holds it (machine.py, above)"; exit 3; }
+    export LD_LIBRARY_PATH=$COMPAT:${LD_LIBRARY_PATH:-}
   fi
   "$PY" -c 'import torch; assert torch.cuda.is_available(), "torch sees no CUDA device"; print(torch.__version__, torch.cuda.get_device_name(0))' || exit 3
   "$PY" -c 'import ninja' 2>/dev/null || uv pip install -q --python "$PY" ninja || exit 3   # torch's JIT build of pous_native

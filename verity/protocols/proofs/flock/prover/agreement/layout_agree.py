@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from circuit_type_agree import flat, toy_table, tree, _width
 
 from verity.circuits import library
+from verity.circuits.codec import canonical_json
 from verity_flock import circuit_types as CT
 from verity_flock import layouts as LY
 
@@ -134,7 +135,7 @@ def mutations(a, rng):
                 r.pop(k, None)
             else:
                 r[k] = v
-        b["layouts"][j] = {**r, "sha512": hashlib.sha512(LY.FORMAT.encode() + b"\0" + _canon(r)).hexdigest()}
+        b["layouts"][j] = {**r, "sha512": hashlib.sha512(LY.FORMAT.encode() + b"\0" + canonical_json(r)).hexdigest()}
         return b
 
     out.append(("sha512", {**a, "layouts": [{**L[0], "sha512": "0" * 128}] + L[1:]}))
@@ -206,11 +207,6 @@ def shape_cases():
         else:
             out.append(archive([t.digest()], {t.digest(): t}, {sha: ws}, [LY.BlockLayout(t.digest(), None, (), (), ("derive",), (), ((0, None, 2),))], 0))
     return out
-
-
-def _canon(r):
-    from verity.circuits.codec import canonical_json
-    return canonical_json(r)
 
 
 def main() -> int:

@@ -37,7 +37,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.proofs.spot.verifier.one_stage import produced as PRODUCED, proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.commitments import hm96
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
@@ -347,7 +348,7 @@ def _pointed(fx: Path) -> str:
     head, body = (st / "pub-32.bin").read_bytes().split(b"\n", 1)
     header = json.loads(head)
     n, np_ = header["instances"], len(header["shared_rows"])
-    at = PRODUCED.BC_BYTES * sum(header["shared_rows"].values())
+    at = hm96.SHA512.proven_bytes * sum(header["shared_rows"].values())
     refs = bytearray(body[at:at + 4 * n * np_])
     i = header["units"]["indices"].index(DRAWN[0])
     a, b = 4 * i * np_, 4 * ((i + 1) % n) * np_

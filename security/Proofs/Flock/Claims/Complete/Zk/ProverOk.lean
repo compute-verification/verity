@@ -117,11 +117,11 @@ theorem commitPZk_cap {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 6
         Nat.mul_le_mul_left _ (Nat.pow_le_pow_right (by norm_num) h32)
     _ < 2 ^ 64 := by norm_num
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **Each masked rep records a round, each of at most `65536` coins**: `ProverOkZk`'s rep half, at every good masked
 case's table, on the table's extra claims at the link's points. -/
-def RepRoundsZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def RepRoundsZk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, ∀ st ∈ c.sts,
     ∀ v, Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v →
       ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,

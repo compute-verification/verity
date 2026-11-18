@@ -20,7 +20,6 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm import LLM
-from verity_vllm.engine import handle
 from verity_vllm.engine.arrivals import run_requests_arrivals
 from verity_vllm.engine.env import INDUCTOR_DIR_MARK, apply_compile_fresh, apply_engine, apply_target, own_inductor_dir
 from verity_vllm.engine.hooks import Hooks, live
@@ -59,33 +58,33 @@ def _allocator_counts() -> dict[str, float]:
     return {k: stats.get(k, 0) for k in keys}
 
 
-class _DirectLLM:
-    """The subset of ``verity_vllm.LLM`` needed for a content-bound local checkpoint."""
-
-    def __init__(self, llm: Any, engine_overrides: Mapping[str, Any]) -> None:
-        runner = handle.model_runner(llm)
-        self.vllm, self.model = llm, runner.get_model()
-        self.engine_record = {"engine_overrides": dict(engine_overrides)}
-        self.protocols = None
-
-    def close(self) -> None:
-        # The worker process exits immediately after close and releases vLLM's
-        # process-owned CUDA state.
-        pass
-
-
 PASS_COUNTS = ("units", "tiles", "screened_rows", "failing_rows", "unsure_rows")
 
 
 def _pearl_c_run(llm: Any) -> Any | None:
-    """The arm's Pearl-C device run, the owner of its option's ``end_pass``; None when the arm runs none. The adapter ends
-    a pass each time the model runner's ``execute_model`` returns (`pouw.install`), so the harness only reads the passes
+    """The arm's Pearl-C device run: the owner of an installed option's ``end_pass``, or the ``run`` of the scheme the
+    engine attached by name (``llm.scheme``, Pearl+'s `Attached`, which opens it at the first step with tokens); None
+    when the arm runs none, or none yet. Its passes end as the engine steps, so the harness only reads the passes
     (`_pass_totals`) and gates the run (`_pearl_c_gate`)."""
     from verity_torch.pouw.pearl_c.run_device import PearlCDeviceRun
 
-    option = llm.protocols.get("pouw") if llm.protocols is not None else None
-    run = getattr(getattr(option, "end_pass", None), "__self__", None)
-    return run if isinstance(run, PearlCDeviceRun) else None
+    runs = [getattr(getattr(o, "end_pass", None), "__self__", None) for o in getattr(llm.protocols, "installed", ())]
+    runs.append(getattr(getattr(llm, "scheme", None), "run", None))
+    return next((run for run in runs if isinstance(run, PearlCDeviceRun)), None)
+
+
+def _served_scheme(arm: Arm) -> str | None:
+    """The declared useful-work scheme the arm serves (its entry's `messages.option`), None for any other arm."""
+    from verity_vllm import messages
+
+    return next((s.name for e in arm.protocols if (s := messages.option(e)) is not None), None)
+
+
+def _no_run(scheme: str) -> dict[str, Any]:
+    """A served scheme's gate where its device run is not to be found: refused by name, never passed unchecked."""
+    return {"passed": False, "provided": True, "scheme": scheme,
+            "refused": f"the harness could not find the served scheme {scheme}'s device run, so it made none of its "
+                       "checks (y against x·Wᵀ within its error, the commitment twice, the hash-leaf-omitted control)"}
 
 
 def _pass_totals(run: Any) -> dict[str, int]:
@@ -151,7 +150,7 @@ class _VllmEngine:
     """One worker process's live vLLM engine."""
 
     def __init__(self, arm: Arm, preset: Preset, resident: bool, eager: bool) -> None:
-        if preset.revision is None and preset.model_digest is None:
+        if preset.revision is None:
             raise ValueError(f"preset {preset.id} has no pinned checkpoint revision")
         if preset.engine_settings.get("serving_defaults"):
             apply_compile_fresh()
@@ -159,7 +158,7 @@ class _VllmEngine:
         import torch
         import vllm
 
-        self.arm, self.obj, self.installed, self.pearl_c = arm, plugin(arm), None, None
+        self.arm, self.obj, self.installed, self.served = arm, plugin(arm), None, _served_scheme(arm)
         self.target = Target(arm, None, None, Hooks(tag=f"bench:{arm.id}"))
         if self.obj is not None:
             before = {id(e) for e in live()}
@@ -176,32 +175,17 @@ class _VllmEngine:
         engine = engine_args(preset, precision, resident=resident, eager=eager)
         overrides = _callback(self.obj, "engine_overrides", self.target, {}) if self.obj is not None else {}
         engine.update(overrides or {})
-        if preset.model_digest is not None:
-            if arm.protocols:
-                raise ValueError("a local checkpoint override supports stock and experimental arms, not protocol-option arms")
-            self.llm = _DirectLLM(
-                vllm.LLM(
-                    model=preset.model,
-                    enable_prefix_caching=False,
-                    seed=0,
-                    **{k: v for k, v in engine.items() if k != "execution"},
-                ),
-                {k: engine[k] for k in ("dtype", "quantization", "compilation_config", "kv_cache_memory_bytes")
-                 if engine.get(k) is not None},
-            )
-        else:
-            config: dict[str, Any] = {}
-            if arm.protocols:
-                config = protocols_config(arm, settings.environ())
-                engine["protocols"] = ",".join(arm.protocols)
-                if config:
-                    engine["protocols_config"] = config
-            self.llm = LLM(preset.model, revision=preset.revision, **engine)
-            if arm.protocols:
-                self.pearl_c = _pearl_c_run(self.llm)
-                cubin = config.get("pouw", {}).get("cubin")
-                if cubin:
-                    kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
+        config: dict[str, Any] = {}
+        if arm.protocols:
+            config = protocols_config(arm, settings.environ())
+            engine["protocols"] = ",".join(arm.protocols)
+            if config:
+                engine["protocols_config"] = config
+        self.llm = LLM(preset.model, revision=preset.revision, **engine)
+        if arm.protocols:
+            cubin = next((s["cubin"] for s in config.values() if s.get("cubin")), None)
+            if cubin:
+                kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
         self.target.engine, self.target.model = self.llm, self.llm.model
         ready = getattr(self.installed, "ready", None)
         if callable(ready):
@@ -245,7 +229,8 @@ class _VllmEngine:
             if got is not None:
                 return got
         info: Mapping[str, Any] = {} if self.llm.protocols is None else self.llm.protocols.info()
-        return info if self.pearl_c is None else {**info, "pearl_c": _pass_totals(self.pearl_c)}
+        run = _pearl_c_run(self.llm) if self.arm.protocols else None
+        return info if run is None else {**info, "pearl_c": _pass_totals(run)}
 
     def _run(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
         import torch
@@ -325,7 +310,10 @@ class _VllmEngine:
 
     def custom_gate(self) -> Mapping[str, Any]:
         if self.obj is None:
-            return {"passed": True, "provided": False} if self.pearl_c is None else _pearl_c_gate(self.pearl_c)
+            run = _pearl_c_run(self.llm) if self.arm.protocols else None
+            if run is not None:
+                return _pearl_c_gate(run, self.served)
+            return _no_run(self.served) if self.served else {"passed": True, "provided": False}
         got = _callback(self.obj, "gate", self.target, None)
         if got is None:
             return {"passed": True, "provided": False}

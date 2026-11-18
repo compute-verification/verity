@@ -90,7 +90,7 @@ class _LiveSession:
 
     def __init__(self, gate: str, peer: str, epoch: int, lane: str, run: Any = None) -> None:
         from verity_vllm.pipeline.commit_coins import ChallengerGate
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
         self.gate = ChallengerGate(gate, run)
         self.reserved, self.period = PHW.reserve_salt(self.gate.call, self.gate.ledger, lane, peer, epoch)
@@ -98,7 +98,7 @@ class _LiveSession:
         self.carried: dict[str, Any] = {}
 
     def open(self, entry: str, root: bytes) -> Any:
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
         self.client, self.commitment, opening, _, self.carried = PHW.open_session(
             entry, self.gate.call, self.reserved["session"], root, self.k)
@@ -108,28 +108,6 @@ class _LiveSession:
         if self.client is not None:
             client, self.client = self.client, None
             client.close()
-
-
-def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: int, lane: str,
-               run: Any = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """A protocols config's PoUW settings `pouw` with the salt coin a live session's on the auditor device when `gate` (infra's
-    gate as an ssh command) and `peer` (this node in the challenger host's peers) are given: a salt-only session reserved
-    now under lane `lane` (`_LiveSession`, `run` its gate's subprocess in tests), which the install opens on its salt
-    epoch's root (`salt.epoch_open_root` of the fixed operands' root and the epoch's number) and flips its salt coin from
-    (`pouw_h1_window.salt_session`), through the settings ``challenger`` (this node's 127.0.0.1, at the port the gate's open
-    answers), ``session`` (the reserve answer), ``gate`` and ``period`` (the lane's open period the reserve joined), its
-    in-process ``coins`` dropped. Returns the settings and the reserve answer: `pouw` itself and None when neither is
-    given, the coins then in-process. ValueError when one is given without the other, or the reserve is refused."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
-
-    if (gate, peer) == (None, None):
-        return pouw, None
-    if gate is None or peer is None:
-        raise ValueError("live coins take PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER (this "
-                         "node's name in the challenger host's peers) together")
-    session = _LiveSession(gate, peer, epoch, lane, run)
-    return ({**{k: v for k, v in pouw.items() if k != "coins"}, "challenger": "127.0.0.1:0", "session": session.reserved,
-             "gate": PHW.gate_of(session.gate.call), "period": session.period}, session.reserved)
 
 
 class LiveDraw:
@@ -155,7 +133,7 @@ class LiveDraw:
     def __call__(self, root: bytes, asking: Any) -> tuple[bytes, dict[str, Any]]:
         from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
         from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
         lines = self.gate.ledger()
         period = PHW.open_period(lines, self.lane)
@@ -278,7 +256,8 @@ class PearlCArm:
 
     def ready(self, target: Any) -> None:
         from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
-        from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
+        from verity.protocols.compose import schemes
+        from verity.protocols.resource_accounting.scheme import declared
         from verity.hooks import ComputeBlockWith
         from verity_vllm import messages
         from verity_vllm.protocols.linear import vllm_site
@@ -306,7 +285,8 @@ class PearlCArm:
             opening = self.session.open(f"pouw:{scheme}", weights_root(roots))
             commitment = self.session.commitment
             self.coins = {"source": "challenger", "session": self.session.carried, "pass_index": self.session.k,
-                          "salt_after": epoch_open_root(weights_root(roots), self.session.k).hex()}
+                          "salt_after": declared(schemes.get("pearl-plus"), "salt_open_root")(weights_root(roots),
+                                                                                             self.session.k).hex()}
         else:
             coins = _Coins(self.epoch)
             opening, commitment = coins.open("salt", weights_root(roots)), coins.commitment

@@ -345,7 +345,8 @@
 # the serve dir's pearl/w<k>/. Each epoch's salt coin is a live salt-only session of its window's own on vy-challenger-1
 # (`serve_pearl.live`: serve-openai's --challenger-gate PEARLC_CHALLENGER_GATE, --challenger-peer PEARLC_CHALLENGER_PEER
 # and --challenger-lane PEARLC_CHALLENGER_LANE, defaulted as above), reserved under the lane as the window opens and
-# joining its open Pearl-C period; PEARLC_CHALLENGER_GATE set empty leaves them in-process, and the piece claims no
+# joining its open Pearl-C period (with CERTIFIER_FRONT, on the fixed load's windows alone: --pearl-users, so the
+# front's windows reserve nothing in the period's cap of 1); PEARLC_CHALLENGER_GATE set empty leaves them in-process, and the piece claims no
 # verdict. Its defaults are then Llama 3.2 1B's
 # BF16 checkpoint (REPO unsloth/Llama-3.2-1B, PRECISION bfloat16, the arm's), the BF16 B4 row's traced Build under
 # /workspace/research/vllm-pearlc-h200bf16 as ROW, LOAD=fixed at V3C_CLASS's load (SLOTS its slots, PROMPTS P:P at its
@@ -443,6 +444,7 @@ for under in "$OUT" ${RESEARCH_RUN_DIR:+"$RESEARCH_RUN_DIR"}; do
   case "$(realpath -m "$D")/" in "$(realpath -m "$under")"/*)
     echo "PREFLIGHT: D=$D is under $under, which a run uploads: set SERVE_ROOT or D outside it" >&2; exit 3;; esac
 done
+export VERITY_PROTOCOLS_CONFIG=${VERITY_PROTOCOLS_CONFIG:-"{\"private\": \"$D/private\"}"}  # where a replay bundle's keys and salts go
 # step 6's deferral (`defer`): the settings the follow-on runs at, its inputs' list and sums, and the pieces the record read
 DEFER_DIR=$D/private/deferred
 FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE PEARLPLUS_TIE PEARLPLUS_TIE_UNIFORM COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE DAY"
@@ -570,7 +572,8 @@ export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BAN
 PRED=${PRED:-$D/predicted}
 SERVED_COMPARE=$D/served-compare/served_compare.json
 FW=${FLOCK_WORK:-$ROOT/flock-work}
-export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
+export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1
+export CUDA_HOME=${CUDA_HOME:-$(python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.0)}
 export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
@@ -899,7 +902,7 @@ v3c_warm() {  # every template of the committed window composed into $VW/compose
   fi
   say "V3C-WARM class $V3C (records_audit.py warm exit $rc, $V3C_WARM_JOBS at a time): $why"
 }
-v3c_cuda() { FLOCK_WORK=$FW . "$TREE/verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh" >&2 && echo "${CUDA_TK:-/usr/local/cuda-13.3}"; }
+v3c_cuda() { FLOCK_WORK=$FW . "$TREE/verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh" >&2 && { [ -n "${CUDA_TK:-}" ] && echo "$CUDA_TK" || python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.3; }; }
 v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights pinned
   local run leanb m0 rc gl tk tie=() day=() cache=() ch=(--challenger "$V3C_CHALLENGER") ports=${V3C_PORTS:-16} main=$OUT/v3c-audit/main.txt
   [ -n "${DAY:-}" ] && day=(--day "$DAY" --day-log "$DAY_LOG" ${DAY_PARAMS:+--day-params "$DAY_PARAMS"})
@@ -1092,6 +1095,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
       "$PEARLC_KERNEL" "$PEARLC_CUBIN")")
     [ -n "$PEARLC_CHALLENGER_GATE" ] && h1+=(--challenger-gate "$PEARLC_CHALLENGER_GATE"
                                             --challenger-peer "$PEARLC_CHALLENGER_PEER" --challenger-lane "$PEARLC_CHALLENGER_LANE")
+    [ -z "${CERTIFIER_FRONT:-}" ] || h1+=(--pearl-users 'fixed\.[0-9]+')
   fi
   local cfg="" rest=() i=0  # release order is the network-attester scheme's setting, in the serve's one --protocols-config
   while [ "$i" -lt "${#h1[@]}" ]; do

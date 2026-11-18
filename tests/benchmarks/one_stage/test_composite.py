@@ -57,7 +57,7 @@ def git_tree(d: Path, guarantees: list[str], dirty: bool = False) -> Path:
 def no_tree(exe: str, product: str = "remote") -> list[str]:
     """What an accept's check prints after its verdict when ``--tree`` is no git checkout."""
     cites = C.CITES.get(product)
-    return [f"RAN None clean=False sha512={C.file_sha512(Path(exe))} cites={cites}",
+    return [f"RAN None clean=False sha512={hashlib.sha512(Path(exe).read_bytes()).hexdigest()} cites={cites}",
             f"NOT_ESTABLISHED {'the tree is no git checkout' if cites else 'the product cites no listed guarantee'}"]
 
 
@@ -143,22 +143,22 @@ def test_a_per_member_accept_that_missed_a_member_says_the_cite_does_not_cover_i
             assert "not_covered" not in ran and not any(ln.startswith("NOT_COVERED") for ln in lines)
 
 
-def test_a_two_stage_accept_says_the_cite_does_not_cover_it_and_its_form_is_not_yet_proved(tmp_path):
+def test_a_two_level_accept_says_the_cite_does_not_cover_it_and_two_levels_are_not_yet_proved(tmp_path):
     product = next(iter(C.CITES))
     tree = git_tree(tmp_path / "tree", [C.CITES[product]])
-    for form in ("one-stage", "two-stage"):
-        d, cases = tmp_path / form, []
+    for levels in (1, 2):
+        d, cases = tmp_path / f"levels-{levels}", []
         for n, id in enumerate(C.COMPONENTS[product]):
-            p = put(d / f"p{n}", id, {"form": form} if id == SAMPLED else {}, bytes([n]), b"{}", bytes([n]) * 64,
+            p = put(d / f"p{n}", id, {"levels": levels} if id == SAMPLED else {}, bytes([n]), b"{}", bytes([n]) * 64,
                     verdict="accept")
             cases += ["--cases", str(p)]
         assert C.main([product, *cases, *outs(d, tree=tree), "--exe", lean(d, {"verdict": "accept"}, 0)]) == 0
         ran = json.loads((d / "public" / "composite.json").read_bytes())["ran"]
         lines = (d / "public" / "verdicts.txt").read_text().splitlines()
         assert ran["cites"] == C.CITES[product]
-        said = f"NOT_COVERED {SAMPLED} two-stage form: {C.CITES[product]} does not cover it, its form is not yet proved"
-        if form == "two-stage":
-            assert ran["not_covered"] == {"id": SAMPLED, "form": "two-stage"} and said in lines
+        said = f"NOT_COVERED {SAMPLED} 2 levels: {C.CITES[product]} does not cover it, two levels are not yet proved"
+        if levels == 2:
+            assert ran["not_covered"] == {"id": SAMPLED, "levels": 2} and said in lines
         else:
             assert "not_covered" not in ran and not any(ln.startswith("NOT_COVERED") for ln in lines)
 
@@ -353,8 +353,9 @@ def test_an_accept_records_its_commit_its_executable_and_the_listed_guarantee_it
     tree = git_tree(tmp_path / "tree", [C.CITES["remote-v1"]])
     rc, record, lines = remote_accepted(tmp_path, tree)
     commit = subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    verifier = hashlib.sha512((tmp_path / "lean-check").read_bytes()).hexdigest()
     assert rc == 0
-    assert record["ran"] == {"commit": commit, "clean": True, "verifier_sha512": C.file_sha512(tmp_path / "lean-check"),
+    assert record["ran"] == {"commit": commit, "clean": True, "verifier_sha512": verifier,
                              "cites": C.CITES["remote-v1"], "lock": {"listed": True, "deployed": False, "open": ["P.Open"]}}
     assert not any(ln.startswith(("NOT_ESTABLISHED", "UNCITED")) for ln in lines)
 

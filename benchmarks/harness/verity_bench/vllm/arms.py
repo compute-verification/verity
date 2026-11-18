@@ -167,8 +167,10 @@ def served_variant(name: str, settings: ArmSettings | None = None) -> Arm:
 
 def protocols_config(arm: Arm, environ: Mapping[str, str]) -> dict[str, dict[str, Any]]:
     """The arm's protocols config as `verity_vllm.LLM` takes it: each ``"$NAME"`` value read from `environ` (a missing
-    one raises, naming it), and PoUW's ``coins`` an in-process challenger of epoch 0 (`pouw.challenged`) when PoUW is
-    enabled, since its install takes the epoch's salt from a live coin and a config can't carry one."""
+    one raises, naming it). An entry that names a declared scheme (`messages.option`) gets that scheme's in-process coins
+    as its settings say them, ``coins = "in-process"``, unless the spec gives its ``challenger``; any other PoUW entry
+    gets an in-process challenger of epoch 0 (`pouw.challenged`), since its install takes the epoch's salt from a live
+    coin."""
 
     def expand(value: Any, where: str) -> Any:
         if isinstance(value, str) and value.startswith("$"):
@@ -179,11 +181,15 @@ def protocols_config(arm: Arm, environ: Mapping[str, str]) -> dict[str, dict[str
         return value
 
     config = {p: {k: expand(v, f"{p}.{k}") for k, v in s.items()} for p, s in (arm.protocols_config or {}).items()}
-    if not any(e.partition(":")[0] == "pouw" for e in arm.protocols):
-        return config
+    from verity_vllm import messages
     from verity_vllm.protocols.pouw import challenged
 
-    return challenged(config, arm.protocols)
+    declared = [e for e in arm.protocols if messages.option(e) is not None]
+    for entry in declared:
+        own = config.setdefault(entry.partition(":")[0], {})
+        if not own.get("challenger"):
+            own.setdefault("coins", "in-process")
+    return challenged(config, [e for e in arm.protocols if e not in declared])
 
 
 def resolve_arms(names: str | list[str] | tuple[str, ...], module_specs: tuple[str, ...] = (),

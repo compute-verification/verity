@@ -279,7 +279,7 @@ def gate_command(argv: list[str]) -> GateCommand:
         return json.loads(subprocess.run(gate_argv(argv, args), check=True, capture_output=True, text=True).stdout)
 
     def gate(session: str, root: str, withhold: bool = False) -> dict[str, Any]:
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import (
             window as PHW,
         )
         answer = verb("open", "--session", session, "--root", root)
@@ -295,10 +295,10 @@ def gate_command(argv: list[str]) -> GateCommand:
         return answer
 
     def reserve(peer: str, steps: int | None) -> dict[str, Any]:
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import (
             challenger as PHC,
         )
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import (
             window as PHW,
         )
         families = PHC.draw_families() if steps is None else PHC.families(steps)
@@ -337,7 +337,7 @@ def window_sessions(gate: Any, peer: str, steps: int) -> WindowSessions:
     is refused (ValueError), as is a reserve the gate refuses. Each window's sample session is reserved with it
     (``gate.reserve(peer, None)``), ``sessions.draws[name]`` its answer. ``sessions.held`` maps each window to its
     answer."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import (
         window as PHW,
     )
     held: dict[str, dict[str, Any]] = {}
@@ -466,7 +466,7 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
         live as LV,
     )
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import (
         requests as RQ,
     )
     coins = h1.rounds.challenger.commitment
@@ -904,7 +904,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         doc["h1_baseline"] = window("baseline", plain, outdir / "baseline")
     if a.commit:
         if a.period:
-            from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+            from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import (
                 challenger as PHC,
             )
             from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
@@ -1082,7 +1082,7 @@ def fill_close(a: argparse.Namespace) -> dict[str, Any]:
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
         handoff as HO,
     )
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import (
         window as PHW,
     )
     outdir = Path(a.out)
@@ -1239,7 +1239,7 @@ def record_reason(record: dict[str, Any]) -> str | None:
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
         h1 as PH,
     )
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import (
         challenger as PHC,
     )
     c = record["commitment"]
@@ -1510,7 +1510,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     verifier's scratch) credit's verifier runs are `answers.Answers` on it: a run another step answered is taken by key,
     and its ``lean_answers`` says how many."""
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import answers as A
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
     from verity.protocols.proofs.spot.verifier.challenger import remote
 
     rec, tree = json.loads(Path(calls_file).read_text()), Path(directory)

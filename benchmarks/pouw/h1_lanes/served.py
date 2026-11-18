@@ -67,7 +67,9 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1z
 from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR  # noqa: E402
+from verity.protocols.proofs.spot.prover import produced as PP  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.commitments import registered_value as RV  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 
 RC = L.RC
@@ -121,7 +123,7 @@ def extract(a: argparse.Namespace) -> None:
     import pickle
 
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import handoff as HO
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import kept as KP
@@ -190,7 +192,7 @@ def extract(a: argparse.Namespace) -> None:
               "shape": (tree.leaves, tree.words) == (p["leaves"], p["words"]) and tree.schema == V2}
         path, bc = tree.path(row), tree.bcs[row]
         ok["opens"] = G.verify_read(tree.domain, tree.root, row, bc, path, V2)
-        ok["row"] = G.Registered.commit(tree.program, tree.value, [words], [tree.salts[row]], tree.word_bits, V2,
+        ok["row"] = RV.Registered.commit(tree.program, tree.value, [words], [tree.salts[row]], tree.word_bits, V2,
                                         tree.window, tree.produced).bcs[0] == bc
         checks[port] = ok
         ports[port] = {"entry": {x: v for x, v in p.items() if x != "reads"},
@@ -227,7 +229,7 @@ def smoke(a: argparse.Namespace) -> None:
     sa, sw = ((rng.uniform(1e-3, hi, 64) / 127).astype("<f4") for hi in (0.1, 0.5))
 
     def tree(value, rows, window=root):
-        return G.Registered.commit(program, value, rows, schema=V2, window=window)
+        return RV.Registered.commit(program, value, rows, schema=V2, window=window)
 
     A, A2 = tree(f"h1/a/{k}@3", U.row_words(ca, sa).tolist()), tree(f"h1/a/{k}@5", U.row_words(ca[::-1], sa).tolist())
     B = tree(f"h1/b/{k}", U.row_words(cbw, sw).tolist(), None)
@@ -267,7 +269,7 @@ class Served:
     roots: tuple
     registration: str
     sample: str
-    tree: G.Registered
+    tree: RV.Registered
     record: dict
     ports: dict
     values: dict
@@ -450,7 +452,7 @@ def prepare(a: argparse.Namespace) -> None:
     seed = hashlib.sha512(b"h1-lanes/partials-salts/v1" + zs).digest()
     psalts = [b"".join(hashlib.sha512(seed + i.to_bytes(4, "big") + j.to_bytes(2, "big")).digest()
                        for j in range(-(-len(zs) // 64)))[:len(zs)] for i in range(len(pa))]
-    tree = PR.commit(ctx.prog, LL.PARTIALS, pa, d, psalts, schema=V2)
+    tree = PP.commit(ctx.prog, LL.PARTIALS, pa, d, psalts, schema=V2)
     ops = {LL.PARTIALS: PR.rows_of(tree)}
     for p in op["ports"].values():
         ops.setdefault(p["entry"]["value"], []).append((p["opening"]["position"], p["opening"]["bc"]))

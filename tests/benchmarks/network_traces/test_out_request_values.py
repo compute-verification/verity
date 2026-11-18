@@ -238,3 +238,49 @@ def test_the_chains_n2_and_scan_steps_keep_their_summaries_and_the_scans_program
     got = run(code, OUT=out, Q=q, N2OUT=w / "n2", SCANOUT=w / "scan")
     assert got.returncode == 0, got.stderr
     assert published(out) == ["n2/summary.json", "scan/joint/program.json", "scan/summary.json"]
+
+
+ENDPOINT_PY = """#!/bin/sh
+out=; while [ $# -gt 0 ]; do [ "$1" = --out ] && out=$2; shift; done
+echo '{"chain": {"bits": {"bound_why": "certified requests are in none (s0-needle)", "commit_windows": [{"requests": 7}]}}}' > "$out"
+echo "the endpoint's stdout: s0-needle"
+"""
+
+
+def test_the_chains_endpoint_step_keeps_its_report_and_logs_on_the_private_side(tmp_path):
+    """The endpoint's report holds its advice rebuilt in the clear and each Commit window's counts, and its log and the
+    advice's what it printed: whether the step rebuilds it or takes the served node's, none of it reaches $OUT."""
+    py = tmp_path / "py"
+    py.write_text(ENDPOINT_PY)
+    py.chmod(0o755)
+    code = ('unpack() { mkdir -p "$2"; cp -r "$1"/. "$2"; }\n'
+            + block("chain_record.sh", 'if [ -n "${CR_ENDPOINT:-}" ]', "fi"))
+    for k, files in enumerate(({"r/advice_trace.jsonl": "{}\n", "r/advice.log": "s0-needle\n"},
+                               {"r/report.json": '{"bits": "s0-needle"}'})):
+        ep, out, q, w = (tmp_path / f"{x}{k}" for x in ("ep", "OUT", "Q", "W"))
+        put(ep, files)
+        out.mkdir()
+        got = run(code, CR_ENDPOINT=ep, CR_EOS_IDS="1", NETWORK_CERTIFIER="g/run", G="g", PY=py, CR="cr", OUT=out, Q=q,
+                  W=w)
+        assert got.returncode == 0, got.stderr
+        assert published(out) == ["job.log"] and b"s0-needle" not in (out / "job.log").read_bytes()
+        kept = sorted(p.name for p in (q / "witness" / "endpoint").iterdir())
+        assert kept == (["advice.log", "endpoint.log", "report.json"] if k == 0 else ["report.json"])
+
+
+def test_the_records_endpoint_step_keeps_its_verdict_and_counts_of_windows_alone():
+    """The report's endpoint step (chain_record.py's, from the private report) names no request and counts no window's
+    requests: the attested I/O's violations by their count, the advice's binding by its Commit windows'."""
+    sys.path.insert(0, str(HERE))
+    import chain_record as cr
+
+    bits = {"bound": False, "rebuilt": False, "bound_why": "2 certified requests are in none (s0-needle, s1-needle)",
+            "commit_windows": [{"window": 0, "requests": 7, "bound": True, "rebuilt": True},
+                               {"window": 1, "requests": 5, "bound": False, "why": "s1-needle"}]}
+    for io in ({"accepted": True}, {"accepted": False, "violations": [[3, "a request of s0-needle"], [9, "x"]]}):
+        step = cr.network_attester_endpoint_step({"warden_run": "r", "io": io, "chain": {"bits": bits}})
+        assert step["verdict"] == "refused" and "needle" not in json.dumps(step) and '"requests"' not in json.dumps(step)
+        assert step["advice"] == {"bound": False, "rebuilt": False, "commit_windows": 2, "bound_windows": 1}
+        assert step["io"] == {"accepted": io["accepted"], "violations": len(io.get("violations") or [])}
+        e2e = cr.endpoint_step({"chain": {"bits": bits, "tie": {}}})
+        assert "needle" not in json.dumps(e2e) and e2e["advice"] == step["advice"]

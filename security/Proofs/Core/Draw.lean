@@ -15,7 +15,7 @@ A set of units of the product (`SamplingDesign.prod`) is its share of each kind,
 each kind's design misses that kind's share, on coins of its own. So its miss probability is the product over kinds
 (`SamplingDesign.missProb_prod`), and with the kinds the calls of a PoUW window it is the calls' product distribution.
 
-The uniform `k`-subset misses a set `B` of units with probability `C(n − |B|, k)/C(n, k)` (`subset_escape`): its coins
+The uniform `k`-subset misses a set `B` of units with probability `C(n − |B|, k)/C(n, k)` (`subset_missProb`): its coins
 that miss `B` are the `k`-subsets of `B`'s complement (`card_disjoint_subsets`). A uniform permutation's `k`-prefix
 samples as the uniform `k`-subset does, for every property of its sample (`prCoin_permPrefix`), so with the same miss
 probability (`missProb_permPrefix`): a permutation carries any `k`-subset onto any other (`exists_perm_image_eq`), so
@@ -61,6 +61,17 @@ namespace SamplingDesign
 
 open Game
 
+theorem missProb_le_one {U : Type} (D : SamplingDesign U) (T : Finset U) : D.missProb T ≤ 1 := by
+  classical
+  unfold missProb prCoin
+  refine (avg_mono fun ω => ?_).trans (avg_const (C := D.Ω) 1).le
+  split_ifs <;> simp
+
+/-- A set of at least `K` units escapes the sample no more often than the count curve at `K`. -/
+theorem missProb_le_miss {U : Type} (D : SamplingDesign U) {T : Finset U} {K : ℕ} (h : K ≤ T.card) :
+    D.missProb T ≤ D.miss K :=
+  le_iSup₂ (f := fun (B : Finset U) (_ : K ≤ B.card) => D.missProb B) T h
+
 /-- **The product misses a set exactly as often as every kind's design misses that kind's share, independently**:
 the miss probability of `⋃ₖ {k} × T k` under the product of designs by kind is `∏ₖ missProb (L k) (T k)`. -/
 theorem missProb_prod {K : Type} [Fintype K] [DecidableEq K] {V : K → Type} (L : (k : K) → SamplingDesign (V k))
@@ -98,7 +109,7 @@ theorem card_disjoint_subsets (k : ℕ) (B : Finset (Fin n)) :
 
 /-- **The hypergeometric miss probability.** A uniform `k`-subset misses `B` with probability
 `C(n - |B|, k) / C(n, k)`. -/
-theorem subset_escape {k : ℕ} (hk : k ≤ n) (B : Finset (Fin n)) :
+theorem subset_missProb {k : ℕ} (hk : k ≤ n) (B : Finset (Fin n)) :
     (subset n k hk).missProb B = ((n - B.card).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := by
   classical
   unfold missProb
@@ -169,7 +180,7 @@ theorem missProb_permPrefix {k : ℕ} (hk : k ≤ n) (B : Finset (Fin n)) :
 /-- **A uniform permutation's `k`-prefix misses a set of `j` units with probability `C(n − j, k)/C(n, k)`.** -/
 theorem missProb_permPrefix_eq {k : ℕ} (hk : k ≤ n) (B : Finset (Fin n)) :
     (permPrefix n k).missProb B = ((n - B.card).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := by
-  rw [missProb_permPrefix hk, subset_escape]
+  rw [missProb_permPrefix hk, subset_missProb]
 
 end SamplingDesign
 

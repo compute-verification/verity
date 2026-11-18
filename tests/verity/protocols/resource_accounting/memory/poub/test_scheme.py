@@ -28,7 +28,10 @@ def test_bandwidth_is_the_p2_verifiers_component() -> None:
 
 def test_poub_is_the_remote_sessions_and_the_binders_name() -> None:
     assert poub.POUB.protocol == audit.PROTOCOL_ID == period.PROTOCOL
-    assert binder.NAME == poub.POUB.name and poub.POUB.hooks == ("memory", "steps")
+    assert binder.NAME == poub.POUB.name and poub.POUB.hooks == ("declared", "memory", "steps")
+    assert set(poub.POUB.processes) == {poub.SESSION_PROCESS} == {"poub-session"}
+    assert S.PROCESSES[poub.SESSION_PROCESS] is poub.POUB.processes[poub.SESSION_PROCESS]
+    assert poub.prover("binder") is binder.Binder and set(poub.PROVER) == {"binder", poub.SESSION_PROCESS}
     assert poub.POUB.unit == poub.BANDWIDTH.unit == "bits"
 
 
@@ -68,26 +71,49 @@ def test_the_sessions_requests_refuse_a_run_it_cannot_follow() -> None:
 
 def test_no_block_is_declared_and_the_requirement_says_where_the_opening_unit_is() -> None:
     for scheme in (poub.BANDWIDTH, poub.POUB):
-        assert scheme.blocks == () and "BlockOpeningCheck_v2" in scheme.requires["one-design"]
+        assert isinstance(scheme.blocks, S.Lacks) and "BlockOpeningCheck_v2" in scheme.blocks.why
+        assert "BlockOpeningCheck_v2" in scheme.requires["one-design"]
         assert S.credited([scheme], [("Dither_v1", [(0, 4)])]) == frozenset()
 
 
-def test_neither_term_is_said_and_each_names_its_lean_constant() -> None:
+def test_each_says_its_term_as_the_sketch_bounds_error_at_its_layout_and_its_two_sides() -> None:
+    """Each term is the Lean's `δSketch g b Q P N εrank` at its receipts' layout, evaluated exactly at the four
+    parameters a caller gives; the sides are the route form's, naturals in bits with no factor."""
     zero = {name: 0 for name in poub.CHARGES}
-    assert sorted(poub.DELTA_SCHEME) == ["bandwidth", "poub"]
-    assert poub.POUB.delta_scheme is None and all(c.bounded for c in poub.POUB.charges)
-    with pytest.raises(ValueError, match="delta_scheme .* is not said"):
-        S.bound(poub.POUB, Fraction(1, 100), 0, zero)
+    lean = "ResourceAccounting.Guarantees.Remote.δSketch"
+    assert {n: (t.lean, t.parameters) for n, t in poub.DELTA_SCHEME.items()} == {
+        "bandwidth": (f"{lean} 96 257", ("Q", "P", "N", "rank_tail")),
+        "poub": (f"{lean} 216 513", ("Q", "P", "N", "rank_tail"))}
+    for scheme in (poub.BANDWIDTH, poub.POUB):
+        assert scheme.delta_scheme is poub.DELTA_SCHEME[scheme.name]
+        assert "Remote.Run.committed" in scheme.over and "Remote.Run.paid" in scheme.under
+    at = {"Q": 2**80, "P": 6, "N": 2**20, "rank_tail": Fraction(1, 2**100)}
+    q = 2**80 + 6
+    for name, (g, b) in {"bandwidth": (96, 257), "poub": (216, 513)}.items():
+        assert poub.DELTA_SCHEME[name].value(**at) == (
+            Fraction(2**80, 2**g) + q * (Fraction(1, 2**100) + Fraction(2**20, 2**512)) + Fraction(q * q, 2**b))
+    assert all(c.bounded for c in poub.POUB.charges)
+    got = S.bound(poub.POUB, Fraction(1, 100), 0, zero, at, epsilon=Fraction(0))
+    assert got.delta_scheme == poub.DELTA_SCHEME["poub"].value(**at) and 0 < got.delta_scheme < Fraction(1, 2**19)
+    with pytest.raises(ValueError, match=r"\['rank_tail'\] were not given"):
+        S.bound(poub.POUB, Fraction(1, 100), 0, zero, {k: v for k, v in at.items() if k != "rank_tail"}, epsilon=Fraction(0))
     assert not any(c.bounded for c in poub.BANDWIDTH.charges)
     with pytest.raises(ValueError, match="nothing bounds yet"):
         S.bound(poub.BANDWIDTH, Fraction(1, 100), 0, zero)
 
 
 def test_refresh_is_poubs_one_setting_off_by_default() -> None:
-    assert poub.settings({}) == {"refresh": False} == poub.settings({"refresh": False})
-    with pytest.raises(NotImplementedError, match=poub.REFRESH_GOAL):
-        poub.settings({"refresh": True})
+    assert S.settings(poub.POUB, {}) == {"refresh": False} == S.settings(poub.POUB, {"refresh": False})
+    with pytest.raises(ValueError, match=f"poub: refresh waits on {poub.REFRESH_GOAL}"):
+        S.settings(poub.POUB, {"refresh": True})
     with pytest.raises(ValueError, match="has no setting"):
-        poub.settings({"lifetime": 2})
+        S.settings(poub.POUB, {"lifetime": 2})
     with pytest.raises(ValueError, match="is a bool"):
-        poub.settings({"refresh": 1})
+        S.settings(poub.POUB, {"refresh": 1})
+
+
+def test_what_each_lacks_says_why() -> None:
+    with pytest.raises(LookupError, match="bandwidth attaches through no hook"):
+        poub.BANDWIDTH.attach(None, {})
+    with pytest.raises(LookupError, match="poub declares no record: no combined record"):
+        S.declared(poub.POUB, "record")
