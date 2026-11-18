@@ -114,7 +114,7 @@ def test_no_launch_path_takes_a_former_id(old, monkeypatch, capsys):
     monkeypatch.chdir(ROOT)
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
     monkeypatch.setattr(jobs, "dispatch", lambda *a, **k: pytest.fail(f"launched {a}"))
-    for argv in (["plan", old, "--local-only"], ["run", old, "--here"], ["vllm", "--preset", old, "--out", "out"]):
+    for argv in (["plan", old, "--local-only"], ["run", old, "--local-only"], ["vllm", "--preset", old, "--out", "out"]):
         with pytest.raises((SystemExit, ConfigError)) as refused:
             main(argv)
         said = capsys.readouterr().err + str(refused.value)
