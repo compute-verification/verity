@@ -467,7 +467,7 @@ def placed(ms: Sequence[CS.Member], cells: Sequence[int], q: int,
         if k is None:
             raise ValueError(f"{s.value} is read by {s.template}, a template the window has none of: {list(at)}")
         m = ms[k]
-        if s.port not in dict(m.rows) or s.port in {p for p, _o, _ws in m.wired}:
+        if s.port not in dict(m.rows) or s.port in {w.port for w in m.wired}:
             raise ValueError(f"{s.template}: {s.value} is read at its {s.port!r}, which is none of its rows "
                              f"{[p for p, _w in m.rows]} or is wired: an interior member's rows are its parameters (`interior_rows.named`)")
         if dict(m.rows)[s.port] != s.words:

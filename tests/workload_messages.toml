@@ -434,3 +434,30 @@ writers = [
 readers = [
     { lane = "network-accounting", file = "verity/protocols/interface/charge/window_charge.py", find = "^class Advice" },
 ]
+
+[[message]]
+type = "ServingConfiguration"
+second = true
+today = "each scheme's configuration at the stop (`schemes/<name>/configuration.json`): its settings and record"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/scheme_plugin.py", find = "d / \"configuration\\.json\"" },
+]
+readers = []
+
+[[message]]
+type = "Run"
+second = true
+today = "each committing scheme's closed commitment at the stop (`schemes/<name>/commitment.json`)"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/scheme_plugin.py", find = "d / \"commitment\\.json\"" },
+]
+readers = []
+
+[[message]]
+type = "RunTotals"
+second = true
+today = "each scheme's summary at the stop (`schemes/<name>/summary.json`)"
+writers = [
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/scheme_plugin.py", find = "d / \"summary\\.json\"" },
+]
+readers = []
