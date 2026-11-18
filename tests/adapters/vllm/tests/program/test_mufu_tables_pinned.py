@@ -64,6 +64,7 @@ def test_the_decoded_tables_are_core_library_tables():
 def test_the_arch_is_declared_never_read_from_the_environment(monkeypatch):
     monkeypatch.setenv("VERITY_ARCH", "sm_89")
     assert FA.arch_of({}) is None and FA.arch_of({"arch": "sm_89"}) == "sm_89"
+    assert FA.arch_of({"gpu": "NVIDIA GeForce RTX 4090", "gpu_name": "NVIDIA L40S"}) is None
     monkeypatch.setenv("VERITY_ARCH", "sm_90")
     row: dict[str, np.ndarray] = {"x": np.zeros(16, np.uint16), "w": np.zeros(16, np.uint16)}
     assert rms_relation.coverage({"extra": {"consts": {"eps": 1e-6}}}, row)["covered"]

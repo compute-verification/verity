@@ -95,7 +95,7 @@ def operands(node_or_inst: Any, inputs: Mapping[str, Any]) -> tuple[np.ndarray, 
     node = _node_of(node_or_inst)
     consts = dict(_extra(node).get("consts") or {})
     for name in ("num_heads", "num_kv_heads", "head_size", "block_size", "fa_version", "num_splits", "sliding_window",
-                 "logits_soft_cap", "kv_cache_dtype", "scale", "arch", "gpu", "gpu_name"):
+                 "logits_soft_cap", "kv_cache_dtype", "scale", "arch"):
         v = _const(node, inputs, name)
         if v is not None and name not in consts:
             consts[name] = v
