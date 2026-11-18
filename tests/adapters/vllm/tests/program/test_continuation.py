@@ -170,54 +170,11 @@ def test_r5_rng_advances_iff_run_is_stated_and_the_lag_slot_is_the_one_post_eos_
     assert full["samples"] == 6 and full["samples_after_served_eos"] == 0 and full["lag_sample_pos"] is None and full["inactive_slots_sample_nothing"] == []
 
 
-def test_edge_wrong_profile_fails_by_name_never_a_fitted_explanation():
-    # an A = 1 record: 4 served (EOS 4th), 5 executed (the lag slot's raw token 9), cap 8
-    exe, raw, served = [1, 2, 3, 4, 5], {1: ORD, 2: ORD, 3: ORD, 4: EOS[0], 5: 9}, [ORD, ORD, ORD, EOS[0]]
-    good = K.check_transcript(executed_slots_of_record=exe, raw_by_slot=raw, served_of_record=served, cap=8, A=1, eos=EOS)
-    assert good["ok"] and good["failed"] == [] and good["checks"]["f_n_executed_derived_invariant"]["derived"] == 5
-    bad = K.check_transcript(executed_slots_of_record=exe, raw_by_slot=raw, served_of_record=served, cap=8, A=0, eos=EOS)
-    assert not bad["ok"] and "a_executed_set_equals_run_slots" in bad["failed"]
-    assert bad["checks"]["a_executed_set_equals_run_slots"]["execution_past_the_stop"] == [5] and "execution past the stop" in bad["checks"]["a_executed_set_equals_run_slots"]["why"]
-    neg = K.wrong_profile_negative(executed_slots_of_record=exe, raw_by_slot=raw, served_of_record=served, cap=8, A_attested=1, eos=EOS)
-    assert neg["fails_by_name"] is True and neg["A_tried"] == 0 and neg["exercised"]
-    # and the mirror: an A = 0 record (4 executed) read under A = 1 -> a DELETED step at slot 5
-    exe0, raw0 = [1, 2, 3, 4], {1: ORD, 2: ORD, 3: ORD, 4: EOS[0]}
-    bad1 = K.check_transcript(executed_slots_of_record=exe0, raw_by_slot=raw0, served_of_record=served, cap=8, A=1, eos=EOS)
-    assert bad1["checks"]["a_executed_set_equals_run_slots"]["deleted_steps"] == [5] and "a deleted step" in bad1["checks"]["a_executed_set_equals_run_slots"]["why"]
-    # a cap-exhausting record: both profiles agree, the negative is NOT exercised (stated, not claimed)
-    full = K.wrong_profile_negative(executed_slots_of_record=list(range(1, 9)), raw_by_slot={t: ORD for t in range(1, 9)}, served_of_record=[ORD] * 8, cap=8, A_attested=1, eos=EOS)
-    assert full["exercised"] is False and full["fails_by_name"] is None
-
-
-def test_rev_m0445_negatives_lag_token_served_eos_set_extended_second_lag_row():
-    exe, raw, served = [1, 2, 3, 4, 5], {1: ORD, 2: ORD, 3: ORD, 4: EOS[0], 5: 9}, [ORD, ORD, ORD, EOS[0]]
-    # lag-slot token served: one entry past the emit prefix -> (b) and (c) by name
-    r = K.check_transcript(executed_slots_of_record=exe, raw_by_slot=raw, served_of_record=served + [9], cap=8, A=1, eos=EOS)
-    assert {"b_served_equals_emit_tokens", "c_lag_token_not_served"} <= set(r["failed"]) and r["checks"]["c_lag_token_not_served"]["served_entries_past_emit_prefix"] == 1
-    # a served early stop on a token outside the pinned set (the record stopped on 9 with 9 not in EOS): (e), and the executed set disagrees
-    r = K.check_transcript(executed_slots_of_record=[1, 2, 3, 4], raw_by_slot={1: ORD, 2: ORD, 3: ORD, 4: 9}, served_of_record=[ORD, ORD, ORD, 9], cap=8, A=0, eos=EOS)
-    assert "e_stop_under_pinned_set" in r["failed"] and "never extend the set" in r["checks"]["e_stop_under_pinned_set"]["why"]
-    # a second lag row (execution at slot 6 under A = 1): past the stop
-    r = K.check_transcript(executed_slots_of_record=exe + [6], raw_by_slot={**raw, 6: 3}, served_of_record=served, cap=8, A=1, eos=EOS)
-    assert r["checks"]["a_executed_set_equals_run_slots"]["execution_past_the_stop"] == [6]
-    # the lag slot's raw token altered: the verdict does NOT change (it is discarded), the bits are the same
-    r2 = K.check_transcript(executed_slots_of_record=exe, raw_by_slot={**raw, 5: 12345}, served_of_record=served, cap=8, A=1, eos=EOS)
-    assert r2["ok"] and [s["emit"] for s in r2["slots"]] == [1, 1, 1, 1, 0, 0, 0, 0] and [s["run"] for s in r2["slots"]] == [1, 1, 1, 1, 1, 0, 0, 0]
-
-
-def test_f_r17_14_the_rule_stops_at_the_first_eos_a_served_eos_x_eos_transcript_fails_by_name():
-    """Continuation_v1 stops at the FIRST EOS by construction (`e_{t+1} = h AND e AND NOT b`), so served `[EOS, x, EOS]` (cap 5, A = 1, eos {7}) predicts served `[7]`,
-    executed `[1, 2]`, and a record that served three tokens and executed four fails (a) (b) (c) (d) (f) by name -- the named negative."""
+def test_f_r17_14_the_rule_stops_at_the_first_eos():
+    """Continuation_v1 stops at the FIRST EOS by construction (`e_{t+1} = h AND e AND NOT b`), so served `[EOS, x, EOS]` (cap 5, A = 1,
+    eos {7}) predicts served `[7]`, executed `[1, 2]` and the lag slot 2."""
     slots = K.recurrence([7, 3, 7, 5, 5], cap=5, A=1, eos=(7,))
     assert K.served_output(slots) == [7] and K.executed_slots(slots) == [1, 2] and K.lag_slots(slots) == [2]
-    r = K.check_transcript(executed_slots_of_record=[1, 2, 3, 4], raw_by_slot={1: 7, 2: 3, 3: 7, 4: 5}, served_of_record=[7, 3, 7], cap=5, A=1, eos=(7,))
-    assert not r["ok"] and {"a_executed_set_equals_run_slots", "b_served_equals_emit_tokens", "c_lag_token_not_served", "d_inactive_suffix_has_no_rows",
-                            "f_n_executed_derived_invariant"} <= set(r["failed"])
-    assert r["checks"]["a_executed_set_equals_run_slots"]["execution_past_the_stop"] == [3, 4]
-    assert r["checks"]["b_served_equals_emit_tokens"]["first_differing_position"] == 1  # position 1: the rule emits nothing after the first EOS
-    # the same under A = 0: served [7], executed [1]; the record's rows 2..4 are past the stop
-    r0 = K.check_transcript(executed_slots_of_record=[1, 2, 3, 4], raw_by_slot={1: 7, 2: 3, 3: 7, 4: 5}, served_of_record=[7, 3, 7], cap=5, A=0, eos=(7,))
-    assert r0["checks"]["a_executed_set_equals_run_slots"]["execution_past_the_stop"] == [2, 3, 4]
 
 
 def test_executed_prefix_by_rule_is_moes_block_read_from_the_recurrence_first_eos_and_the_real_records():

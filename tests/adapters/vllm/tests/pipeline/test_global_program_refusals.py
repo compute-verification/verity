@@ -82,7 +82,7 @@ def test_components_of_two_executions_are_refused_with_the_applicability_they_de
 
 def test_a_component_derived_for_another_scheduler_is_refused_with_the_lag_the_workload_declares(tmp_path):
     m, derived = _row(tmp_path)
-    _stated(derived[0], lambda r: r.update(target={"declared": {"async_scheduling": False}}))
+    _stated(derived[0], lambda r: r.update(target={"declared": {"compute_capability": [8, 9], "num_sms": SMS, "async_scheduling": False}}))
     message = (f"component (LP=3, T=2) {derived[0]} was derived under a target resolving async_scheduling=False (LAG 0) but the workload's "
                f"declared target resolves async_scheduling=True (LAG 1): one workload Program cannot be specialized for two schedulers")
     lag = _refused(tmp_path, m, derived, "lag", message, "lag")["lag"]
