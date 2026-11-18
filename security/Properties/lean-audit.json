@@ -47,6 +47,7 @@
   "Properties.Spot.Members",
   "Properties.Spot.PlanCheck",
   "Properties.Spot.Wires",
+  "Properties.Spot.Edges",
   "Properties.Spot.Tables",
   "Properties.Spot.HistoryTable",
   "Properties.Spot.Rate",
@@ -2610,6 +2611,11 @@
    "imports": ["Definitions.Spot.Dataflow", "Spot"],
    "except": [],
    "why": "a wiring's dataflow is stated against the wiring check's own types and function (`Spot.Wires`) and the population vocabulary's acyclicity (`Definitions.Spot.Dataflow`), never a proof"
+  },
+  "Properties.Spot.Edges": {
+   "imports": ["Spot.Edges"],
+   "except": [],
+   "why": "the wires the Program's root states are stated against the derivation's own functions (`Spot.Edges`) and the Program's references (`Flock.Program`), never a proof"
   },
   "Properties.Spot.HistoryTable": {
    "imports": ["Spot.HistoryTable", "Definitions.Hash.HistoryTable", "Properties.Verity.Sha512"],
