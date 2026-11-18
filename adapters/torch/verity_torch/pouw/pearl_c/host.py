@@ -262,6 +262,15 @@ def memmove(dst: int, src: int, n: int, raw: int) -> None:
     ctypes.memmove(dst, src, n)
 
 
+def _pinned(n: int) -> Any:
+    """`n` pinned host bytes as a normal tensor, even when made inside inference mode (a vLLM forward, or
+    `PearlCDeviceRun.gemm`): the arena's bytes are written by copies outside it too (a pass's end), which torch refuses into
+    an inference tensor."""
+    import torch
+    with torch.inference_mode(False):
+        return torch.empty(n, dtype=torch.uint8, pin_memory=True)
+
+
 class _Ring:
     """Pinned host bytes handed out in order and given back in any order: a region is free again once it and every region
     handed out before it are given back."""
@@ -269,8 +278,7 @@ class _Ring:
     live: deque[list]
 
     def __init__(self, n: int):
-        import torch
-        self.buf, self.n, self.head, self.live = torch.empty(n, dtype=torch.uint8, pin_memory=True), n, 0, deque()
+        self.buf, self.n, self.head, self.live = _pinned(n), n, 0, deque()
 
     def take(self, size: int) -> tuple[list, Any] | None:
         if not self.live:
@@ -306,9 +314,8 @@ class _Arena:
         self.ring_bytes, self.count, self.rings, self.cv = ring_bytes, rings, [], threading.Condition()
 
     def take(self, size: int) -> tuple[Callable[[], None], Any]:
-        import torch
         if size > self.ring_bytes // 2:
-            return (lambda: None), torch.empty(size, dtype=torch.uint8, pin_memory=True)
+            return (lambda: None), _pinned(size)
         size = -(-size // 512) * 512
         with self.cv:
             if not self.rings:

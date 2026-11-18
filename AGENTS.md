@@ -64,7 +64,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   end to end, GPU probes, and `calibration/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command (`cli/`), `circuit_check/`, `graph/` (the check as a graph of tasks) and `lean/`
   (the Lean check); `tools/check/`: the one check.
-- `artifacts.json`: every replicated fixture by `art:` id (no root `fixtures/`: each file sits beside
+- `artifacts.json`: the fixture registry, every replicated fixture by `art:` id (no root `fixtures/`: each file sits beside
   its reader). `tests/`: invariants of the whole tree. The tree keeps no archive directory: code that is retired is
   deleted, and history keeps every file. The archived proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were
   deleted in `2091252fe3`; `git checkout 2091252fe3^ -- archive` restores them. The H200 demo and the rest of what the
