@@ -1,6 +1,6 @@
 """The bench timing guard: did anything compete with a timed run?
 
-``bench``, ``ir_bench`` and ``circuit_bench`` run their timed reps under a :class:`Guard`. A daemon thread samples, every
+``bench`` and ``circuit_bench`` run their timed reps under a :class:`Guard`. A daemon thread samples, every
 :data:`INTERVAL` s and once more at the end,
 
 * the GPU compute processes other than this one (``nvidia-smi --query-compute-apps``; the coordinator's rule is to time only
