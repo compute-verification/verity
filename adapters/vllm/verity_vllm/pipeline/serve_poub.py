@@ -5,9 +5,9 @@ server's engine.
 ~~~text
 preflight  refused before the model loads (`refusal`): an address that isn't HOST:PORT, a plan other than serve, and
            prefix caching (a hit brings a page back with its KV)
-build      before the engine is built, the session's engine arguments (synchronous scheduling, no prefix caching; the KV
-           pool the engine's own, outside the store) and the store binder on vLLM (`CommitSession.engine_args`,
-           `install`); after it, `CommitSession.check`, which registers --remote-filler-gib of zeros beside the weights.
+build      before the engine is built, the session's requests (one GPU, synchronous steps, no prefix caching; the KV
+           pool the engine's own, outside the store) and the store binder on the exchange (`CommitSession.install`),
+           which the build answers; after it, `CommitSession.check`, which registers --remote-filler-gib of zeros beside the weights.
            The engine then runs at LAG 0, so the bench row the server commits under declares ``async_scheduling``
            false, as a declared Commit's row does under its session (`CommitSession.target`)
 begin      once the committer has read every weight a seal reads, its weights tree at its build (`serve_seal.committer`)
@@ -94,8 +94,8 @@ class ServeSession:
         self.record: dict[str, Any] | None = None
 
     def engine_args(self, kw: dict[str, Any]) -> dict[str, Any]:
-        """The engine's arguments under the session, the store binder installed on vLLM: just before the build."""
-        kw = self.cs.engine_args(kw)
+        """The engine's arguments, unchanged, with the session's requests and the store binder on the exchange: just
+        before the build."""
         self.cs.install()
         return kw
 

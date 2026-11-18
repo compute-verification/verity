@@ -89,7 +89,8 @@ DELTA = Fraction(1, 100)
 def verifier() -> dict:
     """The build record's ``verifier`` (`arm.check_verifier`): Pearl+'s verdict on each shape's retained pass alone, the
     Lean's. First the Python twin (`served_passes.py verify --manifest`) judges the pass under the coins `dump` writes
-    beside it, at `DRAWS` samples on the node's sample, and writes its document and the verifier's coin record there; its
+    beside it, at `DRAWS` samples on the node's sample, and writes its document and the verifier's coin record into the
+    shape's ``{verdicts}`` (the run's ``verdicts/``; the pass stays in the private passes directory); its
     line names no transcript, so the harness never reads it as a verdict, and a twin that rejects ends the shape's commands
     unaccepted. Then the Lean step (`served_passes.py lean`, PouwCheck.PearlPlus's ``pouw-pearlplus`` built in the tree)
     judges the same pass, coins, samples and coin record, held to the twin's verdict: only its line starts ``ACCEPT`` or
@@ -99,10 +100,10 @@ def verifier() -> dict:
     return {"name": "served_passes.py lean: Pearl+'s verdict in Lean (PouwVerifier.PearlPlus) on a retained Pearl-C pass, "
                     "held to its Python twin", "per": "shape",
             "transcript": "transcripts/{arm}/{shape}/manifest.json", "control": "negative/{arm}/{shape}/manifest.json",
-            "commands": [["{python}", SERVED_PASSES, "verify", *pass_, "--coin-record", "{dir}/coin.json",
-                          "--out", "{dir}/pearlplus-verify.json", "--draws", str(DRAWS), "--commit", "{commit}"],
-                         ["{python}", SERVED_PASSES, "lean", *pass_, "--verify", "{dir}/pearlplus-verify.json",
-                          "--exe", "build", "--out", "{dir}/pearlplus-lean.json"]]}
+            "commands": [["{python}", SERVED_PASSES, "verify", *pass_, "--coin-record", "{verdicts}/coin.json",
+                          "--out", "{verdicts}/pearlplus-verify.json", "--draws", str(DRAWS), "--commit", "{commit}"],
+                         ["{python}", SERVED_PASSES, "lean", *pass_, "--verify", "{verdicts}/pearlplus-verify.json",
+                          "--exe", "build", "--out", "{verdicts}/pearlplus-lean.json"]]}
 
 
 def epsilon(m: int, n: int, k: int, card: str, delta: Fraction = DELTA) -> dict:
@@ -339,7 +340,7 @@ class _Held:
         self.wpipe = PPDR._pipeline(kernel, R.BM, wt.n, wt.k,
                                    {**{x: t.data_ptr() for x, t in wt.b.items()}, "line_a": 0, "segdig_b": self.seg.data_ptr()},
                                    self.xb.data_ptr(), {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 64,
-                                                        **self.run.const_keys}, variant=self.run.variant, weight=0)
+                                                        **self.run.const_keys}, variant=self.run.variant)
         self.wsteps = PPDR._steps(self.wpipe, PPD.EPOCH_STEPS + PPD.JOB_STEPS)
         self.ytrees = DeviceTrees(self.run)
 
@@ -386,6 +387,7 @@ class _YTree:
                                "take the wide row-digest kernels (hash_wide.cuh), which the loaded cubin lacks; build one that "
                                "has them")
         self.p, self.rows, self.launches = trees.pipe(n, index), SY.chunk_rows(m, n), SY.tree_launches
+        self.salts = trees.salts(m, index)
         self.tree = PPDR._zeros(self.R.NB * (2 * self.R.pow2(m) - 1), run.device)
         self.bufs = [self.tree] + [PPDR._zeros(size, run.device) for size in (64 * m, 64 * (n // 256) * self.rows, 4 * n * self.rows)]
         self.at = tuple(t.data_ptr() for t in self.bufs)
@@ -398,7 +400,7 @@ class _YTree:
         def widened(r: int, count: int) -> int:
             R.widen_a(dev, y + 2 * n * r, words, count, count, n, pdl=False)
             return words
-        self.launches(R, self.p, tree, dig, seg, self.m, self.rows, self.index, widened)
+        self.launches(R, self.p, tree, dig, seg, self.m, self.rows, self.index, widened, self.salts)
 
 
 class _Call:

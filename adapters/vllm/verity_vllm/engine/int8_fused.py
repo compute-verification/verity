@@ -61,7 +61,7 @@ import triton.language as tl
 from verity_vllm import settings
 from verity_vllm.engine import int8_wgmma
 from verity_vllm.engine.int8_exact import UNIT, ZY_BYTES, zy_units
-from verity_vllm.engine.profiles.devices import card_arch
+from verity_vllm.config import card_arch
 from verity_vllm.engine.profiles.int8_gemm_configs import CONFIGS
 from verity_vllm.engine.profiles.int8_quant_plans import PRODUCER_WARPS, QUANT_PLANS
 

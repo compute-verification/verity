@@ -52,6 +52,11 @@ class Exchange:
         """The workload's step: 0 before serving begins."""
         return 0 if self._step is None else self._step
 
+    @property
+    def next_step(self) -> int:
+        """The step the workload schedules next, which a step being scheduled is until its `StepBegan`."""
+        return 0 if self._step is None else self._step + 1
+
     @step.setter
     def step(self, value: int) -> None:
         self._step = value
@@ -159,10 +164,6 @@ class Exchange:
     def refused(self, input: str) -> list[tuple[str, str]]:
         """Each scheme that refused input ``input`` (`RefuseInput`), with its reason."""
         return [(n, r.why) for n, r in self._filed(H.RefuseInput) if r.input == input]
-
-    def held(self, input: str, step: int) -> bool:
-        """Whether an output of ``input`` may not leave at ``step`` (`HoldRelease`)."""
-        return any(r.input == input and step < r.until for _, r in self._filed(H.HoldRelease))
 
     def resident(self, range_: int, step: int) -> bool:
         """Whether range ``range_`` must stay allocated at ``step`` (`HoldResident`)."""

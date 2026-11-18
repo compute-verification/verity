@@ -40,7 +40,8 @@
 # The replay runs under the arms' lease, after them. An arm of ours that serves on the canonical DSA top-k (prod-record)
 # is replayed on it, and keeps files on the node: PRIVATE names a directory for them outside every run's (the corpus
 # client needs it for such an arm), from which the report reads the top-k's counters and keeps them in
-# OUT/topk_counters.json.
+# OUT/topk_counters.json. An arm that records (its step traces and served ids, prod-record's) and the replay (its
+# tokens) keep them there too, so without PRIVATE such a job is refused before anything is served.
 # The advice line is of the pass the replay re-runs: what its schedule costs as advice, by the scheduler replay's
 # loader (benchmarks/network_e2e/encodings/replay.py).
 # The --replay-of form serves nothing: it copies ours's directory from an earlier job's out/ into this job's and
@@ -121,6 +122,12 @@ export MODEL_ID CLIENT ${MAX_MODEL_LEN:+MAX_MODEL_LEN} ${PASS_PROMPTS:+PASS_PROM
 # ours's directory the replay reads: its first lifetime's where the arms are served in lifetimes
 ours_dir=$OURS; [ "${LIFETIMES:-1}" = 1 ] || ours_dir=$OURS.1
 [ -z "${STOP_AT:-}" ] || date -d "$STOP_AT" +%s > /dev/null || { echo "prod_repro: --stop-at $STOP_AT is not a time"; exit 2; }
+if [ -z "${PRIVATE:-}" ]; then
+  [ -z "$REPLAY_OF" ] || { echo "prod_repro: --replay-of replays, and a replay keeps its tokens on the node: PRIVATE, a directory outside every run's"; exit 2; }
+  recording=$("$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import serve_tax as S
+print(" ".join(a for a in sys.argv[2:] if S.records(S.ARMS[a])))' "$here/../serve_tax" $served) || exit 2
+  [ -z "$recording" ] || { echo "prod_repro: arms $recording record their step traces or served ids, which hold request values: PRIVATE, a directory outside every run's"; exit 2; }
+fi
 # the pass of ours the replay re-runs: REPLAY, REPLAY_FROM and REPLAY_MODES are the benchmark's runner's
 replays() {
   if [ "$REPLAYED" = none ]; then unset REPLAY REPLAY_FROM; else export REPLAY=$REPLAYED REPLAY_FROM=$OUT/$ours_dir REPLAY_MODES; fi

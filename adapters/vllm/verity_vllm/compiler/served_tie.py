@@ -80,7 +80,7 @@ from verity.commitments.gates.frame_v3 import _part, _refs
 from verity.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf
 from verity.commitments.gates import bits as GB
-from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.circuits.boolean import benes as BN
 
 from verity_vllm.compiler import replay_chain as RC
 
@@ -105,7 +105,7 @@ def _sizes(S, *names: str) -> None:
 def _step_widths(S) -> SimpleNamespace:
     _sizes(S, "R", "L", "T")
     LW, TW = _bitlen(S.L), _bitlen(S.T)
-    D = IT.route_depth(S.T, S.R)
+    D = BN.route_depth(S.T, S.R)
     return SimpleNamespace(LW=LW, TW=TW, W=TW + _bitlen(S.R), X=max(LW, TW) + 1, V=TW + LW, D=D, M=1 << D,
                            SW=(2 * D - 1) << (D - 1))
 
@@ -255,7 +255,7 @@ def _body_step(B, S, step, n, chunks, switches):
     Z, K = _step_widths(S), GB._Consts(B)
     sl = _refs(B.call(bind(ServedTieSlots, R=S.R, L=S.L, T=S.T), step, n))
     recs = GB._coll(Array(Z.M, Array(Z.V, BIT)), sl[2:] + K.bits(0, (Z.M - S.R) * Z.V))
-    routed = B.call(bind(IT.IoTieRoute, W=Z.V, D=Z.D), recs, switches)
+    routed = B.call(bind(BN.IoTieRoute, W=Z.V, D=Z.D), recs, switches)
     pos = B.call(bind(ServedTieScan, R=S.R, L=S.L, T=S.T, IB=S.IB, PB=S.PB), routed, n, chunks, GB._coll(BIT, [sl[1]]))
     return GB._coll(Array(2, BIT), [sl[0], *_refs(pos)])
 
@@ -396,7 +396,7 @@ def _live(S, a: int, n: int, N: int) -> bool:
 
 
 def reference(S, unit_rows: dict) -> dict[str, bool]:
-    """The circuit's flags in integers, the switches read: each step's records routed (`io_tie.benes_apply`) and scanned."""
+    """The circuit's flags in integers, the switches read: each step's records routed (`benes.benes_apply`) and scanned."""
     Z = widths(S)
     inside, steps = _steps(S, unit_rows)
     count, pos = inside, True
@@ -404,7 +404,7 @@ def reference(S, unit_rows: dict) -> dict[str, bool]:
         runs, end = _runs(S, f)
         count &= end == N and N <= S.T
         xs = [(a + 1 if _live(S, a, n, N) else 0, s) for a, n, s in runs] + [(0, 0)] * (Z.M - S.R)
-        routed = IT.benes_apply(xs, sw)
+        routed = BN.benes_apply(xs, sw)
         ok = end >= N and all(v in (0, t + 1) if t < S.T else v == 0 for t, (v, _s) in enumerate(routed))
         for t in range(min(N, S.T)):
             v, s = routed[t]
@@ -421,7 +421,7 @@ def route(S, f: dict, N: int) -> list[int]:
         if _live(S, a, n, N):
             perm[k] = a
     rest = iter(sorted(set(range(Z.M)) - set(perm)))
-    return IT.benes([p if p >= 0 else next(rest) for p in perm])
+    return BN.benes([p if p >= 0 else next(rest) for p in perm])
 
 
 def verdict(flags: dict) -> int:
@@ -497,11 +497,11 @@ def evaluate(st: dict, cases: Sequence[Case]) -> list[int]:
 
 def _build_route(C, S, xs: list, sw: list) -> list:
     """`IoTieRoute{W, D}` on C's wires as Flock lowers it, each `IoTieSwitch` activation by its builder, the switch bits
-    in `IT.benes`' order: the input column, the upper half's, the lower half's, the output column."""
+    in `benes.benes`' order: the input column, the upper half's, the lower half's, the output column."""
     it = iter(sw)
 
     def column(pairs: list) -> list:
-        return [IT.IoTieSwitch.build(C, S, a, b, [next(it)]) for a, b in pairs]
+        return [BN.IoTieSwitch.build(C, S, a, b, [next(it)]) for a, b in pairs]
 
     def run(v: list) -> list:
         if len(v) == 2:

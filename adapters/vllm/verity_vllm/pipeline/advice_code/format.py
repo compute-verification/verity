@@ -44,6 +44,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, NamedTuple
 
+__all__ = ["Advice", "bits_by_window", "decode", "encode", "from_json", "MalformedAdvice", "outputs", "RequestAdvice", "Row",
+    "SCHEMA", "Source", "StepAdvice", "total_bits", "WIDTH_BITS"]
+
 SCHEMA = "verity/advice/v0"
 VERSION = 0
 KINDS = ("prefill", "decode")

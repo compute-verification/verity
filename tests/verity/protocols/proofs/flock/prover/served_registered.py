@@ -108,7 +108,7 @@ def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
     outs = np.asarray(s.port("out", 0, N), np.uint16).reshape(N, -1)
     reg_out = G.Registered.commit(P.program_digest(prog), OUT_VALUE, outs.tolist(), schema=bit_rows)
     out_rows, out_salts, out_entry = reg_out.statement(range(N))
-    FC.write(text, s, 0, N, out / f"inst-{N}.bin", out / f"pub-{N}.bin", None, list(range(N)), share_rows=True,
+    FC.write(text, s, 0, N, out / f"inst-{N}.bin", out / f"pub-{N}.bin", list(range(N)), share_rows=True,
              outs={"out": np.asarray(out_rows, np.uint16)},
              tables={"x": np.asarray(x_rows), "cs": np.asarray(rows)}, refs={"x": list(range(N)), "cs": refs},
              salts={"x": x_salts, "cs": salts, "out": out_salts},

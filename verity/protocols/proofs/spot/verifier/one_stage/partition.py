@@ -49,7 +49,7 @@ from verity.circuits.partition_object import (FORMAT, QueryRefused, program_sha5
 from verity.circuits.partition_v2 import SIZE_CLASS_MAX, size_class
 from verity.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
 from verity.circuits.program import Program, is_input, is_registered
-from verity.circuits.refs import Affine, Concat, Strided
+from verity.circuits.refs import Affine, Concat, Grid, Strided
 from verity.circuits.types import Value
 
 _PRE_CANONICAL = {"program", "query"}
@@ -264,8 +264,8 @@ def _runs(refs: Any) -> Iterator[tuple[int, int, int, bool]]:
     span; an explicit one is a run a reference, which the description lists."""
     if not refs.count:
         return
-    if isinstance(refs, Concat):
-        for p in refs.parts:
+    if isinstance(refs, (Concat, Grid)):
+        for p in refs.parts if isinstance(refs, Concat) else refs.pieces():
             yield from _runs(p)
     elif isinstance(refs, Affine):
         if refs.space == "n":

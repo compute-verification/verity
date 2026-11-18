@@ -39,14 +39,25 @@ def relation(template: str) -> str:
     return f"circuit:{template}"
 
 
-#: Both pods stage from one salt key, derived from the set's content digest, so the verifier pod stages its own public files: the
-#: salts are public in a benchmark, which measures proving, not the serving side's hiding (the checking process never reads a
-#: salt: its file has none).
-STAGE_SALTS = "public benchmark key: sha256('verity/flock-circuit/bench-stage-salts' || content_digest)"
+#: Both pods stage from the same public salts, derived from the set's content digest, so the verifier pod stages its own
+#: public files: the salts are public in a benchmark, which measures proving, not the serving side's hiding (the checking
+#: process never reads a salt: its file has none).
+STAGE_SALTS = "public benchmark salts: SHA-512('verity/flock-circuit/bench-public-salts' || content_digest || port || row || j), j < 3"
 
 
-def salt_key(input_set) -> bytes:
-    return hashlib.sha256(b"verity/flock-circuit/bench-stage-salts\0" + bytes.fromhex(input_set.content_digest)).digest()
+class PublicSalts(dict):
+    """Every row's public salt in instances [lo, hi) (`STAGE_SALTS`), made on first read of a port."""
+
+    def __init__(self, input_set, lo: int, hi: int):
+        super().__init__()
+        self.tag = b"verity/flock-circuit/bench-public-salts\0" + bytes.fromhex(input_set.content_digest)
+        self.rows = range(lo, hi)
+
+    def __missing__(self, port: str) -> list[bytes]:
+        pre = self.tag + port.encode() + b"\0"
+        self[port] = [b"".join(hashlib.sha512(pre + i.to_bytes(8, "big") + bytes([j])).digest() for j in range(3))
+                      for i in self.rows]
+        return self[port]
 
 
 def stage_point(a, low, input_set, total: int, d: Path, public: bool) -> tuple[list[tuple[int, int]], float]:
@@ -55,7 +66,7 @@ def stage_point(a, low, input_set, total: int, d: Path, public: bool) -> tuple[l
     t0 = time.time()
     stage = TS.stage if a.typed else FC.stage
     for i, (lo, hi) in enumerate(subs):
-        p = stage(low, input_set, lo, hi, d / f"stage-s{i}", public_only=public, salt_key=salt_key(input_set))
+        p = stage(low, input_set, lo, hi, d / f"stage-s{i}", public_only=public, salts=PublicSalts(input_set, lo, hi))
         os.replace(p, d / f"instances-s{i}.bin")
     return subs, time.time() - t0
 

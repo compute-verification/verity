@@ -18,8 +18,8 @@ commit_slots (the commit path beside this directory) runs on it: the calls below
 E = engine.Engine("cuda", build=DIR)                       # a CUDA device; Engine("host", build=DIR) is the host twin
 rows = E.rows(parts_of_each_row, tensors)                  # parts: (tensor, byte offset, bytes), at most 2 a row
 x = E.row_digests(rows, variant=None)                      # (G, S, 8)
-lt = E.leaf_table(dids, did_of_row, rank, position, salt_row)
-leaves = E.leaves(lt, x, engine.SaltKey(key, nonce0))      # (G, S, 8); or salts=(G, S, 192) uint8 from the caller
+lt = E.leaf_table(dids, did_of_row, rank, position)
+leaves = E.leaves(lt, x, salts)                            # (G, S, 8); salts: (G, S, 192) uint8, the caller's fresh bytes
 leaves = E.commit_rows(rows, lt, salts)                    # both: rows in, leaf digests out
 ft = E.frame_table(dids, rank0, n, schema)                 # n proof blocks' frame leaves (rank0 + j)
 rest = E.leaves(lt, x, salts, out, frames=ft, dest=dest, run=run)   # one-row proof blocks' frame leaves too, into run
@@ -27,11 +27,15 @@ E.frame_units(ft, units, values, run)                      # run[s][units[i]]: t
 E.frame_leaves(values, dids, rank0, schema)                # (T, n, 8): leaf (rank0 + j, rank0 + j, schema, value)
 E.level(children, dids, level, first, pre=None)            # (T, w, 8) nodes first .. first + w - 1 over (T, 2w, 8)
 E.pads(dids, trees, first, n); E.root(leaves, dids)        # pads; each tree's root (tree_levels' padding)
-E.counts()                                                 # the host twin's compressions and ChaCha20 chunks
+E.counts()                                                 # the host twin's compressions
+E.resalt(graph_exec, nodes, n, captured, salts)            # a captured graph's leaf launches read another salt buffer
 ```
 
-`tensors` are (slots, …) with contiguous slot rows. `SaltKey` derives row r's salt in slot s as ChaCha20 chunks 3r … 3r + 2
-under the key with nonce `nonce0 + s` (Flock's `hm96_salt`, commit_slots' `row_salts`). The leaf kernel runs at 1 or
+`tensors` are (slots, …) with contiguous slot rows. A leaf's salt is data: `salts[g, s]` is row g's 192 bytes in slot s,
+the caller's fresh operating-system bytes (`hm96.SHA512.fresh_salt()`, one draw a leaf) in a buffer on the engine's
+device, read in place at whatever row and slot strides the caller's view has (on a CUDA device its address and strides
+are multiples of 16 bytes); the engine derives no salt and holds no key, and salts given twice give the same leaves. The
+leaf kernel runs at 1 or
 2 CTAs an SM (`leaves(..., minb=)`), on all the device's SMs or `leaves(..., sms=)` of them, for a stream on a green
 context of that many (commit_slots' `Plan(sms=)`). Calls run on the current torch stream.
 
@@ -52,7 +56,7 @@ under the caller's `build` directory, and the benchmarks read both from their `S
 
 ## Files
 
-- `rows.cuh`: the row digest and the schedule (the layout `engine.py` fills, the salts, each lane's column order) as
+- `rows.cuh`: the row digest and the schedule (the layout `engine.py` fills, where a leaf's salt is read, each lane's column order) as
   host+device functions. The frame-v3-sha512 leaf, node and pad and the hm96 leaf's mask, salt digest and value are
   `verity/commitments/cuda/row_commit.cuh`'s.
 - `rows.cu`: the kernels.

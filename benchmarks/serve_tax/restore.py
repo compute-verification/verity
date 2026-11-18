@@ -76,7 +76,8 @@ def served(arm_dir: Path, kv_dir: Path, a: int, b: int) -> dict[str, Any]:
                            "max_tokens": r["sampling"].get("max_tokens"), "prompt_ids": plan[client[http]["i"]]["prompt_ids"]})
     steps = {r["step"]: r for r in tr if r["kind"] == "step" and lo <= r["step"] < hi}
     outs: dict[int, dict] = {}
-    for f in sorted((srv / "edges").glob("outputs.*.jsonl*")):
+    kept = S.private_of(arm_dir)
+    for f in sorted((kept / "server" / "edges").glob("outputs.*.jsonl*")) if kept else ():
         outs |= {o["step"]: o["out"] for o in S.trace_records(f) if lo <= o["step"] < hi}
     return {"edges": edges, "files": files, "state": st, "dumps": dumps, "lo": lo, "hi": hi, "header": tr[0],
             "arrive": arrive, "steps": steps, "outputs": outs}

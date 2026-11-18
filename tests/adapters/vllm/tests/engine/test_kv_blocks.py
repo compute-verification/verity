@@ -1,7 +1,8 @@
 """The KV block hook (`engine.kv_blocks`) on vLLM's KV cache manager, block pool and scheduler under the stand-in for
-vLLM: the events on the exchange in the order vLLM acts, each at its step and an allocation for its request,
-ReuseOldestFreed's reuse order, HoldResident's held blocks, a prefix-cache hit as a reused allocation, a step's writes,
-and one set of patches for every attachment."""
+vLLM, the admission hook (`engine.admission`) emitting the steps: the events on the exchange in the order vLLM acts,
+each at its step and an allocation for its request, ReuseOldestFreed's reuse order, HoldResident's held blocks, a
+prefix-cache hit as a reused allocation, a step's writes, one set of patches for every attachment, and no step of its
+own."""
 from __future__ import annotations
 
 from collections import deque
@@ -10,16 +11,16 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.hooks import (HoldResident, RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues,
+from verity.hooks import (HoldResident, RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, ReleaseValue,
                           ReuseOldestFreed, StepBegan, StepEnded)
 
 from tests import fake_vllm
 from verity_vllm import messages
-from verity_vllm.engine import hooks, kv_blocks
+from verity_vllm.engine import admission, hooks, kv_blocks
 
 PAGES, SLOTS = 6, 16
 SITES = {"manager": ("allocate_slots",), "pool": ("get_new_blocks", "free_blocks", "touch"),
-         "scheduler": ("schedule", "update_from_output"), "runner": ("load_model", "initialize_kv_cache")}
+         "scheduler": ("schedule",), "runner": ("load_model", "initialize_kv_cache")}
 FIRST_RUNNER, RUNNER_V2 = kv_blocks.RUNNERS
 
 
@@ -109,8 +110,16 @@ def kv_classes(fake: fake_vllm.FakeVllm, state: Callable[[], Any] = lambda: None
             self.stm = SimpleNamespace(block_size=SLOTS, req_to_blocks={})
             self.kv_cache_manager = SimpleNamespace(coordinator=SimpleNamespace(single_type_managers=[self.stm]))
             self.requests: dict[str, Any] = {}
-            self.output = SimpleNamespace(num_scheduled_tokens={})
+            self.output = output({})
+            self.outputs: dict = {}
+            self.waiting: list = []
             self.during: Callable[[], None] = lambda: None
+
+        def add_request(self, request):
+            calls.append(("add_request", request.request_id))
+
+        def finish_requests(self, request_ids, status):
+            calls.append(("finish_requests", request_ids))
 
         def schedule(self, *a, **kw):
             calls.append(("schedule", a, kw, state()))
@@ -119,7 +128,7 @@ def kv_classes(fake: fake_vllm.FakeVllm, state: Callable[[], Any] = lambda: None
 
         def update_from_output(self, so, out):
             calls.append(("update_from_output", so is self.output, out, state()))
-            return "outputs"
+            return self.outputs
 
     fake.set("vllm.v1.core.block_pool:BlockPool", BlockPool)
     fake.set("vllm.v1.core.kv_cache_manager:KVCacheManager", KVCacheManager)
@@ -128,6 +137,17 @@ def kv_classes(fake: fake_vllm.FakeVllm, state: Callable[[], Any] = lambda: None
               *((r, SITES["runner"]) for r in runners)]
     return SimpleNamespace(calls=calls, pool=BlockPool, manager=KVCacheManager, scheduler=Scheduler, runners=runners,
                            sites={(cls, name): vars(cls)[name] for cls, names in owners for name in names})
+
+
+def output(tokens: dict[str, int]) -> SimpleNamespace:
+    return SimpleNamespace(num_scheduled_tokens=tokens, total_num_scheduled_tokens=sum(tokens.values()))
+
+
+def admitted(v: SimpleNamespace) -> Any:
+    """A stand-in scheduler with the admission hook on it, the emitter of its steps."""
+    sched = v.scheduler()
+    admission.install(sched)
+    return sched
 
 
 @pytest.fixture
@@ -154,25 +174,29 @@ def subscribe():
 
 def test_the_events_come_in_vllms_order_each_at_its_step_and_for_its_request(monkeypatch, subscribe):
     """Blocks allocated inside ``allocate_slots`` are the request's, at the step being scheduled; after vLLM's
-    ``schedule`` come the slots the step writes and then its beginning, and its end before vLLM's
-    ``update_from_output``; blocks freed there are freed at that step; vLLM's own methods run with their arguments and
+    ``schedule`` come the slots the step writes and then the step's beginning, and its end after vLLM's
+    ``update_from_output``; blocks freed after it are freed at that step; vLLM's own methods run with their arguments and
     answer."""
     v = kv_classes(fake_vllm.install(monkeypatch))
     heard = subscribe()
-    pool, sched = v.pool(), v.scheduler()
+    pool, sched = v.pool(), admitted(v)
     manager = v.manager(pool)
     a, c = SimpleNamespace(request_id="a"), SimpleNamespace(request_id="c")
     sched.requests = {"a": SimpleNamespace(num_computed_tokens=20), "c": SimpleNamespace(num_computed_tokens=3)}
-    sched.output = SimpleNamespace(num_scheduled_tokens={"a": 20, "c": 3})
+    sched.output = output({"a": 20, "c": 3})
     sched.during = lambda: sched.stm.req_to_blocks.update(a=manager.allocate_slots(a, 2), c=manager.allocate_slots(c, 1))
     so = sched.schedule("x", k=1)
     assert so is sched.output and v.calls[0] == ("schedule", ("x",), {"k": 1}, None)
-    assert sched.update_from_output(so, "out") == "outputs" and v.calls[-1] == ("update_from_output", True, "out", None)
+    assert sched.update_from_output(so, "out") is sched.outputs and v.calls[-1] == ("update_from_output", True, "out", None)
     pool.free_blocks(iter(sched.stm.req_to_blocks["a"]))
     assert heard == [RangeAllocated((1, 2), "a", step=0), RangeAllocated((3,), "c", step=0),
                      RangeWritten(1, 0, 16, 0), RangeWritten(2, 0, 4, 0), RangeWritten(3, 0, 3, 0),
                      StepBegan(0, ("a", "c"), 23), StepEnded(0), RangeFreed((1, 2), step=0)]
-    assert [x.block_id for x in pool.free_block_queue.q] == [2, 1, 4, 5]
+    sched.output = output({"c": 1})
+    sched.during = lambda: sched.stm.req_to_blocks.update(c=sched.stm.req_to_blocks["c"] + manager.allocate_slots(c, 1))
+    sched.schedule()
+    assert heard[-3:] == [RangeAllocated((2,), "c", step=1), RangeWritten(3, 2, 1, 1), StepBegan(1, ("c",), 1)]
+    assert [x.block_id for x in pool.free_block_queue.q] == [1, 4, 5]
 
 
 def test_the_patches_are_one_set_for_every_attachment_and_the_last_detach_takes_them_off(monkeypatch):
@@ -197,17 +221,18 @@ def test_the_patches_are_one_set_for_every_attachment_and_the_last_detach_takes_
     messages.close()
 
 
-def test_with_no_subscriber_the_hook_still_keeps_the_step(monkeypatch):
+def test_the_hook_emits_no_step_and_stamps_the_exchanges(monkeypatch, subscribe):
+    """Without the admission hook no step begins or ends; a block allocated while scheduling is at the exchange's next
+    step, and one freed outside it at the exchange's step."""
     v = kv_classes(fake_vllm.install(monkeypatch))
-    messages.close()
-    off, sched = kv_blocks.attach(), v.scheduler()
-    try:
-        sched.schedule()
-        sched.schedule()
-        assert messages.current().step == 1
-    finally:
-        off()
-        messages.close()
+    heard = subscribe()
+    pool, sched = v.pool(), v.scheduler()
+    ex = messages.current()
+    ex.step = 4
+    sched.during = lambda: pool.get_new_blocks(1)
+    sched.update_from_output(sched.schedule(), None)
+    pool.free_blocks(pool.blocks[1:2])
+    assert heard == [RangeAllocated((1,), step=5), RangeFreed((1,), step=4)] and ex.step == 4
 
 
 @pytest.mark.parametrize("hold", [False, True])
@@ -239,31 +264,90 @@ def test_a_block_held_resident_is_freed_at_the_first_step_it_no_longer_is(monkey
     RangeFreed, when the scheduler begins the step the hold ends at."""
     v = kv_classes(fake_vllm.install(monkeypatch))
     heard = subscribe(HoldResident(2, 2))
-    pool, sched = v.pool(), v.scheduler()
+    pool, sched = v.pool(), admitted(v)
+    sched.output = SimpleNamespace(num_scheduled_tokens={}, total_num_scheduled_tokens=1)
     got = pool.get_new_blocks(2)
     sched.schedule()
     pool.free_blocks(got)
     assert heard[-1] == RangeFreed((1,), step=0) and [x.block_id for x in pool.free_block_queue.q] == [1, 3, 4, 5]
     sched.schedule()
-    assert heard[-1] == StepBegan(1, (), 0) and got[1].ref_cnt == 1
+    assert heard[-1] == StepBegan(1, (), 1) and got[1].ref_cnt == 1
     sched.schedule()
-    assert heard[-2:] == [RangeFreed((2,), step=2), StepBegan(2, (), 0)] and got[1].ref_cnt == 0
+    assert heard[-2:] == [RangeFreed((2,), step=2), StepBegan(2, (), 1)] and got[1].ref_cnt == 0
     assert [x.block_id for x in pool.free_block_queue.q] == [2, 1, 3, 4, 5]
 
 
 def test_a_runner_emits_its_registered_values_after_load_and_its_ranges_after_the_real_kv_cache(monkeypatch, subscribe):
-    """After vLLM's own `load_model`, the loaded model's parameters, each by name; after vLLM's own
-    `initialize_kv_cache`, unless profiling (its flag by position or by name), the pool's ranges with each layer's
-    cache a store."""
+    """After vLLM's own `load_model`, the loaded model's parameters, each by name, a linear layer's weight marked
+    linear; after vLLM's own `initialize_kv_cache`, unless profiling (its flag by position or by name), the pool's
+    ranges with each layer's cache a store."""
+    class LinearBase:
+        pass
+
+    class RowLinear(LinearBase):
+        pass
+
     caches = [SimpleNamespace(numel=lambda: 2 * PAGES * SLOTS * 64, element_size=lambda: 2)] * 2
     w = SimpleNamespace(numel=lambda: 4, data_ptr=lambda: 1, data="w")
-    model = SimpleNamespace(named_parameters=lambda: [("w", w)])
+    pw = SimpleNamespace(numel=lambda: 4, data_ptr=lambda: 2, data="pw")
+    model = SimpleNamespace(named_parameters=lambda: [("w", w), ("proj.weight", pw)],
+                            named_modules=lambda: [("", model), ("proj", RowLinear())])
     v = kv_classes(fake_vllm.install(monkeypatch), held=lambda: {
         "model": model, "kv_caches": caches, "cache_config": SimpleNamespace(block_size=SLOTS),
         "kernel_block_sizes": [SLOTS]})
     heard = subscribe()
     r, config = v.runners[0](), SimpleNamespace(num_blocks=PAGES)
-    assert r.load_model("x") == "loaded" and heard == [RegisteredValues((("w", "w"),))]
+    assert r.load_model("x") == "loaded" and heard == [RegisteredValues((("w", "w"), ("proj.weight", "pw")), linear=frozenset({"proj.weight"}))]
     assert r.initialize_kv_cache(config, True) == r.initialize_kv_cache(config, is_profiling=True) == "kv"
     assert len(heard) == 1 and r.initialize_kv_cache(config) == "kv"
     assert heard[1:] == [RangesDeclared(PAGES, SLOTS, 2 * 64 * 2, 1, tuple(caches))]
+
+
+def test_a_built_engine_has_one_step_emitter(monkeypatch, subscribe):
+    """`build.hooked` puts the memory hook on and the admission hook on the in-process scheduler; installing admission
+    again gives that hook back, so each scheduled step begins and ends once; the removal takes the admission hook off and
+    its attachment of the memory hook (the fixture's stays)."""
+    from verity_vllm.engine import build
+    v = kv_classes(fake_vllm.install(monkeypatch))
+    heard = subscribe()
+    sched = v.scheduler()
+    llm = SimpleNamespace(llm_engine=SimpleNamespace(engine_core=SimpleNamespace(engine_core=SimpleNamespace(scheduler=sched))))
+    built, hook, off = build.hooked(lambda: llm)
+    assert built is llm and admission.install(sched) is hook
+    sched.output = SimpleNamespace(num_scheduled_tokens={}, total_num_scheduled_tokens=1)
+    sched.update_from_output(sched.schedule(), None)
+    assert [e for e in heard if isinstance(e, StepBegan | StepEnded)] == [StepBegan(0, (), 1), StepEnded(0)]
+    off()
+    assert "schedule" not in vars(sched) and len(hooks.live(kv_blocks.TAG)) == len(v.sites)
+
+
+def test_a_released_value_is_empty_from_its_load_and_restored_at_the_last_detach(monkeypatch):
+    """A `ReleaseValue` empties every parameter on the value's storage (a tied one too) once vLLM's own `load_model`
+    has run, and the last detach sets each to what ``restore()`` gives; a value the model has no parameter of is
+    refused by name."""
+    import torch
+    model = torch.nn.Module()
+    model.proj = torch.nn.Linear(4, 2, bias=False)
+    model.head = torch.nn.Linear(4, 2, bias=False)
+    model.head.weight = model.proj.weight
+    model.other = torch.nn.Linear(4, 2, bias=False)
+    v = kv_classes(fake_vllm.install(monkeypatch), held=lambda: {"model": model})
+    messages.close()
+    back = torch.arange(8.0).view(2, 4)
+    messages.current().request("test", ReleaseValue("proj.weight", lambda: back))
+    off = kv_blocks.attach()
+    try:
+        v.runners[0]().load_model()
+        assert model.proj.weight.numel() == model.head.weight.numel() == 0 and model.other.weight.numel() == 8
+    finally:
+        off()
+    assert torch.equal(model.proj.weight, back) and model.head.weight is model.proj.weight
+    messages.close()
+    messages.current().request("test", ReleaseValue("nope", lambda: back))
+    off = kv_blocks.attach()
+    try:
+        with pytest.raises(RuntimeError, match="registered value nope released"):
+            v.runners[0]().load_model()
+    finally:
+        off()
+        messages.close()
