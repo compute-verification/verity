@@ -244,7 +244,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert not missing, missing
     case = json.loads((out / "window" / "case-v2.json").read_text())
     assert len(case["params"]["proofs"]["members"]) == 2 and "challenger" not in case["params"]
-    assert json.loads((out / "window" / "case-sampled.json").read_text())["params"]["form"] == "one-stage"
+    assert json.loads((out / "window" / "case-sampled.json").read_text())["params"]["levels"] == 1
 
 
 def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case(tmp_path, binaries):
