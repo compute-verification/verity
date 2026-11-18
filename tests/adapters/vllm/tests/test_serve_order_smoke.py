@@ -5,9 +5,17 @@ Each negative control breaks one stand-in and the smoke fails by that reason.
 
 What a processor can't run stays a stand-in, each emitting by hand where the serve's emitter needs a card (`HAND`):
 build_engine's answer (it reads the row's checkpoint manifest), the native committer's `ValueProduced`, the engine's
-input batch and the HTTP route around the server's admission. Not driven: the window's seal (``--seal``, a sealer
-process) and the plugin's attach (`scheme_plugin`), the launcher form that passes the network attester its ``feed``. A
-scheme a processor can't attach fails with its reason unless `EXCEPTED` names what it lacks and what covers it instead."""
+input batch and the HTTP route around the server's admission. A scheme a processor can't attach fails with its reason
+unless `EXCEPTED` names what it lacks and what covers it instead.
+
+What the smoke does not show:
+- the plugin's form (`scheme_plugin` under vLLM's own server, the launcher form that passes the network attester its
+  ``feed``): its order is vLLM's engine core loop and ASGI server, which a stand-in would write rather than run;
+- the window's seal (``--seal``): `serve_seal.seal_of` and the sealer process read the engine's facts of record and the
+  registered tensors from the device;
+- the HTTP route on a socket (`serve_openai.HttpThread`, `Server.completions`' stream): sends enter at `Server.admit`;
+- H1's form (``pouw:eps1-sm120-h1fx1``): `serve_h1.arm_of` arms the served model itself (``llm.model``) and the
+  challenger gate's sessions."""
 
 from __future__ import annotations
 
@@ -607,8 +615,6 @@ IDS_FORM = ("--protocol", "ids", "--id-payload", "503")
 ROAD = {"no scheme, release order": ([], "release-order", {}, ()),
         "no scheme, id form, release order": ([], "release-order", {}, IDS_FORM),
         "pearl-plus, release order": (["pearl-plus"], "release-order", {}, ()),
-        "pearl-plus beside the attester's front, id form, release order": (
-            ["pearl-plus"], "release-order", {"pearl-plus": {"users": r"fixed\.[0-9]+"}}, IDS_FORM),
         "no scheme, arrival": ([], "arrival", {}, ())}
 STORAGE = "pous is storage (it needs the workload's store) and {}'s declaration does not say whether it keeps a weight-derived copy"
 #: the listings no launcher gives serve-openai that its attach refuses today, each by the refusal's scheme and words
@@ -639,6 +645,17 @@ def served(names: list[str], events: list[Any], ex: Any) -> None:
 def test_each_form_the_launchers_give_serves(form, device, tmp_path, monkeypatch):
     names, order, settings, framing = ROAD[form]
     served(names, *serve(names, tmp_path, monkeypatch, order=order, settings=settings, framing=framing))
+
+
+def test_pearl_plus_on_the_fixed_load_beside_the_attesters_front_raises_for_no_user_not_served(device, tmp_path,
+                                                                                               monkeypatch):
+    """A fault on the road (`served_verdicts.sh` under CERTIFIER_FRONT and PEARLPLUS_TIE): under release order
+    `serve_openai.main` gives its server no ``arrive`` (`network_admission` returns no admission hook but under ``tick``),
+    so each `InputArrived` names no user and Pearl+'s ``users`` setting raises (`pouw.scheme.Attached.tied`). Once the
+    server tells the build's admission hook each request's user, this case fails and joins `ROAD`."""
+    with pytest.raises(RuntimeError, match=r"pearl-plus: inputs \[.*\] name no user, and its 'users' setting"):
+        serve(["pearl-plus"], tmp_path, monkeypatch, order="release-order",
+              settings={"pearl-plus": {"users": r"fixed\.[0-9]+"}}, framing=IDS_FORM)
 
 
 def off_road(kind: dict[str, Any]) -> list[list[str]]:
