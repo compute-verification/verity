@@ -138,7 +138,8 @@ from typing import Any
 from verity_vllm import messages as M, settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
-from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_head as HD, serve_learn as SL,
+from verity.protocols.resource_accounting.network.prover import serve_head as HD
+from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL,
                                    serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_poub as SR, serve_row as RW,
                                    serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import (ADMIT, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
