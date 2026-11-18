@@ -529,7 +529,12 @@ PEARL_PLUS = register(Scheme(
     answers=Lacks("has no piece that answers outside an exchange"),
     # until the salt and sample sessions' signature pin is in Lean
     unchecked={"coins-signatures-checked-by-the-auditor":
-               "coins' signatures checked on the served node only; not checked by the auditor"},
+               "coins' signatures checked on the served node only; not checked by the auditor",
+               # no record the verifier reads states vLLM's graph mode: `requests`' eager is held on the serving node
+               "cuda-graph-rows-outside-the-tie":
+               "the tie covers a workload served eager (vLLM's graph mode NONE): under a CUDA graph (FULL or PIECEWISE) "
+               "a step's linear runs at the capture size, with rows no request owns, and those rows are outside what "
+               "the tie covers"},
     record="work",
     symbol="V",
     published=("MACs", Fraction(1)),
