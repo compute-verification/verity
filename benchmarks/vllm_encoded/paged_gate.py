@@ -460,7 +460,7 @@ def main() -> int:
                               "encoded_differ": de.numel(),
                               "appended_words": sorted((s // BS) * lay.sb + g * lay.sh + (s % BS) * lay.ss + j
                                                        for s in slots.tolist() if s >= 0
-                                                       for g in range(G) for j in range(4))[:8]})
+                                                       for g in range(G) for j in range(sh["hw"]))[:8]})
         # kv.py on a few words of layer 1
         w8 = pl[1].view(torch.uint8).view(-1, WB)
         e8 = enc[1].view(torch.uint8).view(-1, WB)
@@ -469,7 +469,7 @@ def main() -> int:
             b, r = divmod(i, lay.sb)
             g, r = divmod(r, lay.sh)
             s, j = divmod(r, lay.ss)
-            wi = (j if j < sh["hw"] // 2 else 16 + j - sh["hw"] // 2) + g * (sh["hw"] // 2)
+            wi = (j if j < sh["hw"] // 2 else 2048 // WB + j - sh["hw"] // 2) + g * (sh["hw"] // 2)
             return ((b * BS + s) * LAYERS + 1) * (4096 // WB) + wi
 
         py_ok = all(K.encode_word(int.from_bytes(bytes(w8[i].cpu().tolist()), "little"), logical_word(i), key)
