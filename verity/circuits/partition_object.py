@@ -58,7 +58,7 @@ from collections import deque
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from .codec import canonical_json, descriptor_id, program_digest
-from .codec import SCHEMA, SCHEMA_V1
+from .codec import SCHEMA
 from .cut import (CALL_X, RECOMPUTE, WIRING, CallCut, CallGates, CallGraph, DefinitionCut, QueryInapplicable, call_committed, call_gates,
                   check_call_cut, check_cut, derived_committed, evaluate_call, evaluate_definition, member_refs)
 from .layout import resolve
@@ -105,10 +105,10 @@ QueryRefused = QueryInapplicable
 
 
 def _program(program_or_desc: Any) -> str:
-    """The `program` field: `codec.program_digest` of a v1 descriptor (a program's, streamed, is `codec.SCHEMA`'s)."""
+    """The `program` field: `codec.program_digest` of a `codec.SCHEMA` descriptor, a program's streamed."""
     schema = program_or_desc.get("schema") if isinstance(program_or_desc, dict) else SCHEMA
-    if schema != SCHEMA_V1:
-        raise ValueError(f"the program digest is over a {SCHEMA_V1} descriptor, not {schema!r}")
+    if schema != SCHEMA:
+        raise ValueError(f"the program digest is over a {SCHEMA} descriptor, not {schema!r}")
     return program_digest(program_or_desc)
 
 

@@ -21,6 +21,7 @@ from verity.circuits.defs import bind
 from verity.circuits.types import Array, Value
 from verity.circuits.ops import gemm as G
 from verity.circuits.kernels import tc as K
+from verity.circuits.ops import moe as MOE
 from verity.circuits.ops import mufu as M
 from verity.circuits.ops import prims as P
 from verity.circuits.silicon.models import AMPERE_BF16_M16N8K16, GroupSum
@@ -71,6 +72,10 @@ SELF_CHECKED = [
     (M.DivFullRcp, 20000),
     (M.DivFullScaleA, 20000),
     (M.RsqrtApprox, 20000),
+    (bind(MOE.MoePairCoordinate, E=3, K=32, DOT=P.AmpereBF16TcDot16), 500),
+    (bind(MOE.MoePairCoordinateW, E=3, K=32, DOT=P.HopperBF16WgmmaDot16), 500),
+    (bind(MOE.MoePairGemm, E=3, K=16, N=3, DOT=P.HopperBF16WgmmaDot16), 200),
+    (bind(MOE.MoePairGemmW, E=3, K=16, N=3, DOT=P.HopperBF16WgmmaDot16), 200),
 ]
 
 
