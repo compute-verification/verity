@@ -53,6 +53,7 @@
   "Properties.Spot.Rate",
   "Properties.Spot.MonitoringPeriod",
   "Properties.Spot.MonitoringPeriodLedger",
+  "Properties.Spot.ChallengerLog",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryAttester",
   "Properties.Pous.Wipe",
@@ -2562,7 +2563,7 @@
    "sealed": true
   },
   "Properties.Spot": {
-   "imports": ["Spot"],
+   "imports": ["Spot", "Circuits.Wire", "Definitions.Core.Label", "Definitions.Core.Challenger"],
    "except": [
     "Properties.Spot.Draw",
     "Properties.Spot.Bits",
@@ -2576,7 +2577,7 @@
     "Properties.Spot.HistoryTable",
     "Properties.Spot.MonitoringPeriodLedger"
    ],
-   "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
+   "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib, and of `security` only the core's label and challenger log (Definitions.Core.Label, Definitions.Core.Challenger), which import nothing, read with the wire they name (Circuits.Wire)"
   },
   "Properties.Spot.Draw": {
    "imports": ["Definitions.Claims", "Spot"],
