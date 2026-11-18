@@ -89,11 +89,10 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
 from verity.commitments.gates import sha512 as SG
-from verity.protocols.resource_accounting.network.verifier import arith_encode as AE, charge_chain as CC
-from verity.protocols.resource_accounting.network.verifier.arith_encode import CW, K_MAX, MAX_TOTAL, RUNS, Tally
+from verity.protocols.interface.charge import arith_encode as AE, charge_chain as CC
+from verity.protocols.interface.charge.arith_encode import CW, K_MAX, MAX_TOTAL, RUNS, Tally
 from verity.commitments.gates.bits import BIT
 from verity.circuits.boolean.trace import part as _part
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 VALUE = "window-charge"
 #: v1's registered caps on a hit (hit units), an order entry's gap and its rank (`v1.TABLE_CAPS`)
@@ -334,28 +333,9 @@ def session(N: int, H: int, O: int, L: int, book: dict, windows: Sequence[Sequen
     return out
 
 
-# --- the chain --------------------------------------------------------------------------------------------------------
-
-def start_opening(program: str, book: dict) -> bytes:
-    """b‖c of the first carry's row under its public salt (`charge_chain.start_salt` of `VALUE`)."""
-    return CC._opening(CC.row(encode(first_carry(book))), CC.start_salt(program, VALUE))
-
-
-def commit_window(program: str, book: dict, carry_out: WindowCarry, registration: str,
-                  carry: G.Registered | None = None, salt: bytes | None = None) -> G.Registered:
-    """A window's produced `VALUE`: its carry-in row and `carry_out`'s (`charge_chain.commit_rows`), the session's
-    first carry-in the book's first carry."""
-    return CC.commit_rows(program, VALUE, encode(first_carry(book)), encode(carry_out), registration, carry, salt)
-
-
 def reads() -> dict[str, dict[str, int]]:
     """The charging unit's rows: `carry_in` 0 and `carry_out` 1."""
     return {VALUE: {"carry_in": 0, "carry_out": 1}}
-
-
-def check_chain(windows: Sequence[Sequence[bytes]], program: str, book: dict) -> str | None:
-    """`charge_chain.check_chain`'s CH-rows, CH-first and CH-carry over `VALUE`'s rows."""
-    return CC.check_rows(windows, start_opening(program, book))
 
 
 # --- the circuits ------------------------------------------------------------------------------------------------------
@@ -674,6 +654,6 @@ def size(kind: str = "charge", N: int = 1, H: int = 0, O: int = 0, L: int = 0) -
 
 __all__ = ["Advice", "ChargeCount", "ChargeLink", "GAP_CAP", "HIT_CAP", "INDEX_CAP", "MT_CAP", "MW", "ROW_BITS", "SLOTS",
            "SYMBOLS", "VALUE", "WindowBook", "WindowCarry", "ZIG_CAP", "binned_symbols", "book_fields", "book_values",
-           "build_link", "carry_of", "charge_unit", "check_chain", "commit_window", "encode", "evaluate_links",
+           "build_link", "carry_of", "charge_unit", "encode", "evaluate_links",
            "evaluate_windows", "first_carry", "length_bits", "link_arguments", "link_unit", "reads", "reference_link",
-           "reference_window", "session", "size", "start_opening", "window_arguments", "window_book", "zigzag"]
+           "reference_window", "session", "size", "window_arguments", "window_book", "zigzag"]
