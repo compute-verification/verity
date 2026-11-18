@@ -97,8 +97,14 @@ def header (units : Array Nat) (ports : List String := ["o1"]) : Json :=
   Json.mkObj [("units", Json.mkObj [("indices", Lean.toJson units)]),
     ("frame_v3", Json.mkObj [("domain_ids", Json.mkObj (ports.map fun p => (p, Json.str (hexOf pubDom))))])]
 
-def trees (units : Array Nat) (ports : List String := ["o1"]) : Except String (Array (String × ByteArray)) :=
-  Registered.knownTreesOf (file (hexOf (root ks)) (some (knownJ ks))) (header units ports)
+/-- `knownTrees` on the file's ports at the reads `OneCircuit.pos` derives from the program (`reg`'s), each port at known
+content held to its root first. -/
+def trees (units : Array Nat) (ports : List String := ["o1"]) : Except String (Array (String × ByteArray)) := do
+  let f := file (hexOf (root ks)) (some (knownJ ks))
+  let own := (← Registered.ofJson f).map ({ · with readsRel := reg.readsRel })
+  let known ← Registered.knownOf f
+  Registered.checkKnownAll own known
+  Registered.knownTrees own known (header units ports)
 
 -- the one port at known content: its published domain, row count, schema index and root
 #guard (trees #[1, 0]).toOption == some #[("o1", pubDom ++ Flock.be64 2 ++ ByteArray.mk #[1] ++
