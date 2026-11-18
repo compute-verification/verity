@@ -418,6 +418,47 @@ def unwhole (ts : List Tmpl) (ls : List Leaves) (wires : List Spot.Wires.Wire) :
 
 /-! ## The record, as far as its templates -/
 
+
+/-- `unwhole` with the leaves and templates by id as maps: the code compiled in its place (`unwhole_eq_fast`). -/
+def unwholeFast (ts : List Tmpl) (ls : List Leaves) (wires : List Spot.Wires.Wire) : Option String :=
+  let lm := Spot.Wires.mapOf (ls.map fun l => (l.tid, l))
+  let tm := Spot.Wires.mapOf (ts.map fun t => (t.tid, t))
+  let leaves := fun (tid : String) => lm[tid]?
+  let width := fun (tid port : String) => ((leaves tid).bind fun l => l.leaf.lookup port).join
+  let closed := fun (tid port : String) => ((leaves tid).map fun l => l.closed.contains port).getD false
+  let short := fun (w : Spot.Wires.Wire) =>
+    match (leaves w.writer).bind fun l => l.bits.lookup w.out,
+        (tm[w.writer]?).bind fun t => t.outs.lookup w.out with
+    | some b, some n => if b == 16 * n then none else some (b, 16 * n)
+    | _, _ => none
+  let whole := fun (w : Spot.Wires.Wire) => closed w.reader w.port ||
+    match width w.reader w.port, width w.writer w.out with
+    | some r, some o => o != 0 && r % o == 0
+    | _, _ => false
+  (wires.find? fun w => (short w).isSome || !whole w).map fun w =>
+    let wire := s!"wire {w.writer}.{w.out} -> {w.reader}.{w.port}: "
+    match short w with
+    | some (b, r) =>
+      wire ++ s!"the writer's output is {b} bits and the row it fills {r}. Every bit of a row a wire fills is a " ++
+      "bit of its writer's output: a row is whole 16-bit words, and a bit of it past its writer's output is no " ++
+      "gate's. Fix the Definitions, not the record: give the writer's output whole 16-bit words, each bit a gate " ++
+      "of its own."
+    | none =>
+    wire ++ "the writer's leaves are of " ++
+    s!"{widthName (width w.writer w.out)} and the reader's of {widthName (width w.reader w.port)}. Every leaf of a " ++
+    "writer's output lies inside one leaf of the row that reads it, each side's leaves of one width and the " ++
+    "writer's dividing the reader's; or the reader's row is one-bit leaves and its Definition passes none of them " ++
+    "on: its return refers to no part of that row, itself or through a call, a batch or a scan. Fix the " ++
+    "Definitions, not the record: give the reader's row leaves of the writer's width or a multiple of it, or the " ++
+    "writer's output leaves of a width that divides the reader's, or make the reader's row one-bit leaves and have " ++
+    "its Definition return gates of its own in their place."
+
+/-! ## The record, as far as its templates -/
+
+@[csimp] theorem unwhole_eq_fast : @unwhole = @unwholeFast := by
+  funext ts ls wires
+  simp only [unwhole, unwholeFast, Spot.Wires.mapOf_get?, ← find?_eq_lookup]
+
 /-- The instance and the trusted input, read as far as the record's templates: the instance, the Program, the trusted
 input, the record, its templates (`RecordText.templatesOf`) and their leaves (`leavesOf`). -/
 structure Front where
@@ -741,6 +782,22 @@ def Case.heldAt (c : Case) (r : Row) : Option Held :=
       else none
     | _, _ => none
 
+/-- `Case.heldAt` with the declarations by reader and port (`declIndex`). -/
+def Case.heldAtIx (c : Case) (g : Std.HashMap String (List Decl)) (r : Row) : Option Held :=
+  match fillAtIx g r with
+  | none => none
+  | some fill => match c.x.declares fill, fill with
+    | some (.read p), _ => if c.isTheta p then some (.read p) else none
+    | some (.table name param root), _ => if c.isTheta param then some (.table name param root) else none
+    | some (.opened name param), .opening i =>
+      if c.held[i]?.getD false && c.isTheta param then
+        (c.x.openings[i]?.bind fun o => c.pins.lookup o.reader).map fun pin => .opened name param pin
+      else none
+    | _, _ => none
+
+theorem Case.heldAtIx_eq (c : Case) (r : Row) : c.heldAtIx (declIndex c.x.decls) r = c.heldAt r := by
+  simp only [Case.heldAtIx, Case.heldAt, fillAtIx_eq]
+
 /-- The stages of the module docstring after `own-rows`, on a front, with `pin` each template's pin where the policy
 pins its Definition. `rolesOf` gives the pinned templates among the readers the declarations name, every opening's
 reader among them, so an opening's reader is pinned exactly where it is one of those. -/
@@ -760,6 +817,30 @@ def finish (f : Front) (pin : String → Option String) : Except String Case := 
   let thetaAt := fun (p : String) => (theta.lookup p).getD false
   let held := (x.openings.map (openingHeld (fun tid => (pins.lookup tid).isSome) thetaAt x)).toArray
   return { f, W, wired, x, S, grids, inside, theta, held, pins }
+
+
+/-- `finish` with the grids by template as a map: the code compiled in its place (`finish_eq_fast`). -/
+def finishFast (f : Front) (pin : String → Option String) : Except String Case := do
+  let W ← recode "wires" (wiring f.P f.doc)
+  let wired ← match Spot.Wires.check W with
+    | .ok s => pure s
+    | .error _ => throw "wires"
+  if (unwhole f.ts f.leaves wired.wires).isSome then throw "leaf-widths"
+  let x ← inputsOf f.ts W f.doc
+  if !formatsHeld f.T f.doc x.params then throw "formats"
+  let (S, grids) ← gridsOf f.ts f.doc
+  let pins ← rolesOf f.P f.ts pin x
+  let gm := Spot.Wires.mapOf grids
+  let gridsAt := fun (tid : String) => gm.getD tid []
+  let inside := (wired.wires.map fun w => sameSlot S (gridsAt w.reader) (gridsAt w.writer) w).toArray
+  let theta := x.params.map fun (p, leaves) => (p, isTheta f.T leaves (widthOf f.doc p) p)
+  let thetaAt := fun (p : String) => (theta.lookup p).getD false
+  let held := (x.openings.map (openingHeld (fun tid => (pins.lookup tid).isSome) thetaAt x)).toArray
+  return { f, W, wired, x, S, grids, inside, theta, held, pins }
+
+@[csimp] theorem finish_eq_fast : @finish = @finishFast := by
+  funext f pin
+  simp only [finish, finishFast, Std.HashMap.getD_eq_getD_getElem?, Spot.Wires.mapOf_get?]
 
 /-- The instance and the trusted input, read, or the first refusal's code in the module docstring's order. A template
 is pinned where its Definition's closure digest, in the Program's descriptor, is among the instance's pins
@@ -925,5 +1006,38 @@ def exported (j tr rows : Json) : Json :=
         ((c.heldAt r).map heldJson).getD Json.null]
     | none => Json.arr #[Json.null, Json.null])
   | .ok _, _ => Json.arr #[]
+
+/-- `kinds` with the declarations indexed once (`declIndex`): the code compiled in its place (`kinds_eq_fast`). -/
+def kindsFast (j tr rows : Json) : Json :=
+  match read j tr, rows with
+  | .error code, _ => InferenceOnlyVerifier.refusal code
+  | .ok c, .arr rs =>
+    let g := declIndex c.x.decls
+    Json.arr (rs.map fun r => Json.str (match rowOf r with
+      | some r => (c.kind (fillAtIx g r)).name
+      | none => Kind.free.name))
+  | .ok _, _ => Json.arr #[]
+
+@[csimp] theorem kinds_eq_fast : @kinds = @kindsFast := by
+  funext j tr rows
+  simp only [kinds, kindsFast, fillAtIx_eq, Case.rowKind]
+
+/-- `exported` with the declarations and the grids indexed once (`declIndex`, `mapOf`): the code compiled in its place
+(`exported_eq_fast`). -/
+def exportedFast (j tr rows : Json) : Json :=
+  match read j tr, rows with
+  | .error code, _ => InferenceOnlyVerifier.refusal code
+  | .ok c, .arr rs =>
+    let g := declIndex c.x.decls
+    let gm := Spot.Wires.mapOf c.grids
+    Json.arr (rs.map fun r => match rowOf r with
+      | some r => Json.arr #[((slotInAt c.S gm r.tid r.unit).map toJson).getD Json.null,
+          ((c.heldAtIx g r).map heldJson).getD Json.null]
+      | none => Json.arr #[Json.null, Json.null])
+  | .ok _, _ => Json.arr #[]
+
+@[csimp] theorem exported_eq_fast : @exported = @exportedFast := by
+  funext j tr rows
+  simp only [exported, exportedFast, slotInAt_eq, Case.heldAtIx_eq, Case.slot]
 
 end InferenceOnlyVerifier.Record
