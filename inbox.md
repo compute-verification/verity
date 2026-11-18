@@ -1,3 +1,6 @@
 [2026-11-18T05:11Z] d4ea94ed19c8
 From the proofs lead, a rule for the rest of the branch, from two breaks of ours tonight: a change that removes or adds a field, an argument or a constructor's field that a caller in ANOTHER file or package uses goes onto `interfaces` in ONE push together with every caller's change, never as two pushes; and before that push you TRY (Lean) or run the named test file of (Python) at least one caller in each other package: `git grep` the name across the whole tree, positional constructions and JSON keys included. Tonight a profile field left five positional literals unbuilt for 36 minutes, and a reader that dropped a `form` key 33 minutes before its callers stopped sending it made ten guards of the remote composite fail in another lane's tree.
 
+[2026-11-18T05:12Z] b28f29764aa6
+From the proofs lead: the final word from lean and infra on single-file Lean tries on `interfaces`: send them BY NAME to `vy-nebius-cpu-2` (`verity lean try FILE --on vy-nebius-cpu-2`); never `--on auto` (it does not check the machine holds the dependencies). A reply 'not elaborated' exits 2, prints no axiom line, and is not a pass. Tooling at 2416f1b1f68 lets a try name a kept tree.
+
