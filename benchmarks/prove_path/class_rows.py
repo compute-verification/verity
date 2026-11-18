@@ -113,7 +113,7 @@ def main(argv=None) -> int:
         from tests.program.predict import test_steps as S
         reg = S._registered()
         cls = WindowClass(8, 4, 2, lanes=4, every=16) if a.slots else WindowClass(2, 4, 2)
-        circuit = class_circuit(reg, cls, None, Grain(gemm_words=512, rows=9, select=64), provable=False)
+        circuit = class_circuit(reg, cls, None, Grain(gemm_words=512, rows=9, select=64))
     else:
         cfg = json.loads((Path.cwd() / "tests/adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
         card = kit.gpu_target(a.card)
@@ -127,7 +127,7 @@ def main(argv=None) -> int:
         cls = WindowClass(*map(int, a.cls.split(","))) if a.cls else CLASS_OF_RECORD
         if a.probe:
             cls = WindowClass(*map(int, a.probe.split(",")))
-            circuit = class_circuit(reg, cls, 1, provable=False)
+            circuit = class_circuit(reg, cls, 1)
         else:
             built, program = WC.class_program(reg, cls), WC.class_program
             WC.class_program = lambda r, c: built if c == cls else program(r, c)

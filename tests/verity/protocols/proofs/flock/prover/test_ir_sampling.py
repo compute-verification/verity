@@ -85,8 +85,12 @@ def ir_walk(target, args, resolved):
     return call, t
 
 
+def _def(V: int):
+    return TM.subcircuit(S.TEMPLATE, V=V).definition()
+
+
 def lane_reference(V, x, temp, rcp, skip, noisy, kbit, g, best, best_i, i):
-    tl, ms, gs = S._composites(V)
+    tl, ms, gs = S._composites(_def(V))
     call, t = ir_walk(tl, [x, temp, rcp, skip], {})
     scaled = t[call.returns[0]]
     call, t = ir_walk(ms, [i, scaled, 0], {f"BitAtx{V}_v1": kbit})
@@ -101,7 +105,7 @@ def lane_reference(V, x, temp, rcp, skip, noisy, kbit, g, best, best_i, i):
 
 def test_lane_unit_matches_the_ir_composites():
     V = 1024
-    low = S.lane(V)
+    low = S.lane(_def(V))
     rng = random.Random(7)
     vecs = []
     for _ in range(4000):
@@ -117,9 +121,9 @@ def test_lane_unit_matches_the_ir_composites():
 
 
 def test_the_lane_is_the_pinned_one():
-    low = S.lane(128256)
+    low = S.lane(_def(128256))
     assert S.pin_digest(low) == REG.module(S.TEMPLATE).PIN == S.PIN
-    assert S.pin_digest(S.lane(64)) == S.PIN
+    assert S.pin_digest(S.lane(_def(64))) == S.PIN
     head = low.unit_text.split("\n", 1)[0].split()
     assert head[0] == IL.FORMAT and head[1] == S.UNIT and int(head[2]) <= 1 << 13
 
@@ -136,7 +140,7 @@ def test_supports_and_relation():
 
 def test_a_mutated_circuit_description_is_caught_by_the_ir_comparison():
     V = 64
-    low = S.lane(V)
+    low = S.lane(_def(V))
     rng = random.Random(3)
     vecs = []
     for _ in range(1500):

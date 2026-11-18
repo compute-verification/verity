@@ -8,8 +8,9 @@ One that a resource scheme (`verity.protocols.resource_accounting.scheme`) runs 
 for once (``arch``, a card file's ``arch``), the cards the scheme runs that build on by their card files' ``short``
 (``calibration/hardware/cards``), and whether registration pins the weights B (``pinned``; None where it takes either):
 a build is made for an architecture and allowed on a card, so a new card of a built architecture is one more name in
-``cards``. A resource scheme declares the entries it runs as its ``kernels`` (`runs_on`), which reads a card's
-architecture from its file.
+``cards``. A resource scheme declares the entries it runs as its ``kernels``
+(`verity.protocols.resource_accounting.compute.pouw.prover.schemes.runs_on`), given the card's architecture by its
+caller.
 
 ``seam`` names the experimental package that builds the family, which registers its builder when imported
 (`prover.schemes.register`): PoUW imports nothing of ``verity/protocols/experimental/``.
@@ -17,9 +18,8 @@ architecture from its file.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
@@ -83,38 +83,4 @@ def names(family: str) -> tuple[str, ...]:
     return tuple(k.name for k in of_family(family))
 
 
-CARD_FILES = Path(__file__).resolve().parents[6] / "calibration/hardware/cards"
-
-
-def _runs(k: KernelScheme) -> str:
-    return f"{k.name} on {' or '.join(k.cards)}{'' if k.pinned is None else ' pinned' if k.pinned else ' chosen'}"
-
-
-def runs_on(*names: str) -> Callable[..., str]:
-    """A resource scheme's ``kernels`` when it runs the entries ``names``: given a card's short name and ``pinned=``,
-    the one entry's name (the name the build is found by everywhere) built for that card's architecture (its card file's
-    ``arch``) and run on that card with that pinning. `LookupError` names the architectures there are builds for when
-    the card's has none, and the cards and pinnings the builds run on when the card or its pinning isn't one."""
-    rows = tuple(named(n) for n in names)
-    if any(not k.cards for k in rows):
-        raise ValueError(f"{', '.join(k.name for k in rows if not k.cards)}: a resource scheme runs only an entry naming "
-                         "its build's architecture and cards")
-
-    def kernels(card: str, *, pinned: bool) -> str:
-        from verity.device import gpu_card_called
-
-        arch = gpu_card_called(card, directory=CARD_FILES).get("arch")
-        built = [k for k in rows if k.arch == arch]
-        if not built:
-            raise LookupError(f"{card}'s architecture {arch} has no build here: "
-                              f"{', '.join(f'{k.name} is built for {k.arch}' for k in rows)}")
-        found = [k for k in built if card in k.cards and k.pinned in (pinned, None)]
-        if len(found) != 1:
-            raise LookupError(f"{len(found)} builds for {arch} run on {card} with B {'pinned' if pinned else 'chosen'}: "
-                              f"they run {', '.join(_runs(k) for k in built)}")
-        return found[0].name
-
-    return kernels
-
-
-__all__ = ["BY_NAME", "CARD_FILES", "IDENTIFIED", "KERNEL_SCHEMES", "KernelScheme", "named", "names", "of_family", "runs_on"]
+__all__ = ["BY_NAME", "IDENTIFIED", "KERNEL_SCHEMES", "KernelScheme", "named", "names", "of_family"]

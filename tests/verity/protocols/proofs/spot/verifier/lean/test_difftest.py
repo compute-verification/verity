@@ -254,7 +254,7 @@ class RegisteredSetup(Setup):
 
     def _rows(self, v: str, w: int) -> tuple:
         """`Registered.commit`'s rows, salts, width and row format for `v` at `w` words."""
-        schema = self.formats.get(v, G.SCHEMA)
+        schema = self.formats.get(v, RV.SCHEMA)
         n, bits = len(G.parameter_gates(self.program, v)), G.width(self.program, v)
         k = G.row_leaves(self.program, v, w, schema)
         rows = [[(i * 40503 + 7) % (1 << bits) for i in range(r * w, (r + 1) * w)] for r in range(n // k)]
@@ -1951,7 +1951,7 @@ def _record_of(s: Setup, values, sampling_design: dict, window: dict, log=(), bi
     if not sup:
         return rec
     filled = [G.supplied_value(s.program, v, rows, rec, sorted(sup), list(log), binding=binding,
-                               schema=s.formats.get(v, G.SCHEMA)).entry()
+                               schema=s.formats.get(v, RV.SCHEMA)).entry()
               for v, rows in G.sources(sup).items()]
     return R.record(s.program, s.query, sampling_design, SCHEME, roots, window, registered=entries + filled, **kw)
 
@@ -2325,7 +2325,7 @@ REGISTERED_PARAMS = [
     _earlier_out,
     _earlier_value,
     _set("params", "row_schemas", lambda a, x: [
-        {"A": G.SCHEMA}, {"A": G.SCHEMA_SEG}, {"B": G.SCHEMA_V2}, {"W": G.SCHEMA_V2}, {"T": G.SCHEMA_SEG}, {"x": G.SCHEMA_V2},
+        {"A": RV.SCHEMA}, {"A": G.SCHEMA_SEG}, {"B": G.SCHEMA_V2}, {"W": G.SCHEMA_V2}, {"T": G.SCHEMA_SEG}, {"x": G.SCHEMA_V2},
         {"S": G.SCHEMA_V2}, {"nope": G.SCHEMA_V2}, {"A": "u16"}, {"A": "hm96-sha512/row/v2 "}, {"A": 1}, ["A"], "A", None,
         {}][x % 15]),
     lambda a, x: a["params"].pop("row_schemas", None),
@@ -8467,8 +8467,8 @@ def test_round_two_reads_a_linked_port_at_a_supplied_row_seg_value(pieces):
     assert len({v["root"] for v in value.values()}) == len(RV.SCHEMAS) and len({v["domain"] for v in value.values()}) == 1
     seg = value[G.SCHEMA_SEG]
     cases = [(_read_linked(linked, 0, seg), []),
-             (_row_schema(_read_linked(linked, 0, seg), G.SCHEMA, reference=False), ["second-values"])]
-    cases += [(_read_linked(linked, 2, seg, value[schema]["root"]), ["second-read"]) for schema in (G.SCHEMA, G.SCHEMA_V2)]
+             (_row_schema(_read_linked(linked, 0, seg), RV.SCHEMA, reference=False), ["second-values"])]
+    cases += [(_read_linked(linked, 2, seg, value[schema]["root"]), ["second-read"]) for schema in (RV.SCHEMA, G.SCHEMA_V2)]
     for case, codes in cases:
         got = second_statements(copy.deepcopy(case))
         assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)

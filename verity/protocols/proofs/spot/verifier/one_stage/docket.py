@@ -921,7 +921,7 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
             continue
         try:
             root = G.supplied_root(program, v, supplied[v], rec, want, sorted(supplied), log, prog, binding,
-                                   (schemas or {}).get(v, G.SCHEMA))
+                                   (schemas or {}).get(v, RV.SCHEMA))
         except ValueError as err:
             c.fail("R7-supplied", {"value": v, "verifier": str(err)})
             continue

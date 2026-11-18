@@ -85,7 +85,7 @@ from verity.circuits.ops import fp32 as W  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, produced, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.commitments.periods import rows as CS  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
@@ -296,7 +296,7 @@ def reads(mine: CS.Binding, r: int, regs: dict[int, dict]) -> dict[str, dict]:
         for j in RANKS:
             e = own_entry(j, q, k, dict(m.rows)["part0"], m.n)
             root = regs[j]["window"]["of"]["partials"][e["value"]]["root"]
-            ports[f"part{j}"] = produced.port(e["value"], e, root, list(range(m.n)), V2) | ({RV.READS_FROM: m.base} if m.base else {})
+            ports[f"part{j}"] = RV.port(e["value"], e, root, list(range(m.n)), V2) | ({RV.READS_FROM: m.base} if m.base else {})
         out[m.key] = WR.reads_file(ports)
     return out
 
