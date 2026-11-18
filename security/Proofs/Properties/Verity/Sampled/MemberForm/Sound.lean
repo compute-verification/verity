@@ -45,7 +45,7 @@ theorem spotSound_form (I : ExecutionPhaseInstance d α) (K₀ : ExecutionPhaseC
 
 /-- **Remote's soundness over windows of several members, at the per-member form's accepts**
 (`remote_soundness_executionPhase`, at `claimReads`, `executionPhaseAt_form` and `executionPhaseReads_members`): under `spotSound_form`'s
-premises, the base's PoUW target and the wires' statement at the vocabulary. -/
+premises and the base's PoUW target. -/
 theorem soundnessAt_form (I : ExecutionPhaseInstance d α) (K₀ : ExecutionPhaseConstructions I.base)
     (reg : Option Claims.Msg → ByteArray)
     (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)
@@ -53,13 +53,11 @@ theorem soundnessAt_form (I : ExecutionPhaseInstance d α) (K₀ : ExecutionPhas
     (hW : I.ExecutionPhaseRegistered) (hR : RegisteredHolds I.base)
     (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ .remote reg sentEvidenceAt (statementFiles statementTable)
       record₀ recordDigest)) .remote)
-    (hP : I.base.PouwSound .remote)
-    (hWi : (I.vocab (I.constructionsAt K₀ .remote reg sentEvidenceAt (statementFiles statementTable) record₀
-      recordDigest)).WiresSound .remote) :
+    (hP : I.base.PouwSound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg sentEvidenceAt (statementFiles statementTable) record₀
       recordDigest)).SoundnessAt .remote :=
   remote_soundness_executionPhase I K₀ reg sentEvidenceAt (statementFiles statementTable) record₀ recordDigest
     (claimReads I _) (executionPhaseAt_form I .remote hW formAccepts formApart hR)
-    (executionPhaseReads_members I .remote formAccepts hR) hTwo hP hWi
+    (executionPhaseReads_members I .remote formAccepts hR) hTwo hP
 
 end Verity.Sampled.MemberForm

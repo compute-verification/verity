@@ -3,7 +3,7 @@ id = "glm53-flock-steady-head-block-h200-walk"
 # `glm53-flock-steady-head-block-h200`'s `FIRST=false` point at one prover with the unit's level walk on the card
 # (`FC_UNIT_WALK=1`): the device builds the witness's unit words itself, where that spec's prover walks them on the
 # host's CPUs. Everything else is that spec's, so the two points differ in the walk alone; a row says which walk ran
-# (`unit_walk`). Launch with `verity-bench run SPEC --direct NODE`.
+# (`unit_walk`). Run it as the harness's README says.
 workload = "glm53"
 card = "h200"
 cores = 10

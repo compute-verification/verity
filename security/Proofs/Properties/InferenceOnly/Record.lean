@@ -101,8 +101,9 @@ theorem pin_listed {F : Form} (hown : Owns F) (hprov : Provenance F) {j tr : Jso
 /-! ## The two numberings of a template's units
 
 `UnitAt` numbers a template's units over the root's ranges: member `m` of a range, after the units of the template's
-earlier ranges. The record's text numbers them from 0 to the template's `units` (`templatesOf`). The text's readers
-accept only where no two ranges have one template, and there the two numberings are one. -/
+earlier ranges. The record's text numbers them from 0 to the template's `units` (`templatesOf`), which its reader
+holds to the counts of the template's ranges summed (`unitsOf`). The two numberings cover the same units
+(`unitAt_lt_iff`, `unitAt_iff`). -/
 
 private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : x >>= f = .ok b) :
     ∃ a, x = .ok a ∧ f a = .ok b := by
@@ -196,114 +197,197 @@ private theorem tmplOf_ok {P : Prog} {r : TRange} {t : Tmpl} (h : tmplOf P r = .
   repeat (split at h <;> try cases h)
   exact ⟨rfl, rfl⟩
 
-private theorem mapM_tmplOf {P : Prog} : ∀ (l : List TRange) (ts : List Tmpl), l.mapM (tmplOf P) = .ok ts →
-    ts.map (fun t => (t.tid, t.units)) = l.map (fun r => (r.template, r.count))
+/-- The text's reading of a template off its first range has that range's template and the units asked for. -/
+theorem tmplAt_ok {P : Prog} {rs : Array TRange} {x : String × ℕ} {t : Tmpl} (h : Spot.RecordText.tmplAt P rs x = .ok t) :
+    t.tid = x.1 ∧ t.units = x.2 ∧ ∃ r ∈ rs, r.template = x.1 ∧ tmplOf P { r with count := x.2 } = .ok t := by
+  unfold Spot.RecordText.tmplAt at h
+  split at h
+  · rename_i r hr
+    obtain ⟨h1, h2⟩ := tmplOf_ok h
+    have hb : r.template = x.1 := by simpa using Array.find?_some hr
+    exact ⟨h1.trans hb, h2, r, Array.mem_of_find?_eq_some hr, hb, h⟩
+  · cases h
+
+private theorem mapM_tmplAt {P : Prog} {rs : Array TRange} :
+    ∀ (l : List (String × ℕ)) (ts : List Tmpl), l.mapM (Spot.RecordText.tmplAt P rs) = .ok ts →
+      ts.map (fun t => (t.tid, t.units)) = l
   | [], ts, h => by
     rw [List.mapM_nil] at h
     cases h
     rfl
-  | r :: l, ts, h => by
+  | x :: l, ts, h => by
     rw [List.mapM_cons] at h
     obtain ⟨t, ht, h⟩ := bind_ok h
     obtain ⟨ts', hts', h⟩ := bind_ok h
     cases h
-    obtain ⟨h1, h2⟩ := tmplOf_ok ht
-    simp only [List.map_cons, h1, h2, mapM_tmplOf l ts' hts']
+    obtain ⟨h1, h2, -⟩ := tmplAt_ok ht
+    simp only [List.map_cons, h1, h2, mapM_tmplAt l ts' hts', Prod.mk.eta]
 
-/-- What the text's reader has checked where it gives the templates: the text's template ids are distinct, the
-template query accepts them, its ranges are the text's templates with their units, in order, and the templates are
-the ranges', one each. The reader's `match` on a template's text has no equations for `simp` to rewrite by, so the
-binds are opened without them. -/
-private theorem templatesOf_ok {P : Prog} {doc : Json} {ts : List Tmpl} (h : templatesOf P doc = .ok ts) :
-    ∃ (tsp : Array (String × ℕ)) (rs : Array TRange),
-      (tsp.map (·.1)).toList.eraseDups.length = (tsp.map (·.1)).size ∧
-      Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (tsp.map (·.1)) = .ok rs ∧
-      rs.map (fun r => (r.template, r.count)) = tsp ∧ rs.toList.mapM (tmplOf P) = .ok ts := by
+/-- **The text's templates are read off the root's ranges**: where the text's reader gives the templates `ts`, the
+template query accepts the text's template ids, which are distinct and are the templates `unitsOf` gives of its
+ranges, with the units it gives them, and `ts` are those templates, each read off its first range. The reader's
+`match` on a template's text has no equations for `simp` to rewrite by, so the binds are opened without them. -/
+theorem templatesOf_spec {P : Prog} {doc : Json} {ts : List Tmpl} (h : templatesOf P doc = .ok ts) :
+    ∃ (tids : Array String) (rs : Array TRange),
+      Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs ∧ tids.toList.Nodup ∧
+        tids.toList = (Spot.RecordText.unitsOf rs).map (·.1) ∧
+        (Spot.RecordText.unitsOf rs).mapM (Spot.RecordText.tmplAt P rs) = .ok ts := by
   unfold templatesOf at h
   simp (config := { iota := false }) only [bind, Except.bind, pure, Except.pure, throw, throwThe,
     MonadExceptOf.throw] at h
   repeat (split at h <;> try cases h)
   rename_i tsp _ hdup _ rs₀ hev _ rs hrs hne
   have hrs' : rs₀ = rs := Except.ok.inj hrs
-  exact ⟨tsp, rs, Classical.not_not.1 fun hc => hdup (bne_iff_ne.2 hc), by rw [← hrs']; exact hev,
-    Classical.not_not.1 fun hc => hne (bne_iff_ne.2 hc), h⟩
+  have hu : Spot.RecordText.unitsOf rs = tsp.toList := Classical.not_not.1 fun hc => hne (bne_iff_ne.2 hc)
+  refine ⟨tsp.map (·.1), rs, by rw [← hrs']; exact hev, ?_, by rw [hu, Array.toList_map], by rw [hu]; exact h⟩
+  exact (eraseDups_nodup _ (tsp.map (·.1)).toList (Nat.le_refl _)).2
+    ((Classical.not_not.1 fun hc => hdup (bne_iff_ne.2 hc)).trans Array.length_toList.symm)
 
-/-- **The text's templates are the root's ranges.** Where the text's reader gives the templates `ts` and the template
-query gives the ranges `rs`, whatever templates it is asked for: no two ranges have one template, and `ts` are the
-ranges in order, each with its range's template and its count for units. -/
+/-- **The text's templates are the root's templates.** Where the text's reader gives the templates `ts` and the
+template query gives the ranges `rs`, whatever templates it is asked for: `ts` have distinct ids, and are the
+templates `unitsOf` gives of `rs`, each with the units it gives. -/
 theorem templatesOf_ranges {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String} {rs : Array TRange}
     (hts : templatesOf P doc = .ok ts)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs) :
-    (rs.toList.map (·.template)).Nodup ∧
-      ts.map (fun t => (t.tid, t.units)) = rs.toList.map (fun r => (r.template, r.count)) := by
-  obtain ⟨tsp, rs₀, hdup, hev, hmap, hmapM⟩ := templatesOf_ok hts
+    (ts.map (·.tid)).Nodup ∧ ts.map (fun t => (t.tid, t.units)) = Spot.RecordText.unitsOf rs := by
+  obtain ⟨tids₀, rs₀, hev, hnd, htids, hmapM⟩ := templatesOf_spec hts
   obtain rfl := evaluate_ranges hev hrs
-  refine ⟨?_, mapM_tmplOf _ _ hmapM⟩
-  have hnd : (tsp.map (·.1)).toList.Nodup :=
-    (eraseDups_nodup _ (tsp.map (·.1)).toList (Nat.le_refl _)).2 (hdup.trans Array.length_toList.symm)
-  subst hmap
-  simpa [Function.comp_def] using hnd
-
-/-- **One range has a template**, where the text's reader gives its templates. -/
-theorem range_unique {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String} {rs : Array TRange}
-    (hts : templatesOf P doc = .ok ts)
-    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs) {i j : ℕ}
-    (hi : i < rs.size) (hj : j < rs.size) (h : rs[i]!.template = rs[j]!.template) : i = j := by
-  have hnd := (templatesOf_ranges hts hrs).1
-  have hi' : i < (rs.toList.map (·.template)).length := by simpa using hi
-  have hj' : j < (rs.toList.map (·.template)).length := by simpa using hj
-  refine (hnd.getElem_inj (hi := hi') (hj := hj')).1 ?_
-  rw [getElem!_pos rs i hi, getElem!_pos rs j hj] at h
-  simpa using h
-
-/-- The text's template at a range's place has the range's template and its count for units. -/
-private theorem tmpl_at {ts : List Tmpl} {rs : Array TRange}
-    (hmap : ts.map (fun t => (t.tid, t.units)) = rs.toList.map (fun r => (r.template, r.count))) {i : ℕ}
-    (hi : i < rs.size) : ∃ t, ts[i]? = some t ∧ t.tid = rs[i]!.template ∧ t.units = rs[i]!.count := by
-  have hlen : ts.length = rs.size := by simpa using congrArg List.length hmap
-  have hi' : i < ts.length := by omega
-  have h : (ts.map fun t => (t.tid, t.units))[i]? = (rs.toList.map fun r => (r.template, r.count))[i]? := by
-    rw [hmap]
-  refine ⟨ts[i], List.getElem?_eq_getElem hi', ?_⟩
-  rw [getElem!_pos rs i hi]
-  simpa [hi, hi'] using h
-
-/-- **The two numberings of a template's units agree.** Where the text's reader gives the templates `ts` and the
-template query gives the ranges `rs`, whatever templates it is asked for: `sc` is unit `u` of the template `tid`
-(`UnitAt`) exactly when a range of `rs`, the one of that template (`range_unique`), has `u` below its count, which is
-the units of the text's template at its place, and `sc` is member `u` of the range's root node. -/
-theorem unitAt_iff {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String} {rs : Array TRange}
-    (hts : templatesOf P doc = .ok ts)
-    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs) (tid : String) (u : ℕ)
-    (sc : Scope) :
-    UnitAt P rs tid u sc ↔ ∃ i t, i < rs.size ∧ rs[i]!.template = tid ∧ ts[i]? = some t ∧ t.tid = tid ∧
-      t.units = rs[i]!.count ∧ u < t.units ∧ sc = P.child P.rootScope rs[i]!.node u := by
-  obtain ⟨-, hmap⟩ := templatesOf_ranges hts hrs
-  have hzero : ∀ i, i < rs.size → rs[i]!.template = tid →
-      ((rs.extract 0 i).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 = 0 := by
-    intro i hi hti
-    have hemp : ((rs.extract 0 i).filter fun r => r.template == tid) = #[] := by
-      rw [Array.filter_eq_empty_iff]
-      intro r hr hb
-      obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hr
-      have hsz : (rs.extract 0 i).size = min i rs.size - 0 := Array.size_extract
-      have hji : j < i := by omega
-      have hjs : j < rs.size := by omega
-      have hjt : rs[j]!.template = tid := by
-        rw [getElem!_pos rs j hjs]
-        simpa using hb
-      exact absurd (range_unique hts hrs hjs hi (hjt.trans hti.symm)) (Nat.ne_of_lt hji)
-    rw [hemp]
+  have hmap := mapM_tmplAt _ _ hmapM
+  refine ⟨?_, hmap⟩
+  have he : ts.map (·.tid) = tids₀.toList := by
+    rw [htids, ← hmap, List.map_map]
     rfl
+  rw [he]
+  exact hnd
+
+/-- A template `unitsOf` gives is one of a range, with its ranges' counts summed. -/
+theorem mem_unitsOf {rs : Array TRange} {x : String × ℕ} :
+    x ∈ Spot.RecordText.unitsOf rs ↔ (∃ r ∈ rs, r.template = x.1) ∧
+      x.2 = (Spot.RecordText.rangesAt rs x.1).foldl (fun a r => a + r.count) 0 := by
+  obtain ⟨tid, n⟩ := x
+  simp only [Spot.RecordText.unitsOf, List.mem_map, List.mem_eraseDups, Array.mem_toList_iff, Prod.mk.injEq]
+  constructor
+  · rintro ⟨a, ⟨r, hr, rfl⟩, rfl, rfl⟩
+    exact ⟨⟨r, hr, rfl⟩, rfl⟩
+  · rintro ⟨⟨r, hr, rfl⟩, rfl⟩
+    exact ⟨_, ⟨r, hr, rfl⟩, rfl, rfl⟩
+
+private theorem before_succ (rs : Array TRange) (tid : String) {n : ℕ} (hn : n < rs.size) :
+    ((rs.extract 0 (n + 1)).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 =
+      ((rs.extract 0 n).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 +
+        if rs[n]!.template = tid then rs[n]!.count else 0 := by
+  rw [Array.extract_succ_right (Nat.succ_pos n) hn, Array.filter_push, getElem!_pos rs n hn]
+  by_cases h : rs[n].template = tid
+  · simp [h]
+  · simp [h]
+
+private theorem below_iff (rs : Array TRange) (tid : String) (u : ℕ) : ∀ n, n ≤ rs.size →
+    ((∃ i m, i < n ∧ rs[i]!.template = tid ∧ m < rs[i]!.count ∧
+        u = ((rs.extract 0 i).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 + m) ↔
+      u < ((rs.extract 0 n).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0)
+  | 0, _ => by
+    have h0 : ((rs.extract 0 0).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 = 0 := by
+      rw [Array.extract_zero]
+      rfl
+    rw [h0]
+    simp
+  | n + 1, hn => by
+    have ih := below_iff rs tid u n (by omega)
+    rw [before_succ rs tid (by omega : n < rs.size)]
+    constructor
+    · rintro ⟨i, m, hi, hti, hm, hu⟩
+      rcases Nat.lt_succ_iff_lt_or_eq.1 hi with hi | rfl
+      · have := ih.1 ⟨i, m, hi, hti, hm, hu⟩
+        omega
+      · rw [if_pos hti]
+        omega
+    · intro hu
+      by_cases hlt : u < ((rs.extract 0 n).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0
+      · obtain ⟨i, m, hi, h⟩ := ih.2 hlt
+        exact ⟨i, m, by omega, h⟩
+      · by_cases ht : rs[n]!.template = tid
+        · rw [if_pos ht] at hu
+          exact ⟨n, u - ((rs.extract 0 n).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0,
+            by omega, ht, by omega, by omega⟩
+        · rw [if_neg ht] at hu
+          omega
+
+/-- **A template's units are its ranges' members**: some scope is unit `u` of the template `tid` (`UnitAt`) exactly
+when `u` is below the counts of `tid`'s ranges summed (`rangesAt`), the units `unitsOf` gives it. -/
+theorem unitAt_lt_iff (P : Prog) (rs : Array TRange) (tid : String) (u : ℕ) :
+    (∃ sc, UnitAt P rs tid u sc) ↔ u < (Spot.RecordText.rangesAt rs tid).foldl (fun a r => a + r.count) 0 := by
+  have h := below_iff rs tid u rs.size (Nat.le_refl _)
+  rw [Array.extract_size] at h
+  rw [show Spot.RecordText.rangesAt rs tid = rs.filter fun r => r.template == tid from rfl, ← h]
   unfold UnitAt
   constructor
-  · rintro ⟨i, m, hi, hti, hm, hu, hsc⟩
-    rw [hzero i hi hti, Nat.zero_add] at hu
-    subst hu
-    obtain ⟨t, ht, htt, htu⟩ := tmpl_at hmap hi
-    exact ⟨i, t, hi, hti, ht, htt.trans hti, htu, by rw [htu]; exact hm, hsc⟩
-  · rintro ⟨i, t, hi, hti, -, -, htu, hu, hsc⟩
-    exact ⟨i, u, hi, hti, by rw [← htu]; exact hu, by rw [hzero i hi hti, Nat.zero_add], hsc⟩
+  · rintro ⟨sc, i, m, hi, hti, hm, hu, -⟩
+    exact ⟨i, m, hi, hti, hm, hu⟩
+  · rintro ⟨i, m, hi, hti, hm, hu⟩
+    exact ⟨_, i, m, hi, hti, hm, hu, rfl⟩
+
+private theorem before_mono (rs : Array TRange) (tid : String) (a : ℕ) : ∀ b, a ≤ b → b ≤ rs.size →
+    ((rs.extract 0 a).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 ≤ ((rs.extract 0 b).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0
+  | 0, hab, _ => by rw [Nat.le_zero.1 hab]
+  | b + 1, hab, hb => by
+    rcases Nat.lt_or_ge a (b + 1) with h | h
+    · have := before_mono rs tid a b (by omega) (by omega)
+      rw [before_succ rs tid (by omega : b < rs.size)]
+      omega
+    · rw [Nat.le_antisymm hab h]
+
+/-- **A unit of a template is one scope**: member `m` of one range, the template's units before it and `m` being
+`u`. -/
+theorem unitAt_unique {P : Prog} {rs : Array TRange} {tid : String} {u : ℕ} {sc sc' : Scope}
+    (h : UnitAt P rs tid u sc) (h' : UnitAt P rs tid u sc') : sc = sc' := by
+  unfold UnitAt at h h'
+  obtain ⟨i, m, hi, hti, hm, hu, rfl⟩ := h
+  obtain ⟨i', m', hi', hti', hm', hu', rfl⟩ := h'
+  have key : ∀ {a b ma mb : ℕ}, a < b → b < rs.size → rs[a]!.template = tid → ma < rs[a]!.count →
+      ((rs.extract 0 a).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 + ma ≠ ((rs.extract 0 b).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 + mb := by
+    intro a b ma mb hab hb hta hma
+    have h1 := before_succ rs tid (by omega : a < rs.size)
+    rw [if_pos hta] at h1
+    have h2 := before_mono rs tid (a + 1) b hab hb.le
+    omega
+  rcases Nat.lt_trichotomy i i' with hlt | rfl | hgt
+  · exact absurd (hu.symm.trans hu') (key hlt hi' hti hm)
+  · have hmm : m = m' := by omega
+    subst hmm
+    rfl
+  · exact absurd (hu'.symm.trans hu) (key hgt hi hti' hm')
+
+/-- **The two numberings of a template's units agree.** Where the text's reader gives the templates `ts` and the
+template query gives the ranges `rs`, whatever templates it is asked for: some scope is unit `u` of the template
+`tid` (`UnitAt`) exactly when the text's template of that id has more units than `u`. -/
+theorem unitAt_iff {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String} {rs : Array TRange}
+    (hts : templatesOf P doc = .ok ts)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs) (tid : String) (u : ℕ) :
+    (∃ sc, UnitAt P rs tid u sc) ↔ ∃ t ∈ ts, t.tid = tid ∧ u < t.units := by
+  obtain ⟨-, hmap⟩ := templatesOf_ranges hts hrs
+  rw [unitAt_lt_iff]
+  constructor
+  · intro hu
+    have hex : ∃ r ∈ rs, r.template = tid := by
+      refine Classical.not_not.1 fun hne => ?_
+      have he : Spot.RecordText.rangesAt rs tid = #[] := by
+        rw [Spot.RecordText.rangesAt, Array.filter_eq_empty_iff]
+        intro r hr hb
+        exact hne ⟨r, hr, by simpa using hb⟩
+      rw [he] at hu
+      simp at hu
+    have hx := (mem_unitsOf (rs := rs) (x := (tid, (Spot.RecordText.rangesAt rs tid).foldl
+      (fun a r => a + r.count) 0))).2 ⟨hex, rfl⟩
+    rw [← hmap] at hx
+    obtain ⟨t, ht, he⟩ := List.mem_map.1 hx
+    simp only [Prod.mk.injEq] at he
+    exact ⟨t, ht, he.1, by rw [he.2]; exact hu⟩
+  · rintro ⟨t, ht, rfl, hu⟩
+    have hx : (t.tid, t.units) ∈ Spot.RecordText.unitsOf rs := by
+      rw [← hmap]
+      exact List.mem_map_of_mem ht
+    rw [← (mem_unitsOf.1 hx).2]
+    exact hu
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs
 

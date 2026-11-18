@@ -16,7 +16,8 @@ import types
 import numpy as np
 import pytest
 from verity.protocols.resource_accounting.compute.pouw.prover import circuit
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import SCHEMES, get, pearl_c
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get, pearl_c
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as pouw_h1
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import lead as pouw_lead
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import ncp as NCP
@@ -108,7 +109,7 @@ def _int7_linear(x, w, bias=None):
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
 def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_h1_and_the_lead_are_executed():
-    assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES, pouw_h1.SCHEME, pouw_lead.SCHEME}))
+    assert pouw.schemes() == tuple(sorted({*IDENTIFIED, *circuit.SCHEMES, *PPD.SCHEMES, pouw_h1.SCHEME, pouw_lead.SCHEME}))
     assert "ncp-v1" in pouw.schemes()
     assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
     assert PO.refusals(_serve("pouw:ncp-v1")) == ()                           # through the selector, real adapter
@@ -139,7 +140,7 @@ def test_pearl_c_sm120_refuses_linears_outside_the_kernels():
                                       ({"settings": {"pouw": {"salt": "x"}}}, "unknown pouw settings"),
                                       ({"settings": {"pouw": {"weight_operands": "resident"}}}, "unknown pouw settings")])
 def test_a_run_the_adapter_cannot_serve_is_refused(kw, match):
-    assert any(match in r for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", **kw)))
+    assert any(match in r for r in PO.refusals(_serve("pouw:ncp-v1", **kw)))
 
 
 def test_pouw_executes_the_linear_apply_and_only_ncp_v2_is_admitted_beside_spot():

@@ -11,13 +11,15 @@ from verity.protocols.resource_accounting.network.prover.egress import EgressBuc
 from verity.protocols.resource_accounting.network.prover.ingress_scan import IngressScanBucket, IngressScanStart
 from verity.protocols.resource_accounting.network.prover.lengths_row import LengthsRow
 from verity.protocols.resource_accounting.network.prover.response_tie import ResponseTieNoStop, ResponseTieStop
-from verity.protocols.resource_accounting.network.prover.window_charge import ChargeCount, ChargeLink
 from verity.protocols.resource_accounting.network.verifier.io_request import IoTieRequest
 from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBucket, IoTieContent, IoTieRoute
 from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Scheme, register
+from verity import hooks as H
+from verity.protocols.resource_accounting.network.prover import id_relay
+from verity.protocols.resource_accounting.scheme import register_process
 
 DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, IoTieContent, IoTieBucket, IoTieRequest,
-               ResponseTieStop, ResponseTieNoStop, LengthsRow, ChargeCount, ChargeLink)
+               ResponseTieStop, ResponseTieNoStop, LengthsRow)
 
 
 def output_bits(definition: Any) -> Callable[[Mapping[str, int]], int]:
@@ -44,5 +46,9 @@ NETWORK_ATTESTER = register(Scheme(
     requires={"one-labelling": "the network attester's rows (`verifier.network_attester_rows`)",
               "one-design": "each scan's own sample at its δ (`prover.scan_zk`)"},
 ))
+
+register_process("id-relay", id_relay.process)
+#: the scheme's request that starts the id relay beside the workload, for the adapter to file under the scheme's name
+START_ID_RELAY = H.StartBeside("id-relay", id_relay.READERS)
 
 __all__ = ["DEFINITIONS", "NETWORK_ATTESTER", "output_bits"]

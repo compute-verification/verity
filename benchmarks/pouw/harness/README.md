@@ -14,7 +14,7 @@ Plan the shapes' operand sets, bursts and memory, with no GPU:
 
 ~~~sh
 cd benchmarks/pouw/harness
-python bench.py --plan
+python bench.py --plan rtx-pro-6000-server
 ~~~
 
 It prints one line a shape, from `m2048-n2048-k2048` to the models' linears, with its sets, burst and memory.
