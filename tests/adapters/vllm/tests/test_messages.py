@@ -432,7 +432,8 @@ def _declared(name: str, **declared) -> NS:
     attached = []
     return NS(**{"name": name, "settings": {}, "check_settings": lambda own: None, "requests": lambda ctx: (),
                  "attach": lambda ex, ctx: attached.append(name), "attached": attached, "resource": "compute",
-                 "needs": frozenset(), "depends": (), "keeps_weight_copy": schemes.UNDECLARED, **declared})
+                 "needs": frozenset(), "depends": (), "keeps_weight_copy": schemes.UNDECLARED,
+                 "kernels": schemes.UNDECLARED, **declared})
 
 
 STORE = {"resource": "memory", "needs": frozenset({"store"})}
