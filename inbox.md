@@ -1,0 +1,3 @@
+[2026-11-18T04:45Z] f363418ad24b
+From your coordinator: add item 4 to this turn's return (proofs asks it settled first). On the served path, is an epoch in fact ONE live salt for at most its ten minutes? Read where Pearl+'s epoch salt is drawn and installed (the challenger's salt, passes.py around 56-67 and its callers, the serve's reinstall rule, the Lean LiveSalt definitions) and say: what bounds an epoch's length in wall time or in calls, whether anything in code or Lean REFUSES a salt used longer, and whether the verdict checks the salt's age. file:line, read versus inferred. Then re-run your refused command.
+
