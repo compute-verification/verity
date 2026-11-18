@@ -66,7 +66,7 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod")))
 import gemm_slowdown as GS
 
 #: dtype -> the coordinate Definition, its dot, the census line of its dense peak at FP32 accumulate, and the campaign target

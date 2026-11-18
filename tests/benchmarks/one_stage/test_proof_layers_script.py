@@ -70,7 +70,7 @@ def test_it_reads_only_the_settings_it_names():
     assigned = set(re.findall(r"(?:^|[\s;(])(?:local )?([A-Za-z_]\w*)=", TEXT)) | {"s", "t", "n", "f", "o", "k"}
     read = set(re.findall(r"\$\{?!?([A-Za-z_]\w*)", TEXT)) - (assigned - set(SETTINGS))
     # HOME and PATH are the shell's; RESEARCH_RUN_DIR is a research run's own directory, the results' default
-    assert read - {"HOME", "PATH", "RESEARCH_RUN_DIR", "SECONDS", "PIPESTATUS", "BASH_REMATCH"} == set(SETTINGS)
+    assert read - {"HOME", "PATH", "RESEARCH_RUN_DIR", "SECONDS", "PIPESTATUS", "BASH_REMATCH", "BASH_SOURCE"} == set(SETTINGS)
     header = TEXT.split("set -uo pipefail", 1)[0]
     assert all(f"#   {s} " in header for s in SETTINGS)
 
