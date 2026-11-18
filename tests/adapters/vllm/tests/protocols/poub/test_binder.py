@@ -284,7 +284,7 @@ def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_
     r.kv_caches[0][:, 1] = 1.5
     b.on_event(StepEnded(0))
     b.on_event(RangeFreed((1,), step=0))
-    b.on_event(StepBegan(1))
+    b.on_event(StepBegan(1, slots=1))
     b.on_event(StepEnded(1))
     assert m.last == 1 and memory_map_lines(m) == [] and b.step == 2
     with pytest.raises(RuntimeError, match="no KV pool"):
@@ -329,7 +329,7 @@ def test_steps_append_their_writes_and_free_the_freed_pages():
     assert not s.in_pass and b.step == 1
     b.on_event(RangeWritten(2, 4, 1, 1))
     b.on_event(StepBegan(1, ("a",), 1))
-    b.on_event(StepBegan(2))
+    b.on_event(StepBegan(2, slots=1))
     assert s.counters.calls["end_pass"] == 2 and b.step == 3
     b.on_event(RangeFreed((1, 2), step=2))
     assert not s.pool.allocated[[1, 2]].any() and s.pool.allocated[3]
@@ -340,7 +340,7 @@ def test_steps_append_their_writes_and_free_the_freed_pages():
 def steps(b: Binder, n: int) -> None:
     """``n`` empty steps after the binder's last."""
     for _ in range(n):
-        b.on_event(StepBegan(b.step))
+        b.on_event(StepBegan(b.step, slots=1))
 
 
 def test_steps_run_in_chained_windows_with_the_readers_roots():
@@ -418,7 +418,7 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     b.on_event(StepEnded(0))
     b.on_event(RangeFreed((2,), step=0))
     assert m.text().count("\n") == 1
-    b.on_event(StepBegan(1))
+    b.on_event(StepBegan(1, slots=1))
     assert open_step() == (1 if passes else None)
     (step,) = memory_map.parse(m.text().splitlines())[1]
     kv = s.region("kv/0")

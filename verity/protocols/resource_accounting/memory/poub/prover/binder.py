@@ -325,7 +325,8 @@ class Binder:
     def on_event(self, e: Any) -> None:
         """One of the exchange's ``memory`` or ``steps`` events."""
         if isinstance(e, StepBegan):
-            self.on_step(e)
+            if e.slots > 0:
+                self.on_step(e)
         elif isinstance(e, StepEnded):
             self.end()
         elif isinstance(e, RangeWritten):

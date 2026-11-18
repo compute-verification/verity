@@ -400,10 +400,10 @@ class TickGate:
         start()
 
     def on(self, event: Any) -> None:
-        """A ``steps`` event: a step that began advances T; a held request completed from outside is dropped, as its N
+        """A ``steps`` event: a step that computes advances T; a held request completed from outside is dropped, as its N
         won't come."""
         if isinstance(event, H.StepBegan):
-            if self.run is not None and self.opened is None:
+            if self.run is not None and self.opened is None and event.slots > 0:
                 self.T += self.tick.step(event.queued > 0)
                 self.steps += 1
         elif isinstance(event, H.OutputsComplete):

@@ -60,7 +60,8 @@ class InputArrived:
 @dataclass(frozen=True)
 class StepBegan:
     """``steps``: workload step ``step`` begins, computing for ``inputs`` over ``slots`` slots, with ``queued`` started
-    inputs left waiting for a slot."""
+    inputs left waiting for a slot. Steps are numbered from 0, each ends in one `StepEnded`, and a step that computes
+    nothing has ``slots == 0`` and no ``inputs``."""
 
     hook: ClassVar[str] = "steps"
     step: int
