@@ -295,6 +295,13 @@ loads = [
 
 [[place]]
 paths = [
+    "verity/clock.py",
+    "tests/verity/tests/test_clock.py",
+]
+trusted = true
+
+[[place]]
+paths = [
     "verity/commitments",
     "verity/commitments/gates/attest.py",
     "verity/commitments/gates/block_key.py",
