@@ -76,8 +76,6 @@ ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ST)
 
 CLASS = WindowClass(8, 32, 4, lanes=4, every=16)
-#: the network attester's scan at CLASS's shape (`WindowClass.scan` is the lowering's `Scan`)
-SCAN = IS.Class(**CLASS.scan.shape)
 PROMPTS = ((17, 3, 250, 9), (5, 77, 42), tuple(range(1000, 1032)), (9, 8, 7, 6, 5))
 ARRIVALS = (0, 0, 0, 5)
 RESPONSES = ((100, 101, 102, 103), (200,), (300, 301), (400, 401, 402))
@@ -133,7 +131,7 @@ def _imports() -> tuple:
 
 
 def test_a_windows_slots_are_the_requests_the_scan_starts_there(serve_dir):
-    scan, imports = SCAN, _imports()
+    scan, imports = IS.Class(**CLASS.scan.shape), _imports()
     rows, starts = kept_scan(serve_dir, CLASS, USERS[:3])
     assert starts == [None, "user-0", None, "user-1", None, "user-2", None, None]
     assert len(rows) == CLASS.buckets and rows[0] == IS.encode(scan, IS.empty(scan))
@@ -153,10 +151,11 @@ def test_a_windows_state_rows_are_the_rows_of_the_scans_state_tree(serve_dir):
     scan_zk's `link` builds it), in execution phase 0 and in execution phase 1: what a period's check needs before it can tie
     the two to one root."""
     served, T = _served(), CLASS.buckets
-    states = ST.chain(SCAN, *served.rows(), served.outputs).states[1:]
+    scan = IS.Class(**CLASS.scan.shape)
+    states = ST.chain(scan, *served.rows(), served.outputs).states[1:]
     for w, users in ((0, USERS[:3]), (1, USERS[3:])):
         rows, _ = kept_scan(serve_dir, CLASS, users)
-        assert [list(r) for r in rows] == IS.window_state(SCAN, states, w * T, T)
+        assert [list(r) for r in rows] == IS.window_state(scan, states, w * T, T)
 
 
 def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serve_dir, tmp_path, monkeypatch):

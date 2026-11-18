@@ -35,7 +35,6 @@ from verity_bench.prove_common import (
     _field,
     _input,
     _read,
-    _superseded,
     card,
     of_record,
 )
@@ -190,7 +189,7 @@ def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, 
     meta names. A superseded target gives nothing, unless `superseded` asks for its rows anyway (for their staged
     names)."""
 
-    if not superseded and (by := _superseded(store, target)):
+    if not superseded and (by := kit.superseded(store, target)):
         return {target: ([], [f"superseded by {', '.join(by)}"])}
     if not target.startswith("art:"):
         return {target: rates(store, target)}
@@ -241,7 +240,7 @@ def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
                      for b in value["blocks"])
     steady, runs, refused = steady_of_record(store, workload)
     aliases = sorted({(s.definition, s.type) for target in records(store).get(workload.record(STEADY), [])
-                      if _superseded(store, target) for found, _ in steady_rows(store, target, True).values() for s in found})
+                      if kit.superseded(store, target) for found, _ in steady_rows(store, target, True).values() for s in found})
     prover = PF.Flock(tuple(steady), sessions, art, provers=provers, cores=cores, aliases=tuple(aliases),
                      boolean=boolean_version)
     table = prover.table(census)
@@ -291,7 +290,7 @@ def lean_verify(doc: Any, run: str) -> PF.LeanVerify | str:
 def lean_run(store: Any, run: str) -> PF.LeanVerify | str:
     """A run of record's `LEAN_RECORD` as the statement it measured, or why the run measures nothing."""
 
-    if superseded := _superseded(store, run):
+    if superseded := kit.superseded(store, run):
         return f"superseded by {', '.join(superseded)}"
     if run.startswith("art:"):
         return f"an art: the Lean verifier's record is a run's (`{LEAN_RECORD}`)"
@@ -370,7 +369,7 @@ def warm_run(store: Any, run: str) -> list[PF.Warm | str]:
     """A run of record's statements proved from warm sessions, every card's group (`warm_rows`), or why the run
     measures nothing."""
 
-    if superseded := _superseded(store, run):
+    if superseded := kit.superseded(store, run):
         return [f"superseded by {', '.join(superseded)}"]
     attempt = store.get_attempt(run) if not run.startswith("art:") else None
     if attempt is None:

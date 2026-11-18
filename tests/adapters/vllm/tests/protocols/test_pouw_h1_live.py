@@ -83,14 +83,11 @@ def test_a_served_window_registers_round_0s_request_headers_and_each_rounds_slot
 
 def test_round_0s_request_table_is_cores_commit_of_its_headers():
     """``requests@0``, hashed with NumPy (`pouw_h1_registered.commit`), is core's `Registered.commit` of round 0's
-    headers under the run key's salts at its nonce: its entry, strings, levels, salts and rows."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
-        registered as NR,
-    )
+    headers under the run's salts at its nonce: its entry, strings, levels, salts and rows."""
     run = _window()
     served = run.served
     req, words = served.live[LV.value(served, LV.REQUESTS)], LV.request_words(run.admitted.get(0, []), ROWS)
-    ys = NR.salts(run._key, LV.nonce(SV.LIVE_NONCE, LV.REQUESTS, 0), ROWS)
+    ys = run._salts.held(LV.nonce(SV.LIVE_NONCE, LV.REQUESTS, 0))
     core = RV.Registered.commit(served.program_digest, req.value, words.tolist(), [ys[192 * j:192 * (j + 1)] for j in range(ROWS)],
                                RV.WORD_BITS, LR.REQUEST_SCHEMA, session=SV.LOCAL_SESSION)
     assert req.entry() == core.entry() and req.bcs == core.bcs and req.levels == core.levels

@@ -1,4 +1,4 @@
-"""H1's, ncp-v2's and Pearl-C's session on the proof system's challenger on its auditor device
+"""H1's and Pearl-C's session on the proof system's challenger on its auditor device
 (`verity.protocols.proofs.spot.verifier.challenger.remote`), as the serving process opens and closes it; `pouw_h1_challenger` is
 the verifier's check of what it served.
 
@@ -10,9 +10,8 @@ open S on the window's open root R = `salt.window_open_root` of the weights' roo
 and opens its salt coin after R; the epoch's salt is `audit.salt_of` of that coin over the weights' root. A Pearl-C
 install holds the same reserve answer, for a session reserved with its salt coin alone (`window.SALT_FAMILIES`), and has
 the gate open S on its salt epoch's root R = `salt.epoch_open_root` of the weights' root W and the epoch's number k
-over W (`EPOCHS`), its salt coin opened after R (`salt_session`); its salt is `audit.salt_of` over W. ncp-v2's `session` is
-the gate's open answer, and opens its salt after the weights' root. Round s's coin opens after round s's root
-(`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the
+over W (`EPOCHS`), its salt coin opened after R (`salt_session`); its salt is `audit.salt_of` over W. Round s's coin
+opens after round s's root (`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the
 root its session was opened on (serve.py's ``--root``), H1's R. An H1 window's sampling coin is not S's: it comes
 from a sample session of its own (`DrawSession`, the pouw setting ``draw_session``, reserved withheld with
 `window.DRAW_FAMILIES`: ``reserve --withhold``), which the gate opens on the window's sample root once the prover's
@@ -60,7 +59,7 @@ H1_PERIOD = (CR.K_FIELD, CR.ROWS_FIELD, CR.LENGTH_FIELD)
 
 
 def session_setting(raw: Any) -> dict[str, Any] | None:
-    """The pouw setting ``session``: the gate's open answer (`pouw_h1_challenger.session_of`, ncp-v2's) or, for a window that opens its
+    """The pouw setting ``session``: the gate's open answer (`pouw_h1_challenger.session_of`) or, for a window that opens its
     session itself on its window-open root (H1's), the gate's reserve answer (`reserved_of`)."""
     return PHC.session_of(raw) if isinstance(raw, Mapping) and "root" in raw else reserved_of(raw)
 
@@ -202,21 +201,6 @@ def _live(entry: str, at: str, steps: int, given: Mapping[str, Any],
     return client, c
 
 
-def session(entry: str, at: str, steps: int, root: bytes,
-            given: Mapping[str, Any]) -> tuple[Any, LiveCommitment, LiveOpening, LiveRecord, bytes]:
-    """ncp-v2's session on the challenger at `at`, the one the gate's answer `given` opened (`_live`), its salt coin opened
-    after the weights' root `root`. Returns the session, its coin commitment, the salt coin's opening, the `LiveRecord` of
-    its round coins and the epoch's salt; on a refusal the session is closed and ValueError or `CoinError` (the
-    challenger's) raised."""
-    client, c = _live(entry, at, steps, given)
-    try:
-        opening = LiveRecord(client, Wd.SALT).record(root)
-    except BaseException:
-        _close(client)
-        raise
-    return client, c, opening, LiveRecord(client, Wd.ROUND), salt_of(c, opening.coin, root)
-
-
 def gate_of(call: Callable[..., Mapping[str, Any]]) -> Gate:
     """The `Gate` of infra's gate as words (`commit_coins.ChallengerGate.call`): ``open --session S --root R``, its ``commitment``
     from ``status S`` when the open answers none, and only the fields a session's answer has (`pouw_h1_challenger.session_of`).
@@ -260,20 +244,16 @@ def opened(entry: str, at: str, steps: int, gate: Gate, sid: str, root: bytes, n
     return client, c, opening, answer
 
 
-def salt_session(entry: str, settings: Any, root: bytes, opens: bool, epoch: int | None = None
+def salt_session(entry: str, settings: Any, root: bytes, epoch: int | None = None
                  ) -> tuple[Any, LiveCommitment, LiveOpening, bytes, dict[str, Any], int | None]:
-    """The session an install's salt coin comes from, on the challenger at ``settings.challenger``: when `opens`
-    (Pearl-C's), the reserved session ``settings.session`` that ``settings.gate`` opens on the install's salt epoch's
+    """The session an install's salt coin comes from, on the challenger at ``settings.challenger``: Pearl-C's
+    reserved session ``settings.session`` that ``settings.gate`` opens on the install's salt epoch's
     epoch root, `salt.epoch_open_root` of the weights' root `root` and the epoch's number k over it (`epoch`, a number
     its caller has already spent where it outlives the process; else `EPOCHS`), its coins
     the salt coin alone (`window.salt_epoch_reason`, so it ends complete once that coin is released) and that coin
-    opened after the epoch root (`opened`); else (ncp-v2's) the session the gate's open answer ``settings.session``
-    names (`session`), its salt coin opened after `root`. Returns the session, its coin commitment, the salt coin's
+    opened after the epoch root (`opened`). Returns the session, its coin commitment, the salt coin's
     opening, the epoch's salt (`audit.salt_of` over `root`), the gate's answer as the run carries it
-    (`pouw_h1_challenger.carried`) and k (None for ncp-v2)."""
-    if not opens:
-        (client, c, opening, _, _), given = session(entry, settings.challenger, 0, root, settings.session), settings.session
-        return client, c, opening, salt_of(c, opening.coin, root), PHC.carried(given), None
+    (`pouw_h1_challenger.carried`) and k."""
     if epoch is None:
         k = EPOCHS.get(root.hex(), 0)
         EPOCHS[root.hex()] = k + 1
@@ -475,4 +455,4 @@ def finish(run: Any, client: Any) -> None:
 __all__ = ["DrawSession", "EPOCHS", "Gate", "H1_PERIOD", "NO_DRAW_SESSION", "RESERVE_FIELDS", "WITHHELD_OPEN", "Window", "after_close",
            "at_port", "closed_on_error", "connect", "finish", "gate_of", "in_process_draw", "open_period", "open_session", "opened",
            "period_reason", "period_setting", "refusals", "reserve_draw", "reserve_salt", "reserved_of", "salt_session",
-           "session", "session_setting"]
+           "session_setting"]

@@ -10,8 +10,8 @@ reads only its digest, its open root and its tables' names.
 
 * **W**, H1's window docket (`pouw_h1_commit.registration`): each round's A table of K and input-ids table, made H1's
   way from the served values (`chunk_words` of each call's int8 codes and scale over M slots, call after call; `ids_words`
-  of the step's input ids), committed under H1's run key at H1's nonces and domains (round 0's ids bound to the session).
-* **R**, the audited window's docket, as `prove_path.py window-commit --window-registration W --h1-key` makes it:
+  of the step's input ids), committed under H1's kept salts at H1's nonces and domains (round 0's ids bound to the session).
+* **R**, the audited window's docket, as `prove_path.py window-commit --window-registration W --h1-prover` makes it:
   the window circuit with H1's tables (`window_circuit.lower` with `Tables`), its units filled from the same values
   (`window_rows.Rows`), its tables W's rebuilt from the rows its proof blocks make (`pouw_h1_commit.reuse`), recorded,
   committed and written through `interface.Window` as a v2 record chained right after W.
@@ -73,6 +73,7 @@ from verity_vllm.pipeline import serve_tie as TIE
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.words import chunk_words, ids_words
@@ -96,8 +97,8 @@ TARGET = {"compute_capability": [12, 0], "num_sms": 188, "int8_exact": "linears"
 CLASS, TABLES = WindowClass(1, 32, 2), Tables(K, M, CALLS)
 #: H1's linears at K and their calls, a round each linear once (`pouw_h1_served.Served`'s)
 LINEARS = [("qkv", K, 3072), ("o", K, K), ("gate_up", K, 512)]
-#: the committers' secret keys: V3c's, and H1's run key
-H1_KEY = bytes(range(64, 96))
+#: H1's run salts, which W's tables are committed under and the tie reuses them under
+H1_SALTS = PV.RunSalts()
 H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()
 OPEN = hashlib.sha512(b"the H1 window's open root").hexdigest()
 #: the V3c window's run root
@@ -175,9 +176,10 @@ class _Served(SV.Served):
 
 def _window(a_words: dict[int, np.ndarray], id_words: dict[int, np.ndarray]) -> SimpleNamespace:
     """H1's window with these tables committed as `pouw_h1_served.Served` commits them, and its docket W."""
-    a = {s: NR.commit(H1, f"{SV.PREFIX}a/{K}@{s}", w, H1_KEY, SV.nonce(s * CALLS, "a"), keep_rows=True, window=OPEN)
+    a = {s: NR.commit(H1, f"{SV.PREFIX}a/{K}@{s}", w, H1_SALTS.at(SV.nonce(s * CALLS, "a"), len(w)), keep_rows=True,
+                      window=OPEN)
          for s, w in a_words.items()}
-    ids = {s: NR.commit(H1, f"{SV.PREFIX}ids@{s}", w, H1_KEY, SV.IDS_NONCE + s, keep_rows=True,
+    ids = {s: NR.commit(H1, f"{SV.PREFIX}ids@{s}", w, H1_SALTS.at(SV.IDS_NONCE + s, len(w)), keep_rows=True,
                         **({"session": SV.LOCAL_SESSION} if s == 0 else {"window": OPEN})) for s, w in id_words.items()}
     served = _Served(program=H1, program_digest=H1, root=OPEN, registered={v.value: v for v in a.values()},
                      linears=list(LINEARS), calls=[(n, b) for _ in range(ROUNDS) for b, (n, _k, _n) in enumerate(LINEARS)],
@@ -201,7 +203,7 @@ def _layout() -> dict:
 
 
 def _reuse(toy, W: dict) -> dict:
-    return CT.reuse(W, _layout(), ROUNDS, H1_KEY, toy.rows.value)
+    return CT.reuse(W, _layout(), ROUNDS, H1_SALTS, toy.rows.value)
 
 
 def _reads(circuit) -> dict[tuple[str, str, int], tuple[str, int]]:
