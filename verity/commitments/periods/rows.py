@@ -407,8 +407,7 @@ class Binding:
 
     @cached_property
     def partition(self) -> dict[str, Any]:
-        """The partition object, its ``blocks`` the members' units in the partition's order, under its digest."""
-        return PO.build(self.program, self.query, [[m.base, m.base + m.n] for m in self.members])
+        return PO.build(self.program, self.query)
 
     @cached_property
     def partition_digest(self) -> str:
