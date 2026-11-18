@@ -51,14 +51,17 @@ def _get(j: Any, k: str) -> Any:
 
 
 def split(j: Any, what: str) -> dict:
-    """`SampledTwo.split`: an object naming the form ``two-stage``, without its ``form``."""
+    """`SampledTwo.split`: an object naming the form ``two-stage``, and ``levels`` 2 where it names any, without
+    either."""
     if not isinstance(j, dict):
         raise Reject(f"the {what} is not an object")
     if not isinstance(j.get("form"), str):
         raise Reject(f"the {what} names no form")
     if j["form"] != TWO_STAGE:
         raise Reject(f"the {what} name the form {j['form']}, not \"{TWO_STAGE}\"")
-    return {k: v for k, v in j.items() if k != "form"}
+    if "levels" in j and not (type(j["levels"]) is int and j["levels"] == 2):
+        raise Reject(f"levels-form-mismatch: the {what}' levels is {canonical(j['levels'])}, and their form is {TWO_STAGE}")
+    return {k: v for k, v in j.items() if k not in ("form", "levels")}
 
 
 def _delegated(decode, *args) -> Any:

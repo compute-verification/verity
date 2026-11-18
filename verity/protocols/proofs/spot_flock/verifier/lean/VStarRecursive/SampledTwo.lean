@@ -206,12 +206,16 @@ def valuesOf (j : Json) (what : String) : V (Array Service.Value) := do
 def paramsAt (j : Json) : V OneStage.Params := do
   OneStage.paramsParsed (← Core.canonicalJson (← Flock.canon j).toUTF8)
 
-/-- The form's rest: the object less its `form`, which must be `two-stage`. -/
+/-- The form's rest: the object less its `form`, which must be `two-stage`, and its `levels`, which must be `2` where
+present. -/
 def split (j : Json) (what : String) : V Json := do
   let .obj _ := j | throw s!"the {what} is not an object"
   let .str form := getD j "form" | throw s!"the {what} names no form"
   if form != TWO_STAGE then throw s!"the {what} name the form {form}, not \"{TWO_STAGE}\""
-  pure (Json.mkObj (without j "form"))
+  if let some v := field? j "levels" then
+    if v != Json.num 2 then
+      throw s!"levels-form-mismatch: the {what}' levels is {v.compress}, and their form is {TWO_STAGE}"
+  pure (Json.mkObj (without (Json.mkObj (without j "form")) "levels"))
 
 /-- The parameters' parse (module docstring, **params**), before the two stages' windows are held apart
 (`paramsOfJson`). -/
@@ -981,6 +985,12 @@ def protocol : Core.BlobProtocol where
   checkBlobs := checkBlobs
 
 #guard (paramsOfJson (Json.mkObj [("form", "one-stage")])).toOption.isNone
+#guard match split (Json.mkObj [("form", TWO_STAGE), ("levels", Json.num 1)]) "parameters" with
+  | .error e => e == "levels-form-mismatch: the parameters' levels is 1, and their form is two-stage"
+  | .ok _ => false
+#guard match split (Json.mkObj [("form", TWO_STAGE), ("levels", Json.num 2), ("a", Json.num 0)]) "parameters" with
+  | .ok j => j == Json.mkObj [("a", Json.num 0)]
+  | .error _ => false
 #guard match paramsOfJson (Json.mkObj [("form", TWO_STAGE), ("outputs", Json.arr #["y"])]) with
   | .error e => e.startsWith "the keys of the parameters"
   | .ok _ => false

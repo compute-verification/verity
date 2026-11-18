@@ -86,6 +86,10 @@ CHANGES = {
     "no-form": lambda p: _set(p, ("form",), DROP),
     "form-not-a-string": lambda p: _set(p, ("form",), 2),
     "form-one-stage": lambda p: _set(p, ("form",), "one-stage"),
+    "levels-one": lambda p: _set(p, ("levels",), 1),
+    "levels-three": lambda p: _set(p, ("levels",), 3),
+    "levels-a-string": lambda p: _set(p, ("levels",), "2"),
+    "levels-two-a-key-missing": lambda p: _set(_set(p, ("levels",), 2), ("delta",), DROP),
     "a-key-missing": lambda p: _set(p, ("delta",), DROP),
     "a-key-more": lambda p: _set(p, ("more",), 1),
     "outputs-not-a-list": lambda p: _set(p, ("outputs",), "credited"),
@@ -126,6 +130,7 @@ def test_the_form_s_own_refusals_are_reached() -> None:
     reasons = {str(e) for e in refusals if not isinstance(e, T.Delegated)}
     for own in (T.ONE_DEFINITION, T.ONE_KEY, T.OUTPUTS_REFUSED, "the rule is not two-stage"):
         assert own in reasons
+    assert any(r.startswith("levels-form-mismatch") for r in reasons)
 
 
 @pytest.mark.parametrize("name", list(CHANGES))

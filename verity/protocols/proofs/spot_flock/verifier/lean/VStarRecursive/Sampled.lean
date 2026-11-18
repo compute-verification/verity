@@ -62,13 +62,50 @@ abbrev Evidence := OneStageZk.Evidence ⊕ SampledTwo.Evidence
 /-- The forms, as a refusal names them. -/
 def FORMS : String := s!"\"{ONE_STAGE}\", \"{RECURSIVE}\" or \"{SampledTwo.TWO_STAGE}\""
 
-private def split (j : Json) (what : String) : V (String × Json) := do
+/-- The keys only two levels' parameters hold: the boundary docket, the interior and the two-level rule. -/
+def TWO_LEVEL_KEYS : List String := ["boundary", "interior", "rule"]
+
+/-- The form a `levels` field names: `1` one level's, `2` two levels'; any other count refused by name. -/
+def levelsForm (v : Json) (what : String) : V String :=
+  match v with
+  | .num n =>
+    if n.exponent != 0 then throw s!"levels-not-integer: the {what}' levels is {v.compress}, not a whole number of levels"
+    else if n.mantissa == 1 then pure ONE_STAGE
+    else if n.mantissa == 2 then pure SampledTwo.TWO_STAGE
+    else if n.mantissa < 1 then throw s!"levels-not-positive: the {what}' levels is {v.compress}: an audit samples at least one level"
+    else throw s!"levels-not-built: the {what}' levels is {v.compress}: only 1 or 2 levels are built"
+  | _ => throw s!"levels-not-integer: the {what}' levels is {v.compress}, not a whole number of levels"
+
+/-- The form the parameters' shape is: two levels' keys (`TWO_LEVEL_KEYS`) all or none. -/
+def shapeForm (j : Json) : V String :=
+  let held := TWO_LEVEL_KEYS.filter (fun k => (field? j k).isSome)
+  if held.isEmpty then pure ONE_STAGE
+  else if held.length == TWO_LEVEL_KEYS.length then pure SampledTwo.TWO_STAGE
+  else throw s!"levels-shape: the parameters hold {held} of two levels' {TWO_LEVEL_KEYS}: neither shape"
+
+/-- The form an object names and its rest, less `form` and `levels`. `levels` and `form`, where both are present, must
+name one form, and an object naming neither is one level's. The parameters' (``params``) one- or two-level form must be
+their shape's (`shapeForm`): the count is the parameters', fixed before any coin, and never a record's. -/
+private def split (j : Json) (what : String) (params : Bool) : V (String × Json) := do
   let .obj kvs := j | throw s!"the {what} is not an object"
-  let .str form := getD j "form" | throw s!"the {what} names no form ({FORMS})"
-  pure (form, Json.mkObj (kvs.toArray.filter (·.1 != "form")).toList)
+  let byLevels ← match field? j "levels" with
+    | none => pure none
+    | some v => some <$> levelsForm v what
+  let form ← match getD j "form", byLevels with
+    | .str f, some l =>
+      if f == l then pure f
+      else throw s!"levels-form-mismatch: the {what}' levels is {(getD j "levels").compress}, and their form is {f}"
+    | .str f, none => pure f
+    | .null, some l => pure l
+    | .null, none => pure ONE_STAGE
+    | v, _ => throw s!"the {what}' form is {v.compress}, not a string ({FORMS})"
+  if params && (form == ONE_STAGE || form == SampledTwo.TWO_STAGE) then
+    let s ← shapeForm j
+    if s != form then throw s!"levels-params-mismatch: the parameters name the form {form}, and their shape is {s}'s"
+  pure (form, Json.mkObj (kvs.toArray.filter (fun kv => kv.1 != "form" && kv.1 != "levels")).toList)
 
 def paramsOfJson (j : Json) : V Params := do
-  let (form, rest) ← split j "parameters"
+  let (form, rest) ← split j "parameters" true
   if form == ONE_STAGE then
     if (field? rest "proofs").isNone then throw s!"the parameters name no proofs: {V1_REFUSED}"
     return .inl (← OneStageZk.paramsEitherOfJson rest)
@@ -77,7 +114,7 @@ def paramsOfJson (j : Json) : V Params := do
   throw s!"the parameters' form {form} is not {FORMS}"
 
 def evidenceOf (b : ByteArray) : V Evidence := do
-  let (form, rest) ← split (← Core.canonicalJson b) "evidence"
+  let (form, rest) ← split (← Core.canonicalJson b) "evidence" false
   if form == RECURSIVE then throw RECURSIVE_REFUSED
   if form == SampledTwo.TWO_STAGE then return .inr (← SampledTwo.evidenceOf b)
   if form == ONE_STAGE && (field? rest "proofs").isNone then throw s!"the evidence names no proofs: {V1_REFUSED}"
@@ -121,7 +158,36 @@ def protocol : Core.BlobProtocol where
   | .error e => e == s!"the parameters' form other is not {FORMS}"
   | .ok _ => false
 #guard match paramsOfJson (Json.mkObj [("form", SampledTwo.TWO_STAGE)]) with
+  | .error e => e.startsWith "levels-params-mismatch"
+  | .ok _ => false
+#guard match paramsOfJson (Json.mkObj [("form", SampledTwo.TWO_STAGE), ("boundary", Json.mkObj []),
+    ("interior", Json.mkObj []), ("rule", Json.mkObj [])]) with
   | .error e => e.startsWith "the keys of the parameters"
+  | .ok _ => false
+#guard match paramsOfJson (Json.mkObj [("levels", Json.num 2), ("boundary", Json.mkObj []),
+    ("interior", Json.mkObj []), ("rule", Json.mkObj [])]) with
+  | .error e => e.startsWith "the keys of the parameters"
+  | .ok _ => false
+#guard match paramsOfJson (Json.mkObj [("levels", Json.num 2), ("form", ONE_STAGE)]) with
+  | .error e => e == "levels-form-mismatch: the parameters' levels is 2, and their form is one-stage"
+  | .ok _ => false
+#guard match paramsOfJson (Json.mkObj [("levels", Json.num 3)]) with
+  | .error e => e.startsWith "levels-not-built"
+  | .ok _ => false
+#guard match paramsOfJson (Json.mkObj [("levels", "2")]) with
+  | .error e => e.startsWith "levels-not-integer"
+  | .ok _ => false
+#guard match paramsOfJson (Json.mkObj [("levels", Json.num 0)]) with
+  | .error e => e.startsWith "levels-not-positive"
+  | .ok _ => false
+#guard match paramsOfJson (Json.mkObj [("levels", Json.num 1), ("boundary", Json.mkObj [])]) with
+  | .error e => e.startsWith "levels-shape"
+  | .ok _ => false
+#guard match paramsOfJson (Json.mkObj [("law", Json.mkObj [])]) with
+  | .error e => e == s!"the parameters name no proofs: {V1_REFUSED}"
+  | .ok _ => false
+#guard match paramsOfJson (Json.mkObj [("levels", Json.num 1), ("law", Json.mkObj [])]) with
+  | .error e => e == s!"the parameters name no proofs: {V1_REFUSED}"
   | .ok _ => false
 #guard match evidenceOf "{\"form\":\"two-stage\"}".toUTF8 with
   | .error e => e.startsWith "the keys of the evidence"
