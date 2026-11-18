@@ -64,8 +64,8 @@ def meets (n k e K : ℕ) : Bool :=
 /-- `meets` is `miss (K + 1) < 2^-e ≤ miss K` for the uniform `k`-subset: `K` meets `audit_exfiltration`'s `hk`, and it is
 the least that does, since `miss` is antitone. -/
 theorem miss_of_meets {n k e K : ℕ} (h : meets n k e K = true) :
-    ∃ hk : k ≤ n, (SamplingDesign.subset n k hk).miss (K + 1) < ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ∧
-      ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ≤ (SamplingDesign.subset n k hk).miss K := by
+    ∃ hk : k ≤ n, (Verity.SamplingDesign.subset n k hk).miss (K + 1) < ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ∧
+      ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ≤ (Verity.SamplingDesign.subset n k hk).miss K := by
   simp only [meets, Bool.and_eq_true, decide_eq_true_eq, chooseD_eq] at h
   obtain ⟨⟨⟨hk, hK⟩, hlt⟩, hle⟩ := h
   have hB : (n.choose k : ℝ≥0∞) ≠ 0 := by exact_mod_cast (Nat.choose_pos hk).ne'
@@ -90,8 +90,8 @@ theorem grid_meets : grid.all (fun (n, k, e, _) => meets n k e (countBound n k e
 
 /-- **Each vector's `K` meets `hk`, and no smaller count does**: `miss (K + 1) < 2^-e ≤ miss K`. -/
 theorem grid_counts : ∀ c ∈ grid, ∃ hk : c.2.1 ≤ c.1,
-    (SamplingDesign.subset c.1 c.2.1 hk).miss (countBound c.1 c.2.1 c.2.2.1 + 1) < ((2 ^ c.2.2.1 : ℕ) : ℝ≥0∞)⁻¹ ∧
-      ((2 ^ c.2.2.1 : ℕ) : ℝ≥0∞)⁻¹ ≤ (SamplingDesign.subset c.1 c.2.1 hk).miss (countBound c.1 c.2.1 c.2.2.1) :=
+    (Verity.SamplingDesign.subset c.1 c.2.1 hk).miss (countBound c.1 c.2.1 c.2.2.1 + 1) < ((2 ^ c.2.2.1 : ℕ) : ℝ≥0∞)⁻¹ ∧
+      ((2 ^ c.2.2.1 : ℕ) : ℝ≥0∞)⁻¹ ≤ (Verity.SamplingDesign.subset c.1 c.2.1 hk).miss (countBound c.1 c.2.1 c.2.2.1) :=
   fun c hc => miss_of_meets (List.all_eq_true.1 grid_meets c hc)
 
 /-! ## Stratified samplingDesigns
