@@ -29,6 +29,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity import hooks as H
+from verity.channel import Int, Json, Schema
 from verity.protocols.resource_accounting.compute.pouw.prover import workload
 from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import runs_on
 from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
@@ -441,9 +442,15 @@ def attach(exchange: Any, ctx: Any) -> Attached:
     return on
 
 
+#: the challenger's salt coin for salt epoch k, opened after its root (`salt.epoch_open_root`; `coins.CoinOpening`)
+PEARL_SALT = Schema("PearlSalt", 1, "coins", {"epoch": Int(0, (1 << 64) - 1), "opening": Json(1 << 12)})
+
+
 PEARL_PLUS = register(Scheme(
     name="pearl-plus",
-    messages=workload.MESSAGES,
+    # H1Registration is H1's, not Pearl+'s: vLLM's codec (`verity_vllm.messages.types`) finds a type only on a declared
+    # scheme, and H1 has none
+    messages=tuple(m for m in workload.MESSAGES if m.type in ("PoUWScheme", "PearlPass", "H1Registration")),
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
     blocks=(Block("PearlPlusTile_v1", tile_macs), Block("PearlCTileRead_v1", tile_macs)),
@@ -474,7 +481,7 @@ PEARL_PLUS = register(Scheme(
     record="work",
     symbol="V",
     published=("MACs", Fraction(1)),
-    channel_schemas=Lacks("no Schema is declared for PearlSalt"),
+    channel_schemas=(PEARL_SALT,),
     check=Lacks("Pearl+'s verifier of record is its owner's to declare"),
     premises=Lacks("Pearl+'s premises are its owner's to name"),
     reader=Lacks("the record's work row is H1's (W_cert, in work); Pearl+'s reader is its owner's to declare"),
