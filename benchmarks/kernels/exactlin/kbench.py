@@ -267,8 +267,8 @@ def main() -> int:
         at32 = {(r["n"], r["k"]): r for r in rows if r["m"] == 32}
         step[model] = {}
         for arm in arms:
-            per_layer = sum(at32[nk]["us_per_call"][arm] for nk in spec["linears"].values())
-            step[model][arm] = {"us_per_layer_m32": per_layer, "ms_per_step_m32": spec["layers"] * per_layer / 1e3}
+            per_layer = sum(at32[nk]["us_per_call"][arm] for nk in spec.linears.values())
+            step[model][arm] = {"us_per_layer_m32": per_layer, "ms_per_step_m32": spec.layers * per_layer / 1e3}
     from vllm.triton_utils import use_tensor_descriptor
     summary = {"device": torch.cuda.get_device_name(), "reps": a.reps, "arms": arms, "models": models,
                "special_rows": a.special_rows, "arch": X.arch(),
