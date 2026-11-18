@@ -6,13 +6,14 @@ public import Proofs.Properties.InferenceOnly.RecordOwn
 /-!
 # A unit's row is input gates of its own
 
-A unit is a member of a root node that is no input node, a call or a batch. Where `Record.SecurityProofs.OwnRuns` holds, a leaf of
-one of its parameters resolves in two steps: up to the root, at a reference of the node's argument (`rs_unit`), and
-there to a gate of an input node, since the reference lies in a part that is a run of an input node's leaves
-(`arg_leaf`). So the leaf is gate `j` of input node `n` (`unit_leaf`), and no two leaves of units are one gate
-(`unit_leaf_inj`): a gate of the root names its node and the leaf (`node_of_gate`), a leaf of an input node lies in
-one run at one place (`leafAt_inj`, from `Record.SecurityProofs.runs_apart`), and a batch's members read an argument
-at references of their own (`memberIdx_inj`).
+A unit is a member of a root node that is no input node, a call or a batch. Where `Record.SecurityProofs.OwnRuns`
+holds, a leaf of one of its parameters resolves in two steps: up to the root, at a reference of the node's argument
+(`rs_unit`), and there to a gate of an input node, since the reference lies in a part that is a run of an input node's
+leaves, as far into the run as into the part, mod the run (`arg_leaf`). So the leaf is gate `j` of input node `n`
+(`unit_leaf`), and no two leaves of units are one gate but a leaf of a shared run (`unit_leaf_inj`): a gate of the
+root names its node and the leaf (`node_of_gate`), a leaf of an input node lies in one run at one place, or in a run
+read more than once (`leafAt_inj`, from `Record.SecurityProofs.runs_shared` and `part_shared`), and a batch's members
+read an argument at references of their own (`memberIdx_inj`).
 -/
 
 @[expose] public section
@@ -20,8 +21,8 @@ at references of their own (`memberIdx_inj`).
 namespace InferenceOnlyVerifier.Properties.SecurityProofs.Resolve
 
 open Flock.Program
-open InferenceOnlyVerifier.Record.SecurityProofs (runOf unitsOf partsIn Apart runs_apart part_run batch_dims runOf_some
-  axisDims_of_removeAxis)
+open InferenceOnlyVerifier.Record.SecurityProofs (runOf unitsOf partsIn Apart runs_shared part_run part_shared batch_dims
+  runOf_some partRun_of_runOf partRun_some axisDims_of_removeAxis)
 
 /-- A walk whose first step moves on and whose second ends has the second's result. -/
 theorem run_two {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α)} {a a' : α} {b b' : β}
@@ -134,15 +135,43 @@ theorem decoded_root (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode
   exact ⟨hlt, (hok _ hlt).1, hnk⟩
 
 /-- Reference `x` of argument `i` of root node `k` is leaf `j` of the root's node `n`: it lies in a part of the
-argument that is a run of `n`'s leaves, `j` as far into the run as `x` into the part. -/
+argument that is a run of `n`'s leaves, `j` as far into the run as `x` into the part, mod the run. -/
 def LeafAt (P : Prog) (k i x n j : ℕ) : Prop :=
   ∃ q base count, q < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts).size ∧
     runOf P ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]!) = some (n, base, count) ∧
     ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! ≤ x ∧
-    x < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! + count ∧
-    j = base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!)
+    x < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! +
+      ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]!).count ∧
+    j = base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) % count
 
-/-- **A leaf of an input node is a reference of one argument, at one place.** -/
+/-- A run some reference of its part lies in is of some leaf. -/
+theorem run_pos {P : Prog} {q : Part} {s x n base count : ℕ} (hr : runOf P q = some (n, base, count))
+    (h1 : s ≤ x) (h2 : x < s + q.count) : 0 < count := by
+  obtain ⟨hshape, -⟩ := runOf_some hr
+  rcases hshape with hqe | ⟨inner, cnt, hqe, hin, -, hc⟩
+  · rw [hqe] at h2
+    simp only [Part.count] at h2
+    omega
+  · rw [hqe] at h2
+    simp only [Part.count] at h2 hc
+    omega
+
+/-- A root node that is no input node is a unit, and a part of its argument one of the parts `ownRows` reads. -/
+theorem part_mem {P : Prog} {k i q : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
+    (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
+    (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size)
+    (hq : q < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts).size) :
+    (P.defs[P.root]!).body.nodes[k]! ∈ unitsOf P ∧
+      (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]! ∈ partsIn ((P.defs[P.root]!).body.nodes[k]!) := by
+  refine ⟨List.mem_filter.2 ⟨?_, by simp [hu]⟩, List.mem_flatMap.2 ⟨((P.defs[P.root]!).body.nodes[k]!).args[i]!, ?_, ?_⟩⟩
+  · rw [getElem!_pos _ k hk]
+    exact Array.mem_toList_iff.2 (Array.getElem_mem hk)
+  · rw [getElem!_pos _ i hi]
+    exact Array.mem_toList_iff.2 (Array.getElem_mem hi)
+  · rw [getElem!_pos _ q hq]
+    exact Array.mem_toList_iff.2 (Array.getElem_mem hq)
+
+/-- **A leaf of an input node is a reference of one argument, at one place, or a leaf of a shared run.** -/
 theorem leafAt_inj {P : Prog} (hown : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P) {k i x k' i' x' n j : ℕ}
     (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
@@ -150,21 +179,49 @@ theorem leafAt_inj {P : Prog} (hown : InferenceOnlyVerifier.Record.SecurityProof
     (hk' : k' < (P.defs[P.root]!).body.nodes.size)
     (hu' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k']!) = false)
     (hi' : i' < ((P.defs[P.root]!).body.nodes[k']!).args.size)
-    (h : LeafAt P k i x n j) (h' : LeafAt P k' i' x' n j) : k = k' ∧ i = i' ∧ x = x' := by
+    (h : LeafAt P k i x n j) (h' : LeafAt P k' i' x' n j) :
+    (k = k' ∧ i = i' ∧ x = x') ∨ ∃ runs r, InferenceOnlyVerifier.Record.rowRuns P = some runs ∧ r ∈ runs.shared ∧
+      r.1 = n ∧ r.2.1 ≤ j ∧ j < r.2.1 + r.2.2 := by
   obtain ⟨q, base, count, hq, hr, h1, h2, hj⟩ := h
   obtain ⟨q', base', count', hq', hr', h1', h2', hj'⟩ := h'
-  by_cases hpos : k = k' ∧ i = i' ∧ q = q'
-  · obtain ⟨rfl, rfl, rfl⟩ := hpos
+  have hpos := run_pos hr h1 h2
+  have hpos' := run_pos hr' h1' h2'
+  have hjr : base ≤ j ∧ j < base + count := by
+    rw [hj]
+    exact ⟨Nat.le_add_right _ _, Nat.add_lt_add_left (Nat.mod_lt _ hpos) _⟩
+  have hjr' : base' ≤ j ∧ j < base' + count' := by
+    rw [hj']
+    exact ⟨Nat.le_add_right _ _, Nat.add_lt_add_left (Nat.mod_lt _ hpos') _⟩
+  by_cases hsame : k = k' ∧ i = i' ∧ q = q'
+  · obtain ⟨rfl, rfl, rfl⟩ := hsame
     rw [hr] at hr'
-    have hb : base = base' := by
-      have := Option.some.inj hr'
-      exact (Prod.mk.inj (Prod.mk.inj this).2).1
-    exact ⟨rfl, rfl, by omega⟩
-  · have hap := runs_apart hown hk hu hi hq hk' hu' hi' hq' hr hr' (by show 0 < count; omega)
-      (by show 0 < count'; omega) hpos
-    unfold Apart at hap
-    have hap' : n ≠ n ∨ base + count ≤ base' ∨ base' + count' ≤ base := hap
-    omega
+    obtain ⟨rfl, rfl⟩ : base = base' ∧ count = count' := by simpa using hr'
+    obtain ⟨f, hf⟩ := partRun_of_runOf hr
+    obtain ⟨hshape, -⟩ := partRun_some hf
+    by_cases hlt : x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! < count ∧
+        x' - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! < count
+    · rw [Nat.mod_eq_of_lt hlt.1] at hj
+      rw [Nat.mod_eq_of_lt hlt.2] at hj'
+      exact Or.inl ⟨rfl, rfl, by omega⟩
+    · have hflag : f = true := by
+        rcases hshape with ⟨hqe, -⟩ | ⟨inner, cnt, hqe, -, -, hc, hf'⟩
+        · exfalso
+          rw [hqe] at h2 h2'
+          simp only [Part.count] at h2 h2'
+          omega
+        · rw [hqe] at h2 h2'
+          simp only [Part.count] at h2 h2' hc
+          rw [hf', decide_eq_true_eq]
+          omega
+      subst hflag
+      obtain ⟨hunit, hpart⟩ := part_mem hk hu hi hq
+      obtain ⟨runs, hrr, hmem⟩ := part_shared hown hunit hpart hf hpos
+      exact Or.inr ⟨runs, (n, base, count), hrr, hmem, rfl, hjr.1, hjr.2⟩
+  · rcases runs_shared hown hk hu hi hq hk' hu' hi' hq' hr hr' hpos hpos' hsame with ⟨-, runs, hrr, hmem⟩ | hap
+    · exact Or.inr ⟨runs, (n, base, count), hrr, hmem, rfl, hjr.1, hjr.2⟩
+    · unfold Apart at hap
+      have hap' : n ≠ n ∨ base + count ≤ base' ∨ base' + count' ≤ base := hap
+      omega
 
 /-- **A gate of the root names its node and the leaf**, where each node's gates are its output's leaves. -/
 theorem node_of_gate (P : Prog) (hl : Walk.LaidOut P P.root) (hp : (P.defs[P.root]!).prim = false) {n n' j j' : ℕ}
@@ -217,6 +274,12 @@ theorem argIdx_lt (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode by
     rw [hf] at hop
     exact hop
 
+/-- Reference `d` of a run read with outer stride 0 and inner stride 1 is the run's leaf `d` mod `inner`. -/
+theorem strided_get (n base inner cnt d : ℕ) :
+    (Part.strided false n (base : Int) inner 0 1 cnt).get d = ⟨false, n, base + d % inner⟩ := by
+  show (⟨false, n, ((base : Int) + ((d / inner : ℕ) : Int) * 0 + ((d % inner : ℕ) : Int) * 1).toNat⟩ : Ref) = _
+  rw [Int.mul_zero, Int.add_zero, Int.mul_one, ← Int.natCast_add, Int.toNat_natCast]
+
 section
 variable (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
   (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (hown : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
@@ -254,20 +317,39 @@ theorem arg_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
       exact Array.mem_toList_iff.2 (Array.getElem_mem hq)
   obtain ⟨⟨n, base, count⟩, hr⟩ := part_run hown hunit hpart
   obtain ⟨hqe, hn, hin, hform⟩ := runOf_some hr
-  have hqe' : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]! = .affine false n base count := hqe
   have hn' : n < (P.defs[P.root]!).body.nodes.size := hn
   have hin' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true := hin
   have hform' : ((P.defs[P.root]!).body.nodes[n]!).form = .prim ∨
       ((P.defs[P.root]!).body.nodes[n]!).form = .batch := hform
-  rw [hqe'] at h2 hget
-  have h2' : x < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! + count := h2
+  have hpos : 0 < count := run_pos hr h1 h2
   have hget' : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get x =
-      ⟨false, n, base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!)⟩ := hget
+      ⟨false, n, base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) % count⟩ := by
+    rw [hget]
+    rcases hqe with hqe | ⟨inner, cnt, hqe, hin0, -, hc⟩
+    · have hqe' : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]! = .affine false n base count := hqe
+      rw [hqe'] at h2 ⊢
+      simp only [Part.count] at h2
+      show (⟨false, n, base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!)⟩ : Ref) = _
+      rw [Nat.mod_eq_of_lt (show x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! < count by
+        omega)]
+    · have hqe' : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[q]! =
+          .strided false n (base : Int) inner 0 1 cnt := hqe
+      have hc' : count = min inner cnt := hc
+      rw [hqe'] at h2 ⊢
+      simp only [Part.count] at h2
+      have hm : (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) % inner =
+          (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) % count := by
+        rcases Nat.le_total inner cnt with hle | hle
+        · rw [hc', Nat.min_eq_left hle]
+        · have hlt : x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]! < cnt := by omega
+          rw [hc', Nat.min_eq_right hle, Nat.mod_eq_of_lt hlt, Nat.mod_eq_of_lt (Nat.lt_of_lt_of_le hlt hle)]
+      rw [← hm]
+      exact strided_get n base inner cnt _
   have hbody : BodyOk P P.root := hB P.rootScope ⟨rfl, rfl, rfl⟩
   obtain ⟨-, hargs, -, -, -⟩ := hbody.1 k hk
   have href := (hargs i x hx).2 (by rw [hget'])
   rw [hget'] at href
-  have hjlt : base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) <
+  have hjlt : base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) % count <
       ((P.defs[P.root]!).body.nodes[n]!).out.leaves := href.2
   obtain ⟨-, hc, hno⟩ := decoded_root bytes P hdec n hn'
   have hprim : (P.defs[((P.defs[P.root]!).body.nodes[n]!).fn]!).prim = true := by
@@ -276,11 +358,11 @@ theorem arg_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     exact (Bool.and_eq_true_iff.1 h0).1
   obtain ⟨hleaves, hg1, hol⟩ := input_node _ _ hc hno hprim hform'
   have hlaid := (hL P.root hroot.1 hroot.2).2.2 n hn'
-  refine ⟨n, base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!),
-    ⟨q, base, count, hq, hr, h1, h2', rfl⟩, hn', hjlt, by rw [hlaid, hg1, hleaves, Nat.mul_one], ?_⟩
+  refine ⟨n, base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) % count,
+    ⟨q, base, count, hq, hr, h1, h2, rfl⟩, hn', hjlt, by rw [hlaid, hg1, hleaves, Nat.mul_one], ?_⟩
   rw [hget']
   rcases hform' with hf | hf
-  · have hj0 : base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) = 0 := by
+  · have hj0 : base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!) % count = 0 := by
       rw [hleaves, prim_members _ (Or.inl hf)] at hjlt
       omega
     rw [hj0, Nat.add_zero]
@@ -306,7 +388,7 @@ theorem unit_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
   obtain ⟨n, j, hleaf, hn, hj, ho, hstep⟩ := arg_leaf bytes P hdec hov hlay hown hk hu hi hx
   exact ⟨n, j, hleaf, hn, hj, ho, fun g hg => run_two (rs_unit P d off k m i t hf) hstep _ hg⟩
 
-/-- **No two leaves of units' parameters are one gate.** -/
+/-- **No two leaves of units' parameters are one gate, but a leaf of a shared run.** -/
 theorem unit_leaf_inj {k k' : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hk' : k' < (P.defs[P.root]!).body.nodes.size)
     (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
@@ -321,13 +403,20 @@ theorem unit_leaf_inj {k k' : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (ht' : t' < ((P.defs[((P.defs[P.root]!).body.nodes[k']!).fn]!).params[i']!).2.leaves) (d off d' off' : ℕ)
     {g : ℕ} (h : resolve P (.child P.rootScope d off k m) ⟨true, i, t⟩ = .ok g)
     (h' : resolve P (.child P.rootScope d' off' k' m') ⟨true, i', t'⟩ = .ok g) :
-    k = k' ∧ m = m' ∧ i = i' ∧ t = t' := by
+    (k = k' ∧ m = m' ∧ i = i' ∧ t = t') ∨ ∃ runs r, InferenceOnlyVerifier.Record.rowRuns P = some runs ∧
+      r ∈ runs.shared ∧ (P.defs[P.root]!).body.offsets[r.1]! + r.2.1 ≤ g ∧
+      g < (P.defs[P.root]!).body.offsets[r.1]! + r.2.1 + r.2.2 := by
   obtain ⟨hroot, -, hL, -, -, -⟩ := decoded_walk bytes P hdec hov hlay
   obtain ⟨n, j, hleaf, hn, hj, ho, hg⟩ := unit_leaf bytes P hdec hov hlay hown hk hu hf hm hi ht d off
   obtain ⟨n', j', hleaf', hn', hj', ho', hg'⟩ := unit_leaf bytes P hdec hov hlay hown hk' hu' hf' hm' hi' ht' d' off'
-  have hgg := (hg g h).symm.trans (hg' g h')
+  have hgn := hg g h
+  have hgg := hgn.symm.trans (hg' g h')
   obtain ⟨rfl, rfl⟩ := node_of_gate P (hL P.root hroot.1) hroot.2 hn hn' hj hj' ho ho' hgg
-  obtain ⟨rfl, rfl, hxx⟩ := leafAt_inj hown hk hu hi hk' hu' hi' hleaf hleaf'
+  rcases leafAt_inj hown hk hu hi hk' hu' hi' hleaf hleaf' with ⟨rfl, rfl, hxx⟩ | ⟨runs, r, hrr, hmem, hr1, hlo, hhi⟩
+  swap
+  · subst hr1
+    exact Or.inr ⟨runs, r, hrr, hmem, by omega, by omega⟩
+  left
   obtain ⟨-, -, hno⟩ := decoded_root bytes P hdec k hk
   rcases hf with hf | hf
   · rw [argIdx_call hf, argIdx_call hf] at hxx

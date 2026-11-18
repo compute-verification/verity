@@ -53,8 +53,8 @@ record first, and the digest of the run's own record. `params` is not read.
    calls a composite keyed as an input id (`RecordText.keyedAsInput`); or a template's parameter is not whole
    16-bit words, an output has no bit, or two of its ports share a name. A template's rows are its Definition's
    parameters, one row a parameter, and its outputs the fields of its return type (`RecordText.templatesOf`).
-7. `own-rows`: the root hands some unit a row that is not input gates of its own (`ownRows`, "Rows of its own"
-   below).
+7. `own-rows`: the root hands some unit a row that is neither input gates of its own nor a shared run (`ownRows`,
+   "Rows of its own" below).
 8. `wires`: the record's wiring is refused (`RecordText.wiring`: the text's cuts as SPOT's reader reads them, and
    the wires the Program's root states, `Spot.Edges.edgesOf`), or SPOT's check refuses it (`Spot.Wires.check`).
 9. `leaf-widths`: some offset of a wire is no field's first word of its writer's output, or its row is not that one
@@ -63,17 +63,22 @@ record first, and the digest of the run's own record. `params` is not read.
 10. `inputs`: a registered read, table, table read, opening, ingress or row format declaration is malformed for the
     templates and cuts, or two declarations (wires among them) fill one row (`RecordText.inputsOf`). A registered
     read is a wire's record with `param` for its writer, and SPOT's reader reads it (`Spot.Wires.Wire.ofJson`).
-11. `formats`: a registered parameter's leaf width (`RecordText.widthOf`: its format's, 16 without one) is not the one
+11. `shared-unheld`: the root hands some run of input leaves to more than one row ("Shared runs" below), and a row
+    that reads it is not a registered read, θ, of one parameter at one offset for each input node, from its
+    member's stretch of the run, or the check runs out of fuel deciding it (`sharedHeld`).
+12. `formats`: a registered parameter's leaf width (`RecordText.widthOf`: its format's, 16 without one) is not the one
     the registration log registers it in, or the run's own record registers it under another root than it commits or
     in other than its bits (`formatsHeld`, "Formats" below). So a record with no `formats` key can be refused here.
-12. `blocks`: the record's inference entries do not tile every template's units, each with one slot digit of the
+13. `blocks`: the record's inference entries do not tile every template's units, each with one slot digit of the
     class's radix (`RecordText.gridsOf`).
-13. `reader-layout`, then `reader-roles` (`rolesOf`, "The layout" below): a pinned template that an opening or a table
+14. `reader-layout`, then `reader-roles` (`rolesOf`, "The layout" below): a pinned template that an opening or a table
     read names as its reader has no layout; or an opening or a table read of such a reader names a row or an output
     that is not the layout's.
 
-An `own-rows` or a `leaf-widths` refusal comes with a message that says what to fix (`messageOf`), and a
-`leaf-widths` one names the wire and its two rows' bits, or its two widths.
+An `own-rows`, a `shared-unheld` or a `leaf-widths` refusal comes with a message that says what to fix
+(`messageOf`); a `shared-unheld` one says whether some row is not held (`SHARED_UNHELD`) or the check ran past
+its bound before it could tell (`SHARED_UNDECIDED`), and a `leaf-widths` one names the wire and its two rows' bits, or
+its two widths.
 
 ## Rows of its own
 
@@ -82,9 +87,26 @@ only where the row is input gates of that unit and of no other row: a row the ro
 is computed, whatever the record declares of it, and input gates handed to two rows are one value the record may
 declare twice, differently. `ownRows` reads it from the root's body, where each unit's rows are its node's arguments:
 every argument of a root node that is no input node is runs of leaves of the root's input nodes, a batch maps every
-argument over its members, and no two runs share a leaf. A leaf of an input node is one gate, and a batch that maps
-an argument hands each member its own stretch of it, so every unit's every row is then input gates no other row has.
+argument over its members, and no two runs share a leaf. A strided part whose outer stride is at least its inner run
+reads one row a member, the rows that far apart, and is that many runs (`gatherRuns`); one whose outer stride lies
+between 0 and the run reads rows that overlap and is refused. A leaf of an input node is one gate, and a batch that
+maps an argument hands each member its own stretch of it, so every unit's every row is then input gates no other row
+has.
 A root of any other form is refused: the form reads no row it cannot show to be the unit's own.
+
+## Shared runs
+
+A registered weight that several members of a batch read, or that several nodes read, is one run of input leaves
+handed to more than one row. The wired builder spells it as a strided part over an input node with outer stride 0,
+inner stride 1, its inner count the run and its count a multiple of it: reference k is leaf k mod the run, so members
+of w leaves each read the run's successive stretches of w and, past the run, read them again (a matmul's members
+across slots sharing one row of its weight; where w is the run, every member reads all of it). Several nodes reading
+one weight are the same run in parts of each. `rowRuns` tells these runs (`shared`) from runs one row reads (`own`):
+two runs it reads are the same run or share no leaf, and any other overlap is refused. Two rows of one gate are one
+value only where the record declares both rows alike, so a shared run is admitted only where every row that reads it
+is held as a registered read of one parameter, which the registration commits once (`sharedHeld`). The block
+count counts a row whole for each unit that reads it, so it counts a shared weight once for each member that reads
+it: more than the circuit's inputs, which errs toward the bound.
 
 ## Wires whole
 
@@ -345,13 +367,87 @@ def leavesOf (P : Prog) (passed : Array (List Nat)) (t : Tmpl) : Leaves :=
     closed := defn.params.toList.zipIdx.filterMap fun ((name, ty), i) =>
       if Widths.homo ty == some 1 && !on.contains i then some name else none }
 
-/-- **Every unit's rows are its own input gates** (the module docstring's "Rows of its own"), read from the root's
-body: every part of an argument of a root node that is no input node, but a part reading another such node's outputs
-(a grid, in every lane; an edge, which the record's wiring holds: `Spot.Edges.edgesOf`), is runs of leaves of the root's input nodes (affine
-parts and no other; an input node a primitive or a batch of one, a leaf a gate), a batch maps every argument over its
-members (each has the `dims` resolution reads a member's leaves by), and no two runs, of one argument or of two,
-share a leaf. It costs the root's argument parts, sorted. -/
-def ownRows (P : Prog) : Bool :=
+/-- The runs of input leaves the root's argument parts read, `(input node, first leaf, leaves)` each, none empty:
+`own`, each read by one part, and `shared`, each read by one strided part that reads it more than once over or
+by more than one part ("Shared runs"), in the order of their nodes and first leaves, a run read by several parts
+once for each after the first. A strided part's rows that lie apart (`gatherRuns`) are in neither. -/
+structure Runs where
+  own : List (Nat × Nat × Nat)
+  shared : List (Nat × Nat × Nat)
+  deriving Inhabited
+
+/-- Node `i` of the root is an input node, a primitive or a batch of one, whose leaves are its gates. -/
+def inputAt (P : Prog) (i : Nat) : Bool :=
+  ((P.defs[P.root]!).body.nodes[i]?.map fun n =>
+    Desc.isInputNode P n && (n.form == .prim || n.form == .batch)).getD false
+
+/-- The run of input leaves part `q` reads, `(input node, first leaf, leaves)`, and whether it reads it more than
+once: an affine part over an input node reads its run once; a strided part over one from a leaf at or after 0 with
+outer stride 0, inner stride 1 and a count a multiple of its inner run reads its reference k at the run's leaf k mod
+the run, more than once where its count passes the run. None for any other part. -/
+def partRun (P : Prog) : Part → Option ((Nat × Nat × Nat) × Bool)
+  | .affine false i base count => if inputAt P i then some ((i, base, count), false) else none
+  | .strided false i base inner os is count =>
+    if inputAt P i && os == 0 && is == 1 && 0 ≤ base && 0 < inner && count % inner == 0 then
+      some ((i, base.toNat, min inner count), inner < count)
+    else none
+  | _ => none
+
+/-- The rows a strided part over an input node reads where no two overlap: from a leaf at or after 0, inner stride
+1, a count a multiple of its inner run, and an outer stride at least the run (or one row), `count / inner` runs of
+the run's leaves, row `j` from leaf `base + j · outer stride`, each its member's own. None for any other part, so a
+strided part whose rows overlap, an outer stride between 0 and its run, is neither rows of its own nor a shared run. -/
+def gatherRuns (P : Prog) : Part → Option (List (Nat × Nat × Nat))
+  | .strided false i base inner os is count =>
+    if inputAt P i && is == 1 && 0 ≤ base && 0 < inner && count % inner == 0 &&
+        (count == inner || (inner : Int) ≤ os) then
+      some ((List.range (count / inner)).map fun (j : Nat) => (i, (base + (j : Int) * os).toNat, inner))
+    else none
+  | _ => none
+
+/-- Whether the runs `rs`, each marked where it is a strided part's row (`gatherRuns`), share no leaf, but for two
+unmarked ones that are one run. It costs the runs, sorted. -/
+def apart (rs : List ((Nat × Nat × Nat) × Bool)) : Bool :=
+  let sorted := (rs.filter fun r => r.1.2.2 > 0).mergeSort fun a b =>
+    a.1.1 < b.1.1 || (a.1.1 == b.1.1 && a.1.2.1 ≤ b.1.2.1)
+  (sorted.zip sorted.tail).all fun (a, b) =>
+    a.1.1 != b.1.1 || a.1.2.1 + a.1.2.2 ≤ b.1.2.1 || (a.1 == b.1 && !a.2 && !b.2)
+
+/-- `rowRuns` over the parts `parts`: each a run (`partRun`), and two runs, of one argument or of two, the same run or
+sharing no leaf. It costs the parts, sorted. -/
+def runsOf (P : Prog) (parts : List Part) : Option Runs :=
+  let runs := parts.filterMap (partRun P)
+  let sorted := (runs.filter fun r => r.1.2.2 > 0).mergeSort fun a b =>
+    a.1.1 < b.1.1 || (a.1.1 == b.1.1 && a.1.2.1 ≤ b.1.2.1)
+  let next := sorted.zip sorted.tail
+  let prev := (none :: sorted.map (some ·.1)).zip sorted
+  if runs.length == parts.length &&
+      next.all (fun (a, b) => a.1 == b.1 || a.1.1 != b.1.1 || a.1.2.1 + a.1.2.2 ≤ b.1.2.1) then
+    some { own := (prev.zip (sorted.tail.map (some ·.1) ++ [none])).filterMap fun ((p, r), n) =>
+             if r.2 || p == some r.1 || n == some r.1 then none else some r.1,
+           shared := sorted.filterMap (fun r => if r.2 then some r.1 else none) ++
+             next.filterMap fun (a, b) => if a.1 == b.1 then some a.1 else none }
+  else none
+
+/-- Whether part `q` is a strided part's rows that lie apart (`gatherRuns`) and no run (`partRun`). -/
+def gathered (P : Prog) (q : Part) : Bool := (partRun P q).isNone && (gatherRuns P q).isSome
+
+/-- `rowRuns` over the parts `parts`, some of them a strided part's rows (`gathered`): the others' runs (`runsOf`),
+where every row shares no leaf with any other row or run (`apart`). -/
+def gatherRows (P : Prog) (parts : List Part) : Option Runs :=
+  let rest := parts.filter fun q => !gathered P q
+  let rows := (parts.filterMap fun q => if gathered P q then gatherRuns P q else none).flatten
+  (runsOf P rest).bind fun R =>
+    if apart (rows.map (·, true) ++ (rest.filterMap (partRun P)).map (·.1, false)) then some R else none
+
+/-- **The root's rows as runs of input leaves** (the module docstring's "Rows of its own" and "Shared runs"), read
+from the root's body: every part of an argument of a root node that is no input node, but a part reading another
+such node's outputs (a grid, in every lane; an edge, which the record's wiring holds: `Spot.Edges.edgesOf`), is a run
+of leaves of one of the root's input nodes (`partRun`) or rows of one that lie apart (`gatherRuns`), each row its
+member's own; a batch maps every argument over its members (each has the `dims` resolution reads a member's leaves
+by); and two runs are the same run or share no leaf (`runsOf`), and a strided part's row shares no leaf with any other
+run (`apart`). None where the root is of another form. -/
+def rowRuns (P : Prog) : Option Runs :=
   let nodes := (P.defs[P.root]!).body.nodes
   let units := nodes.toList.filter fun n => !Desc.isInputNode P n
   let edge := fun (q : Part) => match q with
@@ -359,25 +455,40 @@ def ownRows (P : Prog) : Bool :=
     | .explicit it => it.any fun r => !r.p && (nodes[r.i]?.map fun n => !Desc.isInputNode P n).getD false
     | .grid _ lanes => lanes.all fun l => !l.p && (nodes[l.i]?.map fun n => !Desc.isInputNode P n).getD false
     | _ => false
-  let parts := units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)
-  let runs := parts.filterMap fun
-    | .affine false i base count =>
-      if (nodes[i]?.map fun n => Desc.isInputNode P n && (n.form == .prim || n.form == .batch)).getD false then
-        some (i, base, count)
-      else none
-    | _ => none
-  let sorted := (runs.filter fun r => r.2.2 > 0).mergeSort fun a b => a.1 < b.1 || (a.1 == b.1 && a.2.1 ≤ b.2.1)
-  units.all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) &&
-    runs.length == parts.length &&
-    (sorted.zip sorted.tail).all fun (a, b) => a.1 != b.1 || a.2.1 + a.2.2 ≤ b.2.1
+  if units.all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) then
+    let parts := units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)
+    if parts.any (gathered P) then gatherRows P parts else runsOf P parts
+  else none
+
+/-- **Every unit's rows are input gates, each its own or a shared run's**: `rowRuns` reads the root. -/
+def ownRows (P : Prog) : Bool := (rowRuns P).isSome
+
+/-- The runs the root hands to more than one row (`Runs.shared`), none where `rowRuns` refuses the root. -/
+def sharedRuns (P : Prog) : List (Nat × Nat × Nat) := ((rowRuns P).map (·.shared)).getD []
 
 /-- What an `own-rows` refusal says, with its fix. -/
 def OWN_ROWS : String :=
   "the root hands a unit a row that is not input gates of its own. Every part of an argument of a root node that " ++
   "is no input node reads another such node's outputs or is affine runs of leaves of the root's input nodes, a " ++
-  "batch maps every argument over its members, and no leaf is handed to two rows. Fix the Program, not the " ++
+  "batch maps every argument over its members, and no leaf is handed to two rows; a strided part's rows overlap " ++
+  "where its outer stride is between 0 and its inner run. Fix the Program, not the " ++
   "record: build its root as templates over input nodes of their own or other templates' outputs, each input " ++
   "leaf handed once."
+
+/-- What a `shared-unheld` refusal says, with its fix. -/
+def SHARED_UNHELD : String :=
+  "the root hands one run of input leaves to more than one row, and the record does not hold every row that " ++
+  "reads it as a registered read of one parameter at those leaves. Declare each such row a registered read of " ++
+  "the parameter whose leaves the run is, or give each row input leaves of its own."
+
+/-- What a `shared-unheld` refusal says where the check ran past its bound (`FUEL` stretches of one declaration's
+source) before it could tell whether every row is held. -/
+def SHARED_UNDECIDED : String :=
+  "not decided within the bound: the root hands one run of input leaves to more than one row, and the check of " ++
+  "whether the record holds every row that reads it as a registered read of one parameter at those leaves ran " ++
+  "past its bound (4096 stretches of one declaration's source) before it could tell; it found no row unheld. " ++
+  "Declare each such row's read with fewer stretches, a digit for each of the run's stretches, or give each row " ++
+  "input leaves of its own."
 
 /-- A port's leaf width as a refusal names it. -/
 def widthName : Option Nat → String
@@ -634,6 +745,170 @@ def formatsHeld (T : Theta.Trusted) (doc : Json) (params : List (String × Nat))
       | none => false
     | none => !hasFormat doc p || isTheta T leaves b p
 
+/-- Per registered parameter of `x`, whether it is θ (`isTheta`, at its width). -/
+def thetaOf (T : Theta.Trusted) (doc : Json) (x : Inputs) : List (String × Bool) :=
+  x.params.map fun (p, leaves) => (p, isTheta T leaves (widthOf doc p) p)
+
+/-! ## Shared runs held -/
+
+/-- `ps` (fastest first) with each digit whose step continues the one below it folded into that one. -/
+def merged : List (Nat × Int) → List (Nat × Int)
+  | (r, s) :: (r', s') :: ps =>
+    if s' == (r : Int) * s then merged ((r * r', s) :: ps) else (r, s) :: merged ((r', s') :: ps)
+  | ps => ps
+termination_by ps => ps.length
+
+/-- From index `i`, the slope of `accum ps` and how many indices it is affine over; `none` for all on. -/
+def stretch : List (Nat × Int) → Nat → Int × Option Nat
+  | [], _ => (0, none)
+  | (r, s) :: _, i => (s, some (r - i % r))
+
+/-- Whether `fb + accum f (fi + v) = gb + accum g (gi + v)` for every `v < n`, one stretch where both are affine at a
+time, with `fuel` stretches left: none where the fuel runs out first. -/
+def agree (fuel : Nat) (f : List (Nat × Int)) (fb : Int) (fi : Nat) (g : List (Nat × Int)) (gb : Int) (gi n : Nat) :
+    Option Bool :=
+  if n == 0 then some true
+  else match fuel with
+    | 0 => none
+    | fuel + 1 =>
+      if fb + Spot.Wires.accum f fi != gb + Spot.Wires.accum g gi then some false
+      else
+        let (sf, lf) := stretch f fi
+        let (sg, lg) := stretch g gi
+        let m := min n (min (lf.getD n) (lg.getD n))
+        if 0 < m && (m == 1 || sf == sg) then agree fuel f fb (fi + m) g gb (gi + m) (n - m) else some false
+
+/-- The digits (fastest first) and base of `v ↦ b + accum ps (k · v + c)`, for `c < k`, where they are digits. -/
+def restrict : List (Nat × Int) → Int → Nat → Nat → Option (List (Nat × Int) × Int)
+  | ps, b, 1, _ => some (ps, b)
+  | [], b, _, _ => some ([], b)
+  | (r, s) :: ps, b, k, c =>
+    if r % k == 0 then some ((r / k, (k : Int) * s) :: ps, b + (c : Int) * s)
+    else if k % r == 0 then restrict ps (b + ((c % r : Nat) : Int) * s) (k / r) (c / r)
+    else none
+
+/-- Whether, from reader unit `u` to `e` of template `tid`'s port `port`, row `c`, with `fuel` declarations left to
+visit, the declaration that fills each unit (`fillAt`'s) is a registered read of `p`, θ, whose source at unit `v` is
+`gb + accum g (v - u0)`, held in closed form (`agree`): none where a bound runs out first. -/
+def heldFrom (ds : List Decl) (theta : String → Bool) (tid port : String) (c u0 e : Nat) (p : String)
+    (g : List (Nat × Int)) (gb : Int) (fuel u : Nat) : Option Bool :=
+  if e ≤ u then some true
+  else match fuel with
+    | 0 => none
+    | fuel + 1 =>
+      match ds.find? (fun d => (d.w.indexOf tid u port c).isSome) with
+      | some d => match d.fill with
+        | .read q =>
+          let e' := min e (d.w.start + d.w.readerUnits)
+          if !(q == p && theta p && decide (u < e')) then some false
+          else match restrict d.w.pairs d.w.base d.w.cuts (c - d.w.cut0) with
+            | none => some false
+            | some (f, fb) => match agree FUEL (merged f) fb (u - d.w.start) (merged g) gb (u - u0) (e' - u) with
+              | some true => heldFrom ds theta tid port c u0 e p g gb fuel e'
+              | r => r
+        | _ => some false
+      | none => some false
+
+/-- An argument of the root that reads a shared run (`sharedRuns`): argument `arg` of node `node` is one part, of
+`count` leaves, over the run of `inner` leaves of input node `input` from leaf `base`, its members `count / members`
+leaves each, the run's stretches in turn. -/
+structure Shared where
+  node : Nat
+  arg : Nat
+  input : Nat
+  base : Nat
+  inner : Nat
+  count : Nat
+  deriving Inhabited
+
+/-- The arguments of the root that read a shared run (`sharedRuns`), each as `Shared`; none where a part that reads
+one is not its argument's one part, or a batch hands its members other than a stretch of the part each. -/
+def sharedOf (P : Prog) : Option (List Shared) :=
+  let nodes := (P.defs[P.root]!).body.nodes
+  let sh := sharedRuns P
+  let reads := fun (q : Part) => ((partRun P q).map (sh.contains ·.1)).getD false
+  let args := nodes.toList.zipIdx.flatMap fun (nd, k) =>
+    if Desc.isInputNode P nd then [] else nd.args.toList.zipIdx.map fun (a, j) => (k, j, a.seq.parts.toList)
+  let mapped := fun (k j c : Nat) => ((nodes[k]?).map fun nd =>
+    nd.form != .batch || (nd.args[j]?.bind (·.dims)).map (·.2) == some (c / nd.n)).getD false
+  args.foldr (fun (k, j, ps) acc => acc.bind fun out => match ps with
+    | [q] => match partRun P q with
+      | some ((i, base, inner), _) =>
+        if !sh.contains (i, base, inner) then some out
+        else if mapped k j q.count then some ({ node := k, arg := j, input := i, base, inner, count := q.count } :: out)
+        else none
+      | none => some out
+    | _ => if ps.any reads then none else some out) (some [])
+
+/-- What `sharedRow` checks of row `c` of the shared run `s`: the template and port of its members, their first unit
+and count, the parameter `p` the declaration at the first member reads, the source `g`, `gb` of every member, and
+the offset `o`; none where the row is no registered read of that shape. -/
+def sharedPlan (P : Prog) (rs : Array Flock.TemplateQuery.TRange) (ts : List Tmpl) (W : Spot.Wires.Wiring)
+    (ds : List Decl) (s : Shared) (c : Nat) :
+    Option (String × String × Nat × Nat × String × List (Nat × Int) × Int × Int) := do
+  let r ← rs.find? (·.node == s.node)
+  let tid := r.template
+  let u0 := (rangesAt rs tid).foldl (fun a q => if q.first < r.first then a + q.count else a) 0
+  let n := r.count
+  let t ← ts.find? (·.tid == tid)
+  let (port, _) ← (P.defs[t.defn]!).params[s.arg]?
+  let (words, _) ← t.rows.lookup port
+  let k := W.cutsOf tid port
+  let wn ← (((P.defs[P.root]!).body.nodes[s.input]?).map fun nd => inputWidth? (P.defs[nd.fn]!).key).join
+  let L := s.count / n
+  if !(0 < n && 0 < L && s.count == L * n && L * wn == 16 * words && 0 < s.inner && s.inner % L == 0 &&
+      (s.base * wn) % 16 == 0 && words % k == 0 && c < k) then none
+  let b : Int := (s.base * wn / 16 : Nat)
+  let per := s.inner / L
+  let g := if per ≤ 1 then [] else [(per, (words : Int))]
+  let d ← ds.find? (fun d => (d.w.indexOf tid u0 port c).isSome)
+  let .read p := d.fill | none
+  let i ← d.w.indexOf tid u0 port c
+  let o := d.w.writerAt i - b - (c * (words / k) : Nat)
+  some (tid, port, u0, n, p, g, o + b + (c * (words / k) : Nat), o)
+
+/-- The registered read of row `c` of the shared run `s`, as `(input node, parameter, offset)`: the run's members are
+a range of `rs`, units `[u0, u0 + n)` of template `tid`, and each row `c` of their port is filled, unit by unit, by a
+registered read of one parameter `p`, θ, from the source `o + b + (v mod P)·words + c·(words / k)` at member `v`, where
+`b` is the run's base and `P` its stretches, in `p`'s 16-bit leaves, and `o` is the read's source at the first member
+less those: none where the check runs past its bound, `some none` where the row is not so held. -/
+def sharedRow (P : Prog) (rs : Array Flock.TemplateQuery.TRange) (ts : List Tmpl) (W : Spot.Wires.Wiring)
+    (ds : List Decl) (theta : String → Bool) (s : Shared) (c : Nat) : Option (Option (Nat × String × Int)) :=
+  match sharedPlan P rs ts W ds s c with
+  | none => some none
+  | some (tid, port, u0, n, p, g, gb, o) =>
+    (heldFrom ds theta tid port c u0 (u0 + n) p g gb (ds.length + 1) u0).map fun held =>
+      if held then some (s.input, p, o) else none
+
+/-- **Every shared run is held** (the module docstring's `shared-unheld`): each row of each argument that reads a
+shared run (`sharedOf`) is a registered read, θ, of one parameter and offset per input node, from the source its member's stretch of the run
+names (`sharedRow`). The check ties every reader of a shared run to one declared parameter and offset, and does not
+tie the input node to that parameter, as for every registered read today. It costs the shared runs, each row's
+declarations and their stretches (`agree`, at most `FUEL` a declaration). Some row not held is `some false`;
+else where the check of some row runs past its bound, none (`SHARED_UNDECIDED`). -/
+def sharedDecide (P : Prog) (ts : List Tmpl) (W : Spot.Wires.Wiring) (ds : List Decl) (theta : String → Bool) :
+    Option Bool :=
+  if (sharedRuns P).isEmpty then some true else
+  match sharedOf P, Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
+      (W.templates.map (·.1)).toArray with
+  | none, _ | _, .error _ => some false
+  | some sh, .ok rs =>
+  let rows := sh.flatMap fun s =>
+    let k := ((rs.find? (·.node == s.node)).bind fun r => (ts.find? (·.tid == r.template)).bind fun t =>
+      ((P.defs[t.defn]!).params[s.arg]?).map fun (port, _) => W.cutsOf r.template port).getD 1
+    (List.range k).map (s, ·)
+  let got := rows.map fun (s, c) => sharedRow P rs ts W ds theta s c
+  if got.any (· == some none) then some false
+  else if got.any (·.isNone) then none
+  else
+    let marks := got.filterMap (·.join)
+    some (marks.all fun m => marks.all fun m' => m.1 != m'.1 || m == m')
+
+/-- **Every shared run is held** (`sharedDecide`, decided and held). -/
+def sharedHeld (P : Prog) (ts : List Tmpl) (W : Spot.Wires.Wiring) (ds : List Decl) (theta : String → Bool) :
+    Bool :=
+  sharedDecide P ts W ds theta == some true
+
 /-- The pin of template `tid`'s Definition, where the policy pins it: its closure digest in the Program whose
 descriptor is `desc` (`DefinitionDigest.closureDigest`), where that is among `pins`. -/
 def pinOf (desc : Json) (pins : Array String) (tid : String) : Option String :=
@@ -795,12 +1070,14 @@ def finish (f : Front) (pin : String → Option String) : Except String Case := 
     | .error _ => throw "wires"
   if (unwhole f.P f.ts f.leaves wired).isSome then throw "leaf-widths"
   let x ← inputsOf f.ts W f.doc
+  if !sharedHeld f.P f.ts W x.decls (fun p => ((thetaOf f.T f.doc x).lookup p).getD false) then
+    throw "shared-unheld"
   if !formatsHeld f.T f.doc x.params then throw "formats"
   let (S, grids) ← gridsOf f.ts f.doc
   let pins ← rolesOf f.P f.ts pin x
   let gridsAt := fun (tid : String) => (grids.lookup tid).getD []
   let inside := (wired.wires.map fun w => sameSlot S (gridsAt w.reader) (gridsAt w.writer) w).toArray
-  let theta := x.params.map fun (p, leaves) => (p, isTheta f.T leaves (widthOf f.doc p) p)
+  let theta := thetaOf f.T f.doc x
   let thetaAt := fun (p : String) => (theta.lookup p).getD false
   let held := (x.openings.map (openingHeld (fun tid => (pins.lookup tid).isSome) thetaAt x)).toArray
   return { f, W, wired, x, S, grids, inside, theta, held, pins }
@@ -897,10 +1174,22 @@ def evaluate (j tr : Json) : Except String Json := do
   return Json.mkObj (s.fields ++ [("complies", Json.bool failure.isNone), ("failure", failureJson failure)])
 
 /-- The message of a refusal whose fix is the lowering's to make: for `own-rows` the rule (`OWN_ROWS`); for
+`shared-unheld` whether a row is not held (`SHARED_UNHELD`) or the check ran past its bound (`SHARED_UNDECIDED`); for
 `leaf-widths` the first wire that does not land whole, its two rows' bits or its two leaf widths, and the fix
 (`unwhole`). None for any other code. -/
 def messageOf (j tr : Json) (code : String) : Option String :=
   if code == "own-rows" then some OWN_ROWS
+  else if code == "shared-unheld" then
+    match front j tr with
+    | .ok f => match wiring f.P f.doc with
+      | .ok W => match inputsOf f.ts W f.doc with
+        | .ok x =>
+          if (sharedDecide f.P f.ts W x.decls fun p => ((thetaOf f.T f.doc x).lookup p).getD false).isNone then
+            some SHARED_UNDECIDED
+          else some SHARED_UNHELD
+        | .error _ => some SHARED_UNHELD
+      | .error _ => some SHARED_UNHELD
+    | .error _ => some SHARED_UNHELD
   else if code == "leaf-widths" then
     match front j tr with
     | .ok f => match wiring f.P f.doc with

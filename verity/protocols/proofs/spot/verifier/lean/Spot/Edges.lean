@@ -323,6 +323,7 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
       out := out ++ (← explicitWires P fu W k rt port ty cuts j (rb + lo) rows)
       continue
     let (run, lanes) := partLanes q
+    if lanes.all fun l => !l.p && l.i < nodes.size && isInputNode P l.i then continue
     let k0 := x0 + lo * L - s0
     let (w, l0, radix, steps) ← match laneWire run lanes k0 L len cnt with
       | .ok v => pure v

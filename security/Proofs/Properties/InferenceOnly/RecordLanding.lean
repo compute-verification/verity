@@ -158,7 +158,10 @@ theorem lands_unwired {o a : ℕ} (hw : ¬ Wired P rs W S o) (h : Lands P rs W S
     exact absurd ⟨r, l, lo, hi, Option.isSome_iff_exists.2 ⟨_, hwr⟩, hrl⟩ hw
 
 /-- A read of a leaf of a row with a writer lands where a leaf of the writer that meets it lands. -/
-theorem lands_wired_row (hO : OwnRows P rs W) (hN : PortsNamed P rs) {r : Row} {l g lo hi : ℕ}
+theorem lands_wired_row (hO : OwnRows P rs W)
+    (hSh : ∀ r l g lo hi, SharedLeaf P g → RowLeaf P rs W r l g lo hi →
+      S.writerOf r.tid r.unit r.port r.row = none)
+    (hN : PortsNamed P rs) {r : Row} {l g lo hi : ℕ}
     (hrl : RowLeaf P rs W r l g lo hi) (hw : (S.writerOf r.tid r.unit r.port r.row).isSome) {a : ℕ}
     (h : Lands P rs W S g a) :
     ∃ l' g' lo' hi', WriterLeaf P rs S r l' g' lo' hi' ∧ lo < hi' ∧ lo' < hi ∧ Lands P rs W S g' a := by
@@ -166,7 +169,9 @@ theorem lands_wired_row (hO : OwnRows P rs W) (hN : PortsNamed P rs) {r : Row} {
   | here _ hn => exact absurd ⟨r, l, lo, hi, hw, hrl⟩ hn
   | wire _ g' _ hf hl =>
     obtain ⟨r₁, l₁, l', lo₁, hi₁, lo', hi', hrl₁, hwl, hm1, hm2⟩ := hf
-    obtain ⟨e1, e2⟩ := hO.2 r₁ l₁ lo₁ hi₁ r l lo hi g hrl₁ hrl
+    obtain ⟨e1, e2⟩ | hs := hO.2 r₁ l₁ lo₁ hi₁ r l lo hi g hrl₁ hrl
+    swap
+    · simp [hSh r l g lo hi hs hrl] at hw
     subst e1 e2
     obtain ⟨_, e3, e4⟩ := rowLeaf_fun hN hrl₁ hrl
     subst e3 e4
@@ -322,7 +327,10 @@ theorem writerLand_le {r : Row} {sc' : Scope} {f : ℕ}
 
 /-- **The bound for an output leaf**: a read of a leaf of a unit's output row lands on gates together no wider than
 the leaf. -/
-theorem outLeaf_land_le (hO : OwnRows P rs W) (hA : Aligned P rs W S) (hL : LaysOut P rs W S D at_)
+theorem outLeaf_land_le (hO : OwnRows P rs W)
+    (hSh : ∀ r l g lo hi, SharedLeaf P g → RowLeaf P rs W r l g lo hi →
+      S.writerOf r.tid r.unit r.port r.row = none)
+    (hA : Aligned P rs W S) (hL : LaysOut P rs W S D at_)
     (hH : LeafHolds P rs W S) (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs) (hN : PortsNamed P rs)
     (ρ : String × ℤ → ℕ) (hρ : Ranked S ρ) :
     ∀ (n : ℕ) (tid : String) (u : ℕ) (sc : Scope) (out : String) (l g lo hi : ℕ), ρ (tid, (u : ℤ)) = n →
@@ -366,7 +374,7 @@ theorem outLeaf_land_le (hO : OwnRows P rs W) (hA : Aligned P rs W S) (hL : Lays
             exact hrank
           refine width_charge D (outRow (P.defs[sc'.d]!) f).2 lo'' hi'' (writerLand P rs W S at_ r')
             (fun l' _ => writerLand_le hall hstep l') _ fun a ha => ?_
-          obtain ⟨l', g', lo', hi', hwl, hm1, hm2, hl'⟩ := lands_wired_row hO hN hrl hwr (mem_landOf.1 ha)
+          obtain ⟨l', g', lo', hi', hwl, hm1, hm2, hl'⟩ := lands_wired_row hO hSh hN hrl hwr (mem_landOf.1 ha)
           have hod := outLeaf_data (hall l' g' lo' hi' hwl)
           rcases hA r' l' g' lo' hi' hwl with ⟨l₂, g₂, lo₂, hi₂, hrl₂, hle1, hle2⟩ | hsec
           · -- the writer's leaf lies inside one leaf of the row, which is this one
@@ -389,14 +397,15 @@ theorem outLeaf_land_le (hO : OwnRows P rs W) (hA : Aligned P rs W S) (hL : Lays
           · -- else the unit passes on no leaf of the row that meets the writer's, and it passes this one on
             exact absurd ⟨sc, out, l, lo, hi, hsc, hout⟩ (hsec l'' g lo'' hi'' hrl hm1 hm2)
         · refine width_none_le D _ _ fun a ha => ?_
-          obtain ⟨l', g', lo', hi', hwl, _⟩ := lands_wired_row hO hN hrl hwr (mem_landOf.1 ha)
+          obtain ⟨l', g', lo', hi', hwl, _⟩ := lands_wired_row hO hSh hN hrl hwr (mem_landOf.1 ha)
           exact hne ⟨l', g', lo', hi', hwl⟩
       · -- the row has no writer: no wire covers the leaf
         have hnw : ¬ Wired P rs W S g := by
           rintro ⟨r, l₁, lo₁, hi₁, hsome, hrl₁⟩
-          obtain ⟨e, _⟩ := hO.2 r l₁ lo₁ hi₁ r' l'' lo'' hi'' g hrl₁ hrl
-          subst e
-          exact hwr hsome
+          obtain ⟨e, _⟩ | hs := hO.2 r l₁ lo₁ hi₁ r' l'' lo'' hi'' g hrl₁ hrl
+          · subst e
+            exact hwr hsome
+          · simp [hSh r l₁ g lo₁ hi₁ hs hrl₁] at hsome
         exact landOf_unwired_le hL.1 hnw (hwd hnw)
 
 /-! ## A row -/
@@ -404,7 +413,9 @@ theorem outLeaf_land_le (hO : OwnRows P rs W) (hA : Aligned P rs W S) (hL : Lays
 /-- **The landing bound**, from `LeafHolds`: the gates a row's reads land on are together no wider than the
 row. -/
 theorem landing_le_of_holds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary)
-    (D : Verity.Circuit) (at_ : Fin D.N → ℕ) (hO : OwnRows P rs W) (hA : Aligned P rs W S)
+    (D : Verity.Circuit) (at_ : Fin D.N → ℕ) (hO : OwnRows P rs W)
+    (hSh : ∀ r l g lo hi, SharedLeaf P g → RowLeaf P rs W r l g lo hi →
+      S.writerOf r.tid r.unit r.port r.row = none) (hA : Aligned P rs W S)
     (hL : LaysOut P rs W S D at_) (hH : LeafHolds P rs W S) (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs)
     (hN : PortsNamed P rs) (hF : OutFits P rs W S) (ρ : String × ℤ → ℕ) (hρ : Ranked S ρ) (r : Row) (sc : Scope)
     (hsc : UnitAt P rs r.tid r.unit sc) (i : ℕ) (hi : i < (P.defs[sc.d]!).params.size)
@@ -418,14 +429,14 @@ theorem landing_le_of_holds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wirin
       obtain ⟨wt, wu, sc', f, hw, h0, hu, hf, hall⟩ := writerLeaf_data h₀
       have hstep : ∀ l g lo hi, WriterLeaf P rs S r l g lo hi →
           D.width (landOf P rs W S at_ g) ≤ hi - lo := fun l₁ g₁ lo₁ hi₁ h₁ =>
-        outLeaf_land_le hO hA hL hH hR hU hN ρ hρ _ wt wu.toNat sc' _ l₁ g₁ lo₁ hi₁ rfl hu
+        outLeaf_land_le hO hSh hA hL hH hR hU hN ρ hρ _ wt wu.toNat sc' _ l₁ g₁ lo₁ hi₁ rfl hu
           (hall l₁ g₁ lo₁ hi₁ h₁)
       have h1 : D.width (landing P rs W S at_ r) ≤
           bitAt (outRow (P.defs[sc'.d]!) f).2 (outRow (P.defs[sc'.d]!) f).2.size - 0 := by
         refine width_charge D (outRow (P.defs[sc'.d]!) f).2 0 _ (writerLand P rs W S at_ r)
           (fun l' _ => writerLand_le hall hstep l') _ fun a ha => ?_
         obtain ⟨l, o, lo, hi', hrl, hla⟩ := mem_landing.1 ha
-        obtain ⟨l', g', lo', hi'', hwl, _, _, hl'⟩ := lands_wired_row hO hN hrl hwr hla
+        obtain ⟨l', g', lo', hi'', hwl, _, _, hl'⟩ := lands_wired_row hO hSh hN hrl hwr hla
         have hod := outLeaf_data (hall l' g' lo' hi'' hwl)
         exact ⟨l', hod.1, Nat.zero_le _, bitAt_leaf_le _ l' hod.1, mem_writerLand.2 ⟨g', lo', hi'', hwl, hl'⟩⟩
       have h2 := hF r wt wu _ sc sc' i f hw h0 hsc hu hi hp rfl hf
@@ -433,14 +444,15 @@ theorem landing_le_of_holds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wirin
       exact h1.trans h2
     · refine width_none_le D _ _ fun a ha => ?_
       obtain ⟨l, o, lo, hi', hrl, hla⟩ := mem_landing.1 ha
-      obtain ⟨l', g', lo', hi'', hwl, _⟩ := lands_wired_row hO hN hrl hwr hla
+      obtain ⟨l', g', lo', hi'', hwl, _⟩ := lands_wired_row hO hSh hN hrl hwr hla
       exact hne ⟨l', g', lo', hi'', hwl⟩
   · -- the row has no writer: its reads land on its own leaves
     have hown : ∀ l o lo hi', RowLeaf P rs W r l o lo hi' → ¬ Wired P rs W S o := by
       rintro l o lo hi' hrl ⟨r₁, l₁, lo₁, hi₁, hsome, hrl₁⟩
-      obtain ⟨e, _⟩ := hO.2 r₁ l₁ lo₁ hi₁ r l lo hi' o hrl₁ hrl
-      rw [e] at hsome
-      exact hwr hsome
+      obtain ⟨e, _⟩ | hs := hO.2 r₁ l₁ lo₁ hi₁ r l lo hi' o hrl₁ hrl
+      · rw [e] at hsome
+        exact hwr hsome
+      · simp [hSh r₁ l₁ o lo₁ hi₁ hs hrl₁] at hsome
     have h1 : D.width (landing P rs W S at_ r) ≤
         bitAt (inRow (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row).2
           (inRow (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row).2.size - 0 := by
@@ -467,13 +479,15 @@ theorem landing_le_of_holds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wirin
 
 /-- **The landing bound**: the gates a row's reads land on are together no wider than the row. -/
 theorem landing_le (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary)
-    (D : Verity.Circuit) (at_ : Fin D.N → ℕ) (hO : OwnRows P rs W) (hA : Aligned P rs W S)
+    (D : Verity.Circuit) (at_ : Fin D.N → ℕ) (hO : OwnRows P rs W)
+    (hSh : ∀ r l g lo hi, SharedLeaf P g → RowLeaf P rs W r l g lo hi →
+      S.writerOf r.tid r.unit r.port r.row = none) (hA : Aligned P rs W S)
     (hL : LaysOut P rs W S D at_) (hW : LeafWide P rs W) (hR : ReturnsOwn P rs W) (hU : UnitsComputed P rs)
     (hN : PortsNamed P rs) (hF : OutFits P rs W S) (ρ : String × ℤ → ℕ) (hρ : Ranked S ρ) (r : Row) (sc : Scope)
     (hsc : UnitAt P rs r.tid r.unit sc) (i : ℕ) (hi : i < (P.defs[sc.d]!).params.size)
     (hp : (P.defs[sc.d]!).params[i]!.1 = r.port) :
     D.width (landing P rs W S at_ r) ≤
       (inRow (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row).2.foldl (· + ·) 0 := by
-  exact landing_le_of_holds P rs W S D at_ hO hA hL (leafHolds_of_leafWide hW) hR hU hN hF ρ hρ r sc hsc i hi hp
+  exact landing_le_of_holds P rs W S D at_ hO hSh hA hL (leafHolds_of_leafWide hW) hR hU hN hF ρ hρ r sc hsc i hi hp
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs

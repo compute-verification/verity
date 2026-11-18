@@ -2,11 +2,13 @@ module
 
 public import Proofs.Properties.InferenceOnly.LeafWidthsResolve
 public import Proofs.Properties.InferenceOnly.RecordFields
+public import Proofs.Properties.InferenceOnly.RecordInputs
 public import Proofs.Properties.InferenceOnly.RecordLanding
 public import Proofs.Properties.InferenceOnly.RecordLeafWide
 public import Proofs.Properties.InferenceOnly.RecordPrim
 public import Proofs.Properties.InferenceOnly.RecordRead
 public import Proofs.Properties.InferenceOnly.RecordRows
+public import Proofs.Properties.InferenceOnly.RecordShared
 public import Proofs.Properties.InferenceOnly.RecordTemplates
 public import Proofs.Properties.InferenceOnly.RecordWhole
 public import Mathlib.Tactic
@@ -21,6 +23,8 @@ rows do not line up, and this module states what a record it accepts has, in the
   returns no leaf of the row.
 * `filled` (`Filled`): every bit of a leaf of a wired row is a bit of a leaf of the writer's row.
 * `outFits` (`OutFits`): the writer's field a wired row reads has no more bits than the row.
+* `sharedUnwired_of_read` (`SharedUnwired`, which `aligned` takes): no row on a leaf of a shared run has a writer,
+  from `SharedHeld` and `held_unwired`.
 
 Both read `wired_row`, what the check has tested of a row with a writer: the row and the writer's field at the wire's
 offset have the same bits, and either the reader's parameter has leaves of one bit and is none of what its Definition passes on,
@@ -261,16 +265,17 @@ theorem rowLeaf_intro {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyV
 /-! ## A parameter that is not passed on -/
 
 /-- **A leaf of a parameter the check holds closed is no leaf its unit returns.** The parameter is none of what the
-unit's Definition passes on. A leaf a unit of a composite returns is a gate of the unit, which no leaf of a
-parameter is, or a leaf of a parameter the Definition passes on, and a gate is one leaf of one parameter of the
-unit at most. A unit of a primitive returns its own gate. -/
+unit's Definition passes on, and the leaf is no leaf of a shared run. A leaf a unit of a composite returns is a gate
+of the unit, which no leaf of a parameter is, or a leaf of a parameter the Definition passes on, and a gate that is
+no leaf of a shared run is one leaf of one parameter of the unit at most. A unit of a primitive returns its own
+gate. -/
 theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t g : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves)
     (hg : Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g)
-    (hn : i ∉ (passedOn P)[sc.d]?.getD (List.range (P.defs[sc.d]!).params.size)) {off l lo up : ℕ}
-    (ho : OutLeaf P sc off l g lo up) : False := by
+    (hn : i ∉ (passedOn P)[sc.d]?.getD (List.range (P.defs[sc.d]!).params.size)) (hsh : ¬ SharedLeaf P g)
+    {off l lo up : ℕ} (ho : OutLeaf P sc off l g lo up) : False := by
   have hout := unit_param_out hP hO hrs hu hi ht hg
   by_cases hp : (P.defs[sc.d]!).prim = true
   · obtain ⟨-, h1, h2⟩ := returnsOwn_prim hP hrs hu hp ho
@@ -290,10 +295,12 @@ theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : Inferenc
     · omega
     · obtain ⟨hd, -⟩ := Resolve.good_d P hroot hB _ hgood
       rw [hprm _ hd hp'] at hi' hj'
-      obtain ⟨-, -, hii, -⟩ := Resolve.unit_leaf_inj bytes P hdec hov hbl hO hk hk hnode hnode hform hform hm hm
+      rcases Resolve.unit_leaf_inj bytes P hdec hov hbl hO hk hk hnode hnode hform hform hm hm
         (hargs i hi) (hargs i' hi') ht hj'
         ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off
-        ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off hg hres'
+        ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off hg hres' with ⟨-, -, hii, -⟩ | hs
+      swap
+      · exact hsh hs
       subst hii
       apply hn
       unfold passOf at hmem
@@ -389,7 +396,8 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityPro
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
     (hwh : unwhole P ts
-      (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S = none) : Aligned P rs W S := by
+      (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S = none)
+    (hSh : SharedUnwired P rs W S) : Aligned P rs W S := by
   intro r l' g' lo' up' hwl
   obtain ⟨wt, wu, o, off, sc₁, hw, -, hu₁, hout₁⟩ := hwl
   obtain ⟨sc, sc', i, f, hsc, -, hsc', hi, hp, hf, hoff, hb, hrow, hbits, hwhole⟩ := wired_row hP hrs hT hS hts hwh hw
@@ -409,7 +417,9 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityPro
       exact hout₂
     obtain ⟨hl, hres, -, -⟩ := rowLeaf_data (portsNamed hrs hT) hsc hi hp hrl
     rw [inRow_size _ _ _ _ hrow] at hl
-    exact closed_not_returned hP hO hrs hsc hi (inRow_get _ i _ _ l hrow hl).1 hres hnot hret
+    refine closed_not_returned hP hO hrs hsc hi (inRow_get _ i _ _ l hrow hl).1 hres hnot (fun hs => ?_) hret
+    rw [hSh r l g lo up hs hrl] at hw
+    cases hw
   · -- each row's leaves are of one width, and the writer's divides the reader's
     obtain ⟨c, rfl⟩ := Nat.dvd_of_mod_eq_zero hdiv
     have hR := inRow_const (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row (o * c) hrow ha
@@ -449,5 +459,16 @@ theorem filled (hP : ReadProg P)
   obtain ⟨l', hl', h1, h2⟩ := leaf_of_bit _ _ (Nat.le_refl _) b hb
   obtain ⟨g', hg'⟩ := outLeaf_intro hP hrs hsc' hf hbf hl'
   exact ⟨l', g', _, _, ⟨wt, wu, out, off, sc', hw, h0, hsc', by rw [← hoff]; exact hg'⟩, h1, h2⟩
+
+/-- **No row on a leaf of a shared run has a writer** (`SharedUnwired`), on a record `read` accepts, given that every
+such row is held (`SharedHeld`): the check holds no row that has a writer (`held_unwired`). -/
+theorem sharedUnwired_of_read (hSH : InferenceOnlyVerifier.Record.SecurityProofs.SharedHeld) {j tr : Json}
+    {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P) (c.W.templates.map (·.1)).toArray =
+      .ok rs) :
+    SharedUnwired c.f.P rs c.W c.wired := by
+  intro r l g lo hi hs hrl
+  obtain ⟨p, hp⟩ := hSH j tr c rs h hrs g hs
+  exact held_unwired h r (by rw [hp r l lo hi hrl]; rfl)
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs

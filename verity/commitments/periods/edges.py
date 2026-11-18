@@ -401,6 +401,8 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
                 if (w := _wire_of(R, fu, templates, k, rt, port, ty, cuts, j, rb + lo + m, r0, l0, [1], [0])) is not None:
                     out.append(w)
             continue
+        if all(not p and 0 <= i < len(R.nodes) and R.nodes[i]["input"] for p, i, *_x in q[2]):
+            continue
         k0 = max(x0 + lo * L - s0, 0)
         try:
             w, l0, radix, steps = _lane_wire(q, k0, L, ln, cnt)

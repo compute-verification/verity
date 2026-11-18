@@ -3,6 +3,7 @@ module
 public import Properties.InferenceOnly
 public import Properties.InferenceOnly.Theta
 public import InferenceOnlyVerifier.DefinitionDigest
+public import InferenceOnlyVerifier.Record
 public import Spot.RecordText
 public import Flock.TemplateQuery
 public import Spot.Wires
@@ -209,16 +210,28 @@ def Templates (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Prop :=
   ∀ (tid : String) (t : Spot.Wires.Template), (tid, t) ∈ W.templates →
     (∀ u, u < t.units ↔ ∃ sc, UnitAt P rs tid u sc) ∧ ∀ u sc, UnitAt P rs tid u sc → TemplateOf (P.defs[sc.d]!) t
 
-/-- **Every unit's rows are its own input gates**: a leaf of a reader row is an input gate, and no gate is a leaf of
-two rows, or two leaves of one. -/
+/-- **Program gate `g` is a leaf of a shared run**: it lies in a run of an input node's leaves that the root hands
+to more than one row (`InferenceOnlyVerifier.Record.rowRuns`' `shared`), a root input node's leaf `j` being gate
+`offsets[n] + j`. -/
+def SharedLeaf (P : Prog) (g : ℕ) : Prop :=
+  ∃ runs x, InferenceOnlyVerifier.Record.rowRuns P = some runs ∧ x ∈ runs.shared ∧
+    (P.defs[P.root]!).body.offsets[x.1]! + x.2.1 ≤ g ∧ g < (P.defs[P.root]!).body.offsets[x.1]! + x.2.1 + x.2.2
+
+/-- **Every unit's rows are input gates, each its own or a shared run's**: a leaf of a reader row is an input gate,
+and no gate is a leaf of two rows, or two leaves of one, unless it is a leaf of a shared run (`SharedLeaf`). -/
 def OwnRows (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Prop :=
   (∀ r l g lo hi, RowLeaf P rs W r l g lo hi →
       ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ Flock.Program.isInputId (P.defs[p]!).key = true) ∧
-    ∀ r l lo hi r' l' lo' hi' g, RowLeaf P rs W r l g lo hi → RowLeaf P rs W r' l' g lo' hi' → r = r' ∧ l = l'
+    ∀ r l lo hi r' l' lo' hi' g, RowLeaf P rs W r l g lo hi → RowLeaf P rs W r' l' g lo' hi' →
+      (r = r' ∧ l = l') ∨ SharedLeaf P g
 
 /-- A wire covers Program gate `g`: it is a leaf of a reader row that has a writer. -/
 def Wired (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (g : ℕ) : Prop :=
   ∃ r l lo hi, (S.writerOf r.tid r.unit r.port r.row).isSome ∧ RowLeaf P rs W r l g lo hi
+
+/-- **No row on a leaf of a shared run has a writer.** -/
+def SharedUnwired (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) : Prop :=
+  ∀ r l g lo hi, SharedLeaf P g → RowLeaf P rs W r l g lo hi → S.writerOf r.tid r.unit r.port r.row = none
 
 /-- Leaf `l'` of the writer's field that the reader row `r` is wired to, at the wire's offset, is Program gate `g'`,
 at bits `[lo', hi')`. -/
@@ -226,15 +239,17 @@ def WriterLeaf (P : Prog) (rs : Array TRange) (S : Spot.Wires.Summary) (r : Row)
   ∃ wt wu o off sc', S.writerOf r.tid r.unit r.port r.row = some (wt, wu, o, off) ∧ 0 ≤ wu ∧
     UnitAt P rs wt wu.toNat sc' ∧ OutLeaf P sc' off l' g' lo' hi'
 
-/-- **Every unit's rows are its own input gates or its writers' outputs**: a leaf of a reader row is an input gate or
-the gate of a leaf of the output row it is wired to (an edge of the Program's root, `Spot.Edges.edgesOf`), and no gate
-is a leaf of two rows that have no writer, or two leaves of one. `OwnRows` is it on a wiring with no wire. -/
+/-- **Every unit's rows are input gates or its writers' outputs**: a leaf of a reader row is an input gate or the
+gate of a leaf of the output row it is wired to (an edge of the Program's root, `Spot.Edges.edgesOf`), and no gate is
+a leaf of two rows that have no writer, or two leaves of one, unless it is a leaf of a shared run (`SharedLeaf`).
+`OwnRows` is it on a wiring with no wire. -/
 def OwnOrEdgeRows (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) : Prop :=
   (∀ r l g lo hi, RowLeaf P rs W r l g lo hi →
       (∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ Flock.Program.isInputId (P.defs[p]!).key = true) ∨
         ∃ l' lo' hi', WriterLeaf P rs S r l' g lo' hi') ∧
     ∀ r l lo hi r' l' lo' hi' g, RowLeaf P rs W r l g lo hi → RowLeaf P rs W r' l' g lo' hi' →
-      S.writerOf r.tid r.unit r.port r.row = none → S.writerOf r'.tid r'.unit r'.port r'.row = none → r = r' ∧ l = l'
+      S.writerOf r.tid r.unit r.port r.row = none → S.writerOf r'.tid r'.unit r'.port r'.row = none →
+        (r = r' ∧ l = l') ∨ SharedLeaf P g
 
 /-- The unit of the reader row `r` passes Program gate `g` on: `g` is a leaf of one of that unit's return fields. -/
 def PassedOn (P : Prog) (rs : Array TRange) (r : Row) (g : ℕ) : Prop :=
@@ -291,8 +306,10 @@ and the edges of the Program's root (`Spot.RecordText.wiring`); the slots are th
 (`Spot.RecordText.slot`); and every row the check holds is one the text declares, for the reason it declares
 (`Spot.RecordText.declared`). The wiring passes `Spot.Wires.check`, and its templates are the Program's: the
 root's nodes (`Flock.TemplateQuery.evaluate`), with their units, rows and outputs (`Templates`); every unit's rows
-are its own input gates or its writers' outputs (`OwnOrEdgeRows`), every wire lands whole, and every bit of a wired row is its writer's; no row the check
-holds has a writer; and `d` is the wired circuit, θ the rows the check holds and `𝓘` the slots.
+are input gates or its writers' outputs (`OwnOrEdgeRows`), every wire lands whole, and every bit of a wired row is
+its writer's; no row the check holds has a writer; every row with a leaf of a shared run is held as a registered read
+of one parameter, the same for every row of that leaf (`SharedLeaf`), so the registration commits the one value each
+reads; and `d` is the wired circuit, θ the rows the check holds and `𝓘` the slots.
 
 No clause asks that the text names its Program: where a gate is computed or a row is held it does, since the gate's
 unit has a slot and the row a declaration and the text's readers give neither unless the text names the Program by
@@ -300,9 +317,10 @@ its SHA-512 (`Spot.RecordText.templatesOf`), and where neither is, the circuit h
 
 Not tied to the text: that the check holds every row the text declares (one that holds fewer counts more bits as
 fresh); an opening's pin and its reader's roles, which are the check's (`Good`); which leaves of its parameter a
-declared read takes; and that the rows and outputs of the templates the two readers lay the units out by
-(`Spot.RecordText.templatesOf`) are this wiring's (`Templates`), two definitions held to one Program with no
-lemma between them. The two number a template's units alike: where the text's reader gives its templates, a
+declared read takes, so neither that the rows of a shared run read their parameter at the run's leaves nor that the
+parameter is the one whose input node the run is, both of which the check holds; and that the rows and outputs of
+the templates the two readers lay the units out by (`Spot.RecordText.templatesOf`) are this wiring's (`Templates`),
+two definitions held to one Program with no lemma between them. The two number a template's units alike: where the text's reader gives its templates, a
 template's units are the members of its root nodes, in the nodes' order, as many as the text gives it (`unitAt_iff`,
 `Proofs.Properties.InferenceOnly.Record`). SPOT's audit reads neither reader. -/
 def Served (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) : Prop :=
@@ -317,6 +335,7 @@ def Served (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) : Prop :=
       ((F.wiring c).templates.map (·.1)).toArray = .ok rs ∧
     Templates P rs (F.wiring c) ∧ OwnOrEdgeRows P rs (F.wiring c) S ∧ Aligned P rs (F.wiring c) S ∧
     Filled P rs (F.wiring c) S ∧ (∀ r, (F.held c r).isSome → S.writerOf r.tid r.unit r.port r.row = none) ∧
+    (∀ g, SharedLeaf P g → ∃ p, ∀ r l lo hi, RowLeaf P rs (F.wiring c) r l g lo hi → F.held c r = some (.read p)) ∧
     LaysOut P rs (F.wiring c) S d.D at_ ∧
     Names P rs (F.wiring c) (fun r => (F.held c r).isSome) at_ d.θ ∧ Divides P rs (F.slot c) at_ d.𝓘
 
