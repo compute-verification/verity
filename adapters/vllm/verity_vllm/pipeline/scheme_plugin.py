@@ -87,7 +87,7 @@ def declared(vllm_config: Any, attached: Mapping[str, Mapping[str, Any]] | None 
 
 
 def attach(exchange: messages.Exchange, vllm_config: Any, names: list[str], cfg: Mapping[str, Any]) -> list[Any]:
-    """Each scheme ``names`` on ``exchange`` in the engine, then the exchange answered (`messages.Exchange.answer`); what
+    """Each scheme ``names`` on ``exchange`` in the engine (`messages.attach_listed`), then the exchange answered (`messages.Exchange.answer`); what
     each attach returned, in order. An engine on more than one GPU, or whose model runner is not in the engine core's
     process (where its scheduler and steps are), is refused by `GOAL`."""
     from verity.protocols.compose import schemes
@@ -99,8 +99,8 @@ def attach(exchange: messages.Exchange, vllm_config: Any, names: list[str], cfg:
                                   f"tensor_parallel_size {shape[0]} × pipeline_parallel_size {shape[1]} × "
                                   f"data_parallel_size {shape[2]} under distributed_executor_backend {shape[3]!r}")
     gate = challenger_gate(cfg.get("gate"))
-    got = [exchange.attach(schemes.get(n), cfg.get(n) or {}, gate=gate, private=cfg["private"], process=H.ENGINE,
-                           feed=cfg["feed"]) for n in names]
+    got = M.attach_listed(exchange, [(schemes.get(n), cfg.get(n) or {}) for n in names], gate=gate, private=cfg["private"],
+                          process=H.ENGINE, feed=cfg["feed"])
     if fixed := sorted({r.ranges for _, r in exchange.requests if isinstance(r, H.FixRanges)}):
         if len(fixed) > 1:
             raise RuntimeError(f"schemes fix the KV pool at {fixed} blocks: one size")

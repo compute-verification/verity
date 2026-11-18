@@ -79,6 +79,7 @@ _LAZY = {
     "draw_challenger": (f"{_POUW}.verifier.window", "draw_challenger"),
     "finish_window": (f"{_SERVING}.coins.window", "finish"),
     "fresh_salts": (f"{_POUW}.verifier.audit", "fresh_salts"),
+    "epoch_open_root": (f"{_POUW}.verifier.salt", "epoch_open_root"),
     "h1_weight_root": (f"{_SERVING}.h1", "weight_root"),
     "in_process_draw": (f"{_SERVING}.coins.window", "in_process_draw"),
     "live_challenger": (f"{_POUW}.verifier.window", "live_challenger"),
