@@ -107,13 +107,11 @@ theorem unwhole_none {P : Prog} {ts : List Tmpl} {ls : List Leaves} {s : Spot.Wi
         · rename_i he
           exact beq_iff_eq.1 he
         · cases hsh
-      · split at h0
-        · rename_i hwh
-          simp only [Bool.or_eq_true] at hwh
-          rcases hwh with hc | hc
-          · exact Or.inl hc
-          · exact Or.inr (widths_divide hc)
-        · cases h0
+      · split_ifs at h0 with hwh
+        simp only [Bool.or_eq_true] at hwh
+        rcases hwh with hc | hc
+        · exact Or.inl hc
+        · exact Or.inr (widths_divide hc)
 
 /-- A name among a list's names is looked up in it. -/
 theorem lookup_append_of_some {β : Type} : ∀ (l l' : List (String × β)) (a : String) (b : β), l.lookup a = some b →
