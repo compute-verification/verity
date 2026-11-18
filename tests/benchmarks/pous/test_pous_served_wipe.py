@@ -210,15 +210,15 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
 
 
 def test_a_case_that_cant_reach_the_private_dir_leaves_none_in_dir(node, tmp_path) -> None:
-    """The case holds the signed session: where the serve dir's private/wipe can't be made, DIR, the window's output that
-    leaves the node, keeps no copy of it."""
+    """The case holds the signed session: where the serve dir's private/wipe can't be made, the wipe fails visibly and
+    DIR, the window's output that leaves the node, keeps no copy of it (the attach writes the case only there)."""
     d = tmp_path / "pieces" / "wipe"
     (tmp_path / "pieces" / "serve-run").mkdir(parents=True)
     (tmp_path / "pieces" / "serve-run" / "private").write_text("not a directory\n")
     judge = _exe(tmp_path / "wipe-protocol", "#!/bin/sh\nexit 9\n")
     r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other", "WIPE_PROTOCOL_EXE": str(judge)}, d)
-    assert "WIPE CASE: the case didn't move to" in r.stdout and "removed from DIR" in r.stdout, r.stdout + r.stderr
-    assert not (d / "wipe.case.json").exists()
+    assert "WIPE FAILED: demo.sh (exit 1) wrote no wipe.json answer" in r.stdout, r.stdout + r.stderr
+    assert not list(d.rglob("wipe.case.json"))
 
 
 def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
