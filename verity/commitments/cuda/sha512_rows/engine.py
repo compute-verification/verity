@@ -21,7 +21,9 @@ leaf). The engine derives no salt and takes no key for one; it reads the buffer 
 stream and don't synchronize.
 
 On a CUDA device the calls run on a tensor runtime (torch) that verity doesn't import: ``Engine.runtime`` raises here, and a
-subclass supplies it (the benchmarks' ``benchmarks/torch_gpu/sha512_rows/torch_engine.py``).
+subclass supplies it (the benchmarks' ``benchmarks/torch_gpu/sha512_rows/torch_engine.py``). Its caller names the target
+the device library is built for (``arch``, such as ``90a``): the device's card file's (``verity.device``), which this
+package can't load. A CUDA device without one is refused.
 
 The host twin counts what it hashes (``counts()``: compressions, and those over a constant schedule), so the tests hold
 each call to its compressions a digest.
@@ -63,6 +65,9 @@ DEFAULT_VARIANT = "0000"
 NEEDS_RUNTIME = ("the engine on a CUDA device runs on a tensor runtime (torch) that verity doesn't import "
                  "(kernels/gpu-code-out-of-benchmarks): use a subclass whose runtime() returns it, as the benchmarks' "
                  "torch_engine.Engine does")
+NEEDS_ARCH = ("the engine on a CUDA device is built for the target its caller names: pass arch, the device's card file's "
+              "arch without sm_ (such as 90a), which the caller reads with verity.device.gpu_card_reporting from the "
+              "name the device reports; the engine derives no target from a compute capability")
 
 INST = hm96.SHA512
 KEY = INST.default_key
@@ -238,12 +243,11 @@ class Engine:
             self.torch, self.device, self.lib = None, "host", host_lib(build)
         else:
             torch = self.runtime()
+            if arch is None:
+                raise ValueError(NEEDS_ARCH)
             self.torch, self.device = torch, torch.device(device)
             if self.device.index is None:
                 self.device = torch.device("cuda", torch.cuda.current_device())
-            if arch is None:
-                major, minor = torch.cuda.get_device_capability(self.device)
-                arch = f"{major}{minor}" + ("a" if major in (9, 10, 12) else "")
             self.lib = device_lib(build, arch, default)
         self.variants = [self.lib.sxr_variant_name(i).decode() for i in range(self.lib.sxr_variants())]
         self.default = self.lib.sxr_default().decode()

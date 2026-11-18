@@ -5,12 +5,25 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.device import compute_capability, gpu_card_reporting
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.row_table_kernels import device_lib, hm_tables, leaf_prefixes
 
-__all__ = ["DeviceLibrary", "side_stream"]
+__all__ = ["CARD_FILES", "DeviceLibrary", "arch", "side_stream"]
+
+#: the GPU card files (`verity.device`), whose ``arch`` is the target every library here is built for
+CARD_FILES = Path(__file__).resolve().parents[4] / "calibration/hardware/cards"
+
+
+def arch(name: str) -> str:
+    """The target a library is built for on the device reporting ``name`` (torch's ``get_device_name``): its card file's
+    ``arch`` (`verity.device.gpu_card_reporting`) without ``sm_``, such as ``90a``; a device no card file names is refused."""
+    card = gpu_card_reporting(name, directory=CARD_FILES)
+    compute_capability(card)
+    return card["arch"].removeprefix("sm_")
 
 
 class DeviceLibrary:
@@ -22,8 +35,7 @@ class DeviceLibrary:
     _of: dict[tuple[Callable[[str], ctypes.CDLL], int], DeviceLibrary] = {}
 
     def __init__(self, torch: Any, device: Any, lib: Callable[[str], ctypes.CDLL], midstates: str, streams: int) -> None:
-        major, minor = torch.cuda.get_device_capability(device)
-        self.lib = lib(f"{major}{minor}")
+        self.lib = lib(arch(torch.cuda.get_device_name(device)))
         self.streams, self.turn = [torch.cuda.Stream(device) for _ in range(streams)], 0
         self.stream = self.streams[0]
         with torch.cuda.stream(self.stream):
