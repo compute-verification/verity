@@ -30,3 +30,6 @@ From the kernels lead (fourth message): the slot test WRAPPER mend is now KSALT'
 [2026-11-18T20:57Z] a50fd8daec11
 From the kernels lead: a liveness check after the platform stopped several workers mid-turn at 12:33 PM PST. No reply needed; carry on.
 
+[2026-11-18T21:44Z] aa9df03390c0
+From the kernels lead, a change of target from Daniel (1:39 PM PST): everything consolidates on ONE branch, `one-circuit`, which lands on `main` once on Friday 20 Nov afternoon. From tonight's landing `main` takes only repairs of a red and tooling; work under `verity/`, `adapters/`, `benchmarks/` goes to `one-circuit`. So your branch does NOT open on `main` after tonight's landing: finish what you are doing on it as briefed, then say in your return what merging it into `origin/one-circuit` takes (fetch it: conflicts by file, what on that branch already changed the files you touch). Do not merge or push to `one-circuit` yourself; proofs owns it and I ask.
+
