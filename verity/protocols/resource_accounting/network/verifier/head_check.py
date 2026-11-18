@@ -299,6 +299,9 @@ NetworkHeadCheck = CompositeDefinition(
         "signed digest; its deadline byte and frames root are free")
 
 
+NetworkHeadCheck.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins (`pin_id`)
+
+
 def unit(L: int, T: int, counts: bool):
     return bind(NetworkHeadCheck, L=L, T=T, COUNTS=int(counts))
 
