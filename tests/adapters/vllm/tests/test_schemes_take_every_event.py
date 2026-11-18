@@ -6,6 +6,7 @@ serve's path does, so Pearl+ fails as on a card where nothing hands its device r
 
 from __future__ import annotations
 
+import dataclasses
 import importlib
 import sys
 from types import SimpleNamespace
@@ -131,24 +132,21 @@ def test_a_scheme_takes_every_event(name, event, serve, tmp_path, monkeypatch):
             ex.emit(e)
 
 
-@pytest.mark.xfail(strict=True, raises=RuntimeError, reason="Pearl+'s step (compute/pouw/scheme.py, PhaseOpened) refuses "
-                   "a phase after the serve's learn-only warm-up (serve_learn.warm_up) stepped outside any phase and "
-                   "opened its epoch for the server's life")
-def test_pearl_plus_takes_the_serves_warm_up_before_its_first_phase(serve, tmp_path, monkeypatch):
-    """The serve's order under its Commit: the learn-only warm-up's steps (`serve_learn.warm_up`), outside any phase,
-    then the first window's phase."""
+@pytest.mark.parametrize("name", sorted(declarations.DECLARATIONS))
+def test_a_scheme_takes_the_serves_warm_up_before_its_first_phase(name, serve, tmp_path, monkeypatch):
+    """The serve's order under its Commit: the learn-only warm-up's step (`serve_learn.warm_up`), from no input and
+    outside any phase, then the first window's phase (`serve_commit`) and its step."""
     monkeypatch.chdir(tmp_path)
-    ex = _attached(serve, "pearl-plus", tmp_path)
+    ex = _attached(serve, name, tmp_path)
     honest = _honest()
     due = next(e for e in honest if isinstance(e, H.BlockDue))
-    try:
-        for e in (*honest[:2], H.StepBegan(0, ("learn-warmup-0",), 3), due, H.StepComputed(0), H.StepEnded(0)):
-            ex.compute(e, lambda inputs: due.inputs["x"]) if e is due else ex.emit(e)
-    except RuntimeError as e:
-        pytest.fail(f"the warm-up itself: {type(e).__name__}: {e}")
-    for e in (H.PhaseOpened(0, 1), H.StepBegan(1, ("r0",), 3), H.StepComputed(1), H.StepEnded(1),
-              H.PhaseClosed(0, 1, ROOT), H.PhaseCommitted(0, ROOT)):
-        ex.emit(e)
+    later = [dataclasses.replace(e, step=e.step + 1) if "step" in {f.name for f in dataclasses.fields(e)} else e
+             for e in honest[2:]]
+    for e in (*honest[:2], H.StepBegan(0, ("learn-warmup-0",), 3), due, H.StepComputed(0), H.StepEnded(0), *later):
+        if isinstance(e, H.BlockDue):
+            ex.compute(e, lambda inputs: due.inputs["x"])
+        else:
+            ex.emit(e)
 
 
 def test_a_handler_takes_only_the_events_it_names():
