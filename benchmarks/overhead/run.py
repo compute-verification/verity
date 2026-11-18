@@ -22,8 +22,8 @@ from verity_bench.cli import main
 #: `scheme/card/point`, each model but the kernel model's on the kernel card a member (`overhead_records.measurements`)
 METRICS = {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C",
            "benchmarks/pearl-plus-gamma-l-h200": "pearl-plus/h200/L",
-           "benchmarks/pearl-plus-gamma-c": "pearl-plus/h100/C",
-           "benchmarks/pearl-plus-gamma-l": "pearl-plus/h100/L"}
+           "benchmarks/pearl-plus-gamma-c-h100": "pearl-plus/h100/C",
+           "benchmarks/pearl-plus-gamma-l-h100": "pearl-plus/h100/L"}
 
 if __name__ == "__main__":
     sys.exit(main(["overhead", *sys.argv[1:]], metrics=METRICS))
