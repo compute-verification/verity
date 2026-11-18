@@ -25,6 +25,7 @@ from verity_torch.frontend.rules.common import (
 from verity_vllm.definitions.registry import bf16_gemm_check
 from verity_vllm.program.frontend import targets
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_device_name,
     active_target_profile,
     launch_tokens_of,
 )
@@ -74,7 +75,7 @@ class CublasLinearRule(OpRule):
         if xs is None or ws is None or not xs or len(ws) != 2 or xs[-1] != ws[1]:
             return f"x {xs} vs W {ws}"
         M, (N, K) = launch_tokens_of(node, len(rows_of(ctx.coll(x))[0])), ws
-        route = bf16_gemm_check.default_cublas_route("linear", M, K, N)
+        route = bf16_gemm_check.default_cublas_route("linear", M, K, N, active_device_name())
         if route is None:
             return f"no captured vLLM-default cuBLAS linear route for M={M}, K={K}, N={N}"
         role = "cublas_splitk_gemm" if route[0] == "splitk" else "gemm_dot"
@@ -89,7 +90,7 @@ class CublasLinearRule(OpRule):
         N, K = known(shape(ctx, w))
         rows, lead = rows_of(ctx.coll(x))
         M = launch_tokens_of(node, len(rows))
-        kernel, statics = bf16_gemm_check.default_cublas_route("linear", M, K, N)
+        kernel, statics = bf16_gemm_check.default_cublas_route("linear", M, K, N, active_device_name())
         DOT = targets.tensor_core_dot(active_target_profile())
         role = "cublas_splitk_gemm" if kernel == "splitk" else "gemm_dot"
         fn = ctx.kind(role, node, K=K, N=N, DOT=DOT, **statics)
@@ -191,7 +192,7 @@ def f32out_route(M: int, K: int, N: int) -> tuple[str, str, dict[str, int]] | st
     kernel, _ = bf16_gemm_check.dispatch_sm90(M, K, N)
     if phase == "router" and kernel != "cublas":
         return f"vLLM dispatches the {kernel} tier at M={M}, K={K}, N={N}, not aten.mm.dtype"
-    route = bf16_gemm_check.default_cublas_route(phase, M, K, N)
+    route = bf16_gemm_check.default_cublas_route(phase, M, K, N, active_device_name())
     if route is None:
         return f"no captured vLLM-default cuBLAS {phase} route for M={M}, K={K}, N={N}"
     return phase, "cublas_splitk_gemm_f32out" if route[0] == "splitk" else "cublas_gemm_f32out", route[1]
