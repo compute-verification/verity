@@ -293,6 +293,8 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
                     raise Refusal("not-topological")
                 raise Refusal("edge-rows")
             continue
+        if all(not p and 0 <= i < len(R.nodes) and R.nodes[i]["input"] for p, i, *_x in q[2]):
+            continue
         k0 = max(x0 + lo * L - s0, 0)
         rows = "edge-fields" if _crosses_fields(R, q, k0, L, ln, cnt) else "edge-rows"
         try:
