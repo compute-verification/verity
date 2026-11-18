@@ -728,11 +728,13 @@ def public_doc(text: str) -> str:
 
 
 def publish(out: Path, private: Path) -> list[str]:
-    """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
-    `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window or holds a load's own
-    field, Pearl+'s exclusion tiles, its exact credit or its prover's give-up (`public_doc`) held in full, under
-    ``private`` at its path under ``out``, its public form left in its place. A file that isn't UTF-8 text is held whole.
-    Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
+    """Every file under ``out``, the dir that leaves the node, in its public form: one `public_files.PUBLIC` doesn't list
+    under ``OUT/``, one whose path names a window, or that `PUBLISH_MAX` keeps from being read, held whole, and one whose
+    text names or counts a window or holds a load's own field, Pearl+'s exclusion tiles, its exact credit or its prover's
+    give-up (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. A
+    file that isn't UTF-8 text is held whole. Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
+    import public_files as PF
+
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():
@@ -744,7 +746,7 @@ def publish(out: Path, private: Path) -> list[str]:
         private.mkdir(mode=0o700, parents=True, exist_ok=True)
         dst.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         data = p.read_bytes() if p.stat().st_size <= PUBLISH_MAX else None
-        if data is None or NAMED.search(rel):
+        if data is None or NAMED.search(rel) or PF.listed("OUT/" + rel) is None:
             shutil.move(p, dst)
             held.append(rel)
             continue
@@ -1348,6 +1350,27 @@ def premises(doc: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     else:
         live = True, LIVE_MET
     return {name: {"met": met, "why": why[:600]} for name, (met, why) in zip(PREMISES, (live, salt), strict=True)}
+
+
+#: who runs each premise's check, by the record's product: on both paths the served node's PoUW piece (the developer's);
+#: the compose node's Lean re-run reaches only the sampled proofs' row, which carries no premise
+PREMISE_RUNNERS: Mapping[str, Mapping[str, str]] = {"onsite": {p: "piece" for p in PREMISES},
+                                                    "remote": {p: "piece" for p in PREMISES}}
+#: what a premise's ``why`` says of who ran its check (`ran_by`)
+RAN_BY = {"piece": "run by the developer's piece; no auditor-side entry runs it",
+          "lean": "recomputed on the compose node by the Lean verifier",
+          "device": "run by an auditor's device"}
+
+
+def ran_by(row: Mapping[str, Any], product: str) -> dict[str, Any]:
+    """``row`` with each premise its development document states (`premises`) saying, at the end of its ``why``, who ran
+    its check on ``product``'s path (`PREMISE_RUNNERS`, `RAN_BY`)."""
+    doc = row.get("development")
+    if not isinstance(doc, Mapping) or not any(isinstance(doc.get(n), Mapping) for n in PREMISES):
+        return dict(row)
+    runners = PREMISE_RUNNERS[product]
+    return {**row, "development": {**doc, **{n: {**doc[n], "why": f"{doc[n].get('why')}; {RAN_BY[runners[n]]}"}
+                                             for n in PREMISES if isinstance(doc.get(n), Mapping)}}}
 
 
 def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str | None, main: Path | None,
@@ -2228,10 +2251,9 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path 
             return {"verdict": BR.REFUSED, "owner": owner, "reason": said[:2000]}
         if isinstance(ran, dict):
             late = f", out of time at {ran.get('limit')}" if ran.get("rc") in (124, 137) else ""
+            log = "in the run's private directory" if key == "wipe" else f"{comp}/piece.log"
             return {"verdict": "error", "owner": owner,
-                    "reason": f"its piece ran (exit {ran.get('rc')}{late}) and wrote no answer; its log is {comp}/piece.log"}
-        if key == "wipe" and (d / "piece.log").exists():
-            return {"verdict": "missing", "owner": owner, "why": f"its piece wrote no answer; its log is {comp}/piece.log"}
+                    "reason": f"its piece ran (exit {ran.get('rc')}{late}) and wrote no answer; its log is {log}"}
         return {"verdict": "missing", "owner": owner, "why": _unset(comp, what)}
     try:
         return row_of(owner, json.loads(f.read_text()), f.parent, run)
@@ -2614,7 +2636,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     drops = [k for k in rows if subprotocols[k] not in BR.PRODUCTS[product]]
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
-    rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
+    rows = {k: dropped_row(k, product) if k in drops else ran_by(r, product) for k, r in rows.items()}
     apart = {"communication"} & set(rows) - set(drops) if front_group else set()
     for k in apart:
         rows[k]["requests"] = FRONT_GROUP
