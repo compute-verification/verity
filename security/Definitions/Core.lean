@@ -11,6 +11,7 @@ public import Definitions.Core.Boolean
 public import Definitions.Core.Game
 public import Definitions.Core.Uniform
 public import Definitions.Core.Draw
+public import Definitions.Core.Levels
 public import Definitions.Core.Scheme
 public import Definitions.Core.Challenger
 public import Definitions.Core.Decisive
@@ -46,7 +47,8 @@ the ones here.
   (the registered hardware and its registration), `SiteSubtree` (a subtree of the Site, its places and its links as
   the hardware model's). What an accepted registration gives the theorems is registration's, an accounting protocol
   (`Definitions.Registration`).
-* Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Challenger`, `Decisive`.
+* Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Levels` (a sample drawn
+  level by level, outer blocks then inner blocks), `Challenger`, `Decisive`.
 * Memory checking: `MemCheck` (a multiset's fingerprint and a key's print over a finite field).
 * A check moved inside proofs: `InProofs` (an accepted run leaves fewer than `K₀` proof blocks failing a check).
 * Word semantics: `Scalar`, `Prims`, `Fp32`, `TC` (the tensor cores); `NaiveStrassen` (two tilings in the tensor-core
