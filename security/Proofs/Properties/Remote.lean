@@ -530,11 +530,11 @@ theorem v2Marks_iff (rec : Json) (v : Spot.Docket.Verifier) :
 theorem callerCheckMeans : CallerCheckMeans := by
   intro rec v
   simp only [VStar.Recursive.Caller.check]
-  rw [Properties.Spot.kept_nil, Properties.Spot.kept_nil, and_assoc, v2Marks_iff, compilerMarks_nil, poolMarks_nil,
-    Properties.Spot.kept_nil, bindingMarks_nil, declaredMarks_nil]
+  rw [Properties.Spot.kept_nil, Properties.Spot.kept_nil, and_assoc, v2Marks_iff, compilerMarks_nil,
+    Properties.Spot.kept_nil, poolMarks_nil, Properties.Spot.kept_nil, bindingMarks_nil, declaredMarks_nil]
   unfold Properties.Spot.CallerHeld Properties.Spot.RunCompiler
-  exact ⟨fun ⟨⟨⟨⟨⟨⟨_, dd⟩, bd⟩, ss⟩, r, wk, sp, o⟩, ck, ad⟩, v2⟩ => ⟨dd, bd, ss, r, wk, sp, o, ⟨ck, ad⟩, v2⟩,
-    fun ⟨dd, bd, ss, r, wk, sp, o, ⟨ck, ad⟩, v2⟩ => ⟨⟨⟨⟨⟨⟨rfl, dd⟩, bd⟩, ss⟩, r, wk, sp, o⟩, ck, ad⟩, v2⟩⟩
+  exact ⟨fun ⟨⟨⟨⟨⟨⟨⟨_, dd⟩, bd⟩, ss⟩, r, wk, sp, o⟩, pp⟩, ck, ad⟩, v2⟩ => ⟨dd, bd, ss, r, wk, sp, o, pp, ⟨ck, ad⟩, v2⟩,
+    fun ⟨dd, bd, ss, r, wk, sp, o, pp, ⟨ck, ad⟩, v2⟩ => ⟨⟨⟨⟨⟨⟨⟨rfl, dd⟩, bd⟩, ss⟩, r, wk, sp, o⟩, pp⟩, ck, ad⟩, v2⟩⟩
 
 /-- **`CallerCheckSound`**, `CallerCheckMeans`' forward half. -/
 theorem callerCheckSound_of_means (hm : CallerCheckMeans) : CallerCheckSound := fun rec v => (hm rec v).1

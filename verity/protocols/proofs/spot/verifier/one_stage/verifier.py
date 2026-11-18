@@ -343,7 +343,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
                                      work_table, registered, supplied, pinned, binding, outputs=outputs, schemas=schemas,
                                      window_root=window_root, held=held, members=members, day=day,
                                      declarations=declarations, seed_salt=seed_salt, pool=pool, tied=tied, history=history,
-                                     compiler=compiler, certified=certified, verdicts=verdicts, wired=wired)
+                                     compiler=compiler, certified=certified, verdicts=verdicts, wired=wired,
+                                     wired_record=wired_record)
         why = None
     except R.HistoryRefused as e:
         py, why = None, str(e)

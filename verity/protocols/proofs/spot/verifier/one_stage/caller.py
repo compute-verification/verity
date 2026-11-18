@@ -4,7 +4,8 @@ and SPOT's own log, which SPOT's check (`docket.check`) reads none of.
 The record names its day's one declared program (Declared day: `R2-undeclared`, `R2-declared-twice`, `R2-declared`);
 its window names the stream and the prover the verifier is bound to (Binding: `R6-stream`, `R6-prover`), the seed salt
 the verifier read from the challenger's log (Seed salt: `R6-seed-salt`), the pool's reset, week and spent mark, at most
-one reset a week (Pool chain: `R6-pool-reset`, `R6-pool-week`, `R6-pool-spent`, `R6-pool-reset-week`), and the
+one reset a week (Pool chain: `R6-pool-reset`, `R6-pool-week`, `R6-pool-spent`, `R6-pool-reset-week`), the pool
+chained at the record's program unless reset (`R6-pool-program`), and the
 registration log's compiler and advice within its length (Registered compiler: `R6-compiler`, `R6-advice-length`); and,
 when the verifier expects values registered, the record's entry for the pool's `pin` is the pool its window opens
 (`R7-pool-chain`), and no output value reads a port of a record the verifier's verdict log names refused
@@ -136,6 +137,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
         c.fail("R6-pool-spent", {"registered": w.get(R.POOL_SPENT), "verifier": spent})
     if pool is not None and pool["reset"] and before:
         c.fail("R6-pool-reset-week", {"registered": True, "verifier": "the week's reset is spent before this window"})
+    if (pool is not None and not pool["reset"] and not R.pool_refused(pool, log) and log
+            and log[-1].get("program") != R.record_program(program, wired)):
+        c.fail("R6-pool-program", {"previous": log[-1].get("program"), "verifier": R.record_program(program, wired)})
     if reads is not R.UNREAD:
         _compiler(c, w, reads)
     if v2 and pool is not None:

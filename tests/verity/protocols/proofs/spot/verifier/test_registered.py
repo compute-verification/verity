@@ -1642,8 +1642,7 @@ def test_a_window_opens_the_pool_the_previous_window_of_record_left():
 
 def test_the_public_rule_restarts_the_pool_with_no_advice():
     """The public rule opens the empty pool, `pin` filled from `genesis`, where there is no pool to carry, at a
-    docket's first window and past a docket boundary (a previous record of another program), and after the
-    verifier refused the window the public lag back, as its own verdict log names it (`verdicts`, `pool_refused`), with
+    docket's first window, and after the verifier refused the window the public lag back, as its own verdict log names it (`verdicts`, `pool_refused`), with
     no reset of serving's: the records name none, so the rule costs no advice. Where it restarts, the previous window's
     pool is refused by name (`R7-pool-chain`). Where the verdict log names that window's run accepted, or holds no
     verdict for it, or the log is shorter than the lag, the window carries the pool. A malformed pool refuses the
@@ -1651,11 +1650,9 @@ def test_the_public_rule_restarts_the_pool_with_no_advice():
     prog = _pooled()
     w = _registered(prog)
     first, kw = _pool_window(prog, w, 0, [])
-    elsewhere, _ = _record(_program(), _registered(_program()))
-    for log in ([], [elsewhere]):
-        opened, kw2 = _pool_window(prog, w, 1, log)
-        assert not R.pool_chains(kw2["pool"], log, prog)
-        assert C.both(opened, prog, Q, **kw2).ok
+    opened, kw2 = _pool_window(prog, w, 1, [])
+    assert not R.pool_chains(kw2["pool"], [], prog)
+    assert C.both(opened, prog, Q, **kw2).ok
     refused = {DD.digest(first): False}
     after, kw3 = _pool_window(prog, w, 1, [first], verdicts=refused)
     assert R.pool_refused(kw3["pool"], [first]) and not R.pool_chains(kw3["pool"], [first], prog)
@@ -1710,6 +1707,24 @@ def test_serving_resets_its_pool_at_most_once_a_week():
     assert C.both(kept, prog, Q, **kw4).ok
     next_week, kw5 = _pool_window(prog, w, 2, log, reset=True, week=1)
     assert C.both(next_week, prog, Q, **kw5).ok
+
+
+def test_a_previous_record_of_another_program_needs_the_pools_reset():
+    """The pool chains at the record's program alone: past a previous record of another program (a docket boundary,
+    or wiring A then wiring B of the same cut, whose records name A's and B's digests) the empty pool is refused by name
+    (`R6-pool-program`) unless serving resets the pool, which the record's window then names."""
+    prog = _pooled()
+    w = _registered(prog)
+    elsewhere, _ = _record(_program(), _registered(_program()))
+    first, _ = _pool_window(prog, w, 0, [])
+    rewired = {**first, "program": "ab" * 64}
+    for log in ([elsewhere], [rewired]):
+        opened, kw = _pool_window(prog, w, 1, log)
+        assert not R.pool_chains(kw["pool"], log, prog)
+        assert C.both(opened, prog, Q, **kw).codes == ("R6-pool-program",)
+        restart, kw2 = _pool_window(prog, w, 1, log, reset=True)
+        assert restart["window"][R.POOL_RESET] is True
+        assert C.both(restart, prog, Q, **kw2).ok
 
 
 #: the window fields a verifier with no pool holds a record to name none of

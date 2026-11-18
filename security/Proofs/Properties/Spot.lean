@@ -891,6 +891,20 @@ theorem linkRefused_false_iff (v : Docket.Verifier) : Docket.linkRefused v = fal
           fun ⟨_, _, h1, h⟩ => by cases h1; rw [hr] at h; exact Except.ok.inj h⟩
   · simp
 
+/-- R2's program line (`Docket.check`): the record names `recordProgram` and the wired facts hold (`cutHolds`) exactly
+when `WiredProgram` does. -/
+theorem wiredProgram_iff (rec : Json) (v : Docket.Verifier) :
+    (jeq (getD rec "program") (v.recordProgram (partitionOf v)) = true ∧ Docket.Verifier.cutHolds rec v = true) ↔
+      WiredProgram rec v := by
+  unfold WiredProgram Docket.Verifier.recordProgram Docket.Verifier.cutHolds
+  cases hw : v.wired with
+  | none => simp
+  | some wc =>
+    obtain ⟨w, circuit⟩ := wc
+    cases h : Spot.Cut.checkWith circuit w v.program v.query with
+    | error e => simp [h]
+    | ok u => cases u; simp [h]
+
 /-- The registration check finds nothing exactly where the registration keeps R1–R8 (`Registered`). The caller's facts
 (`CallerHeld`) are the caller's check's (`VStar.Recursive.Caller.check`), not this one's. -/
 theorem docket_nil (rec : Json) (v : Docket.Verifier) :
@@ -1011,8 +1025,8 @@ theorem docket_nil (rec : Json) (v : Docket.Verifier) :
             by_cases hj : jeq (get name) m = true <;> simp [hj, step_pure, addCode_ne_nil]
         · exact ⟨fun ⟨⟨a, b⟩, d⟩ => ⟨a, b, ⟨n, rfl, hp⟩, d⟩, fun ⟨a, b, _, d⟩ => ⟨⟨a, b⟩, d⟩⟩
   have h3 := step_ite (∃ d, partDigest = some d) j3 j4 _ _ h4 (fun _ => rfl) (isNone_false_iff _)
-  have h2 := step_ite (jeq (getD part "program") (.str program) = true) j2 j3 _ _ h3 (fun _ => rfl)
-    (not_false_iff' _)
+  have h2 := step_ite (jeq (getD part "program") (.str program) = true ∧ Docket.Verifier.cutHolds rec v = true)
+    j2 j3 _ _ h3 (fun _ => rfl) ((not_false_iff' _).trans (Bool.and_eq_true _ _).to_iff)
   have h1 := step_ite ((w matches .obj _) = true ∧ ∃ k ∈ Docket.KINDS, jeq (getD w "kind") (.str k) = true)
     j1 j2 _ _ h2 (fun _ => rfl) (by
       simp only [Bool.or_eq_false_iff, Bool.not_eq_false', List.any_eq_true]
@@ -1081,15 +1095,16 @@ theorem docket_nil (rec : Json) (v : Docket.Verifier) :
     unfold ExpectsV2; rw [hv2]; generalize (v.registered.isEmpty && v.certified.isEmpty) = e; cases e <;> simp
   rw [ek, ef, e7]
   constructor
-  · rintro ⟨hk, ⟨hf, hp⟩, ⟨samplingDesign, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hsch, hroots, hports,
+  · rintro ⟨hk, ⟨hf, hp⟩, ⟨samplingDesign, hd, hl⟩, _, ⟨hw1, hw2⟩, ⟨hprog, hcut⟩, ⟨d, hd'⟩, hloop, hpop, _, hsch, hroots, hports,
       h7', h4', h5', h6a, h6b, h7r, h8, hrl⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
-    exact ⟨samplingDesign, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
+    exact ⟨samplingDesign, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, (wiredProgram_iff rec v).1 ⟨l1, hcut⟩, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
       ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5',
       ⟨h6a, h6b⟩, fun hv => ⟨(h7r hv).1, pinnedHeld_of_R7 (h7r hv).1, (h7r hv).2⟩, h8, hrl⟩
-  · rintro ⟨samplingDesign, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
+  · rintro ⟨samplingDesign, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, hwp, l2, ⟨d, hd', l3⟩, hpop⟩,
       ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b⟩, h7r, h8, hrl⟩
-    refine ⟨hk, ⟨hf, hp⟩, ⟨samplingDesign, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
+    obtain ⟨l1, hcut⟩ := (wiredProgram_iff rec v).2 hwp
+    refine ⟨hk, ⟨hf, hp⟩, ⟨samplingDesign, hd, hl⟩, rfl, ⟨hw1, hw2⟩, ⟨hprog, hcut⟩, ⟨d, hd'⟩,
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7',
       h4', h5', h6a, h6b, fun hv => ⟨(h7r hv).1, (h7r hv).2.2⟩, h8, hrl⟩
     have : some d' = some d := hd''.symm.trans hd'
