@@ -151,6 +151,8 @@ inputs = [
     # are listed here, which the test checks
     "benchmarks/compute/README.md", "benchmarks/memory/README.md", "benchmarks/inference_only/README.md",
     "benchmarks/exfiltration/README.md",
+    # the serving profiles' file, whose client and stock server a test holds to serve_tax's, which reads the file too
+    "benchmarks/production.toml", "benchmarks/serve_tax/serve_tax.py",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
