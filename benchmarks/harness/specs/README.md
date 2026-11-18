@@ -37,8 +37,8 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 
 - `llama31-8b-fp8-1gpu-commit-served`: the Commit (`rows-sha512`) against stock FP8, eager and compiled, each against its
   own stock.
-- `llama31-8b-fp8-1gpu-commit-served-width`: the compiled Commit over compiled stock FP8, from batch 1 to 32.
-- `llama31-8b-fp8-1gpu-commit-served-width-h200`: the same on one H200.
+- `llama31-8b-fp8-1gpu-commit-served-width`: the compiled Commit over compiled stock FP8, from batch 1 to 32, on one RTX
+  PRO 6000 or H200.
 - `llama31-8b-fp8-rtx-served-arm`: `served_commit`'s served arm on Llama-3.1-8B FP8, compiled and eager, against stock
   in both.
 - `llama32-1b-bf16-served-arm`: the same on Llama-3.2-1B in BF16, on one RTX PRO 6000, H200 or H100.

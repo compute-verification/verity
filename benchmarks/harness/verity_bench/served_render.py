@@ -178,20 +178,22 @@ def measurements(table: Mapping[str, Any], metrics: Mapping[str, str]) -> list[d
     for name, at in metrics.items():
         spec, point = at.rsplit("/", 1)
         spec = current_spec(spec)
-        at = f"{spec}/{point}"
         protocol = next((row["protocol"] for row in table["rows"] if row["spec"] == spec), None)
         members = {(row["member"], row["spec"]): row.get("why") for row in table["rows"]
                    if row["protocol"] == protocol and row.get("member")}
         if spec not in {other for _, other in members}:
-            out.append(_measurement(name, at, rows, skipped))
+            out.append(_measurement(name, at, rows, skipped, key=f"{spec}/{point}"))
         out += [_measurement(name, f"{other}/{point}", rows, skipped, member, why or f"no timed {point} in its record")
                 for (member, other), why in members.items()]
     return out
 
 
 def _measurement(name: str, at: str, rows: Mapping[str, Any], skipped: Mapping[str, str], member: str | None = None,
-                 absent: str = "no row: no protocol in `PROTOCOLS` serves it") -> dict[str, Any]:
-    row = rows.get(at) or {}
+                 absent: str = "no row: no protocol in `PROTOCOLS` serves it", key: str | None = None) -> dict[str, Any]:
+    """`at`'s row (``SPEC/POINT``, the row's `key` where `at` names its spec by a former id) as a measurement."""
+
+    key = key or at
+    row = rows.get(key) or {}
     ratio = (row.get("over_served") or {}).get(PER_OUTPUT)
     m: dict[str, Any] = {"name": name, "unit": OVERHEAD_UNIT, "mark": "measured",
                          "extra": {"protocol": row.get("protocol"), "arm": row.get("arm"), "stock": SERVED,
@@ -199,7 +201,7 @@ def _measurement(name: str, at: str, rows: Mapping[str, Any], skipped: Mapping[s
     if member is not None:
         m["member"] = member
     if ratio is None:
-        why = skipped.get(at) or (absent if not row else "no passing run of it in the store" if row["run"] is None else
+        why = skipped.get(key) or (absent if not row else "no passing run of it in the store" if row["run"] is None else
                                   f"a rep lacks {PER_OUTPUT} or stock's is zero")
         return m | {"value": None, "why": f"no served ratio at {at}: {why}"}
     ci = ratio.get("ci95")

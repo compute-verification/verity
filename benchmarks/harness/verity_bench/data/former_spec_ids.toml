@@ -7,3 +7,4 @@
 "llama32-1b-bf16-rtx-served-arm" = { spec = "llama32-1b-bf16-served-arm", card = "rtx-pro-6000" }
 "llama32-1b-bf16-h200-served-arm" = { spec = "llama32-1b-bf16-served-arm", card = "h200" }
 "llama32-1b-bf16-h100-served-arm" = { spec = "llama32-1b-bf16-served-arm", card = "h100" }
+"llama31-8b-fp8-1gpu-commit-served-width-h200" = { spec = "llama31-8b-fp8-1gpu-commit-served-width", card = "h200" }

@@ -28,7 +28,7 @@ SCALE = {"stock-fp8": 2.0, "commit": 2.4, "stock-fp8@compiled": 1.0, "commit@com
          "pouw:pearl-c-h100-v1-h3": 12.4}
 R6, BIG, SMALL = ("llama31-8b-fp8-1gpu-bandwidth-served-r6", "llama31-8b-fp8-1gpu-bandwidth-served-h200",
                   "llama32-1b-fp8-1gpu-bandwidth-served-h200")
-WIDTH_H200 = "llama31-8b-fp8-1gpu-commit-served-width-h200"
+WIDTH_H200 = "llama31-8b-fp8-1gpu-commit-served-width@h200"
 POUW, POUW_H100, POUW_ARM = ("benchmarks/served-overhead-pouw", "llama32-1b-1gpu-pouw-protocol-served@h100",
                              "pouw:pearl-c-h100-v1-h3")
 #: the id the PoUW spec's H100 runs were recorded under before its spec named no card (`presets.FORMER_IDS`)

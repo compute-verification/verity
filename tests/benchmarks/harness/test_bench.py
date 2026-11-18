@@ -187,13 +187,14 @@ def test_the_served_commits_width_sweep_on_a_dc_vms_one_gpu_is_the_rtxs():
     another GPU, and a run of it runs the point it names."""
 
     root = Path(__file__).resolve().parents[3]
-    name = "llama31-8b-fp8-1gpu-commit-served-width-h200"
-    spec, rtx = resolve_spec(name), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width")
+    name = "llama31-8b-fp8-1gpu-commit-served-width@h200"
+    spec, rtx = resolve_spec(name), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width@rtx-pro-6000")
     assert (spec.arms, spec.arm_modules, spec.arm_settings, spec.sweep, spec.reps, spec.eager) == (
         rtx.arms, rtx.arm_modules, rtx.arm_settings, rtx.sweep, rtx.reps, rtx.eager)
     assert (spec.preset.gpu_id, spec.preset.model, spec.preset.revision, spec.preset.precision) == (
         "h200", rtx.preset.model, rtx.preset.revision, rtx.preset.precision)
     assert dict(spec.preset.engine_settings) == dict(rtx.preset.engine_settings)
+    assert (rtx.admission.max_minutes, spec.admission.max_minutes) == (40, 120)
     assert [point.id for point in expand_sweep(spec.sweep.id)] == ["b1-p512-mixed", "b8-p512-mixed", "b32-p512-mixed"]
     plan = jobs.make_plan(name, root=root, commit="a" * 40, lookup=lambda identity, commit: None)
     assert [jobs.to_run(plan, point.id).point.id for point in expand_sweep(spec.sweep.id)] == [

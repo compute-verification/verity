@@ -87,7 +87,7 @@ def test_run_refuses_a_spec_with_more_than_one_point_unless_one_is_named(tmp_pat
     dispatch = jobs.dispatch
     monkeypatch.setattr(jobs, "dispatch", lambda *a, **k: dispatch(
         *a, **k, execute=lambda command, cwd: commands.append(command) or 0))
-    name = "llama31-8b-fp8-1gpu-commit-served-width-h200"
+    name = "llama31-8b-fp8-1gpu-commit-served-width@h200"
     with pytest.raises(SystemExit):
         main(["run", name])
     assert ("has 3 points (b1-p512-mixed, b8-p512-mixed, b32-p512-mixed) and a run runs one: name it with --point"
