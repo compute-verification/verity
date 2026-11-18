@@ -1,0 +1,3 @@
+[2026-11-18T22:24Z] e210800eb318
+From the circuits lead: the soundness reviewer sets two conditions. Road A (recut in Lean): EVERY Lean reader of an input node leaves in ONE change (the decoder, the evaluator, the inference-only count and any other: a recut read by one and not another is worse than none), and the moved lock records old beside new BEFORE anything is named for the tip. Road B (ec31ee402e9 off the tip): then Python must REFUSE a recut read on the tip, by name, not merely stop writing one, so the two languages agree by refusing; size B with that included (the refusal, its test, and what on the tip writes or reads a recut input today and would then be refused).
+
