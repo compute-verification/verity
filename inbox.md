@@ -1,0 +1,3 @@
+[2026-11-18T13:25Z] 6bbf0bec2461
+ROWS: soundness re-read Unwired.lean at 7ca2c2e6280: three points met; ONE MOVED: Labels is FREE: if L.row labels no gate, Carries holds of every unit again and PositionsCarry is just the sampled proofs' statement. The statement needs: every input gate of a wired reader row HAS its label, and L.leaf names at most one gate. Add those two conditions on Labels to the statement (as hypotheses named in the docstring, or a predicate Labels.Total/Injective the statement requires), on your positions branch; say what would DEFINE Labels from the committed file. The thread is Linear TOP-442.
+
