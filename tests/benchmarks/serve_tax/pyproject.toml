@@ -100,6 +100,25 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     "benchmarks/network_e2e/traces/traffic.py",
     # the record of the value settings in force that an arm's meta.json and a replay's replay.json hold
     "adapters/vllm/verity_vllm/settings.py",
+    # the names a run's private-paths.json states and no public write may have: the adapter's private list, its reader
+    # and the modules the reader imports
+    "adapters/vllm/verity_vllm/pipeline/private_names.json",
+    "adapters/vllm/verity_vllm/pipeline/research_outputs.py",
+    "adapters/vllm/verity_vllm/pipeline/cli.py",
+    "adapters/vllm/verity_vllm/check/__init__.py",
+    "adapters/vllm/verity_vllm/check/match/__init__.py",
+    "adapters/vllm/verity_vllm/check/match/rank_match.py",
+    "adapters/vllm/verity_vllm/config.py",
+    "adapters/vllm/verity_vllm/engine/collectives/__init__.py",
+    "adapters/vllm/verity_vllm/engine/collectives/collective_sites.py",
+    "adapters/vllm/verity_vllm/engine/collectives/fused_norm.py",
+    "adapters/vllm/verity_vllm/engine/profiles/layer_classes.py",
+    "adapters/vllm/verity_vllm/log.py",
+    "adapters/vllm/verity_vllm/program/__init__.py",
+    "adapters/vllm/verity_vllm/program/compact.py",
+    "adapters/vllm/verity_vllm/query/__init__.py",
+    "adapters/vllm/verity_vllm/query/manifest/__init__.py",
+    "adapters/vllm/verity_vllm/query/manifest/format.py",
     # every write the serve tax, prod_repro and the replay ladder make is under the private directory or in the
     # registry of writers (tests/test_private_writes.py), which reads their every file
     "benchmarks/prod_repro",

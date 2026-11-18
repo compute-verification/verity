@@ -253,18 +253,46 @@ OWN_ROWS = ("the root hands a unit a row that is not input gates of its own. Eve
             "leaf handed once.")
 
 
-def own_rows(program, form_only: bool = False) -> None:
-    """The Lean's `ownRows` (`own-rows`). The rule, restated: every part of an argument of a root node that is no input
-    node, but a part reading another such node's outputs (a grid, in every lane; an edge), is affine runs of leaves of the root's input nodes
-    (each a primitive or a batch), a batch maps every argument over its members, and no two runs, of one argument or of
-    two, share a leaf. Then, unless `form_only`, what the rule stands for, leaf by leaf: every leaf of every parameter
-    of every unit that no edge fills, resolved through the root (`layout.resolve_gate`), is an input gate, and no gate
-    is two of them."""
-    from verity.circuits.cut import member_refs
-    from verity.circuits.layout import Scope, resolve_gate
-    from verity.circuits.parts import n_members
+RECUT_UNREAD = ("the Program reads an input node in leaves of part of its leaf width (`refs.recut`), and the record "
+                "check reads whole input leaves, so it would misread them. Fix the Program, not the record: register "
+                "each input at the leaf width its reader reads.")
+
+
+#: `Record.SHARED_UNHELD`
+SHARED_UNHELD = ("the root hands one run of input leaves to more than one row, and the record does not hold every row "
+                 "that reads it as a registered read of one parameter at those leaves. Declare each such row a "
+                 "registered read of the parameter whose leaves the run is, or give each row input leaves of its own.")
+#: `Record.SHARED_UNDECIDED`
+SHARED_UNDECIDED = ("not decided within the bound: the root hands one run of input leaves to more than one row, and "
+                    "the check of whether the record holds every row that reads it as a registered read of one "
+                    "parameter at those leaves ran past its bound (4096 stretches of one declaration's source) before "
+                    "it could tell; it found no row unheld. Declare each such row's read with fewer stretches, a digit "
+                    "for each of the run's stretches, or give each row input leaves of its own.")
+#: `Record.FUEL`
+FUEL = 4096
+
+
+def input_at(nodes, i) -> bool:
+    """The Lean's `Record.inputAt`: node `i` of the root is an input node, a primitive or a batch of one."""
+    return 0 <= i < len(nodes) and is_input(nodes[i].fn) and nodes[i].form in ("primitive", "batch")
+
+
+def part_run(nodes, p):
+    """The Lean's `Record.partRun`: the run of input leaves `(node, first leaf, leaves)` part `p` reads and whether it
+    reads it more than once, an affine part's or a strided part's whose reference k is the run's leaf k mod the run;
+    None for any other part."""
     from verity.circuits.refs import Strided
-    nodes = program.root.body.nodes
+    if isinstance(p, Affine) and p.space == "n" and input_at(nodes, p.idx):
+        return (p.idx, p.base, p.count), False
+    if (isinstance(p, Strided) and p.space == "n" and input_at(nodes, p.idx) and p.outer_stride == 0
+            and p.inner_stride == 1 and p.base >= 0 and p.inner > 0 and p.count % p.inner == 0):
+        return (p.idx, p.base, min(p.inner, p.count)), p.inner < p.count
+    return None
+
+
+def edge_of(nodes):
+    """Whether a part of a root node's argument reads another root node's outputs: a grid, in every lane; an edge."""
+    from verity.circuits.refs import Strided
 
     def reads(s, i) -> bool:
         return s == "n" and 0 <= i < len(nodes) and not is_input(nodes[i].fn)
@@ -275,20 +303,210 @@ def own_rows(program, form_only: bool = False) -> None:
         if isinstance(p, Explicit):
             return any(reads(r[0], r[1]) for r in p.items)
         return isinstance(p, (Affine, Strided)) and reads(p.space, p.idx)
+    return edge
 
-    def run(p) -> bool:
-        return (isinstance(p, Affine) and p.space == "n" and 0 <= p.idx < len(nodes) and is_input(nodes[p.idx].fn)
-                and nodes[p.idx].form in ("primitive", "batch"))
+
+def row_runs(program) -> tuple[list, list] | None:
+    """The Lean's `Record.rowRuns`: the runs of input leaves the root's argument parts that are no edge read, as
+    `(own, shared)`, `shared` those a strided part reads more than once over and those read by more than one part, in
+    order, once for each part after the first; None where a part is no run of an input node (`part_run`), a batch
+    maps an argument over no axis, or two runs share a leaf and are not the same run."""
+    nodes = program.root.body.nodes
+    units, edge = [node for node in nodes if not is_input(node.fn)], edge_of(nodes)
+    parts = [p for node in units for a in node.args for p in _parts(a.refs) if not edge(p)]
+    runs = [part_run(nodes, p) for p in parts]
+    if any(node.form == "batch" and None in node.axes for node in units) or None in runs:
+        return None
+    runs = sorted((r for r in runs if r[0][2] > 0), key=lambda r: (r[0][0], r[0][1]))
+    pairs = list(zip(runs, runs[1:]))
+    if any(a[0] != b[0] and a[0][0] == b[0][0] and a[0][1] + a[0][2] > b[0][1] for a, b in pairs):
+        return None
+    same = {r[0] for r, q in pairs if r[0] == q[0]}
+    own = [r[0] for r in runs if not r[1] and r[0] not in same]
+    return own, [r[0] for r in runs if r[1]] + [a[0] for a, b in pairs if a[0] == b[0]]
+
+
+def shared_of(program, shared: list) -> list[tuple[int, int, int, int, int, int]] | None:
+    """The Lean's `Record.sharedOf`: the root's arguments that read a run of `shared`, each `(node, argument, input
+    node, base, inner, count)`: one part of `count` leaves over the run of `inner` leaves from `base`; None where a part
+    that reads one is not its argument's one part, or a batch hands its members other than a stretch of it each."""
+    nodes = program.root.body.nodes
+    out = []
+    for k, node in enumerate(nodes):
+        if is_input(node.fn):
+            continue
+        for j, a in enumerate(node.args):
+            ps = _parts(a.refs)
+            if len(ps) != 1:
+                if any((part_run(nodes, p) or (None,))[0] in shared for p in ps):
+                    return None
+                continue
+            r = (part_run(nodes, ps[0]) or (None,))[0]
+            if r is None or r not in shared:
+                continue
+            if node.form == "batch" and (node.axes[j] != 0 or a.type.elem.leaves != ps[0].count // node.n):
+                return None
+            out.append((k, j, *r, ps[0].count))
+    return out
+
+
+def _pairs(w: dict) -> list[tuple[int, int]]:
+    """`Spot.Wires.Wire.pairs`: a wire's digits, the fastest first."""
+    return list(zip(w["radix"], w["step"]))[::-1]
+
+
+def _accum(ps, i: int) -> int:
+    """`Spot.Wires.accum`."""
+    out = 0
+    for r, st in ps:
+        out += (i % r) * st
+        i //= r
+    return out
+
+
+def _merged(ps) -> list:
+    """`Record.merged`: each digit whose step continues the one below it folded into that one."""
+    out = list(ps)
+    k = 0
+    while k + 1 < len(out):
+        (r, st), (r2, st2) = out[k], out[k + 1]
+        if st2 == r * st:
+            out[k:k + 2] = [(r * r2, st)]
+        else:
+            k += 1
+    return out
+
+
+def _stretch(ps, i: int):
+    """`Record.stretch`."""
+    return (0, None) if not ps else (ps[0][1], ps[0][0] - i % ps[0][0])
+
+
+def _agree(fuel: int, f, fb: int, fi: int, g, gb: int, gi: int, n: int) -> bool | None:
+    """`Record.agree`: None where `fuel` stretches run out first."""
+    while True:
+        if n == 0:
+            return True
+        if fuel == 0:
+            return None
+        fuel -= 1
+        if fb + _accum(f, fi) != gb + _accum(g, gi):
+            return False
+        (sf, lf), (sg, lg) = _stretch(f, fi), _stretch(g, gi)
+        m = min(n, n if lf is None else lf, n if lg is None else lg)
+        if not (0 < m and (m == 1 or sf == sg)):
+            return False
+        fi, gi, n = fi + m, gi + m, n - m
+
+
+def _restrict(ps, b: int, k: int, c: int):
+    """`Record.restrict`."""
+    ps = list(ps)
+    while True:
+        if k == 1:
+            return ps, b
+        if not ps:
+            return [], b
+        (r, st), rest = ps[0], ps[1:]
+        if r % k == 0:
+            return [(r // k, k * st)] + rest, b + c * st
+        if k % r == 0:
+            ps, b, k, c = rest, b + (c % r) * st, k // r, c // r
+            continue
+        return None
+
+
+def _held_from(x, is_theta, tid: str, port: str, c: int, u0: int, e: int, p: str, g, gb: int) -> bool | None:
+    """`Record.heldFrom`: from the first member to the last, the read that fills each unit's row `c` is of `p`, θ,
+    from the source `gb + accum g (v - u0)`, in closed form (`_agree`); None where a bound runs out first."""
+    fill, u = x.fill.get((tid, port), {}), u0
+    while u < e:
+        if fill.get((u, c)) != ("read", p) or not is_theta(p):
+            return False
+        r = next(r for r in x.reads if r["reader"] == tid and r["port"] == port and r["at"] <= u
+                 < r["at"] + math.prod(r["radix"]) // r["C"] and r["c0"] <= c < r["c0"] + r["C"])
+        e2 = min(e, r["at"] + math.prod(r["radix"]) // r["C"])
+        rs = _restrict(_pairs(r), r["base"], r["C"], c - r["c0"])
+        if rs is None:
+            return False
+        held = _agree(FUEL, _merged(rs[0]), rs[1], u - r["at"], _merged(g), gb, u - u0, e2 - u)
+        if held is not True:
+            return held
+        u = e2
+    return True
+
+
+def shared_held(program, templates: list, cuts: dict, x, is_theta) -> None:
+    """`Record.sharedHeld` (`shared-unheld`): each row `c` of each shared run's members `v` (units `u0 + v` of its
+    template) is filled by a registered read of one parameter `p`, θ, from the source
+    `o + b + (v mod P)·words + c·(words / k)`, `b` the run's base and `P` its stretches in `p`'s 16-bit leaves, and
+    every row of every shared run of one input node has one `p` and one offset `o`. A row not so held is refused with
+    `SHARED_UNHELD`; else a row whose check runs past its bound, with `SHARED_UNDECIDED`."""
+    nodes = program.root.body.nodes
+    by = {t.tid: t for t in templates}
+    src = {(r["reader"], r["port"], u, c): s for r in x.reads for u, c, s in entries(r)}
+    runs = row_runs(program)
+    if not runs[1]:
+        return
+    readers = shared_of(program, runs[1])
+    if readers is None:
+        raise refused("shared-unheld", SHARED_UNHELD)
+    marks, undecided = [], False
+    for k, j, i, base, inner, count in readers:
+        tid = codec.descriptor_id(nodes[k].fn)
+        u0 = sum(nd.n if nd.form == "batch" else 1 for nd in nodes[:k] if codec.descriptor_id(nd.fn) == tid)
+        n = nodes[k].n if nodes[k].form == "batch" else 1
+        t = by.get(tid)
+        if t is None or j >= len(t.rows):
+            raise refused("shared-unheld", SHARED_UNHELD)
+        port, words, _ = t.rows[j]
+        kc = int(cuts.get(tid, {}).get(port, 1))
+        wn = (input_id(codec.descriptor_id(nodes[i].fn)) or (None, 0))[1]
+        L = count // n if n else 0
+        if not (n > 0 and L > 0 and count == L * n and L * wn == 16 * words and inner > 0 and inner % L == 0
+                and base >= 0 and base * wn % 16 == 0 and words % kc == 0):
+            raise refused("shared-unheld", SHARED_UNHELD)
+        b, per, rw = base * wn // 16, inner // L, words // kc
+        g = [] if per <= 1 else [(per, words)]
+        for c in range(kc):
+            first = x.fill.get((tid, port), {}).get((u0, c))
+            if first is None or first[0] != "read":
+                raise refused("shared-unheld", SHARED_UNHELD)
+            p = first[1]
+            o = src[(tid, port, u0, c)] - b - c * rw
+            held = _held_from(x, is_theta, tid, port, c, u0, u0 + n, p, g, o + b + c * rw)
+            if held is False:
+                raise refused("shared-unheld", SHARED_UNHELD)
+            undecided = undecided or held is None
+            if held:
+                marks.append((i, p, o))
+    if undecided:
+        raise refused("shared-unheld", SHARED_UNDECIDED)
+    if any(m[0] == q[0] and m != q for m in marks for q in marks):
+        raise refused("shared-unheld", SHARED_UNHELD)
+
+
+def own_rows(program, form_only: bool = False) -> None:
+    """The Lean's `ownRows` (`own-rows`). The rule, restated: every part of an argument of a root node that is no input
+    node, but a part reading another such node's outputs (a grid, in every lane; an edge), is a run of leaves of one
+    of the root's input nodes (each a primitive or a batch; `row_runs`), a batch maps every argument over its members,
+    and two runs, of one argument or of two, are the same run or share no leaf. Then, unless `form_only`, what the
+    rule stands for, leaf by leaf: every leaf of every parameter of every unit that no edge fills, resolved through the
+    root (`layout.resolve_gate`), is an input gate, and no gate is two of them, unless it is a leaf of a shared run
+    (`row_runs`), which no row has as a leaf of its own."""
+    from verity.circuits.cut import member_refs
+    from verity.circuits.layout import Scope, resolve_gate
+    from verity.circuits.parts import n_members
+    nodes = program.root.body.nodes
     units = [(k, node) for k, node in enumerate(nodes) if not is_input(node.fn)]
-    parts = [p for _, node in units for a in node.args for p in _parts(a.refs) if not edge(p)]
-    runs = sorted((p.idx, p.base, p.count) for p in parts if run(p) and p.count > 0)
-    if any(node.form == "batch" and None in node.axes for _, node in units) or not all(map(run, parts)) \
-            or any(a[0] == b[0] and a[1] + a[2] > b[1] for a, b in zip(runs, runs[1:])):
+    runs = row_runs(program)
+    if runs is None:
         raise refused("own-rows", OWN_ROWS)
     if form_only:
         return
     root = Scope(program.root, 0, None, 0, 0)
     seen: set[int] = set()
+    held: set[int] = set()
     for k, node in units:
         for m in range(n_members(node)):
             unit = root.child(k, m)
@@ -299,9 +517,16 @@ def own_rows(program, form_only: bool = False) -> None:
                     if r[0] == "n" and not is_input(nodes[r[1]].fn):
                         continue
                     gate, prim = resolve_gate(unit, ("p", i, leaf))
-                    if not is_input(prim) or gate in seen:
+                    if not is_input(prim):
                         raise refused("own-rows", OWN_ROWS)
-                    seen.add(gate)
+                    if r[0] == "n" and any(r[1] == x and b <= r[2] < b + c for x, b, c in runs[1]):
+                        held.add(gate)
+                    elif gate in seen:
+                        raise refused("own-rows", OWN_ROWS)
+                    else:
+                        seen.add(gate)
+    if seen & held:
+        raise refused("own-rows", OWN_ROWS)
 
 
 def lands_whole(row, out) -> bool:
@@ -714,10 +939,13 @@ def held(x: Inputs, is_theta, is_pinned, o: dict) -> bool:
 
 
 def front(inst, tr, form_only: bool = False) -> tuple:
-    """`Record.front`, the stages as far as `own-rows`: the instance's fields, the Program, its descriptor,
-    the record, the trusted input and the templates. Refused (`Malformed`) with the first stage's code."""
+    """`Record.front`, the stages as far as `own-rows`: the instance's fields, the Program (`recut-unread` where its
+    root reads an input node at another width), its descriptor, the record, the trusted input and the templates.
+    Refused (`Malformed`) with the first stage's code."""
     i = parse(inst)
     program = reference.desc_program(i["program"])
+    if program.root.body.recut:
+        raise refused("recut-unread", RECUT_UNREAD)
     try:
         rec = json.loads(i["record"])
     except ValueError as e:
@@ -757,6 +985,7 @@ def expand(inst, tr, form_only: bool = False) -> dict:
     wires, cuts = wires_of(templates, rec, desc)
     leaf_widths(program, templates, wires, cuts, form_only)
     x = Inputs(templates, cuts, wires, rec)
+    shared_held(program, templates, cuts, x, lambda p: p in x.params and theta(T, x.params, p, width_of(rec, p)))
     if not formats_held(T, rec, x.params):
         raise Malformed("formats")
     slots, slot = slots_of(templates, rec)

@@ -20,6 +20,10 @@ PYTHON = ROOT / "verity/commitments/domains.py"
 #: `example : … Domains.NAME … := rfl` in its file (`TIE`).
 READERS: tuple[str, ...] = ("verity/protocols/resource_accounting/compute/pouw/verifier",)
 SKIPPED_PARTS = {"tests", "scripts"}
+#: Files that run on the standard library alone, so keep an entry's bytes under its own name rather than import the table.
+STDLIB_COPIES: dict[str, tuple[str, ...]] = {
+    "verity/protocols/proofs/flock/prover/agreement/agree.py": ("FLOCK_NETLIST",),
+}
 ABBREV = re.compile(r'abbrev ([A-Z][A-Z0-9_]*) : String :=\s*"([^"\\]*)"')
 TIE = re.compile(r"^example : (.*) := rfl$", re.M)
 #: the module header every Lean file has (`tools/verity/lean/modules.py`)
@@ -145,6 +149,16 @@ def test_readers_carry_no_literal_of_the_table():
                        "definition a lock reads keeps its literal, tied in its file by `example : … Domains.NAME … := "
                        "rfl`):\n"
                        + "\n".join(found))
+
+
+def test_a_standard_library_files_copy_is_its_entry():
+    unequal = []
+    for rel, names in STDLIB_COPIES.items():
+        assigned = {t.id: n.value.value for n in ast.parse((ROOT / rel).read_text()).body if isinstance(n, ast.Assign)
+                    and isinstance(n.value, ast.Constant) for t in n.targets if isinstance(t, ast.Name)}
+        unequal += [f"{rel}: {n} = {assigned.get(n)!r}, the table's is {domains.TABLE.get(n)!r}" for n in names
+                    if n not in domains.TABLE or assigned.get(n) != domains.TABLE[n]]
+    assert not unequal, "a standard-library file's copy of a table entry differs from the table; copy its bytes:\n" + "\n".join(unequal)
 
 
 def test_every_entry_is_read_or_still_written():

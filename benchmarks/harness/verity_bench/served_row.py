@@ -18,10 +18,10 @@ run; it reads from the tree who decided each of those and what proves it, and pr
   block where it is the stand-in; its inputs where the interior registers them, which is after the first stage's
   sample (`AFTER_SAMPLE`); every verdict a verifier that is not Lean decided (`TABLE`'s ``decided_by``);
   every Lean verdict whose lock entry (``proved_by``, in ``security/lean-audit.json``) is missing or lists open
-  premises; and the final accept where it was not given, or is not complete. The resampling holes and the cited
+  premises; and the final accept where it was not given, or is not complete. SPOT's holes and the cited
   theorem are not listed here: `spot_status` prints them, in the same command.
 * **The mark**: ``proved`` only where that list is empty, the final accept is given and complete, the cited
-  theorem's lock entry lists no open premise and each resampling hole is closed at the commit of every one of the
+  theorem's lock entry lists no open premise and each of SPOT's holes is closed at the commit of every one of the
   served run's four runs (`spot_status.served`, the reading the next block prints, so the two cannot disagree);
   `exfiltration.RUN_NOT_PROVED` otherwise. A kind of verdict is ``proved`` only where a Lean verifier decided it and
   its lock entry lists no open premise.
@@ -293,7 +293,7 @@ def prover(record: Mapping, notes: Sequence[Mapping] = ()) -> dict:
 def account(record: Mapping[str, Any], root: Path | None = None, *, kinds: Mapping | None = None,
             holes: Mapping[str, str] | None = None) -> dict | None:
     """The section's document from a served run's ``record`` (`served_record.read`), read against the tree at
-    ``root``: its lock, the table (``kinds``, default `TABLE`) and each resampling hole's status over the served
+    ``root``: its lock, the table (``kinds``, default `TABLE`) and each of SPOT's holes' status over the served
     run's own commits (``holes``, default `spot_status.served`'s, closed only where it is closed at all four runs).
     None where the record holds no ``audit``."""
 

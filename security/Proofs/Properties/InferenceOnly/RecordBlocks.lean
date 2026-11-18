@@ -95,7 +95,7 @@ theorem mergeStep_cons (last : Grid) (before : List Grid) (g : Grid) :
       if last.q == g.q then { last with units := last.units + g.units } :: before else g :: last :: before :=
   rfl
 
-theorem merged_eq (gs : List Grid) : merged gs = (gs.foldl mergeStep []).reverse := rfl
+theorem merged_eq (gs : List Grid) : Spot.RecordText.merged gs = (gs.foldl mergeStep []).reverse := rfl
 
 /-- The fold of `merged` keeps a tiling, from where it started to where the grids it has read end, and every row
 length it holds is one it was given. -/
@@ -149,7 +149,7 @@ theorem mergeStep_fold (Q : Nat → Prop) (cur : Nat) : ∀ (gs : List Grid) (ac
 
 /-- **Merging neighbours keeps a tiling**, and every row length of the merged grids is one of the grids'. -/
 theorem merged_tiles (Q : Nat → Prop) (gs : List Grid) (cur units : Nat) (h : tiles (rangesOf gs) cur units = true)
-    (hq : ∀ g ∈ gs, Q g.q) : tiles (rangesOf (merged gs)) cur units = true ∧ ∀ g ∈ merged gs, Q g.q := by
+    (hq : ∀ g ∈ gs, Q g.q) : tiles (rangesOf (Spot.RecordText.merged gs)) cur units = true ∧ ∀ g ∈ Spot.RecordText.merged gs, Q g.q := by
   have hc := (tiles_ordered gs cur units h).1
   obtain ⟨h1, h2⟩ := mergeStep_fold Q cur gs [] cur units (by simp [rangesOf, tiles]) (fun _ hg => by cases hg) h hq
   exact ⟨by rw [merged_eq]; exact h1, fun g hg => h2 g (by rw [merged_eq] at hg; exact List.mem_reverse.1 hg)⟩

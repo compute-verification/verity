@@ -8,8 +8,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from verity.commitments import docket_digest as DD
 from verity.commitments.periods import interface as IF
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.protocols.resource_accounting.network.verifier import blocks as NB
 
 
@@ -38,7 +38,7 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any],
         raise ValueError(f"the execution phase registers {both} afresh, and the earlier registration registers them too")
     if not values:
         raise ValueError("the circuit takes no values, so there is nothing to tie to W")
-    pins, outputs, d = {}, {}, REG.digest(w)
+    pins, outputs, d = {}, {}, DD.digest(w)
     for v in values:
         if len(got := [e for e in w.get("registered") or () if isinstance(e, Mapping) and e.get("value") == v]) != 1:
             raise ValueError(f"W registers the circuit's value {v!r} {len(got)} times, not once")

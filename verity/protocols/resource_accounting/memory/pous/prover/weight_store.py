@@ -1,7 +1,7 @@
 """PoUS's prover over a served model's weights: ``W`` (the weight tensors a serving system hands in) in the store's
 frozen layout, the commitment to it, ``C* = P2-Enc(W, salt)`` encoded and held on the weights' device, the decode of any
-tensor from ``C*`` at use, and each period's audit of what is held. A serving system's adapter finds the tensors and
-attaches the decode to its layers (vLLM's: `verity_vllm.protocols.pous`).
+tensor from ``C*`` at use, and each period's audit of what is held. PoUS's scheme attaches it to a served run
+(`served`): the run registers its weights and computes each block with the weight decoded from ``C*``.
 
 * **W** is each tensor from a block boundary over ⌈size / payload⌉ blocks, its last block zero past its end, and ``W``
   zero to whole segments of the point's ``2^16`` blocks (`layout_of`, `TensorLayout.of_ranges`; the store's
@@ -182,8 +182,8 @@ class Store:
 
     def held(self) -> Any:
         """`period_prover.EncodedStore` of what this setup left: the setup case is built from ``C*`` as held now."""
-        from verity.protocols.resource_accounting.memory.pous.verifier import period
         from verity.protocols.resource_accounting.memory.pous.prover import period_prover
+        from verity.protocols.resource_accounting.memory.pous.verifier import period
         return period_prover.EncodedStore(self.point, self.published(), Blocks(self), self.digests,
                                           period.setup_case(self.params, self.commitment, self.salt, self.segments()))
 

@@ -22,6 +22,8 @@ from typing import Any
 import numpy as np
 import pytest
 
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V
 from verity.circuits import partition_object as PO
@@ -288,7 +290,7 @@ def test_a_class_without_verdicts_writes_and_registers_its_two_values_alone(tmp_
     c = _fixed(BR.Layout(check, 0, 1, 4, 4, 5, "a" * 128, inline=inline))
     raw = (BR.write(c, tmp_path / "w0" / "p4-o4") / BR.COMMIT).read_bytes()
     rec = BR.record(json.loads(raw), check, DESIGN)
-    assert (hashlib.sha512(raw).hexdigest()[:32], R.digest(rec)[:32]) == (commit, registration), (
+    assert (hashlib.sha512(raw).hexdigest()[:32], DD.digest(rec)[:32]) == (commit, registration), (
         "a class without verdicts writes another commit.json or registers another record than the pinned ones: pin again "
         "only where changing every such class's record is the change's purpose")
     assert b"verdicts" not in raw and "verdicts" not in rec["window"] and len(rec["roots"]) == 2
@@ -681,7 +683,7 @@ def test_a_class_definitions_ends_are_its_boundary_values_and_round_two_links_ea
     row = _u32s(WD.ingress_row(_ended("x", (), None, 7, (1, 2, 3, 4)), 4))
     assert evaluate(D, row[:WD.HEAD_U32], row[WD.HEAD_U32:]) == (7, 12)
 
-    program = P.population_program(D, 3)
+    program = PN.population_program(D, 3)
     templates = {BR.REQUEST: (descriptor_id(READS_REQUEST), "request"),
                  BR.PROMPT: (descriptor_id(bind(READS_PROMPT, P=4)), "prompt"),
                  BR.EGRESS: (descriptor_id(bind(WRITES_EGRESS, O=2)), "o0")}
@@ -773,7 +775,7 @@ def test_the_stop_blocks_register_as_a_population_of_their_own_over_the_class_bo
     mine = BR.layout_of(pub, PAIR, RULE)
     rec = BR.record(pub, PAIR, DESIGN, stop=RULE)
     reg, srec = BS.stop_registration(pub, PAIR, RULE, rec), BS.stop_record(pub, PAIR, RULE, STOP_DESIGN, rec)
-    assert P.units(mine.stop_program, mine.stop_query) == 3 and srec["previous"] == R.digest(rec)
+    assert P.units(mine.stop_program, mine.stop_query) == 3 and srec["previous"] == DD.digest(rec)
     assert srec["roots"] == [{"port": BR.STOP, "root": pub["values"][BR.STOP]["root"], **mine.stop_ports()[BR.STOP]}]
     part = mine.stop_partition
     assert mine.stop_ports()[BR.STOP] == {"leaves": 3, "domain": R.window_domain(part["program"], P.digest(part), BR.STOP,
@@ -782,7 +784,7 @@ def test_the_stop_blocks_register_as_a_population_of_their_own_over_the_class_bo
     assert ({e["value"]: (e["root"], e["domain"], e["leaves"], e["words"], e["word_bits"]) for e in srec["registered"]}
             == {v: (by_port[p]["root"], by_port[p]["domain"], 3, w, 32)
                 for (v, p), w in zip(BS.STOP_READS.items(), (WD.HEAD_U32, 4))})
-    assert reg.outputs == {v: {"record": R.digest(rec), "port": p} for v, p in BS.STOP_READS.items()}
+    assert reg.outputs == {v: {"record": DD.digest(rec), "port": p} for v, p in BS.STOP_READS.items()}
     assert srec["window"] == {**rec["window"], "population": "stop"} and srec["registered"] == reg.registered
 
     def codes(record: dict, log: list[dict], verifier=R) -> tuple[str, ...]:
@@ -961,8 +963,8 @@ def test_a_class_under_a_stop_rule_commits_its_blocks_return_after_its_three_par
         return
     reg, srec = BS.stop_registration(pub, SAME, RULE, rec), BS.stop_record(pub, SAME, RULE, STOP_DESIGN, rec)
     assert srec["roots"] == [{"port": BR.STOP, "root": pub["values"][BR.STOP]["root"], **mine.stop_ports()[BR.STOP]}]
-    assert srec["previous"] == R.digest(rec)
-    assert reg.outputs == {v: {"record": R.digest(rec), "port": p} for v, p in BS.STOP_READS.items()}
+    assert srec["previous"] == DD.digest(rec)
+    assert reg.outputs == {v: {"record": DD.digest(rec), "port": p} for v, p in BS.STOP_READS.items()}
     for verifier in (R, V):
         assert verifier.check(srec, mine.stop_program, mine.stop_query, STOP_DESIGN, CS.SCHEME, mine.stop_ports(), log=[rec],
                               registered=reg.values, outputs=reg.outputs, schemas=reg.schemas).codes == ()
