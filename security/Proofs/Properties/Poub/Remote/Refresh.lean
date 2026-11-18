@@ -894,4 +894,134 @@ theorem coinBySlot : CoinBySlot := by
   obtain ⟨σ, rfl⟩ := Option.isSome_iff_exists.1 (hs hr)
   exact ⟨root, count, origin, σ, by simpa using hl, hk, h4, h5, h6, h7⟩
 
+/-! ## `OriginsOnRota` -/
+
+/-- `Params.slotAt`'s loop over the windows `ws`, its first slot `start`. -/
+def slotScan (p : Params) (N k : Nat) : List Nat → Nat → Option (Nat × Slot)
+  | [], _ => none
+  | w :: ws, start =>
+    if k < start + p.windowSize N w then some (w, p.slotIn N w (k - start))
+    else slotScan p N k ws (start + p.windowSize N w)
+
+/-- Where `Params.slotAt`'s loop stops: the first slot of the window holding `k`, or past the last. -/
+def scanStop (p : Params) (N k : Nat) : List Nat → Nat → Nat
+  | [], start => start
+  | w :: ws, start => if k < start + p.windowSize N w then start else scanStop p N k ws (start + p.windowSize N w)
+
+theorem forIn_scan (p : Params) (N k : Nat) : ∀ (l : List Nat) (start : Nat),
+    forIn (m := Id) l ((none : Option (Option (Nat × Slot))), start) (fun w (r : Option (Option (Nat × Slot)) × Nat) =>
+      if k < r.2 + p.windowSize N w then pure (ForInStep.done (some (some (w, p.slotIn N w (k - r.2))), r.2))
+      else pure (ForInStep.yield (none, r.2 + p.windowSize N w))) =
+      ((slotScan p N k l start).map some, scanStop p N k l start)
+  | [], start => rfl
+  | w :: ws, start => by
+    by_cases h : k < start + p.windowSize N w
+    · simp [List.forIn_cons, slotScan, scanStop, h]; exact rfl
+    · simp only [List.forIn_cons, slotScan, scanStop, h, ite_false]
+      exact forIn_scan p N k ws _
+
+theorem slotAt_eq (p : Params) (N k : Nat) : p.slotAt N k = slotScan p N k (List.range' 0 p.windows) 0 := by
+  unfold Params.slotAt
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel,
+    Nat.div_one, forIn_scan]
+  cases slotScan p N k (List.range' 0 p.windows) 0 <;> rfl
+
+theorem windowStart_succ (p : Params) (N w : Nat) :
+    p.windowStart N (w + 1) = p.windowStart N w + p.windowSize N w := by
+  simp [Params.windowStart, List.range_succ, List.map_append, List.sum_append]
+
+theorem windowStart_mono (p : Params) (N : Nat) {a b : Nat} (h : a ≤ b) : p.windowStart N a ≤ p.windowStart N b := by
+  induction h with
+  | refl => exact Nat.le_refl _
+  | step _ ih => rw [windowStart_succ]; omega
+
+theorem slotScan_range (p : Params) (N k w : Nat) (x : Slot) : ∀ n a, p.windowStart N a ≤ k →
+    (slotScan p N k (List.range' a n) (p.windowStart N a) = some (w, x) ↔
+      a ≤ w ∧ w < a + n ∧ p.windowStart N w ≤ k ∧ k < p.windowStart N (w + 1) ∧
+        x = p.slotIn N w (k - p.windowStart N w)) := by
+  intro n
+  induction n with
+  | zero => intro a _; simp [slotScan]; omega
+  | succ n ih =>
+    intro a ha
+    rw [List.range'_succ]
+    simp only [slotScan]
+    by_cases hk : k < p.windowStart N a + p.windowSize N a
+    · rw [if_pos hk]
+      constructor
+      · intro h
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        refine ⟨Nat.le_refl _, by omega, ha, by rw [windowStart_succ]; exact hk, rfl⟩
+      · rintro ⟨h1, -, h3, -, rfl⟩
+        have : w = a := by
+          rcases Nat.eq_or_lt_of_le h1 with h | h
+          · exact h.symm
+          · have := windowStart_mono p N (Nat.succ_le_of_lt h)
+            rw [windowStart_succ] at this
+            omega
+        subst this
+        rfl
+    · rw [if_neg hk, ← windowStart_succ]
+      rw [ih (a + 1) (by rw [windowStart_succ]; omega)]
+      constructor
+      · rintro ⟨h1, h2, h3⟩; exact ⟨by omega, by omega, h3⟩
+      · rintro ⟨h1, h2, h3, h4, h5⟩
+        refine ⟨?_, by omega, h3, h4, h5⟩
+        rcases Nat.eq_or_lt_of_le h1 with h | h
+        · subst h; rw [windowStart_succ] at h4; omega
+        · omega
+
+/-- Slot `k` of the schedule is in window `w` (`w < windows`, `k` among its slots), of the kind `slotIn` gives it. -/
+theorem slotAt_iff (p : Params) (N k w : Nat) (x : Slot) :
+    p.slotAt N k = some (w, x) ↔ w < p.windows ∧ p.windowStart N w ≤ k ∧ k < p.windowStart N (w + 1) ∧
+      x = p.slotIn N w (k - p.windowStart N w) := by
+  rw [slotAt_eq]
+  have h0 : p.windowStart N 0 = 0 := by simp [Params.windowStart]
+  have := slotScan_range p N k w x p.windows 0 (by rw [h0]; exact Nat.zero_le _)
+  rw [h0] at this
+  rw [this]
+  constructor
+  · rintro ⟨-, h2, h3⟩; exact ⟨by omega, h3⟩
+  · rintro ⟨h2, h3⟩; exact ⟨Nat.zero_le _, by omega, h3⟩
+
+/-- A re-key slot's origin is a fresh slot of the schedule: re-key slot `rekey k` of window `w` names fresh slot
+`q mod freshSlots` of window `w − n·L`, `n ≥ 1`. -/
+theorem slotAt_rekey {p : Params} {N σ w k : Nat} (h : p.slotAt N σ = some (w, .rekey k)) :
+    ∃ b, p.slotAt N k = some (b, .fresh) := by
+  obtain ⟨hw, h1, h2, h3⟩ := (slotAt_iff p N σ w _).1 h
+  rw [windowStart_succ] at h2
+  unfold Params.slotIn at h3
+  dsimp only at h3
+  generalize hr : (if p.hasRegistered N w then 1 else 0) = r at h3
+  generalize hm : σ - p.windowStart N w = m at h3
+  by_cases c1 : m < r
+  · rw [ite_cond_eq_true _ _ (eq_true c1)] at h3
+    generalize p.classRun N (w % p.lifetime) = c at h3
+    cases c
+    cases h3
+  rw [ite_cond_eq_false _ _ (eq_false c1)] at h3
+  by_cases c2 : m < r + p.freshSlots * (w / p.lifetime)
+  · rw [ite_cond_eq_true _ _ (eq_true c2)] at h3
+    injection h3 with h3
+    subst h3
+    have hF : 0 < p.freshSlots := by
+      rcases Nat.eq_zero_or_pos p.freshSlots with h0 | h0
+      · rw [h0, Nat.zero_mul] at c2; omega
+      · exact h0
+    generalize hb : w - (w / p.lifetime - (m - r) / p.freshSlots) * p.lifetime = b
+    generalize hi : (m - r) % p.freshSlots = i
+    have hiF : i < p.freshSlots := by rw [← hi]; exact Nat.mod_lt _ hF
+    have hbw : b < p.windows := by omega
+    have hsz : p.freshSlots ≤ p.windowSize N b := by unfold Params.windowSize; omega
+    refine ⟨b, ?_⟩
+    rw [slotAt_iff]
+    unfold Params.freshSlot
+    refine ⟨hbw, by omega, by rw [windowStart_succ]; omega, ?_⟩
+    unfold Params.slotIn Params.windowSize
+    dsimp only
+    generalize (if p.hasRegistered N b then 1 else 0) = rb
+    rw [ite_cond_eq_false _ _ (eq_false (by omega)), ite_cond_eq_false _ _ (eq_false (by omega))]
+  · rw [ite_cond_eq_false _ _ (eq_false c2)] at h3; cases h3
+
 end Properties.Poub
