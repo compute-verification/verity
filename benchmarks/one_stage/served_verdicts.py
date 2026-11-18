@@ -231,7 +231,6 @@ from datetime import datetime
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
-from verity.commitments import docket_digest as DD
 
 ROOT = Path(__file__).resolve().parents[2]
 for _p in (Path(__file__).resolve().parent, ROOT / "benchmarks" / "one_stage" / "interfaces"):
@@ -1704,6 +1703,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     class the check held the passes to with the requests and rounds its fixed load fixes (`pearlplus_class`), None
     without one."""
     import served_shares as SS
+    from verity.commitments import docket_digest as DD
 
     out.mkdir(parents=True, exist_ok=True)
     reasons = []

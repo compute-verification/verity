@@ -27,7 +27,6 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.commitments import docket_digest as DD
 
 pytest.importorskip("torch")
 
@@ -58,6 +57,7 @@ SP = T.load("pearl_c_vllm_served_passes", T.POUW / "pearl_c_vllm" / "served_pass
 def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_compose_reads_it(tmp_path, monkeypatch):
     import verity_difftest as D
     from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
+    from verity.commitments import docket_digest as DD
 
     monkeypatch.setattr(PV, "coins", lambda n: SOURCE[:n])
     for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):

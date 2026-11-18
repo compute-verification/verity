@@ -47,7 +47,6 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
-from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
 
@@ -171,6 +170,7 @@ def bind(stage: Path, program, partition: Mapping, entries: Sequence[Mapping], p
     every value an earlier `bind` registered; a value is registered once) written to `REGISTRATION`, its digest bound into
     META (`REGISTRATION_KEY`), and ``private`` (``{value: {"nodes", "salts"}}``, the prover's openings) added to `PRIVATE`.
     Refused unless META names ``partition`` and its program. Returns the record."""
+    from verity.commitments import docket_digest as DD
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
     stage = Path(stage)
@@ -194,6 +194,7 @@ def bind(stage: Path, program, partition: Mapping, entries: Sequence[Mapping], p
 
 def bound(stage: Path) -> dict:
     """The staged statement's circuit registration, refused unless its digest is the one META carries."""
+    from verity.commitments import docket_digest as DD
 
     stage = Path(stage)
     want = meta(stage).get(REGISTRATION_KEY)

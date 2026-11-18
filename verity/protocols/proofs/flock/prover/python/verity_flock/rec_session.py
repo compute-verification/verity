@@ -47,7 +47,6 @@ import threading
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from verity.commitments import docket_digest as DD
 from verity.circuits.ops.boolean import gf2k as G
 from verity.circuits.ops.boolean.gf2k import mul
 from verity.commitments import coin_tree as CT
@@ -247,6 +246,7 @@ def staged_stacked(stage: Path) -> tuple[dict, str, dict]:
     """The circuit registration META binds in ``stage`` (`inner_registered.bound`), its digest, and the `rec_live.Proxy`'s
     ``registered`` opening of its `rec_live.STACKED` entry (`inner_registered.private`, its ``top`` the nodes' ``b || c``
     under their salts); refused when the record carries no ``stacked`` entry or the prover holds no opening of it."""
+    from verity.commitments import docket_digest as DD
 
     from . import inner_registered as IR
 

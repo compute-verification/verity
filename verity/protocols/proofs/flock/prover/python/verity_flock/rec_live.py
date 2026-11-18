@@ -120,7 +120,6 @@ from pathlib import Path
 from typing import Protocol
 
 from verity.circuits.codec import canonical_json
-from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.commitments import coin_tree as CT
 from verity.commitments import hm96
@@ -1141,6 +1140,7 @@ class Proxy:
         """``table``'s registered top (`register_top`'s opening), before Hello and any coin: a table the schedule gives no
         root at ``Commit``, registered once, whose opening opens its ``top`` and whose ``top`` makes the entry named
         ``table`` of the registration whose digest META binds (``bound``, `top_entry`)."""
+        from verity.commitments import docket_digest as DD
 
         if self.hello is not None or self.coins.hello is not None or self.coins.committed is not None:
             raise ValueError(f"{table}: a top is registered before the session, never after Hello or a coin")

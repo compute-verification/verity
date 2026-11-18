@@ -17,7 +17,6 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.commitments import domains as DM
 from verity.commitments import hm96
@@ -126,6 +125,7 @@ def test_register_with_the_statements_partition_binds_the_circuit_registration(s
     beside the circuit, its digest META's ``registration`` and both files' headers the rewritten circuit's (its SHA-512 and
     class); the rows, salts and roots are the staged ones. A partition object META doesn't name, or a program without its
     partition object, is refused."""
+    from verity.commitments import docket_digest as DD
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
     text, program, part = partitioned(staged)

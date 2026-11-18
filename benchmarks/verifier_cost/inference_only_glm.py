@@ -60,7 +60,6 @@ sys.path.insert(0, str(HERE))
 from run import EXE, _reference, timed  # noqa: E402
 
 from verity.circuits.codec import canonical_json  # noqa: E402
-from verity.commitments import docket_digest as DD  # noqa: E402
 from verity.commitments.domains import IR_DESCRIPTOR  # noqa: E402
 
 SCHEMA = "verity/nci-glm/v1"
@@ -598,6 +597,7 @@ def slices(runs: Runs, scratch: Path, src: Source, body: dict, ref) -> None:
 def node_instances(args, scratch: Path) -> tuple[list[tuple], dict]:
     """The registered node's instances, one per `--node-points` point, once its descriptor is its digest and, given its
     registration, held to it (`registered-node`); run in a process of its own, as the decoded descriptor is tens of GB."""
+    from verity.commitments import docket_digest as DD
 
     desc, ann = load(Path(args.node))
     text, size = described(desc)
