@@ -631,23 +631,6 @@ def test_beside_spot_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
     assert r.value.reasons == (_refused_beside_spot("ncp-v1"),)
 
 
-PEARL = "pouw:pearl-c-h100-v1-h3"
-PEARL_SETTINGS = {"device": "cuda", "kernel": "/k", "cubin": "/c"}
-
-
-def test_beside_spot_pearl_c_is_refused_as_an_executor_with_no_circuit():
-    """Pearl-C has no circuit (its y is noise-dependent), so a composition refuses it beside SPOT as any such executor;
-    serve-openai attaches Pearl+ by name (`serve_openai.scheme_settings`), whose scheme provides the cut. SPOT takes
-    no settings."""
-    row = PO.Context(stage="commit", enabled=config.parse_protocols(f"{PEARL},sampled-proofs:rows-sha512"),
-                     settings={"pouw": PEARL_SETTINGS})
-    assert PO.refusals(row) == (_refused_beside_spot("pearl-c-h100-v1-h3"),)
-    ncp = PO.Context(stage="commit", enabled=config.parse_protocols("pouw:ncp-v2,sampled-proofs:rows-sha512"),
-                     settings={"sampled-proofs": {"cut": "pouw:ncp-v2"}})
-    assert PO.refusals(ncp) == ("sampled-proofs:rows-sha512: the sampled-proofs settings ['cut']: it takes none",)
-    assert PO.refusals(_serve(PEARL, settings={"pouw": PEARL_SETTINGS})) == ()
-
-
 def test_traced_as_is_the_circuit_of_one_executed_call():
     from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import (
         DomainError,

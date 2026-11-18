@@ -1,7 +1,7 @@
 """The committers' bytes as constants.
 
-Every other test of the committers holds a root to the reference under the run's own fresh step keys.  Here the tensors and
-the step keys are fixed, so the bytes each part of a committer makes are the ones written below: the offline core's step
+Every other test of the committers holds a root to the reference under the run's own fresh step keys and salts.  Here the
+tensors, the step keys and the weights' salt file (``weights_registration.salts``) are fixed, so the bytes each part of a committer makes are the ones written below: the offline core's step
 roots, run root, context and layout digests (step hashing), a served model's geometry digest, a leaf opening and a range
 opening (retention and openings), a dumped store's files, the weights' registration, and the windowed collector's roots over
 its CPU stand-ins.  A change that moves one of them changes the commitment, wherever the code that makes it lives.
@@ -13,10 +13,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
+
+from verity.commitments import salt_file as SF
 
 from tests.check import opened as O
 from tests.commit import test_native_collect_plan_cache as windowed
@@ -45,7 +48,7 @@ K = R.ROW_BYTES // 256                   # sizes in 256-byte units: one step ins
 STEPS = {s: [(f"m{s}.{i}", expand(f"pins/{s}/{i}", n)) for i, n in enumerate(sizes)]
          for s, sizes in enumerate([(100 * K,), (700 * K, 3, 513 * K), (2048 * K, 1000 * K)])}
 KEYS = {s: expand(f"pins/key/{s}", R.KEY_BYTES) for s in range(4)}
-WEIGHTS_KEY = expand("pins/weights", R.KEY_BYTES)
+WEIGHTS_SALTS = Path(__file__).with_name("weights_registration.salts")            # the pinned registration's salt file
 
 RUN_ROOT = ("dc383743d414c311105097a9253b06dbfe27d60bc52f28b5a5d5d059f40f6de0"
             "7ae986e2c4f6972b959d15eb2992b58cf32b60c64ffc4046b934e04ff0254d49")
@@ -134,10 +137,10 @@ def test_the_weights_registration(monkeypatch):
     monkeypatch.setenv("VERITY_WEIGHTS_HASH", "host")
     com = O.committer(run_id="pins")
     com.model = _Model()
-    com.weights_tree = {"scheme": R.NAME, "key": WEIGHTS_KEY.hex()}           # a replay re-registers under the recorded key
+    com.weights_salts = {n: SF.read(WEIGHTS_SALTS, n) for n in SF.params(WEIGHTS_SALTS)}   # a replay re-registers under them
     w = com.register_weights(replay=True)
     assert (w["root"], w["tensors"], w["bytes"]) == (WEIGHTS_ROOT, 4, 23857)
-    assert sha256(repr(sorted((k, v) for k, v in com.weights_tree.items() if k != "key")).encode()) == WEIGHTS_TREE
+    assert sha256(repr(sorted(com.weights_tree.items())).encode()) == WEIGHTS_TREE
 
 
 @pytest.mark.parametrize("retain", ["none", "host"])
