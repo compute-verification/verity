@@ -164,12 +164,12 @@ if [ "${ASYNC:-0}" = 1 ]; then
   args+=(--async-scheduling)
   serve=("$PY" -c 'import json, sys
 from pathlib import Path
-from verity_vllm.pipeline import cli, serve_row as RW, serve_seal as SS
+from verity_vllm.pipeline import cli, serve_row as RW
 checked = RW.of
 def of(opts):
     if not opts.row_build:
         return None
-    path = Path(SS.programs_root_of(opts)) / RW.WORKLOAD_PROGRAM
+    path = Path(RW.programs_root_of(opts)) / RW.WORKLOAD_PROGRAM
     got = json.loads(path.read_text())["applicability"]["engine"]["async_scheduling"]
     if got is True:
         print(f"UTIL the row declares async_scheduling true: serve_row checks it ({path})", flush=True)
