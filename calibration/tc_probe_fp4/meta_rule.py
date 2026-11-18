@@ -315,15 +315,15 @@ def main(args: argparse.Namespace) -> int:
     out.mkdir(parents=True, exist_ok=True)
     t_all = time.time()
     row = INSTRUCTIONS[args.instruction]
-    arch = args.arch or "sm_120a"
     if args.chain != 1:
         raise SystemExit("--chain is not defined for the sparse rows")
     if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
         raise SystemExit("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
-    if args.fake_silicon and not P.shutil.which(P.nvcc_bin()):
-        so, nvcc = None, "not built (fake silicon)"
+    if args.fake_silicon and not P.has_nvcc():
+        so, nvcc, arch = None, "not built (fake silicon)", None
     else:
-        so, nvcc = P.build(arch, out, "mma_fp4.cu")
+        card, arch = P.target(args.card, "mma_fp4.cu")
+        so, nvcc = P.build(card, out, "mma_fp4.cu")
     ptx = S.PTX[row]
     results: dict = {"schema": "pouw-rtxpro/tc-probe-fp4-meta-rule/v1", "instruction": ptx, "instruction_id": S.INSTRUCTION_ID[row],
                      "fake_silicon": args.fake_silicon}

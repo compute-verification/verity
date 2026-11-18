@@ -229,21 +229,11 @@ class RequireProperty:
     fixes: bool = False
 
 
-@dataclass(frozen=True)
-class RefuseProperty:
-    """A scheme's refusal of a workload that declares ``property`` as ``value``."""
-
-    property: str
-    value: Any
-    why: str
-
-
 def unmet[T](requests: Iterable[tuple[T, Any]], properties: Mapping[str, Any]) -> list[tuple[T, Any]]:
-    """The `RequireProperty` and `RefuseProperty` of ``requests`` (each with who filed it) that ``properties`` doesn't
-    meet: a required property it lacks is unmet."""
+    """The `RequireProperty` of ``requests`` (each with who filed it) that ``properties`` doesn't meet: a required
+    property it lacks is unmet."""
     return [(who, r) for who, r in requests
-            if (isinstance(r, RequireProperty) and properties.get(r.property) != r.value)
-            or (isinstance(r, RefuseProperty) and r.property in properties and properties[r.property] == r.value)]
+            if isinstance(r, RequireProperty) and properties.get(r.property) != r.value]
 
 
 class Kernel(Protocol):
@@ -286,30 +276,6 @@ class Gate(Protocol):
 
     def take(self, record: Mapping[str, Any]) -> None:
         """One record of what the gate orders by, fed on the thread that steps the workload."""
-
-
-class Reports(Protocol):
-    """A gate, frontend or subscriber whose report the workload's run keeps under its scheme's name: ``summary`` at the
-    run's end, ``record`` the versions and parameters it ran with."""
-
-    def summary(self) -> Mapping[str, Any]: ...
-
-    def record(self) -> Mapping[str, Any]: ...
-
-
-class Releases(Protocol):
-    """What a scheme's ``attach`` returns where it holds something until the workload stops: ``release`` is called once,
-    when it stops, and closes what the scheme holds (its run's commitment, its sessions)."""
-
-    def release(self) -> None: ...
-
-
-class Commits(Reports, Releases, Protocol):
-    """`Reports` and `Releases` from a scheme that commits while the workload runs: ``commitment``, what it commits to,
-    which the run's record hashes under its scheme's name (``summary`` is kept beside it, unhashed), readable after
-    ``release``."""
-
-    def commitment(self) -> Mapping[str, Any]: ...
 
 
 class Front(Protocol):
@@ -363,14 +329,6 @@ class Broken(Exception):
 
 
 @dataclass(frozen=True)
-class HoldResident:
-    """A scheme's request that range ``range`` stay allocated until step ``until``."""
-
-    range: int
-    until: int
-
-
-@dataclass(frozen=True)
 class ReuseOldestFreed:
     """A scheme's request that a freed range be handed out again only after every range freed before it, so a freed
     range keeps its values as long as the workload has other ranges to hand out."""
@@ -403,12 +361,12 @@ class StartBeside:
     readers: tuple[str, ...] = ()
 
 
-type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldResident
-                | StartBeside | ReuseOldestFreed | ServeRoute | RefuseInput | FixRanges | ReleaseValue)
+type Request = (RequireProperty | ComputeBlockWith | StartOnBoundary | StartBeside | ReuseOldestFreed | ServeRoute
+                | RefuseInput | FixRanges | ReleaseValue)
 
 
-__all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldResident",
-           "Broken", "Commits", "ENGINE", "FRONT", "FixRanges", "Front", "Releases", "Reports", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
-           "RangesDeclared", "RefuseInput", "RefuseProperty", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
+__all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle",
+           "Broken", "ENGINE", "FRONT", "FixRanges", "Front", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
+           "RangesDeclared", "RefuseInput", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

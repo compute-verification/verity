@@ -10,7 +10,7 @@ set -uxo pipefail
 export O=${OUT:?run under research run}; mkdir -p "$O"
 BW=$PWD/calibration/bandwidth
 export B=$(mktemp -d /tmp/bwwrite.XXXXXX); trap 'rm -rf "$B"' EXIT
-NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
+NVCC=${NVCC:-$(python3 benchmarks/kernels/machine.py toolkit 13.0)/bin/nvcc} || { echo 3 > "$O/rc.txt"; exit 3; }
 if [ -z "${ARCH:-}" ]; then
   case $(nvidia-smi --query-gpu=name --format=csv,noheader -i 0 2> /dev/null || true) in
     *H200* | *H100*) ARCH=90a ;;

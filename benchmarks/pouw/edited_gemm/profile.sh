@@ -5,10 +5,11 @@
 # Clocks are read, never set (ncu --clock-control none).
 #
 #   research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
-#     -- bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/profile.sh
+#     -- bash benchmarks/pouw/edited_gemm/profile.sh
 set -uo pipefail
 export O=${OUT:?}
-export PATH=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2
+export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
 export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm
 export BIN=$(mktemp -d /tmp/egemm-prof.XXXXXX)
 trap 'rm -rf "$BIN"' EXIT

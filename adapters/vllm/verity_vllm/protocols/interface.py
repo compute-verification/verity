@@ -8,7 +8,7 @@ An adapter is one module of this package (`spot`, `pous`, `pouw`) that defines:
   alone, before the engine is built;
 * ``install(scheme, target) -> Installed``: install it on the built model;
 * optionally ``requests(scheme, ctx) -> tuple[verity.hooks.Request, ...]``: what it requires or refuses of the workload
-  (`verity.hooks.RequireProperty`, `RefuseProperty`), read against `Context.properties`; one whose computation is the
+  (`verity.hooks.RequireProperty`), read against `Context.properties`; one whose computation is the
   row's Build requires the profile's kernels (`BUILD_BOUND`, with ``fixes``);
 * optionally ``EXECUTES: tuple[str, ...]``: the sites where the option replaces the computation rather than wrapping
   it (PoUW: ``LinearBase.quant_method.apply``).  A site has at most one executor, innermost; the others wrap it from
