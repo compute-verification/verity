@@ -31,10 +31,8 @@ Under --salts: each value's row salts, `<value>.salts`, the prover's, which noth
 """
 from __future__ import annotations
 
-import gzip
 import json
 import multiprocessing
-import os
 import sys
 import time
 from collections.abc import Iterator
@@ -71,11 +69,6 @@ class Options:
     salts: str = option("--salts", help="where each value's row salts go (private: never under --out)")
     workers: int = option("--workers", type=int, default=8, help="ranks registered at once, a spawned process each (1: in this process)")
     cmd: str = field(default="node-registration", init=False)
-
-
-def load_descriptor(path: str | os.PathLike) -> dict[str, Any]:
-    with (gzip.open(path, "rb") if str(path).endswith(".gz") else open(path, "rb")) as f:
-        return json.loads(f.read())
 
 
 def root_inputs(desc: dict[str, Any]) -> list[tuple[int, int, int]]:
@@ -115,6 +108,8 @@ def descriptor_theta(path: str, params: list[tuple[str, Any]], theta: tuple[str,
     """The descriptor's Program digest and θ (`theta_nodes`), `params` as `[(name, type JSON)]`."""
     from verity.circuits import codec
     from verity.circuits.types import type_from_json
+
+    from .score import load_descriptor
 
     desc = load_descriptor(path)
     return codec.program_digest(desc), theta_nodes(desc, [(n, type_from_json(t)) for n, t in params], theta)

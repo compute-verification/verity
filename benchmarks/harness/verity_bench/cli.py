@@ -192,17 +192,23 @@ def _overhead_store(args: Any) -> Any:
     return completion.store
 
 
-def _overhead_node(args: Any) -> str:
-    if args.on is None or args.card is None:
-        raise ValueError("--on NODE --card CARD: a launch names its GPU node and the card's `short` there")
-    return args.on
+def _overhead_node(args: Any) -> tuple[str, str]:
+    """The machine a launch runs on (`research run --on`) and the card it measures, its record's (`overhead.machine_card`)."""
+    from research.pods.registry import registry_dir
+    from research.remote import machines_path
+
+    if args.on is None:
+        raise ValueError("--on NODE: a launch names the GPU node it runs on, whose record's [properties] give its card")
+    if (machines := registry_dir(machines_path())) is None:
+        raise ValueError("the machine register is off (RESEARCH_MACHINES_D), so no record gives --on's card")
+    return args.on, overhead.machine_card(args.on, machines).gpu
 
 
 def _overhead_points(args: Any) -> int:
     if args.store:
         print(overhead_records.store_points(_overhead_store(args), args.store, by=args.by))
         return 0
-    return overhead_records.launch_points(jobs.repository_root(), _overhead_node(args), args.card, args.model,
+    return overhead_records.launch_points(jobs.repository_root(), *_overhead_node(args), args.model,
                                           args.precision, args.minutes, gpu=args.gpu, cores=args.cores)
 
 
@@ -214,7 +220,7 @@ def _overhead_run(args: Any) -> int:
         return 0
     if args.scheme is None:
         raise ValueError("--scheme S, or --record RUN")
-    return overhead_records.launch_run(_overhead_store(args), jobs.repository_root(), _overhead_node(args), args.card,
+    return overhead_records.launch_run(_overhead_store(args), jobs.repository_root(), *_overhead_node(args),
                                        args.scheme, args.point, args.points, args.minutes, cubin=args.cubin,
                                        model=args.model, gpu=args.gpu, cores=args.cores, keep_reports=args.keep_reports)
 
@@ -235,8 +241,8 @@ def _overhead_parser(commands: Any) -> None:
     sub = door.add_subparsers(dest="overhead_command", required=True, metavar="STEP")
 
     def common(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--card", choices=list(overhead.cards()), help="the card's `short`; a launch needs it")
-        p.add_argument("--on", metavar="NODE", help="the GPU node, a machine with the card; a launch needs it")
+        p.add_argument("--on", metavar="NODE", help="the GPU node the launch runs on (research run --on), whose record's "
+                                                    "[properties] give the card it measures; a launch needs it")
         p.add_argument("--gpu", metavar="INDEX", help="lease this GPU of the node alone (gpu-lease --on)")
         p.add_argument("--cores", metavar="CPUS", help="pin the run to these CPUs of the node (gpu-lease --cores)")
         p.add_argument("--model", default=overhead.KERNEL_MODEL, choices=list(overhead.MODELS))
