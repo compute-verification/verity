@@ -9,7 +9,7 @@ import json
 from math import comb
 from pathlib import Path
 
-from verity.protocols.resource_accounting.network.prover import window_charge as WC
+from verity.protocols.interface.charge import window_charge as WC
 
 FIXTURE = Path(__file__).parent / "fixtures" / "arith_encode_vectors.json"
 

@@ -17,7 +17,8 @@ def _toy(name: str = "toy-bandwidth", **kw) -> S.Scheme:
         "log": (S.Order("payload", "key"),
                 S.Order("receipts", "seed", within_ns=1_000_000, assumption="ToyNoCompression")),
         "charges": (S.Charge("on-chip", "on_chip_bits"), S.Charge("rebuilt", "rebuilt_bits")),
-        "settings": {"refresh": False}, "requires": {"coins-at-rate": "its own challenger"}, **kw})
+        "settings": {"refresh": False}, "requires": {"coins-at-rate": "its own challenger"},
+        "delta_scheme": Fraction(0), **kw})
 
 
 @pytest.fixture(autouse=True)
@@ -104,6 +105,38 @@ def test_scheme_term_carried() -> None:
     assert S.bound(_toy(), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}).delta_scheme == 0
     with pytest.raises(ValueError, match="δscheme lies"):
         _toy(delta_scheme=Fraction(1))
+
+
+def test_scheme_term_not_said_refuses_a_bound() -> None:
+    s = _toy("silent", delta_scheme=None)
+    assert S.register(s) is S.get("silent")
+    with pytest.raises(ValueError, match=r"silent: its delta_scheme \(Verity.Scheme.δscheme\) is not said"):
+        S.bound(s, Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0})
+
+
+def _dither_circuit() -> list[tuple[str, list[list[int]]]]:
+    from verity.circuits.defs import bind
+    from verity.commitments.periods import interface as I
+    from verity.protocols.experimental.dither.prover import dither as D
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+
+    program, query = I.Circuit("toy", ((bind(D.PouwDitherBlock, L=32, FIRST=True), 3),
+                                       (bind(D.PouwDitherLast, K=64, L=64), 1))).program()
+    return P.strata(program, query)
+
+
+def test_credited_resolves_a_declaration_in_a_registered_circuit() -> None:
+    from verity.protocols.experimental.dither.scheme import DITHER
+
+    strata = _dither_circuit()
+    assert [t for t, _ in strata] == ["PouwDitherBlock_v1{L=32,FIRST=true}", "PouwDitherLast_v1{K=64,L=64}"]
+    assert S.credited([DITHER], strata) == frozenset({0, 1, 2, 3})
+    assert S.credited([], strata) == frozenset()
+    with pytest.raises(ValueError, match="toy-bandwidth: its block ToyReceipt_v1 resolves to no block"):
+        S.credited([DITHER, _toy()], strata)
+    rival = _toy("rival", blocks=(S.Block("PouwDitherLast_v1", lambda shape: 0),))
+    with pytest.raises(ValueError, match=r"PouwDitherLast_v1\{K=64,L=64\} would be credited twice"):
+        S.credited([DITHER, rival], strata)
 
 
 def test_unbounded_charge_refuses_a_bound() -> None:

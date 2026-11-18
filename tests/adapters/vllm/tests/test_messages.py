@@ -253,3 +253,21 @@ def test_a_build_request_is_filed_before_the_build_and_any_other_before_the_firs
     ex.step = 0
     with pytest.raises(Refused, match=r"pouw: files HoldRelease after serving began \(step 0\)"):
         ex.request("pouw", H.HoldRelease("in-0", 3))
+
+
+def test_a_route_has_one_scheme_and_an_input_is_refused_while_serving():
+    ex = M.Exchange()
+    serve = lambda first_line, headers, body: (200, headers["run"] + b"".join(body).decode())  # noqa: E731
+    ex.request("network", H.ServeRoute("/watermark", serve))
+    with pytest.raises(Refused, match="poub: serves route /watermark, which network serves"):
+        ex.request("poub", H.ServeRoute("/watermark", serve))
+    name, answer = ex.route("/watermark")
+    assert answer("POST /watermark HTTP/1.1", {"run": "r"}, iter([b"7", b"3"])) == (200, "r73")
+    assert name == "network" and ex.route("/other") is None
+    ex.step = 0
+    told: list = []
+    ex.refuse = lambda input, why: told.append((input, why))
+    ex.request("network", H.RefuseInput("in-1", "no release stamp"))
+    assert ex.refused("in-1") == [("network", "no release stamp")] and ex.refused("in-2") == []
+    assert told == [("in-1", "no release stamp")]
+    assert H.InputArrived("in-1", 3, 0, {"x-release": "4"}, "POST /v1/completions HTTP/1.1").headers["x-release"] == "4"
