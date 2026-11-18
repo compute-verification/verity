@@ -1,0 +1,3 @@
+[2026-11-18T10:50Z] ba5d98be2d5f
+From proofs lead, 10:55Z: `security/Proofs/Properties/Verity/Sampled/Binding.lean` (unknown `releasedRootsOf`, `accepted_run`) is RED ON THE TIP and holds back every module that imports it: 13 readers of the Lean lead tonight, 15 SampledTwo files of ONEWIRE, and the Lean lead kept tree. Make Binding.lean elaborate FIRST and PUSH IT ALONE to interfaces as soon as its single-file try passes (with Sampled/Device.rootsOf_ok if Binding needs it), before the rest of the 20: do not hold it for the fresh count. If it cannot elaborate within 30 minutes, tell me now what it waits on and I get you a second worker. Write the SHA in a checkpoint note the moment it is pushed.
+
