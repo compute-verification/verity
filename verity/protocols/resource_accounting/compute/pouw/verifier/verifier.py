@@ -8,7 +8,7 @@ execution phase's statements are judged here too: `credit.window` and `credit.pe
 outcome from `lean("credit-live-verified", …)` (`PouwCheck.LiveVerified`), with `credit._live_verified` the reference,
 on the circuit files its credit period's open committed, `lean("credit-committed-files", …)` (`PouwCheck.CommittedFiles`),
 with `credit.committed_files` the reference. The verdicts acted on are the Lean's too (`of_record`): `credit.window`'s
-and `credit.period_credit`'s, `lean("window", …)` and `lean("period", …)` (`PouwCheck.Credit.window`,
+and `credit.period_credit`'s, `lean("window", …)` and `lean("period", …)` (`PouwVerifier.Credit.executionPhase`,
 `Credit.periodCredit`) on those outcomes, each with its Python twin beside it, and a disagreement between them is a
 refusal. The challenger's salt check, `lean("salt", …)` (`PouwCheck.saltCheck`, `core_check.salt_of_record`, with its
 twin), is the verifier's program, run by the developer's side (`pouw_h1_gpu --check-challenger`, from `served_verdicts

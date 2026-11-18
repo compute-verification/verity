@@ -161,6 +161,19 @@ def test_the_rank_window_passes_its_checks_with_only_peers_free(rank0):
     assert sum(r.reader_units for r in served) == O
 
 
+@pytest.mark.slow
+def test_its_program_is_refused_at_the_first_selects_token(rank0):
+    """Not had: the class window's Program (`interface.descriptor_record`, through `population`) does not build. Its
+    selects write the token, the live bit and the count narrower than their readers take them: fifteen width faults, the
+    first the first select's token into the embedding read's 32-bit ``tok``; past them an embedding table is opened by two
+    runs. `main` joined these wires with no check of width or order. The cures come after the close.
+    The only test that builds the Program of GLM-5.3's class window, so the only one that sees it built or refused."""
+    with pytest.raises(ValueError, match=r"^wire-width: wire \{'reader': 'EmbeddingRead_v2\{V=154880,H=192\}', 'port': "
+                                         r"'tok', 'writer': 'GreedyCombineFirst_v1\{.*: GreedyCombineFirst_v1\{.* writes "
+                                         r"Array<2,Value<16>> into a row of Value<32>$"):
+        IF.descriptor_record(rank0.circuit, 1)
+
+
 def _word16(v: int, n: int) -> np.ndarray:
     return np.array([[(v >> i) & 1 for i in range(16)]] * n, np.uint8)
 
