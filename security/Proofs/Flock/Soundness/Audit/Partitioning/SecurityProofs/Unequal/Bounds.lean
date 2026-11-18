@@ -25,6 +25,8 @@ as a hypothesis (`hCA`), and `FreeCompute` passes its proof.
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal
 
+open FlockSoundness
+
 open Finset Game
 open scoped ENNReal
 

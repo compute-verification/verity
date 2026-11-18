@@ -37,7 +37,7 @@ its reads file (`hlv`). `ChecksC3`'s check 5 (`RecCoins.check` on each statement
 namespace FlockC3.RegLevels
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 
 /-- **`RecCoins.check` at one of R's levels is `checkStackedLevel`**: at a unit named `rec-open-stacked/l<L>-h<H>`

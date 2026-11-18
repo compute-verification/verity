@@ -33,6 +33,8 @@ program.
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Finset
 open scoped ENNReal
 

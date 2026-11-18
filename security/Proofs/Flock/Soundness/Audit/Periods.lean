@@ -28,12 +28,14 @@ probability at most `p` over its own coins" is `∀ ω, prCoin (fun a => E t (Fu
   own coins decide gets only the count bounds: an adversary short on a `p`-share of each period's coins, where it is
   accepted, is accepted in every period and short in `Binomial(T, p)` of them.
 
-`Audit.SamplingDesign`'s pooled escape (`Pooled.lean`) is the instance at uniform `kd`-subset samples.
+`FlockSoundness.Audit.SamplingDesign`'s pooled escape (`Pooled.lean`) is the instance at uniform `kd`-subset samples.
 -/
 
 @[expose] public section
 
 namespace FlockSoundness.Audit.Periods
+
+open FlockSoundness
 
 open Game
 open scoped ENNReal

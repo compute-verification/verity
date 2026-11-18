@@ -16,6 +16,8 @@ witness file can cite them. `SamplingDesign.subset n n` samples every unit, so o
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil
 
+open FlockSoundness
+
 open Finset
 open scoped ENNReal
 

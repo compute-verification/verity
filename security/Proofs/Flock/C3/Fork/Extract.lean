@@ -41,7 +41,7 @@ position (`RunOpensReg`): both are runs of `σ` at `ω`, so the two are an inner
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit StrictCR
+open Game FlockSoundness.Audit StrictCR
 open scoped ENNReal
 
 section Leaf

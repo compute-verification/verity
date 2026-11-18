@@ -192,7 +192,7 @@ theorem holoRepC_on (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (
 end shape
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockC3.Reps (repPart RepTie SrcRepTie)
 open FlockC3.Sparse (SparseTie SrcSparseTie sparseKinds)

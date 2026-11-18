@@ -20,6 +20,8 @@ With every unit `b` bits wide, the bound `CertifiesLeak` certifies is `H + locBi
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil
 
+open FlockSoundness
+
 open Finset
 open scoped ENNReal
 

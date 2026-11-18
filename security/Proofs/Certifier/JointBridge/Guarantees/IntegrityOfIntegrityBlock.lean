@@ -19,7 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # The integrity audit of a server-time block is Flock's integrity audit of that block (trusted)
 
-A server-time block's SPOT audit (`Audit.sampled` of the block's period, `ResourceAccounting.PeriodRun`) is Flock's
+A server-time block's SPOT audit (`FlockSoundness.Audit.sampled` of the block's period, `ResourceAccounting.PeriodRun`) is Flock's
 integrity audit of block `b` of a server's monitoring period of sessions with carried state
 (`Flock.Guarantees.IntegrityBlockCarried`): the sessions `t` in `S.sessions b`, each a sampling block `S.W t`
 (`Flock.Guarantees.SamplingBlock`), a `--zk` session under hidden outputs with a fresh live subset sample, played by one

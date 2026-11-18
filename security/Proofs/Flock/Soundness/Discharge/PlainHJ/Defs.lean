@@ -35,7 +35,7 @@ the one-table hidden-output tables (`HiddenExec.TableH`, `SampleSetupH`) in plac
 
 namespace FlockSoundness.Discharge.PlainHJ
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Flock
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.HiddenExec
 open FlockSoundness.Discharge.Composed (nTab nTab_pos drawJ partOf partS mem_partS)
 open FlockSoundness.Discharge.PlainJ (inputsPJ)

@@ -31,7 +31,7 @@ event, on an audit whose outcome carries the transcript.
 namespace FlockSoundness.Discharge.Exec
 
 open Lean (Json)
-open Game Audit
+open Game FlockSoundness.Audit
 open scoped ENNReal
 
 /-- What `verity-verify-proof verify` reads besides the session directory: the statement's tags (`--statement`, as `verifyCmd`

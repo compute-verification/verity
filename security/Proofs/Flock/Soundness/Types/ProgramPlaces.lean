@@ -29,7 +29,7 @@ open Flock Flock.DeriveAll
 
 namespace FlockSoundness
 
-open Audit Types.Dag Compose Model
+open FlockSoundness.Audit Types.Dag Compose Model
 
 /-- A block, and the columns there at which statement `St` holds rows `R`. -/
 structure RowsAt (St : Statement) (R : Rows) where

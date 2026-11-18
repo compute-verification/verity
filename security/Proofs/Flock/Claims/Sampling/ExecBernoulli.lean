@@ -28,6 +28,8 @@ exact uniform sample `r ∈ [0, den)` from the stream (`Flock.Draw.uniform`, rej
 
 namespace FlockSoundness.Audit.SampleExec
 
+open FlockSoundness
+
 open Flock.Draw Game
 open scoped ENNReal
 
@@ -223,6 +225,8 @@ theorem bernLoop_append (num den : ℕ) (a b : ByteArray) : ∀ (l : List ℕ) (
 end FlockSoundness.Audit.SampleExec
 
 namespace FlockSoundness.Audit.SamplingDesign
+
+open FlockSoundness
 
 open Game Finset
 open scoped ENNReal

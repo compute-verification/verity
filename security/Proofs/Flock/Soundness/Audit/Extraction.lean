@@ -30,6 +30,8 @@ state. `extraction_audit_le` is `audit_le` in this form; the count curve is `ext
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game
 open scoped ENNReal
 

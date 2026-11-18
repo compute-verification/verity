@@ -69,7 +69,7 @@ it self-clashes:
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec
 open FlockSoundness.Discharge.Tables (LiveOutJ DecodesTable)
 
 local notation "𝔽" => FlockLevel3.GF128
@@ -164,7 +164,7 @@ end FlockSoundness.Discharge.Composed
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec Composed
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec Composed
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 
 local notation "𝔽" => FlockLevel3.GF128

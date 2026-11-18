@@ -47,7 +47,7 @@ outcome verity-verify-proof accepts, at table `j`:
 
 namespace FlockSoundness.Discharge.PlainJ
 
-open Flock Refine Exec Game Model Accounting Audit
+open Flock Refine Exec Game Model Accounting FlockSoundness.Audit
 open FlockSoundness.Discharge.Tables FlockSoundness.Discharge.DecodeZL FlockSoundness.Discharge.Integrate
 open FlockSoundness.Discharge.Composed (nTab nTab_pos drawJ partS TagsOkZJ)
 open FlockSoundness.Discharge.DecodeZLJ (partJson accepts_reps_at decJ nXT RecordsLiveJ)

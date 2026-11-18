@@ -35,7 +35,7 @@ Not covered, as for `zk_session_soundHJ_nonvacuous_v2`: that a session over the 
 -/
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
 
 variable {n : ℕ}
 

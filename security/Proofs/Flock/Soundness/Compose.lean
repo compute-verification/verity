@@ -35,7 +35,7 @@ open Flock Flock.Derive
 
 namespace FlockSoundness
 
-open Audit
+open FlockSoundness.Audit
 
 namespace Compose
 

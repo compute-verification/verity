@@ -29,7 +29,7 @@ session run.
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting Extract LinkFinder Audit Audit.Partition
+open Game Model Accounting Extract LinkFinder FlockSoundness.Audit FlockSoundness.Audit.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/

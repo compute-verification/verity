@@ -24,7 +24,7 @@ proof block's public gates:
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Flock FlockLevel3 Model Audit Binding Placed
+open Flock FlockLevel3 Model FlockSoundness.Audit Binding Placed
 open FlockSoundness.Discharge.Layout (keyN portRowW OutColAt outDecode OutsOutP KeysRowP keyRowOfP keyPubOf)
 
 variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {pi : HmIn.Ports} {Reg : Type} {mPts : ℕ}

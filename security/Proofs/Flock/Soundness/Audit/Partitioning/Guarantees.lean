@@ -49,6 +49,8 @@ on the leak, not leaks an adversary achieves.
 
 namespace FlockSoundness.Audit.Partitioning.Guarantees
 
+open FlockSoundness
+
 open Finset
 
 /-- **The converse, exactly.** A sampling design under which every set of at least `K` of its `n` units escapes with probability at

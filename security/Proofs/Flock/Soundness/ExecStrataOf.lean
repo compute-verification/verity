@@ -31,6 +31,8 @@ set_option backward.privateInPublic.warn false
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Finset Flock.Draw
 
 namespace StrataExec

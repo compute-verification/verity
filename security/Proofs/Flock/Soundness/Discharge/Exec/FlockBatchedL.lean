@@ -41,7 +41,7 @@ named assumption; `ε_bind` stays named (`BindSound`).
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting Audit Audit.Partition
+open Game Model Accounting FlockSoundness.Audit FlockSoundness.Audit.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/

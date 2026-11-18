@@ -158,7 +158,7 @@ noncomputable def ksStrict205 (ts : List (TabSpec mPts)) (j : Fin ts.length) (k 
 
 /-- **The knowledge term at `fast100`'s numbers**: `ksAvgStrict` at `ksStrict205`. -/
 noncomputable def ksAvgStrict205 {n : ℕ} {Reg : Type} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
-    (L : Audit.SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
+    (L : FlockSoundness.Audit.SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
   avg fun ω : L.Ω => ⨆ j : Fin (plan (L.draw ω) R).length,
     ENNReal.ofReal (ksStrict205 (plan (L.draw ω) R) j k qF qS / (1 - rateB (plan (L.draw ω) R) j k))
 
@@ -176,7 +176,7 @@ theorem ksStrict_le_205 (ts : List (TabSpec mPts)) (j : Fin ts.length) (hT : ((t
 /-- **The knowledge term's closed form at `fast100`'s numbers**: with every table of the plan in `Stmt.InRangeWide`,
 `ksAvgStrict` is at most `ksAvgStrict205`. -/
 theorem ksAvgStrict_le_205 {n : ℕ} {Reg : Type} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
-    (hR : ∀ S R (j : Fin (plan S R).length), (((plan S R).get j).S.shape mPts).InRangeWide) (L : Audit.SamplingDesign n)
+    (hR : ∀ S R (j : Fin (plan S R).length), (((plan S R).get j).S.shape mPts).InRangeWide) (L : FlockSoundness.Audit.SamplingDesign n)
     (k : ℕ) (qF qS : ℝ) (R : Reg) : ksAvgStrict plan L k qF qS R ≤ ksAvgStrict205 plan L k qF qS R := by
   refine avg_mono fun ω => iSup_mono fun j => ?_
   rcases le_or_gt (1 - rateB (plan (L.draw ω) R) j k) 0 with h0 | h0
@@ -189,7 +189,7 @@ end FlockSoundness.StrictCR
 
 namespace FlockSoundness.Discharge.Integrate
 
-open Flock FlockLevel3 Model Refine Audit
+open Flock FlockLevel3 Model Refine FlockSoundness.Audit
 open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
@@ -225,7 +225,7 @@ end FlockSoundness.Discharge.Integrate
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Flock FlockLevel3 Model Refine Audit
+open Flock FlockLevel3 Model Refine FlockSoundness.Audit
 open FlockSoundness.Discharge.Exec (Inputs)
 open FlockSoundness.Discharge.Integrate (SampleSetup)
 
@@ -264,7 +264,7 @@ namespace FlockSoundness.Discharge.FailClosed
 
 section
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Flock
 open FlockSoundness.Discharge.Exec
 open FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.DecodeZL
 
@@ -408,7 +408,7 @@ end
 
 section
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Flock
 open FlockSoundness.Discharge.Exec
 open FlockSoundness.Discharge.HiddenExec FlockSoundness.Discharge.HiddenDec FlockSoundness.Discharge.DecodeZL
 open FlockSoundness.Discharge.Inst

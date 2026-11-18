@@ -20,12 +20,12 @@ its extractor never needed.
 
 namespace FlockSoundness.Binding
 
-open Game Model Accounting Refine Audit
+open Game Model Accounting Refine FlockSoundness.Audit
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-  {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
+  {decode : FlockSoundness.Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
 
 /-- **A layout's rows, each hashed under its own encoding**: `HmRows` with the bytes the row digest hashes at commit
 string `p` (`enc p`), and for two different values with the same bytes there, two byte strings that collide (`ext`,
@@ -38,7 +38,7 @@ structure HmRowsX (lay : Layout P plan tab decode) where
   ext_spec : ∀ p v v', v ≠ v' → enc p v = enc p v' → Collides (ext p v v')
   other : lay.Pos → ExplicitLeaf lay.Val
   bcAt : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → lay.Pos → Fin 128 → Fin 8 →
-    Fin (2 ^ (Audit.Partition.tabOf plan tab S R u).S.m)
+    Fin (2 ^ (FlockSoundness.Audit.Partition.tabOf plan tab S R u).S.m)
   bc_registered : ∀ S R u, u ∈ S → ∀ M, Sat plan tab S R u M → ∀ g ∈ P.io u, isRow (lay.pos g) →
     H512 (K512.leafPrefix ++ bytesAt (wit plan tab S R u M) (bcAt S R u (lay.pos g))) = lay.regLeaf R (lay.pos g)
   other_registered : ∀ S R u, u ∈ S → ∀ M, Sat plan tab S R u M → ∀ g ∈ P.io u, ¬ isRow (lay.pos g) →

@@ -825,7 +825,7 @@ theorem acceptsZK_wrD {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Json)
 inputs' tags (`TagsOkZJ`, untyped) and every sample setting each table up at `mPts` link points (`SampleOkZKJ`). -/
 theorem decodesOnZKJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} {d₀ : Json}
-    (y₀ : Composed.SampleSetupZJ (Composed.inputsJ I 0) mPts S₀ d₀) (L : Audit.SamplingDesign n) (hT : Composed.TagsOkZJ I)
+    (y₀ : Composed.SampleSetupZJ (Composed.inputsJ I 0) mPts S₀ d₀) (L : FlockSoundness.Audit.SamplingDesign n) (hT : Composed.TagsOkZJ I)
     (hDraw : ∀ ω, Composed.SampleOkZKJ I dj mPts (L.draw ω)) :
     Composed.DecodesOnZKJ execArith ZkExec.hs512 (Composed.planZJ (Reg := Reg) dj y₀) I
       (wrD I dj fun S R => (Composed.planZJ (Reg := Reg) dj y₀ S R).length)
@@ -841,7 +841,7 @@ theorem decodesOnZKJ_wrD_file {n : ℕ} {Reg : Type} (I : Exec.Inputs) (ht : I.t
     (hc : HmRow.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) (kd : ℕ) (hdiv : kd % Composed.nTab I = 0)
     (dj : Finset (Fin n) → Json) (hdf : ZkLink.SampleFileZK dj (.subset kd) n) {S₀ : Finset (Fin n)} {d₀ : Json}
     (y₀ : Composed.SampleSetupZJ (Composed.inputsJ I 0) (Exec.mPtsOf c.g (kd / Composed.nTab I)) S₀ d₀)
-    (L : Audit.SamplingDesign n) (hT : Composed.TagsOkZJ I) :
+    (L : FlockSoundness.Audit.SamplingDesign n) (hT : Composed.TagsOkZJ I) :
     Composed.DecodesOnZKJ execArith ZkExec.hs512 (Composed.planZJ (Reg := Reg) dj y₀) I
       (wrD I dj fun S R => (Composed.planZJ (Reg := Reg) dj y₀ S R).length)
       (Composed.opnAtZJ (Composed.planZJ dj y₀) I dj) (Composed.decAtZJ (Composed.planZJ dj y₀))

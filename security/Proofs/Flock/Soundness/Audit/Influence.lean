@@ -60,6 +60,8 @@ end Verity.Boolean.Circuit
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Finset
 open scoped ENNReal
 

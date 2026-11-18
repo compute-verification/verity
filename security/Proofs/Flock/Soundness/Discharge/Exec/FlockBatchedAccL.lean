@@ -33,7 +33,7 @@ resistance (`Assumptions.SHA512CRExpected`).
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting Audit Audit.Partition
+open Game Model Accounting FlockSoundness.Audit FlockSoundness.Audit.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/

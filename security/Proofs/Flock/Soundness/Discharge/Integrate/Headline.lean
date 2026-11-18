@@ -30,7 +30,7 @@ failing (`Flock.ProvedScope`), and `FailClosed.flock_headline_exec` takes none o
 
 namespace FlockSoundness.Discharge.Integrate
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Flock
 open FlockSoundness.Discharge.Exec
 open scoped ENNReal
 

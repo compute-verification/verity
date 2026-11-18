@@ -45,6 +45,8 @@ that accepts exactly when its sample misses `B` meets `(1 − q)^{|B|}` (`harm_c
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Finset
 open scoped ENNReal
 

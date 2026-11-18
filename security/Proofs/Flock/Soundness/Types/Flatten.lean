@@ -26,7 +26,7 @@ unchanged.
 
 namespace FlockSoundness.Types.Flatten
 
-open Flock Flock.DeriveAll Audit Types Types.Dag
+open Flock Flock.DeriveAll FlockSoundness.Audit Types Types.Dag
 
 /-! ## Gates -/
 

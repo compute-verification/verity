@@ -87,7 +87,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkBind.AtM1
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game Audit Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL
+open Game FlockSoundness.Audit Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128

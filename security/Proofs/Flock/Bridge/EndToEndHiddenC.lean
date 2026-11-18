@@ -46,7 +46,7 @@ import Proofs.Flock.Soundness.Game
   under `OpeningsCanon`, at the same bound;
 * `Flock.Bridge.endToEndHiddenC_of`: `OpeningsCanonTarget` gives `EndToEndHiddenC`. It is
   `zk_session_soundHJ_custody_regC` at `Bridge.canonAt` with its first and last terms in closed form, as
-  `EndToEndHidden` is `zk_session_soundHJ_custody_reg`'s (`Audit.SamplingDesign.subset_miss`, and `linkBoundZC` at A2);
+  `EndToEndHidden` is `zk_session_soundHJ_custody_reg`'s (`FlockSoundness.Audit.SamplingDesign.subset_miss`, and `linkBoundZC` at A2);
 * `Flock.Bridge.endToEndHidden_of_c`: `EndToEndHiddenC` gives `EndToEndHidden` (`incorrectRegZ_subset_incorrectRegZc`).
 -/
 
@@ -54,7 +54,7 @@ import Proofs.Flock.Soundness.Game
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
   Placed StrictCR DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal

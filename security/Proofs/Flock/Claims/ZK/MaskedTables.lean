@@ -76,7 +76,7 @@ sample, `SampleSetupZHJ.table`), so every table is a table the session sets up (
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec Composed
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec Composed
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128

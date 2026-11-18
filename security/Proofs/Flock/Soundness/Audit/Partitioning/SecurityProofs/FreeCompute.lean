@@ -15,6 +15,8 @@ The proofs of the free-compute statements of `Partitioning.Guarantees`.
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs
 
+open FlockSoundness
+
 open Finset Game
 open scoped ENNReal
 

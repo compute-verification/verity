@@ -33,7 +33,7 @@ set_option Elab.async false
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Flock FlockLevel3 Model Audit Binding Placed Compose FlockSoundness.Discharge.Inst
+open Flock FlockLevel3 Model FlockSoundness.Audit Binding Placed Compose FlockSoundness.Discharge.Inst
 open FlockSoundness.Discharge.Layout (portRowW)
 open FlockSoundness.Discharge.Hm (chunkBit chunkBit_of_lt)
 

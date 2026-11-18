@@ -182,7 +182,7 @@ end Req0
 
 section Reps
 
-open Flock Refine Exec Game Model Accounting Audit
+open Flock Refine Exec Game Model Accounting FlockSoundness.Audit
 open FlockSoundness.Discharge.DecodeZL FlockSoundness.Discharge.HiddenExec
 open Lean (Json)
 

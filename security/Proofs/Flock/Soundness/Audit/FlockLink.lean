@@ -48,6 +48,8 @@ record's `t·N_s(8N₀/e)/2^256` with `Q_s` in place of `N_s`, up to lower-order
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Model Accounting Extract LinkFinder
 open scoped ENNReal
 

@@ -28,7 +28,7 @@ map meets `TabZK.hpos` (`posLo_uniform`, from `Arith.Correct.lo_balanced`).
 
 namespace FlockSoundness.Discharge.ZkSession
 
-open Game Model Accounting Audit
+open Game Model Accounting FlockSoundness.Audit
 open scoped ENNReal NNReal
 
 variable {wideLeaf : Bool}

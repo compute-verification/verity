@@ -20,8 +20,8 @@ decoded one (`tapeOfGroups`). So `decodesOfRuns`, `decodesAllOfRuns` and `decode
 
 namespace FlockSoundness.Discharge.PlaysCoin
 
-open Flock FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge.Exec Model Accounting Audit
-  Audit.Partition
+open Flock FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge.Exec Model Accounting FlockSoundness.Audit
+  FlockSoundness.Audit.Partition
 
 local notation "𝔽" => FlockLevel3.GF128
 

@@ -72,7 +72,7 @@ the decoder `decAtZ`, the openings `opnAtZ`, no tail and `capOfRoot`. The refere
 def RunsZCLive : Prop :=
   ∀ {n mPts : ℕ} {Reg : Type} (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (y₀ : ZkLink.SampleSetupZK I mPts S₀ (dj S₀))
-    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.SamplingDesign n),
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : FlockSoundness.Audit.SamplingDesign n),
     ZkLink.TablesAtZKLive (n := n) (mPts := mPts) (Reg := Reg) → TagsOk I → ZkLink.RecordsLiveZK I dj wr →
     (∀ ω, ZkLink.SampleOkZK I dj mPts (L.draw ω)) →
     RunsOnZC (K := 𝕂) execArith hs512 (ZkLink.tablesAtZK (Reg := Reg) dj y₀) I wr

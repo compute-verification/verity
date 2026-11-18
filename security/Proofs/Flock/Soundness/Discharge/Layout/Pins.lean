@@ -29,7 +29,7 @@ paid once in the headline as `δ_tree`; nothing here is cryptographic.
 
 namespace FlockSoundness.Discharge.Layout
 
-open Game Model Audit Binding
+open Game Model FlockSoundness.Audit Binding
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} {Reg : Type} {mPts : ℕ}
 
@@ -65,7 +65,7 @@ namespace Readers
 
 variable {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-  (rd : Readers C plan tab) {P : Audit.Partition C n}
+  (rd : Readers C plan tab) {P : FlockSoundness.Audit.Partition C n}
   (place : ∀ S R u, u ∈ S → UnitPlace P (Partition.tabOf plan tab S R u).S u)
 
 /-- The value a witness holds at commit string `q`: its bits at `rowAt`, `false` past them. -/

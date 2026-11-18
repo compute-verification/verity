@@ -33,6 +33,8 @@ resistance (`Assumptions.SHA512CRExpected`).
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Model Accounting
 open scoped ENNReal
 

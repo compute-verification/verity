@@ -28,7 +28,7 @@ set_option Elab.async false
 
 namespace FlockSoundness.Discharge.Layout
 
-open Flock FlockLevel3 Model Audit Binding Placed
+open Flock FlockLevel3 Model FlockSoundness.Audit Binding Placed
 
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (pi : HmIn.Ports) (rowW : Fin c.ports.size → ℕ)
 

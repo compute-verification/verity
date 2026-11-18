@@ -52,7 +52,7 @@ fresh; `Discharge/ZkCoins`), and `J > 1` (the plan has one table).
 
 namespace FlockSoundness.Discharge.ZkExec
 
-open Game Audit Exec Refine Model Accounting ZkSession
+open Game FlockSoundness.Audit Exec Refine Model Accounting ZkSession
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128

@@ -89,12 +89,12 @@ unit) included. -/
 theorem sampleOkZKH_of_execG (I : Inputs) {g : ℕ}
     (hg : ∀ {d : Json} {st : Flock.Stmt}, Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables
       (some d) I.partition I.program = .ok st → st.c.g = g)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Audit.SamplingDesign.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Audit.SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (FlockSoundness.Audit.SamplingDesign.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : FlockSoundness.Audit.SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
     SampleOkZKH I dj (mPtsOf g (∑ s, ks s))
-      ((Audit.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
+      ((FlockSoundness.Audit.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
   refine ⟨fun D hD u hu => ?_, fun st hst => ?_⟩
   · rw [hdj _ D hD, sampleOf_proved, sampleOf_mem]
     exact ⟨u, hu, rfl⟩
@@ -112,12 +112,12 @@ units: when the record's sample file is the verifier's sample under the live sam
 source's bytes (every unit) included. -/
 theorem sampleOkZKH_of_exec (I : Inputs) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Audit.SamplingDesign.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Audit.SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (FlockSoundness.Audit.SamplingDesign.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : FlockSoundness.Audit.SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
     SampleOkZKH I dj (mPtsOf c.g (∑ s, ks s))
-      ((Audit.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
+      ((FlockSoundness.Audit.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
   sampleOkZKH_of_execG I (fun h => congrArg Flock.Circuit.g (setupHidden_c_of_parse hc h)) σs ks hks
     St hS Kd pop Lb src dj hdj ω
 
@@ -125,12 +125,12 @@ theorem sampleOkZKH_of_exec (I : Inputs) {c : Flock.Circuit}
 tags. -/
 theorem sampleOkZKH_of_execSt (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Audit.SamplingDesign.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Audit.SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (FlockSoundness.Audit.SamplingDesign.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : FlockSoundness.Audit.SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
     SampleOkZKH I dj (mPtsOf c.g (∑ s, ks s))
-      ((Audit.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
+      ((FlockSoundness.Audit.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
   sampleOkZKH_of_execG I (fun h => (stmt_g_of_setupHidden ((zkTags_typed I).trans ht) hc h).symm) σs ks hks
     St hS Kd pop Lb src dj hdj ω
 

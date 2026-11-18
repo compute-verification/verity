@@ -29,7 +29,7 @@ open Flock Flock.DeriveAll
 
 namespace FlockSoundness
 
-open Audit Types.Dag Types.Flatten Compose Audit.Partition
+open FlockSoundness.Audit Types.Dag Types.Flatten Compose FlockSoundness.Audit.Partition
 
 /-! ## `flatten`'s input gates are its first `inBits + 1` -/
 
@@ -253,7 +253,7 @@ structure UnitSpec where
 theorem getD_of_lt {a : Array ℕ} {i : ℕ} (h : i < a.size) : a.getD i 0 = a[i] := by
   simp [Array.getD, h]
 
-theorem Audit.Partition.mem_committed_iff {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) (g : Fin C.N) :
+theorem _root_.FlockSoundness.Audit.Partition.mem_committed_iff {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) (g : Fin C.N) :
     g ∈ P.committed ↔ (C.op g).isInput = true ∨ g ∈ C.outputs ∨ ∃ h, g ∈ (C.op h).args ∧ P.unit h ≠ P.unit g := by
   classical
   simp [Partition.committed]

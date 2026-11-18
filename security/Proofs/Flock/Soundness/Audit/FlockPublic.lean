@@ -32,6 +32,8 @@ committed values remains in their place, only these two facts about the statemen
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Model Accounting Extract LinkFinder
 open scoped ENNReal
 

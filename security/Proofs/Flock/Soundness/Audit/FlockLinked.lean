@@ -27,6 +27,8 @@ session run.
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Model Accounting Extract LinkFinder
 open scoped ENNReal
 

@@ -37,7 +37,7 @@ leaf decodes. The conclusion is `zk_sessions_recursive_fork_inner`'s.
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit StrictCR
+open Game FlockSoundness.Audit StrictCR
 open scoped ENNReal
 
 section Last

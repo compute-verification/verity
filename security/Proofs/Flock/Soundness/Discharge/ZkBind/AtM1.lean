@@ -28,7 +28,7 @@ setup), so `ksAvgStrictZ_le_m1` applies with no hypothesis on the tables.
 
 namespace FlockSoundness.Discharge.ZkBind
 
-open Flock FlockLevel3 Game Model Accounting Refine Audit ZkSession ZkLink ZkExec Integrate Placed
+open Flock FlockLevel3 Game Model Accounting Refine FlockSoundness.Audit ZkSession ZkLink ZkExec Integrate Placed
 open FlockSoundness.Discharge.Exec (Inputs)
 open scoped ENNReal
 

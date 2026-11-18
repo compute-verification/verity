@@ -8,11 +8,11 @@ import Proofs.Flock.Soundness.Game
 # `ε_bind` for `--zk` sessions under expected-time collision resistance (interactive-oracle layer)
 
 `zk_flock_count_execOS_m1` leaves the binding error as the named hypothesis `BindSound ε_bind`. It is discharged here in the
-shape of `Audit.Partition.flock_batched_linkSoundE`, for the protocol as Lean defines it at the interactive-oracle layer
+shape of `FlockSoundness.Audit.Partition.flock_batched_linkSoundE`, for the protocol as Lean defines it at the interactive-oracle layer
 (`sessionZK`), under expected-time collision resistance of SHA-512 for an explicit finder
 (`Assumptions.SHA512CRExpected`):
 
-* **The binding** (`ValueBindingZ`): `Audit.Partition.ValueBinding` for `--zk` tables. A message that packs a witness
+* **The binding** (`ValueBindingZ`): `FlockSoundness.Audit.Partition.ValueBinding` for `--zk` tables. A message that packs a witness
   satisfying a sampled proof block's statement opens the commit string of each of the unit's wires to a value whose commitment is
   the registered one and whose bit on the wire is the decoded one; two openings of one commit string with different values
   give a collision of `Hc`.
@@ -44,7 +44,7 @@ compiled prover and extracts, is `Discharge/ZkLink/Compiled.lean`'s open guarant
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting Audit LinkFinder ZkSession
+open Game Model Accounting FlockSoundness.Audit LinkFinder ZkSession
 open scoped ENNReal NNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
@@ -91,7 +91,7 @@ variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-/-- **The binding of wires to registered commit strings for `--zk` tables** (`Audit.Partition.ValueBinding`'s form,
+/-- **The binding of wires to registered commit strings for `--zk` tables** (`FlockSoundness.Audit.Partition.ValueBinding`'s form,
 over `TabZK` plans). Each wire is held by a commit string (`pos`). A message that packs a witness satisfying sampled proof block
 `u`'s table's statement opens the commit string of each of `u`'s wires: the opening's commitment is the string registered
 at `R` (`cs`), and its value's bit on the wire is the decoded one. Two openings of one string with different values give
@@ -253,7 +253,7 @@ theorem readsZ_eq_empty {c : vb.Pos} {ω : L.Ω} (h : ¬ ReadsSampleZ A P planZ 
 
 /-- **A2 for one prover's link finders** (`Assumptions.SHA512CRExpected`): at the registration `R` and the prover's
 continuation `τ`, for the finder built for each commit string a sample can read, at cost `t'` per trial. As at M0
-(`Audit.Partition.LinkCR`), A2 is asked only of the finders of the prover it bounds. -/
+(`FlockSoundness.Audit.Partition.LinkCR`), A2 is asked only of the finders of the prover it bounds. -/
 def LinkCRZ (M : ℕ) (t' : ℝ) : Prop :=
   ∀ (c : vb.Pos) (_ : Nonempty (ΩcZ A P planZ tab vb L c)), Assumptions.SHA512CRExpected Hc
     (finderG (trialZ A P planZ tab vb c) M) (finderStrat _ (sampleStrat _) M) (outZ A P planZ tab vb R τ c)

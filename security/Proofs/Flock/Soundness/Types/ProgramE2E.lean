@@ -29,6 +29,8 @@ since computed columns are the unit's own gates and the constant's is on `one`.
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Model Accounting Extract LinkFinder
 open scoped ENNReal
 

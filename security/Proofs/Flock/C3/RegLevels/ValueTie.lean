@@ -437,10 +437,10 @@ theorem valueColl_spec {reg : Registered.Port} {rows : Array (Array ℕ)} {salt 
 
 section Reads
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-  {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
+  {decode : FlockSoundness.Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
   {lay : FlockSoundness.Binding.Layout P plan tab decode} {rs : FlockSoundness.Binding.HmRowsX lay}
 
 /-- **A registered read of a value the verifier registers itself**: where `checkRows` accepted the port `port` at

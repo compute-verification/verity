@@ -39,7 +39,7 @@ with no transfer to compiled tables:
 
 namespace FlockSoundness.Discharge.PlainJ
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Flock
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Integrate
 open FlockSoundness.Discharge.Composed (nTab nTab_pos drawJ partOf partS mem_partS parse_tagsAt loadPublic_tagsAt)
 open FlockSoundness.Discharge.ZkBind (recastAcc)

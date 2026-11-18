@@ -25,6 +25,8 @@ $$\Pr\Big[\text{accept} \wedge \sum_{t \le T} h(\mathrm{incorrect}(X_t)) \ge H\B
 
 namespace FlockSoundness.Audit.Adaptive
 
+open FlockSoundness
+
 open Game Finset Play
 open scoped ENNReal
 

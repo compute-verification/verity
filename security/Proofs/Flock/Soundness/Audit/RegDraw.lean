@@ -19,6 +19,8 @@ is that game: registration `R`, then the coin of `L R`, then the session on `L R
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game
 
 variable {n : ℕ}

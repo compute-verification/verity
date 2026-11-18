@@ -58,6 +58,8 @@ a token, so `Proofs/ResourceAccounting.lean` imports it.
 
 namespace FlockSoundness.Audit.SamplingDesign
 
+open FlockSoundness
+
 /-- **A `subset` live sample that runs is `Flock.Draw.subset` on its stream.** -/
 theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 256} {k n : ℕ} {d : Flock.Draw.UnitSample}
     (hd : runOS f (.subset k) n = some d) : Flock.Draw.subset k n (streamOf (f 0)) = some d.units := by

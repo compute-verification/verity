@@ -43,6 +43,8 @@ Its corollaries are the integrity profile (`audit_profile`), the count curve
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game
 open scoped ENNReal
 

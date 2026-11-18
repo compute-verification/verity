@@ -41,6 +41,8 @@ The Bernoulli sampling design's live sample is `Proofs.Flock.Claims.Sampling.Exe
 
 namespace FlockSoundness.Audit.SamplingDesign
 
+open FlockSoundness
+
 open Game Finset
 open scoped ENNReal
 

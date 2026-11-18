@@ -27,7 +27,7 @@ each of one of the types `T i`, and then flips a coin of type `CT k`; round `r` 
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit.SampleExec
+open Game FlockSoundness.Audit.SampleExec
 open scoped ENNReal
 
 /-- Averaging a function of one coordinate over a product of uniform coordinates averages it over that coordinate. -/

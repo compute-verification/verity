@@ -16,6 +16,8 @@ import it. `SamplingDesign.subset n n` samples every unit, so every set doing po
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal
 
+open FlockSoundness
+
 open Finset
 
 theorem log_inv_half : Real.log (1 / 2 : ℝ)⁻¹ = Real.log 2 := by norm_num

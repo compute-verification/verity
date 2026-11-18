@@ -43,7 +43,7 @@ import Proofs.Flock.Soundness.Refine.Setup
 
 namespace FlockSoundness.Discharge.DecodeZLJ
 
-open Flock Refine Exec Game Model Accounting Audit
+open Flock Refine Exec Game Model Accounting FlockSoundness.Audit
 open FlockSoundness.Discharge.Tables FlockSoundness.Discharge.DecodeZL FlockSoundness.Discharge.Integrate
 open Lean (Json)
 

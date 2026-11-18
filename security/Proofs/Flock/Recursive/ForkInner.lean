@@ -46,7 +46,7 @@ the relabelled transcript is accepted and that some outer outcome the leaf reach
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit StrictCR
+open Game FlockSoundness.Audit StrictCR
 open scoped ENNReal
 
 theorem option_eq_of_rel {α : Type} {R : α → α → Prop} (hR : ∀ a b, R a b → a = b) :

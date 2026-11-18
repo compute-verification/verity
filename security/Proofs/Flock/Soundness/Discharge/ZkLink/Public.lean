@@ -35,6 +35,8 @@ essentially every value exists, so there it adds nothing to correctness in `X`.
 
 namespace FlockSoundness.Audit.Partition
 
+open FlockSoundness
+
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
 /-- **Unit `u` reads only its own gates and input gates.** -/
@@ -78,7 +80,7 @@ end FlockSoundness.Audit.Partition
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting Audit ZkSession
+open Game Model Accounting FlockSoundness.Audit ZkSession
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}

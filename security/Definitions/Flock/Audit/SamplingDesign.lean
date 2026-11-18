@@ -33,6 +33,8 @@ The lemmas named here are `Proofs/Flock/Soundness/Audit/SamplingDesign.lean`'s.
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game
 open scoped ENNReal
 

@@ -25,7 +25,7 @@ would give `(3/2)·(2(1 + k)t')^{2/3}/2^{512/3}`; that form would need the link 
 
 namespace FlockSoundness.CROnly
 
-open Game Model Accounting Extract LinkFinder Audit Audit.Partition
+open Game Model Accounting Extract LinkFinder FlockSoundness.Audit FlockSoundness.Audit.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/

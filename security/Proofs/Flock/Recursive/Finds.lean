@@ -86,7 +86,7 @@ end FlockSoundness.StrictCR
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Model Accounting Extract LinkFinder Audit Audit.Partition ZkSession ZkLink StrictCR ZkReg
+open Game Model Accounting Extract LinkFinder FlockSoundness.Audit FlockSoundness.Audit.Partition ZkSession ZkLink StrictCR ZkReg
 open scoped ENNReal
 
 section Cost

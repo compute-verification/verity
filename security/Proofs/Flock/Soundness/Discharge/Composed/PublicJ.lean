@@ -38,11 +38,11 @@ incorrect proof blocks contain `zk_session_soundJ_custody`'s (`incorrect_subset_
 
 namespace FlockSoundness.Discharge.Layout
 
-open Flock FlockLevel3 Audit Placed
+open Flock FlockLevel3 FlockSoundness.Audit Placed
 
 /-- **A unit cut out as a rows unit reads only its own gates and input gates**, when every column of it that is no
 computed column is on an input gate. -/
-theorem readsOwn_of_rows {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {R : Fin n → Rows}
+theorem readsOwn_of_rows {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {R : Fin n → Rows}
     (I : ∀ u, P.IsRowsUnit u (R u))
     (hread : ∀ u (y : Fin (R u).w), (∀ i, y ≠ (R u).comp i) → P.unit ((I u).wire y) = none) (u : Fin n) :
     P.ReadsOwn u := by
@@ -67,7 +67,7 @@ end FlockSoundness.Discharge.Layout
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 

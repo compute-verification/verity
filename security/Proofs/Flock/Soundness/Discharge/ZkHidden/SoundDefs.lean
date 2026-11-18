@@ -68,7 +68,7 @@ def RunsZCLiveH : Prop :=
   ∀ {n mPts : ℕ} {Reg : Type} (I : Inputs) (_ht : I.tags.typed = false) {c : Flock.Circuit}
     (_hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
-    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.SamplingDesign n),
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : FlockSoundness.Audit.SamplingDesign n),
     TablesAtZKHLive (n := n) (mPts := mPts) (Reg := Reg) → HiddenDec.TagsOkH I → ZkLink.RecordsLiveZK I dj wr →
     (∀ ω, SampleOkZKH I dj mPts (L.draw ω)) →
     RunsOnZC (K := 𝕂) execArith hs512 (tablesAtZKH (Reg := Reg) dj y₀) I wr
@@ -80,7 +80,7 @@ def RunsZCLiveHI : Prop :=
   ∀ {n mPts : ℕ} {Reg : Type} (I : Inputs) (_ht : I.tags.typed = false) {c : Flock.Circuit}
     (_hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
-    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.SamplingDesign n),
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : FlockSoundness.Audit.SamplingDesign n),
     TablesAtZKHLiveI (n := n) (mPts := mPts) (Reg := Reg) → HiddenDec.TagsOkH I → ZkLink.RecordsLiveZK I dj wr →
     (∀ ω, SampleOkZKH I dj mPts (L.draw ω)) →
     RunsOnZC (K := 𝕂) execArith hs512 (tablesAtZKH (Reg := Reg) dj y₀) I wr
@@ -93,7 +93,7 @@ def RunsZCLiveHSt : Prop :=
   ∀ {n mPts : ℕ} {Reg : Type} (I : Inputs) (_ht : I.tags.typed = false) {c : Flock.Circuit}
     (_hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
-    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.SamplingDesign n),
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : FlockSoundness.Audit.SamplingDesign n),
     TablesAtZKHLiveSt (n := n) (mPts := mPts) (Reg := Reg) → HiddenDec.TagsOkH I → ZkLink.RecordsLiveZK I dj wr →
     (∀ ω, SampleOkZKH I dj mPts (L.draw ω)) →
     RunsOnZC (K := 𝕂) execArith hs512 (tablesAtZKH (Reg := Reg) dj y₀) I wr
@@ -105,7 +105,7 @@ def RunsZCLiveHISt : Prop :=
   ∀ {n mPts : ℕ} {Reg : Type} (I : Inputs) (_ht : I.tags.typed = false) {c : Flock.Circuit}
     (_hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
-    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.SamplingDesign n),
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : FlockSoundness.Audit.SamplingDesign n),
     TablesAtZKHLiveISt (n := n) (mPts := mPts) (Reg := Reg) → HiddenDec.TagsOkH I → ZkLink.RecordsLiveZK I dj wr →
     (∀ ω, SampleOkZKH I dj mPts (L.draw ω)) →
     RunsOnZC (K := 𝕂) execArith hs512 (tablesAtZKH (Reg := Reg) dj y₀) I wr

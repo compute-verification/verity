@@ -51,7 +51,7 @@ record's `t·N_s(8N₀/e)/2^256` with `Q_s` in place of `N_s`, up to lower-order
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting Extract LinkFinder Audit Audit.Partition
+open Game Model Accounting Extract LinkFinder FlockSoundness.Audit FlockSoundness.Audit.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/

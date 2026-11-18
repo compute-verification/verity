@@ -22,7 +22,7 @@ public import Proofs.Flock.Bridge.EndToEndHiddenC
 
 namespace FlockSoundness.Discharge.Layout
 
-open Flock FlockLevel3 Audit Placed
+open Flock FlockLevel3 FlockSoundness.Audit Placed
 
 /-- **`keyProgP`'s proof blocks read only their own gates and input gates** (`keyProg_readsOwn`). -/
 theorem keyProgP_readsOwn (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (pi : HmIn.Ports)
@@ -34,7 +34,7 @@ end FlockSoundness.Discharge.Layout
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
   Placed StrictCR DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal

@@ -31,6 +31,8 @@ open scoped ENNReal
 
 namespace FlockSoundness.Audit.InfluenceWitness
 
+open FlockSoundness
+
 namespace W
 
 abbrev ops : Fin 4 → Verity.Boolean.Op 4

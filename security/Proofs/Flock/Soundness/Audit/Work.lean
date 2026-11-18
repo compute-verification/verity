@@ -51,6 +51,8 @@ sampling design samples on the same coins, and `escape_widen_le` carries every m
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Finset
 open scoped ENNReal NNReal
 

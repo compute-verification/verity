@@ -31,7 +31,7 @@ has them (`Flock.Registered.check` refuses a registered port that is not a table
 
 namespace FlockSoundness.Discharge.ZkReg
 
-open Flock FlockLevel3 Game Model Accounting Refine Audit ZkSession ZkLink ZkExec ZkBind Integrate Placed
+open Flock FlockLevel3 Game Model Accounting Refine FlockSoundness.Audit ZkSession ZkLink ZkExec ZkBind Integrate Placed
 open FlockSoundness.Discharge.Exec (Inputs)
 open scoped ENNReal
 

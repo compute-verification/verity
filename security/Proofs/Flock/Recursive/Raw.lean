@@ -49,7 +49,7 @@ builds them from the raw ones and carries the prover's strategy across:
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg FailClosed
 open ZkHidden (planZHJ planZHJ_length SampleSetupZHJ TagsOkZHJ SampleOkZKHJ layShHJ)
 open FlockSoundness.Discharge.Tables (LiveOutJ liveSession liveRoundsJ)

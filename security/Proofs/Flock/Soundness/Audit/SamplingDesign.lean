@@ -31,6 +31,8 @@ misses a set `B` of units.
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game
 open scoped ENNReal
 

@@ -35,7 +35,7 @@ builds from a live prover.
 
 namespace FlockSoundness.Discharge.ZkExec
 
-open Game Audit Exec Refine Flock
+open Game FlockSoundness.Audit Exec Refine Flock
 
 local notation "𝔽" => FlockLevel3.GF128
 

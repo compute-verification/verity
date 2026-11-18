@@ -42,7 +42,7 @@ verdict accepts. The statements here:
 
 namespace FlockSoundness.Discharge.DecodeZL
 
-open Flock Refine Exec Game Model Accounting Audit
+open Flock Refine Exec Game Model Accounting FlockSoundness.Audit
 open FlockSoundness.Discharge.Integrate
 
 local notation "𝔽" => FlockLevel3.GF128

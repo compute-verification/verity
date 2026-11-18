@@ -21,7 +21,7 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Placed
 
-open Model Audit
+open Model FlockSoundness.Audit
 
 /-- **The circuit's program on Δ's source keys with public inputs**: `n` units of the circuit's template instance rows,
 input `x` of each on the gate of its key (`Aliased.keyIdxP`), the zero's gate when it reads the zero. -/

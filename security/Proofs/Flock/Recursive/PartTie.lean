@@ -48,7 +48,7 @@ guarantee's disjunct, `VBridgeCOff`), the rep's rounds and comb as the family's 
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit
+open Game FlockSoundness.Audit
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
   {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}

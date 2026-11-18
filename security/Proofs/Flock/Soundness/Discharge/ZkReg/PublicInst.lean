@@ -48,7 +48,7 @@ of `scopeOkH`.
 
 namespace FlockSoundness.Discharge.ZkReg
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind ZkHidden HiddenExec
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind ZkHidden HiddenExec
   HiddenDec DecodeZL Composed Placed StrictCR
 open FlockSoundness.Discharge.Exec (Inputs recordDraw)
 open FlockSoundness.Discharge.Inst

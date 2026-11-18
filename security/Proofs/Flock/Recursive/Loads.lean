@@ -49,7 +49,7 @@ equation:
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg FailClosed
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal

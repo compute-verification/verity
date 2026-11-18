@@ -50,6 +50,8 @@ The headline, gives each one's kind):
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Model Accounting Extract LinkFinder
 open scoped ENNReal
 

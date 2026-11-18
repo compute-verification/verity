@@ -51,6 +51,8 @@ does not bind, or prove those strata whole.
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Finset
 open scoped ENNReal NNReal
 

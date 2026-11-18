@@ -27,7 +27,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 # Proof of Flock's end-to-end guarantee under hidden outputs
 
 `Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden` is `zk_session_soundHJ_custody_reg` with its
-first and last terms in closed form, as `EndToEnd` is `zk_session_soundJ_custody_reg`'s (`Audit.SamplingDesign.subset_miss`, and
+first and last terms in closed form, as `EndToEnd` is `zk_session_soundJ_custody_reg`'s (`FlockSoundness.Audit.SamplingDesign.subset_miss`, and
 `linkBoundZC` at A2). `Flock.SecurityProofs.EndToEndHiddenSampled : Flock.Guarantees.EndToEndHiddenSampled` is
 `zk_session_soundHJ_custody_sampled_reg` with its last term in closed form. Each reads the circuit the descriptor
 unrolls to, which `HmOut.parse` reads from the file (`Flock.Desc.parse_flat`). `EndToEndHiddenFlat` and

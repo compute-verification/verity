@@ -45,6 +45,8 @@ named assumption; `ε_bind` stays named (`BindSound`).
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Model Accounting
 open scoped ENNReal
 

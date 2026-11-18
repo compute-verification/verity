@@ -30,6 +30,8 @@ therefore runs out only if one of its `k` steps rejects its first word.
 
 namespace FlockSoundness.Audit.SampleExec
 
+open FlockSoundness
+
 open Game Finset
 open scoped ENNReal
 
@@ -231,6 +233,8 @@ theorem subset_none_le (k n L : ℕ) (hk : k ≤ n) (hL : k * Flock.Draw.width n
 end FlockSoundness.Audit.SampleExec
 
 namespace FlockSoundness.Audit.SamplingDesign
+
+open FlockSoundness
 
 open Game Finset
 open scoped ENNReal

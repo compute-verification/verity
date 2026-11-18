@@ -67,7 +67,7 @@ theorem rowsFit_of_scopeGenH {tags : Tags} {cf : ByteArray} {tables : List (Stri
 
 section Hidden
 
-open Game Model Accounting Refine Audit Audit.Partition
+open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.HiddenExec FlockSoundness.Discharge.HiddenDec
   FlockSoundness.Discharge.DecodeZL FlockSoundness.Discharge.Inst
 open scoped ENNReal
@@ -138,7 +138,7 @@ end Hidden
 
 section Zk
 
-open Game Audit Exec Refine FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec HiddenDec
+open Game FlockSoundness.Audit Exec Refine FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec HiddenDec
   Composed StrictCR DecodeZL ZkHidden
 open FlockSoundness.Discharge.Inst
 open scoped ENNReal

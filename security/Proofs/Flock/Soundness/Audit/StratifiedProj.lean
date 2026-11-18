@@ -25,6 +25,8 @@ them, stratum `s`'s at `ω s`. With `n_s = |stratum σ s|` and `m_s = |B.filter 
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Finset
 open scoped ENNReal
 

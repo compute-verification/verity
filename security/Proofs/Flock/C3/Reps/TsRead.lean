@@ -111,7 +111,7 @@ theorem rows_congr {Q : FlockSoundness.Discharge.Recursion.VStmt} {bits bits' : 
   · rw [getElem!_neg r l (by omega), getElem!_neg r' l (by omega)]
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockVBridge.Family (skOf maskOf cpO)
 open FlockVBridge.AccChain (levelLanes)

@@ -36,7 +36,7 @@ columns, where every satisfying witness carries one value on the unit's inputs t
 
 namespace FlockSoundness
 
-open Audit Model
+open FlockSoundness.Audit Model
 
 namespace Rows
 
@@ -49,7 +49,12 @@ theorem comp_injective : Function.Injective R.comp := fun i j h => by
 
 end Rows
 
-namespace Audit.Partition
+end FlockSoundness
+
+namespace FlockSoundness.Audit.Partition
+
+open FlockSoundness
+open FlockSoundness.Audit Model
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
@@ -122,7 +127,11 @@ theorem correct_decode {z : Fin R.w → Bool} (hz : R.Sat z) (ha : I.Agree z) : 
 
 end IsRowsUnit
 
-end Audit.Partition
+end FlockSoundness.Audit.Partition
+
+namespace FlockSoundness
+
+open FlockSoundness.Audit Model
 
 /-! ## Rows placed in a statement -/
 
@@ -203,7 +212,7 @@ theorem PlacedSat.one_eq {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ 
 /-- **The compiled lowering, for every template.** If a witness satisfies a statement in which unit
 `u`'s rows are placed in block `o` at the columns `col`, and the unit's inputs on one gate carry one
 value there, the transcript decoded from that block makes `u` correct. -/
-theorem lowering_sound {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
+theorem lowering_sound {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {R : Rows}
     (I : P.IsRowsUnit u R) {S : Statement} {col : Fin R.w → Fin (2 ^ S.kLog)}
     (hpl : Placement S R col) (o : Fin (2 ^ S.nbl)) {z : Witness S.m} (hz : S.Satisfies z)
     (ha : I.Agree fun c => bit (S.block z o (col c))) :
@@ -212,7 +221,7 @@ theorem lowering_sound {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partiti
 
 namespace UnitPlace
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {S : Statement} {u : Fin n}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {S : Statement} {u : Fin n}
 
 theorem agree (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
     pl.inst.Agree fun c => bit (S.block z pl.o (pl.col c)) :=

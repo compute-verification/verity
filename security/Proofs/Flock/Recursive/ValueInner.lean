@@ -35,7 +35,7 @@ import Proofs.Flock.VBridge.PartS
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit
+open Game FlockSoundness.Audit
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
 

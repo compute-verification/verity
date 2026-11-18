@@ -18,6 +18,8 @@ positive probability, so only the empty set escapes with probability `1`.
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil
 
+open FlockSoundness
+
 open Finset
 open scoped ENNReal
 

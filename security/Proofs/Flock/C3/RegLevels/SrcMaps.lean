@@ -86,7 +86,7 @@ theorem opening_rounds {c3 : RecCoins.C3} {unit : String} {o : RecCoins.Register
 end Rounds
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 
 /-- The rounds of `stacked/rep0`'s coins at `c3`, where it has them. -/
@@ -173,7 +173,7 @@ end FlockC3.Opening
 namespace FlockC3.RegLevels
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 open FlockSoundness.Discharge.PlaysCoin (coinArr)
 open FlockSoundness.Refine (capAt)

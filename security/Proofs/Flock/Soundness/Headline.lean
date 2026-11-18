@@ -40,6 +40,8 @@ states, and which covers the challenger's keyed coin tree: `verify` refuses a se
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Model Accounting Extract LinkFinder Refine Partition
 open scoped ENNReal
 

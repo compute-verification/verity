@@ -28,9 +28,9 @@ readers are fixed before the witness is (a reader that chose its values would di
 
 namespace FlockSoundness.Discharge.Layout
 
-open Game Model Audit Binding
+open Game Model FlockSoundness.Audit Binding
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n}
 
 /-- **Each committed wire of a unit is on a column of its instance**: the unit's own gates are its computed rows'
 columns, and the gates they read are columns of those rows. -/

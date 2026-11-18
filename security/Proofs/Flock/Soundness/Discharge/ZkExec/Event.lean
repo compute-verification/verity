@@ -34,7 +34,7 @@ table count and sample: nothing here fixes them. Lemmas that read `setupH`'s sta
 namespace FlockSoundness.Discharge.ZkExec
 
 open Lean (Json)
-open Game Audit Exec
+open Game FlockSoundness.Audit Exec
 
 /-- The coins `verify --zk` sets a session up on: the keyed coin tree of the session's tables (`Zk.coinSpec`: the
 session's stream, then each table's two reps). -/

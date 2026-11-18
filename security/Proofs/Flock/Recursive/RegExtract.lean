@@ -31,7 +31,7 @@ sample are the inner fork at round 0 (`forkG pick 0`, `StrictCR.twoRuns`).
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit StrictCR
+open Game FlockSoundness.Audit StrictCR
 open scoped ENNReal
 
 section Runs

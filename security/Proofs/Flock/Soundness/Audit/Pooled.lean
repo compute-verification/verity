@@ -38,6 +38,8 @@ window's error once per window, so its second term grows with the number of wind
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game
 open scoped ENNReal
 

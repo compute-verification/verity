@@ -45,7 +45,7 @@ sets up at `count > 1` (`accepts_tables`), with dec-zl's one-table decoder run o
 
 namespace FlockSoundness.Discharge.DecodeZLJ
 
-open Flock Refine Exec Game Model Accounting Audit
+open Flock Refine Exec Game Model Accounting FlockSoundness.Audit
 open FlockSoundness.Discharge.Tables FlockSoundness.Discharge.DecodeZL
 open Lean (Json)
 

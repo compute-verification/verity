@@ -19,6 +19,8 @@ risk, at the price where the fill stops.
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Finset
 open scoped ENNReal
 variable {n : ℕ}

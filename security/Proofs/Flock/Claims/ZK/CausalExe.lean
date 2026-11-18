@@ -69,7 +69,7 @@ commits a column that reads no coin (`Cx.digOf_pads`), and a cut's pads leaf at 
 
 namespace FlockSoundness.Discharge.Composed.Cx
 
-open Game Audit Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL
+open Game FlockSoundness.Audit Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL
 
 local notation "𝔽" => FlockLevel3.GF128
 

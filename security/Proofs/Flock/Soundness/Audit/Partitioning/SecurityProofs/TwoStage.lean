@@ -14,6 +14,8 @@ The proofs of the two-stage statements of `Partitioning.Guarantees`.
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs
 
+open FlockSoundness
+
 /-- With `G = C(x, j)`, `B = C(x, j+1)` and `A = C(x, j+2)`: `B² ≤ 2AG + 2BG + G²`. Through `B (j+1) = G (x − j)` and
 `A (j+2) = B (x − j − 1)`, it is `G² (j s² + 2(j+1)² s + (j+1)²(j+2)) ≥ 0` with `s = x − j`. -/
 theorem choose_sq_le (x j : ℕ) :

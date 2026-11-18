@@ -265,8 +265,8 @@ end Session
 at a prover each of whose tables' finders, after each sample, satisfies `SHA512CRStrict` at budgets `qF`, `qS`
 (`TableCRL`). -/
 theorem ksAvgBE_le_strictL {n : ℕ} {Reg D Sl : Type} [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H)
-    {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) {L : Audit.SamplingDesign n} (k : ℕ) {qF qS : ℝ} (R : Reg)
-    (τ : Audit.Cont L Reg (batchedSessionL H E Lf plan) R)
+    {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) {L : FlockSoundness.Audit.SamplingDesign n} (k : ℕ) {qF qS : ℝ} (R : Reg)
+    (τ : FlockSoundness.Audit.Cont L Reg (batchedSessionL H E Lf plan) R)
     (hCR : ∀ ω j, TableCRL execArith H E Lf (plan (L.draw ω) R) j (batchStratL H E Lf plan (τ ω)) qF qS) :
     ksAvgBEL H E Lf plan k R τ ≤ ksAvgStrict plan L k qF qS R := by
   refine avg_mono fun ω => iSup_mono fun j => ?_

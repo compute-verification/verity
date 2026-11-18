@@ -50,6 +50,8 @@ The window (`PlanDraw.executionPhase`, `plan.draw` for each call under one key, 
 
 namespace FlockSoundness.Audit.KeyedSample
 
+open FlockSoundness
+
 open Game Finset SampleExec
 open scoped ENNReal
 
@@ -353,6 +355,8 @@ end FlockSoundness.Audit.KeyedSample
 
 namespace FlockSoundness.Audit.SamplingDesign
 
+open FlockSoundness
+
 open Game Finset
 open scoped ENNReal
 
@@ -384,6 +388,8 @@ theorem subsetOn_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
 end FlockSoundness.Audit.SamplingDesign
 
 namespace FlockSoundness.Audit.KeyedSample
+
+open FlockSoundness
 
 open Game Finset SampleExec Randomness
 open scoped ENNReal
@@ -512,6 +518,8 @@ theorem sampleOn_units (T : ℕ → ℕ → ByteArray) : ∀ (WS : List (List Pa
 end FlockSoundness.Audit.KeyedSample
 
 namespace FlockSoundness.Audit.SamplingDesign
+
+open FlockSoundness
 
 open Game Finset SampleExec Randomness
 open scoped ENNReal
@@ -891,6 +899,8 @@ end FlockSoundness.Randomness
 
 namespace FlockSoundness.Audit.SamplingDesign
 
+open FlockSoundness
+
 open Game Finset Randomness
 open scoped ENNReal
 
@@ -996,6 +1006,8 @@ theorem keyedExecutionPhase_escape_le_of_names (σ : Fin n → Fin M) (k : Fin M
 end FlockSoundness.Audit.SamplingDesign
 
 namespace FlockSoundness.Audit.SamplingDesign
+
+open FlockSoundness
 
 open Game Finset Randomness
 open scoped ENNReal

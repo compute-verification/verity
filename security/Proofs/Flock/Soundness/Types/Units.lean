@@ -29,7 +29,7 @@ open Flock Flock.DeriveAll
 
 namespace FlockSoundness
 
-open Audit Types.Dag Types.Flatten Compose
+open FlockSoundness.Audit Types.Dag Types.Flatten Compose
 
 /-- A gate as a `Verity.Boolean.Op`, its arguments renamed by `w`. -/
 def Types.Flatten.Gate.lift {N : ℕ} (w : ℕ → Fin N) : Gate → Verity.Boolean.Op N
@@ -114,7 +114,12 @@ theorem Rows.one_ne_comp (R : Rows) : ∀ i, R.one ≠ R.comp i := fun i h => by
   have := i.isLt
   omega
 
-namespace Audit.Partition
+end FlockSoundness
+
+namespace FlockSoundness.Audit.Partition
+
+open FlockSoundness
+open FlockSoundness.Audit Types.Dag Types.Flatten Compose
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
@@ -227,9 +232,13 @@ theorem localEval_compose (hd : deriveChecked types ls info words unit = .ok don
 
 end IsRowsUnit
 
-end Audit.Partition
+end FlockSoundness.Audit.Partition
 
-open Audit.Partition
+namespace FlockSoundness
+
+open FlockSoundness.Audit Types.Dag Types.Flatten Compose
+
+open FlockSoundness.Audit.Partition
 
 /-- **One unit's rows and gates, and how the Boolean circuit's values are read off the audit's** (`m`). On `C` the unit is
 an instance of the rows `deriveChecked` composes for layout `idx`, of type `t`; on `CB`, of `t`'s unit gates. Through `m`,

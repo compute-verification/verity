@@ -25,7 +25,7 @@ and the audit's session is `batchedSessionL` on the plan.
 
 namespace FlockSoundness.Discharge.Tables
 
-open Game Model Accounting Refine Audit Audit.Partition Exec
+open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Exec
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128

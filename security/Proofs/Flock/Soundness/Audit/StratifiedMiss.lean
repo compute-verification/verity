@@ -27,6 +27,8 @@ likeliest set to escape fills the strata greedily, taking the largest factors fi
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Finset
 open scoped ENNReal
 

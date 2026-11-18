@@ -40,7 +40,7 @@ commitment fixed before the coin. An inner verifier that ignores the last round'
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit StrictCR
+open Game FlockSoundness.Audit StrictCR
 open scoped ENNReal
 
 section Last

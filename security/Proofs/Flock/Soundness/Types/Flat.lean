@@ -23,7 +23,7 @@ about how `place` arranges groups. Calls, exported inputs and reads come later.
 
 namespace FlockSoundness.Types
 
-open Flock Flock.Derive Audit
+open Flock Flock.Derive FlockSoundness.Audit
 
 /-- A form's value: the XOR of its wires' values, and its constant. -/
 def formVal (v : ℕ → Bool) (f : Form) : Bool := Bool.xor (Verity.Boolean.xorSum f.ws.toList v) (decide (f.c = 1))

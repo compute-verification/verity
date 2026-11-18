@@ -27,7 +27,7 @@ session's acceptance probability and `r = N₀/(ek) < 1`:
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting Audit ZkSession
+open Game Model Accounting FlockSoundness.Audit ZkSession
 open scoped ENNReal NNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}

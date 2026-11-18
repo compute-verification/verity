@@ -30,7 +30,7 @@ hypotheses become the sites (`si`), the parse (`hparse`), the layout (`lay`, `rs
 
 namespace FlockSoundness.Discharge.ZkBind
 
-open Game Model Accounting Audit ZkSession ZkLink StrictCR Placed Refine Binding
+open Game Model Accounting FlockSoundness.Audit ZkSession ZkLink StrictCR Placed Refine Binding
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}

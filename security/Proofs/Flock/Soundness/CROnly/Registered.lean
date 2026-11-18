@@ -21,7 +21,7 @@ for `hCR : LinkCR …`, as `CROnly.E2E` restates the forms they extend: the boun
 
 namespace FlockSoundness.CROnly
 
-open Game Model Accounting Extract LinkFinder Refine Audit Audit.Partition Binding Registered
+open Game Model Accounting Extract LinkFinder Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Binding Registered
 open scoped ENNReal
 
 /-- The executable's field. -/

@@ -42,6 +42,8 @@ closed form. Stratum `s` has `n_s` units of which `k_s` are sampled uniformly wi
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Finset
 open scoped ENNReal NNReal
 

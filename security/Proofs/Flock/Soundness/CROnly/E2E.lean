@@ -29,7 +29,7 @@ verifier checks `final_c` in the clear. None is about `--zk`, whose session mode
 
 namespace FlockSoundness.CROnly
 
-open Game Model Accounting Extract LinkFinder Refine Audit Audit.Partition
+open Game Model Accounting Extract LinkFinder Refine FlockSoundness.Audit FlockSoundness.Audit.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/

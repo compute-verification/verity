@@ -65,7 +65,7 @@ only where verity-verify-proof `--zk` accepts what `wr` writes at it. -/
 def RunsZCLiveA : Prop :=
   ∀ {n mPts : ℕ} {Reg : Type} (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (y₀ : ZkLink.SampleSetupZK I mPts S₀ (dj S₀))
-    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.SamplingDesign n),
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : FlockSoundness.Audit.SamplingDesign n),
     ZkLink.TablesAtZKLive (n := n) (mPts := mPts) (Reg := Reg) → TagsOk I → ZkLink.RecordsLiveZK I dj wr →
     (∀ ω R (o : LiveOut mPts), AcceptsZK I (wr (L.draw ω) R o) → ZkLink.SampleOkZK I dj mPts (L.draw ω)) →
     RunsOnZC (K := 𝕂) execArith hs512 (ZkLink.tablesAtZK (Reg := Reg) dj y₀) I wr
@@ -102,12 +102,12 @@ theorem SampleFileZK.card {dj : Finset (Fin n) → Lean.Json} {samplingDesign : 
 /-- **`SampleOkZK` at a sample of the live sampling design whose run succeeds**, at `mPtsOf c.g (∑ s, k s)` link points. -/
 theorem sampleOkZK_execOS (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) {mPts m : ℕ} {σ : Fin n → Fin m} {k : Fin m → ℕ}
-    {St : Fin m → Draw.Stratum} (hS : Audit.SamplingDesign.ExecStrata σ k St) {samplingDesign : Draw.SamplingDesign} {pop' : ℕ}
+    {St : Fin m → Draw.Stratum} (hS : FlockSoundness.Audit.SamplingDesign.ExecStrata σ k St) {samplingDesign : Draw.SamplingDesign} {pop' : ℕ}
     {dj : Finset (Fin n) → Lean.Json} (h : SampleFileZK dj samplingDesign pop') {K pop : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω]
     {L : Fin m → ℕ} {t : Ω → (i : Fin m) → Fin (L i) → Fin 256} {ω : Ω} {d : Draw.UnitSample}
-    (hrun : Audit.SamplingDesign.runOS (t ω) (.stratified K (Array.ofFn St)) pop = some d)
+    (hrun : FlockSoundness.Audit.SamplingDesign.runOS (t ω) (.stratified K (Array.ofFn St)) pop = some d)
     (hm : mPts = mPtsOf c.g (∑ s, k s)) :
-    SampleOkZK I dj mPts ((Audit.SamplingDesign.execOS (n := n) t (.stratified K (Array.ofFn St)) pop).draw ω) := by
+    SampleOkZK I dj mPts ((FlockSoundness.Audit.SamplingDesign.execOS (n := n) t (.stratified K (Array.ofFn St)) pop).draw ω) := by
   have hc' : (if (zkTags I).typed then HmRow.parseTyped (zkTags I) I.circuitFile I.tables
       else HmRow.parse (zkTags I) I.circuitFile I.tables) = .ok c := by
     rw [zkTags_typed, ht]; exact hc
@@ -119,10 +119,10 @@ theorem sampleOkZK_execOS (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Ci
 run that succeeds samples that many (`execOS_sample_card_or`), and the run that reads past the source's bytes samples every
 unit, whose file decodes only when every stratum samples all its units (`sum_ks_of_univ`). -/
 theorem SampleFileZK.size_execOS {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ)
-    (hks : ∀ s, ks s ≤ (Audit.SamplingDesign.stratum σs s).card) (St : Fin m → Draw.Stratum) (hS : Audit.SamplingDesign.ExecStrata σs ks St)
+    (hks : ∀ s, ks s ≤ (FlockSoundness.Audit.SamplingDesign.stratum σs s).card) (St : Fin m → Draw.Stratum) (hS : FlockSoundness.Audit.SamplingDesign.ExecStrata σs ks St)
     (Kd pop : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {dj : Finset (Fin n) → Lean.Json} (hdj : SampleFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
-    ∀ D, Draw.UnitSample.ofJson (dj ((Audit.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
+    ∀ D, Draw.UnitSample.ofJson (dj ((FlockSoundness.Audit.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
       = .ok D → D.units.size = ∑ s, ks s := by
   intro D hD
   have hDe := hdj _ D hD
@@ -136,7 +136,7 @@ end FlockSoundness.Discharge.ZkLink
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL Composed
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL Composed
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 
 local notation "𝕂" => FlockLevel3.GF256

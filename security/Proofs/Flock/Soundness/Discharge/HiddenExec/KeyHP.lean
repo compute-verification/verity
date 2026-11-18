@@ -31,7 +31,7 @@ public input word's in the population's public file (`pubBitOf`):
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Flock FlockLevel3 Model Audit Binding Placed
+open Flock FlockLevel3 Model FlockSoundness.Audit Binding Placed
 open FlockSoundness.Discharge.Layout (keyN portRowW OutColAt outDecode OutsOutP KeysRowP keyRowOfP keyPubOf keyGateP)
 
 variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {pi : HmIn.Ports}

@@ -194,7 +194,7 @@ end Flock.SecurityProofs.TopFinder
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting StrictCR
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting StrictCR
 open Flock.SecurityProofs Flock.SecurityProofs.TopFinder
 open scoped ENNReal
 

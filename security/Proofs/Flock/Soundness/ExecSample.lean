@@ -27,6 +27,8 @@ open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.B
 
 namespace FlockSoundness.Audit.SamplingDesign
 
+open FlockSoundness
+
 /-- The byte stream of `L` bytes `f`, as `Flock.Draw` reads it. -/
 def streamOf {L : ℕ} (f : Fin L → Fin 256) : ByteArray := ⟨Array.ofFn fun i => UInt8.ofFin (f i)⟩
 
@@ -34,6 +36,8 @@ end FlockSoundness.Audit.SamplingDesign
 
 
 namespace FlockSoundness.Audit.SampleExec
+
+open FlockSoundness
 
 private theorem loop_perm {α : Type} {n : ℕ} (lt : α → α → Bool) (lo hi : ℕ) (hhi : hi < n) (pivot : α) :
     ∀ (d : ℕ) (as : Vector α n) (i k : ℕ) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
@@ -689,6 +693,8 @@ theorem loopL_le (n k F : ℕ) (B : Finset ℕ) (hB : ∀ u ∈ B, u < n) : ∀ 
 end FlockSoundness.Audit.SampleExec
 
 namespace FlockSoundness.Audit.SamplingDesign
+
+open FlockSoundness
 
 open Game Finset
 open scoped ENNReal

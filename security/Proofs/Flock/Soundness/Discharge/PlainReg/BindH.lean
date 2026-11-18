@@ -30,7 +30,7 @@ here are `sitesAtH_bcSiteS`, `rsAtHS` and `rsAtHS_computes`, the same without it
 
 namespace FlockSoundness.Discharge.PlainReg
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Flock
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.HiddenExec
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}

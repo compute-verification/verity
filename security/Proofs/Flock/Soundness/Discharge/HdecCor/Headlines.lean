@@ -42,7 +42,7 @@ failing (`Flock.ProvedScope`).
 
 namespace FlockSoundness.Discharge.HdecCor
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Flock
 open FlockSoundness.Discharge.Exec
 open scoped ENNReal
 

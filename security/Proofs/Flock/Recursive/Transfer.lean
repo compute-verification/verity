@@ -49,7 +49,7 @@ reference, which no finder at a budget computes, so `stage_bind` bounds that pro
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Model Accounting Extract LinkFinder Audit Audit.Partition ZkSession ZkLink StrictCR ZkReg
+open Game Model Accounting Extract LinkFinder FlockSoundness.Audit FlockSoundness.Audit.Partition ZkSession ZkLink StrictCR ZkReg
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}

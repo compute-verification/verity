@@ -166,7 +166,7 @@ noncomputable def spend (B : Finset (Fin w.n)) : ℝ :=
 
 /-- **The most harm in the confidence set**: the largest total weight `Σ_{u ∈ B} h u` over the incorrect sets `B` the
 stratified sample misses with probability at least `δ`. Core's `harm_bound` returns a bound on it
-(`Audit.IsHarmBound`). -/
+(`FlockSoundness.Audit.IsHarmBound`). -/
 noncomputable def maxHarm (h : Fin w.n → ℕ) (δ : ℝ) : ℝ :=
   ⨆ B : {B : Finset (Fin w.n) // ENNReal.ofReal δ ≤ w.ideal.missProb B}, ((∑ u ∈ B.1, h u : ℕ) : ℝ)
 

@@ -32,7 +32,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.Sound
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}

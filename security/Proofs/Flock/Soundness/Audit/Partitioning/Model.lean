@@ -30,6 +30,8 @@ the definitions the partitioning guarantees (`Partitioning.Guarantees`) read:
 
 namespace FlockSoundness.Audit.Partitioning
 
+open FlockSoundness
+
 open Finset
 open scoped ENNReal
 

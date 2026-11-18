@@ -31,6 +31,8 @@ unit; `ExecSampleOS.lean` proves the same bounds for it.
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Finset
 open scoped ENNReal
 

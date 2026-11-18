@@ -20,18 +20,18 @@ unit's instance puts distinct computed columns on distinct gates (`IsRowsUnit.sh
 
 namespace FlockSoundness.Discharge.Layout
 
-open Flock FlockLevel3 Audit Placed
+open Flock FlockLevel3 FlockSoundness.Audit Placed
 
 /-- **A committed gate a unit computes is an output**, when every unit reads, besides its own computed gates, only input
 gates. -/
-theorem computed_committed_output {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {R : Fin n → Rows}
+theorem computed_committed_output {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {R : Fin n → Rows}
     (I : ∀ u, P.IsRowsUnit u (R u))
     (hread : ∀ u (y : Fin (R u).w), (∀ i, y ≠ (R u).comp i) → P.unit ((I u).wire y) = none)
     {u : Fin n} {g : Fin C.N} (hg : g ∈ P.io u) (hgu : P.unit g = some u) : g ∈ C.outputs := by
   classical
-  simp only [Audit.Partition.io, Finset.mem_filter] at hg
+  simp only [FlockSoundness.Audit.Partition.io, Finset.mem_filter] at hg
   have hc := hg.1
-  simp only [Audit.Partition.committed, Finset.mem_filter, Finset.mem_univ, true_and] at hc
+  simp only [FlockSoundness.Audit.Partition.committed, Finset.mem_filter, Finset.mem_univ, true_and] at hc
   rcases hc with hin | hout | ⟨h, hgh, hne⟩
   · rw [← P.input_iff] at hin
     rw [hin] at hgu

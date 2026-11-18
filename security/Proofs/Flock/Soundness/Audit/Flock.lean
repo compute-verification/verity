@@ -42,6 +42,8 @@ import the Flock theorems.
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Model Accounting
 open scoped ENNReal
 

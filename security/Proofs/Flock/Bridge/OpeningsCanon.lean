@@ -57,7 +57,7 @@ end Flock.Bridge
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Flock FlockLevel3 Model Audit Binding Placed
+open Flock FlockLevel3 Model FlockSoundness.Audit Binding Placed
 open FlockSoundness.Discharge.Layout (keyN keyRowOf portRowW OutColAt outDecode OutsOut KeysRow)
 
 variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {Reg : Type} {mPts : ℕ}

@@ -30,6 +30,8 @@ stratified samplingDesign draws an independent uniform `k s`-subset inside each 
 
 namespace FlockSoundness.Audit
 
+open FlockSoundness
+
 open Game Finset
 open scoped ENNReal
 

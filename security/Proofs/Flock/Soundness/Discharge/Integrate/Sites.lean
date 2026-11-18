@@ -43,7 +43,7 @@ file, one table), at the sample the challenger writes for `S` (`dj S`, the sampl
 
 namespace FlockSoundness.Discharge.Integrate
 
-open Flock FlockLevel3 Model Refine Audit
+open Flock FlockLevel3 Model Refine FlockSoundness.Audit
 open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n : ℕ} (I : Inputs) (mPts : ℕ)

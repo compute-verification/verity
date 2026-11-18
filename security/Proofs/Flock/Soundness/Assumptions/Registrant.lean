@@ -33,7 +33,7 @@ them.
 namespace Flock.Assumptions
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg FailClosed
 
 /-- Premise (`registrant-holds-openings`) on the provers the guarantee covers. **The prover holds its openings.** At

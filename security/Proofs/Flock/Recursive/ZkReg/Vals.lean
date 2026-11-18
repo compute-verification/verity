@@ -36,7 +36,7 @@ is).
 
 namespace FlockSoundness.Discharge.ZkReg
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
+open Game FlockSoundness.Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
 open Composed
 open ZkHidden (planZHJ tabZHJ SampleSetupZHJ TagsOkZHJ SampleOkZKHJ layShHJ placeZHJ)
 open FlockSoundness.Discharge.Tables (LiveOutJ)

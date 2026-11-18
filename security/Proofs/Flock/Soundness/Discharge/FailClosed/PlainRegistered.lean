@@ -44,7 +44,7 @@ F` accepts there `verify` accepts (`verifies_of_R`), and `FailClosed.Exec`'s pub
 
 namespace FlockSoundness.Discharge.FailClosed
 
-open Game Model Accounting Refine Audit Audit.Partition Flock
+open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Flock
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Inst
 open scoped ENNReal
 

@@ -19,7 +19,7 @@ program's own instance (`Placed.Sites.progPlaces_keyProg_inst`). So only a unit'
 
 namespace FlockSoundness.Discharge.Const
 
-open FlockSoundness Audit Flock
+open FlockSoundness FlockSoundness.Audit Flock
 
 variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length} {c : Flock.Circuit}

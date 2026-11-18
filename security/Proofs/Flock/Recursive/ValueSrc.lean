@@ -104,7 +104,7 @@ end FlockC3.RegLevels
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit Refine StrictCR
+open Game FlockSoundness.Audit Refine StrictCR
 
 variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
 

@@ -32,7 +32,7 @@ reads the plan only through the positions the sample reads and `ρ`, a bound on 
 
 namespace FlockSoundness.Discharge.Tables
 
-open Game Model Accounting Refine Audit Audit.Partition Exec
+open Game Model Accounting Refine FlockSoundness.Audit FlockSoundness.Audit.Partition Exec
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128

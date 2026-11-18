@@ -16,7 +16,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Headline
 
 namespace FlockSoundness.Discharge.ZkExec
 
-open Game Audit Exec Refine Flock
+open Game FlockSoundness.Audit Exec Refine Flock
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128

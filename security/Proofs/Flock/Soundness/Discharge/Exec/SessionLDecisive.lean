@@ -36,7 +36,7 @@ tiling). No table needs to be satisfiable and no schedule needs a side condition
 
 namespace FlockSoundness.Discharge.Exec.SessionLDecisive
 
-open Game Model Accounting Audit
+open Game Model Accounting FlockSoundness.Audit
 
 section Defs
 

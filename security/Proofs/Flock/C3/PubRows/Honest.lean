@@ -41,7 +41,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 namespace FlockC3.PubRows
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game FlockSoundness.Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockC3.Compose
 open FlockVBridge.Family (skOf cmtOf mem_skOf_inl inr_not_mem_skOf vb_cs_inl)
 

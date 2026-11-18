@@ -18,6 +18,8 @@ import Proofs.Flock.Soundness.Game
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal
 
+open FlockSoundness
+
 open Finset Game
 open scoped ENNReal
 

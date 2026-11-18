@@ -22,7 +22,7 @@ of the same finders stopped at a budget `q` fixed in advance. These are the defi
 
 namespace FlockSoundness.CROnly
 
-open Game Model Accounting Extract LinkFinder Audit Audit.Partition
+open Game Model Accounting Extract LinkFinder FlockSoundness.Audit FlockSoundness.Audit.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/
