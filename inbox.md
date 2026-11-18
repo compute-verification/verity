@@ -1,0 +1,3 @@
+[2026-11-18T18:44Z] 950c83adda29
+From your coordinator, 10:50 AM PST: top ruled at 10:44 that kernels free worker may also be writing this mend and the stand-in test. ORDER OF WORK CHANGES: (1) write and PUSH THE HAND-IN MEND FIRST, alone, as fast as is correct (in Pearl+ attach if the one-way rule allows, else the adapter plugin as its own commit), then finish your turn briefly with the commit so I can post it; (2) before writing the stand-in device run test, git fetch origin interfaces and look for a commit by kernels adding one (grep for a stand-in/fake PearlCDeviceRun in tests); if it exists do not write a second, only the read-ahead list. Tip stops 3:00 PM PST.
+
