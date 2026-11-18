@@ -411,6 +411,52 @@ private def rootsOf (log : List String) : Option (List ByteArray) := (ordered lo
 -- the head is no coin's line, whatever it says
 #guard (Challenger.releasedLogOf threeFamilies [rootLine "draw/0" 0 (wide 1)]).toOption.isNone
 
+private def commitLine (label : String) (index : Nat) (r : ByteArray) : String :=
+  lineOf [("event", Json.str "commit"), ("index", Lean.toJson index), ("label", Json.str label),
+    ("received_at", Lean.toJson (0 : Nat)), ("root", Json.str (Flock.hexOf r))]
+
+private def logHead : List String := threeLines.take 1
+
+private def refusedAs (log : List String) (why : String) : Bool :=
+  match Challenger.releasedLogOf threeFamilies log with
+  | .error e => e == why
+  | .ok _ => false
+
+-- a family's coins in any order, each by its slot: draw/1's coin 1 before its coin 0
+#guard ((Challenger.releasedLogOf threeFamilies (logHead ++ [rootLine "draw/1" 1 (wide 2), releaseLine "draw/1" 1 (wide 2),
+  rootLine "draw/1" 0 (wide 3), releaseLine "draw/1" 0 (wide 3)])).toOption.map fun l =>
+    l.map fun e => (e.kind == .released, e.index)) == some [(false, 1), (true, 1), (false, 0), (true, 0)]
+-- a slot opened twice is refused
+#guard refusedAs (logHead ++ [rootLine "draw/1" 1 (wide 2), releaseLine "draw/1" 1 (wide 2),
+  rootLine "draw/1" 1 (wide 3), releaseLine "draw/1" 1 (wide 3)]) Challenger.SLOT_TWICE
+-- a slot opened that was never recorded is refused: a release of a coin other than its root's, a release after no
+-- root, a coin past its family's
+#guard refusedAs (logHead ++ [rootLine "draw/1" 0 (wide 2), releaseLine "draw/1" 1 (wide 2)]) Challenger.LOG_MALFORMED
+#guard refusedAs (logHead ++ [releaseLine "draw/1" 0 (wide 2)]) Challenger.LOG_MALFORMED
+#guard refusedAs (logHead ++ [rootLine "draw/1" 2 (wide 2), releaseLine "draw/1" 2 (wide 2)]) Challenger.LOG_MALFORMED
+-- an unused slot left unopened is accepted: draw/1's coin 0 never opens
+#guard (Challenger.releasedLogOf threeFamilies
+  (logHead ++ [rootLine "draw/1" 1 (wide 2), releaseLine "draw/1" 1 (wide 2)])).toOption.isSome
+-- a root its coin's release does not follow
+#guard refusedAs (logHead ++ [rootLine "draw/1" 0 (wide 2)]) Challenger.UNRELEASED
+#guard refusedAs (logHead ++ [rootLine "draw/1" 0 (wide 2), commitLine "draw/1" 0 (wide 3)]) Challenger.UNRELEASED
+-- a committed root followed by a release is refused
+#guard refusedAs (logHead ++ [commitLine "draw/0" 0 (wide 4), releaseLine "draw/0" 0 (wide 4)])
+  Challenger.COMMITTED_RELEASED
+-- a commit is its family's next
+#guard refusedAs (logHead ++ [commitLine "draw/0" 1 (wide 4)]) Challenger.LOG_MALFORMED
+
+/-- A log of all three kinds: two commits of the window's, draw/0's coin between them, then draw/1's coin 1. -/
+private def threeKinds : List String :=
+  logHead ++ [commitLine "window" 0 (wide 5), rootLine "draw/0" 0 (wide 1), releaseLine "draw/0" 0 (wide 1),
+    commitLine "window" 1 (wide 6), rootLine "draw/1" 1 (wide 2), releaseLine "draw/1" 1 (wide 2)]
+
+-- the cut over it: a committed root counts among its payload family's roots
+#guard ((Challenger.releasedLogOf threeFamilies threeKinds).toOption.map fun l =>
+  (l.map (·.kind == .committed), Challenger.cut l ["window"] ["draw/0"], Challenger.cut l ["window"] ["draw/1"],
+   Challenger.cut l ["draw/0"] ["draw/1"], Challenger.releasedAfter l "draw/1" (wide 2))) ==
+  some ([true, false, false, true, false, false], false, true, true, [1])
+
 private def audited (digest : String) (accepted : Json) (complete : Json := .bool true) : Json :=
   Json.mkObj [("format", Json.str FORMAT), ("registration_digest", Json.str digest), ("accepted", accepted),
     ("complete", complete)]
