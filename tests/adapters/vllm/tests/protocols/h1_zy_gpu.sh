@@ -7,11 +7,12 @@
 # Outside the lease: the workspace synced with the members' CUDA torch (`uv sync --all-packages --extra torch`). Under one
 # lease of at most LEASE_MIN minutes (default 20): the H1 tests (TESTS, default tests/protocols/test_pouw_h1*.py) with
 # the GPU, into $OUT/tests.log and $OUT/tests.xml, then h1_zy_gpu.py (with H1_ZY_ARGS) into $OUT/h1_zy_gpu.json. Each step's exit code is in
-# $OUT/rc.txt, and the script exits non-zero if any failed. CUDA: the toolkit (default the first of /usr/local/cuda-13.0
-# and /usr/local/cuda).
+# $OUT/rc.txt, and the script exits non-zero if any failed. CUDA: the toolkit (default the machine's toolkit at 13.0,
+# benchmarks/kernels/machine.py toolkit; exit 2 where there is none).
 set -uo pipefail
 export O=${OUT:?} V=adapters/vllm
-for c in "${CUDA:-}" /usr/local/cuda-13.0 /usr/local/cuda; do [ -n "$c" ] && [ -x "$c/bin/nvcc" ] && { CUDA=$c; break; }; done
+CUDA=${CUDA:-$(python3 benchmarks/kernels/machine.py toolkit 13.0)} \
+  || { echo "h1_zy_gpu: no CUDA toolkit 13.0 (machine.py, above)" >&2; exit 2; }
 export CUDA PATH=$CUDA/bin:$HOME/.local/bin:$PATH LD_LIBRARY_PATH=$CUDA/lib64:${LD_LIBRARY_PATH:-}
 : > "$O/rc.txt"
 step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }

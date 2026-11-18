@@ -83,9 +83,8 @@ def _pearl_c_run(llm: Any) -> Any | None:
     (`_pass_totals`) and gates the run (`_pearl_c_gate`)."""
     from verity_torch.pouw.pearl_c.run_device import PearlCDeviceRun
 
-    option = llm.protocols.get("pouw") if llm.protocols is not None else None
-    run = getattr(getattr(option, "end_pass", None), "__self__", None)
-    return run if isinstance(run, PearlCDeviceRun) else None
+    runs = (getattr(getattr(o, "end_pass", None), "__self__", None) for o in getattr(llm.protocols, "installed", ()))
+    return next((run for run in runs if isinstance(run, PearlCDeviceRun)), None)
 
 
 def _pass_totals(run: Any) -> dict[str, int]:
@@ -199,7 +198,7 @@ class _VllmEngine:
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
             if arm.protocols:
                 self.pearl_c = _pearl_c_run(self.llm)
-                cubin = config.get("pouw", {}).get("cubin")
+                cubin = next((s["cubin"] for s in config.values() if s.get("cubin")), None)
                 if cubin:
                     kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
         self.target.engine, self.target.model = self.llm, self.llm.model
