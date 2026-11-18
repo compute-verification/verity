@@ -14,7 +14,8 @@ printf '#!/usr/bin/env bash\nwhile [ $# -gt 0 ] && [ "$1" != -- ]; do shift; don
 chmod +x "$S/bin/gpu-lease"
 # the prove step imports no package of the stager's venv, which prove_time.sh would otherwise fetch
 mkdir -p "$S/fw/py/bin" && ln -s "$(command -v python3)" "$S/fw/py/bin/python"
-export PATH=$S/bin:$PATH CUDA_TK=$FC LD_LIBRARY_PATH=$FC/lib64:${LD_LIBRARY_PATH:-} GPU_LEASE_UUID=${CUDA_VISIBLE_DEVICES%%,*}
+G=${CUDA_VISIBLE_DEVICES:-0}
+export PATH=$S/bin:$PATH CUDA_TK=$FC LD_LIBRARY_PATH=$FC/lib64:${LD_LIBRARY_PATH:-} GPU_LEASE_UUID=${G%%,*}
 { nvidia-smi --query-gpu=name,driver_version,memory.total,memory.used --format=csv -i "${GPU_LEASE_UUID:-0}"
   ldd "$FC/bin/flock-circuit"; sha256sum "$FC/bin/flock-circuit"; } > "$OUT/host.txt" 2>&1
 RESEARCH_RUN_DIR=$OUT/pt PT_DEVICE=${PT_DEVICE:-gpu} STEPS=prove PT_BINARY=$FC/bin/flock-circuit PT_UNITS= FLOCK_WORK=$S/fw \
