@@ -720,9 +720,9 @@ def log_lines(path: str | os.PathLike) -> list[str]:
 
 
 def released_roots(path: str | os.PathLike, commitment: LiveCommitment) -> dict[str, tuple[bytes, ...]]:
-    """The roots the release log at `path` shows the challenger received, by family in order (`released_roots_of`),
-    unsigned: a verifier reads them only through `trusted_session`."""
-    return Ch.released_roots_of(commitment, log_lines(path))
+    """The roots the release log at `path` shows the challenger received, by family in order (`by_family` of
+    `released_log_of`), unsigned: a verifier reads them only through `trusted_session`."""
+    return Ch.by_family(commitment, Ch.released_log_of(commitment, log_lines(path)))
 
 
 def log_hello(directory: str | os.PathLike, n: int, why: str) -> None:

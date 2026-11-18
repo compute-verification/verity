@@ -2491,7 +2491,6 @@ def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any],
     if doc.get("format") != CIRCUIT:
         raise ValueError(f"a period's circuit record is {CIRCUIT}, not {doc.get('format')!r}")
     defs = _templates_of(doc, resolve)
-    program, query = wired_population_program(defs, doc)
     stated = "cap" in doc
     if (("members" in doc) == stated or ("wires" in doc) != stated
             or (not stated and ({*DECLARED, "blocks"} - {"registered"}) & set(doc)) or (stated and WINDOW_INGRESS in doc)):
@@ -2507,9 +2506,11 @@ def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any],
         check_inputs(lays, cuts, wires, registered, ingress, boundary_reads_of(doc), free_of(doc), ranks_of(doc))
         if "blocks" in doc:
             Blocks.of(doc["blocks"], {t: n for t, (_, n) in lays.items()}, doc["partition"])
+        program, query = wired_population_program(defs, doc)
         ms = _members(defs, program, query, doc["cap"], wires, cuts, committed_reads(registered),
                       _seg(registered, wires, cuts), order)
     else:
+        program, query = wired_population_program(defs, doc)
         ms = _listed_members(doc)
     tables = tuple(CS.RowTable(t["segment"], t["name"], t["template"], t["words"], _frozen(t["keys"]),
                                tuple((k, _frozen(v)) for k, v in t["label"])) for t in doc["row_tables"])

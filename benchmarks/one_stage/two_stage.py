@@ -585,12 +585,11 @@ def stop_order(key: Ch.ChallengerKey | None, main: Sequence[str], evidence: Mapp
     if why is not None:
         return f"the stop sample's coins: {why}"
     try:
-        Ch.trusted_session_of(evidence["ledger"], {"root": window_root}, key, evidence["pins"], list(main),
-                              evidence["session"], verify)
+        _, log = Ch.trusted_session_of(evidence["ledger"], {"root": window_root}, key, evidence["pins"], list(main),
+                                       evidence["session"], verify)
     except Ch.CoinError as e:
         return str(e)
-    received = [bytes.fromhex(e["root"]) for e in map(json.loads, evidence["session"]["log"][1:])
-                if e.get("event") == "root"]
+    received = [e.root for e in log if e.kind == "recorded"]
     first_, then = ([i for i, r in enumerate(received) if r == x] for x in (before, after))
     for name, coins in (("class's boundary", first_), ("stop", then)):
         if not coins:
