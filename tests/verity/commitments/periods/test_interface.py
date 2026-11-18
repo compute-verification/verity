@@ -681,6 +681,12 @@ def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_
         CS.own_entries(doc["members"][1], bytes(body), (), CS.held_ports(doc, 1))
 
 
+def as_listed(w: CS.Binding, *defs) -> CS.Binding:
+    """``w`` under the Program of a record that lists its members (`listed_program`), ``defs`` its templates' Definitions."""
+    program, query = I.listed_program([(fn, n) for fn, (_t, n) in zip(defs, I.templates_of(w), strict=True)], ())
+    return replace(w, program=program, query=query)
+
+
 def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_them():
     win = I.Window(chain(), RUN, SAMPLING_DESIGN, 2)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
@@ -701,8 +707,8 @@ def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_the
     split = I.window_of_record({**doc, "cap": 3}, SAMPLING_DESIGN, by_id).members
     assert [(m.base, m.n, m.wired) for m in split] == [
         (0, 2, ()), (2, 2, (("x", "o0", (0, 1)),)), (4, 2, (("x", "o0", (2, 3)),)), (6, 2, (("x", "o0", (4, 5)),))]
-    listed = json.loads(I.circuit_bytes(I.circuit_record(win.window, "chain", [(GID, 8)])))
-    assert "cap" not in listed and I.window_of_record(listed, SAMPLING_DESIGN, by_id).members == win.window.members
+    listed_doc = json.loads(I.circuit_bytes(I.circuit_record(as_listed(win.window, GEMM), "chain", [(GID, 8)])))
+    assert "cap" not in listed_doc and I.window_of_record(listed_doc, SAMPLING_DESIGN, by_id).members == win.window.members
     with pytest.raises(ValueError, match="stated with a cap"):
         I.circuit_record(win.window, "chain", [(GID, 8)], wires=chain().wires)
 
@@ -717,7 +723,8 @@ def test_a_record_that_lists_its_members_declares_its_period_ingress_and_is_coun
     stated one no period ingress."""
     win, by_id, W = I.Window(chain(), RUN, SAMPLING_DESIGN, 2), {GID: GEMM}.__getitem__, I.WINDOW_INGRESS
     first = I.Ingress(GID, "x", 0, REQUESTS, 0)
-    listed = json.loads(I.circuit_bytes(I.circuit_record(win.window, "chain", [(GID, 8)], declared={W: [first.doc()]})))
+    listed = json.loads(I.circuit_bytes(I.circuit_record(as_listed(win.window, GEMM), "chain", [(GID, 8)],
+                                                         declared={W: [first.doc()]})))
     assert listed[W] == [first.doc()] and "ingress" not in listed
     assert I.window_of_record(listed, SAMPLING_DESIGN, by_id).members == win.window.members
     stated = I.input_count(replace(chain(), ingress=(first,)).description())
@@ -763,7 +770,7 @@ def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_regis
     weights = I.Read(GID, "w", "weights", 0, (LAYERS, layer), 0, (256, 0))
     reg = I.Registered({"weights": LAYERS * 256}, reads=(weights,))
     win = I.Window(replace(chain(), registered=reg), RUN, SAMPLING_DESIGN, 2)
-    plain, tabled = (replace(win.window, members=tuple(replace(m, tables=t) for m in win.window.members))
+    plain, tabled = (replace(as_listed(win.window, GEMM), members=tuple(replace(m, tables=t) for m in win.window.members))
                      for t in ((), (("w", 1),)))
     first = I.Ingress(GID, "x", 0, REQUESTS, 0)
     declared = {"registered": reg.doc(), W: [first.doc()]}
@@ -1122,7 +1129,7 @@ def test_a_history_tables_writer_commits_each_row_as_the_tables_leaf():
     assert pinned == {"latent": table.entry()} and hist["registered"] == {"latent": pinned["latent"]["root"]}
     strings = {"latent": HW.strings(win.circuit.registered.histories[0], mine, publics, {})}
     assert strings == {"latent": table.bcs}
-    listed = json.loads(I.circuit_bytes(I.circuit_record(win.window, "sliced", [(G8ID, 6), (GID, 3)], doc["statements"],
+    listed = json.loads(I.circuit_bytes(I.circuit_record(as_listed(win.window, G8, GEMM), "sliced", [(G8ID, 6), (GID, 3)], doc["statements"],
                                                          declared={"registered": doc["registered"]})))
     assert I.window_of_record(listed, SAMPLING_DESIGN, resolve).members == ms
     assert HW.params(listed, mine, publics, HW.pins(listed, roots)) == hist and HW.pins(listed, roots) == pinned
