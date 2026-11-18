@@ -23,7 +23,7 @@ from verity.channel import Refused
 
 SP, WORK = P.SUBPROTOCOLS["verity/remote/v1"]["sampled-proofs"], P.SUBPROTOCOLS["verity/remote/v1"]["pearl-plus"]
 POUW = P.SUBPROTOCOLS["verity/onsite/v0"]["pouw"]
-CERT = P.IDS["certifier"]
+CERT = P.IDS["network-attester"]
 POLICY = P.IDS["inference-only"]
 REMOTE = ("sampled-proofs", "pearl-plus", "inference-only")
 REMOTE_V0 = ("sampled-proofs", "pouw", "inference-only")
@@ -131,7 +131,7 @@ def test_a_listed_subprotocol_with_no_answer_is_absent_and_the_composite_rejects
 
 
 def test_onsites_subprotocols_answers_and_cases_reach_the_composite():
-    onsite = ("sampled-proofs", "certifier", "pouw", "pous", "bandwidth", "inference-only", "wipe")
+    onsite = ("sampled-proofs", "network-attester", "pouw", "pous", "bandwidth", "inference-only", "wipe")
     m = Machine()
     (line,) = go(m, components=onsite).outcomes[P.VERIFIER]["outcome"]["verdicts"]
     assert line["components"] == dict.fromkeys(onsite, "accept") and line["verdict"] == "accept"
@@ -186,9 +186,9 @@ def test_workers_that_cant_serve_leave_the_verifier_refused_closed_with_nothing_
 
 
 @pytest.mark.parametrize("bad", [{"blocks": 0, "components": list(REMOTE), "coins": "simulated"},
-                                 {"blocks": 1, "components": ["certifier"], "coins": "simulated"},
+                                 {"blocks": 1, "components": ["network-attester"], "coins": "simulated"},
                                  {"blocks": 1, "components": ["sampled-proofs"], "coins": "simulated"},
-                                 {"blocks": 1, "components": ["sampled-proofs", "certifier"], "coins": "simulated"},
+                                 {"blocks": 1, "components": ["sampled-proofs", "network-attester"], "coins": "simulated"},
                                  {"blocks": 1, "components": ["sampled-proofs", "pouw", "pouw"], "coins": "simulated"},
                                  {"blocks": 1, "components": list(REMOTE), "coins": "gate"},
                                  {"blocks": 1, "components": list(REMOTE), "coins": "simulated", "law": "x"}])

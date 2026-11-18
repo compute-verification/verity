@@ -22,6 +22,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from verity.circuits import population as PN
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V
 from verity.circuits import partition_object as PO
@@ -681,7 +682,7 @@ def test_a_class_definitions_ends_are_its_boundary_values_and_round_two_links_ea
     row = _u32s(WD.ingress_row(_ended("x", (), None, 7, (1, 2, 3, 4)), 4))
     assert evaluate(D, row[:WD.HEAD_U32], row[WD.HEAD_U32:]) == (7, 12)
 
-    program = P.population_program(D, 3)
+    program = PN.population_program(D, 3)
     templates = {BR.REQUEST: (descriptor_id(READS_REQUEST), "request"),
                  BR.PROMPT: (descriptor_id(bind(READS_PROMPT, P=4)), "prompt"),
                  BR.EGRESS: (descriptor_id(bind(WRITES_EGRESS, O=2)), "o0")}
