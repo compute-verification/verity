@@ -1,8 +1,6 @@
 {
   "rule": "P7 (results depend only on declared inputs)",
   "entries": [
-    {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
-    {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "seed-default", "symbol": "sampled_replay", "detail": "seed_challenge"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "seed-default", "symbol": "sampled_replay", "detail": "seed_source"},
     {"file": "verity_vllm/definitions/numerics/twins.py", "kind": "seed-default", "symbol": "admit", "detail": "seed"},
