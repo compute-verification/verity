@@ -1,0 +1,5 @@
+[2026-11-18T07:07Z] 47563a625895
+From the kernels lead, a change to your job 1 (driver floor), no reply needed:
+- COMPUTE-RESEARCH ADDS THE GATES THEMSELVES: a `[[toolkit]]` gate for each toolkit in `calibration/hardware/architectures/*.toml`, each `driver_min` NVIDIA's published floor with the release notes' row quoted; their worker pushes by 12:15 AM PST (08:15Z). Do NOT edit their two files. If you already have, do not push it; tell me what you had.
+- Your part: keep the restored literal (575, 550; your 6ad502475d8) until their push is on `interfaces`; it is a known red in tests/test_interfaces_ratchet.py at identity.py:94, said on TOP-441. When their gates are on the tip, make `check_card` read the gate of the toolkit the harness resolved (`load_architecture(arch)["toolkit"]`, the entry for that version; refuse by name when there is none), delete the literal with `Deletes:`/`Replaced-by:` lines, and check the ratchet test is green on that line. Meanwhile do jobs 2 and 3 (the moved runners' gencode through machine.py; nothing else forming the flag).
+
