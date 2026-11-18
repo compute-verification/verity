@@ -542,7 +542,7 @@ theorem callerCheckSound_of_means (hm : CallerCheckMeans) : CallerCheckSound := 
 /-- `CallerCheckSound`, from `callerCheckMeans`. -/
 theorem callerCheckSound : CallerCheckSound := callerCheckSound_of_means callerCheckMeans
 
-/-- What SPOT's accepted case gives, on any blobs: `StageHeld`, in the one-stage form, where the caller's
+/-- What SPOT's accepted case gives, on any blobs: `StageHeld`, in the one-stage or the two-stage form, where the caller's
 check finds nothing only where the record keeps the caller's facts (`CallerCheckSound`). -/
 theorem stage_held (hm : CallerCheckSound) {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params)
     (h : Properties.Composition.DecodedAccepted (VStar.Recursive.Sampled.protocol.onBlobs bs) n.params.toUTF8
@@ -557,11 +557,12 @@ theorem stage_held (hm : CallerCheckSound) {k : Case} {n : Named} {bs : Blobs} (
   · obtain ⟨hcall, hz⟩ := VStar.Recursive.Caller.gate_accept
       (show VStar.Recursive.Caller.gate c.record p.base.verifier (Spot.OneStageZk.checkBlobs p c e bs) =
         .accept pub prof from hchk')
-    exact ⟨p, c, hp'', hc', stage_zk_registered hz, hm _ _ hcall⟩
+    exact .inl ⟨p, c, hp'', hc', stage_zk_registered hz, hm _ _ hcall⟩
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
-  · exact absurd hchk' (VStar.Recursive.SampledTwo.checkBlobs_refuses VStar.Recursive.SampledTwo.form_off q c e bs
-      pub prof)
+  · have hq : VStar.Recursive.SampledTwo.checkBlobs q c e bs = .accept pub prof := hchk'
+    obtain ⟨hcall, -⟩ := VStar.Recursive.Caller.gate_accept (VStar.Recursive.Caller.gate_accept hq).2
+    exact .inr ⟨q, c, hp'', hc', hm _ _ hcall⟩
 
 /-- What remote's acceptance gives: the three cases in order, one digest for the policy's and SPOT's
 records, which every Commit record the period's windows name has, the policy's case decoding to what the policy's
