@@ -3,6 +3,7 @@ module
 public import Definitions.Core.Circuit
 public import Definitions.Core.Digest
 public import Definitions.Core.Partition
+public import Definitions.Core.Rblk
 public import Definitions.Core.Annotation
 public import Definitions.Core.Advice
 public import Definitions.Core.PrivatePartition

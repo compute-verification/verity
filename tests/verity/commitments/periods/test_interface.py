@@ -582,7 +582,7 @@ def _staged(d: Path, mem: dict, k: int, out: Path, **kw: object) -> tuple[dict, 
     keywords) -> its header and body."""
     meta = {"scheme": CS.SCHEME, "ports": [[p, n, 1] for p, n in mem["ports"]], "input_ports": mem["input_ports"],
             "out_ports": mem["out_ports"], "row_schemas": mem.get("row_schemas"), "vus_per_block": 1, "units_per_vu": 1,
-            "subcircuit": "gemm"}
+            "unit": "gemm"}
     got = FI.flock_input_files(d, k, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", out, write=("pub",), **kw)
     head, body = Path(got["pub"]).read_bytes().split(b"\n", 1)
     return json.loads(head), body
@@ -1023,16 +1023,19 @@ def test_a_cut_port_is_rows_each_wired_from_its_own_writer():
         sliced(wires=(*c.wires, I.Wire(GID, "x", G8ID, "o0", at=2, radix=(1,), base=0, step=(0,), cut=(1, 1))))
 
 
-def test_cap_is_a_run_field_the_registration_binds_and_the_circuits_digest_does_not():
+def test_cap_is_a_run_field_the_registration_binds_and_the_partitions_blocks_follow_it():
     """A stated record's members are derived from its ``cap`` (`window_of_record`), so ``cap`` stays a key of the record and
     under its registration's ``window.circuit`` (the whole record's SHA-512, before any coin); it is a run field, out of the
-    circuit's digest ``H`` (`circuit_of`), so a Definition that names ``H`` before the serve holds whatever cap it commits at."""
+    circuit's digest ``H`` (`circuit_of`), which reads it only through the partition's ``blocks``, the members at that cap
+    (`partition_blocks`)."""
     a, b = (window(cap=cap)[0].circuit_record() for cap in (4, 3))
-    assert (a["cap"], b["cap"]) == (4, 3) and {k for k in a.keys() | b.keys() if a.get(k) != b.get(k)} == {"cap"}
+    assert (a["cap"], b["cap"]) == (4, 3) and {k for k in a.keys() | b.keys() if a.get(k) != b.get(k)} == {"cap", "partition"}
     assert hashlib.sha512(I.circuit_bytes(a)).digest() != hashlib.sha512(I.circuit_bytes(b)).digest()
-    assert canonical_json(I.circuit_of(a)) == canonical_json(I.circuit_of(b)) and "cap" not in I.circuit_of(a)
+    oa, ob = I.circuit_of(a), I.circuit_of(b)
+    assert {k for k in oa.keys() | ob.keys() if oa.get(k) != ob.get(k)} == {"partition"} and "cap" not in oa
     c = sliced()
-    assert I.descriptor_record(c, 2)["cap"] == 2 and I.circuit_of(I.descriptor_record(c, 2)) == I.circuit_of(I.descriptor_record(c, 3))
+    r2, r3 = I.descriptor_record(c, 2), I.descriptor_record(c, 3)
+    assert r2["cap"] == 2 and {k for k in r2 if r2[k] != r3.get(k)} == {"cap", "partition"}
 
 
 def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
@@ -2219,7 +2222,7 @@ def test_a_periods_value_rows_and_paths_are_written_once_and_a_sampled_members_b
     k, mem = chained[1], doc["members"][chained[1]]
     meta = {"scheme": CS.SCHEME, "ports": [[p, n, 1] for p, n in mem["ports"]], "input_ports": mem["input_ports"],
             "out_ports": mem["out_ports"], "row_schemas": mem["row_schemas"], "vus_per_block": 1, "units_per_vu": 1,
-            "subcircuit": "gemm"}
+            "unit": "gemm"}
     got = FI.flock_input_files(tmp_path, k, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "staged")
     head, body = Path(got["inst"]).read_bytes().split(b"\n", 1)
     reads, shared = win._entries[ms[k].key], CS.shared_entries(tmp_path, doc, k)
@@ -2477,7 +2480,9 @@ def test_a_commit_into_a_directory_holds_a_run_and_never_the_window(monkeypatch,
     """The peak, pinned: committing 2,048 coordinates' rows into a directory, a run of 64 units at a time from a producer
     that makes each run when it is asked, allocates at its peak under a quarter of the bytes the window commits (its
     rows, salts and ``b || c``, `rows.window_bytes`), where the whole commit of the same rows, given as arrays, holds
-    more than all of them but the salts it is handed; the roots are the same."""
+    more than all of them but the salts it is handed; the roots are the same. Both are measured after a first streamed
+    commit of the window, which builds what does not grow with its rows (its partition, whose Program digest reads the
+    descriptor with its Boolean bodies)."""
     import tracemalloc
 
     n, chunk = 2048, 64
@@ -2506,9 +2511,9 @@ def test_a_commit_into_a_directory_holds_a_run_and_never_the_window(monkeypatch,
         finally:
             tracemalloc.stop()
 
-    CS.commit(replace(w), [{k: {p: a[:] for p, a in d[k].items()} for k in d} for d in made()], chunk=chunk)
     ys = fixed(w)
-    c, streamed = peak(lambda: CS.commit(w, made(), into=tmp_path, chunk=chunk, salts_of=ys))
+    CS.commit(w, made(), into=tmp_path / "first", chunk=chunk, salts_of=ys)
+    c, streamed = peak(lambda: CS.commit(w, made(), into=tmp_path / "second", chunk=chunk, salts_of=ys))
     whole, held = peak(lambda: CS.commit(w, [{k: {p: a[:] for p, a in d[k].items()} for k in d} for d in made()],
                                          chunk=chunk, salts_of=ys))
     assert c.roots == whole.roots and len(w.members) == 1

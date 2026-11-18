@@ -86,6 +86,7 @@
   "Properties.Ties",
   "Properties.Flock.Nets",
   "Properties.Flock.EvalBool",
+  "Properties.Flock.DecodeBoolean",
   "Properties.Assumptions",
   "Properties.Verity.ExecutionPhaseFiles",
   "Properties.Verity.Idle",
@@ -15073,7 +15074,13 @@
    "InferenceOnlyVerifier.Properties.Record.PinnedReadHonest": "unstated: PinnedReadBinds's witness that the check's own form has a pinned read, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
    "InferenceOnlyVerifier.Properties.Record.PinnedReadNontrivial": "unstated: PinnedReadBinds's witness that at the verdict bit 0 some pinned read does not return its table's row, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
    "InferenceOnlyVerifier.Properties.Record.OpenedRowReturned": "unstated: that an opening's declared row is the row its reader returns, stated and not yet proved, so no guarantee states it; decided after the landing, NET-451, Wed 18 Nov",
-   "Properties.Site.RefusedAt": "unstated: a site entry's refusal, the first of its checks it fails, whose guarantee Properties.Site.refusedAt left the lock by name with its honest and nontrivial witnesses; it is listed again with them (owner @lean)."
+   "Properties.Site.RefusedAt": "unstated: a site entry's refusal, the first of its checks it fails, whose guarantee Properties.Site.refusedAt left the lock by name with its honest and nontrivial witnesses; it is listed again with them (owner @lean).",
+   "Properties.Poub.RegisteredCapped": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.registeredCapped; it gets a guarantee entry, with its shape and record, after tonight's landing",
+   "Properties.Poub.ProbationKept": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.probationKept; it gets a guarantee entry, with its shape and record, after tonight's landing",
+   "Properties.Poub.OriginsOnRota": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.originsOnRota; it gets a guarantee entry, with its shape and record, after tonight's landing",
+   "Properties.Poub.OpensOrigin": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.opensOrigin; it gets a guarantee entry, with its shape and record, after tonight's landing",
+   "Properties.Poub.CoinAfterAppend": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.coinAfterAppend; it gets a guarantee entry, with its shape and record, after tonight's landing",
+   "Properties.Poub.CoinBySlot": "unstated: one of refresh's code-side statements (Properties.Poub.Remote.Refresh), proved by Properties.Poub.coinBySlot; it gets a guarantee entry, with its shape and record, after tonight's landing"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
