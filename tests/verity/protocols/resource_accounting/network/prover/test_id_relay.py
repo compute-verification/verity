@@ -85,3 +85,27 @@ def test_any_other_connection_is_relayed_byte_for_byte():
 def test_a_payload_below_an_id_event_is_refused():
     with pytest.raises(ValueError, match="an id event is at least"):
         R.Front(("127.0.0.1", 1), 137, request_of=request_of, stream_ids=stream_ids)
+
+
+def test_run_serves_the_relay_until_stopped():
+    """`run`, the relay as its process, with the readers it names (`READERS`): an id request is answered as `Front`
+    answers it, and setting ``stop`` ends it."""
+    assert R.READERS == ("server-request", "stream-token-ids")
+
+    async def go() -> bytes:
+        upstream = await scripted(SCRIPT, [])
+        stop, at = asyncio.Event(), asyncio.get_running_loop().create_future()
+        async with upstream:
+            relay = asyncio.ensure_future(R.run(upstream.sockets[0].getsockname()[:2], ("127.0.0.1", 0), P,
+                                                server_request=request_of, stream_token_ids=stream_ids, stop=stop,
+                                                announce=at.set_result))
+            reader, writer = await asyncio.open_connection(*await at)
+            writer.write(released())
+            await writer.drain()
+            got = await reader.read()
+            writer.close()
+            stop.set()
+            await relay
+        return got
+
+    assert asyncio.run(go()) == b"".join(id_event(t, P) for t in (7, 8, 9)) + TRAILER

@@ -33,7 +33,7 @@ def a_duty(tmp_path: Path, points: list[dict]) -> Path:
 
 
 def bench(store: FakeStore, *argv: str) -> int:
-    return H.main(list(argv), store_of=lambda: C.EvidenceStore(store, store.pull, Refused, "withdrawn"))
+    return H.main(["--protocol", "pearl-plus", *argv], store_of=lambda: C.EvidenceStore(store, store.pull, Refused, "withdrawn"))
 
 
 def both(store: FakeStore, tmp_path: Path, points: list[dict] = (HONEST, *OTHERS), **edits) -> None:

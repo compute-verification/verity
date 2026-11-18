@@ -39,7 +39,7 @@ from verity.protocols.resource_accounting.network.prover.workload import (
 )
 from verity.protocols.resource_accounting.network.verifier import release as REL
 
-__all__ = ["BLANK", "BODY_BYTES", "COMPLETIONS", "GONE", "READ_BYTES", "Broken", "Front", "RequestOf", "StreamIds", "serve"]
+__all__ = ["BLANK", "BODY_BYTES", "COMPLETIONS", "GONE", "READ_BYTES", "Broken", "Front", "RequestOf", "READERS", "StreamIds", "run", "serve"]
 
 READ_BYTES = 1 << 16
 #: the longest body the relay reads whole to tell an id request: a connection whose request says more is relayed
@@ -53,6 +53,9 @@ GONE = "the network attester's side ended before the server's stream"
 RequestOf = Callable[[dict[str, Any], bytes, bytes], bytes]
 #: each chunk's token ids, in order, of the server's answer read from its connection; `Broken` where it doesn't end whole
 StreamIds = Callable[[asyncio.StreamReader], AsyncIterator[list[int]]]
+#: the readers `run` takes from the serving system, by name: ``server-request`` a `RequestOf`, ``stream-token-ids`` a
+#: `StreamIds`
+READERS = ("server-request", "stream-token-ids")
 
 
 class Broken(Exception):
@@ -208,3 +211,12 @@ async def serve(front: Front, listen: tuple[str, int], *, announce: Callable[[tu
     announce(tuple(server.sockets[0].getsockname()[:2]))
     async with server:
         await stop.wait()
+
+
+async def run(upstream: tuple[str, int], listen: tuple[str, int], payload: int = ID_PAYLOAD, *, server_request: RequestOf,
+              stream_token_ids: StreamIds, log: Callable[[dict[str, Any]], None] | None = None, stop: asyncio.Event,
+              announce: Callable[[tuple[str, int]], None]) -> None:
+    """The network attester's id relay as a process: a `Front` before the server at `upstream`, served on `listen` until
+    `stop` is set; `ValueError` for a `payload` below an id event, before it listens."""
+    front = Front(upstream, payload, request_of=server_request, stream_ids=stream_token_ids, log=log)
+    await serve(front, listen, announce=announce, stop=stop)
