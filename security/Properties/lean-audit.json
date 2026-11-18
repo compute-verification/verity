@@ -2907,7 +2907,17 @@
  },
  "guarantees": {
   "Flock.Bridge.gateARow": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Flock.Bridge.gateARow : Flock.Bridge.GateARow"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "7b4111cc25192d1589a6fa7b4d4048850da3772390db68c0de2fc1346aa7d3a9",
+   "unfolded_hash": "e7175f079887ec9994ca6e66aec9f63e7cfbe6f76da0ed94323d643397389d66"
   },
   "InferenceOnlyVerifier.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
@@ -26002,6 +26012,12 @@
     "Verity.Circuit.ofAudit": "389d0d8b86cf8a5ac812ebe4b9c5ffe1a41b2e5ee28a81e9b720a36cd7513590",
     "Verity.Partition.empty": "4038368331e12a1b34b8cf2beeb8b8258067982f5ed21138165876cfbc6f5d86",
     "Verity.Partition.ofAudit": "222dcfe7d517f58968b87d5481815c8d0fb8a632ad4446b0d11c14a4db28ff5f"
+   }
+  },
+  "Properties.Flock.Circuit.GateARow": {
+   "digest": "71040adab19804c4cd87c973641bc644690a591a1248376e8357f7842495a190",
+   "definitions": {
+    "Flock.Bridge.GateARow": "f879d798b4ba4abccd55a61a2f717f885051cb307b26cef73dae000c1469a83c"
    }
   },
   "Properties.Flock.Circuit.Keyed": {
