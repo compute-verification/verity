@@ -49,6 +49,7 @@ def capture(args) -> int:
     from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
     from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
     from verity_torch.pouw.pearl_c import run_device as PPDR
 
     out, dev = Path(args.out), torch.device("cuda")
@@ -63,7 +64,7 @@ def capture(args) -> int:
     challenger = Challenger(0, verifier.coins)
     opening = challenger.open("salt", weights_root(roots))
     xs = [torch.randn(m, weights[w].shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, m in CALLS]
-    s, log = PPD.scheme_of(args.scheme), {}
+    s, log = pouw_schemes.get(args.scheme), {}
     dumps = ("seeds_a", "seed_a", "ea_codes", "rowdig_a")
     for name, (graphs, omit) in PASSES.items():
         run = PPDR.PearlCDeviceRun(s, f"pouw:{args.scheme}", kernel, weights, roots, challenger.commitment, opening, graphs=graphs,
@@ -94,8 +95,8 @@ def capture(args) -> int:
 
 
 def _scheme(man: dict):
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-    return PPD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
+    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
+    return pouw_schemes.get(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
 
 
 def _calls(d: Path) -> dict:

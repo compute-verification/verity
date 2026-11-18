@@ -250,6 +250,6 @@ def test_a_build_request_is_filed_before_the_build_and_any_other_before_the_firs
     with pytest.raises(Refused, match="pouw: files RequireProperty after the build was answered"):
         ex.request("pouw", H.RequireProperty("eager", True, "its kernels"))
     ex.request("pouw", H.ComputeBlockWith(lambda due, original: original(None)))
-    ex.emit(H.StepBegan(1))
-    with pytest.raises(Refused, match=r"pouw: files HoldRelease after serving began \(step 1\)"):
+    ex.step = 0
+    with pytest.raises(Refused, match=r"pouw: files HoldRelease after serving began \(step 0\)"):
         ex.request("pouw", H.HoldRelease("in-0", 3))

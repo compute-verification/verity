@@ -69,6 +69,7 @@ def capture(a) -> int:
     import torch
     from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
     from verity_torch.pouw.pearl_c import run_device as PPDR
 
     out, dev = Path(a.out), torch.device("cuda")
@@ -82,7 +83,7 @@ def capture(a) -> int:
     coins = BA._Coins(EPOCH)
     opening = coins.open("salt", weights_root(roots))
     (out / "coins.json").write_text(json.dumps(coins.commitment.to_json()) + "\n")
-    run = PPDR.PearlCDeviceRun(PPD.scheme_of(a.scheme), f"pouw:{a.scheme}", kernel, weights, roots, coins.commitment, opening,
+    run = PPDR.PearlCDeviceRun(pouw_schemes.get(a.scheme), f"pouw:{a.scheme}", kernel, weights, roots, coins.commitment, opening,
                               salt_key=salt_key, schedule=a.schedule, graphs=a.graphs)
     arm = BA.PearlCArm()
     arm.run, arm.weights = run, weights
@@ -219,6 +220,7 @@ def full_pass(d: Path, coins, jobs: int, every: int, without_y: bool = False) ->
     from clear_audit import Transcript, Verifier
     from verity.commitments import Commitment
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PD
+    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 
     class Seen(CW._TileRuleView):
         """`verify_run`'s view of the scheme, keeping the operands and checked words of the digest it last took."""
@@ -231,7 +233,7 @@ def full_pass(d: Path, coins, jobs: int, every: int, without_y: bool = False) ->
     try:
         man = json.loads((d / "manifest.json").read_text())
         PD.manifest_schema(man, False)
-        scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
+        scheme = pouw_schemes.get(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
         epoch, _ = PD.manifest_epoch(man, coins, False)
         c = man["commitment"]
         transcript = Transcript(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]),

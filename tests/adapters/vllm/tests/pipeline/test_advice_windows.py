@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.resource_accounting.network.verifier import advice as A
+from verity_vllm.pipeline.advice_code import format as A
 
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT

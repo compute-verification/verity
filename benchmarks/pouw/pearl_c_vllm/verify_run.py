@@ -150,6 +150,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as G, doc
 from verity.errors import ProtocolError
 from verity.commitments.randomness import derive
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PD
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 from verity_config.settings import of
@@ -224,7 +225,7 @@ class Opened:
 
     def __init__(self, man: dict, files: Files, refs):
         self.man, self.files, self.refs = man, files, refs
-        self.hm96 = PD.scheme_of(man["scheme"]).commitment_hash == HM96
+        self.hm96 = pouw_schemes.get(man["scheme"]).commitment_hash == HM96
         self.nb = 64 if self.hm96 else 32
 
     def _salted(self, value: bytes, spec: dict | None, i: int) -> bytes:
@@ -318,7 +319,7 @@ def load(path: Path, coins: CoinCommitment | LiveCommitment | None = None, man: 
     why = passes_distinct([man])
     if why is not None:
         raise Refused(why)
-    scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
+    scheme = pouw_schemes.get(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
     matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
     epoch, salt = PD.manifest_epoch(man, coins)
     records = records_of(man, matmuls)
