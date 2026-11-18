@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
 from .ports import bind_ports
-from .refs import Affine, Coll, Concat, Explicit, Grid, Refs, Strided, concat, recut
+from .refs import Affine, Coll, Concat, Explicit, Grid, Refs, Strided, concat, lane_bounds, recut
 from .types import Array, RecordType, Tuple as TupleT, Type, Value, field_at, field_starts, field_types, range_widths, remove_axis
 
 StaticValue = Any  # int | str | tuple[int, ...] | FunctionDefinition
@@ -567,22 +567,53 @@ def _cover(t: Type, lo: int, hi: int) -> tuple[Type, int]:
             return t, off
 
 
-def _cyclic_widths(E: Type, r: int, n: int) -> frozenset:
-    """The widths of `n` consecutive leaves of an array of `E`s, from leaf `r` of an element on."""
-    L = E.leaves
-    if n >= L:
-        return E.width_set()
-    if r + n <= L:
-        return range_widths(E, r, r + n)
-    return range_widths(E, r, L) | range_widths(E, 0, r + n - L)
-
-
 def _residues(stride: int, count: int, L: int, cap: int = 4096) -> set[int] | None:
     """{k * stride mod L : k < count}, or None when it has more than `cap` members."""
     g = math.gcd(stride, L)
     if count >= L // g:
         return set(range(0, L, g)) if L // g <= cap else None
     return {k * stride % L for k in range(count)} if count <= cap else None
+
+
+_RCAP = 1 << 16
+
+
+def _level_res(L: int, levels: tuple[tuple[int, int], ...]) -> set[int] | None:
+    """The residues mod L of a lane's levels' contributions over its periods (`Widths.levelRes`), None past `_RCAP`."""
+    if not levels:
+        return {0}
+    (r, d), rest = levels[0], levels[1:]
+    A = _residues(d, r, L, _RCAP)
+    if not rest:
+        return A
+    B = _level_res(L, rest)
+    if A is None or B is None or len(A) * len(B) > _RCAP:
+        return None
+    return {(x + y) % L for x in A for y in B}
+
+
+def _lane_width(S: Type, w: int, lo: int, hi: int, b: int, run: int, e: int, levels, exact: bool) -> bool | None:
+    """Whether every leaf of `S` a lane reaches between its extremes lo..hi has width `w`, by structure (`Widths.laneWidth`):
+    `S`'s widths between the extremes, or the residues the lane reaches in the period of the array holding them all, each of
+    which it reaches where `exact`. None where neither decides."""
+    ws = range_widths(S, lo, hi + 1)
+    if len(ws) == 1:
+        return next(iter(ws)) == w
+    node, off = _cover(S, lo, hi + 1)
+    if not isinstance(node, Array) or not node.elem.leaves:
+        return None
+    L = node.elem.leaves
+    O, G = _residues(e, run, L, _RCAP), _level_res(L, tuple(levels))
+    if O is None or G is None or len(O) * len(G) > _RCAP:
+        return None
+    if all(range_widths(node.elem, (b - off + x + y) % L, (b - off + x + y) % L + 1) == {w} for x in O for y in G):
+        return True
+    return False if exact else None
+
+
+def _undecided(p: Refs, why: str) -> TypeError:
+    form = type(p).__name__.lower()
+    return TypeError(f"E_REINTERPRET unchecked: a {form} part of {p.count} references, not decided by structure: {why}")
 
 
 class _Widths:
@@ -658,27 +689,27 @@ class _Widths:
             return 0
         if isinstance(p, Affine):
             return _first_other(T, p.base, p.count, w)
-        if range_widths(T, lo, hi + 1) == {w} or self._periodic(T, p, lo, hi, w):  # type: ignore[arg-type]
-            return None
-        return next((k for k, (s, i, j) in enumerate(p) if self.leaf(s, i, j) != w), None)
+        ok = _lane_width(T, w, lo, hi, p.base, p.inner, p.inner_stride,  # type: ignore[attr-defined]
+                         ((-(-p.count // p.inner), p.outer_stride),), p.count % p.inner == 0)  # type: ignore[attr-defined]
+        if ok is None:
+            raise _undecided(p, f"the leaves of {'parameter' if p.space == 'p' else 'node'} {p.idx} it reads are of "  # type: ignore[attr-defined]
+                             "several widths")
+        return None if ok else next((k for k, (s, i, j) in enumerate(p) if self.leaf(s, i, j) != w), None)
 
-    @staticmethod
-    def _periodic(T: Type, p: Strided, lo: int, hi: int, w: int) -> bool:
-        """Every leaf `p` names is of width `w`, by the offsets it reads within the elements of the array that holds them all."""
-        node, off = _cover(T, lo, hi + 1)
-        if not isinstance(node, Array):
-            return False
-        L = node.elem.leaves
-        A = _residues(p.outer_stride, -(-p.count // p.inner), L)
-        r0 = (p.base - off) % L
-        if A is not None and p.inner_stride == 1 and len(A) <= 4096:
-            # each outer step reads `inner` consecutive leaves (fewer at a short last step), so a superset of the leaves `p`
-            # names is the window of `inner` leaves from each step's first, cyclically within an element
-            return all(_cyclic_widths(node.elem, (r0 + a) % L, min(p.inner, p.count)) == {w} for a in A)
-        B = _residues(p.inner_stride, p.inner, L)
-        if A is None or B is None or len(A) * len(B) > 4096:
-            return False
-        return all(range_widths(node.elem, r, r + 1) == {w} for r in {(r0 + a + b) % L for a in A for b in B})
+    def grid_bad(self, p: Grid, w: int) -> bool:
+        """Whether a lane of grid `p`, read at width `w`, reaches a leaf of another width (`Widths.partOk`'s grid case)."""
+        vs = []
+        for s, i, b, e, lv in p.lanes:
+            T, h, _n = self.src(s, i)
+            if T is None or h == w:
+                continue
+            lo, hi = lane_bounds(p.run, (s, i, b, e, lv))
+            vs.append(_lane_width(T, w, max(lo, 0), max(hi, 0), b, p.run, e, lv, True))
+        if False in vs:
+            return True
+        if None in vs:
+            raise _undecided(p, "a lane reads leaves of several widths")
+        return False
 
     def misread(self, t: Type, pos: int, p: Refs) -> int | None:
         """The first leaf of part `p` (no `Concat`), read at leaves pos.. of a `t`, whose width is not the one `t` gives that leaf,
@@ -689,6 +720,10 @@ class _Widths:
         ws = range_widths(t, pos, pos + n)
         if len(ws) == 1:
             return self.other(p, next(iter(ws)))
+        if isinstance(p, Strided) and self.input_width(p.space, p.idx) is None:
+            if self.src(p.space, p.idx)[0] is None:
+                return None
+            raise _undecided(p, "the type it is read as has leaves of several widths along it")
         if isinstance(p, Affine) and self._same_layout(t, pos, p):
             return None
         node, off = _cover(t, pos, pos + n)
@@ -740,6 +775,12 @@ class _Widths:
         # A method, not a closure: a recursive closure is a reference cycle, which only the cyclic collector frees, and this
         # runs for every argument of every node.
         if isinstance(r, Grid):
+            if r.count and all(self.input_width(s, i) is None for s, i, *_x in r.lanes):
+                ws = range_widths(t, pos, pos + r.count)
+                if len(ws) != 1:
+                    raise _undecided(r, "the type it is read as has leaves of several widths along it")
+                if not self.grid_bad(r, next(iter(ws))):
+                    return None
             r = Concat(r.pieces())
         if not isinstance(r, Concat):
             k = self.misread(t, pos, r)
