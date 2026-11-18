@@ -49,9 +49,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "proofs.spot.verifier.one_stage.registered", "proofs.spot.verifier.second_stage",
         ),
         "verity_vllm/pipeline/interior_rows.py": ("proofs.spot.verifier.one_stage.docket",),
-        "verity_vllm/pipeline/registration_log.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/serve_day.py": ("registration.verifier.registration",),
-        "verity_vllm/pipeline/serve_tie.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/serving_rows.py": (
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.partition",
             "proofs.spot.verifier.one_stage.registered", "proofs.spot.verifier.service",
