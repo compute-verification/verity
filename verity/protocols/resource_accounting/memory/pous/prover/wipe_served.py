@@ -181,10 +181,12 @@ def refusals(ctx: Mapping[str, Any]) -> tuple[str, ...]:
         out.append("no challenger's side was handed to it (ctx['side_of'], the runtime's Side.of)")
     if ctx.get("private") is None:
         out.append("no private directory was handed to it, where its case goes")
+    if "party" not in ctx:
+        out.append("no party was handed to it (ctx['party'], the memory challenger's, which the scheme hands)")
     if not s["run_keys"]:
         if ctx.get("pins") is None:
             out.append("no pin was handed to it (ctx['pins'], the application's [[pin]] entries)")
-        elif pin_of(ctx["pins"], ctx["party"]) is None and not ctx.get("trusted"):
+        elif "party" in ctx and pin_of(ctx["pins"], ctx["party"]) is None and not ctx.get("trusted"):
             out.append(f"the pins handed to it give the {ctx['party']} no key for the wipe")
         if not s["host"]:
             out.append("no challenger binding (host, address, command) and run_keys unset")

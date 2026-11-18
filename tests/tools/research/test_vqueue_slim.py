@@ -1584,11 +1584,11 @@ AUDIT {SCRATCH}/Security/Properties: FAIL; built in the sandbox
   lean: proved_in: ../Proofs's build did not pass (its report says why), so its facts are not read
 AUDIT: FAIL ({SCRATCH}/Security/Proofs, {SCRATCH}/Security/Properties); reports in /workspace/research/runs/r-x/lean-audit
 """
-TAMPER_LOG = f"""AUDIT {SCRATCH}/verity/core/devices/certifier/lean: FAIL; built in the sandbox
+TAMPER_LOG = f"""AUDIT {SCRATCH}/verity/protocols/resource_accounting/network/attester/program/lean: FAIL; built in the sandbox
   tamper: {SCRATCH}/verity/core/service/flock/.lake/build/lib/lean/Flock/Canon.olean changed
   build: exit 1
     error: object file verity/core/service/flock/.lake/build/lib/lean/Flock/Canon.olean of module Flock.Canon does not exist
-AUDIT: FAIL ({SCRATCH}/verity/core/devices/certifier/lean); reports in /workspace/research/runs/r-x/lean-audit
+AUDIT: FAIL ({SCRATCH}/verity/protocols/resource_accounting/network/attester/program/lean); reports in /workspace/research/runs/r-x/lean-audit
 """
 
 
