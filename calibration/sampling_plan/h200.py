@@ -35,8 +35,8 @@ from dataclasses import asdict, dataclass, field, replace
 from math import ceil, exp, log
 from pathlib import Path
 
-from calibration.sampling_plan import transformer as X
-from calibration.sampling_plan.inputs import CARDS, I, cap
+import transformer as X
+from inputs import CARDS, I, cap
 
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 from verity.protocols.proofs.spot.prover.candidates import shape_of

@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import pytest
 
-from calibration.sampling_plan import int8_llama as L
-from calibration.sampling_plan.inputs import I, MODELS
+import int8_llama as L
+from inputs import I, MODELS
 from verity.protocols.proofs.spot.prover.optimize import ReplayGrain, replay_cost
 
 V = {k: i.value for k, i in I.items()}

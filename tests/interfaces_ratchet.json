@@ -27,7 +27,7 @@
   "infra/control/top_watch.py": 1,
   "verity/commitments/cuda/commit_slots/slots.py": 1,
   "verity/protocols/experimental/dither/prover/dither.py": 1,
-  "calibration/sampling_plan/inputs.py": 3,
+  "verity/protocols/proofs/spot/prover/cost/inputs.py": 3,
   "verity/protocols/resource_accounting/compute/pouw/prover/circuit/inert_bound.circuit-check.py": 1,
   "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py": 1,
   "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py": 1,

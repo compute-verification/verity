@@ -46,7 +46,7 @@ from fractions import Fraction
 from math import ceil, log
 from pathlib import Path
 
-from calibration.sampling_plan.inputs import CARDS, I, cap, observations
+from inputs import CARDS, I, cap, observations
 
 from verity import protocol
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum

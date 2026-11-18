@@ -2856,7 +2856,6 @@
     {"file": "verity/protocols/proofs/recursion/verifier/zk_server/ZkServer/Record.lean", "count": 2},
     {"file": "verity/protocols/proofs/recursion/verifier/zk_server/ZkServer/Release.lean", "count": 1},
     {"file": "verity/protocols/proofs/spot/prover/candidates.py", "count": 12},
-    {"file": "verity/protocols/proofs/spot/prover/cost/README.md", "count": 3},
     {"file": "calibration/sampling_plan/cpu_budget.py", "count": 6},
     {"file": "calibration/sampling_plan/glm53.py", "count": 4},
     {"file": "calibration/sampling_plan/h200.py", "count": 34},

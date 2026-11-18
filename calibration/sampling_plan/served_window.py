@@ -58,7 +58,7 @@ from fractions import Fraction
 from math import log, log2
 from pathlib import Path
 
-from calibration.sampling_plan.inputs import (EPILOGUE, I, K_MAX, KEY, MEASURED, S8_STEP, block_k_log, cap,
+from inputs import (EPILOGUE, I, K_MAX, KEY, MEASURED, S8_STEP, block_k_log, cap,
                                                              observations)
 
 from verity.protocol import MONITORING_PERIODS

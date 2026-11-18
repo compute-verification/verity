@@ -27,7 +27,7 @@ from dataclasses import replace
 from math import ceil, log
 from pathlib import Path
 
-from calibration.sampling_plan.inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, Model, cap, leaf_chain,
+from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, Model, cap, leaf_chain,
                                                              observations, s8_coord_ands, serve_rows, tree_chain)
 
 from verity.protocols.proofs.spot.prover.candidates import Shape, cuts, pressure

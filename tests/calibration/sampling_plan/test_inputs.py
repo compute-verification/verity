@@ -5,10 +5,10 @@ plan reads the one cap."""
 
 from __future__ import annotations
 
-from calibration.sampling_plan import h200 as H
-from calibration.sampling_plan import int8_llama as P
-from calibration.sampling_plan import transformer as X
-from calibration.sampling_plan.inputs import K_MAX, block_k_log, cap
+import h200 as H
+import int8_llama as P
+import transformer as X
+from inputs import K_MAX, block_k_log, cap
 
 COORD_ROWS = (2, 4, 4)
 

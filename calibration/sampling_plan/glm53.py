@@ -46,7 +46,7 @@ from typing import Any
 
 from verity.circuits.evaluation import bits
 from verity.commitments.periods.interface import proof_block_k_log
-from calibration.sampling_plan.inputs import MEASURED
+from inputs import MEASURED
 from verity.protocols.proofs.spot.prover.optimize import Candidate
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA, Stratified, Stratum
 

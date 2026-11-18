@@ -10,8 +10,8 @@ from math import ceil, log
 
 import pytest
 
-from calibration.sampling_plan import h200 as H
-from calibration.sampling_plan.inputs import observations
+import h200 as H
+from inputs import observations
 
 M = H.Shape()
 

@@ -398,16 +398,11 @@ trusted = true
 [[place]]
 paths = [
     "verity/protocols/proofs/spot/prover/audit",
-    "verity/protocols/proofs/spot/prover/cost",
 ]
 loads = [
-    "verity/circuits",
-    "verity/circuits/ops",
     "verity/commitments/crypto",
     "verity/commitments/periods",
     "verity/protocols/proofs/spot/verifier",
-    "verity/protocols/proofs/spot/verifier/profile.py",
-    "verity/runtime",
 ]
 
 [[place]]
@@ -475,12 +470,6 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstage.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstar.py",
     "verity/protocols/proofs/spot/prover/audit/local_challenger.py",
-    "calibration/sampling_plan/glm53.py",
-    "calibration/sampling_plan/h200.py",
-    "calibration/sampling_plan/inputs.py",
-    "calibration/sampling_plan/int8_llama.py",
-    "calibration/sampling_plan/served_window.py",
-    "calibration/sampling_plan/transformer.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1window.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/lowering/h1unit.py",
@@ -521,10 +510,6 @@ reaches = [
     "verity/circuits",
 ]
 loaded_by = [
-    "calibration/sampling_plan/glm53.py",
-    "calibration/sampling_plan/h200.py",
-    "calibration/sampling_plan/served_window.py",
-    "calibration/sampling_plan/transformer.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/plan.py",
 ]
 
@@ -926,9 +911,6 @@ reaches = [
     "verity/channel.py",
 ]
 loaded_by = [
-    "calibration/sampling_plan/cpu_budget.py",
-    "calibration/sampling_plan/served_window.py",
-    "calibration/sampling_plan/transformer.py",
     "verity/protocols/proofs/spot/prover/workload.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/workload.py",
     "verity/protocols/resource_accounting/memory/poub/prover/p2_party_prover.py",

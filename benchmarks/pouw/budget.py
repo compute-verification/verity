@@ -234,9 +234,9 @@ def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
     samples a week, the share of the plan's cost that grows with a unit's ANDs (all but the sessions' fixed cost) and the
     linears' cut. ≈ 2 s a regime."""
     tree = Path(tree).resolve()
-    sys.path[:0] = [str(tree)]
-    from calibration.sampling_plan import int8_llama as P
-    from calibration.sampling_plan.inputs import I
+    sys.path[:0] = [str(tree / "calibration" / "sampling_plan"), str(tree)]
+    import int8_llama as P
+    from inputs import I
 
     P.DELTA = math.exp(-LN_INV_DELTA)
     v = {k: i.value for k, i in I.items()}

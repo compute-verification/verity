@@ -2,7 +2,7 @@
 from pathlib import Path
 
 import pytest
-from calibration.sampling_plan import recursion as R
+import recursion as R
 
 RESULT = {"headline": {"ok": True, "pipeline": {"inner M0 e2e_s": 10.0, "V* staging_s (vstage + vcap steps)": 20.0,
                                                 "outer prove (firewall) e2e_s": 570.0, "Lean step_s": 60.0}},

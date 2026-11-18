@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from calibration.sampling_plan import served_window as S
-from calibration.sampling_plan.inputs import K_MAX, block_k_log, cap
+import served_window as S
+from inputs import K_MAX, block_k_log, cap
 from verity.commitments.periods.interface import MASK_LOG
 
 
