@@ -202,16 +202,17 @@ class Attached:
         self.declared = event
 
     def registered(self, event: Any) -> None:
-        """The ``memory`` hook's `RegisteredValues`; its ranges' events (`RangesDeclared` and the rest) are not Pearl+'s."""
-        if isinstance(event, H.RegisteredValues):
+        """The ``memory`` hook's registered values (`MemoryChanged` ``registered``); its ranges' events
+        (`RangesDeclared` and the other changes) are not Pearl+'s."""
+        if isinstance(event, H.MemoryChanged) and event.change == "registered":
             self.weights = self.keyed(event)
 
-    def keyed(self, event: H.RegisteredValues) -> dict[int, H.Handle]:
+    def keyed(self, event: H.MemoryChanged) -> dict[int, H.Handle]:
         """The linear weights by block key (``operands``, the key `BlockDue` carries), every one committed before the
         first block."""
         values = dict(event.values)
         if not event.operands:
-            raise ValueError("pearl-plus: the registered values name no weight operand (RegisteredValues.operands is "
+            raise ValueError("pearl-plus: the registered values name no weight operand (MemoryChanged.operands is "
                              "empty), so there is no linear weight to commit")
         if missing := sorted(set(event.operands) - set(values)):
             raise ValueError(f"pearl-plus: weight operands {missing} are not among the registered values")

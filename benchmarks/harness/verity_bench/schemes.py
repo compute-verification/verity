@@ -40,7 +40,8 @@ def attached(name: str, weights: dict, given: dict) -> object:
 
     exchange = Exchange()
     on = exchange.attach(declarations.get(name), given)
-    exchange.emit(H.RegisteredValues(tuple((str(k), w) for k, w in weights.items()), operands={str(k): k for k in weights}))
+    exchange.emit(H.MemoryChanged("registered", values=tuple((str(k), w) for k, w in weights.items()),
+                                  operands={str(k): k for k in weights}))
     exchange.emit(H.PhaseOpened(0, 0))
     return on
 

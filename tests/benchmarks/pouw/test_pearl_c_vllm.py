@@ -687,8 +687,9 @@ class _Steps:
         monkeypatch.setattr(PPDR, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, **run))
         self.H, self.weights, self.steps, self.rng, self.at = H, weights, steps, np.random.default_rng(seed), 0
         self.scheme = PP.Attached({"settings": {"kernel": "k", "coins": "in-process", **(more or {})}})
-        self.scheme.registered(H.RegisteredValues(tuple((f"l{w}.weight", t) for w, t in weights.items()), 0,
-                                                  {f"l{w}.weight": w for w in weights}))
+        values = tuple((f"l{w}.weight", t) for w, t in weights.items())
+        operands = {f"l{w}.weight": w for w in weights}
+        self.scheme.registered(H.MemoryChanged("registered", values=values, operands=operands))
 
     def begin(self):
         calls = self.steps[self.at]

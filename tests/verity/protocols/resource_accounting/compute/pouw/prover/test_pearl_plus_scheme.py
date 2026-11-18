@@ -136,14 +136,14 @@ def _attached(monkeypatch) -> tuple[_Exchange, _Run]:
     monkeypatch.setattr(PS.Attached, "open", lambda self, weights, own: (weights == {3: "w"} or 1 / 0) and run)
     on = PS.PEARL_PLUS.attach(ex, CTX)
     assert on.commitment() == {}
-    ex.emit(H.RegisteredValues((("model.layers.0.qkv.weight", "w"), ("model.norm.weight", "n")),
-                               operands={"model.layers.0.qkv.weight": 3}))
+    ex.emit(H.MemoryChanged("registered", values=(("model.layers.0.qkv.weight", "w"), ("model.norm.weight", "n")),
+                            operands={"model.layers.0.qkv.weight": 3}))
     return ex, run
 
 
 def test_the_memory_hooks_other_events_leave_it_as_it_was(monkeypatch) -> None:
     """The ``memory`` hook carries the KV cache's ranges as well as the registered values: an engine declares its
-    ranges at start, before or after its weights register, and Pearl+ takes only `RegisteredValues`."""
+    ranges at start, before or after its weights register, and Pearl+ takes only the registered values."""
     ranges = (H.RangesDeclared(4, 16, 64, 2, ("s0", "s1")), H.MemoryChanged("allocated", (0, 1), input="a"),
               H.MemoryChanged("written", (0,), 1, offset=0, count=8), H.MemoryChanged("freed", (0, 1), 2))
     ex = _Exchange()
@@ -196,7 +196,7 @@ def _phased(monkeypatch) -> tuple[_Exchange, list[_Run], PS.Attached]:
     ex, runs = _Exchange(), []
     monkeypatch.setattr(PS.Attached, "open", lambda self, weights, own: runs.append(_Run()) or runs[-1])
     on = PS.PEARL_PLUS.attach(ex, CTX)
-    ex.emit(H.RegisteredValues((("w", "w"),), operands={"w": 3}))
+    ex.emit(H.MemoryChanged("registered", values=(("w", "w"),), operands={"w": 3}))
     return ex, runs, on
 
 
@@ -298,7 +298,7 @@ def test_a_retained_phase_writes_its_record_beside_its_passes(monkeypatch, tmp_p
 
     monkeypatch.setattr(PS.Attached, "open", opened)
     on = PS.PEARL_PLUS.attach(ex, IN_PROCESS)
-    ex.emit(H.RegisteredValues((("w", "w"),), operands={"w": 3}))
+    ex.emit(H.MemoryChanged("registered", values=(("w", "w"),), operands={"w": 3}))
     ex.emit(H.PhaseOpened(0, 0))
     ex.emit(H.PhaseClosed(0, 1, b""))
     ex.emit(H.PhaseOpened(1, 2))
@@ -338,12 +338,12 @@ def test_a_step_that_computed_without_steps_computed_is_refused(monkeypatch) -> 
 
 def test_the_weight_operands_are_keyed_by_their_blocks() -> None:
     on = PS.Attached(CTX)
-    event = H.RegisteredValues((("a", "A"), ("b", "B"), ("norm", "N")), operands={"a": 1, "b": 0})
+    event = H.MemoryChanged("registered", values=(("a", "A"), ("b", "B"), ("norm", "N")), operands={"a": 1, "b": 0})
     assert on.keyed(event) == {1: "A", 0: "B"}
     with pytest.raises(ValueError, match="name no weight operand"):
-        on.keyed(H.RegisteredValues((("a", "A"),)))
+        on.keyed(H.MemoryChanged("registered", values=(("a", "A"),)))
     with pytest.raises(ValueError, match=r"weight operands \['c'\] are not among the registered values"):
-        on.keyed(H.RegisteredValues((("a", "A"),), operands={"a": 0, "c": 1}))
+        on.keyed(H.MemoryChanged("registered", values=(("a", "A"),), operands={"a": 0, "c": 1}))
 
 
 def test_attach_refuses_without_coins_or_a_challenger_its_gate_or_a_kernel() -> None:
@@ -379,7 +379,8 @@ def test_a_capture_records_each_call_as_one_op_on_in_process_coins(monkeypatch) 
     ex = _Exchange()
     on = PS.PEARL_PLUS.attach(ex, {**IN_PROCESS, "stage": "capture", "build": "build-7"})
     [(_, req)] = ex.filed
-    ex.emit(H.RegisteredValues((("model.layers.0.qkv.weight", W0),), operands={"model.layers.0.qkv.weight": 3}))
+    ex.emit(H.MemoryChanged("registered", values=(("model.layers.0.qkv.weight", W0),),
+                            operands={"model.layers.0.qkv.weight": 3}))
     ex.emit(H.StepBegan(0, ("a",), 8))
     assert _Device.runs == {"build-7": on.run}
     assert req.kernel(_due(), lambda given: "stock") == "y"
@@ -530,7 +531,7 @@ def test_reports_are_the_runs_commitment_and_details(monkeypatch) -> None:
     run.commits = {"salt_opening": "o"}
     monkeypatch.setattr(PS.Attached, "open", lambda self, weights, own: run)
     on = PS.PEARL_PLUS.attach(ex, CTX)
-    ex.emit(H.RegisteredValues((("w", "w"),), operands={"w": 0}))
+    ex.emit(H.MemoryChanged("registered", values=(("w", "w"),), operands={"w": 0}))
     assert on.commitment() == {} and on.run is None
     ex.emit(H.StepBegan(0, ("a",), 8))
     assert on.commitment() == {"salt_opening": "o"}
@@ -647,7 +648,7 @@ def _users(monkeypatch, users: str = FIXED) -> tuple[_Exchange, list[_Run], PS.A
     ex, runs = _Exchange(), []
     monkeypatch.setattr(PS.Attached, "open", lambda self, weights, own: runs.append(_Run()) or runs[-1])
     on = PS.PEARL_PLUS.attach(ex, {**CTX, "settings": {**CTX["settings"], "users": users}})
-    ex.emit(H.RegisteredValues((("w", "w"),), operands={"w": 3}))
+    ex.emit(H.MemoryChanged("registered", values=(("w", "w"),), operands={"w": 3}))
     for input_, user in (("e-front", "user-1"), ("e-fixed", "fixed.00000"), ("e-fixed2", "fixed.00001")):
         ex.emit(H.InputArrived(input_, 1, 0, user=user))
     return ex, runs, on
@@ -739,7 +740,7 @@ def test_a_user_is_matched_in_process_and_reaches_no_record(monkeypatch, tmp_pat
 
     monkeypatch.setattr(PS.Attached, "open", opened)
     on = PS.PEARL_PLUS.attach(ex, {"settings": {**IN_PROCESS["settings"], "users": FIXED}})
-    ex.emit(H.RegisteredValues((("w", "w"),), operands={"w": 3}))
+    ex.emit(H.MemoryChanged("registered", values=(("w", "w"),), operands={"w": 3}))
     ex.emit(H.InputArrived("e-fixed", 1, 0, user="fixed.00000"))
     ex.emit(H.PhaseOpened(0, 0))
     ex.emit(H.StepBegan(0, ("e-fixed",), 8))
