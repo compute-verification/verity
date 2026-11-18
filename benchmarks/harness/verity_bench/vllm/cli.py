@@ -49,13 +49,14 @@ def run(a: Any) -> int:
     sweep = spec.sweep if a.sweep is None else a.sweep
     if reps < 1:
         raise ValueError("--reps must be positive")
-    preset = resolve_spec(a.preset).preset
+    resolved = resolve_spec(a.preset)
+    preset = resolved.preset
     if a.model_path is not None:
         preset = local_checkpoint(preset, a.model_path)
     preset, eager = served(preset, a.eager or spec.eager)
     modules = spec.arm_modules if a.arm_module is None else tuple(a.arm_module)
-    names = spec.arms if a.arms is None else tuple(x.strip() for x in a.arms.split(","))
-    arms = resolve_arms(names, modules, {k: v for k, v in spec.arm_settings.items() if k in names})
+    names = resolved.arms if a.arms is None else tuple(x.strip() for x in a.arms.split(","))
+    arms = resolve_arms(names, modules, {k: v for k, v in resolved.arm_settings.items() if k in names})
     points = expand_sweep(sweep)
     a.out.mkdir(parents=True, exist_ok=True)
     recorded = settings.is_set("RESEARCH_RUN_DIR")

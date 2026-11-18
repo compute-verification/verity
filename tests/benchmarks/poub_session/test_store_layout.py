@@ -26,8 +26,10 @@ import store_layout as sl  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
 from test_session import run  # noqa: E402
 
+FIGURES_FILE = Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json"
+FIGURES = timing.Figures.of_json(json.loads(FIGURES_FILE.read_text()))
+
 ROLE = "synthetic-bf16"
-FIGURES = timing.RTX_PRO_6000_NODE
 B = rstore.BLOCK
 TINY = {"layers": 1, "hidden": 16, "heads": 2, "kv_heads": 1, "intermediate": 32, "vocab": 64}
 """A checkpoint of 6 weights blocks an arena, so two arenas of 7 and 2 host blocks make `test_session`'s 16-block store
@@ -91,7 +93,7 @@ def test_verifier_py_takes_no_checkpoint(tmp_path):
     """verifier.py holds no checkpoint: `--model` and the store's shape are no arguments of it."""
     for flag, value in (("--model", ROLE), ("--checkpoint", str(tmp_path)), ("--arena-blocks", "7")):
         with pytest.raises(SystemExit):
-            verifier.main(["--out", str(tmp_path / "out"), flag, value], figures=FIGURES)
+            verifier.main(["--out", str(tmp_path / "out"), "--figures", str(FIGURES_FILE), flag, value])
 
 
 def test_the_paced_line_reports_weights_held_and_filler_held_apart():

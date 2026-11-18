@@ -1,5 +1,5 @@
 """The attested tick (``--admit tick``) in the replay and in advice v1. The serving side's gate
-(`verity_vllm.pipeline.serve_admit.TickGate`, a hold of the admission hook, `verity_vllm.engine.admission`) in front of the replay's vLLM scheduler, served in
+(`verity.protocols.resource_accounting.network.prover.admission.TickGate`, a hold of the admission hook, `verity_vllm.engine.admission`) in front of the replay's vLLM scheduler, served in
 simulated physical time with wall-clock jitter, schedules exactly the batches `replay.replay(tick=...)` computes from the
 attested release buckets alone, under sync and async scheduling, and the same jitter without the gate changes them. v1
 registered with the tick sends no decision, no order entry and no hit, which the replay's block pool gives, so every

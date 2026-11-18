@@ -24,6 +24,9 @@ trap 'rm -rf "$TMPDIR"' EXIT
 # shellcheck disable=SC1091
 source "${VENV:-/workspace/cp/venv312}/bin/activate"
 export PYTHONPATH=$TREE:$TREE/benchmarks:$TREE/adapters/vllm:$TREE/tools/research/src:$TREE/infra/cluster/src:$TREE/infra/ops:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/verity/circuit_check/src:$TREE/tools/verity/cli:$TREE/tools/difftest/python
+# the collector's JIT build reads the card's arch from its card file (vLLM's CARD_SKU): the card the run is on, from the kit
+CARD_SKU=${CARD_SKU:-$(python "$TREE/benchmarks/kernels/machine.py" sku)}
+export CARD_SKU
 cd "$TREE/adapters/vllm"
 nvidia-smi --query-gpu=index,name,memory.used --format=csv,noheader
 python -c "from verity_vllm.commit.committer import native_collect as N; N.ext()"

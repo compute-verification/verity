@@ -123,7 +123,7 @@ theorem sampleMiss_le (hA3 : FlockSoundness.Assumptions.UniformRandomBytes w.Lb 
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ (1 - (w.kd : ℝ≥0∞) / w.n) ^ B.card := by
   rw [prob_sampleMiss]
   refine (SamplingDesign.execOS_subset_escape_le w.n w.kd w.hkd w.Lb w.src hA3 B).trans ?_
-  rw [SamplingDesign.subset_escape]
+  rw [Verity.SamplingDesign.subset_escape]
   exact SamplingDesign.choose_div_le_one_sub_pow w.hkd (by simpa using B.card_le_univ)
 
 
