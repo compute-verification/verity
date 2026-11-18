@@ -150,11 +150,13 @@ def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = H
     """`rows` in one tree.  Values are committed hiding, under `HM96` with the committer's ``salts``, one `HM96_SALT`-byte
     salt a row in rank order (`fresh_salts`), which it keeps: each value is followed by its salt, so no one without the
     salts recomputes the root from candidate values; a missing salt or one of another size is refused.  A plain
-    ``sha256`` or ``sha512`` tree (``salts`` None) is not hiding, and is refused unless ``public``, the caller's statement
+    ``sha256`` or ``sha512`` tree takes no salts, is not hiding, and is refused unless ``public``, the caller's statement
     that its rows need no hiding: rows the protocol makes public, or a plain format's tree (h0's) that a reference tool or
     a recorded run replays, which no served commitment is."""
     if hash == HM96:
         rows = _salted(rows, salts)
+    elif salts is not None:
+        raise ProtocolError(f"a plain {hash} tree takes no salts")
     elif not public:
         raise ProtocolError(f"a plain {hash} tree is not hiding: values are committed under {HM96} with the committer's "
                             "salts, and public=True is for rows the protocol makes public")
@@ -165,6 +167,8 @@ def transcript_root(salt: bytes, weights_root: bytes, digests: Sequence[bytes], 
                     salts: Sequence[bytes] | None = None) -> bytes:
     """The transcript's root over the tiles' digests in order (`transcript_domain` of the execution phase's ``salt`` and
     ``weights_root``): under `HM96` digest i is followed by ``salts[i]``, as `commit_rows` salts a row."""
+    if hash != HM96 and salts is not None:
+        raise ProtocolError(f"a plain {hash} tree takes no salts")
     values = _salted(digests, salts) if hash == HM96 else list(digests)
     d = rows_domain(tagged(domains.POUW_TRANSCRIPT, salt, weights_root), -1, len(values), hash, digests=True)
     return MerkleTree(d, dict(enumerate(values)), lambda _: TILE_SCHEMA).commitment.root

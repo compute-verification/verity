@@ -18,16 +18,17 @@ from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Po
 from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover import id_relay, workload
 from verity.protocols.resource_accounting.network.prover.ids_protocol import IdsProtocol
-from verity.protocols.resource_accounting.network.prover.admission import ORDERS, Admitter, tick_config
+from verity.protocols.resource_accounting.network.prover.admission import ORDERS, Admitter, FrontFeed, engine, tick_config
 
 DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, IoTieContent, IoTieBucket, IoTieRequest,
                ResponseTieStop, ResponseTieNoStop, LengthsRow)
 
 
 #: the scheme's settings and their defaults: ``order`` ``arrival`` admits no request in release order (the id relay
-#: instead); ``release-order`` and ``tick`` are `prover.admission.Admitter`'s, which reads the rest under ``tick``
+#: instead); ``release-order`` and ``tick`` are `prover.admission.Admitter`'s, which reads the rest under ``tick``;
+#: ``log``, a directory for the engine's tick log (`prover.admission.engine`), none where empty
 SETTINGS = {"order": "arrival", "hold_ms": 5000, "bucket_us": 100_000, "sat_us": 0, "free_us": 0, "token_ns": 0,
-            "catch_up": "quiet", "arm": ""}
+            "catch_up": "quiet", "arm": "", "log": ""}
 
 
 def _check(values: Mapping[str, Any]) -> str | None:
@@ -52,8 +53,13 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
     """The scheme on a served run's ``exchange`` under ``ctx["settings"]`` (`settings`). Under an ``order`` other than
     ``arrival``, its admission (`prover.admission.Admitter`, with ``ctx``'s ``source``, ``submit``, ``abort``, ``take``,
     ``pull``, ``log``, ``clock`` and ``schedule``), installed and returned; else the id relay beside the workload
-    (`START_ID_RELAY`)."""
+    (`START_ID_RELAY`). Where the front and the engine run in two processes (``ctx["process"]``), each process's side of
+    the certified tick, on the server's feed directory (`prover.admission.FrontFeed`, `prover.admission.engine`)."""
     s = settings(ctx.get("settings", {}))
+    if ctx.get("process") == H.FRONT:
+        return FrontFeed(ctx["feed"]).attach(exchange, NETWORK_ATTESTER.name)
+    if ctx.get("process") == H.ENGINE:
+        return engine(s, ctx["feed"]).install(exchange, NETWORK_ATTESTER.name)
     if s["order"] == "arrival":
         for r in requests(ctx):
             exchange.request(NETWORK_ATTESTER.name, r)
@@ -80,6 +86,7 @@ NETWORK_ATTESTER = register(Scheme(
     name="network-attester",
     messages=workload.MESSAGES,
     framings={IdsProtocol.name: IdsProtocol},
+    provides=("admission",),
     protocol="verity/certifier/v0",
     resource="egress",
     blocks=tuple(Block(d.id, output_bits(d)) for d in DEFINITIONS),

@@ -92,7 +92,7 @@ class TickServer(Server):
 
         self.windows.admitted = counted
         ex = messages.current()
-        got = messages.attester().attach(ex, {"settings": {"order": "tick", "hold_ms": 60_000, **TICK.record()},
+        got = messages.providing("admission").attach(ex, {"settings": {"order": "tick", "hold_ms": 60_000, **TICK.record()},
                                               "submit": self.submit, "abort": self.loop.abort, "take": take,
                                               "clock": lambda: 0.0})
         self.gate = self.loop.gate = got.gate

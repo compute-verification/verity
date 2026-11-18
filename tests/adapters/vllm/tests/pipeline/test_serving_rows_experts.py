@@ -319,7 +319,8 @@ def test_the_reads_roots_domains_and_verdicts_are_committed_by_reference_and_cou
         for p, of in (("in1", "root"), ("in2", "domain"))}
     values = {**tables, **IF.supplied(reg, {p: v.entry() for p, v in tables.items()}, "cd" * 64, module=G1)}
     got = SRW.read_all(ms, layer.rows, layer.store, None, tables=tables)
-    data, entries, roots, salts_of = WT.by_reference(SimpleNamespace(members=ms, row_tables=()), reg, [g for g, _e in got], values)
+    data, entries, roots, salts_of = WT.by_reference(SimpleNamespace(members=ms, row_tables=()), reg, [g for g, _e in got], values,
+                                                     IF.member_ranges(ms))
     assert roots == {p: v.root.hex() for p, v in tables.items()}
     for m, d in zip(ms, data):
         if m.template not in (READ_W, READ_WS):
@@ -479,7 +480,8 @@ def test_a_fused_blocks_tables_are_declared_on_it_committed_by_reference_and_cou
         (t, "in0", ("in3", "in4", "in5"), "o1", at, n) for t in (READ_WS, FU) for at, n, _b, _param, _l in plan.tables(t)}
     values = {**tables, **IF.supplied(reg, {p: v.entry() for p, v in tables.items()}, "cd" * 64, module=G1)}
     got = SRW.read_all(ms, rows, ns.store, None, tables=tables)
-    data, entries, roots, _salts = WT.by_reference(SimpleNamespace(members=ms, row_tables=()), reg, [g for g, _e in got], values)
+    data, entries, roots, _salts = WT.by_reference(SimpleNamespace(members=ms, row_tables=()), reg, [g for g, _e in got], values,
+                                                     IF.member_ranges(ms))
     assert roots == {p: v.root.hex() for p, v in tables.items()}
     for m, d in zip(ms, data):
         assert (m.key in entries) == (m.template != SLOTS)

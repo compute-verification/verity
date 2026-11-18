@@ -113,7 +113,7 @@ _PLUGIN: list[Mapping[str, Any]] = []
 def register() -> None:
     """``--admit tick`` under vLLM's own OpenAI server, as a vLLM general plugin (entry point group
     ``vllm.general_plugins``, run in each of its processes): with ``VERITY_TICK`` set (`tick_config`), every engine core
-    built in this process gets the network attester's gate (`verity_vllm.messages.attester`'s ``attach``) that reads the
+    built in this process gets the network attester's gate (the scheme that provides admission, `verity_vllm.messages.providing`, its ``attach``) that reads the
     feed, a hold of the adapter's admission hook on its scheduler (`verity_vllm.engine.admission.register`, keyed by the client's X-Request-Id). Idempotent."""
     cfg = tick_config()
     if cfg is None or _PLUGIN:
@@ -121,6 +121,6 @@ def register() -> None:
     from verity_vllm import messages
     from verity_vllm.engine import admission
     given = {k: v for k, v in settings.get(TICK_ENV).items() if k not in ("feed", "log")} | {"order": "tick"}
-    admission.register(lambda exchange: messages.attester().attach(
-        exchange, {"settings": given, "source": TICK_ENV, "pull": FeedReader(cfg["feed"]), "log": _log_to(cfg["log"])}))
+    admission.register(lambda exchange: exchange.attach(
+        messages.providing("admission"), given, source=TICK_ENV, pull=FeedReader(cfg["feed"]), log=_log_to(cfg["log"])))
     _PLUGIN.append(cfg)

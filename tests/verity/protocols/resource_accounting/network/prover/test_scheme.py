@@ -74,3 +74,39 @@ def test_settings_are_the_admissions_with_their_defaults_and_refuse_what_admissi
                 {**tick, "catch_up": "open"}):
         with pytest.raises(ValueError):
             NS.settings(bad)
+
+
+class _Hooks(_Exchange):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fns: list = []
+
+    def subscribe(self, name: str, hook: str, fn):
+        self.fns.append(fn)
+        return super().subscribe(name, hook, fn)
+
+    def emit(self, ev: object) -> None:
+        for fn in self.fns:
+            fn(ev)
+
+
+def test_the_front_feeds_the_engine_in_another_process(tmp_path) -> None:
+    from verity.protocols.resource_accounting.network.prover import admission as A
+    settings = {"bucket_us": 1000, "sat_us": 100, "free_us": 10}
+    front, eng = _Hooks(), _Hooks()
+    NS.attach(front, {"process": H.FRONT, "feed": str(tmp_path), "settings": settings})
+    admitter = NS.attach(eng, {"process": H.ENGINE, "feed": str(tmp_path), "settings": settings})
+    assert any(isinstance(r, H.ServeRoute) and r.path == A.WATERMARK_PATH for _, r in front.filed)
+    rel = {A.RELEASE_HEADER: "0", A.RUN_HEADER: "r", A.BUCKET_HEADER: "3"}
+    front.emit(H.InputArrived("a", 0, 0, rel, "POST /v1/completions HTTP/1.1"))
+    front.emit(H.InputArrived("b", 0, 0, {**rel, A.RELEASE_HEADER: "1"}, "POST /v1/completions HTTP/1.1"))
+    front.emit(H.InputArrived("c", 0, 0, rel, "POST /v1/completions HTTP/1.1"))
+    front.emit(H.InputArrived("d", 0, 0, {}, "POST /v1/completions HTTP/1.1"))
+    front.emit(H.OutputsComplete("b", 0))
+    front.emit(H.OutputsComplete("a", 7))
+    assert [r for _, r in front.filed if isinstance(r, H.RefuseInput)] == [
+        H.RefuseInput("c", f"{A.RELEASE_HEADER}: 0 came twice in run 'r'")]
+    assert A.FeedReader(A.feed_file(str(tmp_path)))() == [
+        {"key": "a", "run": "r", "n": 0, "bucket": 3}, {"key": "b", "run": "r", "n": 1, "bucket": 3},
+        {"run": "r", "n": 1, "passed": True}]
+    assert isinstance(admitter, A.Admitter) and admitter.gate is not None and admitter.front is None
