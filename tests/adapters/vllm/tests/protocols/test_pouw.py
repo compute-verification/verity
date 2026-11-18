@@ -16,16 +16,14 @@ import types
 import numpy as np
 import pytest
 from verity.protocols.resource_accounting.compute.pouw.prover import circuit
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get, pearl_c
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get
 from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as pouw_h1
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import lead as pouw_lead
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import ncp as NCP
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import operands as OPS
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES, pearl_c_scheme
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PPK
-from verity.protocols.resource_accounting.compute.pouw.verifier import registration
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
     Epoch,
@@ -49,7 +47,6 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
     Shape,
     Tile,
 )
-from verity_torch.pouw.pearl_c import run_device as PPDR
 
 from verity_vllm import config
 from verity_vllm import protocols as PO
@@ -110,23 +107,13 @@ def _int7_linear(x, w, bias=None):
 
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
-def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_h1_and_the_lead_are_executed():
-    assert pouw.schemes() == tuple(sorted({*IDENTIFIED, *circuit.SCHEMES, *PEARL_C_SCHEMES, pouw_h1.SCHEME, pouw_lead.SCHEME}))
+def test_schemes_are_the_protocol_packages_and_only_ncp_h1_and_the_lead_are_executed():
+    assert pouw.schemes() == tuple(sorted({*IDENTIFIED, *circuit.SCHEMES, pouw_h1.SCHEME, pouw_lead.SCHEME}))
     assert "ncp-v1" in pouw.schemes()
     assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
     assert PO.refusals(_serve("pouw:ncp-v1")) == ()                           # through the selector, real adapter
     assert "executor runs" in pouw.refusals("pearl-fp8-v4", _serve("pouw:pearl-fp8-v4"))[0]
-
-
-def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_spot():
-    scheme = "pearl-c-sm120-v1-h3"
-    assert scheme in pouw.EXECUTED
-    assert any("device only" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}")))
-    on = {"pouw": {"device": "cuda", "kernel": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120"}}
-    assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings=on)) == ()
-    assert any("path strings" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {"kernel": 3}})))
-    commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:rows-sha512"), settings=on)
-    assert any("no Definition" in r for r in PO.refusals(commit))
+    assert "executor runs" in pouw.refusals("pearl-c-sm120-v1-h3", _serve("pouw:pearl-c-sm120-v1-h3"))[0]
 
 
 def test_pearl_c_sm120_refuses_linears_outside_the_kernels():
@@ -316,12 +303,12 @@ def test_ncp_v1_keeps_no_weight_copy_so_the_selector_admits_pous_beside_it(monke
     assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1")) == ()
 
 
-@pytest.mark.parametrize("scheme", ["pearl-c-sm120-v1-h3", "ncp-v2"])
+@pytest.mark.parametrize("scheme", ["ncp-v2"])
 def test_a_scheme_that_keeps_weight_state_is_refused_beside_pous(monkeypatch, scheme):
-    """Pearl-C forms B~ once per install, and ncp-v2 reuses each weight's side: under POUS their GEMMs would read a copy made
-    from the plaintext, not what POUS decodes."""
+    """ncp-v2 reuses each weight's side: under POUS its GEMMs would read a copy made from the plaintext, not what POUS
+    decodes."""
     _fake_pous(monkeypatch)
-    settings = {"pouw": {"coins": _coins(), **({"device": "cuda", "kernel": "k"} if scheme.startswith("pearl") else {})}}
+    settings = {"pouw": {"coins": _coins()}}
     assert pouw.keeps_weight_copy(scheme)
     assert PO.refusals(_serve(f"pouw:{scheme}", settings=settings)) == ()
     got = PO.refusals(_serve(f"pouw:{scheme}", "pous:band-chain/d12/v1", settings=settings))
@@ -378,71 +365,3 @@ def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
         x = rng.standard_normal((16, K), np.float32)
         assert np.array_equal(layer.quant_method.apply(layer, x), _int7_linear(x, (w + 100) - 100))
     assert hooks.live("pouw:ncp-v1") == () and hooks.live("pous:band-chain/d12/v1") == ()
-
-
-def test_served_fp8_claims_registered_weights_only_under_the_shared_rule(monkeypatch):
-    """Served FP8 applies no keyed rotation, so its weights register only from the curated list, through the one
-    registered-weights rule Pearl-C4 reads too; refused, the claim says it is about nothing and names why."""
-    s = pearl_c_scheme("pearl-c-sm120-v1-h3")
-    seen: list[tuple] = []
-    assert pouw.SERVED_TRANSFORMS == () and pearl_c.check_registration is registration.check_registration
-
-    def check_registration(*a):
-        seen.append(a)
-        return registration.check_registration(*a)
-
-    monkeypatch.setattr(pearl_c, "check_registration", check_registration)
-    claim = pouw.weights_claim(s)
-    assert seen == [((), False, False)]
-    assert claim == {"transforms": [], "curated": False, "registered": False, "claims": pouw.UNREGISTERED,
-                     "refused": claim["refused"]} and "must be on the curated list" in claim["refused"]
-    assert pouw.weights_claim(s, curated=True) == {"transforms": [], "curated": True, "registered": True}
-    folded = pouw.weights_claim(s, curated=True, needs_gamma_fold=True)
-    assert not folded["registered"] and "only with γ folded" in folded["refused"]
-
-
-def test_an_unregistered_served_fp8_checkpoint_is_served_and_its_commitment_claims_nothing_about_the_weights(monkeypatch):
-    """Install doesn't raise on an unregistered checkpoint: the epoch's salt is still the challenger's salt coin, opened
-    after the weights' root, and the commitment's registration says it claims nothing about which weights were served.
-    The device run is a stand-in (no GPU here)."""
-    scheme = "pearl-c-sm120-v1-h3"
-    roots = {0: b"\x05" * 64}
-    started = []
-
-    class Run:
-        def __init__(self, s, entry, kernel, weights, roots, coins, opening, **kw):
-            started.append(Epoch.start(Workload((Matmul(0, Shape(16, 1024, 128), 0),)), roots, coins, opening))
-            self.commits = {"scheme": s.name, "salt": started[-1].salt.hex(), "coins": coins.to_json(),
-                            "salt_opening": opening.to_json()}
-            self.details = {}
-
-        def gemm(self, w, x, weight, bias):
-            return x
-
-        def end_pass(self):
-            return {}
-
-        def finish(self):
-            pass
-
-    monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
-    monkeypatch.setattr(PPDR, "weight_roots", lambda kernel, weights, scheme, *, weight_salts: roots)
-    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPDR.weight_roots)
-    monkeypatch.setattr(PPDR, "PearlCDeviceRun", Run)
-    monkeypatch.setattr(pouw, "PearlCDeviceRun", Run)
-    model, coins = Model(_rng().standard_normal((128, 1024), np.float32)), _coins()
-    settings = {"pouw": {"coins": coins, "device": "cuda", "kernel": "k"}}
-    with PO.install(model, _serve(f"pouw:{scheme}", settings=settings)) as comp:
-        c = comp.get("pouw").commitment()
-        assert c["registration"]["registered"] is False and c["registration"]["claims"] == pouw.UNREGISTERED
-        assert c["salt"] == started[0].salt.hex() and started[0].coins == coins.commitment
-        assert coin_reason(coins.commitment, CoinOpening.from_json(c["salt_opening"]), "salt", weights_root(roots)) is None
-
-
-def test_pearl_cs_schedule_is_a_setting_checked_against_the_scheme():
-    scheme, on = "pearl-c-sm120-v1-h3", {"coins": _coins(), "device": "cuda", "kernel": "k"}
-    for name in ("serial", "deferred", "deferred-caller"):
-        assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": name}})) == ()
-    assert any("schedule is one of" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": "h3o"}})))
-    assert any("Pearl-C's; this executor runs serially" in r
-               for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"coins": _coins(), "schedule": "deferred"}})))
