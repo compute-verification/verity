@@ -45,6 +45,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import setup as pous_setup
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import POINT, P2Params
 from verity.protocols.resource_accounting.memory.poub.verifier import ledger, p2_case, p2_lean
+from verity.protocols.resource_accounting.memory.poub.prover.p2_stage import bandwidth as BW
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
@@ -236,8 +237,8 @@ def _deployment(key: str, bw: str | None = BW_KEY) -> dict:
     scheme = "lms-sha512/n64-w1-h20/v0"
     pins = [{"key-sha512": key, "party": "memory-challenger", "protocol": "pous", "scheme": scheme}]
     if bw is not None:
-        pins.append({"key-sha512": bw, "party": SP.BW.p2_parties.CLOSER_PARTY,
-                     "protocol": SP.BW.p2_parties.COMPONENT, "scheme": scheme})
+        pins.append({"key-sha512": bw, "party": BW.p2_parties.CLOSER_PARTY,
+                     "protocol": BW.p2_parties.COMPONENT, "scheme": scheme})
     return {"configuration": CONF, "committed": frozenset({CONF}), "pins": pins}
 
 
@@ -290,7 +291,7 @@ def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, bet
     assert early is None
     between()
     with monkeypatch.context() as m:
-        for mod, name in ((CS, "salt"), (CR, "session"), (SP.messages, "Exchange"), (SP.BW.Attached, "session")):
+        for mod, name in ((CS, "salt"), (CR, "session"), (SP.messages, "Exchange"), (BW.Attached, "session")):
             m.setattr(mod, name, _gone)
         return SP.answers(s.serve, 3, s.out, trusted_sha512=trusted, private=s.private, schemes=ts.SCHEMES,
                           protocol=TEST_PROTOCOL, **kw)
@@ -605,8 +606,8 @@ def test_the_three_answers_are_all_started_before_any_is_waited_for(served, tmp_
     def held_bandwidth():
         held = json.loads((s.private / SP.HELD).read_text())
         (s.private / SP.HELD).write_text(json.dumps(held | {"bandwidth": {"session_s": 0.0}}))
-    monkeypatch.setattr(SP.BW, "decide", lambda *a, **kw: {"verdict": "accept"})
-    monkeypatch.setattr(SP.BW, "line", lambda bw: "BANDWIDTH stand-in")
+    monkeypatch.setattr(SP, "BW", dataclasses.replace(SP.BW, decide=lambda *a, **kw: {"verdict": "accept"},
+                                                      line=lambda bw: "BANDWIDTH stand-in"))
     answer = _parts(s, tmp_path, monkeypatch, between=held_bandwidth, pool=pool)
     assert answer["verdict"] == "accept", answer["reason"]
     assert pool.log[:3] == [("submit", "bandwidth_answer"), ("submit", "lean_answer"), ("submit", "python_answer")]
@@ -948,8 +949,9 @@ def test_the_bandwidth_audit_beside_storage_not_saying_whether_it_keeps_a_weight
 def test_the_held_sessions_request_is_the_auditors_session():
     """The held session requests, by default, the session the auditor's party holds every request to
     (`p2_parties.SESSION`), so V3's served run is never refused for its parameters."""
-    assert SP.BW.request(NODE.encode()) == SP.BW.p2_parties.request_of(NODE.encode(), **SP.BW.p2_parties.SESSION)
-    assert (SP.BW.WINDOWS, SP.BW.PASSES, SP.BW.SAMPLES, SP.BW.WINDOW_S, SP.BW.DEADLINE_S) == (6, 4, 1024, 20.0, 1.0)
+    assert SP.BW.request(NODE.encode()) == BW.p2_parties.request_of(NODE.encode(), **BW.p2_parties.SESSION)
+    assert (BW.WINDOWS, BW.PASSES, BW.SAMPLES, BW.WINDOW_S, BW.DEADLINE_S) == (6, 4, 1024, 20.0, 1.0)
+    assert SP.BW.session == {"windows": 6, "passes": 4, "samples": 1024, "window_s": 20.0, "deadline_s": 1.0}
 
 
 def _jsonl(path: Path) -> list:
@@ -991,7 +993,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
         assert stat.S_IMODE((private / f).stat().st_mode) == 0o600
     pous_case = json.loads((s.private / "case.json").read_text())
     assert p2_case.same_store(case, pous_case) is None and p2_case.store_root(case).hex() == published["root"]
-    toy = SP.BW.p2_parties.request_of(NODE.encode(), windows=2, passes=2, samples=4, window_ns=10 ** 6,
+    toy = BW.p2_parties.request_of(NODE.encode(), windows=2, passes=2, samples=4, window_ns=10 ** 6,
                                     deadline_ns=10 ** 6)
     assert case["params"]["request"] == toy and own["verdict"] == "accept"
     session = json.loads((private / "session.json").read_text())["answer"]
@@ -1000,12 +1002,12 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
                                                      "verdict": "undecided"}
     lean, = p2_case.serve(case_exe, [case])
     why = "; ".join(f"the request's {k} is not the auditor's ({toy[k]}, not {v})"
-                    for k, v in SP.BW.p2_parties.SESSION.items())
+                    for k, v in BW.p2_parties.SESSION.items())
     assert lean == own | {"profile": None, "public": None, "reason": f"the request is refused: {why}", "verdict": "reject"}
     assert own["commitment"] == p2_case.digest(case).hex() and own["profile"]["units"] == 2
     kept = tmp_path / "parties" / "bw" / "private"
-    assert (kept / SP.BW.p2_parties.CASE_DIGESTS).read_text().splitlines() == [SP.BW.p2_parties.case_digest(case)]
-    assert sorted(p.name for p in kept.iterdir()) == [SP.BW.p2_parties.CASE_DIGESTS]
+    assert (kept / BW.p2_parties.CASE_DIGESTS).read_text().splitlines() == [BW.p2_parties.case_digest(case)]
+    assert sorted(p.name for p in kept.iterdir()) == [BW.p2_parties.CASE_DIGESTS]
     assert _jsonl(tmp_path / "parties" / "bw" / "answers.jsonl")[-1]["verdict"] == "accept"
 
     assert {k: v for k, v in bw["public"].items() if k not in ("gamma", "r_bytes_per_s")} == own["public"]
@@ -1025,7 +1027,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert (summary["key_sha512"], summary["key_pinned"], summary["pins_matched"]) == (BW_KEY, True, True)
     assert summary[mc.PREMISE].startswith(f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins")
     assert case["params"]["trusted"] == [ts.AtLeaf(b"p2-party-at-leaf").public_key.hex()]
-    assert not any((d / f).exists() for d, f in ((private, SP.BW.HELD), (s.private, SP.STORE), (s.private, SP.HELD)))
+    assert not any((d / f).exists() for d, f in ((private, BW.HELD), (s.private, SP.STORE), (s.private, SP.HELD)))
     stamps = _stamps(s.out)
     answers = [f"{a} {e}" for a in ("PoUB's answer", "PoUS's answer by the Python", "PoUS's answer by the Lean")
                for e in ("start", "done")]
@@ -1091,12 +1093,12 @@ def test_with_its_lean_the_bandwidth_answer_is_the_leans_and_the_summary_names_i
     private = s.serve / "private" / "bandwidth"
 
     def kept():
-        assert {SP.BW.SESSION, SP.BW.HELD} <= set(_names(private)) and p2_case.CASE not in _names(private)
-        assert stat.S_IMODE((private / SP.BW.HELD).stat().st_mode) == 0o600
+        assert {BW.SESSION, BW.HELD} <= set(_names(private)) and p2_case.CASE not in _names(private)
+        assert stat.S_IMODE((private / BW.HELD).stat().st_mode) == 0o600
         assert _names(s.out) == ["stamps.txt"] and not (s.out.parent / "bandwidth").exists()
     answer = _parts(s, tmp_path, monkeypatch, between=kept, **_bandwidth(tmp_path, bw_case_exe=str(case_exe)))
     assert answer["verdict"] == "accept", answer["reason"]
-    assert not (private / SP.BW.HELD).exists()
+    assert not (private / BW.HELD).exists()
     private, bw, doc = _bandwidth_files(s)
     case = json.loads((private / p2_case.CASE).read_text())
     lean, = p2_case.serve(case_exe, [case])
@@ -1128,7 +1130,7 @@ def test_a_close_the_prover_signed_under_a_key_it_listed_itself_is_refused(regis
     the prover's."""
     s = registered
     private = s.serve / "private" / "bandwidth"
-    answer = _parts(s, tmp_path, monkeypatch, between=lambda: _signed_by_its_own_key(private / SP.BW.HELD),
+    answer = _parts(s, tmp_path, monkeypatch, between=lambda: _signed_by_its_own_key(private / BW.HELD),
                     **_bandwidth(tmp_path, bw_case_exe=str(case_exe)))
     assert answer["verdict"] == "accept", answer["reason"]
     _, bw, _ = _bandwidth_files(s)
@@ -1158,9 +1160,9 @@ def test_with_no_key_named_for_the_close_the_bandwidth_session_has_no_case(regis
     answer = _parts(s, tmp_path, monkeypatch, deployment=_deployment(pous, bw=None), **kw)
     assert answer["verdict"] == "accept", answer["reason"]
     private, bw, summary = _bandwidth_files(s)
-    assert bw["verdict"] == "undecided" and bw["reason"].startswith(SP.BW.NO_KEY), bw
+    assert bw["verdict"] == "undecided" and bw["reason"].startswith(BW.NO_KEY), bw
     assert "key_pin" not in summary and not (private / p2_case.CASE).exists()
-    session = json.loads((private / SP.BW.SESSION).read_text())
+    session = json.loads((private / BW.SESSION).read_text())
     assert session["session"] is None and "--session" not in session["party"]
 
 
@@ -1181,7 +1183,7 @@ def test_a_bandwidth_lean_that_does_not_answer_leaves_the_bandwidth_undecided(re
     assert SV.piece_row("bandwidth", registered.out.parent)["verdict"] == "undecided"
     assert json.loads((registered.out / "pous.json").read_text())["bandwidth"]["verdict"] == "undecided"
     # the case its Lean has not answered stays, with what PoUS's answer needs, for another --answers
-    assert (private / SP.BW.HELD).exists() and (registered.private / SP.STORE).exists()
+    assert (private / BW.HELD).exists() and (registered.private / SP.STORE).exists()
 
 
 @pytest.mark.slow
@@ -1204,14 +1206,14 @@ def test_a_bandwidth_lean_that_refuses_the_case_undecoded_is_the_answer(register
 
 
 COLLECT = 'python benchmarks/pous/served_piece.py collect-bandwidth --serve-dir "$1" --window "$2" --out "$3"'
-HELD_ANSWER = {"commitment": "ab" * 64, "protocol": SP.BW.p2_parties.PROTOCOL, "reason": None, "verdict": "accept",
+HELD_ANSWER = {"commitment": "ab" * 64, "protocol": BW.p2_parties.PROTOCOL, "reason": None, "verdict": "accept",
                "public": {"eps": "1/1099511627776", "gamma": "1/2", "q_bytes": 8224, "r_bytes_per_s": 1000,
                           "span_ns": 16448},
                "profile": {"delta": "1/1099511627776", "draws": [0], "receipts": 1, "wrong": 0, "units": 1,
                            "scope": "beside the served window"}}
 #: the record's bandwidth row of `HELD_ANSWER`, byte for byte as the composed run reads it
 HELD_ROW = {"answer": HELD_ANSWER, "commitment": "ab" * 64, "delta": "1/1099511627776", "epsilon": None,
-            "owner": "memory-accounting", "protocol": SP.BW.p2_parties.PROTOCOL, "quantity": HELD_ANSWER["public"],
+            "owner": "memory-accounting", "protocol": BW.p2_parties.PROTOCOL, "quantity": HELD_ANSWER["public"],
             "reason": None, "runs": [], "verdict": "accept"}
 
 

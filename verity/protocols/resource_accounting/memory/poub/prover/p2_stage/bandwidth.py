@@ -809,6 +809,12 @@ def line(answer: Mapping[str, Any]) -> str:
         return f"BANDWIDTH: accept: {json.dumps(answer['public'], sort_keys=True)}"
     return f"BANDWIDTH: {answer['verdict']}: {answer['reason']}"
 
+#: the bandwidth audit's `answers` entry (`verity.protocols.resource_accounting.scheme.Answers`'s fields)
+ANSWERS = {"held": HELD, "binding": binding, "decide": decide, "missing": missing, "line": line, "request": request,
+           "session": {"windows": WINDOWS, "passes": PASSES, "samples": SAMPLES, "window_s": WINDOW_S,
+                       "deadline_s": DEADLINE_S},
+           "key_of": key_of}
+
 
 
 class Held:

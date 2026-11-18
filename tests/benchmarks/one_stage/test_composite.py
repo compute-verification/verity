@@ -386,3 +386,10 @@ def test_onsite_cites_no_listed_guarantee(tmp_path):
     assert record["ran"]["cites"] is None and record["ran"]["lock"] is None
     assert "NOT_ESTABLISHED the product cites no listed guarantee" in \
         (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
+
+
+def test_the_products_ids_are_the_domains_constants():
+    """composite.py imports the standard library alone, so it spells each product's protocol id; these are
+    `verity.commitments.domains`'."""
+    from verity.commitments import domains as DM
+    assert C.PRODUCTS == {"onsite": DM.ONSITE_PROTOCOL, "remote": DM.REMOTE_PROTOCOL, "remote-v1": DM.REMOTE_V1_PROTOCOL}

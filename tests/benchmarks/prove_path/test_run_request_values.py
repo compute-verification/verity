@@ -229,14 +229,29 @@ def test_pp_keep_under_out_or_the_run_dir_is_refused_before_anything_is_written(
     assert keep.stat().st_mode & 0o777 == 0o700
 
 
-def test_public_log_lets_no_advice_length_or_charge_go():
+def test_public_log_lets_only_what_its_reader_reads_go():
+    """Each tagged line leaves with only the fields `proof_layers.read_prove_path` reads; a field it doesn't read (the
+    advice's length, the leak counted against it, a charge, a served scope's population, a member's name) is held, and
+    an error line leaves as its exception's class."""
     import importlib.util
     spec = importlib.util.spec_from_file_location("public_log", PL)
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
-    assert m.public_line('RECORDS {"ok": true, "draw_counts": {"t": 2}, "leak": {"advice_bits": 9, "bound": "vacuous"}}') \
-        == 'RECORDS {"draw_counts": {"t": 2}, "ok": true}'
-    assert m.public_line('PROVE-PATH {"advice_bits": 9, "proof": "zk", "ranks": {"0": {"charge": {"c": 9}, "ok": true}}}') \
-        == 'PROVE-PATH {"proof": "zk", "ranks": {"0": {"ok": true}}}'
-    assert m.public_line("ValueError: boom") == "ValueError: boom"
+    assert m.public_line('RECORDS {"ok": true, "accepted": true, "negatives_refused": true, "draw_counts": {"t": 2}, '
+                         '"population": 9, "draw": [9], "circuit": "9", "leak": {"advice_bits": 9, "bound": 9}}') \
+        == 'RECORDS {"accepted": true, "draw_counts": {"t": 2}, "negatives_refused": true, "ok": true}'
+    rank = {"accepted": True, "ok": True, "population": 9, "draw": [9], "draw_counts": {"t": 2}, "seconds": 9,
+            "charge": {"c": 9}, "advice_before_draw": True, "forged": {"x": 9},
+            "per_unit": {"t": {"units": 2, "proof_bytes": 3, "prove_s_per_unit": 1.5, "lean_verify_s_per_unit": 0.5, "x": 9}}}
+    line = {"advice_bits": 9, "delta": 9, "forged": False, "ok": True, "proof": "zk", "coins": "gate", "run_root": "9",
+            "transfer_gates": 9, "ranks": {"0": rank}}
+    assert json.loads(m.public_line("PROVE-PATH " + json.dumps(line)).split(" ", 1)[1]) == {
+        "forged": False, "ok": True, "proof": "zk", "coins": "gate", "ranks": {"0": {
+            "accepted": True, "draw_counts": {"t": 2},
+            "per_unit": {"t": {"units": 2, "proof_bytes": 3, "prove_s_per_unit": 1.5, "lean_verify_s_per_unit": 0.5}}}}}
+    a5 = {"source": "served", "draw": [9], "audit": {"accepted": True, "wrong_units": 9, "why": {"x": "9"},
+                                                     "verdicts": {"lean-verify": True, "x": False}}}
+    assert m.public_line("A5 " + json.dumps(a5)) == 'A5 {"audit": {"accepted": true, "verdicts": {"lean-verify": true, "x": false}}}'
+    assert m.public_line('A5 {"memory": {"pool": 9}}') == "A5 {}" and m.public_line("PROOF-EDITS {}") is None
+    assert m.public_line("ValueError: request 9 of user-9") == "ValueError: held in the kept log"
     assert "9" not in m.public_line("PROVE-PATH not json 9") and m.public_line("[prove-path commit] rank 0: {}") is None
