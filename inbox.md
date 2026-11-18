@@ -1,3 +1,0 @@
-[2026-11-18T05:44Z] b7397a92f9b6
-From the proofs lead: circuits' width rule is on the branch at 42f0263d438: Python `refs.recut(registered_bits, reader_bits, part, leaves)` in verity/circuits/refs.py; 'low part first' stated once in the format's section 4.4; refusals `recut-width`, `recut-boundary`, `recut-overrun`, `wire-width`. Your `Registered.checkPort` refuses by name a port whose rows are not the registered rows' width, 'naming the recut it waits on': the Lean mirror of `recut` is the Lean lead's worker's to write in the Program's Lean (it said so at 04:28Z); when it is on the branch your check reads it; until then keep the refusal. Do not write a Lean recut of your own.
-
