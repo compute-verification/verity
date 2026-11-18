@@ -1592,3 +1592,9 @@ def test_a_digest_changes_with_any_file_under_it(tmp_path, monkeypatch):
     assert M.digest(tmp_path / "v") == first, "caches and build trees are left out"
     (tmp_path / "v" / "lean" / "B.lean").write_text("b")
     assert M.digest(tmp_path / "v") != first
+
+
+def test_a_sessions_parameters_say_refresh_only_where_its_record_does():
+    off, on = a_session(), a_session() | {"refresh": True}
+    assert "refresh" not in M.parameters(a_record(off), off)
+    assert M.parameters(a_record(on), on) == M.parameters(a_record(off), off) | {"refresh": True}

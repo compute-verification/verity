@@ -15,7 +15,9 @@ One connection serves one registration and then `--sessions` sessions over it, e
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
    and gaps and of the measured round trip (`--quantile`), `--jitter-ms`, and the lifetime cap L on an appended block
    (`--lifetime`, windows, by default those of `--window-ms` in 30 s, `audit.lifetime_windows`, sent with the
-   session so the prover re-keys in time); chal_0, then a boundary message every window, each coin sent as its value and
+   session so the prover re-keys in time), and refresh where `--refresh` sets it for the session
+   (`audit.Params.refresh`, off by default; the session's message then says `"refresh": true`, and an absent key is
+   off, so a session without it is sent and recorded as before); chal_0, then a boundary message every window, each coin sent as its value and
    the root it was opened after (`coins.Released`), each append answered with its coin (`Verifier.append`), each root
    fed to `AuditRun.receive` stamped with the time its last byte was read (with the releases its message carries first, and
    the withdrawn blocks among them, its plan as a change when it carries one, and the step its pass covers:
@@ -425,6 +427,21 @@ def node_line(mem: dict, *, host_bytes: int) -> dict:
 
 TIME_HELD = "held over time"
 """The paced session's third form (`paced_line`): the blocks in node memory at each instant, averaged over time."""
+
+
+def refresh_of(words: str | None, sessions: int) -> tuple[bool, ...]:
+    """`--refresh`'s word as each of `sessions` sessions' setting: none (or an empty word) is off for all, one word
+    (`0` or `1`) is every session's, and `0,1` is one word a session. Refused otherwise."""
+    if not words:
+        return (False,) * sessions
+    each = words.split(",")
+    if any(w not in ("0", "1") for w in each):
+        raise ValueError(f"--refresh takes 0 or 1, one for every session or one a session (0,1): {words!r}")
+    if len(each) == 1:
+        each = each * sessions
+    if len(each) != sessions:
+        raise ValueError(f"--refresh {words} sets {len(each)} session(s), and the run has {sessions}")
+    return tuple(w == "1" for w in each)
 
 
 def pace_of(spec: str, pass_ms: float) -> dict:
@@ -864,10 +881,11 @@ class Pair:
             raise audit.SessionError(f"the verifiers disagree on window {t}'s boundary")
         return out
 
-    def append(self, root: bytes, count: int):
-        return self._step(self.s.filling, lambda: {"kind": "append", "root": root.hex(), "count": count},
-                          lambda: self.s.append(root, count), lv.appended_json,
-                          coin=lambda out: out[1] if isinstance(out, tuple) else None)[0]
+    def append(self, root: bytes, count: int, origin: audit.Origin | None = None):
+        named = {} if origin is None else {"origin": wire.origin_json(origin)}
+        return self._step(self.s.filling, lambda: {"kind": "append", "root": root.hex(), "count": count} | named,
+                          lambda: self.s.append(root, count, *(() if origin is None else (origin,))),
+                          lv.appended_json, coin=lambda out: out[1] if isinstance(out, tuple) else None)[0]
 
     def release(self, runs, withdrawn=()):
         return self._step(self.s.filling, lambda: lv.release_event(runs, withdrawn),
@@ -958,6 +976,11 @@ class Pair:
                 else None}
         if got != mine:
             self._disagree(len(self.s.windows) - 1, "record", got, mine)
+        elif (getattr(self.s.params, "refresh", False) and got.get("outcome") == "accepted"
+              and (got.get("record") or {}).get("refresh") is not True):
+            # a Lean verifier that doesn't read the setting ran the session under the other rule
+            self._disagree(len(self.s.windows) - 1, "refresh", {"refresh": (got.get("record") or {}).get("refresh")},
+                           {"refresh": True})
 
     def record(self) -> audit.Record:
         """The accepted session's record: the Lean's (its `outcome` at `end`, as `lv.record_of` reads it, with the
@@ -988,8 +1011,9 @@ class Verifier:
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
                  challenger: challengers.Local | challengers.Serve | challengers.ChallengerGate | None = None,
                  appends: int | None = None, payload_key: bytes | None = None, groups_per_coin: int = 1,
-                 node: ledger.Node | None = None) -> None:
+                 node: ledger.Node | None = None, refresh: Sequence[bool] = ()) -> None:
         coins.openings_coins(1, groups_per_coin)
+        self.refresh = tuple(refresh)
         if node is not None and (disk_bytes_per_s or link_bytes_per_s or disk_burst_bytes is not None
                                  or link_burst_bytes is not None):
             raise ValueError("a node handed in states its own disk and link ceilings and bursts: give them in it")
@@ -1120,13 +1144,14 @@ class Verifier:
         self.calibration = ready["calibration"]
         return self.registration, self.calibration
 
-    def appends_of(self) -> int:
+    def appends_of(self, refresh: bool = False) -> int:
         """A session's append coins (`coins.families`): `appends` if given, else `coins.APPENDS`, or none, and no append
-        family, when the hello said the prover's sessions append nothing (`prover.BANDWIDTH`).  That says only what
-        the prover will forgo: an append it sends then has no coin and refuses the session."""
+        family, when the hello said the prover's sessions append nothing (`prover.BANDWIDTH`) and the session does
+        not refresh, whose re-keys are appends.  That says only what the prover will forgo: an append it sends then
+        has no coin and refuses the session."""
         if self.appends is not None:
             return self.appends
-        return coins.APPENDS if self.appending else 0
+        return coins.APPENDS if self.appending or refresh else 0
 
     def ping(self, n: int) -> dict:
         rtts = []
@@ -1166,23 +1191,28 @@ class Verifier:
         samples, window_ns = (self.samples, self.T) if pace is None else (pace["draws"], 1)
         life = self.lifetime if self.lifetime is not None else audit.lifetime_windows(
             self.T if pace is None else round(pace["t_ms"] * 1e6) // pace["groups"], self.deferred)
+        # the one setting, named only when on: the parameters, the session's message and its result are today's without it
+        refresh = {"refresh": True} if k < len(self.refresh) and self.refresh[k] else {}
+        if refresh and "refresh" not in {f.name for f in dataclasses.fields(audit.Params)}:
+            raise ValueError(f"session {k} is set to refresh, and this tree's audit.Params has no `refresh`")
         params = audit.Params(reg.blocks, allowance_ns, W, samples, self.delta, window_ns=window_ns, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows, lifetime=life, deferred=self.deferred,
                               pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)),
-                              groups_per_coin=self.groups_per_coin)
+                              groups_per_coin=self.groups_per_coin, **refresh)
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
         one = {} if pace is None or pace.get("in_flight", 2) == 2 else {"in_flight": pace["in_flight"]}
         if one:
             params = dataclasses.replace(params, pace=dataclasses.replace(params.pace, **one))
         g = params.groups_per_coin
         shared, per = ({}, {}) if g == 1 else ({"groups_per_coin": g}, {"per_coin": g})
-        appends = self.appends_of()
+        appends = self.appends_of(bool(refresh))
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
                                       challenger=lambda e: self.challenger.open(reg.digest, e, W, appends, **per))
         case = None if self.transcript is None else lv.DifftestCase(
             self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, not_before_ns)
         session = Pair(self, books, k, case)
-        self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime, "pace": K} | one | shared)
+        self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime, "pace": K} | one | shared
+                       | refresh)
         self.expect("armed")
         while self.clock.now() < not_before_ns:
             item = self.clock.wait(self.inbox, not_before_ns)
@@ -1410,7 +1440,7 @@ class Verifier:
                 break
         commitment, opened = session.disclose()
         self.conn.send({"type": "coins", "k": k, "commitment": commitment.to_json()}, wire.openings_json(opened))
-        out = shared | {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
+        out = shared | refresh | {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
                "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W, "pace": pace,
                "lifetime": params.lifetime,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
@@ -1452,10 +1482,11 @@ class Verifier:
 
     @staticmethod
     def append(session: audit.AuditRun, head: dict) -> dict | audit.Verdict:
-        """An append's message to the session (`AuditRun.append`), `{"type": "append", "root": hex, "count": n}`: the
-        reply `{"type": "appended", "first": j, "coin": hex}`, its first index and its coin `c_a`, sampled now, or the
-        rejection."""
-        got = session.append(bytes.fromhex(head["root"]), head["count"])
+        """An append's message to the session (`AuditRun.append`), `{"type": "append", "root": hex, "count": n}`, and
+        under refresh a re-key's `"origin"` (`origin_of`): the reply `{"type": "appended", "first": j, "coin": hex}`,
+        its first index and its coin `c_a`, sampled now, or the rejection."""
+        origin = wire.origin_of(head.get("origin"))
+        got = session.append(bytes.fromhex(head["root"]), head["count"], *(() if origin is None else (origin,)))
         if isinstance(got, audit.Verdict):
             return got
         first, coin = got
@@ -1615,6 +1646,10 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
                     help="L: windows (a paced session's groups) an appended block may stay in plans after the window "
                          "it joined (default: those of the window, or of the nominal group, in 30 s, "
                          "`audit.lifetime_windows`)")
+    ap.add_argument("--refresh", metavar="0|1[,...]",
+                    help="refresh (`audit.Params.refresh`), off by default: 1 sets it for every session, and one "
+                         "word a session, as 0,1, sets it for each (two sessions on one registration, the first "
+                         "under today's rule and the second under refresh)")
     ap.add_argument("--pings", type=int, default=1000)
     ap.add_argument("--check-workers", type=int, default=len(os.sched_getaffinity(0)) - 1,
                     help="processes computing each window's exact bound on wrong receipts (`checks.Checks.bounds`; 0: "
@@ -1733,6 +1768,10 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
         ap.error("--out is required")
     if a.appends is not None and a.appends < 0:
         ap.error("--appends is a count, 0 or more")
+    try:
+        refresh = refresh_of(a.refresh, len(a.paced) if a.paced else a.sessions)
+    except ValueError as e:
+        ap.error(str(e))
     if a.groups_per_coin > 1 and any(pace_of(x, 1.0).get("in_flight") == 1 for x in a.paced or ()):
         ap.error("--groups-per-coin above 1 takes no --paced session at one window in flight (F = 1): the Lean "
                  "verifier refuses one, as no property covers it; drop :1 or --groups-per-coin")
@@ -1767,7 +1806,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
                  link_bytes_per_s=a.link_bytes_per_s, disk_burst_bytes=a.disk_burst_bytes,
                  link_burst_bytes=a.link_burst_bytes,
                  challenger=challenger, appends=a.appends, groups_per_coin=a.groups_per_coin,
-                 node=capacities)
+                 node=capacities, refresh=refresh)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()
@@ -1848,5 +1887,6 @@ __all__ = ["AVERAGE", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier",
            "WORST_PASS", "accepts", "gamma_answer", "ingress_bursts", "lean_record", "load_registry", "main", "memory",
            "memory_error",
            "node_line", "node_refused", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
+           "refresh_of",
            "recorded_paced", "recorded_queries", "recorded_rates", "recorded_windows", "regions_of", "save_registry",
            "sketch_at", "timing_parts"]

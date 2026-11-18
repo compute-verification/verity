@@ -1,7 +1,10 @@
 """`poub.verifier.wire`: the openings frame round-trips, a body it cannot read is None, and a window's frames give its
-openings in order, or none at all once one frame doesn't decode (`Wire.openingsOf`)."""
+openings in order, or none at all once one frame doesn't decode (`Wire.openingsOf`); a re-key's opening carries its
+origin's position."""
 
 from __future__ import annotations
+
+import dataclasses
 
 import pytest
 
@@ -29,3 +32,16 @@ def test_a_windows_frames_give_its_openings_in_order_or_none_once_one_frame_does
     assert wire.openings_of([]) == []
     for k in range(len(frames)):
         assert wire.openings_of(frames[:k] + [frames[k] + b"\0"] + frames[k + 1:]) == []
+
+
+def test_a_rekey_s_opening_carries_its_origin_s_position_under_bound_2_and_a_flag_above_is_none():
+    """Wire §5 under refresh: bound 2 is d_j ‖ u64be origin_position; 0 and 1 are as before, byte for byte."""
+    rekey = dataclasses.replace(APPENDED, origin_position=(1 << 64) - 2)
+    body = wire.encode_openings([REG, rekey, APPENDED])
+    assert wire.decode_openings(body) == [REG, rekey, APPENDED]
+    one = wire.encode_openings([rekey])
+    assert one[-73] == 2 and one[-8:] == ((1 << 64) - 2).to_bytes(8, "big")
+    assert wire.decode_openings(one[:-73] + b"\3" + one[-72:]) is None
+    assert wire.encode_openings([APPENDED]) == wire.encode_openings([dataclasses.replace(rekey, origin_position=None)])
+    with pytest.raises(ValueError, match="d_j beside"):
+        wire.encode_openings([dataclasses.replace(REG, origin_position=0)])
