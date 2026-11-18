@@ -16,15 +16,19 @@ RUN = "ab"
 
 
 class Exchange:
-    """The adapter's exchange as a scheme sees it: ``request(name, request)``, and ``subscribe(name, hook, fn)``
-    returning the removal."""
+    """The adapter's exchange as a scheme sees it: ``request(name, request)``, ``serve(name, path, route)`` and
+    ``subscribe(name, hook, fn)`` returning the removal."""
 
     def __init__(self) -> None:
         self.requests: list[tuple[str, Any]] = []
+        self.routes: list[tuple[str, str, Any]] = []
         self.subscribers: list[tuple[str, str, Callable[[Any], None]]] = []
 
     def request(self, name: str, request: Any) -> None:
         self.requests.append((name, request))
+
+    def serve(self, name: str, path: str, route: Any) -> None:
+        self.routes.append((name, path, route))
 
     def subscribe(self, name: str, hook: str, fn: Callable[[Any], None]) -> Callable[[], None]:
         entry = (name, hook, fn)
@@ -45,9 +49,9 @@ def test_tick_builds_the_gate_and_the_frontend_and_files_both_under_the_name():
     assert isinstance(a.front, NA.TickAdmit) and a.front.take == a.gate.take
     ex = Exchange()
     assert a.install(ex, "n") is a
-    (n0, gate), (n1, route) = ex.requests
-    assert (n0, n1) == ("n", "n") and gate == H.AdmitInput("hold", a.gate)
-    assert route == H.ServeRoute(NA.WATERMARK_PATH, a.front.serve_watermark)
+    [(n0, gate)] = ex.requests
+    assert n0 == "n" and gate == H.AdmitInput("hold", a.gate)
+    assert ex.routes == [("n", NA.WATERMARK_PATH, a.front.serve_watermark)]
     assert ex.subscribers == [("n", "steps", a.gate.on)]
 
 
@@ -57,7 +61,7 @@ def test_a_lost_release_in_the_engine_is_refused_through_the_exchange():
     adm = SimpleNamespace(engine_id="e0", release=a.front.key({"x-verity-release": "0", "x-verity-release-run": RUN}))
     a.front.submit(adm)
     assert a.front.watermark({"x-verity-release-run": RUN}).feed(b"0 2 0\n")
-    assert ex.requests[2:] == [("n", H.AdmitInput("refuse", input="e0", why=NA.LOST.format(n=0, run=RUN)))]
+    assert ex.requests[1:] == [("n", H.AdmitInput("refuse", input="e0", why=NA.LOST.format(n=0, run=RUN)))]
 
 
 def test_the_token_term_is_a_setting_of_the_one_gate():

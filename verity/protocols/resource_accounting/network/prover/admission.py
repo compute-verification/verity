@@ -597,7 +597,7 @@ class TickAdmit:
         under scheme ``name`` (the network attester's declaration's by default), and refuse there the requests of the
         releases it names lost."""
         name = name or scheme_name()
-        exchange.request(name, H.ServeRoute(WATERMARK_PATH, self.serve_watermark))
+        exchange.serve(name, WATERMARK_PATH, self.serve_watermark)
         self.refuse = lambda input, why: exchange.request(name, H.AdmitInput("refuse", input=input, why=why))
 
     def serve_watermark(self, first_line: str, headers: Mapping[str, str], body: Iterable[bytes]) -> tuple[int, str]:
@@ -746,7 +746,7 @@ class Admitter:
         """File and subscribe on ``exchange`` (the adapter's: ``request(name, request)``, and ``subscribe(name, hook,
         fn)`` returning the removal) under ``name`` (`scheme_name` by default), before the engine is built: the gate
         (`TickGate.attach`: a hold, `hooks.AdmitInput`, and the ``steps`` hook) and the frontend's watermark route and
-        refusals (`TickAdmit.attach`: `hooks.ServeRoute`, `hooks.AdmitInput`). ``release-order`` files nothing."""
+        refusals (`TickAdmit.attach`: ``exchange.serve``, `hooks.AdmitInput`). ``release-order`` files nothing."""
         if self.installed:
             raise RuntimeError("the network attester's admission is installed")
         self.installed = True

@@ -102,6 +102,9 @@ class _Exchange:
     def request(self, name: str, request: object) -> None:
         self.filed.append((name, request))
 
+    def serve(self, name: str, path: str, route: object) -> None:
+        self.filed.append((name, path))
+
     def subscribe(self, name: str, hook: str, fn: object):
         self.filed.append((name, hook))
         return lambda: None
@@ -150,7 +153,7 @@ def test_the_front_feeds_the_engine_in_another_process(tmp_path) -> None:
     front, eng = _Hooks(), _Hooks()
     NS.attach(front, {"process": H.FRONT, "feed": str(tmp_path), "settings": settings})
     admitter = NS.attach(eng, {"process": H.ENGINE, "feed": str(tmp_path), "settings": settings})
-    assert any(isinstance(r, H.ServeRoute) and r.path == A.WATERMARK_PATH for _, r in front.filed)
+    assert any(r == A.WATERMARK_PATH for _, r in front.filed)
     rel = {A.RELEASE_HEADER: "0", A.RUN_HEADER: "0f", A.BUCKET_HEADER: "3"}
     front.emit(H.InputArrived("a", 0, 0, rel, "POST /v1/completions HTTP/1.1"))
     front.emit(H.InputArrived("b", 0, 0, {**rel, A.RELEASE_HEADER: "1"}, "POST /v1/completions HTTP/1.1"))
