@@ -196,7 +196,6 @@ from verity.commitments import docket_digest as DD
 from verity import device as ST  # noqa: E402
 from verity.protocols.registration.verifier import registration as G  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import BY_NAME  # noqa: E402
 from verity.protocols.compose import schemes  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
@@ -698,12 +697,29 @@ def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, byt
     return {"day": day, "declarations": declarations}
 
 
+def entry_scheme(entry: str) -> str:
+    """The kernel scheme the option ``entry`` names, in the option's form ``<protocol>:<kernel scheme>`` as `pouw/scheme.py` writes it."""
+    return entry.partition(":")[2]
+
+
+def why_not_pearl(w: Any) -> str | None:
+    """Why W is no Pearl+ window record, or None where it is one: its window's ``entry`` is Pearl+'s declared option, whole
+    string against whole string, and its ``scheme`` the one that entry names (`entry_scheme`)."""
+    head = w.get("window") if isinstance(w, Mapping) else None
+    head = head if isinstance(head, Mapping) else {}
+    entry, scheme, option = head.get("entry"), head.get("scheme"), schemes.get("pearl-plus").option
+    if entry != option:
+        return f"its entry {entry} is not Pearl+'s declared option {option}"
+    if scheme != entry_scheme(entry):
+        return f"its scheme {scheme} is not the one its entry {entry} names"
+    return None
+
+
 def tie_row(tied: Mapping[str, Any]) -> dict[str, Any]:
     """The audit summary's ``tie`` for a5's ``tie`` (`tie_of`): W's digest and the values tied to it, and for Pearl+'s window
-    record (a W whose window names a Pearl-C scheme) what credits its roots (`PEARL_CREDIT`)."""
+    record (`why_not_pearl`) what credits its roots (`PEARL_CREDIT`)."""
     w = tied["log"][0]
-    scheme = (w.get("window") or {}).get("scheme")
-    pearl = isinstance(scheme, str) and getattr(BY_NAME.get(scheme), "family", None) == "pearl-c"
+    pearl = why_not_pearl(w) is None
     return {"record": DD.digest(w), "values": sorted(tied["outputs"]), **({"credited_by": PEARL_CREDIT} if pearl else {})}
 
 
