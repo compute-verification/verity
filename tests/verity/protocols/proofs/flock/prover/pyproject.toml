@@ -44,6 +44,7 @@ untraced = [
     "test_lean_zk_mask.py",
     "test_ligerito_folds.py",
     "test_pod_lean_verdicts.py",
+    "test_pod_selftest.py",
     "test_pouw_rows.py",
     "test_read_tmpl.py", "test_read_tmpl_stager.py",
     "test_rec_algebra.py",

@@ -114,14 +114,3 @@ def with_levels(case: Mapping[str, Any], levels: int, canonical: Callable[[dict]
     if (m := of_params(out["params"])) != n:
         raise Refused("levels-params-mismatch", f"the case's params are {m} levels' shape, not {n}'s")
     return out
-
-
-def record_field(levels: int, profile: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """The run's record's field: what a serve or an audit record writes, and the only writer of it. Each level's
-    partition and sampling design are the integrity profile's ``levels`` (`profile.IntegrityProfile.to_json`), coarse
-    to fine, whose length, where ``profile`` is given, must be ``levels``."""
-    n = parse(levels, "the record's levels")
-    if profile is not None and len(profile.get("levels") or ()) != n:
-        raise Refused("levels-profile-mismatch",
-                      f"the integrity profile has {len(profile.get('levels') or ())} level(s), and the record {n}")
-    return {KEY: n}

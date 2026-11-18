@@ -845,7 +845,6 @@ theorem paramsEitherOfJson_base {j : Json} {p : Params} (h : paramsEitherOfJson 
       obtain ⟨p0, hp0, h⟩ := Flock.HmNets.bind_ok h
       try dsimp only at h
       obtain ⟨ms, -, h⟩ := Flock.HmNets.bind_ok h
-      obtain ⟨w, -, h⟩ := Flock.HmNets.bind_ok h
       cases h
       exact ⟨_, p0, _, hp0, rfl⟩
     · cases h
@@ -1189,7 +1188,7 @@ private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [
 #guard whyT (runMembers (fun _ => Json.null) #[] #[] #[1] ⟨#[]⟩) ==
   "the units the sessions proved are not the evidence's proved_units"
 #guard (whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[2] ⟨#[]⟩)).startsWith
-  "member m2: circuit: "
+  "member m2: one-circuit: not derived yet: restrict"
 #guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[] ⟨#[]⟩) == unsampled "m2"
 #guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2", statementT "m10"] #[10] ⟨#[]⟩) ==
   unsampled "m2"

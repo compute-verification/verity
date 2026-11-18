@@ -1,0 +1,9 @@
+# A claims partition's proof blocks placed as the last level's blocks read Claims' `Sampling.Partition`, and the core
+# reads no claims: the module is the claims' definitions'. Lean only; its declarations keep their names.
+
+[words]
+"Definitions.Core.LevelsProofBlocks" = "Definitions.Claims.LevelsProofBlocks"
+"Definitions/Core/LevelsProofBlocks" = "Definitions/Claims/LevelsProofBlocks"
+
+[rewrite]
+exclude = ["**/*.py", "**/*.md", "**/*.json", "**/*.toml", "**/*.txt", "**/*.sh", "**/*.rs", "**/lean-audit.json", "tests/**/fixtures/**", "tools/move/*_map.toml", "tools/move/*_moves.json"]

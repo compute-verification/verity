@@ -33,14 +33,14 @@ peak), then O(proof) a session: so a protocol verifies one statement a stratum, 
 It runs in `verifier_env`: its caller's environment over `VERIFIER_ENV`, the verifier's allocator setting.
 
 The one-stage audit's v2 (`V2`, `Spot.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
-as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
-(`evidence_v2`) and the files themselves, and `verdicts_v2` is that run's verdicts alone, which the difftest holds to
+as content-addressed blobs: v1's inputs with the verdicts replaced by the files' digests (`evidence_v2`) and the
+files themselves, and `verdicts_v2` is that run's verdicts alone, which the difftest holds to
 `verify`'s. `order_why` mirrors its refusal of a challenger release log out of the order the sample, then the link,
 then the other rounds (`OneStageZk.orderHeld`). The registered circuit names the lookup tables its session reads (its
 META's ``lookups``, `lookups_of`), and v2 refuses blobs whose pinned MUFU tables are other than those (`tables_why`,
 `OneStageZk.tablesHeld`); in the per-member form a member's statement holds the blobs' pinned tables its own circuit
-looks up and no other (`own_tables`, `tables_match_why`). `statements_v2` is the evidence's per-member form, one
-statement a sampled member (`OneStageZk.membersEvidenceOf`).
+looks up and no other (`own_tables`, `tables_match_why`).
+The evidence's per-member form is one statement a sampled member (`OneStageZk.membersEvidenceOf`).
 
 A window of several members has v2's per-member form of ``proofs`` (`members_v2`: every `Member` in the parameters, one
 statement for each member with a session in the evidence), which the audit's check reads beside the one statement's
@@ -100,16 +100,6 @@ MUFU_SHA512 = {t.name: t.sha512 for t in TABLES if t.name in ("rsq", "sqrt", "rc
 #: `OneStageZk.NO_TABLES`, the head of the v2 audit's refusal of blobs whose pinned MUFU tables are not the registered
 #: circuit's lookups (`tables_why`)
 NO_TABLES = "tables: the blobs' pinned MUFU tables are not the ones the registered circuit looks up (its META's lookups)"
-#: `OneStageZk.TABLES_KEY`: the parameter naming how many tables one session sets up
-SESSION_TABLES_KEY = "session_tables"
-
-
-def session_tables_of(params: Mapping[str, Any]) -> int:
-    """`OneStageZk.tablesOfJson`: one table a session where the parameters name no `session_tables`. A session of J
-    tables is not written, so parameters naming it raise."""
-    if SESSION_TABLES_KEY not in params:
-        return 1
-    raise NotImplementedError("proofs/zero-knowledge: one-stage v2 at J tables in one session (session_tables)")
 
 
 class LeanError(RuntimeError):
@@ -524,7 +514,7 @@ def order_why(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Ma
     """`OneStageZk.orderHeld`'s refusal, with its reason: the challenger session's release log in v1's `evidence`
     (``coins``' ``session``'s ``log``), after its head, not the sample, then the link, then the other rounds
     (`challenger.sample_link_first`) at the parameters' challenger family (`params`' ``challenger``'s ``label``) and the
-    docket `record`'s digest; None when it is. `check_v2` answers it under ``proofs:`` before any session's record
+    docket `record`'s digest; None when it is. v2 answers it under ``proofs:`` before any session's record
     is read, once the log's coin trees parse (`challenger.coin_trees_of`), which it refuses first."""
     log = evidence["coins"]["session"]["log"]
     if sample_link_first(params["challenger"]["label"], bytes.fromhex(registration_digest(record)), log[1:]):
@@ -553,21 +543,6 @@ def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict,
                          "reps": {r.name: file_sha512(r) for r in reps}})
         blobs += [s / "session.json", *reps]
     return {"sessions": sessions}, blobs
-
-
-def statements_v2(statements: Sequence[tuple[str, Proof]], names: Sequence[str]) -> tuple[dict, list[Path]]:
-    """The v2 evidence's ``proofs`` in the per-member form (`OneStageZk.membersEvidenceOf`): per
-    statement, its member's name and `evidence_v2`'s on its files, its sessions named by the next of `names` (the v1
-    evidence's ``sessions``, statement by statement); and the blobs that hold them."""
-    names, out, blobs = list(names), [], []
-    for member, proof in statements:
-        pr, bs = evidence_v2(proof, names[:len(proof.sessions)])
-        names = names[len(proof.sessions):]
-        out.append({"member": member, **pr})
-        blobs += bs
-    if names:
-        raise ValueError(f"{len(names)} names left after the statements' sessions")
-    return {"statements": out}, blobs
 
 
 #: what the v2 executable's ``members`` says of what it prints (`OneStageZk.PARSED`): no check of the audit ran
@@ -667,39 +642,8 @@ def verdicts_v2(proof: Proof, *, program: Mapping[str, Any], partition: Mapping[
                     tuple(v["units"])) for v in got["verdicts"]], None
 
 
-def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any], proof: Proof, *,
-             public_sha512: str, registered: Mapping[str, Any] | None) -> dict:
-    """The one-stage audit on `proof` itself (`spot-one-stage-zk check`): v1's `params` with ``proofs``, the
-    auditor's public file's digest, committed before any coin, and theta's registered file, the
-    docket `record`, and v1's `evidence` with its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`,
-    under the evidence's ``sessions``); the outcome line. `params` must name the auditor's challenger and its window
-    (``challenger``, ``window_root``), whose signed release in the evidence's ``coins`` the sample reads: v2 refuses
-    parameters naming none. The evidence names one session (v2 refuses none or several). That release log must release
-    the sample, then the link, then the other rounds (`challenger.sample_link_first`, `order_why`), and the session's
-    record must be on the one coin tree it shows the challenger sampled and opened, its link opened after the roots of
-    exactly `STATEMENT`'s one table, its ``root_B`` of the length the statement fixes (`challenger.sessions_tree_reason`,
-    `challenger.LINK_ROOT_LEN`), the program's proof blocks must be `record`'s population in order (`partition.in_order`), and the public file's header
-    must be `record`'s (`registration.matches_public` at `registration.public_ports`: a window of one member's roots
-    read bare, several members' refused), its ``units.indices`` the population's units in order, before the session is
-    verified."""
-    pr, blobs = evidence_v2(proof, evidence["sessions"])
-    p2 = {**params, "proofs": {"public": public_sha512, "registered": registered}}
-    e2 = {k: v for k, v in evidence.items() if k != "verdicts"} | {"proofs": pr}
-    with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
-        paths = [Path(d, n) for n in ("params.json", "record.json", "evidence.json")]
-        for path, x in zip(paths, (p2, record, e2)):
-            path.write_bytes(_canonical(x))
-        p = subprocess.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)], capture_output=True,
-                           text=True)
-    try:
-        return json.loads(p.stdout.strip().splitlines()[-1])
-    except (IndexError, ValueError):
-        raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
-
-
 __all__ = ["EXE", "FITS", "MUFU_SHA512", "NO_ROW_WHY", "NO_TABLES", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY",
-           "SIZE_CLASS_MAX", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "check_v2",
-           "circuit_lookups", "draw_fits_why", "evidence_v2", "executable", "file_sha512", "fits_why", "ks_form_why",
-           "lookups_of", "order_why", "own_tables", "population_why", "printed", "printed_size", "proved_units",
-           "reads_registered", "statements_v2", "tables_match_why", "tables_why", "template_why", "units_exactly",
-           "v2_executable", "verdicts_v2", "verify"]
+           "SIZE_CLASS_MAX", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "circuit_lookups",
+           "draw_fits_why", "evidence_v2", "executable", "file_sha512", "fits_why", "ks_form_why", "lookups_of",
+           "order_why", "own_tables", "population_why", "printed", "printed_size", "proved_units", "reads_registered",
+           "tables_match_why", "tables_why", "template_why", "units_exactly", "v2_executable", "verdicts_v2", "verify"]

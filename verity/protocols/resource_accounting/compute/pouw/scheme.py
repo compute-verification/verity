@@ -201,8 +201,10 @@ class Attached:
     def declare(self, event: H.Declared) -> None:
         self.declared = event
 
-    def registered(self, event: H.RegisteredValues) -> None:
-        self.weights = self.keyed(event)
+    def registered(self, event: Any) -> None:
+        """The ``memory`` hook's `RegisteredValues`; its ranges' events (`RangesDeclared` and the rest) are not Pearl+'s."""
+        if isinstance(event, H.RegisteredValues):
+            self.weights = self.keyed(event)
 
     def keyed(self, event: H.RegisteredValues) -> dict[int, H.Handle]:
         """The linear weights by block key (``operands``, the key `BlockDue` carries), every one committed before the
@@ -525,6 +527,9 @@ PEARL_PLUS = register(Scheme(
                               starts=("gate", "peer", "lane", "key-sha512", "main-file"),
                               starts_optional=("lane", "main-file"))},
     answers=Lacks("has no piece that answers outside an exchange"),
+    # until the salt and sample sessions' signature pin is in Lean
+    unchecked={"coins-signatures-checked-by-the-auditor":
+               "coins' signatures checked on the served node only; not checked by the auditor"},
     record="work",
     symbol="V",
     published=("MACs", Fraction(1)),
@@ -539,4 +544,8 @@ PEARL_PLUS = register(Scheme(
     salt_open_root=serving.epoch_open_root,
     kernels=runs_on(KERNEL),
     keeps_weight_copy=True,
+    copy_beside_storage_ruled="Storage's bound is over a responder that is handed the weights, so it does not depend on "
+                              "what else holds them. Beside Pearl+ the plain weights stay resident for the whole serve, "
+                              "with Pearl+'s formed FP8 buffers as a third form, and storage's release of a weight frees "
+                              "nothing.",
 ))
