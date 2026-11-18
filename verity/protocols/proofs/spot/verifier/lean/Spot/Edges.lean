@@ -22,8 +22,8 @@ another read as one (`merged`), and reads one whole return field `f` of one memb
 bits. The wire reads its writer's one output row `out` (the unit's outputs in order, each its bits in u16 words) from
 the field's first word (`fieldWord`). A part is a grid (`partLanes`): a row lies in one lane's run, and across the members
 a part covers its place moves by the argument's member stride, inside that run or by whole periods of the lanes; the
-writer leaves the members read are then a mixed radix of the lane's levels (`laneWire`), and a wire needs the field's
-place in its unit to stay the same, so each step is a whole number of writer members.
+writer leaves the members read are then a mixed radix of the lane's levels (`laneWire`), each step whole writer units
+and a step of the field's place inside its unit, whose first word then steps by a word step a digit (`ostep`).
 
 The refusals, by name: `edge-template` (a non-input root node whose template the ranges or the wiring don't list),
 `edge-form` (a scan at the root, as reader or writer), `not-topological` (a part reads a later node, or the node
@@ -80,6 +80,40 @@ def fieldOffset (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map Ty.leaves
 /-- The first u16 word of return field `f` of `t` in its unit's output row `out`, the fields before it whole words: a
 row is its leaves in order, each its bits in u16 words low first, padded only at its end (`Registered.rowWords`). -/
 def fieldWord (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map fun ty => bitsOf ty / 16).sum
+
+/-- Return field `f` of `t` at leaf `p` of its unit, of `len` leaves and `bits` bits, the fields before it whole u16
+words; none otherwise. -/
+def fieldAt (t : Ty) (len bits : Nat) (p : Int) : Option Nat :=
+  if p < 0 then none else
+  (runAt t p.toNat len).filter fun f =>
+    bitsOf (fieldsOf t)[f]! == bits && ((fieldsOf t).take f).all (bitsOf · % 16 == 0)
+
+/-- The word step of each level of `lv` (its radix and its leaf step inside the unit), the members starting at a field
+at leaf `p0`: every leaf they reach is a field `fieldAt` admits, and its first word is `p0`'s plus a word step a level
+times its digit; none otherwise. The leaves reached are at most the fields, so the work is the levels times the fields
+squared, the Definition's description. -/
+def wordSteps (t : Ty) (len bits p0 : Nat) (lv : List (Nat × Int)) : Option (List Int) := do
+  let f0 ← fieldAt t len bits p0
+  let n := (fieldsOf t).length
+  let mut ps : List (Int × Int) := [(p0, fieldWord t f0)]
+  let mut ws : List Int := []
+  for (r, o) in lv do
+    if r ≤ 1 || o == 0 then
+      ws := ws ++ [0]
+      continue
+    if r > n then none
+    let f1 ← fieldAt t len bits ((p0 : Int) + o)
+    let ow : Int := (fieldWord t f1 : Int) - fieldWord t f0
+    let mut next := ps
+    for (p, w) in ps do
+      for d in [1:r] do
+        let f ← fieldAt t len bits (p + (d : Int) * o)
+        if (fieldWord t f : Int) != w + (d : Int) * ow then none
+        if !next.any (·.1 == p + (d : Int) * o) then next := next ++ [(p + (d : Int) * o, w + (d : Int) * ow)]
+    if next.length > n then none
+    ps := next
+    ws := ws ++ [ow]
+  return ws
 
 /-- The members `[lo, lo + n)` of `M` whose row, at argument index `x0 + m·L` and `len` long, lies in the part at
 `[s0, s0 + c)`; `edge-rows` where some member's row meets the part without lying in it. -/
@@ -205,7 +239,9 @@ def isInputNode (P : Prog) (k : Nat) : Bool :=
   f.prim && isInputId f.key
 
 /-- The wire of row `j` (of `cuts`) of template `rt`'s port `port` (of type `ty`) at reader units from `start`, reading
-root node `w`'s leaves from `l0`, the members' radix and steps in leaves; none where `w` is an input node. -/
+root node `w`'s leaves from `l0`, the members' radix and steps in leaves; none where `w` is an input node. Each step is
+whole writer units and a leaf step inside the unit (rounded toward zero), the field's word stepping with its digit
+(`wordSteps`, the wire's `ostep`). -/
 def wireOf (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.Wiring) (k : Nat) (rt port : String)
     (ty : Ty) (cuts j start w l0 : Nat) (radix : List Nat) (steps : List Int) :
     Except String (List Spot.Wires.Wire) := do
@@ -224,11 +260,12 @@ def wireOf (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.Wir
   let some f := runAt wd.ret (l0 % LW) len | throw "edge-run"
   if bitsOf (fieldsOf wd.ret)[f]! != bitsOf ty / cuts || ((fieldsOf wd.ret).take f).any (bitsOf · % 16 != 0) then
     throw "edge-width"
-  if (radix.zip steps).any (fun (r, d) => r > 1 && d % (LW : Int) != 0) then throw "edge-rows"
+  let some ws := wordSteps wd.ret len (bitsOf ty / cuts) (l0 % LW)
+    (radix.zip (steps.map fun s => s - s.tdiv LW * LW)) | throw "edge-run"
   let wire : Spot.Wires.Wire :=
     { reader := rt, port := port, writer := wt, out := "out", start := start, radix := radix,
-      base := ((wb + l0 / LW : Nat) : Int), step := steps.map (· / (LW : Int)), cut0 := j, cuts := 1,
-      offset := fieldWord wd.ret f }
+      base := ((wb + l0 / LW : Nat) : Int), step := steps.map fun s => s.tdiv LW, cut0 := j, cuts := 1,
+      offset := fieldWord wd.ret f, ostep := if ws.all (· == 0) then [] else ws }
   return [wire]
 
 /-- The wires of an explicit part's member rows `rows` (row `j` of template `rt`'s port, at reader units from `start`),

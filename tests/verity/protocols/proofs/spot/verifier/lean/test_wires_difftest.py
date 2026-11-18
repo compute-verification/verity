@@ -74,7 +74,7 @@ def _template(j):
 
 def _wire(j):
     keys = set(_obj(j, "a wire"))
-    if not WIRE_KEYS <= keys <= WIRE_KEYS | {"cut", "offset"}:
+    if not WIRE_KEYS <= keys <= WIRE_KEYS | {"cut", "offset", "ostep"}:
         raise D.Reject("a wire's keys")
     for k in ("reader", "port", "writer", "out"):
         _str(j[k], k)
@@ -92,13 +92,27 @@ def _wire(j):
             raise D.Reject("a wire's cut is [c0, C], C at least 1")
         c0, c = cut
     off = _nat(j["offset"], "offset") if "offset" in j else 0
-    return dict(j, at=at, radix=radix, step=step, c0=c0, c=c, off=off)
+    ostep = _list(j["ostep"], "ostep") if "ostep" in j else []
+    if not all(_int(s) for s in ostep):
+        raise D.Reject("an offset step is not an integer")
+    if ostep and len(ostep) != len(radix):
+        raise D.Reject("a wire's ostep is one integer a digit")
+    return dict(j, at=at, radix=radix, step=step, c0=c0, c=c, off=off, ostep=ostep)
 
 
 def writers(w: dict, i: int) -> int:
     """V3a's `Wire.writers` at one reader index."""
     out = w["base"]
     for r, s in zip(reversed(w["radix"]), reversed(w["step"])):
+        out += (i % r) * s
+        i //= r
+    return out
+
+
+def offsets(w: dict, i: int) -> int:
+    """`Wire.offsetAt` at one reader index, before its clamp at 0."""
+    out = w["off"]
+    for r, s in zip(reversed(w["radix"]), reversed(w["ostep"])):
         out += (i % r) * s
         i //= r
     return out
@@ -167,7 +181,7 @@ def expand(j):
         k = cuts.get(w["reader"], {}).get(w["port"], 1)
         if not (w["c0"] + w["c"] <= k and (w["c"] == 1 or w["radix"][-1] == w["c"])):
             return refusal("cut", i)
-        if w["off"] + rows[w["port"]][0] // k > outs[w["out"]]:
+        if any(offsets(w, x) < 0 or offsets(w, x) + rows[w["port"]][0] // k > outs[w["out"]] for x in range(units(w))):
             return refusal("width", i)
         if any(not (w["at"] + x // w["c"] < rn and 0 <= writers(w, x) < wn) for x in range(units(w))):
             return refusal("bounds", i)
@@ -178,7 +192,7 @@ def expand(j):
             row = (w["reader"], w["at"] + x // w["c"], w["port"], w["c0"] + x % w["c"])
             if row in entries:
                 return refusal("overlap")
-            entries[row] = ([w["writer"], writers(w, x), w["out"], w["off"]],
+            entries[row] = ([w["writer"], writers(w, x), w["out"], offsets(w, x)],
                             16 * (templates[w["reader"]][1][w["port"]][0] // k))
     if order is None:
         if (got := kahn(templates, wires)) is not None:
@@ -311,6 +325,8 @@ def instances(draw, broken: bool = False):
              "step": draw(st.lists(st.integers(-2, 2), min_size=nd, max_size=nd))}
         if draw(st.integers(0, 2)) == 0:
             w["offset"] = draw(st.integers(0, 3))
+        if draw(st.integers(0, 3)) == 0:
+            w["ostep"] = draw(st.lists(st.integers(-1, 2), min_size=nd, max_size=nd))
         if k > 1 or draw(st.integers(0, 3)) == 0:
             c = draw(st.integers(1, max(k, 1)))
             if draw(st.integers(0, 4)):
@@ -325,7 +341,7 @@ def instances(draw, broken: bool = False):
     if broken:
         part = draw(st.sampled_from(["templates", "cuts", "wires", "queries", "wire", "template", "order"]))
         if part == "wire" and wires:
-            wires[0][draw(st.sampled_from(sorted(WIRE_KEYS | {"cut", "offset", "extra"})))] = draw(JSON)
+            wires[0][draw(st.sampled_from(sorted(WIRE_KEYS | {"cut", "offset", "ostep", "extra"})))] = draw(JSON)
         elif part == "template":
             templates[names[0]][draw(st.sampled_from(["units", "rows", "outs", "extra"]))] = draw(JSON)
         else:
@@ -410,6 +426,13 @@ def _gather(**change) -> dict:
      {"ok": True, "wired_rows": 6, "wired_bits": 192, "spans": [[0, 5]],
       "lookups": [["G", 5, "o0", 2], ["G", 1, "o0", 2], None]}),
     ("a run from an offset past the writer's row", _gather(templates__G__outs={"o0": 3}, wires__0__offset=2),
+     refusal("width", 0)),
+    ("an offset stepping with the row digit", _gather(templates__G__outs={"o0": 6}, wires__0__ostep=[0, 2]),
+     {"ok": True, "wired_rows": 6, "wired_bits": 192, "spans": [[0, 5]],
+      "lookups": [["G", 5, "o0", 4], ["G", 1, "o0", 2], None]}),
+    ("an offset stepping past the writer's row", _gather(templates__G__outs={"o0": 5}, wires__0__ostep=[0, 2]),
+     refusal("width", 0)),
+    ("an offset stepping below the row", _gather(templates__G__outs={"o0": 6}, wires__0__ostep=[-1, 0]),
      refusal("width", 0)),
     ("a cut of no port", _gather(cuts={"A": {"q": 3}}), refusal("cuts")),
     ("a cut that doesn't divide the outer length", _gather(cuts={"A": {"k": 2}}), refusal("cuts")),

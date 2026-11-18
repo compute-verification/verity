@@ -2,7 +2,8 @@
 reads an earlier non-input root node's outputs is one wire per row of the reader's port, in closed form, or the first
 refusal by name (`edge-template`, `edge-form`, `not-topological`, `edge-rows`, `edge-units` where a reader row reads
 two writer units, `edge-run` where its row in one unit is not one whole return field, `edge-width`). A wire reads its
-writer unit's one output row ``out`` from word ``offset``, the field's first u16 word; adjacent affine parts that continue
+writer unit's one output row ``out`` from word ``offset``, the field's first u16 word, stepping by ``ostep`` a digit
+where present; adjacent affine parts that continue
 one another read as one. The program
 is a descriptor (`circuits/PROTOCOL.md` §4), the ranges ``[node, template, first, count]`` and the wiring the record's
 (its ``templates`` and ``cuts``). The work is the root's nodes and arguments, then each part times its port's rows."""
@@ -121,6 +122,51 @@ def _run_at(t, o: int, ln: int):
 def _field_word(t, f: int) -> int:
     """The first u16 word of field `f` of `t` in the unit's output row ``out``, the fields before it whole words."""
     return sum(_bits(ty) // 16 for ty in _fields(t)[:f])
+
+
+def _field_at(t, ln: int, bits: int, p: int):
+    """`Spot.Edges.fieldAt`: field `f` of `t` at leaf `p`, `ln` leaves and `bits` bits, the earlier fields whole words."""
+    if p < 0:
+        return None
+    f = _run_at(t, p, ln)
+    fs = _fields(t)
+    return f if f is not None and _bits(fs[f]) == bits and all(_bits(x) % 16 == 0 for x in fs[:f]) else None
+
+
+def _word_steps(t, ln: int, bits: int, p0: int, lv) -> list | None:
+    """`Spot.Edges.wordSteps`: each level's word step, every leaf the members reach a whole field at a linear word."""
+    f0 = _field_at(t, ln, bits, p0)
+    if f0 is None:
+        return None
+    n = len(_fields(t))
+    ps, ws = [(p0, _field_word(t, f0))], []
+    for r, o in lv:
+        if r <= 1 or o == 0:
+            ws.append(0)
+            continue
+        if r > n:
+            return None
+        f1 = _field_at(t, ln, bits, p0 + o)
+        if f1 is None:
+            return None
+        ow = _field_word(t, f1) - _field_word(t, f0)
+        nxt = list(ps)
+        for p, w in ps:
+            for d in range(1, r):
+                f = _field_at(t, ln, bits, p + d * o)
+                if f is None or _field_word(t, f) != w + d * ow:
+                    return None
+                if not any(q == p + d * o for q, _ in nxt):
+                    nxt.append((p + d * o, w + d * ow))
+        if len(nxt) > n:
+            return None
+        ps = nxt
+        ws.append(ow)
+    return ws
+
+
+def _tdiv(a: int, b: int) -> int:
+    return abs(a) // b * (1 if a >= 0 else -1)
 
 
 def _leaf_at(q, k: int):
@@ -296,10 +342,12 @@ def _wire_of(R: _Root, fu: dict, templates: Mapping, k: int, rt: str, port: str,
         raise Refusal("edge-run")
     if _bits(_fields(wn["ret"])[f]) != _bits(ty) // cuts or any(_bits(x) % 16 for x in _fields(wn["ret"])[:f]):
         raise Refusal("edge-width")
-    if any(r > 1 and d % lw != 0 for r, d in zip(radix, steps)):
-        raise Refusal("edge-rows")
-    return {"reader": rt, "port": port, "writer": wt, "out": "out", "at": start, "radix": radix,
-            "base": wb + l0 // lw, "step": [d // lw for d in steps], "cut": [j, 1], "offset": _field_word(wn["ret"], f)}
+    ws = _word_steps(wn["ret"], ln, _bits(ty) // cuts, l0 % lw, list(zip(radix, [d - _tdiv(d, lw) * lw for d in steps])))
+    if ws is None:
+        raise Refusal("edge-run")
+    wire = {"reader": rt, "port": port, "writer": wt, "out": "out", "at": start, "radix": radix,
+            "base": wb + l0 // lw, "step": [_tdiv(d, lw) for d in steps], "cut": [j, 1], "offset": _field_word(wn["ret"], f)}
+    return wire | ({"ostep": ws} if any(ws) else {})
 
 
 def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int, q, s0: int) -> list[dict]:

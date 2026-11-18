@@ -240,6 +240,50 @@ def _mixed_toy(name: str, widths: tuple, read: int) -> dict:
 MIXED_16_32 = _mixed_toy("CoreEdgesMixedA", (16, 32), 1)
 MIXED_32_16_32 = _mixed_toy("CoreEdgesMixedB", (32, 16, 32), 2)
 
+def _slots_toy(name: str) -> dict:
+    """The untied and INT8 classes' token read: a writer (4 members) of four groups of fields, one 32-bit value, 28,
+    one, then a pair, and a reader (4 members, each one 32-bit value) whose member m reads field 4m of writer unit m,
+    the references 160 apart."""
+    v, a = Value(32), Array(28, Value(32))
+    ret = Tuple(*[v, a, v, Tuple(v, v)] * 4)
+
+    def fields(B, x):
+        one = B.call(XOR32, x[0], x[0])
+        return [one, B.batch(XOR32, x, x, axes=(0, 0)), one, tuple_of(one, one)] * 4
+
+    writer = bind(CompositeDefinition(f"{name}W", 0, (), lambda S: ((("x", a),), ret),
+                                      lambda B, S, x: tuple_of(*fields(B, x)), register=False))
+    reader = bind(CompositeDefinition(f"{name}R", 0, (), lambda S: ((("x", v),), v),
+                                      lambda B, S, x: B.call(XOR32, x, x), register=False))
+
+    def body(B, S, x, y):
+        return tuple_of(B.batch(writer, x, axes=(0,)), B.batch(reader, y, axes=(0,)))
+
+    defn = bind(CompositeDefinition(name, 0, (), lambda S: ((("x", Array(4, a)), ("y", Array(4, v))),
+                                                            Tuple(Array(4, ret), Array(4, v))), body, register=False))
+    desc = json.loads(D.canonical(codec.encode_program(Program(defn))))
+    tw, tr = codec.descriptor_id(writer), codec.descriptor_id(reader)
+    ids = desc["callees"]
+    w = next(k for k, x in enumerate(_nodes(desc)) if ids[x["fn"]] == tw)
+    r = next(k for k, x in enumerate(_nodes(desc)) if ids[x["fn"]] == tr)
+    _nodes(desc)[r]["args"][0]["refs"] = {"strided": ["n", w, 0, 4, 0, 160, 4]}
+    template = {"units": 4, "rows": {"x": [2, 1]}, "outs": {"out": 256}}
+    return {"program": desc, "ranges": [[w, tw, 0, 4], [r, tr, 4, 4]],
+            "wiring": {"templates": {tw: template, tr: template}, "cuts": {}, "wires": []}}
+
+
+ROPE = _fields_toy("CoreEdgesRoPE", 48, 64, Array(64, Value(16)), lambda w: {"strided": ["n", w, 0, 2048, 3072, 1, 8192]},
+                   readers=128)
+SLOTS = _slots_toy("CoreEdgesSlots")
+
+#: the served classes' reads, whose field's place in the writer unit steps with a digit (the wire's `ostep`)
+SERVED_CASES = [
+    ("the tied class's rotary head: 32 fields of each of 4 writer units", ROPE,
+     {"wires": [{**_wire_of(ROPE, [4, 32], [1, 0]), "ostep": [0, 64]}]}),
+    ("the untied and INT8 classes' token: field 4m of writer unit m, 32-bit leaves", SLOTS,
+     {"wires": [{**_wire_of(SLOTS, [4], [1]), "ostep": [64]}]}),
+]
+
 #: a wire's `offset` is in u16 words of the writer unit's row `out`: a 32-bit field is two words
 WORD_CASES = [
     ("a 32-bit field after a 16-bit one, at word 1", MIXED_16_32, {"wires": [_wire_of(MIXED_16_32, [4], [1], offset=1)]}),
@@ -294,7 +338,7 @@ def _code(out: dict) -> dict:
 
 
 EDGES = D.Port("spot-difftest", "edges", reference,
-               st.sampled_from([c[1] for c in CASES + SEED_CASES + WORD_CASES] + _variants()),
+               st.sampled_from([c[1] for c in CASES + SEED_CASES + WORD_CASES + SERVED_CASES] + _variants()),
                package=PACKAGE, need_rejects=False, of_record="lean")
 pieces = D.server_fixture(EDGES)
 
@@ -310,6 +354,14 @@ def test_the_named_cases(pieces, name, j, want):
 def test_the_generators_forms(pieces, name, j, want):
     """Members stepping inside a run are a wire in closed form, and an explicit part's rows each a wire or none, in
     Lean and in the twin."""
+    assert _code(got := reference(j)) == want
+    assert pieces.call("edges", j) == ("output", D.canonical(got))
+
+
+@pytest.mark.parametrize("name, j, want", SERVED_CASES, ids=[c[0] for c in SERVED_CASES])
+def test_the_served_classes_reads(pieces, name, j, want):
+    """A member's field stepping inside its writer unit is one wire whose offset steps by a word step a digit, in Lean
+    and in the twin."""
     assert _code(got := reference(j)) == want
     assert pieces.call("edges", j) == ("output", D.canonical(got))
 
