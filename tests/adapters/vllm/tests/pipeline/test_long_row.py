@@ -26,6 +26,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from verity.circuits import population as PN
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.evaluation.batch import evaluate_batch
@@ -232,7 +233,7 @@ def test_its_links_are_the_ones_round_two_derives_and_its_window_takes_them() ->
         values = IL.link_values(links, q)
         w = IR.interior_window(ms, cells, "00", list(range(q)), wires, links, rows)
         assert [m.n for m in w.members] == [q * n for n in cells]
-        want = P.mixed_population_program([(x, q * n) for x, n in zip(L.templates, cells, strict=True)], values=values)
+        want = PN.mixed_population_program([(x, q * n) for x, n in zip(L.templates, cells, strict=True)], values=values)
         digests.append(P.program_digest(w.program))
         assert digests[-1] == P.program_digest(want)
     assert digests[0] != digests[1]
@@ -342,7 +343,7 @@ def test_a_sampled_spans_units_commit_as_its_interior() -> None:
     it = IR.interior(sampled, cells, "00" * 64, [0, 2], **kw)
     w = it.committed.window
     assert [(m.template, m.n) for m in w.members] == [(m.template, 2 * n) for m, n in zip(ms, cells, strict=True)]
-    want = P.mixed_population_program([(x, 2 * n) for x, n in zip(L.templates, cells, strict=True)],
+    want = PN.mixed_population_program([(x, 2 * n) for x, n in zip(L.templates, cells, strict=True)],
                                       values=IL.link_values(links, 2))
     assert P.program_digest(w.program) == P.program_digest(want)
     assert [e["value"] for e in it.record["registered"]] == [f"{key}/{p}" for p in PARAMS]

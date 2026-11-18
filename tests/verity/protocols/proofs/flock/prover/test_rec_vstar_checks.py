@@ -31,6 +31,7 @@ from verity_flock import rec_bindings as RB
 from verity_flock import rec_budget as RBG
 from verity_flock import rec_outer as O
 from verity_flock import rec_residuals as RR
+from verity.circuits import population as PN
 
 pytestmark = [pytest.mark.slow,
               pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")]
@@ -345,7 +346,7 @@ def _l16_h1(d: Path, n: int, name: str | None = None) -> Path:
     from verity_flock import rec_open as R
 
     defn = R.definition(16, 1)
-    program = P.population_program(defn, n)
+    program = PN.population_program(defn, n)
     part = P.partition(program, P.template_instance_query(defn))
     return _staged(d, FC.compose(O.lowering(16, 1, name), O.subcircuit(16, 1, name), partition=P.digest(part),
                                  program=P.program_sha512(program)), part, program)

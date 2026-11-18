@@ -1203,16 +1203,16 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
                      "word_bits": RV.WORD_BITS,
                      "domain": RV.domain(program, v, words, leaves,
                                         window=None if is_held(v) else window).domain_id.hex(),
-                     **G.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, [row(t) for t in range(size)])}
+                     **RV.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, [row(t) for t in range(size)])}
     pv = f"{prefix}pub@{call}"
     blocks = [CC.j10r_blocks(m, k, (r, c), t // per, t % per) for t in range(size)] if tile["j10r"] else None
     rows, salts, reg = public_table(program, pv, salt, window, u0, size, (roots[a][0], roots[b][0]), blocks)
     out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": size, "words": len(rows[0]), "word_bits": RV.WORD_BITS,
-                     "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                     "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
                      **CC.call_reads(u0, list(range(size))), "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
     rows, salts, reg = ok_table(program, ov, window, sum(sizes))
     out[OK_PORT] = {"value": ov, "root": reg.root.hex(), "leaves": sum(sizes), "words": len(CC.OK_ROW),
-                    "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                    "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
                     **CC.call_reads(u0, list(range(u0, u0 + size))),
                     "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
     return {"format": G.READS_V1, "ports": out}, None
@@ -1952,7 +1952,7 @@ def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statem
         if _digest(root) is None:
             return None, ("registration", f"drawn leaf {u}'s statement {list(statement)} reads {table}, whose root the "
                                           "verifier does not hold as a SHA-512 digest")
-        ports[port] = PR.port(table, e, root, [base + row], G.SCHEMA_V2)
+        ports[port] = RV.port(table, e, root, [base + row], G.SCHEMA_V2)
         if LL.read_in_full(v) and port != LL.OK:
             ports[port][LL.READ_IN_FULL] = True
     if any(_digest(roots.get(v, [None])[0]) is None for v in (a, b)):

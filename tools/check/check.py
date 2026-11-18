@@ -1906,7 +1906,7 @@ OPT_IN = {
             "pipeline/test_interior_table.py::test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give_their_links",
             "pipeline/test_interior_table.py::test_a_table_round_1_did_not_register_is_refused",
             "pipeline/test_interior_table.py::test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length",
-            "pipeline/test_interior_table.py::test_a_table_reads_interior_without_a_test_key_registers_the_same_root_and_domain",
+            "pipeline/test_interior_table.py::test_a_table_reads_interior_registers_the_same_root_and_domain_each_commit",
             "pipeline/test_interior_table.py::test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_committed",
             "pipeline/test_interior_table.py::test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_cannot_read",
             "pipeline/test_interior_table.py::test_the_challengers_history_refuses_a_table_round_1_did_not_register"),
