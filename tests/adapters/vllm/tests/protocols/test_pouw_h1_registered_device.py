@@ -26,7 +26,7 @@ import shutil
 import numpy as np
 import pytest
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.commitments.merkle import tree_levels
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, hm96_salt, rows_domain

@@ -20,7 +20,7 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import (
     live_reason,
 )
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 
 _ROOT = re.compile(r"^[0-9a-f]{128}$")
 #: why a window's sampling coin has no session to be read from

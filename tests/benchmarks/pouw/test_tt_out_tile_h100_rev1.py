@@ -115,7 +115,7 @@ def test_first_promotion_skip_is_outside_rev1s_credit():
     first promotion of every word not executed outputs every ticket word. rev1 takes that add out of W_ref and the credit
     (`first_adds`), so the program costs rev1's W_ref and its event never fires on the domain; under the credit before
     rev1 it fires, which is the falsification this test would have caught."""
-    C.set_atom("hopper")
+    C.set_atom(C.HOPPER_E4M3_K32.name)
     for fam in FAMILIES:
         A, B, ok, _, _ = _tile(fam, 1024)
         assert ok, fam
@@ -143,7 +143,7 @@ def test_cross_group_joint_skips_stay_within_the_gap():
     words share, the intersection replayed on every word, and its atoms outside each word's debit (`debit`'s flags) priced
     at a MAC each against the tile's rev1 credit: the event never fires. Priced word by word instead, the same sets do
     fire, so the test reaches the class and the bound rests on the fragment."""
-    C.set_atom("hopper")
+    C.set_atom(C.HOPPER_E4M3_K32.name)
     sch = PC.PearlC(forming="v1", device=H100, prices=PRICES)
     k = 1024
     s = Shape(64, k, 64)
@@ -331,7 +331,7 @@ def _dead_pair_case(k: int, n: int, groups: int, units: int, m: int = 8192, run:
     weight: whether its rows pass the rules, whether the program's words are the reference's, the tile's replayed debit
     (flagged atom-words, later promotions into +0, and at least every salt-dead element) against its cap, and the
     program's cost against TT_OUT's bound, per word."""
-    C.set_atom("hopper")
+    C.set_atom(C.HOPPER_E4M3_K32.name)
     sch = PC.PearlC(forming="v1", device=H100)
     s = Shape(m, k, n)
     sch.check(Matmul(0, s, 0))
@@ -474,7 +474,7 @@ def _raised_case(k: int, n: int, groups: int, units: int, m: int = 8192, run: in
                  program: str = "one-atom") -> dict:
     """One 64 x 64 audit tile of the raised-adder family at depth `k`, reported as `_dead_pair_case` reports its own, for
     the program that runs one atom a planted group (`"one-atom"`) or the one that only skips (`"skip"`)."""
-    C.set_atom("hopper")
+    C.set_atom(C.HOPPER_E4M3_K32.name)
     sch = PC.PearlC(forming="v1", device=H100)
     s = Shape(m, k, n)
     sch.check(Matmul(0, s, 0))
@@ -551,7 +551,7 @@ def _live_raiser_rows(side: str, k: int, groups: int, raisers: int, at: float) -
 def _live_raiser_case(k: int, groups: int, raisers: int, at: float, n: int = 8192, m: int = 8192) -> dict:
     """One 64 x 64 audit tile of live raisers, formed under §5 as `_raised_tile` forms its own: whether its rows pass the
     rules, its replayed debit and mends, and its cap."""
-    C.set_atom("hopper")
+    C.set_atom(C.HOPPER_E4M3_K32.name)
     sch = PC.PearlC(forming="v1", device=H100)
     s = Shape(m, k, n)
     sch.check(Matmul(0, s, 0))
@@ -636,7 +636,7 @@ def test_planted_cross_group_skips_at_the_deepest_shape_are_over_the_cap():
 def test_honest_tiles_take_no_mends():
     """The mends charge nothing on the census's honest-like tiles: no dead pair and no forced zero on any of their
     words, so the new terms move no honest tile's debit toward its cap."""
-    C.set_atom("hopper")
+    C.set_atom(C.HOPPER_E4M3_K32.name)
     for fam in HONEST:
         for k in (1024, 8192):
             _, _, ok, XA, XB = _tile(fam, k)
