@@ -212,7 +212,17 @@ REFUSED = 2
 #: the values an execution phase registers afresh under its open root, never an earlier record's: the scan's state, which
 #: the network verifier ties to its scan (stateTied); a circuit names it among its values and marks nothing else, so any
 #: other value it takes is W's
-PHASE_OWN = frozenset(p.value for p in schemes.get("network-attester").ports if p.name == "scan-state")
+def port_value(scheme: Any, port: str) -> str:
+    """The value ``scheme``'s port ``port`` registers: refused (ValueError) naming both unless it declares that port
+    exactly once, with a value."""
+    got = [p.value for p in scheme.ports if p.name == port]
+    if len(got) != 1 or not got[0]:
+        raise ValueError(f"the {scheme.name} declaration declares the port {port!r} with a value {len(got)} times, "
+                         "not once: records_audit reads the execution phase's own value from it")
+    return got[0]
+
+
+PHASE_OWN = frozenset({port_value(schemes.get("network-attester"), "scan-state")})
 
 
 def catalog_resolve(tid: str) -> Any:
