@@ -19,13 +19,14 @@ from verity.commitments.periods import interface as IF
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (
     CLASS,
-    KEY,
     ROPE,
     SCAN_PIN,
     WINDOW,
     _alone,
     _checkpoint,
     _label,
+    _refused,
+    _register,
     held,
     wired,
     wired_matches_by_hand,
@@ -95,17 +96,16 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
                                          ("model.layers.0.self_attn.v_proj.weight_scale",
                                           "model.layers.0.self_attn.qkv_proj.weight_scale@32")])
 def test_the_committers_registered_roots_hold_every_int8_weight_read_but_the_rotary_tables(tmp_path, flip, param):
-    """On TINY's exact-int8 checkpoint the committer's registration (`weights_registration` at the window's grain under its
-    key), held to the verifier's weights record (`registration_pins`), has a hiding root for each weight parameter the
+    """On TINY's exact-int8 checkpoint the committer's registration (`weights_registration` at the window's grain), held to the verifier's weights record (`registration_pins`), has a hiding root for each weight parameter the
     class circuit registers, each linear's s8 codes and f32 row scales their own, but the rotary table: pinned at them,
     and the scan state at its own root, every weight read but the rotary table's is registered. A committer serving one
-    byte changed in a linear's codes, or in its scales, refuses to register that weight, and a window that serves it
-    commits another root for that parameter alone, whose reads are then not registered. Pinned on the unwired lowering
+    byte changed in a linear's codes, or in its scales, refuses to register that weight, and a window that serves it is
+    refused by that parameter's name alone, publishing nothing of it. Pinned on the unwired lowering
     (module docstring), whose node-output reads are free for want of a wire."""
     reg = _registered()
     doc = json.loads(json.dumps(_unwired(reg).description()))
     d, man = _checkpoint(tmp_path, quant=INT8_EXACT_QUANT)
-    registration = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
+    registration, rpath = _register(tmp_path / "committer", reg, d, checkpoints_manifest=man, grain=GRAIN)
     pins = WW.registration_pins(registration, WW.weights_record(reg, d, man, grain=GRAIN))
     assert (ADV.registered_weights(registration), len(pins), list(registration["unrooted"])) == (pins, 24, [ROPE])
     assert set(pins) == set(_unwired(reg).registered.params) - {ROPE, SCAN_STATE}
@@ -116,11 +116,10 @@ def test_the_committers_registered_roots_hold_every_int8_weight_read_but_the_rot
     served = WW.record_words(reg, *_checkpoint(tmp_path / "served", flip=flip, quant=INT8_EXACT_QUANT))
     refused = {param.rpartition("@")[0]: "served words that aren't the checkpoint's"}
     with pytest.raises(ValueError, match=re.escape(f"no weight registered: {refused} ")):
-        WW.weights_registration(reg, KEY, d, served, checkpoints_manifest=man, grain=GRAIN)
-    roots = {p: v.root.hex() for p, v in WW.weight_values(reg, served, KEY, GRAIN).items()}
-    assert [p for p in pins if pins[p] != roots[p]] == [f"{WC.WEIGHTS}/{param}"]
-    got, alone = IF.input_count(doc, pins=both, roots={**roots, **SCAN_PIN}), _alone(doc, f"{WC.WEIGHTS}/{param}")
-    assert (got["registered"], got["free"]) == (held_["registered"] - alone, held_["free"] + alone) and alone > 0
+        WW.weights_registration(reg, tmp_path / "refused.salts", d, served, checkpoints_manifest=man, grain=GRAIN)
+    with pytest.raises(ValueError) as e:
+        WW.weight_values(reg, served, rpath, GRAIN)
+    assert _refused(e) == [f"{WC.WEIGHTS}/{param}"]
 
 
 @pytest.mark.slow

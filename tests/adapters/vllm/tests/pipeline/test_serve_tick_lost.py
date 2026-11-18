@@ -21,10 +21,11 @@ from verity.protocols.resource_accounting.network.verifier import release as REL
 from tests.pipeline.test_serve_admit_tick import RUN, TICK, hooked, read_all, request
 from tests.pipeline.test_serve_advice import REG, C, SchedEngine, Server, _body
 from tests.pipeline.test_serve_openai import Tokenizer, records
+from verity_vllm import messages
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.engine.engine_driver import external_id
 from verity_vllm.pipeline import advice as ADV
-from verity_vllm.pipeline import serve_admit as sa
+from verity.protocols.resource_accounting.network.prover import admission as na
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.advice_code import codec as V1
 from verity_vllm.pipeline.advice_code import schedule as SC
@@ -76,8 +77,8 @@ class TickServer(Server):
 
     engine_of = TickEngine
 
-    def order(self) -> sa.TickAdmit:
-        self.gate = self.loop.gate = sa.TickGate(TICK, hold_s=60.0, clock=lambda: 0.0)
+    def order(self) -> na.TickAdmit:
+        self.gate = self.loop.gate = na.TickGate(TICK, hold_s=60.0, clock=lambda: 0.0)
         self.ticked = self.loop.hook = hooked(self.engine.sched, self.gate, key=external_id)
         self.added, self.lines = threading.Semaphore(0), threading.Semaphore(0)
         admitted = self.windows.admitted
@@ -92,13 +93,16 @@ class TickServer(Server):
                 self.lines.release()
 
         self.windows.admitted = counted
-        return sa.TickAdmit(self.submit, self.loop.abort, take)
+        admit = na.TickAdmit(self.submit, self.loop.abort, take)
+        admit.attach(messages.current())
+        return admit
 
     def __exit__(self, *exc: Any) -> None:
         self.loop.stop()
         self.engine_thread.join()
         self.ticked.uninstall()
         super().__exit__(*exc)
+        messages.close()
 
 
 def test_a_run_with_a_lost_release_commits_it_as_an_abort_after_0_and_encodes_under_the_tick_without_it(tmp_path):

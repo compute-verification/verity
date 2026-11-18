@@ -29,7 +29,7 @@ and every KV read in its place, is the id the user sent there.
 **The proof block** (`IoTieRequestIds{B, L, R, P, S}`) is IoTieRequest's scan, lane by lane, plus:
 - each request cell's slots (`IoTieIdsSlots{B}`): slot k is a field when the frame's count of fields is above k, its
   value the u32 its 10 characters spell, its ordinal nf + k, nf the bucket's fields before the cell;
-- the classes routed to the fields (`io_tie.IoTieRoute` over M1 = 2^D1 ≥ NK slot positions, NK = N·K): record f is
+- the classes routed to the fields (`benes.IoTieRoute` over M1 = 2^D1 ≥ NK slot positions, NK = N·K): record f is
   (keys[f], f), and `IoTieIdsKeys` holds each field to the record routed to it, with index its ordinal and a class
   not the sink, every other slot the sink;
 - the members sorted by class (`IoTieRoute` over M2 = 2^D2 ≥ NK + E): each slot (class, 0, value), each opened entry
@@ -43,7 +43,6 @@ reads'), and both routings' switches.
 """
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from typing import Any, Mapping, NamedTuple, Sequence
 
@@ -56,6 +55,7 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier import io_request as Q
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.circuits.boolean import benes as BN
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIGITS, ID_FIELD_BYTES
 
@@ -114,11 +114,11 @@ class Shape:
 
     @property
     def D1(self) -> int:
-        return IT.route_depth(self.NK, 1)
+        return BN.route_depth(self.NK, 1)
 
     @property
     def D2(self) -> int:
-        return IT.route_depth(self.NK + self.E, 1)
+        return BN.route_depth(self.NK + self.E, 1)
 
     @property
     def route(self) -> int:
@@ -144,13 +144,6 @@ def commit_rows(steps: Sequence[Sequence[Row]], tokens: Sequence[Sequence[int]],
     """Each step's `c00.input/ids` row as the Commit holds it (`io_tie.port_row`): its rows' input ids in batch order,
     request q's position p being tokens[q][p] (its prompt, then its outputs)."""
     return [IT.port_row([tokens[r.q][r.start + t] for r in rows for t in range(r.n)], P) for rows in steps]
-
-
-def commit(rows: Sequence[bytes], seed: bytes = b"commit") -> tuple[tuple[bytes, ...], list[list[bytes]], bytes]:
-    """The fake Commit's tree of the rows under fake salts: (salts, levels, domain id)."""
-    salts = tuple(IT.fake_salt(seed, s) for s in range(len(rows)))
-    dom = IT.domain(hashlib.sha512(seed).digest(), len(rows)).domain_id
-    return salts, IT.rows_levels(dom, rows, salts), dom
 
 
 # --- the verifier's map ----------------------------------------------------------------------------------------------
@@ -334,7 +327,7 @@ def route_switches(shape: Shape, inst: Instance) -> list[int]:
     perm = [-1] * (1 << shape.D1)
     for f, s in enumerate(got[1] if got is not None else ()):
         perm[f] = s
-    return IT.benes(_fill(perm))
+    return BN.benes(_fill(perm))
 
 
 def sort_switches(shape: Shape, inst: Instance) -> list[int]:
@@ -350,7 +343,7 @@ def sort_switches(shape: Shape, inst: Instance) -> list[int]:
     perm = [0] * len(members)
     for rank, m in enumerate(sorted(range(len(members)), key=lambda m: (*members[m], m))):
         perm[m] = rank
-    return IT.benes(perm)
+    return BN.benes(perm)
 
 
 # --- the circuit -----------------------------------------------------------------------------------------------------
@@ -532,7 +525,7 @@ def _body_ids(B, S, row, lanes_, keys, ekeys, port, route, sort):
     kr, xs1 = GB._refs(keys), []
     for f in range(1 << sh.D1):
         xs1 += (kr[CB * f:CB * (f + 1)] if f < sh.NK else K.bits(sh.sink, CB)) + K.bits(f, sh.D1)
-    routed1 = B.call(bind(IT.IoTieRoute, W=CB + sh.D1, D=sh.D1),
+    routed1 = B.call(bind(BN.IoTieRoute, W=CB + sh.D1, D=sh.D1),
                      GB._coll(Array(1 << sh.D1, Array(CB + sh.D1, BIT)), xs1), route)
     ko = GB._refs(B.call(bind(IoTieIdsKeys, NK=sh.NK, CB=CB, D1=sh.D1), GB._coll(Array(sh.NK, Array(SLOT, BIT)), slots),
                          routed1))
@@ -544,7 +537,7 @@ def _body_ids(B, S, row, lanes_, keys, ekeys, port, route, sort):
         members += ek[CB * e:CB * (e + 1)] + K.bits(1, 1) + [pr[8 * (4 * e + 3 - j // 8) + j % 8] for j in range(32)]
     for _ in range(sh.NK + sh.E, 1 << sh.D2):
         members += K.bits(sh.sink, CB) + K.bits(1, 1) + K.bits(0, 32)
-    ordered = B.call(bind(IT.IoTieRoute, W=CB + 33, D=sh.D2), GB._coll(Array(1 << sh.D2, Array(CB + 33, BIT)), members),
+    ordered = B.call(bind(BN.IoTieRoute, W=CB + 33, D=sh.D2), GB._coll(Array(1 << sh.D2, Array(CB + 33, BIT)), members),
                      sort)
     oks.append(B.call(bind(IoTieIdsChain, CB=CB, D2=sh.D2), ordered))
     bits = [r for o in oks for r in GB._refs(o)] + [ko[0]]

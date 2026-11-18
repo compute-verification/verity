@@ -127,7 +127,8 @@ class IntegrityProfile:
         `covered`     gate families proved on every audit, outside the samples (their faults survive with probability 0).
 
     `credited` numbers the blocks a scheme credits among the top level's members; each is a block of every finer level
-    too (Lean `Core.Integrity.creditedProblem`), so every finer size is 1 when any block is credited.
+    too (Lean `Core.Integrity.creditedProblem`). Under a profile with a finer level that splits, no block can be
+    credited, by design: a profile credits only with one level, or finer levels of size 1.
     """
 
     levels: Hierarchy
