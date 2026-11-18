@@ -116,6 +116,8 @@ inputs = [
     "calibration/hardware/cards",
     # a host core-second's weight is read from its node's file and the cards it names (host_weight)
     "calibration/hardware/nodes",
+    # a session's node is read from the node files whose cards `verity.device` reads with their architectures
+    "calibration/hardware/architectures",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/engine/__init__.py", "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py",
     # the proof-system table prices serving at the reference fleet's assumed serving MFU, and `verity bench prove` is the
     # door's runner, which a test runs
