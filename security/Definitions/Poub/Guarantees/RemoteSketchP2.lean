@@ -18,7 +18,7 @@ is the four partials' sum, so the bound is on the unit.
   `r = 12`, with `Q` the prover's SHA-512 compressions over the session (its budget, `2^80` in `audit.QUERIES_LOG2`, on
   any hardware it reaches), as `SketchBoundDeployed` is at 4096-byte blocks and 64 rows:
 
-    `δs = Q/2^96 + (Q + P)·(ε + N/2^512) + (Q + P)²/2^257`,
+    `δs = Q/2^96 + (Q + P)·(ε + N/2^512) + (Q + P)²/2^257` (`δSketch 96 257 Q P N ε`),
 
   with `ε = 257 · timing.sign_rank_at_most(16, 11) = 2^-95.2491`, the bound on a 16 × 32 sign block's rank falling
   below 12 over the unit's sectors (evaluated outside Lean, as at `m = 128`), above 4096-byte blocks' `2^-96.2548`
@@ -48,7 +48,7 @@ open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions R
 /-- **The sketch bound at P2's receipts** (drafted). `SketchBoundRun` at a unit of four 2,056-byte blocks
 (`m = 257`), 16 sign rows, SHA-512 tags and rank `r = 12`, for a prover of `Q` SHA-512 compressions over the session:
 at most `Q + P` candidate seeds and `Q` receipt-hash queries in all, with SHA-512's keys at them within `(Q + P)²/2^257`
-of uniform. -/
+of uniform, at `δSketch 96 257`. -/
 def SketchBoundP2 : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N S L q Q : ℕ) (G qtot : Fin P → ℕ) (ε : ℝ)
     (A : Remote.Sketch.Run β Hs P N 257 512 S L q 16 G) (T : Trace (Outcome β Hs N 257)),
@@ -57,6 +57,6 @@ def SketchBoundP2 : Prop :=
     ∑ j, G j ≤ Q + P → ∑ j, qtot j ≤ Q →
     ResourceAccounting.Assumptions.SketchHashRandom A (((Q : ℝ) + P) ^ 2 / 2 ^ 257) → KeyBudget A qtot → Receipted A T →
     Present A T →
-    SketchBound T ((Q : ℝ) / 2 ^ 96 + ((Q : ℝ) + P) * (ε + N / 2 ^ 512) + ((Q : ℝ) + P) ^ 2 / 2 ^ 257)
+    SketchBound T (δSketch 96 257 Q P N ε)
 
 end ResourceAccounting.Guarantees.Remote

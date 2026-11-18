@@ -175,10 +175,8 @@ def div_full(a: np.ndarray, b: np.ndarray, tables: RmsTables) -> np.ndarray:
 
 
 def rms_norm_rows(x: np.ndarray, w: np.ndarray, eps: float, tables: RmsTables, variant: int = 0,
-                  want_scalars: bool = False, want_pre: bool = False, kernel: str = "triton"):
-    """``x``: (rows, n_cols) BF16 words (uint16); ``w``: (n_cols,) BF16 words; returns (rows, n_cols) BF16 words,
-    followed (if requested) by the per-row fp32 scalars (triton: ``[sum_sq, mean_eps, rms, inv]``; cuda:
-    ``[sum_sq, arg, mean, s]``) and by the fp32 values just before the BF16 output cast.
+                  kernel: str = "triton") -> np.ndarray:
+    """``x``: (rows, n_cols) BF16 words (uint16); ``w``: (n_cols,) BF16 words; returns (rows, n_cols) BF16 words.
     ``kernel``: ``"triton"`` (the batch-invariant ``_rms_norm_kernel``) or ``"cuda"`` (``vllm::rms_norm_kernel<bf16, 8>``)."""
     x = np.ascontiguousarray(x, dtype=np.uint16)
     w = np.ascontiguousarray(w, dtype=np.uint16)
@@ -186,8 +184,6 @@ def rms_norm_rows(x: np.ndarray, w: np.ndarray, eps: float, tables: RmsTables, v
         raise ValueError(f"shape mismatch: x {x.shape}, w {w.shape}")
     rows, n = x.shape
     out = np.empty_like(x)
-    dbg = np.empty((rows, 4), dtype=np.float32) if want_scalars else None
-    pre = np.empty((rows, n), dtype=np.float32) if want_pre else None
     if kernel == "triton":
         fn, tab2 = lib().rms_triton_rows, tables.sqrt
     elif kernel == "cuda":
@@ -200,13 +196,8 @@ def rms_norm_rows(x: np.ndarray, w: np.ndarray, eps: float, tables: RmsTables, v
         raise ValueError(kernel)
     fn(x.ctypes.data, w.ctypes.data, rows, n, ctypes.c_float(float(eps)),
        tables.rcp.ctypes.data, tab2.ctypes.data, out.ctypes.data,
-       dbg.ctypes.data if dbg is not None else None, pre.ctypes.data if pre is not None else None, int(variant))
-    res = [out]
-    if want_scalars:
-        res.append(dbg)
-    if want_pre:
-        res.append(pre)
-    return res[0] if len(res) == 1 else tuple(res)
+       None, None, int(variant))
+    return out
 
 
 class RmsUnresolved(Exception):
