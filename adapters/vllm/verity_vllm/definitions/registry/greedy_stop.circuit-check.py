@@ -13,6 +13,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     of 8 ids and of 43 (a class is keyed by its prompt's exact length, a power of two or not), and at GLM-5.3's statics at
     (P, T) = (64, 128) and (43, 128), each under `MAX_GATES`, so kept in ``--all`` with no pin."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import greedy_stop as X
 
     return [("GreedyStopCheck_v1:320:2:stop", lambda: bind(X.GreedyStopCheck, V=320, N=16, T=2, STOP=(3,), MAX_TOKENS=8,
