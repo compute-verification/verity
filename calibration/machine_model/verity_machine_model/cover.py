@@ -28,7 +28,9 @@ COVER = DATA / "cover"
 #: corpus.json and the two family tables are in artifacts.json and gitignored; this brings them into a checkout
 FETCH = "uv run research data fetch-fixtures calibration/machine_model/data/cover"
 DEVICES = ("sm_90", "sm_120")
-FAMILY = {"sm_90": "hopper", "sm_120": "blackwell"}
+#: the family table of NVIDIA's Instruction Set Reference (bu_12_9.json, sass_isa_tables.json) an architecture's opcodes
+#: are listed in: the reference's own grouping, one table a family, which no architecture file states
+ISA_TABLE = {"sm_90": "hopper", "sm_100": "blackwell", "sm_103": "blackwell", "sm_120": "blackwell"}
 MARKS = ("covered", "coarse", "hole", "absent")
 DOMINATED = ("covered", "coarse")
 SLACK = 1.001   # a measured rate a hair over its sheet (2047.6 · 1/2 against 1024) is the sheet's rounding
@@ -139,7 +141,7 @@ def load(cover: Path = COVER) -> Cover:
     for dev in DEVICES:
         o: dict[str, set[str]] = {}
         for src, table in (("BU 12.9", bu), ("CUDA 13", c13)):
-            for op in table[FAMILY[dev]]:
+            for op in table[ISA_TABLE[dev]]:
                 o.setdefault(op, set()).add(src)
         for op in corpus[dev]:
             o.setdefault(_base(op), set()).add("corpus")

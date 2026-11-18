@@ -14,6 +14,7 @@ import prod_repro as P
 import pytest
 import replay as R
 import serve_tax as S
+from verity.channel import PUBLIC
 
 LOAD = "burst"
 #: the arms of every job here, named to the report and the runner: their defaults are the benchmark's arms at the
@@ -136,7 +137,7 @@ def test_a_replayed_window_prints_the_settings_and_the_three_lines(tmp_path: Pat
     # first the context limit the arms were started at
     assert txt.startswith("prod_repro: context limit 4,096 tokens, given outright to record and compiled\n"
                           "prod_repro: load burst; stock compiled, stock again compiled-again, ours record; run r-1, commit "
-                          + "c" * 40 + f"\nmodel: repo@rev, as the benchmark names it; the checkpoint served: {out / 'ck'}\n")
+                          + "c" * 40 + "\nmodel: repo@rev, as the benchmark names it\n")
     # how far each arm and the replay got comes first, from their own records
     assert ("what ran:\n"
             "  compiled: up in 12.5 s; the load served 3 times, 6 requests, every one finished\n"
@@ -297,7 +298,7 @@ def test_the_kept_tokens_are_compared_not_the_replays_own_count(tmp_path: Path):
 def test_without_a_replay_of_this_window_the_tokens_are_not_measured(tmp_path: Path):
     out = job(tmp_path)
     rc, txt, r = run(out)
-    assert rc == 0 and r["tokens"] == {"measured": False, "why": f"no replay ran (no replay.json in {out / 'replay-compiled'})"}
+    assert rc == 0 and r["tokens"] == {"measured": False, "why": "no replay ran (no replay.json in replay-compiled)"}
     assert txt.endswith("prod_repro: 1 of 3 lines measured\n")
     # a replay of another job's serve of the same arm, or of another rep, is not this window's
     for other in ({"served_run_id": "r-0"}, {"rep": 2}, {"arm_dir": str(out / "compiled")}):
@@ -315,14 +316,13 @@ def test_what_ran_names_the_arm_that_failed_the_one_that_stopped_and_a_replay_th
     (out / "replay-compiled.log").write_text("Traceback (most recent call last):\n  ...\nSystemExit: steps [3] hold rows of another load\n\n")
     rc = P.main(["report", str(out), "--load", LOAD, "--again", "", "--stock", "compiled", "--ours", "record", "--expect-replay"])
     txt, r = (out / "prod_repro.txt").read_text(), json.loads((out / "prod_repro.json").read_text())
-    log = out / "replay-compiled.log"
     assert ("prod_repro: load burst; stock compiled, stock again not served, ours record; run r-1, commit " + "c" * 40) in txt
     assert ("what ran:\n"
-            "  compiled: FAILED: RuntimeError: the server exited 1 before it was ready (its record's error; its server's "
-            "log: compiled/server/server.log); NOTHING of the load was served\n"
+            "  compiled: FAILED: RuntimeError (the class of its record's error; its server left no log); NOTHING of the "
+            "load was served\n"
             "  record: STOPPED before burst rep 2 (--stop-at 11:20Z: the pass needed 310.0 s); up in 12.5 s; the load "
             "served 1 time, 2 requests, every one finished\n"
-            f"  the replay: DID NOT END; its log ends: SystemExit: steps [3] hold rows of another load ({log})\n") in txt
+            "  the replay: DID NOT END; the last exception its log names: SystemExit\n") in txt
     # a replay that was asked for and did not end fails the job, and the tokens line says where it stopped
     assert rc == 1 and r["failed"] == ["a replay was asked for and the tokens line is not measured"]
     # where the failed arm's server left a log, the line names the first exception in it: the record's error is the
@@ -333,21 +333,20 @@ def test_what_ran_names_the_arm_that_failed_the_one_that_stopped_and_a_replay_th
         "(EngineCore pid=7) ERROR 11-12 [core.py:9] torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 24.00 GiB.\n"
         "RuntimeError: Engine core initialization failed. See root cause above.\n")
     P.main(["report", str(out), "--load", LOAD, "--again", "", "--stock", "compiled", "--ours", "record", "--expect-replay"])
-    assert ("  compiled: FAILED: RuntimeError: the server exited 1 before it was ready (its record's error; the first "
-            "exception its server's log names: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 24.00 GiB. "
-            "(compiled/server/server.log)); NOTHING of the load was served\n") in (out / "prod_repro.txt").read_text()
+    assert ("  compiled: FAILED: RuntimeError (the class of its record's error; the first exception its server's log "
+            "names: OutOfMemoryError); NOTHING of the load was served\n") in (out / "prod_repro.txt").read_text()
     (out / "compiled/server/server.log").write_text("INFO 11-12 [model.py:1] Using max model len 262144\n")
     P.main(["report", str(out), "--load", LOAD, "--again", "", "--stock", "compiled", "--ours", "record", "--expect-replay"])
-    assert "its server's log names no exception: compiled/server/server.log" in (out / "prod_repro.txt").read_text()
-    assert (f"tokens: not measured: the replay did not end (no replay.json in {out / 'replay-compiled'}); its log ends: "
-            "SystemExit: steps [3] hold rows of another load") in txt
+    assert "(the class of its record's error; its server's log names no exception)" in (out / "prod_repro.txt").read_text()
+    assert ("tokens: not measured: the replay did not end (no replay.json in replay-compiled); the last exception its "
+            "log names: SystemExit") in txt
     assert "cost: not measured: compiled did not serve load burst" in txt
     assert txt.endswith("prod_repro: 0 of 3 lines measured; FAILED: a replay was asked for and the tokens line is not "
                         "measured; not served whole: compiled, record\n")
     assert r["ran"]["arms"]["compiled"] | {"started": True, "ok": False, "passes": 0} == r["ran"]["arms"]["compiled"]
     # an arm with no record never started; a replay with no log never did either; unfinished requests are counted
     shutil.rmtree(out / "compiled")
-    log.unlink()
+    (out / "replay-compiled.log").unlink()
     meta = json.loads((out / "record/meta.json").read_text())
     (out / "record/meta.json").write_text(json.dumps(meta | {"stopped": None, "loads": [
         {"load": LOAD, "rep": 1, "requests": 2, "unfinished": 1}]}))
@@ -356,7 +355,7 @@ def test_what_ran_names_the_arm_that_failed_the_one_that_stopped_and_a_replay_th
     assert rc == 1 and "  compiled: NOT SERVED: the job holds no record of it (no compiled/meta.json): it did not start\n" in txt
     assert "  record: up in 12.5 s; the load served 1 time, 2 requests, 1 UNFINISHED\n" in txt
     assert "  the replay: DID NOT END: it left no log, so it did not start\n" in txt
-    assert f"tokens: not measured: the replay did not end (no replay.json in {out / 'replay-compiled'}); it left no log\n" in txt
+    assert "tokens: not measured: the replay did not end (no replay.json in replay-compiled); it left no log\n" in txt
     # the job with no replay asked for: the same files are no failure
     rc = P.main(["report", str(out), "--load", LOAD, "--again", "", "--stock", "compiled", "--ours", "record"])
     assert rc == 0 and "  the replay: none was asked for\n" in (out / "prod_repro.txt").read_text()
@@ -365,7 +364,7 @@ def test_what_ran_names_the_arm_that_failed_the_one_that_stopped_and_a_replay_th
     rc = P.main(["report", str(out), "--load", LOAD, "--again", "", "--stock", "compiled", "--ours", "record", "--expect-replay"])
     txt = (out / "prod_repro.txt").read_text()
     assert rc == 1 and "tokens: not measured: record was not served\n" in txt and "  prefix caching: not read (record was not served)" in txt
-    assert "model: not read, as the benchmark names it; the checkpoint served: not read\n" in txt
+    assert "model: not read, as the benchmark names it\n" in txt
 
 
 def test_stock_served_once_has_no_noise_floor(tmp_path: Path):
@@ -393,8 +392,7 @@ def test_files_the_benchmarks_readers_refuse_end_their_lines_and_not_the_report(
 
     monkeypatch.setattr(S, "arm_metrics", refuses)
     rc, txt, r = run(out)
-    why = ("compiled's metrics can't be read from the job's files: SystemExit: compiled/burst/rep-1: vLLM's client counted "
-           "this pass's goodput against another SLO")
+    why = "compiled's metrics can't be read from the job's files: SystemExit"
     assert rc == 0 and r["ran"]["unread"] == {"compiled": why} and f"\n  {why}\n" in txt
     assert "  prefix caching: on (the engine's configuration; the cache served 40.0% of the load's prompt tokens); compiled's files can't be read\n" in txt
     assert "cost: not measured: compiled did not serve load burst" in txt and "tokens: reproduced" in txt
@@ -432,8 +430,9 @@ def test_a_setting_the_serve_did_not_turn_on_is_off(tmp_path: Path):
 
 def test_the_value_settings_in_force_are_the_adapters_record_as_each_server_and_the_replay_kept_it(tmp_path: Path):
     """An arm's record and the replay's hold the adapter's record of the value settings in force (the benchmark's
-    ``settings``): the report keeps each whole and names the variables ours's differs from stock's in and the
-    replay's from ours's. A job whose directories hold none says not recorded."""
+    ``settings``): the report keeps each by the variables' names, the canonical top-k's switch and the digest
+    (`prod_repro.named_settings`), and names the variables ours's differs from stock's in and the replay's from ours's.
+    A job whose directories hold none says not recorded."""
     out = job(tmp_path)
     replayed(out)
     _, txt, r = run(out)
@@ -458,8 +457,11 @@ def test_the_value_settings_in_force_are_the_adapters_record_as_each_server_and_
             f"compiled 3 set, SHA-512 {stock['digest'][:12]}; record 4 set, SHA-512 {ours['digest'][:12]}, differing from "
             f"compiled's in VERITY_DSA_TOPK; the replay's engine 4 set, SHA-512 {replay['digest'][:12]}, differing from "
             "record's in VLLM_BATCH_INVARIANT, VLLM_ENABLE_V1_MULTIPROCESSING\ntokens: ") in txt
+    named = P.named_settings
+    assert named(ours) == {"names": sorted(ours["values"]), "values": {"VERITY_DSA_TOPK": "canonical"}, "digest": ours["digest"]}
     assert r["value_settings"] == {
-        "arms": {"compiled": {"compiled": stock}, "record": {"record": ours}}, "replay": replay, "lifetimes_differ": [],
+        "arms": {"compiled": {"compiled": named(stock)}, "record": {"record": named(ours)}}, "replay": named(replay),
+        "lifetimes_differ": [],
         "differ": {"ours_from_stock": ["VERITY_DSA_TOPK"],
                    "replay_from_ours": ["VLLM_BATCH_INVARIANT", "VLLM_ENABLE_V1_MULTIPROCESSING"]}}
     # a credential is in the record by its name alone, and the difference is in no verdict
@@ -478,14 +480,14 @@ def test_the_value_settings_in_force_are_the_adapters_record_as_each_server_and_
             "  NOT ONE RECORD: record's lifetimes hold different value settings; the line above reads its first "
             "lifetime's\ntokens: ") in txt
     assert r["value_settings"]["arms"] == {"compiled": {"compiled.1": None, "compiled.2": None},
-                                           "record": {"record.1": ours, "record.2": replay}}
+                                           "record": {"record.1": named(ours), "record.2": named(replay)}}
     assert r["value_settings"]["lifetimes_differ"] == ["record"]
     assert r["value_settings"]["differ"] == {"ours_from_stock": None, "replay_from_ours": []}
     # a record that is not in the adapter's form ends this line and not the report
     (out / "record.1" / "meta.json").write_text(json.dumps(
         json.loads((out / "record.1" / "meta.json").read_text()) | {"settings": {"schema": "another"}}))
     _, txt, r = run(out, "--again", "")
-    assert "\n  value settings in force: the adapter's record of them can't be read from the job's files: KeyError: " in txt
+    assert "\n  value settings in force: the adapter's record of them can't be read from the job's files: KeyError\n" in txt
     assert r["value_settings"]["unread"] and "tokens: reproduced" in txt
 
 
@@ -1252,7 +1254,7 @@ def test_the_advice_line_is_the_replayed_passs_schedule_as_the_scheduler_replays
     assert ("advice: not measured: record holds no pass other rep 1, the one the replay re-runs: the advice is that pass's "
             "schedule's (--replay PASS names it)\n") in txt
     _, txt, _ = run(out, "--rep", "2")
-    assert (f"advice: not measured: the replay in {out / 'replay-compiled'} is of another pass (burst rep 1), not of "
+    assert ("advice: not measured: the replay in replay-compiled is of another pass (burst rep 1), not of "
             "record's burst rep 2\n") in txt
     # without a replay the line is of the pass a replay would re-run, and says none ran
     shutil.rmtree(out / "replay-compiled")
@@ -1785,7 +1787,7 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms(tmp
     shutil.rmtree(run_dir / "out/replay-compiled")
     (run_dir / "out/replay-compiled.log").write_text("serve-tax: no arrival of load chat@16 rep 1\n")
     p = bash(script, *argv, run_dir=run_dir)
-    assert p.returncode == 1 and "the replay: DID NOT END; its log ends: serve-tax: no arrival of load chat@16 rep 1" in p.stdout
+    assert p.returncode == 1 and "the replay: DID NOT END; its log names no exception\n" in p.stdout
     assert p.stdout.endswith("FAILED: a replay was asked for and the tokens line is not measured\n")
     p = bash(script, "--report", str(run_dir / "out"), "--load", "chat=16", "--replay", "chat@16", "--again", "none")
     assert p.returncode == 1 and "FAILED: a replay was asked for and the tokens line is not measured" in p.stdout
@@ -1823,7 +1825,7 @@ def test_the_runner_serves_ours_alone_and_takes_the_benchmarks_missing_cost_as_n
     kept = meta.read_text()
     meta.write_text(json.dumps(json.loads(kept) | {"error": "RuntimeError: the server exited 1"}))
     p = bash(script, *argv, run_dir=run_dir, STAND_IN_RC="1")
-    assert p.returncode == 1 and "prod-record: FAILED: RuntimeError: the server exited 1" in p.stdout
+    assert p.returncode == 1 and "prod-record: FAILED: RuntimeError (the class of its record's error" in p.stdout
     assert "the job's exit is the report's" not in p.stdout
     meta.write_text(kept)
     shutil.rmtree(run_dir / "out/replay-compiled")
@@ -1841,16 +1843,18 @@ def test_the_runner_replays_an_earlier_jobs_pass_and_serves_nothing(tmp_path: Pa
     script, run_dir, earlier = runner(tmp_path), tmp_path / "run", tmp_path / "earlier/out"
     bench_arm(earlier, "prod-record", {"chat@16": [299.0]}, ids="chat@16", argv=("--max-model-len", "262144"))
     argv = ("--client", "vllm-bench", "--model", "glm53", "--replay-of", str(earlier), "--load", "chat=16", "--replay", "chat@16")
-    # the benchmark's runner is given no arms, the pass and ours's directory, copied into this job's out/; where it
-    # leaves no replay (the stand-in replays nothing) the job fails for the replay it asked for
+    # the benchmark's runner is given no arms, the pass and ours's directory where the earlier job left it, whose
+    # records' named fields alone are carried into this job's out/; where it leaves no replay (the stand-in replays
+    # nothing) the job fails for the replay it asked for
     p = bash(script, *argv, run_dir=run_dir)
     s = started(run_dir)
     assert (s["argv"], s["ARMS"], s["CLIENT"], s["MODEL_ID"]) == ("", "unset", "corpus", "glm53"), p.stdout + p.stderr
-    assert (s["REPLAY"], s["REPLAY_FROM"], s["REPLAY_MODES"]) == ("chat@16", str(run_dir / "out/prod-record"), "compiled")
-    assert (run_dir / "out/prod-record/meta.json").read_bytes() == (earlier / "prod-record/meta.json").read_bytes()
+    assert (s["REPLAY"], s["REPLAY_FROM"], s["REPLAY_MODES"]) == ("chat@16", str(earlier / "prod-record"), "compiled")
+    copied = sorted(str(f.relative_to(run_dir / "out/prod-record")) for f in (run_dir / "out/prod-record").rglob("*") if f.is_file())
+    assert copied == sorted(P.carried(earlier / "prod-record")) and "server" not in {f.split("/")[0] for f in copied}
     assert p.returncode == 1 and p.stdout.endswith("FAILED: a replay was asked for and the tokens line is not measured\n")
     # with the replay the runner leaves, the report is of ours alone: the tokens, and no cost
-    replayed(run_dir / "out", "prod-record", load="chat@16", served_under=TOPK_UNDER)
+    shutil.move(replayed(earlier, "prod-record", load="chat@16", served_under=TOPK_UNDER), run_dir / "out/replay-compiled")
     p = bash(script, *argv, run_dir=run_dir)
     assert p.returncode == 0, p.stdout + p.stderr
     assert "prod_repro: load chat; stock not served, stock again not served, ours prod-record; run r-1" in p.stdout
@@ -1951,3 +1955,86 @@ def test_the_runner_stores_a_stage_record_after_the_report_and_refuses_a_stage_i
     r = json.loads((run_dir / "result.json").read_text())
     assert r["kind"] == "serving-cost-capture/v1" and r["workload_fingerprint"]["minify"] == "r20261117-110000-0001"
     assert not (run_dir / "leased").exists()
+
+
+#: what a job's records hold that is none of the public kinds, planted in a stand-in arm's records and logs
+HOST, PATH, REQUEST, ERROR, PROMPT = ("gpu-node-7.internal.example", "/mnt/private-models/ckpt-0042",
+                                      "cmpl-planted-77777-0-deadbeef", "the card behind gpu-node-7 fell over at 3am",
+                                      "Tell me the launch codes, please")
+
+
+def on_the_list(rec: object, spec: object, where: str) -> None:
+    """Every field of ``rec`` is one ``spec`` names (`prod_repro.NAMED`), down to its kinds, each one of verity.channel's
+    public kinds."""
+    if isinstance(spec, str):
+        assert spec in PUBLIC, where
+    elif isinstance(rec, list):
+        for x in rec:
+            on_the_list(x, spec, where)
+    else:
+        assert isinstance(rec, dict) and set(rec) <= set(spec), (where, sorted(set(rec) - set(spec)))
+        for k, v in rec.items():
+            on_the_list(v, spec[k], f"{where}.{k}")
+
+
+def test_the_report_and_a_replayed_jobs_carried_arm_hold_no_private_field(tmp_path: Path, capsys: pytest.CaptureFixture):
+    """A stand-in arm whose records and logs hold a host, a path, a request id, a free-text error and a prompt: none
+    of them is in the bytes the report writes (its two files and what it prints), nor in what a replayed job carries
+    of the arm (`prod_repro.carry`, run.sh --replay-of) or that job's report, and every field carried is on
+    `prod_repro.NAMED` with its kind."""
+    out = job(tmp_path)
+    env = {"VERITY_DSA_TOPK": "canonical", "VERITY_DSA_TOPK_LOG": f"{PATH}/topk", "HOSTNAME": HOST}
+    settings = S.value_settings({"VERITY_DSA_TOPK": "canonical", "VLLM_CACHE_ROOT": PATH, "VLLM_HOST_IP": HOST})
+    meta = json.loads((out / "record/meta.json").read_text())
+    (out / "record/meta.json").write_text(json.dumps(meta | {
+        "host": HOST, "checkpoint": PATH, "error": f"RuntimeError: {ERROR} ({PATH}, {REQUEST})",
+        "server_argv": [*meta["server_argv"], "--download-dir", PATH, "--host", HOST], "env": env, "settings": settings,
+        "requests": [REQUEST], "prompts": [PROMPT],
+        "loads": [x | {"t0_unix": 1000.0, "wall_s": 0.5, "host": HOST, "request": REQUEST} for x in meta["loads"]]}))
+    for f in (out / "record").glob(f"{LOAD}/rep-*/meta.json"):
+        f.write_text(json.dumps(json.loads(f.read_text()) | {"argv": ["--host", HOST, PATH], "prompt": PROMPT,
+                                                              "request_id": REQUEST, "error": ERROR}))
+    (out / "record" / LOAD / "rep-1" / S.RESULT).write_text(json.dumps({
+        "duration": 0.5, "completed": 2, "total_output_tokens": 4, "prompts": [PROMPT], "request_ids": [REQUEST],
+        "errors": [ERROR], "host": HOST}))
+    (out / "record/server/server.log").write_text(
+        f"INFO {HOST} loading {PATH}\nERROR [{REQUEST}] torch.OutOfMemoryError: {ERROR} at {PATH}\n")
+    replayed(out, served_under={"plugins": ["verity_dsa_topk = dsa_topk:register"], "by": "the replay", "env": env},
+             settings=settings)
+    (out / "replay-compiled.log").write_text(f"{PROMPT}\nRuntimeError: {ERROR} on {HOST} ({PATH}, {REQUEST})\n")
+
+    def written(*files: Path) -> str:
+        return capsys.readouterr().out + "".join(f.read_text() for f in files)
+
+    def holds_none(text: str) -> None:
+        assert [x for x in (HOST, PATH, REQUEST, ERROR, PROMPT) if x in text] == []
+
+    P.main(["report", str(out), "--load", LOAD, *ARMS])
+    r = json.loads((out / "prod_repro.json").read_text())
+    holds_none(written(out / "prod_repro.json", out / "prod_repro.txt"))
+    assert r["ran"]["arms"]["record"]["error"] == "RuntimeError"
+    assert r["ran"]["arms"]["record"]["log_error"] == "OutOfMemoryError"
+    under = r["ran"]["replay_engine"]["engine"]["under"]
+    assert under["env"] == {"VERITY_DSA_TOPK": "canonical", "VERITY_DSA_TOPK_LOG": True}
+    on_the_list(under, P.NAMED["served_under"], "served_under")
+    for rec in [r["value_settings"]["replay"], *r["value_settings"]["arms"]["record"].values()]:
+        on_the_list(rec, P.NAMED["settings"], "settings")
+    # a replayed job: the arm is read where the earlier job left it, and only its named fields are carried
+    again = tmp_path / "again" / "out"
+    assert P.main(["carry", str(out / "record"), str(again / "record")]) == 0
+    shutil.move(out / "replay-compiled", again / "replay-compiled")
+    shutil.move(out / "replay-compiled.log", again / "replay-compiled.log")
+    P.main(["report", str(again), "--load", LOAD, "--stock", "", "--again", "", "--ours", "record", "--served-at", str(out)])
+    carried = sorted(f for f in (again / "record").rglob("*") if f.is_file())
+    assert [str(f.relative_to(again / "record")) for f in carried] == sorted(
+        ["meta.json", *(f"{LOAD}/rep-{k}/meta.json" for k in (1, 2, 3)), f"{LOAD}/rep-1/{S.RESULT}"])
+    holds_none(written(again / "prod_repro.json", again / "prod_repro.txt", *carried))
+    for f in carried:
+        key = "meta.json" if f.parent == again / "record" else f"rep-*/{f.name}"
+        on_the_list(json.loads(f.read_text()), P.NAMED[key], str(f.relative_to(again)))
+    assert json.loads((again / "record/meta.json").read_text())["env"] == {"VERITY_DSA_TOPK": "canonical",
+                                                                         "VERITY_DSA_TOPK_LOG": True}
+    assert "tokens: reproduced" in (again / "prod_repro.txt").read_text()
+    # a second carry of the same arm is the same copy; another arm's copy there already is refused
+    assert P.main(["carry", str(out / "record"), str(again / "record")]) == 0
+    assert P.main(["carry", str(out / "compiled"), str(again / "record")]) == 2

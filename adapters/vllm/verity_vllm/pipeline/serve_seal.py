@@ -66,6 +66,7 @@ from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import serve_release as SL
+from verity_vllm.pipeline.serve_guard import GB
 from verity_vllm.pipeline.serve_row import programs_root_of, row_refusal
 
 ROWS = step_rows.NAME
@@ -563,7 +564,6 @@ class _Null:
 
 #: what a committer's `reset` rebinds for its next window: the closed window's per-step state, as its seal reads it
 WINDOW_STATE = ("_layouts", "_gpu_blocks", "_gpu_levels", "_done", "row_keys")
-GB = 10 ** 9
 
 
 def freeze(com: Any) -> Any:
