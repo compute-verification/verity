@@ -105,7 +105,7 @@ static int check(int argc, char** argv) {
   cm.fuse_top = small && fz && !strcmp(fz, "1");
   const char* pz = getenv("COMMIT_GPU_PREFETCH");
   cm.prefetch = pz && !strcmp(pz, "1");
-  cm.salts(dsalts, 0);
+  cm.salts(dsalts, s.size() * salt_slots, 0);
   if (tile) {
     cm.tiles(drows, a, b, (u32)c, seg, 0, slot);
   } else if (mode == "seg") {
@@ -294,7 +294,7 @@ static int bench(int argc, char** argv) {
   Nv nv;
   int dev; cudaDeviceProp prop;
   CK(cudaGetDevice(&dev)); CK(cudaGetDeviceProperties(&prop, dev));
-  for (int w = 0; w < 2; ++w) { cm.salts(salts, sc); commit(sc, -1); }
+  for (int w = 0; w < 2; ++w) { cm.salts(salts, 192 * n, sc); commit(sc, -1); }
   CK(cudaStreamSynchronize(sc));
   CK(cudaGetLastError());
   // the data phase as one CUDA graph (a small commitment is a dozen short kernels, and their launch gaps count): to the
@@ -317,7 +317,7 @@ static int bench(int argc, char** argv) {
   std::vector<double> t_salt, t_all, t_leaf, t_graph, mhz;
   for (int r = 0; r < reps; ++r) {
     CK(cudaEventRecord(e[0], sc));
-    cm.salts(salts, sc);
+    cm.salts(salts, 192 * n, sc);
     CK(cudaEventRecord(e[1], sc));
     leaves(sc);
     CK(cudaEventRecord(e[2], sc));

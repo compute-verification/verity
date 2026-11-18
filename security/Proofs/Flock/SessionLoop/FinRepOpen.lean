@@ -72,7 +72,7 @@ namespace FlockComplete
 open Flock
 
 /-- **A pads commitment from a source holds the source's columns and salts.** -/
-theorem padsTreeCut_cols {hs : Hashes PS} {n : ℕ} {S : RepSrc} {l l' : Array Claims.Msg} {ic : InnerCommit}
+theorem padsTreeCut_cols {hs : Hashes PS} {n : ℕ} {S : RepSrc} {l l' : Array Hash.Msg} {ic : InnerCommit}
     (h : (padsTreeCut hs n S).go l = (.ok ic, l')) :
     ic.ch = (Array.range n).map S.ch ∧ ic.cm = (Array.range n).map S.cm ∧
       ic.salts = (Array.range n).map S.padSalt := by
@@ -88,8 +88,8 @@ theorem padsTreeCut_cols {hs : Hashes PS} {n : ℕ} {S : RepSrc} {l l' : Array C
     exact ⟨rfl, rfl, rfl⟩
 
 /-- `RunPost` at a run whose value is known: it holds at the run's last history. -/
-theorem RunPost.fst {α : Type} {m : TMW PS α} {P : α → Transcript → Array Claims.Msg → Prop} (h : RunPost m P)
-    {s : Transcript} {l : Array Claims.Msg} {a : α} {t : Transcript} (e : ((m.run s).go l).1 = .ok (a, t)) :
+theorem RunPost.fst {α : Type} {m : TMW PS α} {P : α → Transcript → Array Hash.Msg → Prop} (h : RunPost m P)
+    {s : Transcript} {l : Array Hash.Msg} {a : α} {t : Transcript} (e : ((m.run s).go l).1 = .ok (a, t)) :
     P a t ((m.run s).go l).2 :=
   h s l a t _ (Prod.ext e rfl)
 

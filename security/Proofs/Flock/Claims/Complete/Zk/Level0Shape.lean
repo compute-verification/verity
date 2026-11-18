@@ -190,7 +190,7 @@ theorem zkSchedule_lig {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule �
 /-- **A `Total.H` walk, read off a run**: a computation that returns from every state `pre` holds at, with `post`,
 has `post` at whatever it returned. -/
 theorem H_run {α : Type} {y : LP PS α} {pre : LigState → Prop} {post : α → LigState → Prop}
-    (hy : totT.H y pre post) {st : LigState} (hp : pre st) {t t' : Transcript} {l l' : Array Claims.Msg} {a : α}
+    (hy : totT.H y pre post) {st : LigState} (hp : pre st) {t t' : Transcript} {l l' : Array Hash.Msg} {a : α}
     {st' : LigState} (h : ((y.run st).run t).go l = (.ok ((a, st'), t'), l')) : post a st' := by
   obtain ⟨p, l₁, e, hq⟩ := hy st hp t l
   rw [show ((y.run st).run t) = y st t from rfl, e] at h
@@ -202,7 +202,7 @@ open ZkTables.Level0 in
 /-- **The masked Ligerito prover's proof has its lengths**: a masked Ligerito prover that returns, at a schedule the
 walk follows, on a level-0 commitment of rows `2^lanes + EXTRA_LANES` wide and a table of `2^n` entries, has
 `LgShaped`'s lengths and `t_pad` padding coefficients. -/
-theorem ligeritoPZk_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) {sh : Shape} {ms : MerkleScheme}
+theorem ligeritoPZk_shape (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) {sh : Shape} {ms : MerkleScheme}
     (hn : ∀ l r v, (ms.opsWith (Hashes.ofSha512 h : Hashes V)).node l r = .ok v → v.size = sh.hashLen)
     (hlf : ∀ row salt v, (ms.opsWith (Hashes.ofSha512 h : Hashes V)).leaf row salt = .ok v → v.size = sh.hashLen)
     (hsl : (sh.saltLen = none ∧ ms.saltBytes = 0) ∨ sh.saltLen = some ms.saltBytes) {sch : Schedule}
@@ -210,7 +210,7 @@ theorem ligeritoPZk_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArr
     (hc0 : CommitOkW sh.hashLen ms.saltBytes (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES)
       (sch.levels.getD 0 default) cm0) {tb : Array F128} (ht : tb.size = 2 ^ sch.n) (b : Array F128)
     (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128)
-    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {t t' : Transcript} {l l' : Array Claims.Msg}
+    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {t t' : Transcript} {l l' : Array Hash.Msg}
     {P : LigeritoProof} {zl : Zk.Level0Msgs} {rc : Zk.L0Rec}
     (hrun : ((ligeritoPZk (asksS resp) (Hashes.ofSha512 h) ms sch T cm0 tb b lay hv rep tPad extra lanePad salt
       nonce).run t).go l = (.ok ((P, zl, rc), t'), l')) :
@@ -252,7 +252,7 @@ theorem ligeritoPZk_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArr
   have h1 := lget_bind h1
   obtain ⟨_, h1⟩ := lsendMsg_bind _ h1
   obtain ⟨sL, stC, tC, lC, hLoop, h1⟩ := lp_bind_ok h1
-  have hI := lforIn_invS _ (fun j (s : Array F256 × (F256 × F256) × Zk.Level0Msgs) st (_ : Array Claims.Msg) =>
+  have hI := lforIn_invS _ (fun j (s : Array F256 × (F256 × F256) × Zk.Level0Msgs) st (_ : Array Hash.Msg) =>
       meas st = ⟨j + 1, 0, 0, 1, 1, if j < sch.k0 then 2 ^ (sch.n - j) else 2 ^ (sch.n - sch.k0 + 1), true⟩ ∧
         (j = sch.k0 → s.2.2.ybar.size = tPad)) sch.k0 ?step ?init hLoop
   case init =>

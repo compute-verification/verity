@@ -15,7 +15,7 @@ The proofs of `JointSampledV5`, `JointShareV5` and `JointPooledV5` (`Joint/V5/St
   its part (`forall₂_getElem?`), so a union over the members (`ZkSession.prob_exists_le`) of
   `JointAuditV5.member_accepted_sampledIncorrect_le` bounds it;
 * `JointAuditV5.sampleMiss_le`: the sample misses a set `B` with probability at most the sampling design's own miss `P_a(B)`, under
-  A3 (`Bridge.execSel_escape_le`);
+  A3 (`Bridge.execSel_missProb_le`);
 * `Flock.SecurityProofs.JointSampledV5`: an accepted run with every proof block of `W` incorrect either has a sampled
   proof block incorrect or its sample misses `W`;
 * `Flock.SecurityProofs.JointShareV5`: `JointSampledV5` at the window's incorrect proof blocks, whose `P_a` is at most
@@ -139,7 +139,7 @@ theorem prob_sampleMiss (B : Finset (Fin w.nJ)) (τ : Strategy w.game) :
 theorem sampleMiss_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (B : Finset (Fin w.nJ)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ ENNReal.ofReal (w.pa B) := by
   rw [prob_sampleMiss]
-  exact Bridge.execSel_escape_le w.src hA3 w.hlaw w.hns B
+  exact Bridge.execSel_missProb_le w.src hA3 w.hlaw w.hns B
 
 end JointAuditV5
 

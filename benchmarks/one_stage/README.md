@@ -8,7 +8,7 @@ Its sampled sessions are SPOT[Flock]'s on its own, in its three roles: serving c
 each sampled session's prover runs `flock-circuit prove --zk` itself (the proof server: `a0.DIRECT`, `zk_cost.py`'s `dev` arm, which
 Figure 1 prices); and the challenger's live coins, its signed log and the Lean verifier decide (the verifier). There is no ZK
 server and no recursion on that path. The core protocols' path, every prover behind the Lean ZK server's send check, is
-`--zk-server` on SPOT's window audit (`a5.py`), its variants here and `prove_bundle.py`, and `ZK_SERVER=1` on their shell entry points. The network
+`--zk-server` on SPOT's window audit (`a5.py`), its variants here, and `ZK_SERVER=1` on their shell entry points. The network
 attester, where a run has one (`a5_network_attester.py`), is a layer of its own, whose signed stamp SPOT[Flock] reads as a certified
 input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/README.md`.
 
@@ -421,8 +421,8 @@ cp -r $WORK/out-flock $WORK/out-zk $WORK/out-sampling . && rm -rf "$WORK"
 `gpu-lease 1 --wait --on $A5_CARD --cores $A5_CORES --` in place of `taskset -c $A5_CORES`. The script leases `A5_CARD`
 for its Match capture and its Commit, and every lease it takes names `A5_CORES`, without which it refuses before any
 build; with no `gpu-lease` it takes that card directly. `gpu-lease status` shows each lease under `GPU_LEASE_WHO`;
-unset, the script records its leases as `vllm-sha512`. Unless `CUDA_HOME` is set, the script takes the first of
-`/usr/local/cuda-12.9`, `/usr/local/cuda-12`, `/usr/local/cuda-13.0` and `/usr/local/cuda` that has `nvcc`. Where that
+unset, the script records its leases as `vllm-sha512`. Unless `CUDA_HOME` is set, the script takes the machine's toolkit
+at 12.9, else at 13.0, else its default (`benchmarks/kernels/machine.py toolkit`). Where that
 toolkit lacks the CUDA math libraries' headers, it takes them from the venv's NVIDIA wheels, as the bootstrap's norm and
 router tap builds do. Each run's record is its `OUT`, which the printer reads as a directory, as it reads a
 `research run`'s id. The three `OUT` directories are inside `WORK`, so the last line copies them to the current

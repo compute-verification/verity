@@ -42,7 +42,7 @@ proof's recursive caps, and each level-`ℓ ≥ 1` opening `(q, v)` is a row `v`
 flattened `ℓ − 1`-th of them, a cap of `2^cap` 64-byte digests, in the run's log: the live outcome is the run's
 (`plainSimRun`), the opening one of the run's level-`ℓ` rows (`rawLevelCols_plain`), an `Opening` there
 (`plain_levelOpening`). -/
-theorem plain_liveOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_liveOpening {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) {u : plainTape x}
@@ -179,7 +179,7 @@ reps' caps and later entries (`hE`, as `plain_laterEntriesAt` and `plain_laterEn
 run's proof's `ℓ`-th recursive cap, so one cap of 64-byte digests (`capDig_inj`), and open one position of it to two
 different rows, each an `Opening` against that cap in its run's log (`plain_liveOpening`), which collide in the joined
 logs (`tiedColl_of_openings`). -/
-theorem plainForkQ_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plainForkQ_of {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
@@ -214,7 +214,7 @@ theorem plainForkQ_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false
 
 /-- **The live fork event's collision holds at every statement**: `plainForkQ_of` at `plain_laterEntriesAt` and
 `plain_laterEntriesHAt`. -/
-theorem plainForkClash (x : Claims.Msg) : PlainForkClash x := by
+theorem plainForkClash (x : Hash.Msg) : PlainForkClash x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω
   exact ⟨fun hh => plainForkQ_of hs hin hset h hd _ _ _
       (plain_laterEntriesAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω,
@@ -224,7 +224,7 @@ theorem plainForkClash (x : Claims.Msg) : PlainForkClash x := by
 /-! ## At `VK keep` -/
 
 /-- `plain_liveOpening` at `VK keep`. -/
-theorem plain_liveOpeningK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_liveOpeningK (keep : Bool → Bool) {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) {u : plainTape x}
@@ -311,7 +311,7 @@ theorem plain_liveOpeningK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.F
   exact ⟨row, hrow, hcs, hcw, hop⟩
 
 /-- `plainForkQ_of` at `VK keep`. -/
-theorem plainForkQ_ofK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plainForkQ_ofK (keep : Bool → Bool) {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
@@ -345,7 +345,7 @@ theorem plainForkQ_ofK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock
   exact tiedColl_of_openings ho₁ ho₂ fun he => hne (by rw [hrow₁, hrow₂, he])
 
 /-- `plainForkClash` at `VK keep`. -/
-theorem plainForkClashK (keep : Bool → Bool) (x : Claims.Msg) : PlainForkClashK keep x := by
+theorem plainForkClashK (keep : Bool → Bool) (x : Hash.Msg) : PlainForkClashK keep x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω
   exact ⟨fun hh => plainForkQ_ofK keep hs hin hset h hd _ _ _
       (plain_laterEntriesAtK keep hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω,

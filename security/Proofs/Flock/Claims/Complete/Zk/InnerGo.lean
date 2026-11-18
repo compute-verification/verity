@@ -71,7 +71,7 @@ structure Challenges where
   cb : ℕ → F128
   cq : ℕ → F128
 
-def coinsAt (resp : ℕ → Claims.Msg) (L : ℕ) : Challenges :=
+def coinsAt (resp : ℕ → Hash.Msg) (L : ℕ) : Challenges :=
   ⟨coinOf (resp L), coinOf (resp (L + 1)), coinOf (resp (L + 2)), coinOf (resp (L + 3))⟩
 
 variable (lay : Zk.PadLayout) (p : PadsZk) (finalC : F128) (cons : Array (String × Zk.Lin)) (h : ByteArray → ByteArray)
@@ -135,8 +135,8 @@ theorem tauCommitmentWith_ofSha512 (h : ByteArray → ByteArray) (tau : F128) (s
 
 /-- **The masked prover's inner proof, in closed form**, at the coins of the replies to its sends, where the batched
 constraint holds on the pads and `β ≠ 0`. -/
-theorem innerP_go (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
-    (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) (t : Transcript) (l : Array Claims.Msg)
+theorem innerP_go (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
+    (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) (t : Transcript) (l : Array Hash.Msg)
     (hz : ((InZ.lin lay p cons (InZ.coinsAt resp l.size)).c +
       dot (InZ.lin lay p cons (InZ.coinsAt resp l.size)).a p.h).isZero = true)
     (hb : (coinOf (resp (l.size + 2)) 0).isZero = false) :
@@ -167,9 +167,9 @@ theorem innerP_go (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay
 /-- **At a rep's pads, the masked prover's inner proof refuses only at `β = 0`**: where the rep's constraints vanish at
 its pads (`ConsHold`), the batched constraint holds at every sacrifice and batching coin (`innerP_batched`), so `innerP`
 returns in closed form at every reply but one whose `β` is `0`. -/
-theorem innerP_go_pads (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (tape : TapeZk)
+theorem innerP_go_pads (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (tape : TapeZk)
     (i r : ℕ) (ic : InnerCommit) (finalC : F128) {cons : Array (String × Zk.Lin)}
-    (hc : ConsHold cons (padsOf tape i r lay).h) (t : Transcript) (l : Array Claims.Msg)
+    (hc : ConsHold cons (padsOf tape i r lay).h) (t : Transcript) (l : Array Hash.Msg)
     (hb : (coinOf (resp (l.size + 2)) 0).isZero = false) :
     ∃ l', l'.size = l.size + 4 ∧
       ((innerP (asksS resp) (Hashes.ofSha512 h) lay (padsOf tape i r lay) ic finalC cons).run t).go l =

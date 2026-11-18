@@ -217,7 +217,7 @@ theorem fitOf_run_stage (A : Live₂) (Ls : CoinMap.Locate) (tab : ℕ → Strin
 /-- **The coin map's agreement at the run's locator is its agreement at the stages', at the stages' rounds**: where
 the run's coins have the elements the releases the run's locator puts on each read round carry, they have those the
 stages' locator's releases carry, at each read round at most the second stage's last. -/
-theorem elemAgrees_run_stage (A : Live₂) (x : Claims.Msg) (Ls : CoinMap.Locate) (tab : ℕ → String)
+theorem elemAgrees_run_stage (A : Live₂) (x : Hash.Msg) (Ls : CoinMap.Locate) (tab : ℕ → String)
     (hLs : ∀ pre i s c b, Ls pre (.opening i s c) b = none) (reads : ℕ → Prop) {o : Exchange} {r : Coins A x}
     (h : CoinMap.ElemAgrees (runLocate A Ls tab) A x reads o r) :
     CoinMap.ElemAgrees Ls A x (fun i => reads i ∧ i ≤ A.h.stage) o r := by
@@ -274,7 +274,7 @@ theorem fitOf_eq_usedOf (L : CoinMap.Locate) (n : ℕ) :
 /-- **`DevElems` from the coin map's agreement**: at a locator that agrees with the session-round locator at the
 sessions' rounds, reading every round the run's verifier reads, where the releases on each session's round fit in one
 coin. -/
-theorem devElems_of (A : Live₂) (x : Claims.Msg) (tab : ℕ → String) (L : CoinMap.Locate) (reads : ℕ → Prop)
+theorem devElems_of (A : Live₂) (x : Hash.Msg) (tab : ℕ → String) (L : CoinMap.Locate) (reads : ℕ → Prop)
     (Acc Good : Exchange → Prop) (hL : LocatesSessions A tab (CoinMap.locAt L))
     (hreads : ∀ i, readsAt A.h i → reads i) (hfit : SessionsFit A tab Acc Good) :
     DevElems A x (locOf A tab) (CoinMap.dev L) Acc Good (CoinMap.ElemAgrees L A x reads) := by
@@ -301,7 +301,7 @@ theorem coinsAgree_run (A : Live₂) (C : CaseOf) (Ms : SessionReading) (tab : �
 /-- **The sessions' releases agree with the run's coins, at the coin map's release and its agreement**
 (`SessionsAgree`, as `devAgrees_formReading` takes it): at the run's locator over any stages' locator and the coin
 map's agreement there on the rounds the run's verifier reads, from `InteriorLogged` and `HeldSize`. -/
-theorem sessionsAgree_run (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
+theorem sessionsAgree_run (A : Live₂) (x : Hash.Msg) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
     (Ls : CoinMap.Locate) (Good : Exchange → Prop) (hsz : HeldSize) (hlog : InteriorLogged C Good) :
     SessionsAgree A x (withCoins A C tab (CoinMap.dev (runLocate A Ls tab)) Ms) (CoinMap.dev (runLocate A Ls tab))
       (FormAccepts C) Good (CoinMap.ElemAgrees (runLocate A Ls tab) A x (readsAt A.h)) :=

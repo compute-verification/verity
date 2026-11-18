@@ -69,8 +69,8 @@ def tw (s : LigState) : TW := (s.tab, s.w)
 lists end up `p`'s first and whose value has `Xb`, from the model's cursors `c` and transcript `tm`. -/
 def JRuns (p : LigeritoProof) (L : ℕ) {β : Type} (y : LP PS β) (c : Cur) (tm : Transcript) (Xb : β → Prop)
     (J : TW → Prop) (J' : β → TW → Prop) : Prop :=
-  ∀ (st : LigState) (t : Transcript) (l : Array Claims.Msg) (b : β) (st' : LigState) (t' : Transcript)
-    (l' : Array Claims.Msg), l.size = L + t.k → ((y.run st).run t).go l = (.ok ((b, st'), t'), l') →
+  ∀ (st : LigState) (t : Transcript) (l : Array Hash.Msg) (b : β) (st' : LigState) (t' : Transcript)
+    (l' : Array Hash.Msg), l.size = L + t.k → ((y.run st).run t).go l = (.ok ((b, st'), t'), l') →
     Ext p st' → Xb b → pcur st = c → t = tm → J (tw st) → J' b (tw st')
 
 /-- **The prover's step on the model's, with its table and weight** (`PRuns` and `JRuns`). -/
@@ -220,7 +220,7 @@ theorem HRuns.absorbAll (ws wsM : Array F128) (c : Cur) (tm : Transcript) (J : T
         Pure.pure (ForInStep.yield PUnit.unit))
       c tm c (ap (fun P => wsM.foldl (fun P w => pF w P) P) tm) (fun _ => True) (fun _ => ws = wsM) J fun _ => J := by
   refine ⟨PRuns.absorbAll ws wsM c tm, ?_⟩
-  have key : ∀ (xs : List F128) (st : LigState) (t : Transcript) (l : Array Claims.Msg),
+  have key : ∀ (xs : List F128) (st : LigState) (t : Transcript) (l : Array Hash.Msg),
       (((ForIn.forIn xs PUnit.unit fun w (_ : PUnit) => do
         liftT (liftTM (Transcript.absorbF w))
         Pure.pure (ForInStep.yield PUnit.unit) : LP PS PUnit).run st).run t).go l =
@@ -315,7 +315,7 @@ theorem HRuns.powB (nonce : ℕ → ℕ → UInt64) (c : Cur) (tm : Transcript) 
   exact hJ
 
 /-- **A vector of coins**: the model's, at its transcript's position. -/
-theorem HRuns.sampleVec (resp : ℕ → Claims.Msg) {n : ℕ} (hn : n ≠ 0) (c : Cur) (tm : Transcript) (J : TW → Prop) :
+theorem HRuns.sampleVec (resp : ℕ → Hash.Msg) {n : ℕ} (hn : n ≠ 0) (c : Cur) (tm : Transcript) (J : TW → Prop) :
     HRuns p L (liftT (sampleVecP (asksS resp) n)) c tm c (afterSq tm 2 n (cfOf resp L tm.k)) (fun _ => True)
       (fun _ => True) J fun z y => J y ∧ z = vec (cfOf resp L) tm n := by
   refine ⟨PRuns.sampleVec resp hn c tm, ?_⟩
@@ -327,7 +327,7 @@ theorem HRuns.sampleVec (resp : ℕ → Claims.Msg) {n : ℕ} (hn : n ≠ 0) (c 
   rw [hl]
   rfl
 
-theorem HRuns.sample (resp : ℕ → Claims.Msg) (c : Cur) (tm : Transcript) (J : TW → Prop) :
+theorem HRuns.sample (resp : ℕ → Hash.Msg) (c : Cur) (tm : Transcript) (J : TW → Prop) :
     HRuns p L (liftT (sampleP (asksS resp))) c tm c (afterSq tm 1 1 (cfOf resp L tm.k)) (fun _ => True)
       (fun _ => True) J fun v y => J y ∧ v = cfOf resp L tm.k 0 := by
   refine ⟨PRuns.sample resp c tm, ?_⟩
@@ -339,7 +339,7 @@ theorem HRuns.sample (resp : ℕ → Claims.Msg) (c : Cur) (tm : Transcript) (J 
   rw [hl]
   rfl
 
-theorem HRuns.sampleK (resp : ℕ → Claims.Msg) (c : Cur) (tm : Transcript) (J : TW → Prop) :
+theorem HRuns.sampleK (resp : ℕ → Hash.Msg) (c : Cur) (tm : Transcript) (J : TW → Prop) :
     HRuns p L (liftT (sampleKP (asksS resp))) c tm c (afterSq tm 2 2 (cfOf resp L tm.k)) (fun _ => True)
       (fun _ => True) J fun r y => J y ∧ r = ⟨cfOf resp L tm.k 0, cfOf resp L tm.k 1⟩ := by
   refine ⟨PRuns.sampleK resp c tm, ?_⟩
@@ -400,7 +400,7 @@ theorem HRuns.splitJoin (split : Bool) {k : PUnit → LP PS β} {c c' : Cur} {tm
 
 /-- **A challenge**, against the model's (`chal`): the table and weight fold at the model's coin, split when asked, and
 the message is their round polynomial. -/
-theorem HRuns.challenge (resp : ℕ → Claims.Msg) (split : Bool) (sm : LState) (tm : Transcript) (J : TW → Prop) :
+theorem HRuns.challenge (resp : ℕ → Hash.Msg) (split : Bool) (sm : LState) (tm : Transcript) (J : TW → Prop) :
     HRuns p L (challengeP (asksS resp) split) (cur sm) tm (cur (chal p (cfOf resp L) sm tm).2.1)
       (chal p (cfOf resp L) sm tm).2.2 (fun _ => True) (fun _ => True) J fun r y =>
         r = (chal p (cfOf resp L) sm tm).1 ∧ (∃ x, J x ∧ y = if split then splitTW (foldTW r x) else foldTW r x) ∧
@@ -417,7 +417,7 @@ theorem HRuns.challenge (resp : ℕ → Claims.Msg) (split : Bool) (sm : LState)
 
 /-- **An out-of-domain intro**, against the model's (`ood`): the weight gains `β·eq(z, ·)` at the model's point and
 coin, the value read is `mleF g z`, and the message is the claim's round polynomial. -/
-theorem HRuns.oodIntro (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : ℕ} (hdim : dim ≠ 0)
+theorem HRuns.oodIntro (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : ℕ} (hdim : dim ≠ 0)
     (split : ℕ) (sm : LState) (tm : Transcript) (J : TW → Prop) :
     HRuns p L (oodIntroP (asksS resp) nonce g dim) (cur sm) tm (cur (ood p (cfOf resp L) dim split sm tm).1)
       (ood p (cfOf resp L) dim split sm tm).2 (fun _ => True) (fun _ => True) J fun _ y => ∃ x, J x ∧
@@ -434,7 +434,7 @@ theorem HRuns.oodIntro (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt
 
 /-- **A level's query**, against the model's (`query`): the opening at the model's positions, and the consistency
 weight at its positions and coins. -/
-theorem HRuns.query (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit)
+theorem HRuns.query (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit)
     (hq : lv.q ≠ 0) (rows : Array (Array F128)) (fold : Array F256) (sm : LState) (tm : Transcript) (J : TW → Prop) :
     HRuns p L (queryP (asksS resp) nonce ms lv cm) (cur sm) tm (cur (Lg.query p (cfOf resp L) lv rows fold sm tm).2.1)
       (Lg.query p (cfOf resp L) lv rows fold sm tm).2.2 (fun _ => True) (fun _ => True) J fun r y => J y ∧

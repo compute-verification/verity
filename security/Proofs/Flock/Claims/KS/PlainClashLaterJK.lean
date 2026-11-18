@@ -492,7 +492,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **The deployed plain decoders' later entries at `plainTab`, at the sample**: `laterEntries_wrK_ofJ` at the
 statement's sample `d` and no sampled proof block, as `plain_clash₀AtK_ofJ` is `clash₀_wrK_ofJ` there. -/
 theorem plain_laterEntriesAtK_ofJ (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = false) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
@@ -536,7 +536,7 @@ theorem plain_laterEntriesAtK_ofJ (keep : Bool → Bool)
 /-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at hidden outputs under a leaf form
 `F`**: `laterEntries_wrKHLf_ofJ` at the statement's sample `d` and no sampled proof block. -/
 theorem plain_laterEntriesHLfAtK_ofJ (keep : Bool → Bool) (F : AtSample.LeafFormJ)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = F.tag) {d : Json}
@@ -581,7 +581,7 @@ theorem plain_laterEntriesHLfAtK_ofJ (keep : Bool → Bool) (F : AtSample.LeafFo
 /-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at hidden outputs under hm96 leaves**:
 `laterEntries_wrKH_ofJ` at the statement's sample `d` and no sampled proof block; `plain_laterEntriesHLfAtK_ofJ` at `hm96`. -/
 theorem plain_laterEntriesHAtK_ofJ (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json}
@@ -695,7 +695,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at `wrPDJK keep`**:
 `plain_laterEntriesAtK_ofJ` at what `wrPDJK keep` writes for `o` (`plain_laterEntriesAt`). -/
 theorem plain_laterEntriesAtJK (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = false) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
@@ -716,7 +716,7 @@ theorem plain_laterEntriesAtJK (keep : Bool → Bool)
 /-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the sample, at `wrPDJK keep`**:
 `laterEntriesClashK_ofJ` at `plain_laterEntriesAtJK`. -/
 theorem plain_laterClashAtJK (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = false) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
@@ -737,7 +737,7 @@ theorem plain_laterClashAtJK (keep : Bool → Bool)
 /-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at hidden outputs under hm96 leaves, at
 `wrPDJK keep`**: `plain_laterEntriesHAtK_ofJ` at what `wrPDJK keep` writes for `o` (`plain_laterEntriesHAt`). -/
 theorem plain_laterEntriesHAtJK (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json}
@@ -759,7 +759,7 @@ theorem plain_laterEntriesHAtJK (keep : Bool → Bool)
 /-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the sample, at hidden outputs under hm96
 leaves, at `wrPDJK keep`**: `laterEntriesClashK_ofJ` at `plain_laterEntriesHAtJK`. -/
 theorem plain_laterClashHAtJK (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json}

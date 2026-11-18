@@ -497,7 +497,7 @@ def private_root(directory: Path, *public: Path | None) -> Path:
     d = Path(directory).resolve()
     for p in public:
         if p is not None and d.is_relative_to(Path(p).resolve()):
-            raise ValueError(f"the history tables' private directory {d} is inside {p}, which leaves the node: put it "
+            raise ValueError(f"the private directory {d} is inside {p}, which leaves the node: put it "
                              f"outside every run directory")
     return d
 

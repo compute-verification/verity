@@ -45,7 +45,7 @@ from verity_vllm.records import workload as workload_record
 __all__ = [
     "CARD_FILES", "CHECKPOINTS", "DEFAULT_ROW_PROTOCOLS", "DTYPES", "MANIFESTS", "RECORDS", "ROOT", "VLLM",
     "WORKLOADS", "WORKLOAD_SCHEMA", "BuildConfig", "CommitConfig", "card_arch", "cuda_arch", "EnginePin", "MatchConfig", "RowConfig", "RowEngine",
-    "RowId", "RunEnv", "UsageError", "checkpoint_dir", "checkpoint_entries", "checkpoints_hf_home", "done_source_refusal",
+    "RowId", "RunEnv", "UsageError", "CONTENT", "checkpoint_digest", "checkpoint_dir", "checkpoint_entries", "checkpoints_hf_home", "done_source_refusal",
     "group", "option", "parse_protocols", "row_batch", "row_execution", "row_file", "row_path", "row_target", "row_tokens",
     "row_world", "rows_of_record", "run_store", "target_card", "target_cc", "target_num_sms", "target_tokens", "vllm_revision", "workload_arg", "workload_file", "workload_files",
 ]
@@ -288,9 +288,36 @@ def parse_protocols(value: str | Mapping[str, str] | Any | None) -> tuple[str, .
     return tuple(f"{n}:{got[n]}" for n in PROTOCOLS if n in got)
 
 
-#: pins kept beside a checkpoint manifest in `<stem>-<name>.json`, same schema and append-only too (the int8 recipe pins: the
-#: manifest itself sits at the repository's 256 KiB file cap); `checkpoint_entries` reads them after the manifest's own pins
-SIBLING_MANIFESTS = ("int8",)
+#: pins kept beside a checkpoint manifest in `<stem>-<name>.json`, same schema and append-only too (the int8 recipe pins, and
+#: the node-local checkpoints bound by their content: the manifest itself sits at the repository's 256 KiB file cap);
+#: `checkpoint_entries` reads them after the manifest's own pins
+SIBLING_MANIFESTS = ("int8", "local")
+#: the revision prefix of a node-local checkpoint's pin, whose ``repo`` and ``local_path`` are its directory and whose
+#: revision is this prefix and its `checkpoint_digest`
+CONTENT = "sha256:"
+
+
+def checkpoint_files(root: Path) -> list[Path]:
+    """The files that bind a node-local checkpoint: all but a Hub snapshot's repository metadata (dot-files such as
+    ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add."""
+    return sorted(p for p in root.iterdir() if p.is_file() and not p.name.startswith(".") and p.suffix != ".md")
+
+
+def checkpoint_digest(root: str | Path) -> str:
+    """SHA-256 over each of `checkpoint_files`' name, size and SHA-256, in order: what a node-local pin's revision binds."""
+    files = checkpoint_files(Path(root))
+    if not files:
+        raise ValueError(f"checkpoint {root} has no files")
+    digest = hashlib.sha256()
+    for file in files:
+        name = file.name.encode()
+        digest.update(len(name).to_bytes(4, "big") + name + file.stat().st_size.to_bytes(8, "big"))
+        content = hashlib.sha256()
+        with file.open("rb") as stream:
+            while chunk := stream.read(8 << 20):
+                content.update(chunk)
+        digest.update(content.digest())
+    return digest.hexdigest()
 
 
 def sibling_manifests(checkpoints: str | Path = CHECKPOINTS) -> list[Path]:
@@ -310,7 +337,8 @@ def checkpoint_entries(checkpoints: str | Path = CHECKPOINTS) -> list[dict[str, 
 class EnginePin:
     """The pinned engine a row or :class:`verity_vllm.LLM` runs.
 
-    ``model`` is the HF repo id and ``revision`` its full commit sha, both as ``manifests/checkpoints.json`` pins them;
+    ``model`` is the HF repo id and ``revision`` its full commit sha, both as ``manifests/checkpoints.json`` pins them
+    (a node-local checkpoint: its directory and `CONTENT` with its `checkpoint_digest`);
     ``case`` is the pin's role (the engine profile's key) and ``local_path`` the snapshot on this host.  ``world`` is the
     tensor-parallel degree.  Build it with :meth:`resolve`, which refuses an unpinned model or another revision.
     """
@@ -765,7 +793,7 @@ class CommitConfig:
                                                   "salts in the salt file beside it; needs SERVING_ROWS")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
                                          help="the PoUB session's verifier: the Commit proves its store to it in lockstep "
-                                              "with its first instrumented run (verity_vllm.protocols.poub.remote; single-GPU rows)")
+                                              "with its first instrumented run (verity.protocols.resource_accounting.memory.poub.prover.commit_session; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")

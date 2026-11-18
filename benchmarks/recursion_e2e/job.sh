@@ -30,7 +30,9 @@
 #      session, so WARM=0 RUNS=1, and each CPU step once, REPEAT=1, unless set)  RELEASE_WINDOWS_S= (85's)
 #      RELEASE_BUDGET= (85's: the stream's failure budget, at least 1, which RELEASE=1 needs)
 #      and any of 85's own (LEVELS, GPU, PCPUS, GPU_PREEMPTIBLE, ...), passed through
-#      CUDA_TK, WARM_FROM: as 85 takes them (default: the rec-reprice unpack and cargo tree where present, read only)
+#      CUDA_TK, WARM_FROM: as 85 takes them (default: the machine's toolkit at 13.3, else 85's own unpack; the rec-reprice
+#      cargo tree where present, read only)
+#      SM= (85's GPU build target; default: the run's machine's card's, benchmarks/kernels/machine.py arch)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 # RELEASE=1: one inner session opens the one recursive session, and every step inside its first window runs once
@@ -55,6 +57,9 @@ MODES=${MODES:-zk_server}; NEG=${NEG-challenge,query}; NEG=${NEG//,/ }
 export OPROVE_JOBS=${OPROVE_JOBS:-1}
 home=$HOME; [ -w "$HOME" ] || home=$FLOCK_WORK/home
 refused=0; refuse() { echo "job.sh: $1" >&2; refused=1; }
+# 85 builds its GPU prover for SM, the compute capability of the run's machine's card (its record's arch), unless given
+[ -n "${SM:-}" ] || [ "${GPU:-1}" = 0 -a "$OPROVE_GPU" = 0 ] || { a=$(python3 benchmarks/kernels/machine.py arch) && export SM=${a//[!0-9]/}; } \
+  || refuse "a GPU step builds for SM, which the kit reads from the run's machine's card: give SM, or run where its card is read"
 /usr/bin/time -v true > /dev/null 2>&1 || refuse "no GNU time at /usr/bin/time, which times every step: apt-get install time"
 command -v cargo > /dev/null || [ -x "$home/.cargo/bin/cargo" ] || refuse "no cargo, which builds the prover: curl -sSf https://sh.rustup.rs | sh -s -- -y"
 command -v lake > /dev/null || [ -x "$home/.elan/bin/lake" ] || command -v curl > /dev/null \
@@ -71,7 +76,7 @@ PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --own
 # 85 moves HOME where it can't write; its Lean builds (the Lean verifier, the ZK server's Lean session loop) must find the same elan
 [ -w "$HOME" ] || { export HOME=$FLOCK_WORK/home; mkdir -p "$HOME"; }
 RR=/workspace/jobs/rec-reprice
-[ -z "${CUDA_TK:-}" ] && [ -x $RR/cuda-13.3.1/bin/nvcc ] && export CUDA_TK=$RR/cuda-13.3.1
+[ -z "${CUDA_TK:-}" ] && CUDA_TK=$(python3 benchmarks/kernels/machine.py toolkit 13.3 2> /dev/null) && export CUDA_TK
 [ -z "${WARM_FROM:-}" ] && [ -d $RR/flock-gpu-link/flock ] && export WARM_FROM=$RR/flock-gpu-link
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 REC=verity/protocols/proofs/flock/prover/pod/85-rec-reprice.sh
@@ -81,7 +86,7 @@ LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key veri
   echo "OPROVE_WARM=${OPROVE_WARM:-0} OPROVE_RUNS=${OPROVE_RUNS:-1} GPU_MAX_MIN=$GPU_MAX_MIN GPU=${GPU:-1} OPROVE_GPU=$OPROVE_GPU OPROVE_JOBS=$OPROVE_JOBS" \
     $(for v in $(compgen -v REPEAT_); do echo "$v=${!v}"; done)
   echo "steps=$STEPS modes=$MODES lean_jobs=${LEAN_JOBS:-4} lean_sources=$LSHA neg=${NEG// /+} forge=${FORGE//,/+} rec_links=${REC_LINKS:-0}"
-  echo "cuda_tk=${CUDA_TK:-} warm_from=${WARM_FROM:-} tree_from=${TREE_FROM:-test-os} parameters=development release=${RELEASE:-0}" \
+  echo "cuda_tk=${CUDA_TK:-} sm=${SM:-} warm_from=${WARM_FROM:-} tree_from=${TREE_FROM:-test-os} parameters=development release=${RELEASE:-0}" \
     "release_windows_s=${RELEASE_WINDOWS_S:-} release_budget=${RELEASE_BUDGET:-}"; nproc; nvidia-smi -L 2>/dev/null; } > "$O/params.txt"
 
 # timed NAME I CMD...: CMD under $O/steps/NAME/r<I> (its RESEARCH_RUN_DIR) and /usr/bin/time -v; its exit status

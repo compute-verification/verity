@@ -71,12 +71,12 @@ open FlockSoundness.Discharge.Recursion (HClass)
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128)
 
 /-- **Table `i`'s reps run at the decision**, from rows G, B, C, D, R and E as proved, at the hypotheses they still
 take: B's frames, row L, D's pieces and their ties, R's structure, sizes and residuals, and E's unit sums and ends. -/
-theorem runs_assembled {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem runs_assembled {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st
@@ -88,8 +88,8 @@ theorem runs_assembled {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStateme
     (hsh : ∀ r : Fin 2,
       ProofShaped (shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) (2 * i + r)) (D.d.f.ps[2 * i + r]'(hk r)))
     (hL : ∀ r, D.RowL cls acc i r)
-    (pieces : List OpenPiece) (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide)
-    (posAt : Claims.Msg → List Coin → OpenPiece → ℕ)
+    (pieces : List OpenPiece) (sideAt : Hash.Msg → List Hash.Msg → OpenPiece → OpenSide)
+    (posAt : Hash.Msg → List Coin → OpenPiece → ℕ)
     (hholds : ∀ q ∈ pieces, openHolds sideAt posAt q x ms cs)
     (hside : ∀ r : Fin 2, ∀ q ∈ pieces, q.table = i → q.rep = r.val → sideAt x ms q = D.side cls i r)
     (hpos : ∀ r : Fin 2, ∀ v info kappa,

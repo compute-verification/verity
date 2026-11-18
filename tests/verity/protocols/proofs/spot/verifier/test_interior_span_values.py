@@ -13,6 +13,7 @@ import pytest
 from verity.circuits.types import Array, Value
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R
+from verity.commitments import registered_value as RV
 
 from test_service import PAIR as ONE_TEMPLATE, _spec as one_template_spec
 from test_two_stage import (DELTA, MIXED, Q, WINDOW, WINDOW_QUERY, Clock, _refused, _window_boundary,
@@ -56,7 +57,7 @@ def _interior(stream: S.Stream, previous: str, first, flat: bool = False) -> tup
     if flat:
         prog = P.program_digest(program)
         rows = [_digest_words(r) for r in ROOTS]
-        value = G.Registered.commit(prog, "hist", rows, G.supplied_salts(prog, "hist", len(rows)), 16)
+        value = RV.Registered.commit(prog, "hist", rows, RV.supplied_salts(prog, "hist", len(rows)), 16)
     else:
         value = G.supplied_value(program, "hist", G.sources(SUPPLIED)["hist"], bare)
     n = P.units(program, WINDOW_QUERY)

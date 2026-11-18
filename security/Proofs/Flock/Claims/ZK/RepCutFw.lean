@@ -83,16 +83,16 @@ set_option maxHeartbeats 4000000 in
 ZK server's rep at SHA-512 returned from the empty transcript and `l`, the cut's rep at SHA-512 from any source,
 level-0 commitment, pads commitment, domain and extra claims of the same count returns from the empty transcript and a
 log of `l`'s size, wherever its rank check passes, with a log of the ZK server's size. -/
-theorem repCut_of_repFwC (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
+theorem repCut_of_repFwC (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Hash.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     {st : Setup} (hm : 14 ≤ st.m) (hkk : st.kLog = st.fold.kLog) {sch : Schedule} {tPad rep : ℕ} {dom : ByteArray}
     {g : Array F128} {cm0 : Commit} {extras : Array Claim} {pads : PadsZk} {ic : InnerCommit} {vals : Array F128}
-    {extra lanePad : ℕ → ℕ → F128} {salt : ℕ → ℕ → ByteArray} {l : Array Claims.Msg} {p : Zk.ZkProof}
-    {t : Transcript} {l' : Array Claims.Msg}
+    {extra lanePad : ℕ → ℕ → F128} {salt : ℕ → ℕ → ByteArray} {l : Array Hash.Msg} {p : Zk.ZkProof}
+    {t : Transcript} {l' : Array Hash.Msg}
     (h : ((_root_.Flock.ZkServer.Finish.repFwC (asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch tPad rep dom g
       cm0 extras pads ic vals extra lanePad salt).run (Transcript.init #[] dom)).go l = (.ok (p, t), l'))
     (h' : ByteArray → ByteArray) (rep' : ℕ) (dom' : ByteArray) (cm0' : Commit) {extras' : Array Claim}
     (hes : extras'.size = extras.size) (ic' : InnerCommit) (src : RepSrc) (prior : Array (List F128))
-    (words : List ℕ) {L : Array Claims.Msg} (hLs : L.size = l.size)
+    (words : List ℕ) {L : Array Hash.Msg} (hLs : L.size = l.size)
     (hrk : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((zerocheckCut (asksCut coin n) st.m st.digest (flat cm0'.cap) ic'.root (Zk.PadLayout.new st.m st.kLog sch.k0)
           src.masked).run (Transcript.init #[] dom')).go L = (.ok ((zp, zc), t₁), l₁) →

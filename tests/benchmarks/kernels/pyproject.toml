@@ -1,0 +1,14 @@
+# ship.sh's frame, without a GPU: what ship_nvcc.sh hands the device compiler, and a ship build's cubin from two places of
+# the tree.
+[tool.pytest.ini_options]
+testpaths = ["."]
+
+[tool.verity.tests]
+# test_ship_nvcc.py starts bash on ../../../benchmarks/kernels/ship_nvcc.sh, ship_probe.sh and job_nvcc.sh, and
+# test_ship_place.py on copies of the frame (ship.sh, ship_clock.c) and of what its `machine.py gencode` reads, which the
+# read guard can't trace
+untraced = ["test_ship_nvcc.py", "test_ship_place.py"]
+inputs = ["benchmarks/kernels/ship.sh", "benchmarks/kernels/ship_nvcc.sh", "benchmarks/kernels/ship_probe.sh",
+          "benchmarks/kernels/ship_clock.c", "benchmarks/kernels/job_nvcc.sh", "benchmarks/kernels/machine.py",
+          "benchmarks/harness/verity_bench", "tools/config/verity_config", "verity/__init__.py", "verity/channel.py",
+          "verity/device.py", "verity/errors.py", "calibration/hardware/cards", "calibration/hardware/architectures"]

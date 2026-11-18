@@ -78,7 +78,10 @@ PIECES = [
     ("F2fpBf16_v1", (32,), 16, lambda C, a: IL.PIECES["F2fpBf16_v1"](C, a), P.F2fpBf16.evaluate),
     ("F32ToBf16Rn_v1", (32,), 16, lambda C, a: IL.PIECES["F32ToBf16Rn_v1"](C, a), P.F32ToBf16Rn.evaluate),
 ]
+from verity_flock import boolean_export as BX  # noqa: E402
 from verity_flock.boolean_export import prims as _registered  # noqa: E402
+
+BX.load_catalog("verity_vllm.definitions.registry")
 
 #: the tail primitives (tail_pieces): attention's softmax, the norms' row scalars, the sampler lane's F32 ops
 TAIL = {"F32AddFtz_v1": 2, "F32SubFtz_v1": 2, "F32MulFtz_v1": 2, "F32FmaFtz_v1": 3, "F32FmaSubFtz_v1": 3, "F32Max_v1": 2,

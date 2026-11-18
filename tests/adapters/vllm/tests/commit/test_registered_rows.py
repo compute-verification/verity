@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 from verity.commitments import hm96
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity_vllm.commit import registered_rows as RR
 
@@ -27,7 +27,7 @@ def test_commit_is_registered_commit_on_its_rows(monkeypatch, bits, dtype, word_
     leaves = np.random.default_rng(n).integers(0, 1 << bits, n, dtype=np.uint64).astype(dtype)
     salts = _salts(n // words, n)
     got = RR.commit(PROGRAM, "shared.weights[3]", leaves, word_bits, words, salts)
-    want = G.Registered.commit(PROGRAM, "shared.weights[3]", leaves.reshape(-1, words).tolist(),
+    want = RV.Registered.commit(PROGRAM, "shared.weights[3]", leaves.reshape(-1, words).tolist(),
                                [salts[i * N:(i + 1) * N] for i in range(n // words)], word_bits=word_bits)
     assert got.entry == want.entry() and got.root == want.root.hex() and got.salts == salts
 

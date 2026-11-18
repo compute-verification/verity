@@ -630,8 +630,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
 
     def register_weights(self, replay: bool = False) -> dict:
         """Registered input: every parameter + buffer hashed once (rows-sha512: `weights_rows`, SHA-512).  Timed and reported apart from
-        steady state, outside its denominator.  Each registration salts under a fresh key; ``replay`` re-registers under the key of the
-        registration this committer holds (`weights_tree`), so an unchanged model reproduces its root."""
+        steady state, outside its denominator.  Each registration draws its rows' salts fresh from the OS and keeps them by tensor name
+        (`weights_salts`, its salt file's content, `verity.commitments.salt_file`); ``replay`` re-registers under the salts this
+        committer holds, so an unchanged model reproduces its root, and is refused without them."""
         t0 = time.perf_counter()
         # host (default) | device | device-checked: device hashes rows-sha512's rows into the same per-tensor tree on the GPU, by
         # native_rows.cu (`weights_rows`); the weights tree over the tensor roots is built the same either way.  device-checked computes
@@ -639,7 +640,11 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         mode = settings.VERITY_WEIGHTS_HASH
         if mode not in ("host", "device", "device-checked"):
             raise ValueError(f"VERITY_WEIGHTS_HASH must be host | device | device-checked, got {mode!r}")
-        WR = weights_rows.WeightsRows(self._geo_digest, weights_rows.key((getattr(self, "weights_tree", None) or {}) if replay else None))
+        held: dict[str, bytes] | None = getattr(self, "weights_salts", None)
+        if replay and not held:
+            raise ValueError("a replay re-registers under the recorded registration's salts, and this committer holds none")
+        WR = weights_rows.WeightsRows(self._geo_digest)
+        salts: dict[str, bytes] = {}
         roots: list[Any]
         roots, names, n_bytes, checked = [], [], 0, 0
         seen: set[int] = set()
@@ -654,13 +659,19 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             flat = src.view(torch.uint8) if src.dtype != torch.uint8 else src
             nb = int(flat.numel())
             entry = [name, _dtype_name(p), list(p.shape), nb]
-            r, c = WR.root(len(roots), entry, flat, mode)
+            if replay:
+                if name not in held:
+                    raise ValueError(f"a replay re-registers {name}, and the recorded registration's salt file holds none for it")
+                salts[name] = held[name]
+            else:
+                salts[name] = step_rows.fresh_tensor_salts(nb)
+            r, c = WR.root(len(roots), entry, flat, mode, salts[name])
             checked += c
             roots.append(r)
             n_bytes += nb
             names.append(entry)
         # the tree under the root, kept off the record: a deferred replay opens the weight fields it consumes against it (replay bundle)
-        self.weights_tree = WR.tree(names, roots)
+        self.weights_tree, self.weights_salts = WR.tree(names, roots), salts
         self.weights = {"root": self.weights_tree["root"], "tensors": len(roots), "bytes": n_bytes, "wall_s": time.perf_counter() - t0,
                         "label": "measured; once per process, excluded from steady state", "hash": mode, "chunk": self.chunk,
                         "scheme": self.commit_scheme, **({"device_checked_tensors": checked} if mode == "device-checked" else {})}

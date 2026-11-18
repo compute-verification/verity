@@ -758,7 +758,7 @@ namespace FlockComplete.ZkTables
 open FlockDeploy FlockSoundness FlockSoundness.Discharge
 
 /-- **A masked session in scope links at two points.** -/
-theorem points_of_setup {x : Claims.Msg} {s : Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+theorem points_of_setup {x : Hash.Msg} {s : Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hscope : Claims.Flock.Scope (deployZk _root_.Flock.Readable.relation) x)
     (hsetup : setupOf true x = some (s, spec, sts)) : spec.points = 2 := by
   obtain ⟨p, hp, hsc⟩ := (_root_.Flock.Readable.scope_iff (deployZk _root_.Flock.Readable.relation)

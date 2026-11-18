@@ -26,6 +26,10 @@ from verity_flock import class_statement as CS  # noqa: E402
 from verity_flock import partition_units as PU  # noqa: E402
 
 
+#: a registered Definition of two q-word classes, bound through Flock's catalog resolver
+ROPE = ["--definition", "RoPE_v1{NHEADS=32,D=64}", "--resolver", "verity/protocols/proofs/flock/prover/pod/catalog.py:definition"]
+
+
 @pytest.fixture(scope="module")
 def units():
     TG.load_registries()
@@ -468,7 +472,7 @@ def test_the_slot_circuits_are_built_only_when_a_shape_is_not_in_the_stage_cache
 
     def cached(name):
         CS._CTX.pop("source_digest")                                   # main() reads the code's digest once per process
-        assert CS.main(["--model", "tiny", "--partition", "q-word", "--stage-only", "--sample", "2", "--out", str(tmp_path / name)]) == 0
+        assert CS.main([*ROPE, "--partition", "q-word", "--stage-only", "--sample", "2", "--out", str(tmp_path / name)]) == 0
         recs = [json.loads(ln) for ln in (tmp_path / name / "staged.jsonl").read_text().splitlines()]
         assert len(recs) == 2 and len({"stage_cached" in r for r in recs}) == 1
         return "stage_cached" in recs[0]
@@ -541,7 +545,7 @@ def test_selftest_jobs_runs_the_case_processes_at_once_and_keeps_their_records_i
     monkeypatch.setattr(CS, "SELFTEST_SAMPLE_S", 0.001)
     monkeypatch.setattr(CS, "cache_slot_circuits", lambda: None)
     monkeypatch.setattr(CS, "_stage_job", lambda s: {"shape": s, "stage": {"n": 16}, "table_reads": {}})
-    args = ["--model", "tiny", "--partition", "q-word", "--sample", "1", "--selftest-only", "--selftest", "1", "--selftest-gpu",
+    args = [*ROPE, "--partition", "q-word", "--sample", "1", "--selftest-only", "--selftest", "1", "--selftest-gpu",
             "--selftest-cases", ",".join(cases), "--selftest-binary", "flock-circuit-seeded", "--selftest-case-mib", "6144"]
     argvs, sel = [], {}
     # jobs, the GPU's free MiB, where the cases ran, the order they returned in

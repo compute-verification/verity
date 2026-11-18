@@ -552,7 +552,7 @@ def out_at(sh: Shape, rows: Mapping[int, bytes], i: int, j: int) -> int:
 #: each card's s8 tensor-core step (`silicon.integer`, PINNED in `silicon.instructions`): sm_120's IMMA m16n8k32 without
 #: .satfinite, which `PouwSegDot_v2` is bound to, and the H200's (``wgmma`` m64nNk32 and ``mma.sync`` m16n8k32),
 #: the same step with .satfinite
-DEVICES: dict[str, IntegerMma] = {"sm_120": BLACKWELL_SM120_S8_M16N8K32_WRAP, "sm_90": HOPPER_SM90_S8_K32}
+DEVICES: dict[str, IntegerMma] = {m.arch: m for m in (BLACKWELL_SM120_S8_M16N8K32_WRAP, HOPPER_SM90_S8_K32)}
 
 
 def dot_steps(arch: str) -> tuple[Any, Any]:

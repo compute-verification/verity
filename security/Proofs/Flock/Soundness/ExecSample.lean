@@ -9,7 +9,7 @@ import all Init.Data.Array.QSort.Basic
 
 `Flock.Draw.subset k n src` is the verifier's executable sampler (`verity/commitments/lean/Commitments/Draw.lean`): a
 partial Fisher–Yates over a `Std.HashMap` of swaps, each index sampled by `Flock.Draw.uniform`, an exact rejection sampler
-on big-endian words, and the `k` values sorted by `Array.qsort`. `SamplingDesign.subset_exec_escape_le`: over a uniform stream of
+on big-endian words, and the `k` values sorted by `Array.qsort`. `SamplingDesign.subset_exec_missProb_le`: over a uniform stream of
 bytes, it returns a sample that misses `B` with probability at most `(Verity.SamplingDesign.subset n k hk).missProb B`, the model's uniform
 `k`-subset. A stream that runs out gives `none`, which only lowers the executable's missProb.
 
@@ -701,8 +701,8 @@ open scoped ENNReal
 
 /-- **The executable sample escapes no more often than the model's.** Its probability space is a uniform stream: that
 the challenger's coins are uniform is A3 (`Assumptions.UniformRandomBytes`, `uniform/io-getrandombytes`), which
-`sampleOS_subset_escape_le` (`ExecSampleOS.lean`) takes for the live sample, reruns included. -/
-theorem subset_exec_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
+`sampleOS_subset_missProb_le` (`ExecSampleOS.lean`) takes for the live sample, reruns included. -/
+theorem subset_exec_missProb_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
     prCoin (fun f : Fin L → Fin 256 =>
         ∃ D, Flock.Draw.subset k n (SamplingDesign.streamOf f) = some D ∧ ∀ u ∈ B, u.val ∉ D) ≤
       (Verity.SamplingDesign.subset n k hk).missProb B := by
@@ -723,7 +723,7 @@ theorem subset_exec_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) 
     _ ≤ ((n - 0 - B'.card).choose k : ℝ≥0∞) / ((n - 0).choose k : ℝ≥0∞) :=
         SampleExec.loopL_le n k (L + 1) B' hB'n k 0 (Equiv.refl ℕ) (by omega) hk (fun t ht => ht)
           (fun t ht => absurd ht (Nat.not_lt_zero t)) L
-    _ = (Verity.SamplingDesign.subset n k hk).missProb B := by rw [Verity.SamplingDesign.subset_escape, hcard, Nat.sub_zero]
+    _ = (Verity.SamplingDesign.subset n k hk).missProb B := by rw [Verity.SamplingDesign.subset_missProb, hcard, Nat.sub_zero]
 
 end Spot.Sampling.SamplingDesign
 

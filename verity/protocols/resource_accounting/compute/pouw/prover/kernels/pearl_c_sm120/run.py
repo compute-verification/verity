@@ -436,6 +436,18 @@ def is_ml(name: str) -> bool:
     return gemm_tile(name) == (BM, BM)
 
 
+def salts_at(at: int, name: str, count: int = 0, given: int | None = None) -> int:
+    """The address `at` of a buffer of hm96 salts as a leaf kernel may read it, else a refusal naming the buffer `name`: the
+    kernels read a salt by 16-byte loads (hash_h3.cuh's `load_salt`), so its address is a multiple of 16, and where the
+    caller says the buffer's length `given` it is `count` leaves' `HM_SALT` bytes each, no fewer and no more."""
+    if at % 16:
+        raise ValueError(f"{name} at {at:#x}: the leaf kernels read a salt by 16-byte loads, so the buffer's address is a "
+                         "multiple of 16 bytes (a slice of a buffer from an odd offset is not)")
+    if given is not None and given != HM_SALT * count:
+        raise ValueError(f"{name}: {given} bytes for {count} leaves, which take {HM_SALT * count} ({HM_SALT} a leaf)")
+    return at
+
+
 class Pipeline:
     """One (shape, variant) instance: its buffers and its kernels in order, each a (name, phase, launch) step.  Phases:
     `epoch` (B's row tree, whose root the epoch's salt and seed_B follow), `unit` (the pads of A's tree and the tile tree,
@@ -577,7 +589,7 @@ class Pipeline:
                 "order), and this pipeline's caller gave none.  The kernels derive no salt: the caller hands in fresh "
                 "operating-system bytes for a call's trees and a registered row's salt from its registration's salt file "
                 "(compute-accounting's goal: Pearl+ hands the leaf kernels their salts)")
-        return at
+        return salts_at(at, f"salts_{tag}")
 
     def put_salts(self, tag: str, salts: bytes) -> None:
         """`salts` from the host into tree `tag`'s ``salts_<tag>``, whole: a check's or a bench's bytes (a serving caller
@@ -673,12 +685,14 @@ class Pipeline:
         else:
             d.launch(f"pd_tiles_{v}", self.tiles, 32, p=p, i=(mr, n))
 
-    def hm_level0(self, tag: str, x: int, count: int, dom: str, salts: int | None = None) -> None:
+    def hm_level0(self, tag: str, x: int, count: int, dom: str, salts: int | None = None, salt_bytes: int | None = None) -> None:
         """An `audit.HM96` tree's level 0 over `count` 64-byte values at x: hm_leaves over them and their salts, then
         s512_frame_leaves in place.  The salts are the `count` leaves' at device address `salts` (a tree written into the
-        pipeline's buffer that is not the pipeline's own tree: a call's y), else the tree's own (`Pipeline.salts`)."""
+        pipeline's buffer that is not the pipeline's own tree: a call's y), else the tree's own (`Pipeline.salts`).  An
+        address says nothing of the bytes behind it, so the caller that owns the buffer says its length, `salt_bytes`: one
+        that is not `count` salts of `HM_SALT` bytes is refused before any launch (`salts_at`)."""
         d, tree, kk = self.dev, self.b[f"tree_{tag}"], self.keys
-        at = Pipeline.salts(self, tag) if salts is None else salts
+        at = Pipeline.salts(self, tag) if salts is None else salts_at(salts, f"tree {tag!r}'s salts", count, salt_bytes)
         d.launch("hm_leaves", cdiv(count, 64), 64, p=(x, tree, at, kk["hm"]), i=(count,))
         d.launch("s512_frame_leaves", cdiv(count, 64), 64, p=(tree, kk[dom]), i=(0, count))
 

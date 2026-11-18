@@ -40,7 +40,7 @@ from verity.commitments import domains
 from verity.commitments.frame_v3 import BitRowLeaf
 from verity.commitments.rowleaf import bit_row, row_leaf
 from verity.protocols.proofs.spot.verifier.one_stage import produced
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.commitments import registered_value as RV
 
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import replay_step as RS
@@ -161,4 +161,4 @@ def reads_port(record: Mapping, run_root: bytes, reads: Sequence[int | None], re
     e = {"leaves": n, "words": n_bits // CS.WORD, "word_bits": CS.WORD, "domain": ADV.domain(b, n).domain_id.hex()}
     port = produced.port(SCHEMA, e, record["root"], [None if r is None else int(r) for r in reads],
                          BitRowLeaf(n_bits).hiding_schema)
-    return port | ({REG.READS_FROM: int(reads_from)} if reads_from else {})
+    return port | ({RV.READS_FROM: int(reads_from)} if reads_from else {})

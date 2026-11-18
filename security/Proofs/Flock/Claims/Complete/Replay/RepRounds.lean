@@ -245,7 +245,7 @@ theorem fast100_small {m : ℕ} {s : Schedule} (h : fast100 m = some s) :
 
 /-- **A returning rep records a round, each of at most `65536` coins** (`RepOk`), from the empty transcript, at a
 table of `m ≥ 14` with `fast100`'s schedule and at most `65534` extra claims. -/
-theorem repP_repOk (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_repOk (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (hm : 14 ≤ st.m) (hsch : fast100 st.m = some sch) (hx : extras.size + 2 ≤ 65536) (d : ByteArray) :
     Ret ((repP (asksS resp) (Hashes.ofSha512 h) st sch tr tbl cm0 extras salt nonce).run

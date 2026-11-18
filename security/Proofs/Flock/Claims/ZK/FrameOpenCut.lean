@@ -69,7 +69,7 @@ open FlockSoundness.Refine (Frame encs label_enc absorbBytes_enc absorbSlice_enc
 out-of-domain value `y` and the nonce's bytes `nb` with `β_0`'s; lane round `i`'s message `msg i` with its
 challenge's, for `i < k_0`; the pair's sums `e_0`, `e_1` with `ρ_0`'s; `ρ_1`'s squeeze alone. -/
 def l0Body (P : List UInt8) (T : F128) (cap : ByteArray) (n k0 : ℕ) (y : F128) (nb : ByteArray)
-    (msg : ℕ → F256 × F256) (e0 e1 : F256) (i : ℕ) : Claims.Msg :=
+    (msg : ℕ → F256 × F256) (e0 e1 : F256) (i : ℕ) : Hash.Msg :=
   if i = 0 then
     P ++ encs [.label "flock-ligerito-basis-f256-split-v0".toUTF8, .one T, .bytes cap, .label Zk.LABEL_OPEN.toUTF8] ++
       (Frame.sq 2 n).enc
@@ -122,7 +122,7 @@ def l0Msg (coin : ℕ → ℕ → F128) (p0 : ℕ) (sch : Schedule) (t b : Array
 out-of-domain value, lane messages and pair's sums at the pads `h`, the claim nonce `0` (R4). -/
 def l0BodyAt (coin : ℕ → ℕ → F128) (p0 : ℕ) (P : List UInt8) (T : F128) (cap : ByteArray) (sch : Schedule)
     (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128) (rep : ℕ) (extra : ℕ → ℕ → F128)
-    (_nonce : ℕ → ℕ → UInt64) : ℕ → Claims.Msg :=
+    (_nonce : ℕ → ℕ → UInt64) : ℕ → Hash.Msg :=
   l0Body P T cap sch.n sch.k0 (mleF t (zS coin p0 sch.n) + h[lay.lgOod 0]!) (le64 0)
     (l0Msg coin p0 sch t b lay h)
     (dotK (wS coin p0 b sch.n sch.k0) (embedF ((Array.range (tabS coin p0 t sch.k0).size).map (extra (2 * rep)))) +
@@ -168,26 +168,26 @@ end BodyAt
 /-! ## A run that stops -/
 
 /-- **A run that stopped past the openings**, its log `L` as `Q` reads it. -/
-def CutStop {α : Type} (Q : Array Claims.Msg → Prop) (r : Except String α × Array Claims.Msg) : Prop :=
+def CutStop {α : Type} (Q : Array Hash.Msg → Prop) (r : Except String α × Array Hash.Msg) : Prop :=
   ∃ L, r = (.error "past the openings", L) ∧ Q L
 
-theorem cutStop_err {α : Type} {Q : Array Claims.Msg → Prop} {r : Except String α × Array Claims.Msg}
-    {L : Array Claims.Msg} (h : r = (.error "past the openings", L)) (hQ : Q L) : CutStop Q r :=
+theorem cutStop_err {α : Type} {Q : Array Hash.Msg → Prop} {r : Except String α × Array Hash.Msg}
+    {L : Array Hash.Msg} (h : r = (.error "past the openings", L)) (hQ : Q L) : CutStop Q r :=
   ⟨L, h, hQ⟩
 
-theorem cutStop_bind {α β : Type} {Q : Array Claims.Msg → Prop} {x : TMW PS α} {f : α → TMW PS β} {t : Transcript}
-    {l : Array Claims.Msg} (h : CutStop Q ((x.run t).go l)) : CutStop Q (((x >>= f).run t).go l) := by
+theorem cutStop_bind {α β : Type} {Q : Array Hash.Msg → Prop} {x : TMW PS α} {f : α → TMW PS β} {t : Transcript}
+    {l : Array Hash.Msg} (h : CutStop Q ((x.run t).go l)) : CutStop Q (((x >>= f).run t).go l) := by
   obtain ⟨L, hx, hQ⟩ := h
   exact ⟨L, LigLock.bind_go_err hx, hQ⟩
 
-theorem cutStop_lbind {α β : Type} {Q : Array Claims.Msg → Prop} {x : LP PS α} {f : α → LP PS β} {s : LigState}
-    {t : Transcript} {l : Array Claims.Msg} (h : CutStop Q (((x.run s).run t).go l)) :
+theorem cutStop_lbind {α β : Type} {Q : Array Hash.Msg → Prop} {x : LP PS α} {f : α → LP PS β} {s : LigState}
+    {t : Transcript} {l : Array Hash.Msg} (h : CutStop Q (((x.run s).run t).go l)) :
     CutStop Q ((((x >>= f).run s).run t).go l) := by
   rw [StateT.run_bind]
   exact cutStop_bind h
 
 /-- A log that sent bodies `B 0, …, B (i − 1)` after `l`, with `B i` pushed. -/
-theorem sent_push (i : ℕ) {k : ℕ} {l L : Array Claims.Msg} {B : ℕ → Claims.Msg} {m : Claims.Msg}
+theorem sent_push (i : ℕ) {k : ℕ} {l L : Array Hash.Msg} {B : ℕ → Hash.Msg} {m : Hash.Msg}
     (h : L.toList = l.toList ++ (List.range i).map B) (hm : m = B i) (hk : k = i + 1) :
     (L.push m).toList = l.toList ++ (List.range k).map B := by
   subst hm hk
@@ -195,21 +195,21 @@ theorem sent_push (i : ℕ) {k : ℕ} {l L : Array Claims.Msg} {B : ℕ → Clai
 
 /-! ## `asksCut`'s squeezes at a log's size -/
 
-theorem sampleVecP_at (coin : ℕ → ℕ → F128) {n : ℕ} (k p : ℕ) (hk : k ≠ 0) (t : Transcript) {l : Array Claims.Msg}
+theorem sampleVecP_at (coin : ℕ → ℕ → F128) {n : ℕ} (k p : ℕ) (hk : k ≠ 0) (t : Transcript) {l : Array Hash.Msg}
     (hp : l.size = p) (hl : p < n) :
     ((sampleVecP (asksCut coin n) k).run t).go l =
       (.ok ((Array.range k).map (coin p), afterSq t 2 k (coin p)), l.push (Claims.toMsg (framed t 2 k))) := by
   subst hp
   exact squeezeP_cut_ok coin 2 hk t hl
 
-theorem sampleP_at (coin : ℕ → ℕ → F128) {n : ℕ} (p : ℕ) (t : Transcript) {l : Array Claims.Msg} (hp : l.size = p)
+theorem sampleP_at (coin : ℕ → ℕ → F128) {n : ℕ} (p : ℕ) (t : Transcript) {l : Array Hash.Msg} (hp : l.size = p)
     (hl : p < n) :
     ((sampleP (asksCut coin n)).run t).go l =
       (.ok (coin p 0, afterSq t 1 1 (coin p)), l.push (Claims.toMsg (framed t 1 1))) := by
   subst hp
   exact sampleP_cut_ok coin t hl
 
-theorem sampleKP_at (coin : ℕ → ℕ → F128) {n : ℕ} (p : ℕ) (t : Transcript) {l : Array Claims.Msg} (hp : l.size = p)
+theorem sampleKP_at (coin : ℕ → ℕ → F128) {n : ℕ} (p : ℕ) (t : Transcript) {l : Array Hash.Msg} (hp : l.size = p)
     (hl : p < n) :
     ((sampleKP (asksCut coin n)).run t).go l =
       (.ok (⟨coin p 0, coin p 1⟩, afterSq t 2 2 (coin p)), l.push (Claims.toMsg (framed t 2 2))) := by
@@ -219,7 +219,7 @@ theorem sampleKP_at (coin : ℕ → ℕ → F128) {n : ℕ} (p : ℕ) (t : Trans
   show (Except.ok (_, _), _) = _
   simp
 
-theorem sampleKP_stop (coin : ℕ → ℕ → F128) {n : ℕ} (t : Transcript) {l : Array Claims.Msg} (hl : n ≤ l.size) :
+theorem sampleKP_stop (coin : ℕ → ℕ → F128) {n : ℕ} (t : Transcript) {l : Array Hash.Msg} (hl : n ≤ l.size) :
     ((sampleKP (asksCut coin n)).run t).go l = (.error "past the openings", l.push (Claims.toMsg (framed t 2 2))) := by
   unfold sampleKP
   exact LigLock.bind_go_err (squeezeP_cut_err coin 2 two_ne_zero t hl)
@@ -242,16 +242,16 @@ theorem powP2_bind_run {γ : Type} (nonce : ℕ → ℕ → UInt64) (f : Unit �
 
 /-- **A loop that stops**: where step `i` from `I i` either stops or yields into `I (i + 1)`, and `I` holds at no step
 past the loop's, the loop over `[0:k]` from `I 0` stops. -/
-theorem lforIn_stop {σ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (k : ℕ) (Q : Array Claims.Msg → Prop)
-    (I : ℕ → σ → LigState → Transcript → Array Claims.Msg → Prop) (hI : ∀ i u s t L, I i u s t L → i < k)
+theorem lforIn_stop {σ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (k : ℕ) (Q : Array Hash.Msg → Prop)
+    (I : ℕ → σ → LigState → Transcript → Array Hash.Msg → Prop) (hI : ∀ i u s t L, I i u s t L → i < k)
     (hb : ∀ i < k, ∀ u s t L, I i u s t L →
       CutStop Q ((((body i u).run s).run t).go L) ∨
         ∃ v s' t' L', (((body i u).run s).run t).go L = (.ok ((.yield v, s'), t'), L') ∧ I (i + 1) v s' t' L')
-    {u : σ} {s : LigState} {t : Transcript} {L : Array Claims.Msg} (h₀ : I 0 u s t L) :
+    {u : σ} {s : LigState} {t : Transcript} {L : Array Hash.Msg} (h₀ : I 0 u s t L) :
     CutStop Q ((((forIn [:k] u body).run s).run t).go L) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
   simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
-  suffices key : ∀ m a (u : σ) (s : LigState) (t : Transcript) (L : Array Claims.Msg), a + m = k → I a u s t L →
+  suffices key : ∀ m a (u : σ) (s : LigState) (t : Transcript) (L : Array Hash.Msg), a + m = k → I a u s t L →
       CutStop Q ((((forIn (List.range' a m) u body).run s).run t).go L) from
     key k 0 u s t L (by omega) h₀
   intro m
@@ -275,7 +275,7 @@ masked Ligerito at any pads `h` and nonces stops past the openings having sent l
 theorem ligeritoPZk_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (tr : Transcript)
-    (l : Array Claims.Msg) {j : ℕ} (hj : j < sch.k0 + 4) (hk : 1 ≤ sch.k0) (hn : sch.n ≠ 0) :
+    (l : Array Hash.Msg) {j : ℕ} (hj : j < sch.k0 + 4) (hk : 1 ≤ sch.k0) (hn : sch.n ≠ 0) :
     CutStop (fun L => L.toList = l.toList ++ (List.range (j + 1)).map
         (l0BodyAt coin l.size tr.pending.data.toList T (flat cm0.cap) sch t b lay h rep extra nonce))
       (((ligeritoPZk (asksCut coin (l.size + j)) hs ms sch T cm0 t b lay h rep tPad extra lanePad salt nonce).run
@@ -325,7 +325,7 @@ theorem ligeritoPZk_cutL0 (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : M
     bind_go (liftTM_ok (absorbK_ok _ _) _), liftT_bind_run, bind_go (liftTM_ok (absorbK_ok _ _) _)]
   -- the lane rounds, round `l.size + 2 + i` lane round `i`'s challenge
   refine cutStop_lbind (lforIn_stop _ sch.k0 _
-    (fun i _ (s : LigState) (tt : Transcript) (L : Array Claims.Msg) =>
+    (fun i _ (s : LigState) (tt : Transcript) (L : Array Hash.Msg) =>
       i < sch.k0 ∧ i + 2 ≤ j ∧ s.tab = tabS coin l.size t i ∧ s.w = wS coin l.size b sch.n i ∧
         tt.pending.data.toList = encs (Claims.ZKServer.pairFr (l0Msg coin l.size sch t b lay h i).1
           (l0Msg coin l.size sch t b lay h i).2) ∧

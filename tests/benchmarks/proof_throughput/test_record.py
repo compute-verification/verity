@@ -9,7 +9,8 @@ from verity_proof_throughput import record as REC
 
 
 def verifier_result(status="passed", rate=10.0):
-    return {"validation": {"status": status}, "measurements": [{"name": "vu.per_second", "value": rate, "unit": "VU/s"}]}
+    return {"validation": {"status": status}, "measurements": [{"name": n, "value": rate + d, "unit": "VU/s"}
+                                                               for n, d in zip(REC.SESSIONS.values(), (0, -1, 1))]}
 
 
 def point(d, status="passed", rate=10.0, span=(0.0, 5.0)):
@@ -77,7 +78,7 @@ def test_record_runs_one_prover_then_two_at_once_each_verified_and_writes_a_read
     jobs = [e for s, e in seen if s == "job.sh"]
     assert [(e["LEASE_CARD"], e["LEASE_CORES"]) for e in jobs] == [("0", "0-9"), ("0", "0-9"), ("1", "10-19")]
     assert len({e["SESSIONS_LOCK"] for e in jobs[1:]}) == 2 and all(e["B"] == "64" for e in jobs)
-    assert len({e["PORT"] for e in jobs[1:]}) == 2
+    assert len({e["PORT"] for e in jobs[1:]}) == 2 and all(e["RUNS"] == "3" for e in jobs)
     assert all(e["BUNDLE"].startswith("art:") and e["PROVE_RUN"] == "r1" for s, e in seen if s == "verify.sh")
     assert REC.write(kit.writer(tmp_path), out, "bf16-k6144", 64, points) == 0
     doc = json.loads((tmp_path / "result.json").read_text())
@@ -87,6 +88,8 @@ def test_record_runs_one_prover_then_two_at_once_each_verified_and_writes_a_read
     leases = {m["provers"]: m["leases"] for m in doc["measurements"]}
     first, second = {"card": "0", "cores": "0-9"}, {"card": "1", "cores": "10-19"}
     assert leases == {1: [first], 2: [first, second]}
+    assert {m["provers"]: (m["lowest"], m["highest"]) for m in doc["measurements"]} == {1: (3.0, 5.0), 2: (6.0, 10.0)}
+    assert [m["sessions"] for m in doc["measurements"] if m["provers"] == 1] == [[{"median": 4.0, "lowest": 3.0, "highest": 5.0}]]
     assert all(f"out/{p['dir']}/verifier/result.json" in doc["validation"]["evidence"] for g in points.values() for p in g)
 
 

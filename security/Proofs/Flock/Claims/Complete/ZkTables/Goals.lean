@@ -67,7 +67,7 @@ namespace FlockComplete.ZkTables
 open Flock Transcript FlockComplete FlockDeploy JsonRT
 open Lean (Json JsonNumber)
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 theorem tabsOf_size (sts : Array Flock.Stmt) : (tabsOf sts).size = sts.size := by simp [tabsOf]
 
@@ -155,7 +155,7 @@ theorem Run.jsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) :
   rfl
 
 /-- **The round messages and their coins**: the sends after the first, the `j`th with coin `1 + j`. -/
-theorem Run.mids_eq (o : Run H rel) {b : Claims.Msg} {bs : List Claims.Msg} (hbs : o.bodies.toList = b :: bs) :
+theorem Run.mids_eq (o : Run H rel) {b : Hash.Msg} {bs : List Hash.Msg} (hbs : o.bodies.toList = b :: bs) :
     o.mids = bs.zip ((List.range bs.length).map fun j => Claims.coinSeq o.r (1 + j)) := by
   have hn : o.bodies.size = bs.length + 1 := by
     rw [← Array.length_toList, hbs, List.length_cons]
@@ -352,7 +352,7 @@ theorem recordJ_of (h64 : Out64 H) (hS : StmtOkJ H rel) (hF : FilesJ H rel) : Re
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables, the record's checks discharged: from `complete`'s premises at one table and at several tables
 `StmtOkJ`, `ProverRunsJ`, what the record's checks ask of the proof files (`FilesJ`) and the rep's checks (`OpenJ`). -/
-theorem completeJ (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem completeJ (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hFJ : FilesJ H rel)

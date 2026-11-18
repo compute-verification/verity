@@ -60,7 +60,7 @@ open Flock FlockDeploy Transcript
 
 /-! ## The run's table and outer coins -/
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- Table `i`'s trace, as the honest session proves it. -/
 def _root_.FlockComplete.Run.trace (o : Run H rel) (i : ℕ) : Trace := (tracesOf o.sts o.w)[i]!
@@ -112,7 +112,7 @@ theorem zerocheck_replay (hs : Hashes V) {m : ℕ} (hm : 14 ≤ m) (digest cap :
   ⟨_, zerocheckWith_of hs hm digest cap cs tr (Transcript.init #[] dom) rfl hR (Zc.fold_final hm cs tr hR1CS hc1)⟩
 
 /-- **Each table's trace satisfies the block R1CS** bitwise (`a·b = c`). -/
-def TraceR1CS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def TraceR1CS (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ x < 2 ^ o.tabs[i]!.m,
     ((o.trace i).az[x]! && (o.trace i).bz[x]!) = (o.trace i).z[x]!
 
@@ -130,7 +130,7 @@ theorem ok_val {α : Type} [Inhabited α] {x : Except String α} (h : ∃ v, x =
 
 /-- **The zerocheck goal**: zerocheck replays at every honest run, on R1CS-valid traces, at every rep the session
 walk aligns. -/
-theorem zerocheck_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem zerocheck_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hR1 : TraceR1CS H rel) (hzc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r) : Zerocheck H rel := by
   intro o i hi r hr
   obtain ⟨hp, hag⟩ := hzc o i hi r hr
@@ -148,9 +148,9 @@ theorem Ret.run_bind {α β : Type} {x : TMW PS α} {f : α → TMW PS β} {t : 
   exact FlockComplete.Ret.bind hx fun ⟨a, t'⟩ h => hf a t' h
 
 /-- **A rep that returns** carries the prover's zerocheck, at the replies from its first send on, and the level-0 cap. -/
-theorem repP_zerocheck (resp : ℕ → Claims.Msg) (hsP : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_zerocheck (resp : ℕ → Hash.Msg) (hsP : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (hm : 14 ≤ st.m) (t : Transcript) (l : Array Claims.Msg) {p : Proof} {t' : Transcript} {l' : Array Claims.Msg}
+    (hm : 14 ≤ st.m) (t : Transcript) (l : Array Hash.Msg) {p : Proof} {t' : Transcript} {l' : Array Hash.Msg}
     (h : ((repP (asksS resp) hsP st sch tr tbl cm0 extras salt nonce).run t).go l = (.ok (p, t'), l')) :
     p.zerocheck = Zc.proof st.m (Zc.coinsAt resp l.size) tr ∧ p.cap = cm0.cap := by
   obtain ⟨l₁, -, hz⟩ := zerocheckP_go resp hm st.digest (flat cm0.cap) tr t l

@@ -2,8 +2,8 @@
 
 SPOT's cryptographic error in the remote application: SPOT's part of the cryptographic soundness error of the
 composite `verity/remote/v1` (SPOT, PoUW's Pearl+ run verdict and the inference-only policy), for a prover making at
-most T SHA-512 calls. Bound's formula proved in Lean under four open premises; value evaluated in Python; SPOT's part
-only. A security figure, computed from parameters, not measured.
+most T SHA-512 calls. Bound's formula proved in Lean under the open premises its lock lists; value evaluated in
+Python; SPOT's part only. A security figure, computed from parameters, not measured.
 
 ```text
 uv run python benchmarks/remote_error/run.py              # the tables
@@ -33,8 +33,8 @@ remote composite's error is the union bound over its subprotocols' errors (`Veri
 
 - **Guarantee.** `Verity.Sampled.remote_soundness_deployedReady`, the remote composite's soundness at SPOT's live session
   (`Verity.Sampled.Live.delta`), and `Verity.remote_soundness_of_subprotocols`, the union bound it instantiates. The
-  script reads their open premises (three: `Verity.Sampled.Instance.FamiliesPinned`, `Verity.Sampled.TwoStageBound`,
-  `Verity.Vocab.PouwSound`) and named assumptions from the locks and prints them.
+  script reads their open premises and named assumptions from the locks and prints them, so the list is the lock's as
+  last regenerated.
 - **Bases.** Lean doesn't instantiate the remote guarantee at numeric parameters: its one instance, the honest witness,
   has every error ⊤, and no lock guarantee states a term's value. So no term is `proved at these parameters`. A term is
   `formula proved, value evaluated here` where each parameter it reads is of kind (a) or (b) below, and `assumed` where

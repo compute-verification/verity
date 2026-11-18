@@ -23,12 +23,14 @@ if [ "${N2_GPU:-0}" = 1 ]; then
   [ -n "${CUDA_VISIBLE_DEVICES:-}" ] || { echo "N2_GPU=1 needs the run's leased GPU (a job of one GPU)" >&2; exit 7; }
   export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || exit 7
   unset CARGO_TARGET_DIR
-  for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
-    [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x "$c/usr/local/cuda-13.3/bin/nvcc" ] \
-      && export CUDA_TK=$c/usr/local/cuda-13.3
-  done
-  C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
   G=${RESEARCH_RUN_DIR:?}/out/build-gpu; mkdir -p "$G"
+  # CUDA 13.3: CUDA_TK where given, else the machine's toolkit at 13.3 (benchmarks/kernels/machine.py), else the one
+  # verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh finds or unpacks under FLOCK_WORK
+  [ -n "${CUDA_TK:-}" ] || CUDA_TK=$(python3 benchmarks/kernels/machine.py toolkit 13.3 2> "$G/cuda.log") \
+    || { CUDA_TK=; ( . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh ) >> "$G/cuda.log" 2>&1 \
+         && . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$G/cuda.log" 2>&1; }
+  [ -n "${CUDA_TK:-}" ] || { echo "N2_GPU=1: no CUDA 13.3 on this node ($G/cuda.log)" >&2; exit 7; }
+  export CUDA_TK; C13=$CUDA_TK; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
   OUT=$G bash verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM=${SM:-120} > "$G/build.txt" 2>&1
   FLOCK_PROVE=$(sed -n 's/^BINARY=//p' "$G/build.txt" | tail -1)
   FLOCK_SELFTEST=$(sed -n 's/^SELFTEST_BINARY=//p' "$G/build.txt" | tail -1)

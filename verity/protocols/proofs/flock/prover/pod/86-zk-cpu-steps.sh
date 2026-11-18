@@ -16,9 +16,10 @@
 #               unless every build's exited 0 with its VERDICT accepted (lean_verdicts.py), a build without one too
 # The prover runs on the job's first PCPUS cores, the verifier (serve, replay) on the rest. Every step writes out/summary-$STEP.json.
 # env: FLOCK_WORK=/workspace/jobs/zk-cpu-steps  STATEMENTS="4096:2048 14336:512" (build: K:N each)  K=4096 N=2048 (prove, lean)
-#      BUILDS= (prove, lean)  M0=1  WARM=1  RUNS=3  PCPUS=16  SM=120
+#      BUILDS= (prove, lean)  M0=1  WARM=1  RUNS=3  PCPUS=16  SM (required: the GPU build's compute capability)
 #      RESOLVER=MODULE:FUNC (build: binds the statements' Gemm_v2 ids, class_statement --resolver; refused without)
-#      CUDA_TK=/workspace/jobs/rec-reprice/cuda-13.3.1 (node 1's host CUDA 13.0 ptxas doesn't know the kernels' clmad)
+#      CUDA_TK (required: a CUDA 13.3 toolkit, as 85-rec-reprice.sh unpacks one; node 1's host CUDA 13.0 ptxas doesn't know the
+#      kernels' clmad)
 #      WARM_FROM=/workspace/jobs/rec-reprice/flock-gpu-link (a checkout whose cargo target starts the first build warm)
 #      LEAN_FROM=/workspace/jobs/rec-reprice/cache (read only: its verity-verify-proof of the same sources is used, not rebuilt)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -29,10 +30,10 @@ FW=${FLOCK_WORK:-/workspace/jobs/zk-cpu-steps}; W=$FW/flock-circuit; L=$FW/cache
 mkdir -p $W $L || exit 1
 [ -w "$HOME" ] || { export HOME=$FW/home; mkdir -p $HOME; }
 unset CARGO_TARGET_DIR
-export CUDA_TK=${CUDA_TK:-/workspace/jobs/rec-reprice/cuda-13.3.1}
+export CUDA_TK=${CUDA_TK:?set it to a CUDA 13.3 toolkit (85-rec-reprice.sh unpacks one under its FLOCK_WORK)}
 [ -x $CUDA_TK/bin/nvcc ] || { echo "CUDA_TK=$CUDA_TK: no nvcc" >&2; exit 1; }
 export PATH=$CUDA_TK/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
-SM=${SM:-120}; K=${K:-4096}; N=${N:-2048}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS))
+SM=${SM:?SM: the compute capability of the GPU build, 120 for sm_120, which every step names}; K=${K:-4096}; N=${N:-2048}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS))
 DD=$FW/data/k$K; D=$DD/stage
 CPUS=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
 NC=$(echo $CPUS | tr ',' '\n' | wc -l); PC=${PCPUS:-16}; [ $PC -ge $NC ] && PC=$(( NC / 2 ))

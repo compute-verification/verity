@@ -32,10 +32,10 @@ namespace FlockComplete.L0
 open Flock Transcript FlockComplete Replay Replay.Lg
 
 /-- **The masked prover's Ligerito proof carries level 0's commitment's cap.** -/
-theorem ligeritoPZk_initialCap (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule)
+theorem ligeritoPZk_initialCap (resp : ℕ → Hash.Msg) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {t t' : Transcript}
-    {l l' : Array Claims.Msg} {P : LigeritoProof} {zl : Zk.Level0Msgs} {rc : Zk.L0Rec}
+    {l l' : Array Hash.Msg} {P : LigeritoProof} {zl : Zk.Level0Msgs} {rc : Zk.L0Rec}
     (hrun : ((ligeritoPZk (asksS resp) hs ms sch T cm0 tb b lay hv rep tPad extra lanePad salt nonce).run t).go l =
       (.ok ((P, zl, rc), t'), l')) :
     P.initialCap = cm0.cap := by
@@ -54,7 +54,7 @@ theorem ligeritoPZk_initialCap (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms 
 
 /-- **The masked model's pair coins at the replies are the prover's**: at the coins `cfOf resp L` from a transcript at
 position `k`, the lane phase's pair `ρ` is `laneRho` at `L + k` sends. -/
-theorem preZ_rho (resp : ℕ → Claims.Msg) (L : ℕ) (P : LigeritoProof) (sch : Schedule) (T : F128)
+theorem preZ_rho (resp : ℕ → Hash.Msg) (L : ℕ) (P : LigeritoProof) (sch : Schedule) (T : F128)
     (cap : Array ByteArray) (zl : Zk.Level0) (t : Transcript) (hk0 : 1 ≤ sch.k0) :
     (preZ P (cfOf resp L) sch T cap zl t).1.2 = ZkTables.Level0.laneRho resp sch.k0 (L + t.k) := by
   have hk : (head P (cfOf resp L) sch.n (init T) (startZ cap T t)).2.k = t.k + 2 := by
@@ -72,12 +72,12 @@ theorem preZ_rho (resp : ℕ → Claims.Msg) (L : ℕ) (P : LigeritoProof) (sch 
 /-- **The masked model's pair coins are independent wherever the masked prover's Ligerito returns**: run from `L + k`
 bodies sent (`k` its position), the prover's pair coins are independent (`ligeritoPZk_exact`), and they are the model's
 at the replies (`preZ_rho`). -/
-theorem preZ_rhoIndependent (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
+theorem preZ_rhoIndependent (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (hn : sch.n ≠ 0)
     (hk0 : 1 ≤ sch.k0) (hL : 2 ≤ sch.levels.size)
     (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) {L : ℕ} {t t' : Transcript}
-    {l l' : Array Claims.Msg} {r : LigeritoProof × Zk.Level0Msgs × Zk.L0Rec} (hl : l.size = L + t.k)
+    {l l' : Array Hash.Msg} {r : LigeritoProof × Zk.Level0Msgs × Zk.L0Rec} (hl : l.size = L + t.k)
     (hrun : ((ligeritoPZk (asksS resp) (Hashes.ofSha512 h) ms sch T cm0 tb b lay hv rep tPad extra lanePad salt
       nonce).run t).go l = (.ok (r, t'), l'))
     (P : LigeritoProof) (cap : Array ByteArray) (zl : Zk.Level0) :
@@ -141,7 +141,7 @@ theorem outZ_ood0 (p : LigeritoProof) (cf : ℕ → ℕ → F128) (sch : Schedul
 
 /-- **The masked model's lane coins at the replies are the prover's**: at the coins `cfOf resp L` from a transcript at
 position `k`, `laneCh` at `L + k` sends. -/
-theorem preZ_ch (resp : ℕ → Claims.Msg) (L : ℕ) (P : LigeritoProof) (sch : Schedule) (T : F128)
+theorem preZ_ch (resp : ℕ → Hash.Msg) (L : ℕ) (P : LigeritoProof) (sch : Schedule) (T : F128)
     (cap : Array ByteArray) (zl : Zk.Level0) (t : Transcript) :
     (preZ P (cfOf resp L) sch T cap zl t).1.1 = (ZkTables.Level0.laneCh resp sch.k0 (L + t.k)).toArray := by
   have hk : (head P (cfOf resp L) sch.n (init T) (startZ cap T t)).2.k = t.k + 2 := by
@@ -166,7 +166,7 @@ theorem preZ_ch (resp : ℕ → Claims.Msg) (L : ℕ) (P : LigeritoProof) (sch :
 /-- **The masked verifier's record on the model is the prover's lane record**: at the coins `cfOf resp L` from a
 transcript at position `k`, the target, the reply to send `L + k + 1`'s first coin with the proof's first out-of-domain
 value, and the lane and pair coins at `L + k` sends. -/
-theorem recZ_eq (resp : ℕ → Claims.Msg) (L : ℕ) (P : LigeritoProof) (sch : Schedule) (T : F128)
+theorem recZ_eq (resp : ℕ → Hash.Msg) (L : ℕ) (P : LigeritoProof) (sch : Schedule) (T : F128)
     (cap : Array ByteArray) (zl : Zk.Level0) (t : Transcript) (hk0 : 1 ≤ sch.k0) :
     recZ P T (outZ P (cfOf resp L) sch T cap zl t).2.1 (preZ P (cfOf resp L) sch T cap zl t).1 =
       { target := T, ood := #[(coinOf (resp (L + t.k + 1)) 0, P.oodValues[0]!)],

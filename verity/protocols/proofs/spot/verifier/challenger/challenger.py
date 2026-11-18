@@ -226,8 +226,13 @@ from verity.commitments import claim_ids
 from verity.commitments import coin_tree as CT
 from verity.commitments import hm96
 from verity.commitments.identity import canonical_json_text, identity_digest_sha512, tagged_sha512
+from verity.commitments.domains import (
+    CHALLENGER_AUDITOR_ENTRY_V1, CHALLENGER_AUDITOR_ENTRY_V2, CHALLENGER_AUDITOR_RECORD, CHALLENGER_AUDITOR_V1,
+    CHALLENGER_AUDITOR_V2, CHALLENGER_CLOSE, CHALLENGER_COINS, CHALLENGER_COMMITMENT, CHALLENGER_KEY,
+    CHALLENGER_RECORD, CHALLENGER_RELEASE_LOG,
+)
 
-BINDING = "verity/challenger/coins/v1"
+BINDING = CHALLENGER_COINS
 COIN_BYTES = 64
 HM96 = hm96.SHA512
 KEY = HM96.default_key
@@ -239,8 +244,8 @@ COMMITMENT_FORM = ("a live coin commitment is {epoch, families, root, scheme}: f
                    "lowercase hex")
 OPENING_FORM = ("a live coin opening is {after, coin, epoch, index, label, path, salt}: integers, a string, lowercase hex "
                 "and a path of SHA-512 digests")
-RECORD_ROLE = "verity/challenger-record/v1"
-COMMITMENT_TAG = "verity/challenger/commitment/v1"
+RECORD_ROLE = CHALLENGER_RECORD
+COMMITMENT_TAG = CHALLENGER_COMMITMENT
 #: an LMS public key over SHA-512: I (16 bytes) || T[1] (64)
 PUBLIC_BYTES = 80
 _HOST = frozenset(string.ascii_letters + string.digits + "-._")
@@ -248,12 +253,12 @@ RECORD_FORM = ("a challenger record is {commitment, host, signature}: a live coi
                "digits, '-', '.' and '_', and lowercase hex")
 KEY_FORM = ("a challenger key is {H, W, public}: LMS over SHA-512 (N = 64) with W in 1, 2, 4, 8 and 1 <= H <= 30, and its "
             "80-byte public key in lowercase hex")
-KEY_RECORD_SCHEMA = "challenger-key/v1"
+KEY_RECORD_SCHEMA = CHALLENGER_KEY
 KEY_RECORD_FORM = (f"a challenger key record is {KEY_RECORD_SCHEMA} {{H, W, pubkey, pubkey_sha512, schema, ...}}: a "
                    "challenger key's parameters, its public key in lowercase hex and that public key's SHA-512")
 NO_RECORD = "no challenger record: the verifier holds no coin commitment its challenger recorded and signed"
-CLOSE_ROLE = "verity/challenger-close/v1"
-LOG_TAG = "verity/challenger/release-log/v1"
+CLOSE_ROLE = CHALLENGER_CLOSE
+LOG_TAG = CHALLENGER_RELEASE_LOG
 MAX_SESSION_ID = 128
 #: a release log's most coin-tree lines (`coin_trees_of`): each tree the challenger sampled and each round it opened
 MAX_TREE_LINES = 1 << 23
@@ -308,10 +313,10 @@ UNRELEASED = "the challenger's release log holds a root its coin's release does 
 SESSION_FORM = ("a challenger session is {close, hellos, log, record}: its close record, its refused hellos' lines, its "
                 "release log's lines and its record")
 LOG_FILE = "releases.jsonl"
-LEDGER_SCHEMA_V1 = "verity/challenger-auditor/v1"
-LEDGER_SCHEMA = "verity/challenger-auditor/v2"
-LEDGER_ROLE = "verity/challenger-auditor-record/v1"
-LEDGER_TAGS = {LEDGER_SCHEMA_V1: "verity/challenger-auditor/entry/v1", LEDGER_SCHEMA: "verity/challenger-auditor/entry/v2"}
+LEDGER_SCHEMA_V1 = CHALLENGER_AUDITOR_V1
+LEDGER_SCHEMA = CHALLENGER_AUDITOR_V2
+LEDGER_ROLE = CHALLENGER_AUDITOR_RECORD
+LEDGER_TAGS = {LEDGER_SCHEMA_V1: CHALLENGER_AUDITOR_ENTRY_V1, LEDGER_SCHEMA: CHALLENGER_AUDITOR_ENTRY_V2}
 PERIOD_KINDS = ("period-open", "period-close")
 SESSION_KINDS = ("reserve", "open", "end")
 DECLARATION = "declaration"

@@ -58,8 +58,8 @@ open Lean (Json JsonNumber)
 one non-empty `root_B` per table, the link's points off the first reply's coin, and one well-formed stream per rep
 stream; and its sends are the link of those `root_B`s and no public words, then the streams' rounds in order, each from
 index `1` on (`Recs`). -/
-def SessionFactsJ (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (tabs : Array Setup)
-    (hz : String) (ct : CoinTree.Spec) (r : String × Array ByteArray) (bodies : Array Claims.Msg) : Prop :=
+def SessionFactsJ (h : ByteArray → ByteArray) (resp : ℕ → Hash.Msg) (spec : SessionSpec) (tabs : Array Setup)
+    (hz : String) (ct : CoinTree.Spec) (r : String × Array ByteArray) (bodies : Array Hash.Msg) : Prop :=
   ∃ rbs streams, rbs.size = tabs.size ∧
     r.1 = (printJ (recordObjZk spec h hz ct rbs (ptsOf spec (coinOf (resp 0))) streams r.2)) ∧
     (∀ rb ∈ rbs, 0 < rb.size ∧ rb.size < 2 ^ 64) ∧ streams.size = spec.repStreams.size ∧
@@ -69,7 +69,7 @@ def SessionFactsJ (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spe
 
 /-- **The masked session's facts** at any number of tables, given each table's non-empty masked level-0 cap under
 `2^64` bytes and well-formed rep rounds on its extra claims at the link's points, every rep stream naming a table. -/
-theorem sessionPZk_factsJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec}
+theorem sessionPZk_factsJ (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) {spec : SessionSpec}
     {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Flock.JsonParse.parse spec.hello = .ok own)
     {hz : String} (hc : canon (helloJ own) = .ok hz) (tabs : Array Setup) (words : Array (List ℕ))
     (trs : Array Trace) (tape : TapeZk) (hC : ∀ st ∈ tabs, ∀ v, Zk.schedule st.wideLeaf st.m = .ok v → ∀ g extra lanePad salt cm,
@@ -81,7 +81,7 @@ theorem sessionPZk_factsJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
       Ret ((repPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st v.1 v.2 rep dom tr tb cm₀ extras pads ic extra
         lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
     (hst : ∀ a ∈ spec.repStreams, a.1 < tabs.size)
-    {r : String × Array ByteArray} {bodies : Array Claims.Msg}
+    {r : String × Array ByteArray} {bodies : Array Hash.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec tabs words trs tape).go #[] =
       (.ok r, bodies)) :
     SessionFactsJ (Claims.hOf H) resp spec tabs hz ct r bodies := by
@@ -113,7 +113,7 @@ theorem sessionPZk_factsJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
   simp only [Prod.mk.injEq, Except.ok.injEq, Array.size_empty] at hL
   obtain ⟨rfl, rfl⟩ := hL
   obtain ⟨⟨ss, ps⟩, l₄, hF, hrun⟩ := go_bind_ok hrun
-  have hinv := forIn_array_inv _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Claims.Msg) =>
+  have hinv := forIn_array_inv _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Hash.Msg) =>
       b.1.size = k ∧ b.2.size = k ∧ (∀ rs ∈ b.1, RoundsOk rs) ∧
         ∃ bs, l.toList = linkBody (cms.map fun c => flat c.cap).toList (tabs.map fun _ => ByteArray.empty).toList ::
           bs ∧ Recs resp 1 (b.1.toList.flatMap Array.toList) bs) ?_

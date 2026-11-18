@@ -38,14 +38,14 @@ namespace Flock.Bridge
 open Claims.Sampling
 
 /-- **A witness's values read only the statement's roots.** -/
-theorem val_roots {H : Claims.Msg → Claims.Msg} {Cm : CommitmentScheme Bool} {s s' : AuditStatement} (w : Wit)
+theorem val_roots {H : Hash.Msg → Hash.Msg} {Cm : CommitmentScheme Bool} {s s' : AuditStatement} (w : Wit)
     (h : s.roots = s'.roots) : w.val H Cm s = w.val H Cm s' := by
   unfold Wit.val
   rw [h]
 
 /-- **A value a witness opens passes the commitment** under the statement's roots. -/
-theorem opens_of_val {H : Claims.Msg → Claims.Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {w : Wit} {p : ℕ}
-    {b : Bool} (h : w.val H Cm s p = some b) : ∃ d : Claims.Msg, Cm.Opens H s.roots ⟨p, b, d⟩ = true := by
+theorem opens_of_val {H : Hash.Msg → Hash.Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {w : Wit} {p : ℕ}
+    {b : Bool} (h : w.val H Cm s p = some b) : ∃ d : Hash.Msg, Cm.Opens H s.roots ⟨p, b, d⟩ = true := by
   unfold Wit.val at h
   obtain ⟨o, ho, hb⟩ := Option.map_eq_some_iff.1 h
   have hpo := List.find?_some ho
@@ -122,7 +122,7 @@ theorem not_correct_of_unbound {n : ℕ} (P : Spot.Sampling.Partition C n) (κ :
 any partition `Ps` whose slot `u` is unit `u`'s lowered gates and any witness `w`, a unit unbound in the transcript `w`
 opens, under openings that hold at the constants and wherever `w` opens a value, is faulty. -/
 theorem unbound_subset_faulty_slots {n : ℕ} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
-    (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (hs : s.prog = progOf C κ)
+    (H : Hash.Msg → Hash.Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (hs : s.prog = progOf C κ)
     (Ps : Claims.Sampling.Partition) (hslot : ∀ u : Fin n, Ps.blocks[u.val]? = some (unitGates P u)) (w : Wit)
     (opens : (g : Fin (Verity.Circuit.ofAudit C).N) → BitVec ((Verity.Circuit.ofAudit C).w g) → Prop)
     (hκ : ∀ g b, κ g = some b → (C.op g).isInput = true)
@@ -143,7 +143,7 @@ theorem unbound_subset_faulty_slots {n : ℕ} (P : Spot.Sampling.Partition C n) 
 /-- **The unbound units are faulty, at their proof blocks**: as `unbound_subset_faulty_slots`, at `partOf P κ ns`,
 whose slot `u` is unit `u`'s proof block `blockOf P κ u`, at any strata `ns` that sum to `n`. -/
 theorem unbound_subset_faulty_partOf {n : ℕ} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
-    {ns : List ℕ} (hns : ns.sum = n) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement)
+    {ns : List ℕ} (hns : ns.sum = n) (H : Hash.Msg → Hash.Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement)
     (hs : s.prog = progOf C κ) (w : Wit)
     (opens : (g : Fin (Verity.Circuit.ofAudit C).N) → BitVec ((Verity.Circuit.ofAudit C).w g) → Prop)
     (hκ : ∀ g b, κ g = some b → (C.op g).isInput = true)
@@ -167,13 +167,13 @@ wherever the commitment opens under `roots` (`hop`), satisfies `unbound_subset_f
 `unbound_subset_faulty_partOf`'s premises on the openings, and leaves no unit unbound, when the commitment opens every
 value the constants don't fix and the constants fix only inputs and agree with `Xr`'s evaluation. -/
 theorem unbound_subset_faulty_honest {n : ℕ} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
-    (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (Xr : Fin C.N → Bool)
+    (roots : List Hash.Msg) (H : Hash.Msg → Hash.Msg) (Cm : CommitmentScheme Bool) (Xr : Fin C.N → Bool)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true) (hκ : ∀ g b, κ g = some b → C.eval Xr g = b)
-    (hcom : ∀ g, κ g = none → ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C g, C.eval Xr g, d⟩ = true)
+    (hcom : ∀ g, κ g = none → ∃ d : Hash.Msg, Cm.Opens H roots ⟨posOf C g, C.eval Xr g, d⟩ = true)
     (s : AuditStatement) (hr : s.roots = roots)
     (opens : (g : Fin (Verity.Circuit.ofAudit C).N) → BitVec ((Verity.Circuit.ofAudit C).w g) → Prop)
     (hop : ∀ g v, opens g v ↔
-      κ g = some (v.getLsbD 0) ∨ ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C g, v.getLsbD 0, d⟩ = true) :
+      κ g = some (v.getLsbD 0) ∨ ∃ d : Hash.Msg, Cm.Opens H roots ⟨posOf C g, v.getLsbD 0, d⟩ = true) :
     (∀ g b, κ g = some b → opens g (BitVec.ofBool b)) ∧
       (∀ g b, κ g = none → (witDep C Cm H roots Xr).val H Cm s (posOf C g) = some b → opens g (BitVec.ofBool b)) ∧
       ResourceAccounting.unbound (Verity.Partition.ofAudit P) opens
@@ -220,8 +220,8 @@ open Unbound in
 commitment that passes every opening, at any roots and strata of its one unit, the witness opening its evaluation on
 the input `false` leaves the unit not faulty, while openings that open nothing leave it unbound. Every premise of
 `unbound_subset_faulty_partOf` but the openings' holds there: the constants fix nothing. -/
-theorem unbound_subset_faulty_nontrivial (H : Claims.Msg → Claims.Msg) (roots : List Claims.Msg) {ns : List ℕ}
-    (hns : ns.sum = 1) (r : OneStage) (desc : Claims.Msg) (q : Query) :
+theorem unbound_subset_faulty_nontrivial (H : Hash.Msg → Hash.Msg) (roots : List Hash.Msg) {ns : List ℕ}
+    (hns : ns.sum = 1) (r : OneStage) (desc : Hash.Msg) (q : Query) :
     let Cm : CommitmentScheme Bool := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩
     let s := stmtOf notPartition (fun _ => none) r desc q roots
     let w := witDep notCircuit Cm H roots (fun _ => false)

@@ -37,7 +37,7 @@ what the session ran with. `verity bench memory --help` lists its other ways in.
   Its vLLM and torch must be built for your card's CUDA. The recipe as written (no pin, index or extra) was run from
   nothing on an H200: `uv venv` fetched Python 3.12 itself, and the install gave vLLM 0.33.0 and torch
   `2.14.0+cu130`, which served the session; earlier runs used a vLLM development build and torch `2.13.0+cu129`.
-- **The CUDA toolkit with `nvcc`** (under `/usr/local/cuda*` or `CUDA_HOME`). The driver alone is not enough: the
+- **The CUDA toolkit with `nvcc`** (`CUDA_HOME`, else the machine's toolkit: `python3 benchmarks/kernels/machine.py toolkit`). The driver alone is not enough: the
   session compiles its kernels for your card.
 - **Lean:** `bash tools/verity/lean/setup.sh verity/protocols/resource_accounting/memory/poub/verifier/lean` installs `elan` and the
   verifier's dependencies. On your machine the Lean verifier builds from source: several minutes and about 4 GB of

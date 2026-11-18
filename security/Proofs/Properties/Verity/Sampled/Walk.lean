@@ -187,7 +187,7 @@ def optOpenK (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : Lis
 
 section Cuts
 
-variable (P : List Release → Frame → Prop) (rv : β → Option Claims.Msg)
+variable (P : List Release → Frame → Prop) (rv : β → Option Hash.Msg)
 
 /-- A round's cut after a fresh frame it doesn't pick. -/
 noncomputable def freshCut (k : ℕ) (ts : List OpenTree) (f : List Release → Game β) (pre : List Release) (l : String)
@@ -223,7 +223,7 @@ open Classical in
 picks the frame after the log `pre`; otherwise the cut after the opening's coin. -/
 noncomputable def openCut (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β)
     (pre : List Release) (i s n : ℕ) (b : ByteArray) (o : Option OpenTree) :
-    DigestCut Claims.Msg (optOpenK k fs ts f i s n b o) :=
+    DigestCut Hash.Msg (optOpenK k fs ts f i s n b o) :=
   (if P pre (.opening i s n) then cutAt rv b.data.toList else optOpenCut P rv k fs ts f pre i s n b o).cut
 
 variable {P rv}
@@ -461,15 +461,15 @@ variable {g : Game β} {σ : Strategy g}
 the node after an opening frame of the `i`-th tree's stream `s` that a live round picks after the log `pre ++ L`, the
 device's frames left `k`, families `fs` and trees `ts` (the ones that log shows, `TreesOf`), the continuation `f` after
 `L`, with the live rounds' cuts there (`openCut`). -/
-def StopOf (P : ι → List Release → Frame → Prop) (rv : ι → β → Option Claims.Msg) (pre : List Release)
-    (f : List Release → Game β) (a : ι → Prop) (q : Pos g σ Claims.Msg ι) : Prop :=
+def StopOf (P : ι → List Release → Frame → Prop) (rv : ι → β → Option Hash.Msg) (pre : List Release)
+    (f : List Release → Game β) (a : ι → Prop) (q : Pos g σ Hash.Msg ι) : Prop :=
   ∃ L, NoPick P a pre L ∧
     (((∀ j, q.Ks j = .skip) ∧ ∃ y, q.g' = .ret y ∧ ∃ s₀ x₀, CoinTape.run (f L) s₀ x₀ = y) ∨
       ∃ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f' : List Release → Game β) (i s n : ℕ)
         (b : ByteArray), (∀ log, f' log = f (L ++ log)) ∧ TreesOf (pre ++ L) ts ∧
         (∃ j, a j ∧ P j (pre ++ L) (.opening i s n)) ∧
         ∃ (s'' : Strategy (optOpenK k fs ts f' i s n b ts[i]?))
-          (Ks : ι → DigestCut Claims.Msg (optOpenK k fs ts f' i s n b ts[i]?))
+          (Ks : ι → DigestCut Hash.Msg (optOpenK k fs ts f' i s n b ts[i]?))
           (x'' : CoinTape (optOpenK k fs ts f' i s n b ts[i]?) s'')
           (back'' : CoinTape (optOpenK k fs ts f' i s n b ts[i]?) s'' → CoinTape g σ),
           q = ⟨optOpenK k fs ts f' i s n b ts[i]?, s'', Ks, x'', back''⟩ ∧
@@ -478,16 +478,16 @@ def StopOf (P : ι → List Release → Frame → Prop) (rv : ι → β → Opti
 /-- **The walk from the device's releases with `k` frames left stops as `StopOf` says**, at every families,
 continuation, log, trees that log shows and live rounds, the live rounds' cuts those at the first frame their readings
 pick. -/
-def RelStops (P : ι → List Release → Frame → Prop) (rv : ι → β → Option Claims.Msg) (k : ℕ) : Prop :=
+def RelStops (P : ι → List Release → Frame → Prop) (rv : ι → β → Option Hash.Msg) (k : ℕ) : Prop :=
   ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β) (pre : List Release) (a : ι → Prop)
-    (s' : Strategy (relK k fs ts f)) (Ks : ι → DigestCut Claims.Msg (relK k fs ts f))
+    (s' : Strategy (relK k fs ts f)) (Ks : ι → DigestCut Hash.Msg (relK k fs ts f))
     (x : CoinTape (relK k fs ts f) s') (back : CoinTape (relK k fs ts f) s' → CoinTape g σ), TreesOf pre ts →
     DigestCut.LiveCuts a (fun j => (frameCut (P j) (rv j) k fs ts f pre).cut) Ks →
       StopOf P rv pre f a (Pos.walk (relK k fs ts f) s' Ks x back)
 
-variable {P : ι → List Release → Frame → Prop} {rv : ι → β → Option Claims.Msg}
+variable {P : ι → List Release → Frame → Prop} {rv : ι → β → Option Hash.Msg}
 
-theorem stopOf_cons {pre : List Release} {f : List Release → Game β} {a : ι → Prop} {q : Pos g σ Claims.Msg ι}
+theorem stopOf_cons {pre : List Release} {f : List Release → Game β} {a : ι → Prop} {q : Pos g σ Hash.Msg ι}
     (r : Release) (hr : ∀ j, a j → ¬ P j pre r.frame) (h : StopOf P rv (pre ++ [r]) (fun log => f (r :: log)) a q) :
     StopOf P rv pre f a q := by
   obtain ⟨L, hL, h⟩ := h
@@ -499,7 +499,7 @@ theorem stopOf_cons {pre : List Release} {f : List Release → Game β} {a : ι 
     exact Or.inr ⟨k, fs, ts, f', i, s, n, b, hf, hT, ⟨j, hj, hp⟩, s'', Ks, x'', back'', hq, hKs⟩
 
 theorem stopOf_end {pre : List Release} {f : List Release → Game β} {a : ι → Prop} (s' : Strategy (f []))
-    (Ks : ι → DigestCut Claims.Msg (f [])) (x : CoinTape (f []) s') (back : CoinTape (f []) s' → CoinTape g σ)
+    (Ks : ι → DigestCut Hash.Msg (f [])) (x : CoinTape (f []) s') (back : CoinTape (f []) s' → CoinTape g σ)
     (h : ∀ j, Ks j = .skip) : StopOf P rv pre f a (Pos.walk (f []) s' Ks x back) := by
   obtain ⟨hK, hg⟩ := Pos.walk_skip (f []) s' Ks x back h
   exact ⟨[], noPick_nil P a pre, Or.inl ⟨hK, _, hg, s', x, rfl⟩⟩
@@ -507,12 +507,12 @@ theorem stopOf_end {pre : List Release} {f : List Release → Game β} {a : ι �
 /-- **The walk from a decision's node stops as the walk from the branch it takes does**, at that branch's cuts. -/
 theorem stopOf_ite {pre : List Release} {f : List Release → Game β} {a : ι → Prop} {c : Prop} {t e : Game β}
     {Ct : ι → DigestCut.AgreeCut sha512Msg t} {Ce : ι → DigestCut.AgreeCut sha512Msg e} :
-    ∀ (dc : Decidable c) (s' : Strategy (@ite _ c dc t e)) (Ks : ι → DigestCut Claims.Msg (@ite _ c dc t e))
+    ∀ (dc : Decidable c) (s' : Strategy (@ite _ c dc t e)) (Ks : ι → DigestCut Hash.Msg (@ite _ c dc t e))
       (x : CoinTape (@ite _ c dc t e) s') (back : CoinTape (@ite _ c dc t e) s' → CoinTape g σ),
-      (c → ∀ (s' : Strategy t) (Ks : ι → DigestCut Claims.Msg t) (x : CoinTape t s')
+      (c → ∀ (s' : Strategy t) (Ks : ι → DigestCut Hash.Msg t) (x : CoinTape t s')
         (back : CoinTape t s' → CoinTape g σ), DigestCut.LiveCuts a (fun j => (Ct j).cut) Ks →
           StopOf P rv pre f a (Pos.walk t s' Ks x back)) →
-      (¬ c → ∀ (s' : Strategy e) (Ks : ι → DigestCut Claims.Msg e) (x : CoinTape e s')
+      (¬ c → ∀ (s' : Strategy e) (Ks : ι → DigestCut Hash.Msg e) (x : CoinTape e s')
         (back : CoinTape e s' → CoinTape g σ), DigestCut.LiveCuts a (fun j => (Ce j).cut) Ks →
           StopOf P rv pre f a (Pos.walk e s' Ks x back)) →
       DigestCut.LiveCuts a (fun j => (DigestCut.AgreeCut.iteCut (dc := dc) (Ct j) (Ce j)).cut) Ks →
@@ -522,7 +522,7 @@ theorem stopOf_ite {pre : List Release} {f : List Release → Game β} {a : ι �
 
 theorem stopOf_open {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game β}
     {pre : List Release} {i s n : ℕ} {b : ByteArray} {a : ι → Prop}
-    (s' : Strategy (optOpenK k fs ts f i s n b ts[i]?)) (Ks : ι → DigestCut Claims.Msg (optOpenK k fs ts f i s n b ts[i]?))
+    (s' : Strategy (optOpenK k fs ts f i s n b ts[i]?)) (Ks : ι → DigestCut Hash.Msg (optOpenK k fs ts f i s n b ts[i]?))
     (x : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s')
     (back : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s' → CoinTape g σ) (hT : TreesOf pre ts)
     (hKs : DigestCut.LiveCuts a (fun j => openCut (P j) (rv j) k fs ts f pre i s n b ts[i]?) Ks)
@@ -546,7 +546,7 @@ include IH
 theorem walk_freshK {ts : List OpenTree} {f : List Release → Game β} {pre : List Release} {l : String}
     {b : ByteArray} {a : ι → Prop} (hn : ∀ j, a j → ¬ P j pre (.fresh l)) (hT : TreesOf pre ts) :
     ∀ (o : Option (List (String × ℕ))) (s' : Strategy (freshK k ts f l b o))
-      (Ks : ι → DigestCut Claims.Msg (freshK k ts f l b o)) (x : CoinTape (freshK k ts f l b o) s')
+      (Ks : ι → DigestCut Hash.Msg (freshK k ts f l b o)) (x : CoinTape (freshK k ts f l b o) s')
       (back : CoinTape (freshK k ts f l b o) s' → CoinTape g σ),
       DigestCut.LiveCuts a (fun j => (freshCut (P j) (rv j) k ts f pre l b o).cut) Ks →
         StopOf P rv pre f a (Pos.walk (freshK k ts f l b o) s' Ks x back)
@@ -562,7 +562,7 @@ theorem walk_freshK {ts : List OpenTree} {f : List Release → Game β} {pre : L
 theorem walk_helloK {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game β} {pre : List Release}
     {spec : Flock.CoinTree.Spec} {ν : ByteArray} {a : ι → Prop} (hn : ∀ j, a j → ¬ P j pre (.hello spec))
     (hT : TreesOf pre ts) (s' : Strategy (helloK k fs ts f spec ν))
-    (Ks : ι → DigestCut Claims.Msg (helloK k fs ts f spec ν)) (x : CoinTape (helloK k fs ts f spec ν) s')
+    (Ks : ι → DigestCut Hash.Msg (helloK k fs ts f spec ν)) (x : CoinTape (helloK k fs ts f spec ν) s')
     (back : CoinTape (helloK k fs ts f spec ν) s' → CoinTape g σ)
     (hKs : DigestCut.LiveCuts a (fun j => (helloCut (P j) (rv j) k fs ts f pre spec ν).cut) Ks) :
     StopOf P rv pre f a (Pos.walk (helloK k fs ts f spec ν) s' Ks x back) := by
@@ -582,7 +582,7 @@ theorem walk_treeOpenK {fs : List (String × ℕ)} {ts : List OpenTree} {f : Lis
     (hT : TreesOf pre ts) (T : OpenTree) (hTi : ts[i]? = some T) :
     ∀ (q : Option (Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog))), T.next s n = q →
       ∀ (s' : Strategy (treeOpenK k fs ts f i s n b T q))
-        (Ks : ι → DigestCut Claims.Msg (treeOpenK k fs ts f i s n b T q))
+        (Ks : ι → DigestCut Hash.Msg (treeOpenK k fs ts f i s n b T q))
         (x : CoinTape (treeOpenK k fs ts f i s n b T q) s')
         (back : CoinTape (treeOpenK k fs ts f i s n b T q) s' → CoinTape g σ),
         DigestCut.LiveCuts a (fun j => (treeOpenCut (P j) (rv j) k fs ts f pre i s n b T q).cut) Ks →
@@ -600,7 +600,7 @@ theorem walk_optOpenK {fs : List (String × ℕ)} {ts : List OpenTree} {f : List
     {pre : List Release} {i s n : ℕ} {b : ByteArray} {a : ι → Prop} (hn : ∀ j, a j → ¬ P j pre (.opening i s n))
     (hT : TreesOf pre ts) :
     ∀ (o : Option OpenTree), ts[i]? = o → ∀ (s' : Strategy (optOpenK k fs ts f i s n b o))
-      (Ks : ι → DigestCut Claims.Msg (optOpenK k fs ts f i s n b o)) (x : CoinTape (optOpenK k fs ts f i s n b o) s')
+      (Ks : ι → DigestCut Hash.Msg (optOpenK k fs ts f i s n b o)) (x : CoinTape (optOpenK k fs ts f i s n b o) s')
       (back : CoinTape (optOpenK k fs ts f i s n b o) s' → CoinTape g σ),
       DigestCut.LiveCuts a (fun j => (optOpenCut (P j) (rv j) k fs ts f pre i s n b o).cut) Ks →
         StopOf P rv pre f a (Pos.walk (optOpenK k fs ts f i s n b o) s' Ks x back) := by
@@ -650,7 +650,7 @@ theorem walk_relK (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i 
 cast onto it. -/
 theorem walk_cast (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n) {k : ℕ} {fs : List (String × ℕ)}
     {ts : List OpenTree} {f : List Release → Game β} {pre : List Release} {a : ι → Prop} {g' : Game β}
-    (h : relK k fs ts f = g') (s' : Strategy g') (Ks : ι → DigestCut Claims.Msg g') (x : CoinTape g' s')
+    (h : relK k fs ts f = g') (s' : Strategy g') (Ks : ι → DigestCut Hash.Msg g') (x : CoinTape g' s')
     (back : CoinTape g' s' → CoinTape g σ) (hT : TreesOf pre ts)
     (hKs : DigestCut.LiveCuts a (fun j => ((frameCut (P j) (rv j) k fs ts f pre).cast h).cut) Ks) :
     StopOf P rv pre f a (Pos.walk g' s' Ks x back) := by
@@ -668,7 +668,7 @@ continuing to `f` at the request the strategy sends, at the cuts after each requ
 equal to. -/
 theorem walk_send_cast (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n) {k : ℕ}
     {fs : List (String × ℕ)} {f : ByteArray → List Release → Game β} {a : ι → Prop} {g' : Game β}
-    (h : (Game.send ByteArray fun r => relK k fs [] (f r)) = g') (s' : Strategy g') (Ks : ι → DigestCut Claims.Msg g')
+    (h : (Game.send ByteArray fun r => relK k fs [] (f r)) = g') (s' : Strategy g') (Ks : ι → DigestCut Hash.Msg g')
     (x : CoinTape g' s') (back : CoinTape g' s' → CoinTape g σ)
     (hKs : DigestCut.LiveCuts a
       (fun j => ((DigestCut.AgreeCut.send fun r => frameCut (P j) (rv j) k fs [] (f r) []).cast h).cut) Ks) :
@@ -682,7 +682,7 @@ theorem walk_send_cast (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .openi
 opening's coin. -/
 theorem liveCuts_consume {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game β}
     {pre : List Release} {i s n : ℕ} {b : ByteArray} {o : Option OpenTree} {a : ι → Prop}
-    {Ks : ι → DigestCut Claims.Msg (optOpenK k fs ts f i s n b o)}
+    {Ks : ι → DigestCut Hash.Msg (optOpenK k fs ts f i s n b o)}
     (h : DigestCut.LiveCuts a (fun j => openCut (P j) (rv j) k fs ts f pre i s n b o) Ks) :
     DigestCut.LiveCuts (fun j => a j ∧ ¬ P j pre (.opening i s n))
       (fun j => (optOpenCut (P j) (rv j) k fs ts f pre i s n b o).cut)
@@ -702,7 +702,7 @@ theorem liveCuts_consume {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTr
 /-- **At a stop after an opening frame, a round's cut is fixed exactly where the round is live and picks the frame.** -/
 theorem isHere_openCuts {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game β}
     {pre : List Release} {i s n : ℕ} {b : ByteArray} {o : Option OpenTree} {a : ι → Prop}
-    {Ks : ι → DigestCut Claims.Msg (optOpenK k fs ts f i s n b o)}
+    {Ks : ι → DigestCut Hash.Msg (optOpenK k fs ts f i s n b o)}
     (h : DigestCut.LiveCuts a (fun j => openCut (P j) (rv j) k fs ts f pre i s n b o) Ks) (j : ι) :
     (Ks j).isHere = true ↔ a j ∧ P j pre (.opening i s n) := by
   by_cases ha : a j
@@ -718,8 +718,8 @@ theorem isHere_openCuts {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTre
 the frame and on any rewriting of the tape there. -/
 theorem stopOf_next (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n) {k : ℕ} {fs : List (String × ℕ)}
     {ts : List OpenTree} {f : List Release → Game β} {pre : List Release} {i s n : ℕ} {b : ByteArray}
-    {a : ι → Prop} {q : Pos g σ Claims.Msg ι} (s'' : Strategy (optOpenK k fs ts f i s n b ts[i]?))
-    (Ks : ι → DigestCut Claims.Msg (optOpenK k fs ts f i s n b ts[i]?))
+    {a : ι → Prop} {q : Pos g σ Hash.Msg ι} (s'' : Strategy (optOpenK k fs ts f i s n b ts[i]?))
+    (Ks : ι → DigestCut Hash.Msg (optOpenK k fs ts f i s n b ts[i]?))
     (x'' : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s'')
     (back'' : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s'' → CoinTape g σ)
     (hq : q = ⟨optOpenK k fs ts f i s n b ts[i]?, s'', Ks, x'', back''⟩) (hT : TreesOf pre ts)

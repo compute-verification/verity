@@ -11,7 +11,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.device import load_card, load_node, node_kinds  # noqa: E402
+from verity.device import load_card, load_node, node_kinds, number  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import timing  # noqa: E402
 
 CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
@@ -31,7 +31,8 @@ UNSHEETED = {
 }
 # No figure here is measured on an H200 or H100 node, nor its card's on-chip storage counted: their sessions read the
 # RTX PRO 6000 node's (its card's `store.chip` for the GPU's), as the measured node's.
-UNSHEETED |= {kind: UNSHEETED["rtx-pro-6000-server-x8"] | {"gpu_chip_bytes": 263_163_904}
+UNSHEETED |= {kind: UNSHEETED["rtx-pro-6000-server-x8"]
+              | {"gpu_chip_bytes": int(number(load_card("rtx-pro-6000-server", directory=CARD_FILES)["store"]["chip"]))}
               for kind in ("h200-sxm-141gb-x1", "h100-sxm-80gb-x1")}
 """Per node kind, the figures a session's ledger reads that no data sheet states."""
 

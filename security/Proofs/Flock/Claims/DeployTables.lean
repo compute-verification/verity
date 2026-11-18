@@ -101,7 +101,7 @@ namespace KS.Gen
 variable [S : ZkSetup]
 
 /-- **A setup makes as many tables as the parsed statement counts.** -/
-theorem setupOf_size_eq_tables {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+theorem setupOf_size_eq_tables {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Hash.Msg}
     {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {s : Claims.Flock.Stmt}
     (h : setupOf zk x = some (i, spec, sts)) (hp : parse zk rel x = some s) : sts.size = s.tables := by
   obtain ⟨hi, hs⟩ := setupOf_some h
@@ -120,7 +120,7 @@ theorem setupOf_size_eq_tables {zk : Bool} {rel : Readable.Parsed → Readable.R
 end KS.Gen
 
 /-- **A setup makes as many tables as the parsed statement counts.** -/
-theorem setupOf_size_eq_tables {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+theorem setupOf_size_eq_tables {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Hash.Msg}
     {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {s : Claims.Flock.Stmt}
     (h : setupOf zk x = some (i, spec, sts)) (hp : parse zk rel x = some s) : sts.size = s.tables :=
   KS.Gen.setupOf_size_eq_tables (S := KS.S₀) (zk := zk) (rel := rel) (x := x) (i := i) (spec := spec) (sts := sts)
@@ -132,7 +132,7 @@ variable [S : ZkSetup]
 
 /-- **The records' tables are the parsed statement's**: where the statement sets up, the session's tables number
 `Claims.Flock.Stmt.tables` of the parsed statement. -/
-theorem tables_length {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+theorem tables_length {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Hash.Msg}
     {s : Claims.Flock.Stmt} (hp : parse zk rel x = some s) (hx : (setupOf zk x).isSome) :
     (tables zk x).length = s.tables := by
   obtain ⟨⟨i, spec, sts⟩, h⟩ := Option.isSome_iff_exists.1 hx
@@ -144,7 +144,7 @@ end KS.Gen
 
 /-- **The records' tables are the parsed statement's**: where the statement sets up, the session's tables number
 `Claims.Flock.Stmt.tables` of the parsed statement. -/
-theorem tables_length {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+theorem tables_length {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Hash.Msg}
     {s : Claims.Flock.Stmt} (hp : parse zk rel x = some s) (hx : (setupOf zk x).isSome) :
     (tables zk x).length = s.tables :=
   KS.Gen.tables_length (S := KS.S₀) (zk := zk) (rel := rel) (x := x) (s := s) (hp := hp) (hx := hx)
@@ -160,7 +160,7 @@ variable [S : ZkSetup]
 
 /-- **What the claims' parser accepts**: the readable form of a statement the verifier parses, whose tables number
 `Claims.Flock.Stmt.tables`, and each table's own statement (`table`) is its table alone. -/
-theorem parsed_of_parse {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+theorem parsed_of_parse {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Hash.Msg}
     {s : Claims.Flock.Stmt} (hs : parse zk rel x = some s) :
     ∃ p : Readable.Parsed, Readable.parseBytes (readOf zk) x = some p ∧ s = Readable.toReadable rel p ∧
       Readable.Parses p ∧ p.sts.size = s.tables ∧ ∀ j, table zk rel x j = some (Readable.toReadable rel (p.only j)) := by
@@ -174,7 +174,7 @@ end KS.Gen
 
 /-- **What the claims' parser accepts**: the readable form of a statement the verifier parses, whose tables number
 `Claims.Flock.Stmt.tables`, and each table's own statement (`table`) is its table alone. -/
-theorem parsed_of_parse {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+theorem parsed_of_parse {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Hash.Msg}
     {s : Claims.Flock.Stmt} (hs : parse zk rel x = some s) :
     ∃ p : Readable.Parsed, Readable.parseBytes (readOf zk) x = some p ∧ s = Readable.toReadable rel p ∧
       Readable.Parses p ∧ p.sts.size = s.tables ∧ ∀ j, table zk rel x j = some (Readable.toReadable rel (p.only j)) :=
@@ -187,7 +187,7 @@ variable [S : ZkSetup]
 /-- **The deployed relation splits by table**: at an in-scope statement the claims' parser accepts, a witness is in the
 relation exactly when, for every table `j`, its share (`Readable.tableWit`: hidden values `a·J + j`) is in the relation
 of table `j`'s own statement (`table`). -/
-theorem relS_split {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem relS_split {zk : Bool} {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse zk Readable.relation x = some s) (hin : Claims.Flock.InScope zk s) (w : Claims.Flock.Wit) :
     Claims.Flock.RelS s w ↔ ∀ j < s.tables, ∃ t, table zk Readable.relation x j = some t ∧
       Claims.Flock.RelS t (Readable.tableWit s.tables w j) := by
@@ -203,14 +203,14 @@ end KS.Gen
 /-- **The deployed relation splits by table**: at an in-scope statement the claims' parser accepts, a witness is in the
 relation exactly when, for every table `j`, its share (`Readable.tableWit`: hidden values `a·J + j`) is in the relation
 of table `j`'s own statement (`table`). -/
-theorem relS_split {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem relS_split {zk : Bool} {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse zk Readable.relation x = some s) (hin : Claims.Flock.InScope zk s) (w : Claims.Flock.Wit) :
     Claims.Flock.RelS s w ↔ ∀ j < s.tables, ∃ t, table zk Readable.relation x j = some t ∧
       Claims.Flock.RelS t (Readable.tableWit s.tables w j) :=
   KS.Gen.relS_split (S := KS.S₀) (zk := zk) (x := x) (s := s) (hs := hs) (hin := hin) (w := w)
 
 /-- **At one table, the table's own statement is the statement.** -/
-theorem table_zero_of_tables_eq_one {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+theorem table_zero_of_tables_eq_one {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Hash.Msg}
     {s : Claims.Flock.Stmt} (hs : parse zk rel x = some s) (h1 : s.tables = 1) : table zk rel x 0 = some s := by
   obtain ⟨p, -, rfl, -, hsz, htab⟩ := parsed_of_parse hs
   have h1' : p.sts.size = 1 := hsz.trans h1
@@ -230,7 +230,7 @@ reads the tables' traces interleaved (`Claims.Flock.readTables`): each table's c
 statement's relation, and read as one witness each table's values are its share (`Claims.Flock.readTables_getD`), so the
 split (`relS_split`) gives the statement's. -/
 theorem relS_of_assemble {zk : Bool} {Col T : Type} (r : T → Claims.Flock.Wit) (decode : List (ℕ × Col) → List T)
-    {x : Claims.Msg} {opens : List (ℕ → List (ℕ × Col))} {s : Claims.Flock.Stmt} {w : Claims.Flock.Wit}
+    {x : Hash.Msg} {opens : List (ℕ → List (ℕ × Col))} {s : Claims.Flock.Stmt} {w : Claims.Flock.Wit}
     (hs : parse zk Readable.relation x = some s) (hin : Claims.Flock.InScope zk s)
     (h : Claims.Flock.assemble (parse zk Readable.relation) (table zk Readable.relation) decode
       (Claims.Flock.readTables r) x opens = some w) :
@@ -246,7 +246,7 @@ theorem relS_of_assemble {zk : Bool} {Col T : Type} (r : T → Claims.Flock.Wit)
 /-- **The masked record's `assemble` at one table reads as before**: the first decoded trace of table `0`'s columns whose
 read is in the relation. -/
 theorem assemble_deployZk_one (rel : Readable.Parsed → Readable.Relation)
-    (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.ZkTrace) (x : Claims.Msg)
+    (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.ZkTrace) (x : Hash.Msg)
     (opens : List (ℕ → List (ℕ × List FlockLevel3.GF128))) {s : Claims.Flock.Stmt}
     (hs : (deployZk rel).parse x = some s) (h1 : s.tables = 1) :
     Claims.Flock.assemble (deployZk rel).parse (deployZk rel).table decode (deployZk rel).read x opens =
@@ -258,7 +258,7 @@ theorem assemble_deployZk_one (rel : Readable.Parsed → Readable.Relation)
 /-- **The plain record's `assemble` at one table reads as before**: the first decoded trace of table `0`'s columns whose
 read is in the relation. -/
 theorem assemble_deployPlain_one (rel : Readable.Parsed → Readable.Relation)
-    (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (x : Claims.Msg)
+    (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (x : Hash.Msg)
     (opens : List (ℕ → List (ℕ × List FlockLevel3.GF128))) {s : Claims.Flock.Stmt}
     (hs : (deployPlain rel).parse x = some s) (h1 : s.tables = 1) :
     Claims.Flock.assemble (deployPlain rel).parse (deployPlain rel).table decode (deployPlain rel).read x opens =

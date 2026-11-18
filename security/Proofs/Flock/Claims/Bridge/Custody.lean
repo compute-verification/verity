@@ -428,8 +428,8 @@ theorem decode_live {spec : SessionSpec} {text : String} {sess : RunRecord} {lv 
 
 /-- **What `checks` establishes**: the last message's statement is `x`, the record's live session reads (`liveOf`),
 and its custody passes; the record's sample is the statement's up to key order (`checks_sample`). -/
-theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
-    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} (h : checks zk s spec x link c₁ mids f = .ok ()) :
+theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Hash.Msg} {link : List ByteArray × List ByteArray}
+    {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final} (h : checks zk s spec x link c₁ mids f = .ok ()) :
     f.stmt = x ∧ ∃ lv, liveOf spec f.record = .ok lv ∧ custody spec lv link c₁ mids = .ok () := by
   unfold checks at h
   obtain ⟨_, h1, h⟩ := ebind_ok h
@@ -440,8 +440,8 @@ theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {l
 
 /-- **The checks hold the record to its canonical text** (S0, last): it is what `printT` prints of what it parses to
 (`Flock.RecordText.check_ok`). -/
-theorem checks_canonical {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem checks_canonical {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : Flock.RecordText.check f.record = .ok () := by
   unfold checks at h
   obtain ⟨_, -, h⟩ := ebind_ok h
@@ -454,8 +454,8 @@ theorem checks_canonical {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.
 
 /-- **The checks pin the record's sample to the statement's, whatever its key order**: `sampleEq` passes exactly on
 equivalent values (`sampleEq_iff`). -/
-theorem checks_sample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem checks_sample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) :
     Option.Rel JsonEquiv (Exec.recordDraw f.record) s.read.draw := by
   unfold checks at h
@@ -478,16 +478,16 @@ theorem recordSample_norm {record : String} {d : Json} (h : Exec.recordDraw reco
 (`insOf`): both samples are rebuilt (`recordSample_norm`, `insOf_sample_norm`), and two rebuilt values the sample check passes
 on are equal (`eq_of_rel_norm`). This is the `hdraw` of `setupOf_record` and `recordsLiveAt_of_checks`, with no premise
 on the JSON parser. -/
-theorem recordSample_of_checks {zk zk' : Bool} {s : Ins} {spec : SessionSpec} {x x' : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem recordSample_of_checks {zk zk' : Bool} {s : Ins} {spec : SessionSpec} {x x' : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (hs : insOf zk' x' = some s) (h : checks zk s spec x link c₁ mids f = .ok ()) :
     Exec.recordDraw f.record = s.read.draw :=
   eq_of_rel_norm (checks_sample h) (fun _ hd => recordSample_norm hd) (fun _ hd => (insOf_sample_norm hs hd).1)
 
 /-- **An accepting decision's record carries the statement's sample, as a value** (`recordSample_of_checks`). -/
-theorem recordSample_of_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+theorem recordSample_of_decide {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (ha : act zk x as cs = .decide s spec sts link c₁ mids f)
+    {mids : List (Hash.Msg × Coin)} {f : Final} (ha : act zk x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((next zk x as cs).eval sha512).1 = .acc) : Exec.recordDraw f.record = s.read.draw :=
   recordSample_of_checks (setupOf_some (act_decide ha)).1 ((next_decide_sha512 ha).1 hacc).2
 
@@ -495,7 +495,7 @@ theorem recordSample_of_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Ms
 points the first coin's, and its rounds, flattened in `spec.repStreams` order, the round messages with their coins: each
 round's retained bytes are its message and its coins the first `n` of its coin. -/
 theorem custody_ok {spec : SessionSpec} {lv : Live} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} (h : custody spec lv link c₁ mids = .ok ()) :
+    {mids : List (Hash.Msg × Coin)} (h : custody spec lv link c₁ mids = .ok ()) :
     lv.rootB.toList = link.1 ∧ lv.publics.toList = link.2 ∧ lv.points = pointsOf spec c₁ ∧
       List.Forall₂ (fun rd am => rd.bytes = some ⟨am.1.toArray⟩ ∧ rd.coins = am.2.vals rd.n)
         (lv.streams.toList.flatMap (·.toList)) mids := by
@@ -513,8 +513,8 @@ theorem custody_ok {spec : SessionSpec} {lv : Live} {link : List ByteArray × Li
 /-! ## No `--public-inputs` -/
 
 /-- **The checks run the verifier's scope check** (`Read.check`, `ProvedScope.check`). -/
-theorem checks_scope {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem checks_scope {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : s.read.check = .ok () := by
   unfold checks at h
   obtain ⟨_, -, h⟩ := ebind_ok h
@@ -530,14 +530,14 @@ theorem publicInputs_none_of_check {r : Readable.Read} (h : r.check = .ok ()) : 
   exact Option.not_isSome_iff_eq_none.1 (by simp [hR.2.2.2.2.2])
 
 /-- **A statement `Deploy.V`'s checks pass carries no `--public-inputs`**: the checks run the scope check. -/
-theorem publicInputs_none_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem publicInputs_none_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : s.read.publicInputs = none :=
   publicInputs_none_of_check (checks_scope h)
 
 /-- **`InScope` excludes `--public-inputs`** at the verifier's reading of the statement: where the claims' parser reads
 `x` as `st` and `st` is in scope, the inputs the verifier reads of `x` (at a decision, `setupOf_some`) carry none. -/
-theorem publicInputs_none_of_inScope {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+theorem publicInputs_none_of_inScope {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Hash.Msg}
     {st : Claims.Flock.Stmt} {s : Ins} (hp : FlockDeploy.parse zk rel x = some st)
     (hin : Claims.Flock.InScope zk st) (hs : insOf zk x = some s) : s.read.publicInputs = none := by
   obtain ⟨p, hpb, rfl⟩ := Option.map_eq_some_iff.1 hp
@@ -613,8 +613,8 @@ theorem setupOf_zkInputs {r : Readable.Read} {spec : SessionSpec} {sts : Array S
 (`hdraw`), that is the session and tables `Deploy.V` set up at the statement's. The checks give the sample only up to key
 order (`checks_sample`), and the setup keeps the sample itself: `Stmt.setupTables` makes it the session's `unitSample`, and
 `HmRow.drawn` writes it into the public header (`setObjVal!`), whose `canon` the public digest hashes. -/
-theorem setupOf_record {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem setupOf_record {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (hs : s.setup = .ok (spec, sts)) (hc : checks zk s spec x link c₁ mids f = .ok ())
     (hdraw : Exec.recordDraw f.record = s.read.draw) :
     Exec.setupOf (if s.read.zk then ZkExec.zkInputs s.read.I else s.read.I) f.record = .ok (spec, sts) := by
@@ -679,8 +679,8 @@ def viewOf (J mPts : ℕ) (spec : SessionSpec) (link : List ByteArray × List By
 /-- **The outcome's rounds are the round messages with their coins**, where the custody checks pass: its streams, one per
 rep stream, flatten in `spec.repStreams` order to rounds whose retained bytes are the round messages and whose coins
 are the first `n` of each message's coin. -/
-theorem viewOf_rounds {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem viewOf_rounds {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (hc : checks zk s spec x link c₁ mids f = .ok ()) :
     (liveD spec f.record).streams.size = spec.repStreams.size ∧
       List.Forall₂ (fun rd am => rd.bytes = some ⟨am.1.toArray⟩ ∧ rd.coins = am.2.vals rd.n)
@@ -716,8 +716,8 @@ theorem recordsLiveZKJ_iff {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : F
 (so with no `--public-inputs`, `publicInputs_none_of_checks`), and the record's sample is the statement's (`hdraw`), the
 last message's record and proof files are a record of the run's live outcome (`viewOf`), at any `J` of the session's
 tables. -/
-theorem recordsLiveAt_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem recordsLiveAt_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     {J mPts : ℕ} {d : Json} (hs : s.setup = .ok (spec, sts)) (hzk : s.read.zk = true)
     (hdraw : Exec.recordDraw f.record = s.read.draw) (hd : s.read.draw = some d)
     (hJ : J ≤ spec.tables.size) (hc : checks zk s spec x link c₁ mids f = .ok ()) :
@@ -787,8 +787,8 @@ theorem recordCustodyZKJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj :
 outcome**: on a statement of sample `d`, the last message's record and proof files are accepted by `verify --zk`
 (`AcceptsZK`) at the statement's inputs, and record the run's live outcome `viewOf` (`RecordsLiveAt`): the record's
 sample is the statement's as a value (`recordSample_of_decide`). -/
-theorem accepts_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+theorem accepts_of_decide {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)}
     {f : Final} {J mPts : ℕ} {d : Json} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((next true x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
     ZkExec.AcceptsZK s.read.I ⟨f.record, f.proofs⟩ ∧
@@ -805,9 +805,9 @@ theorem accepts_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coi
 of sample `dj S`, `verify --zk` accepts what `wrD` writes for the run's live outcome at `Jf S R ≤` the session's
 tables, the event the old theorems bound under `RecordsLiveZKJ`. -/
 theorem acceptsZK_wrD {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg → ℕ)
-    {S : Finset (Fin n)} {R : Reg} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+    {S : Finset (Fin n)} {R : Reg} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
+    {mids : List (Hash.Msg × Coin)} {f : Final} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((next true x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some (dj S))
     (hJ : Jf S R ≤ spec.tables.size) :
     ZkExec.AcceptsZK s.read.I (wrD s.read.I dj Jf S R (viewOf (Jf S R) mPts spec link c₁ f)) := by

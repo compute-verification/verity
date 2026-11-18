@@ -336,7 +336,7 @@ def test_the_statement_reads_every_row_and_v_from_a_registration(tmp_path):
     (`verifier_value`, a function of the two v's alone), so the statement has no public input; and, when Lean is built, its
     `statement` under the reads file. Under a name of V*'s parts (`rec-residuals/…`) the toy S is refused: such a unit must be
     the verifier's own part net (`Flock.HmRow`)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+    from verity.commitments import registered_value as RV
 
     g = random.Random(11)
     (w0, v0), (w1, v1) = _holding(g), _holding(g)
@@ -346,7 +346,7 @@ def test_the_statement_reads_every_row_and_v_from_a_registration(tmp_path):
     regs, own = {}, {}
     for i, (nm, _) in enumerate(S_SMALL["ports"]):
         salts = [hm96.SHA512.fresh_salt() for _ in range(2)]
-        regs[nm] = (RG.Registered.commit(program, f"rec-c{i}", [rows0[i], rows1[i]], salts), [0, 1])
+        regs[nm] = (RV.Registered.commit(program, f"rec-c{i}", [rows0[i], rows1[i]], salts), [0, 1])
         bcs = RL.commit_rows([rows0[i], rows1[i]], salts)
         own[nm] = RR.commits_entry(program, f"rec-c{i}", RR.port_words(S_SMALL["ports"][i][1]), bcs)
         assert own[nm] == regs[nm][0].entry()

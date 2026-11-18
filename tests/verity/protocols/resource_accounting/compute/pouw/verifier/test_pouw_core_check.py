@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.commitments import domains as DM
 from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import gemm as BG
 from verity.commitments.crypto import lms
@@ -228,7 +229,7 @@ def test_the_digest_is_one_stages():
         b = bytes.fromhex(_instance(seed)["commitment"])
         c = CC.commitment(b)
         assert CC.digest(c).hex() == R.digest(json.loads(b))
-    assert CC.ONE_STAGE == R.PROTOCOL and CC.SCHEME == S.SCHEME and CC.FORMATS == (R.FORMAT, R.FORMAT_V2)
+    assert CC.ONE_STAGE == DM.ONE_STAGE_PROTOCOL and CC.SCHEME == S.SCHEME and CC.FORMATS == (DM.REGISTRATION_V1, DM.REGISTRATION)
 
 
 def test_ratios_have_one_spelling():
@@ -743,9 +744,9 @@ ROUNDS_EXPECT = {
     "rewritten": ("rounds", "the round roots are not the roots the challenger's log shows it received, in order"),
     "roots-form": ("rounds", "the round roots are not"),
     "openings-list": ("rounds", "the round coins are not a list"), "openings-form": ("coin", ": a live coin opening is"),
-    "twice": ("coin", "is opened twice: a retry never redraws"), "early": ("coin", "was opened before its root was recorded"),
-    "early-root": ("coin", "was opened before its root was recorded"), "never": ("coin", "was never opened"),
-    "swapped": ("coin", ": coin is the epoch's pouw/round coin 1, not its pouw/round coin 0"),
+    "twice": ("coin", "is opened twice: a retry never redraws"), "early": ("coin", "was opened with no root recorded before it"),
+    "early-root": ("coin", "was opened with no root recorded before it"), "never": ("coin", "has no coin opened after it"),
+    "swapped": ("coin", "pouw/round coin 1: coin was not opened after what the verifier recorded"),
     "after": ("coin", ": coin was not opened after what the verifier recorded"),
     "root": ("coin", ": coin was not opened after what the verifier recorded"),
     "foreign-epoch": ("coin", ": coin is epoch "), "foreign": ("coin", ": coin does not open against"),

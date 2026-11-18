@@ -28,6 +28,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pla
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity.circuits import codec
 from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import gemm as BG
@@ -730,9 +731,9 @@ def _no_pads(*_args, **_kwargs):
 def test_a_hostile_leaf_count_is_refused_before_the_verifier_hashes_any_pad(monkeypatch):
     """A registered A value's, round A table's or receipt table's leaf count other than the rows the window's layout
     gives it (`table_rows`), 2^40 among them, and an unsized value's (an input-ids table's) past `MAX_ROWS`, are refused
-    by `_a_link` before `tree_root` hashes any pad: every entry's count is checked first, and a hostile count is never
+    by `_a_link` before `root_from_subtrees` hashes any pad: every entry's count is checked first, and a hostile count is never
     padded to its tree. In a whole window too, where `_a_link` reads the layout's rows."""
-    monkeypatch.setattr(Cr, "tree_root", _no_pads)
+    monkeypatch.setattr(Cr, "root_from_subtrees", _no_pads)
     for name in ("layout-rows", "leaves-cap"):
         for seed in range(10):
             d = cases.a_link_instance(random.Random(f"{name}/{seed}"), name)
@@ -760,13 +761,13 @@ def test_a_glm_window_at_k_6144_registers_its_b_rows_as_2_chunk_leaves_each_past
     assert Cr.strata(lay)[1] is None and (x, w) == (2, 1538) and sigma < Cr.MAX_ROWS < x * sigma
     root = hashlib.sha512(b"b/6144").digest()
     entry = {"value": "b/6144", "root": root.hex(), "leaves": x * sigma, "words": w,
-             "domain": G.domain(digest, "b/6144", w, x * sigma).domain_id.hex()}
+             "domain": RV.domain(digest, "b/6144", w, x * sigma).domain_id.hex()}
     wr = Wt.weights_root({6144: root})
     window = {"root": PS.window_open_root(wr, bytes.fromhex(requests), session).hex()}
     assert Cr._entry(entry)
     assert Cr._weights(window, lay, [entry], requests, session, digest, "") == (wr, None)
     bw = Wt.b_words(6144)
-    whole = {**entry, "leaves": sigma, "words": bw, "domain": G.domain(digest, "b/6144", bw, sigma).domain_id.hex()}
+    whole = {**entry, "leaves": sigma, "words": bw, "domain": RV.domain(digest, "b/6144", bw, sigma).domain_id.hex()}
     assert Cr._weights(window, lay, [whole], requests, session, digest, "") == (
         None, ("weights", Cr.other_weights_entry("b/6144", 6144, sigma)))
     assert Cr._weights(window, {**lay, "linears": [["experts", 6200, sigma]]}, [entry], requests, session, digest,
@@ -806,8 +807,8 @@ def test_round_0s_input_ids_are_inside_its_request_table(seed):
     assert r0["requests"] == Cr.requests_root(bytes.fromhex(r0["request_table"]), bytes.fromhex(ids0["root"])).hex()
     program = hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest()
     sid = Ch.audited_session(d["ledger"], d["window"], Ch.ChallengerKey.from_json(d["key"]), rc.lms_verify).session
-    assert ids0["domain"] == G.domain(program, ids0["value"], ids0["words"], ids0["leaves"], session=sid).domain_id.hex()
-    assert ids0["domain"] != G.domain(program, ids0["value"], ids0["words"], ids0["leaves"],
+    assert ids0["domain"] == RV.domain(program, ids0["value"], ids0["words"], ids0["leaves"], session=sid).domain_id.hex()
+    assert ids0["domain"] != RV.domain(program, ids0["value"], ids0["words"], ids0["leaves"],
                                       window=d["window"]["root"]).domain_id.hex()
     layout = Cr.layout_of(bytes.fromhex(d["descriptor"]))[0]
     reg = Cr.commit_of(d["commit"])[0][1]
@@ -838,9 +839,9 @@ def test_round_0s_request_table_is_its_request_table_under_the_session():
         assert e["value"] == f"{prefix}{Cr.REQUESTS_TABLE}" and e["root"] == d["rounds"][0]["request_table"]
         program = hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest()
         sid = Ch.audited_session(d["ledger"], d["window"], Ch.ChallengerKey.from_json(d["key"]), rc.lms_verify).session
-        assert e["domain"] == Cr.domain_of(program, d["window"]["root"], e, sid) == G.domain(
+        assert e["domain"] == Cr.domain_of(program, d["window"]["root"], e, sid) == RV.domain(
             program, e["value"], e["words"], e["leaves"], session=sid).domain_id.hex()
-        assert e["domain"] != G.domain(program, e["value"], e["words"], e["leaves"],
+        assert e["domain"] != RV.domain(program, e["value"], e["words"], e["leaves"],
                                        window=d["window"]["root"]).domain_id.hex()
     assert found
     assert [Cr.is_requests(v) for v in ("h1/requests@0", "requests@0", "h1/requests@1", "h1/requests@00", "h1/x", 3)] \
@@ -1400,7 +1401,7 @@ def test_a_window_on_other_b_rows_than_its_periods_refuses_the_period(seed):
 
 def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
     """Each K's b/<K>, its linears' B rows (each row its int8 codes then its f32 s_w) committed as the served path
-    registers the weights (`registered.Registered`, the domain that binds no window, salts sampled once), folded by
+    registers the weights (`registered_value.Registered`, the domain that binds no window, salts sampled once), folded by
     `weights_root` into the window's open root, is accepted. The same window whose b/32 has one row's s_w changed, every
     code and salt kept, is refused, and so is one with a code changed instead: the open root fixes both before the
     salt. So is a b/32 registered under another circuit's domain, or missing a row, though the open root binds it."""
@@ -1410,9 +1411,9 @@ def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
     lay = {"calls": [list(x) for x in h1.CALLS], "linears": [list(x) for x in h1.LINEARS], "m": m, "tile": list(h1.TILE)}
     rows = {k: [r for name, kk, n in h1.LINEARS if kk == k for r in _b_rows(rng, n, k)] for k in (32, 64)}
 
-    def commit(k: int, b: list[tuple[list[int], float]], program: str = digest) -> G.Registered:
-        return G.Registered.commit(program, f"b/{k}", [_b_row(c, sw) for c, sw in b],
-                                   G.supplied_salts(program, f"b/{k}", len(b)), schema=G.SCHEMA_V2)
+    def commit(k: int, b: list[tuple[list[int], float]], program: str = digest) -> RV.Registered:
+        return RV.Registered.commit(program, f"b/{k}", [_b_row(c, sw) for c, sw in b],
+                                   RV.supplied_salts(program, f"b/{k}", len(b)), schema=G.SCHEMA_V2)
 
     reg = {k: commit(k, b) for k, b in rows.items()}
     assert [r.leaves for r in reg.values()] == [24, 8] and all(r.window is None for r in reg.values())

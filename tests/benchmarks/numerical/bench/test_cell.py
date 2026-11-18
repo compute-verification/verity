@@ -1,5 +1,5 @@
-"""The benchmark entry point (``bench.cell``): planning a cell into its backend's jobs, the reasons a cell cannot run, the protocol
-check on two real Flock cells (``data/flock-cells``, the registered bench-result/v1 documents, both independently
+"""The benchmark entry point (``bench.cell``): planning a circuit cell into its backend's jobs, the reasons a cell cannot run, the
+protocol check on two stored Flock GEMM cells (``data/flock-cells``, the registered bench-result/v1 documents, both independently
 replayed) and their mutations, and registration through ``verity_flock.register`` on the runs behind an H100 BF16 cell
 (``data/flock-runs``)."""
 from __future__ import annotations
@@ -18,6 +18,7 @@ from verity_numerical.bench import drivers
 DATA = Path(__file__).parent / "data"
 SLICE = Path(__file__).parent.parent.parent.parent / "verity" / "protocols" / "proofs" / "flock" / "prover" / "data" / "captured-101" / "slices" / "gemm-coordinate-ampere-bf16-k2048"
 BF16 = ("gemm-coordinate/k1536/sm90-mma-bf16+frame-v3/blake3-keyed", "bench-instances-bf16-hopper-v1")
+CIRCUIT = "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3-sha512/hm96-sha512"
 #: Two machines as the RunPod API and the probes record them (an H100 prover and its A40 verifier).
 SEPARATE = {"prover": {"pod_id": "pod-p", "machine_id": "m-h100", "public_ip": "203.0.113.10", "cpu_model": "Xeon 8470"},
             "verifier": {"pod_id": "pod-v", "machine_id": "m-a40", "public_ip": "198.51.100.20", "cpu_model": "EPYC 7502"},
@@ -31,28 +32,43 @@ def _doc(art: str) -> dict:
 
 
 def _cell(statement=BF16[0], input_set=BF16[1], **kw) -> C.Cell:
+    """A stored C-interactive GEMM cell as its registration names it: its scripts are deleted, so no plan builds one."""
+    sid, scheme = C.split_statement(statement)
+    rel = C.LW.registry("C-Flock").relation(C.TM.parse_subcircuit_id(sid), scheme)
+    return C.Cell("C-interactive", "C-Flock", statement, sid, scheme, C.resolve_input_set(input_set), rel, "vy-flock-h100",
+                  **{**FLOCK, **kw})
+
+
+def _plan(statement=BF16[0], input_set=BF16[1], **kw) -> C.Cell:
     return C.plan("C-interactive", statement, input_set, "vy-flock-h100", **{**FLOCK, **kw})
 
 
-def test_plan_wraps_the_flock_cell_script():
-    cell = _cell()
-    assert (cell.family, cell.relation, cell.subcircuit, cell.scheme) == ("C-Flock", "bf16-hopper", "gemm-coordinate/k1536/sm90-mma-bf16",
-                                                                          "frame-v3/blake3-keyed")
-    assert cell.input_set["kind"] == "census" and cell.input_set["dataset"] == "bench-instances-bf16-hopper/v1"
+def test_plan_wraps_the_circuit_cell_script(tmp_path, monkeypatch):
+    """A captured row 101 slice at K = 2048: both roles receive the same tarball, the prover's extra arguments (the CUDA arch)
+    reach the prover only."""
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    monkeypatch.setattr("tempfile.tempdir", None)
+    cell = _plan(CIRCUIT, str(SLICE), relation="circuit:gemm-coordinate", backend_args=["SM=89"])
+    assert (cell.family, cell.relation, cell.subcircuit, cell.scheme) == ("C-Flock", "circuit:gemm-coordinate",
+                                                                          "gemm-coordinate/k2048/sm80-mma-bf16", "frame-v3-sha512/hm96-sha512")
     v, p = cell.jobs
     assert (v["role"], v["pod"], p["role"], p["pod"]) == ("verifier", "vy-flock-verifier", "prover", "vy-flock-h100")
+    tar = Path(p["send"][0])
+    assert v["send"] == p["send"] and tar.is_file() and tar.name == f"{cell.input_set['content_digest']}.tar"
     for j in (v, p):
         argv = j["argv"]
         assert argv[:4] == ["research", "run", "--on", j["pod"]] and "--custody-r2" in argv and argv[argv.index("--cwd") + 1] == "source"
+        assert argv[argv.index("--send") + 1] == str(tar)
         cmd = argv[argv.index("--") + 1:]
         assert cmd[:4] == ["bash", "-c", C.PROBE_WRAP, "cell-job"] and cmd[4] == ("10.0.0.2:7400" if j["role"] == "prover" else "")
         assert cmd[5] == ""                                  # a 10.x address, not a .runpod.internal name: no RTT target
         cmd = cmd[6:]
-        assert cmd == j["command"] and cmd[:2] == ["bash", "verity/protocols/proofs/flock/prover/pod/30-cell.sh"] and "REL=bf16-hopper" in cmd and "RUNS=5" in cmd
-        assert f"POINTS={C.DEFAULT_POINTS}" in cmd
+        assert cmd == j["command"] and cmd[:2] == ["bash", "verity/protocols/proofs/flock/prover/pod/61-circuit-cell.sh"]
+        assert {"TEMPLATE=gemm-coordinate", "RUNS=5", f"POINTS={C.DEFAULT_POINTS}"} <= set(cmd)
     assert "ROLE=verifier" in v["command"]
     assert {"ROLE=prover", "VERIFIER=10.0.0.2:7400", "RTT_TARGET=10.0.0.2:22", "LOOPBACK=1"} <= set(p["command"])
-    assert (Path(C.LW.REPO) / "verity/protocols/proofs/flock/prover/pod/30-cell.sh").is_file()
+    assert "SM=89" in p["command"] and "SM=89" not in v["command"]
+    assert (Path(C.LW.REPO) / "verity/protocols/proofs/flock/prover/pod/61-circuit-cell.sh").is_file()
     assert C.launch(cell, dry_run=True) == [{"role": "verifier", "argv": v["argv"]}, {"role": "prover", "argv": p["argv"]}]
     assert C.Cell(**json.loads(cell.to_json())) == cell
 
@@ -66,10 +82,11 @@ def test_plan_wraps_the_flock_cell_script():
     (dict(verifier="vy-flock-h100"), "other than the prover's"),
     (dict(rtt_target=None), "--rtt-target"),
     (dict(lane=None), "producing lane"),
+    (dict(), "runs the circuit statement only"),
 ])
 def test_cells_that_cannot_run_say_why(kw, why):
     with pytest.raises(C.NotSupported, match=why):
-        _cell(**kw)
+        _plan(**kw)
 
 
 def test_other_reasons():
@@ -81,38 +98,6 @@ def test_other_reasons():
         C.family_of("E-new")
     with pytest.raises(ValueError, match="not a census input set"):
         C.resolve_input_set("no-such-set")
-
-
-def test_an_input_set_needs_the_lowerings_stage(monkeypatch):
-    """A lowering without stage() runs only on the frozen set its pod scripts regenerate, never on an input set."""
-    mod = C.LW.registry("C-Flock").module("gemm-coordinate")
-    monkeypatch.setattr(mod, "supports", lambda s, c: None)
-    monkeypatch.setattr(mod, "relation", lambda s, c: "bf16-ampere-k2048")
-    monkeypatch.delattr(mod, "stage", raising=False)
-    with pytest.raises(C.NotSupported, match="no stage"):
-        C.plan("C-interactive", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-p", **FLOCK)
-    monkeypatch.setattr(mod, "stage", lambda s, lo, hi, out: out, raising=False)
-    cell = C.plan("C-interactive", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-p", **FLOCK)
-    assert cell.input_set["kind"] == "set" and cell.relation == "bf16-ampere-k2048"
-
-
-def test_a_flock_gemm_cell_on_an_input_set_sends_it_to_both_pods(tmp_path, monkeypatch):
-    """A captured row 101 slice at K = 2048: both roles receive the same tarball (their own instance files come from it), the
-    prover's extra arguments (the CUDA arch) reach the prover only."""
-    monkeypatch.setenv("TMPDIR", str(tmp_path))
-    monkeypatch.setattr("tempfile.tempdir", None)
-    cell = C.plan("C-interactive", "gemm-coordinate/k2048/sm80-mma-bf16+frame-v3/blake3-keyed", str(SLICE), "vy-p",
-                  **{**FLOCK, "backend_args": ["SM=89"]})
-    assert (cell.relation, cell.input_set["kind"]) == ("bf16-ampere", "set")
-    v, p = cell.jobs
-    tar = Path(p["send"][0])
-    assert v["send"] == p["send"] and tar.is_file() and tar.name == f"{cell.input_set['content_digest']}.tar"
-    for j in (v, p):
-        assert j["argv"][j["argv"].index("--send") + 1] == str(tar) and f"SET={tar.name}" in j["command"]
-        assert "REL=bf16-ampere" in j["command"]
-    assert "SM=89" in p["command"] and "SM=89" not in v["command"]
-    census = _cell()
-    assert all(not j["send"] and not any(a.startswith("SET=") for a in j["command"]) for j in census.jobs)
 
 
 def test_input_set_directories_resolve():
@@ -219,7 +204,7 @@ def test_register_passes_the_lane_to_verity_flock_register(tmp_path, monkeypatch
     assert (cmd[-2:] == ["--lane", "bench-spine"]) is takes and ("--lane" in cmd) is takes
 
 
-def test_a_circuit_cells_verifier_binary_is_the_first_result_that_names_its_backend(tmp_path):
+def test_a_cells_verifier_binary_is_the_first_result_that_names_its_backend(tmp_path):
     drv = drivers.driver("C-interactive")
 
     def result(where: str, doc) -> None:
@@ -229,17 +214,17 @@ def test_a_circuit_cells_verifier_binary_is_the_first_result_that_names_its_back
     def named(name) -> dict:
         return {"workload_fingerprint": {"software": {"backend": {"name": name}}}}
 
-    assert drv.circuit_binary(tmp_path) == drv.circuit_binary(tmp_path / "absent") == "flock-circuit"
+    assert drv.verifier_binary(tmp_path) == drv.verifier_binary(tmp_path / "absent") == "flock-circuit"
     result("points/a", named("flock-circuit-gpu"))
-    assert drv.circuit_binary(tmp_path) == "flock-circuit-gpu"
+    assert drv.verifier_binary(tmp_path) == "flock-circuit-gpu"
     for says_nothing in ({}, [], named(None), named(""), {"workload_fingerprint": {"software": None}}):
         result(".", says_nothing)
-        assert drv.circuit_binary(tmp_path) == "flock-circuit-gpu"
+        assert drv.verifier_binary(tmp_path) == "flock-circuit-gpu"
     result(".", named("flock-circuit"))
-    assert drv.circuit_binary(tmp_path) == "flock-circuit"
+    assert drv.verifier_binary(tmp_path) == "flock-circuit"
     result(".", "{")
     with pytest.raises(ValueError):
-        drv.circuit_binary(tmp_path)
+        drv.verifier_binary(tmp_path)
 
 
 def test_takes_lane_reads_the_installed_script():
@@ -271,10 +256,13 @@ def test_run_files_waits_for_the_attempt(monkeypatch):
     assert C.run_files("r1") is None
 
 
-def test_cli(tmp_path, capsys):
+def test_cli(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    monkeypatch.setattr("tempfile.tempdir", None)
     out = tmp_path / "cell.json"
-    assert C.main(["plan", "--backend", "C-interactive", "--statement", BF16[0], "--input-set", BF16[1], "--prover", "vy-p",
-                   "--verifier", "vy-v", "--verifier-addr", "h:7400", "--rtt-target", "h:22", "--lane", "bench-spine",
+    assert C.main(["plan", "--backend", "C-interactive", "--statement", CIRCUIT, "--input-set", str(SLICE), "--prover", "vy-p",
+                   "--relation", "circuit:gemm-coordinate", "--verifier", "vy-v", "--verifier-addr", "h:7400", "--rtt-target", "h:22",
+                   "--lane", "bench-spine",
                    "--placement", str(_placement_file(tmp_path)), "--out", str(out)]) == 0
     assert "research run --on vy-v" in capsys.readouterr().out
     assert C.main(["run", "--cell", str(out), "--dry-run"]) == 0

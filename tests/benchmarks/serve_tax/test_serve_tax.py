@@ -272,7 +272,7 @@ def test_arms_differ_only_by_their_change():
     m = S.MODELS["moonlight"]
     argv = {a: S.server_argv(S.ARMS[a], m, Path("/ck"), 8000) for a in S.ARMS}
     assert "--enforce-eager" not in argv["compiled"] and "--enforce-eager" in argv["eager"]
-    assert argv["record"] == argv["compiled"] == argv["release-order"] == argv["bi-compiled"]
+    assert argv["record"] == argv["compiled"] == argv["bi-compiled"]
     assert argv["bi-eager"] == argv["eager"]
     assert argv["tick"] == argv["compiled"] + ["--middleware", S.TICK_MIDDLEWARE]
     for name, a in S.ARMS.items():
@@ -285,7 +285,7 @@ def test_server_env_names_the_changes(tmp_path: Path):
     env = S.server_env(S.ARMS["tokens"], tmp_path, tmp_path, {"bucket_us": 100000, "sat_us": 9000, "free_us": 11000},
                        600.0, private=tmp_path / "p")
     cfg = json.loads(env[S.PLUGIN_ENV])
-    assert cfg["record"] and cfg["tokens"] and not cfg.get("release_order")
+    assert cfg["record"] and cfg["tokens"]
     assert tick_settings(env)["sat_us"] == 9000
     assert S.PLUGIN_ENV not in S.server_env(S.ARMS["compiled"], tmp_path, tmp_path, None, 600.0)
     with pytest.raises(SystemExit, match="the tick arms need"):
@@ -1041,7 +1041,7 @@ def test_a_pass_of_vllms_client_holds_a_concurrency_and_counts_goodput_against_t
     assert moon[moon.index("--num-prompts") + 1] == "8" and moon[moon.index("--dataset-name") + 1] == "random"
     assert moon[moon.index("--random-input-len") + 1] == "8192" and moon[moon.index("--goodput") + 1:][:2] == [
         "tpot:80", "--percentile-metrics"]
-    # the release-order arm reads request k's release number from the id the client sends
+    # an edge reads request k's load from the id the client sends
     plugin = pytest.importorskip("servetax_plugin")
     assert plugin.release_key("cmpl-chat@16-r2-7-0-0123abcd") == ("chat@16-r2", 7)
 

@@ -19,7 +19,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1d
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.names import PREFIX
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.names import PREFIX
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.tensors import tensors
 
 

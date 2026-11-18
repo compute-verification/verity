@@ -59,7 +59,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The fork bound at the `τ` events**, from `ZkTauAlign` (`zkSimForkLeTau_of_align`). -/
-theorem zkSimForkLeTauZ_of_align {x : Claims.Msg} (ha : ZkTauAlign x) : ZkSimForkLeOn x fun _ i => IsTauZ i := by
+theorem zkSimForkLeTauZ_of_align {x : Hash.Msg} (ha : ZkTauAlign x) : ZkSimForkLeOn x fun _ i => IsTauZ i := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC i hi
   rcases i with ((_ | (_ | r)) | ⟨⟩)
   · exact False.elim hi
@@ -70,7 +70,7 @@ theorem zkSimForkLeTauZ_of_align {x : Claims.Msg} (ha : ZkTauAlign x) : ZkSimFor
 end Gen
 
 /-- **The fork bound at the `τ` events**, from `ZkTauAlign` (`zkSimForkLeTau_of_align`). -/
-theorem zkSimForkLeTauZ_of_align {x : Claims.Msg} (ha : ZkTauAlign x) : ZkSimForkLeOn x fun _ i => IsTauZ i :=
+theorem zkSimForkLeTauZ_of_align {x : Hash.Msg} (ha : ZkTauAlign x) : ZkSimForkLeOn x fun _ i => IsTauZ i :=
   Gen.zkSimForkLeTauZ_of_align (S := S₀) (x := x) (ha := ha)
 
 namespace Gen

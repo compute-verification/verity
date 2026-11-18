@@ -113,7 +113,7 @@ theorem lincheckCut_fc (io : FlockComplete.Asks PS) (c : CircuitFold) (m : ℕ) 
   unfold FlockComplete.lincheckCut
   simp only [hlc, hzp]
 
-theorem map_run_go {α β : Type} (f : α → β) {x : TMW PS α} {t t' : Transcript} {l l' : Array Claims.Msg} {a : α}
+theorem map_run_go {α β : Type} (f : α → β) {x : TMW PS α} {t t' : Transcript} {l l' : Array Hash.Msg} {a : α}
     (h : (x.run t).go l = (.ok (a, t'), l')) : ((f <$> x).run t).go l = (.ok (f a, t'), l') := by
   rw [← bind_pure_comp, FlockComplete.Replay.bind_go h]
   rfl
@@ -124,7 +124,7 @@ theorem piopCut_fc_go (io : FlockComplete.Asks PS) (st : Setup) (lay : Zk.PadLay
     (mk : ℕ → F128) (cap root : ByteArray) (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ)
     (hm : st.m - 6 ≤ lay.nMlv) (hne : ∀ i, i ≠ lay.fc → src.masked i = mk i)
     {zp : ZerocheckProof} {lp : LincheckProof} {ss : Array (Array F128)} {T : F128} {sws : Array Switched}
-    {t₀ t : Transcript} {l l' : Array Claims.Msg}
+    {t₀ t : Transcript} {l l' : Array Hash.Msg}
     (h : ((FlockComplete.piopCut io st lay { src with masked := mk } cap root extras prior words).run t₀).go l =
       (.ok ((zp, lp, ss, T, sws), t), l')) :
     ((FlockComplete.piopCut io st lay src cap root extras prior words).run t₀).go l =
@@ -207,7 +207,7 @@ theorem replay_ok_fc {st : Setup} {lay : Zk.PadLayout} {cap : Array ByteArray} {
 `label LABEL_INNER ‖ absorbF finalC`. -/
 theorem innerCut_first (coin : ℕ → ℕ → F128) {n : ℕ} (lay : Zk.PadLayout) (ic : FlockComplete.InnerCommit)
     (finalC : F128) (src : FlockComplete.RepSrc) (cons : Array (String × Zk.Lin)) (t : Transcript)
-    {l : Array Claims.Msg} (hn : n ≤ l.size) :
+    {l : Array Hash.Msg} (hn : n ≤ l.size) :
     ((FlockComplete.innerCut (FlockComplete.asksCut coin n) lay ic finalC src cons).run t).go l =
       (.error "past the openings",
         l.push (Claims.toMsg (framed (FlockComplete.Replay.InZ.t₁ finalC t) 1 1))) := by
@@ -235,7 +235,7 @@ theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm
     (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit)
     (extras : Array Claim) (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit) (vals : Array F128)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (src : FlockComplete.RepSrc)
-    (prior : Array (List F128)) (words : List ℕ) (t₀ : Transcript) (l : Array Claims.Msg)
+    (prior : Array (List F128)) (words : List ℕ) (t₀ : Transcript) (l : Array Hash.Msg)
     (hm14 : 14 ≤ st.m) (hn : l.size ≤ n) (hkL : st.fold.kLog = st.kLog)
     (hmk : ∀ i < (Zk.PadLayout.new st.m st.kLog sch.k0).zp 64, i ≠ (Zk.PadLayout.new st.m st.kLog sch.k0).fc →
       src.masked i = vals[i]! + pads.h[i]!)
@@ -255,12 +255,12 @@ theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm
         (.ok ((zp, lp, ss, T, sws), t₃), l₃) →
       FlockComplete.LigLock.LigHyp coin n l₃.size st.merkle sch g (FlockComplete.basisVals sws (st.m - 7))
         (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h rep tPad extra lanePad salt src)
-    {p : Zk.ZkProof} {t : Transcript} {l' : Array Claims.Msg}
+    {p : Zk.ZkProof} {t : Transcript} {l' : Array Hash.Msg}
     (h : ((repFwC (FlockComplete.asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch tPad rep dom g cm0 extras pads ic
       vals extra lanePad salt).run t₀).go l = (.ok (p, t), l')) :
     ∃ (zp : ZerocheckProof) (lp : LincheckProof) (ss : Array (Array F128)) (T : F128) (sws : Array Switched)
-      (t₃ : Transcript) (l₃ : Array Claims.Msg) (lg : LigeritoProof) (zl : Zk.Level0Msgs) (rec : Zk.L0Rec)
-      (t₄ : Transcript) (l₄ : Array Claims.Msg),
+      (t₃ : Transcript) (l₃ : Array Hash.Msg) (lg : LigeritoProof) (zl : Zk.Level0Msgs) (rec : Zk.L0Rec)
+      (t₄ : Transcript) (l₄ : Array Hash.Msg),
       ((FlockComplete.piopCut (FlockComplete.asksCut coin n) st (Zk.PadLayout.new st.m st.kLog sch.k0) src
           (FlockComplete.flat cm0.cap) ic.root extras prior words).run t₀).go l =
         (.ok (({ zp with finalC := src.masked (Zk.PadLayout.new st.m st.kLog sch.k0).fc }, lp, ss, T, sws), t₃),

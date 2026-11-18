@@ -59,19 +59,19 @@ theorem SlotsAreBlocks.image_filter (h : L.SlotsAreBlocks P blk) {T : Finset (Fi
     exact ⟨v, ⟨hv, hX⟩, rfl⟩
 
 open Classical in
-theorem faulty_subset_range (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement)
+theorem faulty_subset_range (H : Hash.Msg → Hash.Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement)
     (w : Wit) : faulty H Cm s P w ⊆ Finset.range P.blocks.length := by
   intro v hv
   unfold faulty at hv
   exact (Finset.mem_filter.1 hv).1
 
 /-- **The incorrect set goes to a set of the last level's blocks.** -/
-theorem SlotsAreBlocks.faulty_image_subset (h : L.SlotsAreBlocks P blk) (H : Claims.Msg → Claims.Msg)
+theorem SlotsAreBlocks.faulty_image_subset (h : L.SlotsAreBlocks P blk) (H : Hash.Msg → Hash.Msg)
     (Cm : CommitmentScheme Bool) (s : AuditStatement) (w : Wit) : (faulty H Cm s P w).image blk ⊆ L.blocks :=
   h.image_subset (faulty_subset_range H Cm s w)
 
 /-- **The incorrect set's image has its size**, so the count form `RCount` reads the same on blocks. -/
-theorem SlotsAreBlocks.card_faulty_image (h : L.SlotsAreBlocks P blk) (H : Claims.Msg → Claims.Msg)
+theorem SlotsAreBlocks.card_faulty_image (h : L.SlotsAreBlocks P blk) (H : Hash.Msg → Hash.Msg)
     (Cm : CommitmentScheme Bool) (s : AuditStatement) (w : Wit) :
     ((faulty H Cm s P w).image blk).card = (faulty H Cm s P w).card :=
   h.card_image (faulty_subset_range H Cm s w)
@@ -86,13 +86,13 @@ theorem MissesAsDesign.missProb_image {d : Design} (hm : L.MissesAsDesign d P bl
 
 /-- **The incorrect set's image is missed with its acceptance probability** under the claims design `d` on `P`. -/
 theorem MissesAsDesign.missProb_faulty {d : Design} (hm : L.MissesAsDesign d P blk)
-    (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (w : Wit) :
+    (H : Hash.Msg → Hash.Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (w : Wit) :
     L.design.missProb ((faulty H Cm s P w).image blk) = ENNReal.ofReal (d.Pa P (faulty H Cm s P w)) :=
   hm.missProb_image (faulty_subset_range H Cm s w)
 
 /-- **The sampling relation at `δ` on blocks**: the incorrect set is in the confidence set `M_δ` of the statement's
 design exactly when `L.design` misses its image with probability above `δ`. -/
-theorem MissesAsDesign.relS_iff {H : Claims.Msg → Claims.Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement}
+theorem MissesAsDesign.relS_iff {H : Hash.Msg → Hash.Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement}
     (hm : L.MissesAsDesign s.design P blk) (δ : ℝ) (w : Wit) :
     RelS H Cm δ s P w ↔ δ < (L.design.missProb ((faulty H Cm s P w).image blk)).toReal := by
   rw [hm _ (faulty_subset_range H Cm s w)]

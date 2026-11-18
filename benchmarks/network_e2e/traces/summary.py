@@ -97,21 +97,20 @@ def network_attester_log(d: Path) -> dict[int, dict]:
 def feed_releases(d: Path, network_attesters: dict[int, dict],
                   client: dict[str, dict]) -> tuple[dict[str, tuple[int, int]], dict] | None:
     """A network attester trace's releases under ``--admit tick`` as the server got them: each request's (N, bucket) from the
-    release headers that `scheme_plugin.Front` wrote to the feed (in ``raw/``, keyed by the request's id),
-    kept where they agree with the network attester's own record: the deployment's ``run_id``, and its log of the
+    release headers, as the server's front logged them (``raw/tick.PID.jsonl``, `network.prover.admission.FrontFeed`,
+    keyed by the request's id), kept where they agree with the network attester's own record: the deployment's ``run_id``, and its log of the
     request's connection (warden.json's ``release`` and ``ingress_end``, a, by the client's ordinal) where it has one. A
     request whose release disagrees is left out, so `replay.read_corpus_trace` refuses the trace rather than read an
     unattested release. Returns the releases by request id and what the check found; None for a trace without a
-    network attester's deployment or a feed."""
-    from verity.protocols.resource_accounting.network.prover.admission import feed_file
-    feed, dep = Path(feed_file(str(d / "raw"))), d / "warden" / "deployment.json"
-    if not (feed.exists() and dep.exists()):
-        return None
-    run = json.loads(dep.read_text()).get("run_id")
+    network attester's deployment or a logged release."""
+    dep = d / "warden" / "deployment.json"
     got: dict[str, dict] = {}
-    for r in read_jsonl(feed):
+    for r in raw(d, "tick"):
         if "key" in r:
             got.setdefault(str(r["key"]), r)
+    if not (got and dep.exists()):
+        return None
+    run = json.loads(dep.read_text()).get("run_id")
     out, disagree, unlogged = {}, [], 0
     for rid, f in got.items():
         w = network_attesters.get(((client.get(rid) or {}).get("warden") or {}).get("ordinal")) or {}
@@ -122,7 +121,7 @@ def feed_releases(d: Path, network_attesters: dict[int, dict],
             unlogged += network_attester is None
         else:
             disagree.append({"id": rid, "server": server, "warden": network_attester or [run, None, None]})
-    return out, {"from": f"the server's feed (raw/{feed.name})", "run": run, "released": len(got),
+    return out, {"from": "the server's front's log (raw/tick.PID.jsonl)", "run": run, "released": len(got),
                  "agree": len(out) - unlogged, "unlogged": unlogged, "disagree": len(disagree),
                  "disagreeing": disagree[:10]}
 
@@ -891,7 +890,7 @@ FIELDS = """\
   cell's), `ended`, its `ingress_cells` and `egress_cells`, and `failed` (a reason, or null). Under `--admit tick`,
   `release` and `bucket`: its number in the network certifier's release order and its release bucket, counted from the
   trace meta.json's `tick.origin_unix` in `tick.bucket_us` buckets: in a network certifier trace the network certifier's, as the
-  server got them (its feed in `raw/`) where they agree with its log (`summary.feed_releases`, and summary.json's
+  server's front logged them (`raw/tick.PID.jsonl`) where they agree with its log (`summary.feed_releases`, and summary.json's
   `tick.releases`), elsewhere the client's stand-in's (`corpus.StandIn`).
 - `<trace>/engine.json`: the scheduler's KV pool as the hook saw it (`block_size`, `num_gpu_blocks`, `kv_cache_groups`),
   which `replay.read_corpus_trace` takes over the server log's KV cache size.
@@ -899,7 +898,8 @@ FIELDS = """\
   the hook's (`raw/steps.PID.jsonl`, `raw/outputs.PID.jsonl`, `raw/requests.PID.jsonl`, `raw/arrivals.PID.jsonl`,
   `raw/engine.PID.json`, and in a hostile trace the adversary's `raw/adversary.PID.jsonl`), the API server's
   `raw/accept.PID.jsonl` (`vllm_accept_stamp`), and under `--admit tick` the feed `verity.protocols.resource_accounting.network.prover.admission.FrontFeed` wrote
-  (its feed in `raw/`) and the gate's log (`raw/tick.PID.jsonl`: each step's admissions and every event);
+  (in `raw/`) and the scheme's log (`raw/tick.PID.jsonl`: the front's releases and watermark ends, and the gate's
+  admissions and events);
   `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv, timings, adversary (seed and prefix-cache mode),
   network attester (its schedule, where it ran) and tick (τ in µs, where τ was calibrated, the origin, the run, the watermark's
   outcome, and `where` the releases came from: a network certifier trace's watermark is warden.json's, its last line, the lost
@@ -1005,7 +1005,7 @@ def readme(s: dict) -> str:
                          f"{g.get('opened') or '-'} |")
         fed = {name: g["releases"] for name, g in gated.items() if g.get("releases")}
         if fed:
-            lines += ["", "A network attester trace's releases are the server's (its feed in `raw/`), checked against the network "
+            lines += ["", "A network attester trace's releases are the server's (its front's log in `raw/`), checked against the network "
                           "certifier's log of each connection and its run (`summary.feed_releases`); a disagreeing one is "
                           "left out of requests.jsonl, so the replay refuses the trace:", ""]
             lines += [f"- {name}: {r['released']} released, {r['agree']} agree, {r['unlogged']} the network attester logged no "

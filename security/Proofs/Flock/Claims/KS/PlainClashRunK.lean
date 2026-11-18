@@ -63,7 +63,7 @@ theorem rawCols_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {seen : Clai
     List.flatMap_nil, List.append_nil]
 
 /-- `plainClashQ₀` at `VK keep`. -/
-theorem plainClashQ₀K (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plainClashQ₀K (keep : Bool → Bool) {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
@@ -138,7 +138,7 @@ theorem plainClashQ₀K (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Floc
   exact Or.inl ⟨q, a₁, b₁, hcl' ha, hcl' hb, hab⟩
 
 /-- `plainClashQ_or` at `VK keep`. -/
-theorem plainClashQ_orK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
+theorem plainClashQ_orK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
     {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs} {d : Json}
     {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8)}
     {Q₁ Q₂ : Model.OutCL 𝔽 Dig (List UInt8) → Prop} (Q : Model.OutCL 𝔽 Dig (List UInt8) → Prop)
@@ -187,7 +187,7 @@ theorem rawLevelCols_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {seen :
   · omega
 
 /-- `plainClashQL` at `VK keep`. -/
-theorem plainClashQLK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plainClashQLK (keep : Bool → Bool) {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
@@ -257,7 +257,7 @@ theorem plainClashQLK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.
   exact Or.inr (Or.inl (plain_levelClashK keep hacc (hcl' ha) (hcl' hb) hab))
 
 /-- `PlainSimLaterClashAt` at `VK keep`. -/
-def PlainSimLaterClashAtK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
+def PlainSimLaterClashAtK (keep : Bool → Bool) (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (_ : tables false x = [(spec, st)]) (d : Json) (_ : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -275,7 +275,7 @@ def PlainSimLaterClashAtK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
         (LaterClashL ⟨m, k0, l₀ :: l₁ :: rest, ext⟩))
 
 /-- `plainSimLaterClashAt` at `VK keep`. -/
-theorem plainSimLaterClashAtK (keep : Bool → Bool) (x : Claims.Msg) : PlainSimLaterClashAtK keep x := by
+theorem plainSimLaterClashAtK (keep : Bool → Bool) (x : Hash.Msg) : PlainSimLaterClashAtK keep x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω _ _ P ω
   exact ⟨fun hh => plainClashQLK keep hs hin hset h hd _ _ _
       (plain_laterClashAtK keep hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω,
@@ -283,7 +283,7 @@ theorem plainSimLaterClashAtK (keep : Bool → Bool) (x : Claims.Msg) : PlainSim
       (plain_laterClashHAtK keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω⟩
 
 /-- `plainSimClashAt_of_later` at `VK keep`. -/
-theorem plainSimClashAt_of_laterK (keep : Bool → Bool) {x : Claims.Msg} (hl : PlainSimLaterClashAtK keep x) : PlainSimClashAtK keep x := by
+theorem plainSimClashAt_of_laterK (keep : Bool → Bool) {x : Hash.Msg} (hl : PlainSimLaterClashAtK keep x) : PlainSimClashAtK keep x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω _ _ P ω
   refine ⟨fun hh => ?_, fun hh hleaf => ?_⟩
   · exact plainClashQ_orK keep _ (plainClashQ₀K keep hs hin hset h hd _ _ _

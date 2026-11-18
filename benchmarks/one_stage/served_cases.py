@@ -138,6 +138,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier import levels as LV
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
 from verity.protocols.resource_accounting.compute.pouw.verifier import period_check as PC
@@ -147,7 +148,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import verifier as VF
 from verity.circuits import codec
 
 ROOT = Path(__file__).resolve().parents[2]
-V1 = R.PROTOCOL
+V1 = DM.ONE_STAGE_PROTOCOL
 V1_LEAN = (VF.PACKAGE, "spot-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"
 SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock_recursion/verifier/lean", "vstar-recursive")

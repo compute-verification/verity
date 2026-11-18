@@ -32,7 +32,7 @@ import Proofs.Flock.Soundness.Game
   `monitoringPeriod_union` over `Flock.SecurityProofs.EndToEndHiddenSampled` (`SamplingBlock.accepted_drawnIncorrect_le`), or every
   sampling block's sample misses its incorrect proof blocks with at least `M` of them in all, at most `(1 − q)^M` by
   `monitoringPeriod_horizon`: sampling block `w`'s sample misses its `|W|` incorrect proof blocks with probability at most
-  `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.sampleMiss_le`; `SamplingDesign.execOS_subset_escape_le`,
+  `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.sampleMiss_le`; `SamplingDesign.execOS_subset_missProb_le`,
   `SamplingDesign.choose_div_le_one_sub_pow`). At `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
 -/
 
@@ -122,8 +122,8 @@ theorem sampleMiss_le (hA3 : FlockSoundness.Assumptions.UniformRandomBytes w.Lb 
     (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ (1 - (w.kd : ℝ≥0∞) / w.n) ^ B.card := by
   rw [prob_sampleMiss]
-  refine (SamplingDesign.execOS_subset_escape_le w.n w.kd w.hkd w.Lb w.src hA3 B).trans ?_
-  rw [Verity.SamplingDesign.subset_escape]
+  refine (SamplingDesign.execOS_subset_missProb_le w.n w.kd w.hkd w.Lb w.src hA3 B).trans ?_
+  rw [Verity.SamplingDesign.subset_missProb]
   exact SamplingDesign.choose_div_le_one_sub_pow w.hkd (by simpa using B.card_le_univ)
 
 

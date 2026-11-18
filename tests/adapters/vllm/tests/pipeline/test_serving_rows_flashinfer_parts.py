@@ -226,7 +226,7 @@ def test_a_deepgemm_row_s_coordinates_beside_them_read_its_committed_q_and_s_unw
 @pytest.mark.parametrize("kinds, tmpls", [(("fi", "fi"), [TQ, TG]), (("fi", "dg"), [TQ, TDQ, TG])], ids=["two-flashinfer", "mixed"])
 def test_the_wires_hold_on_the_window_s_commitment(served, kinds, tmpls):
     """The window `serving_rows.population` derives has the members above; its circuit record counts the coordinates' q and s
-    rows as wired; each quantisation chunk's Boolean Definition on its rows is its committed q and s; the window commits each
+    rows as wired, once a row of each chunk's table (its one quantisation unit); each quantisation chunk's Boolean Definition on its rows is its committed q and s; the window commits each
     wired row under its writer's salt, so the verifier's check on the public bodies holds, and refuses a wire to another
     quantisation and a wired row that is not its writer's output.  Slow (about 10 s a quantisation family): the population
     program and the stager's check trace each quantisation's Boolean Definition, which the tests above never build."""
@@ -235,7 +235,7 @@ def test_the_wires_hold_on_the_window_s_commitment(served, kinds, tmpls):
     w, rows = SRW.population({"r0": {}}, {"templates": tmpls, "law": "subset:2", "chunk_cap": caps}, "ab" * 64)
     assert w.members == tuple(CH.shared_tables(wired(tmpls, caps)[0]))
     doc = json.loads(IF.circuit_bytes(SRW.circuit_record(w, rows)))
-    assert IF.input_count(doc)["wired"] == kinds.count("fi") * WN * (8 * K + 32 * KG)
+    assert IF.input_count(doc)["wired"] == kinds.count("fi") * -(-WN // caps[TG]) * (8 * K + 32 * KG)
     got = SRW.read_all(w.members, rows, x["store"], None)
     for m, (g, _e) in zip(w.members, got):
         stager(m.template).reference_check(g["rows"], g["outs"])

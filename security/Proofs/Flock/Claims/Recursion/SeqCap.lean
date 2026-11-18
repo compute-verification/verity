@@ -200,7 +200,7 @@ variable (IV : Claims.Verifier Coin) (b : Brings)
 prover there, on the nested tape of `n_S(x)` sessions read down from `M`'s (`SeqTape.capN`, `SeqTape.capΩ`). -/
 noncomputable def refPMCap (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (M : ℕ) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
-    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
+    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
     (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (w : Claims.Flock.Wit) :
     Claims.Prover ((T₀.iter 0 NB ΩB M).N × (T₀.iter 0 NB ΩB M).Ω) :=
   ⟨fun x hist ω => ((refPM IV b pre wit PS w).comap (Layout.flatten T₀ 0 NB ΩB (nS x))).next x hist
@@ -208,11 +208,11 @@ noncomputable def refPMCap (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonemp
 
 /-- **`ZKBoundM` on one tape**: the masked recursion's zero knowledge at `ZKmalR`, on the nested tape of `M` V\*
 sessions (`refPMCap`), at the claim's `Sim`, `εzk` and `γzk`. -/
-def ZKBoundMCap (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
+def ZKBoundMCap (H : Hash.Msg → Hash.Msg) (ivScope : Hash.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB]
     [Fintype ΩB] [Nonempty ΩB] (M : ℕ) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
-    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
-    (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim) : Prop :=
+    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
+    (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Hash.Msg → ℕ → Claims.Recursion.OSim) : Prop :=
   ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
     Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ →
       Claims.ZKmalR H (kM IV b) (refPMCap IV b T₀ NB ΩB M pre wit PS)
@@ -224,11 +224,11 @@ the relation's statements have at most `M` V\* sessions (`hcap`): at each, the n
 with fibers of one size,
 nonce and rest apart (`SeqTape.fibersEq_capN`, `SeqTape.fibersEq_capΩ`), so `ZKmalAt` carries over at the same errors
 (`zkmalR_of_rx`). -/
-theorem zkBoundMCap_of (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
+theorem zkBoundMCap_of (H : Hash.Msg → Hash.Msg) (ivScope : Hash.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB]
     [Fintype ΩB] [Nonempty ΩB] (M : ℕ) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
-    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
-    (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
+    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
+    (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Hash.Msg → ℕ → Claims.Recursion.OSim)
     (h : ZKBoundM IV b H ivScope I (fun _ => T₀) NB ΩB (fun _ => pre) wit PS SO)
     (hcap : ∀ x w, Claims.Recursion.R (deployRec IV ivScope b) I x w → nS x ≤ M) :
     ZKBoundMCap IV b H ivScope I T₀ NB ΩB M pre wit PS SO := fun t ht δ₁ hδ =>

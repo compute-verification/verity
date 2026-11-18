@@ -166,7 +166,6 @@
   "art:ca9544e3781926c76b0980b26326112bf86aae29d3481165bad816f05e5f22dd": "tests/adapters/vllm/tests/check/fixtures/glm_moe_dsa/config.json",
   "art:76398a8149f3e74bd9959f043570e8187a48354f0c259fa85dd9cc23a4fbf11e": "tests/adapters/vllm/tests/records/data",
   "art:98ccdf6cfe3a5a632e5babed1245d0600d6ef38d67672113d25a32ffa026ef4f": "tests/adapters/vllm/tests/commit/serving_row_leaf_vector.json",
-  "art:cc0144301c8d6f1c8c82c22e7eaabc1e7faeccfaa78722e37678183e3004f390": "tests/benchmarks/one_stage/fixtures/bundle-window",
   "art:5a228652b1b2fae7c14df941448938b171f2e2add451b3270749bccc72a0da09": "tests/verity/protocols/proofs/flock/prover/fixtures/honest-session",
   "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a": "tests/verity/protocols/proofs/flock/prover/fixtures/plain-tree",
   "art:2cf0182ca5bd415214ed211025a1d2b53b223540c46779284b49fdd344938798": "tests/verity/protocols/proofs/flock/prover/fixtures/rec-c3-inner",

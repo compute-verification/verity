@@ -1,6 +1,6 @@
 # The control pod
 
-`vy-control-verity` is the RunPod CPU pod (`p1ugdh9hfgqe5d`, US-CA-2, cpu3g, 4 vCPU, 16 GB, 40 GB container disk) that runs the budget
+`vy-control-verity` is the RunPod CPU pod (US-CA-2, `cpu3g-16-64`: 16 vCPU, 64 GB, 120 GB container disk) that runs the budget
 guard, the resource steward, the console's store panels and every loop that watches the system (the watchers supervisor). Its state lives on network volume `4ue28s1c6g` (1000 GB, NFS),
 mounted at `/data`. This directory holds the master copies of its boot script and its loops: deploy from here rather than
 editing on the pod.
@@ -12,20 +12,19 @@ editing on the pod.
   makes again), `drive.sh`'s two clones there (seeded from the volume), the nightly check's clone and worktrees
   `/root/fast/nightly-check` and the metrics reruns' clone `/root/fast/metrics-rerun-tree` (each made again on first use),
   and the local store caches `/root/vqueue-store`, `/root/drive-store`, `/root/watchers-preflight-store`, `/root/watchers-nightly-store`,
-  `/root/watchers-challenger-store`, `/root/watchers-labels-pack-store` and `/root/watchers-metrics-rerun-store` (SQLite on
-  NFS was too slow), and the hourly sweep's scratch store for each copy of the Goals page it puts in the store
-  (`goals-store-*` in the temporary directory, deleted when that save returns). A RunPod reset wipes the container disk,
-  `/post_start.sh` included. Any `PATCH /pods/{id}` resets the pod about 30 s later, even one that only renames
-  it. So never edit the pod; make a new one.
-- **To resize, move to a new pod.** The services need more than 4 GB: at 4 GB the cgroup sat at its limit and killed processes.
-  - create it with the RunPod REST API under the same name, on volume `4ue28s1c6g` mounted at `/data`, with the old pod's image
-    and `PUBLIC_KEY`; it boots with sshd only;
-  - ci stops the landing loop on the old pod (below), then copy the store caches above to `/data/handover/<old id>/`, each `catalog.sqlite` with
-    sqlite3's `.backup`;
-  - stop the old pod (never start it again: its `/post_start.sh` would start a second guard), copy the caches into the new
-    pod's `/root`, and run `sh /data/boot/post_start.sh`, which starts the landing loop idle; ci then removes its stop file;
-  - `research pods register vy-control --pod-id NEW --project verity --replace --any-name`, and terminate the old pod, since two pods of one
-    name make `research pods ssh vy-control-verity` and the guard host's lookup refuse.
+  `/root/watchers-challenger-store`, `/root/watchers-labels-pack-store` and `/root/watchers-metrics-rerun-store`, and the
+  hourly sweep's scratch store for each copy of the Goals page it puts in the store (`goals-store-*` in the temporary directory,
+  deleted when that save returns). A RunPod reset wipes the container disk, `/post_start.sh` included,
+  as may a stop or any edit of the pod, a rename included: never edit the pod; make a new one.
+- **To resize, move to a new pod.** A `cpu3` pod's vCPU count is a power of two and its container disk at most 10 GB a vCPU,
+  and neither grows in place. `rest.runpod.io` no longer resolves: pod calls go over GraphQL.
+  - create it under another name on volume `4ue28s1c6g` at `/data`, with the old pod's image and `PUBLIC_KEY` (sshd only);
+  - ci stops the landing loop; stop every loop on the old pod, remove its `/post_start.sh` (a restart would start a second
+    guard), and copy to `/data` what its container disk holds that `post_start.sh` doesn't make again;
+  - rename the old pod, then name the new one `vy-control-verity` (each only once emptied: a rename may reset it), restore the copies,
+    run `sh /data/boot/post_start.sh`, and ci removes its stop file;
+  - `research pods register vy-control --pod-id NEW --project verity --replace --any-name`, then stop and terminate the old
+    pod: two pods of one name make `research pods ssh vy-control-verity` and the guard host's lookup refuse.
 - **After a reset, run `sh /data/boot/post_start.sh` once.** It relinks every path below, installs rsync, sqlite3, git, psql and sudo when
   they're missing, and starts each service detached (`setsid -f`). It also puts `/post_start.sh` back as a link to itself.
 - **A service is added in a PR here.** Its files go under `/data/<name>`; its link and its start line go into
@@ -41,7 +40,7 @@ editing on the pod.
 | Resource steward (`research notes watch ... --lease --standby`) | `steward-run.sh`, deployed as `/data/steward/run.sh` | `/data/steward/verity` (a clone of this repo) | `/data/steward/watch.log` |
 | `/tmp` sweep, hourly | `tmp_sweep.sh`, deployed as `/data/infra/tmp_sweep.sh` | the script | `/data/infra/tmp-sweep.log` |
 | Landing, ci's: the verified queue's loop, `research queue vqueue --once` a pass as lane ci with the flags in `/data/vqueue/live/args`, about 15 s apart, no pass while `/data/vqueue/live/stopped` exists; it merges the PRs ready to land onto `main` as candidates and moves `main` (`research queue --help`). Its scripts are ci's, kept on the volume and not in this directory; ci deploys, restarts and stops it | `post_start.sh` runs `/data/vqueue/boot.sh`, which makes the clone and the code again when the container is new and starts `/data/vqueue/live.sh`; the loop holds `/root/vqueue-loop.lock`, so a second copy exits | `/root/fast/vqueue-src`, a worktree of the clone `/root/fast/vqueue-verity` at the commit `/data/vqueue/live/pin` names, else at origin's `ci/vqueue-live` | `/data/vqueue/live/vqueue.log` (a `tick rc=N` line a pass), `boot.log`, `decisions.jsonl` and `state.json` there; the store's cache in `/root/vqueue-store`, its `objects/` and `attempts/` links into `/data/drive/store`; its temp dirs in `/data/vqueue-tmp`, the candidates' checkouts in `/root/fast/trains` while the container disk has 8 GB free |
-| `drive.sh`: `research merge ARGS` (`drive.sh merge ARGS`, in its queue clone on branch `main`) and `research queue ARGS` (`drive.sh queue ARGS`: `eject N --by ci --reason ...`) on this pod with `RESEARCH_DRIVE=1`, as lane ci, under its lock, with the verity-drive App's token: `gh_app_token.sh` (`/data/state/secrets/verity-drive.pem`) mints it, both clones' credential helper is `gh_app_token.sh git`, and `gh` is `/data/drive/ghw/gh`, which sets `GH_TOKEN` per call before running `/data/drive/bin/gh` (the landing loop's `gh` too). It lands nothing itself and runs no loop | `drive.sh`, deployed as `/data/infra/drive.sh`; `status` says whether the stop file is there and shows the log's tail | `/root/fast/verity` on the container disk (a checkout of origin/main it fetches each call, at the landed commit `/data/drive/deployed` pins when it names one, else at main's tip; its `tools/research`), seeded from `/data/drive/verity` when the container is new | the queue's clone in `/root/fast/queue-verity` (`/root/.research/queue/verity` links to it; seeded from `verity.volume` beside it); the store's cache in `/root/drive-store`; its temp dirs in `/data/drive/tmp` |
+| `drive.sh`: `research queue ARGS` (`drive.sh queue ARGS`: `eject N --by ci --reason ...`) on this pod with `RESEARCH_DRIVE=1`, as lane ci, under its lock, with the verity-drive App's token: `gh_app_token.sh` (`/data/state/secrets/verity-drive.pem`) mints it, both clones' credential helper is `gh_app_token.sh git`, and `gh` is `/data/drive/ghw/gh`, which sets `GH_TOKEN` per call before running `/data/drive/bin/gh` (the landing loop's `gh` too). It lands nothing itself and runs no loop | by hand (ci): `drive.sh`, deployed as `/data/infra/drive.sh`; `status` says whether a verb holds its lock and what it runs | `/root/fast/verity` on the container disk (a checkout of origin/main it fetches each call, at the landed commit `/data/drive/deployed` pins when it names one, else at main's tip; its `tools/research`), seeded from `/data/drive/verity` when the container is new | the queue's clone in `/root/fast/queue-verity` (`/root/.research/queue/verity` links to it; seeded from `verity.volume` beside it); the store's cache in `/root/drive-store`; its temp dirs in `/data/drive/tmp` |
 | Store index, every 5 min (`research data index --postgres` into Neon's `store_private`, and `--public` into `store_public` once `store-export.env` exists) | `store_index.sh`, deployed as `/data/infra/store_index.sh` | `/data/infra/store-index-src` (a `tools/research` tree; its `COMMIT` file names it); `store_index.sh` also replaces `/data/infra/store-index-pass.json` with each pass's start, end, exit code and commit as it ends, and starts the watchers tree's `loop_metrics.py index` in the background to send the pass's length to the site's `POST /api/metrics`, keeping in `/data/infra/store-index-send.json` the failed send's reason it last logged | `/data/infra/store-index.log` |
 | Fixture export, every 5 min (`research data export` of main's `artifacts.json`, then each verified-queue candidate's, origin's `queue/<sha12>` branches (each once: `/data/infra/fixtures-export-candidates` lists those exported), so a candidate's check finds the fixtures its PRs register, to the public export, so nobody exports a new fixture by hand; the relay's `fixtures-public` monitor alerts on one still missing) | `fixtures_export.sh`, deployed as `/data/infra/fixtures_export.sh` | `/data/infra/fixtures-export-repo` (a checkout of origin/main it fetches each pass) | `/data/infra/fixtures-export.log` |
 | Store GC, every 6 h (`research data gc`, the store README §7.4: blobs only uncited artifacts past their kind's TTL hold; plans only until `/data/store-gc/apply` exists, then marks and deletes; skips a pass while the notes clone or the fixtures checkout was last fetched over 6 h ago) | `store_gc.sh`, deployed as `/data/infra/store_gc.sh` | `/data/infra/store-gc-src` (a `tools/research` tree; its `COMMIT` file names it) | `/data/infra/store-gc.log`; each pass's report in `/data/store-gc/reports/`, the marks in `marks.json`, the manifests, labels and attempts it read in `cache/` |
@@ -66,7 +65,7 @@ Landing runs on this pod, and it is ci's: `post_start.sh` starts `/data/vqueue/b
 `main`: the loop's lock keeps a second copy on this pod from running. The relay's `unverified-main` monitor rings ci and top
 when the loop has decided nothing for 3 h; the cloud watch does not watch it. Its clone fetches and pushes over https with
 the verity-drive App's token (App 5385601, installation 173153984), minted by `gh_app_token.sh` with Contents and Pull requests write on this repository and the platform repository only, named
-in the request by id so a rename doesn't break it. `drive.sh`'s clones use the same token.
+in the request by id so a rename doesn't break it.
 
 Reading GitHub. Every watch on the pod reads GitHub's API with one read-only token, which the pod mints itself:
 `gh_read_token.sh --cached` (`/data/infra/gh_read_token.sh`), the same App's installation token asked for with Contents and
@@ -105,7 +104,7 @@ its clone's local `credential.helper` being `gh_app_token.sh git`; if `watch.log
 | `/data/chats` | `/workspace/chats` | the chats archive |
 | `/data/research`, `/data/research-control` | `/workspace/research`, `/workspace/research-control` | `research run` state and control worktrees |
 | `/data/infra` | `/workspace/infra` | infra's pod scripts and their logs; `msg-repo` and `msg-notes`, `msg.sh`'s checkout and notes clone |
-| `/data/watchers` | | the watchers supervisor: `run.sh`, `watchers.toml`, `vm_stop.toml`, `src`, `log/`, `status.json`, each loop's state (`vm_stop.json`, `fleet/`, `loop-metrics.json` with its `.lock` once `loop-metrics` runs, `monitors/`, `agent-watch-offset`, `preflight-probe.json` with `preflight-tree` (its store index is `/root/watchers-preflight-store`, on the pod's own disk), `nightly-check.json` (schema `verity/nightly-check/v1`: the night in progress and the last outcome) with `nightly-check.launch.log` (the last launch's output) and `nightly-check/tmp` (the launch's temp dirs; its clone, worktrees and store index are on the pod's own disk, `/root/fast/nightly-check` and `/root/watchers-nightly-store`), `top-asks.json`, `top-sweep.json` with `linear-audit.jsonl` and `goals/` (the Goals page each hour, which `research velocity` reads; a sweep running this tree's `top_watch.py` puts each copy in the store, preserved, and deletes it after 14 days only once the store reported it preserved), `challenger/` with `publish.sh` and its `state`, `metrics-rerun.json` (schema `verity/metrics-rerun/v1`: each launch's numbers, run id, machine and time) with its pass's lock `metrics-rerun.json.lock`, a record that wasn't JSON moved aside to `metrics-rerun.json.corrupt`, the stop file `metrics-rerun.stop` and the week's GPU plan `gpu-plan.toml`), `repo` (a clone without a working tree, for `research deploy drift`'s `RESEARCH_DEPLOY_REPO`; drift fetches it each run), `bin/gh` (GitHub's CLI release, checksum-checked; every loop's `PATH` has the tree's `infra/control/bin/gh` before it, which runs it with the read-only App token of that call), `extra.d/`, `ssh_config` (the loops' ssh config, which `research deploy` makes from the register of machines), `known_hosts`; `notion.env` (`NOTION_API_KEY`, for `top-asks`, which waits for it, and `monitors-relay`'s `asks`, which reads it when it is there), `goals.key` (a site key with `events:read`, one line, for `top-sweep`'s read of the Goals page), `metrics-rerun.env` (`JOBS_TOKEN`, a site key with `events:read`, for `metrics-rerun`'s read of the metrics) and `nebius-stop.env` (a Nebius account that may stop instances, for `vm-stop`) once placed (root, 0600) |
+| `/data/watchers` | | the watchers supervisor: `run.sh`, `watchers.toml`, `vm_stop.toml`, `src`, `log/`, `status.json`, each loop's state (`vm_stop.json`, `fleet/`, `loop-metrics.json` with its `.lock` once `loop-metrics` runs, `monitors/`, `agent-watch-offset`, `preflight-probe.json` with `preflight-tree` (its store index is `/root/watchers-preflight-store`, on the pod's own disk), `nightly-check.json` (schema `verity/nightly-check/v1`: the night in progress and the last outcome) with `nightly-check.launch.log` (the last launch's output) and `nightly-check/tmp` (the launch's temp dirs; its clone, worktrees and store index are on the pod's own disk, `/root/fast/nightly-check` and `/root/watchers-nightly-store`), `top-asks.json`, `top-sweep.json` with `linear-audit.jsonl` and `goals/` (the Goals page each hour, which `research velocity` reads; a sweep running this tree's `top_watch.py` puts each copy in the store, preserved, and deletes it after 14 days only once the store reported it preserved), `challenger/` with `publish.sh` and its `state`, `metrics-rerun.json` (schema `verity/metrics-rerun/v1`: each launch's numbers, run id, machine and time, and each declared number's reason at the last pass) with its pass's lock `metrics-rerun.json.lock`, a record that wasn't JSON moved aside to `metrics-rerun.json.corrupt`, the stop file `metrics-rerun.stop` and the week's GPU plan `gpu-plan.toml`), `repo` (a clone without a working tree, for `research deploy drift`'s `RESEARCH_DEPLOY_REPO`; drift fetches it each run), `bin/gh` (GitHub's CLI release, checksum-checked; every loop's `PATH` has the tree's `infra/control/bin/gh` before it, which runs it with the read-only App token of that call), `extra.d/`, `ssh_config` (the loops' ssh config, which `research deploy` makes from the register of machines), `known_hosts`; `notion.env` (`NOTION_API_KEY`, for `top-asks`, which waits for it, and `monitors-relay`'s `asks`, which reads it when it is there), `goals.key` (a site key with `events:read`, one line, for `top-sweep`'s read of the Goals page), `metrics-rerun.env` (`JOBS_TOKEN`, a site key with `events:read`, for `metrics-rerun`'s read of the metrics) and `nebius-stop.env` (a Nebius account that may stop instances, for `vm-stop`) once placed (root, 0600) |
 | `/data/backup`, `/data/tmp` | | backups and transfer bundles |
 
 Secrets stay on the volume and never in git: this README names the files, never their contents. To see which variables an env
@@ -120,7 +119,7 @@ A wrapper reads its script once: after a copy restart its loop; a file read each
 needs no restart of the agent watch, which imports `research` from that tree at start:
 
 ~~~sh
-CP="research pods ssh p1ugdh9hfgqe5d --"
+CP="research pods ssh vy-control-verity --"
 $CP "cat > /data/boot/post_start.sh" < infra/control/post_start.sh
 $CP "cat > /data/steward/run.sh" < infra/control/steward-run.sh
 $CP "cat > /data/infra/store_index.sh && chmod +x /data/infra/store_index.sh" < infra/control/store_index.sh
@@ -227,29 +226,34 @@ The declared numbers' reruns (`metrics-rerun`) need no seed either: the first pa
 `main`'s tip out clean and reads every `metrics.toml` there. A number is due when the door holds no reading of it or its newest
 is older than its `every`; a number the door doesn't list is said and isn't due; one file's rows that share a command are one
 launch. The loop holds no workload: each launch is a `research run` of the row's command with its `--on` replaced, from the
-clone with `--source .` and the clone's own `research`, without the site key in its environment. A row's `research run` may
-carry only the options `ALLOWED` in `metrics_rerun.py` lists, each with a value of its form; any other (`--send`, `--source
-DIR`, `--runs-dir`, `--id`) is refused and said, so no row ships a file of the pod. A command that doesn't split as a shell
-line is refused and said, and the pass goes on; a `research run` without `--on` is a local run, which would run on the pod,
-and is skipped and said. The loop runs a row only when its command asks no more than the default job (`DEFAULT_JOB`,
-`research run`'s own `AUTO_MEM_GB` and `AUTO_MAX_MIN` from `research.cli`): no `--pool`, and `--mem-gb` and `--timeout` each
-at or under the default's, read as `research run` reads them (one it can't read is over); a row may carry no `--cpus`.
-Any other row runs when its owner runs it, and is skipped and said, before and whatever the plan below lists for it. A CPU command (`--on auto`) goes to the loop's `--on` in the loop's
-`--pool`; a command asking for GPUs or naming its machine (`--on NODE`, `--on vy-...`) goes only to a machine
-`/data/watchers/gpu-plan.toml` lists for one of its numbers now (the machine it names, when it names one) and that no
-launch of the loop's is in flight on (waiting for its slot or running), and without one it is skipped and said. The plan is
-the lead's, one `[[free]]` table a machine, with `machine`, `from` and `until` (TOML date-times, UTC) and `metrics`, the ids
-it is free for: a row naming none is free for none, and said. Never `auto`, never vy-nebius-cpu-2, -4, -5 or -6. A pass
-launches at most `--max`; never a number whose last launch of the loop's is in flight (a run whose state can't be read
-stays so) or ran and ended less than its `every` ago, whatever the door says; never a command that takes a run id only its
-owner picks (FIRE_RUN); never a loop's own number (a row whose command's script is under `infra/control/`); never a parked
-number (a row whose `goal` is `top/parked`, rerun only by hand), and said; never a command
-that failed twice running under its rows as they are, until a change to them. The loop names each run (`--id`) and records
-it before launching, so a launch that prints no run line, or that its timeout kills, is judged by that run's own record: a
-run that registered and reached its machine is in flight and never launched again while it is. A launch that never ran
-(its run never registered or never reached its machine, or ended without taking its slot, as when a pool refuses it at
-once) is a fault of the launch, not of the command: after two in a row the number waits its `every` from the last, and is
-then tried once more. Each pass holds
+clone with `--source .` and the clone's own `research`, without the site, Slack or Linear keys in its environment. A row's
+`research run` may carry only the options `ALLOWED` in `metrics_rerun.py` lists, each with a value of its form; any other
+(`--send`, `--source DIR`, `--runs-dir`, `--id`, `--gpu-host`, `--custody-ttl`) is refused and said, so no row ships a file
+of the pod, and a `--pool` must be one of research's pools (`slot_only.POOLS`). A command that doesn't split as a shell line
+is refused and said, and the pass goes on. The loop runs a row only when its command asks no more than a CPU check machine
+has (`CEILING`: `--cpus`, `--mem-gb` and `--timeout`, read as `research run` reads them; one it can't read is over); any
+other row runs when its owner runs it, and is skipped and said, whatever the plan below lists for it. A CPU command (no
+`--on`, `--on auto`, or `--on NODE` with a pool) goes to the loop's `--on` in the loop's `--pool`, and one naming a CPU node
+(`vy-nebius-cpu-N`, `research.auto.CPU_NODE`) to that node in the loop's `--pool`; neither passes on the row's `--cpus` or
+`--pool` (the slot's cores are the run's, and its memory rule admits the run). A command asking for GPUs, naming another
+machine, or naming `NODE` without a pool goes only to a machine `/data/watchers/gpu-plan.toml` lists for one of its numbers
+now (the machine it names, when it names one) and that no launch of the loop's is in flight on (waiting for its slot or
+running), and without one it is skipped and said. The plan is the lead's, one `[[free]]` table a machine, with `machine`,
+`from` and `until` (TOML date-times, UTC) and `metrics`, the ids it is free for: a row naming none is free for none, and
+said. Never `auto`, never vy-nebius-cpu-2, -4, -5 or -6. A pass launches at most `--max`; never a number whose last launch
+of the loop's is in flight (a run whose state can't be read stays so) or passed less than its `every` ago, whatever the door
+says; never a loop's own number (a row whose command's script is under `infra/control/`); never a parked number (a row
+whose `goal` is `top/parked`, rerun only by hand), and said; never a command that takes a value only its owner fills in
+(FIRE_RUN, CONFIG), whose owner is rung once for each declaration of it when it would otherwise run on a CPU node. The loop
+names each run (`--id`) and records it before launching, so a launch that prints no run line, or that its timeout kills, is
+judged by that run's own record: a run that registered and reached its machine is in flight and never launched again while
+it is. A launch that fails (its run ended non-zero, never registered, never reached its machine, or ended without taking
+its slot) rings its numbers' owners, the handle before each id's slash, with its run id and reason line (`research msg
+ring-run`, with `relay.env`'s Slack key), and is launched again an hour later, or after its `every` if that is shorter;
+after three failures in a row that ended alike under its rows as they are, it is rung once more and held seven days or
+until its rows change. The record's `numbers` holds each declared number's reason at the last pass (one of `REASONS`), and
+`python3 infra/control/metrics_rerun.py classify --tree DIR` prints what the loop could ever do with each number of a
+checkout, with the count of each reason. Each pass holds
 `metrics-rerun.json.lock`, so a dry run and the live loop never share the clone; one that finds it held does nothing and
 says so. A record that isn't JSON is moved aside and said, and every number then waits its `every`, so nothing in flight is
 launched twice; a record that is lost may launch a run still in flight once more. A launch runs `main`'s `research` from
@@ -265,7 +269,8 @@ $CP "tail -n 20 /data/watchers/log/metrics-rerun.log; cat /data/watchers/metrics
 
 A change to `post_start.sh` takes effect at the next reset. To apply a new link or service now, run the new line by hand,
 or the whole script: each link is `ln -sfn`, so a rerun only repeats them. It does start a second copy of every loop,
-though: the steward's lease makes its copy stand by, but kill the old guard first.
+though: the steward's lease makes its copy stand by, but kill the old guard first. Stop a loop's process group with
+`/bin/kill -TERM -- -PGID`: dash, the pod's `/bin/sh`, refuses it as a builtin ("Illegal number: -").
 
 ## The door
 

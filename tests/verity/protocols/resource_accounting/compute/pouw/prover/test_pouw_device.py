@@ -5,14 +5,21 @@ from __future__ import annotations
 import ctypes
 import dataclasses
 import hashlib
+import shutil
+import subprocess
+from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from verity_config.verity_settings import REGISTRY as VERITY_SETTINGS
 
+from verity.device import gpu_card_reporting
+
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import circuit as PC
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as PD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import row_table_kernels as RTK
 
 #: Under `check` (`tools/check/suites.py` sets VERITY_SUITE_ROOT) the CPU build always runs: without a compiler these tests
 #: fail there instead of skipping. nvcc and a GPU stay optional (their tests skip by name).
@@ -113,24 +120,55 @@ def test_the_build_is_keyed_by_its_sources(tmp_path, monkeypatch):
     assert PD.source_digest() != before
 
 
+def test_the_row_table_libraries_build_with_the_configured_toolchain(monkeypatch):
+    built: list[str] = []
+
+    def build(tool, sources, flags, name):
+        built.append(tool)
+        return SimpleNamespace(rt_step_host=SimpleNamespace(), rt_midstates=SimpleNamespace(), rt_step=SimpleNamespace())
+
+    monkeypatch.setattr(PD.TOOLCHAIN, "cxx", "/opt/toolchain/bin/g++")
+    monkeypatch.setattr(PD.TOOLCHAIN, "nvcc", "/opt/toolchain/bin/nvcc")
+    monkeypatch.setattr(RTK, "_build", build)
+    RTK.host_lib.__wrapped__()
+    RTK.device_lib.__wrapped__("120")
+    assert built == ["/opt/toolchain/bin/g++", "/opt/toolchain/bin/nvcc"]
+    assert RTK.nvcc() == PD.nvcc() == "/opt/toolchain/bin/nvcc"
+
+
+@pytest.mark.parametrize("reader, lib, what", [("compiler", lambda: RTK.host_lib.__wrapped__(), "C\\+\\+ compiler"),
+                                               ("nvcc", lambda: RTK.device_lib.__wrapped__("120"), "nvcc")])
+def test_no_toolchain_builds_no_row_table_library(monkeypatch, reader, lib, what):
+    monkeypatch.setattr(PD, reader, lambda: None)
+    monkeypatch.setattr(RTK, "_build", lambda *a: pytest.fail("built with no toolchain"))
+    with pytest.raises(RuntimeError, match=f"no {what} configured or on the path"):
+        lib()
+
+
+CARDS = Path(__file__).resolve().parents[7] / "calibration" / "hardware" / "cards"
+
+
 @pytest.fixture(scope="module")
-def device():
-    """The nvcc build, which compiles and loads without a GPU; the tests that run it need one."""
-    if PD.nvcc() is None:
-        pytest.skip("needs nvcc")
+def arch():
+    """The ``arch`` of this machine's card, by the name nvidia-smi reports for its first GPU: the CUDA builds' target."""
+    smi = shutil.which("nvidia-smi")
+    if PD.nvcc() is None or smi is None:
+        pytest.skip("needs nvcc and a GPU, whose card's arch the CUDA builds target")
+    name = subprocess.run([smi, "--query-gpu=name", "--format=csv,noheader"], capture_output=True, text=True,
+                          check=True).stdout.splitlines()[0].strip()
+    PD.configure(arch=gpu_card_reporting(name, directory=CARDS)["arch"])
+    return PD.TOOLCHAIN.arch
+
+
+@pytest.fixture(scope="module")
+def device(arch):
+    """The nvcc build for this machine's card."""
     return PD.device()
 
 
 def _has_gpu(dll) -> bool:
     rate = ctypes.c_double(0)
     return dll.ncp2_ceiling(0, 1, 32, 1, ctypes.byref(rate)) == 0
-
-
-def test_the_device_build_loads_and_without_a_gpu_reports_cuda_errors(device):
-    if _has_gpu(device):
-        pytest.skip("a CUDA device is present")
-    with pytest.raises(ValueError, match="CUDA error"):
-        PD.commit_call(0, "ncp-v2", dict(PD.gate_calls())["five-strips"], on="device")
 
 
 @pytest.mark.parametrize("name, call", PD.gate_calls(), ids=[n for n, _c in PD.gate_calls()])
@@ -171,17 +209,8 @@ def test_the_low_byte_variant_hashes_each_checkpoints_low_byte(five_strips):
 
 
 @pytest.fixture(scope="module")
-def fused():
-    if PD.nvcc() is None:
-        pytest.skip("needs nvcc")
+def fused(arch):
     return PD.fused()
-
-
-def test_the_fused_build_loads_and_without_a_gpu_reports_cuda_errors(fused, device):
-    if _has_gpu(device):
-        pytest.skip("a CUDA device is present")
-    with pytest.raises(ValueError, match="CUDA error"):
-        PD.commit_call(0, "ncp-v2", dict(PD.gate_calls())["five-strips"], on="fused")
 
 
 @pytest.mark.parametrize("name, call", PD.gate_calls(), ids=[n for n, _c in PD.gate_calls()])

@@ -118,7 +118,7 @@ variable (w : StratifiedBlock)
 /-- The sampling block's sample: `Flock.Draw.drawWith`'s stratified sample on the challenger's coins. -/
 def L : SamplingDesign w.n := SamplingDesign.execOS (n := w.n) w.src (.stratified w.Kd (Array.ofFn w.St)) w.pop
 
-/-- The stratified sampling design the sample is held to under A3 (`SamplingDesign.execOS_escape_le`): `ks s` of subcircuit `s`'s units, uniform
+/-- The stratified sampling design the sample is held to under A3 (`SamplingDesign.execOS_missProb_le`): `ks s` of subcircuit `s`'s units, uniform
 without replacement, independently across subcircuits. -/
 def ideal : SamplingDesign w.n := SamplingDesign.stratified w.sub w.ks w.hks
 

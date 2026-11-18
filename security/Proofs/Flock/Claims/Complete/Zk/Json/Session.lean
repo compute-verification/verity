@@ -66,13 +66,13 @@ open Lean (Json JsonNumber)
 
 /-! ## The rounds -/
 
-theorem get_rec (resp : ℕ → Claims.Msg) : (recS resp).R (get : TMW PS Transcript) get := by
+theorem get_rec (resp : ℕ → Hash.Msg) : (recS resp).R (get : TMW PS Transcript) get := by
   intro t l a t' l' h
   simp only [StateT.run_get, go_pure, Prod.mk.injEq, Except.ok.injEq] at h
   obtain ⟨⟨-, rfl⟩, rfl⟩ := h
   exact Rec.same rfl rfl
 
-theorem liftV_rec (resp : ℕ → Claims.Msg) {α : Type} (v : V α) :
+theorem liftV_rec (resp : ℕ → Hash.Msg) {α : Type} (v : V α) :
     (recS resp).R (StateT.lift (monadLift v : PS α) : TMW PS α) (StateT.lift (monadLift v : PS α)) := by
   intro t l a t' l' e
   change ((monadLift v : PS _) >>= fun a => Pure.pure (a, t)).go l = _ at e
@@ -84,7 +84,7 @@ theorem liftV_rec (resp : ℕ → Claims.Msg) {α : Type} (v : V α) :
   exact Rec.same rfl rfl
 
 /-- A pure computation of `V`, run in `PS` and lifted to the transcript, adds no rounds and no sends. -/
-theorem liftPure_rec (resp : ℕ → Claims.Msg) {α : Type} {x : V α} {y : PS α} (hxy : pureS.R x y) :
+theorem liftPure_rec (resp : ℕ → Hash.Msg) {α : Type} {x : V α} {y : PS α} (hxy : pureS.R x y) :
     (recS resp).R (StateT.lift y : TMW PS α) (StateT.lift y) := by
   intro t l a t' l' e
   change (y >>= fun a => Pure.pure (a, t)).go l = _ at e
@@ -94,7 +94,7 @@ theorem liftPure_rec (resp : ℕ → Claims.Msg) {α : Type} {x : V α} {y : PS 
   cases e2
   exact Rec.same rfl rfl
 
-theorem zerocheckPZk_rec (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout)
+theorem zerocheckPZk_rec (resp : ℕ → Hash.Msg) (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout)
     (h : Array F128) (tr : Trace) :
     (recS resp).R (zerocheckPZk (asksS resp) m digest cap root lay h tr)
       (zerocheckPZk (asksS resp) m digest cap root lay h tr) := by
@@ -102,7 +102,7 @@ theorem zerocheckPZk_rec (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap root 
   sim_walk [squeezeP_rec resp, sampleP_rec resp, label_rec resp, absorbBytes_rec resp, absorbSlice_rec resp,
     absorbF_rec resp]
 
-theorem lincheckPZk_rec (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
+theorem lincheckPZk_rec (resp : ℕ → Hash.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
     (tr : Trace) (zc : ZcOut) :
     (recS resp).R (lincheckPZk (asksS resp) c m lay h tr zc) (lincheckPZk (asksS resp) c m lay h tr zc) := by
   unfold lincheckPZk
@@ -129,7 +129,7 @@ theorem innerCommitP_pureS (h : ByteArray → ByteArray) (p : PadsZk) (salt : �
   unfold innerCommitP MerkleOps.hm96With
   sim_walk [leafWith_sim pureS hh]
 
-theorem ligeritoPZk_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
+theorem ligeritoPZk_rec (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (hp : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
     (recS resp).R
@@ -140,12 +140,12 @@ theorem ligeritoPZk_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
     challengeP_rec resp, oodIntroP_rec resp, queryP_rec resp, commitP_rec resp h, label_rec resp, absorbF_rec resp,
     absorbBytes_rec resp, absorbK_rec resp, absorbSlice_rec resp]
 
-theorem tau_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (tau : F128) (salt : ByteArray) :
+theorem tau_rec (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (tau : F128) (salt : ByteArray) :
     (recS resp).R (StateT.lift (Zk.tauCommitmentWith (Hashes.ofSha512 h : Hashes PS) tau salt) : TMW PS ByteArray)
       (StateT.lift (Zk.tauCommitmentWith (Hashes.ofSha512 h : Hashes PS) tau salt)) :=
   liftPure_rec resp (zk_tauCommitmentWith_sim pureS (pureS_hashes h) tau salt)
 
-theorem innerP_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
+theorem innerP_rec (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic : InnerCommit) (finalC : F128) (cons : Array (String × Zk.Lin)) :
     (recS resp).R (innerP (asksS resp) (Hashes.ofSha512 h) lay p ic finalC cons)
       (innerP (asksS resp) (Hashes.ofSha512 h) lay p ic finalC cons) := by
@@ -154,7 +154,7 @@ theorem innerP_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (la
     absorbBytes_rec resp, tau_rec resp h]
 
 /-- **A masked rep's new rounds are its new sends.** -/
-theorem repPZk_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tPad rep : ℕ)
+theorem repPZk_rec (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tPad rep : ℕ)
     (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk)
     (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (prior : Array (List F128)) (words : List ℕ) :
@@ -173,8 +173,8 @@ theorem repPZk_rec (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st
 `root_B`, the link's points off the first reply's coin, and one well-formed stream per rep stream; the table's extra
 claims evaluate at those points; and its sends are the link of that `root_B` and no public words, then the streams'
 rounds in order, each from index `1` on (`Recs`). -/
-def SessionFactsZk (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (st : Setup)
-    (hz : String) (ct : CoinTree.Spec) (r : String × Array ByteArray) (bodies : Array Claims.Msg) : Prop :=
+def SessionFactsZk (h : ByteArray → ByteArray) (resp : ℕ → Hash.Msg) (spec : SessionSpec) (st : Setup)
+    (hz : String) (ct : CoinTree.Spec) (r : String × Array ByteArray) (bodies : Array Hash.Msg) : Prop :=
   ∃ rb streams, r.1 = printJ (recordObjZk spec h hz ct #[rb] (ptsOf spec (coinOf (resp 0))) streams r.2) ∧
     0 < rb.size ∧ rb.size < 2 ^ 64 ∧ streams.size = spec.repStreams.size ∧ (∀ rs ∈ streams, RoundsOk rs) ∧
     (∃ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e) ∧
@@ -182,7 +182,7 @@ def SessionFactsZk (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (sp
 
 /-- **The one-table masked session's facts**, given a non-empty masked level-0 cap under `2^64` bytes and well-formed
 rep rounds on the table's extra claims at the link's points. -/
-theorem sessionPZk_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
+theorem sessionPZk_facts (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json}
     (hown : Flock.JsonParse.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
     (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
@@ -193,7 +193,7 @@ theorem sessionPZk_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras →
       Ret ((repPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st v.1 v.2 rep dom tr tb cm₀ extras pads ic extra
         lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
-    {r : String × Array ByteArray} {bodies : Array Claims.Msg}
+    {r : String × Array ByteArray} {bodies : Array Hash.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] words trs tape).go #[] =
       (.ok r, bodies)) :
     SessionFactsZk (Claims.hOf H) resp spec st hz ct r bodies := by
@@ -227,7 +227,7 @@ theorem sessionPZk_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
   obtain ⟨rfl, rfl⟩ := hL
   have hrs1 := repStreams_one ht
   obtain ⟨⟨ss, ps⟩, l₄, hF, hrun⟩ := go_bind_ok hrun
-  have hinv := forIn_array_inv _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Claims.Msg) =>
+  have hinv := forIn_array_inv _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Hash.Msg) =>
       b.1.size = k ∧ b.2.size = k ∧ (∀ rs ∈ b.1, RoundsOk rs) ∧
         (0 < k → ∃ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e) ∧
         ∃ bs, l.toList = linkBody [flat cm.cap] [ByteArray.empty] :: bs ∧

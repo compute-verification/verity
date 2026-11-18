@@ -13,6 +13,7 @@ from types import SimpleNamespace as NS
 import pytest
 import release_front as RF
 import serve_tax as S
+from verity_bench import kit
 from verity.protocols.resource_accounting.network.prover.admission import BUCKET_HEADER, RELEASE_HEADER, RUN_HEADER, WATERMARK_PATH
 
 
@@ -172,7 +173,8 @@ def test_prod_all_on_is_sent_through_its_release_front_and_records_what_a_price_
     monkeypatch.setattr(S.subprocess, "Popen", popen)
     monkeypatch.setattr(S, "drive_bench", drive)
     with upstream() as (port, up):
-        monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100, free_port=lambda: port))
+        monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100))
+        monkeypatch.setattr(kit, "free_port", lambda: port)
         assert S.main(["run", "--arm", "prod-all-on", "--model-id", "glm53", "--checkpoint", str(tmp_path / "ck"),
                        "--client", "vllm-bench", "--loads", "long=1", "--reps", "2", "--warm-s", "0", "--tick-ms",
                        "34.7,42.4", "--edges-every-s", "60", "--private", str(tmp_path / "private"), "--out",

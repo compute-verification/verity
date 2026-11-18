@@ -116,7 +116,7 @@ Program with no definitions), and a compiled sampled verifier has a statement in
 The compiled sampled verifier's premise is a named assumption (`Properties.NetworkScan.Assumptions`).
 `scanOf`'s and `Flock.Program.decode`'s acceptances are not exhibited: no descriptor is evaluated here. -/
 theorem scan_honest : Flock.canon .null = .ok "null" ∧ Flattens default ⟨[], []⟩ ∧
-    ∃ (A : Claims.SamplingGeneric.Arg Bool) (D : Claims.SamplingGeneric.Compiled Bool A) (x : Claims.Msg),
+    ∃ (A : Claims.SamplingGeneric.Arg Bool) (D : Claims.SamplingGeneric.Compiled Bool A) (x : Hash.Msg),
       D.Scope x :=
   ⟨canon_null, empty_flattens, _, Claims.Witness.SamplingGeneric.twoL Bool, [],
     Claims.Witness.SamplingGeneric.twoL_scope []⟩
@@ -155,7 +155,7 @@ noncomputable def acceptAllCompiled :
   { Claims.Witness.SamplingGeneric.sksL Bool with parse := fun _ => some nullStmt }
 
 /-- Every message is in `acceptAllCompiled`'s sampling scope. -/
-theorem acceptAllCompiled_scope (x : Claims.Msg) : acceptAllCompiled.Scope x :=
+theorem acceptAllCompiled_scope (x : Hash.Msg) : acceptAllCompiled.Scope x :=
   ⟨nullStmt, Claims.Witness.Sampling.toyPart, rfl, rfl, inScope_null⟩
 
 /-- **`ScanScopeAcc`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a scan Flock
@@ -164,7 +164,7 @@ their descriptor, a statement in its sampling scope is not in `ScopeAcc` at a sc
 circuit returns is an input (`not_fits_of_outs_inputs`). -/
 theorem scanScopeAcc_nontrivial :
     ∃ (s : NetworkVerifier.Period.Schedule) (j : Lean.Json) (c : String) (_ : Flock.canon j = .ok c)
-      (A : Claims.SamplingGeneric.Arg Bool) (D : Claims.SamplingGeneric.Compiled Bool A) (x : Claims.Msg)
+      (A : Claims.SamplingGeneric.Arg Bool) (D : Claims.SamplingGeneric.Compiled Bool A) (x : Hash.Msg)
       (_ : D.Scope x)
       (_ : ∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = c.toUTF8),
       ¬ NetTiming.ScopeAcc D (layOf s) (fun _ => s.window) x := by
@@ -181,7 +181,7 @@ form of the two-lemma rule's `_nontrivial`): at any compiled sampled verifier, a
 to a descriptor decoding to the empty Program, with the empty circuit, is not in `ScopeAcc` at that Program's
 schedule, though a scan check and a scope check accepting everything would pass it. -/
 theorem scanScopeAcc_nontrivial_of {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-    {A : Claims.SamplingGeneric.Arg Coin} {D : Claims.SamplingGeneric.Compiled Coin A} {x : Claims.Msg}
+    {A : Claims.SamplingGeneric.Arg Coin} {D : Claims.SamplingGeneric.Compiled Coin A} {x : Hash.Msg}
     {st : Claims.Sampling.AuditStatement} (hx : D.parse x = some st)
     (hP : Flock.Program.decode ⟨st.desc.toArray⟩ = .ok default) (hC : st.prog = ⟨[], []⟩) :
     ¬ NetTiming.ScopeAcc D (layOf oneSlot) (fun _ => oneSlot.window) x := by

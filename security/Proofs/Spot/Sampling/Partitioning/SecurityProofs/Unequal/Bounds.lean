@@ -67,7 +67,7 @@ theorem cost_const {n : ℕ} (L : SamplingDesign n) (c : ℝ) : cost L (fun _ =>
 theorem miss_toReal_le_of {n : ℕ} {L : SamplingDesign n} {K : ℕ} {δ : ℝ} (hδ : 0 ≤ δ)
     (h : ∀ B : Finset (Fin n), K ≤ B.card → (L.missProb B).toReal ≤ δ) : (L.miss K).toReal ≤ δ := by
   have hle : L.miss K ≤ ENNReal.ofReal δ := iSup₂_le fun B hB =>
-    (ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (L.escape_le_one B)) hδ).2 (h B hB)
+    (ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (L.missProb_le_one B)) hδ).2 (h B hB)
   calc (L.miss K).toReal ≤ (ENNReal.ofReal δ).toReal := ENNReal.toReal_mono ENNReal.ofReal_ne_top hle
     _ = δ := ENNReal.toReal_ofReal hδ
 
@@ -102,7 +102,7 @@ theorem achievability : Guarantees.Achievability := by
         _ = (q u + (den : ℝ)⁻¹) * den := by field_simp
     linarith
   refine ⟨SamplingDesign.bernoulliOf num den, fun B hB => ?_, fun u => ?_⟩
-  · rw [bern_escape_toReal hnum]
+  · rw [bern_missProb_toReal hnum]
     calc ∏ u ∈ B, (1 - (num u : ℝ) / den) ≤ ∏ u ∈ B, Real.exp (-(Λ / C * w u)) := by
           refine Finset.prod_le_prod₀ (fun u _ => ?_) (fun u _ => ?_)
           · rw [sub_nonneg, div_le_one hden0]
@@ -351,7 +351,7 @@ theorem class_bound (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (L : Samplin
     rcases le_or_gt K S.card with hKm | hKm
     · have htA' := htA (Finset.card_pos.1 (lt_of_lt_of_le hK0 hKm))
       have hmiss : ((restrict L S).miss K).toReal ≤ δ := miss_toReal_le_of hδ0.le fun B hB => by
-        rw [restrict_escape]
+        rw [restrict_missProb]
         refine hL _ ?_
         rw [sum_map_restrict]
         calc C = C / t * t := by field_simp

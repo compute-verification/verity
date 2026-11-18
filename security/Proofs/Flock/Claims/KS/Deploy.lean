@@ -69,7 +69,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- The tables' errors, summed, are nonnegative. -/
-theorem εtable_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ εtable zk x := by
+theorem εtable_nonneg (zk : Bool) (x : Hash.Msg) : 0 ≤ εtable zk x := by
   unfold εtable
   refine List.sum_nonneg fun a ha => ?_
   obtain ⟨p, -, rfl⟩ := List.mem_map.1 ha
@@ -78,7 +78,7 @@ theorem εtable_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ εtable zk x := by
 end Gen
 
 /-- The tables' errors, summed, are nonnegative. -/
-theorem εtable_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ εtable zk x :=
+theorem εtable_nonneg (zk : Bool) (x : Hash.Msg) : 0 ≤ εtable zk x :=
   Gen.εtable_nonneg (S := S₀) (zk := zk) (x := x)
 
 namespace Gen
@@ -89,7 +89,7 @@ variable [S : ZkSetup]
 its tables' own statements, and the tables' traces interleaved (`relS_split`). -/
 theorem splits_of_inScope {Coin Col Tr : Type} {zk : Bool} (r : Tr → Claims.Flock.Wit)
     (D : Claims.Flock.Deploy Coin Col Tr) (hp : D.parse = parse zk Readable.relation)
-    (ht : D.table = table zk Readable.relation) (hr : D.read = Claims.Flock.readTables r) {x : Claims.Msg}
+    (ht : D.table = table zk Readable.relation) (hr : D.read = Claims.Flock.readTables r) {x : Hash.Msg}
     {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s) (hin : Claims.Flock.InScope zk s) :
     Claims.Flock.Splits D x := by
   intro s' hs' Ms hlen hall
@@ -110,7 +110,7 @@ end Gen
 its tables' own statements, and the tables' traces interleaved (`relS_split`). -/
 theorem splits_of_inScope {Coin Col Tr : Type} {zk : Bool} (r : Tr → Claims.Flock.Wit)
     (D : Claims.Flock.Deploy Coin Col Tr) (hp : D.parse = parse zk Readable.relation)
-    (ht : D.table = table zk Readable.relation) (hr : D.read = Claims.Flock.readTables r) {x : Claims.Msg}
+    (ht : D.table = table zk Readable.relation) (hr : D.read = Claims.Flock.readTables r) {x : Hash.Msg}
     {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s) (hin : Claims.Flock.InScope zk s) :
     Claims.Flock.Splits D x :=
   Gen.splits_of_inScope (S := S₀) (Coin := Coin) (Col := Col) (Tr := Tr) (zk := zk) (r := r) (D := D) (hp := hp)
@@ -119,7 +119,7 @@ theorem splits_of_inScope {Coin Col Tr : Type} {zk : Bool} (r : Tr → Claims.Fl
 /-- **At one table the relation splits**: table 0's own statement is the statement (`table_zero_of_tables_eq_one`). -/
 theorem splits_of_one {Coin Col Tr : Type} {zk : Bool} {rel : Readable.Parsed → Readable.Relation}
     (D : Claims.Flock.Deploy Coin Col Tr) (hp : D.parse = parse zk rel) (ht : D.table = table zk rel)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : D.parse x = some s) (h1 : s.tables = 1) :
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : D.parse x = some s) (h1 : s.tables = 1) :
     Claims.Flock.Splits D x := by
   intro s' hs' Ms hlen hall
   rw [hs, Option.some.injEq] at hs'
@@ -131,7 +131,7 @@ theorem splits_of_one {Coin Col Tr : Type} {zk : Bool} {rel : Readable.Parsed �
   simpa using hR
 
 /-- **The deployed plain verifier: KS from one wait's bound.** -/
-theorem plain_of_oneWait (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem plain_of_oneWait (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hk : ∀ x, (8 ≤ (deployPlain rel).k x ∧ Claims.Flock.Splits (deployPlain rel) x) ∨
       Claims.Flock.NoAcc H (deployPlain rel).V x)
     (h : Claims.Flock.OneWait H (deployPlain rel)) : Claims.Flock.KS H (deployPlain rel) :=
@@ -142,7 +142,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The deployed masked (`--zk`) verifier: KS from one wait's bound.** -/
-theorem zk_of_oneWait (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem zk_of_oneWait (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hk : ∀ x, (8 ≤ (deployZk rel).k x ∧ Claims.Flock.Splits (deployZk rel) x) ∨
       Claims.Flock.NoAcc H (deployZk rel).V x)
     (h : Claims.Flock.OneWait H (deployZk rel)) : Claims.Flock.KS H (deployZk rel) :=
@@ -150,7 +150,7 @@ theorem zk_of_oneWait (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed →
 
 /-- **The deployed masked (`--zk`) verifier with `E^rep` truncated at `K₀ > 0`: KS from one wait's bound** at the
 instance, which reads no truncation (`deployZkAt`). -/
-theorem zk_of_oneWait_at (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) {K₀ : ℕ}
+theorem zk_of_oneWait_at (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) {K₀ : ℕ}
     (hK₀ : 0 < K₀) (hk : ∀ x, (8 ≤ (deployZk rel).k x ∧ Claims.Flock.Splits (deployZk rel) x) ∨
       Claims.Flock.NoAcc H (deployZk rel).V x)
     (h : Claims.Flock.OneWait H (deployZk rel)) : Claims.Flock.KS H (deployZkAt K₀ rel) :=
@@ -159,7 +159,7 @@ theorem zk_of_oneWait_at (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed 
 end Gen
 
 /-- **The deployed masked (`--zk`) verifier: KS from one wait's bound.** -/
-theorem zk_of_oneWait (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem zk_of_oneWait (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hk : ∀ x, (8 ≤ (deployZk rel).k x ∧ Claims.Flock.Splits (deployZk rel) x) ∨
       Claims.Flock.NoAcc H (deployZk rel).V x)
     (h : Claims.Flock.OneWait H (deployZk rel)) : Claims.Flock.KS H (deployZk rel) :=

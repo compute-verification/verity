@@ -350,7 +350,7 @@ open FlockSoundness FlockSoundness.Discharge.Hm FlockVBridge.OfVStar
 /-- **What the parser accepted at a table, without the check**: a statement that decodes to an untyped statement
 without public input words parses each table with `HmRow.parse` (`parseFacts_of_tablesOf`), so each table carries
 `ParseFacts`, among them each V* unit's own check. -/
-theorem parseFacts_of_parse {decode : Claims.Msg → Option Read} {x : Claims.Msg} {p : Parsed}
+theorem parseFacts_of_parse {decode : Hash.Msg → Option Read} {x : Hash.Msg} {p : Parsed}
     (hx : parseBytes decode x = some p) (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ}
     (htl : t < p.sts.size) (hf : p.sts[t].c.tmpl = none) : ∃ tags, FlockSoundness.ParseFacts tags p.sts[t].c := by
   unfold parseBytes at hx
@@ -358,7 +358,7 @@ theorem parseFacts_of_parse {decode : Claims.Msg → Option Read} {x : Claims.Ms
   exact parseFacts_of_tablesOf (tablesOf_of_parses (parses_of_parse hr)) ht hpi htl hf
 
 /-- `parseFacts_of_parse` whatever the table's template (`ParseFactsU`, `parseFactsU_of_tablesOf`). -/
-theorem parseFactsU_of_parse {decode : Claims.Msg → Option Read} {x : Claims.Msg} {p : Parsed}
+theorem parseFactsU_of_parse {decode : Hash.Msg → Option Read} {x : Hash.Msg} {p : Parsed}
     (hx : parseBytes decode x = some p) (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ}
     (htl : t < p.sts.size) : ∃ tags pre, FlockSoundness.ParseFactsU tags pre p.sts[t].c := by
   unfold parseBytes at hx
@@ -405,7 +405,7 @@ def LevelCalls (v : ℕ → Bool) (LANES H : ℕ) : Prop :=
 /-- **A level's copies carry its climb's calls at `Flock.check`** (`laid_unit_calls` at every table, at what the
 copy's input columns read, `openIns_reads`): wherever `Flock.check` holds at the deployed parser, at an untyped parsed
 statement without public input words, a table whose unit is named for `LANES` and `H` under either name. -/
-theorem levelCalls_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem levelCalls_of_check {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size) {LANES H : ℕ}
     (hp : Flock.RecOpen.params p.sts[t].c.unit.name = some (LANES, H) ∨
@@ -483,7 +483,7 @@ statement without public input words, every copy of a V* unit holds its outputs 
 (`climbAt_of_check` and `levelCalls_of_check` at `openIns_reads`, `partCols_of_check_at` or
 `partCols_of_check_opening` at `inCols_readElems`, `sparseOuts_of_check` at `sparseIn_reads_any`; the units' checks from
 the parse). -/
-theorem unitOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem unitOuts_of_check {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
     {K : (ℕ → Bool) → Prop} (hK : UnitOuts p.sts[t].c K) {o g u : ℕ} (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog))
@@ -507,7 +507,7 @@ def AllOuts (p : Parsed) (w : Claims.Flock.Wit) : Prop :=
     o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) → g < p.sts[t].c.g → u < p.sts[t].c.upv → K (copyOf p t ht w o g u)
 
 /-- **The output tie at every copy** (`unitOuts_of_check` at each). -/
-theorem allOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem allOuts_of_check {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) : AllOuts p w :=
   fun _ htl _ hK _ _ _ ho hg hu => unitOuts_of_check h hx ht hpi htl hK ho hg hu

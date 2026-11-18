@@ -102,7 +102,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_tables
 theorem execOS_subset_miss_le (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src) (c : ℕ) :
     (SamplingDesign.execOS (n := n) src (.subset kd) n).miss c ≤ (Verity.SamplingDesign.subset n kd hkd).miss c :=
-  iSup₂_mono fun B _ => SamplingDesign.execOS_subset_escape_le n kd hkd Lb src hA3 B
+  iSup₂_mono fun B _ => SamplingDesign.execOS_subset_missProb_le n kd hkd Lb src hA3 B
 
 /-- **The headline at the executable, for sessions of `J` tables of the challenger, at the live subset sample**,
 the sample verity-verify-proof takes at more than one table. As `Prog.flock_headline_live_tables`, with the verifier's sample the

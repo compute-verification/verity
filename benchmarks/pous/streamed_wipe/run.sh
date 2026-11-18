@@ -33,7 +33,8 @@ if [ "${1:-}" = leased ]; then
   exit 0
 fi
 
-NVCC=${NVCC:-/usr/local/cuda/bin/nvcc}
+[ -n "${NVCC:-}" ] || NVCC=$("$PY" "$ROOT/benchmarks/kernels/machine.py" toolkit)/bin/nvcc \
+  || { echo "REFUSED: no NVCC, and the machine's record names no CUDA toolkit (machine.py, above)"; exit 3; }
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 NAME=$(nvidia-smi -i 0 --query-gpu=name --format=csv,noheader 2> /dev/null | head -1)
 ARCH=$(card_of "$NAME" arch) || { echo "REFUSED: $ARCH"; exit 3; }

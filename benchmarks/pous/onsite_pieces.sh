@@ -54,7 +54,7 @@ onsite_piece_commands() {
     BANDWIDTH_CMD=${BANDWIDTH_CMD-'"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'}
   elif [ -f "$TREE/benchmarks/one_stage/served_bandwidth.sh" ] && [ -f "$HOME/.ssh/vy-auditor2-bw" ] \
     && [ -f "${BW_STORE:-/workspace/research/pous-store/mem69-v2}/setup.json" ]; then
-    BANDWIDTH_CMD=${BANDWIDTH_CMD-'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'}
+    BANDWIDTH_CMD=${BANDWIDTH_CMD-'BW_CARD=${BW_CARD:-$(PYTHONPATH=$PYTHONPATH:$PWD/benchmarks/harness "$PY" -c "from verity_bench import kit; print(kit.run_card_sku())")} bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'}
   fi
   return 0
 }

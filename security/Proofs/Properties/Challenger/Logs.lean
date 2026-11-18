@@ -67,6 +67,9 @@ on the lines after the head. -/
 def oneLog (label : String) (after : ByteArray) : Log :=
   [⟨.recorded, label, 0, after, 0, 1⟩, ⟨.released, label, 0, after, 0, 2⟩]
 
+theorem oneLog_uncommitted (label : String) (after : ByteArray) :
+    (oneLog label after).any (·.kind == .committed) = false := rfl
+
 theorem byFamily_oneLog {c : LiveCommitment} {label : String} {after : ByteArray} {n : Nat}
     (hf : c.families = [(label, n)]) : byFamily c (oneLog label after) = [(label, [after])] := by
   simp [byFamily, oneLog, hf]

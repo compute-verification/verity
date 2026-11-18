@@ -254,18 +254,6 @@ def card_short(name: str, *, directory: Path | None = None) -> str:
     return card_record(name, directory=directory)["short"]
 
 
-def card_named_short(short: str, *, directory: Path | None = None) -> dict:
-    """The GPU card record in ``directory`` (`cards_directory` by default) whose ``short`` is ``short``, a member's card
-    part as a record stored it; refused, naming the shorts there are, unless exactly one has it."""
-    directory = directory or cards_directory()
-    cards = _gpu_cards(directory)
-    held = [c for c in cards if c.get("short") == short]
-    if len(held) != 1:
-        raise SystemExit(f"{len(held)} GPU card files under {directory} have `short` {short!r}: one of "
-                         f"{sorted(c['short'] for c in cards if c.get('short'))}")
-    return held[0]
-
-
 def card_sku(name: str, *, directory: Path | None = None) -> str:
     """The ``sku`` of `card_record`'s record for ``name``: its file's name in ``directory``."""
     return card_record(name, directory=directory)["sku"]
@@ -526,7 +514,12 @@ def wrong_card(workload: str, short: str, card: str, *, directory: Path | None =
     directory = directory or cards_directory()
     if is_card(card, short, directory=directory):
         return None
-    want = " or ".join(d["value"] for c in _gpu_cards(directory) if c.get("short") == short for d in c.get("driver", ()))
+    from verity.device import gpu_card_called
+
+    try:
+        want = " or ".join(d["value"] for d in gpu_card_called(short, directory=directory).get("driver", ()))
+    except KeyError as e:
+        return f"spec {workload!r} names no one card: {e.args[0]}"
     return (f"the card is a {card}, not the {short} of spec {workload!r} ({want}): run it on a node whose card is a "
             f"{want}, or name this card where the spec lists it (`SPEC@CARD`)")
 

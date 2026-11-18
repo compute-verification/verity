@@ -44,8 +44,9 @@ from verity.circuits.codec import canonical_json
 from verity.circuits import library
 
 from .gf2 import L
+from verity.commitments.domains import CIRCUIT_TYPE
 
-FORMAT = "verity/circuit-type/v1"
+FORMAT = CIRCUIT_TYPE
 AND, CALL, READ = 0, 3, 4
 
 Form = tuple[tuple[int, ...], int]

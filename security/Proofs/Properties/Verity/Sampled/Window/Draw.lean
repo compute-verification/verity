@@ -204,40 +204,40 @@ theorem ExecutionPhase.sessionDelta_extend (W : ExecutionPhase) (S : Widening) (
 section SessionErr
 
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} (D : PosDecoders g σ R Reg) (J : ℕ)
-  (γ : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
+  (γ : Pos g σ Hash.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
 
 /-- **One stop's error, then what follows the session** (`stopErr`): `fin` at the session's end there; `γ` there and
 the next rounds' error over the tapes from the stop where a submission is decoded. -/
-noncomputable def stopErrK (fin e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (q : Pos g σ Claims.Msg (Fin R)) :
+noncomputable def stopErrK (fin e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞) (q : Pos g σ Hash.Msg (Fin R)) :
     Option (SubmitJ J) → ℝ≥0∞
   | none => fin q
   | some s => γ q J s + Pos.resample e q.consume
 
 /-- **The rounds' error, then what follows the session** (`roundsErr`) from the position `p`: `γ` at each stop a
 uniform tape from `p` reaches, and `e` at the position the session's walk ends at. -/
-noncomputable def roundsErrK (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) : ℕ → Pos g σ Claims.Msg (Fin R) → ℝ≥0∞
+noncomputable def roundsErrK (e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞) : ℕ → Pos g σ Hash.Msg (Fin R) → ℝ≥0∞
   | 0, p => e p
   | N + 1, p => stopErrK J γ e (roundsErrK e N) p.toStop (D.sub J p.toStop.modes)
 
 /-- **The session's error, then what follows it**, from the position `p`: `γL` at the session's first stop and the
 rounds' error over the tapes from it. -/
-noncomputable def sessionErrK (γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
-    (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) : ℝ≥0∞ :=
+noncomputable def sessionErrK (γL : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞) (e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞)
+    (N : ℕ) (p : Pos g σ Hash.Msg (Fin R)) : ℝ≥0∞ :=
   γL p.toStop + Pos.resample (roundsErrK D J γ e N) p.toStop.consume
 
 /-- **A member's error, then what follows it**: its session's (`sessionErrK`) where the sample holds one of its proof
 blocks (`true`), then what follows over the tapes from the session's closing round's stop, past it (a closing round
 releases no coin, so its stop adds no error of its own); else what follows, from the same position. -/
-noncomputable def memberErrK (γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
-    (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) : Bool → ℝ≥0∞
+noncomputable def memberErrK (γL : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞) (e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞)
+    (N : ℕ) (p : Pos g σ Hash.Msg (Fin R)) : Bool → ℝ≥0∞
   | true => sessionErrK D J γ γL (fun q => Pos.resample e q.toStop.consume) N p
   | false => e p
 
 variable (M : CoinMap g σ Ω R mPts) (B : RoundHold)
 
 /-- The rounds' share off `B`, then what follows the session, is at most 1 wherever what follows is. -/
-theorem roundsOffK_le_one {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (he : ∀ q, e q ≤ 1) :
-    ∀ (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)), roundsOffK D M J B e N p ≤ 1
+theorem roundsOffK_le_one {e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞} (he : ∀ q, e q ≤ 1) :
+    ∀ (N : ℕ) (p : Pos g σ Hash.Msg (Fin R)), roundsOffK D M J B e N p ≤ 1
   | 0, p => he p
   | N + 1, p => by
     show stopOffK M J B e (roundsOffK D M J B e N) p.toStop (D.sub J p.toStop.modes) ≤ 1
@@ -250,41 +250,41 @@ theorem roundsOffK_le_one {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (he :
       · exact roundsOffK_le_one he N _
 
 /-- The session's share off `BL` and `B`, then what follows it, is at most 1 wherever what follows is. -/
-theorem sessionOffK_le_one (BL : LinkHold mPts) {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (he : ∀ q, e q ≤ 1) (N : ℕ)
-    (p : Pos g σ Claims.Msg (Fin R)) : sessionOffK D M J B BL e N p ≤ 1 := by
+theorem sessionOffK_le_one (BL : LinkHold mPts) {e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞} (he : ∀ q, e q ≤ 1) (N : ℕ)
+    (p : Pos g σ Hash.Msg (Fin R)) : sessionOffK D M J B BL e N p ≤ 1 := by
   refine (avg_mono fun pts => ?_).trans_eq (avg_const 1)
   split_ifs
   · exact zero_le_one
   · exact roundsOffK_le_one D J M B he N _
 
 /-- The session's share off `BL` and `B` reads the position only at its next stop. -/
-theorem sessionOffK_toStop (BL : LinkHold mPts) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (N : ℕ)
-    (p : Pos g σ Claims.Msg (Fin R)) : sessionOffK D M J B BL e N p.toStop = sessionOffK D M J B BL e N p := by
+theorem sessionOffK_toStop (BL : LinkHold mPts) (e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞) (N : ℕ)
+    (p : Pos g σ Hash.Msg (Fin R)) : sessionOffK D M J B BL e N p.toStop = sessionOffK D M J B BL e N p := by
   unfold sessionOffK
   rw [Pos.toStop_toStop]
 
 /-- The session's error reads the position only at its next stop. -/
-theorem sessionErrK_toStop (γL e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
+theorem sessionErrK_toStop (γL e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞) (N : ℕ) (p : Pos g σ Hash.Msg (Fin R)) :
     sessionErrK D J γ γL e N p.toStop = sessionErrK D J γ γL e N p := by
   unfold sessionErrK
   rw [Pos.toStop_toStop]
 
 /-- A member's share off `BL` and `B`, then what follows it, is at most 1 wherever what follows is. -/
-theorem memberOffK_le_one (BL : LinkHold mPts) {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (he : ∀ q, e q ≤ 1) (N : ℕ)
-    (p : Pos g σ Claims.Msg (Fin R)) : ∀ b : Bool, memberOffK D M J B BL e N p b ≤ 1
+theorem memberOffK_le_one (BL : LinkHold mPts) {e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞} (he : ∀ q, e q ≤ 1) (N : ℕ)
+    (p : Pos g σ Hash.Msg (Fin R)) : ∀ b : Bool, memberOffK D M J B BL e N p b ≤ 1
   | true => sessionOffK_le_one D J M B BL (fun q => he q.toStop.consume) N p
   | false => he p
 
 /-- A member's share off `BL` and `B` reads the position only at its next stop, wherever what follows does. -/
-theorem memberOffK_toStop (BL : LinkHold mPts) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
-    (he : ∀ q, e q.toStop = e q) (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
+theorem memberOffK_toStop (BL : LinkHold mPts) (e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞)
+    (he : ∀ q, e q.toStop = e q) (N : ℕ) (p : Pos g σ Hash.Msg (Fin R)) :
     ∀ b : Bool, memberOffK D M J B BL e N p.toStop b = memberOffK D M J B BL e N p b
   | true => sessionOffK_toStop D J M B BL (fun q => e q.toStop.consume) N p
   | false => he p
 
 /-- A member's error reads the position only at its next stop, wherever what follows does. -/
-theorem memberErrK_toStop (γL e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (he : ∀ q, e q.toStop = e q) (N : ℕ)
-    (p : Pos g σ Claims.Msg (Fin R)) :
+theorem memberErrK_toStop (γL e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞) (he : ∀ q, e q.toStop = e q) (N : ℕ)
+    (p : Pos g σ Hash.Msg (Fin R)) :
     ∀ b : Bool, memberErrK D J γ γL e N p.toStop b = memberErrK D J γ γL e N p b
   | true => sessionErrK_toStop D J γ γL (fun q => Pos.resample e q.toStop.consume) N p
   | false => he p
@@ -296,22 +296,22 @@ what follows the session has, over a uniform tape from each position, the event'
 event of the tape has, over a uniform tape from the position `p`, at most its share off `B` plus the rounds' error at
 `γ` and `B`'s probability at each stop. -/
 theorem avg_roundsOffK_le (hR : M.RoundClose γ) (Q : CoinTape g σ → Prop)
-    {eO eE : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hO : ∀ q, eO q ≤ 1)
-    (hK : ∀ q : Pos g σ Claims.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
+    {eO eE : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞} (hO : ∀ q, eO q ≤ 1)
+    (hK : ∀ q : Pos g σ Hash.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
       avg (fun z : CoinTape q.g' q.s' => eO (q.withTape z)) + avg fun z : CoinTape q.g' q.s' => eE (q.withTape z)) :
-    ∀ (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)),
+    ∀ (N : ℕ) (p : Pos g σ Hash.Msg (Fin R)),
       avg (fun z : CoinTape p.g' p.s' => tapeInd Q (p.withTape z)) ≤
         avg (fun z : CoinTape p.g' p.s' => roundsOffK D M J B eO N (p.withTape z)) +
         avg fun z : CoinTape p.g' p.s' =>
           roundsErrK D J (fun q j s => γ q j s + prCoin (B q.g' j s)) eE N (p.withTape z)
   | 0, p => hK p
   | N + 1, p => by
-    let γB : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞ := fun q j s => γ q j s + prCoin (B q.g' j s)
-    let Ψ : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞ := fun q =>
+    let γB : Pos g σ Hash.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞ := fun q j s => γ q j s + prCoin (B q.g' j s)
+    let Ψ : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞ := fun q =>
       stopOffK M J B eO (roundsOffK D M J B eO N) q (D.sub J q.modes)
-    let E : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞ := fun q =>
+    let E : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞ := fun q =>
       stopErrK J γB eE (roundsErrK D J γB eE N) q (D.sub J q.modes)
-    have hstop : ∀ (q : Pos g σ Claims.Msg (Fin R)) (o : Option (SubmitJ J)),
+    have hstop : ∀ (q : Pos g σ Hash.Msg (Fin R)) (o : Option (SubmitJ J)),
         avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
           avg (fun z : CoinTape q.g' q.s' => stopOffK M J B eO (roundsOffK D M J B eO N) (q.withTape z) o) +
           avg fun z : CoinTape q.g' q.s' => stopErrK J γB eE (roundsErrK D J γB eE N) (q.withTape z) o :=
@@ -374,22 +374,22 @@ it starts** (`resample_sessionOff_le`): wherever the coin map writes the link po
 and each round's coins within `γ`, and what follows the session has the event's share within its own error, an event
 of the tape has, over a uniform tape from the position `p`, at most its share off `BL` and `B` plus the session's
 error: `γL` and `BL`'s probability at the first stop and the rounds' error after it. -/
-theorem avg_sessionOffK_le {γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hL : M.LinkClose γL) (hR : M.RoundClose γ)
-    (BL : LinkHold mPts) (Q : CoinTape g σ → Prop) {eO eE : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hO : ∀ q, eO q ≤ 1)
-    (hK : ∀ q : Pos g σ Claims.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
+theorem avg_sessionOffK_le {γL : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞} (hL : M.LinkClose γL) (hR : M.RoundClose γ)
+    (BL : LinkHold mPts) (Q : CoinTape g σ → Prop) {eO eE : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞} (hO : ∀ q, eO q ≤ 1)
+    (hK : ∀ q : Pos g σ Hash.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
       avg (fun z : CoinTape q.g' q.s' => eO (q.withTape z)) + avg fun z : CoinTape q.g' q.s' => eE (q.withTape z))
-    (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
+    (N : ℕ) (p : Pos g σ Hash.Msg (Fin R)) :
     avg (fun z : CoinTape p.g' p.s' => tapeInd Q (p.withTape z)) ≤
       avg (fun z : CoinTape p.g' p.s' => sessionOffK D M J B BL eO N (p.withTape z)) +
       avg fun z : CoinTape p.g' p.s' =>
         sessionErrK D J (fun q j s => γ q j s + prCoin (B q.g' j s)) (fun q => γL q + prCoin (BL q.g')) eE N
           (p.withTape z) := by
-  let γB : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞ := fun q j s => γ q j s + prCoin (B q.g' j s)
-  let Ψ : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞ := fun q => avg fun pts : Fin 2 → Fin mPts → 𝔽 =>
+  let γB : Pos g σ Hash.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞ := fun q j s => γ q j s + prCoin (B q.g' j s)
+  let Ψ : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞ := fun q => avg fun pts : Fin 2 → Fin mPts → 𝔽 =>
     if BL q.g' pts then 0 else roundsOffK D M J B eO N (q.rewrite (M.link q pts)).consume
-  let E : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞ := fun q =>
+  let E : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞ := fun q =>
     γL q + prCoin (BL q.g') + Pos.resample (roundsErrK D J γB eE N) q.consume
-  have hstop : ∀ q : Pos g σ Claims.Msg (Fin R),
+  have hstop : ∀ q : Pos g σ Hash.Msg (Fin R),
       Pos.resample (tapeInd Q) q ≤ Pos.resample Ψ q + Pos.resample E q := fun q => by
     let G : CoinTape q.g' q.s' → ℝ≥0∞ := fun z => roundsOffK D M J B eO N (q.consume.withTape z)
     have hγ : avg G ≤ avg (fun z : CoinTape q.g' q.s' => avg fun pts : Fin 2 → Fin mPts → 𝔽 =>
@@ -440,10 +440,10 @@ has, over a uniform tape from each position, the event's share within its own er
 event's share within its error past the position's next stop, consumed as it is, the error taken over the tapes from
 that stop. The tape from the next stop is uniform and independent of the walk to it (`Pos.avg_toStop`), and consuming
 a stop changes no tape. -/
-theorem avg_tapeInd_consume (Q : CoinTape g σ → Prop) {eO eE : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞}
-    (hK : ∀ q : Pos g σ Claims.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
+theorem avg_tapeInd_consume (Q : CoinTape g σ → Prop) {eO eE : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞}
+    (hK : ∀ q : Pos g σ Hash.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
       avg (fun z : CoinTape q.g' q.s' => eO (q.withTape z)) + avg fun z : CoinTape q.g' q.s' => eE (q.withTape z))
-    (q : Pos g σ Claims.Msg (Fin R)) :
+    (q : Pos g σ Hash.Msg (Fin R)) :
     avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
       avg (fun z : CoinTape q.g' q.s' => eO (q.withTape z).toStop.consume) +
       avg fun z : CoinTape q.g' q.s' => Pos.resample eE (q.withTape z).toStop.consume :=
@@ -466,11 +466,11 @@ variable {D J γ M B} in
 starts**: its session's (`avg_sessionOffK_le`) where the sample holds one of its proof blocks, with what follows
 taken past the session's closing round's stop (`avg_tapeInd_consume`); else what follows has the event's share within
 its own error, from the same position. -/
-theorem avg_memberOffK_le {γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hL : M.LinkClose γL) (hR : M.RoundClose γ)
-    (BL : LinkHold mPts) (Q : CoinTape g σ → Prop) {eO eE : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hO : ∀ q, eO q ≤ 1)
-    (hK : ∀ q : Pos g σ Claims.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
+theorem avg_memberOffK_le {γL : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞} (hL : M.LinkClose γL) (hR : M.RoundClose γ)
+    (BL : LinkHold mPts) (Q : CoinTape g σ → Prop) {eO eE : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞} (hO : ∀ q, eO q ≤ 1)
+    (hK : ∀ q : Pos g σ Hash.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
       avg (fun z : CoinTape q.g' q.s' => eO (q.withTape z)) + avg fun z : CoinTape q.g' q.s' => eE (q.withTape z))
-    (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
+    (N : ℕ) (p : Pos g σ Hash.Msg (Fin R)) :
     ∀ b : Bool, avg (fun z : CoinTape p.g' p.s' => tapeInd Q (p.withTape z)) ≤
       avg (fun z : CoinTape p.g' p.s' => memberOffK D M J B BL eO N (p.withTape z) b) +
       avg fun z : CoinTape p.g' p.s' =>
@@ -485,13 +485,13 @@ end SessionErr
 section SeqErr
 
 variable {g : Game Exchange} {σ : Strategy g} {Reg : Type} {R nJ : ℕ} (D : ℕ → PosDecoders g σ R Reg)
-  (γ : ℕ → Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
-  (γL : ℕ → (mPts : ℕ) → Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (S : Finset (Fin nJ)) (Rg : Reg)
+  (γ : ℕ → Pos g σ Hash.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
+  (γL : ℕ → (mPts : ℕ) → Pos g σ Hash.Msg (Fin R) → ℝ≥0∞) (S : Finset (Fin nJ)) (Rg : Reg)
 
 /-- **The sessions' error, in the members' order** from the position `p`: each member's session's, at its own `γ`
 and `γL`, then the rest's from the position its walk ends at. A member with no proof block in the sample has no
 session and adds nothing (`memberErrK`). -/
-noncomputable def seqErr : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg nJ)) → Pos g σ Claims.Msg (Fin R) →
+noncomputable def seqErr : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg nJ)) → Pos g σ Hash.Msg (Fin R) →
     ℝ≥0∞
   | _, [], _ => 0
   | i, m :: l, p =>
@@ -499,7 +499,7 @@ noncomputable def seqErr : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Re
       (memberSampled S m)
 
 /-- The sessions' error reads the position only at its next stop. -/
-theorem seqErr_toStop : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ) (p : Pos g σ Claims.Msg (Fin R)),
+theorem seqErr_toStop : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ) (p : Pos g σ Hash.Msg (Fin R)),
     seqErr D γ γL S Rg i l p.toStop = seqErr D γ γL S Rg i l p
   | [], _, _ => rfl
   | m :: l, i, p =>
@@ -510,7 +510,7 @@ variable {Ω : Type} (M : ExecutionPhaseCoinMap g σ Ω R) (BL : ExecutionPhaseL
 
 /-- The sessions' share off the held-off events is at most 1. -/
 theorem seqOff_le_one (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ)
-    (p : Pos g σ Claims.Msg (Fin R)), seqOff D M BL B S Rg Q i l p ≤ 1
+    (p : Pos g σ Hash.Msg (Fin R)), seqOff D M BL B S Rg Q i l p ≤ 1
   | [], _, p => tapeInd_le_one Q p
   | m :: l, i, p =>
     memberOffK_le_one (D i) (memberTabs S Rg m) (M.member i (memberPts m)) (B i) (BL i (memberPts m))
@@ -518,7 +518,7 @@ theorem seqOff_le_one (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guaran
 
 /-- The sessions' share off the held-off events reads the position only at its next stop. -/
 theorem seqOff_toStop (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ)
-    (p : Pos g σ Claims.Msg (Fin R)), seqOff D M BL B S Rg Q i l p.toStop = seqOff D M BL B S Rg Q i l p
+    (p : Pos g σ Hash.Msg (Fin R)), seqOff D M BL B S Rg Q i l p.toStop = seqOff D M BL B S Rg Q i l p
   | [], _, p => tapeInd_toStop Q p
   | m :: l, i, p =>
     memberOffK_toStop (D i) (memberTabs S Rg m) (M.member i (memberPts m)) (B i) (BL i (memberPts m))
@@ -532,7 +532,7 @@ wherever each member's coin map writes its link points in within `γL` of the ta
 through the members' sessions in order, plus every session's error. -/
 theorem avg_seqOff_le (hR : ∀ i mPts, (M.member i mPts).RoundClose (γ i))
     (hL : ∀ i mPts, (M.member i mPts).LinkClose (γL i mPts)) (Q : CoinTape g σ → Prop) :
-    ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ) (p : Pos g σ Claims.Msg (Fin R)),
+    ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ) (p : Pos g σ Hash.Msg (Fin R)),
       avg (fun z : CoinTape p.g' p.s' => tapeInd Q (p.withTape z)) ≤
         avg (fun z : CoinTape p.g' p.s' => seqOff D M BL B S Rg Q i l (p.withTape z)) +
         avg fun z : CoinTape p.g' p.s' =>
@@ -550,10 +550,10 @@ variable {D γ γL M} in
 error of uniform**: over coins `ω` that give a sample and a start of the period's tape, wherever the start leaves the
 tape from the first stop fresh (`hF`) and is within `ε₀` of the uniform tape (`hS`), and each member's coin map
 writes its live coins in within `γL` and `γ` of the tape's own. -/
-theorem seqOff_couples (Ks : Fin R → DigestCut Claims.Msg g) {C : Type} [Fintype C] (draw : C → Finset (Fin nJ))
+theorem seqOff_couples (Ks : Fin R → DigestCut Hash.Msg g) {C : Type} [Fintype C] (draw : C → Finset (Fin nJ))
     (start : C → CoinTape g σ) {ε₀ : ℝ≥0∞} (hR : ∀ i mPts, (M.member i mPts).RoundClose (γ i))
     (hL : ∀ i mPts, (M.member i mPts).LinkClose (γL i mPts))
-    (hF : ∀ G : Finset (Fin nJ) → Pos g σ Claims.Msg (Fin R) → ℝ≥0∞,
+    (hF : ∀ G : Finset (Fin nJ) → Pos g σ Hash.Msg (Fin R) → ℝ≥0∞,
       avg (fun ω : C => G (draw ω) (Pos.root Ks (start ω)).toStop) =
         avg fun ω : C => Pos.resample (G (draw ω)) (Pos.root Ks (start ω)).toStop)
     (hS : ∀ H : CoinTape g σ → ℝ≥0∞, (∀ x, H x ≤ 1) → avg H ≤ avg (fun ω : C => H (start ω)) + ε₀)
@@ -561,8 +561,8 @@ theorem seqOff_couples (Ks : Fin R → DigestCut Claims.Msg g) {C : Type} [Finty
     prCoin Q ≤ avg (fun ω : C => seqOff D M BL B (draw ω) Rg Q i l (Pos.root Ks (start ω))) +
       (ε₀ + avg fun ω : C => seqErr D (fun i q j s => γ i q j s + prCoin (B i q.g' j s))
         (fun i mPts q => γL i mPts q + prCoin (BL i mPts q.g')) (draw ω) Rg i l (Pos.root Ks (start ω))) := by
-  let GO : Finset (Fin nJ) → Pos g σ Claims.Msg (Fin R) → ℝ≥0∞ := fun s q => seqOff D M BL B s Rg Q i l q
-  let GE : Finset (Fin nJ) → Pos g σ Claims.Msg (Fin R) → ℝ≥0∞ := fun s q =>
+  let GO : Finset (Fin nJ) → Pos g σ Hash.Msg (Fin R) → ℝ≥0∞ := fun s q => seqOff D M BL B s Rg Q i l q
+  let GE : Finset (Fin nJ) → Pos g σ Hash.Msg (Fin R) → ℝ≥0∞ := fun s q =>
     seqErr D (fun i q j s => γ i q j s + prCoin (B i q.g' j s))
       (fun i mPts q => γL i mPts q + prCoin (BL i mPts q.g')) s Rg i l q
   have hU : prCoin Q = avg fun x : CoinTape g σ => Pos.resample (tapeInd Q) (Pos.root Ks x).toStop := by
@@ -623,7 +623,7 @@ def ExecutionPhaseStartWithin (W : ExecutionPhase) (σ : Strategy (V.game θ F c
 decoded. -/
 noncomputable def executionPhaseFirstStop (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (ω : (W.extend M.widening).L.Ω) :
-    Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) :=
+    Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) :=
   (Pos.root (roundCuts V θ F c rd) (M.start ω)).toStop
 
 /-- **The window's coin map's start leaves the tape from the first stop fresh** (`FirstStopFresh`): over the widened
@@ -631,7 +631,7 @@ coins, any reading of the sample and the projection's first stop has the mean of
 stop. -/
 def ExecutionPhaseFirstStopFresh (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) : Prop :=
-  ∀ G : Finset (Fin W.nJ) → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℝ≥0∞,
+  ∀ G : Finset (Fin W.nJ) → Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → ℝ≥0∞,
     avg (fun ω : (W.extend M.widening).L.Ω =>
         G ((W.extend M.widening).L.draw ω) (executionPhaseFirstStop V θ F c W rd σ M ω)) =
       avg fun ω : (W.extend M.widening).L.Ω =>
@@ -641,8 +641,8 @@ def ExecutionPhaseFirstStopFresh (W : ExecutionPhase) (rd : Reading W.rounds) (�
 the play's start, in the members' order (`seqErr`). -/
 noncomputable def executionPhaseErr (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
-    (γ : ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
-    (γL : ℕ → (mPts : ℕ) → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℝ≥0∞) : ℝ≥0∞ :=
+    (γ : ℕ → Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
+    (γL : ℕ → (mPts : ℕ) → Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → ℝ≥0∞) : ℝ≥0∞ :=
   avg fun ω : (W.extend M.widening).L.Ω =>
     seqErr D γ γL ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) 0
       ((W.extend M.widening).joint t).ms (Pos.root (roundCuts V θ F c rd) (M.start ω))
@@ -655,8 +655,8 @@ leaves the tape from the first stop fresh, and the start is within `ε₀` of th
 beside each member's `γL` and `γ`, the probability of its held-off events at each stop. -/
 theorem executionPhaseCouples_of_close (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
-    {γ : ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞}
-    {γL : ℕ → (mPts : ℕ) → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℝ≥0∞} {ε₀ : ℝ≥0∞}
+    {γ : ℕ → Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞}
+    {γL : ℕ → (mPts : ℕ) → Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → ℝ≥0∞} {ε₀ : ℝ≥0∞}
     (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold) (hR : ∀ i mPts, (M.member i mPts).RoundClose (γ i))
     (hL : ∀ i mPts, (M.member i mPts).LinkClose (γL i mPts)) (hF : ExecutionPhaseFirstStopFresh V θ F c W rd σ M)
     (hS : ExecutionPhaseStartWithin V θ F c W σ M ε₀) :
@@ -796,9 +796,9 @@ theorem executionPhaseCouplingTarget_of_close (rd : ExecutionPhaseReadings) (K :
     (BL : (c : ByteArray) → Strategy (V.game θ F c) → ExecutionPhaseLinkHold)
     (B : (c : ByteArray) → Strategy (V.game θ F c) → ExecutionPhaseRoundHold)
     (γ : (c : ByteArray) → (σ : Strategy (V.game θ F c)) → ℕ →
-      Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
+      Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
     (γL : (c : ByteArray) → (σ : Strategy (V.game θ F c)) → ℕ → (mPts : ℕ) →
-      Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℝ≥0∞)
+      Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → ℝ≥0∞)
     (ε₀ : (c : ByteArray) → Strategy (V.game θ F c) → ℝ≥0∞)
     (ha : ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
       prob (fun o => V.Verdict k .sampled o ∧ ¬ P o) (V.game θ F c) σ ≤

@@ -165,3 +165,17 @@ def test_a_host_runs_replay_at_its_own_round_trip_is_its_line_of_record_and_its_
     assert s["own"]["shares_auditor_clock"] == line["sessions"][0]["shares_auditor_clock"]
     assert doc["line_of_record"] == line["line"] and doc["identity_holds"]
     assert doc["whatif_line"][s["T"]]["credited_sessions"] == [0]
+
+
+def test_a_release_log_recorded_before_the_poub_labels_reads_as_today():
+    """Release logs recorded before 18 Nov 2026 name the coins' families `challenge` and `openings`: both readers of a
+    gate run's record read them as `poub/challenge` and `poub/openings`, so a stored run's line and what-if replay as
+    they were."""
+    def lines(ch: str, op: str) -> list[str]:
+        def coin(label: str, i: int, t: int) -> list[str]:
+            return [json.dumps({"label": label, "index": i, "root": f"{i:0128x}", "received_at": t}),
+                    json.dumps({"released_at": t + 1})]
+        return ["{}", *coin(ch, 0, 10), *coin(op, 0, 20), *coin(ch, 1, 30), "{}"]
+    old, new = lines("challenge", "openings"), lines("poub/challenge", "poub/openings")
+    assert al.release_log(old) == al.release_log(new) and set(al.release_log(new)) == {"poub/challenge", "poub/openings"}
+    assert gw.log_coins(old) == gw.log_coins(new) and {x[0] for x in gw.log_coins(old)} == set(gw.FAMILIES)

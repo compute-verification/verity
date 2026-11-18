@@ -455,7 +455,8 @@ def verify_audit(frames: Sequence[bytes], elapsed_ns: Sequence[int], *, verifier
         response_hash = hashlib.sha512(response_frame).digest()
         transcript.append(response_frame)
 
-        def fail(code: int, flags: int = 0) -> bytes:
+        def fail(code: int, flags: int = 0, *, j: int = j, index: int = index, elapsed: int = elapsed,
+                 challenge_hash: bytes = challenge_hash, response_hash: bytes = response_hash) -> bytes:
             records.append(record(j, index, elapsed, flags, challenge_hash, response_hash))
             return stop(code)
 

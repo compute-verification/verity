@@ -955,7 +955,7 @@ def gate_ready(gate: str, lane: str, main: Path | None = None, root: str | None 
     `root`, the run root a session of this run opens on, also refused once an open in the ledger names it: the gate opens
     a root once, ever."""
     from verity.protocols.proofs.spot.verifier.challenger import challenger as CH
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
     ledger = _gate_out(gate, "ledger").decode().splitlines()
     pins = [json.loads(x) for x in _gate_out(gate, "pins").decode().splitlines() if x.strip()]
@@ -1017,7 +1017,7 @@ def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, 
     strata with no ``k<K>`` file yet. ValueError naming what to build or rerun when the serve dir or `circuits` doesn't
     hold the period's Program, T and S. Before serve-openai starts (no ``serve.json`` yet) the Program is ``program``'s,
     and `period_served` holds the one it then declares to it."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 
     served = serve_dir / "serve.json"
     proto = (json.loads(served.read_text()).get("protocols") or {}) if served.is_file() else None
@@ -1222,7 +1222,7 @@ def pearlplus_period_rule(piece_dir: Path, gate: str, lane: str, record: Path) -
     closed (`pouw_h1_window.after_close`, which `bench_arm.LiveDraw` held it to before asking its coin, and
     `pearlplus_live_sample` holds the record to). Whether it held, and its ``RULE`` line; kept as the PERIOD document's
     ``rule``."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
     doc = json.loads((piece_dir / PERIOD).read_text())
     name = doc["name"]
@@ -1376,7 +1376,7 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
     ``{session, closed, passes, reason}``: the passes checked, and None or the first refusal."""
     from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
     from verity.protocols.proofs.spot.verifier.challenger import remote
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 
     coins = served.get("coins") or {}
     sid = (coins.get("session") or {}).get("session")
@@ -1430,7 +1430,7 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
     from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
     from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
     from verity.protocols.proofs.spot.verifier.challenger import remote
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 
     got: dict[str, Any] = {"from": None, "session": None, "reason": None}
     try:
@@ -1940,8 +1940,8 @@ def pearlplus_live_sample(record: Mapping[str, Any], piece_dir: Path, key: str, 
     from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
     from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
     from verity.protocols.proofs.spot.verifier.challenger import remote
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
     if record.get("schema") != COIN_KIND:
         return f"the verifier's coin record is {record.get('schema')!r}, not {COIN_KIND}, which carries its draw"
@@ -2026,7 +2026,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
     from verity.commitments import randomness as RND
     from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 
     if doc.get("coin_source") != LIVE_SOURCE:
         return None, f"its epoch's coins come from {doc.get('coin_source')!r}, not a live session on the auditor device's challenger"

@@ -41,6 +41,7 @@ from __future__ import annotations
 import copy
 import json
 import operator
+import os
 import shutil
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
@@ -53,6 +54,7 @@ from verity_vllm.commit.challenge import stream
 from verity_vllm.commit.served_record import BlockValues, window_commit
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine.handle import Steps
+from verity_vllm.pipeline import serve_guard as SG
 from verity_vllm.pipeline import serve_release as SL
 from verity_vllm.pipeline import serve_row as RW
 from verity_vllm.pipeline import serve_seal as SS
@@ -82,7 +84,7 @@ TURN_END = {True: "<|eot_id|>", False: "\n\n"}
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    out: str = option("--out", env="RESEARCH_RUN_DIR", default=".", help="the records' directory (default $RESEARCH_RUN_DIR, else .)")
+    out: str | None = option("--out", default=None, help="the records' directory, outside the run's directory (refused inside it)")
     model: str = option("--model", default="", help="the pinned model (a repo of manifests/checkpoints.json)")
     revision: str = option("--revision", default="", help="its pinned revision")
     precision: str = option("--precision", choices=PRECISIONS, default="int8_exact",
@@ -128,7 +130,7 @@ def committer_opts(opts: Options) -> SimpleNamespace:
                            retention=SL.RetentionOptions())
 
 
-def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:
+def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which, environ: Mapping[str, str] = os.environ) -> None:
     """What the committer would refuse after the model has loaded, refused before it."""
     if not opts.required_manifest:
         raise UsageError(f"commit-arb commits as serve-openai does, under {SS.ROWS} with the Commit of record's parts, which its "
@@ -139,6 +141,8 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) 
     if which("ninja") is None:
         raise UsageError("the rows-sha512 committer JIT-builds its kernels with ninja, which is not on PATH: put the environment's "
                          "bin (where its ninja is) on PATH")
+    if why := SG.out_refusal(opts.out, environ):
+        raise UsageError(why)
 
 
 def prompt_range(text: str) -> tuple[int, int]:

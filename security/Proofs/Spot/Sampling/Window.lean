@@ -27,7 +27,7 @@ Two weightings of the same sample: `w`, the work (each tile's W_ref on the tile 
 (1 on the dequantization strata, 0 elsewhere).
 
 * `Covers σ k w K`: every stratum samples at least its share `K · w_s · n_s / W`, or all its units.
-  `stratified_escape_le_of_covers`, **the work bound for any sampling design whose sizes cover the weights**:
+  `stratified_missProb_le_of_covers`, **the work bound for any sampling design whose sizes cover the weights**:
   `missProb B ≤ ((W − W_B)/W)^K`. `covers_work`: the work sampling design covers its own work.
 * `executionPhaseK`, **the per-call split**: call `c` samples by its own work sampling design at its share
   `K_c = min(N_c, max(1, ⌈K · W_c / W⌉))` of the window's `K`. `covers_executionPhase`: that covers the window's work when each
@@ -66,7 +66,7 @@ def Covers (σ : Fin n → Fin m) (k w : Fin m → ℕ) (K : ℕ) : Prop :=
   ∀ s, K * w s * (stratum σ s).card ≤ k s * totalWork σ w ∨ k s = (stratum σ s).card
 
 /-- **The work bound for any stratified sampling design whose sizes cover the weights.** -/
-theorem stratified_escape_le_of_covers (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+theorem stratified_missProb_le_of_covers (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (w : Fin m → ℕ) (K : ℕ) (hW : 0 < totalWork σ w) (hc : Covers σ k w K) (B : Finset (Fin n)) :
     (stratified σ k hk).missProb B ≤
       (((totalWork σ w - workOf σ w B : ℕ) : ℝ≥0∞) / (totalWork σ w : ℝ≥0∞)) ^ K := by
@@ -155,7 +155,7 @@ theorem stratified_escape_le_of_covers (σ : Fin n → Fin m) (k : Fin m → ℕ
           pow_le_pow_left₀ zero_le (NNReal.geom_mean_le_arith_mean_weighted univ a x ha1) K
       _ = _ := by rw [hax]
   have hC : ∀ s, ((N s).choose (k s) : ℝ≥0) ≠ 0 := fun s => by exact_mod_cast (Nat.choose_pos (hkN s)).ne'
-  rw [stratified_escape]
+  rw [stratified_missProb]
   calc ∏ s, (((stratum σ s).card - (B.filter (σ · = s)).card).choose (k s) : ℝ≥0∞) /
         ((stratum σ s).card.choose (k s) : ℝ≥0∞)
       = ((∏ s, ((N s - M s).choose (k s) : ℝ≥0) / ((N s).choose (k s) : ℝ≥0) : ℝ≥0) : ℝ≥0∞) := by
@@ -252,23 +252,23 @@ theorem covers_of_floor (σ : Fin n → Fin m) (k f v : Fin m → ℕ) (Ky : ℕ
 
 /-- One incorrect set against both weightings: under the closure sample of any sampling design whose escapes are at most the stratified
 sampling design's, its missProb is at most the larger bound. -/
-theorem closure_escape_le_executionPhase {L : SamplingDesign n} (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+theorem closure_missProb_le_executionPhase {L : SamplingDesign n} (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (hL : ∀ B, L.missProb B ≤ (stratified σ k hk).missProb B) (cl : Fin n → Finset (Fin n)) {w v : Fin m → ℕ} {K Ky : ℕ}
     (hW : 0 < totalWork σ w) (hc : Covers σ k w K) (hN : 0 < totalWork σ v) (hcy : Covers σ k v Ky) {T Ty : ℕ}
     {B : Finset (Fin n)} (hB : T ≤ unsoundWork σ w cl B ∨ Ty ≤ unsoundWork σ v cl B) :
     (L.closure cl).missProb B ≤
       max ((((totalWork σ w - T : ℕ) : ℝ≥0∞) / (totalWork σ w : ℝ≥0∞)) ^ K)
         ((((totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (totalWork σ v : ℝ≥0∞)) ^ Ky) := by
-  rw [closure_escape]
+  rw [closure_missProb]
   refine (hL _).trans ?_
   rcases hB with hB | hB
-  · refine le_max_of_le_left ((stratified_escape_le_of_covers σ k hk w K hW hc _).trans ?_)
+  · refine le_max_of_le_left ((stratified_missProb_le_of_covers σ k hk w K hW hc _).trans ?_)
     gcongr
-  · refine le_max_of_le_right ((stratified_escape_le_of_covers σ k hk v Ky hN hcy _).trans ?_)
+  · refine le_max_of_le_right ((stratified_missProb_le_of_covers σ k hk v Ky hN hcy _).trans ?_)
     gcongr
 
-/-- `closure_escape_le_executionPhase` for a sampling design whose escapes exceed the stratified sampling design's by at most `η`. -/
-theorem closure_escape_le_executionPhase_slack {L : SamplingDesign n} (σ : Fin n → Fin m) (k : Fin m → ℕ)
+/-- `closure_missProb_le_executionPhase` for a sampling design whose escapes exceed the stratified sampling design's by at most `η`. -/
+theorem closure_missProb_le_executionPhase_slack {L : SamplingDesign n} (σ : Fin n → Fin m) (k : Fin m → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) {η : ℝ≥0∞} (hL : ∀ B, L.missProb B ≤ (stratified σ k hk).missProb B + η)
     (cl : Fin n → Finset (Fin n)) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < totalWork σ w) (hc : Covers σ k w K)
     (hN : 0 < totalWork σ v) (hcy : Covers σ k v Ky) {T Ty : ℕ} {B : Finset (Fin n)}
@@ -276,8 +276,8 @@ theorem closure_escape_le_executionPhase_slack {L : SamplingDesign n} (σ : Fin 
     (L.closure cl).missProb B ≤
       max ((((totalWork σ w - T : ℕ) : ℝ≥0∞) / (totalWork σ w : ℝ≥0∞)) ^ K)
         ((((totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (totalWork σ v : ℝ≥0∞)) ^ Ky) + η := by
-  have h := closure_escape_le_executionPhase σ k hk (fun _ => le_rfl) cl hW hc hN hcy hB
-  rw [closure_escape] at h ⊢
+  have h := closure_missProb_le_executionPhase σ k hk (fun _ => le_rfl) cl hW hc hN hcy hB
+  rw [closure_missProb] at h ⊢
   exact (hL _).trans (add_le_add h le_rfl)
 
 /-- A 0.1% share at `K = 27,713` escapes with at most `2^-40`. -/
@@ -310,7 +310,7 @@ theorem audit_executionPhase (A : Analysis ((SamplingDesign.stratified σ k hk).
           ((((SamplingDesign.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ v : ℝ≥0∞)) ^ Ky) + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => T ≤ SamplingDesign.unsoundWork σ w cl B ∨ Ty ≤ SamplingDesign.unsoundWork σ v cl B) σ').trans ?_
   gcongr
-  exact iSup₂_le fun B hB => SamplingDesign.closure_escape_le_executionPhase σ k hk (fun _ => le_rfl) cl hW hc hN hcy hB
+  exact iSup₂_le fun B hB => SamplingDesign.closure_missProb_le_executionPhase σ k hk (fun _ => le_rfl) cl hW hc hN hcy hB
 
 /-- **The window audit for any sampling design below the product distribution** (oracle layer): `audit_executionPhase` for a sampling design `L` whose escapes are
 at most the stratified sampling design's, sampled with closures, such as an executable sample proved against it. -/
@@ -326,7 +326,7 @@ theorem audit_executionPhase_of_le {L : SamplingDesign n} (hL : ∀ B, L.missPro
           ((((SamplingDesign.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ v : ℝ≥0∞)) ^ Ky) + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => T ≤ SamplingDesign.unsoundWork σ w cl B ∨ Ty ≤ SamplingDesign.unsoundWork σ v cl B) σ').trans ?_
   gcongr
-  exact iSup₂_le fun B hB => SamplingDesign.closure_escape_le_executionPhase σ k hk hL cl hW hc hN hcy hB
+  exact iSup₂_le fun B hB => SamplingDesign.closure_missProb_le_executionPhase σ k hk hL cl hW hc hN hcy hB
 
 /-- **The window audit** (compiled layer, randomized extractor): at most
 `max(((W − T)/W)^K, ((N − T_y)/N)^(K_y)) + ε_ks(σ) + ε_bind(σ)`. -/
@@ -346,7 +346,7 @@ theorem extraction_audit_executionPhase (A : ExtractionAnalysis ((SamplingDesign
   gcongr
   by_cases hB : T ≤ SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')) ∨
       Ty ≤ SamplingDesign.unsoundWork σ v cl (A.incorrect (A.committedOf σ'))
-  · exact (prCoin_mono fun ω h => h.2).trans (SamplingDesign.closure_escape_le_executionPhase σ k hk (fun _ => le_rfl) cl hW hc hN hcy hB)
+  · exact (prCoin_mono fun ω h => h.2).trans (SamplingDesign.closure_missProb_le_executionPhase σ k hk (fun _ => le_rfl) cl hW hc hN hcy hB)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 /-- **The window audit at the sizing of record**: with `K = K_y = 27,713`, the audit accepts while the unsound work is at
@@ -362,10 +362,10 @@ theorem audit_executionPhase_of_record (A : Analysis ((SamplingDesign.stratified
     SamplingDesign.totalWork σ v ≤ 1000 * SamplingDesign.unsoundWork σ v cl B) σ').trans ?_
   gcongr
   refine iSup₂_le fun B hB => ?_
-  rw [SamplingDesign.closure_escape]
+  rw [SamplingDesign.closure_missProb]
   rcases hB with hB | hB
-  · exact (SamplingDesign.stratified_escape_le_of_covers σ k hk w 27713 hW hc _).trans (SamplingDesign.pow_record_le hW hB)
-  · exact (SamplingDesign.stratified_escape_le_of_covers σ k hk v 27713 hN hcy _).trans (SamplingDesign.pow_record_le hN hB)
+  · exact (SamplingDesign.stratified_missProb_le_of_covers σ k hk w 27713 hW hc _).trans (SamplingDesign.pow_record_le hW hB)
+  · exact (SamplingDesign.stratified_missProb_le_of_covers σ k hk v 27713 hN hcy _).trans (SamplingDesign.pow_record_le hN hB)
 
 /-- **The per-call split with y's floors at the sizing of record**: every call sampled by
 its own work sampling design at its share of `K = 27,713`, each stratum's floor covering `v` at `K_y = 27,713`, with closures. -/
@@ -400,7 +400,7 @@ theorem audit_executionPhase_of_le_slack {L : SamplingDesign n} {η : ℝ≥0∞
           ((((SamplingDesign.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ v : ℝ≥0∞)) ^ Ky) + η + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => T ≤ SamplingDesign.unsoundWork σ w cl B ∨ Ty ≤ SamplingDesign.unsoundWork σ v cl B) σ').trans ?_
   gcongr
-  exact iSup₂_le fun B hB => SamplingDesign.closure_escape_le_executionPhase_slack σ k hk hL cl hW hc hN hcy hB
+  exact iSup₂_le fun B hB => SamplingDesign.closure_missProb_le_executionPhase_slack σ k hk hL cl hW hc hN hcy hB
 
 /-- At `η = 0`, `audit_executionPhase_of_le_slack` is `audit_executionPhase_of_le`. -/
 example {L : SamplingDesign n} (hL : ∀ B, L.missProb B ≤ (SamplingDesign.stratified σ k hk).missProb B)
@@ -436,7 +436,7 @@ theorem extraction_audit_executionPhase_of_le_slack {L : SamplingDesign n} {η :
   gcongr
   by_cases hB : T ≤ SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')) ∨
       Ty ≤ SamplingDesign.unsoundWork σ v cl (A.incorrect (A.committedOf σ'))
-  · exact (prCoin_mono fun ω h => h.2).trans (SamplingDesign.closure_escape_le_executionPhase_slack σ k hk hL cl hW hc hN hcy hB)
+  · exact (prCoin_mono fun ω h => h.2).trans (SamplingDesign.closure_missProb_le_executionPhase_slack σ k hk hL cl hW hc hN hcy hB)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 /-- **The per-call split with y's floors, for a sampling design within `η` of it, at the sizing of record** (compiled layer): at most
@@ -465,11 +465,11 @@ theorem extraction_audit_executionPhase_split_of_record_of_le_slack {C : ℕ} {c
       SamplingDesign.totalWork σ v ≤ 1000 * SamplingDesign.unsoundWork σ v cl (A.incorrect (A.committedOf σ'))
   · refine (prCoin_mono fun ω h => h.2).trans ?_
     change (L.closure cl).missProb _ ≤ _
-    rw [SamplingDesign.closure_escape]
+    rw [SamplingDesign.closure_missProb]
     refine (hL _).trans (add_le_add ?_ le_rfl)
     rcases hB with hB | hB
-    · exact (SamplingDesign.stratified_escape_le_of_covers σ _ _ w 27713 hW hc _).trans (SamplingDesign.pow_record_le hW hB)
-    · exact (SamplingDesign.stratified_escape_le_of_covers σ _ _ v 27713 hN hcy _).trans (SamplingDesign.pow_record_le hN hB)
+    · exact (SamplingDesign.stratified_missProb_le_of_covers σ _ _ w 27713 hW hc _).trans (SamplingDesign.pow_record_le hW hB)
+    · exact (SamplingDesign.stratified_missProb_le_of_covers σ _ _ v 27713 hN hcy _).trans (SamplingDesign.pow_record_le hN hB)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 /-- **The per-call split with y's floors, for a sampling design within `η` of it, at the sizing of record**: at most
@@ -493,11 +493,11 @@ theorem audit_executionPhase_split_of_record_of_le_slack {C : ℕ} {call : Fin m
     SamplingDesign.totalWork σ v ≤ 1000 * SamplingDesign.unsoundWork σ v cl B) σ').trans ?_
   gcongr
   refine iSup₂_le fun B hB => ?_
-  rw [SamplingDesign.closure_escape]
+  rw [SamplingDesign.closure_missProb]
   refine (hL _).trans (add_le_add ?_ le_rfl)
   rcases hB with hB | hB
-  · exact (SamplingDesign.stratified_escape_le_of_covers σ _ _ w 27713 hW hc _).trans (SamplingDesign.pow_record_le hW hB)
-  · exact (SamplingDesign.stratified_escape_le_of_covers σ _ _ v 27713 hN hcy _).trans (SamplingDesign.pow_record_le hN hB)
+  · exact (SamplingDesign.stratified_missProb_le_of_covers σ _ _ w 27713 hW hc _).trans (SamplingDesign.pow_record_le hW hB)
+  · exact (SamplingDesign.stratified_missProb_le_of_covers σ _ _ v 27713 hN hcy _).trans (SamplingDesign.pow_record_le hN hB)
 
 end Audits
 

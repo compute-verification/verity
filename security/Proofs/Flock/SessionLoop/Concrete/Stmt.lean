@@ -33,7 +33,7 @@ def concreteHash : ByteArray := Sha512.hash (Concrete.bytesOf (HmNets.shaLaid ()
 def concreteRaw : Raw := Concrete.wC (HmNets.shaLaid ()) (HmNets.hmLaid ()) concreteHash
 
 /-- **A concrete `--zk` statement**: `concreteRaw`'s encoding. -/
-def concreteStmt : Claims.Msg := concreteRaw.encode
+def concreteStmt : Hash.Msg := concreteRaw.encode
 
 theorem name_size : Concrete.NAME.toUTF8.size < 2 ^ 64 := by decide +kernel
 
@@ -80,11 +80,11 @@ theorem concreteStmt_decode (hn : FixedNetsBuild) : decode concreteStmt = some c
 
 /-! ## Its setup -/
 
-theorem insOf_of {zk : Bool} {x : Claims.Msg} {w : Raw} {s : Ins} (hd : decode x = some w) (hz : w.zk = zk)
+theorem insOf_of {zk : Bool} {x : Hash.Msg} {w : Raw} {s : Ins} (hd : decode x = some w) (hz : w.zk = zk)
     (hi : w.ins = .ok s) : insOf zk x = some s := by
   simp [insOf, hd, hz, hi, Except.toOption]
 
-theorem setupOf_of {zk : Bool} {x : Claims.Msg} {s : Ins} {p : SessionSpec × Array Stmt} (hi : insOf zk x = some s)
+theorem setupOf_of {zk : Bool} {x : Hash.Msg} {s : Ins} {p : SessionSpec × Array Stmt} (hi : insOf zk x = some s)
     (hs : s.setup = .ok p) : setupOf zk x = some (s, p) := by
   obtain ⟨spec, sts⟩ := p
   simp [setupOf, hi, hs, Except.toOption]

@@ -71,6 +71,7 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import SAMPLE_L
 from verity.protocols.proofs.spot.verifier.one_stage.docket import digest as registration_digest
 from .verifier import BUILD_LOCK, ROOT
 from .verifier import PACKAGE as V2_PACKAGE
+from verity.commitments.domains import ONE_STAGE_PROTOCOL_V2
 
 PACKAGE = ROOT / "verity/protocols/proofs/flock/verifier"
 EXE = "verity-verify-proof"
@@ -83,7 +84,6 @@ STATEMENT = "verity/flock-circuit"
 _DIGEST = re.compile(r"[0-9a-f]{128}")
 #: an input bound at docket (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
 _REGISTERED_INPUT = re.compile(r"RegisteredInput[1-9][0-9]*_v1")
-_CHUNK = 1 << 24
 #: `Flock.KsScope.SCOPE_WHY` (`ks_form_why`) and `TABLES_WHY`, the head of `verify --zk`'s refusals of a shared-row file
 SCOPE_WHY = ("a circuit outside the unit's form under --zk (scopeOkH: the unit reads its one input group and returns the "
              "outputs)")
@@ -163,12 +163,9 @@ def executable() -> Path:
 
 
 def file_sha512(path: Path) -> str:
-    """The SHA-512 of the file at `path`, read in chunks (a circuit file can be tens of GB)."""
-    h = hashlib.sha512()
+    """The SHA-512 of the file at `path`."""
     with open(path, "rb") as f:
-        while chunk := f.read(_CHUNK):
-            h.update(chunk)
-    return h.hexdigest()
+        return hashlib.file_digest(f, "sha512").hexdigest()
 
 
 def _header(path: Path) -> Any:
@@ -502,7 +499,7 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
 
 
 #: the one-stage audit on the proofs themselves (`Spot.OneStageZk`), which runs `verify`'s verifier on blobs
-V2 = "verity/sampled-proofs/one-stage/v2"
+V2 = ONE_STAGE_PROTOCOL_V2
 V2_EXE = "spot-one-stage-zk"
 
 

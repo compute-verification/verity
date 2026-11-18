@@ -113,7 +113,7 @@ theorem repLens_length (spec : SessionSpec) (sts : Array Stmt) : (repLens spec s
 
 /-- **Rep `k`'s sends are its schedule's rounds**: at a set-up rep (`SchedOf`) whose table has `k_log ≥ 6`, its sends
 in the plain session at replies whose first is `c₁`'s bytes (`JsonRT.sendsP`) are `repLens`' `k`th. -/
-theorem sendsP_eq {resp : ℕ → Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
+theorem sendsP_eq {resp : ℕ → Hash.Msg} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
     {cs : List Coin} {k : ℕ} (hc : resp 0 = c₁.bytes) (hk : k < 2 * sts.size) (h6 : 6 ≤ sts[k / 2]!.c.kLog)
     (hs : SchedOf (repCtx spec sts c₁ r₀ cs k)) :
     JsonRT.sendsP resp spec (tabsOf sts) k = (repLens spec sts).getD k 0 := by
@@ -140,12 +140,12 @@ theorem sendsP_eq {resp : ℕ → Claims.Msg} {spec : SessionSpec} {sts : Array 
 tables are `TableOk` with at most 2,048 extra claims at `c₁`'s link points, where reply `i` is coin `i`'s bytes, for
 coins that number at least the reps' rounds and two. Rep `k`'s `z` reply (`zAtP`, `sessionS_reps`) is one past the
 link and the earlier reps' rounds, the coin `repCtx` reads in `cs.tail.dropLast`. -/
-theorem filesFinalC {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {resp : ℕ → Claims.Msg}
+theorem filesFinalC {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out64 H) {resp : ℕ → Hash.Msg}
     {spec : SessionSpec} {sts : Array Stmt} {w : Claims.Flock.Wit} {ω : Tape} {c₁ : Coin} {cs : List Coin}
     (hc : resp 0 = c₁.bytes) (hts : sts.size = spec.tables.size)
     (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
-    {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
+    {rec : String} {pfs : Array ByteArray} {bs : Array Hash.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs))
     (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hlen : (repLens spec sts).sum + 2 ≤ cs.length) :
     FilesFinalC spec sts c₁ cs.tail.dropLast pfs := by
@@ -182,14 +182,14 @@ theorem filesFinalC {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {resp
 /-- **The honest run decides at its own proofs, at coins the replies are**: `sessionRun_decides_fit`, where reply `i`
 is coin `i`'s bytes and the coins number at least the reps' rounds and two, so the files' `finalC` are at the reader's
 `z` (`filesFinalC`). -/
-theorem sessionRun_decides_coins {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H)
-    {rd : Claims.Msg → Option FinalP} {x last : Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} {c₁ : Coin} {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128}
+theorem sessionRun_decides_coins {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out64 H)
+    {rd : Hash.Msg → Option FinalP} {x last : Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {c₁ : Coin} {resp : ℕ → Hash.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128}
     {fl : FinalP} (hx : setupOf false x = some (s, spec, sts)) (hcs : cs.head? = some c₁)
     (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hlen : (repLens spec sts).sum + 2 ≤ cs.length)
     (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
-    {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
+    {rec : String} {pfs : Array ByteArray} {bs : Array Hash.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs)) (hrd : rd last = some fl)
     (hps : fl.ps = filePs spec sts c₁ pfs) (hst : fl.stmt = x) :
     ∃ d, decR rd x (honestMsgs (fileCaps spec sts c₁ pfs) ((List.range (filePs spec sts c₁ pfs).size).map fun k =>
@@ -265,7 +265,7 @@ theorem repLens_sum {spec : SessionSpec} {sts : Array Stmt}
 /-- **`hlen` holds at the deployed verifier's coin count**: at a statement that sets up with `TableOk` tables, coins
 numbering `(V false).k x`, the link's, the reps' rounds (`repLens_sum`) and the last message's, are at least the
 reps' rounds and two. -/
-theorem hlen_of_k {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {cs : List Coin}
+theorem hlen_of_k {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {cs : List Coin}
     (hx : setupOf false x = some (s, spec, sts)) (hok : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i])
     (hk : cs.length = (V false).k x) : (repLens spec sts).sum + 2 ≤ cs.length := by
   rw [hk, repLens_sum hok]

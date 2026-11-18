@@ -52,7 +52,7 @@ def prove_path_arm(out: Path, name: str, *, proof: str = "zk", forged: bool = Fa
     return arm
 
 
-MACHINE = ("ubuntu\nnode\nabc\nrow dir /w/r/llama32-1b__int8__h200__tp1__b4\nCUDA_HOME /usr/local/cuda\n"
+MACHINE = ("ubuntu\nnode\nabc\nrow dir /w/r/llama32-1b__int8__h200__tp1__b4\nCUDA_HOME /w/cuda\n"
            "GPU 0: NVIDIA H200 (UUID: GPU-0)\nGPU 1: NVIDIA H200 (UUID: GPU-1)\n"
            "HF_HOME /w/hf VENV /w/venv312 A5_COINS challenger: card 1 and CPUs 40-59 leased by gpu-lease for Match and Commit\n")
 SERVES = "llama-3.2-1b-h200"

@@ -73,9 +73,9 @@ registered inputs `reg`, checked inputs `chk` and each statement's check `valid`
   set. -/
 def SampledLeakChecked : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-    (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
+    (H : Hash.Msg → Hash.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
-    (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (εchk : Claims.Msg → ℝ)
+    (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (εchk : Hash.Msg → ℝ)
     (Dj : ℕ),
     KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D (traceRun H D.commit) valid εchk x)
         (RLeakChecked H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) valid

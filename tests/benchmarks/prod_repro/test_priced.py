@@ -329,5 +329,5 @@ def test_a_card_no_gpu_card_file_names_is_refused(tmp_path, card):
     out.mkdir()
     with pytest.raises(SystemExit) as e:
         Q.main([str(out), *(["--card", card] if card else []), "--units", str(units_file(tmp_path)), "--ours", "prod-record"])
-    assert card is None or "is the `short` of no GPU card file" in str(e.value.code)
+    assert card is None or "--card 'h20': 0 GPU card files under" in str(e.value.code)
 

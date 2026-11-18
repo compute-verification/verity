@@ -562,7 +562,7 @@ theorem transports_shaped (R : Reg)
     (hy : y.length = saltLen)
     (he : (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).com (p, v, y) =
       (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).cs R ((vbOf dj y₀ ht hc hscope hU hpub hpt).pos g)) :
-    ∃ d : Claims.Msg, (commitDep ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)) (rowsOf c hU n) c pub n
+    ∃ d : Hash.Msg, (commitDep ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)) (rowsOf c hU n) c pub n
         (rootsOf c pub n)).Opens sha512Msg (rootsOf c pub n)
       ⟨posOf ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)) g,
         (vbOf dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).bit
@@ -632,7 +632,7 @@ def TransportsLiveCS : Prop :=
     Bridge.PortRoots.RootFixesDomain D.unroll pub n →
     ∀ u, ∀ g ∈ P.io u, ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →
       Bridge.canonOpen rows g (vb.val o) o.2.2 →
-      ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
+      ∃ d : Hash.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
 
 /-- **`TransportsLiveCS` holds** (`transports_shaped`). -/
 theorem transportsLiveCS : TransportsLiveCS := by

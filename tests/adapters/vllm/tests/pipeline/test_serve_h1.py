@@ -20,7 +20,7 @@ import pytest
 import torch
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError
 
@@ -592,7 +592,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     monkeypatch.setattr(TD, "available", lambda: False)
     monkeypatch.setattr(verifier, "executable", lambda: built.append(len(calls)))
     opts = SimpleNamespace(protocols=SH.ENTRY, max_num_batched_tokens=ROWS, window_steps=STEPS, protocols_config=None,
-                           gate=SimpleNamespace(h1_prover=None, h1_receipts=False, h1_model=None, h1_weights_root=None,
+                           h1=SimpleNamespace(h1_prover=None, h1_receipts=False, h1_model=None, h1_weights_root=None,
                                                 h1_window_commit=None))
     arm = SH.arm_of(opts, SimpleNamespace(model=srv.model, vllm=object()), srv.com, tmp_path)
     (held,) = sessions.held
@@ -905,8 +905,8 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     man = predicted.row(tmp_path)
 
     def refusal(*more: str) -> str | None:
-        opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), *more],
-                         environ={})
+        opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), "--out", str(tmp_path),
+                                          *more], environ={})
         try:
             so.preflight(opts, which=lambda _: "/v/bin/ninja")
         except cli.UsageError as e:

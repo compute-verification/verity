@@ -200,9 +200,8 @@ def fold_values(vdir: Path, profile_name: str, roles: Path | None, last_step: in
     the whole log's first steps)."""
     from verity_vllm.check import fold_compare
     from verity_vllm.check.fold_compare import SnapshotStore, Values, _attach_specs, load_profile
-    from verity_vllm.observe.events import RunHeader, StepStart
+    from verity_vllm.observe.events import StepStart
     from verity_vllm.observe.fold.fold import fold
-    from verity_vllm.observe.fold.patterns.pouw import with_protocols
     from verity_vllm.observe.log import read_log
     t0 = time.time()
     for dt in ("float8_e4m3fn", "float8_e5m2", "float8_e8m0fnu"):
@@ -213,8 +212,7 @@ def fold_values(vdir: Path, profile_name: str, roles: Path | None, last_step: in
         if last_step is not None and isinstance(e, StepStart) and e.step > last_step:
             break
         events.append(e)
-    header = next((e for e in events if isinstance(e, RunHeader)), None)
-    res = fold(events, with_protocols(profile, header), strict=None, with_program=False)
+    res = fold(events, profile, strict=None, with_program=False)
     _attach_specs(res)
     store = SnapshotStore(vdir / "rank0")
     weights = (weights_cls or Weights)(res.params[-1][1], profile, vdir / "ckpt", roles, vdir / "rank0" / "cos_sin_cache.npy")

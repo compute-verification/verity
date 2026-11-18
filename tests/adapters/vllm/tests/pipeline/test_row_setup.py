@@ -102,12 +102,8 @@ def test_a_row_whose_shape_is_not_read_yet_names_no_target_to_its_derives(tmp_pa
 def test_remote_verifier_reaches_the_single_gpu_commit_which_checks_its_session_before_anything_runs(tmp_path, monkeypatch):
     """REMOTE_VERIFIER reaches the single-GPU Commit as ``--remote-verifier``, and a TP row refuses it; the Commit
     refuses a bad address, a session of more than one mode or a Commit with no instrumented run to audit before anything
-    runs (the adapter's `CommitSession` standing in for the session memory-accounting registers by name)."""
-    from verity.protocols.resource_accounting import scheme
-    from verity_vllm.pipeline import commit, poub_session
-    from verity_vllm.protocols.poub import remote
-
-    monkeypatch.setitem(scheme.PROCESSES, poub_session.SESSION, remote.CommitSession)
+    runs (the session is the process memory-accounting registers by name, which the Commit looks up)."""
+    from verity_vllm.pipeline import commit
 
     single = _row(tmp_path, environ={"REMOTE_VERIFIER": "10.0.0.7:7781"})
     single.hidden_so, single.B = "/x/verity_fa2_matReqG.so", 1

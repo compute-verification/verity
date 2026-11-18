@@ -101,6 +101,17 @@ def test_a_refused_card_is_a_card_the_spec_doesnt_list_and_its_refusal_says_why(
             load_spec(path)
 
 
+@pytest.mark.parametrize("spec", ["llama31-8b-1gpu-pouw-protocol-served", "llama31-8b-1gpu-pouw-protocol-served-b32"])
+def test_a_retired_spec_refuses_every_launch_by_name_and_its_stored_runs_read_under_its_id(spec):
+    for named in (spec, f"{spec}@rtx-pro-6000", f"{spec}@h200"):
+        with pytest.raises(ConfigError, match=rf"^spec '{spec}' is refused: served Pearl-C on sm_120 "
+                                              r"\(`pouw:pearl-c-sm120-v1-h3`\), which is no declared scheme: declaring "
+                                              r"one is compute-accounting's$"):
+            resolve_spec(named)
+    assert not (SPEC_ROOT / f"{spec}.toml").exists() and spec not in presets.former_specs()
+    assert presets.current_spec(spec) == spec and served_table._on_card(spec, "rtx-pro-6000") == spec
+
+
 def test_a_spec_argument_names_its_card_after_an_at_by_id_or_recorded_path():
     assert split_card(POUW) == (POUW, None)
     assert split_card(f"{POUW}@h100") == (POUW, "h100")

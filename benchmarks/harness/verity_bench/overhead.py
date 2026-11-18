@@ -24,7 +24,8 @@ an interval within `HALF_WIDTH` of the median ratio (`of_record_why`) and passes
 (`cross_check_why`); the scheme gate is γ ≤ `GAMMA_MAX` at each point. `periods` states it per monitoring period.
 
 **What a γ covers** (`covers`) is its model's entry: one layer's linears, and not what `LEFT_OUT` names. **y's commitment**: a
-scheme's entry says whether its arm's timed call commits y, the call's output (`Scheme.commits_y`); a timed run records it,
+scheme's declaration says whether its arm's timed call commits y, the call's output (`Scheme.commits_y`, its
+``y_committed``); a timed run records it,
 and a figure from a run whose arm committed no y carries `WITHOUT_Y` (`y_note`).
 """
 
@@ -62,13 +63,15 @@ class Gpu:
     core-second's weight in SM-seconds (`verity_bench.host_weight`); and the door's own choices: the scalings and
     libraries its fastest stock kernel is chosen among; `bridge`: its CUTLASS and DeepGEMM are vLLM's, through torch
     (`bench.py --bridge`), since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in
-    `calibration/census/hardware.json` (the H200's is the H100's: the same compute with more HBM)."""
+    `calibration/census/hardware.json` (the H200's is the H100's: the same compute with more HBM); `note`: what each of its points says of the card, beside its
+    run's note."""
 
     node: str
     precisions: Mapping[str, tuple[str, ...]]
     libraries: tuple[str, ...]
     bridge: bool
     datasheet: str
+    note: str | None = None
 
     # imported where read, so the rules load alone by this file's path, with no package beside them
     @cached_property
@@ -119,7 +122,7 @@ class Gpu:
 
 #: each precision's scalings, as the PoUW harness names its baseline families: per-tensor, rowwise and 128-block FP8
 FP8 = ("fp8-e4m3", "fp8-e4m3-rowwise", "fp8-blk128")
-#: the GPUs the door measures on, each by its node file
+#: the GPUs the door measures on, each by its node file; the first's card is the kernel points' (`kernel_card`)
 DOOR = (
     Gpu("h200-sxm-141gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
     Gpu("h100-sxm-80gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
@@ -131,6 +134,11 @@ DOOR = (
 def cards() -> dict[str, Gpu]:
     """The door's GPUs by their card's `short`, the `--card` that names one."""
     return {card.gpu: card for card in DOOR}
+
+
+def kernel_card() -> str:
+    """The kernel points' card's `short`: `DOOR`'s first GPU's."""
+    return DOOR[0].gpu
 
 class Shape(NamedTuple):
     """A model's decoder: its layer count and one layer's linears, (n, k) each: qkv's n is the query width and two KV
@@ -150,7 +158,8 @@ SHAPES = {
 }
 #: the door's models by its `--model`: one layer's linears each
 MODELS = {"llama3.1-70b": SHAPES["llama-3.1-70b"].linears, "llama3.2-1b": SHAPES["llama-3.2-1b"].linears}
-#: the kernel points' model, whose γ is each metric's own reading; every other model's is a member of it
+#: the kernel points' model, whose γ on the kernel card (`kernel_card`) is each metric's own reading; every other model's,
+#: and every model's on another card, is a member of it
 KERNEL_MODEL = "llama3.1-70b"
 #: what a model's entry leaves out of the layer its γ is over, though serving the model computes it
 LEFT_OUT = {"llama3.1-70b": ("the LM head",), "llama3.2-1b": ("the LM head",)}
@@ -161,27 +170,42 @@ WITHOUT_Y = "without y's commitment (y tree not timed)"
 
 @dataclass(frozen=True)
 class Scheme:
-    """A scheme the door times against stock. `arm` is its PoUW harness arm (`module:Class` in `arm_path`, as `bench.py
-    --arm` and `--arm-path` take them), timed beside stock kernels of `family`, the stock scaling its useful output's
-    quantization matches. `epsilon` (`module:function` in `arm_path`) is its soundness error at a shape on a card,
-    `(m, n, k, card) -> {"epsilon", "delta", "basis"}`, recorded beside its γ. `commits_y`: whether the arm's timed call
-    commits y, the call's output (y's tree), false unless the entry states it; a timed run records it beside its arm
-    (`overhead.json`'s `arm.commits_y`), and its figures carry `WITHOUT_Y` while it is false (`y_note`). `stock` has no arm:
-    its γ is the A/A control every run carries (`bench.py --twins`), the fastest stock kernel against its own twin."""
+    """A scheme the door times against stock: the declared scheme `id` (`compose.schemes.get`) and the benchmark's own
+    binding of it. `arm` is its PoUW harness arm (`module:Class` in `arm_path`, as `bench.py --arm` and `--arm-path` take
+    them), timed beside stock kernels of `family`, the stock scaling its useful output's quantization matches: the
+    declaration's ``product_family``. `epsilon` (`module:function` in `arm_path`) is its soundness error at a shape on a
+    card, `(m, n, k, card) -> {"epsilon", "delta", "basis"}`, recorded beside its γ. `commits_y`: whether the arm's timed
+    call commits y, the call's output (y's tree), the declaration's ``y_committed``; a timed run records it beside its arm
+    (`overhead.json`'s `arm.commits_y`), and its figures carry `WITHOUT_Y` while it is false (`y_note`). `stock` is no
+    declared scheme and has no arm: the benchmark's control, of its own `control_family`, whose γ is the A/A control every
+    run carries (`bench.py --twins`), the fastest stock kernel against its own twin; it commits nothing."""
 
     id: str
-    family: str
     arm: str | None = None
     arm_path: str | None = None
     epsilon: str | None = None
-    commits_y: bool = False
+    control_family: str | None = None
+
+    @property
+    def family(self) -> str:
+        return self.control_family if self.control_family is not None else self._declared("product_family")
+
+    @property
+    def commits_y(self) -> bool:
+        return False if self.control_family is not None else self._declared("y_committed")
+
+    def _declared(self, field: str) -> Any:
+        from verity.protocols.compose import schemes
+        from verity.protocols.resource_accounting.scheme import declared
+
+        return declared(schemes.get(self.id), field)
 
 
-#: Pearl+'s useful output is rowwise-scaled E4M3, so its stock, and stock's own A/A control, are that family's
+#: Pearl+'s useful output is rowwise-scaled E4M3 (its ``product_family``), so its stock, and stock's own A/A control, are
+#: that family's
 SCHEMES = {s.id: s for s in (
-    Scheme("stock", "fp8-e4m3-rowwise"),
-    Scheme("pearl-plus", "fp8-e4m3-rowwise", "overhead_arm:PearlPlus", "benchmarks/pouw/pearl_c_sm90",
-           "overhead_arm:epsilon", commits_y=True),
+    Scheme("stock", control_family="fp8-e4m3-rowwise"),
+    Scheme("pearl-plus", "overhead_arm:PearlPlus", "benchmarks/pouw/pearl_c_sm90", "overhead_arm:epsilon"),
 )}
 
 
@@ -194,10 +218,16 @@ def scheme(name: str) -> Scheme:
 
 def y_note(arm: Mapping | None) -> str | None:
     """The note a run's figures carry, from the `arm` record of its `overhead.json`: `WITHOUT_Y` unless the record says its
-    arm committed y (`commits_y`, the scheme's entry as the run recorded it; a record without the field timed no y tree).
+    arm committed y (`commits_y`, the scheme's declared ``y_committed`` as the run recorded it; a record without the field timed no y tree).
     None for a run with no arm: stock's A/A control commits nothing."""
 
     return None if arm is None or arm.get("commits_y") else WITHOUT_Y
+
+
+def row_note(arm: Mapping | None, card: str | None) -> str | None:
+    """A row's note: its run's (`y_note`) and its card's (`Gpu.note`), joined, or None when neither says anything."""
+
+    return "; ".join(n for n in (y_note(arm), getattr(cards().get(card or ""), "note", None)) if n) or None
 
 
 def covers(model: str = KERNEL_MODEL) -> str:

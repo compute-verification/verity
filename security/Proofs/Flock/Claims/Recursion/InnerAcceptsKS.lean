@@ -370,8 +370,8 @@ SHA-512: `KSFlock_of_flockKS_V` with `InnerAcceptsColl` and the compiled verifie
 for `InnerAccepts`. -/
 theorem KSFlock_of_flockKS_V_coll {Col T : Type} [DecidableEq Col] [Zero Col] (zk : Bool) (D : Deploy Coin)
     (DI DO : Claims.Flock.Deploy Coin Col T) (hVI : DI.V = V zk) (opening : Opening)
-    (decC : Claims.Msg → Claims.Msg → Coin) (hF : Claims.Flock.KS sha512 DO) (NI : Claims.Msg → ℕ)
-    (Ok : Claims.Msg → Col → Prop) (hNI : ∀ x, (NI x : ℝ) ≤ DI.N₀ x) (hεI : ∀ x, 0 ≤ DI.εtable x)
+    (decC : Hash.Msg → Hash.Msg → Coin) (hF : Claims.Flock.KS sha512 DO) (NI : Hash.Msg → ℕ)
+    (Ok : Hash.Msg → Col → Prop) (hNI : ∀ x, (NI x : ℝ) ≤ DI.N₀ x) (hεI : ∀ x, 0 ≤ DI.εtable x)
     (hVkI : ∀ x, 0 < DI.V.k x) (hKI : ∀ x, 0 < DI.cap x)
     (hkI : ∀ x, (8 ≤ DI.k x ∧ Claims.Flock.Splits DI x) ∨ Claims.Flock.NoAcc sha512 DI.V x)
     (hone : ∀ x, (∃ s, DI.parse x = some s ∧ s.tables = 1) ∨ Claims.Flock.NoAcc sha512 DI.V x) (hz : ∀ x, Ok x 0)
@@ -384,7 +384,7 @@ theorem KSFlock_of_flockKS_V_coll {Col T : Type} [DecidableEq Col] [Zero Col] (z
     (hL : ∀ decI, CallsLogColl sha512 D (Inner.ofFlock DI decI) DO)
     (hO : ∀ decI, CallsOpenPlayed sha512 D (Inner.ofFlock DI decI) DO opening)
     (hA : ∀ decI, InnerAcceptsColl sha512 D (Inner.ofFlock DI decI) DO)
-    (hM : ∀ (x : Claims.Msg) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin),
+    (hM : ∀ (x : Hash.Msg) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin),
       (Claims.run sha512 P D.V x ω r).out = .acc → DI.V.k (xI D x) + 3 ≤ D.V.k x)
     (hpc : ∀ decI, PublicCoin sha512 (Inner.ofFlock DI decI) decC) (hN0 : CallsNil sha512 D) :
     KSFlockA sha512 D DI DO :=

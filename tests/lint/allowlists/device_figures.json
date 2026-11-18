@@ -29,7 +29,6 @@
     {"file": "benchmarks/pouw/filler/arms.py", "count": 1, "lane": "compute-accounting"},
     {"file": "benchmarks/pouw/filler/capacity_of.py", "count": 2, "lane": "compute-accounting"},
     {"file": "benchmarks/pouw/filler/share.py", "count": 1, "lane": "compute-accounting"},
-    {"file": "calibration/pouw/opcode_probe/clock_calib_lease.sh", "count": 1, "lane": "compute-research"},
     {"file": "benchmarks/poub_session/auditor_line.py", "count": 1, "lane": "memory-accounting"},
     {"file": "benchmarks/spot_figures/cards/proof_overhead.glm-5.3.json", "count": 1, "lane": "proofs"},
     {"file": "calibration/training/training_slowdown/run.py", "count": 1, "lane": "training"},

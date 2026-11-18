@@ -1,0 +1,8 @@
+# `Claims.Msg` is `Hash.Msg`: every Lean reader that writes it in full names the core hash vocabulary's message. Lean
+# only; the abbreviation itself and its bare readers are a later pass.
+
+[words]
+"Claims.Msg" = "Hash.Msg"
+
+[rewrite]
+exclude = ["**/*.py", "**/*.md", "**/*.json", "**/*.toml", "**/*.txt", "**/*.sh", "**/*.rs", "**/lean-audit.json", "tests/**/fixtures/**", "tools/move/*_map.toml", "tools/move/*_moves.json"]

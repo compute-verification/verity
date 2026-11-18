@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import sys
+from tests.row_paths import row_paths
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -78,7 +79,7 @@ class _Pools:
 def _tp_row(tmp: Path, monkeypatch, *, world: int = 8, shapes=(SHAPE,), cpus: int = 64, headroom: int = 1 << 40,
             environ: dict[str, str] | None = None) -> tuple[TpRow, _FakeChildren, _Pools]:
     env = {k: v for k, v in os.environ.items() if k not in ("BUILD_JOBS", "BUILD_RAM_BUDGET_GB", "VERITY_TREE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID")}
-    env.update(environ or {})
+    env.update({**row_paths(tmp), **(environ or {})})
     o = cli.parse("row", ["run", ROW, "QWEN3_30B_A3B", "Qwen/Qwen3-30B-A3B", "rev", "--sweep-dir", str(tmp), "--py", sys.executable,
                           "--native-collect-default", str(tmp / "nc_build")], env)
     t = TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=world, gpu_util=None,

@@ -136,12 +136,14 @@ class GraphCalls(WholeCalls, _RunState):
         forking A's scales, at a shape that replays as a graph, which is where the call goes to `_into`."""
         return self._forks_stats() and self._whole is not None and self._graphed(sh.m16) and _capturing()
 
-    @staticmethod
-    def salts_a(sh: Any, pipe: Any) -> Any:
+    def salts_a(self, sh: Any, pipe: Any) -> Any:
         """The device bytes a call's A salts are in, `HM96_SALT` a row of its m₁₆: its pipeline's own (a graphed call's,
-        `PearlCDeviceRun._pipe`), else the shape's set the call took (`_Shape.buf`)."""
+        `PearlCDeviceRun._pipe`), else the shape's set the call took (`_Shape.buf`); a buffer short of m₁₆ salts is
+        refused (the kernels' `salts_at`)."""
         own = getattr(pipe, "salts_a", None)
-        return (sh.buf("salts_a") if own is None else own)[:HM96_SALT * sh.m16]
+        salts = (sh.buf("salts_a") if own is None else own)[:HM96_SALT * sh.m16]
+        self.kernel.run.salts_at(salts.data_ptr(), "salts_a", sh.m16, salts.numel())
+        return salts
 
     def _graphed(self, m16: int) -> bool:
         """Whether calls of m₁₆ rows replay as graphs (`graphs`, the serial schedule), reading their keys and offsets from

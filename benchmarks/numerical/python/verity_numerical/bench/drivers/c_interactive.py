@@ -1,15 +1,11 @@
-"""C-interactive (Flock, live verifier): ``verity/protocols/proofs/flock/prover/pod/30-cell.sh`` on both pods, then ``verity_flock.register``.
+"""C-interactive (Flock, live verifier): the circuit statement (``circuit:<template>``, ``verity/flock-circuit``, planned with
+``--relation circuit:<template>``) runs ``verity/protocols/proofs/flock/prover/pod/61-circuit-cell.sh`` on both pods
+(``verity_flock.circuit_bench``; the verifier stages only its public files), then ``verity_flock.register``.
 
-A GEMM cell on an input set (directory or ``art:`` id) sends the set to both pods as the same tarball (``SET=``), and each side
-writes its own instance files from it (``verity_flock.instance_file.write_set``); on a census frozen set the scripts rebuild it.
-
-The circuit statement (``circuit:<template>``, ``verity/flock-circuit``, planned with ``--relation circuit:<template>``) runs
-``verity/protocols/proofs/flock/prover/pod/61-circuit-cell.sh`` the same way (``verity_flock.circuit_bench``; the verifier stages only its public files).
-
-The verifier pod runs ``ROLE=verifier`` (its own instance files, ``verity_flock.bench --serve-plan`` on :7400); the prover pod runs
-``ROLE=prover`` against it: the plateau sweep over ``POINTS`` (warm, ``RUNS`` timed sessions per point, the timing guard), the
-TCP-connect RTT probe to ``RTT_TARGET`` (the verifier pod's sshd) before the sweep, and the loopback probe at the plateau
-(``LOOPBACK=1``).  The plateau's ``result.json`` is the prover run's ``result.json``.
+Both pods receive the input set (directory or ``art:`` id) as the same tarball. The prover pod runs against the verifier pod:
+the plateau sweep over ``POINTS`` (warm, ``RUNS`` timed sessions per point, the timing guard), the TCP-connect RTT probe to
+``RTT_TARGET`` (the verifier pod's sshd) before the sweep, and the loopback probe at the plateau (``LOOPBACK=1``).  The
+plateau's ``result.json`` is the prover run's ``result.json``.
 """
 from __future__ import annotations
 
@@ -32,7 +28,6 @@ BACKEND = "C-interactive"
 FAMILY = "C-Flock"
 INTERACTIVE = True
 RESULT = "result.json"
-SCRIPT = "verity/protocols/proofs/flock/prover/pod/30-cell.sh"
 IR_PREFIX = "irf:"
 CIRCUIT_SCRIPT = "verity/protocols/proofs/flock/prover/pod/61-circuit-cell.sh"
 CIRCUIT_PREFIX = "circuit:"
@@ -60,7 +55,7 @@ def set_tarball(cell: Cell) -> str:
     return str(out)
 
 
-def circuit_jobs(cell: Cell) -> list[dict]:
+def jobs(cell: Cell) -> list[dict]:
     if cell.input_set.get("kind") != "set":
         raise ValueError("a circuit cell runs on an input set (directory or art: id), not a census frozen set")
     tar = set_tarball(cell)
@@ -83,23 +78,9 @@ def unmet(cell: Cell) -> str | None:
         return "C-interactive registers its result under the producing lane (verity_flock.register --lane): plan the cell with --lane"
     if not cell.rtt_target:
         return "C-interactive's RTT probe needs --rtt-target (HOST:PORT of the verifier pod's sshd, not its session port)"
+    if not cell.relation.startswith(CIRCUIT_PREFIX):
+        return f"{cell.relation}: C-interactive runs the circuit statement only; plan the cell with --relation {CIRCUIT_PREFIX}<template>"
     return None
-
-
-def jobs(cell: Cell) -> list[dict]:
-    if cell.relation.startswith(CIRCUIT_PREFIX):
-        return circuit_jobs(cell)
-    send = [set_tarball(cell)] if cell.input_set.get("kind") == "set" else []
-    common = [f"REL={cell.relation}", f"POINTS={cell.points}", f"RUNS={cell.runs}", *([f"PER={cell.per_proof}"] if cell.per_proof else []),
-              *([f"SET={Path(send[0]).name}"] if send else [])]
-    operator = f"OPERATOR={cell.lane}-verifier-pod"
-    return [
-        {"role": "verifier", "pod": cell.verifier, "stage": "flock.cell.verifier", "send": send,
-         "command": ["bash", SCRIPT, "ROLE=verifier", *common, operator]},
-        {"role": "prover", "pod": cell.prover, "stage": "flock.cell.prover", "send": send,
-         "command": ["bash", SCRIPT, "ROLE=prover", *common, f"VERIFIER={cell.verifier_addr}", f"RTT_TARGET={cell.rtt_target}", "LOOPBACK=1",
-                     operator, *cell.backend_args]},
-    ]
 
 
 def register(cell: Cell, prover_run: Path, verifier_run: Path | None, out: Path) -> list[list[str]]:
@@ -108,9 +89,7 @@ def register(cell: Cell, prover_run: Path, verifier_run: Path | None, out: Path)
     if not cell.lane:
         raise ValueError("C-interactive registers under the producing lane: the cell has no lane")
     cmd = [sys.executable, "-m", "verity_flock.register", "--prover-run", str(prover_run), "--verifier-run", str(verifier_run),
-           "--out", str(out)]
-    if cell.relation.startswith(CIRCUIT_PREFIX):
-        cmd += ["--verifier-binary", circuit_binary(prover_run)]
+           "--out", str(out), "--verifier-binary", verifier_binary(prover_run)]
     return [cmd + ["--lane", cell.lane] if takes_lane() else cmd]
 
 
@@ -121,8 +100,8 @@ def _backend_name(result: Any) -> str | None:
     return result if isinstance(result, str) and result else None
 
 
-def circuit_binary(prover_run: Path) -> str:
-    """A circuit cell's verifier binary: the prover's own (the ``software.backend.name`` of the run's first ``result.json``
+def verifier_binary(prover_run: Path) -> str:
+    """A cell's verifier binary: the prover's own (the ``software.backend.name`` of the run's first ``result.json``
     that names one), ``flock-circuit`` when none does. A ``result.json`` that is no JSON raises."""
     for p in (Path(prover_run) / "result.json", *Path(prover_run).glob("**/result.json")):
         if p.is_file() and (name := _backend_name(json.loads(p.read_text()))):

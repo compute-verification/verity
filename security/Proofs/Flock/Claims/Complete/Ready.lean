@@ -88,14 +88,14 @@ def repStart (spec : SessionSpec) (sts : Array Flock.Stmt) (q : ℕ) : ℕ :=
 
 /-- **The zerocheck outer coins** of the session the statement sets up: rep `q`'s second round (`rOuter`, after
 `r_skip`), elements `0` to `m − 14`, as (coin index, element) pairs. -/
-def outerSlots (x : Claims.Msg) : List (ℕ × ℕ) :=
+def outerSlots (x : Hash.Msg) : List (ℕ × ℕ) :=
   match setupOf false x with
   | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
       (List.range (sts[q / 2]!.m - 13)).map fun i => (repStart spec sts q + 1, i)
   | none => []
 
 /-- `ε`: the outer coins' count over `2^128`. -/
-noncomputable def ε (x : Claims.Msg) : ℝ := (outerSlots x).length / 2 ^ 128
+noncomputable def ε (x : Hash.Msg) : ℝ := (outerSlots x).length / 2 ^ 128
 
 /-- **A statement's regions fit**: each region's bytes at each block are its free bits. -/
 def RegionsFit (st : Flock.Stmt) : Prop :=
@@ -103,9 +103,9 @@ def RegionsFit (st : Flock.Stmt) : Prop :=
 
 /-- **The honest record fits its length word** at the plain session `spec`, `sts` of `x`: at every witness, tape and
 coins, a record the pure honest session returns (`sessionS`) is under `2^64` bytes. -/
-def RecordFitsAt (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) : Prop :=
+def RecordFitsAt (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) : Prop :=
   ∀ (w : Claims.Flock.Wit) (ω : Tape) (r : Fin ((V false).k x) → Coin) (record : String) (proofs : Array ByteArray)
-    (bodies : Array Claims.Msg),
+    (bodies : Array Hash.Msg),
     sessionS H (fun j => (Claims.coinSeq r j).bytes) spec sts w ω = (.ok (record, proofs), bodies) →
       record.toUTF8.size < 2 ^ 64
 
@@ -113,7 +113,7 @@ open Classical in
 /-- **The statements the deployed verifier can accept** against `H`: it sets up the session, the session samples a unit,
 the statement is under `2^64` bytes, each table's regions fit, its setup against `H` is the one at SHA-512, and the
 honest record fits. -/
-noncomputable def ready (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
+noncomputable def ready (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) : Bool :=
   match setupOf false x with
   | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 64) && decide (∀ st ∈ sts, RegionsFit st) &&
       decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts)) && decide (RecordFitsAt H x spec sts)
@@ -121,7 +121,7 @@ noncomputable def ready (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool 
 
 open Classical in
 /-- **At SHA-512, `ready` asks no setup agreement**: the setup against `sha512` is the statement's. -/
-theorem ready_sha512 (x : Claims.Msg) :
+theorem ready_sha512 (x : Hash.Msg) :
     ready sha512 x = match setupOf false x with
       | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 64) &&
           decide (∀ st ∈ sts, RegionsFit st) && decide (RecordFitsAt sha512 x spec sts)
@@ -134,12 +134,12 @@ theorem ready_sha512 (x : Claims.Msg) :
   · rfl
 
 /-- **Flock's `δc` at the plain verifier** against `H`: `ε` where the verifier can accept, else `1`. -/
-noncomputable def δc (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if ready H x then ε x else 1
+noncomputable def δc (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) : ℝ := if ready H x then ε x else 1
 
 /-- **A sampled session's `δc` at SHA-512 is below 1**: where the statement sets up a session that samples, is under `2^64`
 bytes, has regions and an honest record that fit, and has fewer than `2^128` outer coins, `ready` holds
 (`ready_sha512`), so `δc` is `ε`. -/
-theorem δc_sha512_lt_one {x : Claims.Msg} {s spec sts} (hs : setupOf false x = some (s, spec, sts))
+theorem δc_sha512_lt_one {x : Hash.Msg} {s spec sts} (hs : setupOf false x = some (s, spec, sts))
     (hd : s.read.draw.isSome = true) (hl : x.length < 2 ^ 64) (hreg : ∀ st ∈ sts, RegionsFit st)
     (hrec : RecordFitsAt sha512 x spec sts) (hε : (outerSlots x).length < 2 ^ 128) :
     δc sha512 x < 1 := by
@@ -163,14 +163,14 @@ def piopRoundsZk (spec : SessionSpec) (st : Flock.Stmt) : ℕ :=
   (st.m + st.c.kLog - 6) + (2 + spec.points * st.regions.size + 1)
 
 /-- **The zerocheck outer coins** of the masked session: rep `q`'s second round, elements `0` to `m − 14`. -/
-def outerSlotsZk (x : Claims.Msg) : List (ℕ × ℕ) :=
+def outerSlotsZk (x : Hash.Msg) : List (ℕ × ℕ) :=
   match setupOf true x with
   | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
       (List.range (sts[q / 2]!.m - 13)).map fun i => (repStartZk spec sts q + 1, i)
   | none => []
 
 /-- **Level 0's pair coins**: rep `q`'s `ρ_0` (`ρ_1` the next), Ligerito's round `k_0 + 2`. -/
-def rhoSlotsZk (x : Claims.Msg) : List ℕ :=
+def rhoSlotsZk (x : Hash.Msg) : List ℕ :=
   match setupOf true x with
   | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
       match Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m with
@@ -179,7 +179,7 @@ def rhoSlotsZk (x : Claims.Msg) : List ℕ :=
   | none => []
 
 /-- **The inner proof's `β`**: rep `q`'s inner round `2`, after Ligerito's `k_0 + 7 + 11R` rounds. -/
-def betaSlotsZk (x : Claims.Msg) : List ℕ :=
+def betaSlotsZk (x : Hash.Msg) : List ℕ :=
   match setupOf true x with
   | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
       match Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m with
@@ -189,7 +189,7 @@ def betaSlotsZk (x : Claims.Msg) : List ℕ :=
   | none => []
 
 /-- **The mask slots' rank checks**: table `i`'s statement, its rep `0`'s first coin and its rep `1`'s. -/
-def rankSlotsZk (x : Claims.Msg) : List (Flock.Stmt × ℕ × ℕ) :=
+def rankSlotsZk (x : Hash.Msg) : List (Flock.Stmt × ℕ × ℕ) :=
   match setupOf true x with
   | some (_, spec, sts) => (List.range sts.size).flatMap fun i =>
       match Zk.schedule sts[i]!.wideLeaf sts[i]!.m with
@@ -198,14 +198,14 @@ def rankSlotsZk (x : Claims.Msg) : List (Flock.Stmt × ℕ × ℕ) :=
   | none => []
 
 /-- `εZk`: the outer coins, the `β`s, twice the pairs and `4·m` per table's rank checks, over `2^128`. -/
-noncomputable def εZk (x : Claims.Msg) : ℝ :=
+noncomputable def εZk (x : Hash.Msg) : ℝ :=
   ((outerSlotsZk x).length + (betaSlotsZk x).length + 2 * (rhoSlotsZk x).length +
     (((rankSlotsZk x).map fun s => 4 * s.1.m).sum : ℕ)) / 2 ^ 128
 
 /-- **The honest masked record fits its length word** at the masked session `spec`, `sts` of `x`: at every witness,
 tape and coins, a record the honest masked session returns, run against `H` with each send answered by its coin
 (`PI.sim`), is under `2^64` bytes. -/
-def RecordFitsZkAt (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) :
+def RecordFitsZkAt (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) :
     Prop :=
   ∀ (w : Claims.Flock.Wit) (ω : TapeZk) (r : Fin ((V true).k x) → Coin) (record : String) (proofs : Array ByteArray),
     ((sessionPZk asks Hashes.pi spec (tabsOf sts) (MaskRank.masksOf sts) (tracesOf sts w) ω).run.sim H
@@ -215,7 +215,7 @@ def RecordFitsZkAt (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (spec : Sess
 open Classical in
 /-- **The statements the masked verifier can accept** against `H`: as `ready H`, of the masked session, at one table,
 with a `Hello` that names the keyed coin tree. -/
-noncomputable def readyZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
+noncomputable def readyZk (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) : Bool :=
   match setupOf true x with
   | some (s, spec, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 64) &&
       decide (∀ st ∈ sts, RegionsFit st) && decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts)) &&
@@ -224,7 +224,7 @@ noncomputable def readyZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Boo
 
 open Classical in
 /-- **At SHA-512, `readyZk` asks no setup agreement** (`ready_sha512`). -/
-theorem readyZk_sha512 (x : Claims.Msg) :
+theorem readyZk_sha512 (x : Hash.Msg) :
     readyZk sha512 x = match setupOf true x with
       | some (s, spec, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 64) &&
           decide (∀ st ∈ sts, RegionsFit st) && spec.coinTree.isSome && decide (RecordFitsZkAt sha512 x spec sts)
@@ -237,17 +237,17 @@ theorem readyZk_sha512 (x : Claims.Msg) :
   · rfl
 
 /-- **The error of `honestPZk`**, against `H`: `εZk` where `readyZk` holds, else `1`. -/
-noncomputable def δcZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if readyZk H x then εZk x else 1
+noncomputable def δcZk (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) : ℝ := if readyZk H x then εZk x else 1
 
 /-- **Flock's completeness at a prover and an error of one's own**: `Claims.Flock.Complete`'s statement at `D`, of `P`
 at `δc`. -/
 def CompleteWith {Coin Col T Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Nonempty Ω]
-    (H : Claims.Msg → Claims.Msg)
-    (D : Claims.Flock.Deploy Coin Col T) (P : Claims.Flock.Wit → Claims.Prover Ω) (δc : Claims.Msg → ℝ) : Prop :=
+    (H : Hash.Msg → Hash.Msg)
+    (D : Claims.Flock.Deploy Coin Col T) (P : Claims.Flock.Wit → Claims.Prover Ω) (δc : Hash.Msg → ℝ) : Prop :=
   Claims.Complete H D.V P (Claims.Flock.R D.parse) (Claims.Flock.Scope D) δc
 
 theorem complete_iff_with {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
-    (H : Claims.Msg → Claims.Msg)
+    (H : Hash.Msg → Hash.Msg)
     (D : Claims.Flock.Deploy Coin Col T) : Claims.Flock.Complete H D ↔ CompleteWith H D D.P (D.δc H) :=
   Iff.rfl
 
@@ -256,7 +256,7 @@ namespace ZkTables
 /-- **The honest masked record fits its length word** at the masked session `spec`, `sts` of `x`: at every witness,
 tape and coins, a record the honest masked session on each table's share returns, run against `H` with each send
 answered by its coin (`PI.sim`), is under `2^64` bytes. -/
-def RecordFitsAt (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) :
+def RecordFitsAt (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) :
     Prop :=
   ∀ (w : Claims.Flock.Wit) (ω : TapeZk) (r : Fin ((V true).k x) → Coin) (record : String) (proofs : Array ByteArray),
     ((sessionPZk asks Hashes.pi spec (tabsOf sts) (MaskRank.masksOf sts) (traces sts w) ω).run.sim H
@@ -268,7 +268,7 @@ open Classical in
 table, at the honest masked prover on each table's share. The session samples a unit, the statement is under `2^64`
 bytes, every table's regions fit, its setup against `H` is the one at SHA-512, its `Hello` names the keyed coin tree,
 and the honest record fits. -/
-noncomputable def ready (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
+noncomputable def ready (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) : Bool :=
   match setupOf true x with
   | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 64) &&
       decide (∀ st ∈ sts, RegionsFit st) && decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts)) &&
@@ -277,7 +277,7 @@ noncomputable def ready (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool 
 
 open Classical in
 /-- **At SHA-512, `ready` asks no setup agreement.** -/
-theorem ready_sha512 (x : Claims.Msg) :
+theorem ready_sha512 (x : Hash.Msg) :
     ready sha512 x = match setupOf true x with
       | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 64) &&
           decide (∀ st ∈ sts, RegionsFit st) && spec.coinTree.isSome && decide (RecordFitsAt sha512 x spec sts)
@@ -291,16 +291,16 @@ theorem ready_sha512 (x : Claims.Msg) :
 
 /-- **Flock's `δc` at the masked verifier** (`deployZk`'s), at any number of tables: `εZk` where the verifier can
 accept, else `1`. -/
-noncomputable def δc (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if ready H x then εZk x else 1
+noncomputable def δc (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) : ℝ := if ready H x then εZk x else 1
 
 /-- **At one table the honest record fits exactly when `honestPZk`'s does.** -/
-theorem recordFitsAt_one {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem recordFitsAt_one {H : Hash.Msg → Hash.Msg} {x : Hash.Msg} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (h1 : sts.size = 1) : RecordFitsAt H x spec sts ↔ RecordFitsZkAt H x spec sts := by
   unfold RecordFitsAt RecordFitsZkAt
   simp only [traces_one h1]
 
 /-- **Where `readyZk` holds, `ready` holds.** -/
-theorem ready_of_readyZk {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : readyZk H x = true) :
+theorem ready_of_readyZk {H : Hash.Msg → Hash.Msg} {x : Hash.Msg} (h : readyZk H x = true) :
     ready H x = true := by
   unfold readyZk at h
   unfold ready
@@ -312,7 +312,7 @@ theorem ready_of_readyZk {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : r
   · cases h
 
 /-- **Where `readyZk` holds, `δc H` is `δcZk H`.** -/
-theorem δc_eq_δcZk {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : readyZk H x = true) : δc H x = δcZk H x := by
+theorem δc_eq_δcZk {H : Hash.Msg → Hash.Msg} {x : Hash.Msg} (h : readyZk H x = true) : δc H x = δcZk H x := by
   simp [δc, δcZk, h, ready_of_readyZk h]
 
 end ZkTables

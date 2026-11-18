@@ -24,7 +24,7 @@ sampling design's own `P_a`. This file holds what the statement reads and how th
 * `sampleUnits_miss_le`: the deployed sample misses a set `U` of slots with probability at most `P_a(U)` (`one_bound`,
   `strata_bound`);
 * `execSel src samplingDesign pop`: the deployed sample as a sampling design on the verifier's bytes `src`, a sample that runs out of them sampling
-  every unit; `execSel_escape_le`: under A3 it escapes `W` with probability at most `P_a` of `W`'s slots;
+  every unit; `execSel_missProb_le`: under A3 it escapes `W` with probability at most `P_a` of `W`'s slots;
 * `samplingDesignSized_size`: a sample file that decodes to the verifier's sample under a sampling design that is `subset kd`, or whose strata
   hold each slot once and sample `kd` units in all (`SamplingDesignSized`, as a sampling design on strata is, `samplingDesignSized_of_samplingDesignOn`), has `kd`
   units, at any population (`ofJson_shape`, and `UnitSample.ofJson`'s per-stratum count, `ofJson_count`,
@@ -250,7 +250,7 @@ def execSel {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
 
 /-- **The deployed sample escapes `W`** with probability at most its sampling design's `P_a` of `W`'s slots, on a uniform byte source
 (A3), at a sampling design on strata `ns` of the `n` units. -/
-theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
+theorem execSel_missProb_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) {samplingDesign : Flock.Draw.SamplingDesign}
     {ns : List ℕ} {kd : ℕ} (hlaw : SamplingDesignOn samplingDesign ns kd) (hns : ns.sum = n) (W : Finset (Fin n)) :
     (execSel (n := n) t samplingDesign n).missProb W ≤
@@ -258,7 +258,7 @@ theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : 
   classical
   rcases W.eq_empty_or_nonempty with rfl | ⟨b, hb⟩
   · rw [Finset.map_empty, pa_empty_of_samplingDesignOn hlaw, ENNReal.ofReal_one]
-    exact Spot.Sampling.SamplingDesign.escape_le_one _ _
+    exact Verity.SamplingDesign.missProb_le_one _ _
   have hU : W.map Fin.valEmbedding ⊆ Finset.range n := fun u hu => by
     obtain ⟨v, -, rfl⟩ := Finset.mem_map.1 hu
     exact Finset.mem_range.2 v.isLt

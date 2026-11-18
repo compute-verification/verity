@@ -104,16 +104,16 @@ variable (IV : Claims.Verifier Coin) (b : Brings)
 
 /-- Two `simRounds` from the empty transcript, `n` rounds then one, are a run of `pm`: where `f` and `g` read as
 `pm` before and at round `n`. -/
-theorem simRounds_pre_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
-    (f g : List (Claims.Msg × Claims.Out) → Claims.SP Claims.Msg) (n k : ℕ)
-    (pm : List (Claims.Msg × Claims.Msg) → Claims.Msg) (hk : k = 1)
-    (hf : ∀ h : List (Claims.Msg × Claims.Msg), h.length < n → (Claims.SP.eval H ask (f (asRounds h))).1 = pm h)
-    (hg : ∀ h : List (Claims.Msg × Claims.Msg), h.length = n → (Claims.SP.eval H ask (g (asRounds h))).1 = pm h) :
+theorem simRounds_pre_eval (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out)
+    (f g : List (Hash.Msg × Claims.Out) → Claims.SP Hash.Msg) (n k : ℕ)
+    (pm : List (Hash.Msg × Hash.Msg) → Hash.Msg) (hk : k = 1)
+    (hf : ∀ h : List (Hash.Msg × Hash.Msg), h.length < n → (Claims.SP.eval H ask (f (asRounds h))).1 = pm h)
+    (hg : ∀ h : List (Hash.Msg × Hash.Msg), h.length = n → (Claims.SP.eval H ask (g (asRounds h))).1 = pm h) :
     (Claims.SP.eval H ask (Claims.Recursion.simRounds g k
       (Claims.SP.eval H ask (Claims.Recursion.simRounds f n [])).1)).1 = Claims.interact ask pm (n + k) [] := by
   subst hk
   rw [simRounds_interact H ask f n [] (by simp), List.nil_append,
-    show Claims.histOf ([] : List (Claims.Msg × Claims.Out)) = [] from rfl,
+    show Claims.histOf ([] : List (Hash.Msg × Claims.Out)) = [] from rfl,
     Claims.ZKMal.interact_congr_lt ask _ pm n hf n [] (by simp), Claims.ZKMal.interact_add ask pm n 1 []]
   unfold Claims.ZKMal.cont
   split
@@ -137,22 +137,22 @@ theorem simRounds_pre_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Ms
       · exact (Claims.ZKMal.recGoesOn_interact ask pm n [] h0).trans (Bool.eq_false_iff.2 hgo)
     rw [simRounds_stop g 1 _ hs] <;> rfl
 
-theorem simRounds_bind_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
-    (f g : List (Claims.Msg × Claims.Out) → Claims.SP Claims.Msg) (n k : ℕ)
-    (pm : List (Claims.Msg × Claims.Msg) → Claims.Msg) (hk : k = 1)
-    (hf : ∀ h : List (Claims.Msg × Claims.Msg), h.length < n → (Claims.SP.eval H ask (f (asRounds h))).1 = pm h)
-    (hg : ∀ h : List (Claims.Msg × Claims.Msg), h.length = n → (Claims.SP.eval H ask (g (asRounds h))).1 = pm h) :
+theorem simRounds_bind_eval (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out)
+    (f g : List (Hash.Msg × Claims.Out) → Claims.SP Hash.Msg) (n k : ℕ)
+    (pm : List (Hash.Msg × Hash.Msg) → Hash.Msg) (hk : k = 1)
+    (hf : ∀ h : List (Hash.Msg × Hash.Msg), h.length < n → (Claims.SP.eval H ask (f (asRounds h))).1 = pm h)
+    (hg : ∀ h : List (Hash.Msg × Hash.Msg), h.length = n → (Claims.SP.eval H ask (g (asRounds h))).1 = pm h) :
     (Claims.SP.eval H ask (Claims.Recursion.spBind (Claims.Recursion.simRounds f n []) fun ms =>
       Claims.Recursion.simRounds g k ms)).1 = Claims.interact ask pm (n + k) [] := by
   rw [Claims.ZKMal.recSpBind_eq, Claims.ZKMal.spBind_eval]
   exact simRounds_pre_eval H ask f g n k pm hk hf hg
 
-theorem simRounds_tail_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
-    (f g : List (Claims.Msg × Claims.Out) → Claims.SP Claims.Msg)
-    (tail : List (Claims.Msg × Claims.Out) → Claims.SP (List (Claims.Msg × Claims.Out))) (n k : ℕ)
-    (pm : List (Claims.Msg × Claims.Msg) → Claims.Msg) (hk : k = 1)
-    (hf : ∀ h : List (Claims.Msg × Claims.Msg), h.length < n → (Claims.SP.eval H ask (f (asRounds h))).1 = pm h)
-    (hg : ∀ h : List (Claims.Msg × Claims.Msg), h.length = n → (Claims.SP.eval H ask (g (asRounds h))).1 = pm h) :
+theorem simRounds_tail_eval (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out)
+    (f g : List (Hash.Msg × Claims.Out) → Claims.SP Hash.Msg)
+    (tail : List (Hash.Msg × Claims.Out) → Claims.SP (List (Hash.Msg × Claims.Out))) (n k : ℕ)
+    (pm : List (Hash.Msg × Hash.Msg) → Hash.Msg) (hk : k = 1)
+    (hf : ∀ h : List (Hash.Msg × Hash.Msg), h.length < n → (Claims.SP.eval H ask (f (asRounds h))).1 = pm h)
+    (hg : ∀ h : List (Hash.Msg × Hash.Msg), h.length = n → (Claims.SP.eval H ask (g (asRounds h))).1 = pm h) :
     (Claims.SP.eval H ask (Claims.Recursion.spBind (Claims.Recursion.simRounds f n []) fun ms =>
       Claims.Recursion.spBind (Claims.Recursion.simRounds g k ms) tail)).1 =
         (Claims.SP.eval H ask (tail (Claims.interact ask pm (n + k) []))).1 := by
@@ -161,16 +161,16 @@ theorem simRounds_tail_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.M
 
 /-- **The first part's simulated messages**: the first `n` rounds each the commit string to the zero digest under its
 inner salt (`yI`), then the staging message at the commit strings to the zero digest under the staging salts (`yS`). -/
-noncomputable def pmZ (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (n : ℕ) (yI : Fin n → Salt)
-    (yS : Fin (b.nC x) → Salt) (h : List (Claims.Msg × Claims.Msg)) : Claims.Msg :=
+noncomputable def pmZ (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) (n : ℕ) (yI : Fin n → Salt)
+    (yS : Fin (b.nC x) → Salt) (h : List (Hash.Msg × Hash.Msg)) : Hash.Msg :=
   if hh : (asRounds h).length < n then List.ofFn (maskOf (yI ⟨(asRounds h).length, hh⟩)) ++
       saltH H (yI ⟨(asRounds h).length, hh⟩)
   else stageMsg b.hs x (asRounds h) ((List.finRange (b.nC x)).map fun j => List.ofFn (maskOf (yS j)) ++ saltH H (yS j))
 
 /-- **The claim's first-part simulator is a run of `pmZ`**, where the inner protocol's rounds at the inner statement
 are the inner verifier's. -/
-theorem simPre_pm {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursion.Inner Coin W)
-    (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (x : Claims.Msg)
+theorem simPre_pm {W : Type} (ivScope : Hash.Msg → Bool) (I : Claims.Recursion.Inner Coin W)
+    (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out) (x : Hash.Msg)
     (hI : I.V.k (xIOf x) = IV.k (xIOf x)) (c : (simPre (deployRec IV ivScope b) I).C x) :
     (Claims.SP.eval H ask ((simPre (deployRec IV ivScope b) I).prog x c)).1 =
       Claims.interact ask (pmZ b H x (I.V.k (xIOf x)) c.1 (c.2 ⟨0, Nat.zero_lt_one⟩)) (kPre IV x) [] := by
@@ -218,8 +218,8 @@ fires within the first part (`censorSim`), then, while the claim's test (`Recurs
 simulator `SO x j` at the V\* statement its simulated history stages where the stop hasn't fired, and the silent one
 where it has (`stopProgB`), on coins of its own. -/
 noncomputable def simMStop (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (S₀ : Claims.Simulator) (SO : Claims.Msg → ℕ → Claims.Recursion.OSim)
-    (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool) : Claims.Simulator where
+    (S₀ : Claims.Simulator) (SO : Hash.Msg → ℕ → Claims.Recursion.OSim)
+    (s : Hash.Msg → List (Hash.Msg × Hash.Msg) → Bool) : Claims.Simulator where
   C x := (iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s))
     (Claims.ZKMal.censorSim S₀ s (kPre IV)) (fun j x => (SO x j).C)
     (Claims.ZKMal.stopProgB s (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
@@ -234,18 +234,18 @@ stop `s` read at the first part's rounds, where each session is `ZKmalAt` at its
 starts it and where the stop hasn't fired (`hS`), and the witness `wit` gives is in the sessions' relation there at
 every live first part (`hW`: its messages the first part's prover's on the tape `t₀`). The masked reference prover
 with the stop is `ZKmalAt` at `simMStop` with `ε₀ + Σ_{j < nS x} eB j` and `nS x · g`, at the masked run's rounds. -/
-theorem zkAtStop (H : Claims.Msg → Claims.Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
+theorem zkAtStop (H : Hash.Msg → Hash.Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (T₀ : SeqTape) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
-    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
+    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
     (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (RA RF : Claims.Rel Claims.Flock.Wit) (S₀ : Claims.Simulator)
-    (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool)
-    (x : Claims.Msg) (ε₀ g : ℝ) (eB : ℕ → ℝ)
+    (SO : Hash.Msg → ℕ → Claims.Recursion.OSim) (s : Hash.Msg → List (Hash.Msg × Hash.Msg) → Bool)
+    (x : Hash.Msg) (ε₀ g : ℝ) (eB : ℕ → ℝ)
     (h₀ : ZKmalAt H (kPre IV x) (preP IV b pre) (RA x) x (S₀.C x) (S₀.prog x) ε₀ 0)
-    (hS : ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg), u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
+    (hS : ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg), u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
       Claims.ZKMal.fired (s x) (kPre IV x) u = false →
       ZKmalAt H ((nums b.st x j).rounds + 1) PS (RF (xsOf IV b x j u)) (xsOf IV b x j u) (SO x j).C
         ((SO x j).prog (xsOf IV b x j u)) (eB j) g)
-    (hW : ∀ j < nS x, ∀ w, RA x w → ∀ (t₀ : T₀.N × T₀.Ω) (u : List (Claims.Msg × Claims.Msg)),
+    (hW : ∀ j < nS x, ∀ w, RA x w → ∀ (t₀ : T₀.N × T₀.Ω) (u : List (Hash.Msg × Hash.Msg)),
       u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
       (∀ i (hi : i < u.length), i < kPre IV x → u[i].1 = (((preP IV b pre w).next x (u.take i) t₀).eval H).1) →
       Claims.ZKMal.fired (s x) (kPre IV x) u = false →
@@ -271,23 +271,23 @@ theorem zkAtStop (H : Claims.Msg → Claims.Msg) {NB ΩB : Type} [Fintype NB] [N
 
 /-- One session's step of a nested simulator: while the run goes on, under the transcript so far, the session's
 program `pB` at the history so far. -/
-noncomputable def stepS (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
-    (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg)
-    (pB : (j : ℕ) → (x : Claims.Msg) → List (Claims.Msg × Claims.Msg) → (SO x j).C →
-      Claims.SP (List (Claims.Msg × Claims.Out)))
-    (τ : List (Claims.Msg × Claims.Out)) (j : ℕ) (c : (SO x j).C) : List (Claims.Msg × Claims.Out) :=
+noncomputable def stepS (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out)
+    (SO : Hash.Msg → ℕ → Claims.Recursion.OSim) (x : Hash.Msg)
+    (pB : (j : ℕ) → (x : Hash.Msg) → List (Hash.Msg × Hash.Msg) → (SO x j).C →
+      Claims.SP (List (Hash.Msg × Claims.Out)))
+    (τ : List (Hash.Msg × Claims.Out)) (j : ℕ) (c : (SO x j).C) : List (Hash.Msg × Claims.Out) :=
   if Claims.Recursion.goesOn τ then
     τ ++ (Claims.SP.eval H ask (Claims.ZKMal.spUnder (τ.map Prod.fst) (pB j x (Claims.histOf τ) c))).1
   else τ
 
 /-- **The stopped parts' nested simulator's transcript**: the first part's, then one `stepS` per session, on the
 coins `iterCoins` reads off the nested ones, for any sessions' programs `pB` (`simMStop`'s are `stopProgB`'s). -/
-theorem iterSimG_stopped_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (T₀ : SeqTape)
+theorem iterSimG_stopped_eval (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out) (T₀ : SeqTape)
     (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (S₀ : Claims.Simulator)
-    (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool)
-    (x : Claims.Msg)
-    (pB : (n : ℕ) → (x : Claims.Msg) → (Layout.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s) n).U x →
-      (SO x n).C → Claims.SP (List (Claims.Msg × Claims.Out))) :
+    (SO : Hash.Msg → ℕ → Claims.Recursion.OSim) (s : Hash.Msg → List (Hash.Msg × Hash.Msg) → Bool)
+    (x : Hash.Msg)
+    (pB : (n : ℕ) → (x : Hash.Msg) → (Layout.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s) n).U x →
+      (SO x n).C → Claims.SP (List (Hash.Msg × Claims.Out))) :
     ∀ (m : ℕ) (c : (iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s)) S₀
         (fun j x => (SO x j).C) pB (fun _ _ => Claims.Recursion.goesOn) m).C x),
       (Claims.SP.eval H ask ((iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s)) S₀

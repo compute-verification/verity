@@ -34,7 +34,7 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.program import Program
-from verity.commitments.domains import FLOCK_CIRCUIT_BINDING
+from verity.commitments.domains import FLOCK_CIRCUIT_BINDING, HM96_SHA512_ROW_V1
 from verity_flock.input_sets import InputSet
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier.one_stage import (
@@ -45,7 +45,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     verifier as V,
 )
 from verity.commitments import randomness as RND
-from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
+from verity.protocols.proofs.spot.verifier.one_stage.proofs import file_sha512 as sha512_file, verifier_env
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
 import r2_population as R2
@@ -60,14 +60,6 @@ STAND_IN_BINDING = FLOCK_CIRCUIT_BINDING
 STATEMENT_ID = "verity/flock-circuit"
 #: a statement's key under which its circuit file is linked into an archive rather than put there (`archive_put`'s ``link``)
 ARCHIVE_LINK = "archive_link"
-
-
-def sha512_file(path: Path) -> str:
-    h = hashlib.sha512()
-    with open(path, "rb") as f:
-        while chunk := f.read(1 << 24):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def environ(env: dict | None) -> dict:
@@ -183,7 +175,7 @@ def hidden_outputs(meta: dict) -> bool:
 
 def ports(meta: dict, n: int) -> dict[str, tuple[str, int]]:
     """Each port the layout derives: its schema and leaf count (before hidden outputs, each output port a tree of u16 words)."""
-    out = {name: ("hm96-sha512/row/v1", n) for name, *_ in meta["ports"]}
+    out = {name: (HM96_SHA512_ROW_V1, n) for name, *_ in meta["ports"]}
     if not hidden_outputs(meta):
         out.update({name: ("u16", n * words) for name, words in meta["out_ports"]})
     return out

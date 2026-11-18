@@ -66,11 +66,11 @@ inductive ActS where
   | rej
   | coin (c : Coin)
   | decide (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-      (mids : List (Claims.Msg × Coin)) (f : FinalP)
+      (mids : List (Hash.Msg × Coin)) (f : FinalP)
 
 /-- **`nextS`'s step**: a coin where the deployed plain verifier answers one; else, at a statement that sets up, decide
 where `rd` reads the last message and the link message reads; anything else, refuse. -/
-def actS (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : ActS :=
+def actS (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) : ActS :=
   match act false x as cs with
   | .coin c => .coin c
   | _ =>
@@ -85,7 +85,7 @@ def actS (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.
       | _, _, _ => .rej
 
 /-- **The element-level step with the proofs decoded.** -/
-def nextS (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) :
+def nextS (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) :
     Claims.OC Claims.Out :=
   match actS rd x as cs with
   | .rej => .ret .rej
@@ -93,19 +93,19 @@ def nextS (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims
   | .decide s _ _ link c₁ mids f => outOf (decisionSF s x link c₁ mids f)
 
 /-- **A coin is answered as the plain verifier answers it** (`deploySplit`'s `hcoin`). -/
-theorem nextS_coin (rd : Claims.Msg → Option FinalP) (H : Claims.Msg → Claims.Msg) : ∀ (x : Claims.Msg)
-    (as : List Claims.Msg) (cs : List Coin) (c : Coin), act false x as cs = .coin c →
+theorem nextS_coin (rd : Hash.Msg → Option FinalP) (H : Hash.Msg → Hash.Msg) : ∀ (x : Hash.Msg)
+    (as : List Hash.Msg) (cs : List Coin) (c : Coin), act false x as cs = .coin c →
     ((nextS rd x as cs).eval H).1 = .msg c.bytes := by
   intro x as cs c h
   simp only [nextS, actS, h, Claims.OC.eval]
 
-theorem nextS_decide {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextS_decide {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} (h : actS rd x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} (h : actS rd x as cs = .decide s spec sts link c₁ mids f) :
     nextS rd x as cs = outOf (decisionSF s x link c₁ mids f) := by
   simp only [nextS, h]
 
-theorem outOf_acc_iff (H : Claims.Msg → Claims.Msg) (d : Claims.OCV Unit) :
+theorem outOf_acc_iff (H : Hash.Msg → Hash.Msg) (d : Claims.OCV Unit) :
     ((outOf d).eval H).1 = .acc ↔ (d.run.eval H).1 = .ok () := by
   simp only [outOf, Claims.OC.eval_bind, Claims.OC.eval]
   cases hr : (d.run.eval H).1 with
@@ -115,8 +115,8 @@ theorem outOf_acc_iff (H : Claims.Msg → Claims.Msg) (d : Claims.OCV Unit) :
   | error e => exact ⟨fun h => by first | cases h | simp at h, fun h => by cases h⟩
 
 /-- `decisionSF` run against `H`: the setup at `hOf H`, then `decisionAtS` at its session. -/
-theorem decisionSF_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (x : Claims.Msg)
-    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : FinalP) :
+theorem decisionSF_eval (H : Hash.Msg → Hash.Msg) (s : Ins) (x : Hash.Msg)
+    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (f : FinalP) :
     ((decisionSF s x link c₁ mids f).run.eval H).1 =
       (setupWith (Claims.hOf H) s.read >>= fun v => ((decisionAtS s v.1 v.2 x link c₁ mids f).run.eval H).1) := by
   unfold decisionSF
@@ -124,9 +124,9 @@ theorem decisionSF_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (x : Claims.Ms
 
 /-- **A decision of `nextS` accepts exactly where the setup at `hOf H` returns a session at which `decisionAtS`
 returns.** -/
-theorem nextS_acc_iff (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
-    {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalP}
+theorem nextS_acc_iff (H : Hash.Msg → Hash.Msg) {rd : Hash.Msg → Option FinalP} {x : Hash.Msg}
+    {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalP}
     (h : actS rd x as cs = .decide s spec sts link c₁ mids f) :
     ((nextS rd x as cs).eval H).1 = .acc ↔ ∃ spec' sts', setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
       ((decisionAtS s spec' sts' x link c₁ mids f).run.eval H).1 = .ok () := by
@@ -141,9 +141,9 @@ theorem nextS_acc_iff (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Optio
 
 /-- **The verdict on the decoded proofs and the checks after it make a decision of `nextS` accept**, at the session the
 setup at `hOf H` returns, where each proof is shaped for its file and the rep streams' names are distinct. -/
-theorem nextS_acc_of (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
-    {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalP}
+theorem nextS_acc_of (H : Hash.Msg → Hash.Msg) {rd : Hash.Msg → Option FinalP} {x : Hash.Msg}
+    {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalP}
     (h : actS rd x as cs = .decide s spec sts link c₁ mids f) {spec' : SessionSpec} {sts' : Array Stmt}
     (hs : setupWith (Claims.hOf H) s.read = .ok (spec', sts'))
     (hsh : ∀ (k : ℕ) (hk : k < f.ps.size),
@@ -163,7 +163,7 @@ theorem nextS_acc_of (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option
 
 /-- **The reading at the last step**: `rd` reads the last message and the link message reads (`actS` decides), and the
 record value's fields custody reads are there with their shapes (`liveOfJ` at the coin-substituted value is `.ok`). -/
-def ReadOkS (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (ms : List Claims.Msg) (cs : List Coin) : Prop :=
+def ReadOkS (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (ms : List Hash.Msg) (cs : List Coin) : Prop :=
   match actS rd x ms cs with
   | .decide _ spec _ _ c₁ mids f => ∃ lv, liveOfJ spec (coinSubJ spec c₁ mids f.j) = .ok lv
   | _ => False

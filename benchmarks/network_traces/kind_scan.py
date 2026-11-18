@@ -79,7 +79,7 @@ def under(prefix: str, table: Mapping[str, Any]) -> dict[str, Any]:
 
 #: a Program's descriptor (``verity-ir/descriptor/v1``): the circuit, every field of it structure
 DESCRIPTOR = {"**": S}
-#: a registered value's entry (`registered.Registered.entry`)
+#: a registered value's entry (`registered_value.Registered.entry`)
 ENTRY = {"value": S, "root": M, "leaves": S, "words": S, "word_bits": S, "domain": S}
 #: a one-stage registration (`one_stage.docket.record`): the digests and population of the Program and query, the
 #: verifier's sampling design over them, the roots and registered values hiding commitments under domains of

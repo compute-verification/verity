@@ -93,16 +93,16 @@ open Flock FlockDeploy
 
 /-- **The last message of a session's verdict at `x`**: `Final.encode` of its record and proof files, `[]` where it threw
 (`prog`'s). -/
-def finMsg (x : Claims.Msg) : Except String (String × Array ByteArray) → Claims.Msg
+def finMsg (x : Hash.Msg) : Except String (String × Array ByteArray) → Hash.Msg
   | .ok (record, proofs) => Final.encode ⟨x, record, proofs⟩
   | .error _ => []
 
 /-- **Fed `1 + rounds` answers, the honest masked prover sends the session's verdict**: `finMsg` of the session answered
 by the answers `bs` (its sends are at most `1 + rounds`, `sessionPZk_sends`). -/
-theorem honestP_finMsg (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
+theorem honestP_finMsg (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts))
     (hspec : spec.tables.size = sts.size) (hm : ∀ j (hj : j < sts.size), 6 ≤ sts[j].m)
-    (bs : List Claims.Msg) (hl : 1 + rounds true spec sts ≤ bs.length) :
+    (bs : List Hash.Msg) (hl : 1 + rounds true spec sts ≤ bs.length) :
     ((feed (prog x w ω) bs).eval H).1 =
       finMsg x ((sessionPZk (asksS fun k => bs.getD k []) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts)
         (MaskRank.masksOf sts) (traces sts w) ω).go #[]).1 := by
@@ -138,10 +138,10 @@ theorem honestP_finMsg (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Cla
 
 /-- **`honestPR`'s last message is the session's verdict** at a history whose answers `bs`, at least `1 + rounds` of
 them, hold no outer coin `1`: `finMsg` of the session on the mask witness answered by them. -/
-theorem honestPR_finMsg (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
+theorem honestPR_finMsg (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts))
     (hspec : spec.tables.size = sts.size) (hm : ∀ j (hj : j < sts.size), 6 ≤ sts[j].m)
-    (hist : List (Claims.Msg × Claims.Msg)) (bs : List Claims.Msg) (hh : hist.map Prod.snd = bs)
+    (hist : List (Hash.Msg × Hash.Msg)) (bs : List Hash.Msg) (hh : hist.map Prod.snd = bs)
     (hl : 1 + rounds true spec sts ≤ bs.length) (ho : outerHit x bs = false) :
     (((honestPR w).next x hist ω).eval H).1 =
       finMsg x ((sessionPZk (asksS fun k => bs.getD k []) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts)
@@ -163,20 +163,20 @@ open Flock
 theorem ext_go {α : Type} {x y : PS α} (h : ∀ l, x.go l = y.go l) : x = y :=
   ExceptT.ext (StateT.ext fun l => h l)
 
-theorem go_liftV {α : Type} (v : V α) (l : Array Claims.Msg) : (monadLift v : PS α).go l = (v, l) := by
+theorem go_liftV {α : Type} (v : V α) (l : Array Hash.Msg) : (monadLift v : PS α).go l = (v, l) := by
   cases v <;> rfl
 
-theorem go_map' {α β : Type} (f : α → β) (y : PS α) (l : Array Claims.Msg) :
+theorem go_map' {α β : Type} (f : α → β) (y : PS α) (l : Array Hash.Msg) :
     (f <$> y).go l = ((y.go l).1.map f, (y.go l).2) := by
   rw [← bind_pure_comp, go_bind]
   rcases y.go l with ⟨r, l'⟩
   cases r <;> rfl
 
-theorem bind_go_congr {α β : Type} {x y : PS α} {l : Array Claims.Msg} (h : x.go l = y.go l) (g : α → PS β) :
+theorem bind_go_congr {α β : Type} {x y : PS α} {l : Array Hash.Msg} (h : x.go l = y.go l) (g : α → PS β) :
     (x >>= g).go l = (y >>= g).go l := by
   rw [go_bind, go_bind, h]
 
-theorem liftV_bind_go {α β : Type} (v : V α) (f g : α → PS β) (l : Array Claims.Msg)
+theorem liftV_bind_go {α β : Type} (v : V α) (f g : α → PS β) (l : Array Hash.Msg)
     (h : ∀ a, v = .ok a → (f a).go l = (g a).go l) :
     ((monadLift v : PS α) >>= f).go l = ((monadLift v : PS α) >>= g).go l := by
   rw [go_bind, go_bind, go_liftV]
@@ -184,7 +184,7 @@ theorem liftV_bind_go {α β : Type} (v : V α) (f g : α → PS β) (l : Array 
   | error _ => rfl
   | ok a => exact h a rfl
 
-theorem liftV_bind_go_ok {α β : Type} {v : V α} {g : α → PS β} {l l' : Array Claims.Msg} {b : β}
+theorem liftV_bind_go_ok {α β : Type} {v : V α} {g : α → PS β} {l l' : Array Hash.Msg} {b : β}
     (h : ((monadLift v : PS α) >>= g).go l = (.ok b, l')) : ∃ a, v = .ok a ∧ (g a).go l = (.ok b, l') := by
   rw [go_bind, go_liftV] at h
   cases v with
@@ -198,7 +198,7 @@ theorem quiet_map {α β : Type} (f : α → β) {x : V α} {y : PS α} (h : qui
 
 /-- A quiet run mapped, then bound, against the run bound: alike where each value the run returns binds alike. -/
 theorem map_bind_go_quiet {α γ β : Type} (F : α → γ) {x : V α} {y : PS α} (hq : quietS.R x y) (f : γ → PS β)
-    (g : α → PS β) (l : Array Claims.Msg) (h : ∀ a, x = .ok a → (f (F a)).go l = (g a).go l) :
+    (g : α → PS β) (l : Array Hash.Msg) (h : ∀ a, x = .ok a → (f (F a)).go l = (g a).go l) :
     ((F <$> y) >>= f).go l = (y >>= g).go l := by
   rw [go_bind, go_bind, go_map', hq l]
   cases x with
@@ -206,7 +206,7 @@ theorem map_bind_go_quiet {α γ β : Type} (F : α → γ) {x : V α} {y : PS �
   | ok a => exact h a rfl
 
 theorem quiet_bind_ok {α β : Type} {x : V α} {y : PS α} (hq : quietS.R x y) {g : α → PS β}
-    {l l' : Array Claims.Msg} {b : β} (h : (y >>= g).go l = (.ok b, l')) : ∃ a, x = .ok a ∧ (g a).go l = (.ok b, l') := by
+    {l l' : Array Hash.Msg} {b : β} (h : (y >>= g).go l = (.ok b, l')) : ∃ a, x = .ok a ∧ (g a).go l = (.ok b, l') := by
   rw [go_bind, hq l] at h
   cases x with
   | error _ => cases h
@@ -214,7 +214,7 @@ theorem quiet_bind_ok {α β : Type} {x : V α} {y : PS α} (hq : quietS.R x y) 
 
 /-- **The link message through `asksCut`**: recorded, then answered by round `0`'s coin unless the session stops
 there. -/
-theorem finAsksCut_link_go (coin : ℕ → ℕ → F128) (n : ℕ) (a b : Array ByteArray) (l : Array Claims.Msg) :
+theorem finAsksCut_link_go (coin : ℕ → ℕ → F128) (n : ℕ) (a b : Array ByteArray) (l : Array Hash.Msg) :
     ((asksCut coin n).link a b).go l =
       (if n ≤ l.size then .error "past the openings" else .ok (coin l.size),
         l.push (FlockDeploy.linkBody a.toList b.toList)) := by
@@ -227,11 +227,11 @@ theorem finAsksCut_link_go (coin : ℕ → ℕ → F128) (n : ℕ) (a b : Array 
 /-- **Two loops in step**: where each body runs as the other's from every state the invariant `I` holds at, and the
 right body's next state keeps it, the loops run alike. -/
 theorem forIn_go_eq {α β : Type} (xs : List α) (f g : α → β → PS (ForInStep β))
-    (I : ℕ → β → Array Claims.Msg → Prop)
+    (I : ℕ → β → Array Hash.Msg → Prop)
     (hstep : ∀ k (hk : k < xs.length) b l, I k b l → (f xs[k] b).go l = (g xs[k] b).go l)
     (hinv : ∀ k (hk : k < xs.length) b l b' l', I k b l → (g xs[k] b).go l = (.ok (.yield b'), l') →
       I (k + 1) b' l')
-    (b : β) (l : Array Claims.Msg) (h0 : I 0 b l) : (forIn xs b f).go l = (forIn xs b g).go l := by
+    (b : β) (l : Array Hash.Msg) (h0 : I 0 b l) : (forIn xs b f).go l = (forIn xs b g).go l := by
   induction xs generalizing I b l with
   | nil => rfl
   | cons a as ih =>

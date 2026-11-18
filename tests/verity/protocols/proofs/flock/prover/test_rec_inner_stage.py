@@ -55,7 +55,7 @@ def _window(src: Path, n: int, part: dict, d: Path) -> bytes:
     d.mkdir()
     (d / "m0-private.bin").write_bytes(body[:-len(public)])
     (d / "m0-public.bin").write_bytes(public)
-    mem = {"k": 0, "template": next(iter(meta["program_digests"])), "n": n, "base": 0,
+    mem = {"k": 0, "template": next(iter(meta["program_digests"])), "n": n, "base": 0, "own": 0,
            "ports": [list(p[:2]) for p in meta["ports"]], "input_ports": meta["input_ports"],
            "out_ports": [list(p) for p in meta["out_ports"]], "frame_v3": json.loads(head)["frame_v3"],
            "public_sha512": hashlib.sha512(public).hexdigest(),

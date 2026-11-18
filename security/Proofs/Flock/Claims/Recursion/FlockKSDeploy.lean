@@ -53,7 +53,7 @@ namespace FlockDeploy
 open Claims.Recursion
 
 /-- **The empty message is never accepted**: it is neither a coin request nor a last message. -/
-theorem act_snoc_nil (zk : Bool) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) :
+theorem act_snoc_nil (zk : Bool) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) :
     act zk x (as ++ [[]]) cs = .rej := by
   unfold act
   rcases setupOf zk x with _ | ⟨s, spec, sts⟩
@@ -61,7 +61,7 @@ theorem act_snoc_nil (zk : Bool) (x : Claims.Msg) (as : List Claims.Msg) (cs : L
   · rw [List.getLast?_concat]
     rfl
 
-theorem refusable_V (H : Claims.Msg → Claims.Msg) (zk : Bool) : Refusable H (V zk) := fun x =>
+theorem refusable_V (H : Hash.Msg → Hash.Msg) (zk : Bool) : Refusable H (V zk) := fun x =>
   ⟨[], fun as cs => by
     show ((next zk x (as ++ [[]]) cs).eval H).1 ≠ .acc
     rw [next_rej H (act_snoc_nil zk x as cs)]
@@ -69,7 +69,7 @@ theorem refusable_V (H : Claims.Msg → Claims.Msg) (zk : Bool) : Refusable H (V
 
 /-- **A decision reads no last coin**: past a first coin, where the last message asks for no coin, the step is the
 same at any last coin. -/
-theorem act_cons_snoc (zk : Bool) (x : Claims.Msg) (as : List Claims.Msg) (c₀ : Coin) (cs : List Coin) (c c' : Coin)
+theorem act_cons_snoc (zk : Bool) (x : Hash.Msg) (as : List Hash.Msg) (c₀ : Coin) (cs : List Coin) (c c' : Coin)
     (ha : ∀ t, as.getLast? ≠ some (0 :: t)) :
     act zk x as (c₀ :: cs ++ [c']) = act zk x as (c₀ :: cs ++ [c]) := by
   unfold act
@@ -103,8 +103,8 @@ theorem act_cons_snoc (zk : Bool) (x : Claims.Msg) (as : List Claims.Msg) (c₀ 
         cases heq
 
 /-- **A coin request is not a decision.** -/
-theorem act_snoc_zero {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {c : Coin}
-    {t : Claims.Msg} (ha : as.getLast? = some (0 :: t)) :
+theorem act_snoc_zero {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {c : Coin}
+    {t : Hash.Msg} (ha : as.getLast? = some (0 :: t)) :
     act zk x as (cs ++ [c]) = .rej ∨ act zk x as (cs ++ [c]) = .coin c := by
   unfold act
   rcases setupOf zk x with _ | ⟨s, spec, sts⟩
@@ -113,7 +113,7 @@ theorem act_snoc_zero {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : 
     rw [ha, List.getLast?_concat]
     exact Or.inr rfl
 
-theorem decideFree_V (H : Claims.Msg → Claims.Msg) (zk : Bool) : DecideFree H (V zk) := by
+theorem decideFree_V (H : Hash.Msg → Hash.Msg) (zk : Bool) : DecideFree H (V zk) := by
   intro x as cs c c' hl hacc
   show (next zk x as (cs ++ [c'])).eval H = (next zk x as (cs ++ [c])).eval H
   change ((next zk x as (cs ++ [c])).eval H).1 = .acc at hacc
@@ -145,8 +145,8 @@ inner deployment whose verifier is `V zk`, with its code facts `AccLast`, `Decid
 deployed verifier. -/
 theorem KSFlock_of_flockKS_V {Col T : Type} [DecidableEq Col] [Zero Col] (zk : Bool) (D : Deploy Coin)
     (DI DO : Claims.Flock.Deploy Coin Col T) (hVI : DI.V = V zk) (opening : Opening)
-    (decC : Claims.Msg → Claims.Msg → Coin) (hF : Claims.Flock.KS sha512 DO) (NI : Claims.Msg → ℕ)
-    (Ok : Claims.Msg → Col → Prop) (hNI : ∀ x, (NI x : ℝ) ≤ DI.N₀ x) (hεI : ∀ x, 0 ≤ DI.εtable x)
+    (decC : Hash.Msg → Hash.Msg → Coin) (hF : Claims.Flock.KS sha512 DO) (NI : Hash.Msg → ℕ)
+    (Ok : Hash.Msg → Col → Prop) (hNI : ∀ x, (NI x : ℝ) ≤ DI.N₀ x) (hεI : ∀ x, 0 ≤ DI.εtable x)
     (hVkI : ∀ x, 0 < DI.V.k x) (hKI : ∀ x, 0 < DI.cap x)
     (hkI : ∀ x, (8 ≤ DI.k x ∧ Claims.Flock.Splits DI x) ∨ Claims.Flock.NoAcc sha512 DI.V x)
     (hone : ∀ x, (∃ s, DI.parse x = some s ∧ s.tables = 1) ∨ Claims.Flock.NoAcc sha512 DI.V x) (hz : ∀ x, Ok x 0)

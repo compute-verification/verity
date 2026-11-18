@@ -19,7 +19,6 @@ composes it as serving's stager does and holds its statement's form to `one_stag
 from __future__ import annotations
 
 import re
-from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -27,27 +26,22 @@ import pytest
 from verity_flock.class_statement import UnitStager
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.commitments.periods import wiring as WI
 from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity.circuits.ops.boolean import versions as BB
 from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
 from verity_vllm.definitions.registry import boolean_sparse_mla as BM
-from verity_vllm.definitions.registry import boolean_sparse_mla_split as BX
 from verity_vllm.definitions.registry import hopper
 from verity_vllm.definitions.registry import sparse_mla as M
-from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
 
 from verity.commitments import randomness as RND
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity_flock.class_statement import UnitStager
 
 from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
 from verity.circuits.defs import bind
 from verity.circuits.codec import descriptor_id
@@ -62,6 +56,9 @@ GLM = {"T": 130, "NH": 8, "DR": 64, "DV": 512, "BN": 64, "SCALE": 0.0625}
 SERVED = ('SparseMla_v1{T=130,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},'
           'SCALE={"f64":"0x1.0000000000000p-4"}}')
 
+
+#: `chain_rows.pieces`' refusal of a port reading several templates' trees
+NAME = "a wired port reads one template's tree"
 
 def row(S: dict = TOY, **over) -> str:
     return descriptor_id(bind(M.SparseMla, **{**S, **over}, **FA3))
@@ -189,115 +186,11 @@ def test_a_chain_row_holds_its_first_block_its_later_blocks_and_its_end():
         CH.positions(SRW.template(block(16)), spec_statics(row()))
 
 
-def test_a_chain_row_also_holds_each_key_block_as_its_scores_and_values_units():
-    """Past its whole key blocks' units the row holds, at each width of `serving_templates.values_widths`, the units
-    `sparse_mla.head_chain` cuts it into at ``cols``: each key block's scores unit and its values units and the head's end on
-    each column block, and the writer of each column block of each key block's key rows, which every head's scores and values
-    units read; a row of 16 output columns has no such width.  Read and wired so, each unit's Definition on its rows computes
-    its committed outputs, and the ends' outputs, column block by column block, are the served row."""
-    st = {x: TOY[x] for x in ("DR", "DV", "BN", "SCALE")}
-    first, later = {"NVIS": 8, "FIRST": True}, {"NVIS": 16, "FIRST": False}
-    def values(c):
-        return [descriptor_id(bind(M.SparseMlaHeadValues, **x, BN=16, G=16, DOT=FA3["DOT"], C=c)) for x in (first, later)]
-
-    def writers(c):
-        return [descriptor_id(bind(M.SparseMlaHeadKeysWire, NVIS=n, W=16, C=c)) for n in (8, 16)]
-
-    tmpls = [descriptor_id(bind(M.SparseMlaHeadScoresCols, **first, **st, DOT=FA3["DOT"], G=16)),
-             descriptor_id(bind(M.SparseMlaHeadScoresCols, **later, **st, DOT=FA3["DOT"], G=16)), *values(0), end(NARROW),
-             *writers(0), *values(1), *writers(1), *writers(2)]
-    assert SRW.unit_templates(row())[4:] == tuple(zip([tmpls[j] for j in (0, 2, 7, 5, 9, 11, 1, 3, 8, 6, 10, 12, 4)],
-                                                      (2, 2, 2, 1, 1, 1, 4, 4, 4, 2, 2, 2, 4)))
-    assert [CH.kind(SRW.template(t)) for t in tmpls] == ["scores", "scores", "values", "values", "end", "keys", "keys", "values",
-                                                         "values", "keys", "keys", "keys", "keys"]
-    assert [CR.reads(SRW.template(t)) for t in tmpls] == ["inline", "slots", *("inline",) * 11]
-    assert {t: CH.positions(SRW.template(t), TOY) for t in tmpls} == dict(zip(tmpls, (
-        [4], [5, 6], [7], [9, 11], [13, 14], [0], [1, 2], [8], [10, 12], [3], [4, 5], [6], [7, 8])))
-    assert [CH.places(TOY)[j].reads for j in (13, 14)] == [(("l", None, "o1", 6), ("o", None, "o0", 11 + c)) for c in range(2)]
-    s = Served(n=2)
-    ms = members(s, tmpls, dict.fromkeys(tmpls, 16))
-    assert {t: sum(m.n for m in ms if m.template == t) for t in tmpls} == dict(zip(tmpls, (4, 8, 4, 8, 8, 2, 4, 4, 8, 2, 4, 2, 4)))
-    assert all(m.wired_trees == (CH.kind(SRW.template(m.template)) not in ("scores", "values")) for m in ms)
-    got = read(s, ms, tmpls)
-    ws = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
-    CH.check_held(ms, [g for g, _e in got])
-    for m, (g, _e) in zip(ms, got):
-        stager(m.template).reference_check(g["rows"], g["outs"])
-    (e,) = [m for m in ms if m.template == tmpls[4]]
-    assert ws[e.port("o0")].reshape(-1).tolist() == s.y.tolist()
-    with pytest.raises(ValueError, match=re.escape("block 1 (visit order)'s scores are the output of a scores template the "
-                                                   "partition does not name")):
-        members(s, [tmpls[0], *tmpls[2:]], dict.fromkeys(tmpls, 16))
-
-
-def test_each_later_block_and_end_is_wired_to_the_block_before_it():
-    ms = members(Served(n=2))
-    assert [(m.template, m.n) for m in ms] == [(F8, 2), (F8, 2), (B16, 3), (B16, 3), (B16, 2), (E, 4)]
-    unit = units(ms, TMPLS, rows=2)
-    at = {u: key for key, u in unit.items()}
-    for m in ms:
-        if m.template == F8:
-            assert m.wired == ()
-            continue
-        prev = tuple(unit[(*at[m.base + i][:2], at[m.base + i][2] - 1)] for i in range(m.n))
-        if m.template == B16:
-            assert m.wired == (("in3", "o0", prev), ("in4", "o1", prev), ("in5", "o2", prev))
-        else:
-            assert m.wired == (("in0", "o1", prev), ("in1", "o2", prev))
-    CH.validate(ms)
-
-
-def test_the_units_read_the_twin_s_states_whose_end_is_the_served_row():
-    """Every wired row is its writer's output row, each unit's ports are its block's keys and the twin's states, and each
-    unit's Definition on its rows (as Flock's stager parses them) computes its committed outputs."""
-    s = Served(n=2)
-    ms = members(s)
-    got = read(s, ms)
-    CH.check_held(ms, [g for g, _e in got])
-    unit, S = units(ms, TMPLS, rows=2), TOY
-    at = {u: key for key, u in unit.items()}
-    vs = M.visits(S["T"], S["BN"])
-
-    def state(p, h, j):
-        return [np.asarray(x[h], dtype=np.uint32).reshape(-1).view("<u2").tolist() for x in s.states[p][j]]
-
-    for m, (g, _entries) in zip(ms, got):
-        stager(m.template).reference_check(g["rows"], g["outs"])
-        for i in range(m.n):
-            p, h, j = at[m.base + i]
-            if j == len(vs):
-                assert [g["rows"][x][i].tolist() for x in ("in0", "in1")] == state(p, h, j - 1)[1:]
-                assert g["outs"]["o0"][i].tolist() == s.y.reshape(2, S["NH"], -1)[p, h].tolist()
-                continue
-            qn, qr = s.ops[3 * p].reshape(S["NH"], -1)[h], s.ops[3 * p + 1].reshape(S["NH"], -1)[h]
-            kv = s.ops[3 * p + 2].reshape(S["T"], -1)[vs[j][0]:vs[j][1]]
-            assert [g["rows"][x][i].tolist() for x in ("in0", "in1", "in2")] == [qn.tolist(), qr.tolist(), kv.reshape(-1).tolist()]
-            if j:
-                assert [g["rows"][x][i].tolist() for x in ("in3", "in4", "in5")] == state(p, h, j - 1)
-            assert [g["outs"][x][i].tolist() for x in ("o0", "o1", "o2")] == state(p, h, j)
-    for t, o in ((F8, "o0"), (B16, "o2"), (E, "o0")):
-        g = next(g for m, (g, _e) in zip(ms, got) if m.template == t)
-        with pytest.raises(AssertionError, match="outputs are not the IR reference's"):     # an output its unit does not compute
-            stager(t).reference_check(g["rows"], {**g["outs"], o: g["outs"][o] ^ np.uint16(1)})
-
-
-def test_a_row_s_statics_as_the_record_spells_them_read_as_a_binding_s():
-    """A TP window's rows carry their statics as the record spells them (`query.manifest.format.spec_statics`: every value a
-    string, SCALE ``{"f64":"<hex>"}``), and read as the binding's."""
-    s = Served(n=2)
-    want = read(s, members(s))
-    s.rows = [(rid, pi, r, {**d, "statics": MF.spec_statics(r["spec"])}) for rid, pi, r, d in s.rows]
-    assert s.rows[0][3]["statics"]["SCALE"] == '{"f64":"0x1.0000000000000p-4"}'
-    got = read(s, members(s))
-    assert [{x: {q: a.tolist() for q, a in g[x].items()} for x in ("rows", "outs")} for g, _e in got] == \
-        [{x: {q: a.tolist() for q, a in g[x].items()} for x in ("rows", "outs")} for g, _e in want]
-
-
 def test_a_row_whose_served_words_are_not_its_chain_s_end_is_refused():
     s = Served()
     s.y[3] ^= np.uint16(1)
     with pytest.raises(ValueError, match="the twin's end of its 3 blocks is not the row's served out words"):
-        read(s, members(s))
+        read(s, SRW.members(TMPLS, [s.rows] * len(TMPLS), None, PER_CHUNK))
 
 
 def test_a_partition_without_a_block_s_template_is_refused():
@@ -309,49 +202,6 @@ def test_a_partition_without_a_block_s_template_is_refused():
     assert all(m.wired == () for m in members(s, [F8]))
 
 
-def test_a_row_at_the_served_statics_reads_and_wires_its_32_units():
-    """One row of GLM-5.3's statics at T = 130, its 32 units (8 2-key first blocks, 16 64-key blocks, 8 ends), each block's
-    state and each end wired to the block before it and every wired row its writer's output; the window itself (its
-    population program at these statics lowers the 64-key block) is the circuit-check bindings'."""
-    s = Served(SERVED, n=1, seed=16)
-    tmpls = [block(2, GLM), block(None, GLM), end(GLM)]
-    ms = members(s, tmpls, dict.fromkeys(tmpls, 256))
-    assert [(m.template, m.n) for m in ms] == [(tmpls[0], 8), (tmpls[1], 16), (tmpls[2], 8)]
-    unit = units(ms, tmpls, GLM)
-    assert ms[2].wired == tuple((f"in{g}", o, tuple(unit[(0, h, 2)] for h in range(8))) for g, o in ((0, "o1"), (1, "o2")))
-    got = read(s, ms, tmpls)
-    words = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
-    CH.check_held(ms, [g for g, _e in got])
-    assert words[ms[2].port("o0")].reshape(-1).tolist() == s.y.tolist()
-
-
-@pytest.mark.slow
-def test_a_window_of_one_row_commits_and_its_wires_hold():
-    s = Served()
-    w = window(s)
-    got = read(s, w.members)
-    c = CS.commit(w, [g for g, _e in got])
-    publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
-    assert WI.check(w.members, publics) == {}
-    j = next(j for j, m in enumerate(w.members) if m.template == B16 and m.n > 1)
-    m = w.members[j]
-    (p, o, ws), *rest = m.wired
-
-    def rewired(wired):
-        return [replace(x, wired=wired) if i == j else x for i, x in enumerate(w.members)]
-
-    assert list(WI.check(rewired(((p, o, ws[1:] + ws[:1]), *rest)), publics)) == [m.key]       # another unit's running max
-    swapped = tuple((q, "o1" if oo == "o2" else "o2" if oo == "o1" else oo, x) for q, oo, x in m.wired)
-    assert list(WI.check(rewired(swapped), publics)) == [m.key]                     # the lanes read as O and O as the lanes
-    names = [q for q, _ in m.all_rows]
-    body = bytearray(publics[m.key])
-    body[names.index("in5") * WI.BC_BYTES] ^= 1
-    assert list(WI.check(w.members, {**publics, m.key: bytes(body)})) == [m.key]
-    bad = [dict(g, rows={**g["rows"], "in5": g["rows"]["in5"] ^ np.uint16(1)}) if i == j else g for i, (g, _e) in enumerate(got)]
-    with pytest.raises(ValueError, match=re.escape(f"{m.key}: a in5 row is not the o2 row")):
-        CS.commit(w, bad)
-
-
 def composed(t: str, d: Path) -> UnitStager:
     """Template ``t``'s statement as serving's stager composes it (its rows `chunk_rows.unit_rows`, its table reads laid out
     as `chunk_rows.statement` says, bound as ``compose_circuit.py --template`` binds it), its circuit ``d/circuit.txt``."""
@@ -361,31 +211,8 @@ def composed(t: str, d: Path) -> UnitStager:
                       bind={"partition": "0" * 128, "program": "0" * 128}, **CR.statement(tp))
 
 
-@pytest.mark.slow
-def test_a_whole_block_s_boolean_body_is_staged_in_the_form_verify_zk_takes(tmp_path):
-    """`verify --zk` takes a statement whose unit returns its own outputs and refuses one whose last stage returns them
-    (`one_stage.proofs.ks_form_why`, the mirror of Lean's `KsScope`).  A whole key block's word template is staged with its EX2
-    reads in lookup slots, the refused form.  Its Boolean body (``SparseMlaHeadBlock_v2``), and a split part's of a whole
-    block (``SparseMlaSplitPart_v2`` at T = BN), have no table to read: each is staged flat, the form it takes, and the
-    block's circuit returns the words serving commits for it.  Minutes, all of them composing the three circuits: the form
-    is the composed circuit's (its META ``out_net``), which nothing short of composing it reads."""
-    s = Served(row(NARROW))
-    tmpls = [block(8, NARROW), block(None, NARROW, boolean=True), end(NARROW)]
-    ms = members(s, tmpls, dict.fromkeys(tmpls, 2))
-    m, (g, _e) = next((m, x) for m, x in zip(ms, read(s, ms, tmpls)) if m.template == tmpls[1])
-    part = descriptor_id(bind(BX.SparseMlaSplitPartV2, T=NARROW["BN"], **{x: NARROW[x] for x in ("DR", "DV", "BN", "SCALE")},
-                              DOT=BOOL["DOT"], INV=BOOL["INV"]))
-    rng = np.random.default_rng(5)
-    part_rows = {q: ((rng.standard_normal((2, bits // 16)).astype(np.float32) * np.float32(0.5)).view(np.uint32) >> 16).astype(np.uint16)
-                 for q, _schema, bits, _ps in CR.unit_rows(SRW.template(part))[0]}
-    for name, t, rows, units, want in (("block", tmpls[1], g["rows"], range(m.base, m.base + m.n), g["outs"]),
-                                       ("part", part, part_rows, range(2), {})):
-        st = composed(t, tmp_path / name)
-        assert (st.meta["lookups"], st.meta.get("out_net", "unit")) == ({}, "unit"), name
-        got = st.stage(rows, tmp_path / name, indices=units)
-        assert all(np.array_equal(got["outs"][q], a) for q, a in want.items()), name
-        assert PF.ks_form_why(tmp_path / name / "circuit.txt", tmp_path / name / "pub.bin") is None, name
-    word = composed(block(None, NARROW), tmp_path / "word")
-    assert "ex2" in word.meta["lookups"] and word.meta["out_net"].startswith("stage")
-    assert PF.ks_form_why(tmp_path / "word" / "circuit.txt", tmp_path / "word" / "pub.bin") == (
-        f"refused: {PF.SCOPE_WHY}: a statement form the soundness proof does not cover")
+def test_a_later_block_reading_its_first_and_its_later_blocks_is_refused_by_name():
+    """A later block's carried state is its first block's output at the second block and a later block's after it: one
+    port reading two templates' trees, which `chain_rows.pieces` refuses by name."""
+    with pytest.raises(ValueError, match=NAME):
+        members(Served(n=2))

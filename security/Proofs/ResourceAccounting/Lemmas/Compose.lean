@@ -124,7 +124,7 @@ is the weaker of the two collision claims at a fixed cost (`StrictBirthday` impl
 expected-time finders such as an extractor. -/
 def BindingOfECR : Prop :=
   ∀ {J Q Pos V : Type} [Nonempty V] (C B : Type) [Fintype C] [Fintype B] (S m s : ℕ)
-    (pf : SampledLayer C B S m s J Q Pos V) (w : Fin S) (L : Finset Pos) (H : Claims.Msg → Claims.Msg)
+    (pf : SampledLayer C B S m s J Q Pos V) (w : Fin S) (L : Finset Pos) (H : Hash.Msg → Hash.Msg)
     (F : Claims.Finder) (κ δ' : ℝ), (∀ j k, pf.pos w j k ∈ L) → 0 < δ' →
     prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => ∃ ℓ ∈ L, pf.Forked ℓ p.1 p.2) ≤
       F.Pr H + κ →

@@ -628,7 +628,7 @@ def requestThen (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : A
 
 /-- SHA-512, the compiled one, as the message-to-message hash `Claims.Finder.Pr` and `ecr/sha-512`
 (`Claims.ExpectedCR`) read. -/
-def sha512Msg (m : Claims.Msg) : Claims.Msg := (Flock.Sha512.hash ⟨m.toArray⟩).data.toList
+def sha512Msg (m : Hash.Msg) : Hash.Msg := (Flock.Sha512.hash ⟨m.toArray⟩).data.toList
 
 open Classical in
 /-- **The committed file a digest the parameters hold names**: the first of the committed files `F` whose SHA-512 is

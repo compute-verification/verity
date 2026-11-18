@@ -143,7 +143,7 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
     """One window at TP N with ``served`` and the Commit on every rank (`pouw_h1_ranks.install`), ``edit`` (a `NEGATIVES`
     kind) on rank ``--edit-tp`` when given, held to core's ROOTS1 steps (`pouw_h1_gpu.core_tie`) once released. Its
     Program is declared at its first call and kept in ``program`` for the next window."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
     from tests.protocols import pouw_h1_gpu as GPU
@@ -198,7 +198,7 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
 def serve(a: argparse.Namespace) -> dict[str, Any]:
     import torch
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 
     from tests.engine.int8_exact_gpu import pin, scratch_checkpoints
     from tests.protocols.pouw_h1_gpu import (

@@ -204,7 +204,7 @@ def test_a_tied_case_names_its_values_parameters_and_row_formats_as_the_lean_rea
 
 
 def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, stub_case):
-    """SPOT refuses one-stage v1's case, so its case is v2's with the form, never v1's."""
+    """SPOT refuses one-stage v1's case, so its case is v2's at one level, never v1's."""
     zk = {"blobs": ["b"], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),
           "params": {"proofs": {"circuit": "cc" * 64, "registered": None}}}
     monkeypatch.setattr(a5, "case_v2", lambda case, sessions, **k: zk)
@@ -212,8 +212,8 @@ def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, s
     assert json.loads((tmp_path / "case-v2.json").read_text()) == zk
     got = json.loads((tmp_path / "case-sampled.json").read_text())
     assert got == a5.case_with_levels(zk)
-    assert got["params"]["form"] == "one-stage" and got["params"]["proofs"] == zk["params"]["proofs"]
-    assert json.loads(bytes.fromhex(got["evidence"])) == {"form": "one-stage", "proofs": {}}
+    assert got["params"]["levels"] == 1 and got["params"]["proofs"] == zk["params"]["proofs"]
+    assert json.loads(bytes.fromhex(got["evidence"])) == {"levels": 1, "proofs": {}}
     assert not (tmp_path / "case-v2-error.txt").exists()
 
 

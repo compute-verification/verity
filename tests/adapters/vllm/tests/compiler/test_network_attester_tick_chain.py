@@ -15,7 +15,7 @@ import pytest
 from tests.compiler import test_network_attester_replay_chain as CT
 from tests.compiler import test_network_attester_tick_step as TC
 from tests.pipeline import test_tick_step as TT
-from verity.protocols.proofs.spot.verifier.one_stage import produced
+from verity.protocols.proofs.spot.prover import produced as PP
 from verity.commitments.gates.bits import ands
 from verity_vllm.compiler import replay_chain as RC
 from verity_vllm.compiler import replay_step as RS
@@ -359,9 +359,9 @@ def test_the_chain_refuses_a_window_that_starts_at_another_clock() -> None:
         RC.commit_window(CT.PROGRAM, restarted[1].rows, restarted[1].win, Sc, CT.REGISTRATION, carry=v0)
     n = len(v0.state.salts[-1])
     salts = [v0.state.salts[-1]] + [bytes([k + 1]) * n for k in range(len(restarted[1].rows) - 1)]
-    state = produced.commit(CT.PROGRAM, RC.VALUE, [RC.row(RC.encode(r, Sc)) for r in restarted[1].rows],
+    state = PP.commit(CT.PROGRAM, RC.VALUE, [RC.row(RC.encode(r, Sc)) for r in restarted[1].rows],
                             CT.REGISTRATION, salts, RC.WORD_BITS, RC.SCHEMA)
-    window = produced.commit(CT.PROGRAM, RC.WINDOW, [v0.window.rows[-1], RC.row(RC.encode_window(restarted[1].win, Sc))],
+    window = PP.commit(CT.PROGRAM, RC.WINDOW, [v0.window.rows[-1], RC.row(RC.encode_window(restarted[1].win, Sc))],
                              CT.REGISTRATION, [v0.window.salts[-1], bytes(n)], RC.WORD_BITS, RC.SCHEMA)
     forged = RC.Committed(state, window)
     assert bytes(forged.state.bcs[0]) != bytes(v0.state.bcs[-1]) and bytes(forged.window.bcs[0]) == bytes(v0.window.bcs[-1])

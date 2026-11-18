@@ -290,34 +290,34 @@ variable (IV : Claims.Verifier Coin) (b : Brings)
 /-! ## The first part's leaves at the pinned key -/
 
 /-- hm96's commit string `b ‖ c` as a leaf. -/
-def hmLeaf (p : XorBytes × Claims.Msg) : Claims.Msg := List.ofFn p.1 ++ p.2
+def hmLeaf (p : XorBytes × Hash.Msg) : Hash.Msg := List.ofFn p.1 ++ p.2
 
 /-- The pinned key's salt hash, `c = H(p_salt ‖ y)` (`Deploy.saltHash` at `deployRec`). -/
-def saltH (H : Claims.Msg → Claims.Msg) (y : Salt) : Claims.Msg :=
+def saltH (H : Hash.Msg → Hash.Msg) (y : Salt) : Hash.Msg :=
   H (Claims.toMsg Hm96.Default512.saltPrefix ++ List.ofFn y)
 
 /-- The pinned key's salt mask as 64 bytes under XOR (`Deploy.mask` at `deployRec`). -/
 def maskX (y : Salt) : XorBytes := maskOf y
 
 /-- **The staging message** at the history's first `n` rounds and the commit strings `ℓ`. -/
-noncomputable def stgOf (x : Claims.Msg) (n : ℕ) (h : List (Claims.Msg × Claims.Msg))
-    (ℓ : Fin (b.nC x) → Claims.Msg) : Claims.Msg :=
+noncomputable def stgOf (x : Hash.Msg) (n : ℕ) (h : List (Hash.Msg × Hash.Msg))
+    (ℓ : Fin (b.nC x) → Hash.Msg) : Hash.Msg :=
   stageMsg b.hs x (asRounds (h.take n)) (List.ofFn ℓ)
 
-theorem zero_leaf (H : Claims.Msg → Claims.Msg) (y : Salt) :
+theorem zero_leaf (H : Hash.Msg → Hash.Msg) (y : Salt) :
     hmLeaf (0 + maskX y, saltH H y) = List.ofFn (maskOf y) ++ saltH H y := by
   rw [zero_add]
   rfl
 
 /-! ## `Sim`'s first part is a first part of leaves of the zero digest -/
 
-theorem simRounds_stop (f : List (Claims.Msg × Claims.Out) → Claims.SP Claims.Msg) :
-    ∀ (n : ℕ) (ms : List (Claims.Msg × Claims.Out)), Claims.Recursion.goesOn ms = false →
+theorem simRounds_stop (f : List (Hash.Msg × Claims.Out) → Claims.SP Hash.Msg) :
+    ∀ (n : ℕ) (ms : List (Hash.Msg × Claims.Out)), Claims.Recursion.goesOn ms = false →
       Claims.Recursion.simRounds f n ms = .ret ms
   | 0, _, _ => rfl
   | _ + 1, _, h => by simp only [Claims.Recursion.simRounds, h, Bool.false_eq_true, ↓reduceIte]
 
-theorem recGoesOn_of_msgs {ms : List (Claims.Msg × Claims.Out)} (h : ∀ p ∈ ms, Claims.ZKMal.isMsg p.2 = true) :
+theorem recGoesOn_of_msgs {ms : List (Hash.Msg × Claims.Out)} (h : ∀ p ∈ ms, Claims.ZKMal.isMsg p.2 = true) :
     Claims.Recursion.goesOn ms = true := by
   unfold Claims.Recursion.goesOn
   cases hl : ms.getLast? with
@@ -329,9 +329,9 @@ theorem recGoesOn_of_msgs {ms : List (Claims.Msg × Claims.Out)} (h : ∀ p ∈ 
 
 /-- **`simRounds` after a transcript of messages is a run**: of the prover whose message at a history is `f`'s at
 the transcript it reads as. -/
-theorem simRounds_interact (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
-    (f : List (Claims.Msg × Claims.Out) → Claims.SP Claims.Msg) :
-    ∀ (n : ℕ) (ms : List (Claims.Msg × Claims.Out)), (∀ p ∈ ms, Claims.ZKMal.isMsg p.2 = true) →
+theorem simRounds_interact (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out)
+    (f : List (Hash.Msg × Claims.Out) → Claims.SP Hash.Msg) :
+    ∀ (n : ℕ) (ms : List (Hash.Msg × Claims.Out)), (∀ p ∈ ms, Claims.ZKMal.isMsg p.2 = true) →
       (Claims.SP.eval H ask (Claims.Recursion.simRounds f n ms)).1 =
         ms ++ Claims.interact ask (fun h => (Claims.SP.eval H ask (f (asRounds h))).1) n
           (Claims.histOf ms)
@@ -360,15 +360,15 @@ theorem simRounds_interact (H : Claims.Msg → Claims.Msg) (ask : List Claims.Ms
         rw [simRounds_stop f n _ (by simp [Claims.Recursion.goesOn])]
         simp [Claims.SP.eval]
 
-theorem zeroCommit_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims.Msg)
-    (ask : List Claims.Msg → Claims.Out) (y : Salt) :
+theorem zeroCommit_eval (ivScope : Hash.Msg → Bool) (H : Hash.Msg → Hash.Msg)
+    (ask : List Hash.Msg → Claims.Out) (y : Salt) :
     (Claims.SP.eval H ask (Claims.Recursion.spOf ((deployRec IV ivScope b).zeroCommit y))).1 =
       List.ofFn (maskOf y) ++ saltH H y := by
   simp only [Claims.Recursion.Deploy.zeroCommit, Claims.Recursion.spOf, Claims.SP.eval, deployRec, saltH]
   rfl
 
-theorem zeroCommits_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims.Msg)
-    (ask : List Claims.Msg → Claims.Out) :
+theorem zeroCommits_eval (ivScope : Hash.Msg → Bool) (H : Hash.Msg → Hash.Msg)
+    (ask : List Hash.Msg → Claims.Out) :
     ∀ ys : List (Fin (deployRec IV ivScope b).saltLen → UInt8),
       (Claims.SP.eval H ask ((deployRec IV ivScope b).zeroCommits ys)).1 =
         ys.map fun y => List.ofFn (maskOf y) ++ saltH H y
@@ -378,14 +378,14 @@ theorem zeroCommits_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Cla
       zeroCommits_eval ivScope H ask ys, Claims.SP.eval]
     exact congrArg (fun a => a :: _) (zeroCommit_eval IV b ivScope H ask y)
 
-theorem stage_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
-    (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (cs : List Claims.Msg) :
+theorem stage_eval (ivScope : Hash.Msg → Bool) (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out)
+    (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) (cs : List Hash.Msg) :
     (Claims.SP.eval H ask (Claims.Recursion.spOf ((deployRec IV ivScope b).stage x ms cs))).1 =
       stageMsg b.hs x ms cs :=
   rfl
 
 /-- **`Sim`'s inner rounds are leaves of the zero digest** under its inner salts. -/
-theorem simInner_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
+theorem simInner_eval (ivScope : Hash.Msg → Bool) (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out)
     (n : ℕ) (salts : Fin n → Salt) :
     (Claims.SP.eval H ask (Claims.Recursion.simInner (deployRec IV ivScope b) n salts)).1 =
       Claims.interact ask (leafPm hmLeaf n (fun _ => 0) maskX (saltH H) salts) n [] := by
@@ -401,8 +401,8 @@ theorem simInner_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims
 
 /-- **`Sim`'s staging round after `n` rounds of messages** is the staging message at commit strings to the zero
 digest under its staging salts. -/
-theorem simStage_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
-    (x : Claims.Msg) (n : ℕ) (salts : Fin (kS x) → Fin (b.nC x) → Salt) (τ : List (Claims.Msg × Claims.Out))
+theorem simStage_eval (ivScope : Hash.Msg → Bool) (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out)
+    (x : Hash.Msg) (n : ℕ) (salts : Fin (kS x) → Fin (b.nC x) → Salt) (τ : List (Hash.Msg × Claims.Out))
     (hm : ∀ p ∈ τ, Claims.ZKMal.isMsg p.2 = true) (hl : τ.length = n) :
     (Claims.SP.eval H ask (Claims.Recursion.simStage (deployRec IV ivScope b) x n salts τ)).1 =
       τ ++ Claims.interact ask (fun h => stgOf b x n h fun j =>
@@ -436,8 +436,8 @@ theorem simStage_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims
 
 /-- **`Sim`'s first part is a first part of leaves of the zero digest**: its inner rounds' commit strings under its
 inner salts, then its staging round's under its staging salts. -/
-theorem simPre_eval {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursion.Inner Coin W)
-    (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (x : Claims.Msg)
+theorem simPre_eval {W : Type} (ivScope : Hash.Msg → Bool) (I : Claims.Recursion.Inner Coin W)
+    (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out) (x : Hash.Msg)
     (c : (simPre (deployRec IV ivScope b) I).C x) :
     (Claims.SP.eval H ask ((simPre (deployRec IV ivScope b) I).prog x c)).1 =
       prefixRun hmLeaf maskX (saltH H) ask (I.V.k (xIOf x)) (b.nC x) (fun _ => 0) (fun _ _ => 0)
@@ -467,8 +467,8 @@ theorem simPre_eval {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recur
 def asX (d : Fin 64 → UInt8) : XorBytes := d
 
 /-- **Commit strings, then `k`**: `k` at the commit strings' hm96 leaves. -/
-theorem commitThen_eval (H : Claims.Msg → Claims.Msg) (k : List Claims.Msg → Claims.OC Claims.Msg) :
-    ∀ (ps : List ((Fin 64 → UInt8) × Salt)) (cs : List Claims.Msg),
+theorem commitThen_eval (H : Hash.Msg → Hash.Msg) (k : List Hash.Msg → Claims.OC Hash.Msg) :
+    ∀ (ps : List ((Fin 64 → UInt8) × Salt)) (cs : List Hash.Msg),
       ((commitThen k ps cs).eval H).1 =
         ((k (cs ++ ps.map fun p => hmLeaf (asX p.1 + maskX p.2, saltH H p.2))).eval H).1
   | [], cs => by simp [commitThen]
@@ -481,10 +481,10 @@ theorem commitThen_eval (H : Claims.Msg → Claims.Msg) (k : List Claims.Msg →
 /-- **The first part's prover is a first part of leaves**: where its inner messages are hm96 commit strings of the
 digests `dI` reads under the inner salts `yI` (`hPI`), its staged values' digests are `dS`'s (`hdig`) and its staging
 salts are `yS` (`hsalt`). -/
-theorem preP_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) {T : Type}
-    (pre : T → b.ref.TI × (ℕ → Salt)) (w : Claims.Flock.Wit) (x : Claims.Msg) (t : T)
-    (yI : Fin (IV.k (xIOf x)) → Salt) (yS : Fin (b.nC x) → Salt) (dI : List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
-    (dS : List (Claims.Msg × Claims.Msg) → Fin (b.nC x) → Fin 64 → UInt8)
+theorem preP_eval (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out) {T : Type}
+    (pre : T → b.ref.TI × (ℕ → Salt)) (w : Claims.Flock.Wit) (x : Hash.Msg) (t : T)
+    (yI : Fin (IV.k (xIOf x)) → Salt) (yS : Fin (b.nC x) → Salt) (dI : List (Hash.Msg × Hash.Msg) → Fin 64 → UInt8)
+    (dS : List (Hash.Msg × Hash.Msg) → Fin (b.nC x) → Fin 64 → UInt8)
     (hPI : ∀ h (hh : h.length < IV.k (xIOf x)), (((b.ref.PI w).next (xIOf x) h (pre t).1).eval H).1 =
       List.ofFn (fun i => dI h i ^^^ maskOf (yI ⟨h.length, hh⟩) i) ++ saltH H (yI ⟨h.length, hh⟩))
     (hdig : ∀ h j (hj : j < b.nC x), (b.ref.digests w (pre t).1 h).getD j 0 = dS h ⟨j, hj⟩)
@@ -515,7 +515,7 @@ theorem preP_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Cla
         (leafPm hmLeaf (IV.k (xIOf x)) (fun h => asX (dI h)) maskX (saltH H) yI) (IV.k (xIOf x)) [])).length =
         IV.k (xIOf x) := by
       rw [Claims.ZKMal.histOf_length, Claims.ZKMal.goesOn_length hg]
-    have e : ∀ h : List (Claims.Msg × Claims.Msg), h.length = IV.k (xIOf x) →
+    have e : ∀ h : List (Hash.Msg × Hash.Msg), h.length = IV.k (xIOf x) →
         (((preP IV b pre w).next x h t).eval H).1 = ((commitThen (fun cs => .ret (stageMsg b.hs x
           (asRounds (h.take (IV.k (xIOf x)))) cs)) ((List.range (b.nC x)).map fun j =>
             ((b.ref.digests w (pre t).1 (h.take (IV.k (xIOf x)))).getD j 0, (pre t).2 j)) []).eval H).1 := by
@@ -536,13 +536,13 @@ first part's tape splits evenly (`split`, every fiber of one size) into other ra
 staging salts; the inner prover's message at each inner round is hm96's commit string of a digest `dI` reads (the
 witness, the other randomness and the history) under that round's inner salt (`hPI`, `RefParts.PI`'s commit form);
 the staged values' digests read no staging salt (`hdig`); and the staging salts are the tape's (`hsalt`). -/
-theorem zkAt_pre (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
+theorem zkAt_pre (H : Hash.Msg → Hash.Msg) (ivScope : Hash.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : SeqTape) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
-    (x : Claims.Msg) (hI : I.V.k (xIOf x) = IV.k (xIOf x)) {R : Type} [Fintype R] [Nonempty R]
+    (x : Hash.Msg) (hI : I.V.k (xIOf x) = IV.k (xIOf x)) {R : Type} [Fintype R] [Nonempty R]
     (split : T₀.N × T₀.Ω → (R × (Fin (IV.k (xIOf x)) → Salt)) × (Fin (b.nC x) → Salt)) {m : ℕ}
     (hsplit : ∀ p, Nat.card {t // split t = p} = m)
-    (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
-    (dS : Claims.Flock.Wit → R × (Fin (IV.k (xIOf x)) → Salt) → List (Claims.Msg × Claims.Msg) →
+    (dI : Claims.Flock.Wit → R → List (Hash.Msg × Hash.Msg) → Fin 64 → UInt8)
+    (dS : Claims.Flock.Wit → R × (Fin (IV.k (xIOf x)) → Salt) → List (Hash.Msg × Hash.Msg) →
       Fin (b.nC x) → Fin 64 → UInt8)
     (hPI : ∀ w t h (hh : h.length < IV.k (xIOf x)), (((b.ref.PI w).next (xIOf x) h (pre t).1).eval H).1 =
       List.ofFn (fun i => dI w (split t).1.1 h i ^^^ maskOf ((split t).1.2 ⟨h.length, hh⟩) i) ++
@@ -597,12 +597,12 @@ theorem zkAt_pre (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
 other randomness, the inner salts and the staging salts; each inner message is hm96's commit string of a digest the
 witness, the other randomness and the history give, under that round's inner salt (`RefParts.PI`'s commit form); the
 staged values' digests read no staging salt; and the staging salts are the tape's. -/
-def PreCommits (H : Claims.Msg → Claims.Msg) (T₀ : SeqTape) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
-    (x : Claims.Msg) : Prop :=
+def PreCommits (H : Hash.Msg → Hash.Msg) (T₀ : SeqTape) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
+    (x : Hash.Msg) : Prop :=
   ∃ (R : Type) (_ : Fintype R) (_ : Nonempty R)
     (split : T₀.N × T₀.Ω → (R × (Fin (IV.k (xIOf x)) → Salt)) × (Fin (b.nC x) → Salt)) (m : ℕ)
-    (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
-    (dS : Claims.Flock.Wit → R × (Fin (IV.k (xIOf x)) → Salt) → List (Claims.Msg × Claims.Msg) →
+    (dI : Claims.Flock.Wit → R → List (Hash.Msg × Hash.Msg) → Fin 64 → UInt8)
+    (dS : Claims.Flock.Wit → R × (Fin (IV.k (xIOf x)) → Salt) → List (Hash.Msg × Hash.Msg) →
       Fin (b.nC x) → Fin 64 → UInt8),
     (∀ p, Nat.card {t // split t = p} = m) ∧
     (∀ w t h (hh : h.length < IV.k (xIOf x)), (((b.ref.PI w).next (xIOf x) h (pre t).1).eval H).1 =
@@ -613,9 +613,9 @@ def PreCommits (H : Claims.Msg → Claims.Msg) (T₀ : SeqTape) (pre : T₀.N ×
 
 /-- **`zkBoundM_of`'s first part (`h₀`)**, where the inner protocol's rounds are the inner verifier's and the first
 part commits by hm96 under fresh salts at every statement. -/
-theorem h0_of_commits (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
-    (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : Claims.Msg → SeqTape)
-    (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
+theorem h0_of_commits (H : Hash.Msg → Hash.Msg) (ivScope : Hash.Msg → Bool)
+    (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : Hash.Msg → SeqTape)
+    (pre : (x : Hash.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
     (hI : ∀ x, I.V.k (xIOf x) = IV.k (xIOf x)) (hpre : ∀ x, PreCommits IV b H (T₀ x) (pre x) x) :
     ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
       Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ → ∀ x,
@@ -628,28 +628,28 @@ theorem h0_of_commits (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → 
 
 /-- **The recursion's zero knowledge at the masked record, from the masked session's models and the first part's
 commit strings**: `zkBoundM_of_tables` with its first part (`h₀`) from `PreCommits` at every statement. -/
-theorem zkBoundM_of_commits (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Msg → Bool)
+theorem zkBoundM_of_commits (H : Hash.Msg → Hash.Msg) (ivScope : Hash.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
-    (T₀ : Claims.Msg → SeqTape) (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
-    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
+    (T₀ : Hash.Msg → SeqTape) (pre : (x : Hash.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
+    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
     (G : Proto Claims.Flock.Wit) [Fintype G.Coin] (Mp : ∀ x, G.Nonce → G.TPreModel x)
-    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Claims.Msg → ℕ)
-    (CB : ℕ → Claims.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)] [∀ t x j, Nonempty (CB t x j)]
+    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Hash.Msg → ℕ)
+    (CB : ℕ → Hash.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)] [∀ t x j, Nonempty (CB t x j)]
     (hI : ∀ x, I.V.k (xIOf x) = IV.k (xIOf x)) (hpre : ∀ x, PreCommits IV b H (T₀ x) (pre x) x)
     (hkey : ∀ δ₁ : ℝ≥0, Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ →
       Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁)
     (hK : ∀ x, G.K x = VO.k x - 1) (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TMsgLink H (Claims.Flock.R (deployZkRec relO).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
     (hC : G.Binding H)
-    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
       u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
       nL (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).1 ∧
         nB (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).2)
-    (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+    (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
       u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
         Nonempty (CB t x j ≃ ((G.withSim Mc).simulatorE t (t * 3 ^ t)).C (xsOf IV b x j u)))
     (hW : ∀ x w, Claims.Recursion.R (deployRec IV ivScope b) I x w → ∀ j < nS x, ∀ (t₀ : (T₀ x).N × (T₀ x).Ω)
-      (u : List (Claims.Msg × Claims.Msg)), u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
+      (u : List (Hash.Msg × Hash.Msg)), u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
         Claims.Flock.R (deployZkRec relO).parse (xsOf IV b x j u) (wit w (pre x t₀) (u.take (IV.k (xIOf x))) j)) :
     ZKBoundM IV b H ivScope I T₀ G.Nonce G.Rand pre wit G.prover
       fun t => soOf ((G.withSim Mc).simulatorE t (t * 3 ^ t)) (CB t) :=
@@ -662,9 +662,9 @@ theorem zkBoundM_of_commits (H : Claims.Msg → Claims.Msg) (ivScope : Claims.Ms
 witness, the other randomness `R` and the history) under that round's salt, on a tape of `R` and one salt per round;
 the staged values' digests (`dg`) and the outer witnesses (`wo`) read that tape. -/
 def RefParts.commit (R : Type) [Nonempty R]
-    (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
-    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8))
-    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit) : RefParts where
+    (dI : Claims.Flock.Wit → R → List (Hash.Msg × Hash.Msg) → Fin 64 → UInt8)
+    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → List (Fin 64 → UInt8))
+    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit) : RefParts where
   TI := R × (ℕ → Salt)
   PI w := ⟨fun _ h ρ => .query (Claims.toMsg Hm96.Default512.saltPrefix ++ List.ofFn (ρ.2 h.length)) fun c =>
     .ret (List.ofFn (fun i => dI w ρ.1 h i ^^^ maskOf (ρ.2 h.length) i) ++ c)⟩
@@ -673,14 +673,14 @@ def RefParts.commit (R : Type) [Nonempty R]
 
 /-- What the deployment brings, its inner prover the one that commits. -/
 abbrev Brings.commit (b : Brings) (R : Type) [Nonempty R]
-    (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
-    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8))
-    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit) : Brings :=
+    (dI : Claims.Flock.Wit → R → List (Hash.Msg × Hash.Msg) → Fin 64 → UInt8)
+    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → List (Fin 64 → UInt8))
+    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit) : Brings :=
   { b with ref := RefParts.commit R dI dg wo }
 
 /-- **The first part's tape at `x`** for an inner prover that commits: the other randomness and one salt per inner
 round, then one staging salt per commit string. -/
-def preTape (R : Type) [Fintype R] [Nonempty R] (x : Claims.Msg) : SeqTape where
+def preTape (R : Type) [Fintype R] [Nonempty R] (x : Hash.Msg) : SeqTape where
   N := R × (Fin (IV.k (xIOf x)) → Salt)
   Ω := Fin (b.nC x) → Salt
 
@@ -688,17 +688,17 @@ def preTape (R : Type) [Fintype R] [Nonempty R] (x : Claims.Msg) : SeqTape where
 def saltsOn {n : ℕ} (y : Fin n → Salt) (i : ℕ) : Salt := if h : i < n then y ⟨i, h⟩ else fun _ => 0
 
 /-- **The first part's tape at `x` read as the inner prover's tape and the staging salts.** -/
-def preOf (R : Type) [Fintype R] [Nonempty R] (x : Claims.Msg) :
+def preOf (R : Type) [Fintype R] [Nonempty R] (x : Hash.Msg) :
     (preTape IV b R x).N × (preTape IV b R x).Ω → (R × (ℕ → Salt)) × (ℕ → Salt) :=
   fun t => ((t.1.1, saltsOn t.1.2), saltsOn t.2)
 
 /-- **The first part commits by hm96 under fresh salts** at the inner prover that commits, on `x`'s first-part tape:
 the tape is the split itself, so each fiber is one point. -/
-theorem preCommits_commit (H : Claims.Msg → Claims.Msg) (R : Type) [Fintype R] [Nonempty R]
-    (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
-    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8))
-    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
-    (x : Claims.Msg) : PreCommits IV (b.commit R dI dg wo) H (preTape IV b R x) (preOf IV b R x) x := by
+theorem preCommits_commit (H : Hash.Msg → Hash.Msg) (R : Type) [Fintype R] [Nonempty R]
+    (dI : Claims.Flock.Wit → R → List (Hash.Msg × Hash.Msg) → Fin 64 → UInt8)
+    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → List (Fin 64 → UInt8))
+    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
+    (x : Hash.Msg) : PreCommits IV (b.commit R dI dg wo) H (preTape IV b R x) (preOf IV b R x) x := by
   refine ⟨R, inferInstance, inferInstance, id, 1, dI, fun w p h j => (dg w (p.1, saltsOn p.2) h).getD j 0,
     fun p => ?_, fun w t h hh => ?_, fun _ _ _ _ _ => rfl, fun t j hj => dite_eq_left hj⟩
   · exact Nat.card_eq_one_iff_unique.2 ⟨⟨fun a a' => Subtype.ext (a.2.trans a'.2.symm)⟩, ⟨⟨p, rfl⟩⟩⟩

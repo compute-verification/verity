@@ -35,6 +35,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
+from verity.commitments import salt_file as SF
 from verity.commitments.periods import rows as CS
 
 from verity_vllm.commit import step_rows
@@ -229,15 +230,16 @@ def served_weights(ck: Any) -> dict[str, np.ndarray]:
     return out
 
 
-def weights_tree(served: dict[str, np.ndarray]) -> dict[str, Any]:
-    """The weights registration's tree over the served tensors, as a committer registers them under rows-sha512."""
-    geo, wk = bytes(range(64)), bytes(range(64))
-    names, roots = [], []
+def weights_tree(served: dict[str, np.ndarray]) -> tuple[dict[str, Any], dict[str, bytes]]:
+    """The weights registration's tree over the served tensors, as a committer registers them under rows-sha512, and its salts."""
+    geo = bytes(range(64))
+    names, roots, salts = [], [], {}
     for i, (_key, (name, shape, bits)) in enumerate(fields()):
         raw: np.ndarray = served[name.removeprefix(WRAP)].view(np.uint8)
         names.append([name.removeprefix(WRAP), DTYPES[bits], list(shape), int(raw.size)])
-        roots.append(step_rows.tensor_root(geo, i, names[-1], raw, wk))
-    return step_rows.weights_tree(geo, names, roots, wk)
+        salts[names[-1][0]] = step_rows.fresh_tensor_salts(int(raw.size))
+        roots.append(step_rows.tensor_root(geo, i, names[-1], raw, salts[names[-1][0]]))
+    return step_rows.weights_tree(geo, names, roots), salts
 
 
 def partition() -> dict[str, Any]:
@@ -280,9 +282,9 @@ def commit(root: Path, *, seed: int = 23) -> dict[str, Any]:
     logits = (rng.standard_normal((M, E)) * 2).astype(np.float32).view(np.uint32)
     values = execute(inst, logits, _bf16(rng, M, H), {WRAP + name: a for name, a in served.items()})
     com, rc = commit_steps({0: planes(inst, values)}, run_id="served-experts")
-    tree = weights_tree(served)
+    tree, wsalts = weights_tree(served)
     rc.weight_registration = {"root": tree["root"]}
-    com.weights_tree, com.model = tree, torch.nn.Module()
+    com.weights_tree, com.weights_salts, com.model = tree, wsalts, torch.nn.Module()
 
     row_dir = root / "row"
     (row_dir / "build_request").mkdir(parents=True)
@@ -301,6 +303,7 @@ def commit(root: Path, *, seed: int = 23) -> dict[str, Any]:
     SD.dump(com, rc, p / "store")
     (p / "weights" / "extra").mkdir(parents=True)
     (p / "weights" / "tree.json").write_text(json.dumps(tree | {"extra": {}}))
+    SF.write(SF.beside(p / "weights" / "tree.json"), wsalts)
     bmap = B.build_binding_map(com._layouts, rc.steps, rc.run_root, inst["digest"], request_id=REQUEST, rank=0, chunk=com.chunk,
                                weight_registration=rc.weight_registration, request_rows={0: [(REQUEST, 0, M)]})
     (out / "binding_map_p1.json").write_text(json.dumps(bmap, default=str))

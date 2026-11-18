@@ -5,7 +5,6 @@ Definition before anything is timed; nothing here changes a committed format, an
 
 | Directory or file | What it holds |
 |---|---|
-| `s8_linear/` | the exact W8A8 linear that `ScaledMmS8Coordinate_v1` defines, three backends under one gate; `run.sh "run.py"` holds every cell to the twin, on an H200 |
 | `exactlin/` | the int8-exact linear as two Triton kernels, the vLLM integration's (`verity_vllm.engine.int8_fused`: the exact quantizer, and the GEMM with the exact epilogue and per-card configs; no copy of a kernel or a table here), gated bit-exact against `int8_exact` (`kgate.py`) and the int8 Definitions' replay evaluators (`replay.py`), timed against stock vLLM int8 at kernel level (`kbench.py`, `ksweep.py`), with the served y checked bit for bit by the vLLM integration's `int8_exact_gpu`, the per-step kernel table (`steps.py`) and the share of a served step PoUW doesn't credit (`share.py`) |
 | `numabind/` | the NUMA binding every timed kernel job runs its command under: the leased GPU's node, within the run's own CPUs, or unbound, and why (`numabind.py`, a script with no import outside the standard library); its suite holds the plan on a fake sysfs |
 | `wide_leaf/` | Flock's wide level-0 commitment leaf (`--wide-leaf`) against today's leaf on one card: `run.sh` builds the prover with the steady harness's setup, holds `statement.toml`'s statement to its pin and times the two leaves interleaved through `server_rate.py`, one prover, each step under the steady harness's ten checks (`wleaf.py`); it writes GPU-seconds a statement and the proof's bytes, each wide over today's. Not in either number: the CPU's witness sets the pace, so a ratio is of that card and its slot's cores; what share of a monitoring period's proving such statements carry; and each step's acceptance is under the provisional unit cover |
@@ -23,7 +22,7 @@ uv run tools/check/suites.py benchmarks/kernels/DIR
 
 Each GPU script's header gives its command and the hardware it needs: CUDA's nvcc (12.8 or later), a GPU taken through
 `gpu-lease`, and an `OUT` directory for what it writes. Some build on a CPU node first, into a ship the GPU run unpacks:
-those builds (`s8_linear`) source `ship.sh`, the one statement of a
+those builds source `ship.sh`, the one statement of a
 ship's toolkit, cubin flags and layout (`toolchain.txt`, `source.txt`, `MANIFEST.sha256`). nvcc's PTX can depend on its
 heap layout, on the lengths of the paths it reads and on how long its passes take, so they build with address randomization
 off, from a copy of their sources and with TMPDIR at paths of one length, and with a counted clock inside nvcc's front end
@@ -50,6 +49,3 @@ word to another directory.
 |---|---|---|
 | `ship.sh` | sourced: the ship's toolkit, cubin flags and layout | `verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh` |
 | `numabind/numabind.py` | run as a script, from the tree or from a copy sent with a job | `benchmarks/pouw/pearl_c_sm120/card.sh`; `benchmarks/pouw/pearl_c_vllm/served_step.sh` |
-| `s8_linear/sass_gate.py` | loaded by file, which fixes its path, nothing more | `tests/benchmarks/pouw/test_mma_gate.py` (declared in `tests/benchmarks/pouw/pyproject.toml`) |
-| `exactlin/kbench.py` | `timed`, `copies_for`, `nvml`, `ITEM_MS` | `benchmarks/kernels/s8_linear` |
-| `exactlin/kgate.py` | `MODELS` | `benchmarks/kernels/s8_linear` |

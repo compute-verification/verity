@@ -338,7 +338,7 @@ when each table's pads' weight is at most its deployed pads' domain and only lev
 roots' weights (`Claims.Flock.roomW`) of twice the deployed weight: each table's weight pays for its events
 (`cZW_sum_le_tableWeight`), round `0` holds at most level 0's, the room and level 0's are every table's but `2`
 (`Claims.Flock.roomW_add`), and `2·k < 8·N₀/e + 2`. -/
-theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
+theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Hash.Msg) {spec : SessionSpec}
     (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
@@ -390,7 +390,7 @@ when each table's pads' weight is at most its deployed pads' domain and only lev
 roots' weights (`Claims.Flock.roomW`) of twice the deployed weight: each table's weight pays for its events
 (`cZW_sum_le_tableWeight`), round `0` holds at most level 0's, the room and level 0's are every table's but `2`
 (`Claims.Flock.roomW_add`), and `2·k < 8·N₀/e + 2`. -/
-theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
+theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Hash.Msg) {spec : SessionSpec}
     (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
@@ -414,7 +414,7 @@ statement whose tables `st j` are Flock ZK's, when each table's pads' weight is 
 only level 0's event of a table is at round `0` and the slack fits the room (`zk_fork_room`,
 `Claims.Flock.slackEscW_fitsForkR`). -/
 theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
+    (x : Hash.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
@@ -442,7 +442,7 @@ statement whose tables `st j` are Flock ZK's, when each table's pads' weight is 
 only level 0's event of a table is at round `0` and the slack fits the room (`zk_fork_room`,
 `Claims.Flock.slackEscW_fitsForkR`). -/
 theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
+    (x : Hash.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,

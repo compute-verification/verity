@@ -266,7 +266,7 @@ theorem card_admissible_le {δ : ℝ≥0∞} {K : ℕ} (hK : L.miss (K + 1) < δ
     intro B hB
     have hle : B.card ≤ K := by
       by_contra hc
-      exact absurd ((mem_filter.1 hB).2.trans (L.escape_le_miss (by omega))) (not_le.2 hK)
+      exact absurd ((mem_filter.1 hB).2.trans (L.missProb_le_miss (by omega))) (not_le.2 hK)
     exact mem_biUnion.2 ⟨B.card, mem_range.2 (by omega), mem_powersetCard.2 ⟨subset_univ _, rfl⟩⟩
   refine (card_le_card hsub).trans (card_biUnion_le.trans (le_of_eq (sum_congr rfl fun j _ => ?_)))
   rw [card_powersetCard, card_univ, Fintype.card_fin]

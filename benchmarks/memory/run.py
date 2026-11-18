@@ -131,8 +131,8 @@ REFERENCES = HERE / "references.json"
 #: a block of PoUB's store, in bytes
 BLOCK_BYTES = 4096
 #: the files of a run this command reads
-#: the verifier's one-card node a --local run writes into its records before the session starts (its `--node`): the mark
-#: of a --local run, read where the run died before its out/memory.json
+#: the one-card node a --local run's verifier states from its figures, written into the run's records before the session
+#: starts: the mark of a --local run, read where the run died before its out/memory.json
 NODE_FILE = "out/local-node.json"
 FIGURES_FILE = "out/local-figures.json"
 RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.json", "out/memory.json", NODE_FILE]
@@ -696,14 +696,11 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
            "NODE_ARGS": " ".join(filter(None, [NODE_ARGS, f"--model-dir {shlex.quote(str(snap))}",
                                                leaf, given.get("NODE_ARGS")])),
            "SESSION_NODE": kit.session_node(name, "serving", kind=kind),
-           "VERIFIER_ARGS": " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--node",
-                                                   shlex.quote(f"{held}/{NODE_FILE}"), "--hbm-bytes", str(hbm_bytes)]))}
+           "VERIFIER_ARGS": " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--hbm-bytes", str(hbm_bytes)]))}
     if shutil.which("gpu-lease") is None and not LEASE_DIR.is_dir():
         env.setdefault("GPU_LEASE_DIR", str(work / "gpu-lease"))
     if sheet:
         env["FIGURES"] = f"{held}/{FIGURES_FILE}"
-    else:
-        env["VERIFIER_ARGS"] = " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--hbm-bytes", str(hbm_bytes)]))
     print(f"memory: --local serves {ROLE} on {name} with a {arena} GiB arena of its {hbm_bytes / 2 ** 30:.0f} GiB, the "
           f"verifier's node {f'one card of {sheet}' if sheet else f'{sku} alone, with no node file: no share'}; its "
           "records go to the directory on the next line, which `verity bench "

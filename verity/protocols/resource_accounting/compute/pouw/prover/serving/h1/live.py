@@ -45,7 +45,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import live_read
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 
 SLOTS, REQUESTS = LR.SLOTS, LR.REQUESTS
 

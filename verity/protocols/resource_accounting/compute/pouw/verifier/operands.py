@@ -21,6 +21,7 @@ from typing import Any
 
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 KEY = "activations"
 #: what an execution phase's operands don't establish yet, named wherever a record reports them (`stated`)
@@ -30,14 +31,14 @@ GAPS = (("the A rows are not proved to be the served activations x (an x row is 
 
 
 def commit(program: str, context: str, rows: Mapping[str, Sequence[Sequence[int]]],
-           salts: Mapping[str, Sequence[bytes]] | None = None) -> dict[str, G.Registered]:
+           salts: Mapping[str, Sequence[bytes]] | None = None) -> dict[str, RV.Registered]:
     """Each operand's rows (u16 words, the reading port's row) committed as a per-execution-phase value of ``program`` under the
     execution phase's ``context``; fresh salts unless ``salts`` (by value)."""
-    return {v: G.Registered.commit(program, v, rs, (salts or {}).get(v), schema=G.SCHEMA_V2, window=context)
+    return {v: RV.Registered.commit(program, v, rs, (salts or {}).get(v), schema=G.SCHEMA_V2, window=context)
             for v, rs in sorted(rows.items())}
 
 
-def block(program: str, values: Mapping[str, G.Registered]) -> dict[str, Any]:
+def block(program: str, values: Mapping[str, RV.Registered]) -> dict[str, Any]:
     """What the registration's execution phase names of the operands (its ``activations``)."""
     return {"program": program, "values": {v: r.entry() for v, r in sorted(values.items())}}
 
@@ -62,7 +63,7 @@ def held(window: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
         if set(b) != {"program", "values"} or not values:
             raise ValueError(f"{KEY} is {{program, values}}, at least one value")
         for v, e in values.items():
-            want = G.domain(program, v, e["words"], e["leaves"], e.get(G.WIDTH_KEY, G.WORD_BITS), window=context)
+            want = RV.domain(program, v, e["words"], e["leaves"], e.get(RV.WIDTH_KEY, RV.WORD_BITS), window=context)
             if e.get("value") != v or not isinstance(e.get("root"), str) or e.get("domain") != want.domain_id.hex():
                 raise ValueError(f"the entry of {v!r} names another value, no root, or a domain other than the one "
                                  f"{program!r}, its rows and the window's context make")

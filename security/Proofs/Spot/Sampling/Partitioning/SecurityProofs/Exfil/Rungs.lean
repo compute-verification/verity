@@ -46,7 +46,7 @@ theorem miss_le_of_certifies {n b J : ℕ} {L : SamplingDesign n} {δ ℓ : ℝ}
   have h1 : (B.card : ℝ) * b ≤ H := by simpa [Finset.sum_const, nsmul_eq_mul] using hH B hlt.le
   have h2 : B.card ≤ K := by
     by_contra h
-    exact lt_irrefl _ ((hlt.trans_le (L.escape_le_miss (K := K + 1) (by omega))).trans hK)
+    exact lt_irrefl _ ((hlt.trans_le (L.missProb_le_miss (K := K + 1) (by omega))).trans hK)
   have h3 : (b : ℝ) * J ≤ (B.card : ℝ) * b := by
     rw [mul_comm]
     exact mul_le_mul_of_nonneg_right (by exact_mod_cast hB) (Nat.cast_nonneg b)

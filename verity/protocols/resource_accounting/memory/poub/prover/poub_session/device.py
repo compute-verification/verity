@@ -1468,6 +1468,10 @@ class GpuBackend:
                 "dropped_hbm": sum(d for d, h in zip(dropped, s.on_host) if not h),
                 "dropped_host": sum(d for d, h in zip(dropped, s.on_host) if h)}
 
+    def pass_salts(self, seed: bytes, leaves: int) -> list[bytes]:
+        """Pass `seed`'s first `leaves` leaf salts, the ones the card hashes: what a reference tree of the pass takes."""
+        return [store_salt(self.salt_key, seed, c) for c in range(leaves)]
+
     def gate(self, registration: audit.Registration) -> dict:
         torch, key, out = self.torch, registration.key, {}
         last = self.blocks - 1
@@ -1495,7 +1499,7 @@ class GpuBackend:
         seed = rb.seed(self.rng.bytes(32), 0, reg.digest)
         r = rb.receipter(reg.receipt, seed, reg.rows)
         ys = [r(j, encoded[j]) for j in range(small.blocks)]
-        ref = rb.tree(seed, small.plan, ys, [store_salt(self.salt_key, seed, c) for c in range(small.blocks // PER_LEAF)])
+        ref = rb.tree(seed, small.plan, ys, self.pass_salts(seed, small.blocks // PER_LEAF))
         # From here every pass and opening of the gate store writes into poisoned buffers.
         small.poison = True
         got, handle = small.run_pass(seed)

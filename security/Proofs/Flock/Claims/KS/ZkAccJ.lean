@@ -286,7 +286,7 @@ fork events only where both forked deployed runs accept and its one-run event on
 table `j`'s one-run event bounding the live strategies' decoded self-clashes of table `j` on accepted live runs
 (`LiveSelfClashZ`). -/
 def ZkLiveAccAtJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
-    (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
+    (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Hash.Msg → ℕ → List 𝔽 → Prop) (x : Hash.Msg) {mPts : ℕ}
     (T : ℕ → TabZK 𝔽 mPts) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
     ∃ (rd : (j : ℕ) → Claims.Flock.IZ (T j).sch.levels.length → Fin ((V true).k x))
@@ -347,7 +347,7 @@ def ZkLiveAccAtJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabite
 /-- **`ZkLiveAccAtJ` gives `ZkLiveAtJ`**: the decoded self-clashes of table `j` on accepted live runs bound the
 simulated strategies' self-clash of table `j` after `Commit` (`mean_selfClash_le_liveJZ`). -/
 theorem zkLiveAtJ_of_acc {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
-    {A : Model.Arith 𝔽 K} {Hs : Hashes 𝔽 D Sl} {Ok : Claims.Msg → ℕ → List 𝔽 → Prop} {x : Claims.Msg} {mPts : ℕ}
+    {A : Model.Arith 𝔽 K} {Hs : Hashes 𝔽 D Sl} {Ok : Hash.Msg → ℕ → List 𝔽 → Prop} {x : Hash.Msg} {mPts : ℕ}
     {T : ℕ → TabZK 𝔽 mPts} (hl : ZkLiveAccAtJ A Hs Ok x T) : ZkLiveAtJ A Hs Ok x T := by
   intro Ω _ _ P
   obtain ⟨rd, hrd, ev, ev₁, tied, tied₁, -, -, hω⟩ := hl Ω P
@@ -363,7 +363,7 @@ masked tables `T j`: the tables' old escapes joined by round (`joinEscZ`), on ac
 `zk_le_sessionsJ` at the simulated strategies after `Commit` at table `j` (`simAtJZ`). -/
 theorem zk_tableBoundJAccAt_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
-    (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) {x : Claims.Msg}
+    (rel : Readable.Parsed → Readable.Relation) (Ok : Hash.Msg → ℕ → List 𝔽 → Prop) {x : Hash.Msg}
     (hn : Claims.Flock.nTab (deployZk rel) x = (tables true x).length) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j)) (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
@@ -406,7 +406,7 @@ theorem zk_tableBoundJAccAt_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [Deci
 
 /-- **The live sessions' bound at a masked statement of any number of tables, with escapes on accepted runs**:
 `ZkLiveAccAtJ` where `ZkLiveJ` reads `ZkLiveAtJ`. -/
-def ZkLiveAccJ (x : Claims.Msg) : Prop :=
+def ZkLiveAccJ (x : Hash.Msg) : Prop :=
   ∀ (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (_ : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
     (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
@@ -414,13 +414,13 @@ def ZkLiveAccJ (x : Claims.Msg) : Prop :=
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts),
     ZkLiveAccAtJ execArith Discharge.ZkExec.hs512 (wideJ true) x (zkTabs h0 L hz hk hlay)
 
-theorem zkLiveJ_of_acc {x : Claims.Msg} (hl : ZkLiveAccJ x) : ZkLiveJ x :=
+theorem zkLiveJ_of_acc {x : Hash.Msg} (hl : ZkLiveAccJ x) : ZkLiveJ x :=
   fun ins spec sts hset h0 L hz hk hlay => zkLiveAtJ_of_acc (hl ins spec sts hset h0 L hz hk hlay)
 
 /-- **Every masked table's bound at a statement in scope, with escapes on accepted runs**: at tables of full-width
 columns, where the statement parses in scope and sets up at least one table, `zk_tableBoundJAccAt_of_liveJ` at
 Flock ZK's padded tables (`zk_atTabs`). -/
-theorem zk_tableBoundJAccAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem zk_tableBoundJAccAt_live {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (hl : ZkLiveAccJ x) :
@@ -435,7 +435,7 @@ theorem zk_tableBoundJAccAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
 /-- **Every masked table's bound at every statement, with escapes on accepted runs**, at full-width columns, from
 `ZkLiveAccJ` at the statements some run accepts: they parse in scope and set up at least one table, and elsewhere no
 run accepts and `k ≤ 2·weight` (`zk_k_le`). -/
-theorem zk_tableBoundJAccAt (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccJ x) (x : Claims.Msg) :
+theorem zk_tableBoundJAccAt (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccJ x) (x : Hash.Msg) :
     Claims.Flock.TableBoundJAccAt sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true) x := by
   by_cases hno : Claims.Flock.NoAcc sha512 (V true) x
   · exact Claims.Flock.tableBoundJAccAt_of_noAcc _ _ _ _ x hno (zk_k_le Readable.relation x)
@@ -447,7 +447,7 @@ theorem zk_tableBoundJAccAt (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x
 theorem wordLenJ_zero (zk : Bool) : (fun x => wordLenJ zk x 0) = wordLen zk :=
   funext fun x => by unfold wordLenJ wordLen; cases tables zk x <;> rfl
 
-theorem wideJ_zero_of_wide {zk : Bool} {x : Claims.Msg} (hx : tables zk x ≠ []) {u : List 𝔽} (h : wide zk x u) :
+theorem wideJ_zero_of_wide {zk : Bool} {x : Hash.Msg} (hx : tables zk x ≠ []) {u : List 𝔽} (h : wide zk x u) :
     wideJ zk x 0 u := by
   obtain ⟨⟨spec, st⟩, l, hl⟩ := List.exists_cons_of_ne_nil hx
   unfold wide zeroCol at h
@@ -458,7 +458,7 @@ theorem wideJ_zero_of_wide {zk : Bool} {x : Claims.Msg} (hx : tables zk x ≠ []
 /-- **Table 0's masked bound at every statement, with escapes on accepted runs**, at full-width columns, from
 `ZkLiveAccJ` at the statements some run accepts: there the statement sets up at least one table and it is
 `zk_tableBoundJAccAt` at table 0, and elsewhere no run accepts. The masked `plain_tableBoundθAccAt`. -/
-theorem zk_tableBoundθAccAt (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccJ x) (x : Claims.Msg) :
+theorem zk_tableBoundθAccAt (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccJ x) (x : Hash.Msg) :
     Claims.Flock.TableBoundθAccAt sha512 (deployZk Readable.relation) (wordLen true) (wide true) x := by
   by_cases hno : Claims.Flock.NoAcc sha512 (V true) x
   · exact Claims.Flock.tableBoundθAccAt_of_noAcc _ _ _ _ x hno (zk_k_le Readable.relation x)

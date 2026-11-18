@@ -189,7 +189,7 @@ theorem recIns_setup_of_compiled {i : RecIns} {h : VStar.Recursive.InnerHeld} {j
 statement reads back as itself (`decodeRec`, `PartStatement`) and the model reads it as `i`, the recursive setup that
 `setupO` runs on the staged statement passes with the compiled session, under `recIns_setup_of_compiled`'s
 hypotheses. -/
-theorem setupO_staged_of_compiled {x : Claims.Msg} {r : XR} {st : Stage} {ms : List (Claims.Msg × Claims.Out)}
+theorem setupO_staged_of_compiled {x : Hash.Msg} {r : XR} {st : Stage} {ms : List (Hash.Msg × Claims.Out)}
     {s : ℕ} {p : PartX} {i : RecIns} {h : VStar.Recursive.InnerHeld} {j : ℕ} {tags0 tags : Tags}
     {circuitB pubB : ByteArray} {partition : Lean.Json} {program : ByteArray}
     {registered : Option (Array Registered.Port)} {bindings : VStar.Bindings}
@@ -236,7 +236,7 @@ theorem read_check_of_scope {i : RecIns} {h : VStar.Recursive.InnerHeld} {j : �
 (`partRaw`) as `i` (`PartStatement`), `i` holds the compiled part's inputs (`SetupMatch`, `PartStatement`), the model's Flock setup and
 its registered-reads checks pass with the compiled session (`BaseSetup`), the compiled checks block passes (`RecChecks`),
 and so does the compiled scope check. -/
-def PartSetup (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ) (p : PartX) :
+def PartSetup (r : XR) (st : Stage) (x : Hash.Msg) (ms : List (Hash.Msg × Claims.Out)) (s : ℕ) (p : PartX) :
     Prop :=
   ∃ (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags) (circuitB pubB : ByteArray)
     (partition : Lean.Json) (program : ByteArray) (registered : Option (Array Registered.Port))
@@ -254,7 +254,7 @@ def PartSetup (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × C
 /-- **The compiled statement reads where every compiled part sets up**: where `readXPre x` reads `r` (`Names`) and
 every part's compiled setup and scope check pass as the model's (`PartSetup`) at one staging, `readX x` reads `r`, and
 each part's circuit is V\*'s statement's of its index (`partsVStar`). -/
-theorem readX_of_compiled {x : Claims.Msg} {r : XR} {st : Stage} {ms : List (Claims.Msg × Claims.Out)}
+theorem readX_of_compiled {x : Hash.Msg} {r : XR} {st : Stage} {ms : List (Hash.Msg × Claims.Out)}
     (hr : readXPre x = some r) (hparts : ∀ s p, r.w.parts[s]? = some p → PartSetup r st x ms s p) :
     readX x = some r ∧
       ∃ vs, RecVStar.statements r.shape = .ok vs ∧ partsVStar r.shape r.w.parts vs = true := by

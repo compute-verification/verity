@@ -144,7 +144,7 @@ def rootBAt (l : Json) (t : String) : Flock.V ByteArray :=
 /-- **The link's message** in the record `record` of a session of the tables `tables`: `root_F`, then each table's
 `root_B` in lexicographic table order (S14's exchange before its points); none where the record does not parse or
 lacks one. -/
-def linkMsg (record : String) (tables : Array String) : Option Claims.Msg :=
+def linkMsg (record : String) (tables : Array String) : Option Hash.Msg :=
   (Flock.JsonParse.parse record).toOption.bind fun j =>
     (Flock.Record.fld j "link").toOption.bind fun l =>
       (Flock.Record.str l "root_f" >>= Flock.unhex).toOption.bind fun rootF =>
@@ -152,7 +152,7 @@ def linkMsg (record : String) (tables : Array String) : Option Claims.Msg :=
 
 /-- **Round `k`'s message on the stream `name`** in the record `record`: the round's retained bytes (S12's `msg`); none
 where the record does not parse, has no such round, or the round retains no bytes. -/
-def roundMsg (record name : String) (k : ℕ) : Option Claims.Msg :=
+def roundMsg (record name : String) (k : ℕ) : Option Hash.Msg :=
   (Flock.JsonParse.parse record).toOption.bind fun j =>
     (Flock.Record.arr j "streams").toOption.bind fun ss =>
       (ss.find? fun x => (Flock.Record.str x "stream").toOption == some name).bind fun x =>
@@ -162,17 +162,17 @@ def roundMsg (record name : String) (k : ℕ) : Option Claims.Msg :=
             else ((Flock.Record.str r "msg" >>= Flock.unhex).toOption).map (·.data.toList)
 
 /-- **The link's message** of the play that ended with `o`, in the record v2 reads, at the session's tables. -/
-def linkIn (tables : Array String) (o : Verity.Exchange) : Option Claims.Msg :=
+def linkIn (tables : Array String) (o : Verity.Exchange) : Option Hash.Msg :=
   (sentRecord o.sent).bind (linkMsg · tables)
 
 /-- **Round `k`'s message on the stream `name`** of the play that ended with `o`, in the record v2 reads. -/
-def roundIn (name : String) (k : ℕ) (o : Verity.Exchange) : Option Claims.Msg :=
+def roundIn (name : String) (k : ℕ) (o : Verity.Exchange) : Option Hash.Msg :=
   (sentRecord o.sent).bind (roundMsg · name k)
 
 /-! ## The typed moves -/
 
 /-- **The tables' roots in the link's message `m`**, past `Σ`'s bytes `σ`: none where `m` does not start with `σ`. -/
-def rootBOf (σ : ByteArray) (m : Claims.Msg) : Option (Array ByteArray) :=
+def rootBOf (σ : ByteArray) (m : Hash.Msg) : Option (Array ByteArray) :=
   if m.take σ.size = σ.data.toList then some #[⟨(m.drop σ.size).toArray⟩] else none
 
 /-- Table `t`'s rep `r` stream, `<t>/rep<r>` (`SessionSpec.repStreams`). -/
@@ -183,7 +183,7 @@ def repOf {J : ℕ} (tables : Fin J → String) (name : String) : Option (Fin J 
   ((List.finRange J).flatMap fun j => [(j, 0), (j, 1)]).find? fun x => repStreamName (tables x.1) x.2.val == name
 
 /-- **The submission of a round** on the stream `name` with `n` coins and the message `m`. -/
-def submitOf {J : ℕ} (tables : Fin J → String) (name : String) (n : ℕ) (m : Claims.Msg) : Option (SubmitJ J) :=
+def submitOf {J : ℕ} (tables : Fin J → String) (name : String) (n : ℕ) (m : Hash.Msg) : Option (SubmitJ J) :=
   (repOf tables name).map fun x => ⟨x.1, x.2, ⟨m.toArray⟩, n⟩
 
 /-- A submission with the coins the live session answered it with. -/
@@ -231,7 +231,7 @@ theorem repOf_name {J : ℕ} {tables : Fin J → String} (hinj : Function.Inject
 
 /-- `repOf_name`'s submission. -/
 theorem submitOf_name {J : ℕ} {tables : Fin J → String} (hinj : Function.Injective tables) (j : Fin J) (r : Fin 2)
-    (n : ℕ) (m : Claims.Msg) : submitOf tables (repStreamName (tables j) r.val) n m = some ⟨j, r, ⟨m.toArray⟩, n⟩ := by
+    (n : ℕ) (m : Hash.Msg) : submitOf tables (repStreamName (tables j) r.val) n m = some ⟨j, r, ⟨m.toArray⟩, n⟩ := by
   rw [submitOf, repOf_name hinj]
   rfl
 

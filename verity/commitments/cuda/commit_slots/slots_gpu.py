@@ -129,12 +129,14 @@ class _Group:
 class _Graph:
     """A group's add captured as one CUDA graph: it reads its tensors' addresses and slot strides from ``addr`` ((2,
     tensors) int64 on the device, filled before each replay), and its ``n`` leaf launches ``nodes`` read their salts from
-    the buffer ``resalt`` points them at, each where it was captured reading the buffer at ``salts`` (an address)."""
+    the buffer ``resalt`` points them at, each where it was captured reading the buffer at ``salts`` (an address), at
+    ``strides`` (the bytes from a row's salts to the next row's and from a slot's to the next slot's)."""
     graph: Any
     addr: Any
     nodes: Any
     n: int
     salts: int
+    strides: tuple[int, int]
 
 
 def driver_bindings(torch: Any) -> tuple[Any, Any]:
@@ -475,7 +477,8 @@ class Plan:
                 g.capture_end()
             g.instantiate()
             n = -(-sc.slots // self.per_pass(grp.shape, sc.slots))
-            self._graphs[key] = _Graph(g, addr, self.engine.graph_leaf_nodes(g.raw_cuda_graph(), n), n, salts.data_ptr())
+            self._graphs[key] = _Graph(g, addr, self.engine.graph_leaf_nodes(g.raw_cuda_graph(), n), n, salts.data_ptr(),
+                                       (int(salts.stride(0)), int(salts.stride(1))))
         return self._graphs[key]
 
     def empty(self, *shape: int) -> Any:
@@ -723,7 +726,8 @@ class StepCommitter:
             gr = plan.graph(self, grp, tensors, salts)
             gr.addr.copy_(torch.tensor([base, stride], dtype=torch.int64).pin_memory(), non_blocking=True)
             with plan.partition.current() if plan.partition else contextlib.nullcontext():
-                plan.engine.resalt(gr.graph.raw_cuda_graph_exec(), gr.nodes, gr.n, gr.salts, salts.data_ptr())
+                plan.engine.resalt(gr.graph.raw_cuda_graph_exec(), gr.nodes, gr.n, gr.salts, salts, grp.shape.rows, self.slots,
+                                   gr.strides)
             gr.graph.replay()
             done = torch.cuda.Event(blocking=True)
             done.record(plan.stream)

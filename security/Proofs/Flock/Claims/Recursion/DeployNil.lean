@@ -50,14 +50,14 @@ namespace RecDeploy
 
 open FlockDeploy (Coin)
 
-theorem actAt_coin {s spec sts} {as : List Claims.Msg} {cs : List Coin} {c : Coin}
+theorem actAt_coin {s spec sts} {as : List Hash.Msg} {cs : List Coin} {c : Coin}
     (h : actAt s spec sts as cs = .coin c) : cs.getLast? = some c := by
   unfold actAt at h
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; assumption)
 
 /-- The outer verifier answers a round with a coin only with the last of the coins it is given. -/
-theorem actO_coin {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {c : Coin}
+theorem actO_coin {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {c : Coin}
     (h : actO x as cs = .coin c) : cs.getLast? = some c := by
   unfold actO at h
   split at h
@@ -66,7 +66,7 @@ theorem actO_coin {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {c : 
 
 section Steps
 
-variable {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+variable {IV : Claims.Verifier Coin} {st : Stage} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
 
 /-- An inner or staging round's coin is the last of the coins the verifier is given. -/
 theorem ract_coin {c : Coin} (h : ract IV st x as cs = .coin c) : cs.getLast? = some c := by
@@ -82,7 +82,7 @@ theorem ract_coin {c : Coin} (h : ract IV st x as cs = .coin c) : cs.getLast? = 
   split_ifs at h <;> cases h
 
 /-- A session's coins are a suffix of the verifier's. -/
-theorem ract_sess_drop {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin}
+theorem ract_sess_drop {s j : ℕ} {xO : Hash.Msg} {as' : List Hash.Msg} {cs' : List Coin}
     (h : ract IV st x as cs = .sess s j xO as' cs') : ∃ off, cs' = cs.drop off := by
   unfold ract at h
   split at h
@@ -111,7 +111,7 @@ theorem getLast?_drop_concat {α : Type} : ∀ {l : List α} {a b : α} {n : ℕ
 /-- **The compiled verifier answers each round with its coin's bytes or with nothing**: an inner or staging round, and
 a V\* session's round its outer verifier answers, with the round's coin; a V\* session before the last one that accepts,
 with `[]`. -/
-theorem answersCoinOrNil_V (IV : Claims.Verifier Coin) (st : Stage) (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) :
+theorem answersCoinOrNil_V (IV : Claims.Verifier Coin) (st : Stage) (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) :
     Claims.Bridge.AnswersCoinOrNil H (V IV st) x FlockDeploy.Coin.bytes := by
   intro as cs c m h
   change ((next IV st x as (cs ++ [c])).eval H).1 = .msg m at h

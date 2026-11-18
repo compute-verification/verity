@@ -15,6 +15,7 @@ from verity_flock import ir_lower as IL
 from verity_flock import tail_pieces as TP
 
 pytest.importorskip("verity_vllm.definitions.registry.prims")
+BX.load_catalog("verity_vllm.definitions.registry")
 
 
 def _types(build, name="root", label=None):

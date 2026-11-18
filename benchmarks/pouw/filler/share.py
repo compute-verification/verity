@@ -47,6 +47,9 @@ import math
 import pathlib
 from collections.abc import Iterable, Mapping, Sequence
 
+from verity.device import load_card, number
+from verity_bench import kit
+
 #: what the scorer and the tests read
 __all__ = [
     "ATT_TOK_L", "A_LADDER", "A_V99", "CERT", "DEC_OTHER_MS", "FA2_MS_8192", "FILLER", "F_MAX", "Filler", "KV_TOK",
@@ -56,7 +59,9 @@ __all__ = [
     "measured_fillers", "mixes", "tau_table", "with_filler",
 ]
 
-SMS, PER_SM, F_MAX = 188, 1024, 2430e6
+_CARD = load_card("rtx-pro-6000-server", directory=kit.cards_directory())
+SMS, PER_SM, F_MAX = (int(number(_CARD["sm"]["count"])), int(number(_CARD["rate"]["tensor"])),
+                      float(number(_CARD["clock"]["sm"]) * 10**6))
 A_V99 = 0.2424 / (300.08 / 256)
 A_LADDER = [  # (what changes, A), rs-price-99.py's LP re-solved
     ("V99 as frozen", A_V99),

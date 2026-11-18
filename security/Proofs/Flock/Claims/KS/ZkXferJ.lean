@@ -123,7 +123,7 @@ def OkOffJ {mPts n : ℕ} (T : ℕ → TabZK 𝔽 mPts) {j : ℕ} (hj : j < n) (
 
 /-- **The deployed decoders are right at `OkOffJ` on `AccOffJ`** at a masked statement in scope that `Deploy.V` sets
 up at the sample `d` (`decodesTable_deploy`, `decodesTable_at`). -/
-theorem decodesOff_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem decodesOff_deploy {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -154,7 +154,7 @@ the deployed runs accepting with no column off `C` by its acceptance with table 
 unless it self-clashes (`AccOffJ`), and the escapes' events bound the `Adv`s of its simulated strategies after
 `Commit` (`simAtJZ` at the deployed decoders `opnD`, `decD`, no tail and table `j`'s cap from `root_B[j]`, right at
 `OkOffJ` by `decodesOff_deploy`) and its decoded self-clashes of table `j` on accepted live runs. -/
-def ZkXferJ (x : Claims.Msg) : Prop :=
+def ZkXferJ (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -229,7 +229,7 @@ def ZkXferJ (x : Claims.Msg) : Prop :=
 /-- **`ZkXferJ` gives `ZkLiveAccJ`** where some run accepts: the statement parses in scope (`acc_inScope`) and
 carries a sample (`acc_sample_of_setup`), and the deployed decoders are right at `OkOffJ` on `AccOffJ`
 (`decodesOff_deploy`), whose verdict at table `j` accepts with no opening off `C` unless it self-clashes. -/
-theorem zkLiveAccJ_of_xferJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferJ x) :
+theorem zkLiveAccJ_of_xferJ {x : Hash.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferJ x) :
     ZkLiveAccJ x := by
   intro ins spec sts hset h0 L hz hk hlay Ω _ _ P
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
@@ -253,7 +253,7 @@ theorem zk_KS_of_xferJ (hx : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → 
 sessions' bound at the deployed decoders at the statements some run accepts (`zk_tableBoundθAccAt`,
 `zkLiveAccJ_of_xferJ`). -/
 theorem zk_tableBoundθAccAt_of_xferJ (hx : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkXferJ x)
-    (x : Claims.Msg) :
+    (x : Hash.Msg) :
     Claims.Flock.TableBoundθAccAt sha512 (deployZk Readable.relation) (wordLen true) (wide true) x :=
   zk_tableBoundθAccAt (fun x hno => zkLiveAccJ_of_xferJ hno (hx x hno)) x
 

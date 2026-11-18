@@ -13,7 +13,7 @@ vLLM is not on the CPU test host, so the rule's `linear_types` is patched to thi
   o one `NcpLinearRow_v1` per row, while the lm_head stays `Gemm_v1`. The Program's value is the circuit's y through the
   chain.
 - Without `pouw:ncp-v2`, the same model is `GemmBias_v1`, `Gemm_v1`, `Gemm_v1`.
-- `NcpLinearRowBias_v1` is `BiasAdd_v1` after `NcpLinearRow_v1`, bit for bit, and the replay's native row.
+- `NcpLinearRowBias_v1` is `BiasAdd_v1` after `NcpLinearRow_v1`, bit for bit.
 """
 from __future__ import annotations
 
@@ -26,7 +26,6 @@ import torch.nn as nn
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 
-from verity_vllm.protocols.pouw import pouw_circuit as RC
 from verity_vllm.definitions.numerics.serve3_reference import materialize
 from verity_vllm.definitions.registry import b1, pouw_rows
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
@@ -183,7 +182,7 @@ def test_the_module_class_decides_which_launches_are_lowered(monkeypatch):
 
 
 @pytest.mark.slow
-def test_the_fused_row_is_bias_add_after_the_row_bit_for_bit_and_the_replays_native_row():
+def test_the_fused_row_is_bias_add_after_the_row_bit_for_bit():
     rng = np.random.default_rng(4)
     fused, row, add = bind(pouw_rows.NcpLinearRowBias, K=K, N=NQ), bind(pouw_rows.NcpLinearRow, K=K, N=NQ), bind(b1.BiasAdd, N=NQ)
 
@@ -195,5 +194,3 @@ def test_the_fused_row_is_bias_add_after_the_row_bit_for_bit_and_the_replays_nat
         for b in biases:
             got = list(evaluate(fused, [int(v) for v in x], [int(v) for v in w], [int(v) for v in b]))
             assert got == list(evaluate(add, list(evaluate(row, [int(v) for v in x], [int(v) for v in w])), [int(v) for v in b])), scale
-            _a, s, _b, t, z = RC.int7_linear(x, w, NQ)
-            assert got == RC.dequant(z, s, t, b), scale

@@ -43,7 +43,7 @@ open _root_.Flock (V SessionSpec Stmt)
 each control slot's frame `ctl k`, and at each model slot the next message's frames (`encK`), up to the last
 message's. -/
 def audT (ctl : Session.Kind → ByteArray) (spec : SessionSpec) :
-    List String → List Session.Kind → List Claims.Msg → List ByteArray
+    List String → List Session.Kind → List Hash.Msg → List ByteArray
   | _, [], _ => []
   | _, _ :: _, [] => []
   | seen, k :: ks, m :: ms =>
@@ -52,7 +52,7 @@ def audT (ctl : Session.Kind → ByteArray) (spec : SessionSpec) :
 
 /-- **The auditor's view of the model's messages `as`** at the setup `spec`, `sts`: the schedule's frames through the
 last message's. -/
-def audView (spec : SessionSpec) (sts : Array Stmt) (as : List Claims.Msg) : List ByteArray :=
+def audView (spec : SessionSpec) (sts : Array Stmt) (as : List Hash.Msg) : List ByteArray :=
   audT (ctlOf (.ok (spec, sts))) spec [] (tmplOf (.ok (spec, sts))) as
 
 /-- An auditor's answer as `V*`'s: its bytes as a message, and no answer a rejection. -/
@@ -62,17 +62,17 @@ def audOut : Option ByteArray → Claims.Out
 
 /-- **`V*` from the relay's auditor `A`**, at `k` rounds: its answer to the model's messages so far is `A`'s at their
 view at the setup `spec`, `sts` (`audView`), on its tape. -/
-def auditorV {Θ : Type} (k : Claims.Msg → ℕ) (spec : SessionSpec) (sts : Array Stmt)
+def auditorV {Θ : Type} (k : Hash.Msg → ℕ) (spec : SessionSpec) (sts : Array Stmt)
     (A : Θ → List ByteArray → Option ByteArray) : Claims.VStar Θ where
   k := k
   next _ as θ := .ret (audOut (A θ (audView spec sts as)))
 
 /-- **`auditorV`'s rounds at the setup `spec`, `sts`**: the schedule's model slots, one round for each. -/
-def audK (spec : SessionSpec) (sts : Array Stmt) : Claims.Msg → ℕ :=
+def audK (spec : SessionSpec) (sts : Array Stmt) : Hash.Msg → ℕ :=
   fun _ => (tmplOf (.ok (spec, sts))).countP isModel
 
 /-- The schedule has a model slot, its `Hello`. -/
-theorem audK_pos (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg) : 0 < audK spec sts x := by
+theorem audK_pos (spec : SessionSpec) (sts : Array Stmt) (x : Hash.Msg) : 0 < audK spec sts x := by
   obtain ⟨T, hT⟩ := tmplOf_cons (.ok (spec, sts))
   show 0 < (tmplOf (.ok (spec, sts))).countP isModel
   rw [hT]
@@ -81,9 +81,9 @@ theorem audK_pos (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg) : 0 < 
 open Claims.ZKMal in
 /-- **The model's run against `auditorV` is the auditor's**: each of its messages answered as `A` answers the view of
 the messages through it, and a message at each round while `A` answered every earlier one. -/
-theorem runStar_auditorV {Ω Θ : Type} {H : Claims.Msg → Claims.Msg} {P : Claims.Prover Ω} {k : Claims.Msg → ℕ}
-    {spec : SessionSpec} {sts : Array Stmt} {A : Θ → List ByteArray → Option ByteArray} {x : Claims.Msg} {ω : Ω}
-    {θ : Θ} {τ : List (Claims.Msg × Claims.Out)}
+theorem runStar_auditorV {Ω Θ : Type} {H : Hash.Msg → Hash.Msg} {P : Claims.Prover Ω} {k : Hash.Msg → ℕ}
+    {spec : SessionSpec} {sts : Array Stmt} {A : Θ → List ByteArray → Option ByteArray} {x : Hash.Msg} {ω : Ω}
+    {θ : Θ} {τ : List (Hash.Msg × Claims.Out)}
     (hτ : τ = (Claims.runStar H P (auditorV k spec sts A) x ω θ).msgs) :
     (∀ j (hj : j < τ.length), (τ[j]'hj).2 = audOut (A θ (audView spec sts ((τ.take (j + 1)).map (·.1))))) ∧
       ∀ j, j < k x → (∀ i < j, (A θ (audView spec sts ((τ.take (i + 1)).map (·.1)))).isSome) → j < τ.length := by
@@ -116,8 +116,8 @@ theorem runStar_auditorV {Ω Θ : Type} {H : Claims.Msg → Claims.Msg} {P : Cla
 /-- **The auditor answered the model's `j`-th message as `auditorV` did**: where the model's run is against
 `auditorV`, `j` is below its rounds and `A` answered the view of every earlier message, a request whose answer is
 none or `A`'s at the view of the messages through the `j`-th. -/
-theorem LoopModel.ans_auditorV {W Rr Ω Θ : Type} {M : LoopModel W Rr} {H : Claims.Msg → Claims.Msg}
-    {P : Claims.Prover Ω} {ω : Ω} {θ : Θ} {k : Claims.Msg → ℕ} {spec : SessionSpec} {sts : Array Stmt}
+theorem LoopModel.ans_auditorV {W Rr Ω Θ : Type} {M : LoopModel W Rr} {H : Hash.Msg → Hash.Msg}
+    {P : Claims.Prover Ω} {ω : Ω} {θ : Θ} {k : Hash.Msg → ℕ} {spec : SessionSpec} {sts : Array Stmt}
     {A : Θ → List ByteArray → Option ByteArray}
     (hτ : M.τ = (Claims.runStar H P (auditorV k spec sts A) M.x ω θ).msgs) {j : Nat} (hj : j < k M.x)
     (hpre : ∀ i < j, (A θ (audView spec sts (M.msgs.take (i + 1)))).isSome) {e : Env}
@@ -140,7 +140,7 @@ theorem AnsPart.of_ans {W Rr : Type} {M : LoopModel W Rr} {c : Nat} {e : Env} {k
 /-- **What the IO code serves at a slot it serves with the answer erased**: it reads the answer only where there is
 one, at the `Commit`'s link and a frame round's coins. -/
 theorem LoopServe.ans_none {W Rr : Type} {M : LoopModel W Rr}
-    {rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
+    {rv : List (Hash.Msg × Hash.Msg) → Option Hash.Msg} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} {k : Session.Kind} {st : State} {pl : Placed} {e : Env} {σ σ' : LoopAt}
     (h : LoopServe M rv sid spec sts nonce k st pl e σ σ') :
     LoopServe M rv sid spec sts nonce k st pl { e with ans := none } σ σ' := by
@@ -181,22 +181,22 @@ theorem audT_nil (ctl : Session.Kind → ByteArray) (spec : SessionSpec) (seen :
   cases ks <;> simp only [audT]
 
 theorem audT_model {ctl : Session.Kind → ByteArray} {spec : SessionSpec} {seen : List String} {k : Session.Kind}
-    {ks : List Session.Kind} {m : Claims.Msg} {ms : List Claims.Msg} (hm : isModel k = true) :
+    {ks : List Session.Kind} {m : Hash.Msg} {ms : List Hash.Msg} (hm : isModel k = true) :
     audT ctl spec seen (k :: ks) (m :: ms) = encK spec seen k m ++ audT ctl spec (seenAfter seen k) ks ms := by
   simp only [audT, hm, ↓reduceIte]
 
 theorem audT_ctl {ctl : Session.Kind → ByteArray} {spec : SessionSpec} {seen : List String} {k : Session.Kind}
-    {ks : List Session.Kind} {m : Claims.Msg} {ms : List Claims.Msg} (hm : isModel k = false) :
+    {ks : List Session.Kind} {m : Hash.Msg} {ms : List Hash.Msg} (hm : isModel k = false) :
     audT ctl spec seen (k :: ks) (m :: ms) = ctl k :: audT ctl spec (seenAfter seen k) ks (m :: ms) := by
   simp only [audT, hm, Bool.false_eq_true, ↓reduceIte]
 
 /-- `EnvOk` reads no answer. -/
-theorem envOk_ans {spec : SessionSpec} {seen : List String} {k : Session.Kind} {e : Env} {m : Claims.Msg}
+theorem envOk_ans {spec : SessionSpec} {seen : List String} {k : Session.Kind} {e : Env} {m : Hash.Msg}
     (a : Option ByteArray) : EnvOk spec seen k { e with ans := a } m ↔ EnvOk spec seen k e m := by
   cases k <;> exact Iff.rfl
 
 /-- A model slot but the `Finish` sends at most one frame. -/
-theorem encK_length_one {spec : SessionSpec} {seen : List String} {k : Session.Kind} {m : Claims.Msg}
+theorem encK_length_one {spec : SessionSpec} {seen : List String} {k : Session.Kind} {m : Hash.Msg}
     (hf : k ≠ .finish) : (encK spec seen k m).length ≤ 1 := by
   cases k with
   | finish => exact absurd rfl hf
@@ -268,8 +268,8 @@ domains, the frames `v` left so far, the streams `seen` and the slots `ksr` to c
 model's messages from the `σ.c`-th on is `v` and theirs over `ksr`, `ksr` has no more model slots than `V*` has rounds
 left, `A` answered the view of each message the slots took, `EnvPre` follows from `LoopReads` here, and what leaves
 from here is at a prefix of `ksr` with each control slot's frame the setup's. -/
-theorem loopReads_aud {W Rr Ω Θ : Type} {M : LoopModel W Rr} {H : Claims.Msg → Claims.Msg}
-    {P : Claims.Prover Ω} {ω : Ω} {θ : Θ} {k : Claims.Msg → ℕ} {spec : SessionSpec} {sts : Array Stmt}
+theorem loopReads_aud {W Rr Ω Θ : Type} {M : LoopModel W Rr} {H : Hash.Msg → Hash.Msg}
+    {P : Claims.Prover Ω} {ω : Ω} {θ : Θ} {k : Hash.Msg → ℕ} {spec : SessionSpec} {sts : Array Stmt}
     {A : Θ → List ByteArray → Option ByteArray}
     (hτ : M.τ = (Claims.runStar H P (auditorV k spec sts A) M.x ω θ).msgs)
     {sid : Nat} {nonce : ByteArray} {Rd : Session.Kind → State → Placed → Env → LoopAt → LoopAt → Prop}
@@ -426,8 +426,8 @@ the model's run is against `auditorV` (`hτ`), the session's schedule has no mor
 (`hnone`), and `EnvPre` follows from `LoopReads` at the session's first request (`hF`): at the relay's requests `es`,
 each reading the setup and passing no hold's barrier at a stop, read as `Rd` reads each slot and answered by the
 auditor (`AudReads`), `LoopReads` holds. -/
-theorem loopReads_auditorV {W Rr Ω Θ : Type} {M : LoopModel W Rr} {H : Claims.Msg → Claims.Msg}
-    {P : Claims.Prover Ω} {ω : Ω} {θ : Θ} {k : Claims.Msg → ℕ} {spec : SessionSpec} {sts : Array Stmt}
+theorem loopReads_auditorV {W Rr Ω Θ : Type} {M : LoopModel W Rr} {H : Hash.Msg → Hash.Msg}
+    {P : Claims.Prover Ω} {ω : Ω} {θ : Θ} {k : Hash.Msg → ℕ} {spec : SessionSpec} {sts : Array Stmt}
     {A : Θ → List ByteArray → Option ByteArray}
     (hτ : M.τ = (Claims.runStar H P (auditorV k spec sts A) M.x ω θ).msgs)
     (hK : (tmplOf (.ok (spec, sts))).countP isModel ≤ k M.x)

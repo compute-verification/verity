@@ -107,7 +107,7 @@ theorem plain_avoid (rel : Readable.Parsed → Readable.Relation) (W : ℕ → L
     plain_inj plain_reg plain_card W p
 
 /-- **A column of the code's width is a width**, at every nonempty word: the zero column's length is positive. -/
-theorem wide_width (zk : Bool) (x : Claims.Msg) (h : 0 < wordLen zk x) : 0 < (zeroCol zk x).length := by
+theorem wide_width (zk : Bool) (x : Hash.Msg) (h : 0 < wordLen zk x) : 0 < (zeroCol zk x).length := by
   unfold zeroCol
   split
   · simp only [List.length_replicate]

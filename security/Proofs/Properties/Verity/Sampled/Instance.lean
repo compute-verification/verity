@@ -84,7 +84,7 @@ theorem strict_of_zero {f : Claims.Finder} (h : f.Pr Verity.sha512Msg = 0) :
   rw [h]
   exact div_nonneg (sq_nonneg q) (Real.rpow_nonneg (by norm_num) _)
 
-theorem sha512Msg_of_sha512 {a b : Claims.Msg} (h : Verity.sha512 a = Verity.sha512 b) :
+theorem sha512Msg_of_sha512 {a b : Hash.Msg} (h : Verity.sha512 a = Verity.sha512 b) :
     Verity.sha512Msg a = Verity.sha512Msg b := by
   have ha := FlockSoundness.Refine.sha512_size ⟨a.toArray⟩
   have hb := FlockSoundness.Refine.sha512_size ⟨b.toArray⟩
@@ -741,9 +741,9 @@ registered files (`pinned`), the deployed device's history (`dev`), composite `k
 session's layout, the family v2's parameters name (`labelAt`), the digest `afterAt` and the session's bytes as
 `MAX_COINS` fresh frames (`srcCoinsAt`), as `couplingTargetAt_counts` reads them. -/
 noncomputable def constructionsAt (K₀ : Constructions I.base) (k : Verity.Registration.Composite)
-    (reg : (A : Live) → Option Claims.Msg → A.Reg)
-    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg) : Constructions I.base :=
+    (reg : (A : Live) → Option Hash.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Hash.Msg) : Constructions I.base :=
   K₀.assembled fieldEnc I.pinned I.dev k
     (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
     (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ) (afterAt I.base k)
@@ -767,9 +767,9 @@ session is one v2 sets up (`sessions_some`), v2's parameters name the vocabulary
 session reads `MAX_COINS` frames' bytes (`lb_of_sessions`), so what is left is the device's log opening only the
 record's rounds (`LogOpensRecorded`). -/
 theorem couplingTarget_at (K₀ : Constructions I.base) (k : Verity.Registration.Composite)
-    (reg : (A : Live) → Option Claims.Msg → A.Reg)
-    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (reg : (A : Live) → Option Hash.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Hash.Msg)
     (hO : I.LogOpensRecorded k) :
     ∀ θ F A, I.sessions θ F = some A →
       CouplingTarget (I.stage (I.constructionsAt K₀ k reg record recordDigest)) k
@@ -817,9 +817,9 @@ theorem remote_soundness_deployed_withBinding (I : Instance d α) (K₀ : Constr
 each session is `couplingTarget_at`'s, so of it what is left is the device's log opening only the record's rounds
 (`LogOpensRecorded`). -/
 theorem remote_soundness_deployedAt (I : Instance d α) (K₀ : Constructions I.base)
-    (reg : (A : Live) → Option Claims.Msg → A.Reg)
-    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg) (hO : I.OpensAt)
+    (reg : (A : Live) → Option Hash.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Hash.Msg) (hO : I.OpensAt)
     (hRg : I.RegisteredFiles) (hSa : I.SessionAt .remote)
     (hOR : I.LogOpensRecorded .remote)
     (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)) .remote)

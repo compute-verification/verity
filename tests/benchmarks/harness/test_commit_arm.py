@@ -148,21 +148,12 @@ def _vllm(path: str):
 
 
 def test_both_arms_take_the_committers_engine_from_the_llms_public_names():
-    from verity_bench.vllm.engine import _DirectLLM
-
     vllm, runner = _vllm("/hf/snapshots/4e20de3624")
     pinned = SimpleNamespace(vllm=vllm, model=runner.model, pin=SimpleNamespace(model="meta-llama/Llama-3.2-1B", revision="4e20de3"))
-    local_vllm, local_runner = _vllm("/models/local")
-    local = _DirectLLM(local_vllm, {})
-    assert not hasattr(local, "_engine")
     for arm in (CommitArm("commit"), CompiledCommitArm("commit@compiled")):
         got = arm.engine(SimpleNamespace(engine=pinned))
         assert (got.llm, got.runner, got.model, got.vllm_config) == (vllm, runner, runner.model, vllm.llm_engine.vllm_config)
         assert got.cp == {"repo": "meta-llama/Llama-3.2-1B", "revision": "4e20de3"}
-        got = arm.engine(SimpleNamespace(engine=local))
-        assert (got.llm, got.runner, got.model, got.vllm_config) == (local_vllm, local_runner, local_runner.model,
-                                                                     local_vllm.llm_engine.vllm_config)
-        assert got.cp == {"repo": "/models/local", "revision": None}
 
 
 class _Source:

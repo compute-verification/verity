@@ -141,7 +141,7 @@ theorem commitsPZk_quiet (h : ByteArray → ByteArray) (tabs : Array Setup) (sch
   unfold commitsPZk commitPZk
   sim_walk [commitRowsP_quiet h]
 
-theorem afterLinkPZk_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (spec : SessionSpec)
+theorem afterLinkPZk_sim (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) (spec : SessionSpec)
     (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) (schs : Array (Schedule × ℕ))
     (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128) :
     (simS H resp).R (afterLinkPZk asks Hashes.pi spec tabs words trs tape schs tbls cms c1)
@@ -151,9 +151,9 @@ theorem afterLinkPZk_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
 
 /-- **The first masked send is the link message**: a pure masked session that returns ran its schedules and level-0
 commitments (their verdict-monad runs return), then sent the link message of the caps, with no public words, first. -/
-theorem sessionSZk_link {H : Claims.Msg → Claims.Msg} {resp : ℕ → Claims.Msg} {spec : SessionSpec}
+theorem sessionSZk_link {H : Hash.Msg → Hash.Msg} {resp : ℕ → Hash.Msg} {spec : SessionSpec}
     {sts : Array Flock.Stmt} {w : Claims.Flock.Wit} {ω : TapeZk} {rec : String} {pfs : Array ByteArray}
-    {bodies : Array Claims.Msg} (h : sessionSZk H resp spec sts w ω = (.ok (rec, pfs), bodies)) :
+    {bodies : Array Hash.Msg} (h : sessionSZk H resp spec sts w ω = (.ok (rec, pfs), bodies)) :
     ∃ schs cms, (schedsPZk (tabsOf sts) : V _) = .ok schs ∧
       (commitsPZk (Hashes.ofSha512 (Claims.hOf H)) (tabsOf sts) schs (tablesP (tabsOf sts) (tracesOf sts w)) ω :
         V _) = .ok cms ∧
@@ -235,7 +235,7 @@ theorem zkSchedule_d0 {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf 
       show ¬m ≤ 31 by omega, show ¬m ≤ 35 by omega] at hq0
 
 /-- **The masked case's statement commits with `hm96-sha512/v1`**: the scope check's leaf scheme. -/
-theorem CaseZk.hm96 {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : CaseZk H rel) :
+theorem CaseZk.hm96 {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (c : CaseZk H rel) :
     ∃ st, c.sts = #[st] ∧ st.merkle = MerkleScheme.hm96Sha512 := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployZk rel) rel (readOf true) rfl
     (fun _ _ h => readOf_zk h) c.x).1 c.scope
@@ -279,7 +279,7 @@ theorem CaseZk.hm96 {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → R
 
 /-- **The first masked send is the link message**, each length in its word: the goal `LinkFirstZk`, for a SHA-512 of
 64-byte outputs. -/
-theorem linkFirstZk_goal (H : Claims.Msg → Claims.Msg) (hH : ∀ m, (H m).length = 64)
+theorem linkFirstZk_goal (H : Hash.Msg → Hash.Msg) (hH : ∀ m, (H m).length = 64)
     (rel : Readable.Parsed → Readable.Relation) : LinkFirstZk H rel := by
   intro o
   have h64 : ∀ b, (Claims.hOf H b).size = 64 := fun b => by

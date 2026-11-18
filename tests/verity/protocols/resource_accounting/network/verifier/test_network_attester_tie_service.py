@@ -27,7 +27,8 @@ from verity.protocols.resource_accounting.network.verifier import head_check as 
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.commitments import registered_value as RV
 
 import standin
 
@@ -179,7 +180,7 @@ def test_an_output_0_or_rows_under_fresh_salts_fail_the_registered_reads(tmp_pat
 
     run = Run(tmp_path / "fresh")
     lanes, known_tree = run.tie.lanes(inputs, SERVED.releases, 0), TS.IngressTie.known_tree
-    monkeypatch.setattr(TS.IngressTie, "known_tree", lambda self, head, port, rows: G.Registered.commit(
+    monkeypatch.setattr(TS.IngressTie, "known_tree", lambda self, head, port, rows: RV.Registered.commit(
         (t := known_tree(self, head, port, rows)).program, t.value, t.rows, None, t.word_bits, t.schema,
         window=t.window))
     sample, delivered = run.prove(0, inputs)

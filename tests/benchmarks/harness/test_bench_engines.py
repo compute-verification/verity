@@ -28,7 +28,6 @@ from verity_bench.vllm.presets import (
     SweepPoint,
     expand_sweep,
     resolve_spec,
-    local_checkpoint,
 )
 from verity_bench.vllm.result import (
     validate,
@@ -142,17 +141,6 @@ def test_closing_an_engine_whose_worker_already_sent_its_error_keeps_that_error(
     assert "left before the close handshake (EOFError)" in capsys.readouterr().err
     with pytest.raises(RuntimeError, match="exited with code 1 while closing"):
         _ProcessEngine(ExitingProcess(1), ExitingConn(), {}).close()
-
-
-def test_local_checkpoint_is_content_bound(tmp_path):
-    (tmp_path / "config.json").write_bytes(b"config")
-    (tmp_path / "weights.safetensors").write_bytes(b"weights")
-    preset = local_checkpoint(resolve_spec("llama31-8b-fp8-1gpu").preset, tmp_path)
-    assert preset.model == str(tmp_path)
-    assert preset.revision is preset.case is None
-    assert len(preset.model_digest) == 64
-    (tmp_path / "weights.safetensors").write_bytes(b"changed")
-    assert local_checkpoint(resolve_spec("llama31-8b-fp8-1gpu").preset, tmp_path).model_digest != preset.model_digest
 
 
 def test_resident_engines_interleave_arms_rep_by_rep_and_discard_warmups():

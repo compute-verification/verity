@@ -38,16 +38,16 @@ open Spot.Sampling Claims.Sampling
 section Reveal
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Spot.Sampling.Partition C n)
-  (κ : Fin C.N → Option Bool) (roots : List Claims.Msg) (u : Fin n) (Xu : Fin C.N → Bool)
-  (dat : Fin C.N → Claims.Msg)
+  (κ : Fin C.N → Option Bool) (roots : List Hash.Msg) (u : Fin n) (Xu : Fin C.N → Bool)
+  (dat : Fin C.N → Hash.Msg)
 
 /-- **The openings at values `Xu`**: at each committed wire `g` of unit `u` that `κ` doesn't fix, in wire order, `g`'s
 position with `Xu`'s bit there and the datum `dat g`, under `roots`. -/
-noncomputable def revealOf : List (List Claims.Msg × Opening Bool) :=
+noncomputable def revealOf : List (List Hash.Msg × Opening Bool) :=
   ((List.finRange C.N).filter fun g => decide (g ∈ P.io u ∧ κ g = none)).map fun g =>
     (roots, ⟨posOf C g, Xu g, dat g⟩)
 
-theorem mem_revealOf {q : List Claims.Msg × Opening Bool} :
+theorem mem_revealOf {q : List Hash.Msg × Opening Bool} :
     q ∈ revealOf P κ roots u Xu dat ↔ ∃ g ∈ P.io u, κ g = none ∧ q = (roots, ⟨posOf C g, Xu g, dat g⟩) := by
   unfold revealOf
   rw [List.mem_map]
@@ -72,7 +72,7 @@ theorem revealOf_length_le : (revealOf P κ roots u Xu dat).length ≤ (P.io u).
 (`Partition.Correct`) and is `κ`'s constant wherever `κ` fixes one of `u`'s committed wires, and each opening of
 `revealOf` opens under `Cm`, committed values `val` that carry each opening that opens under `roots` make slot `u`'s
 proof block correct, whatever its interior values `ι` (`correct_of_local`). -/
-theorem correct_of_revealOf (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool)
+theorem correct_of_revealOf (H : Hash.Msg → Hash.Msg) (Cm : CommitmentScheme Bool)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true) (hX : P.Correct Xu u)
     (hκ : ∀ g ∈ P.io u, ∀ b, κ g = some b → Xu g = b)
     (hopen : ∀ g ∈ P.io u, κ g = none → Cm.Opens H roots ⟨posOf C g, Xu g, dat g⟩ = true)
@@ -90,7 +90,7 @@ end Reveal
 /-- **The datum of wire `g`'s registered row** at an opening's row bits `v` and salt `y` (`dataAt`), at a leaf map `L`;
 empty at a wire with no row. -/
 def dataOfRow (c : Flock.Circuit) (L : LeafMap) {N : ℕ} (rows : Fin N → Option RowAt) (g : Fin N) {W : ℕ}
-    (v : FlockSoundness.Discharge.Layout.BitVal W) (y : List UInt8) : Claims.Msg :=
+    (v : FlockSoundness.Discharge.Layout.BitVal W) (y : List UInt8) : Hash.Msg :=
   match rows g with
   | some r => dataAt c L r v y
   | none => []
@@ -100,7 +100,7 @@ theorem dataOfRow_some {c : Flock.Circuit} {L : LeafMap} {N : ℕ} {rows : Fin N
     dataOfRow c L rows g v y = dataAt c L r v y := by
   simp only [dataOfRow, h]
 
-theorem opens_dataOfRow {H : Claims.Msg → Claims.Msg} {Cm : CommitmentScheme Bool} {roots : List Claims.Msg}
+theorem opens_dataOfRow {H : Hash.Msg → Hash.Msg} {Cm : CommitmentScheme Bool} {roots : List Hash.Msg}
     {c : Flock.Circuit} {L : LeafMap} {N : ℕ} {rows : Fin N → Option RowAt} {g : Fin N} {r : RowAt}
     (hr : rows g = some r) {W : ℕ} {v : FlockSoundness.Discharge.Layout.BitVal W} {y : List UInt8} {pos : ℕ}
     {b : Bool} (h : Cm.Opens H roots ⟨pos, b, dataAt c L r v y⟩ = true) :
@@ -232,7 +232,7 @@ noncomputable def revealV5 {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Optio
     {d₀ : Lean.Json} (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀) (S : Finset (Fin n)) (R : Reg) (u : Fin n)
     (M : Model.Message FlockLevel3.GF128 (tabOfZ (planZHJP dj y₀) (tabZHJP dj y₀) S R u).sch.k0
       (tabOfZ (planZHJP dj y₀) (tabZHJP dj y₀) S R u).sch.level₀.logCols) :
-    List (List Claims.Msg × Opening Bool) :=
+    List (List Hash.Msg × Opening Bool) :=
   let vb := vbP dj y₀ ht (Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse hD)) hscope hU hpi hpub
     (Reg := Reg)
   revealOf ((keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi))

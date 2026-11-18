@@ -1,5 +1,5 @@
 """Registered reads of bit rows: a statement whose ports are `hm96-sha512/row/v2` and `hm96-sha512/row-seg/v1` rows reads
-registered values committed in each port's own format (`registered.Registered.commit`'s `schema`), and the Lean verifier
+registered values committed in each port's own format (`registered_value.Registered.commit`'s `schema`), and the Lean verifier
 opens each table row under its port's leaf schema, refusing a registration in another format, under another format's
 root or of another width. The statement is `test_lean_registered_reads.py`'s RoPE d64 one, composed with every row a bit
 row of its words' bits (`compose`'s `port_bits`) and cs segmented, and both input ports registered: x (unit i reads row
@@ -25,6 +25,7 @@ from verity.circuits.codec import canonical_json, encode_program
 from verity_flock import circuit as FC
 from verity.protocols.resource_accounting.compute.pouw.verifier import audit as PA
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G
+from verity.commitments import registered_value as RV
 
 from test_lean_registered_reads import BIN, LEAN, OUT_VALUE, POSITIONS, STATEMENT, TABLE_ROWS, VALUE, _program
 
@@ -62,7 +63,7 @@ def staged(tmp_path_factory):
                                                 "x": {"value": "x", "rows": list(range(N))}}
     rng = np.random.default_rng(20261020)
     prog = P.program_digest(program)
-    regs = {v: G.Registered.commit(prog, v, rng.integers(0, 1 << 16, (rows, WORDS)).tolist(), schema=SCHEMAS[v])
+    regs = {v: RV.Registered.commit(prog, v, rng.integers(0, 1 << 16, (rows, WORDS)).tolist(), schema=SCHEMAS[v])
             for v, rows in ((VALUE, TABLE_ROWS), ("x", N))}
     roots = {v: r.root.hex() for v, r in regs.items()}
     own = G.reads_file(program, query, values, roots, schemas=SCHEMAS)
@@ -99,7 +100,7 @@ def one_value(tmp_path_factory):
     (d / "partition.json").write_text(json.dumps(part))
     rng = np.random.default_rng(20261021)
     prog, n = P.program_digest(program), N + TABLE_ROWS
-    regs = {name: G.Registered.commit(prog, value, rng.integers(0, 1 << 16, (n, WORDS)).tolist(), schema=G.SCHEMA_V2)
+    regs = {name: RV.Registered.commit(prog, value, rng.integers(0, 1 << 16, (n, WORDS)).tolist(), schema=G.SCHEMA_V2)
             for name, value in (("rows", ROWS), ("again", ROWS), ("other", "other"))}
     reads = {"x": list(range(N)), "cs": [N + p for p in POSITIONS]}
     reg = regs["rows"]
@@ -115,10 +116,10 @@ def one_value(tmp_path_factory):
     return st
 
 
-def _out(prog: str, rng) -> G.Registered:
+def _out(prog: str, rng) -> RV.Registered:
     """The registered `rope_out` rows the statement's output row reads, unit i row i: a `row/v2` bit row of all its words,
     as `compose` lays out the output rows of a bit-row statement."""
-    return G.Registered.commit(prog, OUT_VALUE, rng.integers(0, 1 << 16, (N, WORDS)).tolist(), schema=G.SCHEMA_V2)
+    return RV.Registered.commit(prog, OUT_VALUE, rng.integers(0, 1 << 16, (N, WORDS)).tolist(), schema=G.SCHEMA_V2)
 
 
 def _stage(s, name: str, regs: dict | None = None) -> Path:
@@ -186,10 +187,10 @@ def test_a_root_of_another_format_or_value_is_refused(staged):
     leaves (the reads file naming the port's format) opens nothing, nor does another value's root."""
     for port, value in (("x", "x"), ("cs", VALUE)):
         reg = staged.regs[value]
-        for schema in G.SCHEMAS:
+        for schema in RV.SCHEMAS:
             if schema == reg.schema:
                 continue
-            other = G.Registered.commit(reg.program, value, reg.rows, reg.salts, reg.word_bits, schema)
+            other = RV.Registered.commit(reg.program, value, reg.rows, reg.salts, reg.word_bits, schema)
             code, out = _statement(staged, _own(staged, f"own-root-{port}-{schema[-6:].replace('/', '-')}",
                                                 lambda ps, port=port, other=other: ps[port].update(root=other.root.hex())))
             assert code == 1 and f"port {port}: table row 0 does not open {value}'s registered root" in out, (port, out)
@@ -205,11 +206,11 @@ def test_a_supplied_value_opens_under_its_row_seg_read(staged):
     program, _ = _program()
     rng = np.random.default_rng(20261110)
     rows = [[("bytes", rng.bytes(2 * WORDS).hex())] for _ in range(TABLE_ROWS)]
-    sup = {schema: G.supplied_value(program, VALUE, rows, {}, [VALUE], schema=schema) for schema in G.SCHEMAS}
+    sup = {schema: G.supplied_value(program, VALUE, rows, {}, [VALUE], schema=schema) for schema in RV.SCHEMAS}
     cs, seg = staged.own["ports"]["cs"], sup[G.SCHEMA_SEG]
     assert all(seg.entry()[k] == cs[k] for k in ("leaves", "words", "domain")) and seg.word_bits == cs["word_bits"]
     root = G.supplied_root(program, VALUE, rows, {}, cs, [VALUE], schema=G.SCHEMA_SEG)
-    assert root == seg.root.hex() and len({r.root for r in sup.values()}) == len(G.SCHEMAS)
+    assert root == seg.root.hex() and len({r.root for r in sup.values()}) == len(RV.SCHEMAS)
     public = _stage(staged, "supplied", {"x": staged.regs["x"], VALUE: seg})
     code, out = _statement(staged, _own(staged, "own-supplied", lambda ps: ps["cs"].update(root=root)), public)
     assert code == 0, out
@@ -262,13 +263,13 @@ def test_a_pearl_plus_tree_opens_under_its_own_domain(staged):
     reads file's `domains`): cs's rows committed as Pearl+ commits a call's A, under PoUW's rows domain and salts, whose
     root the verifier opens at every table row under that domain. A table row with one word flipped opens nothing, nor
     does x, a `row/v2` port, read from a Pearl+ tree of its rows (whose leaves are `row-seg/v1`), nor cs under
-    one-stage's own domain for it (`registered.domain`, whichever binding it takes). The reads file registers the output
+    one-stage's own domain for it (`registered_value.domain`, whichever binding it takes). The reads file registers the output
     row out as the fixture does, since a statement under `--registered` registers every port. It catches what
     `tests/test_registered.py`'s Python reads can't: the executable verifier holding a read to a domain from outside
     one-stage, verbatim."""
     program, query = _program()
     (cs, cs_reg), (x, x_reg) = _pearl_plus(staged, VALUE, 7), _pearl_plus(staged, "x", 8)
-    mine = G.domain(P.program_digest(program), VALUE, WORDS, TABLE_ROWS).domain_id.hex()
+    mine = RV.domain(P.program_digest(program), VALUE, WORDS, TABLE_ROWS).domain_id.hex()
     assert cs.domain.domain_id.hex() != mine and staged.own["ports"]["cs"]["domain"] == mine
     own = G.reads_file(program, query, {VALUE: WORDS, "x": WORDS},
                        {VALUE: cs.commitment.root.hex(), "x": staged.regs["x"].root.hex()},

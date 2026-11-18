@@ -12,6 +12,7 @@ import pytest
 from verity.circuits.boolean.forms import Circuit
 from verity.commitments.gates.bits import ands
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity_vllm.compiler import replay_chain as RC
 
@@ -571,7 +572,7 @@ def test_a_session_through_the_chain(S):
 
 
 def _fresh(S, value, rows):
-    return G.Registered.commit(PROGRAM, value, [RC.row(r) for r in rows], word_bits=16, schema=RC.SCHEMA,
+    return RV.Registered.commit(PROGRAM, value, [RC.row(r) for r in rows], word_bits=16, schema=RC.SCHEMA,
                                produced=REGISTRATION)
 
 

@@ -146,7 +146,7 @@ theorem commitsP_quiet (h : ByteArray → ByteArray) (tabs : Array Setup) (schs 
   unfold commitsP
   sim_walk [commitP_quiet h]
 
-theorem afterLinkP_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (spec : SessionSpec)
+theorem afterLinkP_sim (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) (spec : SessionSpec)
     (tabs : Array Setup) (trs : Array Trace) (tape : Tape) (schs : Array Schedule) (tbls : Array (Array F128))
     (cms : Array Commit) (c1 : ℕ → F128) :
     (simS H resp).R (afterLinkP asks Hashes.pi spec tabs trs tape schs tbls cms c1)
@@ -154,14 +154,14 @@ theorem afterLinkP_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
   unfold afterLinkP
   sim_walk [repP_sim H resp, recordJson_sim H resp]
 
-theorem asksS_link_go (resp : ℕ → Claims.Msg) (a b : Array ByteArray) (l : Array Claims.Msg) :
+theorem asksS_link_go (resp : ℕ → Hash.Msg) (a b : Array ByteArray) (l : Array Hash.Msg) :
     ((asksS resp).link a b).go l = (.ok (coinOf (resp l.size)), l.push (linkBody a.toList b.toList)) := rfl
 
 /-- **The first send is the link message**: a pure session that returns ran its schedules and level-0 commitments
 (their verdict-monad runs return), then sent the link message of the caps, with no public words, first. -/
-theorem sessionS_link {H : Claims.Msg → Claims.Msg} {resp : ℕ → Claims.Msg} {spec : SessionSpec}
+theorem sessionS_link {H : Hash.Msg → Hash.Msg} {resp : ℕ → Hash.Msg} {spec : SessionSpec}
     {sts : Array Flock.Stmt} {w : Claims.Flock.Wit} {ω : Tape} {rec : String} {pfs : Array ByteArray}
-    {bodies : Array Claims.Msg} (h : sessionS H resp spec sts w ω = (.ok (rec, pfs), bodies)) :
+    {bodies : Array Hash.Msg} (h : sessionS H resp spec sts w ω = (.ok (rec, pfs), bodies)) :
     ∃ schs cms, (schedsP (tabsOf sts) : V _) = .ok schs ∧
       (commitsP (Hashes.ofSha512 (Claims.hOf H)) (tabsOf sts) schs (tablesP (tabsOf sts) (tracesOf sts w)) ω : V _) =
         .ok cms ∧
@@ -319,7 +319,7 @@ theorem fast100_d0 {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) : (sch.
 
 /-- **The case's statement is one table, and commits with the scope check's leaf scheme**: `hm96-sha512/v1`, or plain
 SHA-512 leaves under hidden outputs. -/
-theorem Case.leaf {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
+theorem Case.leaf {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
     ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧
       (st.merkle = MerkleScheme.hm96Sha512 ∨ st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployPlain rel) rel (readOf false) rfl
@@ -382,7 +382,7 @@ theorem schedsP_one {st : Stmt} {schs : Array Schedule} (hs : (schedsP #[Setup.o
 
 /-- **The first send is the link message**, each length in its word: the goal `LinkFirst`, for a SHA-512 of 64-byte
 outputs. -/
-theorem linkFirst_goal (H : Claims.Msg → Claims.Msg) (hH : ∀ m, (H m).length = 64)
+theorem linkFirst_goal (H : Hash.Msg → Hash.Msg) (hH : ∀ m, (H m).length = 64)
     (rel : Readable.Parsed → Readable.Relation) : LinkFirst H rel := by
   intro o
   have h64 : ∀ b, (Claims.hOf H b).size = 64 := fun b => by

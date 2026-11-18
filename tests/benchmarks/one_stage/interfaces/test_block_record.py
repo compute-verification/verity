@@ -199,6 +199,49 @@ def test_the_wipe_is_its_threshold_at_its_reads() -> None:
                                    "public": public, "profile": {"k": 5231}}}, server="n0", runs=["r"])
     assert (lg["quantity"]["value"], lg["quantity"]["k"], lg["quantity"]["r"]) == (39_721_768_854, 5231, 59)
     assert lg["error"] == f"1/{2 ** 128}" and all(at["holds"] for at in lg["at"].values())
+    assert lg["premises"] == ["Verity.Vocab.WipeSound"]
+
+
+def test_each_declared_schemes_row_is_its_readers_and_only_the_undeclared_are_read_by_name() -> None:
+    """The bandwidth audit's and the network attester's quantities are their schemes' readings under their declared
+    symbols and published units, as the record wrote them before the readers; only the sampled proofs and the work
+    row are read by name, a list that only shrinks; a subprotocol no scheme's record names is refused by name."""
+    row = {"answer": {}, "quantity": {"q_bytes": 5, "eps": "1/4", "K": 9, "windows": 3}}
+    assert R._quantity("bandwidth", row) == ({"symbol": "Q_cert", "value": 5, "unit": "bytes"}, Fraction(1, 4),
+                                             "quantity.eps")
+    assert R._quantity("certifier", row) == ({"symbol": "K", "value": 9, "unit": "bits", "windows": 3},
+                                             Fraction(1, 4), "quantity.eps")
+    assert set(R.BY_NAME) <= {"integrity", "pouw"}
+    assert R._premises(R._scheme("bandwidth")) == ["ResourceAccounting.Remote.Run.Counted"]
+    assert R._premises(R._scheme("pous")) == []
+    assert R._premises(R._scheme("certifier")) == ["NetTiming.Attester.Phase.ChargeHolds",
+                                                   "NetTiming.Attester.RowsCommitted"]
+    with pytest.raises(ValueError, match="not a subprotocol"):
+        R._quantity("attester", row)
+
+
+def test_each_row_its_scheme_bounds_not_carries_why_beside_it_and_keeps_its_verdict(monkeypatch) -> None:
+    """`S.bound` refuses all four declared rows today (PoUS's help and the bandwidth audit's six Γ charges nothing
+    bounds, the wipe's own term unsaid, the network attester's start and tied entries nothing bounds): each carries that sentence and the
+    terms it lacks, and its verdict is still its answer's. Naming a row in `UNDECIDED_WHEN_UNBOUNDED` makes it
+    undecided with the sentence as its reason, and only that row."""
+    report, wipe = _accepting_report()
+    built = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    legs = built["legs"]
+    lacking = {"pous": "help", "bandwidth": "chip", "wipe": "Verity.Scheme.δscheme", "certifier": "start"}
+    for name, term in lacking.items():
+        refused = R.S.unbounded(R._scheme(name))
+        assert legs[name]["unbounded"] == {"why": str(refused), "terms": list(refused.terms)} and term in refused.terms
+        assert legs[name]["answer"]["verdict"] == "accept"
+    assert not any("unbounded" in legs[k] for k in R.BY_NAME)
+    assert built["composed"]["legs"] == {k: "accept" for k in R.SUBPROTOCOLS}
+    jsonschema.Draft202012Validator(SCHEMA).validate(built)
+    assert R.check(built) == {} and R.UNDECIDED_WHEN_UNBOUNDED == ()
+    monkeypatch.setattr(R, "UNDECIDED_WHEN_UNBOUNDED", ("pous",))
+    again = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    assert again["legs"]["pous"]["answer"]["verdict"] == "undecided"
+    assert again["legs"]["pous"]["answer"]["reason"] == legs["pous"]["unbounded"]["why"]
+    assert again["composed"]["legs"] == {k: "undecided" if k == "pous" else "accept" for k in R.SUBPROTOCOLS}
 
 
 def test_pous_writes_its_state_bound_and_a_record_under_the_older_name_still_reads() -> None:

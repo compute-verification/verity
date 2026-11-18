@@ -88,13 +88,13 @@ def sendsC : Cost PS where
     cases v <;> exact Nat.le_add_right _ _
 
 /-- A run from no sends that ends at `l` pushed at most `n` bodies. -/
-theorem sendsC_ran {α : Type} {y : PS α} {n : ℕ} (h : sendsC.P y n) {r : Except String α} {l : Array Claims.Msg}
+theorem sendsC_ran {α : Type} {y : PS α} {n : ℕ} (h : sendsC.P y n) {r : Except String α} {l : Array Hash.Msg}
     (e : y.go #[] = (r, l)) : l.size ≤ n := by
   have := h #[]
   rw [e] at this
   simpa using this
 
-theorem sendsC_round (resp : ℕ → Claims.Msg) (c : ByteArray) : sendsC.P ((asksS resp).round c) 1 := by
+theorem sendsC_round (resp : ℕ → Hash.Msg) (c : ByteArray) : sendsC.P ((asksS resp).round c) 1 := by
   intro l
   show (l.push (Claims.toMsg c)).size ≤ l.size + 1
   simp
@@ -104,7 +104,7 @@ theorem sendsC_quiet {α : Type} {v : V α} {y : PS α} (h : quietS.R v y) : sen
   rw [h l]
   exact Nat.le_add_right _ _
 
-theorem squeezeP_sends (resp : ℕ → Claims.Msg) (kind : UInt8) (n : ℕ) :
+theorem squeezeP_sends (resp : ℕ → Hash.Msg) (kind : UInt8) (n : ℕ) :
     (sendsC.st Transcript).P (squeezeP (asksS resp) kind n) 1 := by
   intro t
   unfold squeezeP
@@ -112,19 +112,19 @@ theorem squeezeP_sends (resp : ℕ → Claims.Msg) (kind : UInt8) (n : ℕ) :
   refine sendsC.mono (sendsC.ite (fun _ => sendsC.pure _) fun _ =>
     sendsC.bind (sendsC_round resp c) fun _ => sendsC.pure _) (by omega)
 
-theorem sampleP_sends (resp : ℕ → Claims.Msg) : (sendsC.st Transcript).P (sampleP (asksS resp)) 1 := by
+theorem sampleP_sends (resp : ℕ → Hash.Msg) : (sendsC.st Transcript).P (sampleP (asksS resp)) 1 := by
   unfold sampleP
   exact (sendsC.st Transcript).bind (squeezeP_sends resp 1 1) fun _ => (sendsC.st Transcript).pure _
 
-theorem sampleVecP_sends (resp : ℕ → Claims.Msg) (n : ℕ) :
+theorem sampleVecP_sends (resp : ℕ → Hash.Msg) (n : ℕ) :
     (sendsC.st Transcript).P (sampleVecP (asksS resp) n) 1 :=
   squeezeP_sends resp 2 n
 
-theorem sampleKP_sends (resp : ℕ → Claims.Msg) : (sendsC.st Transcript).P (sampleKP (asksS resp)) 1 := by
+theorem sampleKP_sends (resp : ℕ → Hash.Msg) : (sendsC.st Transcript).P (sampleKP (asksS resp)) 1 := by
   unfold sampleKP
   exact (sendsC.st Transcript).bind (squeezeP_sends resp 2 2) fun _ => (sendsC.st Transcript).pure _
 
-theorem zerocheckP_sends (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap : ByteArray) (tr : Trace) :
+theorem zerocheckP_sends (resp : ℕ → Hash.Msg) (m : ℕ) (digest cap : ByteArray) (tr : Trace) :
     (sendsC.st Transcript).P (zerocheckP (asksS resp) m digest cap tr) (3 + (m - 6)) := by
   apply (sendsC.st Transcript).mono
   · unfold zerocheckP sampleVecP
@@ -132,7 +132,7 @@ theorem zerocheckP_sends (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap : Byt
   · simp only [Std.Legacy.Range.size]
     omega
 
-theorem lincheckP_sends (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) :
+theorem lincheckP_sends (resp : ℕ → Hash.Msg) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) :
     (sendsC.st Transcript).P (lincheckP (asksS resp) c m tr zc) (3 + (c.kLog - 6)) := by
   apply (sendsC.st Transcript).mono
   · unfold lincheckP
@@ -140,7 +140,7 @@ theorem lincheckP_sends (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) 
   · simp only [Std.Legacy.Range.size]
     omega
 
-theorem ringSwitchP_sends (resp : ℕ → Claims.Msg) (tr : Trace) (claims : Array Claim) :
+theorem ringSwitchP_sends (resp : ℕ → Hash.Msg) (tr : Trace) (claims : Array Claim) :
     (sendsC.st Transcript).P (ringSwitchP (asksS resp) tr claims) (claims.size + 1) := by
   apply (sendsC.st Transcript).mono
   · unfold ringSwitchP sampleVecP
@@ -167,21 +167,21 @@ theorem powP_sends (nonce : ℕ → ℕ → UInt64) (kind : ℕ) :
     cost_walk
   · omega
 
-theorem challengeP_sends (resp : ℕ → Claims.Msg) (split : Bool) :
+theorem challengeP_sends (resp : ℕ → Hash.Msg) (split : Bool) :
     ((sendsC.st Transcript).st LigState).P (challengeP (asksS resp) split) 1 := by
   apply ((sendsC.st Transcript).st LigState).mono
   · unfold challengeP liftT
     cost_walk [sampleKP_sends resp, sendMsg_sends]
   · omega
 
-theorem oodIntroP_sends (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) (dim : ℕ) :
+theorem oodIntroP_sends (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) (dim : ℕ) :
     ((sendsC.st Transcript).st LigState).P (oodIntroP (asksS resp) nonce g dim) 2 := by
   apply ((sendsC.st Transcript).st LigState).mono
   · unfold oodIntroP liftT
     cost_walk [sampleVecP_sends resp, sampleP_sends resp, sendMsg_sends, powP_sends]
   · omega
 
-theorem queryP_sends (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit) :
+theorem queryP_sends (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit) :
     ((sendsC.st Transcript).st LigState).P (queryP (asksS resp) nonce ms lv cm) 2 := by
   apply ((sendsC.st Transcript).st LigState).mono
   · unfold queryP liftT
@@ -189,7 +189,7 @@ theorem queryP_sends (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64
   · omega
 
 /-- **Ligerito's sends**: `k0 + 9` before the recursive levels, then `11` at each level but the last, which sends `7`. -/
-theorem ligeritoP_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
+theorem ligeritoP_sends (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (t b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
     (sendsC.st Transcript).P (ligeritoP (asksS resp) (Hashes.ofSha512 h) ms sch T cm0 t b salt nonce)
       (sch.k0 + 9 + ((sch.levels.size - 1 - 1) * 11 + 7)) := by
@@ -213,14 +213,14 @@ theorem ligeritoP_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
 
 /-! ## A rep, the record and the session -/
 
-theorem ringSwitchP_abc_sends (resp : ℕ → Claims.Msg) (tr : Trace) (m kLog : ℕ) (zc : ZcOut) (lc : LcOut)
+theorem ringSwitchP_abc_sends (resp : ℕ → Hash.Msg) (tr : Trace) (m kLog : ℕ) (zc : ZcOut) (lc : LcOut)
     (extras : Array Claim) :
     (sendsC.st Transcript).P (ringSwitchP (asksS resp) tr (abcClaims m kLog zc lc ++ extras)) (2 + extras.size + 1) := by
   have := ringSwitchP_sends resp tr (abcClaims m kLog zc lc ++ extras)
   rwa [Array.size_append, show (abcClaims m kLog zc lc).size = 2 from rfl] at this
 
 /-- **A rep's sends**: zerocheck's, lincheck's, the ring switch's on the two claims and the extras, and Ligerito's. -/
-theorem repP_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_sends (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (t : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
     (sendsC.st Transcript).P (repP (asksS resp) (Hashes.ofSha512 h) st sch tr t cm0 extras salt nonce)
       ((3 + (st.m - 6)) + (3 + (st.fold.kLog - 6)) + (2 + extras.size + 1) +
@@ -263,13 +263,13 @@ theorem sendsC_quiet_bind {α β : Type} {v : V α} {y : PS α} (hq : quietS.R v
   | error _ => exact Nat.le_add_right _ _
   | ok a => exact h a rfl l
 
-theorem sendsC_link (resp : ℕ → Claims.Msg) (a b : Array ByteArray) : sendsC.P ((asksS resp).link a b) 1 := by
+theorem sendsC_link (resp : ℕ → Hash.Msg) (a b : Array ByteArray) : sendsC.P ((asksS resp).link a b) 1 := by
   intro l
   show (l.push (linkBody a.toList b.toList)).size ≤ l.size + 1
   simp
 
 /-- **The sends after the link message**, one table's two reps. -/
-theorem afterLinkP_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Stmt)
+theorem afterLinkP_sends (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Stmt)
     (sch : Schedule) (trs : Array Trace) (tape : Tape) (tbls : Array (Array F128)) (cms : Array Commit)
     (c1 : ℕ → F128) (hspec : spec.tables.size = 1) :
     sendsC.P (afterLinkP (asksS resp) (Hashes.ofSha512 h) spec #[Setup.ofCircuit st] trs tape #[sch] tbls cms c1)
@@ -318,7 +318,7 @@ theorem fast100_levels {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) : 2
 /-! ## The goal -/
 
 /-- **The sends fit the verifier's rounds**: the goal `SendCount`. -/
-theorem sendCount_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem sendCount_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     SendCount H rel := by
   intro o
   obtain ⟨st, hsts, hspec, -⟩ := o.leaf

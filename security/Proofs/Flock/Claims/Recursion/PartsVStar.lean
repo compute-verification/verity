@@ -83,7 +83,7 @@ theorem rawIns_ok_of_publicFile {w : FlockDeploy.Raw} {pf : ByteArray} {i' : Flo
   all_goals simp_all
 
 /-- What `readXPre` read: the verifier's own inner shape and V*'s list at it. -/
-theorem readXPre_spec {x : Claims.Msg} {r : XR} (h : readXPre x = some r) :
+theorem readXPre_spec {x : Hash.Msg} {r : XR} (h : readXPre x = some r) :
     (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)).toOption = some r.shape ∧
       ∃ vs, RecVStar.statements r.shape = .ok vs ∧ r.w.parts.length = vs.size := by
   unfold readXPre at h
@@ -104,7 +104,7 @@ theorem checkHolo_of_holoOf {s : VStar.Stmt} {c : Flock.Circuit} {holo : Bool}
 /-- **A part whose session sets up has V\*'s circuit**: where part `s`'s session at `r` (`partRaw`, at any staging)
 reads its inputs, sets up and passes its scope check, the session's `RecVStar.checkCircuit` holds its circuit to
 V\*'s statement `s` under the verifier's own bindings, and that is `partVStar`. -/
-theorem partVStar_of_setup {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ}
+theorem partVStar_of_setup {r : XR} {st : Stage} {x : Hash.Msg} {ms : List (Hash.Msg × Claims.Out)} {s : ℕ}
     {p : PartX} {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (hsh : (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)).toOption = some r.shape)
     (hi : (partRaw r st x ms s p).ins = .ok i) (hs : i.setup = .ok (spec, sts)) (hck : i.base.read.check = .ok ()) :
@@ -176,8 +176,8 @@ theorem partVStar_of_setup {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Cl
 /-- **`readX` refuses no statement every part's session sets up at**: where `readXPre` reads `x` and each part's
 session (`partRaw`, at some staging) reads its inputs, sets up and passes its scope check, `readX` reads `x` the
 same. -/
-theorem readX_of_sessions {x : Claims.Msg} {r : XR} (hr : readXPre x = some r)
-    (h : ∀ s p, r.w.parts[s]? = some p → ∃ (st : Stage) (ms : List (Claims.Msg × Claims.Out)) (i : RecIns)
+theorem readX_of_sessions {x : Hash.Msg} {r : XR} (hr : readXPre x = some r)
+    (h : ∀ s p, r.w.parts[s]? = some p → ∃ (st : Stage) (ms : List (Hash.Msg × Claims.Out)) (i : RecIns)
       (spec : SessionSpec) (sts : Array Stmt),
       (partRaw r st x ms s p).ins = .ok i ∧ i.setup = .ok (spec, sts) ∧ i.base.read.check = .ok ()) :
     readX x = some r := by
@@ -196,7 +196,7 @@ theorem readX_of_sessions {x : Claims.Msg} {r : XR} (hr : readXPre x = some r)
 
 /-- **What `readX` read of each part**: the verifier's own bindings of it read, and its circuit is V\*'s statement's
 of its index (`partVStar`). -/
-theorem readX_partVStar {x : Claims.Msg} {r : XR} (h : readX x = some r) :
+theorem readX_partVStar {x : Hash.Msg} {r : XR} (h : readX x = some r) :
     ∃ vs, RecVStar.statements r.shape = .ok vs ∧ r.w.parts.length = vs.size ∧
       ∀ s (hs : s < vs.size), ∃ f p c, ownBindings p.bindings = some f ∧ r.w.parts[s]? = some p ∧
         partCircuit p = some c ∧ RecVStar.checkFile vs[s] f p.base.circuit r.shape.holo = .ok () ∧
@@ -230,7 +230,7 @@ theorem readX_partVStar {x : Claims.Msg} {r : XR} (h : readX x = some r) :
 
 /-- **Each part's circuit is named and flagged as V\*'s statement of its index**: besides its part (`checkPart`), the
 circuit's unit name is the statement's (`RecVStar.check`) and its META holo is V\*'s file's (`checkHolo`). -/
-theorem readX_partNamed {x : Claims.Msg} {r : XR} (h : readX x = some r) :
+theorem readX_partNamed {x : Hash.Msg} {r : XR} (h : readX x = some r) :
     ∃ vs, RecVStar.statements r.shape = .ok vs ∧ ∀ s (hs : s < vs.size), ∃ p c, r.w.parts[s]? = some p ∧
       partCircuit p = some c ∧ RecVStar.checkPart vs[s] c = .ok () ∧ c.unit.name = vs[s].name ∧
       RecVStar.checkHolo vs[s] c r.shape.holo = .ok () := by

@@ -26,7 +26,7 @@ open Claims.Bridge.Live
 open Lean (Json)
 
 /-- `plain_liveRow` at `VK keep`. -/
-theorem plain_liveRowK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_liveRowK (keep : Bool → Bool) {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) {u : plainTape x}
@@ -98,7 +98,7 @@ open Lean (Json)
 
 open Classical in
 /-- `plainOffL_le_rd` at `VK keep`. -/
-theorem plainOffL_le_rdK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {st : Stmt}
+theorem plainOffL_le_rdK (keep : Bool → Bool) {x : Hash.Msg} {ins : Ins} {spec : SessionSpec} {st : Stmt}
     (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -190,7 +190,7 @@ theorem plainOffL_le_rdK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {sp
 
 open Classical in
 /-- `plain_accPr_le_rdL` at `VK keep`. -/
-theorem plain_accPr_le_rdLK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
+theorem plain_accPr_le_rdLK (keep : Bool → Bool) {x : Hash.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (hset : setupOf false x = some (ins, spec, sts))
     (h : tables false x = [(spec, st)]) {d : Json} (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -294,7 +294,7 @@ open Claims.Bridge.Live
 open Lean (Json)
 
 /-- `plainRel_of` at `VK keep`. -/
-theorem plainRel_ofK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plainRel_ofK (keep : Bool → Bool) {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (T : TabSpec spec.mPts)
@@ -332,7 +332,7 @@ theorem plainRel_ofK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.S
 
 open Classical in
 /-- `plain_accPr_le_rdRun` at `VK keep`. -/
-theorem plain_accPr_le_rdRunK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_accPr_le_rdRunK (keep : Bool → Bool) {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (L : Layout st) (m k0 : ℕ)
@@ -399,7 +399,7 @@ theorem plain_accPr_le_rdRunK (keep : Bool → Bool) {x : Claims.Msg} {s : Claim
 
 open Classical in
 /-- `plain_accPr_le_rdAll` at `VK keep`. -/
-theorem plain_accPr_le_rdAllK (keep : Bool → Bool) {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (VK keep) x) :
+theorem plain_accPr_le_rdAllK (keep : Bool → Bool) {x : Hash.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (VK keep) x) :
     ∃ (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (m k0 : ℕ)
       (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ),
       setupOf false x = some (ins, spec, sts) ∧ sts[0]? = some st ∧ fast100 st.m = some sch ∧

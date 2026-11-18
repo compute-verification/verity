@@ -38,8 +38,8 @@ submitting on table `t`'s rep `r` release their coins are the logs before each o
 (`stream_logs`, at a session of a window). -/
 theorem session_stream_logs {γ : Type _} {J : ℕ} (tab : γ → Fin J) (rep : γ → Fin 2) {R : ℕ}
     {tables : Array String} (ht : tables.toList.Nodup) {per : ℕ} (hper : 0 < per)
-    (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) {as : List γ} {ms : List (List Release)} {Lg L₀ : List Release} {u τ : ℕ}
+    (reveal : ℕ → Slot → Exchange → Option Hash.Msg) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) {as : List γ} {ms : List (List Release)} {Lg L₀ : List Release} {u τ : ℕ}
     (hτ : (openedTrees Lg)[u]? = some τ)
     (hF : List.Forall₂ (fun a m => ∃ (j : Fin R) (k : ℕ) (x : Release) (L' : List Release),
       j.val / per = u ∧ slotOf tables.size per (j.val % per) = .rep (tab a).val (rep a) k ∧
@@ -136,8 +136,8 @@ count of the stream's openings its log has, the stream's rounds are `f` at none,
 them in `Lg` (`stream_rounds`, at a session of a window). -/
 theorem session_stream_rounds {γ : Type _} {J : ℕ} (tab : γ → Fin J) (rep : γ → Fin 2) (rd : γ → Flock.Round)
     {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup) {per : ℕ} (hper : 0 < per)
-    (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) {as : List γ} {ms : List (List Release)} {Lg L₀ : List Release} {u τ : ℕ}
+    (reveal : ℕ → Slot → Exchange → Option Hash.Msg) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) {as : List γ} {ms : List (List Release)} {Lg L₀ : List Release} {u τ : ℕ}
     (hτ : (openedTrees Lg)[u]? = some τ)
     (hF : List.Forall₂ (fun a m => ∃ (j : Fin R) (k : ℕ) (x : Release) (L' : List Release),
       j.val / per = u ∧ slotOf tables.size per (j.val % per) = .rep (tab a).val (rep a) k ∧

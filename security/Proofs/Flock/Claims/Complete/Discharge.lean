@@ -60,7 +60,7 @@ namespace FlockComplete
 
 /-- **The scope at the case's setup**: one table, of `22 ≤ m ≤ 35`, and the session spec is its own; its circuit is an
 untyped row circuit the scope parsed, of `m = k_log + nbl` and `6 ≤ k_log`. -/
-theorem Case.table {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
+theorem Case.table {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
     ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧ 22 ≤ st.m ∧ st.m ≤ 35 ∧
       (∃ tags file tables, tags.typed = false ∧ ProvedScope.circuitOf tags file tables = .ok st.c) ∧
       st.m = st.c.kLog + st.nbl ∧ 6 ≤ st.c.kLog := by
@@ -107,7 +107,7 @@ theorem fast100_isSome {m : ℕ} (h1 : 22 ≤ m) (h2 : m ≤ 35) : (fast100 m).i
   exact h
 
 /-- **One statement per table** (§3): the goal `Tables`. -/
-theorem tables_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Tables H rel := by
+theorem tables_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Tables H rel := by
   intro o
   obtain ⟨st, hsts, hspec, -, -⟩ := o.table
   unfold Run.tabs tabsOf
@@ -115,7 +115,7 @@ theorem tables_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
   simp [Stmt.spec]
 
 /-- **Each table has its fast100 schedule**: the goal `Schedules`. -/
-theorem schedules_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
+theorem schedules_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) :
     Schedules H rel := by
   intro o st hst
   obtain ⟨st0, hsts, -, h1, h2, -⟩ := o.table

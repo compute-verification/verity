@@ -65,11 +65,11 @@ def test_chain_record_fails_on_a_released_file_with_an_undeclared_key(tmp_path):
     (run / "out" / "n2" / "leak.json").unlink()
     certs = "out/gates/c0/r0/out/certificates.jsonl"
     line = {"certificate": {"key_id": "k", "link": 0, "direction": "ingress", "window": 0, "digest": "0", "signature": "1"}}
-    _put(run, {certs: (json.dumps(line) + "\n").encode(), "out/n2/outcome.json": b'{"verdict": "accept"}'})
+    _put(run, {certs: (json.dumps(line) + "\n").encode(), "out/scan/outcome.json": b'{"verdict": "accept"}'})
     p = _chain(tmp_path, "gate.tgz absent.tgz")
     out, _ = p.communicate()
     assert "leak guard: clean" in out and (run / certs).is_file(), out
-    assert "1 files checked by key, 0 with a key not declared public; 2 not yet checked ((top level) 1, n2 1)" in out
+    assert "1 files checked by key, 0 with a key not declared public; 2 not yet checked ((top level) 1, scan 1)" in out
     assert json.loads((run / "out" / "leak-guard.json").read_text())["keys"]["no_keys"] == {".log": 2}
     for f in ("job.log", "stdout.log", "leak-guard.json"):
         (run / "out" / f).unlink()

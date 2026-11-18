@@ -68,13 +68,16 @@ def test_a_decided_record_whose_correspondence_holds_no_component_has_none_to_ta
 @pytest.mark.parametrize("extra", [ABSENT, None, {}, {"another.tensor": 3}])
 def test_a_tensor_the_tree_does_not_list_as_the_bundle_s_is_read_from_the_checkpoint(tmp_path: Path, extra: object) -> None:
     tree = with_(OF_RECORD.weights_tree({ROPE: ("float32", OF_RECORD.COS_SIN)}), "extra", extra)
+    OF_RECORD.write_salts(tmp_path, tree)
     assert CPU._open_one(tmp_path, tree, 0, None) == ("checkpoint", None, "no checkpoint given", False)
 
 
 def test_a_tensor_the_tree_lists_as_the_bundle_s_is_read_from_the_bundle(tmp_path: Path) -> None:
     (tmp_path / "weights" / "extra").mkdir(parents=True)
     (tmp_path / "weights" / "extra" / "0.bin").write_bytes(OF_RECORD.COS_SIN.tobytes())
-    source, raw, why, read = CPU._open_one(tmp_path, OF_RECORD.weights_tree({ROPE: ("float32", OF_RECORD.COS_SIN)}) | {"extra": {ROPE: 0}}, 0, None)
+    tree = OF_RECORD.weights_tree({ROPE: ("float32", OF_RECORD.COS_SIN)}) | {"extra": {ROPE: 0}}
+    OF_RECORD.write_salts(tmp_path, tree)
+    source, raw, why, read = CPU._open_one(tmp_path, tree, 0, None)
     assert (source, why, read) == ("bundle", None, True) and raw is not None and raw.tobytes() == OF_RECORD.COS_SIN.tobytes()
 
 
@@ -144,8 +147,11 @@ def test_a_keep_names_the_program_digest_of_its_bundle_s_commit_arguments_and_no
     assert json.loads((CPU.slim_path(out, 1) / CPU.SLIM_DOC).read_text()) == doc
 
 
-def test_a_slim_tree_of_a_tensor_the_tree_holds_no_salt_key_for_raises() -> None:
-    """`keep` names only tensors that opened under the tree, so each has its key; a tree that carries none for one is not refused by
-    name here, as it is where a root is folded (`tensor_root_of`)."""
-    with pytest.raises(AttributeError):
-        CPU.slim_tree({"names": [["w", "f32", [1], 4]], "tensor_keys": {}, "extra": {}}, ["w"])
+@pytest.mark.parametrize("field", ["key", "tensor_keys"])
+def test_a_tree_registered_under_a_weights_key_is_refused_by_name(field: str) -> None:
+    """Only a registration with a salt file is read: a tree recorded under a weights key (its ``key``, or a keep's ``tensor_keys``)
+    is refused before anything opens."""
+    tree = OF_RECORD.weights_tree({ROPE: ("float32", OF_RECORD.COS_SIN)})
+    assert CPU.tree_refusal(tree | {field: "00" * 64}, tree["root"])[1] == (
+        "the bundle's weights tree was registered under a weights key: only a registration with a salt file is read")
+    assert CPU.tree_refusal(tree, tree["root"])[1] is None

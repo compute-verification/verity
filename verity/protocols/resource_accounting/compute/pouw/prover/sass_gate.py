@@ -1769,7 +1769,7 @@ def update_pins(records: list[dict], toolkit: str, path: Path = PINS) -> dict:
 
 
 # ---- the build gate: ptxas's report and cuobjdump's SASS of one kernel family -----------------------------------------
-# Each kernel family's build.sh gate (pearl_c_sm90/, pearl_c_sm120/ and kernels' s8_linear/) states the kernels it
+# Each kernel family's build.sh gate (pearl_c_sm90/ and pearl_c_sm120/) states the kernels it
 # wants and the tensor-core forms each may run; `mma_gate` reads the build and refuses the rest.
 
 MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")

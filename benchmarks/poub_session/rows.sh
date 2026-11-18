@@ -35,7 +35,7 @@
 #
 #   research run --on NODE --project verity --source TREE --cwd clone -- \
 #     env CARDS=0 CORES=0-7 ARCH=120a NOT_AFTER=2026-11-20T18:00Z bash benchmarks/poub_session/rows.sh
-#   ... env BUILD_ONLY=1 ARCH=120a CUDA_HOME=/usr/local/cuda-13.0 BASE_REV=REV bash benchmarks/poub_session/rows.sh
+#   ... env BUILD_ONLY=1 ARCH=120a CUDA_HOME="$(python3 benchmarks/kernels/machine.py toolkit 13.0)" BASE_REV=REV bash benchmarks/poub_session/rows.sh
 #   ... env CARDS=0 CORES=0-7 ARCH=120a STEPS=rows ROWS='64 16' GIB=62 CTAS_AT='64=96,128,188' ...
 set -uo pipefail
 TREE=$PWD
@@ -84,17 +84,17 @@ if [ -n "${TOOLKIT:-}" ]; then
   # shellcheck disable=SC1091
   . benchmarks/pouw/harness/jobs/toolkit.sh || { say "PREFLIGHT: the toolkit did not assemble"; exit 3; }
 fi
-NVCC=$(first "${CUDA_HOME:-/nonexistent}/bin/nvcc" /usr/local/cuda-12.9/bin/nvcc /usr/local/cuda-13.0/bin/nvcc \
-  /usr/local/cuda/bin/nvcc)
-[ -n "$NVCC" ] || { say "PREFLIGHT: no nvcc (CUDA_HOME, /usr/local/cuda-12.9, -13.0)"; exit 3; }
+[ -n "${CUDA_HOME:-}" ] || for v in 12.9 13.0; do CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit "$v" 2> /dev/null) && break; done
+NVCC=$(first "${CUDA_HOME:-/nonexistent}/bin/nvcc")
+[ -n "$NVCC" ] || { say "PREFLIGHT: no nvcc (CUDA_HOME, else the machine's toolkit at 12.9 or 13.0)"; exit 3; }
 if [ -n "${CUDA_HOME:-}" ] && [ "$NVCC" != "$CUDA_HOME/bin/nvcc" ]; then
   say "PREFLIGHT: CUDA_HOME=$CUDA_HOME has no bin/nvcc, so the build would be another toolkit's"; exit 3
 fi
 export CUDA_HOME=${NVCC%/bin/nvcc} PATH=${NVCC%/nvcc}:$PATH
 # `cuobjdump -sass` runs nvdisasm. Where NVCC's toolkit has none, another toolkit's goes last on the PATH: same_sass.py
 # compares two listings the same nvdisasm made, each instruction with its encoding.
-command -v nvdisasm > /dev/null || for d in /usr/local/cuda*/bin; do
-  [ -x "$d/nvdisasm" ] && { PATH=$PATH:$d; break; }
+command -v nvdisasm > /dev/null || for v in 12.9 13.0; do
+  d=$(python3 benchmarks/kernels/machine.py toolkit "$v" 2> /dev/null)/bin && [ -x "$d/nvdisasm" ] && { PATH=$PATH:$d; break; }
 done
 [ -x "$HOME/.elan/bin/lake" ] && export PATH=$HOME/.elan/bin:$PATH
 if [ -z "${ARCH:-}" ]; then

@@ -98,7 +98,7 @@ theorem op_sq (k : UInt8) (n : ℕ) : (Frame.sq k n).op ≠ 1 := by show (4 : UI
 
 /-- **Round `j` of a rep whose log started at `L` bodies**: at most `B` coins, `coin (L + j)`'s, no digest, and bytes the
 log's body `L + j`, its pending bytes (`Lead`) then the squeeze's frame. -/
-structure RoundAt (coin : ℕ → ℕ → F128) (B : ℕ) (dom : ByteArray) (L : ℕ) (l : Array Claims.Msg) (j : ℕ) (r : Round) :
+structure RoundAt (coin : ℕ → ℕ → F128) (B : ℕ) (dom : ByteArray) (L : ℕ) (l : Array Hash.Msg) (j : ℕ) (r : Round) :
     Prop where
   pos : 0 < r.n
   le : r.n ≤ B
@@ -108,7 +108,7 @@ structure RoundAt (coin : ℕ → ℕ → F128) (B : ℕ) (dom : ByteArray) (L :
     ∃ p kind, c.data.toList = p ++ (Frame.sq kind r.n).enc ∧ Lead dom j p
 
 /-- **The invariant**: one body logged per round from `L`, the pending bytes as a round's start, and each round as above. -/
-structure Inv (coin : ℕ → ℕ → F128) (B : ℕ) (dom : ByteArray) (L : ℕ) (t : Transcript) (l : Array Claims.Msg) :
+structure Inv (coin : ℕ → ℕ → F128) (B : ℕ) (dom : ByteArray) (L : ℕ) (t : Transcript) (l : Array Hash.Msg) :
     Prop where
   size : l.size = L + t.rounds.size
   lead : Lead dom t.rounds.size t.pending.data.toList
@@ -116,20 +116,20 @@ structure Inv (coin : ℕ → ℕ → F128) (B : ℕ) (dom : ByteArray) (L : ℕ
 
 variable {coin : ℕ → ℕ → F128} {B N : ℕ} {dom : ByteArray} {L : ℕ}
 
-theorem RoundAt.push {l : Array Claims.Msg} {j : ℕ} {r : Round} (h : RoundAt coin B dom L l j r)
-    (hj : L + j < l.size) (m : Claims.Msg) : RoundAt coin B dom L (l.push m) j r := by
+theorem RoundAt.push {l : Array Hash.Msg} {j : ℕ} {r : Round} (h : RoundAt coin B dom L l j r)
+    (hj : L + j < l.size) (m : Hash.Msg) : RoundAt coin B dom L (l.push m) j r := by
   obtain ⟨h1, h2, h3, h4, c, hc, hl, hp⟩ := h
   refine ⟨h1, h2, h3, h4, c, hc, ?_, hp⟩
   rw [Array.getElem?_push, ite_eq_right (by omega)]
   exact hl
 
-theorem Inv.absorb {t t' : Transcript} {l : Array Claims.Msg} (h : Inv coin B dom L t l) (hr : t'.rounds = t.rounds)
+theorem Inv.absorb {t t' : Transcript} {l : Array Hash.Msg} (h : Inv coin B dom L t l) (hr : t'.rounds = t.rounds)
     (f : Frame) (hf : f.op ≠ 1) (hp : t'.pending.data.toList = t.pending.data.toList ++ f.enc) :
     Inv coin B dom L t' l :=
   ⟨by rw [hr]; exact h.size, by rw [hr, hp]; exact lead_append h.lead f hf,
     fun j r hj => h.rounds j r (by rw [← hr]; exact hj)⟩
 
-theorem Inv.squeeze {t : Transcript} {l : Array Claims.Msg} (h : Inv coin B dom L t l) {n : ℕ} (h0 : 0 < n)
+theorem Inv.squeeze {t : Transcript} {l : Array Hash.Msg} (h : Inv coin B dom L t l) {n : ℕ} (h0 : 0 < n)
     (hn : n ≤ B) (kind : UInt8) :
     Inv coin B dom L (Replay.afterSq t kind n (coin l.size)) (l.push (Claims.toMsg (framed t kind n))) := by
   obtain ⟨hs, hl, hr⟩ := h
@@ -158,12 +158,12 @@ theorem Inv.squeeze {t : Transcript} {l : Array Claims.Msg} (h : Inv coin B dom 
 /-! ## The simulation -/
 
 /-- A transcript computation of the pure session that keeps `I` of its transcript and log. -/
-def Logs (I : Transcript → Array Claims.Msg → Prop) {α : Type} (y : TMW PS α) : Prop :=
-  ∀ (t : Transcript) (l : Array Claims.Msg) (a : α) (t' : Transcript) (l' : Array Claims.Msg),
+def Logs (I : Transcript → Array Hash.Msg → Prop) {α : Type} (y : TMW PS α) : Prop :=
+  ∀ (t : Transcript) (l : Array Hash.Msg) (a : α) (t' : Transcript) (l' : Array Hash.Msg),
     (y.run t).go l = (.ok (a, t'), l') → I t l → I t' l'
 
 /-- **The simulation of `Logs`**: a transcript computation of the pure session is related to itself when it keeps `I`. -/
-def logS (I : Transcript → Array Claims.Msg → Prop) : With.Sim (TMW PS) (TMW PS) where
+def logS (I : Transcript → Array Hash.Msg → Prop) : With.Sim (TMW PS) (TMW PS) where
   R _ y := Logs I y
   pure a t l a' t' l' h hI := by
     simp only [StateT.run_pure, go_pure, Prod.mk.injEq, Except.ok.injEq] at h
@@ -319,13 +319,13 @@ theorem queryP_logs_lv (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (sch
 /-! ## The loops, with an invariant of their state -/
 
 /-- `Logs` of a transcript computation that returns a value with `Q`. -/
-def Post (I : Transcript → Array Claims.Msg → Prop) {α : Type} (y : TMW PS α) (Q : α → Prop) : Prop :=
-  ∀ (t : Transcript) (l : Array Claims.Msg) (a : α) (t' : Transcript) (l' : Array Claims.Msg),
+def Post (I : Transcript → Array Hash.Msg → Prop) {α : Type} (y : TMW PS α) (Q : α → Prop) : Prop :=
+  ∀ (t : Transcript) (l : Array Hash.Msg) (a : α) (t' : Transcript) (l' : Array Hash.Msg),
     (y.run t).go l = (.ok (a, t'), l') → I t l → I t' l' ∧ Q a
 
 section Post
 
-variable {I : Transcript → Array Claims.Msg → Prop} {α β : Type}
+variable {I : Transcript → Array Hash.Msg → Prop} {α β : Type}
 
 theorem Post.of_logs {y : TMW PS α} (h : (logS I).R y y) : Post I y fun _ => True :=
   fun t l a t' l' e hI => ⟨h t l a t' l' e hI, trivial⟩
@@ -362,7 +362,7 @@ theorem Post.liftV (v : V α) : Post I (StateT.lift (monadLift v : PS α) : TMW 
   exact ⟨hI, by cases v <;> simp_all⟩
 
 /-- `Post` of a Ligerito step, from every Ligerito state. -/
-def PostL (I : Transcript → Array Claims.Msg → Prop) {α : Type} (y : LP PS α) (Q : α → Prop) : Prop :=
+def PostL (I : Transcript → Array Hash.Msg → Prop) {α : Type} (y : LP PS α) (Q : α → Prop) : Prop :=
   ∀ s, Post I (y.run s) fun p => Q p.1
 
 theorem PostL.bind {x : LP PS α} {f : α → LP PS β} {Q : α → Prop} {P : β → Prop} (hx : PostL I x Q)
@@ -537,7 +537,7 @@ log's body `l.size + j`. -/
 theorem repCut_rounds (st : Setup) (sch : Schedule) (rep : ℕ) (cm0 : Commit) (extras : Array Claim)
     (ic : InnerCommit) (src : RepSrc) (prior : Array (List F128)) (words : List ℕ) (hQ : Zk.Q ≤ B)
     (hm : st.m - 13 ≤ B) (hx : extras.size + 2 ≤ B) (hn : sch.n + 1 ≤ B)
-    (hq : ∀ j, (sch.levels.getD j default).q + 1 ≤ B) {l l' : Array Claims.Msg} {p : Zk.ZkProof} {tr : Transcript}
+    (hq : ∀ j, (sch.levels.getD j default).q + 1 ≤ B) {l l' : Array Hash.Msg} {p : Zk.ZkProof} {tr : Transcript}
     (h : ((repCut (asksCut coin N) (Hashes.ofSha512 Sha512.hash) st sch rep dom cm0 extras ic src prior words).run
       (Transcript.init #[] dom)).go l = (.ok (p, tr), l')) :
     l'.size = l.size + tr.rounds.size ∧ ∀ j r, tr.rounds[j]? = some r → RoundAt coin B dom l.size l' j r := by

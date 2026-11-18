@@ -9,12 +9,9 @@ module is ``n/s``, the reason naming the file to create.  A module needs nothing
     def supports(subcircuit, scheme) -> str | None        None when the family lowers this statement, else why not (required)
     def relation(subcircuit, scheme) -> str               the family's own name of the lowered statement, the one its pod
                                                           scripts take (``--relation``, ``REL=``); required when supports
-    def stage(input_set, lo, hi, out_dir) -> Path | None  write ids [lo, hi) of an input set as the family's instance files
-                                                          (optional; absent: the scripts regenerate their own frozen set, so
-                                                          only that set is accepted)
 
 ``subcircuit`` is a ``subcircuit_templates.Subcircuit`` (``.id``, ``.params``, ``.template.id``), ``scheme`` a commitment scheme
-id (``frame-v3/blake3-keyed``), ``input_set`` an ``input_sets.InputSet``.  The reason a module returns is what a table prints
+id (``frame-v3/blake3-keyed``).  The reason a module returns is what a table prints
 for the cell (``n/s``).
 """
 from __future__ import annotations
@@ -23,7 +20,6 @@ import importlib.util
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
-from typing import Any
 
 from verity_flock import subcircuit_templates as TM
 
@@ -77,10 +73,6 @@ class Registry:
         if why is not None:
             raise ValueError(why)
         return self.modules()[sub.template.id].relation(sub, scheme)
-
-    def stage(self, sub: TM.Subcircuit) -> Any:
-        mod = self.module(sub.template.id)
-        return getattr(mod, "stage", None) if mod is not None else None
 
     def missing(self) -> list[str]:
         """The catalogue templates this family has no module for (each ``n/s``, naming the file a lane creates)."""

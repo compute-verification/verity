@@ -149,7 +149,7 @@ local notation "𝔽" => FlockLevel3.GF128
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
 /-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample**: `plain_hdec` with
 `plainVerdictAt` for `plainVerdict`, from `decodesTable_wrPD_sc` at `d` and no sampled proof block. -/
-theorem plain_hdecAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_hdecAt {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = false) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
@@ -179,7 +179,7 @@ theorem plain_hdecAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false 
 open Classical Discharge.Tables Claims.Bridge.PlainSample in
 /-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and
 `hm96-sha512/v1` leaves**: `plain_hdecH` with `plainVerdictAt` for `plainVerdict`, from `decodesTable_wrPD_scH`. -/
-theorem plain_hdecHAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_hdecHAt {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json}

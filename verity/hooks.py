@@ -197,16 +197,6 @@ class RangeFreed:
 
 
 @dataclass(frozen=True)
-class OutputReleased:
-    """``steps``: output ``index`` of input ``input`` left the workload at ``step``."""
-
-    hook: ClassVar[str] = "steps"
-    input: str
-    index: int
-    step: int
-
-
-@dataclass(frozen=True)
 class OutputsComplete:
     hook: ClassVar[str] = "steps"
     input: str
@@ -215,7 +205,7 @@ class OutputsComplete:
 
 #: every event a served run emits, each read through its ``hook``
 EVENTS = (Declared, RegisteredValues, InputArrived, StepBegan, StepComputed, StepEnded, ValueProduced, BlockDue, RangesDeclared,
-          RangeAllocated, RangeWritten, RangeFreed, OutputReleased, OutputsComplete, PhaseOpened, PhaseClosed, PhaseCommitted)
+          RangeAllocated, RangeWritten, RangeFreed, OutputsComplete, PhaseOpened, PhaseClosed, PhaseCommitted)
 
 
 @dataclass(frozen=True)
@@ -366,7 +356,7 @@ type Request = (RequireProperty | ComputeBlockWith | StartOnBoundary | StartBesi
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle",
-           "Broken", "ENGINE", "FRONT", "FixRanges", "Front", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
+           "Broken", "ENGINE", "FRONT", "FixRanges", "Front", "InputArrived", "Kernel", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

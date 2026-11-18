@@ -116,7 +116,7 @@ theorem tabsOf_get! {sts : Array Stmt} {i : ℕ} (hi : i < sts.size) : (tabsOf s
 /-- **An honest run decides at every set-up statement** whose tables have a `fast100` schedule and extra claims at the
 first coin's link points: on the honest prover's messages from `honestCaps` and `honestPs`, wherever their rows fit a
 message and the last message reads as `honestPs`, shaped for their files, at the statement, `decR` decides. -/
-theorem honestRun_decides {rd : Claims.Msg → Option FinalP} {x last : Claims.Msg} {cs : List Coin} {s : Ins}
+theorem honestRun_decides {rd : Hash.Msg → Option FinalP} {x last : Hash.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {Ts : ℕ → F128} {fl : FinalP}
     (hx : setupOf false x = some (s, spec, sts)) (hc : cs.head? = some c₁)
     (htab : ∀ (i : ℕ) (hi : i < sts.size),

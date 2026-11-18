@@ -63,7 +63,7 @@ namespace FlockComplete.ZkTables
 open Flock Transcript FlockComplete FlockDeploy JsonRT
 open Lean (Json)
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 theorem mapM_list_ok_mem {α β : Type} (f : α → V β) :
     ∀ xs : List α, (∀ a ∈ xs, ∃ b, f a = .ok b) → ∃ ys, xs.mapM f = .ok ys
@@ -122,7 +122,7 @@ def ProverRunsAt (c : Case H rel) : Prop :=
       ∀ rep, innerCommitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (padsOf c.ω i rep
         (Zk.PadLayout.new (Setup.ofCircuit c.sts[i]!).m (Setup.ofCircuit c.sts[i]!).kLog (v i).1.k0))
         (c.ω.innerSalt i rep) = .ok (ic i rep)) →
-    ∀ l₀ : Array Claims.Msg, l₀.size = 1 → ∃ (ls : ℕ → Array Claims.Msg) (pts : ℕ → Zk.ZkProof × Transcript),
+    ∀ l₀ : Array Hash.Msg, l₀.size = 1 → ∃ (ls : ℕ → Array Hash.Msg) (pts : ℕ → Zk.ZkProof × Transcript),
       ls 0 = l₀ ∧ ∀ k < 2 * c.sts.size,
       (repRunJ H rel c (k / 2) (v (k / 2)) (cm (k / 2)) (e (k / 2)) (k % 2) (ic (k / 2) (k % 2))
         (priorJ c pts k)).go (ls k) = (.ok (pts k), ls (k + 1))

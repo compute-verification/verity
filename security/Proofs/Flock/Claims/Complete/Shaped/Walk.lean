@@ -77,7 +77,7 @@ theorem pow_half {k : ℕ} (hk : 1 ≤ k) : 2 ^ k / 2 = 2 ^ (k - 1) := by
   rw [Nat.pow_succ, Nat.mul_div_cancel _ (by norm_num), Nat.add_sub_cancel]
 
 /-- The level-0 challenges: `k0` of them, the last splitting. -/
-theorem challenges0_H (resp : ℕ → Claims.Msg) (k0 n : ℕ) (hk : 1 ≤ k0) (hkn : k0 ≤ n) (a b c d e : ℕ) (z : Bool) :
+theorem challenges0_H (resp : ℕ → Hash.Msg) (k0 n : ℕ) (hk : 1 ≤ k0) (hkn : k0 ≤ n) (a b c d e : ℕ) (z : Bool) :
     totT.H (forIn [:k0] PUnit.unit fun j (_ : PUnit) => do
         let _ ← challengeP (asksS resp) (j + 1 == k0)
         pure (ForInStep.yield PUnit.unit) : LP PS PUnit)
@@ -181,7 +181,7 @@ def LigOk (sh : Shape) (lg : LigeritoProof) : Prop :=
     lg.messages.size = s.k0 + 8 + 7 * (R - 1) ∧ lg.queryNonces.size = R + 1 ∧ lg.oodValues.size = 1 + 2 * R ∧
     lg.claimNonces.size = 3 * R + 2 ∧ lg.consistencyNonces.size = R + 1 ∧ ZkView.NoncesZero lg
 
-theorem ligeritoP_shape (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) {sh : Shape} {ms : MerkleScheme}
+theorem ligeritoP_shape (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) {sh : Shape} {ms : MerkleScheme}
     (hn : ∀ l r v, (ms.opsWith (Hashes.ofSha512 h : Hashes V)).node l r = .ok v → v.size = sh.hashLen)
     (hlf : ∀ row salt v, (ms.opsWith (Hashes.ofSha512 h : Hashes V)).leaf row salt = .ok v → v.size = sh.hashLen)
     (hsl : (sh.saltLen = none ∧ ms.saltBytes = 0) ∨ sh.saltLen = some ms.saltBytes)

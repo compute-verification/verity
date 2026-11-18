@@ -415,7 +415,7 @@ fixed operands' root, the salt is the coin's, and its records keep the caps and 
 theorem loadedGivesUp_honest : load honestCoins honestManifest = .ok honestPass := by
   apply eq_ok_of_toOption
   simp only [load, epochSalt, coinReason, leafValue, Flock.Hm96.Default512.leaf, Flock.Hm96.Default512.treeLeaf,
-    Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq, saltOf, key?, FlockSoundness.Randomness.derive,
+    Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq, PouwCommit.saltOf, key?, FlockSoundness.Randomness.derive,
     qsort_salt, toNat?_eq_toNatOr]
   decide +kernel
 
@@ -1013,7 +1013,7 @@ theorem replayWith_one {FN : ByteArray → ByteArray → Nat → Except String W
 theorem test_load : load honestCoins testManifest = .ok testPass := by
   apply eq_ok_of_toOption
   simp only [load, epochSalt, coinReason, leafValue, Flock.Hm96.Default512.leaf, Flock.Hm96.Default512.treeLeaf,
-    Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq, saltOf, key?, FlockSoundness.Randomness.derive,
+    Flock.Hm96.Default512.commitString, mask_eq_maskOr, leafPrefix_eq, PouwCommit.saltOf, key?, FlockSoundness.Randomness.derive,
     qsort_salt, toNat?_eq_toNatOr]
   decide +kernel
 

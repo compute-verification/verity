@@ -57,6 +57,8 @@ import json
 import math
 
 from verity.circuits import partition_v2
+from verity.device import load_card, number
+from verity_bench import kit
 
 YEAR = 3.156e7
 GB = 8e9
@@ -70,12 +72,13 @@ BLOCK_NAME_BITS = 25
 REFERENCE_THREADED = (10.0, 37248.0)
 
 #: the card file, the one hardware source for the GPUs here: the RTX PRO 6000 Server Edition at its firmware's maximum
-#: (188 SMs, 1024 tensor units an SM clock, a FP8 E4M3 MAC one unit, the tensor clock's ceiling 2430 MHz), pinned from
-#: calibration/hardware/cards/rtx-pro-6000-server.toml; tests/test_tiers.py holds the pin to the file
-CARD = {"sms": 188, "tensor": 1024, "clock_hz": 2430e6}
-#: the clock PoUW credits on sm_120, the card file's clock.sm (calibration/hardware/cards/rtx-pro-6000-server.toml: 2430 MHz);
-#: tests/test_tiers.py holds the literal to it
-CREDITED_CLOCK_HZ = 2430e6
+#: (its SMs, tensor units an SM clock, a FP8 E4M3 MAC one unit, and the tensor clock's ceiling), read from
+#: calibration/hardware/cards/rtx-pro-6000-server.toml
+_CARD = load_card("rtx-pro-6000-server", directory=kit.cards_directory())
+CARD = {"sms": int(number(_CARD["sm"]["count"])), "tensor": int(number(_CARD["rate"]["tensor"])),
+        "clock_hz": float(number(_CARD["clock"]["tensor"]) * 10**6)}
+#: the clock PoUW credits on sm_120, the card file's clock.sm
+CREDITED_CLOCK_HZ = float(number(_CARD["clock"]["sm"]) * 10**6)
 #: a server's GPUs at the table's FP8 dense peak, 2 FLOP a MAC
 GPU_FLOPS = 2 * CARD["sms"] * CARD["tensor"] * CARD["clock_hz"]
 NODE_FLOPS = 8 * GPU_FLOPS

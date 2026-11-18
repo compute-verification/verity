@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from tests.row_paths import row_paths
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +38,7 @@ PENDING = "Commit PENDING: every rank's C2 replay runs on CPU from its sealed bu
 def _tp_row(tmp: Path, *argv: str, row: str = DENSE, world: int = 2) -> TpRow:
     """The row as `verity-vllm row run` makes it, under an environment that names nothing but the path."""
     o = cli.parse("row", ["run", row, ROLE, REPO, REV, "--sweep-dir", str(tmp), "--py", sys.executable,
-                          "--native-collect-default", str(tmp / "nc_build"), *argv], {"PATH": os.environ.get("PATH", ""), "CUDA_HOME": "/a/toolkit"})
+                          "--native-collect-default", str(tmp / "nc_build"), *argv], {"PATH": os.environ.get("PATH", ""), **row_paths(tmp)})
     return TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=world, gpu_util=None,
                  build=o.build, match=o.match, commit=o.commit)
 

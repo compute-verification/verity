@@ -204,7 +204,7 @@ def _root_.Flock.Bridge.TransportsLiveV5 : Prop :=
     let Cd := Bridge.commitDepL Cc rows D.unroll Lm roots
     ∀ u, ∀ g ∈ P.io u, κ g = none → ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →
       Bridge.canonOpen rows g (vb.val o) o.2.2 →
-      ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
+      ∃ d : Hash.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
 
 open Classical in
 /-- **`SampledKSLiveV5` under the roots guard**: V5's bound without its `ecr/sha-512` term at the roots finder, at
@@ -223,7 +223,7 @@ def _root_.Flock.Bridge.SampledKSLiveV5R : Prop :=
     (_hdup : Flock.PortRoots.dupId D.unroll pub = false)
     (_hroots : Bridge.RootFixesDomainL D.unroll (Bridge.LeafMap.ofPublic D.unroll pub n))
     -- the statement's descriptor, and the registration's query, whose population is the game's n proof blocks in order
-    (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
+    (desc : Hash.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
     -- the registration's sampling design object and work table, the sampling design the verifier samples under from them, sampling kd proof
     -- blocks, and that it is no Bernoulli sampling design
     (lj : Lean.Json) (tb : Option Lean.Json) (samplingDesign : Flock.Draw.SamplingDesign) (kd : ℕ)
@@ -332,7 +332,7 @@ def SampledKSLiveV5 : Prop :=
     (_hrows : Bridge.RowsOk D.unroll)
     (_hdup : Flock.PortRoots.dupId D.unroll pub = false)
     -- the statement's descriptor, and the registration's query, whose population is the game's n proof blocks in order
-    (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
+    (desc : Hash.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
     -- the registration's sampling design object and work table
     (lj : Lean.Json) (tb : Option Lean.Json),
     -- the sampling design the verifier samples under from them, sampling kd proof blocks

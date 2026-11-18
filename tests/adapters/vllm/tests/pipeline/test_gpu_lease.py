@@ -12,6 +12,7 @@ import signal
 import socket
 import subprocess
 import sys
+from tests.row_paths import row_paths
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -282,7 +283,7 @@ def test_the_jit_key_is_the_toolchain_the_device_class_and_the_trees_triton_kern
     shutil.copytree(a, b)
     (b / "verity_vllm" / "row.py").write_text("STAGES = 2\n")
     assert RD.jit_key(py, cuda, PRO, str(b)) == k                                  # another sync, its change outside the kernels
-    assert RD.jit_key(py, cuda, PRO.replace("rtxpro6000", "l40s"), str(a)) not in (k, None)
+    assert RD.jit_key(py, cuda, PRO.replace("rtxpro6000", "h100"), str(a)) not in (k, None)
     (b / "verity_vllm" / "acquire" / "tap.py").write_text("import triton\n\n\n@triton.jit\ndef k(x):\n    return x\n")
     assert RD.jit_key(py, cuda, PRO, str(b)) not in (k, None)
     (tmp_path / "cuda" / "include" / "cuda.h").write_text("#define CUDA_VERSION 13000\n")
@@ -326,7 +327,7 @@ def test_a_bi_eager_rows_jit_caches_move_from_its_job_tree_to_its_key_and_any_ot
 ])
 def test_only_a_bi_eager_row_shares_jit_caches(tmp_path, row, workload, eager):
     from verity_vllm.pipeline import cli
-    o = cli.parse("row", ["run", row, "R", "o/r", "x", "--sweep-dir", str(tmp_path), "--py", sys.executable], {})
+    o = cli.parse("row", ["run", row, "R", "o/r", "x", "--sweep-dir", str(tmp_path), "--py", sys.executable], row_paths(tmp_path))
     r = RD.Row(row=row, role="R", repo="o/r", rev="x", stages="build", env=o.env, proc="row_pod")
     r.tree = str(tmp_path)
     if workload is not None:

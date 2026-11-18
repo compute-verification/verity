@@ -133,7 +133,7 @@ end Lead
 /-- **The simulated strategy leads with rep 0 for `repRounds` coins**: `LeadsAfter` against `plainSimAt`, at every
 plain statement in scope, its one table's `fast100` schedule and the plain decoders where the outputs are public and
 where they are hidden under hm96 leaves. -/
-def PlainSchedAlign (x : Claims.Msg) : Prop :=
+def PlainSchedAlign (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (h : tables false x = [(spec, st)]) (d : Json) (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -154,7 +154,7 @@ def PlainSchedAlign (x : Claims.Msg) : Prop :=
           (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
           (plain_hdecHAt hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C u))
 
-theorem plainSlotAlign_of_sched {x : Claims.Msg} (h : PlainSchedAlign x) : PlainSlotAlign x :=
+theorem plainSlotAlign_of_sched {x : Hash.Msg} (h : PlainSchedAlign x) : PlainSlotAlign x :=
   fun s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω =>
     ⟨fun hh C r ℓ u => slotRSL_lead L (plain_mPts hs hin hset).2.2 _ _ _ _ m k0 l₀ l₁ rest ext hsch hk0 hm _ _ _
         ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω).1 hh C u) r ℓ.val,

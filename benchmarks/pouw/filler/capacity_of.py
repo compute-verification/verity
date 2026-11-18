@@ -27,11 +27,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "calibration" / "ma
 from verity_machine_model import capacity as C
 from verity_machine_model import eps as E
 
+from verity.device import load_card, number
+from verity_bench import kit
+
 #: what the tests read
 __all__ = ["E", "dfill_rows", "fstep_rows", "lfill_rows", "main"]
 
-F_MAX_MHZ = 2430.0  # sm_120's maximum SM clock, the credit's
-SMS = 188
+_CARD = load_card("rtx-pro-6000-server", directory=kit.cards_directory())
+F_MAX_MHZ = float(number(_CARD["clock"]["sm"]))  # sm_120's maximum SM clock, the credit's
+SMS = int(number(_CARD["sm"]["count"]))
 MACS_A_MMA = 4096
 
 

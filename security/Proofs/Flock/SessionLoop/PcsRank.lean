@@ -38,18 +38,18 @@ open FlockComplete.Replay (bind_go)
 /-- **A loop cut at its step `i`**: steps before `i` yield, step `i` throws; the loop, then any continuation, throws
 having sent the first `i + 1` steps' bodies. -/
 theorem forIn_go_cut {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T : ℕ → Flock.Transcript)
-    (B : ℕ → Claims.Msg) (L n i : ℕ) (hi : i < n) {t₀ : Flock.Transcript} (hT : T 0 = t₀) (e : String)
-    (hbody : ∀ k < i, ∀ (s : σ) (l : Array Claims.Msg), l.size = L + k →
+    (B : ℕ → Hash.Msg) (L n i : ℕ) (hi : i < n) {t₀ : Flock.Transcript} (hT : T 0 = t₀) (e : String)
+    (hbody : ∀ k < i, ∀ (s : σ) (l : Array Hash.Msg), l.size = L + k →
       ∃ s', ((body k s).run (T k)).go l = (.ok (.yield s', T (k + 1)), l.push (B k)))
-    (hcut : ∀ (s : σ) (l : Array Claims.Msg), l.size = L + i →
+    (hcut : ∀ (s : σ) (l : Array Hash.Msg), l.size = L + i →
       ((body i s).run (T i)).go l = (.error e, l.push (B i)))
-    (s₀ : σ) (f : σ → TMW PS β) (l : Array Claims.Msg) (hl : l.size = L) :
+    (s₀ : σ) (f : σ → TMW PS β) (l : Array Hash.Msg) (hl : l.size = L) :
     ((forIn [:n] s₀ body >>= f).run t₀).go l = (.error e, l ++ ((List.range (i + 1)).map B).toArray) := by
   subst hT
   refine FlockComplete.bind_go_err ?_
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
   simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
-  suffices h : ∀ k a (s : σ) (l' : Array Claims.Msg), a ≤ i → i < a + k → l'.size = L + a →
+  suffices h : ∀ k a (s : σ) (l' : Array Hash.Msg), a ≤ i → i < a + k → l'.size = L + a →
       l'.toList = l.toList ++ (List.range a).map B →
       ((forIn (List.range' a k) s body).run (T a)).go l' =
         (.error e, l ++ ((List.range (i + 1)).map B).toArray) by
@@ -93,7 +93,7 @@ open Loop
 /-- **The cut ring switch, cut at a claim's round**: from `l`, cut at its round `i` below the claims', it stops having
 sent `rsBody`'s first `i + 1` bodies after `t`'s pending bytes. -/
 theorem ringSwitchCut_at (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128)
-    (claims : Array _root_.Flock.Claim) (t : Flock.Transcript) (l : Array Claims.Msg) {i : ℕ} (hi : i < claims.size)
+    (claims : Array _root_.Flock.Claim) (t : Flock.Transcript) (l : Array Hash.Msg) {i : ℕ} (hi : i < claims.size)
     (hl : n = l.size + i) :
     ∃ L', ((ringSwitchCut (asksCut coin n) sv claims).run t).go l = (.error "past the openings", L') ∧
       L'.toList = l.toList ++ (List.range (i + 1)).map (rsBody sv claims.size t.pending.data.toList) := by
@@ -161,7 +161,7 @@ theorem openStep_switch_at (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (d
   have e := hF (by simp) (by rw [Array.size_empty, Nat.zero_add]; exact hlen)
   obtain ⟨L', hL, hL'⟩ : ∃ L', ((ringSwitchCut (asksCut (fun j i => (cs.getD j #[])[i]!) a)
       (fun k => switchVec t.g r.1.1.2.2[k]!) r.1.1.2.2).run r.1.2).go #[] = (.error "past the openings", L') ∧
-      L'.toList = (#[] : Array Claims.Msg).toList ++ (List.range (a + 1)).map
+      L'.toList = (#[] : Array Hash.Msg).toList ++ (List.range (a + 1)).map
         (rsBody (fun k => switchVec t.g r.1.1.2.2[k]!) r.1.1.2.2.size r.1.2.pending.data.toList) := by
     rcases Nat.lt_or_ge a r.1.1.2.2.size with ha | ha
     · exact ringSwitchCut_at _ a _ r.1.1.2.2 r.1.2 #[] ha (by rw [Array.size_empty, Nat.zero_add])

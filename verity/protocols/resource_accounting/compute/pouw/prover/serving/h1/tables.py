@@ -10,8 +10,8 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.requests import TABLE_NONCES, TABLE_TAGS, table_leaves
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.requests import TABLE_NONCES, TABLE_TAGS, table_leaves
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.tensors import dtype_name, h1_device
 
 

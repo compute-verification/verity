@@ -348,18 +348,23 @@ DRAW_FORM = ("a draw's coin evidence is {ledger, main, pins, segment, session}: 
              "of main's first-parent history, the host's pins log, the draw's coins (Segment.to_json) and the challenger "
              "session's files")
 
+LOG_COMMITTED = ("the challenger's release log holds a root committed with no coin: a sample's session draws a coin after "
+                 "every root")
+
 
 def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins: Any, verify: Verify) -> bytes:
     """Lean `Challenger.sampleCoins`: the coins of family `label` that the session the auditor's ledger opens on `window` (its
     open root) under `key` released after `after`, read from `coins`, `{ledger, main, pins, segment, session}`, in order.
     The key, the window and the family are the verifier's, so a prover can't sign a ledger of its own; the copy of
     main's history is the evidence's, which `coins_reason` holds to its caller's. The session must be a withheld one
-    (`withheld_on`): its challenger released no root, salt or path before it closed. One-stage's check reads its
-    sample's coins through it (`OneStage.coinsOf`). Raises `CoinError`."""
+    (`withheld_on`): its challenger released no root, salt or path before it closed, and its log commits no root
+    (`LOG_COMMITTED`). One-stage's check reads its sample's coins through it (`OneStage.coinsOf`). Raises `CoinError`."""
     if not isinstance(coins, Mapping) or sorted(coins) != ["ledger", "main", "pins", "segment", "session"]:
         raise CoinError(DRAW_FORM)
     commitment, log = trusted_session_of(coins["ledger"], {"root": window}, key, coins["pins"], coins["main"],
                                          coins["session"], verify)
+    if any(e.kind == "committed" for e in log):
+        raise CoinError(LOG_COMMITTED)
     if not withheld_on(coins["ledger"], window):
         raise CoinError(WITHHELD)
     segment = coins["segment"]

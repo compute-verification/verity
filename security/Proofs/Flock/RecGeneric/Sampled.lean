@@ -105,10 +105,10 @@ its `H` calls and its reruns' (`trialCalls`), not its computation between them, 
 incorrect set only at a counted `E` (Flock's `E^rep` at the deployed decoder). -/
 def GenericSampledKSClaims : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (V : Verifier Coin) (Rl : Rel W)
-    (E : Claims.Extractor Coin W V) (H : Claims.Msg → Claims.Msg) (err : Claims.Msg → Prover Unit → ℝ) (n : ℕ)
+    (E : Claims.Extractor Coin W V) (H : Hash.Msg → Hash.Msg) (err : Hash.Msg → Prover Unit → ℝ) (n : ℕ)
     (Reg Dh : Type)
     (Hc : List UInt8 → Dh) (L : SamplingDesign n) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
-    (stmt : Finset (Fin n) → Reg → Claims.Msg)
+    (stmt : Finset (Fin n) → Reg → Hash.Msg)
     (reads : Fin n → Finset B.Pos) (opens : Finset (Fin n) → Reg → Fin n → W → B.Pos → B.Opening) (M : ℕ),
     (∀ S R (P : Prover Unit), PrBad H V Rl E (stmt S R) P ≤ err (stmt S R) P) →
     (jointOf H V Rl E stmt B reads opens).Sound Correct → 1 ≤ M →
@@ -128,10 +128,10 @@ $$\Pr[\text{accept}] \le P_a(F) + \mathbb E_S \max_{u \in S} \mathrm{Comp.err}(\
 \varepsilon_{\rm bind},$$
 at the inner loop bounds `mI` and the link's `Mo`. It follows from L1 (`Claims.RecGeneric.CompositionKS`) and B1. -/
 def RecursiveSampledKS : Prop :=
-  ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (I : Proto Coin W)
+  ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Hash.Msg → Hash.Msg) (I : Proto Coin W)
     (Sv : Server) (K : Claims.RecGeneric.Comp Coin) (mI : Fin I.nT → ℕ) (Mo : ℕ) (n : ℕ) (Reg Dh : Type)
     (Hc : List UInt8 → Dh) (L : SamplingDesign n) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
-    (stmt : Finset (Fin n) → Reg → Claims.Msg)
+    (stmt : Finset (Fin n) → Reg → Hash.Msg)
     (reads : Fin n → Finset B.Pos) (opens : Finset (Fin n) → Reg → Fin n → W → B.Pos → B.Opening) (M : ℕ),
     I.WF → I.KSAbortLin H → I.LastCoinFree H → Sv.Binds →
     (∀ S R, K.OuterKSAt H (stmt S R) ∧ 0 ≤ K.κO (stmt S R) ∧ 0 ≤ K.γO (stmt S R) ∧

@@ -240,6 +240,8 @@ def main(args: Options) -> int:
     if args.replay_deferred and (not args.required_manifest or args.no_sampled_replay):
         raise SystemExit("--replay-deferred defers the ranks' sampled replay: it needs --required-manifest and no --no-sampled-replay")
     deferral_skipped = C2.deferral_skipped(args)
+    if args.replay_deferred and not deferral_skipped and (why := RB.private_refusal()):
+        raise SystemExit(f"--replay-deferred: {why}")
     relabel = None
     if args.relabel_rank:
         relabel_from, relabel_to = args.relabel_rank.split(":")

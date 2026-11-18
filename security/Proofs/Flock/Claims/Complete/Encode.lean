@@ -98,7 +98,7 @@ theorem rdStr_encStr {s : String} (hs : s.toUTF8.size < 2 ^ 64) (rest : List UIn
     fromUTF8?_toUTF8]
   rfl
 
-theorem rdListN_encList {α : Type} {r : Rd α} {e : α → Claims.Msg} :
+theorem rdListN_encList {α : Type} {r : Rd α} {e : α → Hash.Msg} :
     ∀ (l : List α), (∀ a ∈ l, ∀ rest, r.run (e a ++ rest) = some (a, rest)) →
       ∀ rest, (rdListN r l.length).run (l.flatMap e ++ rest) = some (l, rest)
   | [], _, rest => rfl
@@ -108,7 +108,7 @@ theorem rdListN_encList {α : Type} {r : Rd α} {e : α → Claims.Msg} :
       rdListN_encList l (fun a' ha' => hr a' (List.mem_cons_of_mem a ha')) rest]
     rfl
 
-theorem rdList_encList {α : Type} {r : Rd α} {e : α → Claims.Msg} {l : List α}
+theorem rdList_encList {α : Type} {r : Rd α} {e : α → Hash.Msg} {l : List α}
     (hr : ∀ a ∈ l, ∀ rest, r.run (e a ++ rest) = some (a, rest)) (hl : l.length < 2 ^ 64) (rest : List UInt8) :
     (rdList r).run (encList e l ++ rest) = some (l, rest) := by
   simp only [rdList, encList, List.append_assoc, StateT.run_bind, rdNat_encNat hl, Option.bind_eq_bind,

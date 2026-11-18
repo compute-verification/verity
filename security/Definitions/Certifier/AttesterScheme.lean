@@ -97,7 +97,7 @@ structure PhaseRun (ph : Phase) (Chan Root Coin : Type) where
   ok : Bool
   sample : Finset (Fin ph.m)
   log : Challenger.Log Root Coin
-  calls : List (Claims.Msg × Claims.Msg)
+  calls : List (Hash.Msg × Hash.Msg)
   hashCalls : ℕ
 
 /-- **The committed values carry the attester's rows, the registered values and the operator's ingress**: the premise
@@ -141,7 +141,7 @@ at most the term. -/
 def BreaksWithinTerm : Prop :=
   ∀ (ph : Phase) (Chan : Type) [Fintype Chan] (ρ : Chan → ph.C.Trace) (op : ph.Operator Chan) (hop : op.ReadsBefore)
     (Root Coin : Type) (Complete : Chan → Prop) (fixed : Root → Prop) (hcharge : ph.ChargeHolds ρ op)
-    (H : Claims.Msg → Claims.Msg) (S : Type) [Fintype S] [Nonempty S] (play : S → PhaseRun ph Chan Root Coin) (q : ℝ),
+    (H : Hash.Msg → Hash.Msg) (S : Type) [Fintype S] [Nonempty S] (play : S → PhaseRun ph Chan Root Coin) (q : ℝ),
     (∀ s, ∀ p ∈ (play s).calls, H p.1 = p.2) →
     let Sc := scheme ph ρ op hop Root Coin Complete fixed (Claims.ecrBound H (callsFinder play) q) hcharge
     ENNReal.ofReal (Claims.Pr fun s => Sc.breaks (play s)) ≤ Sc.δscheme

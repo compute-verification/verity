@@ -58,7 +58,7 @@ namespace FlockComplete.Replay
 
 open Flock FlockDeploy FlockSoundness.Refine
 
-variable {H : Claims.Msg → Claims.Msg}
+variable {H : Hash.Msg → Hash.Msg}
 
 /-- **The case's statement, satisfied**: at a good case of the deployed relation, the one table `st` is well formed,
 its table's matrices are `stmtOf`'s, and the witness's bits satisfy `stmtOf st hwf (regionsOf st)`. -/

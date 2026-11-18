@@ -30,6 +30,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity.circuits.codec import canonical_json
 from verity_flock import zk_server_transcript as FT
 from verity_flock import rec_live as RL
 
@@ -420,7 +421,7 @@ def leaks() -> list[tuple[str, dict, dict, dict]]:
     t = copy.deepcopy(honest)
     t["schedule"] = copy.deepcopy(pub["schedule"])
     t["schedule"]["hello"]["note"] = "5e"
-    t["items"][at["hello"]]["fixed"]["sent"] = FT.canon(t["schedule"]["hello"]).hex()
+    t["items"][at["hello"]]["fixed"]["sent"] = canonical_json(t["schedule"]["hello"]).hex()
     out.append(("schedule-from-the-transcript", t, pub, refused(at["hello"], "hello: not the value the schedule fixes")))
     out.append(("no-public-input", honest, FT.public(None), refused(at["hello"], "a schedule the public input does not carry")))
     t = copy.deepcopy(honest)

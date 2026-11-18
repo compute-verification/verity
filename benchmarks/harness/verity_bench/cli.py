@@ -29,7 +29,7 @@ from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
 from verity_bench.vllm.engine import ProcessEngineFactory
-from verity_bench.vllm.presets import SweepPoint, local_checkpoint, served
+from verity_bench.vllm.presets import SweepPoint, served
 from verity_bench.vllm.result import write
 from verity_bench.vllm.runner import run_benchmark
 from verity_bench.vllm.table import render
@@ -118,11 +118,6 @@ def _point(args: Any) -> int:
     if not isinstance(point, SweepPoint):
         raise TypeError(f"{point.id} is a steady-state point: steady_plan runs it")
     jobs.check_point_environment(spec, settings.environ())
-    if spec.preset.model_digest is not None:
-        found = local_checkpoint(spec.preset, spec.preset.model).model_digest
-        if found != spec.preset.model_digest:
-            raise ValueError(f"checkpoint {spec.preset.model} hashes to {found}, not the spec's model_digest "
-                             f"{spec.preset.model_digest}")
     if why := kit.wrong_card(spec.id, spec.preset.gpu_id, kit.host_stamp()["card"]):
         raise ValueError(why)
     preset, eager = served(spec.preset, spec.eager)

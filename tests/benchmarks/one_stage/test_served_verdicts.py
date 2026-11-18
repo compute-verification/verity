@@ -65,6 +65,7 @@ from typing import Any
 
 import jsonschema
 import pytest
+from verity.commitments import domains as DM
 from verity import device as SITE
 from verity.commitments.periods import interface as IF
 from verity.protocols.registration.verifier import registration as RL
@@ -1576,7 +1577,7 @@ def _recorded(tmp_path: Path, argv: list[str], capsys) -> tuple[int, dict, dict]
 def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_unchanged(
         tmp_path, monkeypatch, capsys, edit):
     """Off the served node, `record --sampled-lean` takes SPOT's row from this host's own run of its Lean on the
-    hand-off's v2 case in the form ``one-stage``, handed the case's files and its proof blob, the answer tied to the
+    hand-off's v2 case at one level, handed the case's files and its proof blob, the answer tied to the
     record the case commits to: the summary and audit record the served node wrote don't enter it, so editing or deleting
     them leaves the row as it was, while without --sampled-lean the row follows them. The row and the line name its
     source, and PoUW's, still read from its piece's answer file, as the served node wrote it, which its edit changes."""
@@ -1596,7 +1597,7 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     seen = json.loads((tmp_path / "seen.json").read_text())
     w = tmp_path / "serve" / "sampled-proofs-served" / "window"
     assert seen["argv"][:2] == ["sampled", "check"] and seen["argv"][5:] == [str(w / "m0" / "p0.bin")]
-    assert json.loads(seen["files"]["params.json"]) == {"form": "one-stage", "proofs": {}, "verifier": "toy"}
+    assert json.loads(seen["files"]["params.json"]) == {"levels": 1, "proofs": {}, "verifier": "toy"}
     assert json.loads(seen["files"]["commitment.bin"]) == LEAN_RECORD
     plain = [x for x in argv if x not in ("--sampled-lean", "--sampled-exe", argv[-1])]
     _rc, _line, node_rows = _recorded(tmp_path, plain, capsys)
@@ -2615,7 +2616,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record",
     (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True)
     committed = _committed("rate:1/1000000000" if case == "rule not R's" else rule)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps(
-        {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": [],
+        {"format": DM.REGISTRATION, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": [],
          "population": PEARL_BLOCKS, DESIGN: committed}))
     summary = {"tie": {"record": PEARL_W}, "sampling_design": rule,
                "audit": {"rejected": {"accepted": False}, "unsaid": {}}.get(case, {"accepted": True})}
@@ -2705,7 +2706,7 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, tied, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
     (steps := tmp_path / "steps" / S.WINDOW_REGISTRATION).parent.mkdir(parents=True)
-    steps.write_text(json.dumps({"format": REG.FORMAT_V2, "previous": None, "registered": []}))
+    steps.write_text(json.dumps({"format": DM.REGISTRATION, "previous": None, "registered": []}))
     (tmp_path / "steps" / S.AUDIT_SUMMARY).write_text(json.dumps({}))
     (tmp_path / "serve").mkdir()
     base = ["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
@@ -2838,7 +2839,7 @@ def test_the_pearlplus_piece_holds_the_verifiers_sample_to_its_sample_session(tm
         seen.append((window, key.public, pins, main))
         if case == "untrusted":
             raise Ch.CoinError("the auditor's ledger opens no challenger session for this window")
-        return Ch.LiveCommitment.from_json(signed), {Wd.DRAW: (root,)}
+        return Ch.LiveCommitment.from_json(signed), (Ch.Entry("recorded", Wd.DRAW, 0, root, 0, 1),)
     monkeypatch.setattr(Ch, "trusted_session_of", trusted)
 
     def withheld_on(ledger, window):
@@ -2924,7 +2925,7 @@ def test_the_pearlplus_period_opens_around_the_retained_serve_and_closes_before_
                 str(record), "--cubin", str(cubin)])
 
 
-@pytest.mark.parametrize("case", ["held", "stray", "unread", "unsalted", "unparsed"])
+@pytest.mark.parametrize("case", ["held", "stray", "unread", "unsalted", "unparsed", "front"])
 def test_the_tied_period_closes_holding_its_reserves_to_the_windows_salt_sessions(tmp_path, monkeypatch, capsys, case):
     """``pearlplus-period close --lane L --windows PEARL_DIR`` (PEARLPLUS_TIE's, in serve()): the ledger read before the
     close, the sessions lane L reserved (``for``, else ``by``) since the period's open held to the windows' salt sessions
@@ -2951,6 +2952,8 @@ def test_the_tied_period_closes_holding_its_reserves_to_the_windows_salt_session
     (tied := serve / "pearlplus").mkdir(parents=True)
     (tied / S.PERIOD).write_text(json.dumps({"name": "pp-r1", "cap": 1}))
     for k, reserved in ((0, {"session": "s-salt", "period": "pp-r1"}), (1, None)):
+        if case == "front":
+            k += 1
         (serve / "pearl" / f"w{k}").mkdir(parents=True)
         if case != "unsalted":
             (serve / "pearl" / f"w{k}" / "served.json").write_text(json.dumps({"coins": {"reserved": reserved}}))
@@ -2962,8 +2965,9 @@ def test_the_tied_period_closes_holding_its_reserves_to_the_windows_salt_session
     doc, out = json.loads((tied / S.PERIOD).read_text()), capsys.readouterr().out
     salt = [] if case in ("unsalted", "unparsed") else ["s-salt"]
     assert doc["close"]["verb"] == "period-close" and doc["reserves"]["salt_sessions"] == salt
-    assert doc["reserves"]["ok"] is (case == "held") and not any(f"s-{s}" in out for s in ("salt", "stray", "other"))
+    assert doc["reserves"]["ok"] is (case in ("held", "front")) and not any(f"s-{s}" in out for s in ("salt", "stray", "other"))
     said = {"held": "its reserves held (lane vllm's since its open the windows' salt sessions alone)",
+            "front": "its reserves held (lane vllm's since its open the windows' salt sessions alone)",
             "stray": "its reserves REFUSED (lane vllm reserved in it other sessions than the windows' salt sessions; "
                      "period.json's reserves), so no draw follows it",
             "unread": "its reserves REFUSED (the ledger or a window's served.json can't be read: RuntimeError: the gate "
@@ -4625,6 +4629,9 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
     assert {f: gated[gated.index(f) + 1] for f in ("--challenger-gate", "--challenger-peer", "--challenger-lane")} == {
         "--challenger-gate": GATE, "--challenger-peer": "vy-dc-h200", "--challenger-lane": "compute-accounting"}
     assert gated.count("--protocols") == 1 and "--h1-prover" not in gated
+    assert "--pearl-users" not in argv and "--pearl-users" not in gated
+    _rc, fronted = _serve_argv(tmp_path / "fronted", {**PEARL_TIES, **cubin, **live, "CERTIFIER_FRONT": "true"})
+    assert fronted[fronted.index("--pearl-users") + 1] == r"fixed\.[0-9]+" and fronted.count("--pearl-users") == 1
     calls, d = (tmp_path / "calls").read_text().splitlines(), tmp_path / "serve" / "pearlplus"
     assert [c.split("prove_path/prove_path.py ", 1)[-1] for c in calls[-4:-2]] == [
         f"serve-phi --model unsloth/Llama-3.2-1B --revision 9535bd9b1d1dea6acafbdc4813b728796aeb28da --out {d}/serve-phi.json",
@@ -7313,7 +7320,7 @@ def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credi
     It names no weights without ``--model`` (the gate refuses a root its registry lacks). ``period close`` closes it."""
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
     from verity.commitments.crypto import lms
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 
     A = _auditor()
     (tmp_path / "var" / "sessions").mkdir(parents=True)

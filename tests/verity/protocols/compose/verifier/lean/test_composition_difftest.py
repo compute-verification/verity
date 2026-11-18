@@ -54,6 +54,7 @@ from verity_difftest import settings as opt
 from verity import config as K
 from verity.protocols.proofs.spot.verifier import parties as SPP
 from verity.circuits.types import Array, Value
+from verity.commitments import domains as DM
 from verity_config.verity_settings import REGISTRY as VERITY_SETTINGS
 
 ROOT = Path(__file__).resolve().parents[6]
@@ -780,7 +781,7 @@ def reusing(made: list[dict]):
     CC = R.POUW_PERIOD_CASES.credit_cases
 
     def commit(true: dict[str, dict], _steps: int, circuit: str, open_root: str) -> str:
-        w = OS._json({"format": OS.R.FORMAT_V2, "previous": None, "program": circuit, "protocol": OS.R.PROTOCOL,
+        w = OS._json({"format": DM.REGISTRATION, "previous": None, "program": circuit, "protocol": OS.R.PROTOCOL,
                       "registered": [true[v] for v in sorted(true)],
                       "window": {"entry": len(made), "kind": "served", "open_root": open_root, "refused": []}})
         named = sorted((n, v) for v, n in CC.commit_names(true).items())

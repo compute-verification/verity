@@ -107,6 +107,7 @@ import a0  # noqa: E402
 import prove_subprotocol as PL  # noqa: E402
 import two_stage as TS  # noqa: E402
 import verity_vllm.definitions.registry.boolean_stop_rule  # noqa: E402, F401  (the stop rule's words on gates: Flock's pieces for them)
+from verity.commitments import domains as DM
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import SpecializedDefinition  # noqa: E402
 from verity.commitments.merkle import tree_levels  # noqa: E402
@@ -114,6 +115,7 @@ from verity.commitments.rowleaf import row_leaf  # noqa: E402
 from verity.commitments.periods import rows as CS, tables as TB  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P, registered as REG, docket as R  # noqa: E402
+from verity.commitments import registered_value as RV  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS  # noqa: E402
 
@@ -348,7 +350,7 @@ def reads(r: Resumed) -> dict[str, Any]:
     mine = L.stop_ports()[BR.STOP]
     ports = dict(r.held.file["ports"])
     ports[OUT] = {"value": CS.own_value(BR.STOP), "root": stop["root"], "leaves": mine["leaves"], "words": L.words(BR.STOP),
-                  "word_bits": REG.WORD_BITS, "domain": mine["domain"], REG.SCHEMA_KEY: BR.SCHEMA,
+                  "word_bits": RV.WORD_BITS, "domain": mine["domain"], REG.SCHEMA_KEY: BR.SCHEMA,
                   "reads": list(range(L.spans))}
     return {**r.held.file, "ports": dict(sorted(ports.items()))}
 
@@ -571,7 +573,7 @@ def answer_of(r: Resumed, got: Mapping[str, Any]) -> dict[str, Any]:
     failed = sorted(k for k, c in (audit.get("checks") or {}).items() if not c.get("ok"))
     refused = sorted(k for k, v in (audit.get("verdicts") or {}).items() if v.get("accepted") is False)
     named = "; ".join(f"{what}: {', '.join(names)}" for what, names in (("checks", failed), ("verdicts", refused)) if names)
-    return {"commitment": r.docket.digest, "profile": None, "protocol": R.PROTOCOL, "public": None,
+    return {"commitment": r.docket.digest, "profile": None, "protocol": DM.ONE_STAGE_PROTOCOL, "public": None,
             "reason": named or "the stop stream refused the outcome", "verdict": "reject"}
 
 

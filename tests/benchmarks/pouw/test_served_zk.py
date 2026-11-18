@@ -494,6 +494,7 @@ def test_a_window_without_a_registration_deadline_is_refused(served, tmp_path):
     assert json.loads((tmp_path / "q.json").read_text())["registration_deadline"] == 60.0
 
 
+@LEAN
 def test_a_pass_registered_again_on_another_stream_is_refused(served):
     """Execution phases credited together hold each call index of their salt once (`credit.passes_distinct`): the same pass
     registered again on another stream would credit every call twice under the same seeds and tickets, so it is refused

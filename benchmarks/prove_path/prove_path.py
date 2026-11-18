@@ -1763,7 +1763,6 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
     from verity.protocols.proofs.spot.verifier import service as S
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
     from verity.circuits.codec import program_digest
 
     seconds: dict[str, float] = {}
@@ -1849,7 +1848,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
         previous = R.digest(pw)
     lap("rows")
     win = IF.Window(low.circuit, run, window_design(a.sampling_design, low.circuit), a.cap, registered=values, forms=WRS.FORMS)
-    win.supply(CR)
+    win.supply()
     filled.record(win)
     lap("record")
     c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))

@@ -5,7 +5,7 @@ cards = ["h200"]
 # Pearl-C served through the whole-step graph path (the experimental arm `pouw-pearl-c-whole`,
 # `bench_arm.PearlCWholeArm`: each decode step one CUDA graph replay of vLLM's FULL decode graph with every call's Pearl-C
 # graph steps inside it), against `stock-fp8@compiled` (vLLM's serving defaults) in one run under one host load. The
-# preset is `llama31-8b-1gpu-pouw-protocol-served`'s.
+# preset is `llama31-8b-fp8-1gpu-compiled-full`'s.
 #
 # The whole-step arm runs vLLM's FULL_DECODE_ONLY graphs at the preset's capture sizes without torch.compile, at the
 # `compiled` execution label (vLLM's kernels without batch invariance, as `stock-fp8@compiled`), the serial schedule and

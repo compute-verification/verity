@@ -1,0 +1,9 @@
+{
+ "schema": "verity/private-names/v1",
+ "kept_apart": ["replay_bundle_p", "replay_slim_p"],
+ "private": ["tokens.json", "tokens_p*.json", "tokens_digests.jsonl", "tensor_digests_pair*.json", "recorder_sha256.json",
+             "match_stoch.json", "sampled_replay*.json", "requests.jsonl", "step_trace.*",
+             "ids.*jsonl*", "outputs.*jsonl*", "replay_tokens.jsonl*", "replay_logprobs.jsonl*", "alone_tokens.jsonl*",
+             "advice_trace.jsonl", "load*.jsonl", "topology.json", "timeline.jsonl", "timeline_report.json",
+             "runs.jsonl", "memory_map.jsonl"]
+}

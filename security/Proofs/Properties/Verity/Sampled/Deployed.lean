@@ -82,7 +82,7 @@ theorem recordCustodyZKJPLaw_printed (I : Exec.Inputs) (own : Option ByteArray) 
 /-- **V5's `live-verifier` at the deployment's writer and sample file** (`Flock.Guarantees.SampledKSLiveV5`'s `hCust`):
 `RecordCustodyZKJPLaw` at `wrZP` and the sample file printed under the sampling design V5 reads, `designAt`, which is
 no Bernoulli sampling design (`Flock.Bridge.notBernoulli_designAt`), with no premise. -/
-theorem recordCustodyZKJPLaw_designAt (I : Exec.Inputs) (own : Option ByteArray) (desc : Claims.Msg) (q lj : Lean.Json)
+theorem recordCustodyZKJPLaw_designAt (I : Exec.Inputs) (own : Option ByteArray) (desc : Hash.Msg) (q lj : Lean.Json)
     (tb : Option Lean.Json) (Jf : Finset (Fin n) → Reg → ℕ) :
     Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPts) I own (printedSample (Flock.Bridge.designAt desc q lj tb n)) Jf
       (Claims.Bridge.CustodyZkP.wrZP I own (printedSample (Flock.Bridge.designAt desc q lj tb n)) Jf)

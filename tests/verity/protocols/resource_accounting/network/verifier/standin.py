@@ -19,7 +19,8 @@ from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.resource_accounting.network.verifier import service as SVC, tie_service as TS, network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF, registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
 
 _INST = hm96.SHA512
@@ -146,9 +147,9 @@ def _known(registered: dict) -> str | None:
         rows, salts = known["rows"], [bytes.fromhex(s) for s in known["salts"]]
         if dom is None or len(rows) != len(salts) or len(rows) != port["leaves"]:
             return f"registered reads: port {name}: {len(rows)} known rows of {port['value']}'s {port['leaves']}"
-        bcs = [_INST.commit_string(_INST.default_key, G.row_digest(r, G.WORD_BITS, TS.SCHEMA), s)
+        bcs = [_INST.commit_string(_INST.default_key, RV.row_digest(r, RV.WORD_BITS, TS.SCHEMA), s)
                for r, s in zip(rows, salts)]
-        if tree_levels(dom, [G.leaf(dom, i, b, TS.SCHEMA) for i, b in enumerate(bcs)])[-1][0].hex() != port["root"]:
+        if tree_levels(dom, [RV.leaf(dom, i, b, TS.SCHEMA) for i, b in enumerate(bcs)])[-1][0].hex() != port["root"]:
             return f"registered reads: port {name}: {port['value']}'s registered root is not the root of its known rows"
     return None
 

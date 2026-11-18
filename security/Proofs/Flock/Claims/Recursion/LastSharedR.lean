@@ -69,7 +69,7 @@ open Lean (Json)
 
 /-- **The round messages `readPs` reads do not depend on the last message.** -/
 theorem readPs_last {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
-    {rss : List (List ByteArray)} {cs : List Coin} {fl fl' : FinalP} {pf pf' : Array Flock.Proof × List Claims.Msg}
+    {rss : List (List ByteArray)} {cs : List Coin} {fl fl' : FinalP} {pf pf' : Array Flock.Proof × List Hash.Msg}
     (h : readPs spec sts c₁ r₀ rss cs fl = some pf) (h' : readPs spec sts c₁ r₀ rss cs fl' = some pf') :
     pf'.2 = pf.2 := by
   unfold readPs at h h'
@@ -101,9 +101,9 @@ theorem readPs_last {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ 
 
 /-- **Two decisions of `nextR` on the same rounds and coins, differing only in the last message, share the setup, the
 link, the first coin and the round messages.** -/
-theorem nextR_shared {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.Msg}
+theorem nextR_shared {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {l l' : Hash.Msg}
     {cs : List Coin} {s s' : Ins} {spec spec' : SessionSpec} {sts sts' : Array Stmt}
-    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids mids' : List (Claims.Msg × Coin)}
+    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids mids' : List (Hash.Msg × Coin)}
     {f f' : FinalP} (hms : ms ≠ [])
     (ha : actR rd x (ms ++ [l]) cs = .decide s spec sts link c₁ mids f)
     (ha' : actR rd x (ms ++ [l']) cs = .decide s' spec' sts' link' c₁' mids' f') :
@@ -136,9 +136,9 @@ theorem nextR_shared {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : 
 
 /-- **A last step of `nextR` that decides follows at least one earlier message**: with a single message the statement
 sets up no session (`V false`'s round count is `1` only there). -/
-theorem ms_ne_nil_of_actR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {l : Claims.Msg}
+theorem ms_ne_nil_of_actR {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {l : Hash.Msg}
     {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
-    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalP} (hk : ms.length + 1 = (FlockDeploy.V false).k x)
+    {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalP} (hk : ms.length + 1 = (FlockDeploy.V false).k x)
     (ha : actR rd x (ms ++ [l]) cs = .decide s spec sts link c₁ mids f) : ms ≠ [] := by
   intro hms
   subst hms
@@ -151,9 +151,9 @@ theorem ms_ne_nil_of_actR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {
 
 /-- **An accepted decision of `nextR` runs the verdict within its own log**, at SHA-512: the verdict at `jAt sha512`
 and the read proofs' files (`decisionE_runs` at `nextR`). -/
-theorem decideR_runs {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decideR_runs {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((nextR rd x as cs).eval sha512).1 = .acc) :
     Runs sha512 (verifyJWithM Claims.Hashes.oc spec (tabsOf sts) (jAt sha512 spec sts c₁ mids f)
       (filesAt (tabsOf sts) (pointsOf spec c₁) f.ps)) () (((nextR rd x as cs).eval sha512).2.map Prod.fst) := by
@@ -190,14 +190,14 @@ theorem decideR_runs {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : 
 
 /-- **The verdict at a parsed value within `L` is the verdict with SHA-512 answered only within `L`.** -/
 theorem verdictR_within {spec : SessionSpec} {tabs : Array Setup} {j : Json} {proofs : Array ByteArray}
-    {L : List Claims.Msg} (h : Runs sha512 (verifyJWithM Claims.Hashes.oc spec tabs j proofs) () L) :
+    {L : List Hash.Msg} (h : Runs sha512 (verifyJWithM Claims.Hashes.oc spec tabs j proofs) () L) :
     verifyJWithMK id (hashesIn L) spec tabs j proofs = .ok () :=
   (With.verifyJWithM_sim (within L) (within_hashes L) spec tabs j proofs) () h
 
 /-- **`checksAtJ` pins the tables' Merkle scheme** (`checks_leaf` at a parsed value): every table the statement sets up
 commits under `hm96Sha512`, or, for a statement read without `--zk`, under plain SHA-512 leaves. -/
-theorem checksAtJ_leafL {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
-    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {v : Json} {sts : Array Stmt}
+theorem checksAtJ_leafL {s : Ins} {spec : SessionSpec} {x : Hash.Msg} {link : List ByteArray × List ByteArray}
+    {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalJ} {v : Json} {sts : Array Stmt}
     (hc : checksAtJ s spec x link c₁ mids f v = .ok ()) (hs : s.setup = .ok (spec, sts)) :
     ∀ (j : ℕ) (hj : j < sts.size), sts[j].merkle = MerkleScheme.hm96Sha512 ∨
       (s.read.zk = false ∧ sts[j].merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") := by
@@ -341,7 +341,7 @@ theorem streams_sizes_plainJK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec
 /-- `live_keys_eqK` at parsed values. -/
 theorem live_keys_eqJK (keep keep' : Bool → Bool) (hs hs' : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
     {j j' : Json} {proofs proofs' : Array ByteArray} {lv lv' : Live}
-    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Claims.Msg × Coin)}
+    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Hash.Msg × Coin)}
     (hv : verifyJWithMK keep hs spec (tabsOf sts) j proofs = .ok ()) (hl : FlockDeploy.liveOfJ spec j = .ok lv)
     (hv' : verifyJWithMK keep' hs' spec (tabsOf sts) j' proofs' = .ok ())
     (hl' : FlockDeploy.liveOfJ spec j' = .ok lv')
@@ -359,7 +359,7 @@ same link and round messages, decode to sessions with the same rounds on every r
 retained. -/
 theorem sess_rounds_eqJK (keep keep' : Bool → Bool) (hs hs' : Hashes Flock.V) {spec : SessionSpec}
     {sts : Array Stmt} {j j' : Json} {proofs proofs' : Array ByteArray} {lv lv' : Live}
-    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Claims.Msg × Coin)}
+    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Hash.Msg × Coin)}
     {sess sess' : RunRecord}
     (hv : verifyJWithMK keep hs spec (tabsOf sts) j proofs = .ok ()) (hl : FlockDeploy.liveOfJ spec j = .ok lv)
     (hv' : verifyJWithMK keep' hs' spec (tabsOf sts) j' proofs' = .ok ())
@@ -384,7 +384,7 @@ theorem sess_rounds_eqJK (keep keep' : Bool → Bool) (hs hs' : Hashes Flock.V) 
 /-- `streams_coins_eqK` at parsed values. -/
 theorem streams_coins_eqJK (keep keep' : Bool → Bool) (hs hs' : Hashes Flock.V) {spec : SessionSpec}
     {sts : Array Stmt} {j j' : Json} {proofs proofs' : Array ByteArray} {lv lv' : Live}
-    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Claims.Msg × Coin)}
+    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Hash.Msg × Coin)}
     (hv : verifyJWithMK keep hs spec (tabsOf sts) j proofs = .ok ()) (hl : FlockDeploy.liveOfJ spec j = .ok lv)
     (hv' : verifyJWithMK keep' hs' spec (tabsOf sts) j' proofs' = .ok ())
     (hl' : FlockDeploy.liveOfJ spec j' = .ok lv')

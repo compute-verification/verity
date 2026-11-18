@@ -49,7 +49,7 @@ theorem opensPlace_of_ready {D : Flock.Desc} {hU : FlockSoundness.Built D.unroll
     {r : Verity.FileRead} (hD : Flock.Desc.parse r.tags r.circuitFile r.tables = .ok D)
     (hpub : Flock.HmIn.loadPublic r.tags D.unroll pi r.publicFile = .ok pub) (hn : pub.n = n)
     (hN : r.circuit.N = (Commit.Cc D hU n pi).N) (g : Fin r.circuit.N) (hw : r.circuit.w g = 1) {b : Bool}
-    {dg : Claims.Msg}
+    {dg : Hash.Msg}
     (hop : (Commit.Cd D hU n pi pub).Opens Claims.Sampling.sha512Msg (Commit.roots D n pub)
       ⟨Flock.Bridge.posOf (Commit.Cc D hU n pi) (Fin.cast hN g), b, dg⟩ = true)
     {v : BitVec (r.circuit.w g)} (hv : v.getLsbD 0 = b) :

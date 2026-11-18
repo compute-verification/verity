@@ -10,7 +10,7 @@
     instances --workload W [--write]                     regenerate the workload's frozen instance manifest
     workloads                                            the proof-block families and their B caps
     zk                                                   what configuration 2 measures today (job.sh ZK=1: --zk sessions under the ZK server)
-    record   [--workload W] [--B B] [--provers 1,2] --cards G,G --cores C,C   the metric's run, on its GPU node: the prover
+    record   [--workload W] [--B B] [--provers 1,2] --cards G,G --cores C,C [--runs N]   the metric's run, on its GPU node: the prover
              points, 1 then 2 at once (prover I on the I-th card and core range), the Lean verifier on each bundle, and one reading a prover count
 
 The job scripts call the rest: ``population``, ``check-instances``, ``partition``, ``staged``, ``probe``, ``put-bundle``,
@@ -475,7 +475,7 @@ def cmd_record(a) -> int:
     w = kit.writer("pt-record")
     out = Path(w.out) / "out"
     points = REC.run(P.repository_root(), out, a.workload, a.B, provers, cards, cores, w.stamp.get("node") or "local",
-                     w.run)
+                     w.run, runs=a.runs)
     return REC.write(w, out, a.workload, a.B, points)
 
 
@@ -533,7 +533,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dir", required=True); p.add_argument("--out", required=True)
     p = sub.add_parser("record"); p.add_argument("--workload", default=DEFAULT_WORKLOAD); p.add_argument("--B", type=int, default=64)
     p.add_argument("--provers", default="1,2"); p.add_argument("--cards", required=True)
-    p.add_argument("--cores", required=True)
+    p.add_argument("--cores", required=True); p.add_argument("--runs", type=int, default=3)
     p = sub.add_parser("profile-phases"); p.add_argument("--script", required=True); p.add_argument("--time", required=True)
     p.add_argument("--stderr", required=True); p.add_argument("--stdout", default=None); p.add_argument("--out", required=True)
     p.add_argument("--bundle", default=None); p.add_argument("--prove-run", default=None)

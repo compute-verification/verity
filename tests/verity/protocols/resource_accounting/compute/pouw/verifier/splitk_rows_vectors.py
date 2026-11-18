@@ -13,7 +13,7 @@ descriptor's SHA-512), the execution phase's open root and the 32-byte salt key 
 the served A table of call 0's (vllm's ``pouw_h1_served.nonce(0, "a")``, `A_NONCE`), which binds the execution phase, and the
 weights' ``b/<K>`` at `weights.B_NONCE` (K the execution phase's only K), which binds none. Each case pins every leaf's SHA-512 of
 its words' bytes, its ``sha512/row/v2`` digest and its frame-v3 leaf, and the value's domain id and root, all as
-`registered.Registered.commit` gives them under ``hm96-sha512/row/v2``."""
+`registered_value.Registered.commit` gives them under ``hm96-sha512/row/v2``."""
 
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1z
 from verity.protocols.resource_accounting.compute.pouw.verifier import audit
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 OUT = Path(__file__).with_name("vectors") / "splitk_rows.json"
 LABEL = b"verity/pouw/splitk-rows-vectors/v1"
@@ -63,12 +64,12 @@ def window() -> str:
     return _shake(b"window", n=64).hex()
 
 
-def commit(case: tuple) -> tuple[list[list[int]], G.Registered]:
+def commit(case: tuple) -> tuple[list[list[int]], RV.Registered]:
     """A case's leaves' words (`h1zy.chunk_words`) and their registration."""
     name, value, k, count, nonce, windowed = case
     words = Z.chunk_words(rows(name, k, count), k)
     salts = [audit.hm96_salt(key(), nonce, j) for j in range(len(words))]
-    return words, G.Registered.commit(program(), value, words, salts, schema=G.SCHEMA_V2,
+    return words, RV.Registered.commit(program(), value, words, salts, schema=G.SCHEMA_V2,
                                       window=window() if windowed else None)
 
 
@@ -87,7 +88,7 @@ def vectors() -> dict:
             "window": windowed, "leaves": reg.leaves, "words": reg.words, "domain": reg.domain.domain_id.hex(),
             "root": reg.root.hex(),
             "leaf": [{"words_sha512": hashlib.sha512(_bytes(w)).hexdigest(),
-                      "row_digest": G.row_digest(w, G.WORD_BITS, G.SCHEMA_V2).hex(), "frame_leaf": reg.levels[0][j].hex()}
+                      "row_digest": RV.row_digest(w, RV.WORD_BITS, G.SCHEMA_V2).hex(), "frame_leaf": reg.levels[0][j].hex()}
                      for j, w in enumerate(words)]})
     return out
 

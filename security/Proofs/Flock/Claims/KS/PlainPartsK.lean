@@ -75,7 +75,7 @@ theorem not_plainVerdictAtK_nil (keep : Bool → Bool) (I : Discharge.Exec.Input
   exact Claims.Bridge.PlainSample.not_acceptsAtDK_nil keep I (some d) record hA
 
 /-- **The abort at `VK keep`** (`PlainSimAbortAt` at `plainSimK keep` and `plainVerdictAtK keep`). -/
-def PlainSimAbortAtK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
+def PlainSimAbortAtK (keep : Bool → Bool) (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (_ : tables false x = [(spec, st)]) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (I : Discharge.Exec.Inputs)
@@ -84,7 +84,7 @@ def PlainSimAbortAtK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
       (plainSimK keep P x spec st) (plainΦ x spec st) (plainVerdictAtK keep I d C rootB₀)
 
 /-- **The abort holds at every statement, at every `keep`** (`plainSim_proofs_nilK`, `not_plainVerdictAtK_nil`). -/
-theorem plainSimAbortAtK (keep : Bool → Bool) (x : Claims.Msg) : PlainSimAbortAtK keep x :=
+theorem plainSimAbortAtK (keep : Bool → Bool) (x : Hash.Msg) : PlainSimAbortAtK keep x :=
   fun _ hs hin _ _ _ hset st _ _ P ω I d _ C rootB₀ u r' hna =>
     not_plainVerdictAtK_nil keep I d C rootB₀
       (plainSim_proofs_nilK keep P ω st hset _ (plain_mPts hs hin hset).2.1 u r' hna)
@@ -104,7 +104,7 @@ def plainDecQK (keep : Bool → Bool) {mPts : ℕ} (Q : Model.OutCL 𝔽 Refine.
 
 /-- **`Q` at the decoded live outcome gives `P`'s accepting runs of `VK keep` a raw clash** (`PlainClashQ` at
 `plainSimK keep`). -/
-def PlainClashQK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec}
+def PlainClashQK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) {spec : SessionSpec}
     (st : Stmt) (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (Q : Model.OutCL 𝔽 Refine.Dig (List UInt8) → Prop) : Prop :=
@@ -115,7 +115,7 @@ def PlainClashQK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : 
     PlainRawClashLK keep P x ω (plainΦ x spec st (u, r'))
 
 /-- **The live self-clash's clash, at `keep`** (`PlainSimClashAt` at `PlainClashQK keep`). -/
-def PlainSimClashAtK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
+def PlainSimClashAtK (keep : Bool → Bool) (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (_ : tables false x = [(spec, st)]) (d : Json) (_ : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -141,7 +141,7 @@ noncomputable def plainAdvK (keep : Bool → Bool) {spec : SessionSpec} {st : St
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
-    (x : Claims.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+    (x : Hash.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (hdec : ∀ (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray) j,
       DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
         (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leaf512
@@ -165,7 +165,7 @@ noncomputable def plainAdvK (keep : Bool → Bool) {spec : SessionSpec} {st : St
 
 /-- **The simulated fork bounds the strategies' fork advantage, at `keep`** (`PlainSimForkLe` at `plainAdvK keep`,
 the decoders `plain_hdecAtK keep` and `plain_hdecHAtK keep`, and `VK keep`'s simulated fork). -/
-def PlainSimForkLeK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
+def PlainSimForkLeK (keep : Bool → Bool) (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (h : tables false x = [(spec, st)]) (d : Json) (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -196,7 +196,7 @@ def PlainSimForkLeK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
 open Classical in
 /-- **The concrete simulator at the verdict at the sample, from its clash and its fork bound, at `keep`**
 (`plainSimWrPAtD_of_parts`'s proof at `plainSimK keep`). -/
-theorem plainSimWrPAtD_of_partsK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem plainSimWrPAtD_of_partsK (keep : Bool → Bool) {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}
     (h : tables false x = [(spec, st)]) {d : Json} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
@@ -241,7 +241,7 @@ theorem plainSimWrPAtD_of_partsK (keep : Bool → Bool) {x : Claims.Msg} {s : Cl
 
 /-- **The concrete simulator at a plain statement, from its clash and its fork bound, at `keep`**: `PlainSimWDK keep`
 from `PlainSimClashAtK keep` and `PlainSimForkLeK keep`. -/
-theorem plainSimWD_of_partsK (keep : Bool → Bool) {x : Claims.Msg} (hc : PlainSimClashAtK keep x)
+theorem plainSimWD_of_partsK (keep : Bool → Bool) {x : Hash.Msg} (hc : PlainSimClashAtK keep x)
     (hf : PlainSimForkLeK keep x) : PlainSimWDK keep x :=
   fun s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay =>
     ⟨fun hh => plainSimWrPAtD_of_partsK keep hs hin hset h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay _ _

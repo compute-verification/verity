@@ -369,7 +369,7 @@ theorem sessionRead_read (hT : coinTreesOf lines = .ok trees) (hR : readLog labe
     (hx : records[j]? = some x) {tb : String} {n? : Option ℕ} (htab : x.2.1 = #[(tb, n?)]) {text : String}
     (hJ : Flock.JsonParse.parse text = .ok x.2.2.1) {spec : Flock.SessionSpec} {sess : Flock.RunRecord}
     (hd : Flock.Record.decode spec text = .ok sess) (hc : spec.coinTree = some (Flock.Zk.coinSpec #[tb]))
-    (hst : spec.tables = #[tb]) (h512 : spec.sha512Digests = true) {w : Claims.Msg}
+    (hst : spec.tables = #[tb]) (h512 : spec.sha512Digests = true) {w : Hash.Msg}
     (hev : x.2.2.2 = sha512Hex ⟨w.toArray⟩) : SessionRead log #[tb] j text x.2.2.1 sess w := by
   have hopens := sessionOpens_read hT hR hM hrecs hLF hx htab hJ hd hc hst h512
   obtain ⟨-, hnod, hO⟩ := membersTreeReason_none hM
@@ -503,7 +503,7 @@ theorem sessionOpens_of_read (hl : List.Forall₂ Binding.Read.Of (lr.map Bindin
 
 /-- **What v2's read is held to, the device's log is**: where v2's read `lr` reads the releases of the log `Lg`,
 `SessionRead` on `lr` is `SessionRead` on `Lg`. -/
-theorem sessionRead_of_read (hl : List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) Lg) {w : Claims.Msg}
+theorem sessionRead_of_read (hl : List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) Lg) {w : Hash.Msg}
     (h : SessionRead lr tables u text J sess w) : SessionRead Lg tables u text J sess w := by
   have hR := List.forall₂_map_left_iff.1 hl
   have hfa : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) lr Lg :=
@@ -540,7 +540,7 @@ theorem sessionRead_logged (hT : coinTreesOf lines = .ok trees) (hR : readLog la
     {n? : Option ℕ} (htab : x.2.1 = #[(tb, n?)]) {text : String} (hJ : Flock.JsonParse.parse text = .ok x.2.2.1)
     {spec : Flock.SessionSpec} {sess : Flock.RunRecord} (hd : Flock.Record.decode spec text = .ok sess)
     (hc : spec.coinTree = some (Flock.Zk.coinSpec #[tb])) (hst : spec.tables = #[tb])
-    (h512 : spec.sha512Digests = true) {w : Claims.Msg} (hev : x.2.2.2 = sha512Hex ⟨w.toArray⟩) :
+    (h512 : spec.sha512Digests = true) {w : Hash.Msg} (hev : x.2.2.2 = sha512Hex ⟨w.toArray⟩) :
     SessionRead Lg #[tb] j text x.2.2.1 sess w :=
   sessionRead_of_read hl (sessionRead_read hT hR hM hrecs hLF hx htab hJ hd hc hst h512 hev)
 

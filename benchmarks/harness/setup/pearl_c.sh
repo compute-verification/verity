@@ -5,7 +5,8 @@
 PC_OUT=${RESEARCH_RUN_DIR:-$PWD}/out/setup/pearl_c_sm120
 mkdir -p "$(dirname "$PC_OUT")"
 CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4
-CUDA_HOME=$CUDA_HOME bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh "$PC_OUT" \
+PC_GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") || exit 4
+CUDA_HOME=$CUDA_HOME GENCODE=$PC_GENCODE bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh "$PC_OUT" \
   || { echo "setup: verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh failed" >&2; exit 4; }
 sha256sum verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/pearl_c_sm120.cu verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/*.cuh \
   verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py "$PC_OUT/pearl_c_sm120.cubin" > "$PC_OUT/sha256.txt"

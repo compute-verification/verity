@@ -21,6 +21,7 @@ from tests.verity.protocols.resource_accounting.network.verifier.test_network_at
 from tests.verity.protocols.resource_accounting.network.verifier.test_network_attester import records, run
 from verity.protocols.resource_accounting.network.verifier.network_attester import Released
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 T, K = LEN.window // LEN.every, LEN.stride_releases
 LINK = "responses"
@@ -122,7 +123,7 @@ def test_every_row_opens_its_tables_signed_root_at_its_position_and_nowhere_else
         for k, row in enumerate(table.rows):
             bc = W.bc(row, table.salts[k])
             assert bc == hm96.SHA512.commit_string(
-                hm96.SHA512.default_key, G.row_digest(W.words(row), 16, G.SCHEMA_V2), table.salts[k])
+                hm96.SHA512.default_key, RV.row_digest(W.words(row), 16, G.SCHEMA_V2), table.salts[k])
             assert W.opens(dom, entry.root, k, bc, table.path(k))
         row, salt, path = table.rows[1], table.salts[1], table.path(1)
         flipped = bytes([row[0] ^ 1]) + row[1:]

@@ -911,8 +911,8 @@ def test_serve_openai_names_a_header_as_the_network_attester_does():
             assert na.release_of(hd.header_fields(fields)) == (RUN, 3, 1), (pre, post)
 
 
-def test_the_flag_takes_tick_with_the_engine_class_step_times_under_the_schemes_name():
-    base = ["--model", "m", "--revision", "r", "--no-commit"]
+def test_the_flag_takes_tick_with_the_engine_class_step_times_under_the_schemes_name(tmp_path):
+    base = ["--model", "m", "--revision", "r", "--no-commit", "--out", str(tmp_path)]
     name = messages.providing("admission").name
     times = ["--protocols-config", json.dumps({name: {"order": "tick", "sat_us": 27_500, "free_us": 41_000}})]
     opts = cli.parse("serve-openai", [*base, *times], environ={})

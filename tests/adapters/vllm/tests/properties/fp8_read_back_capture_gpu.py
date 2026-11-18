@@ -32,7 +32,6 @@ no source, 0 otherwise. On one idle card, from the tree's root, in the pod's ven
 from __future__ import annotations
 
 import argparse
-import glob
 import hashlib
 import json
 import os
@@ -439,8 +438,9 @@ def kernel_symbols(data: bytes) -> list[str]:
 def sass(lib: Path) -> dict[str, Any]:
     """The kernel's sm_90 SASS in ``lib`` by `cuobjdump`, where one is found, and its `sass_counts`. `cuobjdump` runs
     ``nvdisasm``, so its own directory leads the PATH; what it wrote to stderr is kept."""
-    tools = [shutil.which("cuobjdump"), *sorted(glob.glob("/usr/local/cuda*/bin/cuobjdump"))]
-    tool = next((t for t in tools if t), None)
+    home = os.environ.get("CUDA_HOME")
+    tools = [shutil.which("cuobjdump"), home and os.path.join(home, "bin", "cuobjdump")]
+    tool = next((t for t in tools if t and os.access(t, os.X_OK)), None)
     if tool is None:
         return {"cuobjdump": None}
     env = {**os.environ, "PATH": f"{Path(tool).parent}{os.pathsep}{os.environ.get('PATH', '')}"}

@@ -118,7 +118,7 @@ theorem capsAt_of_decode {st : Setup} {sch : Flock.Schedule} {n : ℕ} {bytes : 
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FlockDeploy.FinalP} {x : Claims.Msg} {ms : List Claims.Msg}
+variable {rd : Hash.Msg → Option FlockDeploy.FinalP} {x : Hash.Msg} {ms : List Hash.Msg}
   {cs : List FlockDeploy.Coin} (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128) (i : ℕ) (r : Fin 2)
 
 /-- **Row D from each query's opening**: at table `i`'s plain scheme and `fast100` schedule, where rep `r`'s caps have

@@ -34,19 +34,19 @@ open FlockSoundness.Discharge
 open scoped NNReal
 
 /-- **The deployed stop on the prover's history**: `stopsRec` at the transcript the history reads as. -/
-noncomputable def sR (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) (x : Claims.Msg)
-    (h : List (Claims.Msg × Claims.Msg)) : Bool :=
+noncomputable def sR (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings) (x : Hash.Msg)
+    (h : List (Hash.Msg × Hash.Msg)) : Bool :=
   stopsRec IV ivScope b.st x (asRounds h)
 
 /-- **The masked record with the deployed stop**: `deployRecM` with the masked reference prover stopped where `sR`
 holds at the first part's rounds, and `stopsRec` its stop; each inner round one commit string, sent as it is. -/
-noncomputable def deployRecMStop (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
+noncomputable def deployRecMStop (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings)
     (VM : Claims.Verifier Coin)
-    (iv : (Claims.Msg → Claims.Msg) → (x : Claims.Msg) → (Fin (VM.k x) → Coin) → List Claims.Flock.Wit → Claims.Seen)
-    (T₀ : Claims.Msg → SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
-    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
-    (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim) :
+    (iv : (Hash.Msg → Hash.Msg) → (x : Hash.Msg) → (Fin (VM.k x) → Coin) → List Claims.Flock.Wit → Claims.Seen)
+    (T₀ : Hash.Msg → SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
+    (pre : (x : Hash.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
+    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
+    (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Hash.Msg → ℕ → Claims.Recursion.OSim) :
     Claims.Recursion.StopDeploy Coin :=
   { deployRecM IV ivScope b VM iv T₀ NB ΩB pre wit PS SO with
     P := fun w => Claims.ZKMal.stopP (refPM IV b id wit PS w) (sR IV ivScope b) (kPre IV)
@@ -57,25 +57,25 @@ noncomputable def deployRecMStop (IV : Claims.Verifier Coin) (ivScope : Claims.M
 /-- **The live witness**: at every history that starts session `j` whose first part is the first part's prover's on
 some tape `t₀` and where the stop hasn't fired, the witness `wit` gives is in the sessions' relation `RF` at the
 statement the history stages. -/
-def LiveWit (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
-    (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : Claims.Msg → SeqTape)
-    (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
-    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
+def LiveWit (H : Hash.Msg → Hash.Msg) (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings)
+    (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (T₀ : Hash.Msg → SeqTape)
+    (pre : (x : Hash.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
+    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
     (RF : Claims.Rel Claims.Flock.Wit) : Prop :=
   ∀ x w, Claims.Recursion.R (deployRec IV ivScope b) I x w → ∀ j < nS x, ∀ (t₀ : (T₀ x).N × (T₀ x).Ω)
-    (u : List (Claims.Msg × Claims.Msg)), u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
+    (u : List (Hash.Msg × Hash.Msg)), u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
       (∀ i (hi : i < u.length), i < kPre IV x → u[i].1 = (((preP IV b (pre x) w).next x (u.take i) t₀).eval H).1) →
       Claims.ZKMal.fired (sR IV ivScope b x) (kPre IV x) u = false →
         RF (xsOf IV b x j u) (wit w (pre x t₀) (u.take (IV.k (xIOf x))) j)
 
 section Stop
 
-variable (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) (VM : Claims.Verifier Coin)
-  (iv : (Claims.Msg → Claims.Msg) → (x : Claims.Msg) → (Fin (VM.k x) → Coin) → List Claims.Flock.Wit → Claims.Seen)
-  (T₀ : Claims.Msg → SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-  (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
-  (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
-  (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
+variable (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings) (VM : Claims.Verifier Coin)
+  (iv : (Hash.Msg → Hash.Msg) → (x : Hash.Msg) → (Fin (VM.k x) → Coin) → List Claims.Flock.Wit → Claims.Seen)
+  (T₀ : Hash.Msg → SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
+  (pre : (x : Hash.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
+  (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
+  (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Hash.Msg → ℕ → Claims.Recursion.OSim)
 
 set_option hygiene false in
 local notation "𝔇" => deployRecMStop IV ivScope b VM iv T₀ NB ΩB pre wit PS SO
@@ -84,7 +84,7 @@ set_option hygiene false in
 local notation "𝔓" => Claims.ZKMal.stopProgB (sR IV ivScope b) (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
   fun j x u c => (SO' x j).prog (xsOf IV b x j u) c
 
-theorem nAt_deployRecMStop (x : Claims.Msg) (i : ℕ) : (𝔇).nAt x i = 1 := rfl
+theorem nAt_deployRecMStop (x : Hash.Msg) (i : ℕ) : (𝔇).nAt x i = 1 := rfl
 
 /-- The record's commit strings to the zero digest are `deployRec`'s. -/
 theorem zeroCommits_deployRecMStop (ys : List (Fin (𝔇).saltLen → UInt8)) :
@@ -93,19 +93,19 @@ theorem zeroCommits_deployRecMStop (ys : List (Fin (𝔇).saltLen → UInt8)) :
   | nil => rfl
   | cons y ys ih => simp only [Claims.Recursion.Deploy.zeroCommits, ih]; rfl
 
-theorem zeroCommits_stop_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
+theorem zeroCommits_stop_eval (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out)
     (ys : List (Fin (𝔇).saltLen → UInt8)) :
     (Claims.SP.eval H ask ((𝔇).toDeploy.zeroCommits ys)).1 = ys.map fun y => List.ofFn (maskOf y) ++ saltH H y := by
   rw [zeroCommits_deployRecMStop]
   exact zeroCommits_eval IV b ivScope H ask ys
 
-theorem innerMsg_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (x : Claims.Msg)
-    (ms : List (Claims.Msg × Claims.Out)) (cs : List Claims.Msg) :
+theorem innerMsg_eval (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out) (x : Hash.Msg)
+    (ms : List (Hash.Msg × Claims.Out)) (cs : List Hash.Msg) :
     (Claims.SP.eval H ask (Claims.Recursion.spOf ((𝔇).innerMsg x ms cs))).1 = cs.flatten :=
   rfl
 
 /-- **The record's stop is `sR`'s** on the transcript a history reads as. -/
-theorem halted_asRounds (H : Claims.Msg → Claims.Msg) (k : ℕ) (x : Claims.Msg) (h : List (Claims.Msg × Claims.Msg)) :
+theorem halted_asRounds (H : Hash.Msg → Hash.Msg) (k : ℕ) (x : Hash.Msg) (h : List (Hash.Msg × Hash.Msg)) :
     (𝔇).halted H k x (asRounds h) = Claims.ZKMal.fired (sR IV ivScope b x) k h := by
   have hl : (asRounds h).length = h.length := List.length_map _
   unfold Claims.Recursion.StopDeploy.halted Claims.ZKMal.fired
@@ -128,8 +128,8 @@ theorem prover_deployRecMStop : (𝔇).prover =
         else o)
       (layProver_comap IV b (pre x) wit PS w (nS x') x' hist (Layout.flatten (T₀ x) 0 NB ΩB (nS x) ω)))
 
-theorem innerRound_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (x : Claims.Msg)
-    (ms : List (Claims.Msg × Claims.Out)) (y : Fin 1 → Fin (𝔇).saltLen → UInt8) :
+theorem innerRound_eval (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out) (x : Hash.Msg)
+    (ms : List (Hash.Msg × Claims.Out)) (y : Fin 1 → Fin (𝔇).saltLen → UInt8) :
     (Claims.SP.eval H ask (Claims.Recursion.spBind ((𝔇).toDeploy.zeroCommits ((List.finRange 1).map y)) fun cs =>
       Claims.Recursion.spOf ((𝔇).innerMsg x ms cs))).1 =
         List.ofFn (maskOf (y ⟨0, Nat.zero_lt_one⟩)) ++ saltH H (y ⟨0, Nat.zero_lt_one⟩) := by
@@ -139,8 +139,8 @@ theorem innerRound_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg �
     | exact List.append_nil _
     | simp
 
-theorem stageRound_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (x : Claims.Msg)
-    (ms : List (Claims.Msg × Claims.Out)) (ys : List (Fin (𝔇).saltLen → UInt8)) :
+theorem stageRound_eval (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out) (x : Hash.Msg)
+    (ms : List (Hash.Msg × Claims.Out)) (ys : List (Fin (𝔇).saltLen → UInt8)) :
     (Claims.SP.eval H ask (Claims.Recursion.spBind ((𝔇).toDeploy.zeroCommits ys) fun cs =>
       Claims.Recursion.spOf ((𝔇).stage x ms cs))).1 =
         stageMsg b.hs x ms (ys.map fun y => List.ofFn (maskOf y) ++ saltH H y) := by
@@ -150,7 +150,7 @@ theorem stageRound_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg �
 /-- **`SimStop`'s coins are `simMStop`'s** at the claim's first-part simulator: the one salt of each inner round, the
 staging salts, and one per V\* session. -/
 noncomputable def stopEquiv (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
-    (SO' : Claims.Msg → ℕ → Claims.Recursion.OSim) (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) :
+    (SO' : Hash.Msg → ℕ → Claims.Recursion.OSim) (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) :
     (Claims.Recursion.SimStop 𝔇 I SO' H).C x ≃
       (simMStop IV b (T₀ x) NB ΩB (simPre (deployRec IV ivScope b) I) SO' (sR IV ivScope b)).C x :=
   (Equiv.prodCongr (Equiv.piCongrRight fun _ => Equiv.funUnique (Fin 1) (Fin (𝔇).saltLen → UInt8))
@@ -165,9 +165,9 @@ noncomputable def stopEquiv (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
 /-- **Past the first part, `SimStop` is `simMStop`'s sessions**: after a first part of `kPre x` rounds of messages,
 where the stop has fired the empty message for the rest of `VM`'s rounds, as many as the sessions' silent rounds;
 where it hasn't, each session's outer simulator at the V\* statement the history stages. -/
-theorem tail_eval (H : Claims.Msg → Claims.Msg) (SO' : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg)
-    (hk : VM.k = kM IV b) (ask : List Claims.Msg → Claims.Out) (cs : (s : Fin ((𝔇).nS x)) → (SO' x s).C)
-    (τ : List (Claims.Msg × Claims.Out))
+theorem tail_eval (H : Hash.Msg → Hash.Msg) (SO' : Hash.Msg → ℕ → Claims.Recursion.OSim) (x : Hash.Msg)
+    (hk : VM.k = kM IV b) (ask : List Hash.Msg → Claims.Out) (cs : (s : Fin ((𝔇).nS x)) → (SO' x s).C)
+    (τ : List (Hash.Msg × Claims.Out))
     (hτ : Claims.Recursion.goesOn τ = true → τ.length = kPre IV x ∧ ∀ p ∈ τ, Claims.ZKMal.isMsg p.2 = true) :
     (Claims.SP.eval H ask (if (𝔇).halted H (kPre IV x) x τ then
         Claims.Recursion.simRounds (fun _ => .ret []) ((𝔇).V.k x - kPre IV x) τ
@@ -241,9 +241,9 @@ theorem tail_eval (H : Claims.Msg → Claims.Msg) (SO' : Claims.Msg → ℕ → 
 /-- **`SimStop` at the record is `simMStop` at the claim's first-part simulator**: against every verifier, one
 transcript on the coins `stopEquiv` matches, where the inner protocol's rounds at the inner statement are the inner
 verifier's and the masked verifier's rounds are the masked run's. -/
-theorem simStop_eval (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
-    (SO' : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg) (hI : I.V.k (xIOf x) = IV.k (xIOf x))
-    (hk : VM.k = kM IV b) (ask : List Claims.Msg → Claims.Out) (c : (Claims.Recursion.SimStop 𝔇 I SO' H).C x) :
+theorem simStop_eval (H : Hash.Msg → Hash.Msg) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
+    (SO' : Hash.Msg → ℕ → Claims.Recursion.OSim) (x : Hash.Msg) (hI : I.V.k (xIOf x) = IV.k (xIOf x))
+    (hk : VM.k = kM IV b) (ask : List Hash.Msg → Claims.Out) (c : (Claims.Recursion.SimStop 𝔇 I SO' H).C x) :
     (Claims.SP.eval H ask ((Claims.Recursion.SimStop 𝔇 I SO' H).prog x c)).1 =
       (Claims.SP.eval H ask ((simMStop IV b (T₀ x) NB ΩB (simPre (deployRec IV ivScope b) I) SO'
         (sR IV ivScope b)).prog x (stopEquiv IV ivScope b VM iv T₀ NB ΩB pre wit PS SO I SO' H x c))).1 := by
@@ -338,8 +338,8 @@ theorem simStop_eval (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
       exact hg.2⟩
 
 /-- **`ZKmalAt` at `simMStop` is `ZKmalAt` at `SimStop`**, at the claim's first-part simulator. -/
-theorem zkAt_simStop (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
-    (SO' : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg) (hI : I.V.k (xIOf x) = IV.k (xIOf x))
+theorem zkAt_simStop (H : Hash.Msg → Hash.Msg) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
+    (SO' : Hash.Msg → ℕ → Claims.Recursion.OSim) (x : Hash.Msg) (hI : I.V.k (xIOf x) = IV.k (xIOf x))
     (hk : VM.k = kM IV b) {N Ω WP : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {k : ℕ}
     {P : WP → Claims.Prover (N × Ω)} {R : WP → Prop} {ε γ : ℝ}
     (h : ZKmalAt H k P R x
@@ -351,7 +351,7 @@ theorem zkAt_simStop (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
 
 /-- **`εzkStop` at the record is `εzk`**: one commit string per inner round. -/
 theorem εzkStop_deployRecMStop (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (t : ℕ) (δ₁ : ℝ)
-    (x : Claims.Msg) :
+    (x : Hash.Msg) :
     Claims.Recursion.εzkStop 𝔇 I t δ₁ x = Claims.Recursion.εzk (deployRec IV ivScope b) I t δ₁ x := by
   unfold Claims.Recursion.εzkStop Claims.Recursion.εzk
   simp only [nAt_deployRecMStop, Finset.sum_const, Finset.card_univ, Fintype.card_fin, Finset.card_fin,
@@ -365,14 +365,14 @@ and `δ₁` at which hm96 leaves hide: the first part is `ZKmalAt` at `Sim`'s fi
 string (`h₀`); each V\* session, at every history that starts it and where the stop hasn't fired, is `ZKmalAt` at
 `SO t` within its proved `--zk` error and `4t·3^t` on the sessions' relation `RF` (`hS`); and the live witness
 (`LiveWit`). The bound is `εzk + γzk · Pr[Fork]`, `εzkStop` at one commit string per inner round. -/
-theorem zkStop_deployRecMStop (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool)
+theorem zkStop_deployRecMStop (H : Hash.Msg → Hash.Msg) (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool)
     (b : Brings) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (VM : Claims.Verifier Coin)
-    (iv : (Claims.Msg → Claims.Msg) → (x : Claims.Msg) → (Fin (VM.k x) → Coin) → List Claims.Flock.Wit → Claims.Seen)
-    (T₀ : Claims.Msg → SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (pre : (x : Claims.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
-    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
-    (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
+    (iv : (Hash.Msg → Hash.Msg) → (x : Hash.Msg) → (Fin (VM.k x) → Coin) → List Claims.Flock.Wit → Claims.Seen)
+    (T₀ : Hash.Msg → SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
+    (pre : (x : Hash.Msg) → (T₀ x).N × (T₀ x).Ω → b.ref.TI × (ℕ → Salt))
+    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
+    (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (SO : ℕ → Hash.Msg → ℕ → Claims.Recursion.OSim)
     (RF : Claims.Rel Claims.Flock.Wit) (hk : VM.k = kM IV b) (hI : ∀ x, I.V.k (xIOf x) = IV.k (xIOf x))
     (h₀ : ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
       Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ → ∀ x,
@@ -381,7 +381,7 @@ theorem zkStop_deployRecMStop (H : Claims.Msg → Claims.Msg) (IV : Claims.Verif
           (2 * (I.V.k (xIOf x) + kS x * b.nC x) * δ₁) 0)
     (hS : ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
       Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ →
-        ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+        ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
           u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
           Claims.ZKMal.fired (sR IV ivScope b x) (kPre IV x) u = false →
           ZKmalAt H ((nums b.st x j).rounds + 1) PS (RF (xsOf IV b x j u)) (xsOf IV b x j u) (SO t x j).C
@@ -411,26 +411,26 @@ theorem zkStop_deployRecMStop (H : Claims.Msg → Claims.Msg) (IV : Claims.Verif
 
 /-- **Each V\* session is zero knowledge at the session's tables at the recursive setup**: `zkBoundM_of_tables`'s
 sessions, at every history that starts one. -/
-theorem sessions_of_tables (IV : Claims.Verifier Coin) (b : Brings) (H : Claims.Msg → Claims.Msg)
-    (ivScope : Claims.Msg → Bool) (relO : Readable.Parsed → Readable.Relation) (T₀ : Claims.Msg → SeqTape)
+theorem sessions_of_tables (IV : Claims.Verifier Coin) (b : Brings) (H : Hash.Msg → Hash.Msg)
+    (ivScope : Hash.Msg → Bool) (relO : Readable.Parsed → Readable.Relation) (T₀ : Hash.Msg → SeqTape)
     (G : Proto Claims.Flock.Wit) [Fintype G.Coin] (Mp : ∀ x, G.Nonce → G.TPreModel x)
-    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Claims.Msg → ℕ)
-    (CB : ℕ → Claims.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)] [∀ t x j, Nonempty (CB t x j)]
+    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Hash.Msg → ℕ)
+    (CB : ℕ → Hash.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)] [∀ t x j, Nonempty (CB t x j)]
     (hkey : ∀ δ₁ : ℝ≥0, Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ →
       Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁)
     (hK : ∀ x, G.K x = VO.k x - 1) (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TMsgLink H (Claims.Flock.R (deployZkRec relO).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
     (hC : G.Binding H)
-    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
       u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
       nL (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).1 ∧
         nB (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).2)
-    (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+    (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
       u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
         Nonempty (CB t x j ≃ ((G.withSim Mc).simulatorE t (t * 3 ^ t)).C (xsOf IV b x j u))) :
     ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
       Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ →
-        ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+        ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
           u.length = (parts IV b ((T₀ x).N × (T₀ x).Ω)).start x j →
           ZKmalAt H ((nums b.st x j).rounds + 1) G.prover (Claims.Flock.R (deployZkRec relO).parse (xsOf IV b x j u))
             (xsOf IV b x j u) (soOf ((G.withSim Mc).simulatorE t (t * 3 ^ t)) (CB t) x j).C
@@ -458,27 +458,27 @@ commits**, on each statement's first-part tape, from the session's tables at the
 its commit strings (`h0_of_commits`, `preCommits_commit`), the sessions from Flock's zero knowledge at the outer
 record (`sessions_of_tables`, `hiding_sha512`), whose premises remain, and the live witness at the outer record's
 relation (`hW`). -/
-theorem zkStop_deployRecMStop_commit_sha512 (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Claims.Msg → Bool)
+theorem zkStop_deployRecMStop_commit_sha512 (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Hash.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (VM : Claims.Verifier Coin)
-    (iv : (Claims.Msg → Claims.Msg) → (x : Claims.Msg) → (Fin (VM.k x) → Coin) → List Claims.Flock.Wit → Claims.Seen)
+    (iv : (Hash.Msg → Hash.Msg) → (x : Hash.Msg) → (Fin (VM.k x) → Coin) → List Claims.Flock.Wit → Claims.Seen)
     (R : Type) [Fintype R] [Nonempty R]
-    (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
-    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8))
-    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
-    (wit : Claims.Flock.Wit → (R × (ℕ → Salt)) × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
+    (dI : Claims.Flock.Wit → R → List (Hash.Msg × Hash.Msg) → Fin 64 → UInt8)
+    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → List (Fin 64 → UInt8))
+    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
+    (wit : Claims.Flock.Wit → (R × (ℕ → Salt)) × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
     (G : Proto Claims.Flock.Wit) [Fintype G.Coin] (Mp : ∀ x, G.Nonce → G.TPreModel x)
-    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Claims.Msg → ℕ)
-    (CB : ℕ → Claims.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)] [∀ t x j, Nonempty (CB t x j)]
+    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Hash.Msg → ℕ)
+    (CB : ℕ → Hash.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)] [∀ t x j, Nonempty (CB t x j)]
     (hk : VM.k = kM IV b) (hI : ∀ x, I.V.k (xIOf x) = IV.k (xIOf x))
     (hK : ∀ x, G.K x = VO.k x - 1) (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TMsgLink FlockDeploy.sha512 (Claims.Flock.R (deployZkRec relO).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
     (hC : G.Binding FlockDeploy.sha512)
-    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
       u.length = (parts IV b ((preTape IV b R x).N × (preTape IV b R x).Ω)).start x j →
       nL (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).1 ∧
         nB (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).2)
-    (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+    (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
       u.length = (parts IV b ((preTape IV b R x).N × (preTape IV b R x).Ω)).start x j →
         Nonempty (CB t x j ≃ ((G.withSim Mc).simulatorE t (t * 3 ^ t)).C (xsOf IV b x j u)))
     (hW : LiveWit FlockDeploy.sha512 IV ivScope (b.commit R dI dg wo) I (preTape IV b R) (preOf IV b R) wit

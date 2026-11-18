@@ -57,7 +57,7 @@ def _trace(p: Path, T: int = 8) -> Path:
 
 
 def test_steady_state_mean_and_losses(tmp_path):
-    got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl"), 8, sent_s=(Z + 5 * MS) / 1e9)
+    got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl"), 8, 1830.0, sent_s=(Z + 5 * MS) / 1e9)
     w = got["queued"]
     assert (w["steps"], w["first_step"], w["last_step"]) == (4, 1, 4)
     assert w["step_wall_ms"]["mean"] == pytest.approx(10.0, abs=1e-3)
@@ -75,9 +75,9 @@ def test_steady_state_mean_and_losses(tmp_path):
 
 
 def test_queued_starts_once_the_last_request_is_sent(tmp_path):
-    got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl"), 8, sent_s=(Z + 25 * MS) / 1e9)
+    got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl"), 8, 1830.0, sent_s=(Z + 25 * MS) / 1e9)
     assert (got["queued"]["steps"], got["queued"]["first_step"]) == (2, 3)
-    assert "queued" not in U.analyse(tmp_path / "prof.sqlite", tmp_path / "advice_trace.jsonl", 8)
+    assert "queued" not in U.analyse(tmp_path / "prof.sqlite", tmp_path / "advice_trace.jsonl", 8, 1830.0)
     timings = tmp_path / "main.timings.json"
     timings.write_text(json.dumps({"start_unix": 1000.0, "requests": [{"send_s": 0.002}, {"send_s": 0.025}, {"send_s": None}]}))
     assert U.last_send(timings) == pytest.approx(1000.025)
@@ -99,13 +99,13 @@ def test_tensor_active_at_the_reference_clock(tmp_path):
     """The GPC clock comes in Hz under a [MHz] label; each tensor sample is scaled by the clock sample at or before it, so
     a window at 1,830 MHz and 915 MHz in turn reads half its tensor-busy cycles at the reference in the slow half."""
     db = sqlite3.connect(_report(tmp_path / "prof.sqlite"))
-    assert U.analyse(tmp_path / "prof.sqlite", _trace(tmp_path / "advice_trace.jsonl"), 8)["all"]["sm_clock_mhz"] is None
+    assert U.analyse(tmp_path / "prof.sqlite", _trace(tmp_path / "advice_trace.jsonl"), 8, 1830.0)["all"]["sm_clock_mhz"] is None
     db.execute("INSERT INTO TARGET_INFO_GPU_METRICS VALUES (0, 3, 'GPC Clock Frequency [MHz]')")
     for j in range(120):
         t = j * MS // 2 + MS // 4
         db.execute("INSERT INTO GPU_METRICS VALUES (?, 0, 3, ?)", (t, 1830e6 if t < 30 * MS else 915e6))
     db.commit()
-    w = U.analyse(tmp_path / "prof.sqlite", _trace(tmp_path / "advice_trace.jsonl"), 8)["all"]
+    w = U.analyse(tmp_path / "prof.sqlite", _trace(tmp_path / "advice_trace.jsonl"), 8, 1830.0)["all"]
     assert w["tensor_active_pct"] == pytest.approx(54.0)
     assert w["sm_clock_mhz"] == pytest.approx((1830 + 915) / 2, abs=0.1)
     assert w["tensor_active_pct_at_ref"] == pytest.approx(54.0 * 0.75)
@@ -119,7 +119,7 @@ def test_the_steady_cut_drops_steps_over_one_and_a_half_medians(tmp_path):
     recs = [{"kind": "header", "schema": "verity-vllm/step-trace/v1"}]
     recs += [{"kind": "step", "step": k, "T": 8 if 1 <= k <= 4 else 4, "t": (Z + e * MS) / 1e9} for k, e in enumerate(ends)]
     (trace := tmp_path / "advice_trace.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs))
-    s = U.analyse(_report(tmp_path / "prof.sqlite"), trace, 8)["all"]["steady"]
+    s = U.analyse(_report(tmp_path / "prof.sqlite"), trace, 8, 1830.0)["all"]["steady"]
     assert (s["steps"], s["dropped"]) == (3, 1)
     assert s["step_wall_ms"] == {"mean": pytest.approx(6.0), "median": pytest.approx(5.0)}
     assert s["tensor_active_pct"] == pytest.approx(60.0)
@@ -131,7 +131,7 @@ def test_the_steady_cut_drops_steps_over_one_and_a_half_medians(tmp_path):
 def test_an_arm_off_the_served_stack_says_so(tmp_path, monkeypatch, capsys, arm, served):
     out = tmp_path / "util.json"
     monkeypatch.setattr(sys, "argv", ["served_util.py", "--sqlite", str(_report(tmp_path / "prof.sqlite")), "--trace",
-                                      str(_trace(tmp_path / "advice_trace.jsonl")), "--T", "8", "--arm", arm, "--out", str(out)])
+                                      str(_trace(tmp_path / "advice_trace.jsonl")), "--T", "8", "--arm", arm, "--card", "h200-sxm-141gb", "--out", str(out)])
     assert U.main() == 0
     assert json.loads(out.read_text())["served_stack"] is served
     assert ("(not the served stack)" in capsys.readouterr().out) is not served
@@ -147,11 +147,11 @@ def test_a_commit_arm_served_async_is_the_served_stack_when_its_row_declares_asy
     out = tmp_path / "util.json"
     monkeypatch.setattr(sys, "argv", ["served_util.py", "--sqlite", str(_report(tmp_path / "prof.sqlite")), "--trace",
                                       str(_trace(tmp_path / "advice_trace.jsonl")), "--T", "8", "--arm", "noseal-async",
-                                      "--serve-dir", str(serve), "--out", str(out)])
+                                      "--card", "h200-sxm-141gb", "--serve-dir", str(serve), "--out", str(out)])
     assert U.main() == 0
     assert json.loads(out.read_text())["served_stack"] is served
 
 
 def test_too_few_full_steps_is_said(tmp_path):
-    got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl", T=16), 8)
+    got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl", T=16), 8, 1830.0)
     assert got["all"]["steps"] == 0 and "fewer than two" in got["all"]["note"]

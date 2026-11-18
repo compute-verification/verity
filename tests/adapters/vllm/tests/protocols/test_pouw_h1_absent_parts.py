@@ -19,7 +19,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import 
     H1Run,
     registered,
 )
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.challenger import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.challenger import (
     drawn_of,
 )
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.commit import (
@@ -27,7 +27,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.commit 
     SCHEME,
     UNTIED,
 )
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.requests import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.requests import (
     RoundOpening,
     slot_reason,
     step_digest,

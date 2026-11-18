@@ -146,7 +146,8 @@ PROGRAM_COMPARE_SCHEMA = "cb-a/compare/v1"
 SAMPLED_REPLAY_SCHEMA = "verity-sweep/sampled-replay/v1"
 #: the MoE planes' alias check, which `check.replay.population.moe_plane_alias_check` writes
 MOE_PLANE_ALIAS_CHECK_SCHEMA = "verity-sweep/moe-plane-alias-check/v1"
-#: the PoUW circuit's replay, which `protocols.pouw.pouw_circuit.replay` writes
+#: the PoUW circuit's replay, which the deleted ncp-v2 replay (`protocols.pouw.pouw_circuit.replay`) wrote; kept for the
+#: records on disk that carry it
 POUW_CIRCUIT_REPLAY_SCHEMA = "verity-vllm/pouw-ncp-v2-replay/v3"
 #: the boundary linkage's record (`check.replay.linkage.LINKAGE_SCHEMA`); `pipeline.c2_replay`, `pipeline.replay_bundle`
 #: and `pipeline.tp.rank_replay` write it for a linkage that did not run

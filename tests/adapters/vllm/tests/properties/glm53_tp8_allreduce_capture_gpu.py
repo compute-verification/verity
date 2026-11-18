@@ -76,7 +76,7 @@ versions, each owner's tree and FTZ, NCCL's fit, tuning and runs past 64 MiB, an
 `tp_allreduce_nodes.NODE_FILE` with its run record, it keys symmetric memory's and NVLS's routes on that node's tree.
 
     cd adapters/vllm; PY=/workspace/cp/venv312/bin/python  # the H200 pod's venv; PYTHONPATH as verity_vllm/ops/pod_bootstrap.sh sets it
-    export CUDA_HOME=/usr/local/cuda PATH=/workspace/cp/venv312/bin:/usr/local/cuda/bin:$PATH
+    export CUDA_HOME=TOOLKIT; export PATH=/workspace/cp/venv312/bin:$CUDA_HOME/bin:$PATH  # TOOLKIT: the node's placement entry's
     $PY tests/properties/glm53_tp8_allreduce_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--served workload|custom-off]
         [--only fused,allreduce,probe,again,switch,h7168,h7168_probe,nccl_probe,nccl_again] [--register RECORD.json]
 """

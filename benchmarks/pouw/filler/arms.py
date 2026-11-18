@@ -35,6 +35,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity.device import load_card, number
+from verity_bench import kit
+
 #: what the scorer, the arms' modules and their runners read
 __all__ = [
     "ARMS", "ArmError", "Colocation", "FILL_V1_SPLIT", "FOLDS", "Filler", "Idle", "NOISE", "NONE", "VERSION",
@@ -45,7 +48,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 VERSION = "filler-arm/v1"
 PLACES = ("none", "split", "co")
-SMS = 188  # the RTX PRO 6000's SMs
+SMS = int(number(load_card("rtx-pro-6000-server", directory=kit.cards_directory())["sm"]["count"]))  # the RTX PRO 6000's SMs
 #: a filler's declarable operands: its chain's own outputs, fresh uniform ±1, fresh uniform {0,1} bits on both sides,
 #: fresh bits A ∈ {0,1} with B = U uniform on {±1..±64} (pfill-bU), or
 #: the dither ⌊x/s⌋ + b (data quantized down plus a fresh uniform bit)

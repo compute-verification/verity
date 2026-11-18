@@ -1,7 +1,7 @@
 """The bandwidth audit's answer on one served window (`served_verdicts.sh`'s BANDWIDTH_CMD):
 
     served_bandwidth.py collect --serve-dir SERVE_DIR --window K --out DIR
-    served_bandwidth.py answer --session FILE --serve-dir SERVE_DIR --window K --out DIR [--r-bytes-per-s R]
+    served_bandwidth.py answer --session FILE --serve-dir SERVE_DIR --window K --out DIR (--card SKU | --r-bytes-per-s R)
                        [--started UTC --ended UTC] [--gpu FILE]
 
 ``collect`` (`collect`), the composed run's piece: PoUB-P2's session runs inside the PoUS piece, over the ``C*`` that piece
@@ -42,8 +42,6 @@ if str(HERE) not in sys.path:
 
 from verity.protocols.resource_accounting.memory.poub.verifier import ledger, p2_parties  # noqa: E402
 
-#: an H200's specified HBM read rate, bytes a second
-H200_BYTES_PER_S = 4_800_000_000_000
 #: what the session certifies of the served window
 SCOPE = ("beside the served window: the session ran on the card after window {k} was served, over the node's registered "
          "store, and was not interleaved with the engine's reads (serving is not hooked), so it certifies the session's "
@@ -121,7 +119,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--serve-dir", type=Path, required=True)
     p.add_argument("--window", type=int, required=True)
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--r-bytes-per-s", type=int, default=H200_BYTES_PER_S, help="R, the read rate γ is against")
+    rate = p.add_mutually_exclusive_group(required=True)
+    rate.add_argument("--card", help="the sku of the card the session ran on: R is its memory.datasheet_bandwidth")
+    rate.add_argument("--r-bytes-per-s", type=int, help="R, the read rate γ is against, given as a number")
     p.add_argument("--started", help="when the session started (UTC)")
     p.add_argument("--ended", help="when it ended (UTC)")
     p.add_argument("--gpu", type=Path, help="nvidia-smi's line of the card the session ran on")
@@ -146,7 +146,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         doc = {"answer": {"verdict": "missing", "reason": f"no session record: {type(e).__name__}: {e}"[:600]}}
     window = served(a.serve_dir, a.window)
     scope = scope_of(window)
-    out = answer(doc, scope, a.r_bytes_per_s)
+    r = a.r_bytes_per_s
+    if a.card is not None:
+        from verity.device import load_card, number
+        from verity_bench import kit
+        r = int(number(load_card(a.card, directory=kit.cards_directory())["memory"]["datasheet_bandwidth"]))
+    out = answer(doc, scope, r)
     (a.out / "answer.json").write_text(json.dumps(out, indent=1, sort_keys=True) + "\n")
     gpu = a.gpu.read_text().strip() if a.gpu is not None and a.gpu.exists() else None
     (a.out / "served.json").write_text(json.dumps({

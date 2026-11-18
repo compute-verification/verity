@@ -120,7 +120,7 @@ theorem setupTables_le {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count 
 end Walk
 
 /-- **A statement that sets up has at most 64 tables, and its spec names one per statement.** -/
-theorem setup_tables {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem setup_tables {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hx : setupOf false x = some (s, spec, sts)) : sts.size ≤ 64 ∧ spec.tables.size = sts.size := by
   have h := setupTables_le (Ins.setup_read (setupOf_some hx).2)
   have hmax : Tags.MAX_TABLES = 64 := rfl
@@ -433,13 +433,13 @@ open FlockComplete Rows in
 at every statement that sets up (`setup_tables`, `capRows_fit`, `repRows_fit`), and whose spec names one table per
 statement. The files' `finalC` at the reader's `z` (`FilesFinalC`) stays a hypothesis here; `sessionRun_decides_coins`
 discharges it. -/
-theorem sessionRun_decides_fit {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {rd : Claims.Msg → Option FinalP}
-    {x last : Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
-    {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128} {fl : FinalP}
+theorem sessionRun_decides_fit {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out64 H) {rd : Hash.Msg → Option FinalP}
+    {x last : Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
+    {resp : ℕ → Hash.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128} {fl : FinalP}
     (hx : setupOf false x = some (s, spec, sts)) (hcs : cs.head? = some c₁) (hc : resp 0 = c₁.bytes)
     (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
-    {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
+    {rec : String} {pfs : Array ByteArray} {bs : Array Hash.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs))
     (hfc : FilesFinalC spec sts c₁ cs.tail.dropLast pfs) (hrd : rd last = some fl)
     (hps : fl.ps = filePs spec sts c₁ pfs) (hst : fl.stmt = x) :

@@ -82,3 +82,9 @@ def test_each_record_binds_its_pinned_step() -> None:
         assert (ins.sm, ins.model, ins.status) == (dev.arch, dev.step, "pinned")
         assert dev.gemm == BG.GEMM_SM120_S8
     assert D.SM90.gemm == BG.GEMM_SM90_S8
+
+
+def test_each_record_is_keyed_by_its_steps_architecture():
+    """A record's architecture is its s8 step's: sm_120's and sm_90's, as the records named them before."""
+    assert {a: d.step.arch for a, d in D.DEVICES.items()} == {"sm_120": "sm_120", "sm_90": "sm_90"}
+    assert (D.SM120.arch, D.SM90.arch) == ("sm_120", "sm_90")

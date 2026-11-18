@@ -83,6 +83,11 @@ class DeviceTrees:
     def _tree(self, p: Any, y: Any, index: int, salts: Any) -> Any:
         import torch
         R, dev, (m, n) = self.run.kernel.run, self.run.kernel.dev, y.shape
+        if (salts.dtype != torch.uint8 or not salts.is_contiguous() or salts.device != y.device
+                or salts.numel() != R.HM_SALT * m):
+            raise ValueError(f"y's {m} rows take {m} salts of {R.HM_SALT} bytes, contiguous uint8 on {y.device}: the kernels "
+                             f"read {R.HM_SALT} a leaf from the salts' address, not the {salts.numel()} {salts.dtype} "
+                             f"on {salts.device} given")
         poison = getattr(self.run.cur, "poison", None)
         size = R.NB * (2 * R.pow2(m) - 1)
         tree = (torch.empty(size, dtype=torch.uint8, device=y.device) if poison is None

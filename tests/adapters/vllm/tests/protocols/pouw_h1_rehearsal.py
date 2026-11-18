@@ -183,7 +183,7 @@ def declared_draw_k(layers: int = 32) -> int:
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
         h1 as PH,
     )
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import (
         challenger as PHC,
     )
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
@@ -403,13 +403,13 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
     from a sampling challenge phase the gate reserves beside it and opens withheld on the window's sample root
     (`pouw_h1_window.DrawSession`), as `test_pouw_h1._salted` forges one in process: (the forged commitment, its
     challenge phase, its sample's)."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import (
         challenger as PHC,
     )
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import (
         requests as RQ,
     )
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import (
         window as PHW,
     )
     from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
@@ -535,7 +535,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
         h1 as PH,
     )
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import (
         challenger as PHC,
     )
     out = Path(a.out)

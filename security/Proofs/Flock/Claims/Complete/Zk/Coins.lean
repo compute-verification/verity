@@ -179,7 +179,7 @@ theorem pr_rho_le {k : ℕ} (a : ℕ) : Claims.Pr (fun r : Fin k → Coin => rho
 
 /-- **The bad coins** of the masked verifier: a zerocheck outer coin is `1`, an inner `β` is `0`, a pair of
 level-0 coins is dependent, or a table's rank checks refuse at coins inside the verifier's. -/
-def BadZk (x : Claims.Msg) {k : ℕ} (r : Fin k → Coin) : Prop :=
+def BadZk (x : Hash.Msg) {k : ℕ} (r : Fin k → Coin) : Prop :=
   (∃ p ∈ outerSlotsZk x, (Claims.coinSeq r p.1).at p.2 = 1) ∨
     (∃ b ∈ betaSlotsZk x, b < k ∧ (Claims.coinSeq r b).at 0 = 0) ∨ (∃ a ∈ rhoSlotsZk x, rhoDep r a) ∨
     ∃ s ∈ rankSlotsZk x, s.2.2 + (s.1.m + s.1.c.kLog) ≤ k ∧ ¬ MaskRank.MaskRankAt s.1 r s.2.1 s.2.2
@@ -193,7 +193,7 @@ theorem pr_list_le {k : ℕ} {β : Type} (E : β → (Fin k → Coin) → Prop) 
   · rw [List.length_map, nsmul_eq_mul]
 
 /-- A table's rank checks: a table of the session that sets up, rep `1`'s coins after rep `0`'s claim points. -/
-theorem mem_rankSlotsZk {x : Claims.Msg} {s : Flock.Stmt × ℕ × ℕ} (hs : s ∈ rankSlotsZk x) :
+theorem mem_rankSlotsZk {x : Hash.Msg} {s : Flock.Stmt × ℕ × ℕ} (hs : s ∈ rankSlotsZk x) :
     ∃ ins spec sts, setupOf true x = some (ins, spec, sts) ∧ s.1 ∈ sts ∧ s.2.1 + (s.1.m + s.1.c.kLog) ≤ s.2.2 := by
   unfold rankSlotsZk at hs
   split at hs
@@ -219,7 +219,7 @@ theorem mem_rankSlotsZk {x : Claims.Msg} {s : Flock.Stmt × ℕ × ℕ} (hs : s 
   · simp at hs
 
 /-- **A rank slot's table has the layout the rank bound reads**, at a statement in scope. -/
-theorem rankSlotsZk_layout {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+theorem rankSlotsZk_layout {rel : Readable.Parsed → Readable.Relation} {x : Hash.Msg}
     (hsc : Claims.Flock.Scope (deployZk rel) x) : ∀ s ∈ rankSlotsZk x, MaskRank.LayoutOk s.1 := by
   intro s hs
   obtain ⟨ins, spec, sts, hx, hst, -⟩ := mem_rankSlotsZk hs
@@ -227,7 +227,7 @@ theorem rankSlotsZk_layout {rel : Readable.Parsed → Readable.Relation} {x : Cl
 
 /-- **`Pr[BadZk] ≤ εZk`**: the union bound over the outer coins, the `β`s, the pairs and, at the rank bound
 (`MaskRank.MaskRankBound`) and each rank slot's layout (`rankSlotsZk_layout`), each table's rank checks. -/
-theorem pr_badZk_le (hMR : MaskRank.MaskRankBound) (x : Claims.Msg)
+theorem pr_badZk_le (hMR : MaskRank.MaskRankBound) (x : Hash.Msg)
     (hlay : ∀ s ∈ rankSlotsZk x, MaskRank.LayoutOk s.1) {k : ℕ} :
     Claims.Pr (fun r : Fin k → Coin => BadZk x r) ≤ εZk x := by
   have ho := pr_list_le (fun (p : ℕ × ℕ) (r : Fin k → Coin) => (Claims.coinSeq r p.1).at p.2 = 1) (outerSlotsZk x)
@@ -257,7 +257,7 @@ theorem pr_badZk_le (hMR : MaskRank.MaskRankBound) (x : Claims.Msg)
 /-- **Completeness from acceptance at the good coins**, at the masked verifier: if, on every statement in scope that it
 can accept and every witness in the relation, the honest masked prover is accepted at every tape and every coin outside
 `BadZk`, then Flock's masked verifier is complete for `honestPZk` at the record's error, `δcZk H`. -/
-theorem complete_zk_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem complete_zk_of (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hMR : MaskRank.MaskRankBound)
     (hacc : ∀ x w, Claims.Flock.Scope (deployZk rel) x → Claims.Flock.R (deployZk rel).parse x w →
       readyZk H x = true → ∀ (ω : TapeZk) (r : Fin ((V true).k x) → Coin), ¬ BadZk x r →

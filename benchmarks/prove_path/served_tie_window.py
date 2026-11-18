@@ -47,11 +47,11 @@ RECORD_KEYS = ("schema", "binding", "root", "count", "n_bits")
 
 
 def load(run_dir: Path, w: int) -> SimpleNamespace:
-    from verity_vllm.commit import store_dump
+    from verity_vllm.pipeline import replay_bundle
 
     bundle = run_dir / "windows" / f"w{w}" / "commit" / "replay_bundle_p0"
     rec = next(r for r in map(json.loads, (run_dir / "windows.jsonl").read_text().splitlines()) if r["window"] == w)
-    store, run = store_dump.load(bundle / "store")
+    store, run = replay_bundle.load_store(bundle)
     return SimpleNamespace(ctx=json.loads((bundle / "context.json").read_text()), rec=rec, store=store, run=run,
                            priv=json.loads((run_dir / "served_rows" / f"w{w}.json").read_text()),
                            reqs=[json.loads(l) for l in (run_dir / "requests.jsonl").read_text().splitlines() if l.strip()])

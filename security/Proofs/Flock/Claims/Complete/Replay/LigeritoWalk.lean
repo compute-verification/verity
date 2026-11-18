@@ -66,15 +66,15 @@ open Flock Transcript
 /-- **A returning rep opens honestly**: its proof's cap is the commitment's, and its Ligerito's openings are the honest
 ones (`Lg.Opens`) at the replies' coins from the rep's first send on, from the round where the prover's ring switch
 stopped. -/
-theorem repP_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_opens (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (hm : 14 ≤ st.m) (hn : sch.n ≠ 0) (hL : 2 ≤ sch.levels.size)
     (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) (t : Transcript) (ht : t.k = 0)
-    (l : Array Claims.Msg) {full : Array F128}
+    (l : Array Hash.Msg) {full : Array F128}
     (hfold : st.fold.fold (coinOf (resp (l.size + 3 + (st.m - 6))) 0)
       (skipWeights (Zc.out st.m (Zc.coinsAt resp l.size) tr).z)
       ((Zc.out st.m (Zc.coinsAt resp l.size) tr).rho.extract 0 (st.fold.kLog - 6)) = .ok full)
-    {p : Proof} {t' : Transcript} {l' : Array Claims.Msg}
+    {p : Proof} {t' : Transcript} {l' : Array Hash.Msg}
     (hrun : ((repP (asksS resp) (Hashes.ofSha512 h) st sch tr tbl cm0 extras salt nonce).run t).go l =
       (.ok (p, t'), l')) :
     p.cap = cm0.cap ∧ Lg.Opens (Hashes.ofSha512 h : Hashes V) st.merkle sch cm0 p.ligerito (Lg.cfOf resp l.size)
@@ -115,14 +115,14 @@ theorem repP_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st
 /-- **Table `i`'s rep `r`'s Merkle openings pass** once the honest rep, on a level-0 commitment of the table's level
 `0`, run from the rep's first send on and its own transcript's start, returns the decoded proof, through a scheme whose
 node and leaf digests are its width. -/
-theorem _root_.FlockComplete.Run.lgMerkle_of {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem _root_.FlockComplete.Run.lgMerkle_of {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) (r : ℕ)
     (hn : ∀ a b v, (o.tabs[i]!.merkle.opsWith o.hs).node a b = .ok v → v.size = o.tabs[i]!.merkle.digestLen)
     (hlf : ∀ row s v, (o.tabs[i]!.merkle.opsWith o.hs).leaf row s = .ok v → v.size = o.tabs[i]!.merkle.digestLen)
     {tbl : Array F128} {cm0 : Commit} {s0 : ℕ → ByteArray}
     (h0 : commitP o.hs o.tabs[i]!.merkle ((o.sch i).levels.getD 0 default) tbl s0 = .ok cm0)
-    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {l : Array Claims.Msg}
-    (hl : l.size = repStart o.spec o.sts (2 * i + r)) {t' : Transcript} {l' : Array Claims.Msg}
+    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) {l : Array Hash.Msg}
+    (hl : l.size = repStart o.spec o.sts (2 * i + r)) {t' : Transcript} {l' : Array Hash.Msg}
     (hrun : ((repP (asksS o.resp) (Hashes.ofSha512 (Claims.hOf H)) o.tabs[i]! (o.sch i) (o.trace i) tbl cm0
       (o.extras i) salt nonce).run (Transcript.init #[] (o.spec.domain o.spec.tables[i]! r).toUTF8)).go l =
         (.ok (o.proof i r, t'), l')) :
@@ -147,10 +147,10 @@ theorem _root_.FlockComplete.Run.lgMerkle_of {H : Claims.Msg → Claims.Msg} {re
 /-- **What the session walk establishes at table `i`'s rep `r`**: the table's level-0 commitment is a `commitP` of the
 schedule's level `0`; the honest rep on it, run from the rep's first send on and from its own transcript's start,
 returns the decoded proof; and the recorded stream carries the rep's rounds and holds as many. -/
-def RepWalk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel) (i r : ℕ) :
+def RepWalk {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel) (i r : ℕ) :
     Prop :=
   ∃ (tbl : Array F128) (cm0 : Commit) (s0 : ℕ → ByteArray) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (l : Array Claims.Msg) (t' : Transcript) (l' : Array Claims.Msg),
+    (l : Array Hash.Msg) (t' : Transcript) (l' : Array Hash.Msg),
     commitP o.hs o.tabs[i]!.merkle ((o.sch i).levels.getD 0 default) tbl s0 = .ok cm0 ∧
     l.size = repStart o.spec o.sts (2 * i + r) ∧
     ((repP (asksS o.resp) (Hashes.ofSha512 (Claims.hOf H)) o.tabs[i]! (o.sch i) (o.trace i) tbl cm0 (o.extras i) salt
@@ -158,23 +158,23 @@ def RepWalk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.
     Agrees (o.stream i r).rounds t'.rounds 0 ∧ (o.stream i r).rounds.size = t'.rounds.size
 
 /-- **Each table's Merkle scheme returns digests of its width** through the run's hashes, at its nodes and leaves. -/
-def SchemeWidths (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def SchemeWidths (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size,
     (∀ a b v, (o.tabs[i]!.merkle.opsWith o.hs).node a b = .ok v → v.size = o.tabs[i]!.merkle.digestLen) ∧
     ∀ row s v, (o.tabs[i]!.merkle.opsWith o.hs).leaf row s = .ok v → v.size = o.tabs[i]!.merkle.digestLen
 
-theorem lgAt_of_walk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel)
+theorem lgAt_of_walk {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel)
     {i : ℕ} (hi : i < o.tabs.size) (r : ℕ) (hw : RepWalk o i r) : LgAt o i r := by
   obtain ⟨tbl, cm0, -, salt, nonce, l, t', l', -, hl, hrun, hag, -⟩ := hw
   exact o.lgAt_of hi r _ tbl cm0 salt nonce hl hrun hag
 
-theorem lgCount_of_walk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel)
+theorem lgCount_of_walk {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel)
     {i : ℕ} (hi : i < o.tabs.size) (r : ℕ) (hw : RepWalk o i r) : LgCount o i r := by
   obtain ⟨tbl, cm0, -, salt, nonce, l, t', l', -, hl, hrun, -, hsz⟩ := hw
   exact o.lgCount_of hi r _ tbl cm0 salt nonce hl hrun hsz
 
 /-- **`LgMerkle` from the walk and the schemes' widths.** -/
-theorem lgMerkle_of_walk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem lgMerkle_of_walk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hW : SchemeWidths H rel) (hw : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, RepWalk o i r) : LgMerkle H rel := by
   intro o i hi r hr
   obtain ⟨tbl, cm0, s0, salt, nonce, l, t', l', h0, hl, hrun, -⟩ := hw o i hi r hr
@@ -185,7 +185,7 @@ theorem lgMerkle_of_walk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed 
 /-- **The Ligerito goal on the walk**: Ligerito replays at every honest run given the session walk at every rep
 (`RepWalk`), the schemes' widths (`SchemeWidths`) and the final identity (`LgFinal`), beside the earlier phases'
 premises. -/
-theorem ligerito_goal_walk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem ligerito_goal_walk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hR1 : TraceR1CS H rel) (hzc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r) (hal : LcAlgebra H rel)
     (hrs : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, RsAt o i r) (hra : RsAlgebra H rel) (hD : RepDecodes H rel)
@@ -196,7 +196,7 @@ theorem ligerito_goal_walk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parse
 
 /-- **The consumption goal on the walk** (S15): every recorded round is consumed given the session walk at every rep,
 the schemes' widths and the final identity, beside the earlier phases' premises. -/
-theorem consumed_goal_walk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem consumed_goal_walk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hR1 : TraceR1CS H rel) (hzc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r) (hal : LcAlgebra H rel)
     (hrs : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, RsAt o i r) (hra : RsAlgebra H rel) (hD : RepDecodes H rel)

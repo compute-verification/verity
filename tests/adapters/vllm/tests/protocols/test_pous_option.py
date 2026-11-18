@@ -148,14 +148,6 @@ def test_pous_registers_p2_v4_as_its_default_and_refuses_what_it_cannot_run():
     band = pous.refusals("band-chain/d12/v1", _ctx("pous:band-chain/d12/v1"))
     assert band == ((f"pous holds C* under {P2} alone, the codec its period's run protocol checks and the staging decode "
                      "reads, not band-chain/d12/v1"),)
-    assert not hasattr(pous, "keeps_weight_copy")                                       # POUS keeps only C*
-
-
-def test_with_pous_on_the_selector_refuses_an_option_that_keeps_a_weight_copy(monkeypatch):
-    _fake_pouw(monkeypatch, lambda scheme, target: None, scheme="ncp-v2")
-    got = PO.refusals(_ctx("pouw:ncp-v2", ENTRY))
-    assert any(r.startswith("pouw:ncp-v2: keeps a weight-derived copy") for r in got)
-    assert PO.refusals(_ctx("pouw:ncp-v2", settings={})) == ()
 
 
 def test_a_tiny_int8_model_is_held_as_p2_and_served_bit_exact(toy):
@@ -354,8 +346,7 @@ def test_a_dropped_block_rejects(toy, tmp_path):
 
 def _fake_pouw(monkeypatch, install, scheme="ncp-v1"):
     mod = types.ModuleType("verity_vllm.protocols.fake_pouw")
-    vars(mod).update(NAME="pouw", schemes=lambda: (scheme,), refusals=lambda s, c: (), install=install,
-                     keeps_weight_copy=lambda s: s == "ncp-v2")
+    vars(mod).update(NAME="pouw", schemes=lambda: (scheme,), refusals=lambda s, c: (), install=install)
     monkeypatch.setitem(sys.modules, mod.__name__, mod)
     monkeypatch.setitem(config.PROTOCOLS, "pouw", "fake_pouw")
 

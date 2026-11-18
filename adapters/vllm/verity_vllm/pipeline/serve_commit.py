@@ -93,27 +93,15 @@ def user_of(body: Any) -> str | None:
     return None if u is None else str(u)
 
 
-def advice_trace(out: Path, engine: Any) -> Any:
-    """The scheduler step trace (`engine.step_trace.StepTrace`) of ``engine`` for the server's lifetime, at ``out/advice_trace.jsonl``
-    (`step_trace.SERVED`, beside the committer's step_trace.jsonl), under the engine ids requests.jsonl records (vLLM's internal
-    suffix dropped): what `verity-vllm advice OUT` reads, with each window's open and close (``CommitWindows(marks=trace.window)``).
-    Its writer thread writes the file (`StepTrace.writer`): the engine thread never waits on the serve dir's disk, which the seals
-    keep busy. It holds request values, so it stays in the serve dir (`MIRRORED` leaves it out)."""
-    from verity_vllm.engine.engine_driver import external_id
-    from verity_vllm.engine.step_trace import SERVED, StepTrace
-
-    return StepTrace(Path(out) / SERVED, request_id=external_id, clock=time.time, writer=True).install(engine)
-
-
 #: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  It holds no
 #: request value (the network attester's users are request indexes, ``user-<i>``), so it can leave the node with
 #: windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
 REQUEST_USERS = "request_users.jsonl"
 
 #: the records mirrored into the run's $OUT, none of them private (`research_outputs.private`): requests.jsonl and the step
-#: traces, which hold request values, stay in the serve dir with the served rows' salts, and what reads them runs there
-MIRRORED = ("serve.json", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "pauses.jsonl", "summary.json", "remote_session.json",
-            "memory_map.jsonl")
+#: traces, which hold request values, and the session's memory map, whose d_j digest the KV payloads, stay in the serve dir with
+#: the served rows' salts, and what reads them runs there
+MIRRORED = ("serve.json", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "pauses.jsonl", "summary.json", "remote_session.json")
 
 
 class Mirror:
@@ -268,6 +256,7 @@ class CommitWindows:
         self.arm_key = getattr(arm, "outcome_key", "pouw_h1")   # the line's and the summary's key for it
         self.arm_failed: list[int] = []                  # the windows whose arm failed to open or close
         self._arm_pending: set[int] = set()              # the windows whose arm is still closing off the loop
+        self._arm_held = False                           # the open window's arm waits for its first step's users (`arm.users`)
         self._awaiting: dict[int, dict[str, Any]] = {}   # ... and their lines, held until it ends
         self.request_cap = int(request_cap)              # --window-requests: at most this many distinct requests a window (0: any)
         self.in_window: set[str] = set()                 # the engine ids live at any step of the open window
@@ -347,6 +336,11 @@ class CommitWindows:
         if not self.is_open:
             self.open()
         self.in_window |= live
+        if self._arm_held and live and not int(self.com._step_index):
+            led = [self.ledgers.get(e) for e in live]
+            if all(x is not None and x.user is not None and self.arm.users.fullmatch(x.user) for x in led):
+                self._arm_held = False
+                self._open_arm()
 
     # -- windows
     def open(self) -> None:
@@ -363,15 +357,20 @@ class CommitWindows:
         if (ex := M.current()).wants("steps"):
             ex.emit(H.PhaseOpened(self.window, ex.next_step))
         if self.arm is not None:
-            try:
-                self.arm.open(self.window)
-            except (ValueError, RuntimeError, OSError) as e:      # the window's visible failure; serving goes on
-                self._arm_out[self.window] = {"error": f"open: {type(e).__name__}: {e}"[:500]}
-                self.arm_failed.append(self.window)
+            self._arm_held = getattr(self.arm, "users", None) is not None
+            if not self._arm_held:
+                self._open_arm()
         self.open_s = self.clock() - t0
         self.is_open = True
         if self.marks is not None:
             self.marks(self.window, "open")
+
+    def _open_arm(self) -> None:
+        try:
+            self.arm.open(self.window)
+        except (ValueError, RuntimeError, OSError) as e:          # the window's visible failure; serving goes on
+            self._arm_out[self.window] = {"error": f"open: {type(e).__name__}: {e}"[:500]}
+            self.arm_failed.append(self.window)
 
     def _close_arm(self) -> None:
         """The arm's window closed, before anything of the committer's: its outcome, or why it failed. An arm that

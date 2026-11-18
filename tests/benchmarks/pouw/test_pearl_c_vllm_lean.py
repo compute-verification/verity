@@ -33,6 +33,7 @@ pytest.importorskip("torch")
 
 import test_pearl_c_vllm as T  # the served passes' test: its honest passes, their serve dir and its `verify`
 from conftest import load
+from verity.commitments import domains as DM
 
 SP = load("pearl_c_vllm/served_passes.py")
 H100 = "pearl-c-h100-v1-h3"
@@ -217,7 +218,7 @@ def tied(run, tmp_path: Path) -> tuple[Path, dict, dict]:
     from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
     d, _verify, doc = run
-    w = {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "window": {"version": 2}, "registered": [], "previous": None}
+    w = {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "window": {"version": 2}, "registered": [], "previous": None}
     (wfile := tmp_path / "w.json").write_text(json.dumps(w))
     held = {**doc, "tie_record": str(wfile), "tie": {"record": REG.digest(w), "tables": 0}}
     (v := tmp_path / "tied.json").write_text(json.dumps(held))

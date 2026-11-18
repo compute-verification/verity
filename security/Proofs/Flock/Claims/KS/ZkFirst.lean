@@ -65,8 +65,8 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **A prover of the live session at `J` tables simulates `P` on the coins `Φ`**, under `--zk`: wherever `V true`
 accepts at `Φ (u, r')`, the coins of `V true` at the tape `u` and the live coins `r'`, the live outcome of `P'` at the
 tape `(ω, u)` and `r'` is the run's (`viewOf`). -/
-def ZkSimRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (J : Claims.Msg → ℕ) (mPts : ℕ) {nMax : ℕ}
-    (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire nMax (J x) mPts) {τ : Type}
+def ZkSimRun {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (J : Hash.Msg → ℕ) (mPts : ℕ) {nMax : ℕ}
+    (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray) (w : (x : Hash.Msg) → Wire nMax (J x) mPts) {τ : Type}
     (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V true).k x) → Coin) : Prop :=
   ∀ u r', (Claims.run sha512 P (V true) x ω (Φ (u, r'))).out = .acc →
     ∀ s spec sts link c₁ mids f,
@@ -82,8 +82,8 @@ variable [S : ZkSetup]
 /-- **A prover of the live session at `J` tables simulates `P` on the coins `Φ`**, under `--zk`: wherever `V true`
 accepts at `Φ (u, r')`, the coins of `V true` at the tape `u` and the live coins `r'`, the live outcome of `P'` at the
 tape `(ω, u)` and `r'` is the run's (`viewOf`). -/
-def ZkSimRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (J : Claims.Msg → ℕ) (mPts : ℕ) {nMax : ℕ}
-    (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire nMax (J x) mPts) {τ : Type}
+def ZkSimRun {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (J : Hash.Msg → ℕ) (mPts : ℕ) {nMax : ℕ}
+    (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray) (w : (x : Hash.Msg) → Wire nMax (J x) mPts) {τ : Type}
     (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V true).k x) → Coin) : Prop :=
   ∀ u r', (Claims.run sha512 P (V true) x ω (Φ (u, r'))).out = .acc →
     ∀ s spec sts link c₁ mids f,
@@ -96,8 +96,8 @@ end Gen
 
 /-- **A prover of the live session at `J` tables simulates `P`**, under `--zk`: the coins `Φ (u, r')` have the sampling design of
 uniform coins, and `P'` simulates `P` on them (`ZkSimRun`). -/
-def ZkSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (J : Claims.Msg → ℕ) (mPts : ℕ) {nMax : ℕ}
-    (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire nMax (J x) mPts) {τ : Type}
+def ZkSim {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (J : Hash.Msg → ℕ) (mPts : ℕ) {nMax : ℕ}
+    (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray) (w : (x : Hash.Msg) → Wire nMax (J x) mPts) {τ : Type}
     [Fintype τ] [Nonempty τ] (P' : Claims.Prover (Ω × τ))
     (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V true).k x) → Coin) : Prop :=
   (∀ E : (Fin ((V true).k x) → Coin) → Prop, Claims.Pr (fun p => E (Φ p)) = Claims.Pr E) ∧
@@ -109,8 +109,8 @@ variable [S : ZkSetup]
 
 /-- **A prover of the live session at `J` tables simulates `P`**, under `--zk`: the coins `Φ (u, r')` have the sampling design of
 uniform coins, and `P'` simulates `P` on them (`ZkSimRun`). -/
-def ZkSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (J : Claims.Msg → ℕ) (mPts : ℕ) {nMax : ℕ}
-    (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire nMax (J x) mPts) {τ : Type}
+def ZkSim {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (J : Hash.Msg → ℕ) (mPts : ℕ) {nMax : ℕ}
+    (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray) (w : (x : Hash.Msg) → Wire nMax (J x) mPts) {τ : Type}
     [Fintype τ] [Nonempty τ] (P' : Claims.Prover (Ω × τ))
     (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V true).k x) → Coin) : Prop :=
   (∀ E : (Fin ((V true).k x) → Coin) → Prop, Claims.Pr (fun p => E (Φ p)) = Claims.Pr E) ∧
@@ -120,13 +120,13 @@ end Gen
 
 /-- **The masked deployed coins at the tape `u` and the live coins `r'`**: coin `j` takes its first `n j` field elements
 from the live coin `r' j` and the rest from `u j` (`mergeAt`). -/
-def zkCoins {x : Claims.Msg} {N : ℕ} (hk : N + 2 = (V true).k x) (n : Fin ((V true).k x) → ℕ)
+def zkCoins {x : Hash.Msg} {N : ℕ} (hk : N + 2 = (V true).k x) (n : Fin ((V true).k x) → ℕ)
     (p : (Fin ((V true).k x) → Coin) × (Fin (N + 2) → LCoin 65536)) : Fin ((V true).k x) → Coin :=
   @mergeAt _ _ _ 𝔽 hk n p.1 p.2
 
 /-- **`P'` simulates `P` on `zkCoins`** where it simulates the runs: the merged coins are uniform (`Pr_mergeAt`). -/
-theorem zkSim_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {J : Claims.Msg → ℕ} {mPts : ℕ}
-    {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : (x : Claims.Msg) → Wire 65536 (J x) mPts}
+theorem zkSim_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {J : Hash.Msg → ℕ} {mPts : ℕ}
+    {N : Hash.Msg → ℕ} {dg : ByteArray → ByteArray} {w : (x : Hash.Msg) → Wire 65536 (J x) mPts}
     {P' : Claims.Prover (Ω × (Fin ((V true).k x) → Coin))} (hk : N x + 2 = (V true).k x)
     (n : Fin ((V true).k x) → ℕ) (h : ZkSimRun P x ω J mPts N dg w P' (zkCoins hk n)) :
     ZkSim P x ω J mPts N dg w P' (zkCoins hk n) :=
@@ -142,11 +142,11 @@ open Classical in
 (`ZkSim`), then the accepting runs whose reader looks up no column of table `j` off `C` are no likelier than the
 average over `u` of `AccTxJ` at table `j` against `P'`'s strategies, at the root of `P`'s first message
 (`Pr_le_liveMix`, `accTxJ_of_run`). -/
-theorem zk_first_of_sim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {M : ℕ}
-    (C : Fin M → List 𝔽) (j : ℕ) (J : Claims.Msg → ℕ) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec}
+theorem zk_first_of_sim {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) {M : ℕ}
+    (C : Fin M → List 𝔽) (j : ℕ) (J : Hash.Msg → ℕ) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec}
     {sts₀ : Array Stmt} {d : Json} (hset : setupOf true x = some (s₀, spec₀, sts₀)) (hd : s₀.read.draw = some d)
-    (hJ : J x ≤ sts₀.size) (hj : j < J x) {nMax : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
-    (w : (x : Claims.Msg) → Wire nMax (J x) mPts) {τ : Type} [Fintype τ] [Nonempty τ] (P' : Claims.Prover (Ω × τ))
+    (hJ : J x ≤ sts₀.size) (hj : j < J x) {nMax : ℕ} (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray)
+    (w : (x : Hash.Msg) → Wire nMax (J x) mPts) {τ : Type} [Fintype τ] [Nonempty τ] (P' : Claims.Prover (Ω × τ))
     (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V true).k x) → Coin) (hsim : ZkSim P x ω J mPts N dg w P' Φ) :
     Claims.Pr (fun r : Fin ((V true).k x) → Coin => (Claims.run sha512 P (V true) x ω r).out = .acc ∧
         ¬ ∃ (p : Fin M) (v : List 𝔽),
@@ -187,11 +187,11 @@ open Classical in
 (`ZkSim`), then the accepting runs whose reader looks up no column of table `j` off `C` are no likelier than the
 average over `u` of `AccTxJ` at table `j` against `P'`'s strategies, at the root of `P`'s first message
 (`Pr_le_liveMix`, `accTxJ_of_run`). -/
-theorem zk_first_of_sim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {M : ℕ}
-    (C : Fin M → List 𝔽) (j : ℕ) (J : Claims.Msg → ℕ) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec}
+theorem zk_first_of_sim {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) {M : ℕ}
+    (C : Fin M → List 𝔽) (j : ℕ) (J : Hash.Msg → ℕ) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec}
     {sts₀ : Array Stmt} {d : Json} (hset : setupOf true x = some (s₀, spec₀, sts₀)) (hd : s₀.read.draw = some d)
-    (hJ : J x ≤ sts₀.size) (hj : j < J x) {nMax : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
-    (w : (x : Claims.Msg) → Wire nMax (J x) mPts) {τ : Type} [Fintype τ] [Nonempty τ] (P' : Claims.Prover (Ω × τ))
+    (hJ : J x ≤ sts₀.size) (hj : j < J x) {nMax : ℕ} (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray)
+    (w : (x : Hash.Msg) → Wire nMax (J x) mPts) {τ : Type} [Fintype τ] [Nonempty τ] (P' : Claims.Prover (Ω × τ))
     (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V true).k x) → Coin) (hsim : ZkSim P x ω J mPts N dg w P' Φ) :
     Claims.Pr (fun r : Fin ((V true).k x) → Coin => (Claims.run sha512 P (V true) x ω r).out = .acc ∧
         ¬ ∃ (p : Fin M) (v : List 𝔽),
@@ -208,11 +208,11 @@ open Classical in
 /-- **The masked mixture's first bound, from a simulation of the runs**: `zk_first_of_sim` with the deployed coins as
 the tape and `zkCoins` as the coins, whose sampling design is uniform (`zkSim_of_run`), so it asks only for `ZkSimRun`,
 deterministic. -/
-theorem zk_first_of_run {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {M : ℕ}
-    (C : Fin M → List 𝔽) (j : ℕ) (J : Claims.Msg → ℕ) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec}
+theorem zk_first_of_run {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) {M : ℕ}
+    (C : Fin M → List 𝔽) (j : ℕ) (J : Hash.Msg → ℕ) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec}
     {sts₀ : Array Stmt} {d : Json} (hset : setupOf true x = some (s₀, spec₀, sts₀)) (hd : s₀.read.draw = some d)
-    (hJ : J x ≤ sts₀.size) (hj : j < J x) (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
-    (w : (x : Claims.Msg) → Wire 65536 (J x) mPts) (P' : Claims.Prover (Ω × (Fin ((V true).k x) → Coin)))
+    (hJ : J x ≤ sts₀.size) (hj : j < J x) (N : Hash.Msg → ℕ) (dg : ByteArray → ByteArray)
+    (w : (x : Hash.Msg) → Wire 65536 (J x) mPts) (P' : Claims.Prover (Ω × (Fin ((V true).k x) → Coin)))
     (hk : N x + 2 = (V true).k x) (n : Fin ((V true).k x) → ℕ) (hrun : ZkSimRun P x ω J mPts N dg w P' (zkCoins hk n)) :
     Claims.Pr (fun r : Fin ((V true).k x) → Coin => (Claims.run sha512 P (V true) x ω r).out = .acc ∧
         ¬ ∃ (p : Fin M) (v : List 𝔽),
@@ -228,8 +228,8 @@ open Classical in
 outcome of `P'` at the tape `(ω, u)` and the live coins `r'` gives `E` at `zkCoins (u, r')`, the average over the
 deployed coins `u` of the live session's probability of `pL` against `P'`'s strategies is at most `Pr[E]`
 (`liveMix_le_Pr`, `Pr_mergeAt`). -/
-theorem zkMix_le_of_run {Ω : Type} (x : Claims.Msg) (ω : Ω) (J : Claims.Msg → ℕ) (mPts : ℕ) (N : Claims.Msg → ℕ)
-    (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire 65536 (J x) mPts)
+theorem zkMix_le_of_run {Ω : Type} (x : Hash.Msg) (ω : Ω) (J : Hash.Msg → ℕ) (mPts : ℕ) (N : Hash.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : (x : Hash.Msg) → Wire 65536 (J x) mPts)
     (P' : Claims.Prover (Ω × (Fin ((V true).k x) → Coin))) (hk : N x + 2 = (V true).k x)
     (n : Fin ((V true).k x) → ℕ) (pL : LiveOutJ (J x) mPts → Prop) (E : (Fin ((V true).k x) → Coin) → Prop)
     (h : ∀ u r', pL (liveOut J (fun _ => mPts) N dg w sha512 P' x (ω, u) r') → E (zkCoins hk n (u, r'))) :

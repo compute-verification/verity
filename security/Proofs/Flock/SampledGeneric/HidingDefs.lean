@@ -90,7 +90,7 @@ noncomputable def hm96Gap : ℝ≥0∞ :=
 /-! ## A claims-core record as a `Zk` -/
 
 /-- **A malicious verifier of `k`'s rounds**: a `V*` and its tape. -/
-structure MalVerifier (k : Claims.Msg → ℕ) (Θ : Type) where
+structure MalVerifier (k : Hash.Msg → ℕ) (Θ : Type) where
   Vs : Claims.VStar Θ
   θ : Θ
   hk : ∀ x, Vs.k x = k x
@@ -102,16 +102,16 @@ variable {N Ω W : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω]
 /-- **A claims-core record as a `Zk`**: the honest view is the transcript of the prover `P w`, on a uniform nonce and
 rest, against `v`'s `V*` at its tape; the simulator's is `S`'s transcript against the same `V*`, on `S`'s uniform
 coins. -/
-noncomputable def zkOfMal (H : Claims.Msg → Claims.Msg) (k : Claims.Msg → ℕ) (P : W → Claims.Prover (N × Ω))
+noncomputable def zkOfMal (H : Hash.Msg → Hash.Msg) (k : Hash.Msg → ℕ) (P : W → Claims.Prover (N × Ω))
     (S : Claims.Simulator) (Θ : Type) :
-    Zk Claims.Msg W (MalVerifier k Θ) (List (Claims.Msg × Claims.Out)) where
+    Zk Hash.Msg W (MalVerifier k Θ) (List (Hash.Msg × Claims.Out)) where
   real x w v := ⟨.coin (N × Ω) fun ω => .ret (Claims.runStar H (P w) v.Vs x ω v.θ).msgs, fun _ => PUnit.unit⟩
   sim x v := ⟨.coin (S.C x) fun c => .ret (S.out H v.Vs v.θ x c), fun _ => PUnit.unit⟩
 
 /-- **`ZKmalR`'s error at `(x, w)` against `v`**: `ε_zk(x) + γ(x)·Pr[Fork]`, with `Fork` the real game's collision
 finder, two runs of `P w` against `v`'s `V*` on one nonce. -/
-noncomputable def malErr (H : Claims.Msg → Claims.Msg) {k : Claims.Msg → ℕ} (P : W → Claims.Prover (N × Ω))
-    (εzk γ : Claims.Msg → ℝ) {Θ : Type} (x : Claims.Msg) (w : W) (v : MalVerifier k Θ) : ℝ≥0∞ :=
+noncomputable def malErr (H : Hash.Msg → Hash.Msg) {k : Hash.Msg → ℕ} (P : W → Claims.Prover (N × Ω))
+    (εzk γ : Hash.Msg → ℝ) {Θ : Type} (x : Hash.Msg) (w : W) (v : MalVerifier k Θ) : ℝ≥0∞ :=
   ENNReal.ofReal (εzk x + γ x * (Claims.Fork H (P w) v.Vs v.θ x).Pr H)
 
 end Mal

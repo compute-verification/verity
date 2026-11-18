@@ -86,10 +86,6 @@ class Live:
 
 
 PROTOCOLS = (
-    Protocol("Pearl-C served (cross-check)",
-             ("llama31-8b-1gpu-pouw-protocol-served", "llama31-8b-1gpu-pouw-protocol-served-b32"),
-             "pouw:pearl-c-sm120-v1-h3", "stock-fp8", record="pearl-c-served"),
-    Protocol("Pearl-C whole-step (cross-check)", (), "pouw-pearl-c-whole", "stock-fp8", record="pearl-c-whole-step"),
     # The bandwidth specs run every arm but the compiled one on decode-only CUDA graphs: no eager stock.
     Protocol("PoUS bandwidth audit", (), "bandwidth-audit", None, record="pous-bandwidth-audit",
              members=(("llama-3.1-8b-h200", "llama31-8b-fp8-1gpu-bandwidth-served-reps6@h200"),

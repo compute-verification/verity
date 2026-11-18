@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.commitments import domains as DM
 import verity.circuits.ops.prims  # with verity.circuits.ops.scalar, the primitives partition_vectors.json's descriptor names
 import verity.circuits.ops.scalar  # noqa: F401
 from verity.circuits import codec, partition_object as PO
@@ -469,7 +470,7 @@ def test_the_answer_of_an_accepted_record_says_whether_every_verdict_ran():
     a = audit.answer(whole, Fraction(1, 4))
     assert whole["complete"] is True and a["public"] == {"bound": whole["wrong_units"]["bound"], "complete": True,
                                                          "drawn": [1, 4], "per_template": None, "proved": [1, 4]}
-    assert (a["verdict"], a["reason"], a["protocol"]) == ("accept", None, R.PROTOCOL)
+    assert (a["verdict"], a["reason"], a["protocol"]) == ("accept", None, DM.ONE_STAGE_PROTOCOL)
     assert a["commitment"] == R.digest(whole["registration"]) and a["profile"]["delta"] == "1/4"
     assert a["profile"]["levels"][0]["draw"] == {"subset": 2}
     for other in ({"accepted": None}, {"accepted": None, "premise": "a check nothing ran"}, {}):

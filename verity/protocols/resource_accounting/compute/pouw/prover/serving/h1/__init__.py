@@ -96,12 +96,12 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import int
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import tables as TB
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.commit import calls_root
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.names import SALT_TAG, program_salt
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.names import SALT_TAG, program_salt
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.records import numpy_of
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.requests import slots
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.requests import slots
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.static import (
     FILL,
     Static,

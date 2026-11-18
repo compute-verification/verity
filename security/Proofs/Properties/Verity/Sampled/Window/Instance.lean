@@ -630,10 +630,10 @@ theorem executionPhaseAt_members (k : Verity.Registration.Composite) (hW : I.Exe
 parameters name (`labelAt`), the digest `afterAt` and the window's bytes as `MAX_COINS` fresh frames, as
 `executionPhaseSpotSound_sessions` reads them. -/
 noncomputable def constructionsAt (K₀ : ExecutionPhaseConstructions I.base) (k : Verity.Registration.Composite)
-    (reg : Option Claims.Msg → ByteArray) (ev : ℕ → Exchange → Option Claims.Msg)
-    (filesDec : Claims.Msg → Array ByteArray)
-    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg) : ExecutionPhaseConstructions I.base :=
+    (reg : Option Hash.Msg → ByteArray) (ev : ℕ → Exchange → Option Hash.Msg)
+    (filesDec : Hash.Msg → Array ByteArray)
+    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Hash.Msg) : ExecutionPhaseConstructions I.base :=
   (K₀.withBinding I.pinned I.dev k).withProject I.base (sessionReadings ExecutionPhase.table ev record₀ recordDigest)
     (fun W _ _ _ _ _ => sessionDecoders reg W.table filesDec)
     (executionPhaseSampleMaps fieldEnc I.base (sessionReadings ExecutionPhase.table ev record₀ recordDigest)
@@ -644,8 +644,8 @@ noncomputable def constructionsAt (K₀ : ExecutionPhaseConstructions I.base) (k
 accepts, whose log v2 read is the device's, whose blobs sent hold each pinned table and each member's file at its
 registered file and whose sample answers the strategy's `afterAt`, every release of the family the parameters name
 precedes every opening, and the play has the sessions of the window's sample at the coins that family releases. -/
-def ExecutionPhaseReads (k : Verity.Registration.Composite) (ev : ℕ → Exchange → Option Claims.Msg)
-    (filesDec : Claims.Msg → Array ByteArray) : Prop :=
+def ExecutionPhaseReads (k : Verity.Registration.Composite) (ev : ℕ → Exchange → Option Hash.Msg)
+    (filesDec : Hash.Msg → Array ByteArray) : Prop :=
   ∀ θ F W, I.executionPhases θ F = some W →
   ∀ (c : ByteArray) (σ : Strategy (I.base.game θ F c)) (z : CoinTape (I.base.game θ F c) σ),
     I.base.Verdict k .sampled (CoinTape.run (I.base.game θ F c) σ z) →
@@ -664,10 +664,10 @@ deployed device printed each play's log and signed what its signatures are on (`
 the window (`ClaimReads`), the verifier's window at an accepted play (`ExecutionPhaseAt`) and what the verifier's acceptance
 gives of each play (`ExecutionPhaseReads`). -/
 theorem spotSound (K₀ : ExecutionPhaseConstructions I.base) (k : Verity.Registration.Composite)
-    (reg : Option Claims.Msg → ByteArray) (ev : ℕ → Exchange → Option Claims.Msg)
-    (filesDec : Claims.Msg → Array ByteArray)
-    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (reg : Option Hash.Msg → ByteArray) (ev : ℕ → Exchange → Option Hash.Msg)
+    (filesDec : Hash.Msg → Array ByteArray)
+    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Hash.Msg)
     (hC : I.ClaimReads (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest))
     (hWa : I.ExecutionPhaseAt k) (hWR : I.ExecutionPhaseReads k ev filesDec)
     (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)) k) :
@@ -700,10 +700,10 @@ per round opened after a digest in every member's session, its closing round amo
 for the bound digests, the coin trees' hiding term, and the read finder's bound. The premises at the finders the
 constructions build from a strategy are `error`'s condition at that strategy. -/
 theorem remote_soundness_executionPhase (I : ExecutionPhaseInstance d α) (K₀ : ExecutionPhaseConstructions I.base)
-    (reg : Option Claims.Msg → ByteArray) (ev : ℕ → Exchange → Option Claims.Msg)
-    (filesDec : Claims.Msg → Array ByteArray)
-    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (reg : Option Hash.Msg → ByteArray) (ev : ℕ → Exchange → Option Hash.Msg)
+    (filesDec : Hash.Msg → Array ByteArray)
+    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Hash.Msg)
     (hC : I.ClaimReads (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest))
     (hWa : I.ExecutionPhaseAt .remote) (hWR : I.ExecutionPhaseReads .remote ev filesDec)
     (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)) .remote)

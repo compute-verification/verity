@@ -120,7 +120,7 @@ def SampledKSLiveV3 : Prop :=
     -- the game's units are the public file's population
     (_hn : pub.n = n)
     -- the statement's descriptor, and the registration's query
-    (desc : Claims.Msg) (qr : Lean.Json)
+    (desc : Hash.Msg) (qr : Lean.Json)
     (kd : ℕ) (_hkd : kd ≤ n)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)

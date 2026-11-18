@@ -209,11 +209,12 @@ if str(HERE.parents[1]) not in sys.path:
 import advice_charge as AC  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage.served_integrity import exact_delta  # noqa: E402
+from verity.commitments.domains import CERTIFIER_PROTOCOL, CERTIFIER_SCAN_STATE, REMOTE_PROTOCOL  # noqa: E402
 
 FORMAT = "verity/onsite-network-record/v1"
 EXTENDS = "verity/all-protocols-window/v1"
-NETWORK = "verity/certifier/v0"
-REMOTE = "verity/remote/v0"
+NETWORK = CERTIFIER_PROTOCOL
+REMOTE = REMOTE_PROTOCOL
 INFERENCE_ONLY = "verity/inference-only/v0"
 #: where the inference-only case's α and Γ came from (`alpha_gamma`), by its private policy.json's ``read``
 #: (`served_cases.FROM_DIVISION`), the one field of it read: never a registered policy, which none records
@@ -368,7 +369,7 @@ PERIOD = Path("v3c-audit") / "period.json"
 AUDIT_SUMMARY = Path("v3c-audit") / "summary.json"
 #: the value a compute audit's window registers the scan's state rows as, which the period ties to its scan's state
 #: (`NetworkCheck.Period.stateValue`, `records_audit.TIED`)
-SCAN_STATE = "verity/certifier/scan-state/v1"
+SCAN_STATE = CERTIFIER_SCAN_STATE
 CREDIT = ("sampled proofs credits only the drawn members whose --registered file named every port of their circuit at "
           "the window's committed roots: the audit completed every member's at the registration's roots before the "
           "draw, as the parameters name it (`a5.complete_members`, its record's checks_before_draw.registered_fixed), "

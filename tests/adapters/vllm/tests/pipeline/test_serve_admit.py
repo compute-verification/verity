@@ -389,8 +389,8 @@ def test_a_refused_release_and_an_unnumbered_request_hold_nothing(tmp_path):
     assert dup_raw.startswith(b"HTTP/1.1 400") and b"came twice" in dup_raw
 
 
-def test_the_order_defaults_to_arrival_and_is_the_schemes_own_setting():
-    base = ["--model", "m", "--revision", "r", "--no-commit"]
+def test_the_order_defaults_to_arrival_and_is_the_schemes_own_setting(tmp_path):
+    base = ["--model", "m", "--revision", "r", "--no-commit", "--out", str(tmp_path)]
     assert so.admission_order(cli.parse("serve-openai", base, environ={})) == "arrival"
     name = messages.providing("admission").name
     given = {"order": "release-order", "hold_ms": 2500}

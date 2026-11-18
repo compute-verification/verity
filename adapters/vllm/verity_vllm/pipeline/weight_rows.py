@@ -108,7 +108,7 @@ def by_reference(window: CS.Binding, registered: IF.Registered | None, data: Seq
                                                             dict[str, bytes]]:
     """``data`` (`serving_rows.read_all`'s, one a member) with each input port a committed read of ``registered`` fills
     (`interface.committed_reads`: a weight's read, a table's root or domain id) given by reference (`rows.ValueRows`) as the rows
-    its units read of the parameter's committed value in ``values`` (``{param: core's registered.Registered}``: the committer's
+    its units read of the parameter's committed value in ``values`` (``{param: core's registered_value.Registered}``: the committer's
     weights and tables under its key at their nonces, rows held, `window_weights.weight_value`, `expert_rows.commit_tables`; a
     table's supplied values, `interface.supplied`), and each output port one fills (an opening's verdict) committed under the
     value's salts (``salts_of``, `rows.commit`), so each unit's row is the value's row the Lean verifier opens against the

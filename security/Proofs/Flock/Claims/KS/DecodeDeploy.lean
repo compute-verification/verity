@@ -30,7 +30,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **A plain statement in scope with public outputs sets up its one table at its sample**: its inputs are untyped and
 have the tags `DecodeZL.TagsOk` asks, they parse the table's circuit, which returns the outputs, setupH sets the
 table up at the sample `d`, the session's spec is the table's, and `22 ≤ m ≤ 35`. -/
-theorem plain_setupH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_setupH {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = false) {d : Json} (hd : ins.read.draw = some d) :
@@ -103,7 +103,7 @@ theorem tableAt_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) {n : ℕ}
   rfl
 
 /-- **The plain codeword length is `2^logLen` at level 0**, at the one table's `fast100` schedule. -/
-theorem plain_wordLen {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
+theorem plain_wordLen {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (h22 : 22 ≤ st.m) (h35 : st.m ≤ 35) {m k0 : ℕ} {l₀ l₁ : Accounting.Level} {rest : List Accounting.Level}
     {ext : ℕ} (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) :
     wordLen false x = 2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ 0).logLen := by
@@ -125,7 +125,7 @@ open Classical Discharge.Tables Claims.Bridge.CustodyPlain Claims.Bridge.DecodeP
 sample is `d`, `decodesTable_wrP_sc` at `d` and no sampled proof block, on the outcomes whose `wrP` transcript verity-verify-proof
 accepts, whose root is `rootB₀`'s and on which the reader looks up no column off `C`, with the verdict
 `PlainLiveAccAt` reads. -/
-theorem plain_hdec {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_hdec {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = false) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)

@@ -7,7 +7,9 @@ import pytest
 
 from verity.protocols.proofs.spot.verifier.one_stage import audit
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
+from verity.protocols.proofs.spot.prover import produced as PP
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 PD = "12" * 64
 REG = "ab" * 64
@@ -17,25 +19,25 @@ ROWS = [[1, 2], [3, 4], [5, 6]]
 
 
 def test_the_produced_tree_opens_under_its_registrations_domain_only():
-    tree = PR.commit(PD, "partials", ROWS, REG)
+    tree = PP.commit(PD, "partials", ROWS, REG)
     mine = PR.entry(PD, "partials", 3, 2, REG)
     assert tree.entry() == {"value": "partials", "root": tree.root.hex(), **{k: mine[k] for k in ("leaves", "words", "domain")}}
     dom = PR.domain(PD, "partials", 2, 3, 16, REG)
     for r in range(3):
         assert G.verify_read(dom, tree.root, r, tree.bcs[r], tree.path(r))
         assert not G.verify_read(PR.domain(PD, "partials", 2, 3, 16, OTHER_REG), tree.root, r, tree.bcs[r], tree.path(r))
-        assert not G.verify_read(G.domain(PD, "partials", 2, 3), tree.root, r, tree.bcs[r], tree.path(r))
+        assert not G.verify_read(RV.domain(PD, "partials", 2, 3), tree.root, r, tree.bcs[r], tree.path(r))
     assert not G.verify_read(dom, tree.root, 0, tree.bcs[1], tree.path(0)), "a swapped row opens at no other position"
-    other = PR.commit(PD, "partials", [[1, 2], [3, 4], [5, 7]], REG)
+    other = PP.commit(PD, "partials", [[1, 2], [3, 4], [5, 7]], REG)
     assert not G.verify_read(dom, tree.root, 2, other.bcs[2], other.path(2)), "another tree's row opens under no root but its own"
     with pytest.raises(ValueError, match="registration digest"):
         PR.domain(PD, "partials", 2, 3, 16, "AB" * 64)
     with pytest.raises(ValueError, match="not two"):
-        G.domain(PD, "partials", 2, 3, 16, window="00" * 64, produced=REG)
+        RV.domain(PD, "partials", 2, 3, 16, window="00" * 64, produced=REG)
 
 
 def test_a_32_bit_entry_and_its_port():
-    tree = PR.commit(PD, "partials", ROWS, REG, word_bits=32)
+    tree = PP.commit(PD, "partials", ROWS, REG, word_bits=32)
     e = PR.entry(PD, "partials", 3, 2, REG, word_bits=32)
     assert tree.entry() == {"value": "partials", "root": tree.root.hex(), "leaves": 3, "words": 2, "word_bits": 32,
                             "domain": e["domain"]}
@@ -46,7 +48,7 @@ def test_a_32_bit_entry_and_its_port():
 
 
 def _rec(docket=REG):
-    tree = PR.commit(PD, "partials", ROWS, docket)
+    tree = PP.commit(PD, "partials", ROWS, docket)
     return PR.record(REG, DRAW, [tree.entry()], {"partials": PR.rows_of(tree)}), tree
 
 
@@ -101,7 +103,7 @@ def test_every_session_opens_the_one_opening_the_record_fixes():
     honest = {"lane0": _verdict({"partials": ("partials", [rows[0]])}), "lane2": _verdict({"partials": ("partials", [rows[2]])}),
               "combine": _verdict({f"p{r}": ("partials", [rows[r]]) for r in range(3)})}
     assert PR.shared(want, honest) == ()
-    resalted = PR.commit(PD, "partials", ROWS, REG)
+    resalted = PP.commit(PD, "partials", ROWS, REG)
     another = (1, resalted.bcs[1].hex())
     for bad in ({"lane1": _verdict({"partials": ("partials", [another])})},
                 {"lane1": _verdict({"partials": ("partials", [(0, rows[1][1])])})},
@@ -117,11 +119,11 @@ def test_a_known_port_opens_only_at_its_content():
     row, salt = [3, 0, 1], bytes(range(192))
     port, op = PR.known_port(PD, "lane", row, salt, REG)
     assert port["reads"] == [0] and port["leaves"] == 1 and port["row_schema"] == G.SCHEMA_V2
-    t = PR.commit(PD, "lane", [row], REG, [salt], schema=G.SCHEMA_V2)
+    t = PP.commit(PD, "lane", [row], REG, [salt], schema=G.SCHEMA_V2)
     assert op == (0, t.bcs[0].hex()) and port["root"] == t.root.hex()
     dom = PR.domain(PD, "lane", 3, 1, 16, REG)
     assert G.verify_read(dom, t.root, 0, t.bcs[0], t.path(0), G.SCHEMA_V2)
-    four = PR.commit(PD, "lane", [[4, 0, 1]], REG, [salt], schema=G.SCHEMA_V2)
+    four = PP.commit(PD, "lane", [[4, 0, 1]], REG, [salt], schema=G.SCHEMA_V2)
     assert not G.verify_read(dom, t.root, 0, four.bcs[0], four.path(0), G.SCHEMA_V2), "another index opens no known root"
     want = PR.wanted(_rec()[0], {"lane": [op]})
     assert PR.shared(want, {"lane3": _verdict({"pub": ("lane", [(0, four.bcs[0].hex())])})}) == ("P-shared",)

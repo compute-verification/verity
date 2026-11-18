@@ -5,7 +5,7 @@
 #   MODE=selftest   CPU and GPU selftests at SELF_N instances
 #   MODE=bench      loopback sessions (a verifier process on 127.0.0.1 serving its own public file) at each of POINTS
 #   MODE=build      nothing more
-# env: SELF_N=4  POINTS="64 256"  WARM=1 RUNS=3  GPU=1  SM (from nvidia-smi)  CPU_SELF=1 (0: skip the CPU selftest)
+# env: SELF_N=4  POINTS="64 256"  WARM=1 RUNS=3  GPU=1  SM (from nvidia-smi; GPU=1 without one refuses)  CPU_SELF=1 (0: skip the CPU selftest)
 #      RECORD=1 (selftest: every case's server record and proofs under out/<set>/records-{cpu,gpu})  TYPED=1 (the typed statement)
 #      ZK=1 (selftest: Flock ZK's --zk statement, and zkaudit on the device's proofs)  MODES="m0 zk" (bench: each point in each mode;
 #      zkseq: --zk with the host's zk work not overlapped, FC_ZK_SEQUENTIAL)  FC_COINS=tree (bench: m0's sessions on the
@@ -17,7 +17,7 @@ set -uxo pipefail
 export FC_COINS=${FC_COINS:-tree}
 REPO=$(pwd); I=${RESEARCH_RUN_DIR:-/tmp/fc}/inputs; O=${RESEARCH_RUN_DIR:-/tmp/fc}/out; W=${FLOCK_WORK:-/workspace}/flock-circuit; mkdir -p $O $W
 MODE=${MODE:-selftest}; G=${GPU:-1}; Z=; [ "${ZK:-0}" = 1 ] && Z=--zk; TY=; [ "${TYPED:-0}" = 1 ] && TY=--typed
-SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-90}
+SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}
 MODE=build GPU=$G SM=$SM bash verity/protocols/proofs/flock/prover/pod/20-gpu-link.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
 source $HOME/.cargo/env; C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 read -r Q PER_ < /sys/fs/cgroup/cpu.max 2>/dev/null || { Q=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null || echo -1); PER_=$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us 2>/dev/null || echo 100000); }

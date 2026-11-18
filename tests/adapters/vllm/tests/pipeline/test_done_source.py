@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from tests.pipeline.test_global_program_regress import _derived_dir, _manifest
+from tests.row_paths import row_paths
 from verity_vllm import config as C
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import global_program as gp
@@ -127,7 +128,7 @@ def test_the_row_precheck_refuses_a_row_of_record_that_stops_at_eos_before_writi
     from verity_vllm.pipeline import row
     _of_record(monkeypatch, tmp_path, SINGLE)
     sweep = tmp_path / "sweep"
-    env = {k: v for k, v in os.environ.items() if k not in ("VERITY_TREE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID")}
+    env = {**{k: v for k, v in os.environ.items() if k not in ("VERITY_TREE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID")}, **row_paths(tmp_path)}
     o = cli.parse("row", ["run", SINGLE, "LLAMA32_1B", "unsloth/Llama-3.2-1B", "9535bd9b", "--sweep-dir", str(sweep), "--py", sys.executable,
                           "--native-collect-default", str(tmp_path / "nc_build")], env)
     assert row.run_row(o, "build,match,commit") == 3

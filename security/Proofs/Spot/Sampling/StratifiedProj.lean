@@ -11,12 +11,12 @@ import Proofs.Flock.Soundness.Game
 `SamplingDesign.stratified σ k hk` samples an independent uniform `k s`-subset inside each stratum `s` of `σ`; its coin `ω` holds
 them, stratum `s`'s at `ω s`. With `n_s = |stratum σ s|` and `m_s = |B.filter (σ · = s)|`:
 
-* `stratified_proj_escape`: **the per-stratum projection**. Stratum `s`'s coordinate of the coin, `(ω s).1`, misses a
+* `stratified_proj_missProb`: **the per-stratum projection**. Stratum `s`'s coordinate of the coin, `(ω s).1`, misses a
   set `B` with stratum `s`'s hypergeometric factor `C(n_s − m_s, k_s) / C(n_s, k_s)`, the factor of `s` in
-  `stratified_escape`. A consumer that samples one stratum by itself (PoUW's tile stratum) cites this for its coin.
-* `stratified_proj_escape_eq_exp`: the same factor is `exp(−stratumRisk σ k s m_s)` when `m_s + k_s ≤ n_s`: stratum
+  `stratified_missProb`. A consumer that samples one stratum by itself (PoUW's tile stratum) cites this for its coin.
+* `stratified_proj_missProb_eq_exp`: the same factor is `exp(−stratumRisk σ k s m_s)` when `m_s + k_s ≤ n_s`: stratum
   `s`'s exact risk is minus the log of its coordinate's missProb.
-* `stratified_escape_eq_exp`: so `B`'s missProb is `exp(−∑ s stratumRisk σ k s m_s)`. The detection budget a set spends,
+* `stratified_missProb_eq_exp`: so `B`'s missProb is `exp(−∑ s stratumRisk σ k s m_s)`. The detection budget a set spends,
   exactly, is the sum of its strata's exact risks, each at least its stratum's term `k_s m_s / n_s` of the closed form
   (`le_stratumRisk`).
 -/
@@ -36,7 +36,7 @@ variable {n m : ℕ}
 
 /-- **The per-stratum projection**: stratum `s`'s coordinate of the stratified sampling design's coin misses `B` with stratum `s`'s
 hypergeometric factor, `C(n_s − m_s, k_s) / C(n_s, k_s)` with `n_s = |stratum σ s|` and `m_s = |B.filter (σ · = s)|`. -/
-theorem stratified_proj_escape (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+theorem stratified_proj_missProb (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (s : Fin m) (B : Finset (Fin n)) :
     prCoin (fun ω : (stratified σ k hk).Ω => Disjoint (ω s).1 B) =
       (((stratum σ s).card - (B.filter (σ · = s)).card).choose (k s) : ℝ≥0∞) /
@@ -68,21 +68,21 @@ theorem choose_div_eq_exp {N k c : ℕ} (h : c + k ≤ N) :
 
 /-- **Stratum `s`'s exact risk is minus the log of its coordinate's missProb**: with `m_s + k_s ≤ n_s`, stratum `s`'s
 coordinate misses `B` with `exp(−stratumRisk σ k s m_s)`. -/
-theorem stratified_proj_escape_eq_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+theorem stratified_proj_missProb_eq_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (s : Fin m) (B : Finset (Fin n)) (hc : (B.filter (σ · = s)).card + k s ≤ (stratum σ s).card) :
     prCoin (fun ω : (stratified σ k hk).Ω => Disjoint (ω s).1 B) =
       ENNReal.ofReal (Real.exp (-stratumRisk σ k s (B.filter (σ · = s)).card)) := by
-  rw [stratified_proj_escape]
+  rw [stratified_proj_missProb]
   unfold stratumRisk
   exact choose_div_eq_exp hc
 
 /-- **The stratified missProb in exact risks**: with `m_s + k_s ≤ n_s` in every stratum, `B` escapes with
 `exp(−∑ s stratumRisk σ k s m_s)`, the product of its strata's coordinates' escapes. -/
-theorem stratified_escape_eq_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+theorem stratified_missProb_eq_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (B : Finset (Fin n)) (hc : ∀ s, (B.filter (σ · = s)).card + k s ≤ (stratum σ s).card) :
     (stratified σ k hk).missProb B =
       ENNReal.ofReal (Real.exp (-∑ s, stratumRisk σ k s (B.filter (σ · = s)).card)) := by
-  rw [stratified_escape, ← Finset.sum_neg_distrib, Real.exp_sum,
+  rw [stratified_missProb, ← Finset.sum_neg_distrib, Real.exp_sum,
     ENNReal.ofReal_prod_of_nonneg (f := fun s => Real.exp (-stratumRisk σ k s (B.filter (σ · = s)).card))
       (fun s _ => (Real.exp_pos _).le)]
   refine Finset.prod_congr rfl fun s _ => ?_

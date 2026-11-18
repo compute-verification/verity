@@ -285,7 +285,7 @@ def test_capture_checks_the_exact_run_it_names(store, tmp_path, capsys):
     ({"minify": None}, True, "names no minify run"),
     ({"card": None}, True, "names no member parts .*`card` None"),
     ({"card": "NVIDIA H200"}, True, "names no member parts"),
-    ({"card": "h900"}, True, "fingerprint's `card`: 0 GPU card files under .* have `short` 'h900': one of .*'h200'"),
+    ({"card": "h900"}, True, "fingerprint's `card`: 0 GPU card files under .* have `short` 'h900': the shorts are .*'h200'"),
     ({}, False, "holds no arm's lifetimes"),
 ])
 def test_capture_refuses_a_record_that_breaks_the_contract(store, tmp_path, fingerprint, lifetimes, why):

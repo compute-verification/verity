@@ -68,7 +68,7 @@ def popOf (l : Spot.Slots.SlotOrder) : List Spot.Slots.ProofBlock :=
   ((l.classes.toList.headD #[]).toList.map Array.toList).flatten
 
 /-- `PopMatches`'s check. -/
-def popCheck (desc : Claims.Msg) (q : Lean.Json) (n : ℕ) : Bool :=
+def popCheck (desc : Hash.Msg) (q : Lean.Json) (n : ℕ) : Bool :=
   match Spot.Program.parse ⟨desc.toArray⟩ with
   | .error _ => false
   | .ok p =>
@@ -78,12 +78,12 @@ def popCheck (desc : Claims.Msg) (q : Lean.Json) (n : ℕ) : Bool :=
 
 /-- **The registration's population is `n` units, in order**: `desc` parses, its layout under the query `q` is
 defined, and the layout's population is `n` proof blocks with slot `u` unit `u`. -/
-@[reducible] def PopMatches (desc : Claims.Msg) (q : Lean.Json) (n : ℕ) : Prop := popCheck desc q n = true
+@[reducible] def PopMatches (desc : Hash.Msg) (q : Lean.Json) (n : ℕ) : Prop := popCheck desc q n = true
 
-instance instDecidablePopMatches (desc : Claims.Msg) (q : Lean.Json) (n : ℕ) : Decidable (PopMatches desc q n) :=
+instance instDecidablePopMatches (desc : Hash.Msg) (q : Lean.Json) (n : ℕ) : Decidable (PopMatches desc q n) :=
   inferInstanceAs (Decidable (_ = true))
 
-theorem popMatches_iff {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} :
+theorem popMatches_iff {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} :
     PopMatches desc q n ↔ ∃ p l, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧
       Spot.Slots.layout p q = .ok l ∧ (popOf l).map (·.unit) = (List.range n).map some := by
   unfold PopMatches popCheck
@@ -105,7 +105,7 @@ theorem popMatches_iff {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} :
     exact decide_eq_true h
 
 /-- The population's units at the layout `PopMatches` reads. -/
-theorem popOf_units {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
+theorem popOf_units {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
     {l : Spot.Slots.SlotOrder} (h : PopMatches desc q n)
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l) :
     (popOf l).map (·.unit) = (List.range n).map some := by
@@ -117,7 +117,7 @@ theorem popOf_units {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Prog
   exact hu
 
 /-- **N = n at the layout**: at `PopMatches`, the population has `n` slots. -/
-theorem popOf_size {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
+theorem popOf_size {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
     {l : Spot.Slots.SlotOrder} (h : PopMatches desc q n)
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l) :
     (popOf l).length = n := by
@@ -126,7 +126,7 @@ theorem popOf_size {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Progr
 
 /-- **The registration's strata**: the sizes of the strata of the population, the first class of the layout the deployed
 verifier evaluates on `desc` under the query `q`, in slot order; none where the parse or the layout fails. -/
-def nsOf (desc : Claims.Msg) (q : Lean.Json) : List ℕ :=
+def nsOf (desc : Hash.Msg) (q : Lean.Json) : List ℕ :=
   match Spot.Program.parse ⟨desc.toArray⟩ with
   | .error _ => []
   | .ok p =>
@@ -134,7 +134,7 @@ def nsOf (desc : Claims.Msg) (q : Lean.Json) : List ℕ :=
     | .error _ => []
     | .ok l => (l.classes.toList.headD #[]).toList.map Array.size
 
-theorem nsOf_eq {desc : Claims.Msg} {q : Lean.Json} {p : Spot.Program} {l : Spot.Slots.SlotOrder}
+theorem nsOf_eq {desc : Hash.Msg} {q : Lean.Json} {p : Spot.Program} {l : Spot.Slots.SlotOrder}
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l) :
     nsOf desc q = (l.classes.toList.headD #[]).toList.map Array.size := by
   unfold nsOf
@@ -151,12 +151,12 @@ theorem sum_strata_popOf (l : Spot.Slots.SlotOrder) :
   congr 1
 
 /-- **The strata sum to `n`**: at `PopMatches`, the registration's strata cover the population's `n` slots. -/
-theorem nsOf_sum {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} (h : PopMatches desc q n) : (nsOf desc q).sum = n := by
+theorem nsOf_sum {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} (h : PopMatches desc q n) : (nsOf desc q).sum = n := by
   obtain ⟨p, l, hp, hl, -⟩ := popMatches_iff.1 h
   rw [nsOf_eq hp hl, sum_strata_popOf, popOf_size h hp hl]
 
 /-- **Slot `u` is unit `u`**: at `PopMatches`, the population's proof block at slot `u` is the population's unit `u`. -/
-theorem popOf_unit {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
+theorem popOf_unit {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
     {l : Spot.Slots.SlotOrder} (h : PopMatches desc q n)
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l)
     (u : ℕ) (hu : u < (popOf l).length) : ((popOf l)[u]'hu).unit = some u := by
@@ -183,7 +183,7 @@ theorem popCount_partOf_eq {C : Verity.Boolean.Circuit} {n : ℕ} (P : Spot.Samp
 
 /-- **N = n**: at `PopMatches`, the claims' partition of the deployed layout has as many population slots as the
 game's partition `partOf P κ ns` has population slots, at strata that sum to `n`. -/
-theorem popCount_partOf {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
+theorem popCount_partOf {desc : Hash.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
     {l : Spot.Slots.SlotOrder} (h : PopMatches desc q n)
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l)
     {C : Verity.Boolean.Circuit} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
@@ -194,8 +194,8 @@ theorem popCount_partOf {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.
 /-- **N = n at the registration**: where `RegMatches` names the statement's registration, and `PopMatches` holds at
 the statement's descriptor and that registration's query, the statement's partition has as many population slots as
 `partOf P κ ns` has population slots, at strata that sum to `n`. -/
-theorem popCount_regMatches {c : SamplingDeploy.Code} {reg : Claims.Msg → Option SamplingDeploy.Reg}
-    (hreg : SamplingDeploy.RegMatches c reg) {x : Claims.Msg} {s : Claims.Sampling.AuditStatement}
+theorem popCount_regMatches {c : SamplingDeploy.Code} {reg : Hash.Msg → Option SamplingDeploy.Reg}
+    (hreg : SamplingDeploy.RegMatches c reg) {x : Hash.Msg} {s : Claims.Sampling.AuditStatement}
     {Pt : Claims.Sampling.Partition} (hx : c.parse x = some s) (hP : c.partition s = some Pt) {n : ℕ}
     (hpop : ∀ g, reg x = some g → PopMatches s.desc g.query n)
     {C : Verity.Boolean.Circuit} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)

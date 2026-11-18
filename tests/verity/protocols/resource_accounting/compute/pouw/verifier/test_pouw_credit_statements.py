@@ -35,6 +35,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import live_read
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.commitments import registered_value as RV
 
 PKG = Path(__file__).resolve().parent / "lean" / "check"
 for _name in ("pouw_rounds_cases", "pouw_credit_cases"):
@@ -323,7 +324,7 @@ def _seeded(d: dict, s: dict, roots: tuple[str, str]) -> dict:
     call's own: every other port credit's."""
     program, lay, shape, reg = _files(d, s)
     pub = reg["ports"][Cr.PUB_PORT]
-    u0, n = pub[Cr.G.READS_FROM], pub["leaves"]
+    u0, n = pub[RV.READS_FROM], pub["leaves"]
     rows, salts, got = Cr.public_table(program, pub["value"], d["salt"], d["window"]["root"], u0, n, roots)
     return {**reg, "ports": {**reg["ports"], Cr.PUB_PORT: {**pub, "root": got.root.hex(), "known": {
         "rows": rows, "salts": [x.hex() for x in salts]}}}}
@@ -358,7 +359,7 @@ def test_a_units_public_row_is_its_calls_own_salt_position_and_roots(seed, tmp_p
         a, b = (reg["ports"][f"a_k{k}_0"], reg["ports"][f"b_k{k}_0"])
         u0, size = sum(n for n, _w in Cr.call_work(lay)[:c]), Cr.call_work(lay)[c][0]
         assert pub["value"].endswith(f"pub@{c}") and pub["leaves"] == size and pub["words"] == 100
-        assert (pub[Cr.G.READS_FROM], pub["reads"]) == (u0, list(range(size)))
+        assert (pub[RV.READS_FROM], pub["reads"]) == (u0, list(range(size)))
         assert pub["known"]["rows"] == [Cr.CC.public_words(bytes.fromhex(d["salt"]), u0 + t, (
             bytes.fromhex(a["root"]), bytes.fromhex(b["root"]))) for t in range(size)]
         assert pub["known"]["salts"] == [Cr.CC.public_row_salt(d["window"]["root"], u0 + t).hex() for t in range(size)]
@@ -390,7 +391,7 @@ def _j10r_rows(d: dict, s: dict, call: int, blocks: list[tuple[int, int]]) -> di
     roots = tuple(bytes.fromhex(next(p for x, p in reg["ports"].items() if x.startswith(f"{t}_k"))["root"]) for t in "ab")
     rows = [Cr.CC.public_words(bytes.fromhex(d["salt"]), u0 + t, roots, (call, blocks[t])) for t in range(n)]
     salts = [Cr.CC.public_row_salt(w, u0 + t) for t in range(n)]
-    got = Cr.G.Registered.commit(program, pub["value"], rows, salts, Cr.G.WORD_BITS, Cr.G.SCHEMA_V2, window=w)
+    got = RV.Registered.commit(program, pub["value"], rows, salts, RV.WORD_BITS, Cr.G.SCHEMA_V2, window=w)
     return {**reg, "ports": {**reg["ports"], Cr.PUB_PORT: {**pub, "root": got.root.hex(), "known": {
         "rows": rows, "salts": [x.hex() for x in salts]}}}}
 
@@ -460,7 +461,7 @@ def _ok_rows(d: dict, s: dict, rows: list[list[int]]) -> dict:
     program, _lay, _shape, reg = _files(d, s)
     ok, w = reg["ports"][Cr.OK_PORT], d["window"]["root"]
     salts = [Cr.CC.ok_salt(w, u) for u in range(ok["leaves"])]
-    got = Cr.G.Registered.commit(program, ok["value"], rows, salts, Cr.G.WORD_BITS, Cr.G.SCHEMA_V2, window=w)
+    got = RV.Registered.commit(program, ok["value"], rows, salts, RV.WORD_BITS, Cr.G.SCHEMA_V2, window=w)
     return {**reg, "ports": {**reg["ports"], Cr.OK_PORT: {**ok, "root": got.root.hex(), "known": {
         "rows": rows, "salts": [x.hex() for x in salts]}}}}
 
@@ -478,9 +479,9 @@ def test_a_units_ok_row_is_the_verifiers_one_word_1(seed, tmp_path, verifier):
         c, ok = s["call"], reg["ports"][Cr.OK_PORT]
         u0, size = sum(n for n, _w in Cr.call_work(lay)[:c]), Cr.call_work(lay)[c][0]
         assert ok["value"] == f"{shape['prefix']}ok" and ok["leaves"] == population and ok["words"] == 1
-        assert (ok[Cr.G.READS_FROM], ok["reads"]) == (u0, list(range(u0, u0 + size)))
+        assert (ok[RV.READS_FROM], ok["reads"]) == (u0, list(range(u0, u0 + size)))
         assert ok["known"] == {"rows": [[1]] * population, "salts": [Cr.CC.ok_salt(w, u).hex() for u in range(population)]}
-        assert ok["domain"] == Cr.G.domain(program, ok["value"], 1, population, window=w).domain_id.hex()
+        assert ok["domain"] == RV.domain(program, ok["value"], 1, population, window=w).domain_id.hex()
     assert credit(d, statements) == (_credited(d), None)
     rng = random.Random(seed)
     s = rng.choice(statements)

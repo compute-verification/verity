@@ -539,8 +539,8 @@ theorem setupAt_of_setup {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hs :
 /-- **Custody gives `RecordsLiveAtS`** (`recordsLiveAt_of_checks` at the statement's sample `d`, so with no premise on
 the record's sample): where `Deploy.V --zk`'s checks pass, the last message's record and proof files are a record of the
 run's live outcome (`viewOf`) at the setup at `d`, at any `J` of the session's tables. -/
-theorem recordsLiveAtS_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem recordsLiveAtS_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     {J mPts : ℕ} {d : Json} (hs : s.setup = .ok (spec, sts)) (hzk : s.read.zk = true) (hd : s.read.draw = some d)
     (hJ : J ≤ spec.tables.size) (hc : checks zk s spec x link c₁ mids f = .ok ()) :
     Composed.RecordsLiveAtS s.read.I d (viewOf J mPts spec link c₁ f) ⟨f.record, f.proofs⟩ := by
@@ -597,8 +597,8 @@ theorem recordsLiveAtS_wrS {J mPts : ℕ} (I : Exec.Inputs) (d : Json) (o : Tabl
 /-- **An accepting decision of `Deploy.V --zk` at SHA-512 is an accepting `verify --zk` at the statement's sample**
 (`accepts_of_decide` with no premise on the record's sample): on a statement of sample `d`, the last message's record and
 proof files are accepted at the setup at `d` (`AcceptsAt`), and record the run's live outcome `viewOf` there. -/
-theorem acceptsAt_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+theorem acceptsAt_of_decide {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)}
     {f : Final} {J mPts : ℕ} {d : Json} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((next true x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
     Composed.AcceptsAt s.read.I d ⟨f.record, f.proofs⟩ ∧
@@ -614,8 +614,8 @@ theorem acceptsAt_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List C
 /-- **`Deploy.V --zk`'s accepting runs are accepted at `wrS`**: where its decision accepts at SHA-512 on a statement of
 sample `d`, `verify --zk` accepts at the setup at `d` what `wrS` writes for the run's live outcome at `J ≤` the session's
 tables. -/
-theorem acceptsAt_wrS {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+theorem acceptsAt_wrS {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)}
     {f : Final} {J mPts : ℕ} {d : Json} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((next true x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
     Composed.AcceptsAt s.read.I d (wrS s.read.I d (viewOf J mPts spec link c₁ f)) := by
@@ -649,8 +649,8 @@ theorem Claims.Bridge.Custody.setupAt_of_setup {zk : Bool} {s : Ins} {spec : Ses
 /-- **Custody gives `RecordsLiveAtS`** (`recordsLiveAt_of_checks` at the statement's sample `d`, so with no premise on
 the record's sample): where `Deploy.V --zk`'s checks pass, the last message's record and proof files are a record of the
 run's live outcome (`viewOf`) at the setup at `d`, at any `J` of the session's tables. -/
-theorem Claims.Bridge.Custody.recordsLiveAtS_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem Claims.Bridge.Custody.recordsLiveAtS_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     {J mPts : ℕ} {d : Json} (hs : S.Ok zk s spec sts) (hzk : s.read.zk = true) (hd : s.read.draw = some d)
     (hJ : J ≤ spec.tables.size) (hc : checks zk s spec x link c₁ mids f = .ok ()) :
     Composed.RecordsLiveAtS s.read.I d (viewOf J mPts spec link c₁ f) ⟨f.record, f.proofs⟩ := by
@@ -685,8 +685,8 @@ theorem Claims.Bridge.Custody.recordsLiveAtS_of_checks {zk : Bool} {s : Ins} {sp
 /-- **An accepting decision of `Deploy.V --zk` at SHA-512 is an accepting `verify --zk` at the statement's sample**
 (`accepts_of_decide` with no premise on the record's sample): on a statement of sample `d`, the last message's record and
 proof files are accepted at the setup at `d` (`AcceptsAt`), and record the run's live outcome `viewOf` there. -/
-theorem Claims.Bridge.Custody.acceptsAt_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+theorem Claims.Bridge.Custody.acceptsAt_of_decide {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)}
     {f : Final} {J mPts : ℕ} {d : Json} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((next true x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
     Composed.AcceptsAt s.read.I d ⟨f.record, f.proofs⟩ ∧
@@ -702,8 +702,8 @@ theorem Claims.Bridge.Custody.acceptsAt_of_decide {x : Claims.Msg} {as : List Cl
 /-- **`Deploy.V --zk`'s accepting runs are accepted at `wrS`**: where its decision accepts at SHA-512 on a statement of
 sample `d`, `verify --zk` accepts at the setup at `d` what `wrS` writes for the run's live outcome at `J ≤` the session's
 tables. -/
-theorem Claims.Bridge.Custody.acceptsAt_wrS {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
-    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+theorem Claims.Bridge.Custody.acceptsAt_wrS {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)}
     {f : Final} {J mPts : ℕ} {d : Json} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((next true x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
     Composed.AcceptsAt s.read.I d (wrS s.read.I d (viewOf J mPts spec link c₁ f)) := by

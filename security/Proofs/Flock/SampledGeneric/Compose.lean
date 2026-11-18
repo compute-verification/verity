@@ -155,12 +155,12 @@ theorem Flock.SecurityProofs.GenericSampledKSEscape : Flock.Guarantees.GenericSa
 
 open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.SampledGeneric in
 /-- **The count curve** (`Flock.Guarantees.GenericSampledKSCount`): `GenericSampledKS` at `|F| ≥ K`, whose sampling
-term is at most `miss(K)` (`Spot.Sampling.SamplingDesign.escape_le_miss`). -/
+term is at most `miss(K)` (`Verity.SamplingDesign.missProb_le_miss`). -/
 theorem Flock.SecurityProofs.GenericSampledKSCount : Flock.Guarantees.GenericSampledKSCount := by
   intro n Reg Dh Hc L PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM K σ hCR
   refine (Flock.SecurityProofs.GenericSampledKS n Reg Dh Hc L PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM σ
     (fun X _ => K ≤ (incorrect B Correct (reg σ) X).card) hCR).trans ?_
   gcongr
   by_cases hB : K ≤ (incorrect B Correct (reg σ) (Xc (reg σ) (cont σ))).card
-  · exact (prCoin_mono fun ω h => h.2).trans (L.escape_le_miss hB)
+  · exact (prCoin_mono fun ω h => h.2).trans (L.missProb_le_miss hB)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => absurd h.1 hB).trans (prCoin_false.le.trans zero_le)

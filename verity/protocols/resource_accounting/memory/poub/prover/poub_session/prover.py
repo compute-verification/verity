@@ -489,7 +489,7 @@ class ServingTrace:
         self.appends.extend(rekeys)
         self.withdrawn.extend(withdrawn)
         if slots:
-            a = self.backend.append(payloads, [self.salts.randbytes(rb.SALT_BYTES) for _ in payloads])
+            a = self.backend.append(payloads, [rb.HM96.fresh_salt() for _ in payloads])
             if a.first != first or a.digests != change.digests:
                 raise AssertionError("the store's append is not the memory map's")
             place(a.first, slots, s)

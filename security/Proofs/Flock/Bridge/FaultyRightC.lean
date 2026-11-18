@@ -155,7 +155,7 @@ theorem need_posOf {n : ℕ} {P : Spot.Sampling.Partition C n} {u : Fin n} {i : 
       · exact hin (mem_unitGates.2 ⟨g, hu, 0, by omega, by rw [Nat.add_zero]⟩)
       · exact hin (mem_unitGates.2 ⟨g, hu, 1, by omega, rfl⟩)
 
-theorem witDep_mem {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
+theorem witDep_mem {Cm : CommitmentScheme Bool} {H : Hash.Msg → Hash.Msg} {roots : List Hash.Msg}
     {xv : Fin C.N → Bool} {o : Opening Bool} (h : o ∈ (witDep C Cm H roots xv).vals) :
     ∃ g, o.pos = posOf C g ∧ o.val = C.eval xv g := by
   simp only [witDep, List.mem_map, List.mem_finRange, true_and] at h
@@ -165,9 +165,9 @@ theorem witDep_mem {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} 
   split <;> exact ⟨rfl, rfl⟩
 
 /-- **`witDep` opens a wire's position at its value** wherever some datum passes there. -/
-theorem witDep_val {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
+theorem witDep_val {Cm : CommitmentScheme Bool} {H : Hash.Msg → Hash.Msg} {roots : List Hash.Msg}
     {xv : Fin C.N → Bool} (s : Claims.Sampling.AuditStatement) (hs : s.roots = roots) (a : Fin C.N)
-    (hex : ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C a, C.eval xv a, d⟩ = true) :
+    (hex : ∃ d : Hash.Msg, Cm.Opens H roots ⟨posOf C a, C.eval xv a, d⟩ = true) :
     (witDep C Cm H roots xv).val H Cm s (posOf C a) = some (C.eval xv a) := by
   unfold Wit.val
   rw [hs]
@@ -247,15 +247,15 @@ theorem correct_of_local {n : ℕ} (P : Spot.Sampling.Partition C n) (u : Fin n)
 other wire it reads is transported (`correct_blockOf_of` at `C`'s evaluation on `Xr`). -/
 theorem faultyRightC {n : ℕ} (P : Spot.Sampling.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
-    (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (roots : List Claims.Msg)
+    (canon : Fin C.N → Val → Prop) (H : Hash.Msg → Hash.Msg) (Cm : CommitmentScheme Bool) (roots : List Hash.Msg)
     (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true)
     (hright : ∃ op : Pos → Opn, ∀ g ∈ P.io u,
       com (op (pos g)) = cs (pos g) ∧ bit (val (op (pos g))) g = C.eval Xr g ∧ canon g (val (op (pos g))))
     (htr : ∀ g ∈ P.io u, κ g = none → ∀ o : Opn, com o = cs (pos g) → canon g (val o) →
-      ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C g, bit (val o) g, d⟩ = true)
+      ∃ d : Hash.Msg, Cm.Opens H roots ⟨posOf C g, bit (val o) g, d⟩ = true)
     (hκ : ∀ g ∈ P.io u, ∀ b, κ g = some b → C.eval Xr g = b)
-    {ns : List ℕ} (hns : ns.sum = n) (r : OneStage) (desc : Claims.Msg) (q : Query) :
+    {ns : List ℕ} (hns : ns.sum = n) (r : OneStage) (desc : Hash.Msg) (q : Query) :
     u.val ∉ faulty H Cm (stmtOf P κ r desc q roots) (partOf P κ ns) (witDep C Cm H roots Xr) := by
   obtain ⟨op, hop⟩ := hright
   have hval : ∀ a ∈ P.io u, κ a = none →

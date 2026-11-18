@@ -50,3 +50,4 @@ def drivers() -> ProofDrivers:
         raise RuntimeError("no proof drivers installed: run the driver through benchmarks/network_traces/zk_drivers.py, "
                            "or call proof_drivers.install first")
     return _installed
+

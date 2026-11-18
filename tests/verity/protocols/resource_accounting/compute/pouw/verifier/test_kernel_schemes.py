@@ -9,6 +9,7 @@ from verity.protocols.resource_accounting.compute.pouw import scheme as pouw_sch
 from verity.protocols.resource_accounting.compute.pouw.prover import circuit, schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.resource_accounting.compute.pouw.verifier import kernel_schemes as K
+from verity.protocols.resource_accounting import scheme as S
 
 
 @pytest.mark.parametrize("name", [k.name for k in K.KERNEL_SCHEMES if k.family in ("ncp", "pearl-kw", "pearl-c")])
@@ -16,19 +17,45 @@ def test_each_entry_pouw_builds_names_itself_as_the_table_does(name):
     assert schemes.get(name).name == name
 
 
+KERNELS = S.declared(pouw_scheme.PEARL_PLUS, "kernels")
+
+
 @pytest.mark.parametrize("card", ["h100", "h200"])
 def test_pearl_plus_on_the_h100_or_h200_is_its_option(card):
-    entry = K.resolve("pearl-plus", card, True)
-    assert entry is K.resolve("pearl-plus", card, False)
-    assert pouw_scheme.PEARL_PLUS.option == f"pouw:{entry.name}"
-    assert schemes.of("pearl-plus", card, True).name == entry.name
+    """Both cards run the one sm_90a build, under the one name its option, cubin and arm are found by."""
+    name = KERNELS(card, pinned=True)
+    assert name == KERNELS(card, pinned=False) == pouw_scheme.KERNEL
+    assert pouw_scheme.PEARL_PLUS.option == f"pouw:{name}"
+    assert schemes.of("pearl-plus", card, True).name == name
 
 
-@pytest.mark.parametrize(("scheme", "card"), [("pearl-plus", "rtx-pro-6000"), ("pearl-plus", "b200"), ("nope", "h100")])
-def test_a_resource_scheme_on_a_card_without_an_entry_is_refused(scheme, card):
-    """Pearl+ never had a kernel on the RTX PRO 6000: its verifier checks pearl-c-h100-v1-h3 alone."""
-    with pytest.raises(KeyError, match=f"^\"0 kernel schemes run {scheme!r} on {card!r} with B pinned: none;"):
-        K.resolve(scheme, card, True)
+@pytest.mark.parametrize("card", ["rtx-pro-6000", "b200"])
+def test_pearl_plus_refuses_a_card_whose_architecture_it_has_no_build_for(card):
+    """Pearl+ never had a kernel on the RTX PRO 6000 (its verifier checks pearl-c-h100-v1-h3 alone), nor on the B200."""
+    with pytest.raises(LookupError, match=f"^{card}'s architecture sm_\\d+a has no build here: pearl-c-h100-v1-h3 is built "
+                                          "for sm_90a$"):
+        KERNELS(card, pinned=True)
+
+
+def test_a_card_of_a_built_architecture_runs_it_only_if_its_row_lists_the_card():
+    row = K.KernelScheme("probe", "pearl-c", arch="sm_90a", cards=("h200",), pinned=False)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(K, "BY_NAME", {"probe": row})
+        kernels = K.runs_on("probe")
+    with pytest.raises(LookupError, match=r"^0 builds for sm_90a run on h100 with B chosen: they run probe on h200 chosen$"):
+        kernels("h100", pinned=False)
+    with pytest.raises(LookupError, match=r"^0 builds for sm_90a run on h200 with B pinned: they run probe on h200 chosen$"):
+        kernels("h200", pinned=True)
+    assert kernels("h200", pinned=False) == "probe"
+
+
+def test_a_card_with_no_file_and_a_scheme_declaring_no_kernels_are_refused():
+    with pytest.raises(KeyError, match="have `short` 'h300'"):
+        KERNELS("h300", pinned=True)
+    with pytest.raises(LookupError, match="dither declares no kernels: experimental"):
+        schemes.of("dither", "rtx-pro-6000", True)
+    with pytest.raises(ValueError, match="named together"):
+        K.KernelScheme("probe", "pearl-c", cards=("h100",))
 
 
 def test_the_readers_read_the_table():

@@ -297,7 +297,8 @@ theorem challengerStream_one {c : LiveCommitment} {segment doc : Json} {after : 
 
 /-- **`sampleCoins` reads the stream where each of its steps accepts**: the evidence has its five keys,
 `trustedChallengePhaseOf` returns the session's commitment and roots, the ledger opens the window withheld, the segment is of
-the family, and `challengerStream` reads the segment under that commitment and the family's roots. -/
+the family, `challengerStream` reads the segment under that commitment and the family's roots, and the log commits no
+root. -/
 theorem sampleCoins_ok_of_steps {key : ChallengerKey} {window label : String} {after ξ : ByteArray} {coins : Json}
     {c : LiveCommitment} {roots : Log}
     (hk : keys? coins = some #["ledger", "main", "pins", "segment", "session"])
@@ -306,11 +307,10 @@ theorem sampleCoins_ok_of_steps {key : ChallengerKey} {window label : String} {a
     (hw : withheldOn (getD coins "ledger") window = true)
     (hl : jsonStrIs (getD (getD coins "segment") "label") label = true)
     (hs : challengerStream c (getD coins "segment") after
-      (some roots) = .ok ξ) :
+      (some roots) = .ok ξ) (hc : roots.any (·.kind == .committed) = false) :
     sampleCoins key window label after coins = .ok ξ := by
   unfold sampleCoins
-  simp only [hk, ht, hw, hl, hs, bind, Except.bind, beq_self_eq_true]
-  rfl
+  simp only [hk, ht, hw, hl, hs, hc, bind, Except.bind, beq_self_eq_true, Bool.false_eq_true, ↓reduceIte]
 
 /-- **`coinsReason` gives no reason where `sampleCoins` reads a stream** that the bytes read are the start of, every
 coin of it read, the evidence's copy of main's history being the caller's. -/

@@ -14,6 +14,7 @@ import pytest
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
     served as SV,
 )
@@ -152,7 +153,7 @@ def filled():
     fields = _weights(low.fn)
     lanes = [(1, 4, 2, [17, 3, 250, 9]), (1, 4, 2, [5, 77, 42, 8])]
     rows_ = [state_row(CLASS.scan, lanes)] + [state_row(CLASS.scan, [(1, 1, 1, [99, 0, 0, 0])] * 2)] * (CLASS.buckets - 1)
-    state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, rows_, [hm96_salt(bytes(32), 0, j) for j in range(len(rows_))],
+    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, rows_, [hm96_salt(bytes(32), 0, j) for j in range(len(rows_))],
                                  schema=CR.SCHEMA_V2)
     values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WR.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi]) for row, _ in WR.scan_slots(low, rows_)]

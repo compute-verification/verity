@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from tests.pipeline.test_row import _row
+from tests.row_paths import row_paths
 from verity_vllm.check.replay.driver import family_strata
 from verity_vllm.check.replay.sample import sample
 from verity_vllm.engine import served as SV
@@ -255,7 +256,7 @@ def test_the_tp_path_runs_a_config_run_at_worlds_2_4_and_8(W, tmp_path, monkeypa
         ran.append((self.W, self.config_run))
         return 0
     monkeypatch.setattr(TpRow, "run", run)
-    o = cli.parse("row", ["run", TP2, "OLMOE", "r", "v", "--sweep-dir", str(tmp_path), "--config-run", "1", "--world", str(W)], {"CUDA_HOME": "/a/toolkit"})
+    o = cli.parse("row", ["run", TP2, "OLMOE", "r", "v", "--sweep-dir", str(tmp_path), "--config-run", "1", "--world", str(W)], row_paths(tmp_path))
     assert row.run_row(o, o.stages) == 0 and ran == [(W, True)]
 
 

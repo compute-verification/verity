@@ -44,7 +44,7 @@ decision 101's keyed sample) is retired.
 
 **Discharge table**: which deployed piece discharges each premise.
 * `MissProbWithin Lw L 𝓑 0`: the service's uniform subset after the receipt (`subset:K′`, `service.py`), by
-  `ServiceMissProb`. On the retired keyed sample it was A4, A5 and M1 (`keyedExecutionPhase_escape_le`).
+  `ServiceMissProb`. On the retired keyed sample it was A4, A5 and M1 (`keyedExecutionPhase_missProb_le`).
 * `CallAnalysis.cover`: each session's tile instances at the public input `t` from the verifier's own sample, the window
   root and domains from the registration (`PUBLIC_PORTS`, `public_inputs`), and the tile's place, rows and roots from
   `X`'s entries under that root (`tile_at`), so a unit's seed inputs are `UnitStmts.seedIn X ⟨σ, t⟩`.

@@ -260,8 +260,7 @@ HELD_KEYS = {
                          "a stored run's arm key, vllm's"),
     "coin_source": (("benchmarks/harness/verity_bench/vllm/runner.py", "tests/benchmarks/harness/test_bench.py",
                      "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py",
-                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/challenger.py",
-                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/lead/__init__.py",
+                     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/challenger.py",
                      "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/window.py"),
                     "the PoUW commitment's key, compute-accounting's"),
 }

@@ -77,15 +77,15 @@ tape in `q`, statement `j` on the witness `wit j` of the worker's context (`Oute
 `θ` of the tape and the commitments. -/
 noncomputable def loopReal {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.finS.SwVals)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     (s : Flock.ZkServer.Schedule) (reqs : Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
     (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (m : ℕ)
-    (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg) (wit : ℕ → OuterZK.WCtx Ωa Ωp nh → Claims.Flock.Wit)
+    (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Hash.Msg) (wit : ℕ → OuterZK.WCtx Ωa Ωp nh → Claims.Flock.Wit)
     (Vs : Claims.VStar Θ) (θ : Ωa → (Fin nh → ByteArray) → Θ)
     (u : ((Ωa × Ωp) × (Fin nh → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
       ((OuterZK.loopRef L₀ src).swP vs).Nonce ((OuterZK.loopRef L₀ src).swP vs).Rand m) :
-    Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) :=
+    Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Hash.Msg × Claims.Out) :=
   (u.1.1.1,
     Flock.ZkServer.run s (reqs u.1.1.1 u.1.1.2 (zkServerStrings (msgs u.1.1.1 u.1.1.2)
         fun i => Spot.Sampling.SamplingDesign.streamOf (u.1.2 i)))
@@ -103,13 +103,13 @@ ideal commitments' leaves (`idealLeaf`), against `V*` at its tape `θ` of them. 
 messages, witnesses, values or randomness. -/
 noncomputable def loopIdeal {Ωa Θ : Type} {nh : ℕ} (t : ℕ)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     (T : (Fin nh → ByteArray) → Array Flock.ZkServer.Sent) (m : ℕ)
-    (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
+    (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Hash.Msg) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
     [∀ j, Nonempty (CB j)] (Vs : Claims.VStar Θ) (θ : Ωa → (Fin nh → ByteArray) → Θ)
     (c : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × OuterZK.LoopSessions.SimCoins CB m) :
-    Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) :=
+    Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Hash.Msg × Claims.Out) :=
   (c.1.1, (T fun i => commitBytes (OuterZK.idealStrs c.1.2 i), true),
     (OuterZK.LoopSessions.pubStmts m stmt).simAt (OuterZK.loopRef L₀ src).Nonce (OuterZK.loopRef L₀ src).Tape
       Claims.ZKMal.CoinOpen.shaH OuterZK.loopK (OuterZK.loopSim L₀ src t) CB Vs (c.1.1, fun i => idealLeaf (c.1.2 i))
@@ -159,7 +159,7 @@ def RecursiveZKLoop : Prop :=
     -- the loop's session: the workers' values, the simulator's rewinds, the release and the frames' source
     (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     -- the ZK server: the pinned schedule, the worker's requests and the messages they commit, each reading the commit
     -- strings sent before it, and the schedule's transcript
@@ -168,7 +168,7 @@ def RecursiveZKLoop : Prop :=
     (T : (Fin nh → ByteArray) → Array Flock.ZkServer.Sent)
     -- V*'s statements at the tape and the commitments, their witnesses at the worker's context, and the simulator's
     -- coins
-    (m : ℕ) (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg)
+    (m : ℕ) (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Hash.Msg)
     (wit : ℕ → OuterZK.WCtx Ωa Ωp nh → Claims.Flock.Wit) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
     [∀ j, Nonempty (CB j)]
     -- the auditor and its tape
@@ -184,7 +184,7 @@ def RecursiveZKLoop : Prop :=
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse)
       (fun u : (Ωa × Ωp) × (Fin nh → ZkView.Salt) => OuterZK.wctxAt msgs u.1.1 u.1.2 u.2) →
     (OuterZK.LoopSessions.atWorker m stmt wit).Sized (OuterZK.loopSim L₀ src t) CB →
-    ∀ (cut : St → Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) → W)
+    ∀ (cut : St → Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Hash.Msg × Claims.Out) → W)
       (stop : (((Ωa × Ωp) × (Fin nh → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
         ((OuterZK.loopRef L₀ src).swP vs).Nonce ((OuterZK.loopRef L₀ src).swP vs).Rand m) × Ωk → St)
       (E : W → Prop),
@@ -210,15 +210,15 @@ set_option synthInstance.maxHeartbeats 1000000
 `msgs` in its holes, and finishes: `loopReal` under `ZkServerSends` (`loopReal_eq_sent`). -/
 noncomputable def loopSent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.finS.SwVals)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     (T : (Fin nh → ByteArray) → Array Flock.ZkServer.Sent)
     (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (m : ℕ)
-    (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg) (wit : ℕ → WCtx Ωa Ωp nh → Claims.Flock.Wit)
+    (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Hash.Msg) (wit : ℕ → WCtx Ωa Ωp nh → Claims.Flock.Wit)
     (Vs : Claims.VStar Θ) (θ : Ωa → (Fin nh → ByteArray) → Θ)
     (u : ((Ωa × Ωp) × (Fin nh → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
       ((loopRef L₀ src).swP vs).Nonce ((loopRef L₀ src).swP vs).Rand m) :
-    Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) :=
+    Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Hash.Msg × Claims.Out) :=
   (u.1.1.1,
     (T (_root_.Flock.Guarantees.zkServerStrings (msgs u.1.1.1 u.1.1.2)
       fun i => Spot.Sampling.SamplingDesign.streamOf (u.1.2 i)), true),
@@ -230,12 +230,12 @@ noncomputable def loopSent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.
 /-- Under `ZkServerSends`, the whole view at the session loop is `loopSent`. -/
 theorem loopReal_eq_sent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.finS.SwVals)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     (s : _root_.Flock.ZkServer.Schedule) (reqs : Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
     (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
     (T : (Fin nh → ByteArray) → Array Flock.ZkServer.Sent) (m : ℕ)
-    (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg) (wit : ℕ → WCtx Ωa Ωp nh → Claims.Flock.Wit)
+    (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Hash.Msg) (wit : ℕ → WCtx Ωa Ωp nh → Claims.Flock.Wit)
     (Vs : Claims.VStar Θ) (θ : Ωa → (Fin nh → ByteArray) → Θ)
     (hF : _root_.Flock.Guarantees.ZkServerSends (Prog := Unit) (Wit := Unit) (Rr := Unit) s (fun _ _ _ => reqs)
       (fun _ _ _ => msgs) T)
@@ -258,24 +258,24 @@ theorem loopSent_le {Ωa Ωp Θ : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ω
     (hsc : Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs)
     (hT : Claims.ZKServer.Loop.finS.TapeOK)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+    (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     (T : (Fin nh → ByteArray) → Array Flock.ZkServer.Sent)
     (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (m : ℕ)
-    (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg) (wit : ℕ → WCtx Ωa Ωp nh → Claims.Flock.Wit)
+    (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Hash.Msg) (wit : ℕ → WCtx Ωa Ωp nh → Claims.Flock.Wit)
     (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] (Vs : Claims.VStar Θ)
     (θ : Ωa → (Fin nh → ByteArray) → Θ)
     (hH : (LoopSessions.atWorker m stmt wit).Honest
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse)
       (fun u : (Ωa × Ωp) × (Fin nh → ZkView.Salt) => wctxAt msgs u.1.1 u.1.2 u.2))
     (hsz : (LoopSessions.atWorker m stmt wit).Sized (loopSim L₀ src t) CB)
-    (E : Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) → Prop) :
+    (E : Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Hash.Msg × Claims.Out) → Prop) :
     prCoin (fun u => E (loopSent vs L₀ src T msgs m stmt wit Vs θ u)) ≤
       prCoin (fun c => E (_root_.Flock.Guarantees.loopIdeal t L₀ src T m stmt CB Vs θ c)) +
         ((LoopSessions.atWorker m stmt wit).err Claims.ZKMal.CoinOpen.shaH loopK ((loopRef L₀ src).swP vs).prover
             (loopEps L₀ src t) (4 * t * 3 ^ t) Vs (fun x => θ x.1 x.2.1) +
           nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)) := by
-  have hOuter : ∀ a p (y : Fin nh → ZkView.Salt) (E' : List (Claims.Msg × Claims.Out) → Prop),
+  have hOuter : ∀ a p (y : Fin nh → ZkView.Salt) (E' : List (Hash.Msg × Claims.Out) → Prop),
       prCoin (fun q : Claims.Sampling.unitTape.at 0 ((loopRef L₀ src).swP vs).Nonce ((loopRef L₀ src).swP vs).Rand m =>
           E' ((LoopSessions.atWorker m stmt wit).viewAt Claims.ZKMal.CoinOpen.shaH loopK
             ((loopRef L₀ src).swP vs).prover Vs

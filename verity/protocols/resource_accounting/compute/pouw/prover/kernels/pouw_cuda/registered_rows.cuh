@@ -1,4 +1,4 @@
-// H1's registered values (`pouw_h1_registered.commit`, core's `registered.Registered.commit` under ``hm96-sha512/row/v2``) as
+// H1's registered values (`pouw_h1_registered.commit`, core's `registered_value.Registered.commit` under ``hm96-sha512/row/v2``) as
 // functions that compile for the host (g++, `registered_rows_host.cpp`, the twin the CPU tests hold to the Python reference) and
 // the device (nvcc, `registered_rows.cu`). One thread computes one row's leaf, one pad or one tree node; SHA-512, ChaCha20, the
 // hm96 commit string and the frame-v3-sha512 leaf, pad and node come through `row_table.cuh` (the last two are the GPU's one
@@ -10,7 +10,7 @@
 //   b, c = x ^ M_key y, SHA-512(salt_prefix || y)                     `hm96.SHA512.commit_string`
 //   leaf = frame-v3-sha512 leaf(domain, j, "hm96-sha512/row/v2", SHA-512(leaf_prefix || b || c))
 // and the value's tree is the frame-v3-sha512 tree over its leaves padded to a power of two, every level kept. The domain id
-// comes from the host (`registered.domain`).
+// comes from the host (`registered_value.domain`).
 #pragma once
 #include "row_table.cuh"
 

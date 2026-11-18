@@ -122,14 +122,6 @@ tests = ["test_recorded_texts.py"]
 paths = ["verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs", "verity/protocols/proofs/flock/verifier/Flock/Tags.lean"]
 
 [[tool.verity.tests.reads]]
-tests = ["test_backend.py"]
-paths = ["verity/protocols/proofs/flock/prover/python/verity_flock"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_backend_bench.py"]
-paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/protocols/proofs/flock/prover/python/verity_flock"]
-
-[[tool.verity.tests.reads]]
 tests = ["test_challenger_audit.py"]
 # `lake build spot-difftest`: its package and those it requires by path
 paths = [

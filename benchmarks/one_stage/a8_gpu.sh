@@ -20,11 +20,13 @@ S=$(mktemp -d "$FLOCK_WORK/a8.XXXXXX"); trap 'rm -rf "$S"' EXIT
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 export PYTHONDONTWRITEBYTECODE=1
 unset CARGO_TARGET_DIR
-for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
-  [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x "$c/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$c/usr/local/cuda-13.3
-done
-[ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node"; exit 1; }
-C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
+# CUDA 13.3: CUDA_TK where given, else the machine's toolkit at 13.3 (benchmarks/kernels/machine.py), else the one
+# verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh finds or unpacks under FLOCK_WORK
+[ -n "${CUDA_TK:-}" ] || CUDA_TK=$(python3 benchmarks/kernels/machine.py toolkit 13.3 2> "$O/cuda.log") \
+  || { CUDA_TK=; ( . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh ) >> "$O/cuda.log" 2>&1 \
+       && . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$O/cuda.log" 2>&1; }
+[ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node ($O/cuda.log)"; exit 1; }
+export CUDA_TK; C13=$CUDA_TK; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 { lscpu | grep -E 'Model name|^CPU\(s\)'; nproc; free -g; nvidia-smi -L; } > "$O/host.txt" 2>&1
 
 log "a8-gpu: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}, builds under $FLOCK_WORK and $PT_WORK"

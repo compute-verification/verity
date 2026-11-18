@@ -83,7 +83,7 @@ theorem fast100_isSome_of {m : ℕ} (h1 : 22 ≤ m) (h2 : m ≤ 35) : (fast100 m
   exact key ⟨m, by omega⟩ h1 h2
 
 /-- Table `i`'s schedule is fast100's at its `m`. -/
-theorem _root_.FlockComplete.Run.sch_fast100 {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem _root_.FlockComplete.Run.sch_fast100 {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) : fast100 o.tabs[i]!.m = some (o.sch i) := by
   obtain ⟨-, h22, h35⟩ := o.tab_m hi
   obtain ⟨s, hs⟩ := Option.isSome_iff_exists.1 (fast100_isSome_of h22 h35)
@@ -96,20 +96,20 @@ theorem _root_.FlockComplete.Run.sch_fast100 {H : Claims.Msg → Claims.Msg} {re
 /-! ## The rep's Ligerito, in closed form -/
 
 /-- Table `i`'s rep `r`'s coins at its transcript's round `k`: the reply to the rep's `k`-th send. -/
-def _root_.FlockComplete.Run.lgCf {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def _root_.FlockComplete.Run.lgCf {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) (i r : ℕ) : ℕ → ℕ → F128 :=
   fun k => coinOf (o.resp (repStart o.spec o.sts (2 * i + r) + k))
 
 /-- Table `i`'s rep `r`'s Ligerito up to the level loop (`Lg.pre`), on the decoded proof from where the prover's ring
 switch stopped. -/
-def _root_.FlockComplete.Run.lgPre {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def _root_.FlockComplete.Run.lgPre {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) (i r : ℕ) : Array F256 × LState × Transcript :=
   Lg.pre (o.proof i r).ligerito (o.lgCf i r) (o.sch i) (Rs.T (o.trace i) (o.claims i r) (o.rsCoins i r))
     (o.proof i r).cap (o.rsEnd i r)
 
 /-- **Table `i`'s rep `r`'s Ligerito, in closed form** (`Lg.out`): on the decoded proof, at the ring switch's `T`, from
 where the prover's ring switch stopped. -/
-def _root_.FlockComplete.Run.lgOut {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def _root_.FlockComplete.Run.lgOut {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) (i r : ℕ) : Lg.Vars × LState × Transcript :=
   Lg.out (o.proof i r).ligerito (o.lgCf i r) (o.sch i) (Rs.T (o.trace i) (o.claims i r) (o.rsCoins i r))
     (o.proof i r).cap (o.rsEnd i r)
@@ -118,23 +118,23 @@ def _root_.FlockComplete.Run.lgOut {H : Claims.Msg → Claims.Msg} {rel : Readab
 
 /-- **What the session walk establishes for table `i`'s rep `r`'s Ligerito**: the decoded proof's level-0 cap is its
 cap, and the recorded stream carries the model's rounds from the rep's start. -/
-def LgAt {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel) (i r : ℕ) : Prop :=
+def LgAt {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel) (i r : ℕ) : Prop :=
   (o.proof i r).ligerito.initialCap = (o.proof i r).cap ∧ Agrees (o.stream i r).rounds (o.lgOut i r).2.2.rounds 0
 
 /-- **The recorded stream holds exactly the model's rounds**: as many as the rep's transcript after Ligerito. -/
-def LgCount {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel) (i r : ℕ) :
+def LgCount {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel) (i r : ℕ) :
     Prop :=
   (o.stream i r).rounds.size = (o.lgOut i r).2.2.rounds.size
 
 /-- **Every level's Merkle opening passes** at every rep, at its query coins. -/
-def LgMerkle (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def LgMerkle (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2,
     Lg.MerkleOk o.hs o.tabs[i]!.merkle (o.sch i) (o.proof i r).cap (o.proof i r).ligerito (o.lgCf i r)
       (o.rsEnd i r).k
 
 /-- **Ligerito's final identity** at every rep: the last level's `y_r` against the final weights meets the running
 sum, at the model's values. -/
-def LgFinal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def LgFinal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2,
     FlockSoundness.Refine.lhsE (o.proof i r).ligerito.finalProof.yr (o.lgOut i r).1.2.2.2
       (FlockSoundness.Refine.resE (basis (Rs.sws (o.claims i r) (o.rsCoins i r))) (o.sch i).n (o.lgPre i r).1
@@ -148,7 +148,7 @@ local instance lawfulBEqByteArrayLg : LawfulBEq ByteArray where
 
 /-- **Ligerito's replay at a rep**: the verifier's Ligerito returns where the model's transcript ends, on the recorded
 rounds, and that position is the model's round count. -/
-theorem _root_.FlockComplete.Run.lg_run {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem _root_.FlockComplete.Run.lg_run {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (hR1 : TraceR1CS H rel) (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) (hzc : ZcAt o i r)
     (hlc : LcAt o i r) (hal : LcAlgebra H rel) (hrs : RsAt o i r) (hra : RsAlgebra H rel) (hD : RepDecodes H rel)
     (hlg : LgAt o i r) (hmk : LgMerkle H rel) (hfin : LgFinal H rel) :
@@ -172,7 +172,7 @@ theorem _root_.FlockComplete.Run.lg_run {H : Claims.Msg → Claims.Msg} {rel : R
     (hmk o i hi r hr) (hfin o i hi r hr)
 
 /-- **Ligerito's transcript at a rep**: the recorded rounds, at the model's position and pending bytes. -/
-theorem _root_.FlockComplete.Run.lg_eq {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem _root_.FlockComplete.Run.lg_eq {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (hR1 : TraceR1CS H rel) (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) (hzc : ZcAt o i r)
     (hlc : LcAt o i r) (hal : LcAlgebra H rel) (hrs : RsAt o i r) (hra : RsAlgebra H rel) (hD : RepDecodes H rel)
     (hlg : LgAt o i r) (hmk : LgMerkle H rel) (hfin : LgFinal H rel) :
@@ -183,7 +183,7 @@ theorem _root_.FlockComplete.Run.lg_eq {H : Claims.Msg → Claims.Msg} {rel : Re
 
 /-- **The Ligerito goal**: Ligerito replays at every honest run, from where the ring switch left the transcript, at
 every rep the session walk aligns, given each level's Merkle opening and the final identity. -/
-theorem ligerito_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem ligerito_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hR1 : TraceR1CS H rel) (hzc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r) (hal : LcAlgebra H rel)
     (hrs : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, RsAt o i r) (hra : RsAlgebra H rel) (hD : RepDecodes H rel)
@@ -195,7 +195,7 @@ theorem ligerito_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed →
 
 /-- **The consumption goal** (S15): every recorded round is consumed, at every rep whose stream holds exactly the
 model's rounds. -/
-theorem consumed_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem consumed_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hR1 : TraceR1CS H rel) (hzc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r) (hal : LcAlgebra H rel)
     (hrs : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, RsAt o i r) (hra : RsAlgebra H rel) (hD : RepDecodes H rel)

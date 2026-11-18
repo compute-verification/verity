@@ -175,7 +175,7 @@ open FlockDecodeTies (keyVal)
 
 section
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass)
 
 /-- **Rep `2 i + r`'s schedule is its frames'**, where row G holds at table `i`. -/
@@ -205,7 +205,7 @@ theorem sched_ctx (acc : ℕ → Array F128) {i : ℕ} (hG : D.RowG cls acc i) (
 /-- **A frame element is its chunk's value**: at a dense decision, element `o` of `rounds`' `kk`-th round, read off the
 messages at its flat index, is element `o` of the values `vs` chunk `t` absorbs, where `t` is the `kk`-th committing
 round of the rep's schedule `rs`, and the rep's round-`t` rows hold `vs` (`RowsAt`). -/
-theorem frame_elem {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem frame_elem {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (h0 : 0 < D.sts.size) (r : Fin 2)
     {Xs : Shape} (hX : D.sh cls 0 = Xs) {rs : Array RecVStar.SchedRound}
     (hrs : (D.ctx (2 * 0 + (r : ℕ))).sched = rs.toList) {kk o : ℕ} (hkk : kk < (rounds Xs).size)
@@ -257,9 +257,9 @@ end
 
 /-- **Rep `r`'s rounds are the opened rounds after its link**: at `Bound.opened`'s messages at the deployed join, with
 two reps of `n` rounds each, rep `r`'s round `t` rows are opened round `r n + t + 1`'s. -/
-theorem rows_getD {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
-    (D : DecAt rd x ms cs) {o₀ : List (Claims.Msg × Salt)} {ot : List (List (Claims.Msg × Salt))}
-    {last : Claims.Msg} (hms : ms = ((o₀ :: ot).map fun o => FlockDeploy.joinR (o.map Prod.fst)) ++ [last]) {n : ℕ}
+theorem rows_getD {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
+    (D : DecAt rd x ms cs) {o₀ : List (Hash.Msg × Salt)} {ot : List (List (Hash.Msg × Salt))}
+    {last : Hash.Msg} (hms : ms = ((o₀ :: ot).map fun o => FlockDeploy.joinR (o.map Prod.fst)) ++ [last]) {n : ℕ}
     (hlens : repLens D.d.spec D.d.sts = [n, n]) (r : Fin 2) {t : ℕ} (ht : t < n) :
     (D.rows (2 * 0 + (r : ℕ))).getD t [] = RestRead.rowsR ((o₀ :: ot).getD ((r : ℕ) * n + t + 1) []) := by
   subst hms
@@ -284,8 +284,8 @@ open FlockDeploy (Coin setupOf)
 
 /-- **`elemReadC` below the frame values**: at a row port `j` inside rep `o + g`'s frame values, `elemReadC` reads
 `framesRead`'s element `j`, whatever the accumulators. -/
-theorem elemReadC_frame (acc : Claims.Msg → List Claims.Msg → List Coin → ℕ → Array F128) {x : Claims.Msg}
-    {ms : List Claims.Msg} {cs : List Coin} {key : ℕ × ℕ × ℕ × ℕ} {e j : ℕ}
+theorem elemReadC_frame (acc : Hash.Msg → List Hash.Msg → List Coin → ℕ → Array F128) {x : Hash.Msg}
+    {ms : List Hash.Msg} {cs : List Coin} {key : ℕ × ℕ × ℕ × ℕ} {e j : ℕ}
     {v : FlockDeploy.Ins × SessionSpec × Array Stmt} (hv : setupOf false x = some v)
     (hpa : portAt (shapeNoCoin v.2.1 v.2.2) key.1 e = some j)
     (hj : j < (framesRead x ms (key.2.1 + key.2.2.1)).length) :

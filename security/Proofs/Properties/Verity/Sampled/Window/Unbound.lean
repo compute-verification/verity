@@ -138,7 +138,7 @@ structure Checked : Prop where
 gate `r` doesn't fix to a constant, a bit the deployed commitment opens at the gate's claims position under the
 member's roots opens the gate to every value whose first bit it is. -/
 def OpensUnder (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
-  ∀ (h : r.circuit.N = m.Cc.N) (g : Fin r.circuit.N) (b : Bool) (d : Claims.Msg), r.consts g = none →
+  ∀ (h : r.circuit.N = m.Cc.N) (g : Fin r.circuit.N) (b : Bool) (d : Hash.Msg), r.consts g = none →
     m.Cd.Opens Claims.Sampling.sha512Msg m.roots ⟨Flock.Bridge.posOf m.Cc (Fin.cast h g), b, d⟩ = true →
       ∀ v : BitVec (r.circuit.w g), v.getLsbD 0 = b → op g v
 

@@ -240,7 +240,7 @@ It needs:
   Run under a `gpu-lease` already held (`research run --gpus 1`, or your own `gpu-lease 1 --on 0 --cores CPUS -- bash
   benchmarks/compute/serve.sh` to pin the run to some CPUs), it serves on that lease's card and takes no lease of its
   own;
-- nvcc from CUDA 13.0 (12.8 or newer) at /usr/local/cuda-13.0, or wherever `CUDA_HOME` names: the kernel is built by
+- nvcc from CUDA 13.0 (12.8 or newer): the machine's toolkit at 13.0, or wherever `CUDA_HOME` names: the kernel is built by
   `benchmarks/harness/setup/pearl_c_sm90.sh`, which hands `build.sh` that toolkit;
 - network access, and `curl`, for what the `bootstrap` step downloads;
 - this tree's `adapters/torch` importable (`verity_torch`, which the served model's PoUW hooks import):

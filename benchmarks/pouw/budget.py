@@ -187,11 +187,11 @@ def sweep(out: Path = FILL_DATA) -> dict:
     vector, VF3r-16 among them). Each point is one `eps` LP, ≈ 0.3 s."""
     from verity_machine_model import eps as E
     from verity_machine_model.commands import eps as cmd
-    from verity_machine_model.model import DATA, device
+    from verity_machine_model.model import device
 
     fams = {}
     for f in FAMILIES:
-        data = DATA if f.device == "sm_120" else device(f.device)
+        data = device(f.device)
         pi = E.machine(f.vector, data)
         base = E.design(f.design_name, data)
         flat0 = cmd.record(base, pi, 1.22, data, "free", "floor", None, None, "full")["baseline"]["cycles_per_mma"]

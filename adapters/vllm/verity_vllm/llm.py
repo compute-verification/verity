@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import asdict, dataclass
+from collections.abc import Mapping
 from typing import Any
 
+from verity import hooks as H
 from verity_vllm import config, messages
 from verity_vllm import protocols as PO
 from verity_vllm.config import EnginePin
@@ -21,7 +23,7 @@ from verity_vllm.errors import Refused
 
 #: The names the library's other modules and files outside the adapter read here.  Outside the distribution the class is
 #: ``from verity_vllm import LLM``.
-__all__ = ["LLM", "protocol_context", "resolve_options"]
+__all__ = ["LLM", "option_settings", "protocol_context", "resolve_options"]
 
 
 @dataclass(frozen=True)
@@ -127,6 +129,15 @@ def class_options(options: dict[str, Any]) -> dict[str, Any]:
     return {**fixed, **options, "max_num_seqs": options.get("max_num_seqs", most)}
 
 
+def option_settings(entry: str, doc: Mapping[str, Any]) -> dict[str, Any]:
+    """The settings of the scheme ``entry`` names (`messages.option`): ``doc``'s entry under its protocol less its
+    ``device``, which is ``cuda`` (``ValueError`` otherwise)."""
+    own = dict(doc.get(entry.partition(":")[0], {}))
+    if own.pop("device", "cuda") != "cuda":
+        raise ValueError(f"{entry} runs on cuda")
+    return own
+
+
 def protocol_context(opts: dict[str, Any], explicit: dict[str, Any] | None = None) -> Any:
     """The protocol options' serving context for resolved options, None when none is enabled; ``ValueError`` names every
     refusal, before any engine exists.  The settings an adapter takes from the built engine (`protocol_options.engine_fills`)
@@ -169,8 +180,10 @@ class LLM:
         llm = LLM("unsloth/Llama-3.2-1B", revision="9535bd9b1d1dea6acafbdc4813b728796aeb28da")
         outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=0.0, max_tokens=16))
 
-    ``model`` is a Hugging Face repo id and ``revision`` its full commit sha; both must be pinned in
-    ``manifests/checkpoints.json`` with the snapshot on this host, else the constructor raises ``ValueError``.  The dtype,
+    ``model`` is a Hugging Face repo id and ``revision`` its full commit sha, or a node-local checkpoint's directory and
+    ``"sha256:"`` with its content digest (`config.checkpoint_digest`, refused at build where the files hash otherwise);
+    both must be pinned in ``manifests/checkpoints.json`` or a sibling manifest with the snapshot on this host, else the
+    constructor raises ``ValueError``.  The dtype,
     tokenizer, attention backend and the rest of the engine come from the pin's engine profile, as in every
     ``verity-vllm`` stage; prefix caching is off unless ``enable_prefix_caching=True``.
 
@@ -228,7 +241,10 @@ class LLM:
     and ``engine_record`` the engine as built: the ``vllm.LLM`` keyword arguments, the environment flags the profile
     set, and the execution vLLM reports back.  ``protocols`` is the installed
     :class:`~verity_vllm.protocols.Composition` (None without protocols); ``close()`` uninstalls it, and
-    ``reinstall(protocols_config=None)`` installs the same set afresh (H1's next window).  The engine is always built
+    ``reinstall(protocols_config=None)`` installs the same set afresh (H1's next window).  An entry of ``protocols`` that
+    names a declared scheme (`messages.option`: Pearl+'s ``pouw:pearl-c-h100-v1-h3``) is attached by name on the build
+    instead, with `option_settings`, its coins in-process unless they name a ``challenger``; ``scheme`` is what its attach
+    returned, and ``close()`` releases it.  The engine is always built
     here; an engine built elsewhere is not accepted.  Each LLM's build has its own exchange (`messages.build`), on which
     its protocols' requests are filed before the build and which is the exchange in scope while it generates.
     """
@@ -241,6 +257,16 @@ class LLM:
         self.pin = EnginePin.resolve(model, revision, world=opts["tensor_parallel_size"])
         if opts["engine_class"] is not None:
             EC.check_model(opts["engine_class"], self.pin.model, self.pin.revision)
+        enabled = config.parse_protocols(opts["protocols"])
+        named = next(((e, s) for e in enabled if (s := messages.option(e)) is not None), None)
+        if named is not None:
+            doc = PO.load_settings(opts["protocols_config"])
+            own = option_settings(named[0], doc)
+            if not own.get("challenger"):
+                own.setdefault("coins", "in-process")
+            doc.pop(named[0].partition(":")[0], None)
+            opts = {**opts, "protocols": [e for e in enabled if e != named[0]], "protocols_config": doc or None}
+        self._served = opts
         ctx = protocol_context(opts, options)
         from verity_vllm.engine import vllm_adapter as va
 
@@ -249,6 +275,7 @@ class LLM:
             engine_args["tensor_parallel_size"] = self.pin.world
         env: dict[str, Any] = {} if opts["engine_class"] is None else {"env": EC.env(opts["engine_class"])}
         ex = messages.build()
+        self.scheme = None if named is None else ex.attach(named[1], own, process=H.ENGINE)
         for entry, request in PO.requests(ctx) if ctx is not None else ():
             ex.request(entry, request)
         self._engine = va.build_engine(config.CHECKPOINTS, max_num_seqs=opts["max_num_seqs"], case=self.pin.case,
@@ -278,13 +305,14 @@ class LLM:
         ``protocols_config`` in place of the constructor's when given, and return the new composition.  The settings
         taken from the engine are filled again, with fresh in-process coins of the next epoch: for H1, one window.
         ``ValueError`` without ``protocols``, or naming every refusal of the new settings."""
-        opts = {**self.options, **({} if protocols_config is None else {"protocols_config": protocols_config})}
+        opts = {**self._served, **({} if protocols_config is None else {"protocols_config": protocols_config})}
         if not config.parse_protocols(opts["protocols"]):
             raise ValueError("verity_vllm.LLM.reinstall: this LLM was built without protocols")
         ctx = protocol_context(opts, self._explicit)
-        self.close()
-        self.protocols = None
         with messages.using(self._engine.exchange):
+            if self.protocols is not None:
+                self.protocols.close()
+            self.protocols = None
             self._install(ctx)
         return self.protocols
 
@@ -300,10 +328,14 @@ class LLM:
         return llm
 
     def close(self) -> None:
-        """Uninstall the protocol options.  Idempotent."""
-        if self.protocols is not None:
-            with messages.using(self._engine.exchange):
+        """Uninstall the protocol options and release the scheme attached by name.  Idempotent."""
+        with messages.using(self._engine.exchange):
+            if self.protocols is not None:
                 self.protocols.close()
+            if self.scheme is not None:
+                scheme, self.scheme = self.scheme, None
+                if callable(getattr(scheme, "release", None)):
+                    scheme.release()
 
     def close_window(self) -> None:
         """Close a Commit window on this engine.  Under an engine class, `errors.Refused` while a request is in flight or once the

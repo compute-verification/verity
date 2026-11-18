@@ -1,5 +1,5 @@
 """serve-openai's PoUB session (``--remote-verifier HOST:PORT``): the Commit's session
-(`protocols.poub.remote.CommitSession`, as `pipeline.poub_session` builds it for a declared Commit) on the
+(PoUB's `CommitSession`, the process ``poub-session``, as `pipeline.poub_session` looks it up for a declared Commit) on the
 server's engine.
 
 ~~~text

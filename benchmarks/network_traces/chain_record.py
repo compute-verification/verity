@@ -220,10 +220,7 @@ def endpoint_step(e: dict | None) -> dict:
     chain = e.get("chain") or {}
     b, t = chain.get("bits") or {}, chain.get("tie") or {}
     honest = (t.get("runs") or {}).get("honest") or {}
-    windows = b.get("commit_windows") or []
-    advice = {"bound": b.get("bound"), "rebuilt": b.get("rebuilt"), "why": b.get("bound_why") or b.get("why"),
-              "commit_windows": len(windows), "bound_windows": sum(bool(c.get("bound") and c.get("rebuilt"))
-                                                                   for c in windows)}
+    advice = endpoint_advice(b)
     tie = {k: honest.get(k) for k in ("verdict", "ok", "codes", "requests", "outputs", "placed", "unplaced", "why")}
     ok = bool(advice["bound"] and advice["rebuilt"]) and honest.get("verdict") == "accepted"
     checked = {n for n, g in (e.get("negatives") or {}).items() if g.get("own_code")}
@@ -233,6 +230,14 @@ def endpoint_step(e: dict | None) -> dict:
     return {"verdict": "accepted" if ok else "refused", "advice": advice, "tie": tie | {"ran": t.get("ran"),
             "stand_ins": t.get("stand_ins")}, "negatives": negatives, "advice_bits": advice_bits(b),
             "in_the_clear": CLEAR["endpoint"]}
+
+
+def endpoint_advice(b: dict) -> dict:
+    """What the record keeps of the endpoint's advice (`chain.bits`): whether it is bound and rebuilt, and how many of its
+    Commit windows are; its whys and its rows, which name requests and count each window's, stay in the report."""
+    windows = b.get("commit_windows") or []
+    return {"bound": b.get("bound"), "rebuilt": b.get("rebuilt"), "commit_windows": len(windows),
+            "bound_windows": sum(bool(c.get("bound") and c.get("rebuilt")) for c in windows)}
 
 
 def advice_bits(b: dict) -> dict:
@@ -293,13 +298,11 @@ def network_attester_endpoint_step(e: dict | None) -> dict:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)",
                 "in_the_clear": CLEAR["warden_endpoint"]}
     b, io = (e.get("chain") or {}).get("bits") or {}, e.get("io") or {}
-    windows = b.get("commit_windows") or []
-    advice = {"bound": b.get("bound"), "rebuilt": b.get("rebuilt"), "why": b.get("bound_why") or b.get("why"),
-              "commit_windows": len(windows), "bound_windows": sum(bool(c.get("bound") and c.get("rebuilt"))
-                                                                   for c in windows)}
-    why = (f"the network certifier's certified I/O doesn't read whole off its cells: {io.get('violations')}"
-           if not io.get("accepted") else None if advice["bound"] and advice["rebuilt"]
-           else advice["why"] or "the endpoint's advice isn't bound to the certified I/O or rebuilt from it")
+    advice = endpoint_advice(b)
+    io = {"accepted": io.get("accepted"), "violations": len(io.get("violations") or [])}
+    why = (f"the network certifier's certified I/O doesn't read whole off its cells: {io['violations']} violation(s)"
+           if not io["accepted"] else None if advice["bound"] and advice["rebuilt"]
+           else "the endpoint's advice isn't bound to the certified I/O or rebuilt from it")
     return {"verdict": "refused" if why else "accepted", "why": why, "warden_run": e.get("warden_run"), "io": io,
             "advice": advice, "advice_bits": advice_bits(b), "at": e.get("at"),
             "in_the_clear": CLEAR["warden_endpoint_served" if e.get("at") == SERVED_NODE else "warden_endpoint"]}

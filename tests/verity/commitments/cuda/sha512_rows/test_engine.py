@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -81,6 +82,48 @@ def test_a_leaf_takes_its_salt_as_data_and_nothing_derives_one() -> None:
         moved[g, s, n] ^= 1
         got = E.digests(e.leaves(lt, x, moved))
         assert [i for i in range(G * S) if got[i] != base[i]] == [g * S + s]
+
+
+def test_a_graph_is_pointed_only_at_salts_leaves_would_take() -> None:
+    """``resalt`` hands a captured graph's leaf launches the next buffer's address, so it holds that buffer to what
+    ``leaves`` holds its own to before the address goes anywhere: a row too few, a row too many, a short salt, another
+    dtype, salts not contiguous and strides other than the captured ones are each refused, with the library untouched."""
+    e = E.Engine("host", build=BUILD)
+    G, S = 3, 2
+    good = np.zeros((G, S, 192), dtype=np.uint8)
+    strides = tuple(int(v) for v in good.strides[:2])
+    e.lib = None   # a refusal comes before any call into the library
+    for bad in (None, np.zeros((G - 1, S, 192), dtype=np.uint8), np.zeros((G + 1, S, 192), dtype=np.uint8),
+                np.zeros((G, S, 191), dtype=np.uint8), np.zeros((G, S, 192), dtype=np.uint16),
+                np.zeros((G, S, 384), dtype=np.uint8)[:, :, ::2]):
+        with pytest.raises(ValueError, match="salt"):
+            e.resalt(0, None, 1, 0, bad, G, S, strides)
+    with pytest.raises(ValueError, match="captured reading its salts at strides"):
+        e.resalt(0, None, 1, 0, np.zeros((G, 2 * S, 192), dtype=np.uint8)[:, ::2], G, S, strides)
+    with pytest.raises(AttributeError):   # salts ``leaves`` would take reach the library
+        e.resalt(0, None, 1, 0, good, G, S, strides)
+
+
+def test_a_devices_salts_are_its_own_uint8_tensor_at_16_byte_addresses_and_strides() -> None:
+    """On a device a salt is read by 16-byte loads, so ``leaves`` and ``resalt`` refuse (``_salts``, here on a CPU tensor
+    in a device engine's place) a buffer at an address or at strides that are not multiples of 16 bytes, one of another
+    dtype and one on another device."""
+    torch = pytest.importorskip("torch")
+    G, S = 3, 2
+    dev = SimpleNamespace(host=False, torch=torch, device=torch.device("cpu"), _ptr=lambda t: t.data_ptr())
+    flat = torch.zeros(G * S * 192 + 16 * G * S + 16, dtype=torch.uint8)
+    at = -flat.data_ptr() % 16
+    good = flat[at:at + G * S * 192].reshape(G, S, 192)
+    assert E.Engine._salts(dev, good, G, S) == (good.data_ptr(), S * 192, 192)
+    odd = flat[at + 1:at + 1 + G * S * 192].reshape(G, S, 192)
+    padded = flat[at:at + G * S * 200].reshape(G, S, 200)[:, :, :192]
+    for bad, why in ((odd, "multiples of 16 bytes"), (padded, "multiples of 16 bytes"),
+                     (good.to(torch.int8), "uint8 tensor on cpu"), (good.numpy(), "uint8 tensor on cpu")):
+        with pytest.raises(ValueError, match=why):
+            E.Engine._salts(dev, bad, G, S)
+    dev.device = torch.device("cuda:0")
+    with pytest.raises(ValueError, match="uint8 tensor on cuda:0"):
+        E.Engine._salts(dev, good, G, S)
 
 
 def test_frame_leaves_levels_pads_and_roots_match_tree_levels(engine: E.Engine) -> None:

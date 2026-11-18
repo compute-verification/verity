@@ -1,10 +1,10 @@
 """Re-register a Flock cell's ``bench-result/v1`` from its recorded runs, with what the red team and `bench.interaction` require.
 
     python -m verity_flock.register --prover-run DIR --verifier-run DIR --lane LANE --out meta.json \\
-        [--loopback-seconds S --loopback-method TEXT] [--rtt-ms MS --rtt-method TEXT] [--supersedes art:...]
+        --verifier-binary NAME [--loopback-seconds S --loopback-method TEXT] [--rtt-ms MS --rtt-method TEXT] [--supersedes art:...]
 
 then put in the evidence store as ``bench-result/v1`` with ``meta.json``, its run files referenced, preserved.
-Adds: the prover's and verifier's source commits and ``flock-pure-gpu`` sha256s (each run's ``job.json`` tree sha and
+Adds: the prover's and verifier's source commits and verifier binaries' sha256s (each run's ``job.json`` tree sha and
 ``out/binary.sha256``); the union bound over the batch's sub-batch proofs; ``net.rtt_ms`` as a network round trip (the
 coin-wait figure moves to ``live.coin_wait_per_round_ms``); ``live.loopback_round_seconds`` with its method.
 Nothing measured is changed.
@@ -16,7 +16,7 @@ import json
 import math
 from pathlib import Path
 
-from .bench import PER_PROOF_LOG2
+from .circuit_bench import PER_PROOF_LOG2
 
 
 def _run(d: Path) -> dict:
@@ -80,7 +80,7 @@ def patch(doc: dict, prover: dict, verifier: dict, a) -> dict:
                 "union": "union bound over the batch's sequential sub-batch proofs (red-team-flock grant of flock-pure-block/v2)"})
     be = fp["software"]["backend"]
     be["commit"], be["binary_sha256"] = prover["commit"], prover["binary_sha256"]
-    fp["software"]["verifier"] = {"binary": f"{getattr(a, 'verifier_binary', 'flock-pure-gpu')} serve (CPU build)", "commit": verifier["commit"],
+    fp["software"]["verifier"] = {"binary": f"{a.verifier_binary} serve (CPU build)", "commit": verifier["commit"],
                                   "binary_sha256": verifier["binary_sha256"], "run": verifier["run"], "host": verifier["host"],
                                   "operator": (doc.get("interaction") or {}).get("verifier_operator")}
     ms = {m["name"]: m for m in doc["measurements"]}
@@ -121,7 +121,7 @@ def main(argv=None) -> int:
     ap.add_argument("--rtt-ms", type=float, default=None)
     ap.add_argument("--rtt-method", default=None)
     ap.add_argument("--supersedes", default=None)
-    ap.add_argument("--verifier-binary", default="flock-pure-gpu")
+    ap.add_argument("--verifier-binary", required=True, help="the verifier binary's name, as the prover run's result names its backend")
     a = ap.parse_args(argv)
     pd, vd = Path(a.prover_run), Path(a.verifier_run)
     raw = json.loads((pd / "result.json").read_text())

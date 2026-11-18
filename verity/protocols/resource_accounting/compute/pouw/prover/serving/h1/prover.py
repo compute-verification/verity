@@ -363,7 +363,7 @@ def open_call(directory: str | Path, record: Mapping[str, Any], index: int, salt
     the window's Program salt `salt` (`pouw_h1_challenger.program_salt_of` its commitment): refused (ValueError) when a
     rebuilt table's root isn't the one the call's manifest row carries."""
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 
     row = record["calls"][index]
     key, t, k, m = key_of(directory), int(row["rows"]), int(row["k"]), int(row["served"])
