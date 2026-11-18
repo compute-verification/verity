@@ -112,13 +112,22 @@ class Served:
         exchange.subscribe(NAME, "memory", self.registered)
         exchange.request(NAME, H.ComputeBlockWith(self.kernel))
 
+    def own(self, event: Any, kind: type) -> bool:
+        """Whether ``event`` is ``kind``, the one its handler reads; another event of the hook is not, and anything that
+        is no event of a served run (`verity.hooks.EVENTS`) is refused by name."""
+        if not isinstance(event, H.EVENTS):
+            raise TypeError(f"{self.entry}: {type(event).__name__} is no event of a served run (verity.hooks.EVENTS)")
+        return isinstance(event, kind)
+
     def declared(self, event: H.Declared) -> None:
+        if not self.own(event, H.Declared):
+            return
         if NAME not in event.settings:
             raise ValueError(f"{self.entry}: the build declared no settings under {NAME!r}")
         self.settings = dict(event.settings[NAME])
 
     def registered(self, event: Any) -> None:
-        if not isinstance(event, H.RegisteredValues):
+        if not self.own(event, H.RegisteredValues):
             return
         from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 
