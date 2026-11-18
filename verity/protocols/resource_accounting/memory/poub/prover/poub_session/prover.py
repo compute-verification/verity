@@ -117,7 +117,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(Path(__file__).resolve().parents[7]))
 
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.prover.rota import Schedule  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.rota import Schedule  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, memory_map, receipts as rb  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402

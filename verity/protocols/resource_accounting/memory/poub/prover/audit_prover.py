@@ -13,7 +13,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 
 from verity.commitments import MerkleTree
-from verity.protocols.resource_accounting.memory.poub.prover.rota import REKEY_MAX, Origin, Schedule
+from verity.protocols.resource_accounting.memory.poub.verifier.rota import REKEY_MAX, Origin, Schedule
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, receipts
 from verity.protocols.resource_accounting.memory.poub.verifier.audit import (REKEY_DOMAIN, Registration, append_head,
                                                                              append_tree, payload_tree)

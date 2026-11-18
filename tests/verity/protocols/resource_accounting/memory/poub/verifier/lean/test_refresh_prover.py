@@ -14,7 +14,7 @@ import shutil
 import pytest
 
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
-from verity.protocols.resource_accounting.memory.poub.prover.rota import Schedule
+from verity.protocols.resource_accounting.memory.poub.verifier.rota import Schedule
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, receipts, wire
 from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
 from verity.protocols.resource_accounting.memory.poub.verifier.session import wire as session_wire
