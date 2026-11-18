@@ -178,10 +178,9 @@ def _python_hits(text: str, names: frozenset[str], fold: bool = False) -> set[in
     for i, t in enumerate(toks):
         if t.type != tokenize.STRING:
             continue
-        try:
-            value = ast.literal_eval(t.string)
-        except (ValueError, SyntaxError):
-            continue
+        if "f" in t.string[:t.string.index(t.string.lstrip("rRbBuUfF")[:1])].lower():
+            continue  # an f-string is one STRING token before Python 3.12, and no literal
+        value = ast.literal_eval(t.string)
         if not isinstance(value, str) or (value.lower() if fold else value) not in names:
             continue
         prev = toks[i - 1].string if i else ""
@@ -230,8 +229,8 @@ def _hooks_names(text: str, path: str, classes: Iterable[str]) -> set[str]:
     name it is imported as (``H.Name``, ``hooks.Name``, ``verity.hooks.Name``)."""
     try:
         tree = ast.parse(text, path)
-    except SyntaxError:
-        return set()
+    except SyntaxError as e:
+        raise AssertionError(f"{path} doesn't parse, so the classes of `verity.hooks` it names can't be read: {e}") from e
     classes = set(classes)
     top = path.count("/") == 1 and path.startswith("verity/")
     aliases, found, dotted = set(), set(), False

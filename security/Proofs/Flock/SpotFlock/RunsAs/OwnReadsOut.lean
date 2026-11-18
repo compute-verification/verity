@@ -137,7 +137,7 @@ theorem reported_stated {own : Spot.SecondStage.Own} {ss : Array Json}
         (port, e) ∈ Spot.entries (Spot.getD s.registered "ports") ∧ Spot.getD e "value" = .str v ∧
         Spot.jeq r (Spot.getD e "root") = true ∧
         Spot.SecondStage.readOk own (Spot.SecondStage.byTemplate own.interior) p port e = true := by
-  obtain ⟨-, -, ps, hp, -, -, hst, -, hrep⟩ := Spot.SecondStage.check_ok h
+  obtain ⟨-, ps, hp, -, -, hst, -, hrep⟩ := Spot.SecondStage.check_ok h
   unfold Spot.Record.sameDict at hrep
   simp only [Bool.and_eq_true] at hrep
   have hall := Array.all_eq_true_iff_forall_mem.1 hrep.2 (v, r) hv

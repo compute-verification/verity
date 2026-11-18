@@ -21,7 +21,9 @@ What its launcher hands it in ``ctx`` (`LAUNCHER`), beside ``settings`` and ``pr
 - ``trusted``: a key the run pins for the wipe itself (`demo.sh`'s ``--trusted-sha512``), trusted in place of the pins'
   key; the pins still decide the premise, so a key they don't give reads rehearsal (`wipe_party.placement`);
 - ``node``: the wiped server's id (this host's name by default);
-- ``judge``: the Lean ``wipe-protocol`` executable. Without it the Python's accept decides nothing (`wipe_period.NO_JUDGE`).
+- ``judge``: the Lean ``wipe-protocol`` executable. Without it the Python's accept decides nothing (`wipe_period.NO_JUDGE`);
+- ``ready``: called with the judge's path before the judge answers (`wipe_run.subprotocol`'s ``ready``); `built` by
+  default, which waits for a judge its launcher still builds beside the wipe (`served_wipe.sh`).
 
 It refuses, by name, before any session: outside the engine's process (``ctx["process"]``), with no side, with no
 private directory, with no pin handed to it, with no challenger binding, and on a busy card. The case and the record
@@ -30,6 +32,7 @@ summary. The challenger's run key and session log are in a scratch directory rem
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import socket
@@ -50,7 +53,7 @@ SMI = "nvidia-smi"
 UNSET = {"segments": 0, "tier": "", "threads": 0, "egress_bits": -1, "reads": 0, "disk": {}, "dram": {}}
 BINDING = ("host", "address", "command")
 #: what a launcher hands the wipe in ``ctx``, beside ``settings``, ``private`` and ``process``
-LAUNCHER = ("side_of", "pins", "configuration", "trusted", "node", "judge")
+LAUNCHER = ("side_of", "pins", "configuration", "trusted", "node", "judge", "ready")
 
 
 def period_wipe(settings: Mapping[str, Any]) -> dict[str, Any]:
@@ -105,6 +108,19 @@ def busy(device: str, idle_mib: int) -> str | None:
     if used > idle_mib:
         return f"the card {device} isn't idle: {used} MiB of its memory in use, past idle_mib {idle_mib}"
     return None
+
+
+def built(exe: str) -> None:
+    """Returns once the judge ``exe`` is built: at once with no lock beside it (``EXE.lock``), else once the build that
+    holds that lock has ended and left ``EXE.ok``. A build that failed raises its own error (``failed`` beside it),
+    as `benchmarks/pous/lean_ready.sh` does for the shell."""
+    lock = Path(f"{exe}.lock")
+    if not lock.exists():
+        return
+    with lock.open() as f:
+        fcntl.flock(f, fcntl.LOCK_SH)
+    if not Path(f"{exe}.ok").exists():
+        raise RuntimeError((lock.parent / "failed").read_text().strip())
 
 
 def card_of(ordinal: int) -> str:
@@ -175,10 +191,10 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
         (period / "period.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
         (private / "period.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
         answer = wipe_run.subprotocol(period, ctx.get("node") or socket.gethostname(), private,
-                                      side_of=ctx["side_of"])
+                                      side_of=ctx["side_of"], ready=ctx.get("ready") or built)
     (private / "wipe.case.json").chmod(0o600)
     return Wiped(answer, json.loads((private / "wipe.json").read_text()))
 
 
-__all__ = ["BINDING", "LAUNCHER", "NAME", "SMI", "UNSET", "Wiped", "attach", "busy", "card_of", "check_settings",
+__all__ = ["BINDING", "LAUNCHER", "NAME", "SMI", "UNSET", "Wiped", "attach", "built", "busy", "card_of", "check_settings",
            "period_wipe", "pin_of", "refusals"]

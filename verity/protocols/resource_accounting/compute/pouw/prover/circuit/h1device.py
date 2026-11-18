@@ -31,15 +31,15 @@ from . import h1zy as Z
 class Device:
     """One architecture's H1 record (module docstring)."""
 
-    arch: str
     gpu: str
     step: IntegerMma                       # the s8 step the kernels' MMAs compute
     instruction: str                       # its `silicon.instructions` entry, the instruction the kernels issue
     domain: tuple[int, int] | None         # (least K, K's divisor) the kernels serve; None: the Definitions' own
 
-    def __post_init__(self) -> None:
-        if self.step.arch != self.arch:
-            raise ValueError(f"{self.arch}'s H1 record names {self.step.name}, an {self.step.arch} step")
+    @property
+    def arch(self) -> str:
+        """The architecture whose record this is: its s8 step's."""
+        return self.step.arch
 
     @property
     def gemm(self) -> dict:
@@ -58,12 +58,12 @@ class Device:
 
 
 SM120 = Device(
-    arch="sm_120", gpu="RTX PRO 6000 Blackwell Server Edition", step=BLACKWELL_SM120_S8_M16N8K32,
+    gpu="RTX PRO 6000 Blackwell Server Edition", step=BLACKWELL_SM120_S8_M16N8K32,
     instruction="sm120.mma.m16n8k32.s8", domain=None,
 )
 
 SM90 = Device(
-    arch="sm_90", gpu="H200 SXM (sm_90a)", step=HOPPER_SM90_S8_K32,
+    gpu="H200 SXM (sm_90a)", step=HOPPER_SM90_S8_K32,
     instruction="sm90.mma.m16n8k32.s8", domain=(Z.LEAST_K, 512),
 )
 
