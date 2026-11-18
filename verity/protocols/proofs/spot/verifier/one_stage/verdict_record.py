@@ -67,7 +67,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.commitments import docket_digest as DD
 
 HERE = Path(__file__).resolve().parent
 #: a run's file of verdict records, one JSON object a line
@@ -109,7 +109,7 @@ def _named(held: object, what: str) -> tuple[Mapping[str, Any], str]:
     rec = held.get("record") if isinstance(held, Mapping) else None
     if not isinstance(rec, Mapping):
         raise ValueError(f"the first-stage file holds no {what}")
-    if R.digest(rec) != held.get("registration"):
+    if DD.digest(rec) != held.get("registration"):
         raise ValueError(f"the first-stage file's {what} is not the record whose digest it names as its registration")
     return rec, held["registration"]
 
@@ -117,7 +117,7 @@ def _named(held: object, what: str) -> tuple[Mapping[str, Any], str]:
 def _stop_record(first: Mapping[str, Any], summary: Mapping[str, Any], boundary: Mapping[str, Any], digest: str,
                  stream: Mapping[str, Any] | None) -> tuple[str, Mapping[str, Any], str | None]:
     rec, stop = _named(first.get("stop"), "stop record")
-    if stream is not None and R.digest(stream) != stop:
+    if stream is not None and DD.digest(stream) != stop:
         raise ValueError("the stop audit's stream is registered by the first-stage file's stop record, not the record handed")
     if rec.get("previous") != digest:
         raise ValueError("the stop record's `previous` is not the class's boundary record")
@@ -150,7 +150,7 @@ def _second_stage(first: Mapping[str, Any], summary: Mapping[str, Any], boundary
                              + (", and a second stage that held registered one" if stream is None else
                                 " for the record handed"))
         return word, boundary, None
-    if not isinstance(stream, Mapping) or R.digest(stream) != own:
+    if not isinstance(stream, Mapping) or DD.digest(stream) != own:
         raise ValueError("the second stage's summary names its interior registration, and the record handed "
                          "(`--stream`: its `interior/registration.json`) is "
                          + ("none" if stream is None else "not the record with that digest"))

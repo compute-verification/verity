@@ -208,7 +208,7 @@ def registry(table: tuple[Path, str] | None = None) -> Registry:
         sys.path.insert(0, str(path))
     D = importlib.import_module(module)
     return Registry(D.MANIFESTS, {n: w for n, (w, _) in D.WORKLOADS.items()},
-                    {n: e for n, (_, e) in D.WORKLOADS.items()}, D.PARTIES, D.ORDER, D.live, getattr(D, "STARTS", {}))
+                    {n: e for n, (_, e) in D.WORKLOADS.items()}, D.PIECES, D.ORDER, D.live, getattr(D, "STARTS", {}))
 
 
 def load(path: Path, reg: Registry) -> dict[str, Any]:
