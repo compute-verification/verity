@@ -17,8 +17,8 @@ wired root read a writer's outputs.
   at the record's templates and units and the record's digest (`recordDigest`); `cut-input` for a root that is no wired
   population, `cut-record` for one of another record. The cut root's key is the same at the digest of the record with
   no wires (`cut-record`).
-* The wires are whole writer fields at whole rows of the record's cuts (`Edges.edgesOf`, refused by its `edge-*`
-  name: circuits' `cut-offset` and `cut-units` are its `edge-rows`, `cut-fields` its `edge-fields` or `edge-width`).
+* The wires are whole writer fields at whole rows of the record's cuts: circuits' `cut-offset`, `cut-units` and
+  `cut-fields` on an affine read of a writer (`rowNames`), and `Edges.edgesOf`'s `edge-*` names for the rest.
 * Node for node, the batches are the wired root's: the same template (`cut-order` for one of the templates out of
   place, `cut-template` for another), the same members (`cut-count`), and each template's Definition the wired
   descriptor's, through every Definition it calls, compared by key (`cut-template`).
@@ -105,19 +105,21 @@ def defnEq (W U : Prog) (a b : Defn) : Bool :=
 /-- Whether Definition `key` is the same in `W` and `U`, with every Definition it calls in `U`, each compared once. -/
 def sameDefs (W U : Prog) (key : String) : Bool := Id.run do
   let mut todo := [key]
-  let mut seen : Std.HashSet String := {}
+  let mut seen : Std.HashSet String := ({} : Std.HashSet String).insert key
   for _ in [0:U.defs.size + 1] do
     match todo with
     | [] => return true
     | k :: rest =>
       todo := rest
-      if seen.contains k then continue
-      seen := seen.insert k
       match W.index[k]?, U.index[k]? with
       | some i, some j =>
         let d := U.defs[j]!
         if !defnEq W U W.defs[i]! d then return false
-        todo := d.body.nodes.toList.map (fun x => (U.defs[x.fn]!).key) ++ todo
+        for x in d.body.nodes do
+          let c := (U.defs[x.fn]!).key
+          if !seen.contains c then
+            seen := seen.insert c
+            todo := c :: todo
       | _, _ => return false
   return todo.isEmpty
 
@@ -215,6 +217,47 @@ def walkArg (W U : Prog) (BW BU : Body) (at_ : String) (a b : Arg) (st0 : Walk) 
   if q != us.size then throw s!"cut-arg: {at_} has more parts in the cut"
   return st
 
+/-- Circuits' names for a wired row that is not one whole field of one writer unit (`population._wired_rows`), on the
+wired root's affine parts that read a writer: `cut-offset` (off a field's first leaf), `cut-units` (across two units),
+`cut-fields` (not the field's length). A row's offset in its writer unit takes at most `LW / gcd(L, LW)` values over
+the members, so that many are read, never one a member; `Edges.edgesOf` names the rest. -/
+def rowNames (P : Prog) (W : Spot.Wires.Wiring) (fu : Std.HashMap Nat (String × Nat)) : Except String Unit := do
+  let nodes := (P.defs[P.root]!).body.nodes
+  for k in [0:nodes.size] do
+    let node := nodes[k]!
+    let some (rt, _) := fu[k]? | continue
+    let d := P.defs[node.fn]!
+    for i in [0:node.args.size] do
+      let some (port, ty) := d.params[i]? | continue
+      let a := node.args[i]!
+      let cuts := W.cutsOf rt port
+      if cuts == 0 || ty.leaves % cuts != 0 then continue
+      let len := ty.leaves / cuts
+      let mut s0 := 0
+      for q in a.seq.parts do
+        if let .affine false w b c := q then
+          if w < k && !Edges.isInputNode P w then
+            let wd := P.defs[nodes[w]!.fn]!
+            let LW := wd.outLeaves
+            for j in [0:cuts] do
+              let t0 := j * len
+              let some (x0, L) := (match a.dims with
+                | none => some (t0, 0)
+                | some (dd, Lb) => if Lb == 0 || t0 % Lb + len > Lb then none
+                    else some ((t0 / Lb * dd) * Lb + t0 % Lb, Lb)) | continue
+              let .ok (lo, cnt) := Edges.membersIn x0 L len node.members s0 c | continue
+              if LW == 0 then continue
+              let reps := min cnt (LW / Nat.gcd (L % LW) LW)
+              for m in [0:reps] do
+                let o := (b + (x0 + (lo + m) * L - s0)) % LW
+                let at_ := s!"{rt} {port}: root node {k} reads root node {w}"
+                match Edges.fieldAt wd.ret o with
+                | none => throw s!"cut-offset: {at_} at leaf {o} of a unit, off a field's first leaf"
+                | some (_, fl, _) =>
+                  if o + len > LW then throw s!"cut-units: {at_}, a row across two units"
+                  if fl != len then throw s!"cut-fields: {at_}, a row of {len} leaves over a field of {fl}"
+        s0 := s0 + q.count
+
 /-- Whether `[lo, lo + n)` and `[lo', lo' + n')` meet. -/
 def meets (lo n lo' n' : Nat) : Bool := lo < lo' + n' && lo' < lo + n
 
@@ -243,6 +286,7 @@ def check (record : Json) (wired cut : Prog) (rs : Array TRange) : Except String
       cuts := (entries (getD record "cuts")).toList.map fun (t, ps) =>
         (t, (entries ps).toList.filterMap fun (p, k) => (nat? k).map (p, ·))
       wires := [] }
+  rowNames wired wiring (Edges.firstUnits rs)
   let _ ← Edges.edgesOf wired rs wiring
   let BW := (wired.defs[wired.root]!).body
   let BU := (cut.defs[cut.root]!).body

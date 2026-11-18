@@ -133,8 +133,12 @@ def _forged(j: dict, edit) -> dict:
 
 
 def _swap(j: dict) -> None:
-    nodes = _root(j["cut"])["nodes"]
+    """The cut's last two batches in each other's place, the return following them."""
+    body = _root(j["cut"])
+    nodes, last = body["nodes"], len(body["nodes"]) - 1
     nodes[-1], nodes[-2] = nodes[-2], nodes[-1]
+    body["ret"] = json.loads(json.dumps(body["ret"]).replace(f"\"n\", {last}, ", "@").replace(
+        f"\"n\", {last - 1}, ", f"\"n\", {last}, ").replace("@", f"\"n\", {last - 1}, "))
 
 
 def _extra(j: dict) -> None:
@@ -145,7 +149,7 @@ def _extra(j: dict) -> None:
 def _left(j: dict) -> None:
     """The wired root under the cut's key: its wires left in place."""
     w, key = copy.deepcopy(j["wired"]), j["cut"]["root"]
-    w["definitions"][key] = w["definitions"].pop(w["root"])
+    w["definitions"][key] = {**w["definitions"].pop(w["root"]), "id": key}
     w["root"] = key
     j["cut"] = w
 
