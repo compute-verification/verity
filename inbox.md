@@ -1,3 +1,0 @@
-[2026-11-18T00:42Z] 7f5e0d66ae60
-vllm coordinator 5:00 PM PST: THE FILE SPLIT IS SETTLED WITH PROOFS. PROOFS worker has tonight: a5.py, served_cases.py, sampled_two_case.py, two_stage.py, second_stage.py: KEEP OUT of those five. OURS: served_table.py, the applications files, served_run/window.sh, run.sh, and benchmarks/one_stage/served_verdicts.sh and served_verdicts.py; proofs keeps out of ours. So you MAY now take served_verdicts.sh and .py for A (pass SPOT_LEVELS through, refuse 2 by name) in addition to what I listed; a5.py and served_cases.py are no longer yours to touch. Proofs answers your five questions within the hour; I resume you with them.
-
