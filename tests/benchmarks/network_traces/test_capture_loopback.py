@@ -47,6 +47,8 @@ if args[1:2] == ["rehearse"]:
     json.dump({{"upstream": ["127.0.0.1", {front}], "listen": ["127.0.0.1", {relay}]}},
               open(os.path.join(run, "endpoints.json"), "w"))
     json.dump({{"params": {{"egress": form}}}}, open(os.path.join(run, "deployment.json"), "w"))
+    for private in ("cells.salts", "ingress.records"):
+        open(os.path.join(run, private), "wb").write(b"the prover's")
 else:
     print("the reader's table")
 """
@@ -75,17 +77,21 @@ def test_the_rehearsal_is_in_the_launchs_egress_form_and_in_bytes_when_it_gives_
     """With no `EGRESS`, and with `bytes`, the rehearsal gets the job's three flags and the launch's, nothing for the
     form; with `id` it gets `--ids` before the launch's. Either way the capture is the loopback's TCP kept at 54
     bytes a packet, which holds no content, what is kept of it is its packets on the deployment's two ports, and the
-    reader gets the kept file, the front's address with its port, the relay's and the run. The exit is the reader's."""
+    reader gets the kept file, the front's address with its port, the relay's and the run. The run is in the job's
+    temporary directory, deleted with it, and $OUT/run keeps its public files alone. The exit is the reader's."""
     for env, form in (({}, []), ({"EGRESS": "bytes"}, []), ({"EGRESS": "id"}, ["--ids"])):
         p, calls, out = job(tmp_path, "--requests", "3", "--lanes", "64", **env)
         assert p.returncode == 0, p.stdout + p.stderr
         capture, rehearsal, kept, reader = calls
         assert capture[:7] == ["tcpdump", "-i", "lo", "-U", "-s", "54", "-w"] and capture[8:] == ["tcp"]
-        assert rehearsal[1:] == ["rehearse", "--fake", "--watermark", "--out", f"{out}/run", *form,
+        run = rehearsal[rehearsal.index("--out") + 1]
+        assert rehearsal[1:] == ["rehearse", "--fake", "--watermark", "--out", run, *form,
                                  "--requests", "3", "--lanes", "64"]
+        assert Path(run).parent == Path(capture[7]).parent and not Path(run).exists()
         assert kept == ["tcpdump", "-r", capture[7], "-w", f"{out}/run.pcap", f"tcp port {FRONT} or tcp port {RELAY}"]
         assert reader == ["capture_flows.py", "--capture", f"{out}/run.pcap", "--server", f"127.0.0.1:{FRONT}",
-                          "--certifier", "127.0.0.1", "--run", f"{out}/run", "--out", f"{out}/capture_flows.json"]
+                          "--certifier", "127.0.0.1", "--run", run, "--out", f"{out}/capture_flows.json"]
+        assert sorted(p.name for p in (out / "run").iterdir()) == ["deployment.json", "endpoints.json"]
         assert (out / "run.pcap").read_bytes() == b"packets" and not Path(capture[7]).exists()
         assert (out / "capture_flows.txt").read_text() == p.stdout == "the reader's table\n"
 

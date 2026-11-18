@@ -9,15 +9,15 @@
 # PLAN_FILE, a ready plan (the replay ladder's serving plan: ShareGPT, multi-turn and long prompts, each request greedy
 # or sampled), is served as it is in each of ARMS: ``mixed``, each request with its own sampling and UNSEEDED_SHARE of the
 # sampled ones unseeded; ``unseeded``, every request with the generation config's sampling and no seed, which vLLM samples
-# with FlashInfer's sampler. Without PLAN_FILE the one arm is SAMPLING, its plan (OUT/plan.jsonl) made before the GPUs are
+# with FlashInfer's sampler. Without PLAN_FILE the one arm is SAMPLING, its plan (PRIVATE/plan.jsonl) made before the GPUs are
 # held, LONG_SHARE of its requests then given prompts of 8k-32k tokens (tp_restore.lengthen). In each arm one server
 # lifetime serves the plan with the edges into OUT/ARM/serve, and one in-process engine restores at the first edge and
 # replays to the second into OUT/ARM/restore (its verdict OUT/ARM/restore/restore.json). An arm after the first starts only
 # if the minutes used so far and the last arm's fit in BUDGET_MIN (OUT/arms.txt says which ran). PERMUTE=1 restores again
 # with the GPUs in reverse order into OUT/ARM/restore-permuted; RESTORE=0 restores nothing. The first DUMP edges' blocks
 # (tens of GB at TP8; NUM_GPU_BLOCKS caps the pool) go to a scratch directory outside the run's, removed at the end
-# unless KEEP=1. PRIVATE, a directory outside every run's, keeps each arm's step trace and step outputs on the node
-# (PRIVATE/ARM/serve/server/), which hold request values. THEN, a script, runs under the same lease after each arm as `bash SCRIPT OUT/ARM/serve SCRATCH/ARM ARM`
+# unless KEEP=1. PRIVATE, a directory outside every run's, keeps the plan and each arm's plan, client records, edges'
+# records, step trace and step outputs on the node (PRIVATE/ARM/serve/), which hold request values. THEN, a script, runs under the same lease after each arm as `bash SCRIPT OUT/ARM/serve SCRATCH/ARM ARM`
 # (PY and HERE, this directory, set), logging to OUT/ARM/then.log. The GPUs are held under gpu-lease where the node has
 # it, or under `research run --gpus N` by the run's own lease. VENV's vLLM must be d9105ea80, the integration's pin.
 # MODEL_ID=moonlight (8,192 tokens of context: LONG_TOKENS=4096,7680 MAX_MODEL_LEN=8192) is a smoke of the same path
@@ -47,7 +47,7 @@ LONG_SHARE=${LONG_SHARE:-0.03}; LONG_TOKENS=${LONG_TOKENS:-8192,32768}; MAX_MODE
 # restores only the blocks and generators and replays nothing
 SAVER=${SAVER-boundary:save_edge}; LOADER=${LOADER-boundary:load_edge}; DUMP=${DUMP:-1}; RESTORE=${RESTORE:-1}; THEN=${THEN:-}
 [ -z "$THEN" ] || [ -f "$THEN" ] || { echo "tp-restore: no script at THEN=$THEN"; exit 2; }
-DOCS=${DOCS:-45000}; MAX_MIN=${MAX_MIN:-150}; PLAN=$OUT/plan.jsonl
+DOCS=${DOCS:-45000}; MAX_MIN=${MAX_MIN:-150}; PLAN=${PRIVATE:+$PRIVATE/plan.jsonl}
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 [ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf
 export HF_HOME=${HF_HOME:-$hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
@@ -137,7 +137,7 @@ if [ "${1:-}" = leased ]; then
   exit $rc
 fi
 
-[ -n "${PRIVATE:-}" ] || { echo "tp-restore: PRIVATE: a directory outside every run's, where the step trace and the step outputs stay on the node"; exit 2; }
+[ -n "${PRIVATE:-}" ] || { echo "tp-restore: PRIVATE: a directory outside every run's, where the plan, the client's records, the edges' records, the step trace and the step outputs stay on the node"; exit 2; }
 [ -n "$PLAN_FILE" ] || "$PY" "$here/serve_tax.py" plan --model-id "$MODEL_ID" --checkpoint "$CK" --c4 "$C4" \
   --rates "load=$RATE" --span-s "$SPAN_S" --docs "$DOCS" --out "$PLAN" || exit 1
 root=/workspace/research/scratch; [ -d "$root" ] || root=${TMPDIR:-/tmp}

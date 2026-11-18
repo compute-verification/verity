@@ -36,7 +36,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 - **Proofs in zero knowledge.** Each driver, in network attestation's `prover/`, proves its
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
   `verity-verify-proof verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of record), `n2_tie_zk.py`
-  (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the
+  (the ingress tie), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the
   scan's answers held by `NetworkCheck.Period`). `leak_scan.py`, in
   `prover/` too, is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with

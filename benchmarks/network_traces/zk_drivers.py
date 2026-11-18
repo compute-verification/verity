@@ -7,7 +7,7 @@
 installs it, and runs the driver's `main`:
 
     python benchmarks/network_traces/zk_drivers.py scan_zk prove --bin flock-circuit --lean verity-verify-proof --out DIR
-    python benchmarks/network_traces/zk_drivers.py egress_zk|network_attester_zk|n2_zk|n2_tie_zk ARGS...
+    python benchmarks/network_traces/zk_drivers.py network_attester_zk|n2_zk|n2_tie_zk ARGS...
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
-DRIVERS = ("scan_zk", "egress_zk", "network_attester_zk", "n2_zk", "n2_tie_zk")
+DRIVERS = ("scan_zk", "network_attester_zk", "n2_zk", "n2_tie_zk")
 
 
 def proof_drivers() -> SimpleNamespace:

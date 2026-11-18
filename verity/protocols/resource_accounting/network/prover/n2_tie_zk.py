@@ -410,7 +410,7 @@ def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNa
             _words, salts, entry = x.cells.statement(range(T))
             trees = known(tie, x)
             public = {p: list(v.salts) for p, v in trees.items()}
-            got = st.stage(rows, d, os.urandom(32), salts={"wit": salts, **public}, indices=range(T),
+            got = st.stage(rows, d, salts={"wit": salts, **public}, indices=range(T),
                            set_name=f"{st.iset.name}-{name}-w{x.window}", tables=rows,
                            refs={r: list(range(T)) for r in TS.ROWS},
                            registered={TS.REGISTERED: entry, **{p: v.statement(range(T))[2] for p, v in trees.items()}})

@@ -14,6 +14,13 @@ from typing import Any, ClassVar, Protocol
 #: the hooks a served run offers every scheme alike, each the ``hook`` of its events (`EVENTS`)
 HOOKS = ("declared", "steps", "values", "blocks", "memory")
 
+#: ``ctx["process"]`` of a scheme's ``attach(exchange, ctx)`` where the workload's front and its engine run in two
+#: processes, each with its own exchange: FRONT takes the workload's inputs (`InputArrived`, `ServeRoute`, `RefuseInput`),
+#: ENGINE steps it (the gates and every other hook). Without the key one process does both. ``ctx["feed"]`` is then
+#: a directory, one for the two, whose files a scheme's front appends to and its engine reads; ``ctx["settings"]`` are the
+#: scheme's settings (`Declared.settings`).
+FRONT, ENGINE = "front", "engine"
+
 type Handle = object
 """A device buffer as the serving system holds it: opaque here, read only by the scheme's own prover code."""
 
@@ -267,6 +274,13 @@ class Reports(Protocol):
     def record(self) -> Mapping[str, Any]: ...
 
 
+class Releases(Protocol):
+    """What a scheme's ``attach`` returns where it holds something until the workload stops: ``release`` is called once,
+    when it stops, and closes what the scheme holds (its run's commitment, its sessions)."""
+
+    def release(self) -> None: ...
+
+
 class Front(Protocol):
     """A scheme's frontend, which the workload's server hands each request: ``key`` names a request by its headers
     (None: not one the scheme orders), ``submit`` and ``abort`` forward one, and ``passed`` says the one ``key`` named
@@ -363,7 +377,7 @@ type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBou
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldResident",
-           "Broken", "FixRanges", "Front", "Reports", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
+           "Broken", "ENGINE", "FRONT", "FixRanges", "Front", "Releases", "Reports", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RefuseProperty", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "Route", "RunBegan", "RunEnded", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

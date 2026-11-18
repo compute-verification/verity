@@ -25,6 +25,7 @@ FLUSH = 256
 BIG = 2**31 - 1
 MODES = ("record", "sort")
 CHECKS = ("logits", "set", "order")
+SHAPE = ("call", "rows", "cols", "k")
 
 
 def apply(*, mode: str | None, out: str | None, real: str | None = None) -> None:
@@ -104,7 +105,8 @@ def records(d: Path) -> dict[str, list[dict]]:
 
 def compare(a: Path, b: Path) -> dict:
     """Per device, the calls each replay made, the first call whose shape differs, and for each checksum the first call
-    (before any shape differs) where the two replays' differ, with how many differ and replay A's record of that call."""
+    (before any shape differs) where the two replays' differ, with how many differ and that call's shape: never a
+    checksum, a sum of the call's inputs."""
     xs_all, ys_all = records(a), records(b)
     out = {}
     for dev in sorted(set(xs_all) | set(ys_all)):
@@ -116,7 +118,8 @@ def compare(a: Path, b: Path) -> dict:
         row: dict[str, Any] = {"calls": [len(xs), len(ys)], "first_shape_mismatch": shape}
         for key in CHECKS:
             diff = [i for i in range(m) if xs[i][key] != ys[i][key]]
-            row[key] = {"differing": len(diff), "first": diff[0] if diff else None, "first_call": xs[diff[0]] if diff else None}
+            row[key] = {"differing": len(diff), "first": diff[0] if diff else None,
+                        "first_call": {s: xs[diff[0]][s] for s in SHAPE} if diff else None}
         row["selecting_calls"] = sum(1 for i in range(m) if xs[i]["cols"] > xs[i]["k"])
         out[dev] = row
     return out

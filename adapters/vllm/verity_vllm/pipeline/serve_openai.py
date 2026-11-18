@@ -21,7 +21,7 @@ is the reference: under ``--protocol vllm`` (the default) a request is parsed by
 validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamResponse``, serialized the way its
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
-each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a network
+each other and the server records the result at start. ``--protocol ids`` (the network attester's declared framing, `serve_protocol.framings`) answers a network
 attester's id request (exactly ``id_form.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
 scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
 engine fails stops after its ids so far and the connection closes, with no ``[DONE]`` and no text (its reason only in
@@ -48,9 +48,9 @@ request's connection as it comes. The HTTP side is an asyncio server on its own 
 takes a request's first line only as the network attester does (`serve_head.request_line`), and answers 400 to any other:
 those are the bytes the network attester passes on without its release.
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
-attester's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the network attester sends), where each step's
+attester's release order (``--admit release-order``: the attester's frontend, `network_admission`), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`; ``serve.json``'s
-``step_rows``). ``--admit tick`` (`serve_admit.TickGate`) also adds each at the step the certified tick says, from the release
+``step_rows``). ``--admit tick`` (the attester's gate) also adds each at the step the certified tick says, from the release
 buckets the network attester's watermark gives (its ``POST /verity/watermark``, which the server reads as it streams) and the
 engine class's registered step times (``--tick-sat-ms``, ``--tick-free-ms``), the rows kept as under ``release-order``.
 No compile slice replays that admission, so its windows' served rows name none (`no_slice`, `serve_commit.NO_TICK_SLICE`).
@@ -98,7 +98,7 @@ has ``--disk-floor-gb`` free beyond one such window, and once a window's seal wo
 not sealed and the server stops: it refuses new requests, finishes those in flight, and exits. ``--copy-records-to`` (the
 run's ``$OUT``) gets a copy of the records (`serve_commit.MIRRORED`) after each close and each seal, and at the stop before
 the seals still pending. SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
-finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`);
+finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (the attester's frontend's ``summary``);
 it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
 ``--protocols pouw:eps1-sm120-h1fx1`` serves PoUW H1 on this server's own Commit, one H1 window a Commit window
@@ -143,13 +143,13 @@ from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL,
                                    serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_poub as SR, serve_row as RW,
                                    serve_seal as SS)
-from verity.protocols.resource_accounting.network.prover.admission import ReleaseOrder, Tick, TickAdmit, TickGate
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, param_of,
                                                records_mirror, served_statics, user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop
-from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
-                                                 VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
+from verity_vllm.pipeline.serve_protocol import (PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
+                                                 VllmProtocol, error_body, framing_agrees, framings, http_chunk, sse,
+                                                 usage_of)
 
 NO_REQUEST_LINE = ("the request's first line isn't `METHOD target HTTP/1.0` or `HTTP/1.1`, one space between and nothing "
                    "after")
@@ -186,11 +186,11 @@ class Options:
     served_model_name: str | None = option("--served-model-name", default=None, help="the name /v1/models lists (default --model)")
     hf_home: str | None = option("--hf-home", env="HF_HOME", default=None, help="the checkpoint store (default $HF_HOME)")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the Commit's run id (default $RESEARCH_RUN_ID)")
-    protocol: str = option("--protocol", choices=tuple(PROTOCOLS), default="vllm",
+    protocol: str = option("--protocol", choices=tuple(framings()), default="vllm",
                            help="vllm: vLLM's own request and response classes; plain: the same framing without them; ids: a "
                                 "network attester's id requests streamed in the scan's id form, raw, and every other request as vllm "
-                                "(serve_protocol.IdsProtocol)")
-    id_payload: int = option("--id-payload", type=int, default=ID_PAYLOAD,
+                                "(the network attester's declared framing, Scheme.framings)")
+    id_payload: int | None = option("--id-payload", type=int, default=None,
                              help="--protocol ids: each id event's bytes, the network attester's cell payload B − 9 (default 503: the scan's "
                                   "B = 512)")
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
@@ -258,7 +258,7 @@ class Options:
     admit: str = option("--admit", choices=ADMIT, default="arrival",
                         help="arrival (default): each request to the engine once parsed; release-order: in the network attester's release "
                              "order (x-verity-release), each once every earlier-released one is in; tick: in release order, each at "
-                             "the step whose logical time its release bucket has closed by (serve_admit.TickGate), its windows' "
+                             "the step whose logical time its release bucket has closed by (the network attester's gate), its windows' "
                              "served rows naming no compile slice (serve_commit.NO_TICK_SLICE)")
     admit_hold_ms: int = option("--admit-hold-ms", type=int, default=5000,
                                 help="release-order, tick: skip a missing earlier release once a later request has waited this long; "
@@ -292,7 +292,7 @@ class Server:
 
     def __init__(self, *, proto: PlainProtocol, served_name: str, max_model_len: int, tokenizer: Any, defaults: Mapping[str, Any],
                  submit: Callable[[Admission], None], abort: Callable[[str], None], model_root: str = "",
-                 clock: Callable[[], float] = time.time, order: ReleaseOrder | TickAdmit | None = None,
+                 clock: Callable[[], float] = time.time, order: H.Front | None = None,
                  exchange: M.Exchange | None = None,
                  arrive: Callable[[str, str, Mapping[str, str]], None] | None = None) -> None:
         self.proto, self.served_name, self.max_model_len = proto, served_name, int(max_model_len)
@@ -587,16 +587,20 @@ class _Route:
         return self.answer
 
 
-def tick_admission(loop: EngineLoop, sched: Any, opts: Any) -> tuple[Any, TickAdmit]:
-    """``--admit tick`` on ``sched``: the gate and the frontend attached to this process's exchange, and the admission
-    hook, the one the build put on ``sched`` where it did."""
+def network_admission(loop: EngineLoop, sched: Any, opts: Any) -> tuple[Any, H.Front]:
+    """``--admit release-order`` or ``tick``: the network attester's admission, attached to this process's exchange by
+    its scheme (`messages.attester`). Returns the admission hook (under ``tick``, the one the build put on ``sched``
+    where it did, after the attester's gate, `loop.gate`; else None) and the attester's frontend."""
     from verity_vllm.engine import admission
-    loop.gate = TickGate(Tick.of_ms(opts.tick_bucket_ms, opts.tick_sat_ms, opts.tick_free_ms), hold_s=opts.admit_hold_ms / 1000)
-    loop.gate.attach(M.current())
-    loop.hook = admission.install(sched)
-    order = TickAdmit(loop.submit, loop.abort, loop.tick)
-    order.attach(M.current())
-    return loop.hook, order
+    cfg: dict[str, Any] = {"order": opts.admit, "hold_ms": opts.admit_hold_ms}
+    if opts.admit == "tick":
+        cfg |= {f"{k}_us": int(round(float(getattr(opts, f"tick_{k}_ms")) * 1000)) for k in ("bucket", "sat", "free")}
+    got = M.attester().attach(M.current(), {"admit": cfg, "source": "--admit", "submit": loop.submit, "abort": loop.abort,
+                                            "take": loop.tick})
+    loop.gate = got.gate
+    if loop.gate is not None:
+        loop.hook = admission.install(sched)
+    return loop.hook, got.front
 
 
 class HttpThread(threading.Thread):
@@ -743,7 +747,8 @@ def main(opts: Options) -> int:
     day, session = SD.declare(opts, out), SR.session_of(opts, out)
     llm, com = build(opts, session, row := RW.of(opts))
     engine = llm.vllm.llm_engine
-    proto = PROTOCOLS[opts.protocol](opts.force_include_usage, **({"payload": opts.id_payload} if opts.protocol == "ids" else {}))
+    given = {} if opts.protocol in PROTOCOLS or opts.id_payload is None else {"payload": opts.id_payload}
+    proto = framings()[opts.protocol](opts.force_include_usage, **given)
     reference = getattr(proto, "base", proto)
     framing = framing_agrees(reference) if isinstance(reference, VllmProtocol) else None
     defaults: dict[str, Any] = {}                            # vLLM's neutral defaults: the request brings its sampling
@@ -794,10 +799,7 @@ def main(opts: Options) -> int:
     if opts.admit in ("release-order", "tick"):
         from verity_vllm.engine.handle import model_runner, scheduler
         rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler(engine))
-    if opts.admit == "release-order":
-        order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000)
-    elif opts.admit == "tick":
-        ticked, order = tick_admission(loop, scheduler(engine), opts)
+        ticked, order = network_admission(loop, scheduler(engine), opts)
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
                     defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model, order=order,
                     arrive=ticked.arrive if ticked is not None else None)
@@ -820,7 +822,7 @@ def main(opts: Options) -> int:
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
               "default_seed": DEFAULT_SEED, "top_p": "refused below 1", "committer": getattr(com, "name", None),
               "admit": opts.admit, "admit_hold_ms": opts.admit_hold_ms if order is not None else None,
-              "tick": loop.gate.tick.record() if loop.gate is not None else None,
+              "tick": loop.gate.record() if loop.gate is not None else None,
               "step_rows": "scheduler" if rows is not None else "runner",
               "commit": opts.commit, "scheme": com.commit_scheme if com is not None else None,
               "learn_warmup": getattr(com, "learn_warmup", None),

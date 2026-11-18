@@ -116,6 +116,6 @@ log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_D
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/sczk"
 (cd "$W/sczk" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'instances.bin' ! -path '*/archive/*' \
-  ! -name '*signer-state.json*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/sczk/")
+  ! -name '*signer-state.json*' ! -name '*-private.bin' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/sczk/")
 log "sczk: done, rc $rc"
 exit "$rc"
