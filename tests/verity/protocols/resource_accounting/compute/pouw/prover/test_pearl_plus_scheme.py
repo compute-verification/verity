@@ -26,6 +26,14 @@ def test_found_by_name() -> None:
     assert PS.PEARL_PLUS.option == f"pouw:{PearlC().name}"
 
 
+def test_its_record_row_is_verified_compute_in_the_macs_its_verifier_credits() -> None:
+    """The run verdict's ``credited`` (`Credit.lean`'s `creditAtAssumption`) is MACs, the unit its costs are in."""
+    assert (S.declared(PS.PEARL_PLUS, "record"), S.declared(PS.PEARL_PLUS, "symbol")) == ("work", "V")
+    assert S.declared(PS.PEARL_PLUS, "published") == (PS.PEARL_PLUS.unit, Fraction(1)) == ("MACs", Fraction(1))
+    with pytest.raises(LookupError, match="pearl-plus declares no channel_schemas: no Schema is declared for PearlSalt"):
+        S.declared(PS.PEARL_PLUS, "channel_schemas")
+
+
 def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:
     from verity.protocols.compose import schemes
 
