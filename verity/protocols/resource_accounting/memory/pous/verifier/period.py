@@ -37,7 +37,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import socket
 import subprocess
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -292,8 +291,9 @@ def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str
 
 def decided_by(exe: str | os.PathLike | None) -> dict[str, str]:
     """Who decided a case, as a piece's summary names it under `decided_by`: the program, `exe`'s file name (a
-    component's Lean, as `serve` runs it) or `python` with none, and the host it ran on, this one."""
-    return {"program": "python" if exe is None else Path(exe).name, "host": socket.gethostname()}
+    component's Lean, as `serve` runs it) or `python` with none, and the machine it ran on, the prover's
+    (`memory_attester.PROVER_MACHINE`), never by a name the machine gives itself."""
+    return {"program": "python" if exe is None else Path(exe).name, "host": mc.PROVER_MACHINE}
 
 
 #: why a PoUS answer no `pous-run-protocol` gave is undecided where the Python accepted (`unjudged`)
