@@ -1,0 +1,3 @@
+[2026-11-18T15:52Z] 6d769e837aa9
+LAYERNAME: compute-accounting's hunk for OUR file is up: branch cursor/compute-accounting-coins-record-strings-1de3 at dcc99dd0ea9: ONE commit in benchmarks/one_stage/served_verdicts.py (+9 -9): three strings: the salt's ('...held each pass's salt to it (pearlplus_coins): coins' signatures checked on the served node only; not checked by the auditor'), the draw's, and the serve's live one: I READ IT AND IT IS RIGHT: TAKE IT AS IT IS (cherry-pick dcc99dd0ea9 onto the tip; do not rewrite its words), run test_served_verdicts.py whole + test_onsite_record.py + the ratchet remotely, push by merge, and tell me the SHA. Then your list of any OTHER sentence of ours that says the compose/auditor checks Pearl+'s challenger, key, ledger or coins.
+
