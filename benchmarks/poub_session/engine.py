@@ -303,7 +303,7 @@ def summary(steps: list[dict]) -> dict:
     for phase, xs in out.items():
         ms = sorted(x["ms"] for x in xs)
         span = xs[-1]["t"] - xs[0]["t"] + xs[-1]["ms"] / 1e3
-        at = lambda q: ms[min(len(ms) - 1, int(q * len(ms)))]
+        at = lambda q, ms=ms: ms[min(len(ms) - 1, int(q * len(ms)))]
         tokens = sum(x["tokens"] for x in xs)
         res[phase] = {"steps": len(xs), "tokens": tokens, "span_s": span, "tokens_per_s": tokens / span if span else None,
                       "steps_per_s": len(xs) / span if span else None, "step_ms": {"p50": at(0.5), "p99": at(0.99),
@@ -358,10 +358,8 @@ def main() -> int:
         cls.load_model = load_model
 
     for name in RUNNERS:
-        try:
+        with contextlib.suppress(ImportError, AttributeError):
             wrap(importlib.import_module(name).GPUModelRunner)
-        except (ImportError, AttributeError):
-            pass
     engine = LLMEngine.from_engine_args(EngineArgs(
         model=a.model, dtype="bfloat16", enforce_eager=True, gpu_memory_utilization=a.util,
         max_model_len=a.max_model_len, max_num_seqs=max(a.concurrency, 4), enable_prefix_caching=False,

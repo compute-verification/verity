@@ -62,7 +62,8 @@ def run(tmp_path: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
     tree = tmp_path / "tree"
     if not tree.exists():
         make_tree(tmp_path)
-    held = {k: v for k, v in os.environ.items() if k not in {"VY_CHALLENGER_1_HOST", "HANDOFF", *ROW_OF_CARDS}}
+    held = {k: v for k, v in os.environ.items()
+            if k not in {"VY_CHALLENGER_1_HOST", "HANDOFF", "VERITY_HOLD_PLACEMENT", "COMPOSE_OFF_NODE", "PRODUCT", *ROW_OF_CARDS}}
     return subprocess.run(["bash", str(tree / SERVED_RUN / "run.sh"), *args], capture_output=True, text=True, check=False,
                           env={**held, "HOME": str(tmp_path), **env})
 
@@ -300,6 +301,26 @@ def test_the_settings_are_node_as_and_its_rows_and_name_no_address(tmp_path, tie
         "H1_PEER": "vy-spot-glm53", "PP_PEER": "vy-spot-glm53", "ROW_ID": row}
     assert env["ROW"] == f"{NODE_A['LLAMA_ROOT']}/{NODE_A['builds'][row]}/{row}" and (env["POUW"] == "pearlplus") == tie
     assert not {"CARD", "CORES", "END", "PRODUCT", "PP_CHALLENGER"} & env.keys() and ADDRESS not in got.stdout
+
+
+@pytest.mark.parametrize("hold", [{}, {"VERITY_HOLD_PLACEMENT": "1"}])
+def test_the_remote_window_composes_off_the_node_and_passes_the_placement_hold_on(tmp_path, hold):
+    env = env_of(got := run(tmp_path, "window", "--dry-run", **ROW_OF_CARDS, **hold))
+    assert got.returncode == 0, got.stderr
+    assert (env["PRODUCT"], env["COMPOSE_OFF_NODE"], env.get("VERITY_HOLD_PLACEMENT")) == (
+        "remote", "1", hold.get("VERITY_HOLD_PLACEMENT"))
+    assert env["COMPOSE_NODE"] == PLACEMENT["run"]["window"]["env"]["COMPOSE_NODE"]
+
+
+@pytest.mark.parametrize("product", ["remote", "onsite"])
+@pytest.mark.parametrize("hold", ["", "1"])
+def test_an_applications_command_leaves_where_its_record_is_composed_to_the_runner(tmp_path, product, hold):
+    settings_tree(tmp_path)
+    got = run(tmp_path, "settings", f"some/{PLACEMENT['row'][:14]}", "--", "bash", "-c",
+              'echo "${COMPOSE_OFF_NODE-unset}|$PRODUCT|${VERITY_HOLD_PLACEMENT-unset}|$COMPOSE_NODE"',
+              PRODUCT=product, **({"VERITY_HOLD_PLACEMENT": hold} if hold else {}))
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.strip() == f"unset|{product}|{hold or 'unset'}|vy-nebius-cpu-14"
 
 
 def test_settings_refuse_a_model_no_row_places(tmp_path):

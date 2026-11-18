@@ -18,6 +18,7 @@ from prove_helpers import (
     lean_shares,
     recorded,
 )
+from verity_bench import kit
 from verity_bench import lean_verify as L
 from verity_bench import prove as P
 from verity_bench import prove_records as R
@@ -151,6 +152,16 @@ def test_a_lean_verifier_run_that_measures_nothing_is_refused_by_name_and_both_f
     assert R.lean_verify([], runs[0]) == "its `out/lean-verify.json` isn't a `verity-bench/lean-verify/v1` record"
 
 
+def test_a_labelled_lean_verifier_trial_measures_nothing_and_is_named_as_a_trial(tmp_path):
+    s, _ = recorded(tmp_path)
+    run = lean_ran(s, tmp_path, "r20261110-000000-0001", lean_record("r20261110-000000-0001"), env={kit.TRIAL: "1"})
+    doc = R.build("flock", "glm53", store=s.fresh(), root=REPO)
+    assert {x["target"]: x["why"] for x in doc["refused"]} == {run: kit.trial_why(run, {"params": {"env": {kit.TRIAL: "1"}}})}
+    t = doc["totals"]
+    assert t["lean_verifier_seconds_per_token"] is None and t["proof_bytes_per_token"] is None and t["lean_verify"] == []
+    assert f"{run} is a trial run (VERITY_BENCH_TRIAL)" in R.render(doc).split("Refused (not read):")[1]
+
+
 def warm_statement(word: str | None, n: int, k_log: int, seconds: float, *, device: str = "gpu", timed: int = 4,
                    accepted: tuple[bool, ...] = (True,) * 5) -> dict:
     """A statement of `prove_time.py`'s summary as a `stage_prove.sh` group writes it, cut to what the table reads."""
@@ -159,9 +170,10 @@ def warm_statement(word: str | None, n: int, k_log: int, seconds: float, *, devi
             "prove_total_s": seconds}
 
 
-def warm_ran(s: Store, tmp: Path, run: str, statements: dict | None, config: str = "warm=1 runs=4") -> str:
+def warm_ran(s: Store, tmp: Path, run: str, statements: dict | None, config: str = "warm=1 runs=4",
+             env: dict | None = None) -> str:
     """`run` in the store with one card's group (`out/gpu0/out/`) holding `statements` (None: a run that wrote none), a
-    warm-session run of record."""
+    warm-session run of record, launched with `env`."""
 
     files = tmp / "warm-files" / run
     group = files / "out" / "gpu0" / "out"
@@ -170,7 +182,7 @@ def warm_ran(s: Store, tmp: Path, run: str, statements: dict | None, config: str
     if statements is not None:
         (group / "summary.json").write_text(json.dumps({"statements": statements}))
         (group / "config.txt").write_text(f"device=gpu units=census:X@full ns=16 64 statements= {config}\n")
-    s.ran(run, files)
+    s.ran(run, files, env=env)
     return s.record(run, R.WARMED)
 
 
@@ -221,6 +233,15 @@ def test_a_warm_session_run_prices_its_own_types_under_its_own_label_with_its_wa
 
     line = next(x for x in R.render(doc).splitlines() if x.startswith(f"| `{off['block']}`"))
     assert f"| {P.SOURCES[P.WARM]} |" in line and "(WARM=1, RUNS=4)" in line and P.SOURCES[P.STEADY] not in line
+
+    # a newer labelled trial that would price the type faster prices nothing, named as a trial
+    trial = warm_ran(s, tmp_path, "r20261115-000000-0003",
+                     {"gpu/off-full": warm_statement(off["block"], full, off["k_log"], 1.0)}, env={kit.TRIAL: "1"})
+    doc = R.build("flock", "glm53", store=s.fresh("third"), root=REPO)
+    got = next(r for r in doc["rows"] if r["block"] == off["block"])
+    assert (got["record"], got["seconds"]) == (run, pytest.approx(100.0 / full))
+    assert (trial, kit.trial_why(trial, {"params": {"env": {kit.TRIAL: "1"}}})) in [
+        (x["target"], x["why"]) for x in doc["refused"]]
 
     assert R.warm_rows({"statements": {}}, "device=gpu units=x", run) == [
         "its `out/gpu*/out/config.txt` states no `warm=W runs=R`, or its `out/gpu*/out/summary.json` no `statements`"]

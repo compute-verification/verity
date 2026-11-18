@@ -408,6 +408,30 @@ def test_the_device_is_the_outputs_own_words(tmp_path):
     assert PL.read("recursion", str(recursion(tmp_path / "r"))).device == "not stated"
 
 
+def test_a_point_says_its_provers_device_and_its_member_the_card_served_on(tmp_path):
+    """A CPU prover's points say ``processors`` beside the member that names the H200 the workload was served on."""
+
+    cpu = {"RoPEHead_v1{D=64}": {"gpus": 0, "device": None, "lean_verify_s": 8.0,
+                                 "timing": {"prove_total_s": 20.0, "proof_bytes": [500, 500]}}}
+    results = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path / "c", timing=cpu)))]
+    own = [m for m in PL.measured(results, IDS) if m["member"] == SERVES]
+    assert [m["name"] for m in own] == list(IDS) and {m["extra"]["prover_device"] for m in own} == {"processors"}
+    assert {m["member"] for m in PL.measured(results, IDS)} == {f"{SERVES}-flock", f"{SERVES}-flock-zero-knowledge", SERVES}
+    assert PL.prover_device("GPU 4 (gpu-lease's record of each flock-circuit prove)").startswith("GPU 4")
+    assert PL.prover_device(PL.NOT_STATED) == PL.NOT_STATED
+
+
+def test_a_batch_study_writes_its_own_members_and_the_own_batch_the_plain_ones(tmp_path):
+    cpu = {"RoPEHead_v1{D=64}": {"gpus": 0, "device": None, "lean_verify_s": 8.0,
+                                 "timing": {"prove_total_s": 20.0, "proof_bytes": [500, 500]}}}
+    results = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path, timing=cpu)))]
+    for batch, word in ((None, ""), ("1-4", "-b4"), ("1-16", "-b16"), ("3-8", "-b3-8")):
+        assert {m["member"] for m in PL.measured(results, IDS, batch)} == {
+            f"{SERVES}-flock{word}", f"{SERVES}-flock-zero-knowledge{word}", f"{SERVES}{word}"}
+    with pytest.raises(ValueError, match="LO-HI request steps"):
+        PL.batch_word("8-1")
+
+
 def test_prove_without_the_store_refuses_in_one_line(monkeypatch, capsys):
     """An outside machine has no store client, or no remote it can read: `prove` names what it needs and exits 2."""
 

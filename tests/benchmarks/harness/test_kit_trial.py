@@ -49,6 +49,17 @@ def test_a_trial_is_the_variable_set_to_anything_but_0():
     assert not kit.trial_attempt({"params": {"env": {"VERITY_BENCH_VENV": "/v"}}}) and not kit.trial_attempt({})
 
 
+def test_a_labelled_trial_is_refused_with_the_launch_that_makes_it_of_record():
+    attempt = {"params": {"argv": ["bash", "job.sh", "--n", "a b"], "env": {kit.TRIAL: "1", "VERITY_BENCH_VENV": "/v"}}}
+    assert kit.trial_why("r1", attempt) == (
+        "r1 is a trial run (VERITY_BENCH_TRIAL), and a trial is never of record: to make one of record, launch the same "
+        "command without VERITY_BENCH_TRIAL: `research run ... --env VERITY_BENCH_VENV=/v -- bash job.sh --n 'a b'`")
+    plain = {"params": {"argv": ["bash", "job.sh"]}}
+    assert kit.trial_why("r2", plain) is None and kit.trial_why("r2", {}) is None
+    assert kit.trial_why("r2", plain, {"trial": True}).endswith("`research run ... -- bash job.sh`")
+    assert kit.trial_why("r2", plain, {"trial": False}) is None
+
+
 def test_a_trial_writes_its_measurements_beside_its_result_and_none_in_it(tmp_path, no_gpu, monkeypatch, capsys, said):
     from research import result as research_result
 

@@ -215,8 +215,8 @@ class Labelled:
 def labelled_rows(store: Any, record: str) -> list[Labelled]:
     """Each row of the record's runs: the runs labelled into it and the runs its labelled arts name. A run's rows are
     its own rate file's, or, where one standing labelled art holds them completed (`completed_rows`, `completed`), the
-    art's; two standing arts that complete one run complete it for neither. A run that kept no files, or whose rate
-    file gives no rows, is one entry without a row, which says so. A superseded run and the runs of a superseded art
+    art's; two standing arts that complete one run complete it for neither. A trial run (`kit.trial_why`), a run that
+    kept no files, or one whose rate file gives no rows, is one entry without a row, which says so. A superseded run and the runs of a superseded art
     give none."""
 
     runs: dict[str, None] = {}
@@ -237,13 +237,16 @@ def labelled_rows(store: Any, record: str) -> list[Labelled]:
     for run in runs:
         if _superseded(store, run):
             continue
+        if why := kit.trial_why(run, store.get_attempt(run) or {}):
+            found.append(Labelled(run, None, None, why))
+            continue
         files = run_files(store, run)
         if files is None:
-            found.append(Labelled(run, None, None, "the run kept no files"))
+            found.append(Labelled(run, None, None, f"{steady.CANNOT_TELL}: the run kept no files"))
             continue
         own = steady_spec.rows(files)
         if isinstance(own, str):
-            found.append(Labelled(run, None, files, own.removeprefix(f"{steady.CANNOT_TELL}: ")))
+            found.append(Labelled(run, None, files, f"{steady.CANNOT_TELL}: {own.removeprefix(f'{steady.CANNOT_TELL}: ')}"))
             continue
         standing = arts.get(run, [])
         taken = (completed(own, standing[0]) if len(standing) == 1 else untaken.get(run) if not standing else
@@ -330,7 +333,7 @@ class SteadyCompletion:
             self._labelled[record] = labelled_rows(store, record)
         for found in sorted(self._labelled[record], key=lambda found: found.run, reverse=True):
             if found.row is None or found.files is None:
-                whys.append(f"{found.run} (labelled `{record}`): {steady.CANNOT_TELL}: {found.held}")
+                whys.append(f"{found.run} (labelled `{record}`): {found.held}")
                 continue
             blocks = steady_spec.row_blocks(found.row)
             if (found.row.get("pin") != item.row.pin or found.row.get("provers") != item.provers
