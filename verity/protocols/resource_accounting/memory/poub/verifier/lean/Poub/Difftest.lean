@@ -593,40 +593,45 @@ def gammaJ (x : Gamma.Gamma) : Json :=
   let w := Gamma.worst x.windows Gamma.Terms.gamma
   let h := Gamma.worst x.windows Gamma.Terms.gammaPooled
   Json.mkObj (termsJ x.terms ++
-    [("linked", .bool false), ("steering_bits", .null),
+    [("linked", .bool false), ("steering_bits", match x.steering with | some a => toJson a | none => .null),
      ("windows", .arr (x.windows.map fun v =>
        Json.mkObj ([("span_ns", toJson v.spanNs), ("window", toJson v.window)] ++ termsJ v.terms))),
      ("error", Json.mkObj [("windows", ratJ x.error), ("horizon", ratJ x.errorPooled)]),
      ("worst", Json.mkObj [("gamma", ratJ w.terms.gamma),
        ("horizon", Json.mkObj [("gamma", ratJ h.terms.gammaPooled), ("window", toJson h.window)]),
-       ("window", toJson w.window)])])
+       ("window", toJson w.window)])] ++
+    match x.probation with | some p => [("probation", ratJ p)] | none => [])
 
-private def gammaOn (reg : Registration) (digest : ByteArray) (sm : Session.Summary) (g : Nat) (j : Json) : V Json := do
+private def gammaOn (reg : Registration) (digest : ByteArray) (sm : Session.Summary) (g : Nat) (j : Json)
+    (scheduled : Option Nat) : V Json := do
   pure (refusedOr (gammaJ <$> Gamma.gamma reg digest sm g (← ratIn j "delta" "input") (← nat j "block_bytes")
-    (← nat j "chip_bytes") (← ratIn j "capacity_bytes_per_s" "input") (← ratIn j "squarings_per_s" "input")))
+    (← nat j "chip_bytes") (← ratIn j "capacity_bytes_per_s" "input") (← ratIn j "squarings_per_s" "input") scheduled))
 
 /-- `ledger.gamma`'s terms (`audit.GammaTerms`) of `{"registration", "record", "delta", "block_bytes", "chip_bytes",
-"capacity_bytes_per_s", "squarings_per_s"}` (`record` as `recordJ` writes it, sampled its `groups_per_coin` windows a
-coin, 1 when it doesn't name it), or why there are none (`Gamma.gamma`). -/
+"capacity_bytes_per_s", "squarings_per_s"}` and, if the session's schedule check passed, its cap (`"scheduled"`,
+`audit.Scheduled.cap`) (`record` as `recordJ` writes it, sampled its `groups_per_coin` windows a coin, 1 when it doesn't
+name it), or why there are none (`Gamma.gamma`). -/
 def gammaFn (j : Json) : V Json := do
   let reg ← registrationOf (← J.get j "registration" "input")
   let rj ← J.get j "record" "input"
   let g ← if J.has rj "groups_per_coin" then J.nat rj "groups_per_coin" "record" else pure 1
-  gammaOn reg (← hex rj "registration") (← summaryOf rj) g j
+  gammaOn reg (← hex rj "registration") (← summaryOf rj) g j (← (← opt j "scheduled").mapM (J.asNat · "scheduled"))
 
 /-- `audit.named_bits` of `{"k"}` (`Gamma.namedBits`), or why the bracket of log₂ k! doesn't decide it. -/
 def namedBitsFn (j : Json) : V Json := do
   pure (refusedOr (toJson <$> Gamma.namedBits (← nat j "k")))
 
 /-- `gammaFn` of the record of one of the accepted sessions `r` runs, that session's own: the registration it ran on
-and its record as `outcome` writes it equal to `record`, at its own windows a coin; refused unless one is. -/
+and its record as `outcome` writes it equal to `record`, at its own windows a coin; refused unless one is. No schedule
+check runs here (the session commits no cap on a schedule's bits), so it credits no appended block. -/
 def gammaOfRegistry (r : Registry) (j : Json) : V Json := do
   let rj ← J.get j "record" "input"
+  if J.has j "scheduled" then throw "this verifier runs no schedule check, so it takes none"
   for live in r.live do
     for run in live.sessions do
       if let .running s f g := run then
         if let some x := s.summary then
-          if recordJ s.digest x f g == rj then return (← gammaOn s.reg s.digest x g j)
+          if recordJ s.digest x f g == rj then return (← gammaOn s.reg s.digest x g j none)
   pure (refusedOr (.error "the record is not one this verifier accepted"))
 
 private def natsOfN (j : Json) (n : Nat) (ctx : String) : V (Array Nat) := do
