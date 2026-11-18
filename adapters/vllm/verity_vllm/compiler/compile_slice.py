@@ -87,9 +87,11 @@ which takes any carry-in; `charge_check.check_chain` (``CH-carry``) refuses it o
 - *one window*: the slice is a window mid-session from the empty rows, so the decisions its steps leave unread carry
   (`replay_chain`'s load) and no `ReplayClose` follows it;
 - *the binding of ``adv``, ``cert``, ``srv``, ``cin`` and ``cout``*: their rows' b‖c, which the verifier checks
-  natively against the advice registration's leaf, the certified record's commitment and the served rows' leaf; the
-  carry chain is the honest prover's, unchecked; no gate hashes them. That the served rows are the rows the served compute ran is the step
-  tree's to bind (`served_rows`).
+  natively against the advice registration's leaf and the certified record's commitment; for ``srv``, the check
+  against the served rows' leaf (`served_rows.leaf_ok`) exists in our compiler and only its tests call it, so today the
+  rows registered at serve time are the prover's word; the carry chain is the honest prover's, unchecked; no gate
+  hashes them. The served-rows tie (`served_tie`) states that the served rows are the rows the served compute ran; no
+  proof of it runs.
 
 **Every advised window is proved**, never sampled: the carry chain binds only proved units (an unproved window's
 carry-out is any the prover likes), and ``en`` is the slice's scan's (network attestation's PROTOCOL.md, A3,
