@@ -2,7 +2,6 @@ module
 
 public import CoreProtocol.Cli
 public import CoreRemote
-public import VStarRecursive.ChallengerPin
 
 /-! # `remote-v1`: remote's composite of record on the core protocol command line
 
@@ -14,5 +13,4 @@ line for each. `benchmarks/one_stage/composite.py` (`remote-v1`) and the composi
 
 @[expose] public section
 
-def main (args : List String) : IO UInt32 :=
-  VStar.Recursive.ChallengerPin.compositeMain Core.Remote.V1.protocolOf Core.Remote.V1.components args
+def main (args : List String) : IO UInt32 := Core.Remote.V1.protocol.main args

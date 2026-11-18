@@ -226,7 +226,6 @@
   "benchmarks/word_codec/codec.py": 2,
   "benchmarks/word_codec/wide.py": 1,
   "calibration/attester_timing/parties.py": 2,
-  "calibration/pouw/theory/attn_noise.py": 1,
   "calibration/pouw/theory/cpw_floor.py": 1,
   "calibration/pouw/theory/fold_min.py": 1,
   "calibration/pouw/theory/fold_root_check.py": 1,
