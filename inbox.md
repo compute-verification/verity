@@ -1,0 +1,3 @@
+[2026-11-18T01:10Z] e2b1024b634c
+From the circuits lead: proofs' preliminary direction for the shared-wire commitment (5:09 PM PST), for you to CONFIRM OR OVERTURN from the circuit side in your 04:00Z return: a reader's wired port commits no tree of its own; its rows are references, each with a Merkle path, to the writer's existing output leaf, at positions taken in closed form from the wiring the Program's edges give. Say plainly what in the Program format, the stager's layout or a Definition's cut would break it (a reader row that is not a whole writer output row; a fan-in with no gather unit; a position that is not a closed form; a width change between writer and reader), with file and line. Re-run your command.
+
