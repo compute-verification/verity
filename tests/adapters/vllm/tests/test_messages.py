@@ -232,7 +232,7 @@ def test_one_exchange_a_build_and_the_build_in_scope_is_current():
     assert M.current() is not ex
 
 
-def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_entries_and_its_requests_filed_once():
+def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_entries_and_its_requests_filed_once(tmp_path):
     """`Exchange.attach` hands ``attach`` and ``requests`` one ``ctx``, files each request ``attach`` did not, and keeps
     the scheme's settings under its name for the build's `Declared` and what ``attach`` returns for the run's record; a
     setting it does not have is refused."""
@@ -248,12 +248,15 @@ def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_ent
     pearl = NS(name="pearl", settings={"coins": "", "tie": False}, check_settings=lambda s: None, attach=attach, requests=lambda ctx: (eager, world))
     ex = M.Exchange()
     assert ex.attach(pearl, {"coins": "live"}, submit=print) == "front"
-    assert seen == [{"settings": {"coins": "live", "tie": False}, "build": ex.key, "gate": None, "submit": print}]
+    assert seen == [{"settings": {"coins": "live", "tie": False}, "build": ex.key, "gate": None, "private": None,
+                     "submit": print}]
     assert ex.requests == [("pearl", eager), ("pearl", world)] and ex.attached == {"pearl": {"coins": "live", "tie": False}}
     assert ex.reports == {"pearl": "front"}
     assert M.Exchange().key != ex.key
     with pytest.raises(ValueError, match=r"pearl has no setting \['salt'\]"):
         ex.attach(pearl, {"salt": 1})
+    ex.attach(pearl, private=tmp_path)
+    assert seen[-1]["private"] == tmp_path / "pearl" and (tmp_path / "pearl").is_dir()
 
 
 def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkeypatch):
