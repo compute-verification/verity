@@ -6,8 +6,8 @@
    "declarations": 19
   },
   "Definitions/Core": {
-   "modules": 3,
-   "declarations": 14
+   "modules": 2,
+   "declarations": 6
   },
   "Definitions/Pouw": {
    "modules": 21,
@@ -18,8 +18,8 @@
    "declarations": 34
   },
   "Proofs/Core": {
-   "modules": 6,
-   "declarations": 53
+   "modules": 5,
+   "declarations": 47
   },
   "Proofs/Flock": {
    "modules": 226,
