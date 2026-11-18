@@ -1098,7 +1098,7 @@ def _stub_calls():
     st = object.__new__(ST.Statement)
     record = OR.Record(lean=False)
     torch = "benchmarks/pouw/served_zk/statement_torch.py"
-    calls = [("Stager.stage", lambda: STG.Stager().stage(*[None] * 9), "benchmarks/pouw/hidden_zk/served_stage.py"),
+    calls = [("Stager.stage", lambda: STG.Stager().stage(*[None] * 8), "benchmarks/pouw/hidden_zk/served_stage.py"),
              ("Statement.zeros", lambda: st.zeros(1), torch), ("Statement.empty", lambda: st.empty(1, 1), torch),
              ("Statement.fill_stages", lambda: st.fill_stages(0), torch), ("Statement.check", lambda: st.check({}), torch),
              ("Record.canonical", lambda: record.canonical({}), "benchmarks/pouw/served_zk/of_record_lean.py"),

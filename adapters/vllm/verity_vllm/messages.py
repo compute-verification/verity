@@ -1,20 +1,21 @@
 """The messages between the adapter and the prover, in both directions.
 
-In one process, through its one `Exchange` (`current`): the adapter's hooks emit the events of `verity.hooks` to the
+In one process, through one `Exchange` a build (`build`; `current` is the build in scope): the adapter's hooks emit the events of `verity.hooks` to the
 subscribers of their hooks, and a scheme, attached by its name before the engine is built, files its requests, each
 answered yes or refused by the scheme's name before serving starts.  A subscriber only reads, so it may attach at any
 time; a request changes what is served: one on what the workload declares (a property, a process beside it) is filed
 before the build's answer, and any other before serving begins, at the first step.  The exchange names no scheme; the adapter's hooks translate vLLM's engine,
 requests, tokens and KV blocks into the circuit's words.
 
-On disk, by their protocols' declarations (each protocol's `prover/workload.py`): a body is checked against its declared
+On disk, by the types the proof layer and each declared scheme declare (`types`, `Scheme.messages`): a body is checked against its declared
 type as it is written and as it is read, and its bytes are left as they are. `tests/workload_messages.toml` lists each
 message's writers and readers.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -22,12 +23,10 @@ from typing import Any
 from verity import hooks as H
 from verity.channel import Message, MessageTypes, Refused
 from verity.protocols.proofs.spot.prover import workload as spot
+from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme as schemes
-from verity.protocols.resource_accounting.compute.pouw.prover import workload as pouw
-from verity.protocols.resource_accounting.memory.pous.prover import workload as pous
-from verity.protocols.resource_accounting.network.prover import workload as certifier
 
-__all__ = ["TYPES", "Exchange", "append", "body", "close", "current", "line", "lines", "read", "write"]
+__all__ = ["Exchange", "append", "body", "build", "close", "current", "line", "lines", "read", "write"]
 
 type Subscriber = Callable[[Any], None]
 
@@ -194,27 +193,58 @@ _CURRENT: Exchange | None = None
 
 
 def current() -> Exchange:
-    """This process's exchange, opened on first use."""
+    """The exchange of the build in scope: the last build's (`build`), or the one `using` names; opened on first use."""
     global _CURRENT
     if _CURRENT is None:
         _CURRENT = Exchange()
     return _CURRENT
 
 
+def build() -> Exchange:
+    """The exchange the build about to start files on and answers: the current one until a build answered it, then a
+    fresh one, made current. An answered exchange stays with its engine, which puts it back in scope with `using`."""
+    global _CURRENT
+    if _CURRENT is None or _CURRENT.declared is not None:
+        _CURRENT = Exchange()
+    return _CURRENT
+
+
+@contextmanager
+def using(exchange: Exchange) -> Iterator[Exchange]:
+    """``exchange`` is the build in scope (`current`) inside the block, the one before it after."""
+    global _CURRENT
+    before, _CURRENT = _CURRENT, exchange
+    try:
+        yield exchange
+    finally:
+        _CURRENT = before
+
+
 def close() -> None:
-    """End this process's exchange; the next `current` opens a fresh one."""
+    """End the exchange in scope; the next `current` opens a fresh one."""
     global _CURRENT
     _CURRENT = None
 
 
-TYPES = MessageTypes((*spot.MESSAGES, *pouw.MESSAGES, *pous.MESSAGES, *certifier.MESSAGES))
+_TYPES: tuple[int, MessageTypes] | None = None
+
+
+def types() -> MessageTypes:
+    """The message types on disk: the proof layer's and every declared scheme's (`Scheme.messages`, by the scheme's name
+    in `verity.protocols.compose.schemes`)."""
+    global _TYPES
+    registry = declarations.load()
+    if _TYPES is None or _TYPES[0] != len(registry):
+        declared = {id(m): m for s in registry.values() for m in s.messages}
+        _TYPES = (len(registry), MessageTypes((*spot.MESSAGES, *declared.values())))
+    return _TYPES[1]
 
 
 def body(type_: str, data: bytes) -> bytes:
     """``data`` as the body of a ``type_`` message, unchanged; `verity.channel.Refused` when its declaration refuses
     it."""
     msg = Message(type_, body=data)
-    if (why := TYPES.schema(msg.type, msg.version).why(msg.head(), msg.body)) is not None:
+    if (why := types().schema(msg.type, msg.version).why(msg.head(), msg.body)) is not None:
         raise Refused(*why)
     return data
 

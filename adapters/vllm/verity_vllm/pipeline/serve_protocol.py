@@ -1,18 +1,15 @@
 """`verity-vllm serve-openai`'s completion protocol: each ``/v1/completions`` request parsed and each response framed as vLLM's
 OpenAI server does it. `VllmProtocol` is that server's own classes; `PlainProtocol` is the same framing without vLLM, for the
-CPU tests; `framing_agrees` holds the two to each other. ``--protocol ids`` is `ids_protocol.IdsProtocol` over
-`VllmProtocol`."""
+CPU tests; `framing_agrees` holds the two to each other. A declared scheme's framings (`Scheme.framings`, the network
+attester's ``ids``) are built over `VllmProtocol` (`framings`)."""
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.resource_accounting.network.prover.ids_protocol import (
-    ID_PAYLOAD,
-    IdsProtocol,
-)
+from verity.protocols.compose import schemes as declarations
 
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
@@ -221,12 +218,19 @@ class VllmProtocol(PlainProtocol):
                                        token_ids=token_ids, prompt_token_ids=prompt_token_ids)]).model_dump_json()
 
 
-def ids(force_include_usage: bool = False, *, payload: int = ID_PAYLOAD) -> IdsProtocol:
-    """``--protocol ids``: the network attester's id form over `VllmProtocol`."""
-    return IdsProtocol(payload=payload, base=VllmProtocol(force_include_usage))
+#: the adapter's own completion framings, by their ``--protocol`` name
+PROTOCOLS = {"vllm": VllmProtocol, "plain": PlainProtocol}
 
 
-PROTOCOLS = {"vllm": VllmProtocol, "plain": PlainProtocol, "ids": ids}
+def framings() -> dict[str, Callable[..., Any]]:
+    """Each completion framing by its ``--protocol`` name, called with ``force_include_usage``: the adapter's own
+    (`PROTOCOLS`) and each declared scheme's (`Scheme.framings`) over `VllmProtocol`, given its settings by keyword."""
+    out: dict[str, Callable[..., Any]] = dict(PROTOCOLS)
+    for scheme in declarations.load().values():
+        for name, framing in scheme.framings.items():
+            out[name] = (lambda f: lambda force_include_usage=False, **given: f(base=VllmProtocol(force_include_usage),
+                                                                                 **given))(framing)
+    return out
 
 
 FRAMING_BASE = {"request_id": "cmpl-0123-0", "created": 1, "model": "m"}
