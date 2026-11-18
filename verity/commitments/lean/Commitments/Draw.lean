@@ -114,7 +114,7 @@ structure WorkStratum extends Stratum where
 
 /-- A stratum's draw under the work samplingDesign: `⌈K · work · n_s / W⌉`, with `W` the population's work `Σ_s work_s · n_s`, never
 below the stratum's floor and never above `n_s`. Rounding up keeps each unit's inclusion probability at least `K · work / W`,
-which the work bound (`FlockSoundness.Audit.SamplingDesign.work_escape_le`, through `workRule_eq_sample`) reads. -/
+which the work bound (`Spot.Sampling.SamplingDesign.work_escape_le`, through `workRule_eq_sample`) reads. -/
 def workK (k work size total floor : Nat) : Nat := min size (max floor ((k * work * size + total - 1) / total))
 
 /-- A work samplingDesign's population work, `Σ_s work_s · n_s`. -/

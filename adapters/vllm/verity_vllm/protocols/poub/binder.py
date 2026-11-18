@@ -1,12 +1,11 @@
-"""`Binder`: the store's hooks into one in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``, so the scheduler and
-the model runner share one `NodeMemory`), every patch through `verity_vllm.engine.hooks` and undone by its `Hooks`.  The
-KV blocks' and the steps' events are the adapter's (`verity_vllm.engine.kv_blocks`), which the binder subscribes to on
-the exchange (`verity_vllm.messages`) under `NAME`.
+"""`Binder`: the store's subscriber to a served run's ``memory`` and ``steps`` events (`verity.hooks`), on the
+adapter's exchange it is installed on, under `NAME`.  It patches nothing of the serving system: the events are the
+adapter's, emitted from one in-process engine (the scheduler and the model runner share one `NodeMemory`).
 
 ~~~text
-GPUModelRunner.load_model           after: each weight tensor a region (kind weights, tier hbm), registered once
-GPUModelRunner.initialize_kv_cache  after, unless profiling: the KV pool, a region per attention layer, every page filler
-                                    (with kv=False, unregistered)
+RegisteredValues                    each weight tensor a region (kind weights, tier hbm), registered once
+RangesDeclared                      the KV pool, a region per store (a layer's KV cache), every page filler (with
+                                    kv=False, unregistered)
 RangeAllocated                      kv_alloc of the pages (with kv=False, none)
 RangeFreed                          kv_free of the pages (with kv=False, none); with fifo, the binder files
                                     ReuseOldestFreed, so a page freed inside a window is reused as late as the pool
@@ -29,8 +28,6 @@ codec's and the reader's: the identity codec has none, so the binder's cost unde
 """
 from __future__ import annotations
 
-import importlib
-import importlib.util
 import math
 from collections import deque
 from collections.abc import Callable, Sequence
@@ -52,11 +49,9 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     NodeMemory,
     PoubReceipt,
 )
-from verity.hooks import RangeAllocated, RangeFreed, RangeWritten, ReuseOldestFreed, StepBegan, StepEnded
+from verity.hooks import (RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, ReuseOldestFreed,
+                          StepBegan, StepEnded)
 
-from verity_vllm import messages
-from verity_vllm.engine import kv_blocks
-from verity_vllm.engine.hooks import Hooks
 
 if TYPE_CHECKING:
     from verity.protocols.resource_accounting.memory.poub.verifier.audit import Tiles
@@ -66,10 +61,6 @@ __all__ = ["Binder", "Every", "WeightRegion", "model_weights"]
 #: the binder's name on the exchange (`messages.current`)
 NAME = "poub"
 
-RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
-#: What a `RUNNERS` runner calls its kernel block sizes, one per KV cache group, set in `initialize_kv_cache`: Model Runner
-#: V2's name (`vllm.v1.worker.gpu.model_runner`), then the first runner's (`vllm.v1.worker.gpu_model_runner`).
-KERNEL_BLOCK_SIZES = ("kernel_block_sizes", "_kernel_block_sizes")
 
 
 class TorchBacking:
@@ -182,15 +173,9 @@ class WeightRegion:
     encode: bool = False
 
 
-def model_weights(runner: Any) -> list[WeightRegion]:
-    """Every parameter of the runner's model once (tied ones once), as the identity codec holds them."""
-    model, seen, out = _unwrap(runner.model), set(), []
-    for name, p in model.named_parameters():
-        if p.numel() == 0 or p.data_ptr() in seen:
-            continue
-        seen.add(p.data_ptr())
-        out.append(WeightRegion(name, p.data, f"param:{name}"))
-    return out
+def model_weights(values: Sequence[tuple[str, Any]]) -> list[WeightRegion]:
+    """Every registered value (`RegisteredValues.values`) as the identity codec holds it."""
+    return [WeightRegion(name, t, f"param:{name}") for name, t in values]
 
 
 def _check_disjoint(starts: list[tuple[int, np.ndarray]], plane_bytes: int) -> None:
@@ -202,12 +187,6 @@ def _check_disjoint(starts: list[tuple[int, np.ndarray]], plane_bytes: int) -> N
         a = np.sort(np.concatenate(group))
         if (np.diff(a) < plane_bytes).any():
             raise ValueError("two KV layers' pages overlap in one storage")
-
-
-def _unwrap(m: Any) -> Any:
-    while not hasattr(m, "named_parameters") and hasattr(m, "runnable"):
-        m = m.runnable
-    return m
 
 
 class Inbox:
@@ -246,7 +225,8 @@ class Every:
 
 
 class Binder:
-    """The store's hooks.  ``weights(runner)`` lists the weight regions after load (default `model_weights`);
+    """The store's subscriber.  ``weights(values)`` lists the weight regions from the registered values
+    (`RegisteredValues.values`; default `model_weights`);
     ``reader(segments)``, if given, returns the step's aligned segments' roots (by segment number), or the pass's root
     when it built the whole tree, for `end_pass`; ``fifo`` reuses freed pages in the order they were freed.
     ``messages()``, polled at each pass's start, returns the verifier's messages since the last poll (`Inbox`, or
@@ -257,7 +237,7 @@ class Binder:
     ``tiles.output(seed, j)``, PoUW's tile output before block ``j`` is read, and the default receipt is the driver's
     (`PoubReceipt`); without them, its default kind, sketch-sha512, of the block alone (`KindReceipt`).
     With ``passes=False`` the binder runs no pass: a remote session's backend runs them, and its windows
-    (`verity_vllm.protocols.poub.remote.CommitSession`).
+    (an adapter's remote commit session).
     With ``weight_blocks`` it registers weight tensors in order while their blocks fit that many, and counts the rest
     unregistered: a store small enough for a remote session's CPU passes (`node_store.serving.StoreBackend`).  With ``kv=False``
     the KV pool stays outside the registration (counted unregistered): its pages' hooks reach no store, and a step
@@ -274,7 +254,7 @@ class Binder:
         self.weights, self.reader, self.fifo, self.tiles = weights, reader, fifo, tiles
         self.messages, self.registration, self.on_window, self.passes = messages, registration, on_window, passes
         self.weight_blocks = weight_blocks
-        self.hooks: Hooks | None = None
+        self._off: list[Callable[[], None]] = []
         self.step = 0
         self.windows = 0
         self._in_window = False
@@ -286,9 +266,9 @@ class Binder:
 
     # --- registration -----------------------------------------------------------------------------------------------
 
-    def on_load(self, runner: Any) -> None:
+    def on_values(self, e: RegisteredValues) -> None:
         room = self.weight_blocks
-        for w in self.weights(runner):
+        for w in self.weights(e.values):
             b = TorchBacking.of_tensor(w.tensor, self.block_bytes)
             nbytes = w.tensor.numel() * w.tensor.element_size()
             if b is None or (room is not None and b.nbytes // self.block_bytes > room):
@@ -301,20 +281,10 @@ class Binder:
             self.store.register(w.name, "hbm", "weights", b, block_bytes=self.block_bytes, codec=w.codec,
                                 receipt=w.receipt or self.receipt, source=w.source, encode=w.encode)
 
-    def on_kv(self, runner: Any, kv_cache_config: Any) -> None:
-        """Register the KV pool: each attention layer's pages a region (`PagedBacking`, so layers that share one
-        storage are each their own pages); the storages' bytes no layer's page holds are counted unregistered."""
-        caches = list(getattr(runner, "kv_caches", None) or ())
-        if not caches:
-            raise RuntimeError("the model runner bound no KV caches")
-        slots = int(runner.cache_config.block_size)
-        kbs = next((v for v in (getattr(runner, name, None) for name in KERNEL_BLOCK_SIZES) if v), None)
-        if kbs is None:
-            raise RuntimeError(f"the model runner names no kernel block sizes ({' or '.join(KERNEL_BLOCK_SIZES)}) to hold to "
-                               f"the manager's {slots}")
-        if any(int(k) != slots for k in kbs):
-            raise NotImplementedError(f"kernel block sizes {kbs} other than the manager's {slots}")
-        pages = int(kv_cache_config.num_blocks)
+    def on_ranges(self, e: RangesDeclared) -> None:
+        """Register the KV pool: each store's pages a region (`PagedBacking`, so layers that share one storage are each
+        their own pages); the storages' bytes no layer's page holds are counted unregistered."""
+        caches, pages, slots = e.stores, e.ranges, e.slots
         if not self.kv:
             storages = {t.untyped_storage().data_ptr(): t.untyped_storage().nbytes() for t in caches}
             self.unregistered["kv"] = sum(storages.values())
@@ -333,7 +303,7 @@ class Binder:
             if layout not in (None, lay):
                 raise NotImplementedError("KV layers of different page shapes")
             layout = lay
-        assert layout is not None, "the runner bound at least one KV cache"
+        assert layout is not None, "the pool has at least one store"
         _check_disjoint(starts, layout.plane_bytes)
         held = sum(f.numel() for f in flats.values()) - sum(b.nbytes for b in backings)
         if held:
@@ -357,7 +327,7 @@ class Binder:
     # --- the scheduler's steps --------------------------------------------------------------------------------------
 
     def on_event(self, e: Any) -> None:
-        """One of the exchange's ``memory`` or ``steps`` events (`verity_vllm.engine.kv_blocks` emits them)."""
+        """One of the exchange's ``memory`` or ``steps`` events."""
         if isinstance(e, StepBegan):
             self.on_step(e)
         elif isinstance(e, StepEnded):
@@ -365,6 +335,10 @@ class Binder:
         elif isinstance(e, RangeWritten):
             if self.kv:
                 self._writes.append(Append(e.range, e.offset, e.count))
+        elif isinstance(e, RegisteredValues):
+            self.on_values(e)
+        elif isinstance(e, RangesDeclared):
+            self.on_ranges(e)
         elif isinstance(e, RangeAllocated) and e.reused:
             raise NotImplementedError("the store's binder runs without prefix caching")
         elif self.kv and isinstance(e, RangeAllocated | RangeFreed):
@@ -410,44 +384,20 @@ class Binder:
 
     # --- install ----------------------------------------------------------------------------------------------------
 
-    def install(self, hooks: Hooks | None = None) -> Binder:
-        h = self.hooks = hooks or Hooks(tag="verity-store")
-        binder = self
-        for mod in RUNNERS:
-            if importlib.util.find_spec(mod) is None:
-                continue
-            cls = importlib.import_module(mod).GPUModelRunner
-
-            def load(orig):
-                def load_model(runner, *a, **kw):
-                    r = orig(runner, *a, **kw)
-                    binder.on_load(runner)
-                    return r
-                return load_model
-
-            def init_kv(orig):
-                def initialize_kv_cache(runner, kv_cache_config, *a, **kw):
-                    r = orig(runner, kv_cache_config, *a, **kw)
-                    if not kw.get("is_profiling", a[0] if a else False):
-                        binder.on_kv(runner, kv_cache_config)
-                    return r
-                return initialize_kv_cache
-
-            h.wrap(cls, "load_model", load)
-            h.wrap(cls, "initialize_kv_cache", init_kv)
-        h.service("kv-blocks", self._subscribe, lambda offs: [off() for off in reversed(offs)])
+    def install(self, exchange: Any) -> Binder:
+        """Subscribe to ``exchange`` (the adapter's: ``subscribe(name, hook, fn)`` returning the removal, and
+        ``request(name, request)``), filing `ReuseOldestFreed` with ``fifo``; before the engine is built."""
+        if self._off:
+            raise RuntimeError("the binder is installed")
+        if self.fifo:
+            exchange.request(NAME, ReuseOldestFreed())
+        self._off = [exchange.subscribe(NAME, hook, self.on_event) for hook in ("memory", "steps")]
         return self
 
-    def _subscribe(self) -> list[Callable[[], None]]:
-        ex = messages.current()
-        if self.fifo:
-            ex.request(NAME, ReuseOldestFreed())
-        return [ex.subscribe(NAME, "memory", self.on_event), ex.subscribe(NAME, "steps", self.on_event),
-                kv_blocks.attach()]
-
     def uninstall(self) -> None:
-        if self.hooks is not None:
-            self.hooks.uninstall()
+        offs, self._off = self._off, []
+        for off in offs:
+            off()
 
     def stats(self) -> dict[str, Any]:
         lay, c = self.store.layout(), self.store.counters

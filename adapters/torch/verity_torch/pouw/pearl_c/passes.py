@@ -20,7 +20,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 
 from verity_torch.pouw.pearl_c.ends import _RunState
 
-#: vLLM's GPU model runner modules (V1's and Model Runner V2's), each with its ``GPUModelRunner`` (as `store.binder.RUNNERS`)
+#: vLLM's GPU model runner modules (V1's and Model Runner V2's), each with its ``GPUModelRunner`` (as `verity_vllm.engine.kv_blocks.RUNNERS`)
 MODEL_RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 
 

@@ -527,9 +527,17 @@ no `.git` needed. A tree that none of these names is refused before anything is 
 
 - `--find-load` serves stock alone over its load's own rungs (`LOADS`), requests in flight up to the profile's prompts.
   It says where output tokens a second stop rising and prints the file's line for this host's card, the profile's
-  version raised by one and the digest `tests/benchmarks/harness/test_profiles.py` then pins. It edits no file. A profile whose load is still `not found yet` refuses `--feature` until that line is in.
-- `--feature ARM` serves stock and one arm of ours in turn at the profile's one load: two server lifetimes each, three
-  reps a lifetime, which makes six paired reps. Its result (`OUT/serving_profile.{json,txt}`) has three lines in this order:
+  version raised by one and the digest `tests/benchmarks/harness/test_profiles.py` then pins. It edits no file. A
+  profile whose load is still `not found yet` refuses `--feature` until that line is in.
+- `--feature SCHEME` names a registered useful-work scheme (`pearl-plus`, `dither`), read from the one table of schemes
+  by name (`verity_bench.schemes`); the job serves the arm of ours whose `scheme` it is (`serve_tax.feature`). A name
+  the table doesn't hold is refused, and a scheme no arm over the model's stock serves yet raises
+  `NotImplementedError` (no arm here serves one yet). It serves stock and that arm in turn at the profile's one load:
+  two server lifetimes each, three reps a lifetime, which makes six paired reps. Its result is the run's result (kind `serve-tax-profile/v1`), written
+  through the kit's report: the cost under the model's metric id (`vllm/serving-cost-glm53`), its member the arm over
+  stock and the profile (`glm-5.3-h200-prod-record-over-prod-coding-agent`), with its interval, and each side's latencies
+  and share within the bounds as measurements beside it. `verity bench serving_cost profile RUN` reads it back. The
+  result prints three lines in this order:
   - our extra card time a token. On a load of requests in flight, stock's output tokens a second at full load over
     ours, less one: the median of the six paired ratios with the kit's interval (`serving_cost`), its noise floor
     stock's two lifetimes. On coding-agent's sessions, our seconds for the same requests over stock's, less one, with a
@@ -541,7 +549,8 @@ no `.git` needed. A tree that none of these names is refused before anything is 
 
   Then come the profile's name, version and digest, the model and whether its result is a quick check, the vLLM pin,
   and the differences from the published command that apply.
-- An arm that refuses what the profile has on gives `cannot run` in the refusal's own words, stored as the result. The
+- An arm that refuses what the profile has on gives `cannot run` in the refusal's own words, stored as the result: the
+  cost with no value and the refusal as its why. The
   job then exits 1, as it does for an arm whose run refuses it. Where a change on our side alone lets the same prompts
   through, the arm is served with that change as a second line, labelled with it (`seeded for ours`, `prefix cache off
   for ours`); stock is never changed. Where no such change exists, no arm is served and no GPU is held.
@@ -553,7 +562,7 @@ short makes the first line `cannot tell`.
 research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
   --profile coding-agent --find-load
 research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
-  --profile coding-agent --feature record
+  --profile coding-agent --feature pearl-plus
 ~~~
 
 Under a deployment's traffic, the job serves the replay ladder's plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,

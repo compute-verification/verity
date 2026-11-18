@@ -10,13 +10,14 @@ from verity.protocols.resource_accounting import scheme as S
 
 
 def _toy(name: str = "toy-bandwidth", **kw) -> S.Scheme:
-    return S.Scheme(
-        name=name, protocol=f"verity/{name}/v0", resource="read",
-        blocks=(S.Block("ToyReceipt_v1", lambda shape: 8 * shape["bytes"]),),
-        assumptions=("ToyNoCompression",),
-        log=(S.Order("payload", "key"), S.Order("receipts", "seed", within_ns=1_000_000, assumption="ToyNoCompression")),
-        charges=(S.Charge("on-chip", "on_chip_bits"), S.Charge("rebuilt", "rebuilt_bits")),
-        settings={"refresh": False}, requires={"coins-at-rate": "its own challenger"}, **kw)
+    return S.Scheme(**{
+        "name": name, "protocol": f"verity/{name}/v0", "resource": "read",
+        "blocks": (S.Block("ToyReceipt_v1", lambda shape: 8 * shape["bytes"]),),
+        "assumptions": ("ToyNoCompression",),
+        "log": (S.Order("payload", "key"),
+                S.Order("receipts", "seed", within_ns=1_000_000, assumption="ToyNoCompression")),
+        "charges": (S.Charge("on-chip", "on_chip_bits"), S.Charge("rebuilt", "rebuilt_bits")),
+        "settings": {"refresh": False}, "requires": {"coins-at-rate": "its own challenger"}, **kw})
 
 
 @pytest.fixture(autouse=True)
@@ -80,3 +81,39 @@ def test_hooks() -> None:
 def test_time_only_through_an_assumption() -> None:
     with pytest.raises(ValueError, match="only by an assumption"):
         S.Order("receipts", "seed", within_ns=1)
+    with pytest.raises(ValueError, match="only by an assumption"):
+        S.Order("value roots", "seeds", "after", assumption="SAKMatmul")
+    with pytest.raises(ValueError, match="positive time"):
+        S.Order("value roots", "seeds", "after", within_ns=0, assumption="SAKMatmul")
+    with pytest.raises(ValueError, match="not among its assumptions"):
+        _toy(log=(S.Order("value roots", "seeds", "after", within_ns=30 * 10**9, assumption="SAKMatmul"),))
+
+
+def test_order_direction() -> None:
+    after = S.Order("value roots", "seeds", "after", within_ns=30 * 10**9, assumption="ToyNoCompression")
+    assert _toy(log=(after,)).log[0].direction == "after"
+    assert S.Order("start", "first-tick").direction == "before"
+    with pytest.raises(ValueError, match="before or after"):
+        S.Order("start", "first-tick", "beside")
+
+
+def test_scheme_term_carried() -> None:
+    s = _toy(delta_scheme=Fraction(1, 2**64))
+    b = S.bound(s, Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0})
+    assert b.delta_scheme == Fraction(1, 2**64) and b.probability == Fraction(1, 100) + Fraction(1, 2**64)
+    assert S.bound(_toy(), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}).delta_scheme == 0
+    with pytest.raises(ValueError, match="δscheme lies"):
+        _toy(delta_scheme=Fraction(1))
+
+
+def test_unbounded_charge_refuses_a_bound() -> None:
+    s = _toy(charges=(S.Charge("on-chip", "on_chip_bits"), S.Charge("padding", "Network.PaddingBound", bounded=False)))
+    with pytest.raises(ValueError, match="nothing bounds yet: padding"):
+        S.bound(s, Fraction(1, 100), 0, {"on-chip": 0, "padding": 0})
+
+
+def test_ports() -> None:
+    port = S.Port("scan state", "input", "ToyReceipt_v1", "state")
+    assert _toy(ports=(port,)).ports == (port,)
+    with pytest.raises(ValueError, match="not its blocks' Definitions"):
+        _toy(ports=(S.Port("scan state", "input", "IngressScanBucket_v1", "state"),))

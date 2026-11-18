@@ -52,8 +52,7 @@ while it is the declared board and vBIOS, which the named assumptions `accountin
 likewise its guest's CPUID.
 
 A GPU card's `driver` lists the product strings a driver reports for it, so the harness kit (`verity_bench.kit`'s
-`card_sku`, `card_short`, `card_arch`) finds the one card a device's reported name is; it refuses a name no card or two
-cards hold.
+`card_short`, `card_arch`) finds the one card a device's reported name is; it refuses a name no card or two cards hold.
 
 ## The architecture files
 

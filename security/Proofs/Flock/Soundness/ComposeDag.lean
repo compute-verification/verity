@@ -27,7 +27,7 @@ open Flock Flock.DeriveAll
 
 namespace FlockSoundness
 
-open Audit Types.Dag
+open Spot.Sampling Types.Dag
 
 namespace Compose
 

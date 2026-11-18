@@ -23,7 +23,7 @@ set_option Elab.async false
 
 namespace FlockSoundness.Discharge.Layout
 
-open Flock FlockLevel3 Audit Placed
+open Flock FlockLevel3 Spot.Sampling Placed
 
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (pi : HmIn.Ports)
 

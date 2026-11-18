@@ -44,7 +44,7 @@ facts about one copy of one unit in a layer agreeing with the registrant, the de
 namespace FlockVBridge.AccChain
 
 open Flock
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockSoundness.Discharge.Hm (bitL)
 open FlockVBridge.Decode (RegBit)
 open Flock.RecAlgebra (valOf)
