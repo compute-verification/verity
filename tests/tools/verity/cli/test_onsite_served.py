@@ -927,8 +927,8 @@ def test_without_the_placement_hold_the_onsite_line_is_the_record_as_the_workloa
                                   **{NAMES[k]: v for k, v in rows.items()}}
     assert line["coins"] == "simulated" and line["coins_on"] == {
         **{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe", "pearl-plus")}, "sampled-proofs": T.GATE_HOST}
-    assert set(line["answer_from"].values()) == {f"{T.AS_WRITTEN} (its piece files in {k}/)" for k in
-                                                 ("integrity", "work", "space", "communication", "wipe", *rows)}
+    assert line["answer_from"] == T.unchecked(PROTOCOLS, {NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)" for k in
+                                                          ("integrity", "work", "space", "communication", "wipe", *rows)})
 
 
 @pytest.mark.parametrize("left", [T.PHASE, "verdicts.json"])
