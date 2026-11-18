@@ -129,6 +129,18 @@ def test_what_isnt_a_network_attesters_id_request_is_refused_and_the_models_list
         assert "a network attester's id request" in refused(respond(other))
     models = respond(b"GET /v1/models HTTP/1.1\r\nhost: s\r\n\r\n")
     assert models.startswith(b"HTTP/1.1 200 OK\r\n")
+
+
+@pytest.mark.parametrize("field, name", [(b"x-verity-release: 3x", "x-verity-release"),
+                                         (b"x-verity-release: 3\r\nx-verity-release-run: zz", "x-verity-release-run"),
+                                         (b"x-verity-release: 3\r\nx-verity-release-bucket: x", "x-verity-release-bucket")])
+def test_an_id_request_with_a_malformed_release_is_refused_by_its_headers_name(field, name):
+    """A class request whose release header is malformed is one someone tried to mark and failed, not one with no
+    release: `release.release_of` refuses it by the header's name and the stand-in answers 400 with that refusal."""
+    marked = ids_request().replace(b"\r\n", b"\r\n" + field + b"\r\n", 1)
+    with pytest.raises(ValueError, match=f"^{name}: "):
+        S.network_attester_request(marked)
+    assert refused(respond(marked)).startswith(name + ": ")
     assert [m["id"] for m in json.loads(models.partition(b"\r\n\r\n")[2])["data"]] == [NAME]
 
 

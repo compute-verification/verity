@@ -1,5 +1,8 @@
-"""The formats of a network attester's release of a request: its headers and its watermark. Each request a network
-attester releases reaches the server with three headers: `x-verity-release: N`, N its 0-based index in the attester
+"""The formats of a network attester's release of a request: its headers and its watermark.
+It says what a release head and a watermark stream are, and nothing about whether a release is charged, held or
+acceptable to the attester, which is a verifier's.
+
+Each request a network attester releases reaches the server with three headers: `x-verity-release: N`, N its 0-based index in the attester
 run's release order (dense: each released request once, a request a fault drops before its release unnumbered);
 `x-verity-release-run: ID`, the run's id in hex; and, from the network attester, `x-verity-release-bucket: A`, the
 bucket of the release, counted from 0 at the run's origin. So a server under the network attester's order
@@ -37,6 +40,7 @@ RUN_ID_BYTES = 32
 WATERMARK_PATH = b"/verity/watermark"
 WATERMARK_END = b"0\r\n\r\n"
 _REQUEST_LINE = re.compile(rb"[!#$%&'*+.^_`|~0-9A-Za-z-]+ [^\s]+ HTTP/1\.[01]")
+_HEX = re.compile(rb"(?:[0-9A-Fa-f]{2})+")
 _LINE = re.compile(rb"(0|[1-9][0-9]*) (0|[1-9][0-9]*)((?: (?:0|[1-9][0-9]*))*)\n")
 
 
@@ -84,8 +88,10 @@ def with_release(request: bytes, n: int, run: bytes | None = None, bucket: int |
 
 
 def release_of(head: bytes) -> tuple[int, bytes | None, int | None] | None:
-    """(N, run id, bucket) of a request's head (through its blank line), each its first header, or None without a
-    well-formed N; a run that isn't hex, or a bucket that isn't a decimal count, is None."""
+    """(N, run id, bucket) of a request's head (through its blank line), each its first header, the run and bucket None
+    without theirs; None for a head with no `x-verity-release`, or bytes that aren't an HTTP/1 request's whole head.
+    `ValueError`, its message starting with the header's name, where an N that isn't a decimal count, a run that isn't
+    hex or a bucket that isn't a decimal count comes with an `x-verity-release`."""
     parts = _split(head)
     if parts is None:
         return None
@@ -93,16 +99,17 @@ def release_of(head: bytes) -> tuple[int, bytes | None, int | None] | None:
     for f in parts[1]:
         values.setdefault(_name(f), f.partition(b":")[2].strip())
     raw = values.get(RELEASE_HEADER)
-    if raw is None or not raw.isdigit():
+    if raw is None:
         return None
-    run = None
-    if RUN_HEADER in values:
-        try:
-            run = bytes.fromhex(values[RUN_HEADER].decode("ascii")) or None
-        except ValueError:
-            pass
+    if not raw.isdigit():
+        raise ValueError(f"{RELEASE_HEADER.decode()}: a decimal count, not {raw[:40]!r}")
+    run = values.get(RUN_HEADER)
+    if run is not None and not _HEX.fullmatch(run):
+        raise ValueError(f"{RUN_HEADER.decode()}: a run id in hex, not {run[:40]!r}")
     bucket = values.get(BUCKET_HEADER)
-    return int(raw), run, int(bucket) if bucket is not None and bucket.isdigit() else None
+    if bucket is not None and not bucket.isdigit():
+        raise ValueError(f"{BUCKET_HEADER.decode()}: a decimal count, not {bucket[:40]!r}")
+    return int(raw), None if run is None else bytes.fromhex(run.decode()), None if bucket is None else int(bucket)
 
 
 def watermark_head(run: bytes) -> bytes:
@@ -128,16 +135,21 @@ def watermark_chunk(t: int, n: int, lost: Sequence[int] = ()) -> bytes:
 
 
 def read_watermark(line: bytes, last: tuple[int, ...] | None = None) -> tuple[int, int, tuple[int, ...]]:
-    """(t, n, lost) of a watermark line, `t n`, any lost releases and its newline, or ValueError unless it follows
-    `last`, the line before it (its (t, n, …)): t one past last's (0 first), n at least last's, and the lost rising
-    from last's n to below n, so the watermark only advances and names each lost release once."""
+    """(t, n, lost) of a watermark line, `t n`, any lost releases and its newline, where it follows `last`, the line
+    before it (its (t, n, …)), so the watermark only advances and names each lost release once. `ValueError`, its
+    message starting with the rule's name: `watermark-form` for a line of another form, `watermark-tick` unless t is
+    one past last's (0 first), `watermark-count` where n is below last's, `watermark-lost` unless the lost rise from
+    last's n to below n."""
     m = _LINE.fullmatch(line)
     if m is None:
-        raise ValueError(f"a watermark line is 't n', any lost releases and a newline, not {line[:40]!r}")
+        raise ValueError(f"watermark-form: a watermark line is 't n', any lost releases and a newline, not {line[:40]!r}")
     t, n, lost = int(m[1]), int(m[2]), tuple(int(k) for k in m[3].split())
     want, least = (0, 0) if last is None else (last[0] + 1, last[1])
-    if t != want or n < least:
-        raise ValueError(f"watermark ({t}, {n}) after {last}: t steps by 1 from 0 and n never decreases")
+    if t != want:
+        raise ValueError(f"watermark-tick: watermark ({t}, {n}) after {last}: t steps by 1 from 0")
+    if n < least:
+        raise ValueError(f"watermark-count: watermark ({t}, {n}) after {last}: n never decreases")
     if not _rising(lost, least, n):
-        raise ValueError(f"watermark ({t}, {n}) after {last}: its lost releases {list(lost)} rise from {least} below n")
+        raise ValueError(f"watermark-lost: watermark ({t}, {n}) after {last}: its lost releases {list(lost)} rise from "
+                         f"{least} below n")
     return t, n, lost
