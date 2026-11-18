@@ -33,7 +33,7 @@ def forkOf (j : ℕ) (v : (Fin n → Coin) × C) : (Fin n → Coin) × C := (for
 open Classical in
 /-- **The link's loop asks only about its forks and searches `first` or one of them**; its asks cost `loopCost` at the
 forks of `us 0`. -/
-theorem linkLoop_exec (j : ℕ) (first : RunExp) : ∀ (N i : ℕ),
+theorem linkLoop_execCost (j : ℕ) (first : RunExp) : ∀ (N i : ℕ),
     ((linkLoop (Coin := Coin) j first N i).exec m ω us).2.1 = [] ∧
     (∀ e ∈ ((linkLoop (Coin := Coin) j first N i).exec m ω us).2.2,
       e = first ∨ e ∈ ((linkLoop (Coin := Coin) j first N i).exec m ω us).1) ∧
@@ -49,7 +49,7 @@ theorem linkLoop_exec (j : ℕ) (first : RunExp) : ∀ (N i : ℕ),
       congr 1
       omega
     have h0 : ((0 : Fin (N + 1)) : ℕ) = 0 := rfl
-    obtain ⟨h1, h2, h3⟩ := linkLoop_exec j first N (i + 1)
+    obtain ⟨h1, h2, h3⟩ := linkLoop_execCost j first N (i + 1)
     by_cases ha : m.acc ω (forkOf m us j (us i))
     · have hex : (linkLoop (Coin := Coin) j first (N + 1) i).exec m ω us =
           ([.fork j (.fresh 0) (.fresh i)], [], [first, .fork j (.fresh 0) (.fresh i)]) := by
@@ -110,7 +110,7 @@ theorem linkPlan_cost_le (k : Msg → ℕ) (M : ℕ) (m : RunModel Coin Ω n C) 
         (slotRuns sl 1, fun t : Fin M => slotRuns sl (2 + t.val)) := by
   have hn : m.named (slotRuns sl) (.fork j.val (.fresh 0) (.fresh 1)) = forkOf m (slotRuns sl) j.val (slotRuns sl 1) :=
     rfl
-  obtain ⟨h1, h2, h3⟩ := linkLoop_exec m ω (slotRuns sl) j.val (.fork j.val (.fresh 0) (.fresh 1)) M 2
+  obtain ⟨h1, h2, h3⟩ := linkLoop_execCost m ω (slotRuns sl) j.val (.fork j.val (.fresh 0) (.fresh 1)) M 2
   show (List.map (fun e => m.cost ω (m.named (slotRuns sl) e))
       ((((linkPlan (Coin := Coin) k M).plan x j).exec m ω (slotRuns sl)).1 ++
         (((linkPlan (Coin := Coin) k M).plan x j).exec m ω (slotRuns sl)).2.1 ++
