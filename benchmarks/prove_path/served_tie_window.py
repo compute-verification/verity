@@ -1,6 +1,10 @@
-"""The served rows' tie (`served_tie.ServedRowsTie_v2`) on a sealed served window's real rows.
+"""The routed tie (`served_tie.ServedRowsTie_v2`) checked natively, in plain, on a sealed served window's real rows.
 
     python benchmarks/prove_path/served_tie_window.py --serve-run DIR --window K --out DIR
+
+It is the developer's own check of its own run, on values in the clear (the serve's run directory, the prover's served
+rows with their salts, the requests), and it establishes nothing for the auditor: its result's ``checked_by`` is
+`kit_report.PIECE`.
 
 * **The window** is serve-openai's sealed window K of the run DIR: its dumped store
   (``windows/wK/commit/replay_bundle_p0/store``), its served-rows record (``windows.jsonl``), the prover's served rows and
@@ -39,6 +43,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+from verity_bench import kit_report as K
 from verity_vllm.compiler import served_rows as SR
 from verity_vllm.compiler import served_statics as SS, served_tie as ST
 
@@ -203,14 +208,15 @@ def main(argv: list[str] | None = None) -> int:
     run = run_cases(S, st, window, steps, seqs)
     t2 = time.monotonic()
     passed = all(ok.values()) and run.passed
-    result = {"window": a.window, "run_root": x.run.run_root.hex(), "served_rows_root": x.rec["served_rows"]["root"],
+    result = {"checked_by": K.PIECE, "window": a.window, "run_root": x.run.run_root.hex(), "served_rows_root": x.rec["served_rows"]["root"],
               "statics": st, "steps": len(steps), "N": [s.N for s in steps], "bindings": ok, "native": native,
               "edits": run.edits, "cases": run.cases, "verdicts": run.verdicts, "expected": run.expected, "passed": passed,
               "ands": {"step": ST.step_size(**st)["ands"], "window": ST.size(**st)["ands"]},
               "seconds": {"open": round(t1 - t0, 1), "cases": round(t2 - t1, 1)}}
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "result.json").write_text(json.dumps(result, indent=1))
-    print(json.dumps({k: result[k] for k in ("bindings", "native", "verdicts", "ands", "seconds", "passed")}, indent=1))
+    print(json.dumps({k: result[k] for k in ("checked_by", "bindings", "native", "verdicts", "ands", "seconds", "passed")},
+                     indent=1))
     return 0 if passed else 1
 
 
