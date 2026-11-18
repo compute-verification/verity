@@ -428,7 +428,7 @@ def parsePartsIn (fuel : Nat) (j : Json) (leaves : Bool → Nat → Option Nat) 
 
 /-- The name a grid `g` is refused by over collections of `n` leaves, or `ok` (`test_grid.py` holds the same table). -/
 private def gridRefusal (g : String) (n : Nat) : String :=
-  match Lean.Json.parse ("{\"grid\":" ++ g ++ "}") with
+  match JsonParse.parse ("{\"grid\":" ++ g ++ "}") with
   | .ok j => match parsePartsIn 4 j (fun _ _ => some n) (fun _ _ => none) with
     | .ok _ => "ok"
     | .error e => (e.splitOn ":")[0]!
