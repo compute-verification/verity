@@ -387,12 +387,36 @@ def test_io_writes_the_kept_runs_attested_io_private_in_keep(tmp_path, monkeypat
     assert SS.main(["io", "--run", RUN, "--keep", str(keep)]) == 2 and "doesn't read whole" in capsys.readouterr().err
 
 
-def test_endpoint_runs_the_step_on_the_served_nodes_records_and_publishes_only_its_report_and_public_records(
+def _full_shaped(src: Path, ps: list[list[int]]) -> list[bytes]:
+    """windows.jsonl and serve.json in serve-openai's whole form, each private field marked: what none of the endpoint's
+    art may hold."""
+    serve = json.loads((src / "serve.json").read_text())
+    dicts = {k: {f"{k}_private": f"{k}-value-77"} for k in ("arena", "admission", "tick", "protocols", "framing",
+                                                             "remote_session")}
+    serve["engine"]["engine_private"] = "engine-value-77"
+    (src / "serve.json").write_text(json.dumps(serve | dicts | {"host": "node-private-77",
+                                                                "binding_map_digest": "d1gest77" * 8}))
+    (src / "windows.jsonl").write_text("".join(json.dumps({
+        "window": w, "run_id": "serve-run-77", "run_root": "r00t77" * 8, "seed_coin": "c01n77" * 8, "steps": 3,
+        "step_roots": ["5tep77"], "committed_bytes": 77777, "requests": ["e0", "e1"], "commit": "c0mm1t77",
+        "user": "user-0", "gc": 0.777, "commit_s": 7.77, "served_rows": {"count": 1}}) + "\n" for w in range(2)))
+    return [*SS.needles(ps), b"user-0", b"user-1", b'"e0"', b'"e1"', b"serve-run-77", b"r00t77", b"c01n77", b"5tep77",
+            b"77777", b"c0mm1t77", b"0.777", b"7.77", b"node-private-77", b"d1gest77", b"engine-value-77",
+            *(f"{k}-value-77".encode() for k in dicts), b"windows.jsonl", b"serve.json", b"prompt_len", b"sampling",
+            b"emitted", str(src).encode()]
+
+
+def test_endpoint_publishes_only_the_steps_public_document_and_keeps_its_report_and_records_private(
         tmp_path, monkeypatch, capsys):
+    """The endpoint's art is one file, the step's public document: each of `chain_record.ENDPOINT_PUBLIC`'s fields and
+    no other. Given serve-openai's whole windows.jsonl and serve.json (request ids, a user, timings, roots, the seven
+    dictionaries), no byte of them reaches ``--out`` or stdout; the whole report stays in ``--keep`` (0600), beside the
+    records, and the chain's step reads the same verdict off either."""
     import chain_record as CR
     seen = _stub_step(monkeypatch)
     ps = SS.prompts(2, SS.PROMPT_IDS, SS.VOCAB, b"seed")
     src, run = _serve_dir(tmp_path / "serve", ps), tmp_path / "run"
+    marks = _full_shaped(src, ps)
     out = run / "out"
     listing = sorted(p.name for p in src.iterdir())
     sent = _certified(run / "inputs", ps)
@@ -400,53 +424,65 @@ def test_endpoint_runs_the_step_on_the_served_nodes_records_and_publishes_only_i
     keep = tmp_path / "serve.endpoint"
     assert not sent.exists() and (keep / SS.CERTIFIED).stat().st_mode & 0o777 == 0o600
     assert keep.stat().st_mode & 0o777 == 0o700 and (keep / "records" / "requests.jsonl").stat().st_mode & 0o777 == 0o600
-    assert sorted(p.name for p in out.iterdir()) == ["report.json", "serve.json", "windows.jsonl"]
-    rep = json.loads((out / "report.json").read_text())
-    assert (rep["verdict"], rep["at"], rep["warden_run"]) == ("accepted", CR.SERVED_NODE, RUN)
+    assert [p.name for p in out.rglob("*")] == [SS.ART]
+    pub = json.loads((out / SS.ART).read_text())
+    paths = {f"{k}/{j}" if isinstance(v, dict) else k for k, v in pub.items() for j in (v if isinstance(v, dict) else [k])}
+    assert paths == set(CR.ENDPOINT_PUBLIC) and pub["format"] == CR.ENDPOINT_PUBLIC_FORMAT
+    assert (pub["verdict"], pub["at"], pub["warden_run"], pub["io"], pub["advice"]) == (
+        "accepted", CR.SERVED_NODE, RUN, {"accepted": True, "violations": 0},
+        {"bound": True, "rebuilt": True, "commit_windows": 1, "bound_windows": 1})
+    whole = keep / SS.ART
+    assert whole.stat().st_mode & 0o777 == 0o600 and json.loads(whole.read_text())["chain"]["bits"]["commit_windows"]
+    assert sorted(p.name for p in (keep / "records").iterdir()) == sorted(SS.SERVED)
+    assert CR.network_attester_endpoint_step(pub) == CR.network_attester_endpoint_step(json.loads(whole.read_text()))
     assert seen["ep"] == keep / "records" and seen["eos"] == [128001] and seen["dep"]["run_id"] == RUN
     assert [(r["engine_id"], r["user"], r["prompt_ids"], r["streamed_ids"]) for r in seen["requests"]] == [
         ("e0", "user-0", ps[0], [1, 2]), ("e1", "user-1", ps[1], [1, 2])]
     assert sorted(p.name for p in src.iterdir()) == listing
-    published = b"".join(p.read_bytes() for p in out.iterdir()) + capsys.readouterr().out.encode()
-    assert not any(n in published for n in [*SS.needles(ps), b'"prompt_len"', b'"sampling"', b'"emitted"'])
+    published = b"".join(p.read_bytes() for p in out.rglob("*") if p.is_file()) + capsys.readouterr().out.encode()
+    assert not [m for m in marks if m in published]
     stdin = tmp_path / "stdin.json"
     stdin.write_bytes(_certified(tmp_path / "kept", ps).read_bytes())
     shutil.rmtree(out)
     with stdin.open() as f:
         monkeypatch.setattr(sys, "stdin", f)
         assert SS.main(["endpoint", "--from", str(src), "--io", "-", "--out", str(out)]) == 0
-    assert json.loads((out / "report.json").read_text())["verdict"] == "accepted"
+    assert json.loads((out / SS.ART).read_text())["verdict"] == "accepted"
 
 
-def test_endpoint_publishes_nothing_that_carries_a_planted_prompt_length_or_seed(tmp_path, monkeypatch, capsys):
-    """A request's values never reach the endpoint's art: a prompt length, a seed or a trace's record planted in a file
-    it would publish, or in the step's report, and nothing is written."""
+def test_a_field_the_table_doesnt_list_is_never_written(tmp_path, monkeypatch, capsys):
+    """A field the step's report gains that `chain_record.ENDPOINT_PUBLIC` doesn't list (a request id in a why, a
+    window's rows, a seed, the whole I/O) never reaches the art, and a listed field that isn't a scalar is refused with
+    nothing written."""
+    import chain_record as CR
+    ps = SS.prompts(2, SS.PROMPT_IDS, SS.VOCAB, b"seed")
+    src, out = _serve_dir(tmp_path / "serve", ps), tmp_path / "run" / "out"
+    argv = ["endpoint", "--from", str(src), "--io", str(_certified(tmp_path / "kept", ps)), "--out", str(out)]
+    rep = {"warden_run": RUN, "seed": 1234, "requests": ["e0"],
+           "io": {"accepted": True, "violations": [], "records": [{"user": "user-0", "prompt": ps[0]}], "tokens": 4},
+           "chain": {"bits": {"bound": True, "rebuilt": True, "bound_why": "request e0 user-0", "T": 10,
+                              "commit_windows": [{"bound": True, "rebuilt": True, "requests": ["e0"], "rows": [[0, 8]]}],
+                              "windows": [{"in_run": True, "derived_bits": 3, "requests": ["e0"]}], "v0_total": 9}}}
+    _stub_step(monkeypatch, rep)
+    assert SS.main(argv) == 0
+    text = (out / SS.ART).read_text()
+    assert not [m for m in ("1234", "e0", "user-0", '"rows"', '"records"', '"tokens"', '"seed"', '"requests"',
+                            '"bound_why"') if m in text]
+    assert not [n for n in SS.needles(ps) if n in text.encode()]
+    assert json.loads(text)["advice_bits"] == {"T": 10, "v0_total": 9, "derived": 3}
+    shutil.rmtree(out)
+    monkeypatch.setattr(CR, "network_attester_endpoint_step",
+                        lambda e: {"verdict": "accepted", "why": ["e0"], "warden_run": RUN})
+    assert SS.main(argv) == 2 and "why is a list, not a scalar" in capsys.readouterr().err and not out.exists()
+
+
+def test_endpoint_refuses_on_its_serve_dir_and_flags(tmp_path, monkeypatch, capsys):
     seen = _stub_step(monkeypatch)
     ps = SS.prompts(2, SS.PROMPT_IDS, SS.VOCAB, b"seed")
     src, run = _serve_dir(tmp_path / "serve", ps), tmp_path / "run"
     out = run / "out"
     io = _certified(tmp_path / "kept", ps)
     argv = ["endpoint", "--from", str(src), "--io", str(io), "--out", str(out)]
-    windows = (src / "windows.jsonl").read_text()
-    for plant, why in (
-            ({"kind": "arrive", "request": "e0", "before_step": 3, "prompt_len": 256, "sampling": {"seed": 1234}},
-             "windows.jsonl: a request's prompt ids or a request-valued field"),
-            ({"window": 1, "prompt_len": 256}, "windows.jsonl: a request's prompt ids or a request-valued field"),
-            ({"window": 1, "seed": 1234}, "windows.jsonl: a record with seed"),
-            ({"kind": "step", "step": 0, "T": 8}, "windows.jsonl: a scheduler trace's step record"),
-            ({"window": 1, "rows": [["e0", 0, 8]]}, "windows.jsonl: a record with rows"),
-            ({"window": 1, "ids": ps[1]}, "windows.jsonl: a request's prompt ids")):
-        (src / "windows.jsonl").write_text(windows + json.dumps(plant) + "\n")
-        assert SS.main(argv) == 2, plant
-        err = capsys.readouterr().err
-        assert why in err and "nothing written" in err and not out.exists(), (plant, err)
-    (src / "windows.jsonl").write_text(windows)
-    for plant, why in (({"prompt_len": 256}, "a request's prompt ids or a request-valued field"),
-                       ({"seed": 1234}, "a record with seed")):
-        rep = {"warden_run": RUN, "io": {"accepted": True}, "chain": {"bits": {"bound": True, "rebuilt": True}}}
-        _stub_step(monkeypatch, rep | plant if "seed" in plant else rep | {"chain": {"bits": rep["chain"]["bits"] | plant}})
-        assert SS.main(argv) == 2 and f"report.json: {why}" in capsys.readouterr().err and not out.exists()
-    _stub_step(monkeypatch)
     assert SS.main(argv) == 0 and seen is not None
     shutil.rmtree(out)
 
@@ -525,7 +561,7 @@ def test_the_endpoints_requests_jsonl_is_rebuilt_from_its_users_map_and_the_atte
     users = (src / SS.USERS).read_text()
     for bad in ({"engine_id": "e3", "user": None}, {"engine_id": "e3", "user": "user-1"}):
         (src / SS.USERS).write_text(users + json.dumps(bad) + "\n")
-        with pytest.raises(SS.Refused, match=f"engine request e3's user {bad['user']!r} is no certified request left"):
+        with pytest.raises(SS.Refused, match="request_users.jsonl line 4: its user is no certified request left"):
             SS.rebuild(src, tmp_path / "keep" / "records", io, [128001])
 
 
