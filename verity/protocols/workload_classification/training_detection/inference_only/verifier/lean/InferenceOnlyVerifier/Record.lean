@@ -54,8 +54,7 @@ record first, and the digest of the run's own record. `params` is not read.
    16-bit words, an output has no bit, or two of its ports share a name. A template's rows are its Definition's
    parameters, one row a parameter, and its outputs the fields of its return type (`RecordText.templatesOf`).
 7. `own-rows`: the root hands some unit a row that is not input gates of its own (`ownRows`, "Rows of its own"
-   below); `edge-rows` where that row is an explicit part naming a node that is no input node
-   (`Spot.Edges.explicitEdge`), as `Spot.Edges.edgesOf` names it.
+   below).
 8. `wires`: the record's wiring is refused (`RecordText.wiring`: the text's cuts as SPOT's reader reads them, and
    the wires the Program's root states, `Spot.Edges.edgesOf`), or SPOT's check refuses it (`Spot.Wires.check`).
 9. `leaf-widths`: some wire's row holds bits its writer's output lacks; or a leaf of some wire's writer does not lie
@@ -349,6 +348,7 @@ def ownRows (P : Prog) : Bool :=
   let units := nodes.toList.filter fun n => !Desc.isInputNode P n
   let edge := fun (q : Part) => match q with
     | .affine false i _ _ | .strided false i _ _ _ _ _ => (nodes[i]?.map fun n => !Desc.isInputNode P n).getD false
+    | .explicit it => it.any fun r => !r.p && (nodes[r.i]?.map fun n => !Desc.isInputNode P n).getD false
     | _ => false
   let parts := units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)
   let runs := parts.filterMap fun
@@ -442,7 +442,7 @@ def front (j tr : Json) : Except String Front := do
   if Theta.strAt (Theta.getD run "window") "circuit" !=
       some (Flock.hexOf (Flock.Sha512.hash i.record.toUTF8)) then throw "run-circuit"
   let ts ← templatesOf P doc
-  if !ownRows P then throw (if Spot.Edges.explicitEdge P then "edge-rows" else "own-rows")
+  if !ownRows P then throw "own-rows"
   let passed := passedOn P
   return { i, P, T, doc, ts, leaves := ts.map (leavesOf P passed) }
 
