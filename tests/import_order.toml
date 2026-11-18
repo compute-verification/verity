@@ -401,14 +401,6 @@ loads = [
 
 [[place]]
 paths = [
-    "verity/protocols/proofs/spot/prover/registered_reads.py",
-]
-loads = [
-    "verity/commitments",
-]
-
-[[place]]
-paths = [
     "verity/protocols/proofs/spot/prover/workload.py",
 ]
 loads = [
