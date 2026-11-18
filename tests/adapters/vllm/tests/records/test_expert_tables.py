@@ -1,6 +1,6 @@
 """`records.expert_tables`: a rank's expert tables registration reads back to what `dump` wrote, and is refused by field when it
 is no JSON object or another schema, holds a field no writer writes or no table, an entry that doesn't name its table under a
-root of 64 bytes, or nonces that aren't one for each table, each its own."""
+root of 64 bytes, or a salt nonce: its salts are in the salt file beside it."""
 from __future__ import annotations
 
 import pytest
@@ -16,7 +16,7 @@ def _entry(name: str, **change) -> dict:
 
 
 REG = ExpertTables(program="ef" * 64, repo="org/model", revision="0" * 40, world=2, rank=1, prefix="model", blocks={"gate_up": 2},
-                   values={T0: _entry(T0), T1: _entry(T1)}, nonces={T0: 0, T1: 1})
+                   values={T0: _entry(T0), T1: _entry(T1)})
 
 
 def test_a_registration_reads_back_to_what_dump_wrote() -> None:
@@ -38,9 +38,7 @@ def test_a_registration_that_is_no_json_object_is_refused() -> None:
     ({"values": {T0: _entry(T0, root="ab" * 32), T1: _entry(T1)}}, RecordError, f"values.{T0}"),
     ({"values": {T0: _entry(T0, root=None), T1: _entry(T1)}}, RecordError, f"values.{T0}"),
     ({"values": {T0: _entry(T0, salt="s"), T1: _entry(T1)}}, UnknownField, f"values.{T0}.salt"),
-    ({"nonces": {T0: 0}}, RecordError, "nonces"),                                        # a table with no nonce
-    ({"nonces": {T0: 0, T1: 0}}, RecordError, "nonces"),                                 # two tables under one
-    ({"nonces": {T0: 0, T1: True}}, RecordError, "nonces"),
+    ({"nonces": {T0: 0, T1: 1}}, UnknownField, "nonces"),                                # v1's salt nonces
     ({"rank": None}, MissingField, "rank"),
 ])
 def test_a_registration_that_isnt_one_is_refused_by_field(change: dict, error: type, field: str) -> None:

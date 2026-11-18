@@ -19,12 +19,19 @@ fails has no figure, only its failures, since it doesn't serve the load. Only a 
 times, so a request whose tokens between them are late is not seen to fail: the failures are a lower bound. The lanes
 are not replayed: a schedule with fewer lanes than the run's most concurrent requests is refused.
 
-Under a research run it writes `METRIC` for each schedule, member `<schedule>/<model>/<card>`, marked modeled.
+Beside each schedule's slowdown it gives the exfiltration capacity the schedule leaves (`CAPACITY`): the network
+attester's term of record, `benchmarks/certifier_term/run.py`'s calculator run at the schedule's bucket, delay, ingress
+buckets and response cap, at the plan's request count, a datacenter's and the world's over a week, a month and a year.
+It reads the schedule alone, so a schedule that fails the replay still has one.
+
+Under a research run it writes `METRIC` and `CAPACITY` for each schedule, member `<schedule>/<model>/<card>`, marked
+modeled.
 """
 from __future__ import annotations
 
 import argparse
 import functools
+import importlib.util
 import json
 import math
 import statistics
@@ -32,6 +39,7 @@ import sys
 import tempfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +52,14 @@ METRIC = "network-accounting/serving-slowdown-under-pacing"
 #: the provisional schedule of the served model's network attester, whose `schedule` a `Schedule` reads
 CARD = ROOT / "benchmarks/spot_figures/cards/certifier.glm-5.3.json"
 REASONS = ("cap", "ingress", "limit", "late")
+#: the exfiltration capacity a schedule leaves, in GB: the network attester's term of record at the schedule
+CAPACITY = "network-accounting/pacing-capacity-left"
+#: the runner of the calculator of the network attester's term, loaded from its file
+TERM = ROOT / "benchmarks/certifier_term/run.py"
+#: an execution phase's length the term is computed at, in seconds: the calculator's default phase at its default bucket
+PHASE_S = 128
+#: the compute and the monitoring periods the capacity goes out over
+SCOPES, PERIODS = ("datacenter", "world"), ("week", "month", "year")
 
 
 @dataclass(frozen=True)
@@ -193,6 +209,42 @@ def fetched(run: str, to: Path, arm: str, load: str, store: Callable[[], Any] = 
     return Path(s.fetch(art, to, paths=[f"out/{arm}.*/{load}/rep-*/user-*/result.json"])) / "out"
 
 
+@functools.cache
+def term_runner() -> Any:
+    spec = importlib.util.spec_from_file_location("certifier_term_run", TERM)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def term_argv(s: Schedule) -> list[str]:
+    """The calculator's arguments for ``s``: its bucket, delay and response cap, its ingress buckets (at most its delay,
+    which the calculator requires) and the buckets of `PHASE_S`."""
+    buckets = Fraction(PHASE_S * 1000, s.bucket_ms)
+    if buckets.denominator != 1:
+        raise SystemExit(f"pacing: a {s.bucket_ms} ms bucket doesn't divide the {PHASE_S} s execution phase")
+    cap = [] if s.max_tokens_cap is None else ["--response-ids", str(s.max_tokens_cap)]
+    return ["--bucket-s", str(Fraction(s.bucket_ms, 1000)), *cap, "--delay", str(s.delay),
+            "--ingress-buckets", str(min(s.ingress_buckets, s.delay)), "--phase-buckets", str(buckets)]
+
+
+def capacity(s: Schedule) -> dict:
+    """The term of record at ``s`` (the calculator's scan row at its jitter bound of record), for each of `SCOPES` and
+    `PERIODS`: in GB and bits, beside a link's bits in one execution phase, the bits a request and the row's error."""
+    ct = term_runner()
+    lb = ct.calculator()
+    argv = term_argv(s)
+    doc, at = ct.document(lb, argv), str(lb.OF_RECORD)
+    got = {}
+    for r in doc["rows"]:
+        if r["row"] == ct.ROW and r["scope"] in SCOPES and r["period"] in PERIODS:
+            t = r["term"][at]
+            got[f"{r['scope']}/{r['period']}"] = {"GB": t["GB"], "bits": t["bits"], "bits_a_phase": t["bits_a_phase"],
+                                                  "bits_a_request": t["bits_a_request"], "eps": r[ct.EPS]}
+    return {"argv": argv, "row": ct.ROW, "at": at, "request_count": doc["rows"][0]["request_count"], "rows": got}
+
+
 def rows(named: Mapping[str, Schedule], passes: Sequence[Sequence[Mapping[str, Any]]]) -> dict[str, Replay]:
     return {name: replay(s, passes) for name, s in named.items()}
 
@@ -202,32 +254,38 @@ def render(doc: dict) -> str:
              f"{doc['model']} on {doc['card']}, stock arm {doc['arm']} at {doc['load']}: {doc['passes']} passes, "
              f"{doc['requests']} requests; the engine's times are stock's, and failures are a lower bound", "",
              "| schedule | bucket ms | ids a bucket | delay buckets | cell bytes | ingress cells, buckets | cap | "
-             "failed (cap, ingress, limit, late) | added, % of stock | over the passes |",
-             "| --- | ---: | ---: | ---: | ---: | --- | ---: | --- | ---: | --- |"]
+             "failed (cap, ingress, limit, late) | added, % of stock | over the passes | "
+             "capacity left, GB: world week / month / year | datacenter week / month / year |",
+             "| --- | ---: | ---: | ---: | ---: | --- | ---: | --- | ---: | --- | --- | --- |"]
     for name, r in doc["rows"].items():
         s, f = r["schedule"], r["failed"]
         pct = "none: fails" if r["percent"] is None else f"{r['percent']:.1f}"
         spread = "" if r["spread"] is None else f"{r['spread'][0]:.1f} to {r['spread'][1]:.1f}"
         lines.append(f"| {name} | {s['bucket_ms']} | {s['slots']} | {s['delay']} | {s['cell_bytes']} | "
                      f"{s['ingress_cells']}, {s['ingress_buckets']} | {s['max_tokens_cap']} | "
-                     f"{sum(f.values())}: {', '.join(str(f[k]) for k in REASONS)} | {pct} | {spread} |")
+                     f"{sum(f.values())}: {', '.join(str(f[k]) for k in REASONS)} | {pct} | {spread} | "
+                     + " | ".join(" / ".join(f"{r['capacity']['rows'][f'{o}/{p}']['GB']:.4g}" for p in PERIODS)
+                                  for o in ("world", "datacenter")) + " |")
     return "\n".join(lines) + "\n"
 
 
 def document(run: str, card: str, arm: str, load: str, named: Mapping[str, Schedule],
-             passes: Sequence[Sequence[Mapping[str, Any]]]) -> dict:
+             passes: Sequence[Sequence[Mapping[str, Any]]],
+             left: Callable[[Schedule], dict] = capacity) -> dict:
     got = rows(named, passes)
     models = {u.get("model_id") for p in passes for u in p}
     one = next(iter(got.values()))
     return {"run": run, "card": card, "arm": arm, "load": load, "model": "/".join(sorted(m for m in models if m)),
             "passes": one.passes, "requests": one.requests,
             "rows": {name: {"schedule": asdict(named[name]), "percent": r.percent, "spread": r.spread,
-                            "failed": dict(r.failed), "concurrent": r.concurrent} for name, r in got.items()}}
+                            "failed": dict(r.failed), "concurrent": r.concurrent, "capacity": left(named[name])}
+                     for name, r in got.items()}}
 
 
 def write(doc: dict, out: Path) -> int:
-    """Each schedule's figure as `METRIC` through the harness kit's writer: under a research run its result, else
-    `out/result.json`."""
+    """Each schedule's figure as `METRIC`, and its capacity as `CAPACITY` over each of `SCOPES` and `PERIODS`, through
+    the harness kit's writer: under a research run its result, else `out/result.json`. A capacity whose row's error is
+    1 or more bounds nothing there and has no value."""
     from verity_bench import kit
 
     w = kit.writer(str(out))
@@ -239,6 +297,20 @@ def write(doc: dict, out: Path) -> int:
                                                   "serve the load",
                       inputs=[f"modeled: {doc['run']}'s {doc['arm']} at {doc['load']} replayed under the schedule; the "
                               "engine's times are stock's", json.dumps(r["schedule"], sort_keys=True)])
+    for name, r in doc["rows"].items():
+        c = r["capacity"]
+        for over in SCOPES:
+            for period in PERIODS:
+                x = c["rows"][f"{over}/{period}"]
+                bound = x["eps"] < 1
+                w.measurement(CAPACITY, x["GB"] if bound else None, "GB", mark="modeled", period=period, over=over,
+                              member=f"{name}/{doc['model']}/{doc['card']}",
+                              why=None if bound else f"no bound at this period: the row's error, {x['eps']}, is 1 or more",
+                              inputs=[f"modeled: benchmarks/certifier_term/run.py's calculator, row {c['row']} at D_j = "
+                                      f"{c['at']}, request count {c['request_count']}: {' '.join(c['argv'])}",
+                                      json.dumps(r["schedule"], sort_keys=True)],
+                              extra={k: x[k] for k in ("bits", "bits_a_phase", "bits_a_request", "eps")}
+                              | {"phase_s": PHASE_S})
     return len(doc["rows"])
 
 
