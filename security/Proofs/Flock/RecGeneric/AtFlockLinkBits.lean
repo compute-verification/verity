@@ -29,7 +29,7 @@ noncomputable def linkCalls {Coin : Type} [Inhabited Coin] (D : Deploy Coin) (x 
   cBe D x + 2 * (setupLen D x + 2 * n + v + w) + 1
 
 /-- **The link's binding term per SHA-512 call of the prover's run**: `ε_L = β₂·c_L/2^256`. -/
-noncomputable def epsLink {Coin W : Type} [Inhabited Coin] (D : Deploy Coin) (I : Inner Coin W) (Cp : Caps Coin)
+noncomputable def epsLink {Coin W : Type} [Inhabited Coin] (D : Deploy Coin) (I : Claims.Recursion.Inner Coin W) (Cp : Caps Coin)
     (x : Msg) (n v w : ℕ) : ℝ :=
   βdev2 D I Cp x * linkCalls D x n v w / 2 ^ (256 : ℝ)
 
@@ -38,7 +38,7 @@ section Instance
 variable {Coin Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col']
 
 /-- **A rerun costs a sample and its searched evaluations**: at most `sampleCost + |S(x_I)| + 2n + v + w`. -/
-theorem rerunCost_ofRec_le (H : Msg → Msg) (D : RecAt Coin) (IV : Verifier Coin) {W : Type} (I : Inner Coin W)
+theorem rerunCost_ofRec_le (H : Msg → Msg) (D : RecAt Coin) (IV : Verifier Coin) {W : Type} (I : Claims.Recursion.Inner Coin W)
     (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} (P : Prover Ω) (x : Msg)
     {n v w : ℕ} (hn : ∀ cs ws, ((D.record IV).innerCalls H x cs ws).length ≤ n)
     (hview : ∀ r ws, ((Comp.ofRec D IV I DO decO).innerLog IV H x r ws).length ≤ n)
@@ -73,7 +73,7 @@ theorem rerunCost_ofRec_le (H : Msg → Msg) (D : RecAt Coin) (IV : Verifier Coi
 /-- **A rerun costs at most `t·c_Be/2 + |S(x_I)| + 2n + v + w` in expectation**, at a prover whose runs make at most `t`
 calls. -/
 theorem Ex_rerunCost_ofRec_le (H : Msg → Msg) (D : RecAt Coin) (IV : Verifier Coin) {W : Type}
-    (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T')
+    (I : Claims.Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T')
     (hS : SessionAccepts (D.record IV)) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) (t : ℕ)
     (ht : ∀ ω r, (run H P (D.record IV).V x ω r).pLog.length + (run H P (D.record IV).V x ω r).vLog.length ≤ t)
     {n v w : ℕ} (hn : ∀ cs ws, ((D.record IV).innerCalls H x cs ws).length ≤ n)
@@ -96,7 +96,7 @@ theorem Ex_rerunCost_ofRec_le (H : Msg → Msg) (D : RecAt Coin) (IV : Verifier 
 
 /-- **The link at today's compiled record under `ExpectedCR`**: at most `(t·c_Be + 2(|S(x_I)| + 2n + v + w))/2^256`. -/
 theorem linkPlan_PrAt_ofRec_le (H : Msg → Msg) (D : RecAt Coin) (IV : Verifier Coin) {W : Type}
-    (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T')
+    (I : Claims.Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T')
     (hS : SessionAccepts (D.record IV)) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) (t : ℕ)
     (ht : ∀ ω r, (run H P (D.record IV).V x ω r).pLog.length + (run H P (D.record IV).V x ω r).vLog.length ≤ t)
     {n v w : ℕ} (hn : ∀ cs ws, ((D.record IV).innerCalls H x cs ws).length ≤ n)
@@ -120,7 +120,7 @@ theorem linkPlan_PrAt_ofRec_le (H : Msg → Msg) (D : RecAt Coin) (IV : Verifier
 /-- **The link's binding term at `M = 2^256` is at most `t·ε_L`** (`epsLink`), at a prover whose runs make between `1`
 and `t` calls, under `ExpectedCR` at the link's finder. -/
 theorem linkTerm_le (H : Msg → Msg) (D : RecAt Coin) (IV : Verifier Coin) {W : Type}
-    (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (Cp : Caps Coin)
+    (I : Claims.Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (Cp : Caps Coin)
     (hS : SessionAccepts (D.record IV)) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) (t : ℕ)
     (ht1 : 1 ≤ t)
     (ht : ∀ ω r, (run H P (D.record IV).V x ω r).pLog.length + (run H P (D.record IV).V x ω r).vLog.length ≤ t)
