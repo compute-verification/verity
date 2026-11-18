@@ -335,7 +335,8 @@ statement to: the known content (`Registered.knownOf`), whose input ports every 
 the file marks `read_in_full` (`KnownRead.readOf`) as one row of its registered row's words (`KnownRead.fullRows`), and the
 template parameter each port reads (`Registered.paramsOf`, which `Registered.checkCover` holds the program's registered
 reads to), the ports it binds to the window's committed values (`RegBound.ofJson`, which `RegBound.check` reads), and
-the file's digest, the SHA-512 of its canonical JSON (`sha512Of`), which a verdict names it by. -/
+the file's digest, the SHA-512 of its canonical JSON (`sha512Of`), which a verdict names it by. With `--wired F`, the
+wired Program the unwired `--program` is cut from, each tree port's reads are derived from it (`Registered.wiredReads`). -/
 def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
     IO (Except String (Option (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) ×
       Array String × Array RegBound.Bound × String))) := do
@@ -343,6 +344,11 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
   let bytes ← match argOf args "--archive" with
     | none => (try pure (Except.ok (← IO.FS.readBinFile f)) catch e => pure (Except.error s!"{ctx}: {e}"))
     | some dir => archiveGet dir f
+  let wired : Except String (Option ByteArray) ← match argOf args "--wired", argOf args "--archive" with
+    | some w, none => (try pure (.ok (some (← IO.FS.readBinFile w)))
+        catch e => pure (.error s!"wired: {e}"))
+    | some w, some dir => pure ((← archiveGet dir w).map some)
+    | none, _ => pure (.ok none)
   match bytes with
   | .error e => return .error e
   | .ok b => match String.fromUTF8? b with
@@ -357,6 +363,11 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
           let bound ← RegBound.ofJson j
           let j := RegBound.ownOf j
           let own ← Registered.ofJson j
+          let own ← match ← wired, flag == "--registered" with
+            | some b, true => do
+              let W ← Program.decode b
+              pure (own.map fun p => if p.tree.isSome then { p with wired := some W } else p)
+            | _, _ => pure own
           let known ← Registered.knownOf j
           Registered.checkKnownAll own known
           return (own, known ++ KnownRead.fullRows own (← KnownRead.readOf j), ← Registered.paramsOf j, bound,

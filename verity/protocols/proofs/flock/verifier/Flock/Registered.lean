@@ -84,7 +84,7 @@ in whole SHA-512 blocks (`rowWords`); a `hm96-sha512/row/v2` or `hm96-sha512/row
 `words · wordBits` bits, as the circuit's port of that schema is. The reads are `readsRel` from unit `readsFrom` on: unit
 `readsFrom + i` reads `readsRel[i]`, and every other unit reads nothing (`readAt`; `reads`, the population-long array).
 A tree port (`tree`, the writer template and output field) states no reads: the verifier's program gives them
-(`withTrees`). -/
+(`withTrees`), or with `wired` the wired Program's (`wiredReads`). -/
 structure Port where
   name : String
   value : String
@@ -97,6 +97,10 @@ structure Port where
   schema : String := HmRow.ROW_SCHEMA
   readsFrom : Nat := 0
   tree : Option (String × String) := none
+  /-- the wired Program (`--wired`) a tree port's reads are derived from, beside the unwired `--program` -/
+  wired : Option Program.Prog := none
+  /-- the template parameter the port reads (`PARAM_KEY`), whose first leaf a derived read is at -/
+  param : Option String := none
   deriving Inhabited
 
 /-- The position every unit reads, from unit 0: none for each unit below `readsFrom`, then `readsRel`. The verifier
@@ -158,8 +162,9 @@ def portsOf (j : Json) : V (Array Port) := do
       if !keysIn tj ["template", "field"] || !reads.isEmpty then
         throw s!"{ctx}: port {name}: a tree port's {TREE_KEY} is {"{"}template, field{"}"} and its reads are empty: the verifier's program gives them"
       pure (some (← J.str tj "template" ctx, ← J.str tj "field" ctx))
+    let param ← if J.has e "param" then some <$> J.str e "param" ctx else pure none
     return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, readsRel := reads, schema, readsFrom,
-             tree }
+             tree, param }
 
 /-- The first port of `ps` whose name a later port has. -/
 def dupName? : List Port → Option String
@@ -318,12 +323,55 @@ def checkLinked (c : Circuit) (own : Array Port) : V Unit := do
 requires of every link, which the class circuits name `out`. -/
 def OUT_FIELD : String := "out"
 
+/-- Output field `f`'s index: `o{j}`'s `j`, `OUT_FIELD`'s 0 (the whole output row); none for another name. -/
+def fieldIndex (f : String) : Option Nat :=
+  if f == OUT_FIELD then some 0 else if f.startsWith "o" then (f.drop 1).toString.toNat? else none
+
+/-- The first output leaf of field `j` of a return type `ret`; none past its fields. -/
+def fieldStart (ret : Program.Ty) (j : Nat) : Option Nat :=
+  let fs := Program.fieldsOf ret
+  if j < fs.length then some ((fs.take j).foldl (· + ·.leaves) 0) else none
+
+/-- Tree port `reg`'s reads derived from the wired Program `W`: each unit `u` of `indices` reads, at the first leaf of
+the parameter the port reads (`param`; without it, its link row's first leaf), the gate `W` wires there; that gate must be the first output leaf of field `f` of a unit of
+template `t`, whose leaf in the tree is that unit's rank in the template (`HmLinks.treeLeaf`). The units are `W`'s, the
+unwired Program's by the cut. -/
+def wiredReads (c : Circuit) (W : Program.Prog) (indices : Array Nat) (reg : Port) (t f : String) : V Port := do
+  let some j := fieldIndex f | throw s!"registered reads: tree port {reg.name} names field {f}, not an output field o<j>"
+  let link := ((← HmLinks.parse c).find? fun (q, _, _) => (c.ports.getD q default).name == reg.name).map (·.2.1)
+  let ns := HmLinks.nodes W
+  let body := (W.defs[W.root]!).body
+  let first := indices.foldl min (indices.getD 0 0)
+  let mut rel : Array (Option Nat) := Array.replicate (indices.foldl max 0 + 1 - first) none
+  for u in indices do
+    let some (k, m) := HmLinks.unitAt ns u | throw s!"registered reads: unit {u} is outside the wired Program's units"
+    let ps : Array (String × Program.Ty) := (W.defs[body.nodes[k]!.fn]!).params
+    let some lo := match reg.param with
+        | some x => (ps.findIdx? fun (q : String × Program.Ty) => q.1 == x).map fun i =>
+            (ps.extract 0 i).foldl (fun (a : Nat) (q : String × Program.Ty) => a + Program.Ty.leaves q.2) 0
+        | none => link
+      | throw s!"registered reads: tree port {reg.name} names no parameter of unit {u}'s template (param) and is no link row"
+    let some g := (← Program.operands W W.rootScope body.nodes[k]! m)[lo]?
+      | throw s!"registered reads: tree port {reg.name}: unit {u} has no parameter leaf {lo}"
+    let some v := HmLinks.ownerAt ns g
+      | throw s!"registered reads: tree port {reg.name}: unit {u}'s leaf {lo} is no unit's output in the wired Program"
+    let some (kv, mv) := HmLinks.unitAt ns v | throw s!"registered reads: unit {v} is outside the wired Program's units"
+    let some (t', leaf) := HmLinks.treeLeaf W ns v | throw s!"registered reads: unit {v} is outside the wired Program's units"
+    if t' != t then
+      throw s!"registered reads: tree port {reg.name} reads {t}'s tree, and unit {u}'s writer, unit {v}, is {t'}'s"
+    let at_ := (← HmLinks.outGates W kv mv).findIdx? (· == g)
+    if at_.isNone || at_ != fieldStart (W.defs[body.nodes[kv]!.fn]!).ret j then
+      throw s!"registered reads: tree port {reg.name} reads field {f}, and unit {u}'s leaf {lo} is its writer's output leaf {at_.getD 0}, not that field's first"
+    rel := rel.set! (u - first) (some leaf)
+  return { reg with readsRel := rel, readsFrom := first }
+
 /-- Tree port `reg`'s reads at the statement's units `indices`, from the verifier's program `P`: each unit reads, at the
 link row of `reg`'s name, the leaf of its writer (`HmLinks.writerOf`) in the writer template's tree (`HmLinks.treeLeaf`),
 the writer's template `reg`'s; a tree port of another field than `OUT_FIELD` is refused. Its work is the statement's
 units, each found from the root body's nodes. -/
 def treeReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (reg : Port) : V Port := do
   let some (t, f) := reg.tree | return reg
+  if let some W := reg.wired then return ← wiredReads c W indices reg t f
   if f != OUT_FIELD then
     throw s!"registered reads: tree port {reg.name} reads {t}'s {f} tree, and a link row reads its writer's whole output row, field {OUT_FIELD} (HmLinks.checkUnit)"
   let some (_, lo, _) := (← HmLinks.parse c).find? fun (p, _, _) => (c.ports.getD p default).name == reg.name

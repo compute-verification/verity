@@ -321,6 +321,39 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_lean_derives_each_tree_read_from_the_wired_program_and_refuses_another_leaf_field_or_writer(staged):
+    """With ``--wired``, each tree port's reads are the wired Program's at the port's first leaf (`Registered.wiredReads`),
+    not the link rows': the honest readers are accepted, and a moved read, a tree port naming another field of the writer
+    (``o1``, ``aux``) and one naming another writer template are refused."""
+    d, _st, _flat, _ = staged
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
+    bound = ["--partition", str(d / "partition.json"), "--program", str(d / "program.desc"), "--wired", str(d / "program.desc")]
+    honest = json.loads((d / "readers.reads.json").read_text())
+    port = _meta(d / "honest")["links"][0]["port"]
+
+    def reads_with(name: str, **tree) -> str:
+        doc = json.loads(json.dumps(honest))
+        doc["ports"][port]["tree"] |= tree
+        (d / f"{name}.reads.json").write_text(json.dumps(doc))
+        return str(d / f"{name}.reads.json")
+
+    def at(name: str, reads: str):
+        return _lean("--circuit", str(d / name / "circuit.txt"), "--public", str(d / name / f"pub-{N}.bin"), *bound,
+                     "--registered", reads)
+
+    for field in ("out", "o0"):
+        ok, out = at("honest", reads_with(f"field_{field}", field=field))
+        assert ok is not None, (field, out)
+    for name, reads, why in (("other_leaf", str(d / "readers.reads.json"), "and the verifier's program reads"),
+                             ("honest", reads_with("field_o1", field="o1"), "not that field's first"),
+                             ("honest", reads_with("field_aux", field="aux"), "not an output field"),
+                             ("honest", reads_with("writer", template="Another_v1"), "is " + honest["ports"][port]["tree"]["template"])):
+        bad, out = at(name, reads)
+        print(name, out.strip().splitlines()[-1])
+        assert bad is None and why in out, (name, out)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_sampled_proofs_own_setup_refuses_each_cheat(staged):
     """The same statements set up by the sampled proofs' own check (`OneStageZk.sessionAt`, through `spot-difftest`'s
     `session_setup`), each with the readers' registered reads."""
