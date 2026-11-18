@@ -873,9 +873,12 @@ def launch(*args: str, **env: str) -> subprocess.CompletedProcess:
     return subprocess.run(["bash", str(NEBIUS / "launch.sh"), *args], env={**base, **env}, capture_output=True, text=True)
 
 
+CARD = "rtx-pro-6000-server"  # the card file of the default platform's GPU, which locks its clocks
+
+
 def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     pub = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIdummy research@test"
-    r = launch("--dry-run", NEBIUS_SSH_PUBKEY=pub)
+    r = launch("--dry-run", NEBIUS_SSH_PUBKEY=pub, NEBIUS_CARD=CARD)
     assert r.returncode == 0, r.stderr
     ud, spec = r.stdout.split("# instance create request (ids are placeholders)\n")
     assert ud.splitlines()[1] == "#cloud-config" and f"      - {pub}" in ud and "PRIVATE KEY" not in r.stdout
@@ -904,6 +907,44 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     assert "# data disk vy-nebius-1-data: attached as it is if it exists, else created (5022 GiB" in ud
 
 
+def test_a_platform_that_locks_clocks_gets_both_from_its_card_file_and_another_gets_neither():
+    """The memory lock is the card file's clock.memory; locking without a card file is refused before anything is created."""
+    clock = tomllib.loads((NEBIUS / "../../../../../../calibration/hardware/cards" / f"{CARD}.toml").read_text())["clock"]
+
+    def settings(**env: str) -> list[str]:
+        r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", **env)
+        assert r.returncode == 0, r.stderr
+        b64 = re.search(r"  - path: /etc/vy/vy.env\n    permissions: '\d+'\n    encoding: gz\+b64\n    content: (\S+)", r.stdout)[1]
+        return [ln for ln in gzip.decompress(base64.b64decode(b64)).decode().splitlines() if "CLOCK" in ln]
+
+    gpu = int(re.search(r"^GPU_LOCK_MHZ=(\d+)$", (NEBIUS / "launch.sh").read_text(), re.M)[1])
+    assert gpu <= clock["sm"]["value"]
+    assert settings(NEBIUS_CARD=CARD) == ["VY_LOCK_CLOCKS=1", f"VY_GPU_CLOCK_MHZ={gpu}", f"VY_MEM_CLOCK_MHZ={clock['memory']['value']}"]
+    assert settings(NEBIUS_PLATFORM_PREFIX="gpu-h100-sxm") == ["VY_LOCK_CLOCKS=0"]
+    r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy")
+    assert r.returncode == 2 and "NEBIUS_CARD is unset" in r.stderr and not r.stdout
+
+
+def test_the_first_boot_refuses_to_lock_with_a_clock_unset_before_writing_anything(tmp_path):
+    """vm_setup.sh has no clock of its own: told to lock with either clock unset or empty it stops, naming both, before its
+    first write; untold, it locks nothing and writes no clock unit."""
+    text = (NEBIUS / "vm_setup.sh").read_text()
+    head, rest = text.split("\nfi\n", 1)
+    assert "cat >" not in head and "systemctl" not in head
+    assert re.search(r'^\[ "\$LOCK_CLOCKS" = 0 \] \|\| cat > /etc/systemd/system/vy-clocks\.service', rest, re.M)
+    env_file = tmp_path / "vy.env"
+    prefix = tmp_path / "head.sh"
+    prefix.write_text(head.replace("/etc/vy/vy.env", str(env_file)) + "\nfi\necho passed\n")
+    for settings, refused in [("VY_LOCK_CLOCKS=1\nVY_GPU_CLOCK_MHZ=2100\n", True),
+                              ("VY_LOCK_CLOCKS=1\nVY_GPU_CLOCK_MHZ=\nVY_MEM_CLOCK_MHZ=12481\n", True),
+                              ("VY_LOCK_CLOCKS=1\nVY_GPU_CLOCK_MHZ=2100\nVY_MEM_CLOCK_MHZ=12481\n", False),
+                              ("VY_USER=research\n", False), ("VY_LOCK_CLOCKS=0\n", False)]:
+        env_file.write_text(settings)
+        r = subprocess.run(["bash", str(prefix)], capture_output=True, text=True)
+        assert (r.returncode, r.stdout) == ((2, "") if refused else (0, "passed\n")), settings
+        assert not refused or ("VY_GPU_CLOCK_MHZ" in r.stderr and "VY_MEM_CLOCK_MHZ" in r.stderr), settings
+
+
 def test_the_first_boot_writes_and_applies_the_user_namespace_setting_on_the_nodes_deploy_gives_it():
     """A node deploy.toml gives /etc/sysctl.d/61-vy-userns.conf has it from its first boot, from the same source, so a check
     or a training job sandboxed there doesn't fail before the first install; a node it doesn't name gets none."""
@@ -911,7 +952,7 @@ def test_the_first_boot_writes_and_applies_the_user_namespace_setting_on_the_nod
     entry = next(f for f in manifest["file"] if f["path"] == "/etc/sysctl.d/61-vy-userns.conf")
     src = (NEBIUS / "../../../../../.." / entry["src"]).read_bytes()
     for name in ("vy-nebius-cpu-14", "vy-nebius-2", "vy-nebius-1", "vy-auditor-1"):
-        r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME=name)
+        r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME=name, NEBIUS_CARD=CARD)
         assert r.returncode == 0, r.stderr
         ud = r.stdout.split("# instance create request (ids are placeholders)\n")[0]
         assert len(ud.split("\n", 1)[1].rstrip("\n")) <= 32768, name

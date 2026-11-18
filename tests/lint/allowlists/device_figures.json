@@ -49,7 +49,6 @@
     {"file": "security/Proofs/Pouw/PearlC/Fp4IssueGap.lean", "count": 4, "lane": "compute-accounting"},
     {"file": "security/Proofs/Pouw/PearlC/Records.lean", "count": 1, "lane": "compute-accounting"},
     {"file": "security/Proofs/Pouw/PearlC/W1Checks.lean", "count": 3, "lane": "compute-accounting"},
-    {"file": "tools/research/src/research/pods/nebius/vm_setup.sh", "count": 3, "lane": "infra"},
     {"file": "verity/circuits/ops/boolean/elementwise.circuit-check.json", "count": 1, "lane": "circuits"},
     {"file": "verity/circuits/ops/tables/mufu_tanh_sm89.json", "count": 1, "lane": "circuits"},
     {"file": "verity/protocols/resource_accounting/memory/poub/verifier/timing.py", "count": 8, "lane": "memory-accounting"},
