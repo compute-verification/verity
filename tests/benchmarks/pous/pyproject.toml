@@ -73,6 +73,10 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           # that module imports) and the block record's subprotocol
           "benchmarks/one_stage/served_verdicts.py", "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py",
           "calibration/census/deployments.json",
+          # the row's `not complete` (row_of), and what each declaration says no auditor-side entry checks
+          # (declared_unchecked imports the schemes' table in order until one is the row's protocol, dither's among them)
+          "verity/protocols/proofs/spot/verifier/one_stage/verdict_record.py", "verity/protocols/experimental/__init__.py",
+          "verity/protocols/experimental/dither/__init__.py", "verity/protocols/experimental/dither/scheme.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py", "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/coins.py", "verity/protocols/resource_accounting/compute/pouw/verifier/core_check.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/verifier.py",
