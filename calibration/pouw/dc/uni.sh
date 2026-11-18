@@ -4,19 +4,21 @@
 # H200 or 1x B200:
 #
 #   research run --on <node> --project verity --source <tree> --cwd source --custody-ttl 12h \
-#     --timeout 30m --env GPU_LEASE_WHO=dc -- bash calibration/pouw/dc/uni.sh sm90|sm100
+#     --timeout 30m --env GPU_LEASE_WHO=dc -- bash calibration/pouw/dc/uni.sh
 #
+# The card is the one the run opened: its card record's `arch` picks the family (sm_90a: sm90, sm_100a: sm100; another
+# is refused before anything is built) and its architecture file nvcc's -gencode (probe.py arch, build).
 # Outside the lease: build and SASS-gate both binaries (gate-build.txt; a refusal stops the run). Under the lease:
 # probe.py run (probes/: rows.jsonl, gate.json, times.jsonl) with nvidia-smi sampled every 200 ms (env/smi.csv), then
 # uniform.py analyze (uniform.json, uniform.txt). Exit: 0 done, 1 build or gate refused, 2 wrong device or no nvcc.
-# DC_BUILD_ONLY=1 stops after the gate (any machine with CUDA 13.0). UNI_TABLES picks the tables (default "uniform imad";
+# DC_BUILD_ONLY=1 stops after the gate (any machine with CUDA 13.0; with no card, DC_SKU names the card file to build
+# for, calibration/hardware/cards/SKU.toml). UNI_TABLES picks the tables (default "uniform imad";
 # "issue" is the issue-saturated stream, the honest step beside 256 FFMA; "async" is the uniform chain beside a saturated
 # async tensor op (wgmma on sm90, tcgen05.mma on sm100): its rows.jsonl carries the K-sweep for an offline slope fit;
 # "ldtm" alone is sm100_ldtm.cu, the tcgen05.ld.32x32b.x128 issue price, analyzed by ldtm.py into ldtm.json and
 # ldtm.txt; "a2u" is sm100_a2u.cu, A2u with every SMSP's issue saturated beside tcgen05.mma and a uniform chain,
 # analyzed by a2u.py into a2u.json and a2u.txt).
 set -uo pipefail
-FAM=${1:?usage: uni.sh sm90|sm100}
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROBE="$HERE/../opcode_probe/probe.py"
@@ -24,10 +26,12 @@ export PYTHONDONTWRITEBYTECODE=1
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "uni.sh: no nvcc (CUDA 13.0 has sm_90a and sm_100a)" >&2; exit 2; }
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
-case "$FAM" in
-  sm90) ARCH=sm_90a; CC=9 ;;
-  sm100) ARCH=sm_100a; CC=10 ;;
-  *) echo "uni.sh: family sm90 or sm100, not $FAM" >&2; exit 2 ;;
+CARD=(${DC_SKU:+--sku "$DC_SKU"})
+ARCH=$(python3 "$PROBE" arch "${CARD[@]}") || exit 2
+case "$ARCH" in
+  sm_90a) FAM=sm90 ;;
+  sm_100a) FAM=sm100 ;;
+  *) echo "uni.sh: the card's target is $ARCH, and uni.sh has probes for sm_90a and sm_100a only: nothing built" >&2; exit 2 ;;
 esac
 
 if [ "${DC_LEASED:-}" != 1 ]; then
@@ -35,14 +39,10 @@ if [ "${DC_LEASED:-}" != 1 ]; then
   trap 'rm -rf "$WORK"' EXIT
   mkdir -p "$OUT/sass" "$OUT/env" "$OUT/probes"
   "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
-  if [ "${DC_BUILD_ONLY:-}" != 1 ]; then
-    nvidia-smi -q >"$OUT/env/nvidia-smi.txt" 2>&1
-    have=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
-    [ "${have%%.*}" = "$CC" ] || { echo "uni.sh: $FAM needs compute capability $CC.x, the device reports '$have'" >&2; exit 2; }
-  fi
+  [ "${DC_BUILD_ONLY:-}" = 1 ] || nvidia-smi -q >"$OUT/env/nvidia-smi.txt" 2>&1
   srcs=()
   for t in ${UNI_TABLES:-uniform imad}; do srcs+=("$HERE/probes/${FAM}_$t.cu"); done
-  python3 "$PROBE" build --out "$WORK" "${srcs[@]}" \
+  python3 "$PROBE" build "${CARD[@]}" --out "$WORK" "${srcs[@]}" \
     >"$WORK/built" 2>"$OUT/build.log" || { cat "$OUT/build.log" >&2; exit 1; }
   mapfile -t bins <"$WORK/built"
   for b in "${bins[@]}"; do cuobjdump -sass "$b" >"$OUT/sass/$(basename "$b").sass" 2>&1; done
@@ -55,7 +55,7 @@ if [ "${DC_LEASED:-}" != 1 ]; then
   lease=()
   command -v gpu-lease >/dev/null && lease=(gpu-lease 1 --wait --max-min 25 --)
   [ ${#lease[@]} -eq 0 ] && echo "uni.sh: no gpu-lease on this node; running on its one GPU directly" >&2
-  "${lease[@]}" env DC_LEASED=1 WORK="$WORK" bash "${BASH_SOURCE[0]}" "$FAM"
+  "${lease[@]}" env DC_LEASED=1 WORK="$WORK" bash "${BASH_SOURCE[0]}"
   exit $?
 fi
 

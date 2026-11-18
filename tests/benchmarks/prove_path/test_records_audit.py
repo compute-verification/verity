@@ -543,6 +543,12 @@ def test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key(tmp
     assert "is no registration under the serve's H1 window Program" in capsys.readouterr().err
 
 
+def _listed(w: CS.Binding) -> CS.Binding:
+    """``w`` over the Program a record that lists its members rebuilds (`interface.listed_program`)."""
+    program, query = IF.listed_program([(COORD, sum(m.n for m in w.members))], ())
+    return replace(w, program=program, query=query)
+
+
 def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = False,
                 listed: bool = False) -> SimpleNamespace:
     """A window of ``n`` coordinates each reading its ``wrow`` from a registered value ``name`` of 4 rows (coordinate u row u % 4),
@@ -560,6 +566,7 @@ def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = 
     win = IF.Window(circuit, RUN, D.parse_design(SAMPLING_DESIGN), cap, registered={name: value})
     if listed:
         stated = win.circuit_record()
+        win.window = _listed(win.window)
         win.circuit_record = lambda: IF.circuit_record(win.window, stated["name"], stated["templates"], stated["statements"],
                                                        declared={"registered": stated["registered"]})
     x = rng.integers(-128, 128, (n, K)).astype(np.int8)
@@ -1624,12 +1631,14 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
     mine, stated, _sets = RA.verifier_window(written.dir, D.parse_design(SAMPLING_DESIGN), None)
+    mine = _listed(mine)
     ingress = [{"reader": TID, "port": p, "at": 0, "units": 5, "step": 0} for p in ("x", "sx")]
     doc = IF.circuit_record(mine, stated["name"], stated["templates"], stated["statements"], stated["external"],
                             declared={IF.WINDOW_INGRESS: ingress})
     body = IF.circuit_bytes(doc)
     (written.dir / "circuit.json").write_bytes(body)
-    rec = {**written.rec, "window": {**written.rec["window"], "circuit": hashlib.sha512(body).hexdigest()}}
+    rec = {**written.rec, "program": doc["program"], "partition": doc["partition"],
+           "window": {**written.rec["window"], "circuit": hashlib.sha512(body).hexdigest()}}
     (written.dir / "registration.json").write_text(json.dumps(rec))
     assert "cap" not in doc and IF.of_records(written.dir, D.parse_design(SAMPLING_DESIGN), IF.resolve)[0].members == mine.members
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
@@ -1794,7 +1803,7 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     s = _served(tmp_path, monkeypatch)
     loaded = SimpleNamespace(progs={"r0": {}}, dirs={"r0": "d"}, arrivals={"r0": 0})
     monkeypatch.setattr(PP.I2Compiler, "load", lambda self, rank, world, requests: loaded)
-    window = IF.Window(IF.Circuit("test", ((COORD, 5),)), "", D.parse_design(SAMPLING_DESIGN), 4).window
+    window = _listed(IF.Window(IF.Circuit("test", ((COORD, 5),)), "", D.parse_design(SAMPLING_DESIGN), 4).window)
     monkeypatch.setattr(SRW, "population", lambda progs, partition, run, dirs, **kw: (window, [[]]) if run == "" else None)
     (tmp_path / "part.json").write_text(json.dumps({"templates": [TID], "law": SAMPLING_DESIGN}))
     (tmp_path / "advice.bin").write_bytes(s.data)

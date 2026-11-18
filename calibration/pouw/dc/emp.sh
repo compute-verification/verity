@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# The H200's empirical check: build sm_90a probes on a CPU node, then time them on the H200 under one
-# gpu-lease, so no CPU phase runs on the shared H200 node.
+# A card's empirical check: build its probes on a CPU node, then time them on the card under one gpu-lease, so no CPU
+# phase runs on the shared GPU node.
 #
-#   research run --on auto --wait -- bash calibration/pouw/dc/emp.sh build SRC...
-#       builds each SRC for sm_90a, gates every probe's SASS (probe.py gate) and writes $OUT/bins.tgz, $OUT/sass/,
-#       gate-build.txt and gate-build.json. A source that fails to build is named and skipped; the rest still build.
+#   research run --on auto --wait -- bash calibration/pouw/dc/emp.sh build SKU SRC...
+#       builds each SRC for the card file calibration/hardware/cards/SKU.toml (its `arch`, and that architecture's file
+#       for nvcc's -gencode: probe.py build --sku), gates every probe's SASS (probe.py gate) and writes $OUT/bins.tgz,
+#       $OUT/sass/, gate-build.txt and gate-build.json. A source that fails to build is named and skipped; the rest still build.
 #       bins.tgz carries the build's cuobjdump and nvdisasm in tools/, which time's gate reads SASS with
 #       (POUW_CUDA_BIN), so a node with no CUDA toolkit gates the binaries with the tools that built them.
 #   research run --on H200 --project verity --campaign pouw --source <tree> --cwd source --send bins.tgz \
@@ -18,7 +19,7 @@
 #       that card holds a compute process; $OUT/env/node-{before,after}.txt hold every card's leases and processes.
 # Exit: 0 done, 1 nothing built or a gate verdict not the declared one, 2 no nvcc or no inputs, 3 the card in use.
 set -uo pipefail
-MODE=${1:?usage: emp.sh build SRC... | time [REPS]}
+MODE=${1:?usage: emp.sh build SKU SRC... | time [REPS]}
 shift
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -27,15 +28,17 @@ export PYTHONDONTWRITEBYTECODE=1
 
 case "$MODE" in
 build)
+  SKU=${1:?usage: emp.sh build SKU SRC..., SKU the card file to build for (calibration/hardware/cards/SKU.toml)}
+  shift
   NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-  [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "emp.sh: no nvcc (CUDA 13.0 builds sm_90a)" >&2; exit 2; }
+  [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "emp.sh: no nvcc" >&2; exit 2; }
   export NVCC PATH="$(dirname "$NVCC"):$PATH"
   WORK=$(mktemp -d)
   trap 'rm -rf "$WORK"' EXIT
   mkdir -p "$WORK/bin" "$OUT/sass"
   "$NVCC" --version >"$OUT/nvcc.txt" 2>&1
   for src in "$@"; do
-    python3 "$PROBE" build --card "NVIDIA H200" --out "$WORK/bin" "$src" >>"$OUT/build.log" 2>&1 \
+    python3 "$PROBE" build --sku "$SKU" --out "$WORK/bin" "$src" >>"$OUT/build.log" 2>&1 \
       || echo "emp.sh: build failed: $src (build.log)" | tee -a "$OUT/build.log" >&2
   done
   shopt -s nullglob

@@ -80,7 +80,7 @@ class BatchDependent(Unexpressible):
 # --- the templates ---------------------------------------------------------------------------------------------------------------
 
 
-def registered_phi(role: str, target: str, execution: str = "bi-eager") -> Phi:
+def registered_phi(role: str, target: str) -> Phi:
     """A registration of ``role``'s model, its config as the engine profile ships it (`find_hf_config`), on the device class the
     row-id token ``target`` names (`config.TARGETS`, `config.TARGET_NUM_SMS`)."""
     import json
@@ -93,7 +93,7 @@ def registered_phi(role: str, target: str, execution: str = "bi-eager") -> Phi:
     cfg = json.loads(found[0].read_text())
     return Phi(model={"repo": (found[2] or {}).get("repo", role), "revision": "registered", "hf_config": cfg},
                workload={"requests": []}, target={"compute_capability": list(TARGETS[target]), "num_sms": TARGET_NUM_SMS[target]},
-               execution=execution)
+               execution="bi-eager")
 
 
 def workload_labels(wl: Any, checked: frozenset[int] = frozenset()) -> tuple[tuple[Any, ...], Fields]:
