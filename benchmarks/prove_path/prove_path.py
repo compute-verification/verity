@@ -1789,14 +1789,12 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
     requests = compile_advice(compiler, data)
     registered, cls = compiler.inner.registered, window_class_of(a.window_class)
-    tie, pearl = h1_tie(a, cls), pearl_tie(a, cls)
-    tables = tie[2] if tie is not None else pearl[3] if pearl is not None else None
+    if h1_tie(a, cls) is not None or pearl_tie(a, cls) is not None:
+        raise ValueError("a window tied to H1's or Pearl+'s W reads its class circuit's table rows, which the committer "
+                         "doesn't fill: it fills a served window's circuit alone")
     try:
         compiled = compile_steps(registered, data, compiler.inner.ingress)
-        WC.takes(compiled, cls)
-        if tables is not None:
-            tables.held(compiled, cls)
-        low = WC.lower(registered, cls, tables=tables)
+        low = WC.lower(registered, cls, requests=WC.takes(compiled, cls))
         WC.check_provable(low.circuit)
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
@@ -1825,16 +1823,21 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     population = program_digest(low.circuit.program()[0])
     state = None if scanned is None else WRS.state_value(population, cls, scanned[0], window=run)
     lap("scan")
-    placed = place_slots(cls, [u.id for u in units], compiler.inner.ingress,
-                         None if state is None else (scanned[1], WRS.scan_slots(low, state.rows)))
-    slots, rows = [], []
-    for u, row, max_tokens in placed:
-        served_ = None
-        if u is not None:
-            pi = ProgramIndex(p.progs[u], program_dir=p.dirs[u])
-            served_ = WRS.Served.of_record(pi, store, u, p.arrivals[u])
-        slots.append(WRS.Slot(low.fn, cls, row, weights, served_, cut=low.cut))
-        rows.append((row, max_tokens))
+    slot_of = {(cls.anchor(k), cls.lane(k)): k for k in range(cls.slots)}
+    heads = None
+    if state is not None:
+        heads = [([0] * (cls.prompt + 2), [0, 0])] * cls.slots
+        for P, h in zip(low.programs, WRS.scan_slots(low, state.rows)):
+            heads[slot_of[(P.anchor, P.lane)]] = h
+    placed = place_slots(cls, [u.id for u in units], compiler.inner.ingress, None if state is None else (scanned[1], heads))
+    rows = [(row, max_tokens) for _u, row, max_tokens in placed]
+    slots = []
+    for P in low.programs:
+        u, row, _m = placed[slot_of[(P.anchor, P.lane)]]
+        if u is None:
+            raise ValueError(f"{P.name}: its lane at bucket {P.anchor} starts no served request")
+        pi = ProgramIndex(p.progs[u], program_dir=p.dirs[u])
+        slots.append(WRS.Slot(P.fn, cls, row, weights, WRS.Served.of_record(pi, store, u, p.arrivals[u])))
     lap("slots")
     reg = WW.WeightsRegistration.of(json.loads(Path(a.registration).read_text()), a.registration)
     if (reg.repo, reg.revision) != (model["repo"], model["revision"]):
@@ -1847,17 +1850,6 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
     lap("weights")
     filled = WRS.Rows(low, slots, values)
-    previous = None
-    if tie is not None:
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT, prover as PV
-        h1w, meta, _tables = tie
-        values |= CT.reuse(h1w, meta["layout"], int(meta["steps"]), PV.salts_of(a.h1_prover), filled.value)
-        previous = DD.digest(h1w)
-    elif pearl is not None:
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
-        pw, manifests, rounds, _tables, dirs = pearl
-        values |= PWR.reuse(pw, manifests, filled.value, rounds, dirs)
-        previous = DD.digest(pw)
     lap("rows")
     win = IF.Window(low.circuit, run, window_design(a.sampling_design, low.circuit), a.cap, registered=values, forms=WRS.FORMS)
     win.supply()
@@ -1866,7 +1858,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))
     lap("close")
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)}}
-    win.write(c, a.out, prov, registrar=DK, previous=previous)
+    win.write(c, a.out, prov, registrar=DK)
     scan_state_opening(values[SS.SCAN_STATE], Path(a.out) / scan_state_file)
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
@@ -1874,7 +1866,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
             "population": sum(filled.n.values()), "members": len(win.window.members), "sources": sources,
             "scan_state": "stand-in" if state is None else "scanned",
             "registration": {"held": len(held), "free": sorted(set(reg.values) - set(held)), "unrooted": sorted(reg.unrooted)},
-            "tie": None if previous is None else {"previous": previous, "tables": len(low.circuit.registered.values)},
+            "tie": None,
             "seconds": seconds}
 
 
