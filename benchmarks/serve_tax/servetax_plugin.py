@@ -42,7 +42,7 @@ directory, /edge-K.state.pkl), and the KV pool's bytes at the edges ``save_kv`` 
 step's sampled tokens and their logprobs' bits go to ``private``/server/edges/outputs.PID.jsonl. With a tensor-parallel executor each
 rank keeps its part in its own process (`ranks_take`), copied to host memory on the ranks ``kv_copy`` names.
 
-The tick's plugin (`verity_vllm.pipeline.tick_plugin`) is a separate entry point, loaded after this one, so its gate wraps
+The tick's plugin (`verity_vllm.pipeline.scheme_plugin`) is a separate entry point, loaded after this one, so its gate wraps
 the scheduler outside these.
 """
 from __future__ import annotations
@@ -131,8 +131,8 @@ class ReleaseGate:
 
         self.key_of, self.clock = key, clock
         self.timers: list[tuple[float, Callable[[], None]]] = []
-        self.order = messages.attester().attach(messages.Exchange(), {
-            "admit": {"order": "release-order", "hold_ms": hold_s * 1000}, "submit": lambda adm: add(adm.request),
+        self.order = messages.providing("admission").attach(messages.Exchange(), {
+            "settings": {"order": "release-order", "hold_ms": round(hold_s * 1000)}, "submit": lambda adm: add(adm.request),
             "abort": lambda engine_id: abort([engine_id]),
             "schedule": lambda delay, fn: self.timers.append((self.clock() + delay, fn))}).front
         self.headers = self.order.headers

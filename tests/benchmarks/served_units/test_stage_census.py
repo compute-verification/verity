@@ -143,7 +143,8 @@ def test_main_bound(stage, monkeypatch, tmp_path, capsys, n, want, composed):
     part, desc = json.loads((tmp_path / "partition.json").read_text()), json.loads((tmp_path / "program.json").read_text())
     digests = {"partition": PO.digest(part), "program": part["program"]}
     assert PO.validate(part).ok and part["query"] == PO.template_instances_query([SILU])
-    assert desc["program_fn"] == f'TemplatePopulations_v1{{templates=["{SILU}"],counts=[{want}]}}'
+    record = hashlib.sha512(b"{}").hexdigest()
+    assert desc["program_fn"] == f'WiredPopulations_v1{{templates=["{SILU}"],record="{record}",counts=[{want}]}}'
     assert program_digest(desc) == part["program"]
     assert rec["bind"] == {**digests, "query": part["query"], "population": want, "indices": [0, want],
                            "program_bytes": (tmp_path / "program.json").stat().st_size}

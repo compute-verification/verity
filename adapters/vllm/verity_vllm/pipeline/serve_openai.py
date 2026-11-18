@@ -595,7 +595,7 @@ def network_admission(loop: EngineLoop, sched: Any, opts: Any) -> tuple[Any, H.F
     cfg: dict[str, Any] = {"order": opts.admit, "hold_ms": opts.admit_hold_ms}
     if opts.admit == "tick":
         cfg |= {f"{k}_us": int(round(float(getattr(opts, f"tick_{k}_ms")) * 1000)) for k in ("bucket", "sat", "free")}
-    got = M.current().attach(M.providing("admission"), admit=cfg, source="--admit", submit=loop.submit, abort=loop.abort,
+    got = M.current().attach(M.providing("admission"), cfg, source="--admit", submit=loop.submit, abort=loop.abort,
                              take=loop.tick)
     loop.gate = got.gate
     if loop.gate is not None:
