@@ -6,6 +6,8 @@ from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.population import BitsWord, WordBits, mixed_population_program, wired_population_program
+from verity.circuits.program import is_input
+from verity.circuits.refs import Concat, Strided
 from verity.circuits.types import Array, Value
 
 V16 = Value(16)
@@ -77,6 +79,47 @@ def test_a_program_with_no_width_changing_wire_keeps_its_digest():
     assert program_digest(wired_population_program([(A, 2), (B, 2)], _record())[0]) == (
         "a0fafd0c4293444de2f08bb1c7405f91fbf17a83d8d70ad3c66abc55ff235bda2c7c2c95f053f2c799bcf88a21a6c9dbe6f9a5bdf81d4f820980ab8002ac5a0f")
     assert wired_population_program([(A, 2), (B, 2)], _record())[1]["params"]["templates"] == [IA, IB]
+
+
+def _parts(refs):
+    return [q for p in refs.parts for q in _parts(p)] if isinstance(refs, Concat) else [refs]
+
+
+def _root(prog):
+    nodes = [n for n in prog.root.body.nodes if not is_input(n.fn)]
+    return nodes, [len(_parts(a.refs)) for n in nodes for a in n.args]
+
+
+def _every_other(nb, order=None):
+    rec = _record(na=2 * nb, nb=nb, step=2)
+    return {**rec, **({"order": order} if order else {})}
+
+
+@pytest.mark.parametrize("nb", [2, 8, 64])
+def test_a_regular_run_of_edges_is_one_strided_part_whatever_the_units(nb):
+    prog = wired_population_program([(A, 2 * nb), (B, nb)], _every_other(nb))[0]
+    nodes, parts = _root(prog)
+    assert len(nodes) == 2 and parts == [1, 1, 1, 1]
+    assert isinstance(nodes[1].args[0].refs, Strided)
+    w, x, k = list(range(2 * nb)), list(range(1, 4 * nb + 1)), list(range(100, 100 + 4 * nb))
+    a = [evaluate(A, x[2 * u:2 * u + 2], k[2 * u:2 * u + 2]) for u in range(2 * nb)]
+    b = [evaluate(B, a[2 * u], w[2 * u:2 * u + 2]) for u in range(nb)]
+    assert evaluate(prog.fn, w, x, k) == tuple(v for out in a + b for v in out)
+
+
+@pytest.mark.parametrize("one_writer", [False, True])
+def test_a_reader_range_is_one_batch_or_with_one_writer_a_batch_for_each_writer_batch_it_reads(one_writer):
+    order = [[IA, 0, 4], [IA, 4, 4], [IB, 0, 4]]
+    prog = wired_population_program([(A, 8), (B, 4)], _every_other(4, order), one_writer=one_writer)[0]
+    nodes, parts = _root(prog)
+    if one_writer:
+        assert [(n.fn.id, n.n) for n in nodes] == [(A.id, 4), (A.id, 4), (B.id, 2), (B.id, 2)] and parts == [1] * 8
+    else:
+        assert [(n.fn.id, n.n) for n in nodes] == [(A.id, 4), (A.id, 4), (B.id, 4)] and parts == [1, 1, 1, 1, 2, 1]
+    w, x, k = list(range(8)), list(range(1, 17)), list(range(100, 116))
+    a = [evaluate(A, x[2 * u:2 * u + 2], k[2 * u:2 * u + 2]) for u in range(8)]
+    b = [evaluate(B, a[2 * u], w[2 * u:2 * u + 2]) for u in range(4)]
+    assert evaluate(prog.fn, w, x, k) == tuple(v for out in a + b for v in out)
 
 
 BIT = Value(1)

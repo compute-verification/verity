@@ -9,6 +9,7 @@ integration builds its window's program with them: both sides build the same pro
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
 import math
 import re
@@ -21,7 +22,7 @@ from .defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinitio
 from .partition_object import template_instances_query
 from .ports import In, Leaves, Out, Ports, port_types
 from .program import Program
-from .refs import Coll, coll_concat, concat
+from .refs import Affine, Coll, Refs, Strided, coll_concat, concat
 from .types import Array, RecordType, Tuple, Value
 
 #: The population programs' versions, the builders' default first. v1 names its templates (each one's descriptor id) in its
@@ -173,18 +174,20 @@ def _converts(src: Any, dst: Any) -> int | None:
     return max(a, b)
 
 
-def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, int]], record: Mapping[str, Any]
-                             ) -> tuple[Program, dict[str, Any]]:
+def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, int]], record: Mapping[str, Any], *,
+                             one_writer: bool = False) -> tuple[Program, dict[str, Any]]:
     """`WiredPopulations_v1{templates, record, counts}` and its template query, as `Circuit.program` gives the population's:
     circuit record ``record`` as one Program over ``templates``, each ``(template, units)`` as the record names them. Each
-    range of the record's order (each template one range where it states none) is a batch, and the result is
-    `mixed_population_program`'s. An input row is its wire's writer's output row; a registered or boundary read's, the root
-    parameter named for the value it reads; a table read's, ``<param>/<root or domain>``; an opening's port,
-    ``<table>/<port>`` over the opening's units; any other row, the population's own ``<j>.<port>``. The registered values
-    are the first parameters, in order, the rest sorted by name. A wire or read from W-bit words into a row of one-bit
-    leaves passes through a batch of `WordBits{W}` just before its reader's, one from bits into words through
-    `BitsWord{W}`, and the query lists each after the templates. The Program's ``annotations["free"]`` are the rows no
-    wire, read, table read, opening or ingress fills, as the record's ``free`` entries state rows. ``record`` is the
+    range of the record's order (each template one range where it states none) is a batch, with ``one_writer`` (a binding
+    of its own) one for each run of its units that reads the same writer batches; each argument's runs of equal rows at one
+    stride are one strided part, and the result is `mixed_population_program`'s. An input row is its wire's writer's output
+    row; a registered or boundary read's, the root parameter named for the value it reads; a table read's,
+    ``<param>/<root or domain>``; an opening's port, ``<table>/<port>`` over the opening's units; any other row, the
+    population's own ``<j>.<port>``. The registered values are the first parameters, in order, the rest sorted by name. A
+    wire or read from W-bit words into a row of one-bit leaves passes through a batch of `WordBits{W}` just before its
+    reader's, one from bits into words through `BitsWord{W}`, and the query lists each after the templates. The Program's
+    ``annotations["free"]`` are the rows no wire, read, table read, opening or ingress fills, as the record's ``free``
+    entries state rows. ``record`` is the
     binding's by the SHA-512 of the canonical JSON of its `WIRED_FIELDS`. Refused (ValueError), by name: a row two fill, a
     wire or read between leaves of two widths neither of them one bit, a wire whose writer the order puts at or after its
     reader."""
@@ -316,43 +319,54 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
     def body(B, S, *args):
         coll = dict(zip((v for v, _ in params), args))
         made: dict[int, list[tuple[int, Any]]] = {j: [] for j in range(len(sigs))}
+        starts: dict[int, list[int]] = {j: [] for j in range(len(sigs))}
+
+        def writer(a: int, b: int) -> int:
+            return bisect.bisect_right(starts[a], b) - 1
+
         for j, lo, n in order:
-            argv = []
-            for p, t in sigs[j][0]:
-                k, rt = cut(j, p), row(j, p)
-                r = rt.homogeneous_width()
-                parts, widths = [], []
-                for u in range(lo, lo + n):
-                    for c in range(k):
-                        kind, a, b, *f = fills[(j, p)][(u, c)]
-                        w = r
-                        if kind == "wire":
-                            wlo, out = next(x for x in made[a] if x[0] <= b < x[0] + len(x[1]))
-                            e = out[b - wlo]
-                            parts.append((e[f[0]] if isinstance(sigs[a][1], (Tuple, RecordType)) else e).refs)
-                            w = _fields(sigs[a][1])[f[0]].homogeneous_width()
-                        elif kind == "leaf":
-                            w = roots[a].elem.w
-                            parts.append(coll[a].refs.slice(b, b + rt.leaves * (r or w) // w))
-                        else:
-                            v = coll[a] if kind == "whole" and b is None else coll[a][u if kind == "own" else b]
-                            parts.append(v.refs.slice(c * rt.leaves, (c + 1) * rt.leaves))
-                        widths.append(w)
-                for w in sorted({w for w in widths if w != r}):
-                    at = [i for i, x in enumerate(widths) if x == w]
-                    bits = concat([parts[i] for i in at])
-                    out = (B.batch(bind(WordBits, W=w), Coll(Array(len(at) * rt.leaves // w, Value(w)), bits), axes=(0,))
-                           if r == 1 else
-                           B.batch(bind(BitsWord, W=r), Coll(Array(len(at) * rt.leaves, Array(r, BIT)), bits), axes=(0,)))
-                    for q, i in enumerate(at):
-                        parts[i] = out.refs.slice(q * rt.leaves, (q + 1) * rt.leaves)
-                argv.append(Coll(Array(n, t), concat(parts)))
-            made[j].append((lo, B.batch(templates[j][0], *argv, axes=(0,) * len(argv))))
-        return coll_concat(rets, [coll_concat(Array(n, sigs[j][1]), [o for _, o in sorted(made[j], key=lambda x: x[0])])
-                                  for j, n in enumerate(units)])
+            keys = [tuple(writer(src[1], src[2]) if src[0] == "wire" else -1
+                          for p, _t in sigs[j][0] for c in range(cut(j, p)) for src in (fills[(j, p)][(u, c)],))
+                    for u in range(lo, lo + n)] if one_writer else [()] * n
+            for slo, sn in _runs_of(keys, lo):
+                argv = []
+                for p, t in sigs[j][0]:
+                    k, rt = cut(j, p), row(j, p)
+                    r = rt.homogeneous_width()
+                    parts, widths = [], []
+                    for u in range(slo, slo + sn):
+                        for c in range(k):
+                            kind, a, b, *f = fills[(j, p)][(u, c)]
+                            w = r
+                            if kind == "wire":
+                                wlo, out = made[a][writer(a, b)]
+                                e = out[b - wlo]
+                                parts.append((e[f[0]] if isinstance(sigs[a][1], (Tuple, RecordType)) else e).refs)
+                                w = _fields(sigs[a][1])[f[0]].homogeneous_width()
+                            elif kind == "leaf":
+                                w = roots[a].elem.w
+                                parts.append(coll[a].refs.slice(b, b + rt.leaves * (r or w) // w))
+                            else:
+                                v = coll[a] if kind == "whole" and b is None else coll[a][u if kind == "own" else b]
+                                parts.append(v.refs.slice(c * rt.leaves, (c + 1) * rt.leaves))
+                            widths.append(w)
+                    for w in sorted({w for w in widths if w != r}):
+                        at = [i for i, x in enumerate(widths) if x == w]
+                        bits = _strided([parts[i] for i in at])
+                        out = (B.batch(bind(WordBits, W=w), Coll(Array(len(at) * rt.leaves // w, Value(w)), bits), axes=(0,))
+                               if r == 1 else
+                               B.batch(bind(BitsWord, W=r), Coll(Array(len(at) * rt.leaves, Array(r, BIT)), bits), axes=(0,)))
+                        for q, i in enumerate(at):
+                            parts[i] = out.refs.slice(q * rt.leaves, (q + 1) * rt.leaves)
+                    argv.append(Coll(Array(sn, t), _strided(parts)))
+                i = bisect.bisect_right(starts[j], slo)
+                starts[j].insert(i, slo)
+                made[j].insert(i, (slo, B.batch(templates[j][0], *argv, axes=(0,) * len(argv))))
+        return coll_concat(rets, [coll_concat(Array(n, sigs[j][1]), [o for _, o in made[j]]) for j, n in enumerate(units)])
 
     named = {"templates": tuple(ids), "record": hashlib.sha512(canonical_json(
-        {k: record[k] for k in WIRED_FIELDS if k in record})).hexdigest(), "counts": tuple(units)}
+        {k: record[k] for k in WIRED_FIELDS if k in record})).hexdigest(), **({"one_writer": True} if one_writer else {}),
+             "counts": tuple(units)}
     defn = CompositeDefinition("WiredPopulations", 1, tuple(named), lambda S: (params, rets), body,
                                doc="wired units of " + ", ".join(f"{n} x {t.id}" for t, n in templates), register=False)
     free_rows = [{"reader": t, "port": p, "at": at, "units": n, **({} if rows == (0, cut(index[t], p)) else {"cut": list(rows)})}
@@ -360,6 +374,36 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
     wiring = [bind(WordBits if to_bits else BitsWord, W=w) for to_bits, w in sorted(need)]
     return (Program(bind(defn, **named), annotations={"free": free_rows}),
             template_instances_query([t for t, _ in templates] + wiring))
+
+
+def _runs_of(keys: Sequence[tuple[int, ...]], lo: int) -> Iterator[tuple[int, int]]:
+    at = 0
+    for i in range(1, len(keys) + 1):
+        if i == len(keys) or keys[i] != keys[at]:
+            yield lo + at, i - at
+            at = i
+
+
+def _strided(parts: Sequence[Refs]) -> Refs:
+    runs: list[Refs] = []
+    for p in parts:
+        q = runs[-1] if runs else None
+        if (isinstance(p, Affine) and isinstance(q, Affine) and (q.space, q.idx) == (p.space, p.idx)
+                and q.base + q.count == p.base):
+            runs[-1] = Affine(p.space, p.idx, q.base, q.count + p.count)
+        elif p.count:
+            runs.append(p)
+    out: list[Refs] = []
+    for p in runs:
+        q = out[-1] if out else None
+        if isinstance(p, Affine) and isinstance(q, Affine) and (q.space, q.idx) == (p.space, p.idx) and q.count == p.count:
+            out[-1] = Strided(p.space, p.idx, q.base, p.count, p.base - q.base, 1, 2 * p.count)
+        elif (isinstance(p, Affine) and isinstance(q, Strided) and (q.space, q.idx) == (p.space, p.idx) and q.inner == p.count
+              and q.inner_stride == 1 and q.count % q.inner == 0 and p.base == q.base + q.count // q.inner * q.outer_stride):
+            out[-1] = Strided(p.space, p.idx, q.base, q.inner, q.outer_stride, 1, q.count + p.count)
+        else:
+            out.append(p)
+    return concat(out)
 
 
 def _cover(p: Mapping[str, Any]) -> Iterator[tuple[int, int, int]]:

@@ -25,7 +25,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.population import BitsWord, WordBits, wired_population_program
 from verity.circuits.program import is_input
-from verity.circuits.refs import runs
+from verity.circuits.refs import Concat, runs
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import wiring as WI
 from verity_vllm.definitions.registry import io_shell as IO
@@ -1144,12 +1144,14 @@ def by_hand(circuit: IF.Circuit, inputs: dict[str, np.ndarray], prog: Any) -> di
 def wired_matches_by_hand(circuit: IF.Circuit, prog: Any) -> None:
     inputs = made_up(prog)
     vals, mine = node_outputs(prog, inputs), by_hand(circuit, inputs, prog)
-    ranges = iter(circuit.description()["order"])
-    for node, v in zip(prog.root.body.nodes, vals):
-        if not is_input(node.fn) and descriptor_id(node.fn) in mine:
-            tid, lo, n = next(ranges)
-            assert descriptor_id(node.fn) == tid and np.array_equal(v.reshape(n, -1), mine[tid][lo:lo + n]), (tid, lo)
-    assert next(ranges, None) is None
+    batches = [(descriptor_id(node.fn), node.n, v) for node, v in zip(prog.root.body.nodes, vals)
+               if not is_input(node.fn) and descriptor_id(node.fn) in mine]
+    for tid, lo, n in circuit.description()["order"]:
+        while n:
+            got, m, v = batches.pop(0)
+            assert got == tid and m <= n and np.array_equal(v.reshape(m, -1), mine[tid][lo:lo + m]), (tid, lo)
+            lo, n = lo + m, n - m
+    assert not batches
 
 
 @pytest.fixture(scope="module")
@@ -1169,6 +1171,19 @@ def test_the_tiny_class_circuit_is_one_wired_program_of_registered_rows_with_a_w
     assert prog.fn.gates == 110_483_744
     wiring = [descriptor_id(bind(d, W=w)) for d, w in ((BitsWord, 16), (BitsWord, 32), (WordBits, 16), (WordBits, 32))]
     assert query["params"]["templates"] == circuit.ids + wiring
+
+
+def _parts(refs: Any) -> list[Any]:
+    return [q for p in refs.parts for q in _parts(p)] if isinstance(refs, Concat) else [refs]
+
+
+@pytest.mark.slow
+def test_the_tiny_class_wired_roots_parts_are_within_its_wires_times_its_ranges(tiny_wired):
+    circuit, prog, _ = tiny_wired
+    d = circuit.description()
+    nodes = [n for n in prog.root.body.nodes if not is_input(n.fn)]
+    parts = sum(len(_parts(a.refs)) for n in nodes for a in n.args)
+    assert (len(nodes), parts) == (177, 950) and parts <= len(d["wires"]) * len(d["order"])
 
 
 @pytest.mark.slow
