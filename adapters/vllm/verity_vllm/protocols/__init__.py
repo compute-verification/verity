@@ -455,8 +455,8 @@ def capture_context(profile: Any, *, settings: Any = None) -> Context | None:
 
 
 def at_capture(profile: Any, model: Any, settings: Any = None) -> Composition | None:
-    """Install a Match capture's composition (`capture_context`) on its engine's model: PoUW's executor there serves each call
-    and records it as one op (`pouw.ncp_linear_op`), committing nothing. None when the target declares no such protocol."""
+    """Install a Match capture's composition (`capture_context`) on its engine's model: each protocol's executor there serves
+    its calls, committing nothing. None when the target declares no such protocol."""
     ctx = capture_context(profile, settings=settings)
     if ctx is None:
         return None

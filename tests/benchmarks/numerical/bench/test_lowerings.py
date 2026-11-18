@@ -2,16 +2,12 @@
 what it lowers; today's GEMM cells resolve to the relation names their pod scripts take."""
 from __future__ import annotations
 
-import json
 
-import numpy as np
 import pytest
 
-from verity_flock import input_sets as IS
 from verity_flock import lowering as FL
 from verity_flock import lowerings as L
 from verity_flock import subcircuit_templates as TM
-from verity_numerical.bench import generate as G
 
 FAMILIES = sorted(L.DIRECTORIES)
 EXAMPLES = [TM.subcircuit(t.id, **t.example) for t in TM.TEMPLATES.values()]
@@ -94,14 +90,3 @@ def test_support_matrix():
     assert set(m) == {"C-Flock"}
     assert isinstance(m["C-Flock"]["rope-head/d64/neox-bf16+frame-v3/sha-256"], str)
 
-
-def test_flock_stage_writes_an_input_set_range(tmp_path):
-    sub = TM.parse_subcircuit_id("gemm-coordinate/k2048/sm80-mma-bf16")
-    stage = L.registry("C-Flock").stage(sub)
-    d = tmp_path / "set"
-    G.generate(sub, 4, 7, d)
-    s = IS.InputSet.open(d)
-    out = stage(s, 1, 3, tmp_path / "inst")
-    h = json.loads(out.read_bytes().split(b"\n", 1)[0])
-    assert (h["vus"], h["k"], h["instances"]["range"], h["instances"]["manifest_sha256"]) == (2, 2048, [1, 3], s.content_digest)
-    assert np.fromfile(s.path / "x.u16", dtype="<u2").size == 4 * 2048

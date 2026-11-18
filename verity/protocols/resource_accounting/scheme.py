@@ -265,8 +265,10 @@ class Scheme:
     (``bf16``), not the format of the arithmetic that made it; ``product_family``, the number family of its useful
     products, the operands' format and scaling (``fp8-e4m3-rowwise``: E4M3 operands, one scale per row of each, an
     FP32 accumulator), named as the harness names a stock kernel's family; ``y_committed``, whether each of its calls
-    commits that y; and ``salt_open_root``, the root its salt coin is opened after, a function of the weights' root
-    and the salt epoch's number.
+    commits that y; ``salt_open_root``, the root its salt coin is opened after, a function of the weights' root
+    and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card, of the card's short name and
+    ``pinned=`` (whether registration pins the weights), `LookupError` naming the cards and pinnings it runs on
+    otherwise.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     is a `Lacks` saying so: it is in the one table with its parties and record, and `bound` and `credited` refuse it by
@@ -310,6 +312,7 @@ class Scheme:
     product_family: str | Lacks = UNDECLARED
     y_committed: bool | Lacks = UNDECLARED
     salt_open_root: Callable[[bytes, int], bytes] | Lacks = UNDECLARED
+    kernels: Callable[..., str] | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
