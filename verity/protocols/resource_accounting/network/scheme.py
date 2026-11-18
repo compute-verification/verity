@@ -20,6 +20,7 @@ from verity.protocols.resource_accounting.network.verifier.blocks import SCAN_ST
 from verity.protocols.resource_accounting.network.verifier.io_request import IoTieRequest
 from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBucket, IoTieContent, IoTieRoute
 from verity.protocols.resource_accounting import scheme as S
+from verity.protocol import Channel, Role
 from verity.protocols.resource_accounting.scheme import Block, Charge, Layout, Order, Port, Scheme, Term, register
 from verity.protocols.resource_accounting.network.verifier import parties as NC, period_check
 from verity import hooks as H
@@ -137,12 +138,17 @@ NETWORK_ATTESTER = register(Scheme(
     requests=requests,
     attach=attach,
     processes={"id-relay": id_relay.process},
-    parties=NC.MANIFEST.parties,
-    channels=NC.MANIFEST.channels,
+    parties=(Role("network-attester", "auditor", per="link", needs=("clock", "coins", "signing-key")),
+             Role("workers", "developer", needs=("serve",)),
+             Role("verifier", "auditor", needs=("audit", "component", "product"))),
+    channels=(Channel("network-attester", "workers", ("out-opening", "records", "cells-salts")),
+              Channel("network-attester", "verifier",
+                      ("out-record", "certificate", "registration", "deployment", "groups"))),
     channel_schemas=NC.MANIFEST.messages,
-    colocated=(("challenger", NC.NETWORK_ATTESTER),),
+    colocated=(("challenger", "network-attester"),),
     needs=frozenset({"windows", "ingress-relay"}),
     depends=("sampled-proofs",),
+    pieces={"workers": S.Launch(binds=("gate", "peer"))},
     record="communication",
     symbol="K",
     published=("bits", Fraction(1)),

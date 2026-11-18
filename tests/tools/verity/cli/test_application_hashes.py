@@ -14,12 +14,12 @@ from verity_cli import run as R
 ROOT = Path(R.ROOT)
 REG = R.registry()
 HASHES = {
-    "onsite_compute": "f5ca90b1a0f6c0b201537a257c2c7070050a8f94629b4356ca437cca08d9b627"
-                      "e3fbb2da763263e35fccb143ae171e908f3f7de57f120d206a17dda2c1554322",
-    "onsite_full": "29ddc537eb839e0115f3cbd66f5842a9a534eef5f64f389bad552b6df2ca7436"
-                   "024e372e061d5e818eb65f459b2ef6b91820597f21489fe55837a7f84773dffe",
-    "onsite_network": "9d9c1d03935955f17207629a34cc2001c04b90185587a00fe6a08bb88f342c59"
-                      "cde7036cc73eef8d75abb2b9e14295857d7ab94207f3b2d7572fc78ef519f00e",
+    "onsite_compute": "94e39b782f3a59b7d12e74efbb7279061df2b0dafb55c547bb901bec98f983e3"
+                      "ffdc40c529c2143f859a4bd0d6dde61f87251c64568a52c56b77a8f28fcecfc3",
+    "onsite_full": "78a31992cc4f87122f5c04ff18823bcdd7eefea7385de600baa723deb06f82ff"
+                   "84520bd0601c076f567459cb3803d1d3ed87a3a5eb85e5bd3a5b60028771bd75",
+    "onsite_network": "d7573dd065d5d692918ded81d936c2dd9bf736e4e52b10d6fe56344b838b5564"
+                      "f0a08fbd7bd3ae9bb26ab70619465f9bb9a048513db90d0b3d2be63dff676679",
     "remote": "dac8166b62d4569e8c1259e1a71df0da959009e5200ac292fef50780e199ab08"
               "154e1dd01a184f2e5e569980ba0b1edd7ca99174ac490923d641456925514820",
 }

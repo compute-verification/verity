@@ -10,13 +10,13 @@
 # path config.RunEnv.norm_tap_so names, rebuilding only when the inputs changed (their sha256 beside the .so, source_set.sha256);
 # (3) `verity-vllm norm-tap-build --check`.  Exactness is a separate step: tests/properties/norm_tap_exactness_gpu.py (needs the GPU).
 # Env: VENV (default /workspace/venv312), CUDA_HOME (required), CARD_SKU (required: the card file the tap compiles for), NT (default
-# /workspace/cp/norm_tap), REPO (default: this tree), NORM_TAP_FORCE=1 (rebuild regardless).
+# <build root>/norm_tap: VERITY_BUILD_ROOT, else cli.MACHINE's), REPO (default: this tree), NORM_TAP_FORCE=1 (rebuild regardless).
 set -uo pipefail
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
 VENV=${VENV:-/workspace/venv312}
 export CUDA_HOME=${CUDA_HOME:?set CUDA_HOME to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 . "$REPO/verity_vllm/ops/cuda_headers.sh" && cuda_headers "$VENV/bin/python"
-NT=${NT:-/workspace/cp/norm_tap}
+[ -n "${NT:-}" ] || NT=${VERITY_BUILD_ROOT:-$("$VENV/bin/python" -c "from verity_vllm.pipeline.cli import MACHINE; print(MACHINE[\"RunEnv.build_root\"])")}/norm_tap || { echo "NORM-TAP-FAIL no build root (VERITY_BUILD_ROOT)"; exit 1; }
 PIN=d9105ea8001e0a6d77a96327d17515bb5791fb36
 SRC=$REPO/verity_vllm/acquire/norm_tap_src
 VSRC=$NT/vllm/csrc/libtorch_stable

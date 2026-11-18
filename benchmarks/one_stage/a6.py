@@ -53,6 +53,8 @@ sys.path.insert(0, str(HERE.parent / "served_units"))
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
 import stage as SU  # noqa: E402
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.ops import gemm as OG  # noqa: E402
@@ -105,7 +107,7 @@ def chunk_cap(meta: dict) -> int:
 def window(K: int, c: int) -> tuple:
     """Template K's population of c units as a window of its own: its program, query and partition."""
     d = template(K)
-    program = P.mixed_population_program([(d, c)])
+    program = PN.mixed_population_program([(d, c)])
     query = P.template_instances_query([d])
     return program, query, P.partition(program, query)
 
@@ -259,7 +261,7 @@ def main() -> int:
 
     # the verifier's program and partition
     defs = [template(K) for K, _ in spec]
-    program = P.mixed_population_program([(d, n) for d, (_K, n) in zip(defs, spec)])
+    program = PN.mixed_population_program([(d, n) for d, (_K, n) in zip(defs, spec)])
     query = P.template_instances_query(defs)
     part = P.partition(program, query)
     pd = P.digest(part)
@@ -306,7 +308,7 @@ def main() -> int:
         checks[f"twin/{m['name']}"] = {"ok": m["st"]["twin"]["agrees"], "codes": [] if m["st"]["twin"]["agrees"] else ["twin"], "detail": {}}
     receipt = R.receipt(rec, "one-stage-e2e verifier (a6.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-    summary.update(population=n_all, partition=pd, registration=R.digest(rec), law=rec["law"],
+    summary.update(population=n_all, partition=pd, registration=DD.digest(rec), law=rec["law"],
                    checks_before_draw={c: v["ok"] for c, v in checks.items()})
     if not all(v["ok"] for v in checks.values()):
         summary["checks"] = checks
@@ -317,7 +319,7 @@ def main() -> int:
     # the verifier's stratified sample, by its own Lean over its own program and partition object on a development
     # challenger's coins; each member serves its stratum
     p = a0.challenger_sample(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
-                                    "--stratified", str(a.k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
+                                    "--stratified", str(a.k)], rec["law"], n_all, DD.digest(rec), out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     served, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}

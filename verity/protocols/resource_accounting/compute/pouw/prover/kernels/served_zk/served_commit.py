@@ -122,6 +122,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 from verity.commitments.identity import identity_digest_sha512, tagged_sha512
@@ -212,7 +214,7 @@ def tile_work(params: dict) -> int:
 def population(k: int, n: int):
     """The execution phase's tiles as one-stage's population: (program, query, partition object)."""
     d = template(k)
-    prog = PT.population_program(d, n)
+    prog = PN.population_program(d, n)
     q = PT.template_instance_query(PT.template_id(d))
     return prog, q, PT.partition(prog, q)
 
@@ -1036,7 +1038,7 @@ class Challenger:
         runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
         sampling_design = S.selection_sampling_design(st.spec.selection, n)
-        prog = PT.population_program(st.unit, n)
+        prog = PN.population_program(st.unit, n)
         q = st.spec.check.query
         params = OR.registration_params(prog, q, sampling_design, S.SCHEME, ports_, list(st.log), self.params["delta"])
         args = (rec, prog, q, sampling_design, S.SCHEME, ports_, None, (), list(st.log), None, None, None)
@@ -1435,7 +1437,7 @@ def cmd_register(a) -> int:
         print(f"REFUSED {json.dumps(e.verdict.to_json(), default=str)}", flush=True)
         return 0 if a.expect_refused else 1
     Path(a.out).write_text(json.dumps(rec, sort_keys=True))
-    print(f"REGISTERED {json.dumps({'registration': R.digest(rec)[:32], 'population': rec['population'], 'law': rec['law'], 'public': sorted(rec['window']['public'])})}",
+    print(f"REGISTERED {json.dumps({'registration': DD.digest(rec)[:32], 'population': rec['population'], 'law': rec['law'], 'public': sorted(rec['window']['public'])})}",
           flush=True)
     return 1 if a.expect_refused else 0
 

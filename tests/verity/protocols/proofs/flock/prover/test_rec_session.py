@@ -21,7 +21,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.commitments import registered_value as RV
 from verity.commitments import domains as DM
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -53,7 +55,7 @@ _UNIT = bind(CompositeDefinition("RecSessionTestUnit", 0, (), lambda S: ((("x", 
 
 def _private(n: int = 3):
     """A private circuit's program and query: ``n`` instances of a toy unit."""
-    return P.population_program(_UNIT, n), P.template_instance_query(_UNIT)
+    return PN.population_program(_UNIT, n), P.template_instance_query(_UNIT)
 
 
 def _partition():
@@ -538,13 +540,13 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
     stage = _toy_circuit(tmp_path, 8)[0].parent
     desc = RV.Registered.commit(part["program"], "prog", [[1, 2, 3]])
     with_desc = IR.bind(stage, program, part, [desc.entry()])
-    assert IR.meta(stage)[IR.REGISTRATION_KEY] == R.digest(with_desc) and IR.bound(stage) == with_desc
+    assert IR.meta(stage)[IR.REGISTRATION_KEY] == DD.digest(with_desc) and IR.bound(stage) == with_desc
     with pytest.raises(ValueError, match="carries no stacked entry: R was not registered at staging"):
         RS.staged_stacked(stage)
     registration, bound, reg = _registered_top(stage, binds["stacked"], 6)
     meta, text = IR.meta(stage), (stage / "circuit.txt").read_text()
     entry = RL.registered_entry(registration, RL.STACKED)
-    assert bound == meta[IR.REGISTRATION_KEY] == R.digest(registration)
+    assert bound == meta[IR.REGISTRATION_KEY] == DD.digest(registration)
     assert registration == IR.registration_record(program, part, [desc.entry(), entry])
     assert (registration["program"], registration["partition"]) == (meta["program_sha512"], meta["partition"]["digest"])
     assert (registration["scheme"], registration["roots"], registration["window"]) == (FC.SCHEME, [], IR.WINDOW)
@@ -588,9 +590,9 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
     forged = IR.registration_record(program, part, [desc.entry(), other["entry"]])
     v1 = {**registration, "format": DM.REGISTRATION_V1}
     not_meta = "the registration is not the one the statement's META binds"
-    for bad, dg, why in [(with_desc, R.digest(with_desc), "the private circuit's registration (verity/registration/v2) names no stacked"),
-                         (v1, R.digest(v1), "names no stacked"), (None, bound, not_meta), (registration, None, not_meta),
-                         (forged, bound, not_meta), (forged, R.digest(forged), "the registered top is not the registration's stacked")]:
+    for bad, dg, why in [(with_desc, DD.digest(with_desc), "the private circuit's registration (verity/registration/v2) names no stacked"),
+                         (v1, DD.digest(v1), "names no stacked"), (None, bound, not_meta), (registration, None, not_meta),
+                         (forged, bound, not_meta), (forged, DD.digest(forged), "the registered top is not the registration's stacked")]:
         with pytest.raises(ValueError, match=re.escape(why)):
             RL.Proxy(RL.LiveCoinPart(), schedule=sch, registration=bad, registered={RL.STACKED: reg}, bound=dg)
     late = RL.Proxy(RL.LiveCoinPart(random.Random(3).randbytes), schedule=sch, registration=registration, bound=bound)
@@ -613,11 +615,11 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
     V.registered(public, registration, bound)
     moved = {**registration, "registered": [desc.entry(), {**entry, "domain": desc.entry()["domain"]}]}
     not_meta = "the record is not the circuit registration META binds"
-    for bad, dg, why in [(forged, R.digest(forged), "stacked/rep0's binding round's top is not stacked's registered top"),
-                         (moved, R.digest(moved), "stacked/rep0's binding round's top is not stacked's registered top"),
+    for bad, dg, why in [(forged, DD.digest(forged), "stacked/rep0's binding round's top is not stacked's registered top"),
+                         (moved, DD.digest(moved), "stacked/rep0's binding round's top is not stacked's registered top"),
                          (forged, bound, not_meta), (registration, None, not_meta), (None, bound, not_meta),
-                         (with_desc, R.digest(with_desc), "stacked has no root at Commit and no registered top"),
-                         (v1, R.digest(v1), "stacked has no root at Commit and no registered top")]:
+                         (with_desc, DD.digest(with_desc), "stacked has no root at Commit and no registered top"),
+                         (v1, DD.digest(v1), "stacked has no root at Commit and no registered top")]:
         with pytest.raises(ValueError, match=re.escape(f"ZK-SERVER-REFUSED: registration: {why}")):
             V.registered(public, bad, dg)
 

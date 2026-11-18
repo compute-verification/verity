@@ -100,8 +100,9 @@ from typing import Any
 
 import numpy as np
 
+from verity.circuits import population as PN
 from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
@@ -334,7 +335,7 @@ class Layout:
 
     @cached_property
     def program(self) -> Program:
-        return P.population_program(self.replay, self.spans)
+        return PN.population_program(self.replay, self.spans)
 
     @cached_property
     def grain(self) -> dict[str, Any]:
@@ -350,7 +351,7 @@ class Layout:
         if not self.stopped:
             raise ValueError("only a stop class has stop blocks: a class under a stop rule, whose spans the rule ends as "
                              "they were served")
-        return P.population_program(self.stop.template, self.spans)
+        return PN.population_program(self.stop.template, self.spans)
 
     @cached_property
     def stop_query(self) -> dict[str, Any]:

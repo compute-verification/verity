@@ -121,13 +121,13 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.config import COMPOSITES
 from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.party import Finish, Identity, Received, LogEntry, Send
 from verity.channel import Body, Hex, Int, Message, Schema, Str
 
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.commitments.domains import (
     CERTIFIER_PROTOCOL, ONSITE_PROTOCOL, POUB_P2, POUB_PROTOCOL, POUS_P2_RUN, POUW_PROTOCOL, WIPE_PROTOCOL,
 )
@@ -142,22 +142,22 @@ VERSION = 1
 SPOT_ID = "verity/sampled-proofs/spot/v1"
 CHALLENGER, ZK_SERVER, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 INFERENCE_SERVER, PROOF_SERVER = "inference-server", "proof-server"
+COMPONENT = "sampled-proofs"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
 #: `Core.Remote.V1.components`): onsite's PoUW is its period check and its bandwidth the P2 session on PoUS's store,
 #: remote's PoUW is Pearl+'s run verdict, and both compose SPOT as `COMPOSED`
 SUBPROTOCOLS = {
-    ONSITE_PROTOCOL: {"bandwidth": POUB_P2, "certifier": CERTIFIER_PROTOCOL,
+    ONSITE_PROTOCOL: {"bandwidth": POUB_P2, "network-attester": CERTIFIER_PROTOCOL,
                          "inference-only": "verity/inference-only/v0", "pous": POUS_P2_RUN,
-                         "pouw": "verity/pouw/period/v1", "sampled-proofs": COMPOSED,
+                         "pouw": "verity/pouw/period/v1", COMPONENT: COMPOSED,
                          "wipe": WIPE_PROTOCOL},
     "verity/remote/v1": {"inference-only": "verity/inference-only/v0", "pearl-plus": "verity/pouw/pearl-plus/v1",
-                         "sampled-proofs": COMPOSED},
+                         COMPONENT: COMPOSED},
 }
 #: a configuration's subprotocol names and the protocol id each has outside a composite
-IDS = {"bandwidth": POUB_PROTOCOL, "certifier": CERTIFIER_PROTOCOL,
+IDS = {"bandwidth": POUB_PROTOCOL, "network-attester": CERTIFIER_PROTOCOL,
        "inference-only": "verity/inference-only/v0", "pearl-plus": "verity/pouw/pearl-plus/v1",
-       "pous": POUS_P2_RUN, "pouw": POUW_PROTOCOL, "sampled-proofs": ID}
-COMPONENT = "sampled-proofs"
+       "pous": POUS_P2_RUN, "pouw": POUW_PROTOCOL, COMPONENT: ID}
 #: what a run's coins are (module docstring)
 COINS = ("simulated", "development")
 #: a listed subprotocol whose party gave no case: its own decoders refuse it
@@ -546,7 +546,7 @@ class Verifier(_Verifier):
     def _decide(self, i: int) -> list[LogEntry]:
         """Block ``i``'s line as an output entry, after a private one saying why its audit was unavailable."""
         raw, record = self.registrations[i]
-        digest = R.digest(record)
+        digest = DD.digest(record)
         out = []
         try:
             answer, case = self.audit(i, raw, dict(self.challenger), dict(self.zk_server))
@@ -646,12 +646,12 @@ class SpotVerifier(_Verifier):
     def _decide(self, i: int) -> list[LogEntry]:
         """Block ``i``'s line as an output entry, after a private one saying why its audit was unavailable."""
         raw, record = self.registrations[i]
-        digest = R.digest(record)
+        digest = DD.digest(record)
         args: tuple[Any, ...] = (i, raw, dict(self.challenger), self.samples[i], self.proofs.pop(i))
         interior: dict[str, str] = {}
         if self.TWO:
             body, inner = self.interiors.pop(i)
-            interior = {"interior": R.digest(inner)}
+            interior = {"interior": DD.digest(inner)}
             args = (*args, body, self.seconds[i])
         out = []
         try:

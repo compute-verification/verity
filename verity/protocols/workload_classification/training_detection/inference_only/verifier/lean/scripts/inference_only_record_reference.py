@@ -253,6 +253,11 @@ OWN_ROWS = ("the root hands a unit a row that is not input gates of its own. Eve
             "leaf handed once.")
 
 
+RECUT_UNREAD = ("the Program reads an input node in leaves of part of its leaf width (`refs.recut`), and the record "
+                "check reads whole input leaves, so it would misread them. Fix the Program, not the record: register "
+                "each input at the leaf width its reader reads.")
+
+
 #: `Record.SHARED_UNHELD`
 SHARED_UNHELD = ("the root hands one run of input leaves to more than one row, and the record does not hold every row "
                  "that reads it as a registered read of one parameter at those leaves. Declare each such row a "
@@ -934,10 +939,13 @@ def held(x: Inputs, is_theta, is_pinned, o: dict) -> bool:
 
 
 def front(inst, tr, form_only: bool = False) -> tuple:
-    """`Record.front`, the stages as far as `own-rows`: the instance's fields, the Program, its descriptor,
-    the record, the trusted input and the templates. Refused (`Malformed`) with the first stage's code."""
+    """`Record.front`, the stages as far as `own-rows`: the instance's fields, the Program (`recut-unread` where its
+    root reads an input node at another width), its descriptor, the record, the trusted input and the templates.
+    Refused (`Malformed`) with the first stage's code."""
     i = parse(inst)
     program = reference.desc_program(i["program"])
+    if program.root.body.recut:
+        raise refused("recut-unread", RECUT_UNREAD)
     try:
         rec = json.loads(i["record"])
     except ValueError as e:

@@ -23,6 +23,8 @@ from types import SimpleNamespace as NS
 import numpy as np
 import pytest
 
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
@@ -84,7 +86,7 @@ def _interior(layout: BR.Layout, previous: str, program: Program | None = None) 
     """The replay side's interior docket over the Q sampled spans' proof blocks (PAIR's instances, or
     ``program``'s, a window of templates'), at stand-in roots."""
     m = Q * P.units(Program(layout.replay), layout.query)
-    program, query = program or P.population_program(PAIR, m), layout.query
+    program, query = program or PN.population_program(PAIR, m), layout.query
     part = P.partition(program, query)
     ports = {v: {"leaves": m, "domain": R.window_domain(part["program"], P.digest(part), v, s, m, layout.run)}
              for v, s in INTERIOR}
@@ -964,7 +966,7 @@ def test_the_writer_reads_a_stop_class_as_the_driver_and_the_stop_audit_write_it
     assert r.docket.digest == first["stop"]["registration"] and first["stop"]["record"]["previous"] == r.boundary
     interior = _record(4, 4, previous=r.boundary, interior=True)
     second = {"first_stage": {"registration": r.first.docket.digest}, "held": True, "outcome": {"accepted": False},
-              "second_stage": {"registration": R.digest(interior)}}
+              "second_stage": {"registration": DD.digest(interior)}}
     assert VR.record("second_stage", first, second, stream=interior, **NAMES)["verdict"] == "withheld"
 
 
