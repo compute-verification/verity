@@ -138,9 +138,9 @@ A spec-level reference for network attestation's timing channel:
   served through the network attester's egress, every cell of an egress execution phase is opened, each a pad, the
   canonical event of one token id or the response's end on the stream the network attester set, and each is the cell
   the advice's map names at its place (`window_map`, from the advice's outputs, release buckets and advice v1's order
-  permutation, each request on its ingress ordinal's stream from 1; the verifier
-  computes it in the clear from the opened advice, the named gap, until the map is read in the proof under the advice's
-  hiding root), with the id the Commit sampled for it (the port: one hiding row of ids a step, read under the Commit's
+  permutation, each request on its ingress ordinal's stream from 1: the prototype's map, computed in the clear from the
+  opened advice, which a verifier of the design would compute until the map is read in the proof under the advice's
+  hiding root; no verifier computes it today, and no real path runs the map or the tie's check), with the id the Commit sampled for it (the port: one hiding row of ids a step, read under the Commit's
   root). The cells are the network attester's (`network_attester`): a connection's r slots a bucket, a `PAD` on its stream before
   its first cell and after its `END`, one id event a `DATA` cell. The network attester commits each bucket's cells as
   one hiding row. It has the reference and the proof block's Boolean Definition, one a bucket row (`IoTieBucket`: the
