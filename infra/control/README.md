@@ -225,46 +225,43 @@ The declared numbers' reruns (`metrics-rerun`) need no seed either: the first pa
 `/root/fast/metrics-rerun-tree`, on the pod's own disk, as the first after a reset does, and each pass fetches it, checks
 `main`'s tip out clean and reads every `metrics.toml` there. A number is due when the door holds no reading of it or its newest
 is older than its `every`; a number the door doesn't list is said and isn't due; one file's rows that share a command are one
-launch. The loop holds no workload: each launch is a `research run` of the row's command with its `--on` replaced, from the
-clone with `--source .` and the clone's own `research`, without the site, Slack or Linear keys in its environment. A row's
-`research run` may carry only the options `ALLOWED` in `metrics_rerun.py` lists, each with a value of its form; any other
-(`--send`, `--source DIR`, `--runs-dir`, `--id`, `--gpu-host`, `--custody-ttl`) is refused and said, so no row ships a file
-of the pod, and a `--pool` must be one of research's pools (`slot_only.POOLS`). A command that doesn't split as a shell line
-is refused and said, and the pass goes on. The loop runs a row only when its command asks no more than a CPU check machine
-has (`CEILING`: `--cpus`, `--mem-gb` and `--timeout`, read as `research run` reads them; one it can't read is over); any
-other row runs when its owner runs it, and is skipped and said, whatever the plan below lists for it. A CPU command (no
+launch. Each launch is a `research run` of the row's command with its `--on` replaced, from the clone with `--source .` and
+the clone's own `research`, without the site, Slack or Linear keys in its environment. Only a row that says
+`runs = "control"` (it reads what only the pod reaches) runs on the pod: a local `research run` from the clone, which the
+pass waits for (`--timeout` at most `CONTROL_S`), keeping the Linear app's keys (`CONTROL_KEEPS`) and taking none of
+`NOT_LOCAL`'s options. A row's
+`research run` may carry only the options `ALLOWED` in `metrics_rerun.py` lists, each with a value of its form; any other is
+refused and said, so no row ships a file of the pod, and a `--pool` must be one of `slot_only.POOLS`. A command that isn't a
+shell line is refused and said. The loop runs a row only when its command asks no more than a CPU check machine
+has (`CEILING`; an option it can't read is over); any other row runs when its owner runs it, and is skipped and said. A CPU command (no
 `--on`, `--on auto`, or `--on NODE` with a pool) goes to the loop's `--on` in the loop's `--pool`, and one naming a CPU node
-(`vy-nebius-cpu-N`, `research.auto.CPU_NODE`) to that node in the loop's `--pool`; neither passes on the row's `--cpus` or
-`--pool` (the slot's cores are the run's, and its memory rule admits the run). A command asking for GPUs, naming another
+(`research.auto.CPU_NODE`) to that node in the loop's `--pool`; neither passes on the row's `--cpus` or
+`--pool`. A command asking for GPUs, naming another
 machine, or naming `NODE` without a pool goes only to a machine `/data/watchers/gpu-plan.toml` lists for one of its numbers
 now (the machine it names, when it names one) and that no launch of the loop's is in flight on (waiting for its slot or
 running), and without one it is skipped and said. The plan is the lead's, one `[[free]]` table a machine, with `machine`,
 `from` and `until` (TOML date-times, UTC) and `metrics`, the ids it is free for: a row naming none is free for none, and
 said. Never `auto`, never vy-nebius-cpu-2, -4, -5 or -6. A pass launches at most `--max`, and nothing while
-`--max-in-flight` of the loop's launches are in flight (launching, queued or running; the pass's line says how many, and how
-many it held back for it); never a number whose last launch
-of the loop's is in flight (a run whose state can't be read stays so) or passed less than its `every` ago, whatever the door
+`--max-in-flight` of the loop's launches are in flight (launching, queued or running); never a
+number whose last launch of the loop's is in flight (a run whose state can't be read stays so) or passed less than its `every` ago, whatever the door
 says; never a loop's own number (a row whose command's script is under `infra/control/`); never a parked number (a row
 whose `goal` is `top/parked`, rerun only by hand), and said; never a command that takes a value only its owner fills in
 (FIRE_RUN, CONFIG), whose owner is rung once for each declaration of it when it would otherwise run on a CPU node. The loop
 names each run (`--id`) and records it before launching, so a launch that prints no run line, or that its timeout kills, is
-judged by that run's own record: a run that registered and reached its machine is in flight and never launched again while
-it is. A launch that fails (its run ended non-zero, never registered, never reached its machine, or ended without taking
-its slot) rings its numbers' owners, the handle before each id's slash, with its run id and reason line (`research msg
-ring-run`, with `relay.env`'s Slack key), and is launched again an hour later, or after its `every` if that is shorter;
+judged by that run's own record. A launch that fails (non-zero, never registered, never reached its machine, or ended
+without taking its slot) rings its numbers' owners (`research msg ring-run`, with `relay.env`'s key), and is
+launched again an hour later, or after its `every` if that is shorter;
 after three failures in a row that ended alike under its rows as they are, it is rung once more and held seven days or
 until its rows change. A run whose pool had no slot for it within its wait (slot.py left the line at `--wait-max` and exited
-75 before running the command) is no failure: it rings no one, counts toward no hold, is launched again at a later pass, and
-the pass names it on one `congestion:` line. The record's `numbers` holds each declared number's reason at the last pass (one of `REASONS`), and
+75 before running the command) is no failure: it counts toward no hold, is launched again at a later pass, and the pass
+names it on one `congestion:` line; `SLOT_WAITS` such launches running ring its owners once, until a launch of it starts. The record's `numbers` holds each declared number's reason at the last pass (one of `REASONS`), and
 `python3 infra/control/metrics_rerun.py classify --tree DIR` prints what the loop could ever do with each number of a
-checkout, with the count of each reason. Each pass holds
+checkout. Each pass holds
 `metrics-rerun.json.lock`, so a dry run and the live loop never share the clone; one that finds it held does nothing and
-says so. A record that isn't JSON is moved aside and said, and every number then waits its `every`, so nothing in flight is
-launched twice; a record that is lost may launch a run still in flight once more. A launch runs `main`'s `research` from
-the clone, not the pod's. While `/data/watchers/metrics-rerun.stop` exists, nothing is launched; it is read again before
-each launch. Each pass's log says what it launched and what it skipped, and why; `--dry-run` added to the loop's arguments,
-under `$W metrics-rerun --`, makes one pass that launches nothing and writes no record, and judges while the stop file
-stands:
+says so. A record that isn't JSON is moved aside and said, and every number waits its `every`; a lost record may launch a
+run still in flight once more. While `/data/watchers/metrics-rerun.stop` exists, nothing is launched; it is read again
+before each launch. Each pass's log says what it launched and what it skipped, and why; `--dry-run` added to the loop's
+arguments, under `$W metrics-rerun --`, makes one pass that launches nothing and writes no record, even past the stop file:
 
 ~~~sh
 $CP "touch /data/watchers/metrics-rerun.stop"     # stop every launch; rm it to go on

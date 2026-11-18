@@ -162,8 +162,8 @@ stays listed while it is within that window, whether or not the loop still sends
 
 Its owner keeps a metric within its `every`: the control pod's rerun loop (`infra/control/metrics_rerun.py`) launches
 the `command` of a metric whose newest value is older than its `every` as a `research run`, within the bounds its
-docstring lists, and a metric whose command's script is under `infra/control/` is a loop's, which the loop sends. A
-metric's keys:
+docstring lists: on a CPU node, a GPU machine its plan lists, or, for a row that says `runs = "control"`, the control pod
+itself. A metric whose command's script is under `infra/control/` is a loop's, which the loop sends. A metric's keys:
 
 - `id`: `OWNER/NAME`, under its owner's prefix.
 - `title`: the number's headline on the tab, three to six plain words with no digit or backtick.
@@ -178,7 +178,10 @@ metric's keys:
 - `every`: how often its owner measures it, in minutes, hours or days (`5m`, `12h`, `7d`); a value older than that is
   stale, so a number that reaches the tab through the index needs an `every` well over the index's hour.
 - Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a
-  list of words; `version`, `changed` and `was` (below).
+  list of words; `version`, `changed` and `was` (below); `runs = "control"`, for a command that reads what only the
+  control pod reaches (its own state, GitHub through its read token, the Linear app's keys): the rerun loop runs it there
+  as a local `research run`, which takes no `--on`, `--pool`, `--cpus`, `--mem-gb`, `--gpus` or `--store-read`, with the
+  Linear app's keys and none of the pod's site or Slack keys. A row without it runs on a machine, with none of them.
 
 The site refuses a metric with any other key: it lists the metric with why and shows none of it, so a new key reaches
 the site's reader before a metric uses it.
@@ -196,7 +199,7 @@ row's former ids, so an id is renamed without breaking its line: the registry's 
 resolves each to the row.
 
 The site's reader (infra's) takes `version`, `changed` and `was` on a row and `version` on a measurement
-(`SITE_TAKES_VERSIONS` in the registry's test). One part is not true yet: a reading sent from a loop through
+(`SITE_TAKES_VERSIONS` in the registry's test), and `runs` on a row once `SITE_TAKES_RUNS` there is True. One part is not true yet: a reading sent from a loop through
 `research.metrics` carries no version, since the sender (infra's) doesn't take one.
 
 Each value carries its mark, how it was had, which the tab shows beside it: the measurement's `mark`, which the kit's
@@ -221,7 +224,7 @@ that nothing waits on, other than `top/parked`. A number whose goal sits under `
 `tests/test_metrics_registry.py` refuses a metric that lacks a key the list above doesn't mark optional or holds one it
 doesn't list, an id declared twice across all the files, an unknown owner, an owner who doesn't own the metric's file,
 an id outside its owner's prefix, a `title`, `unit` or `axis` that breaks its rule above, a `better` other than `lower`
-or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing, a metric
+or `higher`, an `every` that isn't a count of minutes, hours or days, a `runs` other than `control`, a command whose script is missing, a metric
 the directory of the file declaring it never names, and a shared `metrics.toml` directly under `benchmarks/`. It also
 refuses a `version` that isn't a whole number 1 or above, a `changed` missing above 1, given at 1 or more than one
 sentence, a `was` that repeats an id or names a row's id, a `kit_report.VERSIONS` that isn't the rows above version 1,

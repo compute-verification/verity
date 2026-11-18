@@ -6,8 +6,8 @@ answer are), the 90th percentile of minutes to the answer, an open ask at its ag
 
     research run --project verity --cwd source -- uv run python benchmarks/communication/response.py
 
-It reads Linear with the app's LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET (else LINEAR_API_KEY), which an agent VM with the
-team's keys holds, and writes the result and `response.json`, the reader's whole report, under `--out` (`out/` outside a
+It reads Linear with the app's LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET (else LINEAR_API_KEY), which the control pod holds,
+where its rows run (`runs = "control"`), as does an agent VM with the team's keys, and writes the result and `response.json`, the reader's whole report, under `--out` (`out/` outside a
 research run). Without credentials it writes no measurement and exits 1.
 """
 from __future__ import annotations
