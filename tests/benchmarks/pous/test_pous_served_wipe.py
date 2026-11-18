@@ -35,7 +35,7 @@ SIDE = Path(__file__).resolve().parents[2] / "verity" / "protocols" / "resource_
 ANSWER_KEYS = ["commitment", "profile", "protocol", "public", "reason", "verdict"]
 CARD = "GPU-5e7ed000-0000-0000-0000-000000000000"
 #: who decided, as the summary and the headline name it: the stand-in judge, on this host
-DECIDED = {"program": "wipe-protocol", "host": socket.gethostname()}
+DECIDED = {"program": "wipe-protocol", "host": mc.PROVER_MACHINE}
 #: the SHA-512 of the key the challenger's stand-in (`wipe_side.py`) signs under: the pin of a deployment of it
 PINNED = runpy.run_path(str(SIDE))["key_sha512"]()
 #: the wipe key the run's configuration pins (VERITY_PINS): the pin of a run that sets none of its own
@@ -237,8 +237,8 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     assert public["k"] == W.READS and public["memory_bits"] == W.SEGMENT_LABELS * sw.LABEL_BITS
     assert public["certified"] is False and public["foreign_bits"] > 0
     placement = answer["profile"]["placement"]
-    assert placement["trusted-device"] == (f"{mc.UNCOMMITTED} (no configuration); the memory attester ran on vy-auditor-2, not the developer's "
-                                         "vy-dc-h200")
+    assert placement["trusted-device"] == (f"{mc.UNCOMMITTED} (no configuration); the memory attester ran on "
+                                         f"{mc.ATTESTER_MACHINE}, not on {mc.PROVER_MACHINE}")
     profile = {k: v for k, v in answer["profile"].items() if k != "placement"}
     private = tmp_path / "pieces" / "serve-run" / "private" / "wipe"
     case = json.loads((private / "wipe.case.json").read_text())
@@ -266,7 +266,7 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     headline = json.loads(last.removeprefix("WIPE "))
     assert headline | {"fill_GBps": None, "t0": None, "t1": None} == {
         "verdict": "accept", "reason": None, "protocol": W.PROTOCOL, "decided_by": DECIDED, "k": W.READS, "segments": 1,
-        "fill_GBps": None, "t0": None, "t1": None, "server": "vy-dc-h200", "card": CARD, "exit": 0, "key_pin": "run"}
+        "fill_GBps": None, "t0": None, "t1": None, "server": mc.PROVER_MACHINE, "card": CARD, "exit": 0, "key_pin": "run"}
     assert not (tmp_path / "lease.log").exists() and not (d / "refused.txt").exists()
     assert _stamps(d) == ["start", "the wipe exit 0", "exit 0"]
 
@@ -469,7 +469,7 @@ def test_a_gate_key_not_on_the_node_is_refused(node, tmp_path) -> None:
     d = tmp_path / "wipe"
     missing = tmp_path / "nowhere" / "vy-auditor2-wipe"
     why = _refused(_wipe(node, d, _settings(missing)), d)
-    assert why.startswith(f"no wipe gate key {missing} on vy-dc-h200 (") and "infra installs it" in why
+    assert why.startswith(f"no wipe gate key {missing} on {mc.PROVER_MACHINE} (") and "infra installs it" in why
     assert not (tmp_path / "lease.log").exists() and _stamps(d) == ["start", "refused"]
 
 
@@ -591,3 +591,70 @@ def test_the_control_link_is_the_nodes_own_unless_the_settings_name_the_links(no
     named = [{"name": "nic2", "to": "outside", "via": "eth9"}]
     assert _wipe(env, e, _settings(tmp_path / "vy-auditor2-wipe", links=named)).returncode == 0
     assert json.loads((tmp_path / "other" / "serve-run" / "private" / "wipe" / "period.json").read_text())["wipe"]["links"] == named
+
+
+DISTINCT = {"WIPE_NODE": "node-zq7-distinct"}
+ATTESTER_HOST, ATTESTER_ADDRESS = "attester-xk4-distinct", "192.0.2.177"
+
+
+def _distinct(key: Path, **more) -> str:
+    """The launcher's settings with the memory attester's host and address distinctively named."""
+    return _settings(key, host=ATTESTER_HOST, address=f"{ATTESTER_ADDRESS}:47998",
+                     command=["ssh", "-i", str(key), "-o", "BatchMode=yes", f"research@{ATTESTER_ADDRESS}"], **more)
+
+
+def _public_bytes(r: subprocess.CompletedProcess, d: Path) -> bytes:
+    """What of a wipe piece leaves the node in public: its answer or its refusal, its served counts but for ``server``
+    (the case's server id, which `served_case.wipe_piece` checks against it), and its last line."""
+    out = [r.stdout.strip().splitlines()[-1].encode()]
+    for name in ("answer.json", "refused.txt"):
+        if (d / name).exists():
+            out.append((d / name).read_bytes())
+    if (d / "served.json").exists():
+        out.append(json.dumps({k: v for k, v in json.loads((d / "served.json").read_text()).items()
+                               if k != "server"}).encode())
+    return b"\n".join(out)
+
+
+def _no_name(said: bytes) -> None:
+    for name in (DISTINCT["WIPE_NODE"], ATTESTER_HOST, ATTESTER_ADDRESS, DISTINCT["WIPE_NODE"].encode().hex(),
+                 socket.gethostname()):
+        assert name.encode() not in said, name
+
+
+def test_no_machine_name_reaches_an_accepted_wipe_pieces_public_bytes(node, tmp_path) -> None:
+    """An accepted wipe with the node, the memory attester's host and its address each distinctively named: no byte of
+    its answer, its served counts or its last line holds any of them, the node's name in hex or this machine's own."""
+    d = tmp_path / "pieces" / "wipe"
+    env = node | DISTINCT | {"GPU_LEASE_UUID": CARD, "WIPE_PROTOCOL_EXE": _judge(tmp_path)}
+    r = _wipe(env, d, _distinct(tmp_path / "vy-auditor2-wipe"))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert json.loads((d / "answer.json").read_text())["verdict"] == "accept"
+    _no_name(_public_bytes(r, d) + json.dumps(json.loads((d / "answer.json").read_text())).encode())
+
+
+def test_no_machine_name_reaches_a_wipe_whose_side_refuses_it(node, tmp_path) -> None:
+    """A wipe whose memory attester's side refuses the session, its refusal naming the host it runs on as the runtime's
+    side does: the piece fails with no answer, and its last line names no machine but by its party."""
+    hook = ("def refusing(period, node, key, local, what=None):\n"
+            "    named = of(period, node, key, local, what)\n"
+            "    return Side(named.host, (sys.executable, '-c', 'print(\\'{\"refused\": \"a session has run\"}\\')'))\n"
+            "Side.of = staticmethod(refusing)")
+    d = tmp_path / "pieces" / "wipe"
+    env = node | DISTINCT | {"GPU_LEASE_UUID": CARD, "WIPE_PROTOCOL_EXE": _judge(tmp_path),
+                             "PY": str(_python(tmp_path, hook))}
+    r = _wipe(env, d, _distinct(tmp_path / "vy-auditor2-wipe"))
+    assert r.returncode == 1 and not (d / "answer.json").exists(), r.stdout + r.stderr
+    last = r.stdout.strip().splitlines()[-1]
+    assert last.startswith("WIPE FAILED: ") and f"on {mc.ATTESTER_MACHINE} refused" in last, last
+    _no_name(_public_bytes(r, d))
+
+
+def test_no_machine_name_reaches_a_refused_wipes_refusal(node, tmp_path) -> None:
+    """A wipe refused before its session (no gate key at the path its command names): ``refused.txt`` names the node,
+    this machine and the attester's host by their parties."""
+    d = tmp_path / "pieces" / "wipe"
+    r = _wipe(node | DISTINCT, d, _distinct(tmp_path / "no-such-key"))
+    why = _refused(r, d)
+    assert f"on {mc.PROVER_MACHINE}" in why and mc.ATTESTER_MACHINE in why, why
+    _no_name(_public_bytes(r, d))
