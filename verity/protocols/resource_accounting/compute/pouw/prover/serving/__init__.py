@@ -58,7 +58,7 @@ _LAZY = {
     "H1_CHALLENGER": (f"{_SERVING}.h1", "CHALLENGER"),
     "H1_SCHEME": (f"{_SERVING}.h1", "SCHEME"),
     "H1_TILE": (f"{_SERVING}.h1", "TILE"),
-    "H1_WEIGHT_KEY": (f"{_SERVING}.h1", "WEIGHT_KEY"),
+    "H1_WEIGHT_SALTS": (f"{_SERVING}.h1", "WEIGHT_SALTS"),
     "HM96": (f"{_POUW}.verifier.audit", "HM96"),
     "HM96_WEIGHTS": (f"{_POUW}.verifier.audit", "HM96_WEIGHTS"),
     "Matmul": (f"{_POUW}.verifier.protocol", "Matmul"),

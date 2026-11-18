@@ -8,7 +8,7 @@ second copy), with noise.cu's noise on a CUDA device and hashlib's elsewhere. It
 ``receipt@<c>`` from the window's record, the prover's kept rows (`pouw_h1_prover`) and the served weights, as the word
 reference computes it: proof block t at position u0 + t (u0 the call's first proof block, `credit.call_work`), seeded from
 the window's Program salt and the registered roots of ``a/<K>@<s>`` and ``b/<K>``, each row its receipt's u16 words, the
-table committed at ``RECEIPT_NONCE`` + c under the prover's key and bound to the window's root. It refuses the table
+table committed at ``RECEIPT_NONCE`` + c under the prover's kept salts and bound to the window's root. It refuses the table
 unless the record registers it once at that root and domain."""
 from __future__ import annotations
 
@@ -105,8 +105,8 @@ class Window:
 
     def commit(self, c: int, words: np.ndarray) -> Any:
         """Call c's receipt table of ``words`` as `Served.commit` registers it, its rows kept."""
-        return NR.commit(self.program, self.receipt(c), words, PV.key_of(self.prover), SV.RECEIPT_NONCE + c,
-                         keep_rows=True, window=self.root)
+        salts = PV.salts_of(self.prover).at(SV.RECEIPT_NONCE + c, len(words))
+        return NR.commit(self.program, self.receipt(c), words, salts, keep_rows=True, window=self.root)
 
     def receipt_value(self, c: int) -> Any:
         """Call c's ``receipt@<c>`` rebuilt as the word reference computes it (`h1zy.reference`, the module docstring)."""

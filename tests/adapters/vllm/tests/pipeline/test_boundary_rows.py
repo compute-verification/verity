@@ -1181,7 +1181,7 @@ def _served(monkeypatch, out, check, inline: bool, stop: BS.Stop | None) -> list
             return real(*a, **kw)
         return call
     for name in BUILDERS:
-        mod, attr = {"population": (BR, name), "inlined": (BR, name), "population_program": (P, name),
+        mod, attr = {"population": (BR, name), "inlined": (BR, name), "population_program": (PN, name),
                      "template_instance_query": (PO, name), "partition": (PO, "build")}[name]
         monkeypatch.setattr(mod, attr, counted(name, getattr(mod, attr)))
 
