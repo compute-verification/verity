@@ -55,8 +55,8 @@ from verity.protocols.resource_accounting.memory.poub.verifier.session import wi
 
 import sheets  # noqa: E402
 
-FIGURES = sheets.figures()
-"""The node's figures, from its data sheets (`sheets.figures`)."""
+FIGURES = sheets.figures("rtx-pro-6000-server-x8")
+"""The figures of the node the gate's sessions ran on, from its data sheets (`sheets.figures`)."""
 
 LN = -math.log(audit.DELTA)
 BLOCK = 4096
