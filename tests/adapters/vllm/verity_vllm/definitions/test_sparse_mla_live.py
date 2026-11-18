@@ -8,16 +8,23 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
+from tests.adapters.vllm.verity_vllm.definitions.test_sparse_mla_head_units import (
+    BF16_SPECIALS,
+    F32_SPECIALS,
+    SERVED,
+    SMALL,
+    _bf16,
+    _inputs,
+    _planted,
+)
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.ops.boolean import versions as SW
+
 from verity_vllm.definitions.registry import boolean_sparse_mla as BM
 from verity_vllm.definitions.registry import sparse_mla as M
-from tests.adapters.vllm.verity_vllm.definitions.test_sparse_mla_head_units import (BF16_SPECIALS, F32_SPECIALS, SERVED, SMALL, _bf16,
-                                                                   _inputs, _planted)
 
 _BITS = dict(DR=16, DV=16, BN=16, DOT=BM.SPARSE_MLA_GLM53["DOT"], SCALE=0.0625)
 _SERVED_BITS = {k: BM.SPARSE_MLA_GLM53[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")}
