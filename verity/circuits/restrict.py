@@ -6,7 +6,8 @@ a batch's members (a scan's iterations) consecutive in member order, each its ca
 a member. An input node (`Input<w>_v1`, or `RegisteredInput<w>_v1` for a registered value) is a primitive node of the root,
 one gate a member, at its node's place. A gate has its primitive's width. This index, and only it, names a block (`words`),
 a boundary (in(S) and out(S): `inputs`, `outputs`) and a leaf; `Block.to_c_gate` maps the block's descriptor gates into it.
-Units, and a partition's blocks, are counted in the population's own order (`TemplatePartition`), not in gates.
+Units, and a partition's blocks, are counted in the population's own order (`TemplatePartition`, `fit.FitPartition`), not in
+gates; under `Q_fit` a block may also be a piece of one activation (`fit`), named by its path and its nodes or members.
 
 **C on bits, for a statement and a count only.** It never names a block, a boundary or a leaf. It numbers the bits of C's
 gates, gate by gate in C's index order: gate g's bit gates come after every bit gate of
@@ -20,15 +21,18 @@ the gates before g (`Bits.base`), and are, in place:
   gates, or a parameter bit it passes through).
 Every gate of C on bits reads only earlier gates.
 
-**The block.** S is the gates of C inside the block's units, each unit the instance the partition's template query numbers
-(`TemplatePartition.gates`). in(S) is the gates outside S that a gate of S reads, out(S) the gates of S that a gate outside S
-reads or that C returns, each in increasing index of C (`ports`).
+**The block.** S is the gates of C inside the block's units, each unit the instance the partition's query numbers
+(`TemplatePartition.gates`, `fit.FitPartition.gates`), or inside its piece. in(S) is the gates outside S that a gate of S
+reads, out(S) the gates of S that a gate outside S reads or that C returns, each in increasing index of C (`ports`, from the
+descriptor by `boundary`, never by a pass over C).
 
 **The object** (`restrict`): the Program whose root
-- has a parameter for each maximal run of in(S) of one width and one binding, in order, `p<i>` of type `Array<n, Value<w>>`,
-  bound at registration when its gates are `RegisteredInput` gates of C and per run otherwise;
-- then has the units' root nodes of C in C's order, each as C has it when the block holds all of its members, and one call
-  node a member, in member order, when it holds some (a unit is one member); each argument leaf names the parameter leaf
+- has a parameter for each maximal run of in(S) of one width, one binding and, under `Q_fit` with the partition's blocks,
+  one writer row (`fit`'s rows), in order, `p<i>` of type `Array<n, Value<w>>`, bound at registration when its gates are
+  `RegisteredInput` gates of C and per run otherwise;
+- then has the block's nodes of its activation (the root's for units) in C's order, each as C has it when the block holds
+  all of its members, and one call node a member, in member order, when it holds some (a unit is one member); each argument
+  leaf names the parameter leaf
   of its gate of in(S), or the earliest leaf of the block's nodes whose gate it is, the leaves spelled as the maximal runs
   of consecutive leaves of one node or parameter, each an `Affine`, concatenated;
 - returns, for each maximal run of out(S) of one width, `Array<n, Value<w>>`, in a Tuple, each gate as the earliest leaf of
@@ -51,11 +55,14 @@ from functools import cached_property, lru_cache
 from typing import Any, Mapping, Sequence
 
 from . import boolean as BL
+from . import boundary as BD
+from . import fit as FT
 from . import partition_object as PO
 from . import program as P
 from .codec import DecodedProgram, decode_program, descriptor_chunks, lookup_primitive
 from .defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
-from .layout import Circuit, resolve
+from .layout import Circuit, Scope, resolve
+from .parts import Part, Unsupported
 from .program import REGISTRATION, RUN, input_id, input_prim
 from .refs import Affine, Coll, concat
 from .types import Array, Tuple, Value, remove_axis, type_from_json
@@ -148,46 +155,129 @@ def _width(fn: PrimitiveDefinition) -> int:
     return ret.w
 
 
+class _Seq:
+    """A read-only sequence of ``n`` items, each computed when read: `Bits`' per-gate tables without a pass over C."""
+
+    def __init__(self, n: int, f) -> None:
+        self.n, self.f = n, f
+
+    def __len__(self) -> int:
+        return self.n
+
+    def __getitem__(self, i: int):
+        if i < 0:
+            i += self.n
+        if not 0 <= i < self.n:
+            raise IndexError(i)
+        return self.f(i)
+
+    def __iter__(self):
+        return (self.f(i) for i in range(self.n))
+
+
 class Bits:
-    """C on bits (module docstring), gate by gate: each gate of C's first bit (`base`), its count of bit gates, and the bit
-    gates its value's bits are (`out`)."""
+    """C on bits (module docstring), gate by gate, each entry computed when read from the descriptor's structure, never by a
+    pass over C: each gate of C's first bit (`base`), the bit gates its value's bits are (`out`), its kind and width."""
 
     def __init__(self, D: DecodedProgram) -> None:
         self.D, self.C = D, D.circuit
-        self.word = list(self.C.gates())
-        self.base: list[int] = []
-        self.out: list[tuple[int, ...]] = []
-        self.kind: list[tuple[str, Any]] = []
-        self.width: list[int] = []
-        at = 0
-        for g in self.word:
-            fn, w = g.prim, _width(g.prim)
-            self.base.append(at)
-            self.width.append(w)
+        n = self.C.size
+        self._of: dict[int, tuple[Any, int]] = {}
+        self._prefix: dict[int, tuple[Any, list[int]]] = {}
+        self._kinds: dict[int, tuple[str, Any]] = {}
+        self._outs: dict[int, tuple[int, ...]] = {}
+        self.word = _Seq(n, self.C.gate)
+        self.base = _Seq(n + 1, self._base)
+        self.out = _Seq(n, self._out)
+        self.kind = _Seq(n, self._kind)
+        self.width = _Seq(n, lambda g: _width(self.C.gate(g).prim))
+        self.size = self._bits(self.C.root)
+
+    def _bits(self, fn: Any) -> int:
+        """The bit gates of one activation (or gate) of ``fn``."""
+        hit = self._of.get(id(fn))
+        if hit is not None and hit[0] is fn:
+            return hit[1]
+        if isinstance(fn, PrimitiveDefinition):
+            w = _width(fn)
             if (inp := input_id(fn.id)) is not None:
-                self.kind.append(("input", inp[0]))
-                self.out.append(tuple(at + j for j in split(w)))
-                at += w
+                n = inp[1]
             elif w == 1 and (BL.is_gate(fn) or BL.is_constant_bit(fn)):
-                self.kind.append(("gate", fn.id))
-                self.out.append((at,))
-                at += 1
+                n = 1
             else:
-                bfn = D.boolean.get(fn.id)
+                bfn = self.D.boolean.get(fn.id)
                 if bfn is None:
                     raise Refused("E_NO_BODY", f"C names no Boolean body for {fn.id}")
-                b = _body(bfn)
-                ops = self.operand_bits(g.index)
-                if len(ops) != b.params or len(b.ret) != w:
-                    raise Refused("E_BODY", f"{fn.id}'s body has {b.params} parameter bits and {len(b.ret)} return bits")
-                self.kind.append(("body", b))
-                self.out.append(tuple(at + r if r >= 0 else ops[-1 - r] for r in b.ret))
-                at += len(b.gates)
-        self.base.append(at)
-        self.size = at
+                n = len(_body(bfn).gates)
+        else:
+            n = self._prefixes(fn)[-1]
+        self._of[id(fn)] = (fn, n)
+        return n
+
+    def _prefixes(self, fn: Any) -> list[int]:
+        hit = self._prefix.get(id(fn))
+        if hit is not None and hit[0] is fn:
+            return hit[1]
+        out, at = [0], 0
+        for node in fn.body.nodes:
+            at += (node.n if node.form in ("batch", "scan") else 1) * self._bits(node.fn)
+            out.append(at)
+        self._prefix[id(fn)] = (fn, out)
+        return out
+
+    def _base(self, g: int) -> int:
+        if g == self.C.size:
+            return self.size
+        scope, acc = self.C.root_scope, 0
+        while True:
+            body = scope.spec.body
+            k = body.node_at(g - scope.offset)
+            node = body.nodes[k]
+            node_off = scope.offset + body.offsets[k]
+            m = 0 if node.form in ("primitive", "call") else (g - node_off) // node.fn.gates
+            acc += self._prefixes(scope.spec)[k] + m * self._bits(node.fn)
+            if isinstance(node.fn, PrimitiveDefinition):
+                return acc
+            scope = scope.child(k, m)
+
+    def _kind(self, g: int) -> tuple[str, Any]:
+        hit = self._kinds.get(g)
+        if hit is None:
+            fn = self.C.gate(g).prim
+            if (inp := input_id(fn.id)) is not None:
+                hit = ("input", inp[0])
+            elif _width(fn) == 1 and (BL.is_gate(fn) or BL.is_constant_bit(fn)):
+                hit = ("gate", fn.id)
+            else:
+                bfn = self.D.boolean.get(fn.id)
+                if bfn is None:
+                    raise Refused("E_NO_BODY", f"C names no Boolean body for {fn.id}")
+                hit = ("body", _body(bfn))
+            self._kinds[g] = hit
+        return hit
+
+    def _out(self, g: int) -> tuple[int, ...]:
+        hit = self._outs.get(g)
+        if hit is not None:
+            return hit
+        k, v = self._kind(g)
+        at = self._base(g)
+        if k == "input":
+            hit = tuple(at + j for j in split(self.width[g]))
+        elif k == "gate":
+            hit = (at,)
+        else:
+            w = self.width[g]
+            word = self.C.gate(g)
+            if sum(self.width[o] for o in word.operands) != v.params or len(v.ret) != w:
+                raise Refused("E_BODY", f"{word.prim.id}'s body has {v.params} parameter bits and {len(v.ret)} return bits")
+            ops = self.operand_bits(g) if any(r < 0 for r in v.ret) else ()
+            hit = tuple(at + r if r >= 0 else ops[-1 - r] for r in v.ret)
+        self._outs[g] = hit
+        return hit
 
     def operand_bits(self, g: int) -> list[int]:
-        return [b for o in self.word[g].operands for b in self.out[o]]
+        return [b for o in self.C.gate(g).operands for b in self.out[o]]
 
     def lines(self, g: int) -> list[tuple[str, list[int]]]:
         """Gate g's bit gates in order: kind and operands as indices of C on bits."""
@@ -201,7 +291,21 @@ class Bits:
         return [(kind, [base + o if o >= 0 else ops[-1 - o] for o in os]) for kind, os in v.gates]
 
     def gate_of(self, b: int) -> int:
-        return bisect.bisect_right(self.base, b) - 1
+        """The gate of C whose bit gates hold bit gate ``b``."""
+        if not 0 <= b < self.size:
+            raise IndexError(b)
+        scope, acc = self.C.root_scope, 0
+        while True:
+            body = scope.spec.body
+            pre = self._prefixes(scope.spec)
+            k = bisect.bisect_right(pre, b - acc) - 1
+            node = body.nodes[k]
+            per = self._bits(node.fn)
+            m = (b - acc - pre[k]) // per
+            acc += pre[k] + m * per
+            if isinstance(node.fn, PrimitiveDefinition):
+                return scope.offset + body.offsets[k] + m
+            scope = scope.child(k, m)
 
     def bits_of(self, gates: Sequence[int]) -> list[int]:
         """Each gate's bits, least significant first, gate by gate; refused where two are one bit gate."""
@@ -211,39 +315,97 @@ class Bits:
         return out
 
 
-def unit_gates(D: DecodedProgram, partition: Mapping[str, Any], units: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
-    """The gates of C (§6) of ``units``, ascending ``[lo, hi)`` ranges of the partition's template query's units, as gate ranges."""
+@dataclass(frozen=True)
+class _Where:
+    """A block in C: the activation its gates lie in (`scope`), its nodes there, each ``(k, first member, end member)``
+    (`kept`), and the same gates as a `Part`."""
+    scope: Scope
+    kept: tuple[tuple[int, int, int], ...]
+    part: Part
+
+
+def _partition(D: DecodedProgram, partition: Mapping[str, Any]) -> Any:
     q = partition.get("query") if isinstance(partition, Mapping) else None
-    if not isinstance(q, Mapping) or (q.get("name"), q.get("version")) not in (PO.Q_TEMPLATE_INSTANCE, PO.Q_TEMPLATE_INSTANCES):
-        raise Refused("E_QUERY", f"restrict covers the template queries, not {q!r}")
+    kind = (q.get("name"), q.get("version")) if isinstance(q, Mapping) else None
+    if kind not in (PO.Q_TEMPLATE_INSTANCE, PO.Q_TEMPLATE_INSTANCES, FT.Q_FIT):
+        raise Refused("E_QUERY", f"restrict covers the template queries and Q_fit, not {q!r}")
     try:
-        tp = PO.TemplatePartition(D, q)
+        return FT.FitPartition(D, q) if kind == FT.Q_FIT else PO.TemplatePartition(D, q)
     except PO.QueryInapplicable as e:
         raise Refused("E_QUERY", str(e)) from e
-    us = [tuple(u) for u in units]
-    if not us or any(not (isinstance(lo, int) and isinstance(hi, int) and 0 <= lo < hi) for lo, hi in us) or \
-            any(a[1] > b[0] for a, b in zip(us, us[1:])) or us[-1][1] > tp.population:
-        raise Refused("E_UNITS", f"units {us!r}: not ascending disjoint nonempty ranges within 0..{tp.population}")
-    out: list[tuple[int, int]] = []
-    for lo, hi in us:
-        for u in range(lo, hi):
-            a, b = tp.gates(u)
-            if out and out[-1][1] == a:
-                out[-1] = (out[-1][0], b)
-            else:
-                out.append((a, b))
-    return out
 
 
-def ports(bits: Bits, words: Sequence[tuple[int, int]]) -> tuple[list[int], list[int]]:
-    """in(S) and out(S) of S, the gates of C in ``words``, each in increasing index."""
-    inside = [False] * len(bits.word)
-    for lo, hi in words:
-        inside[lo:hi] = [True] * (hi - lo)
-    ins = {o for lo, hi in words for g in range(lo, hi) for o in bits.word[g].operands if not inside[o]}
-    outs = {o for g in range(len(bits.word)) if not inside[g] for o in bits.word[g].operands if inside[o]}
-    outs |= {g for g in bits.C.root_outputs() if inside[g]}
+def _where(D: DecodedProgram, tp: Any, units: Any) -> _Where:
+    """``units`` (ascending ``[lo, hi)`` ranges of the partition's units, or under `Q_fit` a piece, `fit`'s entry) in C."""
+    if isinstance(units, Mapping):
+        if not isinstance(tp, FT.FitPartition):
+            raise Refused("E_QUERY", "a piece below a unit is a block of Q_fit only")
+        if not FT.entry_form(dict(units)) or "path" not in units:
+            raise Refused("E_UNITS", f"{units!r}: not a piece (`fit`'s module docstring)")
+        try:
+            part = FT.part_of(D, tp, units)
+        except ValueError as e:
+            raise Refused("E_UNITS", str(e)) from e
+    else:
+        us = [tuple(u) for u in units]
+        if not us or any(not (isinstance(lo, int) and isinstance(hi, int) and 0 <= lo < hi) for lo, hi in us) or \
+                any(x[1] > y[0] for x, y in zip(us, us[1:])) or us[-1][1] > tp.population:
+            raise Refused("E_UNITS", f"units {us!r}: not ascending disjoint nonempty ranges within 0..{tp.population}")
+        part = Part(D.circuit.root_scope, frozenset(tp.locate(u) for lo, hi in us for u in range(lo, hi)))
+    body, kept = part.scope.spec.body, []
+    for k, m in sorted(part.items):
+        node = body.nodes[k]
+        root = part.scope.parent is None
+        if (root and node.form not in ("call", "batch")) or node.form == "scan":
+            raise Refused("E_FORM", f"node {k} of {part.scope.spec.id} is a {node.form}: a block holds calls, batches and "
+                                    "primitives of one activation, and a unit is a call or a batch member")
+        if kept and kept[-1][0] == k and kept[-1][2] == m:
+            kept[-1] = (k, kept[-1][1], m + 1)
+        else:
+            kept.append((k, m, m + 1))
+    return _Where(part.scope, tuple(kept), part)
+
+
+def unit_gates(D: DecodedProgram, partition: Mapping[str, Any], units: Any) -> list[tuple[int, int]]:
+    """The gates of C (§6) of ``units``, ascending ``[lo, hi)`` ranges of the partition's units (or, under `Q_fit`, a piece),
+    as gate ranges."""
+    return _where(D, _partition(D, partition), units).part.intervals()
+
+
+def ports(part: Part) -> tuple[list[int], list[int]]:
+    """in(S) and out(S) of S, the part's gates of C, each in increasing index, from the descriptor (`boundary`), never by a
+    pass over C."""
+    ins, outs = BD.in_gates(part), BD.out_gates(part)
+    for x in (ins, outs):
+        if isinstance(x, Unsupported):
+            raise Refused("E_BOUNDARY", f"{x.reason}: {x.detail}")
     return sorted(ins), sorted(outs)
+
+
+def _rows(D: DecodedProgram, tp: Any, partition: Mapping[str, Any], units: Any) -> Any:
+    """Under `Q_fit` with the partition's ``blocks``: a gate of in(S) -> its writer row (`fit`'s rows), from the blocks before
+    this one; None otherwise. Refused where ``units`` is no block of the partition."""
+    entries = partition.get(PO.BLOCKS) if isinstance(tp, FT.FitPartition) else None
+    if entries is None:
+        return None
+    me = dict(units) if isinstance(units, Mapping) else ([list(u) for u in units][0] if len(units) == 1 else None)
+    if me not in entries:
+        raise Refused("E_UNITS", f"{units!r} is no block of the partition's blocks")
+    fit = FT.Fit(D)
+    for e in entries[:entries.index(me)]:
+        p = FT.part_of(D, tp, e)
+        try:
+            _ins, outs = fit._ports(p)
+        except FT.Unfit as x:
+            raise Refused("E_BOUNDARY", str(x)) from None
+        fit.finish(p, outs, [BD.gate_width(D, g) for g in outs])
+
+    def key(g: int) -> tuple:
+        got = fit._input_row(g) or fit.writers.row(g)
+        if got is None:
+            raise Refused("E_ORDER", f"gate {g} is in no block before this one and no input")
+        return got[0]
+    return key
 
 
 def _runs(gates: Sequence[int], key) -> list[list[int]]:
@@ -271,29 +433,11 @@ def _binding(bits: Bits, g: int) -> str:
     return v if k == "input" else RUN
 
 
-def _nodes(bits: Bits, words: Sequence[tuple[int, int]]) -> list[tuple[int, int, int]]:
-    """The root nodes of C the gates ``words`` are, each ``(k, first member, end member)``."""
-    body, out = bits.D.root.body, []
-    for lo, hi in words:
-        for k, node in enumerate(body.nodes):
-            a, b = body.offsets[k], body.offsets[k + 1]
-            if b <= lo or a >= hi:
-                continue
-            if node.form not in ("call", "batch"):
-                raise Refused("E_FORM", f"root node {k} is a {node.form}: a block holds calls and batches")
-            per = node.fn.gates
-            m0, m1 = (max(lo, a) - a) // per, (min(hi, b) - a) // per
-            if a + m0 * per != max(lo, a) or a + m1 * per != min(hi, b):
-                raise Refused("E_UNITS", f"the units cut root node {k} inside a member")
-            out.append((k, m0, m1))
-    return out
-
-
 @dataclass(frozen=True)
 class Block:
     """`restrict`'s value: the block's Program and its bytes, S as C's gate ranges (`words`), in(S) and out(S) (`inputs`,
-    `outputs`), and the bits of C on bits behind them (`bits`)."""
-    units: tuple[tuple[int, int], ...]
+    `outputs`), and the bits of C on bits behind them (`bits`). ``units`` is the block as given: unit ranges, or a piece."""
+    units: Any
     words: tuple[tuple[int, int], ...]
     inputs: tuple[int, ...]
     outputs: tuple[int, ...]
@@ -373,14 +517,15 @@ def listing_of(c: bytes) -> bytes:
     return _text(bits, ins, body, bits.bits_of(bits.C.root_outputs()), {b: b for b in range(bits.size)})
 
 
-def _build(bits: Bits, words: Sequence[tuple[int, int]], ins: list[int], outs: list[int]) -> Any:
-    D, C = bits.D, bits.C
-    body, scope = D.root.body, C.root_scope
-    in_runs = _runs(ins, lambda g: (bits.width[g], _binding(bits, g)))
+def _build(bits: Bits, where: _Where, ins: list[int], outs: list[int], row: Any = None) -> Any:
+    D = bits.D
+    scope = where.scope
+    body = scope.spec.body
+    in_runs = _runs(ins, lambda g: (bits.width[g], _binding(bits, g), row(g) if row else None))
     out_runs = _runs(outs, lambda g: bits.width[g])
     params = tuple((f"p{i}", Array(len(r), Value(bits.width[r[0]]))) for i, r in enumerate(in_runs))
     ret = Tuple(*[Array(len(r), Value(bits.width[r[0]])) for r in out_runs])
-    kept = _nodes(bits, words)
+    kept = where.kept
 
     def build(B, S, *colls):
         ref: dict[int, tuple] = {}
@@ -399,9 +544,9 @@ def _build(bits: Bits, words: Sequence[tuple[int, int]], ins: list[int], outs: l
 
         for k, m0, m1 in kept:
             node = body.nodes[k]
-            if node.form == "call" or (m0, m1) == (0, node.n):
+            if node.form in ("call", "primitive") or (m0, m1) == (0, node.n):
                 a = args((x.type, x.refs) for x in node.args)
-                o = B.call(node.fn, *a) if node.form == "call" else B.batch(node.fn, *a, axes=node.axes, n=node.n)
+                o = B.batch(node.fn, *a, axes=node.axes, n=node.n) if node.form == "batch" else B.call(node.fn, *a)
                 for j in range(node.out.leaves):
                     ref.setdefault(resolve(scope, ("n", k, j)), o.refs[j])
                 continue
@@ -438,14 +583,16 @@ def _build(bits: Bits, words: Sequence[tuple[int, int]], ins: list[int], outs: l
         P._BODY_LOOKUP[:] = saved
 
 
-def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]], bits: Bits | None = None) -> Block:
-    """`compact (restrict C S)` for S the gates of ``units`` (module docstring: the index, the block and the object)."""
+def restrict(c: bytes, partition: Mapping[str, Any], units: Any, bits: Bits | None = None) -> Block:
+    """`compact (restrict C S)` for S the gates of ``units``: ascending ranges of the partition's units, or under `Q_fit` a
+    piece (`fit`) (module docstring: the index, the block and the object)."""
     bits = Bits(program(c)) if bits is None else bits
-    words = unit_gates(bits.D, partition, units)
-    ins, outs = ports(bits, words)
-    prog = _build(bits, words, ins, outs)
-    return Block(tuple(tuple(u) for u in units), tuple(words), tuple(ins), tuple(outs), prog,
-                 b"".join(descriptor_chunks(prog)), bits)
+    tp = _partition(bits.D, partition)
+    where = _where(bits.D, tp, units)
+    ins, outs = ports(where.part)
+    prog = _build(bits, where, ins, outs, _rows(bits.D, tp, partition, units))
+    key = dict(units) if isinstance(units, Mapping) else tuple(tuple(u) for u in units)
+    return Block(key, tuple(where.part.intervals()), tuple(ins), tuple(outs), prog, b"".join(descriptor_chunks(prog)), bits)
 
 
 def evaluate(text: bytes, inputs: Sequence[int]) -> list[int]:

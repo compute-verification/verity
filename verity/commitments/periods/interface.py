@@ -131,6 +131,9 @@ import numpy as np
 
 from verity.circuits import boolean as B, partition_object as PO
 from verity.circuits.codec import canonical_json, descriptor_id
+from verity.circuits.fit import (  # noqa: F401  Flock's composer's sizes, read from here
+    K_MAX, K_MIN, LAST_BLOCK_BYTES, MASK_LOG, MAX_ROWS, PACK_LOG, PER_SLOT, SLOT_LOG, proof_block_k_log,
+)
 from verity.circuits.defs import (CATALOG_PACKAGES, REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition,
                                   bind)
 from verity.circuits.evaluation import evaluate_batch
@@ -341,39 +344,6 @@ def unit_rows(fn: Any, cuts: Mapping[str, int] | None = None, seg: Collection[st
     lay = layout(fn)
     return ([(p, SEG if p in seg else V2, 16 * w, ps) for p, w, ps in lay.cut(cuts)],
             [(SEG if p in seg else V2, (j,)) for j, (p, _w) in enumerate(lay.outs)])
-
-
-#: Flock's composer's sizes, which `verity_flock.circuit` and the benchmarks read from here: a Flock block of at most
-#: 2^K_MAX bits and at least 2^K_MIN, the sha512x3 and hm96 slots of 2^SLOT_LOG bits, PER_SLOT compressions a sha512x3
-#: slot, the mask's 2^MASK_LOG, and 2^PACK_LOG bits, up to which it packs a template's proof blocks into one Flock block
-K_MAX, K_MIN, SLOT_LOG, PER_SLOT, MASK_LOG, PACK_LOG = 27, 20, 18, 3, 14, 22
-#: the row bytes a row's last SHA-512 block holds beside the padding's 17: a longer row has a compression before it
-LAST_BLOCK_BYTES = 111
-#: the most rows a proof block may have: at one more, its hm96 range alone fills a Flock block of 2^K_MAX bits
-MAX_ROWS = 1 << (K_MAX - SLOT_LOG - 1)
-
-
-def proof_block_k_log(in_bytes: Sequence[int], out_bytes: Sequence[int] = (), ands: int = 0, *,
-                      packed: bool = True) -> int:
-    """The ``k_log`` Flock's composer gives a template's proof block (`verity_flock.circuit.compose`'s META ``k_log``,
-    which the Lean verifier reads): input rows of ``in_bytes`` bytes, output rows of ``out_bytes``, and ``ands`` rows of
-    logic between them (its ANDs, inline table reads' rows and assertions), its statement as `UnitStager` stages
-    `unit_rows`. The proof block's circuit lays out its input bits, the logic, its output bits and a constant, each of the
-    two port groups an aligned power of two of 128-bit words, in a slot of at least 2^7 cells. A Flock block holds the
-    hm96 slots (one a row, a power of two in all), that slot and the mask, then the sha512x3 slots; and the composer
-    packs proof blocks into it while it stays within 2^`PACK_LOG` bits or one proof block's size, which doubling, at most
-    doubling the block, ends at exactly the larger. ``packed=False``: one proof block's own block before that packing
-    (compose's ``k1``, at least 2^`K_MIN`), which a sampling plan's statement cap reads, counting the packing itself."""
-    def cells(row_bytes: Sequence[int]) -> int:
-        return 128 << (-(-8 * sum(row_bytes) // 128) - 1).bit_length() if sum(row_bytes) else 0
-
-    rows = [*in_bytes, *out_bytes]
-    i, o = cells(in_bytes), cells(out_bytes)
-    useful = (-(-(i + ands) // o) * o if o else i + ands) + o + 1
-    plain = ((1 << (len(rows) - 1).bit_length()) << SLOT_LOG) + (1 << max(7, (useful - 1).bit_length())) + (1 << MASK_LOG)
-    comps = sum(-(-(b - LAST_BLOCK_BYTES) // 128) for b in rows if b > LAST_BLOCK_BYTES)
-    bits = (-(-plain >> SLOT_LOG) + -(-comps // PER_SLOT)) << SLOT_LOG
-    return max(PACK_LOG if packed else K_MIN, (bits - 1).bit_length())
 
 
 def check_proof_block(fn: Any, cuts: Mapping[str, int] | None = None) -> int:

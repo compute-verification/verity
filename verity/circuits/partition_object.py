@@ -40,6 +40,11 @@
   an instance of any listed template, every listed template with at least one instance; the unit order is node order, not list order.
   `tests/verity/circuits/test_template_instance.py` pins both (`template_instance_vectors.json`).  Like every query, both apply only to a
   topological program (below), so an instance never reads its own gates.
+* **Q_fit v1**, `params = {"rows": <rows>, "bits": <bits>}` (`fit`, PROTOCOL.md §13): units are the root's Calls' instances, a
+  call one and a batch member one, of any Definition; ``blocks`` is required, each entry root units ``[lo, hi]`` or a piece of
+  one activation (a path, then body nodes or a node's members), the entries a cover of the Calls' gates in layout order, every
+  block within ``rows`` rows and a Flock block of ``bits`` bits.  `verify` refuses by entry (`fit-entry`, `fit-rows`,
+  `fit-bits`, `fit-straddles`, `blocks-unsorted`, `blocks-gap`).
 * **Every query** applies only to a topological program: every node of every body names only its body's parameters and earlier
   nodes (a body's `ret` any node).  `evaluate` checks it once, before any query (`order_violation`), so every query and `verify`
   refuse the same programs (`query-inapplicable`, with the definition, node, argument and reference).
@@ -66,6 +71,7 @@ import re
 from collections import deque
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
+from . import fit as FT
 from .codec import canonical_json, descriptor_id, program_digest
 from .codec import SCHEMA
 from .cut import (CALL_X, RECOMPUTE, WIRING, CallCut, CallGates, CallGraph, DefinitionCut, QueryInapplicable, call_committed, call_gates,
@@ -108,6 +114,7 @@ QUERIES: dict[tuple[str, int], tuple[tuple[str, ...], Callable[[Mapping[str, Any
     Q_CALL: (("X",), _word_params_ok),
     Q_TEMPLATE_INSTANCE: (("template",), lambda p: isinstance(p["template"], str)),
     Q_TEMPLATE_INSTANCES: (("templates",), lambda p: _templates_ok(p["templates"])),
+    FT.Q_FIT: (("rows", "bits"), FT.params_ok),
 }
 
 #: one-stage's name for the template queries' refusal
@@ -157,18 +164,19 @@ def template_instances_query(templates: Sequence[Any]) -> dict[str, Any]:
     return {"name": Q_TEMPLATE_INSTANCES[0], "version": Q_TEMPLATE_INSTANCES[1], "params": {"templates": [template_id(t) for t in templates]}}
 
 
-def build(program: Any, q: Mapping[str, Any] | None = None, blocks: Iterable[Sequence[int]] | None = None) -> dict[str, Any]:
+def build(program: Any, q: Mapping[str, Any] | None = None, blocks: Iterable[Any] | None = None) -> dict[str, Any]:
     """The object naming `program`'s partition as the query `q` (default `Q_word{X=16, W=32}` v1), with `blocks`, its proof
-    blocks as [lo, hi) unit ranges, when given."""
+    blocks as [lo, hi) unit ranges (or, under `Q_fit`, its entries: `fit`), when given."""
     obj = {"format": FORMAT, "program": _program(program), "query": dict(q or query())}
     if blocks is not None:
-        obj[BLOCKS] = [[lo, hi] for lo, hi in blocks]
+        obj[BLOCKS] = [b if isinstance(b, Mapping) else [b[0], b[1]] for b in blocks]
     return obj
 
 
-def blocks(obj: Mapping[str, Any]) -> list[tuple[int, int]] | None:
-    """The object's proof blocks, each (lo, hi), or None when it names no grouping."""
-    return None if BLOCKS not in obj else [(lo, hi) for lo, hi in obj[BLOCKS]]
+def blocks(obj: Mapping[str, Any]) -> list[Any] | None:
+    """The object's proof blocks, each (lo, hi) (or, under `Q_fit`, a piece as its entry), or None when it names no
+    grouping."""
+    return None if BLOCKS not in obj else [b if isinstance(b, Mapping) else (b[0], b[1]) for b in obj[BLOCKS]]
 
 
 def _blocks_form(b: Any, template: bool, fail: Callable[[str, Any], None]) -> None:
@@ -236,7 +244,12 @@ def validate(obj: Any) -> CutVerdict:
             fail("query-unknown", [q["name"], q["version"]])
         elif not isinstance(q["params"], Mapping) or set(q["params"]) != set(known[0]) or not known[1](q["params"]):
             fail("query-params", q["params"])
-    if BLOCKS in obj:
+    fit = isinstance(q, Mapping) and (q.get("name"), q.get("version")) == FT.Q_FIT
+    if fit and BLOCKS not in obj:
+        fail("blocks-missing", q.get("name"))
+    elif fit:
+        FT.blocks_form(obj[BLOCKS], fail)
+    elif BLOCKS in obj:
         template = isinstance(q, Mapping) and (q.get("name"), q.get("version")) in (Q_TEMPLATE_INSTANCE, Q_TEMPLATE_INSTANCES)
         _blocks_form(obj[BLOCKS], template, fail)
     codes = tuple(bad)
@@ -469,7 +482,8 @@ def _out_of_order(refs: Any, params: int, nodes: int) -> list | None:
     return None
 
 
-def evaluate(program: Any, q: Mapping[str, Any] | None = None, memo: dict | None = None) -> Partition | CallPartition | TemplatePartition:
+def evaluate(program: Any, q: Mapping[str, Any] | None = None, memo: dict | None = None
+             ) -> Partition | CallPartition | TemplatePartition | FT.FitPartition:
     """The query `q` (default `Q_word{16, 32}` v1) applied to `program`: `QueryInapplicable` when the program is not topological
     (`order_violation`), checked once here for every query, or when the query does not apply to it."""
     bad = order_violation(program)
@@ -478,6 +492,8 @@ def evaluate(program: Any, q: Mapping[str, Any] | None = None, memo: dict | None
     q = dict(q or query())
     if (q.get("name"), q.get("version")) in (Q_TEMPLATE_INSTANCE, Q_TEMPLATE_INSTANCES):
         return TemplatePartition(program, q)
+    if (q.get("name"), q.get("version")) == FT.Q_FIT:
+        return FT.FitPartition(program, q)
     if (q.get("name"), q.get("version")) == Q_CALL:
         return CallPartition(program, q, memo)
     return Partition(program, q, memo)
@@ -493,7 +509,8 @@ def owners_digest(part: Partition | CallPartition) -> str:
     return hashlib.sha512(f"{FORMAT}/owners".encode() + b"\0" + canonical_json([[k, part.owner(p)] for p, (k, _c) in enumerate(part.calls)])).hexdigest()
 
 
-def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[int]] | None = None) -> CutVerdict:
+def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[int]] | None = None,
+           inference: Callable[[int], Any] | None = None) -> CutVerdict:
     """The object against the program: `validate`, `program` = `codec.program_digest(program)`, then the query evaluated here
     (`query-inapplicable` when it does not apply) and every Call's cut checked on its derived graph (`cut.check_cut`: the invariant with
     the derived committed set, and the width rule with the query's X and W), once per Definition; failures by Call under `cut`
@@ -507,7 +524,10 @@ def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[i
     query commits whole instances' inputs and results; `served` with one is refused (`served-unsupported`).
 
     Under `Q_word` v2 a value computed in two units is no failure; the verdict's detail reports it, never as a code, under
-    `recomputed_across`: {"n": the pairs over every Call, "gates": per Call with any, {"call", "n", "gates": its first pairs}}."""
+    `recomputed_across`: {"n": the pairs over every Call, "gates": per Call with any, {"call", "n", "gates": its first pairs}}.
+
+    Under `Q_fit` every block is checked (`fit.verify`): its entry, the cover, its rows and its bits, and, given ``inference``
+    (a unit -> its inference block), that no block holds units of two (`fit-straddles`)."""
     v = validate(obj)
     if not v.ok:
         return v
@@ -516,11 +536,14 @@ def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[i
     if obj["program"] != _program(program):
         bad["program"] = [obj["program"]]
     template = (obj["query"]["name"], obj["query"]["version"]) in (Q_TEMPLATE_INSTANCE, Q_TEMPLATE_INSTANCES)
-    if template and served is not None:
+    fit = (obj["query"]["name"], obj["query"]["version"]) == FT.Q_FIT
+    if (template or fit) and served is not None:
         bad["served-unsupported"] = [obj["query"]["name"]]
     try:
         part = evaluate(program, obj["query"])
-        if not template:
+        if fit:
+            FT.verify(program, part, obj[BLOCKS], bad, inference)
+        elif not template:
             _verify_calls(part, served, bad, report)
         elif BLOCKS in obj:
             _blocks_cover(obj[BLOCKS], part.population, bad)
