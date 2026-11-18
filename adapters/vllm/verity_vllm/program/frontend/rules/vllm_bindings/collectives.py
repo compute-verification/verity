@@ -271,7 +271,7 @@ class FusedAllReduceRmsNormRule(OpRule):
         assert plan is not None and why is None
         M, n, N, W = plan["M"], plan["rows_n"], plan["N"], len(parts)
         shot = tp_allreduce.mnnvl_shot(M, N, W)
-        _block, cluster = tp_allreduce.mnnvl_grid(M, N)
+        _block, cluster = tp_allreduce.mnnvl_grid(M, N, int(active_target_profile().num_sms))
         fn = ctx.kind("all_reduce_rmsnorm_mnnvl", node, WORLD=W, N=N, SHOT=shot, CLUSTER=cluster, EPS=eps,
                       FMA=bool(plan["captured"].statics["FMA"]))
         hint = _collective_hint(node, ctx)

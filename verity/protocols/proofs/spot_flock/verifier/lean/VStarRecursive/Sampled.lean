@@ -3,9 +3,9 @@ SPOT (`verity/sampled-proofs/v1`), a `Core.BlobProtocol`: one-stage v2's audit o
 (`Spot.OneStageZk`). One-stage v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's
 are its own run of the verifier. The recursive audit (`verity/sampled-proofs/recursive/v1`) is refused too, its params
 and its evidence alike, by name (`RECURSIVE_REFUSED`), and none of its types is a case here; the
-two-stage audit (`VStar.Recursive.SampledTwo`) is read and checked, then refused last while its switch
-(`SampledTwo.FORM`) is off (`SampledTwo.checkBlobs_refuses`): SPOT's soundness covers the one-stage form only, and the
-verifier refuses every form its soundness doesn't cover.
+two-stage audit (`VStar.Recursive.SampledTwo`) is read and checked, then accepted while its switch
+(`SampledTwo.FORM`) is on: SPOT's soundness covers the one-stage form only, and the verifier accepts the two-stage form
+ahead of its proof.
 
 `Core.Composition.product` reads every component's case, so SPOT is one component and the form is the params':
 
@@ -20,7 +20,7 @@ verifier refuses every form its soundness doesn't cover.
   either of its forms (`OneStageZk.evidenceEitherOf`); recursive evidence is refused before its rest is read;
 * **check**: that form's check on the blobs, its acceptance held to the caller's check (`Caller.gate`) against that
   form's verifier; evidence of another form than the params' rejects, so only one-stage v2's check and the two-stage
-  form's run, and the two-stage form's refuses every audit while its switch is off.
+  form's run, and the two-stage form's check refuses a run only where its switch is off, which it is not.
 
 The recursive audit's own command, `vstar-recursive` with any first word but `sampled`, is dispatched by the
 executable's root, not here.

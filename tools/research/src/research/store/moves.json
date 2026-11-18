@@ -5262,6 +5262,11 @@
     },
     {
       "paths": {
+        "adapters/vllm/verity_vllm/pipeline/serve_head.py": "verity/protocols/resource_accounting/network/prover/serve_head.py"
+      }
+    },
+    {
+      "paths": {
         "adapters/vllm/verity_vllm/pipeline/id_relay.py": "verity/protocols/resource_accounting/network/prover/id_relay.py"
       }
     }
