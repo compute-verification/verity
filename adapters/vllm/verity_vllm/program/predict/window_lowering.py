@@ -29,7 +29,7 @@ from verity_vllm.pipeline.tp.grain import GROUP
 
 from . import scan_state as SS
 from .build import Unexpressible
-from .window_builder import WEIGHTS, Row, _Builder, _spans, _step, _word
+from .window_builder import WEIGHTS, Row, _Builder, _spans, _step, _word, weight_run
 from .window_class import FixedLoad, PearlTables, Request, Tables, WindowClass
 from .window_cut import Linears, cut_linear
 
@@ -166,10 +166,7 @@ class _Program:
 
     def weight(self, refs: Refs, words: int) -> int:
         """The first word of the one run of the weights record ``refs`` read, ``words`` long."""
-        segs = self.segments(refs)
-        if len(segs) != 1 or segs[0][:2] != ("p", WEIGHTS) or segs[0][3] - segs[0][2] != words:
-            raise Unexpressible(f"{self.name}: a weight read of {segs}, not one run of {words} weight words")
-        return segs[0][2]
+        return weight_run(self.name, self.segments(refs), words)
 
     def lower(self, j: int, node: Any) -> None:
         """Node ``j`` lowered into units, each of the Program's slot and the node's step: its position, which each

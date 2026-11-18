@@ -361,3 +361,10 @@ def inference(spans: dict[str, list[tuple[int, int, int, int]]], slots: int) -> 
         out += [IF.InferenceEntry(tid, at, tuple(r for r, _ in d), tuple(a for _, a in d), step, slot)
                 for at, d, step, slot in groups]
     return out
+
+
+def weight_run(name: str, segs: Sequence[tuple[Any, ...]], words: int) -> int:
+    """The first word of ``segs`` where they are one run of the weights record, ``words`` long."""
+    if len(segs) != 1 or segs[0][:2] != ("p", WEIGHTS) or segs[0][3] - segs[0][2] != words:
+        raise Unexpressible(f"{name}: a weight read of {segs}, not one run of {words} weight words")
+    return segs[0][2]
