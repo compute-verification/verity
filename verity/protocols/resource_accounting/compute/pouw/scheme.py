@@ -28,7 +28,7 @@ PEARL_PLUS = register(Scheme(
     charges=(Charge("inert-work", "rho"), Charge("sample", "epsilon"), Charge("over-bound-tiles", "over_cap_draws"),
              Charge("excluded-rows", "give_up")),
     option="pouw:pearl-c-h100-v1-h3",
-    hooks=("linear", "build"),
+    hooks=("blocks", "declared"),
     requires={"one-labelling": "its own pass manifests, tied to the window record's pearl-a/, pearl-y/ and pearl-b/ values",
               "log-order": "its own coin sessions: the salt's opened on the weights' root, the sample's on the run's "
                            "commitment",

@@ -32,6 +32,7 @@ from verity_vllm.engine.step_trace import scheduler_config
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
+from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
 from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import serve_seal as ss
 from verity_vllm.pipeline.serve_admit import Admission, Delta
@@ -122,16 +123,16 @@ def test_ids_frames_are_the_scans_id_events():
     """`IdsProtocol`: each id its own `io_tie.id_event` of P bytes, however many ids a delta carries; the stream's end
     is the scan's trailer; no usage, and a stream returns its ids, whatever the request asks; P below an event's 138
     bytes is refused."""
-    p = proto.IdsProtocol(force_include_usage=True, payload=140, base=proto.PlainProtocol(True))
+    p = idp.IdsProtocol(payload=140, base=proto.PlainProtocol(True))
     assert (p.name, p.http, proto.PlainProtocol.http) == ("ids", False, True)
     assert p.events(token_ids=[4853, 4884], text="ab", finish_reason=None) + proto.SSE_DONE == TWO_IDS_AT_140
     assert proto.SSE_DONE == IT.TRAILER and p.events(token_ids=[]) == b""
     req = p.parse(dict(CERTIFIER_BODY, stream_options={"include_usage": True, "continuous_usage_stats": True}))
     assert (req.include_usage, req.continuous_usage, req.return_token_ids) == (False, False, True)
     assert not p.parse(dict(CERTIFIER_BODY, stream=False)).return_token_ids
-    assert proto.PROTOCOLS["ids"] is proto.IdsProtocol and proto.ID_PAYLOAD == 512 - HEADER.size
+    assert proto.PROTOCOLS["ids"] is proto.ids and idp.ID_PAYLOAD == 512 - HEADER.size
     with pytest.raises(ValueError, match="at least 138"):
-        proto.IdsProtocol(payload=137, base=proto.PlainProtocol())
+        idp.IdsProtocol(payload=137, base=proto.PlainProtocol())
 
 
 def test_command_is_registered_and_defaults_to_the_setting_that_fits_network_certifications_plan():
@@ -503,7 +504,7 @@ def test_errors_and_whole_response(tmp_path):
     assert body["choices"][0]["text"] == "".join(f" w{t}" for t in body["choices"][0]["token_ids"])
 
 
-def id_request(payload: int = proto.ID_PAYLOAD) -> bytes:
+def id_request(payload: int = idp.ID_PAYLOAD) -> bytes:
     """The network attester's id request in cells of P + 9 bytes (`id_form.id_request`, offset 0)."""
     return IDF.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + HEADER.size,
                         offset=0)
@@ -533,7 +534,7 @@ def test_ids_answers_in_id_form_exactly_the_network_attesters_id_requests():
     """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the network attester's release
     headers (`release.with_release`: the release, the run and, as the network attester sends it, the release's bucket); its
     base for anything else, the shim's rebuilt POST, an id request in other cells, or bytes that aren't a request."""
-    p = proto.IdsProtocol(payload=proto.ID_PAYLOAD, base=proto.PlainProtocol())
+    p = idp.IdsProtocol(payload=idp.ID_PAYLOAD, base=proto.PlainProtocol())
     assert p.of(id_request()) is p and p.of(REL.with_release(id_request(), 3, b"run")) is p
     assert p.of(REL.with_release(id_request(), 3, b"run", 7)) is p
     assert p.of(shims_request(18097)) is p.base and p.of(id_request(140)) is p.base
@@ -548,8 +549,8 @@ def test_under_ids_the_network_attesters_id_request_streams_raw_id_events_then_d
     scan's P = 503 every P bytes are one id event, the cells the network attester makes of them, and the whole is what
     network_attester_serve's id-form parser (`parse_id_response`) takes: `io_tie.id_event`s, then `io_tie.TRAILER`. A whole
     response under ids is still the JSON one."""
-    for payload in (140, proto.ID_PAYLOAD):
-        ids = proto.IdsProtocol(True, payload=payload, base=proto.PlainProtocol(True))
+    for payload in (140, idp.ID_PAYLOAD):
+        ids = idp.IdsProtocol(payload=payload, base=proto.PlainProtocol(True))
         with Serving(tmp_path / str(payload), commit=False, protocol=ids) as s:
             raw = s.send(REL.with_release(id_request(payload), 0, b"run", 5))
             assert s.send(id_request(payload)) == raw
@@ -610,7 +611,7 @@ def test_under_ids_a_failed_stream_stops_unterminated():
     stream and fails it, where an END before the stop rule's position would read as a valid end. The reason is in the
     server's record. Under vLLM's framing (``--protocol vllm``, here its twin `PlainProtocol`) the error event is still
     sent before ``data: [DONE]``."""
-    ids = proto.IdsProtocol(True, payload=140, base=proto.PlainProtocol(True))
+    ids = idp.IdsProtocol(payload=140, base=proto.PlainProtocol(True))
     raw, server = failed_stream(ids, "RuntimeError: the engine broke")
     assert raw == IT.id_event(4853, 140) == failed_stream(ids, "the endpoint is stopping: SIGTERM")[0]
     assert IT.TRAILER not in raw
@@ -634,7 +635,7 @@ def test_under_ids_the_network_attesters_clients_get_vllms_http_and_json(tmp_pat
     endpoint): ``/v1/models`` and ``/tokenize`` as ever, its shim's streamed POST (the id request's fields with
     ``return_token_ids``) an HTTP response, chunked, of vLLM's JSON chunks carrying the token ids, and its probe's
     (urllib) the same."""
-    ids = proto.IdsProtocol(True, payload=proto.ID_PAYLOAD, base=proto.PlainProtocol(True))
+    ids = idp.IdsProtocol(payload=idp.ID_PAYLOAD, base=proto.PlainProtocol(True))
     with Serving(tmp_path, commit=False, protocol=ids) as s:
         assert [m["id"] for m in json.loads(urllib.request.urlopen(s.url + "/v1/models").read())["data"]] == ["m"]  # noqa: S310 (the test's own 127.0.0.1 endpoint)
         assert json.loads(s.post("/tokenize", {"model": "m", "prompt": "a bb ccc"})[1])["tokens"] == [1, 101, 102, 103]
