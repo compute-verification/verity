@@ -23,7 +23,7 @@ circuit file and its public file, and its sessions' directories), never a verdic
   rejected refuses the window whole (`failed`: no partial credit, and no retry), a session that opened its call's public
   table or the window's ok rows (`OK_PORT`, o1) anywhere but at the `--registered` file's value and root refuses it
   (`registration`), and so does one that proved a unit of another call (`proof`). Each unit an accepted session proved
-  is one outcome (`credit.PROOF_KEYS`), which `Credit.window` then holds to the sample and the window's registration.
+  is one outcome (`credit.PROOF_KEYS`), which `Credit.executionPhase` then holds to the sample and the window's registration.
 
 Before any run: the circuit files' form (`FILES_FORM`, `filesRefusal`), the statements' form (`STATEMENTS_FORM`, each
 call one of the window's), one statement a call (a retry never reproves), a statement only for a call with a sampled proof block,

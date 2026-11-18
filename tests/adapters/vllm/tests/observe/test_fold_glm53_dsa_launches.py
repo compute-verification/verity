@@ -625,7 +625,7 @@ def _before_its_mla(requests=TWO, slots=(5, 70), sms=132, **norm):
     """The step of `requests` (`TWO`'s when not given) on a record target of `sms` SMs, once its layer has folded the fused norm/RoPE
     launch (`norm` its arguments), which names the latent cache, and the request-index copy, which names the page table."""
     ctx = _ctx(requests, slots=slots)
-    ctx.header = dataclasses.replace(ctx.header, profile={"gpu": {"multi_processor_count": sms}})
+    ctx.header = dataclasses.replace(ctx.header, profile={"gpu": {"compute_capability": "9.0", "multi_processor_count": sms}})
     assert isinstance(D.DsaNormRope().match(_norm(rows=len(slots), **norm), ctx), Group)
     assert isinstance(D.DsaIndexShare().match(_share(rows=len(slots)), ctx), Transparent)
     return ctx

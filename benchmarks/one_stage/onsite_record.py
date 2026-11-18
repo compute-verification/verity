@@ -18,8 +18,8 @@ open under it, ℓ_a and period cells, labelled with its run, tree and serving s
 credits no verified compute and what they are conditional on, and none carried to another's settings; a record stating
 no serving settings is refused (`UNLABELLED`).
 
-**Verdicts** (`VERDICTS`), each ``{protocol, verdict, from}`` with the answer's ``reason`` or ``refusal``, or, where the
-run wrote no answer, ``missing`` and ``why``:
+**Verdicts** (`VERDICTS`), each ``{protocol, verdict, from}`` with the answer's ``reason`` or ``refusal`` and the row's
+stated source (``answer_from``, where the report gives one), or, where the run wrote no answer, ``missing`` and ``why``:
 
 * SPOT: its subprotocol in the composite of record, the outcome of remote's SPOT case there
   (`SAMPLED_ID`: VStar.Recursive.Sampled on OneStageZk's case, the proofs themselves), never ``record/verdicts.json``'s
@@ -985,7 +985,8 @@ def row_verdict(rows: Mapping[str, Any], key: str, src: str | None = None) -> di
     if r.get("verdict") in ("missing", "dropped"):
         return missing(str(r.get("why")), src) | ({"development": True} if "development" in r else {})
     out = {"protocol": r.get("protocol"), "verdict": r.get("verdict"), "from": src}
-    return out | ({"reason": r["reason"]} if r.get("reason") else {})
+    return out | ({"reason": r["reason"]} if r.get("reason") else {}) | \
+        ({"answer_from": r["answer_from"]} if r.get("answer_from") else {})
 
 
 def composites(out: Path) -> dict[str, tuple[str, dict[str, Any]]]:
