@@ -70,6 +70,14 @@ runner imports it without vLLM or torch: `kit.lease` (the wait for a job's GPUs)
 number), `kit.record_dir` and `kit.record` (a run's record by directory or run id), and `kit.ran_with` (the core
 benchmarks' `ran with` line). Nothing it writes is a verdict of record.
 
+## The serving profiles
+
+`benchmarks/production.toml` holds the three serving profiles (`coding-agent`, `chat`, `fixed-size`): each one's
+dataset, requests, load, bounds and version, each model's stock launch, and where the profiles differ from the published
+command. `verity_bench.profiles` reads it strictly into frozen objects and builds a profile's two command lines, stock
+`vllm serve` (`serve_argv`) and `vllm bench serve` (`bench_argv`). A profile's version rises with any change to what it
+reads, which a test pins.
+
 ## A steady-state spec
 
 `plan`, `run` and `check` take a second schema, told from the first by the file's `schema`: a steady-state spec
