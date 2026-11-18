@@ -21,10 +21,11 @@ FEED = "/tmp/feed"
 ENV = {"VERITY_PROTOCOLS": "stand-in", "VERITY_PROTOCOLS_CONFIG": '{"feed": "%s", "stand-in": {"k": 1}}' % FEED}
 
 
-def vllm_config(tp: int = 1) -> SimpleNamespace:
+def vllm_config(tp: int = 1, dp: int = 1, backend: str = "uni") -> SimpleNamespace:
     return SimpleNamespace(
         model_config=SimpleNamespace(model="m", enforce_eager=True, dtype="torch.bfloat16", quantization=None),
-        parallel_config=SimpleNamespace(tensor_parallel_size=tp, pipeline_parallel_size=1),
+        parallel_config=SimpleNamespace(tensor_parallel_size=tp, pipeline_parallel_size=1, data_parallel_size=dp,
+                                        distributed_executor_backend=backend),
         cache_config=SimpleNamespace(enable_prefix_caching=False, num_gpu_blocks_override=None),
         scheduler_config=SimpleNamespace(async_scheduling=False))
 
@@ -69,8 +70,10 @@ def test_the_engine_attaches_each_scheme_with_its_context_and_answers_what_vllms
                                       "quantization": None, "prefix_cache": False, "kernels": "profile",
                                       "async_steps": False}
     assert (ex.declared.schemes, ex.declared.settings) == (("stand-in",), {"stand-in": {"k": 1}})
-    with pytest.raises(NotImplementedError, match="vllm/scheme-on-in-vllm-server: schemes inside vLLM's server on one GPU"):
-        SP.attach(messages.Exchange(), vllm_config(tp=2), *SP.config(ENV))
+    for shape in ({"tp": 2}, {"dp": 2}, {"backend": "mp"}):
+        with pytest.raises(NotImplementedError, match="vllm/scheme-on-in-vllm-server: schemes inside vLLM's server on one GPU "
+                                                      "with its uniprocess executor"):
+            SP.attach(messages.Exchange(), vllm_config(**shape), *SP.config(ENV))
 
 
 def test_the_engine_hands_each_scheme_the_challenger_gate_its_configuration_names(stand_in):
@@ -127,6 +130,67 @@ def test_register_attaches_before_the_model_loads_and_releases_at_shutdown(stand
     finally:
         SP._PLUGIN[0][0].uninstall()
         SP._PLUGIN[0][1]()
+
+
+def test_pearl_plus_by_name_opens_at_load_ends_a_pass_each_computed_step_and_closes_at_shutdown(monkeypatch):
+    """`pearl-plus` named in the settings attaches in the engine with its ``challenger`` and the configuration's gate; the
+    linear weights registered at ``load_model`` open its run, each `StepComputed` ends a pass, and the engine's shutdown
+    closes the challenger session. The device run is a stand-in: Pearl's kernels need a card."""
+    from verity.protocols.resource_accounting.compute.pouw import scheme as PP
+    from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
+
+    own = {"challenger": "auditor:7000", "session": {"session": "s1"}, "kernel": "/k.so"}
+    env = {"VERITY_PROTOCOLS": "pearl-plus",
+           "VERITY_PROTOCOLS_CONFIG": json.dumps({"feed": FEED, "gate": "gate-cmd", "pearl-plus": own})}
+    log: list = []
+    run = SimpleNamespace(details={"max_step_tokens": 8}, commits={},
+                          end_pass=lambda step: log.append(("pass", step)), finish=lambda: log.append("finish"))
+
+    def open(self, weights, settings):
+        log.append(("open", dict(weights), settings["challenger"], self.gate.__self__.command))
+        self.session = "session"
+        return run
+    monkeypatch.setattr(PP.Attached, "open", open)
+    monkeypatch.setattr(SV, "finish_window", lambda r, session: log.append(("closed", r is run, session)), raising=False)
+
+    class Runner:
+        vllm_config = vllm_config()
+
+        def load_model(self):
+            pass
+
+    def kv_attach():
+        orig = Runner.load_model
+
+        def load_model(runner):
+            orig(runner)
+            messages.current().emit(H.RegisteredValues((("l0.weight", "W0"),), 0, {"l0.weight": 3}))
+        Runner.load_model = load_model
+        return lambda: setattr(Runner, "load_model", orig)
+
+    class Core:
+        def shutdown(self):
+            log.append("shutdown")
+
+    monkeypatch.setattr(kv_blocks, "attach", kv_attach)
+    monkeypatch.setattr(admission, "register", lambda attach, refuse=None: None)
+    monkeypatch.setattr(SP, "_PLUGIN", [])
+    SP.register(env, core=Core, runners=(Runner,))
+    try:
+        Runner().load_model()
+        ex = messages.current()
+        assert ex.declared.schemes == ("pearl-plus",) and ex.declared.settings["pearl-plus"]["challenger"] == "auditor:7000"
+        for e in (H.StepBegan(1, slots=4), H.StepComputed(1), H.StepEnded(1)):
+            ex.emit(e)
+        with pytest.raises(RuntimeError, match="a step of 9 tokens is over one pass"):
+            ex.emit(H.StepBegan(2, slots=9))
+        Core().shutdown()
+        assert log == [("open", {3: "W0"}, "auditor:7000", ["gate-cmd"]), ("pass", True), ("closed", True, "session"),
+                       "shutdown"]
+    finally:
+        SP._PLUGIN[0][0].uninstall()
+        SP._PLUGIN[0][1]()
+        messages.close()
 
 
 def test_a_refused_input_is_aborted_and_its_client_told_why():
