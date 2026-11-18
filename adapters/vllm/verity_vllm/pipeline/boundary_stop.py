@@ -40,7 +40,7 @@ from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
 from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.verifier.one_stage import served as RS
+from verity.protocols.proofs.spot.prover import served as RS
 
 from verity_vllm.pipeline.boundary_rows import (
     EGRESS,
