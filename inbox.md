@@ -1,0 +1,3 @@
+[2026-11-18T13:21Z] 9e16779d784b
+WIDELEAF: after the merge8 hunks (first, by 13:47Z): ONE LINE for network-accounting, by my yes: in served_verdicts.sh, the call that runs the path prover's runner gets PP_KEEP="$LOGS/sampled-proofs" in its environment (their a280c5a2fb0 moved the runner's error/build logs to a private keep that is the job's scratch unless PP_KEEP is set, so under our launcher they now vanish). Add it on interfaces AFTER the merge of main lands (to avoid a 22nd conflict) unless the merge is not in by 14:45Z, then add it anyway; a test that a failed sampled-proofs step leaves its error log under the serve dir's private logs. Linear's thread is now TOP-442.
+
