@@ -2071,13 +2071,13 @@ def _member_doc(m: CS.Member) -> dict[str, Any]:
     return {"template": m.template, "name": m.name, "n": m.n, "base": m.base, "rows": [list(r) for r in m.rows],
             "outs": [list(o) for o in m.outs], "schemas": [list(s) for s in m.schemas], "tables": [list(t) for t in m.tables],
             "link_units": list(m.link_units), "links": [list(x) for x in m.links],
-            "wired": [w.doc() for w in m.wired]}
+            "wired": [w.doc() for w in m.wired], "values": list(m.values)}
 
 
 def _listed_members(doc: Mapping[str, Any]) -> tuple[CS.Member, ...]:
     return tuple(CS.Member(m["template"], tuple(map(tuple, m["rows"])), tuple(map(tuple, m["outs"])), m["n"], m["base"],
                            tuple(map(tuple, m["tables"])), m["name"], tuple(map(tuple, m["schemas"])), tuple(m["link_units"]),
-                           tuple(map(tuple, m["links"])), tuple(WI.Wired.of(w) for w in m["wired"]))
+                           tuple(map(tuple, m["links"])), tuple(WI.Wired.of(w) for w in m["wired"]), tuple(m["values"]))
                  for m in doc["members"])
 
 
@@ -2088,8 +2088,8 @@ def listed_ingress(members: Sequence[CS.Member], templates: Sequence[Sequence[An
     link checks bind it to its writers' outputs (SPOT's wiring, ε_bind), so it is not the run's ingress (`Ingress`
     in a stated record, the ingress gates Lean's ``freeInputs`` reads) and leaves the run's count free (`input_count`).
     Refused (ValueError) where one names no template, reads outside its units or units no member holds, or a port that
-    isn't an input row of every member holding those units, or is one a wire or a shared-row table fills (`CS.Member`'s
-    ``wired`` and ``tables``), or two meet. The work is per declaration and per member it covers, never per unit. `circuit_record`,
+    isn't an input row of every member holding those units, or is one a wire, a registered value or a table of other
+    rows than its units' own fills (`CS.Member`'s ``wired``, ``values`` and ``tables``), or two meet. The work is per declaration and per member it covers, never per unit. `circuit_record`,
     `window_of_record` and `input_count` each refuse a listed record whose period ingress this refuses."""
     base, at = {}, 0
     for t, n in templates:
@@ -2114,7 +2114,7 @@ def listed_ingress(members: Sequence[CS.Member], templates: Sequence[Sequence[An
             if m is None or not m.base <= reach < m.base + m.n:
                 raise ValueError(f"period ingress {g.doc()}: unit {reach - lo0} of {g.reader} is in no member")
             rows, wired = dict(m.rows), {w.port for w in m.wired}
-            if g.port not in rows or g.port in dict(m.tables) or g.port in wired:
+            if g.port not in rows or dict(m.tables).get(g.port, m.n) != m.n or g.port in wired or g.port in m.values:
                 raise ValueError(f"period ingress {g.doc()}: {m.key}'s {g.port} is not an input row of its own units; a wire or a "
                                  "shared-row table fills it")
             end = min(hi, m.base + m.n)

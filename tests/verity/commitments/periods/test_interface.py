@@ -643,34 +643,24 @@ def test_the_keyed_ports_are_an_openings_key_ports_and_verdict_on_the_members_it
 
 
 def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_verifier_reads(tmp_path, monkeypatch):
-    """A shared-row member holding a wired port in its writer's tree (no wired trees, a table of its writer's rows): its
-    header entry (`rows.held_ports`, `rows.own_entries`) is the writer's output value, one position and one path per row of
-    its table, each path climbing to the writer's root, and the verifier's read of it (`rows.own_reads`, seeded with no
-    port) names the same value, that root, a leaf count of the table's rows and each unit's writer row, so the header opens
-    every row the verifier reads and no other. A member holding none gets no entry, and a body whose held rows are not its
-    writer's is refused."""
+    """A member's wired port, held in its writer template's output tree: its header entry (`rows.shared_ports`,
+    `rows.shared_entries`) is that tree's value, one position and one path per row of its table, the leaves it reads
+    (`rows.Binding.leaves`), each path climbing to the tree's root, and the verifier's read of it (`rows.own_reads`, seeded
+    with no port) names the same value and root and reads those leaves. A member with no wired port gets no ``x`` entry."""
     w, c, doc = _held_window(tmp_path, monkeypatch)
-    ms = w.members
+    ms, tree = w.members, WI.tree(GID, "o0")
     roots = {q: {"root": r.hex(), "domain": c.domains[q].domain_id.hex(), "leaves": c.domains[q].count} for q, r in c.roots.items()}
-    files = CS.own_reads({m.key: {"format": REG.READS_V1, "ports": {}} for m in ms if m.wired}, w, roots, registered=REG)
-    assert CS.held_ports(doc, 0) == {} and CS.own_entries(doc["members"][0], c.public_body(0), (), {}) == {}
+    files = CS.own_reads({m.key: {"format": REG.READS_V1, "ports": {}} for m in ms}, w, roots, registered=REG)
+    assert "x" not in CS.shared_ports(doc, 0)
+    dom, bc = c.domains[tree], b"".join(c.bc[m.port("o0")] for m in ms)
     for k, m in enumerate(ms[1:], 1):
-        writer = w.held(m, "x")
-        assert CS.held_ports(doc, k) == {"x": writer} != {"x": m.port("x")} and m.port("x") not in c.roots
-        e = CS.own_entries(doc["members"][k], c.public_body(k), (), CS.held_ports(doc, k))["x"]
-        read = files[m.key]["ports"]["x"]
-        rows = dict(m.tables)["x"]
-        assert e["value"] == read["value"] == CS.own_value(writer) and read["root"] == c.roots[writer].hex()
-        assert e["positions"] == list(range(rows)) == list(range(read["leaves"])) and len(e["paths"]) == rows
-        assert read["reads"] == list(w.held_leaves(m, "x")) and set(read["reads"]) <= set(e["positions"])
-        dom, bc = c.domains[writer], c.bc[writer]
+        assert CS.shared_ports(doc, k)["x"][2] == tree and m.port("x") not in c.roots
+        e, read = CS.shared_entries(tmp_path, doc, k)["x"], files[m.key]["ports"]["x"]
+        assert e["value"] == read["value"] == CS.own_value(tree) and read["root"] == c.roots[tree].hex()
+        assert e["positions"] == w.leaves(m, "x").tolist() == read["reads"]
         for i, path in zip(e["positions"], e["paths"], strict=True):
             leaf = row_leaf(dom, i, CS.INST.tree_leaf(CS.INST.default_key, bc[CS.BC_BYTES * i:CS.BC_BYTES * (i + 1)]), m.schema("x"))
-            assert _climb(dom, i, leaf, bytes.fromhex(path)) == c.roots[writer]
-    body = bytearray(c.public_body(1))
-    body[0] ^= 1                                                       # the held port's first table row
-    with pytest.raises(ValueError, match="not its frame_v3 root"):
-        CS.own_entries(doc["members"][1], bytes(body), (), CS.held_ports(doc, 1))
+            assert _climb(dom, i, leaf, bytes.fromhex(path)) == c.roots[tree]
 
 
 def as_listed(w: CS.Binding, *defs) -> CS.Binding:
@@ -687,18 +677,18 @@ def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_the
     mine = I.window_of_record(doc, SAMPLING_DESIGN, by_id)
     assert mine.members == win.window.members and mine.partition_digest == win.window.partition_digest
     with pytest.raises(ValueError, match=r"\['partition', 'program'\] are not the ones its templates make"):
-        I.window_of_record({**doc, "wires": [{**doc["wires"][0], "step": [2, 0]}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
+        I.window_of_record({**doc, "wires": [{**doc["wires"][0], "step": [0]}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
     with pytest.raises(ValueError, match="order: wire 0"):
-        I.window_of_record({**doc, "wires": [{**doc["wires"][0], "base": 1}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
+        I.window_of_record({**doc, "wires": [{**doc["wires"][0], "base": 2}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
     for bad, why in [({k: v for k, v in doc.items() if k != "cap"}, "one or the other"), ({**doc, "members": []}, "one or the other"),
                      ({**doc, "wires": [{**doc["wires"][0], "radix": 2}]}, "radix and step lists"),
                      ({**doc, "wires": [{**doc["wires"][0], "extra": 0}]}, "a wire's record"),
                      ({**doc, "cap": 0}, "at least one unit")]:
         with pytest.raises(ValueError, match=why):
             I.window_of_record(bad, SAMPLING_DESIGN, by_id)
-    split = I.window_of_record({**doc, "cap": 3}, SAMPLING_DESIGN, by_id).members
-    assert [(m.base, m.n, m.wired) for m in split] == [
-        (0, 2, ()), (2, 2, (("x", "o0", (0, 1)),)), (4, 2, (("x", "o0", (2, 3)),)), (6, 2, (("x", "o0", (4, 5)),))]
+    split = I.window_of_record({**doc, "cap": 3}, SAMPLING_DESIGN, by_id)
+    assert [(m.base, m.n, split.reads(m, "x").tolist() if m.wired else None) for m in split.members] == [
+        (0, 2, None), (2, 2, [0, 1]), (4, 2, [2, 3]), (6, 2, [4, 5])]
     listed_doc = json.loads(I.circuit_bytes(I.circuit_record(as_listed(win.window, GEMM), "chain", [(GID, 8)])))
     assert "cap" not in listed_doc and I.window_of_record(listed_doc, SAMPLING_DESIGN, by_id).members == win.window.members
     with pytest.raises(ValueError, match="stated with a cap"):
@@ -762,8 +752,9 @@ def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_regis
     weights = I.Read(GID, "w", "weights", 0, (STEPS, LAYERS, REQUESTS), 0, (0, 256, 0))
     reg = I.Registered({"weights": LAYERS * 256}, reads=(weights,))
     win = I.Window(replace(chain(), registered=reg), RUN, SAMPLING_DESIGN, 2)
-    plain, tabled = (replace(as_listed(win.window, GEMM), members=tuple(replace(m, tables=t) for m in win.window.members))
-                     for t in ((), (("w", 1),)))
+    plain, tabled = (replace(as_listed(win.window, GEMM), members=tuple(
+        replace(m, values=(), tables=tuple((p, t if p == "w" else n) for p, n in m.tables) if m.tables else ())
+        for m in win.window.members)) for t in (2, 1))
     first = I.Ingress(GID, "x", 0, REQUESTS, 0)
     declared = {"registered": reg.doc(), W: [first.doc()]}
     listed = json.loads(I.circuit_bytes(I.circuit_record(plain, "chain", [(GID, 8)], declared=declared)))
@@ -788,7 +779,7 @@ def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_regis
         return I.Registered({"weights": LAYERS * 256}, reads=rs)
 
     cut = I.Read(GID, "w", "weights", 0, (STEPS, LAYERS, REQUESTS, 2), 0, (0, 256, 0, 128), cut=(0, 2))
-    for bad, why in [(reads(replace(weights, at=1, radix=(1, 4))), "begins no member"),
+    for bad, why in [(reads(replace(weights, at=1, radix=(1, LAYERS, REQUESTS))), "begins no member"),
                      (reads(replace(weights, port="x")), "a wire or a row table fills"),
                      (reads(weights, I.Read(GID, "x", "weights", 0, (REQUESTS,), 0, (16,))), "both fill rows"),
                      (reads(replace(weights, radix=(STEPS, LAYERS, REQUESTS + 1))), "among its template's 8"),
@@ -862,7 +853,9 @@ def test_the_wires_dataflow_is_acyclic_under_the_circuits_order():
     a unit reading a later unit of its template, so no rising order: a cycle."""
     c = chain()
     assert c.order == ((GID, 0, 2), (GID, 2, 2), (GID, 4, 2), (GID, 6, 2))
-    I.check_order(c.units, c.wires)
+    I.check_order(c.units, c.wires, c.order)
+    with pytest.raises(ValueError, match="order: wire 0 "):
+        I.check_order(c.units, c.wires)
     for order, why in [(((GID, 0, 4), (GID, 4, 4)), "order: wire 0 "),
                        (((GID, 0, 2), (GID, 4, 2), (GID, 2, 2), (GID, 6, 2)), "order: wire 0 "),
                        (((GID, 0, 2), (GID, 4, 2), (GID, 2, 2)), "don't tile"), (((GID, 0, 4), (GID, 3, 5)), "don't tile"),
