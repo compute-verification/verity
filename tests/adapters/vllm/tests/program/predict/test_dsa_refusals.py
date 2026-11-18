@@ -28,6 +28,7 @@ from verity_vllm.program.predict.node import build_node_program
 from verity_vllm.program.predict.phi import Phi
 
 LAYERS, H200, H100 = 4, "NVIDIA H200", "NVIDIA H100 80GB HBM3"
+CARDS = {H200: "h200-sxm-141gb", H100: "h100-sxm-80gb"}
 GROUPS = ("prefix", "prefix_ik", "prefix_iks")
 NO_TILE = (f"vocabulary cannot express: no tuned fused-MoE config for E=256, N=256 on {H100!r} "
            f"(engine.profiles.devices.FUSED_MOE_CONFIGS)")
@@ -42,8 +43,8 @@ def cut(tmp_path):
 
     def make(layers: int = LAYERS, device: str = H200) -> Phi:
         p = _first_layers(_row_phi(GLM53, "GLM53", tmp_path), layers)
-        assert p.hf_config["mlp_layer_types"] == (["dense"] * 3 + ["sparse"])[:layers] and p.target["device_name"] == H200
-        return Phi.from_json({**p.to_json(), "target": {**p.target, "device_name": device}})
+        assert p.hf_config["mlp_layer_types"] == (["dense"] * 3 + ["sparse"])[:layers] and p.target["card"] == CARDS[H200]
+        return Phi.from_json({**p.to_json(), "target": {**p.target, "card": CARDS[device]}})
 
     return make
 

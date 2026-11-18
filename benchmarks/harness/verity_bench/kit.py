@@ -412,23 +412,6 @@ def machine_toolkit() -> str:
     return found["directory"]
 
 
-def gpu_target(sku: str, *, directory: Path | None = None) -> dict[str, Any]:
-    from verity.device import load_architecture, load_card, number
-
-    directory = directory or cards_directory()
-    card = load_card(sku, directory=directory)
-    names = [d["value"] for d in card.get("driver", ())]
-    if card["kind"] != "gpu" or len(names) != 1:
-        raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: it needs kind \"gpu\" and one `driver` "
-                         f"name, and has kind {card['kind']!r}, driver {names}")
-    try:
-        arch = load_architecture(str(card.get("arch")), directory=cards_directory().parent / "architectures")
-    except KeyError as e:
-        raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: its {e.args[0]}") from None
-    return {"device_name": names[0], "compute_capability": [int(x) for x in arch["capability"].split(".")],
-            "num_sms": int(number(card["sm"]["count"]))}
-
-
 def is_card(card: str, short: str, *, directory: Path | None = None) -> bool:
     """Whether every card a stamp's `card` names (``, ``-joined) is one record's whose ``short`` is ``short``; a name
     no single record holds, or one without a ``short``, is not."""
