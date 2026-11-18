@@ -39,7 +39,7 @@ MAKERS = {
     "exact": "`verity bench serving_cost exact` under research run --store-read",
     "capture": "vllm's `benchmarks/prod_repro/run.sh` on the real model, which stores it",
     "price": "`verity bench serving_cost price` under research run --store-read",
-    "profile": "vllm's `benchmarks/serve_tax/run.sh --profile NAME --feature SCHEME` under research run, which stores it",
+    "profile": "vllm's `benchmarks/serve_tax/run.sh --profile NAME --feature NAME [KEY=VALUE ...]` under research run, which stores it",
 }
 HOLDS = {
     "minify": f"{UNITS} in the form `priced.units` reads",
