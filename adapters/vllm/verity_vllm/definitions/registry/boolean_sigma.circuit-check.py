@@ -19,6 +19,7 @@ def _boolean_roots() -> list[Any]:
     norm's pair sums and in-order sums)."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import gemm as BG
+
     from verity_vllm.definitions.registry import boolean_attention as BA
     from verity_vllm.definitions.registry import boolean_sigma as SG
 

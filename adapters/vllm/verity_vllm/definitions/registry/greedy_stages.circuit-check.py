@@ -12,6 +12,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     lowering is compared whole.  The select at GLM-5.3's statics is held to the block by its units (`greedy_stages.CUTS`) and
     its descriptor's digest is pinned (``digests``), which keeps it in ``--all``."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import greedy_stages as G
 
     return [

@@ -14,6 +14,7 @@ from __future__ import annotations
 from verity.circuits.defs import composite
 from verity.circuits.ops.prims import ZERO32
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.definitions.registry.prims import BF16, F32
