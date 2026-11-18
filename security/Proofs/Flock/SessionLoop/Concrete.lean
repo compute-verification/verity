@@ -28,7 +28,7 @@ open Flock
 
 /-! ## `decode` reads back what `Raw.encode` writes -/
 
-theorem run_rdTake {n : ℕ} (l rest : Claims.Msg) (h : l.length = n) :
+theorem run_rdTake {n : ℕ} (l rest : Hash.Msg) (h : l.length = n) :
     (rdTake n).run (l ++ rest) = some (l, rest) := by
   subst h
   simp [StateT.run, rdTake, List.take_left' rfl, List.drop_left' rfl]
@@ -49,32 +49,32 @@ theorem foldr_encNat {n : ℕ} (h : n < 2 ^ 64) : (encNat n).foldr (fun b acc =>
   rw [encNat, List.range_eq_range', foldr_digits, Nat.pow_zero, Nat.div_one]
   exact Nat.mod_eq_of_lt (by simpa using h)
 
-theorem run_bind_some {α β : Type} {x : Rd α} {f : α → Rd β} {s s' : Claims.Msg} {a : α}
+theorem run_bind_some {α β : Type} {x : Rd α} {f : α → Rd β} {s s' : Hash.Msg} {a : α}
     (h : x.run s = some (a, s')) : (x >>= f).run s = (f a).run s' := by
   rw [StateT.run_bind, h]; rfl
 
-theorem run_pure' {α : Type} (a : α) (s : Claims.Msg) : (pure a : Rd α).run s = some (a, s) := rfl
+theorem run_pure' {α : Type} (a : α) (s : Hash.Msg) : (pure a : Rd α).run s = some (a, s) := rfl
 
-theorem run_rdNat {n : ℕ} (h : n < 2 ^ 64) (rest : Claims.Msg) : rdNat.run (encNat n ++ rest) = some (n, rest) := by
+theorem run_rdNat {n : ℕ} (h : n < 2 ^ 64) (rest : Hash.Msg) : rdNat.run (encNat n ++ rest) = some (n, rest) := by
   rw [rdNat, run_bind_some (run_rdTake (encNat n) rest (length_encNat n)), run_pure', foldr_encNat h]
 
-theorem run_rdBytes {b : ByteArray} (h : b.size < 2 ^ 64) (rest : Claims.Msg) :
+theorem run_rdBytes {b : ByteArray} (h : b.size < 2 ^ 64) (rest : Hash.Msg) :
     rdBytes.run (encBytes b ++ rest) = some (b, rest) := by
   rw [rdBytes, encBytes, List.append_assoc, run_bind_some (run_rdNat h _),
     run_bind_some (run_rdTake (n := b.size) _ rest rfl), run_pure']
 
-theorem run_rdStr {s : String} (h : s.toUTF8.size < 2 ^ 64) (rest : Claims.Msg) :
+theorem run_rdStr {s : String} (h : s.toUTF8.size < 2 ^ 64) (rest : Hash.Msg) :
     rdStr.run (encStr s ++ rest) = some (s, rest) := by
   rw [rdStr, encStr, run_bind_some (run_rdBytes h rest),
     FlockSoundness.Discharge.Recursion.ZkServerWire.fromUTF8?_toUTF8]
   rfl
 
-theorem run_rdBool (b : Bool) (rest : Claims.Msg) : rdBool.run (encBool b ++ rest) = some (b, rest) := by
+theorem run_rdBool (b : Bool) (rest : Hash.Msg) : rdBool.run (encBool b ++ rest) = some (b, rest) := by
   rw [rdBool, run_bind_some (run_rdTake (n := 1) (encBool b) rest rfl)]
   cases b <;> rfl
 
-theorem run_rdOpt {α : Type} {r : Rd α} {e : α → Claims.Msg} {o : Option α}
-    (hr : ∀ a, o = some a → ∀ rest, r.run (e a ++ rest) = some (a, rest)) (rest : Claims.Msg) :
+theorem run_rdOpt {α : Type} {r : Rd α} {e : α → Hash.Msg} {o : Option α}
+    (hr : ∀ a, o = some a → ∀ rest, r.run (e a ++ rest) = some (a, rest)) (rest : Hash.Msg) :
     (rdOpt r).run (encOpt e o ++ rest) = some (o, rest) := by
   cases o with
   | none =>
@@ -86,7 +86,7 @@ theorem run_rdOpt {α : Type} {r : Rd α} {e : α → Claims.Msg} {o : Option α
     show (some <$> r).run (e a ++ rest) = _
     rw [StateT.run_map, hr a rfl rest]; rfl
 
-theorem run_rdListN {α : Type} {r : Rd α} {e : α → Claims.Msg} :
+theorem run_rdListN {α : Type} {r : Rd α} {e : α → Hash.Msg} :
     ∀ (l : List α), (∀ a ∈ l, ∀ rest, r.run (e a ++ rest) = some (a, rest)) → ∀ rest,
       (rdListN r l.length).run (l.flatMap e ++ rest) = some (l, rest)
   | [], _, _ => rfl
@@ -96,8 +96,8 @@ theorem run_rdListN {α : Type} {r : Rd α} {e : α → Claims.Msg} :
       run_bind_some (run_rdListN l (fun b hb => hr b (List.mem_cons_of_mem a hb)) rest)]
     rfl
 
-theorem run_rdList {α : Type} {r : Rd α} {e : α → Claims.Msg} {l : List α} (hl : l.length < 2 ^ 64)
-    (hr : ∀ a ∈ l, ∀ rest, r.run (e a ++ rest) = some (a, rest)) (rest : Claims.Msg) :
+theorem run_rdList {α : Type} {r : Rd α} {e : α → Hash.Msg} {l : List α} (hl : l.length < 2 ^ 64)
+    (hr : ∀ a ∈ l, ∀ rest, r.run (e a ++ rest) = some (a, rest)) (rest : Hash.Msg) :
     (rdList r).run (encList e l ++ rest) = some (l, rest) := by
   rw [rdList, encList, List.append_assoc, run_bind_some (run_rdNat hl _), run_rdListN l hr]
 
@@ -119,15 +119,15 @@ structure Raw.Fits (w : Raw) : Prop where
   registered : ∀ b, w.registered = some b → b.size < 2 ^ 64
   publicInputs : ∀ b, w.publicInputs = some b → b.size < 2 ^ 64
 
-theorem run_rdOptBytes {o : Option ByteArray} (h : ∀ b, o = some b → b.size < 2 ^ 64) (rest : Claims.Msg) :
+theorem run_rdOptBytes {o : Option ByteArray} (h : ∀ b, o = some b → b.size < 2 ^ 64) (rest : Hash.Msg) :
     (rdOpt rdBytes).run (encOpt encBytes o ++ rest) = some (o, rest) :=
   run_rdOpt (fun b hb => run_rdBytes (h b hb)) rest
 
-theorem run_rdOptNat {o : Option ℕ} (h : ∀ n, o = some n → n < 2 ^ 64) (rest : Claims.Msg) :
+theorem run_rdOptNat {o : Option ℕ} (h : ∀ n, o = some n → n < 2 ^ 64) (rest : Hash.Msg) :
     (rdOpt rdNat).run (encOpt encNat o ++ rest) = some (o, rest) :=
   run_rdOpt (fun n hn => run_rdNat (h n hn)) rest
 
-theorem run_read {w : Raw} (hw : w.Fits) (rest : Claims.Msg) : Raw.read.run (w.encode ++ rest) = some (w, rest) := by
+theorem run_read {w : Raw} (hw : w.Fits) (rest : Hash.Msg) : Raw.read.run (w.encode ++ rest) = some (w, rest) := by
   have hF : FORMAT.toUTF8.size < 2 ^ 64 := by decide +kernel
   have ht : ∀ rest, (rdList (do let n ← rdStr; let b ← rdBytes; pure (n, b))).run
       (encList (fun p => encStr p.1 ++ encBytes p.2) w.tables ++ rest) = some (w.tables, rest) :=

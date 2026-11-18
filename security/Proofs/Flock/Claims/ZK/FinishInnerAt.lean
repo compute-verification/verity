@@ -63,7 +63,7 @@ theorem piopCut_fw_fc (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay 
     (mk : ℕ → F128) (src : FlockComplete.RepSrc) (cap root : ByteArray) (extras : Array Claim)
     (prior : Array (List F128)) (words : List ℕ) (hm14 : 14 ≤ st.m) (hm : st.m - 6 ≤ lay.nMlv)
     (hk : st.fold.kLog - 6 ≤ lay.nLc) (hmk : ∀ i < lay.zp 64, i ≠ lay.fc → src.masked i = mk i) {t₀ : Transcript}
-    {l : Array Claims.Msg} (hn : l.size ≤ n)
+    {l : Array Hash.Msg} (hn : l.size ≤ n)
     (hpiop : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut coin n) st.m st.digest cap root lay mk).run t₀).go l =
         (.ok ((zp, zc), t₁), l₁) →
@@ -74,7 +74,7 @@ theorem piopCut_fw_fc (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay 
         ∀ k < (abcClaims st.m st.kLog zc lc ++ extras).size,
           src.sv k = switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
     {zp : ZerocheckProof} {lp : LincheckProof} {ss : Array (Array F128)} {T : F128} {sws : Array Switched}
-    {t₃ : Transcript} {l₃ : Array Claims.Msg}
+    {t₃ : Transcript} {l₃ : Array Hash.Msg}
     (h : ((piopFw (FlockComplete.asksCut coin n) st lay g mk cap root extras).run t₀).go l =
       (.ok ((zp, lp, ss, T, sws), t₃), l₃)) :
     ((FlockComplete.piopCut (FlockComplete.asksCut coin n) st lay src cap root extras prior words).run t₀).go l =
@@ -100,7 +100,7 @@ theorem repCut_fw_inner_at (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) 
     (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit)
     (extras : Array Claim) (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit) (vals : Array F128)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (src : FlockComplete.RepSrc)
-    (prior : Array (List F128)) (words : List ℕ) (t₀ : Transcript) (l : Array Claims.Msg)
+    (prior : Array (List F128)) (words : List ℕ) (t₀ : Transcript) (l : Array Hash.Msg)
     (hs : FlockComplete.CutEq.SchOk st sch) (hn : l.size ≤ n) (hkL : st.fold.kLog = st.kLog)
     (hmk : ∀ i < (Zk.PadLayout.new st.m st.kLog sch.k0).zp 64, i ≠ (Zk.PadLayout.new st.m st.kLog sch.k0).fc →
       src.masked i = vals[i]! + pads.h[i]!)
@@ -120,10 +120,10 @@ theorem repCut_fw_inner_at (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) 
         (.ok ((zp, lp, ss, T, sws), t₃), l₃) →
       FlockComplete.LigLock.LigHyp coin n l₃.size st.merkle sch g (FlockComplete.basisVals sws (st.m - 7))
         (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h rep tPad extra lanePad salt src)
-    {p : Zk.ZkProof} {t : Transcript} {l' : Array Claims.Msg}
+    {p : Zk.ZkProof} {t : Transcript} {l' : Array Hash.Msg}
     (h : ((repFwC (FlockComplete.asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch tPad rep dom g cm0 extras pads ic
       vals extra lanePad salt).run t₀).go l = (.ok (p, t), l')) :
-    ∃ (t₄ : Transcript) (L : Array Claims.Msg), t₄.pending = ByteArray.empty ∧
+    ∃ (t₄ : Transcript) (L : Array Hash.Msg), t₄.pending = ByteArray.empty ∧
       L.size = FlockComplete.CutEq.innerAt l.size st sch extras ∧
       ((FlockComplete.repCut (FlockComplete.asksCut coin L.size) (Hashes.ofSha512 Sha512.hash) st sch rep dom
           (FlockComplete.eraseC cm0) extras ic src prior words).run t₀).go l =

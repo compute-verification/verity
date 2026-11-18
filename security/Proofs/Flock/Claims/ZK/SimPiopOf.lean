@@ -51,7 +51,7 @@ namespace FlockComplete
 
 open Flock Transcript
 
-theorem go_bind_congr {α β : Type} {x y : TMW PS α} {f : α → TMW PS β} {t : Transcript} {l : Array Claims.Msg}
+theorem go_bind_congr {α β : Type} {x y : TMW PS α} {f : α → TMW PS β} {t : Transcript} {l : Array Hash.Msg}
     (h : (x.run t).go l = (y.run t).go l) : ((x >>= f).run t).go l = ((y >>= f).run t).go l := by
   rw [StateT.run_bind, StateT.run_bind, go_bind, go_bind, h]
 
@@ -60,7 +60,7 @@ only there. -/
 theorem repMix_zero_one (io : Asks PS) (hs : Hashes PS) (st : Setup) (sch : Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (prior : Array (List F128)) (words : List ℕ) (src : RepSrc) (t : Transcript) (l : Array Claims.Msg)
+    (prior : Array (List F128)) (words : List ℕ) (src : RepSrc) (t : Transcript) (l : Array Hash.Msg)
     (h : ((piopCut io st (Zk.PadLayout.new st.m st.kLog sch.k0) src (flat cm0.cap) ic.root extras prior words).run
         t).go l =
       ((piopPZk io st (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h tr (flat cm0.cap) ic.root extras prior words).run

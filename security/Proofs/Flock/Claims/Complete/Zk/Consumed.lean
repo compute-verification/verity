@@ -98,7 +98,7 @@ theorem verifyInnerWith_end (hs : Hashes V) {lay : Zk.PadLayout} {pr : Zk.InnerP
   rw [hr₁₀, r₉, hk₁₀, kk₉]
   omega
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **Where a masked rep's steps return, the inner proof ends at the rep's round count**, within the rep's stream: the
 replay's `m + (kLog − 6)`, the ring switch's `claims + 1`, Ligerito's `k0 + 7 + 11 R` and the inner proof's `4`. -/

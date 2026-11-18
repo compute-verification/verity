@@ -31,9 +31,9 @@ variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 `executionPhaseAt_form` and `executionPhaseReads_members`, at the check's accepts: `formAccepts`, `formApart`): where the window is
 the parameters' members on the registered files and the registered files hold each member's file. -/
 theorem spotSound_form (I : ExecutionPhaseInstance d α) (K₀ : ExecutionPhaseConstructions I.base)
-    (k : Verity.Registration.Composite) (reg : Option Claims.Msg → ByteArray)
-    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)
-    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (k : Verity.Registration.Composite) (reg : Option Hash.Msg → ByteArray)
+    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Hash.Msg)
+    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Hash.Msg)
     (hW : I.ExecutionPhaseRegistered) (hR : RegisteredHolds I.base)
     (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ k reg sentEvidenceAt (statementFiles statementTable) record₀
       recordDigest)) k) :
@@ -47,9 +47,9 @@ theorem spotSound_form (I : ExecutionPhaseInstance d α) (K₀ : ExecutionPhaseC
 (`remote_soundness_executionPhase`, at `claimReads`, `executionPhaseAt_form` and `executionPhaseReads_members`): under `spotSound_form`'s
 premises and the base's PoUW target. -/
 theorem soundnessAt_form (I : ExecutionPhaseInstance d α) (K₀ : ExecutionPhaseConstructions I.base)
-    (reg : Option Claims.Msg → ByteArray)
-    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)
-    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (reg : Option Hash.Msg → ByteArray)
+    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Hash.Msg)
+    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Hash.Msg)
     (hW : I.ExecutionPhaseRegistered) (hR : RegisteredHolds I.base)
     (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ .remote reg sentEvidenceAt (statementFiles statementTable)
       record₀ recordDigest)) .remote)

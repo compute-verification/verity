@@ -48,20 +48,20 @@ open Flock
 
 /-- **The decision at a session, its verdict read through `keep`**: the verdict over `OC` on its tables, then the
 plain custody checks. -/
-def decisionAtK (keep : Bool → Bool) (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
-    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) :
+def decisionAtK (keep : Bool → Bool) (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Hash.Msg)
+    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (f : Final) :
     Claims.OCV Unit := do
   verifyWithMK keep Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs
   monadLift (checks false s spec x link c₁ mids f)
 
 /-- **The decision, its verdict read through `keep`**: the statement's setup over `OC`, then `decisionAtK`. -/
-def decisionK (keep : Bool → Bool) (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : Final) : Claims.OCV Unit := do
+def decisionK (keep : Bool → Bool) (s : Ins) (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
+    (mids : List (Hash.Msg × Coin)) (f : Final) : Claims.OCV Unit := do
   let (spec, sts) ← setupM Claims.Hashes.oc s.read
   decisionAtK keep s spec sts x link c₁ mids f
 
 /-- **The step, its verdict read through `keep`**: `next false`'s, with `decisionK keep`. -/
-def nextK (keep : Bool → Bool) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Claims.OC Claims.Out :=
+def nextK (keep : Bool → Bool) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) : Claims.OC Claims.Out :=
   match act false x as cs with
   | .rej => .ret .rej
   | .coin c => .ret (.msg c.bytes)
@@ -95,9 +95,9 @@ theorem VK_true : VK (fun _ => true) = VE := by
 /-- `VK keep` takes the deployed plain verifier's rounds. -/
 theorem VK_k (keep : Bool → Bool) : (VK keep).k = (V false).k := rfl
 
-theorem decisionAtK_eval (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec)
-    (sts : Array Stmt) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : Final) :
+theorem decisionAtK_eval (keep : Bool → Bool) (H : Hash.Msg → Hash.Msg) (s : Ins) (spec : SessionSpec)
+    (sts : Array Stmt) (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
+    (mids : List (Hash.Msg × Coin)) (f : Final) :
     ((decisionAtK keep s spec sts x link c₁ mids f).run.eval H).1 =
       (do verifyWithK keep (Claims.hOf H) spec (tabsOf sts) f.record f.proofs
           checks false s spec x link c₁ mids f) := by
@@ -109,8 +109,8 @@ theorem decisionAtK_eval (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) 
   subst he
   cases verifyWithK keep (Claims.hOf H) spec (tabsOf sts) f.record f.proofs <;> rfl
 
-theorem decisionK_eval (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) (s : Ins) (x : Claims.Msg)
-    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) :
+theorem decisionK_eval (keep : Bool → Bool) (H : Hash.Msg → Hash.Msg) (s : Ins) (x : Hash.Msg)
+    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (f : Final) :
     ((decisionK keep s x link c₁ mids f).run.eval H).1 =
       (do let (spec, sts) ← setupWith (Claims.hOf H) s.read
           verifyWithK keep (Claims.hOf H) spec (tabsOf sts) f.record f.proofs
@@ -127,11 +127,11 @@ theorem decisionK_eval (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) (s
     obtain ⟨spec, sts⟩ := p
     exact decisionAtK_eval keep H s spec sts x link c₁ mids f
 
-theorem nextK_rej (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
+theorem nextK_rej (keep : Bool → Bool) (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg}
     {cs : List Coin} (h : act false x as cs = .rej) : (nextK keep x as cs).eval H = (.rej, []) := by
   simp only [nextK, h, Claims.OC.eval]
 
-theorem nextK_coin (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
+theorem nextK_coin (keep : Bool → Bool) (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg}
     {cs : List Coin} {c : Coin} (h : act false x as cs = .coin c) :
     (nextK keep x as cs).eval H = (.msg c.bytes, []) := by
   simp only [nextK, h, Claims.OC.eval]
@@ -139,9 +139,9 @@ theorem nextK_coin (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {x : C
 /-- **The decision read through `keep`, against `H`**: it accepts exactly when the setup with `hOf H` is `.ok`, and at
 its session `verifyWithK keep (hOf H)` and the custody checks are `.ok` (`next_decide` at `keep := id`, `nextE_decide`
 at `keep := fun _ => true`). -/
-theorem nextK_decide (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
+theorem nextK_decide (keep : Bool → Bool) (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg}
     {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
-    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     (h : act false x as cs = .decide s spec sts link c₁ mids f) :
     ((nextK keep x as cs).eval H).1 = .acc ↔
       ∃ spec' sts', setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧

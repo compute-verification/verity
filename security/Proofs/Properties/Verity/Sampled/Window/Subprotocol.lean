@@ -95,8 +95,8 @@ theorem executionPhaseSpotSound_of_members (rd : ExecutionPhaseReadings) (K : Ex
     (BL : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ExecutionPhaseLinkHold)
     (B : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ExecutionPhaseRoundHold)
     (I : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
-      (W.extend (M W θ F c σ).widening).L.Ω → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ →
-        Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
+      (W.extend (M W θ F c σ).widening).L.Ω → Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → ℕ →
+        Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → Prop)
     (ha : ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Strategy (V.game θ F c)),
       prob (fun o => V.Verdict k .sampled o ∧ ¬ P o) (V.game θ F c) σ ≤
         ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
@@ -151,7 +151,7 @@ theorem executionPhaseSpotSound_of_sample (e : 𝔽 ≃ (Fin 128 → Bool)) (rd 
     (Q : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
     (I : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       (W.extend (executionPhaseSampleMaps e V rd label after κ W θ F c σ).widening).L.Ω →
-        Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
+        Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → ℕ → Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → Prop)
     (hκ : ∀ θ F W, S θ F = some W → ∀ H : (Fin nc → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ W ω)) = avg H)
     (ha : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
       prob (fun o => V.Verdict k .sampled o ∧ ¬ P o) (V.game θ F c) σ ≤

@@ -325,7 +325,7 @@ theorem innerOk_of_held {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} 
 the inner statement** (`InnerOkAt`). -/
 theorem innerOkAt_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
-    {x : Claims.Msg} (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) (hn : Names p e bs x) :
+    {x : Hash.Msg} (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) (hn : Names p e bs x) :
     InnerOkAt x := by
   intro w' hw'
   obtain ⟨h, _, hh, -⟩ := parts_of_accepts hacc
@@ -376,7 +376,7 @@ theorem partVerdict_pub {h : VStar.Recursive.InnerHeld} {j : ℕ} {po : VStar.Re
   exact ⟨pubB, hp, fits_lt hf⟩
 
 /-- `nS x` counts no more parts than `x` carries. -/
-theorem nS_le {x : Claims.Msg} {w : RecDeploy.RecX} (hx : RecDeploy.decodeX x = some w) :
+theorem nS_le {x : Hash.Msg} {w : RecDeploy.RecX} (hx : RecDeploy.decodeX x = some w) :
     RecDeploy.nS x ≤ w.parts.length := by
   unfold RecDeploy.nS
   split
@@ -526,7 +526,7 @@ theorem parts_le {bs : Core.Blobs} : ∀ (qs : List RecDeploy.PartX) (ps : List 
 
 /-- **`x` is no longer than the compiled `statementSize`** where it names the component's inputs (`Names`): every
 field `x` encodes is a file the component read or the canonical bytes of a value it read. -/
-theorem x_len_le {p : VStar.Recursive.Params} {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {x : Claims.Msg}
+theorem x_len_le {p : VStar.Recursive.Params} {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {x : Hash.Msg}
     {h : VStar.Recursive.InnerHeld} {T : ℕ} (hn : Names p e bs x)
     (hh : VStar.Recursive.innerHeld p.own e.proofs bs = .ok h) (hl2 : p.own.parts.size = e.proofs.parts.size)
     (hT : VStar.Recursive.statementSize h p.own e.proofs bs = .ok T) : x.length ≤ T := by
@@ -608,7 +608,7 @@ a statement of `2 ^ 56` bytes or more (`statementFits`, which bounds `x`: `x_len
 (`fits`). -/
 theorem pub_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
-    {x : Claims.Msg} (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) (hn : Names p e bs x)
+    {x : Hash.Msg} (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) (hn : Names p e bs x)
     {P : ℕ → ByteArray} {what : String}
     (hP : ∀ s q, e.proofs.parts[s]? = some q → bs.get q.pub what = .ok (P s)) :
     ∀ s < RecDeploy.nS x, x.length + (P s).size < 2 ^ 64 := by

@@ -431,7 +431,7 @@ def LaterClashL (sch : FlockSoundness.Accounting.Schedule) (out : Model.OutCL �
 /-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample**: `clash₀_wrK_of` at the statement's
 sample `d` and no sampled proof block, as `plain_hdecAtK_of` is `decodesTable_wrK_sc_of` there. -/
 theorem plain_clash₀AtK_of (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = false) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
@@ -475,7 +475,7 @@ theorem plain_clash₀AtK_of (keep : Bool → Bool)
 /-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample, at hidden outputs under a leaf form
 `F`**: `clash₀_wrKHLf_of` at the statement's sample `d` and no sampled proof block. -/
 theorem plain_clash₀HLfAtK_of (keep : Bool → Bool) (F : AtSample.LeafForm)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true)
@@ -522,7 +522,7 @@ theorem plain_clash₀HLfAtK_of (keep : Bool → Bool) (F : AtSample.LeafForm)
 `clash₀_wrKH_of` at the statement's sample `d` and no sampled proof block, as `plain_hdecHAtK_of` is `decodesTable_wrK_scH_of`
 there; `plain_clash₀HLfAtK_of` at `hm96`. -/
 theorem plain_clash₀HAtK_of (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true)
@@ -543,7 +543,7 @@ theorem plain_clash₀HAtK_of (keep : Bool → Bool)
 
 /-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample**: `plain_clash₀AtK_of` at
 `keep := id` and what `wrPD` writes for `o`. -/
-theorem plain_clash₀At {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_clash₀At {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = false) {d : Json} (hd : ins.read.draw = some d) (L : Layout st)
@@ -562,7 +562,7 @@ theorem plain_clash₀At {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse fa
 
 /-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample, at hidden outputs under hm96 leaves**:
 `plain_clash₀HAtK_of` at `keep := id` and what `wrPD` writes for `o`. -/
-theorem plain_clash₀HAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_clash₀HAt {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true)
@@ -623,7 +623,7 @@ theorem rawCols_plain (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {in
 (`hE`, as `plain_clash₀At` and `plain_clash₀HAt` give), where `P`'s run accepts at `plainΦ x`, the simulator's outcome
 is the run's (`plainSimRun`), `wrPD` records the run's rep streams and proof files, and those entries are the run's
 raw columns (`rawCols_plain`), so the run has a raw clash at level 0 (`PlainClashQ` at `Clash₀L`). -/
-theorem plainClashQ₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plainClashQ₀ {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
@@ -702,7 +702,7 @@ theorem plainClashQ₀ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse fals
 
 /-- **`PlainClashQ` at a property two others cover**: where `Q` implies `Q₁ ∨ Q₂` and each of those gives `P`'s
 accepting runs a raw clash, so does `Q`. -/
-theorem plainClashQ_or {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
+theorem plainClashQ_or {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
     {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs} {d : Json}
     {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8)}
     {Q₁ Q₂ : Model.OutCL 𝔽 Dig (List UInt8) → Prop} (Q : Model.OutCL 𝔽 Dig (List UInt8) → Prop)
@@ -716,7 +716,7 @@ theorem plainClashQ_or {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω :
 /-- **The live self-clash's clash past level 0**: `PlainSimClashAt` at `LaterClashL` in place of `SelfClashL`, at
 every plain statement in scope, its one table's `fast100` schedule and the plain decoders' openings, public and
 hidden under hm96 leaves. -/
-def PlainSimLaterClashAt (x : Claims.Msg) : Prop :=
+def PlainSimLaterClashAt (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (_ : tables false x = [(spec, st)]) (d : Json) (_ : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -735,7 +735,7 @@ def PlainSimLaterClashAt (x : Claims.Msg) : Prop :=
 
 /-- **The live self-clash's clash from its clash past level 0**: `SelfClashL` is `Clash₀L` or `LaterClashL`, and
 `plainClashQ₀` at `plain_clash₀At` and `plain_clash₀HAt` gives the first. -/
-theorem plainSimClashAt_of_later {x : Claims.Msg} (hl : PlainSimLaterClashAt x) : PlainSimClashAt x := by
+theorem plainSimClashAt_of_later {x : Hash.Msg} (hl : PlainSimLaterClashAt x) : PlainSimClashAt x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω _ _ P ω
   refine ⟨fun hh => ?_, fun hh hleaf => ?_⟩
   · exact plainClashQ_or _ (plainClashQ₀ hs hin hset h hd _ _ _

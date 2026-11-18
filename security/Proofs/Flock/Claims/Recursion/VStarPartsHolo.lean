@@ -125,7 +125,7 @@ theorem partCols_of_satisfies_at {st : Flock.Stmt} (L : FlockSoundness.Layout st
 
 /-- **An algebra part's copies compute its residuals at `Flock.check`, at either holo flag**
 (`partCols_of_satisfies_at` at every table). -/
-theorem partCols_of_check_at {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem partCols_of_check_at {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
     (hc : RecResiduals.check p.sts[t].c = .ok ()) {m k cl j : ℕ}
@@ -177,7 +177,7 @@ theorem recOpen_check_ok_any {c : Flock.Circuit} (h : Flock.RecOpen.check c = .o
 
 /-- **A level's copies climb at `Flock.check`, under either name** (`openOuts_of_net` at every table, the net from
 `recOpen_check_ok_any`). -/
-theorem openOuts_of_check_any {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem openOuts_of_check_any {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
     {o g u : ℕ} (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog)) (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv)
@@ -197,7 +197,7 @@ theorem openOuts_of_check_any {decode : Claims.Msg → Option Read} {x : Claims.
 /-- **R's opening parts' copies compute their residuals at `Flock.check`**: where `RecOpening.check` accepted the
 table's circuit as part `j` of R's opening at a shape it accepts, the net is `RecResiduals.unitLaid` at that part
 (`check_opening`), the algebra parts' template, so `laid_part` holds at it (`opening_small`). -/
-theorem partCols_of_check_opening {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem partCols_of_check_opening {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
     (hc : RecOpening.check p.sts[t].c = .ok ()) {m cl j : ℕ}
@@ -242,7 +242,7 @@ def SparseCopyOuts (sh : Flock.RecSparse.Shape) (v : ℕ → Bool) (wA vA : Arra
 circuit at the shape its unit's name gives, the net is `RecSparse.unitLaid sh` (`check_sparse`) at a valid shape
 (`T_LOG ≤ 16`), so a copy whose input columns hold the messages, `v` and the types (`SparseIn`) holds `laid_sparse`'s
 outputs. -/
-theorem sparseCopyOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem sparseCopyOuts_of_check {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
     (hc : Flock.RecSparse.check p.sts[t].c = .ok ()) {sh : Flock.RecSparse.Shape}
