@@ -42,8 +42,6 @@ ALLOWED: dict[str, str] = {
     "adapters/torch/verity_torch/pouw/pearl_c/served_y_device.py": "@compute-accounting",
     "adapters/vllm/verity_vllm/commit/committer/native_rows.cu": "@vllm",
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
-    "adapters/vllm/verity_vllm/pipeline/interior_links.py": "@vllm",
-    "adapters/vllm/verity_vllm/pipeline/interior_rows.py": "@vllm",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
     "verity/commitments/crypto/chacha20.py": "@proofs",
     "verity/commitments/cuda/commit_gpu/commit_gpu.cuh": "@kernels",
