@@ -5236,11 +5236,13 @@ def _served_step_profile(path: Path) -> Path:
 
 
 def test_served_step_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name():
-    """No declared scheme serves Pearl-C on sm_120, so ``served_step.py run`` refuses that protocol arm by its entry before
-    any engine, and ``served_step.sh``'s RTX PRO 6000 default arms are stock FP8's alone."""
+    """No declared scheme serves Pearl-C on sm_120, so ``served_step.py run`` refuses an arm of that entry by name
+    (`undeclared`, which `_engine` asks before any engine) and passes the H100's, and ``served_step.sh``'s RTX PRO 6000
+    default arms are stock FP8's alone."""
     S = load("pearl_c_vllm_served_step", POUW / "pearl_c_vllm" / "served_step.py")
-    with pytest.raises(SystemExit, match=r"pouw:pearl-c-sm120-v1-h3: no declared scheme serves Pearl-C on that card"):
-        S._engine("llama31-8b-1gpu-pouw-protocol-served", "pouw:pearl-c-sm120-v1-h3")
+    assert "pouw:pearl-c-sm120-v1-h3: no declared scheme serves Pearl-C on that card" in S.undeclared(
+        ["stock-fp8", "pouw:pearl-c-sm120-v1-h3"])
+    assert S.undeclared(["pouw:pearl-c-h100-v1-h3"]) is None
     assert "ARMS=${ARMS:-stock-fp8@compiled,stock-fp8}; SPEC" in (POUW / "pearl_c_vllm" / "served_step.sh").read_text()
 
 

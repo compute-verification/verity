@@ -123,18 +123,18 @@ def _patch_engine(llm) -> None:
         runner.sample_tokens = _timed(runner.sample_tokens, "sample")
 
 
-def _pearl_c(entry: str):
-    """The Pearl-C kernel row a protocol entry ``name:scheme`` names (`kernel_schemes`), else None."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import BY_NAME
-    row = BY_NAME.get(entry.partition(":")[2])
-    return row if row is not None and row.family == "pearl-c" else None
+def _pearl_c(entry: str) -> bool:
+    """Whether a protocol entry ``name:scheme`` names a Pearl-C kernel (``pouw:pearl-c-*``)."""
+    return entry.startswith("pouw:pearl-c-")
 
 
 def undeclared(entries) -> str | None:
-    """Why a protocol arm of ``entries`` can't run: the first Pearl-C entry whose kernel row names no declared scheme
-    (``scheme``), as the RTX PRO 6000's names none, which no served path serves; None when there is none."""
+    """Why a protocol arm of ``entries`` can't run: the first Pearl-C entry that isn't Pearl+'s option (`pouw.scheme`),
+    as the RTX PRO 6000's isn't, which no served path serves; None when there is none."""
+    from verity.protocols.resource_accounting.compute.pouw.scheme import OPTION
+
     for e in entries:
-        if (row := _pearl_c(e)) is not None and not row.scheme:
+        if _pearl_c(e) and e != OPTION:
             return (f"{e}: no declared scheme serves Pearl-C on that card, so no served arm runs it; its kernel's own "
                     "benchmarks (bench_arm.py, e2e.py) run it directly")
     return None

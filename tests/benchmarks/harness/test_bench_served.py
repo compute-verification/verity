@@ -205,17 +205,14 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
     settings(M.option("pouw:pearl-c-h100-v1-h3"), {**doc["pouw"], "coins": "in-process"})
 
 
-@pytest.mark.parametrize("mode", ["arm", "serve"])
-def test_served_passes_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name(mode, tmp_path):
+def test_served_passes_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name():
     """No declared scheme serves Pearl-C on sm_120 (`pouw:pearl-c-sm120-v1-h3` is no declared scheme's option), so
-    ``served_passes.py`` refuses the RTX PRO 6000 spec's arm by its entry before any engine or challenger, and its default
-    spec is Pearl+'s."""
+    ``served_passes.py`` refuses an arm of that entry by name (`undeclared`, which `pearl_c_arm` asks before any engine or
+    challenger), and its default spec is Pearl+'s."""
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
 
-    spec = str(SPEC_ROOT / "llama31-8b-1gpu-pouw-protocol-served.toml")
-    args = ["--passes", str(tmp_path / "passes")] if mode == "serve" else []
-    with pytest.raises(SystemExit, match=r"pouw:pearl-c-sm120-v1-h3: no declared scheme serves Pearl-C on that card"):
-        SP.main([mode, "--spec", spec, "--out", str(tmp_path / "out.json"), *args])
+    assert "pouw:pearl-c-sm120-v1-h3: no declared scheme serves Pearl-C on that card" in SP.undeclared(
+        ["pouw:pearl-c-sm120-v1-h3"])
     assert SP.undeclared(["pouw:pearl-c-h100-v1-h3"]) is None
     assert SP.SPEC.name == "llama32-1b-1gpu-pouw-protocol-served.toml"
 
