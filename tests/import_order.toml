@@ -851,6 +851,7 @@ loads = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/periods",
+    "verity/commitments/randomness",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/resource_accounting/network/verifier",
     "verity/runtime",
