@@ -354,7 +354,8 @@ def test_a_dropped_block_rejects(toy, tmp_path):
 
 def _fake_pouw(monkeypatch, install, scheme="ncp-v1"):
     mod = types.ModuleType("verity_vllm.protocols.fake_pouw")
-    vars(mod).update(NAME="pouw", schemes=lambda: (scheme,), refusals=lambda s, c: (), install=install)
+    vars(mod).update(NAME="pouw", schemes=lambda: (scheme,), refusals=lambda s, c: (), install=install,
+                     keeps_weight_copy=lambda s: s == "ncp-v2")
     monkeypatch.setitem(sys.modules, mod.__name__, mod)
     monkeypatch.setitem(config.PROTOCOLS, "pouw", "fake_pouw")
 
