@@ -226,6 +226,12 @@ def test_an_accept_is_the_audits_only_where_the_second_stage_held_and_complete_o
         assert reads(doc["verdict_record"])
         assert [doc["verdict_record"][k] for k in ("verdict", "proved_by", "open")] == ["not complete", None, said]
 
+    said = "the two-stage form is not yet proved: the verifier accepts it ahead of its proof"
+    doc = W.account(record_of(tmp_path / "unproved", outcome=bare | {"not_covered": said}, layout=OWN, registered=()),
+                    tree(tmp_path), kinds=ALL_LEAN, holes=CLOSED)
+    assert doc["outcome"]["not_covered"] == said and doc["verdict"]["line"].endswith(f"; {said}")
+    assert said in doc["verdict_record"]["open"] and doc["verdict"]["mark"] == E.RUN_NOT_PROVED
+
     for held in (False, None):
         doc = W.account(record_of(tmp_path / "unheld", outcome=GIVEN, held=held, layout=OWN, registered=()),
                         tree(tmp_path), kinds=ALL_LEAN, holes=CLOSED)
