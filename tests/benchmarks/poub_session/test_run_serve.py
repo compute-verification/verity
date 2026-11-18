@@ -53,6 +53,7 @@ case " $* " in
     echo "$STUB_ROW_FILE"; exit 0 ;;
   *verifier_process.py*) exec "$REAL_PY" "$STUB_DIR/verifier.py" "$@" ;;
   *"serve.py --connect"*) exec "$REAL_PY" "$STUB_DIR/prover.py" tiny "$@" ;;
+  *poub_session/prover.py*) echo "card prover ${*#*prover.py }" >> "$STUB_DIR/calls"; exit 0 ;;
 esac
 exec "$REAL_PY" "$@"
 """
@@ -443,6 +444,44 @@ def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     assert json.loads((node.out / "row/commit/remote_session.json").read_text())["accepted"] is True
 
 
+#: files a row's Commit directory holds that are private (the vLLM integration's list, the unsalted token digest of
+#: runs.jsonl, the memory map's payload digests, the Build's inputs), each holding the served tokens
+ROW_PRIVATE = ("tokens.json", "commit/tokens_p0.json", "match_stoch.json", "commit/sampled_replay_p0.json",
+               "requests.jsonl", "step_trace.jsonl", "advice_trace.jsonl", "load_0.jsonl", "topology.json",
+               "timeline.jsonl", "timeline_report.json", "replay_bundle_p0/values.json", "replay_slim_p0/keep.json",
+               "commit/runs.jsonl", "commit/memory_map.jsonl", "build_request/inputs.json", "commit/summary.json")
+SERVED_TOKENS = "[90211, 4417, 118003, 2290]"
+
+
+def test_a_row_keeps_its_public_records_and_none_of_its_private_files(node):
+    sweep = node.tmp / "sweep"
+    for rel in ROW_PRIVATE:
+        (sweep / ROW / rel).parent.mkdir(parents=True, exist_ok=True)
+        (sweep / ROW / rel).write_text(f'{{"tokens": {SERVED_TOKENS}}}\n')
+    for rel in ("stages.txt", "build_summary.json", "config_record.json", "commit/verdict.json"):
+        (sweep / ROW / rel).write_text('{"verdict": "PASS"}\n')
+    p = node.both("row", SWEEP_DIR=str(sweep))
+    assert p.returncode == 0, said(p)
+    kept = sorted(f.relative_to(node.out / "row").as_posix() for f in (node.out / "row").rglob("*") if f.is_file())
+    assert kept == sorted(["stages.txt", "build_summary.json", "config_record.json", "commit/verdict.json",
+                           "commit/remote_session.json"])
+    assert "keep.py: kept 5 of the row's public records" in p.stdout
+    held = [f for f in (node.tmp / "run").rglob("*") if f.is_file() and SERVED_TOKENS in f.read_text(errors="replace")]
+    assert held == []
+
+
+@pytest.mark.parametrize("change, why", [
+    ({"SWEEP_DIR": "{run}/out/sweep"}, "refused: SWEEP_DIR={run}/out/sweep is inside the run's directory"),
+    ({"VERIFIER_ARGS": "--challenger serve --challenger-key {run}/keys"},
+     "refused: --challenger-key {run}/keys is inside the run's directory"),
+    ({"VERIFIER_ARGS": "--challenger-key={run}/keys"}, "refused: --challenger-key {run}/keys is inside the run's directory"),
+])
+def test_a_private_store_inside_the_runs_directory_is_refused(node, change, why):
+    run = str(node.tmp / "run")
+    refused(node, node.both("row", **{k: v.format(run=run) for k, v in change.items()}), why.format(run=run))
+    assert not (node.tmp / "run" / "out" / "sweep").exists()
+
+
 # ---------------------------------------------------------------------------------------------- run.sh: the exit codes
 
 @pytest.mark.parametrize("serve_as, prover, code, line", [
@@ -554,6 +593,8 @@ def test_under_role_prover_the_windows_are_checked_only_when_the_line_states_bot
     ({"LEAN_EXE": "/no/such/verifier"}, "refused: LEAN_EXE=/no/such/verifier is not an executable"),
     ({"VLLM_PY": "/no/such/python"}, "refused: VLLM_PY=/no/such/python is not an executable"),
     ({"GPU_LEASE": "/no/such/gpu-lease"}, "refused: GPU_LEASE=/no/such/gpu-lease is not a program"),
+    ({"CODEC": "p512/k2"}, "refused: SERVE=row's Commit registers the deployed p1024/k3/masked, not CODEC=p512/k2"),
+    ({"CODEC": "p768/k2"}, "refused: CODEC=p768/k2: a card's session is built at p1024/kK/masked or p512/kK"),
 ])
 def test_a_line_that_cannot_run_is_refused_with_the_reason(node, change, why):
     refused(node, node.both("row", **change), why)
@@ -571,6 +612,28 @@ def test_kv_cu_is_built_for_the_card_the_rows_target_declares_or_the_one_stated(
     refused(node, node.both("row", KV_ARCH="h200"), "refused: KV_ARCH=h200 is no card's architecture (sm_90)")
     assert node.both("row", KV_ARCH="sm_120a").returncode == 0
     assert node.calls()[0].startswith("nvcc -O3 -arch=sm_120a ")
+
+
+@pytest.mark.parametrize("codec, defines", [
+    (None, "-DKV_FIELD=1024 -DKV_MASK=1 -DKV_FOLD6=1"),     # the deployed codec, the build it has always had
+    ("p1024/k3/masked", "-DKV_FIELD=1024 -DKV_MASK=1 -DKV_FOLD6=1"),
+    ("p512/k2", "-DKV_FIELD=512"),
+])
+def test_a_cards_session_builds_kv_cu_and_registers_at_codec(node, codec, defines):
+    program(node.bin / "nvidia-smi", '#!/bin/bash\ncase " $* " in *compute_cap*) echo 9.0 ;; esac\nexit 0\n')
+    port = str(free_port())
+    (node.stub / "busy").write_text(f"{port}\n")
+    # a card's line takes CUDA_HOME, else /usr/local/cuda-13.0, whose real nvcc a node with that toolkit would run
+    p = node.run(ROLE="prover", PORT=port, CODEC=codec, PY=str(node.ws / "venv312/bin/python"),
+                 CUDA_HOME=str(node.tmp / "cuda" / "cuda-13.0"),
+                 PROVER_CPUS=",".join(map(str, sorted(os.sched_getaffinity(0)))))
+    assert p.returncode == 0, said(p)
+    kv = "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu"
+    (nvcc,) = [c for c in node.calls() if c.startswith("nvcc ") and c.endswith(kv)]
+    assert nvcc.split(" -o ")[0].endswith(f"-Xptxas -v {defines}")
+    (prover,) = [c for c in node.calls() if c.startswith("card prover ")]
+    from verity.protocols.resource_accounting.memory.poub.verifier import codec as deployed
+    assert prover.split("--gib 16 ")[1].startswith(f"--codec {codec or deployed.DEFAULT.name}")
 
 
 def test_tiny_takes_serve_or_servedrop(node):
