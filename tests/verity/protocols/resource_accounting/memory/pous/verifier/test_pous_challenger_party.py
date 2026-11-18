@@ -389,11 +389,24 @@ def test_the_party_follows_period_json(tmp_path) -> None:
         "parties": {"memory_attester": "auditor-host", "prover": "n0", "verifier": "n0"}, "kind": "own-host",
         CS.PREMISE: f"{mc.MATCHED}: the session is signed under the key configuration {conf} pins for memory-challenger's "
                     "pous sessions; the memory attester ran on auditor-host, not the prover's n0",
-        "setup": CS.SETUP}
+        "setup": CS.SETUP, "unchecked": dict(mc.UNCHECKED)}
     assert CS.SETUP == "setup checked by the developer, not the auditor"
     assert not mc.holds(CS.placement("n0", "auditor-host", "ef" * 64, **under))
     assert not mc.holds(CS.placement("n0", "auditor-host", key, **under | {"committed": frozenset()}))
     assert CS.placement("n0", "auditor-host")[CS.PREMISE].startswith(f"{mc.UNCOMMITTED} (no configuration); ")
+
+
+def test_what_no_auditor_side_entry_checks_is_carried_by_storages_and_the_wipes_placements_and_never_holds():
+    """Storage's and the wipe's placements carry `memory_attester.UNCHECKED`, the one table, under ``unchecked``; only
+    ``trusted-device`` is read as holding, so no wording under ``unchecked`` makes a placement hold."""
+    from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party as WP
+
+    assert set(mc.UNCHECKED) == {"attester-attended-each-block", "attester-key-pinned-outside-the-case"}
+    assert all(w.startswith("not checked by any auditor-side entry: ") for w in mc.UNCHECKED.values())
+    for where in (CS.placement("n0", "auditor-host"), WP.placement("n0", "auditor-host", None)):
+        assert where["unchecked"] == dict(mc.UNCHECKED) and not mc.holds(where)
+    forged = {mc.PREMISE: mc.REHEARSAL, "unchecked": {k: "holds: " + w for k, w in mc.UNCHECKED.items()}}
+    assert not mc.holds(forged) and mc.holds(forged | {mc.PREMISE: "holds: the auditor's device"})
 
 
 class Handed(Exception):
