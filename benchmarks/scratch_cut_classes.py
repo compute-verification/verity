@@ -56,7 +56,7 @@ def same(a: dict, b: dict) -> bool:
         if set(a[k]) != set(b[k]):
             return False
         for t in a[k]:
-            (ra, wa), (rb, wb) = a[k][t], b[k][t]
+            (ra, wa), (rb, wb) = (tuple(map(np.asarray, a[k][t])), tuple(map(np.asarray, b[k][t])))
             oa, ob = np.argsort(ra, kind="stable"), np.argsort(rb, kind="stable")
             if not (np.array_equal(ra[oa], rb[ob]) and np.array_equal(wa[oa], wb[ob])):
                 return False
