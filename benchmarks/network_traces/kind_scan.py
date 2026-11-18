@@ -77,7 +77,7 @@ def under(prefix: str, table: Mapping[str, Any]) -> dict[str, Any]:
     return {f"{prefix}.{k}": v for k, v in table.items()}
 
 
-#: a Program's descriptor (``verity-ir/descriptor/v1``): the circuit, every field of it structure
+#: a Program's descriptor (``verity-ir/descriptor/v2``): the circuit, every field of it structure
 DESCRIPTOR = {"**": S}
 #: a registered value's entry (`registered_value.Registered.entry`)
 ENTRY = {"value": S, "root": M, "leaves": S, "words": S, "word_bits": S, "domain": S}

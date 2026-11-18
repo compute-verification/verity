@@ -56,7 +56,7 @@ on the requests the scan read; and each scan's ok bits must be at the roots the 
      "windows": m}
 
 each compute audit's layout terms (`free`, the free inputs it doesn't register, `#(freeInputs \ reg)`; `steps`, its
-monitoring period `k`) and its Program, the descriptor (`verity-ir/descriptor/v1`) of the window's population program,
+monitoring period `k`) and its Program, the descriptor (`verity-ir/descriptor/v2`) of the window's population program,
 which must decode (`Flock.Program.decode`) with a template in its root: the audit's proof blocks are the root's template
 instances, and each commits its template's return, the outputs it computes that other proof blocks or the client read, which
 can be wider than a proof block's 16-bit public output; each network attester connection's cell cap over the period
@@ -74,7 +74,7 @@ identifier, where one key may be listed in several sessions; a `w₀` before the
 that still name `"key"`, `"session"` or `"sessions"`, naming the entry to write), their LMS parameters, the link (at
 most 65,535 UTF-8 bytes), the period's `m ≥ 1` execution phases, the class circuit, the SHA-512 of the Program of the one
 window circuit the workload's class registers, which every tied compute audit runs (`held`); the scan's Program, its
-descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
+descriptor (`verity-ir/descriptor/v2`, `scan_zk`'s `program.json`), and the network
 attester's one fixed schedule (`network_certifier.NetworkAttesterParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
 header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a slot stride's buckets, dividing T, so each
 execution phase is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and

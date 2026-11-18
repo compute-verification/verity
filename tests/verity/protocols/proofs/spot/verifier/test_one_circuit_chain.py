@@ -55,11 +55,13 @@ def circuit() -> I.Circuit:
 
 @functools.cache
 def registered() -> dict[str, Any]:
-    """C's bytes (the wired Program's descriptor), theta, the partition, and the window binding."""
+    """C's bytes (the wired Program's descriptor), theta, the partition with its proof blocks (the window's members,
+    `interface.partition_blocks`), and the window binding."""
     win = I.Window(circuit(), TI.RUN, TI.SAMPLING_DESIGN, 2)
     program, _query = circuit().program()
     c = b"".join(descriptor_chunks(program))
-    return {"window": win, "C": c, "theta": theta().doc(), "partition": win.window.partition}
+    blocks = [[m.base, m.base + m.n] for m in win.window.members]
+    return {"window": win, "C": c, "theta": theta().doc(), "partition": {**win.window.partition, "blocks": blocks}}
 
 
 def committed(x=None) -> Any:
@@ -101,7 +103,7 @@ def python_door(member: Any, circuit_file: bytes = b"", public: bytes = b"",
         s.mkdir()
         (s / "session.json").write_text("{}")
         return PF.verify(PF.Proof(cf, pub, (s,)), program=r["C"], partition=r["partition"] if partition is None else partition,
-                         units=[(member.base, member.base + member.n)], registered=r["theta"])
+                         block=[m.base for m in r["window"].window.members].index(member.base), registered=r["theta"])
 
 
 def own_root_public(k: int) -> bytes:
@@ -184,11 +186,10 @@ def stage_not_cs() -> str:
 
 
 def stage_left_out() -> str:
-    """(c) a block left out, at the door: a partition whose blocks cover none of C's units (its query names no template
-    of C; the partition object has no blocks field of its own yet)."""
+    """(c) a block left out, at the door: a partition whose blocks leave C's last block out."""
     win, _c = committed()
     part = registered()["partition"]
-    bad = {**part, "query": {**part["query"], "params": {"templates": []}}}
+    bad = {**part, "blocks": part["blocks"][:-1]}
     _f, why = python_door(drawn(win), partition=bad)
     stopped(why)
     assert why is not None, "cheat (c): the door accepted a partition that leaves C's units out"

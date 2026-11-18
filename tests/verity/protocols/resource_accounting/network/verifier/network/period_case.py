@@ -140,7 +140,9 @@ from verity.circuits import boolean as BL, codec, population
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.defs import REGISTRY
 from verity.circuits.program import Program
-from verity.circuits.refs import array_of, coll_concat, tuple_of
+from verity.circuits import program as PG
+from verity.circuits.ops.boolean import versions as V
+from verity.circuits.refs import Coll, Explicit, array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.commitments import advice as ADV
 from verity.commitments.frame_v3 import BitRowLeaf
@@ -210,7 +212,7 @@ ROWS_KEYS = ["cell_bytes", "certificate", "direction", "domain", "format", "layo
 LAYOUT_KEYS = ["buckets", "connection_slots", "first_bucket", "slots"]
 DIGEST = re.compile("[0-9a-f]{128}")
 U32 = 1 << 32
-SCHEMA = "verity-ir/descriptor/v1"
+SCHEMA = "verity-ir/descriptor/v2"
 INPUT_ID = re.compile(r"^(?:Registered)?Input([1-9][0-9]*)_v1$")
 #: the egress bucket's parameters in the generator form (`egress.EgressBucket`)
 EGRESS_PARAMS = ("state",)
@@ -1780,6 +1782,21 @@ BYTE_BITS, U16_BITS = Array(8, BIT), Array(OUT_BITS, BIT)
 #: the scan's stand-ins' gate, a bit from two, and `N` bits from two (a byte's or a u16's)
 MIX = PrimitiveDefinition("NetworkPeriodScanMix", 2, (("a", BIT), ("b", BIT)), BIT, lambda a, b: a ^ b,
                           register=False)
+#: `LOW`'s and `MIX`'s one Boolean Definitions, which a Program's descriptor holds (`codec`'s `boolean`): the u16's low
+#: eight bits, and the Xor of the two bits
+BOOLEAN = {LOW.id: bind(CompositeDefinition("NetworkPeriodScanLowBits", 1, (), lambda S: ((("s", U16_BITS),), BYTE_BITS),
+                                            lambda B, S, s: array_of([Coll(BIT, Explicit((r,))) for r in list(s.refs)[:8]]),
+                                            register=False)),
+           MIX.id: bind(CompositeDefinition("NetworkPeriodScanMixBits", 1, (), lambda S: ((("a", BIT), ("b", BIT)), BIT),
+                                            lambda B, S, a, b: B.call(BL.xor_gate(2), BL.operands(a, b)), register=False))}
+
+
+def _boolean(p: PrimitiveDefinition):
+    """A primitive's one Boolean Definition: `BOOLEAN`'s for the stand-ins', else the catalog's."""
+    return BOOLEAN[p.id] if p.id in BOOLEAN else V.boolean_version(p)
+
+
+PG.register_boolean_bodies(_boolean)
 SPREAD = CompositeDefinition("NetworkPeriodScanSpread", 0, ("N",),
                              lambda S: ((("a", BIT), ("b", BIT)), Array(S.N, BIT)),
                              lambda B, S, a, b: B.batch(MIX, a, b, axes=(None, None), n=S.N), register=False)
