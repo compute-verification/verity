@@ -261,7 +261,6 @@
   "benchmarks/proof_throughput/job.sh": 2,
   "benchmarks/replay_ladder/run.sh": 1,
   "benchmarks/route_capture/run.sh": 1,
-  "benchmarks/served_commit/hash_prof.sh": 2,
   "benchmarks/spot_proved/cuda_dev.sh": 3,
   "benchmarks/spot_proved/node_record.sh": 1,
   "benchmarks/spot_proved/run_discover.sh": 1,
