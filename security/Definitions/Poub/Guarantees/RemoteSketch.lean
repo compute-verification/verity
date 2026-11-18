@@ -21,6 +21,8 @@ its query; per query, `2^-(8r)` that it named a block's sketch with a sector of 
 device did not obtain is uniform, and at rank `r` at most `256^(32−r)` of its values give one sketch,
 `ResourceAccounting.Guarantees.SketchRankFiber`); and `ε_ro`, the keys' distance from uniform.
 
+* `δSketch g b Q P N εrank`: the error at a fixed receipt layout, `Q/2^g + (Q + P)·(εrank + N/2^512) + (Q + P)²/2^b`,
+  `g = 8r` the guess term's bits at rank `r` and `b` the sign keys' birthday bits; real, as `SketchBound` reads it.
 * `SketchBoundRun`: at every parameter.
 * `SketchBoundDeployed`: at the deployed receipts (`poub.receipts`: 4096-byte blocks of `m = 128` sectors,
   64 sign rows under 512-bit sign keys, SHA-512 tags, `h = 512`) and rank `r = 27`, with `Q` the SHA-512 compressions
@@ -28,7 +30,7 @@ device did not obtain is uniform, and at rank `r` at most `256^(32−r)` of its 
   seed reads no block, so it can run off the node): at most `Q + P` candidate seeds and `Q` queries in all give, with
   the keys within the 512-bit sign keys' birthday `(Q + P)²/2^513` of uniform,
 
-    `δs = Q/2^216 + (Q + P)·(ε + N/2^512) + (Q + P)²/2^513`,
+    `δs = Q/2^216 + (Q + P)·(ε + N/2^512) + (Q + P)²/2^513` (`δSketch 216 513 Q P N ε`),
 
   `timing.sketch_failure(P, 64, blocks=N, queries=Q)`, the error `ledger.sketch` puts in the memory line's δ. A
   16-row session's receipts (256-bit sign keys) are `SketchBoundRun`'s at `ks = 16`, `r = 12` and
@@ -61,10 +63,21 @@ def SketchBoundRun : Prop :=
     ResourceAccounting.Assumptions.SketchHashRandom A εro → KeyBudget A qtot → Receipted A T → Present A T →
     SketchBound T (((∑ j, G j : ℕ) : ℝ) * (ε + N / 2 ^ h) + ((∑ j, qtot j : ℕ) : ℝ) / 2 ^ (8 * r) + εro)
 
+/-- **The sketch bound's error at a fixed receipt layout**, `δs = Q/2^g + (Q + P)·(εrank + N/2^512) + (Q + P)²/2^b`:
+`Q` the prover's SHA-512 compressions over the session, `P` the passes, `N` the blocks, `εrank` the signs' rank tail
+(`SketchRank`'s bound, a parameter of this error and neither the audit's error `ε` that `Verity.Scheme.GetsBack` adds
+nor a scheme's own term `Verity.Scheme.δscheme`), `g = 8r` the guess term's bits at rank `r`, and `b` the bits of the
+sign keys' birthday term. One function at two parameter sets: the deployed receipts' `δSketch 216 513` (`r = 27`,
+512-bit sign keys) and P2's `δSketch 96 257` (`r = 12`, 256-bit sign keys). It is real, as `SketchBound` reads it; a
+scheme whose term it is takes `ENNReal.ofReal` of it. -/
+noncomputable def δSketch (g b Q P N : ℕ) (εrank : ℝ) : ℝ :=
+  (Q : ℝ) / 2 ^ g + ((Q : ℝ) + P) * (εrank + N / 2 ^ 512) + ((Q : ℝ) + P) ^ 2 / 2 ^ b
+
 /-- **The sketch bound at the deployed receipts.** `SketchBoundRun` at 4096-byte blocks (`m = 128`), 64 sign rows,
 SHA-512 tags and rank `r = 27`, for a prover of `Q` SHA-512 compressions over the session (its budget, `2^80` in
 `audit.QUERIES_LOG2`, on any hardware it reaches): at most `Q + P` candidate seeds and `Q` receipt-hash queries in all,
-with SHA-512's keys at them within the 512-bit sign keys' birthday `(Q + P)²/2^513` of uniform. -/
+with SHA-512's keys at them within the 512-bit sign keys' birthday `(Q + P)²/2^513` of uniform, at
+`δSketch 216 513`. -/
 def SketchBoundDeployed : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N S L q Q : ℕ) (G qtot : Fin P → ℕ) (ε : ℝ)
     (A : Remote.Sketch.Run β Hs P N 128 512 S L q 64 G) (T : Trace (Outcome β Hs N 128)),
@@ -73,6 +86,6 @@ def SketchBoundDeployed : Prop :=
     ∑ j, G j ≤ Q + P → ∑ j, qtot j ≤ Q →
     ResourceAccounting.Assumptions.SketchHashRandom A (((Q : ℝ) + P) ^ 2 / 2 ^ 513) → KeyBudget A qtot → Receipted A T →
     Present A T →
-    SketchBound T ((Q : ℝ) / 2 ^ 216 + ((Q : ℝ) + P) * (ε + N / 2 ^ 512) + ((Q : ℝ) + P) ^ 2 / 2 ^ 513)
+    SketchBound T (δSketch 216 513 Q P N ε)
 
 end ResourceAccounting.Guarantees.Remote
