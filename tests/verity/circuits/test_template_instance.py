@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+import stand_in  # noqa: F401  (the test primitives' Boolean bodies, also when run as a script)
 from verity.circuits import codec, partition_object as PO
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.population import population_program

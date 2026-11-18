@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from test_qword_vectors import TAdd64, Dead, Max3, Step, TwiceSep, WideTwice, Wiring, _c, _canon, _top, registry as _qword_registry
+import stand_in  # noqa: F401  (the test primitives' Boolean bodies, also when run as a script)
 from verity.circuits import boolean as BL
 from verity.circuits import codec, cut, partition_object as PO
 from verity.circuits.defs import PrimitiveDefinition, DefinitionTable
