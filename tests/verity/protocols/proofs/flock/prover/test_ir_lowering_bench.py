@@ -7,12 +7,12 @@ import random
 import numpy as np
 import pytest
 
-P = pytest.importorskip("verity_vllm.definitions.registry.prims")
-from test_ir_lowering import LOWERED, REG, SLICES, _check_set  # noqa: E402
-from verity_flock import ir_lower as IL  # noqa: E402
-from verity_flock import subcircuit_templates as TM  # noqa: E402
-from verity_flock.input_sets import InputSet  # noqa: E402
-from verity_numerical.bench.generate import generate  # noqa: E402
+pytest.importorskip("verity_vllm.definitions.registry")
+from test_ir_lowering import LOWERED, REG, SLICES, _check_set
+from verity_flock import ir_lower as IL
+from verity_flock import subcircuit_templates as TM
+from verity_flock.input_sets import InputSet
+from verity_numerical.bench.generate import generate
 
 INGRESS = {"MODEL": "m", "LP": 3, "V": 1000}
 

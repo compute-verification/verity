@@ -134,15 +134,14 @@ SECONDS: dict[str, float] = {
     "regression/test_attempt_resolution.py": 21,
     "program/test_fp8_block_dot.py": 21,
     "check/test_capture_map_dsv4.py": 20,
-    "protocols/test_pouw_native.py": 20,
 }
 #: what each part's job runs, from the repository's root; {k}/{n} names the part and {opts} the suites.py options. A part that
 #: lists nothing stops the job: suites.py with no modules would run the whole suite
 JOB = ("uv sync -q --all-packages --extra torch-cpu && P=$(python3 adapters/vllm/tools/suite_parts.py {k}/{n})"
        " && test -n \"$P\" && uv run tools/check/suites.py verity-vllm"
        " --jobs \"$(nproc)\" --logs \"$OUT/logs\"{opts} -- $P")
-#: the memory each part's job asks for: 4 CPUs' workers at the suite's worker_gb
-JOB_MEM_GB = 32
+#: the memory each part's job asks for: 4 CPUs' workers, one at the suite's worker_gb and the rest at its typical_worker_gb
+JOB_MEM_GB = 38
 
 
 def _skipped(name: str) -> bool:

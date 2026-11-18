@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R, verifier as V
 
@@ -191,9 +192,9 @@ def test_r7_reads_each_values_first_registration():
 
     stream._append(stream._registration(first, 0))
     for i in range(1, 24):
-        stream._append(stream._registration(at(SERVED["row"] + i, R.digest(stream._log[-1]),
+        stream._append(stream._registration(at(SERVED["row"] + i, DD.digest(stream._log[-1]),
                                                 reg.entry() if i % 3 else None), i))
-    last = R.digest(stream._log[-1])
+    last = DD.digest(stream._log[-1])
     row = SERVED["row"] + 24
     for cand, registered, codes in (
             (at(row, last, reg.entry()), {"W": 2}, ()),

@@ -63,6 +63,8 @@ alone and is refused while it is held, down or starts no run (`closed`).
 """
 from __future__ import annotations
 
+import ast
+import importlib.util
 import json
 import math
 import re
@@ -149,6 +151,57 @@ def lean_pool(command: list[str], env: list[str] = ()) -> str | None:
     if changed or (any(w.endswith("lean/check.py") for w in words) and "--build" in opts):
         return named.get("LEAN_SLOT_POOL") or "audit"
     return None
+
+
+#: the Lean tool's figures and their rules (`reserve.floor`, `reserve.ask`), loaded by path from the shipped tree, and the line
+#: its records run prints below its floor (`check.py`'s BELOW_FLOOR_RUN), read as data: check.py itself loads far more
+LEAN_RESERVE_PY, LEAN_CHECK_PY = Path("tools/verity/lean/reserve.py"), Path("tools/verity/lean/check.py")
+#: what of a package's manifest makes its build heavy (`check.py`'s HEAVY_DEPS), and the Lean tool's fixtures, which hold
+#: locks of no package (`lean_audit.packages`)
+HEAVY_DEPS = frozenset({"mathlib", "Arklib"})
+LEAN_FIXTURES = ("tools/verity/lean/", "tests/tools/verity/lean/")
+
+
+def below_floor(source: Path, command: list[str], env: list[str], mem_gb: float) -> str | None:
+    """Why a records run (`lean_changed.py --records PKG`) asking ``mem_gb`` GB is refused at launch, or None: the node
+    refuses it below the floor of the build of each package it audits (`reserve.floor`), and the launch knows only PKG's,
+    by its manifest in ``source``; a `VERITY_LEAN_MEM_FLOOR_GIB` of ``env`` or the command sets another, as on the node."""
+    words = [x for w in map(str, command) for x in (shlex.split(w) if " " in w else [w])]
+    at = next((i for i, w in enumerate(words) if Path(w).name == "lean_changed.py"), None)
+    if at is None or "--records" not in words[at:-1]:
+        return None
+    name = words[words.index("--records", at) + 1].rstrip("/")
+    listed = subprocess.run([GIT, "-C", str(source), "ls-files", "--", "*/lean-audit.json"], capture_output=True, text=True)
+    pkgs = sorted(f.rsplit("/", 1)[0] for f in listed.stdout.splitlines() if not f.startswith(LEAN_FIXTURES))
+    match = [p for p in pkgs if p == name] or [p for p in pkgs if _lake_name(source / p) == name] or [p for p in pkgs if name in p]
+    if len(match) != 1 or not (source / LEAN_RESERVE_PY).is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("auto_lean_reserve", source / LEAN_RESERVE_PY)
+    reserve = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reserve)
+    manifest = source / match[0] / "lake-manifest.json"
+    pins = {p.get("name") for p in json.loads(manifest.read_text()).get("packages", [])} & HEAVY_DEPS if manifest.is_file() else set()
+    named = dict(kv.split("=", 1) for kv in (*env, *words) if "=" in kv and not kv.startswith("-"))
+    floor = named.get("VERITY_LEAN_MEM_FLOOR_GIB", str(reserve.floor("build", pins)))
+    if not re.fullmatch(r"[0-9]+(\.[0-9]*)?", floor):
+        return f"VERITY_LEAN_MEM_FLOOR_GIB={floor!r} is no number of GiB: set it to one (0 for none), or unset it for the package's floor"
+    floor = float(floor)
+    if floor <= 0 or reserve.gib(mem_gb) >= floor:
+        return None
+    gb = reserve.ask({match[0]: pins}, ("build",))[0]
+    tree = ast.parse((source / LEAN_CHECK_PY).read_text())
+    run = next((n.value.value for n in tree.body if isinstance(n, ast.Assign)
+                and any(getattr(t, "id", None) == "BELOW_FLOOR_RUN" for t in n.targets)), None)
+    if not isinstance(run, str):
+        return None
+    run = run.format(gb=gb, pkg=name) + " --update" * ("--update" in words[at:])
+    return (f"the build of {match[0]} needs at least {floor:g} GiB, and --mem-gb {mem_gb:g} is {reserve.gib(mem_gb):.1f} GiB, "
+            f"so its node would refuse it once it took a slot: run it where it asks {gb} GB,\n  {run}")
+
+
+def _lake_name(pkg: Path) -> str | None:
+    lakefile = pkg / "lakefile.toml"
+    return tomllib.loads(lakefile.read_text()).get("name") if lakefile.is_file() else None
 
 
 class Unplaceable(Exception):
@@ -450,7 +503,9 @@ def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = 
         except Exception as e:                                       # not listed, not this project's, no source: never chosen
             return str(e) or type(e).__name__
         if r.returncode:
-            err = r.stderr.decode(errors="replace").strip().splitlines()
+            from .remote import name_addresses
+
+            err = name_addresses(r.stderr.decode(errors="replace"), machine=name).strip().splitlines()
             if r.returncode == 255 and err and err[-1].startswith("ssh: connect to host "):
                 return f"{NO_SSH} ({err[-1].rsplit(': ', 1)[-1]})"
             return f"exit {r.returncode}: {err[-1] if err else 'no output'}"

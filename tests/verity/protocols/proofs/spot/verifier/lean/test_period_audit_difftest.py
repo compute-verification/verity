@@ -52,6 +52,7 @@ from test_period_difftest import (CIRCUIT, DAY, ELSEWHERE, LABEL, LANE, OTHER, S
 
 import verity_difftest as D
 from verity_difftest import protocol as PR
+from verity.commitments import docket_digest as DD
 from verity.commitments.crypto import lms
 from verity.commitments.identity import canonical_json_text
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as T
@@ -290,7 +291,7 @@ def check(j: Any, inner=stand_in) -> Any:
         record = k["registration"]
         if not isinstance(record, dict):
             return _reject("evidence", f"session {sid}: registration: the registration record is not an object")
-        got = R.digest(record)
+        got = DD.digest(record)
         if got != want:
             return _reject("evidence", f"session {sid}: the case is of registration {got[:16]}, and the session's log "
                                        f"shows registration {want[:16]}")
@@ -395,7 +396,7 @@ class Week:
         cases = []
         for rec, family in zip(recs, families):
             record = records[family]
-            digest = bytes.fromhex(R.digest(rec))
+            digest = bytes.fromhex(DD.digest(rec))
             coins = T.ChallengerCoins(record)
             if record.roots:
                 # the family's second commitment, which the client refuses to write and the challenger takes
@@ -425,7 +426,7 @@ class Week:
                 self.blobs.append(public)
             cases.append({"evidence": e, "public": _sha(public), "registration": rec})
         if name == "twice":
-            logged(LABEL, lambda: records[LABEL].record(bytes.fromhex(R.digest(recs[0]))))
+            logged(LABEL, lambda: records[LABEL].record(bytes.fromhex(DD.digest(recs[0]))))
 
         hellos = ["x"] * rng.choice([0, 0, 1])
         chain = Ch.log_chain(lines)
@@ -691,7 +692,7 @@ def test_three_windows_pass_and_each_audit_is_handed_the_records_before_it(piece
     assert [x["session"] for x in published["windows"]] == sids
     assert [[a["published"]["bound"] for a in x["audits"]] for x in published["windows"]] == [[0], [1], [2]]
     assert [x["audits"][0]["registration"] for x in published["windows"]] == [
-        R.digest(ev["audits"][0]["registration"]) for ev in w.windows]
+        DD.digest(ev["audits"][0]["registration"]) for ev in w.windows]
     assert published["others"] == [{"registration": ELSEWHERE, "session": other}]
     assert (published["lane"], published["registration"], published["start"], published["stop"]) == (
         LANE, CIRCUIT, START, STOP)
@@ -782,7 +783,7 @@ def test_a_second_commitment_in_a_family_of_its_own_refuses_the_period(pieces, n
     commitment read by nothing (by reading such a check, which is not run here)."""
     w, sid, j = _one_window(name, name)
     shown = _shown(j["evidence"]["windows"][0]["session"])
-    audited = R.digest(w.windows[0]["audits"][0]["registration"])
+    audited = DD.digest(w.windows[0]["audits"][0]["registration"])
     assert shown[LABEL] == {audited} and len(shown[SECOND]) == 1 and shown[SECOND] != shown[LABEL], shown
     want = {"reason": f"members: session {sid}'s log shows 2 registrations: {ONE_MEMBER}", "verdict": "reject"}
     assert check(j) == want
@@ -814,7 +815,7 @@ def test_one_stage_v2_itself_refuses_a_root_in_another_family_than_its_own(piece
 
     w, sid, j = _one_window(name, name, real=True)
     shown = _shown(j["evidence"]["windows"][0]["session"])
-    digest = R.digest(w.windows[0]["audits"][0]["registration"])
+    digest = DD.digest(w.windows[0]["audits"][0]["registration"])
     root = w.b.sessions[sid]["root"]
     assert shown == ({LABEL: {root, digest}} if name == "root-in-family" else {WINDOW: {root}, SECOND: {digest}})
     want = check(j, _asks(one_stage_v2))
@@ -841,7 +842,7 @@ def test_one_stage_v2_itself_answers_each_case(pieces, one_stage_v2, period):
     b.period_close("p", 2 * 3600)
     b.reserve(OTHER, 7 * DAY, SALT)
     j = w.request()
-    digest = R.digest(w.windows[0]["audits"][0]["registration"])
+    digest = DD.digest(w.windows[0]["audits"][0]["registration"])
     want = check(j, inner)
     assert want == {"reason": f"audit: session {sid}, registration {digest[:16]}: {NO_SESSIONS}", "verdict": "reject"}
     kind, text = pieces.call("period_check", j)

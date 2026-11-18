@@ -26,9 +26,9 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity_torch.pouw.pearl_c import ends as ENDS
 from verity_torch.pouw.pearl_c import host as PH
 from verity_torch.pouw.pearl_c import served_y_device as SYD
@@ -520,13 +520,13 @@ def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_th
 
 
 def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(device_run, tmp_path):
-    """The call runs as vLLM runs it, under inference mode, so its shape's buffers are inference tensors; the retained pass
-    begins outside it (execution phase 's verify pass failed there)."""
+    """The call runs as vLLM runs it, under inference mode, and its shape's buffers are still normal tensors; the retained
+    pass begins outside it (execution phase 's verify pass failed there)."""
     make, kernel, weights, *_ = device_run
     run = make()
     with torch.inference_mode():
         run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
-    assert all(t.is_inference() for sh in run.shapes.values() for t in sh.b.values())
+    assert not any(t.is_inference() for sh in run.shapes.values() for t in sh.b.values())
     run.end()
     run.begin(retain=str(tmp_path))
     assert bool((run.leaves == 0xA5).all()) and all(bool((t == 0xA5).all()) for sh in run.shapes.values() for t in sh.b.values())
@@ -547,6 +547,27 @@ def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
     assert all(r["commitment_repeats"] and not r["omitted_leaves_rejected"] and not r["ok"] for r in calls)
     (check,) = [r for r in rows if r["check"] == "screen"]
     assert check["ok"] and check["flags_equal"] and check["screen"] == "torch"
+
+
+def test_the_whole_retained_check_names_the_first_call_and_field_that_differ(tmp_path):
+    """`retained_differences`: two retained passes the same but for one call's A tree names that call, its matmul and
+    its entry's differing field, and the one file on disk; two passes the same are ok."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
+    mms = [Matmul(i, Shape(16, 2048, 3072), 7 + i) for i in range(3)]
+    files = [{"rows": {"path": f"calls/{i}.rows.bf16", "bytes": 4}, "tree": {"path": f"calls/{i}.tree", "bytes": 8, "sha256": "a"}}
+             for i in range(3)]
+    moved = [*files[:1], {**files[1], "tree": {**files[1]["tree"], "sha256": "b"}}, *files[2:]]
+    dirs = [tmp_path / "eager", tmp_path / "replayed"]
+    for d, tree in zip(dirs, (b"x", b"y"), strict=True):
+        (d / "calls").mkdir(parents=True)
+        (d / "calls" / "1.tree").write_bytes(tree)
+    want, got = ([None] * 3, files, {"tiles": 3}, mms), ([None] * 3, moved, {"tiles": 3}, mms)
+    assert E2E.retained_differences(want, got, dirs) == {
+        "ok": False, "disk": {"differ": 1, "first": ["calls/1.tree"]},
+        "call_files": {"calls": [3, 3], "first": 1, "matmul": {"index": 1, "shape": [16, 2048, 3072], "weight": 8},
+                       "fields": ["tree.sha256"]}}
+    assert E2E.retained_differences(want, want, [dirs[0], dirs[0]]) == {"ok": True}
 
 
 # ---- one pass per engine step, through Pearl+ attached by name (`pouw.scheme.Attached`) ---------------------------------
@@ -1619,6 +1640,7 @@ def _uncredited_case(tmp_path: Path, monkeypatch, capsys):
     return doc, test, VR.load(path, coins), out, run
 
 
+@pytest.mark.slow
 def test_an_accepted_run_verdict_says_where_its_macs_went_uncredited_and_served_passes_recomputes_it(tmp_path, monkeypatch, capsys):
     """An accepted verdict that credits carries `uncredited_calls` in its document (not in its answer); a test instance's
     credits nothing and carries none.  ``served_passes.py uncredited`` recomputes it from the passes in DIR, found by the
@@ -1650,6 +1672,7 @@ def test_an_accepted_run_verdict_says_where_its_macs_went_uncredited_and_served_
     assert rc == 1 and "no pass in" in said and not out.exists()
 
 
+@pytest.mark.slow
 def test_served_passes_uncredited_reads_the_grid_form_of_a_fixed_load_run(tmp_path, monkeypatch, capsys):
     """A run held to its class's fixed load (`verify_run.grid_work`) publishes the passes' whole MACs (the checked MACs
     and the excluded and voluntary cells') and their credit less the give-up padded up to the execution phase grid.
@@ -1695,6 +1718,7 @@ def _replay_every_tile(p) -> dict[int, str]:
     return {tid: reason for _, tid, ok, reason, *_ in got if not ok}
 
 
+@pytest.mark.slow
 def test_a_salt_dead_element_puts_its_row_over_the_inert_bound(tmp_path, monkeypatch):
     """P3's forming term in the tile rule (`pearl_c_inert_work.inert_elements`): credited row 9 holds one entry 300 times its
     RMS, which keeps the per-row rules and is salt-dead, inert work of fs·|cols|/n = 64 over the row's bound of 41 at
@@ -1707,6 +1731,7 @@ def test_a_salt_dead_element_puts_its_row_over_the_inert_bound(tmp_path, monkeyp
     assert _replay_every_tile(p) == {}
 
 
+@pytest.mark.slow
 def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile_then_passes(tmp_path):
     """V-EX's remedy on a retained pass before its sampling coin: under the h100 record's zero key a credited row is over its
     own cap (`proved_pass`), so the verifier rejects its tile.  `volunteer_pass` finds the same tiles from the words' counts,
@@ -1735,6 +1760,7 @@ def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile
     assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
 
 
+@pytest.mark.slow
 def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_inert_bound(tmp_path, capsys):
     """The pipelines give the rows over a debit cap up before the coin exactly where ``served_passes.py volunteer-needed``
     says yes, so it says yes exactly where the verdict they call rejects a run on a sampled tile with a credited row over its
@@ -1837,6 +1863,7 @@ def test_volunteer_pass_on_the_device_counts_every_tile_as_the_replay_and_gives_
     assert (cpu["voluntary_a"], cpu["voluntary_b"]) == (out["voluntary_a"], out["voluntary_b"])
 
 
+@pytest.mark.slow
 def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex_or_its_published_root(tmp_path):
     """A pass whose rows over a cap are given up (`volunteer_pass`) is accepted by the run's verdict, which credits no cell
     of a given-up A row's band of 64 rows or a given-up B row's block of 64 columns.  More given-up rows than V-EX allows (⌈m/64⌉ of a call's A), or records changed after the
@@ -1892,6 +1919,7 @@ def window_record(*paths: Path, version: int = 2) -> dict:
                            {"value": "input-ids/0", "root": "00", "leaves": 1, "words": 1, "domain": "00"}]}
 
 
+@pytest.mark.slow
 def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_weights_b_root_and_domain(tmp_path):
     """``served_passes.py verify --tie W`` accepts a run whose execution phase record registers each call's A rows and y at the roots
     the verdict credits, under the domains it recomputes from the salt and the call's index, and each weight's B rows at
@@ -1907,8 +1935,8 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
     coins, w, man = published(path), window_record(path), json.loads(path.read_text())
     (wfile := tmp_path / "w.json").write_text(json.dumps(w))
     rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json", "--manifest", str(path), "--tie", str(wfile))
-    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 6}, doc["line"]
-    assert f"tied to W {REG.digest(w)[:16]} on its 6 tables" in doc["line"] and doc["tie_record"] == str(wfile)
+    assert rc == 0 and answer["public"]["tie"] == {"record": DD.digest(w), "tables": 6}, doc["line"]
+    assert f"tied to W {DD.digest(w)[:16]} on its 6 tables" in doc["line"] and doc["tie_record"] == str(wfile)
     salt, (u0, u1) = bytes.fromhex(man["salt"]), man["matmuls"]
     b0, b1 = (next(e for e in w["registered"] if e["value"] == f"pearl-b/{x}") for x in (0, 1))
     n1 = b1["leaves"]
@@ -1950,7 +1978,7 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
     (lfile := tmp_path / "legacy.json").write_text(json.dumps(legacy))
     rc, doc, answer = served_verify(path.parent, tmp_path / "legacy-verify.json", "--manifest", str(path), "--tie", str(lfile))
     assert rc != 0 and answer["verdict"] == "reject" and VR.UNTIED_WEIGHTS in answer["reason"], doc["line"]
-    untied = {"record": REG.digest(old), "tables": 4, "weights": VR.WEIGHTS_UNTIED}
+    untied = {"record": DD.digest(old), "tables": 4, "weights": VR.WEIGHTS_UNTIED}
     r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=old, test_instance=True)
     assert r["answer"]["verdict"] == "accept" and r["answer"]["public"]["tie"] == untied, r["line"]
     (ofile := tmp_path / "v1.json").write_text(json.dumps(old))
@@ -1959,6 +1987,7 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
     assert f"on its 4 tables, {VR.WEIGHTS_UNTIED}" in doc["line"]
 
 
+@pytest.mark.slow
 def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_credits_them(tmp_path):
     """``retain --window-record W`` on a serve of a warm-up pass, a pass without calls and two timed passes: it drops the
     warm-up's round 0, retains rounds 1 and 2 (places among served.json's passes with calls), and writes W over those two
@@ -1993,9 +2022,9 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     first.write_text(json.dumps({"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "registered": [], "previous": None}))
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(chained), "--previous-record", str(first)]) == 0
     wc = json.loads(chained.read_text())
-    assert w["previous"] is None and wc == {**w, "previous": REG.digest(json.loads(first.read_text()))}
-    assert VR.tie(wc, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": REG.digest(wc), "tables": 10}
-    assert REG.digest(wc) != REG.digest(w)
+    assert w["previous"] is None and wc == {**w, "previous": DD.digest(json.loads(first.read_text()))}
+    assert VR.tie(wc, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": DD.digest(wc), "tables": 10}
+    assert DD.digest(wc) != DD.digest(w)
     with pytest.raises(SystemExit):
         SP.main(["retain", "--passes", str(d), "--previous-record", str(first)])
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(tmp_path / "none.json"),
@@ -2006,19 +2035,20 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
                     "--day-declaration", str(declared)]) == 0
     wn = json.loads(named.read_text())
     assert wn == {**wc, "window": {**wc["window"], "day": 3, "declaration": "5d" * 64}}
-    assert VR.tie(wn, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": REG.digest(wn), "tables": 10}
+    assert VR.tie(wn, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": DD.digest(wn), "tables": 10}
     with pytest.raises(SystemExit):
         SP.main(["retain", "--passes", str(d), "--day-declaration", str(declared)])
     declared.write_text(json.dumps({"day": 3}))
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(tmp_path / "none.json"),
                     "--day-declaration", str(declared)]) == 1 and not (tmp_path / "none.json").exists()
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
-    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 10}, doc["line"]
+    assert rc == 0 and answer["public"]["tie"] == {"record": DD.digest(w), "tables": 10}, doc["line"]
     assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["timed"]["passes"]) == ([1, 2], [0], 2)
     before = wfile.read_text()
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 1 and wfile.read_text() == before
 
 
+@pytest.mark.slow
 def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_an_inert_bound_and_refuses_an_unretained_serve(tmp_path):
     """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
     each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
@@ -2078,6 +2108,7 @@ def test_served_passes_volunteer_on_the_device_gives_up_the_cpus_rows_and_names_
         assert doc["passes"][0]["device"]["replayed"] == doc["device"]["replayed"]
 
 
+@pytest.mark.slow
 def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_and_refuses_a_retention_after_it(tmp_path):
     """``retain`` drops passes before the coin (one ``--drop``, and with ``--volunteer`` each pass that step didn't finish or
     left over a cap): ``verify`` then reads the retained passes alone, each at its round, credits only them, and records
@@ -2120,6 +2151,7 @@ def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_a
     assert json.loads((d / SP.COIN).read_text()) == coin
 
 
+@pytest.mark.slow
 def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     """V-EX's give-up is the prover's before the coin: a pass whose records change after the verifier recorded its coin
     (`volunteer_pass` run past ``served_passes.py volunteer``'s refusal) is another run, and the verdict refuses it
@@ -2135,6 +2167,7 @@ def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     assert VR.verify_passes([path], 3, 1, "test", coins, test_instance=True)["answer"]["verdict"] == "accept"
 
 
+@pytest.mark.slow
 def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_draw_again(tmp_path):
     """``verify_passes``' ``draw(C, asking)``: its source is the sample's coin on the run's commitment C, recorded (v2) with
     the sample before any replay and reused by a later verdict without sampling; a sample that fails before it asks rejects
@@ -2309,6 +2342,7 @@ def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_
         assert asked == (["ledger", "reserve", "ledger"] if case == "raced" else ["ledger"]), case
 
 
+@pytest.mark.slow
 def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes_over_the_dropped_rounds(tmp_path):
     """With round 0 dropped before the coin, W over both rounds ties the retained pass at its round 1, its dropped round's
     entries crediting nothing; without the drop those entries are a call the run doesn't hold, and the pass at round 0
@@ -2359,7 +2393,7 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path, monkeypatch):
 
     r = run([a, b], window_class=cls)
     assert r["answer"]["verdict"] == "accept", r["line"]
-    assert r["answer"]["public"]["tie"] == {"record": REG.digest(w), "tables": 10, "load": [2, 8, 2]} == r["tie"]
+    assert r["answer"]["public"]["tie"] == {"record": DD.digest(w), "tables": 10, "load": [2, 8, 2]} == r["tie"]
     assert "on its 10 tables, at its class's fixed load (2, 8, 2)" in r["line"]
     # held to the class, the work is in the grid form and the exact credit is the profile's; a test instance's credits 0
     passes = [VR.load(x, coins) for x in (a, b)]
@@ -2502,6 +2536,7 @@ def test_a_class_held_runs_work_is_its_structural_credit_less_the_give_up_on_the
     assert whole_record == PW.UnitRecord(Matmul(0, Shape(128, 2048, 2048), 0), 100, 2048)
 
 
+@pytest.mark.slow
 def test_a_tie_refuses_two_passes_that_commit_one_weight_under_two_roots(tmp_path):
     """W registers each weight's B rows once, so a tie over passes whose execution phases commit weight 0 under two roots (other
     weights, seed 12) has no one entry to hold them to.  `verify_passes` never gets here (one salt is one weights root,
@@ -2621,7 +2656,7 @@ def test_the_version_2_tie_holds_a_run_of_the_run_of_records_size_to_its_64_weig
     passes = [VR.load(p, coins) for p in paths]
     assert sum(len(p.records) for p in passes) == 256 and all(len(p.epoch.workload.weights()) == 64 for p in passes)
     tied, seconds = timed(lambda: VR.tie(w, passes))
-    assert tied == {"record": REG.digest(w), "tables": 576}
+    assert tied == {"record": DD.digest(w), "tables": 576}
     want = VR.tie_entries(passes)
     assert list(want) == names
     for x in range(64):
@@ -2929,6 +2964,7 @@ def test_a_retained_pass_salted_by_a_live_session_restarts_only_under_that_sessi
         PPD.manifest_epoch(early, c)
 
 
+@pytest.mark.slow
 def test_a_runs_coins_file_is_a_live_sessions_commitment_or_an_in_process_challengers(tmp_path):
     """`verify_run.epoch_coins`, the coins file every step of a served run reads (``served_passes.py volunteer`` and
     ``verify``, ``verify_run.py --coins``, ``volunteer_pass.py --coins``): a live session's commitment when its scheme is
@@ -5032,9 +5068,8 @@ def test_served_step_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name():
     (`undeclared`, which `_engine` asks before any engine) and passes the H100's, and ``served_step.sh``'s RTX PRO 6000
     default arms are stock FP8's alone."""
     S = load("pearl_c_vllm_served_step", POUW / "pearl_c_vllm" / "served_step.py")
-    assert "pouw:pearl-c-sm120-v1-h3: no declared scheme serves Pearl-C on that card" in S.undeclared(
-        ["stock-fp8", "pouw:pearl-c-sm120-v1-h3"])
-    assert S.undeclared(["pouw:pearl-c-h100-v1-h3"]) is None
+    assert S.undeclared(["pouw:pearl-c-sm120-v1-h3"]).startswith("pouw:pearl-c-sm120-v1-h3 is no declared scheme's name")
+    assert S.undeclared(["pearl-plus"]) is None
     assert "ARMS=${ARMS:-stock-fp8@compiled,stock-fp8}; SPEC" in (POUW / "pearl_c_vllm" / "served_step.sh").read_text()
 
 
