@@ -126,34 +126,10 @@ private theorem readsK_same {β : Type} (ctx : String) {e e' : Json} (h : Same e
 
 /-! ## One port -/
 
-/-- `portsOf`'s reading of a tree port's `tree` object `tj`, after its reads. -/
-private def treeOf (name : String) (reads : Array (Option Nat)) (tj : Json) : V (Option (String × String)) := do
-  let ctx := "registered reads"
-  if !Registered.keysIn tj ["template", "field"] || !reads.isEmpty then
-    throw s!"{ctx}: port {name}: a tree port's {Registered.TREE_KEY} is {"{"}template, field{"}"} and its reads are empty: the verifier's program gives them"
-  pure (some (← J.str tj "template" "registered reads", ← J.str tj "field" "registered reads"))
-
-/-- `portsOf`'s reading of a port's `tree`, of its entry `e`. -/
-private def treeK (name : String) (e : Json) (reads : Array (Option Nat)) : V (Option (String × String)) :=
-  if !J.has e Registered.TREE_KEY then pure none else
-    J.get e Registered.TREE_KEY "registered reads" >>= treeOf name reads
-
-private theorem treeK_same (name : String) {e e' : Json} (h : Same e e') (reads : Array (Option Nat)) :
-    treeK name e reads = treeK name e' reads := by
-  unfold treeK
-  rw [has_same h]
-  rcases get_same h Registered.TREE_KEY "registered reads" with ⟨x, e₁, e₂⟩ | ⟨a, b, e₁, e₂, hs⟩
-  · rw [e₁, e₂]
-  · rw [e₁, e₂]
-    have hab : treeOf name reads a = treeOf name reads b := by
-      unfold treeOf
-      rw [keysIn_same hs, str_same hs, str_same hs]
-    exact congrArg (fun x => if (!J.has e' Registered.TREE_KEY) = true then pure none else x) hab
-
 /-- `portsOf`'s reading of one port, with each read of the port's entry an argument. -/
 private def portV (v1 : Bool) (name : String) (kin : Bool) (has : String → Bool) (nat : String → V Nat)
-    (str : String → V String) (rds : (Array (Option Nat) → V Registered.Port) → V Registered.Port)
-    (tr : Array (Option Nat) → V (Option (String × String))) : V Registered.Port := do
+    (str : String → V String) (get : String → V Json)
+    (rds : (Array (Option Nat) → V Registered.Port) → V Registered.Port) : V Registered.Port := do
   let ctx := "registered reads"
   if v1 && !kin then
     throw s!"{ctx}: port {name}: a {Registered.FORMAT} port holds keys of {Registered.PORT_KEYS} and no other"
@@ -176,14 +152,18 @@ private def portV (v1 : Bool) (name : String) (kin : Bool) (has : String → Boo
   if schema != HmRow.ROW_SCHEMA && words.isNone then
     throw s!"{ctx}: port {name}: a {schema} row is a bit row of its words' bits, and the port names no words"
   rds fun reads => do
-    let tree ← tr reads
+    let tree ← if !has Registered.TREE_KEY then pure none else do
+      let tj ← get Registered.TREE_KEY
+      if !Registered.keysIn tj ["template", "field"] || !reads.isEmpty then
+        throw s!"{ctx}: port {name}: a tree port's {Registered.TREE_KEY} is {"{"}template, field{"}"} and its reads are empty: the verifier's program gives them"
+      pure (some (← J.str tj "template" ctx, ← J.str tj "field" ctx))
     return { name, value := ← str "value", root, leaves, words, wordBits, domain, readsRel := reads, schema,
              readsFrom, tree }
 
 /-- One port's reading, of its name and its entry. -/
 private def portE (v1 : Bool) (p : String × Json) : V Registered.Port :=
   portV v1 p.1 (Registered.keysIn p.2 Registered.PORT_KEYS) (J.has p.2) (fun k => J.nat p.2 k "registered reads")
-    (fun k => J.str p.2 k "registered reads") (readsK "registered reads" p.2) (treeK p.1 p.2)
+    (fun k => J.str p.2 k "registered reads") (fun k => J.get p.2 k "registered reads") (readsK "registered reads" p.2)
 
 private theorem portE_same (v1 : Bool) (name : String) {e e' : Json} (h : Same e e') :
     portE v1 (name, e) = portE v1 (name, e') := by
@@ -194,12 +174,15 @@ private theorem portE_same (v1 : Bool) (name : String) {e e' : Json} (h : Same e
     funext fun k => str_same h k _
   have h4 : readsK (β := Registered.Port) "registered reads" e = readsK "registered reads" e' :=
     funext fun k => readsK_same _ h k
-  have h5 : treeK name e = treeK name e' := funext (treeK_same name h)
   show portV v1 name (Registered.keysIn e Registered.PORT_KEYS) (J.has e) (fun k => J.nat e k "registered reads")
-      (fun k => J.str e k "registered reads") (readsK "registered reads" e) (treeK name e) =
+      (fun k => J.str e k "registered reads") (fun k => J.get e k "registered reads") (readsK "registered reads" e) =
     portV v1 name (Registered.keysIn e' Registered.PORT_KEYS) (J.has e') (fun k => J.nat e' k "registered reads")
-      (fun k => J.str e' k "registered reads") (readsK "registered reads" e') (treeK name e')
-  rw [keysIn_same h, h1, h2, h3, h4, h5]
+      (fun k => J.str e' k "registered reads") (fun k => J.get e' k "registered reads") (readsK "registered reads" e')
+  rw [keysIn_same h, h1, h2, h3, h4]
+  unfold portV
+  rcases get_same h Registered.TREE_KEY "registered reads" with ⟨x, e₁, e₂⟩ | ⟨a, b, e₁, e₂, hs⟩
+  · simp only [e₁, e₂]
+  · simp only [e₁, e₂, bind, Except.bind, keysIn_same hs, str_same hs]
 
 /-! ## The file's ports -/
 
