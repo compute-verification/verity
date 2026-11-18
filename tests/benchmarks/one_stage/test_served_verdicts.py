@@ -8408,3 +8408,30 @@ def test_every_piece_the_launcher_names_to_pieces_is_one_the_parser_takes(tmp_pa
             S.main(["pieces", "--serve-run", str(tmp_path), "--window", "0", "--out", str(tmp_path / "out"),
                     f"--{flag}", word])
         assert got.value.args[0 if flag == "only" else 1] == [word], (flag, word)
+
+
+@pytest.mark.parametrize("value", [None, "", "0", "1", "yes", " 1", "1 "])
+def test_the_shells_hold_and_the_one_python_reader_agree_on_every_value(value):
+    """placement.sh's `hold_placement`, which served_verdicts.sh and served_composite.sh source, run as the shell runs it,
+    holds exactly where `verity_cli.settings.hold_placement` does, the hold's one Python reader."""
+    spec = importlib.util.spec_from_file_location(
+        "verity_cli_settings", HERE.parents[2] / "tools" / "verity" / "cli" / "verity_cli" / "settings.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    env = {"PATH": os.defpath, **({} if value is None else {"VERITY_HOLD_PLACEMENT": value})}
+    shell = subprocess.run(["bash", "-c", '. "$1" && hold_placement', "_",
+                            str(HERE.parents[2] / "benchmarks" / "one_stage" / "placement.sh")], env=env, check=False)
+    assert shell.returncode in (0, 1)
+    assert (shell.returncode == 0) is cli.hold_placement(env) is (value == "1")
+
+
+def test_the_launcher_and_the_composite_read_the_hold_only_through_placement_sh():
+    """Neither script defines a hold of its own or reads VERITY_HOLD_PLACEMENT inline: each sources placement.sh, and the
+    launcher's preflight only checks the value's form."""
+    for name in ("served_verdicts.sh", "served_composite.sh"):
+        script = (HERE.parents[2] / "benchmarks" / "one_stage" / name).read_text()
+        code = [x for x in script.splitlines() if not x.lstrip().startswith("#")]
+        assert any("/placement.sh\"" in x for x in code), name
+        assert not [x for x in code if "hold_placement()" in x], name
+        reads = [x for x in code if "${VERITY_HOLD_PLACEMENT" in x and not x.startswith("case ${VERITY_HOLD_PLACEMENT:-} in")]
+        assert not reads, (name, reads)

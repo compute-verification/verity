@@ -138,7 +138,7 @@ inputs = ["applications/onsite_full.toml", "tools/config/verity_config", "verity
           "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/wire.py", "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/vectors.json", "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/audit-vectors.json",
           "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/audit-negative-vectors.json", "verity/protocols/resource_accounting/memory/poub/verifier/bandwidth-mem69-v2.json",
           "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/layout.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py",
-          "verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py", "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/run.sh", "benchmarks/prove_path/sources.json",
+          "verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py", "benchmarks/prove_path/prove_path.py", "tools/verity/cli/verity_cli/settings.py", "benchmarks/prove_path/run.sh", "benchmarks/prove_path/sources.json",
           "benchmarks/prove_path/llama32_1b_tg_l0_step1.json",
           "adapters/vllm/manifests/checkpoints.json", "adapters/vllm/manifests/checkpoints-int8.json",
           "adapters/vllm/manifests/checkpoints-local.json", "benchmarks/one_stage"]

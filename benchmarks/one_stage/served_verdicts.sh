@@ -570,8 +570,7 @@ elif [ -n "$PEARLPLUS_TIE" ]; then WINDOW_STEPS=${WINDOW_STEPS:-$(cut -d, -f3 <<
 else WINDOW_STEPS=${WINDOW_STEPS:-256}; fi
 MAIN_SHA=${MAIN_SHA-$(git -C "$TREE" rev-parse HEAD 2>/dev/null)}
 PRODUCT=${PRODUCT:-onsite}
-# true under VERITY_HOLD_PLACEMENT=1, which restores the holds that rest only on where coins are flipped or a composite made
-hold_placement() { [ "${VERITY_HOLD_PLACEMENT:-}" = 1 ]; }
+. "$(dirname "${BASH_SOURCE[0]}")/placement.sh" || exit 2  # hold_placement
 # off the node only where the caller runs a composer there (COMPOSE_OFF_NODE=1), or under VERITY_HOLD_PLACEMENT=1
 COMPOSE_OFF_NODE=${COMPOSE_OFF_NODE:-$(hold_placement && echo 1 || echo 0)} COMPOSE_NODE=${COMPOSE_NODE:-vy-auditor-2}
 COMPOSE_GATE=${COMPOSE_GATE:-ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes research@${VY_AUDITOR_2_HOST:-}}
