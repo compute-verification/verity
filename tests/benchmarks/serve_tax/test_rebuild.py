@@ -191,6 +191,7 @@ def test_roots_read_each_request_s_computed_tokens_only() -> None:
     moved[1][6, 0] ^= 1
     d = RB.roots_diff(want, RB.roots(moved, {"a": ([5, 6], 6), "b": ([5, 7], 4)}, 4))
     assert d["differing"] == 1 and d["first"] == ["a"] and not d["roots_equal"]
+    assert RB.roots_diff(want, want)["roots_equal"] and not any(v in json.dumps(d) for v in want.values())
 
 
 @pytest.mark.parametrize("dtype, row", [("bfloat16", 576 * 2), ("uint8", 656)])
@@ -528,6 +529,15 @@ def test_a_served_preempted_request_is_resumed_and_any_other_stays_new() -> None
 def test_capture_takes_only_a_served_shape_only_target_s_rows(args: list[str]) -> None:
     with pytest.raises(SystemExit, match="--capture takes the sampler rows of --served's --shape-only target"):
         RB.main([*args, "--capture", "TokenSelect_v4{V=8}", "--out", "O", "--private", "P"])
+
+
+@pytest.mark.parametrize("flag", ["--kv-dir", "--mirror-out"])
+def test_a_kept_directory_inside_the_runs_output_is_refused_by_its_flag(tmp_path, flag) -> None:
+    out = tmp_path / "out"
+    args = {"--kv-dir": str(tmp_path / "kv"), "--mirror-out": None, flag: str(out / "kept")}
+    with pytest.raises(SystemExit, match=f"^{flag} .* which leaves the node"):
+        RB.main(["--arm-dir", "A", *[x for k, v in args.items() if v for x in (k, v)], "--at-step", "1", "--out",
+                 str(out), "--private", str(tmp_path / "private")])
 
 
 @pytest.mark.parametrize("given", [None, "TokenSelect_v4{V=8}"])

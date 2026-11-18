@@ -240,7 +240,7 @@ def instrument(m: Meter) -> None:
 def parse(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", choices=sorted(MODELS), default="glm-5.3",
-                    help="llama-3.2-1b: its BF16 class Program at class 4,27,2 lowered unwired, in place of a window")
+                    help="llama-3.2-1b: its BF16 class Program at class 4,27,2 lowered wired, in place of a window")
     ap.add_argument("--window", choices=sorted(WINDOWS), default=None, help="default: long-w0, unless --requests")
     ap.add_argument("--requests", default=None, help="ARRIVE:LP:MAX_TOKENS,... in place of --window")
     ap.add_argument("--card", required=True, help="the card the target is compiled for, by its card file's name under "

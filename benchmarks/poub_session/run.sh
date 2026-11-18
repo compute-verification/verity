@@ -89,9 +89,9 @@
 #      no GPU visible (STAGES, default
 #      build,commit, in a config run, CONFIG_RUN default 1: the Build, the word check and one instrumented Commit,
 #      the run the session audits; BUILD_GPU=1 leaves the Build to the lease) in SWEEP_DIR (default: scratch removed
-#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; the row's public records under 1 MiB are kept in
-#      out/row: its logs, verdicts, summaries, run and step tables, versions, source identity and session record, never
-#      a committed value, a salt, an opening or a binding map). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
+#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; the Commit's three public records are kept in
+#      out/row: commit/verdict.json, commit/steps.jsonl and commit/remote_session.json; nothing else of the sweep, which
+#      holds committed values, salts, token digests and the run's logs). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
 #      holds no vLLM), CUDA_HOME/bin (--cuda-bin) and ROW_ARGS (such as --norm-tap-so PATH);
 #   3. ROLE=both: builds the Lean verifier (LEAN_EXE: that executable instead), starts the verifier on VERIFIER_CPUS
 #      and goes on once it listens;
@@ -161,11 +161,14 @@
 # make the sessions paced; ROLE=both SERVE=node, the node's session on this machine with its verifier and a local
 # challenger beside it, defaults them to 1:1000:2773:7 (seven stretches of a second, a live coin a pass) and 0 (the
 # pass its calibration measured), builds the Lean verifier before the lease, as a served line does, and ends by the
-# verdict line. VERIFIER_ARGS='--node FILE --hbm-bytes N' states the node the share is of (default: timing's eight-card
-# RTX PRO 6000 node). The north-star run, the verifier on a second node's CPUs:
+# verdict line. VERIFIER_ARGS='--node FILE --hbm-bytes N' states the node the share is of (default: the figures').
+# The verifier reads the audited node's figures from FIGURES, by default out/figures.json, which `sheets.py NODE_KIND`
+# writes, NODE_KIND a node file's name (ROLE=both on a GPU: the node file of this machine's card). The north-star run,
+# the verifier on a second node's CPUs:
 #
 #   ROLE=verifier PEER=PROVER_NODE PORT=7799 SESSIONS=2 WINDOWS=7 WINDOW_MS=60000 SAMPLES=33273 QUANTILE=max \
-#     JITTER_MS=50 VERIFIER_ARGS='--host-bytes 1843153879040' bash benchmarks/poub_session/run.sh   # 16 CPUs
+#     JITTER_MS=50 NODE_KIND=rtx-pro-6000-server-x8 VERIFIER_ARGS='--host-bytes 1843153879040' \
+#     bash benchmarks/poub_session/run.sh                         # 16 CPUs
 #   ROLE=prover PORT=7799 SERVE=node PLAN=honest,skip:0.0625 ENGINE_CPUS=0-23 PROVER_CPUS=24-47 \
 #     ENGINE_ARGS='--step-hz 2 --align-steps' NODE_ARGS='--decode-s 60 --warm-openings 33273' \
 #     bash benchmarks/poub_session/run.sh                         # the whole 8-GPU node, 200 GB of host memory
@@ -320,6 +323,20 @@ if [ "${SERVE:-}" = node ] && [ "$ROLE" = both ]; then
   lean_exe
   VERIFY+=(--lean-exe "$LEAN_EXE")
 fi
+if [ "$ROLE" != prover ] && [ -z "${CLOSE:-}" ]; then
+  if [ -z "${FIGURES:-}" ]; then
+    if [ -z "${NODE_KIND:-}" ] && [ "$ROLE" = both ] && [ -z "${CPU:-}" ]; then
+      NODE_KIND=$(python3 benchmarks/kernels/machine.py session-node "$(nvidia-smi --query-gpu=name --format=csv,noheader \
+        | head -1)" 0) || refuse "no node file for this machine's card: $NODE_KIND"
+      NODE_KIND=${NODE_KIND#local/} NODE_KIND=${NODE_KIND%/*}
+    fi
+    [ -n "${NODE_KIND:-}" ] || refuse "the verifier reads the audited node's figures: set NODE_KIND (a node file under" \
+      "calibration/hardware/nodes) or FIGURES (their JSON, benchmarks/poub_session/sheets.py NODE)"
+    FIGURES=$O/figures.json
+    "$PY" benchmarks/poub_session/sheets.py "$NODE_KIND" > "$FIGURES" || refuse "no figures for NODE_KIND=$NODE_KIND"
+  fi
+  VERIFY+=(--figures "$FIGURES")
+fi
 if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
   mkdir -p "$(dirname "$REGISTRY")" || exit 3
@@ -414,11 +431,14 @@ card_free() { # NOWAIT=1 with GPU: 75 where a compute process is on those cards,
 }
 if [ -n "$SERVED" ]; then
   card_free || exit 75
-  keep_row() { # the row's public records under 1 MiB, into out/row: the sweep holds its committed values and salts too
+  keep_row() { # the Commit's public records, by path, into out/row: the rest of the sweep is private
     [ -d "$SWEEP/$ROW" ] || return 0
-    mkdir -p "$O/row" && (cd "$SWEEP/$ROW" && find . -type f -size -1024k \( -name '*.log' -o -name verdict.json \
-      -o -name 'summary.*' -o -name runs.jsonl -o -name steps.jsonl -o -name versions.json -o -name source_identity.json \
-      -o -name remote_session.json \) -print0 | xargs -0 -r cp --parents -t "$O/row")
+    local f
+    mkdir -p "$O/row"
+    for f in commit/verdict.json commit/steps.jsonl commit/remote_session.json; do
+      [ -f "$SWEEP/$ROW/$f" ] && (cd "$SWEEP/$ROW" && cp --parents "$f" "$O/row/")
+    done
+    return 0
   }
   drop_connection() { # a verifier still waiting for its prover ends at a connection opened and dropped
     (exec 3<> "/dev/tcp/127.0.0.1/$PORT") 2> /dev/null
@@ -532,7 +552,11 @@ fi
 "${LEASE[@]}" bash -c '
   if [ -n "$CPU" ]; then
     DEV=(--cpu "$CPU" --codec "$CODEC")
+    SNODE=$(python3 benchmarks/kernels/machine.py session-node cpu 0)
   else
+    SNODE=$(python3 benchmarks/kernels/machine.py session-node "$(nvidia-smi --query-gpu=name --format=csv,noheader \
+      -i "${GPU_LEASE_UUID%%,*}" | head -1)" "$(nvidia-smi --query-gpu=index --format=csv,noheader -i "${GPU_LEASE_UUID%%,*}" \
+      | head -1)" 2>&1) || { echo "run.sh: no node for the session to register: $SNODE"; exit 3; }
     nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
       --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
     CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i "${GPU_LEASE_UUID%%,*}" | head -1)
@@ -562,7 +586,7 @@ fi
       setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups -- "${PIN[@]}")
   fi
   "${PIN[@]}" "$PY" verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
-    "${DEV[@]}" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
+    "${DEV[@]}" --node "${SESSION_NODE:-$SNODE}" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
   P=$?
   W=0
   if [ -n "$V" ]; then

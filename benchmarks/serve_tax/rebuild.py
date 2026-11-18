@@ -170,11 +170,9 @@ def roots(layers: list[Any], spans: dict[str, tuple[list[int], int]], block_size
 def roots_diff(served: dict[str, str], rebuilt: dict[str, str], limit: int = 20) -> dict[str, Any]:
     both = sorted(set(served) & set(rebuilt))
     bad = [r for r in both if served[r] != rebuilt[r]]
-    total = hashlib.sha512("".join(f"{r}:{served[r]};" for r in sorted(served)).encode()).hexdigest()
-    mine = hashlib.sha512("".join(f"{r}:{rebuilt[r]};" for r in sorted(rebuilt)).encode()).hexdigest()
     return {"requests_served": len(served), "requests_rebuilt": len(rebuilt), "compared": len(both), "differing": len(bad),
             "only_served": sorted(set(served) - set(rebuilt))[:limit], "only_rebuilt": sorted(set(rebuilt) - set(served))[:limit],
-            "first": bad[:limit], "root_served": total, "root_rebuilt": mine, "roots_equal": total == mine}
+            "first": bad[:limit], "roots_equal": served == rebuilt}
 
 
 def served_spans(st: dict[str, Any]) -> dict[str, tuple[list[int], int]]:
@@ -1651,6 +1649,9 @@ def main(argv: list[str] | None = None) -> int:
                          "run's directory")
     a = ap.parse_args(argv)
     a.private = S.outside(a.private.resolve(), a.out)
+    for flag, d in (("--kv-dir", a.kv_dir), ("--mirror-out", a.mirror_out)):
+        if d:
+            S.outside(d, a.out, flag)
     if bool(a.served) == bool(a.arm_dir and a.kv_dir) or bool(a.served) != bool(a.scratch):
         raise SystemExit("either --arm-dir with --kv-dir (one GPU), or --served with --scratch (tp_restore.py serve's)")
     if a.served and (a.mirror_out or a.from_mirror):

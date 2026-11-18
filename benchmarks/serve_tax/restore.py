@@ -324,6 +324,8 @@ def main(argv: list[str] | None = None) -> int:
                          "every run's directory")
     a = ap.parse_args(argv)
     a.private = S.outside(a.private.resolve(), a.out)
+    if a.kv_dir:
+        S.outside(a.kv_dir, a.out, "--kv-dir")
     if sys.flags.hash_randomization:
         raise SystemExit("run with PYTHONHASHSEED=0, as the served engine did: the scheduler iterates sets of request ids")
     os.environ.update(VLLM_ENABLE_V1_MULTIPROCESSING="0", VLLM_DISABLE_REQUEST_ID_RANDOMIZATION="1")

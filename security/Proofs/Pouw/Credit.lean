@@ -441,7 +441,8 @@ theorem drawWithheld : DrawWithheld := by
 `trustedChallengePhaseOf` trusts, as a withheld deployment's is. -/
 theorem drawChallengePhase_honest {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
     (ht : trustedChallengePhaseOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session = .ok x)
-    (hw : withheldOn ledger root = true) : PouwVerifier.Credit.drawChallengePhase ledger k pins main session root = .ok x := by
+    (hw : withheldOn ledger root = true) :
+    PouwVerifier.Credit.drawChallengePhase ledger k pins main session root = .ok (x.1, Spot.Challenger.byFamily x.1 x.2) := by
   simp [PouwVerifier.Credit.drawChallengePhase, ht, hw, Except.mapError]
 
 /-- **`DrawWithheld`'s nontrivial lemma**: its conclusion fails at the empty ledger, which opens no session, and the sample

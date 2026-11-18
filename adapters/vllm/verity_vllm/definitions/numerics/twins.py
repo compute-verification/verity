@@ -24,7 +24,7 @@ Twins (twin_id -> the registered body it reproduces, and how it computes it):
     token_select.argmax.v1       TokenSelect_v1       numpy strict-greater scan semantics (first index wins ties, NaN never wins)
     silu_mul.bf16.table.v1       SiluMul_v1           65,536-entry table of the registered `bf16(silu_f32(g))`, numpy f32 mul, RNE
     rope.neox.bf16.v1            RoPE_v1              numpy: t = RN32(y*s) in f32, fma(x, c, -t) via an exact float64 intermediate
-    rmsnorm.triton.v1            RMSNormTriton_v1     rms_triton_model.cpp `rms_triton_rows` (variant 0)
+    rmsnorm.triton.v1            RMSNormTriton_v1     rms_triton_model.cpp `rms_triton_rows`
     rmsnorm.fused_cuda.v2.v1     RMSNormFusedCuda_v2  numpy: residual add, per-thread fma chain (float64 intermediate), cub
                                                       BlockReduce tree, IEEE div/add, MUFU.RSQ (C++), two f32 products, RNE
     attention.fa2.bf16.v3        Attention_v3         fa2_model.cpp `fa2_rows` (online softmax, blocks last -> first); declines
@@ -536,7 +536,7 @@ class RoPETwin(Twin):
 class RMSNormTritonTwin(Twin):
     twin_id = "rmsnorm.triton.v1"
     base_id = "RMSNormTriton_v1"
-    covers = ("RMSNormTriton_v1{N,EPS}: rms_triton_model.cpp `rms_triton_rows` variant 0 -- chunks of 1024 columns, 128 threads x 8 "
+    covers = ("RMSNormTriton_v1{N,EPS}: rms_triton_model.cpp `rms_triton_rows` -- chunks of 1024 columns, 128 threads x 8 "
               "columns (`acc = x1*x1; fma(x0,x0,acc); fma(x2..x7)`), warp butterfly xor 16,8,4,2,1, CTA `(w0+w2)+(w1+w3)`, chunks "
               "added from +0; `mean_eps = fma(rcp(N), sum, eps)` (div.full range scaling), MUFU.SQRT, `inv = div.full(1, rms)`, "
               "`out = bf16_rne((inv*x)*w)` -- the same MUFU tables the primitives use.")
@@ -554,7 +554,7 @@ class RMSNormTritonTwin(Twin):
         if x.size != N or w.size != N:
             raise ValueError(f"{self.spec.id}: operands {x.size}, {w.size} words")
         rm, tabs = rms_twin()
-        out = rm.rms_norm_rows(x.reshape(1, N), w, float(self.s.EPS), tabs, variant=0, kernel="triton")
+        out = rm.rms_norm_rows(x.reshape(1, N), w, float(self.s.EPS), tabs, kernel="triton")
         return np.asarray(out).reshape(-1).astype(U64)
 
     @classmethod
@@ -638,7 +638,7 @@ def _fused_variance(rf: np.ndarray, N: int) -> np.float32:
 class AttentionTwin(Twin):
     twin_id = "attention.fa2.bf16.v3"
     base_id = "Attention_v3"
-    covers = ("Attention_v3{T,NH,KVH,D,BN}: fa2_model.cpp `fa2_rows` (variant 0, AMPERE_BF16 tensor-core step, inv_degenerate 1) per "
+    covers = ("Attention_v3{T,NH,KVH,D,BN}: fa2_model.cpp `fa2_rows` (AMPERE_BF16 tensor-core step, inv_degenerate 1) per "
               "head with KV head h // (NH/KVH), col_limit T, ceil(T/BN) blocks visited last -> first: S = QK^T as D/16 ascending "
               "k16 chain steps from 0; row max; rescale ex2((m_prev - m)*scale_log2); P = ex2(fma(S, scale_log2, -m*scale_log2)); "
               "per-lane sums (lane (c%8)//2, ascending, the block's first add fused with the rescale as one FFMA.FTZ); P -> bf16 "

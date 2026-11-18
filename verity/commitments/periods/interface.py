@@ -135,6 +135,7 @@ from verity.circuits.defs import (CATALOG_PACKAGES, REGISTRY, CompositeDefinitio
                                   bind)
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.population import wired_population_program
+from verity.circuits.refs import recut
 from verity.circuits.types import Array
 from verity.commitments import advice as AC, history as HT
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
@@ -1766,10 +1767,8 @@ def _reads_of(tid: str, lo: int, n: int, reads: _ReadIndex, rows: Mapping[str, i
         if words is None:
             raise ValueError(f"read {r.doc()}: {r.port!r} is no row of {tid}")
         if r.cut != (0, 1) or r.base % words or any(s % words for s in r.step):
-            raise NotImplementedError(
-                f"read {r.doc()}: a read cut, or not of whole registered rows of the port's {words} words: a reader's part "
-                "reads the registered leaves' bits cut again at its width, low part first, which waits on circuits and lean "
-                "defining that cut once in the Program's Lean and Python")
+            raise ValueError(f"read {r.doc()}: a read cut, or not of whole registered rows of the port's {words} words: each "
+                             "unit's row is one registered row, recut at the port's width (`refs.recut`)")
         order: dict[int, int] = {}
         refs = np.array([order.setdefault(int(p), len(order)) for p in r.source(np.arange(lo - r.at, lo - r.at + n)) // words],
                         dtype=np.int64)
@@ -1808,24 +1807,16 @@ class _Drawn:
                 "paths": [paths[i] for i in np.searchsorted(at, positions)]}
 
 
-#: why a wired Program's root batch is refused as no range of its order (`unit_ranges`)
-WIDTH_AT_ROOT = ("a root batch of a template no record names (a WordBits or BitsWord width conversion): a width conversion "
-                 "is a gate inside a template, never a root node")
-
-
 class Units:
     """A wired Program's batches of its templates (`Circuit.program`), each the next of its ``ranges`` (`ranges_of`), in
     root order: ``ranges``, each ``(descriptor id, first unit of the partition, first own
-    unit, units)``. Refused (ValueError, `WIDTH_AT_ROOT`) where a root batch is not the next of the order's ranges."""
+    unit, units)``. Refused (ValueError) where a root batch is not the next of the order's ranges."""
 
     def __init__(self, program: Any, query: Mapping[str, Any], ranges: Sequence[tuple[str, int, int]]) -> None:
         want = list(ranges)
         got = CS.template_partition(program, query).ranges
         if [(t, n) for _k, t, _g, n in got] != [(t, n) for t, _a, n in want]:
-            names = {t for t, _a, _n in want}
-            extra = sorted({t for _k, t, _g, _n in got} - names)
-            raise ValueError(f"the wired Program's {len(got)} root batches are not its order's {len(want)} ranges"
-                             + (f": {', '.join(extra)} is {WIDTH_AT_ROOT}" if extra else ""))
+            raise ValueError(f"the wired Program's {len(got)} root batches are not its order's {len(want)} ranges")
         self.ranges = tuple((t, g, a, n) for (_k, t, g, _n), (_t, a, n) in zip(got, want))
         rs: dict[str, list[tuple[int, int]]] = {}
         for t, g, a, _n in self.ranges:
@@ -2632,6 +2623,7 @@ class Window:
             v = (self.registered or {}).get(r.param)
             lay = lays[r.reader][0]
             words, bits = dict(lay.rows + lay.outs)[r.port], value_format(self.circuit.registered, r.param)[1]
+            recut(bits, dict(zip((p for p, _ in lay.rows + lay.outs), lay.widths))[r.port])
             if v is not None and (v.word_bits != bits or CS.value_words(v) != words
                                   or words * v.leaves != params[r.param]):
                 raise ValueError(f"{r.param}: committed as {v.leaves} rows of {v.words} {v.word_bits}-bit leaves, not the "
@@ -2764,10 +2756,9 @@ class Window:
                     raise ValueError(f"{m.key} {p} reads registered parameter {param!r}: give its committed value"
                                      + (" (`Window.supply`)" if param.rsplit("/", 1)[-1] in SUPPLIED else ""))
                 if CS.value_words(v) != words[p]:
-                    raise NotImplementedError(
-                        f"{m.key} {p} reads {param!r}, rows of {CS.value_words(v)} 16-bit words, at its width of {words[p]}: "
-                        "a reader's part reads the registered leaves' bits cut again at its width, low part first, which "
-                        "waits on circuits and lean defining that cut once in the Program's Lean and Python")
+                    raise ValueError(f"{m.key} {p} reads {param!r}, rows of {CS.value_words(v)} 16-bit words, in rows of "
+                                     f"{words[p]}: each unit's row is one registered row, recut at the port's width "
+                                     "(`refs.recut`)")
                 wanted.setdefault(param, []).append(positions)
         sampled, written = _Drawn(values, wanted), self._written(values)
         given, (data, salts_of, strings_of, self._entries) = dict(salts_of or {}), ([], {}, {}, {})

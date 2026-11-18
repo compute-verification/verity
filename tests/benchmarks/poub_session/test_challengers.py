@@ -257,7 +257,7 @@ def test_the_verifiers_entry_hands_its_main_the_lms_verify_and_the_live_challeng
     got = {}
     monkeypatch.setattr(VP.verifier, "main", lambda argv, **kw: got.update(argv=argv, **kw) or 0)
     assert VP.main(["--port", "7781"]) == 0
-    assert got == {"argv": ["--port", "7781"], "figures": VP.timing.RTX_PRO_6000_NODE, "verify": VP.lms_verify,
+    assert got == {"argv": ["--port", "7781"], "verify": VP.lms_verify,
                    "served_verify": VP.verify, "serve": (sys.executable, str(LIVE / "serve.py"))}
 
 
@@ -477,8 +477,8 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     else:
         assert zero(doc) == {0: ["not complete"], 1: ["not complete", "not accepted"]}
         assert honest["credit"]["complete"]["reason"] == "period p-1 closed incomplete (1 of its 2 windows incomplete)"
-        assert re.fullmatch(r"its window closed incomplete: the challenger released (\d+ of its \d+ \w+ coins, )?"
-                            r"\d+ of its \d+ openings coins; period p-1 closed incomplete \(1 of its 2 windows "
+        assert re.fullmatch(r"its window closed incomplete: the challenger released (\d+ of its \d+ [\w/]+ coins, )?"
+                            r"\d+ of its \d+ poub/openings coins; period p-1 closed incomplete \(1 of its 2 windows "
                             r"incomplete\)", dropper["credit"]["complete"]["reason"])
         assert doc["line"][t][al.line.TIME_HELD] == {**dict.fromkeys(al.SHARES, 0.0),
                                                      "exact": dict.fromkeys(al.SHARES, "0")}

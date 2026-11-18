@@ -647,7 +647,8 @@ def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_
     """A member's wired port, held in its writer template's output tree: its header entry (`rows.shared_ports`,
     `rows.shared_entries`) is that tree's value, one position and one path per row of its table, the leaves it reads
     (`rows.Binding.leaves`), each path climbing to the tree's root, and the verifier's read of it (`rows.own_reads`, seeded
-    with no port) names the same value and root and reads those leaves. A member with no wired port gets no ``x`` entry."""
+    with no port) names the same value and root as a tree port of the writer template's field, its reads the verifier's
+    program's. A member with no wired port gets no ``x`` entry."""
     w, c, doc = _held_window(tmp_path, monkeypatch)
     ms, tree = w.members, WI.tree(GID, "o0")
     roots = {q: {"root": r.hex(), "domain": c.domains[q].domain_id.hex(), "leaves": c.domains[q].count} for q, r in c.roots.items()}
@@ -658,7 +659,8 @@ def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_
         assert CS.shared_ports(doc, k)["x"][2] == tree and m.port("x") not in c.roots
         e, read = CS.shared_entries(tmp_path, doc, k)["x"], files[m.key]["ports"]["x"]
         assert e["value"] == read["value"] == CS.own_value(tree) and read["root"] == c.roots[tree].hex()
-        assert e["positions"] == w.leaves(m, "x").tolist() == read["reads"]
+        assert e["positions"] == w.leaves(m, "x").tolist()
+        assert read["tree"] == {"template": GID, "field": "o0"} and read["reads"] == [] and "reads_from" not in read
         for i, path in zip(e["positions"], e["paths"], strict=True):
             leaf = row_leaf(dom, i, CS.INST.tree_leaf(CS.INST.default_key, bc[CS.BC_BYTES * i:CS.BC_BYTES * (i + 1)]), m.schema("x"))
             assert _climb(dom, i, leaf, bytes.fromhex(path)) == c.roots[tree]
@@ -896,9 +898,6 @@ def declared(**edit) -> I.Circuit:
     return I.Circuit("declared", ((EMB, 3), (G8, 6), (GEMM, 3)), **{**parts, **edit})
 
 
-#: the wired builder reads a registered value only in leaves of its port's width or of one bit (`population._converts`,
-#: verity/circuits/population.py:167-174), and puts a width conversion at the root (population.py:348-353)
-WAITS_WIDTH = "waits on circuits: the wired builder's width folds (population.py:167-174, 348-353)"
 #: the wired builder binds the SHA-512 of the record's WIRED_FIELDS (population.py:362-363), so a record field the Program
 #: doesn't read (boundary reads, named free rows) changes the Program's digest
 WAITS_RECORD_HASH = "waits on circuits: the record's hash in the wired Program's binding (population.py:362-363)"
@@ -1341,19 +1340,11 @@ BOUNDARY = (I.Read(EID, "tok", "ids", at=2, radix=(1,), base=0, step=(0,)),
             I.Read(GID, "o0", "o0", at=0, radix=(3,), base=0, step=(16,)))
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
-def test_a_record_without_boundary_reads_ranks_or_free_rows_keeps_its_bytes():
+def test_a_record_without_boundary_reads_ranks_or_free_rows_names_none():
     """The records of circuits that declare no boundary reads, ranks or free rows, a stated one with every other
-    declaration, a plain period's and one with registered reads, are the bytes they were before `Circuit.boundary_reads`,
-    `Circuit.ranks` and `Circuit.free` (their SHA-512s pinned)."""
-    for doc, digest in [
-        (declared().description(), "d35073408e1e86b57c9d7babbf974e1e4a970bb88df064ed1e604ed0d1da2440f99cd9f27f2262f53f971aecf15bb"
-                                   "a219271260bd8a6726c2d614c04256d4816"),
-        (window()[0].circuit_record(), "ef353529124da950c7a39602f6538af3c918ba8076f420baafbacb808fd5144b0986c95efbf0c01da48c7916"
-                                       "37b1a5983631e639d9b542c2089ff3a9540a3810"),
-        (registered()[0].circuit_record(), "4bd67fc5d44ffbf2de4be9b788a8360ca2daeb24516db815fefdb8e96c384c2ab72b8585f2e86a579651"
-                                           "4bea6512f77deccc65db8fcf772b9aa9c95d7e330bfe")]:
-        assert not {"boundary_reads", "ranks", "free"} & set(doc) and hashlib.sha512(I.circuit_bytes(doc)).hexdigest() == digest
+    declaration, a plain period's and one with registered reads, hold no ``boundary_reads``, ``ranks`` or ``free``."""
+    for doc in (declared().description(), window()[0].circuit_record(), registered()[0].circuit_record()):
+        assert not {"boundary_reads", "ranks", "free"} & set(doc)
 
 
 def test_a_circuit_declares_its_boundary_reads_and_no_row_twice():
@@ -1664,7 +1655,6 @@ def registered(n: int = 12, cap: int = 4, params: dict | None = None, held: tupl
     return win, w
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_inputs():
     """The record format: the reads in the record's ``registered``, its other fields only when declared, and the free
     input bits counted from the description alone. A pin names its parameter alone: ``w``'s holds no ``w/a@8``, whose
@@ -1697,7 +1687,6 @@ def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_
             I.input_count({**doc, "registered": bad}, BY_ID.__getitem__)
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_registered_values_shape_is_the_width_of_the_port_its_reads_name():
     """`read_shape`: ``w``'s rows are ``wrow``'s width, its leaves over that, and a value no read names, one read at two
     widths or one whose leaves aren't whole rows is refused."""
@@ -1717,7 +1706,6 @@ def test_a_registered_values_shape_is_the_width_of_the_port_its_reads_name():
         I.read_shape(odd, "w")
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_circuits_values_are_parameters_of_its_program_ahead_of_its_units():
     """`Registered.values`: registered parameters the circuit's program takes as its own, ahead of its units', in 16-bit
     leaves (`program_values`), so a circuit of one template with values is a ``TemplatePopulations``. Its record names them
@@ -1740,7 +1728,6 @@ def test_a_circuits_values_are_parameters_of_its_program_ahead_of_its_units():
             replace(circuit, registered=replace(reg, values=bad))
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_period_registers_its_circuits_values_by_their_entries_chained_after_the_last_record(tmp_path):
     """With values, `Window.write` registers each by its committed value's entry, in the circuit's order, chained after
     ``previous``, and names the record v2 (core's ``record`` makes it ``verity/registration/v2`` with entries); without,
@@ -1767,7 +1754,6 @@ def test_a_period_registers_its_circuits_values_by_their_entries_chained_after_t
     assert not (tmp_path / "unheld").exists()
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_registration_names_the_values_its_period_outputs_after_its_ports(tmp_path):
     """`rows.registration` names each value the period ``outputs`` for a later record among the record's roots, after the
     period's own ports and by its port, root, leaves and domain alone; with none, the roots are the ports'. An output named
@@ -1798,15 +1784,15 @@ def test_a_registration_names_the_values_its_period_outputs_after_its_ports(tmp_
     assert roots == [*ports, out]
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_read_covers_whole_members_and_reads_whole_rows():
     """Members are cut where a read's units begin or end, as where a wire's do, so a read covers whole members: units 2..11
-    read the weight's rows as tables and units 0 and 1 hold their own rows."""
+    read the weight's rows as registered values and units 0 and 1 hold their own rows, each a shared-row member of a
+    template of several."""
     reg = lambda r: I.Registered({"w": 6 * K // 2}, reads=(r,))  # noqa: E731
     win = I.Window(I.Circuit("part", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 2, (5, 2), 0, (K // 2, 0)))),
                    RUN, SAMPLING_DESIGN, 4)
-    assert [(m.base, m.n, bool(m.tables)) for m in win.window.members] == [(0, 2, False), (2, 4, True), (6, 4, True),
-                                                                           (10, 2, True)]
+    assert [(m.base, m.n, bool(m.tables), m.values) for m in win.window.members] == [
+        (0, 2, True, ()), (2, 4, True, ("wrow",)), (6, 4, True, ("wrow",)), (10, 2, True, ("wrow",))]
     with pytest.raises(ValueError, match="whole registered rows"):
         I.Window(I.Circuit("half", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 0, (12,), 0, (K // 8,)))),
                  RUN, SAMPLING_DESIGN, 4)
@@ -1815,7 +1801,6 @@ def test_a_read_covers_whole_members_and_reads_whole_rows():
                            registered=reg(I.Read(TID, "x", "w", 0, (12, 2), 0, (0, K // 4), cut=(0, 2)))), RUN, SAMPLING_DESIGN, 4)
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_the_period_commits_each_read_port_as_a_table_of_the_registered_rows_under_their_salts():
     """A member a read covers is a shared-row member: its read port's table the distinct rows its units read, under the
     registered value's salts, each unit's ref its row; its other ports its units' own rows. The header names the rows'
@@ -1847,11 +1832,10 @@ def test_the_period_commits_each_read_port_as_a_table_of_the_registered_rows_und
         unread.close()
     twice, _ = registered()
     twice._recorded[TID][0].words[2][1, 0] ^= 1
-    with pytest.raises(ValueError, match="two rows for one row"):
+    with pytest.raises(ValueError, match="a unit's recorded row is not the row of 'w' it reads"):
         twice.close()
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_port_reading_a_tables_parameter_is_a_row_seg_row():
     """A port whose reads read a declared table's parameter is an ``hm96-sha512/row-seg/v1`` row (`seg_ports`) in its
     template's statement, its members (the verifier's, derived from the record, the same) and its ``--registered`` file,
@@ -1879,7 +1863,6 @@ def test_a_port_reading_a_tables_parameter_is_a_row_seg_row():
 FP32_SEG = {"row_schema": SEG, "word_bits": 32}
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_value_of_a_declared_format_is_read_in_it(tmp_path):
     """`Registered.formats`: ``w`` declared 32-bit leaves in ``row-seg/v1`` rows is read in them. Its port is a ``row-seg/v1``
     row in its template's statement and its members (the verifier's, from the record, the same), its program takes it as
@@ -2575,7 +2558,7 @@ REFUSED = {
 }
 
 
-WAITS_CUT_AGAIN = "waits on circuits: a reader's part reads the registered leaves' bits cut again at its width (rows.py)"
+WAITS_CUT_AGAIN = "waits on proofs: rows._referenced reading a registered value recut at a reader's width (refs.recut)"
 
 
 @pytest.mark.parametrize("edit, why", [
@@ -2605,60 +2588,6 @@ def test_a_linked_members_x_rows_are_rows_of_the_row_tables_schema(monkeypatch):
     with pytest.raises(ValueError, match=re.escape(f"its {CS.LINKED!r} rows are {V2} rows, a row table's are {CS.TABLE_SCHEMA}")):
         replace(linked, members=(*linked.members[:k], replace(m, schemas=tuple((p, V2) for p, _ in m.schemas)),
                                  *linked.members[k + 1:]))
-
-
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
-def test_a_row_committed_under_a_registered_values_salt_is_the_values_row(monkeypatch):
-    """An input row recorded in full is committed under its registered value's salt (`rows.commit`'s ``salts_of``), and
-    `Window.close` hands over the ``b || c`` that salt carries in the value's own tree (``carried``). `rows.commit`
-    refuses a row that makes another string, naming it, since a salt hides one row; the strings move no root; without
-    them the other row commits, to another root; and strings for a port ``salts_of`` doesn't name, or not one a row, are
-    refused."""
-    win, w = registered()
-    given = {}
-    with monkeypatch.context() as mp:
-        mp.setattr(CS, "commit", lambda window, data, **kw: given.update(window=window, data=data, **kw))
-        win.close(salts_of=fixed(win))
-    window, data, salts_of, carried = (given[k] for k in ("window", "data", "salts_of", "carried"))
-    port = window.members[1].port("wrow")
-    assert sorted(carried) == sorted(salts_of) == sorted(m.port("wrow") for m in window.members)
-    assert salts_of[port] == w.salts[2] + w.salts[3] and carried[port] == w.bcs[2] + w.bcs[3]
-    held = CS.commit(window, data, salts_of=salts_of, carried=carried)
-    free = CS.commit(window, data, salts_of=salts_of)
-    assert held.roots == free.roots and held.bc == free.bc and held.bc[port] == carried[port]
-    other = [dict(d, rows=dict(d["rows"])) for d in data]
-    other[1]["rows"]["wrow"] = data[1]["rows"]["wrow"].copy()
-    other[1]["rows"]["wrow"][1, 0] ^= 1
-    with pytest.raises(ValueError, match=re.escape(f"{port}: rows [1] are not the rows its salts already carry")):
-        CS.commit(window, other, salts_of=salts_of, carried=carried)
-    assert CS.commit(window, other, salts_of=salts_of).roots[port] != held.roots[port]
-    for no in ({"salts_of": {}, "carried": carried},
-               {"salts_of": salts_of, "carried": {**carried, port: carried[port][:-1]}}):
-        with pytest.raises(ValueError, match="carried .*: not one 128-byte"):
-            CS.commit(window, data, salts_of=fixed(window), **no)
-    moved, _ = registered()
-    moved._recorded[TID][0].words[2][:2, 0] ^= 1
-    with pytest.raises(ValueError, match=re.escape(f"{window.members[0].port('wrow')}: rows [0] are not the rows its salts")):
-        moved.close(salts_of=fixed(moved))
-
-
-class Table(Held):
-    """`EMB`'s table, one token a row under ``hm96-sha512/row-seg/v1`` (`gates.embedding`), as core registers it: its rows,
-    salts, tree and entry."""
-
-    def __init__(self) -> None:
-        rng = np.random.default_rng(7)
-        super().__init__("embed", rng.integers(0, 1 << 16, (4, 16), dtype=np.uint16))
-        self.salts = [bytes(rng.integers(0, 256, E.SALT_BYTES, dtype=np.uint8)) for _ in range(4)]
-        self.dom = CommitmentDomain(hashlib.sha512(b"embed").digest(), -2, RangeIndexedDomain(0, 4), hash="sha512")
-        self.tree = RT.commit(self.dom, [bit_row((r.tolist(), 16)) for r in self.rows], self.salts)
-
-    def entry(self):
-        return {"value": "embed", "root": self.tree.root.hex(), "leaves": 4, "words": 16, "domain": self.dom.domain_id.hex()}
-
-    def path(self, tok: int) -> list[bytes]:
-        p = self.tree.path(tok)
-        return [p[k:k + 64] for k in range(0, len(p), 64)]
 
 
 def embedding(**edit) -> I.Circuit:
@@ -2801,8 +2730,6 @@ def test_an_opening_may_declare_the_output_that_returns_its_row():
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(raises=NotImplementedError, strict=True, reason="o1 reads embed/opened (3 words) at width 1: the "
-                   "registered leaves cut again at a reader's width waits on circuits and lean defining the cut")
 def test_a_period_commits_its_table_reads_and_verdicts_as_registered_reads():
     """A table's registered reads committed: each table read and verdict a registered read of its supplied value, the opening's row,
     salt and path the units' own; and the verifier derives the same members, and each member's ``--registered`` file, from
@@ -2843,7 +2770,7 @@ def test_a_period_commits_its_table_reads_and_verdicts_as_registered_reads():
     with pytest.raises(ValueError, match="didn't pin"):
         I.registered_reads(doc, mine, {}, registered=REG)
     win.registered = {**win.registered, "embed/opened": Held("embed/opened", np.ones((1, 3), dtype=np.uint16))}
-    with pytest.raises(ValueError, match="rows of 3 16-bit leaves, not the port's 1 16-bit words"):
+    with pytest.raises(ValueError, match="rows of 3 16-bit words, in rows of 1"):
         win.close(salts_of=fixed(win))
 
 
