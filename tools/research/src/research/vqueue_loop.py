@@ -3495,7 +3495,7 @@ class Loop:
         try:
             audit = self._audit_from(d, main, line, below, lent)
             suites = self._suites_from(d, main, line, below, lent)
-            after = self.slim.replaced(Past.read(self.log_path, self.now() - self.slim.CARRY_WAIT_S).lines,
+            after = self.slim.replaced(Past.read(self.log_path, self.now() - self.slim.CARRY_LOOKBACK_S).lines,
                                        line.get("members") or (), self.now()) if self.gate in CHECKS else {}
             with self.steps("launch"):
                 rec, error = self.slim.start(d, line["sha"], line["base"],

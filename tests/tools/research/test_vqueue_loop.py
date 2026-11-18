@@ -4534,6 +4534,22 @@ def test_under_gate_check_a_suite_failed_while_the_shards_run_ejects_its_lone_su
     assert rebuilt["members"] == [2] and rebuilt["base"] == main
 
 
+def test_under_gate_check_a_candidate_built_long_after_a_drop_sharing_a_member_carries_that_drop_s_runs(env, monkeypatch):
+    """The loop reads its log back `CARRY_LOOKBACK_S` for the drops a candidate's check replaces: a drop of a check holding
+    member 1 twenty minutes before the candidate's build, long past `CARRY_WAIT_S`, is named to its launch, which waits for
+    no record the store already holds."""
+    env.put(1, {"a.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch)
+    runs.state["c-old"] = ("done", 143, None)
+    loop.log_path.parent.mkdir(parents=True, exist_ok=True)
+    with loop.log_path.open("a") as f:
+        f.write(json.dumps({"action": "drop", "at": L.stamp(env.clock - 1200), "sha": "0" * 40, "members": [1],
+                            "beside_cancelled": ["c-old"]}) + "\n")
+    _, built, started = loop.tick()
+    assert (built["action"], started["action"], started["sha"]) == ("build", "slim", built["sha"])
+    assert started["record"]["carry"] == ["c-old"] and "wait" not in started["record"]
+
+
 @pytest.mark.parametrize("killed", [True, False])
 def test_under_gate_check_a_step_killed_while_the_shards_run_is_no_early_red(env, monkeypatch, killed):
     """lean-audit fails in one shard while the others run.  Its log saying a process of its own was killed (`KILLED_SAYS`,

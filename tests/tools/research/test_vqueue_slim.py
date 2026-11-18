@@ -24,7 +24,7 @@ from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, L
                               SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, _reading, decide, meets)
-from research.vqueue_slim import (BUILD, CARRY_ENV, ENV, SUITE_RUNNER, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
+from research.vqueue_slim import (BUILD, CARRY_DROPS, CARRY_ENV, CARRY_LOOKBACK_S, ENV, SUITE_RUNNER, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
                                   WHOLE, Read, _json, _text, abandon, answers_suites, audit_built, audit_failures, audited,
                                   audits, based, borrowed, combine, failures, judge, key, lean_inputs, lean_reads, left,
                                   lends_suites, read_step, read_suite, reads, replaced, joined, shard_count, start, step_kind,
@@ -985,14 +985,14 @@ def test_a_check_that_waited_and_then_registered_no_run_is_infra_kept(world, mon
     assert rec["verdict"]["state"] == INFRA and judge(h.d, rec) == got and len(h.posted) == 1
 
 
-def test_a_check_replaces_the_runs_the_loop_cancelled_for_a_candidate_sharing_a_member_in_the_last_carry_wait_s():
-    """Of the loop's lines, a drop's or a launched drop's (`Loop._launched`) cancel of a check in the last `CARRY_WAIT_S` of a
-    candidate sharing a member: every run it names (one whose cancel failed among them) but one `KEEP_RUNS` left running,
+def test_a_check_replaces_the_runs_the_loop_cancelled_for_a_candidate_sharing_a_member_in_the_last_carry_lookback_s():
+    """Of the loop's lines, a drop's or a launched drop's (`Loop._launched`) cancel of a check in the last `CARRY_LOOKBACK_S` of
+    a candidate sharing a member: every run it names (one whose cancel failed among them) but one `KEEP_RUNS` left running,
     each by its first such line; not a records run's, nor a line without a time."""
     from research.vqueue_loop import stamp
 
     now = 1_800_000_000.0
-    lines = [{"action": "drop", "at": stamp(now - CARRY_WAIT_S - 1), "members": [2], "beside_cancelled": ["r-old"]},
+    lines = [{"action": "drop", "at": stamp(now - CARRY_LOOKBACK_S - 1), "members": [2], "beside_cancelled": ["r-old"]},
              {"action": "drop", "at": stamp(now - 100), "members": [1, 2], "beside_cancelled": ["r-1", "r-kept", "r-stuck"],
               "beside_cancel_failed": {"r-kept": "left running: /data/keep names it", "r-stuck": "cancel exited 1"}},
              {"action": "drop", "at": stamp(now - 50), "members": [3], "beside_cancelled": ["r-other"]},
@@ -1001,6 +1001,25 @@ def test_a_check_replaces_the_runs_the_loop_cancelled_for_a_candidate_sharing_a_
              {"action": "drop", "at": "a while ago", "members": [2], "beside_cancelled": ["r-bad"]}]
     assert replaced(lines, [2, 4], now) == {"r-1": now - 100, "r-stuck": now - 100, "r-late": now - 40}
     assert replaced(lines, [5], now) == {} == replaced([], [2], now)
+
+
+def test_a_check_built_long_after_a_drop_replaces_its_runs_and_launches_at_once_naming_them(world, monkeypatch):
+    """A rebuild many minutes after its drop, in a later tick or late in a long one, still replaces the drop's runs: their
+    passes keep every key no member moved.  It replaces only the newest `CARRY_DROPS` drops' runs, as its launch reads each
+    run it names from the store, and its wait stays bounded by `CARRY_WAIT_S` after the cancel, so it launches at once,
+    naming them."""
+    from research.vqueue_loop import stamp
+
+    h, base, sha, _ = _harness(world, monkeypatch)
+    now = h.clock
+    drops = [{"action": "drop", "at": stamp(now - 60 * m), "members": [1, 2], "beside_cancelled": [f"r-{m}"]}
+             for m in (100, 40, 30, 11)]
+    assert CARRY_WAIT_S < 11 * 60 < 100 * 60 < CARRY_LOOKBACK_S and CARRY_DROPS == 3
+    assert replaced(drops, [2], now) == {"r-40": now - 2400, "r-30": now - 1800, "r-11": now - 660}
+    published, named = _carry(h, monkeypatch)
+    published.update({"r-40", "r-11"})
+    rec = start(h.d, sha, base, after=replaced(drops, [2], now))
+    assert "wait" not in rec and named == ["r-11,r-30,r-40"] and rec["carry_without"] == ["r-30"]
 
 
 def test_a_run_has_left_its_passes_once_the_store_holds_its_attempt():

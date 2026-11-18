@@ -17,9 +17,9 @@ calls `start` again, avoiding the machines its runs failed on (``erred_on``), an
 the `Landing` the `on` of drive.toml at its `main` (`MAIN`): `start` refuses a `Landing` without machines.  Under `--dry-run` it
 calls neither `start` nor `judge`.  The candidate's verdict for `vqueue.decide` is `combine` of graph2's and this one's.  The
 loop's `Landing` outlives its ticks, so `judge` reads the runs' states afresh each call.  Where the check gates, a candidate
-sharing a member with one whose check the loop cancelled in the last `CARRY_WAIT_S` (`replaced`) launches only once those
-runs' records are in the store or that long has passed since their cancel, and names them to its launch, so its check reuses
-every pass they left (`start`'s ``after``).
+sharing a member with one whose check the loop cancelled in the last `CARRY_LOOKBACK_S` (`replaced`, the newest `CARRY_DROPS`
+such drops) launches only once those runs' records are in the store or `CARRY_WAIT_S` has passed since their cancel, and names
+them to its launch, so its check reuses every pass they left (`start`'s ``after``).
 
 A failed step's `Failed.key` is its content key at the candidate (`key`): SHA-512 over the step's name and the files it
 reads (`reads`) as git holds them in the candidate's tree; its `base_key` is the same at the base, computed from the base's
@@ -157,6 +157,11 @@ HEAVY_PART, HEAVY_REST = "lean-audit:security/Proofs", "lean-audit:*"
 #: how long after the loop cancelled a run a check that replaces it waits for the run's record (`start`'s ``after``), in
 #: seconds; past it the check launches without that run's passes
 CARRY_WAIT_S = 180
+#: how far back, in seconds, a check finds the runs it replaces (`replaced`): a rebuild comes often many minutes after its
+#: drop, a later tick's or a long tick's, and the passes its drop stopped keep every key no member moved
+CARRY_LOOKBACK_S = 2 * 3600
+#: the most drops whose runs a check replaces, the newest: its launch reads each run it names from the store
+CARRY_DROPS = 3
 #: what names the runs ``after`` holds to the candidate's check.py, whose launch sends their packs first (`check.carried_packs`)
 CARRY_ENV = "TRAIN_CARRY_FROM"
 #: what names the candidate a check is built on to its check.py, whose suites that candidate's check answers for where their
@@ -283,15 +288,17 @@ def heavy_shards(driver: Landing, sha: str, n: int, doc: dict | None = None) -> 
 
 def replaced(lines: Iterable[dict], members: Iterable[int], now: float) -> dict[str, float]:
     """The runs a check of a candidate holding ``members`` replaces (`start`'s ``after``), each by when the loop cancelled it:
-    of each line of the loop's log (``lines``) in the last `CARRY_WAIT_S` that cancelled the check of a candidate sharing a
-    member, a drop's or one's that cancelled a check still launching at its drop (`Loop._launched`), its runs
-    (``beside_cancelled``, those that had ended already among them) but one its cancel left running (`KEEP_RUNS`), which
+    of the newest `CARRY_DROPS` lines of the loop's log (``lines``) in the last `CARRY_LOOKBACK_S` that cancelled the check of a
+    candidate sharing a member, a drop's or one's that cancelled a check still launching at its drop (`Loop._launched`), their
+    runs (``beside_cancelled``, those that had ended already among them) but one its cancel left running (`KEEP_RUNS`), which
     no wait would see end."""
-    want, out = set(members), {}
+    want, found = set(members), []
     for r in lines:
         at = _epoch(r.get("at"))
-        if at is None or now - at > CARRY_WAIT_S or not want & set(r.get("members") or ()):
-            continue
+        if at is not None and now - at <= CARRY_LOOKBACK_S and want & set(r.get("members") or ()) and r.get("beside_cancelled"):
+            found.append((at, r))
+    out: dict[str, float] = {}
+    for at, r in sorted(found, key=lambda f: f[0])[-CARRY_DROPS:]:
         kept = {i for i, why in (r.get("beside_cancel_failed") or {}).items() if str(why).startswith("left running")}
         for rid in r.get("beside_cancelled") or ():
             if rid not in kept:
