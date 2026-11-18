@@ -1,8 +1,9 @@
-"""A stand-in for `streamed_wipe/demo.sh` in `test_pous_served_wipe`, taking its options and writing its outputs under
-`$OUT` (period.json, wipe.json, wipe.case.json, summary.json) with its exit: one 32 MiB segment kept in host memory
+"""A stand-in for `streamed_wipe/demo.sh` in `test_pous_served_wipe`, taking its options, attaching the wipe as it does
+(`Exchange.attach`, the case to `$WIPE_PRIVATE/wipe`) and writing its outputs under `$OUT` (period.json, wipe.json,
+summary.json) with its exit: one 32 MiB segment kept in host memory
 (`wipe_store.HostMemory`, period.json's `wipe.store` `host`) in place of the card, against `wipe_side.py`, the challenger's
 stand-in on a host of its own, in place of the side `--challenger-command` starts on `--challenger`, its key trusted
-only when it is the one `--trusted-sha512` pins (period.json's `wipe.trusted_sha512`), as demo.sh has it. The
+only when it is the one `--trusted-sha512` pins (the attach's ``trusted``), as demo.sh has it. The
 challenger period.json names is `Side.of`'s, written to `$OUT/party.json` before the stand-in replaces it;
 the arguments and the lease it ran under go to `$OUT/demo-argv.json`. The `--wipe-protocol` the wrapper always gives is
 the period's Lean judge, stood in by one that answers each case as the Python answered it.
@@ -11,15 +12,18 @@ the period's Lean judge, stood in by one that answers each case as the Python an
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
+import os
 import shlex
+import shutil
 import sys
-import tempfile
 from pathlib import Path
 
+from verity import hooks as H
+from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
 from verity.runtime.stream import Side
+from verity_vllm.messages import Exchange
 
 SIDE = Path(__file__).resolve().parents[2] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "wipe_side.py"
 
@@ -34,9 +38,8 @@ def main(argv: list[str]) -> int:
     out = Path(out)
     (out / "demo-argv.json").write_text(json.dumps({"argv": argv, "lease": lease or None}))
     judge = a.wipe_protocol
-    doc = {"tools": {} if judge is None else {"wipe-protocol": judge}, "challenger_host": a.challenger,
-           "challenger": {"wipe": {"command": shlex.split(a.challenger_command), "address": a.challenger_address}},
-           "wipe": {"store": "host", "reads": int(a.reads), "trusted_sha512": a.trusted_sha512}}
+    settings = {"store": "host", "streamer": "python", "reads": int(a.reads), "host": a.challenger,
+                "address": a.challenger_address, "command": shlex.split(a.challenger_command)}
 
     def stand_in(period, node, key, local, what=None):
         assert (key, what) == ("wipe", "the wipe"), "the wipe's side is period.json's challenger.wipe"
@@ -56,14 +59,15 @@ def main(argv: list[str]) -> int:
         return [wipes[-1].answer]
 
     wipe_run.run, wipe_run.serve = ran, judged
-    with tempfile.TemporaryDirectory() as t:
-        period = Path(t) / "periods" / "p0"
-        period.mkdir(parents=True)
-        (period / "period.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
-        (out / "period.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
-        (Path(t) / "periods" / "wipe-challenger").mkdir()
-        with open(out / "summary.json", "w") as f, contextlib.redirect_stdout(f):
-            return wipe_run.main(["--period", str(period), "--out", str(out), "--node", a.node], side_of=stand_in)
+    private = Path(os.environ["WIPE_PRIVATE"])
+    got = Exchange().attach(schemes.get("wipe"), settings, private=private, process=H.ENGINE, side_of=stand_in,
+                            pins=json.loads(os.environ.get("VERITY_PINS") or "[]"),
+                            configuration=os.environ.get("VERITY_CONFIGURATION") or None, trusted=a.trusted_sha512,
+                            node=a.node, judge=judge)
+    shutil.copy(private / "wipe" / "period.json", out / "period.json")
+    (out / "wipe.json").write_text(json.dumps(got.record(), sort_keys=True, indent=1))
+    (out / "summary.json").write_text(json.dumps(got.summary(), indent=1, sort_keys=True))
+    return 0 if got.answer["verdict"] == "accept" else 1
 
 
 if __name__ == "__main__":

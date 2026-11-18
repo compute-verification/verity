@@ -23,7 +23,8 @@ block in the circuit and no adapter option. `Pous.SecurityProofs.StreamedWipe` i
 onsite's soundness takes the wipe's target, `WipeSound`, as a premise. Its sides: over is the prior content's bits kept,
 under is zero. Its own term is unsaid: `Pous.Guarantees.StreamedWipe`'s compression term `k·C(N,g+1)·2^(M+E)/2^(q+(g+1)b)`
 has no Lean constant of its own (`StreamedWipe.bound` adds the sampling term `(g/N)^k`), and `Adv_PRF`
-(`StreamedWipe.prfAdvantage`) has no value, so no `Term` evaluates it.
+(`StreamedWipe.prfAdvantage`) has no value, so no `Term` evaluates it. Its settings are `period.json`'s ``wipe`` and the
+challenger's binding, and its attach (`prover/wipe_served.py`) runs the whole wipe before the model loads.
 """
 
 from __future__ import annotations
@@ -90,6 +91,17 @@ POUS = register(Scheme(
     attach=_pous_attach,
 ))
 
+
+def _wipe_check_settings(values: Any) -> str | None:
+    from verity.protocols.resource_accounting.memory.pous.prover import wipe_served
+    return wipe_served.check_settings(values)
+
+
+def _wipe_attach(exchange: Any, ctx: Any) -> Any:
+    from verity.protocols.resource_accounting.memory.pous.prover import wipe_served
+    return wipe_served.attach(exchange, ctx)
+
+
 WIPE = register(Scheme(
     name="wipe",
     protocol=domains.WIPE_PROTOCOL,
@@ -98,6 +110,12 @@ WIPE = register(Scheme(
     assumptions=("Verity.Vocab.WipeSound", TRUSTED_DEVICE),
     log=(Order("fill", "reveal"),),
     charges=(),
+    settings={"store": "cuda", "device": 0, "segments": 0, "reserve_bytes": 1 << 30, "tier": "",
+              "limit_ns": 20_000_000, "streamer": "native", "threads": 0, "foreign_bytes": 0,
+              "foreign_past_bound": False, "simulated": False, "egress_bits": -1, "reads": 0, "links": [], "disk": {},
+              "dram": {}, "host": "", "address": "", "command": [], "run_keys": False, "idle_mib": 1024},
+    check_settings=_wipe_check_settings,
+    attach=_wipe_attach,
     over="the prior content's bits kept through an accepted wipe, in bits",
     under="zero bits: nothing is credited for what is kept",
     requires={

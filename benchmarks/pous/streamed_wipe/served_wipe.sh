@@ -121,11 +121,11 @@ rc=0
 if [ -n "$RUN_KEYS" ]; then
   K=$SERVE_DIR/private/run-keys/wipe
   rm -rf "$K" && (umask 077 && mkdir -p "$K")
-  OUT=$DIR TMPDIR=$K bash "$DEMO" --node "$NODE" --reads "$READS" \
+  OUT=$DIR TMPDIR=$K WIPE_PRIVATE=$SERVE_DIR/private bash "$DEMO" --node "$NODE" --reads "$READS" \
     ${WIPE_PROTOCOL_EXE:+--wipe-protocol "$WIPE_PROTOCOL_EXE"} ${DEMO_ARGS[@]+"${DEMO_ARGS[@]}"} || rc=$?
   rm -rf "$K"
 else
-  OUT=$DIR bash "$DEMO" --node "$NODE" --challenger "$CH" --challenger-address "$ADDR" --challenger-command "$CMD" \
+  OUT=$DIR WIPE_PRIVATE=$SERVE_DIR/private bash "$DEMO" --node "$NODE" --challenger "$CH" --challenger-address "$ADDR" --challenger-command "$CMD" \
     --trusted-sha512 "$PIN" --reads "$READS" ${WIPE_PROTOCOL_EXE:+--wipe-protocol "$WIPE_PROTOCOL_EXE"} \
     ${DEMO_ARGS[@]+"${DEMO_ARGS[@]}"} || rc=$?
 fi
@@ -161,10 +161,6 @@ print("WIPE " + json.dumps({"verdict": answer["verdict"], "reason": answer["reas
 EOF
 )
 P=$SERVE_DIR/private/wipe
-if [ -f "$DIR/wipe.case.json" ]; then
-  { install -d -m 700 "$P" && mv -f "$DIR/wipe.case.json" "$P/wipe.case.json" && chmod 600 "$P/wipe.case.json"; } \
-    || echo "WIPE CASE: the case didn't move to $P"
-fi
 if [ -f "$DIR/answer.json" ] && [ -f "$P/wipe.case.json" ]; then
   PYTHONPATH=$ROOT "${PY:-python3}" "$ROOT/benchmarks/pous/served_case.py" --window "$DIR" --private "$P" \
     || echo "WIPE CASE: served_case.py exited $?: the composite has no wipe piece"
