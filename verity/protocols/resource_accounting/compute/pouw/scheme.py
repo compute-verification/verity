@@ -324,7 +324,8 @@ class Attached:
     def open(self, weights: Mapping[int, H.Handle], own: Mapping[str, Any]) -> Any:
         """The device run over ``weights``, under Pearl+'s own settings ``own`` (``kernel``, ``cubin``, ``schedule``,
         ``transcript_dir``, and ``coins`` or ``challenger``, whose session `reserve` gives and the launcher's gate
-        opens): their roots committed before any salt, the salt coin opened on their root (with ``challenger``, one
+        opens): their B rows salted with fresh bytes each epoch (the served checkpoint is not registered), their
+        roots committed before any salt, the salt coin opened on their root (with ``challenger``, one
         session an epoch, closed at its `close`, on an epoch number first spent in ``ctx["private"]``, `spend_epoch`; else
         the in-process coins of this process's epoch count), and the run's pass limit, retained passes and ``registration``,
         what it claims of the weights it serves."""
@@ -336,7 +337,8 @@ class Attached:
         if bad := SV.pearl_c_refusals(name, {w: tuple(t.shape) for w, t in weights.items()}):
             raise ValueError(f"pearl-plus: its weights are refused before any commitment: {'; '.join(bad)}")
         kernel = SV.PearlCKernel.load(own["kernel"], own["cubin"] or None)
-        roots = device.weight_roots(kernel, weights, name)
+        salts = {w: b"".join(SV.fresh_salts(t.shape[0])) for w, t in weights.items()}
+        roots = device.weight_roots(kernel, weights, name, weight_salts=salts)
         k, carried = None, None
         if own["challenger"]:
             k = spend_epoch(self.private)
@@ -349,7 +351,7 @@ class Attached:
         with SV.closed_on_error(self.session):
             scheme = SV.pearl_c_scheme(name)
             run = device.PearlCDeviceRun(scheme, OPTION, kernel, weights, roots, coins, opening, pass_index=k,
-                                         schedule=own["schedule"])
+                                         schedule=own["schedule"], weight_salts=salts)
         if self.session is not None:
             run.commits.update(coin_source=SV.H1_CHALLENGER, session=carried)
         run.commits["registration"] = registration(scheme, SV.DomainError)

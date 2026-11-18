@@ -296,9 +296,12 @@ class _DeviceRun(_Run):
 
 class _Device:
     PearlCDeviceRun = _DeviceRun
+    salted: list = []
 
     @staticmethod
-    def weight_roots(kernel, weights, scheme):
+    def weight_roots(kernel, weights, scheme, *, weight_salts):
+        assert {w: len(s) for w, s in weight_salts.items()} == {w: len(SV.fresh_salts(1)[0]) * t.shape[0] for w, t in weights.items()}
+        _Device.salted.append(weight_salts)
         return {w: bytes([w]) * 64 for w in weights}
 
     @staticmethod
@@ -330,7 +333,7 @@ def _in_domain(monkeypatch) -> list:
 def test_open_runs_the_handed_in_device_run_on_the_salt_coin(monkeypatch, _in_domain) -> None:
     coins = _Coins()
     monkeypatch.setattr(SV, "PearlCKernel", _Kernel, raising=False)
-    monkeypatch.setattr(SV, "in_process_coins", lambda window: window == 0 and coins)
+    monkeypatch.setattr(SV, "in_process_coins", lambda window: window in (0, 1) and coins)
     monkeypatch.setattr(T, "_pearl_c", lambda: _Device)
     on = PS.Attached(IN_PROCESS)
     run = on.open({0: W0, 1: W1}, on.own)
@@ -338,7 +341,10 @@ def test_open_runs_the_handed_in_device_run_on_the_salt_coin(monkeypatch, _in_do
     assert _in_domain == [("pearl-c-h100-v1-h3", {0: (256, 512), 1: (256, 512)})]
     assert coins.opened == [("salt", SV.weights_root(roots))]
     assert run.made == ("pearl-c-h100-v1-h3", PS.OPTION, ("kernel", "k.so", None), {0: W0, 1: W1}, roots,
-                        "commitment", "opening", {"pass_index": None, "schedule": "serial"})
+                        "commitment", "opening", {"pass_index": None, "schedule": "serial",
+                                                  "weight_salts": _Device.salted[-1]})
+    again = on.open({0: W0, 1: W1}, on.own)
+    assert again.made[7]["weight_salts"][0] != run.made[7]["weight_salts"][0]
     assert run.commits["registration"] == PS.registration(SV.pearl_c_scheme("pearl-c-h100-v1-h3"), SV.DomainError)
     assert run.commits["registration"]["claims"] == PS.UNREGISTERED
     assert run.details["max_step_tokens"] == 128
@@ -421,7 +427,7 @@ def test_a_challenger_opens_one_session_for_the_servers_life(monkeypatch, tmp_pa
     assert (entry, at, session, root, opens, epoch) == (PS.OPTION, "127.0.0.1:1", SESSION, w, True, 0)
     assert gate("s-1", "ab") == {"session": "s-1", "root": "ab", "commitment": "c"}
     assert on.run.made[2] == ("kernel", "k.so", None)
-    assert on.run.made[5:] == ("c", "o", {"pass_index": 0, "schedule": "serial"})
+    assert on.run.made[5:] == ("c", "o", {"pass_index": 0, "schedule": "serial", "weight_salts": _Device.salted[-1]})
     assert on.run.commits["coin_source"] == SV.H1_CHALLENGER and on.run.commits["session"] == {"gate": 1}
     on.release()
     assert finished == ["session"]
