@@ -123,7 +123,8 @@ def test_the_commits_session_attaches_a_binder_of_its_store_before_the_build(mon
     assert cs.binder.made == ((cs.store,), {"passes": False, "weight_blocks": 5, "kv": False})
     ex = messages.current()
     assert ex.requests == [("poub", r) for r in cs.requests()] and H.FixRanges(8) in cs.requests()
-    assert dict(ex.attached) == {"poub": {"refresh": False}} and ex.reports["poub"] is cs.binder
+    assert dict(ex.attached) == {"poub": {"refresh": False, "passes": False, "kv": False, "weight_blocks": 5, "window": 0}}
+    assert ex.reports["poub"] is cs.binder and cs.settings() == {"passes": False, "kv": False, "weight_blocks": 5}
     assert cs.declared is None
     declared = H.Declared("", {"world": 1, "async_steps": False, "prefix_cache": False, "in_process": True})
     ex.answer(declared)

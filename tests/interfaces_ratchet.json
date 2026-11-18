@@ -142,7 +142,7 @@
   "calibration/attester_timing/parties.py": 6,
   "calibration/attester_timing/run.py": 9,
   "tools/verity/cli/verity_cli/served_table.py": 3,
-  "verity/device.py": 2,
+  "verity/device.py": 1,
   "verity/protocols/proofs/spot/verifier/parties.py": 8,
   "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py": 1,
   "verity/protocols/resource_accounting/memory/pous/prover/wipe_run.py": 3,

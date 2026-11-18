@@ -598,14 +598,6 @@ class TransferBlocks:
     def root(self, opening: Hidden) -> str:
         return tree_levels(self.domain(opening.window), self.leaves(opening))[-1][0].hex()
 
-    def registration(self, opening: Hidden, previous: str | None = None) -> dict[str, Any]:
-        """One-stage's record of the execution phase: its salted root and nothing of the attestations. `previous`: the
-        digest of the stream's previous registration."""
-        w = opening.window
-        roots = [{"port": VALUE, "root": self.root(opening), **self.ports(w)[VALUE]}]
-        return R.record(self._program, self.query, {"law": "subset", "k": 1}, S.SCHEME, roots, self.provenance(w),
-                        previous=previous)
-
     def session(self, opening: Hidden, sample: S.Draw) -> str:
         """The delivered session's SHA-512: the registration, the sample and the salted leaves the opening reproduces."""
         return _sha512({"format": SESSION, "registration": sample.docket.digest, "draw": _sha512(dict(sample.draw)),

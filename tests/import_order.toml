@@ -527,6 +527,7 @@ loaded_by = [
 [[place]]
 paths = [
     "verity/protocols/registration/verifier/registration.py",
+    "verity/protocols/registration/verifier/site_log.py",
 ]
 trusted = true
 loads = [
@@ -545,7 +546,6 @@ paths = [
 loads = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/circuits/kernels",
     "verity/circuits/ops",
     "verity/circuits/silicon",
     "verity/commitments",
@@ -858,6 +858,7 @@ loads = [
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/resource_accounting/network/scheme.py",
     "verity/protocols/resource_accounting/network/verifier",
+    "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
 
@@ -956,6 +957,7 @@ loaded_by = [
     "verity/protocols/proofs/spot/prover/workload.py",
     "verity/protocols/proofs/spot/scheme.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/workload.py",
+    "verity/protocols/resource_accounting/compute/pouw/scheme.py",
     "verity/protocols/resource_accounting/memory/poub/prover/p2_party_prover.py",
     "verity/protocols/resource_accounting/memory/poub/prover/session_prover.py",
     "verity/protocols/resource_accounting/memory/poub/scheme.py",
@@ -965,5 +967,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/pous/scheme.py",
     "verity/protocols/resource_accounting/network/prover/block_attester.py",
     "verity/protocols/resource_accounting/network/prover/workload.py",
+    "verity/protocols/resource_accounting/network/scheme.py",
     "verity/protocols/workload_classification/training_detection/inference_only/scheme.py",
 ]

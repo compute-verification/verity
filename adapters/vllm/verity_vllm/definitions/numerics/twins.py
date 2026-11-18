@@ -30,6 +30,9 @@ Twins (twin_id -> the registered body it reproduces, and how it computes it):
     attention.fa2.bf16.v3        Attention_v3         fa2_model.cpp `fa2_rows` (online softmax, blocks last -> first); declines
                                                       non-finite operands and rows with a non-finite intermediate (flags)
 
+`tc_model.cpp`'s step, which `fa2_model.cpp` includes, is defined on finite inputs only: the words with a non-finite operand are
+computed by the registered primitives, through the GEMM twin's fallback or the attention twin's refusal.
+
 Equivalence evidence is machine-checked by `--check` against the gate evaluator and written as `verity-gen/twins/v1` JSON.
 """
 from __future__ import annotations
@@ -676,7 +679,7 @@ class AttentionTwin(Twin):
         scale = float(np.array([b1.scale_log2_bits(D)], dtype=U32).view(F32)[0])
         fa2.lib().fa2_rows(q.ctypes.data, kc.ctypes.data, vc.ctypes.data, KVH, D, kvh.ctypes.data, col.ctypes.data, nbm.ctypes.data,
                            NH, BN, ctypes.c_float(scale), tabs.ex2.ctypes.data, tabs.rcp.ctypes.data, out.ctypes.data,
-                           None, None, None, None, None, None, 0, 0, flags.ctypes.data)
+                           None, flags.ctypes.data)
         if flags.any():
             heads = np.nonzero(flags)[0].tolist()
             raise Declined(f"non-finite intermediate (S/P/rescale/O/sum) in head(s) {heads[:8]}: outside the FA2 model's measured domain")
