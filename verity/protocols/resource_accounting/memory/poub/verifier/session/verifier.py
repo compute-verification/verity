@@ -864,10 +864,11 @@ class Pair:
             raise audit.SessionError(f"the verifiers disagree on window {t}'s boundary")
         return out
 
-    def append(self, root: bytes, count: int):
-        return self._step(self.s.filling, lambda: {"kind": "append", "root": root.hex(), "count": count},
-                          lambda: self.s.append(root, count), lv.appended_json,
-                          coin=lambda out: out[1] if isinstance(out, tuple) else None)[0]
+    def append(self, root: bytes, count: int, origin: audit.Origin | None = None):
+        named = {} if origin is None else {"origin": wire.origin_json(origin)}
+        return self._step(self.s.filling, lambda: {"kind": "append", "root": root.hex(), "count": count} | named,
+                          lambda: self.s.append(root, count, *(() if origin is None else (origin,))),
+                          lv.appended_json, coin=lambda out: out[1] if isinstance(out, tuple) else None)[0]
 
     def release(self, runs, withdrawn=()):
         return self._step(self.s.filling, lambda: lv.release_event(runs, withdrawn),
@@ -1452,10 +1453,11 @@ class Verifier:
 
     @staticmethod
     def append(session: audit.AuditRun, head: dict) -> dict | audit.Verdict:
-        """An append's message to the session (`AuditRun.append`), `{"type": "append", "root": hex, "count": n}`: the
-        reply `{"type": "appended", "first": j, "coin": hex}`, its first index and its coin `c_a`, sampled now, or the
-        rejection."""
-        got = session.append(bytes.fromhex(head["root"]), head["count"])
+        """An append's message to the session (`AuditRun.append`), `{"type": "append", "root": hex, "count": n}`, and
+        under refresh a re-key's `"origin"` (`origin_of`): the reply `{"type": "appended", "first": j, "coin": hex}`,
+        its first index and its coin `c_a`, sampled now, or the rejection."""
+        origin = wire.origin_of(head.get("origin"))
+        got = session.append(bytes.fromhex(head["root"]), head["count"], *(() if origin is None else (origin,)))
         if isinstance(got, audit.Verdict):
             return got
         first, coin = got
