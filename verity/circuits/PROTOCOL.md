@@ -467,18 +467,21 @@ function, the block or which C; a scheme passes no function and no row at run ti
   significant first, w = 1.
 - `bits` is the value's length in bits at `args`.
 
-**The registry.** Each function states what it reads, the origin its leaves take, its arguments and its value's length at
-them. Its body is the verifier's: one Lean definition per function, in one registry, which is where the value comes from and
-the only place.
+**The registry.** The registry is the Lean one (`Spot/Supplied.lean` of the proofs' verifier): a closed list of functions,
+each with its body there, and a function exists when it has one. `supplied.FUNCTIONS` names the same list, with each one's
+reads, the origin its leaves take, its arguments and its value's length at them, which is what the decoder checks a mark
+against; no length is one deployment's figure, so a length a registration fixes is an argument. `test_supplied.py` holds
+the two lists equal, reading the Lean file's string literals of function names, and fails strictly for each function the
+list names whose body is not there yet.
 
 | function | reads | origin | args | bits |
 |---|---|---|---|---|
 | `pous.session.round_coin/v1` (u32be(j) ‖ u64be(i_j)) | coin, commitment | supplied | `round` | 96 |
-| `pous.session.header/v1` | commitment | supplied | | 6,048 |
+| `pous.session.header/v1` (the compact header) | commitment | supplied | `head` (its registered bytes) | 8 (head + head mod 2) |
 | `pous.session.context/v1` | commitment | supplied | | 848 |
 | `pous.setup.salt/v1` | coin | supplied | | 192 |
-| `poub.read.pub/v1` | coin, commitment, constant | supplied | `draw`, `K`, `masked`, `N` | 4,320 + (2 + K + masked) N |
-| `poub.read.signs/v1` | coin, constant | supplied | `draw`, `sketch_rows`, `bytes` | 8 · sketch_rows · bytes |
+| `poub.read.pass_seed/v1` (the named exception to live coins: seeds inside a window) | coin, commitment | supplied | `window`, `pass` | 512 |
+| `poub.read.pass_root/v1` (released before the openings' coin) | commitment | supplied | `window`, `pass` | 512 |
 | `window.salt/v1` | coin | coin | | 512 |
 | `pouw.pearlplus.salt/v1` | coin | coin | | 256 |
 | `registered.root/v1` (the verifier's pin, never a prover's row) | commitment | supplied | `value` | 512 |
@@ -487,15 +490,20 @@ the only place.
 | `const.u16/v1` | constant | supplied | `value` | 16 |
 
 **A supplied value is short.** No supplied input is as long as a population: where a unit's row is a function of its index
-and a short value, the verifier supplies the short value and each unit computes its row inside, from that value and its
-index, a constant of the unit in C. So the verifier computes one value per input, and the prover pays the expansion in
-gates. A storage setup unit builds its base `prefix ‖ u64be(s) ‖ u64be(v)` from `pous.setup.salt/v1` (the prefix is the
-salt framed between constants, zero-padded) and its block u = 2^16 s + v (constant bits): wiring and constants, no AND; its
-slot u mod n is a constant. A unit's position is `log.base/v1` plus its index, a 64-bit addition.
+and a short value, the verifier supplies the short value and the units compute the row inside. Either each unit reads the
+value and computes its own row, from the value and its index, a constant of the unit in C; or one unit of the block reads
+it, expands it, and its outputs are the rows the block's other units read by wire. So the verifier computes one value per
+input, and the prover pays the expansion in gates. A storage setup unit builds its base `prefix ‖ u64be(s) ‖ u64be(v)`: the
+prefix is the keys' tag, the framed protocol id, the framed prime's id and the framed `pous.setup.salt/v1`, zero-padded to
+128 bytes, the first three registered constants; its block u = 2^16 s + v is constant bits: wiring and constants, no AND;
+its slot u mod n is a constant. A unit's position is `log.base/v1` plus its index, a 64-bit addition. A bandwidth pass's one
+expanding unit reads `poub.read.pass_seed/v1` and computes the sketch's midstate, the receipt tree's domain and the sign
+rows, which the pass's other units read by wire; the rest of a draw's public row is registered constants and the unit's own
+index.
 
-So a storage round's index, its session's header and context, the setup's salt, the bandwidth audit's public row and signs,
-and a PoUW block's salt, its log's base and its operands' roots, which its seed Definition hashes inside the block, are one
-kind of input, with no case per scheme.
+So a storage round's index, its session's header and context, the setup's salt, the bandwidth pass's seed and root, and a
+PoUW block's salt, its log's base and its operands' roots, which its seed Definition hashes inside the block, are one kind
+of input, with no case per scheme.
 
 **What the decoder refuses**, after §5.1's `E_INPUTS*`, in this order (`supplied.check_entry`, `check_held`):
 
@@ -524,7 +532,9 @@ a parameter of the block bound `supplied`, named `<name>/p<i>`; a run ends where
 entry carries C's mark with `"of": [name, lo, hi]`, the leaves of C's parameter it covers (`0 <= lo < hi`, inside the
 value's bits), and `bits` the part's (`supplied.part`); a block's decoder checks the part as it checks C's mark, with
 `bits` the part's in place of the value's (`E_SUPPLIED_MARK`, `E_SUPPLIED_WIDTH`). The leaves a block's
-held outputs are held to join in(S) as such a part. The listing's binding of such an input bit is `supplied`. A block that
+held outputs are held to join in(S) as such a part. The listing's binding of such an input bit is `supplied`. A block
+whose one expanding unit reads the input and whose other units read that unit's outputs has the part in in(S) once, and
+the expansion's rows are the block's own gates; a block that holds only readers of the rows reads them as wires. A block that
 reads one leaf of an input reads that leaf alone: the key of an opening reads i_j's low half, leaf 2 of
 `pous.session.round_coin/v1` under `halves`, and no other function gives i_j.
 

@@ -1,10 +1,13 @@
 """`verity.circuits.supplied` (PROTOCOL.md §5.4): an `inputs` entry's supplied mark holds of its nodes for every short
 value a verifier makes today (the storage session's round coin, header and context, the storage setup's salt, from which
-each unit builds its own base, the bandwidth audit's pub and signs, and the salts, the log's base and the operands' roots a
-seed reads), with no case per scheme;
+each unit builds its own base, the bandwidth audit's pass seed and pass root, and the salts, the log's base and the operands'
+roots a seed reads), with no case per scheme; the registry names the Lean registry's functions;
 the decoder's refusals each name their code; an output held to a supplied constant is checked once; a block's part of a
 supplied input keeps C's mark; and an evaluation that reads a commitment registered after its coin is refused by name."""
 from __future__ import annotations
+
+import re
+from pathlib import Path
 
 import pytest
 
@@ -18,12 +21,11 @@ def _entry(name, fn, args, layout, bits, n=1):
 #: (entry, its nodes as (binding, width, leaves)) at the deployed widths
 SERVED = [
     (_entry("round_3", "pous.session.round_coin/v1", {"round": 3}, "halves", 96), [(S.SUPPLIED, 32, 3)]),
-    (_entry("header", "pous.session.header/v1", {}, "le", 6048), [(S.SUPPLIED, 1, 6048)]),
+    (_entry("header", "pous.session.header/v1", {"head": 756}, "le", 6048), [(S.SUPPLIED, 1, 6048)]),
     (_entry("context", "pous.session.context/v1", {}, "le", 848), [(S.SUPPLIED, 1, 848)]),
     (_entry("setup_salt", "pous.setup.salt/v1", {}, "le", 192), [(S.SUPPLIED, 16, 12)]),
-    (_entry("pub_9", "poub.read.pub/v1", {"draw": 9, "K": 5, "masked": 1, "N": 256}, "le", 6368), [(S.SUPPLIED, 16, 398)]),
-    (_entry("signs_9", "poub.read.signs/v1", {"draw": 9, "sketch_rows": 8, "bytes": 128}, "le", 8192),
-     [(S.SUPPLIED, 16, 512)]),
+    (_entry("seed_2", "poub.read.pass_seed/v1", {"window": 0, "pass": 2}, "halves", 512), [(S.SUPPLIED, 32, 16)]),
+    (_entry("pass_root_2", "poub.read.pass_root/v1", {"window": 0, "pass": 2}, "digest", 512), [(S.SUPPLIED, 1, 512)]),
     (_entry("salt", "window.salt/v1", {}, "halves", 512), [(S.SUPPLIED, 32, 16)]),
     (_entry("pp_salt", "pouw.pearlplus.salt/v1", {}, "le", 256), [(S.SUPPLIED, 32, 8)]),
     (_entry("root_b", "registered.root/v1", {"value": "weights/b"}, "digest", 512), [(S.SUPPLIED, 1, 512)]),
@@ -54,8 +56,8 @@ def test_unmarked_entries_are_unchanged():
     (_entry("k", "pous.session.round_key/v1", {"round": 3}, "halves", 64), [(S.SUPPLIED, 32, 2)], "E_SUPPLIED_FN"),
     (_entry("k", "pous.session.round_coin/v1", {}, "halves", 96), [(S.SUPPLIED, 32, 3)], "E_SUPPLIED_ARGS"),
     (_entry("k", "const.u16/v1", {"value": 1 << 16}, "le", 16), [(S.SUPPLIED, 16, 1)], "E_SUPPLIED_ARGS"),
-    (_entry("k", "poub.read.signs/v1", {"draw": 9, "sketch_rows": "x", "bytes": 128}, "le", 8192), [(S.SUPPLIED, 16, 512)],
-     "E_SUPPLIED_ARGS"),
+    (_entry("k", "pous.session.header/v1", {"head": "x"}, "le", 6048), [(S.SUPPLIED, 1, 6048)], "E_SUPPLIED_ARGS"),
+    (_entry("k", "pous.session.header/v1", {}, "le", 6048), [(S.SUPPLIED, 1, 6048)], "E_SUPPLIED_ARGS"),
     (_entry("k", "pous.session.round_coin/v1", {"round": 3}, "halves", 64), [(S.SUPPLIED, 32, 2)], "E_SUPPLIED_WIDTH"),
     (_entry("k", "pous.session.round_coin/v1", {"round": 3}, "halves", 96), [(S.SUPPLIED, 32, 2), (S.SUPPLIED, 16, 2)],
      "E_SUPPLIED_WIDTH"),
@@ -108,3 +110,25 @@ def test_every_function_reads_only_public_things():
     for f in S.FUNCTIONS.values():
         assert f.origin in S.ORIGINS and set(f.reads) <= set(S.READS) and f.reads
         assert f.origin == "supplied" or f.reads == ("coin",), f.name
+
+
+#: the Lean registry: each function a supplied input may name has its body there, and a function exists when it has one
+LEAN_REGISTRY = Path(__file__).parents[3] / "verity/protocols/proofs/spot/verifier/lean/Spot/Supplied.lean"
+#: a function's name as the Lean registry spells it: a string literal of the name, as in `supplied.FUNCTIONS`
+LEAN_NAME = re.compile(r'"([a-z0-9_]+(?:\.[a-z0-9_]+)+/v[1-9][0-9]*)"')
+#: the functions the Lean registry has no body of yet; each strict failure below is one to take off this list
+NO_LEAN_BODY = frozenset(S.FUNCTIONS)
+
+
+def _lean_names() -> set[str]:
+    return set(LEAN_NAME.findall(LEAN_REGISTRY.read_text()))
+
+
+@pytest.mark.parametrize("name", [pytest.param(n, marks=pytest.mark.xfail(strict=True, reason="no Lean body yet"))
+                                  if n in NO_LEAN_BODY else n for n in S.FUNCTIONS])
+def test_each_function_has_its_lean_body(name):
+    assert name in _lean_names(), f"{name} has no body in {LEAN_REGISTRY.name}"
+
+
+def test_the_lean_registry_names_no_function_the_format_lacks():
+    assert _lean_names() <= set(S.FUNCTIONS)
