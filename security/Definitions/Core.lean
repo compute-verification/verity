@@ -16,6 +16,7 @@ public import Definitions.Core.CircuitLevels
 public import Definitions.Core.LevelsCount
 public import Definitions.Core.LevelsCredited
 public import Definitions.Core.Scheme
+public import Definitions.Core.ZkCompiler
 public import Definitions.Core.Challenger
 public import Definitions.Core.Decisive
 public import Definitions.Core.Scalar
@@ -42,6 +43,7 @@ and defines none of its own: a circuit and its trace, a partition into proof blo
 the ones here.
 
 * Schemes: `Scheme` (what a resource accounting protocol supplies, and `Scheme.GetsBack`, what it gets back).
+* Zero knowledge: `ZkCompiler` (an argument and a hiding commitment give a ZK argument).
 * Circuits: `Circuit` (gates, traces, `Implements`), `Boolean` (the Boolean profile), `Expand` (a multi-bit circuit as
   a Boolean one), `Digest`.
 * Partitions: `Partition` (committed wires, a proof block's correctness), `Annotation`, `PrivatePartition`,

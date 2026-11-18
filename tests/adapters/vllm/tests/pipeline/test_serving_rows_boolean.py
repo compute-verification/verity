@@ -20,6 +20,7 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.ops.boolean import versions as BB
+from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
@@ -101,7 +102,7 @@ def test_a_boolean_templates_window_commits_the_word_rows_and_passes_the_verifie
 
     # the verifier's own copies, its population program over the Boolean template
     defn = bind(REGISTRY["RoPEHead_v2"], D=D)
-    program, query = P.population_program(defn, HEADS), P.template_instance_query(defn)
+    program, query = IF.listed_program([(defn, HEADS)], ())
     part = P.digest(P.partition(program, query))
     ports = {f"{ROPE_BITS}/{p}": {"leaves": HEADS, "domain": R.window_domain(P.program_digest(program), part, f"{ROPE_BITS}/{p}",
                                                                              CS.ROW_SCHEMA, HEADS, c["run_root"])}

@@ -185,7 +185,17 @@ paths = ["pyproject.toml", "*/pyproject.toml", "adapters/vllm/verity_vllm"]
 tests = ["test_bench_served.py"]
 paths = ["pyproject.toml", "*/pyproject.toml",
          "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90",
-         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120"]
+         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120",
+         # the Pearl-C arm's kernel scheme: the useful-work scheme by its registered name, and the kernel-scheme table
+         "benchmarks/harness/verity_bench/schemes.py", "verity/hooks.py", "verity/protocols/__init__.py",
+         "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/scheme.py",
+         "verity/protocols/resource_accounting/compute/__init__.py",
+         "verity/protocols/resource_accounting/compute/pouw/__init__.py",
+         "verity/protocols/resource_accounting/compute/pouw/scheme.py",
+         "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py",
+         "verity/protocols/resource_accounting/compute/pouw/verifier/kernel_schemes.py",
+         "verity/protocols/experimental/__init__.py", "verity/protocols/experimental/dither/__init__.py",
+         "verity/protocols/experimental/dither/scheme.py", "calibration/hardware/cards"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_settings.py"]

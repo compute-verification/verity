@@ -53,12 +53,14 @@ class InputArrived:
 
 @dataclass(frozen=True)
 class StepBegan:
-    """``steps``: workload step ``step`` begins, computing for ``inputs`` over ``slots`` slots."""
+    """``steps``: workload step ``step`` begins, computing for ``inputs`` over ``slots`` slots, with ``queued`` started
+    inputs left waiting for a slot."""
 
     hook: ClassVar[str] = "steps"
     step: int
     inputs: tuple[str, ...] = ()
     slots: int = 0
+    queued: int = 0
 
 
 @dataclass(frozen=True)
@@ -202,13 +204,29 @@ class ComputeBlockWith:
     kernel: Kernel
 
 
+@dataclass(frozen=True)
+class StepDue:
+    """Workload step ``step`` is next: ``active`` inputs started and not complete, ``queued`` of them waiting for a slot,
+    and ``completing`` complete since the last step, which the step frees."""
+
+    step: int
+    active: int
+    queued: int
+    completing: int
+
+
 class Gate(Protocol):
     """A scheme's hold on starting inputs: ``add`` starts an input when the scheme calls ``start``, and ``pending`` says
-    whether it holds any not yet started."""
+    whether it holds any not yet started. ``ready`` is asked before each step, may start inputs, and holds the step while
+    False; ``open`` starts what it holds, and every later input at once."""
 
     def add(self, input: str, start: Callable[[], None]) -> None: ...
 
     def pending(self) -> bool: ...
+
+    def ready(self, due: StepDue) -> bool: ...
+
+    def open(self, why: str) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -257,4 +275,4 @@ type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBou
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldRelease", "HoldResident",
            "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "ReuseOldestFreed",
-           "StartBeside", "StartOnBoundary", "StepBegan", "StepEnded", "ValueProduced", "unmet"]
+           "StartBeside", "StartOnBoundary", "StepBegan", "StepDue", "StepEnded", "ValueProduced", "unmet"]
