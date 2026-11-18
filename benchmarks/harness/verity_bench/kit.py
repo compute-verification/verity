@@ -603,6 +603,14 @@ def is_trial(environ: Mapping[str, str] | None = None) -> bool:
     return (settings.get(TRIAL, environ) or "0") != "0"
 
 
+def superseded(store: Any, target: str) -> list[str]:
+    """What supersedes a record's run or art: the values of its `served_table.SUPERSEDED_BY` labels, empty where none."""
+
+    from verity_bench.served_table import SUPERSEDED_BY
+
+    return [str(lab.value) for lab in store.labels(target, key=SUPERSEDED_BY)]
+
+
 def trial_attempt(attempt: Mapping[str, Any]) -> bool:
     """Whether `research run` started the attempt as a trial (`--env VERITY_BENCH_TRIAL=1`, its ``params.env``)."""
 
