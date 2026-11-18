@@ -49,14 +49,15 @@ class Grain:
 
 def _spans(what: str, fields: Sequence[tuple[str, Any]]) -> list[tuple[int, int, int]]:
     """``fields`` laid end to end as u16 words: each one's ``(first leaf, first word, leaf bits)``, then ``(leaves, words, 0)``;
-    refused where a field isn't leaves of one whole-byte width filling whole words (an s8 weight's are two a word)."""
+    refused where a field isn't leaves of one whole-byte width, or bits (`interface.layout`'s Boolean-profile words, low bit
+    first), filling whole words (an s8 weight's are two a word)."""
     out, leaf, word = [], 0, 0
     for label, ty in fields:
         ws = ty.width_set()
         bits = next(iter(ws))
-        if len(ws) != 1 or bits % 8 or ty.leaves * bits % 16:
-            raise Unexpressible(f"{what} {label}'s {ty.leaves} leaves are {sorted(ws)} bits, not one byte width filling whole u16 "
-                                "words")
+        if len(ws) != 1 or bits % 8 and bits != 1 or ty.leaves * bits % 16:
+            raise Unexpressible(f"{what} {label}'s {ty.leaves} leaves are {sorted(ws)} bits, not one byte width filling whole "
+                                "u16 words, nor bits filling them")
         out.append((leaf, word, bits))
         leaf, word = leaf + ty.leaves, word + ty.leaves * bits // 16
     return out + [(leaf, word, 0)]

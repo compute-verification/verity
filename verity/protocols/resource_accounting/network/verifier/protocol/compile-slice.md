@@ -45,10 +45,10 @@ and its carry are witness until the slice binds them):
   - by ``steps`` (and ``rows``) when the execution-phase row drops it too, since the scan's ask then reads past the count.
   On w212 both cases charge less than the honest 27 bits (24).
 - *`bit` is the committed decisions:* ``adv``'s row, which the verifier holds to the advice registration's leaf.
-- *The carry is the session's:* ``cout`` must be the charge's carry' from ``cin`` (``code``). The verifier holds ``cin``
-  and ``cout`` by their b‖c to the session's carry chain (`charge_check.check_chain`), beside the advice, served-row and
-  attested-record bindings. The proof block accepts a restarted carry-in (the priors, or counts fitted to the execution phase),
-  and the chain refuses it: ``CH-first`` on a session's first execution phase, ``CH-carry`` after it.
+- *The carry is the honest prover's:* ``cout`` must be the charge's carry' from ``cin`` (``code``), and the proof block
+  accepts any carry-in, a restarted one (the priors, or counts fitted to the execution phase) included. `charge_check`'s
+  `check_chain` would refuse it (``CH-first`` on a session's first execution phase, ``CH-carry`` after it), and no
+  verifier calls it, so no verifier holds ``cin`` and ``cout`` to the session's carry chain.
 - The slice-level cases are `tests/adapters/vllm/tests/compiler/test_network_attester_compile_slice_phase14.py`.
 
 **Every advised execution phase is proved, never sampled.** The chain binds only proved proof blocks: an unproved one's

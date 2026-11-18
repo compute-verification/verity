@@ -7,6 +7,8 @@
 #   research run --on MACHINE --project verity --source . --cwd clone --store-read --mem-gb 96 -- \
 #     bash benchmarks/one_stage/block_census.sh ROW_DIR
 #   BC_JOBS=4 (ranks at once, about 11 GB each)
+# The row is an a5_llama1b_h200.sh run's (A5_KEEP=1) on the kept bootstrap, which kept_bootstrap.sh makes or reuses
+# before the card's lease and names on its last line, DIR: VENV=DIR/venv312 HF_HOME=DIR/hf A5_TAPS=DIR/cp, under flock -s DIR.lock.
 set -uo pipefail
 ROW=${1:?the row directory: build/rank<r>/ (tensor-parallel) or build_request*/ (single-card), and commit/}
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; mkdir -p "$O"; JOBS=${BC_JOBS:-4}
