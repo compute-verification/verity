@@ -17,8 +17,10 @@ import torch
 from verity import hooks as H
 from verity.channel import Refused
 from verity.protocols.compose import schemes as declarations
+from tests.pipeline.test_serve_learn import SHAPE, parse, stand_ins
 from verity_vllm import messages as M
 from verity_vllm.pipeline import scheme_plugin as SP
+from verity_vllm.pipeline import serve_learn as sl
 
 #: the least settings each scheme needs to attach, as an application gives them (Pearl+'s passes retained besides, as
 #: `serve_openai.listed` holds them)
@@ -134,15 +136,34 @@ def test_a_scheme_takes_every_event(name, event, serve, tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("name", sorted(declarations.DECLARATIONS))
 def test_a_scheme_takes_the_serves_warm_up_before_its_first_phase(name, serve, tmp_path, monkeypatch):
-    """The serve's order under its Commit: the learn-only warm-up's step (`serve_learn.warm_up`), from no input and
-    outside any phase, then the first window's phase (`serve_commit`) and its step."""
+    """The serve's order under its Commit: the learn-only warm-up (`serve_learn.warmed`) over a stand-in engine whose
+    steps emit on the current exchange as a served step does, from no input and outside any phase, then the first
+    window's phase (`serve_commit`) and its step."""
     monkeypatch.chdir(tmp_path)
     ex = _attached(serve, name, tmp_path)
     honest = _honest()
     due = next(e for e in honest if isinstance(e, H.BlockDue))
-    later = [dataclasses.replace(e, step=e.step + 1) if "step" in {f.name for f in dataclasses.fields(e)} else e
-             for e in honest[2:]]
-    for e in (*honest[:2], H.StepBegan(0, ("learn-warmup-0",), 3), due, H.StepComputed(0), H.StepEnded(0), *later):
+    for e in honest[:2]:
+        ex.emit(e)
+    opts = parse(*SHAPE)
+    engine, com, llm = stand_ins(opts)
+    step = engine.step
+
+    def emitting() -> object:
+        on, s = serve.current(), serve.current().next_step
+        on.emit(H.StepBegan(s, ("learn-warmup-0",), 3))
+        on.compute(dataclasses.replace(due, step=s), lambda inputs: due.inputs["x"])
+        on.emit(H.StepComputed(s))
+        on.emit(H.StepEnded(s))
+        return step()
+
+    vars(engine)["step"] = emitting
+    with serve.using(ex):
+        sl.warmed(com, llm, opts)
+    shift = ex.next_step
+    for e in honest[2:]:
+        if "step" in {f.name for f in dataclasses.fields(e)}:
+            e = dataclasses.replace(e, step=e.step + shift)
         if isinstance(e, H.BlockDue):
             ex.compute(e, lambda inputs: due.inputs["x"])
         else:
