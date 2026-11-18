@@ -60,12 +60,11 @@ mkdir -p "$O/m0-build"
 FW=${SMALL_FLOCK_WORK:-$W}
 GPU=0; ON_CARDS=()
 if [ -n "${SMALL_GPU:-}" ]; then
-  # the unpacking runs in a subshell, under its own shell options; sourced again, the script only names the toolkit it
-  # finds. With the toolkit named, the build installs nothing on the node, and the prover finds its runtime beside it
-  ( set +euo pipefail; FLOCK_WORK=$FW . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh ) > "$O/cuda.log" 2>&1 \
+  # with the toolkit named, the build installs nothing on the node, and the prover finds its runtime beside it
+  . benchmarks/one_stage/toolkit.sh
+  FLOCK_WORK=$FW cuda_13_3 "$O/cuda.log" \
     || { tail -20 "$O/cuda.log"; echo "SMALL_GPU=1: the node has no CUDA 13.3 toolkit and none could be unpacked" >&2; exit 8; }
-  set +euo pipefail; FLOCK_WORK=$FW . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$O/cuda.log" 2>&1; set -euo pipefail
-  TK=${CUDA_TK:-$(python3 benchmarks/kernels/machine.py toolkit 13.3)} || TK=
+  TK=$CUDA_TK
   [ -x "$TK/bin/nvcc" ] || { echo "SMALL_GPU=1: no nvcc under $TK" >&2; exit 8; }
   export CUDA_TK=$TK LD_LIBRARY_PATH=$TK/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
   # `second` is told its cards as whoever holds them names them: this run's, else a lease's taken for it alone
