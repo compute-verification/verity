@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import math
+
 import numpy as np
 
 from verity.circuits.defs import primitive
@@ -33,7 +35,7 @@ __all__ = ["f32_decode", "f32_round", "BF16", "BF16_NAN_F2FP", "BF16_NAN_TORCH",
            "F32MulFtz", "F32SubFtz", "F32AddV2", "F32AddFtzV2", "F32DivV2", "F32FmaV2", "F32FmaFtzV2", "F32FmaSubFtzV2", "F32MulV2",
            "F32MulFtzV2", "F32SubFtzV2", "GuardNegInfZero", "bf16_to_f32_bits", "bits_of", "f32_add_bits", "f32_div_bits",
            "f32_fma_bits", "f32_gpu_nan", "f32_is_nan", "f32_max_bits", "f32_mul_bits", "f32_of", "f32_sub_bits",
-           "f32_to_bf16_rn_bits", "ftz_bits"]
+           "f32_to_bf16_rn_bits", "ftz_bits", "f32_silu_bits", "f32_tanh_bits", "bf16_gelu_tanh_bits", "GELU_BETA_BITS", "GELU_KAPPA_BITS", "GELU_HALF_BITS", "GELU_ONE_BITS"]
 
 # The float32 evaluators must return the IEEE result on overflow, invalid and division by zero, never warn or raise.
 np.seterr(all="ignore")
@@ -340,3 +342,53 @@ def Bf16MulF32(a: int, s: int) -> int:
 def Bf16MulBf16(a: int, b: int) -> int:
     """`_f16Vec *= _f16Vec`: bf16_rn(f32(a) * f32(b)); NaN -> 0x7FFF."""
     return f32_to_bf16_rn_bits(f32_mul_bits(bf16_to_f32_bits(a), bf16_to_f32_bits(b)), BF16_NAN_F2FP)
+
+
+def f32_silu_bits(g_f32_bits: int) -> int:
+    """The registered stand-in for the CUDA `silu` (expf + division): RN32 of the exact real value
+    g / (1 + e^-g). Total: NaN -> NaN, +inf -> +inf, -inf -> -0 (exact limit)."""
+    c, v = _decode(g_f32_bits)
+    if c == 2:
+        return F32_NAN
+    if c == 1:
+        return 0x7F800000
+    if c == -1:
+        return 0x80000000
+    g = float(v)
+    if g < -80.0:
+        return bits_of(np.float32(g * math.exp(g)))  # underflows to -0 well before this
+    return bits_of(np.float32(g / (1.0 + math.exp(-g))))
+
+
+def f32_tanh_bits(x: int) -> int:
+    """RN32 of the exact real tanh(x), the stand-in for CUDA `tanhf`: NaN -> canonical NaN, ±inf -> ±1, ±0 -> ±0, |x| >= 10 -> ±1."""
+    c, v = _decode(x)
+    if c == 2:
+        return F32_NAN
+    if c == 1:
+        return 0x3F800000
+    if c == -1:
+        return 0xBF800000
+    if v == 0:
+        return x & 0x80000000
+    f = float(v)
+    if abs(f) >= 10.0:
+        return 0x3F800000 if f > 0 else 0xBF800000
+    return bits_of(math.tanh(f))
+
+
+GELU_BETA_BITS = 0x3F4C422A       # f32(M_SQRT2 * M_2_SQRTPI * 0.5)
+GELU_KAPPA_BITS = 0x3D372713      # f32(0.044715)
+GELU_HALF_BITS = 0x3F000000
+GELU_ONE_BITS = 0x3F800000
+
+
+def bf16_gelu_tanh_bits(g: int) -> int:
+    """`(T)gelu_tanh_kernel((float)g)`: the activation word before the multiply."""
+    f = bf16_to_f32_bits(g)
+    x2 = f32_mul_bits(f, f)
+    x3 = f32_mul_bits(x2, f)
+    inner = f32_mul_bits(GELU_BETA_BITS, f32_fma_bits(GELU_KAPPA_BITS, x3, f))
+    t = f32_tanh_bits(inner)
+    act = f32_mul_bits(f32_mul_bits(GELU_HALF_BITS, f), f32_add_bits(GELU_ONE_BITS, t))
+    return f32_to_bf16_rn_bits(act, BF16_NAN_F2FP)

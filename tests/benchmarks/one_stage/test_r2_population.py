@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.types import Value as Bits
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
@@ -35,8 +36,8 @@ def _ports(program, query) -> dict:
 
 def _own(population, mixed: bool):
     if mixed:
-        return P.mixed_population_program(population), P.template_instances_query([d for d, _ in population])
-    return P.population_program(*population[0]), P.template_instance_query(population[0][0])
+        return PN.mixed_population_program(population), P.template_instances_query([d for d, _ in population])
+    return PN.population_program(*population[0]), P.template_instance_query(population[0][0])
 
 
 @pytest.mark.parametrize(("population", "mixed", "counts"), [
@@ -74,7 +75,7 @@ VALUES = (("row-table/0/k8", 4, 16), ("input-ids/0", 2, 16))
 def test_r2s_partition_takes_the_windows_values(population):
     """A window whose program takes values (a served window's tables, ahead of its templates' parameters): R2's other
     partition takes the same values as the same parameters, and its partition is still another."""
-    own = P.mixed_population_program(population, values=VALUES)
+    own = PN.mixed_population_program(population, values=VALUES)
     query = P.template_instances_query([d for d, _ in population])
     other = R2.program(population, mixed=True, values=VALUES)
     assert other.fn.bindings["values"] == own.fn.bindings["values"] == VALUES

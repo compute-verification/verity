@@ -41,6 +41,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as PW
@@ -111,7 +112,7 @@ def audited_v1_case(program, query, accepted: bool = True) -> dict:
 
 def toy() -> tuple[object, dict]:
     templates = [PAIR, TRIPLE]
-    return P.mixed_population_program([(t, SLOTS) for t in templates]), P.template_instances_query(templates)
+    return PN.mixed_population_program([(t, SLOTS) for t in templates]), P.template_instances_query(templates)
 
 
 def audit_dir(root: Path, v1: dict, *, v2: bool | str = True) -> Path:
@@ -252,7 +253,7 @@ def tied_v1_case(w: dict) -> dict:
     root, domain and leaves, chained right after W; its params the v2 params as a5 writes them under the tie
     (`replay.params` with ``log`` [W], the registered words, ``outputs`` and ``schemas``, `a5.tie`)."""
     templates = [PAIR, TRIPLE]
-    program = P.mixed_population_program([(t, SLOTS) for t in templates],
+    program = PN.mixed_population_program([(t, SLOTS) for t in templates],
                                          values=[(name, leaves, 16) for name, _, leaves in TABLES])
     query = P.template_instances_query(templates)
     sampling_design, ports = {"law": "stratified", "k": 1}, {"x": {"leaves": 8, "domain": "02" * 64}}
@@ -778,7 +779,7 @@ def test_from_division_is_accepted_at_the_divisions_own_budgets(tmp_path, capsys
 def test_the_parameters_are_the_population_programs_and_no_other_programs():
     """The program function's parameters come from the population program rebuilt over the root's templates, one
     template's included; a Program that isn't one (here a template on its own) is refused, its parameters unknown."""
-    one = v1_case(P.population_program(PAIR, SLOTS), P.template_instance_query(PAIR))
+    one = v1_case(PN.population_program(PAIR, SLOTS), P.template_instance_query(PAIR))
     assert SC.inference_only_case(one, 1, 1)["params"]["parameters"] == [["x", Array(SLOTS, Array(2, Bits(8))).to_json()]]
     lone = Program(PAIR)
     desc = json.loads(codec.canonical_json(codec.encode_program(lone)))
@@ -1383,8 +1384,7 @@ def test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets(
     from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit
 
     reg = Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target=H200), default_seed=7)
-    circuit = class_circuit(reg, WindowClass(4, 32, 4), None, Grain(gemm_words=1024, rows=256, select=64),
-                            provable=False)
+    circuit = class_circuit(reg, WindowClass(4, 32, 4), None, Grain(gemm_words=1024, rows=256, select=64))
     program, query = circuit.program()
     v1 = v1_case(program, query)
     alpha, gates = SC.division_policy(v1, [], inference_only_exe, tmp_path / "s")

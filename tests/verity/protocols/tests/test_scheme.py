@@ -220,6 +220,7 @@ def test_unbounded_charge_refuses_a_bound() -> None:
     s = _toy(charges=(S.Charge("on-chip", "on_chip_bits"), S.Charge("padding", "Network.PaddingBound", bounded=False)))
     with pytest.raises(ValueError, match="nothing bounds yet: padding"):
         S.bound(s, Fraction(1, 100), 0, {"on-chip": 0, "padding": 0})
+    assert S.unbounded(s).terms == ("padding",) and S.unbounded(_toy()) is None
 
 
 def test_ports() -> None:

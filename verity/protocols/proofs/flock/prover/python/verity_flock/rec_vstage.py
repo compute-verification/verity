@@ -92,6 +92,7 @@ from . import rec_outer as O
 from . import rec_residuals as RR
 from . import rec_sparse as SP
 from . import rec_vstar as V
+from verity.commitments.domains import REGISTERED_READS_V0
 
 TABLE = "circuit"
 FORGERIES = ("message", "sum", "comb", "top", "top-salt", "coef", "dirs", "filler")
@@ -357,7 +358,7 @@ def shared_rows(algebra, stacked=(), tops=()) -> dict:
     for nm, e in ports.items():
         if site(first.setdefault(e["value"], e)) != site(e):
             raise ValueError(f"the shared rows register {e['value']} twice: {nm} is not the first entry of that value")
-    return {"format": "verity/registered-reads/v0", "ports": ports}
+    return {"format": REGISTERED_READS_V0, "ports": ports}
 
 
 def staged_shared_rows(v: Path) -> dict:
