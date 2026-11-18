@@ -17,6 +17,7 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -65,13 +66,56 @@ def statement(m: dict, tmp: Path, *, ports: dict | None = None, header: tuple[st
 
 
 @pytest.fixture(scope="module")
-def at(tmp_path_factory):
+def run(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("network-certifier-zk")
     out, key = tmp / "run", tmp / "key"
     out.mkdir()
     requests = [tws.ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 30)]
     tws._run(out, key, requests, [tws._response([" word"] * 40), tws._response([" a"])])
-    return wz.attestation(out, UNITS)
+    return out
+
+
+@pytest.fixture(scope="module")
+def at(run):
+    return wz.attestation(run, UNITS)
+
+
+def test_prove_holds_the_stagers_shape_to_flocks_zk_shape_before_it_stages(run, tmp_path, monkeypatch):
+    """``prove --dry`` lowers the toy unit at the run's row width and ``--units`` and holds the statement's m, k_log
+    plus the blocks' log, to 25 .. M_MAX before it stages. The stager is stood in for (lowering takes seconds, and
+    `staged` does it), at its shape for 8 units: k_log 22, 2 units a block, m = 22 + 3 = 25, which reaches staging;
+    a k_log one lower is refused by name before any member is staged."""
+    asked, staged = [], []
+
+    class Staged(Exception):
+        pass
+
+    def stager(k_log):
+        def make(M, B, n, out):
+            asked.append((B, n))
+            return SimpleNamespace(n=n, base=0, lower_s=0.0, defn=SimpleNamespace(id="toy"),
+                                   st=SimpleNamespace(meta={"k_log": k_log, "vus_per_block": 2}, pin="0" * 16))
+        return make
+
+    def stage(M, sg, at, name):
+        staged.append(name)
+        raise Staged
+    monkeypatch.setattr(wz, "stage", stage)
+    argv = ["prove", "--dry", "--run", str(run), "--units", str(UNITS)]
+    monkeypatch.setattr(wz, "stager", stager(22))
+    with pytest.raises(Staged):
+        wz.main([*argv, "--out", str(tmp_path / "ok")])
+    assert asked == [(WR.row_bytes(tws.PARAMS), UNITS)] and staged == [next(iter(wz.MEMBERS))]
+    monkeypatch.setattr(wz, "stager", stager(21))
+    with pytest.raises(SystemExit, match=r"m = 21 \+ 3 is outside 25 \.\. \d+ \(--zk and flock-circuit's shape\)"):
+        wz.main([*argv, "--out", str(tmp_path / "low")])
+    assert len(asked) == 2 and len(staged) == 1 and not (tmp_path / "low" / "summary.json").exists()
+    M = wz._one_stage()
+    top = SimpleNamespace(n=UNITS, st=SimpleNamespace(meta={"k_log": M.a7.M_MAX - 3, "vus_per_block": 2}))
+    wz.check_shape(M, top)
+    top.st.meta["k_log"] += 1
+    with pytest.raises(SystemExit, match=rf"m = {M.a7.M_MAX - 2} \+ 3 is outside 25 \.\. {M.a7.M_MAX}"):
+        wz.check_shape(M, top)
 
 
 def test_the_programs_units_read_the_egress_cells_after_the_delay(at):
