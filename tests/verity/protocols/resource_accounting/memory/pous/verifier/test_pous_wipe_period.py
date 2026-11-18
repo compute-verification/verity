@@ -85,7 +85,7 @@ def test_an_honest_segment_is_accepted_and_not_certified() -> None:
     assert W.certify(W.params_for(), 3) == {"certified": True, "egress_mib": 3, "eps": f"1/{2 ** 128}",
                                             "foreign_bits": SEGMENT_2152 + 3 * sw.EGRESS_UNIT_BITS, "k": W.READS,
                                             "memory_bits": M, "r": 24}
-    assert w.answer["profile"]["gaps"] == [W.UNFLOORED, writer(3)] and w.answer["profile"]["tiers"] == [[W.TIER, 1 << 25]]
+    assert w.answer["profile"]["gaps"] == [writer(3)] and w.answer["profile"]["tiers"] == [[W.TIER, 1 << 25]]
     assert w.answer["profile"]["certificate"] == {"eps": f"1/{2 ** 128}", "max_reads": W.MAX_READS, "outside_bits": 0,
                                                   "r": 24, "reads": W.READS}
     evidence = json.loads(bytes.fromhex(w.case["evidence"]))
@@ -100,7 +100,7 @@ def test_an_uncounted_egress_bounds_nothing() -> None:
     gaps = [f"the egress count is {sw.EGRESS_MAX_UNITS} MiB, outside 0 to {sw.EGRESS_MAX_UNITS - 1}: it bounds nothing"]
     for egress in (None, sw.EGRESS_MAX_UNITS):
         w = _run(W.params_for(), egress_mib=egress)
-        assert w.verdict == "accept" and w.answer["public"] == VACUOUS and w.answer["profile"]["gaps"] == [W.UNFLOORED, *gaps]
+        assert w.verdict == "accept" and w.answer["public"] == VACUOUS and w.answer["profile"]["gaps"] == gaps
         assert json.loads(bytes.fromhex(w.case["evidence"]))["egress_mib"] == egress
     assert W.egress_of(None) == sw.EGRESS_MAX_UNITS and W.egress_of(0) == 0
 
@@ -110,7 +110,7 @@ def test_a_count_in_range_certifies_nothing(egress: int) -> None:
     """Every count from 0 to `EGRESS_MAX_UNITS − 1`, 0 included, is the evidence writer's: the wipe is accepted, not
     certified, and its gap names the count (the Lean's `zero-egress` is the 0)."""
     w = _run(W.params_for(), egress_mib=egress)
-    assert w.verdict == "accept" and w.answer["public"] == VACUOUS and w.answer["profile"]["gaps"] == [W.UNFLOORED, writer(egress)]
+    assert w.verdict == "accept" and w.answer["public"] == VACUOUS and w.answer["profile"]["gaps"] == [writer(egress)]
     assert W.writer_gap(egress) == [writer(egress)] and W.writer_gap(sw.EGRESS_MAX_UNITS) == W.writer_gap(-1) == []
 
 
@@ -238,23 +238,25 @@ def test_the_floors_are_the_node_kinds_pinned_figures(tmp_path) -> None:
         WC.main(["--device", str(tmp_path / "d"), "--figures", str(path)])
 
 
-def test_the_judge_refuses_a_commitment_under_its_floors_and_names_a_case_without_them() -> None:
+def test_the_judge_refuses_a_commitment_under_its_floors_and_a_counted_case_without_them() -> None:
     """The judge reads the floors from the case's params (`Floors`, with the figures' digest whoever re-reads the
-    record compares with its own pin): tiers under them are refused (`FLOOR`); tiers that cover them are accepted with
-    no floor gap; a case that pins none is accepted with `UNFLOORED` among its gaps, so it certifies nothing."""
+    record compares with its own pin): tiers under them are refused (`FLOOR`) by both checks; tiers that cover them
+    are accepted. A case that pins none is accepted by the plain check, which certifies nothing, and refused by the
+    counted one, the one that certifies (`UNFLOORED`)."""
     tiers = (("gpu-hbm", 1 << 26), (W.TIER, W.SEGMENT_BYTES))
     w = _run(_floored(tiers), egress_mib=3)
     c, (key,) = WP.commitment_of(json.loads(bytes.fromhex(w.case["commitment"]))), w.case["params"]["trusted"]
     trusted = (bytes.fromhex(key),)
     held = W.Floors("ab" * 64, FLOORS)
     ok = W.outcome(b"n0", c.session, trusted, c, w.signed, ts.SCHEMES, egress_mib=3, floors=held)
-    assert ok[0] == "accept" and W.UNFLOORED not in ok[2]["gaps"]
-    assert W.certify(c.params, 3)["certified"] and not W.certify(c.params, 3, floored=False)["certified"]
     bare = W.outcome(b"n0", c.session, trusted, c, w.signed, ts.SCHEMES, egress_mib=3)
-    assert bare[0] == "accept" and bare[2]["gaps"][0] == W.UNFLOORED
+    assert ok[0] == bare[0] == "accept" and ok[1:] == bare[1:] and not ok[1]["certified"]
     high = W.Floors("ab" * 64, FLOORS | {"gpu-hbm": (1 << 26) + 1})
-    assert W.outcome(b"n0", c.session, trusted, c, w.signed, ts.SCHEMES, egress_mib=3, floors=high) == (
-        "reject", W.FLOOR + "the request declares 67108864 bytes of gpu-hbm, under the 67108865 the node kind pins")
+    under = ("reject", W.FLOOR + "the request declares 67108864 bytes of gpu-hbm, under the 67108865 the node kind pins")
+    assert W.outcome(b"n0", c.session, trusted, c, w.signed, ts.SCHEMES, egress_mib=3, floors=high) == under
+    assert W.outcome_counted(b"n0", c.session, trusted, c, w.signed, ts.SCHEMES, egress_mib=3, floors=high) == under
+    assert W.outcome_counted(b"n0", c.session, trusted, c, w.signed, ts.SCHEMES, egress_mib=3) == (
+        "reject", W.NO_MARK)
     case = W.case(b"n0", c.session, trusted, c, w.signed, 3, held)
     assert case["params"]["floors"] == {"figures_sha512": "ab" * 64, "tiers": {"gpu-hbm": 1 << 26, "host-dram": 1 << 25}}
     assert W.Floors.from_json(case["params"]["floors"]) == held
@@ -563,7 +565,7 @@ def test_a_pinned_session_with_a_zero_count_is_not_certified(tmp_path, monkeypat
     assert json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))["egress_mib"] == 0
     gaps = json.loads((out / "wipe.json").read_text())["uncertified"]
     assert gaps[0].startswith(f"key custody: {mc.MATCHED}") and gaps[1] == writers(0)
-    assert answer["profile"]["gaps"] == [W.UNFLOORED, writer(0)]
+    assert answer["profile"]["gaps"] == [writer(0)]
 
 
 def test_the_periods_egress_goes_to_the_check_and_never_to_the_challenger(tmp_path, monkeypatch) -> None:

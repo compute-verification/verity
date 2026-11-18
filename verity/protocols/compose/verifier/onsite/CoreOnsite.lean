@@ -385,7 +385,7 @@ private def endMsg : ByteArray := (MemoryAttester.StreamedWipe.endMessage wipeSi
 /-- The wipe's case: of `server`, its evidence the signed session and a count. -/
 private def wipeCase (server : String) (signed : Option MemoryAttester.StreamedWipe.Signed) (egressMib : Int) : Case :=
   { id := countedWipe.id,
-    params := canonText (MemoryAttester.WipeProtocol.Params.toJson ⟨server.toUTF8, ⟨#[0]⟩, #[]⟩),
+    params := canonText (MemoryAttester.WipeProtocol.Params.toJson ⟨server.toUTF8, ⟨#[0]⟩, #[], none⟩),
     commitment := (canonText wipeCommitment.toJson).toUTF8,
     evidence := (canonText (MemoryAttester.WipeProtocol.Evidence.toJson ⟨signed, some egressMib⟩)).toUTF8 }
 

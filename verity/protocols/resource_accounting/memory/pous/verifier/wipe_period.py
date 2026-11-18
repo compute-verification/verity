@@ -84,8 +84,8 @@ NO_JUDGE = ("no wipe-protocol among the period's tools: the Lean decides the wip
 COUNTED = "verity/wipe/counted/v0"
 NO_COUNT = "the evidence gives no egress count: a counted wipe is held to the network certifier's count over its span"
 FLOOR = "the wipe's tiers don't cover the node kind's pinned floors: "
-UNFLOORED = ("the case pins no floors, so R is computed from tiers the prover states: memory the request leaves out "
-             "stays outside the bound")
+UNFLOORED = ("the case pins no floors: a counted wipe is held to the node kind's pinned floors, since R computed from "
+             "tiers the prover states leaves out whatever memory the request doesn't declare")
 NO_MARK = "the session names no start mark: the memory challenger held no start certificate, so no count is of its span"
 
 
@@ -124,11 +124,10 @@ def foreign_bits(p: sw.WipeParams, r: int) -> int:
     return sw.LABEL_BITS * ((n + r - 1) // r - 1) + n + p.k.bit_length() - 1 + COUNT_BITS + p.outside_bits
 
 
-def gaps(p: sw.WipeParams, egress_mib: int, floored: bool = True) -> list[str]:
+def gaps(p: sw.WipeParams, egress_mib: int) -> list[str]:
     """`MemoryChallenger.WipeProtocol.gaps`: why the bound doesn't cover an accepted wipe (none when it does). `k = 0` is
-    one: `WipeParams` refuses it, but `ratio(0) = 1` doesn't sample. A case whose params pin no floors (`floored`
-    false, `outcome`'s) is another (`UNFLOORED`): its `R` is the prover's statement."""
-    out = [] if floored else [UNFLOORED]
+    one: `WipeParams` refuses it, but `ratio(0) = 1` doesn't sample."""
+    out = []
     if p.k == 0:
         out.append("k = 0: a session of no timed reads bounds nothing")
     elif p.k > MAX_READS:
@@ -143,10 +142,10 @@ def ratio_of(p: sw.WipeParams) -> int:
     return ratio(p.k) if p.k <= MAX_READS else 0
 
 
-def certify(p: sw.WipeParams, egress_mib: int, floored: bool = True) -> dict[str, Any]:
+def certify(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
     """`MemoryChallenger.WipeProtocol.certify`'s public outputs, eps an exact ratio."""
     m, r = memory_bits(p), ratio_of(p)
-    if gaps(p, egress_mib, floored):
+    if gaps(p, egress_mib):
         return {"certified": False, "egress_mib": egress_mib, "eps": "0", "foreign_bits": m, "k": p.k, "memory_bits": m,
                 "r": r}
     return {"certified": True, "egress_mib": egress_mib, "eps": str(EPS),
@@ -168,13 +167,13 @@ def writer_gap(egress_mib: int) -> list[str]:
             "is certified on it until the check that composes the wipe with the network certifier"]
 
 
-def profile(p: sw.WipeParams, egress_mib: int, floored: bool = True) -> dict[str, Any]:
+def profile(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
     """`MemoryChallenger.WipeProtocol.profileJson`: the wipe the session ran, the bound and every gap, the evidence's
     count among them."""
     return {"batch": p.batch,
             "certificate": {"eps": str(EPS), "max_reads": MAX_READS, "outside_bits": p.outside_bits, "r": ratio_of(p),
                             "reads": p.k},
-            "experimental": EXPERIMENTAL, "gaps": gaps(p, egress_mib, floored) + writer_gap(egress_mib), "k": p.k,
+            "experimental": EXPERIMENTAL, "gaps": gaps(p, egress_mib) + writer_gap(egress_mib), "k": p.k,
             "labels": p.labels,
             "limit_ns": p.limit_ns, "tiers": [[t, b] for t, b in p.tiers]}
 
@@ -190,11 +189,12 @@ def outcome(server: bytes, session: bytes, trusted: Collection[bytes], commitmen
             egress_mib: int | None = None, floors: Floors | None = None) -> tuple:
     """`MemoryChallenger.WipeProtocol.check` on decoded inputs, the evidence the signed session and `egress_mib` beside
     it (`egress_of`): `("accept", public, profile)`, `("reject", reason)` or `("undecided", reason)`. `floors`, the
-    params' (`Floors`), refuses a commitment whose tiers don't cover them (`FLOOR`, `wipe_party.floor_refusal`)."""
-    if commitment.server != server or commitment.session != session:
-        return ("reject", OTHER)
+    params' (`Floors`), refuses first a commitment whose tiers don't cover them (`FLOOR`, `wipe_party.floor_refusal`;
+    the Lean's `checkFloored`, around `check`)."""
     if floors is not None and (why := wipe_party.floor_refusal(commitment.params.tiers, floors.tiers)):
         return ("reject", FLOOR + why)
+    if commitment.server != server or commitment.session != session:
+        return ("reject", OTHER)
     egress = egress_of(egress_mib)
     if not 0 <= egress <= sw.EGRESS_MAX_UNITS:
         return ("reject", EGRESS_RANGE.format(egress, sw.EGRESS_MAX_UNITS))
@@ -203,7 +203,7 @@ def outcome(server: bytes, session: bytes, trusted: Collection[bytes], commitmen
     v = sw.verdict(signed, commitment, trusted=set(trusted), schemes=schemes)
     if not v.accepted:
         return ("reject", "; ".join(v.reasons))
-    return ("accept", uncounted(commitment.params), profile(commitment.params, egress, floors is not None))
+    return ("accept", uncounted(commitment.params), profile(commitment.params, egress))
 
 
 def digest(commitment: sw.WipeCommitment) -> bytes:
@@ -273,10 +273,10 @@ def named(commitment: sw.WipeCommitment, signed: sw.SignedWipe | None,
             "end_message": sw.end_message(signed), "egress_mib": egress_mib}
 
 
-def counted_profile(p: sw.WipeParams, egress_mib: int, floored: bool = True) -> dict[str, Any]:
+def counted_profile(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
     """`MemoryChallenger.WipeProtocol.countedProfileJson`: `profile` whose gaps are the bound's alone (`gaps`), the
     count being no gap once a composition holds it."""
-    return profile(p, egress_mib, floored) | {"gaps": gaps(p, egress_mib, floored)}
+    return profile(p, egress_mib) | {"gaps": gaps(p, egress_mib)}
 
 
 def outcome_counted(server: bytes, session: bytes, trusted: Collection[bytes], commitment: sw.WipeCommitment,
@@ -284,7 +284,8 @@ def outcome_counted(server: bytes, session: bytes, trusted: Collection[bytes], c
                     egress_mib: int | None, floors: Floors | None = None) -> tuple:
     """`MemoryChallenger.WipeProtocol.checkCounted`, the check with its count held by a composition: `outcome`'s
     refusals, then a rejection where `named` refuses the session, of an evidence that gives no count (`NO_COUNT`) and
-    of a session that names no start mark (`NO_MARK`), and on acceptance `certify` at the evidence's count with
+    of a session that names no start mark (`NO_MARK`) and of a case whose params pin no floors (`UNFLOORED`), and on
+    acceptance `certify` at the evidence's count with
     `counted_profile`. It holds the count to nothing, as `outcome` does: only under a composition that ties `named` to
     the network attester's count over the span between the session's two marks is the count the network attester's."""
     out = outcome(server, session, trusted, commitment, signed, schemes, egress_mib=egress_mib, floors=floors)
@@ -298,8 +299,9 @@ def outcome_counted(server: bytes, session: bytes, trusted: Collection[bytes], c
         return ("reject", NO_COUNT)
     if len(n["start_mark"]) != sw.MARK_BYTES:
         return ("reject", NO_MARK)
-    return ("accept", certify(commitment.params, n["egress_mib"], floors is not None),
-            counted_profile(commitment.params, n["egress_mib"], floors is not None))
+    if floors is None:
+        return ("reject", UNFLOORED)
+    return ("accept", certify(commitment.params, n["egress_mib"]), counted_profile(commitment.params, n["egress_mib"]))
 
 
 def foreign_labels(foreign_bytes: int | str, p: sw.WipeParams) -> int:

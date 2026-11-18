@@ -12,6 +12,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import random
 import shutil
 
 import mc_cases as M
@@ -67,7 +68,10 @@ def sampled(draw) -> dict:
     signed = None if how == "unsigned" else s.signed
     server = s.commitment.server + b"x" if how == "other" else None
     egress = draw(st.integers(0, sw.EGRESS_MAX_UNITS) if draw(st.booleans()) else WC.EGRESS)
-    return C.wipe_case(s.commitment, signed, s.trusted, server=server, egress_mib=egress)
+    floor = draw(st.sampled_from(["none", "floored", "floored", "over-floor", "floor-missing", "floor-under",
+                                  "floor-unpinned"]))
+    floors = C.floors_of(floor, s.commitment.params.tiers, random.Random(x))
+    return C.wipe_case(s.commitment, signed, s.trusted, server=server, egress_mib=egress, floors=floors)
 
 
 @pytest.mark.slow
@@ -93,6 +97,7 @@ def test_a_marked_wipe_is_certified_on_its_count_and_nothing_else_is(counted_ser
     counted, uncounted = counted_port(st.none()), uncounted_port(st.none())
 
     def case(s: WC.Session, egress: int | None, **kw) -> dict:
+        kw.setdefault("floors", WP.Floors(C.FIGURES_SHA512, dict(params.tiers)))
         return C.wipe_case(s.commitment, kw.pop("signed", s.signed), s.trusted, egress_mib=egress, **kw)
 
     a = _both(counted, counted_server, case(marked, 2))
@@ -114,11 +119,15 @@ def test_a_marked_wipe_is_certified_on_its_count_and_nothing_else_is(counted_ser
             ("unsigned", case(marked, 2, signed=None), "undecided", WP.UNSIGNED),
             ("tampered", case(marked, 2, signed=tampered), "reject", "the signature does not verify"),
             ("out of range", case(marked, -1), "reject", WP.EGRESS_RANGE.format(-1, sw.EGRESS_MAX_UNITS)),
-            ("another server", case(marked, 2, server=b"another node"), "reject", WP.OTHER)]:
+            ("another server", case(marked, 2, server=b"another node"), "reject", WP.OTHER),
+            ("no floors", case(marked, 2, floors=None), "reject", WP.UNFLOORED),
+            ("under its floors", case(marked, 2, floors=WP.Floors(C.FIGURES_SHA512, {"gpu": 3 * sw.LABEL_BYTES + 1,
+                                                                                    "host-dram": 1})),
+             "reject", WP.FLOOR + "the request declares 192 bytes of gpu, under the 193 the node kind pins")]:
         got = _both(counted, counted_server, c)
         assert (got["verdict"], got["reason"], got["public"]) == (verdict, reason, None), (name, got)
-    # the wipe's own check takes the two the counted check refuses for their count
-    for c in (case(marked, None), case(unmarked, 2)):
+    # the wipe's own check takes the three the counted check refuses for their count, mark or floors
+    for c in (case(marked, None), case(unmarked, 2), case(marked, 2, floors=None)):
         assert _both(uncounted, uncounted_server, c)["verdict"] == "accept"
 
 

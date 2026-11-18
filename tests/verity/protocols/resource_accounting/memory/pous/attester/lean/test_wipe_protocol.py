@@ -120,7 +120,7 @@ def test_the_named_wipes(deployed_server):
         assert sorted(evidence) == ["egress_mib", "signed"] and "egress_bits" not in evidence["signed"], name
         params = WC.commitment_of(json.loads(bytes.fromhex(C.build(name)["commitment"]))).params
         assert seen[name]["public"] == WP.uncounted(params), name
-        assert seen[name]["profile"]["gaps"] == [WP.UNFLOORED, *WP.writer_gap(evidence["egress_mib"])] == [WP.UNFLOORED,
+        assert seen[name]["profile"]["gaps"] == WP.writer_gap(evidence["egress_mib"]) == [
             (f"the egress count is {evidence['egress_mib']} MiB, the evidence writer's, which no network certifier "
              "signed: no wipe is certified on it until the check that composes the wipe with the network certifier")], name
     assert json.loads(bytes.fromhex(C.build("zero-egress")["evidence"]))["egress_mib"] == 0
@@ -131,7 +131,7 @@ def test_the_named_wipes(deployed_server):
                                         sw.EGRESS_MAX_UNITS)
     assert not none["public"]["certified"] and none["public"]["egress_mib"] == sw.EGRESS_MAX_UNITS
     assert none["public"]["foreign_bits"] == none["public"]["memory_bits"] and none["public"]["eps"] == "0"
-    assert none["profile"]["gaps"] == [WP.UNFLOORED, (f"the egress count is {sw.EGRESS_MAX_UNITS} MiB, outside 0 to "
+    assert none["profile"]["gaps"] == [(f"the egress count is {sw.EGRESS_MAX_UNITS} MiB, outside 0 to "
                                         f"{sw.EGRESS_MAX_UNITS - 1}: it bounds nothing")]
     outside = json.loads(bytes.fromhex(C.build("egress-range")["evidence"]))["egress_mib"]
     assert not 0 <= outside <= sw.EGRESS_MAX_UNITS
@@ -142,7 +142,7 @@ def test_the_named_wipes(deployed_server):
     assert seen["tampered"]["reason"] == "the signature does not verify"
     assert seen["commitment"]["commitment"] is None and seen["evidence"]["commitment"] is not None
     for name in ("floored", "over-floor"):
-        assert WP.UNFLOORED not in seen[name]["profile"]["gaps"], name
+        assert seen[name]["public"] == seen["honest"]["public"] or not seen[name]["public"]["certified"], name
         assert C.build(name)["params"]["floors"]["figures_sha512"] == C.FIGURES_SHA512, name
     assert seen["floor-missing"]["reason"].startswith(WP.FLOOR + "the request declares no disk: the node kind pins")
     assert seen["floor-under"]["reason"].startswith(WP.FLOOR) and "under the" in seen["floor-under"]["reason"]

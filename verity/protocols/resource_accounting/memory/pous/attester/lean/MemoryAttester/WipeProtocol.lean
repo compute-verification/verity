@@ -79,18 +79,64 @@ def EXPERIMENTAL : String :=
 private def hexJ (b : ByteArray) : Json := .str (hexOf b)
 private def natJ (n : Nat) : Json := Lean.toJson n
 
+/-- The node kind's pinned capacity by tier, in bytes, and the SHA-512 of the figures they are read from, which whoever
+re-reads the record compares with its own pin: the verifier's configuration's, never the prover's. -/
+structure Floors where
+  figuresSha512 : ByteArray
+  tiers : List (String × Nat)
+
 structure Params where
   server : ByteArray
   session : ByteArray
   trusted : Array ByteArray
+  floors : Option Floors := none
+
+def Floors.toJson (f : Floors) : Json :=
+  Json.mkObj [("figures_sha512", hexJ f.figuresSha512), ("tiers", Json.mkObj (f.tiers.map fun (t, b) => (t, natJ b)))]
 
 def Params.toJson (p : Params) : Json :=
-  Json.mkObj [("server", hexJ p.server), ("session", hexJ p.session), ("trusted", .arr (p.trusted.map hexJ))]
+  Json.mkObj ([("server", hexJ p.server), ("session", hexJ p.session), ("trusted", .arr (p.trusted.map hexJ))] ++
+    match p.floors with
+    | none => []
+    | some f => [("floors", f.toJson)])
+
+def decodeFloors (j : Json) : V Floors := do
+  let sha ← hexField j "figures_sha512" "params.floors"
+  match ← J.get j "tiers" "params.floors" with
+  | .obj kvs =>
+    let tiers ← kvs.toArray.toList.mapM fun (t, v) => do
+      let b ← J.asNat v "params.floors.tiers"
+      if b == 0 then throw "params.floors.tiers: a pin is a positive byte count"
+      pure (t, b)
+    pure ⟨sha, tiers⟩
+  | _ => throw "params.floors.tiers: not an object"
 
 def decodeParams : Json → V Params :=
   exactly (fun j => do
-    pure ⟨← hexField j "server" "params", ← hexField j "session" "params", ← hexArr j "trusted" "params"⟩)
+    let floors ← match j.getObjVal? "floors" with
+      | .ok f => some <$> decodeFloors f
+      | .error _ => pure none
+    pure ⟨← hexField j "server" "params", ← hexField j "session" "params", ← hexArr j "trusted" "params", floors⟩)
     Params.toJson
+
+def FLOOR : String := "the wipe's tiers don't cover the node kind's pinned floors: "
+
+/-- Why the declared `tiers` don't cover the pinned `floors` (none when they do): each pinned tier declared at no less
+than its pin, in the floors' order, and no tier the floors don't pin, since its size would be the prover's alone.
+Declaring more than a pin is allowed: the floor is one-sided. -/
+def floorRefusal (tiers : Array (String × Nat)) (floors : List (String × Nat)) : Option String :=
+  let declared := tiers.toList
+  match floors.find? (fun (t, b) => match declared.lookup t with | none => true | some d => d < b) with
+  | some (t, b) =>
+    match declared.lookup t with
+    | none => some (s!"the request declares no {t}: the node kind pins {b} bytes of it, and memory it leaves out " ++
+        "would stay outside R")
+    | some d => some s!"the request declares {d} bytes of {t}, under the {b} the node kind pins"
+  | none =>
+    let unpinned := ((declared.map (·.1)).filter (fun t => (floors.lookup t).isNone)).toArray.qsort (· < ·)
+    if unpinned.isEmpty then none
+    else some (s!"the request declares {", ".intercalate unpinned.toList}, which the node kind's figures pin no " ++
+      "size of: its size would be the prover's alone")
 
 def decodeCommitment (b : ByteArray) : V StreamedWipe.Commitment := do
   exactly StreamedWipe.Commitment.ofJson StreamedWipe.Commitment.toJson (← Core.canonicalJson b)
@@ -223,6 +269,14 @@ def check (schemes : Schemes) (p : Params) (c : StreamedWipe.Commitment) (e : Ev
     if v.accepted then .accept (uncounted c.params) (c.params, e.egress)
     else .reject ("; ".intercalate v.reasons.toList)
 
+/-- `check` behind the floors: a commitment whose tiers don't cover the params' floors (`floorRefusal`) is refused
+first; without floors, `check` alone. -/
+def checkFloored (schemes : Schemes) (p : Params) (c : StreamedWipe.Commitment) (e : Evidence) :
+    Core.Outcome Public (StreamedWipe.Params × Int) :=
+  match p.floors.bind (fun f => floorRefusal c.params.tiers f.tiers) with
+  | some why => .reject (FLOOR ++ why)
+  | none => check schemes p c e
+
 def mkProtocol (id : String) (schemes : Schemes) : Core.Protocol where
   id := id
   Params := Params
@@ -234,7 +288,7 @@ def mkProtocol (id : String) (schemes : Schemes) : Core.Protocol where
   commitment := decodeCommitment
   evidence := decodeEvidence
   digest := digest
-  check := check schemes
+  check := checkFloored schemes
   publicJson := Public.toJson
   profileJson := profileJson
 
@@ -296,5 +350,12 @@ private def unread : StreamedWipe.Commitment := ⟨"n0".toUTF8, ⟨#[0]⟩, { se
   | .error _ => false
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
 #guard account.Formed ∧ account.protocol = protocol.id
+#guard floorRefusal #[("gpu-hbm", 10), ("host-dram", 4)] [("gpu-hbm", 8), ("host-dram", 4)] == none
+#guard floorRefusal #[("gpu-hbm", 10)] [("gpu-hbm", 8), ("host-dram", 4)] == some
+  "the request declares no host-dram: the node kind pins 4 bytes of it, and memory it leaves out would stay outside R"
+#guard floorRefusal #[("gpu-hbm", 7), ("host-dram", 4)] [("gpu-hbm", 8), ("host-dram", 4)] ==
+  some "the request declares 7 bytes of gpu-hbm, under the 8 the node kind pins"
+#guard floorRefusal #[("gpu-hbm", 8), ("host-dram", 4), ("disk", 1)] [("gpu-hbm", 8), ("host-dram", 4)] == some
+  "the request declares disk, which the node kind's figures pin no size of: its size would be the prover's alone"
 
 end MemoryAttester.WipeProtocol

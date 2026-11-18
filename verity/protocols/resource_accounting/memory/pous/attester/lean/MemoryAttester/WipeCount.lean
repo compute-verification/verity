@@ -77,6 +77,22 @@ def checkCounted (schemes : Schemes) (p : Params) (c : StreamedWipe.Commitment) 
       else .accept (certify c.params n.egressMib) (c.params, n.egressMib)
   | o => o
 
+def UNFLOORED : String :=
+  "the case pins no floors: a counted wipe is held to the node kind's pinned floors, since R computed from tiers the " ++
+  "prover states leaves out whatever memory the request doesn't declare"
+
+/-- `checkCounted` behind the floors: a commitment whose tiers don't cover the params' floors is refused first
+(`floorRefusal`), and a case that pins none is refused where `checkCounted` would accept it (`UNFLOORED`), since the
+counted check is the one that certifies. -/
+def checkCountedFloored (schemes : Schemes) (p : Params) (c : StreamedWipe.Commitment) (e : Evidence) :
+    Core.Outcome Public (StreamedWipe.Params × Int) :=
+  match p.floors.bind (fun f => floorRefusal c.params.tiers f.tiers) with
+  | some why => .reject (FLOOR ++ why)
+  | none =>
+    match checkCounted schemes p c e with
+    | .accept pub prof => if p.floors.isNone then .reject UNFLOORED else .accept pub prof
+    | o => o
+
 /-- `profileJson` of a counted wipe: its gaps are the bound's (`gaps`) alone, the count being no gap once held. -/
 def countedProfileJson (x : StreamedWipe.Params × Int) : Json :=
   (profileJson x).setObjVal! "gaps" (.arr ((gaps x.1 x.2).map Json.str).toArray)
@@ -94,7 +110,7 @@ def mkCounted (id : String) (schemes : Schemes) : Core.Protocol where
   commitment := decodeCommitment
   evidence := decodeEvidence
   digest := digest
-  check := checkCounted schemes
+  check := checkCountedFloored schemes
   publicJson := Public.toJson
   profileJson := countedProfileJson
 
@@ -124,10 +140,10 @@ private def guardSigned : StreamedWipe.Signed :=
   | .error _ => true
   | _ => false
 -- `check`'s own refusals stand: an unsigned session is undecided, and one under no accepted scheme rejected
-#guard match checkCounted TEST_SCHEMES ⟨"n0".toUTF8, ⟨#[0]⟩, #[]⟩ guardCommitment ⟨none, some 3⟩ with
+#guard match checkCounted TEST_SCHEMES ⟨"n0".toUTF8, ⟨#[0]⟩, #[], none⟩ guardCommitment ⟨none, some 3⟩ with
   | .undecided _ => true
   | _ => false
-#guard match checkCounted TEST_SCHEMES ⟨"n0".toUTF8, ⟨#[0]⟩, #[]⟩ guardCommitment ⟨some guardSigned, some 3⟩ with
+#guard match checkCounted TEST_SCHEMES ⟨"n0".toUTF8, ⟨#[0]⟩, #[], none⟩ guardCommitment ⟨some guardSigned, some 3⟩ with
   | .reject r => r != NO_COUNT && r != NO_MARK
   | _ => false
 -- the counted profile names no gap for a count the bound covers, where `check`'s names the count
