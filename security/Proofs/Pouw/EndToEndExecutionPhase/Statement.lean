@@ -187,13 +187,13 @@ counted by that program's calls:
 `EndToEndExecutionPhase` is true at any `sessCalls`, since `β` is its hypothesis; what is open is a number for `E[β]`. Before
 the card states one, `sessCalls` is tied to the play, with `CollCounted`'s restatement and one definition for both: the
 sessions as an oracle strategy of the window's game, one `QTree` per prover move with `H` only in the verdict, and
-`sessCalls` its calls (as `RegQueries` does for the registration). The window audit is `auditReg Lr (session H s)`:
+`sessCalls` its calls (as `RegQueries` does for the registration). The window audit is `Pouw.Window.auditReg Lr (session H s)`:
 `n` audit units, the sampling design `Lr R` at the registration `R`, and the session at the oracle `H` and the salt `s`. -/
 structure ProverModel (Q R S : Type) {n : ℕ} (Reg : Type) (Lr : Reg → SamplingDesign n)
     (session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool) where
   Prog : Type
   play : Prog → (H : Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → (s : S) →
-    FlockSoundness.Game.Strategy (auditReg Lr (session H s))
+    FlockSoundness.Game.Strategy (Pouw.Window.auditReg Lr (session H s))
   cost : Prog → (Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → S → ℝ
   received : Prog → (Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → S → ℕ
   cutoff : Prog → (Q → R) → Workload → (ℕ → Pouw.Mat) → Pouw.State → S → ℕ
@@ -222,7 +222,7 @@ structure Prover (PM : ProverModel Q R S Reg Lr session) where
 
 /-- **The prover's play** at the oracle `H` and the salt `s`: the strategy the window audit runs against. -/
 def Prover.play {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : Workload) (H : Q → R) (s : S) :
-    FlockSoundness.Game.Strategy (auditReg Lr (session H s)) :=
+    FlockSoundness.Game.Strategy (Pouw.Window.auditReg Lr (session H s)) :=
   PM.play B.online H U B.act (B.pre.eval H) s
 
 /-- The place of the prover's registration's receipt in the challenger's record. -/
@@ -314,11 +314,11 @@ Its discharges:
 def ExecutionPhaseBound (P : Protocol Q R S) (U : Workload) (ε : ℝ) {n : ℕ} {Reg : Type} {Lr : Reg → SamplingDesign n}
     {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}
     (Ccom : (Q → R) → S → Reg → Pouw.Trace)
-    (σ' : (H : Q → R) → (s : S) → FlockSoundness.Game.Strategy (auditReg Lr (session H s)))
+    (σ' : (H : Q → R) → (s : S) → FlockSoundness.Game.Strategy (Pouw.Window.auditReg Lr (session H s)))
     (β : (Q → R) → S → ℝ≥0∞) : Prop :=
   ∀ (H : Q → R) (s : S), FlockSoundness.Game.prob
       (fun o => o.1 = true ∧ ε * totalWref P U.layout ≤ incorrectWork P U H s (Ccom H s (σ' H s).1))
-      (auditReg Lr (session H s)) (σ' H s) ≤ β H s
+      (Pouw.Window.auditReg Lr (session H s)) (σ' H s) ≤ β H s
 
 /-- **The window realizes PoUW's units** at the oracle `H` and the salt `s`, for the incorrect proof blocks `incorrect` of an
 analysis's transcripts and the map `tx` from them to PoUW transcripts: at every trace `X`, the incorrect work of
@@ -404,7 +404,7 @@ def ExecutionPhaseBoundOfService : Prop :=
     ∀ εks εbind : (H : Q → R) → (s : S) → (R' : Reg) → Cont (Verity.SamplingDesign.subset N K hK) Reg (session H s) R' → ℝ≥0∞,
     (∀ H s, (An H s).KnowledgeSound (εks H s)) → (∀ H s, (An H s).BindSound (εbind H s)) →
     ∀ σ' : (H : Q → R) → (s : S) →
-      FlockSoundness.Game.Strategy (auditReg (fun _ : Reg => Verity.SamplingDesign.subset N K hK) (session H s)),
+      FlockSoundness.Game.Strategy (Pouw.Window.auditReg (fun _ : Reg => Verity.SamplingDesign.subset N K hK) (session H s)),
       ExecutionPhaseBound P U ε Ccom σ' fun H s =>
         (Verity.SamplingDesign.subset N K hK).miss ⌈ε * totalWref P U.layout / (wmax : ℝ)⌉₊ +
           εks H s (reg (atReg (σ' H s))) (cont (atReg (σ' H s))) +
@@ -476,7 +476,7 @@ def EndToEndExecutionPhase : Prop :=
         FlockSoundness.Game.prob
           (fun o => WindowWork.AcceptsBy B U x.1 x.2 o ∧
             T + Text < (1 - γu) * (1 - ε) * totalWref P U.layout)
-          (auditReg (fun _ : Reg => Verity.SamplingDesign.subset n K hK) (session x.1 x.2)) (B.play U x.1 x.2))
+          (Pouw.Window.auditReg (fun _ : Reg => Verity.SamplingDesign.subset n K hK) (session x.1 x.2)) (B.play U x.1 x.2))
         ≤ FlockSoundness.Game.avg (fun x : (Q → R) × S => β x.1 x.2) + ENNReal.ofReal (εid q U.layout.N) +
           ENNReal.ofReal (η (q + qext) U.layout.N)
 
