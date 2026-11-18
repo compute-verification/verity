@@ -1079,12 +1079,12 @@ def shaped() -> list[dict]:
             reads = [[_refs(nodes, a["refs"]) for a in x["args"]] for x in before]
             ret = _refs(nodes, body["ret"])
             second = copy.deepcopy(norm)
+            halves = []
             for node, m in ((norm, h), (second, n - h)):
                 node["n"] = m
-                for a, refs in zip(node["args"], reads[k], strict=True):
-                    per = refs.count // n
-                    lo = per * h if node is second else 0
-                    a["refs"] = _spelled(refs.slice(lo, lo + per * m))
+                lo = [refs.count // n * h if node is second else 0 for refs in reads[k]]
+                halves.append((node, [r.slice(b, b + r.count // n * m) for r, b in zip(reads[k], lo, strict=True)]))
+                for a in node["args"]:
                     a["type"] = _halved(desc, a["type"], m)
                 node["out"] = _halved(desc, node["out"], m)
             order = list(range(k + 1))
@@ -1096,12 +1096,12 @@ def shaped() -> list[dict]:
             order += [None] + list(range(k + 1, len(before)))
             pos = {i: p for p, i in enumerate(order)}
             nodes[:] = [second if i is None else before[i] for i in order]
-            for x, refs in zip(before, reads, strict=True):
-                if x is not norm:
-                    for a, r in zip(x["args"], refs, strict=True):
-                        a["refs"] = _spelled(_repointed(r, k, cut, pos))
+            moved = [(x, r) for x, r in zip(before, reads, strict=True) if x is not norm] + halves
+            for x, refs in moved:
+                for a, r in zip(x["args"], refs, strict=True):
+                    a["refs"] = _spelled(_repointed(r, k, cut, pos))
             body["ret"] = _spelled(_repointed(ret, k, cut, pos))
-            _split_reads(desc, [(x, r) for x, r in zip(before, reads, strict=True) if x is not norm], ret, k, cut, pos)
+            _split_reads(desc, moved, ret, k, cut, pos)
         return edit
 
     first("2x3 one input run handed to two rows", lowered(2, 3), 27, reroot=twice, broken="own-rows")
