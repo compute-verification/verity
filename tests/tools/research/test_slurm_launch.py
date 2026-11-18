@@ -1,6 +1,6 @@
 """`research run --on NAME` for a `provider = "slurm"` machine (pods/slurm.py): the payload it builds with infra/vcf/payload.sh,
 the sbatch arguments the run's flags give, the machine and properties it hands the job, its refusals, `status` and `fetch` once
-the run is published, and the register's listing.  The `via` machine is `sh -c` on a local directory, where a tmux and a
+the run is published, and the register's listing.  The `via` machine is `sh -c` on a local directory, where a setsid and a
 vcf-job-run.sh stub record what they were given; its entry's host is a dummy."""
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def site(tmp_path, monkeypatch):
     (reg / "vcf-node.toml").write_text(NODE)
     via, stubs = tmp_path / "via", tmp_path / "bin"
     stubs.mkdir()
-    _exe(stubs / "tmux", '#!/bin/sh\ncase "$1" in new-session) shift 4; sh -c "$1"; exit 0;; *) exit 1;; esac\n')
+    _exe(stubs / "setsid", '#!/bin/sh\nshift\nexec "$@"\n')
     monkeypatch.setenv("PATH", str(stubs), prepend=os.pathsep)
     job_run = _exe(stubs / "vcf-job-run.sh", '#!/bin/sh\nd=$(dirname "$0")\nprintf "%s\\n" "$@" > "$d/args"\n'
                                               'printf "%s\\n%s\\n" "$SEND" "$OUT" > "$d/where"\necho "00:00:00Z job 4242"\n')

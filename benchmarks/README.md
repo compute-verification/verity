@@ -326,7 +326,8 @@ research run --on vcf-h100-sxm-8-0 --project verity --gpus 1 --cpus 16 --mem-gb 
 ~~~
 
 It builds `infra/vcf/payload.sh`'s payload of the checkout's commit, copies it to `/data/vcf/launches/RUN/` on the control
-pod, and starts the commit's own `vcf-job-run.sh` there in tmux session `research-RUN`, with `--gpus`, `--cpus`, `--mem-gb`
+pod, and starts the commit's own `vcf-job-run.sh` there in a session of its own (its pid in `launch.pid`), with
+`--gpus`, `--cpus`, `--mem-gb`
 and the entry's node and reservation as sbatch options and `--timeout` (at most the entry's `max_minutes`) as the job's
 minutes; it prints the Slurm job id and returns. `research status RUN` reads the job's log on the control pod until the run is
 published, and then, like `research fetch RUN`, its records from the store. Run by hand, `payload.sh` and `vcf-job-run.sh`

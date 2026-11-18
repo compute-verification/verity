@@ -13,7 +13,7 @@ submits with infra/vcf's scripts, under the cluster's key only `via` holds.  Its
 
 The entry names no address, user, key or account: `via`'s scripts hold those.  `research run --on NAME --project P [--source
 GITDIR] ... -- CMD` builds infra/vcf/payload.sh's payload of GITDIR's HEAD commit (default: the checkout here), ships it to `via`
-by `research pods ssh`'s path, and starts the commit's own vcf-job-run.sh there in a tmux session, so the launch returns once
+by `research pods ssh`'s path, and starts the commit's own vcf-job-run.sh there in a session of its own (setsid), so the launch returns once
 Slurm has the job, and the job outlives the launching VM.  On the node the job runs CMD under `research run --local-only --id RUN
 --machine NAME`; vcf-job-run.sh copies its run dir back to `via` and publishes it to the store under RUN, where `research status
 RUN` and `research fetch RUN` find it.  No lease, slot or pool of ours exists there.
@@ -195,21 +195,22 @@ def _via_ssh(via: str) -> list[str]:
 
 
 def start(via: str, run_id: str, payload: Path, job_args: list[str]) -> str:
-    """Ship the payload to `via`, start vcf-job-run.sh there in tmux session research-RUN, and wait (on `via`, at most
+    """Ship the payload to `via`, start vcf-job-run.sh there in a session of its own (setsid; its pid in launch.pid), and wait (on `via`, at most
     SUBMIT_WAIT_S) for Slurm's job id, which it returns.  Refused when the copy fails or the job is not submitted."""
     ssh, q = _via_ssh(via), shlex.quote
-    d, out, session = f"{VIA_LAUNCHES}/{run_id}", f"{VIA_JOBS}/{run_id}", f"research-{run_id}"
+    d, out = f"{VIA_LAUNCHES}/{run_id}", f"{VIA_JOBS}/{run_id}"
     see = f"`research pods ssh {via} -- tail {d}/launch.log` says why"
     with payload.open("rb") as f:
         r = subprocess.run([*ssh, f"mkdir -p {q(d)} && cat > {q(d)}/payload.tar.gz"], stdin=f, capture_output=True, timeout=1800)
     if r.returncode != 0:
         raise remote.Refused(f"the payload's copy to {via} failed (ssh rc {r.returncode}): `research pods ssh {via} -- true` shows "
                              "ssh's message")
-    job = f"SEND={q(d)}/payload.tar.gz OUT={q(out)} bash {shlex.join([JOB_RUN, *job_args])} > launch.log 2>&1"
+    job = f"echo $$ > launch.pid; SEND={q(d)}/payload.tar.gz OUT={q(out)} bash {shlex.join([JOB_RUN, *job_args])} > launch.log 2>&1"
     grep = "grep -o -m1 ' job [0-9][0-9]*$' launch.log 2>/dev/null"
-    script = (f"cd {q(d)} && tar -xzf payload.tar.gz tree/infra/vcf && tmux new-session -d -s {q(session)} {q(job)} || exit 3; "
+    script = (f"cd {q(d)} && tar -xzf payload.tar.gz tree/infra/vcf && setsid -f bash -c {q(job)} < /dev/null > /dev/null 2>&1 || exit 3; "
+              "for i in $(seq 50); do [ -s launch.pid ] && break; sleep 0.1; done; "
               f"for i in $(seq {SUBMIT_WAIT_S // 2}); do {grep} && exit 0; "
-              f"tmux has-session -t {q(session)} 2>/dev/null || {{ {grep} && exit 0; tail -n 1 launch.log; exit 5; }}; sleep 2; done; "
+              f"kill -0 \"$(cat launch.pid 2>/dev/null)\" 2>/dev/null || {{ {grep} && exit 0; tail -n 1 launch.log; exit 5; }}; sleep 2; done; "
               "exit 4")
     r = subprocess.run([*ssh, script], capture_output=True, timeout=SUBMIT_WAIT_S + 120)
     text = r.stdout.decode(errors="replace")
@@ -259,7 +260,7 @@ def launch(ns: argparse.Namespace, harness_opts: list[str], command: list[str], 
         "launch_args": ["--stage", ns.stage, *harness_opts], "source_sha": commit, "slurm_job": job, "minutes": n, "sbatch": sbatch,
         "via_dir": d, "via_out": out})
     print(f"research: run {run_id} submitted to {name} as Slurm job {job} ({n} min, its command {cmd_min} of them; "
-          f"{' '.join(sbatch) or 'no sbatch options'}), from {m['via']}'s tmux session research-{run_id}", file=sys.stderr)
+          f"{' '.join(sbatch) or 'no sbatch options'}), from a session of its own on {m['via']} (pid in {d}/launch.pid)", file=sys.stderr)
     print(f"research: its output lands in {m['via']}:{out}/ and its launch log is {m['via']}:{d}/launch.log; once {m['via']} has "
           f"published it, `research status {run_id}` and `research fetch {run_id}` read it from the store. The job does not depend "
           "on this session staying alive", file=sys.stderr)
