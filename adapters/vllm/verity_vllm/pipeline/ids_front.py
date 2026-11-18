@@ -28,9 +28,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity.protocols.resource_accounting.network.prover.id_relay import (
+    BLANK,
+    COMPLETIONS,
+    READ_BYTES,
+    Broken,
+    Front,
+    serve,
+)
 from verity.protocols.resource_accounting.network.prover.ids_protocol import ID_PAYLOAD
+
 from verity_vllm.config import UsageError, option
-from verity.protocols.resource_accounting.network.prover.id_relay import BLANK, COMPLETIONS, READ_BYTES, Broken, Front, serve
 
 __all__ = ["Options", "address", "chunk_ids", "main", "server_request", "token_ids"]
 

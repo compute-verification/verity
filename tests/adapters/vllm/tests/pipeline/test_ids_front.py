@@ -16,16 +16,16 @@ import threading
 from typing import Any
 
 import pytest
+from verity_vllm.config import UsageError
+from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import ids_front as F
+from verity_vllm.pipeline import serve_protocol as proto
+
+from tests.pipeline import test_serve_openai as served
+from verity.protocols.resource_accounting.network.prover import id_relay as R
 from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 from verity.protocols.resource_accounting.network.verifier import release as REL
-
-from tests.pipeline import test_serve_openai as served
-from verity_vllm.config import UsageError
-from verity_vllm.pipeline import cli
-from verity.protocols.resource_accounting.network.prover import id_relay as R
-from verity_vllm.pipeline import ids_front as F
-from verity_vllm.pipeline import serve_protocol as proto
 
 P = 140
 FIELDS = {"model": "m", "user": "u", "prompt": [128000, 791, 4062], "max_tokens": 2, "temperature": 0.0, "top_p": 1.0, "seed": 0}

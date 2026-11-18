@@ -8,10 +8,10 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from verity.errors import InvalidArtifact
-
 from verity_vllm.check.replay import driver
 from verity_vllm.commitments.leaves import parse_shape_text
+
+from verity.errors import InvalidArtifact
 from verity.protocols.resource_accounting.network.prover import id_relay
 
 NO_DECIMAL = "²"
