@@ -434,7 +434,7 @@ $$\mathbb{E}_{H,s}\Pr[\text{accept before the sample coin} \wedge T + T_{ext} < 
   \mathbb{E}_{H,s}\,\beta(H, s) + \varepsilon_{id}(q, N) + \eta(q + q_{ext}, N).$$
 The challenger's wall-clock deadline (`Check.registration_deadline`) only refuses more, so the bound holds of what the
 service accepts at any deadline.
-The audit is `Spot.Sampling.auditReg` at the service's sampling design, one uniform `K`-subset of the `n` padded units
+The audit is `Pouw.Window.auditReg` at the service's sampling design, one uniform `K`-subset of the `n` padded units
 (`Verity.SamplingDesign.subset n K`, `subset:K′` in `window.py`), with any sessions. `ε` is the window's, the `ε` its `K′` was sized at
 (`window.sampling`), so the statement covers each grid main serves, `(0.1%, 2^-40)` and `(1%, 2^-128)`.
 
