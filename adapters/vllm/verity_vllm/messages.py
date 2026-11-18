@@ -274,11 +274,39 @@ def named(entry: str) -> schemes.Scheme | None:
     return found if found is not None else declarations.load().get(entry)
 
 
+#: what a storage scheme declares: its resource (`Scheme.resource`) and the workload's store among its needs (`Scheme.needs`)
+STORAGE = ("memory", "store")
+
+
+def storage(s: Any) -> bool:
+    needs = getattr(s, "needs", schemes.UNDECLARED)
+    return getattr(s, "resource", None) == STORAGE[0] and not isinstance(needs, schemes.Lacks) and STORAGE[1] in needs
+
+
+def weight_copy_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
+    """A storage scheme (`storage`) listed beside one that keeps a weight-derived copy resident (``keeps_weight_copy``),
+    or beside one that has not declared whether it does, in any order; sorted by name, so the order listed changes none."""
+    out = []
+    for st in sorted({s.name: s for s in listed if storage(s)}.values(), key=lambda s: s.name):
+        for o in sorted({s.name: s for s in listed if s.name != st.name}.values(), key=lambda s: s.name):
+            keeps = getattr(o, "keeps_weight_copy", schemes.UNDECLARED)
+            if keeps is True:
+                out.append(f"{st.name} is storage (it needs the workload's store) and {o.name} keeps a weight-derived copy resident for the "
+                           f"serve's life (keeps_weight_copy), so {o.name}'s GEMMs would not read the weights {st.name} holds: "
+                           "the two are not attached in one process while the pairing awaits a decision")
+            elif isinstance(keeps, schemes.Lacks):
+                out.append(f"{st.name} is storage (it needs the workload's store) and {o.name}'s declaration does not say whether it keeps a "
+                           f"weight-derived copy (keeps_weight_copy is undeclared), so storage is not attached beside it "
+                           "until it declares that, and a scheme that keeps one beside storage awaits a decision")
+    return out
+
+
 def listed_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
     """Every reason ``listed``, a configuration's schemes in its order, can't be attached together in one process,
     checked before any of them attaches; empty: it can."""
     names = [s.name for s in listed]
-    return [f"{n} is listed {names.count(n)} times" for n in dict.fromkeys(names) if names.count(n) > 1]
+    twice = [f"{n} is listed {names.count(n)} times" for n in dict.fromkeys(names) if names.count(n) > 1]
+    return twice + weight_copy_refusals(listed)
 
 
 def attach_listed(exchange: Exchange, listed: Sequence[tuple[schemes.Scheme, Mapping[str, Any]]], **ctx: Any) -> list[Any]:

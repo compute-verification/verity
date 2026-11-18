@@ -228,14 +228,21 @@ def current_spec(spec_id: str) -> str:
     return now[0] if doc.get("cards", [doc.get("card")]) == [now[1]] else f"{now[0]}@{now[1]}"
 
 
-def _spec_path(spec: str | Path) -> Path:
+def spec_file(spec: str | Path) -> Path | None:
+    """The spec file ``spec`` names, by path or id (one under `FORMER_SPECS` by its name); None where none is there: a
+    former, retired or unknown id."""
+
     path = Path(spec)
     if path.is_file():
         return path
+    named = SPEC_ROOT / f"{former_name(spec) or spec}.toml"
+    return named if named.is_file() else None
+
+
+def _spec_path(spec: str | Path) -> Path:
+    if (path := spec_file(spec)) is not None:
+        return path
     name = former_name(spec) or str(spec)
-    named = SPEC_ROOT / f"{name}.toml"
-    if named.is_file():
-        return named
     if now := former_spec(name):
         raise ConfigError(f"spec {name!r} is {now[0]!r} on the {now[1]}, `{now[0]}@{now[1]}`: its former id names a "
                           "stored run's spec, and no run is launched under it")

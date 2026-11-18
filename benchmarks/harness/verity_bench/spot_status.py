@@ -1,12 +1,14 @@
-"""Whether the code a SPOT figure's runs ran closes SPOT's two resampling holes, and the theorem the figure rests on,
+"""Whether the code a SPOT figure's runs ran closes SPOT's holes, and the theorem the figure rests on,
 as one block that `verity bench prove --system spot` and `verity bench exfiltration` print beside their tables (and
 hold in their `--json` under `spot_holes`).
 
-* **The holes** are `HOLES`: a redrawn sample (a prover registers again for fresh coins and hands over the last
-  sample alone) and a re-committed execution phase (the phase committed again under fresh salts). The commits whose
-  code closes each are declared in `FIXES`, a data file this module reads: the fix (a commit, whose change is against
-  its first parent, or a range ``A..B`` of commits, whose change is ``git diff A B``), then each later commit that
-  rewrote the fix's lines and keeps it, each an ancestor of the next. A hole it holds no commit for is open.
+* **The holes** are `HOLES`: two resampling holes, a redrawn sample (a prover registers again for fresh coins and
+  hands over the last sample alone) and a re-committed execution phase (the phase committed again under fresh salts),
+  and the wires between proof blocks, open until the registered circuit carries its wires, its status line printing
+  what it leaves of the claim (`LIMITS`, also the hole's `limit` in the JSON). The commits whose code closes each are
+  declared in `FIXES`, a data file this module reads: the fix (a commit, whose change is against its first parent, or
+  a range ``A..B`` of commits, whose change is ``git diff A B``), then each later commit that rewrote the fix's lines
+  and keeps it, each an ancestor of the next. A hole it holds no commit for is open.
 * **A hole is closed in a run** only where the run's code holds its fix (`closes`, the one check every reader uses): the
   fix's commit (a range's tip) is an ancestor of the run's own commit, the one the run's record names
   (`source.commit`); no commit between them reverts the fix, a commit of its range, a later commit the run holds or a
@@ -34,7 +36,8 @@ hold in their `--json` under `spot_holes`).
   read and those not given, never closed, and the label stays `SPOT`: `SPOT soundness` needs every hole closed at
   all four runs.
 * **The theorem** is the first of `THEOREMS` that the lock (`LOCK`) lists among its guarantees, printed with the open
-  premises its record there takes (`premises.open`), by name.
+  premises its record there takes (`premises.open`), by name, and under it what those leave unsaid
+  (`THEOREM_NOTES`).
 """
 
 from __future__ import annotations
@@ -50,12 +53,22 @@ from typing import Any
 
 from verity_bench import jobs
 
-HOLES = ("redrawn sample", "re-committed execution phase")
+HOLES = ("redrawn sample", "re-committed execution phase", "wires between proof blocks")
+#: what a sampled audit's claim holds while the wires between proof blocks are open
+WIRES = "each sampled block on its own inputs; the wires between blocks are not held"
+#: what an open hole leaves of a sampled audit's claim, printed on its status line until it is closed
+LIMITS = {"wires between proof blocks": WIRES}
 FIXES = Path(__file__).resolve().parent / "data" / "spot_holes.json"
 LOCK = Path("security/lean-audit.json")
 #: the guarantees the label rests on, the first the lock lists cited: onsite soundness, else remote soundness, each at
 #: the deployed vocabulary
 THEOREMS = ("Verity.Sampled.onsite_soundness_deployedReady", "Verity.Sampled.remote_soundness_deployedReady")
+#: what a cited theorem's printed premises leave unsaid, printed under its line
+THEOREM_NOTES = {THEOREMS[0]: (
+    "Onsite's theorem takes the inference-only policy's claim as an open premise (`InferenceOnlySound`). That claim is "
+    "about the case as the prover sent it; no check and no premise of the theorem ties that case's wires to the "
+    "committed record's wires. So the wires limit applies to onsite's verdict as it does to remote's, and onsite's "
+    "theorem does not name it.")}
 CLOSED, OPEN, UNKNOWN = "closed", "open", "not known"
 #: a served run's hole closed at every commit read while some of its runs were not given, which is never `CLOSED`
 CLOSED_READ = "closed at the runs read"
@@ -487,7 +500,7 @@ def _over(sources: Mapping[str, tuple[str | None, str | None]], root: Path) -> d
                    UNKNOWN if UNKNOWN in found or unread or not runs else CLOSED)
         declared = list(fixed.get(hole, ()))
         out.append({"hole": hole, "status": overall, "fix": declared[0] if declared else None, "commits": declared,
-                    "at": seen})
+                    "at": seen, "limit": LIMITS.get(hole)})
     return {"label": SOUND if all(h["status"] == CLOSED for h in out) else LABEL, "holes": out,
             "fixes": str(FIXES.relative_to(root)) if FIXES.is_relative_to(root) else str(FIXES),
             "runs": len(runs), "commits": dict(commits.most_common()), "unread": unread,
@@ -501,9 +514,9 @@ def render(doc: Mapping[str, Any]) -> str:
     t, sv = doc["theorem"], doc.get("served")
     of = ("of the commit the served run's record names and of each of its runs' commits" if sv else
           "of the commit each run's record names")
-    lines = ["## SPOT's resampling holes in the code that ran", "",
+    lines = ["## SPOT's holes in the code that ran", "",
              (f"Each hole is closed only where its fix's commit (`{doc['fixes']}`; a hole with none is open) is an ancestor "
-              f"{of}. The label is `SPOT soundness` only when both are closed in every "
+              f"{of}. The label is `SPOT soundness` only when every hole is closed in every "
               f"{'one, with all four runs read' if sv else 'run read'}."), "", f"- label: **{doc['label']}**"]
     partly = f" ({', '.join(sv['read']) or 'its record alone'}); {', '.join(sv['not_given'])} not given" if sv else ""
     runs_at: dict[str, list[str]] = {}
@@ -511,7 +524,8 @@ def render(doc: Mapping[str, Any]) -> str:
         if r["holes"]:
             runs_at.setdefault(r["commit"], []).append(r["name"])
     for h in doc["holes"]:
-        lines.append(f"- {h['hole']}: {h['status']}" + (partly if h["status"] == CLOSED_READ else ""))
+        lines.append(f"- {h['hole']}: {h['status']}" + (partly if h["status"] == CLOSED_READ else "")
+                     + (f": {h['limit']}" if h.get("limit") and h["status"] != CLOSED else ""))
         kinds = {(s["status"], s["why"]) for s in h["at"].values()}
         if len(kinds) > 1:
             lines += [f"  - at `{c[:12]}`" + (f" ({', '.join(runs_at[c])})" if c in runs_at else "") + f": {s['status']}"
@@ -538,4 +552,6 @@ def render(doc: Mapping[str, Any]) -> str:
         premises = ", ".join(f"`{p}`" for p in t["open_premises"]) or "none"
         lines.append(f"- theorem: `{t['name']}`, on the {len(t['open_premises'])} open premises its record in "
                      f"`{t['lock']}` takes: {premises}")
+        if t["name"] in THEOREM_NOTES:
+            lines.append(f"  - {THEOREM_NOTES[t['name']]}")
     return "\n".join(lines)
