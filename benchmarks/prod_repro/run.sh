@@ -114,11 +114,6 @@ if [ -n "$REPORT" ]; then
   report "$REPORT"; exit $?
 fi
 D=${RESEARCH_RUN_DIR:?run this under research run (or read an earlier job: --report OUT --load NAME)}; OUT=$D/out
-if [ -z "${PRIVATE:-}" ]; then
-  recording=$("$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import serve_tax as S
-print(" ".join(a for a in sys.argv[2:] if S.records(S.ARMS[a])))' "$here/../serve_tax" $served ${SERVE:-}) || exit 2
-  [ -z "$recording" ] || { echo "prod_repro: arms $recording record their step traces or served ids, which hold request values: PRIVATE, a directory outside every run's"; exit 2; }
-fi
 MODEL_ID=${MODEL_ID:-moonlight}
 export MODEL_ID CLIENT ${MAX_MODEL_LEN:+MAX_MODEL_LEN} ${PASS_PROMPTS:+PASS_PROMPTS} ${STOP_AT:+STOP_AT} ${SAMPLED:+SAMPLED} \
   ${LIFETIMES:+LIFETIMES} ${LEAVE_OUT:+LEAVE_OUT}
@@ -127,6 +122,12 @@ export MODEL_ID CLIENT ${MAX_MODEL_LEN:+MAX_MODEL_LEN} ${PASS_PROMPTS:+PASS_PROM
 # ours's directory the replay reads: its first lifetime's where the arms are served in lifetimes
 ours_dir=$OURS; [ "${LIFETIMES:-1}" = 1 ] || ours_dir=$OURS.1
 [ -z "${STOP_AT:-}" ] || date -d "$STOP_AT" +%s > /dev/null || { echo "prod_repro: --stop-at $STOP_AT is not a time"; exit 2; }
+if [ -z "${PRIVATE:-}" ]; then
+  [ -z "$REPLAY_OF" ] || { echo "prod_repro: --replay-of replays, and a replay keeps its tokens on the node: PRIVATE, a directory outside every run's"; exit 2; }
+  recording=$("$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import serve_tax as S
+print(" ".join(a for a in sys.argv[2:] if S.records(S.ARMS[a])))' "$here/../serve_tax" $served) || exit 2
+  [ -z "$recording" ] || { echo "prod_repro: arms $recording record their step traces or served ids, which hold request values: PRIVATE, a directory outside every run's"; exit 2; }
+fi
 # the pass of ours the replay re-runs: REPLAY, REPLAY_FROM and REPLAY_MODES are the benchmark's runner's
 replays() {
   if [ "$REPLAYED" = none ]; then unset REPLAY REPLAY_FROM; else export REPLAY=$REPLAYED REPLAY_FROM=$OUT/$ours_dir REPLAY_MODES; fi

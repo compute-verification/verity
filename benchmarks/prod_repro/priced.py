@@ -34,7 +34,7 @@ from pathlib import Path
 from verity.device import load_card, skus
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "benchmarks/serve_tax"))
-import serve_tax as S  # noqa: E402 (benchmarks/serve_tax, put on sys.path above)
+import serve_tax as S
 
 CARDS = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
 METRIC = "vllm/prod-serving-cost-glm53"

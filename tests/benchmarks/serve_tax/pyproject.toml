@@ -106,6 +106,7 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     "adapters/vllm/verity_vllm/query/manifest/__init__.py",
     "adapters/vllm/verity_vllm/query/manifest/format.py",
     "benchmarks/replay_ladder/ladder.py",
+    "benchmarks/spot_proved/long_rows.py",
     # a point's member carries its card's record's `short`, the record found by the name nvidia-smi gives the card
     "verity/device.py",
     "calibration/hardware/cards",
