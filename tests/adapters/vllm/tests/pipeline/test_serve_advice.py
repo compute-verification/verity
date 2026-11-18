@@ -29,6 +29,7 @@ from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline import research_outputs as RO
 from verity_vllm.pipeline import serve_commit as sc
+from verity_vllm.pipeline import serve_mirror as sm
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import window_advice as WA
@@ -193,7 +194,7 @@ def test_request_users_is_requests_jsonls_engine_id_and_user_alone_and_stays_in_
     assert len(users) == sum(map(len, WAVES)) and all(set(u) == {"engine_id", "user"} for u in users)
     assert [(u["engine_id"], u["user"]) for u in users] == [(r["engine_id"], r["user"]) for r in reqs]
     assert None in {u["user"] for u in users}                      # a body with no `user` is recorded as such, not dropped
-    sc.Mirror(out, tmp_path / "OUT")()
+    sm.Mirror(out, tmp_path / "OUT")()
     assert (tmp_path / "OUT" / "windows.jsonl").exists() and not (tmp_path / "OUT" / sc.REQUEST_USERS).exists()
     assert RO.private(sc.REQUEST_USERS)
 

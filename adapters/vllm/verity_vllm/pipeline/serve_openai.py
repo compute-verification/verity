@@ -96,8 +96,9 @@ committer (`NativeHostCommitter.detach`), and it waits only while the windows aw
 ``--window-gb``, which bounds each bundle on disk; under ``--seal`` the server refuses to start unless ``--out``'s filesystem
 has ``--disk-floor-gb`` free beyond one such window, and once a window's seal would take it under that floor, the window is
 not sealed and the server stops: it refuses new requests, finishes those in flight, and exits. ``--copy-records-to`` (the
-run's ``$OUT``) gets a copy of the records (`serve_commit.MIRRORED`) after each close and each seal, and at the stop before
-the seals still pending. SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
+run's ``$OUT``) gets the fields `serve_mirror.PUBLIC` names of the records it lists, each with its public kind, after each close
+and each seal, and at the stop before the seals still pending; every other field and file stays in ``--out``.
+SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
 finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`);
 it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
@@ -143,9 +144,10 @@ from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h
                                    serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import (ADMIT, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
                                               engine_id_of, keep_scheduler_rows, new_http_id)
-from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, param_of, records_mirror,
+from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, param_of,
                                                served_statics, user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop, advice_trace
+from verity_vllm.pipeline.serve_mirror import records_mirror
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
@@ -217,8 +219,8 @@ class Options:
                                        "(--window-gb), and stop cleanly (no new requests) rather than seal a window that would "
                                        "leave less (0: no floor)")
     copy_records_to: str | None = option("--copy-records-to", default=None,
-                                         help="copy the public records (serve_commit.MIRRORED; never requests.jsonl, its users or the "
-                                              "step traces) into this directory (the run's $OUT) after each block closes and at the stop")
+                                         help="copy the records' public fields (serve_mirror.PUBLIC, field by field; nothing it doesn't "
+                                              "name) into this directory (the run's $OUT) after each block closes and at the stop")
     switch_interval_ms: float = option("--switch-interval-ms", type=float, default=0.1,
                                        help="the interpreter's switch interval while serving (Python's is 5 ms): how long the engine's "
                                             "thread may wait for the GIL after each torch call while the seal's thread runs Python "
