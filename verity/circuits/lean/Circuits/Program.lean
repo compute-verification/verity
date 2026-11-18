@@ -1650,6 +1650,13 @@ theorem resolve_eq {P : Prog} (h : (P.defs[P.root]!).body.recut = #[]) (sc : Sco
   rw [h]
   rfl
 
+theorem resolve_recut {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (h : resolve P sc r = .ok a) :
+    (P.defs[P.root]!).body.recut = #[] := by
+  unfold resolve at h
+  split at h
+  · exact Array.isEmpty_iff.mp (by assumption)
+  · cases h
+
 /-- `partition_object.order_violation`: the first reference naming neither a parameter of its body nor an earlier node of it
 (a body's `ret` may name any node), over every body the root reaches, root first and callees in node order, each
 Definition once; its detail `{definition, node, arg, reference, why}`, or none when the program is topological. -/

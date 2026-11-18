@@ -176,6 +176,7 @@ theorem batch_lands (hc : InferenceOnlyVerifier.Desc.calleesFirst P = true) (hrp
       ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).form = .scan →
         ((P.defs[d]!).body.nodes[k]!).n = 0 → ((P.defs[d]!).body.nodes[k]!).out.leaves = 0)
     (hfuel : 4 * (InferenceOnlyVerifier.Desc.activations P)[P.root]! ≤ Flock.Steps.FUEL)
+    (hrc : (P.defs[P.root]!).body.recut = #[])
     {ke j : ℕ} (hk : ke < (P.defs[P.root]!).body.nodes.size)
     (hcomp : (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).prim = false)
     (hbatch : ((P.defs[P.root]!).body.nodes[ke]!).form = .batch)
@@ -192,7 +193,7 @@ theorem batch_lands (hc : InferenceOnlyVerifier.Desc.calleesFirst P = true) (hrp
     refine ⟨good_root P, ⟨fun h => by simp at h, fun _ => ⟨hk, hj⟩⟩, fun h => by simp at h, fun _ => ?_⟩
     show 0 + (P.defs[P.root]!).body.offsets[ke + 1]! ≤ (P.defs[P.root]!).gates
     omega
-  obtain ⟨a, ha⟩ := OperandsResolve.resolve_ok P hroot hB hL hc hrp hz hfuel _ _ _ hinv
+  obtain ⟨a, ha⟩ := OperandsResolve.resolve_ok P hroot hB hL hc hrp hz hfuel hrc _ _ _ hinv
   refine ⟨a, ha, ?_⟩
   obtain ⟨-, -, -, hdown, -⟩ := hBr.1 ke hk
   have hdn := hdown j hj
@@ -235,6 +236,7 @@ theorem param_lands (hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i
       ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).form = .scan →
         ((P.defs[d]!).body.nodes[k]!).n = 0 → ((P.defs[d]!).body.nodes[k]!).out.leaves = 0)
     (hfuel : 4 * (InferenceOnlyVerifier.Desc.activations P)[P.root]! ≤ Flock.Steps.FUEL)
+    (hrc : (P.defs[P.root]!).body.recut = #[])
     {kl m j q : ℕ} (hk : kl < (P.defs[P.root]!).body.nodes.size)
     (hcomp : (P.defs[((P.defs[P.root]!).body.nodes[kl]!).fn]!).prim = false)
     (hbatch : ((P.defs[P.root]!).body.nodes[kl]!).form = .batch)
@@ -270,7 +272,7 @@ theorem param_lands (hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i
     · show 0 + (P.defs[P.root]!).body.offsets[kl]! + m * (P.defs[((P.defs[P.root]!).body.nodes[kl]!).fn]!).gates ≤
         (P.defs[P.root]!).gates
       omega
-  obtain ⟨a, ha⟩ := OperandsResolve.resolve_ok P hroot hB hL hc hrp hz hfuel _ _ _ hinv
+  obtain ⟨a, ha⟩ := OperandsResolve.resolve_ok P hroot hB hL hc hrp hz hfuel hrc _ _ _ hinv
   refine ⟨a, ha, ?_⟩
   have hstep : resolveStep P (P.child P.rootScope kl m, ⟨true, 0, j⟩) =
       .ok (.inr (P.rootScope, (((P.defs[P.root]!).body.nodes[kl]!).args[0]!).memberRef m j)) :=
@@ -467,7 +469,7 @@ theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' 
     have hjl : t * (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).outLeaves + j <
         ((P.defs[P.root]!).body.nodes[ke]!).out.leaves := by
       rw [hle]; exact BodiesOk.lt_mul_of _ _ _ _ ht hj
-    obtain ⟨a, ha, hS⟩ := batch_lands P hroot hB hL hc hpar hz hfuel F.ke_lt F.e_comp F.e_batch
+    obtain ⟨a, ha, hS⟩ := batch_lands P hroot hB hL hc hpar hz hfuel (OperandsResolve.resolvable_recut P hres) F.ke_lt F.e_comp F.e_batch
       (fun b hb => (F.e_args b hb).1) hjl
     have : gateAt P P.rootScope ⟨false, ke,
         t * (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).outLeaves + j⟩ = a := by
@@ -490,7 +492,7 @@ theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' 
     simp only [F.l_row, BodiesOk.leaves_array, BodiesOk.leaves_value]
     have : s.allocation * s.cellBytes * (8 * 1) = s.allocation * (8 * s.cellBytes) := by ring
     omega
-  obtain ⟨a, ha, h1, h2⟩ := param_lands P hroot hB hL hok hc hpar hz hfuel F.kl_lt F.l_comp F.l_batch hm F.l_p0 hj'
+  obtain ⟨a, ha, h1, h2⟩ := param_lands P hroot hB hL hok hc hpar hz hfuel (OperandsResolve.resolvable_recut P hres) F.kl_lt F.l_comp F.l_batch hm F.l_p0 hj'
     F.row_in
   have hia : gateAt P (P.child P.rootScope kl t') ⟨true, 0, j⟩ = a := by
     unfold gateAt; rw [ha]; rfl
