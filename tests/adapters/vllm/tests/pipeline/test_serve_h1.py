@@ -911,7 +911,7 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     man = predicted.row(tmp_path)
 
     def refusal(*more: str) -> str | None:
-        opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), "--out", str(tmp_path),
+        opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--row-build", str(man), "--out", str(tmp_path),
                                           *more], environ={})
         try:
             so.preflight(opts, which=lambda _: "/v/bin/ninja")
@@ -935,7 +935,7 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
         assert refusal(*h1, "--max-num-batched-tokens", t) == refusal("--max-num-batched-tokens", t), t
         assert f"--max-num-batched-tokens a multiple of 512, not {t}" in refused("--max-num-batched-tokens", t)
     assert refusal(*h1, "--max-num-batched-tokens", "1536") is None
-    assert "multiple of 32" in SH.refusal(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest",
+    assert "multiple of 32" in SH.refusal(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--row-build",
                                                                      str(man), *h1, "--max-num-batched-tokens", "2050"], environ={}))
     assert refusal("--protocols-config", "{}") == "--protocols-config without --protocols or an admission order"
     assert "the server's own" in refused(*h1, "--protocols-config", json.dumps({"pouw": {"rows": 64}}))
@@ -952,7 +952,7 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     assert "--protocols-config {" in refused(*h1, "--protocols-config", "{not json")
 
     def h1_refusal(*more: str) -> str | None:
-        return SH.refusal(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man),
+        return SH.refusal(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--row-build", str(man),
                                                      *more], environ={}))
 
     def h1_refused(*more: str) -> str:
