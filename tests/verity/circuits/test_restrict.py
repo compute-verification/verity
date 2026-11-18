@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import functools
 import importlib.util
+import json
 import random
 from pathlib import Path
 
 import pytest
 
 from verity.circuits import restrict as R
-from verity.circuits.codec import descriptor_chunks
+from verity.circuits.codec import definition_digest, definition_entry, descriptor_chunks
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.program import input_id
 
@@ -37,6 +38,11 @@ def block(units: tuple) -> R.Block:
     return R.restrict(c, PARTITION, list(units), bits)
 
 
+@functools.cache
+def listing(units: tuple) -> bytes:
+    return block(units).listing()
+
+
 def trace(seed: int) -> dict[int, int]:
     program, _, _ = chain()
     C, rng, t = program.circuit, random.Random(seed), {}
@@ -56,49 +62,73 @@ def test_a_blocks_circuit_computes_what_C_computes_there(units):
     program, _, bits = chain()
     assert program.circuit.size == bits.C.size
     b, t = block(tuple(units)), trace(sum(u for r in units for u in r))
-    assert R.evaluate(b.text, [bit(t, bits, x) for x in b.inputs]) == [bit(t, bits, x) for x in b.outputs]
+    assert R.evaluate(listing(tuple(units)), [bit(t, bits, x) for x in b.input_bits]) == [bit(t, bits, x) for x in b.output_bits]
+
+
+@pytest.mark.parametrize("units", MEMBERS + UNITS[:1] + UNITS[3:4])
+def test_the_descriptor_laid_out_on_bits_is_the_listing_from_C(units):
+    b = block(tuple(units))
+    own, ref = R.listing_of(b.descriptor).split(b"\n"), listing(tuple(units)).split(b"\n")
+    assert len(own) == len(ref)
+    n_in = len(b.input_bits)
+    kinds = [b.bits.kind[b.bits.gate_of(x)] for x in b.input_bits]
+    assert [x for i, x in enumerate(ref) if i not in range(2, 2 + n_in)] == \
+           [x for i, x in enumerate(own) if i not in range(2, 2 + n_in)]
+    assert own[2:2 + n_in] == [(v if k == "input" else R.RUN).encode() for k, v in kinds]
+    assert ref[2:2 + n_in] == [(v if k == "input" else R.WIRE).encode() for k, v in kinds]
+
+
+def test_the_descriptor_is_a_program_of_Cs_definitions():
+    _, c, bits = chain()
+    b = block(tuple(MEMBERS[1]))
+    assert json.loads(b.descriptor)["boolean"] == json.loads(c)["boolean"]
+    own, cs = R.program(b.descriptor).defs, bits.D.defs
+    shared = [k for k in own if k in cs]
+    assert set(own) - set(shared) == {"Root[Block_v1]_v1"}
+    assert all(definition_digest(definition_entry(own[k])) == definition_digest(definition_entry(cs[k])) for k in shared)
+    assert b.descriptor == block(tuple(MEMBERS[2])).descriptor
 
 
 def test_the_blocks_gates_are_Cs_computed_gates_each_once():
     _, _, bits = chain()
-    computed = {x for g, (k, _) in enumerate(bits.kind) if k != "input"
-                for x in range(bits.base[g], bits.base[g + 1] if g + 1 < len(bits.base) else bits.size)}
+    computed = {x for g, (k, _) in enumerate(bits.kind) if k != "input" for x in range(bits.base[g], bits.base[g + 1])}
     for blocks in (MEMBERS, UNITS):
-        got = [x for u in blocks for x in block(tuple(u)).gate_indices()]
+        got = [x for u in blocks for lo, hi in block(tuple(u)).gate_ranges for x in range(lo, hi)]
         assert len(got) == len(set(got)) and set(got) == computed
 
 
 @pytest.mark.parametrize("units", MEMBERS + UNITS)
-def test_the_ports_are_the_boundary_in_increasing_index_and_the_map_is_injective(units):
+def test_the_map_is_injective_and_carries_the_ports_to_the_boundary(units):
     _, _, bits = chain()
     b = block(tuple(units))
-    gates = b.gate_indices()
-    assert list(b.inputs) == sorted(set(b.inputs)) and gates == sorted(set(gates)) and not set(b.inputs) & set(gates)
-    assert list(b.outputs) == sorted(set(b.outputs)) and set(b.outputs) <= set(gates)
-    (lo, hi), = R.unit_gates(bits.D, PARTITION, units)
+    n_in, gates = len(b.input_bits), [x for lo, hi in b.gate_ranges for x in range(lo, hi)]
+    image = [b.to_c(i) for i in range(n_in + len(gates))]
+    assert len(set(image)) == len(image) and image == b.input_bits + gates
+    assert list(b.inputs) == sorted(set(b.inputs)) and list(b.outputs) == sorted(set(b.outputs))
+    (lo, hi), = b.words
     region = bits.C.region(lo, hi)
-    assert sorted({bits.gate_of(x) for x in b.inputs}) == list(region.in_)
-    assert sorted({bits.gate_of(x) for x in b.outputs}) == list(region.out)
-    lines = b.text.decode().splitlines()
-    n_in, n_gates, n_out = map(int, lines[1].split())
-    assert (n_in, n_gates, n_out) == (len(b.inputs), len(gates), len(b.outputs))
-    outs = [int(s.split()[1]) for s in lines[2 + n_in + n_gates:]]
-    assert [gates[k - n_in] for k in outs] == list(b.outputs)
+    assert list(b.inputs) == list(region.in_) and list(b.outputs) == list(region.out)
+    assert b.input_bits == [x for g in b.inputs for x in bits.out[g]]
+    lines = listing(tuple(units)).decode().splitlines()
+    i, k, o = map(int, lines[1].split())
+    assert (i, k, o) == (n_in, len(gates), len(b.output_bits))
+    assert [image[int(s.split()[1])] for s in lines[2 + i + k:]] == b.output_bits
 
 
 def test_a_wire_inside_a_block_is_no_port_unless_C_returns_it():
     _, _, bits = chain()
-    root = {x for g in bits.C.root_outputs() for x in bits.out[g]}
+    root = set(bits.C.root_outputs())
     pair, first = block(tuple(MEMBERS[0])), block(tuple(UNITS[0]))
     inner = set(first.outputs) - set(pair.outputs)
     assert inner == set(first.outputs) - root
     assert not inner & set(pair.inputs)
 
 
-def test_the_text_is_a_function_of_C_and_the_units():
-    program, c, _ = chain()
+def test_the_bytes_are_a_function_of_C_and_the_units():
+    _, c, _ = chain()
     again = b"".join(descriptor_chunks(_chain()))
-    assert again == c and R.restrict(again, PARTITION, MEMBERS[1]).text == block(tuple(MEMBERS[1])).text
+    b = R.restrict(again, PARTITION, MEMBERS[1])
+    assert again == c and b.descriptor == block(tuple(MEMBERS[1])).descriptor and b.listing() == listing(tuple(MEMBERS[1]))
 
 
 @pytest.mark.parametrize("units", [[], [(1, 1)], [(7, 9)], [(2, 4), (3, 5)], [(4, 6), (0, 2)]])
