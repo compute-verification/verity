@@ -20,7 +20,7 @@ from verity_flock import lowerings  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 
-SLICES = Path(__file__).resolve().parents[0] / "data" / "captured-101" / "slices"
+SLICES = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "data" / "captured-101" / "slices"
 REG = lowerings.registry("C-Flock")
 LOWERED = {"rope-head": {"D": 64}, "silu-mul": {"I": 8192}, "silu-mul-v2": {"I": 256}}
 

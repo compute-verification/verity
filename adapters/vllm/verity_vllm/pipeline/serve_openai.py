@@ -8,7 +8,7 @@
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb GB (with --seal)]
         [--copy-records-to $OUT] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
-        [--protocols pouw:pearl-c-h100-v1-h3 --precision bfloat16 --protocols-config JSON
+        [--protocols pearl-plus --precision bfloat16 --protocols-config JSON
          [--challenger-gate CMD --challenger-peer NAME --challenger-lane LANE]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO] [--remote-filler-gib 0]]
         [--day N --day-log LOG --day-program HEX [--day-blocks KEYS] [--day-params FILE]]
@@ -104,8 +104,8 @@ it is written before the pending seals too, and its ``final`` is true only once 
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor device's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
-``--protocols`` listing declared schemes, each by its name or its option (``pouw:pearl-c-h100-v1-h3``: ``pearl-plus``,
-``--precision bfloat16``), attaches each by name on the engine's build in the list's order, the earlier outer
+``--protocols`` listing declared schemes, each by its name (``pearl-plus``, ``--precision bfloat16``; its option
+``pouw:pearl-c-h100-v1-h3`` is refused, naming it), attaches each by name on the engine's build in the list's order, the earlier outer
 (`listed`, `messages.attach_listed`), and releases each at shutdown before its report (`write_reports`): Pearl+ one epoch a Commit window,
 its passes, ``coins.json`` and ``served.json`` under ``pearl/w<k>/``, its report under ``schemes/pearl-plus/``. With
 ``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` each epoch's salt comes from a session of its own
@@ -597,13 +597,16 @@ def admission_order(opts: Any) -> str:
 
 
 def listed(opts: Any, out: Path) -> list[tuple[Any, dict[str, Any]]]:
-    """``--protocols``' entries in their order, each the declared scheme it names (`messages.named`: by its option, or by
-    its name, as the wipe has no option) with its settings: ``--protocols-config``'s entry under the entry's name, an
-    option's protocol (`option_settings`), with what the serve holds of the keys the scheme declares: its passes under
+    """``--protocols``' entries in their order, each the declared scheme it names (`messages.named`) with its settings:
+    ``--protocols-config``'s entry under its name (`option_settings`), with what the serve holds of the keys the scheme declares: its passes under
     ``out/pearl``, its salt a session an epoch reserved under ``--challenger-lane`` as ``--challenger-peer`` (the
     challenger at this node's 127.0.0.1, at the port the gate's open answers), else in-process.  Empty when no entry
-    names a declared scheme (H1's, `serve_h1`); `UsageError` when only some do."""
-    found = [(e, M.named(e)) for e in (x.strip() for x in (opts.protocols or "").split(",")) if e]
+    names a declared scheme (H1's, `serve_h1`); `UsageError` when only some do, or one is a declared scheme's option
+    (`messages.option`), naming the scheme's name."""
+    entries = [e for e in (x.strip() for x in (opts.protocols or "").split(",")) if e]
+    if spelled := [f"{e} is {s.name}'s option: list it as --protocols {s.name}" for e in entries if (s := M.option(e))]:
+        raise UsageError(f"--protocols {opts.protocols}: {'; '.join(spelled)}, its settings under {s.name!r}")
+    found = [(e, M.named(e)) for e in entries]
     if all(s is None for _, s in found):
         return []
     if bad := [e for e, s in found if s is None]:

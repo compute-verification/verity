@@ -17,7 +17,6 @@ HERE = Path(__file__).resolve().parent
 
 @dataclass(frozen=True)
 class Arch:
-    name: str                     # the architecture file's name (NAME.toml), the key of `ARCHS`
     family: str                   # the label of the probe's outputs and census rows (analysis.json, JI90_k)
     tensor: str                   # the tensor instruction it times: "wgmma" or "tcgen05"
     source: str                   # probes/<source>.cu, the forms run.sh builds
@@ -31,17 +30,18 @@ class Arch:
     unpriced: str                 # sass_census/rates.sh's source
 
 
-ARCHS = {a.name: a for a in (
-    Arch(name="sm_90a", family="sm90", tensor="wgmma", source="sm90_wgmma",
-         gates=("128 256 256 7", "256 512 1024 11", "192 384 2048 13"),
-         honest_forms=("wg_s8_n256_a1", "wg_s8_n256_a0"), honest_kind="IGMMA_S8_N256", tmem=False,
-         fp8acc=False, jbreak="sm90_jbreak", s8_forms=("mma", "wg", "wg64", "wg128", "wg256"),
-         unpriced="unpriced90.cu"),
-    Arch(name="sm_100a", family="sm100", tensor="tcgen05", source="sm100_tcgen05",
-         gates=("128 256 256 7", "256 512 1024 11", "384 768 2048 13"),
-         honest_forms=("tc_i8_m128_n256",), honest_kind="UTCIMMA_M128_N256", tmem=True, fp8acc=True,
-         jbreak="", s8_forms=("mma", "tc"), unpriced="unpriced.cu"),
-)}
+#: Keyed by the architecture file's name (NAME.toml).
+ARCHS = {
+    "sm_90a": Arch(family="sm90", tensor="wgmma", source="sm90_wgmma",
+                   gates=("128 256 256 7", "256 512 1024 11", "192 384 2048 13"),
+                   honest_forms=("wg_s8_n256_a1", "wg_s8_n256_a0"), honest_kind="IGMMA_S8_N256", tmem=False,
+                   fp8acc=False, jbreak="sm90_jbreak", s8_forms=("mma", "wg", "wg64", "wg128", "wg256"),
+                   unpriced="unpriced90.cu"),
+    "sm_100a": Arch(family="sm100", tensor="tcgen05", source="sm100_tcgen05",
+                    gates=("128 256 256 7", "256 512 1024 11", "384 768 2048 13"),
+                    honest_forms=("tc_i8_m128_n256",), honest_kind="UTCIMMA_M128_N256", tmem=True, fp8acc=True,
+                    jbreak="", s8_forms=("mma", "tc"), unpriced="unpriced.cu"),
+}
 FAMILIES = tuple(a.family for a in ARCHS.values())
 
 

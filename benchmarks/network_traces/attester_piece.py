@@ -92,7 +92,8 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   run (no kept run, a rehearsal the gate's check didn't pass, a build, a tool or the chain failing without a report,
   an input missing, the leak guard failing, or SIGTERM from the piece's time limit) is `NotRun`, and the piece then
   refuses, releasing nothing from the hold and keeping no case: DIR keeps only its logs (`LOGS`) and gets
-  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the attester missing.
+  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the attester refused by that sentence
+  (undecided in the block record, never accepted, never dropped).
   Each step it runs (the build, the chain, the check and the leak
   guard) is a process group of its own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`,
   SIGKILL), so nothing a step started outlives it; a SIGTERM while a step runs is held until the step's group has

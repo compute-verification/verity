@@ -283,6 +283,8 @@ PUBLIC = {
                                          "Pearl-C arm take their coins from",
     "verity_vllm.pipeline.replay_bundle": "I1: the replay bundle a Commit with --replay-deferred leaves for its C2 replay on CPU "
                                           "(MANIFEST, open_bundle), which benchmarks/one_stage opens",
+    "verity_vllm.pipeline.research_outputs": "I1: the names a run's public outputs never hold (PRIVATE), which "
+                                             "benchmarks/serve_tax states and refuses a public write by",
     "verity_vllm.pipeline.tp.rank_replay": "I1: the C2 of record on one rank of a TP Commit, and a rank's manifest (load, "
                                            "manifest_of_rank), which benchmarks/one_stage reads",
     "verity_vllm.program.model": "I7: what a model configuration is, and the roots that are functions of it (config_of, "
