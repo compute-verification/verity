@@ -945,7 +945,6 @@
       "usergroup": "S0CAYGG5BDW",
       "linear": "HASH",
       "owns": [
-        "benchmarks/hash/",
         "benchmarks/kernels/"
       ],
       "branch_suffixes": [

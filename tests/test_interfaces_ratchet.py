@@ -67,7 +67,7 @@ SCHEME_IMPORT = re.compile(r"^\s*(?:from|import)\s+verity\.protocols\.(?:resourc
 SCHEME_IMPORTERS = ("benchmarks/", "calibration/", "tools/", "applications/")
 #: {file: the scheme names that are another word there}: a rounding mode or a design called dither, a card's memory bandwidth
 NOT_SCHEMES = {"benchmarks/ppl/steps.py": {"dither"}, "calibration/pouw/theory/checked_strip.py": {"dither"},
-               "benchmarks/hash/dither/dbw.py": {"dither"}, "verity/device.py": {"bandwidth"},
+               "verity/device.py": {"bandwidth"},
                "calibration/pouw/dc/pipe.py": {"bandwidth"}}
 #: {ratchet: {file: why it stays}}: a second path kept by a ruling. It is still held from growing, and ``--report`` counts
 #: it apart, so nobody finds it again as a table to remove.

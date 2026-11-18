@@ -2,21 +2,15 @@
 h1u.cu's formulas (kh_j10r_rows_bytes, kh_j10r_jw_bytes, kh_j10r_ws_bytes, kh_j10r_flags, kh_j10r_workspace_bytes)."""
 from __future__ import annotations
 
-import re
-import sys
-from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 import verity.protocols.experimental.dither.prover.j10r_ws as JWS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-DITHER = (Path(__file__).resolve().parents[4] / "benchmarks" / "hash" / "dither")
 
 #: the frozen shape's up and down (kraqwxsc's served shapes on the H200) and Llama-3.1-8B's four linears
 #: at a 64-row slot, (M, N, K)
@@ -133,11 +127,3 @@ def test_a_build_with_half_of_the_query_is_refused() -> None:
         with pytest.raises(JWS.WorkspaceError, match="without the other"):
             JWS.workspace_bytes(h, 64, 4096, 4096)
 
-
-def test_no_loader_in_dither_sizes_a_workspace_itself() -> None:
-    """Every dither loader that allocates J10-R's workspace takes
-    j10r_ws.workspace_bytes: none calls a build's kh_j10r_*_bytes, so none sizes an H1U_JW build by its rows."""
-    call = re.compile(r"\bkh_j10r_(?:rows|jw|ws|workspace)_bytes\s*\(")
-    hits = [f"{p.name}:{i}" for p in sorted(DITHER.glob("*.py")) if p.name != "j10r_ws.py"
-            for i, line in enumerate(p.read_text().splitlines(), 1) if call.search(line)]
-    assert hits == []
