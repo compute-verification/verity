@@ -24,4 +24,4 @@ def test_the_command_prints_the_directory_exits_3_on_a_version_not_listed_and_re
     assert absent.returncode == 3 and absent.stdout == "" and "list no CUDA toolkit 13.1" in absent.stderr
     assert (arch.returncode, arch.stdout) == (0, "sm_90a\n")
     assert (own.returncode, own.stdout) == (0, "sm_90a\n")
-    assert refused.returncode == 1 and refused.stderr.startswith("0 card records under ")
+    assert refused.returncode == 1 and refused.stderr.startswith("0 GPU card files under ")
