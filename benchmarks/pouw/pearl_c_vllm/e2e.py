@@ -7,6 +7,9 @@ on the device, timed against stock vLLM on the same card at the panel's two shap
 On an H100 or H200 the kernel directory is ``verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90`` under ``--scheme pearl-c-h100-v1-h3`` (window.sh's
 ``PEARLC_KERNEL``), and ``--tag`` names another model in the shape names (`SHAPES`).
 
+It holds the device run directly, not Pearl+ attached by name, because it times and replays device internals no served
+setting exposes.
+
 The run:
 - **Model:** Llama-3.1-8B-Instruct, TP 1, eager, prefix caching off.  Every linear is in the kernels' domain: k is 4,096 or
   14,336, and n is 6,144, 4,096 or 28,672.
