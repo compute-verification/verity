@@ -1067,7 +1067,6 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/program/predict/window_class.py",
     "adapters/vllm/verity_vllm/program/predict/window_rows.py",
     "adapters/vllm/verity_vllm/program/predict/window_weights.py",
-    "adapters/vllm/verity_vllm/protocols/__init__.py",
     "adapters/vllm/verity_vllm/protocols/poub/remote.py",
     "adapters/vllm/verity_vllm/protocols/pous.py",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",

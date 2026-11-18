@@ -17,7 +17,6 @@ Flock's staging is `verity_flock`'s and `hidden_zk`'s, which verity does not imp
 from __future__ import annotations
 
 import json
-import os
 import resource
 import sys
 import time
@@ -41,7 +40,7 @@ class Stager:
     lowering (`hidden_zk`'s ``fast``, or the library's), through `hash_scratch`'s pieces once they agree with their
     primitives."""
 
-    def stage(self, d: Any, name: str, in_rows: list, out_rows: list, rows: dict, out: Path, seed: bytes, salts: dict,
+    def stage(self, d: Any, name: str, in_rows: list, out_rows: list, rows: dict, out: Path, salts: dict,
               staging: str) -> dict:
         """`stage_unit`'s result, with the staged circuit's `circuit_sha512`, `class_sha512` and `circuit_bytes`."""
         raise NotImplementedError("Stager.stage needs verity_flock and hidden_zk's staging, which verity does not import "
@@ -76,7 +75,7 @@ def main(argv: list[str] | None = None, *, stager: Stager | None = None, staging
         at += r
     rows = {"a0": side["a"]["words"][i][None, :], "b0": side["b"]["words"][j][None, :]}
     salts = {"a0": [side["a"]["salts"][i]], "b0": [side["b"]["salts"][j]]}
-    got = stager.stage(d, "unit/pouw-pc8-hidden-served", in_rows, out_rows, rows, out, os.urandom(32), salts, staging)
+    got = stager.stage(d, "unit/pouw-pc8-hidden-served", in_rows, out_rows, rows, out, salts, staging)
     pin = got["circuit_sha512"]
     (out / "pin.txt").write_text(pin)
     body = (out / "pub.bin").read_bytes().split(b"\n", 1)[1]
