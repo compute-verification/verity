@@ -22,7 +22,7 @@ difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never suppli
 `SecondStage.replayWires`): a template's parameter that is, at each of its callers, one field of one instance of
 another template reads that writer's output port for the field, one value the interior commits once, so
 ``second-read`` holds a wired port to its writer's port at its writer unit's row and `at_run` binds it by that port
-(`_held_port`). No wire reads an output the replay block returns, a writer's port a link names: the boundary commits
+(`placings`). No wire reads an output the replay block returns, a writer's port a link names: the boundary commits
 that output, and the interior's port of it is another tree, which nothing holds to the first. No link names a wire's
 reader's port either: a session reads a port a link names at the link's entry (`_read_ok`), so a wire naming it too
 would hold nothing of what is read. And each wire's writer's part is before its reader's (``second-wires``,
@@ -105,6 +105,7 @@ from verity.circuits.replay_links import (
     Link, Part, Rows, Run, Wire, _by_port, _by_template, _callers_of, _fields, _fits, _get, _outputs, _port_of,
     _return_links, link_runs, links_of, parts, replay_links, replay_rows, row_at, wire_runs,
 )
+from verity.commitments import registered_value as RV
 from verity.commitments.window import window_binding
 
 from .one_stage import verifier as V
@@ -140,6 +141,15 @@ KEY_WHY = ("the interior registration registers the opened row of a read at a ke
 #: service reads sets the field. Only development plays set it on, never an accept of record. It turns on only once
 #: the statement that a sampled reader unit's key is its writer unit's committed output row is proved.
 WIRED_KEY = False
+#: The three rules that place a session port's binding (`placings`): its own tree of the interior record, its writer's
+#: tree there, a value the interior registration registers.
+OWN_TREE, WRITER_TREE, REGISTERED = "own", "writer", "registered"
+PLACE_NONE_WHY = ("a port of a template's reference header is placed by none of the three rules: its own tree of the "
+                  "interior record, its writer's tree where a wire names it, a value the interior registration "
+                  "registers where a link names it")
+PLACE_TWO_WHY = ("a port of a template's reference header is placed by more than one of the three rules: its own tree of "
+                 "the interior record, its writer's tree where a wire names it, a value the interior registration "
+                 "registers where a link names it")
 KEY_WIRES_WHY = "a read's key is wired, but not by exactly one wire"
 KEY_LINKED_WHY = "a read's key is both wired and linked: it is its writer's row or a value the verifier holds, never both"
 KEY_WIDTH_WHY = "a read's key is wired to a writer's output row of other u16 words than the key's row"
@@ -293,6 +303,24 @@ def widths_of(j: Any) -> tuple[Width, ...] | None:
 
 
 @dataclass(frozen=True)
+class Held:
+    """`SecondStage.Held`: the terms the interior registration's own entries are computed under (`Docket.ownEntries`,
+    the docket check's ``R7-registered``): its Program's digest, its window's open root, and the values held across
+    windows, whose domain leaves that root out (`Docket.fixedOf`)."""
+    program: str
+    window: str | None
+    fixed: tuple[str, ...]
+
+
+def held_of(program: str, window_root: str | None, held: Sequence[str] | None = None,
+            pinned: Mapping[str, Any] | None = None, supplied: Mapping[str, Any] | None = None,
+            outputs: Mapping[str, Any] | None = None) -> Held:
+    """`Held` of the interior registration the docket check took with these arguments: `program` its Program's digest,
+    and the values held across windows its ``held`` list, then its pinned, supplied and output values (`docket._window`)."""
+    return Held(program, window_root, (*(held or ()), *(pinned or {}), *(supplied or {}), *(outputs or {})))
+
+
+@dataclass(frozen=True)
 class Own:
     """What the verifier holds of the run: the replay sample, the parts (`parts`), the interior and boundary
     dockets' records, the second sample's units, the design's links (`replay_links`, None when the replay block's
@@ -306,9 +334,10 @@ class Own:
     own copies of those it holds without the prover: each one it fills itself, with its rows of sources
     (`supplied_of`), and the names of those it pinned or holds to an earlier record (``fixed``); the templates the
     auditor's params record as reads, each with its table's rows, ``(template, V)`` (`service.template_reads`); the
-    registered tables the auditor's params pin before any coin, ``(parameter, entry)`` each, the entry the tables'
-    docket names (``tables``); the words of the rows each wire joins (`replay_widths`); and the wired key's
-    switch, by default `WIRED_KEY`, which the service never sets otherwise."""
+    registered tables the     auditor's params pin before any coin, ``(parameter, entry)`` each, the entry the tables'
+    docket names (``tables``); the words of the rows each wire joins (`replay_widths`); the wired key's
+    switch, by default `WIRED_KEY`, which the service never sets otherwise; and the terms the interior registration's
+    own entries were held to (`Held`), None for none, which binds no registered value."""
 
     sample: tuple[int, ...]
     parts: tuple[Part, ...] | None
@@ -329,6 +358,7 @@ class Own:
     tables: tuple[tuple[str, Any], ...] = ()
     widths: tuple[Width, ...] = ()
     wired_key: bool = WIRED_KEY
+    held: Held | None = None
 
 
 def supplied_of(supplied: Any) -> tuple[tuple[str, tuple[tuple[tuple[str, str], ...], ...]], ...]:
@@ -507,11 +537,16 @@ def _key_failure(own: Own, t: str) -> str | None:
     return None
 
 
-def _held_port(own: Own, named: bool, t: str, p: str) -> str:
-    """`SecondStage.heldPort`: the interior record's port that holds template `t`'s session port `p`: at a port a wire
-    names, its writer's output port, the one tree the interior commits that value in; else its own."""
-    w = _wire_of(own, t, p)
-    return _port_of(named, t, p) if w is None else _port_of(named, w.writer, w.wport)
+def placings(own: Own, named: bool, t: str, p: str) -> list[tuple[str, Any]]:
+    """`SecondStage.placings`: every rule that places template `t`'s session port `p`, by the interior record and the
+    design alone: `OWN_TREE` at its own port of the record, `WRITER_TREE` at its writer's output port where a wire names
+    it, and `REGISTERED` at the interior registration's entry of the value a link names it to read. A port is placed
+    where exactly one holds (`placing_failures`)."""
+    w, x = _wire_of(own, t, p), _link_of(own, t, p)
+    e = None if x is None else _registered_entry(own.interior, x.value)
+    return ([(OWN_TREE, _port_of(named, t, p))] if _port_of(named, t, p) in _by_port(own.interior) else []) + (
+        [] if w is None else [(WRITER_TREE, _port_of(named, w.writer, w.wport))]) + (
+        [] if e is None else [(REGISTERED, e)])
 
 
 def _put_at(v: Any, j: Any, path: Sequence[str]) -> Any:
@@ -566,18 +601,45 @@ def port_binding(rec: Any, port: str, schema: str, run: str) -> str | None:
     return window_binding(program, partition, port, schema, leaves, run).hex()
 
 
+def registered_binding(held: Held | None, e: Any) -> str | None:
+    """`SecondStage.registeredBinding`: the binding the interior registration's entry `e` was committed under, from the
+    held registration `held`: `registered_value.domain` over its Program's digest, the value's name, words, leaves and
+    word bits, and its window's open root but for a value held across windows; None unless that domain's id is the
+    entry's ``domain``, or where `held` is None or the entry names no such domain."""
+    v, words, leaves, b = _get(e, "value"), _get(e, "words"), _get(e, "leaves"), _get(e, RV.WIDTH_KEY)
+    b = RV.WORD_BITS if b is None else b
+    if held is None or not (isinstance(v, str) and _nat(words) and _nat(leaves) and _nat(b)):
+        return None
+    try:
+        d = RV.domain(held.program, v, words, leaves, b, None if v in held.fixed else held.window)
+    except ValueError:
+        return None
+    return d.binding.hex() if _jeq(d.domain_id.hex(), _get(e, "domain")) else None
+
+
+def _placed_binding(own: Own, named: bool, t: str, p: str, schema: str, run: str) -> str | None:
+    """`SecondStage.placedBinding`: the binding of template `t`'s session port `p` of row schema `schema` in run `run`,
+    at its one placing (`placings`): an interior record's port's (`port_binding`) or a registered value's
+    (`registered_binding`); None where the port has none or two."""
+    ps = placings(own, named, t, p)
+    if len(ps) != 1:
+        return None
+    (rule, at), = ps
+    return registered_binding(own.held, at) if rule == REGISTERED else port_binding(own.interior, at, schema, run)
+
+
 def at_run(own: Own, named: bool, k: int, t: str, r: Any) -> Any:
     """`SecondStage.atRun`: template `t`'s reference header `r` placed in the run, for the session of the `k`-th part:
     its ``set`` the run's input set (`set_name`) and its ``frame_v3.bindings`` the binding of each port of
-    its ``frame_v3.schemas`` (`port_binding`, the interior record's port that holds it, `_held_port`: a wired port's its
-    writer's), which the verifier computes. None when the interior record names no run, or a port the verifier can't
-    bind."""
+    its ``frame_v3.schemas`` at its one placing (`_placed_binding`): its own tree's, its writer's tree's, or the
+    binding the registered value it reads was committed under, which the verifier computes. None when the interior
+    record names no run, or a port the verifier can't bind."""
     run = _run_of(own.interior)
     if run is None:
         return None
     bindings = {}
     for p, s in _entries(_get(_get(r, "frame_v3"), "schemas")):
-        b = port_binding(own.interior, _held_port(own, named, t, p), s, run) if isinstance(s, str) else None
+        b = _placed_binding(own, named, t, p, s, run) if isinstance(s, str) else None
         if b is None:
             return None
         bindings[p] = b
@@ -1147,7 +1209,25 @@ def _failures(own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> list[tuple[str
     if not _same_dict(own.reported or {}, statement_reads(ss)):
         found.append(("second-reported", REPORTED_WHY))
     found += table_rows_failures(own, ss)
-    return found
+    return found + placing_failures(own, ps)
+
+
+def placing_failures(own: Own, ps: Sequence[Part]) -> list[tuple[str, Any]]:
+    """`SecondStage.placingFailures`: for each template of the parts `ps` in their order, once, and each port of its
+    reference header's ``frame_v3.schemas`` in key order, ``second-place-none`` where no rule places it and
+    ``second-place-two`` where more than one does (`placings`), naming the template and the port."""
+    named, out, seen = _by_template(own.interior), [], []
+    for p in ps:
+        if p.template in seen:
+            continue
+        seen.append(p.template)
+        ref = next(((r,) for x, r in own.refs if x == p.template), None)
+        for port, _s in sorted(_entries(_get(_get(ref[0], "frame_v3"), "schemas")) if ref else (), key=lambda x: x[0]):
+            n = len(placings(own, named, p.template, port))
+            if n != 1:
+                out.append(("second-place-none" if n == 0 else "second-place-two",
+                            {"template": p.template, "port": port, "why": PLACE_NONE_WHY if n == 0 else PLACE_TWO_WHY}))
+    return out
 
 
 def table_rows_why(own: Own, t: str, port: str, e: Any) -> str | None:
@@ -1227,12 +1307,13 @@ def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]
     return out if v.ok else {**out, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None}
 
 
-__all__ = ["READ_ROW_FIELDS", "READ_RUN_FIELDS", "RETURN_WHY", "WIRED_KEY", "Checked", "Link", "Own", "Part",
+__all__ = ["OWN_TREE", "PLACE_NONE_WHY", "PLACE_TWO_WHY", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "REGISTERED", "RETURN_WHY",
+           "WIRED_KEY", "WRITER_TREE", "Checked", "Held", "Link", "Own", "Part",
            "Rows", "Run", "Width", "Wire",
            "at_run", "attach", "blank_reads", "blank_run", "check", "check_twin", "complete", "complete_twin", "held_to_lean",
            "inputs_failure", "interior_order_ok",
            "interior_reads", "interior_root", "link_runs", "links_of",
-           "own_draw", "parts", "port_binding", "replay_links", "replay_returns", "replay_rows", "replay_widths",
-           "replay_wires", "returns_ok", "row_at", "rows_of",
+           "own_draw", "parts", "placing_failures", "placings", "port_binding", "registered_binding", "replay_links",
+           "replay_returns", "replay_rows", "replay_widths", "replay_wires", "returns_ok", "row_at", "rows_of",
            "set_name", "statement_reads", "supplied_of", "table_rows_failures", "table_rows_why", "verified_of",
            "widths_of", "wire_runs", "wires_of"]

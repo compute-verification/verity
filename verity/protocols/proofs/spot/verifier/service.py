@@ -2605,7 +2605,9 @@ class Stream:
                      returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record),
                      supplied=SS.supplied_of(R.resolved(e.interior_copies[5], e.interior_history)),
                      fixed=(*(e.interior_copies[6] or ()), *(e.interior_copies[10] or ())),
-                     reads=template_reads(proofs), tables=pinned_tables(proofs))
+                     reads=template_reads(proofs), tables=pinned_tables(proofs),
+                     held=SS.held_of(P.program_digest(e.interior_program), e.interior_copies[8], e.interior_copies[9],
+                                     e.interior_copies[6], e.interior_copies[5], e.interior_copies[10]))
         rec = SS.attach(rec, SS.check_twin(own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots,
