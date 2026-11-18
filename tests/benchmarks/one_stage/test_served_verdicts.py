@@ -2144,7 +2144,8 @@ def test_a_published_serve_dir_carries_none_of_the_give_ups_counts(tmp_path, liv
     pub = json.loads((out / "pieces" / "pouw" / "development.json").read_text())
     assert "give_up" not in pub and pub["credit"] == work and pub == {k: v for k, v in json.loads(
         full["pieces/pouw/development.json"]).items() if k != "give_up"}
-    log = (out / "pieces" / "pouw" / "piece.log").read_text().splitlines()
+    assert not (out / "pieces" / "pouw" / "piece.log").exists()
+    log = [S.public_line(x) for x in full["pieces/pouw/piece.log"].splitlines()]
     assert log[0].endswith("volunteer FAIL: " + S.GAVE_UP) and log[1].endswith("pass-00002: FAIL: " + S.GAVE_UP)
     assert log[2].endswith("round 2: tiles left over a cap after its give-up")
     shown = json.loads(log[3].removeprefix("POUW-DEV "))
