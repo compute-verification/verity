@@ -9,7 +9,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
 
 * **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice_v7.demo`, 59,613 ANDs a
   unit, max_tokens 8, 16 and 255), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven
-  steps (`tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit, each
+  steps (`tests/adapters/vllm/tests/compiler/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit, each
   arrival's max_tokens its request's), which `prove` first checks is the corpus's (`replay_vectors.vectors` on
   corpus-smallkv: the arrivals, the decisions and the replay's rows; `cache_vectors`' tokens of each arrival); or
   ``w212``, window 212 of vLLM's served run (the encodings' ``vllm-8eb1`` fixture) padded into the run's public engine

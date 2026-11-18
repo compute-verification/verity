@@ -5278,6 +5278,17 @@
         "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_advice_adversarial.py": "tests/adapters/vllm/tests/pipeline/test_advice_format_adversarial.py",
         "tests/benchmarks/network_traces/test_window_chain.py": "tests/adapters/vllm/tests/pipeline/test_window_chain.py"
       }
+    },
+    {
+      "paths": {
+        "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_smallkv.json": "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_smallkv.json",
+        "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w1.json": "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w1.json",
+        "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w1_class.json": "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w1_class.json",
+        "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212.json": "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212.json",
+        "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212_class.json": "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212_class.json",
+        "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212_class_async.json": "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212_class_async.json",
+        "verity/protocols/resource_accounting/network/verifier/protocol/served-shape.md": "adapters/vllm/verity_vllm/compiler/served-shape.md"
+      }
     }
   ]
 }
