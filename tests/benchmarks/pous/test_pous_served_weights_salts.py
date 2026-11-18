@@ -1,6 +1,6 @@
 """PoUS's served weights take their row salts from a salt file of fresh operating-system bytes, never from a key: a
 tensor committed whole and its root computed in chunks agree under one salt file, the interface's fixture is what its
-stored public test salts give, and two draws of the salts share no row."""
+stored public test salts give, and two samples of the salts share no row."""
 from __future__ import annotations
 
 import json

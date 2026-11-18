@@ -5,7 +5,7 @@ of record) on the same events. Each attack also runs on the books with the one r
 the prover held and read. `python refresh_attacks.py [TRIALS]` prints the table and the sampled rates.
 
 Every attack stacks: a carrier, a chunk whose payload is another credited chunk's stored form, so that holding the
-carrier's stored form answers for both. Its payload is chosen after the other chunk's key is drawn, which the refresh
+carrier's stored form answers for both. Its payload is chosen after the other chunk's key is sampled, which the refresh
 cut forbids; each attack takes one route around one rule."""
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier.receipts import P
 N, WINDOWS, LIFETIME, FRESH_SLOTS = 64, 6, 2, 4
 """The reference session's: 64 registered blocks, W = 6, L = 2, F = 4 fresh slots a window (T = 53)."""
 SAMPLES = 16
-"""The reference session's openings a window, which the rates draw; the pairs open every receipt."""
+"""The reference session's openings a window, which the rates sample; the pairs open every receipt."""
 SCHEDULE_CAP = 4096
 CAPACITY = float(1 << 50)
 """The Python ledger's bytes a second: no record's reads exceed it, a power of two so the credit reads back exactly."""

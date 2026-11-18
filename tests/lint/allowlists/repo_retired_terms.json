@@ -2511,7 +2511,6 @@
     {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/window_vectors.py", "count": 3},
     {"file": "tests/verity/protocols/resource_accounting/memory/poub/attester/live_verifier/test_host.py", "count": 3},
     {"file": "tests/verity/protocols/resource_accounting/memory/poub/test_poub_session.py", "count": 2},
-    {"file": "tests/verity/protocols/resource_accounting/memory/poub/verifier/lean/honest_log.py", "count": 1},
     {"file": "tests/verity/protocols/resource_accounting/memory/poub/verifier/lean/test_honest_log.py", "count": 1},
     {"file": "tests/verity/protocols/resource_accounting/memory/poub/verifier/lean/test_line.py", "count": 17},
     {"file": "tests/verity/protocols/resource_accounting/memory/poub/verifier/lean/test_p2.py", "count": 4},

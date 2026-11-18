@@ -28,7 +28,7 @@ COINS = hashlib.sha512(b"the period's live coins").digest()
 
 def run():
     """The period's run: its case (`commitment`, `evidence`, `params`) and its live session's answer. The registration's
-    nonce, which the verifier draws from the operating system (`audit.register`), comes from the suite's entropy too."""
+    nonce, which the verifier samples from the operating system (`audit.register`), comes from the suite's entropy too."""
     c = M.Clock(10 ** 9, 1_000)
     with mock.patch.object(audit.secrets, "token_bytes", M.Entropy(b"nonce")):
         return period_prover.run("n0", STORE, COINS, windows=1, samples=1, clock=c, sleep_until=c.sleep_until,
