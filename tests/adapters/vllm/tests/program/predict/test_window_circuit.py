@@ -15,6 +15,7 @@ import hashlib
 import json
 import re
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -135,7 +136,7 @@ def _counts(circuit) -> Counter:
 
 def _lowered(window, cls: WindowClass = CLASS, placed=None, grain: Grain = GRAIN):
     reg = S._registered()
-    return WC.lower(reg, cls, None, grain, compiled=S.compile_steps(reg, *S._session(*window)), placed=placed)
+    return WC.lower(reg, cls, None, grain, requests=WC.takes(S.compile_steps(reg, *S._session(*window)), cls, placed))
 
 
 def test_a_served_window_is_its_requests_programs_and_no_padded_unit():
@@ -222,18 +223,20 @@ def test_the_class_of_record_takes_both_windows_to_their_requests(monkeypatch):
     calls: list[tuple] = []
 
     def class_circuit(*a, **k):
-        calls.append((a[1:], k["placed"]))
+        calls.append((a[1:], k["requests"]))
         return "the circuit"
 
     monkeypatch.setattr(WC, "class_circuit", class_circuit)
     reg = S._registered()
     windows = ((THREE, [(0, 1), (0, 2), (16, 31)]), (EIGHT, [(0, 1)] * 4 + [(16, 17)] * 4))
+    taken = []
     for window, placed in windows:
         compiled = S.compile_steps(reg, *S._session(*window))
         assert window_circuit(reg, compiled, CLASS_OF_RECORD, placed=placed) == "the circuit"
-        assert [(r.anchor, r.lane) for r in WC.takes(compiled, CLASS_OF_RECORD, placed)] == [
+        taken.append(WC.takes(compiled, CLASS_OF_RECORD, placed))
+        assert [(r.anchor, r.lane) for r in taken[-1]] == [
             (a, sum(1 for b, _ in placed[:i] if b == a)) for i, (a, _) in enumerate(placed)]
-    assert calls == [((CLASS_OF_RECORD, None, WC._GRAIN), placed) for _, placed in windows]
+    assert calls == [((CLASS_OF_RECORD, None, WC._GRAIN), t) for t in taken]
 
 
 def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
@@ -243,7 +246,7 @@ def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
     calls: list[tuple] = []
 
     def class_circuit(*a, **k):
-        calls.append((a[1:], k["placed"]))
+        calls.append((a[1:], k["requests"]))
         return "the circuit"
 
     monkeypatch.setattr(WC, "class_circuit", class_circuit)
@@ -252,8 +255,7 @@ def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
     compiled = S.compile_steps(reg, *S._session(*window))
     assert [(u.LP, u.T + 1) for u in compiled.requests if u is not None] == [(1, 64)]
     assert window_circuit(reg, compiled, CLASS_OF_RECORD, placed=[(16, 59)]) == "the circuit"
-    assert calls == [((CLASS_OF_RECORD, None, WC._GRAIN), [(16, 59)])]
-    assert WC.takes(compiled, CLASS_OF_RECORD, [(16, 59)]) == (WC.Request(16, 0, 1, 64),)
+    assert calls == [((CLASS_OF_RECORD, None, WC._GRAIN), (WC.Request(16, 0, 1, 64),))]
     assert WC.Request(16, 0, 1, 64).positions == 64
 
 
@@ -262,10 +264,36 @@ def test_a_window_of_no_request_or_a_served_window_with_tables_or_a_program_coun
     tables, so a Program count or tables beside it are refused."""
     reg = S._registered()
     with pytest.raises(Unexpressible, match="a window of no request has no circuit"):
-        WC.lower(reg, CLASS, None, GRAIN, compiled=type("Compiled", (), {"requests": [None]})())
-    compiled = S.compile_steps(reg, *S._session(*WINDOW))
+        WC.lower(reg, CLASS, None, GRAIN, requests=())
+    requests = WC.takes(S.compile_steps(reg, *S._session(*WINDOW)), CLASS)
     with pytest.raises(Unexpressible, match="a served window's circuit is every request's Program, reading no tables"):
-        WC.lower(reg, CLASS, 1, GRAIN, compiled=compiled)
+        WC.lower(reg, CLASS, 1, GRAIN, requests=requests)
+
+
+def test_the_registered_compiler_takes_the_advice_alone_to_the_served_circuit():
+    """`WindowCompiler` is ``compile(advice) -> C``: on a window's advice alone, I1's bytes, its circuit is byte for byte
+    `window_circuit`'s from the advice compiled with its certified bodies, for windows of other requests' lengths and the
+    fixed load alike."""
+    reg = S._registered()
+    for window in (WINDOW, OTHER, ONE, FULL):
+        advice, _ = S._session(*window)
+        assert _bytes(WC.WindowCompiler(reg, CLASS, GRAIN)(S.I1.encode(advice))) == _bytes(_circuit(window))
+
+
+def test_the_registered_compiler_refuses_advice_past_its_cap_and_anything_but_a_bit_string():
+    """The compiler enforces ℓ, the registered cap on the advice's bits, refusing past it by name; it takes nothing but the
+    bit string, and at a class of two boundaries, whose anchors the advice doesn't carry, it refuses by name."""
+    reg = S._registered()
+    advice = S._session(*WINDOW)[0]
+    data = S.I1.encode(advice)
+    bits = 8 * len(data)
+    with pytest.raises(Unexpressible, match=f"the advice is {bits} bits, over the registered cap ℓ = {bits - 8} bits"):
+        WC.WindowCompiler(replace(reg, cap_bits=bits - 8), CLASS, GRAIN)(data)
+    assert _bytes(WC.WindowCompiler(replace(reg, cap_bits=bits), CLASS, GRAIN)(data)) == _bytes(_circuit(WINDOW))
+    with pytest.raises(Unexpressible, match="the advice is a bit string, bytes, not a Advice"):
+        WC.WindowCompiler(reg, CLASS, GRAIN)(advice)
+    with pytest.raises(Unexpressible, match="the advice carries no request's admission bucket"):
+        WC.WindowCompiler(reg, SLOTS, GRAIN)(data)
 
 
 @pytest.mark.slow
@@ -609,15 +637,17 @@ def test_the_blocks_put_each_unit_at_its_slot_and_its_positions_step(window):
 
 def test_inference_entries_are_the_slots_runs_side_by_side():
     """`window_builder.inference` takes a template's runs in unit order (a slot's are allocated before the next slot's, each allocation's
-    slots side by side), merges its units of one (slot, step) into runs, takes each ``slots`` runs (slots 0, 1, ... of one
-    length at one step) as an entry, and merges like entries that follow on at one step under a ``-`` digit, then at
-    consecutive steps under a ``step`` digit; units that aren't such runs are refused by name."""
+    slots side by side), merges its units of one (slot, step) into runs, takes consecutive slots' runs of one length at one
+    step as an entry from the first's slot, and merges like entries that follow on at one step under a ``-`` digit, then at
+    consecutive steps under a ``step`` digit; a run past the circuit's slots is refused by name."""
     assert WB.inference({"t": [(0, 1, 0, 0), (1, 1, 0, 0), (2, 2, 1, 0), (4, 2, 0, 1), (6, 2, 1, 1)]}, 2) == [
         IF.InferenceEntry("t", 0, (2, 2, 2), ("step", "slot", "-"), 0)]
     for spans in ([(0, 1, 0, 3), (1, 1, 1, 3), (2, 1, 0, 3), (3, 1, 1, 3)], [(0, 1, 0, 3), (2, 1, 0, 3), (1, 1, 1, 3), (3, 1, 1, 3)]):
         assert WB.inference({"t": spans}, 2) == [IF.InferenceEntry("t", 0, (2, 2), ("-", "slot"), 3)]
-    with pytest.raises(Unexpressible, match=r"t: units from 0 are not 2 slots' runs of one length at one step"):
-        WB.inference({"t": [(0, 2, 0, 0), (2, 1, 1, 0)]}, 2)
+    assert WB.inference({"t": [(0, 2, 0, 0), (2, 1, 1, 0)]}, 2) == [
+        IF.InferenceEntry("t", 0, (1, 2), ("slot", "-"), 0), IF.InferenceEntry("t", 2, (1,), ("slot",), 0, 1)]
+    with pytest.raises(Unexpressible, match=r"t: units from 2 are slot 2's, not one of the circuit's 2"):
+        WB.inference({"t": [(0, 2, 0, 0), (2, 1, 2, 0)]}, 2)
 
 
 def test_every_input_row_is_wired_or_registered_counted_from_the_description(window):

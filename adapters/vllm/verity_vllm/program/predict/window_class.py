@@ -230,24 +230,6 @@ def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | Non
     """The window's requests in request order (`Request`), each at its lane, the requests anchored at a boundary its lanes
     in order; refused where they are past ``cls``'s envelope (`window_circuit`)."""
     units = [u for u in compiled.requests if u is not None]
-    if len(units) > cls.slots:
-        raise Unexpressible(f"{len(units)} requests in a window of a class of {cls.slots} slots")
-    placed = [(cls.boundaries[0], None)] * len(units) if placed is None else list(placed)
-    if len(placed) != len(units):
-        raise ValueError(f"{len(placed)} placements for the window's {len(units)} requests")
-    anchored: dict[int, int] = {}
-    out = []
-    for u, (anchor, end) in zip(units, placed):
-        if anchor not in cls.boundaries:
-            raise Unexpressible(f"request {u.request}: anchored at bucket {anchor}, none of its class's boundaries "
-                                f"{list(cls.boundaries)}")
-        if end is not None and end < anchor:
-            raise Unexpressible(f"request {u.request}: its last output at bucket {end}, before its anchor {anchor}")
-        out.append(Request(anchor, anchored.get(anchor, 0), u.LP, u.T + 1))
-        anchored[anchor] = anchored.get(anchor, 0) + 1
-    for anchor, n in sorted(anchored.items()):
-        if n > cls.lanes:
-            raise Unexpressible(f"{n} requests anchored at bucket {anchor}, past the {cls.lanes} slots a boundary has")
     for u in units:
         if u.carried_in or u.carried_out or u.C or u.parse is not None:
             raise Unexpressible(f"request {u.request}: carried across windows, a prefix-cache hit or byte ingress, which the "
@@ -255,10 +237,52 @@ def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | Non
         if u.policy != GREEDY:
             raise Unexpressible(f"request {u.request}: a {u.policy.get('kind')} request, and the class Program is greedy (a "
                                 "Program that reads a seed isn't lowered yet)")
-        if cls.prompt < u.LP or cls.outputs < u.T + 1:
-            raise Unexpressible(f"request {u.request}: {u.LP} prompt ids and {u.T + 1} outputs, past its class's {cls.prompt} and "
+    return _placed(cls, [(u.request, u.LP, u.T + 1) for u in units], placed)
+
+
+def requests_of(advice: Any, cls: WindowClass) -> tuple[Request, ...]:
+    """The decoded advice's requests (`steps.advice_of`) in request order (`Request`), each of its prompt and outputs and
+    at its lane of the class's one boundary: the advice carries no admission bucket, so a class of more boundaries is
+    refused, as are requests past ``cls``'s envelope, carried across windows or served from the prefix cache."""
+    if len(cls.boundaries) != 1:
+        raise Unexpressible(f"{cls}: the advice carries no request's admission bucket, so its requests are anchored at a class "
+                            f"of one boundary, not {len(cls.boundaries)}")
+    if advice.carried:
+        raise Unexpressible(f"{len(advice.carried)} requests carried into the window, which its lowering doesn't take yet")
+    for st in advice.steps:
+        for r in st.rows:
+            if r.cache_hit or r.sources:
+                raise Unexpressible(f"request {r.request}: a prefix-cache hit, which the window's lowering doesn't take yet")
+    return _placed(cls, [(i, q.prompt_len, q.output_len) for i, q in enumerate(advice.requests)], None)
+
+
+def _placed(cls: WindowClass, sizes: Sequence[tuple[int, int, int]],
+            placed: Sequence[tuple[int, int | None]] | None) -> tuple[Request, ...]:
+    """Each ``(request, prompt, outputs)`` of ``sizes`` as its `Request` at its placement (`takes`), refused past the envelope."""
+    if len(sizes) > cls.slots:
+        raise Unexpressible(f"{len(sizes)} requests in a window of a class of {cls.slots} slots")
+    placed = [(cls.boundaries[0], None)] * len(sizes) if placed is None else list(placed)
+    if len(placed) != len(sizes):
+        raise ValueError(f"{len(placed)} placements for the window's {len(sizes)} requests")
+    anchored: dict[int, int] = {}
+    out = []
+    for (i, prompt, outputs), (anchor, end) in zip(sizes, placed):
+        if anchor not in cls.boundaries:
+            raise Unexpressible(f"request {i}: anchored at bucket {anchor}, none of its class's boundaries "
+                                f"{list(cls.boundaries)}")
+        if end is not None and end < anchor:
+            raise Unexpressible(f"request {i}: its last output at bucket {end}, before its anchor {anchor}")
+        out.append(Request(anchor, anchored.get(anchor, 0), prompt, outputs))
+        anchored[anchor] = anchored.get(anchor, 0) + 1
+    for anchor, n in sorted(anchored.items()):
+        if n > cls.lanes:
+            raise Unexpressible(f"{n} requests anchored at bucket {anchor}, past the {cls.lanes} slots a boundary has")
+    for i, prompt, outputs in sizes:
+        if cls.prompt < prompt or cls.outputs < outputs:
+            raise Unexpressible(f"request {i}: {prompt} prompt ids and {outputs} outputs, past its class's {cls.prompt} and "
                                 f"{cls.outputs}")
     return tuple(out)
 
 
-__all__ = ["CLASS_OF_RECORD", "FixedLoad", "GREEDY", "PearlTables", "Request", "Tables", "WindowClass", "takes"]
+__all__ = ["CLASS_OF_RECORD", "FixedLoad", "GREEDY", "PearlTables", "Request", "Tables", "WindowClass", "requests_of",
+           "takes"]

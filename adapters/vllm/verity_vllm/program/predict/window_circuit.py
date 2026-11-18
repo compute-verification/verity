@@ -145,7 +145,7 @@ from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 
 from . import scan_state as SS
 from .build import Unexpressible
-from .steps import RequestUnit, request_program
+from .steps import RequestUnit, advice_of, request_program
 from .window_builder import WEIGHTS, Grain, Row, _Builder, check_provable, inference
 from .window_class import (
     CLASS_OF_RECORD,
@@ -155,6 +155,7 @@ from .window_class import (
     Request,
     Tables,
     WindowClass,
+    requests_of,
     takes,
 )
 from .window_cut import ROW_FORMAT, cut_values, linears
@@ -196,28 +197,25 @@ class Lowered:
 
 
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
-                  tables: FixedLoad | None = None, compiled: Any = None,
-                  placed: Sequence[tuple[int, int | None]] | None = None) -> IF.Circuit:
+                  tables: FixedLoad | None = None, requests: Sequence[Request] | None = None) -> IF.Circuit:
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of the
     scan state row before its anchor (`WindowClass.anchor`), each allocation's slots side by side in its template; its blocks'
     slots are the slots. Its registered parameters are the weights (`window_builder.weight_param`) and ``SCAN_STATE``'s
     ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`), and with ``tables`` H1's
     tables (`Tables`) or Pearl+'s (`PearlTables`). A window's circuit is every slot's; ``programs`` is the first slots only, a probe's census
-    (`class_size`). With ``compiled``, the served window's circuit instead (`lower`)."""
-    return lower(registered, cls, programs, grain, tables=tables, compiled=compiled, placed=placed).circuit
+    (`class_size`). With ``requests``, the served window's circuit instead (`lower`)."""
+    return lower(registered, cls, programs, grain, tables=tables, requests=requests).circuit
 
 
 def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
-          tables: FixedLoad | None = None, compiled: Any = None,
-          placed: Sequence[tuple[int, int | None]] | None = None) -> Lowered:
+          tables: FixedLoad | None = None, requests: Sequence[Request] | None = None) -> Lowered:
     """`class_circuit`'s circuit with its lowering (`Lowered`). With ``tables``,
     refused unless the class is one boundary; with H1's, unless round 0's rows (each slot's prompt) fit a table's ``m`` rows
     a call and every position has ``tables.calls`` int8 linears of K = ``tables.k``; with Pearl+'s, unless every position's
-    linears are the first's (`window_cut.linears`). With ``compiled`` (`steps.Compiled`, ``placed`` as `window_circuit`'s),
-    the served window's circuit: a Program a request (`window_class.takes`) of the request's own positions, longest first,
-    reading its lane at its anchor, so it holds exactly the requests' positions; refused with ``tables`` or ``programs``,
-    or for a window of no request."""
-    requests = None if compiled is None else takes(compiled, cls, placed)
+    linears are the first's (`window_cut.linears`). With ``requests`` (`window_class.takes`, `window_class.requests_of`),
+    the served window's circuit: a Program a request of the request's own positions, longest first, reading its lane at
+    its anchor, so it holds exactly the requests' positions; refused with ``tables`` or ``programs``, or for a window of
+    no request."""
     if requests is not None and (tables is not None or programs is not None):
         raise Unexpressible("a served window's circuit is every request's Program, reading no tables")
     if requests is not None and not requests:
@@ -292,6 +290,28 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     return Lowered(circuit, fn, tuple(progs), b.spans, None if order is None else tuple(order))
 
 
+@dataclass(frozen=True)
+class WindowCompiler:
+    """The registered window compiler, ``compile(advice) -> C``: its one input is the advice, a bit string only it
+    interprets (its code: `steps.advice_of`), of at most ℓ = ``registered.cap_bits`` bits, refused past it by name; the
+    model (``registered``), the envelope (``cls``) and the ``grain`` are the compiler's own. C is a greedy Program a request
+    of the advice's prompt and outputs (`window_class.requests_of`, `lower`); the certified bodies and the scan state are
+    C's inputs, never the compiler's."""
+    registered: Any
+    cls: WindowClass
+    grain: Grain = _GRAIN
+
+    def lower(self, advice: bytes) -> Lowered:
+        """`__call__`'s circuit with its lowering (`Lowered`)."""
+        if type(advice) is not bytes:
+            raise Unexpressible(f"the advice is a bit string, bytes, not a {type(advice).__name__}")
+        return lower(self.registered, self.cls, None, self.grain,
+                     requests=requests_of(advice_of(self.registered, advice), self.cls))
+
+    def __call__(self, advice: bytes) -> IF.Circuit:
+        return self.lower(advice).circuit
+
+
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
                    placed: Sequence[tuple[int, int | None]] | None = None,
                    tables: FixedLoad | None = None) -> IF.Circuit:
@@ -302,12 +322,12 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     window's end is the scan's to carry (module docstring). With ``tables``, H1's tables read (`Tables`) or the circuit cut
     at its linears (`PearlTables`), ``cls``'s class circuit, refused unless the window is the fixed load."""
     if tables is None:
-        return class_circuit(registered, cls, None, grain, compiled=compiled, placed=placed)
+        return class_circuit(registered, cls, None, grain, requests=takes(compiled, cls, placed))
     takes(compiled, cls, placed)
     tables.held(compiled, cls)
     return class_circuit(registered, cls, None, grain, tables)
 
 
-__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Row", "Tables", "WEIGHTS",
-           "Request", "WindowClass", "check_provable", "class_circuit", "class_program", "lower", "stop_ids", "takes",
-           "window_circuit"]
+__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Request", "Row", "Tables", "WEIGHTS",
+           "WindowClass", "WindowCompiler", "check_provable", "class_circuit", "class_program", "lower", "requests_of", "stop_ids",
+           "takes", "window_circuit"]
