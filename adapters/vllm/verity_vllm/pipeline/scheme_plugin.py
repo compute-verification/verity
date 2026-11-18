@@ -136,9 +136,16 @@ def register(environ: Mapping[str, str] | None = None, core: type | None = None,
 
     def stop(orig: Callable[..., Any]) -> Callable[..., Any]:
         def shutdown(self: Any, *a: Any, **kw: Any) -> Any:
+            failed: list[BaseException] = []
             while held:
-                held.pop(0).release()
-            return orig(self, *a, **kw)
+                try:
+                    held.pop(0).release()
+                except Exception as e:  # noqa: BLE001 -- each scheme is released, and vLLM shut down, before it is raised
+                    failed.append(e)
+            r = orig(self, *a, **kw)
+            if failed:
+                raise failed[0]
+            return r
         return shutdown
 
     detach = kv_blocks.attach()

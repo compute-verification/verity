@@ -108,6 +108,11 @@ def test_register_attaches_before_the_model_loads_and_releases_at_shutdown(stand
         Core().shutdown()
         assert order == ["load after 1 attach", "registered values", "shutdown after 1 release"]
         assert got[0][0] is messages.current() and Runner.vllm_config.cache_config.num_gpu_blocks_override == 64
+        Runner().load_model()
+        held.release = lambda: (_ for _ in ()).throw(RuntimeError("its commitment did not close"))
+        with pytest.raises(RuntimeError, match="its commitment did not close"):
+            Core().shutdown()
+        assert order[-1] == "shutdown after 1 release"
     finally:
         SP._PLUGIN[0][0].uninstall()
         SP._PLUGIN[0][1]()
