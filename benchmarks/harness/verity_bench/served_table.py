@@ -157,8 +157,8 @@ def spec_name(path: str) -> str:
 
 
 def _on_card(spec: str, card: str | None) -> str:
-    """`spec` as the card its run was on names it (``SPEC@CARD``), where its spec runs on more than one card or any;
-    else `spec`."""
+    """`spec` as the card its run was on names it (``SPEC@CARD``), unless that card is its spec's one card now: a run on a
+    card the spec no longer lists keeps its card's name."""
 
     if card is None or split_card(spec)[1] is not None:
         return spec
@@ -166,7 +166,7 @@ def _on_card(spec: str, card: str | None) -> str:
         cards = load_spec(spec).cards
     except ConfigError:
         return spec
-    return spec if len(cards) == 1 else f"{spec}@{card}"
+    return spec if cards == (card,) else f"{spec}@{card}"
 
 
 def spec_added(root: Path, spec: str) -> int:
