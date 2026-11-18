@@ -100,7 +100,7 @@ from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.population import mixed_population_program, wired_population_program
 from verity.circuits.program import Program
-from verity.circuits.refs import Affine, Concat, array_of, as_grid, concat, record_of, refs_from_json, spell, tuple_of
+from verity.circuits.refs import Affine, Concat, array_of, as_grid, concat, lane_bounds, record_of, refs_from_json, spell, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.commitments.periods.edges import INPUT_ID
 
@@ -1603,9 +1603,50 @@ def _moved(ref: tuple, k: int, cut: int, pos: dict) -> tuple:
     return (s, pos[None], j - cut) if i == k and j >= cut else (s, pos[i], j)
 
 
+def _lane_to(run: int, lane: tuple, k: int, cut: int, pos: dict):
+    s, i, b, e, lv = lane
+    if s != "n":
+        return lane, False
+    if i != k:
+        return (s, pos[i], b, e, lv), False
+    lo, hi = lane_bounds(run, lane)
+    if hi < cut:
+        return (s, pos[k], b, e, lv), False
+    if lo >= cut:
+        return (s, pos[None], b - cut, e, lv), True
+    return None, None
+
+
+def _regridded(p, k: int, cut: int, pos: dict) -> list | None:
+    """The grid part `p` re-pointed as whole grids: itself, or one grid a run of its lanes' outermost digits that
+    lie on one side of the cut; None where a lane's digit straddles it."""
+    run, lanes = as_grid(p)
+    moved = [_lane_to(run, x, k, cut, pos) for x in lanes]
+    if all(m is not None for m, _ in moved):
+        return [spell(run, tuple(m for m, _ in moved))]
+    if not all(lv for *_, lv in lanes) or len({lv[-1][0] for *_, lv in lanes}) != 1:
+        return None
+    groups: list[list] = []
+    for q in range(lanes[0][4][-1][0]):
+        sub = [_lane_to(run, (s, i, b + q * lv[-1][1], e, lv[:-1]), k, cut, pos) for s, i, b, e, lv in lanes]
+        if any(m is None for m, _ in sub):
+            return None
+        key = [(m[0], m[1], later) for m, later in sub]
+        if groups and groups[-1][0] == key:
+            groups[-1][2] += 1
+        else:
+            groups.append([key, [m for m, _ in sub], 1])
+    return [spell(run, tuple((s, i, b, e, lv + (((n, x[4][-1][1]),) if n > 1 else ()))
+                             for (s, i, b, e, lv), x in zip(first, lanes, strict=True))) for _, first, n in groups]
+
+
 def _repointed(refs, k: int, cut: int, pos: dict):
     out = []
     for p in refs.parts if isinstance(refs, Concat) else [refs]:
+        whole = _regridded(p, k, cut, pos)
+        if whole is not None:
+            out += whole
+            continue
         later = [s == "n" and i == k and j >= cut for s, i, j in p]
         lo = 0
         for x in range(1, len(later) + 1):
