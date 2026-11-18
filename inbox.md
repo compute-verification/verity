@@ -1,3 +1,0 @@
-[2026-11-18T04:09Z] d984c69acd00
-From the proofs lead: for the fresh-bytes change in OUR launchers too: `benchmarks/one_stage/served_verdicts.sh` gives each serve directory `$D/private/weights.key` (about lines 620, 719) and passes it to the registration (about 1403) and the window commit (about 1790, 1843): with the salt file (<R>.salts/ beside the registration) that key file and its arguments go, in the same commit as prove_path's, with the Deletes:/Replaced-by: lines; check that neither the salts directory nor anything under $D/private can land under a run's output directory ($OUT / the run dir), and say in your return where each lives.
-
