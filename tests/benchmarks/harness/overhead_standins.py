@@ -17,7 +17,7 @@ from verity_bench import overhead as O
 from verity_bench import overhead_records as R
 
 REPO = Path(__file__).resolve().parents[3]
-H200 = O.CARDS["h200"]
+H200 = O.card("h200")
 LINEARS = O.MODELS[O.KERNEL_MODEL]
 UUID = "GPU-11111111-2222-3333-4444-555555555555"
 ARM = "pearl_plus"

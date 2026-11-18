@@ -589,14 +589,14 @@ class _Route:
 
 def network_admission(loop: EngineLoop, sched: Any, opts: Any) -> tuple[Any, H.Front]:
     """``--admit release-order`` or ``tick``: the network attester's admission, attached to this process's exchange by
-    its scheme (`messages.attester`). Returns the admission hook (under ``tick``, the one the build put on ``sched``
+    the scheme that provides admission (`messages.providing`). Returns the admission hook (under ``tick``, the one the build put on ``sched``
     where it did, after the attester's gate, `loop.gate`; else None) and the attester's frontend."""
     from verity_vllm.engine import admission
     cfg: dict[str, Any] = {"order": opts.admit, "hold_ms": opts.admit_hold_ms}
     if opts.admit == "tick":
         cfg |= {f"{k}_us": int(round(float(getattr(opts, f"tick_{k}_ms")) * 1000)) for k in ("bucket", "sat", "free")}
-    got = M.attester().attach(M.current(), {"admit": cfg, "source": "--admit", "submit": loop.submit, "abort": loop.abort,
-                                            "take": loop.tick})
+    got = M.current().attach(M.providing("admission"), cfg, source="--admit", submit=loop.submit, abort=loop.abort,
+                             take=loop.tick)
     loop.gate = got.gate
     if loop.gate is not None:
         loop.hook = admission.install(sched)
