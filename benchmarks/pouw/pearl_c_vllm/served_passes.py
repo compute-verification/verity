@@ -185,7 +185,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.wi
 
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
-SPEC = HERE.parents[1] / "harness" / "specs" / "llama31-8b-1gpu-pouw-protocol-served-b32.toml"
+SPEC = HERE.parents[1] / "harness" / "specs" / "llama32-1b-1gpu-pouw-protocol-served.toml"
 #: the arm `serve` serves without ``--arm``: the spec's one PoUW Pearl-C arm (``pouw:pearl-c-sm120-v1-h3`` on an RTX PRO
 #: 6000, ``pouw:pearl-c-h100-v1-h3`` on an H100 or H200)
 ARM_PREFIX = "pouw:pearl-c-"

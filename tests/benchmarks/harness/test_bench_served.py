@@ -87,33 +87,33 @@ def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
 
 
 def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_spec(monkeypatch):
-    """`pouw:pearl-c-sm120-v1-h3` was refused before any engine started: the harness
-    gave every protocol arm the preset's FP8 and no pouw settings. Its spec's `arm_settings` give it the BF16 checkpoint,
-    stock FP8 as its control, and the device, kernel and setup-built cubin, with the harness's challenger as its coins,
-    which the adapter's refusals accept."""
+    """A protocol arm was refused before any engine started while the harness gave every protocol arm the preset's FP8
+    and no pouw settings. Its spec's `arm_settings` give it the BF16 checkpoint, stock FP8 as its control, and the device,
+    kernel and setup-built cubin, which are the spec's identity, with the harness's challenger as its coins, which the
+    adapter's refusals accept."""
 
     from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
     from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
     from verity_vllm.protocols import refusals
     from verity_vllm.protocols.interface import Context
 
-    spec = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
+    spec, pearl = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200"), "pouw:pearl-c-h100-v1-h3"
     control, arm, _ = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert (control.id, control.precision) == ("stock-fp8", "fp8")
-    assert (arm.protocols, arm.precision, arm.control) == (("pouw:pearl-c-sm120-v1-h3",), "bfloat16", None)
-    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120",
-                                             "cubin": "$PEARLC_CUBIN", "schedule": "deferred"}}
+    assert (arm.protocols, arm.precision, arm.control) == ((pearl,), "bfloat16", None)
+    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "$PEARLC_KERNEL", "cubin": "$PEARLC_CUBIN"}}
     assert arm.to_json()["protocols_config"] == arm.protocols_config
-    settings = spec.arm_settings["pouw:pearl-c-sm120-v1-h3"]
+    settings = spec.arm_settings[pearl]
     other = replace(settings, protocols_config={"pouw": {**settings.protocols_config["pouw"], "schedule": "serial"}})
     assert spec.config_sha256 != replace(spec, arm_settings={arm.id: other}).config_sha256
     assert resolve_arms(spec.arms)[1].control == "stock-fp8" and resolve_arms(spec.arms)[1].precision is None
 
     with pytest.raises(ValueError, match=r"\$PEARLC_CUBIN"):
-        protocols_config(arm, {})
+        protocols_config(arm, {"PEARLC_KERNEL": "/tree/benchmarks/pouw/pearl_c_sm90"})
     monkeypatch.setattr(verifier, "coins", lambda n: b"\1" * n)
-    config = protocols_config(arm, {"PEARLC_CUBIN": "/run/out/setup/pearl_c_sm120.cubin"})
-    assert config["pouw"]["cubin"] == "/run/out/setup/pearl_c_sm120.cubin"
+    config = protocols_config(arm, {"PEARLC_KERNEL": "/tree/benchmarks/pouw/pearl_c_sm90",
+                                    "PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"})
+    assert config["pouw"]["cubin"] == "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"
     assert isinstance(config["pouw"]["coins"].commitment, CoinCommitment)
     ctx = Context(stage="serve", enabled=arm.protocols, settings=config)
     assert refusals(ctx) == ()
@@ -206,24 +206,25 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
 
 
 def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):
-    source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-protocol-served.toml").read_text()
+    spec_id = "llama32-1b-1gpu-pouw-protocol-served"
+    source = (SPEC_ROOT / f"{spec_id}.toml").read_text()
     path = tmp_path / "spec.toml"
     for control, want in (("stock-fp8", "stock-fp8"), ("none", None)):
         path.write_text(source.replace('control = "none"', f'control = "{control}"', 1))
         spec = load_spec(path)
         assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[1].control == want
-    for old, new, why in (('arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3", "stock-fp8@compiled"]',
-                           'arms = ["stock-fp8", "pouw:pearl-c-h100-v1-h3", "stock-fp8@compiled"]', "must name a protocol arm"),
-                          ('[arm_settings."pouw:pearl-c-sm120-v1-h3"]\n', '[arm_settings.stock]\n', "must name a protocol arm"),
+    for old, new, why in (('arms = ["stock-fp8", "pouw:pearl-c-h100-v1-h3", "stock-fp8@compiled"]',
+                           'arms = ["stock-fp8", "pouw:ncp-v2", "stock-fp8@compiled"]', "must name a protocol arm"),
+                          ('[arm_settings."pouw:pearl-c-h100-v1-h3"]\n', '[arm_settings.stock]\n', "must name a protocol arm"),
                           ('precision = "bfloat16"', 'precision = "int4"', "precision is one of"),
                           ('control = "none"', 'control = "stock"', "control must be another arm"),
-                          ('control = "none"', 'control = "pouw:pearl-c-sm120-v1-h3"', "control must be another arm")):
+                          ('control = "none"', 'control = "pouw:pearl-c-h100-v1-h3"', "control must be another arm")):
         assert old in source
         path.write_text(source.replace(old, new, 1))
         with pytest.raises(ValueError, match=why):
             load_spec(path)
     with pytest.raises(ValueError, match="not in --arms"):
-        resolve_arms("stock-fp8", (), load_spec("llama31-8b-1gpu-pouw-protocol-served").arm_settings)
+        resolve_arms("stock-fp8", (), load_spec(spec_id).arm_settings)
 
 
 def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_reads_them():
@@ -255,11 +256,11 @@ def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_re
 
 
 def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
-    """`llama31-8b-1gpu-pouw-protocol-served` measures Pearl-C over the compiled engine in one run, so every arm's engine
+    """`llama32-1b-1gpu-pouw-protocol-served` measures Pearl-C over the compiled engine in one run, so every arm's engine
     shares its step budget, sequence bound and KV pool."""
 
-    spec = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
-    pearl = "pouw:pearl-c-sm120-v1-h3"
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
+    pearl = "pouw:pearl-c-h100-v1-h3"
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert [(a.id, a.precision, a.control, a.execution) for a in arms] == [
         ("stock-fp8", "fp8", None, None),
@@ -274,18 +275,13 @@ def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
         shared = ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "gpu_memory_utilization",
                   "kv_cache_memory_bytes")
         assert len({tuple(b[k] for k in shared) for b in built}) == 1
-        assert built[0]["kv_cache_memory_bytes"] == 8 << 30 and built[0]["max_num_batched_tokens"] == 4096
+        assert built[0]["kv_cache_memory_bytes"] == 8 << 30 and built[0]["max_num_batched_tokens"] == 8192
     assert engine_args(resolve_spec("llama31-8b-fp8-1gpu").preset, "fp8", resident=True, eager=True)["max_num_seqs"] == 128
-
-    b32 = resolve_spec("llama31-8b-1gpu-pouw-protocol-served-b32")
-    assert (b32.arms, b32.arm_settings, b32.setup, b32.eager, b32.preset) == (
-        spec.arms, spec.arm_settings, spec.setup, spec.eager, replace(spec.preset, id=b32.id))
-    assert b32.reps == 6 and b32.sweep == replace(spec.sweep, id="b32", batches=(32,))
 
 
 def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_compiled_engine(monkeypatch):
-    """`llama31-8b-1gpu-pearl-c-whole-served` times the whole-step arm beside the compiled engine, on the protocol spec's
-    preset. Under the eager spec, the arm's overrides build vLLM's FULL decode graphs at the preset's capture sizes
+    """`llama31-8b-1gpu-pearl-c-whole-served` times the whole-step arm beside the compiled engine, on
+    `llama31-8b-fp8-1gpu-compiled-full`'s preset. Under the eager spec, the arm's overrides build vLLM's FULL decode graphs at the preset's capture sizes
     without torch.compile, at the `compiled` label, which `verity_vllm.LLM` accepts, and its run takes the graph path's
     options and serial schedule."""
 
@@ -293,8 +289,9 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_comp
 
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     spec = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served")
-    protocol = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
-    assert replace(spec.preset, id=protocol.id, gpu_id=protocol.preset.gpu_id) == protocol.preset
+    full = resolve_spec("llama31-8b-fp8-1gpu-compiled-full").preset
+    assert dict(spec.preset.engine_settings) == {**full.engine_settings, "max_num_seqs": 128}
+    assert replace(spec.preset, id=full.id, gpu_id=full.gpu_id, engine_settings=full.engine_settings) == full
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert [(a.id, a.precision, a.control, a.execution, a.experimental) for a in arms] == [
         ("stock-fp8@compiled", "fp8", None, "compiled", False), ("pouw-pearl-c-whole", "bfloat16", None, None, True)]

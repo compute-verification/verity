@@ -128,9 +128,7 @@ loader = "verity/protocols/proofs/flock"
 loaded = "benchmarks"
 files = [
     "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/bench.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/register.py",
 ]
 
