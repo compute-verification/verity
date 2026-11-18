@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Cursor's `preToolUse` hook for the Task tool (`.cursor/hooks.json`, matchers `Task` and `CallDynamicTool`, the wrapper a
-session that offers Task as a dynamic tool calls it through): a coordinator never waits on a local worker in the foreground.
+session that offers Task as a dynamic tool calls it through, at any depth of its arguments): a coordinator never waits on a
+local worker in the foreground.
 
 Slack, Linear and timer events reach an agent only while its turn is free, and a foreground subagent holds its parent's turn
 until it ends; one in the background doesn't. Local workers also share the coordinator's VM, where one OOM kills them all (so:
@@ -52,7 +53,11 @@ def holders(text: str | None = None) -> dict[str, str]:
     except (OSError, ValueError) as e:
         print(f"task_hook: the registry is unreadable, so no agent holds a handle ({type(e).__name__}: {e})", file=sys.stderr)
         return {}
-    return {a: h.get("handle", "?") for h in reg.get("handles") or [] for a in AGENT_ID.findall(str(h.get("holder", "")))}
+    if not isinstance(reg, dict) or not isinstance(reg.get("handles") or [], list):
+        print("task_hook: the registry is no JSON object with a list of handles, so no agent holds a handle", file=sys.stderr)
+        return {}
+    return {a: h.get("handle", "?") for h in reg.get("handles") or [] if isinstance(h, dict)
+            for a in AGENT_ID.findall(str(h.get("holder", "")))}
 
 
 #: `infra/cursor/launch_coordinator.py`'s NAMESPACE, which the guard can't import: a coordinator it launches for a handle
@@ -66,19 +71,44 @@ def leads() -> set[str]:
     """Every lead's agent id: each `holder` of the registry, and the id `launch_coordinator.py` gives each handle it
     registers at each generation in LEAD_GENERATIONS. A registry that can't be read raises: the caller decides."""
     text = REGISTRY.read_text()
-    handles = [h.get("handle") for h in json.loads(text).get("handles") or []]
+    if not isinstance(reg := json.loads(text), dict):
+        raise ValueError(f"{REGISTRY} is no JSON object")
+    handles = [h.get("handle") for h in reg.get("handles") or [] if isinstance(h, dict)]
     return set(holders(text)) | {f"bc-{uuid.uuid5(COORDINATORS, f'{h}/{g}')}" for h in handles if isinstance(h, str) and h
                                  for g in LEAD_GENERATIONS}
 
 
-def task_input(event: dict):
-    """The Task call's input; where Task is a dynamic tool it arrives as `CallDynamicTool` with toolName `Task`, and a
-    dynamic call of any other tool has none."""
-    args = event.get("tool_input")
-    if event.get("tool_name") == "CallDynamicTool":
-        return args.get("arguments") if isinstance(args, dict) and args.get("toolName") == "Task" else None
-    if str(event.get("tool_name") or "").startswith("MCP:"):
+def nested_task(value, depth: int = 0):
+    """The input of a Task call `value` holds at any depth (`{"toolName": "Task", "arguments": ...}`, either one possibly a
+    JSON string), else None."""
+    if isinstance(value, str) and value.lstrip()[:1] in ("{", "["):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return None
+    if depth > 8:
         return None
+    if isinstance(value, dict):
+        if value.get("toolName") == "Task":
+            inner = value.get("arguments")
+            if isinstance(inner, str):
+                try:
+                    inner = json.loads(inner)
+                except ValueError:
+                    pass
+            return inner if inner is not None else {}
+        value = list(value.values())
+    if isinstance(value, list):
+        return next((found for v in value if (found := nested_task(v, depth + 1)) is not None), None)
+    return None
+
+
+def task_input(event: dict):
+    """The Task call's input; where Task is a dynamic tool it arrives as `CallDynamicTool` with toolName `Task`, possibly
+    nested in another tool's arguments, and a dynamic or MCP call holding no Task call has none."""
+    args = event.get("tool_input")
+    if event.get("tool_name") == "CallDynamicTool" or str(event.get("tool_name") or "").startswith("MCP:"):
+        return nested_task(args)
     return args
 
 

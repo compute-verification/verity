@@ -43,6 +43,32 @@ def test_a_task_call_through_the_dynamic_tool_wrapper_is_judged_like_a_direct_on
                                                                              ("CallDynamicTool", False, "cloud")]
 
 
+@pytest.mark.parametrize("tool_name,tool_input", [
+    ("CallDynamicTool", {"namespace": "cursor", "toolName": "CallDynamicTool",
+                         "arguments": {"namespace": "cursor", "toolName": "Task", "arguments": {"subagent_type": "debug"}}}),
+    ("CallDynamicTool", {"namespace": "cursor", "toolName": "Task", "arguments": json.dumps({"subagent_type": "debug"})}),
+    ("CallDynamicTool", {"namespace": "x", "toolName": "batch",
+                         "arguments": json.dumps({"calls": [{"toolName": "Task", "arguments": {"subagent_type": "debug"}}]})}),
+    ("MCP:batch", {"calls": [{"toolName": "Task", "arguments": {"subagent_type": "debug"}}]}),
+])
+def test_a_task_call_nested_inside_another_tools_arguments_is_still_judged(tmp_path, tool_name, tool_input):
+    """A Task call wrapped in another tool's arguments, or given them as a JSON string, read as no Task call and passed."""
+    a = answer(tmp_path, HOLDER, tool_input, tool_name)
+    assert a["permission"] == "deny" and "@proofs" in a["agent_message"]
+
+
+@pytest.mark.parametrize("registry", ["[]", '"proofs"', '{"handles": {"proofs": 1}}', '{"handles": ["proofs", 3]}'])
+def test_a_registry_that_is_not_a_json_object_of_handles_passes_every_call(tmp_path, registry):
+    """A registry.json holding a list crashed the hook on `.get`, so the call got no verdict."""
+    reg = tmp_path / "registry.json"
+    reg.write_text(registry)
+    env = {**os.environ, "AGENT_GUARD_REGISTRY": str(reg), "AGENT_GUARD_TASK_LOG": str(tmp_path / "task.jsonl")}
+    r = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "preToolUse", "tool_name": "Task",
+                                                                 "conversation_id": HOLDER, "tool_input": {"prompt": "x"}}),
+                       capture_output=True, text=True, env=env)
+    assert (r.returncode, json.loads(r.stdout)) == (0, {"permission": "allow"}) and "Traceback" not in r.stderr
+
+
 def test_another_steps_event_passes_unlogged(tmp_path, event_log):
     """A hooks.json Cursor misread (a `/*` in it stripped as a comment) ran this hook on shell commands naming Task, and each
     logged a verdict with no tool name."""
