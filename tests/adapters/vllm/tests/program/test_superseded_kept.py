@@ -32,7 +32,7 @@ KEPT = {
                    "d53cfe4f5ee4151a777b3a7a9ae26dcd1873f3d4ed344f9ffaff7e13cf29194bc1b7dbbfd2bddf9d5221d05f6d064ab244bc918a9c2858da1fbd199abee87536"),
     "SiluMulBf16_v3": (lambda: bind(BS.SiluMulBf16), "SiluMulBf16_v3",
                        "618c3ebb4c96158c3c08b8355c5c3c1e84699720d770cd0b7a67de1c02e73046d36fa0f91e42f6c630f8ed79a35eea0a796b4c630a47c37f9c613b7fd6cc703e",
-                       "3bb873ca3d8e742ca7a40364a5ce05e1ec11dd94c9059d3c995c97f662f790294c04edbe385b5de5486d68a35b7136a7f3f889e7974c178cc411f267a6ba8255"),
+                       "144697dd0f642f140b4bc6de4dfc0fed6fc40ac3aa9c9b499521d1291521601683facdbc90f494f9d0d5776494843809306212805961daf2f341bb9f05a2cf79"),
     "Attention_v1": (lambda: bind(b1.Attention, T=3, NH=2, KVH=1, D=16), "Attention_v1{T=3,NH=2,KVH=1,D=16}",
                      "281d195af5bb7756a896b56971cdc9daf08d5dae91becd00cbe2c2d5359cd9fed7361920021cefc3a21fe894c41e0546b6dec5959e5d8f54cf159edb05e048b2",
                      "859cc88da075d4ead8dd0737b82a5ff771aa218583f38209821f1834a773be2cf475b8d25b0e669c91384d1e6cb258234a9669d9ade0fda284aa2773aafdef2a"),

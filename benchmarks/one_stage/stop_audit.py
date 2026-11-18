@@ -66,8 +66,9 @@ verified by Lean (`verify --zk --registered`), and the stop stream's outcome wit
   response's length is held (``length_held``) only when the record accepted and is complete.
 * **The answer** (`answer_of`, ``answer.json`` beside ``audit.json``, one canonical line) is the stop stream's, in
   one-stage's form (`audit.answer`): an accept of a record that accepted, whose public ``complete`` is that record's
-  own, so it is false while any entry above is null; else a reject of the stop docket. A reader that wants a
-  complete audit of the stop population reads `audit.answer_complete` of it, never the verdict alone.
+  own, so it is false while any entry above is null; else a reject of the stop docket. A complete audit of the stop
+  population is read from ``summary.json``'s ``complete``, never its ``accepted`` alone: the verdict record
+  (`verdict_record`) words an accept that is not complete ``not complete``.
 * **The reason** (`reason`): ``summary.json``'s ``reason`` is one word for what Lean's verdict of record refused, read
   from that verdict and from nothing else. It is ``stop_word`` where Lean's own verdict on the stop blocks' session
   refused the proof it read at its inner check's batched constraint (`UNSATISFIED`), the check that holds a proof to
@@ -564,7 +565,7 @@ def summary_of(r: Resumed, stop: BS.Stop, design: str, got: Mapping[str, Any]) -
 def answer_of(r: Resumed, got: Mapping[str, Any]) -> dict[str, Any]:
     """The stop stream's answer of an outcome (`decide`'s), in one-stage's form. Of an audit record that accepted it is
     `audit.answer` at the stream's δ: its public ``complete`` is the record's own, true only when every entry has a
-    verdict, so an accept whose record left an entry null says so and `audit.answer_complete` refuses it. Else a
+    verdict, so an accept whose record left an entry null says so. Else a
     reject of the stop docket, naming the record's checks that failed and its verdicts that did not accept, or
     that the stream refused the outcome and wrote no record."""
     audit = got.get("audit") or {}
