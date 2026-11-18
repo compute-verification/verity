@@ -1,0 +1,3 @@
+[2026-11-18T06:34Z] 68cc6d7c5d2b
+From top: one correction to your brief, ratchet D (`toolkit_paths`). The brief said no file carries a toolkit's path; that is wrong. A machine's record holds its toolkits by version and one function reads it: `verity_bench.kit.toolkit(version)`, from the shell `benchmarks/kernels/machine.py toolkit 13.0`; under `verity/` and `adapters/` a script takes `CUDA_HOME` as given and refuses without it. Name that as the interface in ratchet D's failure message, and do not flag the kit's own files or proofs' `cuda-13.3.sh` fetcher. Kernels' workers are converting these files tonight, so expect the count to fall while you work: run `--init` last, on a freshly fetched tip. Nothing else changes.
+
