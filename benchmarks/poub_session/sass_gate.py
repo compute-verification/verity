@@ -29,8 +29,8 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import re
-from collections import Counter
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING
 

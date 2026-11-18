@@ -3972,10 +3972,11 @@ def _launch(argv: list[str], cwd: Path) -> subprocess.CompletedProcess:
 
 def quick_run(rid: str, on: str, wt: Path, at: str, base: str, *, merged: str | None = None, audit: list[str] | None = None,
               by: str = "", project: str = "verity", wait_s: float = REMOTE_WAIT_S, timeout_s: float = REMOTE_TIMEOUT_S,
-              pool: str = "", priority: bool = False, twin: str = "", twin_after: float = 0, note: str = "") -> list[str]:
+              pool: str = "", priority: bool = False, rank: int | None = None, twin: str = "", twin_after: float = 0,
+              note: str = "") -> list[str]:
     """The `research run` of the quick tier at ``at`` (``wt``, a checkout of it, its `--source`) since ``base`` as run ``rid`` on
     machine ``on`` (`RemoteQuickTier`): in a check slot of the machine (of its ``pool``'s), a `--priority` one with
-    ``priority``, waiting `wait_s` for it and running `timeout_s` in it; ``merged``, the PR head when ``at`` is its merge onto
+    ``priority`` (at `slot.py --rank` ``rank`` when given), waiting `wait_s` for it and running `timeout_s` in it; ``merged``, the PR head when ``at`` is its merge onto
     ``base``; ``audit``, `LEAN_AUDIT` when it audits (`lean_audit`); ``twin``, its `slot.py --twin` (PAIR on the pair's home,
     PAIR@HOME elsewhere, joining the line after ``twin_after``); ``note``, the line its log starts with."""
     slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
@@ -3983,7 +3984,8 @@ def quick_run(rid: str, on: str, wt: Path, at: str, base: str, *, merged: str | 
     args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
             *(["--merged", merged] if merged else []), *(["--lean-audit", shlex.join(audit)] if audit else []),
             *(["--note", note] if note else []), "--", *QUICK_TIER]
-    opts = [*(["--priority"] if priority else []), *(["--by", by] if by else []),
+    opts = [*(["--priority"] if priority else []), *(["--rank", str(rank)] if priority and rank is not None else []),
+            *(["--by", by] if by else []),
             *(["--twin", twin] if twin else []), *(["--twin-after", f"{twin_after:g}"] if twin and twin_after else []),
             "--wait-max", f"{wait_s:g}", "--run-max", f"{timeout_s:g}"]
     return [sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", project,
