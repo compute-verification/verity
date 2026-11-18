@@ -14,6 +14,7 @@ import importlib.machinery
 import importlib.util
 import inspect
 import os
+import sys
 import textwrap
 from functools import cache
 from typing import Any
@@ -148,10 +149,8 @@ def _package_dirs(module: str) -> tuple[str, ...] | None:
     parts = module.split(".")
     if not parts[0] or module.startswith("."):
         return None
-    try:
-        spec = importlib.util.find_spec(parts[0])
-    except (ImportError, ValueError):
-        return None
+    loaded = sys.modules.get(parts[0])
+    spec = loaded.__spec__ if loaded is not None else importlib.util.find_spec(parts[0])
     if spec is None:
         return None
     if spec.submodule_search_locations is None:
