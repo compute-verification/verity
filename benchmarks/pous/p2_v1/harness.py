@@ -43,6 +43,7 @@ audited one of two ways:
 """
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -165,8 +166,11 @@ TIMED_AUDIT_CHECK = H.ROOT / "verity" / "protocols" / "resource_accounting" / "m
 def timed_audit_exe(out: Path) -> Path:
     """`pous_check`'s `pous-timed-audit`, the verdict of record on `V3`'s audits, built once a run with `lake` as `pod.sh
     PREPARE=1` builds it (a no-op after that), its log in `lake-build.log`.  Where it doesn't build, the path of an
-    executable that isn't there, so every audit is undecided."""
-    with (out / "lake-build.log").open("w") as log:
+    executable that isn't there, so every audit is undecided.  Built under the tree's Lake build lock."""
+    from verity.protocols.proofs.spot.verifier.one_stage.verifier import BUILD_LOCK
+    BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with (out / "lake-build.log").open("w") as log, open(BUILD_LOCK, "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
         try:
             rc = subprocess.run(["lake", "build", "pous-timed-audit"], cwd=TIMED_AUDIT_CHECK, stdout=log,
                                 stderr=subprocess.STDOUT).returncode
