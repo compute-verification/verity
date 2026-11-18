@@ -126,6 +126,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import domains as DM
 from verity.commitments import Commitment, Opening, VerificationLimits, verify_opening
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
@@ -583,8 +584,8 @@ def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: t
     left out of the retention before the coin, which credit nothing). For a W at version 1, which registers no ``pearl-b/``
     value, the tie is of the calls alone, as it was at that version, and the answer names the fixed operands untied:
     ``"weights": WEIGHTS_UNTIED``. ValueError naming the first mismatch otherwise."""
-    if not isinstance(w, dict) or w.get("format") != REG.FORMAT_V2 or not isinstance(w.get("registered"), list):
-        raise ValueError(f"W is no {REG.FORMAT_V2} record with registered values")
+    if not isinstance(w, dict) or w.get("format") != DM.REGISTRATION or not isinstance(w.get("registered"), list):
+        raise ValueError(f"W is no {DM.REGISTRATION} record with registered values")
     tied = PWR.version_of(w) == PWR.VERSION
     got: dict[str, dict] = {}
     for e in w["registered"]:
