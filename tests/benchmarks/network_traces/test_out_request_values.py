@@ -113,6 +113,33 @@ def test_scan_zk_publishes_what_the_gate_publishes_of_its_own_rehearsal(tmp_path
     holds_none_of_the_run(out, "warden")
 
 
+def test_scan_zk_keeps_its_answers_whole_registrations_out_of_its_output(tmp_path):
+    """The scan's copy of its driver's directory into $OUT/sczk leaves out ``answers.json``, whose registrations carry
+    their wiring; the summary, which holds each answer's verdict and public part, is copied."""
+    w, out = tmp_path / "W", tmp_path / "OUT"
+    whole = {"wiring": "17" * 64, "root": "ab" * 64}
+    put(w / "sczk", {"summary.json": {"answers": {"0": {"verdict": "accept", "public": {"proved": [0]}}}},
+                     "answers.json": {"windows": [{"registration": whole, "registrations": [whole, whole]}]},
+                     "honest-0/verifier/program.json": {"units": 3}})
+    (out / "sczk").mkdir(parents=True)
+    got = run(block("scan_zk.sh", '(cd "$W/sczk" && find', "  ! -name"), W=w, OUT=out)
+    assert got.returncode == 0, got.stderr
+    assert published(out) == ["sczk/honest-0/verifier/program.json", "sczk/summary.json"]
+    assert "17" * 64 not in "".join(p.read_text() for p in out.rglob("*.json"))
+
+
+def test_network_attester_zk_keeps_its_summary_alone_of_its_drivers_directory(tmp_path):
+    """A member's registrations and the verifier's registered reads open the wiring: of the driver's directory the
+    job keeps only its summary."""
+    w, out = tmp_path / "W", tmp_path / "OUT"
+    put(w / "wzk", {"summary.json": {"ok": True}, "pad/warden-registration.json": {"wiring": "17" * 64},
+                    "pad/registration.json": {"window": {"units": {"cells": [[1, 4]]}}},
+                    "pad/verifier/registered.json": {"ports": {"p": {"rows": [3]}}}})
+    got = run(block("network_attester_zk.sh", 'mkdir -p "$OUT/wzk"', '[ -f "$W/wzk/summary.json" ]'), W=w, OUT=out)
+    assert got.returncode == 0, got.stderr
+    assert published(out) == ["wzk/summary.json"]
+
+
 def test_the_chain_keeps_a_step_s_whole_registrations_on_its_private_side(tmp_path):
     """chain_record.sh's copy of a step's files into $OUT, which the leak guard reads and custody uploads, leaves
     out the files that hold a row registration whole, its wiring's digest with it: the registrations a verifier takes
