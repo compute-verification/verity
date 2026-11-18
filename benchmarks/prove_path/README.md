@@ -295,8 +295,8 @@ The proof block closes the named gap: the advice is never opened, and the verifi
     default seed, ℓ and the transfer gates, so a `serve.json` whose model, revision, target or execution differs from the
     one the advice was registered under names another compiler, refused before the sample (`serve_check`'s `compiler`), and
     one recording another default seed is refused outright (`registered_seed`). `prove_path.py compiler --serve-run DIR`
-    prints the binding's compiler. I2's Programs are held to the ones vllm's registered compiler wrote into the row dir
-    (`manifest.json`, by I1 id).
+    prints the binding's compiler. I2's compiler and Programs are held to the ones vllm's registered compiler wrote into the
+    row dir (`programs.json`: its docket's compiler, and each request's Program by I1 id), refused without that file.
 - **A served execution phase** binds the root serve-openai published: the advice is committed once, by the server, and the prover
   commits it under the published binding. Before any commit and before the sample (folded into the source check a5
   gates the sample on), `serve_check` holds the published records to the verifier's own and refuses by name: another execution phase

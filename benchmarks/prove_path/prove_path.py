@@ -26,7 +26,7 @@ Two kinds of committed run:
   serve-openai` run, its window ``rank0/``. The run dir is serve-openai's (``serve.json``, ``windows.jsonl``, ``requests.jsonl``)
   with `verity-vllm advice`'s ``advice/w<K>/`` (``registration.json``, public; ``private/advice.bin`` and ``private/opening.json``,
   the prover's); the window's Commit is its sealed row dir (``commit/replay_bundle_p0``, the Commit's records, the
-  Build's Programs, ``manifest.json``). The compiler is `Capped` over `I2Compiler` under φ of the served engine
+  window's Programs file (`advice_compile`'s ``programs.json``)). The compiler is `Capped` over `I2Compiler` under φ of the served engine
   (`phi_of_serve`), the bodies each request's ingress record (`serve_ingress`), named as `verity-vllm advice` names it
   (`served_identity`: compile_steps over the tree's code identity), its digest a single-GPU window's I2's over that code, so
   it covers what the compile reads of ``serve.json`` (`I2Compiler.digest`). The advice is committed once, by the server:
@@ -230,7 +230,7 @@ BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
 #: the templates each served model's compiler of record lists as holding transfer gates, by ``serve.json``'s ``model``
 #: (`served_gates`): unsloth/Llama-3.2-1B's is the TP1 stand-in, its RoPE heads, until I2 lists the I/O shell's units
 GATES_OF_RECORD: Mapping[str, tuple[str, ...]] = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}
-#: the schema of the request Programs vllm's registered compiler writes into a served window's row dir (``manifest.json``)
+#: the schema of the request Programs vllm's registered compiler writes into a served window's row dir (``programs.json``)
 SERVED_PROGRAMS = "verity-vllm/served-window-programs/v1"
 #: what a plain audit's summary names as its interim (a5's `PLAIN_SCOPE` is the scope it refuses outside of), with the
 #: changes it waits on (``sources.json``)
@@ -982,33 +982,31 @@ def commit1(a: argparse.Namespace, compiler: Capped, requests: list[dict], bound
                        roles=CPU.registered_roles(p.dirs.values(), prefix) if ck is not None else None)
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
     res = SRW.after_commit(str(out), partition_file=str(a.partition), programs=p.progs, bmap=bmap, committed=OpenedReader(r.store, r.run),
-                           weights=CPU.provider(words, prefix, set()),
-                           manifest=r.manifest if isinstance(r.manifest, dict) else None, run_root=r.run.run_root,
+                           weights=CPU.provider(words, prefix, set()), run_root=r.run.run_root,
                            row=r.row.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": r.pair, "source": r.ctx.get("code")}, workers=a.workers,
                            stand_in=stand_in1(r), binding=dict(bound), transfer_gates=compiler.transfer_gates, tables=tables)
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
-def i2_against_record(a: argparse.Namespace, requests: list[dict]) -> dict | None:
-    """A single-GPU run's I2 Programs against the Build's Programs of record for the record's requests (`deferred_rows.of_record`,
-    by the manifest's lookup): each request's two digests and whether they are equal. A served window's Programs of record are
-    the ones vllm's registered compiler wrote into its row dir by I1 id (``manifest.json``, `SERVED_PROGRAMS`); a stand-in's row
-    dir has none, and its record names requests by its own labels, so there the two are compared as multisets of digests."""
+def i2_against_record(a: argparse.Namespace, requests: list[dict], compiler: Mapping[str, str]) -> dict | None:
+    """A served window's I2 Programs against the ones the server's registered compiler wrote for it (`advice_compile`'s
+    ``programs.json``, `SERVED_PROGRAMS`): its docket's compiler (``registration.binding.compiler``) against I2's
+    ``compiler``, and each request's Program digest (``requests[<I1 id>].digest``) against I2's. Refused without the file."""
     if not single(a):
         return None
-    man = Path(a.row_dir) / "manifest.json"
-    doc = json.loads(man.read_text()) if served(a) and man.is_file() else {}
-    if doc.get("schema") == SERVED_PROGRAMS:
-        of = {str(k): str(v["digest"]) for k, v in doc["requests"].items()}
-    elif served(a):
-        mine, theirs = sorted(q["digest"] for q in requests), sorted(map(str, record1(str(a.bundle), str(a.row_dir)).digests.values()))
-        return {"units": {q["request_id"]: {"i2": q["digest"]} for q in requests}, "of_record": theirs, "equal": mine == theirs}
-    else:
-        of = record1(str(a.bundle), str(a.row_dir)).digests
+    if not served(a):
+        raise ValueError("a single-GPU window is a served one (--serve-run): the rows route's Commit is retired")
+    p = Path(a.row_dir) / "programs.json"
+    doc = json.loads(p.read_text())
+    if doc.get("schema") != SERVED_PROGRAMS:
+        raise ValueError(f"{p} is {doc.get('schema')!r}, not {SERVED_PROGRAMS}")
+    of = {str(k): str(v["digest"]) for k, v in doc["requests"].items()}
+    theirs = ((doc.get("registration") or {}).get("binding") or {}).get("compiler")
     units = {q["request_id"]: {"i2": q["digest"], "of_record": of.get(q["request_id"]), "equal": q["digest"] == of.get(q["request_id"])}
              for q in requests}
-    return {"units": units, "equal": len(units) == len(of) and all(u["equal"] for u in units.values())}
+    return {"compiler": {"i2": dict(compiler), "of_record": theirs, "equal": theirs == dict(compiler)}, "units": units,
+            "equal": theirs == dict(compiler) and len(units) == len(of) and all(u["equal"] for u in units.values())}
 
 
 @contextlib.contextmanager
@@ -1090,7 +1088,7 @@ def commit(a: argparse.Namespace) -> int:
     for (_a, r, _q, _b), got in in_processes(commit_rank, a.jobs or 1, [(a, r, requests, bound) for r in ranks]):
         rows[str(r)] = got
         print(f"[prove-path commit] rank {r}: {json.dumps(got, sort_keys=True, default=str)}", flush=True)
-    doc = {"binding": bound, "ranks": rows, "compile_s": compile_s, **({"i2": i2_against_record(a, requests)} if single(a) else {})}
+    doc = {"binding": bound, "ranks": rows, "compile_s": compile_s, **({"i2": i2_against_record(a, requests, bound["compiler"])} if single(a) else {})}
     Path(a.out, "commit.json").write_text(json.dumps(doc, indent=1, sort_keys=True, default=str))
     return 0
 
@@ -1311,7 +1309,7 @@ def audit(a: argparse.Namespace) -> int:
                      "inner_compiler": {"name": compiler.inner.name, "digest": compiler.inner.digest}, "compile_s": compile_s,
                      "transfer_gates": list(compiler.transfer_gates),
                      "gap": "the advice is opened to the verifier until the compile slice's proof block exists (README.md)",
-                     **({"i2": i2_against_record(a, requests)} if single(a) else {}),
+                     **({"i2": i2_against_record(a, requests, bound["compiler"])} if single(a) else {}),
                      **({"serve": {"run": str(a.serve_run), "window": int(a.window), **serve_check_of(a, bound)}} if served(a) else {}),
                      "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {},
                      **({"plain": {"scope": A5.PLAIN_SCOPE, "interim": PLAIN_INTERIM}} if a.plain else {})}
@@ -1819,7 +1817,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
         return w
 
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
-    store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.manifest if isinstance(r.manifest, dict) else None)
+    store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run))
     units = [u for u in compiled.requests if u is not None]
     scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units], kept_ingress=kept_ingress)
     population = program_digest(low.circuit.program()[0])
@@ -1945,7 +1943,7 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
         p.add_argument("--build-root", help="with --tp-commit: each rank's Programs of record in rank<r>/ (the stand-in compiler's)")
         p.add_argument("--bundle", help="instead of --tp-commit: a single-GPU Commit's sealed replay bundle (<row dir>/commit/"
                        "replay_bundle_p0), its window's Programs I2's")
-        p.add_argument("--row-dir", help="with --bundle or --serve-run: the row dir (the Build's Programs, manifest.json, commit/)")
+        p.add_argument("--row-dir", help="with --serve-run: the window's row dir (programs.json, commit/)")
         p.add_argument("--workload", type=workload_arg, help="with --bundle: the workload file the Commit served (φ's declared inputs, I2's)")
         p.add_argument("--serve-run", help="instead: a serve-openai run dir (serve.json, windows.jsonl, requests.jsonl, advice/w<K>/), "
                        "its window --window from the sealed row dir --row-dir (bundle default <row dir>/commit/replay_bundle_p0)")
