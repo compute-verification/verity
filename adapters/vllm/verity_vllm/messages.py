@@ -56,14 +56,23 @@ class Exchange:
         self.key = f"build-{next(_KEYS)}"
 
     def attach(self, scheme: schemes.Scheme, given: Mapping[str, Any] | None = None, *,
-               gate: Callable[..., Mapping[str, Any]] | None = None, **launcher: Any) -> Any:
+               gate: Callable[..., Mapping[str, Any]] | None = None, private: str | Path | None = None,
+               **launcher: Any) -> Any:
         """Attach ``scheme`` with ``ctx`` (`verity.protocols.resource_accounting.scheme`) ``{"settings": its settings,
-        ``given`` over its defaults; "build": this build's key; "gate": ``gate``; **launcher}``: its ``attach(self, ctx)``,
-        then each of its ``requests(ctx)`` its attach did not file; returns what attach returns.  ``gate`` is the
-        auditor device's challenger gate in its own words, ``gate(*words) -> answer`` (`commit_coins.ChallengerGate.call`),
-        or None where the launcher holds none.  Attached before the build is answered, it is declared (`H.Declared`);
-        after, its requests are refused as `request` refuses them."""
-        ctx = {"settings": schemes.settings(scheme, given or {}), "build": self.key, "gate": gate, **launcher}
+        ``given`` over its defaults; "build": this build's key; "gate": ``gate``; "private"; **launcher}``: its
+        ``attach(self, ctx)``, then each of its ``requests(ctx)`` its attach did not file; returns what attach returns.
+        ``gate`` is the auditor device's challenger gate in its own words, ``gate(*words) -> answer``
+        (`commit_coins.ChallengerGate.call`), or None where the launcher holds none.  ``ctx["private"]`` is the scheme's
+        own directory under the launcher's ``private`` (``private/<scheme's name>``, made here), outside every run
+        output, where it keeps what never leaves the node across servers; None where the launcher holds none.
+        Attached before the build is answered, it is declared (`H.Declared`); after, its requests are refused as
+        `request` refuses them."""
+        own = None
+        if private is not None:
+            own = Path(private) / scheme.name
+            own.mkdir(parents=True, exist_ok=True)
+        ctx = {"settings": schemes.settings(scheme, given or {}), "build": self.key, "gate": gate, "private": own,
+               **launcher}
         got = scheme.attach(self, ctx)
         for r in scheme.requests(ctx):
             if (scheme.name, r) not in self.requests:
