@@ -20,6 +20,13 @@ plan reads lies in one of its runs (`block_mem`).
 reads is `Kept` at `t`. A new pass is past `refreshRefusal`'s `probation` arm (`prob_check`), which reads each append's
 birth: defined, since every append's slot is in the schedule and so is a re-key's origin slot, which `State.slotOk`
 finds an append holding (`Slots`). An append comes after every block a recorded pass reads (`InvOn.reads`).
+
+`OriginsOnRota` over the invariant `Rota`: `append` takes an append only past `State.slotOk`, which checks its slot's
+kind, and a re-key slot's origin is a fresh slot (`slotAt_rekey`), so its append is fresh (`onRota_new`); `receive` joins
+the appends not joined yet to window `filling` only past `joinsAnother`, so each joins its slot's window (`rota_join`);
+and the last window is drawn only once every append has joined (`close`'s `coin` refusal), after which `append` refuses,
+since a drawn window is final and the windows are then all released. An accepted session has drawn its last window
+(`InvOn.drawn`), and its slots increase (`InvOn.ordered`).
 -/
 
 @[expose] public section
@@ -1023,5 +1030,437 @@ theorem slotAt_rekey {p : Params} {N σ w k : Nat} (h : p.slotAt N σ = some (w,
     generalize (if p.hasRegistered N b then 1 else 0) = rb
     rw [ite_cond_eq_false _ _ (eq_false (by omega)), ite_cond_eq_false _ _ (eq_false (by omega))]
   · rw [ite_cond_eq_false _ _ (eq_false c2)] at h3; cases h3
+
+/-- What `OriginsOnRota` reads of every reached state: with refresh each append is `OnRota` and each joined window is
+its slot's; no more windows joined than appends; a drawn window is final; at most `max 1 windows` windows, each but the
+last ended; and once the last window is drawn, every append has joined. -/
+structure RotaOn (P : Params) (N : Nat) (as : Array Append) (js : Array Nat) (ws : Array Win) : Prop where
+  onRota : P.refresh = true → ∀ a : Nat, a < as.size → OnRota P N as a
+  le : js.size ≤ as.size
+  win : P.refresh = true → ∀ a : Nat, a < js.size → js[a]? = (P.slotAt N (as[a]! : Append).slot).map (·.1)
+  final : ∀ u : Nat, (ws[u]! : Win).drawn.isSome → (ws[u]! : Win).final = true
+  size : ws.size ≤ max 1 P.windows
+  bnd : ∀ u : Nat, u + 1 < ws.size → (ws[u]! : Win).boundaryNs.isSome
+  last : ∀ u : Nat, u + 1 = P.windows → (ws[u]! : Win).drawn.isSome → js.size = as.size
+
+def Rota (s : State) : Prop := RotaOn s.params s.reg.blocks s.appends s.joined s.windows
+
+theorem drawn_past (ws : Array Win) (u : Nat) (h : ¬u < ws.size) : ws[u]!.drawn = none := by
+  rw [getElem!_neg ws u h]; rfl
+
+theorem rota_init (params : Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat) :
+    Rota (State.init params reg coins appendCoins notBeforeNs) := by
+  refine ⟨fun _ a ha => by simp [State.init] at ha, by simp [State.init], fun _ a ha => by simp [State.init] at ha,
+    fun u hu => ?_, by simp [State.init], fun u hu => by simp [State.init] at hu, fun u _ hu => ?_⟩
+  · rw [drawn_past _ _ (by simp [State.init])] at hu; cases hu
+  · rw [drawn_past _ _ (by simp [State.init])] at hu; cases hu
+
+/-- `ws'` is `ws` with each window as drawn as it was, final if it was, and ended if it was. -/
+def WK (ws ws' : Array Win) : Prop :=
+  ws'.size = ws.size ∧ ∀ u : Nat, (ws'[u]! : Win).drawn = (ws[u]! : Win).drawn ∧
+    ((ws[u]! : Win).final = true → (ws'[u]! : Win).final = true) ∧
+    ((ws[u]! : Win).boundaryNs.isSome → (ws'[u]! : Win).boundaryNs.isSome)
+
+theorem rotaOn_wk {P N as js ws ws'} (h : RotaOn P N as js ws) (k : WK ws ws') : RotaOn P N as js ws' :=
+  ⟨h.onRota, h.le, h.win, fun u hu => (k.2 u).2.1 (h.final u (by rw [← (k.2 u).1]; exact hu)),
+    by rw [k.1]; exact h.size, fun u hu => (k.2 u).2.2 (h.bnd u (by rw [← k.1]; exact hu)),
+    fun u hw hu => h.last u hw (by rw [← (k.2 u).1]; exact hu)⟩
+
+theorem rota_getElem!_modify (ws : Array Win) (u t : Nat) (f : Win → Win) :
+    (ws.modify u f)[t]! = if u = t ∧ t < ws.size then f ws[t]! else ws[t]! := by
+  by_cases ht : t < ws.size
+  · rw [getElem!_pos (ws.modify u f) t (by simpa using ht), getElem!_pos ws t ht, Array.getElem_modify]
+    by_cases hu : u = t <;> simp [hu, ht]
+  · rw [getElem!_neg (ws.modify u f) t (by simpa using ht), getElem!_neg ws t ht]
+    simp [ht]
+
+theorem wk_modify (ws : Array Win) (u : Nat) (f : Win → Win)
+    (hf : ∀ w : Win, (f w).drawn = w.drawn ∧ (w.final = true → (f w).final = true) ∧
+      (w.boundaryNs.isSome → (f w).boundaryNs.isSome)) : WK ws (ws.modify u f) := by
+  refine ⟨by simp, fun t => ?_⟩
+  rw [rota_getElem!_modify]
+  split
+  · exact hf _
+  · exact ⟨rfl, id, id⟩
+
+theorem rota_fail {s : State} (h : Rota s) (t : Nat) (f : Failure) (at? : Option (Nat × Nat)) :
+    Rota (s.fail t f at?).2 := by
+  unfold State.fail
+  dsimp only
+  split
+  · exact rotaOn_wk h (wk_modify _ _ _ fun _ => ⟨rfl, id, id⟩)
+  · exact h
+
+theorem rota_final {s : State} (h : Rota s) (u : Nat) :
+    Rota { s with windows := s.windows.modify u ({· with final := true}) } :=
+  rotaOn_wk h (wk_modify _ _ _ fun _ => ⟨rfl, fun _ => rfl, id⟩)
+
+/-- A new window, not drawn, past windows that have all ended, within `max 1 windows`. -/
+theorem rotaOn_push {P N as js ws} (h : RotaOn P N as js ws) (w : Win) (hd : w.drawn = none)
+    (hs : ws.size + 1 ≤ max 1 P.windows) (hb : ∀ u, u < ws.size → ws[u]!.boundaryNs.isSome) :
+    RotaOn P N as js (ws.push w) := by
+  have g : ∀ u : Nat, ((ws.push w)[u]! : Win).drawn = (ws[u]! : Win).drawn := by
+    intro u
+    by_cases hl : u < ws.size
+    · rw [getElem!_pos (ws.push w) u (by simp only [Array.size_push]; omega), getElem!_pos ws u hl,
+        Array.getElem_push_lt hl]
+    · rw [drawn_past ws u hl]
+      by_cases he : u = ws.size
+      · subst he; rw [getElem!_pos (ws.push w) ws.size (by simp), Array.getElem_push_eq, hd]
+      · exact drawn_past _ _ (by simp only [Array.size_push]; omega)
+  refine ⟨h.onRota, h.le, h.win, fun u hu => ?_, by simpa using hs, fun u hu => ?_,
+    fun u hw hu => h.last u hw (by rw [← g u]; exact hu)⟩
+  · have hu' := hu
+    rw [g u] at hu'
+    have hl : u < ws.size := Decidable.byContradiction fun hl => by rw [drawn_past ws u hl] at hu'; cases hu'
+    have := h.final u hu'
+    rw [getElem!_pos ws u hl] at this
+    rw [getElem!_pos (ws.push w) u (by simp only [Array.size_push]; omega), Array.getElem_push_lt hl]
+    exact this
+  · simp only [Array.size_push] at hu
+    have hl : u < ws.size := by omega
+    have := hb u hl
+    rw [getElem!_pos ws u hl] at this
+    rw [getElem!_pos (ws.push w) u (by simp only [Array.size_push]; omega), Array.getElem_push_lt hl]
+    exact this
+
+/-- `close`'s draw of window `t`, made final first; the last window only once every append has joined. -/
+theorem rotaOn_sample {P N as js ws} (h : RotaOn P N as js ws) (t : Nat) (d : Array (Nat × Nat)) (now : Nat)
+    (hl : t + 1 = P.windows → as.size ≤ js.size) :
+    RotaOn P N as js ((ws.modify t ({· with final := true})).modify t
+      ({· with drawn := some d, openedNs := some now})) := by
+  have e : ∀ u, ((ws.modify t ({· with final := true})).modify t
+      ({· with drawn := some d, openedNs := some now}))[u]! =
+      if t = u ∧ u < ws.size then { ({ ws[u]! with final := true } : Win) with drawn := some d, openedNs := some now }
+      else ws[u]! := by
+    intro u
+    rw [rota_getElem!_modify, Array.size_modify]
+    by_cases hc : t = u ∧ u < ws.size
+    · rw [if_pos hc, if_pos hc, rota_getElem!_modify, if_pos hc]
+    · rw [if_neg hc, if_neg hc, rota_getElem!_modify, if_neg hc]
+  refine ⟨h.onRota, h.le, h.win, fun u hu => ?_, by simp only [Array.size_modify]; exact h.size, fun u hu => ?_,
+    fun u hw hu => ?_⟩
+  · rw [e u] at hu ⊢
+    by_cases hc : t = u ∧ u < ws.size
+    · rw [if_pos hc]
+    · rw [if_neg hc] at hu ⊢; exact h.final u hu
+  · simp only [Array.size_modify] at hu
+    rw [e u]
+    by_cases hc : t = u ∧ u < ws.size
+    · rw [if_pos hc]; exact h.bnd u hu
+    · rw [if_neg hc]; exact h.bnd u hu
+  · by_cases hc : t = u ∧ u < ws.size
+    · obtain ⟨rfl, -⟩ := hc; exact Nat.le_antisymm h.le (hl hw)
+    · rw [e u, if_neg hc] at hu; exact h.last u hw hu
+
+theorem close_last {a b c d : Nat} (h : ¬(a + 1 == b && decide (c < d)) = true) : a + 1 = b → d ≤ c := by
+  intro e; simp [e] at h; omega
+
+theorem onRota_push {P : Params} {N : Nat} {as : Array Append} {a : Nat} (x : Append) (h : OnRota P N as a) :
+    OnRota P N (as.push x) a := by
+  unfold OnRota at h ⊢
+  rcases Nat.lt_or_ge a as.size with ha | ha
+  · rw [Array.getElem?_push, if_neg (by omega)]
+    cases hy : as[a]? with
+    | none => rw [hy] at h; exact h.elim
+    | some y =>
+      rw [hy] at h
+      dsimp only at h ⊢
+      rcases hs : P.slotAt N y.slot with _ | ⟨w, _ | ⟨lo, n⟩ | k⟩ <;> cases ho : y.origin <;>
+        simp only [hs, ho] at h ⊢
+      all_goals first
+        | exact h
+        | (obtain ⟨hk, b, hb, z, hz, rest⟩ := h
+           exact ⟨hk, b, hb, z, by rw [Array.getElem?_push, if_neg (by omega)]; exact hz, rest⟩)
+  · rw [Array.getElem?_eq_none ha] at h; exact h.elim
+
+/-- With refresh, the append `append` takes in slot `k` is `OnRota`: `State.slotOk` checks its slot's kind, and a re-key
+slot's origin is a fresh slot (`slotAt_rekey`), so the append `find?` gives there is fresh by its own `OnRota`. -/
+theorem onRota_new {s : State}
+    (hR : s.params.refresh = true → ∀ a, a < s.appends.size → OnRota s.params s.reg.blocks s.appends a)
+    (hr : s.params.refresh = true) {k n : Nat} {origin : _root_.Poub.Origin} (hk : s.slotOk k n origin = true)
+    (x : Append) (hxs : x.slot = k) (hxc : x.count = n) (hxo : x.origin = origin) :
+    OnRota s.params s.reg.blocks (s.appends.push x) s.appends.size := by
+  unfold State.slotOk at hk
+  rw [Bool.and_eq_true] at hk
+  obtain ⟨-, hk⟩ := hk
+  unfold OnRota
+  rw [Array.getElem?_push, if_pos rfl]
+  dsimp only
+  rw [hxs, hxo, hxc]
+  rcases hs : s.params.slotAt s.reg.blocks k with _ | ⟨w, _ | ⟨lo, m⟩ | k₀⟩ <;> cases origin <;>
+    simp only [hs] at hk ⊢
+  all_goals first
+    | (simp at hk; done)
+    | skip
+  · simpa using hk
+  · simpa using hk
+  · rename_i k'
+    simp only [Bool.and_eq_true, beq_iff_eq, Option.any_eq_true] at hk
+    obtain ⟨hkk, y, hy, hyc⟩ := hk
+    have hys := Array.find?_some (p := fun x : Append => x.slot == k₀) hy
+    obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_of_find?_eq_some hy)
+    simp only [beq_iff_eq] at hys hyc
+    obtain ⟨b', hb'⟩ := slotAt_rekey hs
+    have hj' := hR hr j hj
+    unfold OnRota at hj'
+    rw [Array.getElem?_eq_getElem hj] at hj'
+    dsimp only at hj'
+    rw [hys, hb'] at hj'
+    have ho : s.appends[j].origin = .fresh := by
+      revert hj'; cases s.appends[j].origin <;> simp
+    exact ⟨hkk.symm, j, hj, s.appends[j], by rw [Array.getElem?_push, if_neg (by omega), Array.getElem?_eq_getElem hj],
+      hys, ho, hyc⟩
+
+/-- An append `append` takes: `OnRota` with refresh, and never once the last window is drawn, since then the windows
+are all released and the last is final, where `append` refuses with `coin`. -/
+theorem rota_push {s : State} (h : Rota s) {A : Bool} {count : Nat} {origin : _root_.Poub.Origin}
+    {slot : Option Nat} (h2 : ¬(s.params.refresh && !(slot.any fun k => s.slotOk k count origin)) = true)
+    (h3 : ¬(A || (s.windows.size == s.params.windows && (s.windows.back?.map (·.final)).getD false)) = true)
+    (x : Append) (hxs : x.slot = slot.getD s.appends.size) (hxc : x.count = count) (hxo : x.origin = origin)
+    (hd : Option ByteArray) (n : Nat) :
+    Rota { s with appends := s.appends.push x, head := hd, extent := n } := by
+  have hno : ∀ u, u + 1 = s.params.windows → s.windows[u]!.drawn.isSome → False := by
+    intro u hw hu
+    have hl : u < s.windows.size := Decidable.byContradiction fun hl => by rw [drawn_past _ _ hl] at hu; cases hu
+    have hf := h.final u hu
+    have hsz := h.size
+    have he : s.windows.size = s.params.windows := by omega
+    have hb : s.windows.back? = some s.windows[u]! := by
+      rw [Array.back?_eq_getElem?, show s.windows.size - 1 = u by omega, getElem!_pos s.windows u hl,
+        Array.getElem?_eq_getElem hl]
+    apply h3
+    simp [he, hb, hf]
+  have hle := h.le
+  refine ⟨fun hr a ha => ?_, ?_, fun hr a ha => ?_, h.final, h.size, h.bnd, fun u hw hu => (hno u hw hu).elim⟩
+  · change a < (s.appends.push x).size at ha
+    simp only [Array.size_push] at ha
+    by_cases hl : a < s.appends.size
+    · exact onRota_push x (h.onRota hr a hl)
+    · have : a = s.appends.size := by omega
+      subst this
+      rw [hr] at h2
+      cases slot with
+      | none => simp at h2
+      | some k =>
+        have hk : s.slotOk k count origin = true := by simpa using h2
+        exact onRota_new h.onRota hr hk x (by simpa using hxs) hxc hxo
+  · show s.joined.size ≤ (s.appends.push x).size
+    simp only [Array.size_push]; omega
+  · show s.joined[a]? = (s.params.slotAt s.reg.blocks (s.appends.push x)[a]!.slot).map (·.1)
+    have hl : a < s.appends.size := Nat.lt_of_lt_of_le ha hle
+    rw [h.win hr a ha, getElem!_pos (s.appends.push x) a (by simp only [Array.size_push]; omega),
+      getElem!_pos s.appends a hl, Array.getElem_push_lt hl]
+
+/-- `receive`'s join, past `joinsAnother`: every append not joined yet joins window `filling`, its slot's. -/
+theorem rota_join {s : State} (h : Rota s) (hj : ¬s.joinsAnother s.filling = true) :
+    Rota { s with joined := s.joined ++ Array.replicate (s.appends.size - s.joined.size) s.filling } := by
+  have hle := h.le
+  refine ⟨h.onRota, ?_, fun hr a ha => ?_, h.final, h.size, h.bnd, fun _ _ _ => ?_⟩
+  · show (s.joined ++ Array.replicate (s.appends.size - s.joined.size) s.filling).size ≤ s.appends.size
+    simp only [Array.size_append, Array.size_replicate]; omega
+  · show (s.joined ++ Array.replicate (s.appends.size - s.joined.size) s.filling)[a]? =
+      (s.params.slotAt s.reg.blocks s.appends[a]!.slot).map (·.1)
+    change a < (s.joined ++ Array.replicate (s.appends.size - s.joined.size) s.filling).size at ha
+    simp only [Array.size_append, Array.size_replicate] at ha
+    by_cases hl : a < s.joined.size
+    · rw [Array.getElem?_append_left hl]; exact h.win hr a hl
+    · rw [Array.getElem?_append_right (by omega), Array.getElem?_replicate, if_pos (by omega)]
+      unfold State.joinsAnother at hj
+      rw [hr] at hj
+      simp only [Bool.true_and, List.any_eq_true, not_exists, not_and] at hj
+      have := hj a (List.mem_range'_1.2 ⟨by omega, by omega⟩)
+      have e : (s.params.slotAt s.reg.blocks s.appends[a]!.slot).map (·.1) = some s.filling := by
+        simpa [State.slotWindow] using this
+      exact e.symm
+  · show (s.joined ++ Array.replicate (s.appends.size - s.joined.size) s.filling).size = s.appends.size
+    simp only [Array.size_append, Array.size_replicate]; omega
+
+theorem rota_start {s : State} {now : Nat} {r : Result} {s' : State} (h : Rota s)
+    (he : start s now = (r, s')) : Rota s' := by
+  unfold start at he
+  split at he
+  · cases he; exact h
+  split at he
+  · cases he; exact h
+  · rename_i h1 _
+    cases he
+    have he : s.windows.size = 0 := by simpa using h1
+    exact rotaOn_push h _ rfl (by rw [he]; omega) (fun u hu => by omega)
+
+theorem rota_boundary {s : State} {now : Nat} {r : Result} {s' : State} (h : Rota s)
+    (he : boundary s now = (r, s')) : Rota s' := by
+  unfold boundary at he
+  simp only [Id.run] at he
+  split at he
+  · cases he; exact h
+  split at he
+  · rename_i t hf
+    have hmem := Array.mem_of_find?_eq_some hf
+    have hnone := Array.find?_some hf
+    rw [Array.mem_range] at hmem
+    have hlast : t + 1 = s.windows.size := Decidable.byContradiction fun hne => by
+      have := h.bnd t (by omega)
+      revert this hnone
+      try simp only []
+      cases s.windows[t]!.boundaryNs <;> simp
+    have hb' : ∀ u, u < s.windows.size →
+        (s.windows.modify t ({· with boundaryNs := some now}))[u]!.boundaryNs.isSome := by
+      intro u hu
+      rw [rota_getElem!_modify]
+      split
+      · rfl
+      · exact h.bnd u (by omega)
+    split at he
+    · cases he; exact h
+    split at he
+    · rename_i hc
+      have hc' : t + 1 < s.params.windows := hc
+      cases he
+      exact rotaOn_push (rotaOn_wk h (wk_modify s.windows t ({· with boundaryNs := some now})
+        fun _ => ⟨rfl, id, fun _ => rfl⟩)) _ rfl
+        (by simp only [Array.size_modify]; omega) (fun u hu => hb' u (by rw [Array.size_modify] at hu; exact hu))
+    · cases he; exact rotaOn_wk h (wk_modify _ _ _ fun _ => ⟨rfl, id, fun _ => rfl⟩)
+  · cases he; exact h
+
+theorem rota_append {s : State} {root : ByteArray} {count : Int} {origin : _root_.Poub.Origin} {slot : Option Nat}
+    {r : Result} {s' : State} (h : Rota s) (he : append s root count origin slot = .ok (r, s')) : Rota s' := by
+  unfold append at he
+  repeat' (first | split at he | (dsimp only at he; split at he))
+  all_goals (try simp only [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at he)
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact h
+    | exact rota_fail h _ _ _
+    | exact rota_push h ‹_› ‹_› _ rfl rfl rfl _ _
+
+theorem rota_release {s : State} {runs withdrawn : Array (Int × Int)} {r : Result} {s' : State} (h : Rota s)
+    (he : release s runs withdrawn = (r, s')) : Rota s' := by
+  unfold release at he
+  simp only [Id.run] at he
+  repeat' split at he
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact h
+    | exact rota_fail h _ _ _
+
+theorem rota_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State} (h : Rota s)
+    (he : close s t now = .ok (r, s')) : Rota s' := by
+  unfold close at he
+  dsimp only at he
+  repeat' split at he
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact h
+    | exact rota_fail (rota_final h _) _ _ _
+    | exact rotaOn_sample h _ _ _ (close_last ‹_›)
+
+theorem rota_verify {s : State} {t : Int} {openings : Array Opening} {r : Result} {s' : State}
+    (h : Rota s) (he : verify s t openings = (r, s')) : Rota s' := by
+  unfold verify at he
+  simp only [Id.run] at he
+  repeat' split at he
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact h
+    | exact rota_fail h _ _ _
+    | exact rotaOn_wk h (wk_modify _ _ _ fun _ => ⟨rfl, id, id⟩)
+
+theorem rota_receive {s : State} {t i : Int} {root : ByteArray} {runs : Option (Array (Int × Int))}
+    {change : Option (Array (Int × Int) × Array (Int × Int))} {step : Option Int} {now : Nat} {r : Result}
+    {s' : State} (h : Rota s) (he : receive s t i root runs change step now = (r, s')) : Rota s' := by
+  unfold receive at he
+  split at he
+  · cases he; exact h
+  split at he
+  · cases he; exact h
+  split at he
+  · cases he; exact rota_fail h _ _ _
+  change (have s := s; _) = _ at he
+  extract_lets s₀ jp s₁ at he
+  have key : ∀ s₂ : State, Rota s₂ → jp () s₂ = (r, s') → Rota s' := by
+    intro s₂ h₂ hj
+    dsimp -zeta only [jp] at hj
+    extract_lets t₂ N₂ ext₂ plan₂ s₃ below₂ head₂ jp₂ at hj
+    have key₂ : jp₂ () = (r, s') → Rota s' := by
+      intro hj
+      dsimp only [jp₂] at hj
+      generalize hq : plan₂ = q at hj
+      repeat' split at hj
+      all_goals (try dsimp only at hj)
+      all_goals cases hj
+      all_goals first
+        | exact rota_fail h₂ _ _ _
+        | exact rota_fail (rota_join h₂ ‹_›) _ _ _
+        | exact rotaOn_wk (rota_join h₂ ‹_›) (wk_modify _ _ _ fun _ => ⟨rfl, id, id⟩)
+    split at hj
+    · split at hj
+      · cases hj; exact rota_fail h₂ _ _ _
+      · exact key₂ hj
+    · exact key₂ hj
+  split at he
+  · exact key s₁ (rotaOn_wk h (wk_modify _ _ _ fun _ => ⟨rfl, fun _ => rfl, id⟩)) he
+  · split at he
+    · cases he; exact rota_fail h _ _ _
+    · exact key s₀ h he
+
+theorem step_rota {s : State} {e : Event} {r : Result} {s' : State} (h : Rota s)
+    (he : step s e = .ok (r, s')) : Rota s' := by
+  cases e with
+  | start now => injection he with he; exact rota_start h he
+  | boundary now => injection he with he; exact rota_boundary h he
+  | append root count origin slot => exact rota_append h he
+  | release runs withdrawn => injection he with he; exact rota_release h he
+  | receive t i root runs change st now => injection he with he; exact rota_receive h he
+  | close t now => exact rota_close h he
+  | verify t openings => injection he with he; exact rota_verify h he
+
+theorem slots_ordered {as : Array Append} (h : ∀ k (hk : k + 1 < as.size), as[k].slot < as[k + 1].slot) :
+    ∀ a b (hb : b < as.size) (hab : a < b), as[a].slot < as[b].slot := by
+  intro a b hb hab
+  induction b with
+  | zero => omega
+  | succ b ih =>
+    rcases Nat.lt_succ_iff_lt_or_eq.1 hab with hl | hl
+    · exact Nat.lt_trans (ih (by omega) hl) (h b hb)
+    · subst hl; exact h a hb
+
+theorem originsOnRota : OriginsOnRota := by
+  intro params reg coins appendCoins notBeforeNs events rs s hrun hr hout a ha
+  have hR : Rota s := run_inv Rota (fun _ _ _ _ hs he => step_rota hs he) _ _ _ _ (rota_init _ _ _ _ _) hrun
+  obtain ⟨hI, hp, hg, -⟩ := inv_run hrun
+  subst hp hg
+  unfold State.outcome at hout
+  split at hout
+  · rename_i f _
+    have := Option.some.inj hout
+    cases hf : f.failure <;> simp [hf, Failure.name] at this
+  have hc : (s.windows.size == s.params.windows && s.windows.all fun x => x.verdict == some Verdict.accept) = true := by
+    split at hout
+    · assumption
+    · cases hout
+  simp only [Bool.and_eq_true, beq_iff_eq, Array.all_eq_true] at hc
+  obtain ⟨hsz, hall⟩ := hc
+  have hon := hR.onRota hr a ha
+  have hw : 0 < s.params.windows := by
+    have hon' := hon
+    unfold OnRota at hon'
+    rw [Array.getElem?_eq_getElem ha] at hon'
+    dsimp only at hon'
+    revert hon'
+    cases hs : s.params.slotAt s.reg.blocks s.appends[a].slot with
+    | none => cases s.appends[a].origin <;> simp
+    | some p => intro _; obtain ⟨w, x⟩ := p; exact Nat.lt_of_le_of_lt (Nat.zero_le _) ((slotAt_iff _ _ _ _ _).1 hs).1
+  have hu : s.params.windows - 1 < s.windows.size := by omega
+  have hd := hI.drawn _ hu (verdict_beq (hall _ hu))
+  have hj := hR.last (s.params.windows - 1) (by omega) (by rw [getElem!_pos s.windows _ hu]; exact hd)
+  have hle := hR.le
+  refine ⟨hon, ?_, fun b hb hab => slots_ordered hI.ordered a b hb hab⟩
+  unfold State.slotWindow
+  rw [hR.win hr a (by omega), getElem!_pos s.appends a ha]
 
 end Properties.Poub

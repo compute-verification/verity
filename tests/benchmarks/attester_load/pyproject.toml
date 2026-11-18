@@ -5,8 +5,24 @@ testpaths = ["."]
 
 [tool.verity.tests]
 # The tests read the scan class's schedule from `scan_zk.py` in process, the GLM-5.3 network attester's card, and write
-# a fixed arm's result through the harness kit's writer, which reads its settings through verity_config.
+# a fixed arm's result through the harness kit's writer, which reads its settings through verity_config. The pacing
+# replay's capacity runs `benchmarks/certifier_term/run.py`'s calculator of K, with what it reads (that suite's inputs).
 inputs = ["benchmarks/attester_load", "verity", "benchmarks/spot_figures/cards/certifier.glm-5.3.json",
+    "benchmarks/certifier_term", "benchmarks/network_traces/leak_bounds.py",
+    "calibration/census/deployments.json",
+    "calibration/census/adversary.json",
+    "calibration/census/hardware.json",
+    "benchmarks/spot_figures/cards",
+    "benchmarks/spot_figures/cards.py",
+    "benchmarks/spot_figures/figure1.py",
+    "benchmarks/spot_figures/total_cost.py",
+    "benchmarks/spot_figures/second_stage.py",
+    "benchmarks/spot_figures/breakeven",
+    "tests/verity/tests",
+    "adapters/vllm/verity_vllm/definitions/__init__.py",
+    "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.circuit-check.json",
+    "benchmarks/slowdown/data/reference.toml",
+    "benchmarks/slowdown/data/hardware.toml",
     "benchmarks/harness/verity_bench/__init__.py",
     "benchmarks/harness/verity_bench/kit.py",
     "benchmarks/harness/verity_bench/kit_report.py",

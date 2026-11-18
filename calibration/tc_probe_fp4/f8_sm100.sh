@@ -27,8 +27,10 @@ NVCC=$TK/bin/nvcc
 export PATH="$TK/bin:$PATH"
 card=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
 [ -n "$card" ] || { echo "f8_sm100.sh: no GPU here" >&2; exit 2; }
-arch=$("$PY" "$MACHINE" arch "$card") || exit 2
-[ "$arch" = sm_100a ] || { echo "f8_sm100.sh: tcgen05_f8.cu's kernels are sm_100a, and the card '$card' is $arch" >&2; exit 2; }
+PROBE="$HERE/../pouw/opcode_probe/probe.py"
+arch=$("$PY" "$PROBE" arch --card "$card") || exit 2
+want=$("$PY" "$PROBE" arch --sku b200-sxm-180gb) || exit 2
+[ "$arch" = "$want" ] || { echo "f8_sm100.sh: tcgen05_f8.cu's kernels are $want, and the card '$card' is $arch" >&2; exit 2; }
 "$NVCC" --version >"$OUT/nvcc.txt" 2>&1
 BUILD=$(mktemp -d)
 trap 'rm -rf "$BUILD"' EXIT
