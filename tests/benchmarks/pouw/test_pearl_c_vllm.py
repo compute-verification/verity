@@ -375,7 +375,7 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
     assert (tmp_path / man["weights"]["0"]["rows"]["path"]).stat().st_size == 2 * 256 * 1024
     for u in man["matmuls"]:
         y, tree = (tmp_path / u["y"]["rows"]["path"]).read_bytes(), (tmp_path / u["y"]["tree"]["path"]).read_bytes()
-        root, want = SY.commit_y(y, u["n"], salt, u["index"], SALT_KEY)
+        root, want = SY.commit_y(y, u["n"], salt, u["index"], split_salts((tmp_path / u["y"]["salts"]["path"]).read_bytes()))
         assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
 
 
@@ -388,10 +388,12 @@ def test_a_retained_call_given_its_y_tree_retains_that_tree_and_never_makes_one(
     run.begin(retain=str(tmp_path))
     retained, given = run._retained, {}
 
-    def with_tree(cur, mm, m, flags, xa, tree, y=None, y_tree=None):
-        honest = SY.commit_y(PPDR._bytes(y.contiguous().view(torch.uint8)), y.shape[1], salt, mm.index, SALT_KEY)[1]
+    def with_tree(cur, mm, m, flags, xa, tree, y=None, y_tree=None, salts=None):
+        ys = fresh_salts(y.shape[0])
+        honest = SY.commit_y(PPDR._bytes(y.contiguous().view(torch.uint8)), y.shape[1], salt, mm.index, ys)[1]
         given[mm.index] = bytes([0xA5]) * len(honest) if given else honest
-        return retained(cur, mm, m, flags, xa, tree, y=y, y_tree=torch.frombuffer(bytearray(given[mm.index]), dtype=torch.uint8))
+        return retained(cur, mm, m, flags, xa, tree, y=y, y_tree=torch.frombuffer(bytearray(given[mm.index]), dtype=torch.uint8),
+                        salts=salts, y_salts=torch.frombuffer(bytearray(b"".join(ys)), dtype=torch.uint8))
     monkeypatch.setattr(run, "_retained", with_tree)
     monkeypatch.setattr(SYD, "y_tree", lambda *_: pytest.fail("a given y tree is never made again"))
     run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
@@ -443,7 +445,8 @@ def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_th
     assert (tmp_path / "ok" / u["y"]["rows"]["path"]).read_bytes() == served
     ytree = (tmp_path / "ok" / u["y"]["tree"]["path"]).read_bytes()
     assert u["y"]["tree"]["sha256"] == hashlib.sha256(ytree).hexdigest()
-    assert u["y"]["root"] == ytree[-64:].hex() == SY.commit_y(served, 256, run.salt, index, run.salt_key)[0].hex()
+    assert u["y"]["root"] == ytree[-64:].hex() == SY.commit_y(served, 256, run.salt, index, split_salts(
+        (tmp_path / "ok" / u["y"]["salts"]["path"]).read_bytes()))[0].hex()
 
     def fails(path, *_):
         raise OSError(f"no space left for {path.name}")
@@ -1095,6 +1098,11 @@ def pinned_salts(key: bytes, nonces: list[int]):
         nonce = next(left)
         return [hm96_salt(key, nonce, i) for i in range(n)]
     return draw
+
+
+def split_salts(kept: bytes) -> list[bytes]:
+    """A salts file's salts, `HM96_SALT` bytes each in rank order."""
+    return [kept[i:i + HM96_SALT] for i in range(0, len(kept), HM96_SALT)]
 
 
 def kept_salts(tree: MerkleTree) -> bytes:

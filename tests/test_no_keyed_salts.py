@@ -29,7 +29,6 @@ ALLOWED: dict[str, str] = {
     "adapters/torch/verity_torch/pouw/pearl_c/ends.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/host.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/run_device.py": "@compute-accounting",
-    "adapters/torch/verity_torch/pouw/pearl_c/served_y_device.py": "@compute-accounting",
     "adapters/vllm/verity_vllm/pipeline/interior_links.py": "@vllm",
     "adapters/vllm/verity_vllm/pipeline/interior_rows.py": "@vllm",
     "adapters/vllm/verity_vllm/program/predict/window_weights.py": "@vllm",

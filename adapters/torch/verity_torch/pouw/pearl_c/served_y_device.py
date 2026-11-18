@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from verity_torch.pouw.pearl_c.host import _bytes, _put, _stream, _zeros
+from verity.protocols.resource_accounting.compute.pouw.prover.audit import HM96_SALT, fresh_salts
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.served_y import (
     Y_CHECK_ROWS,
     chunk_rows,
@@ -14,22 +15,33 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.se
 )
 
 
-def y_tree(run: Any, y: Any, index: int) -> Any:
-    """Call `index`'s tree over its real rows `y` (BF16, m x n) as uint8 bytes in `commit_y`'s layout, its root the last
-    node: on a device by the run's `DeviceTrees`, on the CPU by `commit_y`."""
+def y_tree(run: Any, y: Any, index: int, salts: Any) -> Any:
+    """Call `index`'s tree over its real rows `y` (BF16, m x n) under its rows' salts `salts` (uint8, `HM96_SALT` bytes a
+    row in row order, on y's device) as uint8 bytes in `commit_y`'s layout, its root the last node: on a device by the
+    run's `DeviceTrees`, on the CPU by `commit_y`."""
     import torch
     if not y.is_cuda:
-        tree = commit_y(_bytes(y.contiguous().view(torch.uint8)), y.shape[1], run.salt, index, run.salt_key)[1]
+        tree = commit_y(_bytes(y.contiguous().view(torch.uint8)), y.shape[1], run.salt, index, _split(_bytes(salts)))[1]
         return torch.frombuffer(bytearray(tree), dtype=torch.uint8)
     if run._y_trees is None:
         run._y_trees = DeviceTrees(run)
-    return run._y_trees(y, index)
+    return run._y_trees(y, index, salts)
+
+
+def y_salts(m: int) -> Any:
+    """Fresh salts for y's `m` rows (`audit.fresh_salts`), uint8 on the host, `HM96_SALT` bytes a row in row order."""
+    import torch
+    return torch.frombuffer(bytearray(b"".join(fresh_salts(m))), dtype=torch.uint8)
+
+
+def _split(salts: bytes) -> list[bytes]:
+    return [salts[i:i + HM96_SALT] for i in range(0, len(salts), HM96_SALT)]
 
 
 class DeviceTrees:
     """A run's y trees on its device, by its kernel's own tree launches, the ones B's weight trees run: the row digests
     (`run.Pipeline.row_digests`) over y's rows widened to FP32 a chunk at a time (exact, as `f32_rows`), the hm96 leaves at
-    nonce `HM96_Y` + index and the frame leaves under the call's `y_domain` (`hm_level0`), its pads and its levels, on the
+    the rows' salts given as data and the frame leaves under the call's `y_domain` (`hm_level0`), its pads and its levels, on the
     current stream, into a tree that starts as the pass's poison byte where the pass has one.  One pipeline a width n, y's
     rows its rows of k = n words, so n is a k the kernels take; its first tree is held to `commit_y` over a fixed
     `Y_CHECK_ROWS`-row y."""
@@ -40,8 +52,8 @@ class DeviceTrees:
         self.run, self.pipes = run, {}
         self.dom = _zeros(64, run.device)
 
-    def __call__(self, y: Any, index: int) -> Any:
-        return self._tree(self.pipe(y.shape[1], index), y.contiguous(), index)
+    def __call__(self, y: Any, index: int, salts: Any) -> Any:
+        return self._tree(self.pipe(y.shape[1], index), y.contiguous(), index, salts)
 
     def pipe(self, n: int, index: int) -> Any:
         """Width `n`'s pipeline, made and held to `commit_y` at its first use."""
@@ -59,7 +71,7 @@ class DeviceTrees:
         except ValueError as e:
             raise ValueError(f"y's device tree hashes y's rows as the kernels' rows of k = {n} words: {e}") from None
 
-    def _tree(self, p: Any, y: Any, index: int) -> Any:
+    def _tree(self, p: Any, y: Any, index: int, salts: Any) -> Any:
         import torch
         R, dev, (m, n) = self.run.kernel.run, self.run.kernel.dev, y.shape
         poison = getattr(self.run.cur, "poison", None)
@@ -77,7 +89,7 @@ class DeviceTrees:
             return held[0].data_ptr()
         before, dev.stream = dev.stream, _stream(y.device)
         try:
-            tree_launches(R, p, tree.data_ptr(), dig.data_ptr(), seg.data_ptr(), m, rows, index, words)
+            tree_launches(R, p, tree.data_ptr(), dig.data_ptr(), seg.data_ptr(), m, rows, index, words, salts.data_ptr())
         finally:
             dev.stream = before
         return tree
@@ -85,12 +97,13 @@ class DeviceTrees:
     def _check(self, p: Any, n: int, index: int) -> None:
         import torch
         y = torch.linspace(-4, 4, Y_CHECK_ROWS * n).reshape(Y_CHECK_ROWS, n).to(torch.bfloat16)
-        got = _bytes(self._tree(p, y.to(self.run.device), index))
-        want = commit_y(_bytes(y.view(torch.uint8)), n, self.run.salt, index, self.run.salt_key)[1]
+        salts = y_salts(Y_CHECK_ROWS)
+        got = _bytes(self._tree(p, y.to(self.run.device), index, salts.to(self.run.device)))
+        want = commit_y(_bytes(y.view(torch.uint8)), n, self.run.salt, index, _split(_bytes(salts)))[1]
         if got != want:
             at = next(i for i in range(0, len(want), 64) if got[i:i + 64] != want[i:i + 64]) // 64
             raise ValueError(f"y's device tree at width {n} differs from served_y.commit_y over {Y_CHECK_ROWS} rows, first "
                              f"at node {at} of {len(want) // 64}")
 
 
-__all__ = ["DeviceTrees", "y_tree"]
+__all__ = ["DeviceTrees", "y_salts", "y_tree"]
