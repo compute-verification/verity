@@ -35,8 +35,8 @@ NAME = "class Program 0"
 
 @pytest.fixture
 def low():
-    """TINY's class Program lowered into one slot, unwired: its Program holds every node's rows."""
-    return WC.lower(S._registered(), CLASS, 1, GRAIN, wired=False, provable=False)
+    """TINY's class Program lowered into one slot: its Program holds every node's rows."""
+    return WC.lower(S._registered(), CLASS, 1, GRAIN, provable=False)
 
 
 def _node(low, family: str, k: int = 0):
@@ -143,7 +143,7 @@ def test_a_position_past_the_first_that_reads_the_prompt_is_refused(low):
 def test_with_h1s_tables_a_token_that_isnt_one_u32_row_is_refused():
     """An input-ids table's row is one token id: an embedding past the prompt whose token is a norm's input row, 64 words,
     isn't one."""
-    low = WC.lower(_int8(), CLASS, 1, INT8_GRAIN, wired=False, tables=Tables(64, 8, 6))
+    low = WC.lower(_int8(), CLASS, 1, INT8_GRAIN, provable=False, tables=Tables(64, 8, 6))
     p, nodes = low.programs[0], low.fn.body.nodes
     emb, hidden = _node(low, "Embedding", 1)[1], _node(low, "RMSNormTriton")[1].args[0]
     (row,) = p.rows(hidden.refs)
@@ -165,7 +165,7 @@ def test_a_grain_that_cuts_no_unit_within_its_rows_is_refused_by_name():
 def test_a_quantizer_whose_x_is_rows_that_dont_divide_its_values_is_refused():
     """o_proj's quantizer reads its 64 values as the attention's four head rows; one reading two of them and a norm's
     input row, three rows, is refused."""
-    low = WC.lower(_int8(), CLASS, 1, INT8_GRAIN, wired=False)
+    low = WC.lower(_int8(), CLASS, 1, INT8_GRAIN, provable=False)
     p, nodes = low.programs[0], low.fn.body.nodes
     quant, hidden = _node(low, "Int8RowQuant", 1)[1], _node(low, "RMSNormTriton")[1].args[0]
     x = quant.args[0]
