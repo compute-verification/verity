@@ -18,12 +18,14 @@ from collections.abc import Iterator, Mapping
 from types import SimpleNamespace
 from typing import Any, Callable, Sequence
 
+import numpy as np
+
 from .codec import canonical_json, descriptor_id, register_lazy_family
 from .defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from .partition_object import template_instances_query
+from .partition_object import template_instance_query, template_instances_query
 from .ports import In, Leaves, Out, Ports, port_types
 from .program import Program
-from .refs import Affine, Coll, Concat, Grid, Refs, Strided, coll_concat, concat, recut, spell
+from .refs import Affine, Coll, Concat, Grid, Refs, Strided, coll_concat, concat, recut, runs, spell
 from .types import Array, RecordType, Tuple, Value
 
 #: The population programs' versions, the builders' default first. v1 names its templates (each one's descriptor id) in its
@@ -349,6 +351,104 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
             template_instances_query([t for t, _ in templates]))
 
 
+Positions = dict[tuple[str, str, int], dict[str, tuple[np.ndarray, np.ndarray]]]
+
+
+def unwired_population_program(program: Program, cuts: Mapping[str, Mapping[str, int]] | None = None
+                               ) -> tuple[Program, dict[str, Any], Positions]:
+    """A `wired_population_program`'s unwired population and template query, as the periods' `population_program` builds
+    them (its values every root parameter no template owns), and its wires' positions: by (reader, port, row of the
+    port's ``cuts``, the record's), each writer tree ``<writer>/o<field>`` the reader's own units and the writer's own
+    units they read (`rows.Binding.reads`). Refused (ValueError) by name: cut-input, cut-form, cut-return, cut-root,
+    cut-rows, cut-offset, cut-units, cut-fields, cut-width."""
+    fn = program.fn
+    if not isinstance(fn, SpecializedDefinition) or (fn.defn.name, fn.defn.version) != ("WiredPopulations", 1):
+        raise ValueError(f"cut-input: {descriptor_id(fn)} is no WiredPopulations_v1, so it has no wires to cut")
+    ids, counts = list(fn.bindings["templates"]), [int(n) for n in fn.bindings["counts"]]
+    body, index = fn.body, {t: j for j, t in enumerate(ids)}
+    nodes, defs, of = body.nodes, {}, []
+    for k, nd in enumerate(nodes):
+        j = index.get(descriptor_id(nd.fn)) if nd.form == "batch" else None
+        if j is None:
+            raise ValueError(f"cut-form: root node {k} is a {nd.form} of {descriptor_id(nd.fn)}, not a batch of a template")
+        defs.setdefault(j, nd.fn)
+        of.append(j)
+    if len(defs) != len(ids):
+        raise ValueError(f"cut-form: templates {sorted(set(ids) - {ids[j] for j in defs})} have no root batch")
+    sigs = [defs[j].signature() for j in range(len(ids))]
+    ret = [r.leaves for _, r in sigs]
+    bounds = list(np.cumsum([0] + [n * r for n, r in zip(counts, ret)]))
+    first, pos = [-1] * len(nodes), 0
+    for s, i, lo, hi in runs(body.ret):
+        j = bisect.bisect_right(bounds, pos) - 1
+        if s != "n" or lo != 0 or hi != nodes[i].out.leaves or of[i] != j or first[i] >= 0 or pos + hi > bounds[j + 1]:
+            raise ValueError(f"cut-return: the root returns ({s}, {i}, {lo}, {hi}) at leaf {pos}, not one batch whole in "
+                             "its template's units")
+        first[i], pos = (pos - bounds[j]) // ret[j], pos + hi
+    if pos != bounds[-1] or min(first, default=0) < 0:
+        raise ValueError("cut-return: the root returns no batch once each, in its templates' units")
+    own = {f"{j}.{p}" for j, (ps, _) in enumerate(sigs) for p, _ in ps}
+    k0 = next((i for i, (p, _) in enumerate(body.params) if p in own), len(body.params))
+    values = []
+    for p, t in body.params[:k0]:
+        if not (isinstance(t, Array) and isinstance(t.elem, Value)):
+            raise ValueError(f"cut-root: root parameter {p} of {t!r} is no registered value's words")
+        values.append((p, t.n, t.elem.w))
+    if any(p not in own for p, _ in body.params[k0:]):
+        raise ValueError(f"cut-root: root parameters {[p for p, _ in body.params[k0:] if p not in own]} follow the "
+                         "templates' own")
+    members = [(defs[j], n) for j, n in enumerate(counts)]
+    if len(members) == 1 and not values:
+        unwired, query = population_program(*members[0]), template_instance_query(members[0][0])
+    else:
+        unwired, query = mixed_population_program(members, values=values), template_instances_query([t for t, _ in members])
+    fields = []
+    for _, r in sigs:
+        fs = _fields(r)
+        fields.append((np.cumsum([0] + [f.leaves for f in fs])[:-1], np.array([f.leaves for f in fs]), fs))
+    got: dict[tuple[str, str, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]] = {}
+    for k, nd in enumerate(nodes):
+        j = of[k]
+        for (port, t), arg in zip(sigs[j][0], nd.args):
+            kc = int((cuts or {}).get(ids[j], {}).get(port, 1))
+            if kc < 1 or t.leaves % kc or kc > 1 and not (isinstance(t, Array) and t.n % kc == 0):
+                raise ValueError(f"cut-rows: {ids[j]} {port}: {t!r} in {kc} rows")
+            rl, row = t.leaves // kc, t if kc == 1 else Array(t.n // kc, t.elem)
+            at = 0
+            for s, i, lo, hi in runs(arg.refs):
+                if s == "n":
+                    _wired_rows(got, ids, of, first, fields, ret, row, k, j, port, kc, rl, at, i, lo, hi)
+                at += hi - lo
+    return unwired, query, {key: {tree: tuple(np.concatenate(x) for x in zip(*ps)) for tree, ps in trees.items()}
+                            for key, trees in got.items()}
+
+
+def _wired_rows(got: dict, ids: list[str], of: list[int], first: list[int], fields: list, ret: list[int], row: Any,
+                k: int, j: int, port: str, kc: int, rl: int, at: int, i: int, lo: int, hi: int) -> None:
+    where = f"{ids[j]} {port}: root node {k}'s leaves [{at}, {at + hi - lo}) read root node {i}'s [{lo}, {hi})"
+    if at % rl or (hi - lo) % rl:
+        raise ValueError(f"cut-rows: {where}, not whole rows of {rl} leaves")
+    w = of[i]
+    g = np.arange(at // rl, (at + hi - lo) // rl, dtype=np.int64)
+    b, o = np.divmod(lo + (g - g[0]) * rl, ret[w])
+    starts, lens, fs = fields[w]
+    f = np.searchsorted(starts, o, side="right") - 1
+    if (starts[f] != o).any():
+        raise ValueError(f"cut-offset: {where}, off {ids[w]}'s field's first leaf")
+    if (o + rl > ret[w]).any():
+        raise ValueError(f"cut-units: {where}, a row across two of {ids[w]}'s units")
+    if (lens[f] != rl).any():
+        raise ValueError(f"cut-fields: {where}, a row of {rl} leaves over {ids[w]}'s fields of {sorted(set(lens[f].tolist()))}")
+    for x in np.unique(f).tolist():
+        if fs[x].leaf_widths() != row.leaf_widths():
+            raise ValueError(f"cut-width: {where}: {ids[w]} writes {fs[x]!r} into a row of {row!r}")
+    reader, c, writer = first[k] + g // kc, g % kc, first[i] + b
+    for cx in np.unique(c * len(fs) + f).tolist():
+        m = c * len(fs) + f == cx
+        got.setdefault((ids[j], port, cx // len(fs)), {}).setdefault(f"{ids[w]}/o{cx % len(fs)}", []).append(
+            (reader[m], writer[m]))
+
+
 def _chunks(parts: Sequence[Refs]) -> Iterator[tuple[int, str, int, int, int]]:
     for p in parts:
         if isinstance(p, Concat):
@@ -511,4 +611,4 @@ def population(template: SpecializedDefinition, n: int, *, version: int = 1) -> 
 
 
 __all__ = ["BitsWord", "POPULATION_VERSIONS", "WIRED_FIELDS", "WordBits", "bit_of", "leaf_type", "mixed_population_program",
-           "population", "population_program", "wired_population_program", "word_of"]
+           "population", "population_program", "unwired_population_program", "wired_population_program", "word_of"]
