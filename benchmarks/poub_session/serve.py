@@ -404,15 +404,15 @@ def main(argv: list[str] | None = None) -> int:
     a.out.mkdir(parents=True, exist_ok=True)
 
     from verity_vllm import messages
-    from verity_vllm.engine import kv_blocks
+    from verity_vllm.engine.build import hooked
     from verity.protocols.resource_accounting.memory.poub.prover.binder import Binder
 
     serving, NodeMemory = provers()
     store = NodeMemory()
-    detach = kv_blocks.attach()
     binder = Binder(store, passes=False).install(messages.current())
     with tempfile.TemporaryDirectory() as work:
-        trace = Trace(engine(Path(work)))
+        built, _, detach = hooked(lambda: engine(Path(work)))
+        trace = Trace(built)
         clock = PassClock() if a.local else None
         backend = backend_class(serving)(store, trace, clock=clock)
         result, th = {}, None

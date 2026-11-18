@@ -88,7 +88,6 @@ def main() -> None:
         sys.path.insert(0, str(HERE))
         import fast_stage
         fast_stage.install(OUT)
-    salt_key = hashlib.sha256(b"verity/pouw/hidden-zk/salts\0" + str(K).encode()).digest()
     rec: dict = {"role": ROLE, "k": K, "n": N, "staging": STAGE}
     if ROLE in ("row_a", "row_b"):
         sys.path.insert(0, str(HERE))
@@ -144,7 +143,7 @@ def main() -> None:
         at += r
     rec.update(definition=d.id, in_rows=[[r, s, b] for r, s, b, _ in in_rows], out_rows=[[s, list(ps)] for s, ps in out_rows],
                public_inputs=ports)
-    got = CS.stage_unit(d, f"unit/pouw-pc4-{ROLE}", in_rows, out_rows, rows, OUT, salt_key, public_inputs=ports or None)
+    got = CS.stage_unit(d, f"unit/pouw-pc4-{ROLE}", in_rows, out_rows, rows, OUT, public_inputs=ports or None)
     t_stage = time.time() - t0
     text = fast_stage.composed() if STAGE == "fast" else (OUT / "circuit.txt").read_text()
     meta = got["meta"]

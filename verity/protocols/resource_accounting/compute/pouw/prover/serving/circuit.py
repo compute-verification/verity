@@ -38,6 +38,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import par
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import reference as R
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.ncp2 import D, Shape
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import commit_rows
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import named, names
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 
 
@@ -57,11 +58,17 @@ CALLS_DOMAIN_TAG = "verity/pouw/ncp-v2/calls/v1"
 M32 = 0xFFFFFFFF
 
 
+def _no_circuit(scheme: str) -> ValueError:
+    return ValueError(f"{scheme}: no circuit (verity.protocols.resource_accounting.compute.pouw.prover.circuit.SCHEMES = "
+                      f"{', '.join(names('ncp-v2'))})")
+
+
 def kind_of(scheme: str) -> str:
-    """The permutation P that ``scheme`` pins (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.SCHEMES`); ValueError for a scheme without a circuit."""
-    if scheme not in C.SCHEMES:
-        raise ValueError(f"{scheme}: no circuit (verity.protocols.resource_accounting.compute.pouw.prover.circuit.SCHEMES = {', '.join(C.SCHEMES)})")
-    return C.SCHEMES[scheme]
+    """The permutation P that ``scheme`` pins (the kernel schemes' ``ncp-v2`` family); ValueError for a scheme without a
+    circuit."""
+    if scheme not in names("ncp-v2"):
+        raise _no_circuit(scheme)
+    return named(scheme).parameters["perm"]
 
 
 class Rows(Protocol):
@@ -340,7 +347,7 @@ def program(scheme: str, m: int, k: int, n: int) -> Compiled:
     ValueError for a scheme without one."""
     t = C.traced_as(scheme, m, k, n)
     if t is None:
-        raise ValueError(f"{scheme}: no circuit (verity.protocols.resource_accounting.compute.pouw.prover.circuit.SCHEMES = {', '.join(C.SCHEMES)})")
+        raise _no_circuit(scheme)
     prog, wprog = CP.program(t.shape, t.kind), CP.weight_program(t.shape, t.kind)
     return Compiled(t, prog, PO.TemplatePartition(prog, t.query), wprog, PO.TemplatePartition(wprog, t.weight_query))
 

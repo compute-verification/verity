@@ -8,7 +8,9 @@ the engine core's gate (`engine.core_gate.Gate`): `register` adds it to the engi
 gate ``admission``) for every engine core that process builds, and serve-openai's engine loop, which steps an in-process
 engine itself, asks its `Hook.ready` before each step.
 
-An input is a request, by its key (``key`` reads it from vLLM's request id), and an output a token. What each vLLM point
+An input is a request, by its key (``key`` reads it from vLLM's request id: on a scheduler in this process
+(`install`), the id the engine was given (`engine_driver.external_id`); on an engine core behind vLLM's own server
+(`register`), the client's X-Request-Id (`request_key`)), and an output a token. What each vLLM point
 emits, and what it asks:
 
 - ``add_request``: `InputArrived`, with the request's count of prompt ids and the first line and headers the server
@@ -34,6 +36,7 @@ from typing import Any
 from verity import hooks as H
 from verity_vllm import messages
 from verity_vllm.engine import scheduler_step
+from verity_vllm.engine.engine_driver import external_id
 from verity_vllm.engine.runner_step import Rank
 
 __all__ = ["POLL_S", "Hook", "WindowGroups", "install", "non_draft_tokens", "register", "request_key"]
@@ -67,7 +70,7 @@ class Hook(scheduler_step.Part):
     rank = Rank.ADMIT
     poll_s = POLL_S
 
-    def __init__(self, sched: Any, exchange: messages.Exchange, key: Callable[[str], str] = request_key) -> None:
+    def __init__(self, sched: Any, exchange: messages.Exchange, key: Callable[[str], str]) -> None:
         self.sched, self.ex, self.key = sched, exchange, key
         self.step = 0                                       # the next step that schedules a token
         self.began: collections.deque[int] = collections.deque()    # steps scheduled whose outputs haven't come
@@ -176,7 +179,7 @@ class Hook(scheduler_step.Part):
             self._removal = None
 
 
-def install(sched: Any, exchange: messages.Exchange | None = None, key: Callable[[str], str] = request_key) -> Hook:
+def install(sched: Any, exchange: messages.Exchange | None = None, key: Callable[[str], str] = external_id) -> Hook:
     """Put the admission and release hook on ``sched`` (a vLLM V1 scheduler) for ``exchange`` (this process's by default)
     until it is uninstalled; the one already on it where there is one, so a scheduler's steps have one emitter, and
     refused where that one is another exchange's or reads inputs by another ``key``. Where a scheme filed a gate,

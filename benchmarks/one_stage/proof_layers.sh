@@ -35,6 +35,7 @@
 # own files under WORK/a5-llama1b before it removes them); and the largest process's peak resident memory (GNU time's,
 # where /usr/bin/time is installed).
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 ME=benchmarks/one_stage/proof_layers.sh
 refuse() { echo "proof_layers.sh: $1" >&2; exit 2; }
 DRY=0 RESULTS=
@@ -134,7 +135,9 @@ SAMPLER=$!
 finish() {  # at exit, success or failure: the records copied to --out, then WORK removed
   local rc=$? o
   kill "$SAMPLER" 2>/dev/null
-  for o in out-flock out-zk out-sampling bootstrap; do [ ! -e "$WORK/$o" ] || cp -a "$WORK/$o" "$RESULTS/"; done
+  for o in out-flock out-zk out-sampling bootstrap; do
+    [ ! -e "$WORK/$o" ] || (cd "$WORK" && find "$o" -type f -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$RESULTS/")
+  done
   log "WORK=$WORK at the end: $(du -sh "$WORK" 2>/dev/null | cut -f1); removing it"
   rm -rf "$WORK" && log "removed: $WORK"
   rm -f "$MEM"

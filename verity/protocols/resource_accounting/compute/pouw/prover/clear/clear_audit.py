@@ -29,7 +29,6 @@ its own derivation from the salt and the prover's roots, Fiat-Shamir inside the 
 
 from __future__ import annotations
 
-import os
 from bisect import bisect_right
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -38,8 +37,8 @@ from itertools import accumulate
 from math import lcm
 from typing import Any
 
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHTS, ROW_SCHEMA, TILE_SCHEMA, Epoch, TileRef,
-                                              Workload, activation_binding, commit_rows, hm96_salt, opened_value, rows_domain,
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (HM96, ROW_SCHEMA, TILE_SCHEMA, Epoch, TileRef,
+                                              Workload, activation_binding, commit_rows, fresh_salts, opened_value, rows_domain,
                                               tile_refs, transcript_domain, weight_binding)
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger, coin_reason
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Certificate, Context, DomainError, PoUWScheme, Tile
@@ -103,15 +102,14 @@ class Prover:
 
     def __init__(self, scheme: PoUWScheme, weights: Mapping[int, Sequence[bytes]],
                  kernel: Callable[..., list[tuple[bytes, list[list]]]] = reference_kernel, salt_key: bytes | None = None):
-        """`salt_key` is the prover's key of its hm96 salts under `HM96` (fresh by default).  A scheme of a plain format (h0, or
+        """Under `HM96` every tree's salts are fresh (`audit.fresh_salts`); `salt_key` is unread.  A scheme of a plain format (h0, or
         no ``commitment_hash``) has trees that are not hiding, which this reference tool replays as `audit.commit_rows`'
         ``public`` trees; a served commitment is never one."""
         self.scheme, self.kernel = scheme, kernel
         self.weights = {w: list(rows) for w, rows in weights.items()}
         self.hash = commitment_hash(scheme)
-        self.salt_key = (salt_key or os.urandom(32)) if self.hash == HM96 else None
         self.plain = plain = self.hash != HM96
-        self.weight_trees = {w: commit_rows(weight_binding(w), -2, rows, self.hash, self.salt_key, HM96_WEIGHTS + w, public=plain)
+        self.weight_trees = {w: commit_rows(weight_binding(w), -2, rows, self.hash, None if plain else fresh_salts(len(rows)), public=plain)
                              for w, rows in self.weights.items()}
         self._act_trees: list[MerkleTree] = []
         self._refs: list[TileRef] = []
@@ -132,7 +130,7 @@ class Prover:
             rows = list(activations[u.index])
             if len(rows) != u.shape.m:
                 raise DomainError(f"matmul {u.index} has {u.shape.m} activation rows")
-            tree = commit_rows(activation_binding(epoch.salt, u.index), u.index, rows, self.hash, self.salt_key, u.index,
+            tree = commit_rows(activation_binding(epoch.salt, u.index), u.index, rows, self.hash, None if self.plain else fresh_salts(len(rows)),
                                public=self.plain)
             self._act_trees.append(tree)
             ctx = Context(epoch.salt, u, tree.commitment.root, epoch.weight_roots[u.weight])
@@ -146,7 +144,7 @@ class Prover:
                         out[i][j] = block[bi][bj]
             outputs.append(out)
         if self.hash == HM96:
-            leaves = [d + hm96_salt(self.salt_key, HM96_TRANSCRIPT, i) for i, d in enumerate(leaves)]
+            leaves = [d + y for d, y in zip(leaves, fresh_salts(len(leaves)))]
         self._tree = MerkleTree(transcript_domain(epoch, len(leaves), self.hash), dict(enumerate(leaves)), lambda _: TILE_SCHEMA)
         return Transcript(tuple(t.commitment.root for t in self._act_trees), self._tree.commitment, tuple(outputs))
 

@@ -174,9 +174,9 @@ def stager(S, n: int, out: Path) -> SimpleNamespace:
                            lower_s=lower_s, partition_file=out / "partition.json", program_file=out / "program.json")
 
 
-def stage(sg: SimpleNamespace, S, args: list[dict], name: str, plan_salts: list[bytes], salt_key: bytes) -> dict:
+def stage(sg: SimpleNamespace, S, args: list[dict], name: str, plan_salts: list[bytes]) -> dict:
     """One round's statement on the stager: proof block i's plan row under ``plan_salts[i]``, every other row under a salt
-    from the prover's ``salt_key``."""
+    fresh."""
     t0 = time.time()
     st, n, out = sg.st, len(args), sg.out / f"stage-{name}"
     k_log = st.meta["k_log"]
@@ -186,10 +186,9 @@ def stage(sg: SimpleNamespace, S, args: list[dict], name: str, plan_salts: list[
     words = [BC.row_words(sg.rows, a) for a in args]
     data = {r: np.asarray([w[r] for w in words], dtype=np.uint16) for r, _b, _ps in sg.rows}
     set_name = f"{st.iset.name}-{name}"
-    iset = SimpleNamespace(**{**vars(st.iset), "name": set_name})
-    salts = FC.stage_salts(iset, 0, n, st.ports, salt_key)
+    salts = FC.stage_salts(0, n, st.ports)
     salts["plan"] = list(plan_salts)
-    got = st.stage(data, out, salt_key, salts=salts, indices=range(sg.base, sg.base + n), set_name=set_name)
+    got = st.stage(data, out, salts=salts, indices=range(sg.base, sg.base + n), set_name=set_name)
     (out / "inst.bin").rename(out / f"inst-{n}.bin")
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
@@ -489,10 +488,9 @@ def main() -> int:
     sg = stager(S, len(draws), out)
     summary["lower_s"] = sg.lower_s
     log(f"stager: {sg.lower_s} s, k_log {sg.st.meta['k_log']}, pin {sg.st.pin[:16]}")
-    salt_key = hashlib.sha512(secret + b"row salts").digest()[:32]
     members = {}
     for name, (r, st_, ds, wits, ref) in prepared.items():
-        m = stage(sg, S, wits, name, [c3.plan_salts[d.step] for d in ds], salt_key)
+        m = stage(sg, S, wits, name, [c3.plan_salts[d.step] for d in ds])
         if [BC.verdict(w) for w in m["oks"]] != ref:
             raise SystemExit(f"{name}: the staged verdict words {m['oks']} are not the reference's {ref}")
         members[name] = (m, r, ds, ref)

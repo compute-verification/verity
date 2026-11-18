@@ -5,12 +5,12 @@ A sample's coins from one family of the auditor's challenger, as the verifier re
 The record of a sample's coins is its segment `{after, label, openings, start}` (`Segment.to_json`): family `label`'s coins
 `start`, `start` + 1, ..., each opened after `after`, the prover's commitment. `challengerStream` is `challenger_stream`:
 the concatenation of the openings' coins, each checked against the challenger's commitment as the family's coin
-`start + i`, opened after the commitment the verifier holds (`liveReason`); with the family's roots as the challenger's
-signed release log shows it received them, every one of them is that commitment (`FAMILY_ROOT`: a family's coins follow
-one commitment, so a prover that reads a sample and commits again finds its second commitment's coins refused), and the
-openings are exactly the coins the family released, from its first, so the prover picked none of them and the segment's
-`start` is 0. `readReason` is `read_reason`: the bytes the sample read are the start of that stream, and they read every
-coin opened (`startReason`). The commitment and the roots it is given come from the code that already trusts them
+`start + i`, opened after the commitment the verifier holds (`liveReason`); with the challenger's signed release log,
+every root of the family it shows is that commitment (`FAMILY_ROOT`: a family's coins follow one commitment, so a prover
+that reads a sample and commits again finds its second commitment's coins refused), and the openings are exactly the
+coins it shows the family released after it, by index, so the prover dropped none of them.
+`readReason` is `read_reason`: the bytes the sample read are the start of that stream, and they read every coin opened
+(`startReason`). The commitment and the log it is given come from the code that already trusts them
 (`trustedChallengePhaseOf`, through `sampleCoins` and `coinsReason`, `ChallengerSample.lean`). A session `withheldOn` passes is a
 withheld one: every ledger open of the window says `withheld: true`, so its challenger released no root, salt or path
 before it closed.
@@ -47,9 +47,9 @@ def FAMILY_ROOT : String :=
   "a family's coins follow one commitment, from the family's first coin"
 
 /-- `challenger_stream` (module docstring): the sample's coins from `segment`, opened after `after`, checked against `c`
-and, with `roots`, against the family's roots the challenger's log shows: every one `after` (`FAMILY_ROOT`), and the
-openings every coin of the family, from its first. -/
-def challengerStream (c : LiveCommitment) (segment : Json) (after : ByteArray) (roots : Option (List ByteArray)) :
+and, with `log`, against the challenger's log: every root of the family `after` (`FAMILY_ROOT`), and the openings the
+coins the log shows the family released after it, by index and in its order (`releasedAfter`). -/
+def challengerStream (c : LiveCommitment) (segment : Json) (after : ByteArray) (log : Option Log) :
     V ByteArray := do
   unless keys? segment == some #["after", "label", "openings", "start"] do throw SEGMENT_FORM
   let (.str label, some start, .arr openings) := (getD segment "label", nat? (getD segment "start"),
@@ -62,10 +62,9 @@ def challengerStream (c : LiveCommitment) (segment : Json) (after : ByteArray) (
     if let some why ← liveReason c o label ((start + i : Nat) : Int) after then
       throw s!"the draw's {label} coin {start + i}: {why}"
     out := out ++ o.coin
-  if let some rs := roots then
-    unless rs.all (· == after) do throw FAMILY_ROOT
-    let afterIt := (rs.zipIdx.filter (·.1 == after)).map (·.2)
-    unless afterIt == List.range' start openings.size do
+  if let some log := log then
+    unless (log.filter (·.label == label)).all (·.root == after) do throw FAMILY_ROOT
+    unless releasedAfter log label after == List.range' start openings.size do
       throw s!"the draw's {label} coins are not the ones the challenger's log shows released after the prover's commitment"
   return out
 
@@ -78,9 +77,9 @@ def startReason (stream read : ByteArray) : Option String :=
 
 /-- `read_reason` (module docstring): why `read` is not the start of the sample's coins using every coin opened; `none`
 when it is. -/
-def readReason (c : LiveCommitment) (segment : Json) (after read : ByteArray) (roots : Option (List ByteArray)) :
+def readReason (c : LiveCommitment) (segment : Json) (after read : ByteArray) (log : Option Log) :
     Option String :=
-  match challengerStream c segment after roots with
+  match challengerStream c segment after log with
   | .error why => some why
   | .ok stream => startReason stream read
 
@@ -161,17 +160,21 @@ private def lowerHex (j : Json) (what : String) : V ByteArray := do
   let .str s := j | throw s!"{what} is not lowercase hex"
   Flock.unhex s
 
-/-- `{"after", "commitment", "read", "roots", "segment"}` to `read_reason`'s, `roots` null or a list. -/
+/-- `{"after", "commitment", "log", "read", "segment"}` to `read_reason`'s, `log` null or the release log's lines. -/
 def readPiece (j : Json) : V Json := do
-  request j #["after", "commitment", "read", "roots", "segment"]
+  request j #["after", "commitment", "log", "read", "segment"]
   let after ← lowerHex (getD j "after") "after"
   let read ← lowerHex (getD j "read") "read"
-  let roots ← match getD j "roots" with
+  let lines ← match getD j "log" with
     | .null => pure none
-    | .arr rs => some <$> rs.toList.mapM (lowerHex · "a root")
-    | _ => throw "roots is not a list"
+    | .arr ls => some <$> ls.toList.mapM fun | .str s => pure s | _ => throw "a log line is not a string"
+    | _ => throw "log is not a list"
   pure <| refusing do
-    return reasonJson (readReason (← LiveCommitment.ofJson (getD j "commitment")) (getD j "segment") after read roots)
+    let c ← LiveCommitment.ofJson (getD j "commitment")
+    let log ← match lines with
+      | none => pure none
+      | some ls => some <$> releasedLogOf c ls
+    return reasonJson (readReason c (getD j "segment") after read log)
 
 /-- `{"coins", "limits"}` to `coins_within`'s, `limits` `{hellos, ledger, log, openings, path, pins}` or null for
 `LIMITS`: the limits read and the refusal past them. -/
