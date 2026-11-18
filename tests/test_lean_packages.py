@@ -377,8 +377,9 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
 
 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
-#: all Flock's until its spec is extracted
-TREES_EXCEPT = {"security": 29}
+#: all Flock's until its spec is extracted; a moved module keeps its exception, as an entry of its own where its new
+#: prefix also holds modules never excepted (`Proofs.Spot.Sampling`'s seven, moved from `Proofs.Flock.Soundness.Audit`)
+TREES_EXCEPT = {"security": 35}
 
 
 def test_the_trees_except_list_only_shrinks():
