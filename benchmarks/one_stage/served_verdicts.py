@@ -1350,6 +1350,27 @@ def premises(doc: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     return {name: {"met": met, "why": why[:600]} for name, (met, why) in zip(PREMISES, (live, salt), strict=True)}
 
 
+#: who runs each premise's check, by the record's product: on both paths the served node's PoUW piece (the developer's);
+#: the compose node's Lean re-run reaches only the sampled proofs' row, which carries no premise
+PREMISE_RUNNERS: Mapping[str, Mapping[str, str]] = {"onsite": {p: "piece" for p in PREMISES},
+                                                    "remote": {p: "piece" for p in PREMISES}}
+#: what a premise's ``why`` says of who ran its check (`ran_by`)
+RAN_BY = {"piece": "run by the developer's piece; no auditor-side entry runs it",
+          "lean": "recomputed on the compose node by the Lean verifier",
+          "device": "run by an auditor's device"}
+
+
+def ran_by(row: Mapping[str, Any], product: str) -> dict[str, Any]:
+    """``row`` with each premise its development document states (`premises`) saying, at the end of its ``why``, who ran
+    its check on ``product``'s path (`PREMISE_RUNNERS`, `RAN_BY`)."""
+    doc = row.get("development")
+    if not isinstance(doc, Mapping) or not any(isinstance(doc.get(n), Mapping) for n in PREMISES):
+        return dict(row)
+    runners = PREMISE_RUNNERS[product]
+    return {**row, "development": {**doc, **{n: {**doc[n], "why": f"{doc[n].get('why')}; {RAN_BY[runners[n]]}"}
+                                             for n in PREMISES if isinstance(doc.get(n), Mapping)}}}
+
+
 def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str | None, main: Path | None,
          check: Check, statements: Path | None = None, live: Path | None = None,
          lean_answers: Path | None = None) -> dict[str, Any]:
@@ -2445,13 +2466,12 @@ def rebase(serve_dir: Path, served_dir: str, paths: Sequence[str], *, held: bool
 def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | None = None) -> tuple[int, str]:
     """The compose gate's answer (one JSON line) written out under ``out``: its $OUT's files at their paths, and
     ``gate.json`` (the pin and the exit, without the files). Its exit (0 composed and accepted) and its one line, which
-    without an answer ends with the last line of the gate command's stderr ``err`` (ssh's own refusal, say)."""
+    without an answer names the gate command's stderr ``err`` by its last exception's class alone (`failed`)."""
     try:
         doc = json.loads(answer.read_text().strip().splitlines()[-1])
     except (OSError, IndexError, ValueError) as e:
-        said = [x for x in (err.read_text(errors="replace").splitlines() if err and err.is_file() else []) if x.strip()]
-        return 1, (f"GATE-COMPOSE failed (ssh exit {gate_exit}): no answer from the compose gate ({type(e).__name__})"
-                   + (f": {said[-1].strip()[:400]}" if said else ""))
+        return 1, (f"GATE-COMPOSE failed (ssh exit {gate_exit}): no answer from the compose gate ({type(e).__name__}): "
+                   f"its stderr {failed(gate_exit, [str(err)] if err else [])}")
     if "refused" in doc:
         return 3, f"GATE-COMPOSE refused by the compose gate: {str(doc['refused'])[:800]}"
     c = doc.get("compose") or {}
@@ -2460,7 +2480,7 @@ def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | 
     for rel, text in files.items():
         f = (out / rel).resolve()
         if root not in f.parents:
-            return 1, f"GATE-COMPOSE failed: the answer names {rel[:200]!r}, outside {out}"
+            return 1, f"GATE-COMPOSE failed: the answer names {rel[:200]!r}, outside its output directory"
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text(text)
     (out / "gate.json").write_text(json.dumps({**doc, "compose": {k: v for k, v in c.items() if k != "files"}},
@@ -2475,7 +2495,7 @@ def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | 
              + (f" (on {doc['pin']['on']})" if (doc.get("pin") or {}).get("on") else ""))
     rc = 0 if c.get("rc") == 0 and gate_exit in (None, 0) and said == "accept" else 1
     return rc, (f"GATE-COMPOSE {where}: exit {c.get('rc')}, the record {said or 'not written'}, "
-                f"{len(files)} files of its $OUT in {out}" + (f", {len(c['not_sent'])} not sent" if c.get("not_sent") else ""))
+                f"{len(files)} files of its $OUT in the run's compose/" + (f", {len(c['not_sent'])} not sent" if c.get("not_sent") else ""))
 
 
 def served_compare_line(path: Path) -> str:
@@ -2615,7 +2635,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     drops = [k for k in rows if subprotocols[k] not in BR.PRODUCTS[product]]
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
-    rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
+    rows = {k: dropped_row(k, product) if k in drops else ran_by(r, product) for k, r in rows.items()}
     apart = {"communication"} & set(rows) - set(drops) if front_group else set()
     for k in apart:
         rows[k]["requests"] = FRONT_GROUP

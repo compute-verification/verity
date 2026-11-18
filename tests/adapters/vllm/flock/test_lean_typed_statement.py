@@ -20,7 +20,7 @@ from verity_flock import typed_statement as TS  # noqa: E402
 from verity_flock import lowerings  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
 
-LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
+LEAN = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 BINDING_KEYS = ("partition", "program_sha512", "program_digests")
 
@@ -135,7 +135,7 @@ def test_it_refuses_the_rust_provers_sessions(tmp_path):
     which `verify` refuses and `agree --upstream-plain` reads (`Flock.Proof`)."""
     import sys  # noqa: PLC0415
 
-    sys.path.insert(0, str(Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"))
     import ci  # noqa: PLC0415
 
     try:
@@ -143,7 +143,7 @@ def test_it_refuses_the_rust_provers_sessions(tmp_path):
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    subprocess.run([sys.executable, str(Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "selftest_records.py"), str(root / "records"), str(tmp_path / "s")],
+    subprocess.run([sys.executable, str(Path(__file__).resolve().parents[4] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "selftest_records.py"), str(root / "records"), str(tmp_path / "s")],
                    check=True, capture_output=True)
     sessions = sorted(p for p in (tmp_path / "s").iterdir() if (p / "case.json").exists())
     statement = "verity/flock-circuit/types@210d32e1+seed-injection"
