@@ -43,7 +43,7 @@ RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "a
                "pipeline", "kernel_outcome", "kernel_reason", "memory-line-of-record", "run_of_record", "unit_lowering",
                "compile_cost", "training-slowdown")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
-                     "grant", "ready", "reviewed", "lean_review", "landed", "commit_map", "custody", "source-lost", "challenger-key", "challenger-ledger",
+                     "hot_card", "grant", "ready", "reviewed", "lean_review", "landed", "commit_map", "custody", "source-lost", "challenger-key", "challenger-ledger",
                      "challenger-pins", "challenger-models", "verdict", "executor_shadow", "tasks_graph", "verity_graph", "result",
                      "ready_verdict", "label_auth", "label_delegation", "nightly_check")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
@@ -99,6 +99,10 @@ def test_check_is_enum_and_bool_only_and_reads_values_as_the_catalog_does():
     assert vocab.is_known("verified")
     assert vocab.check("training-slowdown", "a" * 64 + "/101/final") is None
     assert "does not match" in vocab.check("training-slowdown", "a" * 64 + "/101/test")
+    assert vocab.key("hot_card").form == vocab.TEXT and vocab.key("hot_card").group == vocab.GROUP_VERIFICATION
+    assert vocab.check("hot_card", "NODE card CARD: the driver counts 9 h of thermal slowdown on this card") is None
+    for value in (True, False, "", "  "):
+        assert "the value names the card" in vocab.check("hot_card", value), value
 
 
 def test_canonical_spellings_and_coercion():
