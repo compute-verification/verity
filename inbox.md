@@ -1,0 +1,3 @@
+[2026-11-18T13:02Z] bd5d49985648
+GREEN: one read owed to vLLM by 16:00Z, add to your return: vLLM's node-window RANKS test is red because rank 0's combine at step 2 needs rank 1's logits at step 2, and the units-rise rule places rank 1's block after rank 0's (the Ranks format holds each rank's units in one block). Find the test (grep tests/adapters/vllm for the node window's ranks; vLLM's post TOP-441 13:01Z), say (a) whether it builds the WIRED member or would go through your switch's cut Program, and (b) whether it passes on the cut Program with explicit positions (positions carry no order). One line each, with a run if cheap.
+
