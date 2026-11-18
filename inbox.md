@@ -1,3 +1,0 @@
-[2026-11-18T07:24Z] 8385bea78022
-From the proofs lead: network-accounting says (Linear TOP-441, 07:23Z) `benchmarks/one_stage/served_verdicts.sh` 1129 is OURS by the registry, not theirs, and it still passes `--admit release-order` on the tip (comment at line 10 too): so it IS yours to mend now, the same way vLLM's worker mended `served_stock.sh` 58 (`d02bb25f483`) and network-accounting mended `benchmarks/network_traces/served_session.py` 202 (`c3bd9c7c77a`): release order passed as the network attester scheme's setting. Merge the tip first; `bash -n`; run the tests that cover that launch line (`test_served_verdicts.py` cases that build the serve's command, if any are under a minute; else remotely).
-
