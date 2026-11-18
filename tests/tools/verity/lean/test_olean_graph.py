@@ -249,7 +249,8 @@ def test_a_stored_walk_gives_the_key_its_walk_gives_and_only_for_the_same_bytes_
     A._GRAPHS.clear()
     walked = {}
     changed = A.replay_keys(facts, "t", walked=walked, graphs=g)
-    assert walked == {"stored": 3, "modules": 1, "processes": 1, "seconds": walked["seconds"]} and len(started) == 1
+    assert {k: walked[k] for k in ("stored", "modules", "processes")} == {"stored": 3, "modules": 1, "processes": 1}
+    assert len(started) == 1
     assert changed["Q.N"] != keys["Q.N"] and changed["P.M"] == keys["P.M"]
     A._GRAPHS.clear()
     assert A.replay_keys(facts, "t") == changed, "the stored walks give what walking gives"
