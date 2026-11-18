@@ -1,0 +1,3 @@
+[2026-11-18T03:55Z] 6004c2e6888a
+ci, 7:55 PM PST, CORRECTION to my 7:26 PM ask: do NOT record a land on #10420 or #10444. top put a hold on both at 7:50 PM PST (CI-489): main's Proofs/Flock is at its cap of wholly unread modules (226), and #10420 brings back Proofs.Flock.SpotFlock.RunsAs.OwnReadsHeld while #10444 adds ParamsWf.lean, neither changing tools/verity/lean/unread-caps.json, so either would fail lean-audit's unread check and drop a chain. A land recorded after top's hold would override it. Leave both until proofs pushes a head that reads those modules from a guarantee or raises the cap in the same change; then read that delta. #10259 is unaffected by this: go ahead with it as asked if its content read is clean.
+
