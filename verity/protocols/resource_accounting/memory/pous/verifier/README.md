@@ -30,7 +30,7 @@ commitment = setup.commit(params, w)                                   # the ser
 salt = setup.sample_salt(b"verifier-secret", commitment)                 # the verifier
 C = [params.codec.encode_segment(params, prims, salt, s, g)             # the server encodes C*
      for s, g in enumerate(codec.split(params, w))]
-vk = setup.verifier_setup(params, prims, commitment, salt, encoded=C)   # setup's check: decode C*, match the commitment
+vk = setup.verifier_key_from_encoding(params, prims, commitment, salt, C)  # setup's check: decode C*, match the commitment
 blocks = [b for seg in C for b in seg]
 assert decode_tensor(layout, prims, salt, "w1", blocks.__getitem__) == bytes(200)
 v = audit.UnsignedRounds(vk, audit.challenge_key(b"audit-secret", vk))  # k = 111 timed rounds

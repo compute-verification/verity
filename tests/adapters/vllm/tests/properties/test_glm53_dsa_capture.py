@@ -509,7 +509,7 @@ def _stub_main(tmp_path, monkeypatch) -> tuple[list[dict], dict, list[dict]]:
     for k in ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "DG_JIT_CACHE_DIR"):
         monkeypatch.setenv(k, "")
     monkeypatch.setenv("PATH", X.os.environ.get("PATH", ""))
-    monkeypatch.delenv("CUDA_HOME", raising=False)
+    monkeypatch.setenv("CUDA_HOME", "/a/toolkit")
     seen: list[dict] = []
 
     def served() -> dict:
@@ -551,7 +551,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert doc["totals"]["mismatch"] == 1 and doc["totals"]["words"] == 3 * (X.D + 1) + 21 + 6
     assert doc["env_cleared"] == {k: "0" for k in SERVED_DEFAULTS} and seen == [{k: None for k in SERVED_DEFAULTS}]
     assert not set(SERVED_DEFAULTS) & set(doc["env"]) and doc["env"]["DG_JIT_CACHE_DIR"].endswith("deep_gemm")
-    assert doc["env"]["CUDA_HOME"] == "/usr/local/cuda" and doc["env"]["PATH"].split(":")[1] == "/usr/local/cuda/bin"
+    assert doc["env"]["CUDA_HOME"] == "/a/toolkit" and doc["env"]["PATH"].split(":")[1] == "/a/toolkit/bin"
     printed = capsys.readouterr().out
     assert "ROPE k_pe=RoPEHeadGptJ_v1 q_pe=RoPEHeadGptJ_v1" in printed and "GLM53-DSA NO-GO" in printed
     assert "no-go cases=['k/probe', 'q/served', 'logits/decode', 'attn']" in printed

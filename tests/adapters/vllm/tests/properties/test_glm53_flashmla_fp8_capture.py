@@ -206,6 +206,7 @@ def test_the_listing_is_made_image_by_image(tmp_path, monkeypatch) -> None:
             return subprocess.CompletedProcess(cmd, int(name in failing), listings[name], "")
         return subprocess.CompletedProcess(cmd, 0, "demangled\n", "")
 
+    monkeypatch.setenv("CUDA_HOME", "/a/toolkit")
     monkeypatch.setattr(X, "flashmla_library", lambda: "lib.so")
     monkeypatch.setattr(X.C, "_archs", lambda so: {"so": so, "sha256": "0" * 64, "sass_archs": ["100", "90a"]})
     monkeypatch.setattr(X.C, "_run", run)
