@@ -26,7 +26,7 @@ from pathlib import Path
 
 from verity_vllm import settings
 from verity_vllm.config import UsageError, option
-from verity_vllm.engine.profiles.devices import cuda_arch
+from verity_vllm.config import cuda_arch
 from verity_vllm.log import write
 
 NAME = "verity_norm_tap"

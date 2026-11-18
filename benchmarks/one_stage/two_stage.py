@@ -178,10 +178,7 @@ HERE = (Path(__file__).resolve().parent)
 FORMAT = "verity-vllm/two-stage/stage1/v0"
 CHALLENGER = "two_stage.py on the auditor's challenger's coins"
 FIRST_STAGE = "stage1.json"
-#: what round 2 refused every two-stage run by while the form's switch was off (`second_stage.FORM`)
-FORM_REFUSED = "two-stage-form"
-#: what an accepted two-stage outcome says of its form: the verifier accepts it ahead of its proof (`second_stage.FORM`),
-#: and no guarantee is quoted for a two-stage run
+#: what an accepted two-stage outcome says of its form: the verifier accepts it ahead of its proof, and no guarantee is quoted for a two-stage run
 NOT_COVERED = ("the two-stage form is not yet proved: the verifier accepts it ahead of its proof, and no guarantee "
                "covers a two-stage run")
 #: whether the replay block is the class's registered request Definition. It is `boundary_rows`' stand-in (module
@@ -194,8 +191,9 @@ INPUTS_REFUSED = "second-inputs"
 ORDER_REFUSED = "cross-stream-order"
 #: a stop class whose stop blocks registered or sampled nothing
 STOP_REFUSED = "stop-stage"
-#: the salts' key of a reference statement (`references`): its rows are stand-ins, so its salts hide nothing
-REFERENCE_KEY = hashlib.sha512(b"verity-vllm/two-stage/reference/v0").digest()
+#: the public tag of a reference statement's salts (`references`, `toy.reference_salts`): its rows are stand-ins, so its
+#: salts hide nothing
+REFERENCE_SALTS = b"verity-vllm/two-stage/reference-salts/v1\0"
 #: a design's counts as a record (`benchmarks/spot_figures`' ``total_cost.py counts``): its ``k`` is the rule's
 COUNTS = "spot-two-stage-counts/v1"
 #: seconds on the challenger's clock from the sample to the proofs: the replay, the interior docket and the second
@@ -914,12 +912,13 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     circuit file the verifier's template check accepts, that record beside the digest (`read_record`). The reference is
     `member_stager`'s statement of the template's member in the interior window of ``q`` replay blocks (`Design.window`,
     under a run of its own, whose fields round 2 places or blanks), bound to that window's partition and program as the
-    sessions' circuits are, on zero rows, salted under `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its
+    sessions' circuits are, on zero rows, under the public `toy.reference_salts`: its public file is ``out``/m<k>/pub.bin, its
     ``circuit.txt`` beside it, and its prover file is deleted. Its registered reads name none of the run's fields: each
     port the value it reads (`verifier_reads`: a link's value, a return's or a parameter's that round 1 commits, a
     read's verdict's of registered tables, else the port holding it), its words and schema. Both are
     a function of the class's layout and ``q`` alone, so an auditor fixes them before the run, one a sample size its
     first-stage sampling design can sample; this command builds them after the sample, which is why its run is a development run."""
+    from toy import reference_salts
     from verity_flock.class_statement import member_stager
 
     window = d.window("00" * 64, range(q))
@@ -929,9 +928,10 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     named = []
     for k, m in enumerate(window.members):
         at, rows = Path(out) / f"m{k}", {r: np.zeros((m.n, w), dtype=np.uint16) for r, w in m.rows}
-        member_stager(template_fn(m.template), m, bind).stage(
-            rows, at, REFERENCE_KEY, indices=range(m.base, m.base + m.n),
-            tables={r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16) for r, w in m.rows},
+        st, tables = member_stager(template_fn(m.template), m, bind), {r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16)
+                                                                     for r, w in m.rows}
+        st.stage(
+            rows, at, reference_salts(REFERENCE_SALTS, k, st, m, tables), indices=range(m.base, m.base + m.n), tables=tables,
             refs={r: window.refs(m, r) for r in rows})
         (at / "inst.bin").unlink()
         with open(at / "pub.bin", "rb") as f:
@@ -1124,7 +1124,7 @@ def complete(audits: list[Mapping[str, Any] | None]) -> bool:
     """Whether an accepted outcome on the audit records ``audits`` is complete: Lean's (`second_stage.complete`), and
     False while no entry answers it (it raises its goal), so no outcome here is complete before Lean says so."""
     try:
-        return SS.complete(SS.FORM, REQUEST_DEFINITION, audits)
+        return SS.complete(REQUEST_DEFINITION, audits)
     except NotImplementedError:
         return False
 
@@ -1164,8 +1164,7 @@ def held(s: Mapping[str, Any], r2: Mapping[str, Any] | None, o: Mapping[str, Any
     """Whether an honest second stage held: every check before the sample passed, every session's circuit file is the
     one its template's params name (`pins`, ``files``), every Lean verdict accepted, the sessions' registered reads
     the verifier's own, every negative refused, round 2 ``r2`` accepting the statements, and the stream's outcome ``o``
-    accepted, or refused by round 2's two-stage form alone (`FORM_REFUSED`, where `second_stage.FORM` is off): the
-    interior's audit record failing no check but round 2's, by that code at most, and the replay sample's none. A
+    accepted. A
     run whose interior docket registers a value a replay block's input may not read (`INPUTS_REFUSED`, in
     ``r2``'s codes or the outcome's) never held, whatever else it reports: its sessions proved replay blocks over inputs
     the prover chose after the first stage's sample."""
@@ -1176,10 +1175,7 @@ def held(s: Mapping[str, Any], r2: Mapping[str, Any] | None, o: Mapping[str, Any
     return (all((s.get("checks_before_draw") or {}).values()) and bool(files) and all((files or {}).values())
             and audit.get("complete") is True and audit.get("registered_reads") is True
             and all(v is True for v in (audit.get("verdicts") or {}).values()) and bool(refused) and all(refused)
-            and (r2 or {}).get("ok") is True and o is not None
-            and (o.get("accepted") is True
-                 or (o.get("interior") in ([], ["statements"]) and o.get("statements") in ([], [FORM_REFUSED])
-                     and o.get("replay_sample") == [])))
+            and (r2 or {}).get("ok") is True and o is not None and o.get("accepted") is True)
 
 
 def prove(a: argparse.Namespace, r: Replayed, out: Path,

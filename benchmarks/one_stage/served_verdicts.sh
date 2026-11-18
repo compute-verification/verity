@@ -15,8 +15,8 @@
 #     rows-sha512 row dir, and the seal opens each one's replay bundle (`deferred_rows.of_record`). Once it listens, before
 #     the first request, the committer registers its weights (`prove_path.py weights-registration`: each weight parameter of
 #     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, and the rotary table at the words the engine serves,
-#     $D/private/cos_sin_cache.npy, once within the analytic table's bound, committed under salts sampled from the committer's
-#     key $D/private/weights.key, 0600, neither of which a record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
+#     $D/private/cos_sin_cache.npy, once within the analytic table's bound, committed under fresh OS salts in the salt file
+#     $D/weights_registration.salts/ (0700, `salt_file.beside`), neither of which a record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the network attester's traffic generator (`adapters/vllm/tools/served_run/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
@@ -438,6 +438,11 @@ TREE=$PWD
 DEPLOY_MANIFEST=$TREE/tools/research/src/research/pods/nebius/deploy.toml  # infra's, where research reads the auditor devices
 ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
 D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
+# the serve dir holds the salt files and private/, which no run record or upload may carry
+for under in "$OUT" ${RESEARCH_RUN_DIR:+"$RESEARCH_RUN_DIR"}; do
+  case "$(realpath -m "$D")/" in "$(realpath -m "$under")"/*)
+    echo "PREFLIGHT: D=$D is under $under, which a run uploads: set SERVE_ROOT or D outside it" >&2; exit 3;; esac
+done
 # step 6's deferral (`defer`): the settings the follow-on runs at, its inputs' list and sums, and the pieces the record read
 DEFER_DIR=$D/private/deferred
 FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE PEARLPLUS_TIE PEARLPLUS_TIE_UNIFORM COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE DAY"
@@ -617,7 +622,7 @@ DREG=$D/deployment-registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
 weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
   (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$D" --checkpoint-dir "$CKPT" \
-    --key "$D/private/weights.key" --out "$WREG" --deployment-record "$DREG") > "$OUT/weights_registration.txt" 2>&1
+    --out "$WREG" --deployment-record "$DREG") > "$OUT/weights_registration.txt" 2>&1
   local rc=$? log=$OUT/weights_registration.txt
   if [ "$rc" != 0 ] || [ ! -f "$WREG" ]; then
     rm -f "$DREG"
@@ -716,7 +721,7 @@ window_commit() {  # window K of $D committed as V3C's class circuit's units in 
   # path, the reference
   (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "$V3C_TIMEOUT" "$PY" benchmarks/one_stage/window_commit.py window-commit --serve-run "$D" \
     --window "$K" --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --class "$V3C" \
-    --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --sampling-design "$V3C_LAW" --out "$VW/window" "$@") > "$json" 2> "$err"
+    --registration "$WREG" --checkpoint-dir "$CKPT" --sampling-design "$V3C_LAW" --out "$VW/window" "$@") > "$json" 2> "$err"
   rc=$?
   if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then echo "timed out after V3C_TIMEOUT=$V3C_TIMEOUT (exit $rc)"
   elif [ "$rc" != 0 ]; then echo "refused (exit $rc): $(grep -v '^ ' "$err" | tail -2 | cut -c1-800)"; fi

@@ -12,6 +12,7 @@
 # Kept in $OUT/stzk: the driver's records and logs, the public files and everything the verifier received; never a
 # prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive.
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../one_stage/public_files.py
 export HZ_CONFIGS=stzk HZ_MEM_GB=${STZK_MEM_GB:?}
 STZK_CACHE=${STZK_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 if mkdir -p "$STZK_CACHE" 2>/dev/null && [ -w "$STZK_CACHE" ]; then export HZ_CACHE=$STZK_CACHE; fi
@@ -34,6 +35,6 @@ log "stzk: proving ${STZK_RUN:?} w${STZK_WINDOW:?} with $DRIVER ${STZK_ARGS:-}${
   --bin "$BIN" --lean "$LEAN" --out "$W/stzk" ${STZK_DRY:+--dry} 2>&1 | tee -a "$OUT/stzk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/stzk"
-(cd "$W/stzk" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/stzk/")
+(cd "$W/stzk" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$OUT/stzk/")
 log "stzk: done, rc $rc"
 exit "$rc"

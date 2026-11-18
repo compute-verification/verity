@@ -225,7 +225,7 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
         for p, v in (("x", BX), ("o0", BOUT))}
     out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements[0]), {"statement": "stub"},
                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
-    assert SS.FORM and out.accepted and out.profile is not None and stream.symbols == ("accept",)
+    assert out.accepted and out.profile is not None and stream.symbols == ("accept",)
 
     body = stream.records[0]
     assert S._sha512(body) == out.record and body["registration"] == reg.digest
@@ -286,34 +286,19 @@ def test_a_replay_block_is_held_to_the_boundary_values_committed_while_serving(p
     assert stream.records[0]["replay_sample"]["audit"]["checks"]["roots"]["detail"]["ports"] == [port]
 
 
-def test_the_run_of_record_holds_the_form_switch(monkeypatch):
-    """`second_stage.FORM` is the Lean's `SecondStage.FORM`, which the run of record reads: flipped in the Python alone,
-    round 2's check refuses the form and the Python would reject, and the run of record, still allowing the form,
-    disagrees."""
-    monkeypatch.setattr(SS, "FORM", False)
-    stream = _stream()
-    out = _two_stage_outcome(stream, lambda s, second: [s])
-    checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["codes"] == ["two-stage-form"]
-    assert checks["run"]["codes"] == [V.DISAGREE]
-    assert {"interior", "symbol"} <= set(checks["run"]["detail"][V.DISAGREE]["fields"])
-
-
-def test_a_two_stage_outcome_is_complete_only_on_the_form_the_request_definition_and_its_records():
-    """`second_stage.complete_twin`: true only when the two-stage form is allowed, the replay block is the registered request
-    Definition and each audit record accepted and is itself complete. One of the three missing, it is false: the form
-    off; a stand-in replay block; a record that is missing, did not accept, is not complete or does not
-    say; no record at all. An argument that is not the boolean true counts as missing."""
+def test_a_two_stage_outcome_is_complete_only_on_the_request_definition_and_its_records():
+    """`second_stage.complete_twin`: true only when the replay block is the registered request Definition and each
+    audit record accepted and is itself complete. One missing, it is false: a stand-in replay block; a record that is
+    missing, did not accept, is not complete or does not say; no record at all. An argument that is not the boolean
+    true counts as missing."""
     whole = {"accepted": True, "complete": True}
-    assert SS.FORM is True
-    assert SS.complete_twin(True, True, [whole, whole]) is True and SS.complete_twin(True, True, [whole]) is True
-    assert SS.complete_twin(SS.FORM, True, [whole, whole]) and not SS.complete_twin(False, True, [whole, whole])
-    assert not SS.complete_twin(True, False, [whole, whole])
+    assert SS.complete_twin(True, [whole, whole]) is True and SS.complete_twin(True, [whole]) is True
+    assert not SS.complete_twin(False, [whole, whole])
     for record in (None, {"accepted": True, "complete": False}, {"accepted": False, "complete": True},
                    {"accepted": True}, {"complete": True}, {"accepted": 1, "complete": True}):
-        assert not SS.complete_twin(True, True, [whole, record])
-    assert not SS.complete_twin(True, True, [])
-    assert not SS.complete_twin(1, True, [whole]) and not SS.complete_twin(True, "yes", [whole])
+        assert not SS.complete_twin(True, [whole, record])
+    assert not SS.complete_twin(True, [])
+    assert not SS.complete_twin("yes", [whole])
 
 
 def test_round_two_is_the_twin_held_to_the_lean_and_completeness_is_the_leans(monkeypatch):
@@ -326,16 +311,16 @@ def test_round_two_is_the_twin_held_to_the_lean_and_completeness_is_the_leans(mo
     monkeypatch.setattr(SS, "check_twin", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
     _two_stage_outcome(_stream(), lambda s, second: [s])
     (own, (s,)), = seen
-    assert SS.check(True, own, [s], []).ok
+    assert SS.check(own, [s], []).ok
     for lean in (["second-read"], None):
-        v = SS.check(True, own, [s], lean)
+        v = SS.check(own, [s], lean)
         assert not v.ok and v.codes == (V.DISAGREE,) and v.detail[V.DISAGREE] == {"lean": lean, "python": []}
     refused = check(True, own, None).codes
-    assert refused and SS.check(True, own, None, list(refused)).codes == refused
-    assert SS.check(True, own, None, []).codes == (V.DISAGREE,)
+    assert refused and SS.check(own, None, list(refused)).codes == refused
+    assert SS.check(own, None, []).codes == (V.DISAGREE,)
     assert SS.held_to_lean(None, []) == SS.held_to_lean([], None) == [V.DISAGREE]
     with pytest.raises(NotImplementedError, match=V.GOAL):
-        SS.complete(True, True, [{"accepted": True, "complete": True}])
+        SS.complete(True, [{"accepted": True, "complete": True}])
     assert V.GOAL == "proofs/spot-two-stage-sound"
 
 
@@ -1034,8 +1019,8 @@ def test_a_read_whose_key_is_wired_lists_no_table_rows():
         assert SS.table_rows_why(own, READ_T, "row", {"value": "row"}) is None
         assert SS.table_rows_why(own, READ_T, "row", {"value": "row", "table_rows": None}) is None
         assert ("second-table-rows", {"statement": 0, "template": READ_T, "port": "row", "why": SS.KEY_ROWS_WHY}) in \
-            SS._failures(True, own, own.parts, [stmt("row", listed)])
-        assert not any(c == "second-table-rows" for c, _ in SS._failures(True, own, own.parts, [stmt("row", {})]))
+            SS._failures(own, own.parts, [stmt("row", listed)])
+        assert not any(c == "second-table-rows" for c, _ in SS._failures(own, own.parts, [stmt("row", {})]))
     unwired = dataclasses.replace(_keyed(), wires=())
     assert SS.table_rows_why(unwired, READ_T, "row", listed) == SS.TABLE_ROWS_WHY
     assert SS.KEYED_PORTS == ("tok", "row", "salt", "path", "o1")

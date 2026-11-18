@@ -64,7 +64,7 @@ def stage(out: Path, seed: int = SEED) -> dict:
         from verity_flock import ir_lower as IL
 
         IL.write_tables(out / "tables")
-    FC.write(text, s, 0, N, out / f"inst-{N}.bin", out / f"pub-{N}.bin", None, list(range(N)))
+    FC.write(text, s, 0, N, out / f"inst-{N}.bin", out / f"pub-{N}.bin", list(range(N)))
     return {"n": N, "program": P.program_digest(prog), "partition": P.digest(part), "pin": FC.digest(text)}
 
 

@@ -242,7 +242,7 @@ def test_a_refused_audit_record_names_leans_refusals(tmp_path):
 def test_a_tampered_wired_window_names_the_sampled_proof_blocks_its_sessions_refused_before_leans_missing_files(tmp_path):
     """A sampled member whose live session the verifier rejects leaves no proof files, so Lean's replay finds
     none: the reason names the sampled proof blocks not proved, by template, and the verifier's rejection first."""
-    mm, quant = "ScaledMmS8_v1{K=128,N=128}", "QuantRowS8_v1{N=128,RELU=true}"
+    mm, quant = "ScaledMmS8_v3{K=128,N=128}", "QuantRowS8_v1{N=128,RELU=true}"
     rec = record(False, proved=False)
     rec["checks"]["proved"]["detail"] = {"units": {"drawn": list(range(12)), "statement": list(range(8, 12))}}
     rec["draw"] = {**DRAW, "strata": [{"template": mm, "units": [[0, 8]]}, {"template": quant, "units": [[8, 12]]}]}
