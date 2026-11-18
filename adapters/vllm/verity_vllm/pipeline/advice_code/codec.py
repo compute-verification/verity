@@ -54,7 +54,7 @@ follow the last window's tail: the decoder has the order and the decisions befor
 the replay asks for it (`kept.Reader`). I1 v0's rows emit one output each, so `encode` and `decode` refuse a draft:
 `schedule_code` is this code to and from the replay's schedule.
 
-**Under the certified tick** (`Registered.tick`, an engine served with ``--admit tick``), the engine adds each request
+**Under the certified tick** (`Registered.tick`, an engine served with order ``tick``), the engine adds each request
 once a logical clock has passed its release bucket's close, in release order, and the replay runs that rule from the
 record's `end`s and the registered τ (`replay.replay`'s ``tick``). It asks nothing, so there are no decisions, and v1
 requires the arrival order to be release order, so there are no order entries. The registered caps hold no count
