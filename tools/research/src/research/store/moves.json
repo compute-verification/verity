@@ -5402,6 +5402,11 @@
         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/job.sh": "benchmarks/pouw/served_zk/job.sh",
         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/run.sh": "benchmarks/pouw/served_zk/run.sh"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/README.md": "benchmarks/pouw/served_zk/README.md"
+      }
     }
   ]
 }
