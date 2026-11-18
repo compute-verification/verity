@@ -557,7 +557,7 @@ def main() -> int:
         vals = {r: bf16_rows(rng, a.n, b // 16) for r, _s, b, _p in rows}
     t = time.time()
     with K.no_cyclic_gc():
-        got = st.stage(vals, d, os.urandom(32), **({"indices": range(base, base + a.n)} if held else {}))
+        got = st.stage(vals, d, **({"indices": range(base, base + a.n)} if held else {}))
     for f in ("inst", "pub"):
         (d / f"{f}.bin").rename(d / f"{f}-{a.n}.bin")
     IL.write_tables(d / "tables")
