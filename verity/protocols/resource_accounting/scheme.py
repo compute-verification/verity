@@ -311,8 +311,9 @@ class Scheme:
     it (`Launch`), a `Lacks` where it launches nothing. ``answers``, the entry (``module:attribute``) of the functions
     that answer its kept session in a process with no exchange (`Answers`, read through `answering`). ``tie``, the
     parameters an application that ties its workload to this scheme states over its settings' defaults. ``unchecked``,
-    what of its run no auditor-side entry checks yet, which its row's stated source says on every check's line whatever
-    the verdict; empty where it says nothing.
+    what of its run no auditor-side entry checks yet, by name, each with its sentence, which its row's stated source
+    says on every check's line whatever the verdict; empty means nothing is listed for the scheme, not that everything
+    is checked, and the line says nothing for it.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -365,7 +366,7 @@ class Scheme:
     keeps_weight_copy: bool | Lacks = UNDECLARED
     pieces: Mapping[str, Launch] | Lacks = UNDECLARED
     answers: str | Lacks = UNDECLARED
-    unchecked: str = ""
+    unchecked: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -427,6 +428,7 @@ class Scheme:
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
         object.__setattr__(self, "tie", MappingProxyType(dict(self.tie)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
+        object.__setattr__(self, "unchecked", MappingProxyType(dict(self.unchecked)))
 
     @property
     def unit(self) -> str:

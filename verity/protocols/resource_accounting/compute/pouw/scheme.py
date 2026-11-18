@@ -526,7 +526,8 @@ PEARL_PLUS = register(Scheme(
                               starts_optional=("lane", "main-file"))},
     answers=Lacks("has no piece that answers outside an exchange"),
     # until the salt and sample sessions' signature pin is in Lean
-    unchecked="coins' signatures checked on the served node only; not checked by the auditor",
+    unchecked={"coins-signatures-checked-by-the-auditor":
+               "coins' signatures checked on the served node only; not checked by the auditor"},
     record="work",
     symbol="V",
     published=("MACs", Fraction(1)),

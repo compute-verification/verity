@@ -252,6 +252,13 @@ def test_every_declaration_fills_each_field_or_says_why_not() -> None:
     assert json.loads(out.stdout) == [], "fill each field a declaration leaves unset, or say why not with S.Lacks(why)"
 
 
+def test_unchecked_is_a_frozen_mapping_of_named_sentences_and_lists_nothing_by_default() -> None:
+    assert dict(_toy().unchecked) == {}
+    toy = _toy(unchecked={"toy-signed-by-the-auditor": "signed on the served node only"})
+    with pytest.raises(TypeError):
+        toy.unchecked["toy-signed-by-the-auditor"] = "checked"  # type: ignore[index]
+
+
 def test_an_answers_entry_is_module_colon_attribute_and_a_lacks_is_refused_by_name() -> None:
     for entry in ("toy.answers", "toy:", ":ANSWERS", "toy answers:ANSWERS", "toy:A.B"):
         with pytest.raises(ValueError, match="answers is an entry, module:attribute"):

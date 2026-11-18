@@ -182,6 +182,7 @@ BANDWIDTH = S.register(S.Scheme(
     depends=("pous",),
     pieces={"prover": S.Launch(optional=("host", "command"), development="host")},
     answers="verity.protocols.resource_accounting.memory.poub.prover.p2_stage.bandwidth:ANSWERS",
+    unchecked=P2.mc.UNCHECKED,
     record="bandwidth",
     symbol="Q_cert",
     published=("bytes", Fraction(1, 8)),

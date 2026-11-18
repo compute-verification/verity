@@ -293,7 +293,8 @@ def test_pearl_plus_row_says_its_coins_signatures_go_unchecked_by_the_auditor_on
             {**ACCEPTED, "work": {"verdict": work}, "inference-only": CHECKED})
     got = T.remote_check(cfg, tmp_path)
     assert got["verdict"] == verdict and got["answer_from"] == {
-        "pearl-plus": "coins' signatures checked on the served node only; not checked by the auditor"}
+        "pearl-plus": ("coins-signatures-checked-by-the-auditor coins' signatures checked on the served node only; not "
+                       "checked by the auditor")}
 
 
 def test_a_component_that_charges_nothing_reads_why_for_its_figure_and_shows_its_verdict(tmp_path, monkeypatch):
