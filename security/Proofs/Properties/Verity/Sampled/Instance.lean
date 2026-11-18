@@ -725,7 +725,7 @@ theorem pouwSound_of_base (k : Verity.Registration.Composite) (h : I.base.PouwSo
 published δ is (`deltaOf_none`). -/
 theorem error_sampled_of_none {θ : ByteArray} (h : I.session θ = none) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy ((I.vocab K).game θ F c)) : (I.vocab K).error .sampled θ F c σ = ⊤ := by
-  unfold Vocab.error ResourceAccounting.condError
+  unfold Vocab.error ResourceAccounting.condError Vocab.errorBound
   split_ifs
   · exact top_unique (le_add_right (le_add_right (le_of_eq (I.deltaOf_none h _).symm)))
   · rfl
@@ -977,7 +977,7 @@ noncomputable def inst (δ : ℝ≥0∞) (b : SessionBound) : Instance Verity.Id
 /-- At `base ⊤` every subprotocol's error is `⊤`. -/
 theorem error_top (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy ((base ⊤).game θ F c)) : (base ⊤).error a θ F c σ = ⊤ := by
-  unfold Vocab.error ResourceAccounting.condError
+  unfold Vocab.error ResourceAccounting.condError Vocab.errorBound
   split_ifs <;> simp [base, Verity.Idle.vocab]
 
 /-- At `base ⊤` every subprotocol meets its target at every composite. -/

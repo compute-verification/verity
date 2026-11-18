@@ -525,7 +525,7 @@ theorem spotSound_of_executionPhase {K : ExecutionPhaseConstructions V} {S : Byt
   by_cases hP : ∃ p, ParamsAt θ p
   swap
   · exact recursiveForm_refused V k θ hP F c σ
-  unfold Vocab.error ResourceAccounting.condError
+  unfold Vocab.error ResourceAccounting.condError Vocab.errorBound
   beta_reduce
   split_ifs with hE
   swap

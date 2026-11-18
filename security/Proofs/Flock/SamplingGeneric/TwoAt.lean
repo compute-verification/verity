@@ -46,7 +46,9 @@ states `ksTwo_stage`, with the sessions' runs both ways (`SessionRuns`, which gi
 
 * `Flock.SecurityProofs.SampledKSTwo_honest`: every premise at a toy code (`toyCode`) that parses no statement, accepts
   none, opens no session and reads no bytes, its second stage one round;
-* `compilerKSTwo_nontrivial`: the conclusion's `CompiledTwo.KS` fails at a verifier that accepts with an empty relation.
+* `Flock.SecurityProofs.SampledKSTwo_nontrivial` (`Proofs.Flock.SamplingGeneric.TwoAtNontrivial`): the conclusion's
+  `CompiledTwo.KS` fails at an instance of its binders where `ReplayCap` holds at SHA-512, an accepting code with no
+  registration and the cap `0`.
 -/
 
 @[expose] public section
