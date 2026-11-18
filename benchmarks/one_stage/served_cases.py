@@ -84,10 +84,10 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   chained right after (`Core.Remote.V1.window`), and its evidence, each
   pass's files the opened tiles read by the SHA-512 of the blob holding them, the blobs the parts' own. Its answer is the
   Lean verdict of record's (`pouw-pearlplus` on the same passes, coins, samples, coin record and W, which the check of
-  this case runs on the blobs instead of the files, and at no class: its public is the exact work, `PEARL_PLUS_PUBLIC`)
-  under the commitment's digest, SHA-512(`PEARL_PLUS_TAG` ‖ 0 ‖
-  commitment), since Pearl+'s package builds no executable of the protocol's form alone. The manifests carry the
-  passes' salt key, so its commitment, unlike the others', is witness. Without the parts none is made.
+  this case runs on the blobs instead of the files, and at no class: its public is the exact work, `PEARL_PLUS_PUBLIC`,
+  and its passes' salts) under the commitment's digest, SHA-512(`PEARL_PLUS_TAG` ‖ 0 ‖ commitment), since Pearl+'s
+  package builds no executable of the protocol's form alone. The manifests carry the passes' salt key, so its
+  commitment, unlike the others', is witness. Without the parts none is made.
 * **`verity/sampled-proofs/one-stage/v2`** (`v2_case`, only with ``--v2``): a5's ``window/case-v2.json``
   (`a5.write_case`), refused here when it commits to another record than v1's case or names a blob that isn't there,
   and when a5 wrote none (its ``case-v2-error.txt`` says why). Its answer is `spot-one-stage-zk check` on the case and
@@ -421,7 +421,8 @@ def pearlplus_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
     work = {**(lean.get("work") or {}), **(lean.get("exact_work") or {})}
     answer = {"protocol": PEARL_PLUS, "verdict": lean["verdict"], "reason": lean.get("reason"),
               "commitment": hashlib.sha512(PEARL_PLUS_TAG + b"\0" + commitment).hexdigest(),
-              "public": {**{k: work[k] for k in PEARL_PLUS_PUBLIC if k in work}, "delta": parts["delta"]} if accepted else None,
+              "public": {**{k: work[k] for k in PEARL_PLUS_PUBLIC if k in work}, "delta": parts["delta"],
+                         "salts": lean.get("salts")} if accepted else None,
               "profile": {"draws": parts["params"].get("draws"), "drawn": lean.get("drawn"),
                           "passes": len(parts["manifests"])} if accepted else None}
     case = {"params": parts["params"], "commitment": commitment.hex(),

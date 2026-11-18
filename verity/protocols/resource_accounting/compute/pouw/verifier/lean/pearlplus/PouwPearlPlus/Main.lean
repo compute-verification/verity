@@ -12,7 +12,8 @@ public import PouwPearlPlus.Open
 prints the verdict as one JSON object: `verdict` (`accept` or `reject`), `reason`, `refused` (`[code, why]` or null),
 `commitment` and `source` (hex, once the passes load and the coin is fixed), `over_cap` (the rule on a tile over its
 inert-work bound, `uncredited` unless `--over-cap` says otherwise), `verdicts` (each opened tile's pass, id, ok and
-reason, in the verdict's order; a tile over its bound has its reason, and is ok under `uncredited`), `work`, and `tie`
+reason, in the verdict's order; a tile over its bound has its reason, and is ok under `uncredited`), `work`, `salts`
+(each retained pass's salt, hex, on an accepted run, or null), and `tie`
 (`{record, tables}` once the passes are held to W, with `weights` `WEIGHTS_UNTIED` for a version-1 W and `load`
 `[slots, prompt, outputs]` where `--class` held them to that class's fixed load, or null).
 `work` is the run's credit at Pearl's assumption. Where `--class` held the passes it is in the grid form (`Grid.published`):

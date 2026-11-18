@@ -2195,7 +2195,7 @@ def test_coin_refuses_a_record_not_the_verifiers_and_a_second_coin_in_one_piece(
     rec, out = tmp_path / "coin.json", tmp_path / "pieces" / "pouw"
     for bad in ({"schema": "other", "commitment": "c1", "source": "5e"}, {"schema": S.COIN_KIND, "source": "5e"}, [1]):
         rec.write_text(json.dumps(bad))
-        with pytest.raises(ValueError, match="is no verity-pouw/pearl-plus-coin/v2 record"):
+        with pytest.raises(ValueError, match="is no verity-pouw/pearl-plus-coin/v3 record"):
             S.coin(rec, out, "r1", research=["research"], put=put)
     assert not out.exists()
     rec.write_bytes(first := _coin_record())
@@ -2215,7 +2215,7 @@ def test_the_coin_command_says_where_the_verifiers_coin_went(tmp_path, capsys, m
     for i, (answers, said) in enumerate((
             ({True: (0, json.dumps({"id": "art:aa"}), "")}, "preserved in the evidence store as art:aa"),
             (NODE_PUT, "art:bb in this node's store, not preserved (research data put --preserve: StoreError: no remote "
-                       "configured): a put of the run's custody copy of coin.json as verity-pouw/pearl-plus-coin/v2 with "
+                       "configured): a put of the run's custody copy of coin.json as verity-pouw/pearl-plus-coin/v3 with "
                        "meta {run, commitment} preserves that id"),
             ({True: OSError("gone"), False: OSError("gone")},
              "in no store (research data put --preserve: OSError: gone): coin.json goes with the run's custody"))):

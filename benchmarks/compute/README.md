@@ -108,7 +108,7 @@ sampling session a root, ever, is the challenger's own rule, in Python on the au
 `verity/protocols/compose/verifier/live_challenger/auditor.py`), not in Lean. On your own machine nothing refuses a
 retried sample.
 
-**Dropping passes after the sample.** The run's commitment covers the retained passes (`runCommitment`) and must be
+**Dropping passes after the sample.** The run's commitment covers the retained passes and their A roots (`runCommitment`) and must be
 the coin record's (`after-coin`); given a class, the retained rounds must be exactly its rounds (`heldToLoad`).
 
 **Skipping inert work.** `inertBoundCheck` replays a sampled tile's inert work exactly and requires at most ρ of the

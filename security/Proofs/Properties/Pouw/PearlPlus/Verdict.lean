@@ -284,7 +284,15 @@ theorem afterTie_ok {i : Input} {passes : List Pass} {tie : Option Tied} {pl : P
       PouwVerifier.PearlPlus.draw pl.passes key i.draws = .ok drawn ∧
       pl.todo = todo pl.passes drawn ∧ pl.drawn = drawn.length ∧ pl.picks = drawn := by
   unfold afterTie at h
-  extract_lets -underBinder root jsrc at h
+  extract_lets -underBinder root jsch at h
+  obtain ⟨u0, h⟩ : ∃ u, jsch u = .ok pl := by
+    split at h
+    · split at h
+      · cases h
+      · exact ⟨(), h⟩
+    · exact ⟨(), h⟩
+  dsimp (config := { zeta := false }) only [jsch] at h
+  extract_lets -underBinder jsrc at h
   obtain ⟨source, hheld, hnone, h⟩ : ∃ source, (∀ c, i.held = some c → c.commitment = root ∧ source = c.source ∧
       (i.source = none ∨ i.source = some c.source)) ∧ (i.held = none → i.source = some source) ∧
       jsrc source = .ok pl := by

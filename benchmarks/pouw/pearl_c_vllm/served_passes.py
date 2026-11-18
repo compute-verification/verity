@@ -125,8 +125,8 @@ verifier's coin record it wrote (``DIR/coin.json``), which pins the Lean's sourc
 held the passes to with the class ``verify --class`` held them at, and, on a live session's coins, ``--of-record``, under which the Lean takes only a challenger sample
 (`lean_argv`, the one place the Lean's command line is written). It holds the Lean's printout to the Python's verdict on
 every field both give (`LEAN_HELD`: the verdict, its reason and refusal, the run's commitment and source, the over-cap
-rule, each opened tile's verdict, an accepted run's work and, where a class is held, the exact credit its grid form
-replaces, ``exact_work``), and its ``tie`` to the Python's: the same W at the same class's load, or none on both. Where they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the
+rule, each opened tile's verdict, an accepted run's work and its passes' salts, and, where a class is held, the exact
+credit its grid form replaces, ``exact_work``), and its ``tie`` to the Python's: the same W at the same class's load, or none on both. Where they agree it writes the Lean's answer to ``--out`` (`lean_answer`: the
 printout with W at ``tie``), the file `served_verdicts.pearlplus_of_record` reads; where they don't, or the Lean doesn't
 answer within ``--timeout`` seconds, it writes none and removes any there. Either way both verdicts, the Lean's command
 line, the executable's SHA-256, the line printed and, once the executable ran, its cost (``check_cost``, `check_cost`:
@@ -206,7 +206,7 @@ UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so 
 COIN, RETENTION = "coin.json", "retention.json"
 #: the fields of the Lean `PouwCheck.PearlPlus` printout `lean` holds to the Python's verdict, as its difftest does
 #: (`benchmarks/pouw/pearlplus_lean`'s ``answer``)
-LEAN_HELD = ("verdict", "reason", "refused", "commitment", "source", "over_cap", "verdicts", "work", "exact_work")
+LEAN_HELD = ("verdict", "reason", "refused", "commitment", "source", "over_cap", "verdicts", "work", "exact_work", "salts")
 #: `lean`'s record of both verdicts, beside its answer
 LEAN_CHECK = "pearlplus-lean-check.json"
 #: ``lean --exe build``: PouwCheck.PearlPlus's Lake package, built there, and the executable the build makes
@@ -686,10 +686,12 @@ def lean_answer(got: dict) -> dict:
 def python_answer(doc: dict) -> dict:
     """`verify`'s document in the Lean's terms (`LEAN_HELD`)."""
     a = doc["answer"]
+    public = a.get("public") or {}
     return {"verdict": a["verdict"], "reason": a["reason"], "refused": doc.get("refused"),
             "commitment": doc.get("commitment"), "source": doc.get("source"), "over_cap": doc.get("over_cap"),
-            "verdicts": doc.get("verdicts", []),
-            "work": (a.get("public") or {}).get("work"), "exact_work": (a.get("profile") or {}).get("exact_work")}
+            "verdicts": doc.get("verdicts", []), "work": public.get("work"),
+            "exact_work": (a.get("profile") or {}).get("exact_work"),
+            "salts": [p["salt"] for p in public["passes"]] if "passes" in public else None}
 
 
 def lean(args: argparse.Namespace) -> int:
@@ -908,7 +910,7 @@ def case(args: argparse.Namespace) -> int:
              "manifests": [json.loads(p.read_text()) for p in paths],
              "window": {"dropped": coin.get("dropped", []), "record": w, "rounds": coin.get("rounds")},
              "evidence": {"files": files},
-             "lean": {k: lean.get(k) for k in ("verdict", "reason", "drawn", "work", "exact_work")}, "delta": doc["delta"]}
+             "lean": {k: lean.get(k) for k in ("verdict", "reason", "drawn", "work", "exact_work", "salts")}, "delta": doc["delta"]}
     _private(out / CASE_PARTS, (json.dumps(parts, sort_keys=True) + "\n").encode())
     print(f"case {lean.get('verdict')}: {len(paths)} passes, {sum(map(len, files))} files their "
           f"{len(lean.get('verdicts') or [])} opened tiles read, {len(held)} blobs of {sum(held.values()):,} bytes -> {out}",

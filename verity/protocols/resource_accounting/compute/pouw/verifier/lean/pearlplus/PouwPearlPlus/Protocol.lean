@@ -19,8 +19,8 @@ the epoch's coins (`EpochCoins.ofJson`: a live session's on the auditor device's
 number of samples, and the verifier's record of the coin it drew on this run's commitment (`CoinRecord`, as `verify_run`
 writes it: its schema and its sample), which pins the source (`after-coin`): a bare source, which `check` also takes, is no
 input here, so the coin is always the one sampled on the run. The verdict is of record (`ofRecord`, `--of-record` as
-`served_pearlplus.sh` runs it): only a challenger sample on live coins is taken (`ofRecordReason`), so in-process coins, the
-node's sample and a v1 record are refused as `of-record`.
+`served_pearlplus.sh` runs it): only a challenger sample on live coins is taken (`ofRecordReason`), so in-process coins and
+the node's sample are refused as `of-record`, and a record of another schema than `COIN_SCHEMA` as `coin-schema`.
 
 **Commitment**, canonical JSON with exactly these keys:
 
@@ -48,7 +48,8 @@ that digest, held to its manifest entry (`held`); a path the object doesn't name
 **The check** is `check` on them: it accepts with the run's credit at its scheme's named assumption at δ = `DELTA`, or rejects with
 `check`'s reason. It never leaves a run undecided.
 
-**Public**, on acceptance: the credit (`credited`, `credited_tiles`, `macs`, `rho`, `epsilon`) and `delta`.
+**Public**, on acceptance: the credit (`credited`, `credited_tiles`, `macs`, `rho`, `epsilon`), `delta`, and each retained
+pass's salt in the passes' order (`salts`, hex): the epoch's coins, the verifier's own, which bind nothing private.
 
 **Profile**: the samples asked for, the tiles sampled and the passes.
 -/
@@ -88,6 +89,11 @@ structure Commitment where
 
 structure Evidence where
   files : List Json
+
+/-- An accepted run's public part: its credit and each retained pass's salt, in the passes' order. -/
+structure Public where
+  credit : Credit
+  salts : List ByteArray
 
 structure Profile where
   draws : Nat
@@ -164,7 +170,7 @@ def opener (c : Commitment) (e : Evidence) (bs : Core.Blobs) (pl : Plan) (i tid 
     held spec (← bs.get d f)
   opening (c.manifests.getD i .null) pl.passes[i]! file tid
 
-def checkBlobs (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) : Core.Outcome Credit Profile :=
+def checkBlobs (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) : Core.Outcome Public Profile :=
   let i := inputOf p c
   if e.files.length != c.manifests.length then
     .reject s!"evidence: {e.files.length} passes' files for {c.manifests.length} passes"
@@ -174,12 +180,14 @@ def checkBlobs (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) : 
     | .ok pl =>
       let ans := check i (opener c e bs pl)
       match ans.accept, ans.work with
-      | true, some w => .accept w { draws := p.draws, drawn := pl.drawn, passes := pl.passes.length }
+      | true, some w => .accept ⟨w, pl.passes.map (·.salt)⟩ { draws := p.draws, drawn := pl.drawn, passes := pl.passes.length }
       | _, _ => .reject (ans.reason.getD "the run is not accepted")
 
-def publicJson (w : Credit) : Json :=
+def publicJson (pub : Public) : Json :=
+  let w := pub.credit
   Json.mkObj [("credited", toJson w.credited), ("credited_tiles", toJson w.creditedTiles), ("delta", .str (toString DELTA)),
-    ("epsilon", .str (toString w.epsilon)), ("macs", toJson w.macs), ("rho", .str (toString w.rho))]
+    ("epsilon", .str (toString w.epsilon)), ("macs", toJson w.macs), ("rho", .str (toString w.rho)),
+    ("salts", .arr (pub.salts.map fun s => Json.str (hex s)).toArray)]
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("draws", toJson pr.draws), ("drawn", toJson pr.drawn), ("passes", toJson pr.passes)]
@@ -189,7 +197,7 @@ def protocol : Core.BlobProtocol where
   Params := Params
   Commitment := Commitment
   Evidence := Evidence
-  Public := Credit
+  Public := Public
   Profile := Profile
   params := paramsOf
   commitment := commitmentOf
