@@ -83,26 +83,33 @@ theorem pinned_params {P : Core.Protocol} {why : P.Params → Option String} {j 
       cases h
       exact ⟨hq, hw⟩
 
-/-- What `pinned P why` accepts, `P` parsed to parameters `why` names nothing in, and those are what its check read. -/
-theorem pinned_accept (P : Core.Protocol) (why : P.Params → Option String) (params commitment evidence : ByteArray)
-    (h : ((pinned P why).answer params commitment evidence).verdict = .accept) :
-    ∃ j p, Core.canonicalJson params = .ok j ∧ P.params j = .ok p ∧ why p = none := by
+/-- What `Q` accepts, its parameters parsed. -/
+theorem accept_params (Q : Core.Protocol) (params commitment evidence : ByteArray)
+    (h : (Q.answer params commitment evidence).verdict = .accept) :
+    ∃ j p, Core.canonicalJson params = .ok j ∧ Q.params j = .ok p := by
   unfold Core.Protocol.answer at h
   split at h
   · simp at h
   · rename_i p hp
     cases hj : Core.canonicalJson params with
     | error e => rw [hj] at hp; cases hp
-    | ok j =>
-      rw [hj] at hp
-      obtain ⟨h1, h2⟩ := pinned_params (P := P) (j := j) (p := p) hp
-      exact ⟨j, p, rfl, h1, h2⟩
+    | ok j => rw [hj] at hp; exact ⟨j, p, rfl, hp⟩
+
+/-- What `pinned P why` accepts, `P` parsed to parameters `why` names nothing in, and those are what its check read. -/
+theorem pinned_accept (P : Core.Protocol) (why : P.Params → Option String) (params commitment evidence : ByteArray)
+    (h : ((pinned P why).answer params commitment evidence).verdict = .accept) :
+    ∃ j p, Core.canonicalJson params = .ok j ∧ P.params j = .ok p ∧ why p = none := by
+  obtain ⟨j, p, hj, hp⟩ := accept_params (pinned P why) params commitment evidence h
+  obtain ⟨h1, h2⟩ := pinned_params (P := P) (j := j) (p := p) hp
+  exact ⟨j, p, hj, h1, h2⟩
 
 theorem pinnedB_accept (P : Core.BlobProtocol) (why : P.Params → Option String)
     (params commitment evidence : ByteArray) (blobs : Array ByteArray)
     (h : ((pinnedB P why).answer params commitment evidence blobs).verdict = .accept) :
-    ∃ j p, Core.canonicalJson params = .ok j ∧ P.params j = .ok p ∧ why p = none :=
-  pinned_accept (P.on blobs) why params commitment evidence h
+    ∃ j p, Core.canonicalJson params = .ok j ∧ P.params j = .ok p ∧ why p = none := by
+  obtain ⟨j, p, hj, hp⟩ := accept_params ((pinnedB P why).on blobs) params commitment evidence h
+  obtain ⟨h1, h2⟩ := pinned_params (P := P.toProtocol) (why := why) (j := j) (p := p) hp
+  exact ⟨j, p, hj, h1, h2⟩
 
 theorem keyReason_none {pin : Pin} {x : Option Challenger.ChallengerKey} (h : keyReason pin x = none) :
     ∃ k, x = some k ∧ sha512Hex k.pub = pin.sha512 := by
