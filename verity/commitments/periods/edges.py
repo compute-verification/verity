@@ -293,6 +293,8 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
                     raise Refusal("not-topological")
                 raise Refusal("edge-rows")
             continue
+        if q[4]:
+            _grid_ok(R, k, q)
         k0 = max(x0 + lo * L - s0, 0)
         rows = "edge-fields" if _crosses_fields(R, q, k0, L, ln, cnt) else "edge-rows"
         try:
@@ -359,8 +361,6 @@ def edges(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], wiring: Mapp
             for i, g in enumerate(x["args"]):
                 s0 = 0
                 for q in g["parts"]:
-                    if q[0] == "g" and q[4]:
-                        _grid_ok(R, k, q)
                     out += _part_wires(R, fu, templates, cuts_of, k, i, q, s0)
                     s0 += _count(q)
         return {"wires": out}

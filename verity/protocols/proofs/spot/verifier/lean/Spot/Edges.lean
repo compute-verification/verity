@@ -194,6 +194,20 @@ def crossesFields (P : Prog) (run : Nat) (lanes : List Lane) (c k0 L len cnt : N
       | _ => false
   | _ => false
 
+/-- Part `q` of root node `k`, if a grid: its lanes count one number of periods (else `edge-parts`), and each lane
+over an earlier root node lies inside that node's outputs at both its extremes (else `edge-rows`), in O(levels) a
+lane. The decoder refuses both first (`grid-shape`, `grid-overrun`); these hold them for a Program built otherwise. -/
+def gridOk (P : Prog) (k : Nat) : Part → Except String Unit
+  | .grid run lanes => do
+    if lanes.any (·.periods != (lanes[0]?.map Lane.periods).getD 0) then throw "edge-parts"
+    let nodes := (P.defs[P.root]!).body.nodes
+    for l in lanes do
+      if !l.p && l.i < k then
+        let n := nodes[l.i]!
+        let (lo, hi) := l.bounds run
+        if lo < 0 || hi ≥ (((P.defs[n.fn]!).outLeaves * n.members : Nat) : Int) then throw "edge-rows"
+  | _ => pure ()
+
 /-- Whether root node `k` calls an input. -/
 def isInputNode (P : Prog) (k : Nat) : Bool :=
   let f := P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!
@@ -228,6 +242,7 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
         if it.any fun r => !r.p && r.i ≥ k then throw "not-topological"
         throw "edge-rows"
       continue
+    gridOk P k q
     let (run, lanes) := partLanes q
     let k0 := x0 + lo * L - s0
     let rows := if crossesFields P run lanes q.count k0 L len cnt then "edge-fields" else "edge-rows"
@@ -253,18 +268,6 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
     out := out ++ [wire]
   return out
 
-/-- A grid part of root node `k`: its lanes count one number of periods (else `edge-parts`), and each lane over an
-earlier root node lies inside that node's outputs at both its extremes (else `edge-rows`), in O(levels) a lane. The
-decoder refuses both first (`grid-shape`, `grid-overrun`); these hold them for a Program built otherwise. -/
-def gridOk (P : Prog) (k run : Nat) (lanes : Array Lane) : Except String Unit := do
-  if lanes.any (·.periods != (lanes[0]?.map Lane.periods).getD 0) then throw "edge-parts"
-  let nodes := (P.defs[P.root]!).body.nodes
-  for l in lanes do
-    if !l.p && l.i < k then
-      let n := nodes[l.i]!
-      let (lo, hi) := l.bounds run
-      if lo < 0 || hi ≥ (((P.defs[n.fn]!).outLeaves * n.members : Nat) : Int) then throw "edge-rows"
-
 /-- **The wires the Program's root states**, under the ranges `rs` and the record's wiring `W` (its templates and
 cuts): the module docstring's rule, in the root's node, argument and part order, or the first refusal. -/
 def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except String (List Spot.Wires.Wire) := do
@@ -281,7 +284,6 @@ def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except Stri
     for i in [0:node.args.size] do
       let s := node.args[i]!.seq
       for qi in [0:s.parts.size] do
-        if let .grid run lanes := s.parts[qi]! then gridOk P k run lanes
         out := out ++ (← partWires P fu W k i s.parts[qi]! s.starts[qi]!)
   return out
 
