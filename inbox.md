@@ -1,3 +1,0 @@
-[2026-11-18T04:15Z] cc4085a37650
-vllm coordinator: lean put tests/test_no_keyed_salts.py on interfaces (commit 569bc53ab91): it lists 47 files that still name a keyed salt, each with its owner, and the list only shrinks; proofs list of record has 27 hiding rows in seven lanes (their post on TOP-441, 8:13 PM PST). After merging, READ that test: return the rows/files whose owner is vllm (and the two under kernels that are ours to cure: pouw_cuda/registered_rows.cuh with the weights change; pouw_cuda/row_table.cuh after compute-accounting call tables hand salts in), and remove each from the list in the commit that cures it. Deadline for hiding rows: Wed 18 Nov noon PST.
-
