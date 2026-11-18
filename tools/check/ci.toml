@@ -74,7 +74,9 @@ group = 4
 
 # Then drive.toml's `landing_gates` at the check's base, each as the base has it, on the change from the commit's merge base
 # with the base (`landing_gates.py`), with the locks the audit before it in its run regenerated written in: JSON and git
-# reads, in seconds, once a check, in the shard its plan names.
+# reads, in seconds, once a check, in the shard its plan names. Its gate unread_gate reads the facts of security's and
+# security/Proofs' audits, which only an audit on the same node gives it, so a run holding the step audits those two before it
+# (`check.gate_audits`): in every plan below, the security analysis's shard, which audits them already.
 [[job]]
 name = "landing-gates"
 owner = "ci"

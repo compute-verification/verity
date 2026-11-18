@@ -211,7 +211,8 @@ doesn't name:
                     else origin/main): whether the change from BASE adds a retired term, an issue id or a run id to a file.
                     Off the gate (policy.toml's `off_gate`), so a red holds nothing; a ready mark's preflight and the
                     sync run `main`'s copy as a warn gate (drive.toml's `warn_gates`)
-    landing-gates   once lean-audit has passed, where the run holds it: `tools/check/landing_gates.py BASE OUT`, every gate
+    landing-gates   after lean-audit of the packages whose facts unread_gate reads, which a run holding the step audits too
+                    (`gate_audits`), their facts handed to the gate: `tools/check/landing_gates.py BASE OUT`, every gate
                     drive.toml lists in `landing_gates` at BASE (as for added-lines), each as BASE has it, on a commit of
                     HEAD's tree with the locks lean-audit regenerated written in, whose one parent is HEAD's merge base with
                     BASE: the candidate's whole change, whatever merges or dates its commits carry.  A gate that fails or
@@ -2161,6 +2162,13 @@ def landing_gates(out: Path) -> list[str] | str:
     return [sys.executable, str(ROOT / "tools" / "check" / "landing_gates.py"), base, str(out)]
 
 
+def gate_audits() -> list[str]:
+    """The audits landing-gates runs after, in its own run: those whose facts unread_gate reads (`lean_audit.UNREAD_FACTS`).
+    A node keeps no facts it didn't audit, and a check node's store has no remote to fetch them from, so a run holding the
+    step audits them first (`groups`), and a plan puts the step in their shard (`shard_needs`)."""
+    return [f"lean-audit:{p}" for p in _lean_audit().UNREAD_FACTS]
+
+
 def suite_args(held: list[str], splits: dict[str, dict] | None, out: Path) -> list[str]:
     """`suites.py`'s arguments for a shard's suites of one step (``held``: `SUITE` or `SUITE:K/M`): each suite once, a split one
     as `SUITE:K1,K2/M` with the parts it holds, pinned to the partition ``splits`` names (`@` its digest) when it names one; and
@@ -2194,12 +2202,15 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
            circuit_cache: bool | None = None, splits: dict[str, dict] | None = None,
            bookkeeping: bool = False, agreement_urls: Path | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd); with ``only``, a
-    shard's parts (`shard`), just the jobs those name, lean-audit on its packages there, and all the cores to pytest or to
+    shard's parts (`shard`), just the jobs those name, lean-audit on its packages there (and on `gate_audits`' beside
+    landing-gates, which its group runs after them), and all the cores to pytest or to
     circuit-check when the other isn't among them.  ``circuit_cache`` (default ``cache``) is whether circuit-check reuses its
     per-target passes.  A split suite's parts (`pytest:SUITE:K/M`) run as `suites.py SUITE:K/M` (`suite_args`, with ``splits``,
     an auto plan's or the task list's partitions).  ``urls`` and ``agreement_urls`` are the files of presigned URLs the run was
     sent (`take_lean_deps_urls`, `take_agreement_urls`)."""
     circuit_cache = cache if circuit_cache is None else circuit_cache
+    if only is not None and "landing-gates" in only:
+        only = [*only, *(g for g in gate_audits() if g not in only)]
     py = sys.executable
     a = max(1, n // 2)
     b = max(1, n - a)
@@ -2380,8 +2391,10 @@ def audit_provers(packages: list[str]) -> dict[str, list[str]]:
 
 def shard_needs() -> dict[str, list[str]]:
     """What a shard runs beside a part (`shards.builds`): each job's `needs` and `after`, and each audited package's provers
-    (`audit_provers`), which `shards.units` holds on its shard."""
-    return {**{j.name: [*j.needs, *([j.after] if j.after else [])] for j in JOBS}, **audit_provers(_parts_of()["lean-audit"])}
+    (`audit_provers`), which `shards.units` holds on its shard, and landing-gates' audits (`gate_audits`)."""
+    needs = {j.name: [*j.needs, *([j.after] if j.after else [])] for j in JOBS}
+    needs["landing-gates"] = [*needs.get("landing-gates", []), *gate_audits()]
+    return {**needs, **audit_provers(_parts_of()["lean-audit"])}
 
 
 def given_suites(suites: dict[str, float], given: dict[str, float] | None) -> dict[str, float]:

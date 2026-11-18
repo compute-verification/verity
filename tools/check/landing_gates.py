@@ -8,11 +8,17 @@ where COMMIT is made here: HEAD's tree, with each lock the run's lean-audit rege
 in, whose one parent is HEAD's merge base with BASE. So a gate that judges a change against its first parent, its merge base or
 its date judges the candidate's whole change from that merge base, whatever merges or dates its commits carry. Exit 0 when every
 gate passes, 1 when one fails or can't judge, each named with its lines.
+
+The run audits the packages whose facts unread_gate reads before this step (`check.gate_audits`), and the facts that audit wrote
+(OUT's `lean-audit/unread/K.jsonl.gz`) go first into the gate's cache under their keys, where it reads first: a node with no
+kept pass of them (a cold cache, or `--no-cache`, which keeps none) judges on them, and the store, which has no remote on a
+check node, isn't needed.
 """
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -24,6 +30,8 @@ DRIVE = "tools/check/drive.toml"
 KEY = "landing_gates"
 GATE_TIMEOUT_S = 900
 FIX_LINES = 8
+FACTS = Path("lean-audit") / "unread"
+GATE_CACHE = "unread-gate"
 IDENTITY = {"GIT_AUTHOR_NAME": "check", "GIT_AUTHOR_EMAIL": "check@verity.invalid", "GIT_COMMITTER_NAME": "check",
             "GIT_COMMITTER_EMAIL": "check@verity.invalid"}
 
@@ -48,6 +56,25 @@ def regenerated(out: Path, repo: Path = ROOT) -> dict[str, Path]:
     if not p.is_file():
         return {}
     return {f"{pkg}/lean-audit.json": repo / f for pkg, f in (json.loads(p.read_text()).get("regenerated") or {}).items()}
+
+
+def cache_dir() -> Path:
+    return Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check")
+
+
+def seed_facts(out: Path) -> list[str]:
+    src = out / FACTS
+    if not src.is_dir():
+        return []
+    dst = cache_dir() / GATE_CACHE
+    dst.mkdir(parents=True, exist_ok=True)
+    got = []
+    for f in sorted(src.glob("*.jsonl.gz")):
+        tmp = dst / f".{f.name}.{os.getpid()}"
+        shutil.copyfile(f, tmp)
+        os.replace(tmp, dst / f.name)
+        got.append(f.name)
+    return got
 
 
 def change(base: str, head: str, locks: dict[str, Path], repo: Path = ROOT) -> tuple[str, str]:
@@ -80,6 +107,8 @@ def run_gate(base: str, commit: str, path: str, repo: Path = ROOT) -> tuple[int 
 
 def judge(base: str, head: str, out: Path, repo: Path = ROOT) -> list[str]:
     commit, mb = change(base, head, regenerated(out, repo), repo)
+    if seeded := seed_facts(out):
+        print(f"landing-gates: the facts of {len(seeded)} audited package(s) handed to the gates ({cache_dir() / GATE_CACHE})")
     said = []
     for path in gates(base, repo):
         rc, text = run_gate(base, commit, path, repo)

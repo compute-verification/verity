@@ -79,7 +79,8 @@ AFTER_LANDING_OPTIONAL = ("lean-agreement",)
 SUITE_STEPS = ("lean-suites", "pytest")
 #: the steps train.sh still checks beside the executor's check of a candidate: a run of them alone (`vqueue_slim.start`), whose
 #: steps on the merge gate count as the executor's tasks on it do: lean-agreement wherever it ran, skipped by name or not, and
-#: landing-gates (drive.toml's `landing_gates` on the candidate's change from its base), not
+#: landing-gates (drive.toml's `landing_gates` on the candidate's change from its base, after the audits whose facts they
+#: read, which the run holds for it: `check.gate_audits`), not
 #: ratchet-gate (policy.toml's `off_gate`); the executor's tasks of them count for nothing
 SLIM_STEPS = ("lean-agreement", "landing-gates", RATCHET_STEP)
 #: what the run of `SLIM_STEPS` judges of its records (`vqueue_slim.judge`): those steps, and the preflights no graph/v2 task

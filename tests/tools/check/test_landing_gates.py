@@ -149,6 +149,51 @@ def test_a_gate_that_cannot_judge_fails_the_step(tmp_path, monkeypatch):
     assert rc == 1 and "gates/gone.py" in said and "can't judge" in said, said
 
 
+#: a gate that reads the facts kept in its cache under a key, as unread_gate does at its third stage, and can't judge without them
+FACTS_GATE = '''import os, pathlib, sys
+cache = pathlib.Path(os.environ["CHECK_CACHE"]) / "unread-gate" / "k1.jsonl.gz"
+sys.exit(0 if cache.is_file() and cache.read_bytes() == b"facts" else 2)
+'''
+
+
+def test_a_cold_node_judges_on_the_facts_its_own_audit_wrote(tmp_path, monkeypatch):
+    """A node with no kept facts can't judge, a red; the facts its run's audit wrote (`lean-audit/unread/K.jsonl.gz`) are
+    handed to the gate's cache, where it reads first, and then it judges."""
+    repo = Repo(tmp_path / "r")
+    repo.commit({"gates/g.py": FACTS_GATE})
+    repo.main = repo.git("rev-parse", "HEAD")
+    repo.commit({"b.txt": "fine\n"})
+    monkeypatch.setitem(ENV, "CHECK_CACHE", str(tmp_path / "cold"))
+    rc, said = _step(repo, tmp_path / "out", monkeypatch)
+    assert rc == 1 and "can't judge" in said, said
+    (tmp_path / "out" / "lean-audit" / "unread").mkdir(parents=True)
+    (tmp_path / "out" / "lean-audit" / "unread" / "k1.jsonl.gz").write_bytes(b"facts")
+    rc, said = _step(repo, tmp_path / "out", monkeypatch)
+    assert rc == 0 and "the facts of 1 audited package(s) handed to the gates" in said, said
+    assert (tmp_path / "cold" / "unread-gate" / "k1.jsonl.gz").read_bytes() == b"facts"
+
+
+def test_every_run_holding_the_step_audits_the_facts_packages_before_it(tmp_path, monkeypatch):
+    """The step runs only after the audits whose facts its gate reads, on the same node: each plan's shard holding it holds
+    them, a run of the step alone (the slim run, a `--deferred` without lean-audit) audits them too, both in the step's group
+    before it, and an auto plan keeps the step with them (`shard_needs`)."""
+    audits = CHECK.gate_audits()
+    assert audits == ["lean-audit:security", "lean-audit:security/Proofs"]
+    packages = CHECK._parts_of()["lean-audit"]
+    for n, plan in D.plans().items():
+        shards = D.resolve(plan, CHECK.JOBS, {**CHECK._parts_of(plan), "lean-audit": packages}, CHECK.audit_provers(packages))
+        [held] = [s for s in shards if "landing-gates" in s]
+        assert set(audits) <= set(held), f"plan {n}: landing-gates in a shard without {set(audits) - set(held)}"
+    for only in (["landing-gates"], ["landing-gates", "ratchet-gate"], ["lean-audit:security/Proofs", "landing-gates"]):
+        [group] = [g for g in CHECK.groups(tmp_path, 16, only=only) if any(s[0] == "landing-gates" for s in g)]
+        names = [s[0] for s in group]
+        assert names.index("lean-audit") < names.index("landing-gates"), (only, names)
+        argv = dict((s[0], s[1]) for s in group)["lean-audit"]
+        assert [argv[i + 1] for i, x in enumerate(argv) if x == "--package"] == [*dict.fromkeys(
+            [p.partition(":")[2] for p in only if p.startswith("lean-audit:")] + [a.partition(":")[2] for a in audits])], only
+    assert set(audits) <= set(CHECK.shard_needs()["landing-gates"])
+
+
 def test_the_step_is_on_the_merge_gate_after_lean_audit_and_in_one_shard_of_every_plan():
     jobs = {j.name: j for j in D.load()}
     step, audit = jobs["landing-gates"], jobs["lean-audit"]
