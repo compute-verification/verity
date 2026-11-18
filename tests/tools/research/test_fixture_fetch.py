@@ -343,6 +343,21 @@ def test_export_also_copies_an_artifact_it_is_named_and_reports_one_nobody_holds
     assert not rep["ok"] and any(nobody in e for e in rep["errors"])
 
 
+def test_export_refuses_an_id_whose_record_is_no_fixture_whatever_names_it(tmp_path):
+    """Rule: only the kinds in EXPORT_KINDS leave; weakening: a run's record named by hand or by a registry line is published."""
+    origin, private = _store(tmp_path, "origin"), FsRemote(tmp_path / "private")
+    repo, _ = _repo(tmp_path, origin, private)
+    out = tmp_path / "run" / "stdout.log"
+    out.parent.mkdir()
+    out.write_text("a run's output")
+    record = origin.put_artifact("run-record/v1", {}, None, tree=out.parent)
+    _publish(origin, record, private)
+    rep = F.export(_store(tmp_path, "exporter"), repo, FsRemote(tmp_path / "public"), srcs=[private], arts=[record])
+    assert not rep["ok"] and any(record in e and "run-record/v1" in e for e in rep["errors"])
+    assert not (tmp_path / "public" / manifest_key(record.split(":")[1])).exists()
+    assert rep["manifests"] == 3
+
+
 def test_export_recovers_superseded_ids_from_history_and_warns_on_lost_ones(tmp_path):
     origin, private = _store(tmp_path, "origin"), FsRemote(tmp_path / "private")
     repo, a = _repo(tmp_path, origin, private)

@@ -321,6 +321,11 @@ def hydrate_stubs(store: LocalStore, repo: Path, paths: Sequence[str] = (), *, s
 
 # ---- the public export --------------------------------------------------------------------------------------------------------------
 
+#: the kinds the public export takes, whatever registers or names an id: a fixture, and the published status document. A run's
+#: record or output is never one of them
+EXPORT_KINDS = (FIXTURE_KIND, "verity/status/v0")
+
+
 def export_ids(doc: dict[str, Any], *, include_previous: bool = True) -> list[str]:
     """Every id the export must hold: the entries, and the ids they superseded (old commits still name them)."""
     out = list(entries(doc))
@@ -415,6 +420,11 @@ def export(store: LocalStore, repo: Path, dest: Remote, *, srcs: Sequence[Remote
     fr = fetchset._report()
     ms = _ensure_local(store, repo, doc, want, srcs, jobs, fr)
     refused, private = private_fixtures(repo, doc, ms)
+    for a, m in ms.items():
+        if m.kind not in EXPORT_KINDS:
+            private.add(a)
+            refused.append(f"{a} is a {m.kind}, which the public export does not take: it takes {' and '.join(EXPORT_KINDS)} "
+                           "(fixtures.EXPORT_KINDS), never a run's record or output, whatever names the id")
     ms = {a: m for a, m in ms.items() if a not in private}
     fetchset.fetch_blobs(store, blobs, srcs, jobs=jobs, report=fr)
     objs = list(dict.fromkeys([b for m in ms.values() for b in m.blobs()] + [(h, int(n)) for h, n in blobs]))
