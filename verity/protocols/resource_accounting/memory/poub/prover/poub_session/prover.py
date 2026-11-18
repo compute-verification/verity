@@ -79,7 +79,7 @@ trace's step before pass n is recorded as step n − 1, so pass n reads the stor
     python prover.py ... --cpu 1024 --model-dir DIR --engines 2 --arena-blocks 512
                                                         the store a model in DIR lays out (`poub.store`)
 
-The payload's salts are under the key the verifier sends first (`payload-key`, `poub.store`).
+The payload's salts are the prover's own, fresh operating-system bytes a block, kept for its openings.
 """
 from __future__ import annotations
 
@@ -109,7 +109,6 @@ from verity.protocols.resource_accounting.memory.poub.verifier import audit, coi
 from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import wire as rwire  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.store import PAYLOAD_LABEL, store_salt  # noqa: E402,F401
 
 from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 
@@ -340,7 +339,7 @@ class ServingTrace:
             raise ValueError(f"a step of {pages} pages, its slots kept {headroom} steps after their free, frees and "
                              f"writes more than the pool's {len(self.slots)} slots")
         self.backend, self.registration, self.pages, self.rng = backend, registration, pages, rng
-        self.salts = random.Random(rng.getrandbits(64))
+        rng.getrandbits(64)  # the sample that once seeded the append salts: a seed's load stays as it was
         self.lifetime, self.headroom = lifetime, headroom
         self.replay = memory_map.Replay(memory_map.Header(registration.digest, N), registration)
         self.steps, self.served, self.cursor, self.rekeyed = 0, 0, 0, 0
@@ -413,7 +412,7 @@ class ServingTrace:
             self.held.pop(x, None)
         self.held.update((x, (window, m)) for x, m in zip(slots, payloads))
         if slots:
-            a = self.backend.append(payloads, [self.salts.randbytes(rb.SALT_BYTES) for _ in payloads])
+            a = self.backend.append(payloads, [rb.HM96.fresh_salt() for _ in payloads])
             if a.first != change.first or a.digests != change.digests:
                 raise AssertionError("the store's append is not the memory map's")
             getattr(self.backend, "place", lambda first, slots, step: None)(a.first, slots, s)
@@ -462,8 +461,7 @@ class CpuBackend:
     `misread(ticket)` is the pass's blocks whose slot held other bytes than the block when it read.
 
     With `store` (a `poub.store.Store`) the payloads are that store's, a pinned model's arenas and zero filler, and
-    the hello carries its layout. The payload salts are the verifier's key's (`set_payload_key`), or random ones sampled
-    from `rng` until it is given one."""
+    the hello carries its layout. The payload salts are fresh operating-system bytes a block, kept for the openings."""
 
     def __init__(self, blocks: int, rng: random.Random, read_bytes_per_s: float = 1e12,
                  store: rstore.Store | None = None) -> None:
@@ -471,7 +469,7 @@ class CpuBackend:
             raise ValueError(f"the store is {store.blocks} blocks, not {blocks}")
         self.blocks, self.rng, self.read_bytes_per_s, self.store_layout = blocks, rng, read_bytes_per_s, store
         self.payloads = [payload(rng) for _ in range(blocks)] if store is None else store.payloads()
-        self.salts = [rng.randbytes(rb.SALT_BYTES) for _ in range(blocks)]
+        self.salts = [rb.HM96.fresh_salt() for _ in range(blocks)]
         self.dropped: set[int] = set()
         self.gates: dict = {}
         self.misreads: tuple[int, ...] = ()
@@ -479,9 +477,6 @@ class CpuBackend:
 
     def layout(self) -> list[dict] | None:
         return None if self.store_layout is None else self.store_layout.regions()
-
-    def set_payload_key(self, key: bytes) -> None:
-        self.salts = [store_salt(key, PAYLOAD_LABEL, j) for j in range(self.blocks)]
 
     def payload_root(self, node: bytes) -> bytes:
         return audit.payload_tree(node, self.payloads, self.salts).commitment.root
@@ -560,7 +555,7 @@ class CpuBackend:
         held = [zero if j in self.dropped else self.mem.get(self.where.get(j, j), zero) for j in plan]
         self.misreads = tuple(j for j, e in zip(plan, held) if j not in self.dropped and e != self.store.blocks[j])
         ys = tuple(r(j, e) for j, e in zip(plan, held))
-        salts = tuple(self.rng.randbytes(rb.SALT_BYTES) for _ in range(rb.leaves(plan.length)))
+        salts = tuple(rb.HM96.fresh_salt() for _ in range(rb.leaves(plan.length)))
         tree = rb.tree(seed, plan, ys, salts)
         return tree.commitment.root, (ys, salts, tree, plan)
 
@@ -689,14 +684,7 @@ class ProverSide:
                 raise wire.Closed(head.get("why", "bye"))
 
     def register(self, codec: rcodec.Codec = rcodec.DEFAULT, receipt: str = rb.DEFAULT, rows: int | None = None) -> dict:
-        """The hello, once a backend that takes the verifier's payload salt key has it (the verifier's first message,
-        `payload-key`), then the registration, the encode and the calibration (`ready`)."""
-        if hasattr(self.backend, "set_payload_key"):
-            head, _, _ = self.expect("payload-key")
-            key = bytes.fromhex(head["key"])
-            if len(key) != rstore.KEY_BYTES:
-                raise ValueError(f"the verifier's payload key is {rstore.KEY_BYTES} bytes, not {len(key)}")
-            self.backend.set_payload_key(key)
+        """The hello, then the registration, the encode and the calibration (`ready`)."""
         root = self.backend.payload_root(self.node)
         layout = self.backend.layout() if hasattr(self.backend, "layout") else None
         self.conn.send({"type": "hello", "node": self.node.hex(), "blocks": self.backend.blocks,
