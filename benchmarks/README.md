@@ -162,8 +162,8 @@ stays listed while it is within that window, whether or not the loop still sends
 
 Its owner keeps a metric within its `every`: the control pod's rerun loop (`infra/control/metrics_rerun.py`) launches
 the `command` of a metric whose newest value is older than its `every` as a `research run`, within the bounds its
-docstring lists, and a metric whose command's script is under `infra/control/` is a loop's, which the loop sends. A
-metric's keys:
+docstring lists: on a CPU node, a GPU machine its plan lists, or, for a row that says `runs = "control"`, the control pod
+itself. A metric whose command's script is under `infra/control/` is a loop's, which the loop sends. A metric's keys:
 
 - `id`: `OWNER/NAME`, under its owner's prefix.
 - `title`: the number's headline on the tab, three to six plain words with no digit or backtick.
@@ -178,7 +178,14 @@ metric's keys:
 - `every`: how often its owner measures it, in minutes, hours or days (`5m`, `12h`, `7d`); a value older than that is
   stale, so a number that reaches the tab through the index needs an `every` well over the index's hour.
 - Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a
-  list of words; `version`, `changed` and `was` (below).
+  list of words; `version`, `changed`, `was`, `under`, `kind` and `needs` (below); `runs = "control"`, for a command that
+  reads what only the control pod reaches (its own state, GitHub through its read token, the Linear app's keys): the rerun
+  loop runs it there as a local `research run`, which takes no `--on`, `--pool`, `--cpus`, `--mem-gb`, `--gpus` or
+  `--store-read`. Of the pod's stripped keys it keeps only those its list entry names, of the Linear app's two
+  (`LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET`); it carries every other variable of the loop's environment, all but the
+  stripped set `JOBS_TOKEN`, `SLACK_*` and `LINEAR_*` (`LEFT_OUT` in `metrics_rerun.py`), with `PYTHONPATH` set to the clone's `research`. A row without it runs on a
+  machine, with none of the stripped set. A row that says it runs on the control pod runs only once infra has listed it
+  there, with its command.
 
 The site refuses a metric with any other key: it lists the metric with why and shows none of it, so a new key reaches
 the site's reader before a metric uses it.
@@ -195,9 +202,16 @@ version. Whether anything else, the axis among it, changed what the number means
 row's former ids, so an id is renamed without breaking its line: the registry's reader (`research.metrics.registry`)
 resolves each to the row.
 
+A row `under = "OWNER/ID"` is a breakdown of that main number, one level deep; `research metrics show` indents it. `kind`
+is `system` (it measures Verity; the default) or `platform` (the project). `needs` lists `parameter` where the value
+depends on a security parameter and `calibration` where it uses a calibration number: each measurement then names
+them, `parameters` as `{NAME: {value, from, basis}}`, `from` the application it is read from, and `calibration` as
+`[{path, key}]`, `path` under `calibration/`. The kit refuses one naming none, by `kit_report.NEEDS`, held to the rows.
+
 The site's reader (infra's) takes `version`, `changed` and `was` on a row and `version` on a measurement
-(`SITE_TAKES_VERSIONS` in the registry's test). One part is not true yet: a reading sent from a loop through
-`research.metrics` carries no version, since the sender (infra's) doesn't take one.
+(`SITE_TAKES_VERSIONS` in the registry's test), `under`, `kind` and `needs` on a row (`SITE_TAKES_STRUCTURE`), and `runs`
+on a row (`SITE_TAKES_RUNS`). One part is not true yet: a reading sent from a loop through `research.metrics` carries no
+version, since the sender (infra's) doesn't take one.
 
 Each value carries its mark, how it was had, which the tab shows beside it: the measurement's `mark`, which the kit's
 writer requires (`measured`, `modeled` or `partial`, `kit.MARKS`; a value of None takes the one it would have had)
@@ -221,7 +235,7 @@ that nothing waits on, other than `top/parked`. A number whose goal sits under `
 `tests/test_metrics_registry.py` refuses a metric that lacks a key the list above doesn't mark optional or holds one it
 doesn't list, an id declared twice across all the files, an unknown owner, an owner who doesn't own the metric's file,
 an id outside its owner's prefix, a `title`, `unit` or `axis` that breaks its rule above, a `better` other than `lower`
-or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script is missing, a metric
+or `higher`, an `every` that isn't a count of minutes, hours or days, a `runs` other than `control`, a command whose script is missing, a metric
 the directory of the file declaring it never names, and a shared `metrics.toml` directly under `benchmarks/`. It also
 refuses a `version` that isn't a whole number 1 or above, a `changed` missing above 1, given at 1 or more than one
 sentence, a `was` that repeats an id or names a row's id, a `kit_report.VERSIONS` that isn't the rows above version 1,
@@ -273,24 +287,24 @@ Two cases decide where a price comes from:
 
 The Verifiable Compute Foundation's cluster (`vcf.lucidcomputing.ai`: the 8-H100 node `h100-sxm-8-0` and the one-card
 nodes `h100-nvl-1-0-cc` and `h100-nvl-1-1-cc`) runs a benchmark from a commit as one Slurm job under the account its credentials name.
-Only the control pod holds the login key, so a lead sends the job from there with `infra/vcf/` (deployed under
-`/data/vcf/`). From a checkout, build the payload, `git archive` of the commit and the command, and copy it to the pod:
+Only the control pod holds the login key, and each node is a register entry with `provider = "slurm"` and `via` the control
+pod (`research.pods.slurm` gives its fields), so a run goes there from any checkout whose agent may reach the control pod:
 
 ~~~text
-infra/vcf/payload.sh origin/main --tool native_peak -- python calibration/native_peak/measure.py --dtype bf16 --sizes 8192 \
-  | research pods ssh vy-control-verity -- 'cat > /data/vcf/payloads/NAME.tar.gz'
-research pods ssh vy-control-verity -- 'cd /data/vcf-jobs && SEND=/data/vcf/payloads/NAME.tar.gz setsid -f bash \
-  /data/vcf/vcf-job-run.sh NAME main 30 /data/vcf/vcf-bench.sh --nodelist=h100-sxm-8-0 --gres=gpu:1 --cpus-per-task=16 \
-  --mem=64G > NAME.launch.log 2>&1 < /dev/null'
+research run --on vcf-h100-sxm-8-0 --project verity --gpus 1 --cpus 16 --mem-gb 64 --timeout 30m --tool native_peak \
+  -- python calibration/native_peak/measure.py --dtype bf16 --sizes 8192
 ~~~
 
-The scripts' headers say what the job does (`vcf-bench.sh`), where `vcf-job-run.sh` copies the run directory and
-how `vcf-publish.sh` publishes it; `NAME.launch.log` gives the Slurm job. Read it back as any run: `research data
-show RUN`.
+It builds `infra/vcf/payload.sh`'s payload of the checkout's commit and starts the commit's own `vcf-job-run.sh` on the control
+pod, with `--gpus`, `--cpus`, `--mem-gb` and the entry's node and reservation as sbatch options and `--timeout` (at most the
+entry's `max_minutes`) as the job's minutes; it prints the Slurm job id and returns. `research status RUN` reads the job's log
+on the control pod until the run is published, and then, like `research fetch RUN`, its records from the store. The run gets
+`RESEARCH_MACHINE=NAME` and the entry's `[properties]` as `inputs/NAME.toml`. The scripts' headers say what the job does
+(`vcf-bench.sh`), where `vcf-job-run.sh` copies the run directory and how `vcf-publish.sh` publishes it.
 
-Such a record names its machine `vcf-NODE` (`execution.machine`) and its cost provider `vcf`. It has no lease and
+Such a record names its machine by its register entry (`execution.machine`) and its cost provider `vcf`. It has no lease and
 no slot of ours (its memory limit is Slurm's `--mem`), its node is shared with other users, it has no rate, and
-nothing preserves it while it runs (`research run-preserve` and `research status` from a VM don't reach it). The nodes
+nothing preserves it while it runs (`research run-preserve` doesn't reach it). The nodes
 have network, Python 3.12 and no root. The DGX's driver is CUDA 13.0's, which `main`'s torch needs;
 `h100-nvl-1-1-cc`'s is CUDA 12.8's, too old for it, and `h100-nvl-1-0-cc` refuses any GPU request. No node has `nvcc` or `ncu` on
 its PATH. The H100 has a card file (`calibration/hardware/cards/h100-sxm-80gb.toml`), but a card-bound benchmark of the
