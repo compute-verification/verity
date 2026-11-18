@@ -68,7 +68,7 @@ if [ -n "$RUN_KEYS" ]; then
     esac
   done
 fi
-export PYTHONPATH=$ROOT:$ROOT/adapters/vllm:$ROOT/tools/config:$ROOT/tools/research/src PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH=$ROOT:$ROOT/adapters/vllm:$ROOT/tools/config:$ROOT/tools/research/src:$ROOT/benchmarks/harness PYTHONDONTWRITEBYTECODE=1
 K=
 S=$(mktemp -d); trap 'rm -rf "$S" ${K:+"$K"}' EXIT
 LIB=${P2_LIB:-}
