@@ -5566,11 +5566,11 @@ OFF_NODE = {"COMPOSE_OFF_NODE": "1"}
 
 @pytest.mark.parametrize("extra, said", [
     (OFF_NODE, f"512 GB: the serve's lease 60 min, capped at 128 GB; {OFF}"),
-    ({}, "512 GB: the serve's lease 60 min, capped at 128 GB"),
+    ({"COMPOSE_OFF_NODE": "0"}, "512 GB: the serve's lease 60 min, capped at 128 GB"),
     ({**TIES, **OFF_NODE}, f"512 GB: the serve's lease 150 min, capped at 160 GB; {OFF}"),
     ({**TIES, **OFF_NODE, "LEASE_MEM_GB": "64"}, f"512 GB: the serve's lease 150 min, capped at 64 GB; {OFF}"),
     ({**SHORT_REMOTE, **OFF_NODE}, f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}; {OFF}"),
-    ({**SHORT_REMOTE, "COMPOSITE": None},
+    ({**SHORT_REMOTE, "COMPOSE_OFF_NODE": "0", "COMPOSITE": None},
      f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, so step 6 defers V3c's audit and the composite to a "
      "follow-on"),
     ({**OFF_NODE, "COMPOSITE": None, "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None},
@@ -7147,15 +7147,16 @@ sys.exit(1)
     host = subprocess.run(["hostname", "-s"], check=True, capture_output=True, text=True).stdout.strip()
     on = (f"COMPOSITE: composed on {host}, which holds the serve dir, from the cases the served node wrote there, not "
           "from the parties that produced them")
+    first = f"COMPOSITE ON-NODE: composed on the served node {host}, which the prover controls"
     assert run().returncode == 1
-    assert (out / "verdicts.txt").read_text() == ("COMPOSITE: not run, onsite's own cases come from "
+    assert (out / "verdicts.txt").read_text() == (f"{first}\nCOMPOSITE: not run, onsite's own cases come from "
                                                   "ONSITE_PIECES's file, and it is unset\n")
     (out / "verdicts.txt").unlink()
     env["ONSITE_PIECES"] = str(ONSITE_PIECES)
     r = run()
     assert r.returncode == 0, r.stderr
     assert (out / "verdicts.txt").read_text().splitlines() == [
-        "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE NOT_WRITTEN verity/wipe/v0",
+        first, "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE NOT_WRITTEN verity/wipe/v0",
         "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here",
         "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept",
         "COMPOSITE CASE verity/registration/v0 accept",
@@ -7180,7 +7181,7 @@ sys.exit(1)
     (out / "verdicts.txt").unlink()
     shutil.rmtree(out / "composite")
     assert run().returncode == 1
-    assert (out / "verdicts.txt").read_text() == "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
+    assert (out / "verdicts.txt").read_text() == f"{first}\nCOMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
     (out / "verdicts.txt").unlink()
     shutil.rmtree(d / "private")
@@ -7188,7 +7189,7 @@ sys.exit(1)
     r = run()
     assert r.returncode == 0, r.stderr
     assert (out / "verdicts.txt").read_text().splitlines() == [
-        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE CASE verity/registration/v0 accept",
+        first, "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE CASE verity/registration/v0 accept",
         "COMPOSITE NOT_WRITTEN verity/inference-only/v0", unstarted,
         "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
@@ -7199,7 +7200,7 @@ sys.exit(1)
     (out / "verdicts.txt").unlink()
     assert run().returncode == 1
     assert (out / "verdicts.txt").read_text().splitlines() == [
-        "COMPOSITE: not run, this host makes no systemd user scope and runs no prlimit: composite.py runs only under a "
+        first, "COMPOSITE: not run, this host makes no systemd user scope and runs no prlimit: composite.py runs only under a "
         "memory limit of its own"]
     _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--serve-dir", str(d)]
@@ -7289,7 +7290,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     subprotocol and not that one, in its params and in its evidence; OUT/verdicts.txt and onsite's composite.json name
     that protocol, and it alone, as missing (NOT_ESTABLISHED), before the Lean's verdict line; remote v1, which
     composes beside onsite under POUW=pearlplus and composes neither protocol, is handed its three cases and misses
-    none; and the exit is 0, each product's Lean having
+    none, its cite not covering SPOT's coins, simulated where no key is pinned; and the exit is 0, each product's Lean having
     answered. A case of the protocol in another directory beside the piece's own (a second window's; the wipe's left
     by an earlier run): the piece's own is composed, the other is not, and nothing is missing. No path reaches
     OUT/verdicts.txt. What onsite's Lean answers on a case that lacks a subprotocol is not shown here, where its Lean
@@ -7340,6 +7341,8 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
         *lines["verity/pous/p2/v4/run"], *lines["verity/wipe/v0"],
         "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here",
         "COMPOSITE remote-v1: VERDICT verity/remote/v1 reject stand-in", *UNSHOWN["remote-v1"],
+        "COMPOSITE remote-v1: NOT_COVERED verity/sampled-proofs/v1 coins: simulated on unnamed: "
+        "Verity.remote_soundness_of_subprotocols does not cover it",
         *([f"COMPOSITE onsite: NOT_ESTABLISHED missing {protocol}"] if killed else []),
         "COMPOSITE onsite: VERDICT verity/onsite/v1 reject stand-in", *UNSHOWN["onsite"]]
     assert str(tmp_path) not in said
