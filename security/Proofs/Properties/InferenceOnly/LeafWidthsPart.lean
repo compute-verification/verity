@@ -377,7 +377,7 @@ theorem laneWidth_sound {S : Ty} {w lo hi run : Nat} {l : Lane} {exact : Bool}
   unfold Widths.laneWidth at h
   by_cases hS : S.leaves ≤ hi
   · rw [if_pos hS] at h; exact absurd h (by simp)
-  rw [if_neg hS] at h
+  rw [ite_eq_right hS] at h
   have hnn : 0 ≤ l.leafAt t o := le_trans (by exact_mod_cast Nat.zero_le lo) hlo
   have hcast : ((l.leafAt t o).toNat : ℤ) = l.leafAt t o := Int.toNat_of_nonneg hnn
   have hj1 : lo ≤ (l.leafAt t o).toNat := by omega
@@ -532,16 +532,16 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
         by_cases hh : ((srcOf B below).homo? l.p l.i == some wd) = true
         · have hw : Widths.homo S = some wd := by rw [← hhomo]; simpa using hh
           exact homo_wAt S wd hw _ hj
-        · rw [if_neg hh] at hv
+        · rw [ite_eq_right hh] at hv
           rcases hbd : l.bounds run with ⟨lo, hi'⟩
           rw [hbd] at hmem hv
           dsimp only at hv
           have hlw : Widths.laneWidth S wd lo.toNat hi'.toNat l.b run l.e l.lv true = some true := by
             simpa using hv
           have hlo : ((lo.toNat : ℕ) : ℤ) ≤ l.leafAt (k / (lanes.size * run)) (k % run) := by
-            rcases le_or_lt 0 lo with h0 | h0
+            by_cases h0 : 0 ≤ lo
             · rw [Int.toNat_of_nonneg h0]; exact hmem.1
-            · rw [Int.toNat_of_nonpos h0.le]; exact_mod_cast hnn
+            · rw [Int.toNat_of_nonpos (by omega)]; exact_mod_cast hnn
           exact laneWidth_sound hlw ht' (Nat.mod_lt k hrun) hlo (le_trans hmem.2 (Int.self_le_toNat hi'))
       · split at h
         · exact absurd (m_pure h).1 (by simp)
