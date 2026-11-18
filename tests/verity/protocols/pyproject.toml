@@ -5,5 +5,7 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: tests/test_profile.py builds a Program with partition levels from the catalog's GEMM.
-inputs = ["verity", "verity/circuits", "verity/circuits/kernels"]
+# Test-only: tests/test_profile.py builds a Program with partition levels from the catalog's GEMM; tests/test_scheme.py
+# resolves Dither's declaration in a registered circuit of its Definitions.
+inputs = ["verity", "verity/circuits", "verity/circuits/kernels", "verity/commitments", "verity/protocols/proofs/spot",
+          "verity/protocols/experimental/dither"]

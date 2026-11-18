@@ -1,4 +1,4 @@
-Part of network attestation's [PROTOCOL.md](../PROTOCOL.md).
+Part of network attestation's [PROTOCOL.md](../../../../verity/protocols/resource_accounting/network/verifier/PROTOCOL.md).
 
 ## The replay at the served shape
 
@@ -35,7 +35,7 @@ execution phases 212's and 1's seals.
 - Over the execution phases: at most 4 requests, 4 running, none waiting, 4 taken in one step (so A = 5), 32 decisions and 54
   async units (52 steps).
 
-**w212** (`tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212.json`) is execution phase 212: requests 308–310 of
+**w212** (`tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212.json`) is execution phase 212: requests 308–310 of
 the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
 - Its statics: (R, W, A) = (2, 1, 2), IW = 9 (the session's 480 ids), Q = K = 3, D = 14, P = 20, at the run's engine
   (`engine`).
@@ -50,11 +50,11 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
   (`tests/benchmarks/network_e2e/encodings/test_served_window.py`).
 - At 8eb1's engine class, its AsyncScheduler included (AS = 1, the trace's: `--slice 212 --served SEAL --R 8 --W 1
   --A 9 --Q 4 --D 32 --P 54 --K 4`), w212 is
-  `tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212_class_async.json`: its 3 arrivals in 4 slots,
+  `tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212_class_async.json`: its 3 arrivals in 4 slots,
   each with its limit, its 14 decisions in 32, and 33 idle steps after its 21 proof blocks. Its proof in zero knowledge is
   [compile-slice.md](compile-slice.md)'s.
 - At the sync class, the same sizes under a sync scheduler (`--AS 0`), w212 is
-  `tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212_class.json`: 34 idle steps after its 20, whose
+  `tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212_class.json`: 34 idle steps after its 20, whose
   served rows are zero. The slice takes it as it is: it accepts the execution phase with the seal's rows (0x3F), and each
   negative fails the flags it fails at w212's own statics (the same tests, over both fixtures).
 - **The slice** charges by `ChargeLink_v1{32}` over the committed decisions, its carry committed once an execution phase
@@ -128,7 +128,7 @@ its statics (`verity_vllm.compiler.compile_slice.chain`), so at an async engine 
 step these fields. **w1** is the smallest of them with more than one request: execution phase 1, requests 4–7 of the session,
 decisions `[1, 1, 1]`, 38 steps; its sync replay diverges from the trace at step 2.
 - At 8eb1's engine class under its async scheduling it is
-  `tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w1_class.json` (`--slice 1 --served SEAL --R 8 --W 1
+  `tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w1_class.json` (`--slice 1 --served SEAL --R 8 --W 1
   --A 9 --Q 4 --D 32 --P 54 --K 4 --AS 1`, the seal's records being `seal-w1.jsonl`): AS = 1, EW = 0 (no prefix
   caching), 38 proof blocks, the last schedule on the drained engine dropped. Its charge is from the session's carry
   after execution phase 0, whose decisions `[1, 1, 1]` charge 24 bits; w1's then charge 21.
@@ -150,7 +150,7 @@ decisions `[1, 1, 1]`, 38 steps; its sync replay diverges from the trace at step
     so the check is as strict as the slot-for-slot one, which AS = 0 keeps. It costs R² products of a slot's row and
     2·R·(R − 1) one-to-one ANDs a step.
 - The slice accepts w1 (0x3F, 21 bits) at its own statics (4, 1, 5), Q 4, D 3, P 38, K 4
-  (`tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w1.json`) and at the class. The negatives fail as
+  (`tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w1.json`) and at the class. The negatives fail as
   at w212: late admission 0x2E (`load` and `rows`; at the class only, past w1's own D), charge 0x37, longer prompt
   0x2F, dropped row 0x2F. So does the one the map opens: proof block 0's first two served rows (requests 4 and 6) with
   their requests swapped, 0x2F. The circuit is its reference on all of them: at w1's own statics 314,936 ANDs, and at
