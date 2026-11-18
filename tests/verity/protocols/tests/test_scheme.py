@@ -211,6 +211,35 @@ def test_ports() -> None:
         _toy(ports=(S.Port("scan state", "input", "IngressScanBucket_v1", "state"),))
 
 
+def test_a_ports_layout_at_a_shape() -> None:
+    def rows(shape):
+        n = shape["slots"]
+        return S.Layout(16 * -(-(8 + 4 * n) // 16), {"head": (0, 8), **{f"{j}.x": (8 + 4 * j, 4) for j in range(n)}},
+                        {"slots": n})
+
+    toy = _toy(ports=(S.Port("state", "input", "ToyReceipt_v1", "state", layout=rows),
+                      S.Port("bare", "input", "ToyReceipt_v1", "state")))
+    got = S.layout(toy, "state", {"slots": 3})
+    assert (got.bits, dict(got.fields), dict(got.counts)) == (32, {"head": (0, 8), "0.x": (8, 4), "1.x": (12, 4),
+                                                                   "2.x": (16, 4)}, {"slots": 3})
+    assert S.Port("bare", "input", "ToyReceipt_v1", "state").layout is None
+    with pytest.raises(ValueError, match="port bare declares no layout"):
+        S.layout(toy, "bare", {})
+    with pytest.raises(KeyError, match="no port 'missing'; its ports: state, bare"):
+        S.layout(toy, "missing", {})
+
+
+@pytest.mark.parametrize("fields,match", [
+    ({"a": (0, 8), "b": (4, 8)}, "field b at bit 4 overlaps field a, which ends at bit 8"),
+    ({"a": (0, 8), "b": (8, 9)}, "field b at \\(8, 9\\) runs past the layout's 16 bits"),
+    ({"a": (-1, 2)}, "field a's offset and width are integers >= 0"),
+])
+def test_a_layout_refuses_an_overlap_and_an_overrun_by_name(fields, match) -> None:
+    with pytest.raises(ValueError, match=match):
+        S.Layout(16, fields)
+    assert dict(S.Layout(16, {"a": (0, 8), "pad": (8, 0), "b": (8, 8)}).fields)["b"] == (8, 8)
+
+
 def test_every_scheme_is_a_line_of_the_one_table() -> None:
     """Each name maps to the module that registers it, and every module that registers one is in the table."""
     from verity.protocols.compose import schemes
