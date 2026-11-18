@@ -5,6 +5,7 @@ is a descriptor (`circuits/PROTOCOL.md` §4), the ranges ``[node, template, firs
 (its ``templates`` and ``cuts``). The work is the root's nodes and arguments, then each part times its port's rows."""
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -72,7 +73,9 @@ def _parts(j, args: list) -> list[tuple]:
         run, lanes = j["grid"]
         lanes = tuple((s == "p", i, b, e, tuple((r, d) for r, d in lv)) for s, i, b, e, lv in lanes)
         return [("g", run, lanes, len(lanes) * run * _periods(lanes[0]), True)]
-    return [("e", tuple((s == "p", i, leaf) for s, i, leaf in j["explicit"]))]
+    if "explicit" in j:
+        return [("e", tuple((s == "p", i, leaf) for s, i, leaf in j["explicit"]))]
+    raise ValueError(f"edge-parts: references {json.dumps(j)}: not affine, strided, grid, explicit, concat or alias")
 
 
 def _periods(lane) -> int:

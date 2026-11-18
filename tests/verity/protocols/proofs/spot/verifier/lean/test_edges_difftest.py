@@ -18,7 +18,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.commitments.periods.edges import _lane_wire, edges
+from verity.commitments.periods.edges import _lane_wire, _parts, edges
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -162,6 +162,11 @@ def test_the_named_cases(pieces, name, j, want):
 def test_the_grid_cases(name, j, want):
     """Each grid case gives the rule's wires or refusal in the twin."""
     assert reference(j) == want
+
+
+def test_a_part_form_it_does_not_know_is_refused_by_name():
+    with pytest.raises(ValueError, match="^edge-parts: "):
+        _parts({"rows": ["n", 1, 0, 4]}, [])
 
 
 def test_two_levels_are_the_wires_radix():
