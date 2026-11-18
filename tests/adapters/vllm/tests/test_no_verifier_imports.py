@@ -36,9 +36,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/pipeline/boundary_rows.py": (
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.second_stage",
         ),
-        "verity_vllm/pipeline/boundary_stop.py": (
-            "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.served",
-        ),
+        "verity_vllm/pipeline/boundary_stop.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/commit_coins.py": (
             "proofs.spot.verifier.challenger.challenger", "proofs.spot.verifier.challenger.challenger.CoinError",
             "proofs.spot.verifier.challenger.challenger.LiveOpening", "proofs.spot.verifier.challenger.challenger.live_reason",

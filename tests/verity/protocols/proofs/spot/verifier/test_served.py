@@ -1,4 +1,4 @@
-"""Served trees as registered ports (`one_stage.served.register_served`): the docket it builds passes R7 and the file
+"""Served trees as registered ports (`prover.served.register_served`): the docket it builds passes R7 and the file
 is `reads_file`'s, an earlier output keeps its port, a reused tree its earlier entry, and every malformed tree is
 refused."""
 from __future__ import annotations
