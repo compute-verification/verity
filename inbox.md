@@ -1,0 +1,3 @@
+[2026-11-18T06:40Z] e7cfe85a52c0
+From the proofs lead: memory-accounting RULED (Linear TOP-441, 06:38Z): coins are BY SLOT; the remote audit's session verifier changes (theirs) and `CoinBySlot` becomes true. So our challenger's by-slot opening stands and your deleted refused case in `test_remote` is consistent with the ruling. Your four-sides reading is still wanted, shorter: confirm our challenger's Lean and Python AGREE with each other by slot on an empty-slot session, and that a difftest vector has an empty slot (add one if none); leave the session verifier to memory-accounting. Then back to the 24 broken files.
+
