@@ -10,8 +10,8 @@ public import Proofs.Core.Game.Tape
 `SamplingDesign.missProb_bind`: a set `T` escapes `D.bind F` with probability `E_{ω ∼ D}[∏_{u ∈ D.draw ω} missProb
 (F u) T]`, since each sampled `u` is drawn on coins of its own. From it:
 
-* one level is its design (`Levels.prCoin_one`: every event of the sample has the probability it has under `D₁`;
-  `Levels.missProb_one`, `Levels.miss_one`);
+* one level's sample is its design (`Levels.design_one`), so it has its miss (`Levels.missProb_one`,
+  `Levels.miss_one`);
 * two levels give `missProb D T = E_{Q₁ ∼ D₁}[∏_{X ∈ Q₁} missProb D₂^X (T_X)]`, `T_X` the blocks of `T` inside `X`
   (`Levels.missProb_two`), and in general the first level's draw and the sample below each of its blocks
   (`Levels.missProb_cons`);
@@ -42,21 +42,6 @@ theorem missProb_bind {U V : Type} [Fintype U] [DecidableEq U] [DecidableEq V] (
         exact Tape.avg_prod _
     _ = _ := congrArg avg (funext fun ω₁ =>
         prCoin_pi_forall (D.draw ω₁) fun u (c : (F u).Ω) => Disjoint ((F u).draw c) T)
-
-theorem bind_const_draw {U : Type} [Fintype U] [DecidableEq U] (D : SamplingDesign U)
-    (ω : (D.bind fun u => const {u}).Ω) : (D.bind fun u => const {u}).draw ω = D.draw ω.1 :=
-  Finset.biUnion_singleton_eq_self
-
-/-- Drawing from `D` and then each sampled unit alone is `D`: every event of the draw has its probability under `D`. -/
-theorem prCoin_bind_const {U : Type} [Fintype U] [DecidableEq U] (D : SamplingDesign U) (P : Finset U → Prop) :
-    prCoin (fun ω => P ((D.bind fun u => const {u}).draw ω)) = prCoin fun ω => P (D.draw ω) := by
-  classical
-  simp only [bind_const_draw]
-  show prCoin (fun ω : D.Ω × ((u : U) → (const ({u} : Finset U)).Ω) => P (D.draw ω.1)) = _
-  unfold prCoin
-  rw [Tape.avg_prod]
-  refine congrArg avg (funext fun ω => ?_)
-  exact avg_const (C := (u : U) → (const ({u} : Finset U)).Ω) (if P (D.draw ω) then (1 : ℝ≥0∞) else 0)
 
 /-- A design whose draws satisfy `p` misses `T` exactly when it misses `T`'s members satisfying `p`. -/
 theorem missProb_filter {U : Type} (D : SamplingDesign U) (p : U → Prop) [DecidablePred p]
@@ -126,46 +111,36 @@ theorem avg_prod_draw {U : Type} [DecidableEq U] (D : SamplingDesign U) (A : Fin
 
 end SamplingDesign
 
-namespace Level
-
-variable {G : Type} [Fintype G] [DecidableEq G]
-
-theorem prCoin_sampleBelow_one (l : Level G) (X : Finset G) (P : Finset (Finset G) → Prop) :
-    prCoin (fun ω => P ((sampleBelow [l] X).draw ω)) = prCoin fun ω => P ((l.design X).draw ω) :=
-  SamplingDesign.prCoin_bind_const (l.design X) P
-
-end Level
-
 namespace Levels
 
 variable {G : Type} [Fintype G] [DecidableEq G]
 
-/-- **One level is its design**: every event of the sample has the probability it has under `D₁`. -/
-theorem prCoin_one (L : Levels G) {l : Level G} (hL : L.levels = [l]) (P : Finset (Finset G) → Prop) :
-    prCoin (fun ω => P (L.design.draw ω)) = prCoin fun ω => P ((l.design Finset.univ).draw ω) := by
+/-- **One level's sample is its design.** -/
+theorem design_one (L : Levels G) {l : Level G} (hL : L.levels = [l]) : L.design = l.design Finset.univ := by
   obtain ⟨levels, hn, hi⟩ := L
   dsimp only at hL
   subst hL
-  exact Level.prCoin_sampleBelow_one l Finset.univ P
+  rfl
 
-/-- **One level's miss is its design's.** -/
 theorem missProb_one (L : Levels G) {l : Level G} (hL : L.levels = [l]) (T : Finset (Finset G)) :
-    L.design.missProb T = (l.design Finset.univ).missProb T :=
-  L.prCoin_one hL fun S => Disjoint S T
+    L.design.missProb T = (l.design Finset.univ).missProb T := by
+  rw [L.design_one hL]
 
 theorem miss_one (L : Levels G) {l : Level G} (hL : L.levels = [l]) (K : ℕ) :
     L.design.miss K = (l.design Finset.univ).miss K := by
-  simp only [SamplingDesign.miss, L.missProb_one hL]
+  rw [L.design_one hL]
 
 /-- The first level's draw, then the sample of the levels below at each of its blocks. -/
-theorem missProb_cons (L : Levels G) {l : Level G} {ls : List (Level G)} (hL : L.levels = l :: ls)
+theorem missProb_cons (L : Levels G) {l : Level G} {ls : List (Level G)} (hL : L.levels = l :: ls) (hls : ls ≠ [])
     (T : Finset (Finset G)) :
     L.design.missProb T =
       avg fun ω => ∏ X ∈ (l.design Finset.univ).draw ω, (Level.sampleBelow ls X).missProb T := by
   obtain ⟨levels, hn, hi⟩ := L
   dsimp only at hL
   subst hL
-  exact SamplingDesign.missProb_bind _ _ T
+  cases ls with
+  | nil => exact absurd rfl hls
+  | cons l' ls' => exact SamplingDesign.missProb_bind _ _ T
 
 /-- **Two levels**: `missProb D T = E_{Q₁ ∼ D₁}[∏_{X ∈ Q₁} missProb D₂^X (T_X)]`, `T_X` the blocks of `T` inside
 `X`. -/
@@ -176,11 +151,10 @@ theorem missProb_two (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels = [l₁
   rw [hL] at hi
   simp only [Level.InsideBelow, Finset.mem_singleton, forall_eq, and_true] at hi
   obtain ⟨h₁, h₂⟩ := hi
-  rw [L.missProb_cons hL]
+  rw [L.missProb_cons hL (List.cons_ne_nil _ _)]
   refine congrArg avg (funext fun ω => Finset.prod_congr rfl fun X hX => ?_)
-  rw [SamplingDesign.missProb_filter (l₂.design X) (· ⊆ X)
-    (fun ω' b hb => (h₂ X (h₁ ω X hX).1 ω' b hb).2) T]
-  exact Level.prCoin_sampleBelow_one l₂ X fun S => Disjoint S T
+  exact (SamplingDesign.missProb_filter (l₂.design X) (· ⊆ X)
+    (fun ω' b hb => (h₂ X (h₁ ω X hX).1 ω' b hb).2) T).symm
 
 end Levels
 

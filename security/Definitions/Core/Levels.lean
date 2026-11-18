@@ -15,8 +15,8 @@ of its block alone, so it is fixed in advance, and each is drawn on coins of its
 The sample (`Levels.design`) is drawn level by level: `Q₀ = {univ}`, and `Q_ℓ` is the union over `X ∈ Q_{ℓ-1}` of a
 draw from `D_ℓ^X` (`SamplingDesign.bind`). It is a sampling design over the blocks of `B_L`, so its miss probability
 is `SamplingDesign.missProb` and its count curve `SamplingDesign.miss`. With two levels the blocks of `B₁` are the
-outer blocks and those of `B₂` the inner blocks. One level is the single design `D₁` (`Levels.missProb_one`), and two
-give `missProb D T = E_{Q₁ ∼ D₁}[∏_{X ∈ Q₁} missProb D₂^X (T_X)]` (`Levels.missProb_two`), in
+outer blocks and those of `B₂` the inner blocks. One level's sample is its design `D₁` itself (`Levels.design_one`), and
+two give `missProb D T = E_{Q₁ ∼ D₁}[∏_{X ∈ Q₁} missProb D₂^X (T_X)]` (`Levels.missProb_two`), in
 `Proofs/Core/Levels.lean`.
 -/
 
@@ -64,6 +64,7 @@ def InsideBelow : Finset (Finset G) → List (Level G) → Prop
 /-- The sample of the levels `ls` drawn level by level inside the block `X`. -/
 def sampleBelow : List (Level G) → Finset G → SamplingDesign (Finset G)
   | [], X => SamplingDesign.const {X}
+  | [l], X => l.design X
   | l :: ls, X => (l.design X).bind fun Y => sampleBelow ls Y
 
 end Level
