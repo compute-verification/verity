@@ -47,7 +47,7 @@ integers are the reference (the tests).
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from functools import cache, lru_cache
+from functools import cache
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
