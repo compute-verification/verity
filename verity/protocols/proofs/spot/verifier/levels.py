@@ -35,9 +35,8 @@ class Refused(ValueError):
 
 
 def parse(value: Any, where: str) -> int:
-    """``value`` as a level count, from JSON or a setting's string; refused unless a whole number in `BUILT`."""
-    if isinstance(value, str) and value.strip().isdecimal():
-        value = int(value)
+    """``value`` as a level count, a JSON number (a string is refused, as the Lean's `levelsForm` refuses it); refused
+    unless a whole number in `BUILT`."""
     if isinstance(value, bool) or not isinstance(value, int):
         raise Refused("levels-not-integer", f"{where} is {value!r}, not a whole number of levels")
     if value < 1:
@@ -80,10 +79,16 @@ def of_params(params: Mapping[str, Any]) -> int:
 
 
 def served(record: Mapping[str, Any]) -> int:
-    """The prover's level count, a run's record's: its `KEY`, else its format's (`BOUNDARY_RECORD`: two), else `ABSENT`."""
+    """The prover's level count, a run's record's: its format's (`BOUNDARY_RECORD`: two), else its `KEY`, else `ABSENT`."""
+    if record.get("format") == BOUNDARY_RECORD:
+        # Two levels by the record's format, not an absent `KEY` read as 2: absent means one level everywhere.
+        if KEY in record and (n := parse(record[KEY], "the run's record's levels")) != 2:
+            raise Refused("levels-format-mismatch", f"the run's record's levels is {n}, and its format "
+                                                    f"{BOUNDARY_RECORD} is two levels'")
+        return 2
     if KEY in record:
         return parse(record[KEY], "the run's record's levels")
-    return 2 if record.get("format") == BOUNDARY_RECORD else ABSENT
+    return ABSENT
 
 
 def check(params: Mapping[str, Any], record: Mapping[str, Any]) -> int:
@@ -97,7 +102,10 @@ def check(params: Mapping[str, Any], record: Mapping[str, Any]) -> int:
 def command(raw: str | None, runs: tuple[int, ...], default: int) -> int:
     """A command's level count, from its `ENV` (``raw``, unset: ``default``); refused where the command can't run it,
     rather than running another."""
-    n = default if raw is None or raw == "" else parse(raw, ENV)
+    if raw is None or raw == "":
+        n = default
+    else:
+        n = parse(int(raw) if raw.strip().isdecimal() else raw, ENV)
     if n not in runs:
         raise Refused("levels-no-path", f"{ENV}={n}: this command runs {' or '.join(map(str, runs))} level(s), and no "
                                         f"other path here runs {n}")

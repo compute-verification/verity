@@ -19,17 +19,17 @@ def refused(reason: str, fn, *args):
     return str(e.value)
 
 
-@pytest.mark.parametrize("value,want", [(1, 1), (2, 2), ("1", 1), (" 2 ", 2)])
+@pytest.mark.parametrize("value,want", [(1, 1), (2, 2)])
 def test_one_and_two_levels_parse(value, want):
     assert LV.parse(value, "x") == want
 
 
 def test_three_levels_and_more_are_refused_by_name():
-    for n in (3, "3", 7):
+    for n in (3, 7):
         assert "only 1 or 2 levels are built" in refused("levels-not-built", LV.parse, n, "x")
 
 
-@pytest.mark.parametrize("value", [True, 1.0, "two", "", None, [2], {"n": 2}])
+@pytest.mark.parametrize("value", [True, 1.0, "1", " 2 ", "two", "", None, [2], {"n": 2}])
 def test_a_non_integer_is_refused(value):
     refused("levels-not-integer", LV.parse, value, "x")
 
@@ -48,6 +48,23 @@ def test_the_parameters_shape_decides_and_neither_field_reads_as_one_level():
     refused("levels-params-mismatch", LV.of_params, {**TWO, "form": "one-stage"})
     refused("levels-shape", LV.of_params, {**ONE, "boundary": {}})
     refused("levels-not-built", LV.of_params, {**ONE, "levels": 3})
+
+
+def test_the_parameters_levels_as_a_string_is_refused():
+    refused("levels-not-integer", LV.of_params, {**ONE, "levels": "1"})
+    refused("levels-not-integer", LV.of_params, {**TWO, "levels": "2"})
+
+
+def test_a_records_levels_as_a_string_is_refused():
+    refused("levels-not-integer", LV.served, {"levels": "1"})
+    refused("levels-not-integer", LV.served, {"format": LV.BOUNDARY_RECORD, "levels": "2"})
+
+
+def test_a_boundary_record_is_two_levels_by_its_format_and_refuses_another_count():
+    assert LV.served({"format": LV.BOUNDARY_RECORD, "levels": 2}) == 2
+    why = refused("levels-format-mismatch", LV.served, {"format": LV.BOUNDARY_RECORD, "levels": 1})
+    assert "levels is 1" in why and LV.BOUNDARY_RECORD in why
+    refused("levels-not-built", LV.served, {"format": LV.BOUNDARY_RECORD, "levels": 3})
 
 
 def test_a_form_that_disagrees_with_the_levels_is_refused_naming_both():
@@ -71,6 +88,7 @@ def test_the_record_is_the_provers_and_a_difference_is_refused():
 def test_a_command_refuses_a_count_it_cannot_run_rather_than_running_another():
     assert LV.command(None, (1,), 1) == 1
     assert LV.command("", (2,), 2) == 2
+    assert LV.command(" 2 ", (2,), 1) == 2
     assert "SPOT_LEVELS=2: this command runs 1 level(s)" in refused("levels-no-path", LV.command, "2", (1,), 1)
     refused("levels-no-path", LV.command, "1", (2,), 2)
     refused("levels-not-built", LV.command, "3", (1, 2), 1)
