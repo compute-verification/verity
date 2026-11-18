@@ -20,6 +20,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity import hooks as H
+from verity.protocols.resource_accounting.compute.pouw.prover import workload
 from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Scheme, register
 
 OPTION = "pouw:pearl-c-h100-v1-h3"
@@ -117,6 +118,7 @@ def attach(exchange: Any, ctx: Any) -> None:
 
 PEARL_PLUS = register(Scheme(
     name="pearl-plus",
+    messages=workload.MESSAGES,
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
     blocks=(Block("PearlPlusTile_v1", tile_macs), Block("PearlCTileRead_v1", tile_macs)),
