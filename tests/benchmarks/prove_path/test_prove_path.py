@@ -55,6 +55,7 @@ import pytest
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, docket as R
 from verity.circuits.codec import canonical_json
+from verity.commitments import salt_file as SF
 from verity.commitments.periods import interface as IF, rows as CS
 from verity_difftest import settings as opt
 from verity_vllm.engine.served_seed import DEFAULT_SEED
@@ -1492,18 +1493,17 @@ def _tiny_checkpoint(d: Path, model: str, revision: str, int8: bool = False) -> 
     return man
 
 
-def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(tmp_path, capsys, monkeypatch):
+def test_a_served_runs_weights_registration_is_the_committers_under_fresh_salts(tmp_path, capsys, monkeypatch):
     """``weights-registration``, the committer's: the served run's weights (`window_weights.weights_registration` under the
-    φ its window circuit lowers under, here at a grain TINY lowers at) committed under salts sampled from ``--key``, a 32-byte
-    file sampled there (0600) the first time and read thereafter, once the committer has checked the checkpoint's shards
+    φ its window circuit lowers under, here at a grain TINY lowers at) committed under fresh OS salts kept in the salt file
+    beside ``--out`` (0700, no salt in the registration), once the committer has checked the checkpoint's shards
     against its manifest. Written to ``--out``: a root for each weight parameter but the rotary table's, what `verity-vllm
     advice --weights-of-record` records and ``window-circuit --pins`` takes (the embedding's table its own, its ``row-seg``
     rows), and what the verifier holds to its own weights
     record's shapes (`registration_pins`) without computing a root. With the engine's served rotary table in the run's
-    ``private/cos_sin_cache.npy`` (serve-openai's) it roots that too, the other roots unchanged, and refuses by name a
-    table outside the analytic table's bound. Another key gives other roots for every weight; a key
-    file of another length, a checkpoint the manifest pins as another model than the run served, or a shard other than the
-    one the manifest pins, is refused by name, nothing registered."""
+    ``private/cos_sin_cache.npy`` (serve-openai's) it roots that too, and refuses by name a table outside the analytic
+    table's bound. Registering again gives other roots for every weight; a checkpoint the manifest pins as another model
+    than the run served, or a shard other than the one the manifest pins, is refused by name, nothing registered."""
     import functools
 
     import numpy as np
@@ -1522,17 +1522,18 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     (run / "serve.json").write_text(json.dumps(serve))
     hf.write_text(json.dumps(TINY))
     man = _tiny_checkpoint(ck, serve["model"], serve["revision"])
-    out, key = tmp_path / "weights_registration.json", tmp_path / "private" / "weights.key"
+    out = tmp_path / "weights_registration.json"
+    salts = SF.beside(out)
 
-    def register(key_file: Path) -> int:
+    def register() -> int:
         return PP.main(["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints",
-                        str(man), "--hf-config", str(hf), "--key", str(key_file), "--out", str(out)])
+                        str(man), "--hf-config", str(hf), "--out", str(out)])
 
     capsys.readouterr()
-    assert register(key) == 0
+    assert register() == 0
     reg, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
-    assert len(key.read_bytes()) == 32 and key.stat().st_mode & 0o777 == 0o600
-    assert key.read_bytes().hex() not in out.read_text()
+    assert salts.stat().st_mode & 0o777 == 0o700 and set(SF.params(salts)) == set(reg["values"])
+    assert all(SF.read(salts, q, [0]).hex() not in out.read_text() for q in reg["values"])
     pins = ADV.registered_weights(reg, serve)
     assert said["roots"] == len(pins) == 16 and PP.pins_of((), [str(out)]) == pins
     assert [p for p in pins if p.endswith("/table")] == ["weights/model.embed_tokens.weight@64/table"]
@@ -1540,31 +1541,27 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
     record = WW.weights_record(registered, str(ck), str(man), grain=grain)
     assert WW.registration_pins(reg, record) == pins
-    assert register(key) == 0 and json.loads(out.read_text()) == reg
+    assert register() == 0
+    again = ADV.registered_weights(json.loads(out.read_text()), serve)
+    assert sorted(again) == sorted(pins) and all(again[q] != pins[q] for q in pins)
+    reg = json.loads(out.read_text())
     C = next(f for f in record["fields"] if f.get("pinned") == "analytic")["analytic"]["C"]
     table = run / "private" / "cos_sin_cache.npy"
     table.parent.mkdir()
     np.save(table, M.cos_sin_table(C))
     capsys.readouterr()
-    assert register(key) == 0
+    assert register() == 0
     rooted, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
     assert said["roots"] == 17 and said["unrooted"] == [] == list(rooted["unrooted"])
-    assert {p: e for p, e in rooted["values"].items() if p not in reg["unrooted"]} == reg["values"]
+    assert set(rooted["values"]) == set(reg["values"]) | set(reg["unrooted"])
     assert WW.registration_pins(rooted, record) == ADV.registered_weights(rooted, serve)
     np.save(table, M.cos_sin_table({**C, "ROPE_THETA": 2 * C["ROPE_THETA"]}))
-    assert register(key) == PP.REFUSED
+    assert register() == PP.REFUSED
     assert "served words outside the analytic table's bound" in capsys.readouterr().err
     table.unlink()
-    assert register(tmp_path / "other.key") == 0
-    other = ADV.registered_weights(json.loads(out.read_text()), serve)
-    assert sorted(other) == sorted(pins) and all(other[p] != pins[p] for p in pins)
-    (tmp_path / "short.key").write_bytes(bytes(16))
-    capsys.readouterr()
-    assert register(tmp_path / "short.key") == PP.REFUSED
-    assert "a committer's salt key is 32 bytes, not 16" in capsys.readouterr().err
     out.unlink()
     (run / "serve.json").write_text(json.dumps({**serve, "model": "org/other"}))
-    assert register(key) == PP.REFUSED
+    assert register() == PP.REFUSED
     assert f"manifest entry is {serve['model']}@{serve['revision']}, not the registered model org/other@" in capsys.readouterr().err
     assert not out.exists()
     (run / "serve.json").write_text(json.dumps(serve))
@@ -1572,7 +1569,7 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     body = bytearray(shard.read_bytes())
     body[-1] ^= 1
     shard.write_bytes(bytes(body))
-    assert register(key) == PP.REFUSED
+    assert register() == PP.REFUSED
     assert "the checkpoint is not of record" in capsys.readouterr().err and not out.exists()
 
 
@@ -1601,9 +1598,9 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     (run / "serve.json").write_text(json.dumps(serve))
     hf.write_text(json.dumps(TINY))
     man = _tiny_checkpoint(ck, serve["model"], serve["revision"])
-    out, key, first = tmp_path / "weights_registration.json", tmp_path / "private" / "weights.key", tmp_path / "first.json"
+    out, first = tmp_path / "weights_registration.json", tmp_path / "first.json"
     argv = ["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints", str(man),
-            "--hf-config", str(hf), "--key", str(key), "--out", str(out)]
+            "--hf-config", str(hf), "--out", str(out)]
     capsys.readouterr()
     assert PP.main(argv) == 0 and "deployment" not in json.loads(capsys.readouterr().out) and not first.exists()
     assert PP.main([*argv, "--deployment-record", str(first)]) == 0
@@ -1652,7 +1649,7 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
     out = tmp_path / "weights_registration.json"
     capsys.readouterr()
     assert PP.main(["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints", str(man),
-                    "--hf-config", str(hf), "--key", str(tmp_path / "private" / "weights.key"), "--out", str(out)]) == 0
+                    "--hf-config", str(hf), "--out", str(out)]) == 0
     reg, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
     pins = ADV.registered_weights(reg, serve)
     assert said["roots"] == len(pins) == 24 and said["unrooted"] == ["weights/model.layers.0.self_attn.rotary_emb.cos_sin_cache@16"]
@@ -2020,17 +2017,6 @@ def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure
     prover = PP.compiler_of_args(argparse.Namespace(**vars(s.a), transfer_gate=[]))
     record, _rows = _circuit(prover, s.data, LAYER0)
     assert IF.circuit_of(record) == IF.circuit_of(doc)
-
-
-def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):
-    """`committer_key`: 32 bytes made mode 0600 where the file doesn't exist, the same bytes read back every window after;
-    a file of another size is refused."""
-    p = tmp_path / "private" / "committer.key"
-    k = PP.committer_key(p)
-    assert len(k) == 32 and (p.stat().st_mode & 0o777) == 0o600 and PP.committer_key(p) == k
-    p.write_bytes(bytes(31))
-    with pytest.raises(ValueError, match="32 bytes, not 31"):
-        PP.committer_key(p)
 
 
 def test_window_commit_without_the_attesters_reader_or_state_file_is_refused_by_name():
