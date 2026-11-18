@@ -104,7 +104,8 @@ def width(w: NodeWindow, refs: Refs, N: int) -> int:
 
 
 def stages(V: int) -> list[tuple[G.Unit, Any]]:
-    """`greedy_stages.plan(V)`'s units, each with its template as `serving_templates` serves the `TokenSelect_v1{V}` row."""
+    """`greedy_stages.plan(V)`'s units, each with its template as `serving_templates` serves the `TokenSelect_v1{V}` row,
+    but the combine, which is `GreedyCombineToken_v1` at the served combine's statics."""
     row = descriptor_id(bind(b1.TokenSelect, V=V))
     served = {t: ST.template(t).fn for t, _n in ST.unit_templates(row)}
     out = []
@@ -113,6 +114,8 @@ def stages(V: int) -> list[tuple[G.Unit, Any]]:
         if t not in served:
             raise Unexpressible(f"{row}: stage {t} is not among the row's unit templates (serving_templates.unit_templates)")
         out.append((u, served[t]))
+    u, fn = out[-1]
+    out[-1] = (u, bind(G.GreedyCombineToken, **fn.bindings))
     return out
 
 
