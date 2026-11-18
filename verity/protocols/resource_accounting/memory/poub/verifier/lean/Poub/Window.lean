@@ -13,17 +13,19 @@ prover's openings of them, in the order sampled. Each opening, in `_check`'s ord
 
 1. `malformed`: not the sampled (pass, position), a block not 4096 bytes, a tile (none is bound), a salt not 192 bytes, a
    path sibling not 64 bytes, or a payload digest `d_j` present for a registered block or absent for an appended one;
+   an origin position present for a block not of a re-key append, absent for one, or not its origin's leaf (`originLeaf`);
    or receipts not the size of the position's leaf;
 2. `receipt-path`: the leaf, under its salt and path, not that leaf of the pass's receipt tree (bound to the pass's seed
    and plan) under the pass's root;
 3. `codec`: the block not canonical, or its decoding under the seed's key (a registered block) or under the bound key
    of `d_j` and its append's coin `c_a` (an appended block) not a payload of that digest;
 4. `payload-path`: the decoded payload, under its salt and path, not leaf j of the payload tree (a registered block) or
-   of its append's tree, under that root;
+   of its append's tree, under that root; for a block of a re-key append, `origin-path` instead: the decoded payload,
+   under its salt and path, not the origin's leaf under the origin's root (`originLeaf`);
 5. `receipt`: the receipt recomputed from the block under the registration's kind and the pass's seed not the opened one.
 
 A session with refresh also rejects a re-key off the rota with `origin` and a plan with `probation`
-(`Session.receive`), and an opening with `origin-path`.
+(`Session.receive`).
 
 A window with another number of openings than samples is `malformed`. `tile` is never reached: a registration that binds
 PoUW's tiles is refused (`Registration.make?`), a form no proof here covers.
@@ -180,6 +182,9 @@ structure Opening where
   payloadPath : Array ByteArray
   tile : ByteArray
   digest : ByteArray
+  /-- For a block of a re-key append, the store index of its payload's leaf under the origin's root, whose salt and
+  path `payloadSalt` and `payloadPath` are; `none` for every other block. -/
+  originPosition : Option Nat := none
 deriving Inhabited
 
 /-- What rejected a window: its failure and the sample it failed at, `none` for the window as a whole. -/
@@ -219,6 +224,17 @@ def appendOf (appends : Array Append) (j : Nat) : Option Append :=
   let k := bisectRight (appends.map (·.first)) j
   if k = 0 then none else appends[k - 1]?
 
+/-- Where the payload of store block `j` of append `a` was first committed, if `a` is a re-key: its leaf's store index,
+and the root and domain of the tree holding it (the registration's payload tree, or append k's). -/
+def originLeaf (reg : Registration) (digest : ByteArray) (appends : Array Append) (a : Append) (j : Nat) :
+    Option (Nat × ByteArray × Flock.FV3.Sha512.Domain) :=
+  match a.origin with
+  | .fresh => none
+  | .registered x => some (x + (j - a.first), reg.payloadRoot, reg.payloadDomain)
+  | .rekey k o =>
+    let b := appends[k]!
+    some (b.first + o + (j - a.first), b.root, appendDomain digest b.first b.count)
+
 /-- `Session._check`: sample (i, p)'s opening, `none` if it checks. -/
 def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
     (receipter : Receipter) (i p : Nat) (o : Opening) : Option Failure := Id.run do
@@ -230,6 +246,8 @@ def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Appe
   let pr := w.passes[i]!
   let j := pr.plan.block p
   if o.digest.size ≠ (if j < N then 0 else DIGEST_BYTES) then return some .malformed
+  let origin := if j < N then none else (appendOf appends j).bind (originLeaf reg digest appends · j)
+  if o.originPosition != origin.map (·.1) then return some .malformed
   let s := w.seedOf i
   let some y := leafReceipt o.leaf p pr.plan.length | return some .malformed
   if !verifyLeaf s pr.plan pr.root p o.leaf o.leafSalt o.receiptPath then return some .receiptPath
@@ -239,7 +257,13 @@ def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Appe
       | some a => (Codec.decode o.block j reg.key (some (o.digest, some a.coin)), appendDomain digest a.first a.count, a.root)
       | none => (.error "no append holds the block", reg.payloadDomain, reg.payloadRoot)
   let .ok (some payload) := decoded | return some .codec
-  if !dom.verifyOpening root dom.count j (hidden payload o.payloadSalt) SCHEMA o.payloadPath then return some .payloadPath
+  match origin with
+  | some (q, oroot, odom) =>
+    if !odom.verifyOpening oroot odom.count q (hidden payload o.payloadSalt) SCHEMA o.payloadPath then
+      return some .originPath
+  | none =>
+    if !dom.verifyOpening root dom.count j (hidden payload o.payloadSalt) SCHEMA o.payloadPath then
+      return some .payloadPath
   if receipter.receipt j o.block != y then return some .receipt
   return none
 

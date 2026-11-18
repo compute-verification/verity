@@ -179,10 +179,11 @@ def State.originOk (s : State) (root : ByteArray) (first count : Nat) : Origin �
 /-- The number of fresh appends before append `k`: the fresh ordinal of a fresh append `k`. -/
 def State.freshOrdinal (s : State) (k : Nat) : Nat := ((s.appends.toList.take k).filter (·.origin == .fresh)).length
 
-/-- Whether append `a`, joining window `r`, re-keys what the public rota re-keys at `r`. A registered block `j` is in
-class `j · L / N`, class `c` being blocks `⌈c·N/L⌉ … ⌈(c+1)·N/L⌉ − 1`, and a fresh append in class its fresh ordinal mod
-`L`; a chunk of base window `b` (0 registered, `joined` otherwise) and class `c` is re-keyed at the windows
-`b + 1 + (c − b − 1) mod L + n·L`. A fresh append is always in it. -/
+/-- Whether append `a`, joining window `r`, is a piece the public rota re-keys at `r`. A registered block `j` is in
+class `j · L / N`, class `c` being blocks `lo … hi − 1` with `lo = ⌈c·N/L⌉`, `hi = ⌈(c+1)·N/L⌉`, and a fresh append in
+class its fresh ordinal mod `L`; a chunk of base window `b` (0 registered, `joined` otherwise) and class `c` is re-keyed
+at the windows `b + 1 + (c − b − 1) mod L + n·L`, in pieces of `REKEY_MAX` blocks from the run's start (`lo`, or offset
+0 of the fresh append), the last piece the run's rest. A fresh append is always in it. -/
 def State.inRota (s : State) (a r : Nat) : Bool :=
   let L := s.params.lifetime
   let N := s.reg.blocks
@@ -192,12 +193,32 @@ def State.inRota (s : State) (a r : Nat) : Bool :=
     | .fresh => true
     | .registered j =>
       let c := r % L
-      1 ≤ r && (c * N + L - 1) / L ≤ j && j + x.count ≤ ((c + 1) * N + L - 1) / L
-    | .rekey k _ =>
+      let lo := (c * N + L - 1) / L
+      let hi := ((c + 1) * N + L - 1) / L
+      1 ≤ r && lo ≤ j && j < hi && (j - lo) % REKEY_MAX == 0 && x.count == min REKEY_MAX (hi - j)
+    | .rekey k o =>
       let b := s.joined.getD k r
       let c : Int := (s.freshOrdinal k % L : Nat)
       let first := b + 1 + (Int.emod (c - b - 1) L).toNat
-      b < r && first ≤ r && (r - first) % L == 0
+      let n := (s.appends[k]?.map (·.count)).getD 0
+      b < r && first ≤ r && (r - first) % L == 0 && o % REKEY_MAX == 0 && o < n && x.count == min REKEY_MAX (n - o)
+
+/-- The rota's order of the re-keys joining one window: registered pieces by first block, then fresh appends' pieces
+by append and offset. -/
+def Origin.dueBefore : Origin → Origin → Bool
+  | .registered a, .registered a' => a < a'
+  | .registered _, .rekey .. => true
+  | .rekey k o, .rekey k' o' => k < k' || (k == k' && o < o')
+  | _, _ => false
+
+/-- What `receive` holds of the re-keys joining window `t` (those not joined yet, and those already joined at `t`):
+each is a piece the rota re-keys at `t` (`inRota`), and they came in the rota's order (`Origin.dueBefore`), so a due
+piece may be missing but none is sent twice or out of turn. -/
+def State.rotaOk (s : State) (t : Nat) : Bool :=
+  let joining := (List.range s.appends.size).filter fun a =>
+    s.joined.getD a t == t && (s.appends[a]?.any (·.origin != .fresh))
+  joining.all (s.inRota · t) &&
+    (joining.zip joining.tail).all fun (a, b) => Origin.dueBefore s.appends[a]!.origin s.appends[b]!.origin
 
 def State.record (s : State) (t : Nat) : WindowRecord :=
   let w := s.windows[t]!
@@ -293,8 +314,7 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
   if !(s.step < st && st < STEP_LIMIT) then return s.fail t .step
   let N := s.reg.blocks
   let extent := s.extent
-  if s.params.refresh && (List.range' s.joined.size (s.appends.size - s.joined.size)).any (!s.inRota · t) then
-    return s.fail t .origin
+  if s.params.refresh && !s.rotaOk t then return s.fail t .origin
   let plan? := match change, runs with
     | some _, some _ => none
     | some (added, removed), none => s.plan.changed added removed extent
