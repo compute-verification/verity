@@ -12,7 +12,7 @@ family after the interior registration's (`oneRoot_samples`, at the cut's two sa
 stage's in the case's words; `OneRootIn`).
 
 A session's read shows a fresh coin of a family only after a root its log's lines show of that family
-(`readLog_fresh`), and those are the roots `releasedRootsOf` lists (`Sampled.releasedRootsOf_ok`). The challenger's
+(`readLog_fresh`), and those are the roots `releasedLogOf` records (`Sampled.releasedLogOf_ok`). The challenger's
 stream for a sample refuses a session that shows a root of the sample's own family other than its digest
 (`Coins.stream_ok`), so each session's read shows its own stage's family after its own digest alone (`first_oneRoot`,
 `second_oneRoot`).
@@ -32,8 +32,6 @@ evidence carries is none the history signed, so it is the forger's, and the forg
 @[expose] public section
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
-
-open private pairs from Spot.ChallengerSession
 
 namespace Verity.SampledTwo
 
@@ -95,7 +93,7 @@ theorem readTail_fresh (label : String) (after : ByteArray) (records : List Json
     ∀ (ls : List String) (ts : List (String × Json)) (pending : Option String) (ξ : ByteArray)
       {out : List Release}, Verity.Sampled.readTail label after records ls ts pending ξ = some out →
       ∀ rl ∈ out, ∀ L, rl.frame = .fresh L →
-        rl.answers ∈ Verity.Sampled.sel L (pairs (pending.toList ++ ls.filter fun l => !treeLine l))
+        rl.answers ∈ Verity.Sampled.sel L (Verity.Sampled.pairs (pending.toList ++ ls.filter fun l => !treeLine l))
   | [], _, none, _, _, h, rl, hrl, _, _ => by
     simp only [Verity.Sampled.readTail, Option.some.injEq] at h
     subst h
@@ -125,8 +123,8 @@ theorem readTail_fresh (label : String) (after : ByteArray) (records : List Json
         rw [hp]
         exact readTail_fresh label after records ls ts (some l) ξ h rl hrl L hL
       | some a =>
-        have hp : pairs ((some a).toList ++ (l :: ls).filter fun l => !treeLine l) =
-            (a, l) :: pairs ((none : Option String).toList ++ ls.filter fun l => !treeLine l) := by
+        have hp : Verity.Sampled.pairs ((some a).toList ++ (l :: ls).filter fun l => !treeLine l) =
+            (a, l) :: Verity.Sampled.pairs ((none : Option String).toList ++ ls.filter fun l => !treeLine l) := by
           rw [List.filter_cons_of_pos (by simp [ht])]
           rfl
         rw [hp]
@@ -158,7 +156,7 @@ theorem readLog_fresh {label : String} {after : ByteArray} {records : List Json}
     {lines : List String} {out : List Release}
     (h : Verity.Sampled.readLog label after records ξ lines = some out) :
     ∀ rl ∈ out, ∀ L, rl.frame = .fresh L →
-      rl.answers ∈ Verity.Sampled.sel L (pairs (lines.tail.filter fun l => !treeLine l)) := by
+      rl.answers ∈ Verity.Sampled.sel L (Verity.Sampled.pairs (lines.tail.filter fun l => !treeLine l)) := by
   intro rl hrl L hL
   cases lines with
   | nil =>
@@ -185,7 +183,7 @@ theorem readLog_fresh {label : String} {after : ByteArray} {records : List Json}
 theorem read_oneRoot {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {out : List Release}
     (h : Verity.Sampled.readLog label after records ξ lines = some out) {L : String} {a : ByteArray}
-    (hall : ∀ r ∈ Verity.Sampled.sel L (pairs (lines.tail.filter fun l => !treeLine l)), r = a) :
+    (hall : ∀ r ∈ Verity.Sampled.sel L (Verity.Sampled.pairs (lines.tail.filter fun l => !treeLine l)), r = a) :
     OneRootIn L a out :=
   fun rl hrl hfr => hall _ (readLog_fresh h rl hrl L hfr)
 
@@ -202,13 +200,13 @@ theorem sampleCoins_roots {key : ChallengerKey} {w label : String} {after : Byte
       Spot.getD (Spot.getD coins "session") "log" = .arr ls ∧ ls.toList = lines.map Json.str ∧
       (∀ r ∈ Verity.Sampled.look roots label, r = after) ∧
       ∀ L, Verity.Sampled.look roots L =
-        Verity.Sampled.sel L (pairs (lines.tail.filter fun l => !treeLine l)) := by
-  obtain ⟨cm, roots, hts, hst⟩ := Verity.Sampled.drawCoins_ok h
+        Verity.Sampled.sel L (Verity.Sampled.pairs (lines.tail.filter fun l => !treeLine l)) := by
+  obtain ⟨cm, roots, hts, hcm, -, hst⟩ := Verity.Sampled.drawCoins_ok h
   obtain ⟨_, hsn⟩ := Verity.Sampled.trustedChallengePhaseOf_ok hts
   obtain ⟨_, hso⟩ := Verity.Sampled.challengePhaseNamed_ok hsn
   obtain ⟨ls, lines, hlog, hls, hrr⟩ := Verity.Sampled.challengePhaseOf_ok hso
   obtain ⟨_, _, _, _, -, -, -, -, -, -, hall⟩ := Properties.Challenger.Coins.stream_ok hst
-  exact ⟨cm, roots, ls, lines, hts, hlog, hls, hall, Verity.Sampled.releasedRootsOf_ok hrr⟩
+  exact ⟨cm, roots, ls, lines, hts, hlog, hls, hall, (Verity.Sampled.releasedLogOf_ok hrr hcm).2.1⟩
 
 /-- **The first session's read shows a family after one root where its roots do**, and its roots show the first
 sample's family after the sample's digest alone. -/

@@ -23,7 +23,7 @@ and the registration's digest (`Spot.OneStageZk.orderHeld`):
 v2's check needs that refusal: nothing else it checks gives the order (`reads_interleave`). Besides the chain
 and the line count its signed close covers, which are the device's for whatever order it released in, v2 reads the
 release log's coin trees' lines apart from its other lines (`coinTreesOf`, `coinTreesOf_filter`) and those others
-apart from the coin trees' (`releasedRootsOf`, `releasedRootsOf_congr`), so it can't tell where a round's opening sits
+apart from the coin trees' (`releasedLogOf`, `releasedLogOf_congr`), so it can't tell where a round's opening sits
 among the sample's releases. And the device releases in the order the prover sends (`Verity.releases`), holding only
 each stream's rounds to their order.
 -/
@@ -210,23 +210,31 @@ theorem coinTreesOf_filter (log : List String) : coinTreesOf log = coinTreesOf (
   intro x b hx
   simp [hx]
 
-/-- **v2's roots read the release log's head and its lines that aren't a coin tree's** (`releasedRootsOf`). -/
-theorem releasedRootsOf_congr (c : LiveCommitment) {l l' : List String} (hh : l.head? = l'.head?)
-    (ht : l.tail.filter (fun x => !treeLine x) = l'.tail.filter (fun x => !treeLine x)) :
-    releasedRootsOf c l = releasedRootsOf c l' := by
-  unfold releasedRootsOf
-  try dsimp only
-  rw [hh, ht]
+/-- **v2's roots read the release log's lines that aren't a coin tree's**: two release logs with the same such lines
+after their heads, each of which `releasedLogOf` reads to entries that commit no root, show each family the same
+roots and the same releases after each root (`releasedLogOf_ok`). Their entries' line positions (`pos`) differ where
+the coin trees' lines sit differently. -/
+theorem releasedLogOf_congr {c c' : LiveCommitment} {l l' : List String} {out out' : Log}
+    (ht : l.tail.filter (fun x => !treeLine x) = l'.tail.filter (fun x => !treeLine x))
+    (h : releasedLogOf c l = .ok out) (hc : out.any (·.kind == .committed) = false)
+    (h' : releasedLogOf c' l' = .ok out') (hc' : out'.any (·.kind == .committed) = false) :
+    (∀ ℓ, look out ℓ = look out' ℓ) ∧ ∀ ℓ x, releasedAfter out ℓ x = releasedAfter out' ℓ x := by
+  obtain ⟨-, hL, -, -, hE⟩ := releasedLogOf_ok h hc
+  obtain ⟨-, hL', -, -, hE'⟩ := releasedLogOf_ok h' hc'
+  exact ⟨fun ℓ => by rw [hL, hL', ht], fun ℓ x => by rw [hE, hE', ht]⟩
 
 /-- **v2's reads of the release log don't see where its coin trees' lines sit among the others**: two logs with one
 head, the same coin trees' lines in the same order and the same other lines in the same order show the same trees
-(`coinTreesOf`) and the same roots (`releasedRootsOf`), wherever a round's opening falls among the sample's releases.
--/
-theorem reads_interleave (c : LiveCommitment) {h : String} {t t' : List String}
+(`coinTreesOf`) and, where `releasedLogOf` reads both to entries that commit no root, each family the same roots and
+releases (`releasedLogOf_congr`), wherever a round's opening falls among the sample's releases. -/
+theorem reads_interleave (c : LiveCommitment) {h : String} {t t' : List String} {out out' : Log}
     (htree : t.filter treeLine = t'.filter treeLine)
-    (hrest : t.filter (fun x => !treeLine x) = t'.filter (fun x => !treeLine x)) :
-    coinTreesOf (h :: t) = coinTreesOf (h :: t') ∧ releasedRootsOf c (h :: t) = releasedRootsOf c (h :: t') := by
-  refine ⟨?_, releasedRootsOf_congr c rfl hrest⟩
+    (hrest : t.filter (fun x => !treeLine x) = t'.filter (fun x => !treeLine x))
+    (h1 : releasedLogOf c (h :: t) = .ok out) (hc : out.any (·.kind == .committed) = false)
+    (h2 : releasedLogOf c (h :: t') = .ok out') (hc' : out'.any (·.kind == .committed) = false) :
+    coinTreesOf (h :: t) = coinTreesOf (h :: t') ∧
+      (∀ ℓ, look out ℓ = look out' ℓ) ∧ ∀ ℓ x, releasedAfter out ℓ x = releasedAfter out' ℓ x := by
+  refine ⟨?_, releasedLogOf_congr hrest h1 hc h2 hc'⟩
   rw [coinTreesOf_filter (h :: t), coinTreesOf_filter (h :: t'), List.filter_cons, List.filter_cons, htree]
 
 end Verity.Sampled
