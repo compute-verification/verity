@@ -61,7 +61,7 @@ if [ -f "$LIB_TAR" ]; then
 elif [ -f "$BUILD/MANIFEST.sha256" ]; then
   cp -r "$BUILD/." "$S/lib/"; LIB_FROM=$BUILD
 else
-  bash verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh "$S/lib" > "$O/build.log" 2>&1; LIB_FROM="build.sh at this commit"
+  CUDA_HOME=$CUDA bash verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh "$S/lib" > "$O/build.log" 2>&1; LIB_FROM="build.sh at this commit"
 fi
 (cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256) \
   && [ "$(tail -n +2 "$S/lib/source.txt" | sha256sum | cut -c1-64)" = "$LIB_SOURCES_SHA256" ] \
