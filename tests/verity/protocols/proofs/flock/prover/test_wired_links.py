@@ -120,8 +120,9 @@ def _stage_mix(d: Path, field: int):
             ids.append(("x", u, i))
     honest = (ins, want, rows)
     template = descriptor_id(fn)
-    tree = RV.Registered.commit(program_digest(program), f"{template}/out",
-                               [[p[u] for p in want] for u in CS.tree_leaves(tp, template)])
+    # an output row's words: each output ⌈bits / 16⌉ of them, low first
+    row = lambda u: [(p[u] >> 16 * k) & 0xFFFF for p, w in zip(want, uc.out_widths) for k in range(CS._words(w))]  # noqa: E731
+    tree = RV.Registered.commit(program_digest(program), f"{template}/out", [row(u) for u in CS.tree_leaves(tp, template)])
     wiring = CS.Wiring(program, query, list(range(tp.population)))
     st = {"writers": CS.stage(units, SPEC, shape, cl, _cut(honest, 0, N), d / "writers", packed=True,
                               wiring=replace(wiring, indices=list(range(N)), tree=tree)),
