@@ -213,8 +213,9 @@ class Template:
 
 
 def templates_of(program, rec: dict, digest: str) -> list[Template]:
-    """The record's templates, held to the Program: the record names the Program, and its templates are the root's
-    nodes that are no input, each a call or a batch of a template of its own, in order. A root node of a composite
+    """The record's templates, held to the Program: the record names the Program, and its templates are the
+    templates of the root's nodes that are no input, each a call or a batch of a template, each template once in the
+    order of its first node, its units its nodes' members summed (`RecordText.unitsOf`). A root node of a composite
     keyed as an input id is refused, listed or not (`RecordText.keyedAsInput`)."""
     ts = rec.get("templates")
     if rec.get("program") != digest or not (isinstance(ts, list) and all(
@@ -223,10 +224,17 @@ def templates_of(program, rec: dict, digest: str) -> list[Template]:
     nodes = [n for n in program.root.body.nodes if not is_input(n.fn)]
     if any(input_id(codec.descriptor_id(n.fn)) is not None for n in nodes):
         raise Malformed("templates")
-    if any(n.form not in ("call", "batch") for n in nodes) or len({t for t, _ in ts}) != len(ts) \
-            or [[codec.descriptor_id(n.fn), n.n if n.form == "batch" else 1] for n in nodes] != ts:
+    if any(n.form not in ("call", "batch") for n in nodes) or len({t for t, _ in ts}) != len(ts):
         raise Malformed("templates")
-    return [Template(t, n.fn, k) for (t, k), n in zip(ts, nodes, strict=True)]
+    units: dict[str, int] = {}
+    first: dict = {}
+    for n in nodes:
+        tid = codec.descriptor_id(n.fn)
+        units[tid] = units.get(tid, 0) + (n.n if n.form == "batch" else 1)
+        first.setdefault(tid, n)
+    if [[t, k] for t, k in units.items()] != ts:
+        raise Malformed("templates")
+    return [Template(t, first[t].fn, k) for t, k in ts]
 
 
 def refused(code: str, message: str) -> Malformed:

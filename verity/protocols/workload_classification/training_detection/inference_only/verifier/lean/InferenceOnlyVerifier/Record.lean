@@ -48,8 +48,9 @@ record first, and the digest of the run's own record. `params` is not read.
 4. `trusted`: as `Theta.trustedOf` refuses it.
 5. `run-program`, `run-circuit`: the run's record does not name this Program, or its `window.circuit` is not the
    SHA-512 of this record's text.
-6. `templates`: the record does not name the Program, or its `templates` are not the root's nodes that are no input,
-   each a call or a batch of a template of its own, in order (`Flock.TemplateQuery.evaluate`); or a root node
+6. `templates`: the record does not name the Program, or its `templates` are not the templates of the root's nodes
+   that are no input, each a call or a batch of a template, each template once in the order of its first node with
+   its nodes' members summed (`Flock.TemplateQuery.evaluate`, `RecordText.unitsOf`); or a root node
    calls a composite keyed as an input id (`RecordText.keyedAsInput`); or a template's parameter is not whole
    16-bit words, an output has no bit, or two of its ports share a name. A template's rows are its Definition's
    parameters, one row a parameter, and its outputs the fields of its return type (`RecordText.templatesOf`).
