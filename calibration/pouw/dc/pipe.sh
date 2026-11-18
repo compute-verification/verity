@@ -11,7 +11,10 @@
 # (gate/<shape>/result.json, ref.json); the rate of every (NB, LW, arm, lm) only if every gate is exact (rate.jsonl);
 # pipe.py analyze (pipe.json, pipe.txt).
 # Exit: 0 all done, 1 build refused, 4 a gate not exact (no rate), 2 wrong device or no nvcc.
-# DC_BUILD_ONLY=1 stops after the build and SASS gate and needs no GPU (any machine with CUDA 13.0).
+# DC_BUILD_ONLY=1 stops after the build and SASS gate and needs no GPU (any machine with CUDA 13.0; with no card, DC_SKU
+# names the card file to build for, calibration/hardware/cards/SKU.toml). The card's record's `arch` is the target, its
+# architecture file nvcc's -gencode (probe.py arch, gencode); pgemm.cu has forms for sm_100a only, and another card is
+# refused before anything is built.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -19,6 +22,11 @@ export PYTHONDONTWRITEBYTECODE=1
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "pipe.sh: no nvcc (CUDA 13.0 has sm_100a)" >&2; exit 2; }
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
+PROBE="$HERE/../opcode_probe/probe.py"
+CARD=(${DC_SKU:+--sku "$DC_SKU"})
+ARCH=$(python3 "$PROBE" arch "${CARD[@]}") || exit 2
+[ "$ARCH" = sm_100a ] || { echo "pipe.sh: the card's target is $ARCH, and pgemm.cu has forms for sm_100a only: nothing built" >&2; exit 2; }
+GENCODE=$(python3 "$PROBE" gencode "${CARD[@]}") || exit 2
 TILES=("2 1" "2 2" "4 1" "4 2")
 SHAPES=("128 512 256 7" "256 1024 1024 11")
 REPS=${PIPE_REPS:-7}
@@ -29,12 +37,8 @@ if [ "${DC_LEASED:-}" != 1 ]; then
   trap 'rm -rf "$WORK"' EXIT
   mkdir -p "$OUT/sass" "$OUT/env" "$OUT/gate"
   "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
-  if [ "${DC_BUILD_ONLY:-}" != 1 ]; then
-    nvidia-smi -q >"$OUT/env/nvidia-smi.txt" 2>&1
-    have=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
-    [ "${have%%.*}" = 10 ] || { echo "pipe.sh: needs compute capability 10.x, the device reports '$have'" >&2; exit 2; }
-  fi
-  "$NVCC" -O3 -std=c++17 -gencode arch=compute_100a,code=sm_100a -Xptxas -v "$HERE/pgemm.cu" -o "$WORK/pgemm" \
+  [ "${DC_BUILD_ONLY:-}" = 1 ] || nvidia-smi -q >"$OUT/env/nvidia-smi.txt" 2>&1
+  "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v "$HERE/pgemm.cu" -o "$WORK/pgemm" \
     >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
   cuobjdump -sass "$WORK/pgemm" >"$OUT/sass/pgemm.sass" 2>&1
   python3 "$HERE/pipe.py" gate-build "$OUT" >"$OUT/gate-build.txt"
