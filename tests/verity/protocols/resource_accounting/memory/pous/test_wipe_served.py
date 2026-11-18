@@ -1,5 +1,5 @@
 """The wipe's attach (`pous.prover.wipe_served`): its settings are the protocol's parameters of `period.json`'s
-``wipe`` and its launcher's facts the rest, and it refuses by name before any session outside the engine's process,
+``wipe`` and its launcher's facts the rest, and it refuses by name before any session outside its piece's process,
 with no side, private directory, pin, fact or challenger binding, and on a busy card."""
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from verity import hooks as H
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_served as WS
-from verity.protocols.resource_accounting.memory.pous.scheme import WIPE
+from verity.protocols.resource_accounting.memory.pous.scheme import MEMORY_ATTESTER, WIPE
 from verity.protocols.resource_accounting.memory.pous.verifier.wipe_period import LIMIT_NS
 
 PIN = {"party": "memory-challenger", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0", "key-sha512": "ab" * 64}
@@ -72,12 +72,14 @@ def test_a_fact_its_launcher_doesnt_hand_is_refused_by_name(tmp_path) -> None:
 def _ctx(tmp_path, given=None, **launcher):
     given = given or {}
     return ({"settings": S.settings(WIPE, {k: v for k, v in given.items() if k in WIPE.settings}), "private": tmp_path,
-             "process": H.ENGINE, "side_of": lambda *a: None, "pins": [PIN]}
+             "process": H.PIECE, "side_of": lambda *a: None, "pins": [PIN],
+             "party": MEMORY_ATTESTER}
             | WS.FACTS | {k: v for k, v in given.items() if k in WS.FACTS} | launcher)
 
 
 @pytest.mark.parametrize("settings, launcher, why", [
-    (BOUND, {"process": H.FRONT}, "it runs in the engine's process, before the model loads, not in 'front'"),
+    (BOUND, {"process": H.FRONT}, "it runs in its piece's process, before any engine is on the card, not in 'front'"),
+    (BOUND, {"process": H.ENGINE}, "it runs in its piece's process, before any engine is on the card, not in 'engine'"),
     (BOUND, {"side_of": None}, "no challenger's side was handed to it"),
     (BOUND, {"private": None}, "no private directory was handed to it"),
     (BOUND, {"pins": None}, "no pin was handed to it (ctx['pins'], the application's [[pin]] entries)"),
