@@ -1,6 +1,5 @@
 module
 
-public import Mathlib.Data.Finset.Card
 public import Spot.Edges
 
 /-!
@@ -72,11 +71,12 @@ def EdgesExact (P : Prog) (rs : Array TRange) (W : Wires.Wiring) (ws : List Wire
     ws.Pairwise fun e e' => ∀ k i x w l, ¬ (WireReads P rs W e k i x w l ∧ WireReads P rs W e' k i x w l)
 
 /-- **Each root argument within the parts bound**: at most one part more than the spaces (`Edges.partKey`) its parts
-read. -/
+read, counted as a list of them without repeats. -/
 def PartsWithin (P : Prog) : Prop :=
   let b := (P.defs[P.root]!).body
   ∀ k < b.nodes.size, ∀ (j : ℕ) (hj : j < (b.nodes[k]!).args.size),
-    ((b.nodes[k]!).args[j]).seq.parts.size ≤
-      (((b.nodes[k]!).args[j]).seq.parts.toList.map Edges.partKey).toFinset.card + 1
+    ∃ keys : List (Option (Bool × ℕ)), keys.Nodup ∧
+      (∀ x, x ∈ keys ↔ x ∈ ((b.nodes[k]!).args[j]).seq.parts.toList.map Edges.partKey) ∧
+        ((b.nodes[k]!).args[j]).seq.parts.size ≤ keys.length + 1
 
 end Properties.Spot.Edges
