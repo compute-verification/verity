@@ -328,6 +328,8 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     answer, calls = _run(served, tmp_path, monkeypatch)
     assert answer["verdict"] == "accept", answer["reason"]
     assert json.loads((served.out / "answer.json").read_text()) == answer and pous.linear_types is types
+    assert json.loads((served.out / "pous.json").read_text())["key_pin"] == "run"
+    assert not mc.holds(answer["profile"]["placement"])
     row = SV.piece_row("space", served.out.parent)
     assert row["verdict"] == "accept" and row["owner"] == "memory-accounting" and row["protocol"] == TEST_PROTOCOL
     assert row["quantity"] == answer["public"] == {"certified": False, "eps": "0", "s_bits": 0}
@@ -342,8 +344,8 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert prof["outside"]["bytes"] == {"the embedding and the head": 2048, "the norms": 96, "the per-row scales": 1024}
     assert "KV cache" in prof["outside"]["serving"] and prof["window"] == 3
     assert prof["placement"][CS.PREMISE] == (
-        f"holds: the session is signed under the key configuration {CONF} pins for memory-challenger's pous sessions; "
-        f"the memory attester ran on {AUDITOR}, not the prover's {NODE}")
+        f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins for memory-challenger's pous "
+        f"sessions; the memory attester ran on {AUDITOR}, not the prover's {NODE}")
     assert prof["placement"]["setup"] == CS.SETUP == "setup checked by the developer, not the auditor"
     assert set(period.profile(period.point_for(1))) <= set(prof)                      # the run protocol's own profile
     party, request = calls[0]
@@ -352,7 +354,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert prof["placement"]["salt"].startswith(f"drawn by the memory challenger on {AUDITOR} from its OS")
 
     doc = json.loads((served.out / "pous.json").read_text())
-    assert doc["key_pinned"] and doc["key_pin"] == "configuration" and doc["setup"] == CS.SETUP
+    assert doc["key_pinned"] and (doc["key_pin"], doc["pins_matched"]) == ("run", True) and doc["setup"] == CS.SETUP
     assert not {"latency", "rounds_answered", "warmups", "reported_host"} & set(doc)
     assert doc["decided_by"] == {"program": JUDGE, "host": socket.gethostname()} and doc["lean_s"] >= 0
     run = json.loads((served.private / "run.json").read_text())
@@ -373,7 +375,7 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_its_record_is_a_rehearsals(
     assert where["kind"] == "own-host" and where[CS.PREMISE] == (
         f"{mc.REHEARSAL} (configuration {CONF}); the memory attester ran on {host}, not the prover's {NODE}")
     doc = json.loads((served.out / "pous.json").read_text())
-    assert doc["key_pinned"] and doc["key_pin"] == "run" and doc["key_sha512"] != "ab" * 64
+    assert doc["key_pinned"] and (doc["key_pin"], doc["pins_matched"]) == ("run", False) and doc["key_sha512"] != "ab" * 64
     assert SP.line(answer).endswith(f"; {CS.PREMISE} {where[CS.PREMISE]}; setup checked by the developer, not the auditor")
 
 
@@ -939,8 +941,9 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert row["answer"]["profile"]["named_terms"] == bw["profile"]["named_terms"] == ledger.NAMED_TERMS
     assert bw["profile"]["gamma_terms"] and json.loads((s.out / "pous.json").read_text())["bandwidth"]["verdict"] == "accept"
     summary = json.loads((public / "bandwidth.json").read_text())
-    assert (summary["key_sha512"], summary["key_pinned"], summary["key_pin"]) == (BW_KEY, True, "configuration")
-    assert summary[mc.PREMISE].startswith(f"holds: the session is signed under the key configuration {CONF} pins")
+    assert summary["key_pin"] == "run" and not mc.holds(summary)
+    assert (summary["key_sha512"], summary["key_pinned"], summary["pins_matched"]) == (BW_KEY, True, True)
+    assert summary[mc.PREMISE].startswith(f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins")
     assert case["params"]["trusted"] == [ts.AtLeaf(b"p2-party-at-leaf").public_key.hex()]
     assert not any((d / f).exists() for d, f in ((private, SP.HB.HELD), (s.private, SP.STORE), (s.private, SP.HELD)))
     assert _stamps(s.out) == [
@@ -1059,7 +1062,8 @@ def test_a_key_the_run_names_and_the_configuration_does_not_pin_is_a_rehearsals(
     assert answer["verdict"] == "accept", answer["reason"]
     _, bw, summary = _bandwidth_files(s)
     assert bw["verdict"] == "accept", bw["reason"]
-    assert (summary["key_sha512"], summary["key_pinned"], summary["key_pin"]) == (BW_KEY, True, "run")
+    assert (summary["key_sha512"], summary["key_pinned"], summary["key_pin"], summary["pins_matched"]) == (
+        BW_KEY, True, "run", False)
     assert summary[mc.PREMISE].startswith(mc.REHEARSAL) and "holds" not in summary[mc.PREMISE]
 
 

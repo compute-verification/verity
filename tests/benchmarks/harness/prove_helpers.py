@@ -138,16 +138,18 @@ class Store:
         (root / name).write_text(json.dumps(doc))
         return self.art(kind, meta or {}, tree=root)
 
-    def ran(self, run: str, files: Path | None, *, rc: int = 0, tool: str = "bash", validation: str | None = None) -> None:
+    def ran(self, run: str, files: Path | None, *, rc: int = 0, tool: str = "bash", validation: str | None = None,
+            env: dict | None = None) -> None:
         """A run's attempt on the remote, its files a run record (`files`: None for a run that kept none), recorded under
-        `tool`, its result's validation `validation`."""
+        `tool`, its result's validation `validation`, launched with `env` (`--env`)."""
 
         from research.store import canon
 
         record = self.art("run-record/v1", {}, tree=files) if files else None
         attempt: dict[str, Any] = {
             "schema": "research/attempt/v0.1", "id": run, "tool": {"name": tool, "version": None},
-            "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": {}, "key_params": [], "inputs": {},
+            "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": {"env": env} if env else {},
+            "key_params": [], "inputs": {},
             "conditions": {}, "key_conditions": [], "source": {"commit": "c" * 40, "dirty": False}, "closure": None,
             "execution": {"start_utc": f"{run[1:5]}-{run[5:7]}-{run[7:9]}T00:00:00Z"}, "cost": None,
             "status": {"state": "done" if rc == 0 else "failed", "rc": rc, "validation": validation},
@@ -249,16 +251,16 @@ def lean_record(run: str, *, word: str | None = RMSNORM, seconds: tuple[float, .
             "label": None if why else L.COVER_LABEL, "host": dict(LEAN_HOST)}
 
 
-def lean_ran(s: Store, tmp: Path, run: str, doc: dict | None, *, name: str = L.RECORD) -> str:
+def lean_ran(s: Store, tmp: Path, run: str, doc: dict | None, *, name: str = L.RECORD, env: dict | None = None) -> str:
     """`run` in the store with `doc` as its `out/lean-verify.json` (None: a run that wrote none), a Lean verifier run
-    of record."""
+    of record, launched with `env`."""
 
     files = tmp / "lean-files" / run / "out"
     files.mkdir(parents=True)
     (files / "job.log").write_text("ran")
     if doc is not None:
         (files / name).write_text(json.dumps(doc))
-    s.ran(run, files.parent)
+    s.ran(run, files.parent, env=env)
     return s.record(run, R.LEAN)
 
 

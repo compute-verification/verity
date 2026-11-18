@@ -340,6 +340,24 @@ def test_a_move_whose_map_main_deleted_after_it_landed_is_crossed_by_the_map_at_
     assert "app/util.py" not in paths(repo, r["result"]) and "tools/move/layout_map.toml" not in paths(repo, r["result"])
 
 
+def test_each_move_is_named_as_its_crossing_starts_and_many_moves_say_how_to_cross_in_parts(repo, monkeypatch, capsys):
+    """A crossing of many moves runs for minutes with nothing to print until its end: each move writes a line as it starts,
+    and from `MANY_MOVES` on the first line counts them and names each, so a carry in parts can begin at once."""
+    monkeypatch.setattr(RS, "SCRIPT_ARGS", RS.SCRIPT_ARGS)
+    git(repo, "checkout", "-q", "-B", "main", "base")
+    move = generate(repo, LINE)
+    on(repo, "pr", ("add extra", {"app/extra.py": "from app.util import f3\n"}))
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--main", "main", "--json"]) == 0
+    said = capsys.readouterr()
+    assert f"restack.py: pr: move 1 of 1, {move[:12]} (" in said.err and "each crossed in turn" not in said.err
+    monkeypatch.setattr(RS, "MANY_MOVES", 1)
+    assert RS.main(["pr", "--main", "main", "--json"]) == 0
+    first, started = capsys.readouterr().err.splitlines()[:2]
+    assert "pr lacks 1 moves, each crossed in turn" in first and first.endswith(f"oldest first: {move[:12]}")
+    assert started.startswith("restack.py: pr: move 1 of 1, ")
+
+
 @pytest.fixture
 def late(repo, monkeypatch):
     """main as a move that lands late leaves it: the first move, made on `base`, reaches main by a merge after main went on
@@ -583,6 +601,25 @@ def on_base(monkeypatch):
 
     monkeypatch.setattr(RS, "run_script", run_script)
     return ran
+
+
+def test_the_move_is_checked_only_for_a_branch_its_script_runs_on(repo, on_base):
+    """A layout move's check runs the script over the whole tree on the move's base. A branch based after the move (skipped
+    in a crossing of many), one that already holds it, and one up to date run no script on it, so they pay no check; the
+    branch the script runs on still does."""
+    git(repo, "checkout", "-q", "-b", "later", "base")
+    later = commit(repo, "main after the move's base", {"app/main.py": MAIN + "from app.util import f3\n"})
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "-s", "ours", "--no-ff", "-m", "land later", later)
+    on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
+    git(repo, "branch", "held", "move")
+    on(repo, "held", ("after the move", {"NOTES.md": "notes\n"}))
+    git(repo, "checkout", "-q", "-b", "moved-on", "move")
+    onto = commit(repo, "main after the move", {"CHANGES.md": "changes\n"})
+    assert RS.restack("later", "move", cwd=str(repo), main="main")["status"] == "based-after" and on_base == []
+    assert RS.restack("held", "move", onto=onto, cwd=str(repo))["status"] == "clean" and on_base == []
+    assert RS.restack("move", "move", cwd=str(repo))["status"] == "up-to-date" and on_base == []
+    assert RS.restack("pr", "move", cwd=str(repo))["status"] == "clean" and on_base == [git(repo, "rev-parse", "base")]
 
 
 def test_without_kept_no_check_is_kept_and_none_is_read(repo, cache, on_base):

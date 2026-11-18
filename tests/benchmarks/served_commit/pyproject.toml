@@ -7,5 +7,6 @@ testpaths = ["."]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["test_served_arm.py"]
-inputs = ["adapters/torch", "benchmarks/served_commit"]
+inputs = ["adapters/torch", "benchmarks/served_commit", "benchmarks/harness/verity_bench", "tools/config/verity_config", "calibration/hardware/cards",
+          "verity/__init__.py", "verity/device.py", "verity/channel.py", "verity/errors.py"]
 
