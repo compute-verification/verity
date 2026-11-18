@@ -124,15 +124,20 @@ def test_unnumbered_malformed_repeated_and_new_runs():
     g, fwd, _, _ = gate()
     arrive(g, None)
     assert fwd == ["rNone"] and g.summary()["unordered"] == 1
-    for bad in ("-1", "x", "1.5", ""):
-        with pytest.raises(ValueError, match="non-negative integer"):
+    for bad in ("-1", "x", "1.5", "", "\u0661"):
+        with pytest.raises(ValueError, match="^x-verity-release: a decimal count"):
             g.key({na.RELEASE_HEADER: bad})
-    arrive(g, 1, run="a")
+    for bad in ("a", "zz", "", "0x0a"):                 # the run is the network attester's hex, as it writes it
+        with pytest.raises(ValueError, match="^x-verity-release-run: a run id in hex"):
+            g.key({na.RELEASE_HEADER: "1", na.RUN_HEADER: bad})
+    with pytest.raises(ValueError, match="^x-verity-release-bucket: a decimal count"):
+        g.key({na.RELEASE_HEADER: "1", na.RUN_HEADER: "0a", na.BUCKET_HEADER: "x"})
+    arrive(g, 1, run="0a")
     with pytest.raises(ValueError, match="came twice"):
-        g.key({na.RELEASE_HEADER: "1", na.RUN_HEADER: "a"})
-    arrive(g, 0, run="b")                            # a new run: what run a still held goes on, and b starts at 0
-    assert fwd == ["rNone", "r1", "r0"] and g.run == "b" and g.next == 1
-    arrive(g, 7, run="a")                            # a's, after b began: unordered
+        g.key({na.RELEASE_HEADER: "1", na.RUN_HEADER: "0a"})
+    arrive(g, 0, run="0b")                           # a new run: what run 0a still held goes on, and 0b starts at 0
+    assert fwd == ["rNone", "r1", "r0"] and g.run == "0b" and g.next == 1
+    arrive(g, 7, run="0a")                           # 0a's, after 0b began: unordered
     assert fwd[-1] == "r7" and g.summary()["stale"] == 1 and g.summary()["runs"] == 2
 
 

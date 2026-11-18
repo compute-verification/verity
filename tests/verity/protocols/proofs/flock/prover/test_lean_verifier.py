@@ -3,6 +3,7 @@ packages by path, and they require only each other), and no escape hatch that wo
 definitions a proof is about (`native_decide`, `implemented_by`, `extern`, `unsafe`)."""
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import importlib.util
 import json
@@ -21,13 +22,17 @@ BASE = [LEAN.parents[3] / d for d in ("circuits/base", "circuits/lean", "commitm
 VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"
 PROOFS = Path(__file__).resolve().parents[6] / "security" / "Proofs"
 TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the security packages' Mathlib and ArkLib pin v4.34.0
+BUILD_LOCK = LEAN.parents[3] / "circuits" / "difftest" / ".lake" / "harness-build.lock"
 FORBIDDEN = re.compile(r"\b(native_decide|implemented_by|extern|unsafe)\b")
 
 
 def lake_build(cwd: Path, *targets: str) -> None:
     """`lake build TARGETS` in `cwd`; a build that fails fails the test with the tail of Lake's output, which is the only
-    record of why."""
-    p = subprocess.run(["lake", "build", *targets], cwd=cwd, capture_output=True, text=True)
+    record of why. Held under the tree's one Lake build lock, as check's lean-build step and `verity_difftest.build` are."""
+    BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with open(BUILD_LOCK, "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        p = subprocess.run(["lake", "build", *targets], cwd=cwd, capture_output=True, text=True)
     if p.returncode:
         tail = "\n".join((p.stdout + p.stderr).splitlines()[-80:])
         pytest.fail(f"`lake build {' '.join(targets)}` in {cwd} exited {p.returncode}:\n{tail}", pytrace=False)

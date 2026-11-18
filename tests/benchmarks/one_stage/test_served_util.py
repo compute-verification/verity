@@ -160,7 +160,7 @@ def test_too_few_full_steps_is_said(tmp_path):
     assert got["all"]["steps"] == 0 and "fewer than two" in got["all"]["note"]
 
 
-SECRET = "SECRET-request-text"
+SECRET = "dummy-SECRET-request-text"
 
 
 def test_util_json_and_util_txt_hold_the_serves_aggregates_alone(tmp_path, monkeypatch, capsys):

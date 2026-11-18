@@ -469,3 +469,23 @@ def test_the_network_attester_path_requires_every_step_on_one_network_attester_r
     r = cr.report(steps)
     assert r["verdict"] == "refused" and r["steps"]["endpoint"]["verdict"] == "not run"
     assert r["steps"]["tie"]["verdict"] == "failed"
+
+
+def test_the_endpoint_document_is_released_keys_list_read_there(monkeypatch):
+    """The endpoint step's public fields are released_keys.json's list of that name, read there: what
+    `endpoint_public` writes passes the record's key check under that list, a field the step gives that the list
+    doesn't name is not written, a field the list names that the step doesn't give is harmless, and a listed field
+    that is no scalar is refused."""
+    from verity.protocols.resource_accounting.network.prover import released_keys as RK
+    listing = next(x for x in RK.load().lists if x.name == cr.ENDPOINT_LIST)
+    assert cr.ENDPOINT_PUBLIC == listing.keys and listing.files[0].fullmatch("report.json")
+    step = {"verdict": "refused", "why": "x", "warden_run": "r", "at": "a", "in_the_clear": "c", "seed": 7,
+            "io": {"accepted": False, "violations": 2, "records": [1]}, "advice": {"bound": False, "rebuilt": False},
+            "advice_bits": {"T": 4}}
+    public = cr.endpoint_public(step)
+    assert "seed" not in public and "records" not in public["io"]
+    assert listing.undeclared(json.dumps(public).encode()) == {}
+    monkeypatch.setitem(cr.ENDPOINT_PUBLIC, "advice/not_given", "output")
+    assert "not_given" not in cr.endpoint_public(step)["advice"]
+    with pytest.raises(ValueError, match="advice/bound is a list, not a scalar"):
+        cr.endpoint_public({**step, "advice": {"bound": [1]}})
