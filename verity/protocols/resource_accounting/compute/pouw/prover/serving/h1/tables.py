@@ -33,7 +33,7 @@ def flush(run: Any) -> None:
         h1_device().flush(run)
 
 
-def take_z(run: Any, call: Any, words: Any) -> tuple[bytes, int] | None:
+def take_z(run: Any, call: Any, words: Any) -> tuple[bytes, bytes] | None:
     """The call's z table for its registered ``zy@<c>`` to commit beside it, when the device holds one back for it
     (`tensors.H1Device.take_z`); else None."""
     if getattr(run, "_zy", None) is None:
@@ -51,14 +51,16 @@ def settle(run: Any, wait: bool) -> None:
         run._roots[index].update(zip(pending.names, (r.hex() for r in pending.roots())))
 
 
-def _binding(run: Any, call: Any, name: str) -> tuple[bytes, int]:
-    """The call's `name` table's domain binding and salt nonce."""
-    return tagged(TABLE_TAGS[name], run.salt, call.index), RQ.TABLES_NONCE + 3 * call.index + TABLE_NONCES[name]
+def _binding(run: Any, call: Any, name: str, n: int) -> tuple[bytes, bytes]:
+    """The call's `name` table's domain binding and its ``n`` rows' salts, the run's at the table's nonce
+    (`pouw_h1_prover.RunSalts`)."""
+    return (tagged(TABLE_TAGS[name], run.salt, call.index),
+            run._salts.at(RQ.TABLES_NONCE + 3 * call.index + TABLE_NONCES[name], n))
 
 
 def _table(run: Any, call: Any, name: str, leaves: list[bytes]) -> str:
-    binding, nonce = _binding(run, call, name)
-    return RQ.hiding_rows(binding, call.index, leaves, run._key, nonce).commitment.root.hex()
+    binding, salts = _binding(run, call, name, len(leaves))
+    return RQ.hiding_rows(binding, call.index, leaves, salts).commitment.root.hex()
 
 
 def _keep(run: Any, call: Any, a: Any, s_a: Any, records: Any) -> None:
