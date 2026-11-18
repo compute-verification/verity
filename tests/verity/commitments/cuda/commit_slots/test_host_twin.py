@@ -1,5 +1,6 @@
-"""The engine's host twin (``../sha512_rows``), driven by slots_gpu's own plan and step code, gives the reference's roots;
-regrouping a layout changes no root; the streaming call refuses what isn't the layout's."""
+"""The engine's host twin (``../sha512_rows``), driven by slots_gpu's own plan and step code, gives the reference's roots
+under the same salt bytes, handed to both as data; regrouping a layout changes no root; the streaming call refuses what
+isn't the layout's, and a step with no salts or a key in their place."""
 from __future__ import annotations
 
 import json
@@ -9,7 +10,7 @@ import weakref
 import numpy as np
 import pytest
 
-from conftest import BUILD
+from conftest import BUILD, salts_of
 
 from verity.commitments.cuda.commit_slots import slots as S
 from verity.commitments.cuda.commit_slots import slots_gpu as G
@@ -17,14 +18,14 @@ from verity.commitments.cuda.commit_slots import slots_gpu as G
 pytestmark = pytest.mark.skipif(not any(shutil.which(c) for c in ("g++", "c++", "clang++")), reason="needs a C++ compiler")
 
 CTX = bytes(range(64))
-KEY = bytes(range(100, 132))
 
 
 @pytest.mark.parametrize("slots", [1, 2, 5, 9])
 def test_the_edge_layout(slots: int) -> None:
     layout = S.edge_layout()
     out = S.random_outputs(layout, slots, np.random.default_rng(slots))
-    assert G.commit(G.Plan(CTX, layout, "host", build=BUILD), 3, KEY, out, slots) == S.commit(CTX, layout, 3, KEY, out, slots)
+    y = salts_of(layout, slots)
+    assert G.commit(G.Plan(CTX, layout, "host", build=BUILD), 3, y, out, slots) == S.commit(CTX, layout, 3, y, out, slots)
 
 
 def test_the_fixtures_root() -> None:
@@ -32,7 +33,8 @@ def test_the_fixtures_root() -> None:
     layout = S.edge_layout()
     out = [[np.frombuffer(bytes.fromhex(h), np.uint8).reshape(d["slots"], n) for h, n in zip(t, g.sources, strict=True)]
            for t, g in zip(d["outputs"], layout.groups, strict=True)]
-    got = G.commit(G.Plan(bytes.fromhex(d["context"]), layout, "host", build=BUILD), d["step"], bytes.fromhex(d["salt_key"]), out, d["slots"])
+    y = np.stack([np.frombuffer(bytes.fromhex(h), np.uint8).reshape(-1, 192) for h in d["salts"]])
+    got = G.commit(G.Plan(bytes.fromhex(d["context"]), layout, "host", build=BUILD), d["step"], y, out, d["slots"])
     assert got.root.hex() == d["root"]
     assert [r.hex() for r in got.slot_roots] == [s["root"] for s in d["per_slot"]]
 
@@ -40,7 +42,8 @@ def test_the_fixtures_root() -> None:
 def test_two_h200_layers() -> None:
     layout = S.h200_layout(layers=2)
     out = S.random_outputs(layout, 3, np.random.default_rng(7))
-    assert G.commit(G.Plan(CTX, layout, "host", build=BUILD), 9, KEY, out, 3) == S.commit(CTX, layout, 9, KEY, out, 3)
+    y = salts_of(layout, 3)
+    assert G.commit(G.Plan(CTX, layout, "host", build=BUILD), 9, y, out, 3) == S.commit(CTX, layout, 9, y, out, 3)
 
 
 @pytest.mark.parametrize(("layout", "k"), [(S.h200_layout(layers=3), 2), (S.edge_layout(), 2)], ids=["h200-3-by-2", "edge-by-2"])
@@ -49,39 +52,82 @@ def test_regrouped_layers_give_the_same_digest_and_roots(layout: S.CommitShape, 
     assert len(grouped.groups) == -(-len(layout.groups) // k) and S.layout_digest(grouped) == S.layout_digest(layout)
     out = S.random_outputs(layout, 3, np.random.default_rng(11))
     joined = [[t for ts in out[i:i + k] for t in ts] for i in range(0, len(out), k)]
-    assert G.commit(G.Plan(CTX, grouped, "host", build=BUILD), 4, KEY, joined, 3) == S.commit(CTX, layout, 4, KEY, out, 3)
+    y = salts_of(layout, 3)
+    assert G.commit(G.Plan(CTX, grouped, "host", build=BUILD), 4, y, joined, 3) == S.commit(CTX, layout, 4, y, out, 3)
 
 
-def test_a_step_reuses_its_plan_and_its_root_moves_with_the_step_and_the_key() -> None:
+def test_a_step_reuses_its_plan_and_its_root_moves_with_the_step_and_the_salts() -> None:
     layout = S.edge_layout()
     plan = G.Plan(CTX, layout, "host", build=BUILD)
     out = S.random_outputs(layout, 4, np.random.default_rng(8))
-    a, b = G.commit(plan, 0, KEY, out, 4), G.commit(plan, 1, KEY, out, 4)
-    c = G.commit(plan, 0, bytes(32), out, 4)
-    assert a == S.commit(CTX, layout, 0, KEY, out, 4) and b == S.commit(CTX, layout, 1, KEY, out, 4)
+    y, other = salts_of(layout, 4), salts_of(layout, 4, seed=1)
+    a, b = G.commit(plan, 0, y, out, 4), G.commit(plan, 1, y, out, 4)
+    c = G.commit(plan, 0, other, out, 4)
+    assert a == S.commit(CTX, layout, 0, y, out, 4) and b == S.commit(CTX, layout, 1, y, out, 4)
     assert len({a.root, b.root, c.root}) == 3 and a.slot_roots == b.slot_roots != c.slot_roots
+
+
+def test_one_rows_salt_moves_its_slots_root_alone() -> None:
+    """A leaf is under its own 192 bytes: one bit of row g of slot s's salt moves slot s's root and the step's, no other
+    slot's, in the reference and the host twin alike."""
+    layout, slots = S.edge_layout(), 3
+    plan = G.Plan(CTX, layout, "host", build=BUILD)
+    out = S.random_outputs(layout, slots, np.random.default_rng(12))
+    y = salts_of(layout, slots)
+    base = G.commit(plan, 0, y, out, slots)
+    for s, g, n in ((0, 0, 0), (1, layout.row_count - 1, 191), (2, 4, 77)):
+        moved = y.copy()
+        moved[s, g, n] ^= 0x80
+        got = G.commit(plan, 0, moved, out, slots)
+        assert got == S.commit(CTX, layout, 0, moved, out, slots) and got.root != base.root
+        assert [i for i in range(slots) if got.slot_roots[i] != base.slot_roots[i]] == [s]
+
+
+def test_a_step_takes_its_salts_as_data_and_derives_none() -> None:
+    """No key makes a step's salts: the reference and the plan's calls take every row's 192 bytes, and refuse a key or a
+    buffer that is not a salt a row; ``fresh_salts`` draws them from the operating system, new bytes each call."""
+    layout, slots = S.edge_layout(), 2
+    plan = G.Plan(CTX, layout, "host", build=BUILD)
+    out = S.random_outputs(layout, slots, np.random.default_rng(13))
+    assert not hasattr(S, "fresh_salt_key") and not hasattr(S, "row_salts")
+    y = S.fresh_salts(layout, slots)
+    assert y.shape == (slots, layout.row_count, 192) and y.dtype == np.uint8
+    assert len({y[s, g].tobytes() for s in range(slots) for g in range(layout.row_count)}) == slots * layout.row_count
+    assert not np.array_equal(y, S.fresh_salts(layout, slots))
+    assert G.commit(plan, 0, y, out, slots) == S.commit(CTX, layout, 0, y, out, slots)
+    for bad in (bytes(32), y[:1], y[:, :-1], y.astype(np.uint16)):
+        with pytest.raises(ValueError, match="salt"):
+            S.commit(CTX, layout, 0, bad, out, slots)
+        with pytest.raises(ValueError, match="salt"):
+            G.commit(plan, 0, bad, out, slots)
+    with pytest.raises(TypeError):
+        G.StepCommitter(plan, 0, slots, bytes(32), None, False, 1)
 
 
 def test_the_streaming_call_refuses_what_is_not_the_layouts() -> None:
     layout = S.edge_layout()
     plan = G.Plan(CTX, layout, "host", build=BUILD)
     out = S.random_outputs(layout, 2, np.random.default_rng(9))
-    sc = G.StepCommitter(plan, 0, 2, KEY)
+    y = salts_of(layout, 2)
+    n0 = layout.group_rows[0]
+    y0, y1 = y[:, :n0], y[:, n0:]
+    sc = G.StepCommitter(plan, 0, 2)
     with pytest.raises(ValueError, match="takes 1 tensors"):
-        sc.add(out[1])
+        sc.add(out[1], y1)
     with pytest.raises(ValueError, match="contiguous bytes a slot"):
-        sc.add([out[0][0][:, :-1]])
+        sc.add([out[0][0][:, :-1]], y0)
     with pytest.raises(ValueError, match="slots=2"):
-        sc.add([out[0][0][:1]])
-    sc.add(out[0])
+        sc.add([out[0][0][:1]], y0)
+    for bad in (None, bytes(32), y1, y0[:1], y0.transpose(1, 0, 2)):
+        with pytest.raises(ValueError, match="group 0's salts are"):
+            sc.add(out[0], bad)
+    sc.add(out[0], y0)
     with pytest.raises(ValueError, match="1 of 2 groups"):
         sc.finish()
-    sc.add(out[1])
+    sc.add(out[1], y1)
     with pytest.raises(ValueError, match="every group is in"):
-        sc.add(out[1])
-    assert sc.finish().result() == S.commit(CTX, layout, 0, KEY, out, 2)
-    with pytest.raises(ValueError, match="32 bytes"):
-        G.StepCommitter(plan, 0, 2, KEY[:31])
+        sc.add(out[1], y1)
+    assert sc.finish().result() == S.commit(CTX, layout, 0, y, out, 2)
 
 
 class _Read:
