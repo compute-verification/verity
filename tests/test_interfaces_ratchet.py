@@ -52,6 +52,10 @@ SCRIPT = (".py", ".sh")
 SCHEME_IMPORT = re.compile(r"^\s*(?:from|import)\s+verity\.protocols\.(?:resource_accounting\.(?:compute|memory|network)"
                            r"|experimental\.dither)\b")
 SCHEME_IMPORTERS = ("benchmarks/", "calibration/", "tools/", "applications/")
+#: {file: the scheme names that are another word there}: a rounding mode or a design called dither, a card's memory bandwidth
+NOT_SCHEMES = {"benchmarks/ppl/steps.py": {"dither"}, "calibration/pouw/theory/checked_strip.py": {"dither"},
+               "benchmarks/hash/dither/dbw.py": {"dither"}, "verity/device.py": {"bandwidth"},
+               "calibration/pouw/dc/pipe.py": {"bandwidth"}}
 CUDA = "/usr/local/cuda"
 #: the machine record's reader and the toolkit fetcher it points at: where a toolkit's directory is written down
 KIT = ("benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
@@ -142,6 +146,8 @@ def _shell_hits(text: str, names: Iterable[str], fold: bool = False) -> set[int]
 
 _OPEN = {")": "(", "]": "[", "}": "{"}
 _GETTERS = {"get", "pop", "setdefault"}
+#: the names the one table is imported under: `schemes.get("pous")` is its own reader, never an offender
+_TABLE = {"schemes", "declarations"}
 
 
 def _python_hits(text: str, names: frozenset[str], fold: bool = False) -> set[int]:
@@ -169,7 +175,7 @@ def _python_hits(text: str, names: frozenset[str], fold: bool = False) -> set[in
                 or prev in ("{", ",") and nxt == ":" or prev == "[" and nxt == "]"
                 or prev == "(" and i >= 2 and toks[i - 2].string == "startswith"
                 or prev == "(" and i >= 3 and toks[i - 2].string in _GETTERS and toks[i - 3].string == "."
-                and not (i >= 4 and toks[i - 4].string == "schemes")  # the one table's own reader
+                and not (i >= 4 and toks[i - 4].string in _TABLE)
                 or prev in ("(", "[", "{", ",") and _in_membership(toks, i)):
             out.add(t.start[0])
     return out
@@ -278,8 +284,9 @@ def scan(files: dict[str, str]) -> Scan:
             continue
         script = path.endswith(SCRIPT)
         if script and path != SCHEMES and Path(path).name != "scheme.py" and scheme_pre.search(text):
-            s.add("scheme_name_tables", path, (_python_hits(text, schemes) if path.endswith(".py")
-                                               else _shell_hits(text, schemes)), text)
+            names = schemes - NOT_SCHEMES.get(path, set())
+            s.add("scheme_name_tables", path, (_python_hits(text, names) if path.endswith(".py")
+                                               else _shell_hits(text, names)), text)
         if script and not path.startswith(HARDWARE) and "/cards/" not in f"/{path}" \
                 and card_pre.search(text.lower()):
             s.add("card_names_in_code", path, (_python_hits(text, cards, fold=True) if path.endswith(".py")
@@ -411,6 +418,8 @@ def _flagged(ratchet: str, files: dict[str, str]) -> dict[str, int]:
                                               'f(protocol="pous")\nx = ["pous", "dither"]\n'
                                               'for p in ("pous", "dither"):\n    pass\n', 0),
     ("scheme_name_tables", "benchmarks/a.py", 'P = schemes.get("pous").protocol\nq = compose.schemes.get("dither")\n', 0),
+    ("scheme_name_tables", "benchmarks/a.py", 'S = declarations.get("pous")\nt = table.get("pous")\n', 1),
+    ("scheme_name_tables", "benchmarks/ppl/steps.py", 'if mode == "dither":\n    pass\nif s == "pous":\n    pass\n', 1),
     ("scheme_name_tables", "verity/protocols/x/scheme.py", 'if s == "pous":\n    pass\n', 0),
     ("scheme_name_tables", "benchmarks/tests/a.py", 'if s == "pous":\n    pass\n', 0),
     ("scheme_name_tables", "benchmarks/a.sh", '# [ "$p" == "pous" ]\necho "pous"\n', 0),
