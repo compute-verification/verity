@@ -828,6 +828,101 @@ class Admitter:
             off()
 
 
+def feed_file(directory: str, name: str | None = None) -> str:
+    """The file in a server's feed directory (`hooks.FRONT`'s ``ctx["feed"]``) that the scheme ``name``'s front appends
+    to and its engine reads."""
+    return os.path.join(directory, f"{name or scheme_name()}.jsonl")
+
+
+class FeedReader:
+    """The records appended to a feed file (JSON lines) since the last call; a partial last line waits for its end."""
+
+    def __init__(self, path: str) -> None:
+        self.path, self.fd, self.tail = path, None, b""
+
+    def __call__(self) -> list[dict[str, Any]]:
+        if self.fd is None:
+            try:
+                self.fd = os.open(self.path, os.O_RDONLY)
+            except FileNotFoundError:
+                return []
+        data = self.tail
+        while chunk := os.read(self.fd, 1 << 16):
+            data += chunk
+        *lines, self.tail = data.split(b"\n")
+        return [json.loads(x) for x in lines if x.strip()]
+
+
+def _log_to(directory: str | None) -> Callable[[dict[str, Any]], None] | None:
+    if not directory:
+        return None
+    f = open(os.path.join(directory, f"tick.{os.getpid()}.jsonl"), "a", encoding="utf-8")
+
+    def log(rec: dict[str, Any]) -> None:
+        f.write(json.dumps(rec, separators=(",", ":")) + "\n")
+        f.flush()
+    return log
+
+
+def engine(settings: Mapping[str, Any], feed: str, name: str | None = None) -> Admitter:
+    """The engine's side (`hooks.ENGINE`): the tick gate (`Admitter` under ``tick`` with ``settings``, `tick_config`'s
+    less ``feed``), reading the records the front appends to its feed file (`feed_file` in ``feed``)."""
+    return Admitter({**settings, "order": "tick"}, source=f"{name or scheme_name()}'s settings",
+                    pull=FeedReader(feed_file(feed, name)), log=_log_to(settings.get("log")))
+
+
+class FrontFeed:
+    """The front's side (`hooks.FRONT`) where the engine runs in another process: `TickAdmit` on the front's hooks,
+    appending its records to the feed file (`feed_file`) the engine's gate reads. Each input that arrives with a release
+    is that release, its key the input; a malformed or repeated one is refused (`hooks.RefuseInput`); one complete at
+    the front at step 0 never reached the engine and is passed; the watermark's route and its lost releases' refusals
+    are `TickAdmit.attach`'s."""
+
+    def __init__(self, feed: str, name: str | None = None) -> None:
+        self.path = feed_file(feed, name)
+        self.admit = TickAdmit(lambda adm: None, lambda key: None, self._append)
+        self.inputs: dict[str, tuple[str, int]] = {}
+
+    def _append(self, rec: dict[str, Any]) -> None:
+        fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        try:
+            os.write(fd, json.dumps(rec, separators=(",", ":")).encode() + b"\n")
+        finally:
+            os.close(fd)
+
+    def attach(self, exchange: Any, name: str | None = None) -> FrontFeed:
+        name = name or scheme_name()
+        self.admit.attach(exchange, name)
+        exchange.subscribe(name, "steps", self.on)
+        return self
+
+    def on(self, ev: Any) -> None:
+        if isinstance(ev, H.InputArrived):
+            try:
+                k = self.admit.key(ev.headers)
+            except ValueError as e:
+                assert self.admit.refuse is not None
+                self.admit.refuse(ev.input, str(e))
+                return
+            if k is not None:
+                self.inputs[ev.input] = k
+                self.admit.submit(_Release(k, ev.input))
+        elif isinstance(ev, H.OutputsComplete) and ev.input in self.inputs:
+            k = self.inputs.pop(ev.input)
+            self.admit.submitted.pop(k, None)
+            if ev.step == 0:
+                self.admit.passed(k)
+
+    def summary(self) -> dict[str, Any]:
+        return self.admit.summary()
+
+
+@dataclass(frozen=True)
+class _Release:
+    release: tuple[str, int]
+    engine_id: str
+
+
 async def _buffered(receive: Callable[[], Any]) -> tuple[bytes, Callable[[], Any]]:
     """The request's whole body, and a ``receive`` that replays the messages it read before the rest."""
     msgs: list[dict[str, Any]] = []
