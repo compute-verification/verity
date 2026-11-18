@@ -8,6 +8,7 @@ import json
 import pytest
 from verity import hooks as H
 from verity.channel import Refused
+from verity.protocols.resource_accounting import scheme as schemes
 
 from verity_vllm import messages as M
 from verity_vllm.pipeline import advice as A
@@ -226,11 +227,18 @@ def test_one_exchange_a_process():
     assert M.current() is not ex
 
 
-def test_a_process_beside_is_refused_without_a_launcher():
+def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkeypatch):
+    monkeypatch.setattr(schemes, "PROCESSES", {"id-front": lambda request, ids: ("relay", request(), ids())})
     ex = M.Exchange()
-    ex.request("network", H.StartBeside("id-front", ("python", "-m", "relay"), ("ingress",)))
-    with pytest.raises(Refused, match="network: starts id-front beside the workload, and no launcher"):
+    ex.request("network", H.StartBeside("id-front", ("server-request", "stream-token-ids")))
+    with pytest.raises(Refused, match=r"network: starts id-front beside the workload with readers \['server-request', "
+                                      r"'stream-token-ids'\] no launcher here offers"):
         ex.answer(H.Declared("", {}))
-    ex.launches = True
+    ex.readers = {"server-request": lambda: "req", "stream-token-ids": lambda: [1, 2]}
     ex.answer(H.Declared("", {}))
-    assert [r.process for _, r in ex.beside()] == ["id-front"]
+    ((process, start),) = ex.beside()
+    assert process == "id-front" and start() == ("relay", "req", [1, 2])
+    other = M.Exchange()
+    other.request("network", H.StartBeside("tap"))
+    with pytest.raises(Refused, match="starts tap beside the workload, which no scheme registered"):
+        other.answer(H.Declared("", {}))

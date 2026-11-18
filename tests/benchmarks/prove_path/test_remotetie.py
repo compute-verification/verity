@@ -62,6 +62,7 @@ import pytest
 import settings
 import window_tie as WT
 from verity_vllm.program.model import INT8_EXACT_QUANT
+from verity_vllm.program.predict import inference_blocks as IB
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WRS
@@ -224,7 +225,7 @@ def make_toy() -> SimpleNamespace:
     reg = Registered.of(Phi(model={"repo": "org/toy", "revision": "r", "hf_config": CONFIG}, target=TARGET), default_seed=7)
     low = WC.lower(reg, CLASS, None, WC.Grain(), tables=TABLES)
     fields = _weights(low.fn)
-    state = WRS.standin_state(WC.population_digest(low.circuit), CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)],
+    state = WRS.standin_state(IB.program_digest(low.circuit), CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)],
                               window=OPEN)
     values = {**WW.weight_values(reg, fields, KEY, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WRS.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi])

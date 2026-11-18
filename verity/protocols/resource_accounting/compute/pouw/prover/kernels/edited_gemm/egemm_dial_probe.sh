@@ -10,7 +10,8 @@
 # Clocks are read, never set.
 set -uo pipefail
 export O=${OUT:?}
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2  # CUDA_HOME, else the run's machine's
+export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
 export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm   # exported: the gpu-lease `bash -c` subshell runs egemm_ref.py as "$D/egemm_ref.py"
 export B; B=$(mktemp -d /tmp/egdial.XXXXXX); trap 'rm -rf "$B"' EXIT
 export EG_R_LIST=${EG_R_LIST:-"1 2 4"} EG_NCU_R=${EG_NCU_R:-"1 2 4"}
