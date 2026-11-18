@@ -503,6 +503,9 @@ class TickGate:
         have none."""
         return bool(self.held) or self.wait_start is not None
 
+    def record(self) -> dict[str, int]:
+        return self.tick.record()
+
     def summary(self) -> dict[str, Any]:
         return {**self.counts, "tick": self.tick.record(), "hold_s": self.hold_s, "runs": len(self.runs), "steps": self.steps,
                 "T_us": self.T, "next": self.next, "buckets": len(self.lines), "ended": self.ended, "held_now": len(self.held),
