@@ -119,8 +119,8 @@ noncomputable def scheme (ph : Phase) {Chan : Type} [Fintype Chan] (ρ : Chan �
   charges := ph.charges Chan
   Run := PhaseRun ph Chan Root Coin
   accepts r := r.ok = true ∧ Complete r.chan
-  over r := Nat.clog 2 (ph.Explainable ρ op (ph.incorrectOf r.X)).ncard
-  under _ := 0
+  «over» r := Nat.clog 2 (ph.Explainable ρ op (ph.incorrectOf r.X)).ncard
+  «under» _ := 0
   logOK r := r.log.Cut fixed fun _ => True
   incorrect r := ph.incorrectOf r.X
   breaks r := (Claims.findColl r.calls).isSome
