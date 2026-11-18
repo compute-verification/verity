@@ -507,6 +507,31 @@ def test_under_gate_verdict_a_plain_candidate_falls_back_to_the_whole_check_once
     assert logged and logged[0]["record"]["gate"] == "check" and len(_shards_of(runs, sha)) == 3
 
 
+@pytest.mark.parametrize("base", ["takes the whole check", "is plain"])
+def test_under_gate_verdict_a_candidate_taking_the_whole_check_leaves_suites_to_its_base_s_whole_check_never_to_a_plain_base(
+        env, monkeypatch, base):
+    """#2 changes a path `lowrisk_excludes` names, so its candidate takes the whole check, built on #1's while `main`'s check
+    passed both suite steps.  Where #1's takes the whole check too, #2's leaves to it the suites keyed there as here, as under
+    `--gate check`, and lands once both passed; where #1's is plain, judged on its quick tier alone, which ran no suite
+    whole, it leaves none and runs every suite itself."""
+    main, whole = env.main(), base == "takes the whole check"
+    env.put(1, {"verity/core/v.py": "x = 1\n"} if whole else {"a.txt": "1\n"})
+    env.put(2, {"verity/core/w.py": "x = 1\n"})
+    loop, runs, quick = _verdict(env, monkeypatch, batch=1, depth=2)
+    loop.tick()
+    runs.end(main)
+    loop.tick()
+    started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"].startswith("started") and r["sha"] != main}
+    (one, below), (top, lent) = started.items()
+    assert below["record"]["gate"] == ("check" if whole else vqueue_slim.QUICK) and lent["base"] == one
+    assert (lent["record"]["gate"], lent["record"].get("suites_from")) == ("check", one if whole else None)
+    runs.end(top)
+    (runs.end if whole else quick.end)(one)
+    for _ in range(3):
+        loop.tick()
+    assert env.main() == top
+
+
 @pytest.mark.parametrize("rules, who", [(None, OWN), (AUTHORED, NAMED)], ids=["as its own", "as the rules' author"])
 def test_under_gate_verdict_a_red_of_main_s_check_naming_one_pr_reverts_it_and_holds_the_ready_prs_meeting_its_failure(
         env, monkeypatch, rules, who):

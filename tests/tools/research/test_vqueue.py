@@ -601,8 +601,20 @@ def test_a_lone_members_own_failure_meeting_none_of_its_files_is_rerun_afresh_on
     acts = decide(snap(cand("c1", MAIN, 5, state=FAIL, failed=(t,), reruns=1), ready=prs(5, 6)))
     assert acts == [Eject(5, "h5", acts[0].why, (t,)), Drop("c1", "failed: t", Outcome((5,), heads(5), FAIL, (5,), MAIN)),
                     Build((6,), MAIN, 2)]
-    assert acts[0].why.startswith("t failed alone at h5 and again when rerun afresh, and no failing task's inputs meet")
-    assert "if a test flaked, delete it (a test that flakes is deleted, not rerun)" in acts[0].why
+    assert acts[0].why == ("t failed alone at h5 and again when rerun afresh, and the change breaks it though no failing task's "
+                           "declared inputs meet its files (the test reads more than it declares)")
+
+
+def test_a_lone_member_failing_again_on_its_rerun_is_not_told_to_delete_a_flaking_test_and_one_with_no_rerun_still_is():
+    """A test that failed twice on the change, once afresh, didn't flake: it reads more than it declares (a test scanning every
+    tracked file reads the change through git).  Only a failure no rerun could test (it names no key) may yet be a flake."""
+    t = task("t", "elsewhere/")
+    again = decide(snap(cand("c1", MAIN, 5, state=FAIL, failed=(t,), reruns=1), ready=prs(5)))[0]
+    assert isinstance(again, Eject) and "delete" not in again.why and "reads more than it declares" in again.why
+    keyless = replace(t, key="")
+    once = decide(snap(cand("c1", MAIN, 5, state=FAIL, failed=(keyless,)), ready=prs(5)))[0]
+    assert isinstance(once, Eject) and once.why == ("t failed alone at h5, and no failing task's inputs meet its files: if a "
+                                                    "test flaked, delete it (a test that flakes is deleted, not rerun)")
 
 
 def test_a_lone_member_reruns_only_its_own_failures_and_is_ejected_at_once_when_one_meets_its_files():
@@ -1962,7 +1974,7 @@ def test_a_lone_retest_reruns_its_failed_keys_instead_of_building_the_same_tree_
     w = Play(prs(7, 8), flaky, {"batch": 1}).run(10)
     assert sorted(w.landed) == [7, 8] and w.ejected == [] and w.count(Rerun) == 1
     w = Play(prs(7, 8), lambda tree, c: Verdict(FAIL, (failed,), ended=True) if 7 in tree else Verdict(PASS), {"batch": 1}).run(10)
-    assert w.landed == [8] and [e.number for e in w.ejected] == [7] and "if a test flaked, delete it" in w.ejected[0].why
+    assert w.landed == [8] and [e.number for e in w.ejected] == [7] and "reads more than it declares" in w.ejected[0].why
 
 
 def test_an_earlier_lone_failure_of_another_task_ejects_nobody_without_a_rerun():
@@ -1997,8 +2009,52 @@ def test_an_env_bump_is_ejected_by_its_inputs_once_they_hold_the_envs_spec_and_a
     ready[3] = pr(4, None, "uv.lock")
     w = Play(ready, oracle).run()
     assert sorted(w.landed) == [1, 2, 3, 5, 6] and [e.number for e in w.ejected] == [4]
-    assert ("meet their inputs" if env else "if a test flaked, delete it") in w.ejected[0].why
+    assert ("meet their inputs" if env else "reads more than it declares") in w.ejected[0].why
     assert (w.built, w.count(Rerun)) == ((2, 0) if env else (7, 3))
+
+
+# ---- members with no land verdict -------------------------------------------------------------------------------------------
+
+def unverdicted(r: Ready) -> Ready:
+    """``r`` taken on its mark alone (the low-risk lane): no land verdict at its head (`Ready.verdict`)."""
+    return replace(r, verdict=False)
+
+
+def test_nothing_is_built_on_a_chain_top_holding_a_member_with_no_land_verdict_until_it_has_its_verdict():
+    """A PR taken on its mark alone is built on the chain's top as any PR is, but nothing goes on its candidate, in flight at
+    the head it was built at or not, so a reviewer's hold on it drops that candidate alone.  Once it has its verdict, the
+    tick builds on it."""
+    assert decide(snap(ready=[unverdicted(pr(1))])) == [Build((1,), MAIN, 2)]
+    s = snap(cand("c1", MAIN, 1), ready=[unverdicted(pr(1)), *prs(2, 3)], depth=3)
+    assert decide(s) == []
+    assert [(x.number, x.cause) for x in left_out(s)] == [(2, "unreviewed top"), (3, "unreviewed top")]
+    assert left_out(s)[0].why == ("main's chain's top c1 holds #1, taken on its mark alone with no land verdict: nothing is "
+                                  "built on it until each has its land verdict or lands")
+    assert decide(replace(s, ready=(unverdicted(pr(1, "h1b")), *prs(2, 3)), flying=(unverdicted(pr(1)),))) == []
+    assert decide(replace(s, ready=tuple(prs(1, 2, 3)))) == [Build((2, 3), "c1", 2)]
+    assert decide(snap(cand("c0", MAIN, 4), cand("c1", "c0", 1), ready=[unverdicted(pr(1)), *prs(2, 4)], depth=3)) == []
+
+
+def test_a_rebuild_goes_on_no_candidate_holding_a_member_with_no_land_verdict_and_what_sat_on_it_waits():
+    """`_restack` keeps each rebuilt candidate's place up to one holding a member with no land verdict, the chain's top."""
+    s = snap(cand("c1", MAIN, 3, 4, state=FAIL, failed=(task("t", "pkg3/"),)), cand("c2", "c1", 1), cand("c3", "c2", 2),
+             ready=[unverdicted(pr(1)), *prs(2, 3, 4)], depth=3)
+    assert [a for a in decide(s) if isinstance(a, Build)] == [Build((4,), MAIN, 3, replaces="c1"),
+                                                             Build((1,), "c1", 2, replaces="c2")]
+    assert [a for a in decide(replace(s, ready=tuple(prs(1, 2, 3, 4)))) if isinstance(a, Build)] == [
+        Build((4,), MAIN, 3, replaces="c1"), Build((1,), "c1", 2, replaces="c2"), Build((2,), "c2", 1, replaces="c3")]
+
+
+def test_a_staged_batch_holding_a_member_with_no_land_verdict_goes_onto_the_top_and_nothing_is_built_or_staged_on_it():
+    """Its `Commit` makes it the chain's top, and its tick builds nothing after it; staged, no second Lean batch is staged on
+    it (`Snapshot.lean_stages`)."""
+    passed = waiting("c1", MAIN, 1, records=RecordsRun(PASS))
+    s = snap(passed, cand("c2", MAIN, 2), ready=[unverdicted(lean(1)), *prs(2, 3)], depth=3, records=True)
+    assert decide(s) == [Commit("c1", "c2", 2)]
+    assert decide(replace(s, ready=(lean(1), *prs(2, 3)))) == [Commit("c1", "c2", 2), Build((3,), "c2", 1, after="c1")]
+    staged = snap(waiting("c1", MAIN, 1), ready=[unverdicted(lean(1)), lean(4)], records=True, lean_stages=2)
+    assert not [a for a in decide(staged) if isinstance(a, Build)]
+    assert decide(replace(staged, ready=(lean(1), lean(4)))) == [Build((4,), "c1", 2, True)]
 
 
 # ---- the simulated world -------------------------------------------------------------------------------------------------------

@@ -1036,11 +1036,14 @@ def listed(path: Path, flag: str = "--priority-file", comments: bool = False, ev
 
 
 #: how long a landing or warn gate may run before it counts as unable to judge (`run_gate`)
-GATE_TIMEOUT_S = 600
+GATE_TIMEOUT_S = 120
 #: the fix items of a gate's failure a refusal quotes
 GATE_FIX_LINES = 15
 #: what the ready mark's preflight says after a warn gate's failure (`Preflight._gates`)
 WARN_GATE_SAYS = "A warn gate refuses nothing: the PR lands, and its owner fixes it in their next PR"
+#: what the ready mark's preflight says of a landing gate that couldn't judge the head (`Preflight._gates`)
+GATE_UNJUDGED_SAYS = ("It refuses nothing here: the mark records it (`gates_unjudged`), and the queue runs the landing gates on "
+                      "the head again before it lands it, leaving it out, with the gate's reason, if they refuse it")
 #: what the ready mark's preflight says after the marked PRs a head doesn't merge with (`Preflight._collisions`)
 COLLIDE_SAYS = ("Nothing is refused for it: the verified queue refuses whichever of the two it merges second, for its conflict "
                 "with `main` by then. To be the second without that refusal, wait for the PR named to land, merge `main` and mark "
@@ -1426,6 +1429,12 @@ class StoreLabels:
     def reviews(self, pr: int, head: str) -> list:
         """The `reviewed` labels on `pr:{n}@{head}` (`research queue review`), pulled as `ready`'s are."""
         return self._counted(pr, head, vocab.REVIEWED)[0]
+
+    def unjudged(self, pr: int, head: str) -> str:
+        """What the newest `gates_unjudged` label on `pr:{n}@{head}` says, the landing gates its mark's preflight couldn't
+        judge it with (`_mark`), taken from another head as `ready`'s are; "" with none."""
+        labs = sorted(self._counted(pr, head, vocab.GATES_UNJUDGED)[0], key=lambda lab: lab.ts)
+        return str(labs[-1].value) if labs else ""
 
     def ready_by(self, pr: int, head: str) -> str | None:
         """Who wrote the newest `ready = true` label on `pr:{n}@{head}`, whenever it was written."""
@@ -5624,7 +5633,7 @@ class Preflight:
     (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, a lint of `PREFLIGHT_LINTS` the change
     reaches, or the merged tree's `uv sync --locked` finds its lock stale; (c) contains another open PR's head that isn't admitted (no ready mark at that head, held, or no
     owner), naming each; (d) fails one of drive.toml's `landing_gates` at `main` (`_gates`, which logs what its `warn_gates`
-    say as warnings), with the gate's fix; or (e) merged
+    say, and each landing gate that can't judge the head, as warnings), with the gate's fix; or (e) merged
     onto `next`, breaks the build of a Lean module that is or imports, transitively, a module it changes, in that module's package
     or one requiring it by path (`lean_graph`), built by ``lean`` (`LakeBuild`, on a node's warm Lean tree) within `lean_s`, naming the
     module, its first error and the PR on `next` that owns it (`touched_by`), or for a module of its own, those that changed what it
@@ -5665,21 +5674,24 @@ class Preflight:
         self.lean, self.lean_s, self.lean_modules = lean, lean_s, lean_modules
         self.collide_s, self.collide_jobs = collide_s, max(1, collide_jobs or os.cpu_count() or 1)
         self.root = Path(root or tempfile.gettempdir())
+        #: why the landing gates couldn't judge the head of the last call, which the mark records (`_mark`)
+        self.unjudged: list[str] = []
 
     def __call__(self, pr: PR, prs: list[PR]) -> str | None:
         """None when the head may be marked; else the refusal: before any check when the sync would refuse the head for the
         merges of an old `next` it carries (`_old_next`), since its fix makes another head."""
-        start = self.clock()
+        start, self.unjudged = self.clock(), []
         try:
             base, onto, members = self._fetch(pr)
         except QueueError as e:
             self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]}: checks skipped: all ({e}); its candidate's "
                      "check still tests the head")
+            self._unjudged(pr, [f"no landing gate ran ({e})"])
             return None
         if why := self._old_next(pr, prs):
             return why
         notes: list[str] = []
-        found = self._contained(pr, prs) + self._gates(pr, notes)
+        found = self._contained(pr, prs) + self._gates(pr)
         tree, files, r = None, [], None
         if not pr.move:
             tree, files, r = merged_tree(self.repo, base, pr.head)
@@ -5837,21 +5849,32 @@ class Preflight:
                 f"#{n}'s change, #{n}'s owner withdraws its mark: `research data label pr:{n}@{entries[n].pr.head[:12]} ready false "
                 f"--by OWNER`)" for n in held] + list(stale.values())
 
-    def _gates(self, pr: PR, notes: list[str]) -> list[str]:
-        """(d): what drive.toml's `landing_gates` at `main` refuse (`gate_refusal`).  A gate that can't judge is a note: the
-        check of the candidate holding the head runs the gates again on its whole change (`landing-gates`), where either is a
-        red.  What its `warn_gates` say is logged as a warning and refuses nothing."""
+    def _gates(self, pr: PR) -> list[str]:
+        """(d): what drive.toml's `landing_gates` at `main` refuse (`gate_refusal`).  A gate that can't judge refuses nothing:
+        it is logged as a warning and kept in `unjudged`, which the mark records on the head (`vocab.GATES_UNJUDGED`).  Under
+        `land_into = "main"`, the verified queue's, no sync merges the head onto `next`: its loop runs the landing gates on that
+        head alone before it builds it into a candidate, once, and leaves it out, with the gate's reason, if they refuse it
+        (`vqueue_loop.World.gate`), and the check of the candidate holding the head runs them again on its whole change
+        (`landing-gates`), where either is a red.  Under drive's `next`, the sync that would merge the head onto `next` runs the
+        gates again, leaves out a head they refuse, and holds one they can't judge waiting, its mark kept, until a sync's gates
+        can.  What its `warn_gates` say is logged as a warning and refuses nothing: the head is admitted, and its owner told."""
         main = _out(self.repo, "rev-parse", "refs/queue/preflight/main")
         try:
             gates, warns = gates_at(self.repo, main), gates_at(self.repo, main, "warn_gates")
         except QueueError as e:
-            notes.append(f"no landing gate run ({e})")
+            self._unjudged(pr, [f"no landing gate ran ({e})"])
             return []
         refused, unjudged = gate_refusal(self.repo, main, pr.head, gates)
-        notes += unjudged
+        self._unjudged(pr, unjudged)
         for why in gate_refusal(self.repo, main, pr.head, warns, kind="warn gate")[0]:
             self.log(f"research queue: preflight: warning: #{pr.number} at {pr.head[:12]}: {why}. {WARN_GATE_SAYS}")
         return refused
+
+    def _unjudged(self, pr: PR, whys: list[str]) -> None:
+        """Each of ``whys``, a landing gate that couldn't judge ``pr``'s head, logged as a warning and kept for the mark."""
+        self.unjudged += whys
+        for why in whys:
+            self.log(f"research queue: preflight: warning: #{pr.number} at {pr.head[:12]}: {why}. {GATE_UNJUDGED_SAYS}")
 
     def _collisions(self, pr: PR, prs: list[PR], base: str, onto: str) -> None:
         """A warning, never a refusal: each marked PR among ``prs``, the open ones, whose head doesn't merge with this head
@@ -6236,6 +6259,7 @@ def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str 
     if preflight is not None and (why := preflight(pr, prs)):
         print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: {why}", file=sys.stderr)
         return 1, pr, prs
+    unjudged = list(getattr(preflight, "unjudged", None) or ())
     if (repo := getattr(tier, "repo", None)) is not None:
         try:
             old = same_tree_mark(store, repo, tier.remote, pr)
@@ -6245,13 +6269,13 @@ def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str 
         if old:
             print(f"research queue: #{pr.number}'s head {pr.head[:12]} has the tree of {old[:12]}, marked ready after its quick tier "
                   f"passed: the same files, so the tier isn't run again", flush=True)
-            return _mark(store, pr, by, None, "ready"), pr, prs
+            return _mark(store, pr, by, None, "ready", unjudged), pr, prs
     if isinstance(tier, MarkOnly):
         print(f"research queue: #{pr.number} at {pr.head[:12]}: marked on {by}'s word, with no quick tier", flush=True)
-        return _mark(store, pr, by, None, "ready"), pr, prs
+        return _mark(store, pr, by, None, "ready", unjudged), pr, prs
     print(f"research queue: the quick tier of #{pr.number}'s head {pr.head[:12]} on its merge onto `main`'s tip: `suites.py --quick` "
           "on the suites it changes", flush=True)
-    return _mark(store, pr, by, tier(pr), "ready"), pr, prs
+    return _mark(store, pr, by, tier(pr), "ready", unjudged), pr, prs
 
 
 def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callable[[Path], dict] | None = None,
@@ -6309,9 +6333,11 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
     return _mark(store, prs[0], by, judge_report(res, rid, machine, head, status, covers), "judge")
 
 
-def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
+def _mark(store, pr: PR, by: str, failed: str | None, command: str, unjudged: list[str] | None = None) -> int:
     """`ready = true` on `pr:{n}@{head}`, pushed to the store's remote, unless the quick tier ``failed`` there (the refusal), or
-    ``store``, a `labelauth.Signer` (`label_signer`), refuses to write a mark it can't sign."""
+    ``store``, a `labelauth.Signer` (`label_signer`), refuses to write a mark it can't sign; written before it, with
+    ``unjudged`` (each landing gate the preflight couldn't judge the head with, `Preflight.unjudged`), `gates_unjudged`
+    saying so, which the verified queue's loop reads (`StoreLabels.unjudged`)."""
     from .labelauth import AuthError
     from .store.cli import _label_write_through
 
@@ -6329,6 +6355,8 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
         return 1
     target = label_target(pr.number, pr.head)
     try:
+        if unjudged:
+            store.add_label(target, vocab.GATES_UNJUDGED, "; ".join(unjudged), by)
         store.add_label(target, vocab.READY, True, by)
     except AuthError as e:
         print(f"research queue {command}: #{pr.number} is not marked ready at {pr.head[:12]}: {e}", file=sys.stderr)

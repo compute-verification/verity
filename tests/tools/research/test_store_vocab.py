@@ -43,7 +43,7 @@ RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "a
                "pipeline", "kernel_outcome", "kernel_reason", "memory-line-of-record", "run_of_record", "unit_lowering",
                "compile_cost", "training-slowdown")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
-                     "hot_card", "grant", "ready", "reviewed", "lean_review", "landed", "commit_map", "custody", "source-lost", "challenger-key", "challenger-ledger",
+                     "hot_card", "grant", "ready", "reviewed", "gates_unjudged", "lean_review", "landed", "commit_map", "custody", "source-lost", "challenger-key", "challenger-ledger",
                      "challenger-pins", "challenger-models", "verdict", "executor_shadow", "tasks_graph", "verity_graph", "result",
                      "ready_verdict", "label_auth", "label_delegation", "nightly_check")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",

@@ -47,13 +47,17 @@ class Lab:
 
 class Labels:
     """A PR's ready mark is the fake GitHub's (`ready`), and each marked head has a land verdict by `reviewer` unless ``held``,
-    but a head ``verdicts`` gives its own ({(PR, head): its `reviewed` labels}), which are its PR's other heads' too."""
+    but a head ``verdicts`` gives its own ({(PR, head): its `reviewed` labels}), which are its PR's other heads' too; a head
+    ``ungated`` names, its mark's preflight couldn't judge with the landing gates (`StoreLabels.unjudged`)."""
 
     def __init__(self, gh):
-        self.gh, self.held, self.verdicts = gh, set(), {}
+        self.gh, self.held, self.verdicts, self.ungated = gh, set(), {}, {}
 
     def ready(self, n: int, head: str) -> bool:
         return (n, head) in self.gh.ready
+
+    def unjudged(self, n: int, head: str) -> str:
+        return self.ungated.get((n, head), "")
 
     def reviews(self, n: int, head: str) -> list[Lab]:
         if (n, head) in self.verdicts:
@@ -635,6 +639,27 @@ def test_a_move_pr_without_a_land_verdict_is_not_built_even_where_the_low_risk_r
     assert loop.world.left == {**({} if lowrisk else {1: (one, "no land verdict, and it isn't low-risk")}),
                                2: (two, "no land verdict, and a move lands on its mark alone only once its map "
                                        "tools/move/x_map.toml is on `main`")}, loop.world.left
+
+
+def test_a_pr_the_low_risk_rule_builds_on_its_mark_alone_is_the_chain_s_top_until_its_land_verdict_and_then_is_built_on(env):
+    """`World.ready` gives a PR taken on its mark alone `Ready.verdict` False, its own land verdict or a carried one True: the
+    policy builds nothing on a candidate holding one, so a reviewer's hold on it would drop that candidate alone."""
+    _main_to(env, {Q.DRIVE_FLAGS: 'lowrisk_excludes = ["*.lean"]\n'})
+    main, verdicts = env.main(), env.labels.verdicts
+    one = env.put(1, {"a.txt": "1\n"})
+    verdicts[1, one] = []                                        # marked, no land verdict
+    loop = env.loop(vqueue.decide)
+    (built,) = [r for r in loop.tick() if r["action"] == "build"]
+    assert (built["members"], built["base"]) == ([1], main) and loop.world.reviewed == set()
+    env.put(2, {"b.txt": "2\n"})
+    assert [r for r in loop.tick() if r["action"] == "build"] == []
+    assert [(x.number, x.verdict) for x in loop.world.ready(main)] == [(1, False), (2, True)]
+    env.put(1, {"a.txt": "1 again\n"})                          # a new head, with a land verdict: in flight, #1 has none
+    assert [r for r in loop.tick() if r["action"] == "build"] == []
+    assert loop.world.land_verdict(1, one) is False
+    verdicts[1, one] = [Lab("reviewer", "land", "2026-01-01T00:00:00Z")]
+    (on,) = [r for r in loop.tick() if r["action"] == "build"]
+    assert (on["members"], on["base"]) == ([2], built["sha"]), on
 
 
 @pytest.mark.parametrize("shadow", [False, True])
@@ -3788,7 +3813,7 @@ class Records:
         self.kw.append(kw)
         launch = {"ids": [], "launch": {"dir": f"records-{len(self.started)}", "pid": 1}} if self.launching else {
             "ids": [f"regen-{len(self.started)}"]}
-        return {**launch, "tip": sha}
+        return {**launch, "tip": sha, **({"on": kw["on"]} if kw.get("on") else {})}
 
     def judge(self, driver, rec: dict | None) -> RecordsRun:
         if rec is None:
@@ -4199,6 +4224,148 @@ def test_a_heavy_pr_s_records_run_and_its_start_again_after_infra_take_heavy_on_
     assert (judged["why"], again["why"], records.kw) == (f"judged {INFRA}", "started again", [want, want])
 
 
+#: a second Lean change, in a package of its own, which merges onto `LEAN`'s
+QKG = {"qkg/B.lean": "theorem b : True := trivial\n", "qkg/lean-audit.json": '{"records": 1}\n'}
+
+
+def _stages_loop(env: Env, stages: int, **kw) -> tuple[Loop, Records, str, str, str]:
+    """The policy's loop at `--lean 1` and ``stages`` (`--lean-stages`), with #1 (`LEAN`) and #2 (`QKG`) ready: its first
+    tick stages #1's candidate, whose sha it gives, with #1's and #2's heads."""
+    one, two = env.put(1, LEAN), env.put(2, QKG)
+    records = Records(env.tmp / "clone")
+    loop = env.loop(vqueue.decide, records=records, lean=1, lean_stages=stages, **kw)
+    loop.world.slim_driver = lambda: "drive"
+    built, started = loop.tick()
+    assert (built["members"], built["base"], built["records_first"], started["action"]) == ([1], env.main(), True, "regenerate")
+    return loop, records, built["sha"], one, two
+
+
+@pytest.mark.parametrize("stages", [1, 2])
+def test_under_lean_stages_2_a_second_lean_batch_is_staged_on_the_first_s_tip_and_goes_onto_main_s_chain_after_it(env, stages):
+    """At `--lean-stages` 1, as before it, #2 waits while #1's batch is staged.  At 2 the next tick stages #2's batch on #1's
+    tip with its own records run, so two records runs run at once; #2's passing first commits nothing, since its base is
+    still staged, and once #1's passed it goes onto main's chain as built, #2's following it there the tick after, as built
+    on it."""
+    loop, records, one_sha, one, two = _stages_loop(env, stages)
+    if stages == 1:
+        assert loop.tick() == [] and records.started == [("drive", one_sha)]
+        return
+    built, started = loop.tick()
+    assert (built["members"], built["heads"], built["base"], built["records_first"], built["enqueued"]) == (
+        [2], [two], one_sha, True, False), built
+    assert (started["action"], started["sha"]) == ("regenerate", built["sha"])
+    assert records.started == [("drive", one_sha), ("drive", two_sha := built["sha"])] and _checks(env) == []
+    records.files = {}                                              # each regenerated nothing: checked as built
+    records.verdicts["regen-2"] = RecordsRun(PASS)
+    assert [(r["action"], r["sha"]) for r in loop.tick()] == [("regenerate", two_sha)] and _checks(env) == []
+    records.verdicts["regen-1"] = RecordsRun(PASS)
+    judged, first = loop.tick()
+    assert (judged["sha"], first["action"], first["sha"], first["enqueued"]) == (one_sha, "build", one_sha, True), first
+    assert _checks(env) == [f"ready:{one_sha}"]
+    (second,) = loop.tick()
+    assert (second["action"], second["sha"], second["base"], second["enqueued"]) == ("build", two_sha, one_sha, True), second
+    assert _checks(env) == [f"ready:{one_sha}", f"ready:{two_sha}"] and len(records.started) == 2 and env.withdrawn == []
+
+
+@pytest.mark.parametrize("stages, want", [(1, [{"on": "big1,big2"}]), (2, [{"on": "big1"}, {"on": "big2"}])])
+def test_under_lean_stages_2_two_staged_heavy_batches_records_runs_take_two_heavy_on_machines(env, stages, want):
+    """With every candidate heavy, at 1 the one staged batch's records run takes all of `--heavy-on`, its first free machine
+    taking it, as before; at 2 the second's takes the machine the first's doesn't hold, and a run started again after
+    infra takes the machine no other run in flight holds."""
+    (env.tmp / "heavy").write_text("*\n")
+    env.put(1, LEAN), env.put(2, QKG)
+    records = Records(env.tmp / "clone")
+    loop = env.loop(vqueue.decide, records=records, lean=1, lean_stages=stages)
+    loop.world.slim_driver = lambda: "drive"
+    loop.world.heavy_file, loop.world.heavy_on = env.tmp / "heavy", "big1,big2"
+    loop.tick()
+    loop.tick()
+    assert records.kw == want
+    if stages == 2:
+        records.verdicts["regen-1"] = RecordsRun(INFRA, "it never ran or was stopped (regen-1)")
+        judged, again = loop.tick()
+        assert (again["why"], records.kw[-1]) == ("started again", {"on": "big1"})
+
+
+def test_under_lean_stages_2_a_refused_first_records_run_drops_the_second_which_is_staged_again_on_what_is_left(env):
+    """The second's own refusal waits while the first's run hasn't passed, since the first's change is under it: nothing is
+    ejected or dropped.  The first's refusal ejects #1 and drops its batch, and the second with it, staged again on `main`
+    with a records run of its own; #2 isn't ejected."""
+    loop, records, one_sha, one, two = _stages_loop(env, 2)
+    (built, _) = loop.tick()
+    records.verdicts["regen-2"] = RecordsRun(FAIL, "it failed: regen-2 failed rc=1")
+    assert [(r["action"], r["why"]) for r in loop.tick()] == [("regenerate", "judged fail")] and env.withdrawn == []
+    assert loop.tick() == [] and set(env.queued()) == {branch(one_sha), branch(built["sha"])}
+    records.verdicts["regen-1"] = RecordsRun(FAIL, "it failed: regen-1 failed rc=1")
+    lines = loop.tick()
+    drops = {r["sha"]: r["why"] for r in lines if r["action"] == "drop"}
+    assert drops == {one_sha: "its records run refused its records: it failed: regen-1 failed rc=1",
+                     built["sha"]: "its base was dropped"}, lines
+    assert env.withdrawn == [(1, one)]
+    (again,) = [r for r in lines if r["action"] == "build"]
+    assert (again["members"], again["heads"], again["base"], again["records_first"], again["replaces"]) == (
+        [2], [two], env.main(), True, built["sha"]), again
+    assert records.started[-1] == ("drive", again["sha"]) and len(records.started) == 3
+
+
+UNJUDGED = "the landing gate gates/g.py ran over 120 s"
+
+
+def _gates(monkeypatch, says: dict[str, tuple[list[str], list[str]]]) -> list[str]:
+    """drive.toml's landing gates at `main`, faked: `gate_refusal` of each head is what ``says`` gives it, (refused,
+    unjudged); the heads judged, in order."""
+    ran: list[str] = []
+    monkeypatch.setattr(L, "gates_at", lambda repo, ref, key="landing_gates": ("gates/g.py",))
+    monkeypatch.setattr(L, "gate_refusal", lambda repo, main, head, gates: ran.append(head) or says[head])
+    return ran
+
+
+def test_a_member_its_mark_s_preflight_couldn_t_judge_with_the_landing_gates_is_judged_once_on_its_head_before_it_is_built(
+        env, monkeypatch):
+    """#1 and #3 were marked with a landing gate that couldn't judge them (`gates_unjudged`), #2 with every gate judging it.
+    The build runs the gates on #1's and #3's heads alone, never #2's: #3 passes and is built beside #2, and #1, refused, is
+    left out, its owner told the gate's reason and fix.  At that head it stays out of `ready`, with the gate's reason, and
+    the gates never run on it again, nor in a new loop on the same cache."""
+    h1, _, h3 = env.put(1, {"a.txt": "1\n"}), env.put(2, {"b.txt": "2\n"}), env.put(3, {"c.txt": "3\n"})
+    env.labels.ungated = {(1, h1): UNJUDGED, (3, h3): UNJUDGED}
+    refusal = "the landing gate gates/g.py at `main`: touches a.txt; delete a.txt"
+    ran = _gates(monkeypatch, {h1: ([refusal], []), h3: ([], [])})
+    main, cache = env.main(), env.tmp / "cache"
+    lines = env.loop(vqueue.decide, cache=cache).tick()
+    assert ran == [h1, h3]
+    gates = [(r["number"], r["heads"], r["why"], r["gated_on"]) for r in lines if r["action"] == "gate"]
+    assert gates == [(1, [h1], f"refused: {refusal}", main), (3, [h3], "passed", main)], lines
+    (skip,) = [r for r in lines if r["action"] == "skip"]
+    why = f"drive.toml's landing gates, which its ready mark's preflight couldn't judge it with, refuse it: {refusal}"
+    assert (skip["number"], skip["why"]) == (1, why) and skip["done"], skip
+    assert len(env.posts) == 1 and env.posts[0].endswith(
+        f"#1 at {h1[:12]} isn't built on the verified queue's candidate on {main[:12]}: {why}. Push the fix and mark the new "
+        "head."), env.posts
+    (built,) = [r for r in lines if r["action"] == "build"]
+    assert built["members"] == [2, 3], built
+    loop = env.loop(vqueue.decide, cache=cache)
+    assert loop.tick() == [] and ran == [h1, h3]
+    assert loop.world.left[1] == (h1, f"drive.toml's landing gates refuse it at this head: {refusal}")
+    assert json.loads((cache / L.GATES_CACHE).read_text()) == {f"1@{h1}": [refusal], f"3@{h3}": []}
+
+
+def test_a_member_the_landing_gates_still_can_t_judge_waits_unbuilt_its_owner_told_nothing_and_is_judged_again_next_build(
+        env, monkeypatch):
+    head = env.put(1, {"a.txt": "1\n"})
+    env.labels.ungated = {(1, head): UNJUDGED}
+    says = {head: ([], [f"the landing gate gates/g.py can't judge {head[:12]}: exit 2"])}
+    ran = _gates(monkeypatch, says)
+    loop = env.loop(vqueue.decide)
+    lines = loop.tick()
+    (skip,) = [r for r in lines if r["action"] == "skip"]
+    assert skip["waits"] and "nor can they now: the landing gate gates/g.py can't judge" in skip["why"], skip
+    assert env.posts == [] and not [r for r in lines if r["action"] in ("gate", "build") and r.get("sha")]
+    says[head] = ([], [])
+    lines = loop.tick()
+    assert ran == [head, head] and [r["why"] for r in lines if r["action"] == "gate"] == ["passed"]
+    assert [r["members"] for r in lines if r["action"] == "build" and r.get("sha")] == [[1]]
+
+
 def test_a_records_run_that_ends_in_infra_is_started_once_more_and_then_refuses_ringing_infra(env):
     def refuse(driver, sha):
         raise Q.QueueError("train.sh printed no run dir")
@@ -4541,8 +4708,10 @@ def test_end_to_end_on_a_lock_run_its_records_commit_lands_naming_each_statement
     assert _git(env.o.origin, "rev-parse", "main^") == sha and env.withdrawn == [] and env.posts == []
 
 
-@pytest.mark.parametrize("flag, records", [((), vqueue_records), (("--no-records",), None)])
-def test_the_command_runs_each_records_run_with_vqueue_records_and_none_with_no_records(monkeypatch, tmp_path, flag, records):
+@pytest.mark.parametrize("flag, records, stages", [((), vqueue_records, 1), (("--no-records",), None, 1),
+                                                   (("--lean-stages", "2"), vqueue_records, 2)])
+def test_the_command_runs_each_records_run_with_vqueue_records_and_none_with_no_records(monkeypatch, tmp_path, flag, records,
+                                                                                        stages):
     import research.store.local as local
 
     made = []
@@ -4562,7 +4731,7 @@ def test_the_command_runs_each_records_run_with_vqueue_records_and_none_with_no_
                             (Q, "credential_args", lambda *a: ()), (local, "LocalStore", lambda root: None)):
         monkeypatch.setattr(mod, name, fake)
     assert L.main(["--dry-run", "--log", str(tmp_path / "log"), *flag]) == 0
-    assert made[0]["records"] is records and made[0]["dry_run"]
+    assert made[0]["records"] is records and made[0]["dry_run"] and made[0]["lean_stages"] == stages
 
 
 def test_research_queue_vqueue_is_its_own_command_and_runs_the_run_beside_each_check_with_vqueue_slim(capsys):
@@ -4575,13 +4744,14 @@ def test_research_queue_vqueue_is_its_own_command_and_runs_the_run_beside_each_c
     assert vqueue_loop._slim() is vqueue_slim
 
 
-def test_the_loop_s_batch_depth_and_lean_default_to_16_3_and_3_on_the_command_and_in_the_loop(capsys, tmp_path):
+def test_the_loop_s_batch_depth_lean_and_lean_stages_default_to_16_3_3_and_1_on_the_command_and_in_the_loop(capsys, tmp_path):
     with pytest.raises(SystemExit):
         Q.main(["vqueue", "--help"])
     said = " ".join(capsys.readouterr().out.split())
-    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("take no limit (--pins-file)", 3))), said
+    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("take no limit (--pins-file)", 3),
+                                                       ("dropped and built again when the first is dropped", "1: one at a time"))), said
     loop = Loop(None, tmp_path / "log")
-    assert (loop.batch, loop.depth, loop.lean) == (L.BATCH, L.DEPTH, L.LEAN) == (16, 3, 3)
+    assert (loop.batch, loop.depth, loop.lean, loop.lean_stages) == (L.BATCH, L.DEPTH, L.LEAN, L.LEAN_STAGES) == (16, 3, 3, 1)
 
 
 def test_merged_root_takes_the_codemod_s_worktrees_off_tmpdir_and_sweeps_one_a_killed_tick_left_there(tmp_path, monkeypatch):
