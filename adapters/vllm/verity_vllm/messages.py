@@ -15,7 +15,7 @@ message's writers and readers.
 from __future__ import annotations
 
 import itertools
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -27,7 +27,8 @@ from verity.protocols.proofs.spot.prover import workload as spot
 from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme as schemes
 
-__all__ = ["Exchange", "append", "body", "build", "close", "current", "declaring", "line", "lines", "option", "providing", "read", "write"]
+__all__ = ["Exchange", "append", "attach_listed", "body", "build", "close", "current", "declaring", "line", "lines", "listed_refusals",
+           "named", "option", "providing", "read", "write"]
 
 type Subscriber = Callable[[Any], None]
 
@@ -234,6 +235,30 @@ def option(entry: str | None) -> schemes.Scheme | None:
 def declaring(port: str) -> schemes.Scheme:
     """The one declared scheme with a port named ``port`` (`Scheme.ports`); `LookupError` naming those that have otherwise."""
     return _one(f"declares port {port!r}", lambda s: any(p.name == port for p in s.ports))
+
+
+def named(entry: str) -> schemes.Scheme | None:
+    """The declared scheme ``entry`` names, by its option (`option`) or by its name; None when it names none."""
+    found = option(entry)
+    return found if found is not None else declarations.load().get(entry)
+
+
+def listed_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
+    """Every reason ``listed``, a configuration's schemes in its order, can't be attached together in one process,
+    checked before any of them attaches; empty: it can."""
+    names = [s.name for s in listed]
+    return [f"{n} is listed {names.count(n)} times" for n in dict.fromkeys(names) if names.count(n) > 1]
+
+
+def attach_listed(exchange: Exchange, listed: Sequence[tuple[schemes.Scheme, Mapping[str, Any]]], **ctx: Any) -> list[Any]:
+    """Each scheme of ``listed`` (a configuration's list, each with its settings) attached on ``exchange`` with ``ctx``
+    (`Exchange.attach`), once `listed_refusals` refuses none; what each attach returned, in list order.  The scheme
+    listed earlier is the outer: a kernel filed later runs outside one filed earlier (`Exchange.request`), so the list
+    attaches last first."""
+    if bad := listed_refusals([s for s, _ in listed]):
+        raise Refused("listed schemes", "; ".join(bad))
+    got = [exchange.attach(s, given, **ctx) for s, given in reversed(listed)]
+    return got[::-1]
 
 
 _CURRENT: Exchange | None = None
