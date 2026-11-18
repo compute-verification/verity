@@ -421,44 +421,93 @@ def y_trees(host, monkeypatch):
     return torch, SY, run, SYD.DeviceTrees(run)
 
 
-#: why a `DeviceTrees` call fails as a whole: its salts are fresh bytes nothing hands it yet, and its first tree is held to
-#: `commit_y`, which still derives them from a key
-Y_SALTS = "compute-accounting's goal: Pearl+ hands the leaf kernels their salts (DeviceTrees.salts, and commit_y over them)"
+def y_salt_bytes(torch, label: str, m: int):
+    """`m` rows' test salts as `served_y_device.y_tree` takes them: uint8 on the host, `R.HM_SALT` bytes a row."""
+    return torch.frombuffer(bytearray(salts_of(label, m)), dtype=torch.uint8)
 
 
 @pytest.mark.parametrize("m", [1, 5, 129, 300])
 def test_served_y_device_trees_are_the_trees_over_their_salts(host, monkeypatch, m):
     """served_y's `DeviceTrees` (a retained Pearl+ call's y tree as its device builds it, by run.py's launches) on the host
-    build, given the rows' salts: over a call's real rows of y, BF16 widened to FP32 7 rows at a time, the tree is the
+    build, handed the rows' salts: over a call's real rows of y, BF16 widened to FP32 7 rows at a time, the tree is the
     frame-v3-sha512 tree over y's FP32 rows under those salts, level 0 padded and every level above it, under the call's y
-    domain, at 1, 5, 129 and 300 rows.  Without salts handed in, the call is refused before any launch."""
+    domain, at 1, 5, 129 and 300 rows.  It is `commit_y`'s tree under the same salt bytes, which is also what `y_tree`
+    gives where y is on the CPU (the fallback), and other salt bytes give another root."""
     n, index = 1024, 77
     torch, SY, run, trees = y_trees(host, monkeypatch)
+    from verity_torch.pouw.pearl_c import served_y_device as SYD
     monkeypatch.setattr(SY, "Y_CHUNK_BYTES", 7 * 4 * n)
     y = torch.randn(m, n, generator=torch.Generator().manual_seed(m)).to(torch.bfloat16)
-    p, salts = trees._pipe(n), salts_of(f"y-{m}", m)
-    with pytest.raises(NotImplementedError, match="fresh 192-byte hm96 salts"):
-        trees._tree(p, y, index)
-    monkeypatch.setattr(trees, "salts", lambda rows, call: host.put(salts) if (rows, call) == (m, index) else 0)
-    got = trees._tree(p, y, index).numpy().tobytes()
-    assert got == tree_of(SY.y_domain(run.salt, index, m), SY.f32_rows(y.view(torch.uint8).numpy().tobytes(), n), salts)
+    raw = salts_of(f"y-{m}", m)
+    salts, y_bytes = y_salt_bytes(torch, f"y-{m}", m), y.view(torch.uint8).numpy().tobytes()
+    got = trees._tree(trees._pipe(n), y, index, salts).numpy().tobytes()
+    root, tree = SY.commit_y(y_bytes, n, run.salt, index, [raw[i:i + R.HM_SALT] for i in range(0, len(raw), R.HM_SALT)])
+    assert got == tree == tree_of(SY.y_domain(run.salt, index, m), SY.f32_rows(y_bytes, n), raw) and got[-64:] == root
+    assert SYD.y_tree(run, y, index, salts).numpy().tobytes() == got
+    other = trees._tree(trees._pipe(n), y, index, y_salt_bytes(torch, f"other-{m}", m)).numpy().tobytes()
+    assert other[-64:] != root
 
 
-@pytest.mark.xfail(raises=NotImplementedError, strict=True, reason=Y_SALTS)
+def test_served_y_refuses_a_wrong_count_or_size_of_salts(host, monkeypatch):
+    """`commit_y`, and `y_tree`'s fallback through it, take one salt of `R.HM_SALT` bytes a row of y: a salt too few, one
+    too many and a short salt are each refused, naming the count and the size."""
+    n, m, index = 1024, 5, 3
+    torch, SY, run, _ = y_trees(host, monkeypatch)
+    from verity_torch.pouw.pearl_c import served_y_device as SYD
+    y = torch.randn(m, n, generator=torch.Generator().manual_seed(0)).to(torch.bfloat16)
+    raw = salts_of("y-count", m + 1)
+    each = [raw[i:i + R.HM_SALT] for i in range(0, len(raw), R.HM_SALT)]
+    refusal = f"y's {m} rows take {m} salts of {R.HM_SALT} bytes"
+    for salts in (each[:m - 1], each, [*each[:m - 1], each[m - 1][:-1]]):
+        with pytest.raises(ValueError, match=refusal):
+            SY.commit_y(y.view(torch.uint8).numpy().tobytes(), n, run.salt, index, salts)
+    for size in (R.HM_SALT * (m - 1), R.HM_SALT * (m + 1), R.HM_SALT * m - 1):
+        with pytest.raises(ValueError, match=refusal):
+            SYD.y_tree(run, y, index, torch.frombuffer(bytearray(raw[:size]), dtype=torch.uint8))
+
+
+def test_device_trees_refuse_a_wrong_count_or_size_of_salts_before_any_launch(host, monkeypatch):
+    """The device path (`DeviceTrees`, whose kernels read `R.HM_SALT` bytes a leaf from the salts' address with no length)
+    refuses a salt too few, one too many, a short salt, and salts not contiguous uint8 on y's device, each before any
+    launch: its width's pipeline is built first, and every launch after it fails."""
+    n, m, index = 1024, 5, 3
+    torch, _, _, trees = y_trees(host, monkeypatch)
+    y = torch.randn(m, n, generator=torch.Generator().manual_seed(0)).to(torch.bfloat16)
+    raw = salts_of("y-device-count", m + 1)
+    trees.pipe(n, index)
+
+    def launched(*a, **kw):
+        raise AssertionError("a launch")
+    monkeypatch.setattr(host, "launch", launched, raising=False)
+    wrong = [torch.frombuffer(bytearray(raw[:size]), dtype=torch.uint8)
+             for size in (R.HM_SALT * (m - 1), R.HM_SALT * (m + 1), R.HM_SALT * m - 1)]
+    whole = torch.frombuffer(bytearray(raw[:R.HM_SALT * m]), dtype=torch.uint8)
+    wrong += [whole.view(torch.int8), torch.frombuffer(bytearray(raw[:2 * R.HM_SALT * m]), dtype=torch.uint8)[::2]]
+    for salts in wrong:
+        with pytest.raises(ValueError, match=f"y's {m} rows take {m} salts of {R.HM_SALT} bytes, contiguous uint8"):
+            trees(y, index, salts)
+
+
 def test_served_y_device_trees_refuse_a_width_whose_first_tree_isnt_commit_ys(host, monkeypatch):
-    """A width's first device tree is held to `commit_y` over a fixed 129-row y, so a tree with a node off is refused, naming
-    the node, and the width's pipeline isn't kept: the next call checks again."""
+    """A width's first device tree is held to `commit_y` over a fixed 129-row y under the same fresh salts, so a tree with a
+    node off is refused, naming the node, and the width's pipeline isn't kept: the next call checks again.  A tree left as
+    built passes the check, and the call's tree is `commit_y`'s under the salts it was handed."""
     n = 1024
     torch, SY, run, trees = y_trees(host, monkeypatch)
     real = trees._tree
 
-    def off(p, y, index):
-        t = real(p, y, index)
+    def off(p, y, index, salts):
+        t = real(p, y, index, salts)
         t[64 * 3] ^= 1
         return t
 
     trees._tree = off
+    y, salts = torch.zeros(4, n, dtype=torch.bfloat16), y_salt_bytes(torch, "y-check", 4)
     for _ in range(2):
         with pytest.raises(ValueError, match=f"width {n} differs from served_y.commit_y over 129 rows, first at node 3 of 511"):
-            trees(torch.zeros(4, n, dtype=torch.bfloat16), 5)
+            trees(y, 5, salts)
         assert not trees.pipes
+    trees._tree = real
+    raw = salts_of("y-check", 4)
+    want = SY.commit_y(y.view(torch.uint8).numpy().tobytes(), n, run.salt, 5, [raw[i:i + R.HM_SALT] for i in range(0, len(raw), R.HM_SALT)])[1]
+    assert trees(y, 5, salts).numpy().tobytes() == want and list(trees.pipes) == [n]

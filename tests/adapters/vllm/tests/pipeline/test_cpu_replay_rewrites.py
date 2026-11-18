@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 import verity_vllm.pipeline.cpu_replay as CPU
-from tests.pipeline.test_cpu_replay import weights_tree
+from tests.pipeline.test_cpu_replay import weights_tree, write_salts
 from verity_vllm.check import fp8_ue8m0 as FU
 from verity_vllm.check import weights_of_record as WR
 
@@ -80,6 +80,7 @@ def test_the_roles_are_read_by_registered_name(world: SimpleNamespace) -> None:
 def test_a_tensor_read_on_demand_is_the_one_open_weights_opens_by_the_builds_roles(tmp_path: Path, world: SimpleNamespace, tp: dict[str, int] | None) -> None:
     tensors = served(world, tp)
     tree = weights_tree(tensors) | {"extra": {}}
+    write_salts(tmp_path, tree)
     words, wc = CPU.open_weights(tmp_path, tree, tree["root"], world.ck, threads=1, tp=tp, roles=world.roles)
     assert wc["equal"] is True and wc["opened"] == 3 and wc["mismatched_n"] == 0 and wc["unopened_n"] == 0, wc
     lazy = CPU.OnRead(tmp_path, tree, tree["root"], world.ck, tp=tp, roles=world.roles)
@@ -92,6 +93,7 @@ def test_a_tensor_read_on_demand_is_the_one_open_weights_opens_by_the_builds_rol
 @pytest.mark.parametrize("tp", [WHOLE, RANK_1])
 def test_without_the_roles_the_requantised_linear_does_not_open(tmp_path: Path, world: SimpleNamespace, tp: dict[str, int] | None) -> None:
     tree = weights_tree(served(world, tp)) | {"extra": {}}
+    write_salts(tmp_path, tree)
     _, bare = CPU.open_weights(tmp_path, tree, tree["root"], world.ck, threads=1, tp=tp)
     assert bare["equal"] is False and sorted(m["name"] for m in bare["mismatched"]) == [W, S], bare
     lazy = CPU.OnRead(tmp_path, tree, tree["root"], world.ck, tp=tp)
@@ -104,6 +106,7 @@ def test_without_the_roles_the_requantised_linear_does_not_open(tmp_path: Path, 
 
 def test_another_ranks_shard_does_not_open_by_the_roles(tmp_path: Path, world: SimpleNamespace) -> None:
     tree = weights_tree(served(world, RANK_1)) | {"extra": {}}
+    write_salts(tmp_path, tree)
     rank_0 = {"world": 2, "rank": 0}
     _, wc = CPU.open_weights(tmp_path, tree, tree["root"], world.ck, threads=1, tp=rank_0, roles=world.roles)
     assert wc["equal"] is False and sorted(m["name"] for m in wc["mismatched"]) == [W, S], "the roles compose the rank's own rows"

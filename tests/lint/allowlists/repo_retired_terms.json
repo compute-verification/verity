@@ -2087,7 +2087,6 @@
     {"file": "tests/adapters/vllm/tests/protocols/test_pouw_h1_registered.py", "count": 6},
     {"file": "tests/adapters/vllm/tests/protocols/test_pouw_h1_tables_device.py", "count": 6},
     {"file": "tests/adapters/vllm/tests/protocols/test_pouw_lead.py", "count": 2},
-    {"file": "tests/adapters/vllm/tests/protocols/test_pouw_pearl_c_served.py", "count": 10},
     {"file": "tests/adapters/vllm/tests/protocols/test_protocol_options.py", "count": 53},
     {"file": "tests/adapters/vllm/tests/protocols/test_rt4_h1_challenger.py", "count": 130},
     {"file": "tests/adapters/vllm/tests/query/test_boundary_oracle.py", "count": 12},
