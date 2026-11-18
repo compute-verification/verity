@@ -93,14 +93,14 @@ def test_without_bindings_no_key_blocks_and_pearl_pluss_coins_are_the_workloads_
 
 
 #: onsite's subprotocols with Pearl+ in H1's place
-ONSITE_PEARLPLUS = tuple("pearl-plus" if c == "pouw" else c for c in T.ONSITE_COMPONENTS)
+ONSITE_PEARLPLUS = tuple("pearl-plus" if c == "pouw" else c for c in T.listed("onsite_full"))
 ONSITE_UNBOUND = [k for k in T.unbound(R.load(ONSITE, REG), {}) if k.split(".")[1] != "pouw"]
 
 
 def onsite_pearlplus(tmp: Path, monkeypatch) -> Path:
-    monkeypatch.setitem(T.DEMOS, "onsite_full", ONSITE_PEARLPLUS)
-    cfg = T.configuration(K.parse(ONSITE.read_text())["program"]["commit"])
-    monkeypatch.setitem(T.DEMOS, "onsite_full", T.ONSITE_COMPONENTS)
+    with monkeypatch.context() as m:
+        m.setattr(T, "listed", lambda demo: ONSITE_PEARLPLUS)
+        cfg = T.configuration(K.parse(ONSITE.read_text())["program"]["commit"])
     f = tmp / "onsite.toml"
     f.write_text(K.render(cfg))
     return f
@@ -277,8 +277,8 @@ def written(base: Path, line: dict | None, rows: dict | None, inference_only: di
 ACCEPTED = {"integrity": {"verdict": "accept"}, "work": {"verdict": "accept"}}
 #: inference-only's row as a verifier-side run would write it: its answer recomputed off the served node
 CHECKED = {"verdict": "accept", "answer_from": "recomputed on this host by its Lean verifier"}
-ALL_ACCEPTED = {c: "accept" for c in T.DEMOS["remote"]}
-ABSENT = {c: "absent" for c in T.DEMOS["remote"]}
+ALL_ACCEPTED = {c: "accept" for c in T.listed("remote")}
+ABSENT = {c: "absent" for c in T.listed("remote")}
 YES = {"composed": "accept", "product": "remote"}
 
 
@@ -379,13 +379,13 @@ def test_remotes_verifier_gives_its_verdict_line_on_its_own_machine(tmp_path, ca
     assert len(lines) == 1, out
     assert (rc, lines[0]["product"], lines[0]["verdict"], lines[0]["block"]) == (0, T.REMOTE, "accept", 3)
     assert lines[0]["coins"] == "simulated"
-    assert lines[0]["coins_on"] == {T.RECORD_NAMES["integrity"]: T.PROVER_NODE, "pearl-plus": T.PROVER_NODE}
+    assert lines[0]["coins_on"] == {SP.COMPONENT: T.PROVER_NODE, "pearl-plus": T.PROVER_NODE}
 
 
 def test_the_verifiers_line_names_the_challengers_machine_for_a_bound_gate(tmp_path):
     cfg = R.load(CONFIG, REG)
     written(tmp_path / "out" / "compose", YES, {**ACCEPTED, "inference-only": CHECKED})
-    spot = T.RECORD_NAMES["integrity"]
+    spot = SP.COMPONENT
     at = {p["name"]: p["machine"] for p in cfg["party"]}
     for tables, want in ((BINDINGS, {spot: at[T.WORKERS], "pearl-plus": at[T.CHALLENGER]}),
                          ({"challenger": {**BINDINGS["challenger"], spot: {"gate": "user@gate-1"}}},
