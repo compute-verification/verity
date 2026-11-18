@@ -337,7 +337,7 @@ def test_a_sampled_spans_units_commit_as_its_interior() -> None:
 
     served = {"roots": [{"port": x.value, "root": x.root.hex(), "leaves": x.leaves, "domain": x.domain.domain_id.hex()}
                         for x in tables]}
-    kw = {"row": "long-row-test", "salt_key": bytes(range(32)), "wires": wires, "rows": block, "tables": tables,
+    kw = {"row": "long-row-test", "wires": wires, "rows": block, "tables": tables,
           "served": served, "positions": BT.class_rows(L.prompt, L.outputs, 16), "links": links}
     it = IR.interior(sampled, cells, "00" * 64, [0, 2], **kw)
     w = it.committed.window
@@ -348,9 +348,9 @@ def test_a_sampled_spans_units_commit_as_its_interior() -> None:
     assert [e["value"] for e in it.record["registered"]] == [f"{key}/{p}" for p in PARAMS]
     assert it.published == {x.value: [bc.hex() for bc in x.bcs] for x in tables}
     reads = next(m for m in w.members if m.template == descriptor_id(t.bindings["READ"]))
-    assert w.held_leaves(reads, "tok") == tuple(range(reads.n))
+    assert w.leaves(reads, "tok").tolist() == list(range(reads.n))
     pick = next(m for m in w.members if m.template.startswith("DsaTopKDigitPick"))
-    assert w.held_leaves(pick, pick.rows[0][0]) == (0, 1, 2, 3)
+    assert w.leaves(pick, pick.rows[0][0]).tolist() == [0, 1, 2, 3]
 
     ids = [s.member.template for s in sampled[0]]
 
