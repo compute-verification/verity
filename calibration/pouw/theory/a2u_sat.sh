@@ -16,8 +16,8 @@ export PYTHONDONTWRITEBYTECODE=1
 
 if [ "${A2U_LEASED:-}" != 1 ]; then
   mkdir -p "$OUT/sass" "$OUT/env" "$OUT/bin"
-  NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-  [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "a2u_sat.sh: no nvcc (CUDA 13.0)" >&2; exit 2; }
+  NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "a2u_sat.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+  [ -x "$NVCC" ] || { echo "a2u_sat.sh: no nvcc at $NVCC" >&2; exit 2; }
   "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
   PROBE="$HERE/../opcode_probe/probe.py"
   ARCH=$(python3 "$PROBE" arch) || exit 2
