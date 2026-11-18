@@ -354,12 +354,13 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
 Positions = dict[tuple[str, str, int], dict[str, tuple[np.ndarray, np.ndarray]]]
 
 
-def unwired_population_program(program: Program, cuts: Mapping[str, Mapping[str, int]]
+def unwired_population_program(program: Program, cuts: Mapping[str, Mapping[str, int]], values: Sequence[str]
                                ) -> tuple[Program, dict[str, Any], Positions]:
     """A `wired_population_program`'s unwired population and template query, as the periods' `population_program` builds
-    them (its values every root parameter no template owns), and its wires' positions: by (reader, port, row of the
-    port's ``cuts``, the record's: the root does not state a port's rows), each writer tree ``<writer>/o<field>`` the reader's own units and the writer's own
-    units they read (`rows.Binding.reads`). Refused (ValueError) by name: cut-input, cut-form, cut-return, cut-root,
+    them, and its wires' positions: by (reader, port, row), each writer tree ``<writer>/o<field>`` the reader's own units
+    and the writer's own units they read (`rows.Binding.reads`). ``cuts`` and ``values`` are the record's, which the root
+    does not state: a port's rows, and which of its leading parameters are registered values (the rest of them, its other
+    reads, become the readers' own rows). Refused (ValueError) by name: cut-input, cut-form, cut-return, cut-root,
     cut-rows, cut-offset, cut-units, cut-fields."""
     fn = program.fn
     if not isinstance(fn, SpecializedDefinition) or (fn.defn.name, fn.defn.version) != ("WiredPopulations", 1):
@@ -389,11 +390,12 @@ def unwired_population_program(program: Program, cuts: Mapping[str, Mapping[str,
         raise ValueError("cut-return: the root returns no batch once each, in its templates' units")
     own = {f"{j}.{p}" for j, (ps, _) in enumerate(sigs) for p, _ in ps}
     k0 = next((i for i, (p, _) in enumerate(body.params) if p in own), len(body.params))
-    values = []
-    for p, t in body.params[:k0]:
-        if not (isinstance(t, Array) and isinstance(t.elem, Value)):
-            raise ValueError(f"cut-root: root parameter {p} of {t!r} is no registered value's words")
-        values.append((p, t.n, t.elem.w))
+    lead = body.params[:len(values)]
+    if [p for p, _ in lead] != list(values) or len(values) > k0 \
+            or not all(isinstance(t, Array) and isinstance(t.elem, Value) for _, t in lead):
+        raise ValueError(f"cut-root: values {list(values)} are not the root's first parameters, each an array of words: "
+                         f"{[(p, t) for p, t in body.params[:max(k0, len(values))]][:4]}")
+    values = [(p, t.n, t.elem.w) for p, t in lead]
     if any(p not in own for p, _ in body.params[k0:]):
         raise ValueError(f"cut-root: root parameters {[p for p, _ in body.params[k0:] if p not in own]} follow the "
                          "templates' own")

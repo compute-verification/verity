@@ -34,13 +34,17 @@ def chain(requests: int = 2, steps: int = 2, layers: int = 2) -> I.Circuit:
                      order=I.ordered({GID: n}, wires, {GID: range(0, n, requests)}))
 
 
+def _values(circuit: I.Circuit) -> list[str]:
+    return [v for v, _n, _w in I.program_values(circuit.registered)]
+
+
 @pytest.mark.parametrize("make", [rounded, chain])
 def test_the_cut_is_the_unwired_population_and_its_positions_are_the_members_reads(make):
     """The cut of a circuit's wired Program is the periods' unwired population of its templates, digest and query, and
     each member's wired port reads, unit by unit, the writer units the cut's positions give (`rows.Binding.reads`)."""
     circuit = make()
     wired, _ = circuit.program()
-    unwired, query, positions = unwired_population_program(wired, circuit.cuts)
+    unwired, query, positions = unwired_population_program(wired, circuit.cuts, _values(circuit))
     want, want_query = population_program(list(circuit.templates), values=I.program_values(circuit.registered))
     assert (program_digest(unwired), query) == (program_digest(want), want_query)
     w = I.Window(circuit, RUN, SAMPLING_DESIGN, 2).window
@@ -55,13 +59,29 @@ def test_the_cut_is_the_unwired_population_and_its_positions_are_the_members_rea
     assert sum(len(a) for trees in positions.values() for a, _ in trees.values()) == len(reads) > 0
 
 
+@pytest.mark.parametrize("held", [(), ("w",)])
+def test_registered_values_stay_and_other_reads_become_the_readers_own_rows(held):
+    """Four ``Gemm_v2`` units each reading registered ``w`` whole: held, ``w`` is the unwired population's value; not
+    held, its root parameter is a read the cut drops, each reader's row its own. The record's values out of the root's
+    order are refused (cut-root)."""
+    reads = (I.Read(GID, "w", "w", 0, (4,), 0, (0,)),)
+    circuit = I.Circuit("reads", ((GEMM, 4),), registered=I.Registered({"w": 256}, reads=reads, values=held))
+    wired, _ = circuit.program()
+    assert "w" in dict(wired.fn.body.params)
+    unwired, query, positions = unwired_population_program(wired, circuit.cuts, _values(circuit))
+    want, want_query = population_program(list(circuit.templates), values=I.program_values(circuit.registered))
+    assert (program_digest(unwired), query, positions) == (program_digest(want), want_query, {})
+    with pytest.raises(ValueError, match="cut-root"):
+        unwired_population_program(wired, circuit.cuts, ("v", *held))
+
+
 def test_an_unwired_population_is_refused_as_no_wired_one():
     """An unwired Program states no wires to cut, and a cut of it would let it stand where a registration names the wired
     one, so it is refused, not returned."""
     circuit = rounded()
-    unwired, _ = unwired_population_program(circuit.program()[0], circuit.cuts)[:2]
+    unwired, _ = unwired_population_program(circuit.program()[0], circuit.cuts, ())[:2]
     with pytest.raises(ValueError, match="cut-input"):
-        unwired_population_program(unwired, {})
+        unwired_population_program(unwired, {}, ())
 
 
 V16 = Value(16)
@@ -103,10 +123,10 @@ def test_each_wired_row_reads_one_whole_field_of_one_writer_unit():
     rows read writer unit 0's o1 and unit 1's o0, contiguous in the writers' outputs and still a field a row."""
     pid = descriptor_id(PAIR)
     prog, rid = wired_by_hand(2, [6, 0])
-    assert _listed(unwired_population_program(prog, {})[2]) == {(rid, "x", 0): {f"{pid}/o1": ([0], [1]),
+    assert _listed(unwired_population_program(prog, {}, ())[2]) == {(rid, "x", 0): {f"{pid}/o1": ([0], [1]),
                                                                               f"{pid}/o0": ([1], [0])}}
     prog, rid = wired_by_hand(4, [2])
-    assert _listed(unwired_population_program(prog, {rid: {"x": 2}})[2]) == {(rid, "x", 0): {f"{pid}/o1": ([0], [0])},
+    assert _listed(unwired_population_program(prog, {rid: {"x": 2}}, ())[2]) == {(rid, "x", 0): {f"{pid}/o1": ([0], [0])},
                                                                             (rid, "x", 1): {f"{pid}/o0": ([0], [1])}}
 
 
@@ -121,7 +141,7 @@ def test_a_wired_row_that_is_no_whole_field_of_one_writer_unit_is_refused_by_nam
     units (cut-units) is refused, by name."""
     prog, rid = wired_by_hand(leaves, offsets)
     with pytest.raises(ValueError, match=refusal):
-        unwired_population_program(prog, {rid: {"x": cuts}})
+        unwired_population_program(prog, {rid: {"x": cuts}}, ())
 
 
 def test_a_wired_row_at_another_width_is_no_root():
