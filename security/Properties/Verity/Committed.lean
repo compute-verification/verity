@@ -3,6 +3,7 @@ module
 public import Properties.Verity.Game
 public import Properties.Spot.Labels
 public import Spot.RecordText
+public import Flock.Registered
 
 /-!
 # What ties the inference-only policy's clause to the committed files
@@ -21,6 +22,11 @@ writer template and output field), and a reader's wired row is a reference with 
 the wire's closed form gives (`Circuits.Wire.leafAt`). Flock's instance opens the reader's row there, under the
 statement's roots, as `Sessions.opens` opens every read: one value at one position, so a reader's row is its
 writer's row and no comparison of two rows is left.
+
+Two more, each a named `Prop` stated and not proved, are what Flock's checks give `ReadsByPath`: `LinksExact`, that a
+link's leaves are one writer unit's outputs from the offset the program gives (`Flock.HmLinks.checkUnit`), and
+`LinkRowsByPath`, that each link row opens the registered root at its writer's leaf in the writer template's tree
+(`Flock.Registered.check` on the reads `Flock.Registered.withTrees` gives).
 -/
 
 @[expose] public section
@@ -69,5 +75,44 @@ def ReadsByPath (k : Verity.Registration.Composite) : Prop :=
             (V.partsOf θ F).unit g = some gu ∧ gu.val = u ∧ h ∈ (V.circuitOf θ F).reads g
 
 end Vocab
+
+open Flock.HmLinks (nodes unitAt ownerAt count outGates writerOf treeLeaf) in
+/-- **A link reads its writer's outputs exactly** (`Flock.HmLinks.checkUnit`): where a circuit's links parse and
+`checkUnit` accepts reader `i` of the public file, every parameter leaf of the reader's unit that the program wires to
+another unit's output lies in exactly one link, and every link's leaves are circuit inputs, or one writer unit's
+outputs, leaf for leaf, from the link's offset, which is so the program's. -/
+def LinksExact : Prop :=
+  ∀ (c : Flock.Circuit) (P : Flock.Program.Prog) (links : Array Flock.HmLinks.Link) (popIdx : Array Nat) (i w : Nat),
+    Flock.HmLinks.parse c = .ok links →
+    Flock.HmLinks.checkUnit c P links popIdx (unitAt (nodes P)) (ownerAt (nodes P)) (count (nodes P)) i = .ok w →
+    ∃ (u k m : Nat) (ops : Array Nat), popIdx[i]? = some u ∧ unitAt (nodes P) u = some (k, m) ∧
+      Flock.Program.operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!) m = .ok ops ∧
+      (∀ t < ops.size, (ownerAt (nodes P) ops[t]!).isSome → ∃! l, l ∈ links ∧ l.lo ≤ t ∧ t < l.hi) ∧
+      ∀ l ∈ links, l.hi ≤ ops.size ∧
+        ((∀ t, l.lo ≤ t → t < l.hi → ownerAt (nodes P) ops[t]! = none) ∨
+          ∃ (v kv mv : Nat) (og : Array Nat), ownerAt (nodes P) ops[l.lo]! = some v ∧
+            unitAt (nodes P) v = some (kv, mv) ∧ outGates P kv mv = .ok og ∧ l.off + (l.hi - l.lo) ≤ og.size ∧
+            ops.extract l.lo l.hi = og.extract l.off (l.off + (l.hi - l.lo)))
+
+open Flock.HmLinks (nodes writerOf treeLeaf) in
+/-- **Every link row is read by path at its writer's leaf** (`Flock.Registered.check`): where the verifier's registered
+reads, their tree ports' reads given from its program (`Flock.Registered.withTrees`), accept a linked statement that
+names each port once, every link row is a tree port of field `out` whose rows are its registered rows' width
+(`Flock.Registered.Port.fits`), and every instance's row of it opens the registered root at the leaf of the instance's
+unit's writer in the writer template's tree. -/
+def LinkRowsByPath : Prop :=
+  ∀ (c : Flock.Circuit) (pub : Flock.Public) (program : ByteArray) (P : Flock.Program.Prog)
+    (own own' : Array Flock.Registered.Port) (links : Array Flock.HmLinks.Link) (t : Flock.Tables) (indices : Array Nat),
+    Flock.Program.decode program = .ok P → Flock.Registered.namesOnce c = .ok () →
+    Flock.Registered.withTrees c pub (some program) (some own) = .ok (some own') →
+    Flock.Registered.check c pub (some own') true = .ok () →
+    Flock.HmLinks.parse c = .ok links → pub.tables = some t → Flock.Registered.unitIndices pub = .ok indices →
+    ∀ l ∈ links, ∃ reg ∈ own', ∃ tmpl : String, reg.name = (c.ports.getD l.port default).name ∧
+      reg.tree = some (tmpl, Flock.Registered.OUT_FIELD) ∧ reg.fits (c.ports.getD l.port default) ∧
+      ∀ i < pub.n, ∃ (v leaf : Nat) (positions : Array Nat) (paths : Array ByteArray),
+        writerOf P (nodes P) (indices.getD i 0) l.lo = .ok (some v) ∧ treeLeaf P (nodes P) v = some (tmpl, leaf) ∧
+        Flock.Registered.entry pub reg = .ok (positions, paths) ∧
+        Flock.Registered.opens reg (Flock.Registered.tableRow pub t l.port (Flock.Registered.ref t c.ports.size l.port i))
+          leaf (paths.getD (Flock.Registered.ref t c.ports.size l.port i) ByteArray.empty)
 
 end Verity
