@@ -1,0 +1,39 @@
+# The advice format leaves the network package (`python3 tools/move/layout.py --map tools/move/advice_format_map.toml`).
+#
+# The advice (v0) is the serving stack's own record of its run-time choices, read by the registered compiler: a bit
+# string `verity` never interprets, so its format is the adapter's. It joins the advice code it is the v0 of
+# (`pipeline/advice_code/`), and `window_chain`, which builds one advice from a served endpoint's Commit windows, joins
+# `pipeline/window_advice.py`, the window's advice it chains. Their tests follow them into the adapter's suite.
+
+[roots]
+old = { verity = "verity", verity_vllm = "adapters/vllm/verity_vllm" }
+new = { verity = "verity", verity_vllm = "adapters/vllm/verity_vllm" }
+
+[paths]
+"verity/protocols/resource_accounting/network/verifier/advice.py" = "adapters/vllm/verity_vllm/pipeline/advice_code/format.py"
+"verity/protocols/resource_accounting/network/prover/window_chain.py" = "adapters/vllm/verity_vllm/pipeline/window_chain.py"
+"tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_advice.py" = "tests/adapters/vllm/tests/pipeline/test_advice_format.py"
+"tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_advice_adversarial.py" = "tests/adapters/vllm/tests/pipeline/test_advice_format_adversarial.py"
+"tests/benchmarks/network_traces/test_window_chain.py" = "tests/adapters/vllm/tests/pipeline/test_window_chain.py"
+
+[retired]
+paths = [
+    "verity/protocols/resource_accounting/network/verifier/advice.py",
+    "verity/protocols/resource_accounting/network/prover/window_chain.py",
+]
+
+[drop]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "tools/move/**", "tests/tools/move/**",
+           "tests/tools/check/test_move_check.py", "archive/**", "tools/research/src/research/store/moves.json",
+           "**/*.lean", "**/lean-audit.json", "**/lakefile.toml"]
+include = []
+
+[modules]
+"tests.benchmarks.network_traces.test_window_chain" = "tests.adapters.vllm.tests.pipeline.test_window_chain"
+"tests.verity.protocols.resource_accounting.network.verifier.test_network_attester_advice" = "tests.adapters.vllm.tests.pipeline.test_advice_format"
+"tests.verity.protocols.resource_accounting.network.verifier.test_network_attester_advice_adversarial" = "tests.adapters.vllm.tests.pipeline.test_advice_format_adversarial"
+"verity.protocols.resource_accounting.network.verifier.advice" = "verity_vllm.pipeline.advice_code.format"
+"verity.protocols.resource_accounting.network.prover.window_chain" = "verity_vllm.pipeline.window_chain"

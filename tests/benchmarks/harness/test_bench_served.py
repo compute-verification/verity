@@ -305,18 +305,19 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
                                  "lag_ends": True, "whole_tree_sm": True, "aside_ends": True, "whole_prefetch_b": True,
                                  "whole_eager": "deferred-a"} and whole.schedule == "serial"
     monkeypatch.setenv("PEARLC_WHOLE_PREFETCH_B", "0")
-    assert "whole_prefetch_b" not in type(whole)().run_options
+    assert "whole_prefetch_b" not in type(whole)(whole.protocol).run_options
     monkeypatch.setenv("PEARLC_WHOLE_EAGER", "deferred")
-    assert type(whole)().run_options["whole_eager"] == "deferred"
+    assert type(whole)(whole.protocol).run_options["whole_eager"] == "deferred"
     monkeypatch.setenv("PEARLC_WHOLE_EAGER", "0")
-    assert "whole_eager" not in type(whole)().run_options
+    assert "whole_eager" not in type(whole)(whole.protocol).run_options
 
 
 def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the_h100_record(monkeypatch):
     """`llama31-8b-1gpu-pearl-c-whole-served-h200` is the whole-served spec's preset on one H200, the whole-step arm beside
-    compiled stock, its setup building pearl_c_sm90's cubin; with PEARLC_KERNEL that directory, the arm takes its record
-    (`pearl-c-h100-v1-h3`, a scheme the device path runs) and its build.sh cubin, and builds the same engine."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import SCHEMES
+    compiled stock, its setup building pearl_c_sm90's cubin; the arm takes the useful-work scheme by its registered name
+    and, on a card of the H200's target, the kernel scheme Pearl+ runs there (`pearl-c-h100-v1-h3`) from the tree's
+    pearl_c_sm90 directory or PEARLC_KERNEL and its build.sh cubin, and builds the same engine."""
+    from verity_bench.schemes import arch
 
     root = Path(__file__).resolve().parents[3]
     monkeypatch.syspath_prepend(str(root))
@@ -328,13 +329,20 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
     assert [(a.id, a.execution, a.experimental) for a in arms] == [("stock-fp8@compiled", "compiled", False),
                                                                    ("pouw-pearl-c-whole", None, True)]
     from benchmarks.pouw.pearl_c_vllm import bench_arm
-    assert set(bench_arm.KERNEL_SCHEMES.values()) <= set(SCHEMES)
-    assert all((root / "benchmarks/pouw" / d).is_dir() for d in bench_arm.KERNEL_SCHEMES)
-    monkeypatch.setenv("PEARLC_KERNEL", str(root / "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90"))
-    monkeypatch.delenv("PEARLC_SCHEME", raising=False)
+    assert bench_arm.PEARL_C_WHOLE.protocol == bench_arm.PEARL_C.protocol == "pearl-plus"
+    assert arch(spec.preset.gpu_id) == arch("h100")
+    monkeypatch.delenv("PEARLC_KERNEL", raising=False)
     monkeypatch.delenv("PEARLC_CUBIN", raising=False)
-    whole = bench_arm.PearlCWholeArm()
-    assert whole.scheme == "pearl-c-h100-v1-h3" and whole.kernel_dir.name == "pearl_c_sm90"
+    with pytest.raises(NotImplementedError, match=r"^dither is not served: no adapter entry attaches it to a served run"):
+        bench_arm.PearlCArm("dither").kernel("h100")
+    with pytest.raises(ValueError, match=r"pouw-pearl-c names no useful-work scheme: build it as PearlCArm\(NAME\)"):
+        bench_arm.PearlCArm().kernel("h100")
+    monkeypatch.setenv("PEARLC_KERNEL", str(root / "elsewhere"))
+    assert bench_arm.PearlCWholeArm("pearl-plus").kernel("h100") == ("pearl-c-h100-v1-h3", root / "elsewhere")
+    monkeypatch.delenv("PEARLC_KERNEL")
+    whole = bench_arm.PearlCWholeArm("pearl-plus")
+    assert whole.kernel("h100") == ("pearl-c-h100-v1-h3", bench_arm.KERNELS / "pearl_c_sm90")
+    assert whole.kernel_dir.is_dir() and whole.scheme == "pearl-c-h100-v1-h3"
     assert whole.kernel_digest(None) is None or (whole.kernel_dir / "pearl_c_sm90.cubin").is_file()
     preset, eager = served(spec.preset, spec.eager)
     preset, eager = arm_execution(arms[-1], preset, eager)

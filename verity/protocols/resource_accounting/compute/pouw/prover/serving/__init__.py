@@ -76,7 +76,7 @@ _LAZY = {
     "LEAD_SCHEME": (f"{_SERVING}.lead", "SCHEME"),
     "Matmul": (f"{_POUW}.verifier.protocol", "Matmul"),
     "NCP_CIRCUIT_SCHEMES": (f"{_PROVER}.circuit", "SCHEMES"),
-    "NCP_SCHEMES": (f"{_PROVER}.schemes", "SCHEMES"),
+    "NCP_SCHEMES": (f"{_POUW}.verifier.kernel_schemes", "IDENTIFIED"),
     "NO_DRAW_SESSION": (f"{_SERVING}.h1.window", "NO_DRAW_SESSION"),
     "PEARL_C_CALL_CAPACITY": (f"{_SERVING}.pearl_c", "CALL_CAPACITY"),
     "PEARL_C_SCHEMES": (f"{_SERVING}.pearl_c", "SCHEMES"),

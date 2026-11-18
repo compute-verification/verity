@@ -1295,7 +1295,7 @@ def test_both_constructions_take_the_one_shared_rule():
 
 
 def test_the_identifier_vectors_pearl_c4_cases_are_its_shapes():
-    """PoUW's identifier vectors name Pearl-C4 without checking its shapes (`schemes.EXPERIMENTAL`): each of its cases'
+    """PoUW's identifier vectors name Pearl-C4 without checking its shapes (its kernel scheme's ``seam``): each of its cases'
     matmuls is one the scheme takes, and the scheme is named by its registered name."""
     cases = [c for c in IV.CASES if c[1] == "pearl-c-nvfp4-v0"]
     assert len(cases) == 2

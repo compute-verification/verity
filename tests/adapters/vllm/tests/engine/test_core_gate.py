@@ -15,7 +15,6 @@ import pytest
 
 from tests import fake_vllm
 from verity_vllm.engine import core_gate as cg
-from verity_vllm.pipeline import tick_plugin as tp
 
 EMPTY = object()
 SHUTDOWN = "the engine core is shutting down"
@@ -163,12 +162,12 @@ def seam():
         assert not {"_process_input_queue", "has_work", "step", "step_with_batch_queue"} & set(vars(cls))
 
 
-def tick_scenario(cls: type, attach: Any) -> list:
+def gate_scenario(cls: type, attach: Any) -> list:
     """Four calls of the input loop under one scripted gate: waits that time out and a request that arrives, a gate that
     holds pending requests, an idle wait, and shutdown."""
     log: list = []
     core = cls(log, now=[("abort", "x")], later=[EMPTY, ("add", "r1"), ("add", "r2")])
-    attach(core, Gate(log, "tick", ready=[False, False, True, True, True, True, True], pending=[True, False, False]))
+    attach(core, Gate(log, "admission", ready=[False, False, True, True, True, True, True], pending=[True, False, False]))
     core._process_input_queue()
     core.scheduler.work = False
     core._process_input_queue()
@@ -178,37 +177,33 @@ def tick_scenario(cls: type, attach: Any) -> list:
     return log
 
 
-def test_with_one_gate_the_input_loop_makes_the_tick_plugins_calls(seam):
-    tick = type("T", (Proc,), {"_process_input_queue": tp._gated_input(Proc._process_input_queue),
-                                "has_work": tp._gated_has_work(Proc.has_work)})
-
+def test_one_gate_holds_the_input_loop_until_ready_and_opens_at_shutdown(seam):
     def on_scheduler(core: Any, gate: Gate) -> None:
-        core.scheduler._verity_tick = gate
+        core.scheduler._verity_gate = gate
 
-    seam.gate("tick", lambda core: core.scheduler._verity_tick)
-    want = tick_scenario(tick, on_scheduler)
-    assert tick_scenario(seam.cls, on_scheduler) == want
-    assert want[:4] == [("abort", "x"), ("tick", "ready", False), ("get", 0.25), ("tick", "ready", False)]
-    assert ("tick", "pending", True) in want and ("get", None) in want and ("aborts-cleared",) in want
-    assert want[-1] == ("tick", "open", SHUTDOWN)
+    seam.gate("admission", lambda core: core.scheduler._verity_gate)
+    want = gate_scenario(seam.cls, on_scheduler)
+    assert want[:4] == [("abort", "x"), ("admission", "ready", False), ("get", 0.25), ("admission", "ready", False)]
+    assert ("admission", "pending", True) in want and ("get", None) in want and ("aborts-cleared",) in want
+    assert want[-1] == ("admission", "open", SHUTDOWN)
 
 
 def test_every_gate_is_asked_in_its_order_and_the_loop_waits_the_least_poll_of_those_waiting(seam):
     log: list = []
     seam.gate("release", lambda core: Gate(log, "release", ready=[False, False, True], poll_s=0.1))
-    seam.gate("tick", lambda core: Gate(log, "tick", ready=[False, True, True], poll_s=0.05))
+    seam.gate("admission", lambda core: Gate(log, "admission", ready=[False, True, True], poll_s=0.05))
     core = seam.cls(log, now=[("add", "r0")], later=[EMPTY, EMPTY])
     core._process_input_queue()
-    assert log == [("add", "r0"), ("tick", "ready", False), ("release", "ready", False), ("get", 0.05),
-                   ("tick", "ready", True), ("release", "ready", False), ("get", 0.1),
-                   ("tick", "ready", True), ("release", "ready", True), ("has_work", True)]
+    assert log == [("add", "r0"), ("admission", "ready", False), ("release", "ready", False), ("get", 0.05),
+                   ("admission", "ready", True), ("release", "ready", False), ("get", 0.1),
+                   ("admission", "ready", True), ("release", "ready", True), ("has_work", True)]
     core.running = False
     core._process_input_queue()
-    assert log[-2:] == [("tick", "open", SHUTDOWN), ("release", "open", SHUTDOWN)]
+    assert log[-2:] == [("admission", "open", SHUTDOWN), ("release", "open", SHUTDOWN)]
 
 
 def test_a_core_without_gates_or_edges_runs_vllms_own(seam):
-    seam.gate("tick", lambda core: None)
+    seam.gate("admission", lambda core: None)
     seam.edge("cut", lambda core: None)
     log: list = []
     core = seam.cls(log, batches=[])
@@ -262,14 +257,14 @@ def test_a_held_edge_holds_the_input_loop_once_drained_until_ready_and_requests_
 
 def test_a_held_edge_waits_beside_a_gate_and_at_shutdown_is_not_taken(seam):
     log: list = []
-    seam.gate("tick", lambda core: Gate(log, "tick", ready=[False, True], poll_s=0.25))
+    seam.gate("admission", lambda core: Gate(log, "admission", ready=[False, True], poll_s=0.25))
     seam.edge("cut", lambda core: Held(log, "cut", due=[True], ready=[False], poll_s=0.05))
     core = seam.cls(log, later=[EMPTY, ("stop", None)])
     core._process_input_queue()
     core.step()
-    assert log == [("tick", "ready", False), ("cut", "ready", False), ("get", 0.05),
-                   ("tick", "ready", True), ("cut", "ready", False), ("get", 0.05), ("stop", None),
-                   ("tick", "open", SHUTDOWN),
+    assert log == [("admission", "ready", False), ("cut", "ready", False), ("get", 0.05),
+                   ("admission", "ready", True), ("cut", "ready", False), ("get", 0.05), ("stop", None),
+                   ("admission", "open", SHUTDOWN),
                    ("cut", "ready", False), ("step", False)]
 
 
@@ -284,9 +279,9 @@ def test_edges_due_at_one_step_are_taken_in_their_order(seam):
 def test_a_gate_or_edge_is_refused_without_its_place_twice_or_after_a_core_made_its_own(seam):
     with pytest.raises(ValueError, match="GATES or EDGES"):
         seam.gate("cut", lambda core: None)
-    seam.gate("tick", lambda core: None)
+    seam.gate("admission", lambda core: None)
     with pytest.raises(ValueError, match="already added"):
-        seam.gate("tick", lambda core: None)
+        seam.gate("admission", lambda core: None)
     core = seam.cls([])
     core._process_input_queue()
     with pytest.raises(RuntimeError, match="before the engine core is built"):

@@ -17,7 +17,8 @@ from typing import Any
 
 import torch
 
-from verity_vllm import settings
+from verity import hooks as H
+from verity_vllm import messages, settings
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import handle, served
 from verity_vllm.log import init_logger
@@ -216,7 +217,9 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
 
 def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8,
                  verify_weights: bool = False, case: str = CASE, engine_args: dict[str, Any] | None = None, target: Any = None,
-                 execution: str | None = None, env: dict[str, str] | None = None) -> Engine:
+                 execution: str | None = None, env: dict[str, str] | None = None, card: str = "") -> Engine:
+    """The engine, built once the process's exchange answered its schemes' requests on what it declares (`Declared`:
+    ``card`` the card's file id, empty when the caller declares none); the in-process runner emits each step."""
     from verity_vllm.engine import engine_profile as prof
 
     # `enforce_eager` comes from the workload's declared execution (`execution_of_workload`), not from a literal:
@@ -244,6 +247,11 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
                            "model is in the ranks' processes: declare none")
     if kw.get("enforce_eager") is False:
         prepare_compiled_process_cache()
+    messages.current().answer(H.Declared(card, {
+        "model": kw.get("model"), "execution": execution, "eager": want_eager, "world": world, "dtype": kw.get("dtype"),
+        "quantization": kw.get("quantization"), "prefix_cache": bool(kw.get("enable_prefix_caching"))}))
+    from verity_vllm.engine import kv_blocks
+    kv_blocks.attach()
     t0 = time.perf_counter()
     llm = LLM(**kw)
     build_s = time.perf_counter() - t0

@@ -5,7 +5,8 @@ GPU, and judges them.
   research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=<you> \
       -- python3 benchmarks/pouw/harness/ieee_pin.py [--toolkit NAME=CUDA_HOME ...]
 
-Toolkits: 12.9.1 from `jobs/toolkit.sh`, 13.0.1 at /usr/local/cuda, unless --toolkit names them; each must be a toolkit of
+Toolkits: 12.9.1 from `jobs/toolkit.sh`, 13.0.1 the run's machine's (`benchmarks/kernels/machine.py toolkit 13.0`),
+unless --toolkit names them; each must be a toolkit of
 `sass_pins.json`, and every one given is judged. A toolkit's target is its name's suffix (13.0.1-sm_90a builds sm_90a and
 runs on an sm_90 card; no suffix, sm_120a), and one run's toolkits share one target, since one leased GPU runs every binary.
 `jobs/pin_target.sh` pins a new one and runs this on it. Per toolkit, on the CPU:
@@ -78,7 +79,6 @@ def nvcc_args(arch: str) -> list[str]:
 PINNED = [[], ["-fmad=false"]]
 CONTROLS = [["--use_fast_math"], ["-ftz=true"], ["-prec-div=false", "-prec-sqrt=false"]]
 SEQUENCES = {"rcp-fast-path", "sqrt-fast-path", "div-fast-path", "int-seed"}
-DEFAULT_HOMES = {"13.0.1": "/usr/local/cuda"}
 LEASE_MINUTES = 30
 _ALL, _HOST = 1 << 32, (1 << 24) - 2 + (1 << 25)
 #: each check ieee_pin.cu prints, and how many inputs it covers (cases plus skipped)
@@ -110,11 +110,16 @@ def toolkit_sh_home() -> str:
     return out.strip()
 
 
+def machine_home(version: str) -> str:
+    """CUDA `version`'s home on the run's machine: CUDA_HOME, else the one its [properties] list (machine.py's refusal else)."""
+    return _run([sys.executable, str(HERE.parents[2] / "benchmarks" / "kernels" / "machine.py"), "toolkit", version]).strip()
+
+
 def homes(specs: list[str], pins: dict) -> dict[str, str]:
     if specs:
         out = dict(s.split("=", 1) for s in specs)
     else:
-        out = {"12.9.1": toolkit_sh_home(), **DEFAULT_HOMES}
+        out = {"12.9.1": toolkit_sh_home(), "13.0.1": machine_home("13.0")}
     unknown = sorted(set(out) - set(pins["toolkits"]))
     if unknown:
         raise PinFailed(f"no toolkit {unknown} in sass_pins.json")
