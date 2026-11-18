@@ -1,7 +1,7 @@
 """Pearl-C's pinned host arena (`pearl_c.host._Arena`), CPU only, over a stand-in for pinned memory: a take within half a
 ring lands in the first ring with room, and its give-back frees that ring's region; a take past half a ring gets memory of
-its own and makes no ring; a take no ring has room for waits for a give, and every give wakes the takes that wait.  The
-copies that land in the arena on a card are the e2e's.
+its own and makes no ring; a take no ring has room for waits for a give, and every give wakes the takes that wait; bytes
+taken inside inference mode take copies outside it.  The copies that land in the arena on a card are the e2e's.
 """
 from __future__ import annotations
 
@@ -84,3 +84,20 @@ def test_a_take_no_ring_has_room_for_waits_for_a_give_and_every_give_wakes_the_t
     assert [r[:2] for r in ring.live] == [[0, 1024]]
     give_c()
     assert not ring.live and waits.notified == 3
+
+
+def test_bytes_taken_inside_inference_mode_take_copies_outside_it(unpinned):
+    """`_Arena.take` inside inference mode (the first copies of a retained pass, made in `PearlCDeviceRun.gemm`) makes the
+    rings and a take of memory of its own as normal tensors, so a pass's end, which copies into them outside inference mode,
+    is not refused as an in-place update to an inference tensor."""
+    import torch
+    arena = _Arena(4096, 1)
+    with torch.inference_mode():
+        (_, ringed), (_, own) = arena.take(1024), arena.take(4096)
+    (ring,) = arena.rings
+    assert not ring.buf.is_inference() and not own.is_inference()
+    _, later = arena.take(512)
+    src = torch.arange(512, dtype=torch.int32).to(torch.uint8)
+    later.copy_(src)
+    own[:512].copy_(src)
+    assert torch.equal(later, src) and torch.equal(own[:512], src)
