@@ -1,0 +1,8 @@
+{
+ "definitions": {
+  "GeluErfBf16_v2": {
+   "and": 545,
+   "type": "5f9de3a66fbdc65862404360df3ffd9b311718dde621155a1a9623abd2b2be997e192c04ed0453c2e05e6b3659000a1c484b19154b58e74014dac6a869c7e26c"
+  }
+ }
+}

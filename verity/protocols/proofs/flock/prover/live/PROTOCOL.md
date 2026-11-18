@@ -768,9 +768,8 @@ before the row is made, and the verifier computes that function itself and takes
 (`Salts`'s header has the rule). The release side computes no known content: it takes a statement's known trees from
 the verifier. After the sample, the verifier's answer to the session's `Register` lists each tree of the statement that it
 computed itself: `be32 K`, then `K` entries of a tree's 64-byte domain, `be64` row count, schema byte and 64-byte root
-(`verity-verify-proof known-trees` writes the list from the verifier's own `--registered` file and the statement's public
-file's header, `Registered.knownTrees`; `flock-circuit serve --known-trees LIST` sends it; an answer that ends at the
-sample lists none). The loop cuts the list off the answer, so the prover receives the sample alone, and holds the
+(`Registered.knownList`; `flock-circuit serve --known-trees LIST` sends it; an answer that ends at the sample lists
+none). The loop cuts the list off the answer, so the prover receives the sample alone, and holds the
 statement's trees to it before `Hello` leaves (`Salts.readsKnown`): a tree that equals an entry reads no registration
 and is recorded (a `known` event, no failure), and every other tree must be a registration's table as above. A list that does not
 parse, an entry whose root is a registration's table's, two entries of one domain, an entry at whose domain the

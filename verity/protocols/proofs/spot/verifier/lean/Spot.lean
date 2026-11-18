@@ -1,7 +1,6 @@
 module
 
 public import Spot.Json
-public import Spot.ChallengerPin
 public import Spot.Program
 public import Spot.Bits
 public import Spot.Partition
@@ -65,5 +64,6 @@ public import Spot.TwoStageCheck
 public import Spot.Ranks
 public import Spot.SecondWindow
 public import Spot.BlockFront
+public import Spot.BlockFile
 
 @[expose] public section

@@ -140,7 +140,27 @@ def test_a_scheme_takes_the_serves_warm_up_before_its_first_phase(name, serve, t
     steps emit on the current exchange as a served step does, from no input and outside any phase, then the first
     window's phase (`serve_commit`) and its step."""
     monkeypatch.chdir(tmp_path)
-    ex = _attached(serve, name, tmp_path)
+    _through_the_warm_up(serve, _attached(serve, name, tmp_path))
+
+
+def test_pearl_plus_and_the_attester_in_release_order_take_the_serves_warm_up(serve, tmp_path, monkeypatch):
+    """Pearl+ attached as the engine attaches it, then, after the warm-up, the network attester under release order as
+    `serve_openai.network_admission` attaches it (the Pearl+ arm of `h100_smoke.sh` and of `served_verdicts.sh`):
+    `weight_copy` allows the pair, the attester files no gate, and both take the first window's events."""
+    monkeypatch.chdir(tmp_path)
+    ex = _attached(serve, "pearl-plus", tmp_path)
+
+    def attester() -> None:
+        got = serve.current().attach(serve.providing("admission"), {"order": "release-order"}, source="--protocols-config",
+                                     submit=lambda adm: None, abort=lambda key: None, take=lambda rec: None)
+        assert got.gate is None and got.front is not None
+
+    _through_the_warm_up(serve, ex, attester)
+    assert sorted(ex.attached) == ["network-attester", "pearl-plus"]
+    assert not any(isinstance(r, H.StartOnBoundary) for _, r in ex.requests)
+
+
+def _through_the_warm_up(serve, ex, after=None) -> None:
     honest = _honest()
     due = next(e for e in honest if isinstance(e, H.BlockDue))
     for e in honest[:2]:
@@ -160,6 +180,8 @@ def test_a_scheme_takes_the_serves_warm_up_before_its_first_phase(name, serve, t
     vars(engine)["step"] = emitting
     with serve.using(ex):
         sl.warmed(com, llm, opts)
+        if after is not None:
+            after()
     shift = ex.next_step
     for e in honest[2:]:
         if "step" in {f.name for f in dataclasses.fields(e)}:

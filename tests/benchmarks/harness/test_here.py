@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from bench_standins import on_stand_in_machine
 
 from verity_bench import jobs
 from verity_bench.cli import main
@@ -59,6 +60,7 @@ def test_run_runs_the_one_point_in_this_run_on_the_card_it_was_given_with_no_git
     assert not {"research", "gpu-lease", "taskset", "python3"} & set(command)
 
     monkeypatch.setenv("VERITY_BENCH_SETUP", "benchmarks/harness/setup/pearl_c_sm90.sh")
+    on_stand_in_machine(monkeypatch, tmp_path, "slurm-node")
     monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"card": card})
     monkeypatch.setattr("verity_bench.cli.run_benchmark", lambda *args, **kwargs: sys.exit(f"timed at {kwargs['git_commit']}"))
     with pytest.raises(SystemExit) as stop:
