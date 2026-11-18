@@ -30,7 +30,7 @@ def GivesAuditBound : Prop :=
   ∀ {U : Type} [DecidableEq U] (L : Verity.SamplingDesign U) (Reg : Type) (session : Finset U → Reg → Game Bool)
     (A : ExtractionAnalysis L Reg session) (εks εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞),
     A.KnowledgeSound εks → A.BindSound εbind → ∀ σ : Strategy (audit L Reg session),
-      AuditBound L (fun p => prob p (audit L Reg session) σ) (fun o => o.1 = true)
+      AuditBound (fun _ => L) (fun p => prob p (audit L Reg session) σ) (fun o => o.1 = true)
         (fun _ => A.incorrect (A.committedOf σ)) (εks (reg σ) (cont σ) + εbind (reg σ) (cont σ))
 
 end Spot.Sampling
