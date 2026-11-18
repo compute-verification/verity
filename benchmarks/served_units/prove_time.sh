@@ -40,8 +40,7 @@ TIMEV="/usr/bin/time -v -o"  # each step's time-*.txt record, where GNU time is 
 [ -x /usr/bin/time ] || { TIMEV=; echo "no GNU time at /usr/bin/time (apt-get install time): no time-*.txt records"; }
 CARD=${PT_CARD:-}
 if [ $DEV = gpu ] && [ -z "$CARD" ]; then
-  CARD=$(PYTHONPATH=$REPO:$REPO/benchmarks/harness:$REPO/tools/config python3 -c 'import sys; from pathlib import Path; from verity_bench import kit
-print(kit.card_sku(sys.argv[1], directory=Path("calibration/hardware/cards")))' "$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)") || exit 1
+  CARD=$(PYTHONPATH=$REPO:$REPO/benchmarks/harness:$REPO/tools/config python3 -c 'import sys; from verity_bench import kit; print(kit.card_sku(sys.argv[1]))' "$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)") || exit 1
 fi
 if [ $DEV = gpu ]; then
   . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh

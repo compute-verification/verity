@@ -37,7 +37,6 @@ import time
 from collections import Counter
 from pathlib import Path
 
-CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
 CARD = "h200-sxm-141gb"
 
 MINUTES, PEAK = "circuits/window-compile-minutes", "circuits/window-compile-peak-memory"
@@ -61,7 +60,7 @@ PINS: dict[str, list[str]] = {
 
 def target(card: str) -> dict:
     from verity_bench import kit
-    t = kit.gpu_target(card, directory=CARD_FILES)
+    t = kit.gpu_target(card)
     return {"compute_capability": t["compute_capability"], "num_sms": t["num_sms"], "batch_invariant": False, "attention_backend": None,
             "vllm_revision": "d9105ea80", "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": t["device_name"],
             "moe_backend": "triton"}
@@ -354,7 +353,7 @@ def machine(card: str) -> str:
 
 def record(out: Path, model: str, window: str, execution: str, rec: dict, *, card: str = CARD) -> None:
     from verity_bench import kit
-    short = kit.card_short(target(card)["device_name"], directory=CARD_FILES)
+    short = kit.card_short(target(card)["device_name"])
     w = kit.writer(out)
     fields = {"model": MODELS[model], "window": window, "execution": execution, "card": short,
               "machine": machine(w.stamp["card"])}
