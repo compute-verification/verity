@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -18,10 +16,8 @@ from verity_flock import layouts as LY
 from verity_flock import typed_statement as TS
 
 pytest.importorskip("verity_vllm.definitions.registry.prims")
-from verity_flock import lowerings  # noqa: E402
-from verity_flock import subcircuit_templates as TM  # noqa: E402
-
-sys.path.insert(0, str((Path(__file__).parent.parent.parent.parent / "verity" / "protocols" / "proofs" / "flock" / "prover")))
+from verity_flock import lowerings
+from verity_flock import subcircuit_templates as TM
 
 
 def _low(template, **params):

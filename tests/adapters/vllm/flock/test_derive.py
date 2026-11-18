@@ -20,7 +20,6 @@ from verity_flock import derive as D
 from verity_flock import layouts as LY
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent / "verity" / "protocols" / "proofs" / "flock" / "prover")
-sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "verity/protocols/proofs/flock/prover/agreement"))
 from test_circuit_types import _adder, _full_adder  # noqa: E402
 

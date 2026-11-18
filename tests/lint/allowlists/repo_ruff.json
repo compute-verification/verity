@@ -178,7 +178,6 @@
     {"file": "tests/verity/protocols/proofs/flock/prover/test_rec_vstar_checks.py", "rule": "E731", "count": 1},
     {"file": "tests/adapters/vllm/flock/test_stage_typed.py", "rule": "RUF100", "count": 4},
     {"file": "tests/adapters/vllm/flock/test_tmpl_statement.py", "rule": "S102", "count": 2},
-    {"file": "tests/adapters/vllm/flock/test_typed_statement.py", "rule": "RUF100", "count": 2},
     {"file": "tests/verity/protocols/proofs/flock/prover/test_zk_server_contract.py", "rule": "E731", "count": 1},
     {"file": "verity/protocols/proofs/spot/verifier/challenger/challenger_session.py", "rule": "BLE001", "count": 3},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/verifier.py", "rule": "E731", "count": 1},
