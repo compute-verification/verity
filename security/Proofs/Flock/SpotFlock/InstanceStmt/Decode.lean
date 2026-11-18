@@ -276,6 +276,7 @@ theorem recutOk_one (params : Array Ty) (hp first : Array (Option ℕ)) (hf : (f
 
 /-- A body of one node without arguments, of type `Array 2 (Value 16)` as its return is, returning that node's leaves
 `0 … 1` as one part, reads no leaf at another width. -/
+set_option linter.unusedSimpArgs false in
 theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
     (hn : B.nodes.size = 1) (ha : (B.nodes[0]!).args.size = 0)
     (ho : (B.nodes[0]!).out = .array 2 (.value 16)) (ht : B.retType = .array 2 (.value 16))
