@@ -163,8 +163,12 @@ def test_the_h200_pearl_c_setup_serves_without_batch_invariance_and_with_sm90s_b
     for script in (stand_in / "bash", python):
         script.chmod(0o755)
     spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
+    # the setup reads the build's target from the run's machine's card (the fixture's is an H100: sm_90a)
+    (tmp_path / "run" / "inputs").mkdir(parents=True)
+    shutil.copy(Path(__file__).parent / "fixtures" / "machines" / "one-card.toml", tmp_path / "run" / "inputs" / "m.toml")
     env = {"PATH": f"{stand_in}:/usr/bin:/bin", "VERITY_BENCH_VENV": str(tmp_path / "venv312"), "CUDA_HOME": str(tmp_path),
-           "RESEARCH_RUN_DIR": str(tmp_path / "run"), "VLLM_BATCH_INVARIANT": "1", **jobs.point_environment(spec)}
+           "RESEARCH_RUN_DIR": str(tmp_path / "run"), "RESEARCH_MACHINE": "m", "VLLM_BATCH_INVARIANT": "1",
+           **jobs.point_environment(spec)}
 
     def served(**job: str) -> str:
         ran = subprocess.run(["bash", "benchmarks/harness/run_point.sh"], cwd=root, env={**env, **job},
