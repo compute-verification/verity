@@ -498,9 +498,10 @@ def y_roots(p: Pass) -> list[str | None]:
 
 
 def run_commitment(passes: list[Pass]) -> bytes:
-    """What the run committed before its sample: each pass's transcript root, records root, salt, its calls' y roots (empty
-    where none) and its calls' A roots, in order."""
-    return tagged(RUN_TAG, *(x for p in passes for x in (p.transcript.commitment.root, bytes.fromhex(p.man["records_root"]),
+    """What the run committed before its sample: each pass's number of calls, transcript root, records root, salt, its
+    calls' y roots (empty where none) and its calls' A roots, in order; the count fixes where each pass's fields end."""
+    return tagged(RUN_TAG, *(x for p in passes for x in (len(p.transcript.activation_roots), p.transcript.commitment.root,
+                                                         bytes.fromhex(p.man["records_root"]),
                                                          p.epoch.salt, *(bytes.fromhex(r or "") for r in y_roots(p)),
                                                          *p.transcript.activation_roots)))
 

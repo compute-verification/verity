@@ -2203,6 +2203,19 @@ def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_a
     assert json.loads((d / SP.COIN).read_text()) == coin
 
 
+def test_the_run_commitment_tells_apart_runs_whose_roots_differ_only_in_which_pass_holds_them():
+    """Two runs whose fields, laid end to end, are the same bytes, the first one's call in its first pass and the second's in
+    its second: each pass's call count fixes where its fields end, so their commitments differ."""
+    def p(t: int, r: int, s: int, calls: list[tuple[int, int]]) -> types.SimpleNamespace:
+        return types.SimpleNamespace(
+            transcript=types.SimpleNamespace(commitment=types.SimpleNamespace(root=bytes([t])),
+                                             activation_roots=tuple(bytes([a]) for _, a in calls)),
+            man={"records_root": bytes([r]).hex(), "matmuls": [{"y": {"root": bytes([y]).hex()}} for y, _ in calls]},
+            epoch=types.SimpleNamespace(salt=bytes([s])))
+
+    assert VR.run_commitment([p(1, 2, 3, [(4, 5)]), p(6, 7, 8, [])]) != VR.run_commitment([p(1, 2, 3, []), p(4, 5, 6, [(7, 8)])])
+
+
 def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     """V-EX's give-up is the prover's before the coin: a pass whose records change after the verifier recorded its coin
     (`volunteer_pass` run past ``served_passes.py volunteer``'s refusal) is another run, and the verdict refuses it

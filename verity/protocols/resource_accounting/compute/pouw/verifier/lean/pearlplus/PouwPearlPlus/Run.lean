@@ -9,8 +9,8 @@ public import PouwPearlPlus.Records
   (`Load`): its epoch's salt and fixed operands' roots, its records, and the roots it published (activations, transcript, records,
   each call's y).
 * **The run's commitment** (`runCommitment`) binds the retained passes, their records and their activation trees, before
-  the coin: `tagged("verity/pouw/pearl-plus/run/v2", per pass: transcript root, records root, salt, each call's y root or
-  empty, each call's A root)`.
+  the coin: `tagged("verity/pouw/pearl-plus/run/v2", per pass: its number of calls, transcript root, records root, salt,
+  each call's y root or empty, each call's A root)`.
 * **The coin record** (`CoinRecord`, `verity-pouw/pearl-plus-coin/v3`) is the verifier's record of its coin against that
   commitment, and of where the coin came from (its `draw`, `Coins`). A record of another schema was drawn on a commitment
   that binds no A root, and is refused (`OLD_COIN`). A verdict over passes whose commitment is another, or with another
@@ -94,12 +94,19 @@ def exclusionTiles (p : Pass) : List Nat := Id.run do
 
 end Pass
 
-/-- `run_commitment`: each retained pass's transcript root, records root and salt, then its calls' y roots (empty where a
-call commits none), then its calls' A roots, in order. -/
+/-- `run_commitment`: each retained pass's number of calls, transcript root, records root and salt, then its calls' y
+roots (empty where a call commits none), then its calls' A roots, in order. The count fixes where each pass's fields end. -/
 def runCommitment (passes : List Pass) : ByteArray :=
   tagged RUN_TAG (passes.flatMap fun p =>
-    [.bytes p.transcriptRoot, .bytes p.recordsRoot, .bytes p.salt] ++ p.yRoots.map (fun y => .bytes (y.getD ByteArray.empty)) ++
-      p.rootsA.map fun a => .bytes a)
+    [.int p.rootsA.length, .bytes p.transcriptRoot, .bytes p.recordsRoot, .bytes p.salt] ++
+      p.yRoots.map (fun y => .bytes (y.getD ByteArray.empty)) ++ p.rootsA.map fun a => .bytes a)
+
+#guard
+  let b (x : UInt8) : ByteArray := ⟨#[x]⟩
+  let pass (t r s : UInt8) (calls : List (UInt8 × UInt8)) : Pass :=
+    { (default : Pass) with transcriptRoot := b t, recordsRoot := b r, salt := b s,
+                            yRoots := calls.map fun c => some (b c.1), rootsA := calls.map fun c => b c.2 }
+  runCommitment [pass 1 2 3 [(4, 5)], pass 6 7 8 []] != runCommitment [pass 1 2 3 [], pass 4 5 6 [(7, 8)]]
 
 /-- The verifier's record of its coin: the run commitment it was sampled on, the source (a challenger sampling coin's 64 bytes,
 or the node's 32), the record's schema and its `draw` as the record carries it (`Coins.drawReason` reads it). -/
