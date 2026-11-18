@@ -105,6 +105,7 @@ untraced = [
     "test_secret_hint.py",
     "test_slack.py",
     "test_slot_only.py",
+    "test_slurm_launch.py",
     "test_spec_alert.py",
     "test_steward.py",
     "test_store_honing.py",

@@ -29,6 +29,11 @@ NODE=${SLURMD_NODENAME:-$(hostname -s)}
 tar -C "$W" -xzf "$J/payload.tar.gz" || { echo "no payload: send one with SEND=" >&2; exit 3; }
 # shellcheck source=/dev/null
 . "$W/request.sh"
+# the machine's [properties] copy, where `research run --machine` reads the register: $HOME's notes clone's machines.d
+if [ -n "${VCF_MACHINE:-}" ] && [ -f "$W/machines.d/$VCF_MACHINE.toml" ]; then
+  mkdir -p "$HOME/.research/notes/machines.d" && cp "$W/machines.d/$VCF_MACHINE.toml" "$HOME/.research/notes/machines.d/"
+fi
+ENVS=(); for e in ${VCF_ENV[@]+"${VCF_ENV[@]}"}; do ENVS+=(--env "$e"); done
 command -v uv > /dev/null || { curl -LsSf -m 60 https://astral.sh/uv/install.sh | env UV_UNMANAGED_INSTALL="$W/bin" sh > /dev/null; export PATH="$W/bin:$PATH"; }
 cd "$W/tree" || exit 3
 t0=$(date +%s)
@@ -39,11 +44,12 @@ export PATH="$W/tree/.venv/bin:$PATH"
 # what the record names as the machine: a node of VCF's cluster, shared with its other users, with no lease or slot of
 # ours; Slurm's --mem is its memory limit
 REMOTE=$(.venv/bin/python -c 'import json, os, sys; e = os.environ.get
-print(json.dumps({"machine": "vcf-" + sys.argv[1], "site": "vcf-slurm", "host": "vcf.lucidcomputing.ai", "slurm_job": e("SLURM_JOB_ID"),
+print(json.dumps({"machine": sys.argv[1], "site": "vcf-slurm", "host": "vcf.lucidcomputing.ai", "slurm_job": e("SLURM_JOB_ID"),
                   "partition": e("SLURM_JOB_PARTITION"), "cpus": e("SLURM_CPUS_PER_TASK"), "gpus": e("SLURM_JOB_GPUS"),
-                  "mem_mb": e("SLURM_MEM_PER_NODE"), "lease": None, "slot": None, "node_shared": True}))' "$NODE")
+                  "mem_mb": e("SLURM_MEM_PER_NODE"), "lease": None, "slot": None, "node_shared": True}))' "${VCF_MACHINE:-vcf-$NODE}")
 .venv/bin/research run --runs-dir "$J/result/runs" --local-only "VCF's cluster holds no store key: vcf-job-run.sh publishes the run dir with its custody" \
   --source-identity "{\"commit\": \"$VCF_COMMIT\", \"tree\": \"$VCF_TREE\", \"dirty\": false, \"dirty_digest\": null}" \
   --remote-json "$REMOTE" --cost-json '{"provider": "vcf", "rate_usd_per_hour": null, "shared": true, "reason": "VCF cluster, no rate"}' \
-  ${VCF_TOOL:+--tool "$VCF_TOOL"} --env "RESEARCH_SOURCE_COMMIT=$VCF_COMMIT" \
+  ${VCF_TOOL:+--tool "$VCF_TOOL"} ${VCF_RUN_ID:+--id "$VCF_RUN_ID"} ${VCF_MACHINE:+--machine "$VCF_MACHINE"} \
+  --env "RESEARCH_SOURCE_COMMIT=$VCF_COMMIT" ${ENVS[@]+"${ENVS[@]}"} \
   --tree-sha "$VCF_COMMIT" --cwd "$W/tree" --timeout "$(( ${VCF_TIMEOUT_MIN:-20} * 60 ))" -- "${VCF_CMD[@]}"

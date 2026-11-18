@@ -81,6 +81,9 @@ def _list_pods() -> list[dict]:
 def ssh_base(target: str) -> list[str]:
     """`ssh ... user@host` for TARGET, ready for a remote command to be appended."""
     m = remote.load_machines().get(target)
+    if m is not None and m.get("provider") == "slurm":
+        raise remote.Refused(f"{target} is a node of a Slurm cluster, reached only through batch jobs its via machine "
+                             f"{m.get('via')} submits: `research run --on {target}`, or `research pods ssh {m.get('via')}`")
     if m is not None and m.get("provider") == "ssh":
         tgt = remote.ssh_host_target({**m, "name": target})
         return ssh_for(tgt["host"], tgt["port"], user=tgt["user"])

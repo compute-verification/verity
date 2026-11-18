@@ -16,7 +16,8 @@ The registry is a directory with one TOML file per machine, `<dir>/<name>.toml`,
 which `research pods stopped` writes; `lane`, the lane whose budget line pays for it, infra when
 unset) plus who registered it and when.  A machine marked `stopped_since`, or `unreachable_since` for UNREACHABLE_OUT_MIN, is out
 of placement (`left_out`): `research run --on auto` asks it nothing and `research deploy` writes it into no list of machines, and
-it is still reached by name.  Two
+it is still reached by name.  A `provider = "slurm"` machine, a node of a cluster that is not ours, is reached only through
+batch jobs its `via` machine submits, and its file holds no address (research.pods.slurm says what it holds).  Two
 agents registering two pods write two files, so nothing is ever hand-merged; in the notes repo, `research notes sync` carries
 them to every machine.  `<dir>/_families.toml` carries the `[families.<fam>]` VRAM references `pods check-part` reads.
 
@@ -114,8 +115,13 @@ def validate(name: str, entry: Any) -> str | None:
             return f"port {entry['port']!r} is not a TCP port"
         if "user" in entry and not (isinstance(entry["user"], str) and NAME_RE.fullmatch(entry["user"])):
             return f"user {entry['user']!r} is not a user name"
+    elif entry.get("provider") == "slurm":
+        from .slurm import problem
+
+        if why := problem(entry):
+            return why
     elif entry.get("provider") != "runpod":
-        return f"provider {entry.get('provider')!r} (runpod or ssh)"
+        return f"provider {entry.get('provider')!r} (runpod, ssh or slurm)"
     elif not isinstance(entry.get("pod_id"), str) or not POD_ID_RE.fullmatch(entry["pod_id"]):
         return f"pod_id {entry.get('pod_id')!r} is not a pod id"
     if entry.get("lane") is not None and not (isinstance(entry["lane"], str) and NAME_RE.fullmatch(entry["lane"])):
@@ -143,12 +149,12 @@ def left_out(entry: dict, now: float) -> str | None:
 
 
 def binding(entry: dict) -> str | None:
-    """What a name is bound to: a runpod pod id, or an ssh machine's host."""
-    return entry.get("pod_id") or entry.get("host")
+    """What a name is bound to: a runpod pod id, an ssh machine's host, or the machine a slurm one's jobs go through."""
+    return entry.get("pod_id") or entry.get("host") or (f"slurm via {entry['via']}" if entry.get("provider") == "slurm" else None)
 
 
 def _bound(entry: dict) -> str:
-    return f"pod {entry['pod_id']}" if entry.get("pod_id") else f"host {entry.get('host')}"
+    return f"pod {entry['pod_id']}" if entry.get("pod_id") else f"host {entry['host']}" if entry.get("host") else str(binding(entry))
 
 
 def host_var(name: str) -> str:

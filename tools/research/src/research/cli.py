@@ -367,6 +367,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                     help="a local run whose store has no usable remote refuses (exit 3): its records would stay on this disk and nothing "
                          "would preserve them. REASON says what does instead; it is printed and recorded in job.json (default "
                          "$RESEARCH_LOCAL_ONLY). A usable remote is pushed to either way; --on MACHINE gets custody on the remote instead")
+    ap.add_argument("--machine", default=None, metavar="NAME",
+                    help="with --local-only: the registered machine this run is already on (a Slurm job's node): the workload gets "
+                         "RESEARCH_MACHINE=NAME and, where the register here holds NAME's [properties], their copy as inputs/NAME.toml")
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ap.add_argument("--allow-pipe", action="store_true",
                     help="run a workload whose shell script pipes without `pipefail` (`bash -lc 'a | tee f'`), which is refused "
@@ -437,6 +440,14 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if ns.on == "auto" and (why := _auto_placement(ns, harness_opts)):
         print(f"research run --on auto: {why}", file=sys.stderr)
         return 2
+    if ns.machine and (ns.on or ns.queue or not ns.local_only):
+        print("research run: --machine NAME names the machine a --local-only run is already on (a Slurm job's node); --on NAME "
+              "names the machine itself", file=sys.stderr)
+        return 2
+    if ns.on not in (None, "auto") and not ns.claimed and (m := remote.load_machines().get(ns.on)) and m.get("provider") == "slurm":
+        from .pods import slurm
+
+        return slurm.launch(ns, harness_opts, command, m)
     if getattr(ns, "auto", False):
         _auto_size(ns, harness_opts, command)
         return _auto_launch(ns, harness_opts, command, clones)
@@ -497,6 +508,20 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
 
 def _exit_on_sigterm(signum: int, _frame: object) -> None:
     raise SystemExit(128 + signum)
+
+
+def _copy_properties(name: str, run_dir: Path) -> None:
+    """A --local-only --machine run's inputs/NAME.toml: NAME's [properties] where the register here holds its file (on a Slurm
+    job's node, the copy the payload carries)."""
+    import tomllib
+
+    from .pods import registry, slurm
+
+    d = registry.registry_dir(remote.machines_path())
+    entry = d / f"{name}.toml" if d else None
+    if entry and entry.is_file() and (props := slurm.properties_copy(name, tomllib.loads(entry.read_text()))):
+        (run_dir / "inputs").mkdir(exist_ok=True)
+        (run_dir / "inputs" / f"{name}.toml").write_text(props)
 
 
 def _take_run_dir(ns: argparse.Namespace, root: Path) -> Path:
@@ -644,6 +669,8 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
         return 3
     if no_remote:
         print(f"research run: no usable remote ({no_remote}); --local-only: {ns.local_only}", file=sys.stderr)
+    if ns.machine:
+        ns.env = [*ns.env, f"RESEARCH_MACHINE={ns.machine}"]
     env_map = _parse_env(ns.env)
     if env_map is None:
         return 2
@@ -688,6 +715,8 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
     source_root = Path.cwd()
     tree_lock = treelock.lock_path(root, source_root) if cwd_basis == "source" and treelock.builds_lean(command) else None
     run_dir.mkdir(parents=True, exist_ok=True)
+    if ns.machine:
+        _copy_properties(ns.machine, run_dir)
     _place_dirty_capture(prep, run_dir)
     cost = json.loads(ns.cost_json) if ns.cost_json else None
     if ns.claimed and remote_info is not None:
@@ -1737,6 +1766,10 @@ def _run_dir(root: Path, ref: str, on: str | None, *, unique: bool = False) -> P
     try:
         return remote.adopt(root, ref, on=on, unique=unique)
     except remote.Refused as e:
+        from .pods import slurm
+
+        if (published := slurm.adopt(root, ref)) is not None:
+            return published
         raise FileNotFoundError(f"no run {ref!r} under {root}, and {e}{_attempt_hint(ref)}") from None
 
 
@@ -2072,7 +2105,7 @@ def cmd_status(argv: list[str]) -> int:
     if ns.refresh or one:
         for s in [R.summarize(one)] if one else R.list_runs(root):
             if s.get("remote_rec") and (s["state"] not in R.TERMINAL or (one and (ns.also or not (Path(s["dir"]) / checkview.SPANS).exists()))) \
-                    and (s["remote_rec"].get("remote_run_dir")):
+                    and (s["remote_rec"].get("remote_run_dir") or s["remote_rec"].get("provider") == "slurm"):
                 try:
                     remote.fetch(Path(s["dir"]), also=(*ns.also, *checkview.CHECK_FILES) if one else ())
                 except remote.Refused as e:

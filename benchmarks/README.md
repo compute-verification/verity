@@ -317,27 +317,32 @@ Two cases decide where a price comes from:
 
 The Verifiable Compute Foundation's cluster (`vcf.lucidcomputing.ai`: the 8-H100 node `h100-sxm-8-0` and the one-card
 nodes `h100-nvl-1-0-cc` and `h100-nvl-1-1-cc`) runs a benchmark from a commit as one Slurm job under the account its credentials name.
-Only the control pod holds the login key, so a lead sends the job from there with `infra/vcf/` (deployed under
-`/data/vcf/`). From a checkout, build the payload, `git archive` of the commit and the command, and copy it to the pod:
+Only the control pod holds the login key, and each node is a register entry with `provider = "slurm"` and `via` the control
+pod (`research.pods.slurm` gives its fields), so a run goes there from any checkout whose agent may reach the control pod:
 
 ~~~text
-infra/vcf/payload.sh origin/main --tool native_peak -- python calibration/native_peak/measure.py --dtype bf16 --sizes 8192 \
-  | research pods ssh vy-control-verity -- 'cat > /data/vcf/payloads/NAME.tar.gz'
-research pods ssh vy-control-verity -- 'cd /data/vcf-jobs && SEND=/data/vcf/payloads/NAME.tar.gz setsid -f bash \
-  /data/vcf/vcf-job-run.sh NAME main 30 /data/vcf/vcf-bench.sh --nodelist=h100-sxm-8-0 --gres=gpu:1 --cpus-per-task=16 \
-  --mem=64G > NAME.launch.log 2>&1 < /dev/null'
+research run --on vcf-h100-sxm-8-0 --project verity --gpus 1 --cpus 16 --mem-gb 64 --timeout 30m --tool native_peak \
+  -- python calibration/native_peak/measure.py --dtype bf16 --sizes 8192
 ~~~
+
+It builds `infra/vcf/payload.sh`'s payload of the checkout's commit, copies it to `/data/vcf/launches/RUN/` on the control
+pod, and starts the commit's own `vcf-job-run.sh` there in tmux session `research-RUN`, with `--gpus`, `--cpus`, `--mem-gb`
+and the entry's node and reservation as sbatch options and `--timeout` (at most the entry's `max_minutes`) as the job's
+minutes; it prints the Slurm job id and returns. `research status RUN` reads the job's log on the control pod until the run is
+published, and then, like `research fetch RUN`, its records from the store. Run by hand, `payload.sh` and `vcf-job-run.sh`
+(their headers) do the same.
 
 The job builds the tree's environment with uv on the node's disk (`--sync`, default `--all-packages --extra torch`:
 CUDA torch from PyPI) and runs the command under `research run --local-only`, so its run directory is the one our
-machines write. `vcf-job-run.sh` copies it to `/data/vcf-jobs/NAME-STAMP/result/runs/RUN/`, publishes it with
+machines write, with `RESEARCH_MACHINE=NAME` and the entry's `[properties]` as `inputs/NAME.toml`. `vcf-job-run.sh` copies it
+to `/data/vcf-jobs/RUN/result/runs/RUN/`, publishes it with
 `research data custody RUN_DIR --publish` (`vcf-publish.sh OUT PAYLOAD` retries that), and removes the job's
-directory on the cluster; `NAME.launch.log` and `sacct.txt` give the Slurm job, the node and its wait and run times.
+directory on the cluster; `launch.log` and `sacct.txt` give the Slurm job, the node and its wait and run times.
 Read it back as any run: `research data show RUN`.
 
-Such a record names its machine `vcf-NODE` (`execution.machine`) and its cost provider `vcf`. It has no lease and
+Such a record names its machine by its register entry (`execution.machine`) and its cost provider `vcf`. It has no lease and
 no slot of ours (its memory limit is Slurm's `--mem`), its node is shared with other users, it has no rate, and
-nothing preserves it while it runs (`research run-preserve` and `research status` from a VM don't reach it). The nodes
+nothing preserves it while it runs (`research run-preserve` doesn't reach it). The nodes
 have network, Python 3.12 and no root. The DGX's driver is CUDA 13.0's, which `main`'s torch needs;
 `h100-nvl-1-1-cc`'s is CUDA 12.8's, too old for it, and `h100-nvl-1-0-cc` refuses any GPU request. No node has `nvcc` or `ncu` on
 its PATH, and the H100 has no card file in `calibration/hardware/cards/`, so a card-bound benchmark refuses there. Use only idle
