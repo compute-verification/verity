@@ -2,6 +2,10 @@ Part of network attestation's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The compile slice's charge, and a served execution phase at its engine's class
 
+This file describes a Definition and its design: no session of the compile slice runs, and no auditor and no driver
+runs any check of it; its checks run only in its tests. In its place, `records_audit.py audit` opens the advice in the
+clear and recompiles it (`records_audit.compile_check`), which reads no served rows.
+
 `CompileSlice_v1` (`verity_vllm.compiler.compile_slice`) is one execution phase of the compile slice's proof block in one Boolean
 Definition. Its circuit, rows, verdict flags, reference and stand-ins are `verity_vllm.compiler.compile_slice`'s
 docstring. This file covers how the slice charges an execution phase, what binds the charge's inputs, and a served execution phase
@@ -56,15 +60,17 @@ carry-out is whatever the prover likes. And `en` is pinned only by the slice's o
 proof block, where the replay is split into proof blocks) is sampled `All`, as N2's proof blocks are (PROTOCOL.md, A3).
 
 **A served execution phase at its engine's class: w212.** An execution phase's request and step counts are private, and the
-class is protocol structure. So a session proves every execution phase at its engine's class: (R, W, A) = (8, 1, 9), Q 4,
-D 32, P 54, K 4, no prefix caching, and 8eb1's AsyncScheduler (AS = 1). The scheduler is engine configuration, so it
-is the class's and never an execution phase's: an AS chosen per execution phase would show whether its schedule matched sync
-order. w212 (requests 308–310, 21 proof blocks, 14 decisions) is padded into it
+class is protocol structure. So a session of the slice would prove every execution phase at its engine's class: (R, W, A) =
+(8, 1, 9), Q 4, D 32, P 54, K 4, no prefix caching, and 8eb1's AsyncScheduler (AS = 1); no session of the slice runs. The
+scheduler is engine configuration, so it is the class's and never an execution phase's: an AS chosen per execution phase
+would show whether its schedule matched sync order. w212 (requests 308–310, 21 proof blocks, 14 decisions) is padded into it
 (`tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212_class_async.json`: an empty arrival slot, 18
-decisions past the count with en 0, and 33 idle steps). The seal's rows are in ``srv``
-(`verity_vllm.compiler.served_rows.step_rows`), each held to its request's slot through ``map``.
-- It proves w212's charge of its decisions. Its order's charge is the I/O tie's, outside this proof (What a proof of
-  the slice covers, above).
+decisions past the count with en 0, and 33 idle steps). The fixture's ``srv`` holds the seal's rows
+(`verity_vllm.compiler.served_rows.step_rows`), and the Definition states that each is its request's slot's through
+``map``.
+- A proof of the slice at this class would prove w212's charge of its decisions. None runs: the tests evaluate the
+  circuit and its reference on the fixture (`test_network_attester_compile_slice_w212.py`). Its order's charge is the
+  I/O tie's, outside this proof (What a proof of the slice covers, above).
 - `replay_vectors --slice` replays an
   execution phase at the trace's own scheduler unless asked for the sync class (`--AS 0`).
 - The proof block is 1,021,302 ANDs, 123,120 of them the map's ([served-shape.md](../../../../../../adapters/vllm/verity_vllm/compiler/served-shape.md)). Of them,
@@ -89,5 +95,7 @@ decisions past the count with en 0, and 33 idle steps). The seal's rows are in `
 - The phase-10 attack's passes (a pass at every ask, where the served execution phase admitted requests 309 and 310 at the seventh
   and fourteenth: twenty-one at the class, at the asks of its 21 proof blocks, and twenty at the sync class) charge 23
   bits.
-  - With the served rows in ``srv``, they are refused by ``rows``.
-  - With their own rows there, the proof block accepts them, and the native ``srv`` b‖c check refuses them.
+  - With the served rows in ``srv``, the Definition's ``rows`` refuses them in a proof of the slice, of which none runs.
+  - With their own rows there, the proof block accepts them, and nothing that runs refuses them: the native ``srv`` b‖c
+    check (`verity_vllm.compiler.served_rows.leaf_ok`) is called only by its tests, and a prover that registers those
+    rows passes it too.
