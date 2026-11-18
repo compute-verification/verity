@@ -3,7 +3,7 @@
     python3 agent_watch.py loop --log /data/agent-watch/events.jsonl     $CURSOR_API_KEY set; the standard library and `research` on the path
 
 An agent hears Slack, Linear and timer events only between runs, and a run can hang after a tool call returns, for hours and for several coordinators at once, and without the watch only a
-person pressing Stop frees one. Every `POLL_S` the watch lists the agents (`GET /v1/agents`, which shows every agent on the account:
+person pressing Stop frees one. Every `POLL_S` the watch lists the agents once (`GET /v1/agents`, `AGENTS_PAGES` pages at most, which shows every agent on the account:
 it keeps those whose `repos` name compute-verification/verity; ACTIVE ones, and IDLE ones changed in the last `IDLE_RECENT_S`,
 since an ERROR leaves an agent IDLE). For each ACTIVE agent it lists its runs (`GET .../runs`),
 page by page back to the newest that started: its `latestRunId` is often a run cancelled on arrival, created and cancelled
@@ -52,9 +52,11 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   recorded once, for a person, and cancelled once the file is gone if it still holds;
 - **in a long call** when a tool call the parent waits on has been running for `LONG_CALL_S` (recorded, never cancelled: a
   build or a wait may be legitimate, unless it is a holder's held unread);
-- **crashed** when the platform has it stopped with an error: for an agent on the list, its latest run ended in ERROR
-  (or its own status reads ERROR, should the list give one: v1 documents none, an errored run leaving its agent IDLE; a
-  worker read by id is told by another sign, below). The watch starts a new run, at most once every `RESTART_S` and
+- **crashed** when the platform has it stopped with an error: for an agent on the list, its newest run that started ended
+  in ERROR (or its own status reads ERROR, should the list give one: v1 documents none, an errored run leaving its agent
+  IDLE; a worker is told by another sign, below). A latest run in ERROR that a newer started run replaced (`replaced`, by
+  `createdAt`) is no crash: the agent is neither down nor restarted and nobody, a person included, is rung for it; for
+  an agent out of a turn its runs are listed once to tell (`later_runs`), and with that list unread it is judged neither way. The watch starts a new run, at most once every `RESTART_S` and
   `MAX_RESTARTS` times in a row (a run can error within a minute, run after run), then records it as
   **erroring**, for a person: top for a coordinator, its launcher's handle for a worker. A restart the API refuses (other
   than 409) is one of the row and is made again `RESTART_S` later, so an agent the watch can't start ends erroring, and a
@@ -108,8 +110,8 @@ RUNNING since went on by itself, in a turn the cancel would cut; that one, and o
 left, and the wake is the hour's refused one.
 `--wake` stays off by default.
 
-A cloud worker (a coordinator's Task subagent) is not in `GET /v1/agents`, lists no runs, and can't be started (POST runs:
-400 legacy workflow), so only its coordinator can resume it, and a lane's workers can all stop mid-step unnoticed for hours. The watch finds workers in the `origin:` of the notes (`--notes`, a research-notes clone)
+A cloud worker (a coordinator's Task subagent) lists no runs and can't be started (POST runs: 400 legacy workflow), so
+only its coordinator can resume it, and a lane's workers can all stop mid-step unnoticed for hours. The watch finds workers in the `origin:` of the notes (`--notes`, a research-notes clone)
 under `lanes/` modified in the last `WORKER_NOTES_S`, and in `workers.d/*.json` beside `--log` (`{agent_id, lane,
 launched_by}`, for a coordinator, or a worker, that registers the workers it launches; one with `integrates` is a swarm's
 integrator's, below; one with `placed_by` the watch wrote
@@ -131,21 +133,29 @@ once as **unplaced**, with the agent whose Task call named it if the watch saw o
 that run's record instead, below), for the relay to ring infra, who finds its launcher, and from then on its alerts are
 marked `quiet` (posted, ringing no one: nobody the watch knows could resume it) until something places it. A worker whose registration names a lane no handle owns keeps that lane, and the
 relay rings infra with each of its alerts. Each sweep
-it reads each one once (`GET /v1/agents/{id}`; `WORKERS_NEW` first reads a sweep; one IDLE for `WORKER_IDLE_S` only when a
-note of its changes; a 404 never again), and records **worker_idle** when it went from ACTIVE to IDLE (once per transition,
-at its `updatedAt`, which moves on a status change and not during work), unless its parent's Task call completed as it
-stopped (`reported_back`: it reported back), and **worker_long** once when it has been ACTIVE for
-`--worker-long-h` (6). A worker that stopped with an error is **crashed** as any agent is, by the one sign the platform
+judges every worker by its status and `updatedAt` on the sweep's one listing, and reads one by id (`GET /v1/agents/{id}`)
+only when the listing lacks it (`WORKERS_NEW` first reads a sweep; one IDLE for `WORKER_IDLE_S` only when a note of its
+changes; a 404 never again). It records **worker_idle** once per stop, at the stop's `updatedAt` (which moves on a status
+change and not during work), unless its parent's Task call completed as it stopped (`reported_back`: it reported back).
+A stop is an IDLE read at an `updatedAt` no worker_idle has had, where the worker left ACTIVE since the last read, or its
+`updatedAt` moved while it read IDLE at both (a Task resume's turn between two sweeps), or the first read finds it
+stopped less than `STALE_STOP_S` ago; one found stopped longer ago rings no one. Either of the last two counts only once
+v0 has it out of a turn, read `SETTLE_S` or more after the change (a resume's message moves `updatedAt` before v1 reads it
+ACTIVE). The watch records **worker_long** once when a worker has been ACTIVE for `--worker-long-h` (6). A worker that stopped with an error is **crashed** as any agent is, by the one sign the platform
 gives of it: v1 reads it IDLE however its turn ended and lists no run for a turn a Task resume ran, so the watch reads
 its status as the legacy `GET /v0/agents/{id}` gives it (`stopped`: ERROR; FINISHED or EXPIRED otherwise, CREATING or
 RUNNING in a turn), when a stop may have happened (it left ACTIVE, its `updatedAt` moved, as a Task resume's message
-moves it, or a note, a registration or a Task call named it again) and every `STOP_S` while v0 has it in a turn or the
-read fails, `STOPS_SWEEP` such reads a sweep at most. It is recorded once per stop, with the issue key in its name
-(`issue`), in place of that stop's worker_idle and never as dropped, and not again until it has run and stopped again;
-the watch can't start it, and the record says so. It records only; the relay rings the lane's handle. A worker's
-worker_idle, crashed and idle_after_run are
-held with its parent's others (`bursts` in `state.json`) and posted once none has joined for `BURST_QUIET_S`, or `BURST_S`
-after the first: one alone as itself, several as one **workers_failed** naming them all. Each names the wake-up the worker
+moves it, or a note, a registration or a Task call named it again), once more at the first sweep `SETTLE_S` after the
+change when the read came sooner, and every `STOP_S` while v0 has it in a turn or the read fails, `STOPS_SWEEP` such reads
+a sweep at most. It is recorded once per stop, with the issue key in its name (`issue`), in place of that stop's
+worker_idle, and not again until it has run and stopped again; the watch can't start it, and the record says so. It
+records only; the relay rings the lane's handle. A stop's record carries where the worker's work stands (`work`: its
+branch, else its newest note). A worker's worker_idle, crashed and idle_after_run are
+held with its parent's others (`bursts` in `state.json`, timed by each stop's `updatedAt`) and posted, right after the
+workers are judged and again at the sweep's end, once none has joined for `BURST_QUIET_S`, or `BURST_S` after the first:
+one alone as itself, several as one **workers_failed** naming them all. So a lone stop is posted at the first sweep that
+starts `BURST_QUIET_S` after it, at worst one sweep interval (a sweep's length, at most `SWEEP_READS_S`, plus `POLL_S`)
+plus `BURST_QUIET_S` after it, and `STOP_S` more when v0 still has it in a turn at that sweep. Each names the wake-up the worker
 says it set (`subscribe_timer`, "a wake-up in 15 minutes") in its last messages, `GET /v0/agents/{id}/conversation`. That
 endpoint is the only conversation the API has, and it carries only user and assistant text: a tool call left without its
 result, the shape of those stops, is not visible to the watch, so a worker that stops is judged by its IDLE alone.
@@ -680,8 +690,7 @@ def issue_of(name: str, registry: Path | None) -> dict[str, str]:
 
 
 def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: dict[str, str], t: float) -> dict[str, dict]:
-    """agent id -> {"lane", "handle", "heard", "branches"}: each cloud worker (a Task subagent, which `GET /v1/agents` doesn't
-    list) named by `workers_d/*.json` (`{agent_id, lane, launched_by, branch}`, which a coordinator or a worker writes for the
+    """agent id -> {"lane", "handle", "heard", "branches"}: each cloud worker (a Task subagent) named by `workers_d/*.json` (`{agent_id, lane, launched_by, branch}`, which a coordinator or a worker writes for the
     workers it launches) or by the `origin:` of a note under `notes/lanes/` modified in the last `WORKER_NOTES_S`, minus the
     coordinators (`coords`). Its handle is its launcher's (`launched_by`) when that is a coordinator, else its lane's when the
     lane is a handle, else that of a coordinator its note's origin names (`started by proofs bc-...`); `heard` is the newest
@@ -2212,7 +2221,9 @@ class Watch:
         the API lists and can't be started (400 legacy workflow), so only its coordinator can resume it (Task); the watch
         records, never acts. One with neither a handle nor a lane (`place_workers`) is recorded once as `unplaced`, and its
         alerts are marked `quiet`. An agent the list has is the sweep's to read, but for one with no run (`runless`), which
-        the sweep can't judge: it is judged here as any worker."""
+        the sweep can't judge: it is judged here as any worker. Its API calls a sweep, past the sweep's one listing: none for
+        a worker on the listing, one `GET /v1/agents/{id}` for each off it that is read (`WORKERS_NEW` first reads at most),
+        and at most `STOPS_SWEEP` v0 statuses (`stopped`)."""
         before = json.dumps([self.workers, self.owners], sort_keys=True)
         self.worker_status, new, self.stops_left = {}, 0, STOPS_SWEEP
         listed_n = by_id = 0
