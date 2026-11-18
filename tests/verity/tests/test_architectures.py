@@ -33,6 +33,20 @@ def test_each_architecture_loads_with_its_gates_sourced(name: str) -> None:
         assert re.fullmatch(r"\d+(\.\d+)+", gate["driver_min"]), gate
 
 
+def _release(text: str) -> tuple[int, ...]:
+    return tuple(int(p) for p in text.split("."))
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_each_architectures_gates_rise_by_version_and_never_lower_the_driver(name: str) -> None:
+    gates = load_architecture(name, directory=ARCH_FILES)["toolkit"]
+    versions = [_release(g["version"]) for g in gates]
+    assert versions == sorted(set(versions)), f"{name}: gates at {[g['version'] for g in gates]}; one a version, oldest first"
+    drivers = [_release(g["driver_min"]) for g in gates]
+    assert drivers == sorted(drivers), (f"{name}: driver_min {[g['driver_min'] for g in gates]} by version; a newer toolkit "
+                                        "never needs an older driver: read its row again")
+
+
 def _write(tmp_path: Path, text: str, name: str = "sm_90a") -> Path:
     (tmp_path / f"{name}.toml").write_text(text, encoding="utf-8")
     return tmp_path
