@@ -253,6 +253,22 @@ theorem unopened_self (S : Finset (Fin C.N)) : P.unopened S S = ∅ := by
   ext u
   simp [unopened]
 
+theorem gates_nonempty_of_io {u : Fin n} {g : Fin C.N} (hg : g ∈ P.io u) : (P.gates u).Nonempty := by
+  obtain ⟨-, h | ⟨h, hh, -⟩⟩ := Finset.mem_filter.1 hg
+  · exact ⟨g, Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩⟩
+  · exact ⟨h, Finset.mem_filter.2 ⟨Finset.mem_univ _, hh⟩⟩
+
+theorem gates_nonempty_of_unopened {S O : Finset (Fin C.N)} {u : Fin n} (hu : u ∈ P.unopened S O) :
+    (P.gates u).Nonempty := by
+  obtain ⟨g, hg, -⟩ := (Finset.mem_filter.1 hu).2
+  exact P.gates_nonempty_of_io hg
+
+theorem gates_nonempty_of_incorrect {X : C.Trace} {u : Fin n} (hu : u ∈ P.incorrect X) : (P.gates u).Nonempty := by
+  classical
+  simp only [incorrect, Correct, Finset.mem_filter, Finset.mem_univ, true_and, not_forall] at hu
+  obtain ⟨g, -, h, -⟩ := hu
+  exact ⟨g, Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩⟩
+
 namespace Refines
 
 variable {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} (r : Refines Pf Pc)
