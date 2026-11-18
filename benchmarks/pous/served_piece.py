@@ -126,7 +126,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
-from verity.protocols.resource_accounting.memory.poub.prover.p2_stage import bandwidth as BW
+from verity.protocols.resource_accounting.scheme import answering
 from verity_vllm import messages
 
 if str(Path(__file__).resolve().parent) not in sys.path:
@@ -135,6 +135,7 @@ if str(Path(__file__).resolve().parent) not in sys.path:
 import served_case as SC
 
 POUS, BANDWIDTH = table.get("pous"), table.get("bandwidth")
+BW = answering(BANDWIDTH)
 ROOT = Path(__file__).resolve().parents[2]
 #: the manifests a served model's pin is read from, the first that names it at its revision
 PINS = tuple(ROOT / "adapters" / "vllm" / "manifests" / name for name in ("checkpoints-int8.json", "checkpoints.json"))
@@ -643,9 +644,9 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
           private=str(private), public=inner["public"], bandwidth=bandwidth,
           decided_by=decided, setup=CS.SETUP, **lean)
     # last, and only once each Lean asked for has answered its case: until then the same sessions can be answered again
-    unanswered = not agreed or (bw is not None and bw["verdict"] == "undecided" and (bw_private / BW.HELD).is_file())
+    unanswered = not agreed or (bw is not None and bw["verdict"] == "undecided" and (bw_private / BW.held).is_file())
     if not unanswered:
-        for kept_file in (private / STORE, private / HELD, bw_private / BW.HELD):
+        for kept_file in (private / STORE, private / HELD, bw_private / BW.held):
             kept_file.unlink(missing_ok=True)
     return answer
 
@@ -704,10 +705,10 @@ def collect_bandwidth(out: Path, window: int) -> dict[str, Any] | None:
         return None
     a, summary = (json.loads(f.read_text()) for f in files)
     S.check_answer(a)
-    if a.get("protocol") != BW.p2_parties.PROTOCOL:
+    if a.get("protocol") != BANDWIDTH.protocol:
         raise ValueError(f"the answer in {out} is {a.get('protocol')!r}'s, not PoUB's")
     if summary.get("window") != window:
-        a = {"commitment": None, "profile": None, "protocol": BW.p2_parties.PROTOCOL, "public": None,
+        a = {"commitment": None, "profile": None, "protocol": BANDWIDTH.protocol, "public": None,
              "reason": f"the bandwidth answer in {out} is window {summary.get('window')}'s, not window {window}'s: the "
                        f"PoUS piece ran no bandwidth session for window {window}", "verdict": "undecided"}
         (out / "answer.json").write_text(json.dumps(a, indent=1, sort_keys=True) + "\n")
@@ -766,11 +767,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                          "bw_party verb), to which --minutes and --pous-session are added")
     bw.add_argument("--bw-host", default=BW_PARTY_HOST, help="where the party's port is reached from here")
     bw.add_argument("--bw-minutes", type=int, default=BW_MINUTES, help="the party's minutes, the gate's cap on the session")
-    bw.add_argument("--bw-windows", type=int, default=BW.WINDOWS)
-    bw.add_argument("--bw-passes", type=int, default=BW.PASSES)
-    bw.add_argument("--bw-samples", type=int, default=BW.SAMPLES)
-    bw.add_argument("--bw-window-s", type=float, default=BW.WINDOW_S)
-    bw.add_argument("--bw-deadline-s", type=float, default=BW.DEADLINE_S)
+    bw.add_argument("--bw-windows", type=int, default=BW.session["windows"])
+    bw.add_argument("--bw-passes", type=int, default=BW.session["passes"])
+    bw.add_argument("--bw-samples", type=int, default=BW.session["samples"])
+    bw.add_argument("--bw-window-s", type=float, default=BW.session["window_s"])
+    bw.add_argument("--bw-deadline-s", type=float, default=BW.session["deadline_s"])
     bw.add_argument("--bw-out", type=Path, help="the bandwidth piece's directory (default: DIR's sibling bandwidth)")
     bw.add_argument("--bw-private", type=Path, help="its private directory (default SERVE_DIR/private/bandwidth)")
     bw.add_argument("--bw-case-exe", help="poub-p2-protocol, which answers the case (else "
