@@ -1,4 +1,4 @@
-"""A served tree registered as a port, end to end (`one_stage.served.register_served`, `served_registered.py`): a
+"""A served tree registered as a port, end to end (`prover.served.register_served`, `served_registered.py`): a
 RoPE d64 statement whose 32 units each read their `cs` row from the served tree `cs_table`, proved by Flock in one
 loopback `--zk` session under a subset sample of 16 (`pod/89-served-registered.sh`, `FIXTURES`), once for each row format a
 served tree may be: `row/v1`, and `row/v2` and `row-seg/v1` bit rows (the circuit's rows bit rows of their words, `cs` a
@@ -32,7 +32,7 @@ import pytest
 from verity.circuits.codec import canonical_json, encode_program
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
-from verity.protocols.proofs.spot.verifier.one_stage.served import register_served
+from verity.protocols.proofs.spot.prover.served import register_served
 
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"

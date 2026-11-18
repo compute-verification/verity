@@ -12,6 +12,7 @@ from collections.abc import Mapping
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 import verity.circuits.ops.scalar  # noqa: F401
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -144,7 +145,7 @@ def test_a_window_reads_the_state_an_earlier_window_left():
     stream = _stream()
     prev = _three_windows(stream)
     w0 = stream.log[0]
-    out = {"state": {"record": R.digest(w0), "port": "next"}}
+    out = {"state": {"record": DD.digest(w0), "port": "next"}}
     cand, ports = _window(3, prev, [_left(w0)])
 
     def check(log: list) -> V.Verdict:
@@ -174,7 +175,7 @@ def test_the_run_of_record_reads_the_output_values(monkeypatch):
     prev = _three_windows(stream)
     w0 = stream.log[0]
     cand, ports = _window(3, prev, [_left(w0)])
-    reg = stream.register(cand, ports, registered={"state": 2}, outputs={"state": {"record": R.digest(w0), "port": "next"}})
+    reg = stream.register(cand, ports, registered={"state": 2}, outputs={"state": {"record": DD.digest(w0), "port": "next"}})
     run = V.run
     monkeypatch.setattr(S.V, "run", lambda *a, value_outputs=None, **kw: run(*a, **kw))
     outcome = _close(stream, reg, {"state": _left(w0)["root"]})
@@ -201,7 +202,7 @@ def test_a_stream_takes_the_verifiers_certified_entries():
     assert outcome.accepted and outcome.verdict.codes == () and stream.records[-1]["audit"]["accepted"]
 
     w0 = stream.log[0]
-    out = {"state": {"record": R.digest(w0), "port": "next"}}
+    out = {"state": {"record": DD.digest(w0), "port": "next"}}
     later, ports = _window(1, reg.digest, [_left(w0), ROWS_ENTRY])
     assert _refused(lambda: stream.register(later, ports, registered={"state": 2}, outputs=out)) == ("R7-values",)
     reg = stream.register(later, ports, registered={"state": 2}, outputs=out, certified=CERTIFIED)
@@ -269,7 +270,7 @@ def test_an_interior_registration_takes_no_certified_entries():
     with pytest.raises(TypeError):
         stream.register_interiors(first, with_rows, iports, registered={"state": 2}, outputs=out, certified=CERTIFIED)
     own, iports = interior([_left(boundary, "carry")])
-    assert stream.register_interiors(first, own, iports, registered={"state": 2}, outputs=out).digest == R.digest(own)
+    assert stream.register_interiors(first, own, iports, registered={"state": 2}, outputs=out).digest == DD.digest(own)
 
 
 def test_an_interior_registration_reads_a_port_of_its_boundary():

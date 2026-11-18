@@ -125,20 +125,17 @@ def _patch_engine(llm) -> None:
         runner.sample_tokens = _timed(runner.sample_tokens, "sample")
 
 
-def _pearl_c(entry: str) -> bool:
-    """Whether a protocol entry ``name:scheme`` names a Pearl-C kernel (``pouw:pearl-c-*``)."""
-    return entry.startswith("pouw:pearl-c-")
-
-
 def undeclared(entries) -> str | None:
-    """Why a protocol arm of ``entries`` can't run: the first Pearl-C entry that isn't Pearl+'s option (`pouw.scheme`),
-    as the RTX PRO 6000's isn't, which no served path serves; None when there is none."""
-    from verity.protocols.resource_accounting.compute.pouw.scheme import OPTION
+    """Why a protocol arm of ``entries`` can't run: the first entry that is no declared scheme's option
+    (`compose.schemes`), as the RTX PRO 6000's Pearl-C and Pearl-C4's are none, which no served path serves; None when
+    there is none."""
+    from verity.protocols.compose import schemes
 
+    options = {s.option: s.name for s in schemes.load().values() if s.option}
     for e in entries:
-        if _pearl_c(e) and e != OPTION:
-            return (f"{e}: no declared scheme serves Pearl-C on that card, so no served arm runs it; its kernel's own "
-                    "benchmarks (bench_arm.py, e2e.py) run it directly")
+        if e not in options:
+            return (f"{e} is no declared scheme's option ({', '.join(f'{n}: {o}' for o, n in options.items())}), so no "
+                    "served arm runs it; its kernel's own benchmarks (bench_arm.py, e2e.py) run it directly")
     return None
 
 
@@ -147,6 +144,7 @@ def _engine(spec_name: str, arm_id: str):
     from verity_bench.vllm.presets import load_spec, resolve_spec, served
     from verity_bench.vllm.engine import _VllmEngine, arm_execution
     from verity_vllm.engine.env import INDUCTOR_DIR_MARK
+    from verity.protocols.compose import schemes
     spec = load_spec(spec_name)
     preset, eager = served(resolve_spec(spec_name).preset, spec.eager)
     names = list(spec.arms) + ([arm_id] if arm_id not in spec.arms else [])
@@ -154,7 +152,7 @@ def _engine(spec_name: str, arm_id: str):
     arm = next(x for x in arms if x.id == arm_id)
     if why := undeclared(arm.protocols):
         raise SystemExit(f"served_step.py: {why}")
-    if settings.PEARLC_CHALLENGER_GATE and any(_pearl_c(e) for e in arm.protocols):
+    if settings.PEARLC_CHALLENGER_GATE and schemes.get("pearl-plus").option in arm.protocols:
         raise SystemExit("served_step.py: PEARLC_CHALLENGER_GATE is set, but an engine attaches Pearl+ with its coins "
                          "in-process and no challenger gate; unset it here, or serve a live session with served_passes.py serve")
     preset, eager = arm_execution(arm, preset, eager)
