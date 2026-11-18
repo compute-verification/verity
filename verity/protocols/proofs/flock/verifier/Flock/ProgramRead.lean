@@ -37,8 +37,8 @@ def Desc.parseOfWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [Mon
   let j ← match parsed with
     | .ok j => pure j
     | .error e => throw s!"program: not JSON: {e}"
-  if (j.getObjValAs? String "schema").toOption != some "verity-ir/descriptor/v1" then
-    throw "program: not a verity-ir/descriptor/v1 descriptor"
+  if (j.getObjValAs? String "schema").toOption != some "verity-ir/descriptor/v2" then
+    throw "program: not a verity-ir/descriptor/v2 descriptor"
   let bare := match j with
     | .obj kvs => Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
     | x => x

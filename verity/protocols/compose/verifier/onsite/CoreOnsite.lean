@@ -103,10 +103,7 @@ def store : Tie :=
 to (`Core.Remote.V1.executionPhase`). -/
 def ties : List Tie := [store, Core.Remote.V1.run, Core.Remote.V1.executionPhase]
 
-/-- Onsite's composite over the members `cs`: `components`, or those under the challenger's pin. -/
-def protocolOf (cs : List BlobProtocol) : BlobProtocol := tiedSameB "verity/onsite/v1" tied ties cs
-
-def protocol : BlobProtocol := protocolOf components
+def protocol : BlobProtocol := tiedSameB "verity/onsite/v1" tied ties components
 
 /-- A case its subprotocol's own `answer` refuses: empty parameters, commitment and evidence. -/
 private def refused (P : BlobProtocol) : Case :=

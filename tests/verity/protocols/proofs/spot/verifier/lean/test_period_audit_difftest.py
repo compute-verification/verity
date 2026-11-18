@@ -71,7 +71,7 @@ DELTA = "1/20"
 #: one-stage v2's parameters less what a window sets (`Spot.MonitoringPeriod.AUDIT_FORM`)
 AUDIT = _json({"anchors": [], "delta": DELTA, "law": DESIGN, "leaf_layer": LEAF, "log": [],
                "partition": P.partition(S.program, S.query), "ports": S.ports,
-               "proofs": {"circuit": _sha(STAND_IN_CIRCUIT), "registered": None}, "program": S.desc, "query": S.query,
+               "proofs": {"registered": None}, "program": S.desc, "query": S.query,
                "registered": None, "scheme": SCHEME, "work_table": None})
 
 PARAM_KEYS = ["audit", "key", "label", "lane", "main", "registration", "start", "stop"]
@@ -80,7 +80,7 @@ REGISTRATION_FORM = ("registration is this registration's circuit, the SHA-512 i
 #: the keys of one-stage v2's parameters that are a window's (`WINDOW_KEYS`, `UNDERIVED_KEYS`)
 AT_A_WINDOW = ["challenger", "window_root", "day", "declarations", "seed_salt"]
 AUDIT_FORM = ("the audit's parameters are one-stage v2's less what a window sets: an object with a log, proofs of exactly "
-              "circuit and registered, and no challenger, window_root, day, declarations or seed_salt")
+              "registered, and no challenger, window_root, day, declarations or seed_salt")
 EVIDENCE_FORM = ("a period's evidence is {pins, windows}: the host's pins log and, for each window in the ledger's order, "
                  "{audits, session}: its challenger session's files and, for each registration the session sampled, "
                  "{evidence, public, registration}")
@@ -122,7 +122,7 @@ def params_refusal(p: Any) -> str | None:
         return REGISTRATION_FORM
     audit = p["audit"]
     if not (isinstance(audit, dict) and isinstance(audit.get("log"), list) and isinstance(audit.get("proofs"), dict)
-            and sorted(audit["proofs"]) == ["circuit", "registered"] and not any(k in audit for k in AT_A_WINDOW)):
+            and sorted(audit["proofs"]) == ["registered"] and not any(k in audit for k in AT_A_WINDOW)):
         return AUDIT_FORM
     return None
 
@@ -146,7 +146,7 @@ def params_at(p: dict, root: str, pub: str, before: list) -> dict:
     audit = p["audit"]
     return {**{k: v for k, v in audit.items() if k not in ("log", "proofs")},
             "challenger": {"key": p["key"], "label": p["label"]}, "log": audit["log"] + before,
-            "proofs": {"circuit": audit["proofs"]["circuit"], "public": pub, "registered": audit["proofs"]["registered"]},
+            "proofs": {"public": pub, "registered": audit["proofs"]["registered"]},
             "window_root": root}
 
 
@@ -560,7 +560,7 @@ def case(rng: random.Random, name: str) -> Any:
                 [{**audit, k: v} for k, v in (("window_root", "00" * 64), ("challenger", None), ("day", 3),
                                               ("declarations", []), ("seed_salt", "5a" * 64), ("log", None),
                                               ("proofs", {**proofs, "public": "00" * 64}),
-                                              ("proofs", {"circuit": proofs["circuit"]}), ("proofs", None))]
+                                              ("proofs", {"registered": proofs["registered"]}), ("proofs", None))]
                 + [{k: v for k, v in audit.items() if k != "log"}, None, []])
         case "evidence-form":
             e = j["evidence"]

@@ -80,6 +80,7 @@
   "Flock.Test.TmplSection",
   "Flock.Lower",
   "Flock.Test.Lower",
+  "Flock.Test.LowerBad",
   "Flock.Test.NetAt",
   "Flock.Test.ByteLines",
   "Flock.Test.MaskLog",
