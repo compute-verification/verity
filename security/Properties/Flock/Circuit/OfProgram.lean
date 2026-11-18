@@ -84,12 +84,12 @@ theorem opsBelow_lt {P : Prog} {g a : Fin (size P)} (h : a ∈ opsBelow P g) : a
 
 /-- The bits an operation reads: each operand's value, low bit first, operands in order. -/
 def opBits {P : Prog} (ops : List (Fin (size P))) (v : (a : Fin (size P)) → BitVec (widthAt P a)) : List Bool :=
-  ops.flatMap fun a => List.ofFn fun i : Fin (widthAt P a) => (v a).getLsbD i
+  List.flatMap (fun a : Fin (size P) => List.ofFn fun i : Fin (widthAt P a) => (v a).getLsbD i) ops
 
 theorem opBits_congr {P : Prog} (ops : List (Fin (size P))) (v v' : (a : Fin (size P)) → BitVec (widthAt P a))
     (h : ∀ a ∈ ops, v a = v' a) : opBits ops v = opBits ops v' := by
   unfold opBits
-  exact List.flatMap_congr fun a ha => by rw [h a ha]
+  exact List.flatMap_congr fun (a : Fin (size P)) ha => by rw [h a ha]
 
 /-- The gates the root's return resolves to (§7). -/
 def outputGates (P : Prog) : List ℕ :=
