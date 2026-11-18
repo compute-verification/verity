@@ -68,8 +68,10 @@ SPEC_PEAKS: list[tuple[str, dict[str, float | None], str]] = [
     (r"RTX\s*4090", {"bf16": 165.2e12, "e4m3": 330.3e12, "nvfp4": None}, "NVIDIA Ada GPU Architecture whitepaper, RTX 4090 dense, FP32 accumulate; Ada has no FP4"),
     (r"A100-SXM4", {"bf16": 312.0e12, "e4m3": None, "nvfp4": None}, "NVIDIA A100 Tensor Core GPU datasheet (SXM4 80GB), BF16 dense; Ampere has no FP8"),
     (r"A100.*PCIe", {"bf16": 312.0e12, "e4m3": None, "nvfp4": None}, "NVIDIA A100 Tensor Core GPU datasheet (PCIe 80GB), BF16 dense; Ampere has no FP8"),
-    (r"H100.*(SXM|HBM3)", {"bf16": 989.4e12, "e4m3": 1978.9e12, "nvfp4": None},
-     "NVIDIA Hopper architecture whitepaper, H100 SXM5 dense (BF16 1978.9 / FP8 3957.8 TFLOPS with sparsity, halved), FP32 accumulate; Hopper has no FP4"),
+    (r"H100.*(SXM|HBM3)", {"bf16": tensor_reading("h100-sxm-80gb", "bf16"), "e4m3": tensor_reading("h100-sxm-80gb", "e4m3"),
+                           "nvfp4": None},
+     "calibration/hardware/cards/h100-sxm-80gb.toml at the tensor pipe's reading: 2 x sm.count x rate.tensor x clock.tensor / weight.<dtype> "
+     "(the NVIDIA Hopper architecture whitepaper's H100 SXM5 dense figures, sparse halved), FP32 accumulate; Hopper has no FP4"),
     (r"H100.*PCIe", {"bf16": 756.0e12, "e4m3": 1513.0e12, "nvfp4": None}, "NVIDIA H100 PCIe datasheet, dense (sparse figures halved), FP32 accumulate; Hopper has no FP4"),
     # H200 SXM: its card at the tensor pipe's reading, the reading the data sheet's dense figures are at (census has no H200
     # line); the H200 NVL's peaks are lower.
@@ -79,10 +81,12 @@ SPEC_PEAKS: list[tuple[str, dict[str, float | None], str]] = [
      "(the NVIDIA H200 data sheet's H200 SXM dense figures, sparse halved), FP32 accumulate; Hopper has no FP4"),
     (r"L40S", {"bf16": 362.05e12, "e4m3": 733.0e12, "nvfp4": None},
      "NVIDIA L40S GPU datasheet, dense (BF16 733 / FP8 1,466 TFLOPS with sparsity, halved); Ada has no FP4"),
-    # calibration/census/hardware.json rtx-pro-6000-server/{bf16,e4m3,e2m1}.  The Workstation Edition's peaks differ (a 2617 MHz boost clock), hence "Server".
-    (r"RTX\s*PRO\s*6000.*Server", {"bf16": 500.0e12, "e4m3": 1000.0e12, "nvfp4": 2000.0e12},
-     "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, dense (FP16 | BF16 1 / FP8 2 / FP4 4 PFLOPS with sparsity, halved); "
-     "FP32 accumulate at the FP16-accumulate rate (RTX PRO Blackwell whitepaper v1.1, Table 4)"),
+    # The Workstation Edition's peaks differ (a 2617 MHz boost clock), hence "Server".
+    (r"RTX\s*PRO\s*6000.*Server", {"bf16": tensor_reading("rtx-pro-6000-server", "bf16"),
+                                    "e4m3": tensor_reading("rtx-pro-6000-server", "e4m3"),
+                                    "nvfp4": tensor_reading("rtx-pro-6000-server", "nvf4")},
+     "calibration/hardware/cards/rtx-pro-6000-server.toml at the tensor pipe's reading: 2 x sm.count x rate.tensor x clock.tensor / "
+     "weight.<dtype> (the RTX PRO Blackwell whitepaper v1.1's Table 4 per-clock rates), FP32 accumulate at the FP16-accumulate rate"),
     (r"RTX\s*5090", {"bf16": 209.5e12, "e4m3": 419.0e12, "nvfp4": 1676.0e12},
      "NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A, RTX 5090 dense with FP32 accumulate (FP4: 1676 dense, 3352 sparse)"),
 ]
