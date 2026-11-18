@@ -60,6 +60,7 @@ import numpy as np
 from verity.commitments import salt_file as SF
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.periods import interface as IF
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
@@ -219,7 +220,7 @@ class Tie:
     def supplied_values(self, program: str) -> dict[str, G.Registered]:
         """Each chain's supplied values committed as core's ``registered.Registered`` under ``program`` (the window's
         partition digest) at their public salts, so the committer and the verifier make the same value."""
-        return {n: G.Registered.commit(program, n, [row], G.supplied_salts(program, n, 1), schema=G.SCHEMA_V2)
+        return {n: G.Registered.commit(program, n, [row], G.supplied_salts(program, n, 1), schema=SCHEMA_HM96_SHA512_ROW_V2)
                 for c in self.chains for n, row in c.supplied().items()}
 
     def digest(self, design: dict[str, Any], cap: int) -> str:

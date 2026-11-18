@@ -426,7 +426,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     program, query = IF.listed_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], ())
     table = work_table_of(sampling_design, n_of, transfer_gates)
     if table is not None:
-        table = {P.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
+        table = {PO.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
     sampling_design, table = SV.params_sampling_design(sampling_design["rate"], program, query, table) if "rate" in sampling_design else (sampling_design, table)
     window = CS.Binding(program, query, sampling_design, run_root, tuple(ms), tables, context, table)
     want = partition.get("partition_digest")
