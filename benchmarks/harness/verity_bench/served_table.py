@@ -28,10 +28,8 @@ from typing import Any
 
 from verity_bench import jobs, kit
 from verity_bench.vllm import result as result_format
-from verity_config import ConfigError
-
 from verity_bench.vllm.presets import (FORMER_SPEC, FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, current_spec, expand_sweep,
-                                       former_specs, load_spec, resolve_spec, split_card)
+                                       former_specs, load_spec, resolve_spec, spec_file, split_card)
 from verity_bench.vllm.runner import summarize
 
 SCHEMA = "verity-bench/served-table/v1"
@@ -156,13 +154,9 @@ def _on_card(spec: str, card: str | None) -> str:
     """`spec` as the card its run was on names it (``SPEC@CARD``), unless that card is its spec's one card now: a run on a
     card the spec no longer lists keeps its card's name."""
 
-    if card is None or split_card(spec)[1] is not None:
+    if card is None or split_card(spec)[1] is not None or spec_file(spec) is None:
         return spec
-    try:
-        cards = load_spec(spec).cards
-    except ConfigError:
-        return spec
-    return spec if cards == (card,) else f"{spec}@{card}"
+    return spec if load_spec(spec).cards == (card,) else f"{spec}@{card}"
 
 
 def spec_added(root: Path, spec: str) -> int:

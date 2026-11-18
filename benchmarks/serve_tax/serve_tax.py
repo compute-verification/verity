@@ -4454,11 +4454,23 @@ def components() -> dict:
     return MANIFESTS
 
 
+def settings_of(name: str, params: dict[str, Any]) -> dict[str, Any] | Exception:
+    """Component ``name``'s settings at ``params`` as its own check returns them, its defaults filled; the check's
+    refusal where it refuses them: `verity.config`'s `verity.channel.Refused`, or the ValueError of a protocol's own
+    parameters check (SPOT's `spot_params_of`)."""
+    from verity.channel import Refused
+
+    try:
+        return dict(components()[name].params(params))
+    except (Refused, ValueError) as e:
+        return e
+
+
 def feature_of(words: Sequence[str]) -> Feature:
     """``--feature NAME [KEY=VALUE ...]`` as an application states it: NAME one of its components (`components`),
     each KEY=VALUE a line of that component's ``[params."<id>"]``, VALUE read as TOML (a bare word that isn't TOML is a
-    string), the settings as the component's own check returns them, its defaults filled. Refused by name for a name no
-    component has or a setting the component doesn't declare."""
+    string), the settings as the component's own check returns them (`settings_of`). Refused by name for a name no
+    component has, a VALUE that is neither, or a setting the component refuses."""
     name, *given = words
     table = components()
     if name not in table:
@@ -4471,27 +4483,25 @@ def feature_of(words: Sequence[str]) -> Feature:
             raise SystemExit(f"--feature {name}: {w!r} is no KEY=VALUE")
         try:
             params[key] = tomllib.loads(f"v = {text}")["v"]
-        except tomllib.TOMLDecodeError:
+        except tomllib.TOMLDecodeError as e:
+            if not text or any(c.isspace() or c in "\"'[]{}=#" for c in text):
+                raise SystemExit(f"--feature {name}: {w!r}: its VALUE is neither TOML ({e}) nor a bare word") from None
             params[key] = text
-    try:
-        settings = table[name].params(params)
-    except Exception as e:  # noqa: BLE001 - the component's check refuses in its own words (`verity.channel.Refused`)
-        raise SystemExit(f"--feature {name}: {e}") from None
+    if isinstance(settings := settings_of(name, params), Exception):
+        raise SystemExit(f"--feature {name}: {settings}")
     return Feature(name, tuple(sorted(settings.items())))
 
 
 def feature(words: Sequence[str], stock: str) -> str:
     """The arm ``--feature NAME [KEY=VALUE ...]`` (`feature_of`) serves beside ``stock``: of `profile_features`, the
     one whose `Arm.feature` is that component at those settings. `NotImplementedError` naming the goal for one no arm
-    over ``stock`` serves yet."""
+    over ``stock`` serves yet; an arm whose settings its component refuses (`settings_of`) serves none."""
     want = feature_of(words)
     for n in profile_features(stock):
         if (f := ARMS[n].feature) is not None and f.name == want.name:
-            try:
-                if feature_of([f.name, *(f"{k}={json.dumps(v)}" for k, v in f.settings)]) == want:
-                    return n
-            except SystemExit:
-                continue
+            settings = settings_of(f.name, dict(f.settings))
+            if isinstance(settings, dict) and Feature(f.name, tuple(sorted(settings.items()))) == want:
+                return n
     raise NotImplementedError(f"benchmarks/serving-profiles-first-number: no arm over {stock} serves {want}")
 
 
