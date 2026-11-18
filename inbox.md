@@ -1,3 +1,0 @@
-[2026-11-18T12:38Z] adf1a7c1e879
-LAYERNAME: the Lean lead measured the untied class: 699,325 wires from 26,038 parts (count follows the description: fine), but Spot.Edges.edgesOf (with partWires, explicitWires) APPENDS TO A LIST at every part: ~9 billion cells copied. CURE IT in your file on your branch: an Array accumulator (push), converted once; same output order, same wires; your derivation's cost test extended to hold it (700k wires within a bound a quadratic would blow; no wall clock). ONEWIRE cures Spot.Wires.pairwiseDisjoint on a branch cut from your head and does not touch Spot/Edges.lean. Also: lean's restated record check reads your WORD offset as a leaf index (their mend). Report times before/after in your return.
-
