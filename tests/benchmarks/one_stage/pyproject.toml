@@ -36,7 +36,6 @@ untraced = [
     "test_compute_local_pair.py",
     "test_composite.py", "test_member_seconds.py", "test_members_tables.py",
     "test_served_advice_day.py",
-    "test_served_bandwidth.py",
     "test_served_overhead.py",
     "test_served_verdicts.py",
     "test_proof_layers_script.py", "test_kept_bootstrap.py",
@@ -70,9 +69,8 @@ parts = 7
 # `verity/protocols/compose/verifier/live_challenger`: the challenger reserve's tests open a session on its local auditor device (auditor.py), whose
 # serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py). `verity_numerical.bench`'s input sets
 # and templates: a8's scan tests import a8, which imports a0.
-# `benchmarks/pous/p2_v1` and p2_stage's modules: served_bandwidth's session over the toy's P2 store (`bandwidth.py`, which
-# serves it through kernels' staging decode, and the toy), run through bash, which no tracer sees; its party's Lean
-# verifier, `poub-verifier`, which `p2_parties` has `lake` build in poub/lean, is under `verity`.
+# `benchmarks/pous/p2_v1` and p2_stage's modules: the bandwidth answer the composed record reads (`bandwidth.public_answer`)
+# and the P2 store its module loads; its party's Lean verifier, `poub-verifier`, is under `verity`.
 # `benchmarks/pous/onsite_pieces.sh`: onsite's pieces and cases, which served_verdicts.sh and served_composite.sh source.
 # `adapters/vllm/verity_vllm`, `benchmarks/network_traces`: a5_network_attester's window, committed as serving commits it, over the
 # cells of a network certifier run its tests drive tick by tick (`test_network_attester_serve._run`).
