@@ -134,9 +134,9 @@ def test_the_verifier_refuses_at_cs_coin_bound_inputs():
     c, _win, part, reg = registered()
     with pytest.raises(V.NotBound, match=r"^pous setup: no coin-bound input kind yet: base\(u\) = expand_prefix\(params, "
                                          r"salt\) .*; slot\(u\) = u mod n"):
-        V.check({}, c, part, reg, SAMPLE, params, salt, 16)
+        V.check(OC.block, PF.verify, {}, c, part, reg, SAMPLE, params, salt, 16)
     with pytest.raises(OC.Refused, match="E_BLOCKS"):
-        V.check({}, c, {**part, "blocks": part["blocks"][:-1]}, reg, SAMPLE, params, salt, 16)
+        V.check(OC.block, PF.verify, {}, c, {**part, "blocks": part["blocks"][:-1]}, reg, SAMPLE, params, salt, 16)
 
 
 @pytest.mark.slow
@@ -154,4 +154,4 @@ def test_the_door_stops_at_lower_on_a_setup_block(monkeypatch):
         s.mkdir()
         (s / "session.json").write_text("{}")
         with pytest.raises(ValueError, match=r"^setup block 5: the door refused \(circuit\): .*" + OC.PREFIX + "lower"):
-            V.check({5: PF.Proof(cf, pub, (s,))}, c, part, reg, [5], params, salt, 16)
+            V.check(OC.block, PF.verify, {5: PF.Proof(cf, pub, (s,))}, c, part, reg, [5], params, salt, 16)

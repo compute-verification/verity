@@ -5,7 +5,7 @@ proofs it reads none of it. The setup is one circuit C (`verity/protocols/resour
 `Setup`): ``PousP2SetupCheck_v1`` over every block of the store, one proof block a store block, its blocks and W's rows
 registered values. The prover commits the store and W, then the setup's values; the proof system samples `SAMPLE`
 blocks on its live coins after that (`sampling_design`), and `check` reads the door's verdict on each sampled block
-(`proofs.verify` on C and the partition, the block's units the partition's), with no list of positions of its own. The
+(SPOT's `proofs.verify` on C and the partition, the block's units the partition's, the caller's door), with no list of positions of its own. The
 claim (`Claim`) carries the parameters and commitment as today, the store's root and SPOT's outcome to the Lean check
 `PousCheck.SetupInProofs.check`.
 
@@ -16,12 +16,9 @@ so `bound` refuses (`NotBound`). And the door's statement of a block is not deri
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
-
-from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
 from .schemes.p2 import P2Params
 
@@ -63,19 +60,21 @@ def bound(params: P2Params, salt: bytes, row_bytes: int) -> None:
     raise NotBound(f"{NOT_BOUND}{BASE_INPUT}; {SLOT_INPUT}")
 
 
-def check(proofs: Mapping[int, PF.Proof], c: bytes, partition: Mapping[str, Any], registered: Mapping[str, Any],
-          sample: Sequence[int], params: P2Params, salt: bytes, row_bytes: int) -> list[PF.Finding]:
+def check(block: Callable[..., Any], verify: Callable[..., tuple[Any, Any]], proofs: Mapping[int, Any], c: bytes,
+          partition: Mapping[str, Any], registered: Mapping[str, Any], sample: Sequence[int], params: P2Params,
+          salt: bytes, row_bytes: int) -> list[Any]:
     """The door's findings on each sampled block `k` of the registered C `c` and its `partition` (`sample`, the proof
-    system's, sampled after the store is committed): its units the partition's (`one_circuit.block`), C's base and slot
-    bound (`bound`), and its proof `proofs[k]` verified against C, never the prover's circuit file (`proofs.verify`,
-    `registered` the store's and W's registration). A partition or block the door refuses raises `one_circuit.Refused`,
-    and a refusal of the door's ValueError with its reason."""
+    system's, sampled after the store is committed): its units the partition's (`block`, SPOT's `one_circuit.block`), C's
+    base and slot bound (`bound`), and its proof `proofs[k]` verified against C, never the prover's circuit file
+    (`verify`, SPOT's `proofs.verify`, `registered` the store's and W's registration). The door is the caller's, so the
+    verifier loads none of SPOT. A partition or block the door refuses raises its refusal, and a refusal of its verdict
+    ValueError with its reason."""
     for k in sample:
-        OC.block(c, partition, k)
+        block(c, partition, k)
     bound(params, salt, row_bytes)
-    out: list[PF.Finding] = []
+    out: list[Any] = []
     for k in sample:
-        findings, why = PF.verify(proofs[k], program=c, partition=partition, block=k, registered=registered)
+        findings, why = verify(proofs[k], program=c, partition=partition, block=k, registered=registered)
         if why is not None:
             raise ValueError(f"setup block {k}: the door refused ({why[0]}): {why[1]}")
         out += findings or []
