@@ -58,7 +58,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.resource_accounting.network.verifier.advice import (
+from verity_vllm.pipeline.advice_code.format import (
     FINISHES,
     VERSION,
     WIDTH_BITS,
