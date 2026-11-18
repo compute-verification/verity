@@ -553,6 +553,7 @@ loads = [
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
+    "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
 
@@ -874,7 +875,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
     "verity/protocols/resource_accounting/network/prover/serve_head.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
-    "adapters/vllm/verity_vllm/pipeline/window_chain.py",
     "verity/protocols/resource_accounting/network/prover/window_charge.py",
 ]
 
