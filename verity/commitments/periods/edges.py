@@ -1,12 +1,12 @@
 """The wires a Program's root states, read off its nodes (`Spot.Edges.edgesOf`): each argument part of a root node that
 reads an earlier non-input root node's outputs is one wire per row of the reader's port, in closed form, or the first
 refusal by name (`edge-template`, `edge-form`, `not-topological`, `edge-rows`, `edge-units` where a reader row reads
-two writer units, `edge-run` where its row in one unit is not one whole return field, `edge-width`). A wire reads its
-writer unit's one output row ``out`` from word ``offset``, the field's first u16 word, stepping by ``ostep`` a digit
-where present; adjacent affine parts that continue
-one another read as one. The program
-is a descriptor (`circuits/PROTOCOL.md` §4), the ranges ``[node, template, first, count]`` and the wiring the record's
-(its ``templates`` and ``cuts``). The work is the root's nodes and arguments, then each part times its port's rows."""
+two writer units, `edge-run` where its row in one unit is not one whole return field, `edge-width`, `edge-word` where a
+reader row is not whole u16 words). A wire reads its writer unit's one output row ``out`` (each return field ceil(bits/16)
+words, as `interface.layout` commits it) from word ``offset``, the field's first u16 word, stepping by ``ostep`` a digit
+where present; adjacent affine parts that continue one another read as one. The program is a descriptor
+(`circuits/PROTOCOL.md` §4), the ranges ``[node, template, first, count]`` and the wiring the record's (its ``templates``
+and ``cuts``). The work is the root's nodes and arguments, then each part times its port's rows."""
 from __future__ import annotations
 
 import json
@@ -41,17 +41,6 @@ def _bits(t) -> int:
     if k == "Tuple":
         return sum(_bits(f) for f in t[1])
     return sum(_bits(f) for _, f in t[1])
-
-
-def _words(t) -> int:
-    k = t[0]
-    if k == "Value":
-        return -(-t[1] // 16)
-    if k == "Array":
-        return t[1] * _words(t[2])
-    if k == "Tuple":
-        return sum(_words(f) for f in t[1])
-    return sum(_words(f) for _, f in t[1])
 
 
 def _fields(t) -> list:
@@ -131,8 +120,9 @@ def _run_at(t, o: int, ln: int):
 
 
 def _field_word(t, f: int) -> int:
-    """The first u16 word of field `f` of `t` in the unit's output row ``out``: a leaf of w bits is ceil(w/16) words."""
-    return sum(_words(ty) for ty in _fields(t)[:f])
+    """The first u16 word of field `f` of `t` in the unit's output row ``out``: each earlier field ceil(bits/16) words,
+    as `interface.layout` commits it."""
+    return sum(-(-_bits(ty) // 16) for ty in _fields(t)[:f])
 
 
 def _field_at(t, ln: int, bits: int, p: int):
@@ -352,6 +342,8 @@ def _wire_of(R: _Root, fu: dict, templates: Mapping, k: int, rt: str, port: str,
         raise Refusal("edge-run")
     if _bits(_fields(wn["ret"])[f]) != _bits(ty) // cuts:
         raise Refusal("edge-width")
+    if _bits(ty) // cuts % 16:
+        raise Refusal("edge-word")
     ws = _word_steps(wn["ret"], ln, _bits(ty) // cuts, l0 % lw, list(zip(radix, [d - _tdiv(d, lw) * lw for d in steps])))
     if ws is None:
         raise Refusal("edge-run")

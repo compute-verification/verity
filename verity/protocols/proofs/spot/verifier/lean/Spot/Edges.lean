@@ -20,8 +20,8 @@ lanes read input nodes (a shared weight, however its members step over it) state
 The rule is by row. A reader row (the port whole, or one of the `k` rows the wiring cuts it into: leaves
 `[j·n/k, (j+1)·n/k)` of a member's `n`) lies in one part of its argument, adjacent affine parts that continue one
 another read as one (`merged`), and reads one whole return field `f` of one member's output, the writer unit's, at its
-bits. The wire reads its writer's one output row `out` (the unit's outputs in order, each its bits in u16 words) from
-the field's first word (`fieldWord`). A part is a grid (`partLanes`): a row lies in one lane's run, and across the members
+bits. The wire reads its writer's one output row `out` (the unit's return fields in order, each its bits in
+`⌈bits/16⌉` u16 words, as `interface.layout` commits them) from the field's first word (`fieldWord`). A part is a grid (`partLanes`): a row lies in one lane's run, and across the members
 a part covers its place moves by the argument's member stride, inside that run or by whole periods of the lanes; the
 writer leaves the members read are then a mixed radix of the lane's levels (`laneWire`), each step whole writer units
 and a step of the field's place inside its unit, whose first word then steps by a word step a digit (`ostep`).
@@ -32,8 +32,9 @@ itself), `edge-rows` (a reader row across a part's edge or not in closed form: a
 members whose rows are no mixed radix of the lane's levels, a row of an explicit part mixing input-node leaves with
 another node's or not that node's consecutive leaves, a reference to a parameter), `edge-units` (a reader row whose
 leaves lie in two writer units: across a unit's end, `unitsCross`), `edge-run` (a row inside one unit that is not one
-whole return field: it starts at no field's first leaf, or ends at no field's last, or runs over several, `runAt`)
-and `edge-width` (a reader row's bits are not the field's). Each names
+whole return field: it starts at no field's first leaf, or ends at no field's last, or runs over several, `runAt`),
+`edge-width` (a reader row's bits are not the field's) and `edge-word` (a reader row that is not whole u16 words, so
+would start or end inside a word its writer's row packs). Each names
 where it arose: the node, and for a part's refusal its argument and part.
 
 The work is the root's nodes and arguments, then each part times its port's rows, and an explicit part's references:
@@ -78,27 +79,9 @@ def runAt (t : Ty) (o len : Nat) : Option Nat :=
 /-- The first leaf of return field `f` of `t`. -/
 def fieldOffset (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map Ty.leaves).sum
 
-/-- The u16 words of a value of `t` in a link row: its leaves in order, a leaf of `w` bits `⌈w/16⌉` words, low first. -/
-def wordsOf : Ty → Nat
-  | .value w => (w + 15) / 16
-  | .array n e => n * wordsOf e
-  | .tuple fs => fs.attach.foldl (fun a f => a + wordsOf f.1) 0
-  | .record fs => fs.attach.foldl (fun a f => a + wordsOf f.1.2) 0
-termination_by t => t
-decreasing_by
-  all_goals simp only [Flock.Program.Ty.array.sizeOf_spec, Flock.Program.Ty.tuple.sizeOf_spec,
-    Flock.Program.Ty.record.sizeOf_spec]
-  · omega
-  · have := Array.sizeOf_lt_of_mem f.2; omega
-  · have := Array.sizeOf_lt_of_mem f.2
-    generalize f.1 = g at this ⊢
-    obtain ⟨k, t⟩ := g
-    simp only [Prod.mk.sizeOf_spec] at this ⊢
-    omega
-
-/-- The first u16 word of return field `f` of `t` in its unit's output row `out`: the words of the leaves before it
-(`wordsOf`), the row being its leaves in order, each its own words. -/
-def fieldWord (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map wordsOf).sum
+/-- The first u16 word of return field `f` of `t` in its unit's output row `out`: the row is the fields in order, each
+its words (`Spot.Bits.wordsOf`, `interface.layout`'s `o<j>`: two 8-bit leaves share a word). -/
+def fieldWord (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map Spot.Bits.wordsOf).sum
 
 /-- Return field `f` of `t` at leaf `p` of its unit, of `len` leaves and `bits` bits; none otherwise. -/
 def fieldAt (t : Ty) (len bits : Nat) (p : Int) : Option Nat :=
@@ -267,6 +250,7 @@ def wireOf (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.Wir
   if l0 % LW + len > LW then throw "edge-units"
   let some f := runAt wd.ret (l0 % LW) len | throw "edge-run"
   if bitsOf (fieldsOf wd.ret)[f]! != bitsOf ty / cuts then throw "edge-width"
+  if (bitsOf ty / cuts) % 16 != 0 then throw "edge-word"
   let some ws := wordSteps wd.ret len (bitsOf ty / cuts) (l0 % LW)
     (radix.zip (steps.map fun s => s - s.tdiv LW * LW)) | throw "edge-run"
   let wire : Spot.Wires.Wire :=
