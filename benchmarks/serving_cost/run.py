@@ -53,7 +53,8 @@ HOLDS = {
     "replay": "out/replay.json, passed only where the replay is bit-exact",
     "exact": f"{EXACT}: the replay's verdict on the copy and circuit-check's on the real model's bindings",
     "capture": "the run's out/ as priced.py reads it: each arm's lifetimes (ARM.N/) with their public steps "
-               f"(ARM.N/server/steps.PID.jsonl.gz, or a record labelled `{STEPS_OF}` the run's id holds them), "
+               f"(ARM.N/server/steps.PID.jsonl.gz; where it holds none, the newest record labelled `{STEPS_OF}` with its run "
+               "id holds them), "
                "topk_counters.json and prod_repro.json",
     "price": f"its figure under {METRIC}",
     "profile": "our extra card time a token under the model's serving-cost metric, its latencies and share within the "
