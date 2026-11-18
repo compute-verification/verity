@@ -698,8 +698,8 @@ def ring_failures(record: list[dict], fx, now: float, say: Callable[[str], None]
                 f"{e.get('where') or 'its metrics.toml'} change, or {span(HOLD_S)} after" if k >= SAME_CAUSE else
                 f"it is launched again after {span(RETRY_S)}, or its every if shorter")
         text = f"metrics-rerun: {', '.join(e['metrics'])} {e['state']} ({e.get('why') or cause(e)}); {then}"
-        ring(fx, e, e.get("run") or "-", str(e["rc"]) if e.get("rc") is not None else e["state"], e["metrics"], text, now,
-             say, dry_run)
+        rc = e["state"] if e["state"] == "unlaunched" or e.get("rc") is None else str(e["rc"])   # an unlaunched rc is its launcher's
+        ring(fx, e, e.get("run") or "-", rc, e["metrics"], text, now, say, dry_run)
 
 
 def ring_placeholders(state: dict, jobs: list[Job], out: list[Decision], fx, now: float, say: Callable[[str], None],
