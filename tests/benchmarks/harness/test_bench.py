@@ -206,7 +206,7 @@ def test_the_launcher_runs_the_point_in_the_venv_the_launch_gives_and_refuses_wi
     env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "CUDA_HOME": str(tmp_path)}
     python = tmp_path / "venv312" / "bin" / "python"
     python.parent.mkdir(parents=True)
-    python.write_text('#!/bin/sh\necho "$PYTHONPATH"\necho "$@"\n')
+    python.write_text(f'#!/bin/sh\n[ "$1" = -c ] && exec {sys.executable} "$@"\necho "$PYTHONPATH"\necho "$@"\n')
     python.chmod(0o755)
     missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
     assert missing.returncode == 2 and "else the path recorded in" in missing.stderr and "(none of them set)" in missing.stderr
@@ -479,25 +479,25 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
 
 
 def test_the_config_a_declared_schemes_arm_hands_passes_that_schemes_own_settings_check():
-    """A protocol arm whose entry names a declared scheme (`messages.option`) hands it settings it takes, read as
+    """A protocol arm whose entry is a declared scheme's name hands it settings it takes, read as
     `verity_vllm.LLM` reads them (`option_settings`) and checked by the scheme's own `settings`: its in-process coins
     the string its settings say, ``coins = "in-process"``, or, where the spec gives one, its challenger's address alone."""
+    from verity.protocols.compose import schemes
     from verity.protocols.resource_accounting.scheme import settings
-    from verity_vllm import messages
     from verity_vllm.llm import option_settings
 
     spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
     arm = next(a for a in resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings) if a.protocols)
     entry, = arm.protocols
-    scheme = messages.option(entry)
-    assert scheme is not None and scheme.name == "pearl-plus"
+    scheme = schemes.get(entry)
+    assert entry == scheme.name == "pearl-plus"
     environ = {"PEARLC_KERNEL": "/tree/kernels/pearl_c_sm90", "PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90.cubin"}
     config = protocols_config(arm, environ)
     own = option_settings(entry, config)
     assert own == {"kernel": environ["PEARLC_KERNEL"], "cubin": environ["PEARLC_CUBIN"], "coins": "in-process"}
     assert settings(scheme, own)["coins"] == "in-process"
-    live = replace(arm, protocols_config={"pouw": {**arm.protocols_config["pouw"], "challenger": "10.0.0.7:7000",
-                                                   "lane": "benchmarks", "peer": "node-1"}})
+    live = replace(arm, protocols_config={"pearl-plus": {**arm.protocols_config["pearl-plus"], "challenger": "10.0.0.7:7000",
+                                                         "lane": "benchmarks", "peer": "node-1"}})
     own = option_settings(entry, protocols_config(live, environ))
     assert "coins" not in own and settings(scheme, own)["challenger"] == "10.0.0.7:7000"
 

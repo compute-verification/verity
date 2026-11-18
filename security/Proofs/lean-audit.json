@@ -62,7 +62,6 @@
   "Proofs.Properties.Spot.HistoryTable",
   "Proofs.Properties.Spot.PlanCheck",
   "Proofs.Properties.Spot.Wires",
-  "Proofs.Properties.Spot.Edges",
   "Proofs.Properties.Spot.Units",
   "Proofs.Properties.Spot.Credited",
   "Proofs.Properties.Spot.Tables",

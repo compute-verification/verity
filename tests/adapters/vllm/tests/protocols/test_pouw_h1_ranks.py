@@ -28,10 +28,11 @@ from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity_vllm.protocols.pouw import h1_ranks as PHR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
+from tests.protocols.pouw_h1_salts import Seeded
 
 K = 64
 SALT = hashlib.sha512(b"salt").digest()
-KEY = hashlib.sha512(b"key").digest()[:32]
 SHAPES = [(32, K), (40, K), (32, K), (40, K)]
 MODULES = {0: "l0.q", 1: "l0.o", 2: "l1.q", 3: "l1.o"}
 #: stage p's linears start at SPLIT[p]
@@ -122,7 +123,7 @@ def _forward(layers, m, seed, rows=None):
 def _whole(salt=SALT, modules=MODULES):
     """One process serving every linear (PP = 1): `pouw_h1_hooks.wire` on the runner and the layers."""
     layers, runner, h = _layers(), Runner(), Hooks(tag="pp1")
-    run = PH.H1Run("t", salt, modules, SHAPES, 32, 4, rounds=_rounds(), key=KEY, admission=RQ.PER_ROUND)
+    run = PH.H1Run("t", salt, modules, SHAPES, 32, 4, rounds=_rounds(), salts=Seeded(), admission=RQ.PER_ROUND)
     run.draw = _draw()
     PHK.wire(run, h, layers, runner, 32)
     for i, so in enumerate(STEPS):
@@ -139,7 +140,8 @@ def _staged(rows_of=None):
     layers, hooks, workers = _layers(), [], []
     for p, lo in enumerate(SPLIT):
         hi = SPLIT[p + 1] if p + 1 < len(SPLIT) else len(SHAPES)
-        stage = PHR.RankRun("t", MODULES, SHAPES, 32, 4, lo, hi, KEY)
+        stage = PHR.RankRun("t", MODULES, SHAPES, 32, 4, lo, hi)
+        stage._salts = Seeded()
         h = Hooks(tag=f"stage{p}")
         PHR.wire_rank(stage, h, layers[lo:hi], 32)
         worker = PHR.RankExtension()
@@ -147,7 +149,7 @@ def _staged(rows_of=None):
         workers.append(worker)
         hooks.append((layers[lo:hi], h))
     executor = Executor(workers)
-    run = PH.H1Run("t", SALT, MODULES, SHAPES, 32, 4, rounds=_rounds(), key=KEY, admission=RQ.PER_ROUND)
+    run = PH.H1Run("t", SALT, MODULES, SHAPES, 32, 4, rounds=_rounds(), salts=Seeded(), admission=RQ.PER_ROUND)
     run.draw = _draw()
     holder = PHR.Holder(run, executor, [{"decode_query_len": 1}], Hooks(tag="holder"))
     holder._push()
@@ -190,11 +192,11 @@ def test_a_stage_call_past_the_rows_is_refused_and_the_window_is_not_static():
 
 
 def test_a_stage_numbers_its_calls_from_the_window_and_waits_for_its_salt():
-    stage = PHR.RankRun("t", MODULES, SHAPES, 32, 4, 2, 4, KEY)
+    stage = PHR.RankRun("t", MODULES, SHAPES, 32, 4, 2, 4)
     layer = Linear(32, seed=2)
     with pytest.raises(RuntimeError, match="before its holder pushed it"):
         stage.record(2, torch.zeros(1, K, dtype=torch.int8), torch.ones(1), layer.weight, layer.weight_scale)
-    stage = PHR.RankRun("t", MODULES, SHAPES, 32, 4, 2, 4, KEY)
+    stage = PHR.RankRun("t", MODULES, SHAPES, 32, 4, 2, 4)
     stage._salt = SALT
     rng = np.random.default_rng(0)
     for s in range(2):
@@ -222,12 +224,13 @@ class FakeRank(PHR.RankExtension):
         return self.rank
 
 
-def test_install_lays_tensor_parallel_ranks_out_rank_major_and_commits_one_window():
+def test_install_lays_tensor_parallel_ranks_out_rank_major_and_commits_one_window(monkeypatch):
+    monkeypatch.setattr(PV, "RunSalts", Seeded)
     layers = _layers()
     workers = [FakeRank(1, layers[2:]), FakeRank(0, layers[:2])]
     executor = Executor(workers)
     holder = PHR.install(None, executor=executor, rows=32, steps=4, coins=Challenger(0, random.Random(0).randbytes),
-                         rounds=_rounds(), key=KEY, entry="t", admission=RQ.PER_ROUND)
+                         rounds=_rounds(), entry="t", admission=RQ.PER_ROUND)
     run = holder.run
     assert run.modules == {0: "l0.q@tp0", 1: "l0.o@tp0", 2: "l0.q@tp1", 3: "l0.o@tp1"}
     assert run.commits["ranks"] == [{"pp": 0, "tp": 0, "first_linear": 0, "linears": 2},

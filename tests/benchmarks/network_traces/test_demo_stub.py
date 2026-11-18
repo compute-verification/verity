@@ -16,7 +16,7 @@ import pytest
 
 from verity.protocols.resource_accounting.network.verifier import id_form as IDF, io_tie as IT
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
-from verity.protocols.resource_accounting.network.verifier.release import RUN_ID_BYTES, with_release
+from verity.release import RUN_ID_BYTES, with_release
 
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
@@ -130,6 +130,18 @@ def test_what_isnt_a_network_attesters_id_request_is_refused_and_the_models_list
     models = respond(b"GET /v1/models HTTP/1.1\r\nhost: s\r\n\r\n")
     assert models.startswith(b"HTTP/1.1 200 OK\r\n")
     assert [m["id"] for m in json.loads(models.partition(b"\r\n\r\n")[2])["data"]] == [NAME]
+
+
+@pytest.mark.parametrize("field, name", [(b"x-verity-release: 3x", "x-verity-release"),
+                                         (b"x-verity-release: 3\r\nx-verity-release-run: zz", "x-verity-release-run"),
+                                         (b"x-verity-release: 3\r\nx-verity-release-bucket: x", "x-verity-release-bucket")])
+def test_an_id_request_with_a_malformed_release_is_refused_by_its_headers_name(field, name):
+    """A class request whose release header is malformed is one someone tried to mark and failed, not one with no
+    release: `release.release_of` refuses it by the header's name and the stand-in answers 400 with that refusal."""
+    marked = ids_request().replace(b"\r\n", b"\r\n" + field + b"\r\n", 1)
+    with pytest.raises(ValueError, match=f"^{name}: "):
+        S.network_attester_request(marked)
+    assert refused(respond(marked)).startswith(name + ": ")
 
 
 def test_its_prompts_are_the_class_and_the_gate_takes_them_as_its_scan_rehearsals_prompts():
@@ -314,7 +326,7 @@ def test_the_gates_demo_traffic_through_the_network_attester_is_the_demo_stand_i
     the bytes the network attester attested, every connection ends within the two execution phases 24 tokens take at D
     = 27, and the check accepts the run."""
     from verity.protocols.resource_accounting.network.verifier import relay_check as RC
-    from verity.protocols.resource_accounting.network.verifier.release import release_of
+    from verity.release import release_of
     prompts = S.prompts(4)
     req = {"device": "warden", "requests": None, "tokens": 24, "height": 10, "minutes": 4, "scan": True,
            "prompts": True, "temperature": 0.0, "top_p": 1.0}

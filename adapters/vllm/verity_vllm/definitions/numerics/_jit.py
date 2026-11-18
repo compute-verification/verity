@@ -46,12 +46,22 @@ class Model(ctypes.CDLL):
 
         class _FuncPtr(base):
             _flags_, _restype_ = base._flags_, base._restype_
+            strict = False
 
             def __call__(self, *args):
+                if self.strict and len(args) != len(self.argtypes):
+                    raise TypeError(f"{self.__name__} takes {len(self.argtypes)} arguments ({len(args)} given)")
                 sys.audit(CALLED, sources)
                 return super().__call__(*args)
 
         self._FuncPtr = _FuncPtr
+
+
+def declare(lib: Model, name: str, argtypes: Sequence[type], restype: type | None = None) -> None:
+    """Function ``name`` of ``lib`` with its C signature, so a call with another number of arguments raises `TypeError`
+    (ctypes passes extra ones on unchecked even with ``argtypes`` set) and one of another kind raises as ctypes does."""
+    fn = getattr(lib, name)
+    fn.argtypes, fn.restype, fn.strict = tuple(argtypes), restype, True
 
 
 def cxx() -> str:

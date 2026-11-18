@@ -22,6 +22,8 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     "verity/commitments",
     # the record entry (`Record`): SPOT's challenger imports it, and the network attester's `active` imports SPOT's verifier
     "verity/channel.py",
+    # the release formats the network attester writes and the shim reads
+    "verity/release.py",
     "verity/protocols/__init__.py",
     "verity/protocols/resource_accounting/__init__.py",
     "verity/protocols/resource_accounting/network",
@@ -103,6 +105,7 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     # the names a run's private-paths.json states and no public write may have: the adapter's private list, its reader
     # and the modules the reader imports
     "adapters/vllm/verity_vllm/pipeline/private_names.json",
+    "adapters/vllm/verity_vllm/pipeline/private_names.py",
     "adapters/vllm/verity_vllm/pipeline/research_outputs.py",
     "adapters/vllm/verity_vllm/pipeline/cli.py",
     "adapters/vllm/verity_vllm/check/__init__.py",

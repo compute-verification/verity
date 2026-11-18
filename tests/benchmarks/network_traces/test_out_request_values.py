@@ -3,7 +3,7 @@ with a prompt planted in every file a request's values are in (a rehearsal's pla
 out-witness.jsonl, a network attester rehearsal's traffic.json and client.json): $OUT gets the public records and no
 file holding the prompt or a request's id fields. A network attester run reaches $OUT only through the gate's
 publisher. Nor does a row registration whole reach it, with its wiring's digest: the chain's copy of a step's files puts
-the files that hold one on its private side."""
+the files that hold one on its private side, and the scan its SC_KEEP, where the period's reader reads them."""
 from __future__ import annotations
 
 import json
@@ -284,3 +284,88 @@ def test_the_records_endpoint_step_keeps_its_verdict_and_counts_of_windows_alone
         assert step["io"] == {"accepted": io["accepted"], "violations": len(io.get("violations") or [])}
         e2e = cr.endpoint_step({"chain": {"bits": bits, "tie": {}}})
         assert "needle" not in json.dumps(e2e) and e2e["advice"] == step["advice"]
+
+
+def test_scan_period_reads_every_file_it_opens_from_the_scans_private_keep(tmp_path, monkeypatch):
+    """A stub run of scan_period.sh (its loop of scan_zk.sh, each run's scan_zk.sh its own copy into $OUT and its
+    SC_KEEP, then its call of scan_period.py) leaves the period's reader every file it opens, and all of them on the
+    scan's private side (0700, 0600 files, outside both run dirs): $OUT keeps what the gate publishes alone. The
+    reader runs whole, with the mirror, network-period and the parameters' checks stood in."""
+    from types import SimpleNamespace
+
+    from verity.protocols.resource_accounting.network.prover import scan_period as SP
+    from verity.protocols.resource_accounting.network.verifier import relay_check as RC
+
+    inner, w, out = tmp_path / "inner", tmp_path / "W", tmp_path / "OUT"
+    certs = [{"certificate": {"link": link, "direction": d.value, "window": 0, "digest": "ab", "key_id": 0,
+                              "signature": "00"}, "head": {"root": "cd" * 64}} for link, d in RC.CERTIFIED.values()]
+    deployment = {"windows": 1, "session": "s", "start": {"signed": 1}, "key": {"params": [1, 2, 3], "public": "aa"},
+                  "params": {"egress": "id", "lanes": 1}}
+    reg = {"program": "ab" * 64, "wiring": "17" * 64}
+    for run_ in ("honest", "late"):
+        put(inner / run_ / "warden", {**NETWORK_ATTESTER_RUN, "deployment.json": deployment, "certified.jsonl": certs})
+        put(inner / run_ / "sczk", {
+            "answers.json": {"windows": [{"window": 0, "registration": reg, "answer": {"verdict": "accept"},
+                                          "registrations": [reg]}]},
+            "summary.json": {"rounds": {f"{r}-0": {"audit": {"why": "x"}} for r in ("tampered", "chain")}},
+            "joint/program.json": {"templates": []}, "tampered-0/registration.json": reg,
+            "chain-0/registration.json": reg, "honest-0/verifier/program.json": {"units": 3},
+            "honest-0/verifier/registration.json": reg, "honest-0/session-start/prove.log": "LIVE\t{}\n",
+            "honest-0/session-start/lean-verify.log": "inputs: 1 ms\n", "honest-0/session-start/sessions/s.json": {}})
+    stub = tmp_path / "scan_zk_stub.sh"
+    stub.write_text(LOG + 'W=$INNER/$(basename "$RESEARCH_RUN_DIR") OUT=$RESEARCH_RUN_DIR/out PY=$REAL_PY rc=0\n'
+                    'mkdir -p "$OUT"\n' + block("scan_zk.sh", '  mkdir -p "$OUT/warden"', "  SC_WARDEN_RUN")
+                    + block("scan_zk.sh", 'mkdir -p "$OUT/sczk"', 'log "sczk: done'))
+    argv = tmp_path / "argv"
+    (capture := tmp_path / "py").write_text(f'#!/bin/sh\nprintf "%s\\n" "$@" > {argv}\n')
+    capture.chmod(0o755)
+    loop = block("scan_period.sh", "declare -A rc", "p=${PIPESTATUS[0]}").replace(
+        "benchmarks/network_traces/scan_zk.sh", str(stub))
+    out.mkdir()
+    got = run(loop, W=w, OUT=out, INNER=inner, P=tmp_path / "P", SRC=tmp_path / "SRC", PYTHONPATH="", PY=capture,
+              REAL_PY=sys.executable)
+    assert got.returncode == 0, got.stderr
+    args = argv.read_text().splitlines()
+    assert args[:2] == ["-m", "verity.protocols.resource_accounting.network.prover.scan_period"], args
+
+    opened: list[Path] = []
+    read_text = Path.read_text
+    monkeypatch.setattr(Path, "read_text", lambda p, *a, **k: (opened.append(p), read_text(p, *a, **k))[1])
+    monkeypatch.setattr(SP, "mirror", lambda path: SimpleNamespace(
+        reference=lambda case: {"verdict": "reject"}, UNWIRED="unwired", UNSTATED="unstated", _states=lambda r: True))
+    monkeypatch.setattr(SP, "lean_check", lambda lean, case, at: {"verdict": "reject"})
+    monkeypatch.setattr(SP, "NetworkAttesterParams", lambda **k: SimpleNamespace(rows_cells=lambda n: []))
+    monkeypatch.setattr(SP, "INTEGER_FIELDS", ("lanes",))
+    monkeypatch.setattr(SP.SA, "window_answer", lambda *a, **k: {"verdict": "reject"})
+    SP.main(args[2:])
+    read = sorted({p.relative_to(w).as_posix() for p in opened if p.is_relative_to(w)})
+    assert read == sorted(f"keep/{r}/{f}" for r, fs in (
+        ("honest", ["warden/certified.jsonl", "warden/deployment.json", "sczk/answers.json", "sczk/summary.json",
+                    "sczk/joint/program.json", "sczk/tampered-0/registration.json", "sczk/chain-0/registration.json"]),
+        ("late", ["warden/certified.jsonl", "warden/deployment.json", "sczk/answers.json",
+                  "sczk/joint/program.json"])) for f in fs)
+    assert not [p for p in opened if p.is_relative_to(out)]
+    keep = w / "keep"
+    assert sorted(p.relative_to(keep).as_posix() for p in keep.rglob("*.log")) == [   # benchmarks/scan_cost's stages
+        f"{r}/sczk/honest-0/session-start/{f}" for r in ("honest", "late") for f in ("lean-verify.log", "prove.log")]
+    assert {oct(p.stat().st_mode & 0o777) for p in keep.rglob("*") if p.is_file()} == {"0o600"}
+    assert {oct(p.stat().st_mode & 0o777) for p in [keep / "honest", *keep.rglob("*")] if p.is_dir()} == {"0o700"}
+    for run_ in ("honest", "late"):
+        assert published(out / run_) == ["job.log", "sczk/honest-0/verifier/program.json", "sczk/summary.json",
+                                         "warden/deployment.json", "warden/groups.json", "warden/outcome.json"]
+        assert "17" * 64 not in "".join(p.read_text() for p in (out / run_).rglob("*.json"))
+
+
+def test_each_runner_fails_by_name_when_the_publisher_fails(tmp_path):
+    """The four runners that publish a network attester run stop, by name, when the publisher exits nonzero, rather
+    than going on with an empty outcome.json."""
+    (py := tmp_path / "py").write_text("#!/bin/sh\nexit 3\n")
+    py.chmod(0o755)
+    for script, first in (("capture_loopback.sh", 'mkdir -p "$OUT/run"'), ("n2_zk.sh", 'mkdir -p "$OUT/run"'),
+                          ("network_attester_zk.sh", 'mkdir -p "$OUT/run"'), ("scan_zk.sh", '  mkdir -p "$OUT/warden"')):
+        out = tmp_path / script / "OUT"
+        out.mkdir(parents=True)
+        got = run(block(script, first, first.split("mkdir")[0] + '"$PY" -m') + "echo went on\n",
+                  W=tmp_path / script / "W", RUN=tmp_path / script / "run", OUT=out, PY=py)
+        assert got.returncode == 6 and "went on" not in got.stdout, (script, got.returncode, got.stdout)
+        assert "the publisher (auditor.py publish) exited 3" in (out / "job.log").read_text(), script

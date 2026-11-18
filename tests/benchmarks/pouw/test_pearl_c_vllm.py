@@ -570,6 +570,21 @@ def test_the_whole_retained_check_names_the_first_call_and_field_that_differ(tmp
     assert E2E.retained_differences(want, want, [dirs[0], dirs[0]]) == {"ok": True}
 
 
+def test_a_retained_pass_is_read_after_its_end_fills_its_records_in():
+    """On the device a call's record is filled in behind it, by the time `end` joins the pass's writes: the whole check
+    reads the pass's records after its end, without its manifest."""
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
+    cur = types.SimpleNamespace(records=["first", None], files=[{}, {}], matmuls=[0, 1], retain="dir")
+
+    def end():
+        assert cur.retain is None
+        cur.records[1] = "behind"
+        return {"tiles": 2, "manifest": "m"}
+
+    run = types.SimpleNamespace(cur=cur, end=end)
+    assert E2E.retained_end(run, ("tiles",)) == (["first", "behind"], [{}, {}], {"tiles": 2}, [0, 1])
+
+
 # ---- one pass per engine step, through Pearl+ attached by name (`pouw.scheme.Attached`) ---------------------------------
 
 def seeded_device_salts(monkeypatch, seed=11):
@@ -5068,9 +5083,8 @@ def test_served_step_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name():
     (`undeclared`, which `_engine` asks before any engine) and passes the H100's, and ``served_step.sh``'s RTX PRO 6000
     default arms are stock FP8's alone."""
     S = load("pearl_c_vllm_served_step", POUW / "pearl_c_vllm" / "served_step.py")
-    assert "pouw:pearl-c-sm120-v1-h3: no declared scheme serves Pearl-C on that card" in S.undeclared(
-        ["stock-fp8", "pouw:pearl-c-sm120-v1-h3"])
-    assert S.undeclared(["pouw:pearl-c-h100-v1-h3"]) is None
+    assert S.undeclared(["pouw:pearl-c-sm120-v1-h3"]).startswith("pouw:pearl-c-sm120-v1-h3 is no declared scheme's name")
+    assert S.undeclared(["pearl-plus"]) is None
     assert "ARMS=${ARMS:-stock-fp8@compiled,stock-fp8}; SPEC" in (POUW / "pearl_c_vllm" / "served_step.sh").read_text()
 
 

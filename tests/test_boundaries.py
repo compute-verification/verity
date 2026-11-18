@@ -148,8 +148,8 @@ BENCHMARKS_IMPORTERS = {
         "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/register.py",
-        "tests/verity/protocols/proofs/flock/prover/test_class_statement.py",
-        "tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py",
+        "tests/adapters/vllm/flock/test_class_statement.py",
+        "tests/adapters/vllm/flock/test_ir_lowering_bench.py",
     ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s contract, cell, generator suites and frozen instances"),
     # research's registry of measuring tools
     **dict.fromkeys(("tools/research/src/research/store/tools_registry.py", "tests/tools/research/test_store_prov.py"),
@@ -1100,7 +1100,6 @@ SPOT_VERIFIER_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_stop.py",
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
-    "adapters/vllm/verity_vllm/pipeline/interior_links.py",
     "adapters/vllm/verity_vllm/pipeline/interior_rows.py",
     "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
     "adapters/vllm/verity_vllm/program/predict/weights_tie.py",

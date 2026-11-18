@@ -58,6 +58,8 @@ class Exchange:
         self.refuse: Callable[[str, str], None] | None = None
         #: the schemes `attach` attached, by name, each with its settings: `Declared.schemes` and `Declared.settings`
         self.attached: dict[str, Mapping[str, Any]] = {}
+        #: the schemes `attach` attached, by name: what `weight_copy_refusals` reads of the next one's
+        self.schemes: dict[str, schemes.Scheme] = {}
         #: what each attached scheme's ``attach`` returned, by its name, read by `scheme_plugin.write_reports`
         self.reports: dict[str, Any] = {}
         #: this build's key, unique in the process: a scheme's ``ctx["build"]``
@@ -79,6 +81,8 @@ class Exchange:
         else as it was given them (``VERITY_PINS``), ``()`` for an application that pins nothing and None where neither
         is given; ``ctx["configuration"]`` the committed configuration's hash likewise (``configuration``,
         ``VERITY_CONFIGURATION``); a keyword and a setting that differ are refused (`ValueError`).
+        A scheme that `weight_copy_refusals` refuses beside those already attached, in either order, is refused by
+        name (`Refused`) before its attach runs, and the exchange is left as it was.
         Attached before the build is answered, it is declared (`H.Declared`); after, its requests are refused as
         `request` refuses them.
 
@@ -91,6 +95,8 @@ class Exchange:
         if self.registered and launcher.get("process") == H.ENGINE:
             raise RuntimeError(f"{scheme.name} attached after the model's weights were registered: an attach in the "
                                "engine runs before the load")
+        if bad := weight_copy_refusals([*self.schemes.values(), scheme]):
+            raise Refused(scheme.name, "; ".join(bad))
         for key, name, read in (("pins", "VERITY_PINS", _pins), ("configuration", "VERITY_CONFIGURATION", str)):
             handed, held = launcher.get(key), settings.get(name)
             if handed is not None and held is not None and read(handed) != read(held):
@@ -108,6 +114,7 @@ class Exchange:
             if (scheme.name, r) not in self.requests:
                 self.request(scheme.name, r)
         self.attached[scheme.name] = ctx["settings"]
+        self.schemes[scheme.name] = scheme
         if got is not None:
             self.reports[scheme.name] = got
         return got
@@ -245,33 +252,31 @@ class Exchange:
         return out
 
 
-def _one(what: str, has: Callable[[schemes.Scheme], bool]) -> schemes.Scheme:
-    found = [s for s in declarations.load().values() if has(s)]
-    if len(found) != 1:
-        raise LookupError(f"one declared scheme {what}, not {len(found)}: {[s.name for s in found]}")
-    return found[0]
-
-
 def providing(role: str) -> schemes.Scheme:
-    """The one declared scheme that provides ``role`` (`Scheme.provides`); `LookupError` naming those that do otherwise."""
-    return _one(f"provides {role!r}", lambda s: role in s.provides)
+    """The one declared scheme that provides ``role`` (`Scheme.provides`), the only one imported; `LookupError` naming
+    those that do otherwise (`compose.schemes.named`)."""
+    return declarations.get(declarations.named("provides", role))
 
 
 def option(entry: str | None) -> schemes.Scheme | None:
-    """The declared scheme whose option is ``entry`` (``name:scheme``, `Scheme.option`), which a launcher attaches by
-    name; None when none is."""
-    return next((s for s in declarations.load().values() if entry and s.option == entry), None)
+    """The declared scheme whose option is ``entry`` (``name:scheme``, `Scheme.option`), which every launcher refuses,
+    naming the scheme's name to list instead, the only one imported; None when none is."""
+    try:
+        return declarations.get(declarations.named("option", entry)) if entry else None
+    except LookupError:
+        return None
 
 
 def declaring(port: str) -> schemes.Scheme:
-    """The one declared scheme with a port named ``port`` (`Scheme.ports`); `LookupError` naming those that have otherwise."""
-    return _one(f"declares port {port!r}", lambda s: any(p.name == port for p in s.ports))
+    """The one declared scheme with a port named ``port`` (`Scheme.ports`), the only one imported; `LookupError` naming
+    those that have otherwise (`compose.schemes.named`)."""
+    return declarations.get(declarations.named("ports", port))
 
 
 def named(entry: str) -> schemes.Scheme | None:
-    """The declared scheme ``entry`` names, by its option (`option`) or by its name; None when it names none."""
-    found = option(entry)
-    return found if found is not None else declarations.load().get(entry)
+    """The declared scheme named ``entry``, the only one imported; None when none is (a declared scheme's option names it
+    only to refuse it, `option`)."""
+    return declarations.get(entry) if entry in declarations.DECLARATIONS else None
 
 
 #: what a storage scheme declares: its resource (`Scheme.resource`) and the workload's store among its needs (`Scheme.needs`)
@@ -284,15 +289,17 @@ def storage(s: Any) -> bool:
 
 
 def weight_copy_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
-    """A storage scheme (`storage`) listed beside one that keeps a weight-derived copy resident (``keeps_weight_copy``),
-    or beside one that has not declared whether it does, in any order; sorted by name, so the order listed changes none."""
+    """A storage scheme (`storage`) beside one that keeps a weight-derived copy (``keeps_weight_copy``), or beside one
+    that has not declared whether it does, in any order; sorted by name, so the order listed or attached changes none.
+    A scheme keeps a weight-derived copy when, across forwards, it holds or keeps alive resident bytes from which the
+    weights can be had without decoding storage's store; whether a product reads them does not enter."""
     out = []
     for st in sorted({s.name: s for s in listed if storage(s)}.values(), key=lambda s: s.name):
         for o in sorted({s.name: s for s in listed if s.name != st.name}.values(), key=lambda s: s.name):
             keeps = getattr(o, "keeps_weight_copy", schemes.UNDECLARED)
             if keeps is True:
-                out.append(f"{st.name} is storage (it needs the workload's store) and {o.name} keeps a weight-derived copy resident for the "
-                           f"serve's life (keeps_weight_copy), so {o.name}'s GEMMs would not read the weights {st.name} holds: "
+                out.append(f"{st.name} is storage (it needs the workload's store) and {o.name} keeps a weight-derived copy "
+                           f"(keeps_weight_copy), so the weights would be resident outside {st.name}'s store: "
                            "the two are not attached in one process while the pairing awaits a decision")
             elif isinstance(keeps, schemes.Lacks):
                 out.append(f"{st.name} is storage (it needs the workload's store) and {o.name}'s declaration does not say whether it keeps a "
@@ -306,13 +313,13 @@ def listed_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
     checked before any of them attaches; empty: it can."""
     names = [s.name for s in listed]
     twice = [f"{n} is listed {names.count(n)} times" for n in dict.fromkeys(names) if names.count(n) > 1]
-    return twice + weight_copy_refusals(listed)
+    return twice + weight_copy_refusals(listed) + schemes.order_refusals(listed)
 
 
 def attach_listed(exchange: Exchange, listed: Sequence[tuple[schemes.Scheme, Mapping[str, Any]]], **ctx: Any) -> list[Any]:
     """Each scheme of ``listed`` (a configuration's list, each with its settings) attached on ``exchange`` with ``ctx``
-    (`Exchange.attach`) in list order, once `listed_refusals` refuses none, so the scheme listed earlier is the outer
-    (`Exchange.request`); what each attach returned."""
+    (`Exchange.attach`) in list order, once `listed_refusals` refuses none: the order `schemes.order_refusals` holds,
+    in which the scheme listed earlier is the outer (`Exchange.request`); what each attach returned."""
     if bad := listed_refusals([s for s, _ in listed]):
         raise Refused("listed schemes", "; ".join(bad))
     return [exchange.attach(s, given, **ctx) for s, given in listed]
@@ -359,13 +366,14 @@ _TYPES: tuple[int, MessageTypes] | None = None
 
 
 def types() -> MessageTypes:
-    """The message types on disk: the proof layer's and every declared scheme's (`Scheme.messages`, by the scheme's name
-    in `verity.protocols.compose.schemes`)."""
+    """The message types on disk: the proof layer's, useful work's workload list (H1's, which no scheme declares), and
+    those of every scheme registered so far (`Scheme.messages`); `body` loads every declaration only for a type none
+    of them declares (`compose.schemes.workload_messages`)."""
     global _TYPES
-    registry = declarations.load()
+    registry = schemes.SCHEMES
     if _TYPES is None or _TYPES[0] != len(registry):
         declared = {id(m): m for s in registry.values() for m in s.messages}
-        _TYPES = (len(registry), MessageTypes((*spot.MESSAGES, *declared.values())))
+        _TYPES = (len(registry), MessageTypes((*spot.MESSAGES, *declarations.workload_messages(), *declared.values())))
     return _TYPES[1]
 
 
@@ -373,7 +381,14 @@ def body(type_: str, data: bytes) -> bytes:
     """``data`` as the body of a ``type_`` message, unchanged; `verity.channel.Refused` when its declaration refuses
     it."""
     msg = Message(type_, body=data)
-    if (why := types().schema(msg.type, msg.version).why(msg.head(), msg.body)) is not None:
+    try:
+        schema = types().schema(msg.type, msg.version)
+    except Refused as e:
+        if e.name != "unknown-type":
+            raise
+        declarations.load()
+        schema = types().schema(msg.type, msg.version)
+    if (why := schema.why(msg.head(), msg.body)) is not None:
         raise Refused(*why)
     return data
 

@@ -6,10 +6,13 @@ from __future__ import annotations
 import dataclasses
 import json
 import re
+import subprocess
+import sys
 from types import SimpleNamespace as NS
 
 import pytest
 from verity import hooks as H
+from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme as schemes
 
 from verity.channel import Body, MessageTypes, Refused
@@ -20,7 +23,18 @@ from verity_vllm.pipeline import serve_day as SD
 from verity_vllm.pipeline import serve_h1 as SH
 
 
+def test_useful_works_workload_messages_are_types_with_no_scheme_declared():
+    """H1's messages (`pouw.prover.workload.MESSAGES`), which no scheme declares, are types before any declaration is
+    imported: Pearl+'s declaration isn't what finds them."""
+    probe = ("import sys\nfrom verity_vllm import messages as M\n"
+             "assert {'H1Registration', 'H1Record', 'H1Program'} <= M.types().types\n"
+             f"assert {declarations.DECLARATIONS['pearl-plus']!r} not in sys.modules\n")
+    got = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
+    assert got.returncode == 0, got.stderr[-2000:]
+
+
 def test_every_declared_message_is_a_type():
+    declarations.load()
     assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows"} <= M.types().types
 
 
@@ -406,7 +420,7 @@ def test_a_route_has_one_scheme_and_an_input_is_refused_while_serving():
 
 def test_the_scheme_that_provides_admission_is_found_by_its_role():
     assert M.providing("admission").name == "network-attester"
-    with pytest.raises(LookupError, match="one declared scheme provides 'nothing', not 0"):
+    with pytest.raises(LookupError, match="one scheme whose provides is 'nothing', not 0"):
         M.providing("nothing")
 
 
@@ -414,7 +428,7 @@ def _declared(name: str, **declared) -> NS:
     attached = []
     return NS(**{"name": name, "settings": {}, "check_settings": lambda own: None, "requests": lambda ctx: (),
                  "attach": lambda ex, ctx: attached.append(name), "attached": attached, "resource": "compute",
-                 "needs": frozenset(), "keeps_weight_copy": schemes.UNDECLARED, **declared})
+                 "needs": frozenset(), "depends": (), "keeps_weight_copy": schemes.UNDECLARED, **declared})
 
 
 STORE = {"resource": "memory", "needs": frozenset({"store"})}
@@ -424,26 +438,63 @@ STORE = {"resource": "memory", "needs": frozenset({"store"})}
 def test_storage_beside_a_scheme_keeping_a_weight_copy_is_refused_by_both_names_before_any_attaches(order):
     made = {"store": _declared("storage", **STORE), "copy": _declared("keeps-copy", keeps_weight_copy=True)}
     listed = [made[k] for k in order]
-    assert M.listed_refusals(listed) == [
-        "storage is storage (it needs the workload's store) and keeps-copy keeps a weight-derived copy resident for the "
-        "serve's life (keeps_weight_copy), so keeps-copy's GEMMs would not read the weights storage holds: the two are "
+    assert M.weight_copy_refusals(listed) == [
+        "storage is storage (it needs the workload's store) and keeps-copy keeps a weight-derived copy "
+        "(keeps_weight_copy), so the weights would be resident outside storage's store: the two are "
         "not attached in one process while the pairing awaits a decision"]
     with pytest.raises(Refused, match="storage is storage .* and keeps-copy keeps a weight-derived copy"):
         M.attach_listed(M.Exchange(), [(s, {}) for s in listed])
     assert made["store"].attached == made["copy"].attached == []
 
 
+def _state(ex: M.Exchange) -> tuple:
+    return (dict(ex.attached), dict(ex.schemes), list(ex.requests), dict(ex.reports),
+            {h: list(s) for h, s in ex.subscribers.items()}, ex.declared, ex.fixed)
+
+
+@pytest.mark.parametrize("keeps", [True, schemes.UNDECLARED], ids=["keeps-copy", "undeclared"])
+@pytest.mark.parametrize("first", ["store", "other"])
+def test_a_bare_attach_beside_an_attached_scheme_is_refused_by_the_same_sentence_and_installs_nothing(first, keeps, tmp_path):
+    made = {"store": _declared("storage", **STORE), "other": _declared("other", keeps_weight_copy=keeps)}
+    second = "other" if first == "store" else "store"
+    ex = M.Exchange()
+    ex.attach(made[first])
+    before = _state(ex)
+    with pytest.raises(Refused) as e:
+        ex.attach(made[second], private=tmp_path)
+    assert str(e.value) == f"{made[second].name}: " + "; ".join(M.listed_refusals([made["store"], made["other"]]))
+    assert _state(ex) == before and made[second].attached == [] and not (tmp_path / made[second].name).exists()
+
+
+def test_a_bare_attach_of_storage_beside_one_that_declares_no_copy_is_attached_either_way():
+    for first, second in ((_declared("storage", **STORE), _declared("plain", keeps_weight_copy=False)),
+                          (_declared("plain", keeps_weight_copy=False), _declared("storage", **STORE))):
+        ex = M.Exchange()
+        ex.attach(first)
+        ex.attach(second)
+        assert list(ex.attached) == [first.name, second.name] and first.attached == [first.name]
+
+
+def test_a_bare_attach_of_pearl_plus_on_an_exchange_holding_pous_is_refused_before_its_attach_runs():
+    pous, pearl = M.named("pous"), M.named("pearl-plus")
+    ex = M.Exchange()
+    ex.schemes[pous.name] = pous
+    with pytest.raises(Refused, match="pous is storage .* and pearl-plus keeps a weight-derived copy"):
+        ex.attach(pearl)
+    assert pearl.name not in ex.attached and ex.requests == []
+
+
 @pytest.mark.parametrize("order", [("store", "other"), ("other", "store")])
 def test_storage_beside_a_scheme_that_has_not_declared_whether_it_keeps_a_copy_is_refused_naming_the_declaration(order):
     made = {"store": _declared("storage", **STORE), "other": _declared("other")}
-    assert M.listed_refusals([made[k] for k in order]) == [
+    assert M.weight_copy_refusals([made[k] for k in order]) == [
         "storage is storage (it needs the workload's store) and other's declaration does not say whether it keeps a "
         "weight-derived copy (keeps_weight_copy is undeclared), so storage is not attached beside it until it declares "
         "that, and a scheme that keeps one beside storage awaits a decision"]
 
 
 def test_storage_beside_one_that_declares_no_copy_and_a_copy_without_storage_are_attached():
-    store, plain, copy = _declared("storage", **STORE), _declared("plain", keeps_weight_copy=False), _declared("keeps-copy", keeps_weight_copy=True)
+    store, plain, copy = _declared("storage", **STORE), _declared("plain", keeps_weight_copy=False, resource="egress"), _declared("keeps-copy", keeps_weight_copy=True)
     wipe = _declared("wipe", resource="memory")
     for listed in ([store, plain], [plain, store], [copy, plain], [copy, wipe]):
         assert M.listed_refusals(listed) == []
@@ -451,7 +502,23 @@ def test_storage_beside_one_that_declares_no_copy_and_a_copy_without_storage_are
     assert store.attached == ["storage", "storage"] and copy.attached == ["keeps-copy", "keeps-copy"]
 
 
+def test_a_list_in_a_refused_order_is_refused_by_name_before_any_attaches():
+    base, dep = _declared("base"), _declared("dep", resource="egress", depends=("base",))
+    ex = M.Exchange()
+    before = _state(ex)
+    with pytest.raises(Refused) as e:
+        M.attach_listed(ex, [(dep, {}), (base, {})])
+    assert (e.value.name, e.value.detail) == ("listed schemes", "order: dep requires base, so protocols lists base before dep")
+    assert _state(ex) == before and dep.attached == base.attached == []
+
+
+def test_storage_beside_the_network_attester_is_not_refused_for_a_weight_copy():
+    pous, attester = M.named("pous"), M.named("network-attester")
+    assert attester.keeps_weight_copy is False and M.storage(pous)
+    assert M.weight_copy_refusals([pous, attester]) == M.weight_copy_refusals([attester, pous]) == []
+
+
 def test_the_declared_storage_and_weight_copy_schemes_are_refused_together():
     pous, pearl = M.named("pous"), M.named("pearl-plus")
     assert pearl.keeps_weight_copy is True and M.storage(pous) and not M.storage(M.named("wipe"))
-    assert M.listed_refusals([pous, pearl]) == M.listed_refusals([pearl, pous]) != []
+    assert M.weight_copy_refusals([pous, pearl]) == M.weight_copy_refusals([pearl, pous]) != []

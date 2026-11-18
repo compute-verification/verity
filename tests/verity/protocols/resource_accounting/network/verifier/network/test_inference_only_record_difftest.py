@@ -185,7 +185,8 @@ def test_the_served_shape(shaped):
         "2x3 none committed": refused, "4x35 none committed": refused,
         "2x3 another root": refused, "2x3 no root read": refused, "2x3 a constant verdict": refused,
         "2x3 one wire from the next slot": refused,
-        "2x3 the order beside the record": (None, None), "2x3 the run's record first": (None, None)}
+        "2x3 the order beside the record": (None, None), "2x3 the run's record first": (None, None),
+        "2x3 the key a 32-bit word, its writers' too": (None, None)}
     # in rows the rate rule decides each the same way: a size's cases list the same units, so a block's rows are
     # those of the accepted case, which the policy's `Γ` and `α` in rows hold exactly
     for what, r in got.items():
@@ -429,23 +430,25 @@ def test_every_row_is_counted_and_a_block_is_a_slot(shaped):
     """`Desc.evaluate`'s reference on the Program of the served class's shape, every root node that computes
     in one block (a root node holds every slot's units of its template, so no partition of them separates two slots)
     and θ empty: that block's gates are the form's gates a block times its blocks, and its input bits are the leaves
-    some gate reads. The form counts every row of every unit, so over the phase its input bits are more by exactly the
-    rows no gate reads."""
+    some gate reads. Every row that is input gates is a row the form counts that no edge fills (`inside`), so over the
+    phase those rows' bits are the Program's input bits, more than the block's by exactly the rows no gate reads."""
     reference = ref.reference
     for size, blocks in (("2x3", 2), ("4x35", 4)):
         case = shaped[f"{size} registered"]["case"]
         text = case["instance"]["program"]
         form = vectors.results(case)["detail"]
+        inside = ref.expand(case["instance"], case["trusted"])["inside"]
         inp, _, _ = reference.root_nodes(text)
         whole = reference.check_desc({"program": text, "theta": [], "owner": ["input" if i else 0 for i in inp],
                                       "gamma": form["gates"] * blocks, "alpha": [vectors.BIG, 1]})
         width, is_input, _, reads = reference.circuit(text)
         read = set().union(*reads)
         unread = sum(w for g, w in enumerate(width) if is_input[g] and g not in read)
+        own = form["inputs"] * blocks - sum(inside)
         assert form["blocks"] == blocks
-        assert whole["ius"] == [[form["gates"] * blocks, form["inputs"] * blocks - unread]] and whole["complies"]
-        assert sum(w for g, w in enumerate(width) if is_input[g]) == form["inputs"] * blocks
-        assert unread > 0
+        assert whole["ius"] == [[form["gates"] * blocks, own - unread]] and whole["complies"]
+        assert sum(w for g, w in enumerate(width) if is_input[g]) == own
+        assert unread > 0 and sum(inside) > 0
 
 
 def test_a_row_is_declared_once(shaped):
@@ -513,7 +516,9 @@ def test_a_root_node_of_a_composite_is_no_input(shaped):
     none of its gates. Such a Program is refused with its templates: the record of that one template, which lists
     it, and the accepted record beside a Program whose root has a unit of it more, which the record does not list.
     The key alone decides the first: the same template under a key that is no input id is read past its
-    templates. Unlisted it is refused under either key."""
+    templates, and its record's registered reads still name templates it no longer lists: a declaration naming a
+    template the Program lacks is refused at the first stage that reads a declaration (`inputs`). Unlisted it is
+    refused under either key."""
     held = shaped["2x3 registered"]
     gate = [[("op", 16, [(0, 0)])]]
     for what, name in vectors.KEYED.items():
@@ -532,7 +537,7 @@ def test_a_root_node_of_a_composite_is_no_input(shaped):
             assert (tid in listed) == (how == "alone"), what
     plain = vectors.template("Plain7", [("p", vectors.Value(16))], [vectors.Value(16)], gate)
     assert input_id(codec.descriptor_id(plain)) is None
-    for edit, stage in ((vectors._alone, "wires"), (vectors._unlisted, "templates")):
+    for edit, stage in ((vectors._alone, "inputs"), (vectors._unlisted, "templates")):
         case = copy.deepcopy(held["case"])
         edit(case, held["circuit"], plain)
         assert ref.check_detail(case["instance"], case["trusted"]) == {"error": stage}

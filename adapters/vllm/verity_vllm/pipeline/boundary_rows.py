@@ -3,16 +3,16 @@ what each request's replay block reads and writes at its edges, committed inside
 the first stage samples requests whose boundary was fixed while they were served.
 
 **Spans and classes.** A window's spans are the requests that finished in it, in admission order (`boundary_windows.BoundaryWindows`); a
-request still running at a close is carried to the next window, so a span never crosses one. A span's class is (P, O): the
-least powers of two, at least `MIN_CAP`, covering its prompt's ids and the ids it was served. Each class is its own
-registration over N replay blocks, slot r its r-th span.
+request still running at a close is carried to the next window, so a span never crosses one. A span's class is (P, O): P
+its prompt's exact length, and O the least power of two, at least `MIN_CAP`, covering the ids it was served
+(`boundary_span.Span.shape`). Each class is its own registration over N replay blocks, slot r its r-th span.
 
 **Values** (`PORTS`): one `hm96-sha512/row/v2` row a span each, under its window domain (`verity.commitments.window`:
 program, partition, port, schema, N leaves, run); a u32 is two u16 words, low first, a float its f32 bits.
 
 | value | row |
 |---|---|
-| `b.ingress` | `INGRESS` (the prompt's length, the sampling inputs, the seed as a u64), then P ids, zero past the prompt |
+| `b.ingress` | `INGRESS` (the prompt's length, the sampling inputs, the seed as a u64), then the prompt's P ids |
 | `b.egress` | the ids served n, the finish (`boundary_span.FINISH`), then O ids, zero past n |
 
 The step shapes are no value: they choose the Programs, and the window's advice commits them. Each leaf's salt is fresh
@@ -25,7 +25,7 @@ twice, and the ids served n is no number the serve states:
 | value | row |
 |---|---|
 | `b.request` | `b.ingress`'s fields before its ids (`boundary_span.FIELDS`), the prompt's length and ``max_tokens`` the first two |
-| `b.prompt` | P prompt ids, zero past lp |
+| `b.prompt` | the prompt's P ids |
 | `b.egress` | O ids, zero past n: no n and no finish |
 | `b.stop` | one u16, n + finish * 8192 (1 a stop id, 2 ``max_tokens``, 3 the model's length): a stop class's alone |
 
@@ -101,7 +101,7 @@ from typing import Any
 import numpy as np
 
 from verity.circuits import population as PN
-from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.circuits import replay_links as RL
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import definitions, descriptor_id
@@ -125,6 +125,7 @@ from verity_vllm.pipeline.boundary_span import (
     egress_row,
     id_rows,
     ingress_row,
+    prompt_size,
 )
 from verity_vllm.records.boundary_commit import FILE as COMMIT, SCHEMA as FORMAT, BoundaryCommit
 from verity_vllm.records.boundary_tables import TableRoots
@@ -190,9 +191,9 @@ def class_signature(prompt: int, outputs: int) -> tuple[tuple[tuple[str, Array],
     `b.request` and `b.prompt` rows, and its return, the span's `b.egress` row (`row_type`). Round 2 then links a
     template's port that reads one of them to the class's value of that name, and the template output it returns to
     the name `ends` gives `b.egress`."""
-    if not (class_size(prompt) and class_size(outputs)):
-        raise ValueError(f"a class's Definition is at a class's (P, O), each a class's size (`class_size`), not "
-                         f"({prompt!r}, {outputs!r})")
+    if not (prompt_size(prompt) and class_size(outputs)):
+        raise ValueError(f"a class's Definition is at a class's (P, O), P a prompt's length (`prompt_size`) and O an "
+                         f"output size (`class_size`), not ({prompt!r}, {outputs!r})")
     return tuple((v, row_type(v, prompt)) for v in PARAMS), row_type(EGRESS, outputs)
 
 
@@ -275,10 +276,10 @@ class Layout:
     row_words: int = BT.WORDS
 
     def __post_init__(self) -> None:
-        for k in ("prompt", "outputs"):
-            v = getattr(self, k)
-            if not class_size(v):
-                raise ValueError(f"a class's {k} cap is a power of two at least {MIN_CAP}, not {v!r}")
+        if not prompt_size(self.prompt):
+            raise ValueError(f"a class's prompt is a prompt's exact length, at least 1, not {self.prompt!r}")
+        if not class_size(self.outputs):
+            raise ValueError(f"a class's outputs cap is a power of two at least {MIN_CAP}, not {self.outputs!r}")
         if not (type(self.spans) is int and self.spans >= 1):
             raise ValueError(f"a class registers one span or more, not {self.spans!r}")
         ls = self.layers
@@ -392,12 +393,12 @@ class Layout:
         if not self.ids:
             return self.verdict_rows
         params = {PO.template_id(t): {name for name, _ty in t.signature()[0]} for t in self.templates}
-        runs = SS.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
+        runs = RL.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
         got = [(x, per, rs) for x, per, rs in runs if x.port not in params.get(x.template, ())]
         by = {PO.template_id(t): t for t in self.templates}
         ok = (len(got) == 1 and got[0][0].value == RETURN and got[0][0].template in by
               and sum(by[got[0][0].template].signature()[1].leaf_widths()) == 32 and got[0][1] == self.outputs == self.n_rho
-              and [SS.row_at(got[0][2], j) for j in range(self.outputs)] == list(range(self.outputs)))
+              and [RL.row_at(got[0][2], j) for j in range(self.outputs)] == list(range(self.outputs)))
         if not ok:
             raise ValueError(f"a class commits its replay block's return as ids where the block returns one 32-bit id an "
                              f"output, in output order, by one return link round 2 derives: not "
@@ -423,14 +424,14 @@ class Layout:
                              f"inlined, one instance an output: not {t}{'' if self.inline else ' as instances'} at "
                              f"{self.per_prompt} a prompt id and {self.per_output} an output")
         units, params = GS.plan(V, V // N), {PO.template_id(x): dict(x.signature()[0]) for x in self.templates}
-        runs = SS.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
+        runs = RL.link_runs(definitions(self.program), descriptor_id(self.replay)) or ()
         read = [(x, per, rs) for x, per, rs in runs if x.port in params.get(x.template, {})]
         got = {x.template: (per, rs) for x, per, rs in read}
         K, n_out = len(units), self.outputs
         want = [PO.template_id(u.defn) for u in units]
         ok = (len(got) == len(read) and sorted(got) == sorted(want) and {x.value for x, _p, _r in read} == {LOGITS}
               and all(u.lanes == (k * N, (k + 1) * N) and got[w][0] == K * n_out
-                      and [SS.row_at(got[w][1], j) for j in range(n_out)] == [j * K + k for j in range(n_out)]
+                      and [RL.row_at(got[w][1], j) for j in range(n_out)] == [j * K + k for j in range(n_out)]
                       for k, (u, w) in enumerate(zip(units, want, strict=True))))
         if not ok:
             raise ValueError(f"{t}: round 2's links at its units' parameters are not each unit k's {LOGITS} at row j·{K} + k "
@@ -740,5 +741,5 @@ def reopen(directory: Path, check: SpecializedDefinition, kept: BT.Kept | None =
 __all__ = ["COMMIT", "EGRESS", "FORMAT", "INDEX", "INGRESS", "LOGITS", "MIN_CAP", "PARAMS", "PARTS", "PORTS", "PROMPT",
            "REQUEST", "RETURN", "SALTS", "SCHEMA", "STOP", "TABLES_UNDER_A_RULE", "U32", "Committed", "Layout", "Span",
            "cap", "check_template", "class_signature", "class_size", "commit", "descriptor_id", "ends", "inlined",
-           "layout_of", "linked", "port_rows", "record", "reopen", "return_port", "row_type", "run_root", "table_roots",
+           "layout_of", "linked", "port_rows", "prompt_size", "record", "reopen", "return_port", "row_type", "run_root", "table_roots",
            "window_domain", "write"]

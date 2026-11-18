@@ -147,7 +147,7 @@ class H1Options:
     """serve-openai's ``--h1-*`` options (its ``h1`` group): PoUW H1's window's prover state, receipts, model key and
     window commit."""
     h1_prover: str | None = option("--h1-prover", default=None, metavar="DIR",
-                                   help="with --protocols: keep each H1 window's prover state (its salt key and each call's "
+                                   help="with --protocols: keep each H1 window's prover state (its salt file and each call's "
                                         "rows, pouw_h1_prover) and its live@<s> rows (pouw_h1_live.dump) in DIR/w<k>/, "
                                         "owner-only, for proving its sampled proof blocks and rounds after the close; never a "
                                         "published path")
@@ -244,8 +244,8 @@ def refusal(opts: Any) -> str | None:
     if not opts.protocols:
         return None
     if opts.protocols != ENTRY:
-        return (f"--protocols {opts.protocols}: serve-openai serves {ENTRY} (PoUW H1, serve_h1) and a declared scheme's "
-                "option (messages.option) only")
+        return (f"--protocols {opts.protocols}: serve-openai serves {ENTRY} (PoUW H1, serve_h1) and declared schemes "
+                "by their names only")
     if not opts.commit or opts.scheme != "rows-sha512" or not opts.required_manifest:
         return (f"--protocols {ENTRY} taps the server's rows-sha512 Commit (its int8 source and step-input port): it needs "
                 "--commit, --scheme rows-sha512 and the bench row's --required-manifest")

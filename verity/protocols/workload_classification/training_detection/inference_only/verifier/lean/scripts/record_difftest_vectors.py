@@ -70,10 +70,10 @@ its members each, side by side and with `Gemm`'s node between, each taken with t
 numbered across the two; and the record stating one unit fewer than their sum, refused with its templates.
 Then the edges (`EDGED`): toys whose root's units read earlier units' outputs, the record stating no wire, each
 under no pin, the largest limits and a log of no registered value. Taken: an edge member to member at one and at
-two slots, across slots, into a call, and from a writer's second output in one strided part and in two parts.
+two slots, across slots, into a call, from a writer's second output in one strided part and in two parts, and one
+template in two root nodes with an edge each way, its order stated or not, a chain of units in the root's node order.
 Refused: a broadcast edge (`own-rows`), a row half its own input and half an edge (`own-rows`), an edge into a
-port the record cuts, a partial row, and one template in two root nodes with an edge each way, its order stated or
-not (`wires`), a row of another width, and an edge from an output of leaves other than its row's, of two widths
+port the record cuts and a partial row (`wires`), a row of another width, and an edge from an output of leaves other than its row's, of two widths
 into one leaf, of 8 bits into 16, of 31 bits into 32 one-bit leaves and of 16 bits into 16 one-bit leaves, the
 mismatches a wire's leaves were refused for (`program`: no Program states them), ingress or a registered read onto an edge's row (`inputs`), and
 a reference to a later node (`not-topological`).
@@ -1067,33 +1067,41 @@ def shaped() -> list[dict]:
 
     def split(apart: bool):
         """`Norm`'s batch split into two root nodes of half its members each, the second right after the first or,
-        `apart`, after `Gemm`'s: one template in two root nodes, its units numbered across them."""
+        `apart`, after an input node no node up to `Norm` reads, moved between them: one template in two root nodes,
+        its units numbered across them, every reference re-pointed."""
         def edit(nodes: list, desc: dict) -> None:
+            body = desc["definitions"][desc["root"]]["body"]
             norm = units(nodes)[2]
             k, n = nodes.index(norm), norm["n"]
             h = n // 2
+            cut = len(_leaves(desc["types"][norm["out"]])) // n * h
+            before = list(nodes)
+            reads = [[_refs(nodes, a["refs"]) for a in x["args"]] for x in before]
+            ret = _refs(nodes, body["ret"])
             second = copy.deepcopy(norm)
+            halves = []
             for node, m in ((norm, h), (second, n - h)):
                 node["n"] = m
+                lo = [refs.count // n * h if node is second else 0 for refs in reads[k]]
+                halves.append((node, [r.slice(b, b + r.count // n * m) for r, b in zip(reads[k], lo, strict=True)]))
                 for a in node["args"]:
-                    refs = _refs(nodes, a["refs"])
-                    per = refs.count // n
-                    lo = per * h if node is second else 0
-                    a["refs"] = _spelled(refs.slice(lo, lo + per * m))
                     a["type"] = _halved(desc, a["type"], m)
                 node["out"] = _halved(desc, node["out"], m)
-            at = k + 2 if apart else k + 1
-            nodes.insert(at, second)
-            moved = {i: i + (i >= at) for i in range(len(nodes))}
-            ret = desc["definitions"][desc["root"]]["body"]["ret"]["concat"]
-            for j, r in reversed(list(enumerate(ret))):
-                run, lanes = as_grid(refs_from_json(r))
-                if {i for _, i, *_ in lanes} == {k}:
-                    whole = spell(run, lanes)
-                    ret[j:j + 1] = [_spelled(whole.slice(0, whole.count * h // n)),
-                                    _spelled(Affine("n", at, whole.base, whole.count * (n - h) // n))]
-                else:
-                    ret[j] = spell(run, tuple((s, moved[i] if i > k else i, *x) for s, i, *x in lanes)).to_json()
+            order = list(range(k + 1))
+            if apart:
+                read = {i for x in reads[:k + 1] for r in x for s, i, _ in r if s == "n"}
+                w = max(i for i, x in enumerate(before[:k]) if not x["args"] and i not in read)
+                order.remove(w)
+                order.append(w)
+            order += [None] + list(range(k + 1, len(before)))
+            pos = {i: p for p, i in enumerate(order)}
+            nodes[:] = [second if i is None else before[i] for i in order]
+            moved = [(x, r) for x, r in zip(before, reads, strict=True) if x is not norm] + halves
+            for x, refs in moved:
+                for a, r in zip(x["args"], refs, strict=True):
+                    a["refs"] = _spelled(_repointed(r, k, cut, pos))
+            body["ret"] = _spelled(_repointed(ret, k, cut, pos))
+            _split_reads(desc, moved, ret, k, cut, pos)
         return edit
 
     first("2x3 one input run handed to two rows", lowered(2, 3), 27, reroot=twice, broken="own-rows")
@@ -1483,6 +1491,51 @@ def _run(nodes: list, j: dict) -> Affine | None:
     p = _refs(nodes, j)
     p = None if isinstance(p, Concat) else spell(*as_grid(p))
     return p if isinstance(p, Affine) and p.space == "n" else None
+
+
+def _moved(ref: tuple, k: int, cut: int, pos: dict) -> tuple:
+    s, i, j = ref
+    if s != "n":
+        return ref
+    return (s, pos[None], j - cut) if i == k and j >= cut else (s, pos[i], j)
+
+
+def _repointed(refs, k: int, cut: int, pos: dict):
+    out = []
+    for p in refs.parts if isinstance(refs, Concat) else [refs]:
+        later = [s == "n" and i == k and j >= cut for s, i, j in p]
+        lo = 0
+        for x in range(1, len(later) + 1):
+            if x == len(later) or later[x] != later[lo]:
+                piece = p.slice(lo, x)
+                for q in piece.parts if isinstance(piece, Concat) else [piece]:
+                    run, lanes = as_grid(q)
+                    out.append(spell(run, tuple(
+                        (s, pos[None], b - cut, e, lv) if later[lo] and s == "n" and i == k else
+                        (s, pos[i] if s == "n" else i, b, e, lv) for s, i, b, e, lv in lanes)))
+                lo = x
+    return concat(out)
+
+
+def _split_reads(desc: dict, reads: list, ret, k: int, cut: int, pos: dict) -> None:
+    body = desc["definitions"][desc["root"]]["body"]
+    nodes = body["nodes"]
+    leaves = [len(_leaves(desc["types"][x["out"]])) for x in nodes]
+    for x, rs in reads:
+        where = next(w for w, y in enumerate(nodes) if y is x)
+        for a, r in zip(x["args"], rs, strict=True):
+            _same_reads(nodes, leaves, f"node {where}", where, a["refs"], r, k, cut, pos)
+    _same_reads(nodes, leaves, "the return", len(nodes), body["ret"], ret, k, cut, pos)
+
+
+def _same_reads(nodes: list, leaves: list, what: str, below: int, j: dict, old, k: int, cut: int, pos: dict) -> None:
+    got = list(_refs(nodes, j))
+    want = [_moved(r, k, cut, pos) for r in old]
+    if got != want:
+        raise AssertionError(f"split: {what} reads {len(got)} references, not the {len(want)} it read re-pointed")
+    for s, i, j_ in got:
+        if s == "n" and not (i < below and 0 <= j_ < leaves[i]):
+            raise AssertionError(f"split: {what} reads leaf {j_} of node {i}, past its {leaves[i]} leaves or not before it")
 
 
 def _share(nodes: list, node: dict, j: int, member: int) -> None:
@@ -2068,9 +2121,10 @@ EDGED = {
     "an edge from a writer's second output, in two parts": (lambda: _ab(_second, writer=EA2), None, None, None),
     "an edge into a port the record cuts": (lambda: _ab(_mapped), None,
                                             lambda d: d.update(cuts={"EdgeB_v1": {"y": 2}}), "wires"),
+    #: the edge each way is between templates, not units: in the root's node order the units form a chain, no cycle
     "one template in two root nodes, an edge each way, the record's order unread": (_two_nodes, None, lambda d: d.update(
-        order=[["EdgeA_v1", 0, 2], ["EdgeB_v1", 0, 2], ["EdgeA_v1", 2, 2]]), "wires"),
-    "one template in two root nodes, an edge each way, no order": (_two_nodes, None, None, "wires"),
+        order=[["EdgeA_v1", 0, 2], ["EdgeB_v1", 0, 2], ["EdgeA_v1", 2, 2]]), None),
+    "one template in two root nodes, an edge each way, no order": (_two_nodes, None, None, None),
     "a partial row": (lambda: _ab(_first_two, n=3, m=2), _repoint(["n", 2, 2, 8], 3), None, "wires"),
     "a row of another width": (_narrow, _repoint(["n", 3, 4, 4], 4), None, "program"),
     "an edge from an output of two widths into one 32-bit leaf": (

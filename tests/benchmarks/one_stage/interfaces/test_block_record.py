@@ -46,7 +46,7 @@ def test_period0_is_five_real_subprotocols_and_a_wipe_elsewhere() -> None:
     assert (c["verdict"], c["answer"], c["missing"], c["elsewhere"]) == ("undecided", None, ["wipe"], ["wipe"])
     assert Fraction(c["joint_horizon"]["error_sum"]) == (Fraction(1, 2) + Fraction(1, 100) + Fraction(1, 10**6)
                                                          + Fraction(4194729, 2**62))
-    assert c["joint_horizon"]["at"]["1/1000000"]["not_established"] == ["certifier"]
+    assert c["joint_horizon"]["at"]["1/1000000"]["not_established"] == ["bandwidth", "certifier", "pous"]
     assert all(p["joint_horizon"]["vacuous"] for p in rec["monitoring_period"]["periods"].values())
 
 
@@ -96,7 +96,7 @@ def test_a_stratified_sample_is_bounded_by_its_strata_and_not_as_a_uniform_one()
                                                                Fraction(1, 2) + Fraction(1, 10**9))] == [2, 1, 1, 0]
     assert [R.integrity_bound(164, 162, d) for d in (Fraction(1, 100), Fraction(1, 10**6))] == [1, 2]
     del integrity["quantity"]["strata"]
-    assert list(R.check(rec).values()) == ["its certificates at the deltas are not its quantity's at its error"]
+    assert list(R.check(rec).values()) == ["its certificates at the deltas are not its quantity's at its error, or hold though its bound is refused"]
     with pytest.raises(ValueError, match="the strata hold 164 units and sample 162 of them, not the 161 of 164"):
         R.integrity_bound(164, 161, Fraction(1, 100), strata)
     row["answer"]["profile"] = {**profile, "levels": [{**profile["levels"][-1], "size": 165}]}
@@ -149,7 +149,10 @@ def test_the_verdict_is_the_answers_and_nothing_else() -> None:
 def test_a_changed_error_is_refused() -> None:
     rec = copy.deepcopy(_load("block-record-r2-period0"))
     rec["legs"]["certifier"]["error"] = "1/1000000"
-    assert "subprotocol:certifier" in R.check(rec)
+    assert {"composed:joint_horizon", "monitoring_period"} <= set(R.check(rec))
+    rec = copy.deepcopy(_load("block-record-r2-period0"))
+    rec["legs"]["pouw"]["error"] = "1/2"
+    assert "subprotocol:pouw" in R.check(rec)
 
 
 def test_another_server_or_an_empty_block_is_refused() -> None:
@@ -172,8 +175,8 @@ def _accepting_report() -> tuple[dict, dict]:
     p0 = _load("block-record-r2-period0")
     profile = {"levels": [{"name": "unit", "size": 1024}], "drawn": {"unit": 2}}
     rows = {}
-    for name, key in R.RUNNER_KEYS.items():
-        lg = p0["legs"][name]
+    for name in ("integrity", "pouw", "pous", "bandwidth", "certifier"):
+        lg, key = p0["legs"][name], R.RUNNER_KEYS[name]
         q = {"integrity": {"bound": 299}, "pouw": {"work": {"credited": 262144, "credited_tiles": 128}},
              "pous": {"s_bits": 0, "certified": False, "eps": "0"}, "bandwidth": {"q_bytes": 6963200, "eps": lg["error"]},
              "certifier": {"K": 15764, "windows": 1, "eps": "1/100"}}[name]
@@ -198,7 +201,8 @@ def test_the_wipe_is_its_threshold_at_its_reads() -> None:
     lg = R.subprotocol("wipe", {"answer": {"protocol": "verity/wipe/v0", "verdict": "accept", "reason": None, "commitment": "00",
                                    "public": public, "profile": {"k": 5231}}}, server="n0", runs=["r"])
     assert (lg["quantity"]["value"], lg["quantity"]["k"], lg["quantity"]["r"]) == (39_721_768_854, 5231, 59)
-    assert lg["error"] == f"1/{2 ** 128}" and all(at["holds"] for at in lg["at"].values())
+    assert lg["error"] == f"1/{2 ** 128}"
+    assert all(at == {"holds": False, "why": lg["unbounded"]["why"]} for at in lg["at"].values())
     assert lg["premises"] == ["Verity.Vocab.WipeSound"]
 
 
@@ -220,11 +224,11 @@ def test_each_declared_schemes_row_is_its_readers_and_only_the_undeclared_are_re
         R._quantity("attester", row)
 
 
-def test_each_row_its_scheme_bounds_not_carries_why_beside_it_and_keeps_its_verdict(monkeypatch) -> None:
+def test_each_row_its_scheme_bounds_not_carries_why_beside_it_keeps_its_verdict_and_holds_at_no_delta() -> None:
     """`S.bound` refuses all four declared rows today (PoUS's help and the bandwidth audit's six Γ charges nothing
     bounds, the wipe's own term unsaid, the network attester's start and tied entries nothing bounds): each carries that sentence and the
-    terms it lacks, and its verdict is still its answer's. Naming a row in `UNDECIDED_WHEN_UNBOUNDED` makes it
-    undecided with the sentence as its reason, and only that row."""
+    terms it lacks, its verdict is still its answer's, and it holds at no δ with that sentence as why, so the joint
+    error lists it as not established; a record that says such a row holds fails `check`."""
     report, wipe = _accepting_report()
     built = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
     legs = built["legs"]
@@ -236,12 +240,14 @@ def test_each_row_its_scheme_bounds_not_carries_why_beside_it_and_keeps_its_verd
     assert not any("unbounded" in legs[k] for k in R.BY_NAME)
     assert built["composed"]["legs"] == {k: "accept" for k in R.SUBPROTOCOLS}
     jsonschema.Draft202012Validator(SCHEMA).validate(built)
-    assert R.check(built) == {} and R.UNDECIDED_WHEN_UNBOUNDED == ()
-    monkeypatch.setattr(R, "UNDECIDED_WHEN_UNBOUNDED", ("pous",))
-    again = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
-    assert again["legs"]["pous"]["answer"]["verdict"] == "undecided"
-    assert again["legs"]["pous"]["answer"]["reason"] == legs["pous"]["unbounded"]["why"]
-    assert again["composed"]["legs"] == {k: "undecided" if k == "pous" else "accept" for k in R.SUBPROTOCOLS}
+    assert R.check(built) == {}
+    for name in lacking:
+        assert legs[name]["at"] == {str(d): {"holds": False, "why": legs[name]["unbounded"]["why"]} for d in R.DELTAS}
+    for d in R.DELTAS:
+        assert set(lacking) <= set(built["composed"]["joint_horizon"]["at"][str(d)]["not_established"])
+    held = copy.deepcopy(built)
+    held["legs"]["pous"]["at"] = R.at_deltas("pous", legs["pous"]["quantity"], Fraction(legs["pous"]["error"]))
+    assert "hold though its bound is refused" in R.check(held)["subprotocol:pous"]
 
 
 def test_a_piece_that_refused_to_run_shows_undecided_by_its_sentence_never_accepted_nor_dropped() -> None:
@@ -461,3 +467,33 @@ def test_a_period_s_blocks_are_core_s_block_count() -> None:
     for p in periods.values():
         assert p["blocks_per_machine"] == block_count(p["seconds"], window_s)
         assert p["blocks"] == block_count(p["seconds"], window_s, machines)
+
+
+def test_the_subprotocols_are_the_onsite_applications_components_through_their_rows_and_the_stored_words() -> None:
+    """`SUBPROTOCOLS` and `RUNNER_KEYS` are the onsite application's components through each declaration's ``record``
+    and the format's `STORED`, in the application's order; the schema, data on disk, requires exactly them, as a set (a
+    stored record's legs are a mapping, written with sorted keys)."""
+    import tomllib
+
+    from verity.protocols.compose import schemes
+    legs = SCHEMA["properties"]["legs"]
+    assert set(legs["required"]) == set(legs["properties"]) == set(R.SUBPROTOCOLS)
+    assert R.SUBPROTOCOLS == tuple(R.RUNNER_KEYS) == R.PRODUCTS["onsite"]
+    listed = tomllib.loads(R.ONSITE_APPLICATION.read_text())["protocols"]
+    rows = [schemes.get(n).record if n in schemes.DECLARATIONS else R.RUNNER_KEYS.get(n) for n in listed]
+    assert [r for r in rows if r in R.RUNNER_KEYS.values()] == list(R.RUNNER_KEYS.values())
+    io, spot = schemes.get("inference-only"), schemes.get("sampled-proofs")
+    assert "inference-only" in listed and isinstance(io.resource, R.S.Lacks) and io.record not in R.STORED
+    assert io.record not in R.RUNNER_KEYS.values(), "inference-only charges nothing and the format keeps no row of it"
+    assert isinstance(spot.resource, R.S.Lacks) and R.RUNNER_KEYS[R.STORED[spot.record]] == spot.record
+    assert R.RUNNER_KEYS["certifier"] == schemes.get("network-attester").record == "communication"
+
+
+def test_a_component_no_scheme_declares_is_a_subprotocol_only_under_a_stored_word(tmp_path, monkeypatch) -> None:
+    app = tmp_path / "onsite.toml"
+    app.write_text('protocols = ["pouw", "nonesuch"]\n')
+    monkeypatch.setattr(R, "ONSITE_APPLICATION", app)
+    with pytest.raises(ValueError, match="nonesuch: no scheme declares it and block_record.STORED has no row stored"):
+        R._runner_keys()
+    app.write_text('protocols = ["pouw"]\n')
+    assert R._runner_keys() == {"pouw": "work"}

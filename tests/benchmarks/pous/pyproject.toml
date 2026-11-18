@@ -42,6 +42,15 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "verity/protocols/proofs/spot/verifier/challenger/remote.py", "verity/circuits",
           # PoUB's poub/prover/p2_stage/bandwidth.py serves the store through the staging decode, whose modules it imports;
           # test_pous_p2_bandwidth.py loads it and runs it as a script
+          # block_record.py (test_pous_served_piece.py, test_pous_served_case.py load it) derives the record's subprotocols
+          # from the onsite application, so it loads each scheme the application lists by its declaration
+          "applications/onsite_full.toml", "verity/protocols/proofs/spot/scheme.py", "verity/protocols/proofs/spot/verifier/parties.py",
+          "verity/protocols/resource_accounting/network",
+          # network's verifier loads the release formats' file
+          "verity/release.py",
+          "verity/protocols/workload_classification/__init__.py", "verity/protocols/workload_classification/training_detection/__init__.py",
+          "verity/protocols/workload_classification/training_detection/inference_only/__init__.py", "verity/protocols/workload_classification/training_detection/inference_only/scheme.py",
+          "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/__init__.py",
           "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py",
           "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/layout.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py",
           # the weight store's placement reads the committed configurations' hashes (`period.deployment`,
@@ -52,7 +61,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "adapters/vllm/verity_vllm/settings.py", "tools/config/verity_config/verity_settings.py", "adapters/vllm/verity_vllm/records/__init__.py",
           "adapters/vllm/verity_vllm/records/fields.py", "adapters/vllm/verity_vllm/records/workload.py",
           "adapters/vllm/verity_vllm/protocols/__init__.py", "adapters/vllm/verity_vllm/protocols/interface.py",
-          "adapters/vllm/verity_vllm/protocols/pous.py", "adapters/vllm/verity_vllm/engine/__init__.py",
+          "adapters/vllm/verity_vllm/engine/__init__.py",
           "adapters/vllm/verity_vllm/engine/hooks.py", "verity/hooks.py", "adapters/vllm/verity_vllm/errors.py",
           "adapters/vllm/verity_vllm/records/schema_ids.py",
           # the adapter's pous.py reads its option from PoUS's declaration (memory/pous/scheme.py), which imports these
@@ -89,7 +98,10 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "verity/commitments/salt_file.py",
           # the lease script served_piece.sh and served_wipe.sh take where a node has no gpu-lease: their tests check
           # that it is where the scripts look for it
-          "tools/research/src/research/pods/sh/gpu_lease.sh", "benchmarks/pous"]
+          "tools/research/src/research/pods/sh/gpu_lease.sh", "benchmarks/pous",
+          # served_wipe.sh attaches the wipe through the adapter's Exchange, and what that module imports
+          "adapters/vllm/verity_vllm/messages.py", "verity/protocols/proofs/spot/prover/__init__.py",
+          "verity/protocols/proofs/spot/prover/workload.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

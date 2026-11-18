@@ -67,15 +67,10 @@ def repository_root(start: str | Path | None = None) -> Path:
 
 
 def _commit(root: Path) -> str:
-    recorded = settings.RESEARCH_SOURCE_SHA
-    if recorded:
-        return recorded
-    try:
-        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True,
-                                       stderr=subprocess.DEVNULL).strip()
-    except (OSError, subprocess.CalledProcessError):
-        raise ValueError(f"{root} is no git checkout and RESEARCH_SOURCE_SHA is unset, so nothing says which commit this "
-                         "tree is: run under `research run`, which sets it (--tree-sha for a tree without .git)") from None
+    if found := kit.commit(root):
+        return found
+    raise ValueError(f"{root} is no git checkout and RESEARCH_SOURCE_SHA is unset, so nothing says which commit this "
+                     "tree is: run under `research run`, which sets it (--tree-sha for a tree without .git)")
 
 
 def toolchain(root: Path, spec: ResolvedSpec, *, commit: str | None = None) -> Toolchain:
@@ -106,6 +101,10 @@ class NoCatalog(ValueError):
     run` runs the point on this alone, saying so; any other error of a lookup is the launch's."""
 
 
+def _utc(t: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
+
+
 def _show(root: Path, commit: str, field: str) -> str:
     try:
         process = subprocess.run(["git", "show", "-s", f"--format={field}", commit], cwd=root, capture_output=True,
@@ -124,9 +123,9 @@ class StoreCompletion:
     unless `local_only`, from the store's remote, pulled once per commit since `COMMIT_MARGIN_S` before it; no reindex."""
 
     def __init__(self, store: Any = None, *, root: Path | None = None, local_only: bool = False,
-                 log: Callable[[str], None] | None = None):
-        self._store, self.root, self.local_only = store, root, local_only
-        self._log = log or (lambda message: print(f"verity-bench: {message}", file=sys.stderr))
+                 log: Callable[[str], None] | None = None, clock: Callable[[], float] = time.time):
+        self._store, self.root, self.local_only, self._clock = store, root, local_only, clock
+        self._log = log or (lambda message: print(f"verity-bench: {message}", file=sys.stderr, flush=True))
         self._pulled: set[str] = set()
 
     @property
@@ -203,10 +202,15 @@ class StoreCompletion:
 
         from research.store import labels_sync
 
-        remote = self._remote()
-        report = labels_sync.sync(self.store, push=False)
-        self._log(f"pulled {len(report['pulled'])} labels from {remote.describe()} "
-                  f"({report['already']} of {report['remote_before']} were here)")
+        remote, start = self._remote(), self._clock()
+        self._log(f"{_utc(start)} pulling labels from {remote.describe()} into {self.store.root}")
+        theirs = labels_sync.remote_labels(remote)
+        listed = self._clock()
+        report = labels_sync.sync(self.store, push=False, theirs=theirs)
+        end = self._clock()
+        self._log(f"{_utc(end)} pulled {len(report['pulled'])} labels from {remote.describe()} "
+                  f"({report['already']} of {report['remote_before']} were here, {report['pack']} of them from the labels "
+                  f"pack): listed in {listed - start:.0f} s, synced in {end - listed:.0f} s")
         for line in report["bad"][:5]:
             self._log(f"skipped label {line}")
         return len(report["pulled"])
@@ -339,21 +343,6 @@ def point_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path
     if isinstance(plan.spec, SteadySpec):
         return [*env, "bash", "benchmarks/harness/steady_point.sh", *flags, *_steady_card()]
     return [*_lease(plan.spec), *env, "bash", "benchmarks/harness/run_point.sh", *flags]
-
-
-def booked(spec: ResolvedSpec | SteadySpec, pool: str, slot: str, end: str, cards: Sequence[int]) -> list[str]:
-    """The `research run` flags of a point in a booked period: the booked slot of `pool` alone, the spec's max_minutes as its
-    bound, which `research run` refuses unless it fits before `end` (a UTC time ending in Z) and waits no later than, and
-    `--timed`, so the point isn't niced. A vLLM point's run leases the booked cards (`--card`), so its own lease takes none
-    (`_lease`); a steady-state point's node side leases its one card itself (`_steady_card`), so its run takes no lease."""
-
-    if spec.admission.max_minutes is None:
-        raise ValueError(f"spec {spec.id!r} has no admission max_minutes, which bounds a booked point's run")
-    want = 1 if isinstance(spec, SteadySpec) else spec.preset.gpu_count
-    if len(cards) != want:
-        raise ValueError(f"spec {spec.id!r} runs on {want} card(s), and the booking names {len(cards)}: {list(cards)}")
-    card = ["--card", ",".join(map(str, cards))] if not isinstance(spec, SteadySpec) else ["--env", f"GPU_LEASE_ON={cards[0]}"]
-    return ["--pool", pool, "--slot", slot, *card, "--end", end, "--timeout", f"{spec.admission.max_minutes}m", "--timed"]
 
 
 def vllm_spec(plan: Plan) -> ResolvedSpec:
