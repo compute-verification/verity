@@ -317,11 +317,11 @@ theorem same_record {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) 
 /-! ## The coin substitution -/
 
 /-- The coin the fill writes into round `k` of stream `name`, at the streams' offsets `off`. -/
-def fillCoin (mids : List (Claims.Msg × Coin)) (off : String → ℕ) (name : String) (k : ℕ) : Coin :=
+def fillCoin (mids : List (Hash.Msg × Coin)) (off : String → ℕ) (name : String) (k : ℕ) : Coin :=
   ((mids[off name + k]?).map Prod.snd).getD default
 
 /-- **The streams with the fill's coins**: round `k` of rep stream `i` holds the first `n` of its fill coin. -/
-def fillStreams (spec : SessionSpec) (mids : List (Claims.Msg × Coin)) (off : String → ℕ)
+def fillStreams (spec : SessionSpec) (mids : List (Hash.Msg × Coin)) (off : String → ℕ)
     (S : Array (Array Round)) : Array (Array Round) :=
   S.mapIdx fun i rs => rs.mapIdx fun k r => { r with coins := (fillCoin mids off (spec.repStreams[i]!).2.2 k).vals r.n }
 
@@ -329,7 +329,7 @@ def fillStreams (spec : SessionSpec) (mids : List (Claims.Msg × Coin)) (off : S
 and its coins substituted is alike the record whose rounds hold the fill's coins, where the fill finds a coin for every
 recorded round. -/
 theorem same_coinSubJ {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h : ByteArray → ByteArray)
-    (rb : ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (S : Array (Array Round)) (F : Array ByteArray)
+    (rb : ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (S : Array (Array Round)) (F : Array ByteArray)
     (hdg : Good (spec.unitSample.getD Json.null))
     (hfill : ∀ i (hi : i < spec.repStreams.size) (hS : i < S.size) k, k < S[i].size →
       (mids[streamOffset spec (eraseCoins (shaSubJ spec (F.map (dgOf spec h))
@@ -402,7 +402,7 @@ set_option maxHeartbeats 1600000 in
 substituted value, at rep streams of distinct names. -/
 theorem fill_of_live {spec : SessionSpec} {h : ByteArray → ByteArray} {rootB : Array ByteArray}
     {P : Array (Array F128)} {S : Array (Array Round)} {F : Array ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {lv : Live} (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup)
+    {mids : List (Hash.Msg × Coin)} {lv : Live} (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup)
     (hl : liveOfJ spec (coinSubJ spec c₁ mids (recordObj spec h rootB P S F)) = .ok lv) :
     ∀ i (hi : i < spec.repStreams.size) (hS : i < S.size) k, k < S[i].size →
       (mids[streamOffset spec (eraseCoins (recordObj spec h rootB P S F)) spec.repStreams[i].2.2 + k]?).isSome := by

@@ -411,7 +411,7 @@ no-device reason `nd` `roundPlace` returns, the worker's value `v` at the model'
 place is the model's scheduled round there, `q`'s masking state the model's before the rank stop (`answeredR`) but for
 `stopped`, where the round takes a device round exactly where the frames haven't stopped session `sid`, `v` fails the
 crossing only where it fails to pass. -/
-structure PlaceFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (v : Claims.Msg) (σ : LoopAt) (q : Rep)
+structure PlaceFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (v : Hash.Msg) (σ : LoopAt) (q : Rep)
     (pc : Place) (nd : Option String) : Prop where
   sched : pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
     (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩
@@ -452,7 +452,7 @@ theorem placeSched_later {T : ZKMal.CoinLayer.TableData}
       Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
     {sid : Nat} {σ : LoopAt} {i r j : Nat} (hr2 : r < 2) (hR : RealAt M real sid σ)
-    {e0 : Claims.Msg × Claims.Msg} {h1 : List (Claims.Msg × Claims.Msg)} {q₀ : Nat}
+    {e0 : Hash.Msg × Hash.Msg} {h1 : List (Hash.Msg × Hash.Msg)} {q₀ : Nat}
     (hh : M.hist σ.c = e0 :: h1) (hq : h1.length = q₀ + 1)
     (hk : nextAt spec sts (M.hist σ.c) = (2 * i + r, j + 1))
     {p : Rep} {rel : _root_.Flock.ZkServer.Frames.Release} {name : String} {l0 : _root_.Flock.ZkServer.Level0.Level0}
@@ -969,7 +969,7 @@ theorem placeFacts_seen {T : ZKMal.CoinLayer.TableData}
     {sid : Nat} {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
     (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, r)) (hlt : σ.c < M.τ.length)
-    (hseen : seen.contains stream = true) (hR : RealAt M real sid σ) {v : Claims.Msg}
+    (hseen : seen.contains stream = true) (hR : RealAt M real sid σ) {v : Hash.Msg}
     (hcr : M.L.cross M.x (M.hist σ.c).length M.w M.ρ (M.hist σ.c) v = false →
       M.L.pass M.x M.w M.ρ (M.hist σ.c) v = false)
     {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
@@ -1005,7 +1005,7 @@ theorem placeFacts_slot {T : ZKMal.CoinLayer.TableData}
     (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, r)) (hlt : σ.c < M.τ.length)
     (hR : RealAt M real sid σ)
     (hpc : ∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c))
-    (hans : ∃ m, M.L.answered M.x M.ρ (M.hist σ.c) = .ok m) {v : Claims.Msg}
+    (hans : ∃ m, M.L.answered M.x M.ρ (M.hist σ.c) = .ok m) {v : Hash.Msg}
     (hcr : M.L.cross M.x (M.hist σ.c).length M.w M.ρ (M.hist σ.c) v = false →
       M.L.pass M.x M.w M.ρ (M.hist σ.c) v = false)
     {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
@@ -1138,7 +1138,7 @@ theorem answered_of_round {T : ZKMal.CoinLayer.TableData}
       Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     (hD : LoopModel.Deployed M L₀ real s0 spec sts) {seen : List String} {st : State} {pl : Placed} {e : Env}
-    {σ σ' : LoopAt} {stream : String} {n i r : Nat} {dom : ByteArray} {v : Claims.Msg}
+    {σ σ' : LoopAt} {stream : String} {n i r : Nat} {dom : ByteArray} {v : Hash.Msg}
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
     (hJ : LoopJ M sid spec sts seen st σ) (htk : M.TookAt st σ.c) (hlt : σ.c < M.τ.length)
     (hr : RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R)
@@ -1248,7 +1248,7 @@ theorem roundFacts_loop {T : ZKMal.CoinLayer.TableData}
       Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     (hD : LoopModel.Deployed M L₀ real s0 spec sts) {seen : List String} {st : State} {pl : Placed} {e : Env}
-    {σ σ' : LoopAt} {stream : String} {n i r : Nat} {dom : ByteArray} {v : Claims.Msg}
+    {σ σ' : LoopAt} {stream : String} {n i r : Nat} {dom : ByteArray} {v : Hash.Msg}
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
     (hJ : LoopJ M sid spec sts seen st σ) (hlt : σ.c < M.τ.length)
     (hr : RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R)
@@ -1301,7 +1301,7 @@ and `placeOf` places it at the inner proof's own, the place `roundPlace` readies
 def OwnSched {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt) (stream : String)
     (n : Nat) : Prop :=
   ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)
-    (v : Claims.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ →
+    (v : Hash.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ →
     LoopJ M sid spec sts seen st σ → σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
     RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
     (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
@@ -1321,7 +1321,7 @@ state after its history so far (`LeanRelease.fresh`) is a masking state, not a r
 def FreshStart {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt)
     (stream : String) (n : Nat) : Prop :=
   ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)
-    (v : Claims.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ →
+    (v : Hash.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ →
     LoopJ M sid spec sts seen st σ → σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
     RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
     (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
@@ -1349,7 +1349,7 @@ theorem answered_deployed {M : LoopModel Claims.Flock.Wit
     (hS : Loop.Level0Src src M.x M.w) (hlive : ZKMal.Masked.Live M.x) (hcp : M.L.CrossPasses)
     {sid : Nat} {stream : String} {n : Nat} (hown : OwnSched M sid spec sts stream n)
     (hfs : FreshStart M sid spec sts stream n) {seen : List String} {st : State} {pl : Placed} {e : Env}
-    {σ σ' : LoopAt} {i r : Nat} {dom : ByteArray} {v : Claims.Msg} (hsl : slot st pl = some (.round stream n))
+    {σ σ' : LoopAt} {i r : Nat} {dom : ByteArray} {v : Hash.Msg} (hsl : slot st pl = some (.round stream n))
     (hF : LoopFacts sid spec seen st pl σ) (hJ : LoopJ M sid spec sts seen st σ) (htk : M.TookAt st σ.c)
     (hlt : σ.c < M.τ.length) (hv : M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false))
     (hr : RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R)
@@ -1385,7 +1385,7 @@ theorem roundFacts_deployed {M : LoopModel Claims.Flock.Wit
     {sid : Nat} {stream : String} {n : Nat} (hown : OwnSched M sid spec sts stream n)
     (hfs : FreshStart M sid spec sts stream n) :
     ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)
-      (v : Claims.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ →
+      (v : Hash.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ →
       LoopJ M sid spec sts seen st σ → σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
       (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →

@@ -493,13 +493,18 @@ class Engine:
             raise ValueError("on a device the salts' address and strides are multiples of 16 bytes")
         return ptr, by_g, by_s
 
-    def resalt(self, graph_exec: int, nodes: Any, n: int, captured: int, salts: int) -> None:
+    def resalt(self, graph_exec: int, nodes: Any, n: int, captured: int, salts: Any, G: int, S: int,
+               strides: tuple[int, int]) -> None:
         """The graph's instantiation (a ``cudaGraphExec_t``) to read its ``n`` leaf launches ``nodes``' salts from the
-        buffer at address ``salts`` from its next launch on, each launch at the offset it was captured reading the buffer at
-        ``captured``: the next launch's fresh salts, a buffer of the captured one's shape and strides."""
-        if salts % 16:
-            raise ValueError("on a device the salts' address is a multiple of 16 bytes")
-        rc = self.lib.sxr_graph_salts(ctypes.c_void_p(graph_exec), nodes, n, ctypes.c_void_p(captured), ctypes.c_void_p(salts))
+        buffer ``salts`` from its next launch on, each launch at the offset it was captured reading the buffer at the
+        address ``captured``: the next launch's fresh salts, ``leaves``' (G, S, 192) uint8 on the engine's device, held to
+        what ``leaves`` holds its own to (``_salts``) and to the bytes ``strides`` from a row's salts to the next row's and
+        from a slot's to the next slot's that the graph was captured reading, so a replay reads no byte outside it."""
+        ptr, by_g, by_s = self._salts(salts, G, S)
+        if (by_g, by_s) != tuple(strides):
+            raise ValueError(f"the graph was captured reading its salts at strides {tuple(strides)}, and these are at "
+                             f"{(by_g, by_s)}")
+        rc = self.lib.sxr_graph_salts(ctypes.c_void_p(graph_exec), nodes, n, ctypes.c_void_p(captured), ctypes.c_void_p(ptr))
         self._ok(rc, "graph salts")
 
     def u32s(self, a: Any) -> Any:

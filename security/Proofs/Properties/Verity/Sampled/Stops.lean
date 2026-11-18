@@ -258,9 +258,9 @@ variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} {D
 
 /-- **The tape a trace ends on is one through its start**, at any cuts. -/
 theorem RoundsReach.le_tape {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
-    {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Claims.Msg (Fin R)}
+    {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Hash.Msg (Fin R)}
     {o : β × CoinTape g σ} (hr : RoundsReach D M dg J B fin rootB pts N rs p o) :
-    ∃ q : Pos g σ Claims.Msg (Fin R), p.Le q ∧ o.2 = q.tape := by
+    ∃ q : Pos g σ Hash.Msg (Fin R), p.Le q ∧ o.2 = q.tape := by
   induction hr with
   | zero rs p => exact ⟨p, Pos.Le.refl p, rfl⟩
   | stop N rs p _ => exact ⟨p.toStop, Pos.le_toStop p, rfl⟩
@@ -271,8 +271,8 @@ theorem RoundsReach.le_tape {β : Type} {fin : LiveOutJ J mPts → β} {rootB : 
 /-- **A trace's start reaches the play of the tape it ends on**, where the start keeps the play's start (`Pos.Inv`):
 the tape is one through the start, whose play is the play from the start's node. -/
 theorem RoundsReach.playReaches {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
-    {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {Ks₀ : Fin R → DigestCut Claims.Msg g}
-    {p : Pos g σ Claims.Msg (Fin R)} {o : β × CoinTape g σ} (hr : RoundsReach D M dg J B fin rootB pts N rs p o)
+    {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {Ks₀ : Fin R → DigestCut Hash.Msg g}
+    {p : Pos g σ Hash.Msg (Fin R)} {o : β × CoinTape g σ} (hr : RoundsReach D M dg J B fin rootB pts N rs p o)
     (hp : p.Inv Ks₀) : PlayReaches p.g' p.s' (CoinTape.run g σ o.2) := by
   obtain ⟨q, ⟨h, hh⟩, hoq⟩ := hr.le_tape
   rw [hoq, Pos.tape, hh, hp.run]
@@ -281,7 +281,7 @@ theorem RoundsReach.playReaches {β : Type} {fin : LiveOutJ J mPts → β} {root
 /-- **A trace from a coin node no cut fixes keeps the node's coin**: the tape it ends on is one through the node,
 holding there the coin the node's tape holds. -/
 theorem RoundsReach.head {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
-    {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Claims.Msg (Fin R)}
+    {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Hash.Msg (Fin R)}
     {o : β × CoinTape g σ} (hr : RoundsReach D M dg J B fin rootB pts N rs p o) {C : Type} {iF : Fintype C}
     {iN : Nonempty C} {k : C → Game Exchange} (hg : p.g' = @Game.coin _ C iF iN k)
     (hK : ∀ i, (p.Ks i).isHere = false) :
@@ -302,9 +302,9 @@ close after `pre` and them, off the opening's empty class at `bits`, the play on
 then the rest. -/
 theorem RoundsReach.release {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray} {k : ℕ}
     {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game Exchange} {pre : List Release} {i s n : ℕ}
-    {b : ByteArray} {Ks₀ : Fin R → DigestCut Claims.Msg g} {q : Pos g σ Claims.Msg (Fin R)}
+    {b : ByteArray} {Ks₀ : Fin R → DigestCut Hash.Msg g} {q : Pos g σ Hash.Msg (Fin R)}
     {s'' : Strategy (optOpenK k fs ts f i s n b ts[i]?)}
-    {Ks : Fin R → DigestCut Claims.Msg (optOpenK k fs ts f i s n b ts[i]?)}
+    {Ks : Fin R → DigestCut Hash.Msg (optOpenK k fs ts f i s n b ts[i]?)}
     {x'' : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s''}
     {back'' : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s'' → CoinTape g σ}
     (hq : q = ⟨optOpenK k fs ts f i s n b ts[i]?, s'', Ks, x'', back''⟩) (hi : q.Inv Ks₀)
@@ -328,14 +328,14 @@ theorem RoundsReach.release {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
 
 /-- **A trace from a play's end ends there**: from a position that keeps the invariant at the play's end `y`, any
 rewriting of its tape consumed, the play on the tape the trace ends on is `y`. -/
-theorem RoundsReach.run_ret {Ks₀ : Fin R → DigestCut Claims.Msg g} {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀)
+theorem RoundsReach.run_ret {Ks₀ : Fin R → DigestCut Hash.Msg g} {q : Pos g σ Hash.Msg (Fin R)} (hi : q.Inv Ks₀)
     {y : Exchange} (hy : q.g' = .ret y) {φ : CoinTape q.g' q.s' → CoinTape q.g' q.s'} {β : Type}
     {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ}
     {rs : Fin J → Fin 2 → List Flock.Round} {o : β × CoinTape g σ}
     (hr : RoundsReach D M dg J B fin rootB pts N rs (q.rewrite φ).consume o) : CoinTape.run g σ o.2 = y := by
   obtain ⟨q', hq', ho⟩ := hr.le_tape
   obtain ⟨h, hh⟩ := ((Pos.le_rewrite _ _).trans (Pos.le_consume _)).trans hq'
-  have key : ∀ p : Pos g σ Claims.Msg (Fin R), p.g' = .ret y → ∀ t, CoinTape.run p.g' p.s' t = y :=
+  have key : ∀ p : Pos g σ Hash.Msg (Fin R), p.g' = .ret y → ∀ t, CoinTape.run p.g' p.s' t = y :=
     fun ⟨_, _, _, _, _⟩ hg t => by
       subst hg
       rfl
@@ -349,12 +349,12 @@ through that keeps any invariant `Q` its start keeps and each consumed stop pass
 stop after it, its coins, which `B` doesn't hold of there, and the rest of the trace from the stop with them written in
 and consumed. -/
 theorem RoundsReach.answers {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
-    {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Claims.Msg (Fin R)}
+    {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Hash.Msg (Fin R)}
     {o : β × CoinTape g σ} (hr : RoundsReach D M dg J B fin rootB pts N rs p o)
-    (Q : Pos g σ Claims.Msg (Fin R) → Prop) (hQ : Q p)
+    (Q : Pos g σ Hash.Msg (Fin R) → Prop) (hQ : Q p)
     (hstep : ∀ q (φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'), Q q →
       Q (q.toStop.rewrite φ).consume) :
-    ∃ as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽))),
+    ∃ as : List (Pos g σ Hash.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽))),
       o.1 = fin ⟨rootB, pts, as.foldl (fun rs a =>
         addRoundJ rs a.2.1.tab a.2.1.rep (roundOf dg a.2.1.bytes a.2.1.n a.2.2)) rs,
           D.proofs (CoinTape.run g σ o.2)⟩ ∧
@@ -376,8 +376,8 @@ cuts `Ks₀`, where the rest of a trace runs from the stop after it, its tape re
 the stop has, on the tape the trace ends on, the most likely message the stop decoded; every other cut decoded none
 there (`Pos.modes_eq`, as `RoundsReach.toStop_modes` at a trace's first stop). -/
 theorem RoundsReach.stop_modes {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
-    {pts : Fin 2 → Fin mPts → 𝔽} {Ks₀ : Fin R → DigestCut Claims.Msg g} {N : ℕ}
-    {rs : Fin J → Fin 2 → List Flock.Round} {q : Pos g σ Claims.Msg (Fin R)} (hq : q.Inv Ks₀)
+    {pts : Fin 2 → Fin mPts → 𝔽} {Ks₀ : Fin R → DigestCut Hash.Msg g} {N : ℕ}
+    {rs : Fin J → Fin 2 → List Flock.Round} {q : Pos g σ Hash.Msg (Fin R)} (hq : q.Inv Ks₀)
     {φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'} {o : β × CoinTape g σ}
     (hr : RoundsReach D M dg J B fin rootB pts N rs (q.toStop.rewrite φ).consume o) :
     q.toStop.modes = fun i => if (q.toStop.Ks i).isHere then (Ks₀ i).modeOn σ o.2 else none := by
@@ -390,11 +390,11 @@ theorem RoundsReach.stop_modes {β : Type} {fin : LiveOutJ J mPts → β} {rootB
 the cuts `Ks₀`, where the rest of a trace runs from the stop after it, its tape rewritten and consumed, a cut fixed at
 the stop at the reading `rv` reveals, on the tape the trace ends on, `rv` of the play on it (`Pos.revealOn_here`). -/
 theorem RoundsReach.stop_reveal {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
-    {pts : Fin 2 → Fin mPts → 𝔽} {Ks₀ : Fin R → DigestCut Claims.Msg g} {N : ℕ}
-    {rs : Fin J → Fin 2 → List Flock.Round} {q : Pos g σ Claims.Msg (Fin R)} (hq : q.Inv Ks₀)
+    {pts : Fin 2 → Fin mPts → 𝔽} {Ks₀ : Fin R → DigestCut Hash.Msg g} {N : ℕ}
+    {rs : Fin J → Fin 2 → List Flock.Round} {q : Pos g σ Hash.Msg (Fin R)} (hq : q.Inv Ks₀)
     {φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'} {o : β × CoinTape g σ}
     (hr : RoundsReach D M dg J B fin rootB pts N rs (q.toStop.rewrite φ).consume o) {i : Fin R}
-    {rv : Exchange → Option Claims.Msg} (hi : q.toStop.Ks i = .here rv) :
+    {rv : Exchange → Option Hash.Msg} (hi : q.toStop.Ks i = .here rv) :
     (Ks₀ i).revealOn σ o.2 = rv (CoinTape.run g σ o.2) := by
   obtain ⟨_, _, hi'⟩ := Pos.toStop_spec hq
   obtain ⟨q', hq', _, hoq⟩ := hr.through (Pos.inv_consume (Pos.inv_rewrite hi' _))
@@ -411,16 +411,16 @@ variable {g : Game Exchange} {σ : Strategy g} {R : ℕ}
 
 /-- **Where a position's walk stops, at a log and the close after it**: as `StopOf` says, from some log `pre`, at
 releases continuing to the close under the signer `sg` after the request `rq` and `pre` and them. -/
-def StopsAt (P : Fin R → List Release → Frame → Prop) (rv : Fin R → Exchange → Option Claims.Msg) (sg : Signer)
-    (θ : ByteArray) (F : Array ByteArray) (c rq : ByteArray) (q : Pos g σ Claims.Msg (Fin R)) : Prop :=
+def StopsAt (P : Fin R → List Release → Frame → Prop) (rv : Fin R → Exchange → Option Hash.Msg) (sg : Signer)
+    (θ : ByteArray) (F : Array ByteArray) (c rq : ByteArray) (q : Pos g σ Hash.Msg (Fin R)) : Prop :=
   ∃ (pre : List Release) (f : List Release → Game Exchange) (a : Fin R → Prop),
     (∀ log, f log = finish sg θ F c rq (pre ++ log)) ∧ StopOf P rv pre f a q
 
 /-- **The walk from a stop, consumed, stops at a log and the close after it**, on any rewriting of the tape there,
 where each round's reading picks only openings. -/
-theorem StopsAt.next {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
+theorem StopsAt.next {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Hash.Msg}
     {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
-    (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n) {q : Pos g σ Claims.Msg (Fin R)}
+    (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n) {q : Pos g σ Hash.Msg (Fin R)}
     (h : StopsAt P rv sg θ F c rq q) (φ : CoinTape q.g' q.s' → CoinTape q.g' q.s') :
     StopsAt P rv sg θ F c rq (q.rewrite φ).consume.toStop := by
   obtain ⟨pre, f, a, hf, L, hL, h⟩ := h
@@ -430,7 +430,7 @@ theorem StopsAt.next {P : Fin R → List Release → Frame → Prop} {rv : Fin R
     obtain rfl : g' = .ret y := hy
     refine ⟨pre, f, a, hf, L, hL, Or.inl ⟨fun j => ?_, y, rfl, s₀, x₀, hrun⟩⟩
     have hKj : Ks j = .skip := hK j
-    show (if (Ks j).isHere then (.skip : DigestCut Claims.Msg (Game.ret y)) else Ks j) = .skip
+    show (if (Ks j).isHere then (.skip : DigestCut Hash.Msg (Game.ret y)) else Ks j) = .skip
     rw [hKj, ite_self]
   · refine ⟨pre ++ L, f', _, fun log => ?_, stopOf_next hP s'' Ks x'' back'' hq hT hKs φ⟩
     rw [hf', hf, List.append_assoc]
@@ -447,7 +447,7 @@ variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} {D
 /-- **The bits `bits` released in the log `log` after the log `pre`, at an opening the rounds `q` fixes pick**: an
 opening of the `i`-th tree's stream `s` that round `j`, whose cut `q` fixes, picks after `pre`, as does every round
 whose cut `q` fixes, answered with `bits`. -/
-def LoggedAfter (P : Fin R → List Release → Frame → Prop) (q : Pos g σ Claims.Msg (Fin R)) (pre : List Release)
+def LoggedAfter (P : Fin R → List Release → Frame → Prop) (q : Pos g σ Hash.Msg (Fin R)) (pre : List Release)
     (bits : List Bool) (log : List Release) : Prop :=
   ∃ (j : Fin R) (i s n : ℕ) (b : ByteArray) (L : List Release),
     (q.Ks j).isHere = true ∧ (∀ j', (q.Ks j').isHere = true → P j' pre (.opening i s n)) ∧
@@ -455,20 +455,20 @@ def LoggedAfter (P : Fin R → List Release → Frame → Prop) (q : Pos g σ Cl
 
 /-- **The bits `bits` released in the log `log` at an opening the rounds `q` fixes pick**, after some log
 (`LoggedAfter`). -/
-def LoggedAt (P : Fin R → List Release → Frame → Prop) (q : Pos g σ Claims.Msg (Fin R)) (bits : List Bool)
+def LoggedAt (P : Fin R → List Release → Frame → Prop) (q : Pos g σ Hash.Msg (Fin R)) (bits : List Bool)
     (log : List Release) : Prop :=
   ∃ pre, LoggedAfter P q pre bits log
 
 /-- **The cuts `q` fixes are at the bytes the release of the log `log` after the log `pre` answers**: each is fixed
 there at its round's revealed messages that open those bytes. -/
-def CutsAt (rv : Fin R → Exchange → Option Claims.Msg) (q : Pos g σ Claims.Msg (Fin R)) (pre log : List Release) :
+def CutsAt (rv : Fin R → Exchange → Option Hash.Msg) (q : Pos g σ Hash.Msg (Fin R)) (pre log : List Release) :
     Prop :=
   ∀ j r L, (q.Ks j).isHere = true → log = pre ++ r :: L → q.Ks j = .here (digestReveal (rv j) r.answers.data.toList)
 
 open Classical in
 /-- **A round's cut after an opening frame its reading picks** is fixed there, at its reading's messages that open
 the bytes the frame answers. -/
-theorem openCut_pos {β : Type} {P : List Release → Frame → Prop} {rv : β → Option Claims.Msg} {k : ℕ}
+theorem openCut_pos {β : Type} {P : List Release → Frame → Prop} {rv : β → Option Hash.Msg} {k : ℕ}
     {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game β} {pre : List Release} {i s n : ℕ}
     {b : ByteArray} (h : P pre (.opening i s n)) (o : Option OpenTree) :
     openCut P rv k fs ts f pre i s n b o = .here (digestReveal rv b.data.toList) := by
@@ -478,11 +478,11 @@ theorem openCut_pos {β : Type} {P : List Release → Frame → Prop} {rv : β �
 
 /-- **At a stop after an opening frame, the cuts fixed there are at the bytes the frame answers** (`CutsAt`), in a
 log with that opening after the log `pre`. -/
-theorem cutsAt_openCuts {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
+theorem cutsAt_openCuts {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Hash.Msg}
     {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game Exchange} {pre : List Release}
-    {i s n : ℕ} {b : ByteArray} {a : Fin R → Prop} {q : Pos g σ Claims.Msg (Fin R)}
+    {i s n : ℕ} {b : ByteArray} {a : Fin R → Prop} {q : Pos g σ Hash.Msg (Fin R)}
     {s'' : Strategy (optOpenK k fs ts f i s n b ts[i]?)}
-    {Ks : Fin R → DigestCut Claims.Msg (optOpenK k fs ts f i s n b ts[i]?)}
+    {Ks : Fin R → DigestCut Hash.Msg (optOpenK k fs ts f i s n b ts[i]?)}
     {x'' : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s''}
     {back'' : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s'' → CoinTape g σ}
     (hq : q = ⟨optOpenK k fs ts f i s n b ts[i]?, s'', Ks, x'', back''⟩)
@@ -501,9 +501,9 @@ openings the device serves, off the opening's empty class at `bits`, the play on
 `bits` written into its opening and consumed, ends on releases `bits` at an opening the rounds whose cuts the position
 fixes pick (`LoggedAt`). -/
 theorem RoundsReach.stop_logged {P : Fin R → List Release → Frame → Prop}
-    {rv : Fin R → Exchange → Option Claims.Msg} {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
+    {rv : Fin R → Exchange → Option Hash.Msg} {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
     {c rq : ByteArray} (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n)
-    {Ks₀ : Fin R → DigestCut Claims.Msg g} {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀)
+    {Ks₀ : Fin R → DigestCut Hash.Msg g} {q : Pos g σ Hash.Msg (Fin R)} (hi : q.Inv Ks₀)
     (hS : StopsAt P rv sg θ F c rq q) (hK : ¬ ∀ j, q.Ks j = .skip) {bits : List Bool}
     (hE : ¬ EmptyAt (finish sg θ F c rq) q.g' bits) {β : Type} {fin : LiveOutJ J mPts → β}
     {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round}
@@ -530,17 +530,17 @@ their bits `bitsOf`, and off `B` the opening's class at those bits is not empty,
 releases, at each answered stop (`RoundsReach.answers`), the bits of the stop's round's coins at an opening the rounds
 whose cuts the stop fixes pick (`LoggedAt`, `RoundsReach.stop_logged`). -/
 theorem RoundsReach.answers_logged {P : Fin R → List Release → Frame → Prop}
-    {rv : Fin R → Exchange → Option Claims.Msg} {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
+    {rv : Fin R → Exchange → Option Hash.Msg} {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
     {c rq : ByteArray} (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
     (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) (hsub : D.sub J (fun _ => none) = none)
     (bitsOf : (s : SubmitJ J) → (Fin s.n → 𝔽) → List Bool)
     (hM : ∀ q s x, M.round q J s x = writeOpening (finish sg θ F c rq) q.s' (bitsOf s x))
     (hB : ∀ g' s x, ¬ B g' J s x → ¬ EmptyAt (finish sg θ F c rq) g' (bitsOf s x))
-    {Ks₀ : Fin R → DigestCut Claims.Msg g} {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
-    {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Claims.Msg (Fin R)}
+    {Ks₀ : Fin R → DigestCut Hash.Msg g} {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
+    {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Hash.Msg (Fin R)}
     {o : β × CoinTape g σ} (hr : RoundsReach D M dg J B fin rootB pts N rs p o) (hi : p.Inv Ks₀)
     (hS : StopsAt P rv sg θ F c rq p.toStop) :
-    ∃ as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽))),
+    ∃ as : List (Pos g σ Hash.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽))),
       o.1 = fin ⟨rootB, pts, as.foldl (fun rs a =>
         addRoundJ rs a.2.1.tab a.2.1.rep (roundOf dg a.2.1.bytes a.2.1.n a.2.2)) rs,
           D.proofs (CoinTape.run g σ o.2)⟩ ∧
@@ -565,10 +565,10 @@ end Logged
 /-- **A submission where one round decodes is that round's slot's**: where every round but `j` decodes none, a
 submission the decoders at the layout `L` decode is round `j`'s, a rep round of a table before `J`, with its most
 likely message. -/
-theorem sub_of_single {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (L : Fin R → Slot) (J : ℕ)
-    {modes : Fin R → Option Claims.Msg} {j : Fin R} (hs : ∀ j', j' ≠ j → modes j' = none) {sub : SubmitJ J}
+theorem sub_of_single {R : ℕ} {Reg : Type} (reg : Option Hash.Msg → Reg) (L : Fin R → Slot) (J : ℕ)
+    {modes : Fin R → Option Hash.Msg} {j : Fin R} (hs : ∀ j', j' ≠ j → modes j' = none) {sub : SubmitJ J}
     (h : (decodersAt reg L).sub J modes = some sub) :
-    ∃ (t : ℕ) (ht : t < J) (r : Fin 2) (k : ℕ) (m : Claims.Msg), L j = .rep t r k ∧ modes j = some m ∧
+    ∃ (t : ℕ) (ht : t < J) (r : Fin 2) (k : ℕ) (m : Hash.Msg), L j = .rep t r k ∧ modes j = some m ∧
       sub = ⟨⟨t, ht⟩, r, ⟨m.toArray⟩, tailCount m⟩ := by
   have hf : ∀ j', j' ≠ j → subAt J L modes j' = none := fun j' hj => by
     rw [subAt, hs j' hj, Option.bind_none]
@@ -598,14 +598,14 @@ theorem sub_of_single {R : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) (
 distinct tables: where every round whose cut the stop `q` fixes picks one opening after the log `pre`, as round `j`
 does, a submission decoded at `q` is round `j`'s, round `k` of table `t`'s rep `r` stream, `t < J`, with its most
 likely message. -/
-theorem stop_slot {R J : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) {tables : Array String}
-    {L : Fin R → Slot} (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) {g : Game Exchange} {σ : Strategy g} {q : Pos g σ Claims.Msg (Fin R)}
+theorem stop_slot {R J : ℕ} {Reg : Type} (reg : Option Hash.Msg → Reg) {tables : Array String}
+    {L : Fin R → Slot} (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) {g : Game Exchange} {σ : Strategy g} {q : Pos g σ Hash.Msg (Fin R)}
     {sub : SubmitJ J} (hsub : (decodersAt reg L).sub J q.modes = some sub) {j : Fin R} {pre : List Release}
     {i s n : ℕ}
     (hall : ∀ j', (q.Ks j').isHere = true → (readingAt tables L record recordDigest).round j' pre (.opening i s n))
     (hP : (readingAt tables L record recordDigest).round j pre (.opening i s n)) :
-    ∃ (t : ℕ) (ht : t < J) (r : Fin 2) (k : ℕ) (m : Claims.Msg), L j = .rep t r k ∧ q.modes j = some m ∧
+    ∃ (t : ℕ) (ht : t < J) (r : Fin 2) (k : ℕ) (m : Hash.Msg), L j = .rep t r k ∧ q.modes j = some m ∧
       sub = ⟨⟨t, ht⟩, r, ⟨m.toArray⟩, tailCount m⟩ :=
   sub_of_single reg L J (modes := q.modes) (fun j' hj' => Pos.modes_eq_none (p := q) (i := j') (by
     cases h : (q.Ks j').isHere
@@ -617,12 +617,12 @@ of distinct tables: where the decoders submit `sub` at the stop `q` and `bits` a
 opening its fixed rounds pick (`LoggedAfter`), `sub` is round `k` of table `t`'s rep `r` stream with the most likely
 message of round `j`, whose slot that is and whose cut `q` fixes, and `pre`'s first opening is of tree `i`, the opening
 is of that tree's stream named table `t`'s rep `r`, and `pre` has opened that stream `k` times. -/
-theorem LoggedAfter.slot {R J : ℕ} {Reg : Type} (reg : Option Claims.Msg → Reg) {tables : Array String}
-    {L : Fin R → Slot} (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) {g : Game Exchange} {σ : Strategy g} {q : Pos g σ Claims.Msg (Fin R)}
+theorem LoggedAfter.slot {R J : ℕ} {Reg : Type} (reg : Option Hash.Msg → Reg) {tables : Array String}
+    {L : Fin R → Slot} (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) {g : Game Exchange} {σ : Strategy g} {q : Pos g σ Hash.Msg (Fin R)}
     {sub : SubmitJ J} (hsub : (decodersAt reg L).sub J q.modes = some sub) {pre : List Release} {bits : List Bool}
     {log : List Release} (h : LoggedAfter (readingAt tables L record recordDigest).round q pre bits log) :
-    ∃ (t : ℕ) (ht : t < J) (r : Fin 2) (k : ℕ) (m : Claims.Msg) (j : Fin R) (i s n : ℕ) (b : ByteArray)
+    ∃ (t : ℕ) (ht : t < J) (r : Fin 2) (k : ℕ) (m : Hash.Msg) (j : Fin R) (i s n : ℕ) (b : ByteArray)
       (L' : List Release), L j = .rep t r k ∧ (q.Ks j).isHere = true ∧ q.modes j = some m ∧
         sub = ⟨⟨t, ht⟩, r, ⟨m.toArray⟩, tailCount m⟩ ∧ firstOpened pre = some i ∧
         ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = tables[t]?.map (repStreamName · r.val) ∧
@@ -689,8 +689,8 @@ theorem firstOpened_ne_none (L₀ : List Release) {r : Release} {i s n : ℕ} (h
   simp [hr] at h'
 
 /-- **The readings at a layout pick only openings the device serves.** -/
-theorem readingAt_served {R : ℕ} (tables : Array String) (L : Fin R → Slot) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) :
+theorem readingAt_served {R : ℕ} (tables : Array String) (L : Fin R → Slot) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) :
     ∀ j pre i s n, (readingAt tables L record recordDigest).round j pre (.opening i s n) → Served pre i s n := by
   intro j pre i s n h
   have h' : slotRound tables (L j) pre (.opening i s n) := h
@@ -734,7 +734,7 @@ def PicksOnce (P : Fin R → List Release → Frame → Prop) (Lg : List Release
 
 /-- **A stop's release is after one log**, where each round picks at most one release of the log. -/
 theorem LoggedAfter.pre_eq {P : Fin R → List Release → Frame → Prop} {Lg : List Release} (hU : PicksOnce P Lg)
-    {q : Pos g σ Claims.Msg (Fin R)} {pre pre' : List Release} {bits bits' : List Bool}
+    {q : Pos g σ Hash.Msg (Fin R)} {pre pre' : List Release} {bits bits' : List Bool}
     (h : LoggedAfter P q pre bits Lg) (h' : LoggedAfter P q pre' bits' Lg) : pre = pre' := by
   obtain ⟨j, i, s, n, b, L, hj, -, hp, he⟩ := h
   obtain ⟨-, i', s', n', b', L', -, hall', -, he'⟩ := h'
@@ -768,9 +768,9 @@ theorem AnsweredBy.seg {P : Fin R → List Release → Frame → Prop} {Lg pre :
   · exact hA.before j L₁ hp (by omega)
 
 /-- **The play on a position's tape at a play's end is that end**, at a position that keeps the invariant. -/
-theorem run_tape_ret {Ks₀ : Fin R → DigestCut Claims.Msg g} {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀)
+theorem run_tape_ret {Ks₀ : Fin R → DigestCut Hash.Msg g} {q : Pos g σ Hash.Msg (Fin R)} (hi : q.Inv Ks₀)
     {y : Exchange} (hy : q.g' = .ret y) : CoinTape.run g σ q.tape = y := by
-  have key : ∀ p : Pos g σ Claims.Msg (Fin R), p.g' = .ret y → ∀ t, CoinTape.run p.g' p.s' t = y :=
+  have key : ∀ p : Pos g σ Hash.Msg (Fin R), p.g' = .ret y → ∀ t, CoinTape.run p.g' p.s' t = y :=
     fun ⟨_, _, _, _, _⟩ hg t => by
       subst hg
       rfl
@@ -781,9 +781,9 @@ frame of the `i`-th tree's stream `s` that the device serves after the log `pre`
 close after `pre` and them, the play on the position's tape has as its log `pre`, then that opening, then the rest. -/
 theorem opening_log {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray} {k : ℕ}
     {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game Exchange} {pre : List Release} {i s n : ℕ}
-    {b : ByteArray} {Ks₀ : Fin R → DigestCut Claims.Msg g} {q : Pos g σ Claims.Msg (Fin R)}
+    {b : ByteArray} {Ks₀ : Fin R → DigestCut Hash.Msg g} {q : Pos g σ Hash.Msg (Fin R)}
     {s'' : Strategy (optOpenK k fs ts f i s n b ts[i]?)}
-    {Ks : Fin R → DigestCut Claims.Msg (optOpenK k fs ts f i s n b ts[i]?)}
+    {Ks : Fin R → DigestCut Hash.Msg (optOpenK k fs ts f i s n b ts[i]?)}
     {x'' : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s''}
     {back'' : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s'' → CoinTape g σ}
     (hq : q = ⟨optOpenK k fs ts f i s n b ts[i]?, s'', Ks, x'', back''⟩) (hi : q.Inv Ks₀)
@@ -808,20 +808,20 @@ after it; and every release of `Lg` a round picks is after an answered log or on
 the trace answered `N` rounds or ended at a stop the decoders submit nothing at, whose fixed rounds pick after a log
 not answered. -/
 theorem RoundsReach.order {P : Fin R → List Release → Frame → Prop}
-    {rv : Fin R → Exchange → Option Claims.Msg} {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
+    {rv : Fin R → Exchange → Option Hash.Msg} {sg : Signer} {θ : ByteArray} {F : Array ByteArray}
     {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
     (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) (hsub : D.sub J (fun _ => none) = none)
     (bitsOf : (s : SubmitJ J) → (Fin s.n → 𝔽) → List Bool)
     (hM : ∀ q s x, M.round q J s x = writeOpening (finish sg θ F c rq) q.s' (bitsOf s x))
     (hB : ∀ g' s x, ¬ B g' J s x → ¬ EmptyAt (finish sg θ F c rq) g' (bitsOf s x))
-    {Ks₀ : Fin R → DigestCut Claims.Msg g} {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
-    {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Claims.Msg (Fin R)}
+    {Ks₀ : Fin R → DigestCut Hash.Msg g} {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
+    {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Hash.Msg (Fin R)}
     {o : β × CoinTape g σ} {Lg : List Release} (hU : PicksOnce P Lg) (hr : RoundsReach D M dg J B fin rootB pts N rs p o) :
     p.Inv Ks₀ → (CoinTape.run g σ o.2).log = Lg →
     ∀ (pre : List Release) (f : List Release → Game Exchange) (a : Fin R → Prop) (done : List (List Release)),
       (∀ log, f log = finish sg θ F c rq (pre ++ log)) → StopOf P rv pre f a p.toStop → AnsweredBy P Lg pre a done →
-      ∃ (as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)))) (ms : List (List Release)),
+      ∃ (as : List (Pos g σ Hash.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)))) (ms : List (List Release)),
         o.1 = fin ⟨rootB, pts, as.foldl (fun rs a =>
           addRoundJ rs a.2.1.tab a.2.1.rep (roundOf dg a.2.1.bytes a.2.1.n a.2.2)) rs,
             D.proofs (CoinTape.run g σ o.2)⟩ ∧
@@ -831,7 +831,7 @@ theorem RoundsReach.order {P : Fin R → List Release → Frame → Prop}
           (a.1.toStop.rewrite (M.round a.1.toStop J a.2.1 a.2.2)).consume o) ∧
         (∀ m ∈ ms, pre.length < m.length) ∧ ms.Pairwise (fun m m' => m.length < m'.length) ∧
         ((∀ j L₁, PicksIn P Lg j L₁ → L₁ ∈ done ∨ L₁ ∈ ms) ∨ as.length = N ∨
-          ∃ (q : Pos g σ Claims.Msg (Fin R)) (L₁ : List Release), D.sub J q.modes = none ∧ L₁ ∉ done ∧
+          ∃ (q : Pos g σ Hash.Msg (Fin R)) (L₁ : List Release), D.sub J q.modes = none ∧ L₁ ∉ done ∧
             ∃ j, (q.Ks j).isHere = true ∧ ∀ j', (q.Ks j').isHere = true → PicksIn P Lg j' L₁) := by
   induction hr with
   | zero rs p =>
@@ -961,8 +961,8 @@ theorem openedOf_lt (L₁ : List Release) {r : Release} {i s n : ℕ} (hr : r.fr
 /-- **Each round of the readings at a layout picks at most one release of a log** whose trees each name their streams
 distinctly: the link's picks the first opening, and a rep round's picks an opening of the first tree opened, of its
 one stream of that name, after a count of that stream's openings that each opening of it raises. -/
-theorem picksOnce_readingAt {R : ℕ} (tables : Array String) (L : Fin R → Slot) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) {Lg : List Release} (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) :
+theorem picksOnce_readingAt {R : ℕ} (tables : Array String) (L : Fin R → Slot) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) {Lg : List Release} (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) :
     PicksOnce (readingAt tables L record recordDigest).round Lg := by
   suffices h : ∀ j L₁ L₁', PicksIn (readingAt tables L record recordDigest).round Lg j L₁ →
       PicksIn (readingAt tables L record recordDigest).round Lg j L₁' → L₁.length < L₁'.length → False by
@@ -1479,7 +1479,7 @@ running from the stop after it; and every release of `Lg` a round picks is after
 (`RoundsReach.order`, `covers_of_length`). -/
 theorem firstStop_order (A : Live) {tables : Array String} {L : Fin A.rounds → Slot} (hL : Function.Injective L)
     (ht : tables.toList.Nodup) {J : ℕ} (hJ : ∀ j t r k, L j = .rep t r k → t < J)
-    (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) (reg : Option Claims.Msg → A.Reg)
+    (record : Exchange → Option Hash.Msg) (recordDigest : Hash.Msg) (reg : Option Hash.Msg → A.Reg)
     {rd : Reading A.rounds} (hrd : rd = readingAt tables L record recordDigest) {D : Decoders A.rounds A.Reg}
     (hD : D = decodersAt reg L) (σ : Strategy (V.game θ F c)) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
     (BL : LinkHold A.mP) {B : RoundHold} (bitsL : (Fin 2 → Fin A.mP → 𝔽) → List Bool)
@@ -1496,7 +1496,7 @@ theorem firstStop_order (A : Live) {tables : Array String} {L : Fin A.rounds →
       ((firstStop V θ F c A rd σ M ω).rewrite (M.link (firstStop V θ F c A rd σ M ω) pts)).consume o)
     {Lg : List Release} (hLg : (CoinTape.run (V.game θ F c) σ o.2).log = Lg) (hU : PicksOnce rd.round Lg)
     (hRN : A.rounds ≤ N + 1) :
-    ∃ (L₀ : List Release) (as : List (Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) ×
+    ∃ (L₀ : List Release) (as : List (Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds) ×
         ((s : SubmitJ J) × (Fin s.n → 𝔽)))) (ms : List (List Release)),
       (LoggedAfter rd.round (firstStop V θ F c A rd σ M ω) L₀ (bitsL pts) Lg ∧
         CutsAt rd.reveal (firstStop V θ F c A rd σ M ω) L₀ Lg) ∧
@@ -1599,11 +1599,11 @@ stop's most likely message for that round is `w` (`RoundsReach.stop_modes`). -/
 theorem RoundsReach.stop_modes_noMiss {A : Live} {rd : Reading A.rounds} {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} {B : RoundHold} {J N : ℕ}
     {β : Type} {fin : LiveOutJ J A.mP → β} {rootB : Array ByteArray} {pts : Fin 2 → Fin A.mP → 𝔽}
-    {rs : Fin J → Fin 2 → List Flock.Round} {q : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds)}
+    {rs : Fin J → Fin 2 → List Flock.Round} {q : Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds)}
     (hq : q.Inv (roundCuts V θ F c rd))
     {φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'} {o : β × CoinTape (V.game θ F c) σ}
     (hr : RoundsReach D M A.dg J B fin rootB pts N rs (q.toStop.rewrite φ).consume o)
-    (hn : NoMiss V θ F c rd σ o.2) {i : Fin A.rounds} (hi : (q.toStop.Ks i).isHere = true) {w : Claims.Msg}
+    (hn : NoMiss V θ F c rd σ o.2) {i : Fin A.rounds} (hi : (q.toStop.Ks i).isHere = true) {w : Hash.Msg}
     (hw : (roundCut V θ F c rd i).cut.revealOn σ o.2 = some w) : q.toStop.modes i = some w := by
   rw [RoundsReach.stop_modes hq hr]
   dsimp only
@@ -1619,14 +1619,14 @@ answers (`CutsAt`), and the play reveals for a round fixed there a message `w` w
 theorem RoundsReach.stop_modes_reveal {A : Live} {rd : Reading A.rounds} {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} {B : RoundHold} {J N : ℕ}
     {β : Type} {fin : LiveOutJ J A.mP → β} {rootB : Array ByteArray} {pts : Fin 2 → Fin A.mP → 𝔽}
-    {rs : Fin J → Fin 2 → List Flock.Round} {q : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds)}
+    {rs : Fin J → Fin 2 → List Flock.Round} {q : Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds)}
     (hq : q.Inv (roundCuts V θ F c rd))
     {φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'} {o : β × CoinTape (V.game θ F c) σ}
     (hr : RoundsReach D M A.dg J B fin rootB pts N rs (q.toStop.rewrite φ).consume o)
     (hn : NoMiss V θ F c rd σ o.2) {pre L : List Release} {r : Release}
     (hc : CutsAt rd.reveal q.toStop pre (CoinTape.run (V.game θ F c) σ o.2).log)
     (hL : (CoinTape.run (V.game θ F c) σ o.2).log = pre ++ r :: L) {i : Fin A.rounds}
-    (hi : (q.toStop.Ks i).isHere = true) {w : Claims.Msg}
+    (hi : (q.toStop.Ks i).isHere = true) {w : Hash.Msg}
     (hw : rd.reveal i (CoinTape.run (V.game θ F c) σ o.2) = some w) (hd : sha512Msg w = r.answers.data.toList) :
     q.toStop.modes i = some w := by
   refine RoundsReach.stop_modes_noMiss hq hr hn hi ?_
@@ -1714,8 +1714,8 @@ theorem rep_ne_session {tables : Array String} {t r : ℕ} :
 /-- **The release after the first stop's log is the log's first opening**, at the readings at a layout with a link
 slot: where each opening of `Lg` is one the device serves, every release a round picks in `Lg` is after `L₀` or one
 of the logs `ms`, each longer than `L₀`, and `Lg` has an opening after `L₀`, `L₀` has none (`link_picks`). -/
-theorem firstOpened_link {R : ℕ} {tables : Array String} {L : Fin R → Slot} {record : Exchange → Option Claims.Msg}
-    {recordDigest : Claims.Msg} {Lg L₀ L' : List Release} {ms : List (List Release)} (hS : LogServed Lg)
+theorem firstOpened_link {R : ℕ} {tables : Array String} {L : Fin R → Slot} {record : Exchange → Option Hash.Msg}
+    {recordDigest : Hash.Msg} {Lg L₀ L' : List Release} {ms : List (List Release)} (hS : LogServed Lg)
     {jl : Fin R} (hjl : L jl = .link)
     (hcov : ∀ j L₁, PicksIn (readingAt tables L record recordDigest).round Lg j L₁ → L₁ = L₀ ∨ L₁ ∈ ms)
     (hgt : ∀ m ∈ ms, L₀.length < m.length) {r₀ : Release} {i s n : ℕ} (hL₀ : Lg = L₀ ++ r₀ :: L')
@@ -1745,9 +1745,9 @@ opening of `Lg` is one the device serves, each tree of `Lg` names its streams di
 followed by an opening of tree `i`, and tree `i`'s stream `s` is named table `t`'s rep `r`, `sub` is round `k` of that
 stream with the most likely message of round `j`, whose slot that is and whose cut `q` fixes, and the opening is of
 stream `s` of tree `i`, after `k` openings of it in `m`. -/
-theorem LoggedAfter.at_stream (reg : Option Claims.Msg → Reg) {tables : Array String} {L : Fin R → Slot}
-    (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) {q : Pos g σ Claims.Msg (Fin R)} {sub : SubmitJ J}
+theorem LoggedAfter.at_stream (reg : Option Hash.Msg → Reg) {tables : Array String} {L : Fin R → Slot}
+    (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) {q : Pos g σ Hash.Msg (Fin R)} {sub : SubmitJ J}
     (hsub : (decodersAt reg L).sub J q.modes = some sub) {m Lg : List Release} {bits : List Bool}
     (hlog : LoggedAfter (readingAt tables L record recordDigest).round q m bits Lg) (hS : LogServed Lg)
     (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) {L₀ L' : List Release} {r₀ : Release} {i s₀ n₀ : ℕ}
@@ -1755,7 +1755,7 @@ theorem LoggedAfter.at_stream (reg : Option Claims.Msg → Reg) {tables : Array 
     (hlt : L₀.length < m.length) (t : Fin J) (r : Fin 2) {s : ℕ}
     (hs : ((helloSpecs Lg)[i]?.bind fun sp => sp.streams[s]?) = tables[t.val]?.map (repStreamName · r.val))
     (htr : sub.tab = t ∧ sub.rep = r) :
-    ∃ (k : ℕ) (w : Claims.Msg) (j : Fin R) (n : ℕ) (b : ByteArray) (L'' : List Release), L j = .rep t.val r k ∧
+    ∃ (k : ℕ) (w : Hash.Msg) (j : Fin R) (n : ℕ) (b : ByteArray) (L'' : List Release), L j = .rep t.val r k ∧
       (q.Ks j).isHere = true ∧ q.modes j = some w ∧ sub = ⟨t, r, ⟨w.toArray⟩, tailCount w⟩ ∧
       ((helloSpecs m)[i]?.bind fun sp => sp.streams[s]?) = tables[t.val]?.map (repStreamName · r.val) ∧
       openedOf m i s = k ∧ Lg = m ++ ⟨.opening i s n, b, bits⟩ :: L'' := by
@@ -1785,10 +1785,10 @@ distinctly, `L₀` has no opening and is followed by an opening of tree `i`'s st
 stream `s` is named table `t`'s rep `r`, and the layout has a slot for each of `Lg`'s openings of it, the logs after
 which the stops submitting on table `t`'s rep `r` release their coins are the logs before each of `Lg`'s openings of
 `s`, in order. -/
-theorem stream_logs (reg : Option Claims.Msg → Reg) {tables : Array String} {L : Fin R → Slot}
-    (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) (bitsOf : (s : SubmitJ J) → (Fin s.n → 𝔽) → List Bool)
-    {as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)))} {ms : List (List Release)}
+theorem stream_logs (reg : Option Hash.Msg → Reg) {tables : Array String} {L : Fin R → Slot}
+    (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) (bitsOf : (s : SubmitJ J) → (Fin s.n → 𝔽) → List Bool)
+    {as : List (Pos g σ Hash.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)))} {ms : List (List Release)}
     {Lg L₀ L' : List Release}
     (hF : List.Forall₂ (fun a m => (decodersAt reg L).sub J a.1.toStop.modes = some a.2.1 ∧
       LoggedAfter (readingAt tables L record recordDigest).round a.1.toStop m (bitsOf a.2.1 a.2.2) Lg) as ms)
@@ -1919,10 +1919,10 @@ variable {g : Game Exchange} {σ : Strategy g} {R J : ℕ} {Reg : Type}
 and the decoders at a layout `L`, injective, of distinct tables, under `stream_logs`'s premises: where the round each
 answered stop on that stream appends is `f` at the count of the stream's openings its log has, the stream's rounds are
 `f` at none, one, and so on up to the count of them in `Lg`. -/
-theorem stream_rounds (reg : Option Claims.Msg → Reg) {tables : Array String} {L : Fin R → Slot}
-    (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) (bitsOf : (s : SubmitJ J) → (Fin s.n → 𝔽) → List Bool) (dg : ByteArray → ByteArray)
-    {as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)))} {ms : List (List Release)}
+theorem stream_rounds (reg : Option Hash.Msg → Reg) {tables : Array String} {L : Fin R → Slot}
+    (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Hash.Msg)
+    (recordDigest : Hash.Msg) (bitsOf : (s : SubmitJ J) → (Fin s.n → 𝔽) → List Bool) (dg : ByteArray → ByteArray)
+    {as : List (Pos g σ Hash.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)))} {ms : List (List Release)}
     {Lg L₀ L' : List Release}
     (hF : List.Forall₂ (fun a m => (decodersAt reg L).sub J a.1.toStop.modes = some a.2.1 ∧
       LoggedAfter (readingAt tables L record recordDigest).round a.1.toStop m (bitsOf a.2.1 a.2.2) Lg) as ms)

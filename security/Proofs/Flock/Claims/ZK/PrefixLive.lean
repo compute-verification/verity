@@ -77,16 +77,16 @@ namespace FlockComplete.PrefixAgree
 open Flock Transcript FlockComplete FlockDeploy With JsonRT
 
 /-- The run only appends to the sends. -/
-def Grow {α : Type} (y : PS α) : Prop := ∀ l, ∃ bs : Array Claims.Msg, (y.go l).2 = l ++ bs
+def Grow {α : Type} (y : PS α) : Prop := ∀ l, ∃ bs : Array Hash.Msg, (y.go l).2 = l ++ bs
 
 /-- Two ends of runs from at most `n` sends: the same end, at no more than `n` sends; or the second threw at send
 `n + 1` and the first's sends extend the second's. -/
-def Couple {α : Type} (n : ℕ) (a b : Except String α × Array Claims.Msg) : Prop :=
+def Couple {α : Type} (n : ℕ) (a b : Except String α × Array Hash.Msg) : Prop :=
   (a = b ∧ a.2.size ≤ n) ∨ ((∃ e, b.1 = .error e) ∧ b.2.size = n + 1 ∧ ∃ bs, a.2 = b.2 ++ bs)
 
 /-- **The coupling at `n`**: `x` only appends, and from at most `n` sends `x` and `y` end coupled. -/
 def Agree (n : ℕ) {α : Type} (x y : PS α) : Prop :=
-  Grow x ∧ ∀ l : Array Claims.Msg, l.size ≤ n → Couple n (x.go l) (y.go l)
+  Grow x ∧ ∀ l : Array Hash.Msg, l.size ≤ n → Couple n (x.go l) (y.go l)
 
 theorem Agree.bind_ok {n : ℕ} {α β : Type} {x y : PS α} {f g : α → PS β} (Q : α → Prop) (hxy : Agree n x y)
     (hQ : ∀ l a l', x.go l = (.ok a, l') → Q a) (hfg : ∀ a, Q a → Agree n (f a) (g a)) :
@@ -160,13 +160,13 @@ theorem agreeL_bind_ok {n : ℕ} {α β : Type} {x y : LP PS α} {f g : α → L
 
 /-! ## The answerers -/
 
-theorem go_get_bind {β : Type} (k : Array Claims.Msg → PS β) (l : Array Claims.Msg) :
-    ((get : PS (Array Claims.Msg)) >>= k).go l = (k l).go l := rfl
+theorem go_get_bind {β : Type} (k : Array Hash.Msg → PS β) (l : Array Hash.Msg) :
+    ((get : PS (Array Hash.Msg)) >>= k).go l = (k l).go l := rfl
 
-theorem go_set_bind {β : Type} (s : Array Claims.Msg) (k : PUnit → PS β) (l : Array Claims.Msg) :
+theorem go_set_bind {β : Type} (s : Array Hash.Msg) (k : PUnit → PS β) (l : Array Hash.Msg) :
     ((set s : PS PUnit) >>= k).go l = (k ⟨⟩).go s := rfl
 
-theorem cut_round_go (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l : Array Claims.Msg) :
+theorem cut_round_go (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l : Array Hash.Msg) :
     ((asksCut coin n).round c).go l =
       if n ≤ l.size then (.error "past the openings", l.push (Claims.toMsg c))
       else (.ok (coin l.size), l.push (Claims.toMsg c)) := by
@@ -179,7 +179,7 @@ theorem cut_round_go (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l 
   · simp only [h, ↓reduceIte]
     rfl
 
-theorem cut_link_go (coin : ℕ → ℕ → F128) (n : ℕ) (a b : Array ByteArray) (l : Array Claims.Msg) :
+theorem cut_link_go (coin : ℕ → ℕ → F128) (n : ℕ) (a b : Array ByteArray) (l : Array Hash.Msg) :
     ((asksCut coin n).link a b).go l =
       if n ≤ l.size then (.error "past the openings", l.push (linkBody a.toList b.toList))
       else (.ok (coin l.size), l.push (linkBody a.toList b.toList)) := by
@@ -192,7 +192,7 @@ theorem cut_link_go (coin : ℕ → ℕ → F128) (n : ℕ) (a b : Array ByteArr
   · simp only [h, ↓reduceIte]
     rfl
 
-variable (resp : ℕ → Claims.Msg) (coin : ℕ → ℕ → F128) {n : ℕ}
+variable (resp : ℕ → Hash.Msg) (coin : ℕ → ℕ → F128) {n : ℕ}
   (hc : ∀ k < n, ∀ i < 65536, coinOf (resp k) i = coin k i)
 
 include hc in
@@ -571,10 +571,10 @@ open Flock Transcript FlockComplete FlockDeploy JsonRT ZkTables
 
 /-- **A masked session that returns sent through its last rep** (`repStartZk`, `repPZk_exact`), at tables of
 `14 ≤ m`, one spec table per statement. -/
-theorem sessionPZk_size (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
+theorem sessionPZk_size (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m)
-    {r : String × Array ByteArray} {L : Array Claims.Msg}
+    {r : String × Array ByteArray} {L : Array Hash.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 h) spec (tabsOf sts) words trs tape).go #[] = (.ok r, L)) :
     L.size = repStartZk spec sts (2 * sts.size) := by
   unfold sessionPZk at hrun
@@ -601,7 +601,7 @@ theorem sessionPZk_size (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
   simp only [Prod.mk.injEq, Except.ok.injEq, Array.size_empty] at hL
   obtain ⟨rfl, rfl⟩ := hL
   obtain ⟨⟨ss, ps⟩, l₄, hF, hrest⟩ := go_bind_ok hrun
-  have hinv := forIn_array_idx _ _ (fun k (_ : Array (Array Round) × Array ByteArray) (l : Array Claims.Msg) =>
+  have hinv := forIn_array_idx _ _ (fun k (_ : Array (Array Round) × Array ByteArray) (l : Array Hash.Msg) =>
       l.size = repStartZk spec sts k) ?step (by simp [repStartZk]) hF
   case step =>
     rintro k a ⟨ss, ps⟩ l res l' ha hl e

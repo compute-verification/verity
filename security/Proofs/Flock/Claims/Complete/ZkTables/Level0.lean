@@ -87,17 +87,17 @@ def LgShaped (sh : Shape) (lg : LigeritoProof) : Prop :=
     lg.claimNonces.size = 3 * R + 2 ∧ lg.consistencyNonces.size = R + 1 ∧ NoncesZero lg
 
 /-- Level 0's out-of-domain point: the reply to send `L`'s first `n` coins. -/
-def lanePoint (resp : ℕ → Claims.Msg) (n L : ℕ) : Array F128 := (Array.range n).map (coinOf (resp L))
+def lanePoint (resp : ℕ → Hash.Msg) (n L : ℕ) : Array F128 := (Array.range n).map (coinOf (resp L))
 
 /-- The lane coins: the replies to sends `L + 2` to `L + 1 + k_0`, as K elements. -/
-def laneCh (resp : ℕ → Claims.Msg) (k0 L : ℕ) : List F256 := (List.range k0).map fun j => coinKOf (resp (L + 2 + j))
+def laneCh (resp : ℕ → Hash.Msg) (k0 L : ℕ) : List F256 := (List.range k0).map fun j => coinKOf (resp (L + 2 + j))
 
 /-- The pair's coins `ρ`: the replies to the two sends after the lane coins. -/
-def laneRho (resp : ℕ → Claims.Msg) (k0 L : ℕ) : F256 × F256 :=
+def laneRho (resp : ℕ → Hash.Msg) (k0 L : ℕ) : F256 × F256 :=
   (coinKOf (resp (L + 2 + k0)), coinKOf (resp (L + 3 + k0)))
 
 /-- The lane phase's weights before its first fold: `b + β·eq(z)`, `β` the reply to send `L + 1`. -/
-def laneW0 (resp : ℕ → Claims.Msg) (n L : ℕ) (b : Array F128) : Array F256 :=
+def laneW0 (resp : ℕ → Hash.Msg) (n L : ℕ) (b : Array F128) : Array F256 :=
   addScaled (embedF b) (embedF (eqTable (lanePoint resp n L))) (coinOf (resp (L + 1)) 0)
 
 /-- Extra lane `e` over the first `s` positions. -/
@@ -112,7 +112,7 @@ table `tb` and the weights `laneW0` folded at the first `j` lane coins, the reco
 out-of-domain value `y = mle(tb)(z) + h_ood`, the lane coins and the pair's; lane message `j < k_0` is
 `roundPoly f_j W_j` masked by round `j`'s pads; the pair's sums are `⟨W_{k_0}, R_{2r+i}⟩` masked by theirs; the
 blinded claim is `⟨W_{k_0}, f_{k_0} + ρ_0 R_{2r} + ρ_1 R_{2r+1}⟩`. -/
-structure LaneForm (resp : ℕ → Claims.Msg) (sch : Schedule) (T : F128) (tb b : Array F128) (lay : Zk.PadLayout)
+structure LaneForm (resp : ℕ → Hash.Msg) (sch : Schedule) (T : F128) (tb b : Array F128) (lay : Zk.PadLayout)
     (hv : Array F128) (rep : ℕ) (extra : ℕ → ℕ → F128) (L : ℕ) (P : LigeritoProof) (zl : Zk.Level0Msgs)
     (rc : Zk.L0Rec) : Prop where
   record : rc =
@@ -142,10 +142,10 @@ Each is at a `--zk` schedule of either statement version (`Zk.schedule wideLeaf 
 transcript and `L` sends, on any claim, level-0 commitment, table, weights, pads, extra lanes, paddings, salts and
 nonces, where the replies to sends `L + 2 + k_0` and `L + 3 + k_0` are independent over F (`Zk.rhoIndependent`). -/
 def ProverRuns : Prop :=
-  ∀ (wideLeaf : Bool) (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray)
+  ∀ (wideLeaf : Bool) (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray)
     (m : ℕ) (v : Schedule × ℕ) (T : F128) (cm0 : Commit)
     (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep : ℕ) (extra lanePad : ℕ → ℕ → F128)
-    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (t : Transcript) (l : Array Claims.Msg),
+    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (t : Transcript) (l : Array Hash.Msg),
     (∀ x, (h x).size = 64) → 25 ≤ m → m ≤ 35 → Zk.schedule wideLeaf m = .ok v →
     Zk.rhoIndependent (laneRho resp v.1.k0 l.size) = true →
     ∃ res l', ((ligeritoPZk (asksS resp) (Hashes.ofSha512 h) MerkleScheme.hm96Sha512 v.1 T cm0 tb b lay hv rep v.2
@@ -155,11 +155,11 @@ def ProverRuns : Prop :=
 commitment of its table, its proof has the lengths `Zk.decode` checks at any shape of the schedule and hm96-SHA-512's
 digest and salt lengths (`LgShaped`), and `t_pad` padding coefficients. -/
 def ProverShape : Prop :=
-  ∀ (wideLeaf : Bool) (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray)
+  ∀ (wideLeaf : Bool) (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray)
     (m : ℕ) (v : Schedule × ℕ) (sh : Shape) (T : F128)
     (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt0 : ℕ → ByteArray) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (t t' : Transcript) (l l' : Array Claims.Msg) (P : LigeritoProof) (zl : Zk.Level0Msgs) (rc : Zk.L0Rec),
+    (t t' : Transcript) (l l' : Array Hash.Msg) (P : LigeritoProof) (zl : Zk.Level0Msgs) (rc : Zk.L0Rec),
     (∀ x, (h x).size = 64) → 25 ≤ m → m ≤ 35 → Zk.schedule wideLeaf m = .ok v → sh.sched = v.1 →
     sh.hashLen = MerkleScheme.hm96Sha512.digestLen →
     sh.saltLen = (if MerkleScheme.hm96Sha512.saltBytes = 0 then none else some MerkleScheme.hm96Sha512.saltBytes) →
@@ -174,10 +174,10 @@ def ProverShape : Prop :=
 on a table and weights of `2^n` entries, its record, masked out-of-domain value, lane messages, pair's sums and blinded
 claim are `LaneForm`'s. -/
 def Lanes : Prop :=
-  ∀ (wideLeaf : Bool) (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray)
+  ∀ (wideLeaf : Bool) (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray)
     (m : ℕ) (v : Schedule × ℕ) (T : F128) (cm0 : Commit)
     (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep : ℕ) (extra lanePad : ℕ → ℕ → F128)
-    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (t t' : Transcript) (l l' : Array Claims.Msg)
+    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (t t' : Transcript) (l l' : Array Hash.Msg)
     (P : LigeritoProof) (zl : Zk.Level0Msgs) (rc : Zk.L0Rec),
     25 ≤ m → m ≤ 35 → Zk.schedule wideLeaf m = .ok v → tb.size = 2 ^ v.1.n → b.size = 2 ^ v.1.n →
     ((ligeritoPZk (asksS resp) (Hashes.ofSha512 h) MerkleScheme.hm96Sha512 v.1 T cm0 tb b lay hv rep v.2 extra
@@ -192,11 +192,11 @@ masked Ligerito, on rounds that carry the prover's from its position on, from th
 bytes, returns the prover's record and ends at the prover's final position and pending bytes, which is its round count
 (as plain's `ligeritoWith_of` ends at its model's). -/
 def Verifier : Prop :=
-  ∀ (wideLeaf : Bool) (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray)
+  ∀ (wideLeaf : Bool) (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray)
     (m : ℕ) (v : Schedule × ℕ) (T : F128) (cm0 : Commit)
     (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep : ℕ) (extra lanePad : ℕ → ℕ → F128)
     (salt0 : ℕ → ByteArray) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (basisAt : Array F256 → ℕ → Array F256) (L : ℕ) (t t' : Transcript) (l l' : Array Claims.Msg)
+    (basisAt : Array F256 → ℕ → Array F256) (L : ℕ) (t t' : Transcript) (l l' : Array Hash.Msg)
     (P : LigeritoProof) (zl : Zk.Level0Msgs) (rc : Zk.L0Rec) (R : Array Round),
     (∀ x, (h x).size = 64) → 25 ≤ m → m ≤ 35 → Zk.schedule wideLeaf m = .ok v → rep < 2 →
     tb.size = 2 ^ v.1.n → b.size = 2 ^ v.1.n → dot tb b = T →

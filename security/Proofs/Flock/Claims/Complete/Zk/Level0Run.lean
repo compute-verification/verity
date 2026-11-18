@@ -30,7 +30,7 @@ variable {α β : Type}
 /-- **A Ligerito prover step returns** from every state, transcript and `n` sends, with `P` of its value and of the
 number of sends after. -/
 def LRet (y : LP PS α) (n : ℕ) (P : α → ℕ → Prop) : Prop :=
-  ∀ (st : LigState) (t : Transcript) (l : Array Claims.Msg), l.size = n →
+  ∀ (st : LigState) (t : Transcript) (l : Array Hash.Msg), l.size = n →
     ∃ a st' t' l', ((y.run st).run t).go l = (.ok ((a, st'), t'), l') ∧ P a l'.size
 
 theorem LRet.pure {a : α} {n : ℕ} {P : α → ℕ → Prop} (h : P a n) : LRet (Pure.pure a : LP PS α) n P :=
@@ -74,15 +74,15 @@ theorem LRet.powB (nonce : ℕ → ℕ → UInt64) (n : ℕ) : LRet (powP nonce 
   LRet.silent (fun st t _ => ⟨(), { st with cbn := st.cbn.push 0 },
     ap (pN 0) t, rfl⟩) n
 
-theorem LRet.sampleKP (resp : ℕ → Claims.Msg) (n : ℕ) :
+theorem LRet.sampleKP (resp : ℕ → Hash.Msg) (n : ℕ) :
     LRet (liftT (sampleKP (asksS resp))) n fun a m => a = coinKOf (resp n) ∧ m = n + 1 := fun st t l hl =>
   ⟨_, st, _, _, liftT_go (sampleKP_go resp t l) st, by rw [hl]; exact ⟨rfl, by simp [hl]⟩⟩
 
-theorem LRet.sampleP (resp : ℕ → Claims.Msg) (n : ℕ) :
+theorem LRet.sampleP (resp : ℕ → Hash.Msg) (n : ℕ) :
     LRet (liftT (sampleP (asksS resp))) n fun _ m => m = n + 1 := fun st t l hl =>
   ⟨_, st, _, _, liftT_go (sampleP_go resp t l) st, by simp [hl]⟩
 
-theorem LRet.sampleVecP (resp : ℕ → Claims.Msg) {k : ℕ} (hk : k ≠ 0) (n : ℕ) :
+theorem LRet.sampleVecP (resp : ℕ → Hash.Msg) {k : ℕ} (hk : k ≠ 0) (n : ℕ) :
     LRet (liftT (sampleVecP (asksS resp) k)) n fun _ m => m = n + 1 := fun st t l hl =>
   ⟨_, st, _, _, liftT_go (sampleVecP_go resp hk t l) st, by simp [hl]⟩
 
@@ -121,7 +121,7 @@ theorem LRet.forIn_upto {σ : Type} (N : ℕ) (b : σ) (f : ℕ → σ → LP PS
 /-- A Ligerito program run from a state, then a step that returns, returns. -/
 theorem LRet.run_bind {γ : Type} {y : LP PS α} {n : ℕ} {P : α → ℕ → Prop} (h : LRet y n P) (st : LigState)
     {g : α × LigState → TMW PS γ} (hg : ∀ p t l, ∃ c l', ((g p).run t).go l = (.ok c, l')) (t : Transcript)
-    (l : Array Claims.Msg) (hl : l.size = n) : ∃ c l', ((y.run st >>= g).run t).go l = (.ok c, l') := by
+    (l : Array Hash.Msg) (hl : l.size = n) : ∃ c l', ((y.run st >>= g).run t).go l = (.ok c, l') := by
   obtain ⟨a, st', t', l', e, -⟩ := h st t l hl
   obtain ⟨c, l'', e'⟩ := hg (a, st') t' l'
   exact ⟨c, l'', by rw [bind_go e]; exact e'⟩
@@ -132,10 +132,10 @@ theorem lsilentT {x : TM α} (hx : ∀ t, ∃ p, x t = .ok p) {n : ℕ} {P : β 
 
 /-- **The masked Ligerito prover returns** from the bodies `l` where its pair's coins, the replies to sends
 `|l| + 2 + k_0` and `|l| + 3 + k_0` (`ligeritoPZk_pos`), are independent over `F`. -/
-theorem ligeritoPZk_ret (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
+theorem ligeritoPZk_ret (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (hn : sch.n ≠ 0)
-    (hk0 : 1 ≤ sch.k0) (t : Transcript) (l : Array Claims.Msg)
+    (hk0 : 1 ≤ sch.k0) (t : Transcript) (l : Array Hash.Msg)
     (hrho : Zk.rhoIndependent (coinKOf (resp (l.size + 2 + sch.k0)), coinKOf (resp (l.size + 3 + sch.k0))) = true) :
     ∃ a l', ((ligeritoPZk (asksS resp) (Hashes.ofSha512 h : Hashes PS) ms sch T cm0 tb b lay hv rep tPad extra lanePad
       salt nonce).run t).go l = (.ok a, l') := by

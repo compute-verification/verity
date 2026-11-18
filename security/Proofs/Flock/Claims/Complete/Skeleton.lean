@@ -70,8 +70,8 @@ namespace FlockComplete
 
 /-- **A good case**: a statement in scope that the verifier can accept, at its setup, a witness in the relation, a
 tape, and coins outside `Bad`. -/
-structure Case (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) where
-  x : Claims.Msg
+structure Case (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) where
+  x : Hash.Msg
   w : Claims.Flock.Wit
   ω : Tape
   r : Fin ((V false).k x) → Coin
@@ -85,15 +85,15 @@ structure Case (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readab
   setup : setupOf false x = some (s, spec, sts)
 
 /-- The verifier's replies at the case's coins: each coin's bytes. -/
-def Case.resp {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
-    ℕ → Claims.Msg :=
+def Case.resp {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
+    ℕ → Hash.Msg :=
   fun j => (Claims.coinSeq c.r j).bytes
 
 /-- **The honest session ran** at a good case: the record, the proof files, and the sends' bodies. -/
-structure Run (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) extends Case H rel where
+structure Run (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) extends Case H rel where
   record : String
   proofs : Array ByteArray
-  bodies : Array Claims.Msg
+  bodies : Array Hash.Msg
   ran : sessionS H (fun j => (Claims.coinSeq r j).bytes) spec sts w ω = (.ok (record, proofs), bodies)
 
 /-! ## What the verifier computes on it
@@ -108,88 +108,88 @@ def val {α : Type} [Inhabited α] : Except String α → α
 namespace Run
 
 /-- The hashes the verdict runs with: SHA-512 the oracle `H`. -/
-def hs {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def hs {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (_ : Run H rel) : Flock.Hashes V := Flock.Hashes.ofSha512 (Claims.hOf H)
 
 /-- Each table's setup. -/
-def tabs {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def tabs {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) : Array Setup := tabsOf o.sts
 
 /-- The last message. -/
-def final {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def final {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) : Final := ⟨o.x, o.record, o.proofs⟩
 
 /-- The sends: each body with tag `0`. -/
-def sends {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (o : Run H rel) : List Claims.Msg := o.bodies.toList.map (List.cons 0)
+def sends {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
+    (o : Run H rel) : List Hash.Msg := o.bodies.toList.map (List.cons 0)
 
 /-- The link the verifier reads off the first send. -/
-def link {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def link {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) : List ByteArray × List ByteArray := (linkOf (o.sends.headD [])).getD ([], [])
 
 /-- The round messages and their coins, as the decision reads them. -/
-def mids {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (o : Run H rel) : List (Claims.Msg × Coin) :=
+def mids {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
+    (o : Run H rel) : List (Hash.Msg × Coin) :=
   midsOf (o.sends ++ [o.final.encode]) ((List.range (o.bodies.size + 1)).map (Claims.coinSeq o.r))
 
 /-- The record's live session. -/
-def live {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def live {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) : Live :=
   match liveOf o.spec o.record with
   | .ok lv => lv
   | .error _ => ⟨#[], #[], #[], #[]⟩
 
 /-- The record, decoded. -/
-def sess {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def sess {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) : RunRecord := val (Record.decodeWith o.hs o.spec o.record)
 
 /-- Table `i`'s schedule. -/
-def sch {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def sch {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) (i : ℕ) : Schedule := (schedsOf o.tabs)[i]!
 
 /-- Table `i`'s rep `r`'s stream. -/
-def stream {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def stream {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) (i r : ℕ) : StreamRec :=
   (o.sess.streams.find? (·.name == s!"{o.spec.tables[i]!}/rep{r}")).getD default
 
 /-- Table `i`'s extra claims at the link's points. -/
-def extras {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def extras {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) (i : ℕ) : Array Claim := val (o.tabs[i]!.extra o.sess.points)
 
 /-- Table `i`'s rep `r`'s proof file. -/
-def bytes {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def bytes {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) (i r : ℕ) : ByteArray := o.proofs[2 * i + r]!
 
 /-- Table `i`'s rep `r`'s proof, decoded. -/
-def proof {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def proof {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) (i r : ℕ) : Proof :=
   val (decodeProof (shapeOf o.tabs[i]! (o.sch i) (o.extras i).size) (o.bytes i r))
 
 /-- The rep's replay transcript at its start. -/
-def t₀ {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def t₀ {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) (i r : ℕ) : Transcript :=
   Transcript.init (o.stream i r).rounds (o.spec.domain o.spec.tables[i]! r).toUTF8
 
 /-- Zerocheck's replay: its output and the transcript it leaves. -/
-def zc {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def zc {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) (i r : ℕ) : ZcOut × Transcript :=
   val ((bindAndZerocheckWith o.hs o.tabs[i]!.m o.tabs[i]!.digest (flat (o.proof i r).cap)
     (o.proof i r).zerocheck).run (o.t₀ i r))
 
 /-- Lincheck's replay. -/
-def lc {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def lc {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) (i r : ℕ) : LcOut × Transcript :=
   val ((lincheckWith o.hs o.tabs[i]!.fold (o.zc i r).1 (o.proof i r).lincheck).run (o.zc i r).2)
 
 /-- The ring switch's replay: the batched claim `T`, the switched claims, and the transcript. -/
-def sw {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def sw {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) (i r : ℕ) : (F128 × Array Switched) × Transcript :=
   val ((ringSwitchWith o.hs o.tabs[i]!.m
     (abcClaims o.tabs[i]!.m o.tabs[i]!.kLog (o.zc i r).1 (o.lc i r).1 ++ o.extras i)
     (o.proof i r).ringSwitches).run (o.lc i r).2)
 
 /-- Ligerito's replay: the transcript it leaves. -/
-def lg {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+def lg {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) (i r : ℕ) : Unit × Transcript :=
   val ((ligeritoWith o.hs o.tabs[i]!.merkle (o.sch i) (o.sw i r).1.1 (o.proof i r).cap (o.proof i r).ligerito
     (basis (o.sw i r).1.2)).run (o.sw i r).2)
@@ -203,135 +203,135 @@ One per check the honest run must pass, each at every honest run at a good case 
 computes from the earlier checks. -/
 
 /-- **The session runs**: at every good case the honest session returns its record and proof files. -/
-def SessionRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def SessionRuns (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : Case H rel, ∃ record proofs bodies,
     sessionS H c.resp c.spec c.sts c.w c.ω = (.ok (record, proofs), bodies)
 
 /-- **The sends fit the verifier's rounds** (`k(x)`): the link message and the recorded rounds. -/
-def SendCount (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, o.bodies.size ≤ 1 + rounds false o.spec o.sts
+def SendCount (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, o.bodies.size ≤ 1 + rounds false o.spec o.sts
 
 /-- **The first send is the link message**, each length in its word. -/
-def LinkFirst (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def LinkFirst (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∃ rootB publics : List ByteArray, o.bodies.toList.head? = some (linkBody rootB publics) ∧
     rootB.length < 2 ^ 64 ∧ publics.length < 2 ^ 64 ∧ (∀ b ∈ rootB, b.size < 2 ^ 64) ∧ ∀ b ∈ publics, b.size < 2 ^ 64
 
 /-- **The last message's lengths fit their words** (the statement's is `ready`'s). -/
-def FinalFits (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def FinalFits (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, o.record.toUTF8.size < 2 ^ 64 ∧ o.proofs.size < 2 ^ 64 ∧ ∀ b ∈ o.proofs, b.size < 2 ^ 64
 
 /-! ### B's checks -/
 
 /-- **The record's sample is the statement's**, as the verifier compares them (`sampleEq`). -/
-def SampleMatches (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def SampleMatches (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, sampleEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
 
 /-- **The record's live session reads** (`liveOf`: the record is JSON with its link, points and streams). -/
-def LiveReads (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, liveOf o.spec o.record = .ok o.live
+def LiveReads (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, liveOf o.spec o.record = .ok o.live
 
 /-- **The record is in its canonical text** (S0, `Flock.RecordText.check`). -/
-def RecordCanonical (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def RecordCanonical (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, Flock.RecordText.check o.record = .ok ()
 
 /-- **Custody: the record's `root_B` is the link message's.** -/
-def CustodyRootB (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, (o.live.rootB.toList == o.link.1) = true
+def CustodyRootB (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, (o.live.rootB.toList == o.link.1) = true
 
 /-- **Custody: the record's public words are the link message's.** -/
-def CustodyPublics (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, (o.live.publics.toList == o.link.2) = true
+def CustodyPublics (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, (o.live.publics.toList == o.link.2) = true
 
 /-- **Custody: the record's link points are the first coin's.** -/
-def CustodyPoints (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def CustodyPoints (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, (o.live.points == pointsOf o.spec (Claims.coinSeq o.r 0)) = true
 
 /-- **Custody: the record has one round per round message.** -/
-def CustodyCount (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def CustodyCount (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ((o.live.streams.toList.flatMap (·.toList)).length == o.mids.length) = true
 
 /-- **Custody: each recorded round is its message and its coin's first `n` elements.** -/
-def CustodyRounds (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def CustodyRounds (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ((o.live.streams.toList.flatMap (·.toList)).zip o.mids).all
     (fun (r, a, c) => r.bytes == some ⟨a.toArray⟩ && r.coins == c.vals r.n) = true
 
 /-! ### The verdict -/
 
 /-- **One statement per table** (§3). -/
-def Tables (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, (o.tabs.size != o.spec.tables.size || o.tabs.size == 0) = false
+def Tables (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, (o.tabs.size != o.spec.tables.size || o.tabs.size == 0) = false
 
 /-- **The record decodes** (S1–S14). -/
-def Decodes (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, Record.decodeWith o.hs o.spec o.record = .ok o.sess
+def Decodes (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, Record.decodeWith o.hs o.spec o.record = .ok o.sess
 
 /-- **Each table's public words are its statement's.** -/
-def Publics (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, ∀ q ∈ (o.tabs.zip o.sess.publics).toList, q.1.publics q.2 = .ok ()
+def Publics (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, ∀ q ∈ (o.tabs.zip o.sess.publics).toList, q.1.publics q.2 = .ok ()
 
 /-- **Each table has its fast100 schedule.** -/
-def Schedules (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, ∀ st ∈ o.tabs.toList, (fast100 st.m).isSome = true
+def Schedules (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, ∀ st ∈ o.tabs.toList, (fast100 st.m).isSome = true
 
 /-- **One proof file per rep stream.** -/
-def ProofCount (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, (o.proofs.size != o.spec.repStreams.size) = false
+def ProofCount (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, (o.proofs.size != o.spec.repStreams.size) = false
 
 /-- **The record's proof digests list exactly the rep streams** (S17). -/
-def ProofList (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def ProofList (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, (o.sess.proofSha.size != o.spec.repStreams.size ||
     !o.spec.repStreams.all fun a => o.sess.proofSha.any fun x => x.1 == a.2.2) = false
 
 /-- **Each proof file is the one the record's digest names** (S17). -/
-def ProofDigests (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def ProofDigests (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ q ∈ (o.spec.repStreams.zip o.proofs).toList,
     ((o.sess.proofSha.find? (·.1 == q.1.2.2)).map (·.2) != some (hexOf (dgOf o.spec (Claims.hOf H) q.2))) = false
 
 /-! ### Each rep: table `i < |tables|`, rep `r < 2` -/
 
 /-- **The rep's stream is recorded** (S11). -/
-def RepStream (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def RepStream (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2,
     (o.sess.streams.find? (·.name == s!"{o.spec.tables[i]!}/rep{r}")).isSome = true
 
 /-- **The table's extra claims evaluate** at the link's points. -/
-def RepExtras (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def RepExtras (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, o.tabs[i]!.extra o.sess.points = .ok (o.extras i)
 
 /-- **The rep's proof file decodes** at its shape. -/
-def RepDecodes (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def RepDecodes (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2,
     decodeProof (shapeOf o.tabs[i]! (o.sch i) (o.extras i).size) (o.bytes i r) = .ok (o.proof i r)
 
 /-- **The rep's PCS parameters are fast100's** (R7/F2). -/
-def RepParams (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def RepParams (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ((o.proof i r).params != pcsParams o.tabs[i]!.merkle (o.sch i)) = false
 
 /-- **Zerocheck replays** from the rep's recorded rounds (§9). -/
-def Zerocheck (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def Zerocheck (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2,
     (bindAndZerocheckWith o.hs o.tabs[i]!.m o.tabs[i]!.digest (flat (o.proof i r).cap) (o.proof i r).zerocheck).run
       (o.t₀ i r) = .ok (o.zc i r)
 
 /-- **Lincheck replays** from where zerocheck left the transcript (§10). -/
-def Lincheck (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def Lincheck (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2,
     (lincheckWith o.hs o.tabs[i]!.fold (o.zc i r).1 (o.proof i r).lincheck).run (o.zc i r).2 = .ok (o.lc i r)
 
 /-- **The ring switch replays** on zerocheck's and lincheck's claims and the extra claims (§11). -/
-def RingSwitch (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def RingSwitch (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2,
     (ringSwitchWith o.hs o.tabs[i]!.m (abcClaims o.tabs[i]!.m o.tabs[i]!.kLog (o.zc i r).1 (o.lc i r).1 ++ o.extras i)
       (o.proof i r).ringSwitches).run (o.lc i r).2 = .ok (o.sw i r)
 
 /-- **Ligerito replays** on the batched claim, with its Merkle openings against the committed rows (§12–§14). -/
-def Ligerito (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def Ligerito (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2,
     (ligeritoWith o.hs o.tabs[i]!.merkle (o.sch i) (o.sw i r).1.1 (o.proof i r).cap (o.proof i r).ligerito
       (basis (o.sw i r).1.2)).run (o.sw i r).2 = .ok (o.lg i r)
 
 /-- **Every recorded round is consumed** (S15). -/
-def Consumed (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def Consumed (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ((o.lg i r).2.k != (o.stream i r).rounds.size) = false
 
 /-- **The rep's cap is the committed `root_B`** (S16). -/
-def CapCommitted (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def CapCommitted (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, (flat (o.proof i r).cap != o.sess.rootB[i]!) = false
 
 /-- **The goals**, every check but the five proved here (the statement, the scope, a sampled session, the link and last
 messages read back given their lengths, and S18 from S16). -/
-structure Goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop where
+structure Goals (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop where
   session : SessionRuns H rel
   sends : SendCount H rel
   linkFirst : LinkFirst H rel
@@ -366,7 +366,7 @@ structure Goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Reada
 
 /-- `ready` at the case's setup: the session samples a unit, the statement is under `2^64` bytes, each table's regions
 fit, the setup against `H` is the case's, and the honest record fits. -/
-theorem Case.ready_parts {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
+theorem Case.ready_parts {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
     c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧ (∀ st ∈ c.sts, RegionsFit st) ∧
       setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) ∧ RecordFitsAt H c.x c.spec c.sts := by
   have h := c.ready
@@ -375,19 +375,19 @@ theorem Case.ready_parts {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed 
   simpa [and_assoc] using h
 
 /-- **The printed honest record is under `2^64` bytes**: `ready` asks it of every honest session. -/
-theorem Run.recordFits {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel) :
+theorem Run.recordFits {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel) :
     o.record.toUTF8.size < 2 ^ 64 :=
   o.ready_parts.2.2.2.2 o.w o.ω o.r o.record o.proofs o.bodies o.ran
 
 /-- **A sampled session**: `checks` never reaches `sampleDesign zk tags false none`. -/
-theorem Case.drawn {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) : c.s.read.draw.isNone = false := by
+theorem Case.drawn {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) : c.s.read.draw.isNone = false := by
   have := c.ready_parts.1
   cases h : c.s.read.draw
   · rw [h] at this; cases this
   · rfl
 
 /-- **The scope check passes** (`ProvedScope.check`): the statement is in scope. -/
-theorem Case.scope_ok {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) : c.s.read.check = .ok () := by
+theorem Case.scope_ok {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) : c.s.read.check = .ok () := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployPlain rel) rel (readOf false) rfl
     (fun _ _ h => readOf_zk h) c.x).1 c.scope
   have hi := (setupOf_some c.setup).1
@@ -398,10 +398,10 @@ theorem Case.scope_ok {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed →
   exact ((Readable.scope_ok_iff p).1 hsc).1
 
 /-- **The last message's statement is the statement.** -/
-theorem Run.stmt_ok {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel) : (o.final.stmt == o.x) = true := beq_self_eq_true _
+theorem Run.stmt_ok {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel) : (o.final.stmt == o.x) = true := beq_self_eq_true _
 
 /-- **The link message reads back** as the verifier's link. -/
-theorem Run.link_ok {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (hL : LinkFirst H rel) (o : Run H rel) :
+theorem Run.link_ok {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (hL : LinkFirst H rel) (o : Run H rel) :
     linkOf (o.sends.headD []) = some o.link := by
   obtain ⟨rootB, publics, hh, h1, h2, h3, h4⟩ := hL o
   have e : o.sends.headD [] = 0 :: linkBody rootB publics := by
@@ -418,7 +418,7 @@ theorem Run.link_ok {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → R
   rfl
 
 /-- **The last message reads back.** -/
-theorem Run.final_ok {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (hF : FinalFits H rel) (o : Run H rel) :
+theorem Run.final_ok {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (hF : FinalFits H rel) (o : Run H rel) :
     finalOf o.final.encode = some o.final := by
   obtain ⟨h1, h2, h3⟩ := hF o
   exact finalOf_encode o.ready_parts.2.1 h1 h2 h3
@@ -432,7 +432,7 @@ theorem bytes_eq_of_bne {a b : ByteArray} (h : (a != b) = false) : a = b := by
 /-! ## The composition -/
 
 /-- **A rep accepts** (`verifyRepWith_ok`), with its cap the committed `root_B`. -/
-theorem Run.rep_ok {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (g : Goals H rel) (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) {r : ℕ}
+theorem Run.rep_ok {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (g : Goals H rel) (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) {r : ℕ}
     (hr : r < 2) : verifyRepWith o.hs o.spec o.tabs[i]! (o.sch i) o.sess i r (o.bytes i r) = .ok o.sess.rootB[i]! := by
   have hS := g.repStream o i hi r hr
   have hfind : o.sess.streams.find? (·.name == s!"{o.spec.tables[i]!}/rep{r}") = some (o.stream i r) := by
@@ -446,20 +446,20 @@ theorem Run.rep_ok {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Re
     (g.ringSwitch o i hi r hr) (g.ligerito o i hi r hr) (g.consumed o i hi r hr) (g.capCommitted o i hi r hr)
 
 /-- **The plain verdict accepts** (`verifyWith_ok`); S18 from S16, both reps' caps the committed `root_B`. -/
-theorem Run.verdict_ok {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (g : Goals H rel) (o : Run H rel) :
+theorem Run.verdict_ok {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (g : Goals H rel) (o : Run H rel) :
     verdictWith false (Claims.hOf H) o.spec (tabsOf o.sts) o.record o.proofs = .ok () :=
   verifyWith_ok (Claims.hOf H) o.spec o.tabs o.record o.proofs (g.tables o) (g.decodes o) (g.publics o)
     (g.schedules o) (g.proofCount o) (g.proofList o) (g.proofDigests o)
     fun i hi => ⟨o.sess.rootB[i]!, o.rep_ok g hi (by decide), o.rep_ok g hi (by decide)⟩
 
 /-- **B's checks pass** (`checks_ok`). -/
-theorem Run.checks_ok' {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (g : Goals H rel) (o : Run H rel) :
+theorem Run.checks_ok' {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (g : Goals H rel) (o : Run H rel) :
     checks false o.s o.spec o.x o.link (Claims.coinSeq o.r 0) o.mids o.final = .ok () :=
   checks_ok o.stmt_ok (g.draw o) (g.liveReads o)
     (custody_ok (g.rootB o) (g.publicsLink o) (g.points o) (g.count o) (g.rounds o)) o.scope_ok o.drawn (g.canonical o)
 
 /-- **The honest prover is accepted** at every honest run at a good case. -/
-theorem Run.acc {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (g : Goals H rel) (o : Run H rel) :
+theorem Run.acc {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (g : Goals H rel) (o : Run H rel) :
     (Claims.run H (honestP o.w) (V false) o.x o.ω o.r).out = .acc := by
   have he := honestRun_eq H o.x o.w o.ω o.r o.setup o.ran
   have hk : (V false).k o.x = 2 + rounds false o.spec o.sts := by
@@ -496,7 +496,7 @@ theorem Run.acc {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Reada
 
 /-- **Completeness from the goals**: Flock's plain verifier is complete for `honestP` at the record's error, `δc H`,
 given each goal. -/
-theorem complete_of_goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) (g : Goals H rel) :
+theorem complete_of_goals (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) (g : Goals H rel) :
     Claims.Flock.Complete H (deployPlain rel) := by
   refine complete_of H rel fun x w hsc hr hready ω r hgood => ?_
   have hset : ∃ s spec sts, setupOf false x = some (s, spec, sts) := by

@@ -186,7 +186,7 @@ open Claims.ZKMal in
 of the transport's request there and the session after holds only the tree after it, the frame took the last coins
 (`frameAnswer`), and it steps on the next, the loop took the coins one message on. -/
 theorem LoopModel.TookAt.succ {W Rr : Type} {M : LoopModel W Rr} {st st' : State} {j : Nat} (hlt : j < M.τ.length)
-    (h : M.TookAt st j) (hj : j ≠ 0) {C C' : Release} {c : Claims.Msg} (hC : st.session = some C)
+    (h : M.TookAt st j) (hj : j ≠ 0) {C C' : Release} {c : Hash.Msg} (hC : st.session = some C)
     (ho : C.open (M.L.req M.x (j - 1)).1 (M.L.req M.x (j - 1)).2 (msgOf (M.τ[j]'hlt).2) = .ok (C', c))
     (hs' : ∀ D, st'.session = some D → D = C') (hf : (M.L.frameAnswer M.x M.ρ (M.hist j)).isOk = true)
     (hfed : M.L.fed M.x M.ρ (M.hist (j + 1)) = true) : M.TookAt st' (j + 1) := by

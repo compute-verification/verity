@@ -195,7 +195,7 @@ def portOpenings (st : _root_.Flock.Stmt) (reg : _root_.Flock.Registered.Port) :
 
 /-- **The openings the recursive setup makes at the V\* statement `xO`**: `portOpenings` of each of the verifier's
 registered ports at each of the setup's statements, with its port. -/
-def regOpenings (xO : Claims.Msg) : List (_root_.Flock.Registered.Port × ByteArray × ℕ × ByteArray) :=
+def regOpenings (xO : Hash.Msg) : List (_root_.Flock.Registered.Port × ByteArray × ℕ × ByteArray) :=
   match setupO xO with
   | some (s, _, sts) =>
     match s.base.registered with
@@ -204,7 +204,7 @@ def regOpenings (xO : Claims.Msg) : List (_root_.Flock.Registered.Port × ByteAr
   | none => []
 
 /-- **The SHA-512 inputs of the recursive setup's registered reads at `xO`**: each opening's (`opensInputs`). -/
-def regIns (xO : Claims.Msg) : List Claims.Msg :=
+def regIns (xO : Hash.Msg) : List Hash.Msg :=
   (regOpenings xO).flatMap fun o => (_root_.Flock.Registered.opensInputs o.1 o.2.1 o.2.2.1 o.2.2.2).map Claims.toMsg
 
 /-- **The brings' setup lists every registered read's evaluations** at every V\* statement. -/
@@ -218,7 +218,7 @@ def withReg (b : Brings) : Brings := { b with setup := fun xO => b.setup xO ++ r
 
 theorem regSetup_withReg (b : Brings) : RegSetup (withReg b) := fun _ _ hu => List.mem_append_right _ hu
 
-theorem regSetup_with_tr {b : Brings} (h : RegSetup b) (t : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray) :
+theorem regSetup_with_tr {b : Brings} (h : RegSetup b) (t : Hash.Msg → List (Hash.Msg × Claims.Out) → ByteArray) :
     RegSetup { b with tr := t } := h
 
 /-- **The compiled record lists them where the brings do**: `recBound`'s setup is the brings'. -/
@@ -236,22 +236,22 @@ theorem mem_portOpenings {st : _root_.Flock.Stmt} {reg : _root_.Flock.Registered
   simp only [portOpenings, ht, hp, he, List.mem_map, List.mem_range]
   exact ⟨i, hi, rfl⟩
 
-theorem mem_regOpenings {xO : Claims.Msg} {s : RecIns} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+theorem mem_regOpenings {xO : Hash.Msg} {s : RecIns} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     {own : Array _root_.Flock.Registered.Port} {st : _root_.Flock.Stmt} {reg : _root_.Flock.Registered.Port}
     {o : ByteArray × ℕ × ByteArray} (h : setupO xO = some (s, spec, sts)) (hr : s.base.registered = some own)
     (hst : st ∈ sts.toList) (hreg : reg ∈ own.toList) (ho : o ∈ portOpenings st reg) : (reg, o) ∈ regOpenings xO := by
   simp only [regOpenings, h, hr, List.mem_flatMap, List.mem_map]
   exact ⟨st, hst, reg, hreg, o, ho, rfl⟩
 
-theorem toMsg_mem_regIns {xO : Claims.Msg} {reg : _root_.Flock.Registered.Port} {bc path : ByteArray} {pos : ℕ}
+theorem toMsg_mem_regIns {xO : Hash.Msg} {reg : _root_.Flock.Registered.Port} {bc path : ByteArray} {pos : ℕ}
     (ho : (reg, bc, pos, path) ∈ regOpenings xO) {u : ByteArray}
     (hu : u ∈ _root_.Flock.Registered.opensInputs reg bc pos path) : Claims.toMsg u ∈ regIns xO := by
   unfold regIns
   exact List.mem_flatMap.2 ⟨_, ho, List.mem_map.2 ⟨u, hu, rfl⟩⟩
 
 /-- A listed evaluation at a V\* statement of `xs` is among the setup's evaluations at `xs`. -/
-theorem mem_setupCalls_of_listed {Coin : Type} {H : Claims.Msg → Claims.Msg} {D : Claims.Recursion.Deploy Coin}
-    {xs : List Claims.Msg} {xO u : Claims.Msg} (hx : xO ∈ xs) (hu : u ∈ D.setup xO) :
+theorem mem_setupCalls_of_listed {Coin : Type} {H : Hash.Msg → Hash.Msg} {D : Claims.Recursion.Deploy Coin}
+    {xs : List Hash.Msg} {xO u : Hash.Msg} (hx : xO ∈ xs) (hu : u ∈ D.setup xO) :
     (u, H u) ∈ Claims.Recursion.setupCalls H D xs := by
   unfold Claims.Recursion.setupCalls
   exact List.mem_flatMap.2 ⟨xO, hx, List.mem_map.2 ⟨u, hu, rfl⟩⟩
@@ -261,9 +261,9 @@ whose setup lists the registered reads' evaluations (`RegListed`), two openings 
 `xs`, at one position under one tree (`SameRoot`), both of which open, have one commit string, wherever the true calls
 `l` and the setup's evaluations at `xs` have no collision (`JointV`'s conjunct, at `l := L.allCalls x ws`). -/
 theorem bc_eq_of_regOpenings {Coin : Type} {D : Claims.Recursion.Deploy Coin} (hD : RegListed D)
-    {l : List (Claims.Msg × Claims.Msg)} (hl : ∀ e ∈ l, FlockDeploy.sha512 e.1 = e.2) {xs : List Claims.Msg}
+    {l : List (Hash.Msg × Hash.Msg)} (hl : ∀ e ∈ l, FlockDeploy.sha512 e.1 = e.2) {xs : List Hash.Msg}
     (hc : (Claims.findColl (l ++ Claims.Recursion.setupCalls FlockDeploy.sha512 D xs)).isSome = false)
-    {xO xO' : Claims.Msg} (hx : xO ∈ xs) (hx' : xO' ∈ xs) {reg reg' : _root_.Flock.Registered.Port}
+    {xO xO' : Hash.Msg} (hx : xO ∈ xs) (hx' : xO' ∈ xs) {reg reg' : _root_.Flock.Registered.Port}
     {bc bc' path path' : ByteArray} {pos : ℕ} (ho : (reg, bc, pos, path) ∈ regOpenings xO)
     (ho' : (reg', bc', pos, path') ∈ regOpenings xO') (hR : _root_.Flock.Registered.SameRoot reg reg')
     (h1 : _root_.Flock.Registered.opens reg bc pos path = true)
@@ -275,7 +275,7 @@ theorem bc_eq_of_regOpenings {Coin : Type} {D : Claims.Recursion.Deploy Coin} (h
   rw [← _root_.Flock.Registered.opensInputs_same hR] at hv
   have htrue : ∀ e ∈ l ++ Claims.Recursion.setupCalls FlockDeploy.sha512 D xs, FlockDeploy.sha512 e.1 = e.2 :=
     fun e he => (List.mem_append.1 he).elim (hl e) (Claims.Recursion.setupCalls_true _ D xs e)
-  have hmem : ∀ {y : Claims.Msg} {w : ByteArray}, y ∈ xs → Claims.toMsg w ∈ D.setup y →
+  have hmem : ∀ {y : Hash.Msg} {w : ByteArray}, y ∈ xs → Claims.toMsg w ∈ D.setup y →
       Claims.toMsg w ∈ (l ++ Claims.Recursion.setupCalls FlockDeploy.sha512 D xs).map Prod.fst :=
     fun hy hw => List.mem_map.2 ⟨_, List.mem_append_right _ (mem_setupCalls_of_listed hy hw), rfl⟩
   have hcol : Claims.Collision FlockDeploy.sha512 (Claims.toMsg u) (Claims.toMsg v) :=

@@ -62,13 +62,15 @@ class Gpu:
     core-second's weight in SM-seconds (`verity_bench.host_weight`); and the door's own choices: the scalings and
     libraries its fastest stock kernel is chosen among; `bridge`: its CUTLASS and DeepGEMM are vLLM's, through torch
     (`bench.py --bridge`), since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in
-    `calibration/census/hardware.json` (the H200's is the H100's: the same compute with more HBM)."""
+    `calibration/census/hardware.json` (the H200's is the H100's: the same compute with more HBM); `note`: what each of its points says of the card, beside its
+    run's note."""
 
     node: str
     precisions: Mapping[str, tuple[str, ...]]
     libraries: tuple[str, ...]
     bridge: bool
     datasheet: str
+    note: str | None = None
 
     # imported where read, so the rules load alone by this file's path, with no package beside them
     @cached_property
@@ -119,7 +121,7 @@ class Gpu:
 
 #: each precision's scalings, as the PoUW harness names its baseline families: per-tensor, rowwise and 128-block FP8
 FP8 = ("fp8-e4m3", "fp8-e4m3-rowwise", "fp8-blk128")
-#: the GPUs the door measures on, each by its node file
+#: the GPUs the door measures on, each by its node file; the first's card is the kernel points' (`kernel_card`)
 DOOR = (
     Gpu("h200-sxm-141gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
     Gpu("h100-sxm-80gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
@@ -131,6 +133,11 @@ DOOR = (
 def cards() -> dict[str, Gpu]:
     """The door's GPUs by their card's `short`, the `--card` that names one."""
     return {card.gpu: card for card in DOOR}
+
+
+def kernel_card() -> str:
+    """The kernel points' card's `short`: `DOOR`'s first GPU's."""
+    return DOOR[0].gpu
 
 class Shape(NamedTuple):
     """A model's decoder: its layer count and one layer's linears, (n, k) each: qkv's n is the query width and two KV
@@ -150,7 +157,8 @@ SHAPES = {
 }
 #: the door's models by its `--model`: one layer's linears each
 MODELS = {"llama3.1-70b": SHAPES["llama-3.1-70b"].linears, "llama3.2-1b": SHAPES["llama-3.2-1b"].linears}
-#: the kernel points' model, whose γ is each metric's own reading; every other model's is a member of it
+#: the kernel points' model, whose γ on the kernel card (`kernel_card`) is each metric's own reading; every other model's,
+#: and every model's on another card, is a member of it
 KERNEL_MODEL = "llama3.1-70b"
 #: what a model's entry leaves out of the layer its γ is over, though serving the model computes it
 LEFT_OUT = {"llama3.1-70b": ("the LM head",), "llama3.2-1b": ("the LM head",)}
@@ -198,6 +206,12 @@ def y_note(arm: Mapping | None) -> str | None:
     None for a run with no arm: stock's A/A control commits nothing."""
 
     return None if arm is None or arm.get("commits_y") else WITHOUT_Y
+
+
+def row_note(arm: Mapping | None, card: str | None) -> str | None:
+    """A row's note: its run's (`y_note`) and its card's (`Gpu.note`), joined, or None when neither says anything."""
+
+    return "; ".join(n for n in (y_note(arm), getattr(cards().get(card or ""), "note", None)) if n) or None
 
 
 def covers(model: str = KERNEL_MODEL) -> str:
