@@ -657,18 +657,17 @@ def attested_ingress(Q, requests: list[bytes], received: list[int], *, T: int, f
 
 
 def request_tie(Q, cells: Ingress, link) -> tuple[bool, ...]:
-    """IoTieRequest's verdict on each ingress window of `link` (`tie_service.LinkAdvice`): its reference on every bucket
-    row of the window against the verifier's lanes of the bucket (`io_request.lanes`: the advice's prompt lengths in
-    its order and the network attester's release); every window refused where the release isn't the network attester's
-    schedule for the advice's requests or doesn't put `received`'s request cells in each window
+    """IoTieRequest's verdict on each ingress window of `link` (`tie_service.IngressInputs`): its reference on every
+    bucket row of the window against the verifier's lanes of the bucket (`io_request.lanes`: each input's length in its
+    place and the network attester's release); every window refused where the release isn't the network attester's
+    schedule for the inputs or doesn't put `received`'s request cells in each window
     (`tie_service.IngressTie.tie`). The verifier takes the verdict from IoTieRequest proofs it verified; this
     is their reference in the clear."""
     refused, T = (False,) * len(link.received), cells.T
-    lens = [q.prompt_len for q in link.advice.requests]
     if len(link.received) * T != len(cells.rows):
         return refused
     try:
-        lanes = [Q.lanes(cells.shape, lens, cells.releases, t) for t in range(len(cells.rows))]
+        lanes = [Q.lanes(cells.shape, link.lengths, cells.releases, t, link.places) for t in range(len(cells.rows))]
     except ValueError:
         return refused
     if TS.window_cells(cells.releases, T) != {w: c for w, c in enumerate(link.received) if c}:
@@ -696,7 +695,11 @@ def advice_suite(advice, *, T: int, request_frames, received: list[int], frame_b
                               link_received(advice, request_frames, received), T=T, frame_bytes=frame_bytes)
 
     def judged(b) -> dict:
-        tie = list(request_tie(Q, cells, TS.LinkAdvice(b, tuple(link_received(b, request_frames, received)))))
+        lens, got = tuple(q.prompt_len for q in b.requests), tuple(link_received(b, request_frames, received))
+        try:
+            tie = list(request_tie(Q, cells, TS.IngressInputs(tuple(range(len(lens))), lens, got)))
+        except ValueError:
+            tie = [False] * len(got)
         return {"codes": [] if all(tie) else [REQUEST_TIE], "request_tie": tie}
 
     honest = judged(advice)

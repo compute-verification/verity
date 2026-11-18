@@ -2,8 +2,8 @@
 each proved as IoTieRequest (`tie_service.IngressTie`, its proof block `NetworkIngressTieBucket_v1{B=512,L=2,R=2}`),
 registered on the link's own stream, proved by Flock `prove --zk` behind the Lean ZK server with each proof block's
 witness row read off the network attester's
-root (`network_attester_rows.bucket_port`), delivered, decided by the tie's verifier on its own lanes from the advice
-and the network attester's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `tie_service.IoTieVerdict` on
+root (`network_attester_rows.bucket_port`), delivered, decided by the tie's verifier on its own lanes from the inputs
+and the network attester's release (`IngressTie.outcome(inputs=…, releases=…, head=…)`), and `tie_service.IoTieVerdict` on
 the link and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read
 through `tie_service.Ties`, the verifier's tie source).
 
@@ -12,9 +12,9 @@ through `tie_service.Ties`, the verifier's tie source).
 
 * **The link** (`PARAMS`, the pinned size class): a span, three id requests of 5, 40 and 5 prompt tokens
   served through the network attester's own ingress (`io_request.serve`) in two windows of T = 4 buckets of two lanes
-  of r = 2 512-byte cells, request 1's `DATA` in bucket 3 and its `END` in bucket 4, so it spans the windows. The advice
-  is v0 of one prefill step, each request one kept output, with the link's `received`; it and the network attester's release are
-  public, and the cells and their salts are witness. ``--class served`` (`CLASSES`) is the served link's ingress
+  of r = 2 512-byte cells, request 1's `DATA` in bucket 3 and its `END` in bucket 4, so it spans the windows. The inputs
+  (`tie_service.IngressInputs`) are the requests in order with their prompt lengths and the link's `received`; they and
+  the network attester's release are public, and the cells and their salts are witness. ``--class served`` (`CLASSES`) is the served link's ingress
   instead: one window of T = 60 buckets of one lane of r = 1 4,096-byte cell, the unit
   `IoTieRequest_v1{B=4096,L=1,R=1}`, with the ``honest`` and ``forged`` members alone.
 * **A network attester's run** (``--class warden --warden-run RUN``, `network_attester_link`): the gate's ``warden-rehearse``'s
@@ -23,29 +23,29 @@ through `tie_service.Ties`, the verifier's tie source).
   attester's key and session) and each window's registration in ``cells.jsonl``, its head's signature verified under
   that key; the prover's rows are the ingress records under ``cells.salts``, held to that head, as `scan_zk.network_attester_run`
   reads them. The release is the cells' headers (each connection's first bucket, checked against the network attester's
-  wiring, and its `DATA` and `END` cells a bucket) and the honest advice's prompt lengths the requests' own (their
+  wiring, and its `DATA` and `END` cells a bucket) and the honest inputs' lengths the requests' own (their
   bytes' ``prompt``). The proof block is the schedule's, ``IoTieRequest_v1{B, L, R}``, and the members are ``honest``
-  and ``forged``: the honest advice on rows of which one has a prompt digit changed, a row IoTieRequest accepts but the
+  and ``forged``: the honest inputs on rows of which one has a prompt digit changed, a row IoTieRequest accepts but the
   network attester never signed, so Lean's registered reads refuse it ("does not open").
 * **Members.** One stream each, over the link's two windows: ``honest``, tied in both; ``carried``, bucket 4 proved on
   its lane's carry-in fields + 5 with its carry-out's + 5, which IoTieRequest accepts but whose
-  ``pub`` row is no public row of the verifier's, so Lean's registered read of it refuses window 1; ``forged``, an
-  advice whose request 1 is 45 prompt tokens in the same cells, which IoTieRequest refuses in both sampling blocks, so
-  its output word 0 fails the registered read of ``o0``; ``split``, prompts of 40 and 5 tokens in cells the advice
-  swaps, proved on the cells' own lanes, which the verifier refuses in every window, the release not being the
-  swapped advice's schedule, so it has no lanes to register (`EXPECT`).
+  ``pub`` row is no public row of the verifier's, so Lean's registered read of it refuses window 1; ``forged``, inputs
+  whose request 1 is 45 prompt tokens in the same cells, which IoTieRequest refuses in both sampling blocks, so
+  its output word 0 fails the registered read of ``o0``; ``split``, prompts of 40 and 5 tokens in cells the inputs
+  swap, proved on the cells' own lanes, which the verifier refuses in every window, the release not being the
+  swapped inputs' schedule, so it has no lanes to register (`EXPECT`).
 * **The statement and the rounds** follow `network_attester_zk`'s: one circuit, `IngressTie.proof_block` lowered once (the gate
   the Definition its pinned digest names), and each execution phase a statement of T instances, unit t bucket t, on rows
   ``pub`` and ``wit`` (`IngressTie.layout`) and the output row ``o0``, the verdict bit: a shared-row file every port
   of which is a registered read, ``wit`` the window's bucket rows under the network attester's salts and paths, and ``pub`` and
   ``o0`` the prover's rows under the known values' public salts (`known`). A round registers, selects, proves live
   behind the ZK server, delivers, and decides on the proof: the verifier's own Lean run with its own registered reads
-  (`IngressTie.registered`: the network attester's root, and at known content its own lanes from the advice and the release
+  (`IngressTie.registered`: the network attester's root, and at known content its own lanes from the inputs and the release
   and the output word 1), each ``pub`` row opened to its own copy and each ``o0`` row read. Per window: prove (the
   session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier's run, Lean
   included). The members run one after another, one ZK server session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is
   1).
-* **What the verifier receives** is `RECEIVED` per window and the advice (``advice.json``), scanned for every piece of
+* **What the verifier receives** is `RECEIVED` per window and the inputs (``inputs.json``), scanned for every piece of
   the windows' held cells and their salts but those the public circuit or an empty slot holds, and a member fails on a
   piece `leak_scan.scan` reads as ``leaked``, not on a find it reads as structured (across the format's fields, or
   bytes the statement fixes), the rule every zero-knowledge driver's scan follows; the prover's instance files, which
@@ -66,7 +66,6 @@ from typing import NamedTuple
 
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC
 from verity.protocols.resource_accounting.network.prover import leak_scan as LS, n2_zk as Z
-from verity_vllm.pipeline.advice_code import format as ADV
 from verity.protocols.resource_accounting.network.verifier import head_check as HC
 from verity.protocols.resource_accounting.network.verifier import io_request as Q, service as SVC
 from verity.protocols.resource_accounting.network.verifier import tie_service as TS, network_attester as W, network_attester_rows as WR
@@ -83,9 +82,9 @@ LINK = "requests"
 SESSION = hashlib.sha512(b"n2-tie-zk").digest()
 #: the span: request 1 (40 tokens) takes 2 cells, its DATA in bucket 3 and its END in bucket 4
 SPAN, ARRIVALS, RATES = (5, 40, 5), (0, 2, 4), (10 ** 6, 600, 10 ** 6)
-#: the forged advice: request 1 45 tokens, in the same cells
+#: the forged inputs: request 1 45 tokens, in the same cells
 FORGED = (5, 45, 5)
-#: the split's prompts, whose cells the split advice swaps
+#: the split's prompts, whose cells the split inputs swap
 SPLIT, SPLIT_ARRIVALS, SPLIT_RATES = (40, 5), (0, 0), (600, 10 ** 6)
 #: what the carried member adds to bucket 4's lane 0 carry-in fields and carry-out fields
 CARRIED = 5
@@ -100,7 +99,7 @@ def _received(T: int) -> dict[str, str]:
             "registered.json": "the verifier's own registered reads, null where it has no lanes",
             "session-*": "the session's files",
             "delivered.json": "each unit's pub and o0 rows' salts and its output word",
-            "outcome.json": "the outcome record", "advice.json": "the link's advice and the network certifier's release"}
+            "outcome.json": "the outcome record", "inputs.json": "the link's inputs and the network attester's release"}
 
 
 RECEIVED = _received(T)
@@ -149,11 +148,9 @@ def requests(prompt_lens) -> list[bytes]:
             for i, n in enumerate(prompt_lens)]
 
 
-def advice(prompt_lens, got) -> TS.LinkAdvice:
-    """An advice v0 of one prefill step, each request one kept output, with the link's `received`."""
-    reqs = tuple(ADV.RequestAdvice(f"u{j}", n, 1, "eos") for j, n in enumerate(prompt_lens))
-    steps = (ADV.StepAdvice(tuple(ADV.Row(j, "prefill", 0, n) for j, n in enumerate(prompt_lens))),)
-    return TS.LinkAdvice(ADV.Advice(reqs, steps, tuple(range(len(prompt_lens)))), tuple(got))
+def inputs(prompt_lens, got) -> TS.IngressInputs:
+    """The requests in order with their prompt lengths, and the link's `received`."""
+    return TS.IngressInputs(tuple(range(len(prompt_lens))), tuple(prompt_lens), tuple(got))
 
 
 def served(prompt_lens, arrivals, rates) -> Q.ServedIngress:
@@ -295,25 +292,25 @@ def _carried(w: int, lanes):
 
 
 def members() -> dict[str, tuple]:
-    """Each member's (served link, its advice, the prover's lanes as an edit of the verifier's, the prompt lengths it
+    """Each member's (served link, its inputs, the prover's lanes as an edit of the verifier's, the prompt lengths it
     proves on or its rows' `Forge`, what was changed)."""
     if REAL is not None:
-        honest, f = advice(REAL.prompt_lens, received(REAL)), forge(REAL)
+        honest, f = inputs(REAL.prompt_lens, received(REAL)), forge(REAL)
         plan = {"honest": (REAL, honest, None, {}),
                 "forged": (REAL, honest, f, {"window": f.window, "bucket": f.bucket, "slot": f.at // B,
                                              "byte": f.at % B})}
         return {name: plan[name] for name in MEMBERS}
     link, split = served(SPAN, ARRIVALS, RATES), served(SPLIT, SPLIT_ARRIVALS, SPLIT_RATES)
-    honest = advice(SPAN, received(link))
+    honest = inputs(SPAN, received(link))
     plan = {"honest": (link, honest, None, {}),
             "carried": (link, honest, _carried, {"bucket": T, "added_fields": CARRIED}),
-            "forged": (link, advice(FORGED, received(link)), None, {"prompt_lens": list(FORGED)}),
-            "split": (split, advice(SPLIT[::-1], received(split)), SPLIT, {"prompt_lens": list(SPLIT[::-1]),
+            "forged": (link, inputs(FORGED, received(link)), None, {"prompt_lens": list(FORGED)}),
+            "split": (split, inputs(SPLIT[::-1], received(split)), SPLIT, {"prompt_lens": list(SPLIT[::-1]),
                                                                           "certified": list(SPLIT)})}
     return {name: plan[name] for name in MEMBERS}
 
 
-def phases(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.LinkAdvice, edit=None) -> SimpleNamespace:
+def phases(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.IngressInputs, edit=None) -> SimpleNamespace:
     """Every execution phase of the member as the network attester and the prover hold it before it registers: the network attester's cells
     (`network_attester_rows.Cells`: a network attester run's own, else fresh salts) and its head, the verifier's lanes of `adv`
     (``own``, None where the release isn't its schedule) and the prover's (``lanes``: `edit` of the verifier's, or, a
@@ -329,7 +326,7 @@ def phases(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.LinkAdvice, edit=N
         if isinstance(edit, Forge):
             lanes = own
         elif isinstance(edit, tuple):
-            lanes = tie.lanes(advice(edit, adv.received), link.releases, w)
+            lanes = tie.lanes(inputs(edit, adv.received), link.releases, w)
         else:
             lanes = own if edit is None or own is None else edit(w, own)
         if lanes is None:
@@ -350,7 +347,7 @@ def phases(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.LinkAdvice, edit=N
                                    mine=mine, words=words, opens=opens, held=held,
                                    expect=int(held is None and all(x == 1 for x in words) and all(opens)),
                                    statement=None))
-    return SimpleNamespace(windows=out, advice=adv, releases=tuple(link.releases))
+    return SimpleNamespace(windows=out, inputs=adv, releases=tuple(link.releases))
 
 
 # --- the statement ----------------------------------------------------------------------------------------------------
@@ -457,9 +454,9 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=a.gpu)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)
-    digest = TS.digest(rd.advice)
-    (vdir / "advice.json").write_text(json.dumps({"advice": ADV.to_json(rd.advice.advice),
-                                                  "received": list(rd.advice.received), "digest": digest,
+    digest = TS.digest(rd.inputs)
+    (vdir / "inputs.json").write_text(json.dumps({"places": list(rd.inputs.places), "lengths": list(rd.inputs.lengths),
+                                                  "received": list(rd.inputs.received), "digest": digest,
                                                   "releases": [list(r) for r in rd.releases]}, sort_keys=True))
     previous, rows = None, []
     for j, x in enumerate(rd.windows):
@@ -480,7 +477,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
                                  x.statement.salts, x.statement.outputs)
         late = stream.deliver(sample, delivered.sessions())
         t = time.time()
-        outcome = late or tie.outcome(stream, sample, delivered, circuit_sha512=sg.circuit_sha512, advice=rd.advice,
+        outcome = late or tie.outcome(stream, sample, delivered, circuit_sha512=sg.circuit_sha512, inputs=rd.inputs,
                                       releases=rd.releases, head=x.head, opening=x.cells if a.debug_clear else None)
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]
@@ -518,7 +515,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
         held = (proof["proved"] and opened == x.words) if x.expect else not proof["lean_accepted"]
         row["registered_read"] = x.held
         row["as_expected"] = (row["accepted"] == bool(x.expect) and not row["late"] and row["decided_by"] == "proof"
-                              and held and row["public"] == {"verdict": x.expect, "advice": digest})
+                              and held and row["public"] == {"verdict": x.expect, "inputs": digest})
         rows.append(row)
         log(f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
             f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}"
@@ -526,9 +523,9 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
             f"{opened}, prove {row['prove']['session_s']} s (prove_total {row['prove']['prove_total_s']}"
             f" s, {row['prove']['proof_bytes']} B), verify {verify_s} s; "
             f"{'as expected' if row['as_expected'] else 'UNEXPECTED'}")
-    tied = TS.Ties(tie, stream, rd.releases).verdict(tie.link, rd.advice, PROFILE)
+    tied = TS.Ties(tie, stream, rd.releases).verdict(tie.link, rd.inputs, PROFILE)
     return {"windows": rows, "tie": {"link": tied.link, "registrations": list(tied.registrations),
-                                     "advice": tied.advice, "accepted": list(tied.accepted)}}
+                                     "inputs": tied.inputs, "accepted": list(tied.accepted)}}
 
 
 def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
@@ -562,11 +559,11 @@ def _member_scan(M, sg, rd, out: Path) -> dict:
 
 def _member_ok(name: str, res: dict, rd) -> bool:
     """Whether member `name`'s run is what `EXPECT` says: every window's verdict its reference's, the tie's on the link
-    under its advice with one registration per window, no witness piece `leak_scan.scan` reads as leaked in what the
+    under its inputs with one registration per window, no witness piece `leak_scan.scan` reads as leaked in what the
     verifier received, and the control holding every held cell."""
     rec = res["received"]
     return (all(r["as_expected"] for r in res["windows"]) and tuple(res["tie"]["accepted"]) == EXPECT[name]
-            and res["tie"]["advice"] == TS.digest(rd.advice) and res["tie"]["link"] == LINK
+            and res["tie"]["inputs"] == TS.digest(rd.inputs) and res["tie"]["link"] == LINK
             and len(res["tie"]["registrations"]) == len(rd.windows)
             and not rec["leaked"] and rec["control"]["holds_all"])
 
@@ -587,7 +584,7 @@ def prove(a) -> int:
                               "gates": [g.id for g in tie.gates()], "pinned": all(HC.pinned(g) for g in tie.gates()),
                               "bits": {p: tie.bits(p) for p in TS.PORTS}},
                      "changed": {name: what for name, (_, _, _, what) in plan.items()},
-                     "advice": {name: TS.digest(rd.advice) for name, rd in rounds.items()},
+                     "inputs": {name: TS.digest(rd.inputs) for name, rd in rounds.items()},
                      "debug_clear": a.debug_clear, "received": RECEIVED}
     summary["instances_s"] = round(time.time() - t, 1)
     for name, rd in rounds.items():
