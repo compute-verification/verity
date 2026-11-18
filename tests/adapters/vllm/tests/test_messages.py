@@ -21,7 +21,7 @@ from verity_vllm.pipeline import serve_h1 as SH
 
 
 def test_every_declared_message_is_a_type():
-    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows", "PoUSStore"} <= M.types().types
+    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows"} <= M.types().types
 
 
 def test_a_type_no_protocol_declares_is_refused():

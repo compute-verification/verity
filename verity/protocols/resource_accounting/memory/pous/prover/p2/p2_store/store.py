@@ -102,7 +102,6 @@ from verity.circuits import requirement
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.commitments.rowleaf import sha512_row_v2_prefix
 from verity.protocols.resource_accounting.memory.pous.verifier import setup, verifier
-from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag
 from verity.protocols.resource_accounting.memory.pous.verifier.layout import TensorLayout
 from verity.protocols.resource_accounting.memory.pous.verifier.p2_v1 import reference
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (
@@ -651,12 +650,11 @@ def row_digests(data: bytes | memoryview, width: int) -> bytes:
 
 
 def segment_root(params: P2Params, salt: bytes, s: int, rows: bytes) -> bytes:
-    """The subtree root over segment `s`'s leaves (`verifier.row_leaf` of each row digest), a perfect tree."""
-    n, sha = params.blocks_per_segment, hashlib.sha512
+    """The subtree root over segment `s`'s leaves (`verifier.row_leaves` of its row digests), a perfect tree."""
+    n = params.blocks_per_segment
     if len(rows) != 64 * n:
         raise ValueError(f"segment {s} has {n} row digests")
-    tag_s = b"\x00" + tag(salt_value(salt), s).to_bytes(32, "little")
-    level = [sha(tag_s + v.to_bytes(2, "little") + rows[64 * v:64 * v + 64]).digest() for v in range(n)]
+    level = verifier.row_leaves(salt, s, rows)
     while len(level) > 1:
         level = [verifier.node_hash(level[i], level[i + 1]) for i in range(0, len(level), 2)]
     return level[0]
