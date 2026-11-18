@@ -1138,11 +1138,11 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   [ -z "$PEARLPLUS_TIE" ] || { pearl_circuit; (cd "$TREE" && inference_policy); pearl_period open; }
   # shellcheck disable=SC2086
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
-    --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal \
+    --precision "$PRECISION" --seal \
     --max-num-batched-tokens "$T" --window-steps "$WINDOW_STEPS" "${h1[@]}" "${day[@]}" \
     --required-manifest "$PRED/manifest.json" --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 \
-    --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --window-gb 32 \
-    --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0 ${SERVE_ARGS:-} \
+    --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" \
+    --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 ${SERVE_ARGS:-} \
     > "$D/serve.log" 2>&1 &
   local srv=$! up=0 c=0 s=0 rc=0 release
   trap 'kill -TERM "$srv" 2>/dev/null; wait "$srv"; pearl_period close; exit 143' TERM INT
