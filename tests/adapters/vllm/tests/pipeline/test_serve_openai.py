@@ -311,10 +311,6 @@ def test_the_served_commit_binds_only_the_build_of_record_predict_wrote(tmp_path
     (row / FILE).write_text(json.dumps(rec | {"schema": "verity-vllm/aot-comparison/v1"}))
     assert "'schema' is 'verity-vllm/aot-comparison/v1'" in refusal("--required-manifest", str(man))
     (row / FILE).write_text(json.dumps(rec))
-    man.write_text(json.dumps({"manifest_digest": "m2"}))
-    assert "so predict didn't write it" in refusal("--required-manifest", str(man), "--no-commit")
-    with pytest.raises(cli.UsageError, match="so predict didn't write it"):
-        ss.committer(parse("--required-manifest", str(man)), llm=None)
     opts = parse("--required-manifest", str(predicted.row(row)))
     assert ss.programs_root_of(opts) == str(row.resolve()) == ss.committer_args(opts).programs_root
     with pytest.raises(SystemExit):

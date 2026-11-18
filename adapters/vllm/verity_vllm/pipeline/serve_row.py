@@ -19,7 +19,6 @@ synchronous step does, under the same rows-sha512 root (``tests/pipeline/serve_a
 """
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Mapping
 from pathlib import Path
@@ -35,8 +34,9 @@ WORKLOAD_PROGRAM = Path("build_workload", "workload_program.json")
 
 def row_refusal(manifest: str) -> str | None:
     """Why the served Commit can't bind the row whose required manifest is ``manifest`` (None: it can). The row's Build of record
-    is the ahead-of-time compiler's (`program.predict.aot.write_row`), whose record beside the manifest (`records.predicted_row`)
-    names the manifest's bytes by their sha256: a manifest without that record, a traced Build's among them, is refused."""
+    is the ahead-of-time compiler's (`program.predict.aot.write_row`), whose record (`records.predicted_row`) is beside the
+    manifest: a manifest without that record, a traced Build's among them, is refused. The record binds the registered compiler
+    and its Programs, not the manifest's bytes."""
     m = Path(manifest)
     if not m.is_file():
         return f"--required-manifest {manifest}: no such file"
@@ -44,12 +44,9 @@ def row_refusal(manifest: str) -> str | None:
            "row --row ROW --out DIR` and pass --required-manifest DIR/manifest.json (a traced Build is its cross-check, `verity-vllm "
            "predict compare ROW_DIR --predicted DIR`)")
     try:
-        rec = PR.PredictedRow.of(json.loads((path := m.parent / PR.FILE).read_text()), str(path))
+        PR.PredictedRow.of(json.loads((path := m.parent / PR.FILE).read_text()), str(path))
     except (OSError, ValueError) as e:
         return f"--required-manifest {manifest}: no record of predict's beside it ({type(e).__name__}: {e}): {how}"
-    if (got := hashlib.sha256(m.read_bytes()).hexdigest()) != rec.manifest_sha256:
-        return (f"--required-manifest {manifest}: its sha256 {got[:16]}… is not the {rec.manifest_sha256[:16]}… {path} names, so "
-                f"predict didn't write it: {how}")
     return None
 
 
