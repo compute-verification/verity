@@ -1,6 +1,6 @@
 """A rank's node window on the served path: its values (`served_values`), its commitment through `interface.Window`
 (`commit_rank_window`), and the joined record's ``ranks`` read on our side (`rank_records`, each rank's window by its H,
-`window_replay.window_digest`). Built: `commit_rank_window`; each other body raises `NotImplementedError` naming the goal."""
+`node_window_join.window_digest`). Built: `commit_rank_window`; each other body raises `NotImplementedError` naming the goal."""
 from __future__ import annotations
 
 import json
@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 import numpy as np
 from verity.commitments.periods import interface as IF
 
-from verity_vllm.pipeline import window_replay as WRP
+from verity_vllm.program.predict.node_window_join import window_digest
 
 if TYPE_CHECKING:
     from verity_vllm.commit import opened as OC
@@ -71,7 +71,7 @@ def commit_rank_window(rank: Rank, values: Rows, *, run: str, law: Mapping[str, 
     other in full. ``registered`` holds the committed value of each parameter its registered reads and values read
     (`expert_rows.commit_bnk`'s among them), and no other. Returns `KEYS`: `tp.serving_rows.write`'s, ``run``,
     ``population`` (its units over every template), ``partition_digest``, ``registration_digest`` and ``seconds``, and
-    ``window``, its H (`window_replay.window_digest` of its record).
+    ``window``, its H (`node_window_join.window_digest` of its record).
 
     Refused (ValueError), by name and before anything is written: a circuit with ``ingress`` (a rank window's prompt
     is a boundary read); a ``cap`` that is not a positive count; ``registered`` values missing a parameter it reads,
@@ -109,7 +109,7 @@ def commit_rank_window(rank: Rank, values: Rows, *, run: str, law: Mapping[str, 
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (d / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     (d / "partition.json").write_text(json.dumps(SRW.partition_doc(win.window, {}), indent=1) + "\n")
-    window = WRP.window_digest(json.loads((d / "circuit.json").read_bytes()))
+    window = window_digest(json.loads((d / "circuit.json").read_bytes()))
     return {**{k: res[k] for k in KEYS[:-1]}, "window": window}
 
 
@@ -120,7 +120,7 @@ def _elements(words: np.ndarray, width: int) -> np.ndarray:
 
 def rank_records(joined: Mapping[str, Any], records: Sequence[Mapping[str, Any]]) -> IF.Ranks:
     """The joined record's ``ranks``, ``{prefix, of: [{window, units, wires}]}`` (`interface.ranks_of`), refused
-    (ValueError) unless ``records`` holds one record a rank, in rank order, rank r's H (`window_replay.window_digest`:
+    (ValueError) unless ``records`` holds one record a rank, in rank order, rank r's H (`node_window_join.window_digest`:
     its record less its run fields) its entry's ``window``, its units of each template its entry's ``units`` and its
     count of wires its entry's ``wires``. A rank's wires are its own: the joined circuit lists them first, rank by rank,
     and the join's wires after them, coalesced one reader rank at a time (`node_window_join.join`), none of them a

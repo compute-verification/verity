@@ -1737,6 +1737,13 @@ def members(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | N
                     circuit.order)
 
 
+def partition_blocks(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | None = None) -> list[list[int]]:
+    """The partition object's ``blocks`` (`partition_object`) of the period's members (`members`: cut over the order's
+    ranges, at every wire's and registered read's ends, and at ``cap``): each member's units [base, base + n) in the
+    population's order."""
+    return [[m.base, m.base + m.n] for m in members(circuit, cap, built)]
+
+
 class _ReadIndex:
     """Registered reads by reader template, each template's units cut at its reads' ends into stretches, each with the reads
     that cover it (in the reads' order), so a member's reads (`_reads_of`) are a lookup and not a pass over every read: a

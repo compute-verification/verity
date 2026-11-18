@@ -8,9 +8,11 @@ Writes `DIR/restrict_difftest/`: `C/<sha256>.json`, each circuit's descriptor by
 descriptor bytes; `listing/<sha256>.txt`, each block's listing; and two files, one line a case. `cases.jsonl`, `{"name",
 "c", "partition", "units"}`: the circuit by its bytes' sha256, the partition object, and the block's units as ascending
 `[lo, hi)` ranges. `python.jsonl`, `{"name", "descriptor", "size", "words", "inputs", "outputs", "listing", "bits",
-"input_bits", "gates", "output_bits"}`: the block's descriptor's sha256 and size; S as C's gate ranges, in(S) and out(S) as
-C's gates; and the reference: the listing's sha256, C on bits' gate count, and the map from the block on bits to C on bits
-(its input bits, its gates as `[lo, hi)` ranges, its output bits).
+"input_bits", "gates", "output_bits"}`: the block's descriptor's sha256 and size; in C's word-level descriptor gate index,
+the one that names things (`restrict`'s module docstring), S as gate ranges (`words`) and in(S) and out(S) as gates
+(`inputs`, `outputs`), so the block's descriptor gate i is C's `(inputs + S)[i]` (`Block.to_c_gate`); and, on bits, for a
+statement and a count only, the listing's sha256, C on bits' gate count, and the map from the block on bits to C on bits (its
+input bits, its gates as `[lo, hi)` ranges, its output bits: `Block.to_c_bit`).
 
 Cases: the periods' chain (eight `Gemm_v2{K=16,N=16}` units, one wire between consecutive ones, each weight a registered
 read), each window member of two units (`[2i, 2i + 2)`) and each unit alone; then `test_restrict`'s toys (`TOYS`), on
