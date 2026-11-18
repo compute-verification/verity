@@ -1,12 +1,11 @@
 """PoUW's serving side: what runs beside a served model to commit its matrix multiplies, one directory a scheme (`h1`,
-`lead`, `pearl_c`, and `ncp` for ``ncp-v1`` and ``ncp-v2``) and the calls' operands, devices and circuits beside them.
+`pearl_c`, and `ncp` for ``ncp-v1`` and ``ncp-v2``) and the calls' operands, devices and circuits beside them.
 
 A workload reaches it only through the names this module exports. Per call there are two:
 
 * `run_matmul(run, site, x, weight, bias)`: run this matrix multiply under PoUW, y = x weightᵀ (+ bias), served and
-  committed by ``run`` (a `MatmulRun`): ``ncp-v1`` (`NcpRun`), ``ncp-v2`` (`NcpCircuitRun`), the lead (`LeadRun`, whose
-  ``x`` is the arm's `QuantizedRows` and ``weight`` the linear its backend loaded), or a workload's own (Pearl-C's run on
-  the device is the workload's).
+  committed by ``run`` (a `MatmulRun`): ``ncp-v1`` (`NcpRun`), ``ncp-v2`` (`NcpCircuitRun`) or a workload's own (Pearl-C's run
+  on the device is the workload's).
 * `observe_matmul(run, site, x, weight, y, ...)`: a matrix multiply the workload served itself, recorded by ``run`` (a
   `MatmulObserver`), which computes nothing: H1 (`H1Run`), whose ``x`` is the int8 arm's s8 rows. The workload hands
   H1 its arm's GEMM and dequantization first (`use_int8_arm`, `int8_arm.Int8Arm`).
@@ -25,7 +24,6 @@ settings."""
 from __future__ import annotations
 
 import importlib
-from dataclasses import dataclass
 from typing import Any, Protocol
 
 _POUW = "verity.protocols.resource_accounting.compute.pouw"
@@ -46,7 +44,6 @@ _LAZY = {
     "use_tensors": (f"{_SERVING}.tensors", "use"),
     "use_h1_device": (f"{_SERVING}.tensors", "use_h1"),
     "H1Run": (f"{_SERVING}.h1", "H1Run"),
-    "LeadRun": (f"{_SERVING}.lead", "LeadRun"),
     "PearlCKernel": (f"{_SERVING}.pearl_c.kernel", "Kernel"),
     "PearlC": (f"{_PROVER}.schemes.pearl_c", "PearlC"),
     "H100": (f"{_PROVER}.schemes.pearl_c_device", "H100"),
@@ -72,8 +69,6 @@ _LAZY = {
     "H1_WEIGHT_KEY": (f"{_SERVING}.h1", "WEIGHT_KEY"),
     "HM96": (f"{_POUW}.verifier.audit", "HM96"),
     "HM96_WEIGHTS": (f"{_POUW}.verifier.audit", "HM96_WEIGHTS"),
-    "LEAD_BACKEND": (f"{_SERVING}.lead", "BACKEND"),
-    "LEAD_SCHEME": (f"{_SERVING}.lead", "SCHEME"),
     "Matmul": (f"{_POUW}.verifier.protocol", "Matmul"),
     "NCP_SCHEMES": (f"{_POUW}.verifier.kernel_schemes", "IDENTIFIED"),
     "NO_DRAW_SESSION": (f"{_SERVING}.h1.window", "NO_DRAW_SESSION"),
@@ -93,7 +88,6 @@ _LAZY = {
     "fresh_salts": (f"{_POUW}.verifier.audit", "fresh_salts"),
     "h1_weight_root": (f"{_SERVING}.h1", "weight_root"),
     "in_process_draw": (f"{_SERVING}.h1.window", "in_process_draw"),
-    "lead_refusals": (f"{_SERVING}.lead", "refusals"),
     "live_challenger": (f"{_POUW}.verifier.window", "live_challenger"),
     "live_epoch_reason": (f"{_POUW}.verifier.window", "live_epoch_reason"),
     "ncp_scheme": (f"{_PROVER}.schemes", "get"),
@@ -186,14 +180,6 @@ class MatmulObserver(Protocol):
                 z: Any = None) -> None: ...
 
 
-@dataclass(frozen=True)
-class QuantizedRows:
-    """A call's rows as its arm quantized them: ``rows`` [m, K] s8 and their f32 ``scales`` [m]."""
-
-    rows: Any
-    scales: Any
-
-
 def run_matmul(run: MatmulRun, site: int, x: Any, weight: Any, bias: Any = None) -> Any:
     """Run this matrix multiply under PoUW: y = x weightᵀ (+ ``bias``) of the linear at ``site`` (its ordinal in the
     forward pass), on the caller's GPU buffers, served and committed by ``run``; y is a new buffer on x's device."""
@@ -222,13 +208,6 @@ def verifier_coins(n: int) -> bytes:
     from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
 
     return verifier.coins(n)
-
-
-def lead_in_process_certifier() -> Any:
-    """The lead's coin link held in this process (`lead.feed.InProcessCertifier`), whose coins credit nothing."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import feed
-
-    return feed.InProcessCertifier()
 
 
 def ready_verifier() -> Any:
@@ -262,5 +241,5 @@ def __dir__() -> list[str]:
     return sorted({*globals(), *_LAZY, *_FAMILIES})
 
 
-__all__ = ["MatmulObserver", "MatmulRun", "QuantizedRows", "in_process_coins", "observe_matmul", "pearl_c_salt_key",
-           "ready_verifier", "run_matmul", "verifier_coins", "lead_in_process_certifier", *_LAZY, *_FAMILIES]
+__all__ = ["MatmulObserver", "MatmulRun", "in_process_coins", "observe_matmul", "pearl_c_salt_key",
+           "ready_verifier", "run_matmul", "verifier_coins", *_LAZY, *_FAMILIES]
