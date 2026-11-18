@@ -178,4 +178,45 @@ def note (why : String) : String :=
 #guard (fields (.ok (cover (some (sha mine)))) (some other) ++ fields (.ok (bound unread)) (some other)).all
   fun (k, v) => ((k ++ " " ++ v).splitOn "program_sha512").length == 1
 
+/-! The object's `blocks`, the population's proof blocks, refused under `partition_object`'s codes. -/
+
+def withBlocks (obj b : Json) : Json := obj.setObjVal! "blocks" b
+
+def pairs (ps : List (Int × Int)) : Json := Json.arr (ps.toArray.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])
+
+def chain : Json := pairs [(0, 2), (2, 4), (4, 6), (6, 8)]
+
+def form (obj : Json) : String :=
+  match HmRow.checkPartitionObject obj with
+  | .error e => e
+  | .ok (n, v) => s!"{n} v{v}"
+
+def code (e : String) : String := ((e.splitOn ": ")[1]?).getD ""
+
+-- the eight-unit chain's blocks pass the form and cover its population; an object without blocks names no grouping
+#guard form (withBlocks template chain) == "Q_template_instance v0"
+#guard (HmRow.checkBlocksCover (withBlocks template chain) 8).toBool
+#guard form template == "Q_template_instance v0" && (HmRow.checkBlocksCover template 5).toBool
+#guard form (template.setObjVal! "grouping" chain) ==
+  "partition: the object's keys are not format, program, query and optionally blocks"
+-- the form: a non-empty list of pairs of naturals lo < hi
+#guard [Json.arr #[], Json.str "0-8", pairs [(0, 2), (2, 2)], pairs [(-1, 2)],
+  Json.arr #[Json.arr #[Lean.toJson 0, Lean.toJson 2, Lean.toJson 4]]].all fun b => code (form (withBlocks template b)) == "blocks-form"
+#guard code (form (withBlocks unread chain)) == "blocks-query"
+-- ascending, each from where the one before ends
+#guard code (form (withBlocks template (pairs [(1, 2), (2, 8)]))) == "blocks-gap"
+#guard code (form (withBlocks template (pairs [(0, 2), (3, 8)]))) == "blocks-gap"
+#guard code (form (withBlocks template (pairs [(0, 4), (2, 8)]))) == "blocks-overlap"
+#guard code (form (withBlocks template (pairs [(0, 2), (2, 4), (0, 8)]))) == "blocks-unsorted"
+-- against the population: the last block ends at it
+#guard code (why (HmRow.checkBlocksCover (withBlocks template chain) 7)) == "blocks-range"
+#guard code (why (HmRow.checkBlocksCover (withBlocks template chain) 9)) == "blocks-gap"
+-- where the setup evaluates the query: the units derived and a sample's strata
+#guard code (match HmRow.deriveTemplateUnits (bound template) (withBlocks template (pairs [(0, 1000)])) mine #[] with
+  | .error e => e
+  | .ok note => note) == "blocks-range"
+#guard code (match HmRow.stratifiedSamplingDesign (withBlocks template (pairs [(0, 1000)])) mine 1 with
+  | .error e => e
+  | .ok _ => "") == "blocks-range"
+
 end Flock.Test.ProgramHeld
