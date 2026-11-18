@@ -18,8 +18,8 @@ uv run python calibration/rate_squaring/gamma.py
 
 It turns the measured rates into x₁ and γ, one row per squaring form and host: no GPU needed.
 
-| Command | Needs | Writes into its output directory |
+| Command | Needs | Writes into its output directory (`run.sh`, each the command of a `research run`) |
 | --- | --- | --- |
 | `uv run tools/check/suites.py calibration/rate_squaring` | the CPU, with `gcc` | nothing: the GPU forms' CPU twins, the IFMA build's gate, and `gamma.py` |
-| `sq.sh` | one GPU | `time.jsonl`, the gate outputs, `sass-mix.json`, Nsight Compute's CSVs and the build logs |
-| `ifma.sh` | an AVX-512 IFMA host | the same |
+| `verity calibrate rate_squaring sq` | one GPU | `time.jsonl`, the gate outputs, `sass-mix.json`, Nsight Compute's CSVs and the build logs, and the gates' validation as the run's `result.json` |
+| `verity calibrate rate_squaring ifma` | an AVX-512 IFMA host | the same, and the run's `result.json` with metrics.toml's number, `memory-accounting/host-squaring-rate` |

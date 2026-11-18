@@ -149,8 +149,8 @@ def test_label_refuses_what_the_vocabulary_cannot_place_unless_off_vocab(env, ca
                (["verified", "yes"], "not one of accepted, rejected, not-transferable, no-dumps"),
                (["fold", "four"], "fold='four' is not an int"),
                (["overhead", "n/a"], "overhead='n/a' is not a number"),
-               (["replay_set", "network-certifier"], "replay_set='network-certifier' does not match"),
-               (["replay_set", "network-certifier/rerun"], "replay_set='network-certifier/rerun' does not match"),
+               (["replay_set", "network-attester"], "replay_set='network-attester' does not match"),
+               (["replay_set", "network-attester/rerun"], "replay_set='network-attester/rerun' does not match"),
                (["replay_expect", "blocked"], "replay_expect='blocked' does not match")]
     for args, why in refused:
         assert main(["label", ART, *args, "--by", "lane-x"]) == 2, args
@@ -169,7 +169,7 @@ def test_label_refuses_what_the_vocabulary_cannot_place_unless_off_vocab(env, ca
     out, err = capsys.readouterr()
     assert Path(out.strip()).is_file() and err.startswith("research data label: local only (write-through off)") and err.count("\n") == 1
     assert {(l.key, l.value) for l in st.labels(ART)} == {("nonesuch", "v1"), ("model_agrees", True), ("verified", "accepted")}
-    for key, value in (("replay_set", "network-certifier/re-verify"), ("replay_set", "pouw/re-run"), ("replay_expect", "blocked: V3")):
+    for key, value in (("replay_set", "network-attester/re-verify"), ("replay_set", "pouw/re-run"), ("replay_expect", "blocked: V3")):
         assert main(["label", ART, key, value, "--by", "lane-x", "--ref", "run:x"]) == 0, (key, value)
     capsys.readouterr()
 

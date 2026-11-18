@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 import shlex
 from pathlib import Path
 from types import SimpleNamespace
@@ -36,9 +37,10 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Cha
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
 
 from tests.pipeline import predicted
-from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Runner, Serving, records
+from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Runner, Serving, records
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import serve_commit as SC
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_pearl as SPL
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
@@ -283,6 +285,56 @@ def test_a_window_short_of_a_linears_call_is_its_visible_failure(tmp_path):
     assert s.windows.arm.describe()["coins"] == "given"
 
 
+def test_with_pearl_users_the_arm_takes_the_tied_workloads_window_alone_and_the_fronts_reserves_nothing(tmp_path):
+    """The network attester's front (users user-N) then the fixed load (fixed.NNNNN), under ``users`` the fixed load's:
+    the front's window serves no epoch and takes no coins, so the period's one salt session is the tied window's, whose
+    epoch is served as without the front."""
+    runner, took = Forward(Model()), []
+
+    def coins(k):
+        took.append(k)
+        return {"coins": Challenger(k, random.Random(k).randbytes)}
+    s = Serving(tmp_path, window_steps=CLASS.outputs, runner=runner,
+                arm=lambda r: SPL.PearlWindows(runner.model, r, None, out=tmp_path, config=CONFIG, run_id="t", coins=coins,
+                                               clock=lambda: 0.0, users=r"fixed\.[0-9]+"))
+    s.windows.arm.com = s.windows.com
+    s.windows.arm.ready()
+    with s as srv:
+        for user, prompt in zip(("user-1", "fixed.00000"), PROMPTS):
+            status, _ = srv.post("/v1/completions", dict(CERTIFIER_BODY, prompt=prompt, user=user,
+                                                         max_tokens=CLASS.outputs, min_tokens=CLASS.outputs))
+            assert status == 200
+    wins = records(tmp_path, "windows.jsonl")
+    assert [w["window"] for w in wins] == [0, 1] and took == [1]
+    assert wins[0]["pouw_pearl"] is None and wins[1]["pouw_pearl"]["window"] == 1
+    assert not (tmp_path / SPL.DIR / "w0").exists()
+    served = json.loads((tmp_path / SPL.DIR / "w1" / "served.json").read_text())
+    assert served["ok"] and served["commit_steps"] == served["passes_with_calls"] == CLASS.outputs
+    assert srv.windows.summary()["pouw_pearl"] == {"windows": 1, "served": 1, "passes": 2, "calls": 8, "failed": [],
+                                                   "closing": []}
+
+
+def test_a_held_arm_opens_at_the_first_step_that_serves_the_tied_workload_in_a_window_that_ran_nothing_yet(tmp_path):
+    """A window opened on the front's last outputs (its users not the tied workload's) runs nothing, and the fixed load
+    serves in it: the arm opens before that window's first step, once; a step of any other user's request opens nothing."""
+    opened = []
+    arm = SimpleNamespace(users=re.compile(r"fixed\.[0-9]+"), open=opened.append, close=lambda k: None)
+    w = SC.CommitWindows(Committer(Runner()), tmp_path, run_id="t", window_steps=2, arm=arm)
+    for eid, user in (("e-front", "user-1"), ("e-fixed", "fixed.00000"), ("e-anon", None)):
+        w.admitted(SimpleNamespace(engine_id=eid, http_id=eid, prompt_ids=[1], ingress={}, user=user))
+    w.before_step({"e-front"})
+    assert w.is_open and opened == []
+    w.before_step({"e-front", "e-fixed"})
+    w.before_step({"e-anon"})
+    assert opened == []
+    w.before_step({"e-fixed"})
+    w.before_step({"e-fixed"})
+    assert opened == [0]
+    w.com._step_index = 1
+    w.before_step({"e-fixed"})
+    assert opened == [0]
+
+
 def test_serve_openai_refuses_what_the_pearl_arm_cant_serve_before_the_model_loads(tmp_path):
     man = predicted.row(tmp_path)
     base = ["--model", "m", "--revision", "r", "--required-manifest", str(man)]
@@ -310,6 +362,9 @@ def test_serve_openai_refuses_what_the_pearl_arm_cant_serve_before_the_model_loa
     for short in (live[:4], live[2:], (*live[:2], *live[4:])):
         assert "--challenger-lane go together under Pearl+" in refused(*arm, *short)
     assert "--h1-model: PoUW H1's, not Pearl+'s" in refused(*arm, *live, "--h1-model", "m")
+    assert refusal(*arm, *live, "--pearl-users", r"fixed\.[0-9]+") is None
+    assert "--pearl-users '(': not a regular expression" in refused(*arm, "--pearl-users", "(")
+    assert f"--pearl-users is {SPL.ENTRY}'s" in refused("--pearl-users", "x")
     assert "--challenger-lane is Pearl+'s" in refused("--challenger-lane", "l")
     assert "not Pearl+'s to give" in refused(*arm[:4], "--protocols-config", json.dumps({"pouw": {"transcript_dir": "/t"}}))
     assert "are not Pearl+'s (pouw)" in refused(*arm[:4], "--protocols-config", json.dumps({"pous": {}}))

@@ -328,6 +328,8 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     answer, calls = _run(served, tmp_path, monkeypatch)
     assert answer["verdict"] == "accept", answer["reason"]
     assert json.loads((served.out / "answer.json").read_text()) == answer and pous.linear_types is types
+    assert json.loads((served.out / "pous.json").read_text())["key_pin"] == "run"
+    assert not mc.holds(answer["profile"]["placement"])
     row = SV.piece_row("space", served.out.parent)
     assert row["verdict"] == "accept" and row["owner"] == "memory-accounting" and row["protocol"] == TEST_PROTOCOL
     assert row["quantity"] == answer["public"] == {"certified": False, "eps": "0", "s_bits": 0}
@@ -342,8 +344,8 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert prof["outside"]["bytes"] == {"the embedding and the head": 2048, "the norms": 96, "the per-row scales": 1024}
     assert "KV cache" in prof["outside"]["serving"] and prof["window"] == 3
     assert prof["placement"][CS.PREMISE] == (
-        f"holds: the session is signed under the key configuration {CONF} pins for memory-challenger's pous sessions; "
-        f"the memory attester ran on {AUDITOR}, not the prover's {NODE}")
+        f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins for memory-challenger's pous "
+        f"sessions; the memory attester ran on {AUDITOR}, not the prover's {NODE}")
     assert prof["placement"]["setup"] == CS.SETUP == "setup checked by the developer, not the auditor"
     assert set(period.profile(period.point_for(1))) <= set(prof)                      # the run protocol's own profile
     party, request = calls[0]
@@ -352,7 +354,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert prof["placement"]["salt"].startswith(f"drawn by the memory challenger on {AUDITOR} from its OS")
 
     doc = json.loads((served.out / "pous.json").read_text())
-    assert doc["key_pinned"] and doc["key_pin"] == "configuration" and doc["setup"] == CS.SETUP
+    assert doc["key_pinned"] and (doc["key_pin"], doc["pins_matched"]) == ("run", True) and doc["setup"] == CS.SETUP
     assert not {"latency", "rounds_answered", "warmups", "reported_host"} & set(doc)
     assert doc["decided_by"] == {"program": JUDGE, "host": socket.gethostname()} and doc["lean_s"] >= 0
     run = json.loads((served.private / "run.json").read_text())
@@ -373,7 +375,7 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_its_record_is_a_rehearsals(
     assert where["kind"] == "own-host" and where[CS.PREMISE] == (
         f"{mc.REHEARSAL} (configuration {CONF}); the memory attester ran on {host}, not the prover's {NODE}")
     doc = json.loads((served.out / "pous.json").read_text())
-    assert doc["key_pinned"] and doc["key_pin"] == "run" and doc["key_sha512"] != "ab" * 64
+    assert doc["key_pinned"] and (doc["key_pin"], doc["pins_matched"]) == ("run", False) and doc["key_sha512"] != "ab" * 64
     assert SP.line(answer).endswith(f"; {CS.PREMISE} {where[CS.PREMISE]}; setup checked by the developer, not the auditor")
 
 
@@ -548,6 +550,43 @@ def test_the_sessions_are_kept_and_then_answered_with_no_card(served, tmp_path, 
     assert doc["key_pinned"] and doc["session_s"] >= 0 and doc["answer_s"] >= 0
     with pytest.raises(SP.Refusal, match="holds no sessions to answer"):
         SP.answers(s.serve, 3, s.out, private=s.private, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+
+
+class _Lazy(futures.Executor):
+    """An executor that runs a task only when its result is first asked for, logging each submit and each run."""
+
+    def __init__(self):
+        self.log: list[tuple[str, str]] = []
+
+    def submit(self, fn, /, *args, **kw):
+        self.log.append(("submit", fn.__name__))
+        log, done = self.log, []
+
+        class Later:
+            def result(self):
+                if not done:
+                    log.append(("run", fn.__name__))
+                    done.append(fn(*args, **kw))
+                return done[0]
+        return Later()
+
+
+def test_the_three_answers_are_all_started_before_any_is_waited_for(served, tmp_path, monkeypatch):
+    """`answers` hands PoUB-P2's answer and PoUS's by the Python and by the Lean to its executor before it waits for
+    any of them, so none waits for another's end. The bandwidth session held and `held_bandwidth.decide` are
+    stand-ins."""
+    s, pool = served, _Lazy()
+
+    def held_bandwidth():
+        held = json.loads((s.private / SP.HELD).read_text())
+        (s.private / SP.HELD).write_text(json.dumps(held | {"bandwidth": {"session_s": 0.0}}))
+    monkeypatch.setattr(SP.HB, "decide", lambda *a, **kw: {"verdict": "accept"})
+    monkeypatch.setattr(SP.HB, "line", lambda bw: "BANDWIDTH stand-in")
+    answer = _parts(s, tmp_path, monkeypatch, between=held_bandwidth, pool=pool)
+    assert answer["verdict"] == "accept", answer["reason"]
+    assert pool.log[:3] == [("submit", "bandwidth_answer"), ("submit", "lean_answer"), ("submit", "python_answer")]
+    assert sorted(pool.log[3:]) == [("run", "bandwidth_answer"), ("run", "lean_answer"), ("run", "python_answer")]
+    assert json.loads((s.out / "pous.json").read_text())["bandwidth"]["verdict"] == "accept"
 
 
 def test_the_pin_is_the_answers_own_never_one_the_sessions_kept(served, tmp_path, monkeypatch):
@@ -939,14 +978,18 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert row["answer"]["profile"]["named_terms"] == bw["profile"]["named_terms"] == ledger.NAMED_TERMS
     assert bw["profile"]["gamma_terms"] and json.loads((s.out / "pous.json").read_text())["bandwidth"]["verdict"] == "accept"
     summary = json.loads((public / "bandwidth.json").read_text())
-    assert (summary["key_sha512"], summary["key_pinned"], summary["key_pin"]) == (BW_KEY, True, "configuration")
-    assert summary[mc.PREMISE].startswith(f"holds: the session is signed under the key configuration {CONF} pins")
+    assert summary["key_pin"] == "run" and not mc.holds(summary)
+    assert (summary["key_sha512"], summary["key_pinned"], summary["pins_matched"]) == (BW_KEY, True, True)
+    assert summary[mc.PREMISE].startswith(f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins")
     assert case["params"]["trusted"] == [ts.AtLeaf(b"p2-party-at-leaf").public_key.hex()]
     assert not any((d / f).exists() for d, f in ((private, SP.HB.HELD), (s.private, SP.STORE), (s.private, SP.HELD)))
-    assert _stamps(s.out) == [
-        "the weights loaded", "setup done", "PoUS's session done", "PoUB's session start", "PoUB's session done",
-        "PoUB's answer done", "PoUS's answer by the Python done", "PoUS's answer by the Lean done",
-        "PoUS's case written"]
+    stamps = _stamps(s.out)
+    answers = [f"{a} {e}" for a in ("PoUB's answer", "PoUS's answer by the Python", "PoUS's answer by the Lean")
+               for e in ("start", "done")]
+    assert stamps[:5] == ["the weights loaded", "setup done", "PoUS's session done", "PoUB's session start",
+                          "PoUB's session done"]
+    assert sorted(stamps[5:-1]) == sorted(answers) and stamps[-1] == "PoUS's case written"
+    assert all(stamps.index(start) < stamps.index(done) for start, done in zip(answers[::2], answers[1::2]))
 
     text = "".join(p.read_text() for d in (public, s.out) for p in sorted(d.iterdir()))
     digests = (s.private / "digests.bin").read_bytes()
@@ -1059,7 +1102,8 @@ def test_a_key_the_run_names_and_the_configuration_does_not_pin_is_a_rehearsals(
     assert answer["verdict"] == "accept", answer["reason"]
     _, bw, summary = _bandwidth_files(s)
     assert bw["verdict"] == "accept", bw["reason"]
-    assert (summary["key_sha512"], summary["key_pinned"], summary["key_pin"]) == (BW_KEY, True, "run")
+    assert (summary["key_sha512"], summary["key_pinned"], summary["key_pin"], summary["pins_matched"]) == (
+        BW_KEY, True, "run", False)
     assert summary[mc.PREMISE].startswith(mc.REHEARSAL) and "holds" not in summary[mc.PREMISE]
 
 

@@ -53,6 +53,37 @@ CUT = {"name": "split", "label": "a toy cut", "replaces": ["Add_v1, Norm_v1"],
 SESSIONS = (PF.Session(GEMM64, 20, 0.5, 2.0, 1 << 15), PF.Session("Other_v1{N=2}", 22, 2.0, 2.0, 1 << 13))
 
 
+def first(nvis: int, bn: int, v: int = 1) -> str:
+    """An attention row's first key block in its word version (`v=1`) or on bits (`v=2`), as the census names it."""
+
+    return f'AttnBlockFirst_v{2 * v - 1}{{D=64,NVIS={nvis},BN={bn},DOT={{"fn":"HopperBF16WgmmaDot16_v{v}"}}}}'
+
+
+HEAD_END, HEAD_END_BITS = 'AttnHeadEnd_v1{D=64,INV={"fn":"Fa3InvSum_v1"}}', 'AttnHeadEnd_v2{D=64,INV={"fn":"Fa3InvSum_v2"}}'
+
+
+def on_bits() -> dict[str, Any]:
+    """One request of 8 tokens in word Definitions, each naming its Definition on bits as `block_census.proved` writes
+    them: the 190-key first block, the largest of its kind; a 5-key one it bounds; and a head end that also carries a
+    `bounded_by`, so a rate of its own id is seen to win over both."""
+
+    def block(k_log: int, ands: int, n: int, **names: str) -> dict:
+        return {"k_log": k_log, "ands": ands, "of": {"Attention_v4": "split"}, "prefill": n, "decode": 0, "macs": 0,
+                **names}
+
+    return {"tokens": {"prefill": 8, "decode": 0}, "per_request": {"circuit_macs": 800, "macs": 800}, "definitions": {
+        first(190, 192): block(26, 10**7, 2, proved_as=first(190, 192, 2)),
+        first(5, 128): block(22, 10**5, 30, proved_as=first(5, 128, 2), bounded_by=first(190, 192, 2)),
+        HEAD_END: block(20, 1000, 4, proved_as=HEAD_END_BITS, bounded_by=first(190, 192, 2))}}
+
+
+def without_names(doc: dict[str, Any]) -> dict[str, Any]:
+    """`doc` as a census stored before the census named each block's Definition on bits."""
+
+    return doc | {"definitions": {s: {k: v for k, v in d.items() if k not in (P.PROVED_AS, P.BOUNDED_BY)}
+                                  for s, d in doc["definitions"].items()}}
+
+
 def steady(type_: str, definition: str, run: str, blocks: int, gpu: float | None, *, full: int = 8, k_log: int = 20,
            verify: float | None = None, refused: str | None = None, provers: int = 1, art: str | None = None,
            cores: int = P.HOST_CORES, form: str | None = None) -> PF.Steady:
@@ -138,16 +169,18 @@ class Store:
         (root / name).write_text(json.dumps(doc))
         return self.art(kind, meta or {}, tree=root)
 
-    def ran(self, run: str, files: Path | None, *, rc: int = 0, tool: str = "bash", validation: str | None = None) -> None:
+    def ran(self, run: str, files: Path | None, *, rc: int = 0, tool: str = "bash", validation: str | None = None,
+            env: dict | None = None) -> None:
         """A run's attempt on the remote, its files a run record (`files`: None for a run that kept none), recorded under
-        `tool`, its result's validation `validation`."""
+        `tool`, its result's validation `validation`, launched with `env` (`--env`)."""
 
         from research.store import canon
 
         record = self.art("run-record/v1", {}, tree=files) if files else None
         attempt: dict[str, Any] = {
             "schema": "research/attempt/v0.1", "id": run, "tool": {"name": tool, "version": None},
-            "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": {}, "key_params": [], "inputs": {},
+            "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": {"env": env} if env else {},
+            "key_params": [], "inputs": {},
             "conditions": {}, "key_conditions": [], "source": {"commit": "c" * 40, "dirty": False}, "closure": None,
             "execution": {"start_utc": f"{run[1:5]}-{run[5:7]}-{run[7:9]}T00:00:00Z"}, "cost": None,
             "status": {"state": "done" if rc == 0 else "failed", "rc": rc, "validation": validation},
@@ -249,16 +282,16 @@ def lean_record(run: str, *, word: str | None = RMSNORM, seconds: tuple[float, .
             "label": None if why else L.COVER_LABEL, "host": dict(LEAN_HOST)}
 
 
-def lean_ran(s: Store, tmp: Path, run: str, doc: dict | None, *, name: str = L.RECORD) -> str:
+def lean_ran(s: Store, tmp: Path, run: str, doc: dict | None, *, name: str = L.RECORD, env: dict | None = None) -> str:
     """`run` in the store with `doc` as its `out/lean-verify.json` (None: a run that wrote none), a Lean verifier run
-    of record."""
+    of record, launched with `env`."""
 
     files = tmp / "lean-files" / run / "out"
     files.mkdir(parents=True)
     (files / "job.log").write_text("ran")
     if doc is not None:
         (files / name).write_text(json.dumps(doc))
-    s.ran(run, files.parent)
+    s.ran(run, files.parent, env=env)
     return s.record(run, R.LEAN)
 
 
@@ -305,8 +338,8 @@ def _sha512(prefix: bytes, obj: object) -> str:
 #: statement's circuit states as `program_sha512`: the digest of its `program_digests`, which no program file has
 PROGRAM_SHA512 = _sha512(b"", {k: v for k, v in PROGRAM.items() if k != "annotations"})
 UNIT_SHA512 = _sha512(b"", {"unit/made-up": hashlib.sha256(b"the staged Definition's id and the row layout").hexdigest()})
-#: a made-up partition object, naming `PROGRAM` as a bound statement's names its Program
-PARTITION = {"format": "made-up", "program": PROGRAM_SHA512, "query": {"name": "Q_made_up", "version": 1, "params": {"X": 16}}}
+#: a `verity/partition/v1` object, naming `PROGRAM` as a bound statement's names its Program
+PARTITION = {"format": "verity/partition/v1", "program": PROGRAM_SHA512, "query": {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}}}
 
 
 def circuit_text(rule: str = L.PARTITION_V1, size: int = 4000) -> bytes:

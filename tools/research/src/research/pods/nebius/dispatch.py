@@ -986,7 +986,9 @@ def n2_python(code: str, *args: str, stdin: str | None = None) -> str:
     except subprocess.TimeoutExpired as e:
         raise RuntimeError(f"ssh {N2}: {e}") from None
     if r.returncode:
-        raise RuntimeError(f"ssh {N2}: rc {r.returncode}: {r.stderr.strip()[-300:]}")
+        from ...remote import name_addresses
+
+        raise RuntimeError(f"ssh {N2}: rc {r.returncode}: {name_addresses(r.stderr).strip()[-300:]}")
     return r.stdout
 
 
