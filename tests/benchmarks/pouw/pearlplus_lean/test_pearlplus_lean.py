@@ -297,8 +297,7 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u(exe, tmp_path):
     for u in man["matmuls"]:
         y = bytearray((path.parent / u["y"]["rows"]["path"]).read_bytes())
         y[0::2] = bytes(b ^ 0x01 for b in y[0::2])
-        u["y"] = T.SY.retain_y(path.parent, u["index"], bytes(y), u["n"], bytes.fromhex(man["salt"]),
-                               bytes.fromhex(man["hm96_salt_key"]))
+        u["y"] = T.SY.retain_y(path.parent, u["index"], bytes(y), u["n"], bytes.fromhex(man["salt"]))
     path.write_text(json.dumps(man))
     assert "is not the unscale of the tile's U" in same(exe, [path])["reason"]
     for u, root in zip(man["matmuls"], old):

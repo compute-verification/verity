@@ -49,7 +49,6 @@ ALLOWED: dict[str, str] = {
     "adapters/torch/verity_torch/pouw/h1/registered_device.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/ends.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/run_device.py": "@compute-accounting",
-    "adapters/torch/verity_torch/pouw/pearl_c/served_y_device.py": "@compute-accounting",
     # the step rows' processor twin is ruled (RULED's native_rows.cu); the registered weights' `tensor_key` expansion here is not
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
