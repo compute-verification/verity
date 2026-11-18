@@ -190,14 +190,15 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
 
 
 def test_served_passes_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name(monkeypatch):
-    """No declared scheme serves Pearl-C on sm_120 (`pouw:pearl-c-sm120-v1-h3` is no declared scheme's option), so
+    """No declared scheme serves Pearl-C on sm_120 (`pouw:pearl-c-sm120-v1-h3` is no declared scheme's name), so
     ``served_passes.py`` refuses an arm of that entry by name (`undeclared`, which `pearl_c_arm` asks before any engine or
     challenger), and its default spec is Pearl+'s."""
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
 
-    assert "pouw:pearl-c-sm120-v1-h3: no declared scheme serves Pearl-C on that card" in SP.undeclared(
-        ["pouw:pearl-c-sm120-v1-h3"])
+    for other in ("pouw:pearl-c-sm120-v1-h3", "pouw:pearl-c-nvfp4-v0"):
+        assert SP.undeclared(["pearl-plus", other]).startswith(f"{other} is no declared scheme's name")
+    assert SP.undeclared(["pouw:pearl-c-h100-v1-h3"]).startswith("pouw:pearl-c-h100-v1-h3 is no declared scheme's name")
     assert SP.undeclared(["pearl-plus"]) is None
     assert SP.SPEC.name == "llama32-1b-1gpu-pouw-protocol-served.toml"
 

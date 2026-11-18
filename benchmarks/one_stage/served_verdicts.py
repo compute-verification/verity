@@ -728,11 +728,14 @@ def public_doc(text: str) -> str:
 
 
 def publish(out: Path, private: Path) -> list[str]:
-    """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
-    `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window or holds a load's own
-    field, Pearl+'s exclusion tiles, its exact credit or its prover's give-up (`public_doc`) held in full, under
-    ``private`` at its path under ``out``, its public form left in its place. A file that isn't UTF-8 text is held whole.
-    Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
+    """Every file under ``out``, the dir that leaves the node, in its public form: one `public_files.PUBLIC` doesn't list
+    under ``OUT/``, one whose path names a window, or that `PUBLISH_MAX` keeps from being read, held whole, and one whose
+    text names or counts a window or holds a load's own field, Pearl+'s exclusion tiles, its exact credit or its prover's
+    give-up (`public_doc`), or holds a field `public_files.WITHOUT` keeps private, held in full, under ``private`` at its
+    path under ``out``, its public form left in its place. A file that isn't UTF-8 text is held whole. Only
+    `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
+    import public_files as PF
+
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():
@@ -744,7 +747,7 @@ def publish(out: Path, private: Path) -> list[str]:
         private.mkdir(mode=0o700, parents=True, exist_ok=True)
         dst.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         data = p.read_bytes() if p.stat().st_size <= PUBLISH_MAX else None
-        if data is None or NAMED.search(rel):
+        if data is None or NAMED.search(rel) or PF.listed("OUT/" + rel) is None:
             shutil.move(p, dst)
             held.append(rel)
             continue
@@ -754,6 +757,10 @@ def publish(out: Path, private: Path) -> list[str]:
             held.append(rel)
             continue
         pub = public_doc(text)
+        if drop := PF.without("OUT/" + rel):
+            with contextlib.suppress(ValueError):
+                if isinstance(doc := json.loads(pub), dict) and set(drop) & doc.keys():
+                    pub = json.dumps({k: v for k, v in doc.items() if k not in drop}, sort_keys=True) + "\n"
         if pub != text:
             dst.write_bytes(data)
             p.write_text(pub)
@@ -858,18 +865,29 @@ def _class(lines: Sequence[str]) -> str:
     return found[-1] if found else "no exception"
 
 
+def _refused(lines: Sequence[str]) -> str | None:
+    import public_files as PF
+
+    return PF.refusal(next((line for line in reversed(lines) if line.strip()), ""))
+
+
 def failed(rc: object, logs: Sequence[str]) -> str:
-    """A tool's failure by its last exception's class and its exit status alone (``-`` is stdin): a tool's log holds
-    paths, hosts and its inputs' values, so no line of it is said."""
-    return f"({_class(_logs(logs))}, exit {rc}): its log is in the run's private directory"
+    """A tool's failure by its refusal's name where its log's last line is one of our tools' fixed refusals
+    (`public_files.REFUSALS`), else by its last exception's class, and its exit status (``-`` is stdin): a tool's log
+    holds paths, hosts and its inputs' values, so no line of it is said."""
+    lines = _logs(logs)
+    if name := _refused(lines):
+        return f"(refused {name}, exit {rc}): its log is in the run's private directory"
+    return f"({_class(lines)}, exit {rc}): its log is in the run's private directory"
 
 
 def tool_said(rc: object, logs: Sequence[str]) -> str:
-    """Our tool's own last line where it passed (its verdict), else its last exception's class alone, for a line that
-    says the exit status itself."""
+    """Our tool's own last line where it passed (its verdict), else its refusal's name (`failed`) or its last exception's
+    class alone, for a line that says the exit status itself."""
     lines = _logs(logs)
     if str(rc) != "0":
-        return f"{_class(lines)}; its log is in the run's private directory"
+        name = _refused(lines)
+        return f"{f'refused {name}' if name else _class(lines)}; its log is in the run's private directory"
     return next((line for line in reversed(lines) if line.strip()), "")
 
 
@@ -1348,6 +1366,27 @@ def premises(doc: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     else:
         live = True, LIVE_MET
     return {name: {"met": met, "why": why[:600]} for name, (met, why) in zip(PREMISES, (live, salt), strict=True)}
+
+
+#: who runs each premise's check, by the record's product: on both paths the served node's PoUW piece (the developer's);
+#: the compose node's Lean re-run reaches only the sampled proofs' row, which carries no premise
+PREMISE_RUNNERS: Mapping[str, Mapping[str, str]] = {"onsite": {p: "piece" for p in PREMISES},
+                                                    "remote": {p: "piece" for p in PREMISES}}
+#: what a premise's ``why`` says of who ran its check (`ran_by`)
+RAN_BY = {"piece": "run by the developer's piece; no auditor-side entry runs it",
+          "lean": "recomputed on the compose node by the Lean verifier",
+          "device": "run by an auditor's device"}
+
+
+def ran_by(row: Mapping[str, Any], product: str) -> dict[str, Any]:
+    """``row`` with each premise its development document states (`premises`) saying, at the end of its ``why``, who ran
+    its check on ``product``'s path (`PREMISE_RUNNERS`, `RAN_BY`)."""
+    doc = row.get("development")
+    if not isinstance(doc, Mapping) or not any(isinstance(doc.get(n), Mapping) for n in PREMISES):
+        return dict(row)
+    runners = PREMISE_RUNNERS[product]
+    return {**row, "development": {**doc, **{n: {**doc[n], "why": f"{doc[n].get('why')}; {RAN_BY[runners[n]]}"}
+                                             for n in PREMISES if isinstance(doc.get(n), Mapping)}}}
 
 
 def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str | None, main: Path | None,
@@ -2228,10 +2267,9 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path 
             return {"verdict": BR.REFUSED, "owner": owner, "reason": said[:2000]}
         if isinstance(ran, dict):
             late = f", out of time at {ran.get('limit')}" if ran.get("rc") in (124, 137) else ""
+            log = "in the run's private directory" if key == "wipe" else f"{comp}/piece.log"
             return {"verdict": "error", "owner": owner,
-                    "reason": f"its piece ran (exit {ran.get('rc')}{late}) and wrote no answer; its log is {comp}/piece.log"}
-        if key == "wipe" and (d / "piece.log").exists():
-            return {"verdict": "missing", "owner": owner, "why": f"its piece wrote no answer; its log is {comp}/piece.log"}
+                    "reason": f"its piece ran (exit {ran.get('rc')}{late}) and wrote no answer; its log is {log}"}
         return {"verdict": "missing", "owner": owner, "why": _unset(comp, what)}
     try:
         return row_of(owner, json.loads(f.read_text()), f.parent, run)
@@ -2356,7 +2394,8 @@ def auditor_device(host: str, manifest: Path | None, served_node: bool = False) 
 
 def error_said(entry: Mapping[str, Any]) -> list[str]:
     """What an accepted subprotocol's block record entry says of its error: each δ of the record's at which its quantity
-    is not established, with the error the run established it at. Where the error leaves terms out (the bandwidth
+    is not established, with the error the run established it at, or, where its scheme's bound is refused
+    (``unbounded``), with that refusal's sentence. Where the error leaves terms out (the bandwidth
     audit's ``named_terms``) it is said with them beside it, in the terms' own words (`block_record.error_form`, which
     for PoUB's is its ledger's ``DELTA_FORM`` with the error for δ): there, and in a clause of its own where the
     quantity is established at every δ."""
@@ -2367,6 +2406,9 @@ def error_said(entry: Mapping[str, Any]) -> list[str]:
     no = [d for d, x in entry["at"].items() if not x["holds"]]
     if no and "members" in entry["quantity"]:
         return [f"at δ = {d}: {entry['at'][d]['why']}" for d in no]
+    if no and "unbounded" in entry:
+        return [f"its quantity is not established at δ = {' or '.join(no)}: {entry['unbounded']['why']}",
+                *([f"its error reads {error}"] if named else [])]
     if no:
         return [f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with {error}"]
     return [f"its error reads {error}"] if named else []
@@ -2445,13 +2487,12 @@ def rebase(serve_dir: Path, served_dir: str, paths: Sequence[str], *, held: bool
 def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | None = None) -> tuple[int, str]:
     """The compose gate's answer (one JSON line) written out under ``out``: its $OUT's files at their paths, and
     ``gate.json`` (the pin and the exit, without the files). Its exit (0 composed and accepted) and its one line, which
-    without an answer ends with the last line of the gate command's stderr ``err`` (ssh's own refusal, say)."""
+    without an answer names the gate command's stderr ``err`` by its last exception's class alone (`failed`)."""
     try:
         doc = json.loads(answer.read_text().strip().splitlines()[-1])
     except (OSError, IndexError, ValueError) as e:
-        said = [x for x in (err.read_text(errors="replace").splitlines() if err and err.is_file() else []) if x.strip()]
-        return 1, (f"GATE-COMPOSE failed (ssh exit {gate_exit}): no answer from the compose gate ({type(e).__name__})"
-                   + (f": {said[-1].strip()[:400]}" if said else ""))
+        return 1, (f"GATE-COMPOSE failed (ssh exit {gate_exit}): no answer from the compose gate ({type(e).__name__}): "
+                   f"its stderr {failed(gate_exit, [str(err)] if err else [])}")
     if "refused" in doc:
         return 3, f"GATE-COMPOSE refused by the compose gate: {str(doc['refused'])[:800]}"
     c = doc.get("compose") or {}
@@ -2460,7 +2501,7 @@ def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | 
     for rel, text in files.items():
         f = (out / rel).resolve()
         if root not in f.parents:
-            return 1, f"GATE-COMPOSE failed: the answer names {rel[:200]!r}, outside {out}"
+            return 1, f"GATE-COMPOSE failed: the answer names {rel[:200]!r}, outside its output directory"
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text(text)
     (out / "gate.json").write_text(json.dumps({**doc, "compose": {k: v for k, v in c.items() if k != "files"}},
@@ -2471,11 +2512,10 @@ def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | 
     except ValueError as e:
         return 1, f"GATE-COMPOSE failed: the compose's RECORD line isn't JSON ({e})"
     said = line.get("composed") if isinstance(line, dict) else None
-    where = (f"at the compose gate's tree {str(doc.get('pinned'))[:12]}"
-             + (f" (on {doc['pin']['on']})" if (doc.get("pin") or {}).get("on") else ""))
+    where = f"at the compose gate's tree {str(doc.get('pinned'))[:12]}"
     rc = 0 if c.get("rc") == 0 and gate_exit in (None, 0) and said == "accept" else 1
     return rc, (f"GATE-COMPOSE {where}: exit {c.get('rc')}, the record {said or 'not written'}, "
-                f"{len(files)} files of its $OUT in {out}" + (f", {len(c['not_sent'])} not sent" if c.get("not_sent") else ""))
+                f"{len(files)} files of its $OUT in the run's compose/" + (f", {len(c['not_sent'])} not sent" if c.get("not_sent") else ""))
 
 
 def served_compare_line(path: Path) -> str:
@@ -2615,7 +2655,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     drops = [k for k in rows if subprotocols[k] not in BR.PRODUCTS[product]]
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
-    rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
+    rows = {k: dropped_row(k, product) if k in drops else ran_by(r, product) for k, r in rows.items()}
     apart = {"communication"} & set(rows) - set(drops) if front_group else set()
     for k in apart:
         rows[k]["requests"] = FRONT_GROUP

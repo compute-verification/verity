@@ -97,16 +97,25 @@ class Host:
         argv[argv.index("--port") + 1] = "0"
         argv = [sys.executable, str(LIVE.parents[4] / "tests" / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "stub_serve.py"), *argv[2:], "--params", "4,4",
                 "--keygen-workers", "1"]
-        listening = threading.Event()
+        listening, raised = threading.Event(), []
 
         def wait(proc, seconds):
             listening.set()
             return proc.wait()
 
-        self.runs[session] = threading.Thread(target=A.run, args=(self.host, session), kwargs=dict(
-            signer=self.signer, pinned=PIN, now=lambda: T0, argv=argv, wait=wait))
+        def run() -> None:
+            try:
+                A.run(self.host, session, signer=self.signer, pinned=PIN, now=lambda: T0, argv=argv, wait=wait)
+            except BaseException as e:
+                raised.append(e)
+                listening.set()
+                raise
+
+        self.runs[session] = threading.Thread(target=run)
         self.runs[session].start()
         listening.wait()
+        if raised:
+            raise raised[0]
 
     def address(self, answer: dict) -> str:
         return (self.host.sessions / answer["session"] / "out" / "stdout.log").read_text().split()[1]

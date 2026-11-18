@@ -87,10 +87,6 @@ def run_files(store: Any, run: str) -> RunFiles | None:
     return RunFiles(store, art) if art else None
 
 
-def _superseded(store: Any, target: str) -> bool:
-    return bool(store.labels(target, key=served_table.SUPERSEDED_BY))
-
-
 def _named(art: str) -> str:
     return f"{art[:16]}…"
 
@@ -140,7 +136,7 @@ def completed_rows(store: Any, art: str) -> tuple[list[str], Completed | str | N
     path = prove_records.ART_RATES
     if manifest.payload is None or not store.listing(art, [path]):
         return named, None
-    if _superseded(store, art):
+    if kit.superseded(store, art):
         return named, f"{_named(art)} is superseded"
     if len(named) != 1:
         return named, f"{_named(art)} holds `{path}` and names {len(named)} runs: an art's rows are one run's"
@@ -228,11 +224,11 @@ def labelled_rows(store: Any, record: str) -> list[Labelled]:
             arts.setdefault(named[0], []).append(rows)
         elif rows is not None:
             untaken |= dict.fromkeys(named, rows)
-        if not _superseded(store, target) and (rows is None or len(named) == 1):
+        if not kit.superseded(store, target) and (rows is None or len(named) == 1):
             runs |= dict.fromkeys(named)
     found: list[Labelled] = []
     for run in runs:
-        if _superseded(store, run):
+        if kit.superseded(store, run):
             continue
         if why := kit.trial_why(run, store.get_attempt(run) or {}):
             found.append(Labelled(run, None, None, why))

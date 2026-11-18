@@ -105,6 +105,7 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     # the names a run's private-paths.json states and no public write may have: the adapter's private list, its reader
     # and the modules the reader imports
     "adapters/vllm/verity_vllm/pipeline/private_names.json",
+    "adapters/vllm/verity_vllm/pipeline/private_names.py",
     "adapters/vllm/verity_vllm/pipeline/research_outputs.py",
     "adapters/vllm/verity_vllm/pipeline/cli.py",
     "adapters/vllm/verity_vllm/check/__init__.py",

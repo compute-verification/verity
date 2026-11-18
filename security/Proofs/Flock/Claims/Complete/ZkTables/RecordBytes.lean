@@ -33,7 +33,7 @@ namespace FlockComplete.ZkTables
 open Flock Transcript FlockComplete FlockDeploy With FlockComplete.Replay
 open Lean (Json)
 
-variable {H : Claims.Msg → Claims.Msg}
+variable {H : Hash.Msg → Hash.Msg}
 
 /-- The weight `record_size_le` bounds the honest masked record by: its hello `hz`, unit sample, coin tree, `σ`,
 table name `t`, `Q` coordinates a point, domains of at most `D` bytes and stream names of at most `L`. -/
@@ -45,7 +45,7 @@ def recBound (spec : SessionSpec) (hz t : String) (ct : CoinTree.Spec) (Q D L : 
 
 /-- **Each masked rep's rounds are nonempty and of at most `2^16` coins**, at a statement with `25 ≤ m ≤ 35`, at most
 `2^10` regions and at most two points: `sessionPZk_walk`'s `hR`. -/
-theorem repOk_at (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (st : Flock.Stmt)
+theorem repOk_at (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) (spec : SessionSpec) (st : Flock.Stmt)
     (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hreg : st.regions.size ≤ 1024) (hpt : spec.points ≤ 2) :
     ∀ v, Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v →
       ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,
@@ -124,7 +124,7 @@ theorem record_size_le (h64 : Claims.Out64 H) {spec : SessionSpec} {t : String} 
     (hkm : st.c.kLog ≤ st.m) (hreg : st.regions.size ≤ 1024) (hpm : spec.mPts = st.mPts) (hpt : spec.points ≤ 2)
     {D L : ℕ} (hD : ∀ rep < 2, (spec.domain t rep).toUTF8.size ≤ D) (hL : NamesLe spec L)
     (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) {k : ℕ} (r : Fin k → Coin)
-    {rec : String × Array ByteArray} {bodies : Array Claims.Msg}
+    {rec : String × Array ByteArray} {bodies : Array Hash.Msg}
     (hrun : (sessionPZk (asksS fun j => (Claims.coinSeq r j).bytes) (Hashes.ofSha512 (Claims.hOf H)) spec
       #[Setup.ofCircuit st] words trs tape).go #[] = (.ok rec, bodies)) :
     rec.1.utf8ByteSize ≤ recBound spec hz t ct st.mPts D L := by
@@ -169,7 +169,7 @@ theorem record_size_le (h64 : Claims.Out64 H) {spec : SessionSpec} {t : String} 
 
 /-- **The honest masked record fits its length word** at one table whose statement has `25 ≤ m ≤ 35`, the `hm96` leaf,
 `kLog ≤ m`, at most `2^10` regions and at most two points, wherever `recBound` is under `2^64`. -/
-theorem recordFitsZk_of (h64 : Claims.Out64 H) {x : Claims.Msg} {spec : SessionSpec} {t : String}
+theorem recordFitsZk_of (h64 : Claims.Out64 H) {x : Hash.Msg} {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json}
     (hown : Flock.JsonParse.parse spec.hello = .ok own) {hz : String} (hc : canon (JsonRT.helloJ own) = .ok hz)
     (st : Flock.Stmt) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hms : st.merkle = MerkleScheme.hm96Sha512)

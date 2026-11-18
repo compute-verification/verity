@@ -400,11 +400,12 @@ def load_catalog(*packages: str) -> None:
 
 
 def _registered(pid: str):
-    """The registered PrimitiveDefinition ``pid``, None when no loaded module registers one (`load_catalog`)."""
+    """The PrimitiveDefinition ``pid`` the registry resolves (a loaded module's, `load_catalog`, or a width family's), None
+    for none."""
     import verity.circuits.ops.prims  # noqa: F401
     from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 
-    p = REGISTRY.defs.get(pid)
+    p = REGISTRY.resolve(pid)
     return p if isinstance(p, PrimitiveDefinition) else None
 
 
@@ -414,19 +415,6 @@ def prims() -> dict:
     from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 
     return {k: v for k, v in REGISTRY.defs.items() if isinstance(v, PrimitiveDefinition)}
-
-
-def _width_prim(pid: str):
-    """A primitive the registry makes per width on demand (``BitAtx{W}``, ``TopPMaskWordx{V}``), from its factory."""
-    import re
-
-    from verity_vllm.definitions.registry import sampling
-
-    for pat, make in ((r"BitAtx(\d+)_v1", sampling.bit_at), (r"TopPMaskWordx(\d+)_v1", sampling.topp_mask_word)):
-        m = re.fullmatch(pat, pid)
-        if m:
-            return make(int(m.group(1)))
-    return None
 
 
 def _words(t) -> list[int]:
@@ -504,7 +492,7 @@ class Walker:
             return {"ref": self.tc_unit(pid)}
         if (m := re.fullmatch(r"GatherBf16x(\d+)_v1", pid)) and GATHERS == "mux":
             return self.gather(int(m.group(1)))
-        p = _registered(pid) or _width_prim(pid)
+        p = _registered(pid)
         if p is None:
             return {"not_yet_lowered": pid, "reason": "primitive not in the registries this export reads"}
         widths = [w for _, t in p.params for w in t.leaf_widths()]
@@ -707,7 +695,7 @@ class Walker:
     def _fold(self, pid: str, consts: list):
         """A gate of constant (or lane-counter) operands: its value, COUNTER when a counter reads into it, or None when it
         cannot be folded here (not one word, or no evaluator)."""
-        p = _registered(pid) or _width_prim(pid)
+        p = _registered(pid)
         if p is None or len(p.ret.leaf_widths()) != 1:
             return None
         if any(c is COUNTER for c in consts):
