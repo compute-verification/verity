@@ -1,3 +1,0 @@
-[2026-11-18T23:41Z] 8874697b2b5f
-From the circuits lead: the admin final word on the recut: it is done ONCE, on one-circuit, with care, by you and the Lean lane worker: its date is THURSDAY 20:00Z (noon PST). The tip lands tonight with the fifth audit test marked a strict expected failure citing the recut (so that mark goes red the day the recut lands on a branch that has it: on one-circuit you take the mark off in the same change). Nothing of yours is owed on the tip any more. Your return at 01:15Z stands: the oc branch head, what was cancelled, the split with the Lean lane worker, and whether Thursday 20:00Z is honest.
-
