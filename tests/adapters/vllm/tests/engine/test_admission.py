@@ -68,7 +68,7 @@ def test_a_held_release_is_refused_until_the_adapter_keeps_tokens_back():
     sched = Outputs()
     admission.install(sched, ex)
     sched.add_request(Req("a"))
-    with pytest.raises(NotImplementedError, match="vllm/adapter-names-no-scheme"):
+    with pytest.raises(NotImplementedError, match="vllm/adapter-imports-no-protocol"):
         step(sched)
 
 

@@ -112,7 +112,7 @@ class Hook(scheduler_step.Part):
                 rid, k = o.request_id, len(o.new_token_ids or ())
                 input_ = self.live.get(rid) or self.key(rid)
                 if k and self.ex.held(input_, step):
-                    raise NotImplementedError(f"vllm/adapter-names-no-scheme: a scheme holds input {input_}'s release "
+                    raise NotImplementedError(f"vllm/adapter-imports-no-protocol: a scheme holds input {input_}'s release "
                                               f"at step {step}, and the adapter keeps no released token back yet")
                 index = self.sent.get(rid, 0)
                 self.sent[rid] = index + k
