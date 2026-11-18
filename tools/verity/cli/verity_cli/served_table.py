@@ -51,7 +51,6 @@ from verity import config as K
 from verity.config import Component, Workload
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Starter
 from verity.protocols.compose import schemes
-from verity.protocols.resource_accounting.compute.pouw.scheme import PEARL_PLUS
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.scheme import settings
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
@@ -133,7 +132,7 @@ def _pearlplus_params(params: Mapping[str, Any]) -> dict[str, Any]:
     if "class" in params and not (isinstance(params["class"], str) and _CLASS.fullmatch(params["class"])):
         raise Refused("params", f"class is SLOTS,PROMPT,OUTPUTS, three positive integers, not {params['class']!r}")
     try:
-        own = settings(PEARL_PLUS, own)
+        own = settings(schemes.get("pearl-plus"), own)
     except ValueError as e:
         raise Refused("params", str(e)) from None
     return {**({"class": params["class"]} if "class" in params else {}), **{k: own[k] for k in PEARLPLUS_PARAMS}}

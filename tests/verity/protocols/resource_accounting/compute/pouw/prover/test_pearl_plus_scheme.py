@@ -305,10 +305,30 @@ def test_attach_refuses_without_coins_or_a_challenger_its_gate_or_a_kernel() -> 
         PS.PEARL_PLUS.attach(_Exchange(), {"settings": {"coins": "in-process"}})
 
 
-def test_a_capture_is_refused_by_name_until_what_it_records_is_settled() -> None:
-    with pytest.raises(NotImplementedError, match=r"Match capture \(ctx\['stage'\] 'capture'\) records rather than commits"):
-        PS.PEARL_PLUS.attach(_Exchange(), {**IN_PROCESS, "stage": "capture"})
-    PS.PEARL_PLUS.attach(_Exchange(), {**IN_PROCESS, "stage": "commit"})
+def test_a_capture_records_each_call_as_one_op_on_in_process_coins(monkeypatch) -> None:
+    with pytest.raises(ValueError, match="a Match capture .* opens no session on the auditor device's challenger"):
+        PS.PEARL_PLUS.attach(_Exchange(), {**CTX, "stage": "capture"})
+    ops: list = []
+
+    def linear_op():
+        return lambda x, weight, bias, entry, w: ops.append((x, weight, bias, entry, w)) or _Device.runs[entry].gemm(
+            w, x, weight, bias)
+
+    monkeypatch.setattr(SV, "PearlCKernel", _Kernel, raising=False)
+    monkeypatch.setattr(SV, "in_process_coins", lambda window: _Coins())
+    monkeypatch.setattr(T, "_pearl_c", lambda: _Device)
+    monkeypatch.setattr(_Device, "linear_op", staticmethod(linear_op), raising=False)
+    monkeypatch.setattr(_Device, "runs", {}, raising=False)
+    ex = _Exchange()
+    on = PS.PEARL_PLUS.attach(ex, {**IN_PROCESS, "stage": "capture", "build": "build-7"})
+    [(_, req)] = ex.filed
+    ex.emit(H.RegisteredValues((("model.layers.0.qkv.weight", W0),), operands={"model.layers.0.qkv.weight": 3}))
+    ex.emit(H.StepBegan(0, ("a",), 8))
+    assert _Device.runs == {"build-7": on.run}
+    assert req.kernel(_due(), lambda given: "stock") == "y"
+    assert ops == [("x", "w", None, "build-7", 3)] and on.run.calls == [(3, "x", "w", None)]
+    on.release()
+    assert _Device.runs == {}
 
 
 def test_attach_refuses_an_undeclared_setting() -> None:

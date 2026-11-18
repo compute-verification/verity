@@ -1,6 +1,6 @@
 """The TABLES sweep for ``flock-circuit`` (``verity/flock-circuit``, or with ``--typed`` the typed statement
-``verity/flock-circuit/types``): one ``result.json`` per point, as ``verity_flock.ir_bench``
-does for ``flock-ir-frame`` (whose guard, probes and helpers, from ``verity_flock.bench``, this reuses).
+``verity/flock-circuit/types``): one ``result.json`` per point, with the guard, probes and helpers of
+``verity_flock.bench``.
 
     python -m verity_flock.circuit_bench --template rope-head --input-set DIR --bin target/release/flock-circuit --out-dir D \\
         --points "256 1024" [--per-proof N] [--runs 5] [--verifier HOST:PORT] [--rtt-target HOST:PORT] [--loopback] [--typed]
