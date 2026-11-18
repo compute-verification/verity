@@ -293,7 +293,7 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
 ROWS = {
     "2x3 one input run handed to two rows": "own-rows",
     "2x3 a row every unit shares": "own-rows",
-    "2x3 a row of computed gates": "own-rows",
+    "2x3 a row of computed gates": "wires",
 }
 #: the toys of an edge from an output of leaves other than its row's (`vectors.EDGED`)
 LEAVES = ("an edge from an output of two widths into one 32-bit leaf", "an edge from an output of 8 bits into a 16-bit leaf",
@@ -324,15 +324,15 @@ def test_an_edges_writer_output_has_its_rows_leaves():
 def test_a_units_rows_are_input_gates_of_its_own(shaped, monkeypatch):
     """The form counts a unit's row by what the record says fills it, which says something of the circuit only where
     the row is input gates of that unit alone. The root says which gates a unit's rows are, and the form refuses a
-    root that hands a unit anything else (`own-rows`): the input gates of another row, the first unit's for every
-    unit, or computed gates. Each case here is the accepted one with its root so edited, the record the same but for
+    root that hands a unit anything else (`own-rows`): the input gates of another row, or the first unit's for every
+    unit. Each case here is the accepted one with its root so edited, the record the same but for
     the Program it names; without the refusal the reference reads the same of each as of the accepted one, and
     accepts it."""
     held = shaped["2x3 registered"]
     want = vectors.results(held["case"])
     doc = json.loads(held["case"]["instance"]["record"])
     made = {what: shaped[what] for what, stage in ROWS.items() if stage == "own-rows"}
-    assert len(made) == 3
+    assert len(made) == 2
     for what, m in made.items():
         r, inst = vectors.results(m["case"]), m["case"]["instance"]
         assert r["detail"] == r["public"] == {"error": "own-rows", "message": ref.OWN_ROWS}, what
@@ -343,7 +343,7 @@ def test_a_units_rows_are_input_gates_of_its_own(shaped, monkeypatch):
     from verity.circuits.layout import Scope, resolve_gate
     from verity.circuits.parts import n_members
     from verity.circuits.program import is_input
-    honest, twice, shared, computed = (ref.reference.desc_program(m["case"]["instance"]["program"])
+    honest, twice, shared = (ref.reference.desc_program(m["case"]["instance"]["program"])
                                        for m in (held, *made.values()))
 
     def gates(program, node: int, param: int) -> list[list[tuple]]:
@@ -363,7 +363,6 @@ def test_a_units_rows_are_input_gates_of_its_own(shaped, monkeypatch):
     assert distinct(gates(honest, feed, 0)) and distinct(gates(honest, select, 0))
     assert gates(twice, norm, 0) == gates(twice, norm, 1)
     assert len({tuple(g for g, _ in row) for row in gates(shared, feed, 0)}) == 1 < len(gates(shared, feed, 0))
-    assert not any(is_input(prim) for row in gates(computed, select, 0) for _, prim in row)
     monkeypatch.setattr(ref, "own_rows", lambda *_: None)
     for what, m in made.items():
         off = vectors.results(m["case"] | {"rows": held["case"]["rows"]})

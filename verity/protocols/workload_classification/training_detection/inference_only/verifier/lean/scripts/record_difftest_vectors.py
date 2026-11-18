@@ -49,8 +49,9 @@ taken into a closed row; an output of 8 bits (`short_output`), which lacks bits 
 into one leaf and into a closed row alike; and an output of 31 bits (`odd_output`), two words, its bits rounded
 up: refused into a row of two words, which holds a bit it lacks, and a record that wires it into a row of one
 word refused by the wires' own check. Then a root that
-hands a unit a row that is not input gates of its own: the served shape with one input run handed to two rows, with
-a row every unit shares, and with a row of computed gates. Then a text the form reads nothing of: the served shape's
+hands a unit a row that is not input gates of its own: the served shape with one input run handed to two rows, and
+with a row every unit shares; and one that hands `Select`'s row part of `Norm`'s output, an edge, refused by the edges
+(`edge-rows`). Then a text the form reads nothing of: the served shape's
 record as one that lists its members, which states no wires, refused by the wires' reader; and the text of no wire
 and nothing else, which names no Program, refused with its templates. Then a row declared twice (`TWICE`): the served
 shape's record with one declaration more, into a row it already declares, a case each pair of a wire, a registered
@@ -1111,9 +1112,10 @@ def shaped() -> list[dict]:
         """`Feed`'s selection not mapped: every unit handed the first unit's input gates."""
         _share(nodes, units(nodes)[-1], 0, desc["types"].index(["Value", 16]))
 
-    def computed(nodes: list, _desc: dict) -> None:
-        """`Select`'s row handed `Norm`'s output, computed gates, in place of input gates."""
-        select = units(nodes)[-2]
+    def computed(nodes: list, desc: dict) -> None:
+        """`Select`'s row handed the first of `Norm`'s output leaves it holds, computed gates of one field it doesn't
+        fill."""
+        select = [x for x in units(nodes) if desc["callees"][x["fn"]] == "LowSelect_v1"][-1]
         count = _refs(nodes, select["args"][0]["refs"]).count
         select["args"][0]["refs"] = {"affine": ["n", nodes.index(units(nodes)[2]), 0, count]}
 
@@ -1158,7 +1160,7 @@ def shaped() -> list[dict]:
 
     first("2x3 one input run handed to two rows", lowered(2, 3), 27, reroot=twice, broken="own-rows")
     first("2x3 a row every unit shares", lowered(2, 3), 28, reroot=shared, broken="own-rows")
-    first("2x3 a row of computed gates", lowered(2, 3), 29, reroot=computed, broken="own-rows")
+    first("2x3 a row of computed gates", lowered(2, 3), 29, reroot=computed, broken="wires")
     c = lowered(2, 3)
     first("2x3 a record that lists its members", c, 45, edit=listed(c), broken="wires")
     first("2x3 a text of no wire that names no Program", lowered(2, 3), 46,
