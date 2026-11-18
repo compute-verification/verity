@@ -196,14 +196,17 @@ def expand(inst) -> dict:
     return inst | {"theta": theta, "owner": owner}
 
 
-def desc_program(text: str):
+def desc_program(text: str, refuse_recut: bool = False):
     """The Program `InferenceOnlyCheck.Desc` reads, with its refusals in its order: `program` where it doesn't decode,
+    `recut-unread` where `refuse_recut` and the root reads an input node in leaves of part of its leaf width,
     `not-topological`, and `program` past `walkBound`'s limit or for a scan of no iterations with output leaves."""
     try:
         desc = json.loads(text)
         program = codec.decode_program(desc, declared(desc))
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise Malformed("program") from e
+    if refuse_recut and program.root.body.recut:
+        raise Malformed("recut-unread")
     from verity.circuits.partition_object import order_violation
     if order_violation(program) is not None:
         raise Malformed("not-topological")
@@ -239,7 +242,7 @@ def evaluate_desc(inst) -> dict:
     gamma, alpha = inst["gamma"], inst["alpha"]
     if not (_nat(gamma) and isinstance(alpha, list) and len(alpha) == 2 and all(map(_nat, alpha)) and alpha[1] > 0):
         raise Malformed("params")
-    desc_program(inst["program"])
+    desc_program(inst["program"], refuse_recut=True)
     inp, reg, spans = root_nodes(inst["program"])
     K = len(inp)
     theta_nodes(inst["theta"], inp, reg)
@@ -444,7 +447,7 @@ def evaluate_count(inst) -> dict:
     if not (_nat(c) and _nat(k) and _nat(n) and all(isinstance(b, str) for b in blocks)
             and all(map(_nat, table.values()))):
         raise Malformed("params")
-    program = desc_program(inst["program"])
+    program = desc_program(inst["program"], refuse_recut=True)
     inp, reg, _ = root_nodes(inst["program"])
     theta = theta_nodes(inst["theta"], inp, reg)
     defs = reached(program)
