@@ -925,6 +925,8 @@ def definition_decoder(desc: dict, registry: DefinitionTable, built: dict[str, A
         def leaves(space: str, idx: int) -> int | None:
             if space == "p":
                 return params[idx][1].leaves if idx < len(params) else None
+            if idx < len(nodes) and is_input(nodes[idx].fn):
+                return outs[idx].leaves * (outs[idx].homogeneous_width() or 1)
             return outs[idx].leaves if idx < len(outs) else None
 
         for nd in b["nodes"]:

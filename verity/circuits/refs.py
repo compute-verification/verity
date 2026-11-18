@@ -198,6 +198,50 @@ def spell(run: int, lanes) -> "Refs":
     return Grid(run, tuple(lanes))
 
 
+def as_grid(p: "Refs") -> tuple[int, tuple[Lane, ...]]:
+    """`(run, lanes)` of an affine, strided, explicit or grid part: the grid its spelling stands for (PROTOCOL.md §3)."""
+    if isinstance(p, Grid):
+        return p.run, p.lanes
+    if isinstance(p, Affine):
+        return p.count, ((p.space, p.idx, p.base, 1, ()),)
+    if isinstance(p, Strided):
+        T = max(1, -(-p.count // p.inner))
+        return p.inner, ((p.space, p.idx, p.base, p.inner_stride, ((T, p.outer_stride),) if T > 1 else ()),)
+    if isinstance(p, Explicit):
+        return 1, tuple((s, i, j, 0, ()) for s, i, j in p.items)
+    raise TypeError(f"{p!r} is not a part")
+
+
+def recut(registered_bits: int, reader_bits: int, part: "Refs | None" = None, leaves: int | None = None) -> int:
+    """q, the reader leaves one leaf of an input node of width ``registered_bits`` is read as at width ``reader_bits``:
+    reader leaf j is bits [(j mod q) * reader_bits, (j mod q + 1) * reader_bits) of registered leaf j div q, the low part
+    first (PROTOCOL.md §3). Given the ``part`` that reads it and the node's ``leaves``, its lanes are checked to read whole
+    registered leaves inside the node. Refused (ValueError) by name: recut-width, recut-boundary, recut-overrun."""
+    if not (reader_bits > 0 and registered_bits > 0 and registered_bits % reader_bits == 0):
+        raise ValueError(f"recut-width: an input node of {registered_bits}-bit leaves read in {reader_bits}-bit leaves: the "
+                         "reader's width divides the registered width")
+    q = registered_bits // reader_bits
+    if part is None or not part.count:
+        return q
+    run, lanes = as_grid(part)
+    for ln in lanes:
+        _s, _i, b, e, lv = ln
+        if q > 1 and not (e == 1 and b % q == 0 and run % q == 0 and part.count % q == 0 and all(d % q == 0 for _r, d in lv)):
+            raise ValueError(f"recut-boundary: {part.to_json()} reads an input node of {registered_bits}-bit leaves in "
+                             f"{reader_bits}-bit leaves other than whole registered leaves")
+        if isinstance(part, Strided):
+            k, last = divmod(part.count - 1, part.inner)
+            at = [b + x * part.outer_stride + y * e for x, y in
+                  [(0, 0), (0, min(part.inner, part.count) - 1), (k, 0), (k, last)] + ([(k - 1, part.inner - 1)] if k else [])]
+            lo, hi = min(at), max(at)
+        else:
+            lo, hi = lane_bounds(run, ln)
+        if leaves is not None and not (0 <= lo and hi < leaves * q):
+            raise ValueError(f"recut-overrun: {part.to_json()} reads past the {leaves} {registered_bits}-bit leaves of its "
+                             "input node")
+    return q
+
+
 class Grid(Refs):
     """`len(lanes)` lanes of `run` references a period, interleaved, over `periods` periods (PROTOCOL.md §3). A lane is
     `(space, idx, base, inner_stride, ((radix, step), ...))`, innermost level first; every lane's radices multiply to
