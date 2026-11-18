@@ -106,18 +106,18 @@ def test_compare_names_the_first_call_each_checksum_differs_at(tmp_path):
 
 
 def test_a_replay_probes_its_top_k_into_its_own_directory(tmp_path, monkeypatch):
-    seen = []
+    seen, argvs = [], []
     monkeypatch.setattr(L, "register", lambda model: tmp_path / "ck")
-    monkeypatch.setattr(L.R, "main", lambda argv: 0)
+    monkeypatch.setattr(L.R, "main", lambda argv: argvs.append(argv) or 0)
     monkeypatch.setattr(L.R, "engine", L.R.engine)
     monkeypatch.setattr(L.P, "apply", lambda **kw: None)
     monkeypatch.setattr(L.T, "apply", lambda **kw: seen.append(kw))
     monkeypatch.setenv("LADDER_TILINGS", "")
     monkeypatch.setenv("LADDER_TOPK_PROBE_OUT", "")
     monkeypatch.delenv("LADDER_TOPK_PROBE", raising=False)
-    L.replay(SimpleNamespace(model="glm53", out=str(tmp_path), index=2, logprobs=False))
-    assert seen == []
+    L.replay(SimpleNamespace(model="glm53", out=str(tmp_path), index=2, logprobs=False, private=str(tmp_path / "private")))
+    assert seen == [] and argvs[0][argvs[0].index("--private") + 1] == str(tmp_path / "private" / "replay-2")
     monkeypatch.setenv("LADDER_TOPK_PROBE", "sort")
     monkeypatch.setenv("LADDER_TOPK_PROBE_REAL", "det_topk:select")
-    L.replay(SimpleNamespace(model="glm53", out=str(tmp_path), index=2, logprobs=False))
+    L.replay(SimpleNamespace(model="glm53", out=str(tmp_path), index=2, logprobs=False, private=str(tmp_path / "private")))
     assert seen == [{"mode": "sort", "out": str(tmp_path / "replay-2" / "topk"), "real": "det_topk:select"}]

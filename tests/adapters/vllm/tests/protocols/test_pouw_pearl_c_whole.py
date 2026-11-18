@@ -15,6 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES, pearl_c_scheme
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
@@ -282,7 +283,7 @@ class Calls(PG.GraphCalls, PP.EpochCalls, PassEnds):
     def __init__(self, torch):
         self.entry, self.hashing, self.graphs = "test", True, True
         self.omit: frozenset[str] = frozenset()
-        self.schedule, self.capacity = PPD.schedule_of(SERIAL, PPD.scheme_of(PPD.SCHEMES[0])), PPD.LEAF_CAPACITY
+        self.schedule, self.capacity = PPD.schedule_of(SERIAL, pearl_c_scheme(PEARL_C_SCHEMES[0])), PPD.LEAF_CAPACITY
         self.order, self.nb = {7: 0, 8: 1, 9: 2}, 64
         self.roots = {w: bytes([w]) * 32 for w in self.order}
         self.keys = lambda root, index, m16: bytes([root[0], index, m16]) * 56
@@ -476,7 +477,7 @@ def test_a_pass_replays_whole_only_when_graphed_and_serial_and_its_key_says_whet
     assert run.whole_key() == (False, frozenset(), name, False, False)        # nothing to defer without hashing
     run.cur, run.graphs = PPDR._Pass(None), False
     assert run.whole_key() is None
-    run.graphs, run.schedule = True, PPD.schedule_of("deferred", PPD.scheme_of(PPD.SCHEMES[0]))
+    run.graphs, run.schedule = True, PPD.schedule_of("deferred", pearl_c_scheme(PEARL_C_SCHEMES[0]))
     assert run.whole_key() is None
 
 

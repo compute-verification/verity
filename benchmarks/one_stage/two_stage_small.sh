@@ -35,6 +35,7 @@
 # SMALL_ARGS="--inline --units 1 --logits --serve NONCE" with a nonce no run has used: the gate opens a run's root once,
 # ever.
 set -euo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
@@ -116,11 +117,11 @@ rc=0
   --out "$W/second" "${UNLINKED[@]}" "${STOP[@]}" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
 grep '^TWO ' "$O/second.log" || tail -30 "$O/second.log"
 echo "second rc=$rc" | tee -a "$O/machine.txt"
-RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -name index.json
-         ! -name index-salt.bin ! -name salts.bin ! -path './*/archive/*' ! -path '*-work/*' ! -path './challenger-host/*')
+RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name index.json
+         ! -path './*/archive/*' ! -path '*-work/*' ! -path './challenger-host/*')
 for d in first second; do
   mkdir -p "$O/$d"
-  (cd "$W/$d" && find . "${RECORDS[@]}" -size -64M -print0 | xargs -0 -r -I{} cp --parents {} "$O/$d/")
+  (cd "$W/$d" && find . "${RECORDS[@]}" -size -64M -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$O/$d/")
   (cd "$W/$d" && find . "${RECORDS[@]}" -size +63M -print0 | sort -z \
      | xargs -0 -r -I{} sh -c 'printf "%s  %s  %s\n" "$(sha512sum < "$1" | cut -d" " -f1)" "$(stat -c %s "$1")" "$1"' _ {}) > "$O/$d/large.txt"
 done

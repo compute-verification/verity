@@ -43,8 +43,9 @@ def lifetime(out: Path, name: str, seconds: float, *, mode: str | None, decode: 
         p.mkdir(parents=True)
         (p / "meta.json").write_text(json.dumps({"load": "agentic@4", "rep": rep, "t0_unix": t0, "wall_s": 10.0}))
         (p / "result.json").write_text(json.dumps({"duration": seconds}))
+    private = out.parent / "private" / name
     (d / "meta.json").write_text(json.dumps({"left_out": 1, "env": {"VERITY_DSA_TOPK": mode} if mode else {},
-                                             "server_argv": ["--tensor-parallel-size", "8"]}))
+                                             "server_argv": ["--tensor-parallel-size", "8"], "private": str(private)}))
     recs = [{"kind": "header", "config": {"speculative": {"num_speculative_tokens": 5}}}]
     if lead:
         recs.append({"kind": "step", "step": 98, "T": 1, "rows": [["s", 10, 1]], "t": 100.5})
@@ -53,7 +54,8 @@ def lifetime(out: Path, name: str, seconds: float, *, mode: str | None, decode: 
               "t": 102.0 + i} for i, (n, start) in enumerate(decode)]
     recs.append({"kind": "step", "step": 99, "T": 6, "rows": [["r0", 5000, 6]], "t": 5.0})
     (d / "server").mkdir()
-    with gzip.open(d / "server" / "step_trace.1.jsonl.gz", "wt") as f:
+    (private / "server").mkdir(parents=True)
+    with gzip.open(private / "server" / "step_trace.1.jsonl.gz", "wt") as f:
         f.write("".join(json.dumps(r) + "\n" for r in recs))
 
 
@@ -86,8 +88,8 @@ def test_at_is_linear_between_shapes_holds_rows_and_extends_keys(tmp_path):
 
 
 def test_steps_count_decode_rows_past_k_and_their_longest(tmp_path):
-    out = job(tmp_path, None)
-    s, n = Q.steps(out / "prod-record.1" / "server" / "step_trace.1.jsonl.gz")
+    job(tmp_path, None)
+    s, n = Q.steps(tmp_path / "private" / "prod-record.1" / "server" / "step_trace.1.jsonl.gz")
     assert n == 6
     assert [(x["rows"], x["keys"]) for x in s] == [(0, 0), (24, 131072), (6, 20000), (6, 5006)]
 

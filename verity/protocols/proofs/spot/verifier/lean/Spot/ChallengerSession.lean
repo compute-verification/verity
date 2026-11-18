@@ -217,10 +217,6 @@ def event (line : String) : V Json := do
   unless sortedKeys j do throw LOG_MALFORMED
   pure j
 
-private def pairsOf {α : Type} : List α → List (α × α)
-  | a :: b :: rest => (a, b) :: pairsOf rest
-  | _ => []
-
 /-- `tree_line`: whether release log line `line` is a coin tree's (`ChallengerTrees.coinTreesOf`), an event whose
 `event` is `TREE_EVENT` or `OPEN_EVENT`. -/
 def treeLine (line : String) : Bool :=
@@ -232,13 +228,22 @@ def treeLine (line : String) : Bool :=
 def RELEASED_BEFORE_RECEIVED : String :=
   "the challenger's release log stamps a coin's release before its root's receipt"
 
+def SLOT_TWICE : String := "the challenger's release log opens one coin twice: a retry never redraws"
+
+def COMMITTED_RELEASED : String :=
+  "the challenger's release log releases a coin after a root it committed with no coin"
+
+def UNRELEASED : String := "the challenger's release log holds a root its coin's release does not follow"
+
 inductive EntryKind where
   | recorded
   | released
+  | committed
   deriving DecidableEq, Repr
 
-/-- An entry of the release log as `Verity.Challenger.Entry`'s: a root `recorded` or a coin `released`, at line `pos`
-(the head is line 0). `root` is the root recorded, or the root the coin is released after; `time` its `received_at` or
+/-- An entry of the release log as `Verity.Challenger.Entry`'s: a root `recorded` for coin `index`, coin `index`
+`released`, or a root `committed` with no coin, the family's `index`th commit, at line `pos` (the head is line 0).
+`root` is the root recorded or committed, or the root the coin is released after; `time` its `received_at` or
 `released_at`. -/
 structure Entry where
   kind : EntryKind
@@ -251,8 +256,8 @@ structure Entry where
 /-- The roots and releases of every family, in the one order the release log holds them. -/
 abbrev Log := List Entry
 
-/-- `before`: entry `a` stands earlier than entry `b` in the release log, the order `Verity.Challenger.Log.before`
-reads. -/
+/-- `before`: entry `a` stands earlier than entry `b` in the release log, the order `Verity.Challenger.Log.RecordedBefore`
+and `Verity.Challenger.Log.ReleasedBefore` read. -/
 def before (a b : Entry) : Bool := a.pos < b.pos
 
 /-- The roots the challenger received, by family in order. -/
@@ -262,45 +267,69 @@ abbrev Roots := List (String × List ByteArray)
 def byFamily (c : LiveCommitment) (log : Log) : Roots :=
   c.families.map fun (l, _) => (l, (log.filter fun e => e.kind == .recorded && e.label == l).map (·.root))
 
-/-- `cut`, lean's cut as a check: every root of a family in `payloads` stands before every release of a family in
-`keys`. -/
+/-- `released_after`: the coins of family `label` that `log` shows released after `after`, by index, in its order. -/
+def releasedAfter (log : Log) (label : String) (after : ByteArray) : List Nat :=
+  (log.filter fun e => e.kind == .released && e.label == label && e.root == after).map (·.index)
+
+/-- `cut`, `Verity.Challenger.Log.Cut` as a check over the log's entries: every root, recorded or committed, of a family
+in `payloads` stands before every release of a family in `keys`. -/
 def cut (log : Log) (payloads keys : List String) : Bool :=
-  let last := ((log.filter fun e => e.kind == .recorded && payloads.contains e.label).map (·.pos)).max?
+  let last := ((log.filter fun e => e.kind != .released && payloads.contains e.label).map (·.pos)).max?
   let first := ((log.filter fun e => e.kind == .released && keys.contains e.label).map (·.pos)).min?
   match last, first with
   | some r, some k => r < k
   | _, _ => true
 
-/-- `released_log_of` (module docstring): the roots and releases the release log `log` shows, its head naming `c`,
-each root followed by its coin's release, released no earlier than its root's receipt, its coin trees' lines aside
-(`treeLine`). -/
+/-- `released_log_of` (module docstring): the roots, releases and commits the release log `log` shows, its head naming
+`c`, its coin trees' lines aside (`treeLine`). A root names a coin of its family, by index below the family's count,
+each at most once (`SLOT_TWICE`) and in any order, and that coin's release follows it (`UNRELEASED`), no earlier than
+its receipt; a commit is its family's next and nothing is released after it (`COMMITTED_RELEASED`). A coin no root
+names is never released. -/
 def releasedLogOf (c : LiveCommitment) (log : List String) : V Log := do
   let head := "{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}"
   unless log.head? == some head do
     throw s!"the challenger's release log is not coin commitment {(Flock.hexOf c.root).take 16}'s"
   let rest := (log.zipIdx.drop 1).filter fun (l, _) => !treeLine l
-  if rest.length % 2 == 1 then throw "the challenger's release log ends on a root without its release"
-  let mut counts : Array (String × Nat) := (c.families.map fun (l, _) => (l, 0)).toArray
+  let mut commits : Array (String × Nat) := (c.families.map fun (l, _) => (l, 0)).toArray
+  let mut opened : List (String × Nat) := []
   let mut out : Array Entry := #[]
-  for ((a, i), (b, j)) in pairsOf rest do
+  let mut pending : Option Entry := none
+  for (a, i) in rest do
     let r ← event a
-    let s ← event b
-    let ok := keys? r == some #["event", "index", "label", "received_at", "root"] &&
-      keys? s == some #["after", "event", "index", "label", "released_at"] &&
-      jsonStrIs (getD r "event") "root" && jsonStrIs (getD s "event") "release"
-    let .str label := getD r "label" | throw LOG_MALFORMED
-    let some k := counts.findIdx? (·.1 == label) | throw LOG_MALFORMED
-    let .str root := getD r "root" | throw LOG_MALFORMED
-    let some bytes := (Flock.unhex root).toOption | throw LOG_MALFORMED
-    let some received := nat? (getD r "received_at") | throw LOG_MALFORMED
-    let some released := nat? (getD s "released_at") | throw LOG_MALFORMED
-    let n : Nat := (counts[k]?.map (·.2)).getD 0
-    unless ok && int? (getD r "index") == some (n : Int) && int? (getD s "index") == some (n : Int) &&
-        jsonStrIs (getD s "label") label && jsonStrIs (getD s "after") root && root.length == 128 do
-      throw LOG_MALFORMED
-    if released < received then throw RELEASED_BEFORE_RECEIVED
-    counts := counts.modify k fun (l, m) => (l, m + 1)
-    out := out.push ⟨.recorded, label, n, bytes, received, i⟩ |>.push ⟨.released, label, n, bytes, released, j⟩
+    if jsonStrIs (getD r "event") "release" then
+      let some p := pending |
+        throw (if out.back?.map (·.kind) == some .committed then COMMITTED_RELEASED else LOG_MALFORMED)
+      let some released := nat? (getD r "released_at") | throw LOG_MALFORMED
+      unless keys? r == some #["after", "event", "index", "label", "released_at"] &&
+          int? (getD r "index") == some (p.index : Int) && jsonStrIs (getD r "label") p.label &&
+          jsonStrIs (getD r "after") (Flock.hexOf p.root) do
+        throw LOG_MALFORMED
+      if released < p.time then throw RELEASED_BEFORE_RECEIVED
+      out := out.push p |>.push ⟨.released, p.label, p.index, p.root, released, i⟩
+      pending := none
+    else
+      if pending.isSome then throw UNRELEASED
+      let .str label := getD r "label" | throw LOG_MALFORMED
+      let some count := c.family label | throw LOG_MALFORMED
+      let .str root := getD r "root" | throw LOG_MALFORMED
+      let some bytes := (Flock.unhex root).toOption | throw LOG_MALFORMED
+      let some received := nat? (getD r "received_at") | throw LOG_MALFORMED
+      let some index := nat? (getD r "index") | throw LOG_MALFORMED
+      unless keys? r == some #["event", "index", "label", "received_at", "root"] && root.length == 128 &&
+          root == Flock.hexOf bytes do
+        throw LOG_MALFORMED
+      if jsonStrIs (getD r "event") "root" then
+        unless index < count do throw LOG_MALFORMED
+        if opened.contains (label, index) then throw SLOT_TWICE
+        opened := (label, index) :: opened
+        pending := some ⟨.recorded, label, index, bytes, received, i⟩
+      else if jsonStrIs (getD r "event") "commit" then
+        let some k := commits.findIdx? (·.1 == label) | throw LOG_MALFORMED
+        unless index == (commits[k]?.map (·.2)).getD 0 do throw LOG_MALFORMED
+        commits := commits.modify k fun (l, m) => (l, m + 1)
+        out := out.push ⟨.committed, label, index, bytes, received, i⟩
+      else throw LOG_MALFORMED
+  if pending.isSome then throw UNRELEASED
   return out.toList
 
 def rootsJson (roots : Roots) : Json :=
@@ -309,7 +338,8 @@ def rootsJson (roots : Roots) : Json :=
 def logJson (log : Log) : Json :=
   Json.arr <| log.toArray.map fun e =>
     Json.mkObj [("index", Lean.toJson e.index),
-      ("kind", Json.str (if e.kind == .recorded then "recorded" else "released")), ("label", Json.str e.label), ("pos", Lean.toJson e.pos), ("root", Json.str (Flock.hexOf e.root)),
+      ("kind", Json.str (match e.kind with | .recorded => "recorded" | .released => "released" | .committed => "committed")),
+      ("label", Json.str e.label), ("pos", Lean.toJson e.pos), ("root", Json.str (Flock.hexOf e.root)),
       ("time", Lean.toJson e.time)]
 
 /-- `session_of` (module docstring): the coin commitment the challenger signed under `key`, the roots and releases its

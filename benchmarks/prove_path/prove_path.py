@@ -42,13 +42,13 @@ Two kinds of committed run:
     prove_path.py commit (--tp-commit DIR --build-root DIR | --bundle DIR --row-dir DIR --workload F [--hf-config F] \\
         | --serve-run DIR --window K --row-dir DIR [--hf-config F] [--target F]) [--advice FILE] [--opening FILE] --partition F \\
         --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...] \\
-        [--serving-rows-tables REGISTRATION --serving-rows-tables-key KEY] [--checkpoint-dir DIR]
+        [--serving-rows-tables REGISTRATION] [--checkpoint-dir DIR]
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server --out DIR [--cap-bits L] \\
         [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] --challenger local|gate:USER@HOST --main FILE
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--builds DIR]
     prove_path.py compiler (--serve-run DIR | --serve FILE) [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
-    prove_path.py weights-registration --serve-run DIR --checkpoint-dir DIR --key FILE --out FILE [--checkpoints F] \\
+    prove_path.py weights-registration --serve-run DIR --checkpoint-dir DIR --out FILE [--checkpoints F] \\
         [--tables DIR] [--hf-config F] [--target F] [--deployment-record FILE]
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
     prove_path.py circuit --serve-run DIR --window K --partition F --advice FILE --out FILE [--hf-config F] [--target F] \\
@@ -61,7 +61,7 @@ Two kinds of committed run:
         [--cap N] [--description] [--pin NAME=ROOT ...] [--pins FILE ...] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
-    prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --key FILE --registration FILE \\
+    prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --registration FILE \\
         --checkpoint-dir DIR --out DIR --sampling-design RATE [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--cap N] \\
         [--workers N] [--window-registration W (--h1-key FILE | --pearl-passes DIR)] [--hf-config F] [--target F] \\
         [--cap-bits L]
@@ -138,8 +138,8 @@ Two kinds of committed run:
   slot k is the advice's k-th request, its row (occupancy, prompt length, ids) its ingress prompt, its values its sealed
   record's (`window_rows.Served`) and the class Program's where the engine computed none; the weights, composed from the
   checkpoint ``--checkpoint-dir`` (its shards checked against ``--checkpoints`` where given) and opened against the committed weights
-  root, committed under the committer's secret key ``--key`` (`window_weights.weight_values`) as
-  **weights-registration** committed them under it before the first window's coins (``--registration``, which the
+  root, committed under the salts of the salt file beside ``--registration`` (`window_weights.weight_values`) as
+  **weights-registration** committed them before the first window's coins (``--registration``, which the
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
   any other's reads are free; the scan's state rows (`window_rows.state_value`), or without a kept run a stand-in's
   (`window_rows.standin_state`), a per-window value under the run root, whose rows and salts it also writes whole, prover
@@ -194,7 +194,6 @@ import importlib
 import json
 import multiprocessing
 import os
-import secrets
 import sys
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -940,8 +939,8 @@ def window_of(a: argparse.Namespace, r: int, compiler: Capped, requests: list[di
 
 def tables_of(a: argparse.Namespace) -> dict[str, str] | None:
     """The per-expert cut's tables as a serving-rows request names them (`expert_tables.of_request`): the committer's registration
-    ``--serving-rows-tables`` (``{rank}`` in its path its rank's) and the key file it is read under; None without one."""
-    return {"key": a.serving_rows_tables_key, "registration": a.serving_rows_tables} if a.serving_rows_tables else None
+    ``--serving-rows-tables`` (``{rank}`` in its path its rank's), its salts the salt file beside it; None without one."""
+    return {"registration": a.serving_rows_tables} if a.serving_rows_tables else None
 
 
 def checkpoint_of(a: argparse.Namespace) -> Any:
@@ -1365,19 +1364,6 @@ def compiler_doc(serve_run: str | None, hf_config: str | None, target: str | Non
             "phi": reg.phi.to_json(), "default_seed": reg.default_seed}
 
 
-def committer_key(path: Path) -> bytes:
-    """The committer's 32-byte salt key at ``path``, which never leaves the committer: sampled fresh (mode 0600) the first
-    time, read thereafter. Refused (ValueError) unless 32 bytes."""
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as f:
-            f.write(secrets.token_bytes(32))
-    key = path.read_bytes()
-    if len(key) != 32:
-        raise ValueError(f"{path}: a committer's salt key is 32 bytes, not {len(key)}")
-    return key
-
-
 def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     """A served run's weights registration, the committer's (`window_weights.weights_registration` under the φ its window
     circuit lowers under, `registered_of_serve`): each weight committed under fresh OS salts, kept in the salt file beside
@@ -1732,7 +1718,7 @@ def window_commit_of_advice(a: argparse.Namespace, kept_ingress: KeptIngress | N
     """A served window committed as its window class's one Circuit (module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
     its request's served values its sealed record's), the circuit's output rows (`window_rows.Rows`) recorded into a `Window`
-    under the record's run root, the weights it serves committed under the committer's key ``--key`` as the docket
+    under the record's run root, the weights it serves committed under the salt file beside ``--registration`` as the docket
     ``--registration`` (`weights-registration`, before the first window's coins) committed them, and the scan state the
     window's own value. Where the attester front kept the network attester's run under the serve dir, the scan state is
     its scan of that run (`kept_scan`), whose state rows the scan's state ports open, and slot k holds the request whose
@@ -1972,7 +1958,6 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     p.add_argument("--workers", type=int, default=None, help="commit workers per rank (default min(16, CPUs))")
     p.add_argument("--serving-rows-tables", metavar="REGISTRATION_JSON", help="the per-expert cut's tables registration (verity-vllm "
                    "tp-register-tables --out; {rank} in its path its rank's): each window commits the tables its reads read under it")
-    p.add_argument("--serving-rows-tables-key", metavar="KEY", help="the committer's key file --serving-rows-tables is registered under")
     p.add_argument("--checkpoint-dir", help="the checkpoint the registered weights a window's rows read are composed from, each "
                    "held to its committed tensor root (default none: only the tensors the bundle carries open)")
     p = sub.choices["audit"]
@@ -2017,8 +2002,6 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
                        "advice --weights-of-record takes, and the roots the verifier pins (window-circuit --pins)")
     for flag in ("--serve-run", "--checkpoint-dir", "--out"):
         p.add_argument(flag, required=True)
-    p.add_argument("--key", required=True, help="the committer's 32-byte salt key file, drawn there the first time (0600); "
-                   "it never leaves the committer")
     p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards (default the tree's manifests/checkpoints.json)")
     p.add_argument("--tables", help="the dir holding the engine's served rotary table, cos_sin_cache.npy (serve-openai's; "
                    "default SERVE_RUN/private): registered once within its bound, else unrooted")
@@ -2074,9 +2057,7 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     for flag in ("--serve-run", "--row-dir", "--advice", "--out"):
         p.add_argument(flag, required=True)
     p.add_argument("--window", type=int, required=True)
-    p.add_argument("--key", required=True, help="the committer's secret key (32 bytes, the prover's private file; made "
-                   "0600 where it doesn't exist), the same every window of a period")
-    p.add_argument("--registration", required=True, help="the committer's weights registration under --key "
+    p.add_argument("--registration", required=True, help="the committer's weights registration, its salt file beside it "
                    "(weights-registration), the verifier's pins (records_audit.py audit --registered)")
     p.add_argument("--checkpoint-dir", required=True, help="the served checkpoint, whose tensors the served weights are "
                    "opened from against the committed weights root")

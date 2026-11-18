@@ -13,7 +13,7 @@ An adapter is one module of this package (`spot`, `pous`, `pouw`) that defines:
 * optionally ``EXECUTES: tuple[str, ...]``: the sites where the option replaces the computation rather than wrapping
   it (PoUW: ``LinearBase.quant_method.apply``).  A site has at most one executor, innermost; the others wrap it from
   outside (`protocol_options.SITES`).  What SPOT traces an executed site as is not the adapter's to say: it
-  is the protocol package's circuit (`protocol_options.CIRCUITS`, `protocol_options.traced_as`), and an executor whose
+  is the protocol package's circuit (`scheme.register_circuits`, `protocol_options.traced_as`), and an executor whose
   scheme has none is refused beside SPOT, since it would be traced as the stock computation.  An adapter
   whose sites depend on the scheme defines ``executes(scheme) -> tuple[str, ...]`` instead (PoUW's H1 executes nowhere);
 * optionally ``keeps_weight_copy(scheme, ctx) -> bool``: True when the installed option keeps a weight-derived copy
