@@ -1,5 +1,5 @@
 """serve-openai's windows sealed off the engine loop (`seal_stages.Sealer` over `serve_seal.freeze`), bounded on disk
-(`serve_guard.DiskFloor`), and its records' public fields copied into the run's ``$OUT`` (`serve_commit.Mirror`). CPU only."""
+(`serve_guard.DiskFloor`), and its records' public fields copied into the run's ``$OUT`` (`serve_mirror.Mirror`). CPU only."""
 from __future__ import annotations
 
 import copy
@@ -23,6 +23,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import seal_stages as st
 from verity_vllm.pipeline import serve_commit as sc
+from verity_vllm.pipeline import serve_mirror as sm
 from verity_vllm.pipeline import serve_guard as sg
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_seal as ss
@@ -376,7 +377,7 @@ def test_the_engine_serves_the_next_windows_while_a_seal_is_held(tmp_path, monke
     sealer = st.Sealer(1 << 40)
     out = tmp_path / "serve"
     out.mkdir()
-    mirror = sc.Mirror(out, tmp_path / "OUT")
+    mirror = sm.Mirror(out, tmp_path / "OUT")
     with Sealed(out, sealer=sealer, mirror=mirror) as s:
         raws = [s.post("/v1/completions", _body(i))[1] for i in range(3)]
         assert all(events(r)[-1] == "[DONE]" for r in raws), "every request served while window 0's seal is held"
@@ -396,8 +397,8 @@ def test_the_engine_serves_the_next_windows_while_a_seal_is_held(tmp_path, monke
     reqs = {r["http_id"]: r for r in records(out, "requests.jsonl")}
     assert len(reqs) == 3 and all(r["check"]["passed"] for r in reqs.values())
     assert s.windows.summary()["passed"] and s.windows.summary()["seals"]["sealed"] == 3
-    assert records(tmp_path / "OUT", "seals.jsonl") == [sc.project(x, sc.PUBLIC["seals.jsonl"]) for x in seals]
-    assert records(tmp_path / "OUT", "windows.jsonl") == [sc.project(w, sc.PUBLIC["windows.jsonl"]) for w in records(out, "windows.jsonl")]
+    assert records(tmp_path / "OUT", "seals.jsonl") == [sm.project(x, sm.PUBLIC["seals.jsonl"]) for x in seals]
+    assert records(tmp_path / "OUT", "windows.jsonl") == [sm.project(w, sm.PUBLIC["windows.jsonl"]) for w in records(out, "windows.jsonl")]
     assert all("requests" not in x for x in records(tmp_path / "OUT", "seals.jsonl") + records(tmp_path / "OUT", "windows.jsonl"))
 
 
@@ -839,7 +840,7 @@ def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_pat
     (src / "serve.json").write_text('{"model": "m", "address": ["10.0.0.1", 8000]}')
     (src / "requests.jsonl").write_text('{"prompt_ids": [1]}\n')
     (src / "advice_trace.jsonl").write_text('{"kind": "header"}\n')
-    m = sc.Mirror(src, dst)
+    m = sm.Mirror(src, dst)
     m()
     assert (dst / "windows.jsonl").read_bytes() == b'{"window": 0}\n'
     assert json.loads((dst / "serve.json").read_text()) == {"model": "m"}
@@ -850,7 +851,7 @@ def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_pat
     (src / "windows.jsonl").write_bytes(b'{"window": 4}\n')
     m()
     assert (dst / "windows.jsonl").read_bytes() == b'{"window": 4}\n' and not m.errors
-    assert sc.records_mirror(src, str(src)) is None and sc.records_mirror(src, None) is None
+    assert sm.records_mirror(src, str(src)) is None and sm.records_mirror(src, None) is None
     assert not (dst / "seals.jsonl").exists()
     assert not (dst / "requests.jsonl").exists(), "the requests' ids stay in the serve dir"
     assert not (dst / "advice_trace.jsonl").exists(), "the step trace stays in the serve dir"
@@ -876,15 +877,15 @@ def test_the_mirror_copies_only_the_fields_public_names_at_every_level_and_no_ot
     """The rule, not the list: whatever `PUBLIC` holds, a record mirrors as exactly its named fields, an unnamed one planted at
     the top, in a nested record, in each element of a list of records, or as a record inside a named field, left out; a file
     `PUBLIC` doesn't list is not mirrored, nor can a mirror be asked for one; and every named field has one of the four kinds."""
-    assert sc.KINDS == ("structure", "output", "coin", "commitment")
+    assert sm.KINDS == ("structure", "output", "coin", "commitment")
 
     def kinds(spec: dict) -> list:
         return [x for s in spec.values() for x in (kinds(s) if isinstance(s, dict) else [s])]
 
-    assert all(k in sc.KINDS for spec in sc.PUBLIC.values() for k in kinds(spec)) and sc.MIRRORED == tuple(sc.PUBLIC)
+    assert all(k in sm.KINDS for spec in sm.PUBLIC.values() for k in kinds(spec)) and sm.MIRRORED == tuple(sm.PUBLIC)
     src, dst = tmp_path / "serve", tmp_path / "OUT"
     src.mkdir()
-    for name, spec in sc.PUBLIC.items():
+    for name, spec in sm.PUBLIC.items():
         rec = _full(spec, True)
         if name.endswith(".jsonl"):
             leaf = next(k for k, s in spec.items() if isinstance(s, str))
@@ -896,9 +897,9 @@ def test_the_mirror_copies_only_the_fields_public_names_at_every_level_and_no_ot
     private = ("pauses.jsonl", "summary.json", "remote_session.json", sc.REQUEST_USERS, "requests.jsonl", "step_trace.jsonl")
     for name in private:
         (src / name).write_text('{"user": "u"}\n')
-    m = sc.Mirror(src, dst)
+    m = sm.Mirror(src, dst)
     m()
-    for name, spec in sc.PUBLIC.items():
+    for name, spec in sm.PUBLIC.items():
         want = _full(spec, False)
         if name.endswith(".jsonl"):
             leaf = next(k for k, s in spec.items() if isinstance(s, str))
@@ -907,10 +908,10 @@ def test_the_mirror_copies_only_the_fields_public_names_at_every_level_and_no_ot
         else:
             assert json.loads((dst / name).read_text()) == want, name
         assert b"planted" not in (dst / name).read_bytes() and b'"u"' not in (dst / name).read_bytes()
-    assert sorted(p.name for p in dst.iterdir()) == sorted(sc.PUBLIC) and not m.errors
-    assert not set(private) & set(sc.MIRRORED)
+    assert sorted(p.name for p in dst.iterdir()) == sorted(sm.PUBLIC) and not m.errors
+    assert not set(private) & set(sm.MIRRORED)
     with pytest.raises(ValueError, match="PUBLIC lists none of its fields"):
-        sc.Mirror(src, dst, names=("summary.json",))
+        sm.Mirror(src, dst, names=("summary.json",))
 
 
 def test_a_seal_writes_its_binding_map_in_pieces_to_the_bytes_and_digest_one_dumps_writes(tmp_path, host_blocks, monkeypatch):

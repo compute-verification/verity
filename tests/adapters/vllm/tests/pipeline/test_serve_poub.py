@@ -15,6 +15,7 @@ from verity.protocols.resource_accounting import scheme
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
+from verity_vllm.pipeline import serve_mirror as sm
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import poub_session
 from verity_vllm.pipeline import serve_poub as SR
@@ -181,4 +182,4 @@ def test_a_sealing_server_reads_the_registered_bytes_once_under_its_weights_root
 
 
 def test_neither_the_sessions_record_nor_its_memory_map_is_mirrored():
-    assert "remote_session.json" not in sc.MIRRORED and "memory_map.jsonl" not in sc.MIRRORED
+    assert "remote_session.json" not in sm.MIRRORED and "memory_map.jsonl" not in sm.MIRRORED
