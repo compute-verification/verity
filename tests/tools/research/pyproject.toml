@@ -264,6 +264,11 @@ paths = ["tools/research/src/research/pods/nebius/monitoring"]
 tests = ["test_nebius_sky.py"]
 paths = ["adapters/vllm/verity_vllm/pipeline"]
 
+# the tree's private names, which store/private.py reads as custody's floor, and their adapter's own matcher, loaded by path
+[[tool.verity.tests.reads]]
+tests = ["test_custody_private.py", "test_private_names_agree.py", "test_remote_local.py"]
+paths = ["adapters/vllm/verity_vllm/pipeline/private_names.json", "adapters/vllm/verity_vllm/pipeline/private_names.py"]
+
 [[tool.verity.tests.reads]]
 tests = ["test_store_vllm_tools.py"]
 paths = ["adapters/vllm", "verity"]
