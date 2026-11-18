@@ -7,12 +7,12 @@ import pytest
 
 from verity.protocols.compose import schemes
 from verity.protocols.proofs.spot.verifier import parties as SP
+from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 
 #: the names the composites list that no scheme declares yet, each with the lane that declares it; only shrinks
-UNDECLARED = {"certifier": "network-accounting (declared as network-attester; the rename is pending)",
-              "pouw": "compute-accounting"}
-MANIFESTS = {"sampled-proofs": SP.MANIFEST, "inference-only": IO.MANIFEST}
+UNDECLARED = {"pouw": "compute-accounting"}
+MANIFESTS = {"sampled-proofs": SP.MANIFEST, "inference-only": IO.MANIFEST, "network-attester": NC.MANIFEST}
 
 
 def _id(name: str) -> str:

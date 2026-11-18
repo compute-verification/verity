@@ -11,10 +11,10 @@ workload -> prover     H1RunCommitment, H1Program, H1Record, H1Registration, Pea
 
 from __future__ import annotations
 
-from verity.channel import Body, Schema
+from verity.channel import Body, Int, Json, Schema
 from verity.protocol import Channel, Role
 
-__all__ = ["CHANNELS", "MESSAGES", "PARTIES"]
+__all__ = ["CHANNELS", "MESSAGES", "PARTIES", "PEARL_CHANNELS", "PEARL_PARTIES", "PEARL_SALT"]
 
 WORKLOAD = "workload"
 PROVER = "prover"
@@ -37,3 +37,10 @@ CHANNELS = (
     Channel(PROVER, WORKLOAD, ("PoUWScheme", "H1State", "PoUWMonitoringPeriod")),
     Channel(WORKLOAD, PROVER, ("H1RunCommitment", "H1Program", "H1Record", "H1Registration", "PearlPass")),
 )
+
+#: Pearl+'s own (`PEARL_PLUS.channel_schemas`, ``parties`` and ``channels``), stated here because this place may load the
+#: wire's types: the challenger's salt coin for salt epoch k, opened after its root (`salt.epoch_open_root`;
+#: `coins.CoinOpening`), the parties beside the verifier, and the salt coin's one channel
+PEARL_SALT = Schema("PearlSalt", 1, "coins", {"epoch": Int(0, (1 << 64) - 1), "opening": Json(1 << 12)})
+PEARL_PARTIES = (Role("challenger", "auditor", needs=("host",)), Role("workers", "developer", needs=("serve",)))
+PEARL_CHANNELS = (Channel("challenger", "workers", ("PearlSalt",), carries_coins=True),)
