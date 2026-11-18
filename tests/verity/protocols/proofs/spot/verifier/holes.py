@@ -11,9 +11,10 @@ import pytest
 
 from verity.protocols.proofs.spot.verifier.one_stage.one_circuit import PREFIX
 
-#: the holes by the name each refuses with: Core's `Circuit.restrict` (C_S), the boundary's `RegisteredCircuit.pos`,
-#: `Partition.io` (in(S)'s rows of the block circuit) and in(S)'s row cuts
-HOLES = ("restrict", "pos", "io", "ioCuts")
+#: the holes by the name each refuses with: Core's `Circuit.restrict` (C_S; Lean's door), the base argument's lowering
+#: of C_S (`lower`), the boundary's `RegisteredCircuit.pos`, `Partition.io` (in(S)'s rows of the block circuit) and
+#: in(S)'s row cuts
+HOLES = ("restrict", "lower", "pos", "io", "ioCuts")
 
 
 def refusal(hole: str) -> str:
@@ -23,9 +24,9 @@ def refusal(hole: str) -> str:
     return f"{PREFIX}{hole} :"
 
 
-def waits_on(hole: str) -> Callable[[Callable], Callable]:
-    """The test, an expected failure where what it raises names `hole`'s refusal; any other failure is its own."""
-    text = refusal(hole)
+def waits_on(*holes: str) -> Callable[[Callable], Callable]:
+    """The test, an expected failure where what it raises names one of `holes`' refusals; any other failure is its own."""
+    texts = {hole: refusal(hole) for hole in holes}
 
     def mark(test: Callable) -> Callable:
         @functools.wraps(test)
@@ -33,9 +34,10 @@ def waits_on(hole: str) -> Callable[[Callable], Callable]:
             try:
                 return test(*args, **kwargs)
             except Exception as e:
-                if text in str(e):
-                    pytest.xfail(f"waits on the hole {hole}")
+                for hole, text in texts.items():
+                    if text in str(e):
+                        pytest.xfail(f"waits on the hole {hole}")
                 raise
-        run.hole = hole
+        run.holes = holes
         return run
     return mark

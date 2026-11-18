@@ -21,7 +21,7 @@ leaf). The engine derives no salt and takes no key for one; it reads the buffer 
 stream and don't synchronize.
 
 On a CUDA device the calls run on a tensor runtime (torch) that verity doesn't import: ``Engine.runtime`` raises here, and a
-subclass supplies it (the benchmarks' ``benchmarks/torch_gpu/sha512_rows/torch_engine.py``). Its caller names the target
+subclass supplies it by overriding ``runtime`` to return the module. Its caller names the target
 the device library is built for (``arch``, such as ``90a``): the device's card file's (``verity.device``), which this
 package can't load. A CUDA device without one is refused.
 
@@ -63,8 +63,7 @@ CFLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared")
 DEFAULT_VARIANT = "0000"
 #: what ``Engine.runtime`` raises until a subclass supplies it
 NEEDS_RUNTIME = ("the engine on a CUDA device runs on a tensor runtime (torch) that verity doesn't import "
-                 "(kernels/gpu-code-out-of-benchmarks): use a subclass whose runtime() returns it, as the benchmarks' "
-                 "torch_engine.Engine does")
+                 "(kernels/gpu-code-out-of-benchmarks): use a subclass whose runtime() returns it")
 NEEDS_ARCH = ("the engine on a CUDA device is built for the target its caller names: pass arch, the device's card file's "
               "arch without sm_ (such as 90a), which the caller reads with verity.device.gpu_card_reporting from the "
               "name the device reports; the engine derives no target from a compute capability")

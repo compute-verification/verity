@@ -53,6 +53,7 @@
   "Properties.Spot.Rate",
   "Properties.Spot.MonitoringPeriod",
   "Properties.Spot.MonitoringPeriodLedger",
+  "Properties.Spot.ChallengerPin",
   "Properties.Spot.ChallengerLog",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryAttester",
@@ -1026,7 +1027,7 @@
    "Claims.StrictBirthday": "SHA-512 collision resistance: the strict birthday bound q^2 / 2^513 at one finder (cr/sha-512), as the spec states it",
    "FlockSoundness.Assumptions.SHA512CRExpected": "SHA-512 collision resistance: a finder of expected cost T finds a collision with probability at most T / 2^256 (ecr/sha-512)",
    "FlockSoundness.Assumptions.SHA512CRStrict": "SHA-512 collision resistance: a finder of at most q evaluations finds a collision with probability at most q^2 / 2^513 (cr/sha-512)",
-   "FlockSoundness.Assumptions.UniformRandomBytes": "the verifier server's uniform randomness: the bytes read from the operating system are uniform (A3)",
+   "FlockSoundness.Assumptions.UniformRandomBytes": "the challenger's uniform randomness, on the verifier server: the bytes the challenger reads from its own host's operating system (`IO.getRandomBytes`), for the coins a unit sample reads and for the epoch salt, are independent and uniform (A3, uniform/io-getrandombytes); the deployed sampled audit's soundness (V3, V5) rests on it",
    "FlockSoundness.Assumptions.UniformRandomBytesTest": "the verifier server's uniform randomness: the bytes read from the operating system pass a test as uniform bytes do, up to its advantage (A3 at one test)",
    "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
    "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
@@ -2585,7 +2586,14 @@
    "sealed": true
   },
   "Properties.Spot": {
-   "imports": ["Spot", "Circuits.Wire", "Definitions.Core.Label", "Definitions.Core.Challenger"],
+   "imports": [
+    "Spot",
+    "Circuits.Wire",
+    "Definitions.Core.Label",
+    "Definitions.Core.Challenger",
+    "VStarRecursive.ChallengerPin",
+    "PouwVerifier.Period"
+   ],
    "except": [
     "Properties.Spot.Draw",
     "Properties.Spot.Bits",
@@ -2599,7 +2607,7 @@
     "Properties.Spot.HistoryTable",
     "Properties.Spot.MonitoringPeriodLedger"
    ],
-   "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib, and of `security` only the core's label and challenger log (Definitions.Core.Label, Definitions.Core.Challenger), which import nothing, read with the wire they name (Circuits.Wire)"
+   "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib, and of `security` only the core's label and challenger log (Definitions.Core.Label, Definitions.Core.Challenger), which import nothing, read with the wire they name (Circuits.Wire); the properties are stated against the one-stage audit's own functions and the challenger's pin on SPOT's executable (`VStarRecursive.ChallengerPin`) and on PoUW's period (`PouwVerifier.Period.pinned`), on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Spot.Draw": {
    "imports": ["Definitions.Claims", "Spot"],

@@ -93,8 +93,9 @@ class Result:
     #: the proof blocks the layer's Flock statement holds, as its prover's log states them: the prover's batch
     prover_batch: int | None = None
     per_block: bool = False
-    #: why it gives no figure a proof block where they are held (`proof_layers.HELD_COUNT`, `HELD_PER_BLOCK`)
-    held: str | None = None
+    #: why it gives no figure a proof block where neither its output nor the run's keep holds the draw counts
+    #: (`proof_layers.NO_COUNT`)
+    uncounted: str | None = None
     ran_with: str = "ran with: not stated"
     detail: str | None = None
     proof: str | None = None
