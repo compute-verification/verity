@@ -13,14 +13,19 @@ prover's openings of them, in the order sampled. Each opening, in `_check`'s ord
 
 1. `malformed`: not the sampled (pass, position), a block not 4096 bytes, a tile (none is bound), a salt not 192 bytes, a
    path sibling not 64 bytes, or a payload digest `d_j` present for a registered block or absent for an appended one;
+   an origin position present for a block not of a re-key append, absent for one, or not its origin's leaf (`originLeaf`);
    or receipts not the size of the position's leaf;
 2. `receipt-path`: the leaf, under its salt and path, not that leaf of the pass's receipt tree (bound to the pass's seed
    and plan) under the pass's root;
 3. `codec`: the block not canonical, or its decoding under the seed's key (a registered block) or under the bound key
    of `d_j` and its append's coin `c_a` (an appended block) not a payload of that digest;
 4. `payload-path`: the decoded payload, under its salt and path, not leaf j of the payload tree (a registered block) or
-   of its append's tree, under that root;
+   of its append's tree, under that root; for a block of a re-key append, `origin-path` instead: the decoded payload,
+   under its salt and path, not the origin's leaf under the origin's root (`originLeaf`);
 5. `receipt`: the receipt recomputed from the block under the registration's kind and the pass's seed not the opened one.
+
+A session with refresh also rejects a re-key off the rota with `origin` and a plan with `probation`
+(`Session.receive`).
 
 A window with another number of openings than samples is `malformed`. `tile` is never reached: a registration that binds
 PoUW's tiles is refused (`Registration.make?`), a form no proof here covers.
@@ -39,14 +44,14 @@ def LAYOUT : String := "store-order/v0"
 /-- `audit.FAILURES`. -/
 inductive Failure
   | late | order | step | plan | lifetime | append | coin | release | few | malformed
-  | receiptPath | codec | payloadPath | tile | receipt
+  | receiptPath | codec | payloadPath | tile | receipt | probation | originPath | origin
 deriving BEq, Repr, DecidableEq
 
 def Failure.name : Failure → String
   | .late => "late" | .order => "order" | .step => "step" | .plan => "plan" | .lifetime => "lifetime"
   | .append => "append" | .coin => "coin" | .release => "release" | .few => "few" | .malformed => "malformed"
   | .receiptPath => "receipt-path" | .codec => "codec" | .payloadPath => "payload-path" | .tile => "tile"
-  | .receipt => "receipt"
+  | .receipt => "receipt" | .probation => "probation" | .originPath => "origin-path" | .origin => "origin"
 
 /-- What the store is (`audit.Registration`), with its codec key. -/
 structure Registration where
@@ -101,13 +106,44 @@ def payloadDomain (node : ByteArray) (blocks : Nat) : Flock.FV3.Sha512.Domain :=
 
 def Registration.payloadDomain (r : Registration) : Flock.FV3.Sha512.Domain := Poub.payloadDomain r.node r.blocks
 
-/-- An append the verifier received: store indices `first … first + count − 1`, its payload tree's root, and the coin
-`c_a` it answered with. -/
+/-- Where an append's payloads were first committed: by the append itself (`fresh`); by the registration
+(`registered a`: its block `first + m` re-keys registered block `a + m`); or by the fresh append in slot `k` of the
+session's schedule (`rekey k`: block `first + m` re-keys that append's block `first_k + m`, the whole append). A re-key
+encodes those payloads again under its own coin and commits none of its own. -/
+inductive Origin
+  | fresh
+  | registered (a : Nat)
+  | rekey (k : Nat)
+deriving BEq, Repr, DecidableEq, Inhabited
+
+/-- A fresh append of a session with refresh holds at most this many blocks, so its tree, a re-key's origin path, is at
+most 9 levels and an opening of a block of its re-key stays one proof block. -/
+def REKEY_MAX : Nat := 512
+
+def REKEY_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/rekey/v0"
+
+/-- `u8 0 ‖ u64be a` for `registered a`, `u8 1 ‖ u64be k` for `rekey k`. -/
+def Origin.bytes : Origin → ByteArray
+  | .fresh => ByteArray.empty
+  | .registered a => be 1 0 ++ be 8 a
+  | .rekey k => be 1 1 ++ be 8 k
+
+/-- A re-key's declaration, the root it sends in place of a payload root: SHA512(REKEY_DOMAIN ‖ registration digest ‖
+u64be first ‖ u64be count ‖ origin bytes). -/
+def rekeyRoot (registration : ByteArray) (first count : Nat) (origin : Origin) : ByteArray :=
+  sha512 (REKEY_DOMAIN ++ registration ++ be 8 first ++ be 8 count ++ origin.bytes)
+
+/-- An append the verifier received: store indices `first … first + count − 1`, its payload tree's root (a re-key's
+declaration, `rekeyRoot`), the coin `c_a` it answered with, where its payloads were first committed (`fresh` in a
+session without refresh), and its slot: with refresh, its index in the session's schedule (`Session.Params.slotAt`);
+without, its place among the appends. -/
 structure Append where
   first : Nat
   count : Nat
   root : ByteArray
   coin : ByteArray
+  origin : Origin := .fresh
+  slot : Nat := 0
 deriving Inhabited
 
 /-- `append_domain(registration digest, first, count)`. -/
@@ -149,6 +185,9 @@ structure Opening where
   payloadPath : Array ByteArray
   tile : ByteArray
   digest : ByteArray
+  /-- For a block of a re-key append, the store index of its payload's leaf under the origin's root, whose salt and
+  path `payloadSalt` and `payloadPath` are; `none` for every other block. -/
+  originPosition : Option Nat := none
 deriving Inhabited
 
 /-- What rejected a window: its failure and the sample it failed at, `none` for the window as a whole. -/
@@ -188,6 +227,16 @@ def appendOf (appends : Array Append) (j : Nat) : Option Append :=
   let k := bisectRight (appends.map (·.first)) j
   if k = 0 then none else appends[k - 1]?
 
+/-- Where the payload of store block `j` of append `a` was first committed, if `a` is a re-key: its leaf's store index,
+and the root and domain of the tree holding it (the registration's payload tree, or that of the fresh append in slot k). -/
+def originLeaf (reg : Registration) (digest : ByteArray) (appends : Array Append) (a : Append) (j : Nat) :
+    Option (Nat × ByteArray × Flock.FV3.Sha512.Domain) :=
+  match a.origin with
+  | .fresh => none
+  | .registered x => some (x + (j - a.first), reg.payloadRoot, reg.payloadDomain)
+  | .rekey k => (appends.find? (·.slot == k)).map fun b =>
+    (b.first + (j - a.first), b.root, appendDomain digest b.first b.count)
+
 /-- `Session._check`: sample (i, p)'s opening, `none` if it checks. -/
 def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
     (receipter : Receipter) (i p : Nat) (o : Opening) : Option Failure := Id.run do
@@ -199,6 +248,8 @@ def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Appe
   let pr := w.passes[i]!
   let j := pr.plan.block p
   if o.digest.size ≠ (if j < N then 0 else DIGEST_BYTES) then return some .malformed
+  let origin := if j < N then none else (appendOf appends j).bind (originLeaf reg digest appends · j)
+  if o.originPosition != origin.map (·.1) then return some .malformed
   let s := w.seedOf i
   let some y := leafReceipt o.leaf p pr.plan.length | return some .malformed
   if !verifyLeaf s pr.plan pr.root p o.leaf o.leafSalt o.receiptPath then return some .receiptPath
@@ -208,7 +259,13 @@ def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Appe
       | some a => (Codec.decode o.block j reg.key (some (o.digest, some a.coin)), appendDomain digest a.first a.count, a.root)
       | none => (.error "no append holds the block", reg.payloadDomain, reg.payloadRoot)
   let .ok (some payload) := decoded | return some .codec
-  if !dom.verifyOpening root dom.count j (hidden payload o.payloadSalt) SCHEMA o.payloadPath then return some .payloadPath
+  match origin with
+  | some (q, oroot, odom) =>
+    if !odom.verifyOpening oroot odom.count q (hidden payload o.payloadSalt) SCHEMA o.payloadPath then
+      return some .originPath
+  | none =>
+    if !dom.verifyOpening root dom.count j (hidden payload o.payloadSalt) SCHEMA o.payloadPath then
+      return some .payloadPath
   if receipter.receipt j o.block != y then return some .receipt
   return none
 
