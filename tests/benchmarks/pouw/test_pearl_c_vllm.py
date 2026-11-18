@@ -3823,13 +3823,13 @@ def test_the_smoke_starts_both_engines_and_records_a_failure_to_stay_resident(tm
 
     monkeypatch.setattr(E2E, "Worker", Fake)
     args = types.SimpleNamespace(out=tmp_path / "smoke.json")
-    E2E.smoke(args)
+    assert E2E.smoke(args)
     got = json.loads(args.out.read_text())
     assert got["resident"] and got["gate_ok"] and "error" not in got and not Fake.live
     assert [s["step"].split(":")[0] for s in got["steps"]][1::2] == ["fp8", "bf16"] and len(got["steps"]) == 5
     assert got["token_agreement_vs_bf16"] == {"fp8": 1.0, "pearlc": 2 / 3}
     Fake.refuse_arm = True
-    E2E.smoke(args)
+    assert not E2E.smoke(args)
     got = json.loads(args.out.read_text())
     assert not got["resident"] and "OutOfMemoryError" in got["error"] and len(got["steps"]) == 2 and not Fake.live
 

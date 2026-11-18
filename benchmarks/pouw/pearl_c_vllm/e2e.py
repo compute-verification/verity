@@ -1036,11 +1036,12 @@ def memory_mib() -> int | None:
         return None
 
 
-def smoke(args) -> None:
+def smoke(args) -> bool:
     """Untimed: both engines resident on the GPU, and each one's first sampling calls.  The stock FP8 engine starts and
     samples; then the Pearl-C engine starts beside it (its install and gates) and samples as stock BF16 and as ``pearlc``.
     Writes each step's time and the GPU's memory use after it, the gates, and the greedy tokens' agreement with BF16.  With
-    ``--retain``, the arm then serves `SERVED`'s requests, each a retained ``pearlc`` pass under its own name."""
+    ``--retain``, the arm then serves `SERVED`'s requests, each a retained ``pearlc`` pass under its own name.
+    Returns whether it passed (no error recorded and every gate ok); `main` exits nonzero when it didn't."""
     ctx, coins = mp.get_context("spawn"), epoch_coins(args, 0)
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "coins": coins.commitment.to_json(), "scheme": getattr(args, "scheme", SCHEME),
                  "schedule": getattr(args, "schedule", "serial"),
@@ -1084,6 +1085,7 @@ def smoke(args) -> None:
     ok = "error" not in out and out.get("gate_ok", False)
     run_result.write(args.out, ok, "pearl-c vLLM e2e smoke: both engines resident, the arm gated, each one's first sampling calls",
                      json.dumps({k: v for k, v in out.items() if k != "gate"}), [(s["step"], s["s"], "s") for s in out["steps"]])
+    return ok
 
 
 def wikitext_windows(model: str, limit: int | None) -> list[list[int]]:
@@ -1244,8 +1246,7 @@ def main() -> None:
     if args.statement and not args.whole_step:
         ap.error("--statement commits the forwards vLLM replays whole: it needs --whole-step")
     if args.smoke:
-        smoke(args)
-        return
+        sys.exit(0 if smoke(args) else 1)
     if args.perplexity:
         sys.exit(perplexity(args))
     ctx, coins, p = mp.get_context("spawn"), epoch_coins(args, 0), prompts(args.reps)
