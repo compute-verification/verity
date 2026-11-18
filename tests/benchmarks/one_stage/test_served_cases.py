@@ -958,9 +958,13 @@ def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, ca
     assert not (serve / "private" / "pouw-period").exists()
 
 
+#: the salts a Pearl+ pass kept beside its tiles' leaves, two of 192 bytes
+SALTS = bytes(range(192)) * 2
+
+
 def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
     """Pearl+'s case's parts as `served_passes.py case` writes them in the serve dir (`PEARL_PLUS_PIECE`): one pass's
-    manifest (its salt key among its fields), the window record W the pass is held to as round 1 of a retention that
+    manifest (naming the salts file the pass kept, `SALTS`, by path, size and digest), the window record W the pass is held to as round 1 of a retention that
     dropped round 0 (``w``, else a record of no entries), the one file its opened tile reads by the blob holding it, and
     the Lean verdict of record's verdict, tiles sampled and work, in the grid form with the exact work beside it."""
     piece = serve / SC.PEARL_PLUS_PIECE
@@ -971,7 +975,8 @@ def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
              "params": {"coins": {"epoch": 0, "root": "c0" * 64, "scheme": "s"}, "draws": 3,
                         "record": {"commitment": "d0" * 64, "source": "e0" * 32, "schema": "verity-pouw/pearl-plus-coin/v2",
                                    "draw": {"from": "challenger"}}},
-             "manifests": [{"hm96_salt_key": "5a" * 32, "run": "r"}],
+             "manifests": [{"salts_t": {"path": "salts_t", "bytes": len(SALTS), "sha256": hashlib.sha256(SALTS).hexdigest()},
+                            "run": "r"}],
              "window": {"dropped": [0], "rounds": [1],
                         "record": w or {"window": {"version": 2}, "registered": [], "previous": None}},
              "evidence": {"files": [{"pearl/w0/rows.bin": hashlib.sha512(blob).hexdigest()}]},
@@ -1016,7 +1021,8 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
         "commitment": hashlib.sha512(b"verity/pouw/pearl-plus/manifests/v1\0" + commitment).hexdigest(),
         "public": {"credited": 7, "credited_tiles": 1, "macs": 9, "rho": "1/4", "epsilon": "1/8", "delta": "1/100"},
         "profile": {"draws": 3, "drawn": 3, "passes": 1}}
-    assert "5a" * 32 not in out and case["commitment"] not in out
+    assert case["commitment"] not in out
+    assert SALTS.hex() not in out and hashlib.sha256(SALTS).hexdigest() not in out and "salts_t" not in out
     (piece / "blobs" / h).unlink()
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / "p2", "--alpha", "1",
                                   "--gamma", 1, *stand_ins(tmp_path, v1))

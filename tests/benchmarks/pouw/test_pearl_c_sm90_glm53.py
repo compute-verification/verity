@@ -18,6 +18,7 @@ from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 import pytest
 
@@ -576,6 +577,7 @@ def retained(tmp_path_factory):
 
     from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
     from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+        HM96_SALT,
         HM96_TRANSCRIPT,
         HM96_WEIGHTS,
         ROW_SCHEMA,
@@ -616,15 +618,26 @@ def retained(tmp_path_factory):
     wrows, acts = {0: words(16), 1: words(32)}, {0: words(32), 1: words(16)}
     acts[0][20:] = 0
     work = Workload((Matmul(0, Shape(32, k, 16), 0), Matmul(1, Shape(16, k, 32), 1)))
-    prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=bytes([1]) * 32)
+    nonces, key = iter([HM96_WEIGHTS + w for w in wrows] + [u.index for u in work.matmuls] + [HM96_TRANSCRIPT]), bytes([1]) * 32
 
-    def salted(v, nonce, i):
-        return v + hm96_salt(prover.salt_key, nonce, i)
+    def pinned(n):
+        nonce = next(nonces)
+        return [hm96_salt(key, nonce, i) for i in range(n)]
+
+    def kept(tree):
+        return [tree.open(i).value for i in range(tree.domain.count)]
+
+    def salts(tree):
+        return b"".join(v[-HM96_SALT:] for v in kept(tree))
+
+    with mock.patch.object(sys.modules[Prover.__module__], "fresh_salts", pinned):
+        prover = Prover(s, {w: rows(x) for w, x in wrows.items()})
 
     ch = Challenger(0, random.Random(7).randbytes)
     coins = ch.commitment, ch.open("salt", weights_root(prover.weight_roots))
     epoch = Epoch.start(work, prover.weight_roots, *coins)
-    tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
+    with mock.patch.object(sys.modules[Prover.__module__], "fresh_salts", pinned):
+        tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
     splits = {w: PW.Split(k) for w in wrows}
     records = CW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
                          real_rows={0: 20})
@@ -638,17 +651,18 @@ def retained(tmp_path_factory):
         weights[str(w)] = {"n": len(x), "k": k, "root": prover.weight_roots[w].hex(), "excluded_b": list(records[w].excluded_b),
                            "rows": PPDR._write(d / "weights" / f"{w}.rows.bf16", bf16(x), digest=False),
                            "tree": PPDR._write(d / "weights" / f"{w}.tree",
-                                              laid(dom, [dom.leaf(j, j, ROW_SCHEMA, salted(r, HM96_WEIGHTS + w, j))
-                                                         for j, r in enumerate(rows(x))]))}
+                                              laid(dom, [dom.leaf(j, j, ROW_SCHEMA, v) for j, v in enumerate(kept(prover.weight_trees[w]))])),
+                           "salts": PPDR._write(d / "weights" / f"{w}.salts", salts(prover.weight_trees[w]))}
     matmuls, y_words = [], 0
-    for u, rec, root in zip(work.matmuls, records, tr.activation_roots):
+    for u, rec, root, at in zip(work.matmuls, records, tr.activation_roots, prover._act_trees):
         x, m, n = rows(acts[u.index]), u.shape.m, u.shape.n
         dom = rows_domain(activation_binding(epoch.salt, u.index), u.index, m, s.commitment_hash)
         matmuls.append({"index": u.index, "m": m, "k": k, "n": n, "weight": u.weight, "real_rows": rec.real_rows,
                         "k_kept": rec.k_kept, "excluded_a": list(rec.excluded_a), "root_a": root.hex(),
                         "rows": PPDR._write(d / "calls" / f"{u.index}.rows.bf16", bf16(acts[u.index]), digest=False),
                         "tree": PPDR._write(d / "calls" / f"{u.index}.tree",
-                                           laid(dom, [dom.leaf(i, i, ROW_SCHEMA, salted(r, u.index, i)) for i, r in enumerate(x)]))})
+                                           laid(dom, [dom.leaf(i, i, ROW_SCHEMA, v) for i, v in enumerate(kept(at))])),
+                        "salts": PPDR._write(d / "calls" / f"{u.index}.salts", salts(at))})
         ctx = Context(epoch.salt, u, root, epoch.weight_roots[u.weight])
         noise = s.noise(ctx)
         ops = s.encode(ctx, noise, x, rows(wrows[u.weight]), Tile(tuple(range(m)), tuple(range(n))))
@@ -663,9 +677,8 @@ def retained(tmp_path_factory):
             "instance": {"k_min": 32, "tile": [16, 16]}, "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(),
             "salt": epoch.salt.hex(), "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
             "commitment": {"root": tr.commitment.root.hex(), "count": count}, "leaves": PPDR._write(d / "leaves", b"".join(leaves)),
-            "tree_t": PPDR._write(d / "tree_t", laid(dt, [dt.leaf(i, i, TILE_SCHEMA, salted(v, HM96_TRANSCRIPT, i))
-                                                       for i, v in enumerate(leaves)])),
-            "hm96_salt_key": prover.salt_key.hex()}
+            "tree_t": PPDR._write(d / "tree_t", laid(dt, [dt.leaf(i, i, TILE_SCHEMA, v) for i, v in enumerate(kept(prover._tree))])),
+            "salts_t": PPDR._write(d / "salts_t", salts(prover._tree))}
     PPDR.write_manifest(d, head, weights, matmuls)
     (base / "coins.json").write_text(json.dumps(coins[0].to_json()) + "\n")
     for name in GP.FULL:

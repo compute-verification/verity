@@ -22,6 +22,7 @@ import types
 from fractions import Fraction
 from pathlib import Path
 from typing import ClassVar
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -37,6 +38,7 @@ from verity.commitments import MerkleTree
 from verity.commitments.merkle import tree_levels
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
+    HM96_SALT,
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
     ROW_SCHEMA,
@@ -45,6 +47,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     Workload,
     activation_binding,
     commit_rows,
+    fresh_salts,
     hm96_kernel_constants,
     hm96_salt,
     opened_value,
@@ -1075,18 +1078,47 @@ def honest_pass(tmp_path, request):
     return proved_pass(tmp_path, request.param)
 
 
+def seeded_salts(seed: int):
+    """192-byte salts drawn from `seed`, a fixture's stand-in for fresh ones, the same on every run."""
+    rng = random.Random(seed)
+    return lambda n: [rng.randbytes(HM96_SALT) for _ in range(n)]
+
+
+def pinned_salts(key: bytes, nonces: list[int]):
+    """A stand-in for the reference prover's `audit.fresh_salts` that hands it, as data and in the order it draws them
+    (`nonces`, one a tree), the salts `proved_pass`'s passes are pinned under: `audit.hm96_salt`'s stream under `key`.
+    The facts these tests hold a pass to (which credited rows are over their caps, which blocks a row's words flag) follow
+    A's salted roots, so they are the pinned salts' facts."""
+    left = iter(nonces)
+
+    def draw(n: int) -> list[bytes]:
+        nonce = next(left)
+        return [hm96_salt(key, nonce, i) for i in range(n)]
+    return draw
+
+
+def kept_salts(tree: MerkleTree) -> bytes:
+    """The salts of an hm96 tree's values in rank order, each value's last `HM96_SALT` bytes: a pass's salts file."""
+    return b"".join(tree.open(i).value[-HM96_SALT:] for i in range(tree.domain.count))
+
+
+def kept_leaves(d, tree: MerkleTree, schema: str = ROW_SCHEMA) -> list[bytes]:
+    return [d.leaf(i, i, schema, tree.open(i).value) for i in range(tree.domain.count)]
+
+
 def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None,
                 live: int | None = None, seed: int = 11, spike: float | None = None, bad_b: int | None = None,
                 tile: tuple[int, int] = (16, 16), zero_a: int | None = None,
                 load: tuple[int, int] | None = None):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
-    salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
-    audit it).  The key is fixed per scheme unless `key` names one: -h3's row seeds follow A's salted roots, and under some
-    keys (about 2 in 15) a credited row of a sampled tile is over its own cap, which the sampling design and verify_run both reject.  On the
-    h100 record (Hopper's 14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits
-    one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
-    The calls have the execution phase's indices `indices`, and every pass built here is of the one execution phase (the same weights, key and
+    salts the prover's, kept in the pass's salts files beside the rows; the unpromoted record's debit isn't stated, so
+    clear_work can't audit it).  The prover's salts are the pinned ones under `key` (`pinned_salts`), fixed per scheme unless
+    `key` names one: -h3's row seeds follow A's salted roots, and under some keys (about 2 in 15) a credited row of a
+    sampled tile is over its own cap, which the sampling design and verify_run both reject.  On the h100 record (Hopper's
+    14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits one flagged atom-word
+    (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
+    The calls have the execution phase's indices `indices`, and every pass built here is of the one execution phase (the same weights, salts and
     salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt execution phase
     `live`'s root over the weights' root (`live_coin`), and the manifest names that execution phase (``pass_index``).  `seed` samples
     the rows: under another, the weights are others, and so is the salt the one coin gives them.  With `spike`, credited
@@ -1120,15 +1152,17 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     def rows(x):
         return [r.tobytes() for r in x]
     work = Workload((Matmul(i0, Shape(m0, k, n0), 0), Matmul(i1, Shape(m1, k, n1), 1)))
-    prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=key)
-    salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)  # noqa: E731
+    drawn = pinned_salts(key, [HM96_WEIGHTS + w for w in wrows] + [u.index for u in work.matmuls] + [HM96_TRANSCRIPT])
+    with patch.object(sys.modules["clear_audit"], "fresh_salts", drawn):
+        prover = Prover(s, {w: rows(x) for w, x in wrows.items()})
     if live is None:
         coins = salt_coin(prover.weight_roots)
         epoch = Epoch.start(work, prover.weight_roots, *coins)
     else:
         coins = live_coin(PS.epoch_open_root(weights_root(prover.weight_roots), live))
         epoch = PPD.epoch_of(work, prover.weight_roots, *coins, live)
-    tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
+    with patch.object(sys.modules["clear_audit"], "fresh_salts", drawn):
+        tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
     splits = {w: PW.Split(k) for w in wrows}
     records = CW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
                          real_rows={i0: real, **({i1: real} if load else {})})
@@ -1141,11 +1175,10 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
         d = rows_domain(weight_binding(w), -2, len(x), s.commitment_hash)
         weights[str(w)] = {"n": len(x), "k": k, "root": prover.weight_roots[w].hex(), "excluded_b": list(records[0 if w == 0 else 1].excluded_b),
                            "rows": PPDR._write(tmp_path / "weights" / f"{w}.rows.bf16", bf16_file(rows(x)), digest=False),
-                           "tree": PPDR._write(tmp_path / "weights" / f"{w}.tree",
-                                              laid_out(d, [d.leaf(j, j, ROW_SCHEMA, salted(r, HM96_WEIGHTS + w, j))
-                                                           for j, r in enumerate(rows(x))]))}
+                           "tree": PPDR._write(tmp_path / "weights" / f"{w}.tree", laid_out(d, kept_leaves(d, prover.weight_trees[w]))),
+                           "salts": PPDR._write(tmp_path / "weights" / f"{w}.salts", kept_salts(prover.weight_trees[w]))}
     matmuls = []
-    for u, rec, root in zip(work.matmuls, records, tr.activation_roots):
+    for u, rec, root, at in zip(work.matmuls, records, tr.activation_roots, prover._act_trees):
         x = rows(acts[u.index])
         d = rows_domain(activation_binding(epoch.salt, u.index), u.index, u.shape.m, s.commitment_hash)
         y = reference_y(s, Context(epoch.salt, u, root, epoch.weight_roots[u.weight]), x, rows(wrows[u.weight]))
@@ -1153,9 +1186,9 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
         matmuls.append({"index": u.index, "m": u.shape.m, "k": k, "n": u.shape.n, "weight": u.weight, "real_rows": rec.real_rows,
                         "k_kept": rec.k_kept, "excluded_a": list(rec.excluded_a), "root_a": root.hex(),
                         "rows": PPDR._write(tmp_path / "calls" / f"{u.index}.rows.bf16", bf16_file(x), digest=False),
-                        "tree": PPDR._write(tmp_path / "calls" / f"{u.index}.tree",
-                                           laid_out(d, [d.leaf(i, i, ROW_SCHEMA, salted(r, u.index, i)) for i, r in enumerate(x)])),
-                        "y": SY.retain_y(tmp_path, u.index, y, u.shape.n, epoch.salt, prover.salt_key)})
+                        "tree": PPDR._write(tmp_path / "calls" / f"{u.index}.tree", laid_out(d, kept_leaves(d, at))),
+                        "salts": PPDR._write(tmp_path / "calls" / f"{u.index}.salts", kept_salts(at)),
+                        "y": SY.retain_y(tmp_path, u.index, y, u.shape.n, epoch.salt)})
     count = tr.commitment.count
     leaves = [prover.digest(t) for t in range(count)]
     dt = transcript_domain(epoch, count, s.commitment_hash)
@@ -1166,9 +1199,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
             "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
             "commitment": {"root": tr.commitment.root.hex(), "count": count},
             "leaves": PPDR._write(tmp_path / "leaves", b"".join(leaves)),
-            "tree_t": PPDR._write(tmp_path / "tree_t", laid_out(dt, [dt.leaf(i, i, TILE_SCHEMA, salted(v, HM96_TRANSCRIPT, i))
-                                                                    for i, v in enumerate(leaves)]))}
-    head["hm96_salt_key"] = prover.salt_key.hex()
+            "tree_t": PPDR._write(tmp_path / "tree_t", laid_out(dt, kept_leaves(dt, prover._tree, TILE_SCHEMA))),
+            "salts_t": PPDR._write(tmp_path / "salts_t", kept_salts(prover._tree))}
     path = PPDR.write_manifest(tmp_path, head, weights, matmuls)
     (tmp_path / "coins.json").write_text(json.dumps(coins[0].to_json()))
     return path, s, epoch, prover, tr, splits, records
@@ -1308,7 +1340,7 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u_rejects_the_run(tmp_path):
     for u in man["matmuls"]:
         y = bytearray((path.parent / u["y"]["rows"]["path"]).read_bytes())
         y[0::2] = bytes(b ^ 0x01 for b in y[0::2])
-        u["y"] = SY.retain_y(path.parent, u["index"], bytes(y), u["n"], bytes.fromhex(man["salt"]), bytes.fromhex(man["hm96_salt_key"]))
+        u["y"] = SY.retain_y(path.parent, u["index"], bytes(y), u["n"], bytes.fromhex(man["salt"]))
     path.write_text(json.dumps(man))
     lied = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4, test_instance=True)
     assert lied["answer"]["verdict"] == "reject" and "is not the unscale of the tile's U" in lied["answer"]["reason"], lied["line"]
@@ -1346,16 +1378,17 @@ def short_y(path: Path, pos: int, drop: int) -> None:
     manifest then names: a prover's own y whose last real row is short, and opens."""
     man = json.loads(path.read_text())
     u = man["matmuls"][pos]
-    key, n, real = bytes.fromhex(man["hm96_salt_key"]), u["n"], u["real_rows"]
+    n, real = u["n"], u["real_rows"]
+    ys = (path.parent / u["y"]["salts"]["path"]).read_bytes()
     file = path.parent / u["y"]["rows"]["path"]
     data = file.read_bytes()
     data = data[:len(data) - drop]
     rows = [data[2 * n * i:2 * n * (i + 1)] for i in range(real)]
     d = SY.y_domain(bytes.fromhex(man["salt"]), u["index"], real)
-    tree = laid_out(d, [d.leaf(i, i, ROW_SCHEMA, VR.f32_row(r[:len(r) & ~1], len(r), 0) + hm96_salt(key, SY.HM96_Y + u["index"], i))
+    tree = laid_out(d, [d.leaf(i, i, ROW_SCHEMA, VR.f32_row(r[:len(r) & ~1], len(r), 0) + ys[HM96_SALT * i:HM96_SALT * (i + 1)])
                         for i, r in enumerate(rows)])
     u["y"] = {"root": tree[-64:].hex(), "rows": PPDR._write(file, data, digest=False),
-              "tree": PPDR._write(path.parent / u["y"]["tree"]["path"], tree)}
+              "tree": PPDR._write(path.parent / u["y"]["tree"]["path"], tree), "salts": u["y"]["salts"]}
     path.write_text(json.dumps(man))
 
 
@@ -1385,7 +1418,8 @@ def test_check_y_holds_each_opened_row_to_its_tiles_columns():
     +0 at α = 1 on both, so every cell's unscale is +0.  A row that covers the columns passes; one that ends at column 3,
     or before the tile, or holds half a word past column 2, is refused by its length (and nothing raises); a whole row
     is still held to the unscale, word by word."""
-    real, index, salt, key = 8, 3, bytes(64), bytes(32)
+    real, index, salt = 8, 3, bytes(64)
+    salts = fresh_salts(real)
     d = SY.y_domain(salt, index, real)
     tile = types.SimpleNamespace(rows=(7,), cols=(2, 3))
     side = lambda n: types.SimpleNamespace(alpha=[PCU.ONE] * n)  # noqa: E731
@@ -1393,7 +1427,7 @@ def test_check_y_holds_each_opened_row_to_its_tiles_columns():
     assert PCU.y(0, PCU.ONE, PCU.ONE) == 0
 
     def reason(row: bytes) -> str | None:
-        values = [(row if i == 7 else bytes(16)) + hm96_salt(key, SY.HM96_Y + index, i) for i in range(real)]
+        values = [(row if i == 7 else bytes(16)) + salts[i] for i in range(real)]
         tree = laid_out(d, [d.leaf(i, i, ROW_SCHEMA, x) for i, x in enumerate(values)])
         p = types.SimpleNamespace(scheme=types.SimpleNamespace(commitment_hash=HM96, forming="v1", name="stand-in"),
                                   epoch=types.SimpleNamespace(salt=salt, workload=types.SimpleNamespace(
@@ -1529,23 +1563,19 @@ def test_served_passes_verify_refuses_a_serve_that_retained_no_pass(tmp_path):
     assert answer["verdict"] == "reject" and answer["reason"].startswith("unretained: the serve retained no pass")
 
 
-def test_a_seeded_serve_draws_the_same_coins_and_salt_key_and_takes_no_retention_or_live_coins(tmp_path, monkeypatch):
+def test_a_seeded_serve_draws_the_same_coins_and_no_salt_key_and_takes_no_retention_or_live_coins(tmp_path, monkeypatch):
     """`serve --seeded`'s streams (`served_passes.seeded`) give one label's bytes however they are sampled, so two seeded
-    installs (`seed_install`) hold challengers of one coin commitment and take one hm96 salt key (`pearl_c.new_salt_key`,
-    which the install's weight commitment calls); ``--seeded`` is refused beside retention and beside the challenger gate,
-    before anything is built."""
+    installs (`seed_install`) hold challengers of one coin commitment, and seed nothing else: every leaf's salt is fresh, so
+    there is no salt key to seed; ``--seeded`` is refused beside retention and beside the challenger gate, before anything
+    is built."""
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     a, b = SP.seeded("coins"), SP.seeded("coins")
-    assert a(3) + a(70) + a(1) == b(74) and SP.seeded("salt key")(32) != SP.seeded("coins")(32)
-    from verity_vllm.protocols import pouw
-
-    monkeypatch.setattr(PPD, "new_salt_key", PPD.new_salt_key)
-    monkeypatch.setattr(pouw, "pearl_c_salt_key", pouw.pearl_c_salt_key)
+    assert a(3) + a(70) + a(1) == b(74) and SP.seeded("salts")(32) != SP.seeded("coins")(32)
     one, two = {"coins": None}, {}
     SP.seed_install(one)
     SP.seed_install(two)
     assert one["coins"].commitment.to_json() == two["coins"].commitment.to_json()
-    assert PPD.new_salt_key(SCHEME) == pouw.pearl_c_salt_key(SCHEME) == SP.seeded("salt key")(32)
+    assert set(one) == set(two) == {"coins"} and not hasattr(PPD, "new_salt_key")
     argv = ["serve", "--seeded", "--passes", str(tmp_path), "--out", str(tmp_path / "served.json")]
     with pytest.raises(SystemExit, match="takes --no-retain and no PEARLC_CHALLENGER_GATE"):
         SP.main(argv)
@@ -1833,6 +1863,7 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
     p = VR.load(path, coins)
     over = _replay_every_tile(p)
     assert over and all("replayed debit" in r for r in over.values()), over
+    exclusion = len(p.tile_ids(CW.exclusion_tiles(p.scheme, p.records)))
     d, source = _serve_dir(tmp_path, [path]), b"verifier" * 4
     (d / SP.COIN).write_text(json.dumps({"commitment": VR.run_commitment([p]).hex(), "source": source.hex()}))
     takes = {}
@@ -1846,11 +1877,11 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
             assert yes in ("yes", "no") and took in SP.OVER_INERT_BOUND and took == (rule or took)
             if verdict == "run":
                 _, doc, answer = served_verify(d, tmp_path / "verify.json", "--draws", "32", *flag)
-                drawn = {v["tile"] for v in doc["verdicts"]}
+                drawn = {v["tile"] for v in doc["verdicts"][:len(doc["verdicts"]) - exclusion]}
                 rejects = answer["verdict"] == "reject" and "replayed debit" in answer["reason"]
             else:
                 r = VR.verify(path, 32, 1, "test", source, coins=coins, **({} if rule is None else {"over_cap": rule}))
-                drawn, rejects = set(r["tiles"]), not r["accepted"] and "replayed debit" in r["line"]
+                drawn, rejects = set(r["tiles"][:r["drawn"]]), not r["accepted"] and "replayed debit" in r["line"]
             assert drawn & set(over), (verdict, rule, sorted(drawn), sorted(over))
             assert (yes == "yes") == rejects, (
                 f"volunteer-needed --verdict {verdict} says {yes} under over-cap rule {took}, but the verdict "
@@ -2621,8 +2652,8 @@ def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
 
     Each root is an hm96 root over seeded fake row digests and salts, not over rows: the tree of the real number of leaves
     (a weight's n, a call's m16 or real rows) under the real domain, each leaf `Hm96Domain`'s of a 64-byte digest no row
-    was hashed to and 192 bytes no key gave. The weights' real rows are 3.9 GB of FP32 words, and their `hm96_salt`s
-    a ChaCha20 stream over all of them. The transcript root is 64 seeded bytes, and no row, tree or leaf file is written
+    was hashed to and 192 seeded bytes in place of its salt. The weights' real rows are 3.9 GB of FP32 words, and their
+    salts 192 bytes a row more. The transcript root is 64 seeded bytes, and no row, tree, salts or leaf file is written
     (the manifests name them as a device run does), so the passes load and tie, and nothing of them opens."""
     layers, linears = LLAMA32_1B
     slots, prompt, outputs = RECORD_CLASS
@@ -2641,7 +2672,8 @@ def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
 
     roots = {w: root(weight_binding(w), -2, n) for w, (n, _) in shapes.items()}
     weights = {str(w): {"n": n, "k": k, "root": roots[w], "excluded_b": [],
-                        "rows": named(f"weights/{w}.rows.bf16", 2 * n * k), "tree": tree(f"weights/{w}.tree", n)}
+                        "rows": named(f"weights/{w}.rows.bf16", 2 * n * k), "tree": tree(f"weights/{w}.tree", n),
+                        "salts": named(f"weights/{w}.salts", HM96_SALT * n)}
                for w, (n, k) in shapes.items()}
     committed = {w: bytes.fromhex(r) for w, r in roots.items()}
     coins, paths = salt_coin(committed), []
@@ -2656,15 +2688,18 @@ def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
                     "k_kept": u.shape.k, "excluded_a": [],
                     "root_a": root(activation_binding(epoch.salt, u.index), u.index, m),
                     "rows": named(f"calls/{u.index}.rows.bf16", 2 * m * u.shape.k), "tree": tree(f"calls/{u.index}.tree", m),
+                    "salts": named(f"calls/{u.index}.salts", HM96_SALT * m),
                     "y": {"root": root(SY.y_binding(epoch.salt, u.index), u.index, real),
-                          "rows": named(f"y/{u.index}.rows.bf16", 2 * real * u.shape.n), "tree": tree(f"y/{u.index}.tree", real)}}
+                          "rows": named(f"y/{u.index}.rows.bf16", 2 * real * u.shape.n), "tree": tree(f"y/{u.index}.tree", real),
+                          "salts": named(f"y/{u.index}.salts", HM96_SALT * real)}}
                    for u in work.matmuls]
         count = sum(len(s.tiles(u.shape)) for u in work.matmuls)
         head = {"schema": CC.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{s.name}", "scheme": s.name,
                 "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
                 "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
                 "commitment": {"root": rng.bytes(64).hex(), "count": count},
-                "leaves": named("leaves", 64 * count), "tree_t": tree("tree_t", count), "hm96_salt_key": SALT_KEY.hex()}
+                "leaves": named("leaves", 64 * count), "tree_t": tree("tree_t", count),
+                "salts_t": named("salts_t", HM96_SALT * count)}
         (d := tmp_path / f"pass-{r:05d}").mkdir(parents=True)
         paths.append(PPDR.write_manifest(d, head, weights, matmuls))
         (d / "coins.json").write_text(json.dumps(coins[0].to_json()))
