@@ -27,6 +27,7 @@ from typing import Any
 
 from verity import hooks as H
 from verity.hooks import Broken
+from verity.protocols.compose.schemes import load
 from verity.protocols.resource_accounting import scheme as schemes
 
 from verity_vllm import messages
@@ -129,14 +130,12 @@ def launch(exchange: messages.Exchange, names: list[str]) -> list[tuple[str, Any
     """Attach the schemes ``names`` to ``exchange`` with this server's `READERS`, and return the processes they start
     beside it, each by its name, bound to its readers; `UsageError` where none is registered or none starts one."""
     exchange.readers = READERS
+    load()
     for name in names:
         try:
             scheme = schemes.get(name)
         except KeyError as e:
             raise UsageError(f"--protocols: {e.args[0]}") from None
-        if not hasattr(scheme, "attach"):
-            raise NotImplementedError(f"vllm/adapter-imports-no-protocol: scheme {name!r} files no requests on an exchange "
-                                      "(Scheme.attach(exchange, ctx) is not in the scheme registry yet)")
         scheme.attach(exchange, {})
     started = exchange.beside()
     if not started:
