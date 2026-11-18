@@ -852,7 +852,7 @@ def formOf : Part → String
   | .affine p i b n => s!"affine {if p then "p" else "n"}{i} base={b} n={n}"
   | .strided p i b inner os is n => s!"strided {if p then "p" else "n"}{i} base={b} inner={inner} os={os} is={is} n={n}"
   | .explicit it => s!"explicit n={it.size}"
-  | .grid run lanes => s!"grid run={run} lanes={lanes.size} n={(Part.grid run lanes).count} lane0={(lanes[0]?.map fun l => s!"{if l.p then "p" else "n"}{l.i} b={l.b} e={l.e} lv={l.lv}").getD ""}"
+  | .grid run lanes => s!"grid run={run} lanes={lanes.size} n={(Part.grid run lanes).count} lane0={(lanes[0]?.map fun (l : Lane) => s!"{if l.p then "p" else "n"}{l.i} b={l.b} e={l.e} lv={l.lv}").getD ""}"
 
 def seqBad (label : String) (s : Src) (t : Ty) (seq : Seq) : M (Option (Nat × Part)) := do
   let ht := homo t
@@ -863,7 +863,7 @@ def seqBad (label : String) (s : Src) (t : Ty) (seq : Seq) : M (Option (Nat × P
     if s1 > s0 then
       let srcHomo := match q with
         | .affine p i _ _ | .strided p i _ _ _ _ _ => toString (s.homo? p i)
-        | .grid _ lanes => toString (lanes.toList.map fun l => s.homo? l.p l.i)
+        | .grid _ lanes => toString (lanes.toList.map fun (l : Lane) => s.homo? l.p l.i)
         | .explicit _ => "-"
       dbg_trace s!"WALKSTEP\t{s1 - s0}\t{label}\t{formOf q}\tht={ht}\tslice={rangeWidths t a (a + q.count)}\tsrcHomo={srcHomo}\tok={ok}"
     if !ok then return some (a, q)
