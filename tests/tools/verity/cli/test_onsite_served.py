@@ -1025,9 +1025,10 @@ def test_served_wipe_gets_the_configurations_pin_and_no_other(tmp_path, pinned):
     cfg = R.load(NETWORK, REG)
     cmd = T.PIECES["wipe"][T.PROVER].variables(cfg if pinned else {**cfg, "pin": []}, NETWORK_BINDINGS)["WIPE_CMD"]
     executable(tmp_path, "ip", IP)
+    executable(tmp_path, "lake", LAKE)
     env = {"PATH": os.pathsep.join([str(tmp_path), str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path),
            "WIPE_KEY_SHA512": "f" * 128, "VERITY_PINS": json.dumps(cfg["pin"]), "WIPE_COMMAND": "true",
-           "WIPE_PROTOCOL_EXE": "true", "GPU_LEASE_UUID": "no-such-card", "PY": sys.executable}
+           "GPU_LEASE_UUID": "no-such-card", "PY": sys.executable}
     p = subprocess.run(["bash", "-c", cmd, "_", str(tmp_path / "serve"), "all", str(tmp_path / "wipe")], cwd=ROOT,
                        env=env, capture_output=True, text=True, check=False)
     refused = (tmp_path / "wipe" / "refused.txt").read_text()
@@ -1059,6 +1060,17 @@ def test_pouss_and_poubs_parties_start_from_the_table_and_none_raises(tmp_path, 
 ARGV = """#!/usr/bin/env bash
 printf '%s\n' "$@" >> "$(dirname "$0")/argv.txt"; echo >> "$(dirname "$0")/argv.txt"
 """
+#: `lake build EXE`'s stand-in for served_piece.sh's Lean builds: an empty program where lake puts EXE
+LAKE = """#!/bin/sh
+mkdir -p .lake/build/bin && printf '#!/bin/sh\\n' > ".lake/build/bin/$2" && chmod +x ".lake/build/bin/$2"
+"""
+
+
+def lake_path(tmp: Path) -> str:
+    """A PATH whose `lake` is `LAKE`, then this Python's directory and the default's."""
+    (tmp / "lake-bin").mkdir(exist_ok=True)
+    Path(stand_in(tmp / "lake-bin", "lake", LAKE)).chmod(0o755)
+    return os.pathsep.join([str(tmp / "lake-bin"), str(Path(sys.executable).parent), os.defpath])
 
 
 @pytest.mark.parametrize("pins", ["configuration's", "others", "none"])
@@ -1077,8 +1089,8 @@ def test_pouss_and_poubs_command_line_carries_the_configurations_pins_and_no_oth
     hooks["POUS_ARGS"] = T.variables(cfg, tables)["POUS_ARGS"]
     py = Path(stand_in(tmp_path, "python", ARGV))
     py.chmod(0o755)
-    env = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path), "PY": str(py),
-           "P2_LIB": str(tmp_path), "POUS_EXE": "true", "BW_CASE_EXE": "true", "GPU_LEASE_UUID": "no-such-card",
+    env = {"PATH": lake_path(tmp_path), "HOME": str(tmp_path), "PY": str(py),
+           "P2_LIB": str(tmp_path), "GPU_LEASE_UUID": "no-such-card",
            "VERITY_PINS": json.dumps(cfg["pin"]), "POUS_ARGS": hooks["POUS_ARGS"]}
     p = subprocess.run(["bash", "-c", hooks["POUS_CMD"], "_", str(tmp_path / "serve"), "3", str(tmp_path / "pous")],
                        cwd=ROOT, env=env, capture_output=True, text=True, check=False)
@@ -1162,10 +1174,9 @@ def test_an_attester_bound_in_part_is_refused_by_name_with_the_fix(tmp_path, cap
 
 
 def served_piece(tmp: Path, pous_args: str, **env: str) -> tuple[subprocess.CompletedProcess, Path]:
-    """served_piece.sh run as the workload runs it, with stand-ins for vLLM's Python and the tree's, and Lean built."""
+    """served_piece.sh run as the workload runs it, with stand-ins for vLLM's Python, the tree's and `lake`."""
     py = executable(tmp, "python", ARGV)
-    run = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp), "PY": str(py),
-           "P2_LIB": str(tmp), "POUS_EXE": "true", "BW_CASE_EXE": "true", "BW_PARTY_EXE": "/lean/poub-verifier",
+    run = {"PATH": lake_path(tmp), "HOME": str(tmp), "PY": str(py), "P2_LIB": str(tmp),
            "TPY": str(executable(tmp, "tpy", TPY)), "GPU_LEASE_UUID": "no-such-card", "VERITY_PINS": "[]",
            "POUS_ARGS": pous_args, **env}
     p = subprocess.run(["bash", "-c", f'bash {T.POUS_SCRIPT} "$@"', "_", str(tmp / "serve"), "3", str(tmp / "pous")],
@@ -1186,7 +1197,12 @@ def test_with_run_keys_served_piece_starts_the_attesters_here_under_one_key_made
                     "--challenger-host": subprocess.run(["hostname"], capture_output=True, text=True).stdout.strip(),
                     "--challenger-address": "127.0.0.1:47610", "--bw-host": "127.0.0.1", "--rounds": "320",
                     "--challenger-command": f"{attester}challenger_party {tmp_path / 'tpy'} {keys}",
-                    "--bw-party": f"{attester}bw_party {tmp_path / 'tpy'} {keys} /lean/poub-verifier"}
+                    "--bw-party": flag["--bw-party"]}
+    party = flag["--bw-party"].split(" ")
+    assert party[:2] == ["bash", str(ROOT / "benchmarks/pous/lean_ready.sh")] and party[3] == "poub-verifier"
+    assert " ".join(party[4:-1]) == f"{attester}bw_party {tmp_path / 'tpy'} {keys}"
+    lean = "verity/protocols/resource_accounting/memory/poub/verifier/lean/.lake/build/bin/poub-verifier"
+    assert party[-1] == f"{Path(party[2]).parent}/{lean}"
     assert "--run-keys" not in argv
     assert (tmp_path / "keys.txt").read_text().split() == [str(keys / "pous"), "700"] and not keys.exists()
 
@@ -1272,15 +1288,16 @@ exec(compile(code, "served_wipe.sh", "exec"), {{"__name__": "__main__"}})
 
 
 def served_wipe(tmp: Path, bindings_: dict, **env: str) -> tuple[subprocess.CompletedProcess, Path]:
-    """served_wipe.sh run as the workload runs it on an idle card, its attach a stand-in, its Lean built."""
+    """served_wipe.sh run as the workload runs it on an idle card, its attach and `lake` stand-ins."""
     cfg = R.load(CONFIG, REG)
     hooks = T.PIECES["wipe"][T.PROVER].variables(cfg, bindings_)
     executable(tmp, "nvidia-smi", IDLE)
     executable(tmp, "ip", IP)
+    executable(tmp, "lake", LAKE)
     log = tmp / "attach.json"
     python = executable(tmp, "python", PYTHON.format(python=sys.executable, log=str(log)))
     run = {"PATH": os.pathsep.join([str(tmp), str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp),
-           "VERITY_PINS": json.dumps(cfg["pin"]), "WIPE_PROTOCOL_EXE": "true", "GPU_LEASE_UUID": "card-0",
+           "VERITY_PINS": json.dumps(cfg["pin"]), "GPU_LEASE_UUID": "card-0",
            "WIPE_CARD": "any", "PY": str(python), **{k: v for k, v in hooks.items() if k != "WIPE_CMD"}, **env}
     p = subprocess.run(["bash", "-c", hooks["WIPE_CMD"], "_", str(tmp / "serve"), "all", str(tmp / "wipe")], cwd=ROOT,
                        env=run, capture_output=True, text=True, check=False)

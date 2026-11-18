@@ -10,7 +10,7 @@ from dataclasses import replace
 from types import ModuleType, SimpleNamespace
 
 import pytest
-from bench_standins import FakeFactory, inputs
+from bench_standins import CPUS, FakeFactory, inputs
 from verity_vllm.engine.env import INDUCTOR_DIR_MARK
 
 from verity_bench import settings
@@ -146,7 +146,7 @@ def test_closing_an_engine_whose_worker_already_sent_its_error_keeps_that_error(
 def test_resident_engines_interleave_arms_rep_by_rep_and_discard_warmups():
     preset, points, arms = inputs()
     factory = FakeFactory()
-    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc")
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc", cpus=CPUS)
     measured = [e[1] for e in factory.events if e[0] == "measure"]
     assert measured == ["stock-fp8", "candidate", "candidate", "stock-fp8"]
     assert doc["execution"]["interleave"] == "resident"
@@ -162,7 +162,7 @@ def test_every_engine_runs_the_warmups_before_its_first_timed_rep_and_the_schedu
 
     preset, points, arms = inputs()
     factory = FakeFactory(resident_failure=resident_failure)
-    doc = run_benchmark(preset, arms, points, sweep="quick", reps=3, warmups=3, factory=factory, git_commit="abc")
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=3, warmups=3, factory=factory, git_commit="abc", cpus=CPUS)
     assert doc["identity"]["warmups"] == doc["execution"]["warmups"] == 3
     lifetimes: dict[str, list[list[str]]] = {}
     for event in factory.events:
@@ -176,10 +176,10 @@ def test_every_engine_runs_the_warmups_before_its_first_timed_rep_and_the_schedu
     assert len(warm) == 3 * len(timed) and [s["warmup"] for s in warm[:3]] == [0, 1, 2]
     assert all(s["run"]["wall_s"] == 0.5 for s in warm)
     with pytest.raises(ValueError, match="warm-up"):
-        run_benchmark(preset, arms, points, sweep="quick", reps=1, warmups=0, factory=FakeFactory(), git_commit="abc")
+        run_benchmark(preset, arms, points, sweep="quick", reps=1, warmups=0, factory=FakeFactory(), git_commit="abc", cpus=CPUS)
     with pytest.raises(ValueError, match="max_warmups"):
         run_benchmark(preset, arms, points, sweep="quick", reps=1, warmups=3, max_warmups=2, factory=FakeFactory(),
-                      git_commit="abc")
+                      git_commit="abc", cpus=CPUS)
 
 
 def test_an_engine_warms_past_its_minimum_until_two_runs_agree_and_says_when_it_never_did():
@@ -243,7 +243,7 @@ def test_a_timed_rep_keeps_its_step_times_request_times_and_host_counters():
 def test_resident_failure_falls_back_to_blocks():
     preset, points, arms = inputs()
     factory = FakeFactory(resident_failure="candidate")
-    doc = run_benchmark(preset, arms, points, sweep="quick", reps=3, factory=factory, git_commit="abc")
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=3, factory=factory, git_commit="abc", cpus=CPUS)
     assert doc["execution"]["interleave"] == "blocks"
     assert "does not fit" in doc["execution"]["resident_failure"]
     measured = [e[1] for e in factory.events if e[0] == "measure"]
@@ -263,14 +263,14 @@ def test_an_engine_that_fails_to_start_closes_the_engines_already_up():
 
     factory.create = refuse
     with pytest.raises(RuntimeError, match="Refused"):
-        run_benchmark(preset, arms, points, sweep="quick", reps=1, factory=factory, git_commit="abc")
+        run_benchmark(preset, arms, points, sweep="quick", reps=1, factory=factory, git_commit="abc", cpus=CPUS)
     assert factory.events == [("create", "stock-fp8", True), ("close", "stock-fp8")]
 
 
 @pytest.mark.parametrize("factory", [FakeFactory(gate_ok=False), FakeFactory(bad_tokens="candidate")])
 def test_a_failed_gate_records_the_failure_and_stops_before_timing(factory):
     preset, points, arms = inputs()
-    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc")
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc", cpus=CPUS)
     assert any(not g["passed"] for g in doc["gates"])
     assert doc["points"] == []
     assert not any(e[0] == "measure" for e in factory.events)
@@ -283,13 +283,13 @@ def test_an_arm_gate_is_read_again_after_its_timed_runs_and_its_failure_drops_th
     in its ``warmups`` and fails a measured run without a root, so the verdict must hold what the gate says after them."""
 
     preset, points, arms = inputs()
-    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc", cpus=CPUS)
     closing = [g for g in doc["gates"] if g["kind"] == "arm-closing"]
     assert all(g["passed"] for g in closing) and doc["points"]
     assert [g["arm"] for g in closing] == ["stock-fp8", "candidate"]
 
     factory = FakeFactory(timed_ok=False, resident_failure=resident_failure)
-    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc")
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc", cpus=CPUS)
     assert all(g["passed"] for g in doc["gates"] if g["kind"] == "arm")
     closing = [g for g in doc["gates"] if g["kind"] == "arm-closing"]
     assert closing and not any(g["passed"] for g in closing)
@@ -303,7 +303,7 @@ def test_an_arm_gate_is_read_again_after_its_timed_runs_and_its_failure_drops_th
 def test_a_failed_token_gate_records_the_first_divergent_token():
     preset, points, arms = inputs()
     doc = run_benchmark(preset, arms, points, sweep="quick", reps=2,
-                        factory=FakeFactory(bad_tokens="candidate"), git_commit="abc")
+                        factory=FakeFactory(bad_tokens="candidate"), git_commit="abc", cpus=CPUS)
     failed, = [g for g in doc["gates"] if g["kind"] == "tokens" and not g["passed"]]
     assert failed["first_divergence"] == {
         "request": "b32-p512-mixed-0", "position": 0, "token": 8, "control_token": 7,
@@ -319,7 +319,7 @@ def test_unequal_kv_pools_fail_the_gate_and_name_the_pin():
 
     preset, points, arms = inputs()
     factory = FakeFactory(kv_tokens={"stock-fp8": 494_064, "candidate": 491_376})
-    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc")
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc", cpus=CPUS)
     gate, = [g for g in doc["gates"] if g["kind"] == "kv-pool"]
     assert not gate["passed"]
     assert (gate["tokens"], gate["control_tokens"]) == (491_376, 494_064)
@@ -332,7 +332,7 @@ def test_unequal_kv_pools_fail_the_gate_and_name_the_pin():
 def test_equal_kv_pools_pass_and_are_recorded_in_the_identity():
     preset, points, arms = inputs()
     factory = FakeFactory(kv_tokens={"stock-fp8": 458_752, "candidate": 458_752})
-    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc")
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc", cpus=CPUS)
     gate, = [g for g in doc["gates"] if g["kind"] == "kv-pool"]
     assert gate["passed"] and doc["points"]
     assert {a["id"]: a["kv_cache_tokens"] for a in doc["identity"]["arms"]} == {

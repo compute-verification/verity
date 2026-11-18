@@ -1,6 +1,7 @@
-"""PoUW's own word primitives as Boolean Definitions: the next version of each `words` primitive Pearl-C4's (`pc4`) and
-Pearl-C's (`pc8`) row units call, and of the four Keccak words their hiding tiles' digest calls (`hashes`, Keccak-p[1600]
-on (lo, hi) half-lanes), the same function on bits.
+"""PoUW's word primitives (`verity.circuits.ops.words`) as Boolean Definitions: the next version of each, the same function
+on bits. They sit beside the core's so that `versions.boolean_version` finds every one in any process; Pearl-C4's (`pc4`)
+and Pearl-C's (`pc8`) row units call them, and the hiding tiles' digest the four Keccak words (`hashes`, Keccak-p[1600] on
+(lo, hi) half-lanes).
 
     PouwF32SqrtRn_v2   (a: Array<32, Value<1>>) -> Array<32, Value<1>>                          word view: PouwF32SqrtRn_v1
     PouwETilde_v2      (e: Array<4, Value<1>>, ae: Array<8, Value<1>>) -> Array<16, Value<1>>    word view: PouwETilde_v1
@@ -17,6 +18,22 @@ on (lo, hi) half-lanes), the same function on bits.
     PouwChi32_v2       (a, b, c: Array<32, Value<1>>) -> Array<32, Value<1>>                    word view: PouwChi32_v1
     PouwRotl64Lo_v2    (lo, hi, c: Array<32, Value<1>>) -> Array<32, Value<1>>                  word view: PouwRotl64Lo_v1
     PouwRotl64Hi_v2    (lo, hi, c: Array<32, Value<1>>) -> Array<32, Value<1>>                  word view: PouwRotl64Hi_v1
+    PouwPackBE4_v2     (b0, b1, b2, b3: Array<7, Value<1>>) -> Array<32, Value<1>>              word view: PouwPackBE4_v1
+    PouwNoiseByte_v2   (w, c: Array<32, Value<1>>) -> Array<8, Value<1>>                        word view: PouwNoiseByte_v1
+    PouwDot16U8S8_v2   (acc: Array<32, Value<1>>, x, y: Array<16, Array<8, Value<1>>>) -> Array<32, Value<1>>
+                                                                                                word view: PouwDot16U8S8_v1
+    PouwNegBetaSum16_v2  (acc: Array<32, Value<1>>, y: Array<16, Array<8, Value<1>>>) -> Array<32, Value<1>>
+                                                                                                word view: PouwNegBetaSum16_v1
+    PouwFormX_v2, PouwAdd8_v2, PouwSub8_v2   (a: Array<7, Value<1>>, e: Array<8, Value<1>>) -> Array<8, Value<1>>
+                                                                                                word view: their _v1
+    PouwFormX3_v2, PouwAddSub8_v2   (a: Array<7, Value<1>>, e1, e2: Array<8, Value<1>>) -> Array<8, Value<1>>
+                                                                                                word view: their _v1
+    PouwAdd64Lo_v2     (alo, blo: Array<32, Value<1>>) -> Array<32, Value<1>>                   word view: PouwAdd64Lo_v1
+    PouwAdd64Hi_v2     (ahi, alo, bhi, blo: Array<32, Value<1>>) -> Array<32, Value<1>>         word view: PouwAdd64Hi_v1
+    PouwCh32_v2, PouwMaj32_v2   (a, b, c: Array<32, Value<1>>) -> Array<32, Value<1>>           word view: their _v1
+    PouwSha512{Big,Small}Sigma{0,1}{Hi,Lo}_v2   (hi, lo: Array<32, Value<1>>) -> Array<32, Value<1>>
+                                                                                                word view: their _v1
+    PouwI32ToF32Rn_v2  (z: Array<32, Value<1>>) -> Array<32, Value<1>>                          word view: PouwI32ToF32Rn_v1
 
 Each is traced from a builder over core's `forms` (`verity.circuits.boolean.trace.definition`), so its And gates are the builder's
 live ANDs but for its commits (`forms.Circuit.commit`, a row of a `forms` lowering and no gate); Flock's lowering runs the
@@ -48,6 +65,12 @@ builder itself (``.build``), for the word primitive's piece and for an activatio
 * `rotl64`: a barrel rotator over the 64-bit word hi:lo, one stage per bit of the amount's low six, the largest first, so
   each stage's live ANDs are only the window the returned half reads.  A constant amount, as every call in `hashes` has,
   folds each stage to wiring with no AND (`forms`' AND of a constant is no gate).
+* `sum_mod`: a sum of weighted columns mod 2^width by full adders, a carry out of the top column dropped. The dot's partial
+  products (y's sign bit complemented, Baugh–Wooley), −128 · Σ y and the three-operand bytes are each one such sum.
+* the 8-bit forms and `noise_byte`: `forms.add`'s ripple; the pack wiring, no AND.
+* SHA-512's words (the 64-bit add's halves, Ch, Maj and the sigma halves): `verity.circuits.boolean.sha512`'s gates on
+  the 64-bit word hi:lo, the add's ripple uncommitted, so its halves are 31 and 63 ANDs, Ch and Maj 32, the sigmas none.
+* `PouwI32ToF32Rn_v2` is `fp.s32_to_f32`, the circuit of `S32ToF32Rn_v2`.
 """
 from __future__ import annotations
 
@@ -57,16 +80,22 @@ from verity.circuits.silicon import fp
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import scalar as BS
 from verity.circuits.ops.boolean.sqrt import f32_sqrt_rn, isqrt
-from verity.circuits.boolean.forms import (NOT, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, multiply, mux,
-                                     or_reduce, shl_window, sub)
+from verity.circuits.boolean.forms import (NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, maj,
+                                           multiply, mux, or_reduce, shl_window, sub)
+from verity.circuits.boolean import sha512 as SH
 from verity.circuits.boolean.trace import definition
 
 from verity.circuits.ops import words as W
 
-__all__ = ["PouwBf16Neg", "PouwBlackwellE4m3SaltDead", "PouwBlackwellE4m3Window", "PouwChi32", "PouwETilde", "PouwF32SqrtRn",
-           "PouwHopperE4m3SaltDead", "PouwHopperE4m3Window", "PouwRotl64Hi", "PouwRotl64Lo", "PouwSqAcc", "PouwSqCeil",
-           "PouwSqGe", "PouwWindowWord", "PouwXor32", "chi32", "e_tilde", "f32_sqrt_rn", "isqrt", "rotl64", "salt_dead",
-           "sq_acc", "sq_ceil", "sq_ge", "square", "up48", "window", "window_word"]
+__all__ = ["PouwAdd64Hi", "PouwAdd64Lo", "PouwAdd8", "PouwAddSub8", "PouwBf16Neg", "PouwBlackwellE4m3SaltDead",
+           "PouwBlackwellE4m3Window", "PouwCh32", "PouwChi32", "PouwDot16U8S8", "PouwETilde", "PouwF32SqrtRn", "PouwFormX",
+           "PouwFormX3", "PouwHopperE4m3SaltDead", "PouwHopperE4m3Window", "PouwI32ToF32Rn", "PouwMaj32",
+           "PouwNegBetaSum16", "PouwNoiseByte", "PouwPackBE4", "PouwRotl64Hi", "PouwRotl64Lo", "PouwSha512BigSigma0Hi",
+           "PouwSha512BigSigma0Lo", "PouwSha512BigSigma1Hi", "PouwSha512BigSigma1Lo", "PouwSha512SmallSigma0Hi",
+           "PouwSha512SmallSigma0Lo", "PouwSha512SmallSigma1Hi", "PouwSha512SmallSigma1Lo", "PouwSqAcc", "PouwSqCeil",
+           "PouwSqGe", "PouwSub8", "PouwWindowWord", "PouwXor32", "add_sub8", "chi32", "dot16_u8s8",
+           "e_tilde", "f32_sqrt_rn", "form_x", "form_x3", "isqrt", "neg_beta_sum16", "noise_byte", "pack_be4", "rotl64",
+           "salt_dead", "sq_acc", "sq_ceil", "sq_ge", "square", "sum_mod", "up48", "window", "window_word"]
 
 BIT = BL.BIT
 F32 = U32 = Array(32, BIT)
@@ -283,3 +312,142 @@ PouwRotl64Hi = definition("PouwRotl64Hi", 2, lambda C, lo, hi, c: rotl64(C, lo, 
                           (("lo", U32), ("hi", U32), ("c", U32)), U32, word=W.PouwRotl64Hi,
                           conformance=W.PouwRotl64Hi.conformance,
                           doc="the high half of hi:lo rotated left by c mod 64, on bits: PouwRotl64Hi_v1")
+
+
+# ---- bytes and int7 entries, the accumulator, SHA-512's words, ncp-v2's dequantization ------------------------------------
+
+I7, A16 = Array(7, BIT), Array(16, U8)
+
+
+def _s8(b):
+    """An int7 entry as its two's-complement byte: bit 6 copied into bit 7."""
+    return list(b) + [b[6]]
+
+
+def sum_mod(C, cols, width):
+    """The sum of weighted columns of bits mod 2^width: the constants folded into one, full adders until no column holds
+    more than two bits, then a ripple; a carry out of the top column is dropped, so it costs no AND."""
+    k = sum(sum(w.c for w in col if w.is_const()) << i for i, col in enumerate(cols[:width]))
+    cols = [[w for w in col if not w.is_const()] for col in cols[:width]] + [[] for _ in range(width - len(cols))]
+    for i in range(width):
+        if k >> i & 1:
+            cols[i].append(ONE)
+    while any(len(col) > 2 for col in cols):
+        nxt = [[] for _ in range(width)]
+        for i, col in enumerate(cols):
+            while len(col) >= 3:
+                x, y, z = col.pop(), col.pop(), col.pop()
+                nxt[i].append(x ^ y ^ z)
+                if i + 1 < width:
+                    nxt[i + 1].append(maj(C, x, y, z))
+            nxt[i].extend(col)
+        cols = nxt
+    out, carry = [], ZERO
+    for i, col in enumerate(cols):
+        x, y = (col + [ZERO, ZERO])[:2]
+        out.append(x ^ y ^ carry)
+        if i + 1 < width:
+            carry = maj(C, x, y, carry)
+    return out
+
+
+def _const_cols(cols, k, width):
+    for i in range(width):
+        if k % (1 << width) >> i & 1:
+            cols[i].append(ONE)
+    return cols
+
+
+def pack_be4(C, b0, b1, b2, b3):
+    """``PouwPackBE4_v1``: the four entries' bytes, b0 the most significant: wiring."""
+    return [x for b in (b3, b2, b1, b0) for x in _s8(b)]
+
+
+def noise_byte(C, w, c):
+    """``PouwNoiseByte_v1``: the low six bits of byte c mod 4 of w, chosen by c's two low bits, plus 225 (−31 mod 256)."""
+    lo, hi = mux(C, c[0], w[8:14], w[0:6]), mux(C, c[0], w[24:30], w[16:22])
+    return add(C, mux(C, c[1], hi, lo) + [ZERO, ZERO], const_bits(225, 8), width=8)
+
+
+def form_x(C, a, e):
+    """``PouwFormX_v1``: a + e + 128 mod 256, the 128 a flip of the top bit."""
+    s = add(C, _s8(a), e, width=8)
+    return s[:7] + [NOT(s[7])]
+
+
+def form_x3(C, a, e1, e2):
+    """``PouwFormX3_v1``: 128 − (a + e1 + e2) mod 256, as ~a + ~e1 + ~e2 + 131."""
+    cols = [[NOT(x), NOT(y), NOT(z)] for x, y, z in zip(_s8(a), e1, e2)]
+    return sum_mod(C, _const_cols(cols, 131, 8), 8)
+
+
+def add_sub8(C, b, f, g):
+    """``PouwAddSub8_v1``: b + f − g mod 256, as b + f + ~g + 1."""
+    cols = [[x, y, NOT(z)] for x, y, z in zip(_s8(b), f, g)]
+    return sum_mod(C, _const_cols(cols, 1, 8), 8)
+
+
+def neg_beta_sum16(C, acc, *y):
+    """``PouwNegBetaSum16_v1``: acc − 128 · Σ s8(y) mod 2^32. An entry's −128 · y is ~y_j at 2^(j+7) for j < 7, y_7 at 2^14,
+    and −127 · 2^7 of the constant, so the sum takes no AND but the carry-save tree's."""
+    cols = [[b] for b in acc]
+    for v in y:
+        for j in range(7):
+            cols[j + 7].append(NOT(v[j]))
+        cols[14].append(v[7])
+    return sum_mod(C, _const_cols(cols, -len(y) * 127 * 128, 32), 32)
+
+
+def dot16_u8s8(C, acc, *xy):
+    """``PouwDot16U8S8_v1``: acc + Σ u8(x) · s8(y) mod 2^32, every partial product in one carry-save sum. y's sign bit weighs
+    −2^7, so x_i y_7 enters complemented at 2^(i+7) with −2^(i+7) in the constant (Baugh–Wooley)."""
+    x, y = xy[:16], xy[16:]
+    cols = [[b] for b in acc]
+    for xt, yt in zip(x, y):
+        for i, a in enumerate(xt):
+            for j, b in enumerate(yt):
+                p = C.AND(a, b)
+                cols[i + j].append(NOT(p) if j == 7 else p)
+    return sum_mod(C, _const_cols(cols, -len(x) * 255 * 128, 32), 32)
+
+
+#: SHA-512's Σ0, Σ1, σ0 and σ1 by their words' names
+_SIGMAS = {"BigSigma0": SH.big_sigma0, "BigSigma1": SH.big_sigma1, "SmallSigma0": SH.small_sigma0,
+          "SmallSigma1": SH.small_sigma1}
+
+
+def _def(word, build, ret, doc):
+    params, _ = word.signature()
+    return definition(word.name, 2, build, tuple((n, BL.bit_type(t)) for n, t in params), ret, word=word,
+                      conformance=word.conformance, doc=f"{doc}, on bits: {word.id}")
+
+
+PouwPackBE4 = _def(W.PouwPackBE4, pack_be4, U32, "four int7 entries' bytes, big-endian")
+PouwNoiseByte = _def(W.PouwNoiseByte, noise_byte, U8, "a noise entry from byte c mod 4 of w")
+PouwDot16U8S8 = _def(W.PouwDot16U8S8, dot16_u8s8, U32, "acc + Σ u8(x)·s8(y) over 16 products, mod 2^32")
+PouwFormX = _def(W.PouwFormX, form_x, U8, "a + e + 128 mod 256")
+PouwFormX3 = _def(W.PouwFormX3, form_x3, U8, "128 − (a + e1 + e2) mod 256")
+PouwAdd8 = _def(W.PouwAdd8, lambda C, b, f: add(C, _s8(b), f, width=8), U8, "b + f mod 256")
+PouwSub8 = _def(W.PouwSub8, lambda C, b, f: sub(C, _s8(b), f, 8)[0], U8, "b − f mod 256")
+PouwAddSub8 = _def(W.PouwAddSub8, add_sub8, U8, "b + f − g mod 256")
+PouwNegBetaSum16 = _def(W.PouwNegBetaSum16, neg_beta_sum16, U32, "acc − 128·Σ s8(y) over 16 entries, mod 2^32")
+PouwAdd64Lo = _def(W.PouwAdd64Lo, lambda C, alo, blo: SH.add2(C, alo, blo, every=None), U32,
+                   "the low half of a 64-bit sum")
+PouwAdd64Hi = _def(W.PouwAdd64Hi, lambda C, ahi, alo, bhi, blo: SH.add2(C, alo + ahi, blo + bhi, every=None)[32:], U32,
+                   "the high half of a 64-bit sum")
+PouwCh32 = _def(W.PouwCh32, SH.ch, U32, "SHA-512's Ch on one half, bit by bit e ? f : g")
+PouwMaj32 = _def(W.PouwMaj32, SH.maj, U32, "SHA-512's Maj on one half")
+
+
+def _sigma_half(name, half):
+    f = _SIGMAS[name]
+    return _def(getattr(W, f"PouwSha512{name}{half}"),
+                (lambda C, hi, lo: f(lo + hi)[32:]) if half == "Hi" else (lambda C, hi, lo: f(lo + hi)[:32]),
+                U32, f"SHA-512's {name} on hi:lo, its {half.lower()} half")
+
+
+PouwSha512BigSigma0Hi, PouwSha512BigSigma0Lo = _sigma_half("BigSigma0", "Hi"), _sigma_half("BigSigma0", "Lo")
+PouwSha512BigSigma1Hi, PouwSha512BigSigma1Lo = _sigma_half("BigSigma1", "Hi"), _sigma_half("BigSigma1", "Lo")
+PouwSha512SmallSigma0Hi, PouwSha512SmallSigma0Lo = _sigma_half("SmallSigma0", "Hi"), _sigma_half("SmallSigma0", "Lo")
+PouwSha512SmallSigma1Hi, PouwSha512SmallSigma1Lo = _sigma_half("SmallSigma1", "Hi"), _sigma_half("SmallSigma1", "Lo")
+PouwI32ToF32Rn = _def(W.PouwI32ToF32Rn, fp.s32_to_f32, F32, "cvt.rn.f32.s32 (`fp.s32_to_f32`, as `S32ToF32Rn_v2`)")
