@@ -1872,7 +1872,7 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
     by: dict[str, list[Wire]] = {}
     for w in wires:
         by.setdefault(w.reader, []).append(w)
-    out, chunk = [], dict.fromkeys(lays, 0)
+    out, chunk, seen = [], dict.fromkeys(lays, 0), dict.fromkeys(lays, 0)
     for tid, lo, own, n in units.ranges:
         lay, kv = lays[tid][0], cuts.get(tid, {})
         rows = tuple((p, w) for p, w, _ in lay.cut(kv))
@@ -1891,9 +1891,13 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
                 held = {x.port: len(WI.table(x.positions(at, m))[0]) for x in wired}
                 tables = (tuple((p, len(got[p][1]) if p in got else held.get(p, m)) for p, _ in rows)
                           if got or held or m != lays[tid][1] else ())
+                if at != seen[tid]:
+                    raise ValueError(f"{tid}: its units [{at}, {at + m}) come after {seen[tid]} of its units in root order: a "
+                                     "(template, output field) tree's leaf i is the template's unit i in root order, so the "
+                                     "order's ranges of a template rise")
                 out.append(CS.Member(tid, rows, lay.outs, m, lo + at - own, tables, name=f"{tid}/c{chunk[tid]}",
-                                     schemas=schemas, wired=wired, own=at))
-                chunk[tid] += 1
+                                     schemas=schemas, wired=wired))
+                chunk[tid], seen[tid] = chunk[tid] + 1, at + m
     return tuple(out)
 
 
@@ -2040,13 +2044,13 @@ def _member_doc(m: CS.Member) -> dict[str, Any]:
     return {"template": m.template, "name": m.name, "n": m.n, "base": m.base, "rows": [list(r) for r in m.rows],
             "outs": [list(o) for o in m.outs], "schemas": [list(s) for s in m.schemas], "tables": [list(t) for t in m.tables],
             "link_units": list(m.link_units), "links": [list(x) for x in m.links],
-            "wired": [w.doc() for w in m.wired], **({"own": m.own} if m.own is not None else {})}
+            "wired": [w.doc() for w in m.wired]}
 
 
 def _listed_members(doc: Mapping[str, Any]) -> tuple[CS.Member, ...]:
     return tuple(CS.Member(m["template"], tuple(map(tuple, m["rows"])), tuple(map(tuple, m["outs"])), m["n"], m["base"],
                            tuple(map(tuple, m["tables"])), m["name"], tuple(map(tuple, m["schemas"])), tuple(m["link_units"]),
-                           tuple(map(tuple, m["links"])), tuple(WI.Wired.of(w) for w in m["wired"]), m.get("own"))
+                           tuple(map(tuple, m["links"])), tuple(WI.Wired.of(w) for w in m["wired"]))
                  for m in doc["members"])
 
 

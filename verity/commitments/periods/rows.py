@@ -243,7 +243,6 @@ class Member:
     link_units: tuple[int, ...] = ()             # a row-table member: per link, how many of its units (consecutive, in order) read it
     links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the period's row table and rank it is
     wired: tuple[WI.Wired, ...] = ()             # per wired port: the leaves of its writer template's output tree its units read
-    own: int | None = None                       # its first unit among its template's own; None: the template's units in the members before it
 
     def __post_init__(self) -> None:
         if self.schemas and (sorted(p for p, _ in self.schemas) != sorted(p for p, _ in self.rows + self.outs)
@@ -360,10 +359,6 @@ class Binding:
             raise ValueError(f"members {mine} are not the partition's units {want} (each template's, in consecutive chunks)")
         if len({m.key for m in self.members}) != len(self.members):
             raise ValueError(f"members {[m.key for m in self.members]}: each its own name")
-        for t, ms in self.chunks.items():
-            if [self.owns[m.key] for m in ms] != [sum(x.n for x in ms[:i]) for i in range(len(ms))]:
-                raise ValueError(f"{t}: its members' own units {[(self.owns[m.key], m.n) for m in ms]} don't tile its "
-                                 f"{self.templates[t]} (Member.own)")
         WI.validate(self.members, self.templates, self.owns)
         for m in self.members:
             if (m.wired or self.templates[m.template] != m.n) and not m.tables:
@@ -449,20 +444,21 @@ class Binding:
 
     @cached_property
     def owns(self) -> dict[str, int]:
-        """Each member's first unit among its template's own, by key (`Member.own`)."""
+        """Each member's first unit among its template's, by key: the template's units in the members before it, in root
+        order, so a tree's leaf is the Program's count of its template's units before it."""
         out, seen = {}, {}
         for m in self.members:
-            out[m.key] = seen.get(m.template, 0) if m.own is None else m.own
+            out[m.key] = seen.get(m.template, 0)
             seen[m.template] = out[m.key] + m.n
         return out
 
     @cached_property
     def chunks(self) -> dict[str, tuple[Member, ...]]:
-        """Each template's members, in the order of their own units."""
+        """Each template's members, in order."""
         out: dict[str, list[Member]] = {}
         for m in self.members:
             out.setdefault(m.template, []).append(m)
-        return {t: tuple(sorted(ms, key=lambda m: self.owns[m.key])) for t, ms in out.items()}
+        return {t: tuple(ms) for t, ms in out.items()}
 
     def wire(self, m: Member, port: str) -> WI.Wired | None:
         return next((w for w in m.wired if w.port == port), None)
@@ -1373,8 +1369,8 @@ def own_value(port: str) -> str:
 
 
 def _template_docs(win: Mapping[str, Any], template: str) -> list[tuple[int, Mapping[str, Any]]]:
-    """Template ``template``'s members in ``window.json``, with their indices, in the order of their own units."""
-    return sorted(((j, x) for j, x in enumerate(win["members"]) if x["template"] == template), key=lambda jx: int(jx[1]["own"]))
+    """Template ``template``'s members in ``window.json``, with their indices, in order."""
+    return [(j, x) for j, x in enumerate(win["members"]) if x["template"] == template]
 
 
 def shared_ports(win: Mapping[str, Any], k: int) -> dict[str, tuple[str, str, str, np.ndarray]]:
