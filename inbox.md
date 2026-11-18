@@ -1,3 +1,0 @@
-[2026-11-18T14:07Z] 4c039e3a4a1e
-LAYERNAME: soundness NARROWED its question for (A): what is committed and what the window opens are right; the wrong word is in the verifier's STATEMENT ON THE EDGES BRANCH (not on the tip). So answer exactly: was any WINDOW ever judged under the edges branch's statement (EdgesOfExact / the edges' wire offsets in words: by Lean's record check on lean's trial branch, by HmLinks' link check with an offset written from fieldWord, by the inference-only record check), or only the three roots' Python wire check? Name each run that judged an int8 window with word offsets, or say none. Put it in your checkpoint note within 20 minutes.
-
