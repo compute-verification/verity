@@ -514,7 +514,8 @@ of ours. It also sets the load (its dataset, the cut and turns for the model's c
 flight), the sampling (no flag, so the model's generation_config applies, and each request stops at its recorded length,
 fixed-size's at 1,024 tokens) and the bounds a request is counted within. The flags it fixes (`--arms`, `--loads`,
 `--reps`, `LIFETIMES`, `SAMPLED`, `MAX_MODEL_LEN`, `PASS_PROMPTS`, the published arm's flags, `--target`, `WITH`) are
-refused if given too, each refusal naming the flag to drop. Without `--profile` the job is as it was.
+refused if given too, each refusal naming the flag to drop. `--profile`, `--feature` and `--find-load` are flags alone:
+`PROFILE`, `FEATURE` and `FIND_LOAD` in the environment are refused. Without `--profile` the job is as it was.
 
 A model's stock launch is the same on each of its cards, and a profile's load is the model's on one card
 (`llama32-1b.h100`). The card is the card file whose driver name nvidia-smi gives this host's cards (`profile_card`),
@@ -524,14 +525,17 @@ never a flag or a machine's name. The same command runs on a machine that is not
 place under `XDG_CACHE_HOME` unless given, and the commit is research run's `--tree-sha` or `RESEARCH_SOURCE_COMMIT`, with
 no `.git` needed. A tree that none of these names is refused before anything is served.
 
-- `--find-load` serves stock alone over a ladder: users 1, 2, 4, 8 and 16 for coding-agent, and 4 to 192 requests in flight,
-  up to the profile's prompts, for the others. It says where output tokens a second stop rising and prints the
-  file's line for this host's card, the profile's version raised by one and the digest `tests/benchmarks/harness/test_profiles.py` then
-  pins. It edits no file. A profile whose load is still `not found yet` refuses `--feature` until that line is in.
+- `--find-load` serves stock alone over its load's own rungs (`LOADS`), requests in flight up to the profile's prompts.
+  It says where output tokens a second stop rising and prints the file's line for this host's card, the profile's
+  version raised by one and the digest `tests/benchmarks/harness/test_profiles.py` then pins. It edits no file. A profile whose load is still `not found yet` refuses `--feature` until that line is in.
 - `--feature ARM` serves stock and one arm of ours in turn at the profile's one load: two server lifetimes each, three
   reps a lifetime, which makes six paired reps. Its result (`OUT/serving_profile.{json,txt}`) has three lines in this order:
-  - output tokens a second at full load, stock's over ours less one: the median of the six paired ratios with the
-    kit's interval, `cannot tell` where that interval, widened by the noise floor of stock's two lifetimes, holds zero;
+  - our extra card time a token. On a load of requests in flight, stock's output tokens a second at full load over
+    ours, less one: the median of the six paired ratios with the kit's interval (`serving_cost`), its noise floor
+    stock's two lifetimes. On coding-agent's sessions, our seconds for the same requests over stock's, less one, with a
+    server lifetime its unit: the mean of the two lifetimes' costs with Student's t interval (`session_cost`), and
+    that cost's noise floor. It is `cannot tell` where the interval, widened by the noise floor, holds zero, or where
+    the two sides did not do the same work. A rep whose two sides served different numbers of output tokens is refused;
   - time to first token and time per output token, median and P99, ours beside stock;
   - the share of requests within the profile's bounds.
 

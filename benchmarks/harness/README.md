@@ -75,9 +75,9 @@ benchmarks' `ran with` line). Nothing it writes is a verdict of record.
 
 `benchmarks/production.toml` holds the three serving profiles (`coding-agent`, `chat`, `fixed-size`): each one's
 dataset, requests, load on each card a model is served on, bounds and version, each model's stock launch and cards
-(the card files' `short`), and where the profiles differ from the published command. `verity_bench.profiles` reads it strictly into frozen objects and builds a profile's two command lines, stock
-`vllm serve` (`serve_argv`) and `vllm bench serve` (`bench_argv`). A profile's version rises with any change to what it
-reads, which a test pins.
+(the card files' `short`), and where the profiles differ from the published command. `verity_bench.profiles` reads it
+strictly into frozen objects and builds no command line: a profile's server and client are serve_tax's own
+(`run.sh --profile`). A profile's version rises with any change to what it reads, which a test pins.
 
 ## A steady-state spec
 

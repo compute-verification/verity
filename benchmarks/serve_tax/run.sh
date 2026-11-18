@@ -33,11 +33,13 @@
 # (prod for glm53, stock vLLM at vLLM's own limits for the others), the profile's load at the model's context, no
 # sampling flag (the model's generation_config) and each request to its recorded length (fixed-size's 1,024 tokens).
 # It fixes ARMS, LOADS, REPS, LIFETIMES, SAMPLED, MAX_MODEL_LEN, PASS_PROMPTS, the published arm's flags, TARGET and
-# WITH, and refuses each one given, naming it. --find-load serves stock alone over a ladder (users 1, 2, 4, 8, 16 for
-# coding-agent; 4 to 192 requests in flight, up to the profile's prompts, for the others) and prints where its output
+# WITH, and refuses each one given, naming it. --profile, --feature and --find-load are flags alone: PROFILE, FEATURE
+# and FIND_LOAD in the environment are refused. --find-load serves stock alone over its load's rungs (serve_tax.LOADS;
+# requests in flight up to the profile's prompts) and prints where its output
 # tokens a second stop rising: the file's line, the version to raise and the pin test's digest
 # (OUT/find_load.{json,txt}); it edits no file. --feature ARM serves stock and ARM in turn at the profile's one load,
-# two lifetimes of three reps each, and writes the result's three lines (OUT/serving_profile.{json,txt}). Where ARM
+# two lifetimes of three reps each, and writes the result's three lines, the first our extra card time a token
+# (OUT/serving_profile.{json,txt}). Where ARM
 # refuses what the profile has on, the result is `cannot run` in the refusal's words and the job exits 1, as for an
 # arm whose run refuses it; where a change on our side alone lets the same prompts through, ARM is served with it
 # (OURS, its label in the result) as the second line, stock unchanged. The passes are planned within the model's
@@ -127,6 +129,9 @@
 # --tree-sha (RESEARCH_SOURCE_SHA) or RESEARCH_SOURCE_COMMIT, with no .git, and its card from nvidia-smi's name
 # through the card files, never from the machine's name.
 set -uo pipefail
+[ -z "${PROFILE:-}${FEATURE:-}${FIND_LOAD:-}" ] || {
+  echo "serve-tax: PROFILE, FEATURE and FIND_LOAD are not read from the environment: --profile NAME with --feature ARM" \
+    "or --find-load"; exit 2; }
 while [ $# -gt 0 ] && [ "$1" != leased ]; do
   flag=$1; shift
   case $flag in
@@ -145,9 +150,13 @@ while [ $# -gt 0 ] && [ "$1" != leased ]; do
   CLIENT=${CLIENT:-vllm-bench}
 done
 CLIENT=${CLIENT:-corpus}
+# the second entry, under the lease, takes the profile as the first did: as a flag (leased --profile NAME)
+if [ "${1:-}" = leased ] && [ $# -gt 1 ]; then
+  { [ $# = 3 ] && [ "$2" = --profile ]; } || { echo "serve-tax: leased takes --profile NAME alone"; exit 2; }
+  PROFILE=$3; set -- leased
+fi
 if [ "${1:-}" != leased ] && [ -n "${PROFILE:-}${FEATURE:-}${FIND_LOAD:-}" ]; then
   [ -n "${PROFILE:-}" ] || { echo "serve-tax: --feature and --find-load are a profile's: --profile NAME"; exit 2; }
-  [ "${FIND_LOAD:-1}" = 1 ] || { echo "serve-tax: FIND_LOAD=$FIND_LOAD: set by --find-load alone"; exit 2; }
   case "${FEATURE:+f}${FIND_LOAD:+l}" in
     f|l) ;;
     *) echo "serve-tax: --profile $PROFILE takes --feature ARM or --find-load, one of them"; exit 2 ;;
@@ -163,7 +172,6 @@ if [ "${1:-}" != leased ] && [ -n "${PROFILE:-}${FEATURE:-}${FIND_LOAD:-}" ]; th
   [ -z "${PUBLISHED_ARGS:-}${PUBLISHED_FRONTEND:-}" ] || fixes "PUBLISHED_ARGS and PUBLISHED_FRONTEND" "the stock launch"
   [ -z "${TARGET:-}${WITH:-}" ] || fixes "--target/TARGET and WITH" "the result: its three lines, and no cost against a target"
   WINDOW_S=${WINDOW_S:-30}
-  export PROFILE ${FEATURE:+FEATURE} ${FIND_LOAD:+FIND_LOAD}
 elif [ "$CLIENT" = vllm-bench ] && [ -z "${PROFILE:-}" ]; then
   ARMS=${ARMS:-compiled compiled-again two-stage}; LOADS=${LOADS:-chat,long}
   [ "$ARMS" = all ] && ARMS="compiled compiled-again record no-prefix-cache boundary-rows canonical-topk two-stage"
@@ -422,7 +430,7 @@ for k in SERVE_VLLM VLLM_CACHE_ROOT FLASHINFER VLLM_USE_FLASHINFER_SAMPLER CUDA_
   [ -f "$PLAN" ] && echo "plan_sha256=$(sha256sum "$PLAN" | cut -c1-64)"; } >> "$OUT/engine_env.txt" 2>&1
 if command -v gpu-lease > /dev/null; then
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-serve-tax} gpu-lease "$GPUS" --wait --max-min "$MAX_MIN" ${GPU_LEASE_ON:+--on "$GPU_LEASE_ON"} \
-    ${GPU_LEASE_CORES:+--cores "$GPU_LEASE_CORES"} -- bash "$here/run.sh" leased
+    ${GPU_LEASE_CORES:+--cores "$GPU_LEASE_CORES"} -- bash "$here/run.sh" leased ${PROFILE:+--profile "$PROFILE"}
   rc=$?
 else
   # a node without gpu-lease queues its jobs by other means: refuse to start on GPUs another job still holds, of those
@@ -435,7 +443,7 @@ else
   if [ "${used:-0}" -ge "${FREE_MIB:-2048}" ]; then
     echo "serve-tax: a GPU still holds $used MiB after 10 min; not starting"; rc=75
   else
-    bash "$here/run.sh" leased; rc=$?
+    bash "$here/run.sh" leased ${PROFILE:+--profile "$PROFILE"}; rc=$?
   fi
 fi
 [ $fresh_kv = 1 ] && rm -rf "$KV_DIR"

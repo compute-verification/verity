@@ -1,11 +1,11 @@
-"""The serving profiles of `benchmarks/production.toml`, read strictly into frozen objects (`load`), each profile's
-digest (`digest`), and the two command lines a profile's run starts: stock vLLM's server (`serve_argv`) and the
-profile's client, `vllm bench serve` (`bench_argv`). A model's launch is the same on each of its `cards` (the card files'
+"""The serving profiles of `benchmarks/production.toml`, read strictly into frozen objects (`load`), with each profile's
+digest (`digest`) and its dataset, cut and load (`dataset`, `cut`, `load_point`). It builds no command line: a
+profile's server and client are serve_tax's own (`benchmarks/serve_tax`, `--profile`). A model's launch is the same on each of its `cards` (the card files'
 ``short``, `verity_bench.kit.card_short`), and a profile's load is the model's on one card."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field, fields, is_dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
@@ -213,51 +213,8 @@ def load_point(doc: Production, profile: str, model: str, card: str) -> int:
     prof = doc.profiles[profile]
     by_card = (prof.users or prof.in_flight)[model]
     if card not in by_card:
-        raise ConfigError(f"{profile} on {model}: no load on card {card or '(none named)'}; its cards are {', '.join(by_card)}")
+        raise ConfigError(f"{profile} on {model}: no load on card {card}; its cards are {', '.join(by_card)}")
     count = by_card[card]
     if count == NOT_FOUND:
-        raise ConfigError(f"{profile} on {model}.{card}: the load is {NOT_FOUND}; pass the load to run at")
+        raise ConfigError(f"{profile} on {model}.{card}: the load is {NOT_FOUND}")
     return count
-
-
-def _command(command: tuple[str, ...], vllm: Sequence[str]) -> list[str]:
-    return [*vllm, *command[1:]]
-
-
-def serve_argv(doc: Production, model: str, checkpoint: str | Path, *, port: int, host: str = "127.0.0.1",
-               vllm: Sequence[str] = ("vllm",)) -> list[str]:
-    """Stock vLLM's server for ``model``: its launch, its context limit, and the server's fixed flags."""
-    m = doc.models[model]
-    limit = ["--max-model-len", str(m.max_model_len)] if m.max_model_len else []
-    return [*_command(doc.server.command, vllm), str(checkpoint), "--served-model-name", m.served, "--host", host,
-            "--port", str(port), *m.serve, *limit, *doc.server.fixed]
-
-
-def bench_argv(doc: Production, profile: str, model: str, checkpoint: str | Path, *, port: int,
-               result_dir: str | Path, tag: str, dataset_path: str | Path | None = None, in_flight: int | None = None,
-               card: str | None = None, prompts: int | None = None, seed: int = 0, host: str = "127.0.0.1",
-               vllm: Sequence[str] = ("vllm",)) -> list[str]:
-    """``profile``'s client on ``model``: no sampling flag, so the server samples by the model's defaults, and every
-    answer stops at its recorded length. A session profile's client is one user's: one request in flight, ``prompts``
-    its turns; ``in_flight`` is the requests in flight of the others, the file's load on ``card`` unless given."""
-    prof, m = doc.profiles[profile], doc.models[model]
-    flags = ["--dataset-name", prof.dataset_name]
-    if prof.dataset_name == "random":
-        flags += ["--random-input-len", str(prof.input), "--random-output-len", str(prof.output)]
-    if prof.dataset_name == "timed_trace":
-        flags += ["--timed-trace-chunk-hash-size", str(prof.block)]
-        held = ["--no-self-timed", "--request-rate", "inf", "--max-concurrency", "1"]
-        count = cut(doc, profile, model).turns if prompts is None else prompts
-    else:
-        held = ["--request-rate", "inf", "--max-concurrency", str(in_flight or load_point(doc, profile, model, card or ""))]
-        count = prof.prompts if prompts is None else prompts
-    goodput = ["--goodput", *(f"{GOODPUT[bound][0]}:{round(getattr(doc.bounds, GOODPUT[bound][1]) * 1e3)}"
-                              for bound in prof.within)]
-    return [*_command(doc.client.command, vllm), "--backend", doc.client.backend, "--base-url", f"http://{host}:{port}",
-            "--endpoint", doc.client.endpoint, "--model", m.served, "--tokenizer", str(checkpoint),
-            *(["--trust-remote-code"] if "--trust-remote-code" in m.serve else []), *flags,
-            *(["--dataset-path", str(dataset_path)] if dataset_path else []), "--num-prompts", str(count),
-            "--seed", str(seed), *held, "--ignore-eos", *goodput, "--percentile-metrics", "ttft,tpot,itl,e2el",
-            "--metric-percentiles", "99", "--request-id-prefix", f"{tag}-", "--ready-check-timeout-sec", "0",
-            "--disable-tqdm", "--save-result", "--save-detailed", "--result-dir", str(result_dir),
-            "--result-filename", "result.json"]

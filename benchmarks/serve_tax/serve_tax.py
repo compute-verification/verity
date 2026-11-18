@@ -4130,8 +4130,6 @@ LOAD_OVERHEAD_S, STOP_S = 5.0, 60.0
 #: the changes on our side alone that a profile's job makes where an arm of ours refuses what the profile has on, each
 #: named as its label says it; stock is never changed
 OURS_CHANGES = {"seeded": "seeded for ours", "prefix-cache-off": "prefix cache off for ours"}
-#: `--find-load`'s ladder: a session profile's users, the requests in flight of the others, these up to its prompts
-SESSIONS_LADDER, LADDER = (1, 2, 4, 8, 16), (4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192)
 #: the reps of a lifetime and the lifetimes of a profile's job: `--find-load` serves stock once, `--feature` serves stock
 #: and the feature twice each, turned round, six paired reps with stock's two lifetimes the noise floor (`own_noise`)
 FIND_REPS, FEATURE_REPS, FEATURE_LIFETIMES = 3, 3, 2
@@ -4163,17 +4161,19 @@ def profile_doc(profile: str, model_id: str) -> tuple:
 def profile_stock(profile: str, model_id: str) -> str:
     """The stock arm a profile's job serves ``model_id`` with: ``prod``, the recipe's line, for a model whose recipe
     this file holds, else ``compiled`` at vLLM's own limits (`server_argv`'s ``limits``). Refused where its server line
-    is not the file's stock launch (`profiles.serve_argv`)."""
+    is not the file's stock launch: the model's name, launch and context limit, and the server's fixed flags."""
     P, doc = profile_doc(profile, model_id)
-    model = MODELS[model_id]
+    model, m = MODELS[model_id], doc.models[model_id]
     stock = "prod" if model.published else REFERENCE
     ours = server_argv(ARMS[stock], model, Path("/ckpt"), 1,
                        max_model_len=published_context(stock, model_id, None) if ARMS[stock].published else None,
                        limits=False)
-    theirs = P.serve_argv(doc, model_id, "/ckpt", port=1)
-    if ours[ours.index("--model") + 2:] != theirs[3:]:
-        raise SystemExit(f"--profile on {model_id}: {stock}'s server line {' '.join(ours[ours.index('--model') + 2:])} "
-                         f"is not {P.PATH.name}'s stock launch {' '.join(theirs[3:])}: make them one")
+    ours = ours[ours.index("--model") + 2:]
+    theirs = ["--served-model-name", m.served, "--host", "127.0.0.1", "--port", "1", *m.serve,
+              *(["--max-model-len", str(m.max_model_len)] if m.max_model_len else []), *doc.server.fixed]
+    if ours != theirs:
+        raise SystemExit(f"--profile on {model_id}: {stock}'s server line {' '.join(ours)} is not {P.PATH.name}'s "
+                         f"stock launch {' '.join(theirs)}: make them one")
     return stock
 
 
@@ -4300,8 +4300,8 @@ def profile_run(a: argparse.Namespace) -> dict:
 
 
 def profile_plan(profile: str, model_id: str, feature: str | None, find_load: bool) -> dict[str, str]:
-    """What run.sh serves for ``--profile``, as its variables: ``--find-load``, stock alone over the ladder
-    (`SESSIONS_LADDER`, `LADDER` up to the profile's prompts) in one lifetime of `FIND_REPS` reps; ``--feature``, stock
+    """What run.sh serves for ``--profile``, as its variables: ``--find-load``, stock alone over the load's
+    rungs (`Load.rungs`, up to the profile's prompts where they are requests in flight) in one lifetime of `FIND_REPS` reps; ``--feature``, stock
     and the feature at the profile's one load in `FEATURE_LIFETIMES` lifetimes of `FEATURE_REPS` reps, the feature with
     the changes on our side its refusals need (``OURS``), and no arm at all where a refusal has none; and the minutes
     the job plans its passes within, the model's (``CAP_MIN``)."""
@@ -4315,7 +4315,7 @@ def profile_plan(profile: str, model_id: str, feature: str | None, find_load: bo
     plan = {"STOCK": stock, "OURS": "", "CAP_MIN": str(doc.models[model_id].cap_minutes), "CARD": card_}
     if find_load:
         prompts = doc.profiles[profile].prompts
-        ladder = SESSIONS_LADDER if LOADS[load].sessions else tuple(c for c in LADDER if c <= prompts)
+        ladder = tuple(c for c in LOADS[load].rungs if LOADS[load].sessions or c <= prompts)
         return plan | {"ARMS": stock, "LOADS": f"{load}={'+'.join(map(str, ladder))}", "REPS": str(FIND_REPS),
                        "LIFETIMES": "1"}
     if feature not in profile_features(stock):
@@ -4347,31 +4347,61 @@ def side_lines(by: dict[int, dict], reps: list[int]) -> dict:
             "met": met, "sent": sent, "within": met / sent if sent else None}
 
 
-def three_lines(stock: dict, ours: dict, load: str, point: int, cap: str | None) -> dict:
-    """The result's three lines for ``ours`` beside ``stock`` at ``load``'s ``point``: (a) output tokens a second at
-    full load, stock's over ours less one, the median of the paired ratios with the kit's interval (`serving_cost`),
-    ``cannot tell`` where that interval widened by the noise floor (stock's own lifetimes, `own_noise`) holds zero, or
-    there is no interval (fewer than six paired reps) or no floor, or ``cap`` stopped a side; (b) time to first token
-    and time per output token, median and P99, ours beside stock; (c) the share of requests within the profile's
-    bounds, each side's. A side not served has no rep."""
-    stock, ours = (x if x else {"loads": {}} for x in (stock, ours))
+#: what the result's first line is, in its words
+EXTRA = "our extra card time a token"
+
+
+def first_line(stock: dict, ours: dict, load: str, point: int, cap: str | None) -> dict:
+    """The result's first line, `EXTRA`, for ``ours`` beside ``stock`` at ``load``'s ``point``, a fraction. On a load
+    of requests in flight, stock's output tokens a second over ours less one, the median of the paired reps' ratios
+    with the kit's interval (`serving_cost`), its noise floor stock's own lifetimes (`own_noise`). On a sessions load,
+    our seconds for the same requests over stock's less one, a server lifetime its unit, the mean of the lifetimes'
+    costs with Student's t interval over them (`session_cost`), its noise floor that cost's. ``cannot tell`` where
+    the interval widened by the floor holds zero, or there is no interval or no floor, or the sides did not do the
+    same work, or ``cap`` stopped a side. Refused where a rep's two sides served different numbers of output tokens:
+    every request decodes to its recorded length, so a side that served fewer did less work."""
+    sessions = LOADS[load].sessions
+    ra, rb = ({r["rep"]: r for r in bench_rungs(x, load).get(point, [])} for x in (stock, ours))
+    for k in sorted(set(ra) & set(rb)):
+        if ra[k].get("output_tokens") != rb[k].get("output_tokens"):
+            raise SystemExit(f"--profile: {stock['arm']} and {ours['arm']} served {ra[k].get('output_tokens')} and "
+                             f"{rb[k].get('output_tokens')} output tokens in rep {k} at load {load}, {at_rung(point)}: "
+                             "each request decodes to its recorded length, so a side that served fewer did less work")
     c = serving_cost(stock, ours, load, point)
-    a, b = bench_rungs(stock, load).get(point, []), bench_rungs(ours, load).get(point, [])
-    ra, rb = {r["rep"]: r for r in a}, {r["rep"]: r for r in b}
-    reps = sorted(set(ra) & set(rb))
-    noise = own_noise(ra)
-    floor = abs(noise["value"]) if noise and noise.get("value") is not None else None
-    why = (cap or ("no rep of the two sides pairs" if c is None else
-                   f"{c['reps']} paired reps, fewer than six, give no interval" if "ci95" not in c else
-                   "stock has no noise floor (fewer than two lifetimes)" if floor is None else None))
+    if c is not None and sessions:
+        s = session_cost([stock, ours], ours["arm"], stock["arm"], load=load)
+        noise = (s["noise_floor"] or {}).get("value")
+        value = None if s["value"] is None else s["value"] / 100
+        ci = s["ci95"] and [x / 100 for x in s["ci95"]]
+        floor = None if noise is None else abs(noise) / 100
+        reps, unit = s["lifetimes"], "lifetime"
+        short = (None if s["same_work"] else "the two sides did not do the same work (same_work: every request "
+                 "served, as many output tokens and the same cached share in every rep)")
+    else:
+        noise = own_noise(ra) if c else None
+        floor = abs(noise["value"]) if noise and noise.get("value") is not None else None
+        value, ci, reps, unit, short = c and c["value"], c and c.get("ci95"), c and c["reps"], "rep", None
+    why = (cap or ("no rep of the two sides pairs" if c is None else short) or
+           (f"{reps} paired {unit}s, fewer than {'two' if sessions else 'six'}, give no interval" if not ci else
+            "stock has no noise floor (fewer than two lifetimes)" if floor is None else None))
     if why is None:
-        lo, hi = c["ci95"]
+        lo, hi = ci
         said = "ours slower" if lo - floor > 0 else "ours faster" if hi + floor < 0 else "cannot tell"
         why = None if said != "cannot tell" else "the interval widened by the noise floor holds zero"
     else:
         said = "cannot tell"
-    return {"throughput": {"value": c and c["value"], "ci95": c and c.get("ci95"), "reps": len(reps), "floor": floor,
-                           "verdict": said, "why": why},
+    return {"label": EXTRA, "unit": unit, "value": value, "ci95": ci, "reps": reps or 0, "floor": floor,
+            "verdict": said, "why": why}
+
+
+def three_lines(stock: dict, ours: dict, load: str, point: int, cap: str | None) -> dict:
+    """The result's three lines for ``ours`` beside ``stock`` at ``load``'s ``point``: (a) `EXTRA` (`first_line`);
+    (b) time to first token and time per output token, median and P99, ours beside stock; (c) the share of requests
+    within the profile's bounds, each side's. A side not served has no rep."""
+    stock, ours = (x if x else {"arm": None, "loads": {}} for x in (stock, ours))
+    ra, rb = ({r["rep"]: r for r in bench_rungs(x, load).get(point, [])} for x in (stock, ours))
+    reps = sorted(set(ra) & set(rb))
+    return {"throughput": first_line(stock, ours, load, point, cap),
             "latency": {"ours": {k: v for k, v in side_lines(rb, reps).items() if "_s" in k},
                         "stock": {k: v for k, v in side_lines(ra, reps).items() if "_s" in k}},
             "within": {side: {k: v for k, v in side_lines(by, reps).items() if k in ("met", "sent", "within")}
@@ -4387,10 +4417,12 @@ def lines_text(r: dict, bounds: str) -> list[str]:
     t, lat, w = r["throughput"], r["latency"], r["within"]
     ci = f" [{t['ci95'][0]:+.1%}, {t['ci95'][1]:+.1%}]" if t["ci95"] else ""
     floor = "no noise floor" if t["floor"] is None else f"noise floor ±{t['floor']:.1%} (stock's two lifetimes)"
-    return ["1. output tokens a second at full load, stock's over ours less one: "
-            + ("—" if t["value"] is None else f"{t['value']:+.1%}{ci}")
-            + f" (median of {t['reps']} paired ratios, the kit's 95% interval); {floor}: {t['verdict']}"
-            + (f" ({t['why']})" if t["why"] else ""),
+    how = ("our seconds for the same requests over stock's, less one: " if t["unit"] == "lifetime" else
+           "stock's output tokens a second at full load over ours, less one: ")
+    over = (f"mean of {t['reps']} server lifetimes' costs, Student's t 95% interval" if t["unit"] == "lifetime" else
+            f"median of {t['reps']} paired ratios, the kit's 95% interval")
+    return [f"1. {t['label']}, {how}" + ("—" if t["value"] is None else f"{t['value']:+.1%}{ci}")
+            + f" ({over}); {floor}: {t['verdict']}" + (f" ({t['why']})" if t["why"] else ""),
             "2. time to first token, median / P99: ours " + " / ".join(_ms(lat["ours"][k]) for k in ("ttft_p50_s", "ttft_p99_s"))
             + ", stock " + " / ".join(_ms(lat["stock"][k]) for k in ("ttft_p50_s", "ttft_p99_s"))
             + "; time per output token, median / P99: ours "

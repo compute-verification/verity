@@ -1,5 +1,5 @@
-"""A serving profile on serve_tax's own job (`run.sh --profile`, `serve_tax.profile_run`): its server and client the
-lines `verity_bench.profiles` builds, the job as it was without one, what it refuses, `cannot run` with its second
+"""A serving profile on serve_tax's own job (`run.sh --profile`, `serve_tax.profile_run`): its server and client what
+`benchmarks/production.toml` says, the job as it was without one, what it refuses, `cannot run` with its second
 line, `--find-load`'s line, and the result's three lines in order. Stand-ins for the server and the client: no GPU."""
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ import serve_tax as S
 S.profiles()
 from verity_bench import profiles as P  # noqa: E402 (benchmarks/harness, put on sys.path by S.profiles)
 
-CLIENT = (sys.executable, "-m", "vllm.entrypoints.cli.main")
 #: what a request without a seed gets under the certified tick (`verity_vllm.pipeline.tick_plugin.unseeded`)
 UNSEEDED = ("under the certified tick a request sampled at the server's default temperature needs an integer seed, "
             "not null: send one, or temperature 0")
@@ -92,36 +91,63 @@ def served(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *flags: str, dataset
     return servers, clients
 
 
+def the_files_client(client: list, profile: str, model: str, in_flight: int, prompts: int) -> None:
+    """``client`` is ``profile``'s on ``model`` as the file says it: its client, dataset and lengths, its prompts and
+    requests in flight, the goodput of its bounds, and no sampling flag, so the server samples by the model's defaults."""
+    doc = P.load()
+    prof = doc.profiles[profile]
+    flag = {k: v for k, v in zip(client, client[1:], strict=False) if k.startswith("--")}
+    assert not {"--temperature", "--top-p", "--top-k"} & set(client)
+    assert (flag["--backend"], flag["--endpoint"], flag["--model"]) == (doc.client.backend, doc.client.endpoint,
+                                                                      doc.models[model].served)
+    assert flag["--dataset-name"] == prof.dataset_name
+    if prof.dataset_name == "random":
+        assert (flag["--random-input-len"], flag["--random-output-len"]) == (str(prof.input), str(prof.output))
+    if prof.dataset_name == "timed_trace":
+        assert flag["--timed-trace-chunk-hash-size"] == str(prof.block)
+    assert (flag["--num-prompts"], flag["--max-concurrency"]) == (str(prompts), str(in_flight))
+    i = client.index("--goodput") + 1
+    assert client[i:i + len(prof.within)] == [f"{P.GOODPUT[b][0]}:{round(getattr(doc.bounds, P.GOODPUT[b][1]) * 1e3)}"
+                                              for b in prof.within]
+    assert "--ignore-eos" in client
+
+
 @pytest.mark.parametrize(("profile", "model", "load", "rung"), [
     ("fixed-size", "llama32-1b", "long", 8), ("fixed-size", "glm53", "long", 4),
     ("chat", "llama32-1b", "chat", 16), ("chat", "glm53", "chat", 12)])
-def test_a_profiles_server_and_client_are_the_lines_verity_bench_profiles_builds(
+def test_a_profiles_server_and_client_are_the_files(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, profile: str, model: str, load: str, rung: int):
     stock = S.profile_stock(profile, model)
     data = {"chat": "/data"} if load == "chat" else {}
     servers, clients = served(tmp_path, monkeypatch, "--arm", stock, "--model-id", model, "--loads", f"{load}={rung}",
                               "--profile", profile, datasets=data)
     doc = P.load()
+    m = doc.models[model]
     (server,), (client,) = servers, clients
-    assert server[server.index("--model") + 2:] == P.serve_argv(doc, model, "/ckpt", port=8000)[3:]
-    want = P.bench_argv(doc, profile, model, "/ckpt", port=8000, result_dir="R", tag=f"{load}@{rung}-r1",
-                        dataset_path=data.get(load), in_flight=rung, vllm=CLIENT)
-    i = client.index("--result-dir") + 1
-    assert [*client[:i], "R", *client[i + 1:]] == want
+    assert server[server.index("--model") + 2:] == [
+        "--served-model-name", m.served, "--host", "127.0.0.1", "--port", "8000", *m.serve,
+        *(["--max-model-len", str(m.max_model_len)] if m.max_model_len else []), *doc.server.fixed]
+    the_files_client(client, profile, model, rung, doc.profiles[profile].prompts)
     meta = json.loads((tmp_path / "out" / "meta.json").read_text())
     assert meta["profile"] == {"name": profile, "version": doc.profiles[profile].version,
                                "digest": P.digest(doc, profile), "ours": [], "seeded": False}
 
 
+def test_a_stock_launch_off_the_files_is_refused(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setitem(S.ARMS, "compiled", replace(S.ARMS["compiled"], args=(*S.ARMS["compiled"].args, "--x", "1")))
+    with pytest.raises(SystemExit, match="compiled's server line .* is not production.toml's stock launch"):
+        S.profile_stock("chat", "llama32-1b")
+
+
 @pytest.mark.parametrize(("model", "load"), [("glm53", "agentic-256k"), ("llama32-1b", "agentic")])
-def test_a_coding_agent_users_client_is_the_line_verity_bench_profiles_builds(model: str, load: str):
+def test_a_coding_agent_users_client_is_the_files(model: str, load: str):
     """A sessions pass's client is a user's (`drive_bench`), its file the user's and its prompts the cut's turns."""
     assert S.profile_load("coding-agent", model) == load
     turns = S.pass_prompts(S.LOADS[load], 1, None)
     ours = S.bench_argv(S.MODELS[model], Path("/ckpt"), 8000, S.as_profile(S.LOADS[load], "coding-agent"), 1,
                         Path("/r"), f"{load}@4-r1-u0", "/u0.jsonl", turns, defaults=True)
-    assert ours == P.bench_argv(P.load(), "coding-agent", model, "/ckpt", port=8000, result_dir="/r",
-                                tag=f"{load}@4-r1-u0", dataset_path="/u0.jsonl", vllm=CLIENT)
+    assert turns == P.cut(P.load(), "coding-agent", model).turns
+    the_files_client(ours, "coding-agent", model, 1, turns)
 
 
 def run_args(**kw) -> NS:
@@ -193,7 +219,7 @@ def rep(r: int, tok: float, ttft: float = 0.2, tpot: float = 0.02, met: int = 90
     return {"rep": r, "rate": None, "concurrency": 4, "sent": 96, "ok": 96, "met": met, "output_tok_per_s": tok,
             "req_per_s": tok / 100, "prompt_tok_per_s": tok * 10, "output_tokens": 9600, "prompt_tokens": 96000,
             "goodput_req_per_s": tok / 100 * met / 96, "slo_attained": met / 96, "ttft_p50_s": ttft,
-            "ttft_p99_s": ttft * 4, "tpot_p50_s": tpot, "tpot_p99_s": tpot * 1.5}
+            "ttft_p99_s": ttft * 4, "tpot_p50_s": tpot, "tpot_p99_s": tpot * 1.5, "prompt_cached_share": 0.8}
 
 
 def arm_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, load: str, sides: dict[str, list[list[dict]]],
@@ -208,13 +234,16 @@ def arm_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, load: str, sides: 
             (d / "meta.json").write_text(json.dumps({"arm": arm, **stop}))
             metrics[d.name] = {"arm": arm, "model_id": "glm53", "slo": {"ttft_s": 2.0, "tpot_s": 0.08},
                                "vllm": "0.1+gd9105ea8", "lifetime": k if len(lives) > 1 else None, "reps": 3,
-                               "left_out": 0, "loads": {f"{load}@{reps[0]['concurrency']}": reps} if reps else {}}
+                               "left_out": 0, "loads": {f"{load}@{reps[0]['concurrency']}": reps} if reps else {},
+                               "commit": "c0ffee", "run_id": f"run-{arm}", "planned": {load: PLANNED}}
             dirs.append(d)
     monkeypatch.setattr(S, "arm_metrics", lambda d, slo=None: metrics[d.name])
     return dirs
 
 
 STOCK = [[rep(1, 100), rep(2, 101), rep(3, 99)], [rep(1, 100, 0.21), rep(2, 100.5), rep(3, 99.5)]]
+#: a sessions load's plan as `arm_metrics` reads it: four users, 24 turns each, the 96 requests `rep` sends at rung 4
+PLANNED = {"requests": 96, "users": 4, "prompt_tokens": 96000, "repeated_tokens": 80000}
 
 
 def test_a_feature_that_refuses_is_cannot_run_and_its_second_line_is_served_with_the_change_on_our_side(
@@ -243,22 +272,26 @@ def test_the_results_three_lines_come_first_in_order_then_the_profile(tmp_path: 
     rc, r, text = S.profile_result(dirs, "coding-agent", "glm53", "prod-record", False)
     assert rc == 0 and list(r)[:3] == ["throughput", "latency", "within"]
     t = r["throughput"]
-    assert t["reps"] == 6 and t["verdict"] == "ours slower" and t["ci95"][0] > t["floor"]
-    assert t["value"] == pytest.approx(sorted(s["output_tok_per_s"] / o["output_tok_per_s"] - 1
-                                              for s, o in zip(sum(STOCK, []), sum(ours, [])))[2:4][0], abs=0.02)
+    assert (t["label"], t["unit"], t["reps"]) == ("our extra card time a token", "lifetime", 2)
+    assert t["verdict"] == "ours slower" and t["ci95"][0] > t["floor"]
+    each = [sum(1 / x["output_tok_per_s"] for x in o) / sum(1 / x["output_tok_per_s"] for x in s) - 1
+            for s, o in zip(STOCK, ours, strict=True)]
+    assert t["value"] == pytest.approx(sum(each) / 2, abs=1e-4)
     assert r["latency"]["ours"]["ttft_p50_s"] == 0.2 and r["latency"]["stock"]["tpot_p99_s"] == pytest.approx(0.03)
     assert r["within"]["ours"] == {"met": 530, "sent": 576, "within": 530 / 576}
     assert (r["profile"], r["version"], r["model_id"], r["quick_check"]) == ("coding-agent", 1, "glm53", False)
     assert r["vllm"] == P.load().vllm and r["served_vllm"] == ["0.1+gd9105ea8"]
     lines = text.splitlines()
-    assert lines[0].startswith("1. output tokens a second at full load, stock's over ours less one: +")
+    assert lines[0].startswith("1. our extra card time a token, our seconds for the same requests over stock's, less "
+                               "one: +")
+    assert "(mean of 2 server lifetimes' costs, Student's t 95% interval)" in lines[0]
     assert lines[0].endswith(": ours slower")
     assert lines[1].startswith("2. time to first token, median / P99: ours 200.0 ms / 800.0 ms, stock ")
     assert lines[2] == "3. within the bounds (each token within 80 ms): ours 92.0% of 576 requests, stock 93.8% of 576 requests"
     assert lines[3] == "prod-record beside prod at agentic-256k, 4 users, 2 lifetimes of 3 reps each"
     assert lines[4].startswith("profile coding-agent v1 (digest ")
     # an interval the noise floor straddles, or a side the cap cut short, cannot tell
-    same = [[rep(1, 100.2), rep(2, 100.6), rep(3, 99.1)], [rep(1, 99.8), rep(2, 100.4), rep(3, 99.7)]]
+    same = [[rep(1, 100.4), rep(2, 101.2), rep(3, 99.2)], [rep(1, 99.6), rep(2, 100.3), rep(3, 99.3)]]
     for k in (0, 1):
         sub = tmp_path / f"t{k}"
         sub.mkdir()
@@ -270,15 +303,34 @@ def test_the_results_three_lines_come_first_in_order_then_the_profile(tmp_path: 
                             "the job's 120 minutes ran out: prod-record stopped before agentic-256k@4 rep 3")
 
 
+def test_on_requests_in_flight_the_first_line_is_the_kits_median_of_paired_reps(tmp_path: Path,
+                                                                              monkeypatch: pytest.MonkeyPatch):
+    ours = [[rep(1, 90), rep(2, 91), rep(3, 89)], [rep(1, 90), rep(2, 90.5), rep(3, 89.5)]]
+    by = S.joined([S.arm_metrics(d) for d in arm_dirs(tmp_path, monkeypatch, "chat", {"prod": STOCK, "prod-record": ours})])
+    t = S.three_lines(by["prod"], by["prod-record"], "chat", 4, None)["throughput"]
+    assert (t["label"], t["unit"], t["reps"], t["verdict"]) == ("our extra card time a token", "rep", 6, "ours slower")
+    assert t["value"] == pytest.approx(S.statistics.median(s["output_tok_per_s"] / o["output_tok_per_s"] - 1
+                                                           for s, o in zip(sum(STOCK, []), sum(ours, []))), abs=1e-3)
+    assert S.lines_text(S.three_lines(by["prod"], by["prod-record"], "chat", 4, None), "")[0].startswith(
+        "1. our extra card time a token, stock's output tokens a second at full load over ours, less one: +")
+    ours[1][2] = {**ours[1][2], "output_tokens": 9599}
+    (tmp_path / "again").mkdir()
+    by = S.joined([S.arm_metrics(d) for d in arm_dirs(tmp_path / "again", monkeypatch, "chat",
+                                                      {"prod": STOCK, "prod-record": ours})])
+    with pytest.raises(SystemExit, match="--profile: prod and prod-record served 9600 and 9599 output tokens in rep 6 "
+                                         "at load chat, at concurrency 4"):
+        S.three_lines(by["prod"], by["prod-record"], "chat", 4, None)
+
+
 @pytest.mark.parametrize(("name", "card"), [("NVIDIA H200", "h200"), ("NVIDIA H100 80GB HBM3", "h100")])
 def test_find_load_prints_the_files_line_the_version_to_raise_and_the_pin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
                                                                            name: str, card: str):
     monkeypatch.setattr(S, "card", lambda: name)
     plan = S.profile_plan("chat", "llama32-1b", None, True)
     assert plan == {"STOCK": "compiled", "OURS": "", "CAP_MIN": "20", "CARD": card, "ARMS": "compiled",
-                    "LOADS": "chat=4+8+12+16+24+32+48+64+96+128+192", "REPS": "3", "LIFETIMES": "1"}
-    assert S.profile_plan("fixed-size", "llama32-1b", None, True)["LOADS"] == "long=4+8+12+16+24"
-    assert S.profile_plan("coding-agent", "llama32-1b", None, True)["LOADS"] == "agentic=1+2+4+8+16"
+                    "LOADS": "chat=4+8+12+16+24+32+48", "REPS": "3", "LIFETIMES": "1"}
+    assert S.profile_plan("fixed-size", "llama32-1b", None, True)["LOADS"] == "long=1+2+4+8"
+    assert S.profile_plan("coding-agent", "llama32-1b", None, True)["LOADS"] == "agentic=4"
     with pytest.raises(SystemExit, match=f"on llama32-1b.{card}: the load is not found yet: run --find-load first"):
         S.profile_plan("chat", "llama32-1b", "record", False)
     tok = {4: 100, 8: 190, 12: 260, 16: 300, 24: 300, 32: 298, 48: 295}
@@ -329,6 +381,10 @@ def test_run_sh_takes_a_profile_and_refuses_what_it_fixes_before_it_holds_anythi
         2, "serve-tax: --profile chat takes --feature ARM or --find-load, one of them\n")
     assert run_sh(*one, "--feature", "record")[0] == 2
     assert run_sh("--find-load") == (2, "serve-tax: --feature and --find-load are a profile's: --profile NAME\n")
+    for env in ({"PROFILE": "chat"}, {"FEATURE": "record"}, {"FIND_LOAD": "1"}):
+        assert run_sh("--model", "llama32-1b", **env) == (
+            2, "serve-tax: PROFILE, FEATURE and FIND_LOAD are not read from the environment: --profile NAME with "
+               "--feature ARM or --find-load\n")
     fixed = {("--loads", "chat=4"): "--loads/LOADS", ("--arms", "compiled record"): "--arms/ARMS",
              ("--reps", "6"): "--reps/REPS and LIFETIMES", ("--target", "5"): "--target/TARGET and WITH"}
     for flags, drop in fixed.items():
@@ -346,6 +402,9 @@ def test_run_sh_takes_a_profile_and_refuses_what_it_fixes_before_it_holds_anythi
     assert "cap_at=$((t_leased + CAP_MIN * 60))" in sh
     assert '[ "$arm" != "$STOCK" ] && [ -n "${OURS:-}" ] && profile+=(--ours "$OURS")' in sh
     assert sh.index('profile result "${dirs[@]}"') < sh.index('cost=("$PY" "$here/serve_tax.py" cost')
+    # the second entry takes the profile as a flag, as the first does: nothing of it is exported
+    assert sh.count('run.sh" leased ${PROFILE:+--profile "$PROFILE"}') == 2 and "export PROFILE" not in sh
+    assert run_sh("leased", "--feature", "record") == (2, "serve-tax: leased takes --profile NAME alone\n")
 
 
 def test_the_card_is_the_driver_names_card_file_and_the_commit_needs_no_git(monkeypatch: pytest.MonkeyPatch):
