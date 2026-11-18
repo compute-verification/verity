@@ -30,7 +30,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # the challenger's tunnel client, whose forced pty the challenger's tunnel key allows
           "verity/protocols/compose/verifier/live_challenger/serve.py",
           # the store's reader its publish imports from the pinned tree
-          "tools/research/src/research/__init__.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/store",
+          "tools/research/src/research/__init__.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/store", "adapters/vllm/verity_vllm/pipeline/private_names.json",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py",
           "verity/protocols/resource_accounting/memory/poub/attester/__init__.py",
           "verity/protocols/compose/__init__.py", "verity/protocols/compose/verifier/__init__.py", "verity/protocols/compose/verifier/live_challenger/__init__.py",

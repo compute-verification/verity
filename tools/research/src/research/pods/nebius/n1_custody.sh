@@ -51,6 +51,7 @@ PENDING_S=${VY_CUSTODY_PENDING_S:-3600}
 # the research and the Python the round runs on the host and its Jobs run with the Secret: root's (deploy.toml installs SRC; PYHOME
 # is `uv python install --install-dir PYHOME --no-bin 3.12.14` as root), never under the world-writable /workspace/jobs
 SRC=${VY_CUSTODY_SRC:-/workspace/custody}
+NAMES=adapters/vllm/verity_vllm/pipeline/private_names.json   # SRC's private names, custody's floor (store.private.FLOOR_ROOTS)
 PYHOME=${VY_CUSTODY_PYHOME:-/workspace/custody/python}
 PY=${VY_CUSTODY_PY:-$PYHOME/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12}
 QUIET=${VY_CUSTODY_QUIET-1210-1330}
@@ -95,9 +96,10 @@ if [ "$(deadline 1800)" -lt "$JOB_MIN_S" ]; then
   echo "n1_custody.sh: $HOLD: no Job starts"
   exit 0
 fi
-if [ ! -f "$SRC/tools/research/src/research/store/custody.py" ] || [ ! -f "$SRC/tools/research/store.pod.toml" ]; then
-  log "refused: no research tree at $SRC (deploy.toml installs it: research deploy install vy-nebius-1 --by WHO" \
-    "$SRC/tools/research/src/research $SRC/tools/research/store.pod.toml)"
+if [ ! -f "$SRC/tools/research/src/research/store/custody.py" ] || [ ! -f "$SRC/tools/research/store.pod.toml" ] \
+    || [ ! -f "$SRC/$NAMES" ]; then
+  log "refused: no research tree at $SRC, or no private names beside it (deploy.toml installs them: research deploy install" \
+    "vy-nebius-1 --by WHO $SRC/tools/research/src/research $SRC/tools/research/store.pod.toml $SRC/$NAMES)"
   exit 3
 fi
 # untrusted PATH...: the first of each PATH (resolved), a file under it, or a directory above it or above the path it resolves to
@@ -123,7 +125,7 @@ case $(realpath -e "$PY" 2> /dev/null) in
   "$(realpath -e "$PYHOME" 2> /dev/null)"/*) ;;
   *) log "refused: $PY is no interpreter under $PYHOME (as root: uv python install --install-dir $PYHOME --no-bin 3.12.14)"; exit 3 ;;
 esac
-if bad=$(untrusted "$SRC/tools/research" "$PYHOME") && [ -n "$bad" ]; then
+if bad=$(untrusted "$SRC/tools/research" "$SRC/$NAMES" "$PYHOME") && [ -n "$bad" ]; then
   log "refused: $bad could be changed by a uid other than root and $(id -un): the round runs $SRC's research and $PY on this host" \
     "and in Jobs with the Secret research-r2, so every file of them, and each directory above, is root's and writable by root alone"
   exit 3
