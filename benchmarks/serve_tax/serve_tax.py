@@ -1851,14 +1851,35 @@ def run(a: argparse.Namespace) -> int:
 
 def outside(private: Path, out: Path, flag: str = "--private") -> Path:
     """``private``, the directory ``flag`` names, refused where it is inside ``out`` or the run's directory, which leave
-    the node."""
+    the node; else stated in the run's directory (`stated`)."""
     held = SHARED.RESEARCH_RUN_DIR
     private = private.resolve()
     for public in (out.resolve(), *([Path(held).resolve()] if held else [])):
         if private.is_relative_to(public):
             raise SystemExit(f"{flag} {private} is inside {public}, which leaves the node: {flag} DIR, outside every "
                              "run's directory")
+    stated(private)
     return private
+
+
+#: the run's statement of what its launchers keep on the node, at its directory's root (`stated`)
+PRIVATE_PATHS = "private-paths.json"
+#: the names of what the launchers keep only in a private directory: no file or directory of a run's own has one
+PRIVATE_NAMES = ("plan.jsonl", "plan.base.jsonl", "capture/", "edges/", "step_trace.*.jsonl*", "ids.*.jsonl*",
+                 "outputs.jsonl", "outputs.*.jsonl*", "replay_steps.jsonl*", "replay_tokens.jsonl*",
+                 "replay_logprobs.jsonl*", "*.state.pkl", "*.fp.npy", "*.kv")
+
+
+def stated(private: Path) -> None:
+    """``private`` added to the run's `PRIVATE_PATHS`, under research run where its directory is made:
+    ``{"schema": "private-paths/v1", "private": [each private directory, absolute], "names": PRIVATE_NAMES}``."""
+    held = SHARED.RESEARCH_RUN_DIR
+    if not held or not Path(held).is_dir():
+        return
+    f = Path(held) / PRIVATE_PATHS
+    was = json.loads(f.read_text())["private"] if f.is_file() else []
+    doc = {"schema": "private-paths/v1", "private": sorted({*was, str(private)}), "names": list(PRIVATE_NAMES)}
+    f.write_text(json.dumps(doc, indent=1) + "\n")
 
 
 def private_dir(a: argparse.Namespace) -> Path:
