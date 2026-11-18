@@ -135,7 +135,7 @@ class Front:
             first = await _first(reader)
             arrived = self.clock()
             fields = id_request_fields(first, self.payload)
-            if fields is not None:
+            if isinstance(fields, dict):
                 await self.ids(first.partition(BLANK)[0] + BLANK, fields, reader, writer, arrived)
             elif first:
                 await self.relay(first, reader, writer)
