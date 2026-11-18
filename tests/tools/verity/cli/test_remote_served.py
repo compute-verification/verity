@@ -381,29 +381,67 @@ def nodes_composite(out: Path) -> None:
     (out / "composite" / "remote" / "composite.json").write_text(json.dumps({"product": "remote"}))
 
 
-def test_remotes_line_reads_the_record_the_served_node_composed_over_its_composite(tmp_path, monkeypatch):
-    """With no compose answer, the line is the served node's own record, which it composed over its composite
-    (served_composite.sh's ``out/composite``); as onsite's, under the placement hold each of its accepts reads
-    undecided and a reject stands."""
+def test_with_no_gate_answer_the_nodes_own_record_reads_development_never_the_auditors_accept(tmp_path, monkeypatch):
+    """Gate's answer absent, the serving node's record and composite present: the record is the prover's own word that
+    it passed, so each of its accepts, the line's and each row's, reads `T.DEVELOPMENT_VERDICT`, never accept (under the
+    placement hold, undecided); a reject stands, and a Lean that gave no answer reads undecided with its reason."""
     monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
     cfg = R.load(CONFIG, REG)
     nodes_composite(tmp_path / "out")
     written(tmp_path / "out", YES, {**ACCEPTED, "inference-only": CHECKED})
     got = T.remote_check(cfg, tmp_path)
-    assert (got["verdict"], got["components"], got["reason"], got["block"]) == (
-        "accept", ALL_ACCEPTED, T.FROM_SERVING_NODE, 3)
+    assert (got["verdict"], got["reason"], got["block"], got["source"]) == (
+        T.DEVELOPMENT_VERDICT, T.FROM_SERVING_NODE, 3, T.SERVING_NODE)
+    assert set(got["components"].values()) == {T.DEVELOPMENT_VERDICT} and "accept" not in json.dumps(got["components"])
     monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
     got = T.remote_check(cfg, tmp_path)
     assert got["verdict"] == "undecided" and set(got["components"].values()) == {"undecided"}
     assert f"the composed verdict {T.AS_WRITTEN}" in got["reason"]
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT")
     written(tmp_path / "out", {"composed": "reject", "product": "remote"}, {**ACCEPTED, "work": {"verdict": "reject"}})
     got = T.remote_check(cfg, tmp_path)
-    assert (got["verdict"], got["components"]["pearl-plus"]) == ("reject", "reject")
-    monkeypatch.delenv("VERITY_HOLD_PLACEMENT")
+    assert (got["verdict"], got["components"]["pearl-plus"], got["components"]["sampled-proofs"]) == (
+        "reject", "reject", T.DEVELOPMENT_VERDICT)
     written(tmp_path / "out", {"composed": "pending", "product": "remote", "lean": "its Lean gave no answer"},
             {**ACCEPTED, "inference-only": CHECKED})
     got = T.remote_check(cfg, tmp_path)
     assert (got["verdict"], got["reason"]) == ("undecided", f"{T.FROM_SERVING_NODE}; its Lean gave no answer")
+
+
+def test_with_the_gates_answer_and_the_nodes_record_both_present_the_gates_answer_wins(tmp_path, monkeypatch):
+    """Both present: the line is the compose gate's answer, its accept the auditor's, with no ``source`` and no
+    development sentence, whatever the node's own record says."""
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    cfg = R.load(CONFIG, REG)
+    nodes_composite(tmp_path / "out")
+    for node, gate, want in ((YES, {"composed": "reject", "product": "remote"}, "reject"),
+                             ({"composed": "reject", "product": "remote"}, YES, "accept")):
+        written(tmp_path / "out", node, {**ACCEPTED, "inference-only": CHECKED})
+        written(tmp_path / "out" / "compose", gate,
+                {**ACCEPTED, "inference-only": CHECKED, **({"work": {"verdict": "reject"}} if want == "reject" else {})})
+        got = T.remote_check(cfg, tmp_path)
+        assert got["verdict"] == want and "source" not in got, got
+        assert T.FROM_SERVING_NODE not in str(got["reason"]) and T.DEVELOPMENT_VERDICT not in got["components"].values()
+
+
+def test_a_deferred_composite_is_refused_as_deferred_until_the_follow_ons_record_is_here(tmp_path, monkeypatch):
+    """A served node short of the audit's memory defers the tied audit and the composite to a follow-on on a prover
+    node: until that follow-on's ``OUT`` is copied to ``out/follow-on``, the line is refused as ``deferred``, naming
+    where it reads it; then it is the follow-on's record, `T.FOLLOW_ON` its source, its accepts development."""
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    cfg = R.load(CONFIG, REG)
+    written(tmp_path / "out", {"composed": "pending", "product": "remote", "deferred": "196 GB, under 290"},
+            {**ACCEPTED, "work": {"verdict": "missing"}})
+    with pytest.raises(T.Refused) as e:
+        T.remote_check(cfg, tmp_path)
+    assert e.value.name == "deferred" and "196 GB, under 290" in e.value.detail
+    assert str(tmp_path / "out" / "follow-on") in e.value.detail
+    follow = tmp_path / "out" / "follow-on"
+    nodes_composite(follow)
+    written(follow, YES, {**ACCEPTED, "inference-only": CHECKED})
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["source"], got["reason"]) == (T.DEVELOPMENT_VERDICT, T.FOLLOW_ON, T.FROM_FOLLOW_ON)
+    assert set(got["components"].values()) == {T.DEVELOPMENT_VERDICT}
 
 
 def test_a_line_from_the_serving_nodes_own_record_says_so_and_a_gates_does_not(tmp_path, capsys, monkeypatch):
@@ -428,6 +466,7 @@ def test_a_line_from_the_serving_nodes_own_record_says_so_and_a_gates_does_not(t
                 assert "source" not in got and T.FROM_SERVING_NODE not in str(got["reason"]), got
             else:
                 assert got["source"] == T.SERVING_NODE and got["reason"].startswith(T.FROM_SERVING_NODE), got
+                assert got["verdict"] == T.DEVELOPMENT_VERDICT, got
 
 
 def test_remotes_verifier_refuses_by_name_a_record_it_cannot_read_or_of_another_product(tmp_path):
