@@ -35,9 +35,9 @@ TRIPLE = bind(CompositeDefinition("MembersRunTriple", 0, (), lambda S: ((("x", A
                                   lambda B, S, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), x[2]), register=False))
 PROGRAM = PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)])
 QUERY = P.template_instances_query([PAIR.id, TRIPLE.id])
-PARTITION = P.partition(PROGRAM, QUERY)
 A, B = "a/c0", "b/c0"
 UNITS = {A: [[0, 2]], B: [[2, 5]]}
+PARTITION = {**P.partition(PROGRAM, QUERY), "blocks": [UNITS[A][0], UNITS[B][0]]}
 SCHEME = "frame-v3-sha512/hm96-sha512"
 SPEC = {"block": 8, "rounds_log": 1, "scheme": CT.SCHEME, "streams": [CT.SESSION, "circuit/rep0", "circuit/rep1"]}
 ROOTS = {A: ("11" * 64, "aa" * 64), B: ("22" * 64, "bb" * 64)}
@@ -69,10 +69,10 @@ class Window:
         for k, name in enumerate((A, B)):
             public = json.dumps((headers or {}).get(name) or header(name)).encode() + b"\nthe rows"
             try:
-                self.put(OC.restrict(self.descriptor, PARTITION, UNITS[name][0][0]))
-            except OC.NotDerived:
+                self.put(OC.restrict(self.descriptor, PARTITION, UNITS[name]))
+            except (OC.NotDerived, OC.Refused):
                 pass
-            members[name] = {"public": self.put(public), "registered": None, "units": UNITS[name], "vus_per_block": 4}
+            members[name] = {"public": self.put(public), "registered": None, "block": k, "vus_per_block": 4}
             if name not in sessions:
                 continue
             tree, line = challenger.sample_tree(SPEC, bytes([k]) * CT.NONCE_BYTES)
@@ -105,8 +105,8 @@ class Window:
                          "proofs": {"statements": statements}}
 
     def circuit(self, member: str) -> str:
-        """The SHA-512 of the member's circuit file, C_S; `one_circuit.NotDerived` until `restrict` is filled."""
-        return hashlib.sha512(OC.restrict(self.descriptor, PARTITION, UNITS[member][0][0])).hexdigest()
+        """The SHA-512 of the member's circuit file, C_S."""
+        return hashlib.sha512(OC.restrict(self.descriptor, PARTITION, UNITS[member])).hexdigest()
 
     def put(self, b: bytes) -> str:
         d = hashlib.sha512(b).hexdigest()
@@ -140,7 +140,7 @@ def ledger(monkeypatch):
     monkeypatch.setattr(C, "trusted_session_of", lambda *a: None)
 
 
-@waits_on("restrict")
+@waits_on("restrict", "lower")
 def test_a_run_of_accepted_sessions_credits_each_members_units_and_names_no_refusal(tmp_path):
     """Each session is verified on its member's own files, with the program and partition every member reads, and
     credited the units of its member's public file its record drew; the run is no verdict, and it names no refusal
@@ -163,7 +163,7 @@ def test_a_run_of_accepted_sessions_credits_each_members_units_and_names_no_refu
                and [n for n, _ in st.reps] == ["circuit.rep0.bin"] for st in seen)
 
 
-@waits_on("restrict")
+@waits_on("restrict", "lower")
 def test_proved_units_other_than_the_evidences_and_a_verdict_of_another_program_are_refused(tmp_path):
     w = Window(tmp_path)
     assert w.run(evidence=w.evidence | {"proved_units": [1, 2]}) == (None, M.PROVED_UNITS)
@@ -186,7 +186,7 @@ def test_a_statement_of_a_member_the_sample_missed_is_refused_before_any_session
     assert w.run(never, evidence=w.evidence | {"proved_units": []}) == (None, f"member {A}: {missed}")
 
 
-@waits_on("restrict")
+@waits_on("restrict", "lower")
 def test_a_session_the_verifier_rejects_is_a_finding_and_the_run_proves_only_the_others_units(tmp_path):
     w = Window(tmp_path)
     run, refused = w.run(lambda st: accepting(st) if st.public.read_bytes().startswith(
@@ -208,7 +208,7 @@ def test_a_session_the_verifier_rejects_is_a_finding_and_the_run_proves_only_the
     ({"instances": 5}, "public file: not the registration's: population"),
     ({"instances": 3, "scheme": 5}, "public file: not the registration's: scheme, population"),
 ])
-@waits_on("restrict")
+@waits_on("restrict", "lower")
 def test_a_member_is_refused_where_its_public_file_is_not_its_slice_with_or_without_a_session(tmp_path, change, why):
     """The first member's public file names other units than the member's, in another order or none, or another scheme,
     root, domain or count than the member's roots of the docket, ports bare: the run refuses the member with the
@@ -219,7 +219,7 @@ def test_a_member_is_refused_where_its_public_file_is_not_its_slice_with_or_with
         assert w.run(never) == (None, f"member {A}: {why}")
 
 
-@waits_on("restrict")
+@waits_on("restrict", "lower")
 def test_every_members_files_are_held_in_the_members_order_before_any_session(tmp_path):
     """A window whose first member has no statement: its files are read and held as the second's are, both before the
     second's session is verified, and the run credits that session's units. A member whose circuit no blob holds, or

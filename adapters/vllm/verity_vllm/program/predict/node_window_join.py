@@ -260,15 +260,21 @@ def join(ranks: Sequence[Rank], name: str = f"{NAME}/ranks") -> Joined:
     return Joined(circuit, first, tuple(free), tuple(wired), tuple(unwired))
 
 
+def window_digest(record: Mapping[str, Any]) -> str:
+    """A window's H: the SHA-512 of its ``circuit.json`` less its run fields (`interface.circuit_of`), in canonical JSON
+    (`codec.canonical_json`, no newline after it): the same for every run of one circuit."""
+    return hashlib.sha512(canonical_json(IF.circuit_of(record))).hexdigest()
+
+
 def ranks_of(ranks: Sequence[Rank], joined: Joined, cap: int) -> dict[str, Any]:
     """The joined record's ``ranks`` (`interface.Ranks`): the prefix ``r<rank>/`` once, and per rank in rank order its
-    ``window``, its H (SHA-512 of the canonical JSON of `interface.circuit_of` of its record, `interface.descriptor_record`
-    at ``cap``, so no run field), its ``units`` per template and ``wires``, how many of the joined circuit's wires are its
-    own. `join` puts each rank's own wires in turn ahead of the ones it adds across ranks."""
+    ``window``, its H (`window_digest` of its record, `interface.descriptor_record` at ``cap``, so no run field), its
+    ``units`` per template and ``wires``, how many of the joined circuit's wires are its own. `join` puts each rank's own
+    wires in turn ahead of the ones it adds across ranks."""
     if [x.rank for x in ranks] != list(range(len(ranks))) or sum(len(x.circuit.wires) for x in ranks) > len(joined.circuit.wires):
         raise ValueError(f"ranks {[x.rank for x in ranks]}: not the ranks 0 .. W-1 that `join` joined into {joined.circuit.name}")
     return {"prefix": "r<rank>/",
-            "of": [{"window": hashlib.sha512(canonical_json(IF.circuit_of(IF.descriptor_record(x.circuit, cap)))).hexdigest(),
+            "of": [{"window": window_digest(IF.descriptor_record(x.circuit, cap)),
                     "units": dict(x.circuit.units), "wires": len(x.circuit.wires)} for x in ranks]}
 
 
@@ -296,4 +302,4 @@ def free_rows(joined: Joined) -> list[dict[str, Any]]:
     return out
 
 
-__all__ = ["Joined", "Rank", "free_rows", "join", "rank_window", "ranks_of", "unfilled"]
+__all__ = ["Joined", "Rank", "free_rows", "join", "rank_window", "ranks_of", "unfilled", "window_digest"]

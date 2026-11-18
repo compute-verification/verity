@@ -12,9 +12,9 @@ blocks). The committed wires are derived, never stored: the inputs, the outputs,
 unit reads (`committed`). Unit `u`'s committed gates are `out(R)` for its gates `R` (`gates u`), and the
 boundary (`boundary`) is in(S) ∪ out(S) over the units, `committed` less the inputs no gate reads. A boundary
 gate's position (`pos`) is a root and a leaf under it (`Root`), read through the circuit's `Layout`: a registered gate
-at its entry's root and its leaf there; any other at the root of the first execution phase that commits it
-(`commitPhase`), at its rank in that phase's window gates (`window`) in the leaves' order: by writer, the inputs first,
-then by index.
+at its entry's root and its leaf there; any other at the root of its own execution phase, the phase that writes it, at
+its rank in that phase's window gates (`window`) in the leaves' order: by writer, the inputs first, then by index. A
+value is committed before any coin of a later phase, which may test it.
 
 Unit `u` is **correct** in a trace `X` when its committed gates hold what its gates compute from `X` on the gates
 it reads from outside, in(R) (`Correct`): recompute `u`'s gates in order, reading every other gate from `X`
@@ -97,29 +97,17 @@ def writerRank (g : Fin C.N) : ℕ :=
 the writer is the same and its index is smaller. -/
 abbrev Before (g h : Fin C.N) : Prop := P.writerRank g < P.writerRank h ∨ (P.writerRank g = P.writerRank h ∧ g < h)
 
-/-- Phase `j` commits `g`: its own phase when `g` is an input or an output, or the phase of a gate of another unit
-that reads it. -/
-def CommitsIn (L : Layout C) (g : Fin C.N) (j : ℕ) : Prop :=
-  ((C.isInput g = true ∨ g ∈ C.outputs) ∧ L.phase g = j) ∨ ∃ h, g ∈ C.reads h ∧ P.unit h ≠ P.unit g ∧ L.phase h = j
-
-open Classical in
-/-- **The phase that commits `g`**: the first that does (`0` for a gate none commits). Only the phases up to it are
-read, so a later phase never changes it. -/
-noncomputable def commitPhase (L : Layout C) (g : Fin C.N) : ℕ :=
-  if h : ∃ j, P.CommitsIn L g j then Nat.find h else 0
-
-/-- **Phase `j`'s window gates**: the boundary gates outside the registered values that phase `j` commits first. -/
+/-- **Phase `j`'s window gates**: the boundary gates outside the registered values that phase `j` writes. -/
 noncomputable def window (L : Layout C) (j : ℕ) : Finset (Fin C.N) :=
-  P.boundary.filter fun g => L.reg g = none ∧ P.commitPhase L g = j
+  P.boundary.filter fun g => L.reg g = none ∧ L.phase g = j
 
-/-- **A boundary gate's position**, a root and a leaf: a registered gate's entry and leaf (`L.reg`); any other, the
-phase that commits it and its rank among that phase's window gates in the leaves' order (`Before`); `none` off the
-boundary. -/
+/-- **A boundary gate's position**, a root and a leaf: a registered gate's entry and leaf (`L.reg`); any other, its
+own phase and its rank among that phase's window gates in the leaves' order (`Before`); `none` off the boundary. -/
 noncomputable def pos (L : Layout C) (g : Fin C.N) : Option (Root × ℕ) :=
   if g ∈ P.boundary then
     match L.reg g with
     | some (i, r) => some (.reg i, r)
-    | none => some (.phase (P.commitPhase L g), ((P.window L (P.commitPhase L g)).filter fun h => P.Before h g).card)
+    | none => some (.phase (L.phase g), ((P.window L (L.phase g)).filter fun h => P.Before h g).card)
   else none
 
 /-- **`Rblk`, the base argument's relation for proof block `u`**, with `S` its gates and `C_S = C.restrict S`: the trace
