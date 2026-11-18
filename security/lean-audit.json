@@ -3258,7 +3258,6 @@
   "Claims.Hm96Hiding": "hash-derived-key",
   "Claims.StrictBirthday": "cr/sha-512",
   "Claims.ZKServer.Loop.Src": "flock-zk-server-os-src",
-  "FlockSoundness.Assumptions.KeyedStreamsUniform": "prf/sha-512",
   "FlockSoundness.Assumptions.SHA512CRExpected": "ecr/sha-512",
   "FlockSoundness.Assumptions.SHA512CRStrict": "cr/sha-512",
   "FlockSoundness.Assumptions.UniformRandomBytes": "uniform/io-getrandombytes",
@@ -3292,7 +3291,7 @@
    "Claims.StrictBirthday": "SHA-512 collision resistance: the strict birthday bound q^2 / 2^513 at one finder (cr/sha-512), as the spec states it",
    "FlockSoundness.Assumptions.SHA512CRExpected": "SHA-512 collision resistance: a finder of expected cost T finds a collision with probability at most T / 2^256 (ecr/sha-512)",
    "FlockSoundness.Assumptions.SHA512CRStrict": "SHA-512 collision resistance: a finder of at most q evaluations finds a collision with probability at most q^2 / 2^513 (cr/sha-512)",
-   "FlockSoundness.Assumptions.UniformRandomBytes": "the verifier server's uniform randomness: the bytes read from the operating system are uniform (A3)",
+   "FlockSoundness.Assumptions.UniformRandomBytes": "the challenger's uniform randomness, on the verifier server: the bytes the challenger reads from its own host's operating system (`IO.getRandomBytes`), for the coins a unit sample reads and for the epoch salt, are independent and uniform (A3, uniform/io-getrandombytes); the deployed sampled audit's soundness (V3, V5) rests on it",
    "FlockSoundness.Assumptions.UniformRandomBytesTest": "the verifier server's uniform randomness: the bytes read from the operating system pass a test as uniform bytes do, up to its advantage (A3 at one test)",
    "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
    "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
@@ -3302,11 +3301,9 @@
   },
   "extra": {
    "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
-    "FlockSoundness.Assumptions.KeyedStreamsUniform": "commitment hiding, trusted for the zero-knowledge guarantees only: the deployed salts' keyed SHA-512 streams pass a test as uniform bytes do, up to its advantage (prf/sha-512)",
     "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "commitment hiding, trusted for the zero-knowledge guarantees only: hm96-sha512's salt key is not among the keys its hiding bound fails for, so a leaf hides at 2^-193 (hash-derived-key)"
    },
    "Flock.SecurityProofs.SessionLoopZKDeployed": {
-    "FlockSoundness.Assumptions.KeyedStreamsUniform": "commitment hiding, trusted for the zero-knowledge guarantees only: the deployed salts' keyed SHA-512 streams pass a test as uniform bytes do, up to its advantage (prf/sha-512)",
     "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "commitment hiding, trusted for the zero-knowledge guarantees only: hm96-sha512's salt key is not among the keys its hiding bound fails for, so a leaf hides at 2^-193 (hash-derived-key)"
    }
   }
@@ -6558,7 +6555,14 @@
    "Proofs.Flock.EndToEndSampled": "C-Flock is excepted until its spec is extracted",
    "Proofs.Pouw.TS.Session": "the named premises and the statement of the proof layer read through its C-Flock sessions read RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Certifier.JointBridge.Guarantees.IntegrityOfIntegrityMonitoringPeriod": "the integrity bridge's realization reads C-Flock's integrity audit over a period (Flock.Guarantees.IntegrityPooled, its SamplingBlock and Period.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec",
-   "Proofs.Certifier.JointBridge.Guarantees.IntegrityOfIntegrityBlock": "the block integrity bridge's realization reads C-Flock's integrity audit of a server-time block (Flock.Guarantees.IntegrityBlockCarried, its CarriedBlocks, SamplingBlock and CarriedBlocks.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec"
+   "Proofs.Certifier.JointBridge.Guarantees.IntegrityOfIntegrityBlock": "the block integrity bridge's realization reads C-Flock's integrity audit of a server-time block (Flock.Guarantees.IntegrityBlockCarried, its CarriedBlocks, SamplingBlock and CarriedBlocks.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec",
+   "Proofs.Spot.Sampling.Closure": "the sampling layer's audit model: Proofs.Flock.Soundness.Audit.Closure renamed (tools/move/spot_sampling_map.toml), which the Proofs.Flock.Soundness exception covered; C-Flock is excepted until its spec is extracted",
+   "Proofs.Spot.Sampling.HarmBudget": "the sampling layer's audit model: Proofs.Flock.Soundness.Audit.HarmBudget renamed (tools/move/spot_sampling_map.toml), which the Proofs.Flock.Soundness exception covered; C-Flock is excepted until its spec is extracted",
+   "Proofs.Spot.Sampling.HarmBudgetLife": "the sampling layer's audit model: Proofs.Flock.Soundness.Audit.HarmBudgetLife renamed (tools/move/spot_sampling_map.toml), which the Proofs.Flock.Soundness exception covered; C-Flock is excepted until its spec is extracted",
+   "Proofs.Spot.Sampling.Influence": "the sampling layer's audit model: Proofs.Flock.Soundness.Audit.Influence renamed (tools/move/spot_sampling_map.toml), which the Proofs.Flock.Soundness exception covered; C-Flock is excepted until its spec is extracted",
+   "Proofs.Spot.Sampling.OneStage": "the sampling layer's audit model: Proofs.Flock.Soundness.Audit.OneStage renamed (tools/move/spot_sampling_map.toml), which the Proofs.Flock.Soundness exception covered; C-Flock is excepted until its spec is extracted",
+   "Proofs.Spot.Sampling.Window": "the sampling layer's audit model: Proofs.Flock.Soundness.Audit.Window renamed (tools/move/spot_sampling_map.toml), which the Proofs.Flock.Soundness exception covered; C-Flock is excepted until its spec is extracted",
+   "Proofs.Spot.Sampling.Work": "the sampling layer's audit model: Proofs.Flock.Soundness.Audit.Work renamed (tools/move/spot_sampling_map.toml), which the Proofs.Flock.Soundness exception covered; C-Flock is excepted until its spec is extracted"
   }
  },
  "four_names": [
@@ -6576,7 +6580,8 @@
   "Flock",
   "FlockSoundness",
   "FlockVBridge",
-  "Hash"
+  "Hash",
+  "Spot"
  ],
  "guarantees": {
   "Bandwidth.SecurityProofs.AuditInteractive": {

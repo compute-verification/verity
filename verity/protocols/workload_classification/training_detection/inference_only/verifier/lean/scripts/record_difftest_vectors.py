@@ -79,7 +79,8 @@ template in two root nodes with an edge each way, its order stated or not, a cha
 Refused: a broadcast edge (`own-rows`), a row half its own input and half an edge (`own-rows`), an edge into a
 port the record cuts and a partial row (`wires`), a row of another width, and an edge from an output of leaves other than its row's, of two widths
 into one leaf, of 8 bits into 16, of 31 bits into 32 one-bit leaves and of 16 bits into 16 one-bit leaves, the
-mismatches a wire's leaves were refused for (`program`: no Program states them), ingress or a registered read onto an edge's row (`inputs`), and
+mismatches a wire's leaves were refused for (`program`: no Program states them), an edge from an output of two
+widths into a row of the same two (`leaf-widths`), ingress or a registered read onto an edge's row (`inputs`), and
 a reference to a later node (`not-topological`).
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
@@ -175,7 +176,10 @@ def prim(ins: tuple[int, ...], r: int) -> PrimitiveDefinition:
 
 def leaves_of(c) -> list:
     """A parameter's leaves, in leaf order."""
-    return [c] if isinstance(c.type, Value) else [x for i in range(c.type.n) for x in leaves_of(c[i])]
+    if isinstance(c.type, Value):
+        return [c]
+    n = len(c.type.fields) if isinstance(c.type, Tuple) else c.type.n
+    return [x for i in range(n) for x in leaves_of(c[i])]
 
 
 #: how a template's output passes leaves of a parameter on (`template`'s `"pass"`)
@@ -2071,6 +2075,22 @@ def _onto(name: str, out, row, writes: list) -> Edged:
                  [(W, 2, _units(1, 2)), (R, 1, _units(1, 1))])
 
 
+def _mixed() -> Edged:
+    """A writer of two units whose first output is one field of an 8-bit and a 24-bit leaf, and its reader called once
+    on an input row of the same two leaves, which the toy repoints to that output of the writer's member 0: a wire
+    every Program decodes, whose leaves are of two widths on both sides."""
+    mixed = Tuple(Value(8), Value(24))
+    W = template("EdgeMixedWriter", [("a", Value(16))], [mixed, Value(16)],
+                 [[("op", 8, [(0, 0)]), ("op", 24, [(0, 0)])], [("op", 16, [(0, 0)])]])
+    R = template("EdgeMixedReader", [("v", mixed)], [Value(16)], [[("op", 16, [(0, 0), (0, 1)])]])
+
+    def body(B, S, a, z):
+        B.batch(W, a, axes=(0,))
+        return B.call(R, z)
+    return Edged(1, [("a", Array(2, Value(16))), ("z", mixed)], Value(16), body,
+                 [(W, 2, _units(1, 2)), (R, 1, _units(1, 1))])
+
+
 def _repoint(refs: list, k: int, j: int = 0, form: str = "affine"):
     """The edit that sets root node `k`'s argument `j` to the references `refs` of the form `form`."""
     def edit(nodes: list) -> None:
@@ -2110,6 +2130,8 @@ EDGED = {
     "an edge from a 16-bit output into 16 one-bit leaves": (
         lambda: _onto("EdgeBits", Value(16), Array(16, Value(1)), [("op", 16, [(0, 0)])]),
         _repoint(["n", 2, 0, 16], 3), None, "program"),
+    "an edge from an output of two widths into a row of the same two widths": (_mixed, _repoint(["n", 3, 0, 2], 4),
+                                                                                None, "leaf-widths"),
     "a row half its own input and half an edge": (lambda: _ab(_half, m=1, reader=EWIDE, ret=EU4), None, None,
                                                   "own-rows"),
     "ingress onto an edge's row": (lambda: _ab(_mapped), None, lambda d: d.update(

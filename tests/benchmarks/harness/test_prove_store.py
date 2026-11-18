@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from dataclasses import replace
 from statistics import linear_regression
 
 import pytest
@@ -28,7 +29,9 @@ from prove_helpers import (
 from verity_bench import exfiltration as E
 from verity_bench import kit
 from verity_bench import prove as P
+from verity_bench import prove_common as PC
 from verity_bench import prove_records as R
+from verity_bench import prove_store as S
 
 
 def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
@@ -148,6 +151,23 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     assert "- served tokens covered per second per prover GPU: 14,246 (range 14,246 to 41,509)" in text
     assert "| world year | year |" in text and "no plan of record covers another period, or a datacenter." in text
     assert text.count("\n| `") == 2 * 150                               # the cost table and the Lean verifier's
+
+
+def test_a_workloads_serving_card_is_named_once_by_its_card_file_and_the_rest_read_from_it():
+    """A workload names its serving card by its card file alone: the card's `short` (read from that file) names it to the
+    door, its fleet (`world-<short>`) and its members, and the serving rate's basis names the card file's card. A card
+    with no fleet of its own is refused by name, listing the fleets."""
+
+    one_b = R.WORKLOADS["llama32-1b"]
+    assert {w.card for w in R.WORKLOADS.values()} == {PC.SERVING_CARD}
+    assert (one_b.short, one_b.fleet, one_b.member) == ("h200", "world-h200", "llama-3.2-1b-h200")
+    assert R.WORKLOADS["glm53"].member is None
+    assert "of the NVIDIA H200 SXM 141 GB's data-sheet peak" in S.serving(REPO, one_b).basis
+    h100 = replace(one_b, card="h100-sxm-80gb")
+    assert (h100.short, h100.member) == ("h100", "llama-3.2-1b-h100")
+    with pytest.raises(ValueError, match=r"has no fleet `world-h100` for the NVIDIA H100 .* \(h100-sxm-80gb\): its fleets "
+                                         r"are world-h200, world-nvl72"):
+        S.serving(REPO, h100)
 
 
 def test_the_plan_of_records_own_prices_are_read_from_its_record(tmp_path):

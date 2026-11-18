@@ -8,7 +8,9 @@ public import Definitions.Core.Circuit
 A partition puts every computed gate of a circuit in exactly one of `n` units; input gates are in none. Proof blocks,
 replay blocks and inference blocks are partitions in three roles, and `Refines` nests them (proof blocks inside replay
 blocks). The committed wires are derived, never stored: the inputs, the outputs, and every gate that a gate of another
-unit reads (`committed`). Unit `u`'s committed gates are `out(R)` for its gates `R` (`gates u`).
+unit reads (`committed`). Unit `u`'s committed gates are `out(R)` for its gates `R` (`gates u`), and the
+boundary (`boundary`) is in(S) ∪ out(S) over the units, `committed` less the inputs no gate reads. A boundary
+gate's position (`pos`) is its rank in the leaves' order: by writer, the inputs first, then by index.
 
 Unit `u` is **correct** in a trace `X` when its committed gates hold what its gates compute from `X` on the gates
 it reads from outside, in(R) (`Correct`): recompute `u`'s gates in order, reading every other gate from `X`
@@ -60,6 +62,26 @@ open Classical in
 /-- `u`'s committed inputs and outputs: what an opening of the unit shows. -/
 noncomputable def io (u : Fin n) : Finset (Fin C.N) :=
   P.committed.filter fun g => P.unit g = some u ∨ ∃ h, P.unit h = some u ∧ g ∈ C.reads h
+
+open Classical in
+/-- **The boundary**: in(S) ∪ out(S) over the proof blocks, every unit's committed inputs and outputs. It is
+`committed` less the input gates no gate reads. -/
+noncomputable def boundary : Finset (Fin C.N) := univ.biUnion P.io
+
+/-- A gate's writer as a rank: `0` for an input gate, `u + 1` for a gate of unit `u`. -/
+def writerRank (g : Fin C.N) : ℕ :=
+  match P.unit g with
+  | none => 0
+  | some u => u.val + 1
+
+/-- **The leaves' order**: `g` before `h` when its writer is earlier (the inputs first, then the units in order), or
+the writer is the same and its index is smaller. -/
+abbrev Before (g h : Fin C.N) : Prop := P.writerRank g < P.writerRank h ∨ (P.writerRank g = P.writerRank h ∧ g < h)
+
+/-- **A boundary gate's position**: its rank among the boundary's gates in the leaves' order (`Before`), so each
+writer's gates are one run of positions, in index order; `none` off the boundary. -/
+noncomputable def pos (g : Fin C.N) : Option ℕ :=
+  if g ∈ P.boundary then some (P.boundary.filter fun h => P.Before h g).card else none
 
 /-- `Pf` refines `Pc`: every fine unit lies inside one coarse unit, its `parent`. -/
 structure Refines {nf nc : ℕ} (Pf : Partition C nf) (Pc : Partition C nc) where

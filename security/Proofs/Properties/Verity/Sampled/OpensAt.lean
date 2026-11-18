@@ -44,7 +44,7 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
   of the deployment's sessions does (`Instance.sessions`; `Live.OpensReady.commit`), its `domain`, `roots`, `words` and
   `opens_rowLeaf`.
 * `Instance.opensAt_of`: **`OpensAt`**, wherever the base places each non-constant gate of a session's files at the
-  session's `placeAt` of its claims position. The committed files' circuit is Boolean (`Circuit.ofAudit`), so the
+  session's `placeAt` of its claims position. The committed files' circuit is Boolean (`Boolean.Circuit.toCircuit`), so the
   opened bit is the gate's whole value. `Instance.opensAt`: at every instance, whose base's place is `placeOfFiles` by
   construction (`Instance.place`).
 * `remote_soundness_deployedReady_honest`, `remote_soundness_deployedReady_nontrivial`: its premises hold at the idle
@@ -134,7 +134,7 @@ theorem fixes_words_of_checksStmt {tags : Flock.Tags} {cf pf : ByteArray} {table
   rw [he, hu]
   exact ⟨hf, hw⟩
 
-theorem w_ofAudit {K : Verity.Circuit} {C : Verity.Boolean.Circuit} (h : K = Verity.Circuit.ofAudit C)
+theorem w_toCircuit {K : Verity.Circuit} {C : Verity.Boolean.Circuit} (h : K = C.toCircuit)
     (g : Fin K.N) : K.w g = 1 := by
   subst h
   rfl
@@ -435,7 +435,7 @@ theorem opensAt_of (I : Instance d α)
   have hplace := h θ F A hs
   obtain ⟨p, hp, o, hacc, hrow⟩ := Live.opens_rowLeaf hready hop
   have hw : (I.base.read θ F).circuit.w g = 1 :=
-    w_ofAudit ((congrArg Verity.ExecutionPhaseFiles.circuit hsu.read).trans
+    w_toCircuit ((congrArg Verity.ExecutionPhaseFiles.circuit hsu.read).trans
       (A.circuit_eq.trans (Flock.Bridge.circuitOf_eq A.D A.hU A.n))) g
   unfold Vocab.Opens
   rw [hconst]
