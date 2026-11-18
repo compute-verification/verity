@@ -1174,7 +1174,7 @@ theorem RefreshedRunConservationSeasoned :
   intro n P N ρ S L q G X qtot T M life ε δ Ω Ca Ch _ _ enc choose slot joined seen s A hn hP hN hrank hKB hB hS
     hcap hord hseas hfix hcb
   rcases isEmpty_or_nonempty (Ω × (Fin T → Ca)) with hE | hY
-  · refine le_trans (le_of_eq ?_) (by positivity)
+  · refine le_trans (le_of_eq ?_) (by first | exact zero_le | positivity | simp)
     simp only [Pous.pr, Verity.Game.prCoin, Verity.Game.avg, Finset.univ_eq_empty, Finset.sum_empty]
   have h := RefreshedRunConservationSketchDeployed
   unfold ResourceAccounting.Guarantees.RefreshedRunConservationSketchDeployed at h
