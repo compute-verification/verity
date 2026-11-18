@@ -9,7 +9,11 @@ meta import Spot.Wires
 the live wires it compares, counted by `sweepWork`, at most a small multiple of the wires, where the pairwise test makes
 W(W−1)/2 comparisons. `kahn`'s order, the verifier's output, held to the loop it replaced (`kahnRef`: the first
 template by index not placed and reading none not placed, found by a scan at each step) on random wirings, acyclic and
-cyclic, with repeated template ids, and on a served class's shape: the same order or the same refusal.
+cyclic, with repeated template ids, and on a served class's shape: the same order or the same refusal. `check` and
+`orderOk`, compiled with their maps (`check_eq_fast`, `orderOk_eq_fast`), held to their bodies as written (`checkOld`,
+`orderOkOld`) on random wirings that reach every refusal, with stated orders and repeated ids; and the whole check on
+700k wires of the served shape, its order's work counted (`orderWork`: each wire's ranges of its reader, and of its
+writer in each reader range it meets).
 -/
 
 @[expose] public section
@@ -170,5 +174,105 @@ def servedWiring (T L : Nat) : Wiring :=
     cuts := (List.range T).map fun j => (tn j, [("p0", 17), ("p1", 17), ("p2", 17)]), wires }
 
 #guard let c := servedWiring 40 12; sameOrder (kahn c) (kahnRef c) && (kahn c).toBool
+
+/-! ## `check` and `orderOk` against their bodies as written -/
+
+def orderOkOld (c : Wiring) (o : List UnitRange) : Bool :=
+  o.all (fun b => (c.templates.lookup b.1).isSome) &&
+    c.templates.all fun (t, tt) =>
+      tiles (((o.filter (·.1 == t)).map (·.2)).mergeSort fun a b => a.1 ≤ b.1) 0 tt.units
+
+def orderOfOld (c : Wiring) : Except Refusal (List UnitRange) :=
+  match statedOrder c with
+  | .ok o => if orderOkOld c o then .ok o else .error ⟨.order, none⟩
+  | .error r => .error r
+
+def checkOld (c : Wiring) : Except Refusal Summary :=
+  if !cutsOk c then .error ⟨.cuts, none⟩
+  else match firstWire c (wireCode c) with
+    | some r => .error r
+    | none =>
+      if !pairwiseRef c.wires then .error ⟨.overlap, none⟩
+      else match (match orderOfOld c with
+          | .error r => some r
+          | .ok o => firstWire c fun w => if orderedWire o w then none else some .order) with
+        | some r => .error r
+        | none => .ok ⟨c.wires, c.wires.map (rowWords c)⟩
+
+def sameCheck : Except Refusal Summary → Except Refusal Summary → Bool
+  | .ok a, .ok b => a.wires.length == b.wires.length && a.rowWords == b.rowWords
+  | .error a, .error b => a == b
+  | _, _ => false
+
+def code : Except Refusal Summary → String
+  | .ok _ => "ok"
+  | .error r => r.code.name
+
+/-- A wiring from seed `x`: `nt` templates of ports `p`, `q` (cut in 1 or 2) and output `o`, the first repeated when
+`dup`; `nw` wires, mostly well formed, a writer mostly at or before its reader, some naming no template or port, rows or widths past the port's, or units past the
+template's; a stated order of the templates' units in random pieces and ranks when `stated`. -/
+def checkWiring (x nt nw : Nat) (stated dup : Bool) : Wiring :=
+  let names := (List.range nt).map fun i => s!"t{(i * 7 + 3) % nt}"
+  let pp : Port := { words := 4, outer := 2 }
+  let pq : Port := { words := 2, outer := 2 }
+  let tm : Template := { units := 8, rows := [("p", pp), ("q", pq)], outs := [("o", 4)] }
+  let ts := names.map fun n => (n, tm)
+  let ts := if dup then ts ++ [(names.headD "t0", { tm with units := 4 })] else ts
+  let cuts := names.filterMap fun n => if (n.length + x) % 2 == 0 then some (n, [("p", 2)]) else none
+  let (ws, x) := (List.range nw).foldl (fun (acc, x) _ =>
+    let x₁ := lcg x; let x₂ := lcg x₁; let x₃ := lcg x₂; let x₄ := lcg x₃; let x₅ := lcg x₄; let x₆ := lcg x₅
+    let d (y m : Nat) := y / 2 ^ 40 % m
+    let r := d x₁ nt; let wr := if d x₆ 5 == 3 then d x₂ nt else d x₂ (r + 1)
+    let reader := if d x₆ 53 == 0 then "nope" else names.getD r ""
+    let port := if d x₆ 29 == 1 then "z" else if d x₅ 2 == 0 then "p" else "q"
+    let n := 1 + d x₄ 3
+    ({ reader, port, writer := names.getD wr "", out := if d x₆ 31 == 2 then "z" else "o", start := d x₃ 8,
+       radix := [n], base := (d x₅ 6 : Int), step := [1], cut0 := if d x₆ 7 == 0 then 1 else 0, cuts := 1,
+       offset := d x₂ 3 } :: acc, x₆)) ([], x)
+  let order := if stated then
+      some (names.flatMap fun n => let k := (lcg (x + n.length)) / 2 ^ 40 % 3
+        if k == 0 then [(n, 0, 8)] else if k == 1 then [(n, 0, 4), (n, 4, 4)] else [(n, 0, 3), (n, 4, 4)])
+    else none
+  let order := order.map fun o => (o.zipIdx.map fun (b, i) => (lcg (x + i) / 2 ^ 40 % 1000, b)).mergeSort
+    (fun a b => a.1 ≤ b.1) |>.map (·.2)
+  { templates := ts, cuts, wires := ws, order }
+
+def checkDraws : List (Nat × Nat × Nat × Bool × Bool) :=
+  (List.range 600).map fun i => (i, 1 + i % 5, i % 9, i % 2 == 0, i % 7 == 0)
+
+#guard checkDraws.all fun (x, nt, nw, st, dup) => let c := checkWiring x nt nw st dup; sameCheck (check c) (checkOld c)
+#guard checkDraws.all fun (x, nt, nw, st, dup) => let c := checkWiring x nt nw st dup
+  match c.order with | some o => orderOk c o == orderOkOld c o | none => true
+def codes : List String := checkDraws.map fun (x, nt, nw, st, dup) => code (check (checkWiring x nt nw st dup))
+
+#guard ["ok", "template", "port", "cut", "width", "bounds", "overlap", "order"].all fun k =>
+  (codes.filter (· == k)).length ≥ 3
+
+/-- Two templates reading each other: `kahn`'s cycle. -/
+def cyclic : Wiring :=
+  let c := checkWiring 0 2 0 false false
+  { c with wires := [{ wire "t1" "p" 0 1 0 1 with writer := "t0" }, { wire "t0" "p" 0 1 0 1 with writer := "t1" }] }
+
+#guard code (check cyclic) == "cycle" && sameCheck (check cyclic) (checkOld cyclic)
+
+/-- `checkFast`'s order work: each wire's ranges of its reader, and of its writer in each reader range it meets. -/
+def orderWork (c : Wiring) : Nat :=
+  match orderOf c with
+  | .error _ => 0
+  | .ok o =>
+    let g := groupBy (·.1.1) o.zipIdx
+    c.wires.foldl (fun n w =>
+      let rs := g.getD w.reader []
+      n + rs.length + ((rs.filter fun (b, _) => w.readsIn b).length) * (g.getD w.writer []).length) 0
+
+/-- The served shape at 699,363 wires: 100 templates of 137 layers, 13,700 root nodes. The whole check on it takes
+about three minutes under the interpreter: a stage quadratic in the wires, templates or ranges would not return, which
+no smaller wiring shows. -/
+def big : Wiring := servedWiring 100 137
+
+#guard big.wires.length == 699363
+#guard (check big).toBool
+#guard orderWork big ≤ 300 * big.wires.length
+#guard !(check { big with wires := { big.wires.headD (wire "" "" 0 0 0 1) with start := 3 } :: big.wires }).toBool
 
 end Spot.Test.WiresDisjoint
