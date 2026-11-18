@@ -103,7 +103,7 @@
 # commit's and audits' logs whole: $OUT and stdout get their lines as public_log.py lets them go.
 set -uxo pipefail
 PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../one_stage/public_files.py
-PL=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_log.py  # a log as it may leave: no advice length, no charge of it
+PL=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_log.py  # a log as it may leave: the fields its reader reads, errors by their class
 for v in PP_LLAMA PP_SERVE_RUN PP_SERVE_ROWS; do
   case "${!v:-}" in art:*) echo "$v=${!v}: a published row dir or serve run holds request values; give $v the serve" \
     "directory on this node (a DIR)"; exit 2;; esac

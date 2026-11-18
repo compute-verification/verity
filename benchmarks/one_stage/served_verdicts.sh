@@ -106,7 +106,7 @@
 #     check), and names the window's
 #     docket R that the record's SPOT audit sampled against: one of another window, or bound to
 #     no record, is refused, exit 1; any other server's answer is carried as elsewhere. Network attestation's chain files
-#     that list or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/attester. Then, unless COMPOSITE is set empty, remote's and onsite's Lean
+#     that list or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/certifier. Then, unless COMPOSITE is set empty, remote's and onsite's Lean
 #     verdicts on the run's cases (`served_composite.sh`'s docstring): a composite that didn't run (a tree without
 #     composite.py) or whose Lean didn't answer fails the run. On the served node its composite is of record, and the
 #     record is composed again after it, reading it (--composite), its composed_on saying where it was made (the served
@@ -1549,7 +1549,7 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   local rc vrc rec comp=0 TPY=$TREE/.venv/bin/python
   (cd "$D" && sha256sum --check --strict --quiet private/deferred/inputs.sha256) > "$DEFER_DIR/check.log" 2>&1
   rc=$?
-  say "FOLLOW-ON on $(hostname -s), $NODE_MEM_GB GB: $DEFERRED_WHAT, which the served node $SERVED_NODE deferred, from its serve" \
+  say "FOLLOW-ON on a prover node, $NODE_MEM_GB GB: $DEFERRED_WHAT, which the served node (SERVED_NODE) deferred, from its serve" \
       "dir's audit inputs copied here prover-side, each as it hashed them (the serve dir's private/deferred/inputs.sha256):" \
       "$([ "$rc" = 0 ] && echo PASS || echo "FAIL (the serve dir's private/deferred/check.log)")"
   [ "$rc" = 0 ] || return 3
@@ -1576,7 +1576,7 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   fi
   local lean=()
   if [ -n "${COMPOSITE-1}" ]; then
-    local why="composed by a deferral's follow-on on $(hostname -s), a prover node, which the prover controls" how=COMPOSE_ON_NODE
+    local why="composed by a deferral's follow-on on a prover node, which the prover controls" how=COMPOSE_ON_NODE
     if hold_placement; then
       why+=": a development check, no claim of record (only the compose follow-on's composite, off the served node on an"
       why+=" auditor device, is the record's)" how=COMPOSE_DEVELOPMENT
@@ -2226,9 +2226,9 @@ EOF
   [ -z "$why" ] || { say "PREFLIGHT: $why"; exit 3; }
 fi
 if [ -n "${PREFLIGHT_ONLY:-}" ]; then  # the checks above alone: nothing kept, built or served
-  if [ -n "$FOLLOW" ]; then plan="the follow-on of $SERVED_NODE's deferral"
+  if [ -n "$FOLLOW" ]; then plan="the follow-on of the served node's (SERVED_NODE) deferral"
     [ "$COMPOSE_OFF_NODE" = 0 ] || plan+=", its compose hand-off for COMPOSE_NODE"
-  elif [ -n "$COMPOSE" ]; then plan="the compose follow-on of $SERVED_NODE's hand-off: $HANDED_WHAT"
+  elif [ -n "$COMPOSE" ]; then plan="the compose follow-on of the served node's (SERVED_NODE) hand-off: $HANDED_WHAT"
   else
     plan="the serve's lease ${LEASE_MIN:-60} min, capped at ${LEASE_MEM_GB:-128} GB"
     [ -z "$DEFER" ] || plan+="; $DEFER, so step 6 defers $DEFERRED_WHAT to a follow-on"
@@ -2328,9 +2328,9 @@ fi
 if [ "$SP_CHALLENGER" != local ]; then
   COINS="the challenger ${SP_CHALLENGER%%@*} (peer ${PP_PEER:-?})"
 elif [ "${PP_CHALLENGER:-local}" != local ]; then
-  COINS="a local development challenger session on $(hostname -s), the served node, for step 3, a development check, since V3c's audit's live session takes the window's run root, which the gate opens once, ever"
+  COINS="a local development challenger session on the served node, for step 3, a development check, since V3c's audit's live session takes the window's run root, which the gate opens once, ever"
 else
-  COINS="a local development challenger session on $(hostname -s), the served node, not an auditor's (PP_CHALLENGER local)"
+  COINS="a local development challenger session on the served node, not an auditor's (PP_CHALLENGER local)"
 fi
 COINS+="; $H1_COINS;"
 [ -z "$V3C" ] || COINS+=" V3c's audit: $(v3c_coins);"
@@ -2359,7 +2359,7 @@ if [ -n "${CERTIFIER_CMD:-}" ]; then  # network attestation's chain is the longe
   CERT_TASKSET=(); NCPU=$(nproc)
   command -v taskset > /dev/null && [ "$NCPU" -gt 2 ] && CERT_TASKSET=(taskset -c "${CERT_CPUS:-2-$((NCPU - 1))}")
   ${CERT_TASKSET[@]+"${CERT_TASKSET[@]}"} "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$KN" --out "$OUT/pieces" \
-    --product "$PRODUCT" --only attester > "$LOGS/pieces-certifier.txt" 2>&1 &
+    --product "$PRODUCT" --only certifier > "$LOGS/pieces-certifier.txt" 2>&1 &
   CERT=$!
 fi
 advice
@@ -2404,7 +2404,7 @@ if [ -n "$SPLIT" ]; then
 fi
 
 # 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
-pieces ${CERT:+--skip attester}
+pieces ${CERT:+--skip certifier}
 [ -z "$CERT" ] || { wait "$CERT"; publish_lines < "$LOGS/pieces-certifier.txt"; }
 # under PEARLPLUS_TIE, once Pearl+'s piece wrote W: the served compare, whose line the record names
 SC=() sc=0

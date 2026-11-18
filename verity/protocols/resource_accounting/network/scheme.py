@@ -149,6 +149,7 @@ NETWORK_ATTESTER = register(Scheme(
     needs=frozenset({"windows", "ingress-relay"}),
     depends=("sampled-proofs",),
     pieces={"workers": S.Launch(binds=("gate", "peer"))},
+    answers=S.Lacks("has no piece that answers outside an exchange"),
     record="communication",
     symbol="K",
     published=("bits", Fraction(1)),
