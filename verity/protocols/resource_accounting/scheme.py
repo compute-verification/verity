@@ -429,6 +429,34 @@ class Bound:
         return self.delta + self.epsilon + self.delta_scheme
 
 
+class Unbounded(ValueError):
+    """`bound`'s refusal of a declaration whatever its caller gives: the sentence, and ``terms``, the name of each
+    term it lacks (each charge nothing bounds, by its name; ``Verity.Scheme.δscheme``; ``premises``)."""
+
+    def __init__(self, why: str, terms: tuple[str, ...]) -> None:
+        super().__init__(why)
+        self.terms = terms
+
+
+def unbounded(scheme: Scheme) -> Unbounded | None:
+    """Why ``scheme``'s declaration lets `bound` give no bound at any inputs, None where it can: a known charge
+    nothing bounds yet, its own term not said, or its premises not said, the first of these."""
+    if open_ := [c for c in scheme.charges if not c.bounded]:
+        return Unbounded(f"{scheme.name} has known charges nothing bounds yet: "
+                         f"{', '.join(f'{c.name} ({c.bound})' for c in open_)}; a bound without them would read as "
+                         "complete", tuple(c.name for c in open_))
+    if isinstance(scheme.delta_scheme, Lacks):
+        return Unbounded(f"{scheme.name}: its delta_scheme (Verity.Scheme.δscheme) is not said: a declaration says its "
+                         "own term by name, zero where none of its assumptions can fail"
+                         + (f"; it says why not: {scheme.delta_scheme.why}" if scheme.delta_scheme.why else ""),
+                         ("Verity.Scheme.δscheme",))
+    if isinstance(scheme.premises, Lacks):
+        return Unbounded(f"{scheme.name}: its premises are not said, so a bound would read as unconditional; a "
+                         "declaration names each Lean Prop its guarantee is stated under, () where none"
+                         + (f"; it says why not: {scheme.premises.why}" if scheme.premises.why else ""), ("premises",))
+    return None
+
+
 def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, int],
           parameters: Mapping[str, Any] | None = None, *, epsilon: Fraction | None = None) -> Bound:
     """``scheme``'s `Bound`, carrying its own term, evaluated at ``parameters`` where it is a `Term` (``N`` read from
@@ -436,19 +464,10 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
     scheme with a known charge nothing bounds yet or whose own term is not said, parameters other than exactly the
     term's, and an audit's error ``epsilon`` not given (`GetsBack`'s ε, which the audit supplies, never the scheme)."""
     declared(scheme, "resource")
+    if (refused := unbounded(scheme)) is not None:
+        raise refused
     if sorted(charges) != sorted(c.name for c in scheme.charges):
         raise ValueError(f"{scheme.name}'s charges are {sorted(c.name for c in scheme.charges)}, not {sorted(charges)}")
-    if unbounded := [f"{c.name} ({c.bound})" for c in scheme.charges if not c.bounded]:
-        raise ValueError(f"{scheme.name} has known charges nothing bounds yet: {', '.join(unbounded)}; a bound "
-                         "without them would read as complete")
-    if isinstance(scheme.delta_scheme, Lacks):
-        raise ValueError(f"{scheme.name}: its delta_scheme (Verity.Scheme.δscheme) is not said: a declaration says its "
-                         "own term by name, zero where none of its assumptions can fail"
-                         + (f"; it says why not: {scheme.delta_scheme.why}" if scheme.delta_scheme.why else ""))
-    if isinstance(scheme.premises, Lacks):
-        raise ValueError(f"{scheme.name}: its premises are not said, so a bound would read as unconditional; a "
-                         "declaration names each Lean Prop its guarantee is stated under, () where none"
-                         + (f"; it says why not: {scheme.premises.why}" if scheme.premises.why else ""))
     if not 0 < delta < 1 or missable < 0 or any(v < 0 for v in charges.values()):
         raise ValueError(f"{scheme.name}: δ lies in (0, 1) and every amount is at least 0")
     if epsilon is None or not 0 <= epsilon < 1:
@@ -570,5 +589,6 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
 
 
 __all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "VERIFIER", "Block", "Bound",
-           "Charge", "Circuits", "Lacks", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "bound", "credited", "declared",
-           "layout", "register", "register_circuits", "register_process", "settings"]
+           "Charge", "Circuits", "Lacks", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded", "bound",
+           "credited", "declared", "layout", "register", "register_circuits", "register_process", "settings",
+           "unbounded"]
