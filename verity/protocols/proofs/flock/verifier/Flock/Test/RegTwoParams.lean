@@ -78,7 +78,7 @@ def pub : Public :=
 one (else the port's own name). -/
 def port (param : Option String := none) : Json :=
   Json.mkObj ([("value", Json.str "A"), ("root", Json.str (hexOf (root v2))), ("leaves", Lean.toJson (2 : Nat)),
-    ("domain", Json.str (hexOf dom)), ("reads", Lean.toJson [some 0, some 1]), ("words", Lean.toJson (32 : Nat)),
+    ("domain", Json.str (hexOf dom)), ("words", Lean.toJson (32 : Nat)),
     ("row_schema", Json.str v2)] ++ (param.map fun p => [(Registered.PARAM_KEY, Json.str p)]).getD [])
 
 /-- The verifier's file: ports `w` and `u`, both of `A`; `u` reads the parameter `second` when given. -/
@@ -92,7 +92,7 @@ def setup (program : ByteArray) (f : Json) : Except String Unit := do
   let params ← Registered.paramsOf f
   Registered.checkProgram (some program) true
   Registered.namesOnce circ
-  Registered.check circ pub (some own) true
+  Registered.check circ pub (some (Flock.Test.RegFormats.derivedReads own)) true
   Registered.checkComplete circ own
   Registered.checkCover circ (some program) (some q) (some own) params
 
