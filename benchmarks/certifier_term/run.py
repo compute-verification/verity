@@ -1,9 +1,9 @@
-"""`verity bench certifier_term [ARGS]`: the network certifier's term for the served model at the load of a node, the
+"""`verity bench certifier_term [ARGS]`: the network attester's term for the served model at the load of a node, the
 census's reference datacenter and the world, over a week, a month and a year, in bits and GB (the README beside this
 file). It runs the calculator of K, `benchmarks/network_traces/leak_bounds.py`, with ARGS, and prints what that prints.
 
 With `--out DIR` it also writes its result, through the harness kit's writer for `DIR` (`verity_bench.kit`) and through
-nothing else; the kit says where the file is, `DIR/result.json` outside a research run (`benchmarks/harness/README.md`).
+nothing else; the kit says where the file is, `DIR/result.json` outside a research run.
 The result holds the fields every resource's benchmark reports (`measurements`), for the row the term of record is read
 from, the scan at two release schedules, at each scope and monitoring period the calculator's document holds. Every
 figure is the model's, and its mark and every name but the metric's say so (`MODELED`); none is computed from a run's K.
@@ -11,13 +11,13 @@ figure is the model's, and its mark and every name but the metric's say so (`MOD
 - `METRIC`, the metric's id: the term of record as the document gives it, in GB, beside the document's target. Its row
   is the scan's over the world's year (`RECORD`).
 - the card's figure, a `metric` named under `MODELED` and the card's mark (`CARD`: `simulated`): the same row's term at
-  the other jitter bound, what a network certifier whose network card releases at a set time would be charged, as the
+  the other jitter bound, what a network attester whose network card releases at a set time would be charged, as the
   document gives it under its label (`CARD_FIGURE`), in GB beside the same target. It is no term of record. Its
   `inputs` open with the card as the document states it: that it is simulated, and the clause the figure rests on.
 - `free`: the term K in bits, which the check bounds from above, beside the same target in bits.
-- `capacity`: what the scope's certified boundary links carry out over the period, in bits. It is read from the
+- `capacity`: what the scope's attested boundary links carry out over the period, in bits. It is read from the
   registered hardware and never copied: `--registration FILE` names a registration log, and a machine's uplink is the
-  link of its host that a network certifier splits (`uplink`), at its `beta` bits a second. `beta` is each way and the
+  link of its host that a network attester splits (`uplink`), at its `beta` bits a second. `beta` is each way and the
   term is egress, so it counts once. A scope's machines are each taken as registered so. With no registration it has
   no value, and its `inputs` say why.
 - `verified`: capacity less free, where both have a value.
@@ -79,7 +79,7 @@ UNION = (f"{EPS}, the calculator's key: a union bound over the period's executio
 
 
 class Uplink(NamedTuple):
-    """A machine's certified boundary links as a registration registers them: their `beta` summed, in bits a second
+    """A machine's attested boundary links as a registration registers them: their `beta` summed, in bits a second
     each way, of which the term's, egress, is one; and what a measurement's inputs say of where they were read."""
     beta: int
     said: str
@@ -94,11 +94,11 @@ def calculator() -> Any:
 
 def uplink(path: Path, links: int) -> Uplink:
     """A machine's uplink as the registration log at ``path`` registers it
-    (`verity.protocols.accounting.registration.verifier.registration`'s committed log): the site its site entries
-    register (`Site.of_log`) holds one host, and each of that host's boundary links is split by a network certifier
+    (`verity.protocols.registration.verifier.registration`'s committed log): the site its site entries
+    register (`Site.of_log`) holds one host, and each of that host's boundary links is split by a network attester
     (`Site.is_boundary`, `Site.certified`), ``links`` of them, the model's links a machine.
     The log is read as given: its check is its verifier's."""
-    from verity.protocols.accounting.registration.verifier import registration
+    from verity.protocols.registration.verifier import registration
     from verity.device import Entry, Site
 
     try:
@@ -110,8 +110,9 @@ def uplink(path: Path, links: int) -> Uplink:
     split = [k for k in boundary if site.certified(k)]
     if len(hosts) != 1 or len(split) != links or len(boundary) != len(split) or any(k.beta is None for k in split):
         raise SystemExit(f"certifier_term: {path} doesn't register the model's machine, one host whose {links} boundary "
-                         f"link(s) a network certifier splits: it registers the hosts {hosts}, whose boundary links are "
-                         f"{[k.id for k in boundary]}, {[k.id for k in split]} of them certified, each at a capacity")
+                         f"link(s) a {calculator().ATTESTER} splits: it registers the hosts {hosts}, whose boundary "
+                         f"links are {[k.id for k in boundary]}, {[k.id for k in split]} of them certified, each at a "
+                         "capacity")
     return Uplink(sum(k.beta for k in split),
                   f"registration {registration.head(composite, log)}, read as given: host {hosts[0]}'s certified "
                   f"boundary link(s) {', '.join(f'{k.id} at beta {k.beta}' for k in split)}, in bits a second each way "

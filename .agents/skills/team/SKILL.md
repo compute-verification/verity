@@ -88,8 +88,8 @@ fast-forwards `main` to one with no new failure:
   loop moves `main`: GitHub's rulesets let only its App push it. Citations and tables read only `main`'s commits.
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.
 - Anyone may do whatever it takes to cut check time: a change to how `check` runs lands without its file owner's review,
-  and the owner is told. infra owns check time and its spend, and ci owns landing: no agent acts between a ready mark
-  and `main` moving unless the automation refuses.
+  and the owner is told. infra owns check time and its spend, and ci owns landing, with full autonomy (`AGENTS.md`,
+  "Checking and merging"): no agent acts between a ready mark and `main` moving unless the automation refuses.
 
 ## Outside the tree
 
@@ -124,11 +124,11 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   request for every agent here, so nobody asks first) or as detached `research run`s; a local subagent only for a short
   read-only lookup. A cloud worker boots from the environment's snapshot, so its brief is complete (the task, the
   done-condition, the deadline, "reread `git show origin/main:AGENTS.md`") and tells it to create
-  `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there. Write no brief or message to a branch (Daniel,
-  13 Nov): later word goes by `inbox.py send` or a resume, a document on a Linear issue or in Notion. It opens its own
-  PR, or reports its branch and SHA for its launcher to.
+  `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there. Write no brief or message to a branch: later word
+  goes by `inbox.py send` or a resume, a document on a Linear issue or in Notion. It opens its own PR,
+  or reports its branch and SHA for its launcher to.
 - **Name a worker's model**, as `Task`'s `model`, a standing request for every agent here, on every launch, never
-  `inherit` or left out: `claude-opus-5-5-high`, or `claude-sonnet-5-5-high` for a fully specified task (a move by a
+  `inherit` or left out: `claude-opus-5-5-medium`, or `claude-sonnet-5-5-high` for a fully specified task (a move by a
   map, a count, a rename, a rerun, a change its tests decide). No worker runs Fable 5.2: only leads may, at medium
   effort, and they plan, design and decide. A worker holds no timer or subscription, since a turn that its lead's
   resume didn't start can run on Fable: its brief has it end such a turn at once. A Fable worker is not resumed: its

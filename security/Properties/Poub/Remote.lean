@@ -9,7 +9,7 @@ public import Poub.Session
 The properties of `Poub` (`verity/protocols/accounting/poub/verifier/lean/`, the verifier's definition, which
 `audit.py` is held to by the difftest `poub-difftest`), stated against its functions as they run, for every input of their types. They
 are the code's half of the bridge from the verifier to the stacked audit's game (`Rate.DeployedRun`, and the
-composed statement `Accounting.Guarantees.RegisteredCircuitRequirement` that reads it): each says what an acceptance
+composed statement `ResourceAccounting.Guarantees.RegisteredCircuitRequirement` that reads it): each says what an acceptance
 establishes about the bytes the verifier holds. They take no premise. What the code cannot see (the coins' uniformity,
 the receipts' and the store's meaning as the game's oracle and words, the window's wall time) is not here: it is a
 premise or a proofs unit of the bridge, named in each docstring.

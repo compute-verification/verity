@@ -14,7 +14,7 @@ at most `n / |α|`.
 
 open Verity.Game renaming prPMF → prob
 
-namespace Accounting.TagProofs
+namespace ResourceAccounting.TagProofs
 
 open scoped ENNReal
 
@@ -47,4 +47,4 @@ theorem prob_uniform_le {α : Type} [Fintype α] [Nonempty α] (E : α → Prop)
   rw [div_eq_mul_inv, ← iSup_uniform]
   exact prob_le_card_mul_iSup _ E n h
 
-end Accounting.TagProofs
+end ResourceAccounting.TagProofs

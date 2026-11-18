@@ -7,7 +7,7 @@ public import Definitions.Pouw.HeadlineDc.Encoding
 
 Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
-this file. `Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
+this file. `ResourceAccounting.Guarantees.TS.Sm100SheetHeadline` reads it.
 
 * `classes`: the 52 instruction classes of the DS-100 census, in the order `Fin 52` indexes them. `NOROW` is A2's
   catch-all: every warp instruction no other class names counts there, at its issue slot alone.
@@ -37,9 +37,9 @@ this file. `Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
 
 @[expose] public section
 
-namespace Accounting.TS.Headline.Sm100
+namespace ResourceAccounting.TS.Headline.Sm100
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- The DS-100 census's instruction classes, in index order. -/
 def classes : List String := [
@@ -175,4 +175,4 @@ noncomputable def lamStar : SheetRow Pipe → ℝ
 /-- The checks a window. -/
 def checks : ℕ := 48000
 
-end Accounting.TS.Headline.Sm100
+end ResourceAccounting.TS.Headline.Sm100

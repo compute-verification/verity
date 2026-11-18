@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Pouw.TS
-public import Proofs.Accounting.Lemmas.TS
+public import Proofs.ResourceAccounting.Lemmas.TS
 
 /-!
 # Theorem D-ideal with fold skippers charged
@@ -25,9 +25,9 @@ PoUW's exponential round bound (`prob_accepts_le`, `c = 1`) on the log-luck game
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS.Whole
+namespace ResourceAccounting.SecurityProofs.TS.Whole
 
-open Accounting.TS Accounting.Assumptions.TS Accounting.SecurityProofs.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS ResourceAccounting.SecurityProofs.TS Pouw.RelativeSecurity
 
 variable {Ω : Type}
 
@@ -48,7 +48,7 @@ theorem wgame_accepts (p p0 : ℝ) : ∀ {n} (G : ReceiptGame Ω n) (Uf : Unfold
 
 /-- The log-luck game's round bound: `E[e^W·1{pass}] ≤ 1` at every round, whatever the past. -/
 theorem wgame_expBound [Fintype Ω] {p p0 : ℝ} (hp : 0 < p) (hp0 : 0 < p0) :
-    ∀ {n} (G : ReceiptGame Ω n) (Uf : Unfolded Ω n), G.Pinned → Accounting.TS.RoundGame.LuckAt p G.game →
+    ∀ {n} (G : ReceiptGame Ω n) (Uf : Unfolded Ω n), G.Pinned → ResourceAccounting.TS.RoundGame.LuckAt p G.game →
       G.WholeLuck p0 Uf → (wgame p p0 G Uf).ExpBound 1
   | _, .done, .done, _, _, _ => trivial
   | _, .round d pass right same next, .round e vnext, hPin, hL, hW => by
@@ -93,7 +93,7 @@ theorem wgame_expBound [Fintype Ω] {p p0 : ℝ} (hp : 0 < p) (hp0 : 0 < p0) :
 /-- A round's saving is at most `Λ` times its weight: along every path, `κ·Σd + f·Σe ≤ Λ·ΣW`. -/
 theorem saving_le {p p0 κ f Λ : ℝ} [Fintype Ω] (hκ : 0 ≤ κ) (hf : 0 ≤ f) (h1 : κ ≤ Λ * Real.log (1 / p))
     (h2 : κ + f ≤ Λ * Real.log (1 / p0)) :
-    ∀ {n} (G : ReceiptGame Ω n) (Uf : Unfolded Ω n), Accounting.TS.RoundGame.LuckAt p G.game →
+    ∀ {n} (G : ReceiptGame Ω n) (Uf : Unfolded Ω n), ResourceAccounting.TS.RoundGame.LuckAt p G.game →
       G.WholeLuck p0 Uf → ∀ x, κ * G.game.deficiency x + f * Uf.share x ≤ Λ * (wgame p p0 G Uf).deficiency x
   | _, .done, .done, _, _, x => by simp [ReceiptGame.game, RoundGame.deficiency, Unfolded.share, wgame]
   | _, .round d pass right same next, .round e vnext, hL, hW, x => by
@@ -142,7 +142,7 @@ theorem dIdealFloor_whole {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintyp
   set δ' := δ - S * (δbind + nπ * δzk) with hδ'
   obtain ⟨E, hE, hacc⟩ := hPS
   set t := Real.log (1 / δ') with ht
-  have hLG : Accounting.TS.RoundGame.LuckAt p G.game := by
+  have hLG : ResourceAccounting.TS.RoundGame.LuckAt p G.game := by
     rw [← hG]
     exact hL
   have hexp := wgame_expBound hp hp0 G Uf hPin hLG hWL
@@ -229,7 +229,7 @@ theorem sheetDIdealFloor_whole {K P T L U F X : Type} [Fintype K] [Fintype P] [D
 /-- Binding at `√δ_fork` from its fork form at `δ_fork` (`BindingOfFork`). -/
 theorem moved_le_sqrt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δfork : ℝ)
     (hB : BindingForkAt pf δfork) (w : Fin S) : prob (fun x => pf.Moved x w) ≤ Real.sqrt δfork := by
-  have h := Accounting.SecurityProofs.TS.BindingOfFork Ω S nπ pf w
+  have h := ResourceAccounting.SecurityProofs.TS.BindingOfFork Ω S nπ pf w
   rw [← Real.sqrt_sq (prob_nonneg (fun x => pf.Moved x w))]
   exact Real.sqrt_le_sqrt (le_trans h (hB w))
 
@@ -319,4 +319,4 @@ theorem headline_of_branches {K R T L U F X : Type} [Fintype K] [Fintype R] [Fin
         Z.epsJl Fl lam (7 / 8) δ' S by rw [Model.epsJl]; ring]
     exact hfold
 
-end Accounting.SecurityProofs.TS.Whole
+end ResourceAccounting.SecurityProofs.TS.Whole

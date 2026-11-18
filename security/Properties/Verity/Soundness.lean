@@ -47,7 +47,7 @@ collision (`Vocab.error`).
 `SoundnessOf` is the one statement, at every composite, a list of its subprotocols' ids: each of its subprotocols'
 targets gives `Vocab.SoundnessAt`, with the errors summed over its subprotocols. `Soundness` is it at onsite's list,
 with its seven targets taken by name (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`,
-`BandwidthAuditSound`, `NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same conclusion at remote's
+`BandwidthAuditSound`, `NetworkAttesterSound`, `WipeSound`), and `RemoteSoundness` the same conclusion at remote's
 composite of record (`Core.Remote.V1.protocol`, `verity/remote/v1`), from two targets (SPOT, and PoUW, which
 at remote is Pearl+'s run verdict and its claim in MACs at the credit its check published) and the two statements that
 tie the inference-only policy's clause to the committed files (`Vocab.WiresSound` and `GateARow`,
@@ -69,7 +69,7 @@ hypotheses in the target's place, each stated and not proved; at onsite the targ
 
 namespace Verity
 
-open Accounting
+open ResourceAccounting
 
 /-- **Soundness at every composite's verifier, from its subprotocols' targets.** On any device, for any names
 `V` the subprotocols define and any composite `k`, if each of `k`'s subprotocols meets its target at `k` in the causal
@@ -82,17 +82,17 @@ def SoundnessOf : Prop :=
     (∀ a ∈ subprotocols k, V.Target k a) → V.SoundnessAt k
 
 /-- **Soundness at onsite's verifier, from its seven subprotocols' targets**: `SoundnessOf` at onsite's list, each
-target by its name. If SPOT, PoUW, the inference-only policy, PoUS, PoUB-P2, the network certifier and the
+target by its name. If SPOT, PoUW, the inference-only policy, PoUS, PoUB-P2, the network attester and the
 wipe each meet their target at onsite, then the probability that onsite's compiled verifier accepts files that passed
 the commit phase's check while one of the period's claims fails (more than an `ε` share of the units unbound in the
 extractor's transcript, fewer than `W` gates computed after their coin, a case of the policy whose Program doesn't
 meet the policy, fewer than `S` bits held on average, fewer than `Q` bits read, more than `K` bits through the network
-certifiers, or foreign content kept across the wipe past its survivor threshold) is at most the seven errors at that
+attesters, or foreign content kept across the wipe past its survivor threshold) is at most the seven errors at that
 strategy summed. -/
 def Soundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
     V.SpotSound .onsite → V.PouwSound .onsite → V.InferenceOnlySound .onsite → V.PousSound .onsite →
-      V.BandwidthAuditSound .onsite → V.NetworkCertifierSound .onsite → V.WipeSound .onsite → V.SoundnessAt .onsite
+      V.BandwidthAuditSound .onsite → V.NetworkAttesterSound .onsite → V.WipeSound .onsite → V.SoundnessAt .onsite
 
 /-- **Soundness at remote's verifier, from two targets and the two statements on the committed files.** If SPOT and PoUW (`Vocab.PouwSound`: at least `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles at the credit
 Pearl+'s check published) each meet their target at remote, the record's wiring is the wiring the committed units are

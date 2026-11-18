@@ -6,8 +6,9 @@
     Phi.tp        {"world", "rank"}
     Phi.sampling  the row's declared sampling policy (`pipeline.build.sampling_policy` shape: greedy | stochastic)
     Phi.engine    the engine args (block_size, max_num_seqs, max_num_batched_tokens, chunked prefill, prefix caching,
-                  disable_custom_all_reduce), the layout of an FP8 KV cache (`kv_cache_dtype`: `STATED_KV_LAYOUT`) and the `env` its
-                  engines run under (the all-reduce switches)
+                  disable_custom_all_reduce), the layout of an FP8 KV cache (`kv_cache_dtype`: `STATED_KV_LAYOUT`), the speculative
+                  decoding it drafts under (`speculative`: `STATED_SPECULATIVE`) and the `env` its engines run under (the
+                  all-reduce switches)
     Phi.workload  the workload manifest's requests (request_id, prompt length, max_tokens, arrive_step, seed, n)
     Phi.execution the row's execution label (`bi-eager`, `eager`): the target's batch invariance and execution mode
 
@@ -124,6 +125,42 @@ STATED_KV_LAYOUT = {("fp8", "glm_moe_dsa", (9, 0)): "fp8_ds_mla"}
 KV_LAYOUT_BACKEND = "FLASHMLA_SPARSE"
 #: the engine args that turn speculative decoding on: the config, and vLLM's short forms of its method, model and token count
 SPECULATIVE = ("speculative_config", "spec_method", "spec_model", "spec_tokens")
+#: the `SpeculativeConfig` fields of vLLM's short forms in `SPECULATIVE`
+SPECULATIVE_SHORT = {"spec_method": "method", "spec_model": "model", "spec_tokens": "num_speculative_tokens"}
+#: the one speculative decoding φ states, as its engine's ``speculative`` (the `SpeculativeConfig` fields set): the model's own
+#: MTP module drafting 5 tokens a decode row. Every other field set, method or count is refused by name
+STATED_SPECULATIVE = {"method": "mtp", "num_speculative_tokens": 5}
+
+
+def _speculative(kw: Mapping[str, Any]) -> dict | None:
+    """The speculative decoding the engine args ``kw`` turn on, `STATED_SPECULATIVE`, or None where none of `SPECULATIVE` is
+    set; a ValueError naming the arg for a launch that states it in both the config's form and the short ones, a config that
+    is no mapping, or a field set to a value `STATED_SPECULATIVE` doesn't hold (another method or count, a draft model, any
+    other field) or left out of it."""
+    config = kw.get("speculative_config")
+    short = {f: kw[k] for k, f in SPECULATIVE_SHORT.items() if kw.get(k) is not None}
+    if config is None and not short:
+        return None
+    if config is not None and short:
+        also = ", ".join(f"{k}={kw[k]!r}" for k in SPECULATIVE_SHORT if kw.get(k) is not None)
+        raise ValueError(f"engine speculative_config={config!r} beside {also}: the launch states its speculative decoding twice. "
+                         "Serve with one of the two to compile it")
+    if config is not None and not isinstance(config, Mapping):
+        raise ValueError(f"engine speculative_config={config!r}: φ reads a speculative config as a mapping of SpeculativeConfig's "
+                         "fields. Serve with it as one to compile it")
+    name = {f: f"speculative_config.{f}" for f in config} if config is not None else {f: k for k, f in SPECULATIVE_SHORT.items()}
+    stated = {f: v for f, v in (dict(config) if config is not None else short).items() if v is not None}
+    want = " and ".join(f"{f}={v!r}" for f, v in STATED_SPECULATIVE.items())
+    for f, v in sorted(stated.items()):
+        if f not in STATED_SPECULATIVE or type(v) is not type(STATED_SPECULATIVE[f]) or v != STATED_SPECULATIVE[f]:
+            raise ValueError(f"engine {name[f]}={v!r}: a request Program states speculative decoding only at {want}, so the "
+                             f"compile of this launch would be Programs it did not run. Serve at {want}, or with speculative "
+                             "decoding off, to compile it")
+    for f in STATED_SPECULATIVE:
+        if f not in stated:
+            raise ValueError(f"engine speculative decoding {stated!r} leaves {f} unset: a request Program states it only at {want}. "
+                             f"Serve at {want}, or with speculative decoding off, to compile it")
+    return dict(STATED_SPECULATIVE)
 
 
 def _refuse_unstated(kw: Mapping[str, Any], model_type: str | None = None, capability: tuple[int, ...] | None = None) -> str | None:
@@ -131,10 +168,9 @@ def _refuse_unstated(kw: Mapping[str, Any], model_type: str | None = None, capab
     ``capability``), None for a launch at a format of `STATED_KV_CACHE` or none; a ValueError for engine args that serve what no
     request Program states: another KV cache format (a ``kv_cache_dtype`` outside both), whose cache other kernels than the
     default's may write and read, the FP8 one beside an attention backend other than `KV_LAYOUT_BACKEND` or with layers kept at
-    the default (``kv_cache_dtype_skip_layers``, mla_attention.py:466-471), either of which stores it otherwise, or speculative
-    decoding (an arg of `SPECULATIVE`), whose decode rows hold draft positions. φ carries none of those (`REGISTERED_ENGINE`), so
-    the compiler's check of φ's engine (`domain.engine_facts`) never sees them, and the compile of such a launch would be the
-    Programs of a launch without them, which it did not run."""
+    the default (``kv_cache_dtype_skip_layers``, mla_attention.py:466-471), either of which stores it otherwise. φ carries none
+    of those (`REGISTERED_ENGINE`), so the compiler's check of φ's engine (`domain.engine_facts`) never sees them, and the
+    compile of such a launch would be the Programs of a launch without them, which it did not run."""
     cache, layout = kw.get("kv_cache_dtype"), None
     if cache is not None and cache not in STATED_KV_CACHE:
         layout = STATED_KV_LAYOUT.get((cache, model_type, capability))
@@ -154,11 +190,6 @@ def _refuse_unstated(kw: Mapping[str, Any], model_type: str | None = None, capab
             raise ValueError(f"engine kv_cache_dtype_skip_layers={skipped!r} at kv_cache_dtype={cache!r}: a request Program models "
                              f"every layer's cache in the layout {layout}, and those layers keep the default's. Serve with no layer "
                              "skipped to compile it")
-    for k in SPECULATIVE:
-        if kw.get(k) is not None:
-            raise ValueError(f"engine {k}={kw[k]!r}: a request Program models no draft tokens (speculative decoding), its decode "
-                             "row is one token, so the compile of this launch would be Programs it did not run. Serve with "
-                             "speculative decoding off to compile it")
     return layout
 
 
@@ -166,10 +197,12 @@ def engine_of(meta: Mapping[str, Any], rank: int, hf_config: Mapping[str, Any] |
     """A served engine's tensor-parallel world at ``rank`` and its engine args (`REGISTERED_ENGINE`), from the run's engine record
     (``meta``'s ``engine_record``: `LLM.engine_record`'s ``engine_kwargs``; where the launch left ``max_model_len`` to vLLM, -1,
     the length the built engine reads back, ``effective``), the layout of an FP8 KV cache as ``kv_cache_dtype`` (`STATED_KV_LAYOUT`,
-    for the model of the pinned config ``hf_config`` on the run's ``target``), and, from a record of the environment its build set
-    (``env_flags``), the DSA top-k's (`engine_classes.DSA_TOPK_ENV`) as set or not, so `predict.dsa` refuses a row past INDEX_TOPK
-    the engine served in the kernels' own order; a ValueError for a rank the world doesn't have, and for a launch that names
-    another KV cache format or decodes speculatively (`_refuse_unstated`)."""
+    for the model of the pinned config ``hf_config`` on the run's ``target``), its speculative decoding as ``speculative`` where
+    it drafts (`STATED_SPECULATIVE`, which `domain.check_phi` refuses to build a Program for until the predictor models drafts),
+    and, from a record of the environment its build set (``env_flags``), the DSA top-k's (`engine_classes.DSA_TOPK_ENV`) as set or
+    not, so `predict.dsa` refuses a row past INDEX_TOPK the engine served in the kernels' own order; a ValueError for a rank the
+    world doesn't have, and for a launch that names another KV cache format (`_refuse_unstated`) or decodes speculatively
+    otherwise (`_speculative`)."""
     from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
 
     rec = meta.get("engine_record")
@@ -186,6 +219,9 @@ def engine_of(meta: Mapping[str, Any], rank: int, hf_config: Mapping[str, Any] |
     engine = {} if kw is None else {k: kw[k] for k in REGISTERED_ENGINE if k in kw}
     if layout is not None:
         engine["kv_cache_dtype"] = layout
+    spec = None if kw is None else _speculative(kw)
+    if spec is not None:
+        engine["speculative"] = spec
     if engine.get("max_model_len") == -1:
         effective = rec.get("effective")
         engine["max_model_len"] = None if effective is None else effective.get("max_model_len")

@@ -2,16 +2,16 @@ module
 
 public import Definitions.Poub.Remote.Held
 public import Definitions.Poub.Remote.Sketch
-public import Definitions.Assumptions.Accounting
+public import Definitions.Assumptions.ResourceAccounting
 
 /-!
 # What deriving the receipts' sketch bound assumes (trusted)
 
-`Accounting.Guarantees.Remote.SketchBoundRun` derives `Accounting.Remote.Held.Assumptions.SketchBound` on a
-trace over a session's outcomes (`Accounting.Remote.Sketch.Outcome`) from the session (`Accounting.Remote.Sketch.Run`)
+`ResourceAccounting.Guarantees.Remote.SketchBoundRun` derives `ResourceAccounting.Remote.Held.Assumptions.SketchBound` on a
+trace over a session's outcomes (`ResourceAccounting.Remote.Sketch.Outcome`) from the session (`ResourceAccounting.Remote.Sketch.Run`)
 and these premises, each a named `Prop` taken as a hypothesis:
 
-* `Accounting.Assumptions.SketchHashRandom A ε` (declared in `Definitions.Assumptions.Accounting`, which this module
+* `ResourceAccounting.Assumptions.SketchHashRandom A ε` (declared in `Definitions.Assumptions.ResourceAccounting`, which this module
   re-exports): the random-oracle premise (`random-oracle`). At every prover coin and
   store, the keys SHA-512 gives at the session's candidate seeds are within `ε` of uniform: no event of the keys is
   more than `ε` likelier than at uniform keys.
@@ -24,14 +24,14 @@ and these premises, each a named `Prop` taken as a hypothesis:
   counts whole blocks, the device sectors: the premise reads a block present when all its sectors were obtained in the
   pass, not necessarily at one tick.
 
-The signs' rank tail is `Accounting.Assumptions.SketchRank`, evaluated outside Lean.
+The signs' rank tail is `ResourceAccounting.Assumptions.SketchRank`, evaluated outside Lean.
 -/
 
 @[expose] public section
 
-namespace Accounting.Remote.Sketch.Assumptions
+namespace ResourceAccounting.Remote.Sketch.Assumptions
 
-open Accounting.RateSketch Accounting.Remote.Held Accounting.Remote.Sketch
+open ResourceAccounting.RateSketch ResourceAccounting.Remote.Held ResourceAccounting.Remote.Sketch
 
 variable {β Hs : Type} {P N m h S L q ks : ℕ} {G : Fin P → ℕ}
 
@@ -55,4 +55,4 @@ def Present (A : Run β Hs P N m h S L q ks G) (T : Trace (Outcome β Hs N m)) :
   ∀ ω, T.accepts ω → ∀ j : Fin P, ∀ t : Fin N, A.Whole ω j (A.kept ω j) t →
     ∀ b : Fin T.blocks, (b : ℕ) = t → ∃ τ, T.tick ω (j : ℕ) ≤ τ ∧ τ < T.tick ω ((j : ℕ) + 1) ∧ b ∈ T.present ω τ
 
-end Accounting.Remote.Sketch.Assumptions
+end ResourceAccounting.Remote.Sketch.Assumptions

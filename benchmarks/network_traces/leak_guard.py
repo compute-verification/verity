@@ -33,7 +33,7 @@ member's as ``ARCHIVE/MEMBER``) and why its bytes are public. An entry's sha256 
 file in those records: for a record that observes what the witness file also records, in the same format, so that
 which pieces match changes with the values (the runner's resources.jsonl and the stall probe's cgroup counters). An
 entry excuses a piece by its witness file and its records, never by a key path, and one that names anything else is
-refused: a value other files repeat by chance is written in a form they don't (the certifier's CPUs,
+refused: a value other files repeat by chance is written in a form they don't (the attester's CPUs,
 `runner_parts.cpu_ranges`). An entry is written only after its find was read by counts and digests
 (QUARANTINE/leak-guard.json), never by its bytes.
 
@@ -80,7 +80,7 @@ import zipfile
 import zlib
 from pathlib import Path
 
-from verity.protocols.accounting.certifier.prover import released_keys as RK
+from verity.protocols.resource_accounting.network.prover import released_keys as RK
 
 #: the system python3 of an exit before chain_record's setup may have no numpy: `Finder` then scans in pure Python.
 #: numpy's import starts its BLAS threads, which start with SIGTERM blocked: a SIGTERM the kernel gave one of them would

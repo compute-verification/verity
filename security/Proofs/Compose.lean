@@ -11,5 +11,5 @@ public import Proofs.Compose.Additive
 # The proofs of the composed audits' guarantees
 
 The audits on one device together (`Joint*`), the circuit credit over a monitoring period (`Compose`,
-`ComposeMonitoringPeriod`), and the additive and period-binding bounds. `Proofs.Accounting` imports the same modules.
+`ComposeMonitoringPeriod`), and the additive and period-binding bounds. `Proofs.ResourceAccounting` imports the same modules.
 -/

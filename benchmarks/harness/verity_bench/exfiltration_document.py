@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import jobs
-from verity_bench.exfiltration_certifier import certifier
+from verity_bench.exfiltration_attester import attester
 from verity_bench.exfiltration_common import (
     AMOUNTS,
     ASSUMED_LABEL,
@@ -37,7 +37,7 @@ from verity_bench.exfiltration_common import (
     WHOLE,
     _same,
 )
-from verity_bench.exfiltration_planner import _label, at_share, rows_of_record
+from verity_bench.exfiltration_planner import ON_A_CLONE, _label, at_share, rows_of_record
 from verity_bench.exfiltration_served import served_share
 from verity_bench.exfiltration_text import _n, _names, _on, _part, _pct, _plan
 from verity_bench.exfiltration_verdicts import (
@@ -70,7 +70,7 @@ def _timed_alone(priced: Mapping, share: float) -> tuple[str, str]:
 
 def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, count: Mapping, share: float,
             network_check: float, row: str, served: Mapping, stop: Mapping | None = None) -> list[dict]:
-    """Every input with its mark and source: the compute audit's from its rows of record, the network certifier's
+    """Every input with its mark and source: the compute audit's from its rows of record, the network attester's
     as its calculator marks them, and those both read, among them the request the calculator counts and what it is.
     ``count`` is the world year's output count (`build`'s `output_count`), which the sums it names take at 0, on the
     execution phases the reader's answer holds (``term``'s `stop`); where it names none, no sum leaves the output
@@ -87,7 +87,7 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
     def one(part: str, name: str, value: Any, unit: str, mark: str, source: str) -> dict:
         return {"part": part, "input": name, "value": value, "unit": unit, "mark": mark, "source": source}
 
-    audit, both, net = "compute audit", "both", "network certifier"
+    audit, both, net = "compute audit", "both", "network attester"
     priced = head["priced"] or {"ways": {}}
     default = (priced.get("sources") or {}).get("default")
 
@@ -135,12 +135,12 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
                        + "; ".join(f"{_what(v)}, `{v['verdict']}` on {v['run']} by {_by(v)}, "
                                    + (f"proved by `{v['proved_by']}`" if v["proved_by"] else f"not proved: {v['open']}")
                                    for v in stop["verdicts"])
-                       + ". Without them the server chooses a response's output count, which the network certifier's "
+                       + ". Without them the server chooses a response's output count, which the network attester's "
                        f"row `{OUTPUT_COUNT}` charges {charged}"))
     elif under:
         out.append(one(net, "output_count", 0, "bit/request", "assumed",
                        f"not counted in the sums under {under}: until a served audit has sampled a "
-                       "stop block the server chooses a response's output count, which the network certifier's row "
+                       "stop block the server chooses a response's output count, which the network attester's row "
                        f"`{OUTPUT_COUNT}` charges {charged}"))
     if served["run"] is not None:
         gaps = {g["field"]: g for g in served["missing"]}
@@ -177,7 +177,8 @@ def _row_label(point: Mapping) -> str:
     return f"{_pct(table)} of its proving priced by the table's rows" if table else ASSUMED_LABEL
 
 
-def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, variant: str | None) -> dict:
+def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, variant: str | None,
+                      record: Path | None = None) -> dict:
     """Row `ASSUMED_ROW` over the world's year at ``share``, beside the figure ``head`` and under its label
     (`_row_label`, `ASSUMED_LABEL` where it is not read): its run, budget, δ and amount, and what prices its proving
     (`_sources`); or, with no amount, why it is not read: no run of record holds it, or its rows cover other compute or
@@ -185,7 +186,7 @@ def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, varian
 
     out = {"row": ASSUMED_ROW, "label": ASSUMED_LABEL, "GB": None, "why": None}
     try:
-        scopes, plans, _, _ = rows_of_record(store, row=ASSUMED_ROW, step=step, variant=variant)
+        scopes, plans, _, _ = rows_of_record(store, row=ASSUMED_ROW, step=step, variant=variant, record=record)
         if "world year" not in scopes:
             return out | {"why": f"no run of record holds its world year's rows (they hold {', '.join(sorted(scopes))})"}
         run, rows = scopes["world year"]
@@ -201,35 +202,35 @@ def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, varian
 def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, row: str = ROW, step: str = STEP,
           variant: str | None = None, response_ids: int = RESPONSE_IDS, scan_delta: Fraction | None = None,
           served: Mapping[str, Any] | None = None, store: Any = None, root: Path | None = None,
-          local_only: bool = False) -> dict:
+          local_only: bool = False, record: Path | None = None) -> dict:
     """The two parts from the store's rows of record and the tree: the inputs with their marks, the compute audit's
-    part at ``share`` of total compute for each scope of record, the network certifier's rows at the world's year
+    part at ``share`` of total compute for each scope of record, the network attester's rows at the world's year
     for a class of at most ``response_ids`` ids a response with each execution phase's scan at ``scan_delta`` (None:
-    the δ `certifier` takes from `PERIOD_ERROR`), and the two side by side for each scope and monitoring period,
+    the δ `attester` takes from `PERIOD_ERROR`), and the two side by side for each scope and monitoring period,
     summed under each of `TOGETHER`. It refuses rows of record priced over other requests than the network
-    certifier's part counts.
+    attester's part counts.
 
     Every figure carries the error summed over everything it covers, and one whose error is 1 or more carries no
-    amount (`NO_BOUND`). A scope's monitoring period holds the network certifier's ε (`eps`), the one its rows over
+    amount (`NO_BOUND`). A scope's monitoring period holds the network attester's ε (`eps`), the one its rows over
     that scope and period carry, their scans' δ summed over every link's execution phases; the compute audit's δ
     over the period (its `compute_audit`'s `delta`); and the sum of the two (`error`), what the two together fail
-    with at most, None for a scope no run of record holds. Where `eps` is 1 or more the network certifier's figures
+    with at most, None for a scope no run of record holds. Where `eps` is 1 or more the network attester's figures
     of that scope and period, the output count among them, are None, and where `error` is, the sums are. A row of the
-    network certifier's own over the world's year whose ε is 1 or more is held without its `AMOUNTS`.
+    network attester's own over the world's year whose ε is 1 or more is held without its `AMOUNTS`.
 
-    A sum is at the network certifier's jitter bound of record. Its `label` is its row's own (None on most): where
+    A sum is at the network attester's jitter bound of record. Its `label` is its row's own (None on most): where
     set, every figure of the row is printed under it. Its `with_set_time_card` is the same sum at the other jitter
-    bound, with the label the network certifier's document gives a figure there. A scope's `output_count` is what a
+    bound, with the label the network attester's document gives a figure there. A scope's `output_count` is what a
     response's output count is charged while the server chooses it, the schedules of the row `OUTPUT_COUNT`, with
     the rows whose sums take it at 0 (`at_zero_in`). Those are named from the stop verdicts' reader's answer and
     never from a schedule that reads 0: the rows of `TOGETHER` among the term document's `stop`'s `rows`, where the
     answer holds an execution phase, and none where it holds none. They take it at 0 on the execution phases the
-    answer holds alone, which the document's `certifier`'s `stop` counts (`held_phases`; every one where `below`).
+    answer holds alone, which the document's `attester`'s `stop` counts (`held_phases`; every one where `below`).
 
     The answer is `stop_charge`'s on the runs that carry the stop class's record (`verdict_runs`), the ones this
-    reads or leaves out, and it is handed to the calculator (`certifier`). With no run carrying the record the
+    reads or leaves out, and it is handed to the calculator (`attester`). With no run carrying the record the
     reader is not asked and the calculator is handed none, so its rows are as with no record read. The document's
-    `certifier`'s `stop` is the term document's own account of it (its `rows`, `held_phases`, `below`, `why` and
+    `attester`'s `stop` is the term document's own account of it (its `rows`, `held_phases`, `below`, `why` and
     `verdicts`), with the runs handed (`runs`) and those of them handed as superseded (`superseded`).
 
     Beside a ``row`` other than `ASSUMED_ROW`, `at_assumed_prices` holds that row's world year at ``share``
@@ -242,23 +243,33 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
 
     Where the store holds the stop class's verdicts (`stop_verdicts`), `stop_class` is their account (`stop_class`),
     and where it is complete the output count's input, where the inputs list one, carries its mark; the runs left
-    out are among `refused`. With none the document holds no `stop_class`."""
+    out are among `refused`. With none the document holds no `stop_class`.
+
+    With ``record`` (a run's record directory, `--from`), the rows of record are that directory's alone, read with no
+    store: no label is read, no run carries the stop class's record, and the calculator is handed no answer."""
 
     if not (0 < share < 1 and 0 <= network_check < share):
         raise ValueError(f"the share of total compute is in (0, 1) and the network check's own below it, not {share!r} "
                          f"and {network_check!r}")
     measured = served_share(served)
     root = root or jobs.repository_root()
-    completion = jobs.StoreCompletion(store, root=root, local_only=local_only)
-    if not local_only:
-        completion.pull_labels()
-    scopes, plans, runs, refused = rows_of_record(completion.store, row=row, step=step, variant=variant)
-    labelled = verdict_runs(completion.store)
+    if record is None:
+        completion = jobs.StoreCompletion(store, root=root, local_only=local_only)
+        if not local_only:
+            try:
+                completion.pull_labels()
+            except RuntimeError as e:
+                if completion.store.remote is not None:
+                    raise
+                raise RuntimeError(f"{e}; {ON_A_CLONE}") from e
+        store = completion.store
+    scopes, plans, runs, refused = rows_of_record(store, row=row, step=step, variant=variant, record=record)
+    labelled = {} if record is not None else verdict_runs(store)
     stop, answer = None, None
-    if (verdicts := stop_verdicts(completion.store, labelled)) is not None:
+    if record is None and (verdicts := stop_verdicts(store, labelled)) is not None:
         stop = stop_class(*verdicts[:2])
         refused = [*refused, *verdicts[2]]
-        answer = stop_charge(root, completion.store, labelled)
+        answer = stop_charge(root, store, labelled)
     points = {scope: at_share(scope, run, its, share, plans.get(scope)) for scope, (run, its) in scopes.items()}
     if "world year" not in points:
         held = sorted({run for run, _ in scopes.values()})
@@ -267,7 +278,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     head = points["world year"]
     world_run, world_rows = scopes["world year"]
     less = at_share("world year", world_run, world_rows, share - network_check)
-    assumed = None if row == ASSUMED_ROW else at_assumed_prices(completion.store, head, share, step, variant)
+    assumed = None if row == ASSUMED_ROW else at_assumed_prices(store, head, share, step, variant, record)
     measured["given"] = {"share": share, "mark": "assumed", "GB": head["GB"]}
     measured.update(GB=None, beta=None, inside=None, no_GB=None)
     if measured["value"] is not None:
@@ -277,11 +288,11 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
         except ValueError as e:
             measured["no_GB"] = str(e)
 
-    term = certifier(root, response_ids, scan_delta, answer)
+    term = attester(root, response_ids, scan_delta, answer)
     charged = {k: term["stop"][k] for k in ("rows", "held_phases", "below", "why", "verdicts")} | {
         "runs": list(labelled), "superseded": [run for run, by in labelled.items() if by]}
     if unnamed := [name for name in charged["rows"] if name in TOGETHER and name not in WHOLE]:
-        raise ValueError(f"the network certifier's rows {_names(unnamed)} are read from verdict records, and this "
+        raise ValueError(f"the network attester's rows {_names(unnamed)} are read from verdict records, and this "
                          "command has no name for their sums where the stop class is charged its whole schedule: name "
                          "each in `WHOLE` (benchmarks/harness/verity_bench/exfiltration.py)")
     at_zero = [name for name in TOGETHER if name in charged["rows"]] if charged["held_phases"] else []
@@ -289,7 +300,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     weights = term["inputs"]["weights"]["value"]
     if not _same(head["weights_bits"], weights):
         raise ValueError(f"the two parts are shares of different weights: the rows of record hold {head['weights_bits']:,} "
-                         f"bits and the network certifier's calculator {weights:,}")
+                         f"bits and the network attester's calculator {weights:,}")
     seen = {(r["scope"], r["period"]): r for r in term["rows"]}
     order = {f"{compute} {period}": n for n, (compute, period) in enumerate(seen)}
     periods = []
@@ -300,10 +311,10 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
                                    ("requests", None if point is None else point["requests"], at["requests"])):
             if mine is not None and not _same(mine, theirs):
                 raise ValueError(f"the two parts cover different compute over the {scope}: {mine:.6g} {name} on the compute "
-                                 f"audit's side and {theirs:.6g} on the network certifier's")
+                                 f"audit's side and {theirs:.6g} on the network attester's")
         rows = {r["row"]: r for r in term["rows"] if (r["scope"], r["period"]) == (compute, period)}
         if len(several := sorted({r["eps"] for r in rows.values()})) != 1:
-            raise ValueError(f"the network certifier's rows over the {scope} carry {len(several)} different ε "
+            raise ValueError(f"the network attester's rows over the {scope} carry {len(several)} different ε "
                              f"({', '.join(map(_n, several))}), and this command prints one a scope and monitoring "
                              "period, its scans' δ summed over every link's execution phases (read each row's own in "
                              "benchmarks/harness/verity_bench/exfiltration.py)")
@@ -320,7 +331,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
 
             def summed(dj: str, r: Mapping = r, mine: float | None = mine, eps: float = eps,
                        error: float | None = error) -> dict:
-                return {"certifier_GB": r["term"][dj]["GB"] if eps < 1 else None,
+                return {"attester_GB": r["term"][dj]["GB"] if eps < 1 else None,
                         "GB": (r["term"][dj]["bits"] + mine) / GB if mine is not None and error is not None and error < 1 else None}
 
             together[name] = {**summed(of), "label": r["with_set_time_card"],
@@ -345,7 +356,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
             "compute_share": measured, **({} if stop is None else {"stop_class": stop}),
             "compute_audit": sorted(points.values(), key=lambda p: (p["scope"] not in order, order.get(p["scope"], 0))),
             "network_check": {"share": network_check, "beta": less["beta"], "inside": less["inside"], "GB": less["GB"]},
-            "certifier": {"schema": term["schema"], "request_count": term["request_count"],
+            "attester": {"schema": term["schema"], "request_count": term["request_count"],
                           "response_ids": term["inputs"]["response_ids"]["value"],
                           "scan_delta": term["inputs"]["scan_delta"], "of_record": of, "set_time": set_time,
                           "with_set_time_card": {"label": card}, "default_class": term["default_class"],

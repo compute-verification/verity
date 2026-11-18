@@ -3,24 +3,24 @@ module
 public import Mathlib.Data.Nat.Notation
 
 /-!
-# The network certifier: cells on a public schedule, the fail cell, and what the client sees
+# The network attester: cells on a public schedule, the fail cell, and what the client sees
 
-Definitions only (PROTOCOL.md, "Capacity", the network certifier's row; design v3). An active **network certifier**
+Definitions only (PROTOCOL.md, "Capacity", the network attester's row; design v3). An active **network attester**
 terminates both connections, the client's and the server's, and re-frames every byte into cells of `B` bytes per
 direction, sent on a public schedule: `r` cells per bucket and a latency of `D` buckets. A connection admitted at bucket
 `s` sends its egress cell `j` (its bytes `B·j` to `B·j + B − 1`) in bucket `s + D + ⌊j/r⌋`, so its egress byte `i` goes
-out in bucket `s + D + ⌊i/(B·r)⌋`. The admission bucket is the network certifier's decision on its own schedule, never
+out in bucket `s + D + ⌊i/(B·r)⌋`. The admission bucket is the network attester's decision on its own schedule, never
 anything the server times.
 
-A cell past the connection's data is padding. A cell whose bytes haven't reached the network certifier by its bucket is
-late: the network certifier fails the connection closed there, with one fail cell that carries no reason, and holds the
+A cell past the connection's data is padding. A cell whose bytes haven't reached the network attester by its bucket is
+late: the network attester fails the connection closed there, with one fail cell that carries no reason, and holds the
 lane to its scheduled end with padding. The end of the data counts as a cell too: the server's end of stream must reach
-the network certifier by the bucket of the cell after the data's last, or the connection fails there.
+the network attester by the bucket of the cell after the data's last, or the connection fails there.
 
 The transfer gates are these cells' bits: their number per window is the schedule's, so it is public.
 
 **What is abstract.** A cell's `B` bytes are a value of `Cell`. Whatever the server does (its accept time, its send
-timing, its ACKs and flow control) reaches the network certifier only as its connections' `Arrivals`: the data, in
+timing, its ACKs and flow control) reaches the network attester only as its connections' `Arrivals`: the data, in
 cells, and the bucket by which each cell has arrived.
 -/
 
@@ -35,8 +35,8 @@ inductive CellView (Cell : Type) where
   | pad
   | fail
 
-/-- **The network certifier's schedule**, public: `r` cells per bucket and a latency of `D` buckets for every
-connection, the admission bucket `adm c` of each connection `c` (the network certifier's own decision), and the number
+/-- **The network attester's schedule**, public: `r` cells per bucket and a latency of `D` buckets for every
+connection, the admission bucket `adm c` of each connection `c` (the network attester's own decision), and the number
 of egress cells `cells c` its lane has in the run. -/
 structure CertifierSchedule (κ : Type) where
   r : ℕ
@@ -48,7 +48,7 @@ structure CertifierSchedule (κ : Type) where
 def CertifierSchedule.bucket {κ : Type} (s : CertifierSchedule κ) (c : κ) (j : ℕ) : ℕ :=
   s.adm c + s.D + j / s.r
 
-/-- **What reaches the network certifier** from the server on one connection: its egress data in cells (`stream`), and
+/-- **What reaches the network attester** from the server on one connection: its egress data in cells (`stream`), and
 for each cell `j` the bucket by which all of it has arrived (`ready j`). `ready stream.length` is the bucket by which
 the end of the stream has. A cell that never arrives has `ready` past every bucket of the run. -/
 structure Arrivals (Cell : Type) where
@@ -60,7 +60,7 @@ past the end. -/
 def streamCell {Cell : Type} (stream : List Cell) (j : ℕ) : CellView Cell :=
   if h : j < stream.length then .data stream[j] else .pad
 
-/-- **The network certifier's code on one lane**, from the lane's cell `j` with `k` cells left, each sent in its bucket
+/-- **The network attester's code on one lane**, from the lane's cell `j` with `k` cells left, each sent in its bucket
 `t j`. Past the end of the data, padding. A cell, or the end of the stream, late for its bucket: the fail cell, then
 padding to the lane's end. Otherwise the cell's data. -/
 def certifierLane {Cell : Type} (a : Arrivals Cell) (t : ℕ → ℕ) : ℕ → ℕ → List (ℕ × CellView Cell)
@@ -70,13 +70,13 @@ def certifierLane {Cell : Type} (a : Arrivals Cell) (t : ℕ → ℕ) : ℕ → 
     else if t j < a.ready j then (t j, .fail) :: (List.range' (j + 1) k).map fun i => (t i, .pad)
     else (t j, streamCell a.stream j) :: certifierLane a t (j + 1) k
 
-/-- **The network certifier's code**: on schedule `s` and the arrivals `arr c` of every connection `c`, the cells the
+/-- **The network attester's code**: on schedule `s` and the arrivals `arr c` of every connection `c`, the cells the
 client receives on each connection, each with its bucket. -/
 def certifierCode {κ Cell : Type} (s : CertifierSchedule κ) (arr : κ → Arrivals Cell) : κ → List (ℕ × CellView Cell) :=
   fun c => certifierLane (arr c) (s.bucket c) 0 (s.cells c)
 
 /-- **The fail cell** of connection `c`: the first cell of its lane, among the data's cells and the end of the stream,
-that reached the network certifier after its bucket, or none. -/
+that reached the network attester after its bucket, or none. -/
 def failCell {κ Cell : Type} (s : CertifierSchedule κ) (arr : κ → Arrivals Cell) (c : κ) : Option ℕ :=
   (List.range (s.cells c)).find? fun j => decide (j ≤ (arr c).stream.length ∧ s.bucket c j < (arr c).ready j)
 

@@ -31,7 +31,6 @@ server and each replay's processes log the configs they kept at run time.
 from __future__ import annotations
 
 import argparse
-import functools
 import gzip
 import json
 import os
@@ -56,6 +55,7 @@ from verity_config.settings import of  # noqa: E402 (put on sys.path by serve_ta
 
 ENV = of(__file__)
 SCHEMA = "verity-bench/replay-ladder/v0"
+METRIC = "proofs/replay-rows-exact"
 #: the load each model's window is served at, and the one each replay and the alone sample read
 LOAD = "saturated"
 #: where the capacity server's processes log the configs they keep at run time
@@ -72,6 +72,7 @@ class Rung:
 
 LADDER = {
     "qwen3-8b": Rung("QWEN3_8B", "qwen3-8b"),
+    "llama32-1b": Rung("LLAMA32_1B", "llama-3.2-1b"),
     "llama31-8b": Rung("LLAMA31_8B", "llama-3.1-8b"),
     "r1-distill-llama-8b": Rung("R1_DISTILL_LLAMA_8B", "r1-distill-llama-8b"),
     "gemma2-9b": Rung("GEMMA2_9B", "gemma-2-9b"),
@@ -100,24 +101,6 @@ def register(model: str, manifest: Path = CHECKPOINTS) -> Path:
     args = ("--dtype", "bfloat16", *(("--tensor-parallel-size", str(rung.tp)) if rung.tp > 1 else ()))
     S.MODELS[model] = S.Model(e["repo"], e["revision"], rung.served, args, (2.0, 0.08))
     return Path(e["local_path"])
-
-
-def tp_engine(tp: int) -> Any:
-    """serve_tax's replay engine, at tensor-parallel width ``tp``."""
-    make = R.engine
-
-    def engine(checkpoint: Path, header: dict, eager: bool) -> Any:
-        if tp == 1:
-            return make(checkpoint, header, eager)
-        import vllm
-
-        real = vllm.EngineArgs
-        vllm.EngineArgs = functools.partial(real, tensor_parallel_size=tp)
-        try:
-            return make(checkpoint, header, eager)
-        finally:
-            vllm.EngineArgs = real
-    return engine
 
 
 # ------------------------------------------------------------------------------------------------------------ serve
@@ -279,7 +262,6 @@ def tilings(d: Path) -> dict | None:
 
 def replay(a: argparse.Namespace) -> int:
     ck = register(a.model)
-    R.engine = tp_engine(LADDER[a.model].tp)
     out = Path(a.out)
     os.environ["LADDER_TILINGS"] = str(out / f"replay-{a.index}")
     P.apply(pin=pin() == "pinned", tilings=ENV.LADDER_TILINGS)
@@ -287,7 +269,7 @@ def replay(a: argparse.Namespace) -> int:
         os.environ["LADDER_TOPK_PROBE_OUT"] = str(out / f"replay-{a.index}" / "topk")
         probe_topk()
     argv = ["--arm-dir", str(out / "record"), "--load", LOAD, "--checkpoint", str(ck), "--out", str(out / f"replay-{a.index}"),
-            *(["--logprobs"] if a.logprobs else [])]
+            "--tp", str(LADDER[a.model].tp), *(["--logprobs"] if a.logprobs else [])]
     if a.index > 1:
         argv += ["--against", str(out / "replay-1")]
     return R.main(argv)
@@ -311,7 +293,7 @@ def alone(a: argparse.Namespace) -> int:
     w = R.window(out / "record", LOAD, 1)
     picks = sample(w["requests"], a.requests)
     t0 = time.monotonic()
-    eng = tp_engine(LADDER[a.model].tp)(ck, w["header"], False)
+    eng = R.engine(ck, w["header"], False, LADDER[a.model].tp)
     ready = time.monotonic() - t0
     tokens: dict[str, list[int]] = {}
     t0 = time.monotonic()
@@ -439,7 +421,35 @@ def summary(a: argparse.Namespace) -> int:
     md = markdown(rows)
     (out / "summary.md").write_text(md)
     print(md, end="")
+    record(out, rows)
     return 0
+
+
+def record(out: Path, rows: list[dict]) -> None:
+    sys.path[:0] = [str(ROOT / "benchmarks/harness"), str(ROOT)]
+    from verity_bench import kit
+
+    res = kit.writer(out)
+    missing = [f"{r['model']}/{r['pin']}/replay-{x['index']}" for r in rows for x in r["replays"] if "bit_exact" not in x]
+    res.validation("failed" if missing or not rows else "passed", "every replay run.sh started wrote its replay.json",
+                   ", ".join(missing) or ("ok" if rows else "no model directory"))
+    card = res.stamp["card"]
+    try:
+        card = "cpu" if card == "none" else kit.card_short(card.split(", ")[0],
+                                                           directory=ROOT / "calibration/hardware/cards")
+    except SystemExit as e:
+        print(f"{METRIC}: no reading, the card {card!r} has no member name: {e}")
+        return
+    for r in (r for r in rows if r["pin"] == "pinned"):
+        reps = [x for x in r["replays"] if "bit_exact" in x]
+        worst = min(reps, key=lambda x: x["rows_exact_share"]) if reps else None
+        res.measurement(METRIC, worst and worst["rows_exact_share"], "share", mark="measured",
+                        member=f"{LADDER[r['model']].served if r['model'] in LADDER else r['model']}-{card}",
+                        why=None if worst else "no pinned replay finished",
+                        extra={"model": r["model"], "checkpoint": r["checkpoint"], "tp": r["tp"], "pin": r["pin"],
+                               "replay": worst and worst["index"],
+                               "replays": [{k: x[k] for k in ("index", "rows_exact_share", "bit_exact", "compile")}
+                                           for x in reps]})
 
 
 def main(argv: list[str] | None = None) -> int:

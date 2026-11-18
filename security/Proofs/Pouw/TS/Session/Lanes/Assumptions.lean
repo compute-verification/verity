@@ -36,11 +36,11 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The named premise a leaf's 33 linked sessions take
 
-`Accounting.TS.Lanes.leafLanes_soundAt` takes one premise beyond `CheckedSessionSound`'s, the reading of a session's
+`ResourceAccounting.TS.Lanes.leafLanes_soundAt` takes one premise beyond `CheckedSessionSound`'s, the reading of a session's
 rows as the words its Definition reads, through a decode per statement (`decL` for a lane's ports, `decC` for the
-combine's). `Accounting.Guarantees.TS.LeafLanesSound` takes what stays of it once each Definition's `ok = 1` is proved
+combine's). `ResourceAccounting.Guarantees.TS.LeafLanesSound` takes what stays of it once each Definition's `ok = 1` is proved
 to mean `LaneOk` or `CombineOk`, that the lanes' and the combine's circuits compute their pieces' compositions on bits
-(`Accounting.TS.Lanes.LaneLowers`, `CombineLowers`, which give it by `leafChecks_of_computes`, `laneComputes_of_lowers`
+(`ResourceAccounting.TS.Lanes.LaneLowers`, `CombineLowers`, which give it by `leafChecks_of_computes`, `laneComputes_of_lowers`
 and `combineComputes_of_lowers`):
 
 * `LeafChecks` (the 33 circuits): each lane's and the combine's circuit computes its Definition at its port rows, so on
@@ -51,24 +51,24 @@ and `combineComputes_of_lowers`):
   `RowsSession.portRow_opens`, `Flock.Registered.complete_opens`), not assumed.
 
 Nothing is asked of the rows the sessions open. The leaf the layer opens and the receipt it checks are the ones those
-rows decode to (`Accounting.TS.Lanes.leafOf`, `receiptOf`); the known ports' rows (the admit bits, the public inputs,
+rows decode to (`ResourceAccounting.TS.Lanes.leafOf`, `receiptOf`); the known ports' rows (the admit bits, the public inputs,
 lane `l`'s index and every `ok` word `1`) are verity-verify-proof's known-content and known-read checks', part of `leafLayer`'s
-acceptance (`Accounting.TS.Lanes.laneKnownHolds_of_check`, `combKnownOk_of_check`); the rows several statements read
+acceptance (`ResourceAccounting.TS.Lanes.laneKnownHolds_of_check`, `combKnownOk_of_check`); the rows several statements read
 (each A row four lanes, each B row four lanes, each partials row lane `l` and the combine) are read in full at one
 registered tree (`PouwWindow.Lanes.ownOf`, `readFull`, which acceptance checks), so they decode alike
-(`Accounting.TS.Lanes.read_bits`). That the registrants' rows agree is not a premise: each registrant's opening opens
+(`ResourceAccounting.TS.Lanes.read_bits`). That the registrants' rows agree is not a premise: each registrant's opening opens
 its root at its position, so two of them at one tree and position are one row's bytes or an explicit SHA-512 collision
-(`Accounting.TS.Lanes.rowsAgree_or_leafColl`), which the leaf layer's relation admits (`LeafColl`).
+(`ResourceAccounting.TS.Lanes.rowsAgree_or_leafColl`), which the leaf layer's relation admits (`LeafColl`).
 
-Like `Accounting.Assumptions.TS`'s other session premises it reads `RowsSession`, in the proofs package, so it sits
+Like `ResourceAccounting.Assumptions.TS`'s other session premises it reads `RowsSession`, in the proofs package, so it sits
 here until Flock's spec is extracted.
 -/
 
 @[expose] public section
 
-namespace Accounting.Assumptions.TS
+namespace ResourceAccounting.Assumptions.TS
 
-open Accounting.TS Accounting.TS.Checked Accounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes
+open ResourceAccounting.TS ResourceAccounting.TS.Checked ResourceAccounting.TS.Lanes Flock.SoundAtBridge PouwWindow.Lanes
 open Pouw.RelativeSecurity (Paths)
 
 /-- `accounting-ts-leaf-checks` (a fact of `h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`'s circuits at their tile's `K`,
@@ -109,4 +109,4 @@ def LeafChecks {K nw : ℕ} {Pub : Type} (dq : List ℤ → ℤ)
       (decC (sess none) (portRead (sess none) vals)).ok = true →
       CombineOk (decC (sess none) (portRead (sess none) vals))
 
-end Accounting.Assumptions.TS
+end ResourceAccounting.Assumptions.TS

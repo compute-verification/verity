@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 
 The vocabulary of `Definitions.Pouw.Guarantees.CoinFlow`. Under one σ shared by every matmul of a batch, a declared
 Program could unwind its own noise (read a coin again and cancel what it added) or use one noise twice, and then a
-skipped value's coins are in the cheater's view (`Accounting.HMuProofs.readsCoin`, `twoCopies`). The Build refuses
+skipped value's coins are in the cheater's view (`ResourceAccounting.HMuProofs.readsCoin`, `twoCopies`). The Build refuses
 both (`verity/circuits/ports.py`, `E_COIN_FLOW` and `E_COIN_REUSE`). This is its rules on a model of the Program's
 dataflow, at the granularity the Build sees: one node per primitive instance of the flattened Program.
 
@@ -62,7 +62,7 @@ dataflow, at the granularity the Build sees: one node per primitive instance of 
 
 @[expose] public section
 
-namespace Accounting.CoinFlow
+namespace ResourceAccounting.CoinFlow
 
 /-- A Program's dataflow: `m` nodes in order over coins `C` and values `V`, each computing its value from the nodes and
 coins it reads. -/
@@ -136,4 +136,4 @@ def view [Inhabited V] (P : FlowGraph m C V) (k : Fin m) (σ : C → Bool) : P.V
 
 end FlowGraph
 
-end Accounting.CoinFlow
+end ResourceAccounting.CoinFlow

@@ -15,7 +15,7 @@ sys.path[:0] = [str(HERE), str(HERE.parent / "pearl_c_vllm")]
 import fast_tile  # noqa: E402
 from of_record_lean import Record  # noqa: E402
 
-from verity.protocols.accounting.pouw.prover.kernels.served_zk import served_commit  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import served_commit  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:

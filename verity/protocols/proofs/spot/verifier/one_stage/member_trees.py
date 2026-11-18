@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.commitments import coin_tree as CT
-from verity.protocols.proofs.spot.device import challenger as Ch, remote as R
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, remote as R
 from verity.protocols.proofs.spot.verifier.one_stage.closing import closing_after
 from verity.protocols.proofs.spot.verifier.one_stage.members import TABLES
 

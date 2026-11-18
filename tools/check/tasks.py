@@ -244,7 +244,7 @@ class Facts:
         return ids
 
     def circuit_closure(self) -> list[str]:
-        s = next((s for s in self.suites.values() if s.path == "tools/verity/circuit_check"), None)
+        s = next((s for s in self.suites.values() if "tools/verity/circuit_check" in (s.path, *S.LAYOUT.tested(s.path))), None)
         return sorted({s.path, *S.closure(s, self.pkgs), "uv.lock"}) if s else ["."]
 
 

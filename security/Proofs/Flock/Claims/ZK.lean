@@ -23,13 +23,11 @@ public import Proofs.Flock.Claims.ZK.Deployed
 public import Proofs.Flock.Claims.ZK.Reference
 public import Proofs.Flock.Claims.ZK.CoinLayer
 public import Proofs.Flock.Claims.ZK.CoinOpen
-public import Proofs.Flock.Claims.ZK.Tape
 public import Proofs.Flock.Claims.ZK.Capacity
 public import Proofs.Flock.Claims.ZK.Session
 public import Proofs.Flock.Claims.ZK.MaskedTables
 public import Proofs.Flock.Claims.ZK.Masked
 public import Proofs.Flock.Claims.ZK.MaskTape
-public import Proofs.Flock.Claims.ZK.MaskFamily
 public import Proofs.Flock.Claims.ZK.OneTape
 public import Proofs.Flock.Claims.ZK.Round0
 public import Proofs.Flock.Claims.ZK.ExeLayout
@@ -84,7 +82,6 @@ public import Proofs.Flock.Claims.ZK.Blind
 public import Proofs.Flock.Claims.ZK.Release
 public import Proofs.Flock.Claims.ZK.Refine
 public import Proofs.Flock.Claims.ZK.OwnHistAny
-public import Proofs.Flock.Claims.ZK.CoinPass
 public import Proofs.Flock.Claims.ZK.Os
 public import Proofs.Flock.Claims.ZK.FrameTape
 public import Proofs.Flock.Claims.ZK.FrameParse

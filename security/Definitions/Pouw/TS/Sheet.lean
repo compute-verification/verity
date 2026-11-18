@@ -57,7 +57,7 @@ The machine model's `DS-NN` vectors are these rows at each device's vendor value
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 /-- **A device's data sheet** over classes `K` and pipes `P`: its maximum boost clock `fmax`; per class, the dense
 tensor MACs `macs k` one warp instruction does (`0` off the tensor pipe; a sparse form at its dense equivalent; a
@@ -100,4 +100,4 @@ noncomputable def Sheet.machine (S : Sheet K P) : Machine K (SheetRow P) where
   smClocked _ := true
   fmax := S.fmax
 
-end Accounting.TS
+end ResourceAccounting.TS

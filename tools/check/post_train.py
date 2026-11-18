@@ -4,8 +4,8 @@ reference regression's manifest rebuilds and the fast workloads of record's neut
 
 `check` blocks on the regression's cheap T0 tier; the checks that recompute from a row's Programs (marked `rebuild`: the manifest
 rebuilds, `manifest_digest` on every row it applies to and the #57 refusal, and `step_segmentation`'s decode of every component;
-about an hour of CPU in one process) run here instead, once per landing.  `research merge --push` starts
-this, detached, after each push it lands (`after_land` in `tool.py`); run it by hand for a landing pushed another way, or to redo one.
+about an hour of CPU in one process) run here instead, once per landing.  The verified queue starts
+this, detached, after each landing (`merge.after_land`, from `merge.caught_up`); run it by hand for a landing pushed another way, or to redo one.
 
 After the rebuilds the same run rebuilds the fast workloads of record's Programs and compares them with their pins (`verity-vllm
 neutrality --tier fast`, by `neutrality_tier.sh` beside this, minutes a row), so a landing that moves a
@@ -13,9 +13,9 @@ fast row's Program without re-pinning it is a red: each row that moved or didn't
 rebuilds' rows (`regression fail:<row>`), and the owner of the workloads of record (`OWNER`) is rung at once in the merge thread,
 as ci, with the run to read.  A carried verdict rings no one: the run it carries from rang.
 
-COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in, or, for a train
-`research queue drive` or the verified queue fast-forwarded main to, the store's passing check of that commit does (`passed`:
-the whole check, or shard 1 of the queue's sharded one).  Drive passes the check it landed
+COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in, or, for a candidate
+the verified queue fast-forwarded main to, the store's passing check of that commit does (`passed`:
+the whole check, or shard 1 of the queue's sharded one).  The queue passes the check it landed
 on as `--attempt RID`, taken when RID ran on COMMIT or on the train COMMIT merges onto a moved main (its second parent): a landing
 with deferred steps has no passing check in the store when this starts.  Its tree is checked
 out in a worktree of its own and the rebuilds run there through `research run --on MACHINE`, pinned to --cores, under
@@ -75,15 +75,14 @@ TIMEOUT_S = 4 * 3600
 #: capped at MEM_GB // WORKER_GB: about 20 workers at ~28 GB each with nothing reserved, 570 GB, fill a node's slice and get
 #: other runs killed
 MEM_GB, WORKER_GB, MEM_WAIT_S = 200, 28, 3600
-#: `research run --on` returns once the run is launched, so its records are fetched until they show its end (`research merge` too)
+#: `research run --on` returns once the run is launched, so its records are fetched until they show its end
 POLL_S = 60
 #: a runner that died before writing its end is waited for no longer than the run's bound and the runner's publish margin, twice
 POLLS = (TIMEOUT_S + 1800) // POLL_S
 SLEEP = time.sleep
 ENDED = ("done", "failed", "cancelled")
 CHECK_RE = re.compile(r"^Check: (r20\d{6}-\d{6}-[0-9a-f]{4})$", re.M)
-#: the trailer of drive's lock commit (`Driver._commit_locks`: `Lock records regenerated for ...`), which names the files it
-#: regenerated
+#: the trailer of a lock commit (`Lock records regenerated for ...`), which names the files it regenerated
 LOCKS_RE = re.compile(r"^Regenerated: \S", re.M)
 ROW_RE = re.compile(r"-(r\d+)\]$")
 #: the check a shard runs: records from before the move name the old path
@@ -97,7 +96,7 @@ out=$RESEARCH_RUN_DIR/out; mkdir -p "$out"
 s=$(mktemp -d /workspace/research/scratch/post-train.XXXXXX 2>/dev/null || mktemp -d); trap 'rm -rf "$s"' EXIT
 export TMPDIR=$s VERITY_REGRESSION_SCRATCH=$s BUILD_RAM_BUDGET_GB=32 VERITY_MANIFEST_JOBS=4
 uv run -q --locked --all-packages --extra torch-cpu python -m research data fetch-fixtures --repo "$PWD" --json \\
-  adapters/vllm/tests/regression > "$out/fetch-fixtures.json" || exit 1
+  tests/adapters/vllm/tests/regression > "$out/fetch-fixtures.json" || exit 1
 cd adapters/vllm
 VERITY_REGRESSION=1 VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1 VERITY_REGRESSION_RECORD_ACTUAL=$out/actual \\
   {pin}../../.venv/bin/python -m pytest tests/regression -m {marks} -n {workers} -rA --durations=0 \\
@@ -117,9 +116,9 @@ def git(*args: str, cwd: Path = ROOT, check: bool = True) -> str:
 
 
 def check_attempt(commit: str, cwd: Path = ROOT, attempt: str | None = None) -> str | None:
-    """The attempt a landing of main was admitted on: its `Check:` line (`research merge`; a paragraph of its own, which git's
-    `%(trailers)` doesn't read), else, for a commit on origin/main, the check that passed on its clean tree (`passed`): a train
-    `research queue drive` or the verified queue fast-forwards main to was checked as it is, so it has no trailer.  None for any
+    """The attempt a landing of main was admitted on: its `Check:` line (the old path's landings; a paragraph of its own, which git's
+    `%(trailers)` doesn't read), else, for a commit on origin/main, the check that passed on its clean tree (`passed`): a candidate
+    the verified queue fast-forwards main to was checked as it is, so it has no trailer.  None for any
     other commit.
 
     With ``attempt`` (`--attempt`, the check drive landed on), that attempt, when it ran on the commit (a fast-forward) or on the

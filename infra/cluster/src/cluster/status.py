@@ -51,11 +51,12 @@ STALE_S = 60
 COMMANDS = {
     "kueue": shlex.join([*nebius1.KUBECTL, "get", "pods,workloads,jobs,clusterqueues,localqueues", "-n", "default", "-o", "json"]),
     "df": "df -P /workspace",
-    # release.py's bundles_gb, one line per bundle; `sudo -n true` first, so a refused sudo is an error and not 0 GB. vy-sudo's
-    # du-bundles is the same find, the form the node's sudoers allows once research has no blanket root (pods/nebius/lockout)
-    "bundles": f"sudo -n true && {{ if [ -x {VY_SUDO} ]; then sudo -n {VY_SUDO} du-bundles 2>/dev/null; else"
-               f" sudo -n find {' '.join(BUNDLE_ROOTS)} -xdev -name 'replay_bundle_p*' -prune -print0 2>/dev/null"
-               " | sudo -n xargs -0r du -sb 2>/dev/null; fi; true; }",
+    # release.py's bundles_gb, one line per bundle; the grant is probed first, so a refused sudo is an error and not 0 GB.
+    # vy-sudo's du-bundles is the same find, the form a node's sudoers allows once research has no blanket root
+    # (pods/nebius/lockout); there `sudo -n true` still passes, so only `sudo -n -l` of the form itself says it will run
+    "bundles": f"if [ -x {VY_SUDO} ]; then sudo -n -l {VY_SUDO} du-bundles >/dev/null && {{ sudo -n {VY_SUDO} du-bundles"
+               f" 2>/dev/null; true; }}; else sudo -n true && {{ sudo -n find {' '.join(BUNDLE_ROOTS)} -xdev -name"
+               " 'replay_bundle_p*' -prune -print0 2>/dev/null | sudo -n xargs -0r du -sb 2>/dev/null; true; }; fi",
     # the agent's state: <live>/state.json with --roll, else its run's <live>/<stamp>/state.json; the newest
     "state": f'cd {LIVE} && f=$(ls -t state.json */state.json 2>/dev/null | head -1) && test -n "$f" && echo "{LIVE}/$f"'
              ' && cat "$f"',

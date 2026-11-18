@@ -4,18 +4,18 @@ public import Definitions.Compose.JointPeriod
 public import Definitions.Pouw.PouwWitness
 
 /-!
-# The period run the network certifier's accounting bridge fails at (trusted definitions; used only by the
+# The period run the network attester's accounting bridge fails at (trusted definitions; used only by the
 satisfiability witnesses)
 
 `acceptAllNet`: on a device with no capacity (`PouwWitness.nullDevice`), over the circuit with no gate
 (`emptyCircuit`) and an idle schedule (`PouwWitness.idleStep`), a period run whose every audit accepts at every coin
-while the network certifier's claim never holds: what `Accounting.Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted` rules
+while the network attester's claim never holds: what `ResourceAccounting.Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted` rules
 out.
 -/
 
 @[expose] public section
 
-namespace Accounting.NetWitness
+namespace ResourceAccounting.NetWitness
 
 open PouwWitness
 
@@ -32,7 +32,7 @@ def emptyCircuit : Verity.Circuit where
   outputs := ∅
 
 /-- A period run on `nullDevice` over `emptyCircuit`, idle, whose every audit accepts at every coin and at which the
-network certifier's claim never holds. -/
+network attester's claim never holds. -/
 def acceptAllNet : PeriodRun nullDevice Unit emptyCircuit (fun _ : Unit => Unit) where
   units := 0
   parts := ⟨fun g => g.elim0, fun g => g.elim0⟩
@@ -47,4 +47,4 @@ def acceptAllNet : PeriodRun nullDevice Unit emptyCircuit (fun _ : Unit => Unit)
   commWithin _ _ := False
   accepts _ _ := True
 
-end Accounting.NetWitness
+end ResourceAccounting.NetWitness

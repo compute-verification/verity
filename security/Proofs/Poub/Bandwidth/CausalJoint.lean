@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Poub.Bandwidth.Causal
-public import Proofs.Accounting.Actual.Transducer
+public import Proofs.ResourceAccounting.Actual.Transducer
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -37,7 +37,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.Actual.Confidence
+import Proofs.ResourceAccounting.Actual.Confidence
 import Proofs.Poub.Bandwidth.TickedJoint
 
 /-!
@@ -66,7 +66,7 @@ its capacity form (`n ≤ βm T − cert_bw`): the guarantees `Bandwidth.Guarant
 namespace Bandwidth
 
 open Pous (Bits pr)
-open Accounting Accounting.SecurityProofs.Actual
+open ResourceAccounting ResourceAccounting.SecurityProofs.Actual
 open scoped ENNReal
 
 namespace Causal

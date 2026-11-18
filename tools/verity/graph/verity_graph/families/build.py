@@ -49,7 +49,7 @@ SUITES = "tools/check/suites.py"
 #: and the parts of one tree hold each file once whichever machines run them.  Each is as many as keep its parts near ten minutes
 #: at its files' recorded seconds, or near its longest file.  A suite that declares `[tool.verity.tests] parts` is in those
 #: parts by test id, as check runs it, and isn't listed here
-PARTS = {"pous-check": 3}
+PARTS = {"pous-verifier": 3}
 #: a lean-suites task's disk: the suites build Lake packages of their own beside the verifier's
 SUITES_DISK_GB = 60
 #: where lean-build's output holding the rest of its build (`lean_build.TREE`: each `.lake/build` but the executables) is in a work
@@ -65,29 +65,34 @@ CHECK_READS = (*(f"tools/check/{m}" for m in ("check.py", "ci.toml", "common.py"
                ".agents/skills/using-slack/registry.json")
 
 
-def required(root: Path, files: list[str]) -> list[str]:
-    """The packages of the tree the Lean verifier requires by path from outside its directory, by its manifest (which lists
-    those its requirements require too) or its lakefile, each from the root and ending in "/" (`check.required_in_tree`)."""
+def required_dirs(root: Path, files: list[str]) -> set[Path]:
+    """The directories of the packages the Lean verifier requires by path, by its manifest (which lists those its
+    requirements require too) or its lakefile (`check.required_packages`)."""
     entries: list[dict] = []
     if f"{LEAN}/lake-manifest.json" in files:
         entries += json.loads((root / LEAN / "lake-manifest.json").read_text()).get("packages", [])
     if f"{LEAN}/lakefile.toml" in files:
         entries += tomllib.loads((root / LEAN / "lakefile.toml").read_text()).get("require", [])
-    top, own = root.resolve(), (root / LEAN).resolve()
-    dirs = {(own / p).resolve() for e in entries if (p := e.get("dir") or e.get("path")) is not None}
+    own = (root / LEAN).resolve()
+    return {(own / p).resolve() for e in entries if (p := e.get("dir") or e.get("path")) is not None}
+
+
+def required(root: Path, files: list[str]) -> list[str]:
+    """The packages of the tree the Lean verifier requires by path from outside its directory, each from the root and
+    ending in "/" (`check.required_in_tree`)."""
+    top, own, dirs = root.resolve(), (root / LEAN).resolve(), required_dirs(root, files)
     return sorted(d.relative_to(top).as_posix() + "/" for d in dirs if d.is_relative_to(top) and not d.is_relative_to(own))
 
 
 def package(root: Path, files: list[str]) -> list[str]:
     """The files `lake build` of the Lean verifier can read: its package's and those of the packages of the tree it requires
     by path (`required`), less each one's lock (`lean-audit.json`, which only the Lean check reads), their Markdown and any
-    Lake package nested in the verifier's while its lakefile requires nothing (`check.agreement_closure`'s cut)."""
+    Lake package nested in the verifier's directory that the verifier doesn't require (`check.agreement_closure`'s cut)."""
     pre = LEAN + "/"
     lakefiles = [f for f in files if f.startswith(pre) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     top = [f for f in lakefiles if f.count("/") == pre.count("/")]
-    nested = tuple(f.rsplit("/", 1)[0] + "/" for f in lakefiles if f not in top)
-    if any("require" in (root / f).read_text() for f in top):
-        nested = ()
+    need = required_dirs(root, files)
+    nested = tuple(d for f in lakefiles if f not in top if (root / (d := f.rsplit("/", 1)[0] + "/")).resolve() not in need)
     packages = (pre, *required(root, files))
     locks = {p + "lean-audit.json" for p in packages}
     return [f for f in files if f.startswith(packages) and f not in locks and not f.startswith(nested) and not f.endswith(".md")]

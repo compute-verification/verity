@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.accounting.pouw.verifier.protocol import CALL_RANGE
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import CALL_RANGE
 
 from verity_torch.pouw.pearl_c.ends import _RunState
 

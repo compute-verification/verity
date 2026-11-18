@@ -30,17 +30,17 @@ The chain: `card_resample_ground` (the resampling count against its ground set),
 query index's bad data, counted against the data where that index exists), `Prover.card_bad_family_le` (the budgeted
 union over a candidate family's query indices), `Prover.pr_unpaid_rank_family_le` (one pass, all candidates),
 `SketchDeployedWindow.pr_unpaid_good_sum_le` and `pr_unpaid_sum_le` (the window),
-`Accounting.SecurityProofs.RemoteRunConservationSketchSum` (the session, at every parameter), and
-`Accounting.SecurityProofs.RemoteRunConservationSketchDeployed` (the deployed guarantee,
-`Accounting.Guarantees.RemoteRunConservationSketchDeployed`, card 5d1805d1). The budget is the named assumption
-`Accounting.Assumptions.SketchHashBudget`; `budget_of_bounded` shows `qtot = G·q` always satisfies it, so the sum
+`ResourceAccounting.SecurityProofs.RemoteRunConservationSketchSum` (the session, at every parameter), and
+`ResourceAccounting.SecurityProofs.RemoteRunConservationSketchDeployed` (the deployed guarantee,
+`ResourceAccounting.Guarantees.RemoteRunConservationSketchDeployed`, card 5d1805d1). The budget is the named assumption
+`ResourceAccounting.Assumptions.SketchHashBudget`; `budget_of_bounded` shows `qtot = G·q` always satisfies it, so the sum
 form at the worst budget recovers the product form (`RemoteRunConservationSketchDeployedProduct` in
 `DeployedSketch.lean` keeps that bound stated).
 -/
 
 @[expose] public section
 
-namespace Accounting.RateSketch
+namespace ResourceAccounting.RateSketch
 
 open Pous (pr)
 open scoped ENNReal
@@ -377,7 +377,7 @@ theorem pr_unpaid_rank_family_le {G : ℕ}
     (A : Fin G → Prover N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (r X qtot : ℕ)
     (hr32 : r ≤ 32)
-    (hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank)
+    (hr : ∀ u, r ≤ ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank)
     (hX : ∀ c O D, ((A c).prog σ D).rebuilds O D * 256 ≤ X)
     (hq : ∀ (Os : Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) (D : Data N m ρ Sector),
       ∑ c, (((A c).prog σ D).queries (Os c) D).length ≤ qtot) :
@@ -388,7 +388,7 @@ theorem pr_unpaid_rank_family_le {G : ℕ}
   classical
   let g := 256 ^ (32 - r)
   have hfib : fib (sketch (k := ks) (m := m)) σ ≤ g :=
-    Accounting.SecurityProofs.SketchRankFiber ks m r σ hr
+    ResourceAccounting.SecurityProofs.SketchRankFiber ks m r σ hr
   have hsplit : ∀ x : Data N m ρ Sector × (Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))),
       (∃ c, (A c).footprint σ (x.2 c) x.1 + (S + (L - ρ * 256) + X) <
           ((A c).correct sketch σ (x.2 c) x.1).card * (m * 256)) →
@@ -502,7 +502,7 @@ each pass's `G` candidates the oracle queries total at most `qtot`, the window's
 `P·G·(N/2^h + q/2^(8r))`. -/
 theorem pr_unpaid_good_sum_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : SketchSigns ks m)
     (r X qtot : ℕ) (hr32 : r ≤ 32)
-    (hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank)
+    (hr : ∀ u, r ≤ ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank)
     (hX : ∀ j η c O D, ((A.device j η c).prog σ D).rebuilds O D * 256 ≤ X)
     (hq : ∀ j η (Os : Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) (D : Data N m ρ Sector),
       ∑ c, (((A.device j η c).prog σ D).queries (Os c) D).length ≤ qtot) :
@@ -528,7 +528,7 @@ theorem pr_unpaid_good_sum_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (
 pass, and the query term per pass. Compare `pr_unpaid_le`. -/
 theorem pr_unpaid_sum_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) (r X qtot : ℕ)
     (εrank : ℝ≥0∞)
-    (hr32 : r ≤ 32) (hRank : Accounting.Assumptions.SketchRank ks m r εrank)
+    (hr32 : r ≤ 32) (hRank : ResourceAccounting.Assumptions.SketchRank ks m r εrank)
     (hX : ∀ j η c σ O D, ((A.device j η c).prog σ D).rebuilds O D * 256 ≤ X)
     (hq : ∀ j η σ (Os : Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) (D : Data N m ρ Sector),
       ∑ c, (((A.device j η c).prog σ D).queries (Os c) D).length ≤ qtot) :
@@ -546,7 +546,7 @@ theorem pr_unpaid_sum_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks
   rw [Rate.pr_equiv eSample]
   refine Rate.pr_le_of_fiber _ _ (fun _draw => ?_)
   let badRank : SketchSigns ks m → Prop := fun σ =>
-    ∃ u, ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r
+    ∃ u, ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r
   let unpaid : SketchStore N m × (SketchSigns ks m × Passes) → Prop := fun x =>
     A.reads x.1 x.2.1 x.2.2 + P * (S + (L - ρ * 256) + X) <
       (A.correctAll x.1 x.2.1 x.2.2).card * (m * 256)
@@ -566,7 +566,7 @@ theorem pr_unpaid_sum_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks
       ((Equiv.refl _).prodCongr (Equiv.prodComm _ _)).trans (Equiv.prodAssoc _ _ _).symm
     rw [Rate.pr_equiv eGood]
     refine Rate.pr_le_of_fiber _ _ fun σ => ?_
-    by_cases hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank
+    by_cases hr : ∀ u, r ≤ ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank
     · exact (pr_mono fun _ hx => hx.2).trans
         (pr_unpaid_good_sum_le A σ r X qtot hr32 hr
           (hX := fun j η c O D => hX j η c σ O D) (hq := fun j η Os D => hq j η σ Os D))
@@ -588,12 +588,12 @@ variable {n P N m ρ h S L q ks G d : ℕ}
 /-- Some window's unpaid words on a uniform store, under `RemoteRunConservationSketchSum`'s hypotheses: at most
 `n·(ε + P·(G·N/2^h + qtot/2^(8r)))`. -/
 theorem pr_unpaid_sum_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (r X qtot : ℕ) (ε : ℝ≥0∞)
-    (hr32 : r ≤ 32) (hRank : Accounting.Assumptions.SketchRank ks m r ε)
+    (hr32 : r ≤ 32) (hRank : ResourceAccounting.Assumptions.SketchRank ks m r ε)
     (hX : ∀ w η j ι c E σ R O,
       let B := (A.window w η).device j ι c
       let D := Data.ofParts E R
       (B.prog σ D).rebuilds O D * 256 ≤ X)
-    (hq : ∀ w η j ι, Accounting.Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) :
+    (hq : ∀ w η j ι, ResourceAccounting.Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) :
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       ∃ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 + P * (S + (L - ρ * 256) + X) <
         ((A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1).card * (m * 256))
@@ -684,19 +684,19 @@ theorem pr_deployed_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → SketchSto
 
 end SketchDeployedRun
 
-end Accounting.RateSketch
+end ResourceAccounting.RateSketch
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate Accounting.RateSketch
+open ResourceAccounting.Rate ResourceAccounting.RateSketch
 open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
 /-- **PoUB with deployed tensor-sketch receipts, for the verbatim class, under the per-pass
-hash budget: the sum form.** `Accounting.Guarantees.RemoteRunConservationSketch`'s statement with one added named
+hash budget: the sum form.** `ResourceAccounting.Guarantees.RemoteRunConservationSketch`'s statement with one added named
 assumption — across each pass's `G` candidate oracles the queries total at most `qtot`
-(`Accounting.Assumptions.SketchHashBudget`) — and the receipt term
+(`ResourceAccounting.Assumptions.SketchHashBudget`) — and the receipt term
 
   `(n·P·G)·N/2^h + (n·P)·qtot/2^(8r)`
 
@@ -707,12 +707,12 @@ theorem RemoteRunConservationSketchSum :
     ∀ (n P N m ρ h S L q ks G d r X qtot : ℕ) (ε : ℝ≥0∞)
       (A : RateSketch.SketchDeployedRun n P N m ρ h S L q ks G d) (dbar dw : ℝ),
       0 < n → 0 < P → 0 < N → 0 < m → r ≤ 32 → dw ≤ 1 →
-      Accounting.Assumptions.SketchRank ks m r ε →
+      ResourceAccounting.Assumptions.SketchRank ks m r ε →
       (∀ w η j ι c E σ R O,
         let B := (A.window w η).device j ι c
         let D := RateSketch.Data.ofParts E R
         (B.prog σ D).rebuilds O D * 256 ≤ X) →
-      (∀ w η j ι, Accounting.Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) →
+      (∀ w η j ι, ResourceAccounting.Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) →
       pr (fun x : RateSketch.SketchStore N m ×
           (Fin n → RateSketch.SketchWindowCoins P N m ρ h ks G d) =>
         (∀ w t, (x.2 w).2.2 t ∈
@@ -730,12 +730,12 @@ theorem RemoteRunConservationSketchSum :
   ring
 
 /-- **The verbatim sketch session at the deployed receipt parameters, under the per-pass hash budget**
-(`Accounting.Guarantees.RemoteRunConservationSketchDeployed`). `RemoteRunConservationSketchSum` at 4 KiB
+(`ResourceAccounting.Guarantees.RemoteRunConservationSketchDeployed`). `RemoteRunConservationSketchSum` at 4 KiB
 tiles (`m = 128`), 16 sketch rows, SHA-512 tags, rank `r = 12`, 2,773 pooled openings per window, `d̄ = 0.15%`,
 `d_w = 1%`. At the conservative caps `G = qtot = 2^55` the query term is `n·P·2^-41` (`sketchQueryTermCapsSum`),
 where the product form's `G·q/2^96` alone was `2^14`. -/
 theorem RemoteRunConservationSketchDeployed :
-    Accounting.Guarantees.RemoteRunConservationSketchDeployed := by
+    ResourceAccounting.Guarantees.RemoteRunConservationSketchDeployed := by
   intro n P N ρ S L q G X qtot ε A hn hP hN hRank hX hq
   have h := RemoteRunConservationSketchSum n P N 128 ρ 512 S L q 16 G 2773 12 X qtot ε A
     0.0015 0.01 (by omega) hP hN (by norm_num) (by norm_num) (by norm_num) hRank hX hq
@@ -769,4 +769,4 @@ theorem sketchQueryTermCapsSum :
   simpa using (ENNReal.mul_div_mul_left (c := (2 : ℝ≥0∞) ^ 55) 1 (2 ^ 41)
     (pow_ne_zero _ (by norm_num)) (ENNReal.pow_ne_top ENNReal.ofNat_ne_top))
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

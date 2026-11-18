@@ -51,7 +51,7 @@ spares a segment's work only once the segment has nothing left to sum.
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 open Finset
 
@@ -81,4 +81,4 @@ noncomputable def adaptConsumer (seg : Fin m → Fin G) (act : Finset (Fin m)) (
   act := act
   cost Z := c * (segUntouched seg act Z).card
 
-end Accounting.TS
+end ResourceAccounting.TS

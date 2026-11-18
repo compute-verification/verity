@@ -19,7 +19,7 @@ in the payload and holds only public structure, hiding commitments and paths bes
   the window's registered one, fixed before any coin, and a live sample's ``record`` (the verifier's sample object, when it
   carries one) is a sample under it over the registered population, of exactly the bundle's units (`check` against the
   docket).
-* ``weights``: the registered values the units read (core's ``one_stage.registered``, as `verity.protocols.accounting.pous.prover.served_weights`
+* ``weights``: the registered values the units read (core's ``one_stage.registered``, as `verity.protocols.resource_accounting.memory.pous.prover.served_weights`
   registers the seeded weights: ``registered.domain(program, value, words, leaves, word_bits)``, rows in
   ``hm96-sha512/row/v2``): ``{program, values: [{value, root, leaves, words, word_bits, domain, row_schema}]}``.
 * ``commitment``: the serving steps' commitment (kernels' commit call, `commit_slots`: step tree over
@@ -1027,10 +1027,10 @@ def check(doc: Mapping[str, Any], payload: bytes, *, docket: Mapping[str, Any] |
     if docket is not None:
         sampling_design = docket["law"]
         if d.get("law") != sampling_design or (sampling_design.get("law") == "subset" and len(d["units"]) != sampling_design.get("k")):
-            bad["draw:law"] = f"the draw is not one under the registered law {sampling_design}"
+            bad["draw:law"] = f"the draw is not one under the registered sampling design {sampling_design}"
         if "record" in d and not (D.check_draw(d["record"], docket, sampling_design).ok
                                   and d["record"].get("units") == sorted(d["units"])):
-            bad["draw:record"] = "the draw's record is not a draw of its units under the registered law and population"
+            bad["draw:record"] = "the draw's record is not a draw of its units under the registered sampling design and population"
         reg_roots = {r["port"]: r for r in docket["roots"]}
         for port, r in win["roots"].items():
             if (reg_roots.get(port) or {}).get("root") != r["root"]:

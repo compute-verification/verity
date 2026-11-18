@@ -6,7 +6,7 @@ public import Definitions.Slowdown.ServingBlocks.Instances
 /-!
 # The serving-block bound: honest and nontrivial lemmas
 
-Each guarantee of `Accounting.Guarantees.ServingBlocks` has two statements here, at the instances of
+Each guarantee of `ResourceAccounting.Guarantees.ServingBlocks` has two statements here, at the instances of
 `security/Definitions/Slowdown/ServingBlocks/Instances.lean`. `<Guarantee>_honest`: its premises hold together at
 `Honest`. `<Guarantee>_nontrivial`: at an explicit circuit every premise but one named premise holds, that one fails, and
 the counted weight is above the bound's right-hand side, so the guarantee is false without it, its last
@@ -28,9 +28,9 @@ The proofs are in `security/Proofs/Slowdown/ServingBlocks/Witnesses.lean`.
 
 @[expose] public section
 
-namespace Accounting.Guarantees.ServingBlocks
+namespace ResourceAccounting.Guarantees.ServingBlocks
 
-open Verity Finset Accounting.ServingBlocks
+open Verity Finset ResourceAccounting.ServingBlocks
 
 /-- **The serving-block bound's premises hold** at `Honest`, at `(c_S, k_S) = (c, k) = (1, 1)`, the serving blocks as
 their own inference blocks, `ω_max = μ = 1`, `q_U(u) = 1` and `q_U(L_dark) = 1`. -/
@@ -94,4 +94,4 @@ def UncertifiedElementary_nontrivial : Prop :=
     Straddle.J.split (Straddle.P.gates 1) (fun i : {i // Straddle.r.parent i = 1} => Straddle.P.gates i) ∧
   ¬ UncertifiedCap Straddle.J (Straddle.P.gates 1) (fun i : {i // Straddle.r.parent i = 1} => Straddle.P.gates i) 0
 
-end Accounting.Guarantees.ServingBlocks
+end ResourceAccounting.Guarantees.ServingBlocks

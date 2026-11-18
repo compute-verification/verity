@@ -35,7 +35,7 @@ open FlockSoundness.Refine (ptsOf)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The link points' coins are some -/
 

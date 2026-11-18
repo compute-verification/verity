@@ -39,7 +39,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **A play of the frame with the extractor's seed**: the tape, the run's coins and the seed. -/
 abbrev MajSample (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
@@ -59,7 +59,7 @@ noncomputable def majorityPlays (V : Vocab d α) (A : Live₂) (x : Msg) (θ : B
   Wit := Claims.Sampling.Wit
   acc _ s := (Claims.run FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2.1).out = .acc
   drawn _ s u := ∃ wt, (A.L.E.eval FlockDeploy.sha512 Fr.P x s.1 s.2.1 s.2.2).1 = some wt ∧
-    u ∉ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX wt)
+    u ∉ ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX wt)
   wit _ s := (A.L.E.eval FlockDeploy.sha512 Fr.P x s.1 s.2.1 s.2.2).1
   R _ := A.R x
   read _ := readX
@@ -98,7 +98,7 @@ at most an `ε` share of the units is unbound in it. At the two-stage parameters
 (`holdsOnWitness_of`), from `UnitsAreReplay` and `CapsAt`, which the instance owes. -/
 def HoldsOnWitness (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F)) : Prop :=
-  ∀ wt, A.R x wt → Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (readX wt) (V.certOf θ).ε
+  ∀ wt, A.R x wt → ResourceAccounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (readX wt) (V.certOf θ).ε
 
 /-- **Two readings of a bound wire are a collision** at `x` (the instance owes it, from the commitment's binding at the
 boundary registration): where two witnesses in the relation each bind a unit holding the wire `g` (correct there and
@@ -107,8 +107,8 @@ def ReadsBind (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Arr
     (readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F))
     (collOf : Claims.Sampling.Wit → Claims.Sampling.Wit → Option (Msg × Msg)) : Prop :=
   ∀ w₁ w₂ (g : Fin (V.circuitOf θ F).N), A.R x w₁ → A.R x w₂ →
-    (∃ u, u ∉ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w₁) ∧ g ∈ (V.partsOf θ F).io u) →
-    (∃ u, u ∉ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w₂) ∧ g ∈ (V.partsOf θ F).io u) →
+    (∃ u, u ∉ ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w₁) ∧ g ∈ (V.partsOf θ F).io u) →
+    (∃ u, u ∉ ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w₂) ∧ g ∈ (V.partsOf θ F).io u) →
     readX w₁ g ≠ readX w₂ g →
     ∃ m m', collOf w₁ w₂ = some (m, m') ∧ Claims.Collision FlockDeploy.sha512 m m'
 
@@ -170,7 +170,7 @@ theorem off_of_accepts (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ)
     (readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F))
     (hX : V.extract θ F c σ = majority V A x θ F c σ Fr readX) (hholds : HoldsOnWitness V A x θ F c readX)
-    (hnot : ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε)
+    (hnot : ¬ ResourceAccounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε)
     (s : MajSample V A x θ F c σ)
     (hacc : (Claims.run FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2.1).out = .acc)
     (hR : Claims.Rel.ext A.R x (A.L.E.eval FlockDeploy.sha512 Fr.P x s.1 s.2.1 s.2.2).1) :
@@ -182,21 +182,21 @@ theorem off_of_accepts (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     rw [hw] at hR
     have hR' : A.R x wt := hR
     have hle := hholds wt hR'
-    have hgt : ¬ ((Accounting.unbound (V.partsOf θ F) (V.Opens θ F c)
+    have hgt : ¬ ((ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c)
         (majority V A x θ F c σ Fr readX)).card : ℝ) ≤ (V.certOf θ).ε * V.units θ F := by
       rw [← hX]; exact hnot
-    obtain ⟨u, huX, huW⟩ : ∃ u ∈ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (majority V A x θ F c σ Fr readX),
-        u ∉ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX wt) := by
+    obtain ⟨u, huX, huW⟩ : ∃ u ∈ ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (majority V A x θ F c σ Fr readX),
+        u ∉ ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX wt) := by
       by_contra hall
       push_neg at hall
-      have hcard := Finset.card_le_card (show Accounting.unbound (V.partsOf θ F) (V.Opens θ F c)
-          (majority V A x θ F c σ Fr readX) ⊆ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX wt) from
+      have hcard := Finset.card_le_card (show ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c)
+          (majority V A x θ F c σ Fr readX) ⊆ ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX wt) from
         fun u hu => hall u hu)
-      have hle' : ((Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX wt)).card : ℝ) ≤
+      have hle' : ((ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX wt)).card : ℝ) ≤
           (V.certOf θ).ε * V.units θ F := hle
       exact hgt (le_trans (by exact_mod_cast hcard) hle')
     have h' := huW
-    simp only [Accounting.unbound, Finset.mem_filter, Finset.mem_univ, true_and, not_or, not_exists, not_and,
+    simp only [ResourceAccounting.unbound, Finset.mem_filter, Finset.mem_univ, true_and, not_or, not_exists, not_and,
       not_not] at h'
     obtain ⟨g, hg, i, hi, hbit⟩ := Majority.unbound_sampled (V.partsOf θ F) (V.Opens θ F c) h'.1 h'.2 huX
     exact ⟨u, hacc, ⟨wt, hw, huW⟩, wt, hw, hR', g, hg, i, hi, hbit⟩

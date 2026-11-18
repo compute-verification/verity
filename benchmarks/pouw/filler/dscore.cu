@@ -26,7 +26,7 @@
 //
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a dscore.cu -lcublasLt -lnvidia-ml -ldl
 #define main dcap_main
-#include "../../../verity/protocols/accounting/pouw/prover/kernels/filler/dcap.cu"
+#include "../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/dcap.cu"
 #undef main
 #include "rounds.cuh"
 

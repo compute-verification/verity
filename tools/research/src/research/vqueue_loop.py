@@ -97,7 +97,8 @@ plan of the candidate's tree, which splits pytest by suite), judged on every ste
 and its verdict alone is the candidate's; a run started while graph2 gated is started again as the check.  With `verdict`,
 the land verdicts gate: as `check`, but a plain candidate (`Loop._plain`: each member has a land verdict of its own at its
 head, is no move, changes no Lean input and meets nothing drive.toml at `main` names in `lowrisk_excludes` but not in
-`verdict_plain`, or in `verdict_excludes`) lands on those verdicts and the quick tier on its own merge (`vqueue_slim.start_quick`).  `main`'s whole check follows each such landing
+`verdict_plain`, or in `verdict_excludes`) lands on those verdicts and the quick tier on its own merge (`vqueue_slim.start_quick`),
+and no batch holding one holds a PR that isn't (`vqueue.Snapshot.plain`).  `main`'s whole check follows each such landing
 (`Loop._below`), and a red of it (`Loop._main_red`) reverts the one PR landed since `main`'s last passed check whose change
 meets what the failure read (`World.revert`), holding the ready PRs that meet it too until `main`'s check passes again; with
 no such PR it reverts none, and every candidate takes the whole check until `main`'s passes.  Every other candidate takes the
@@ -144,7 +145,8 @@ each member whose merge ratchet-gate fails, the owner of each circuit-check targ
 drop while they or the run beside its base's check run (`Past.off_gate_running`); a red its base shares rings nobody.
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), or, for a base a build of the same tick
-rebuilt (`vqueue.Build.replaces`, logged as its line's `replaces`), onto what that build pushed (`Tick.rebuilds`), leaving
+rebuilt (`vqueue.Build.replaces`, logged as its line's `replaces`) or named (`vqueue.Build.name`: a tick builds several
+batches, each on the one before), onto what that build pushed (`Tick.rebuilds`), leaving
 out one that doesn't merge (`skip`, its owner told once per head and base, a conflict with members merged above `main`
 naming them where it merges onto `main`;
 nobody is told of a head what it merges onto holds, `held`, or `main` fetched again does).  A member whose ready mark's
@@ -155,9 +157,10 @@ as its own one no line names that is the same build made before, as a tick cut o
 it, enqueues `ready:<sha>` as graph/v2 at its priority and starts the run beside its check; with `records` (a member changes
 Lean, a lock or a spec) it starts the candidate's records run instead (`vqueue_records.start`: drive's lock run, on drive's
 machines, on its tree), logged (`regenerate`), and the candidate is staged, its check waiting; a tick that stages one builds
-its batch of PRs with no Lean change too, on the same base.  Under `--lean-stages` N above 1, while fewer than N are staged
-the tick's Lean batch is staged on the top staged one's tip, its records run its own (`vqueue.Snapshot.lean_stages`).  One after a Commit of its tick (`vqueue.Build.after`) is built
-on the candidate that Commit put on main's chain, whose check's record, as started, it reads as its base's; it is built
+its batches of PRs with no Lean change too, the first on the same base.  Under `--lean-stages` N above 1, while fewer than N
+are staged the tick's Lean batch is staged on the top staged one's tip, its records run its own (`vqueue.Snapshot.lean_stages`).
+One after a Commit of its tick (`vqueue.Build.after`) is built on the candidate that Commit put on main's chain, whose check's
+record, as started, it reads as its base's; it is built
 nowhere, and nothing is logged, when the Commit put none there.  Every check starts at one seam (`Loop._enqueue`: the
 enqueue, its line and the run beside it).
 A candidate holding a heavy PR (`World.heavy`), or every candidate and `main`'s own check while the heavy file holds `*`,
@@ -214,7 +217,7 @@ never writes drive's state, its priority file, `next`, `checked` or a label, but
 On a node it runs as vy-vqueue (tools/research/src/research/pods/nebius/vqueue/loop.sh): one `--once` tick a pass, from ci's
 pinned tree in the loop's own clone, with its args file's flags and the node's log, state, lock, priority and freeze files, and
 `--dry-run` or `--shadow` as its mode says, neither when live.  `--batch`, `--depth`, `--lean` and `--lean-stages` default to
-16, 3, 3 and 1.
+16, 3, 3 and 1, and `--fill` to `--depth`.
 """
 from __future__ import annotations
 
@@ -581,7 +584,8 @@ class Past:
     def history(self, on: Callable[[str], bool] | None = None) -> tuple[Outcome, ...]:
         """The drops' outcomes; with ``on``, a pass only of a candidate ``on`` holds (a shadow's `main` left behind)."""
         return tuple(Outcome(tuple(o.get("members") or ()), tuple(o.get("heads") or ()), o["state"], tuple(o.get("suspects") or ()),
-                             o.get("base"), tuple(_as_failed(f) for f in o.get("inherited") or () if isinstance(f, dict)))
+                             o.get("base"), tuple(_as_failed(f) for f in o.get("inherited") or () if isinstance(f, dict)),
+                             r.get("sha"))
                      for r in self.of("drop") if isinstance(o := r.get("outcome"), dict) and o.get("state")
                      and (on is None or o["state"] != PASS or on(r.get("sha") or "")))
 
@@ -2648,9 +2652,10 @@ class Tick:
     #: what each `Commit` of this tick put on main's chain, by the staged batch it committed: the candidate, and the record of
     #: the run beside its check as started, which a build after it is built on and reads as its base's (`vqueue.Build.after`)
     committed: dict[str, tuple[str, dict | None]] = field(default_factory=dict)
-    #: each candidate a build this tick rebuilt (`vqueue.Build.replaces`): what that build pushed, or what it went on when
-    #: no member merged, which a later build naming the candidate as its base goes on
-    rebuilds: dict[str, str] = field(default_factory=dict)
+    #: each candidate a build this tick rebuilt (`vqueue.Build.replaces`), and each build's `vqueue.Build.name`: what that
+    #: build pushed, or what it went on when no member merged, which a later build naming it as its base goes on; None for a
+    #: name built nowhere, on which nothing is built
+    rebuilds: dict[str, str | None] = field(default_factory=dict)
     #: `main` fetched again, the first time this tick a notice needed it (`Loop._landed`)
     fetched: str | None = None
     #: whether a detached job of the steps after an advance runs (`Loop._moved`)
@@ -2670,7 +2675,7 @@ class Loop:
 
     def __init__(self, world: World, log: Path, *, decide: Callable[[Snapshot], list[Action]] = vqueue.decide,
                  shadow: bool = False, dry_run: bool = False, batch: int = BATCH, depth: int = DEPTH, lean: int = LEAN,
-                 pending_s: float = 4 * 3600, slim=None, now: Callable[[], float] = time.time,
+                 fill: int = 1, pending_s: float = 4 * 3600, slim=None, now: Callable[[], float] = time.time,
                  out: Callable[[str], None] = print, state: Path | None = None, tree_ejects: bool = False,
                  gate: str = GRAPH2_GATE, shards: int | str = SHARDS, records=None, graph2_shadow: bool = True,
                  g2_read_s: float = G2_READ_S, g2_fresh: int = G2_FRESH, after: list[str] | None = None,
@@ -2683,6 +2688,7 @@ class Loop:
                              "beside each check (`research.vqueue_slim`) as one shard or more")
         self.world, self.log_path, self.decide, self.shadow, self.dry_run = world, Path(log), decide, shadow, dry_run
         self.batch, self.depth, self.lean, self.pending_s, self.slim = batch, depth, lean, pending_s, slim
+        self.fill = fill
         self.lean_stages, self.gate, self.shards = lean_stages, gate, shards
         #: under `lean_stages` above 1, the records and check records of the candidates this tick's snapshot read, by sha, and
         #: the `--heavy-on` machine each heavy launch of the tick took (`_heavy_on`)
@@ -2808,7 +2814,8 @@ class Loop:
                                            move=bool(getattr(w.open().get(m), "move", "")),
                                            scripts=vqueue.meets(f, MOVE_SCRIPTS), verdict=w.land_verdict(m, h))
                                 for m, h in sorted(flying)),
-                        records=self.records is not None, lean_stages=self.lean_stages)
+                        records=self.records is not None, fill=self.fill, plain=frozenset(self.plain),
+                        lean_stages=self.lean_stages)
         steps.lap("chain")
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], regen, dict(w.carried),
                     dict(w.unauthenticated), riding=riding)
@@ -3319,20 +3326,23 @@ class Loop:
         w, base = self.world, t.rebuilds.get(a.base, a.base)
         if a.after is not None:
             if a.after not in t.committed:                  # its Commit put nothing on the chain: the next tick decides
-                return []
-            base = t.committed[a.after][0]
+                base = None
+            else:
+                base = t.committed[a.after][0]
+        if base is None:
+            if a.name is not None:
+                t.rebuilds[a.name] = None
+            return []
         if self.slim is not None or a.records:
             w.slim_driver()                                 # before anything is pushed
         again = {"replaces": a.replaces} if a.replaces is not None else {}
         tip, merged, recs = self._merged(t, a.members, base)
         if not merged:
-            if a.replaces is not None:
-                t.rebuilds[a.replaces] = base
+            t.rebuilds.update((k, base) for k in (a.replaces, a.name) if k is not None)
             recs.append(self.record(t, "build", base=base, priority=a.priority, why="no member merges onto its base", **again))
             return recs
         tip, adopted = self._pushed(t, tip, base, merged)
-        if a.replaces is not None:
-            t.rebuilds[a.replaces] = tip
+        t.rebuilds.update((k, tip) for k in (a.replaces, a.name) if k is not None)
         line = {"sha": tip, "base": base, "members": [m.pr for m in merged], "heads": [m.head for m in merged],
                 "priority": a.priority, **({"adopted": True} if adopted else {}), **again, **self._moves(merged)}
         if a.records:
@@ -4496,6 +4506,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--batch", type=int, default=BATCH, help=f"the most members a candidate holds (default {BATCH})")
     ap.add_argument("--depth", type=int, default=DEPTH, help=f"the most candidates stacked at once, each with the run beside "
                                                              f"its check (default {DEPTH})")
+    ap.add_argument("--fill", type=int, help="the most candidates a tick builds on main's chain, each on the one before "
+                                             "(default --depth)")
     ap.add_argument("--lean", type=int, default=LEAN, help=f"the most members of a Lean candidate, each with a Lean change "
                                                            f"that compiles (a spec's or a Lean source's, not a lock's "
                                                            f"alone): one opens whenever none is staged and no PR "
@@ -4634,7 +4646,7 @@ def main(argv: list[str]) -> int:
             return _after_landing(world, a.after_landing)
         after = None if a.shadow or a.dry_run else [sys.executable, "-m", "research", "queue", "vqueue", *argv]
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
-                    lean_stages=max(1, a.lean_stages),
+                    fill=a.depth if a.fill is None else a.fill, lean_stages=max(1, a.lean_stages),
                     pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects, gate=a.gate,
                     shards=a.shards, records=None if a.no_records else vqueue_records, graph2_shadow=not a.no_graph2_shadow,
                     after=after)

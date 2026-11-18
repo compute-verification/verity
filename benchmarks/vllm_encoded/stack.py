@@ -43,14 +43,14 @@ import torch
 HERE = Path(__file__).resolve().parent
 CT = HERE.parent / "codec_tensor"
 sys.path.insert(0, str(CT))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/poub/prover/codec_tensor/reader.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.py").parent))
 
 import bench as BW  # noqa: E402  (codec_tensor's)
 import reader as RD  # noqa: E402
 import sketching as SKT  # noqa: E402
 
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/poub/prover/word_codec/paged.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/paged.py").parent))
 import kernels as K  # noqa: E402
 import paged as P  # noqa: E402
 import step_spans as SS  # noqa: E402
@@ -731,8 +731,8 @@ class Attention:
         if not self.staged:
             return
         if self.graph_tab is None:
-            ents = [(self.stage_k[l], self.stage_v[l], self.stage_s[l], MAX_ROWS, c, base, layers, idx)
-                    for l, (c, base, layers, idx) in sorted(self.staged.items())]
+            ents = [(self.stage_k[li], self.stage_v[li], self.stage_s[li], MAX_ROWS, c, base, layers, idx)
+                    for li, (c, base, layers, idx) in sorted(self.staged.items())]
             self.graph_tab = P.table(torch, ents).cuda()
             self.graph_layers = len(ents)
         self._launch(self.graph_tab, self.graph_layers, rows, SS.KINDS.index("graph"))
@@ -1047,7 +1047,7 @@ def components(st: Stack, lm: LmHead, trials: int = 5) -> dict:
         x8 = {lin.kd: rand_x(lin, m, gen) for lin in st.linears[:-1]}
         st.begin_pass(m)
 
-        def linears():
+        def linears(x8=x8):
             for lin in st.linears[:-1]:
                 lin.forward(x8[lin.kd], xs)
         linears()
@@ -1058,13 +1058,13 @@ def components(st: Stack, lm: LmHead, trials: int = 5) -> dict:
         row = {"linears": best(g.replay)}
         del g
         if st.encoded:
-            def commit():
+            def commit(m=m):
                 st.at = st.nvec[m]
                 st.commit(m)
             row["commit"] = best(commit)
-            row["begin_pass"] = best(lambda: st.begin_pass(m))
+            row["begin_pass"] = best(lambda m=m: st.begin_pass(m))
         h = torch.randn((m, lm.h), generator=gen, device="cuda").to(torch.bfloat16)
-        row["lm_head"] = best(lambda: lm.run(h, False))
+        row["lm_head"] = best(lambda h=h: lm.run(h, False))
         out[m] = row
     return out
 

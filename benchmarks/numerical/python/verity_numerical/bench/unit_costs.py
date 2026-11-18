@@ -50,7 +50,7 @@ sharing a VU-level circuit could make between its subcircuits (an operand they s
 ANDs and nonzeros.
 
 **Sampled instances.** The sample is uniform over all units, because a hidden partition cannot be stratified by type: K =
-``record_k(ε, δ)`` units (``verity.protocols.accounting.pouw.prover.circuit.plan``, 27,713 at the default ε = 0.1%, δ = 2⁻⁴⁰) without
+``record_k(ε, δ)`` units (``verity.protocols.resource_accounting.compute.pouw.prover.circuit.plan``, 27,713 at the default ε = 0.1%, δ = 2⁻⁴⁰) without
 replacement from the workload's N evaluable units, at each granularity. A type with n of the N units gets a hypergeometric
 count: its mean ``K n / N`` and its upper ``1 − δ`` quantile, the least k with P(X > k) ≤ δ, summed exactly over the tail
 in log space.
@@ -77,7 +77,7 @@ from verity.circuits.cut import separable
 from verity.circuits.evaluation.reference import resolve, signature_of
 from verity.circuits.ops.boolean import attention as AT
 from verity_vllm.definitions.registry import sampling_boolean as SB
-from verity.protocols.accounting.pouw.prover.circuit.plan import record_k
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit.plan import record_k
 from verity_flock import ir_lower, lowerings
 from verity_flock import subcircuit_templates as TM
 
@@ -160,11 +160,17 @@ def build(template: str, params: Mapping[str, Any], statics: Mapping[str, int] |
     return out
 
 
+#: what building a template at some parameters raises when it can't be built there, reported and never guessed around: a
+#: missing piece (`ir_lower.NoPiece`, a NotImplementedError), an unsupported parameter (ValueError, KeyError, TypeError) or
+#: a word the lowering can't place (`ir_lower.AmbiguousWord`); anything else is a bug, and raises
+UNBUILT = (NotImplementedError, ValueError, KeyError, TypeError, ir_lower.AmbiguousWord)
+
+
 def _build_job(job: tuple) -> tuple[tuple, dict[str, Any]]:
     template, params, statics = job
     try:
         return job, build(template, dict(params), dict(statics))
-    except Exception as e:  # a missing piece (NoPiece) or an unsupported parameter: reported, never guessed around
+    except UNBUILT as e:
         return job, {"error": f"{type(e).__name__}: {e}"}
 
 
@@ -212,7 +218,7 @@ def _reg_job(job: tuple) -> tuple[tuple, dict[str, Any]]:
     template, params, statics = job
     try:
         return job, registered(template, dict(params), dict(statics).get("T"))
-    except Exception as e:
+    except UNBUILT as e:
         return job, {"none": f"{type(e).__name__}: {e}"}
 
 

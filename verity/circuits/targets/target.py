@@ -33,7 +33,7 @@ multiple of 16.
   chain whose intermediate transition saturates is rejected at the next step.  The pinned simulator masks the
   exponent instead and is not the reference there.
 * **Statement.** An obligation is a ``typed-obligation/v0`` object (``statement_format = 2``,
-  ``benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0``) whose family digest is :data:`FAMILY_DIGEST`.
+  ``tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0``) whose family digest is :data:`FAMILY_DIGEST`.
 
 Transition unit versus proof block
 ==================================
@@ -72,7 +72,7 @@ Outside FIRST
   (:data:`verity.circuits.silicon.models.HOPPER_BF16_M16N8K16`); a different pipeline, a different target.
 * **Kernel-level accumulation order.** The target fixes the chain the *relation* checks (ascending ``k``, one
   accumulator).  Whether a given GEMM kernel launch (split-K, stream-K, different tile orders) realises exactly this
-  chain is a frontend binding question; ``benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0``'s
+  chain is a frontend binding question; ``tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0``'s
   K = 1536 input is one captured case where it did.
 
 Draft targets
@@ -126,7 +126,7 @@ Native peak: what a target's overhead is measured against
 A target names its ``anchor_device``, the **conformance device of its instruction** -- the card the relation was pinned
 on (A100 for ``sm80.mma.m16n8k16.bf16``, H100 for ``sm90.wgmma.m64n8k32.e4m3``, RTX 4090 for ``sm89.mma.m16n8k32.e4m3``)
 -- not the machine a prover happens to run on (that is in the result's ``hardware`` fingerprint).  The number a
-benchmark's ``overhead.vs_native_peak`` divides by is outside core: the census entry (``benchmarks/census/hardware.json``, data read
+benchmark's ``overhead.vs_native_peak`` divides by is outside core: the census entry (``calibration/census/hardware.json``, data read
 by the benchmarks) of that device and the target's operand dtype, the datasheet **dense** tensor-core peak at the
 relation's FP32 accumulate width.  One proof block of ``GemmCoordinate<K>`` is ``K`` multiply-accumulates = ``2K`` FLOP, so the native time of one
 proof block at a peak is ``2K / flop_per_second``.
@@ -166,7 +166,7 @@ __all__ = [
 
 #: The tensor-core gate families' names and versions.  Each ``veritor.*`` spelling is baked into a ``*_FAMILY_DIGEST``
 #: pin, fixtures and recorded runs, so it stays; a new family takes a fresh id outside ``veritor.*``
-#: (``verity/circuits/tests/test_targets_frozen_families.py``).
+#: (``tests/verity/circuits/test_targets_frozen_families.py``).
 TC_AMPERE_BF16_NAME = "veritor.tc-ampere-bf16"
 #: The family-name prefix of FIRST's vocabulary on another BF16 pipeline.
 TC_BF16_NAME_PREFIX = "veritor.tc-bf16."
@@ -220,7 +220,7 @@ class Target:
     anchor_device: str
     status: Status = "frozen"
     instruction: str | None = None
-    #: The ``trust-dossier/v1`` artifact id whose computed trust level this target cites (``benchmarks/tc_probe/trust.py``),
+    #: The ``trust-dossier/v1`` artifact id whose computed trust level this target cites (``calibration/tc_probe/trust.py``),
     #: from :data:`EVIDENCE_IDS`.
     dossier: str | None = None
 

@@ -5,7 +5,7 @@ public import Definitions.Poub.Remote.Held
 /-!
 # What devices outside the node compute for it, and what enters it, over a PoUB session (trusted)
 
-A PoUB session's trace (`Accounting.Remote.Held.Trace`) says where each registered block is on the node, tick
+A PoUB session's trace (`ResourceAccounting.Remote.Held.Trace`) says where each registered block is on the node, tick
 by tick on the verifier's clock. `Outside T` is the same session's record of the computation off the node for it, at
 each outcome `ω` and tick `t`:
 
@@ -23,13 +23,13 @@ is not computing on it: the block then comes in by the trace's `link` route.
 
 `Ingress Ω` is what enters the node over its uplinks, the links between it and any other host, at each outcome and
 tick: `entered ω t`, the bits other than the verifier's messages that enter it at tick `t`, and `counted ω t`, those
-the network certifiers on its uplinks sign as entering it then. `Quiet T n ω` says `n` is 0 at every tick of every
+the network attesters on its uplinks sign as entering it then. `Quiet T n ω` says `n` is 0 at every tick of every
 credited pass of `T` at `ω`: at `n = counted` it is the event the certifiers observe.
 -/
 
 @[expose] public section
 
-namespace Accounting.Remote.Held
+namespace ResourceAccounting.Remote.Held
 
 /-- What devices outside the node compute for it during a PoUB session whose node memory is the trace `T`. -/
 structure Outside {Ω : Type} (T : Trace Ω) where
@@ -42,7 +42,7 @@ structure Outside {Ω : Type} (T : Trace Ω) where
 structure Ingress (Ω : Type) where
   /-- the bits other than the verifier's messages that enter the node over its uplinks at tick `t` -/
   entered : Ω → ℕ → ℕ
-  /-- the bits other than the verifier's messages that the network certifiers on its uplinks sign as entering at
+  /-- the bits other than the verifier's messages that the network attesters on its uplinks sign as entering at
   tick `t` -/
   counted : Ω → ℕ → ℕ
 
@@ -50,4 +50,4 @@ structure Ingress (Ω : Type) where
 def Quiet {Ω : Type} (T : Trace Ω) (n : Ω → ℕ → ℕ) (ω : Ω) : Prop :=
   ∀ p < T.passes, ∀ t, T.tick ω p ≤ t → t < T.tick ω (p + 1) → n ω t = 0
 
-end Accounting.Remote.Held
+end ResourceAccounting.Remote.Held

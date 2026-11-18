@@ -41,9 +41,9 @@ challenges), independently: `z` is fixed before setup, as `W` is, and `W` does n
 
 @[expose] public section
 
-namespace Accounting.Guarantees.Memory
+namespace ResourceAccounting.Guarantees.Memory
 
-open Accounting.Memory
+open ResourceAccounting.Memory
 open scoped ENNReal
 
 /-- **The counting core.** For every map `π` reading a `q`-bit value from an `M`-bit state, at most `2^(q − k)` of the
@@ -187,4 +187,4 @@ def AddsAdviceP2Ring : Prop :=
               M + H + a + k) ≤
         ENNReal.ofReal Pous.Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) + 105 * (2⁻¹ : ℝ≥0∞) ^ k
 
-end Accounting.Guarantees.Memory
+end ResourceAccounting.Guarantees.Memory

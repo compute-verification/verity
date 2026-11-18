@@ -53,7 +53,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **A play of the game after `θ`, `F` and `c` is at the parameters `θ`.** -/
 theorem play_params (V : Vocab d α) {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}

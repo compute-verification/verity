@@ -10,7 +10,7 @@ public import Mathlib.Data.Finset.Sort
 `nontrivial` witnesses (`lean-audit.json`'s `witnesses`), and `Proofs.Pouw.MonitoringPeriod.Honest` that the instance meets every
 premise (`h1_meets`); the instance they read is here, so their statements read only this tree, the spec and the code.
 
-* The twin's circuit word, scheme and anatomy (`Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest`): one
+* The twin's circuit word, scheme and anatomy (`ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.Honest`): one
   committed `S8Dot_v1` word, every kind credited with its operand luck pinned, `r_B = ½` and guess `½`, one word fixed.
 * The deployed check's numbers at the all-protocols PoUW subprotocol (`Accept`): the pinned H1 tile's check item, its
   parameters `h1Params`, the loop's honest registration `h1Reg` and one-stage's answer accepting it, `h1Evidence`.
@@ -22,12 +22,12 @@ premise (`h1_meets`); the instance they read is here, so their statements read o
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest
+namespace ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.Honest
 
-open Accounting.TS Accounting.Compose
+open ResourceAccounting.TS ResourceAccounting.Compose
 
 /-- The word: step `0` of an `S8Dot_v1` body of `K = L = 32` (its `T_1`, a served step), committed. -/
-def word : Accounting.Gates.IntGate Unit where
+def word : ResourceAccounting.Gates.IntGate Unit where
   op := .const 0
   args := []
   lo := 0
@@ -58,11 +58,11 @@ noncomputable def anatomy : Anatomy Unit Unit Unit Unit where
   words := fun _ => 0
   fixed := 1
 
-end Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest
+end ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.Honest
 
 namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
 
-open PouwCheck
+open PouwVerifier
 open Lean (Json)
 open PouwWindow (Work Sampling)
 
@@ -72,7 +72,7 @@ def h1Tile : Tile := tiles[4]
 /-- The subprotocol's check item (`h1_check`): the pinned tile's template and work per tile (`64·32`), the scheme and the
 entries bound 1024, no coin mode. -/
 def h1Check : CheckItem :=
-  { entries := 1024, scheme := PouwCheck.scheme, template := h1Tile.template, tileWork := h1Tile.tileWork }
+  { entries := 1024, scheme := PouwVerifier.scheme, template := h1Tile.template, tileWork := h1Tile.tileWork }
 
 /-- The subprotocol's check parameters (`h1_params`) in the period's context `context`. -/
 def h1Params (context : String) : Params where
@@ -105,7 +105,7 @@ def h1Reg (context format program partition : String) (bytes : ByteArray) : Exec
   program := program
   query := h1Tile.query
   partition := partition
-  scheme := PouwCheck.scheme
+  scheme := PouwVerifier.scheme
   population := 144
   samplingDesign := subsetSamplingDesign 24
   roots := #[]
@@ -133,9 +133,9 @@ end Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
 namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1
 
 open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
-open PouwCheck (Params)
-open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposeMonitoringPeriod
+open PouwVerifier (Params)
+open ResourceAccounting.TS ResourceAccounting.Compose Pouw.RelativeSecurity
+open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The circuit -/
 
@@ -174,7 +174,7 @@ def period : (n : ℕ) → ExecutionPhasePlay Bool Ω1 (Fin 144) circuit.rounds 
 def prm : Params := h1Params ""
 
 /-- Every window's registration: the loop's honest one. -/
-def reg : PouwCheck.ExecutionPhaseCommitmentRecord := h1Reg "" "" "" "" ByteArray.empty
+def reg : PouwVerifier.ExecutionPhaseCommitmentRecord := h1Reg "" "" "" "" ByteArray.empty
 
 /-- The units of the model's sample at permutation coin `β`, ascending. -/
 noncomputable def unitsOf (β : Equiv.Perm (Fin 144) × Unit) : Array ℕ :=

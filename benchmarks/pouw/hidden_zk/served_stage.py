@@ -9,11 +9,12 @@ from pathlib import Path
 from typing import Any
 
 import hash_scratch as H
+from verity_config.settings import of
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL
 
-from verity.protocols.accounting.pouw.prover.kernels.served_zk import stage_tile
+from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import stage_tile
 
 
 class Stager(stage_tile.Stager):
@@ -36,4 +37,4 @@ class Stager(stage_tile.Stager):
 
 
 if __name__ == "__main__":
-    stage_tile.main(stager=Stager())
+    stage_tile.main(stager=Stager(), staging=of(__file__).HZ_STAGE)

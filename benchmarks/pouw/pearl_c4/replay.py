@@ -53,14 +53,14 @@ from pathlib import Path
 from verity_config.settings import of
 
 from verity.commitments import Commitment, MerkleTree, Opening
-from verity.protocols.accounting.pouw.prover.schemes import get
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get
 from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
-from verity.protocols.accounting.pouw.verifier import audit as au
-from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, tagged
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as W
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit as au
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, tagged
 
-# the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/prover/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
+# the work sampling design and the clear audit are a reference tool's (verity/protocols/resource_accounting/compute/pouw/prover/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
 import clear_audit as CA
 import clear_work as CW
 
@@ -77,7 +77,7 @@ SHORTCUTS = (
     ("the transcript tree over the tile leaves and the records (row_passes and R1 per row) are computed on the host after "
      "timing"),
     ("verify opens the sampled tiles' rows and words and recomputes them in the clear: its ACCEPT is replay-verified "
-     "(development shortcut; the protocol's check is a ZK proof, PouwCheck)"),
+     "(development shortcut; the protocol's check is a ZK proof, PouwVerifier)"),
 )
 
 

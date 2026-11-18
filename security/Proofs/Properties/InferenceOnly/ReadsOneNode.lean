@@ -43,8 +43,8 @@ gate is one of its gates (`locW_lt`), so shifted to a member's first gate it is 
 
 @[expose] public section
 
-namespace InferenceOnlyCheck.Properties.SecurityProofs.ReadsExact
-open InferenceOnlyCheck.Desc (Piece Seg PS Tgt)
+namespace InferenceOnlyVerifier.Properties.SecurityProofs.ReadsExact
+open InferenceOnlyVerifier.Desc (Piece Seg PS Tgt)
 open Flock.Program (Prog)
 open DescAgree (nodeCount rootOffs)
 
@@ -1791,4 +1791,4 @@ theorem rootOneNode_of
   exact ⟨fun q hq _ => nodeGates_of_inNode P hl hk (hN.1 q hq),
     fun h1 h2 _ => nodeGates_of_inNode P hl hk (hN.2 h1 h2)⟩
 
-end InferenceOnlyCheck.Properties.SecurityProofs.ReadsExact
+end InferenceOnlyVerifier.Properties.SecurityProofs.ReadsExact

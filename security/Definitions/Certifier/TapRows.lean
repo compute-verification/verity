@@ -34,25 +34,25 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The network certifier's rows: its registration at the transfer gates, and the leak relation at them
+# The network attester's rows: its registration at the transfer gates, and the leak relation at them
 
 Definitions only. The audit's trace holds each step's egress rows at the layout's egress gates and its ingress at the
-ingress gates (`BoundaryGates`). The network certifier on the server's uplink, which functions as an active warden,
+ingress gates (`BoundaryGates`). The network attester on the server's uplink, which functions as an active warden,
 registers what it records there: openings `ops` under the statement's roots, one at each transfer gate before the
 horizon, whose values (`certifierVal ops`) are its records' egress rows and the operator's moves on them (`CertifierRegisters`). Its
 registered root is its signed root for the window, a function of what the server did, so these rows vary with the
 server's secret, unlike the values the prover registers at `reg` (`AsReg`).
 
-An extracted trace that opens a transfer gate to a value other than the network certifier's makes, with the network
-certifier's opening there, two passing openings of one position to different values, so under `CommitmentScheme.Binds` the
+An extracted trace that opens a transfer gate to a value other than the network attester's makes, with the network
+attester's opening there, two passing openings of one position to different values, so under `CommitmentScheme.Binds` the
 calls that check them collide; `Btap` looks for that collision. Every transfer gate outside the incorrect proof blocks is opened,
-so where the trace agrees with the network certifier it carries the network certifier's records there; an incorrect proof
+so where the trace agrees with the network attester it carries the network attester's records there; an incorrect proof
 block's committed gates are the advice the count already charges (`2^β` over `incorrectSets`). The leak relation at the
-network certifier's rows (`RLeakCertifier`) is `RLeak` with the observations it counts picked out by the network certifier's
+network attester's rows (`RLeakCertifier`) is `RLeak` with the observations it counts picked out by the network attester's
 registration rather than by the trace's transfer gates.
 
 A constant gate is committed by nobody, and every trace holds the program's constant there, so at an egress gate the
-program holds constant the network certifier's record must be that constant (an ingress gate is an input,
+program holds constant the network attester's record must be that constant (an ingress gate is an input,
 `BoundaryGates.Fits`).
 -/
 
@@ -62,16 +62,16 @@ namespace NetTiming
 
 open Claims Claims.Sampling
 
-/-- **The network certifier's value** at gate `g`: its first opening at `g`'s position, `false` where it has none. -/
+/-- **The network attester's value** at gate `g`: its first opening at `g`'s position, `false` where it has none. -/
 def certifierVal (ops : List (Opening Bool)) (g : ℕ) : Bool :=
   ((ops.find? fun o => o.pos == g).map (·.val)).getD false
 
 /-- **The trace filled in**: the committed values `ref`, with `tv`'s value at every gate `ref` leaves unopened. At the
-network certifier's values (`certifierVal`) it holds the network certifier's records at the transfer gates wherever
+network attester's values (`certifierVal`) it holds the network attester's records at the transfer gates wherever
 the trace's own openings there agree with them. -/
 def fillTrace (ref : ℕ → Option Bool) (tv : ℕ → Bool) (g : ℕ) : Option Bool := some ((ref g).getD (tv g))
 
-/-- **The network certifier registers the records `o`** at the transfer gates of the statement `s` over the horizon `k`,
+/-- **The network attester registers the records `o`** at the transfer gates of the statement `s` over the horizon `k`,
 at the operator `op`: each of its openings `ops` passes under the statement's roots; before `k`, every egress and
 ingress gate has an opening, and at an egress gate the program holds constant the opening holds that constant; and each
 step's record exists, its egress rows are the rows the openings hold at the egress gates, and the operator's move on the
@@ -86,8 +86,8 @@ def CertifierRegisters {L K S : ℕ} (H : Msg → Msg) (Cm : CommitmentScheme Bo
       ∃ h : t < o.length, (∀ ℓ, o[t].rows ℓ = rowOf (certifierVal ops) (lay.egress t ℓ)) ∧
         op t (o.take t) = (lay.ingress t).map (certifierVal ops)
 
-/-- **The leak relation at the network certifier's rows** at `δ`, on the statement's bytes: the statement parses and has
-a partition, and every observation sequence of length `k` with jitter below `Dj` that the network certifier registers
+/-- **The leak relation at the network attester's rows** at `δ`, on the statement's bytes: the statement parses and has
+a partition, and every observation sequence of length `k` with jitter below `Dj` that the network attester registers
 (`CertifierRegisters`, its openings `tops s`) with every status complete is among the sequences `AccSeqsSampled` counts at the
 inputs `As s ρ`, `ρ` the trace's committed values. -/
 def RLeakCertifier (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
@@ -106,9 +106,9 @@ section Finder
 
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **`B_tap`**, the collision finder against the network certifier's openings: on the judged run's tape and coins and
+/-- **`B_tap`**, the collision finder against the network attester's openings: on the judged run's tape and coins and
 the extractor's coins, the extractor run, and the first collision among its own `H` calls and the calls that check the
-network certifier's openings `tops s` under the statement's roots. Its cost is the extraction's SHA-512 calls, its
+network attester's openings `tops s` under the statement's roots. Its cost is the extraction's SHA-512 calls, its
 reruns' included, and the checks'. -/
 noncomputable def Btap (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) (Cm : CommitmentScheme Bool)
     (parse : Msg → Option AuditStatement) (tops : AuditStatement → List (Opening Bool)) : FinderFamily :=

@@ -33,7 +33,7 @@ The length check's n is tied to the last step's count: `class_check` reads that 
 it, so the count the selects carried and the n the rule gives cannot be two numbers.
 
 **The limits** reach every step's select and the length check from one committed source, so the bit and the check
-cannot be given two different limits: the class's `b.request` row, its first four fields (`boundary_rows.FIELDS`: the
+cannot be given two different limits: the class's `b.request` row, its first four fields (`boundary_span.FIELDS`: the
 prompt's length ``lp``, ``max_tokens``, ``min_tokens``, ``ignore_eos``), 8 sixteen-bit leaves from leaf 0, which each
 of those units reads by one boundary read (`interface.Read`, ``step [0]`` across them: `LIMITS`).
 
@@ -67,7 +67,7 @@ the request; it cannot make the auditor accept anything false.
 
 **The length check** (`class_check`) keeps one bit and reads the last step's bit and count with the ids. The ids are the
 selects' ``o0``, zeros past n, so the served-ids boundary read of the combines' ``o0``
-(`node_window_reads.served_reads`) equals the `b.egress` row (`boundary_rows.egress_row` under a stop rule: the n ids,
+(`node_window_reads.served_reads`) equals the `b.egress` row (`boundary_span.egress_row` under a stop rule: the n ids,
 then O - n zeros, low word first) at every n, and the check needs no second output.
 
 **The wires** (`class_window`): each reader of the bit (the masked key blocks and the next select) reads it from step

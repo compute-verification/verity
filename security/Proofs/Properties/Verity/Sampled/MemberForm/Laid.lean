@@ -40,7 +40,7 @@ theorem ExecutionPhase.laid_of {W : ExecutionPhase} (ht : (W.ms.map fun m => m.n
 
 namespace MemberForm
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **A window whose members' files pass is laid out in order**, where each of the parameters' members is one range
 of units and no unit is in two members' ranges: the members are in the order of their first units, each at the range

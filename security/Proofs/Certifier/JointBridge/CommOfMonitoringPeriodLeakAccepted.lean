@@ -40,28 +40,28 @@ import Proofs.Pouw.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The network certifier's per-period guarantee from its period of sampled audits (proof)
+# The network attester's per-period guarantee from its period of sampled audits (proof)
 
-`Accounting.SecurityProofs.Bridge.CommOfMonitoringPeriodLeakAccepted`: `comm_of_monitoringPeriodLeak` at network accounting's proof of
-`MonitoringPeriodLeakAccepted` (`NetTiming.monitoringPeriodLeak`). On a run that realizes the network certifier's period of `n` sampled
-audits (`Accounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted`), the network audit's `PeriodRun.Sound` holds at
-`n · (δ + ε_ks + ε_bind + ε_tap)`. The network certifier accepting with the claim failing means some window fails
+`ResourceAccounting.SecurityProofs.Bridge.CommOfMonitoringPeriodLeakAccepted`: `comm_of_monitoringPeriodLeak` at network accounting's proof of
+`MonitoringPeriodLeakAccepted` (`NetTiming.monitoringPeriodLeak`). On a run that realizes the network attester's period of `n` sampled
+audits (`ResourceAccounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted`), the network audit's `PeriodRun.Sound` holds at
+`n · (δ + ε_ks + ε_bind + ε_tap)`. The network attester accepting with the claim failing means some window fails
 `ExecutionPhaseGood` (`comm_iff`); the union bound over the windows sums each window's failure, which is at most the sampled
 verifier's `PrBad` at `RLeakCertifier` (`period_le`), which `MonitoringPeriodLeakAccepted`'s per-window conjunct bounds by
 `κ + √(γ·Pr[B]) + Pr[B_ext] + Pr[B_tap]`, at most `δ + ε_ks + ε_bind + ε_tap` at each window's prover.
 
-The per-window conjunct of `MonitoringPeriodLeakAccepted` reads neither the period's windows nor the network certifier device,
+The per-window conjunct of `MonitoringPeriodLeakAccepted` reads neither the period's windows nor the network attester device,
 so it is read off at the period of no windows (`ksLin_of_monitoringPeriodLeak`). Its count of the secrets is what the claim at
-`K` stands for, and the error doesn't use it. The network certifier's trust (`trusted-device`) is the realization's
+`K` stands for, and the error doesn't use it. The network attester's trust (`trusted-device`) is the realization's
 `trusted`, which this proof doesn't read: `period_le` is the per-window bound its records give, and deriving it from
 `MonitoringPeriodLeakAccepted` at the deployed period and `trusted` is the follow-up.
 -/
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Bridge
+namespace ResourceAccounting.SecurityProofs.Bridge
 
-open Claims Claims.Sampling NetTiming Accounting.JointBridge Finset
+open Claims Claims.Sampling NetTiming ResourceAccounting.JointBridge Finset
 
 theorem pr_exists_le {β : Type} [Fintype β] {n : ℕ} (P : Fin n → β → Prop) :
     Pouw.pr (fun x => ∃ i, P i x) ≤ ∑ i, Pouw.pr (P i) := by
@@ -142,14 +142,14 @@ theorem comm_of_monitoringPeriodLeak (hsrc : Guarantees.MonitoringPeriodLeakAcce
     _ = n * (δ + εks + εbind + εtap) := by
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-/-- **The network certifier's per-period guarantee**, at network accounting's proof of `MonitoringPeriodLeakAccepted`. -/
+/-- **The network attester's per-period guarantee**, at network accounting's proof of `MonitoringPeriodLeakAccepted`. -/
 theorem CommOfMonitoringPeriodLeakAccepted : Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted := by
   intro ι d α _ C I Ω _ _ Coin _ _ _ A r c p H D L Kₒ S lay k δ reg Dj n R
   exact comm_of_monitoringPeriodLeak NetTiming.monitoringPeriodLeak c p R
 
 open NetWitness in
 /-- **`CommOfMonitoringPeriodLeakAccepted`'s conclusion fails at the verifier that accepts everything** (`acceptAllNet`): the
-network audit accepts on every coin while the network certifier's claim fails on it, so the audit's guarantee fails at
+network audit accepts on every coin while the network attester's claim fails on it, so the audit's guarantee fails at
 error `½`. -/
 theorem CommOfMonitoringPeriodLeakAccepted_nontrivial :
     ¬ acceptAllNet.Sound ⟨0, 1, 0, 0, 0⟩ (fun _ => 1) .network (1 / 2) := by
@@ -163,4 +163,4 @@ theorem CommOfMonitoringPeriodLeakAccepted_nontrivial :
   rw [hpr] at h1
   norm_num at h1
 
-end Accounting.SecurityProofs.Bridge
+end ResourceAccounting.SecurityProofs.Bridge

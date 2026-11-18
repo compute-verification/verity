@@ -1010,7 +1010,7 @@ theorem printsLog_dev (S : Exchange → RunSetup) (o : Exchange) : Lines.PrintsL
 
 /-- **`Binds` at v2's read, at the device's history at each play** (`Binding.binds_of_prints`): at every setup, each
 play's history printed its log (`printsLog_dev`). -/
-theorem binds_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+theorem binds_dev {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
     (k : Verity.Registration.Composite) (S : Exchange → RunSetup) (θ : ByteArray) :
     Binding.Binds V k Binding.readsV2 (dev S) θ :=
   Binding.binds_of_prints V k (dev S) θ fun o _ => printsLog_dev S o
@@ -1156,7 +1156,7 @@ at a vocabulary whose signer at the parameters is the deployment's at the vocabu
 signer signs is one a history of the setup's ledger lines, or of the run that released the play's log, signs
 (`Deployment.signer`), and the device's history at the play holds that run (`dev_play`) and those lines under the
 parameters' key. -/
-theorem signsPlay_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (P : Deployment)
+theorem signsPlay_dev {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (P : Deployment)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (hD : V.signer θ = P.signer V.families θ) :
     Binding.SignsPlay V (dev (P.setupOf V.families)) θ F c := by
   intro o ho key hk m hm
@@ -1206,7 +1206,7 @@ theorem signsPlay_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintyp
 accepted play whose log v2 read isn't the device's is at most as likely as the read finder's collision plus the
 forger's forgery (`Binding.logged_le`), the device's history at each play having printed the play's log (`binds_dev`)
 and signed what the play's signatures are on (`signsPlay_dev`). -/
-theorem logged_le_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+theorem logged_le_dev {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
     (T : PinnedTables) (k : Verity.Registration.Composite) (P : Deployment) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hD : V.signer θ = P.signer V.families θ) :
     Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Binding.Logged Binding.readsV2 o) (V.game θ F c) σ ≤

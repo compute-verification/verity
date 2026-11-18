@@ -24,9 +24,9 @@ What `Pouw.Guarantees.MonitoringPeriodBindingPerProver` (`Definitions.Compose.Gu
 
 @[expose] public section
 
-namespace Accounting.Compose
+namespace ResourceAccounting.Compose
 
-open Accounting.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS Pouw.RelativeSecurity
 
 /-- **The positions a period's tiles read**: `(w, g)` for each verification phase `w < n` and each gate `g` among tile
 `t`'s slots, `t < Np`, with the gate `Declared.monitoringPeriodLayer` reads past a tile's last slot (its first slot, or
@@ -99,4 +99,4 @@ def acceptAllLayer : SampledLayer Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 (Fin 1
 
 end PeriodBinding
 
-end Accounting.Compose
+end ResourceAccounting.Compose

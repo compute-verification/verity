@@ -9,17 +9,17 @@ public import Definitions.Poub.Guarantees.Sketch
 For a nonzero integer vector `d`, flipping the sign of one row entry where `d` is nonzero moves the row's inner product
 with `d` by `±2 d_j ≠ 0`. The flip is an involution, so it maps the rows of any one inner product into the rest: at most
 half the rows have a given inner product (`card_level_le`), and `k` independent rows all hit given values with probability
-at most `2^-k` (`card_rows_le`). `nonCollision` is `Accounting.Guarantees.Sketch.NonCollision`; `commitThenProject`
-(`Accounting.Guarantees.Sketch.CommitThenProject`) applies the same bound to a column where `C` and `A·B` differ.
+at most `2^-k` (`card_rows_le`). `nonCollision` is `ResourceAccounting.Guarantees.Sketch.NonCollision`; `commitThenProject`
+(`ResourceAccounting.Guarantees.Sketch.CommitThenProject`) applies the same bound to a column where `C` and `A·B` differ.
 -/
 
 @[expose] public section
 
 open Verity.Game renaming prPMF → prob
 
-namespace Accounting.TagProofs
+namespace ResourceAccounting.TagProofs
 
-open Accounting.Tag Finset
+open ResourceAccounting.Tag Finset
 open scoped ENNReal
 
 /-- An event holding on at most a `2^-k` share of a finite type has uniform probability at most `2^-k`. -/
@@ -88,7 +88,7 @@ theorem flip_moves {ι : Type} [Fintype ι] [DecidableEq ι] (d : ι → ℤ) (j
     rw [h, sub_self, sgn_not_sub] at e
     cases hb : r j <;> simp [hb] at e <;> exact hj (by omega)
 
-theorem nonCollision : Accounting.Guarantees.Sketch.NonCollision := by
+theorem nonCollision : ResourceAccounting.Guarantees.Sketch.NonCollision := by
   intro k n x y
   classical
   apply prob_uniform_le_inv_pow
@@ -113,7 +113,7 @@ theorem nonCollision : Accounting.Guarantees.Sketch.NonCollision := by
     rw [hset]
     exact card_rows_le (fun r : Fin n → Bool => ∑ l, sgn (r l) * (x l - y l)) _ hf hne _
 
-theorem commitThenProject : Accounting.Guarantees.Sketch.CommitThenProject := by
+theorem commitThenProject : ResourceAccounting.Guarantees.Sketch.CommitThenProject := by
   intro k m n p A B C
   classical
   apply prob_uniform_le_inv_pow
@@ -136,4 +136,4 @@ theorem commitThenProject : Accounting.Guarantees.Sketch.CommitThenProject := by
     intro i
     simpa [Matrix.mul_apply, signMatrix] using congrFun (congrFun h0 i) q
 
-end Accounting.TagProofs
+end ResourceAccounting.TagProofs

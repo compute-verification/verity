@@ -21,7 +21,7 @@ from pathlib import Path
 from verity.circuits import library
 from verity_flock import circuit_types as CT
 
-VECTORS = Path(__file__).resolve().parents[1] / "tests" / "circuit_type_vectors.json"
+VECTORS = Path(__file__).resolve().parents[6] / "tests" / "verity" / "protocols" / "proofs" / "flock" / "prover" / "circuit_type_vectors.json"
 
 
 def toy_table(rng, ib, vb):

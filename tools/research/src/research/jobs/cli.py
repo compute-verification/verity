@@ -11,6 +11,7 @@ reference).  The Job queue holds batch, unattended work on pods; an interactive 
     research jobs events [--after ID] [--kind K] [--subject S] [--limit N] [--json]
     research worker --dispatch --pods A,B,... [--name rc] [--kinds merge-check,lean-regen] [--once] [--workdir DIR] [--token-file F]
                     [--repo OWNER/NAME]
+    research worker --dispatch --kinds research-run [--slots 4] --name control     a lead's `research run` line (dispatch.py)
 
 The tokens: `research jobs` uses `$JOBS_TOKEN`, else ~/.research/jobs/token (the coordinator's); `research worker` uses
 --token-file, else `$JOBS_WORKER_TOKEN`, else ~/.research/jobs/dispatch-{name}.token (the dispatcher's), never the coordinator's.
@@ -25,7 +26,7 @@ The dedupe key makes adding idempotent, and a deliberate re-run names a new one 
 `merge-check:{commit}`.  A Lean regeneration's is `lean-regen:{digest of its inputs}`: the blobs, at that commit, of every tracked
 file the audit reads (each package, the packages its `proved_in` names, and every package these require by path, less the
 Lake packages nested in them, `tools/verity/lean/`, and the controls' packages every Lean check run builds, wherever
-`check.FIXTURES` puts them; `tools/verity/lean/lean_audit.py`'s inputs without check's own files).  So trains
+`check.FIXTURES` puts them; `tools/verity/lean/lean_audit.py`'s inputs without check's own files).  So candidates
 whose Lean inputs are the same share one regeneration, and the second add answers with the first job and its run.  The site
 is `$JOBS_URL`.  Exit 1 when the Job queue refuses, 4 when it can't be reached.
 """
@@ -45,6 +46,7 @@ from pathlib import Path, PurePosixPath
 from .client import WORKER_TOKEN_ENV, HTTPClient, Unreachable, load_token, worker_token_file
 from .dispatch import AUDIT_TIMEOUT_S, DEFAULT_TIMEOUT_S, EMPTY_TREE, SHA, WORKDIR, Dispatcher, DispatchError, ResearchRunner, lease_needed
 from .dispatch import KINDS as DISPATCH_KINDS
+from .dispatch import POD_KINDS, RUN_KIND, RUN_SLOTS
 
 REPO = "compute-verification/verity"
 LEAN_TOOL = "tools/verity/lean/"
@@ -328,9 +330,10 @@ def main(argv: list[str], client=None) -> int:
 def worker_main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research worker", description="step 1's dispatcher (research/jobs/dispatch.py)")
     ap.add_argument("--dispatch", action="store_true", help="claim jobs and run them with `research run --on` onto --pods")
-    ap.add_argument("--pods", required=True, help="machines.toml names, comma-separated; one job per pod at a time")
+    ap.add_argument("--pods", default="", help="machines.toml names, comma-separated; one job per pod at a time")
+    ap.add_argument("--slots", type=int, default=RUN_SLOTS, help=f"{RUN_KIND} jobs at a time, when it is among --kinds")
     ap.add_argument("--name", default="rc", help="the worker is dispatch:{name}")
-    ap.add_argument("--kinds", default=",".join(DISPATCH_KINDS))
+    ap.add_argument("--kinds", default=",".join(POD_KINDS), help=f"of {', '.join(DISPATCH_KINDS)}")
     ap.add_argument("--once", action="store_true", help="one pass, then exit")
     ap.add_argument("--workdir", default=str(WORKDIR))
     ap.add_argument("--repo", default=REPO)
@@ -343,16 +346,24 @@ def worker_main(argv: list[str]) -> int:
     if set(kinds) - set(DISPATCH_KINDS):
         print(f"research worker: the dispatcher runs only {', '.join(DISPATCH_KINDS)}", file=sys.stderr)
         return 2
+    pods = [p for p in ns.pods.split(",") if p]
+    runner = ResearchRunner(repo=ns.repo, workdir=Path(ns.workdir).expanduser())
+    why = ("--pods names no pod for " + ", ".join(sorted(set(kinds) - {RUN_KIND})) if set(kinds) - {RUN_KIND} and not pods else
+           f"--slots must be at least 1 for {RUN_KIND}" if RUN_KIND in kinds and ns.slots < 1 else
+           f"{RUN_KIND} runs `research run` from the dispatcher's own checkout, and this one runs from none"
+           if RUN_KIND in kinds and runner.launcher_tree is None else None)
+    if why:
+        print(f"research worker: {why}", file=sys.stderr)
+        return 2
     from .. import remote
 
-    pods = [p for p in ns.pods.split(",") if p]
     try:
         for p in pods:
             remote.resolve_machine(p, "verity")
     except remote.Refused as e:
         print(f"research worker: {e}", file=sys.stderr)
         return 2
-    workdir = Path(ns.workdir).expanduser()
+    workdir = runner.workdir
     workdir.mkdir(parents=True, exist_ok=True)
     lock = open(workdir / f"dispatch-{ns.name}.lock", "w")
     try:
@@ -363,9 +374,10 @@ def worker_main(argv: list[str]) -> int:
     token = (load_token({}, ns.token_file) if ns.token_file else
              load_token(path=worker_token_file(ns.name, workdir), var=WORKER_TOKEN_ENV))
     client = HTTPClient(token=token)
-    d = Dispatcher(client, ResearchRunner(repo=ns.repo, workdir=workdir), pods, name=ns.name, kinds=kinds,
+    d = Dispatcher(client, runner, pods, name=ns.name, kinds=kinds, run_slots=ns.slots, repo=ns.repo,
                    state_path=workdir / f"dispatch-{ns.name}.json", out=lambda m: print(m, flush=True))
-    d.log(f"{d.worker} on {client.url}: {', '.join(pods)}; {', '.join(kinds)}")
+    d.log(f"{d.worker} on {client.url}: {', '.join(pods) or 'no pods'}; {', '.join(kinds)}"
+          + (f"; {ns.slots} {RUN_KIND} slots, launched from {runner.launcher_tree}" if RUN_KIND in kinds else ""))
     try:
         d.run(once=ns.once)
     except DispatchError as e:

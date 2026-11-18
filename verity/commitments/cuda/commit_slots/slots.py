@@ -208,7 +208,7 @@ def fresh_salt_key() -> bytes:
 
 def row_salts(salt_key: bytes, slot: int, first: int, n: int) -> bytes:
     """The salts of rows ``first .. first + n - 1`` of ``slot``, 192 bytes each: ChaCha20 chunks 3g .. 3g + 2 under the step's
-    salt key with nonce ``slot`` (Flock's ``hm96_salt``, ``verity.protocols.accounting.pouw.verifier.audit.hm96_salt``)."""
+    salt key with nonce ``slot`` (Flock's ``hm96_salt``, ``verity.protocols.resource_accounting.compute.pouw.verifier.audit.hm96_salt``)."""
     return keystream(salt_key, slot, 3 * first, 3 * n)
 
 
@@ -403,7 +403,7 @@ def edge_layout() -> CommitShape:
     return CommitShape("commit-slots/edge/v1", (g0, g1))
 
 
-FIXTURE = Path(__file__).resolve().parent.parent.parent / "tests" / "fixtures" / "commit-slots-v1.json"
+FIXTURE = Path(__file__).resolve().parent.parent.parent.parent.parent / "tests" / "verity" / "commitments" / "fixtures" / "commit-slots-v1.json"
 
 
 def _layout_json(layout: CommitShape) -> dict[str, Any]:

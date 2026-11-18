@@ -1,7 +1,7 @@
 """The counted share of frontier pretraining from scratch under the verification stack: the FLOP an unconstrained run
 needs, divided by the FLOP the developer spends, registered plus unregistered. The developer must still compute the counted
-multiplications M (an updated weight times an activation or activation gradient). Terms and symbols follow the proposal
-"Terms and symbols for the training-efficiency bound" (Notion, under the assumptions register) and ARCHITECTURE.md's Glossary.
+multiplications M (an updated weight times an activation or activation gradient). Terms and symbols follow
+GLOSSARY.md.
 
 counted share <= s + min(r, memory cap) + 1/rho_NCI + chi, each term an upper bound under the model; ``STATUS`` says which
 steps are proved.
@@ -71,9 +71,9 @@ REFERENCE_THREADED = (10.0, 37248.0)
 
 #: the card file, the one hardware source for the GPUs here: the RTX PRO 6000 Server Edition at its firmware's maximum
 #: (188 SMs, 1024 tensor units an SM clock, a FP8 E4M3 MAC one unit, the tensor clock's ceiling 2430 MHz), pinned from
-#: hardware/cards/rtx-pro-6000-server.toml; tests/test_tiers.py holds the pin to the file
+#: calibration/hardware/cards/rtx-pro-6000-server.toml; tests/test_tiers.py holds the pin to the file
 CARD = {"sms": 188, "tensor": 1024, "clock_hz": 2430e6}
-#: the clock PoUW credits on sm_120, the card file's clock.sm (hardware/cards/rtx-pro-6000-server.toml: 2430 MHz);
+#: the clock PoUW credits on sm_120, the card file's clock.sm (calibration/hardware/cards/rtx-pro-6000-server.toml: 2430 MHz);
 #: tests/test_tiers.py holds the literal to it
 CREDITED_CLOCK_HZ = 2430e6
 #: a server's GPUs at the table's FP8 dense peak, 2 FLOP a MAC
@@ -154,9 +154,9 @@ SPEC = [
     {"key": "lag_s", "label": "Verdict lag: from a first incorrect proof block to the halt, a window plus the verdict delay (1 hour assumed)", "unit": "s", "min": 1, "max": 1e7, "log": True, "zero": True},
     {"key": "identities", "label": "SPOT: identities a detection doesn't end", "unit": "", "min": 1, "max": 1e6, "log": True},
     {"key": "floor_steps", "label": "SPOT: steps in a class sampled at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
-    {"key": "K", "label": "NCI: novel bits per inference block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
+    {"key": "K", "label": "NCI: fresh input bits per inference block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
     {"key": "Gamma", "label": "NCI: gates per inference block", "unit": "", "min": 1e14, "max": 1e19, "log": True},
-    {"key": "d", "label": "Model: entry fee d (thread reads below which a value's fan-out is at most e). 1 is what Lean certifies for a training run from structure alone: its embedding table is updated weights, which Layered's lookups (columns of novel inputs) can't read. ReferenceThreaded gives 10 for Kimi K2 at S = 2e7 (a Dot16 step's 17 terms less E = 7 bf16 embedding columns) under the open conjecture ReferenceLayered, which holds for a training run only once lookups may read weight columns", "unit": "", "min": 1, "max": 65536, "log": True},
+    {"key": "d", "label": "Model: entry fee d (thread reads below which a value's fan-out is at most e). 1 is what Lean certifies for a training run from structure alone: its embedding table is updated weights, which Layered's lookups (columns of fresh inputs) can't read. ReferenceThreaded gives 10 for Kimi K2 at S = 2e7 (a Dot16 step's 17 terms less E = 7 bf16 embedding columns) under the open conjecture ReferenceLayered, which holds for a training run only once lookups may read weight columns", "unit": "", "min": 1, "max": 65536, "log": True},
     {"key": "e", "label": "Model: fan-out e, multiplications per activation value (37,248 for Kimi K2: ReferenceThreaded's 2,328 Dot16 steps of 16 products, an MoE input value's, under the open conjecture ReferenceLayered)", "unit": "", "min": 1e3, "max": 1e6, "log": True},
     {"key": "kappa", "label": "Model: kappa, twice the counted multiplications over the training circuit's gates (Kimi K2's pretraining schedule 0.60; adversarial 0.5; kappa.py)", "unit": "", "min": 0.05, "max": 1, "log": False},
     {"key": "thread_bits", "label": "Model: reads up to which one inference block is held to (d, e)-threading, only (1, 0) above (ThreadedOfLayered certifies the reference training algorithm's Dot16 circuit 17 - E terms below E + 1 lookup columns, none at 17: 17 x 163,840 x 16 bits = 4.46e7 at the bf16 embeddings ReferenceLayered states; at C1's 2.5-bit floor 7.0e6, below K, so a circuit of the reference training algorithm that C1 allows may get no (d, e) at K; the whole embedding table at 2.5 bits, 2.9e9, needs a refined layered theorem). The certified terms fall to 1 near it, which matters only to a pool too small to fill one block", "unit": "bit", "min": 1e6, "max": 1e11, "log": True},
@@ -243,7 +243,7 @@ def chord(p: dict, bits: float = math.inf) -> float:
     """Counted multiplications per injected bit when ``bits`` of them go into inference blocks reading ``K`` fresh input bits
     each: the steepest secant from ``K`` of ``block_cap``, out to ``K + bits``, with (d, e)-threading only up to
     ``thread_bits``. The cap is convex between its kinks, so the secants peak at their ends, and concentrating the bits
-    on few blocks is the adversary's best. At the defaults the steepest secant is to ``S_1 = sqrt(2 b_w b_a block_mults
+    on few blocks is the malicious developer's best. At the defaults the steepest secant is to ``S_1 = sqrt(2 b_w b_a block_mults
     Gamma)``, on the (1, 0) piece, so d and e below ``thread_bits`` don't move it."""
     K, tb, reach = p["K"], p["thread_bits"], p["K"] + bits
     base = block_cap(p, K, K <= tb)

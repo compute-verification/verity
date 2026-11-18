@@ -15,7 +15,7 @@ fx1's steps with odd multipliers do (`Pouw.Guarantees.Receipt.DuoStepBijective`,
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 /-- The state after the words `d` from the state `s`, word `i` absorbed by the step `g i`. -/
 def foldRun {α : Type} {c N : ℕ} (g : Fin N → (Fin c → α) → α → (Fin c → α)) (s : Fin c → α) (d : Fin N → α) :
@@ -26,4 +26,4 @@ def foldRun {α : Type} {c N : ℕ} (g : Fin N → (Fin c → α) → α → (Fi
 def BindingStep (c : ℕ) (α : Type) : Type :=
   {g : (Fin c → α) → α → (Fin c → α) // (∀ s, Function.Injective (g s)) ∧ ∀ d, Function.Injective fun s => g s d}
 
-end Accounting.TS
+end ResourceAccounting.TS

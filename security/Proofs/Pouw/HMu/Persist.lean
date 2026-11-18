@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Guarantees.HMu
-public import Proofs.Accounting.Lemmas.HMu
+public import Proofs.ResourceAccounting.Lemmas.HMu
 
 /-!
 # Lemma B′ for a persistent pattern, one word a unit
@@ -14,9 +14,9 @@ skipped values.
 
 @[expose] public section
 
-namespace Accounting.HMuProofs
+namespace ResourceAccounting.HMuProofs
 
-open Accounting.HMu
+open ResourceAccounting.HMu
 
 variable {S W : Type}
 
@@ -43,7 +43,7 @@ theorem chain_ne_of_first_diff (step : ℕ → S → W → S) (hs : ∀ n x, Fun
     rw [ha (i + 1 + k) (by omega) (by omega)]
     exact fun h => ih (fun n h1 h2 => ha n h1 (by omega)) (hs _ _ h)
 
-theorem persistentOneWord : Accounting.Guarantees.HMu.PersistentOneWord := by
+theorem persistentOneWord : ResourceAccounting.Guarantees.HMu.PersistentOneWord := by
   intro S W _ step s₀ w P i c hs hw hi hic hP X X' h
   by_contra hne
   obtain ⟨k, rfl⟩ : ∃ k, c = i + 1 + k := ⟨c - (i + 1), by omega⟩
@@ -57,4 +57,4 @@ theorem persistentOneWord : Accounting.Guarantees.HMu.PersistentOneWord := by
   simp only [persist, hi, ite_true]
   exact fun h => hne (add_left_cancel h)
 
-end Accounting.HMuProofs
+end ResourceAccounting.HMuProofs

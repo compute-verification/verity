@@ -1,6 +1,6 @@
 """SPOT's messages between the workload and the prover: what SPOT's prover asks of the workload, and what the workload
 hands SPOT's prover. Both parties are the developer's, so none of these messages reaches the auditor. With PoUW's,
-PoUS's and the network certifier's (each protocol's `prover/workload.py`), they are the one list
+PoUS's and the network attester's (each protocol's `prover/workload.py`), they are the one list
 `tests/test_workload_messages.py` holds: each message declared once, named in the Glossary's words, with its writer and
 its reader. A message more than one protocol reads is declared here. `tests/workload_messages.toml` lists today's
 writers and readers by lane.

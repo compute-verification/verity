@@ -77,7 +77,7 @@ LUT_SIZE = 256
 LUT = tuple(int(v) for v in np.rint(127.0 * np.exp2(-np.arange(LUT_SIZE) / 16.0)))
 #: fattn.cu's A is a uint32_t: past it, A saturates
 A_CAP = (1 << 32) - 1
-#: the most padded keys P V' runs over in its window (`Accounting.Guarantees.Gates.LutPvWindow`, 32·S <= 132,096): P in [0, 127]
+#: the most padded keys P V' runs over in its window (`ResourceAccounting.Guarantees.Gates.LutPvWindow`, 32·S <= 132,096): P in [0, 127]
 #: against V' in [-128, 127] keeps every product in [-16256, 16129], so 4,128 steps stay in s32 where 2^17 does not
 PV_KEY_LIMIT = 132_096
 

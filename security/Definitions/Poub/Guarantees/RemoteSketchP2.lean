@@ -6,7 +6,7 @@ public import Definitions.Poub.Guarantees.RemoteSketch
 # The receipts' sketch bound over PoUS's P2 store (trusted; drafted)
 
 PoUB's P2 mode (`poub.p2`, its `PROTOCOL.md` §11) receipts a unit of four of `C*`'s 2,056-byte
-blocks, 8,224 bytes, `m = 257` sectors of 32 bytes: the trace's block (`Accounting.Remote.Held.Trace`) is a unit, and
+blocks, 8,224 bytes, `m = 257` sectors of 32 bytes: the trace's block (`ResourceAccounting.Remote.Held.Trace`) is a unit, and
 `N` counts units (`⌊blocks/4⌋`; a store's last `blocks mod 4` blocks are not audited). A block's own receipt would not
 do: 2,056 bytes is not a whole number of 32-byte sectors, and the sketch's guess term is per sector, `2^-(8r)` at rank
 `r ≤` a sector's bytes, so 8-byte sectors would bound it at `Q/2^64`; four blocks are 257 whole sectors and keep
@@ -32,7 +32,7 @@ sectors (`SketchRank 16 257 12`), the hash budget (`KeyBudget`), and `Receipted`
 outcome's coins). P2's `C*` is the encode of the public `W`, so a uniform store is the ideal encoding model: a sector the
 device never held, read, took in or rebuilt is uniform to it. A device that rebuilds a unit obtains it (`Present`
 counts it), and what rebuilding costs, in part or whole, is the codec's, the memory line's charge
-(`Accounting.Assumptions.WorkHardnessP2`, `SquaringCeilingP2`).
+(`ResourceAccounting.Assumptions.WorkHardnessP2`, `SquaringCeilingP2`).
 
 **Drafted, not decided**: the claims await a ruling; `audit.ledger` refuses a P2 record
 until a line takes this.
@@ -40,10 +40,10 @@ until a line takes this.
 
 @[expose] public section
 
-namespace Accounting.Guarantees.Remote
+namespace ResourceAccounting.Guarantees.Remote
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sketch
-  Accounting.Remote.Sketch.Assumptions
+open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sketch
+  ResourceAccounting.Remote.Sketch.Assumptions
 
 /-- **The sketch bound at P2's receipts** (drafted). `SketchBoundRun` at a unit of four 2,056-byte blocks
 (`m = 257`), 16 sign rows, SHA-512 tags and rank `r = 12`, for a prover of `Q` SHA-512 compressions over the session:
@@ -53,10 +53,10 @@ def SketchBoundP2 : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N S L q Q : ℕ) (G qtot : Fin P → ℕ) (ε : ℝ)
     (A : Remote.Sketch.Run β Hs P N 257 512 S L q 16 G) (T : Trace (Outcome β Hs N 257)),
     0 ≤ ε → T.passes ≤ P →
-    Accounting.Assumptions.SketchRank 16 257 12 (ENNReal.ofReal ε) →
+    ResourceAccounting.Assumptions.SketchRank 16 257 12 (ENNReal.ofReal ε) →
     ∑ j, G j ≤ Q + P → ∑ j, qtot j ≤ Q →
-    Accounting.Assumptions.SketchHashRandom A (((Q : ℝ) + P) ^ 2 / 2 ^ 257) → KeyBudget A qtot → Receipted A T →
+    ResourceAccounting.Assumptions.SketchHashRandom A (((Q : ℝ) + P) ^ 2 / 2 ^ 257) → KeyBudget A qtot → Receipted A T →
     Present A T →
     SketchBound T ((Q : ℝ) / 2 ^ 96 + ((Q : ℝ) + P) * (ε + N / 2 ^ 512) + ((Q : ℝ) + P) ^ 2 / 2 ^ 257)
 
-end Accounting.Guarantees.Remote
+end ResourceAccounting.Guarantees.Remote

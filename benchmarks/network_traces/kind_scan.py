@@ -1,15 +1,15 @@
-"""kind-scan: each field the network certifier's piece releases to the verifier, by kind. A field is one of the four
+"""kind-scan: each field the network attester's piece releases to the verifier, by kind. A field is one of the four
 public kinds (`verity.channel.PUBLIC`: protocol structure, the protocol's outputs, the verifier's coins and samples,
-hiding commitments) or what the network certifier signed (`CERTIFICATE`: its certificates reach the verifier in the
+hiding commitments) or what the network attester signed (`CERTIFICATE`: its attestations reach the verifier in the
 clear from the auditor's device, a provisional exception to the four kinds, not a fifth). A field of no declared kind is
 a finding.
 
     python benchmarks/network_traces/kind_scan.py DIR
     python benchmarks/network_traces/kind_scan.py --received OUT
 
-DIR is a piece's DIR, or its hold as the leak guard reads it: `DOCS`' files, the execution phase's certificates among
-them (`certifier_piece.CERTIFICATES`, the case's evidence's and nothing else of it). The piece's case
-(`certifier_piece.CASE`), the period check's three input files and the scan's answers are witness and have no
+DIR is a piece's DIR, or its hold as the leak guard reads it: `DOCS`' files, the execution phase's attestations among
+them (`attester_piece.CERTIFICATES`, the case's evidence's and nothing else of it). The piece's case
+(`attester_piece.CASE`), the period check's three input files and the scan's answers are witness and have no
 declaration: one left in DIR is a finding. Each file's JSON is walked to its leaves, and each leaf's key path (a list's
 items ``[]``) must match one its file declares: ``*`` is any one key (a Definition's, a port's, a stratum's, a δ's), and
 ``**`` everything below, a Program's descriptor (`DESCRIPTOR`, the circuit, which is structure) or a development check's
@@ -22,14 +22,14 @@ check): an advice binding in a registration (``window.compiler``, ``window.advic
 length an audit opens, `records_audit.py audit --opening`), since no audit of record reads an advice (V3c's class
 window's circuit is the class's) and no registration of the record path binds one to be opened; and the chain's
 endpoint rebuild (the report's ``endpoint`` step, chain_record.sh's CR_ENDPOINT on the endpoint's records and advice in
-the clear), which the network certifier path refuses. The report's steps are the network certifier path's (`STEPS`). A
+the clear), which the network attester path refuses. The report's steps are the network attester path's (`STEPS`). A
 text field (a verdict's reason, a step's account of what ran in the clear) is declared by its key, its text not read,
 and so is a text file (`TEXT`, a
 refusal). Any other file is a finding, a log included: the steps' logs stay on the node (`served_verdicts.sh`'s
 CERTIFIER_PRIVATE).
 
 ``--received OUT`` scans what a verifier on another machine reads of a served run's OUT (`RECEIVED`): the
-certifier's piece (``pieces/certifier``, `DOCS`) and V3c's audit (``v3c-audit``, `V3C_DOCS`, what `served_integrity.answer`
+attester's piece (``pieces/certifier``, `DOCS`) and V3c's audit (``v3c-audit``, `V3C_DOCS`, what `served_integrity.answer`
 reads of it and the period's compute audit), each whole, so a file in either that no declaration covers is a finding;
 and the window circuit's inputs and count, each the verifier's: the registered compiler (`COMPILER`), the advice
 registration (`ADVICE_REGISTRATION`, its length held to `cap_bits`: `padded`), the weights registration (`WEIGHTS`) and each
@@ -68,8 +68,8 @@ OPENING = Development("an advice binding, which an audit opens (records_audit.py
                       "no audit of record reads an advice or its length (V3c's class window's circuit is the class's), "
                       "and nothing opens one")
 ENDPOINT = Development("the chain's endpoint rebuild (CR_ENDPOINT: the endpoint's records and advice, in the clear), a "
-                       "development check the network certifier path refuses")
-#: the chain's steps on the network certifier path (`chain_record.report`)
+                       "development check the network attester path refuses")
+#: the chain's steps on the network attester path (`chain_record.report`)
 STEPS = ("custody", "certificates", "n2", "scan", "lean")
 
 
@@ -111,11 +111,11 @@ ONE_STAGE = {
     "public": O, "public.bound": O, "public.per_template": O, "public.per_template.*": O, "public.drawn[]": C,
     "public.proved[]": C,
 }
-#: a certificate (`scan_period.CERTIFICATE_KEYS`), the network certifier's in the clear
-CERTIFICATE_DOC = dict.fromkeys(("digest", "direction", "key_id", "link", "signature", "window"), X)
-#: the execution phase's certificates as the piece publishes them (`certifier_piece.certificates`): its records' and
+#: an attestation (`scan_period.ATTESTATION_KEYS`), the network attester's in the clear
+ATTESTATION_DOC = dict.fromkeys(("digest", "direction", "key_id", "link", "signature", "window"), X)
+#: the execution phase's attestations as the piece publishes them (`attester_piece.certificates`): its records' and
 #: its row registrations', each with its own fields alone
-CERTIFICATES = {**under("records[]", CERTIFICATE_DOC), **under("rows[]", CERTIFICATE_DOC)}
+CERTIFICATES = {**under("records[]", ATTESTATION_DOC), **under("rows[]", ATTESTATION_DOC)}
 #: ``verity/certifier/v0``'s answer (`Answer.toJson`) with the piece's placement: K, ε and their terms the protocol's
 #: outputs, the profile where each party ran
 ANSWER = {
@@ -135,13 +135,13 @@ ANSWER = {
 STEP = {"verdict": O, "in_the_clear": S, "eps_at_delta": O,
         **{f"eps_at_delta.{k}": S for k in ("law", "units", "drawn", "per_proof")},
         "eps_at_delta.incorrect_at_delta.*": O}
-#: the chain's report less what `certifier_piece.PUBLIC` drops: its verdict, each `STEPS` step's and what the path stubs
+#: the chain's report less what `attester_piece.PUBLIC` drops: its verdict, each `STEPS` step's and what the path stubs
 REPORT = {
     "schema": S, "verdict": O, "path": S, "scope": S, "stubbed[]": S, "negatives_refused.*": O,
     **{k: v for s in STEPS for k, v in under(f"steps.{s}", STEP).items()},
     "steps.endpoint.**": ENDPOINT,
 }
-#: DIR's files, each by its declaration (`certifier_piece.PIECE_FILES` less the logs, and what `served_verdicts.py`
+#: DIR's files, each by its declaration (`attester_piece.PIECE_FILES` less the logs, and what `served_verdicts.py`
 #: leaves beside a piece it ran)
 DOCS: dict[str, dict[str, Any]] = {
     "answer.json": ANSWER,
@@ -151,7 +151,7 @@ DOCS: dict[str, dict[str, Any]] = {
     "piece.json": {"server": S, "rc": O, "limit": S},
     "served.json": {"server": S, "source": S},
 }
-#: text files, each declared whole, its text not read: a piece's refusal (`certifier_piece.REFUSED`), the protocol's
+#: text files, each declared whole, its text not read: a piece's refusal (`attester_piece.REFUSED`), the protocol's
 #: output
 TEXT = {"refused.txt": O}
 
@@ -182,7 +182,7 @@ AUDIT_RECORD = {
     "checks_after_draw.registered_complete.members[]": O,
     "registered_reads.ok": O, "registered_reads.chunks.*.ok": O,
 }
-#: V3c's audit as one compute audit of the network certifier's period (`records_audit.period`): its answer, its free
+#: V3c's audit as one compute audit of the network attester's period (`records_audit.period`): its answer, its free
 #: input bits and steps, the Program and the registration
 PERIOD = {**under("answer", ONE_STAGE), "free": S, "steps": S, **under("program", DESCRIPTOR),
           **under("registration", REGISTRATION)}

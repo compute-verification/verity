@@ -37,9 +37,9 @@ Known limits, each a premise a real node may fail rather than a gap in the bound
 
 @[expose] public section
 
-namespace Accounting.Guarantees.Remote
+namespace ResourceAccounting.Guarantees.Remote
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions
+open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions
 
 /-- **The snapshot held, under Identity.** On any trace whose node re-encodes at most `s/E` blocks a tick and one batch
 of `Br` (`SquaringCeiling`), whose disks bring back at most `β` a tick and one read of `Bd` (`Disks`), whose chips hold
@@ -86,4 +86,4 @@ def HeldOverTimeLinks : Prop :=
           - K.fill ω T.blocks W
         ≤ T.heldOver ω (K.start ω) (K.stop ω)
 
-end Accounting.Guarantees.Remote
+end ResourceAccounting.Guarantees.Remote

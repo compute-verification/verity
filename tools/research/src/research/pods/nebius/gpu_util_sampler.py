@@ -111,7 +111,9 @@ def lease_waiters() -> list[str]:
             continue
         try:
             argv = (d / "cmdline").read_bytes().split(b"\0")
-        except OSError:
+        except OSError as e:
+            if d.exists():
+                print(f"gpu_util_sampler: pid {d.name}'s command line unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         s = [a.decode(errors="replace") for a in argv if a]
         if len(s) >= 3 and s[1].endswith("gpu-lease") and "--wait" in s[:6]:

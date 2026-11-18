@@ -51,7 +51,7 @@ programs are partial ones, a rebuild the completion of all `b` bits.
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 
@@ -242,4 +242,4 @@ theorem toPartial_work (cost : ℕ → ℕ) (w : World N b h ρ) (c : Chip N b h
 
 end Chip
 
-end Accounting.Rate
+end ResourceAccounting.Rate

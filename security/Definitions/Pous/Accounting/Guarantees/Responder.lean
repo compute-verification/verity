@@ -38,7 +38,7 @@ a function of its state at the previous one and of what reached it in between.
 * `B2P2Ring`: the same at P2's deployed point under `P2RingAuditSecure 0 0 0`, which `P2RingAuditSecure D Q L` implies
   for every `(D, Q, L)`, with the first challenge at a fixed tick and `105·span ≤ 2^τ`: some `j` has
   `mem_X(t_j) + 1 + τ + H > ⌊ρ·|C|⌋`, except with `δ + 2^-129 + 2^-130`.
-* `B2Determines`, the hookup to lemma M (`Accounting.Guarantees.Memory.AddsOn`): for a family of strategies, one for
+* `B2Determines`, the hookup to lemma M (`ResourceAccounting.Guarantees.Memory.AddsOn`): for a family of strategies, one for
   each value `z` the location keeps, each meeting `B2`'s hypotheses with every period at most `span` and
   `mem_X(t_j) ≤ M` in every run, and `z` read off `X`'s state's content at every challenge, B2's responders are lemma
   M's adversaries: an `(M + 1) + τ + H`-bit state, from which a map reads `z` before every challenge on every outcome.
@@ -70,7 +70,7 @@ the number of values it takes. The proofs are in `Security/Proofs/Pous/Accountin
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
 open scoped ENNReal
 
@@ -275,4 +275,4 @@ def B2PeriodP2Ring : Prop :=
           List.ofFn fun j => ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1 x.2.1).2 (x.2.2 j)) ≤
         ENNReal.ofReal Pous.Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130)
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

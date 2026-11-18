@@ -36,7 +36,7 @@ relative to `C`; `muHost` converts `C` into `C_true`.
 
 @[expose] public section
 
-namespace Accounting.Remote
+namespace ResourceAccounting.Remote
 
 /-- An audited node over memory tiers `τ`. -/
 structure Node (τ : Type) where
@@ -129,4 +129,4 @@ at tile cost `W_tile`. -/
 noncomputable def gammaLinks (N : Node τ) (a : Audit) (ε Wr Φout Wtile : ℝ) : ℝ :=
   gamma N a ε Wr + muLink N a + muOut N a Φout Wtile
 
-end Accounting.Remote
+end ResourceAccounting.Remote

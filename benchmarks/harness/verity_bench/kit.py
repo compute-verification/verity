@@ -1,25 +1,33 @@
-"""The harness kit: the five calls benchmarks' runners share, each written once.
+"""The harness kit: the calls benchmarks' runners share, each written once.
 
-- `lease(gpus, minutes)`: the `gpu-lease` argv a job's command follows, with its bound.
+- `lease(gpus, minutes, on=None, cores=None)`: the `gpu-lease` argv a job's command follows, with its bound.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
+- `card_short(name, directory=...)`: the card's name in a measurement's member, from the one card record whose `driver`
+  holds the stamp's `card` exactly.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
+  Inside pytest it writes nothing into the research run the process started under (`refuse_the_started_run`).
+  A trial run (`VERITY_BENCH_TRIAL` set to anything but 0, `is_trial`) writes each measurement to
+  `out/trial-measurements.json` instead, and its result says ``trial: true``: a trial's numbers reach no metric's line.
   `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once, and
   `writer(out, kind)` writes a result of that `kind`, the artifact kind `research` stores it as.
   `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
   `research` keeps; the first of them writes all three of its keys, so a result that uses none holds none.
-- `report(name, text, doc, measured)`: a command's last step: prints `text` and `doc` as one line of JSON, and where it
-  has a place to write (`$RESEARCH_RUN_DIR/out` under a research run, else `$OUT` where set) writes that line to
-  `<name>.json` there and `measured` to the run's result through the writer; with no place it writes nothing.
+- `record_dir(arg)`, `ran_with(coins, parameters, detail=None, verified=False)` and `report(name, text, doc, measured,
+  ...)`: the core benchmarks' interface (`benchmarks/README.md`'s "The core benchmarks' interface"), written in
+  `kit_report`: what a command takes, the one line of its coins and parameters, and its last step, which prints and
+  writes its number.
 
 **A result** is `RESULT_SCHEMA`, the form `research` reads a run's `result.json` in: `run_id`, `measurements` and the run's
 `validation` (`status`, `checker`, `detail` and `evidence`, the files it stands on, as paths relative to the result's
 directory: under a research run, the run's). Each
 measurement is the form a reader of numbers takes, `value`, `unit`, `commit` and `run`, with its `name`, its `mark`, its
 95% interval (`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the `inputs` it was
-computed from (other measurements' names, run or `art:` ids) and the `host` stamp it was written under; a measurement with
+computed from (other measurements' names, run or `art:` ids), the `host` stamp it was written under and, under a research
+run, the `command` the run was launched as (its `job.json`'s, a list of words), so a reader can tell a metric's own
+command's measurement from any other run's; a measurement with
 no value (`value` None) may say why (`why`, held only where given), and any measurement may carry keys of its
 benchmark's own (`extra`), such as what its number rests on. **A mark** says how the value was had, one of `MARKS`,
 which every measurement gives, one with no value the mark it would have had: ``"measured"``, computed from a run of
@@ -28,9 +36,11 @@ model or stated figures no run measured, or scaled past what a run covered; ``"p
 name covers. The writer also puts it first among the `inputs`, where the console's Metrics tab reads it until it reads
 `mark`. A measurement of a figure that is over a span of time or of compute says which, each as its own field and held
 only where given: `period`, one of `PERIODS` (a verification phase, a week, a month or a year), and `over`, one of
-`OVER` (the world's compute or one datacenter's). A measurement of one member of a set (a deployed guarantee, a lead)
-says which as `member`, a non-empty string, held only where given. The writer appends: every
-writer of a research run, whatever its `out`, appends to the run's one result and keeps what the run already wrote there.
+`OVER` (the world's compute or one datacenter's). A measurement of one of a metric's lines says which as `member`, a
+non-empty string held only where given: whatever tells it from the metric's other lines, a guarantee, a lead, an area, or
+a configuration as a slug of lower-case words joined by hyphens, model, card, then arm where arms differ
+(`llama-3.2-1b-h200`). The writer appends: every writer of a research run, whatever its `out`, appends to the run's one
+result and keeps what the run already wrote there.
 A result holds one run's measurements, one a name, period, `over` and member (a name given none is one of them), and one
 validation, so a rerun writes a fresh directory.
 
@@ -41,11 +51,13 @@ where the value stands against its target (``"within target"``). **A validation 
 protocol's security verdict: its `status` is the schema's ``"passed"`` or ``"failed"`` and nothing else, which is the
 whole guard, and its `detail` says in the gates' own words what passed or failed.
 
-Standard library and `verity_bench.settings` only, so a kernel's runner imports it without vLLM or torch.
+Standard library and `verity_bench.settings` only (`record_dir` imports research's store client only for a run id), so a
+kernel's runner imports it without vLLM or torch.
 """
 
 from __future__ import annotations
 
+import atexit
 import contextlib
 import csv
 import fcntl
@@ -58,8 +70,9 @@ import re
 import shutil
 import statistics
 import subprocess
+import sys
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -94,21 +107,26 @@ OVER = ("world", "datacenter")
 LEADING_WORD = re.compile(r"^([a-z]+)\b")
 #: a result's `kind`, as `research` stores an artifact's: a name and a version
 KIND = re.compile(r"[a-z0-9][a-z0-9-]*/v[0-9]+")
+#: the variable that makes a run a trial, and the file a trial's measurements go to in place of its result
+TRIAL, TRIAL_FILE = "VERITY_BENCH_TRIAL", "trial-measurements.json"
+TRIAL_LINE = "a trial run ({var}): its {n} measurements are in {path}, and none reaches a metric's line"
 
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
 
 
-def lease(gpus: int, minutes: float) -> list[str]:
-    """The `gpu-lease` argv a job's command follows: the wait for `gpus` GPUs of the node, held for the job's bound of
-    `minutes` (gpu-lease's `--max-min`, in whole minutes). The job takes the lease itself, since `research run --gpus` is
-    refused on a node whose GPUs gpu-lease doesn't hand out."""
+def lease(gpus: int, minutes: float, *, on: str | None = None, cores: str | None = None) -> list[str]:
+    """The `gpu-lease` argv a job's command follows: the wait for `gpus` GPUs of the node (only those `on` lists, and the
+    job pinned to the CPUs `cores` lists, where given), held for the job's bound of `minutes` (gpu-lease's `--max-min`, in
+    whole minutes). The job takes the lease itself, since `research run --gpus` is refused on a node whose GPUs gpu-lease
+    doesn't hand out."""
 
     if isinstance(gpus, bool) or not isinstance(gpus, int) or gpus < 1:
         raise ValueError(f"a lease holds one GPU or more, not {gpus!r}")
     if not (isinstance(minutes, numbers.Real) and math.isfinite(minutes) and minutes > 0):
         raise ValueError(f"a lease needs its bound in minutes, not {minutes!r}")
-    return ["gpu-lease", str(gpus), "--wait", "--max-min", str(math.ceil(minutes)), "--"]
+    return ["gpu-lease", str(gpus), "--wait", *(["--on", on] if on else []), *(["--cores", cores] if cores else []),
+            "--max-min", str(math.ceil(minutes)), "--"]
 
 
 # ---- the host stamp ----------------------------------------------------------------------------------------------------------
@@ -177,6 +195,22 @@ def host_stamp() -> dict:
     if why:
         stamp["why"] = why
     return stamp
+
+
+def card_short(name: str, *, directory: Path) -> str:
+    """The ``short`` of the card record in ``directory`` (``verity.device.load_card``) whose ``driver`` has ``name``, the
+    name nvidia-smi gives the card (a stamp's `card`), exactly; refused, naming what to add, unless exactly one record
+    holds it and has a ``short``, the card's name in a measurement's member."""
+    from verity.device import load_card, skus
+
+    cards = [load_card(sku, directory=directory) for sku in skus("gpu", directory=directory)]
+    found = [c for c in cards if name and name in {d["value"] for d in c.get("driver", ())}]
+    if len(found) != 1 or not found[0].get("short"):
+        raise SystemExit(
+            f"{len(found)} card records under {directory} have {name!r}, the card nvidia-smi names here, in `driver`: add "
+            f"{{ value = {json.dumps(name)}, source = ... }} to its one record's `driver` and give it a `short`, the "
+            "card's name in a measurement's member, adding its <sku>.toml there if it has none")
+    return found[0]["short"]
 
 
 # ---- the paired ratio --------------------------------------------------------------------------------------------------------
@@ -256,6 +290,27 @@ def _inside(rel: Any) -> bool:
     return isinstance(rel, str) and bool(rel) and not Path(rel).is_absolute() and ".." not in Path(rel).parts
 
 
+def is_trial(environ: Mapping[str, str] | None = None) -> bool:
+    """Whether a run is a trial: `TRIAL` set to anything but ``0`` in `environ` (an attempt's ``params.env``), else in
+    this process's environment."""
+
+    return (settings.get(TRIAL, environ) or "0") != "0"
+
+
+def trial_attempt(attempt: Mapping[str, Any]) -> bool:
+    """Whether `research run` started the attempt as a trial (`--env VERITY_BENCH_TRIAL=1`, its ``params.env``)."""
+
+    return is_trial((attempt.get("params") or {}).get("env") or {})
+
+
+_TRIALS_SAID: set[Path] = set()
+
+
+def _say_trial(place: Path) -> None:
+    n = len(json.loads(place.read_text(encoding="utf-8"))) if place.is_file() else 0
+    print(TRIAL_LINE.format(var=TRIAL, n=n, path=place), file=sys.stderr)
+
+
 @contextlib.contextmanager
 def _locked(directory: Path) -> Iterator[None]:
     """One appender at a time in `directory`: two processes of a job each keep their measurement."""
@@ -273,12 +328,23 @@ class Writer:
     """`writer(out)`: the one writer of `out/result.json`, for the run `run` under the host stamp `stamp`. `out` is the
     directory the result is in: under a research run the run's own, whatever `writer` was given. `kind`, where given,
     is the result's `kind`, the artifact kind `research` stores it as (`bench-result/v1` where it has none): the
-    writer writes it into the result and refuses a result of another kind."""
+    writer writes it into the result and refuses a result of another kind. `command`, where given, is the command the
+    run was launched as (`run_command`), which each measurement holds. `trial` (`is_trial` when the writer is made): a
+    trial run's result holds ``trial: true`` and no measurement, each of which goes, as it would have been, to
+    `trial_file` instead, and the process says so on stderr once, at its exit (`TRIAL_LINE`)."""
 
     out: Path
     run: str
     stamp: Mapping
     kind: str | None = None
+    command: Sequence[str] | None = None
+    trial: bool = field(default_factory=is_trial)
+
+    def trial_file(self) -> Path:
+        """Where a trial's measurements go: the research run's ``out/`` under one (where `report` writes), else beside
+        the result."""
+
+        return (Path(settings.RESEARCH_RUN_DIR) / "out" if settings.is_set("RESEARCH_RUN_DIR") else self.out) / TRIAL_FILE
 
     def measurement(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
                     target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
@@ -291,14 +357,37 @@ class Writer:
 
         entry = self._entry(name, value, unit, interval, target, verdict, inputs, why, mark=mark, period=period, over=over,
                            member=member, extra=extra)
+        self._append([entry], (name, period, over, member))
+        return entry
+
+    def keep(self, entries: Sequence[Mapping[str, Any]]) -> None:
+        """Appends measurements a caller wrote whole, as given and unchecked, where `measurement` appends: serving cost's
+        (`overhead_node.write_result`), until it writes them through `measurement`."""
+
+        self._append([dict(e) for e in entries])
+
+    def _append(self, entries: list[dict], key: tuple | None = None) -> None:
         with self._open() as (path, doc):
-            key = (name, period, over, member)
-            if any((m.get("name"), m.get("period"), m.get("over"), m.get("member")) == key for m in doc["measurements"]):
-                raise ValueError(f"{path} already holds a measurement named {name} at period={period!r}, over={over!r} and "
+            place = self.trial_file() if self.trial else path
+            if not self.trial:
+                held = doc["measurements"]
+            else:
+                held = json.loads(place.read_text(encoding="utf-8")) if place.is_file() else []
+            if key is not None and any((m.get("name"), m.get("period"), m.get("over"), m.get("member")) == key
+                                       for m in held):
+                name, period, over, member = key
+                raise ValueError(f"{place} already holds a measurement named {name} at period={period!r}, over={over!r} and "
                                  f"member={member!r}: a result holds one a name, period, over and member (a rerun writes a "
                                  "fresh directory)")
-            doc["measurements"].append(entry)
-        return entry
+            held += entries
+            if self.trial:
+                place.parent.mkdir(parents=True, exist_ok=True)
+                tmp = place.with_name(f"{TRIAL_FILE}.tmp.{os.getpid()}")
+                tmp.write_text(json.dumps(held, indent=1, allow_nan=False) + "\n", encoding="utf-8")
+                os.replace(tmp, place)
+                if place not in _TRIALS_SAID:
+                    _TRIALS_SAID.add(place)
+                    atexit.register(_say_trial, place)
 
     def _entry(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
                target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
@@ -307,8 +396,8 @@ class Writer:
         """One measurement as `measurement` appends it: `value` in `unit` (None where the benchmark has no finite value
         to give, and then `why`, in words, where given), its `mark`, its 95% `interval` (low, high), which the result
         holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check
-        against that target, and the `inputs` it was computed from, with this run, its commit and the host stamp, and
-        beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
+        against that target, and the `inputs` it was computed from, with this run, its commit, the host stamp and, where
+        the writer has it, the run's `command`, and beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
         is required, a value of None's too, which takes the mark its value would have had. It is also the first of
         `inputs`, the bare word, unless the given first input already opens with it (``"modeled: ..."``), which the
         console's Metrics tab reads it from until it reads `mark`. `period` (one of `PERIODS`) and `over` (one of `OVER`)
@@ -361,8 +450,10 @@ class Writer:
                  "verdict": _target_check(verdict, target), "inputs": inputs, "host": dict(self.stamp)}
         if why is not None:
             entry["why"] = why
+        if self.command is not None:
+            entry["command"] = list(self.command)
         for key, held in (extra or {}).items():
-            if not isinstance(key, str) or key in entry or key in ("why", "period", "over", "member"):
+            if not isinstance(key, str) or key in entry or key in ("why", "period", "over", "member", "command"):
                 raise ValueError(f"{name}'s extra key {key!r} is a key the measurement already has a meaning for")
             try:
                 json.dumps(held, allow_nan=False)
@@ -468,6 +559,8 @@ class Writer:
         path = self.out / RESULT
         with _locked(self.out):
             doc = self._read(path)
+            if self.trial:
+                doc["trial"] = True
             yield path, doc
             tmp = path.with_name(f"{RESULT}.tmp.{os.getpid()}")
             tmp.write_text(json.dumps(doc, indent=1, allow_nan=False) + "\n", encoding="utf-8")
@@ -498,43 +591,71 @@ class Writer:
         return doc
 
 
+#: the environment this process started with, which no monkeypatch or conftest changes (Linux; elsewhere the kit's import)
+_START = Path("/proc/self/environ")
+_PLACES = ("RESEARCH_RUN_DIR", "OUT")
+
+
+def _started_under() -> tuple[Path, ...]:
+    if _START.is_file():
+        environ = {k: v for k, _, v in (e.partition("=") for e in os.fsdecode(_START.read_bytes()).split("\0"))
+                   if k in _PLACES}
+    else:
+        environ = {n: v for n in _PLACES if (v := settings.raw(n)) is not None}
+    return tuple(Path(settings.get(n, environ)).resolve() for n in _PLACES if settings.is_set(n, environ))
+
+
+#: `$RESEARCH_RUN_DIR` and `$OUT` as this process started: the places of the research run it runs under, which a test
+#: inherits
+STARTED_UNDER = _started_under()
+
+
+def under_pytest() -> bool:
+    # pytest's own modules load before any conftest or test module; PYTEST_CURRENT_TEST misses collection and imports
+    return "_pytest" in sys.modules
+
+
+def refuse_the_started_run(place: str | os.PathLike) -> None:
+    """Inside pytest, refuses to write `place` where it is in `STARTED_UNDER`, so a test's figures never become the
+    measurements of the run it runs under; a test that plays a run sets its own `RESEARCH_RUN_DIR`, which it may write."""
+    if not under_pytest():
+        return
+    p = Path(place).resolve()
+    if run := next((d for d in STARTED_UNDER if p.is_relative_to(d)), None):
+        raise ValueError(f"inside pytest the kit writes nothing into the research run this process started under, and "
+                         f"{place} is in {run}: name a test's tmp_path as the place, or run the suite with "
+                         "tools/check/suites.py, which drops the run's variables")
+
+
 def writer(out: str | os.PathLike, kind: str | None = None) -> Writer:
     """The writer of this run's result (`RESEARCH_RUN_ID`, ``local`` outside one), stamped with the host now, of `kind`
     where given (`Writer.kind`). Under a research run (`RESEARCH_RUN_DIR` set) the result is
     `$RESEARCH_RUN_DIR/result.json`, the one file `research` reads a run's result from, whatever `out` is, so its evidence
-    paths are relative to the run's directory; outside one it is `out/result.json`."""
+    paths are relative to the run's directory; outside one it is `out/result.json`. Inside pytest it refuses the run the
+    process started under (`refuse_the_started_run`)."""
 
     where = settings.RESEARCH_RUN_DIR if settings.is_set("RESEARCH_RUN_DIR") else out
-    return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp(), kind)
+    refuse_the_started_run(where)
+    return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp(), kind, run_command())
 
 
-# ---- the report --------------------------------------------------------------------------------------------------------------
+def run_command() -> list[str] | None:
+    """The command `research run` ran this run as, from its `job.json` (`execution.command`, which research writes
+    before the run's command starts, with secrets and machines' addresses already redacted), or None outside a research
+    run, where the run's directory holds no `job.json`, or where it gives no list of strings. A `job.json` that isn't
+    JSON raises: research wrote it."""
 
-
-def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapping[str, Any]] = (), *,
-           document: bool = True, mark: str = "measured", out: str | os.PathLike | None = None) -> Path | None:
-    """A command's last step, the one way it prints and writes its number: prints `text`, then `doc` as one line of
-    JSON, and where it has a place to write (`out` where the caller names one, its `--out`; else under a research run its
-    `out/`, `$RESEARCH_RUN_DIR/out`, and outside one `$OUT` where set) writes that line to `<name>.json` there and
-    appends each of `measured`, the keywords of a `Writer.measurement`, at `mark` to the run's result (`writer`). An
-    empty variable names no place. With `document` False the place keeps the `<name>.json` it holds. The place
-    it wrote to, or None where there is none and nothing is written."""
-
-    print(text)
-    line = json.dumps(doc)
-    print(line)
-    if out is not None:
-        place = out
-    else:
-        place = Path(settings.RESEARCH_RUN_DIR) / "out" if settings.is_set("RESEARCH_RUN_DIR") else settings.OUT
-    if not place:
+    job = Path(settings.RESEARCH_RUN_DIR) / "job.json" if settings.is_set("RESEARCH_RUN_DIR") else None
+    if job is None or not job.is_file():
         return None
-    place = Path(place)
-    if document:
-        place.mkdir(parents=True, exist_ok=True)
-        (place / f"{name}.json").write_text(line + "\n")
-    if measured := list(measured):
-        w = writer(place)
-        for m in measured:
-            w.measurement(**m, mark=mark)
-    return place
+    execution = json.loads(job.read_text(encoding="utf-8")).get("execution")
+    argv = execution.get("command") if isinstance(execution, dict) else None
+    return argv if isinstance(argv, list) and all(isinstance(a, str) for a in argv) else None
+
+
+# the core benchmarks' interface, written in kit_report and called as the kit's
+from verity_bench import kit_report  # noqa: E402
+
+COINS, NOT_STATED, PARAMETERS = kit_report.COINS, kit_report.NOT_STATED, kit_report.PARAMETERS
+NoRecord, Record, ran_with = kit_report.NoRecord, kit_report.Record, kit_report.ran_with
+record, record_dir, report = kit_report.record, kit_report.record_dir, kit_report.report

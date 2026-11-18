@@ -1,0 +1,104 @@
+"""The interface `test_pearlplus_lean`'s cases drive, read from the Lean's source without building it: `pouw-pearlplus`'s
+options (`PouwPearlPlus/Main.lean`'s `parse`) are the ones the cases' argv passes, each taking a value or not as it does
+there; its `over_cap` rules and their default are `verify_run`'s; and the window record's value names it ties a run to
+(`PouwPearlPlus/Tie.lean`), why it refuses a version-2 W that registers no fixed operand, a version-1 W that registers one and
+a W of another version, W's version, and the name it gives a version-1 W's untied fixed operands, are `verify_run`'s and
+`pearl_c.window`'s; the rows of a class's fixed load and why passes of another load are refused are `verify_run`'s;
+and the grid a class-held run's give-up is padded to (`PouwPearlPlus/Grid.lean`) is H1's window grid, as `verify_run`'s."""
+
+from __future__ import annotations
+
+import importlib.util
+import inspect
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[4]
+LEAN = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus" / "PouwPearlPlus"
+CASES = Path(__file__).resolve().parent / "test_pearlplus_lean.py"
+
+
+def _module(name: str, path: Path):
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, path)
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+VR = _module("pearl_c_vllm_verify_run", ROOT / "benchmarks" / "pouw" / "pearl_c_vllm" / "verify_run.py")
+
+
+def _block(text: str, head: str) -> str:
+    """The Lean definition starting at line `head`, up to the next blank line."""
+    start = text.index(head)
+    return text[start:text.index("\n\n", start)]
+
+
+def test_the_lean_parses_the_options_the_cases_pass():
+    parse = _block((LEAN / "Main.lean").read_text(), "def parse ")
+    lean = {f: bool(v) for f, v in re.findall(r'\| "(--[a-z-]+)" :: (v :: )?rest', parse)}
+    cases = {f: sep == "," for f, sep in re.findall(r'"(--[a-z-]+)"([,\]])', CASES.read_text())}
+    assert lean == cases == {"--coins": True, "--draws": True, "--source": True, "--record": True, "--over-cap": True,
+                             "--test-instance": False, "--tie": True, "--class": True, "--of-record": False}
+
+
+def test_the_over_inert_bound_rules_and_default_are_verify_runs():
+    check = (LEAN / "Check.lean").read_text()
+    names = dict(re.findall(r'\| \.(\w+) => "([a-z]+)"', _block(check, "def OverInertBound.name ")))
+    parsed = {n: c for n, c in re.findall(r'\| "([a-z]+)" => some \.(\w+)', _block(check, "def OverInertBound.ofName? "))}
+    assert set(names.values()) == set(parsed) == set(VR.OVER_INERT_BOUND)
+    assert all(names[c] == n for n, c in parsed.items())
+    default = re.search(r"overInertBound : OverInertBound := \.(\w+)", _block((LEAN / "Main.lean").read_text(), "structure Args ")).group(1)
+    assert names[default] == inspect.signature(VR.verify_passes).parameters["over_cap"].default == VR.UNCREDITED
+
+
+def test_the_tie_names_are_verify_runs():
+    tie = (LEAN / "Tie.lean").read_text()
+    prefixes = re.search(r"def TIE_PREFIXES : List String := \[(.*)\]", tie).group(1)
+    assert tuple(re.findall(r'"([^"]+)"', prefixes)) == VR.TIE_PREFIXES
+    assert sorted(set(re.findall(r's!"(pearl-[ay]/\{s\}/\{c\})"', tie))) == [VR.TIE_A, VR.TIE_Y]
+    assert set(re.findall(r's!"(pearl-b/\{w\})"', tie)) == {VR.TIE_B}
+    def lit(name: str) -> str:
+        return re.search(rf'def {name} : String :=\s*"([^"]*)"', tie).group(1)
+    assert (lit("UNTIED_WEIGHTS"), lit("WEIGHTS_UNTIED"), lit("V1_WEIGHTS")) == (VR.UNTIED_WEIGHTS, VR.WEIGHTS_UNTIED,
+                                                                                 VR.V1_WEIGHTS)
+    assert int(re.search(r"def W_VERSION : Nat := (\d+)", tie).group(1)) == VR.PWR.VERSION
+    unknown = re.search(r'def UNKNOWN_VERSION : String :=\s*s!"([^"]*)" \+\+\s*"([^"]*)"', tie).groups()
+    assert "".join(unknown).replace("{W_VERSION}", str(VR.PWR.VERSION)) == VR.PWR.UNKNOWN_VERSION
+
+
+def test_the_fixed_loads_rows_and_refusal_are_verify_runs():
+    tie = (LEAN / "Tie.lean").read_text()
+    align = int(re.search(r"def ROW_ALIGN : Nat := (\d+)", tie).group(1))
+    assert align == VR.PD.ROW_ALIGN
+    assert "let rows := if s == 0 then c.slots * c.prompt else c.slots" in _block(tie, "def loadRows ")
+    assert "(rows, (rows + ROW_ALIGN - 1) / ROW_ALIGN * ROW_ALIGN)" in _block(tie, "def loadRows ")
+    for cls in ((4, 32, 4), (2, 8, 2), (3, 7, 5)):
+        slots, prompt, outputs = cls
+        assert [VR.load_rows(cls, s) for s in (0, 1, outputs - 1)][:2] == [
+            (slots * prompt, -(-slots * prompt // align) * align), (slots, -(-slots // align) * align)]
+        text = "".join(re.findall(r's!"([^"]*)"', _block(tie, "def offLoad ")))
+        for name, value in (("c.slots * c.prompt", slots * prompt), ("c.slots", slots), ("c.prompt", prompt),
+                            ("c.outputs", outputs), ("ROW_ALIGN", align)):
+            text = text.replace("{" + name + "}", str(value))
+        assert text == VR.off_load(cls) and "{" not in text
+
+
+def test_the_grid_is_h1s_window_grid():
+    """`Grid.lean`'s `GRID_BITS` and `gridPad` are `window.GRID_BITS` and `window.pad` (0 at 0, where `verify_run.grid_work`
+    pads nothing), at each value its guards name, the run of record's give-up among them."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+
+    grid = (LEAN / "Grid.lean").read_text()
+    assert int(re.search(r"def GRID_BITS : Nat := (\d+)", grid).group(1)) == Wd.GRID_BITS and VR.grid_pad is Wd.pad
+    assert "(n + 2 ^ s - 1) / 2 ^ s * 2 ^ s" in _block(grid, "def gridPad ") and "if n == 0 then 0" in _block(grid, "def gridPad ")
+    assert "#guard (List.range 17).map (gridPad ·) == List.range 17" in grid
+    assert [Wd.pad(n) for n in range(1, 17)] == list(range(1, 17))
+    ins, outs = re.search(r"#guard \[([\d, ]+)\]\.map \(gridPad ·\) == \[([\d, ]+)\]", grid).groups()
+    assert [Wd.pad(int(n)) for n in ins.split(",")] == [int(g) for g in outs.split(",")] and len(ins.split(",")) == 10
+    pairs = re.findall(r"gridPad (\d+) == (\d+)", grid)
+    assert len(pairs) == 3 and ("331347979", "335544320") in pairs and all(Wd.pad(int(n)) == int(g) for n, g in pairs)
+    assert VR.grid_work({"credited": 400_000_000}, {"credited": 400_000_000 - 331_347_979}) == {
+        "credited": 400_000_000 - 335_544_320, "give_up": 335_544_320}

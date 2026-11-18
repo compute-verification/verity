@@ -38,11 +38,11 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # A checked unit's proof layer through its Flock sessions
 
-The proof layer a checked record (`Accounting.Served`'s `Held`, at `PouwH1TileZy_v1`) is realized by, when proof `i` of
+The proof layer a checked record (`ResourceAccounting.Served`'s `Held`, at `PouwH1TileZy_v1`) is realized by, when proof `i` of
 round `w` on the path `x` is the Flock session `sess x w i` (a `RowsSession`) with outcome `out x w i`:
 
 * `accepted`: verity-verify-proof `--zk --registered` accepts the session (`LiveAcceptsZKR`), so the proof system's rule
-  (`Accounting.Assumptions.TS.AcceptedLive`) holds of it by definition;
+  (`ResourceAccounting.Assumptions.TS.AcceptedLive`) holds of it by definition;
 * `opened`: the registered rows, the committed trees' own: at each unit `u` and each wire of `u` at a registered read
   of `rdU u` (the unit's `zy` and A rows, its registered B, and its `ok` row), the bit of the registrant's opening
   there; nothing elsewhere (`openedReg`);
@@ -58,14 +58,14 @@ round `w` on the path `x` is the Flock session `sess x w i` (a `RowsSession`) wi
 session's value layer (`XplurZC`) at them, the `rows` `ServedChecksHold` and `ServedRootsLinked` read.
 
 These definitions read `RowsSession`, in the proofs package, so they sit here under `reads_exempt`'s
-`Proofs.Pouw.TS.Session`, as `Accounting.Assumptions.TS`'s do.
+`Proofs.Pouw.TS.Session`, as `ResourceAccounting.Assumptions.TS`'s do.
 -/
 
 @[expose] public section
 
-namespace Accounting.TS.Checked
+namespace ResourceAccounting.TS.Checked
 
-open Accounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
+open ResourceAccounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 open Pouw.RelativeSecurity (Paths)
 
 open Classical in
@@ -107,4 +107,4 @@ noncomputable def checkedLayer {Ω : Type} {S nπ : ℕ} (sess : Paths Ω S → 
   rel x w i v := CheckedRel (sess x w i) (out x w i) ok v
   right := right
 
-end Accounting.TS.Checked
+end ResourceAccounting.TS.Checked

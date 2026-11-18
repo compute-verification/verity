@@ -8,8 +8,8 @@ public import Mathlib.Data.Fintype.Prod
 (trusted)
 
 A capacity audit whose game is sound against every server with state at most `S₀` bits embeds into the device model: in
-a run that realizes the game (`Accounting.RealizesState`), the capacity audit has its guarantee
-(`Accounting.Run.CapacitySound`) at the game's error, at any certificate whose bit-ticks over the capacity window, with
+a run that realizes the game (`ResourceAccounting.RealizesState`), the capacity audit has its guarantee
+(`ResourceAccounting.Run.CapacitySound`) at the game's error, at any certificate whose bit-ticks over the capacity window, with
 the chip and a round's side ingress, fit in `S₀` (`CapacityOfStateBound`). Its conclusion is `CapacitySound`, about a
 bound on the capacity account's bit-ticks on every one of the capacity audit's own coins: the account's worst case over
 them, not its charge at the coin flipped.
@@ -29,14 +29,14 @@ certificate does not count it. It is not free: it shares the capacity residual `
 of the capacity audit's own coins, not at the coin flipped: outside the error, some capacity coin leaves them within it. A
 per-run reading is not claimed yet; a proof by truncation is in progress.
 
-Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Pous.Accounting.Capacity`).
+Each `def G : Prop` is proved by `ResourceAccounting.SecurityProofs.G : ResourceAccounting.Guarantees.G` (`Proofs.Pous.Accounting.Capacity`).
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting
+open ResourceAccounting
 
 /-- **A state-bounded game's soundness is the capacity guarantee.** For any run on any device whose capacity audit
 realizes a game `G` with rounds of `round` ticks, if every server of `G` with state at most `S₀` bits passes with
@@ -64,4 +64,4 @@ def DerivedStateResidual : Prop :=
     w ≠ r.acct .capacity → r.CapacitySound S εS →
       Pouw.pr (fun ω => r.accepts .capacity ω ∧ r.CapacityCovertBut w S ω) ≤ εS
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

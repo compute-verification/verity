@@ -602,7 +602,7 @@ def past_range(w: dict) -> str | None:
         return None
     return (f"the unit needs a slot of 2^{w['k']} witness bits ({w['ands']:,} ANDs and {w['port_bits']:,} port bits, read off its "
             f"Definition); Flock's proved range is 2^{K_MAX} (Flock/Statement.lean Stmt.InRange): split the unit (e.g. PoUW's "
-            f"lanes form, verity/protocols/accounting/pouw/verifier/leaf_lanes.py) or extend the proved range (proofs)")
+            f"lanes form, verity/protocols/resource_accounting/compute/pouw/verifier/leaf_lanes.py) or extend the proved range (proofs)")
 
 
 def _block_ranges(n_sha: int, n_hm: int, unit_log: int, units: int, unit_packed: bool = False,
@@ -687,7 +687,7 @@ def past_block(b: dict) -> str | None:
             f"{b['hm96']} hm96 slots of 2^{SLOT_LOG}, and the mask; Flock's proved range is 2^{K_MAX} (Flock/Statement.lean "
             f"Stmt.InRange): cut it into narrower units that each read fewer row bytes (a served row's column blocks or slices, "
             f"adapters/vllm/verity_vllm/pipeline/serving_templates.py), split the unit (e.g. PoUW's lanes form, "
-            f"verity/protocols/accounting/pouw/verifier/leaf_lanes.py), or extend the proved range (proofs)")
+            f"verity/protocols/resource_accounting/compute/pouw/verifier/leaf_lanes.py), or extend the proved range (proofs)")
 
 
 def refuse_past_range(definition, name: str) -> dict:
@@ -735,7 +735,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     them one META already has.
 
     ``tail`` (a :class:`tail.Tail`): the stages as given, in place of :func:`tail.lower_tail`'s, for a lowering whose split is
-    its own (`multi_unit`; `read_slots`, whose tail carries its wires): a stage of ``count`` slots per VU is a second repeated
+    its own (`read_slots`, whose tail carries its wires): a stage of ``count`` slots per VU is a second repeated
     unit type, wired slot by slot (META ``per_vu``), and returned outputs on a repeated last stage (or a ``slotted_rets`` tail's)
     are ``out_net_ports`` of ``[slot, port]``.
 

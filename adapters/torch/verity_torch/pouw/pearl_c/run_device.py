@@ -3,7 +3,7 @@
 Pearl-C (`pearl_c`) at the linears' ``quant_method.apply``: every call computed and committed on the device by GPU 1's
 kernel pipeline, one epoch per install over every linear weight, one transcript per pass over every call.
 
-The kernel is a directory (setting ``kernel``): the run tree's ``verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120``, or ``pearl_c_sm90`` for the
+The kernel is a directory (setting ``kernel``): the run tree's ``verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120``, or ``pearl_c_sm90`` for the
 ``h100`` record (an H100 or H200, sm_90a), whose ``run.py`` has the `Pipeline` (its kernels in order, each a named step of a
 phase, over buffers the caller may own); a unit's keys are the scheme's (`pearl_c.keys_of`, `pearl_c.unit_block`).  The cubin is
 build.sh's (setting ``cubin``, default the directory's cubin).  This module owns the buffers and runs the pipeline's steps on
@@ -55,7 +55,7 @@ compiled kernel launched directly after the first launch; `screen` where Triton 
 buffer by one driver copy; filler rows zeroed only where an earlier call wrote them; the stream from torch's raw accessor.
 The filler bookkeeping holds while no call has run under graphs (`eager_only`).
 
-The schedule (`verity.protocols.accounting.pouw.verifier.serving.Schedule`) places each call's step groups on lanes (`pouw_pearl_c_lanes`):
+The schedule (`verity.protocols.resource_accounting.compute.pouw.verifier.serving.Schedule`) places each call's step groups on lanes (`pouw_pearl_c_lanes`):
 ``deferred`` hashes tiles on a side lane beside the next calls, ``deferred-a`` A's tree too where the kernel splits A's
 commitment; the commitments are the serial schedule's.  With ``hashing`` off (``pearlc-nohash``) a call skips A's tree, E_A's
 lines, the leaves and the records, for the time split.  ``hashing`` may change between passes, never within.
@@ -67,21 +67,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.verifier.audit import (
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     Workload,
     rows_domain,
     weight_binding,
 )
-from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.accounting.pouw.verifier.serving import (
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.verifier.serving import (
     SERIAL,
     Schedule,
     hash_format,
 )
 
-from verity.protocols.accounting.pouw.prover.serving import run_matmul
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import run_matmul
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
     CALL_BUFFERS,
     CALL_BUFFERS_OWN,
     CALL_CAPACITY,
@@ -121,10 +121,10 @@ from verity_torch.pouw.pearl_c.host import (
     memmove,
     write_manifest,  # noqa: F401 - kept importable here, as callers read it
 )
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.kernel import Kernel
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes import STEP_GROUPS, admitted, rotated, schedule_of, whole_options
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.kernel import Kernel
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.lanes import STEP_GROUPS, admitted, rotated, schedule_of, whole_options
 from verity_torch.pouw.pearl_c.lanes_device import LaneCalls
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.manifest import SaltCoins, SaltOpening, epoch_of
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.manifest import SaltCoins, SaltOpening, epoch_of
 from verity_torch.pouw.pearl_c.passes import (
     EpochCalls,
     call_index,

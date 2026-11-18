@@ -5,7 +5,8 @@ public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
 public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
 public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfiltration
 public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.TwoStage
-public import Proofs.Flock.Soundness.Audit.Partitioning.Witness
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Witnesses
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Witnesses
 
 /-!
 # Optimal partitioning

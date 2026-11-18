@@ -6,7 +6,7 @@ public import Definitions.Registration.Physical
 /-!
 # The device's schedule, induced by the actual circuit (trusted)
 
-The device model (`Accounting.Device`, `Schedule`) read off the actual circuit (its model's v2.3), on a run. The
+The device model (`ResourceAccounting.Device`, `Schedule`) read off the actual circuit (its model's v2.3), on a run. The
 device is the location `chip ∪ mem`: its
 on-chip state is what the leaves of `chip` hold and what is in flight between them (`Actual.Run.state`), and its device
 memory the same of `mem`, so nothing it holds goes uncounted. Bits reach the chip from device memory on the link `hbm.1`
@@ -22,7 +22,7 @@ of no class (a send, a move) is charged no op. The schedule a run `R` induces (`
 
 A gate is charged once, to its own account, so at each tick the accounts' charges partition the device's: the induced
 schedule fits the device under the run's memory, links and a compute rate for each op class
-(`Accounting.SecurityProofs.Actual.fits`, and `fits_of_feasible` from the feasible set). Charging each gate to one
+(`ResourceAccounting.SecurityProofs.Actual.fits`, and `fits_of_feasible` from the feasible set). Charging each gate to one
 account is where additivity enters: what a guarantee says of one account's charge, it says of that account's gates
 alone. The schedule also covers what the device's gates use when every wire into `chip` from outside runs on the
 memory link or a side channel, and the work's pricing is `p` on each class (`covers_ingress`, `covers_work`).
@@ -30,7 +30,7 @@ memory link or a side channel, and the work's pricing is `p` on each class (`cov
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Finset
 
@@ -63,4 +63,4 @@ noncomputable def schedule {E ι α : Type} (chip mem : Finset L) (cls : Fin R.A
 
 end Actual.Run
 
-end Accounting
+end ResourceAccounting

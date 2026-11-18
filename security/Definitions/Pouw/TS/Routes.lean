@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # Routes, labelled programs and the terms (trusted)
 
-EPS1-SPEC §0.4–§0.7a and §1.3 over `Accounting.TS.Machine`:
+EPS1-SPEC §0.4–§0.7a and §1.3 over `ResourceAccounting.TS.Machine`:
 
 * `Head`: what heads an owned right fixed committed word, which is also the word-route menu `𝒲`: `T_κ` for a writer
   kind (an MMA kind, or a uniform class), `S_V` for a gather-free vector word, a table route per memory level, a side
@@ -58,7 +58,7 @@ Prices are per unit of honest work throughout; a window's totals divided by its 
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 open Finset
 
@@ -274,4 +274,4 @@ def Wf (P : Labelled K) : Prop :=
 
 end Model
 
-end Accounting.TS
+end ResourceAccounting.TS

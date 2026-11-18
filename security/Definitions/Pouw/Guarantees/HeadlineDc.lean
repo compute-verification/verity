@@ -221,15 +221,15 @@ The statements:
 
 Each statement's docstring gives its binding branch exactly, the exporter's `bound`.
 
-Each is proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Pouw.HeadlineDc`: with `χ* = 0` it is an instance
+Each is proved as `ResourceAccounting.SecurityProofs.TS.G` in `Proofs.Pouw.HeadlineDc`: with `χ* = 0` it is an instance
 of `headline_of_branches` at the data's π*, each branch's floor bounded from below by lower bounds on `w*` and `φ*`.
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees.TS
+namespace ResourceAccounting.Guarantees.TS
 
-open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
 
 /-- **The H200's headline at the data sheet**, under full checking with live coins. On DS-90's machine
 (`Sm90.sheet`), `dither-2s-licpw-redux-p1-l32`'s TS model (`Sm90.model`: every census MMA class a writer kind at its
@@ -417,4 +417,4 @@ def Sm100MeasuredHeadline : Prop :=
     prob (fun x => Pl.accepts x ∧
       (Pl.run x).run.time / Sm100Measured.model.credit Sm100Measured.flat < 1 - 900 / 100000) ≤ (1 / 2) ^ 40
 
-end Accounting.Guarantees.TS
+end ResourceAccounting.Guarantees.TS

@@ -82,8 +82,8 @@ CAP = 64
 ROOT_JSON_BYTES = 360
 #: the H200's rates, compressions a second: a measured step and commit_gpu's peak (`commit_slots`)
 RATES = {"3.1 G/s": 3.1e9, "4.79 G/s": 4.79e9}
-#: the reference datacenter's GPUs: the census deployment whose role is reference (`benchmarks/census/deployments.json`)
-_REF = next(d for d in json.loads((HERE.parent / "census" / "deployments.json").read_text()) if d["role"] == "reference")
+#: the reference datacenter's GPUs: the census deployment whose role is reference (`calibration/census/deployments.json`)
+_REF = next(d for d in json.loads((HERE.parents[1] / "calibration" / "census" / "deployments.json").read_text()) if d["role"] == "reference")
 GPUS = _REF["machines"] * _REF["gpus_per_machine"]
 #: core's monitoring periods (`verity.protocol`), seconds by name
 PERIODS = dict(MONITORING_PERIODS)
@@ -100,7 +100,7 @@ CENSUS = Costs("census", CR.FRESH_EXTRA, CR.REUSED)
 ENGINE = Costs("engine", CR.FRESH_EXTRA + 1, CR.REUSED + 1)
 
 #: ANDs a unit on the H200 (int8 linears, FA3 attention), each `BS.compile(...).counts["and"]` of its Boolean twin at
-#: GEMM_SM90_S8 / HopperBF16WgmmaDot16 (`./tests/test_window_cost.py` holds them to it): `ScaledMmS8Coordinate_v2{K}` and
+#: GEMM_SM90_S8 / HopperBF16WgmmaDot16 (`../../tests/benchmarks/prove_path/test_window_cost.py` holds them to it): `ScaledMmS8Coordinate_v2{K}` and
 #: `Int8RowQuant_v2{K}` by K, `GemmCoordinate_v3{K}` by K, `AttnBlock_v9{D=64, NVIS=BN, FIRST=False, BN, CHECK}` by (BN, CHECK)
 S8_COORD = {2048: 271_342, 8192: 1_069_678}
 ROW_QUANT = {2048: 7_727_887, 8192: 30_903_055}
@@ -755,7 +755,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--layout-levers", default="L1", help="the levers the layouts are under, comma-separated (default L1)")
     ap.add_argument("--stream", default=None, metavar="SIZING", help="price serving's own stream commit (`stream`) at this arena "
                     "sizing record's widths, or a fixture's under \"sizing\" (Llama-3.2-1B's: "
-                    "adapters/vllm/tests/pipeline/fixtures/admission/b16.json)")
+                    "tests/adapters/vllm/tests/pipeline/fixtures/admission/b16.json)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     to = tuple(int(v) for v in a.project.split(",")) if a.project else None

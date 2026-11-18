@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # A checked unit's proof layer with its served checks is sound through its Flock sessions (the proof)
 
-`Accounting.SecurityProofs.TS.HeldSessionSound`. The held layer accepts where the checked layer does and verity-verify-proof's
+`ResourceAccounting.SecurityProofs.TS.HeldSessionSound`. The held layer accepts where the checked layer does and verity-verify-proof's
 known-content check passes, and opens the same rows, so `AcceptedLive` is its acceptance's first half. Its unsound event
 is inside the checked layer's (`Pouw.RelativeSecurity.prob_mono`), because on every path an accepted proof whose rows
 meet `CheckedRel` meets `HeldRel` (`held_of_checked`):
@@ -48,14 +48,14 @@ meet `CheckedRel` meets `HeldRel` (`held_of_checked`):
   (`RowsSession.ServedRegistered`), which `checkKnownAll` accepted at the known rows; so its row bytes are the word
   `1`'s, or `knownColl` exhibits a SHA-512 collision (`FlockC3.RegLevels.knownColl_spec`, `tie_ok`);
 * (b) the checked relation's assignment is the opened rows at each such wire, so its `ok` wires carry the `ok` row,
-  and `Accounting.Assumptions.TS.OkRealizes` gives each sampled proof block's checks of `Cd`.
+  and `ResourceAccounting.Assumptions.TS.OkRealizes` gives each sampled proof block's checks of `Cd`.
 -/
 
 @[expose] public section
 
-namespace Accounting.TS.Held
+namespace ResourceAccounting.TS.Held
 
-open Accounting.TS Accounting.TS.Checked Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
+open ResourceAccounting.TS ResourceAccounting.TS.Checked Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 open FlockSoundness.Refine (H512)
 
 theorem regRead_at (s : RowsSession) (f : Fin s.n → Fin s.Circ.N → Bool) {u : Fin s.n} {g : Fin s.Circ.N}
@@ -113,11 +113,11 @@ theorem tie_ok (s : RowsSession) (ok : String) {known : Array (String × Array (
 naming `ok` with rows each the word `1`, whose served roots are registered and whose key program realizes `Cd`. -/
 theorem held_of_checked {ι : Type} (s : RowsSession) (o : s.Out) (ok : String)
     (known : Array (String × Array (Array ℕ × ByteArray))) {ks : Array (Array ℕ × ByteArray)}
-    {Cd : Accounting.Compose.Declared ι} {cls : ℕ → Accounting.Served.Cls} {unitOf : Fin s.n → ℕ}
+    {Cd : ResourceAccounting.Compose.Declared ι} {cls : ℕ → ResourceAccounting.Served.Cls} {unitOf : Fin s.n → ℕ}
     {dec : (Fin s.Circ.N → Bool) → ι → ℤ}
     (hk : Flock.Registered.checkKnownAll s.own known = .ok ()) (hm : (ok, ks) ∈ known)
     (hks : ∀ r ∈ ks, r.1 = okRow) (hS : ∀ u, s.ServedRegistered u)
-    (hR : Accounting.Assumptions.TS.OkRealizes s ok Cd cls unitOf dec)
+    (hR : ResourceAccounting.Assumptions.TS.OkRealizes s ok Cd cls unitOf dec)
     (hc : CheckedRel s o ok (openedReg s)) : HeldRel s o ok Cd cls unitOf dec known (openedReg s) := by
   refine ⟨hc, ?_⟩
   by_cases hcol : OkColl s ok ks
@@ -131,13 +131,13 @@ theorem held_of_checked {ι : Type} (s : RowsSession) (o : s.Out) (ok : String)
   rw [regRead_at s _ hg hr, regRead_at s _ hg hr] at e
   exact (Option.some.inj e).symm
 
-end Accounting.TS.Held
+end ResourceAccounting.TS.Held
 
-open Accounting.TS Accounting.TS.Checked Accounting.TS.Held in
-theorem Accounting.SecurityProofs.TS.HeldSessionSound : Accounting.Guarantees.TS.HeldSessionSound := by
+open ResourceAccounting.TS ResourceAccounting.TS.Checked ResourceAccounting.TS.Held in
+theorem ResourceAccounting.SecurityProofs.TS.HeldSessionSound : ResourceAccounting.Guarantees.TS.HeldSessionSound := by
   intro ι Ω _ S nπ sess out ok known Cd cls unitOf dec right δ hCR hSamplingDesign hk hS hok hKn hR hδ hδ0
   refine ⟨fun _ _ _ h => h.1, fun w i => ?_⟩
-  have hC := (Accounting.SecurityProofs.TS.CheckedSessionSound sess out ok right δ hCR hSamplingDesign hk hS hok hδ
+  have hC := (ResourceAccounting.SecurityProofs.TS.CheckedSessionSound sess out ok right δ hCR hSamplingDesign hk hS hok hδ
     hδ0).2.2.2
   have hsub : ∀ x, (heldLayer sess out ok known Cd cls unitOf dec right).Unsound x w i →
       (checkedLayer sess out ok right).Unsound x w i := by

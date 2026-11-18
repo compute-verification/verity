@@ -53,7 +53,7 @@ and the advantages add (`adv_le`): `2^bits` leaves.
 
 @[expose] public section
 
-namespace Accounting.BoundSketch
+namespace ResourceAccounting.BoundSketch
 
 open Finset
 
@@ -292,13 +292,13 @@ theorem adv_le (π : Protocol (ι → ZMod p) (ι → ZMod p) (ZMod p)) (f g : (
 theorem trace_sketch {r m : ℕ} (E B : Fin r × Fin m → ZMod p) : ∑ i, sketch E B i i = ip E B := by
   simp only [sketch, ip, Fintype.sum_prod_type]
 
-end Accounting.BoundSketch
+end ResourceAccounting.BoundSketch
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Finset Accounting.BoundSketch
+open Finset ResourceAccounting.BoundSketch
 
-theorem InnerProductRelay : Accounting.Guarantees.InnerProductRelay := by
+theorem InnerProductRelay : ResourceAccounting.Guarantees.InnerProductRelay := by
   intro p _ ι _ _ μ ν κE κR π hμ hν hμ1 hν1 hκE hκR
   have e : ∑ x, ∑ y, μ x * ν y * (1 / p : ℝ) = 1 / p :=
     calc ∑ x, ∑ y, μ x * ν y * (1 / p : ℝ) = ∑ x, μ x * ((∑ y, ν y) * (1 / p)) :=
@@ -330,7 +330,7 @@ theorem InnerProductRelay : Accounting.Guarantees.InnerProductRelay := by
   refine mul_le_mul_of_nonneg_left (Real.sqrt_le_sqrt ?_) (by positivity)
   exact mul_le_mul_of_nonneg_right (mul_le_mul hμ2 hν2 (sum_nonneg fun _ _ => sq_nonneg _) hκE0) hpn
 
-theorem BoundSketchRelay : Accounting.Guarantees.BoundSketchRelay := by
+theorem BoundSketchRelay : ResourceAccounting.Guarantees.BoundSketchRelay := by
   intro p _ r m μ ν κE κR π hμ hν hμ1 hν1 hκE hκR
   have h := InnerProductRelay p (Fin r × Fin m) μ ν κE κR (π.map fun v => ∑ i, v i i) hμ hν hμ1 hν1 hκE hκR
   rw [Protocol.bits_map, Fintype.card_prod, Fintype.card_fin, Fintype.card_fin] at h
@@ -343,4 +343,4 @@ theorem BoundSketchRelay : Accounting.Guarantees.BoundSketchRelay := by
     rw [h₀]
     split_ifs <;> norm_num
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

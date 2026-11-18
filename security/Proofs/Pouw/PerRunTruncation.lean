@@ -22,7 +22,7 @@ the adversary truncated at `b` is accepted on every such run.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Pouw
 
@@ -55,4 +55,4 @@ theorem pr_lt_of_abort (acc : A → Ω → Prop) (Bdd : A → ℝ → Prop) (a :
     rw [pr_eq_zero fun ω h => hc ((hnn ω).trans_lt h.2)]
     exact (pr_nonneg _).trans (hsure a' 0 le_rfl ha')
 
-end Accounting
+end ResourceAccounting

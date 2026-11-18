@@ -28,7 +28,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from . import CANCEL_ACTORS, pyspy
+from . import CANCEL_ACTORS, end_state, pyspy
 from .cancel import cancel as cancel_run
 from .cgroup import Cgroup, session_limit, uncapped
 from .classify import classify, write as write_failure
@@ -380,7 +380,7 @@ def run(a: argparse.Namespace, cmd: list[str], poll: Callable[[], None] | None =
     status_rc = 128 + sig if sig else rc
     outcome = "ok" if rc == 0 else "fail"
     em.span_end(a.stage, sid, outcome=outcome, rc=status_rc, signal=sig, timed_out=timed_out, refs=list(a.declared_output))
-    set_status(d, "cancelled" if timed_out else ("done" if rc == 0 else "failed"), rc=status_rc, signal=sig, timed_out=timed_out, ended_mono=t_end,
+    set_status(d, end_state(rc, timed_out), rc=status_rc, signal=sig, timed_out=timed_out, ended_mono=t_end,
                ended_utc=utc_now_ms(), wall_s=t_end - t_start, rc_is_shell_status=True, **({"scope_end": scope_end} if scope_end else {}),
                **_end_record(ended, em, a.stage))
     # ---- stop the sampler (it lingers by itself once the root pid is gone; SIGTERM makes it take final readings now)

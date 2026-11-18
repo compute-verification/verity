@@ -5,13 +5,14 @@ no pool fits.
 Node 2's share is 48 cores that queued runs claim whole (research.cores) in one first-come line, so two large runs (a 16-job
 quick tier and a 32-core Lean check) can hold all 48 for hours while dozens of small runs wait behind them, with cpu-1's idle
 cores unused. So before queueing, `read` asks each machine at once, over the ssh `research run
---on` uses, as `python3 -` with research.cores and the source tree's tools/check/slot.py inlined (both stdlib only):
+--on` uses, as `python3 -` with research.cores and the source tree's tools/check/slot.py (a trusted launcher tree's,
+research.launcher, where there is one) inlined (both stdlib only):
 node 2 for its share's live claims and waiters, and each CPU node (`spill`) for its pool's `slot.py --status --json` and the
 memory slot.py finds free there (`free_gb`, read once a pool). A pool is read by the machine's own slot.py where it has one
 (slot_only.NODE_SLOT), the copy its runs wait by, and by the inlined one where it has none. `choose` then takes, in order:
 
   - the pool with the most places for the job, the first by number among equals. A place is a slot that fits the job (not
-    trains-only, at least its CPUs), idle and unblocked, with the machine's free memory covering what the job would reserve
+    `only=trains`, at least its CPUs), idle and unblocked, with the machine's free memory covering what the job would reserve
     there (`_need`: the larger of the slot's mem=, or its book=, and the job's ask, which no cgroup enforces) once the
     waiters ahead have taken their own slots and memory, each by the ask its ticket names, as slot.py admits them (`_pool`).
     Idle slots are places only as far as the free memory goes, since every run that starts reserves its own. The most
@@ -68,6 +69,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -78,6 +80,7 @@ AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
 SPILL_POOL = "research"
 #: a CPU node's name in the launcher's registry of machines; `spill` takes them by number
 CPU_NODE = re.compile(r"vy-nebius-cpu-([0-9]+)")
+clock = time.time             # what `spill` reads a registry mark's age against
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/check/slot.py")
 READ_TIMEOUT_S = 30
@@ -310,18 +313,24 @@ def cpulist(text: str) -> int:
     return n
 
 
-def spill(machines: dict[str, dict] | None = None) -> tuple[tuple[str, str], ...]:
+def spill(machines: dict[str, dict] | None = None, now: float | None = None) -> tuple[tuple[str, str], ...]:
     """(machine, pool) where `--on auto` may spill: SPILL_POOL on every CPU node (CPU_NODE) of AUTO_PROJECT in the launcher's
     registry of machines (remote.load_machines; ``machines`` stands in for it), by number. No node is listed here, so one
-    registered today is asked today, and a pool left out can't sit idle while the others queue. Which nodes keep the pool
+    registered today is asked today, and a pool left out can't sit idle while the others queue. A node its registry entry
+    marks stopped, or unanswering for long (`registry.left_out` at ``now``, the clock's when None), is not asked: no launch
+    waits out its ssh, and `stranded` expects it in no machine's peers. Which nodes keep the pool
     is the probe's to say: one with no slots file for it, or a file that lists no slot, is skipped (`_pool`) at the cost of
     its probe, which runs beside the others'."""
     if machines is None:
         from . import remote
 
         machines = remote.load_machines()
+    from .pods import registry
+
+    now = clock() if now is None else now
     nodes = sorted((int(m.group(1)), name) for name, entry in machines.items()
-                   if (m := CPU_NODE.fullmatch(name)) and AUTO_PROJECT in (entry.get("projects") or [entry.get("project")]))
+                   if (m := CPU_NODE.fullmatch(name)) and AUTO_PROJECT in (entry.get("projects") or [entry.get("project")])
+                   and not registry.left_out(entry, now))
     return tuple((name, SPILL_POOL) for _, name in nodes)
 
 
@@ -421,8 +430,12 @@ def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = 
     2's share is `{"hold": {until, why}}` while HOLD_FILE holds it (`now`: `payload`). A machine that can start no run (the
     probe's `no_start`) says why in place of each: node 2's share is `{"no_start": why}`, a pool's document an error in
     NO_START's words. With `node_only`, node 2 alone is asked; with `lean`, each machine's Lean slots too, under "lean"
-    (lean_slot.py's status document); with `peers`, the machines each one reaches, under "peers" (`elsewhere` reads them)."""
-    reach, run = reach or _reach, run or _ssh
+    (lean_slot.py's status document); with `peers`, the machines each one reaches, under "peers" (`elsewhere` reads them).
+    The probe's slot.py and lean_slot.py and the description are a trusted launcher tree's where there is one
+    (research.launcher), never ``source``'s."""
+    from . import launcher
+
+    reach, run, source = reach or _reach, run or _ssh, launcher.code(source)
     share = share_cpus(source)
     asks: dict[str, list[str]] = {AUTO_NODE: []}
     for machine, pool in () if node_only else spill():

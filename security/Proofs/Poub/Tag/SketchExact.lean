@@ -31,16 +31,16 @@ bits keeps all of it (`normalize_intTerm`). So the group returns `intTerm` of th
 step writes its FP32 word, and the next step reads it back (`fp32Value_packTerm`).
 
 `smallCode_product` checks the 66 products of a ±1 code and a data code by `decide`. `exact` is
-`Accounting.Guarantees.Sketch.Exact`, `smallCode` is `SmallCode`, and `tensorCoreNonCollision` is
+`ResourceAccounting.Guarantees.Sketch.Exact`, `smallCode` is `SmallCode`, and `tensorCoreNonCollision` is
 `TensorCoreNonCollision`, from `exact` and the row bound of `Signs.lean`. `fp32Value_packTerm` restates
 `Pouw.Fp8Atom.fp32Value_packTerm` so this area doesn't import PoUW's proofs.
 -/
 
 @[expose] public section
 
-namespace Accounting.TagProofs
+namespace ResourceAccounting.TagProofs
 
-open Accounting.Tag Pouw.Fp8Atom Finset
+open ResourceAccounting.Tag Pouw.Fp8Atom Finset
 
 /-! ## Integers as terms -/
 
@@ -401,7 +401,7 @@ theorem foldl_steps {T : ℕ} (s : Fin T → Fin 32 → Bool) (x : Fin T → Fin
     rw [List.foldl_cons, step_intTerm A (s t) (x t) (by omega) (by omega), ih _ (by omega), List.map_cons,
       List.sum_cons, add_assoc]
 
-theorem sketchExact : Accounting.Guarantees.Sketch.Exact := by
+theorem sketchExact : ResourceAccounting.Guarantees.Sketch.Exact := by
   intro T s x
   have hT := T.isLt
   set S := ∑ t, ∑ l, sgn (s t l) * smallValue (x t l) with hSdef
@@ -417,7 +417,7 @@ theorem sketchExact : Accounting.Guarantees.Sketch.Exact := by
   rw [hw]
   simp [wordQ, fp32Value_packTerm_intTerm hS, Value.finite?, intTerm_value hS]
 
-theorem smallCode_value : Accounting.Guarantees.Sketch.SmallCode := by
+theorem smallCode_value : ResourceAccounting.Guarantees.Sketch.SmallCode := by
   intro i
   have h : ∀ i : Fin 33, (smallCode i).isNaN = false ∧ 0 ≤ (smallCode i).lsbExp + 9 ∧
       (if (smallCode i).sign then -1 else 1) * ((smallCode i).sig : ℤ) * 2 ^ ((smallCode i).lsbExp + 9).toNat =
@@ -431,7 +431,7 @@ theorem smallCode_value : Accounting.Guarantees.Sketch.SmallCode := by
   cases hs : (smallCode i).sign <;> simp only [hs, Bool.false_eq_true, ite_false, ite_true] at h3' ⊢ <;>
     push_cast at h3' <;> linarith
 
-theorem tensorCoreNonCollision : Accounting.Guarantees.Sketch.TensorCoreNonCollision := by
+theorem tensorCoreNonCollision : ResourceAccounting.Guarantees.Sketch.TensorCoreNonCollision := by
   intro k T x y
   classical
   apply prob_uniform_le_inv_pow
@@ -481,4 +481,4 @@ theorem tensorCoreNonCollision : Accounting.Guarantees.Sketch.TensorCoreNonColli
           ∀ i, inner (S i) = (fun _ => (0 : ℤ)) i).card := Nat.mul_le_mul_left _ (card_le_card hsub)
       _ ≤ _ := card_rows_le inner f hfi hne' _
 
-end Accounting.TagProofs
+end ResourceAccounting.TagProofs

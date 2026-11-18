@@ -1,4 +1,4 @@
-"""The fixture of `verify --zk`'s form refusals (`verity/protocols/proofs/spot/verifier/tests/test_form_refusals.py`): honest
+"""The fixture of `verify --zk`'s form refusals (`tests/verity/protocols/proofs/spot/verifier/test_form_refusals.py`): honest
 M0 `--zk` sessions, each of N instances with every unit sampled and bound to its template query's partition, as
 `forged_proofs.py` stages them, differing in the statement's form:
 

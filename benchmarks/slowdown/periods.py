@@ -19,10 +19,10 @@ world-inference-2027) and each monitoring period (`PERIODS`, core's, through `sl
   the block that binds;
 * **what is scaled**: a server block's local minimum is a per-server-window bound (one server between two wipes,
   onsite; one server over the period, remote), its cuts' statements are per server block, and the bound sums them over
-  every server and window; the unregistered leaves are one pool, `ε_unreg` of the fleet, and the uncertified routes are shares of
-  each server's capacity, neither a per-window bound; on a remote row both are `SlowdownRemoteMonitoringPeriod`'s terms over the
+  every server and execution phase; the unregistered leaves are one pool, `ε_unreg` of the fleet, and the uncertified routes are shares of
+  each server's capacity, neither a per-execution-phase bound; on a remote row both are `SlowdownRemoteMonitoringPeriod`'s terms over the
   period, which a row cites with the premises it takes, each one's section of the lock's record and the terms it is on
-  (`PERIOD_PREMISES`), the escape's tail and the windows' knowledge errors (`pooled`);
+  (`PERIOD_PREMISES`), the escape's tail and the execution phases' knowledge errors (`pooled`);
 * **what sets it** (`analysis.attribution`);
 * **the premises ranked** by how far each alone moves the lower bound: each ranged parameter over its range, each
   assumption of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary yield). A proof
@@ -70,7 +70,7 @@ FIXED = ("datasheet", "measured", "declared", "ruled")
 #: output bits, the widest public size class (the limit, provisional) down to the smallest, the 16-bit limit
 LIMITS = dict.fromkeys(params.BLOCK_OUTPUT_BITS, "the size class's limit (provisional)")
 #: the period statement whose terms a remote row's unregistered pool and uncertified routes are, each a share of the
-#: fleet's capacity over the period, and the premises it takes in place of `SlowdownRemote`'s per-window ones, each
+#: fleet's capacity over the period, and the premises it takes in place of `SlowdownRemote`'s per-execution-phase ones, each
 #: with the terms it is on; no statement sums a server block's bound over servers, so the scaled part cites none
 PERIOD_BOUND = "Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod"
 #: the per-block statement the remote cuts cite (`Remote.CITES`), whose premises the period statement's others are
@@ -300,9 +300,9 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
             "(`scenario.<name>.fleet`, `.horizon`). The range is each ranged parameter alone at either end of its "
             "plausible range, the rest at reference; the corner is all of them at their worse ends at once."
             + (LOCK_ONLY if reg["bounds.lock_only"] else "") + " The "
-            "slowdown is the hardware multiple over the reference training algorithm at its MFU, MFU₀ (Lean's "
+            "slowdown is the GPU-hours over the reference training algorithm's at its MFU, MFU₀ (Lean's "
             "`hardwareMultiple`, at least 1, so no protocol gives 1); the padded size ratio `|A| / T_0` is the "
-            "intermediate it comes from. The time to the target is wall-clock, at least the slowdown times "
+            "intermediate it comes from. The time to the task is wall-clock, at least the slowdown times "
             "`T_0 / (MFU₀ Φ_total)`. Each row says what it assumes about proofs: every unit proved, or proofs "
             "sampled at the regime's compute share (`regime.<name>.proof_share`), where each accepted incorrect proof "
             "block injects the widest public size class of output bits (`step_bits`)."), "",
@@ -310,7 +310,7 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
            *(measured_md(reg, measured) if measured else ()),
            "## The lower bound", "",
            ("| scenario | proofs | over | period | slowdown ≥ | range | corner | padded size ratio | status, premises | "
-            "set by | what sets it | time to the target ≥ |"), "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+            "set by | what sets it | time to the task ≥ |"), "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for x in rows:
         p = x["parts"]
         sets = ", ".join(f"{t['name']} {t['share']:.0%}" for t in x["attribution"][:2])
@@ -342,7 +342,7 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
                  else "; ".join(f"{g['where']}, {g['period']}" for g in group))
         out += [f"### {x['scenario']} ({where})", "",
                 (f"Set by **{p['setter']}** ({p.get('status')}; premises {p.get('premise') or '—'}), binding at "
-                f"{fmt(p.get('binding_bits', math.nan))} novel bits a block."
+                f"{fmt(p.get('binding_bits', math.nan))} fresh input bits a block."
                 + (f" The kinds are the per-block cuts' citations; the period statement, `{sc['period']['bound']}`, "
                    "is the \"not scaled\" line's." if sc["period"] else "")), "", "| kind | parts |", "|---|---|"]
         for kind, names in p["kinds"].items():

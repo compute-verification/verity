@@ -1,5 +1,5 @@
 //! flock-trace: the witness `flock-circuit prove` assigns a staged statement (M0's zero mask slot, no `--zk`), as digests, for
-//! the Lean trace assigner's difftest (`VStar.Trace`, `vstar-trace`; `verity/protocols/proofs/recursion/verifier/vstar_cli/tests/test_vstar_trace_difftest.py`).
+//! the Lean trace assigner's difftest (`VStar.Trace`, `vstar-trace`; `tests/verity/protocols/proofs/recursion/verifier/vstar_cli/test_vstar_trace_difftest.py`).
 //!
 //!   flock-trace --instances INST --circuit FILE
 //!

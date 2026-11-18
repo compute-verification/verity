@@ -126,7 +126,7 @@ on the ends' mean and AM–GM (`prob_convex_pool_accepted`).
 
 namespace Properties.Pouw.PearlPlus
 
-open PouwCommit PouwCheck.PearlPlus PouwCheck.PearlPlus.Words
+open PouwCommit PouwVerifier.PearlPlus PouwVerifier.PearlPlus.Words
 
 /-! ## The tie to W -/
 
@@ -134,15 +134,15 @@ open PouwCommit PouwCheck.PearlPlus PouwCheck.PearlPlus.Words
 root `root` (as hex), `leaves` rows of `words` 32-bit words, and the domain `d`'s frame id. -/
 def Registers (w : Lean.Json) (v : String) (root : ByteArray) (leaves words : ℕ) (d : RowsDomain) : Prop :=
   ∃ (es : Array Lean.Json) (x : ℕ) (e : Lean.Json) (s : String),
-    PouwCheck.PearlPlus.get? w "registered" = some (Lean.Json.arr es) ∧ es[x]? = some e ∧
-    PouwCheck.PearlPlus.get? e "value" = some (Lean.Json.str v) ∧
+    PouwVerifier.PearlPlus.get? w "registered" = some (Lean.Json.arr es) ∧ es[x]? = some e ∧
+    PouwVerifier.PearlPlus.get? e "value" = some (Lean.Json.str v) ∧
     (∀ (x' : ℕ) (e' : Lean.Json), es[x']? = some e' →
-      PouwCheck.PearlPlus.get? e' "value" = some (Lean.Json.str v) → x' = x) ∧
-    PouwCheck.PearlPlus.get? e "root" = some (Lean.Json.str s) ∧ pyFromHex s = .ok root ∧
-    PouwCheck.PearlPlus.get? e "leaves" = some (Lean.Json.num ⟨(leaves : Int), 0⟩) ∧
-    PouwCheck.PearlPlus.get? e "words" = some (Lean.Json.num ⟨(words : Int), 0⟩) ∧
-    PouwCheck.PearlPlus.get? e "word_bits" = some (Lean.Json.num ⟨32, 0⟩) ∧
-    PouwCheck.PearlPlus.get? e "domain" = some (Lean.Json.str (PouwCheck.PearlPlus.hex d.frame.id))
+      PouwVerifier.PearlPlus.get? e' "value" = some (Lean.Json.str v) → x' = x) ∧
+    PouwVerifier.PearlPlus.get? e "root" = some (Lean.Json.str s) ∧ pyFromHex s = .ok root ∧
+    PouwVerifier.PearlPlus.get? e "leaves" = some (Lean.Json.num ⟨(leaves : Int), 0⟩) ∧
+    PouwVerifier.PearlPlus.get? e "words" = some (Lean.Json.num ⟨(words : Int), 0⟩) ∧
+    PouwVerifier.PearlPlus.get? e "word_bits" = some (Lean.Json.num ⟨32, 0⟩) ∧
+    PouwVerifier.PearlPlus.get? e "domain" = some (Lean.Json.str (PouwVerifier.PearlPlus.hex d.frame.id))
 
 /-- The round W registers pass `pi` of `n` as: `rounds[pi]`, or `pi` where the run names no rounds. -/
 def roundOf (rounds : Option (List ℕ)) (n pi : ℕ) : ℕ := ((rounds.getD (List.range n))[pi]?).getD pi
@@ -162,7 +162,7 @@ def TieMeans : Prop :=
   ∀ (coins : EpochCoins) (manifests : List Lean.Json) (passes : List Pass) (w : Lean.Json)
     (rounds : Option (List ℕ)) (dropped : List ℕ) (tied : Tied),
     manifests.mapM (load coins) = .ok passes → tieOf w (manifests.zip passes) rounds dropped = .ok tied →
-    fieldIs (PouwCheck.PearlPlus.get? w "format") Flock.WindowRecord.FORMAT_V2 = true ∧
+    fieldIs (PouwVerifier.PearlPlus.get? w "format") Flock.WindowRecord.FORMAT_V2 = true ∧
     Flock.WindowRecord.digestHex w = .ok tied.record ∧
     (∀ ss : List ℕ, rounds = some ss → ss.length = passes.length) ∧
     ((tied.weights = none ∧ wVersion w = .ok W_VERSION) ∨
@@ -181,8 +181,8 @@ def TieMeans : Prop :=
     ∃ want : List (String × TieEntry),
       tieEntries (manifests.zip passes) rounds tied.weights.isNone = .ok want ∧ tied.tables = want.length ∧
       ∀ (es : Array Lean.Json) (x : ℕ) (e : Lean.Json) (v : String),
-        PouwCheck.PearlPlus.get? w "registered" = some (Lean.Json.arr es) → es[x]? = some e →
-        PouwCheck.PearlPlus.get? e "value" = some (Lean.Json.str v) →
+        PouwVerifier.PearlPlus.get? w "registered" = some (Lean.Json.arr es) → es[x]? = some e →
+        PouwVerifier.PearlPlus.get? e "value" = some (Lean.Json.str v) →
         TIE_PREFIXES.any (fun t => v.startsWith t) = true →
         (want.lookup v).isSome = true ∨
           (TIE_CALLS.any (fun t => v.startsWith t) = true ∧

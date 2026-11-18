@@ -5,7 +5,7 @@ public import Proofs.Core.Game.Prob
 public import Proofs.Core.Blocks
 public import Proofs.Core.Circuit
 public import Proofs.Pouw.PearlC.WholeCircuit
-public import Proofs.Accounting.Lemmas.JointLive
+public import Proofs.ResourceAccounting.Lemmas.JointLive
 
 /-!
 # Proof of the joint guarantee over a causal game
@@ -35,9 +35,9 @@ run (`JointPeriodLive_nontrivial`).
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting Verity Verity.Game
+open ResourceAccounting Verity Verity.Game
 open scoped ENNReal
 
 /-- **The union bound at a strategy**, over a finite family of events. -/
@@ -62,8 +62,8 @@ theorem Live.prob_exists_univ_le {O ι : Type} [Fintype ι] (p : ι → O → Pr
     prob (fun o => ∃ i, p i o) G s ≤ ∑ i, prob (p i) G s :=
   (prob_mono (fun _ ⟨i, hi⟩ => ⟨i, Finset.mem_univ i, hi⟩) G s).trans (Live.prob_exists_le Finset.univ p G s)
 
-/-- **The joint guarantee over a period played as a causal game** (`Accounting.Guarantees.JointPeriodLive`). -/
-theorem JointPeriodLive : Accounting.Guarantees.JointPeriodLive := by
+/-- **The joint guarantee over a period played as a causal game** (`ResourceAccounting.Guarantees.JointPeriodLive`). -/
+theorem JointPeriodLive : ResourceAccounting.Guarantees.JointPeriodLive := by
   intro ι α _ d C O G r c err h s
   exact (Live.prob_exists_univ_le _ G s).trans (Finset.sum_le_sum fun a _ => h a s)
 
@@ -75,8 +75,8 @@ theorem Live.pr_le_of_expectedCR {H : Claims.Msg → Claims.Msg} {F : Claims.Fin
   hF.trans (div_le_div_of_nonneg_right hq (by positivity))
 
 /-- **The joint guarantee over a period, with `ecr/sha-512` asked of the finders only**
-(`Accounting.Guarantees.JointPeriodLiveECR`). -/
-theorem JointPeriodLiveECR : Accounting.Guarantees.JointPeriodLiveECR := by
+(`ResourceAccounting.Guarantees.JointPeriodLiveECR`). -/
+theorem JointPeriodLiveECR : ResourceAccounting.Guarantees.JointPeriodLiveECR := by
   intro ι α _ d C O G r H c δ loss q h hmono hcr hq s
   refine (JointPeriodLive ι α d C O G r c (fun a s => r.error H a (δ a s) (loss a) s) h s).trans
     (Finset.sum_le_sum fun a _ => ?_)
@@ -114,8 +114,8 @@ theorem Live.unbound_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C
   · exact hw (Pouw.PearlC.WholeCircuit.correct_eval P x u)
   · exact hg (ho g)
 
-/-- **The honest prover meets every claim** (`Accounting.Guarantees.JointPeriodLive_honest`). -/
-theorem JointPeriodLive_honest : Accounting.Guarantees.JointPeriodLive_honest := by
+/-- **The honest prover meets every claim** (`ResourceAccounting.Guarantees.JointPeriodLive_honest`). -/
+theorem JointPeriodLive_honest : ResourceAccounting.Guarantees.JointPeriodLive_honest := by
   intro ι α _ d C O G r c s hε hX hO hW hS hQ hK
   have hall : ∀ a o, r.Holds c s a o := by
     intro a o
@@ -195,10 +195,10 @@ def Live.toyPeriod : PeriodLive Live.toyDevice Unit Live.toyCircuit (.ret ()) wh
 /-- The one strategy of the game with no rounds. -/
 def Live.toyStrategy : Strategy (Game.ret () : Game Unit) := PUnit.unit
 
-/-- **The bound is not vacuous** (`Accounting.Guarantees.JointPeriodLive_nontrivial`): on the one-gate circuit, a
+/-- **The bound is not vacuous** (`ResourceAccounting.Guarantees.JointPeriodLive_nontrivial`): on the one-gate circuit, a
 period whose extractor reads `0` at the gate and whose SPOT accepts is wrong at its one unit with
 probability `1`, at integrity share `0`. -/
-theorem JointPeriodLive_nontrivial : Accounting.Guarantees.JointPeriodLive_nontrivial := by
+theorem JointPeriodLive_nontrivial : ResourceAccounting.Guarantees.JointPeriodLive_nontrivial := by
   refine ⟨Empty, Unit, inferInstance, Live.toyDevice, Live.toyCircuit, Unit, .ret (), Live.toyPeriod,
     ⟨0, 0, 0, 0, 0⟩, Live.toyStrategy, ?_⟩
   have hmem : (0 : Fin 1) ∈ unbound Live.toyParts (fun _ _ => True) (fun _ => 0) := by
@@ -213,8 +213,8 @@ theorem JointPeriodLive_nontrivial : Accounting.Guarantees.JointPeriodLive_nontr
     _ ≤ _ := prob_mono (fun _ _ => ⟨.sampled, trivial, hfail⟩) _ _
 
 /-- **The joint guarantee over a horizon of periods played as one causal game**
-(`Accounting.Guarantees.JointPooledLive`). -/
-theorem JointPooledLive : Accounting.Guarantees.JointPooledLive := by
+(`ResourceAccounting.Guarantees.JointPooledLive`). -/
+theorem JointPooledLive : ResourceAccounting.Guarantees.JointPooledLive := by
   intro ι α _ d m C O G r c err h s
   calc prob (fun o => ∃ j a, (r j).accepts a o ∧ ¬ (r j).Holds (c j) s a o) G s
       ≤ ∑ j, prob (fun o => ∃ a, (r j).accepts a o ∧ ¬ (r j).Holds (c j) s a o) G s :=
@@ -224,8 +224,8 @@ theorem JointPooledLive : Accounting.Guarantees.JointPooledLive := by
     _ ≤ _ := Finset.sum_le_sum fun j _ => Finset.sum_le_sum fun a _ => h j a s
 
 /-- **The joint guarantee over a horizon of server-time blocks and their wipes, played as one causal game**
-(`Accounting.Guarantees.JointPooledBlocksLive`). -/
-theorem JointPooledBlocksLive : Accounting.Guarantees.JointPooledBlocksLive := by
+(`ResourceAccounting.Guarantees.JointPooledBlocksLive`). -/
+theorem JointPooledBlocksLive : ResourceAccounting.Guarantees.JointPooledBlocksLive := by
   intro ι α _ _ d B C O G S c σ err δPous D sched Ω Ch _ _ _ _ W foreignBits εWipe R h hW hR hM s
   have hA := JointPooledLive ι α d B C O G S.block c err h s
   have hW' : prob (fun o => ∃ b, (R b s).accepts o ∧ (R b s).Kept (foreignBits b) o) G s ≤
@@ -345,4 +345,4 @@ theorem Live.prob_survives_of_survivorBound {ι : Type} {d : Device ι} {D : Ver
     rw [h0, Nat.cast_zero] at hk
     exact (hk (by linarith)).elim
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

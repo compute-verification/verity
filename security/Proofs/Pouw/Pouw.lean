@@ -17,11 +17,11 @@ oracle queries, which the device's limits bound. PoUW's EndToEnd then bounds its
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting Pouw
+open ResourceAccounting Pouw
 
-theorem ComputeOfPouw : Accounting.Guarantees.ComputeOfPouw := by
+theorem ComputeOfPouw : ResourceAccounting.Guarantees.ComputeOfPouw := by
   intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ hΩ hWref hTT U hU t εs hεs hne ι α ΩQ ΩS _ _ _ d r p hq real o T hT
     hwork
   obtain ⟨⟨_, _, tix⟩⟩ := hne
@@ -31,4 +31,4 @@ theorem ComputeOfPouw : Accounting.Guarantees.ComputeOfPouw := by
   exact (pr_mono fun x hx => ⟨(real.accepts_iff x o).1 hx.1, hx.2⟩).trans
     (Pouw.SecurityProofs.EndToEnd Q R S CM P D γ₀ Ωmax ε hγ hΩ hWref hTT U hU T hT _ hq (real.adv o) hA t εs hεs)
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

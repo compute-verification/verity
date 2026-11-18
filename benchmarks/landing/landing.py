@@ -1,15 +1,15 @@
-"""Mark to `main` (README.md): for each PR the verified queue landed on `main` in a window, the hours from its ready mark at
+"""Mark to `main` (README.md): for each PR the verified queue landed on `main` in a period, the hours from its ready mark at
 the head that landed to the move of `main` that holds it, split as the queue splits its batches (plain, Lean), with each
 class's p90, median, count and share within 2 h.
 
     landing.py --repo DIR --out DIR [--days N] [--until TIME]
 
-The window is the `--days` (7) before `--until` (a UTC time, default now). `run.sh` runs it as a research run.
+The period is the `--days` (7) before `--until` (a UTC time, default now). `run.sh` runs it as a research run.
 
 **What is read**, each through the queue's own code:
 
 - landings: the loop's decision log on the control pod (`queue_table.CONTROL_SCRIPT`, over `research pods ssh`): each `advance`
-  logged done and not the shadow's whose time is in the window, with its members, their heads and the `main` it moved from.
+  logged done and not the shadow's whose time is in the period, with its members, their heads and the `main` it moved from.
   A PR is counted once, at its first landing at a head.
 - marks: the `ready` labels on `pr:N@HEAD` in the evidence store, pulled from its remote, at the head that landed and at each
   head a restack across a move made it from (`queue_table.restacks`, from GitHub): the mark is the one in force when `main`
@@ -154,7 +154,7 @@ def collect(repo: Path, start: float, end: float, decisions: Callable[[float], l
             restacks: Callable[[list[str]], tuple[dict[str, str], list[str]]] = Q.restacks,
             labels: Callable[[list[tuple[str, str]]], dict[str, list[dict]]] = read_labels,
             lean: Callable[[Path, str, str], bool] = lean_batch) -> dict:
-    """The document: the window, each landing's row, the summary and what was not read (`errors`)."""
+    """The document: the period, each landing's row, the summary and what was not read (`errors`)."""
     doc: dict = {"schema": SCHEMA, "start": iso(start), "end": iso(end), "rows": [], "errors": []}
     try:
         landed = landings(decisions(start), start, end)
@@ -212,8 +212,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="landing.py", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repo", type=Path, required=True, help="a checkout of the repository, fetched here: the heads' changes")
     ap.add_argument("--out", type=Path, required=True, help="where landing.json goes ($OUT under a research run)")
-    ap.add_argument("--days", type=float, default=DAYS, help=f"the window's length in days (default {DAYS})")
-    ap.add_argument("--until", metavar="YYYY-MM-DDTHH:MM:SSZ", help="the window's end (default now)")
+    ap.add_argument("--days", type=float, default=DAYS, help=f"the period's length in days (default {DAYS})")
+    ap.add_argument("--until", metavar="YYYY-MM-DDTHH:MM:SSZ", help="the period's end (default now)")
     a = ap.parse_args(argv)
     try:
         end = Q.ts(a.until) if a.until else datetime.now(UTC).timestamp()
