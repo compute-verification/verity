@@ -66,7 +66,7 @@ SUPPORTED: dict[str, Supported] = {
     "attention_config": Supported((dict, type(None)), None, "vLLM attention settings, such as {'flash_attn_version': 2}"),
     "moe_backend": Supported((str, type(None)), None, "vLLM's MoE backend, such as triton (default: vLLM's auto)"),
     "seed": Supported(int, 0, "the engine seed"),
-    "protocols": Supported((str, dict, list, tuple), None, "protocol options installed on the engine: 'pouw:<scheme>,pous:<scheme>' "
+    "protocols": Supported((str, dict, list, tuple), None, "protocol options installed on the engine: 'pouw:<scheme>' "
                                                              "or {name: scheme} (verity_vllm.protocols); default none"),
     "protocols_config": Supported(dict, None, "each enabled protocol's settings, {name: {...}}; never hashed"),
 }
@@ -215,7 +215,7 @@ class LLM:
     * ``moe_backend`` (str): vLLM's MoE backend, such as ``"triton"``; default vLLM's ``"auto"``.
     * ``seed`` (int, default 0): the engine seed.
     * ``protocols`` (str or mapping): protocol options installed on the engine once it is built
-      (:mod:`verity_vllm.protocols`), ``"pouw:<scheme>,pous:<scheme>"`` or ``{"pous": "<scheme>"}``; default none.
+      (:mod:`verity_vllm.protocols`), ``"pouw:<scheme>"`` or ``{"pouw": "<scheme>"}``; default none.
       A set the options refuse raises ``ValueError`` before the engine is built.  SPOT runs in the Commit stage
       of a row, not here.  Settings an option takes from the engine are filled from this one after the build
       (`protocol_options.from_engine`), and one it can't fill there is refused by name: PoUW's H1
