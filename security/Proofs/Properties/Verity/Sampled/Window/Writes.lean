@@ -167,11 +167,11 @@ and the position past the stop after its session's end, a session's verdict (`Se
 theorem memberSteps_of_verdicts (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
-    (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ →
-      Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
+    (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → ℕ →
+      Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → Prop)
     (hstart : ∀ ω r, I ω r 0 (Pos.root (roundCuts V θ F c rd) (M.start ω)))
     (hstep : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Member W.nJ)
-      (p q r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds))
+      (p q r : Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds))
       (out : LiveOutJ (memberTabs ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) (m.toV5 t))
         (memberPts (m.toV5 t))),
       W.ms[i]? = some m → ((m.toV5 t).part ((W.extend M.widening).L.draw ω)).Nonempty →
@@ -187,10 +187,10 @@ theorem memberSteps_of_verdicts (k : Verity.Registration.Composite) (P : Exchang
         StatesMember a m ∧ SessionVerdict a bs keys s record spec tabs rest proofs units ∧
           MemberMovesOf m t ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) record proofs out)
     (hskip : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Member W.nJ)
-      (p r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)),
+      (p r : Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds)),
       W.ms[i]? = some m → ¬ ((m.toV5 t).part ((W.extend M.widening).L.draw ω)).Nonempty → I ω r i p →
       I ω r (i + 1) p)
-    (hends : ∀ (ω : (W.extend M.widening).L.Ω) (r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)),
+    (hends : ∀ (ω : (W.extend M.widening).L.Ω) (r : Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds)),
       (Pos.root (roundCuts V θ F c rd) (M.start ω)).Past r →
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
         P (CoinTape.run (V.game θ F c) σ r.tape) →

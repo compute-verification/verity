@@ -75,8 +75,8 @@ namespace FlockComplete
 
 /-- **A good masked case**: a statement in scope that the masked verifier can accept, at its setup, a witness in the
 relation, a masked tape, and coins outside `BadZk`. -/
-structure CaseZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) where
-  x : Claims.Msg
+structure CaseZk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) where
+  x : Hash.Msg
   w : Claims.Flock.Wit
   ω : TapeZk
   r : Fin ((V true).k x) → Coin
@@ -90,15 +90,15 @@ structure CaseZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
   setup : setupOf true x = some (s, spec, sts)
 
 /-- The verifier's replies at the case's coins: each coin's bytes. -/
-def CaseZk.resp {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : CaseZk H rel) :
-    ℕ → Claims.Msg :=
+def CaseZk.resp {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (c : CaseZk H rel) :
+    ℕ → Hash.Msg :=
   fun j => (Claims.coinSeq c.r j).bytes
 
 /-- **The honest masked session ran** at a good case: the record, the proof files, and the sends' bodies. -/
-structure RunZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) extends CaseZk H rel where
+structure RunZk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) extends CaseZk H rel where
   record : String
   proofs : Array ByteArray
-  bodies : Array Claims.Msg
+  bodies : Array Hash.Msg
   ran : sessionSZk H (fun j => (Claims.coinSeq r j).bytes) spec sts w ω = (.ok (record, proofs), bodies)
 
 /-! ## What the masked verifier computes on it
@@ -107,7 +107,7 @@ Each step's value where it returns, `default` where it refuses: the goals below 
 
 namespace RunZk
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- The hashes the verdict runs with: SHA-512 the oracle `H`. -/
 def hs (_ : RunZk H rel) : Flock.Hashes V := Flock.Hashes.ofSha512 (Claims.hOf H)
@@ -119,13 +119,13 @@ def tabs (o : RunZk H rel) : Array Setup := tabsOf o.sts
 def final (o : RunZk H rel) : Final := ⟨o.x, o.record, o.proofs⟩
 
 /-- The sends: each body with tag `0`. -/
-def sends (o : RunZk H rel) : List Claims.Msg := o.bodies.toList.map (List.cons 0)
+def sends (o : RunZk H rel) : List Hash.Msg := o.bodies.toList.map (List.cons 0)
 
 /-- The link the verifier reads off the first send. -/
 def link (o : RunZk H rel) : List ByteArray × List ByteArray := (linkOf (o.sends.headD [])).getD ([], [])
 
 /-- The round messages and their coins, as the decision reads them. -/
-def mids (o : RunZk H rel) : List (Claims.Msg × Coin) :=
+def mids (o : RunZk H rel) : List (Hash.Msg × Coin) :=
   midsOf (o.sends ++ [o.final.encode]) ((List.range (o.bodies.size + 1)).map (Claims.coinSeq o.r))
 
 /-- The record's live session. -/
@@ -197,7 +197,7 @@ masked run. -/
 
 section Goals
 
-variable (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+variable (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
 
 /-- **The masked session runs**: at every good case the honest masked session returns its record and proof files. -/
 def SessionRunsZk : Prop :=
@@ -378,7 +378,7 @@ end Goals
 
 section Proved
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- `readyZk` at the case's setup: one table, the session samples a unit, the statement is under `2^64` bytes, every
 table's regions fit, the setup against `H` is the case's, the session's coins are the keyed coin tree, and the honest
@@ -536,7 +536,7 @@ end Proved
 
 /-- **Masked completeness from the goals**: Flock's masked verifier is complete for `honestPZk` with error `δcZk H`,
 given each goal and the rank bound. -/
-theorem complete_zk_of_goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem complete_zk_of_goals (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hMR : MaskRank.MaskRankBound) (g : GoalsZk H rel) : CompleteWith H (deployZk rel) honestPZk (δcZk H) := by
   refine complete_zk_of H rel hMR fun x w hsc hr hready ω r hgood => ?_
   have hset : ∃ s spec sts, setupOf true x = some (s, spec, sts) := by

@@ -31,7 +31,7 @@ from bisect import bisect_left
 from collections.abc import Sequence
 from pathlib import Path
 
-from verity.device import load_card, skus
+from verity.device import gpu_card_called
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "benchmarks/serve_tax"))
 import serve_tax as S
@@ -532,9 +532,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--card", required=True, help="the served card's `short` in calibration/hardware/cards, a member's name part")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    shorts = {load_card(sku, directory=CARDS).get("short") for sku in skus("gpu", directory=CARDS)}
-    if a.card not in shorts:
-        raise SystemExit(f"--card {a.card!r} is the `short` of no GPU card file under {CARDS}: one of {sorted(x for x in shorts if x)}")
+    try:
+        gpu_card_called(a.card, directory=CARDS)
+    except KeyError as e:
+        raise SystemExit(f"--card {a.card!r}: {e.args[0]}") from None
     rep = json.loads((a.out / "prod_repro.json").read_text()) if (a.out / "prod_repro.json").is_file() else {}
     r = price(a.out, units(a.units), tested_by=a.tested_by or rep.get("run") or "not named", units_from=a.units.name,
               ours=a.ours, reference=a.reference, stock=a.stock, model=a.model, card=a.card,

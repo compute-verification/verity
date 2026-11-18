@@ -180,8 +180,10 @@ class LLM:
         llm = LLM("unsloth/Llama-3.2-1B", revision="9535bd9b1d1dea6acafbdc4813b728796aeb28da")
         outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=0.0, max_tokens=16))
 
-    ``model`` is a Hugging Face repo id and ``revision`` its full commit sha; both must be pinned in
-    ``manifests/checkpoints.json`` with the snapshot on this host, else the constructor raises ``ValueError``.  The dtype,
+    ``model`` is a Hugging Face repo id and ``revision`` its full commit sha, or a node-local checkpoint's directory and
+    ``"sha256:"`` with its content digest (`config.checkpoint_digest`, refused at build where the files hash otherwise);
+    both must be pinned in ``manifests/checkpoints.json`` or a sibling manifest with the snapshot on this host, else the
+    constructor raises ``ValueError``.  The dtype,
     tokenizer, attention backend and the rest of the engine come from the pin's engine profile, as in every
     ``verity-vllm`` stage; prefix caching is off unless ``enable_prefix_caching=True``.
 

@@ -103,3 +103,21 @@ def test_on_a_busy_card_the_attach_refuses_before_any_session(tmp_path, smi) -> 
     smi.setattr(wipe_run, "subprotocol", lambda *a, **kw: pytest.fail("a session started"))
     with pytest.raises(ValueError, match=re.escape("wipe: the card GPU-1234 isn't idle: process 4242 on it")):
         WIPE.attach(None, _ctx(tmp_path, BOUND))
+
+
+@pytest.mark.parametrize("launcher, want", [({}, WS.built), ({"ready": print}, print)])
+def test_the_judge_answers_once_ready_returns_built_unless_its_launcher_hands_its_own(tmp_path, monkeypatch, launcher,
+                                                                                         want) -> None:
+    """`wipe_run.subprotocol` calls ``ready`` before the judge answers; the attach hands it `built`, which waits for a
+    judge `served_wipe.sh` still builds beside the wipe, or the launcher's ``ready``."""
+    seen = []
+
+    def subprotocol(period, node, out, *, side_of, ready):
+        seen.append(ready)
+        (out / "wipe.case.json").write_text("{}")
+        (out / "wipe.json").write_text("{}")
+        return {"verdict": "accept"}
+
+    monkeypatch.setattr(wipe_run, "subprotocol", subprotocol)
+    WIPE.attach(None, _ctx(tmp_path, BOUND | {"store": "python"}, **launcher))
+    assert seen == [want]

@@ -2830,7 +2830,7 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (LINKS_FIRST, links_first_case, LINKS_FIRST_NAMES, 200)]
 
 
-ACCEPTED = {"honest", "slot-order", "commit-other", "commit-own"}
+ACCEPTED = {"honest", "slot-order"}
 
 
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])
@@ -2846,6 +2846,7 @@ def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
             outcomes[name, clean] += 1
             assert clean == (name in ACCEPTED), (port.fn, name, seed, kind, text)
             assert name not in FAMILY_ROOTS or json.loads(text) == {"reason": T.FAMILY_ROOT}, (port.fn, name, seed, text)
+            assert not name.startswith("commit-") or json.loads(text) == {"reason": T.LOG_COMMITTED}, (port.fn, seed, text)
             assert name != "link-tables" or f": {Ch.LINK_TABLES}" in text, (port.fn, seed, text)
             assert name != "link-root-len" or f": {Ch.LINK_ROOT_LEN}" in text, (port.fn, seed, text)
     print(f"{port.fn}: {stats}; swept {sum(outcomes.values())}")

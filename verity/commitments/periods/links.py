@@ -25,6 +25,7 @@ from typing import Any
 
 import numpy as np
 
+from verity.commitments import registered_value as RV
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import row_leaf
 from verity.commitments.periods import rows as CS
@@ -118,8 +119,8 @@ def reads(record: Mapping[str, Any], value: str, words: int, schema: str, positi
     if not all(0 <= int(p) < int(e["leaves"]) for p in positions):
         raise ValueError(f"{value}: a read outside its {e['leaves']} leaves")
     return {"value": value, "root": e["root"], "leaves": int(e["leaves"]), "words": int(words),
-            "word_bits": registered.WORD_BITS, "domain": e["domain"], registered.SCHEMA_KEY: schema,
-            "reads": [int(p) for p in positions], registered.READS_FROM: int(base)}
+            "word_bits": RV.WORD_BITS, "domain": e["domain"], registered.SCHEMA_KEY: schema,
+            "reads": [int(p) for p in positions], RV.READS_FROM: int(base)}
 
 
 def reads_file(ports: Mapping[str, Mapping[str, Any]], *, registered: Any) -> dict[str, Any]:

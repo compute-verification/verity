@@ -190,7 +190,7 @@ def test_a_row_whose_served_words_are_not_its_chain_s_end_is_refused():
     s = Served()
     s.y[3] ^= np.uint16(1)
     with pytest.raises(ValueError, match="the twin's end of its 3 blocks is not the row's served out words"):
-        read(s, members(s))
+        read(s, SRW.members(TMPLS, [s.rows] * len(TMPLS), None, PER_CHUNK))
 
 
 def test_a_partition_without_a_block_s_template_is_refused():

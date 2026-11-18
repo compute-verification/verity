@@ -94,6 +94,8 @@ REGISTRY = Registry(
                                                   "is a live session's on the auditor device"),
     S("PEARLC_CHALLENGER_PEER", str, None, WHERE, "this node's name in the challenger host's peers"),
     S("PEARLC_CHALLENGER_LANE", str, "vllm", WHERE, "the lane the gate key is registered for"),
+    S("PEARLC_PRIVATE", str, None, WHERE, "the directory outside every run output where served_passes.py serve's Pearl+ "
+                                          "keeps its salt epoch's number (pouw.scheme.spend_epoch); a live session needs it"),
     S("PEARLC_GPU_UTIL", float, 0.55, VALUE, "vLLM's gpu_memory_utilization under the arm"),
     S("PEARLC_STEP_TOKENS", int, 4096, VALUE, "vLLM's max_num_batched_tokens under the arm"),
     S("PEARLC_WHOLE_DEFER_A", not_zero, True, VALUE, "the whole-step arm's whole_defer_a option; 0 leaves it out"),

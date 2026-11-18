@@ -89,11 +89,11 @@ def words(row: bytes) -> list[int]:
 
 
 def register(program: str, links: Sequence[LinkEntry], salts: Sequence[bytes] | None = None):
-    """The table registered as `VALUE` at the link part's program SHA-512 ``program`` (`one_stage.registered.Registered`;
+    """The table registered as `VALUE` at the link part's program SHA-512 ``program`` (`registered_value.Registered`;
     ``salts``, one a row, default fresh); its root and row count are what goes public."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+    from verity.commitments import registered_value as RV
 
-    return RG.Registered.commit(program, VALUE, [words(r) for r in table(links)], salts)
+    return RV.Registered.commit(program, VALUE, [words(r) for r in table(links)], salts)
 
 
 def entries(ports: Sequence[str], links: Sequence[Sequence]) -> list[LinkEntry]:

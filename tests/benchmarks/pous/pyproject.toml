@@ -20,7 +20,7 @@ untraced = [
 # run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
 # packages and their path dependencies (each lakefile's `[[require]]`).
 inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
-          "verity/__init__.py", "verity/errors.py", "verity/protocols/resource_accounting/memory/pous",
+          "verity/__init__.py", "verity/errors.py", "verity/ports.py", "verity/protocols/resource_accounting/memory/pous",
           # served_piece.py reads PoUS's declaration through the schemes' one table
           "verity/protocols/compose/__init__.py", "verity/protocols/compose/schemes.py",
           "verity/protocols/interface", "verity/protocols/resource_accounting/memory/pous/prover",

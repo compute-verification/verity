@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -61,6 +62,7 @@ def _sealed(tmp_path):
     (p / "store" / "raw").mkdir(parents=True)
     (p / "store" / "raw" / "s0.bin").write_bytes(bytes(range(256)))
     (p / "store" / "store.json").write_text("{}")
+    (p / "store" / "keys.bin").write_bytes(bytes(64))
     (tmp_path / "binding_map_p1.json").write_text(json.dumps({"entries": []}))
     return RB.seal(tmp_path, 1, {"pair": 1, "run_root": "ab" * 32}, tmp_path / "binding_map_p1.json")
 
@@ -70,19 +72,21 @@ def test_a_sealed_bundle_opens_and_its_partial_is_gone(tmp_path):
     assert not RB.partial(tmp_path, 1).exists() and m["path"] == str(RB.path(tmp_path, 1))
     b = RB.open_bundle(m["path"])
     assert b["manifest_sha256"] == m["sha256"] and b["context"]["run_root"] == "ab" * 32 and b["context"]["schema"] == RB.SCHEMA
-    assert set(b["manifest"]["files"]) == {"store/raw/s0.bin", "store/store.json", "binding_map.json", "context.json"}
+    assert set(b["manifest"]["files"]) == {"store/raw/s0.bin", "store/store.json", "store/keys.bin", "binding_map.json", "context.json"}
 
 
 def test_a_digest_taken_as_the_file_was_written_is_the_manifest_s_and_is_checked_on_opening(tmp_path):
     p = RB.partial(tmp_path, 1)
     (p / "store" / "raw").mkdir(parents=True)
     (p / "store" / "raw" / "s0.bin").write_bytes(bytes(range(256)))
+    (p / "store" / "keys.bin").write_bytes(bytes(64))
     (tmp_path / "binding_map_p1.json").write_text("{}")
     good = hashlib.sha256(bytes(range(256))).hexdigest()
     m = RB.seal(tmp_path, 1, {"pair": 1}, tmp_path / "binding_map_p1.json", hashed={"store/raw/s0.bin": good})
     assert m["files"]["store/raw/s0.bin"]["sha256"] == good and RB.open_bundle(m["path"])
-    p.mkdir()
+    (p / "store").mkdir(parents=True)
     (p / "s.bin").write_bytes(b"x")
+    (p / "store" / "keys.bin").write_bytes(bytes(64))
     m = RB.seal(tmp_path, 1, {"pair": 1}, tmp_path / "binding_map_p1.json", hashed={"s.bin": "00" * 32})
     with pytest.raises(ValueError, match="sha256"):
         RB.open_bundle(m["path"])
@@ -123,7 +127,9 @@ def test_a_store_written_beside_the_checks_is_the_store_defer_writes(tmp_path):
     started, ctx, files, keys = _deferred(tmp_path / "beside")
     inline, ctx0, files0, _ = _deferred(tmp_path / "inline", keys, replay_bundle_overlap=0)
     assert started is not None and started.future.done() and inline is None
-    assert files == files0 and ctx[RB.HASHED] == ctx0[RB.HASHED] and set(ctx[RB.HASHED]) == {f for f in files if f.endswith(".bin") and f.startswith("store/")}
+    assert files.keys() == files0.keys() and {k: v for k, v in files.items() if k != RB.PRIVATE_DOC} == {k: v for k, v in files0.items() if k != RB.PRIVATE_DOC}
+    assert ctx[RB.HASHED] == ctx0[RB.HASHED]
+    assert set(ctx[RB.HASHED]) == {f for f in files if f.endswith(".bin") and f.startswith("store/")} | {RB.PRIVATE[0]}
     assert {k: v for k, v in ctx.items() if k != "engine_of_record"} == {k: v for k, v in ctx0.items() if k != "engine_of_record"}
 
 
@@ -183,3 +189,60 @@ def test_a_discarded_bundle_leaves_nothing(tmp_path):
     (RB.partial(tmp_path, 1) / "store").mkdir(parents=True)
     RB.discard(tmp_path, 1)
     assert not RB.partial(tmp_path, 1).exists() and not RB.path(tmp_path, 1).exists()
+
+
+def test_a_commit_writes_no_key_or_salt_under_its_output_and_its_manifest_still_digests_them(tmp_path):
+    """The keys go to the private directory, outside the Commit's output; only their place changes: the manifest lists them by
+    their path in the bundle with their digest, so its sha256 (the stand-in's) still covers a secret."""
+    out = tmp_path / "out"
+    _, ctx, _, keys = _deferred(out)
+    m = RB.seal(out, 1, {"pair": 1}, None, hashed=ctx[RB.HASHED])
+    assert not [f for f in out.rglob("*") if f.name.startswith(("keys", "tree.salts")) or "salts" in f.parts]
+    there = RB.private_file(m["path"], RB.PRIVATE[0])
+    assert not there.is_relative_to(out) and m["files"][RB.PRIVATE[0]]["sha256"] == hashlib.sha256(there.read_bytes()).hexdigest()
+    assert RB.open_bundle(m["path"])["manifest_sha256"] == m["sha256"]
+    assert RB.load_store(m["path"])[0] is not None and there.read_bytes() == b"".join(keys[s] for s in sorted(keys))
+    there.write_bytes(bytes(len(there.read_bytes())))
+    with pytest.raises(ValueError, match="sha256 is not the manifest's"):
+        RB.open_bundle(m["path"])
+
+
+def test_keys_both_in_the_bundle_and_its_private_part_or_in_neither_are_refused_by_name(tmp_path):
+    out = tmp_path / "out"
+    _, ctx, _, _ = _deferred(out)
+    b = RB.path(out, 1)
+    RB.seal(out, 1, {"pair": 1}, None, hashed=ctx[RB.HASHED])
+    there = RB.private_file(b, RB.PRIVATE[0])
+    (b / RB.PRIVATE[0]).write_bytes(there.read_bytes())
+    with pytest.raises(ValueError, match="both in the bundle and in its private directory"):
+        RB.open_bundle(b)
+    (b / RB.PRIVATE[0]).unlink()
+    there.unlink()
+    with pytest.raises(ValueError, match="is not in its private directory"):
+        RB.open_bundle(b)
+
+
+def test_a_manifest_that_lists_no_salt_or_key_file_is_refused_by_name_at_sealing_and_opening(tmp_path):
+    m = _sealed(tmp_path)
+    RB.partial(tmp_path / "o", 1).mkdir(parents=True)
+    with pytest.raises(ValueError, match="lists no salt or key file"):
+        RB.seal(tmp_path / "o", 1, {"pair": 1}, None)
+    b = Path(m["path"])
+    man = json.loads((b / RB.MANIFEST).read_text())
+    (b / RB.PRIVATE[0]).unlink()
+    del man["files"][RB.PRIVATE[0]]
+    (b / RB.MANIFEST).write_text(json.dumps(man))
+    with pytest.raises(ValueError, match="lists no salt or key file"):
+        RB.open_bundle(b)
+
+
+def test_the_private_directory_is_the_protocols_configurations_and_never_inside_the_run(tmp_path, monkeypatch):
+    run = tmp_path / "run"
+    env = {"RESEARCH_RUN_DIR": str(run), "VERITY_PROTOCOLS_CONFIG": json.dumps({"private": str(run / "p")})}
+    assert "$RESEARCH_RUN_DIR" in RB.private_refusal(env)
+    assert "names none" in RB.private_refusal({"VERITY_PROTOCOLS_CONFIG": "{}"})
+    assert RB.private_refusal({**env, "VERITY_PROTOCOLS_CONFIG": json.dumps({"private": str(tmp_path / "p")})}) is None
+    monkeypatch.delenv("VERITY_PROTOCOLS_CONFIG")
+    with pytest.raises(SystemExit, match="--replay-deferred: .*VERITY_PROTOCOLS_CONFIG's private"):
+        RB.refuse(SimpleNamespace(replay_deferred="full", program_dir="p", programs_root=None, arms=None, only_arm=None,
+                                  compiled_taps="off", vu_export_dir=None, serving_rows=None))

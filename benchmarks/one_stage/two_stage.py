@@ -9,7 +9,7 @@ gives its outcome (`prove`, `outcome_of`).
 
 * **The Spec** (`spec_of`): the class's boundary values (`Layout.schemas`: ``b.ingress`` and ``b.egress``, or under a
   serve's stop rule their parts ``b.request``, ``b.prompt`` and ``b.egress``, then its history tables; phase ``serve``),
-  the interior values (phase ``interior``: the check template's ports as the replay side commits them,
+  the interior values (phase ``interior``: the trees of the interior window the replay side commits,
   `interior_values`) and the replay block's
   parameters the interior docket registers as values (`Rule.span_values`: those the verifier supplies, a table
   read's root and domain or an index, and those the replay gives, a picking unit's scores or a read's opening, each
@@ -166,6 +166,7 @@ import numpy as np
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import levels as LV, second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P, registered as REG
+from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import descriptor_id
@@ -712,8 +713,8 @@ def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlink
 
 def rule_of(layout: BR.Layout, replay: str, k: int | Mapping[str, int],
             proof_deadline: float = PROOF_DEADLINE_S) -> Rule:
-    """The class's rule from its `design`: the interior values the replay side commits (its templates' ports as an
-    interior window lays them out) and the replay block's parameters its interior registers as values
+    """The class's rule from its `design`: the interior values the replay side commits (its interior window's trees)
+    and the replay block's parameters its interior registers as values
     (`interior_rows.span_values`, sized by the class: its rows a sampled span), which are none where the class's record
     commits every parameter its templates read. A class round 2 derives no wires from has its templates' ports alone
     (`design`'s ``unlinked``): its first stage samples as any class's does."""
@@ -899,8 +900,8 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
                 raise ValueError(f"{m.template}'s {p!r} reads {x.value}, which the interior registration doesn't register")
             e = values[x.value]
             ports[p] = {"value": x.value, "root": e["root"], "leaves": int(e["leaves"]), "words": int(words),
-                        "word_bits": REG.WORD_BITS, "domain": e["domain"], REG.SCHEMA_KEY: m.schema(p),
-                        "reads": [s * x.per + a for s in range(q) for a in x.at], REG.READS_FROM: m.base}
+                        "word_bits": RV.WORD_BITS, "domain": e["domain"], REG.SCHEMA_KEY: m.schema(p),
+                        "reads": [s * x.per + a for s in range(q) for a in x.at], RV.READS_FROM: m.base}
         out[m.key] = LK.reads_file(ports, registered=REG)
     return out
 
@@ -936,7 +937,7 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
         with open(at / "pub.bin", "rb") as f:
             header = json.loads(f.readline())
         reads = LK.reads_file({p: {"value": linked.get((m.template, p), window.tree(m, p)), "words": int(words),
-                                   "word_bits": REG.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
+                                   "word_bits": RV.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
                                for p, words in m.all_rows}, registered=REG)
         read = read_record(template_fn(m.template), at / "circuit.txt", header["circuit_sha512"])
         named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header, "registered": reads,
@@ -966,11 +967,9 @@ def read_record(defn: SpecializedDefinition, circuit: Path, sha512: str) -> dict
 
     if not read_tmpl.is_read(defn):
         return None
-    h = hashlib.sha512()
     with open(circuit, "rb") as f:
-        while chunk := f.read(1 << 24):
-            h.update(chunk)
-    if h.hexdigest() != sha512:
+        got = hashlib.file_digest(f, "sha512").hexdigest()
+    if got != sha512:
         raise ValueError(f"{circuit} is not the circuit file of SHA-512 {sha512}")
     V, H = int(defn.statics["V"]), int(defn.statics["H"])
     return {"V": V, "H": H} if read_tmpl.check(V, H, circuit) is None else None

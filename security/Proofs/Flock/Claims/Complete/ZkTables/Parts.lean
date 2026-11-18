@@ -59,7 +59,7 @@ open Flock Transcript FlockComplete FlockDeploy JsonRT
 
 section Rest
 
-variable (H : Claims.Msg → Claims.Msg)
+variable (H : Hash.Msg → Hash.Msg)
 
 /-- **`RepShapedT` beyond level 0's shape**: the masked PIOP's and the inner proof's lengths, and the encoding's bound,
 given `Level0.ProverShape`. -/
@@ -82,7 +82,7 @@ end Rest
 
 open FlockComplete.Replay in
 /-- **`LigeritoT` from level 0's verifier premise** (`view`). -/
-theorem ligeritoRest (H : Claims.Msg → Claims.Msg) : LigeritoRest H := by
+theorem ligeritoRest (H : Hash.Msg → Hash.Msg) : LigeritoRest H := by
   intro hV h64 st tr hT ω i d k r v cm pts e rep ic hin hrep prior ws l p t' l' _ _ hgo R hAg q hq sw hsw
   obtain ⟨_, _, _, _, _, h, -⟩ :=
     view hV h64 st tr hT ω i d r v cm pts e rep ic hin hrep prior ws l p t' l' hgo R hAg q hq sw hsw
@@ -92,7 +92,7 @@ open FlockComplete.Replay in
 /-- **`InnerT` from level 0's verifier premise**: the verifier's constraints are those the prover's inner proof
 returned on (`view`), so its batched constraint held at its coins (`innerP_ret`), which is what the verifier's inner
 check needs (`verifyInnerWith_of'`). -/
-theorem innerRest (H : Claims.Msg → Claims.Msg) : InnerRest H := by
+theorem innerRest (H : Hash.Msg → Hash.Msg) : InnerRest H := by
   intro hV h64 st tr hT ω i d k r v cm pts e rep ic hin hrep prior ws l p t' l' _ _ hgo R hAg q hq sw hsw lg hlg lanes
     hlanes
   obtain ⟨rec, tI, lI, rp, lgc, hLg, htk, hlgc, hq1, hinn⟩ :=
@@ -109,7 +109,7 @@ theorem innerRest (H : Claims.Msg → Claims.Msg) : InnerRest H := by
 /-- **Masked completeness from its parts**: `complete_jsonT` from level 0's four premises (`Level0`), the rest of
 `RepShapedT` and `ProverRunsT`, and the mask-rank bound; `LigeritoT` and `InnerT` follow from `Level0.Verifier`
 (`ligeritoRest`, `innerRest`). -/
-theorem complete_jsonT_of_parts (H : Claims.Msg → Claims.Msg) 
+theorem complete_jsonT_of_parts (H : Hash.Msg → Hash.Msg) 
     (h0 : Level0.ProverRuns) (h1 : Level0.ProverShape) (h2 : Level0.Lanes) (h3 : Level0.Verifier)
     (gS : ShapeRest H) (gR : RunsRest H) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=

@@ -122,6 +122,7 @@ from pathlib import Path
 
 import verity_difftest as D
 from verity_difftest import protocol as P
+from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.network.verifier import content_rows, io_request, scan_ok
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.certificate import (Certificate, CertifiedStart, Direction, LmsKey,
@@ -131,6 +132,7 @@ from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIG
 from verity.protocols.resource_accounting.network.verifier.network_attester import INTEGER_FIELDS, OPTIONAL_FIELDS, NetworkAttesterParams
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
 from verity.protocols.proofs.spot.verifier.profile import Stratified
 from verity.circuits import boolean as BL, codec, population
@@ -148,8 +150,8 @@ from verity_vllm.definitions.registry.sampling import bit_at
 
 ID = "verity/certifier/v0"
 COMMITMENT_TAG = "verity-network-certifier/period/v0"
-ONE_STAGE = R.PROTOCOL
-FORMATS = (R.FORMAT, R.FORMAT_V2)
+ONE_STAGE = DM.ONE_STAGE_PROTOCOL
+FORMATS = (DM.REGISTRATION_V1, DM.REGISTRATION)
 #: a proof block's public outputs are at most 16 bits (the values it commits can be wider)
 OUT_BITS = 16
 UNIT = "unit"
@@ -1248,7 +1250,7 @@ def start_empty(words: int, salt: bytes, domain: bytes, row: bytes | None = None
     """The empty state as a scan's registration starts from it (`startEmpty`): its `registered` entry of `START`, a
     tree of the one row of `words` zero u16 words (or of `row`, a row the prover chose) under `salt` at the domain
     whose id is `domain`, and the opening its `window` gives as ``empty``."""
-    root = G.leaf(_Domain(domain, 1), 0, _row_bc(bytes(2 * words) if row is None else row, salt), G.SCHEMA_V2)
+    root = RV.leaf(_Domain(domain, 1), 0, _row_bc(bytes(2 * words) if row is None else row, salt), G.SCHEMA_V2)
     return ({"domain": domain.hex(), "leaves": 1, "root": root.hex(), "value": START, "words": words},
             {START: {"salt": salt.hex(), "words": words}})
 
