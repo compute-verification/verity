@@ -671,6 +671,24 @@ def test_rows_check_takes_only_network_rows_verdict_and_leaves_no_case_behind(tm
     assert not list(unpacked.glob("rows-*"))
 
 
+def test_a_failed_build_is_refused_by_name_though_an_older_executable_sits_where_it_writes(tmp_path, monkeypatch):
+    """The piece builds its Lean executables itself: a build that fails is its refusal, naming the build, and never the
+    older executable left where the build writes its own."""
+    package = tmp_path / "lean"
+    stale = package / ".lake" / "build" / "bin" / "network-period"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("#!/bin/sh\necho '{\"verdict\": \"accepted\"}'\n")
+    stale.chmod(0o755)
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tools / "lake").write_text("#!/bin/sh\necho 'error: Period.lean: unknown identifier' >&2\nexit 1\n")
+    (tools / "lake").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tools}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setattr(CP, "LEAN_DIR", package)
+    with pytest.raises(CP.NotRun, match=r"(?s)lake build network-period in .*lean failed \(1\):.*unknown identifier"):
+        CP.lean_exe("network-period", None)
+
+
 @pytest.fixture(scope="module")
 def rows_exe() -> str:
     """``network-rows``, built where the piece builds it."""
