@@ -10,7 +10,7 @@ import dataclasses
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from verity_vllm import config
+from verity_vllm import config, messages
 from verity_vllm import protocols as PO
 from verity_vllm.config import EnginePin
 from verity_vllm.engine import served
@@ -229,7 +229,8 @@ class LLM:
     set, and the execution vLLM reports back.  ``protocols`` is the installed
     :class:`~verity_vllm.protocols.Composition` (None without protocols); ``close()`` uninstalls it, and
     ``reinstall(protocols_config=None)`` installs the same set afresh (H1's next window).  The engine is always built
-    here; an engine built elsewhere is not accepted.
+    here; an engine built elsewhere is not accepted.  Each LLM's build has its own exchange (`messages.build`), on which
+    its protocols' requests are filed before the build and which is the exchange in scope while it generates.
     """
 
     def __init__(self, model: str, *, revision: str, **options: Any) -> None:
@@ -247,6 +248,9 @@ class LLM:
         if self.pin.world > 1:
             engine_args["tensor_parallel_size"] = self.pin.world
         env: dict[str, Any] = {} if opts["engine_class"] is None else {"env": EC.env(opts["engine_class"])}
+        ex = messages.build()
+        for entry, request in PO.requests(ctx) if ctx is not None else ():
+            ex.request(entry, request)
         self._engine = va.build_engine(config.CHECKPOINTS, max_num_seqs=opts["max_num_seqs"], case=self.pin.case,
                                        engine_args=engine_args,
                                        execution=opts["execution"] or va.execution_label_of(opts["enforce_eager"]), **env)
@@ -280,7 +284,8 @@ class LLM:
         ctx = protocol_context(opts, self._explicit)
         self.close()
         self.protocols = None
-        self._install(ctx)
+        with messages.using(self._engine.exchange):
+            self._install(ctx)
         return self.protocols
 
     @classmethod
@@ -297,7 +302,8 @@ class LLM:
     def close(self) -> None:
         """Uninstall the protocol options.  Idempotent."""
         if self.protocols is not None:
-            self.protocols.close()
+            with messages.using(self._engine.exchange):
+                self.protocols.close()
 
     def close_window(self) -> None:
         """Close a Commit window on this engine.  Under an engine class, `errors.Refused` while a request is in flight or once the
@@ -319,7 +325,8 @@ class LLM:
         if unknown:
             raise TypeError(f"verity_vllm.LLM.generate does not support {', '.join(map(repr, unknown))}; "
                             f"supported: prompts, sampling_params, {', '.join(GENERATE_SUPPORTED)}")
-        outputs = self._engine.llm.generate(prompts, sampling_params, **kwargs)
+        with messages.using(self._engine.exchange):
+            outputs = self._engine.llm.generate(prompts, sampling_params, **kwargs)
         self.records.append(GenerateRecord.of(outputs, sampling_params))
         return outputs
 
