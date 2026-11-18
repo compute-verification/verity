@@ -40,6 +40,7 @@ No entry holds a private file (`private`), wherever it sits, and these stay on t
   length, sampling parameters, rows a step and emitted ids), its served ids (`ids.*jsonl*`), its step outputs
   (`outputs.*jsonl*`: sampled ids and logprob bits), a replay's tokens and logprobs (`replay_tokens.jsonl*`,
   `replay_logprobs.jsonl*`, `alone_tokens.jsonl*`) and the load's client records (`load*.jsonl`);
+- the PoUB session's memory map (`memory_map.jsonl`): each written block's unsalted digest, the value its append leaf hides;
 - where each rank ran, its process and device (`topology.json`), and when each process ran (`timeline.jsonl`,
   `timeline_report.json`).
 A check that reads them runs where they are: the regression harness takes such a candidate as row dirs, not as Attempts.
@@ -91,7 +92,7 @@ TENSOR_DIGESTS = "tensor_digests_pair*.json"
 #: nor these files, wherever they sit: request values, where each rank ran and when each process ran
 PRIVATE = ("tokens.json", "tokens_p*.json", TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS, "match_stoch.json", "sampled_replay*.json", "requests.jsonl", "step_trace.*",
            "ids.*jsonl*", "outputs.*jsonl*", "replay_tokens.jsonl*", "replay_logprobs.jsonl*", "alone_tokens.jsonl*",
-           "advice_trace.jsonl", "load*.jsonl", "topology.json", "timeline.jsonl", "timeline_report.json")
+           "advice_trace.jsonl", "load*.jsonl", "memory_map.jsonl", "topology.json", "timeline.jsonl", "timeline_report.json")
 
 BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "build_workload/descriptor.json.gz", "manifest.json",
                "target_family.build.json", "target_family.json",
