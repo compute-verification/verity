@@ -3,6 +3,7 @@ module
 public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 public import Definitions.Spot.SamplePressure
 public import Definitions.Spot.Exfiltration
+import Proofs.Core.Draw
 import Proofs.Spot.Exfiltration
 
 /-!
@@ -80,19 +81,6 @@ theorem choose_ratio_le_exp {K : ℕ} (hK : K ≤ n) (hk : k ≤ n) :
     ((n - K).choose k : ℝ) / n.choose k ≤ Real.exp (-(k * K / n)) :=
   (choose_ratio_le_pow hK hk).trans (one_sub_div_pow_le_exp hk K)
 
-/-- The samples that miss `B` are the `k`-subsets of its complement: `C(n - |B|, k)` of them. -/
-theorem card_missing (B : Finset (Fin n)) : (missing n k B).card = (n - B.card).choose k := by
-  have e : (missing n k B).map (Function.Embedding.subtype _) = powersetCard k Bᶜ := by
-    ext t
-    simp only [missing, mem_map, mem_filter, mem_univ, true_and, Function.Embedding.coe_subtype, mem_powersetCard,
-      subset_compl_iff_disjoint_right]
-    constructor
-    · rintro ⟨s, hs, rfl⟩
-      exact ⟨hs, s.2⟩
-    · rintro ⟨hd, hc⟩
-      exact ⟨⟨t, hc⟩, hd, rfl⟩
-  rw [← card_map (Function.Embedding.subtype _), e, card_powersetCard, card_compl, Fintype.card_fin]
-
 /-- The uniform sample gives each sample probability `1 / C(n, k)`. -/
 theorem uniformSample_toReal (hk : k ≤ n) (s : Verity.Draw.Subset n k) :
     (uniformSample n k hk s).toReal = 1 / n.choose k := by
@@ -104,7 +92,8 @@ theorem uniformSample_toReal (hk : k ≤ n) (s : Verity.Draw.Subset n k) :
 theorem sum_missing_uniformSample (hk : k ≤ n) (B : Finset (Fin n)) :
     Verity.Game.prPMFReal (uniformSample n k hk) (· ∈ missing n k B) = ((n - B.card).choose k : ℝ) / n.choose k := by
   rw [Verity.Game.prPMFReal_mem]
-  simp only [uniformSample_toReal, sum_const, card_missing, nsmul_eq_mul, mul_one_div]
+  simp only [uniformSample_toReal, sum_const, missing, Verity.SamplingDesign.card_disjoint_subsets, nsmul_eq_mul,
+    mul_one_div]
 
 /-- **The deployed sample gives detection pressure `k/n`.** At the window after the history `h` the commitment fixes the
 incorrect set `B h`; the window escapes only on the samples that miss `B h` and leaks at most `Σ_{u ∈ B h} w u`, with each

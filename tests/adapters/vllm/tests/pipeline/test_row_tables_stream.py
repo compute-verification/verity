@@ -16,6 +16,7 @@ from verity.circuits.program import Program
 from verity.commitments import row_table as RT
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R
+from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS, tables as TB
 
 from .test_row_tables import DEFN, UNITS, committed
@@ -56,7 +57,7 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
     refuses the record (`roots`): the tree over the step roots is one of the window's salted roots. About 70 s, the coins'
     outcomes each run by the Lean verifier: the only test that takes a row-table window's record through a Stream, so a
     `row-table` root the service can't register or the verifier refuses shows here and not on a served window."""
-    program, query = CS.population_program([(DEFN, UNITS)], several=True)
+    program, query = IF.listed_program([(DEFN, UNITS)], ())
     c, _s, _got = committed(monkeypatch, sampling_design=S.selection_sampling_design(RULE, UNITS, D.strata_sizes(program, query)),
                             work_table=S.selection_table(RULE, program, query, None))
     mine = c.window
