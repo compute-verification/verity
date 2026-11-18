@@ -1,7 +1,7 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-1gpu-pearl-c-whole-served"
-cards = ["rtx-pro-6000"]
+cards = ["rtx-pro-6000", "h200"]
 # Pearl-C served through the whole-step graph path (the experimental arm `pouw-pearl-c-whole`,
 # `bench_arm.PearlCWholeArm`: each decode step one CUDA graph replay of vLLM's FULL decode graph with every call's Pearl-C
 # graph steps inside it), beside `llama31-8b-1gpu-pouw-protocol-served`'s three arms, all in one run under one host load:
@@ -16,6 +16,12 @@ cards = ["rtx-pro-6000"]
 # Pearl-C call check with the calls graphed and `e2e.whole_check` (a forward captured whole, replayed bit for bit as the
 # eager calls). The PoUW option refuses a non-eager engine (`pouw.refusals`), so this arm installs Pearl-C itself, as
 # `PearlCArm` does, with one pass per engine step. Pearl-C's y carries the epoch's live salt: no arm is its token control.
+#
+# The whole arm's kernel is the one its useful-work scheme (`pearl-plus`) runs on the card (`schemes.kernel_scheme`):
+# pearl_c_sm90's `pearl-c-h100-v1-h3` on the H200 (sm_90a), whose setup exports PEARLC_KERNEL and PEARLC_CUBIN. On the
+# RTX PRO 6000 the table states no `pearl-plus` kernel, and its protocol arm names `pearl-c-sm120-v1-h3` and its kernel
+# directory itself. The H200 times the whole arm against `stock-fp8@compiled` alone (`[card_settings.h200]`): the PoUW
+# option's protocol arm on that card is `llama32-1b-1gpu-pouw-protocol-served`'s.
 arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3", "stock-fp8@compiled", "pouw-pearl-c-whole"]
 arm_modules = ["benchmarks.pouw.pearl_c_vllm.bench_arm:PEARL_C_WHOLE"]
 sweep = "quick"
@@ -58,3 +64,7 @@ block_kv_cache_memory_bytes = 8589934592
 
 [admission]
 max_minutes = 120
+
+[card_settings.h200]
+arms = ["stock-fp8@compiled", "pouw-pearl-c-whole"]
+setup = "benchmarks/harness/setup/pearl_c_sm90.sh"
