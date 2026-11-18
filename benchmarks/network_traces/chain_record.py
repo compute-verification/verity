@@ -235,20 +235,15 @@ def endpoint_step(e: dict | None) -> dict:
 
 
 def endpoint_advice(b: dict) -> dict:
-    """What the record keeps of the endpoint's advice (`chain.bits`): whether it is bound and rebuilt, and how many of its
-    Commit windows are; its whys and its rows, which name requests and count each window's, stay in the report."""
-    windows = b.get("commit_windows") or []
-    return {"bound": b.get("bound"), "rebuilt": b.get("rebuilt"), "commit_windows": len(windows),
-            "bound_windows": sum(bool(c.get("bound") and c.get("rebuilt")) for c in windows)}
+    """What the record keeps of the endpoint's advice (`chain.bits`): whether it is bound and rebuilt. Its Commit windows'
+    count, whys and rows, which name requests and count each window's, stay in the endpoint's report."""
+    return {"bound": b.get("bound"), "rebuilt": b.get("rebuilt")}
 
 
 def advice_bits(b: dict) -> dict:
-    """The advice's bits over the run's windows (`chain.bits`): v0's encoding, and the residual's (what the advice says
-    beyond what the walk derives from the attested I/O), None unless the advice was rebuilt from it."""
-    runs = [w for w in b.get("windows") or [] if w.get("in_run")]
-    derived = [w.get("derived_bits") for w in runs]
-    return {"v0_total": b.get("v0_total"), "T": b.get("T"),
-            "derived": sum(derived) if runs and None not in derived and b.get("rebuilt") else None}
+    """What the record keeps of the advice's bits (`chain.bits`): the egress window's T buckets alone. Its lengths, v0's
+    and the residual's, are functions of what was served: private, in the endpoint's report."""
+    return {"T": b.get("T")}
 
 
 #: `verity-vllm advice`, as network-e2e runs it
