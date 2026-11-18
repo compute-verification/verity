@@ -106,10 +106,10 @@ def strings(publics: Mapping[str, bytes], m: Any, port: str) -> np.ndarray | Non
     return None if (refs >= counts[j]).any() else table.reshape(counts[j], BC_BYTES)[refs]
 
 
-def validate(members: Sequence[Any], templates: Mapping[str, tuple[int, int]]) -> None:
+def validate(members: Sequence[Any], templates: Mapping[str, int], owns: Mapping[str, int]) -> None:
     """Refuse a wiring that is not, for each wired port of a member, one row of its writer template's output field a unit,
     of the port's words and schema, inside that template's units; each port wired at most once. ``templates``: each
-    template's first global unit and unit count."""
+    template's unit count; ``owns``: each member's first unit among its template's own, by key."""
     outs = {}
     for m in members:
         for o, _w in m.outs:
@@ -117,7 +117,7 @@ def validate(members: Sequence[Any], templates: Mapping[str, tuple[int, int]]) -
     for m in members:
         if len({w.port for w in m.wired}) != len(m.wired):
             raise ValueError(f"{m.key}: ports {[w.port for w in m.wired]} are wired more than once")
-        lo = m.base - templates[m.template][0]
+        lo = owns[m.key]
         for w in m.wired:
             if w.port not in dict(m.rows):
                 raise ValueError(f"{m.key}: wire {w.doc()} names no input port of its own rows")
@@ -126,6 +126,6 @@ def validate(members: Sequence[Any], templates: Mapping[str, tuple[int, int]]) -
                 raise ValueError(f"{m.key}: its {w.port} rows ({dict(m.rows)[w.port]} words, {m.schema(w.port)}) are not "
                                  f"{tree(w.writer, w.out)}'s rows ({got})")
             at = w.positions(lo, m.n)
-            if len(at) and (at.min() < 0 or at.max() >= templates[w.writer][1]):
+            if len(at) and (at.min() < 0 or at.max() >= templates[w.writer]):
                 raise ValueError(f"{m.key}: wire {w.doc()} reads leaves outside {tree(w.writer, w.out)}'s "
-                                 f"{templates[w.writer][1]}")
+                                 f"{templates[w.writer]}")

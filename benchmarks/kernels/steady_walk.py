@@ -46,10 +46,9 @@ def machine(spec_card: str, reported: str) -> tuple[str, str | None]:
     """The member's card: the ``short`` of the card record whose ``driver`` holds ``reported`` (`kit.card_short`), else
     the spec's card and why."""
     from verity_bench import kit
-    from verity_bench.overhead import CARD_FILES
 
     try:
-        return kit.card_short(reported, directory=CARD_FILES), None
+        return kit.card_short(reported), None
     except SystemExit as refused:
         return spec_card, str(refused)
 

@@ -80,9 +80,20 @@ from __future__ import annotations
 
 from verity.circuits.defs import PrimitiveDefinition, bind, composite, primitive
 from verity.circuits.ops.prims import E2M1, F2fpBf16, HopperBF16WgmmaDot16, const
-from verity.circuits.ops.scalar import BIT, BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectF32, SelectI32
+from verity.circuits.ops.scalar import (
+    BIT,
+    BitAnd,
+    BitNot,
+    BitOr,
+    I32Add,
+    I32Eq,
+    I32Le,
+    SelectF32,
+    SelectI32,
+)
 from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.registry import fp8_moe_experts as X
 from verity_vllm.definitions.registry.dsa import I32Sub
 from verity_vllm.definitions.registry.prims import BF16, F32, I32, Bf16MulBf16, F32Add

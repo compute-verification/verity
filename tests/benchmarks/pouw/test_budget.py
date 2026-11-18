@@ -183,3 +183,18 @@ def test_main_writes_every_familys_tables(tmp_path, capsys):
             assert [a["mult"] for a in d["allocation"][regime]] == [1, 2, 5, 10]
             assert all(a["point"]["config"]["mix"] not in B.CONDITIONAL
                        for a in d["allocation_integer_filler"][regime])
+
+
+def test_a_card_is_read_through_its_card_file_and_reports_its_family_alone(tmp_path, capsys):
+    assert B.family("NVIDIA H200") is FAM["H200"]
+    assert B.family("NVIDIA RTX PRO 6000 Blackwell Server Edition") is FAM["sm_120"]
+    js = tmp_path / "budget.json"
+    assert B.main(["--card", "NVIDIA B200", "--json", str(js)]) == 0
+    assert set(json.loads(js.read_text())) == {"B200"}
+    assert "## sm_120:" not in capsys.readouterr().out
+
+
+def test_a_card_no_family_prices_is_refused_with_where_its_price_goes():
+    with pytest.raises(SystemExit, match=r"no family of budget.FAMILIES prices NVIDIA H100 80GB HBM3 \(h100\): add a "
+                                         r"Family with card='h100', its gpu_usd_h"):
+        B.main(["--card", "NVIDIA H100 80GB HBM3"])

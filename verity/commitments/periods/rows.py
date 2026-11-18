@@ -243,6 +243,7 @@ class Member:
     link_units: tuple[int, ...] = ()             # a row-table member: per link, how many of its units (consecutive, in order) read it
     links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the period's row table and rank it is
     wired: tuple[WI.Wired, ...] = ()             # per wired port: the leaves of its writer template's output tree its units read
+    own: int | None = None                       # its first unit among its template's own; None: the template's units in the members before it
 
     def __post_init__(self) -> None:
         if self.schemas and (sorted(p for p, _ in self.schemas) != sorted(p for p, _ in self.rows + self.outs)
@@ -359,9 +360,13 @@ class Binding:
             raise ValueError(f"members {mine} are not the partition's units {want} (each template's, in consecutive chunks)")
         if len({m.key for m in self.members}) != len(self.members):
             raise ValueError(f"members {[m.key for m in self.members]}: each its own name")
-        WI.validate(self.members, self.templates)
+        for t, ms in self.chunks.items():
+            if [self.owns[m.key] for m in ms] != [sum(x.n for x in ms[:i]) for i in range(len(ms))]:
+                raise ValueError(f"{t}: its members' own units {[(self.owns[m.key], m.n) for m in ms]} don't tile its "
+                                 f"{self.templates[t]} (Member.own)")
+        WI.validate(self.members, self.templates, self.owns)
         for m in self.members:
-            if (m.wired or self.templates[m.template][1] != m.n) and not m.tables:
+            if (m.wired or self.templates[m.template] != m.n) and not m.tables:
                 raise ValueError(f"{m.key}: its rows lie in trees other members' rows share (its wired ports, or outputs of a "
                                  "template of several members), each opened by its path: make it a shared-row member "
                                  "(Member.tables)")
@@ -435,17 +440,29 @@ class Binding:
         return CommitmentDomain(self.binding(port, schema, leaves), OWNER, RangeIndexedDomain(0, leaves), hash="sha512")
 
     @cached_property
-    def templates(self) -> dict[str, tuple[int, int]]:
-        """Each template's first global unit and unit count."""
-        return {tid: (lo, n) for _k, tid, lo, n in template_partition(self.program, self.query).ranges}
+    def templates(self) -> dict[str, int]:
+        """Each template's unit count."""
+        out: dict[str, int] = {}
+        for m in self.members:
+            out[m.template] = out.get(m.template, 0) + m.n
+        return out
+
+    @cached_property
+    def owns(self) -> dict[str, int]:
+        """Each member's first unit among its template's own, by key (`Member.own`)."""
+        out, seen = {}, {}
+        for m in self.members:
+            out[m.key] = seen.get(m.template, 0) if m.own is None else m.own
+            seen[m.template] = out[m.key] + m.n
+        return out
 
     @cached_property
     def chunks(self) -> dict[str, tuple[Member, ...]]:
-        """Each template's members, in order."""
+        """Each template's members, in the order of their own units."""
         out: dict[str, list[Member]] = {}
         for m in self.members:
             out.setdefault(m.template, []).append(m)
-        return {t: tuple(ms) for t, ms in out.items()}
+        return {t: tuple(sorted(ms, key=lambda m: self.owns[m.key])) for t, ms in out.items()}
 
     def wire(self, m: Member, port: str) -> WI.Wired | None:
         return next((w for w in m.wired if w.port == port), None)
@@ -453,7 +470,7 @@ class Binding:
     def shared(self, m: Member) -> bool:
         """Whether member ``m`` has ports in trees other members' rows share: wired ports, or outputs of a template of
         several members."""
-        return bool(m.wired) or self.templates[m.template][1] != m.n
+        return bool(m.wired) or self.templates[m.template] != m.n
 
     def tree(self, m: Member, port: str) -> str:
         """The tree holding member ``m``'s port ``port``: its template's output tree for an output, its writer template's for
@@ -465,7 +482,7 @@ class Binding:
 
     def reads(self, m: Member, port: str) -> np.ndarray:
         """The leaf of `tree` each of member ``m``'s units reads at port ``port``, in order."""
-        lo = m.base - self.templates[m.template][0]
+        lo = self.owns[m.key]
         w = self.wire(m, port)
         if w is not None:
             return w.positions(lo, m.n)
@@ -497,7 +514,7 @@ class Binding:
                 if self.wire(m, p) is None:
                     out[m.port(p)] = (m.schema(p), dict(m.tables).get(p, m.n))
             for o, _w in m.outs:
-                out.setdefault(WI.tree(m.template, o), (m.schema(o), self.templates[m.template][1]))
+                out.setdefault(WI.tree(m.template, o), (m.schema(o), self.templates[m.template]))
         return out
 
 
@@ -689,7 +706,7 @@ def _gather(window: Binding, writer: str, out: str, at: np.ndarray, get: Callabl
     """Leaves ``at`` of the tree of template ``writer``'s output ``out``, read off its members (``get(member, out)``: one
     row a unit)."""
     ms = window.chunks[writer]
-    starts = np.array([m.base for m in ms], dtype=np.int64) - window.templates[writer][0]
+    starts = np.array([window.owns[m.key] for m in ms], dtype=np.int64)
     at = np.asarray(at, dtype=np.int64)
     j = np.searchsorted(starts, at, side="right") - 1
     res = None
@@ -886,10 +903,7 @@ def commit(window: Binding, data: Iterable[dict[str, dict[str, Any]]], *, salt_k
             ys[m.port(LINKED)] = b"".join(ys[window.row_tables[t].port][r * SALT_BYTES:(r + 1) * SALT_BYTES] for t, r in m.links)
     t_salt = time.perf_counter()
     given = dict(strings_of or {})
-    outs = {}
-    for m in ms:
-        for o, _w in m.outs:
-            outs.setdefault(WI.tree(m.template, o), []).append(m.port(o))
+    outs = {WI.tree(t, o): [m.port(o) for m in chunk] for t, chunk in window.chunks.items() for o, _w in chunk[0].outs}
     for t, qs in outs.items():
         schemas[t] = schemas[qs[0]]
     tree_rows = {t: np.concatenate([rows[q] for q in qs]) for t, qs in outs.items()}
@@ -1359,7 +1373,8 @@ def own_value(port: str) -> str:
 
 
 def _template_docs(win: Mapping[str, Any], template: str) -> list[tuple[int, Mapping[str, Any]]]:
-    return [(j, x) for j, x in enumerate(win["members"]) if x["template"] == template]
+    """Template ``template``'s members in ``window.json``, with their indices, in the order of their own units."""
+    return sorted(((j, x) for j, x in enumerate(win["members"]) if x["template"] == template), key=lambda jx: int(jx[1]["own"]))
 
 
 def shared_ports(win: Mapping[str, Any], k: int) -> dict[str, tuple[str, str, str, np.ndarray]]:
@@ -1368,7 +1383,7 @@ def shared_ports(win: Mapping[str, Any], k: int) -> dict[str, tuple[str, str, st
     (`Binding.leaves`): its outputs, where its template is several members, and its wired ports."""
     mem = win["members"][k]
     mine = _template_docs(win, mem["template"])
-    lo = int(mem["base"]) - int(mine[0][1]["base"])
+    lo = int(mem["own"])
     out = {}
     if len(mine) > 1:
         for o, _w in mem["out_ports"]:
@@ -1579,7 +1594,7 @@ class Bodies:
                 raise ValueError(f"member {k} {p}: no wire names its rows")
             tid, o, _tree, leaves = ports[p]
             docs = _template_docs(self._win, tid)
-            starts = np.array([int(x["base"]) for _j, x in docs], dtype=np.int64) - int(docs[0][1]["base"])
+            starts = np.array([int(x["own"]) for _j, x in docs], dtype=np.int64)
             self._wires[k, p] = (o, leaves, docs, starts)
         o, leaves, docs, starts = self._wires[k, p]
         pos = leaves[at]
@@ -1643,8 +1658,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     the record: ``FORMAT``, or ``FORMAT_V2`` with ``entries``, and ``digest``), chained after ``previous``, registering
     the values' ``entries`` and naming the roots of the values it ``outputs``; the period's provenance gets the index's hiding
     leaf (`index_leaf`), so the registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt
-    are prover only: the salt is ``index_salt`` (192 bytes, a committer's sampled under its key) or else fresh bytes from the
-    OS.  ``registered``: by member key, an outside value's reads (``salts_of``), each a header entry
+    are prover only: the salt is ``index_salt`` (192 fresh bytes from the OS the committer already holds, a recommit's
+    read back from ``index-salt.bin``) or else fresh bytes from the OS.  ``registered``: by member key, an outside value's reads (``salts_of``), each a header entry
     (``{port: {"value", "positions", "paths"}}``), whose paths ``window.json`` gives once for the period
     (``registered_paths``, by value and position; `registered_header`).  A member's ``m<k>-private.bin`` is its prover body
     less two kinds of port, rows and salts: a port given as a registered value's rows (`Committed.by_value`) its entry names
@@ -1693,7 +1708,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                                  "registered value's rows, which its header (registered) doesn't name")
         ub = index_bytes(units_doc(m))
         (d / f"m{k}-units.json").write_bytes(ub)
-        members.append({"k": k, "name": m.key, "template": m.template, "n": m.n, "base": m.base, "ports": [list(p) for p in m.all_rows],
+        members.append({"k": k, "name": m.key, "template": m.template, "n": m.n, "base": m.base, "own": c.window.owns[m.key], "ports": [list(p) for p in m.all_rows],
                         "input_ports": len(m.rows), "out_ports": [list(p) for p in m.outs], "frame_v3": c.frame_entry(k),
                         "public_sha512": digest, "units": f"m{k}-units.json",
                         "units_sha512": hashlib.sha512(ub).hexdigest(),

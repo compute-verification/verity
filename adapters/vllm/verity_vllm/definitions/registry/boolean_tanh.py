@@ -31,12 +31,25 @@ from decimal import ROUND_FLOOR, ROUND_HALF_EVEN, Decimal, localcontext
 from functools import lru_cache
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import (NOT, ONE, ZERO, add, compress_columns, const_bits, lzc, multiply, mux, or_reduce,
-                                              shl_window, sub)
+from verity.circuits.boolean.forms import (
+    NOT,
+    ONE,
+    ZERO,
+    add,
+    compress_columns,
+    const_bits,
+    lzc,
+    multiply,
+    mux,
+    or_reduce,
+    shl_window,
+    sub,
+)
 from verity.circuits.boolean.trace import definition
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.silicon import fp
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import dense as D
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.tables import TANH_RN_HI, TANH_RN_LO
