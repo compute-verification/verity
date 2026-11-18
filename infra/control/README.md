@@ -246,11 +246,15 @@ $CP "tail -n 20 /data/watchers/log/metrics-rerun.log; cat /data/watchers/metrics
 
 A `runs = "control"` row runs on the pod only once `/data/watchers/metrics-rerun.control.toml` (`--control-rows`) lists it:
 infra writes that file on the pod by hand, and no repository holds or deploys it. It is TOML, one `[[row]]` a row, with the
-row's `id`, its `command` exactly as its `metrics.toml` gives it, and `keys`, the names of the pod's keys its launch keeps
-(none when absent; rows of one command name the same). A row it doesn't hold, by id or by command character for character,
+row's `id`, its `command` exactly as its `metrics.toml` gives it, and `keys`, the names of the pod's keys its launch keeps,
+each one of `ENTRY_KEYS` (`LINEAR_CLIENT_ID` and `LINEAR_CLIENT_SECRET`; none when absent; rows of one command name the
+same). A row it doesn't hold, by id or by command character for character,
 is `control-unlisted`: it runs nowhere, the pass says the entry to write, and its owners and infra are rung once for each
 declaration of it. A missing or unreadable file lists none, said once a pass. The file holds no key's value (those stay in
-`relay.env` and the pod's other env files), no row a node runs, and no exception to any other bound. A control run's ring
+`relay.env` and the pod's other env files), no row a node runs, and no exception to any other bound. The list compares the
+command's string. What that string runs is main's tip as the loop fetches it: the row's script, what it imports, the lockfile
+`uv run` installs from, and `research` itself. So anything that lands on main runs on the control pod with the kept keys, the
+list unchanged. That is the same trust main already has on the pod; the list does not bound it. A control run's ring
 says how it ended and never what it printed, which stays on the pod; a launch still going after `LAUNCH_S` is killed with
 its process group and its workload's. Its entries now:
 
