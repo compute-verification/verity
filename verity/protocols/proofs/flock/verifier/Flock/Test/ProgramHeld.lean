@@ -2,10 +2,10 @@ module
 
 public import Flock.ProvedScope
 public import Flock.Registered
-public import Flock.Test.RegProgram
+public import Flock.Test.DescOfProg
 meta import Flock.ProvedScope
 meta import Flock.Registered
-meta import Flock.Test.RegProgram
+meta import Flock.Test.DescOfProg
 
 @[expose] public section
 
@@ -213,22 +213,25 @@ def code (e : String) : String := ((e.splitOn ": ")[1]?).getD ""
 -- against the population: the last block ends at it
 #guard code (why (HmRow.checkBlocksCover (withBlocks template chain) 7)) == "blocks-range"
 #guard code (why (HmRow.checkBlocksCover (withBlocks template chain) 9)) == "blocks-gap"
-/-- A template query over `RegProgram.reg`, whose instances of `TStep_v1` are its population. -/
-def steps : Json := object (sha Flock.Test.RegProgram.reg) "Q_template_instance" 0 (Json.mkObj [("template", Json.str "TStep_v1")])
+/-- The template query over `DescOfProg.pops`, whose five instances are its population. -/
+def five : Json := object (sha Flock.Test.DescOfProg.pops) "Q_template_instances" 0
+  (Json.mkObj [("templates", Json.arr (Flock.Test.DescOfProg.templates.map Json.str))])
 
-def strata (obj : Json) : String :=
-  match HmRow.stratifiedSamplingDesign obj Flock.Test.RegProgram.reg 1 with
+def units (obj : Json) : String :=
+  match HmRow.deriveTemplateUnits default obj Flock.Test.DescOfProg.pops #[] with
   | .error e => e
-  | .ok (_, pop) => s!"{pop}"
+  | .ok note => note
 
-def pop : Nat := (strata steps).toNat!
+def NO_TEMPLATE : String := "partition: META program_digests does not name the circuit's one template"
 
--- where the setup evaluates the query: a sample's strata and the units derived
-#guard pop > 0 && strata (withBlocks steps (pairs [(0, pop)])) == s!"{pop}"
-#guard code (strata (withBlocks steps (pairs [(0, pop + 1)]))) == "blocks-range"
-#guard code (strata (withBlocks steps (pairs [(0, pop - 1)]))) == "blocks-gap" || pop == 1
-#guard code (match HmRow.deriveTemplateUnits default (withBlocks steps (pairs [(0, pop + 1)])) Flock.Test.RegProgram.reg #[] with
+-- where the setup evaluates the query: the units derived (refused past the cover for want of a template) and a sample's strata
+#guard ((TemplateQuery.Desc.parse Flock.Test.DescOfProg.pops).toOption.bind fun d =>
+  (TemplateQuery.evaluate d Flock.Test.DescOfProg.templates).toOption.map TemplateQuery.population) == some 5
+#guard units five == NO_TEMPLATE && units (withBlocks five (pairs [(0, 2), (2, 5)])) == NO_TEMPLATE
+#guard code (units (withBlocks five (pairs [(0, 2), (2, 6)]))) == "blocks-range"
+#guard code (units (withBlocks five (pairs [(0, 2), (2, 4)]))) == "blocks-gap"
+#guard code (match HmRow.stratifiedSamplingDesign (withBlocks five (pairs [(0, 6)])) Flock.Test.DescOfProg.pops 1 with
   | .error e => e
-  | .ok note => note) == "blocks-range"
+  | .ok _ => "") == "blocks-range"
 
 end Flock.Test.ProgramHeld
