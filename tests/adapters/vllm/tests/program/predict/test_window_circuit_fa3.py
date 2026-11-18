@@ -144,7 +144,7 @@ def test_a_head_with_no_cut_past_the_grains_rows_is_refused_by_name():
         class_circuit(_registered(GUARDED), CLASS, None, Grain(gemm_words=1024, rows=10, select=128))
 
 
-#: Pearl+'s scheme a tied window's circuit is cut at (`served_verdicts.sh`'s PEARLPLUS_ARM)
+#: Pearl+'s scheme a tied run's class circuit is cut at (`served_verdicts.sh`'s PEARLPLUS_ARM)
 PEARL = "pearl-c-h100-v1-h3"
 ADD = "RMSNormFusedCudaAdd_v2{{N=2048,C=256,AT={},R={}}}"
 
