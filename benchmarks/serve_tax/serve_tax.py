@@ -205,6 +205,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 import urllib.request
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -215,10 +216,13 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 TRACES = ROOT / "benchmarks/network_e2e/traces"
-CARD_FILES = ROOT / "calibration/hardware/cards"
 sys.path.insert(0, str(ROOT / "tools" / "config"))
 sys.path.append(str(ROOT))
 from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/config, put on sys.path above)
+#: the serving profiles (`verity_bench.profiles`), whose datasets, loads' shapes and response-time bounds this file's
+#: loads and models take
+PRODUCTION = tomllib.loads((ROOT / "benchmarks/production.toml").read_text(encoding="utf-8"))
+PROFILE = PRODUCTION["profiles"]
 SCHEMA = "verity-bench/serve-tax/v0"
 PLUGIN_ENV = "VERITY_SERVETAX"
 TICK_MIDDLEWARE = "verity_vllm.pipeline.tick_plugin.TickFeed"
@@ -265,6 +269,8 @@ class Arm:
     attester: bool = False
     #: what of a served deployment the arm leaves off, in words (`parts_of`)
     off: tuple[str, ...] = ()
+    #: the tick rule's catch-up forms that only a measurement may take (`tick_rule`) and that this arm measures
+    catch_ups: tuple[str, ...] = ()
 
 
 BATCH_INVARIANT = {"VLLM_BATCH_INVARIANT": "1"}
@@ -344,7 +350,8 @@ ARMS = {
     "prod-tick": Arm("prod", "+ admission on the certified tick, its releases and watermark from a stand-in release "
                      "front on the node: prod-all-on's tick with nothing recorded and no edge, its client sending each user's seed as "
                      "prod-all-on's does", plugin=("idle_reset",), published=True, tick=True, seeds=True, off=("the network attester's egress pacing", "useful-work kernels",
-                                                     "commitment of values", "the record", "the edge snapshot")),
+                                                     "commitment of values", "the record", "the edge snapshot"),
+                     catch_ups=("open",)),
     "prod-all-on": Arm("prod-record", "+ admission on the certified tick, its releases and watermark from a stand-in "
                        "release front on the node (`release_front`: admission real, no answer paced), and the edge "
                        "snapshot every --edges-every-s seconds as a server would take it, every rank's KV cache hashed "
@@ -511,15 +518,16 @@ RUST_ENV = {"VLLM_USE_RUST_FRONTEND": "1"}
 #: or model may carry, and the variable a server's environment never keeps
 LOGS_TEXT_ARGS = ("--enable-log-requests", "--enable-log-outputs")
 LOGS_TEXT_ENV = ("VLLM_DEBUG_LOG_API_SERVER_RESPONSE",)
+SLO = (PRODUCTION["bounds"]["first_token_s"], PRODUCTION["bounds"]["token_s"])
 MODELS = {
     "moonlight": Model("moonshotai/Moonlight-16B-A3B-Instruct", "4e735b07a89f73647dfab71ab91b840f362ede5b", "moonlight-16b",
-                       ("--dtype", "bfloat16", "--trust-remote-code"), (2.0, 0.08)),
+                       ("--dtype", "bfloat16", "--trust-remote-code"), SLO),
     "llama8b": Model("unsloth/Llama-3.1-8B", "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814", "llama-3.1-8b",
-                     ("--dtype", "bfloat16"), (2.0, 0.08)),
+                     ("--dtype", "bfloat16"), SLO),
     "qwen3-30b": Model("Qwen/Qwen3-30B-A3B", "ad44e777bcd18fa416d9da3bd8f70d33ebb85d39", "qwen3-30b-a3b",
-                       ("--dtype", "bfloat16"), (2.0, 0.08)),
+                       ("--dtype", "bfloat16"), SLO),
     "llama32-1b": Model("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "llama-3.2-1b",
-                        ("--dtype", "bfloat16"), (2.0, 0.08), metric="vllm/serving-cost-glm53", prefix_row=False),
+                        ("--dtype", "bfloat16"), SLO, metric="vllm/serving-cost-glm53", prefix_row=False),
     # glm53's target is the cost model's share for serving (the spot figures' serving cost card, its `tokens`
     # configuration): extra GPU time at equal tokens, which reads no SLO, for a server that does not cut its cache at a
     # phase edge and keeps vLLM's prefix cache on, priced at one engine across eight H200s under the chat load at 384
@@ -527,14 +535,15 @@ MODELS = {
     # part where one of its arms turns on that part's changes alone (`cost_report`'s `measured`). It has no part for
     # prefix caching off, the served ids or the network attester in front.
     "glm53": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3",
-                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=10.25, target_basis="modeled",
+                   ("--tensor-parallel-size", "8"), SLO, target=10.25, target_basis="modeled",
                    target_parts=(
                        Part("the certified tick", 1.63, ("admission on the certified tick",),
                             "the queue-dependent tick's throughput, simulated on traces", "simulated"),
                        Part("the canonical top-k", 8.37, ("the canonical top-k",),
-                            "the old pass's cost, which bisects every wrong fast selection by one program: prod-record "
-                            "over prod-trace on the agentic load at 4 users; right for main today and an upper bound "
-                            "once the new select lands, until prod-record-bisect measures the new one", "measured"),
+                            "the cost of the pass that bisects every wrong fast selection by one program: prod-record "
+                            "over prod-trace on the agentic load at 4 users; an upper bound for main's pass, which "
+                            "refines it instead and which a run of the same arms on the same workload put at +2.11 "
+                            "points [0.82, 3.41], until prod-record-bisect measures it", "measured"),
                        Part("the snapshot bundle", 0.17, ("the edge snapshot",),
                             "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
                             "the prefix cache on"),
@@ -561,7 +570,7 @@ MODELS = {
     # the MTP layer and the FP8 blocks, and a rank's attention heads at tensor parallel 8; README.md says what of its
     # points transfers to glm53
     "glm53-standin": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3-stand-in",
-                           ("--tensor-parallel-size", "1", "--load-format", "dummy"), (2.0, 0.08),
+                           ("--tensor-parallel-size", "1", "--load-format", "dummy"), SLO,
                            check="GreedySelect_v1{V=154880,N=7744}",
                            published=("--kv-cache-dtype", "fp8", "--speculative-config.method", "mtp",
                                       "--speculative-config.num_speculative_tokens", "5", "--tool-call-parser", "glm47",
@@ -1055,6 +1064,11 @@ class Dataset:
     def url(self) -> str:
         return f"https://huggingface.co/datasets/{self.repo}/resolve/{self.revision}/{self.file}"
 
+    @classmethod
+    def pinned(cls, pin: dict) -> Dataset:
+        """A dataset table of the serving profiles' file (`PRODUCTION`)."""
+        return cls(pin["repository"], pin["revision"], pin["file"], pin["bytes"], pin["sha512"])
+
 
 #: a line of a planned load's table (`read_plan`, `Planned`): a request's arrival in seconds after its pass starts and
 #: its prompt's and its output's tokens; and, on a request whose prompt begins as an earlier one's does, that line's
@@ -1115,14 +1129,12 @@ TIMED_TRACE = ("--dataset-name", "timed_trace", "--timed-trace-chunk-hash-size",
 AGENTIC, AGENTIC_FULL, AGENTIC_256K = "agentic", "agentic-full", "agentic-256k"
 #: SemiAnalysis's AgentX traces (Apache-2.0): recorded sessions of a coding agent, a line a session, each request its
 #: prompt's and its output's tokens and an id for each block of `BLOCK` prompt tokens, with no token and no text
-AGENTX = Dataset("semianalysisai/cc-traces-weka-062126", "23f152f6f0f9399a85901b89a6458def0ef16729", "traces.jsonl",
-                 1847151435, "e9737b2661bf90958672b5aa7b133bf009bd2642d43fb3c22060e85b9f15a4ac"
-                 "ed11b887571578abdfdc7b14df3b72a0825440628437dad16701697e48386470")
+AGENTX = Dataset.pinned(PROFILE["coding-agent"]["datasets"]["agentx"])
 #: the same sessions as their publisher cut them for a context of 262,144 tokens (Apache-2.0), in the same form: no
 #: request of it, with its output, passes that context
-AGENTX_256K = Dataset("semianalysisai/cc-traces-weka-062126-256k", "8fecd2fc56694469f758f0afbbb6335ad3043740", "traces.jsonl",
-                      568864747, "a6c659d9d773a3b00552266103937cad1cd6a7f1233fb98aa00f2ff6f706c4d7"
-                      "7ebf1bf7b640485ba0df5cebf2321242e85ecf786182f98d32137d5a173d679d")
+AGENTX_256K = Dataset.pinned(PROFILE["coding-agent"]["datasets"]["agentx-256k"])
+#: the turns a user sends at each context the sessions are cut at, by the context's tokens
+CUTS = PROFILE["coding-agent"]["cuts"]
 #: the fewest turns a session is sent with (`session_lines`): its opening request and the first to carry its context
 SESSION_TURNS = 2
 
@@ -1139,20 +1151,19 @@ SESSION_TURNS = 2
 #: eight of these cards, and the prefix cache would evict what a later turn repeats.
 LOADS = {
     "chat": Load("ShareGPT's first turns, each decoding its recorded answer's length (vLLM's sharegpt dataset)",
-                 ("--dataset-name", "sharegpt"), 200, (4, 8, 12, 16, 24, 32, 48), 4096,
-                 Dataset("anon8231489123/ShareGPT_Vicuna_unfiltered", "192ab2185289094fc556ec8ce5ce1e8e587154ca",
-                         "ShareGPT_V3_unfiltered_cleaned_split.json", 672837942,
-                         "324efe241e9a5a284c94a9cd15776a8a037092528e44b4bc6aa7338f7c93ee80"
-                         "62e859ae182c2b9440a1099f6f6f7659b1c3d4ffecf2672e0d9ff8771946d5db")),
+                 ("--dataset-name", "sharegpt"), PROFILE["chat"]["prompts"], (4, 8, 12, 16, 24, 32, 48), 4096,
+                 Dataset.pinned(PROFILE["chat"]["dataset"])),
     "long": Load("8,192 random tokens in and 128 out (vLLM's random dataset at one long length)",
-                 ("--dataset-name", "random", "--random-input-len", "8192", "--random-output-len", "128"), 24,
-                 (1, 2, 4, 8), 16384, slo=("tpot",)),
+                 ("--dataset-name", "random", "--random-input-len", str(PROFILE["fixed-size"]["input"]),
+                  "--random-output-len", "128"), PROFILE["fixed-size"]["prompts"], (1, 2, 4, 8), 16384,
+                 slo=("tpot",)),
     PREFIX: Load("two prompts near the context limit, each sent again with another ending, of synthetic token ids "
                  "(vLLM's timed_trace dataset)", TIMED_TRACE,
                  len(PAIRS), (1,), 131072, slo=("tpot",), plan=PAIRS, number=False),
     AGENTIC: Load("a coding agent's recorded sessions, each turn's prompt beginning as the turn before it, cut where a "
                   "request passes 131,072 tokens, of synthetic token ids (SemiAnalysis's AgentX traces; vLLM's "
-                  "timed_trace dataset)", TIMED_TRACE, 24, (4,), 131072, AGENTX, slo=("tpot",), number=False,
+                  "timed_trace dataset)", TIMED_TRACE, CUTS["131072"]["turns"], (4,), 131072, AGENTX, slo=("tpot",),
+                  number=False,
                   sessions=True),
     AGENTIC_FULL: Load("a coding agent's recorded sessions, each turn's prompt beginning as the turn before it, whole "
                        "up to the model's own context limit, of synthetic token ids (SemiAnalysis's AgentX traces; "
@@ -1160,8 +1171,8 @@ LOADS = {
                        number=False, sessions=True),
     AGENTIC_256K: Load("a coding agent's recorded sessions, each turn's prompt beginning as the turn before it, as their "
                        "publisher cut them for a context of 262,144 tokens, of synthetic token ids (SemiAnalysis's "
-                       "AgentX traces, the 256k copy; vLLM's timed_trace dataset)", TIMED_TRACE, 12, (4,), 262144,
-                       AGENTX_256K, slo=("tpot",), number=False, sessions=True),
+                       "AgentX traces, the 256k copy; vLLM's timed_trace dataset)", TIMED_TRACE,
+                       CUTS["262144"]["turns"], (4,), 262144, AGENTX_256K, slo=("tpot",), number=False, sessions=True),
 }
 
 
@@ -1778,6 +1789,19 @@ def run(a: argparse.Namespace) -> int:
         return serve(a, outside(Path(d).resolve()))
 
 
+def tick_rule(name: str, text: str) -> dict:
+    """``--tick-rule``'s JSON for arm ``name``, with ``arm`` set where its catch-up is one only a measurement takes
+    (``open``: the gate open from the start, which orders nothing). Refused where the arm doesn't name it
+    (`Arm.catch_ups`)."""
+    rule = json.loads(text)
+    if rule.get("catch_up") != "open":
+        return rule
+    if "open" not in ARMS[name].catch_ups:
+        raise SystemExit(f"arm {name}: catch_up 'open' opens the tick's gate, which then orders nothing, and only an arm "
+                         "that names it in Arm.catch_ups measures it")
+    return rule | {"arm": name}
+
+
 def corpus_only(arm: Arm) -> str | None:
     """Why vLLM's client can't send ``arm``'s passes, None where it can. Under it a tick arm's requests come through a
     `release_front`, and its server refuses ``/reset_prefix_cache``, so its engine must empty its prefix cache when idle."""
@@ -1836,7 +1860,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
         print(f"[serve-tax] plan: {len(plan)} requests in {time.monotonic() - t:.1f} s", flush=True)
     tick = tick_args(a.tick_from, a.tick_ms) if arm.tick else None
     if tick and a.tick_rule:
-        tick["rule"] = json.loads(a.tick_rule)
+        tick["rule"] = tick_rule(a.arm, a.tick_rule)
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     site = plugin_site(out / ".site", arm)
@@ -2440,9 +2464,9 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
 def busy_cycle(recs: list[dict]) -> dict:
     """The engine's mean busy cycle over a step trace with times (`StepTrace` with a clock): from one step's output to the
     next's, between consecutive steps that scheduled tokens, where a request was in the engine (arrived, not yet finished)
-    once the first's output was back,     as `summary.busy_cycle` reads the corpus's traces. ``per_token``: the least-squares fit of each cycle to a fixed
-    amount and an amount for each non-draft token of the step it ends, a row past its prompt being one token and its
-    drafts where the engine drafts."""
+    once the first's output was back, as `summary.busy_cycle` reads the corpus's traces. ``per_token``: the least-squares
+    fit of each cycle to a fixed amount and an amount for each non-draft token of the step it ends, a row past its prompt
+    being one token and its drafts where the engine drafts."""
     flight: set[str] = set()
     prompt: dict[str, int] = {}
     drafts = any(r.get("kind") == "header" and (r.get("config") or {}).get("speculative") for r in recs)
@@ -3976,26 +4000,14 @@ def hardware(model: Model) -> str:
     return f"{tp_size(model)} × {card()}"
 
 
-def card_record(name: str) -> dict:
-    """The card record (``verity.device.load_card``) whose ``driver`` has ``name`` as a value, the name nvidia-smi gives the
-    card; refused, naming what to add, unless exactly one record holds it and has the ``short`` a point's member carries."""
-    from verity.device import load_card, skus
-
-    cards = [load_card(sku, directory=CARD_FILES) for sku in skus("gpu", directory=CARD_FILES)]
-    found = [c for c in cards if name and name in {d["value"] for d in c.get("driver", ())}]
-    if len(found) != 1 or not found[0].get("short"):
-        raise SystemExit(
-            f"{len(found)} card records under {CARD_FILES} have {name!r}, the card nvidia-smi names here, in `driver`: add "
-            f"{{ value = {json.dumps(name)}, source = ... }} to its one record's `driver` and give it a `short`, the "
-            "card's name in a point's member, adding its <sku>.toml there if it has none")
-    return found[0]
-
-
 def member(model: Model, arm: str, reference: str | None = None) -> str:
     """A point's ``member``, what tells its line from the lines of the metric's other configurations: the model's
     served name, this host's card and the arm, over its reference where it has one, lower-case words joined by hyphens
     (``llama-3.2-1b-h200-record-over-compiled``)."""
-    kind = card_record(card())["short"]
+    kit()
+    from verity_bench import kit as bench
+
+    kind = bench.card_short(card())
     return "-".join((model.served, kind, arm, *(("over", reference) if reference else ())))
 
 

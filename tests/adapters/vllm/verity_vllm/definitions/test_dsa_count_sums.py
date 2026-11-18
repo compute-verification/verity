@@ -9,9 +9,9 @@ from collections.abc import Sequence
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.commitments.periods import interface as IF
+
 from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
 from verity_vllm.definitions.registry import dsa_topk as T
 from verity_vllm.definitions.registry import dsa_topk_mask_cut as X

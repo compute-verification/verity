@@ -16,11 +16,12 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | Command | What it runs |
 | --- | --- |
 | `verity bench attester_load` | what the network attester costs the requests it carries: the added time to a response's first and last byte against the endpoint straight, the ticks' lateness at its schedule's capacity, and that capacity stated |
-| `verity bench bandwidth` | the device ceilings PoUB's timing cites, one probe a run: `chip` (what a card holds on chip) and `write_gpu` on one GPU, `write_host` on the host's CPUs |
+| `verity calibrate bandwidth` | the device ceilings PoUB's timing cites, one probe a run: `chip` (what a card holds on chip) and `write_gpu` on one GPU, `write_host` on the host's CPUs |
 | `verity bench bool_build_cost` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule, timed |
 | `verity bench certifier_term` | the network attester's term for GLM-5.3 at a scope's load, in bits and GB |
 | `verity bench attester_timing` | the bits an interval a server moves through when the network attester releases its bytes: `run`, `guard`, `serve`, `observe`, `score`, `table` and `target` |
 | `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside the slowdown calculator's shape-derived ones; `--models llama32-1b --out DIR`, Llama 3.2 1B's layer alone and its point, on a CPU |
+| `verity bench codec_tensor` | the tensor-core wide-word codec on one GPU: `wt.cu`'s libraries gated against `wide.py`, then their read, rates, decodes and GEMMs timed |
 | `verity bench compile_cost` | wall time and peak memory, by phase, of compiling a class-G window's Programs |
 | `verity bench compute` | the compute audit's number: the share of a served model's MACs that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record |
 | `verity bench dsa_topk` | the canonical top-k on one GPU node: its outputs run to run and in two processes at once, the plugin as vLLM loads it, and its cost |
@@ -151,6 +152,13 @@ made_up=True)`: the line `a made-up record, not a run's` is printed under the au
 `made_up: true` and is no audit, and every measurement written from it is marked `modeled` (figures no run measured)
 and carries `made_up: true`, so its `result.json` passed on alone never reads as a run's measurement. A fixture record
 passes `made_up=True` wherever it is reported, whatever its own files say of its coins, parameters or commit.
+
+**A trial** is a run whose numbers are for its launcher alone: a probe from a branch, a study at other settings, a run
+on a stand-in model, a comparison run. Start one with `research run --env VERITY_BENCH_TRIAL=1 ...` in front of the
+registered command (the overhead, vLLM and steady doors forward the variable from the launcher's environment). Its
+writer puts every measurement in `out/trial-measurements.json` and none in `result.json`, which says `trial: true`, so no
+number of it reaches a metric's line. It is never a plan's passing run, and every record step refuses a labelled one
+(`kit.trial_why`), naming the launch that makes it of record.
 
 `kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=..., made_up=..., withdrawn=..., from_run=...)` is the command's
 last step, and the printed and written forms are the kit's (`harness/README.md`'s "The kit").
@@ -333,7 +341,8 @@ no slot of ours (its memory limit is Slurm's `--mem`), its node is shared with o
 nothing preserves it while it runs (`research run-preserve` and `research status` from a VM don't reach it). The nodes
 have network, Python 3.12 and no root. The DGX's driver is CUDA 13.0's, which `main`'s torch needs;
 `h100-nvl-1-1-cc`'s is CUDA 12.8's, too old for it, and `h100-nvl-1-0-cc` refuses any GPU request. No node has `nvcc` or `ncu` on
-its PATH, and the H100 has no card file in `calibration/hardware/cards/`, so a card-bound benchmark refuses there. Use only idle
+its PATH. A harness spec's point runs there as the job's command, `verity-bench run SPEC --here`
+(`benchmarks/harness/README.md`), with no lease or slot of ours. Use only idle
 capacity: one job at a time, at most 30 minutes, one GPU and 16 CPUs; `vcf-job-run.sh` cancels a job still pending
 after 20 minutes. A job that pends on `Resources` while the DGX's GPUs are idle may find them held by a reservation
 of the account (`scontrol show reservation`), which `--reservation=NAME` runs it in.

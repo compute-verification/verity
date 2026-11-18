@@ -77,8 +77,9 @@ def test_only_a_run_of_the_door_s_own_job_can_be_stored_or_recorded(tmp_path):
     s.ran("r20261104-020000-0020", tmp_path / "r20261104-020000-0002", argv=gpus,
           env={"VERITY_BENCH_VENV": "/workspace/jobs/venv312"})
     assert R.store_points(s.store, "r20261104-020000-0020").startswith("art:")
-    s.ran("r20261104-020000-0022", tmp_path / "r20261104-020000-0002", sub="points",
-          env={"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"})
+    from research.result import env_defaults
+
+    s.ran("r20261104-020000-0022", tmp_path / "r20261104-020000-0002", sub="points", env=env_defaults({}))
     assert R.store_points(s.store, "r20261104-020000-0022").startswith("art:")
 
     points = tmp_path / "r20261104-020000-0002" / "out" / "points.json"
@@ -98,6 +99,38 @@ def test_only_a_run_of_the_door_s_own_job_can_be_stored_or_recorded(tmp_path):
         with pytest.raises(ValueError, match="isn't a run of the door"):
             R.record_run(s.store, run)
         assert not R.of_record(s.store, run)[0]
+
+
+def test_a_trial_through_the_door_is_admitted_and_never_of_record(tmp_path, monkeypatch):
+    """A trial (`VERITY_BENCH_TRIAL`) passes the door's `--env` rule, so a probe can run the door's own job, and the door
+    forwards it from the launcher; a sweep or timed run that is one, by its attempt's env or its result, is refused."""
+
+    from verity_bench import kit
+
+    monkeypatch.setattr(kit.atexit, "register", lambda *a: None)
+    s = Store(tmp_path)
+    art = stored_points(tmp_path, s, "r20261104-020000-0001")
+    node_points(tmp_path, Node(tmp_path), "r20261104-020000-0002")
+    s.ran("r20261104-020000-0003", tmp_path / "r20261104-020000-0002", sub="points", env={kit.TRIAL: "1"})
+    with pytest.raises(ValueError, match=r"r20261104-020000-0003 is a trial run \(VERITY_BENCH_TRIAL\)"):
+        R.store_points(s.store, "r20261104-020000-0003")
+
+    sent = tmp_path / "sent-points.json"
+    sent.write_bytes(Path(s.store.fetch(art)).read_bytes())
+    monkeypatch.setenv(kit.TRIAL, "1")
+    argv = R.launch_argv(tmp_path, "node", 60, ["run"])
+    assert argv[argv.index("VERITY_BENCH_TRIAL=1") - 1] == "--env"
+    rc, run_dir = node_run(tmp_path, Node(tmp_path), sent, "stock", art, run="r20261104-030000-0001")
+    monkeypatch.delenv(kit.TRIAL)
+    assert rc == 0 and json.loads((run_dir / "result.json").read_text())["trial"] is True
+    s.ran("r20261104-030000-0001", run_dir)
+    with pytest.raises(ValueError, match=r"r20261104-030000-0001 is a trial run"):
+        R.record_run(s.store, "r20261104-030000-0001")
+    assert not s.store.labels("r20261104-030000-0001", key=R.RUN_OF_RECORD)
+    # labelled by hand all the same, the table shows its points refused as a trial's, never as a figure
+    s.store.add_label("r20261104-030000-0001", R.RUN_OF_RECORD, R.RUN_RECORD, by="benchmarks", ts="2026-11-04T04:00:00Z")
+    rows = R.gamma_rows(s.store)
+    assert rows and all(not r["of_record"] and r["why"].startswith("r20261104-030000-0001 is a trial run") for r in rows)
 
 
 def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_why(tmp_path, scheme):

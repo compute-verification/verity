@@ -1822,7 +1822,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     units = [u for u in compiled.requests if u is not None]
     scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units], kept_ingress=kept_ingress)
     population = WC.population_digest(low.circuit)
-    state = None if scanned is None else WRS.state_value(population, cls, scanned[0], key, int(a.window), window=run)
+    state = None if scanned is None else WRS.state_value(population, cls, scanned[0], window=run)
     lap("scan")
     placed = place_slots(cls, [u.id for u in units], compiler.inner.ingress,
                          None if state is None else (scanned[1], WRS.scan_slots(low, state.rows)))
@@ -1841,7 +1841,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
                          f"{model['repo']}@{model['revision']}'s")
     served = {label: weights(label, 0, n) for label, n in sizes.items()}
     values = {**WW.weight_values(registered, served, key, keep_rows=True),
-              SS.SCAN_STATE: WRS.standin_state(population, cls, rows, key, int(a.window), window=run) if state is None
+              SS.SCAN_STATE: WRS.standin_state(population, cls, rows, window=run) if state is None
               else state}
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
     lap("weights")
@@ -1865,7 +1865,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))
     lap("close")
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)}}
-    win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)), previous=previous)
+    win.write(c, a.out, prov, registrar=R, previous=previous)
     scan_state_opening(values[SS.SCAN_STATE], Path(a.out) / scan_state_file)
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}

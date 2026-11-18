@@ -766,7 +766,7 @@ def test_round_two_refuses_a_value_the_prover_registers_after_the_first_stages_s
 
 #: A read's template, which the auditor's params record as a read of 8 rows (`READ_SIZES`), and its ports' links,
 #: each at a value of its own name.
-READ_T = "EmbeddingRead_v1{V=8,H=2}"
+READ_T = "EmbeddingRead_v2{V=8,H=2}"
 READ_SIZES = ((READ_T, 8),)
 READ_LINKS = tuple(SS.Link(READ_T, p, p) for p in ("tok", "root", "domain", "row", "salt", "path"))
 #: The roots and domain ids of tables ``t`` and ``u``, and round 1's record registering both.

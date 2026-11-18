@@ -10,24 +10,24 @@ from __future__ import annotations
 
 import torch
 from verity.circuits.refs import Coll
-from verity_vllm.definitions.registry import bf16_gemm_check
-
-from verity_vllm.program.frontend import targets
 from verity_torch.frontend.rules.base import OpRule, RuleInfo
+from verity_torch.frontend.rules.bindings.operands import (
+    _strides,
+    _untransposed,
+)
 from verity_torch.frontend.rules.common import (
     from_rows,
     known,
     rows_of,
     shape,
 )
+
+from verity_vllm.definitions.registry import bf16_gemm_check
+from verity_vllm.program.frontend import targets
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_device_name,
     active_target_profile,
     launch_tokens_of,
-)
-from verity_torch.frontend.rules.bindings.operands import (
-    _strides,
-    _untransposed,
 )
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 

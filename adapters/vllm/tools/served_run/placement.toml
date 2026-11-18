@@ -34,6 +34,8 @@ VY_AUDITOR_2_HOST = "/root/.config/verity/auditor-2.env"
 gate = "research@${VY_CHALLENGER_1_HOST}"
 peer = "vy-spot-glm53"
 key = "tests/benchmarks/pouw/fixtures/challenger-key.json"
+# the gate's challenger's LMS key, which the record holds Pearl+'s salt sessions to (served_verdicts.sh's H1_KEY_SHA512)
+key-sha512 = "27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc"
 gate-key = "${HOME}/.ssh/vllm_lane_ed25519"
 address = "${VY_AUDITOR_2_HOST}:47611"
 

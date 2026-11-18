@@ -5425,7 +5425,7 @@ def _verifier_held(c: dict, x: int) -> dict:
 
 #: A read's template, which the auditor's params record as a read of `OPENING_ROWS` rows, and the names its links
 #: read in `_read_opening`.
-OPENING = "EmbeddingRead_v1{V=8,H=2}"
+OPENING = "EmbeddingRead_v2{V=8,H=2}"
 OPENING_ROWS = 8
 OPENING_PORTS = ("tok", "root", "domain", "row", "salt", "path")
 
@@ -6738,11 +6738,11 @@ def test_the_unit_gates_by_range_are_the_walks(pieces, n):
 #: A served model's template mix, per template its units in the population: L5's seven, at their shares of its units.
 REAL_TEMPLATES = [
     ('MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}', 32),
-    ("EmbeddingRead_v1{V=256,H=3072}", 131072),
-    ("EmbeddingRead_v1{V=256,H=96}", 1024),
+    ("EmbeddingRead_v2{V=256,H=3072}", 131072),
+    ("EmbeddingRead_v2{V=256,H=96}", 1024),
     ('MoeExpertFp8BlockGemm_v4{K=6144,N=1,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}', 131072),
-    ("EmbeddingRead_v1{V=256,H=4096}", 49152),
-    ("EmbeddingRead_v1{V=256,H=4}", 12288),
+    ("EmbeddingRead_v2{V=256,H=4096}", 49152),
+    ("EmbeddingRead_v2{V=256,H=4}", 12288),
     ('MoeExpertFp8BlockGemmW_v4{K=256,N=32,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}', 49152),
 ]
 

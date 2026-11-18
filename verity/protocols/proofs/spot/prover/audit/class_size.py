@@ -163,7 +163,7 @@ ROWS_3: str = SOURCES["rows_3"]
 #: table unless said otherwise
 MEASURED: dict[str, tuple[int, int, str]] = {lab: (ands, k, SOURCES["measured"][lab] if src is None else src)
                                              for lab, (ands, k, src) in {
-    "EmbeddingRead_v1{V=128256,H=2048}": (5_392_976, 25, None),
+    "EmbeddingRead_v2{V=128256,H=2048}": (5_392_976, 25, None),
     "RMSNormTriton_v5{N=2048}": (9_416_444, 25, None),
     "RMSNormFusedCuda_v2{N=2048}": (10_474_114, 27, None),
     "Gemm_v2{K=2048,N=16}": (16 * 1_053_595, 27, None),

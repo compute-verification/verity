@@ -364,6 +364,20 @@ def test_prod_tick_is_prod_all_ons_tick_alone_and_takes_a_rule_other_than_the_re
     assert json.loads(ruled["VERITY_TICK"]) == plain | {"token_ns": 18_500, "catch_up": "marks"}
 
 
+def test_only_an_arm_that_names_the_open_gate_takes_it_and_its_server_hears_which(tmp_path: Path):
+    from verity_vllm.pipeline import tick_plugin
+
+    assert S.tick_rule("prod-all-on", '{"token_ns": 5, "catch_up": "marks"}') == {"token_ns": 5, "catch_up": "marks"}
+    for name in ("prod-all-on", "tick-certifier"):
+        with pytest.raises(SystemExit, match="catch_up 'open'"):
+            S.tick_rule(name, '{"catch_up": "open"}')
+    rule = S.tick_rule("prod-tick", '{"catch_up": "open"}')
+    assert rule == {"catch_up": "open", "arm": "prod-tick"}
+    tick = {"bucket_us": 100_000, "sat_us": 7_761, "free_us": 9_485, "rule": rule}
+    env = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0)
+    assert tick_plugin.tick_config(env)["catch_up"] == "open"
+
+
 def test_the_boundary_rows_arm_keeps_the_prefix_cache_on_and_hands_the_plugin_its_object(tmp_path: Path):
     m = S.MODELS["glm53"]
     argv = S.server_argv(S.ARMS["boundary-rows"], m, Path("/ck"), 8000)
@@ -2381,6 +2395,6 @@ def test_a_card_no_record_lists_in_its_driver_is_refused_naming_what_to_add(monk
                                          r"\{ value = \"NVIDIA Z9 80GB\", source = \.\.\. \} to its one record's `driver` "
                                          r"and give it a `short`.*<sku>\.toml"):
         S.member(S.MODELS["llama32-1b"], "record", "compiled")
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": ""})
     with pytest.raises(SystemExit, match="0 card records"):
-        S.card_record("")
-    assert S.card_record("NVIDIA H200")["sku"] == "h200-sxm-141gb"
+        S.member(S.MODELS["llama32-1b"], "record", "compiled")

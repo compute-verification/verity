@@ -32,11 +32,11 @@ from verity.circuits.population import mixed_population_program  # noqa: E402
 
 L5 = [
     ('MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}', 32),
-    ("EmbeddingRead_v1{V=256,H=3072}", 131072),
-    ("EmbeddingRead_v1{V=256,H=96}", 1024),
+    ("EmbeddingRead_v2{V=256,H=3072}", 131072),
+    ("EmbeddingRead_v2{V=256,H=96}", 1024),
     ('MoeExpertFp8BlockGemm_v4{K=6144,N=1,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}', 131072),
-    ("EmbeddingRead_v1{V=256,H=4096}", 49152),
-    ("EmbeddingRead_v1{V=256,H=4}", 12288),
+    ("EmbeddingRead_v2{V=256,H=4096}", 49152),
+    ("EmbeddingRead_v2{V=256,H=4}", 12288),
     ('MoeExpertFp8BlockGemmW_v4{K=256,N=32,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}', 49152),
 ]
 

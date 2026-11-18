@@ -83,7 +83,7 @@ def model_shapes(model: str, ms: Sequence[int]) -> list[str]:
 
 def _card_why(card: O.Gpu, result: dict) -> str | None:
     got = ((result.get("identity") or {}).get("card") or {}).get("name")
-    if got is None or card.name not in got:
+    if got is None or not kit.is_card(got, card.gpu):
         return f"the run's card is {got!r}, not the {card.name} the door was asked to measure"
     return None
 
@@ -108,10 +108,9 @@ def write_result(run_dir: Path, run_id: str, out: Path, record: str, ok: bool, d
 
     rel = os.path.relpath(out / record, run_dir)
     (run_dir / kit.RESULT).unlink(missing_ok=True)
-    if measurements:
-        run_dir.mkdir(parents=True, exist_ok=True)
-        _write(run_dir / kit.RESULT, {"schema": kit.RESULT_SCHEMA, "run_id": run_id, "measurements": list(measurements)})
     writer = kit.Writer(run_dir, run_id, kit.host_stamp() if measured else {})
+    if measurements:
+        writer.keep(measurements)
     writer.fingerprint(**fingerprint)
     writer.measurement_file(rel)
     for m in measured:

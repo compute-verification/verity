@@ -170,7 +170,9 @@ research run --on NODE --source . --cwd source --env GPU_LEASE_ON=4 --env PRIVAT
   sizes each rung's pass by the rung instead, K prompts for each request it holds in flight and the load's own at
   least, which makes that end the same share at every rung: for a ladder read for the rung where tokens a second
   stop rising.
-- **The dataset file** of `chat` is pinned (`serve_tax.Dataset`: its repository, revision, file and SHA-512). A node
+- **The dataset file** of `chat` is pinned (`serve_tax.Dataset`: its repository, revision, file and SHA-512), as the
+  sessions loads' are, by the serving profiles' file (`benchmarks/production.toml`), which also holds the loads'
+  prompts, `long`'s input length, the sessions' turns at each context and the SLO. A node
   keeps one copy, in its Hugging Face cache outside every run's directory; `serve_tax.py passes --fetch`, which
   `run.sh` runs before it holds a GPU, downloads it there where there is none, and a download or a copy whose SHA-512
   is not the pinned one is refused. No run sends the file or keeps it: an arm's `meta.json` records its path and
@@ -209,7 +211,7 @@ research run --on NODE --source . --cwd source --env GPU_LEASE_ON=4 --env PRIVAT
   the model's SLO (TTFT and time per output token). Each side's best is at the rung where its mean over reps is
   largest, so each arm is read at its own operating point. It is the cost only where both sides meet the SLO for
   every request. No target or verdict is of it: the model's target is of GPU time at equal tokens, and the SLO
-  (`Model.slo`) is the benchmark's own constant. An arm that meets the SLO for no request at any rung has no finite
+  (`Model.slo`) is the serving profiles' response-time bounds (`benchmarks/production.toml`). An arm that meets the SLO for no request at any rung has no finite
   cost within it.
 - **The Commit period** of an arm with a boundary commitment is 30 s in this form (`WINDOW_S`), shorter than a pass,
   so that a pass holds the commits of the requests it finishes. At a period longer than a pass the commits would fall

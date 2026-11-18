@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 import pytest
 from research.vqueue import (BASE_DROPPED, BUILT, FAIL, INFRA, INFRA_SPLIT, LIST_FAILED, ON_MAIN, PASS, PENDING, Advance, Build,
                              Candidate, Commit, Drop, Eject, Failed, Leave, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun,
-                             Retry, Ring, Snapshot, Verdict, Wait, decide, left_out, meets)
+                             Retry, Ring, Snapshot, UNSAID, Verdict, Wait, decide, left_out, meets)
 from research.vqueue_slim import Read, joined, read_step, read_suite, unnamed
 
 MAIN = "m0"
@@ -171,7 +171,8 @@ def test_a_fail_above_the_lowest_candidate_is_decided_at_once_and_nothing_is_bui
     """A candidate above the lowest whose check failed, still running or not, on tests its base passed, is decided as the
     lowest's fail is: its lone suspect ejected, the candidates above it dropped as a base failure and built again in the same
     tick on the candidate below it (`main`, once the lowest passed), never on it, and the next batch on them.  While its base
-    hasn't said, it waits, and nothing is built above it."""
+    hasn't said, its suspect waits for that word (`UNSAID`), and in the tick the lowest passes that word is said: the
+    suspect is built again alone."""
     ready = [pr(1), pr(2, None, "pkg/x.py"), pr(3), pr(4)]
     t = by_tests("step pytest", {"pkg::t"}, set(), "pkg/x.py")
     s = snap(cand("c1", MAIN, 1, state=lowest), cand("c2", "c1", 2, state=FAIL, failed=(t,), ended=False),
@@ -185,7 +186,39 @@ def test_a_fail_above_the_lowest_candidate_is_decided_at_once_and_nothing_is_bui
     unsaid = by_tests("step pytest", {"pkg::t"}, None, "pkg/x.py")
     s = snap(cand("c1", MAIN, 1, state=lowest), cand("c2", "c1", 2, state=FAIL, failed=(unsaid,), ended=False),
              ready=ready, depth=3)
-    assert decide(s) == passed
+    held = Drop("c2", "failed step pytest before c1's check said whose failure it is: built again without #2, who waits for "
+                      "that check", Outcome((2,), heads(2), UNSAID, (2,), "c1"))
+    assert decide(s) == [*passed, held, Build((2,), "c1", 3) if lowest == PASS else Build((3, 4), "c1", 2)]
+
+
+def test_a_fail_above_the_lowest_before_its_base_s_word_is_built_again_without_its_suspects_who_wait_for_that_word():
+    """A candidate above the lowest whose own failure its base hasn't said yet is built again at once on that base without
+    the members the failure meets (`UNSAID`), the candidates above it built again on it and the next batch on them.  Its
+    suspects wait while its base is on main's chain and its check hasn't passed; when the base leaves the chain otherwise
+    or lands on inherited failures, the failure may be the base's and they go back in as before; when its check passes or
+    it lands failing nothing, the failure is theirs, and they are bisected as a fail's suspects."""
+    f = by_tests("pytest", {"t"}, None, "pkg2/")
+    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, 3, state=FAIL, failed=(f,)), cand("c3", "c2", 4), ready=prs(1, 2, 3, 4, 5),
+             depth=4)
+    unsaid = Outcome((2, 3), heads(2, 3), UNSAID, (2,), "c1")
+    assert decide(s) == [Drop("c2", "failed pytest before c1's check said whose failure it is: built again without #2, who "
+                                    "waits for that check", unsaid),
+                         Drop("c3", BASE_DROPPED), Build((3,), "c1", 3, replaces="c2"), Build((4,), "c2", 2, replaces="c3"),
+                         Build((5,), "c3", 1)]
+    waiting = Leave(2, "h2", "base's word", "a fail above the lowest suspects it: it waits for c1's check, which says whose "
+                                            "failure it was")
+    assert left_out(s) == [waiting]
+    unsaid = replace(unsaid, sha="c2")
+    live = snap(cand("c1", MAIN, 1), ready=prs(1, 2, 3), history=[unsaid], depth=4)
+    assert (decide(live), left_out(live)) == ([Build((3,), "c1", 3)], [waiting])
+    failed = snap(ready=prs(2, 3), history=[unsaid, Outcome((1,), heads(1), FAIL, (1,), MAIN, sha="c1")], depth=4)
+    assert decide(failed) == [Build((2, 3), MAIN, 4)]
+    inherited = Outcome((1,), heads(1), PASS, base=MAIN, inherited=(by_tests("pytest", {"t"}, {"t"}, "pkg2/"),), sha="c1")
+    assert decide(snap(ready=prs(2, 3), history=[unsaid, inherited], main="c1", depth=4)) == [Build((2, 3), "c1", 4)]
+    passed = snap(cand("c0", MAIN, 5), cand("c1", "c0", 1, state=PASS), ready=prs(1, 2, 3, 5), history=[unsaid], depth=4)
+    assert decide(passed) == [Build((2,), "c1", 2)]
+    landed = snap(ready=prs(2, 3), history=[unsaid, Outcome((1,), heads(1), PASS, sha="c1")], main="c1", depth=4, fill=2)
+    assert decide(landed) == [Build((2,), "c1", 4, name=f"{BUILT}1"), Build((3,), f"{BUILT}1", 3)]
 
 
 def test_a_fail_above_the_lowest_candidate_bisects_its_suspects_reruns_a_lone_one_and_waits_on_what_is_inherited():
@@ -972,14 +1005,8 @@ def test_left_out_names_the_lean_prs_and_the_lean_inputs_a_staged_batch_keeps_ou
 
 
 def test_left_out_names_what_stops_every_build_of_the_tick():
-    """While a failed candidate above the lowest waits for its base's word, nothing is built, and every ready PR waiting says
-    so; on a move on main's chain, or in the tick that advances to one, a PR that doesn't cross it (`Ready.crosses`) says
+    """On a move on main's chain, or in the tick that advances to one, a PR that doesn't cross it (`Ready.crosses`) says
     so, and one that crosses it is built."""
-    f = by_tests("pytest", {"t"}, None, "pkg2/")
-    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, state=FAIL, failed=(f,)), ready=prs(1, 2, 3), depth=4)
-    assert decide(s) == []
-    assert left_out(s) == [Leave(3, "h3", "chain waits", "a failed candidate above the lowest waits for its base's word on its "
-                                                       "failures: nothing is built above it")]
     move = replace(pr(1), move=True)
     s = snap(cand("c1", MAIN, 1), ready=[move, pr(2)], depth=4)
     assert decide(s) == []
@@ -1552,7 +1579,7 @@ class Play:
             elif isinstance(a, Drop):
                 self.cands.pop(a.sha)
                 if a.outcome is not None:
-                    self.history.append(a.outcome)
+                    self.history.append(replace(a.outcome, sha=a.sha))
             elif isinstance(a, Eject):
                 self.ejected.append(a)
             elif isinstance(a, Retry):
@@ -2286,6 +2313,16 @@ class World:
                 self.seen["bisected"] += len(a.outcome.suspects) > 1
                 self.seen["bisected on infra errors"] += not own and len(a.outcome.suspects) > 1
                 self.seen["a mixed failure"] += bool(own and a.outcome.inherited)
+            elif isinstance(a, Drop) and a.outcome is not None and a.outcome.state == UNSAID:
+                c = by[a.sha]
+                unsaid = [f for f in c.verdict.failed if not inherits(f) and f.base_tests is None]
+                met = tuple(m for m in c.members if any(meets(built[m].files, f.inputs) for f in unsaid))
+                assert c.base != s.main and reads(c.verdict) == FAIL and unsaid, (
+                    f"{where}: a fail decided before its base's word with none to wait for")
+                assert a.outcome == Outcome(c.members, c.heads, UNSAID, met or c.members, c.base), where
+                assert not any(isinstance(e, Eject) and e.number in c.members for e in acts), (
+                    f"{where}: a fail ejects before its base's word")
+                self.seen["a fail above built again without its suspects before its base's word"] += len(met) < len(c.members)
             elif isinstance(a, Drop) and a.outcome is not None and a.outcome.state == INFRA_SPLIT:
                 c = by[a.sha]
                 assert reads(c.verdict) == INFRA and c.tries >= min(s.rings, 2) and len(c.members) > 1, where
@@ -2344,11 +2381,6 @@ class World:
                 assert (Retry(c.sha) in acts) == (waited > s.pending_s and c.tries == 1), where
                 assert any(isinstance(a, Ring) and a.sha == c.sha for a in acts) == (waited > 2 * s.pending_s), where
                 self.seen["waited for the rest of a check"] += c.verdict.state == FAIL
-        for c in by.values():
-            unsaid = [f for f in c.verdict.failed if not inherits(f) and f.base_tests is None]
-            if c.base != s.main and reads(c.verdict) == FAIL and unsaid and c.sha not in decided:
-                under = [p for m in self.under(s, c) for p in built[m].files]
-                self.seen["a fail above waited for the word of the one below"] += any(meets(under, f.inputs) for f in unsaid)
         if moved:               # a staged batch's records are its own tree's: its run's refusal is decided wherever `main` is
             drops = [a for a in acts if isinstance(a, Drop)]
             assert {d.sha for d in drops} >= {c for c in by if c not in staged} and all(
@@ -2376,9 +2408,7 @@ class World:
             replace(r, conflict=r.conflict or r.lean or r.lean_input or r.number in out) for r in s.ready))
         self.seen["a PR changing a Lean input waited behind a staged batch"] += any(
             r.lean_input and not r.lean for r in self.pool(s, acts))
-        now = [a.outcome for a in acts if isinstance(a, Drop) and a.outcome is not None]
-        aside = {(m, h) for o in [*s.history, *now] for m, h in zip(o.members, o.heads)
-                 if o is [p for p in [*s.history, *now] if (m, h) in zip(p.members, p.heads)][-1] and o.state == INFRA}
+        aside = {held for held, (state, _) in self.newest(s, acts).items() if state == INFRA}
         heads = {r.number: r.head for r in s.ready}
         builds = [a for a in acts if isinstance(a, Build) and not (a.records and a.replaces is not None)]
         alike = []
@@ -2428,6 +2458,18 @@ class World:
         leans = [m for m in a.members if ready[m].lean]
         assert 1 <= len(a.members) <= s.batch and not any(ready[m].conflict for m in a.members), where
         assert len({m in s.plain for m in a.members}) == 1, f"{where}: a batch mixes PRs of the quick tier and the whole check"
+        said, outcomes = self.newest(s, acts), [*s.history, *(d.outcome for d in acts if isinstance(d, Drop) and d.outcome)]
+        landed = {o.sha for o in outcomes if o.state == PASS and not o.inherited} | {
+            c.sha for c in s.candidates if c.verdict.state == PASS}
+        for m in a.members:
+            assert said.get((m, ready[m].head), (None,))[0] != UNSAID, (
+                f"{where}: #{m} built while a fail above suspects it before its base's word")
+            o = next((o for o in reversed(outcomes) if (m, ready[m].head) in zip(o.members, o.heads)), None)
+            if o is not None and o.state == UNSAID and m in o.suspects:
+                assert o.base not in landed or len(a.members) <= max(1, len(o.suspects) // 2), (
+                    f"{where}: #{m}, a suspect of a fail above whose base passed, built over its suspect limit")
+                self.seen["a suspect of a fail above bisected once its base passed" if o.base in landed else
+                          "a suspect of a fail above back in once its base failed"] += 1
         self.seen["a batch of PRs of the quick tier built"] += a.members[0] in s.plain
         ranked = sorted(a.members, key=lambda m: (ready[m].rank, m))
 
@@ -2490,7 +2532,7 @@ class World:
 
     def admits(self, s: Snapshot, acts: list, where: str) -> None:
         """What a tick builds: at most one Lean batch and one batch of PRs with no Lean change, both only with records runs,
-        the Lean one staged beside the other, and nothing above a fail that waits for its base's word (`fail_waits`).  Else it
+        the Lean one staged beside the other.  Else it
         opens a Lean batch whenever a Lean PR could be admitted (a pinned one, or any under a `lean` above 0) and nothing keeps
         it out: no batch stays staged, the chain holds no wide Lean change, nor, with records runs, a PR set aside before that
         changes a Lean input (`erred`), and, with no records run, it has room and a top holding no Lean change; with records
@@ -2510,10 +2552,6 @@ class World:
         assert [a.name for a in on] == [f"{BUILT}{i}" for i in range(1, len(on))] + [None] * bool(on), (
             f"{where}: a build named but the one the tick's next goes on")
         self.seen["a tick built several batches on the chain"] += len(on) > 1
-        if self.fail_waits(s, acts):
-            assert not builds and not any(isinstance(a, (Commit, Wait)) for a in acts), (
-                f"{where}: built above a fail that waits for its base's word")
-            return
         chain, waiting = self.chain(s, acts), self.pool(s, acts)
         gone = {a.sha for a in acts if isinstance(a, (Drop, Commit))}
         staged = [c.sha for c in s.candidates if c.waits and c.sha not in gone]
@@ -2569,25 +2607,38 @@ class World:
         return [c.members[0] for c in self.chain(s, acts) if s.records and len(c.members) == 1
                 and (c.members[0], c.heads[0]) in aside and (flown[c.members[0]].lean or flown[c.members[0]].lean_input)]
 
-    def fail_waits(self, s: Snapshot, acts: list) -> bool:
-        """Whether a fail above the lowest candidate holds the tick's builds: the lowest one ``acts`` leaves on main's chain,
-        neither dropped nor rerun, waits for its base's word."""
-        fail = next((c for c in self.chain(s, acts) if c.base != s.main and not c.waits and reads(c.verdict) == FAIL
-                     and c.verdict.failed), None)
-        return fail is not None and Rerun(fail.sha, tuple(f.key for f in fail.verdict.failed if not inherits(f))) not in acts
-
     def pool(self, s: Snapshot, acts: list, aside: bool = False) -> list[Ready]:
         """The ready PRs a build in ``acts`` may take, in rank order: in no candidate left on main's chain, staged or on `main`,
-        not ejected, not conflicting, and neither on `main` nor set aside at its head (a pass or infra outcome, this tick's
-        among them); with ``aside``, those set aside too."""
+        not ejected, not conflicting, and neither on `main`, set aside nor suspected by a fail above before its base's word
+        at its head (a pass, infra or unsaid outcome, this tick's among them, as `newest` has it); with ``aside``, those set
+        aside too."""
         dropped = {a.sha: a.why for a in acts if isinstance(a, Drop)}
         busy = {m for c in s.candidates if c.sha not in dropped or dropped[c.sha] == ON_MAIN for m in c.members}
         busy |= {a.number for a in acts if isinstance(a, Eject)}
         busy |= {m for a in acts if isinstance(a, Build) and a.replaces is not None for m in a.members}
-        now = [a.outcome for a in acts if isinstance(a, Drop) and a.outcome is not None]
-        newest = {(m, h): o.state for o in [*s.history, *now] for m, h in zip(o.members, o.heads)}
-        return sorted((r for r in s.ready if not r.conflict and r.number not in busy and newest.get((r.number, r.head)) not in (
-            (PASS,) if aside else (PASS, INFRA))), key=lambda r: (r.rank, r.number))
+        newest = self.newest(s, acts)
+        return sorted((r for r in s.ready if not r.conflict and r.number not in busy and newest.get(
+            (r.number, r.head), (None,))[0] not in ((PASS, UNSAID) if aside else (PASS, INFRA, UNSAID))),
+            key=lambda r: (r.rank, r.number))
+
+    @staticmethod
+    def newest(s: Snapshot, acts: list) -> dict[tuple[int, str], tuple[str, Outcome]]:
+        """For each (PR, head), the state of the newest outcome holding it, this tick's among them, and that outcome; one
+        of a fail above decided before its base's word (`UNSAID`) as that base's check settles it: unsaid for its suspects
+        while the base is on main's chain, a fail once its check passed or it landed failing nothing, and none once it left
+        otherwise."""
+        now = [replace(a.outcome, sha=a.sha) for a in acts if isinstance(a, Drop) and a.outcome is not None]
+        live = {c.sha for c in s.candidates} - {a.sha for a in acts if isinstance(a, Drop)}
+        landed = {o.sha for o in [*s.history, *now] if o.state == PASS and not o.inherited} | {
+            c.sha for c in s.candidates if c.verdict.state == PASS}
+        out: dict[tuple[int, str], tuple[str, Outcome]] = {}
+        for o in [*s.history, *now]:
+            if o.state == UNSAID and o.base not in live | landed:
+                continue
+            for m, h in zip(o.members, o.heads):
+                out[m, h] = (o.state if o.state != UNSAID else FAIL if o.base in landed else
+                             UNSAID if m in o.suspects else FAIL), o
+        return out
 
     def takeable(self, s: Snapshot, acts: list, upto: Build | None = None) -> list[Ready]:
         """`pool` without the members of the tick's builds before ``upto``, or of all of them."""
@@ -2700,7 +2751,7 @@ class World:
         elif isinstance(a, Drop):
             del self.cands[a.sha]
             if a.outcome is not None:
-                self.history.append(a.outcome)
+                self.history.append(replace(a.outcome, sha=a.sha))
         elif isinstance(a, Eject):
             assert self.marks[a.number].head == a.head and a.number in set(self.bad) | set(self.erring), f"{where}: a good PR ejected"
             self.ejected.add(a.number)
@@ -2826,7 +2877,9 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
                  "an untraced program's module read as its declared inputs", "rebuilt without a suspect",
                  "rebuilt without a leaver", "rebuilt whole above a drop", "a red's others rebuilt in its tick",
                  "a leaver's others rebuilt in its tick", "a leaver subtracted", "a fail above decided at once on main's word",
-                 "a fail above waited for the word of the one below", "advanced through two candidates in a tick",
+                 "a fail above built again without its suspects before its base's word",
+                 "a suspect of a fail above bisected once its base passed",
+                 "a suspect of a fail above back in once its base failed", "advanced through two candidates in a tick",
                  "a tick built several batches on the chain", "a batch built on the one its tick built before it",
                  "a Lean batch built on a batch its tick built", "a batch of PRs of the quick tier built"):
         assert seen[what], f"no seed exercised: {what}"

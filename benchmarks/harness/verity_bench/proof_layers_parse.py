@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import kit
-from verity_bench.overhead import CARD_FILES
 from verity_bench.proof_layers_result import (
     MODELS,
     NOT_STATED,
@@ -58,7 +57,7 @@ def _serves(machine: str) -> tuple[str | None, str | None]:
     if model is None or name is None:
         return None, None
     try:
-        return f"{model}-{kit.card_short(name, directory=CARD_FILES)}", None
+        return f"{model}-{kit.card_short(name)}", None
     except SystemExit as e:
         return None, f"no member, so no measurement: {e}"
 
