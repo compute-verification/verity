@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import numpy as np
 import pytest
@@ -31,7 +32,7 @@ from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.commitments import randomness as RND
 
 from verity_vllm.commit import history_tables as H
 from verity_vllm.definitions.registry import boolean_dsa_norm as BDN
@@ -129,7 +130,7 @@ def cut(rows, histories=True, caps=CAPS):
 def binding(ms) -> CS.Binding:
     n = {t: sum(m.n for m in ms if m.template == t) for t in TMPLS}
     return CS.Binding(*IF.listed_program([(SRW.template(t).fn, n[t]) for t in TMPLS], ()),
-                      D.parse_design("stratified:2"), RUN, tuple(ms), (), "", None)
+                      RND.parse_design("stratified:2"), RUN, tuple(ms), (), "", None)
 
 
 def opens(t: HT.HistoryTable, g, i):
@@ -173,10 +174,17 @@ def test_a_request_served_cached_prompt_rows_appends_its_own_rows_and_its_reads_
     assert plan.keys() == [("r0", 3), ("r0", 5)] and [len(us) for us in plan.written.values()] == [5, 5]
 
 
-def light(ms) -> SimpleNamespace:
-    """A window of members ``ms`` as `serving_rows.window_values` reads it, with no population program to build (a real
-    `rows.Binding` lowers the Boolean latent row and the V = 2^17 read, minutes on a CPU)."""
-    return SimpleNamespace(members=tuple(ms), row_tables=(), partition_digest="ef" * 64)
+@dataclass(frozen=True)
+class Light:
+    """A window as `serving_rows.window_values` reads it, with no population program to build (a real `rows.Binding`
+    lowers the Boolean latent row and the V = 2^17 read, minutes on a CPU)."""
+    members: tuple[Any, ...]
+    row_tables: tuple[Any, ...] = ()
+    partition_digest: str = "ef" * 64
+
+
+def light(ms) -> Light:
+    return Light(tuple(ms))
 
 
 def recomputed(h: IF.History, ms, strings_of, held) -> list[bytes]:

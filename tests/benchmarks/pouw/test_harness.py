@@ -713,22 +713,24 @@ def test_a_queue_job_accepts_any_listed_gpu_and_records_it():
 
 def test_the_card_is_the_one_its_card_file_records_for_its_name():
     assert I.check_card("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "595.91.07")["arch"] == "sm_120a"
-    assert I.check_card("NVIDIA H200", "9.0", 132, "570.133.20")["arch"] == "sm_90a"
+    assert I.check_card("NVIDIA H200", "9.0", 132, "575.51.03")["arch"] == "sm_90a"
     assert I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "580.173.02")["arch"] == "sm_90a"
-    assert I.check_card("NVIDIA B200", "10.0", 148, "570.26")["arch"] == "sm_100a"
+    assert I.check_card("NVIDIA B200", "10.0", 148, "575.51.03")["arch"] == "sm_100a"
     for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "575.1"),
-                ("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "570.25.99"),
+                ("NVIDIA RTX PRO 6000", "12.0", 188, "570.86"),
+                ("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "575.51.02"),
                 ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H100 80GB HBM3", "12.0", 132, "570.1"),
-                ("NVIDIA H200", "10.0", 132, "570.1"), ("NVIDIA H200", "9.0", 132, "525.60.12"),
+                ("NVIDIA H100 PCIe", "9.0", 114, "570.1"),
+                ("NVIDIA H200", "10.0", 132, "570.1"), ("NVIDIA H200", "9.0", 132, "549.1"),
                 ("NVIDIA H200", "9.0", 132, "unknown"), ("NVIDIA H200", "9.0", 132, "")):
         with pytest.raises(I.IdentityError, match="not the card"):
             I.check_card(*bad)
 
 
-def test_the_h100_is_its_card_files_sm90a_with_132_sms_and_its_gates_oldest_driver():
-    assert I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "525.60.13")["arch"] == "sm_90a"
-    with pytest.raises(I.IdentityError, match=r"driver '525\.60\.12', need 525\.60\.13 or later"):
-        I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "525.60.12")
+def test_the_h100_is_its_card_files_sm90a_with_132_sms_and_its_toolkits_gate():
+    assert I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "575.51.03")["arch"] == "sm_90a"
+    with pytest.raises(I.IdentityError, match=r"driver '575\.51\.02', need 575\.51\.03 or later"):
+        I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "575.51.02")
     with pytest.raises(I.IdentityError, match=r"compute capability 12\.0, not 9\.0"):
         I.check_card("NVIDIA H100 80GB HBM3", "12.0", 132, "580.173.02")
     with pytest.raises(I.IdentityError, match="114 SMs, not 132"):
@@ -739,6 +741,14 @@ def test_a_name_no_card_file_holds_is_refused_by_that_name():
     for name in ("NVIDIA H100 PCIe", "NVIDIA RTX PRO 6000", "H200", ""):
         with pytest.raises(I.IdentityError, match=f"not the card: 0 GPU card files under .* have {re.escape(repr(name))}"):
             I.check_card(name, "9.0", 132, "580.173.02")
+
+
+def test_a_card_whose_architecture_has_no_gate_for_the_harnesss_toolkit_is_refused_by_name(monkeypatch):
+    monkeypatch.setattr(I, "TOOLKIT", "13.1")
+    with pytest.raises(I.IdentityError, match=r"NVIDIA RTX PRO 6000 Blackwell Server Edition \(rtx-pro-6000-server\) builds "
+                                              r"for sm_120a, whose architecture file has no \[\[toolkit\]\] gate for CUDA "
+                                              r"13\.1, the harness's toolkit: add it"):
+        I.check_card("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "595.91.07")
 
 
 def test_a_card_with_no_card_or_architecture_file_is_refused_by_name(tmp_path, monkeypatch):

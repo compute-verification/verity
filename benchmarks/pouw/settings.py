@@ -119,7 +119,6 @@ REGISTRY = Registry(
     S("PANEL_BY", str, "bc-dd22acf8", WHERE, "who panel_rows.py labels its rows by"),
     S("SERVED_TREE", str, None, WHERE, "the source tree served_profile.py profiles; unset, the working directory"),
     # ---------------------------------------------------------------- the harness
-    S("POUW_CUDA_BIN", str, None, WHERE, "the CUDA toolkit's bin directory the SASS gate takes cuobjdump and nvdisasm from"),
     S("VERITY_POUW_NVCC", str, None, WHERE, "a CUDA >= 12.8 toolkit's root (its bin/ holds nvcc and cuobjdump), with which "
                                             "test_pearl_c_sm120.py's and test_pearl_c_sm90.py's build tests compile the "
                                             "kernels and hold them to the SASS gate"),

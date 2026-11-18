@@ -31,22 +31,17 @@ fi
 # exports
 SHIP_NVCC=$ROOT/benchmarks/kernels/ship_nvcc.sh
 
-# whether the toolkit $1 has nvcc 12.8 or later
-ship_nvcc_ok() { [ -x "$1/bin/nvcc" ] && "$1/bin/nvcc" --version | grep -Eq "release 12\.(8|9)|release 1[3-9]\."; }
-
-# CUDA, else the first of the toolkits named whose nvcc is 12.8 or later; empty when there is none
+# CUDA: as the build gives it, else the machine's toolkit at version $1 (machine.py toolkit: CUDA_HOME, else the run's
+# machine's record), refused by name where there is none
 ship_find_cuda() {
-  if [ -z "${CUDA:-}" ]; then
-    for c in "$@"; do ship_nvcc_ok "$c" && { CUDA=$c; break; }; done
-  fi
-  CUDA=${CUDA:-}
+  [ -n "${CUDA:-}" ] || CUDA=$(python3 "$ROOT/benchmarks/kernels/machine.py" toolkit "${1:?the toolkit version, or CUDA}") \
+    || exit 1
 }
 
-# ship_find_cuda, refusing unless it finds one, and unless SHIP_NVCC with that toolkit still gives one cubin for a source
-# at two places (ship_probe.sh, once a build: a toolkit or a wrapper that no longer does builds no ship)
+# ship_find_cuda, refusing unless SHIP_NVCC with that toolkit still gives one cubin for a source at two places
+# (ship_probe.sh, once a build: a toolkit or a wrapper that no longer does builds no ship)
 ship_cuda() {
   ship_find_cuda "$@"
-  ship_nvcc_ok "$CUDA" || { echo "no nvcc >= 12.8 at ${CUDA:-any of $*}: set CUDA" >&2; exit 1; }
   export CUDA
   "$ROOT/benchmarks/kernels/ship_probe.sh" || exit 1
 }

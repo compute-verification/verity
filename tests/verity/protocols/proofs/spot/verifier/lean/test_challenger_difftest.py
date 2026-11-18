@@ -1787,12 +1787,13 @@ class Drawn:
     samples and opens `trees` coin trees too (`TreeSession` on `tables`, its link opened after `keys`; sampled, by
     default), their lines among the others in `order` (`_release_log`; the sample, then the link, then the other rounds,
     by default).  Its key is the key of `seed` at one of `params`.  The session's window is `window` (sampled, unless
-    given)."""
+    given).  Family `commit`, when given, commits `after` with no coin (`LiveRecord.commit`) before the sample's coins."""
 
     def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None, *, later: bool = False,
                  reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True,
                  trees: int | None = None, tables: list[str] | None = None, keys: list[str] | None = None,
-                 params=LEDGER_PARAMS, seed: int = 0, order: str = "honest", window: dict | None = None) -> None:
+                 params=LEDGER_PARAMS, seed: int = 0, order: str = "honest", window: dict | None = None,
+                 commit: str | None = None) -> None:
         s = self.s = _ledger_session(rng, params=params, seed=seed)
         s.ch = _challenger(rng, [("other", 4), ("draw", 12)])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
@@ -1804,6 +1805,9 @@ class Drawn:
             self._step("other", lambda: self.records["other"].record(rng.randbytes(64)))
         draw = self.records["draw"]
         self.after = rng.randbytes(64) if after is None else after
+        if commit is not None:
+            self.records[commit].commit(self.after)
+            s.lines.append(canonical_json_text(self.records[commit].log[-1]))
         coins = T.ChallengerCoins(draw)
         self.segment = coins.commit(self.after)
         self.early = [self._step("draw", lambda: draw.record(rng.choice([rng.randbytes(64), bytes(64)])))
@@ -1858,7 +1862,8 @@ FAMILY_ROOTS = ["root-before", "root-after"]
 
 def _drawn(rng: random.Random, name: str, **kwargs: Any) -> Drawn:
     """Case `name`'s session: the family's coins the sample's alone, but for the cases that put another root in it."""
-    return Drawn(rng, before=name in ("before", "root-before"), later=name == "root-after", **kwargs)
+    return Drawn(rng, before=name in ("before", "root-before"), later=name == "root-after",
+                 commit={"commit-other": "other", "commit-own": "draw"}.get(name), **kwargs)
 
 
 def _mutated(rng: random.Random, d: Drawn, name: str) -> tuple[dict, bytes, bytes]:
@@ -1948,7 +1953,7 @@ def read_case(rng: random.Random, name: str) -> Any:
 
 SAMPLE_COINS_NAMES = ["honest"] + SAMPLE_MUTATIONS + FAMILY_ROOTS + [
     "other-family", "log-tampered", "other-window", "window-form", "key-form", "other-key", "off-main", "other-main",
-    "main-form", "no-pins", "coins-form", "named", "unwithheld", "request"]
+    "main-form", "no-pins", "coins-form", "named", "unwithheld", "request", "commit-other", "commit-own"]
 
 
 def sample_coins_case(rng: random.Random, name: str) -> Any:
@@ -2825,10 +2830,13 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (LINKS_FIRST, links_first_case, LINKS_FIRST_NAMES, 200)]
 
 
+ACCEPTED = {"honest", "slot-order", "commit-other", "commit-own"}
+
+
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])
 def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
-    """Each piece agrees on sampled cases and on every mutation over a few seeds, the honest ones accepted (no reason, no
-    refusal) and each mutation refused."""
+    """Each piece agrees on sampled cases and on every mutation over a few seeds, those `ACCEPTED` names accepted (no
+    reason, no refusal: a release log's slots in any order are no fault) and each other mutation refused."""
     stats = D.run(port, examples=examples, server=pieces)
     outcomes = Counter()
     for name in names:
@@ -2836,7 +2844,7 @@ def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
             kind, text = D.replay(port, make(random.Random(f"{name}/{seed}"), name), pieces)
             clean = kind == "output" and '"refused"' not in text and '"reason":"' not in text
             outcomes[name, clean] += 1
-            assert clean == (name == "honest"), (port.fn, name, seed, kind, text)
+            assert clean == (name in ACCEPTED), (port.fn, name, seed, kind, text)
             assert name not in FAMILY_ROOTS or json.loads(text) == {"reason": T.FAMILY_ROOT}, (port.fn, name, seed, text)
             assert name != "link-tables" or f": {Ch.LINK_TABLES}" in text, (port.fn, seed, text)
             assert name != "link-root-len" or f": {Ch.LINK_ROOT_LEN}" in text, (port.fn, seed, text)

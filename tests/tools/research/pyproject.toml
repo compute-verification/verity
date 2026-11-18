@@ -138,7 +138,7 @@ untraced = [
 # commits them into its origin so the queue's clone runs the `lean-audit` record driver it configures.
 # tools/check/merge_map.py and merge_rows.py: test_check_merge_drivers merges through them at either layout's place.
 # tools/check/gates/markdown_caps.py and tests/test_repository.py: test_queue commits them into its origin, so its sync
-# runs the Markdown size limits' landing gate on the limits it reads. tools/check/added_lines.py, GLOSSARY.md and the two lints it
+# runs the Markdown size limits' landing gate on the limits it reads. tools/check/added_lines.py, tests/lint/retired_terms.md and the two lints it
 # loads (tests/lint/test_repo_lane_text.py, test_repo_retired_terms.py): test_queue commits them into its origin, so the mark's
 # preflight runs the added-lines warn gate as `main` has it. tools/check/pins.py: test_queue commits it into its origin, so
 # the sync's pin rebuild (`repinned`) reads the real `PINS`. tests/tools/verity/graph/key_vectors.json: test_executor holds
@@ -167,7 +167,8 @@ inputs = ["tools/research", ".agents/skills", "verity/README.md", ".gitignore", 
           "tools/verity/graph/verity_graph/__init__.py",
           "calibration/hardware/nodes/rtx-pro-6000-server-x8.toml", "calibration/hardware/cards/rtx-pro-6000-server.toml",
           "tools/check/merge_map.py", "tools/check/merge_rows.py",
-          "tools/check/added_lines.py", "GLOSSARY.md", "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py",
+          "tools/check/added_lines.py", "tests/lint/retired_terms.md", "tests/lint/test_repo_lane_text.py",
+          "tests/lint/test_repo_retired_terms.py",
           # what the compose builds, which test_nebius_compose_packaging.py holds the compose gate's pin to
           "benchmarks/one_stage/served_composite.sh", "benchmarks/one_stage/served_cases.py",
           "benchmarks/one_stage/inference_only_lean.py"]

@@ -13,13 +13,13 @@
 # ROOT: a directory searched for *.so, *.so.*, *.cubin and *.fatbin over 100 kB. Default: the CUDA toolkit of the nvcc
 # it runs, /usr/lib/x86_64-linux-gnu (the driver's and NCCL's libraries) and this checkout. MAXBYTES skips binaries
 # larger than it: a fast first pass that leaves out cuBLASLt (whose one cuobjdump pass is serial and holds the merge
-# until it ends). NVCC (default: the newest /usr/local/cuda-13*), CUOBJDUMP and JOBS (default: nproc) are read too.
+# until it ends). NVCC (default: the machine's toolkit at 13.0's), CUOBJDUMP and JOBS (default: nproc) are read too.
 set -uo pipefail
 case "${1:-}" in -h|--help) sed -n '2,/^set /p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;; esac
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "$0")" && pwd)
-NVCC=${NVCC:-$(ls -d /usr/local/cuda-13*/bin/nvcc 2>/dev/null | sort -V | tail -1)}
-[ -x "${NVCC:-}" ] || NVCC=$(command -v nvcc)
+NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "dump.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+[ -x "$NVCC" ] || { echo "dump.sh: no nvcc at $NVCC" >&2; exit 2; }
 BIN=$(dirname "$NVCC")
 CUOBJDUMP=${CUOBJDUMP:-$BIN/cuobjdump}
 JOBS=${JOBS:-$(nproc)}
