@@ -87,7 +87,10 @@ KEPT = {"scheme_name_tables": {
     "benchmarks/pouw/pearl_c4/ship.sh":
         "a pinned commit message, whose hash is every rebuilt ship's launch path (top, 18 Nov)",
     "verity/commitments/cuda/commit_slots/slots.py":
-        "a key of a pinned fixture, `commit-slots-v1.json`, whose digest a suite pins (top, 18 Nov)"}}
+        "a key of a pinned fixture, `commit-slots-v1.json`, whose digest a suite pins (top, 18 Nov)",
+    "benchmarks/pouw/hidden_zk/registered.sh":
+        "the registered semantics' name its template is generated at, an `INSTRUCTIONS` key of `verity/circuits/silicon` "
+        "(compute-accounting, 18 Nov)"}}
 #: a toolkit's directory written out: under `/usr/local` or `/opt`, any path to a `cuda-<version>` directory (a file
 #: named so, `cuda-13.3.sh`, is not one), and pip's toolkit under `site-packages` (kernels' pattern, 18 Nov)
 CUDA = re.compile(r"(?<![\w.-])(?:/usr/local/cuda|/opt/cuda)"
