@@ -370,15 +370,19 @@ def _accepts_any_cells(B, S_, *args):
 
 def test_the_tie_gate_names_its_pinned_circuit_digest():
     """The tie's gate names IoTieRequest's circuit digest as `io_request.circuit-check.json` pins it (circuit-check
-    holds the pin to the Definition), and an IoTieRequest with the same id and signature that accepts any cells expands
-    no gate of it."""
+    holds the pin to the Definition), and the registered unit is one call of IoTieRequest itself, its proof block, so
+    an IoTieRequest with the same id and signature that accepts any cells is another registered Program."""
     d, gate = bind(Q.IoTieRequest, B=B, L=2, R=2), TS.gate(B, 2, 2)
     pinned = json.loads(Q.PINS.read_text())["digests"][d.id]["sha512"]
     assert gate.id == f"Gate[{d.id}@{pinned}]_v2" and HC.pinned(gate)
-    forged = bind(replace(Q.IoTieRequest, body=_accepts_any_cells, register=False), B=B, L=2, R=2)
-    assert forged.id == d.id and forged.signature() == d.signature()
+    forged = replace(Q.IoTieRequest, body=_accepts_any_cells, register=False)
+    assert bind(forged, B=B, L=2, R=2).id == d.id and bind(forged, B=B, L=2, R=2).signature() == d.signature()
     with pytest.raises(ValueError, match="another circuit"):
-        HC.expand(gate, forged)
+        HC.expand(gate, bind(forged, B=B, L=2, R=2))
+    unit = bind(TS._UNIT, B=B, L=2, R=2)
+    other = bind(replace(TS._UNIT, body=lambda B_, S_, *a: B_.call(bind(forged, B=S_.B, L=S_.L, R=S_.R), *a),
+                         register=False), B=B, L=2, R=2)
+    assert unit.id == other.id and HC.circuit_digest(unit) != HC.circuit_digest(other)
 
 
 def test_an_unpinned_size_class_is_refused(tmp_path):

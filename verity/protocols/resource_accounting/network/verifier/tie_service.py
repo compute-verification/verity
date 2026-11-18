@@ -13,9 +13,10 @@ the prover's, which the network attester hands it privately, and the challenger 
 registration is one execution phase, its `window` provenance `{"kind": "served", "window": w}` held to the
 registration's order (`IngressTie.register`), and T proof blocks, proof block t bucket row t. Selection is `All`.
 
-**The check** is `IngressTie.unit`, `NetworkIngressTieBucket` v1{B, L, R}: one gate naming
-`io_request.IoTieRequest_v1{B, L, R}` and its circuit digest, pinned in `io_request.circuit-check.json` and held to the
-Definition by circuit-check (`gate`, as `head_check.gate` holds the head check), with one output bit, IoTieRequest's.
+**The check** is `IngressTie.unit`, `NetworkIngressTieBucket` v1{B, L, R}: one call of
+`io_request.IoTieRequest_v1{B, L, R}`, with one output bit, IoTieRequest's. The registered Program holds the
+Definition and its Boolean body itself, so its digest binds the circuit; its circuit digest is pinned in
+`io_request.circuit-check.json`, which circuit-check holds to the Definition, and `gate` names that pin.
 Its witness row is the bucket row itself, which the proof system's registered read holds to the network attester's root
 (`network_attester_rows.bucket_port`: proof block t reads row t, the verifier's own `--registered` port, `IngressTie.registered`),
 so no gate hashes it. A size class no sidecar pins has a gate that names no digest, and no proof of its proof block is
@@ -128,23 +129,18 @@ PUBLIC = (
 
 @lru_cache(maxsize=None)
 def gate(B: int, L: int, R: int) -> PrimitiveDefinition:
-    """`IoTieRequest_v1{B, L, R}` as one gate that names it and its pinned circuit digest (`io_request.PINS`),
-    `Gate[IoTieRequest_v1{…}@<digest>]_v2`, as `head_check.gate` holds the head check."""
+    """`IoTieRequest_v1{B, L, R}`'s pin as a gate's id, `Gate[IoTieRequest_v1{…}@<digest>]_v2` (`io_request.PINS`), which
+    `IngressTie.proved` reads: never in the unit, which calls the Definition."""
     d = bind(Q.IoTieRequest, B=B, L=L, R=R)
     return HC.gate_of(d, HC.pinned_digest(d, Q.PINS), "the ingress tie")
 
 
-@lru_cache(maxsize=None)
-def _expanded(B: int, L: int, R: int):
-    return HC.expand(gate(B, L, R), bind(Q.IoTieRequest, B=B, L=L, R=R))
-
-
-def _unit(check) -> CompositeDefinition:
+def _unit() -> CompositeDefinition:
     def sig(S_):
-        return gate(S_.B, S_.L, S_.R).signature()
+        return bind(Q.IoTieRequest, B=S_.B, L=S_.L, R=S_.R).signature()
 
     def body(B, S_, *args):
-        return B.call(check(S_.B, S_.L, S_.R), *args)
+        return B.call(bind(Q.IoTieRequest, B=S_.B, L=S_.L, R=S_.R), *args)
 
     return CompositeDefinition(
         "NetworkIngressTieBucket", 1, _STATICS, sig, body, register=False,
@@ -153,9 +149,7 @@ def _unit(check) -> CompositeDefinition:
             "lanes")
 
 
-_UNIT = _unit(gate)
-#: the same proof block with the gate replaced by the Definition it names, as a proof's circuit lowers it
-_PROOF_BLOCK = _unit(_expanded)
+_UNIT = _unit()
 
 
 def request_cells(prompt_len: int, B: int) -> int:
@@ -354,11 +348,10 @@ class IngressTie:
     def unit(self):
         return bind(_UNIT, **dict(zip(_STATICS, self.key)))
 
-    @cached_property
+    @property
     def proof_block(self):
-        """The proof block a proof's circuit lowers: `unit` with its gate the Definition it names (`head_check.expand`,
-        a `ValueError` for an unpinned size class)."""
-        return bind(_PROOF_BLOCK, **dict(zip(_STATICS, self.key)))
+        """The proof block a proof's circuit lowers: `unit`, which holds no gate."""
+        return self.unit
 
     @cached_property
     def query(self) -> dict[str, Any]:

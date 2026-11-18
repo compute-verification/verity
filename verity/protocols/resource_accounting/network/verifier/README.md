@@ -345,8 +345,8 @@ A spec-level reference for network attestation's timing channel:
   chains are wires through the registered roots;
 - the ingress tie through the proof system (`tie_service`): `IngressTie`, each ingress execution phase's `IoTieRequest`
   proof blocks, one a bucket row of the network attester's registered ingress cells, proved as
-  `NetworkIngressTieBucket` (one gate
-  naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the network attester's root
+  `NetworkIngressTieBucket` (one call of
+  `IoTieRequest`, whose circuit digest `io_request.circuit-check.json` pins) with the row read off the network attester's root
   (`network_attester_rows.bucket_port`) and its lanes and output row off values the verifier registers at known content
   (`IngressTie.known`), decided by the verifier on its own lanes from the advice and the network attester's
   release, and `IngressTie.tie`, which builds `IoTieVerdict` on the link and the stream's registrations from the

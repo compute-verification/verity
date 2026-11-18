@@ -34,8 +34,8 @@ through `tie_service.Ties`, the verifier's tie source).
   its output word 0 fails the registered read of ``o0``; ``split``, prompts of 40 and 5 tokens in cells the inputs
   swap, proved on the cells' own lanes, which the verifier refuses in every window, the release not being the
   swapped inputs' schedule, so it has no lanes to register (`EXPECT`).
-* **The statement and the rounds** follow `network_attester_zk`'s: one circuit, `IngressTie.proof_block` lowered once (the gate
-  the Definition its pinned digest names), and each execution phase a statement of T instances, unit t bucket t, on rows
+* **The statement and the rounds** follow `network_attester_zk`'s: one circuit, `IngressTie.proof_block` lowered once (the
+  registered unit itself, one call of IoTieRequest), and each execution phase a statement of T instances, unit t bucket t, on rows
   ``pub`` and ``wit`` (`IngressTie.layout`) and the output row ``o0``, the verdict bit: a shared-row file every port
   of which is a registered read, ``wit`` the window's bucket rows under the network attester's salts and paths, and ``pub`` and
   ``o0`` the prover's rows under the known values' public salts (`known`). A round registers, selects, proves live
