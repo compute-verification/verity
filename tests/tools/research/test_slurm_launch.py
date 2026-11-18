@@ -46,7 +46,7 @@ def site(tmp_path, monkeypatch):
     via, stubs = tmp_path / "via", tmp_path / "bin"
     stubs.mkdir()
     _exe(stubs / "tmux", '#!/bin/sh\ncase "$1" in new-session) shift 4; sh -c "$1"; exit 0;; *) exit 1;; esac\n')
-    monkeypatch.setenv("PATH", f"{stubs}:{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", str(stubs), prepend=os.pathsep)
     job_run = _exe(stubs / "vcf-job-run.sh", '#!/bin/sh\nd=$(dirname "$0")\nprintf "%s\\n" "$@" > "$d/args"\n'
                                               'printf "%s\\n%s\\n" "$SEND" "$OUT" > "$d/where"\necho "00:00:00Z job 4242"\n')
     monkeypatch.setattr(slurm, "VIA_LAUNCHES", str(via / "launches"))
