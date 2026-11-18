@@ -145,6 +145,8 @@ UNREAD = ("refused: a circuit that does not parse (", "refused: a public file th
 #: the refusal (`flock_form`)
 Form = Callable[[Path, Path, Sequence[tuple[str, Path]]], "str | None"]
 _HEX = frozenset("0123456789abcdef")
+#: the value a registered port reads a committed tree of the registration as, ``committed/<port>`` (`rows.own_value`)
+COMMITTED = "committed/"
 
 
 class Outside(ValueError):
@@ -391,11 +393,89 @@ def _class(ms: Mapping[str, Any]) -> None:
                                "member at one root")
 
 
+def _template_of(name: str) -> tuple[str, str] | None:
+    """`OneStageZk.templateOf`: a name read at its last ``/``; None for a name with none."""
+    i = name.rfind("/")
+    return None if i < 0 else (name[:i], name[i + 1:])
+
+
+def _templates(names: Any) -> set[str]:
+    """`OneStageZk.templatesOf`: the templates of the members named `names`."""
+    return {t[0] for n in names if (t := _template_of(n)) is not None}
+
+
+def _field_trees(ts: set[str], record: Mapping[str, Any]) -> dict[str, list[tuple[str, dict[str, Any]]]]:
+    """`OneStageZk.fieldTreesOf`: each root of `record` whose port is ``<template>/<field>`` of a template of `ts`, by
+    template, as ``(field, root)`` in the record's order, the root under the bare field."""
+    out: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    roots = record.get("roots")
+    for r in roots if isinstance(roots, list) else ():
+        port = r.get("port") if isinstance(r, dict) else None
+        t = _template_of(port) if type(port) is str else None
+        if t is not None and t[0] in ts:
+            out.setdefault(t[0], []).append((t[1], {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": t[1],
+                                                    "root": r.get("root")}))
+    return out
+
+
+def _field_root_in(ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]], template: str, field: str,
+                   port: str) -> dict[str, Any] | None:
+    """`OneStageZk.fieldRootIn`: the window's tree of `template`'s `field` among `ft`, under the port name `port`."""
+    e = next((e for f, e in ft.get(template, ()) if f == field), None)
+    return None if e is None else {"domain": e.get("domain"), "leaves": e.get("leaves"), "port": port,
+                                   "root": e.get("root")}
+
+
+def _own_fields(ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]], name: str,
+                roots: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """`OneStageZk.ownFieldsOf`: the member `name`'s roots with its template's fields' trees at the fields it has no
+    root of."""
+    got = [dict(r) for r in roots]
+    t = _template_of(name)
+    for f, e in ft.get(t[0], ()) if t is not None else ():
+        if not any(r.get("port") == f for r in got):
+            got.append(dict(e))
+    return got
+
+
+def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
+    """`OneStageZk.treePortsHeld`: every port of a member's registered file that opens a committed tree, a tree port's
+    ``<template>/<field>`` or a value ``committed/<port>``, is the record's root of it, its root, domain and leaf
+    count (`OneStageZk.portTreeHeld`)."""
+    roots = record.get("roots")
+    by_port = {r["port"]: r for r in (roots if isinstance(roots, list) else ())
+               if isinstance(r, dict) and type(r.get("port")) is str}
+    for name, m in ms.items():
+        reg = m["registered"]
+        for port in sorted(reg["ports"]) if reg is not None else ():
+            e = reg["ports"][port]
+            tree, value = e.get("tree"), e["value"]
+            t = (f"{tree['template']}/{tree['field']}" if isinstance(tree, dict) else
+                 value[len(COMMITTED):] if value.startswith(COMMITTED) else None)
+            if t is None:
+                continue
+            r = by_port.get(t)
+            if r is None:
+                raise _Refused(f"registered: member {name}'s port {port} opens the committed tree {t}, and the "
+                               f"registration holds no root {t}: a committed tree a statement opens is one its window "
+                               "registered before any coin")
+            what = next((w for w, ok in (("root", r.get("root") == e["root"]), ("domain", r.get("domain") == e["domain"]),
+                                         ("leaf count", _nat(r.get("leaves")) and r["leaves"] == e["leaves"]))
+                         if not ok), None)
+            if what is not None:
+                raise _Refused(f"registered: member {name}'s port {port} opens the committed tree {t} at another {what} "
+                               "than the registration's: a statement opens its window's registered tree, never another "
+                               "window's or another member's")
+
+
 def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
-    """`OneStageZk.rootsOf`: the docket's roots by the member each is of, its port without the member's name."""
+    """`OneStageZk.rootsOf`: the docket's roots by the member each is of, its port without the member's name; a root
+    ``<template>/<field>`` of a member's template, not named as a member, is the window's tree of the field, no
+    member's own (`_field_trees`)."""
     roots = record.get("roots")
     if type(roots) is not list:
         raise _Refused("roots: the registration's roots are not a list")
+    ts = _templates(ms)
     out: dict[str, list[dict[str, Any]]] = {name: [] for name in ms}
     for r in roots:
         port = r.get("port") if isinstance(r, dict) else None
@@ -405,8 +485,10 @@ def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[d
             raise _Refused(ROW_TABLES)
         mine = [(port[:i], port[i + 1:]) for i, c in enumerate(port) if c == "/" and port[:i] in out]
         if not mine:
+            if port not in out and (t := _template_of(port)) is not None and t[0] in ts:
+                continue
             raise _Refused(f"roots: the registration's root {port} is no member's: a member's roots are named "
-                           "<member>/<port>")
+                           "<member>/<port>, and a window's tree of a template's field <template>/<field>")
         if len(mine) > 1:
             raise _Refused(f"roots: the registration's root {port} is two members': a member's roots are named "
                            "<member>/<port>, and a root is one member's")
@@ -420,20 +502,22 @@ def _slice(m: Mapping[str, Any], roots: Sequence[Mapping[str, Any]], record: Map
     return {"population": _count(m), "roots": list(roots), "scheme": record.get("scheme")}
 
 
-def _field_root(record: Mapping[str, Any], template: str, field: str, port: str) -> dict[str, Any] | None:
-    """`OneStageZk.fieldRootOf`: the record's ``fields`` entry of the writer template's output field, its domain,
-    leaves and root under the reader's port name; else None."""
-    fs = record.get("fields")
-    r = next((f for f in fs if f.get("template") == template and f.get("field") == field), None) \
-        if isinstance(fs, list) else None
-    return None if r is None else {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": port, "root": r.get("root")}
+def _members_roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> tuple[dict[str, list[dict[str, Any]]],
+                                                                             dict[str, list[tuple[str, dict[str, Any]]]]]:
+    """`OneStageZk.membersRootsOf` before its wiring: `_roots`', each member's own output ports at its template's
+    fields' trees (`_own_fields`), and the window's trees (`_field_trees`) the wiring reads."""
+    roots = _roots(ms, record)
+    ft = _field_trees(_templates(ms), record)
+    return {name: _own_fields(ft, name, rs) for name, rs in roots.items()}, ft
 
 
 def field_roots(wiring: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: Mapping[str, Any],
-                record: Mapping[str, Any], roots: Mapping[str, Sequence[Mapping[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
-    """`OneStageZk.fieldRoots`: each member's roots `roots` (`_roots`'), then for each wire of `wiring` into the
-    template whose range of ``ranges`` (each ``[template, first, count]``) holds the member's units, at a port the
-    member has no root of, its writer's output field's tree (`_field_root`), the first wire's of each port."""
+                ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]],
+                roots: Mapping[str, Sequence[Mapping[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    """`OneStageZk.fieldRoots`: each member's roots `roots`, then for each wire of `wiring` into the template whose
+    range of ``ranges`` (each ``[template, first, count]``) holds the member's units, at a port the member has no root
+    of, its writer's output field's tree among the window's trees `ft` (`_field_root_in`), the first wire's of each
+    port."""
     out = {}
     for name, m in ms.items():
         f, n = _first(m), _count(m)
@@ -443,7 +527,7 @@ def field_roots(wiring: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: 
                 continue
             if not any(t == w["reader"] and a <= f and f + n <= a + c for t, a, c in ranges):
                 continue
-            if (e := _field_root(record, w["writer"], w["out"], w["port"])) is not None:
+            if (e := _field_root_in(ft, w["writer"], w["out"], w["port"])) is not None:
                 got.append(e)
         out[name] = got
     return {**roots, **out}
@@ -453,7 +537,8 @@ def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, 
            wiring: Mapping[str, Any] | None = None, ranges: Sequence[Sequence[Any]] = ()) -> dict[str, dict[str, Any]]:
     """Each member's slice of the docket `record` (`OneStageZk.Member.slice`), for the members `members` by name,
     each its units as ranges ``[lo, hi)``: ``{name: {population, roots, scheme}}``, the member's count of units, the
-    docket's roots that are its own, its name taken off each port (`OneStageZk.rootsOf`), with, where the parameters
+    docket's roots that are its own, its name taken off each port (`OneStageZk.rootsOf`), and its template's fields'
+    trees at the output ports it has no root of (`OneStageZk.ownFieldsOf`), with, where the parameters
     name a ``wiring`` (at the partition's ``ranges``, each ``[template, first, count]``), each wired port its writer's
     output field's tree (`field_roots`, `OneStageZk.membersRootsOf`), and the docket's scheme. `population_why` holds a member's
     public file to its slice. `ValueError` with Lean's reason where the members are not laid over the docket's
@@ -462,11 +547,11 @@ def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, 
     ms = {name: {"units": [list(r) for r in units]} for name, units in members.items()}
     try:
         _laid(ms, record)
-        roots = _roots(ms, record)
+        roots, ft = _members_roots(ms, record)
     except _Refused as e:
         raise ValueError(str(e)) from None
     if wiring is not None:
-        roots = field_roots(wiring, ranges, ms, record, roots)
+        roots = field_roots(wiring, ranges, ms, ft, roots)
     return {name: _slice(m, roots[name], record) for name, m in ms.items()}
 
 
@@ -699,7 +784,8 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
             raise _Refused(POPULATION_ORDER)
         _laid(ms, record)
         _class(ms)
-        roots = _roots(ms, record)
+        _tree_ports_held(ms, record)
+        roots, _ = _members_roots(ms, record)
         _sampled(ms, held, evidence["proved_units"])
         try:
             strata: Any = P.strata(program, params["query"])

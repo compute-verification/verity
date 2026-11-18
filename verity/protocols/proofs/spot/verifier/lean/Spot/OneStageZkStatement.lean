@@ -300,17 +300,32 @@ def splitsFrom : List Char → List Char → List (String × String)
 /-- Every way the port `port` reads as `<name>/<port name>` (`splitsFrom`). -/
 def splitsOf (port : String) : List (String × String) := splitsFrom [] port.toList
 
+/-- A name read at its last `/`: a member's name `<template>/<k>` as its template and `k`, a window's field tree's
+port `<template>/<field>` as its template and field; none for a name with no `/`. -/
+def templateOf (name : String) : Option (String × String) := (splitsOf name).getLast?
+
+/-- The templates of the members named `names` (`templateOf`). -/
+def templatesOf (names : List String) : Std.HashSet String :=
+  names.foldl (fun s n => match templateOf n with | some (t, _) => s.insert t | none => s) {}
+
 /-- One root `r` of the registration given to its member, among the members `acc` holds a name of (`rootsOf`): the
 member whose name, then `/`, the root's port begins with, the root pushed on that member's with the name and the `/`
-taken off its port. A refusal where the root is a row tables' (`ROW_TABLES`), no member's, or two members'. -/
-def rootStep (acc : Std.HashMap String (Array Json)) (r : Json) : V (Std.HashMap String (Array Json)) := do
+taken off its port. A root that is no member's, not named as a member, whose port is `<template>/<field>` of a
+template of `ts` is the window's tree of that template's field, every member's of the template (`fieldTreesOf`), and
+is passed over here. A refusal where the root is a row tables' (`ROW_TABLES`), no member's and no such tree, or two
+members'. -/
+def rootStep (ts : Std.HashSet String) (acc : Std.HashMap String (Array Json)) (r : Json) :
+    V (Std.HashMap String (Array Json)) := do
   let .str port := getD r "port" | throw "roots: a root of the registration names no port"
   if port == TABLE_PORT then throw ROW_TABLES
   match (splitsOf port).filter fun x => acc.contains x.1 with
   | [(name, bare)] =>
     pure (acc.modify name (·.push (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"),
       ("port", .str bare), ("root", getD r "root")])))
-  | [] => throw s!"roots: the registration's root {port} is no member's: a member's roots are named <member>/<port>"
+  | [] =>
+    if !acc.contains port && (templateOf port).any (ts.contains ·.1) then pure acc
+    else throw (s!"roots: the registration's root {port} is no member's: a member's roots are named " ++
+      "<member>/<port>, and a window's tree of a template's field <template>/<field>")
   | _ =>
     throw (s!"roots: the registration's root {port} is two members': a member's roots are named " ++
       "<member>/<port>, and a root is one member's")
@@ -328,19 +343,111 @@ def NOT_ONE_MEMBER : String :=
   "public file: the registration's roots are not one member's: the one statement's public file is held to a " ++
     "registration whose ports are bare, or are all one window member's, <member>/<port>"
 
+/-- The window's trees of its templates' fields: each root of the record `rec` whose port is `<template>/<field>`
+of a template of `ts` (`templateOf`), by template, as `(field, root)` in the record's order, each root its domain,
+leaves and root under the bare field. One pass over the record's roots. -/
+def fieldTreesOf (ts : Std.HashSet String) (rec : Json) : Std.HashMap String (Array (String × Json)) :=
+  match getD rec "roots" with
+  | .arr rs => rs.foldl (fun acc r => match getD r "port" with
+    | .str port => match templateOf port with
+      | some (t, f) =>
+        if ts.contains t then
+          acc.insert t ((acc.getD t #[]).push (f, Json.mkObj [("domain", getD r "domain"),
+            ("leaves", getD r "leaves"), ("port", .str f), ("root", getD r "root")]))
+        else acc
+      | none => acc
+    | _ => acc) {}
+  | _ => {}
+
+/-- The window's tree of template `template`'s field `field` among the trees `ft` (`fieldTreesOf`), under the port
+name `port`: its domain, leaves and root; none where the record names no such tree. -/
+def fieldRootIn (ft : Std.HashMap String (Array (String × Json))) (template field port : String) : Option Json :=
+  ((ft.getD template #[]).find? (·.1 == field)).map fun (_, e) =>
+    Json.mkObj [("domain", getD e "domain"), ("leaves", getD e "leaves"), ("port", .str port), ("root", getD e "root")]
+
+/-- **The registration's tree of a writer template's output field**, under the reader's port name `port`: the record
+`rec`'s root at `<template>/<field>` (`fieldTreesOf`, `fieldRootIn`), the window's one tree of the template's field
+whichever members hold its units, which the docket's roots name (R3), its domain, leaves and root; none where the
+record names no such root. -/
+def fieldRootOf (rec : Json) (template field port : String) : Option Json :=
+  fieldRootIn (fieldTreesOf (({} : Std.HashSet String).insert template) rec) template field port
+
+/-- The member `name`'s roots `roots` with its template's fields' trees (`fieldTreesOf`'s `ft`) at the ports of those
+fields it has no root of: a member's own output port reads its template's tree of the field. -/
+def ownFieldsOf (ft : Std.HashMap String (Array (String × Json))) (name : String) (roots : Array Json) : Array Json :=
+  match templateOf name with
+  | none => roots
+  | some (t, _) => (ft.getD t #[]).foldl (fun got (f, e) =>
+      if got.any (getD · "port" == Json.str f) then got else got.push e) roots
+
 /-- **The registration's roots by port, as the one statement's public file names them** (`publicHeld`): the record
-`rec`'s own (`Record.byPort`) where no root's port reads as `<name>/<port name>`; else, where every root's port is one
-member's (`commonMember`), that member's roots with its name and the `/` after it taken off
-(`rootStep`, which refuses a row tables' root and a root that is no member's), as the per-member form reads a
-member's (`Member.slice`). A registration of two members or more has no name every root's port reads as, and refuses
-(`NOT_ONE_MEMBER`). A function of the record alone, fixed before any coin. -/
+`rec`'s own (`Record.byPort`) where no root's port reads as `<name>/<port name>`; else, where every root's port but
+the window's trees of a template's field is one member's (`commonMember`; a port `<template>/<field>` is such a tree
+where `template` is another port's name's template, `templatesOf`), that member's roots with its name and the `/`
+after it taken off (`rootStep`, which refuses a row tables' root and a root that is no member's and no such tree),
+with its template's fields' trees at the fields it has no root of (`ownFieldsOf`), as the per-member form reads a
+member's (`Member.slice`). A registration of two members or more has no name every such root's port reads as, and
+refuses (`NOT_ONE_MEMBER`). A function of the record alone, fixed before any coin. -/
 def publicPorts (rec : Json) : V (Array (String × Json)) := do
   let rs := match getD rec "roots" with | .arr rs => rs | _ => #[]
   let ports := rs.toList.filterMap fun r => match getD r "port" with | .str p => some p | _ => none
   if ports.all fun p => (splitsOf p).isEmpty then return Record.byPort rec
-  let some n := commonMember ports | throw NOT_ONE_MEMBER
-  let acc ← rs.foldlM rootStep (({} : Std.HashMap String (Array Json)).insert n #[])
-  return Record.byPort (Json.mkObj [("roots", .arr (acc.getD n #[]))])
+  let ts := templatesOf (ports.filterMap fun p => (templateOf p).map (·.1))
+  let some n := commonMember (ports.filter fun p => !(templateOf p).any (ts.contains ·.1)) | throw NOT_ONE_MEMBER
+  let acc ← rs.foldlM (rootStep ts) (({} : Std.HashMap String (Array Json)).insert n #[])
+  return Record.byPort (Json.mkObj [("roots", .arr (ownFieldsOf (fieldTreesOf ts rec) n (acc.getD n #[])))])
+
+/-- The record `rec`'s roots by port, the last of each port (R3 refuses a record that names a port twice). -/
+def rootsByPort (rec : Json) : Std.HashMap String Json :=
+  match getD rec "roots" with
+  | .arr rs => rs.foldl (fun m r => match getD r "port" with | .str p => m.insert p r | _ => m) {}
+  | _ => {}
+
+/-- The value a registered port reads a committed tree of the registration as (`rows.own_value`):
+`committed/<port>`, `<port>` the record's root's. -/
+def COMMITTED : String := "committed/"
+
+/-- The record's port of the tree a registered port `q` opens: `<template>/<field>` for a tree port (`q.tree`),
+`<port>` for a port read as `committed/<port>` (`COMMITTED`); none for a registered value's port. -/
+def treePortOf (q : Flock.Registered.Port) : Option String :=
+  match q.tree with
+  | some (t, f) => some s!"{t}/{f}"
+  | none => if q.value.startsWith COMMITTED then some (q.value.drop COMMITTED.length).toString else none
+
+/-- The refusal of a registered port `port` of `who` that opens a committed tree `tree` the record holds no root of
+(`registeredTreesHeld`). -/
+def TREE_UNHELD (who port tree : String) : String :=
+  s!"registered: {who}'s port {port} opens the committed tree {tree}, and the registration holds no root {tree}: " ++
+    "a committed tree a statement opens is one its window registered before any coin"
+
+/-- The refusal of a registered port `port` of `who` whose `what` is not the record's root's at `tree`
+(`registeredTreesHeld`). -/
+def TREE_OTHER (who port tree what : String) : String :=
+  s!"registered: {who}'s port {port} opens the committed tree {tree} at another {what} than the registration's: " ++
+    "a statement opens its window's registered tree, never another window's or another member's"
+
+/-- A registered port `q` of `who` that opens a committed tree (`treePortOf`) held to the record's root at that
+tree's port among `byPort` (`rootsByPort`): its root, domain and leaf count are the record's, refused by name
+(`TREE_UNHELD`, `TREE_OTHER`). The domain binds the window, so a tree of another window refuses. -/
+def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (q : Flock.Registered.Port) : V Unit :=
+  match treePortOf q with
+  | none => pure ()
+  | some t =>
+    match byPort.get? t with
+    | none => throw (TREE_UNHELD who q.name t)
+    | some e =>
+      if getD e "root" != .str (Flock.hexOf q.root) then throw (TREE_OTHER who q.name t "root")
+      else if getD e "domain" != .str (Flock.hexOf q.domain) then throw (TREE_OTHER who q.name t "domain")
+      else if nat? (getD e "leaves") != some q.leaves then throw (TREE_OTHER who q.name t "leaf count")
+      else pure ()
+
+/-- **A registered file's committed trees are its window's**: every port of the registered file `j` of `who` that
+opens a committed tree is held to the record's root of it (`portTreeHeld`, at `byPort`, `rootsByPort`); no file, no
+port. One pass over the file's ports, each a lookup. -/
+def registeredTreesHeld (byPort : Std.HashMap String Json) (who : String) (j : Option Json) : V Unit :=
+  match j with
+  | none => pure ()
+  | some j => (Flock.Registered.ofJson j).mapError (s!"{who}: {·}") >>= fun own => own.forM (portTreeHeld byPort who)
 
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the sample): its header's scheme, `frame_v3` roots and their `domain_ids`, and
@@ -846,7 +953,8 @@ def orderHeld (p : Params) (c : OneStage.Commitment) (e : Evidence) : V Unit := 
 /-- The one statement's check at the coins `ξ` (module docstring, **check**): the evidence's one session
 (`oneSession`), its coins held to the trees the challenger logged in the order it must release them (`treesOf`,
 `orderHeld`, `treesHeld`), the registration's population held to the program (`popHeld`), the parameters' public file
-held to the registration (`publicHeld`), then the session's verdict on the blobs, then v1's `checkAt` at `ξ` on it. v1
+held to the registration (`publicHeld`), the committed trees its registered file opens held to the registration's
+roots (`registeredTreesHeld`), then the session's verdict on the blobs, then v1's `checkAt` at `ξ` on it. v1
 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own `all` says it again, so an acceptance reads
 the run rather than the verdicts' JSON. -/
 def checkOneAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
@@ -859,6 +967,7 @@ def checkOneAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evid
     popHeld p.base.verifier c.record
     let pubB ← bs.get p.own.pub "public file"
     publicHeld c.record pubB
+    registeredTreesHeld (rootsByPort c.record) "the verifier" p.own.registered
     run p.own e.sessions (some e.base.provedUnits) bs
   match r with
   | .error err => .reject s!"proofs: {err}"
@@ -1102,14 +1211,15 @@ def Member.heldAt (m : Member) (strata : Array (String × Array (Nat × Nat))) (
 /-- **The registration's roots, each its member's**: the roots of the record `rec` by the name of the member each is
 of, in the record's order, each as the record holds it with the member's name and the `/` after it taken off its
 port (`rootStep`). A root is the member's whose name, then `/`, its port begins with, the whole name: the record's
-writer names a member's ports `<name>/<port name>`, and that rule is the prover's, so it is held here. A root that is
-no member's refuses, and one that is two members' (a name holds `/`s, so one port can read as two members'), and a row
-tables' root (`ROW_TABLES`). So every root of a record this reads is exactly one member's, by a function of the
-parameters' members and the record alone, and a member's statement reads no other (`Member.slice`). One pass over the
-record's roots. -/
+writer names a member's ports `<name>/<port name>`, and that rule is the prover's, so it is held here. A root
+`<template>/<field>` of a member's template (`templatesOf`) is the window's tree of the template's field, which
+`fieldTreesOf` reads, and is no member's own. Any other root that is no member's refuses, and one that is two members'
+(a name holds `/`s, so one port can read as two members'), and a row tables' root (`ROW_TABLES`). So every other root
+of a record this reads is exactly one member's, by a function of the parameters' members and the record alone, and a
+member's statement reads no other (`Member.slice`). One pass over the record's roots. -/
 def rootsOf (ms : Array Member) (rec : Json) : V (Std.HashMap String (Array Json)) :=
   match getD rec "roots" with
-  | .arr rs => rs.foldlM rootStep (ms.foldl (fun acc m => acc.insert m.name #[]) {})
+  | .arr rs => rs.foldlM (rootStep (templatesOf (ms.toList.map (·.name)))) (ms.foldl (fun acc m => acc.insert m.name #[]) {})
   | _ => throw "roots: the registration's roots are not a list"
 
 /-- How many units a member holds. -/

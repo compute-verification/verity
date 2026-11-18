@@ -769,14 +769,19 @@ def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | s
     window ``mine`` and the docket ``rec``: the docket's strata and each member's slice of the record
     (`members.slices`, Lean's `OneStageZk.Member.slice`: its units, the roots the record names under its name, the
     scheme), or Lean's reason why there is none. A member's public file names a root for each of its ports, one that is
-    not its own tree (a wired port, a registered value's) at the tree over its table rows (`rows.Committed.frame_entry`),
-    which the record never names: the slices here read no wiring, so such a member is refused by name (`members.unwired_why`),
-    as Lean's is where the parameters name no wiring (`OneStageZk.membersRootsOf`). A window's row tables' root
+    not its own tree (a wired port, a registered value's) at the tree it is bound under (`rows.Committed.frame_entry`): a
+    wired port's is its writer's output field's tree, which the slices take from the window's wiring (`members.field_roots`,
+    Lean's `OneStageZk.membersRootsOf` where the parameters name the wiring); a member naming a root the slice holds none of
+    is refused by name (`members.unwired_why`). A window's row tables' root
     (`rows.TABLE_PORT`) is the window's and no member's: the per-member form refuses such a window, and this audit, its
     stand-in there, holds that root by `tables.check_row_tables` and reads the slices of the record's other roots."""
     record = {**rec, "roots": [r for r in rec["roots"] if r.get("port") != CS.TABLE_PORT]} if mine.row_tables else rec
+    wiring = {"wires": [{"reader": m.template, "writer": w.writer, "out": w.out, "port": w.port}
+                        for m in mine.members for w in m.wired]}
+    ranges = [[tid, lo, n] for _k, tid, lo, n in CS.template_partition(mine.program, mine.query).ranges]
     try:
-        return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record)
+        return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record,
+                                                             wiring, ranges)
     except (P.QueryRefused, ValueError) as e:
         return str(e)
 
