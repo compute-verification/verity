@@ -123,10 +123,10 @@ ext = native_ext.ext()
 assert not native_jit.missing_bindings(ext, os.path.join(native_ext.HERE, "native_collect.cpp"))
 print(f"COMMITTER BUILT ITS NATIVE COLLECTOR: CARD_SKU {sku}, arch {cuda_arch(sku)}, CUDA_HOME {home}, every binding present")
 EOF
-  SCHEME=$SCHEME "$PY" - "${LOAD[@]}" <<'EOF'
-import os, runpy, sys
+  "$PY" - "${LOAD[@]}" <<'EOF'
+import runpy, sys
 a = runpy.run_path(sys.argv[1])["parser"]().parse_args(sys.argv[2:])
-if os.environ["SCHEME"] == "pearl-plus":
+if a.fixed:
     assert (a.fixed, a.window_steps, a.prompt_range, a.varied) == (4, 2, "27:27", 0), a
     print("LOAD PARSED: fixed", a.fixed, "request(s) of", a.prompt_range, "tokens over", a.window_steps, "window steps (Pearl+'s tie)")
 else:
