@@ -48,20 +48,20 @@ the audit once and outputs the pair where the outcome's history has one.
 
 namespace FlockSoundness.Registered
 
-open Game Refine Binding Audit
+open Game Refine Binding Spot.Sampling
 open scoped ENNReal
 
 section Clash
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-  {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
+  {decode : Spot.Sampling.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
   {lay : Binding.Layout P plan tab decode} {rs : HmRowsX lay}
-  {C' : Verity.Boolean.Circuit} {n' : ℕ} {P' : Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
+  {C' : Verity.Boolean.Circuit} {n' : ℕ} {P' : Spot.Sampling.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
   {plan' : Finset (Fin n') → Reg₁ → List (TabSpec mPts')}
   {tab' : (S : Finset (Fin n')) → (R : Reg₁) → Fin n' → Fin (plan' S R).length}
-  {decode' : Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
+  {decode' : Spot.Sampling.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
   {lay' : Binding.Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
 
 /-- **Two registrant records clash**: at registered reads `p` of `rd` and `p'` of `rd'`, the openings
@@ -116,7 +116,7 @@ end FlockSoundness.Registered
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg
 open scoped ENNReal
 

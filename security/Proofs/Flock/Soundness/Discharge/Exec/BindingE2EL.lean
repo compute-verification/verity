@@ -46,7 +46,7 @@ A3 compares its count curve with `SamplingDesign.stratified`'s (`SamplingDesign.
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting Extract LinkFinder Refine Binding Audit Audit.Partition
+open Game Model Accounting Extract LinkFinder Refine Binding Spot.Sampling Spot.Sampling.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/

@@ -7,7 +7,7 @@ public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 public import Proofs.Flock.VBridge.Unit
 public import Properties.Flock.Circuit.UnitInst
 import Proofs.Core.Circuit
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 import Proofs.Flock.Soundness.Discharge.Zero.Uniform
 

@@ -1,0 +1,137 @@
+"""The wires a Program's root states (`Spot.Edges.edgesOf`, the `edges` piece) against its twin,
+`verity.commitments.periods.edges`, on descriptors the builder writes and on their root arguments' references rewritten:
+both give the same wires or the same refusal, and the named cases give the wires or refusal the rule says."""
+
+from __future__ import annotations
+
+import copy
+import json
+import shutil
+from pathlib import Path
+
+import pytest
+from hypothesis import strategies as st
+
+import verity_difftest as D
+from verity.circuits import codec
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple, Value
+from verity.commitments.periods.edges import edges
+
+PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
+pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+
+XOR16 = PrimitiveDefinition("CoreEdgesXor16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: a ^ b,
+                            register=False)
+ROW = Array(2, Value(16))
+PAIR = Tuple(Value(16), Value(16))
+
+
+def _arr(name: str):
+    return bind(CompositeDefinition(name, 0, (), lambda S: ((("x", ROW),), ROW),
+                                    lambda B, S, x: B.batch(XOR16, x, x, axes=(0, 0)), register=False))
+
+
+def _tup(name: str):
+    return bind(CompositeDefinition(name, 0, (), lambda S: ((("x", PAIR),), PAIR),
+                                    lambda B, S, x: tuple_of(B.call(XOR16, x[0], x[1]), B.call(XOR16, x[1], x[0])),
+                                    register=False))
+
+
+def _toy(name: str, ty, a, b) -> tuple[dict, str, str]:
+    """A root batching `a` (2 members) over the inputs, `b` (2) over `a`'s outputs and `a` (2) over `b`'s."""
+    def body(B, S, x):
+        return B.batch(a, B.batch(b, B.batch(a, x, axes=(0,)), axes=(0,)), axes=(0,))
+
+    defn = bind(CompositeDefinition(name, 0, (), lambda S: ((("x", Array(2, ty)),), Array(2, ty)), body, register=False))
+    return json.loads(D.canonical(codec.encode_program(Program(defn)))), codec.descriptor_id(a), codec.descriptor_id(b)
+
+
+ARR = _toy("CoreEdgesArr", ROW, _arr("CoreEdgesA"), _arr("CoreEdgesB"))
+TUP = _toy("CoreEdgesTup", PAIR, _tup("CoreEdgesTA"), _tup("CoreEdgesTB"))
+
+
+def _nodes(desc: dict) -> list[dict]:
+    return desc["definitions"][desc["root"]]["body"]["nodes"]
+
+
+def _of(toy, cuts=None, b_refs=None) -> dict:
+    """The piece's input on `toy`: its ranges by the root's nodes calling either template, in order, and its wiring
+    with `cuts`; `b_refs(a, a2)` rewrites `b`'s argument from `a`'s and the later `a`'s node indices."""
+    desc, ta, tb = copy.deepcopy(toy[0]), toy[1], toy[2]
+    ids = desc["callees"]
+    at = [k for k, x in enumerate(_nodes(desc)) if ids[x["fn"]] in (ta, tb)]
+    if b_refs is not None:
+        _nodes(desc)[at[1]]["args"][0]["refs"] = b_refs(at[0], at[2])
+    template = {"units": 4, "rows": {"x": [2, 2]}, "outs": {"o0": 2}}
+    return {"program": desc, "ranges": [[at[0], ta, 0, 2], [at[1], tb, 2, 2], [at[2], ta, 4, 2]],
+            "wiring": {"templates": {ta: template, tb: template}, "cuts": cuts or {}, "wires": []}}
+
+
+def _affine(*parts):
+    return {"concat": [{"affine": ["n", k, b, c]} for k, b, c in parts]}
+
+
+def _wire(r, w, o, at, base, cut0=0) -> dict:
+    return {"reader": r, "port": "x", "writer": w, "out": o, "at": at, "radix": [2],
+            "base": base, "step": [1], "cut": [cut0, 1]}
+
+
+_, TA, TB = ARR
+_, UA, UB = TUP
+
+CASES = [
+    ("A, B, A", _of(ARR), {"wires": [_wire(TB, TA, "o0", 0, 0), _wire(TA, TB, "o0", 2, 0)]}),
+    ("B's argument offset by half a row", _of(ARR, b_refs=lambda a, a2: _affine((a, 1, 3), (a, 0, 1))),
+     {"refusal": "edge-rows"}),
+    ("a two-part argument", _of(ARR, b_refs=lambda a, a2: _affine((a, 0, 2), (a, 2, 2))),
+     {"wires": [{**_wire(TB, TA, "o0", 0, 0), "radix": [1]}, {**_wire(TB, TA, "o0", 1, 1), "radix": [1]},
+                _wire(TA, TB, "o0", 2, 0)]}),
+    ("an argument over the parts bound", _of(ARR, b_refs=lambda a, a2: _affine((a, 0, 2), (a, 2, 1), (a, 3, 1))),
+     {"refusal": "edge-parts"}),
+    ("a read of a later node", _of(ARR, b_refs=lambda a, a2: {"affine": ["n", a2, 0, 4]}), {"refusal": "not-topological"}),
+    ("a cut port's rows", _of(TUP, cuts={UA: {"x": 2}, UB: {"x": 2}}),
+     {"wires": [_wire(UB, UA, "o0", 0, 0, 0), _wire(UB, UA, "o1", 0, 0, 1),
+                _wire(UA, UB, "o0", 2, 0, 0), _wire(UA, UB, "o1", 2, 0, 1)]}),
+    ("an uncut port over two fields", _of(TUP), {"refusal": "edge-rows"}),
+    ("a template the wiring doesn't list", {**_of(ARR), "wiring": {**_of(ARR)["wiring"], "templates": {}}},
+     {"refusal": "edge-template"}),
+]
+
+
+def _variants():
+    """Every split of `b`'s argument into up to three affine parts over `a`'s leaves, each at an offset, and each cut."""
+    out = []
+    for cuts in (None, {TB: {"x": 2}}):
+        for offset in (0, 1):
+            for split in ((4,), (2, 2), (1, 3), (3, 1), (1, 1, 2), (2, 1, 1)):
+                parts, at = [], offset
+                for c in split:
+                    parts.append((at % 4, c) if at % 4 + c <= 4 else (0, c))
+                    at += c
+                out.append(_of(ARR, cuts=cuts, b_refs=lambda a, a2, ps=tuple(parts): _affine(*((a, b, c) for b, c in ps))))
+    return out
+
+
+def reference(j) -> dict:
+    return edges(j["program"], j["ranges"], j["wiring"])
+
+
+EDGES = D.Port("spot-difftest", "edges", reference, st.sampled_from([c[1] for c in CASES] + _variants()),
+               package=PACKAGE, need_rejects=False, of_record="lean")
+pieces = D.server_fixture(EDGES)
+
+
+@pytest.mark.parametrize("name, j, want", CASES, ids=[c[0] for c in CASES])
+def test_the_named_cases(pieces, name, j, want):
+    """Each named case gives the rule's wires or refusal, in Lean and in the twin."""
+    assert reference(j) == want
+    assert pieces.call("edges", j) == ("output", D.canonical(want))
+
+
+def test_the_twin_agrees_on_rewritten_arguments(pieces):
+    """Lean and the twin agree on every split, offset and cut of `b`'s argument."""
+    stats = D.run(EDGES, examples=200, server=pieces)
+    assert stats.outputs > 0, stats

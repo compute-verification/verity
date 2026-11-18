@@ -64,7 +64,7 @@ def defAt : List (ℕ × ℕ) → ℕ → ℕ
   | (i, c) :: ns, j => if j < c then i else defAt ns (j - c)
 
 /-- **A proof block's output bits**, computed from the description: its Definition's output bits. This is the width
-`hb` that `FlockSoundness.Audit.Partition.audit_exfiltration` takes as an argument today. -/
+`hb` that `Spot.Sampling.Partition.audit_exfiltration` takes as an argument today. -/
 def blockWidth (j : ℕ) : ℕ := D.outWidth (defAt D.nodes j)
 
 /-- An inference block's fresh input bits, computed from the description: its Definition's fresh input bits. -/
@@ -91,7 +91,7 @@ end Description
 
 /-- **The computed widths meet the influence bound's width hypothesis**: for a partition its description describes,
 the exits of any set `B` of units hold at most the sum of their computed widths. This is the hypothesis `hw` of
-`FlockSoundness.Audit.Partition.audit_exfiltration` and `card_influenceSet_le_harm` with `hb := blockWidth` and `K B`
+`Spot.Sampling.Partition.audit_exfiltration` and `card_influenceSet_le_harm` with `hb := blockWidth` and `K B`
 the exits of `B`'s gates, which `separates_exits` shows separate `B`.
 
 It follows from `Describes`, since the exits of a union lie in the union of the exits; it is not proved yet. -/
@@ -109,7 +109,7 @@ while the committed trace's incorrect proof blocks form a set the sample misses 
 probability at most `ε`.
 
 A stand-in: the limits take `Spot.Sampling.Sound` once it is stated, and this definition goes. Today's theorem of this
-shape is `FlockSoundness.Audit.audit_profile`, from knowledge soundness and binding. -/
+shape is `Spot.Sampling.audit_profile`, from knowledge soundness and binding. -/
 def SampledSound (δ ε : ℝ≥0∞) : Prop :=
   Verity.Sound g accept (fun a => L.missProb (P.incorrect (X a)) < δ) ε
 
@@ -137,7 +137,7 @@ only the delivered values, succeed together (accepted, and `rcv` returns `m`) wi
 `2^H · ∑_{j ≤ k} C(n, j) / |M|` plus the errors. With `|M| = 2^ℓ`, at most `H + log₂ ∑_{j ≤ k} C(n, j)` bits leave.
 `H` and the computed widths come from the description; `consumers.exfiltration_bound` computes this figure.
 
-It would follow from `FlockSoundness.Audit.Partition.audit_exfiltration` with `hb := blockWidth`, `hw` by
+It would follow from `Spot.Sampling.Partition.audit_exfiltration` with `hb := blockWidth`, `hw` by
 `WidthsMeet` and `hsep` by `separates_exits`, restated over core's circuit. Not yet true: the wires premise
 (`OneValuePerWire`) stays a hypothesis until a wire has one commitment. -/
 def ExfiltrationLimit (D : Description) (rd : α → (h w : Fin C.N) → BitVec (C.w w)) (a₀ : C.Trace)
@@ -152,7 +152,7 @@ the anchors, the design and `δ`, with at most `2^H · ∑_{j ≤ k} C(n, j)` me
 the delivered values lie outside `Y` with probability at most the errors. The incorrect proof blocks steer the delivered
 values by at most `H + log₂ ∑_{j ≤ k} C(n, j)` bits; `consumers.infiltration_bound` computes `H`.
 
-It would follow from `FlockSoundness.Audit.Partition.audit_influence` with `card_influenceSet_le_harm` and
+It would follow from `Spot.Sampling.Partition.audit_influence` with `card_influenceSet_le_harm` and
 `card_admissible_le` at `hb := blockWidth`, restated over core's circuit. Not yet true: the wires premise stays a
 hypothesis until a wire has one commitment. -/
 def InfiltrationLimit (D : Description) (rd : α → (h w : Fin C.N) → BitVec (C.w w)) (a₀ : C.Trace)

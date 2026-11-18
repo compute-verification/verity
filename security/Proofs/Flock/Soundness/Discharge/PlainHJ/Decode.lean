@@ -48,7 +48,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 
 namespace FlockSoundness.Discharge.PlainHJ
 
-open Flock Refine Exec Game Model Accounting Audit
+open Flock Refine Exec Game Model Accounting Spot.Sampling
 open FlockSoundness.Discharge.Tables FlockSoundness.Discharge.DecodeZL FlockSoundness.Discharge.Integrate
 open FlockSoundness.Discharge.Composed (nTab nTab_pos drawJ partS)
 open FlockSoundness.Discharge.DecodeZLJ (partJson decJ nXT RecordsLiveJ)

@@ -22,12 +22,12 @@ untraced = [
 # (verity.circuits.kernels) lazily. test_proofs.py fetches its fixture through Flock's `verifier/ci.py`, whose child
 # `python -m research data fetch` imports the research files listed last.
 # the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in
-inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "security/Proofs/Flock/Soundness/Audit/Influence.lean",
+inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "security/Proofs/Spot/Sampling/Influence.lean",
           # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
           "tools/difftest/python/verity_difftest",
-          "security/Proofs/Flock/Soundness/Audit/SamplingDesign.lean",
-          "security/Proofs/Flock/Soundness/Audit/Stratified.lean",
-          "security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean",
+          "security/Proofs/Spot/Sampling/SamplingDesign.lean",
+          "security/Proofs/Spot/Sampling/Stratified.lean",
+          "security/Proofs/Spot/Sampling/StratifiedMiss.lean",
           "security/Proofs/Flock/SamplingGeneric/TwoCount.lean",
           "security/Proofs/Flock/SamplingGeneric/TwoTable.lean",
           "security/Definitions/Claims/SamplingTwo.lean",
