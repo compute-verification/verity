@@ -84,8 +84,8 @@ BANDWIDTH_VERIFIER, NETWORK_ATTESTER = P2.CLOSER_PARTY, NC.NETWORK_ATTESTER
 #: served_verdicts.py's record reads each piece's answer by its runner name
 RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
-#: each component's row in the record: Pearl+'s is ``work``, as H1's is
-ROWS = {v: k for k, v in RECORD_NAMES.items()} | {"pearl-plus": "work"}
+#: each component's row in the record: Pearl+'s is the one it declares
+ROWS = {v: k for k, v in RECORD_NAMES.items()} | {"pearl-plus": declared(schemes.get("pearl-plus"), "record")}
 #: served_verdicts.py's ``answer_from`` for a row it carries from a file the served node wrote (its ``AS_WRITTEN``)
 AS_WRITTEN = "as the served node wrote it"
 

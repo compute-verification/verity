@@ -596,7 +596,7 @@ ours (Pearl+'s kernel is sm_90's), and the find-load and the pair run on the sam
    ~~~text
    uv run python -c 'import json, sys
    from verity_vllm.pipeline.commit_coins import ChallengerGate
-   from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.window import reserve_salt
+   from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.window import reserve_salt
    g = ChallengerGate(sys.argv[1]); print(json.dumps(reserve_salt(g.call, g.ledger, sys.argv[2], sys.argv[3], 0)[0]))' \
      "$GATE" LANE PEER
    ~~~
