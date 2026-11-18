@@ -3222,12 +3222,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.Vocab.WiresSound": {
-   "owner": "@lean",
-   "digest": "0c489865a6d45dcdae0b5bf99e6fc00e8fa7d1535279d17ba21ebcd2ec65994f",
-   "issue": "LEAN-238",
-   "due": "2026-11-24"
-  },
   "Verity.Wipe.OfRun.Preserves": {
    "owner": "@lean",
    "digest": "e53bc266fa535839efba6e56109da557edaa11b26284cf3c35161edc69f46396",
@@ -4023,7 +4017,9 @@
    "Claims.SamplingGeneric.FlockArgKSTable": "proved of every Flock record, decoder, tables' lengths and errors, and naming of a table (`Claims.SamplingGeneric.flockArgKSTable`)",
    "Claims.SamplingGeneric.FlockKSTable": "proved of every Flock record, decoder, tables' lengths and errors, naming of a table and compiled verifier over it (`Claims.SamplingGeneric.flockKSTable`)",
    "Claims.SamplingGeneric.FlockKSRegTable": "proved of every Flock record, decoder, tables' lengths and errors, naming of a table and compiled verifier over it (`Claims.SamplingGeneric.flockKSRegTable`)",
-   "Claims.SamplingGeneric.FlockRerunsTable": "proved of every Flock record, tables' lengths and errors, and naming of a table (`Claims.SamplingGeneric.flockRerunsTable`)"
+   "Claims.SamplingGeneric.FlockRerunsTable": "proved of every Flock record, tables' lengths and errors, and naming of a table (`Claims.SamplingGeneric.flockRerunsTable`)",
+   "Verity.Levels.MissesAsDesign": "a helper the levels' proofs take: the levels' sample misses each set of slots with the claims design's acceptance probability, a hypothesis of `Proofs/Core/LevelsProofBlocks` and `Proofs/Spot/Sampling/Levels`; no deployment meets it on its own",
+   "Verity.Levels.SlotsAreBlocks": "a helper the levels' proofs take: `blk` places a claims partition's slots one to one onto the last level's blocks, a hypothesis of `Proofs/Core/LevelsProofBlocks` and `Proofs/Spot/Sampling/Levels`; no deployment meets it on its own"
   },
   "generic": {
    "Claims.SamplingGeneric.CompilerKS": "Claims.SamplingGeneric.compilerKS",
@@ -5513,7 +5509,6 @@
  "witnesses_assumed": {
   "Claims.ExpectedCR": "ecr/sha-512 at one collision finder is a computational assumption about SHA-512 that no theorem concludes, so a witness takes it as it stands.",
   "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "commitment hiding, which no theorem concludes: by definition it is `Claims.Hm96Hiding` at the deployed instance (hm96's mask `ZkView.My` and salt hash `ZkView.saltHash` at δ₁ = 2^-193) and adds no assumption, and only a zero-knowledge guarantee's witness takes it, as the trust base's extra premise is trusted for the zero-knowledge guarantees only.",
-  "Verity.Vocab.WiresSound": "not an assumption about the world but an unproved statement about SPOT's extractor at the deployed vocabulary: on a play sampled proofs accept, at most a 2ε share of the committed units read a row that is not the row the record's wiring gives them, but for twice sampled proofs' error. Where the deployment runs sessions that error is finite, so the statement holds only by its proof, which Lean does not have yet (it is listed under `open`); until then a witness leaves it as it stands. No clause of the conclusions that take it reads it.",
   "Verity.Sampled.TwoStageBound": "not an assumption about the world but an unproved statement about SPOT's verifier at its two-stage form: at parameters that name the form, the probability that its sampled verdict holds while the claim fails is at most the error. The verifier accepts the form ahead of its proof, so no theorem concludes the bound and no instance can; until Lean proves it a witness leaves it as it stands. No clause of the conclusions that take it reads it."
  },
  "layers": {
@@ -5740,7 +5735,7 @@
     "Definitions.Slowdown.ServingBlocks",
     "Definitions.Poub.Tag"
    ],
-   "except": [],
+   "except": ["Definitions.ResourceAccounting.Network.AttesterScheme"],
    "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model; the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game; they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer; the remote audit's receipts are the served row leaf in frame-v3-sha512 trees, and their binding event is a collision among the two openings' checks (Definitions.Hash); a period of the causal game reads its subprotocols' collision finders and their success (Definitions.Claims' Finder, Finder.Pr), as the claims state them"
   },
   "Definitions.ResourceAccounting.Guarantees": {
@@ -5821,16 +5816,28 @@
    "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof; the premises of the area that are named assumptions of the lock (W, the key's binding, the sketch's hash) are declared in the assumptions home's module for resource accounting, which the modules that list them re-export",
    "sealed": true
   },
+  "Definitions.ResourceAccounting.Network.AttesterScheme": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Core.Assumptions",
+    "Definitions.Spot",
+    "Definitions.Certifier.Tap"
+   ],
+   "except": [],
+   "why": "the network attester's scheme at one execution phase is trusted text over core's scheme, partition, challenger and interaction (Definitions.Core), the sampling layer's analysis (Definitions.Spot), the attester's record format and schedules (Definitions.Certifier.Tap) and its trust, trusted-device (Definitions.Core.Assumptions), which `ClientViewReads` takes as a hypothesis; it imports no guarantee or proof"
+  },
   "Definitions.Claims": {
    "imports": [
     "Mathlib",
     "Definitions.Core.Boolean",
     "Definitions.Core.Interaction",
     "Definitions.Core.Hm96",
+    "Definitions.Core.LevelsCount",
     "Definitions.Claims"
    ],
    "except": [],
-   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof; messages and collisions are the hash area's (Definitions.Hash.Basic), and Flock's block circuit is core's Boolean circuit (Definitions.Core.Boolean); the interaction model they are stated in, with its messages and collisions, is core's (Definitions.Core.Interaction); hm96's hiding, which the claims and the composition of zero knowledge through a recursion state, is core's (Definitions.Core.Hm96)"
+   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof; messages and collisions are the hash area's (Definitions.Hash.Basic), and Flock's block circuit is core's Boolean circuit (Definitions.Core.Boolean); the interaction model they are stated in, with its messages and collisions, is core's (Definitions.Core.Interaction); hm96's hiding, which the claims and the composition of zero knowledge through a recursion state, is core's (Definitions.Core.Hm96); a claims partition's proof blocks are placed as the last level's blocks of core's levels, counted at δ (Definitions.Core.LevelsCount)"
   },
   "Definitions.Hash": {
    "imports": ["Mathlib", "Definitions.Core.Digest", "Definitions.Core.Hash", "Definitions.Hash"],
@@ -5847,6 +5854,7 @@
    "imports": [
     "Mathlib",
     "Definitions.Core.Boolean",
+    "Definitions.Core.Partition",
     "Definitions.Hash.Basic",
     "Definitions.Core.Game",
     "Definitions.Core.Draw",
@@ -5854,7 +5862,7 @@
     "Definitions.Flock"
    ],
    "except": [],
-   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof; the audit partitions core's Boolean circuit (Definitions.Core.Boolean); a Merkle collision is the hash area's (Definitions.Hash.Basic); its games, with their uniform average and probability, and the draw law, are core's (Definitions.Core.Game, Definitions.Core.Rewinding, Definitions.Core.Draw)"
+   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof; the audit partitions core's Boolean circuit (Definitions.Core.Boolean) and its partition is core's (Definitions.Core.Partition); a Merkle collision is the hash area's (Definitions.Hash.Basic); its games, with their uniform average and probability, and the draw law, are core's (Definitions.Core.Game, Definitions.Core.Rewinding, Definitions.Core.Draw)"
   },
   "Definitions.Spot": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Spot"],

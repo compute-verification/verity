@@ -1,7 +1,6 @@
 {
   "rule": "Typed records (read a record through its verity_vllm.records type)",
   "entries": [
-    {"file": "verity_vllm/definitions/encoding.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/definitions/numerics/fa2_relation.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/definitions/numerics/gemm_relation.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/definitions/numerics/rms_relation.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
