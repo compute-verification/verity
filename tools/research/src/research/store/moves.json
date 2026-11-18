@@ -5464,6 +5464,11 @@
       "paths": {
         "verity/protocols/resource_accounting/compute/pouw/prover/circuit/words.py": "verity/circuits/ops/words.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/network/verifier/charge_check.py": "verity/protocols/resource_accounting/network/prover/charge_check.py"
+      }
     }
   ]
 }
