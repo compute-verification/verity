@@ -29,7 +29,7 @@ fail() { echo "FA3-TAP-FAIL $*"; exit 1; }
 log() { echo "[fa3_tap] $(date -u +%FT%TZ) $*"; }
 [ -x "$PY" ] || fail "no venv python at $PY"
 command -v nvcc >/dev/null || fail "nvcc not found (CUDA_HOME=$CUDA_HOME)"
-$PY -c "import ninja" 2>/dev/null || $PY -m pip install -q ninja || fail "ninja"
+command -v ninja >/dev/null || $PY -m pip install -q ninja || fail "ninja"
 mkdir -p "$FA2/trees" "$FA2/build" "$FA2/logs"
 if [ ! -d "$FA_SRC"/.git ]; then
   git clone -q https://github.com/vllm-project/flash-attention.git "$FA_SRC" || fail "clone vllm-flash-attn"
