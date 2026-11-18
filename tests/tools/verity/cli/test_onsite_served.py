@@ -872,6 +872,12 @@ def written(*components: str, composed: bool = False) -> str:
         f"{h} {T.AS_WRITTEN}" for h in ["the composed verdict"] * composed + sorted(components))
 
 
+#: what Pearl+'s row says on every line until its coin sessions' signature pin is in Lean
+COINS_UNCHECKED = "coins' signatures checked on the served node only; not checked by the auditor"
+#: what storage's, the wipe's and the bandwidth audit's rows say on every line: the memory attester's one table
+ATTESTER_UNCHECKED = "; ".join(mc.UNCHECKED.values())
+#: each row's end on every line, by component
+UNCHECKED_ENDS = {"pearl-plus": COINS_UNCHECKED, **dict.fromkeys(("pous", "wipe", "bandwidth"), ATTESTER_UNCHECKED)}
 #: the components of the rows `published` writes by default
 BASE = ("network-attester", "pearl-plus", "pous", "sampled-proofs", "wipe")
 #: a row's ``answer_from`` that is not `AS_WRITTEN`, which the serving node may write all the same: served_verdicts.py's
@@ -916,8 +922,29 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
     assert line["coins"] == "simulated" and line["reason"] == reason
     assert line["coins_on"] == {**{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe", "pearl-plus")},
                                 "sampled-proofs": T.GATE_HOST}
-    assert line["answer_from"] == {NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
-                                   for k in ("integrity", "work", "space", "communication", "wipe", *rows)}
+    assert line["answer_from"] == T.unchecked(PROTOCOLS, {NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
+                                   for k in ("integrity", "work", "space", "communication", "wipe", *rows)})
+    assert {c: s for c, s in line["answer_from"].items() if c in UNCHECKED_ENDS} == {
+        c: f"{T.AS_WRITTEN} (its piece files in {k}/); {UNCHECKED_ENDS[c]}"
+        for k, c in NAMES.items() if c in UNCHECKED_ENDS and k in ("work", "space", "wipe", *rows)}
+
+
+def test_an_empty_declared_mapping_says_nothing_and_an_entry_not_a_sentence_is_refused_by_name(monkeypatch) -> None:
+    pearl, get = T.schemes.get("pearl-plus"), T.schemes.get
+    stand_in = dataclasses.replace(pearl, unchecked={})
+    monkeypatch.setattr(T.schemes, "get", lambda n: stand_in if n == "pearl-plus" else get(n))
+    assert T.unchecked(["pearl-plus"], {"pearl-plus": T.AS_WRITTEN}) == {"pearl-plus": T.AS_WRITTEN}
+    assert T.unchecked(["pearl-plus"], {}) == {}
+    object.__setattr__(stand_in, "unchecked", {"coins-signatures-checked-by-the-auditor": 3})
+    with pytest.raises(ValueError, match="pearl-plus: unchecked entry 'coins-signatures-checked-by-the-auditor' is not a "
+                                         "sentence"):
+        T.unchecked(["pearl-plus"], {})
+
+
+def test_an_entry_the_launchers_record_says_already_is_said_once_on_the_line() -> None:
+    said = {"pearl-plus": f"{T.AS_WRITTEN} (its piece files in work/); {COINS_UNCHECKED}",
+            "pous": f"{T.AS_WRITTEN} (its piece files in space/); {ATTESTER_UNCHECKED}"}
+    assert {c: T.unchecked(PROTOCOLS, said)[c] for c in said} == said
 
 
 @pytest.mark.parametrize("source", NOT_WRITTEN)
@@ -930,7 +957,9 @@ def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
     (line,) = said(capsys.readouterr().out, "VERDICT")
     assert (line["verdict"], line["reason"]) == ("undecided", written(*PROTOCOLS, composed=True))
-    assert set(line["components"].values()) == {"undecided"} and set(line["answer_from"].values()) == {source}
+    assert set(line["components"].values()) == {"undecided"}
+    assert line["answer_from"] == {c: f"{source}; {UNCHECKED_ENDS[c]}" if c in UNCHECKED_ENDS else source
+                                   for c in line["answer_from"]}
 
 
 @pytest.mark.parametrize("rows, composed, lean, verdict, rc, reason", [
@@ -956,8 +985,8 @@ def test_without_the_placement_hold_the_onsite_line_is_the_record_as_the_workloa
                                   **{NAMES[k]: v for k, v in rows.items()}}
     assert line["coins"] == "simulated" and line["coins_on"] == {
         **{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe", "pearl-plus")}, "sampled-proofs": T.GATE_HOST}
-    assert set(line["answer_from"].values()) == {f"{T.AS_WRITTEN} (its piece files in {k}/)" for k in
-                                                 ("integrity", "work", "space", "communication", "wipe", *rows)}
+    assert line["answer_from"] == T.unchecked(PROTOCOLS, {NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)" for k in
+                                                          ("integrity", "work", "space", "communication", "wipe", *rows)})
 
 
 @pytest.mark.parametrize("left", [T.PHASE, "verdicts.json"])
