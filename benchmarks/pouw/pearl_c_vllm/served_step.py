@@ -125,20 +125,35 @@ def _patch_engine(llm) -> None:
         runner.sample_tokens = _timed(runner.sample_tokens, "sample")
 
 
-def _pearl_c(entry: str) -> bool:
-    """Whether a protocol entry ``name:scheme`` names a Pearl-C kernel (``pouw:pearl-c-*``)."""
-    return entry.startswith("pouw:pearl-c-")
+def kernel_scheme(entry: str):
+    """The PoUW kernel scheme (`verifier.kernel_schemes`) a protocol entry ``pouw:NAME`` names; None for another
+    protocol's entry or a compile-pass scheme (`prover.circuit.compile.SCHEMES`), and KeyError naming the entry when
+    ``NAME`` is neither."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import compile as C
+    from verity.protocols.resource_accounting.compute.pouw.verifier import kernel_schemes as KS
+
+    protocol, _, name = entry.partition(":")
+    if protocol != "pouw":
+        return None
+    if name in KS.BY_NAME:
+        return KS.BY_NAME[name]
+    try:
+        C._scheme(name)
+    except C.CompileError:
+        raise KeyError(f"{entry}: no PoUW kernel scheme ({', '.join(KS.BY_NAME)}) or compile-pass scheme "
+                       f"({', '.join(C.SCHEMES)}) is named {name!r}") from None
+    return None
 
 
 def undeclared(entries) -> str | None:
-    """Why a protocol arm of ``entries`` can't run: the first Pearl-C entry that isn't Pearl+'s option (`pouw.scheme`),
-    as the RTX PRO 6000's isn't, which no served path serves; None when there is none."""
+    """Why a protocol arm of ``entries`` can't run: the first kernel-scheme entry that isn't Pearl+'s option
+    (`pouw.scheme`), as the RTX PRO 6000's isn't, which no served path serves; None when there is none."""
     from verity.protocols.resource_accounting.compute.pouw.scheme import OPTION
 
     for e in entries:
-        if _pearl_c(e) and e != OPTION:
-            return (f"{e}: no declared scheme serves Pearl-C on that card, so no served arm runs it; its kernel's own "
-                    "benchmarks (bench_arm.py, e2e.py) run it directly")
+        if (k := kernel_scheme(e)) is not None and e != OPTION:
+            return (f"{e}: no declared scheme serves {k.family} kernel scheme {k.name}, so no served arm runs it; its "
+                    "kernel's own benchmarks (bench_arm.py, e2e.py) run it directly")
     return None
 
 
@@ -147,6 +162,7 @@ def _engine(spec_name: str, arm_id: str):
     from verity_bench.vllm.presets import load_spec, resolve_spec, served
     from verity_bench.vllm.engine import _VllmEngine, arm_execution
     from verity_vllm.engine.env import INDUCTOR_DIR_MARK
+    from verity.protocols.resource_accounting.compute.pouw.scheme import OPTION
     spec = load_spec(spec_name)
     preset, eager = served(resolve_spec(spec_name).preset, spec.eager)
     names = list(spec.arms) + ([arm_id] if arm_id not in spec.arms else [])
@@ -154,7 +170,7 @@ def _engine(spec_name: str, arm_id: str):
     arm = next(x for x in arms if x.id == arm_id)
     if why := undeclared(arm.protocols):
         raise SystemExit(f"served_step.py: {why}")
-    if settings.PEARLC_CHALLENGER_GATE and any(_pearl_c(e) for e in arm.protocols):
+    if settings.PEARLC_CHALLENGER_GATE and OPTION in arm.protocols:
         raise SystemExit("served_step.py: PEARLC_CHALLENGER_GATE is set, but an engine attaches Pearl+ with its coins "
                          "in-process and no challenger gate; unset it here, or serve a live session with served_passes.py serve")
     preset, eager = arm_execution(arm, preset, eager)

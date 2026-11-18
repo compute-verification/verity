@@ -31,7 +31,8 @@ from typing import Any
 from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover import serving, workload
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import runs_on
-from verity.protocols.resource_accounting.scheme import VERIFIER, Block, Charge, Lacks, Order, Scheme, Term, register
+from verity.protocol import VERIFIER
+from verity.protocols.resource_accounting.scheme import Block, Charge, Lacks, Order, Scheme, Term, register
 
 #: the kernel scheme it runs, on every card its row allows
 KERNEL = "pearl-c-h100-v1-h3"
