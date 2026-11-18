@@ -1877,16 +1877,29 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
     by: dict[str, list[Wire]] = {}
     for w in wires:
         by.setdefault(w.reader, []).append(w)
+    starts: dict[str, list[int]] = {}
+    for tid, _lo, own, _n in units.ranges:
+        starts.setdefault(tid, []).append(own)
+    segments: dict[str, tuple[list[int], list[tuple[int, int, list[Wire]]]]] = {}
+    for tid, (_lay, n) in lays.items():
+        mine = sorted(by.get(tid, ()), key=lambda w: w.at)
+        ends = sorted({0, n, *(x for w in mine for x in (w.at, w.at + w.reader_units)), *index.ends(tid), *starts.get(tid, ())})
+        live: list[Wire] = []
+        nxt, segs = 0, []
+        for a, b in zip(ends, ends[1:]):
+            live = [w for w in live if w.at + w.reader_units > a]
+            while nxt < len(mine) and mine[nxt].at <= a:
+                live.append(mine[nxt])
+                nxt += 1
+            segs.append((a, b, live))
+        segments[tid] = ([a for a, _b, _l in segs], segs)
     out, chunk = [], dict.fromkeys(lays, 0)
     for tid, lo, own, n in units.ranges:
         lay, kv = lays[tid][0], cuts.get(tid, {})
         rows = tuple((p, w) for p, w, _ in lay.cut(kv))
         schemas = tuple((p, SEG if p in (seg or {}).get(tid, ()) else V2) for p, _ in rows + lay.outs)
-        mine = sorted((w for w in by.get(tid, ()) if w.at < own + n and own < w.at + w.reader_units), key=lambda w: w.at)
-        ends = sorted({own, own + n, *(x for w in mine for x in (w.at, w.at + w.reader_units) if own < x < own + n),
-                       *(x for x in index.ends(tid) if own < x < own + n)})
-        for a, b in zip(ends, ends[1:]):
-            live = [w for w in mine if w.at <= a and a < w.at + w.reader_units]
+        firsts, segs = segments[tid]
+        for a, b, live in segs[bisect.bisect_left(firsts, own):bisect.bisect_left(firsts, own + n)]:
             for at in range(a, b, cap):
                 m = min(cap, b - at)
                 wired = tuple((row_name(w.port, r, int(kv.get(w.port, 1))), w.out,
