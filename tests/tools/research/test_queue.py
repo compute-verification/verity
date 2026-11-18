@@ -883,6 +883,32 @@ def test_a_merged_tree_whose_caller_names_no_root_goes_under_merged_root_not_tmp
     assert not list(fast.glob(f"{queue.MERGED_PREFIX}*")) and not list(tmp.iterdir())
 
 
+def test_a_merged_tree_survives_a_prune_of_the_clone_s_worktrees_while_a_build_uses_it(tmp_path, monkeypatch):
+    """A detached quick tier's or auto plan's `git worktree prune` takes no lock, and one racing a registered worktree's add
+    deleted part of its registration (its `gitdir`) and left the rest, which the next prune removed while the build still
+    used the tree (`git add -u`: gitfile does not point to a valid repository).  The tree is registered nowhere in the clone,
+    so neither step reaches it, and it leaves nothing behind."""
+    from research import queue
+
+    repo = tmp_path / "repo"
+    monkeypatch.setattr(queue, "MERGED_ROOT", tmp_path / "fast")
+    _git(tmp_path, "init", "-q", "-b", "main", str(repo))
+    (repo / "f.txt").write_text("x\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "f")
+    head = _git(repo, "rev-parse", "HEAD")
+    with queue.merged_worktree(repo, head) as wt:
+        for reg in (repo / ".git" / "worktrees").glob("*"):
+            (reg / "gitdir").unlink(missing_ok=True)
+        _git(repo, "worktree", "prune")
+        (wt / "f.txt").write_text("y\n")
+        _git(wt, "add", "-u")
+        assert _git(wt, "diff", "--cached", "--name-only", head) == "f.txt"
+        assert _git(repo, "cat-file", "-p", f"{_git(wt, 'write-tree')}:f.txt") == "y"
+        assert _git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1
+    assert not list((tmp_path / "fast").iterdir()) and _git(repo, "status", "--porcelain") == ""
+
+
 def _regeneration(world: World, ran: Path) -> tuple[Queue, str, PR]:
     """A queue's clone of a `main` holding stub move scripts: `rename.py` writes its working directory to ``ran`` and adds
     `moved.txt`, `move_check.py` certifies; (the queue, `main`, a move PR naming the map)."""
@@ -1048,40 +1074,6 @@ def test_a_pr_a_landing_gate_can_t_judge_waits_with_its_mark_and_merges_once_a_s
     assert [m.pr for m in members] == [1, 2, 3] == world.on_next(q) and q.load_state()["waiting"] == {}
 
 
-def test_a_member_merged_again_onto_the_tree_it_was_judged_on_takes_its_verdict_and_main_moving_judges_it_again(
-        world, monkeypatch):
-    """A lift merges every member above the lifted one again, each running the landing gates (~15 s), though those above where
-    it was have the same members below and so the same trees.  Their verdicts, a refusal too, are kept under `main` and the gates;
-    a new `main` judges every merge again."""
-    from research import queue as Q
-
-    main = _move_main(world, GATED)
-    real, judged = Q.gate_refusal, []
-
-    def gate_refusal(repo, m, merge, gates, onto, kind):
-        judged.append(int(_git(repo, "log", "-1", "--format=%s", merge).split("#")[1].split()[0]))
-        return real(repo, m, merge, gates, onto=onto, kind=kind)
-
-    monkeypatch.setattr(Q, "gate_refusal", gate_refusal)
-    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt"), (5, "bad.txt")):
-        world.gh.put(n, world.change({f: f"{n}\n"}))
-    q = world.queue()
-    members, entries = q.sync()
-    assert [m.pr for m in members] == [1, 2, 3, 4] and judged == [1, 2, 3, 4, 5] and entries[5].state == "refused"
-    judged.clear()
-    q.lift = [2]
-    lifted, entries = q.sync()
-    assert [m.pr for m in lifted] == [2, 1, 3, 4] and judged == [2, 1], judged
-    assert [_git(world.origin, "rev-parse", f"{m.commit}^{{tree}}") for m in lifted[2:]] == [
-        _git(world.origin, "rev-parse", f"{m.commit}^{{tree}}") for m in members[2:]]
-    assert entries[5].state == "refused" and entries[5].why == _gate_says(main, "touches bad.txt", merged=True)
-    assert world.logs[-1].endswith("kept 0, merged 4, merges reused for 3, gates' verdicts reused for 3"), world.logs[-1]
-    judged.clear()
-    _move_main(world, {"x.txt": "x\n"})
-    q.lift = []
-    assert [m.pr for m in q.sync()[0]] == [1, 2, 3, 4] and judged == [1, 2, 3, 4, 5]
-
-
 def _merge_trees(monkeypatch) -> list[str]:
     """The head of each `git merge-tree` the queue runs, from now on."""
     real, heads = Q._git, []
@@ -1124,17 +1116,12 @@ def test_a_member_merged_again_onto_the_same_tree_takes_its_recorded_merge_and_s
     assert _trees(world, rebuilt) == _trees(world, members) and _git(world.origin, "rev-parse", f"{rebuilt[0].commit}^1") == moved
 
 
-def test_a_merge_is_made_again_when_its_head_its_parents_tree_or_the_drivers_change_and_judged_again_when_the_gates_do(
-        world, monkeypatch):
+def test_a_merge_is_made_again_when_its_head_its_parents_tree_or_the_drivers_change(world, monkeypatch):
     """A merge record stands only for what it read: a new head, a parent tree that changed (`main` moved under `next`) or a
-    merge driver's command each merge again; a merge taken from its record with the gates changed is judged again, as the
-    gates' verdicts are kept only under `main` and its gates."""
+    merge driver's command each merge again."""
     from research import clone
 
-    _move_main(world, {**GATED, "gates/h.py": "import sys\nsys.exit(0)\n"})
-    real, judged = Q.gate_refusal, []
-    monkeypatch.setattr(Q, "gate_refusal", lambda repo, m, merge, gates, onto, kind: judged.append(merge) or real(
-        repo, m, merge, gates, onto=onto, kind=kind))
+    _move_main(world, GATED)
     world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
     world.gh.put(2, world.change({"b.txt": "2\n"}))
     world.queue().sync()
@@ -1149,14 +1136,8 @@ def test_a_merge_is_made_again_when_its_head_its_parents_tree_or_the_drivers_cha
     _git(world.origin, "update-ref", "-d", "refs/heads/next")
     assert [m.pr for m in world.queue().sync()[0]] == [1, 2] and calls == [h1, h2]
     calls.clear()
-    judged.clear()
     _git(world.origin, "update-ref", "-d", "refs/heads/next")
-    assert [m.pr for m in world.queue().sync()[0]] == [1, 2] and calls == [] and judged == []
-    monkeypatch.setattr(Q, "gates_at", lambda repo, ref, key="landing_gates": ("gates/g.py", "gates/h.py")
-                        if key == "landing_gates" else ())
-    _git(world.origin, "update-ref", "-d", "refs/heads/next")
-    members, _ = world.queue().sync()
-    assert [m.pr for m in members] == [1, 2] and calls == [] and judged == [m.commit for m in members]
+    assert [m.pr for m in world.queue().sync()[0]] == [1, 2] and calls == []
 
 
 def test_a_recorded_conflict_stays_a_conflict_onto_its_tree_and_the_member_merges_afresh_onto_another(world, monkeypatch):

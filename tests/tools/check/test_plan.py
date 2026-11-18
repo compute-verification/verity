@@ -146,7 +146,8 @@ def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads
 
 def test_a_job_off_the_merge_gate_is_planned_and_required_of_no_check(P, tmp_path):
     """circuit-check, ratchet-gate and added-lines are off the merge gate (policy.toml's `off_gate`): their parts are listed, none
-    required, so a commit whose targets no check passed is planned as one only its gated parts hold back."""
+    required, so a commit whose targets no check passed is planned as one only its gated parts hold back.  landing-gates gates
+    each candidate's change from its base, not a tree, so it is listed with no verdict and required of no tree."""
     root = tmp_path / "tree"
     _tree(root)
     parts = P.plan_tree(root, [], False, circuit=lambda C, s: [P.Part("circuit-check:t", "circuit-check", "v1/k", "must-run")])
@@ -154,7 +155,8 @@ def test_a_job_off_the_merge_gate_is_planned_and_required_of_no_check(P, tmp_pat
     by = {p["part"]: p for p in doc["parts"]}
     assert by["circuit-check:t"]["state"] == "must-run" and by["circuit-check:t"]["required"] is False
     assert by["ratchet-gate"]["required"] is False and by["added-lines"]["required"] is False
-    off = ("circuit-check:t", "ratchet-gate", "added-lines", "lean-agreement")
+    assert (by["landing-gates"]["state"], by["landing-gates"]["required"]) == ("no-verdict", False)
+    off = ("circuit-check:t", "ratchet-gate", "added-lines", "landing-gates", "lean-agreement")
     assert all(p.get("required", True) for n, p in by.items() if n not in off)
 
 
