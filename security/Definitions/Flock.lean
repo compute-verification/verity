@@ -13,6 +13,7 @@ public import Definitions.Flock.Merkle
 public import Definitions.Flock.MerklePair
 public import Definitions.Flock.Circuit
 public import Definitions.Flock.Audit.SamplingDesign
+public import Definitions.Flock.Audit.Levels
 public import Definitions.Flock.Defs
 public import Definitions.Flock.Extract
 public import Definitions.Flock.Audit.Harm
