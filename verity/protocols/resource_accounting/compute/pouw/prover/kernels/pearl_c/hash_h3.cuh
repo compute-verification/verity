@@ -2,7 +2,7 @@
 // labels' H_l = `pearl_c.s512`, SHA-512 after a 128-byte label block, its first 32 bytes (the labels keep their `pearl-c/h3s/`
 // bytes, `pearl_c.S512_LABELS`); A's row digests (`s512_rows`) and the tile leaf, `sha512/row-seg/v1` over each row and over
 // the tile's messages; the trees `audit.HM96`: frame-v3-sha512 (`verity.commitments.merkle`, hash="sha512") over
-// hm96-sha512 leaves (`audit.Hm96Domain`, `verity.commitments.hm96.SHA512`) salted by ChaCha20 (`audit.hm96_salt`).
+// hm96-sha512 leaves (`audit.Hm96Domain`, `verity.commitments.hm96.SHA512`), each leaf's salt read from the caller's buffer.
 // Every SHA-512 word is big-endian; buffers hold bytes, loaded as little-endian u32 (`rs_be64`).  A frame message's integers
 // have minimal big-endian lengths, so each thread assembles it in its own slice of shared memory (`SMsg`), never in a local
 // array.  SHA-512's compression is sha512.cuh's; the frame messages and the hm96 leaf are verity/commitments/cuda/row_commit.cuh's
@@ -382,49 +382,33 @@ extern "C" __global__ void __launch_bounds__(64) s512_tree_small(const Args a) {
 }
 
 // ---------------------------------------------------------------- hm96-sha512 leaves (`audit.Hm96Domain.leaf`)
-// ChaCha20's block, 20 rounds, a 64-bit counter (words 12, 13) and a 64-bit nonce (words 14, 15): `audit.chacha20_block`
-#define H3S_QR(a, b, c, d)                                                                         \
-  {                                                                                                \
-    a += b; d = __funnelshift_l(d ^ a, d ^ a, 16); c += d; b = __funnelshift_l(b ^ c, b ^ c, 12);  \
-    a += b; d = __funnelshift_l(d ^ a, d ^ a, 8); c += d; b = __funnelshift_l(b ^ c, b ^ c, 7);    \
+constexpr int HM_SALT = 192;   // a leaf's salt in bytes (`hm96.SHA512.salt_bytes`)
+// leaf i's salt y_i as its 48 little-endian u32: the 192 bytes at salts + 192 i, byte n of the salt at offset n, in twelve
+// 16-byte loads (the buffer is 16-byte aligned).  The caller's bytes; a leaf kernel derives none
+DEV void load_salt(uint64_t salts, uint64_t i, uint32_t* y) {
+  const uint4* s = reinterpret_cast<const uint4*>(salts + HM_SALT * i);
+#pragma unroll
+  for (int q = 0; q < HM_SALT / 16; q++) {
+    const uint4 v = s[q];
+    y[4 * q] = v.x; y[4 * q + 1] = v.y; y[4 * q + 2] = v.z; y[4 * q + 3] = v.w;
   }
-DEV void chacha20_block(const uint32_t* key, uint64_t counter, uint64_t nonce, uint32_t* out) {
-  uint32_t x[16];
-  x[0] = 0x61707865u; x[1] = 0x3320646eu; x[2] = 0x79622d32u; x[3] = 0x6b206574u;
-#pragma unroll
-  for (int i = 0; i < 8; i++) x[4 + i] = key[i];
-  x[12] = (uint32_t)counter; x[13] = (uint32_t)(counter >> 32); x[14] = (uint32_t)nonce; x[15] = (uint32_t)(nonce >> 32);
-#pragma unroll
-  for (int r = 0; r < 10; r++) {
-    H3S_QR(x[0], x[4], x[8], x[12]); H3S_QR(x[1], x[5], x[9], x[13]); H3S_QR(x[2], x[6], x[10], x[14]); H3S_QR(x[3], x[7], x[11], x[15]);
-    H3S_QR(x[0], x[5], x[10], x[15]); H3S_QR(x[1], x[6], x[11], x[12]); H3S_QR(x[2], x[7], x[8], x[13]); H3S_QR(x[3], x[4], x[9], x[14]);
-  }
-  out[0] = x[0] + 0x61707865u; out[1] = x[1] + 0x3320646eu; out[2] = x[2] + 0x79622d32u; out[3] = x[3] + 0x6b206574u;
-#pragma unroll
-  for (int i = 0; i < 8; i++) out[4 + i] = x[4 + i] + key[i];
-  out[12] = x[12] + (uint32_t)counter; out[13] = x[13] + (uint32_t)(counter >> 32);
-  out[14] = x[14] + (uint32_t)nonce; out[15] = x[15] + (uint32_t)(nonce >> 32);
 }
 DEV uint64_t rs_bswap64(uint64_t v) { return rs_be64((uint32_t)v, (uint32_t)(v >> 32)); }
 
 // the inner leaves of an `audit.HM96` tree (Flock's ``launch_hm96_finish``): leaf i < i0 over x_i (p0 + 64 i: a row's
-// sha512/row-seg/v1 digest, or a tile leaf) and its salt y_i = `audit.hm96_salt`(key, nonce, i): b = x ⊕ M·y (the byte
-// tables), c = SHA-512(salt prefix ‖ y), hl = SHA-512(leaf prefix ‖ b ‖ c); s512_frame_leaves makes hl the frame leaf.  p0 x,
-// p1 out (64 B a leaf, hl), p2 the salt key (32 B), p3 `audit.hm96_kernel_constants` (the prefixes' midstates, 8 u64 each,
-// then the byte tables, [192][256] entries of 64 B little-endian), p5 0 or the address of the nonce (u64 LE: an activation
-// tree's unit index, in the unit block); i0 leaves, i1 and i2 the nonce's low and high 32 bits (when p5 is 0).  The salt
-// stays in registers, unrolled, so the table rows' loads are independent.
+// sha512/row-seg/v1 digest, or a tile leaf) and its salt y_i (p2 + 192 i, `load_salt`): b = x ⊕ M·y (the byte tables),
+// c = SHA-512(salt prefix ‖ y), hl = SHA-512(leaf prefix ‖ b ‖ c); s512_frame_leaves makes hl the frame leaf.  p0 x, p1 out
+// (64 B a leaf, hl), p2 the salts (192 B a leaf, in leaf order, the caller's: fresh bytes, or a registered row's from its
+// file), p3 `audit.hm96_kernel_constants` (the prefixes' midstates, 8 u64 each, then the byte tables, [192][256] entries of
+// 64 B little-endian); i0 leaves.  The salt is loaded whole into registers before any table row, so the table rows' loads
+// are independent.
 extern "C" __global__ void __launch_bounds__(64) hm_leaves(const Args a) {
   const uint64_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= (uint64_t)a.i[0]) return;
-  const uint64_t nonce = a.p[5] ? *reinterpret_cast<const uint64_t*>(a.p[5])
-                                : (uint64_t)(uint32_t)a.i[1] | (uint64_t)(uint32_t)a.i[2] << 32;
   const uint64_t* mid = reinterpret_cast<const uint64_t*>(a.p[3]);
   const uint64_t* tables = reinterpret_cast<const uint64_t*>(a.p[3] + 128);
-  uint32_t key[8], y[48], mk[16];
-  load_key(a.p[2], key);
-#pragma unroll
-  for (int j = 0; j < 3; j++) chacha20_block(key, 3 * i + j, nonce, y + 16 * j);
+  uint32_t y[48], mk[16];
+  load_salt(a.p[2], i, y);
   rc::mask_positions(rc::PosTab<false>{reinterpret_cast<const uint8_t*>(tables)}, y, mk);
   const uint32_t* x = reinterpret_cast<const uint32_t*>(a.p[0] + 64 * i);
   uint64_t B[16], h[8];

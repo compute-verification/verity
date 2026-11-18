@@ -176,7 +176,7 @@ class _Specs:
 
     def linear(self, K: int, N: int):
         """A decoder linear's kind: the GEMM, or under the int8 linears (`rules.vllm_bindings.int8`) its quantizer and product,
-        `(Int8RowQuant_v1{K}, ScaledMmS8_v1{K,N,DOT})`."""
+        `(Int8RowQuant_v1{K}, ScaledMmS8_v3{K,N,DOT})`."""
         if not self.C.int8:
             return self.gemm(K, N)
         return self.kind("int8_row_quant", K=K), self.kind("int8_scaled_mm", K=K, N=N)

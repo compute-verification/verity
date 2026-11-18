@@ -83,18 +83,35 @@ class Int8RowQuantRule(OpRule):
 
 class Int8ScaledMmRule(OpRule):
     """`verity_int8::scaled_mm(xq s8 [M, K], s_a f32 [M], w int8 [N, K], s_w f32 [N, 1] or [N]) -> y bf16 [M, N]` -> per token row
-    `int8_scaled_mm{K,N}` (ScaledMmS8_v1, ScaledMmS8Coordinate_v1 per output), so the query of record cuts one coordinate of the
-    product instead of its whole fan-in."""
+    `int8_scaled_mm{K,N}` (ScaledMmS8_v3, ScaledMmS8Coordinate_v1 per output), so the query of record cuts one coordinate of the
+    product instead of its whole fan-in; w and s_w are the `weights` record's u16 words they are registered as (`weight_types`)."""
     modes = frozenset({"profile"})
     info = RuleInfo("Int8ScaledMm[vllm]", 1, "op-binding",
                     applies_to="verity_int8::scaled_mm(Tensor xq, Tensor s_a, Tensor w, Tensor s_w) -> Tensor",
                     preconditions=("xq is an int8 value [M, K], s_a a float32 value [M]", "w is an int8 parameter [N, K]",
                                    "s_w is a float32 parameter [N, 1] or [N]"),
-                    evidence_domain="structural; numerics: Int8RowQuant_v1 + ScaledMmS8_v1 = Int8Linear_v1 (engine.int8_exact's plain linear, bit-equal on the RTX PRO 6000 "
+                    evidence_domain="structural; numerics: Int8RowQuant_v1 + ScaledMmS8_v3 = Int8Linear_v3 (engine.int8_exact's plain linear, bit-equal on the RTX PRO 6000 "
                                     "to its CPU run)")
 
     def targets(self):
         return _int8_op("scaled_mm")
+
+    def weight_types(self, ep, mode):
+        out = {}
+        params = ep.graph_signature.inputs_to_parameters
+        for n in ep.graph.nodes:
+            if n.op != "call_function" or n.target not in self.targets() or len(n.args) != 4:
+                continue
+            w, sw = n.args[2], n.args[3]
+            wv, sv = (getattr(a, "meta", {}).get("val") for a in (w, sw))
+            if not (isinstance(wv, torch.Tensor) and isinstance(sv, torch.Tensor) and w.name in params and sw.name in params):
+                continue
+            if wv.dtype == torch.int8 and wv.dim() == 2 and wv.shape[1] % 2 == 0 and sv.dtype == torch.float32 \
+                    and sv.numel() == wv.shape[0]:
+                N, K = (int(d) for d in wv.shape)
+                out[params[w.name]] = Array(N, Array(K // 2, Value(16)))
+                out[params[sw.name]] = Array(N, Array(2, Value(16)))
+        return out
 
     def applies(self, node, ctx):
         if len(node.args) != 4:
@@ -115,9 +132,12 @@ class Int8ScaledMmRule(OpRule):
         if xs[1] % 32:
             return f"shape: K={xs[1]}; ScaledMmS8Coordinate_v1 takes K a multiple of 32 (its IMMA k step)"
         if not dtype_is(ctx, w, torch.int8) or not dtype_is(ctx, sw, torch.float32):
-            return f"numerics_unregistered: w {ctx.dtype_of(w)}, s_w {ctx.dtype_of(sw)}; Int8Linear_v1 reads int8 weights and float32 scales"
+            return f"numerics_unregistered: w {ctx.dtype_of(w)}, s_w {ctx.dtype_of(sw)}; Int8Linear_v3 reads int8 weights and float32 scales"
         if ctx.weight_of(w) is None or ctx.weight_of(sw) is None:
-            return "w / s_w are not parameters; Int8Linear_v1 takes the checkpoint's int8 rows and their scales as weight Inputs"
+            return "w / s_w are not parameters; Int8Linear_v3 takes the checkpoint's int8 rows and their scales as weight Inputs"
+        N, K = ws
+        if (ctx.coll(w).type, ctx.coll(sw).type) != (Array(N, Array(K // 2, Value(16))), Array(N, Array(2, Value(16)))):
+            return "w / s_w are not read whole as the u16 words they are registered as (a view of a parameter, not the parameter)"
         return True
 
     def emit(self, node, ctx):
@@ -125,7 +145,7 @@ class Int8ScaledMmRule(OpRule):
         N, K = known(shape(ctx, w))
         rows, lead = rows_of(ctx.coll(xq))
         scales = ctx.coll(sa).reshape(Array(len(rows), Value(32)))
-        wc, sc = ctx.coll(w), ctx.coll(sw).reshape(Array(N, Value(32)))
+        wc, sc = ctx.coll(w), ctx.coll(sw)
         fm = ctx.kind("int8_scaled_mm", node, K=K, N=N)
         hint = ctx.hint_name(node)
         ys = [ctx.call(fm, r, scales[i], wc, sc, node=node, rule=self, name=f"{hint}[{i}]") for i, r in enumerate(rows)]

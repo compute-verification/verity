@@ -5,9 +5,11 @@ root; the two ranks are distinct values under fresh salts; and a registration's 
 window's committer reads (`records.expert_tables`, `expert_rows.of_request`)."""
 from __future__ import annotations
 
+import ast
 import gzip
 import hashlib
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -160,27 +162,36 @@ def test_registered_entries_are_the_committers(ckpt, regs, salts):
         assert {p: r.entry() for p, r in got.items()} == doc["values"]
 
 
-def test_a_table_served_otherwise_has_another_root(ckpt, regs, salts):
-    """One byte of one expert's row changed changes exactly that row's table root."""
+def _refused(e) -> list[str]:
+    """The tables a refusal names, held to name no root."""
+    msg = str(e.value)
+    assert msg.startswith("tables refused, nothing of them published: ") and not re.search(r"[0-9a-f]{128}", msg)
+    return ast.literal_eval(msg.split("published: ", 1)[1].split("]", 1)[0] + "]")
+
+
+def test_a_window_serving_a_table_otherwise_is_refused_by_its_name_publishing_nothing(ckpt, regs, salts):
+    """One byte of one expert's row changed changes exactly that row's table root, so the window's tables are refused, naming
+    that table alone and no root."""
     served = _served(ckpt, 1)
     f = WRAP + "model.layers.2.mlp.experts.w13_weight"
     served[f] = served[f].copy()
     served[f][5, 7, 3] ^= 1
-    got = {p: r.entry()["root"] for p, r in _commit(served, regs[1], salts[1]).items()}
-    changed = sorted(p for p, root in got.items() if root != regs[1]["values"][p]["root"])
-    assert changed == [ER.table_param(f, BLOCKS["w13"] * H // 2, 7 // BLOCKS["w13"])]
+    with pytest.raises(ValueError) as e:
+        _commit(served, regs[1], salts[1])
+    assert _refused(e) == [ER.table_param(f, BLOCKS["w13"] * H // 2, 7 // BLOCKS["w13"])]
 
 
 def test_ranks_are_distinct_values_under_their_own_fresh_salts(ckpt, regs, salts):
     """The two ranks' tables are registered under distinct programs, each table under salts of its own, 192 bytes a row, and
-    committed under another registration's salts each takes another root."""
+    committed under another registration's salts each takes another root, so every one is refused."""
     assert regs[0]["program"] != regs[1]["program"]
     assert SF.params(salts[0]) == {p: e["leaves"] for p, e in regs[0]["values"].items()}
     rows = [SF.read(s, p)[i:i + SF.SALT_BYTES] for s in salts for p in SF.params(s)
             for i in range(0, len(SF.read(s, p)), SF.SALT_BYTES)]
     assert len(set(rows)) == len(rows)
-    got = _commit(_served(ckpt, 0), regs[0], salts[1])
-    assert all(r.entry()["root"] != regs[0]["values"][p]["root"] for p, r in got.items())
+    with pytest.raises(ValueError) as e:
+        _commit(_served(ckpt, 0), regs[0], salts[1])
+    assert _refused(e) == sorted(regs[0]["values"])
 
 
 def test_stacks_and_refusals(ckpt, regs, tmp_path):
@@ -267,7 +278,7 @@ def test_of_request_reads_the_ranks_file_and_the_salts_beside_it(tmp_path, regs,
         shutil.copytree(salts[doc["rank"]], tmp_path / f"tables{doc['rank']}.salts")
     spec = {"registration": str(tmp_path / "tables{rank}.json")}
     assert ER.of_request(spec, rank=1) == {"salts": tmp_path / "tables1.salts", "program": regs[1]["program"],
-                                           "values": frozenset(regs[1]["values"])}
+                                           "roots": {p: e["root"] for p, e in regs[1]["values"].items()}}
     (tmp_path / "tables0.json").write_text(json.dumps(regs[1]))
     with pytest.raises(ValueError, match="of rank 1, not of rank 0"):
         ER.of_request(spec, rank=0)
@@ -340,7 +351,8 @@ def test_a_weight_in_bnk_order_is_one_value_committed_once_a_process(ckpt, regs,
     """``bnk`` registers a ``(B, K, N)`` weight in (B, N, K) order beside the stacks' tables, whose entries stay theirs: one
     ``row/v2`` value of B N rows of K words, row
     b N + n the weight's words [b, :, n].  A window's committer commits it once a process (`expert_rows.commit_bnk`) at the
-    registered root; a registration without it and a weight that is not three dimensions refuse."""
+    registered root, and refuses another value's without holding it; a registration without it and a weight that is not three
+    dimensions refuse."""
     monkeypatch.setattr(ER, "_BNK", {})
     B, K, N = BKN
     param = ER.bnk_param(ABSORB, K)
@@ -357,6 +369,11 @@ def test_a_weight_in_bnk_order_is_one_value_committed_once_a_process(ckpt, regs,
         reads.append(1)
         return field
 
+    forged = field.copy()
+    forged[0, 0, 0] ^= 1
+    with pytest.raises(ValueError) as e:
+        ER.commit_bnk(com, ABSORB, K, lambda: forged)
+    assert _refused(e) == [param] and not ER._BNK
     got = ER.commit_bnk(com, ABSORB, K, served)
     assert got.entry() == doc["values"][param] and ER.commit_bnk(com, ABSORB, K, served) is got and len(reads) == 1
     assert all(np.array_equal(got.rows.at([b * N + n])[0], field[b, :, n]) for b in range(B) for n in range(N))

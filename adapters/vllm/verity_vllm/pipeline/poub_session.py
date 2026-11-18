@@ -1,25 +1,30 @@
-"""The Commit's PoUB session (``--remote-verifier HOST:PORT``, `store.remote.CommitSession`), from its
-``--remote-*`` options to its lines in the Commit's record: the audited run's row entry, the verdict's
-``poub_session`` and the Commit's last line, whose rejection fails the Commit (`pipeline.commit.main`).  PoUB's driver is
-imported by name (`protocols.driver`), so a tree without it refuses ``--remote-verifier`` (`Refused`) before anything runs."""
+"""The Commit's PoUB session (``--remote-verifier HOST:PORT``), from its ``--remote-*`` options to its lines in the Commit's
+record: the audited run's row entry, the verdict's ``poub_session`` and the Commit's last line, whose rejection fails the
+Commit (`pipeline.commit.main`).  The session is the process registered as `SESSION` (`scheme.PROCESSES`, once every
+declaration is loaded), so this package imports no PoUB code."""
 from __future__ import annotations
 
 from typing import Any
 
-from verity_vllm import protocols
+from verity.protocols.compose import schemes as declarations
+from verity.protocols.resource_accounting import scheme
 
-#: the PoUB driver's name in `protocols.DRIVERS`
-POUB = "poub"
+#: the process a PoUB scheme starts beside the Commit's engine
+SESSION = "poub-session"
 
 
 def commit_session(opts: Any, out: Any, kv_pages: int | None) -> Any:
-    """The session (`remote.CommitSession`) of ``opts``' ``--remote-*`` options (`pipeline.commit.Options`'s, or serve-openai's
-    `serve_poub.RemoteOptions`), its KV pool at ``kv_pages`` pages (None: the engine's own) and its record under ``out``."""
-    remote = protocols.driver(POUB, "remote")
-    return remote.CommitSession(opts.remote_verifier, plan=opts.remote_plan, kv_pages=kv_pages,
-                                weight_blocks=opts.remote_weight_blocks, kv_lib=opts.remote_kv_lib,
-                                out=out, node=opts.remote_node, step_ms=opts.remote_step_ms,
-                                filler_gib=opts.remote_filler_gib, log=lambda m: print(m, flush=True))
+    """The session (`SESSION`) of ``opts``' ``--remote-*`` options (`pipeline.commit.Options`'s, or serve-openai's
+    `serve_poub.RemoteOptions`), its KV pool at ``kv_pages`` pages (None: the engine's own) and its record under ``out``;
+    `NotImplementedError` until a scheme registers it."""
+    declarations.load()
+    if (start := scheme.PROCESSES.get(SESSION)) is None:
+        raise NotImplementedError(f"vllm/adapter-imports-no-protocol: memory-accounting registers the Commit's PoUB session "
+                                  f"as process {SESSION!r} (Scheme.processes); no scheme has")
+    return start(opts.remote_verifier, plan=opts.remote_plan, kv_pages=kv_pages,
+                 weight_blocks=opts.remote_weight_blocks, kv_lib=opts.remote_kv_lib,
+                 out=out, node=opts.remote_node, step_ms=opts.remote_step_ms,
+                 filler_gib=opts.remote_filler_gib, log=lambda m: print(m, flush=True))
 
 
 def session_of(args: Any) -> Any | None:

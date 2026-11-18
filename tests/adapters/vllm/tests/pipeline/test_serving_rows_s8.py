@@ -1,6 +1,6 @@
-"""The serving rows of an int8 row (`pipeline.serving_rows`): a ``ScaledMmS8_v1`` Program row is cut into its N
+"""The serving rows of an int8 row (`pipeline.serving_rows`): a ``ScaledMmS8_v3`` Program row is cut into its N
 ``ScaledMmS8Coordinate_v1`` instances (A6's template id, the word of the Boolean ``ScaledMmS8Coordinate_v2``), each template's units are consecutive chunks of at most its chunk cap,
-each coordinate's rows are A6's bit rows read off the row's operands, and a word partition is never the window's."""
+each coordinate's rows are A6's bit rows read off the row's operands (W and s_w their registered u16 words), and a word partition is never the window's."""
 
 from __future__ import annotations
 
@@ -26,15 +26,16 @@ def bcoord(k: int) -> str:
 
 
 def row(i: int, n: int, op: str = "model.model.layers.0.self_attn.qkv_proj", token: int = 0, step: int = 0) -> SRW.Row:
-    spec = f"ScaledMmS8_v1{{K={K},N={n},DOT={DOT}}}"
-    r = {"i": i, "spec": spec, "args": [[["n", token, 0, K]], [["n", token, K, K + 1]], [["p", 0, 0, n * K]], [["p", 0, n * K, n * K + n]]]}
+    spec = f"ScaledMmS8_v3{{K={K},N={n},DOT={DOT}}}"
+    w = n * K // 2
+    r = {"i": i, "spec": spec, "args": [[["n", token, 0, K]], [["n", token, K, K + 1]], [["p", 0, 0, w]], [["p", 0, w, w + 2 * n]]]}
     d = {"statics": {"K": K, "N": n}, "op_path": op, "members": [("y", n, "bf16")], "row": token, "step": step}
     return ("r0", None, r, d)
 
 
 def test_a_scaled_mm_row_is_cut_into_a6s_coordinate_template():
-    hits = SRW.unit_templates(f"ScaledMmS8_v1{{K=4096,N=6144,DOT={DOT}}}")
-    assert hits[1:] == ((coord(4096), 6144),)
+    hits = SRW.unit_templates(f"ScaledMmS8_v3{{K=4096,N=6144,DOT={DOT}}}")
+    assert hits[-1] == (coord(4096), 6144) and [t for t, _n in hits].count(coord(4096)) == 1
     assert coord(4096) == P.template_id(bind(OG.ScaledMmS8Coordinate, K=4096, **OG.GEMM_SM120_S8))
     assert [(SRW.template(t).word, SRW.template(t).layout) for t in (coord(4096), bcoord(4096))] == [(coord(4096), "s8")] * 2
 
@@ -71,7 +72,7 @@ def test_a_coordinate_reads_a6s_rows_off_the_rows_operands(monkeypatch):
     def operand(_pi, _store, _w, _rid, _arrive, group):
         r = next(x for x in rows if group in x[2]["args"])
         t = rows.index(r)
-        return [toks[t].view(np.uint8), sx[t], W.reshape(-1).view(np.uint8), sw][r[2]["args"].index(group)]
+        return [toks[t].view(np.uint8), sx[t], W.reshape(-1).view("<u2"), sw.astype("<u4").view("<u2")][r[2]["args"].index(group)]
 
     class Store:
         def words(self, _rid, _step, _op, _member, lo, hi):

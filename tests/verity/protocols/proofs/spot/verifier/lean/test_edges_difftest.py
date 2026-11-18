@@ -91,6 +91,8 @@ CASES = [
                 _wire(TA, TB, "o0", 2, 0)]}),
     ("an argument over the parts bound", _of(ARR, b_refs=lambda a, a2: _affine((a, 0, 2), (a, 2, 1), (a, 3, 1))),
      {"refusal": "edge-parts"}),
+    ("an explicit read of a node that is no input node",
+     _of(ARR, b_refs=lambda a, a2: {"explicit": [["n", a, i] for i in range(4)]}), {"refusal": "edge-rows"}),
     ("a read of a later node", _of(ARR, b_refs=lambda a, a2: {"affine": ["n", a2, 0, 4]}), {"refusal": "not-topological"}),
     ("a cut port's rows", _of(TUP, cuts={UA: {"x": 2}, UB: {"x": 2}}),
      {"wires": [_wire(UB, UA, "o0", 0, 0, 0), _wire(UB, UA, "o1", 0, 0, 1),

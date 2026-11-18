@@ -2,7 +2,7 @@
 the int8 ops are folded into (`observe.fold.patterns.int8`):
 
     Int8RowQuant_v1{K}                (x: bf16[K]) -> (codes s8[K], s f32)                    verity_int8::row_quant
-    ScaledMmS8_v1{K,N,DOT}            (x: s8[K], sx: f32, w: s8[N][K], sw: f32[N]) -> bf16[N]   verity_int8::scaled_mm
+    ScaledMmS8_v3{K,N,DOT}            (x: s8[K], sx: f32, w: u16[N][K/2], sw: u16[N][2]) -> bf16[N]   verity_int8::scaled_mm
     Int8KvQuant_v1{S,D}               (k, v: bf16[S][D], sk: f32) -> (K', V' s8[S][D], s_v, f32(V'_0) f32[D])   kv_quant(_window)_batch
     Int8LutAttentionRow_v1{D,S,SCALE} (q: bf16[D], K': s8[S][D], sk: f32, V': s8[S][D], s_v, v0: f32[D]) -> bf16[D]   window_rows_batch
 
@@ -23,12 +23,12 @@ import numpy as np
 from verity_vllm.definitions.numerics.kernel_registry import Declined, prim_static
 
 FAMILY = "Int8RowQuant_v1"
-SCALED_MM, KV_QUANT, ATTENTION_ROW = "ScaledMmS8_v1", "Int8KvQuant_v1", "Int8LutAttentionRow_v1"
+SCALED_MM, KV_QUANT, ATTENTION_ROW = "ScaledMmS8_v3", "Int8KvQuant_v1", "Int8LutAttentionRow_v1"
 DOT = "BlackwellS8ImmaDot32_v1"
 EVALUATORS = {
     FAMILY: "verity_vllm.definitions.numerics.int8_rows.int8_row_quant_rows (Int8RowQuant_v1{K}: the row's f32 |x| max from +0 floored at "
             "RN32(1e-30), one div.rn by 127, then rint(x / s) clamped to [-127, 127] per code; registry.int8_exact)",
-    SCALED_MM: "verity_vllm.definitions.numerics.int8_rows.scaled_mm (ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}: K/32 satfinite s8 "
+    SCALED_MM: "verity_vllm.definitions.numerics.int8_rows.scaled_mm (ScaledMmS8_v3{K,N,DOT=BlackwellS8ImmaDot32_v1}: W and s_w as their u16 words, K/32 satfinite s8 "
                "steps from 0 per coordinate, cvt.rn.f32.s32, RN32 by the token's scale, then by the channel's, cvt.rn.bf16.f32; "
                "ml.circuits.ops.gemm.ScaledMmS8Coordinate_v1)",
     KV_QUANT: "verity_vllm.definitions.numerics.int8_rows.kv_quant (Int8KvQuant_v1{S,D}: K' each key under the KV head's K scale, V' "
@@ -52,6 +52,14 @@ def _u32(w: Any, n: int, what: str) -> np.ndarray:
     if a.size != n:
         raise ValueError(f"{what} has {a.size} words, the signature has {n}")
     return a
+
+
+def _words(w: Any, n: int, what: str) -> np.ndarray:
+    """``n`` u16 words' bytes, each word's low byte first."""
+    a = np.asarray(w, dtype=np.uint16).reshape(-1)
+    if a.size != n:
+        raise ValueError(f"{what} has {a.size} words, the signature has {n}")
+    return a.astype("<u2").view(np.uint8)
 
 
 def _codes(q: np.ndarray) -> np.ndarray:
@@ -130,8 +138,8 @@ def scaled_mm(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, n
     if len(ops) != 4:
         raise Declined(f"{SCALED_MM}: the row wires {len(ops)} args, the Definition takes 4 (x, sx, w, sw)")
     K, N = int(statics["K"]), int(statics["N"])
-    x, w = _s8(ops[0]).reshape(K), _s8(ops[2]).reshape(N, K)
-    sx, sw = _u32(ops[1], 1, "sx"), _u32(ops[3], N, "sw")
+    x, w = _s8(ops[0]).reshape(K), _s8(_words(ops[2], N * K // 2, "w")).reshape(N, K)
+    sx, sw = _u32(ops[1], 1, "sx"), _words(ops[3], 2 * N, "sw").view("<u4").astype(np.uint32)
     with np.errstate(all="ignore"):
         y = D.mul_rn(D.mul_rn(_s32_to_f32(s8_chain(x, w)), np.broadcast_to(sx, (N,))), sw)
     out = D.f2fp_bf16(y)
@@ -211,7 +219,7 @@ def check_targets(family: str = FAMILY) -> list:
     from verity_vllm.definitions.registry import int8_exact as X
     return {
         FAMILY: lambda: [bind(X.Int8RowQuant, K=k) for k in (1, 8, 33)],
-        SCALED_MM: lambda: [bind(gemm.ScaledMmS8, K=k, N=n, **gemm.GEMM_SM120_S8) for k, n in ((32, 1), (64, 3))],
+        SCALED_MM: lambda: [bind(gemm.ScaledMmS8V3, K=k, N=n, **gemm.GEMM_SM120_S8) for k, n in ((32, 1), (64, 3))],
         KV_QUANT: lambda: [bind(X.Int8KvQuant, S=s, D=32) for s in (1, 3)],
         ATTENTION_ROW: lambda: [bind(X.Int8LutAttentionRow, D=32, S=s, SCALE=32 ** -0.5) for s in (1, 5, 33)],
     }[family]()

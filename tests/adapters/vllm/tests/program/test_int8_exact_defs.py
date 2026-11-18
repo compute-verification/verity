@@ -50,9 +50,9 @@ def test_int8_linear_is_the_served_linear(seed):
     sw = (torch.rand(N, generator=g) * 0.01 + 1e-4).float()
     xq, sa = E.quantize_rows(x)
     y = E.plain_linear(x, w, sw)
-    defn = bind(X.Int8Linear, K=K, N=N)
+    defn = bind(X.Int8LinearV3, K=K, N=N)
     for i in range(M):
-        got = evaluate(defn, _bf16(x[i]), _s8(w), _f32(sw))
+        got = evaluate(defn, _bf16(x[i]), _words(_u8(w)).tolist(), _words(_w32(sw)).tolist())
         assert list(got[:K]) == _s8(xq[i]) and got[K] == _f32(sa[i:i + 1])[0] and list(got[K + 1:]) == _bf16(y[i])
 
 
@@ -92,9 +92,14 @@ def _w16(t: torch.Tensor) -> np.ndarray:
     return np.asarray(_bf16(t), dtype=np.uint16)
 
 
+def _words(a: np.ndarray) -> np.ndarray:
+    """Little-endian ``a``'s bytes as u16 words, the weights record's form of an s8 weight or its f32 scales."""
+    return np.ascontiguousarray(a, a.dtype.newbyteorder("<")).view("<u2")
+
+
 @pytest.mark.parametrize("K,N,seed", [(64, 8, 0), (32, 3, 1), (4096, 40, 2)])
 def test_the_replay_linear_is_the_definition_and_the_served_linear(K, N, seed):
-    """`kernels.int8_rows.scaled_mm` (the replay of `ScaledMmS8_v1`) word for word against `engine.int8_exact.plain_linear` on
+    """`kernels.int8_rows.scaled_mm` (the replay of `ScaledMmS8_v3`) word for word against `engine.int8_exact.plain_linear` on
     quantized rows (a zero row among them) and against the Definition, there and on codes the quantizer never makes (-128),
     with DOT spelt as the spec text, a bare id and the bound primitive; another DOT is declined by name."""
     from verity.circuits.ops import gemm
@@ -110,19 +115,20 @@ def test_the_replay_linear_is_the_definition_and_the_served_linear(K, N, seed):
     sw = (torch.rand(N, generator=g) * 0.01 + 1e-4).float()
     xq, sa = E.quantize_rows(x)
     y = E.plain_linear(x, w, sw)
-    defn = bind(gemm.ScaledMmS8, K=K, N=N, **gemm.GEMM_SM120_S8)
+    defn = bind(gemm.ScaledMmS8V3, K=K, N=N, **gemm.GEMM_SM120_S8)
+    ww, sww = _words(_u8(w)), _words(_w32(sw))
     spellings = ['{"fn":"BlackwellS8ImmaDot32_v1"}', "BlackwellS8ImmaDot32_v1", gemm.GEMM_SM120_S8["DOT"]]
     wild = torch.randint(-128, 128, (K,), generator=g, dtype=torch.int8)
     for i, dot in zip(range(3), spellings):
         st = {"K": K, "N": N, "DOT": dot}
-        got = Q.scaled_mm(st, [_u8(xq[i]), _w32(sa[i:i + 1]), _u8(w), _w32(sw)])["0"]
+        got = Q.scaled_mm(st, [_u8(xq[i]), _w32(sa[i:i + 1]), ww, sww])["0"]
         assert got.tolist() == _bf16(y[i]), i
         if K <= 64:
-            assert list(evaluate(defn, _s8(xq[i]), _f32(sa[i:i + 1])[0], _s8(w), _f32(sw))) == got.tolist()
-            wg = Q.scaled_mm(st, [_u8(wild), _w32(sa[i:i + 1]), _u8(w), _w32(sw)])["0"]
-            assert list(evaluate(defn, _s8(wild), _f32(sa[i:i + 1])[0], _s8(w), _f32(sw))) == wg.tolist()
+            assert list(evaluate(defn, _s8(xq[i]), _f32(sa[i:i + 1])[0], ww.tolist(), sww.tolist())) == got.tolist()
+            wg = Q.scaled_mm(st, [_u8(wild), _w32(sa[i:i + 1]), ww, sww])["0"]
+            assert list(evaluate(defn, _s8(wild), _f32(sa[i:i + 1])[0], ww.tolist(), sww.tolist())) == wg.tolist()
     with pytest.raises(Declined, match="BlackwellU8S8ImmaDot32_v1"):
-        Q.scaled_mm({"K": K, "N": N, "DOT": "BlackwellU8S8ImmaDot32_v1"}, [_u8(xq[0]), _w32(sa[:1]), _u8(w), _w32(sw)])
+        Q.scaled_mm({"K": K, "N": N, "DOT": "BlackwellU8S8ImmaDot32_v1"}, [_u8(xq[0]), _w32(sa[:1]), ww, sww])
     assert rows.ROWS[Q.SCALED_MM].returns == ("0",) and Q.SCALED_MM in rows.EVALUATORS
 
 
@@ -137,12 +143,13 @@ def test_the_replay_linear_scales_by_the_token_first(Y, sx, sw):
     from verity_vllm.definitions.numerics import int8_rows as Q
 
     x, w = [1] * 32, [127] * (Y // 127) + [Y % 127] + [0] * (31 - Y // 127)
+    ww, sww = _words(np.asarray(w, np.uint8)), _words(np.asarray([sw], np.uint32))
     got = Q.scaled_mm({"K": 32, "N": 1, "DOT": "BlackwellS8ImmaDot32_v1"}, [np.asarray(x, np.uint8), np.asarray([sx], np.uint32),
-                                                                             np.asarray(w, np.uint8), np.asarray([sw], np.uint32)])["0"]
+                                                                             ww, sww])["0"]
     y = np.asarray([Y], np.float32).view(np.uint32)
     other = D.f2fp_bf16(D.mul_rn(D.mul_rn(y, np.asarray([sw], np.uint32)), np.asarray([sx], np.uint32)))
     assert got.tolist() != other.tolist()
-    assert list(evaluate(bind(gemm.ScaledMmS8, K=32, N=1, **gemm.GEMM_SM120_S8), x, sx, w, [sw])) == got.tolist()
+    assert list(evaluate(bind(gemm.ScaledMmS8V3, K=32, N=1, **gemm.GEMM_SM120_S8), x, sx, ww.tolist(), sww.tolist())) == got.tolist()
 
 
 def test_the_replay_s8_chain_clamps_each_step():

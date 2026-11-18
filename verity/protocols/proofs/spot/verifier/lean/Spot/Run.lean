@@ -48,7 +48,7 @@ check the stream ran on it, in the stream's order.
   names of what the block returns, which the verifier derives from the replay block's Definition in the challenger's
   program (`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`,
   `SecondStage.replayReturns`), as its `statements` check
-  (`SecondStage.checkAny`, the two-stage form allowed only when `run`'s `form` is, by default `SecondStage.FORM`); the
+  (`SecondStage.checkAny`); the
   symbol accepts when every audit record does. Each audit record takes the sessions' reads of its registration's own
   ports at their own roots (`Record.lessOwnReads`); under a two-stage rule round 2 holds their rows. Each holds the
   reads of the window values its params name to their entries' roots (`Record.windowReads`).
@@ -334,9 +334,9 @@ def secondStage (i : Input) (sample : Array Nat) :
   | _, none => return .ok none
 
 /-- The interior registration's audit record over the second stage's proved units, with round 2's statement check
-(`SecondStage.checkAny`, the two-stage form allowed where `form` is) over the first stage's replay sample `sample`:
+(`SecondStage.checkAny`) over the first stage's replay sample `sample`:
 whether it accepts, and the run's `interior` entry; nothing under a one-stage rule. -/
-def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
+def interiorAudit (i : Input) (sample : Array Nat) :
     Option (Interior × Json × Json × Json × Nat) → V (Bool × List (String × Json))
   | none => return (true, [])
   | some (it, receipt, draw, samplingDesign, read) => do
@@ -357,19 +357,17 @@ def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
         supplied := it.params.verifier.supplied,
         fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1),
         reads := it.reads, tables := it.tables }
-    let rec_ := SecondStage.attach rec_ (SecondStage.checkAny form own it.statements)
+    let rec_ := SecondStage.attach rec_ (SecondStage.checkAny own it.statements)
       (SecondStage.interiorReads own ((it.statements.getD #[]).toList))
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
       ("read", Lean.toJson read), ("audit", Json.str (← PyJson.canonical rec_))])])
 
-/-- The run, step by step; an error where the Python raises. The second stage's statement check allows the two-stage
-form where `form` does, by default the switch (`SecondStage.FORM`); a caller that decides last by the switch itself runs
-it at `form := true`. Its registration step is SPOT's check alone (`Docket.check`), as `interiorSteps`' is: it
+/-- The run, step by step; an error where the Python raises. Its registration step is SPOT's check alone (`Docket.check`), as `interiorSteps`' is: it
 refuses no record for the caller's facts (the declared day, the binding, the seed salt, the registered compiler, the
 pool's marks and chain, and the verdicts), which the stream refuses at registration, before any run
 (`one_stage.verifier.check`, `Caller.gate`), and the two-stage form after its run
 (`VStar.Recursive.SampledTwo.checkBlobsAt`). -/
-def run (i : Input) (form : Bool := SecondStage.FORM) : V Json := do
+def run (i : Input) : V Json := do
   let v := i.params.verifier
   if !grainHolds i.rule v.query then return refused "register" #["grain"]
   let qd ← Docket.queryDigest v.query
@@ -406,7 +404,7 @@ def run (i : Input) (form : Bool := SecondStage.FORM) : V Json := do
     let proved := i.provedUnits.getD drawn
     let instances := i.instances.getD proved.size
     let rec_ ← audit i v i.record receipt draw derived proved instances i.served i.sessionRoots i.params.windowValues
-    let (accepted₂, staged) ← interiorAudit form i (drawn.map Int.toNat) inner
+    let (accepted₂, staged) ← interiorAudit i (drawn.map Int.toNat) inner
     let accepted := jeq (getD rec_ "accepted") (.bool true) && accepted₂
     return Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read),
       ("symbol", Json.str (if accepted then "accept" else "reject")),

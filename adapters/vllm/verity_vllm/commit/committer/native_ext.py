@@ -25,7 +25,7 @@ def ext(build_dir: str | None = None, verbose: bool = False) -> Any:
     if _EXT is None:
         # Read here, not at import: `native_jit` takes the kernels' headers from the core `verity`, which only a build needs.
         from verity_vllm.commit.committer import native_jit
-        from verity_vllm.engine.profiles.devices import cuda_arch
+        from verity_vllm.config import cuda_arch
 
         _EXT, bd, digest = native_jit.jit_load("verity_native_collect", native_jit.source_paths(HERE), arch=cuda_arch(settings.card_sku()),
                                                parent=build_dir or settings.NATIVE_COLLECT_BUILD or None,
