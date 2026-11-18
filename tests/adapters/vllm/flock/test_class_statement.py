@@ -28,7 +28,7 @@ from verity_flock import partition_units as PU  # noqa: E402
 
 #: a registered Definition of two q-word classes, bound through Flock's catalog resolver
 ROPE = ["--definition", "RoPE_v1{NHEADS=32,D=64}", "--resolver",
-        f"{Path(__file__).parents[6] / 'verity' / 'protocols' / 'proofs' / 'flock' / 'prover' / 'pod' / 'catalog.py'}:definition"]
+        f"{Path(__file__).parents[4] / 'verity' / 'protocols' / 'proofs' / 'flock' / 'prover' / 'pod' / 'catalog.py'}:definition"]
 
 
 @pytest.fixture(scope="module")
@@ -75,7 +75,7 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
 
 
 def _gemm_fp():
-    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "gemm_fp.py")
+    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[4] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "gemm_fp.py")
     gemm_fp = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gemm_fp)
     return gemm_fp
@@ -408,7 +408,7 @@ def _frame_prefixes(dtype: str, K: int) -> tuple[dict, list]:
 def _gemm_fp():
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "gemm_fp.py")
+    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[4] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "gemm_fp.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

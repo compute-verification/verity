@@ -713,8 +713,7 @@ theorem membersRun_ran {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk.
       Spot.OneStageZk.runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs = .ok r := by
   unfold Spot.OneStageZk.membersRun at h
   simp only [Verity.Sampled.bind_ok] at h
-  obtain ⟨_, hs, roots, -, r', hrm, _, -, hr⟩ := h
-  obtain rfl : r' = r := by cases hr; rfl
+  obtain ⟨_, hs, roots, -, hrm⟩ := h
   unfold Spot.OneStageZk.membersStructure at hs
   simp only [Verity.Sampled.bind_ok] at hs
   obtain ⟨held, hheld, hs⟩ := hs
