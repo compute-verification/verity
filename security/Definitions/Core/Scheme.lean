@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Core.Draw
+public import Definitions.Core.LevelsCredited
 
 /-!
 # A scheme: what a resource accounting protocol supplies, and what it gets back
@@ -17,6 +17,9 @@ Every resource accounting protocol states its guarantee through these, and defin
 * `Scheme.GetsBack`: what a scheme gets back from the audit, a named `Prop`. At cutoff `δ`, an accepted run whose
   log meets the scheme's conditions leaves more than the missable cost plus the charges uncredited with probability at
   most `δ` plus the scheme's own term.
+* `Scheme.Placed`: a scheme's blocks placed in a circuit, each block its gate set. `Placed.credited` is the credited
+  set the levels setting and the integrity profile take, and `Placed.Unsplit` says it is credited unsplit
+  (`Levels.CreditedUnsplit`): each block is a block of the first level and of every later one.
 
 A scheme names no level, no commitment and no duration: the audit decides which values its blocks open, and the
 probability `pr` is the audit game's, over any prover. The code's interface is
@@ -46,7 +49,8 @@ structure Scheme where
   used : Run → ℕ
   /-- The resource the run was credited. -/
   credited : Run → ℕ
-  /-- The run's log meets the scheme's conditions: each commitment it names is logged before the coin it names. -/
+  /-- The run's log meets the scheme's conditions: each entry it names is logged before, or after, the coin or other
+  logged event it names. -/
   logOK : Run → Prop
   /-- The run's incorrect blocks. -/
   incorrect : Run → Finset Block
@@ -72,6 +76,25 @@ an accepted run whose log meets the conditions leaves more than the missable cos
 probability at most `δ + δscheme`. -/
 def GetsBack (S : Scheme) (L : SamplingDesign S.Block) (pr : (S.Run → Prop) → ℝ≥0∞) (δ : ℝ≥0∞) : Prop :=
   pr (fun r => S.accepts r ∧ S.logOK r ∧ S.credited r + S.missable L δ + S.charges < S.used r) ≤ δ + S.δscheme
+
+/-- **A scheme placed in a circuit** with gates `G`: each block's gate set, two blocks never the same set. -/
+structure Placed (S : Scheme) (G : Type) where
+  /-- A block's gates. -/
+  gates : S.Block → Finset G
+  /-- Two blocks are never the same gate set. -/
+  inj : Function.Injective gates
+
+variable {S : Scheme} {G : Type}
+
+/-- The credited blocks of a placed scheme: its blocks' gate sets, the credited set the levels setting and the
+integrity profile take. -/
+def Placed.credited [DecidableEq G] (P : S.Placed G) : Finset (Finset G) :=
+  Finset.univ.image P.gates
+
+/-- **A placed scheme's blocks are credited unsplit** under the levels `L`: each is a block of the first level and of
+every later one, so its values are committed before the sample. -/
+def Placed.Unsplit [Fintype G] [DecidableEq G] (P : S.Placed G) (L : Levels G) : Prop :=
+  L.CreditedUnsplit P.credited
 
 end Scheme
 
