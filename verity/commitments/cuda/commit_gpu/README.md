@@ -359,8 +359,8 @@ constants as kernel parameters. The record before it, `vllm-v1` (`adapters/vllm/
 node / lift trees, with `hm96-sha256/v1` leaves as an option), is by name. Its opt-in serving rows
 (`verity_vllm/commit/serving_rows.py`) already commit `frame-v3-sha512` trees of `hm96-sha512/row/v1` leaves, on the CPU,
 and this committer could take them over: `sha512/row/v1`'s first block is a 128-byte constant like `sha512/row/v2`'s (a
-different midstate, a host parameter), the schema strings are the same length, and their ChaCha20 salts are given salts
-(192 bytes a row) or a ChaCha20 kernel in the salt phase. Not checked here: `reference.py` has no `row/v1` case yet. It also
+different midstate, a host parameter), the schema strings are the same length, and their salts are given salts (192 bytes
+a row) or the salt phase's, from a source `../../hm96/PROTOCOL.md` section 3, "Randomness", allows. Not checked here: `reference.py` has no `row/v1` case yet. It also
 needs a domain a port, a library entry point instead of the CLI (the kernels take device pointers already), b || c kept
 (128 bytes a leaf) or recomputed for openings, the salt phase scheduled ahead of the step, and the commitment's stream at
 high priority.
