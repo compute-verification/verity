@@ -97,9 +97,9 @@ ZY_FILE=tests/protocols/test_pouw_h1_registered_device.py
 ROWS=$SCRATCH/rows.txt
 SKIPPED=77
 CUDA="" GENCODE="" NVCC_VERSION="" GPU="" CARD_OK=0
-# the target the smoke's builds are for: Pearl-C's tree states its own (build.sh's ARCH, which refuses another's GENCODE)
-TARGET=$(sed -n 's/^ARCH=\([a-z0-9_]*\).*/\1/p' "$PEARL/build.sh")
-[ -n "$TARGET" ] || { echo "smoke_h100.sh: $PEARL/build.sh states no ARCH, the target its kernels are built for" >&2; exit 2; }
+# the target the smoke's builds are for: Pearl-C's tree says its own (build.sh --arch; it refuses another's GENCODE)
+TARGET=$(bash "$PEARL/build.sh" --arch) && [[ "$TARGET" =~ ^[a-z]+_[0-9]+[a-z]?$ ]] || {
+  echo "smoke_h100.sh: $PEARL/build.sh --arch names no one target its kernels are built for (it said: ${TARGET:-nothing})" >&2; exit 2; }
 : > "$ROWS"
 
 sha() { sha256sum "$1" | cut -d' ' -f1; }
