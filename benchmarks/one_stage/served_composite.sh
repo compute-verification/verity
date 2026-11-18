@@ -38,7 +38,7 @@
 # each case not written or left out by its protocol, each case whose check was not started (`served_cases.py`'s
 # NOT_STARTED: no check runs outside a memory limit of its own, CHECK_MEM_GB, or on blob files that sum past
 # CHECK_BLOBS_GB, and the per-member sampled case is not asked) with why, its blob files' sum and the limit, each
-# product's NOT_ESTABLISHED and VERDICT lines, and the host it composed on
+# product's NOT_ESTABLISHED and VERDICT lines, and the node it composed on, named by its role
 # (the serve dir's: the served node's, or, where SERVED_NODE names another, the node a compose follow-on composed on from
 # the served node's compose hand-off, COMPOSE_HANDOFF set, or a deferral's follow-on copied the serve dir's audit inputs
 # to), headed COMPOSITE, and nothing else. Without composite.py in the tree, or under PRODUCT=onsite without
@@ -72,12 +72,12 @@ if [ -n "${COMPOSE_DEVELOPMENT:-}" ]; then
   say "COMPOSITE DEVELOPMENT: ${dev[1]}"
 elif [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
   if [ "${COMPOSE_OFF_NODE:-1}" != 0 ]; then
-    say "COMPOSITE refused: this is the served node $(hostname -s), which the prover controls, so a composite here claims" \
+    say "COMPOSITE refused: this is the served node (SERVED_NODE), which the prover controls, so a composite here claims" \
         "no record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it" \
         "here as a development check)"
     exit 1
   fi
-  dev=(--development "composed on the served node $(hostname -s), which the prover controls: a development check, no claim of record (COMPOSE_OFF_NODE=0)")
+  dev=(--development "composed on the served node, which the prover controls: a development check, no claim of record (COMPOSE_OFF_NODE=0)")
   say "COMPOSITE DEVELOPMENT: ${dev[1]}"
 fi
 PRODUCT=${PRODUCT:-onsite}
@@ -181,10 +181,10 @@ EOF
   esac
 done
 if [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
-  say "COMPOSITE: composed on $(hostname -s), which holds the serve dir, from the cases the served node wrote there, not from the parties that produced them"
+  say "COMPOSITE: composed on the node that holds the serve dir, from the cases the served node wrote there, not from the parties that produced them"
 elif [ -n "${COMPOSE_HANDOFF:-}" ]; then
-  say "COMPOSITE: composed on $(hostname -s), not the served node $SERVED_NODE: from its compose hand-off (verifier-side files, no witness) and the cases written and checked here from it, not from the parties that produced them"
+  say "COMPOSITE: composed on COMPOSE_NODE, not the served node: from its compose hand-off (verifier-side files, no witness) and the cases written and checked here from it, not from the parties that produced them"
 else
-  say "COMPOSITE: composed on $(hostname -s), not the served node $SERVED_NODE: from a prover-side copy of its serve dir's audit inputs and the cases written here from it, not from the parties that produced them"
+  say "COMPOSITE: composed on a follow-on node, not the served node: from a prover-side copy of its serve dir's audit inputs and the cases written here from it, not from the parties that produced them"
 fi
 exit "$bad"

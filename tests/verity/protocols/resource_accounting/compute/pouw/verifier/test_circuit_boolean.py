@@ -17,7 +17,7 @@ from verity.circuits.evaluation.bits import evaluate_bits, evaluate_words
 from verity.commitments.crypto.turboshake import turboshake128
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import boolean as B
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import hashes as H
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import words as W
+from verity.circuits.ops import words as W
 
 M32, M576 = (1 << 32) - 1, (1 << 576) - 1
 #: every FP32 class's ends: ±0, the subnormals', the normals', ±inf, quiet, signalling and all-ones NaNs

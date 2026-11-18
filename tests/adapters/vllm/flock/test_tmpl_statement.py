@@ -21,6 +21,7 @@ import numpy as np
 import pytest
 from test_class_statement_unit_stager import _toy
 from test_struct_lower import TOY_READS, toy_reads  # noqa: F401
+from tmpl_toy import ROWS, toy_tmpl
 from verity.circuits import population as PN
 from verity.circuits.defs import bind
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
@@ -30,21 +31,9 @@ from verity_flock import class_statement as CS
 from verity_flock import struct_lower as S
 from verity_flock import tmpl as T
 
-LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
+LEAN = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 MODE = "iv/hybrid/4"
-
-#: ``Flock.Test.Tmpl``'s unit: two copies of a pair (each two copies of a two-input AND and their sum) at 128, bound to input
-#: bits that step by one, its outputs at 256 and 257 and a row at 300
-HEADER = "flock-ir-tmpl/v2 t 2 1 0 1 1 3 1 2 1 1 2"
-AND2 = ["DEF 1 2 1 0", "0 1 2 1 1"]
-PAIR = ["DEF 3 2 1 1", "2 2 1 0 1 5", "CALL 0 2 0 1 1 2 3 0 1 0"]
-ROWS = ["0 1 0 1 0", "1 1 1 1 1", "2 1 2 1 2", "256 1 130 1 399", "257 1 133 1 399", "300 3 0 1 0 1 400"]
-
-
-def _tmpl(*calls: str, rows: list[str] = ROWS) -> T.Tmpl:
-    return T.parse("\n".join([HEADER, *AND2, *PAIR, f"DEF 400 0 {len(rows)} {len(calls)}", *rows, *calls]) + "\n")
-
 
 def _map(t: T.Tmpl, mode: str) -> tuple[int, list[int]]:
     lays = T.layout(t, mode)
@@ -69,22 +58,22 @@ def test_layout_places_each_column_where_the_lean_layout_does(mode):
     at 128, 130, 132, 129, 131, 133), the pair is laid out as 3 columns aligned to 2, one copy keeps its columns, two pairs
     at 250 push the output group to 384 and the constant to 527; and the two layouts it refuses, by name."""
     moved = {129: 130, 130: 132, 131: 129, 132: 131}
-    t = _tmpl("CALL 1 2 128 3 1 2 0 1 1 0")
+    t = toy_tmpl("CALL 1 2 128 3 1 2 0 1 1 0")
     assert _map(t, mode) == (400, [moved.get(x, x) for x in range(400)])
     assert (T.layout(t, mode)[1].size, T.layout(t, mode)[1].align) == (3, 2)
-    assert _map(_tmpl("CALL 1 1 128 3 1 2 0 1 1 0"), mode) == (400, list(range(400)))
-    size, at = _map(_tmpl("CALL 1 2 250 3 1 2 0 1 1 0"), mode)
+    assert _map(toy_tmpl("CALL 1 1 128 3 1 2 0 1 1 0"), mode) == (400, list(range(400)))
+    size, at = _map(toy_tmpl("CALL 1 2 250 3 1 2 0 1 1 0"), mode)
     assert (size, at[256], at[399]) == (528, 384, 527)
     with pytest.raises(ValueError, match="output group at word 2 does not keep its columns at a multiple of its width"):
-        T.layout(_tmpl("CALL 1 2 253 3 1 2 0 1 1 0", rows=[ROWS[i] for i in (0, 1, 2, 5)]), mode)
+        T.layout(toy_tmpl("CALL 1 2 253 3 1 2 0 1 1 0", rows=[ROWS[i] for i in (0, 1, 2, 5)]), mode)
     with pytest.raises(ValueError, match="a call in the input rows or an output group to a definition laid out apart"):
-        T.layout(_tmpl("CALL 1 1 0 3 1 1 399 0 2 0", rows=ROWS[3:]), mode)
+        T.layout(toy_tmpl("CALL 1 1 0 3 1 1 399 0 2 0", rows=ROWS[3:]), mode)
 
 
 def test_a_definition_two_call_paths_reach_is_placed_at_its_modes_alignment():
     """The pair called again, once, at 141: two call paths reach it, so strict, and hybrid at T = 0, place its copy at its size's
     power of two (144), lenient and hybrid at T >= 1 at its own alignment (142); the root's size is 528 in each."""
-    t = _tmpl("CALL 1 2 128 3 1 2 0 1 1 0", "CALL 1 1 141 3 1 2 0 1 1 0")
+    t = toy_tmpl("CALL 1 2 128 3 1 2 0 1 1 0", "CALL 1 1 141 3 1 2 0 1 1 0")
     for mode, nb in (("iv", 142), ("iv/strict", 144), ("iv/hybrid", 144), ("iv/hybrid/1", 142), (MODE, 142)):
         size, at = _map(t, mode)
         assert size == 528 and at[141:144] == [nb, nb + 1, nb + 2], mode

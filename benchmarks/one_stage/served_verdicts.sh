@@ -1099,7 +1099,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   [ -n "$H1_GATE" ] && [ -n "${H1_CIRCUITS:-}" ] && h1+=(--h1-prover "$D/private/h1")
   [ -n "$H1_GATE" ] && [ "${H1_RECEIPTS:-0}" = 1 ] && h1+=(--h1-receipts)
   if [ -n "$PEARLPLUS_TIE" ]; then  # the window's linears Pearl+'s matmuls on this one engine (serve_pearl), one epoch a window
-    h1=(--protocols "$PEARLPLUS_ARM" --protocols-config "$("$SAY_PY" -c 'import json, sys; print(json.dumps({"pouw": {"device": "cuda", "kernel": sys.argv[1], "cubin": sys.argv[2], **({"users": sys.argv[3]} if sys.argv[3] else {})}}))' \
+    h1=(--protocols pearl-plus --protocols-config "$("$SAY_PY" -c 'import json, sys; print(json.dumps({"pearl-plus": {"device": "cuda", "kernel": sys.argv[1], "cubin": sys.argv[2], **({"users": sys.argv[3]} if sys.argv[3] else {})}}))' \
       "$PEARLC_KERNEL" "$PEARLC_CUBIN" "${CERTIFIER_FRONT:+fixed\.[0-9]+}")")
     [ -n "$PEARLC_CHALLENGER_GATE" ] && h1+=(--challenger-gate "$PEARLC_CHALLENGER_GATE"
                                             --challenger-peer "$PEARLC_CHALLENGER_PEER" --challenger-lane "$PEARLC_CHALLENGER_LANE")
@@ -1498,12 +1498,12 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
   if [ "$COMPOSE_OFF_NODE" = 1 ]; then
     say "DEFERRED $DEFERRED_WHAT: $1. A follow-on on a node with the memory runs it there and writes the compose hand-off," \
         "from the serve dir's audit inputs copied prover-side, outside any run dir, each file its private/deferred/inputs.txt" \
-        "lists: D=$D bash benchmarks/one_stage/served_verdicts.sh v3c; $HANDED_WHAT are composed off both nodes, on" \
-        "COMPOSE_NODE ($COMPOSE_NODE), from that hand-off"
+        "lists: D=<that path> bash benchmarks/one_stage/served_verdicts.sh v3c; $HANDED_WHAT are composed off both nodes, on" \
+        "COMPOSE_NODE, from that hand-off"
   else
     say "DEFERRED $DEFERRED_WHAT: $1. A follow-on on a node with the memory runs them and composes the final record there," \
         "from the serve dir's audit inputs copied prover-side, outside any run dir, each file its private/deferred/inputs.txt" \
-        "lists: D=$D bash benchmarks/one_stage/served_verdicts.sh v3c"
+        "lists: D=<that path> bash benchmarks/one_stage/served_verdicts.sh v3c"
   fi
 }
 day_held() {  # a follow-on under DAY: the deferral's copy of the day's log, which core's check accepts, holds the
@@ -1729,18 +1729,18 @@ copy() {  # `served_verdicts.sh copy deferred|compose HOST[:DIR]`: each file the
     *) say "COPY refused: served_verdicts.sh copy deferred|compose HOST[:DIR], not $kind"; return 3 ;;
   esac
   [ -f "$dir/inputs.txt" ] && [ -f "$dir/$kind.env" ] \
-    || { say "COPY refused: the serve dir $D holds no $kind list (private/$kind/inputs.txt and $kind.env)"; return 3; }
+    || { say "COPY refused: the serve dir D holds no $kind list (private/$kind/inputs.txt and $kind.env)"; return 3; }
   # shellcheck source=/dev/null
   IFS='|' read -r served composer < <(set +u; . "$dir/$kind.env"; echo "${SERVED_NODE%%.*}|${COMPOSE_NODE%%.*}")
   host=${host#*@}
   if [ "$kind" = deferred ]; then
     for n in "$composer" "${COMPOSE_NODE%%.*}"; do
       [ -z "$n" ] || [ "${host%%.*}" != "$n" ] \
-        || { say "COPY refused: the deferral's list holds the window's witness, and $host is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"; return 3; }
+        || { say "COPY refused: the deferral's list holds the window's witness, and its node is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"; return 3; }
     done
   else
     [ "${host%%.*}" != "$served" ] \
-      || { say "COPY refused: $host is the served node, which the prover controls: copy the hand-off to COMPOSE_NODE ($composer)"; return 3; }
+      || { say "COPY refused: its node is the served node, which the prover controls: copy the hand-off to COMPOSE_NODE"; return 3; }
     why=$("$SAY_PY" "$SV" witness < "$dir/inputs.txt") \
       || { say "COPY refused: the hand-off's list names the served run's witness ($(echo "$why" | head -1 | cut -c1-400))"; return 3; }
   fi
@@ -2209,12 +2209,12 @@ EOF
 fi
 if [ -n "${PREFLIGHT_ONLY:-}" ]; then  # the checks above alone: nothing kept, built or served
   if [ -n "$FOLLOW" ]; then plan="the follow-on of $SERVED_NODE's deferral"
-    [ "$COMPOSE_OFF_NODE" = 0 ] || plan+=", its compose hand-off for COMPOSE_NODE ($COMPOSE_NODE)"
+    [ "$COMPOSE_OFF_NODE" = 0 ] || plan+=", its compose hand-off for COMPOSE_NODE"
   elif [ -n "$COMPOSE" ]; then plan="the compose follow-on of $SERVED_NODE's hand-off: $HANDED_WHAT"
   else
     plan="the serve's lease ${LEASE_MIN:-60} min, capped at ${LEASE_MEM_GB:-128} GB"
     [ -z "$DEFER" ] || plan+="; $DEFER, so step 6 defers $DEFERRED_WHAT to a follow-on"
-    [ "$COMPOSE_OFF_NODE" = 0 ] || plan+="; $HANDED_WHAT composed off this node, on COMPOSE_NODE ($COMPOSE_NODE), from its compose hand-off"
+    [ "$COMPOSE_OFF_NODE" = 0 ] || plan+="; $HANDED_WHAT composed off this node, on COMPOSE_NODE, from its compose hand-off"
   fi
   say "PREFLIGHT passed, $NODE_MEM_GB GB: $plan. PREFLIGHT_ONLY: nothing kept, built or served"
   exit 0
@@ -2403,7 +2403,7 @@ fi
 wait "$IOV"
 LEFT=
 if [ "$COMPOSE_OFF_NODE" = 1 ]; then
-  LEFT="$HANDED_WHAT, composed off this node, on COMPOSE_NODE ($COMPOSE_NODE), from its compose hand-off"
+  LEFT="$HANDED_WHAT, composed off this node, on COMPOSE_NODE, from its compose hand-off"
   [ -z "$DEFER" ] || LEFT="$DEFERRED_WHAT, to a follow-on on a node with the memory, which writes the compose hand-off: $DEFER; and $LEFT"
 elif [ -n "$DEFER" ]; then LEFT="$DEFERRED_WHAT, to a follow-on on a node with the memory, which composes the final record: $DEFER"; fi
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \

@@ -2466,13 +2466,12 @@ def rebase(serve_dir: Path, served_dir: str, paths: Sequence[str], *, held: bool
 def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | None = None) -> tuple[int, str]:
     """The compose gate's answer (one JSON line) written out under ``out``: its $OUT's files at their paths, and
     ``gate.json`` (the pin and the exit, without the files). Its exit (0 composed and accepted) and its one line, which
-    without an answer ends with the last line of the gate command's stderr ``err`` (ssh's own refusal, say)."""
+    without an answer names the gate command's stderr ``err`` by its last exception's class alone (`failed`)."""
     try:
         doc = json.loads(answer.read_text().strip().splitlines()[-1])
     except (OSError, IndexError, ValueError) as e:
-        said = [x for x in (err.read_text(errors="replace").splitlines() if err and err.is_file() else []) if x.strip()]
-        return 1, (f"GATE-COMPOSE failed (ssh exit {gate_exit}): no answer from the compose gate ({type(e).__name__})"
-                   + (f": {said[-1].strip()[:400]}" if said else ""))
+        return 1, (f"GATE-COMPOSE failed (ssh exit {gate_exit}): no answer from the compose gate ({type(e).__name__}): "
+                   f"its stderr {failed(gate_exit, [str(err)] if err else [])}")
     if "refused" in doc:
         return 3, f"GATE-COMPOSE refused by the compose gate: {str(doc['refused'])[:800]}"
     c = doc.get("compose") or {}
@@ -2481,7 +2480,7 @@ def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | 
     for rel, text in files.items():
         f = (out / rel).resolve()
         if root not in f.parents:
-            return 1, f"GATE-COMPOSE failed: the answer names {rel[:200]!r}, outside {out}"
+            return 1, f"GATE-COMPOSE failed: the answer names {rel[:200]!r}, outside its output directory"
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text(text)
     (out / "gate.json").write_text(json.dumps({**doc, "compose": {k: v for k, v in c.items() if k != "files"}},
@@ -2496,7 +2495,7 @@ def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | 
              + (f" (on {doc['pin']['on']})" if (doc.get("pin") or {}).get("on") else ""))
     rc = 0 if c.get("rc") == 0 and gate_exit in (None, 0) and said == "accept" else 1
     return rc, (f"GATE-COMPOSE {where}: exit {c.get('rc')}, the record {said or 'not written'}, "
-                f"{len(files)} files of its $OUT in {out}" + (f", {len(c['not_sent'])} not sent" if c.get("not_sent") else ""))
+                f"{len(files)} files of its $OUT in the run's compose/" + (f", {len(c['not_sent'])} not sent" if c.get("not_sent") else ""))
 
 
 def served_compare_line(path: Path) -> str:
