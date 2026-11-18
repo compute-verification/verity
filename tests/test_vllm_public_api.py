@@ -326,10 +326,7 @@ KNOWN = frozenset({
     "verity_vllm.commit.opened",
     # the compile slice and its pieces (`verity_vllm.compiler`), which the network attester's drivers under `benchmarks/` import
     "verity_vllm.compiler.cache_step",
-    "verity_vllm.compiler.cache_step_v3",
     "verity_vllm.compiler.compile_slice",
-    "verity_vllm.compiler.compile_slice_v4",
-    "verity_vllm.compiler.compile_slice_v6",
     "verity_vllm.compiler.compile_slice_v7",
     "verity_vllm.compiler.served_rows",
     "verity_vllm.compiler.served_statics",
