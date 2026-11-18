@@ -400,11 +400,11 @@ def unwhole (P : Prog) (ts : List Tmpl) (ls : List Leaves) (s : Spot.Wires.Summa
     (List.range (fieldsOf ret).length).find? fun f =>
       Spot.Edges.fieldWord ret f == w.offset && 0 < bits (fieldsOf ret)[f]!
   let short := fun (w : Spot.Wires.Wire) (f n : Nat) =>
-    match (leaves w.writer).bind fun l => l.bits.lookup s!"o{f}" with
+    match (leaves w.writer).bind fun l => l.bits.lookup ("o" ++ toString f) with
     | some b => if b == 16 * n then none else some (b, 16 * n)
     | none => none
   let whole := fun (w : Spot.Wires.Wire) (f : Nat) => closed w.reader w.port ||
-    match width w.reader w.port, width w.writer s!"o{f}" with
+    match width w.reader w.port, width w.writer ("o" ++ toString f) with
     | some r, some o => o != 0 && r % o == 0
     | _, _ => false
   (s.wires.zip s.rowWords).findSome? fun (w, n) =>
@@ -421,7 +421,7 @@ def unwhole (P : Prog) (ts : List Tmpl) (ls : List Leaves) (s : Spot.Wires.Summa
       "gate's, or another field's. Fix the Definitions, not the record: give the writer's field whole 16-bit " ++
       "words, each bit a gate of its own, and the reader's row that field's words.")
     | none =>
-    let o := s!"o{f}"
+    let o := "o" ++ toString f
     if whole w f then none else some (
     wire ++ s!"the writer's field {f} has leaves of " ++
     s!"{widthName (width w.writer o)} and the reader's row of {widthName (width w.reader w.port)}. Every leaf of a " ++
