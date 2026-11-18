@@ -131,6 +131,10 @@ class Exchange:
         """Whether range ``range_`` must stay allocated at ``step`` (`HoldResident`)."""
         return any(r.range == range_ and step < r.until for _, r in self._filed(H.HoldResident))
 
+    def oldest_freed_first(self) -> bool:
+        """Whether a freed range is handed out again only after every range freed before it (`ReuseOldestFreed`)."""
+        return bool(self._filed(H.ReuseOldestFreed))
+
     def beside(self) -> list[tuple[str, Callable[[], Any]]]:
         """The processes schemes asked to start beside the workload, each by its name and bound to the readers it
         named, for the launcher to call before serving."""
