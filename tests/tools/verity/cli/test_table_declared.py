@@ -54,10 +54,9 @@ def test_the_declared_components_are_the_schemes_whose_record_names_a_row():
     assert rowed == {"sampled-proofs", "inference-only", "pearl-plus", "pous", "bandwidth", "wipe", "network-attester"}
 
 
-def test_a_declared_sampling_design_is_the_default_and_the_served_windows_rule_is_checked():
+def test_only_the_sampled_proofs_carry_the_served_windows_rule_and_its_default():
     designs = {n: (c.default_sampling_design, c.sampling_design) for n, c in T.MANIFESTS.items() if c.sampling_design}
     assert designs == {"sampled-proofs": ("rate:1/3481648", T._design)}
-    assert T.schemes.get("sampled-proofs").sampling_design == "rate:1/3481648"
 
 
 def test_a_tied_schemes_parameters_are_what_its_tie_names_and_nothing_else(monkeypatch):

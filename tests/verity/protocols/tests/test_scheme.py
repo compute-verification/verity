@@ -275,15 +275,6 @@ def test_an_answers_entry_is_module_colon_attribute_and_a_lacks_is_refused_by_na
         S.answering(_toy(answers=S.Lacks("it keeps no session")))
 
 
-def test_a_sampling_design_is_a_rate_or_empty() -> None:
-    assert _toy().sampling_design == ""
-    for rate in ("rate:1/3481648", "stratified-rate:3/7"):
-        assert _toy(sampling_design=rate).sampling_design == rate
-    for design in ("subset:2", "work:2", "rate:0/1", "rate:1/0", "rate:1", "rate:1/2 "):
-        with pytest.raises(ValueError, match="toy-bandwidth: sampling_design is a rate"):
-            _toy(sampling_design=design)
-
-
 def test_the_bandwidth_audit_is_answered_through_its_entry_in_a_process_with_no_exchange(tmp_path: Path) -> None:
     probe = ("import json, sys\n"
              "from pathlib import Path\n"

@@ -47,7 +47,7 @@ import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -177,17 +177,15 @@ _PROVER = Role(PROVER, "developer", per="server", needs=("store",))
 def _declared(name: str) -> Component:
     """The `Component` of the scheme ``name`` declares (`schemes.get`): its parties, channels, colocated pairs, needs,
     and as ``requires`` its ``depends``. Its parameters are its settings (`_settings`, over their defaults), or, for a
-    tied scheme, what its ``tie`` names (`_tied`). Where it declares a ``sampling_design``, the served window's rule is
-    checked (`_design`) and that design is the configuration's where it states none. Its id is the one `SP.IDS` gives,
-    the key of its ``[params]``, which may differ from the declared ``protocol``."""
+    tied scheme, what its ``tie`` names (`_tied`). Its id is the one `SP.IDS` gives, the key of its ``[params]``, which
+    may differ from the declared ``protocol``."""
     s = schemes.get(name)
     cid = SP.IDS.get(name, s.protocol)
     params = ({"params": partial(_tied, s, cid)} if s.tie else
               {"params": partial(_settings, s), "default_params": dict(s.settings)} if s.settings else {})
-    design = {"sampling_design": _design, "default_sampling_design": s.sampling_design} if s.sampling_design else {}
     return Component(name, cid, parties=declared(s, "parties"), channels=declared(s, "channels"),
                      colocated=declared(s, "colocated"), needs=declared(s, "needs"), requires=declared(s, "depends"),
-                     **params, **design)
+                     **params)
 
 
 #: the components no scheme declares yet, each with its row in the record, which only shrinks
@@ -202,8 +200,11 @@ UNDECLARED: dict[str, tuple[Component, str, Mapping[str, Launch]]] = {c.name: (c
 )}
 #: every component the served window's record has a row for: each undeclared one's, and each declared scheme's whose
 #: ``record`` names its row (a scheme with no row, an experimental one or a session's own, is no component here)
-MANIFESTS: dict[str, Component] = {**{n: c for n, (c, _, _) in UNDECLARED.items()}, **{
-    n: _declared(n) for n in schemes.DECLARATIONS if not isinstance(schemes.get(n).record, Lacks)}}
+MANIFESTS: dict[str, Component] = {
+    **{n: c for n, (c, _, _) in UNDECLARED.items()},
+    **{n: _declared(n) for n in schemes.DECLARATIONS if not isinstance(schemes.get(n).record, Lacks)},
+    **{c.name: c for c in (
+        replace(_declared("sampled-proofs"), sampling_design=_design, default_sampling_design="rate:1/3481648"),)}}
 #: each component's row in the record, the one its scheme declares (`record`)
 ROWS: dict[str, str] = {n: row for n, (_, row, _) in UNDECLARED.items()} | {
     n: declared(schemes.get(n), "record") for n in MANIFESTS if n not in UNDECLARED}

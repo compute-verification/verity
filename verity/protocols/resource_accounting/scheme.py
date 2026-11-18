@@ -134,7 +134,6 @@ RESOURCES: Mapping[str, str] = MappingProxyType({"compute": "MACs", "memory": "b
 REQUIREMENTS = ("one-labelling", "log-order", "log-times", "coins-at-rate", "one-design")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
 _ENTRY = re.compile(r"[A-Za-z_][\w.]*:[A-Za-z_]\w*")
-_RATE = re.compile(r"(stratified-)?rate:[1-9][0-9]*/[1-9][0-9]*")
 
 
 @dataclass(frozen=True)
@@ -326,10 +325,7 @@ class Scheme:
     that copy beside storage, empty or a `Lacks` where none has. ``pieces``, by developer-side party, what the served runner launches for
     it (`Launch`), a `Lacks` where it launches nothing. ``answers``, the entry (``module:attribute``) of the functions
     that answer its kept session in a process with no exchange (`Answers`, read through `answering`). ``tie``, the
-    parameters an application that ties its workload to this scheme states over its settings' defaults.
-    ``sampling_design``, the rule its draw of the window's blocks runs under where a configuration states none (its
-    ``[service] law``), a rate (``rate:NUM/DEN``, ``stratified-rate:NUM/DEN``); empty where it draws no sample under
-    that law. ``unchecked``,
+    parameters an application that ties its workload to this scheme states over its settings' defaults. ``unchecked``,
     what of its run no auditor-side entry checks yet, by name, each with its sentence, which its row's stated source
     says on every check's line whatever the verdict; empty means nothing is listed for the scheme, not that everything
     is checked, and the line says nothing for it.
@@ -351,7 +347,6 @@ class Scheme:
     settings: Mapping[str, Any] = field(default_factory=dict)
     check_settings: Callable[[Mapping[str, Any]], str | None] = _no_settings_check
     tie: Mapping[str, Any] = field(default_factory=dict)
-    sampling_design: str = ""
     option: str = ""
     hooks: tuple[str, ...] = ()
     requires: Mapping[str, str] = field(default_factory=dict)
@@ -444,9 +439,6 @@ class Scheme:
                     raise ValueError(f"{self.name}: what {party}'s start may leave out is among what it writes, "
                                      f"not {extra}")
             object.__setattr__(self, "pieces", MappingProxyType(dict(self.pieces)))
-        if self.sampling_design and not _RATE.fullmatch(self.sampling_design):
-            raise ValueError(f"{self.name}: sampling_design is a rate, rate:NUM/DEN or stratified-rate:NUM/DEN, not "
-                             f"{self.sampling_design!r}")
         if not isinstance(self.answers, Lacks) and not _ENTRY.fullmatch(self.answers):
             raise ValueError(f"{self.name}: answers is an entry, module:attribute, not {self.answers!r}")
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
