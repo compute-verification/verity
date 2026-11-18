@@ -30,8 +30,8 @@ namespace InferenceOnlyVerifier.Properties.SecurityProofs.DecodeKeys
 open Flock.Program
 open Std.Do
 open BodiesOk (DM ex_throw_bind decode_root)
-open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.ddefs liftV
-  from Circuits.Program
+open private getDef composite staticFns goOf decodeDefs DecState DecState.defs DecState.index DecState.busy Desc Desc.ddefs
+  liftV from Circuits.Program
 
 /-! ## Reading the decoder's functions -/
 
@@ -364,8 +364,9 @@ theorem decode_kept (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   rotate_left; · exact absurd h (by intro h; injection h)
   split at h
   rotate_left; · exact absurd h (by intro h; injection h)
-  extract_lets go at h
   obtain ⟨⟨root, st⟩, hgo, h⟩ := Walk.except_bind_ok h
+  replace hgo := BodiesOk.decodeDefs_plain hgo
+  unfold goOf at hgo
   extract_lets rd jpR at h
   split at h
   · exact (ex_throw_bind h).elim

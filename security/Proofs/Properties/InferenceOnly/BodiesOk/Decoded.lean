@@ -34,8 +34,8 @@ root is one of them (`getDef`'s index), a composite without parameters (`decode`
 
 namespace InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 open Flock.Program
-open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.types Desc.callees
-  Desc.ddefs liftV at_ paramsOf buildNode natJ? from Circuits.Program
+open private getDef composite staticFns goOf decodeDefs DecState DecState.defs DecState.index DecState.busy Desc Desc.types
+  Desc.callees Desc.ddefs liftV at_ paramsOf buildNode natJ? from Circuits.Program
 
 theorem ex_throw_bind {α β : Type} {e : String} {f : α → Flock.V β} {b : β}
     (h : (throw e >>= f : Flock.V β) = .ok b) : False := by
@@ -69,6 +69,15 @@ theorem go_inv (desc : Desc) (rootId programFn : String) (root : ℕ) (s0 st : D
     exact ⟨i1, p1⟩
   · obtain ⟨-, rfl⟩ := st_pure hf
     exact grows_refl _
+
+/-- `decode`'s Definitions are the plain walk's (`decodeDefs`: the walk that reads an input node at another width only names
+a refusal). -/
+theorem decodeDefs_plain {desc : Desc} {rootId programFn : String} {r : ℕ × DecState}
+    (h : decodeDefs desc rootId programFn = .ok r) : (goOf desc rootId programFn false).run {} = .ok r := by
+  unfold decodeDefs at h
+  split at h
+  next r' hr => injection h with h; rw [hr, h]
+  next => exact absurd h (by intro h; injection h)
 
 /-- **What `decode` returns**: the Definitions of a decoder state that keeps `Inv`, its root one of them, a composite
 without parameters. -/
@@ -111,8 +120,9 @@ theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   swap; · exact absurd h (by intro h; injection h)
   split at h
   swap; · exact absurd h (by intro h; injection h)
-  extract_lets go at h
   obtain ⟨⟨root, st⟩, hgo, h⟩ := Walk.except_bind_ok h
+  replace hgo := decodeDefs_plain hgo
+  unfold goOf at hgo
   extract_lets rd jpR at h
   split at h
   · exact (ex_throw_bind h).elim

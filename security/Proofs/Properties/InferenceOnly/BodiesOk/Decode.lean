@@ -216,7 +216,7 @@ theorem bodyBad_default (defs : Array Defn) (key : String) (w : ℕ) :
   unfold Widths.bodyBad
   have h0 : (default : Body).nodes.size = 0 := rfl
   have hp : (default : Body).ret.parts = #[] := rfl
-  simp only [h0, hp, Widths.seqBad]
+  simp only [h0, hp, Widths.seqBad, Bool.false_eq_true, ↓reduceIte]
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
   simp only [Std.Legacy.Range.size, Nat.sub_self, Nat.zero_add, Nat.zero_div, List.range'_zero, List.forIn_nil]
   rfl

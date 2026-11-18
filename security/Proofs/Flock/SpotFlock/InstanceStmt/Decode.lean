@@ -253,28 +253,11 @@ theorem slice_A : Widths.sliceWidth (.array 2 (.value 16)) 0 2 = some 16 := by
   simp only [leaves_V, rangeWidths_V]
   decide
 
-theorem rangeWidths_A : Widths.rangeWidths (.array 2 (.value 16)) 0 2 = [16] := by
-  rw [Widths.rangeWidths]
-  simp only [leaves_V, rangeWidths_V]
-  decide
+/-- The plain width check holds no input widths, so `recutOk` leaves every part to the rest of `partOk`. -/
+theorem recutOk_plain (params nodes : Array Ty) (hp hn : Array (Option ℕ)) (below : ℕ) (t : Ty) (ht : Option ℕ) (a : ℕ)
+    (q : Part) : Widths.recutOk { params, nodes, hp, hn, below, inp := #[], first := #[] } t ht a q = pure none := by
+  cases q <;> simp [Widths.recutOk, Widths.Src.inW?]
 
-/-- The return's one part reads node 0 first, at its own width 16. -/
-theorem firstReads_one (params : Array (String × Ty)) (form fn axes n nxs offsets recut count) :
-    Widths.firstReads #[some 16] ⟨params, .array 2 (.value 16), ⟨[⟨form, fn, #[], .array 2 (.value 16), axes, n, nxs⟩]⟩,
-      ⟨#[.affine false 0 0 2], #[0], count⟩, offsets, recut⟩ = #[some 16] := by
-  obtain ⟨s', hs'⟩ : ∃ s', Std.Stream.next? (Std.toStream (#[0] : Array ℕ)) = some (0, s') := ⟨_, rfl⟩
-  simp [Widths.firstReads, Widths.wAt, hs', leaves_V]
-
-/-- A 16-bit input node of 2 leaves, first read at 16 bits, read whole at 16 bits: `recutOk` admits it, taking no step. -/
-theorem recutOk_one (params : Array Ty) (hp first : Array (Option ℕ)) (hf : (first[0]?).join = some 16) (w : ℕ) :
-    (Widths.recutOk { params, nodes := #[.array 2 (.value 16)], hp, hn := #[some 16], below := 1, inp := #[some 16], first }
-      (.array 2 (.value 16)) (some 16) 0 (.affine false 0 0 2)).run w = .ok (some true) w := by
-  unfold Widths.recutOk
-  generalize hD : Widths.DEPTH = D
-  obtain ⟨D, rfl⟩ : ∃ k, D = k + 1 := ⟨D - 1, by subst hD; rfl⟩
-  simp [Widths.Src.inW?, Widths.bySlices, rangeWidths_A, hf, Widths.recut, leaves_A, Widths.sliceOf, Part.count]
-
-set_option linter.unusedSimpArgs false in
 /-- A body of one node without arguments, of type `Array 2 (Value 16)` as its return is, returning that node's leaves
 `0 … 1` as one part, reads no leaf at another width. -/
 theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
@@ -294,19 +277,7 @@ theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
     subst ho
     rw [Array.eq_empty_of_size_eq_zero ha]
     obtain ⟨s', hs'⟩ : ∃ s', Std.Stream.next? (Std.toStream (#[0] : Array ℕ)) = some (0, s') := ⟨_, rfl⟩
-    -- node 0 is an input node or not, as `defs` says; either way it is read at its own width 16 (`recutOk`)
-    have hi : Widths.inputWidths defs ⟨params, .array 2 (.value 16), ⟨[⟨form, fn, #[], .array 2 (.value 16), axes, n,
-        nxs⟩]⟩, ⟨#[.affine false 0 0 2], #[0], count⟩, offsets, recut⟩ = #[none] ∨
-        Widths.inputWidths defs ⟨params, .array 2 (.value 16), ⟨[⟨form, fn, #[], .array 2 (.value 16), axes, n,
-        nxs⟩]⟩, ⟨#[.affine false 0 0 2], #[0], count⟩, offsets, recut⟩ = #[some 16] := by
-      simp only [Widths.inputWidths, List.map_toArray, List.map_cons, List.map_nil]
-      split
-      · split
-        · exact .inr (by rw [homo_A])
-        · exact .inl rfl
-      · exact .inl rfl
-    rcases hi with hi | hi <;>
-    simp only [hi, hs', firstReads_one, recutOk_one _ _ #[some 16] rfl, Widths.bodyBad, List.size_toArray, List.length_cons, List.length_nil, Nat.zero_add,
+    simp only [hs', recutOk_plain, Widths.bodyBad, List.size_toArray, List.length_cons, List.length_nil, Nat.zero_add,
       List.getElem!_toArray, List.getElem!_eq_getElem?_getD, Widths.seqBad, Widths.partOk, Widths.Src.ty?,
       Array.getElem?_map, List.map_toArray, List.map_cons, List.map_nil, List.getElem?_toArray, Widths.Src.homo?,
       homo_A, Part.count, slice_A, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true, gt_iff_lt, Nat.div_pos_iff, List.cons_append,
@@ -317,40 +288,8 @@ theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
       Nat.div_self, List.range'_one, List.forIn_cons, getElem?_pos, List.getElem_cons_zero, Option.getD_some,
       List.range'_zero, Nat.not_lt_zero, not_false_eq_true, getElem!_neg, ↓reduceIte, List.forIn_nil, pure_bind,
       Nat.lt_one_iff, Option.isSome_some, Bool.true_and, List.forIn_toArray, Bool.false_eq_true, Option.join_some,
-      Bool.true_eq_false, EStateM.run_bind] <;>
+      Bool.true_eq_false, EStateM.run_bind]
     rfl
-
-/-- The same body records no input node read at another width (`Body.recut`): node 0, an input node or not, is read
-at its own width 16. -/
-theorem recutOf_one (defs : Array Defn) (B : Body)
-    (hn : B.nodes.size = 1) (ha : (B.nodes[0]!).args.size = 0)
-    (ho : (B.nodes[0]!).out = .array 2 (.value 16)) (ht : B.retType = .array 2 (.value 16))
-    (hr : B.ret.parts = #[.affine false 0 0 2]) (hs : B.ret.starts = #[0]) :
-    Widths.recutOf defs B = #[] := by
-  obtain ⟨params, retType, nodes, ret, offsets, recut⟩ := B
-  obtain ⟨parts, starts, count⟩ := ret
-  simp only at hn ha ho ht hr hs
-  subst ht hr hs
-  obtain ⟨l⟩ := nodes
-  match l, hn, ha, ho with
-  | [⟨form, fn, args, out, axes, n, nxs⟩], _, ha, ho =>
-    change args.size = 0 at ha
-    change out = _ at ho
-    subst ho
-    rw [Array.eq_empty_of_size_eq_zero ha]
-    obtain ⟨s', hs'⟩ : ∃ s', Std.Stream.next? (Std.toStream (#[0] : Array ℕ)) = some (0, s') := ⟨_, rfl⟩
-    have hi : Widths.inputWidths defs ⟨params, .array 2 (.value 16), ⟨[⟨form, fn, #[], .array 2 (.value 16), axes, n,
-        nxs⟩]⟩, ⟨#[.affine false 0 0 2], #[0], count⟩, offsets, recut⟩ = #[none] ∨
-        Widths.inputWidths defs ⟨params, .array 2 (.value 16), ⟨[⟨form, fn, #[], .array 2 (.value 16), axes, n,
-        nxs⟩]⟩, ⟨#[.affine false 0 0 2], #[0], count⟩, offsets, recut⟩ = #[some 16] := by
-      simp only [Widths.inputWidths, List.map_toArray, List.map_cons, List.map_nil]
-      split
-      · split
-        · exact .inr (by rw [homo_A])
-        · exact .inl rfl
-      · exact .inl rfl
-    unfold Widths.recutOf
-    rcases hi with hi | hi <;> simp [hi, Widths.firstReads, Widths.wAt, hs', leaves_V]
 
 /-! ## The canonical JSON domain, with fuel
 
@@ -415,7 +354,7 @@ set_option maxHeartbeats 1600000 in
 fwd_def progX decode_prog : Program.decode progBytes by [fromUTF8?_toUTF8, parse_prog, domainError_fuel 12,
     hm_get_insert, hm_get_empty, hs_contains_insert, hs_contains_erase, hs_contains_empty, hm_get_foldl,
     hm_contains_foldl, mapM_nil, mapM_one, mapM_pair, ofJson_V, ofJson_A, beq_of_A, beq_of_V, leaves_of_A,
-    leaves_of_V, bodyBad_one, recutOf_one, recordFunctionIds_plain, splitOn_of, all_of, toNat_of, st_bind, st_get, st_set,
+    leaves_of_V, bodyBad_one, recordFunctionIds_plain, splitOn_of, all_of, toNat_of, st_bind, st_get, st_set,
     st_modify, st_pure, st_throw, st_ite, st_dite, st_forIn_empty, st_forIn_range1, prod_fst, prod_snd, ds_defs,
     ds_index, ds_busy, ds_walked, mapM_empty, st_mapM_empty, st_run, qsort_fuel, canon_bare, canon_fuel 12,
     dup_empty]
