@@ -47,7 +47,7 @@ def test_the_blocks_ride_in_the_circuit_record_and_the_verifier_holds_their_proo
     plan = "ab" * 32
     win = I.Window(blocked(chain_blocks(plan=plan)), RUN, TI.SAMPLING_DESIGN, 2)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
-    assert doc["blocks"] == win.circuit.blocks_record() == {
+    assert doc["blocks"] == win.circuit.blocks_record(2) == {
         "format": I.BLOCKS, "proof": {"units": 8, "partition": doc["partition"], "plan": plan},
         "inference": {"slots": 2, "steps": 2, "entries": [{"template": GID, "at": 0, "radix": [2, 2, 2],
                                                            "axes": ["-", "step", "slot"], "step": 0}]}}
@@ -88,15 +88,33 @@ def test_the_inference_entries_tile_each_templates_units_exactly_once_at_the_cla
                            ((replace(e, step=1),), r"steps \[1, 3\), each below the class's 2")]:
         with pytest.raises(ValueError, match=why):
             blocked(chain_blocks(inference=inference))
-    with pytest.raises(ValueError, match="radix is the class's 4 slots"):
+    with pytest.raises(ValueError, match="slot 2 is in no inference entry: each of the class's 4 slots"):
         blocked(chain_blocks(slots=4))
+    with pytest.raises(ValueError, match=r"slots \[1, 3\), each below the circuit's 2"):
+        blocked(chain_blocks(inference=(replace(e, slot=1), replace(e, at=8))))
     for edit, why in [(dict(axes=("-", "-", "-")), "one of them the slot"), (dict(axes=("slot", "step", "slot")), "one of them"),
                       (dict(axes=("step", "step", "slot")), "at most one the step"), (dict(axes=("x", "step", "slot")), "one axis"),
                       (dict(axes=("step", "slot")), "one axis"), (dict(step=-1), "naturals"), (dict(radix=(2, 0, 2)), "radix 1")]:
         with pytest.raises(ValueError, match=why):
             replace(e, **edit)
-    with pytest.raises(ValueError, match="an inference entry is"):
-        I.InferenceEntry.of({**e.doc(), "extra": 0})
+    for bad in ({**e.doc(), "extra": 0}, {**e.doc(), "slot": 0}):
+        with pytest.raises(ValueError, match="an inference entry is"):
+            I.InferenceEntry.of(bad)
+
+
+def test_an_entry_from_a_later_slot_puts_its_units_at_its_slots():
+    """A served window's Programs of their own positions need not all lower a template's units at a step, so an entry covers
+    the slots from its ``slot`` on: the chain's layer-0 units at both slots and its layer-1 units at slot 1 alone tile its
+    units, unit 6 at (slot 1, step 0), and the record carries ``slot`` only where it isn't 0, so a class circuit's
+    entries are as they were."""
+    e = chain_blocks().inference[0]
+    four = replace(e, radix=(TI.STEPS, TI.REQUESTS), axes=("step", "slot"))
+    late = [replace(four, at=4, radix=(TI.STEPS, 1), slot=1), replace(four, at=6, radix=(TI.STEPS, 1))]
+    b = chain_blocks(inference=(four, *late))
+    blocked(b)
+    assert late[0].doc()["slot"] == 1 and "slot" not in late[1].doc() and "slot" not in e.doc()
+    assert I.InferenceEntry.of(late[0].doc()) == late[0] and not b.uniform and chain_blocks().uniform
+    assert [tuple(map(list, b.slots_steps(GID, u, u + 1))) for u in (4, 6)] == [([1], [0]), ([0], [0])]
     with pytest.raises(ValueError, match="at least one"):
         chain_blocks(steps=0)
     with pytest.raises(ValueError, match="are `Blocks`"):
@@ -222,7 +240,7 @@ def test_cmp92s_class_circuit_has_one_inference_and_nothing_free(circuit):
         [e.doc() for e in circuit.blocks.inference]
     count = I.input_count(json.loads(json.dumps(circuit.description())), **held("positions", "weights", "request"))
     assert count["free"] == 0 and count["ingress"] == 0, count
-    assert circuit.blocks_record()["proof"] == {"units": 17548,
+    assert circuit.blocks_record(1 << 20)["proof"] == {"units": 17548,
                                                 "partition": I.descriptor_record(circuit, 1 << 20)["partition"]}
 
 
@@ -237,4 +255,4 @@ def test_cmp92s_members_come_from_its_record_and_its_blocks_are_the_same_under_a
     for run in ("ab" * 64, "cd" * 64):
         w = I.window_of_record({**rec, "run": run, "context": ""}, TI.SAMPLING_DESIGN, I.resolve)
         assert w.members == I.members(plain, cap)
-    assert I.circuit_bytes(rec["blocks"]) == I.circuit_bytes(plain.blocks_record())
+    assert I.circuit_bytes(rec["blocks"]) == I.circuit_bytes(plain.blocks_record(cap))

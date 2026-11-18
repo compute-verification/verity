@@ -1,0 +1,492 @@
+{
+ "roots": [
+  "verity.circuits",
+  "verity.commitments",
+  "verity.protocols",
+  "verity_vllm",
+  "verity_torch",
+  "verity_flock"
+ ],
+ "word_primitives": 303,
+ "no_body": 45,
+ "by_place": {
+  "the circuits' catalogue": [
+   "PouwAdd64Hi_v1",
+   "PouwAdd64Lo_v1",
+   "PouwAdd8_v1",
+   "PouwAddSub8_v1",
+   "PouwCh32_v1",
+   "PouwDot16U8S8_v1",
+   "PouwFormX3_v1",
+   "PouwFormX_v1",
+   "PouwI32ToF32Rn_v1",
+   "PouwMaj32_v1",
+   "PouwNegBetaSum16_v1",
+   "PouwNoiseByte_v1",
+   "PouwPackBE4_v1",
+   "PouwSha512BigSigma0Hi_v1",
+   "PouwSha512BigSigma0Lo_v1",
+   "PouwSha512BigSigma1Hi_v1",
+   "PouwSha512BigSigma1Lo_v1",
+   "PouwSha512SmallSigma0Hi_v1",
+   "PouwSha512SmallSigma0Lo_v1",
+   "PouwSha512SmallSigma1Hi_v1",
+   "PouwSha512SmallSigma1Lo_v1",
+   "PouwSub8_v1"
+  ],
+  "the vLLM adapter": [
+   "DsaButterflySet_v1",
+   "DsaMaskCount_v1",
+   "DsaMaskTag_v1",
+   "DsaTopKAtLeastBelow_v1",
+   "DsaTopKAtLeast_v1",
+   "E2m1ToBf16_v1",
+   "E2m1x2Hi_v1",
+   "E2m1x2Lo_v1",
+   "E8m0DequantBf16_v1",
+   "F32ErfRn_v1",
+   "F32TanhRn_v1",
+   "GeluErfBf16_v1",
+   "I32Mul_v1",
+   "NcpAbsMax_v1",
+   "NcpDot16I7_v1",
+   "NcpRneClampI7_v1"
+  ],
+  "useful work's prover": [
+   "PearlCLineKeyByte_v1",
+   "PearlCLineRawByte_v1",
+   "PearlCRowBlockByte_v1",
+   "PearlCRowSeedHeadByte_v1",
+   "PearlCRowSeedTailByte_v1",
+   "PearlCSeedBByte_v1",
+   "PearlCShaBlockByte_v1"
+  ]
+ },
+ "rows": [
+  {
+   "id": "DsaButterflySet_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.dsa_topk_mask"
+  },
+  {
+   "id": "DsaMaskCount_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.dsa_topk_mask"
+  },
+  {
+   "id": "DsaMaskTag_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.dsa_topk_mask"
+  },
+  {
+   "id": "DsaTopKAtLeastBelow_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.dsa_topk_mask"
+  },
+  {
+   "id": "DsaTopKAtLeast_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.dsa_topk_mask"
+  },
+  {
+   "id": "E2m1ToBf16_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.marlin_moe"
+  },
+  {
+   "id": "E2m1x2Hi_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.marlin_moe"
+  },
+  {
+   "id": "E2m1x2Lo_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.marlin_moe"
+  },
+  {
+   "id": "E8m0DequantBf16_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.marlin_moe"
+  },
+  {
+   "id": "F32ErfRn_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.ref_prims"
+  },
+  {
+   "id": "F32TanhRn_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.ref_prims"
+  },
+  {
+   "id": "GeluErfBf16_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.act"
+  },
+  {
+   "id": "I32Mul_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.marlin_moe"
+  },
+  {
+   "id": "NcpAbsMax_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.pouw_rows"
+  },
+  {
+   "id": "NcpDot16I7_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.pouw_rows"
+  },
+  {
+   "id": "NcpRneClampI7_v1",
+   "place": "the vLLM adapter",
+   "module": "verity_vllm.definitions.registry.pouw_rows"
+  },
+  {
+   "id": "PearlCLineKeyByte_v1",
+   "place": "useful work's prover",
+   "module": "verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_noise"
+  },
+  {
+   "id": "PearlCLineRawByte_v1",
+   "place": "useful work's prover",
+   "module": "verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_noise"
+  },
+  {
+   "id": "PearlCRowBlockByte_v1",
+   "place": "useful work's prover",
+   "module": "verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_noise"
+  },
+  {
+   "id": "PearlCRowSeedHeadByte_v1",
+   "place": "useful work's prover",
+   "module": "verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_noise"
+  },
+  {
+   "id": "PearlCRowSeedTailByte_v1",
+   "place": "useful work's prover",
+   "module": "verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_noise"
+  },
+  {
+   "id": "PearlCSeedBByte_v1",
+   "place": "useful work's prover",
+   "module": "verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_noise"
+  },
+  {
+   "id": "PearlCShaBlockByte_v1",
+   "place": "useful work's prover",
+   "module": "verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_noise"
+  },
+  {
+   "id": "PouwAdd64Hi_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwAdd64Lo_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwAdd8_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwAddSub8_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwCh32_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwDot16U8S8_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwFormX3_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwFormX_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwI32ToF32Rn_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.ncp"
+  },
+  {
+   "id": "PouwMaj32_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwNegBetaSum16_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwNoiseByte_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwPackBE4_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwSha512BigSigma0Hi_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwSha512BigSigma0Lo_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwSha512BigSigma1Hi_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwSha512BigSigma1Lo_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwSha512SmallSigma0Hi_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwSha512SmallSigma0Lo_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwSha512SmallSigma1Hi_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwSha512SmallSigma1Lo_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  },
+  {
+   "id": "PouwSub8_v1",
+   "place": "the circuits' catalogue",
+   "module": "verity.circuits.ops.words"
+  }
+ ],
+ "defined_outside_verity": {
+  "benchmarks": [
+   "BenchPopulationXor8"
+  ],
+  "tests": [
+   "A5CoinsTestXor8",
+   "A5MemoTestXor8",
+   "A5OutputsTestXor8",
+   "A5ReserveTestXor8",
+   "Add16",
+   "AmpereBF16TcDot16",
+   "And2",
+   "BatchTestAdd16",
+   "BatchTestMul16",
+   "BatchTestWlMul16",
+   "BitsTestAddWord",
+   "BlockCircuitTestOpaque",
+   "BooleanFindTestWord",
+   "BoundaryRowsTestAdd32",
+   "BoundaryRowsTestInc32",
+   "BoundaryRowsTestNot8",
+   "BoundaryRowsTestSame8",
+   "BoundaryRowsTestTake32",
+   "BoundaryRowsTestXor8",
+   "BoundaryTablesTestSame8",
+   "BoundaryTablesTestXor8",
+   "BoundaryWindowsCheckTestXor8",
+   "BtReadBad",
+   "BtRead{ib}x{ew}i{iw}",
+   "CcBodiesHalf",
+   "CcBodies{name}",
+   "CertRowsTestAdd16",
+   "CircuitCheckAdd64",
+   "CircuitCheckDeclines",
+   "CircuitCheckFloorKernel",
+   "CircuitCheckHolds",
+   "CircuitCheckKernel",
+   "CircuitCheckPartial",
+   "CircuitCheckS8Mul",
+   "CircuitCheckS8MulTight",
+   "CircuitCheckS8MulUntyped",
+   "CircuitCheckTableRead",
+   "CircuitCheckWide",
+   "CircuitCheckXorNibbleWord",
+   "ConfProbe",
+   "CoreEdgesXor16",
+   "CoreSpotConst8",
+   "CoreSpotId18",
+   "CoreSpotXor32",
+   "CoreSpotXor64",
+   "CoreSpotXor8",
+   "CutTestCopy16",
+   "ExampleWordNeg",
+   "FlockLoweringTestOnly",
+   "FlockTableRead{ib}x{ew}",
+   "GatherFakex4",
+   "GatherTwox4",
+   "GpTestAdd16",
+   "H1ServedTestFold1",
+   "H1ServedTestLow1",
+   "H1ServedTestXor1",
+   "H1WindowTestFold1",
+   "H1WindowTestLow1",
+   "H1WindowTestXor1",
+   "Id16",
+   "KBadLookup",
+   "KFakeLibrary",
+   "KLookup",
+   "KTableDot",
+   "LonelyWord",
+   "MembersRunXor8",
+   "Mul16",
+   "NetworkPeriodScanLow",
+   "NetworkPeriodScanMix",
+   "NoSigmaEntry",
+   "OneStageTestConst8",
+   "OneStageTestXor64",
+   "OneStageTestXor8",
+   "OutputsTestXor8",
+   "PadrevCmpAdd16",
+   "PortsOneUseAdd32",
+   "PortsOneUseAdd8",
+   "PortsOneUseByte",
+   "PortsOneUseDither",
+   "PortsOneUseFold",
+   "PortsOneUseKeyFold",
+   "PortsOneUseWiden",
+   "PortsTestAbsorb",
+   "PortsTestAcc",
+   "PortsTestAdd16",
+   "PortsTestAdd32",
+   "PortsTestAdd8",
+   "PortsTestAnyBound",
+   "PortsTestByte",
+   "PortsTestCarryAt",
+   "PortsTestDither",
+   "PortsTestDot4",
+   "PortsTestFold",
+   "PortsTestId8",
+   "PortsTestKeyFold",
+   "PortsTestLimbAt",
+   "PortsTestLimbSplit",
+   "PortsTestLimbs",
+   "PortsTestLo8",
+   "PortsTestMul",
+   "PortsTestNeg8",
+   "PortsTestNoise",
+   "PortsTestPair",
+   "PortsTestQuant",
+   "PortsTestRange7",
+   "PortsTestRangeNeg3",
+   "PortsTestSplit17",
+   "PortsTestTag",
+   "PortsTestWide",
+   "PortsTestWiden",
+   "PortsTestZero32",
+   "PrAdd16",
+   "PrMix",
+   "PrSub16",
+   "QpartWide64",
+   "R2PopulationTestAnd8",
+   "R2PopulationTestXor8",
+   "RecSessionTestXor8",
+   "RegLogOp",
+   "RegisteredTestXor1",
+   "RegisteredTestXor8",
+   "Relu16",
+   "RemoteTestXor8",
+   "ScanZkTestXor8",
+   "ServedCasesTestXor8",
+   "ServedTestXor8",
+   "ServiceTestXor8",
+   "SkewTestAdd16",
+   "SkewTestSub16",
+   "StratAgreeXor8",
+   "StructLowerToyAssert",
+   "StructLowerToyMix",
+   "StructLowerToyRead",
+   "StructuralTestMix",
+   "StructuralTestRead",
+   "SynAdd",
+   "SynLate",
+   "SynLx",
+   "SynLz",
+   "SynLz2",
+   "SynMinus",
+   "SynOx",
+   "SynPx",
+   "SynV",
+   "SynW",
+   "SynWide{n}",
+   "SynXor",
+   "TAdd32",
+   "TAdd64",
+   "TAnyTopKOrder",
+   "TAt",
+   "TEmptyScanOp8",
+   "TGatesAdd8",
+   "TGatesNeg8",
+   "TGatesPick",
+   "TGatesSum3",
+   "TGatesWide",
+   "THolds",
+   "TINeg16",
+   "TLo32",
+   "TNarrow",
+   "TPLAdd16",
+   "TPLNeg16",
+   "TPopAdd32",
+   "TPopKeyFold32",
+   "TPopValuesAdd32",
+   "TPopValuesKeyFold32",
+   "TReadEager",
+   "TRead{ib}x2",
+   "TRecutNot1",
+   "TSecondRecutNot1",
+   "TViewRecutNot1",
+   "TWide",
+   "TWide64",
+   "TWiden16",
+   "TWiredAdd16",
+   "TWiredMul16",
+   "TWiredNeg32",
+   "TWiredXor1",
+   "TestGatherF32x{TOY_V}",
+   "TestGatherF32x{V}",
+   "TestPick",
+   "TwoStageDriverTestSame8",
+   "TwoStageDriverTestXor8",
+   "TwoStageTestId18",
+   "TwoStageTestId32",
+   "TwoStageTestXor8",
+   "Wx{w}",
+   "{family}x{E}",
+   "{name}Word"
+  ],
+  "tools": [
+   "CircuitCheckLazyOperand"
+  ]
+ }
+}

@@ -120,7 +120,7 @@ from verity.circuits.refs import array_of
 from verity.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP
 from verity.circuits.types import Array, Value
 
-from .boolean import PouwXor32
+from verity.circuits.ops.boolean.words import PouwXor32
 
 __all__ = [
     "FOLDS",
