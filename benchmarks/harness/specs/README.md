@@ -12,11 +12,11 @@ a spec or a sweep, and this file says what each one is for.
   and traffic shapes, every request sampled greedily. A spec names one by its id.
 - A **steady-state spec** (`verity-bench/steady-spec/v0`) is the proof server's rate at steady state: block types, each a
   row with its staged statement's pin, timed at each of its prover counts on one card with the spec's cores. Its points
-  run only with `--direct NODE`.
+  run in a GPU slot of a node (`research run --pool gpu`).
 
 ~~~text
 verity-bench plan SPEC     # each point's identity, and its passing run if it has one
-verity-bench run SPEC      # one recorded run for each point without a passing run (--direct NODE: on that GPU node)
+verity-bench run SPEC      # in a research run: its point without a passing run, here (--point POINT: of several)
 verity-bench check SPEC    # exit 0 only when every point has a passing run
 ~~~
 
@@ -55,7 +55,7 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   (`served_pearlplus.sh`'s step).
 - `llama32-1b-1gpu-pouw-protocol-served-h100`: the same on one H100.
 - `llama32-1b-1gpu-stock-served-h100`: its two stock arms alone, with no setup: a served point on an H100 whose machine
-  has no CUDA toolkit to build Pearl-C with (`verity-bench run SPEC --here` on VCF's node).
+  has no CUDA toolkit to build Pearl-C with (`verity-bench run SPEC` on VCF's node).
 
 ## PoUS's bandwidth audit
 

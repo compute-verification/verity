@@ -615,8 +615,10 @@ def released(j: Any) -> Any:
         raise D.Reject("log is not a list of strings")
 
     def go():
-        roots = Ch.released_roots_of(Ch.LiveCommitment.from_json(j["commitment"]), j["log"])
-        return {"chain": Ch.log_chain(j["log"]).hex(), "roots": _roots(roots)}
+        c = Ch.LiveCommitment.from_json(j["commitment"])
+        log = Ch.released_log_of(c, j["log"])
+        return {"chain": Ch.log_chain(j["log"]).hex(), "log": [e.to_json() for e in log],
+                "roots": _roots(Ch.by_family(c, log))}
     return _refusing(go)
 
 
@@ -648,9 +650,9 @@ def session(j: Any) -> Any:
     _request(j, ["key", "ledger", "main", "pins", "session", "window"])
 
     def go():
-        c, roots = Ch.trusted_session_of(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), j["pins"],
-                                         j["main"], j["session"], lms_verify)
-        return {"commitment": c.to_json(), "roots": _roots(roots)}
+        c, log = Ch.trusted_session_of(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), j["pins"],
+                                       j["main"], j["session"], lms_verify)
+        return {"commitment": c.to_json(), "roots": _roots(Ch.by_family(c, log))}
     return _refusing(go)
 
 
@@ -1005,7 +1007,7 @@ def _set(lines: list[str], i: int, **changes) -> list[str]:
 
 
 RELEASED_NAMES = ["honest", "head", "head-form", "empty", "odd", "root", "after", "index", "label", "label-release",
-                  "event", "tree-event", "time", "time-type", "extra", "non-canonical", "torn", "long", "float",
+                  "event", "tree-event", "time", "early", "time-type", "extra", "non-canonical", "torn", "long", "float",
                   "commitment-form", "request"]
 
 
@@ -1044,6 +1046,8 @@ def released_case(rng: random.Random, name: str) -> Any:
             j["log"] = _set(lines, rng.choice([i, i + 1]), event=rng.choice([Ch.TREE_EVENT, Ch.OPEN_EVENT]))
         case "time":
             j["log"] = _set(lines, rng.choice([i, i + 1]), **{rng.choice(["received_at", "released_at"]): -1})
+        case "early":
+            j["log"] = _set(lines, i + 1, released_at=json.loads(lines[i])["received_at"] - 1)
         case "time-type":
             k = "received_at" if rng.random() < 0.5 else "released_at"
             j["log"] = _set(lines, i if k == "received_at" else i + 1, **{k: rng.choice(["1", None, True, [1]])})

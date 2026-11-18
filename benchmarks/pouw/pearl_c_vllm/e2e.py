@@ -236,11 +236,14 @@ def find_model(llm):
 
 
 def install(model, args, coins):
-    """Every LinearBase layer's apply, found by type (`verity_vllm.protocols.linear.vllm_site`), through one `Stack` whose executor is a
+    """Every LinearBase layer's apply, found by type (`verity_vllm.protocols.linear.vllm_site`), through one `Stack`, filed as the
+    kernel of every due linear (`verity.hooks.ComputeBlockWith`), whose executor is a
     `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  The execution phase's salt is `coins`' salt coin,
     asked for once the weights are committed (`Coins`).  Returns the run, the weights by id and the stack; the stack starts
     inactive (vLLM's own apply), and `arm_of` gives each mode's arm."""
     from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
+    from verity.hooks import ComputeBlockWith
+    from verity_vllm import messages
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.protocols.linear import vllm_site
     from verity_vllm.protocols.linear.api import Stack
@@ -274,7 +277,8 @@ def install(model, args, coins):
     bad = stack.refusals()
     if bad:
         raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
-    vllm_site.attach(stack, sites, Hooks(tag=f"pouw:{scheme}"))
+    messages.current().request(f"pouw:{scheme}", ComputeBlockWith(stack))
+    vllm_site.attach(sites, Hooks(tag=f"pouw:{scheme}"))
     return run, weights, stack
 
 

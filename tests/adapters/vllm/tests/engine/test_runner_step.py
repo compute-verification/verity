@@ -9,8 +9,6 @@ from typing import Any
 
 import pytest
 
-from verity import hooks as H
-from verity_vllm import messages
 from verity_vllm.engine import hooks, runner_step
 from verity_vllm.engine.runner_step import Rank, Step
 
@@ -353,20 +351,3 @@ def test_add_refuses_a_part_with_no_rank_and_a_part_that_is_already_on() -> None
     assert runner_step.parts(runner) == (part,)
     remove()
     assert hooks.live() == before
-
-
-def test_steps_emits_each_step_to_the_exchange() -> None:
-    messages.close()
-    seen: list[Any] = []
-    messages.current().subscribe("s", "steps", seen.append)
-    runner = Runner([])
-    remove = runner_step.add(runner, runner_step.Steps())
-    try:
-        runner.execute_model(SimpleNamespace(total_num_scheduled_tokens=5, num_scheduled_tokens={"r0": 4, "r1": 1}))
-        runner.sample("hidden", "batch", None)
-        runner.execute_model(tokens(0))
-        one_step(runner)
-    finally:
-        remove()
-        messages.close()
-    assert seen == [H.StepBegan(1, ("r0", "r1"), 5), H.StepEnded(1), H.StepBegan(2, (), 3), H.StepEnded(2)]

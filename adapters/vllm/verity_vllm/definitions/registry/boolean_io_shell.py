@@ -1,8 +1,8 @@
 """`io_shell`'s Definitions on bits: `IngressPrompt_v2{MODEL,LP,V}`, its word body line for line over gates (the body is
 `io_shell.parse`, written once over its steps), so its word view is its `_v1` at the same statics;
 `IngressSampled_v1{MODEL,LP,V,RID}`, ingress schema v1's parse (`io_shell`'s module docstring), which has no word view: its seed
-is a 64-bit sum; and `ScanSlots_v2{NS,NP,IDB,K0,K,OCC,LP,MAX,IDS}`, the scan state row's read (`io_shell`'s module docstring),
-which has no word view either: its port is the row's bits.
+is a 64-bit sum; and `ScanSlots_v3{NS,NP,IDB,K0,K,OCC,LP,MAX,IDS}`, the scan state row's read (`io_shell`'s module docstring),
+which has no word view either: its gates read the row's bits.
 
 `IngressSampled_v1` is `IngressPrompt_v2`'s steps over schema v1's layout (`io_shell.layout`), then each byte of the user, each
 ratio's seven digits and its point, top_p's bounds, and the seed field: `io_shell.field_checks`' checks, its value a 64-bit sum
@@ -13,18 +13,25 @@ compare, a select as `forms.mux`, an AND and a NOT of bits), and bit i of a byte
 so a field's selects of constant words are ANDs with one wire and its sums fold above the field's largest value.  No table or
 lookup gate.  Every byte of the body reaches ``ok``.
 
-`ScanSlots_v2` copies each lane's fields out of the row as they are, its ids zero-extended, and computes one thing: the slot
-its first position carries on, whose count is the prompt's length minus one (mod 2^32), a borrow chain of 30 ANDs a lane.
-Every lane's is computed in every unit, so a unit's lanes but its own Program's are its cost and nobody's input.
+`ScanSlots_v3` takes the row as the u16 words it is registered as and gives each field as the i32 its readers take: the token
+`EmbeddingRead_v2`'s, the slot, occupancy word and head `TokenFeed_v1`'s, `SelectEntry_v1`'s and `SelectCollect_v1`'s. Its
+words become bits and its bits words through `WordBits{16}` and `BitsWord{32}`, which are wiring; between them it copies
+each lane's fields out of the row as they are, its ids zero-extended, and computes one thing:
+the slot its first position carries on, whose count is the prompt's length minus one (mod 2^32), a borrow chain of 30 ANDs a
+lane. Every lane's is computed in every unit, so a unit's lanes but its own Program's are its cost and nobody's input.
 """
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce
-from verity.circuits.defs import bind
+from verity.circuits.boolean.trace import emit, trace
+from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.population import BitsWord, WordBits
+from verity.circuits.refs import Coll
 from verity.circuits.types import Array, Tuple
 
 from verity_vllm.definitions.registry import io_shell as X
@@ -132,11 +139,32 @@ def _scan(S):
     return run
 
 
-ScanSlotsV2 = EW.specialized("ScanSlots", 2, ["NS", "NP", "IDB", "K0", "K", "OCC", "LP", "MAX", "IDS"], _scan, X.slots_sig,
-                             doc="Each lane's first position's token and slot, occupancy word and head from the scan's state "
-                                 "row (`io_shell`'s module docstring; `io_shell.scan_reference`).",
-                             refuse=X.slots_refuse,
-                             conformance="not-yet-established: the network attester's scan state row as its Programs read "
-                                         "their slots, and each slot's first position's token feed")
+SCAN_STATICS = ("NS", "NP", "IDB", "K0", "K", "OCC", "LP", "MAX", "IDS")
+_SCANS: dict[tuple, Any] = {}
 
-BOOLEAN_IO_SHELL = [IngressPromptV2, IngressSampledV1, ScanSlotsV2]
+
+def scan_bits(S) -> tuple[Any, list, Any]:
+    lane = (X.BITS32, Array(S.NP + 1, X.BITS32), X.BITS32, Array(2, X.BITS32))
+    params, ret = [Array(S.NS, Array(16, BL.BIT))], Tuple(*[t for _ in S.OCC for t in lane])
+    key = tuple(getattr(S, k) for k in SCAN_STATICS)
+    if key not in _SCANS:
+        _SCANS[key] = trace(_scan(S), params, ret)
+    return _SCANS[key], params, ret
+
+
+def _scan_words(B, S, state):
+    T, params, ret = scan_bits(S)
+    out = emit(T, params, ret, B, B.batch(bind(WordBits, W=16), state, axes=(0,)))
+    words = B.batch(bind(BitsWord, W=32), Coll(Array(len(S.OCC) * (S.NP + 5), X.BITS32), out.refs), axes=(0,))
+    return Coll(X.slots_sig(S)[1], words.refs)
+
+
+ScanSlotsV3 = CompositeDefinition("ScanSlots", 3, SCAN_STATICS, X.slots_sig, _scan_words,
+                                  doc="Each lane's first position's token and slot, occupancy word and head from the scan's "
+                                      "state row of u16 words, each an i32 (`io_shell`'s module docstring; "
+                                      "`io_shell.scan_reference`).",
+                                  refuse=X.slots_refuse,
+                                  conformance="not-yet-established: the network attester's scan state row as its Programs "
+                                              "read their slots, and each slot's first position's token feed")
+
+BOOLEAN_IO_SHELL = [IngressPromptV2, IngressSampledV1, ScanSlotsV3]

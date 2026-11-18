@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.protocols.resource_accounting.network.verifier import advice as I1
+from verity_vllm.pipeline.advice_code import format as I1
 
 from tests.engine.fake_scheduler import FakeRequest, FakeScheduler, drive
 from verity_vllm.config import UsageError

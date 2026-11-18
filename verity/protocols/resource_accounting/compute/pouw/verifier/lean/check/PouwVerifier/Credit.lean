@@ -326,10 +326,10 @@ sample root `root` (its hex) under `k`, from the session's files `session` (`tru
 withheld (`withheldOn`); else the refusal (`coin`). -/
 def drawChallengePhase (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
     R (Spot.Challenger.LiveCommitment × Spot.Challenger.Roots) := do
-  let got ← (trustedChallengePhaseOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
+  let (c, log) ← (trustedChallengePhaseOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
     fun e => ("coin", s!"the draw's session is not trusted: {e}")
   unless Spot.Challenger.withheldOn ledger root do throw ("coin", Spot.Challenger.WITHHELD)
-  pure got
+  pure (c, Spot.Challenger.byFamily c log)
 
 /-- `credit._credited` up to the sample root: the verifier's challenger key, the credited calls' indices and the root
 `draw_root` gives over the execution phase's manifest, Commit record, receipts and round log; else the refusal. -/
