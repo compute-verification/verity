@@ -4293,6 +4293,37 @@ def test_an_open_entry_that_gives_a_why_lists_a_prop_a_statement_reads_and_none_
         assert new["open"]["P.Held"]["digest"] != digest
 
 
+def test_an_open_entry_that_waits_on_a_guarantee_lists_a_prop_no_guarantee_takes_and_an_update_never_adds_one():
+    """A `Prop` no guarantee takes or reads, whose stronger conclusion a listed guarantee waits on, is listed by hand
+    under `open` with `waits` and a `why`: its digest is the build's walk of it, an update keeps it and adds none, and it
+    fails when it changes, when its owner, issue, due date or `why` is missing, when it waits on no listed guarantee, and
+    once a guarantee takes it."""
+    walk = {"P.Wired": [{"name": "P.Wired", "kind": "def", "module": "P.Defs", "sha256": "7" * 64}]}
+    now = holding() | {"assumption_reads": walk}
+    pol = A.judge(TWO, now, FILES, update=True)[1]
+    assert "P.Wired" not in pol.get("open", {}), "an update adds no such entry"
+    waits = {"owner": "@lean", "issue": "LEAN-238", "due": "2026-11-24", "waits": "P.t",
+             "why": "P.t's conclusion on the committed files waits on it"}
+    written = pol | {"open": {"P.Wired": waits}}
+    assert [(x.code, x.entry) for x in A.judge(written, now, FILES)[0]] == [("open.unrecorded", "P.Wired")]
+    kept = A.judge(written, now, FILES, update=True)[1]
+    entry = kept["open"]["P.Wired"]
+    assert entry == waits | {"digest": entry["digest"]} and kept["guarantees"] == pol["guarantees"]
+    assert list(entry) == ["owner", "digest", "issue", "due", "waits", "why"]
+    assert A.judge(kept, now, FILES) == ([], kept) and A.judge(kept, now, FILES, update=True) == ([], kept)
+    changed = holding() | {"assumption_reads": {"P.Wired": [walk["P.Wired"][0] | {"sha256": "8" * 64}]}}
+    assert [x.code for x in A.judge(kept, changed, FILES)[0]] == ["open.digest"]
+    for bad, code in [({k: v for k, v in entry.items() if k != "issue"}, "open.form"),
+                      ({k: v for k, v in entry.items() if k != "owner"}, "open.form"),
+                      (entry | {"why": "two\nlines"}, "open.form"), (entry | {"waits": "P.w"}, "open.waits")]:
+        assert [x.code for x in A.judge(kept | {"open": {"P.Wired": bad}}, now, FILES)[0]] == [code], bad
+    plain = {k: v for k, v in entry.items() if k not in ("waits", "why")}
+    assert [x.code for x in A.judge(kept | {"open": {"P.Wired": plain}}, now, FILES)[0]] == ["open.unread"]
+    taken = taking(now) | {"pins": {n: p | {"premises": [{"binder": "s", "head": "P.Wired", "module": "P.Defs"}]}
+                                    if n == "P.u" else p for n, p in now["pins"].items()}}
+    assert "open.waits-taken" in {x.code for x in A.judge(kept, taken, FILES)[0]}
+
+
 def test_an_open_entry_that_rests_on_a_read_gives_its_issue_its_due_date_its_owner_and_one_line_of_why():
     """Such an entry is a person's: it owes the issue that discharges it and its due date, both, an owner, and a `why` of
     one line, whether or not a statement takes its `Prop`, and each failure takes a person."""

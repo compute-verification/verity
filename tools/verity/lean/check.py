@@ -2707,8 +2707,8 @@ def on_read(rec) -> bool:
     """Whether the `open` entry ``rec`` says it rests on a read: it gives a `why`, one line a person writes naming a
     statement that holds its `Prop` without taking it as a hypothesis (a conjunct of its event).  The guarantees that read
     the `Prop` without taking it then rest on it, whether or not another statement takes it.  An update keeps the field
-    and writes none (`assumption_records`)."""
-    return isinstance(rec, dict) and "why" in rec
+    and writes none (`assumption_records`).  An entry that `waits` on a guarantee rests on no read."""
+    return isinstance(rec, dict) and "why" in rec and "waits" not in rec
 
 
 def stated_by(policy: dict, facts: dict) -> dict[str, str]:
@@ -3553,12 +3553,41 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                                  f"it"))
         return entry | text
 
+    def waiting(d: str, rec: dict) -> None:
+        """An `open` entry that `waits` on a listed guarantee: a `Prop` no guarantee takes, whose stronger conclusion
+        that guarantee would draw once it is proved. It keeps its owner, issue, due date and `why`; its digest is the
+        build's."""
+        g, why = rec["waits"], rec.get("why")
+        h = read[d][1] if d in read else walked[d][1] if d in walked else None
+        opens[d] = {k: v for k, v in (("owner", rec.get("owner")), ("digest", h), ("issue", rec.get("issue")),
+                                      ("due", rec.get("due"))) if v is not None} | {"waits": g, "why": why}
+        if g not in owners:
+            fails.append(Failure("open.waits", d, f"open: {d} waits on {g!r}, which is no guarantee this lock lists: "
+                                 f"name the listed guarantee whose stronger conclusion waits on it"))
+        if by := premised.get(d):
+            fails.append(Failure("open.waits-taken", d, f"open: {d} is a premise of {', '.join(sorted(by))}, so it "
+                                 f"waits on nothing: remove its `waits` and `why`, and it is their open premise"))
+        if not (OWNER.fullmatch(str(rec.get("owner"))) and OPEN_ISSUE.fullmatch(str(rec.get("issue")))
+                and OPEN_DUE.fullmatch(str(rec.get("due"))) and isinstance(why, str) and why.strip() and "\n" not in why):
+            fails.append(Failure("open.form", d, f"open: {d}'s entry, which `waits` on a guarantee, gives its `owner` "
+                                 f"(@lane), the `issue` that discharges it (TEAM-N), its `due` (YYYY-MM-DD) and a "
+                                 f"one-line `why` saying what waits on it"))
+        if h is None:
+            fails.append(Failure("open.waits-unknown", d, f"open: {d} waits on {g}, but no module the build reads "
+                                 f"declares it: write the definition's full name"))
+        elif not update and rec.get("digest") != h:
+            fails.append(Failure("open.digest" if "digest" in rec else "open.unrecorded", d, f"open: {d}'s definition "
+                                 f"in {module(d)} changed; run `check.py --update` and commit the record"))
+
     for a, rec in sorted((domained | opened | assumed).items()):
         section = "assumptions" if a in assumed else "open" if a in opened else "domain"
         if len(twice := [s for s, x in (("assumptions", assumed), ("domain", domained), ("open", opened)) if a in x]) > 1:
             fails.append(Failure(f"{twice[-1]}.listed-twice", a, f"{twice[-1]}: {a} is listed under "
                                  f"{' and '.join(f'`{s}`' for s in twice)}; keep the one entry its kind makes it"))
         who = (rec or {}).get("owner") or owner or (first_owner(premised.get(a)) if fallback else None)
+        if section == "open" and isinstance(rec, dict) and "waits" in rec:
+            waiting(a, rec)
+            continue
         if a in read:
             m, h, _ = read[a]
             what = f"{a}'s definition in {m}"

@@ -350,7 +350,7 @@ def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str],
             v = derived(f"{section}[{k}]", x, y, z, candidate)
         else:
             v = {}
-            for f in ("id", "owner", "digest", "issue", "due", "why", "cites"):
+            for f in ("id", "owner", "digest", "issue", "due", "why", "cites", "waits"):
                 w = (derived if f == "digest" else one)(f"{section}[{k}].{f}", owned(x, f), owned(y, f), owned(z, f),
                                                         candidate if f == "digest" else why)
                 v |= {} if w is MISSING else {f: w}

@@ -173,7 +173,9 @@ keeps or drops from and never adds to.
   the build or of a package it requires. A domain hypothesis is part of what its guarantee says, with a one-line
   `why`, or `cites` the listed guarantee whose statement it is; every other premise is open, with the Linear `issue`
   that discharges it and its `due` date, written by hand. A `Prop` a statement reads without taking it is open only by
-  an entry that gives a `why`, for each guarantee that reads it (`on_read`). Each has an `owner` and a `digest`, so a
+  an entry that gives a `why`, for each guarantee that reads it (`on_read`). A `Prop` no guarantee takes or reads is
+  open only by an entry that `waits` on the listed guarantee whose stronger conclusion waits on it, with its `issue`,
+  `due` and a `why`; it fails once a guarantee takes it (`waiting`). Each has an `owner` and a `digest`, so a
   change to a premise or to what it reads fails under its own name. An entry may carry `id`, the claim id that names
   it (`trusted-device`, `cr/sha-512`), written by hand and never renamed; `claim_ids.py` writes the table from each id
   to its Lean names, `verity/commitments/claim_ids.json`, from these. `open_seed`, `open_default_issue` and

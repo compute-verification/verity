@@ -146,7 +146,9 @@ Their history is in the decisions log.
   every guarantee that took it. Lean is the one source of truth for what we assume.
 - Named assumptions are the few real ones (a hash's collision resistance, the auditor's devices), in the lock's
   `assumptions_module`; any other premise is `domain` or `open`, and a `Prop` a statement only reads is `open` by its
-  entry's `why` (the README's lock sections). A named `Prop` counted only as an antecedent inside a premise an honest
+  entry's `why` (the README's lock sections). A `Prop` no guarantee takes, which a listed guarantee's stronger conclusion
+  waits on, is `open` by hand with `waits` naming that guarantee beside its owner, issue, due date and `why`; `--update`
+  keeps it and adds none, and the check refuses it once a guarantee takes it. A named `Prop` counted only as an antecedent inside a premise an honest
   witness concludes is that premise's scope: `domain`, its `why` saying what it restricts there, and no witness is
   asked to conclude it.
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
