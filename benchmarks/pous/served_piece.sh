@@ -4,7 +4,7 @@
 #
 #   POUS_CMD='bash benchmarks/pous/served_piece.sh "$@"'
 #
-# Before the card: libp2v1.so built for it (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh at ARCH, default sm_90a) into a
+# Before the card: libp2v1.so built for it (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh at ARCH, default the `arch` of this node's card record) into a
 # scratch directory removed on exit, unless P2_LIB names one, as a node that refuses `setarch -R` needs, since the build
 # doesn't run there; the library loaded once by the sessions' Python, with no card to see; and the two Lean verifiers
 # that decide, pous-run-protocol (PoUS's case) and poub-p2-protocol (PoUB-P2's), built in a scratch copy of
@@ -76,7 +76,12 @@ if [ -z "$LIB" ]; then
   setarch "$(uname -m)" -R true 2> /dev/null \
     || { echo "POUS: no answer: setarch -R is refused on this node, so libp2v1.so doesn't build here: build it where" \
            "it is allowed (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh) and name its directory in P2_LIB"; exit 3; }
-  ARCH=${ARCH:-sm_90a} bash "$ROOT/verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \
+  if [ -z "${ARCH:-}" ]; then
+    ARCH=$(PYTHONPATH="$ROOT:$ROOT/benchmarks/harness" python3 -m verity_bench.kit card \
+      "$(nvidia-smi -i "${GPU_LEASE_UUID:-0}" --query-gpu=name --format=csv,noheader 2> /dev/null | head -1)" arch 2>&1) \
+      || { echo "POUS: no answer: ARCH is not given and the card's record doesn't give it: $ARCH"; exit 3; }
+  fi
+  ARCH=$ARCH bash "$ROOT/verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \
     || { tail -20 "$DIR/build.log"; echo "POUS: no answer: libp2v1.so doesn't build (build.log)"; exit 3; }
   LIB=$S/p2/lib
   stamp "built libp2v1.so"

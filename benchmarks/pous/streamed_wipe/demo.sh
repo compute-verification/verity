@@ -60,7 +60,8 @@
 #   --dram-gb G          the fill on the DRAM, in GB (implies --dram; default: what's available less the reserve)
 #   --dram-reserve-gib G DRAM left out of the fill (default 16)
 #   --lease-min M        gpu-lease's --max-min (default 60; a fill of the disks too takes longer)
-#   --gpu NAME           refuse a GPU whose name lacks NAME (default H200; any: take any)
+#   --card SKU           refuse a GPU whose card record (calibration/hardware/cards/, by nvidia-smi's name) is not
+#                        SKU's (default h200-sxm-141gb; any: take any)
 #   --node NAME          the developer's node, the wiped server's id (default: hostname)
 #   --limit-ns N         the deadline a read (default 20 ms)
 #   --wipe-protocol EXE  the Lean judge built elsewhere (served_wipe.sh builds it outside this tree's .lake, which
@@ -83,7 +84,7 @@ mkdir -p "$O"
 if [ "${1:-}" = leased ]; then
   [ -n "${GPU_LEASE_UUID:-}" ] && export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID
 else
-  DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000
+  DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda CARD=h200-sxm-141gb NODE=$(hostname) LIMIT=20000000
   SIMULATED=0 FOREIGN=0 EXPECT= EGRESS= LINKS= READS= DISKS=() DISK_GB= DISK_RESERVE=10 DISK_SPARE=0 LEASE_MIN=60
   DRAM=0 DRAM_GB= DRAM_RESERVE=16 WIPE_PROTOCOL= TRUSTED=
   ARGS=("$@")
@@ -112,7 +113,7 @@ else
       --dram-gb) DRAM=1 DRAM_GB=$2; shift ;;
       --dram-reserve-gib) DRAM_RESERVE=$2; shift ;;
       --lease-min) LEASE_MIN=$2; shift ;;
-      --gpu) GPU=$2; shift ;;
+      --card) CARD=$2; shift ;;
       --node) NODE=$2; shift ;;
       --limit-ns) LIMIT=$2; shift ;;
       --wipe-protocol) WIPE_PROTOCOL=$2; shift ;;
@@ -223,7 +224,7 @@ if ch:
 open(path, "w").write(json.dumps(doc, indent=1, sort_keys=True))
 EOF
   cp "$S/periods/p0/period.json" "$O/period.json"
-  export DEMO_PERIOD=$S/periods/p0 DEMO_NODE=$NODE DEMO_STORE=$STORE DEMO_GPU=$GPU DEMO_EXPECT=$EXPECT
+  export DEMO_PERIOD=$S/periods/p0 DEMO_NODE=$NODE DEMO_STORE=$STORE DEMO_CARD=$CARD DEMO_EXPECT=$EXPECT
   if [ "$STORE" = cuda ] && [ -z "${GPU_LEASE_UUID:-}" ] && command -v gpu-lease >/dev/null 2>&1; then
     LEASE_MEM=()
     [ "$DRAM" = 1 ] && LEASE_MEM=(--mem-gb "$(awk '/^MemTotal:/ {printf "%d", $2 / 1048576 - 2}' /proc/meminfo)")
@@ -240,7 +241,10 @@ if [ "$DEMO_STORE" = cuda ]; then
     --format=csv > "$O/gpu.txt"
   nvidia-smi -q -d MEMORY,CLOCK,PERFORMANCE >> "$O/gpu.txt" 2>&1 || true
   NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader ${CUDA_VISIBLE_DEVICES:+-i "$CUDA_VISIBLE_DEVICES"} | head -1)
-  case "$DEMO_GPU:$NAME" in any:*|*:*"$DEMO_GPU"*) ;; *) echo "REFUSED: the GPU is '$NAME', not an $DEMO_GPU"; exit 3 ;; esac
+  if [ "$DEMO_CARD" != any ]; then
+    SKU=$(PYTHONPATH="$PWD:$PWD/benchmarks/harness" python3 -m verity_bench.kit card "$NAME" sku 2>&1) || { echo "REFUSED: $SKU"; exit 3; }
+    [ "$SKU" = "$DEMO_CARD" ] || { echo "REFUSED: the GPU is '$NAME', a $SKU, not a $DEMO_CARD"; exit 3; }
+  fi
 fi
 rc=0
 uv run --no-sync python benchmarks/pous/streamed_wipe/wipe_on_node.py --period "$DEMO_PERIOD" --out "$O" --node "$DEMO_NODE" \

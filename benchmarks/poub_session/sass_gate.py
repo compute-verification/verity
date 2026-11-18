@@ -181,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("ptxas", type=Path)
     ap.add_argument("sass", type=Path)
     ap.add_argument("out")
-    ap.add_argument("--arch", default="sm_90a")
+    ap.add_argument("--arch", required=True, help="the build's SASS target, its card record's `arch` (sm_90a)")
     ap.add_argument("--listings", type=Path, metavar="DIR")
     ap.add_argument("--no-leaf64", dest="leaf64", action="store_false",
                     help="the build has no -DLEAF_PASS64: the leaf pass's 64-row kernels are refused, not wanted")
