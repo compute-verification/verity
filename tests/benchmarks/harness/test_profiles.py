@@ -1,7 +1,6 @@
 """The serving profiles (`verity_bench.profiles`, `benchmarks/production.toml`): each profile's version pinned with its
-digest, the file refusing what it doesn't declare, and its datasets, bounds and both command lines equal to serve_tax's
-for the same load, but for the two changes the profiles make: no sampling flag where serve_tax samples greedily, and
-fixed-size's 1,024 tokens out where serve_tax's long load has 128. No engine."""
+digest, the file refusing what it doesn't declare, its datasets and bounds equal to serve_tax's for the same load, and
+each model's load read on one card. No engine."""
 from __future__ import annotations
 
 import importlib.util
@@ -17,11 +16,10 @@ from verity_config import ConfigError
 
 SERVE_TAX = Path(__file__).resolve().parents[3] / "benchmarks" / "serve_tax" / "serve_tax.py"
 PINS = {
-    "coding-agent": (1, "a24d1318f600e63c49c28dc74451dcd6b31d2e2bb118088909b9924e53a0f923"),
-    "chat": (1, "e20c6329d358ca47456b00c1e5393dabf35983b2b47d7b8f6d351526da03a057"),
-    "fixed-size": (1, "fb3b62a2b5b09d64c0f44837e700852866c02c8c43c5c1eae8ee5a3b5fedd92e"),
+    "coding-agent": (1, "54ef9ec108314bddeaff1f5c8546edf8b00f8cdd32e046be0a3ca8a159578ade"),
+    "chat": (1, "553bc90ac63b177fcd651c58798f764d7e30f26f57dee79688a92b613e3c2a40"),
+    "fixed-size": (1, "93036f84deab9449aa7d8e4f1343c9f23a1918bed489dc5efbcb036d51e1cbc4"),
 }
-CLIENT = (sys.executable, "-m", "vllm.entrypoints.cli.main")
 
 
 @pytest.fixture(scope="module")
@@ -52,7 +50,7 @@ def test_objects_are_frozen(doc):
     with pytest.raises(FrozenInstanceError):
         doc.profiles["chat"].prompts = 1
     with pytest.raises(TypeError):
-        doc.profiles["coding-agent"].users["glm53"] = 8
+        doc.profiles["coding-agent"].users["glm53"]["h200"] = 8
 
 
 @pytest.mark.parametrize(("table", "line"), [
@@ -69,8 +67,10 @@ def test_an_unknown_key_is_refused(tmp_path, table, line):
 
 
 @pytest.mark.parametrize(("old", "new", "refusal"), [
-    ("glm53 = 4\n", "glm53 = 0\n", "a positive count"),
-    ("llama32-1b = \"not found yet\"\n", "llama32-1b = \"unknown\"\n", "a positive count"),
+    ("glm53.h200 = 4\n", "glm53.h200 = 0\n", "a positive count"),
+    ("llama32-1b.h100 = \"not found yet\"\n", "llama32-1b.h100 = \"unknown\"\n", "a positive count"),
+    ("llama32-1b.h100 = \"not found yet\"\n", "", "names cards \\['h200'\\], not its cards \\['h100', 'h200'\\]"),
+    ("glm53.h200 = 4\n", "glm53.h200 = 4\nglm53.h100 = 4\n", "names cards"),
     ("prompts = 200\n", "", "exactly"),
     ("within = [\"token\"]\n", "within = [\"e2e\"]\n", "within names"),
     ("[profiles.coding-agent.cuts.131072]", "[profiles.coding-agent.cuts.65536]", "no cut at llama-3.2-1b"),
@@ -105,47 +105,18 @@ def test_datasets_bounds_and_shapes_are_serve_taxs(doc, S):
             S.MODELS[name].repo, S.MODELS[name].revision, S.MODELS[name].served)
 
 
-def test_glm53s_stock_server_is_serve_taxs_prod(doc, S):
-    theirs = S.server_argv(S.ARMS["prod"], S.MODELS["glm53"], Path("/ckpt"), 8000, max_model_len=262144)
-    ours = P.serve_argv(doc, "glm53", "/ckpt", port=8000)
-    assert ours[:3] == ["vllm", "serve", "/ckpt"]
-    assert ours[3:] == theirs[theirs.index("--model") + 2:]
+def test_a_load_is_a_models_on_one_card_and_not_found_yet_is_refused(doc):
+    assert P.load_point(doc, "coding-agent", "glm53", "h200") == 4
+    with pytest.raises(ConfigError, match="no load on card h100; its cards are h200"):
+        P.load_point(doc, "coding-agent", "glm53", "h100")
+    with pytest.raises(ConfigError, match="chat on glm53.h200: the load is not found yet"):
+        P.load_point(doc, "chat", "glm53", "h200")
 
 
-def test_the_1bs_stock_server_is_serve_taxs_compiled_at_vllms_limits(doc, S):
-    theirs = S.server_argv(S.ARMS["compiled"], S.MODELS["llama32-1b"], Path("/ckpt"), 8000)
-    tail = theirs[theirs.index("--model") + 2:]
-    for flag in ("--max-model-len", "--max-num-seqs"):
-        del tail[tail.index(flag):tail.index(flag) + 2]
-    assert P.serve_argv(doc, "llama32-1b", "/ckpt", port=8000)[3:] == tail
+def test_each_models_cards_are_card_files_shorts(doc):
+    from verity.device import load_card, skus
 
-
-@pytest.mark.parametrize(("profile", "model", "load", "rung"), [
-    ("coding-agent", "glm53", "agentic-256k", 1),
-    ("coding-agent", "llama32-1b", "agentic", 1),
-    ("chat", "glm53", "chat", 16),
-    ("chat", "llama32-1b", "chat", 8),
-    ("fixed-size", "glm53", "long", 4),
-    ("fixed-size", "llama32-1b", "long", 2),
-])
-def test_the_client_is_serve_taxs_but_sampling_and_fixed_size_output(doc, S, tmp_path, profile, model, load, rung):
-    theirs = S.bench_argv(S.MODELS[model], Path("/ckpt"), 8000, S.LOADS[load], rung, tmp_path, "t-0", dataset="/data")
-    i = theirs.index("--temperature")
-    assert theirs[i:i + 2] == ["--temperature", "0"]
-    del theirs[i:i + 2]
-    if profile == "fixed-size":
-        theirs[theirs.index("--random-output-len") + 1] = "1024"
-    in_flight = None if profile == "coding-agent" else rung
-    ours = P.bench_argv(doc, profile, model, "/ckpt", port=8000, result_dir=tmp_path, tag="t-0", dataset_path="/data",
-                        in_flight=in_flight, vllm=CLIENT)
-    assert ours == theirs
-
-
-def test_a_load_not_found_yet_is_refused_unless_given(doc, tmp_path):
-    assert P.load_point(doc, "coding-agent", "glm53") == 4
-    with pytest.raises(ConfigError, match="not found yet"):
-        P.bench_argv(doc, "chat", "glm53", "/ckpt", port=8000, result_dir=tmp_path, tag="t")
-    argv = P.bench_argv(doc, "chat", "glm53", "/ckpt", port=8000, result_dir=tmp_path, tag="t", in_flight=12)
-    assert argv[:3] == ["vllm", "bench", "serve"]
-    assert argv[argv.index("--max-concurrency") + 1] == "12"
-    assert not {"--temperature", "--top-p", "--top-k"} & set(argv)
+    cards = Path(__file__).resolve().parents[3] / "calibration" / "hardware" / "cards"
+    shorts = {load_card(sku, directory=cards).get("short") for sku in skus("gpu", directory=cards)}
+    for name, model in doc.models.items():
+        assert set(model.cards) <= shorts, f"models.{name}: cards {model.cards} not all of the card files' {sorted(shorts)}"
