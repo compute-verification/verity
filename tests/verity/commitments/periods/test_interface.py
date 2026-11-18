@@ -435,15 +435,23 @@ REQUESTS, STEPS, LAYERS = 2, 2, 2
 
 
 def chain() -> I.Circuit:
-    """Two requests' two decode steps through two layers, a ``Gemm_v2{K=16, N=16}`` unit each, in (layer, step, request)
+    """Two requests' two decode steps through two layers, a ``Gemm_v2{K=16, N=16}`` unit each, in (step, layer, request)
     order: layer 1 reads layer 0's output at its step and request, layer 0 at step s + 1 reads layer 1's output at step s,
-    and layer 0's input at step 0 (the embedding) is external. The template reads itself, so the circuit states an order,
-    a range each layer and step (`ordered`)."""
+    and layer 0's input at step 0 (the embedding) is external, so unit u >= 2 reads unit u - 2, one wire. The template
+    reads itself, so the circuit states an order, a range each layer and step (`ordered`)."""
+    n = LAYERS * STEPS * REQUESTS
+    wires = (I.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(n - REQUESTS,), base=0, step=(1,)),)
+    return I.Circuit("chain", ((GEMM, n),), external=(f"{GID}/x",), wires=wires,
+                     order=I.ordered({GID: n}, wires, {GID: range(0, n, REQUESTS)}))
+
+
+def layer_chain() -> tuple[dict[str, int], tuple[I.Wire, ...]]:
+    """`chain`'s units in (layer, step, request) order: layer 0's step 1 (units 2, 3) reads layer 1's step 0 (units 4,
+    5), a later unit of its own template, so no order of its ranges rises."""
     layer = REQUESTS * STEPS
-    wires = (I.Wire(GID, "x", GID, "o0", at=layer, radix=(STEPS, REQUESTS), base=0, step=(REQUESTS, 1)),
-             I.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(STEPS - 1, REQUESTS), base=layer, step=(REQUESTS, 1)))
-    return I.Circuit("chain", ((GEMM, LAYERS * layer),), external=(f"{GID}/x",), wires=wires,
-                     order=I.ordered({GID: LAYERS * layer}, wires, {GID: range(0, LAYERS * layer, REQUESTS)}))
+    return {GID: LAYERS * layer}, (
+        I.Wire(GID, "x", GID, "o0", at=layer, radix=(STEPS, REQUESTS), base=0, step=(REQUESTS, 1)),
+        I.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(STEPS - 1, REQUESTS), base=layer, step=(REQUESTS, 1)))
 
 
 def chain_values(seed: int = 0, first: np.ndarray | None = None) -> tuple[list[np.ndarray], list[np.ndarray]]:
@@ -464,7 +472,7 @@ def chain_values(seed: int = 0, first: np.ndarray | None = None) -> tuple[list[n
                     x[layer, s, r] = y[0, s, r] if layer else y[1, s - 1, r]
                 y[layer, s, r] = np.asarray(evaluate_batch(GEMM, x[layer, s, r][None], w[layer][None], kernel="reference"),
                                             dtype=np.uint16).reshape(16)
-    order = [(layer, s, r) for layer in range(LAYERS) for s in range(STEPS) for r in range(REQUESTS)]
+    order = [(layer, s, r) for s in range(STEPS) for layer in range(LAYERS) for r in range(REQUESTS)]
     return [np.stack([x[k] for k in order]), np.stack([w[k[0]] for k in order])], [np.stack([y[k] for k in order])]
 
 
@@ -766,8 +774,8 @@ def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_regis
     fills or the period ingress reads, outside its template's units, of no template or parameter, past its parameter's
     leaves, off its port's rows, cut, or over another's rows is refused by the record, the verifier's period and the
     count, and so is a table that isn't its parameter's every row (the next test takes tables)."""
-    layer, by_id, W = REQUESTS * STEPS, {GID: GEMM}.__getitem__, I.WINDOW_INGRESS
-    weights = I.Read(GID, "w", "weights", 0, (LAYERS, layer), 0, (256, 0))
+    by_id, W = {GID: GEMM}.__getitem__, I.WINDOW_INGRESS
+    weights = I.Read(GID, "w", "weights", 0, (STEPS, LAYERS, REQUESTS), 0, (0, 256, 0))
     reg = I.Registered({"weights": LAYERS * 256}, reads=(weights,))
     win = I.Window(replace(chain(), registered=reg), RUN, SAMPLING_DESIGN, 2)
     plain, tabled = (replace(as_listed(win.window, GEMM), members=tuple(replace(m, tables=t) for m in win.window.members))
@@ -795,11 +803,11 @@ def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_regis
     def reads(*rs: I.Read) -> I.Registered:
         return I.Registered({"weights": LAYERS * 256}, reads=rs)
 
-    cut = I.Read(GID, "w", "weights", 0, (LAYERS, layer, 2), 0, (256, 0, 128), cut=(0, 2))
+    cut = I.Read(GID, "w", "weights", 0, (STEPS, LAYERS, REQUESTS, 2), 0, (0, 256, 0, 128), cut=(0, 2))
     for bad, why in [(reads(replace(weights, at=1, radix=(1, 4))), "begins no member"),
                      (reads(replace(weights, port="x")), "a wire or a row table fills"),
                      (reads(weights, I.Read(GID, "x", "weights", 0, (REQUESTS,), 0, (16,))), "both fill rows"),
-                     (reads(replace(weights, radix=(LAYERS, layer + 1))), "among its template's 8"),
+                     (reads(replace(weights, radix=(STEPS, LAYERS, REQUESTS + 1))), "among its template's 8"),
                      (reads(replace(weights, reader="other")), "names no template"),
                      (reads(replace(weights, param="other")), "a registered parameter"),
                      (reads(replace(weights, base=256)), r"leaves \[256, 768\)"),
@@ -863,24 +871,25 @@ def test_a_wires_box_bounds_the_writers_of_the_reader_indices_between_two():
 
 
 def test_the_wires_dataflow_is_acyclic_under_the_circuits_order():
-    """`chain`'s template reads itself, and with no order its units in unit order don't fit its wires (layer 1's step 0,
-    units 2 and 3, reads layer 0's step 1, units 4 and 5); its order, a range each layer and step (`ordered`), puts every
-    range a wire reads in a range below that range. An order where a range reads a later one is refused naming the first
-    such wire, an order that doesn't tile each template's units by name, and a cut into ranges no order can rank (layer
-    0's steps one range, read by layer 1's step 0 and reading it) as a cycle."""
+    """`chain`'s template reads itself; its order, a range each layer and step (`ordered`), puts every range a wire reads
+    in a range below that range, and its template's ranges rise. An order where a range reads a later one is refused
+    naming the first such wire, an order that doesn't tile each template's units by name, and a cut into ranges no order
+    can rank (all four steps one range, which reads itself) as a cycle. The same chain in (layer, step, request) order has
+    a unit reading a later unit of its template, so no rising order: a cycle."""
     c = chain()
-    assert c.order == ((GID, 0, 2), (GID, 4, 2), (GID, 2, 2), (GID, 6, 2))
-    with pytest.raises(ValueError, match="order: wire 1 "):
-        I.check_order(c.units, c.wires)
-    for order, why in [(((GID, 0, 4), (GID, 4, 4)), "order: wire 1 "), (((GID, 0, 2), (GID, 2, 2), (GID, 4, 2), (GID, 6, 2)),
-                                                                        "order: wire 1 "),
-                       (((GID, 4, 2), (GID, 0, 2), (GID, 2, 2), (GID, 6, 2)), "order: wire 0 "),
+    assert c.order == ((GID, 0, 2), (GID, 2, 2), (GID, 4, 2), (GID, 6, 2))
+    I.check_order(c.units, c.wires)
+    for order, why in [(((GID, 0, 4), (GID, 4, 4)), "order: wire 0 "),
+                       (((GID, 0, 2), (GID, 4, 2), (GID, 2, 2), (GID, 6, 2)), "order: wire 0 "),
                        (((GID, 0, 2), (GID, 4, 2), (GID, 2, 2)), "don't tile"), (((GID, 0, 4), (GID, 3, 5)), "don't tile"),
                        (((GID, 0, 8), (GID, 8, 0)), "don't tile"), ((("Z", 0, 8),), "order: range 0")]:
         with pytest.raises(ValueError, match=why):
             I.check_order(c.units, c.wires, order)
     with pytest.raises(ValueError, match="cycle: no order of the ranges"):
-        I.ordered(c.units, c.wires, {GID: (4,)})
+        I.ordered(c.units, c.wires, {})
+    units, wires = layer_chain()
+    with pytest.raises(ValueError, match="cycle: no order of the ranges"):
+        I.ordered(units, wires, {GID: range(0, units[GID], REQUESTS)})
 
 
 EMB = I.resolve("EmbeddingRead_v2{V=4,H=16}")
@@ -1948,9 +1957,8 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
     units' own rows, and the wiring check reads a unit's string through its ref, the row its statement reads. The verifier
     derives the same members, a wire moved to other writers is refused, and so is a ref moved to another unit's row."""
     ins, outs = chain_values()
-    layer = REQUESTS * STEPS
-    w = Bound("w", ins[1][::layer].reshape(LAYERS, 256))
-    read = I.Read(GID, "w", "w", at=0, radix=(LAYERS, layer), base=0, step=(256, 0))
+    w = Bound("w", ins[1][:LAYERS * REQUESTS:REQUESTS].reshape(LAYERS, 256))
+    read = I.Read(GID, "w", "w", at=0, radix=(STEPS, LAYERS, REQUESTS), base=0, step=(0, 256, 0))
     circuit = replace(chain(), registered=I.Registered({"w": LAYERS * 256}, reads=(read,)))
     win = I.Window(circuit, RUN, SAMPLING_DESIGN, 2, registered={"w": w})
     ms = win.window.members
@@ -2011,8 +2019,8 @@ def fed_chain() -> tuple[I.Circuit, Bound, list[np.ndarray], list[np.ndarray], l
     sy = np.asarray(evaluate_batch(SRC, sx, sw, kernel="reference"), dtype=np.uint16).reshape(REQUESTS, 16)
     ins, outs = chain_values(first=sy)
     layer = REQUESTS * STEPS
-    w = Bound("w", ins[1][::layer].reshape(LAYERS, 256))
-    read = I.Read(GID, "w", "w", at=0, radix=(LAYERS, layer), base=0, step=(256, 0))
+    w = Bound("w", ins[1][:LAYERS * REQUESTS:REQUESTS].reshape(LAYERS, 256))
+    read = I.Read(GID, "w", "w", at=0, radix=(STEPS, LAYERS, REQUESTS), base=0, step=(0, 256, 0))
     circuit = replace(chain(), templates=((SRC, REQUESTS), (GEMM, LAYERS * layer)), external=(f"{SID}/x", f"{SID}/w"),
                       wires=(I.Wire(GID, "x", SID, "o0", at=0, radix=(REQUESTS,), base=0, step=(1,)), *chain().wires),
                       registered=I.Registered({"w": LAYERS * 256}, reads=(read,)), order=((SID, 0, REQUESTS), *chain().order))
