@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
@@ -63,7 +64,7 @@ def args(outputs=OUTPUTS) -> SimpleNamespace:
 
 
 def program() -> Program:
-    return P.mixed_population_program([(PAIR, N)])
+    return PN.mixed_population_program([(PAIR, N)])
 
 
 def _ports() -> dict:

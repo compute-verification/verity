@@ -17,6 +17,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from verity.circuits import population as PN
 from verity.commitments import domains as DM
 from verity.commitments import hm96
 from verity_flock import circuit as FC
@@ -73,7 +74,7 @@ def partitioned(s):
     ``verity/partition/v1`` object, as `rec_inner.stage` binds it; the program and the object."""
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
-    program = P.population_program(s.template, N)
+    program = PN.population_program(s.template, N)
     part = P.partition(program, P.template_instance_query(s.template))
     head_, line, rest = s.text.split("\n", 2)
     meta = dict(s.meta, program_sha512=part["program"], partition={"rule": P.FORMAT, "digest": P.digest(part)})
@@ -141,7 +142,7 @@ def test_register_with_the_statements_partition_binds_the_circuit_registration(s
     assert h["circuit_sha512"] == FC.digest(now) and h["units"]["classes"] == [FC.class_digest(now)] * N
     other = stage(staged, "bound-other", text=text)
     with pytest.raises(ValueError, match="META binds program"):
-        smaller = P.population_program(staged.template, N - 1)
+        smaller = PN.population_program(staged.template, N - 1)
         IR.register(other, program=smaller, partition=P.partition(smaller, P.template_instance_query(staged.template)))
     with pytest.raises(ValueError, match="program and its partition object together"):
         IR.register(other, program=program)

@@ -41,6 +41,7 @@ from pathlib import Path
 import pytest
 
 import verity_difftest as D
+from verity.circuits import population as PN
 from verity.commitments import coin_tree as CT
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import (
@@ -93,7 +94,7 @@ class Audit:
     def __init__(self, seed: str, ports: tuple[str, str] = (f"{A}/out", f"{B}/out"), opened: tuple[str, str] = (A, B),
                  closed: tuple[str, ...] = (A, B), together: bool = False, sampled: tuple[str, ...] = (A, B)):
         rng = random.Random(seed)
-        s = self.s = Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]),
+        s = self.s = Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]),
                            P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
         self.rec = R.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF)

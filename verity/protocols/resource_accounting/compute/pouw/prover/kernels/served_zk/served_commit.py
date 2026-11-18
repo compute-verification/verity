@@ -122,6 +122,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 from verity.commitments.identity import identity_digest_sha512, tagged_sha512
@@ -212,7 +213,7 @@ def tile_work(params: dict) -> int:
 def population(k: int, n: int):
     """The execution phase's tiles as one-stage's population: (program, query, partition object)."""
     d = template(k)
-    prog = PT.population_program(d, n)
+    prog = PN.population_program(d, n)
     q = PT.template_instance_query(PT.template_id(d))
     return prog, q, PT.partition(prog, q)
 
@@ -1036,7 +1037,7 @@ class Challenger:
         runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
         sampling_design = S.selection_sampling_design(st.spec.selection, n)
-        prog = PT.population_program(st.unit, n)
+        prog = PN.population_program(st.unit, n)
         q = st.spec.check.query
         params = OR.registration_params(prog, q, sampling_design, S.SCHEME, ports_, list(st.log), self.params["delta"])
         args = (rec, prog, q, sampling_design, S.SCHEME, ports_, None, (), list(st.log), None, None, None)

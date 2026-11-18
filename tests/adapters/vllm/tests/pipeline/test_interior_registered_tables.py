@@ -23,6 +23,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from verity.circuits import population as PN
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import ONE
@@ -194,7 +195,7 @@ def _span(seed: int, registration: int = 0) -> IR.Span:
 
 
 def _boundary_window() -> CS.Binding:
-    return CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), RND.parse_design(f"subset:{Q}"),
+    return CS.Binding(PN.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), RND.parse_design(f"subset:{Q}"),
                       "b0" * 64, (CS.Member(P.template_id(BLOCK), (("ingress", 64),), (("egress", 64),), SPANS),))
 
 
@@ -388,11 +389,11 @@ def test_the_links_are_the_ones_round_2_derives_from_the_replay_block():
     ``domain`` the verifier's with the registered tables a row (``tables``): a row a table, unit j reading row
     j // `W`. They are this module's by hand."""
     record = _boundary()[0]
-    got = IR.links(P.population_program(BLOCK, SPANS), KEY, record, _member(), CELLS, dict.fromkeys(IR.TABLE),
+    got = IR.links(PN.population_program(BLOCK, SPANS), KEY, record, _member(), CELLS, dict.fromkeys(IR.TABLE),
                    dict.fromkeys(IR.TABLE, PARAMS))
     assert len(got) == len(_links()) and set(got) == set(_links())
     with pytest.raises(ValueError, match="1 registered tables for its 2 rows a sampled span"):
-        IR.links(P.population_program(BLOCK, SPANS), KEY, record, _member(), CELLS, dict.fromkeys(IR.TABLE),
+        IR.links(PN.population_program(BLOCK, SPANS), KEY, record, _member(), CELLS, dict.fromkeys(IR.TABLE),
                  dict.fromkeys(IR.TABLE, PARAMS[:1]))
     with pytest.raises(ValueError, match="read it as two values"):
         IL.values((SUPPLIES[0], replace(SUPPLIES[0], tables=PARAMS[::-1])))
