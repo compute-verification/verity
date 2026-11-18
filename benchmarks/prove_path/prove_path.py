@@ -1754,7 +1754,6 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     from verity_vllm.check.replay.index import ProgramIndex
     from verity_vllm.check.replay.opening import CommittedStore
     from verity_vllm.pipeline import cpu_replay as CPU
-    from verity_vllm.program.predict import inference_blocks as IB
     from verity_vllm.program.predict import scan_state as SS
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict import window_rows as WRS
@@ -1764,6 +1763,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     from verity_vllm.program.predict.steps import compile_steps
     from verity.protocols.proofs.spot.verifier import service as S
     from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+    from verity.circuits.codec import program_digest
 
     seconds: dict[str, float] = {}
     t = time.time()
@@ -1810,7 +1810,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.manifest if isinstance(r.manifest, dict) else None)
     units = [u for u in compiled.requests if u is not None]
     scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units], kept_ingress=kept_ingress)
-    population = IB.program_digest(low.circuit)
+    population = program_digest(low.circuit.program()[0])
     state = None if scanned is None else WRS.state_value(population, cls, scanned[0], window=run)
     lap("scan")
     placed = place_slots(cls, [u.id for u in units], compiler.inner.ingress,
