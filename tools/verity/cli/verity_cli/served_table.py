@@ -900,7 +900,7 @@ def composite(env: Mapping[str, str]) -> dict[str, str]:
     caller that runs a composer there, or its default under ``VERITY_HOLD_PLACEMENT=1``), where onsite's composite, which
     reads PoUS's and the wipe's cases that only the node's card writes, can't be made, and it refuses to start. ``env``
     is what the runner gets before it; a caller that names ``COMPOSITE`` or ``COMPOSE_OFF_NODE=0`` keeps what it named."""
-    off = env.get("COMPOSE_OFF_NODE", "1" if env.get("VERITY_HOLD_PLACEMENT") == "1" else "0")
+    off = env.get("COMPOSE_OFF_NODE", "1" if machine_settings.hold_placement(env) else "0")
     return {} if "COMPOSITE" in env or off == "0" else {"COMPOSITE": ""}
 
 
