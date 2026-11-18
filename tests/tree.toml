@@ -270,6 +270,10 @@ means = "the protocol on top of the audits that holds several quantities on one 
 protocol = true
 
 [[tree]]
+path = "verity/protocols/compose/schemes.py"
+means = "every resource scheme, registered: the one list of the modules that declare one, which a reader of every scheme loads"
+
+[[tree]]
 path = "verity/protocols/experimental/"
 means = "experimental/NAME/, a whole directory no configuration lists; made with the first such directory"
 
