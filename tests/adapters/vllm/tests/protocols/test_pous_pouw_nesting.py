@@ -128,7 +128,7 @@ def test_two_kernels_filed_in_list_order_put_the_earlier_listed_outside():
         return compute
 
     for name in ("pous", "pouw"):                                        # the application's order
-        ex.request(name, H.ComputeBlockWith(kernel(name)))
+        ex.compute_with(name, kernel(name))
     due = H.BlockDue("l0", 0, {"n": 2, "k": 2}, "s8", {"x": "x", "weight": "w"})
     ex.compute(due, lambda given: "stock")
     assert order == ["pous", "pouw"], f"outer first: {order}"

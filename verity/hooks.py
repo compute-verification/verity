@@ -229,16 +229,10 @@ def unmet[T](requests: Iterable[tuple[T, Any]], properties: Mapping[str, Any]) -
 
 class Kernel(Protocol):
     """A scheme's computation of a due block: its output, computed itself or through ``original``, the workload's own,
-    given inputs in place of the block's or None for the block's."""
+    given inputs in place of the block's or None for the block's. A capability the scheme files at attach
+    (``exchange.compute_with(name, kernel)``), not an entry."""
 
     def __call__(self, due: BlockDue, original: Callable[[Mapping[str, Handle] | None], Handle]) -> Handle: ...
-
-
-@dataclass(frozen=True)
-class ComputeBlockWith:
-    """A scheme's request to compute every due block with ``kernel``."""
-
-    kernel: Kernel
 
 
 @dataclass(frozen=True)
@@ -343,7 +337,7 @@ class FixRanges:
 @dataclass(frozen=True)
 class ReleaseValue:
     """A scheme's request that registered value ``value``'s storage be released once it is resident, the scheme's
-    kernels computing every block that reads it (`ComputeBlockWith`), and restored to ``restore()``, the same bytes,
+    kernels computing every block that reads it (`Kernel`), and restored to ``restore()``, the same bytes,
     when the workload's memory hook comes off."""
 
     value: str
@@ -360,11 +354,10 @@ class StartBeside:
     readers: tuple[str, ...] = ()
 
 
-type Request = (RequireProperty | ComputeBlockWith | AdmitInput | StartBeside | ReuseOldestFreed | ServeRoute | FixRanges
-                | ReleaseValue)
+type Request = RequireProperty | AdmitInput | StartBeside | ReuseOldestFreed | ServeRoute | FixRanges | ReleaseValue
 
 
-__all__ = ["ADMITS", "CHANGES", "EVENTS", "HOOKS", "AdmitInput", "BlockDue", "BlockResult", "ComputeBlockWith", "Declared",
+__all__ = ["ADMITS", "CHANGES", "EVENTS", "HOOKS", "AdmitInput", "BlockDue", "BlockResult", "Declared",
            "Gate", "Handle", "Broken", "ENGINE", "FRONT", "PIECE", "FixRanges", "Front", "InputArrived", "Kernel",
            "MemoryChanged", "OutputLeft", "RangesDeclared", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StepBegan", "StepComputed",

@@ -217,8 +217,8 @@ def test_exchange_nests_kernels_and_hands_inputs_inward():
     ex = M.Exchange()
     seen = []
     ex.subscribe("s", "blocks", seen.append)
-    ex.request("outer", H.ComputeBlockWith(lambda due, original: original({"weight": "decoded"})))
-    ex.request("inner", H.ComputeBlockWith(lambda due, original: ("inner", due.inputs["weight"], original(None))))
+    ex.compute_with("outer", lambda due, original: original({"weight": "decoded"}))
+    ex.compute_with("inner", lambda due, original: ("inner", due.inputs["weight"], original(None)))
     due = H.BlockDue("layers.0.mlp", 1, {"n": 2, "k": 2}, "bf16", {"x": "x", "weight": "stored"})
     assert ex.compute(due, lambda given: ("stock", given)) == ("inner", "decoded", ("stock", {"weight": "decoded"}))
     assert seen == [due] and ex.computes()
@@ -394,8 +394,10 @@ def test_a_build_request_is_filed_before_the_build_and_any_other_before_the_firs
     ex.answer(H.Declared("", {}))
     with pytest.raises(Refused, match="pouw: files RequireProperty after the build was answered"):
         ex.request("pouw", H.RequireProperty("eager", True, "its kernels"))
-    ex.request("pouw", H.ComputeBlockWith(lambda due, original: original(None)))
+    ex.compute_with("pouw", lambda due, original: original(None))
     ex.step = 0
+    with pytest.raises(Refused, match=r"pouw: files a kernel after serving began \(step 0\)"):
+        ex.compute_with("pouw", lambda due, original: original(None))
     with pytest.raises(Refused, match=r"pouw: files ReuseOldestFreed after serving began \(step 0\)"):
         ex.request("pouw", H.ReuseOldestFreed())
 

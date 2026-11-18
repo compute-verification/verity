@@ -7,7 +7,7 @@ stand-ins (`tests/protocols/linear`), and only the module that finds the sites i
   controls and schedules it implements, and runs one pass at a time (`ExecutorPass`), fixed by its `PassSpec`.
 * A `WeightSource` supplies each use's weight (POUS: decoded from its store) and is told when each forward ends.
 * A `Stack` joins them on one rank: it is the kernel (`verity.hooks.Kernel`) a scheme files with
-  `verity.hooks.ComputeBlockWith`, and `vllm_site.attach` hands it every linear's `BlockDue` through the exchange.  Its
+  ``Exchange.compute_with``, and `vllm_site.attach` hands it every linear's `BlockDue` through the exchange.  Its
   `refusals` read the declared attributes, so a composition that can't hold is refused before any patch; `activate`
   switches arms only between passes; a call computes inside a pass, and an active executor outside one fails closed;
   `forward` always ends the forward at the source, even when the forward raises.

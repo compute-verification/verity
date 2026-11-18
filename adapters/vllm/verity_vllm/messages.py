@@ -62,6 +62,8 @@ class Exchange:
     def __init__(self) -> None:
         self.subscribers: dict[str, list[tuple[str, Subscriber, tuple[type, ...] | None]]] = {h: [] for h in H.HOOKS}
         self.requests: list[tuple[str, H.Request]] = []
+        #: the kernels schemes compute due blocks with (`compute_with`), the one filed first outermost
+        self.kernels: list[tuple[str, H.Kernel]] = []
         self.declared: H.Declared | None = None
         self.fixed = False
         self._step: int | None = None
@@ -166,7 +168,7 @@ class Exchange:
         return lambda: self.subscribers[hook].remove(entry) if entry in self.subscribers[hook] else None
 
     def request(self, name: str, request: H.Request) -> None:
-        """File scheme ``name``'s request; kernels and gates filed earlier run outside later ones."""
+        """File scheme ``name``'s request; gates filed earlier run outside later ones."""
         kind = type(request).__name__
         if isinstance(request, H.AdmitInput) and request.admit == "refuse":
             self.requests.append((name, request))
@@ -180,6 +182,13 @@ class Exchange:
         if self._step is not None:
             raise Refused(name, f"files {kind} after serving began (step {self._step}); file it before the first step")
         self.requests.append((name, request))
+
+    def compute_with(self, name: str, kernel: H.Kernel) -> None:
+        """Scheme ``name`` computes every due block with ``kernel``, inside the kernels filed before it; filed before
+        the first step."""
+        if self._step is not None:
+            raise Refused(name, f"files a kernel after serving began (step {self._step}); file it before the first step")
+        self.kernels.append((name, kernel))
 
     def _filed[R](self, kind: type[R]) -> list[tuple[str, R]]:
         return [(n, r) for n, r in self.requests if isinstance(r, kind)]
@@ -224,20 +233,19 @@ class Exchange:
     def unheard(self) -> Iterator[None]:
         """No scheme hears the block's pass, which is never a record (the learn-only warm-up): its events reach no
         subscriber, its inputs start at once and its blocks are the workload's own."""
-        subscribers, requests = self.subscribers, self.requests
-        self.subscribers = {h: [] for h in H.HOOKS}
-        held = [r for _, r in self._filed(H.AdmitInput) if r.admit == "hold"]
-        self.requests = [(n, r) for n, r in requests if not isinstance(r, H.ComputeBlockWith) and r not in held]
+        subscribers, requests, kernels = self.subscribers, self.requests, self.kernels
+        self.subscribers, self.kernels = {h: [] for h in H.HOOKS}, []
+        self.requests = [(n, r) for n, r in requests if not (isinstance(r, H.AdmitInput) and r.admit == "hold")]
         try:
             yield
         finally:
-            self.subscribers, self.requests = subscribers, requests
+            self.subscribers, self.requests, self.kernels = subscribers, requests, kernels
 
     def compute(self, due: H.BlockDue, original: Callable[[Mapping[str, H.Handle] | None], H.Handle]) -> H.Handle:
         """A due block's output: emitted to ``blocks``' subscribers, then computed by the filed kernels, the workload's
         ``original`` innermost; inputs a kernel hands inward replace the block's for every kernel inside it."""
         self.emit(due)
-        kernels = [r.kernel for _, r in self._filed(H.ComputeBlockWith)][::-1]
+        kernels = [k for _, k in self.kernels][::-1]
 
         def level(i: int, inputs: Mapping[str, H.Handle] | None) -> H.Handle:
             if i < 0:
@@ -249,7 +257,7 @@ class Exchange:
 
     def computes(self) -> bool:
         """Whether a scheme computes due blocks: the adapter wraps its blocks only then."""
-        return bool(self._filed(H.ComputeBlockWith))
+        return bool(self.kernels)
 
     def start(self, input: str, start: Callable[[], None]) -> None:
         """Start ``input`` once every gate a hold filed (`AdmitInput`) starts it; with none, now."""
