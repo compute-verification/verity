@@ -60,9 +60,9 @@ def test_two_stage_refuses_a_boundary_record_serving_one_level(monkeypatch, caps
 
 
 def test_the_boundary_record_format_is_the_one_levels_reads_as_two():
-    from verity_vllm.records import boundary_commit
+    from verity_vllm.pipeline.boundary_rows import FORMAT
 
-    assert LV.BOUNDARY_RECORD == boundary_commit.SCHEMA
+    assert LV.BOUNDARY_RECORD == FORMAT
 
 
 def test_sampled_case_is_at_one_level():
