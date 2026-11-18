@@ -1,11 +1,12 @@
 """Every timed loop of a probe run against the data-sheet machine's facets, DS-90's rows (sm_90).
 
+  bash emp.sh run emp                  # on the card: build and time probes/sm90_emp.cu, then this into emp.txt
   uv run python emp.py RUN_OUT SASS_DIR [--json OUT]
 
-RUN_OUT is `emp.sh time`'s output (each binary's rows.jsonl and gate.json under RUN_OUT/<binary>/); SASS_DIR is
-`emp.sh build`'s sass/ (cuobjdump -sass of each binary). A row's rates are the gated patterns' warp instructions a SM
-a clock; a loop's trip rate is one of them over its count, and every opcode in the loop's SASS (head to tail, the
-gate's addresses) runs at its count times that. Each facet's occupancy is its SMSP-cycles over SMSP-cycles:
+RUN_OUT is `emp.sh run emp`'s output, or `emp.sh time`'s (each binary's rows.jsonl and gate.json under
+RUN_OUT/<binary>/); SASS_DIR is its sass/, or `emp.sh build`'s (cuobjdump -sass of each binary). A row's rates are
+the gated patterns' warp instructions a SM a clock; a loop's trip rate is one of them over its count, and every opcode
+in the loop's SASS (head to tail, the gate's addresses) runs at its count times that. Each facet's occupancy is its SMSP-cycles over SMSP-cycles:
 
   issue   1 a warp instruction, every opcode, uniform included (A2, A2u)
   tensor  MACs over a quarter of the type's dense peak a SM-clock (the H200 card's rate.tensor over the format's weight,

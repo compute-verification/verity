@@ -1037,6 +1037,17 @@ WIPE_REJECT = {"protocol": W.PROTOCOL, "verdict": "reject", "reason": "a read ca
                "public": None, "profile": None}
 
 
+def test_a_wipe_that_ran_and_wrote_no_answer_errs_with_its_exit_not_as_unset(tmp_path):
+    """The launcher's wipe step leaves its exit in pieces/wipe/piece.json and its log in the private directory: a wipe
+    that wrote no answer errs with that exit, never reads as WIPE_CMD unset, and names no path for its log."""
+    (tmp_path / "wipe").mkdir()
+    (tmp_path / "wipe" / "piece.json").write_text('{"limit": "20m", "rc": 124}\n')
+    row = S.piece_row("wipe", tmp_path)
+    assert row["verdict"] == "error" and "_CMD unset" not in row["reason"], row
+    assert row["reason"] == f"its piece ran (exit 124, out of time at 20m) and wrote no answer; {PRIVATE}", row
+    assert S.piece_server("wipe", tmp_path) == (None, "real")
+
+
 @pytest.mark.parametrize("case", ["accept", "elsewhere", "unserved", "refused", "reject"])
 def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_server(tmp_path, monkeypatch, capsys, case):
     """`record` takes the wipe out of ``record_missing`` only when its answer accepts and its served.json names the
@@ -1826,6 +1837,27 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     assert "POUW (development run, credits nothing) " in out and got["pouw"]["verdict"] == "accept"
     assert (got["pouw"]["session"], got["pouw"]["coins"], got["pouw"]["credited"]) == (SID, None, False)
     assert {p: got["pouw"][p]["met"] for p in S.PREMISES} == {"AcceptedLive": False, "SaltIsLiveCoin": True}
+
+
+@pytest.mark.parametrize("product", ["onsite", "remote"])
+def test_a_premise_in_the_record_names_who_ran_its_check(tmp_path, monkeypatch, product):
+    """Every premise a record's development row states, met or not, ends its ``why`` with its runner's phrase on the
+    record's path (`PREMISE_RUNNERS`), and the phrase follows the runner: a met premise never reads as an auditor's."""
+    assert set(S.PREMISE_RUNNERS) == set(BR.PRODUCTS)
+    doc = {"verdict": "accept", "AcceptedLive": {"met": True, "why": S.LIVE_MET},
+           "SaltIsLiveCoin": {"met": True, "why": S.SALT_MET}}
+    rows = {**_rows(_accepted(), tmp_path), "work": {"verdict": "missing", "why": S.DEV_WHY, "development": doc}}
+
+    def stated() -> dict:
+        report, _rec, _line = S.record(rows, window=1, steps=(0, 4), node="n", run="r", product=product)
+        return report["protocols"]["work"]["development"]
+
+    got = stated()
+    for p in S.PREMISES:
+        assert got[p]["met"] and got[p]["why"] == f"{doc[p]['why']}; {S.RAN_BY['piece']}"
+    monkeypatch.setitem(S.PREMISE_RUNNERS, product, {**S.PREMISE_RUNNERS[product], "SaltIsLiveCoin": "lean"})
+    assert stated()["SaltIsLiveCoin"]["why"] == f"{S.SALT_MET}; {S.RAN_BY['lean']}" != got["SaltIsLiveCoin"]["why"]
+    assert doc["SaltIsLiveCoin"]["why"] == S.SALT_MET, "the piece's own document is left as it wrote it"
 
 
 def _pearlplus_run(accepted: bool = True, source: str = S.LIVE_SOURCE) -> tuple[dict, dict]:
