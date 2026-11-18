@@ -35,6 +35,7 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 from circuit_check import targets as TG  # noqa: E402
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ports import free_port  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
@@ -89,7 +90,7 @@ def main() -> int:
     stage.mkdir(parents=True, exist_ok=True)
     TG.load_registries()
     fn = TG.definition(KIND)
-    program = P.mixed_population_program([(fn, N)])
+    program = PN.mixed_population_program([(fn, N)])
     part = P.partition(program, P.template_instances_query([fn]))
     (stage / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (stage / "program.json").write_bytes(canonical_json(encode_program(program)))

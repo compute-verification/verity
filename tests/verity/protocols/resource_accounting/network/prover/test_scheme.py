@@ -56,6 +56,27 @@ def test_its_own_term_is_sha512s_collision_bound_at_the_phases_calls() -> None:
     assert NS.NETWORK_ATTESTER.over.startswith("bits: ") and NS.NETWORK_ATTESTER.under == "bits: zero; the attester credits nothing"
 
 
+def test_its_check_is_the_network_period_programs_answer_unchanged_and_refuses_another_protocols(tmp_path) -> None:
+    import json
+    import subprocess
+
+    def said(answer: dict):
+        return lambda argv: subprocess.CompletedProcess(argv, 1, stdout=json.dumps(answer) + "\n", stderr="")
+
+    case = {"params": {"windows": 1}, "commitment": "00", "evidence": "01"}
+    reject = {"protocol": "verity/certifier/v0", "verdict": "reject", "reason": "a reason", "public": None}
+    assert NS.NETWORK_ATTESTER.check("network-period", case, tmp_path, said(reject)) == reject
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["commitment.bin", "evidence.json", "params.json"]
+    with pytest.raises(ValueError, match="the protocol 'verity/network-rows/v1', not verity/certifier/v0"):
+        NS.NETWORK_ATTESTER.check("network-rows", case, tmp_path, said({**reject, "protocol": "verity/network-rows/v1"}))
+
+
+def test_it_declares_it_keeps_no_weight_derived_copy() -> None:
+    from verity.protocols.resource_accounting import scheme as S
+
+    assert S.declared(NS.NETWORK_ATTESTER, "keeps_weight_copy") is False
+
+
 def test_cost_is_output_bits() -> None:
     cost = NS.NETWORK_ATTESTER.blocks[NS.DEFINITIONS.index(ResponseTieStop)].cost
     assert cost({"O": 4}) == 176

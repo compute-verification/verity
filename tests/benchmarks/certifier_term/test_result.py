@@ -36,7 +36,8 @@ sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "certifier_term"))
 
 import run as R  # noqa: E402
 from verity.protocols.registration.verifier import registration  # noqa: E402
-from verity.device import NO_LINE_RATE, OUTSIDE, Link, Loc  # noqa: E402
+from verity.device import OUTSIDE, Link, Loc  # noqa: E402
+from verity.protocols.registration.verifier.site_log import NO_LINE_RATE  # noqa: E402
 from verity_bench import kit  # noqa: E402
 
 LB = R.calculator()

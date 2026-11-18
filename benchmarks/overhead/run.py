@@ -19,11 +19,12 @@ import sys
 from verity_bench.cli import main
 
 #: the metrics `benchmarks/overhead/metrics.toml` holds this benchmark to, by id: each the γ of record of the table's row
-#: `scheme/card/point`, each model but the kernel model's on the kernel card a member (`overhead_records.measurements`)
-METRICS = {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C",
-           "benchmarks/pearl-plus-gamma-l-h200": "pearl-plus/h200/L",
-           "benchmarks/pearl-plus-gamma-c": "pearl-plus/h100/C",
-           "benchmarks/pearl-plus-gamma-l": "pearl-plus/h100/L"}
+#: `scheme/card/point` and what the row says of its readings (`overhead_records.metric_row`): ``own``, the kernel model's on
+#: the row's card its own reading and every other model's a member, or ``members``, every reading a member
+METRICS = {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C own",
+           "benchmarks/pearl-plus-gamma-l-h200": "pearl-plus/h200/L own",
+           "benchmarks/pearl-plus-gamma-c": "pearl-plus/h100/C members",
+           "benchmarks/pearl-plus-gamma-l": "pearl-plus/h100/L members"}
 
 if __name__ == "__main__":
     sys.exit(main(["overhead", *sys.argv[1:]], metrics=METRICS))

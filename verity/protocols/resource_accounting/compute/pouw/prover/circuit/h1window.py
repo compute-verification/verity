@@ -1,7 +1,7 @@
 """H1's execution phase as one public Program: every R × C tile of an execution phase's calls is one call of its call's contraction K's
 template (`template`: one call of the tile unit, `h1zy.PouwH1TileZy` over `h1tile.PouwH1Tile`, at that K), so the verifier
 derives the execution phase's units from its own copy of the Program under the `Q_template_instances` query of its templates
-(`query`), and a served path registers the trees it commits as the Program's parameters (`one_stage.served.register_served`).
+(`query`), and a served path registers the trees it commits as the Program's parameters (`prover.served.register_served`).
 
 * **The tile** is a parameter: ``tile`` is its R × C, the served path's 32 × 32 (`pouw_h1.TILE`) or h1_prove's 4 × 8
   smoke, and the execution phase binds the tile unit once per K its linears have (`tile_unit`; ``unit`` gives another), so
@@ -593,7 +593,7 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
         out[port] = {**({G.PARAM_KEY: key} if key in (ports or {}) and port != key else {}),
             "value": r["value"], "root": roots[r["value"]], "leaves": leaves, "words": words, "word_bits": RV.WORD_BITS,
             "domain": RV.domain(prog, r["value"], words, leaves, window=None if r["value"] == b else window).domain_id.hex(),
-            **G.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, r["rows"])}
+            **RV.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, r["rows"])}
     if salt is not None:
         if window is None:
             raise ValueError("a call's public rows are committed under salts of the window's open root: give window")
@@ -601,12 +601,12 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
         rows, salts, reg = public_table(prog, pv, salt, window, u0, n, (roots[table(program, "a", call, steps)], roots[b]),
                                         call_blocks(program, call) if is_j10r(program) else None)
         out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": n, "words": len(rows[0]), "word_bits": RV.WORD_BITS,
-                         "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                         "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
                          **CC.call_reads(u0, list(range(n))), "known": {"rows": rows, "salts": [s.hex() for s in salts]}}
         ov = f"{S.PREFIX}{OUTPUTS[1]}"
         rows, salts, reg = ok_table(prog, ov, window, tp.population)
         out[OK_PORT] = {"value": ov, "root": reg.root.hex(), "leaves": tp.population, "words": len(CC.OK_ROW),
-                        "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                        "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
                         **CC.call_reads(u0, list(range(u0, u0 + n))),
                         "known": {"rows": rows, "salts": [s.hex() for s in salts]}}
     return {"format": G.READS_V1, "ports": out}
@@ -866,7 +866,7 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
             leaves, words = shape[value]
             e = {"leaves": leaves, "words": words, "word_bits": RV.WORD_BITS,
                  "domain": RV.domain(prog, value, words, leaves, window=None if value == b else window).domain_id.hex()}
-        out[port] = PR.port(value, e, roots[value], [row], G.SCHEMA_V2)
+        out[port] = RV.port(value, e, roots[value], [row], G.SCHEMA_V2)
         if LL.read_in_full(logical[port][0]) and port != LL.OK:
             out[port][READ_IN_FULL] = True
     if both := sorted(set(out) & set(known_ports)):

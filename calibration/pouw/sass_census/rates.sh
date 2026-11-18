@@ -17,11 +17,10 @@ OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROBE="$HERE/../opcode_probe/probe.py"
 ARCH=$(python3 "$PROBE" arch) || exit 2
-case $ARCH in
-  sm_100a) SRC=${SRC:-unpriced.cu} CC=10 ;;
-  sm_90a) SRC=${SRC:-unpriced90.cu} CC=9 ;;
-  *) echo "rates.sh: the card's target is $ARCH, and rates.sh has probes for sm_100a and sm_90a only: nothing built" >&2; exit 2 ;;
-esac
+UNPRICED=$(python3 "$HERE/../dc/archs.py" "$ARCH" unpriced) || exit 2
+SRC=${SRC:-$UNPRICED}
+CC=$(python3 "$HERE/../dc/archs.py" "$ARCH" capability) || exit 2
+CC=${CC%%.*}
 export PYTHONDONTWRITEBYTECODE=1
 NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "rates.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
 [ -x "$NVCC" ] || { echo "rates.sh: no nvcc at $NVCC" >&2; exit 2; }

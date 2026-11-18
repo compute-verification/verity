@@ -727,7 +727,7 @@ def checkTemplate (s : VStar.Stmt) (f : VStar.Bindings) : V Unit := do
 /-- The verifier's own bindings `f` are its own partition object's and program's: `f`'s partition digest is the object's
 (`HmRow.partitionDigest`), `f`'s program and the object's `program` are the program's digest (the SHA-512 of its canonical
 descriptor without `annotations`, `TemplateQuery.Desc.parse`), and `f`'s `program_digests` names one Definition, the
-template the object's query names, which `checkCircuit` holds to V*'s template of the statement (`checkTemplate`). Its
+template the object's query names (its `template`, or its `templates` of one), which `checkCircuit` holds to V*'s template of the statement (`checkTemplate`). Its
 digest is not recomputed: that is core's codec's digest of the one-Definition program, which this verifier does not
 encode; the auditor's `verity_flock.rec_bindings` computes it from V*'s own Definition of the statement. -/
 def checkOwnBindings (name : String) (f : VStar.Bindings) (obj : Json) (prog : ByteArray) : V Unit := do
@@ -738,7 +738,11 @@ def checkOwnBindings (name : String) (f : VStar.Bindings) (obj : Json) (prog : B
   let op := (obj.getObjValAs? String "program").toOption.getD ""
   if op != ps then throw s!"{name}: the partition object's program {op}, the verifier's program's {ps}"
   let q := (obj.getObjVal? "query").toOption.getD Json.null
-  let t := ((q.getObjVal? "params").toOption.getD Json.null |>.getObjValAs? String "template").toOption.getD ""
+  let qp := (q.getObjVal? "params").toOption.getD Json.null
+  let t := match (qp.getObjValAs? String "template").toOption, (qp.getObjValAs? (Array String) "templates").toOption with
+    | some t, _ => t
+    | none, some #[t] => t
+    | _, _ => ""
   match f.programDigests with
   | .obj kvs =>
     match kvs.toArray.map (·.1) with

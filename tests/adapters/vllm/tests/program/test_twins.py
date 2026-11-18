@@ -8,6 +8,7 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 
+from verity_vllm.definitions.numerics import fa2_model, fa3_model
 from verity_vllm.definitions.numerics import kernel_registry as KR
 from verity_vllm.definitions.numerics import twins as TW
 
@@ -95,3 +96,22 @@ def test_attention_twin_declines_non_finite_operands():
     args[1][0] = 0x7FC0                                                   # a NaN key word
     with pytest.raises(KR.Declined):
         tw(*args, **spec.statics)
+
+
+def test_attention_twin_declines_a_non_finite_intermediate_of_finite_operands():
+    """Every word the largest finite BF16 (0x7F7F): the operands pass the twin's own check, S = QK^T overflows, and
+    `fa2_rows`' flag declines the row, where the model's saturated result (+inf) differs from the gates' NaN."""
+    spec = bind(TW.DEFINITIONS["Attention_v3"], T=5, NH=2, KVH=1, D=16, BN=128)
+    tw = KR.instance(spec, TW.KERNEL)
+    args = [np.full(n, 0x7F7F, dtype=np.uint64) for n in (2 * 16, 5 * 16, 5 * 16)]
+    with pytest.raises(KR.Declined, match="non-finite intermediate"):
+        tw(*args, **spec.statics)
+
+
+@pytest.mark.parametrize("model, name", [(fa2_model, "fa2_rows"), (fa3_model, "fa3_rows"), (fa2_model, "fa_s_words")])
+def test_an_attention_model_entry_point_refuses_one_argument_too_many(model, name):
+    """ctypes passes extra arguments on unchecked: a call of a stale argument list, as the twin's of `fa2_rows` was, raises."""
+    fn = getattr(model.lib(), name)
+    n = len(fn.argtypes)
+    with pytest.raises(TypeError, match=rf"{name} takes {n} arguments \({n + 1} given\)"):
+        fn(*[0] * (n + 1))

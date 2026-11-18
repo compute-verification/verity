@@ -25,11 +25,11 @@ import period_case as PC
 import verity_difftest as D
 from period_case import (ACCEPT, EXPECT, INGRESS, KINDS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most, build,
                          clog2, public, reference, verdict_of)
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.network.verifier import scan_ok
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 
 __all__ = ["EXPECT", "MUTATIONS", "build", "reference"]
@@ -1356,7 +1356,7 @@ def registered(case: dict, c: dict, e: dict, reg: dict, x: dict) -> dict:
     registration."""
     size, design = level_of(x)
     reg |= stated(size, design)
-    x["commitment"] = R.digest(reg)
+    x["commitment"] = DD.digest(reg)
     return case | {"commitment": D.canonical(c).encode().hex(), "evidence": D.canonical(e).encode().hex()}
 
 
@@ -1605,6 +1605,23 @@ def test_a_small_period_reaches_its_verdict(server):
     small = [build(m, n, small=True) for m in MUTATIONS if m != "case" for n in range(2)]
     assert [reference(c)["verdict"] for c in small] == [EXPECT[m] for m in MUTATIONS if m != "case" for _ in range(2)]
     D.run(dataclasses.replace(PORT, inputs=st.sampled_from(small)), examples=2 * len(small), server=server)
+
+
+@pytest.mark.slow
+def test_the_network_attesters_declared_check_answers_by_the_built_program(tmp_path):
+    """The network attester's declared check run against the built Lean program, which the check's own tests stand in
+    for: the honest period accepted, a forged certificate refused by name, a `network-rows` answer refused as another
+    protocol's."""
+    from verity.protocols.compose import schemes
+
+    check = schemes.get("network-attester").check
+    period, rows = str(D.build(LEAN, "network-period")), str(D.build(LEAN, "network-rows"))
+    honest = build("rows-honest", 0, small=True)
+    assert check(period, honest, tmp_path / "honest")["verdict"] == ACCEPT
+    forged = check(period, build("rows-cert-forged", 0, small=True), tmp_path / "forged")
+    assert forged["verdict"] == REJECT and forged["reason"].startswith("window 0: certificates")
+    with pytest.raises(ValueError, match="'verity/network-rows/v1', not verity/certifier/v0"):
+        check(rows, honest, tmp_path / "rows")
 
 
 def test_each_kind_of_case_is_answered_as_lean_answers(server):

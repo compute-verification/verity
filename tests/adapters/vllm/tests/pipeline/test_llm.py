@@ -26,6 +26,7 @@ import pytest
 import verity_vllm
 from tests import fake_vllm
 from verity import hooks as H
+from verity.protocols.resource_accounting.scheme import Lacks
 from verity_vllm import config, messages
 from verity_vllm import llm as L
 from verity_vllm.config import EnginePin
@@ -216,10 +217,24 @@ def test_a_refused_set_raises_before_the_engine_is_built(built):
     assert built == {}
 
 
-def test_pearl_cs_option_attaches_pearl_plus_by_name_on_the_build_and_close_releases_it(built, monkeypatch):
+def test_storage_attaches_by_its_name_though_the_selector_has_no_such_protocol(built, monkeypatch):
+    """``pous`` is no protocol of the selector (`config.PROTOCOLS`) but PoUS's declared scheme's name, which is attached
+    by name: what refuses it here is PoUS's own attach (`served.launcher_refusals`: the in-process LLM hands it no salt
+    source), not the selector.  A name that is neither stays the selector's to refuse, with its message."""
+    attached: list[str] = []
+    attach = messages.Exchange.attach
+    monkeypatch.setattr(messages.Exchange, "attach", lambda ex, s, given, **ctx: (attached.append(s.name), attach(ex, s, given, **ctx))[1])
+    with pytest.raises(ValueError, match="no salt_source"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous")
+    assert attached == ["pous"]
+    with pytest.raises(ValueError, match=r"protocol entry 'zk:v1': unknown protocol 'zk' \(known: pouw, sampled-proofs\)"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous,zk:v1")
+
+
+def test_pearl_plus_attaches_by_its_name_on_the_build_and_close_releases_it(built, monkeypatch):
     """The kernel is a stand-in: Pearl+ loads it at the first registered weights, which a CPU engine never emits."""
-    llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:pearl-c-h100-v1-h3",
-                protocols_config={"pouw": {"device": "cuda", "kernel": "/k.so"}})
+    llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols=["pearl-plus"],
+                protocols_config={"pearl-plus": {"device": "cuda", "kernel": "/k.so"}})
     ex = llm._engine.exchange
     assert list(ex.attached) == ["pearl-plus"] and llm.protocols is None
     assert ex.attached["pearl-plus"]["kernel"] == "/k.so" and ex.attached["pearl-plus"]["coins"] == "in-process"
@@ -229,18 +244,28 @@ def test_pearl_cs_option_attaches_pearl_plus_by_name_on_the_build_and_close_rele
     llm.close()
     llm.close()
     assert released == [True]
+    with pytest.raises(ValueError, match="pearl-plus runs on cuda"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pearl-plus", protocols_config={"pearl-plus": {"device": "cpu"}})
+
+
+def test_a_declared_schemes_option_is_refused_and_its_name_is_named(built):
+    with pytest.raises(ValueError, match="pouw:pearl-c-h100-v1-h3: names the declared scheme pearl-plus, .*by its name, 'pearl-plus'"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:pearl-c-h100-v1-h3")
+    with pytest.raises(ValueError, match="unknown protocol 'pous'"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:p2-16448/v4")
+    with pytest.raises(ValueError, match="protocol 'pouw' is enabled twice"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pearl-plus,pouw:eps1-sm120-h1fx1")
+
+
+def test_listed_schemes_attach_by_name_in_their_order(built, monkeypatch):
     order: list[str] = []
-    stand_ins = {e: SimpleNamespace(name=n, option=e, settings={}, check_settings=lambda own: None, requests=lambda ctx: (),
-                                    attach=lambda ex, ctx, n=n: order.append(n))
-                 for e, n in (("pouw:a-v1", "a"), ("pous:b-v1", "b"))}
-    monkeypatch.setattr(messages, "option", stand_ins.get)
-    both = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:a-v1,pous:b-v1")
+    stand_ins = {n: SimpleNamespace(name=n, option="", settings={}, depends=(), resource=Lacks("a stand-in"), check_settings=lambda own: None, requests=lambda ctx: (),
+                                    attach=lambda ex, ctx, n=n: order.append(n)) for n in ("a", "b")}
+    monkeypatch.setattr(messages.declarations, "load", lambda: stand_ins)
+    both = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="a,b")
     assert order == ["a", "b"] and sorted(both._engine.exchange.attached) == ["a", "b"] and both.protocols is None
     with pytest.raises(ValueError, match="2 schemes attached by name, not one"):
         _ = both.scheme
-    monkeypatch.undo()
-    with pytest.raises(ValueError, match="pouw:pearl-c-h100-v1-h3 runs on cuda"):
-        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:pearl-c-h100-v1-h3", protocols_config={"pouw": {"device": "cpu"}})
 
 
 @pytest.mark.parametrize("option,value", [
@@ -309,11 +334,11 @@ def test_each_llm_files_on_its_own_builds_exchange_and_generates_in_it(built, mo
 
 def test_an_engine_class_fills_its_settings():
     assert L.class_options({"engine_class": "G", "max_model_len": CTX}) == {
-        "engine_class": "G", "execution": "eager", "max_num_seqs": 256, "max_model_len": CTX, **CLASS_G_ARGS}
+        "engine_class": "G", "execution": "eager", "max_num_seqs": 1024, "max_model_len": CTX, **CLASS_G_ARGS}
     assert L.class_options({"engine_class": "G", "max_num_seqs": 4, "seed": 3, "max_model_len": 131072}) == {
         "engine_class": "G", "execution": "eager", "max_num_seqs": 4, "seed": 3, "max_model_len": 131072, **CLASS_G_ARGS}
     assert L.class_options({"seed": 3}) == {"seed": 3}
-    assert EC.max_num_seqs("G") == EC.CLASS_G_LIMITS["max_num_seqs"] == 256
+    assert EC.max_num_seqs("G") == EC.CLASS_G_LIMITS["max_num_seqs"] == 1024
     assert all(0 < v <= EC.CLASS_G_LIMITS[k] for k, v in EC.CLASS_G_SERVED.items())
 
 
@@ -339,7 +364,7 @@ def test_class_g_serves_compiled_at_its_breakable_graphs():
     sizes = [1, 2, 4, *range(8, 256, 8), *range(256, 513, 16)]
     graphs = {"cudagraph_mode": "FULL_AND_PIECEWISE", "cudagraph_capture_sizes": sizes}
     assert L.class_options({"engine_class": "G", "execution": "compiled", "max_model_len": CTX}) == {
-        "engine_class": "G", "execution": "compiled", "max_num_seqs": 256, "max_model_len": CTX, **CLASS_G_ARGS,
+        "engine_class": "G", "execution": "compiled", "max_num_seqs": 1024, "max_model_len": CTX, **CLASS_G_ARGS,
         "compilation_config": graphs}
     assert EC.compilation("G", "compiled") == "breakable" and EC.compilation("G", None) is None
     with pytest.raises(Refused, match="execution 'bi-compiled' \\(class G serves eager, compiled\\)"):
@@ -371,13 +396,13 @@ def test_a_built_engine_runs_at_its_launchs_context_limit_or_at_one_vllm_fitted(
 def test_an_option_the_class_contradicts_is_refused_by_name():
     with pytest.raises(Refused) as e:
         L.class_options({"engine_class": "G", "tensor_parallel_size": 4, "long_prefill_token_threshold": 512,
-                         "enable_prefix_caching": True, "execution": "bi-eager", "attention_backend": "FLASH_ATTN", "max_num_seqs": 257})
+                         "enable_prefix_caching": True, "execution": "bi-eager", "attention_backend": "FLASH_ATTN", "max_num_seqs": 1025})
     msg = str(e.value)
     assert msg.startswith("engine class G refused: ")
     for part in ("tensor_parallel_size=4, where the class serves 8", "long_prefill_token_threshold=512, where the class serves 256",
                  "enable_prefix_caching=True, where the class serves False", "execution='bi-eager', where the class serves 'eager'",
                  "attention_backend='FLASH_ATTN': the class serves the engine profile's",
-                 "max_num_seqs=257, over the class's 256", "max_model_len=None: the class serves at its launch's context limit"):
+                 "max_num_seqs=1025, over the class's 1024", "max_model_len=None: the class serves at its launch's context limit"):
         assert part in msg, part
     with pytest.raises(Refused, match=r"engine class 'H' is not registered \(registered: G\)"):
         L.class_options({"engine_class": "H"})
@@ -427,7 +452,7 @@ def built_g(monkeypatch):
 def test_class_g_builds_at_its_settings_and_its_window_refuses_past_its_limits(built_g):
     llm = L.LLM(GLM53[0], revision=GLM53[1], engine_class="G", max_model_len=CTX)
     assert built_g["engine_args"] == {**CLASS_G_ARGS, "max_model_len": CTX}
-    assert (built_g["case"], built_g["max_num_seqs"], built_g["execution"]) == ("GLM53", 256, "eager")
+    assert (built_g["case"], built_g["max_num_seqs"], built_g["execution"]) == ("GLM53", 1024, "eager")
     assert built_g["env"] == llm.engine_record["env_flags"] == {"VERITY_DSA_TOPK": "canonical"}
     assert llm.engine_record["engine_class"] == "G" and llm.engine_record["engine_overrides"] == {"moe_backend": "triton"}
     sched = handle.scheduler(llm)
@@ -536,7 +561,7 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
             if k in (*L.ENGINE_ARGS, "tensor_parallel_size")}
     assert args == {**CLASS_G_ARGS, "max_model_len": CTX}
     eng = B.build_engine(cps, case="M", max_num_seqs=EC.max_num_seqs("G"), engine_args=args, execution="eager", env=EC.env("G"))
-    assert {k: seen[k] for k in args} == args and (seen["enforce_eager"], seen["max_num_seqs"]) == (True, 256)
+    assert {k: seen[k] for k in args} == args and (seen["enforce_eager"], seen["max_num_seqs"]) == (True, 1024)
     assert eng.runner is None and eng.model is None
     assert eng.env_flags == {"VERITY_DSA_TOPK": "canonical"} == {"VERITY_DSA_TOPK": os.environ["VERITY_DSA_TOPK"]}
     assert EC.effective_refusals("G", eng.effective, eng.env_flags, CTX) == []

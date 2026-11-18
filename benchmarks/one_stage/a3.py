@@ -34,6 +34,8 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
@@ -109,7 +111,7 @@ def main() -> int:
                            "template_program_ok": m["program_ok"]} for m in members]
 
     # the partition over the verifier's own program
-    program = P.mixed_population_program([(m["defn"], m["n"]) for m in members])
+    program = PN.mixed_population_program([(m["defn"], m["n"]) for m in members])
     query = P.template_instances_query([m["defn"] for m in members])
     ranges = P.ranges(program, query)
     n = P.units(program, query)
@@ -143,7 +145,7 @@ def main() -> int:
         checks[f"public/{m['name']}"] = {"ok": ok, "codes": [] if ok else ["public"], "detail": {}}
     receipt = R.receipt(rec, "one-stage-e2e verifier (a3.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-    summary.update(population=n, partition=rec["partition"], registration=R.digest(rec),
+    summary.update(population=n, partition=rec["partition"], registration=DD.digest(rec),
                    checks_before_draw={k: v["ok"] for k, v in checks.items()})
     if not all(v["ok"] for v in checks.values()) or not all(m["program_ok"] for m in members):
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
@@ -151,7 +153,7 @@ def main() -> int:
         return 1
 
     # the sample: the verifier's split over the union, then each template's live sample of its share
-    split = lean_split(a.lean, n, a.k, R.digest(rec), out)
+    split = lean_split(a.lean, n, a.k, DD.digest(rec), out)
     counts = {m["name"]: sum(1 for u in split["units"] if m["base"] <= u < m["base"] + m["n"]) for m in members}
     (out / "split.json").write_text(json.dumps({"lean_draw": split, "counts": counts}, indent=1))
     union_units, proved, instances, verdicts, statement, sessions, session_roots = [], [], 0, {}, {}, [], {}

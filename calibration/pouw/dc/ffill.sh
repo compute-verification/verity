@@ -25,7 +25,8 @@ NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
 CARD=(${DC_SKU:+--sku "$DC_SKU"})
 ARCH=$(python3 "$PROBE" arch "${CARD[@]}") || exit 2
-[ "$ARCH" = sm_90a ] || { echo "ffill.sh: the card's target is $ARCH, and ffill's forms are sm_90a's only: nothing built" >&2; exit 2; }
+TENSOR=$(python3 "$HERE/archs.py" "$ARCH" tensor) || exit 2
+[ "$TENSOR" = wgmma ] || { echo "ffill.sh: the card's target is $ARCH, and ffill's forms sit beside wgmma, which archs.py doesn't time on $ARCH: nothing built" >&2; exit 2; }
 
 if [ "${DC_LEASED:-}" != 1 ]; then
   WORK=$(mktemp -d)

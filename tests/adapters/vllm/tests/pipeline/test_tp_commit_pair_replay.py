@@ -275,8 +275,7 @@ def _deferred(pair: TP._Pair, rank: int, pin: dict[str, Any] = PIN) -> Callable[
         if answer["binding"] is None:
             return
         part = RB.partial(pair.out, 0, rank=rank)
-        (part / "store").mkdir(parents=True)
-        (part / RB.PRIVATE[0]).write_bytes(bytes(64))
+        part.mkdir(parents=True)
         (part / "binding_map.json").write_text(json.dumps(pair.ranks[rank]._tp2_commit["bmap"], default=str) + "\n")
         replay, linkage = RB.deferred_records(RB.path(pair.out, 0, rank=rank))
         answer["sampled_replay"] = {"sampled_replay": replay | {"rank": rank}, "boundary_linkage": linkage | {"rank": rank},
@@ -314,7 +313,7 @@ def test_a_deferred_pair_is_pending_on_every_rank_and_seals_each_ranks_bundle(pa
     for b in bundles:
         sealed = RB.open_bundle(b["path"])
         context = sealed["context"]
-        assert (sealed["manifest_sha256"], b["files"]) == (b["manifest_sha256"], 3)
+        assert (sealed["manifest_sha256"], b["files"]) == (b["manifest_sha256"], 2)
         assert (context["tp"], context["pair"], context["run_root"], context["tp_run_root"]) == \
             ({"world": 2, "rank": b["rank"]}, 0, roots[b["rank"]].hex(), c["tp_run_root"])
         assert (context["required_manifest"], context["engine_of_record"], context["programs"]) == (flags[1], {"vllm": "a stand-in"}, {})

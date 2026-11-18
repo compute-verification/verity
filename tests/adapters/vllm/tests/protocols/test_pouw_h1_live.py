@@ -71,7 +71,7 @@ def test_a_served_window_registers_round_0s_request_headers_and_each_rounds_slot
         assert G.verify_read(reg.domain, reg.root, 1, reg.bcs[1], reg.path(1), schema)
         assert not G.verify_read(reg.domain, reg.root, 1, reg.bcs[1], reg.path(1), other)
     ports = LV.statement(run, 0)[1]["ports"]
-    assert ports["req_0"][G.SCHEMA_KEY] == G.SCHEMA_SEG and ports["slot_0"][G.SCHEMA_KEY] == G.SCHEMA_V2
+    assert ports["req_0"][RV.SCHEMA_KEY] == G.SCHEMA_SEG and ports["slot_0"][RV.SCHEMA_KEY] == G.SCHEMA_V2
     assert LV.verdicts(run) == [{"round": 0, "m": 3, "admitted": 3, "ok": True}]
     with pytest.raises(ValueError, match="live table"):
         run.open_request(0)
@@ -83,14 +83,11 @@ def test_a_served_window_registers_round_0s_request_headers_and_each_rounds_slot
 
 def test_round_0s_request_table_is_cores_commit_of_its_headers():
     """``requests@0``, hashed with NumPy (`pouw_h1_registered.commit`), is core's `Registered.commit` of round 0's
-    headers under the run key's salts at its nonce: its entry, strings, levels, salts and rows."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
-        registered as NR,
-    )
+    headers under the run's salts at its nonce: its entry, strings, levels, salts and rows."""
     run = _window()
     served = run.served
     req, words = served.live[LV.value(served, LV.REQUESTS)], LV.request_words(run.admitted.get(0, []), ROWS)
-    ys = NR.salts(run._key, LV.nonce(SV.LIVE_NONCE, LV.REQUESTS, 0), ROWS)
+    ys = run._salts.held(LV.nonce(SV.LIVE_NONCE, LV.REQUESTS, 0))
     core = RV.Registered.commit(served.program_digest, req.value, words.tolist(), [ys[192 * j:192 * (j + 1)] for j in range(ROWS)],
                                RV.WORD_BITS, LR.REQUEST_SCHEMA, session=SV.LOCAL_SESSION)
     assert req.entry() == core.entry() and req.bcs == core.bcs and req.levels == core.levels
@@ -266,4 +263,4 @@ def test_the_provers_live_dump_opens_every_row_its_statement_reads(tmp_path):
         dom = RV.domain(pub["program"], e["value"], e["words"], e["leaves"], **bind)
         assert dom.domain_id.hex() == e["domain"]
         assert G.verify_read(dom, bytes.fromhex(e["root"]), op["index"], bytes.fromhex(op["bc"]), bytes.fromhex(op["path"]),
-                             e.get(G.SCHEMA_KEY, G.SCHEMA)), p
+                             e.get(RV.SCHEMA_KEY, RV.SCHEMA)), p

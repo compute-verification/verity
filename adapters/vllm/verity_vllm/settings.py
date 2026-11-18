@@ -141,6 +141,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_ARENA_WAIT_S", float, 600.0, WHERE, "seconds the serving thread waits for a free host-arena block before failing"),
     S("VERITY_COLLECT_DEAD_GRACE_S", float, 120.0, WHERE, "seconds a dead collector waits for progress before its watchdog exits"),
     S("VERITY_COLLECT_WATCHDOG_MARKER", str, "", WHERE, "the file the collector's watchdog writes when it exits (the Commit sets it)"),
+    S("VERITY_CONFIGURATION", str, None, VALUE, "the committed configuration's hash the launcher was given (`verity run`'s "
+      "runner sets it), which `messages.Exchange.attach` hands each scheme as ctx['configuration']; unset, none was given"),
     S("VERITY_CONSUMER_DELAY_MS", float, 0.0, DEBUG, "milliseconds the collector's consumer sleeps per step (a stall injected for tests)"),
     S("VERITY_CUT", json.loads, None, VALUE, "the carried pool's cut at each window edge under vLLM's engine core "
       "(`pipeline.cut_plugin`), a JSON object: every_s or every_steps, hold_s, the log directory and the sent feed (`cut_plugin.SentFeed`); unset, none"),
@@ -163,6 +165,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_PIN", one, False, VALUE, "1: the host committer's worker pins its CPU affinity"),
     S("VERITY_PINNED_EXACT", flag, True, VALUE, "the pinned pool allocates exactly what is asked, not rounded up"),
     S("VERITY_PINNED_POPULATE_THREADS", int, None, VALUE, "helper threads that fault a fresh pinned pool in (`commit --pinned-populate-threads`)"),
+    S("VERITY_PINS", json.loads, None, VALUE, "the application's [[pin]] entries as JSON (`verity run`'s runner sets it), "
+      "which `messages.Exchange.attach` hands each scheme, read-only, as ctx['pins']; unset, none were given"),
     S("VERITY_RETAIN", lowered, None, VALUE, "where raw copies are retained: host, device, gpu, none or sample; unset, the committer's; "
       "empty is refused", empty=True),
     S("VERITY_RETAIN_EXCLUDE", str, "", VALUE, "families whose raw copies aren't retained (`native_collect.retain_exclude_families`)"),
@@ -238,6 +242,7 @@ SETTINGS: dict[str, Setting] = _declare(
       "its fields to the record (diagnostic only, never on a workload of record)"),
     # ---- the native builds
     S("NATIVE_COLLECT_BUILD", str, None, WHERE, "the parent directory of the native collector's builds"),
+    S("VERITY_BUILD_ROOT", str, None, WHERE, "the pod's build root: the collector's and the taps' builds are under it (config.BUILT)"),
     # ---- the program (program/)
     S("VERITY_DENSE_THREADS", str, None, VALUE, "the dense chain's thread cap, read at import; not a positive integer, no cap"),
     S("VERITY_NUMERICS_BUILD_DIR", str, None, WHERE, "where the numerics' JIT-built libraries live"),
@@ -303,13 +308,13 @@ FAMILIES: dict[str, str] = {"VLLM_": VALUE, "NCCL_": VALUE, "CUBLAS": VALUE}
 ELSEWHERE = frozenset((
     "VERITY_BENCH_", "VERITY_GRADER_", "VERITY_SUITE_", "VERITY_VLLM_BENCH_",
     "VERITY_ADV_CACHE", "VERITY_ADV_SEED", "VERITY_AMBIENT", "VERITY_AMBIENT_TEST", "VERITY_CAPTURED_101_GUMBEL", "VERITY_CENSUS",
-    "VERITY_CHECKER_VARIANT", "VERITY_CIRCUIT_CHECK_SLOW", "VERITY_COMMIT", "VERITY_CONFIGURATION", "VERITY_DENSE_PROGRAM_DIRS", "VERITY_E2E_B",
+    "VERITY_CHECKER_VARIANT", "VERITY_CIRCUIT_CHECK_SLOW", "VERITY_COMMIT", "VERITY_DENSE_PROGRAM_DIRS", "VERITY_E2E_B",
     "VERITY_E2E_BOUNDED", "VERITY_E2E_CASE", "VERITY_E2E_EXCLUDE", "VERITY_E2E_GPU_UTIL", "VERITY_E2E_HIDDEN_SO", "VERITY_E2E_LEARN_MB",
     "VERITY_E2E_UTIL", "VERITY_E2E_WINDOW_MB", "VERITY_E2E_WORKLOAD", "VERITY_ENCODINGS_ADVICE_V0", "VERITY_EVALUATE_FULL_LOGF",
     "VERITY_EXHAUSTIVE", "VERITY_FA2_CSRC", "VERITY_FLOCK_CACHE", "VERITY_FLOCK_INNER_FOLD", "VERITY_FLOCK_SAME_SHAPE_FULL",
     "VERITY_GIT_GUARD", "VERITY_GPU_TORCH_ONLY", "VERITY_H1_REGISTER", "VERITY_HP_ARCHIVE", "VERITY_KV_SO", "VERITY_LEAF_LAYOUT",
     "VERITY_LEAN_MEM_FLOOR_GIB", "VERITY_ML_BOOLEAN_EXHAUSTIVE", "VERITY_ML_DEFINITIONS_SLOW", "VERITY_MOE_PROGRAM_DIRS",
-    "VERITY_MUFU_TABLES", "VERITY_MUFU_TANH_TABLES", "VERITY_NETWORK_RECORDS_EXE", "VERITY_NUMERICAL_STORE", "VERITY_PAGED_SO", "VERITY_PINS",
+    "VERITY_MUFU_TABLES", "VERITY_MUFU_TANH_TABLES", "VERITY_NETWORK_RECORDS_EXE", "VERITY_NUMERICAL_STORE", "VERITY_PAGED_SO",
     "VERITY_POUS_SLOW", "VERITY_POUW_CUDA_ARCH", "VERITY_POUW_CUDA_BUILD", "VERITY_POUW_H1_PIN", "VERITY_POUW_H1U_SO",
     "VERITY_POUW_NOISE_CUBIN", "VERITY_POUW_NVCC", "VERITY_POUW_WINDOW_LOWERED_LANES", "VERITY_REAL_GIT", "VERITY_REGRESSION",
     "VERITY_REGRESSION_CANDIDATE", "VERITY_REGRESSION_CANDIDATE_CACHE", "VERITY_REGRESSION_ORACLE", "VERITY_REGRESSION_REBUILD",
