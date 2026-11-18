@@ -84,6 +84,7 @@ ATTESTER_PIECE = "benchmarks/network_traces/attester_piece.py"
 ATTESTER_FRONT = "benchmarks/network_traces/attester_front.py"
 LEAK_GUARD = "benchmarks/network_traces/leak_guard.py"
 SERVED_SESSION = "benchmarks/network_traces/served_session.py"
+NETWORK_LEAN = "verity/protocols/resource_accounting/network/verifier/lean"
 PEARLPLUS_SCRIPT = "benchmarks/one_stage/served_pearlplus.sh"
 PEARLPLUS_GATE = "benchmarks/one_stage/pearlplus_local_e2e.py"
 ONSITE = "verity/onsite/v1"
@@ -676,13 +677,17 @@ def _attester_piece(cfg, params, bound, pinned):
     guard = "--guard-cmd " + shlex.quote(f'{py} {LEAK_GUARD} "$@"')
     chain = "--chain-cmd " + shlex.quote(f'{py} {SERVED_SESSION} chain --keep "$1" --run "$2" --endpoint "$3" '
                                          '--eos-ids 128001 "${@:4}"')
+    lock = "verity/circuits/difftest/.lake"
+    built = (f"mkdir -p {lock} && flock {lock}/harness-build.lock lake -d {NETWORK_LEAN} build network-period "
+             f"network-rows; {py} {ATTESTER_PIECE}")
+    lean, rows = (f"--{k} {NETWORK_LEAN}/.lake/build/bin/network-{e}" for k, e in (("lean", "period"), ("rows", "rows")))
     if "pearl-plus" in cfg["protocols"]:
         tokens = min(FRONT_TOKENS, cfg["workload"]["params"]["window-steps"])
         return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": f"{front} --tokens {tokens}",
-                "CERTIFIER_CMD": f'{py} {ATTESTER_PIECE} piece {guard} {chain} "$@"'}
+                "CERTIFIER_CMD": f'{built} piece {lean} {rows} {guard} {chain} "$@"'}
     return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": front,
-            "CERTIFIER_CHAIN_CMD": f'{py} {ATTESTER_PIECE} chain {guard} {chain} "$@"',
-            "CERTIFIER_PERIOD_CMD": f'{py} {ATTESTER_PIECE} period {guard} "$@"',
+            "CERTIFIER_CHAIN_CMD": f'{built} chain {rows} {guard} {chain} "$@"',
+            "CERTIFIER_PERIOD_CMD": f'{built} period {lean} {rows} {guard} "$@"',
             "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
 
 

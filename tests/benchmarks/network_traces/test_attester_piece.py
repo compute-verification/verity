@@ -525,7 +525,8 @@ def test_a_step_the_leak_guard_refuses_keeps_no_case_and_a_step_that_cant_start_
     (bare / CP.CASES).mkdir(parents=True)
     (bare / CP.CASES / CP.CASE).write_text("{}")
     out = tmp_path / "bare-pieces" / "certifier"
-    assert CP.main(["piece", str(bare), str(K), str(out), "--guard-cmd", GUARD, "--chain-cmd", "exit 7"]) == 3
+    assert CP.main(["piece", str(bare), str(K), str(out), *_lean(tmp_path, {}), "--guard-cmd", GUARD,
+                    "--chain-cmd", "exit 7"]) == 3
     assert "no network attester run kept" in (out / CP.REFUSED).read_text() and not _named(tmp_path, CP.CASE)
 
 
@@ -677,10 +678,11 @@ def test_rows_check_takes_only_network_rows_verdict_and_leaves_no_case_behind(tm
 
 @pytest.fixture(scope="module")
 def rows_exe() -> str:
-    """``network-rows``, built where the piece builds it."""
+    """``network-rows``, built where the launcher builds it (`relay_check.ROWS_EXE`)."""
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
-    return CP.lean_exe("network-rows", None)
+    return str(V.executable("network-rows", RC.ROWS_EXE.parents[3]))
 
 
 #: the synthetic run's cells a connection a bucket, and a cell's bytes

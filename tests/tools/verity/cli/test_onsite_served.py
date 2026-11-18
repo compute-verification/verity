@@ -61,9 +61,16 @@ UNBOUND = sorted(k for k in (f"{p}.{c}.{k}" for p, cs in BINDINGS.items() if p n
 GUARD_CMD = """--guard-cmd '.venv/bin/python benchmarks/network_traces/leak_guard.py "$@"'"""
 CHAIN_CMD = ("""--chain-cmd '.venv/bin/python benchmarks/network_traces/served_session.py chain --keep "$1" """
              """--run "$2" --endpoint "$3" --eos-ids 128001 "${@:4}"'""")
+#: the network attester's piece, its Lean executables built under the tree's Lake build lock first, and their paths
+NETWORK_LEAN = "verity/protocols/resource_accounting/network/verifier/lean"
+PIECE = ("mkdir -p verity/circuits/difftest/.lake && flock verity/circuits/difftest/.lake/harness-build.lock "
+         f"lake -d {NETWORK_LEAN} build network-period network-rows; "
+         ".venv/bin/python benchmarks/network_traces/attester_piece.py")
+PERIOD_EXE = f"--lean {NETWORK_LEAN}/.lake/build/bin/network-period"
+ROWS_EXE = f"--rows {NETWORK_LEAN}/.lake/build/bin/network-rows"
 #: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
 VARIABLES = {
-    "CERTIFIER_CMD": f'.venv/bin/python benchmarks/network_traces/attester_piece.py piece {GUARD_CMD} {CHAIN_CMD} "$@"',
+    "CERTIFIER_CMD": f'{PIECE} piece {PERIOD_EXE} {ROWS_EXE} {GUARD_CMD} {CHAIN_CMD} "$@"',
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_front.py front "$1" "$2" "$3" '
                        "--gate user@gate-1 --peer peer-1 --tokens 2",
     "CLASSES": "4,27,2", "V3C_CLASS": "4,27,2",
@@ -405,9 +412,8 @@ def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one
 SPLIT = {"SERVE_ARGS": T.ID_FORM,
          "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_front.py front "$1" "$2" "$3" '
                             "--gate user@gate-1 --peer peer-1",
-         "CERTIFIER_CHAIN_CMD": f'.venv/bin/python benchmarks/network_traces/attester_piece.py chain {GUARD_CMD} '
-                                f'{CHAIN_CMD} "$@"',
-         "CERTIFIER_PERIOD_CMD": f'.venv/bin/python benchmarks/network_traces/attester_piece.py period {GUARD_CMD} "$@"',
+         "CERTIFIER_CHAIN_CMD": f'{PIECE} chain {ROWS_EXE} {GUARD_CMD} {CHAIN_CMD} "$@"',
+         "CERTIFIER_PERIOD_CMD": f'{PIECE} period {PERIOD_EXE} {ROWS_EXE} {GUARD_CMD} "$@"',
          "V3C_CLASS": "8,32,4,4,16", "CLASSES": "4,32,4 8,32,4,4,16"}
 
 

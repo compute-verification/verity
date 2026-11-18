@@ -1,11 +1,11 @@
 """attester-piece: the network attester's piece of `served_verdicts.sh` (its ``CERTIFIER_CMD``), on the network attester
 run the front (`attester_front.py`, its ``CERTIFIER_FRONT``) kept under the serve dir.
 
-    python attester_piece.py piece SERVE_DIR WINDOW DIR --guard-cmd CMD --chain-cmd CMD [--close-cmd CMD]
-        [--lean EXE] [--rows EXE] [CR_K=V ...]
-    python attester_piece.py chain SERVE_DIR WINDOW DIR V3C --guard-cmd CMD --chain-cmd CMD [--close-cmd CMD]
-        [--rows EXE] [--class w63k4] [CR_K=V ...]
-    python attester_piece.py period SERVE_DIR WINDOW DIR V3C --guard-cmd CMD [--close-cmd CMD] [--lean EXE] [--rows EXE]
+    python attester_piece.py piece SERVE_DIR WINDOW DIR --lean EXE --rows EXE --guard-cmd CMD --chain-cmd CMD
+        [--close-cmd CMD] [CR_K=V ...]
+    python attester_piece.py chain SERVE_DIR WINDOW DIR V3C --rows EXE --guard-cmd CMD --chain-cmd CMD
+        [--close-cmd CMD] [--class w63k4] [CR_K=V ...]
+    python attester_piece.py period SERVE_DIR WINDOW DIR V3C --lean EXE --rows EXE --guard-cmd CMD [--close-cmd CMD]
 
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
   form): accept only when ``network-rows check`` accepted the network attester's records, the chain accepted and
@@ -15,7 +15,7 @@ run the front (`attester_front.py`, its ``CERTIFIER_FRONT``) kept under the serv
      through the front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request
      late past the network attester's D·τ, or cut) attested no served answer, so there is none for the protocol to
      reject (`rehearsed`). Its records are then audited as rows (`rows_check`): `network_attester_chain.rows_audit_case` of the
-     run, checked by ``network-rows`` (``--rows``, else built in verity/protocols/resource_accounting/network/verifier/lean;
+     run, checked by ``network-rows`` (``--rows``, built in verity/protocols/resource_accounting/network/verifier/lean;
      `NetworkCheck.RowsAudit`, `ROWS`), which holds each record to its attested head and each attestation to the
      deployment's key in its session, then runs the attester program's rows audit (`NetworkAttester.Rows.audit`):
      every egress row must be the one the schedule the records show renders, so cells cut, clocked or ordered
@@ -38,7 +38,7 @@ run the front (`attester_front.py`, its ``CERTIFIER_FRONT``) kept under the serv
   4. The period's execution phase is the scan's (``answers.json``'s one window; the chain keeps its scan's answers on
      its private side, `chain_witness`): every window request's release and streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the network attester run and the chain's scan, checked by ``network-period``
-     (``--lean``, else built in verity/protocols/resource_accounting/network/verifier/lean); its answer is the piece's, an accept's profile
+     (``--lean``, built in verity/protocols/resource_accounting/network/verifier/lean); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): each machine by the party the configuration puts on it, never a host's
      name, and the piece's own steps' machines `UNNAMED`. The names are labels: the piece establishes no
      `trusted-device` and gives no bound on that ground (`UNMET`).
@@ -58,17 +58,16 @@ run the front (`attester_front.py`, its ``CERTIFIER_FRONT``) kept under the serv
   blob (about 83 MB on a served window, nearly all of it the params); the attestations are cut from that evidence, and
   the hold's period files then go, so the case has one copy. It is there only where the step ended with its files
   released (`settle`), and no answer is beside it: the answer is DIR's. Only the protocol rejects: a step that can't
-  run (no kept run, a rehearsal the gate's check didn't pass, a build, a tool or the chain failing without a report,
-  an input missing, the leak guard failing, or SIGTERM from the piece's time limit) is `NotRun`, and the piece then
-  refuses, releasing nothing from the hold and keeping no case: DIR keeps only its logs (`LOGS`) and gets
-  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the attester refused by that sentence
-  (undecided in the block record, never accepted, never dropped).
-  Each step it runs (the build, the chain, the check and the leak
-  guard) is a process group of its own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`,
-  SIGKILL), so nothing a step started outlives it; a SIGTERM while a step runs is held until the step's group has
-  ended, so a step never outlives the refusal either. A CR_K=V goes to the chain. A relay session nobody closed
-  (`open_sessions`) is closed first by ``--close-cmd`` (``bash -c CMD _ SERVE_DIR``: `attester_front.py close-open`);
-  without it, the step refuses (`close_open`).
+  run (no kept run, a rehearsal the gate's check didn't pass, an executable not built, a tool or the chain failing
+  without a report, an input missing, the leak guard failing, or SIGTERM from the piece's time limit) is `NotRun`, and
+  the piece then refuses, releasing nothing from the hold and keeping no case: DIR keeps only its logs (`LOGS`) and
+  gets DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the attester refused by that
+  sentence (undecided in the block record, never accepted, never dropped).
+  Each step it runs (the chain, the checks and the leak guard) is a process group of its own, which the piece ends
+  however the step ends (`run_group`: SIGTERM, `GRACE_S`, SIGKILL), so nothing a step started outlives it; a SIGTERM
+  while a step runs is held until the step's group has ended, so a step never outlives the refusal either. A CR_K=V
+  goes to the chain. A relay session nobody closed (`open_sessions`) is closed first by ``--close-cmd`` (``bash -c CMD
+  _ SERVE_DIR``: `attester_front.py close-open`); without it, the step refuses (`close_open`).
 * **chain** and **period** are the piece split in two around V3c (`served_verdicts.sh`'s ``CERTIFIER_CHAIN_CMD`` and
   ``CERTIFIER_PERIOD_CMD``, each run as ``bash -c CMD _ D K DIR V3C``, e.g. ``CERTIFIER_CHAIN_CMD='python
   benchmarks/network_traces/attester_piece.py chain "$@"'``), so the period's compute audit is V3c's audit of the
@@ -160,7 +159,6 @@ LOGS = ("piece.log", "chain.log", "period.log")
 #: every file DIR may hold when the leak guard reads it and the hold (its ``--public``): the answer, the logs, the
 #: split's `CHAINED`, the attestations and `PUBLIC`'s
 PIECE_FILES = ("answer.json", *LOGS, CHAINED, CERTIFICATES, *(f"chain/{rel}" for rel in PUBLIC))
-LEAN_DIR = TREE / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "lean"
 #: how long a step's process group has after SIGTERM before SIGKILL: inside `timeout -k`'s minute and the research
 #: runner's grace, so the piece has ended its steps before anything ends the piece; and how often it looks
 GRACE_S, POLL_S = 5, 0.05
@@ -181,7 +179,7 @@ def _lines(path: Path) -> list[dict]:
 # ---------------------------------------------------------------------------------------------------------------- piece
 
 class NotRun(Exception):
-    """The piece couldn't run to a verdict for a reason outside the protocol: a build, a tool or an input failed."""
+    """The piece couldn't run to a verdict for a reason outside the protocol: a tool or an input failed."""
 
 
 class Rejected(Exception):
@@ -418,21 +416,6 @@ def run_chain(keep: Path, run: str, endpoint: Path, sets: list[str], cmd: str) -
     argv = ["bash", "-c", cmd, "_", str(keep), run, str(endpoint), *sets]
     with open(d / "chain" / "stdout.log", "w") as log:
         return run_group(argv, cwd=TREE, env=env, stdout=log, stderr=subprocess.STDOUT)
-
-
-def lean_exe(name: str, given: str | None) -> str:
-    """``given``, else the executable ``name`` of `LEAN_DIR`, built here under every test's Lake build lock
-    (`verifier.executable`): Lake builds `LEAN_DIR`'s path requires, SPOT's and Flock's among them, in their own `.lake`."""
-    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
-    if given:
-        return given
-    try:
-        exe = V.executable(name, LEAN_DIR)
-    except V.LeanError as e:
-        raise NotRun(str(e)) from None
-    if not exe.is_file():
-        raise NotRun(f"lake build {name} wrote no {exe}")
-    return str(exe)
 
 
 def period_check(exe: str, case: dict, d: Path) -> dict:
@@ -776,10 +759,9 @@ def piece(a: argparse.Namespace) -> int:
         return 2
 
     def step(hold: Path) -> tuple[dict | None, Path | None]:
-        exe, rows = lean_exe("network-period", a.lean), lean_exe("network-rows", a.rows)
         chain = lambda keep, run, ep, n: run_chain(keep, run, ep, sized(n, a.set), a.chain_cmd)  # noqa: E731
-        return decide(serve_dir, a.window, hold, chain=chain, check=lambda c, p: period_check(exe, c, p),
-                      rows=own_rows(rows))
+        return decide(serve_dir, a.window, hold, chain=chain, check=lambda c, p: period_check(a.lean, c, p),
+                      rows=own_rows(a.rows))
     try:
         got = settle(serve_dir, a.window, d, "CERTIFIER_TIMEOUT", step, a.guard_cmd, a.close_cmd)
     except NotRun as e:
@@ -811,7 +793,7 @@ def chain_step(a: argparse.Namespace) -> int:
         chain = lambda keep, run, ep, n: run_chain(keep, run, ep, sized(n, sets), a.chain_cmd)  # noqa: E731
         got = settle(serve_dir, a.window, d, "CERTIFIER_TIMEOUT",
                      lambda hold: decide(serve_dir, a.window, hold, chain=chain, check=None,
-                                         rows=own_rows(lean_exe("network-rows", a.rows))),
+                                         rows=own_rows(a.rows)),
                      a.guard_cmd, a.close_cmd)
     except NotRun as e:
         return refuse(d, str(e))
@@ -836,9 +818,8 @@ def period_step(a: argparse.Namespace) -> int:
     def step(hold: Path) -> tuple[dict | None, Path | None]:
         if not (d / CHAINED).is_file():
             raise NotRun(f"no {CHAINED} in DIR: the chain step (CERTIFIER_CHAIN_CMD) didn't run, or didn't finish")
-        exe, rows = lean_exe("network-period", a.lean), lean_exe("network-rows", a.rows)
-        return decide(serve_dir, a.window, hold, chain=None, check=lambda c, p: period_check(exe, c, p),
-                      rows=own_rows(rows), case=v3c_case(v3c))
+        return decide(serve_dir, a.window, hold, chain=None, check=lambda c, p: period_check(a.lean, c, p),
+                      rows=own_rows(a.rows), case=v3c_case(v3c))
     try:
         got = settle(serve_dir, a.window, d, "CERTIFIER_PERIOD_TIMEOUT", step, a.guard_cmd, a.close_cmd)
     except NotRun as e:
@@ -853,7 +834,6 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("serve_dir", type=Path)
     q.add_argument("window", type=int)
     q.add_argument("dir", type=Path)
-    q.add_argument("--lean", help="network-period, built (else built here)")
     for name in ("chain", "period"):
         q = sub.add_parser(name)
         q.add_argument("serve_dir", type=Path)
@@ -861,7 +841,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("dir", type=Path)
         q.add_argument("v3c", type=Path, help="V3c's directory: window/ (window-commit's) and period.json")
     for q in sub.choices.values():
-        q.add_argument("--rows", help="network-rows, built (else built here)")
+        q.add_argument("--rows", required=True, help="network-rows, built")
         q.add_argument("--guard-cmd", required=True, help="the leak guard: bash -c CMD _ ARGS")
         q.add_argument("--close-cmd", help="closes a relay session nobody closed: bash -c CMD _ SERVE_DIR")
     for name in ("piece", "chain"):
@@ -871,7 +851,8 @@ def parser() -> argparse.ArgumentParser:
     q = sub.choices["chain"]
     q.add_argument("--class", dest="scan_class", default=V3C_SCAN_CLASS,
                    help=f"the scan's class, V3c's window class's (default {V3C_SCAN_CLASS})")
-    sub.choices["period"].add_argument("--lean", help="network-period, built (else built here)")
+    for name in ("piece", "period"):
+        sub.choices[name].add_argument("--lean", required=True, help="network-period, built")
     return p
 
 
