@@ -133,7 +133,7 @@ def weight_value(program: str, param: str, words: Any, salts: bytes | None = Non
     opens them)."""
     rows = _rows(param, words)
     ys = os.urandom(len(rows) * SF.SALT_BYTES) if salts is None else bytes(salts)
-    return registered_commit(program, param, rows, bytes(32), 0, keep_rows=keep_rows, row_salts=ys,
+    return registered_commit(program, param, rows, ys, keep_rows=keep_rows,
                              schema=SCHEMA_HM96_SHA512_ROW_SEG if _param(param)[2] else SCHEMA_HM96_SHA512_ROW_V2)
 
 

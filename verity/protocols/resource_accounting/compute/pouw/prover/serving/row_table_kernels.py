@@ -108,7 +108,7 @@ def nvcc() -> str | None:
 
 @cache
 def device_lib(arch: str) -> ctypes.CDLL:
-    """`row_table.cu` built with nvcc for ``sm_<arch>`` (``"120"``: the RTX PRO 6000)."""
+    """`row_table.cu` built with nvcc for ``sm_<arch>`` (``"120a"``: the RTX PRO 6000)."""
     tool = nvcc()
     if tool is None:
         raise RuntimeError("no nvcc configured or on the path")
