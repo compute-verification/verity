@@ -54,7 +54,7 @@ from pathlib import Path
 from verity.circuits import codec
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.program import input_id, is_input
-from verity.circuits.refs import Affine, Concat, Explicit
+from verity.circuits.refs import Affine, Concat, Explicit, Strided
 from verity.circuits.types import Array, RecordType, Tuple
 
 
@@ -275,6 +275,128 @@ def own_rows(program, form_only: bool = False) -> None:
                     if not is_input(prim) or gate in seen:
                         raise refused("own-rows", OWN_ROWS)
                     seen.add(gate)
+
+
+def _unit(nodes, i: int) -> bool:
+    """`RecordWired.isUnit`: root node `i` is no input node."""
+    return 0 <= i < len(nodes) and not is_input(nodes[i].fn)
+
+
+def _reads_unit(nodes, p) -> bool:
+    """`RecordWired.readsUnit`: part `p` of a root node's argument reads a unit's output."""
+    if isinstance(p, Explicit):
+        return any(s == "n" and _unit(nodes, i) for s, i, _ in p.items)
+    return p.space == "n" and p.count > 0 and _unit(nodes, p.idx)
+
+
+def _edge_arg(nodes, a) -> bool:
+    """`RecordWired.isEdgeArg`."""
+    return any(_reads_unit(nodes, p) for p in _parts(a.refs))
+
+
+def has_edge(program) -> bool:
+    """`RecordWired.hasEdge`: some argument of a root node that is no input node reads a unit's output."""
+    nodes = program.root.body.nodes
+    return any(not is_input(n.fn) and any(_edge_arg(nodes, a) for a in n.args) for n in nodes)
+
+
+def _axis_dims(ty, ax: int):
+    """`Ty.axisDims`: for a batch argument mapped on axis `ax`, the axis' length and the leaves below it."""
+    if not isinstance(ty, Array):
+        return None
+    return (ty.n, ty.elem.leaves) if ax == 0 else _axis_dims(ty.elem, ax - 1)
+
+
+def _width(ty):
+    """`Widths.homo`: a type's one leaf width, None where it has more than one."""
+    ws = set(ty.leaf_widths())
+    return ws.pop() if len(ws) == 1 else None
+
+
+def edges_of(program, templates: list[Template], form_only: bool = False) -> list[dict]:
+    """`RecordWired.edgesOf`: the root's edges, each as a wire (`reader`, `port`, `writer`, `out`, `at`, `radix`, `base`,
+    `step`, `c0`, `C`), each unit's arguments in order; `edge-rows` where an argument that reads a unit's output is no
+    edge the rule takes (`RecordWired`'s docstring). Then, unless `form_only`, what an edge stands for, leaf by leaf:
+    every leaf of every reader member's row resolves (`layout.resolve_gate`) to the gate of the same leaf of the writer
+    member's output row it reads."""
+    from verity.circuits.layout import Scope, resolve_gate
+    from verity.circuits.parts import n_members
+    nodes = program.root.body.nodes
+    tm = dict(zip([k for k, n in enumerate(nodes) if not is_input(n.fn)], templates, strict=True))
+    out = []
+    for k, t in tm.items():
+        n = nodes[k]
+        for a, arg in enumerate(n.args):
+            if not _edge_arg(nodes, arg):
+                continue
+            parts = _parts(arg.refs)
+            q = parts[0]
+            port, pty = n.fn.signature()[0][a]
+            L, nk = pty.leaves, n_members(n)
+            mapped = n.form == "batch" and n.axes[a] is not None
+            dims = _axis_dims(arg.type, n.axes[a]) if mapped else None
+            c = nk * L if mapped else L
+            if isinstance(q, Affine) and q.count == c:
+                i, b, stride = q.idx, q.base, L
+            elif isinstance(q, Strided) and q.count == c and q.inner == L and q.inner_stride == 1:
+                i, b, stride = q.idx, q.base, q.outer_stride
+            else:
+                i = None
+            w = nodes[i] if i is not None and _unit(nodes, i) else None
+            ret = w.fn.signature()[1] if w is not None else None
+            Li = ret.leaves if ret is not None else 0
+            fs = fields_of(ret) if ret is not None else ()
+            m0, off = divmod(b, Li) if Li and b >= 0 else (None, None)
+            js = [j for j in range(len(fs)) if sum(f.leaves for f in fs[:j]) == off and fs[j].leaves == L]
+            if not (n.form in ("call", "batch") and len(parts) == 1 and (not mapped or dims == (nk, L))
+                    and w is not None and i < k and q.space == "n" and w.form in ("call", "batch") and m0 is not None
+                    and (not (mapped and nk > 1) or stride == Li) and m0 + (nk if mapped else 1) <= n_members(w)
+                    and js and _width(pty) is not None and _width(fs[js[0]]) == _width(pty)):
+                raise Malformed("edge-rows")
+            j = js[0]
+            out.append({"reader": t.tid, "port": port, "writer": tm[i].tid, "out": f"o{j}", "at": 0, "radix": [nk],
+                        "base": m0, "step": [1 if mapped else 0], "c0": 0, "C": 1})
+            if form_only:
+                continue
+            root = Scope(program.root, 0, None, 0, 0)
+            first = sum(f.leaves for f in fs[:j])
+            for m in range(nk):
+                wm = m0 + (m if mapped else 0)
+                for leaf in range(L):
+                    if resolve_gate(root.child(k, m), ("p", a, leaf))[0] != \
+                            resolve_gate(root, ("n", i, wm * Li + first + leaf))[0]:
+                        raise Malformed("edge-rows")
+    return out
+
+
+def own_rows_but(program, form_only: bool = False) -> None:
+    """`RecordWired.ownRowsBut`: `own_rows` on the root's arguments that read no unit's output (`own-rows`), with its
+    expansion over those rows unless `form_only`."""
+    from verity.circuits.layout import Scope, resolve_gate
+    from verity.circuits.parts import n_members
+    nodes = program.root.body.nodes
+
+    def run(p) -> bool:
+        return (isinstance(p, Affine) and p.space == "n" and 0 <= p.idx < len(nodes) and is_input(nodes[p.idx].fn)
+                and nodes[p.idx].form in ("primitive", "batch"))
+    units = [(k, node) for k, node in enumerate(nodes) if not is_input(node.fn)]
+    own = [(k, node, a) for k, node in units for a, arg in enumerate(node.args) if not _edge_arg(nodes, arg)]
+    parts = [p for _, node, a in own for p in _parts(node.args[a].refs)]
+    runs = sorted((p.idx, p.base, p.count) for p in parts if run(p) and p.count > 0)
+    if any(node.form == "batch" and node.axes[a] is None for _, node, a in own) or not all(map(run, parts)) \
+            or any(x[0] == y[0] and x[1] + x[2] > y[1] for x, y in zip(runs, runs[1:])):
+        raise Malformed("own-rows")
+    if form_only:
+        return
+    root = Scope(program.root, 0, None, 0, 0)
+    seen: set[int] = set()
+    for k, node, a in own:
+        for m in range(n_members(node)):
+            for leaf in range(node.fn.signature()[0][a][1].leaves):
+                gate, prim = resolve_gate(root.child(k, m), ("p", a, leaf))
+                if not is_input(prim) or gate in seen:
+                    raise Malformed("own-rows")
+                seen.add(gate)
 
 
 def lands_whole(row, out) -> bool:
@@ -670,6 +792,30 @@ def held(x: Inputs, is_theta, is_pinned, o: dict) -> bool:
 def front(inst, tr, form_only: bool = False) -> tuple:
     """`Record.front`, the stages as far as `own-rows`: the instance's fields, the Program, its descriptor,
     the record, the trusted input and the templates. Refused (`Malformed`) with the first stage's code."""
+    got = _stages(inst, tr)
+    own_rows(got[1], form_only)
+    return got
+
+
+def front_wired(inst, tr, form_only: bool = False) -> tuple:
+    """`RecordWired.frontWired`: `front`, and no edge, where it does not refuse `own-rows`; where it does, `own-rows`
+    again unless the root has an edge (`has_edge`), else the root's edges (`edges_of`, else `edge-rows`) and `own-rows`
+    on its other arguments (`own_rows_but`). `front`'s six values, then the edges."""
+    try:
+        return (*front(inst, tr, form_only), [])
+    except Malformed as m:
+        if m.code != "own-rows":
+            raise
+        got = _stages(inst, tr)
+        if not has_edge(got[1]):
+            raise
+    edges = edges_of(got[1], got[-1], form_only)
+    own_rows_but(got[1], form_only)
+    return (*got, edges)
+
+
+def _stages(inst, tr) -> tuple:
+    """`front`'s stages before `own-rows`."""
     i = parse(inst)
     program = reference.desc_program(i["program"])
     try:
@@ -687,9 +833,7 @@ def front(inst, tr, form_only: bool = False) -> tuple:
     window = run.get("window")
     if not (isinstance(window, dict) and window.get("circuit") == hashlib.sha512(i["record"].encode()).hexdigest()):
         raise Malformed("run-circuit")
-    templates = templates_of(program, rec, digest)
-    own_rows(program, form_only)
-    return i, program, desc, rec, T, templates
+    return i, program, desc, rec, T, templates_of(program, rec, digest)
 
 
 def closed(inst, tr) -> list | dict:
@@ -701,13 +845,16 @@ def closed(inst, tr) -> list | dict:
         return {"error": m.code}
 
 
-def expand(inst, tr, form_only: bool = False) -> dict:
+def expand(inst, tr, form_only: bool = False, wired: bool = False) -> dict:
     """Everything the summary is read from, unit by unit: the instance's fields (`i`), the templates, the wires and
     cuts, the declarations (`x`), the slots and each unit's (`slots`, `slot`), each wire's `within`, `kind` (the class
     of what fills a row), each template's pin where the policy pins its Definition (`pins`), and per slot the sums
     `gates`, `inputs` (every row, whole), each of `KINDS`' bits, and `fresh`, the sum of `FRESH`'s. Refused
-    (`Malformed`) with the first stage's code, in `Record`'s order."""
-    i, program, desc, rec, T, templates = front(inst, tr, form_only)
+    (`Malformed`) with the first stage's code, in `Record`'s order. With `wired`, `RecordWired`'s reading: the root's
+    edges (`front_wired`), after the last stage each refused (`edge-rows`) into a port the record cuts and (`inputs`)
+    onto a row a declaration fills, and else each filling its rows as wire `len(wires) + e`, counted as a wire is."""
+    i, program, desc, rec, T, templates, edges = front_wired(inst, tr, form_only) if wired else \
+        (*front(inst, tr, form_only), [])
     wires, cuts = wires_of(templates, rec, (i["order"],) if "order" in i else None)
     leaf_widths(program, templates, wires, cuts, form_only)
     x = Inputs(templates, cuts, wires, rec)
@@ -728,6 +875,15 @@ def expand(inst, tr, form_only: bool = False) -> dict:
         return pins[tid] is not None
     roles(templates, is_pinned, x)
     holds = [held(x, is_theta, is_pinned, o) for o in x.openings]
+    if any(int(cuts.get(e["reader"], {}).get(e["port"], 1)) != 1 for e in edges):
+        raise Malformed("edge-rows")
+    for k, e in enumerate(edges):
+        held_rows = x.fill.setdefault((e["reader"], e["port"]), {})
+        for u, r, _ in entries(e):
+            if (u, r) in held_rows:
+                raise Malformed("inputs")
+            held_rows[(u, r)] = ("wire", len(wires) + k)
+    inside = inside + [all(slot[e["reader"]][u] == slot[e["writer"]][v] for u, _, v in entries(e)) for e in edges]
 
     def kind(what: tuple | None) -> str:
         """The class of a row filled by `what`, None where nothing fills it: one of `KINDS`."""
@@ -762,10 +918,11 @@ def expand(inst, tr, form_only: bool = False) -> dict:
             "wired_rows": sum(n for n, _ in wired), "wired_bits": sum(n * b for n, b in wired)}
 
 
-def evaluate(inst, tr, form_only: bool = False) -> dict:
+def evaluate(inst, tr, form_only: bool = False, wired: bool = False) -> dict:
     """`Record.evaluate`: the summary, each per-block count the greatest over the slots, and the rate rule on
-    it: `size` where a block has more than `Γ` gates, else `inference_only` where its fresh bits exceed `α` times its gates."""
-    e = expand(inst, tr, form_only)
+    it: `size` where a block has more than `Γ` gates, else `inference_only` where its fresh bits exceed `α` times its
+    gates. With `wired`, `RecordWired.evaluate`."""
+    e = expand(inst, tr, form_only, wired)
     i = e["i"]
     out = {"blocks": e["slots"], **{k: max(e[k]) for k in ("gates", "inputs", "fresh", *FRESH)},
            "wired_rows": e["wired_rows"], "wired_bits": e["wired_bits"]}
@@ -774,15 +931,16 @@ def evaluate(inst, tr, form_only: bool = False) -> dict:
     return {**out, "complies": failure is None, "failure": failure}
 
 
-def check_detail(inst, tr, form_only: bool = False) -> dict:
+def check_detail(inst, tr, form_only: bool = False, wired: bool = False) -> dict:
     """`Record.checkDetail`: the whole verdict, or the refusal (with its message, where it has one), for the
     private record only. With `form_only`, `own-rows` and `leaf-widths` are their rules alone, as the Lean has them,
     without the leaf-by-leaf expansions (the module docstring): nothing then holds a taken record's rows to being input
-    gates of their own unit, or a taken wire's leaves to lying whole in the row it fills."""
+    gates of their own unit, or a taken wire's leaves to lying whole in the row it fills. With `wired`,
+    `RecordWired.checkDetail`, a refusal its code alone."""
     try:
-        return evaluate(inst, tr, form_only)
+        return evaluate(inst, tr, form_only, wired)
     except Malformed as e:
-        return {"error": e.code, **({"message": e.message} if hasattr(e, "message") else {})}
+        return {"error": e.code, **({"message": e.message} if hasattr(e, "message") and not wired else {})}
 
 
 def check(inst, tr) -> dict:
@@ -791,11 +949,11 @@ def check(inst, tr) -> dict:
     return res if "error" in res else {"complies": res["complies"]}
 
 
-def kinds(inst, tr, rows) -> list | dict:
+def kinds(inst, tr, rows, wired: bool = False) -> list | dict:
     """`Record.kinds`: the class of each of `rows`, `[template, port, unit, row]` each (`free` where the
-    record's declarations fill no such row), or the refusal."""
+    record's declarations fill no such row), or the refusal. With `wired`, `RecordWired.kinds`."""
     try:
-        e = expand(inst, tr)
+        e = expand(inst, tr, wired=wired)
     except Malformed as m:
         return {"error": m.code}
     return [e["kind"](e["x"].fill.get((t, p), {}).get((u, r))) for t, p, u, r in rows]
