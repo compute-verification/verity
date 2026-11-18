@@ -2,7 +2,7 @@ schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama32-1b-1gpu-pouw-protocol-served"
 cards = ["h200", "h100"]
-# `llama31-8b-1gpu-pouw-protocol-served-b32` for the demo's Llama 3.2 1B on one H200 or H100 (sm_90a, the same code on
+# PoUW's served protocol row for the demo's Llama 3.2 1B on one H200 or H100 (sm_90a, the same code on
 # each, and only the card differs): the PoUW option's Pearl-C
 # arm on pearl_c_sm90's kernels under `pearl-c-h100-v1-h3` (the setup exports PEARLC_KERNEL and PEARLC_CUBIN) against
 # stock FP8, eager and compiled. served_passes.py serves its Pearl-C arm with every pass retained (`served_pearlplus.sh`,

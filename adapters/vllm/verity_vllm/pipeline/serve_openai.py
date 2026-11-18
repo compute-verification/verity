@@ -597,14 +597,15 @@ def scheme_settings(opts: Any, out: Path) -> dict[str, Any]:
     """The settings of the scheme ``--protocols`` names (`messages.option`): ``--protocols-config``'s entry under the
     option's protocol (``pouw``, whose ``device`` is the GPU's, ``cuda``), its passes under ``out/pearl``, its salt a
     session an epoch reserved under ``--challenger-lane`` as ``--challenger-peer`` (the challenger at this node's
-    127.0.0.1, at the port the gate's open answers), else in-process."""
+    127.0.0.1, at the port the gate's open answers), else in-process; which of these go together is the scheme's
+    ``check_settings``."""
     try:
         own = option_settings(opts.protocols, protocols_doc(opts))
     except ValueError as e:
         raise UsageError(f"--protocols-config: {e}") from None
     g = opts.gate
-    coins = ({"challenger": "127.0.0.1:0", "lane": g.challenger_lane, "peer": g.challenger_peer} if g.challenger_gate
-             else {"coins": "in-process"})
+    coins = {"challenger": "127.0.0.1:0" if g.challenger_gate else "", "coins": "" if g.challenger_gate else "in-process",
+             "lane": g.challenger_lane or "", "peer": g.challenger_peer or ""}
     return {**own, **coins, "transcript_dir": str(out / "pearl")}
 
 
@@ -620,8 +621,6 @@ def scheme_refusal(opts: Any, scheme: Any) -> str | None:
     from verity.protocols.resource_accounting.scheme import settings as checked
 
     g, after = opts.gate, getattr(getattr(opts, "retention", None), "release_after", "") or ""
-    if len({bool(g.challenger_gate), bool(g.challenger_peer), bool(g.challenger_lane)}) > 1:
-        return f"--challenger-gate, --challenger-peer and --challenger-lane go together under {opts.protocols}"
     if h1 := [f"--{k.replace('_', '-')}" for k, v in vars(opts.h1).items() if v]:
         return f"{', '.join(h1)}: PoUW H1's, not {opts.protocols}'s"
     if g.challenger_gate and not private():
@@ -636,7 +635,7 @@ def scheme_refusal(opts: Any, scheme: Any) -> str | None:
     try:
         checked(scheme, scheme_settings(opts, Path(opts.out)))
     except ValueError as e:
-        return f"--protocols-config: {e}"
+        return f"--protocols-config, --challenger-gate, --challenger-lane, --challenger-peer: {e}"
     return None
 
 

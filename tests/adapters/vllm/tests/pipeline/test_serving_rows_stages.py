@@ -148,7 +148,7 @@ def test_a_row_whose_served_token_is_not_the_twin_s_is_refused():
     s = Served()
     s.tok[0] = (int(s.tok[0]) + 1) % V
     with pytest.raises(ValueError, match=re.escape(f"the twin's token {(int(s.tok[0]) - 1) % V} is not the row's served token")):
-        read(s, members(s))
+        read(s, SRW.members(TMPLS, [s.rows] * len(TMPLS), None, PER_CHUNK))
 
 
 def test_a_partition_without_a_stage_s_template_is_refused():

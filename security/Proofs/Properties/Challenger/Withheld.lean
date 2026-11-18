@@ -663,6 +663,7 @@ theorem draws (h : p.Honest I) :
     (by
       rw [c5]
       exact hst)
+    (Logs.oneLog_uncommitted _ _)
 
 /-- **`coinsReason` gives no reason against an honest play** read whole, under the verifier's own copy of main's
 history. -/
