@@ -210,7 +210,7 @@ ROWS_KEYS = ["cell_bytes", "certificate", "direction", "domain", "format", "layo
 LAYOUT_KEYS = ["buckets", "connection_slots", "first_bucket", "slots"]
 DIGEST = re.compile("[0-9a-f]{128}")
 U32 = 1 << 32
-SCHEMA = "verity-ir/descriptor/v1"
+SCHEMA = "verity-ir/descriptor/v2"
 INPUT_ID = re.compile(r"^(?:Registered)?Input([1-9][0-9]*)_v1$")
 #: the egress bucket's parameters in the generator form (`egress.EgressBucket`)
 EGRESS_PARAMS = ("state",)
