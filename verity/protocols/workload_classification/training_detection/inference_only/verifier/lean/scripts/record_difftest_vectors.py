@@ -1664,9 +1664,9 @@ def _commit(case: dict, record: str, program: str | None = None) -> None:
     doc = json.loads(record)
     if case.get("spot") is not None and isinstance(doc, dict):
         wires = _program_wires(case["instance"]["program"], case["spot"]["templates"], doc.get("cuts", {}))
-        order = [list(b) for b in ref.root_order(json.loads(case["instance"]["program"]), case["spot"]["templates"])]
-        case["spot"] = None if isinstance(wires, Exception) else {"templates": case["spot"]["templates"], "cuts": doc.get("cuts", {}),
-                                                   "wires": wires, "order": order}
+        case["spot"] = None if isinstance(wires, Exception) else {
+            "templates": case["spot"]["templates"], "cuts": doc.get("cuts", {}), "wires": wires,
+            "order": [list(b) for b in ref.root_order(json.loads(case["instance"]["program"]), case["spot"]["templates"])]}
 
 
 def _misformat(rng, made: dict, doc: dict, how: str) -> bool:
