@@ -641,6 +641,8 @@ theorem plan_of {P : Prog} {rs : Array TRange} {ts : List Spot.RecordText.Tmpl} 
                 refine ⟨hp, rfl, rfl, rfl, ?_⟩
                 simp_all
               · split at h <;> try (simp at h; done)
+                rename_i hk1
+                clear hk1
                 simp only [Option.some.injEq] at h
                 subst h
                 simp only [planAt, Prod.mk.injEq] at hat
