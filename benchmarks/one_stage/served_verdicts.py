@@ -246,6 +246,8 @@ WINDOW_VERDICT = {"undecided": "pending"}
 #: ``record``'s exit by the window's verdict, as composite.py's by its Lean's: 0 only for the compiled Lean check's
 #: accept; 1 for a reject (or a refused composite, or a block record its own check refuses), 2 for pending
 RECORD_EXIT = {"accept": 0, "reject": 1, "pending": 2}
+
+
 #: SPOT's owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
 
@@ -261,7 +263,7 @@ PIECES: dict[str, tuple[str, str, str, str]] = {
                "the challenger's key")),
     "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting",
                   ("PoUB-P2's session over the store the PoUS piece holds, which that piece runs (POUS_CMD, "
-                   "benchmarks/pous/served_piece.py) and BANDWIDTH_CMD collects (served_bandwidth.py collect)")),
+                   "benchmarks/pous/served_piece.py) and BANDWIDTH_CMD collects (served_piece.py collect-bandwidth)")),
     "communication": ("the network certifier", "certifier", "network-accounting",
                       "the network certifier in front of the serving endpoint"),
 }
@@ -1379,32 +1381,36 @@ BLOCKS_ALONE = ("each sampled proof block is proved alone; that a block's inputs
                 "is assumed, not checked")
 TIED_BY_CONSTRUCTION = ("the circuit the policy was checked on and the circuit the proofs are about are tied by "
                         "construction only")
-#: who graded a row's answer, where it is the developer's piece's and no auditor-side entry runs it (`RAN_BY`)
-GRADED_BY = {
-    "space": ("graded by the developer's piece (benchmarks/pous/served_piece.py: period.answer, with setup's tie, and "
-              "pous-run-protocol) on the served node; no auditor-side entry runs it"),
-    "bandwidth": ("graded by the developer's piece (benchmarks/pous/held_bandwidth.py: poub-p2-protocol's replay of the "
-                  "case) on the served node; no auditor-side entry runs it; a live verdict on the auditor's device exists "
-                  "(poub-verifier, its bandwidth party) and is not the one this row reads"),
-    "wipe": ("graded by the developer's piece (wipe_on_node.py: wipe_period.answer and wipe-protocol, verity/wipe/v0 "
-             "uncounted) on the served node; no auditor-side entry runs it; not certified: survivors bounded by nothing"),
-}
+#: the owners whose pieces grade their own rows' answers on the served node, no auditor-side entry running the check: a
+#: row of theirs ends its ``answer_from`` with its placement's ``graded_by`` (`graded_by`), or `PIECE` where it has none
+GRADED_ON_NODE = ("memory-accounting",)
 _MAIN_FORM_SAYS = f"{BLOCKS_ALONE}; {TIED_BY_CONSTRUCTION}"
 #: who ran the check behind what a row shows, by the record's product, then by premise (`PREMISES`, ending its ``why``)
 #: or by row (ending its ``answer_from``); the compose node's Lean re-run reaches only the sampled proofs' row, which
 #: carries no premise, so every premise is the developer's piece's on both paths
+#: what each product adds to a check only the developer's piece runs
+TAIL = {"onsite": f"; {ONSITE_UNDECIDED}", "remote": ""}
 RAN_BY: Mapping[str, Mapping[str, str]] = {
-    product: {**{n: PIECE + tail for n in PREMISES}, **{k: why + tail for k, why in GRADED_BY.items()},
+    product: {**{n: PIECE + TAIL[product] for n in PREMISES},
               **({"integrity": _MAIN_FORM_SAYS, INFERENCE_ONLY_ROW: _MAIN_FORM_SAYS} if MAIN_FORM else {})}
-    for product, tail in (("onsite", f"; {ONSITE_UNDECIDED}"), ("remote", ""))}
+    for product in TAIL}
+
+
+def graded_by(row: Mapping[str, Any]) -> str | None:
+    """Who graded ``row``'s answer, as its piece's placement says (``answer.profile.placement.graded_by``), or None."""
+    profile = (row.get("answer") or {}).get("profile")
+    place = profile.get("placement") if isinstance(profile, Mapping) else None
+    said = place.get("graded_by") if isinstance(place, Mapping) else None
+    return said if isinstance(said, str) and said else None
 
 
 def ran_by(key: str, row: Mapping[str, Any], product: str) -> dict[str, Any]:
     """Row ``key`` saying who ran its checks on ``product``'s path (`RAN_BY`): each premise its development document
     states (`premises`) at the end of its ``why``, the row's own at the end of its ``answer_from``."""
     said, out = RAN_BY[product], dict(row)
-    if key in said and "answer_from" in out:
-        out["answer_from"] = f"{out['answer_from']}; {said[key]}"
+    own = graded_by(row) or (PIECE if row.get("owner") in GRADED_ON_NODE else None)
+    if "answer_from" in out and (key in said or own):
+        out["answer_from"] = f"{out['answer_from']}; {said[key] if key in said else own + TAIL[product]}"
     doc = out.get("development")
     if isinstance(doc, Mapping) and any(isinstance(doc.get(n), Mapping) for n in PREMISES):
         out["development"] = {**doc, **{n: {**doc[n], "why": f"{doc[n].get('why')}; {said[n]}"}
@@ -2336,6 +2342,7 @@ def terms(r: Mapping[str, Any], subprotocol: Mapping[str, Any] | None) -> list[s
            if counted else [])
     premise = place.get("trusted-device") or place.get("trusted-host")   # a record made before the premise's rename
     out += [f"trusted-device {premise}"] if premise else []
+    out += [f"{name} {why}" for name, why in (place.get("unchecked") or {}).items()]
     if isinstance(w, Mapping) and w.get("held"):
         out.append(f"its weights {w['held']}, not concurrently with the block")
     if isinstance(w, Mapping) and w.get("share"):

@@ -623,15 +623,20 @@ def coalesce(patterns: Sequence[Any]) -> list[Any]:
 
 
 def ordered(units: Mapping[str, int], wires: Sequence[Wire],
-            starts: Mapping[str, Sequence[int]]) -> tuple[tuple[str, int, int], ...]:
+            starts: Mapping[str, Sequence[int]],
+            ranks: Mapping[str, Sequence[int]] | None = None) -> tuple[tuple[str, int, int], ...]:
     """An order for ``wires`` (`Circuit.order`, `check_order`): each template's units cut into ranges at its ``starts``
     (``units``: each template's, by descriptor id), in a topological order of what the wires' closed forms need, every
     range meeting a wire's box on the writers it reads in a range (`Wire.box`) before that range, and each template's
     ranges in rising order (a (template, output field) tree's leaf i is the template's unit i in root order), the next at
-    each step the first ready range by template and unit. The work is per range and per wire's ranges, never per unit.
+    each step the first ready range by template and unit. A circuit joined from ranks (`Ranks`) gives each template's
+    first unit of each rank (``ranks``): each rank commits its own trees, so its ranges are cut there too and rise only
+    inside one rank. That each rank commits its own is `Window`'s refusal of a circuit that states ranks ("a circuit
+    joined from ranks is no period"), which `test_a_joined_circuit_states_its_ranks_and_names_its_free_rows` pins. The work is per range and per wire's ranges, never per unit.
     Refused (ValueError) where those needs have a cycle, naming a wire on it: a unit then reads itself or a later unit of
     its template, or a range holds units on both sides of a chain of reads."""
-    cut = {t: sorted({0, *(s for s in starts.get(t, ()) if 0 < s < n)}) for t, n in units.items()}
+    bounds = {t: {s for s in (ranks or {}).get(t, ()) if 0 < s < n} for t, n in units.items()}
+    cut = {t: sorted({0, *(s for s in starts.get(t, ()) if 0 < s < n), *bounds[t]}) for t, n in units.items()}
     nodes = sorted((t, k) for t, ss in cut.items() for k in range(len(ss)))
     idx = {x: i for i, x in enumerate(nodes)}
     end = {t: [*ss[1:], units[t]] for t, ss in cut.items()}
@@ -647,6 +652,8 @@ def ordered(units: Mapping[str, int], wires: Sequence[Wire],
                 why.setdefault(a, i)
     for t, ss in cut.items():
         for k in range(1, len(ss)):
+            if ss[k] in bounds[t]:
+                continue
             indeg[idx[(t, k)]] += 1
             outs[idx[(t, k - 1)]].append(idx[(t, k)])
     ready = [i for i in range(len(nodes)) if indeg[i] == 0]

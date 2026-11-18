@@ -17,9 +17,10 @@ covers, so stating a default changes no hash.
 
 The subprotocols a configuration lists that the composite takes (a `Component`'s ``product``) are exactly one
 composite's (`COMPOSITES`): onsite's, or remote's (SPOT, the inference-only policy and Pearl+'s run verdict,
-``pearl-plus``). Protocol soundness covers only those two. `check` also reads onsite's two smaller sets, each a
-deployment with an id of its own (`UNACCEPTED`), whose verdict `verity run` records as undecided unless the table
-says who combined it, and refuses any other set (``composite``), H1's development composite's among them.
+``pearl-plus``, which is onsite's work too). Protocol soundness covers only those two. `check` also reads onsite's two
+smaller sets, each a deployment with an id of its own (`UNACCEPTED`), whose verdict `verity run` records as undecided
+unless the table says who combined it, and refuses any other set (``composite``), H1's development composite's among
+them.
 
 What a protocol declares (`Component`: its id, the workload hooks it needs, the subprotocols it requires, its parties and
 channels as its manifest's `Role`s and `Channel`s, the parties that must share a machine, its parameters' schema and the
@@ -72,8 +73,8 @@ SCHEMES = ("lms-sha512/n64-w1-h20/v0",)
 AUDITOR = "auditor"
 LOCAL = "local"
 #: the composites, by id: the subprotocols each composes, by name (`Core.Composites.ofIds`): onsite and remote (v1,
-#: Pearl+'s run verdict its work), the only two protocol soundness covers
-COMPOSITES = {"verity/onsite/v0": ("bandwidth", "inference-only", "network-attester", "pous", "pouw",
+#: Pearl+'s run verdict the work of each), the only two protocol soundness covers
+COMPOSITES = {"verity/onsite/v1": ("bandwidth", "inference-only", "network-attester", "pearl-plus", "pous",
                                     "sampled-proofs", "wipe"),
               "verity/remote/v1": ("inference-only", "pearl-plus", "sampled-proofs")}
 #: onsite's two smaller sets, by id (`applications/onsite_network.toml`, `applications/onsite_compute.toml`): each a deployment of its
