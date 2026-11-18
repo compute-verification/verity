@@ -127,11 +127,13 @@ def test_under_onsite_pearl_plus_takes_h1s_place_with_its_product_and_no_compute
 
 
 def test_a_part_of_pearl_pluss_live_challenger_is_refused_by_name(tmp_path, capsys):
-    for part, lacking in (({"gate": "gate-command"}, "challenger.pearl-plus.peer, challenger.pearl-plus.key-sha512"),
-                          ({"peer": "peer-1", "key-sha512": KEY}, "challenger.pearl-plus.gate")):
-        rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, {"challenger": {"pearl-plus": part}}))
-        assert rc == 2 and "refused unbound: Pearl+'s live challenger takes gate, peer, key-sha512 together" in err, err
-        assert f"without {lacking}: bind them" in err, err
+    rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, {"challenger": {"pearl-plus": {"gate": "gate-command"}}}))
+    assert rc == 2 and "refused unbound: Pearl+'s live challenger takes gate, peer, key-sha512 together" in err, err
+    assert "without challenger.pearl-plus.peer, challenger.pearl-plus.key-sha512: bind them" in err, err
+    rc, _, err = dry(capsys, "--bindings", bindings(tmp_path, {"challenger": {"pearl-plus": {"peer": "peer-1",
+                                                                                              "key-sha512": KEY}}}))
+    assert rc == 2 and "refused unbound: challenger.pearl-plus.gate is unbound" in err, err
+    assert "bind challenger.pearl-plus.peer, challenger.pearl-plus.key-sha512 beside it" in err, err
 
 
 def test_the_runners_variables_under_remote_are_pearl_pluss():
