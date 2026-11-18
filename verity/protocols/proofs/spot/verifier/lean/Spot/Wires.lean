@@ -17,7 +17,8 @@ template `reader`'s units read rows of their parameter `port` whole as the words
 `check` decides a circuit's wires in work proportional to its templates and wires, never to the units they cover (AGENTS.md
 "Design rules"): each wire's writers lie in `span`, the least and greatest writer in closed
 form; and two wires wire no reader row twice exactly when they read different ports or their rectangles (reader units ×
-rows) are disjoint, compared pair by pair (#wires² comparisons, each of a few fields). Its summary gives each reader row's writer (`Summary.writerOf`, by the
+rows) are disjoint (`pairwiseDisjoint`, every pair; compiled as `pairwiseDisjointFast`, the wires sorted by reader, port
+and first unit and each compared only with the earlier wires of its port whose units reach it). Its summary gives each reader row's writer (`Summary.writerOf`, by the
 wires alone) and the wired rows and bits multiplied through (`wiredRows`, `wiredBits`), the wired term of the count of a
 window's free inputs.
 
@@ -39,6 +40,7 @@ module
 public import Lean.Data.Json
 public import Circuits.Wire
 public import Std.Data.HashMap
+public import Std.Data.TreeSet
 
 @[expose] public section
 
@@ -81,6 +83,36 @@ structure Wiring where
 
 /-- The number of rows template `tid`'s port `p` is cut into (absent: 1). -/
 def Wiring.cutsOf (c : Wiring) (tid p : String) : Nat := (((c.cuts.lookup tid).getD []).lookup p).getD 1
+
+/-- `l`'s elements by key, each key's in `l`'s order. -/
+def groupBy {α} (key : α → String) (l : List α) : Std.HashMap String (List α) :=
+  l.foldr (fun x m => m.insert (key x) (x :: m.getD (key x) [])) {}
+
+theorem groupBy_getD {α} (key : α → String) (l : List α) (k : String) :
+    (groupBy key l).getD k [] = l.filter (key · == k) := by
+  induction l with
+  | nil => simp [groupBy]
+  | cons x xs ih =>
+    simp only [groupBy, List.foldr_cons] at ih ⊢
+    rw [Std.HashMap.getD_insert]
+    by_cases h : key x = k
+    · subst h; simp [ih]
+    · simp [h, ih]
+
+/-- An association list as a map, its first entry for a key winning as `List.lookup`'s does. -/
+def mapOf {β} (l : List (String × β)) : Std.HashMap String β := l.foldr (fun (k, v) m => m.insert k v) {}
+
+theorem mapOf_get? {β} (l : List (String × β)) (k : String) : (mapOf l)[k]? = l.lookup k := by
+  induction l with
+  | nil => simp [mapOf]
+  | cons x xs ih =>
+    obtain ⟨a, b⟩ := x
+    simp only [mapOf, List.foldr_cons] at ih ⊢
+    rw [Std.HashMap.getElem?_insert]
+    by_cases h : a = k
+    · subst h; simp [List.lookup]
+    · have : (k == a) = false := by simpa using Ne.symm h
+      simp [ih, List.lookup, this, h]
 
 /-! ## Refusals -/
 
@@ -138,6 +170,147 @@ def pairwiseDisjoint : List Wire → Bool
   | [] => true
   | w :: ws => ws.all (disjoint w) && pairwiseDisjoint ws
 
+/-- `a` sorts no later than `b`: by reader, then port, then first reader unit. -/
+def before (a b : Wire) : Bool :=
+  a.reader < b.reader || (a.reader == b.reader && (a.port < b.port || (a.port == b.port && a.start ≤ b.start)))
+
+/-- Each two neighbours of the list in `before` order. -/
+def sortedBy : List Wire → Bool
+  | a :: b :: ws => before a b && sortedBy (b :: ws)
+  | _ => true
+
+/-- Each wire against the live wires before it, those of its reader port whose units reach past its first unit; the
+others are disjoint from it and from every wire after it when the list is sorted (`sortedBy`). -/
+def sweep : List Wire → List Wire → Bool
+  | _, [] => true
+  | live, w :: ws =>
+    let live := live.filter fun a => a.reader == w.reader && a.port == w.port && w.start < a.start + a.readerUnits
+    live.all (disjoint w) && sweep (w :: live) ws
+
+/-- `pairwiseDisjoint` sorted and swept, in work `O(W log W)` beside the live wires each wire meets: the code compiled in
+its place (`pairwiseDisjoint_eq_fast`). -/
+def pairwiseDisjointFast (ws : List Wire) : Bool :=
+  let s := ws.mergeSort before
+  if sortedBy s then sweep [] s else pairwiseDisjoint ws
+
+private def Prec (a b : Wire) : Prop :=
+  a.reader < b.reader ∨ (a.reader = b.reader ∧ (a.port < b.port ∨ (a.port = b.port ∧ a.start ≤ b.start)))
+
+private theorem before_iff {a b : Wire} : before a b = true ↔ Prec a b := by
+  simp [before, Prec]
+
+private theorem prec_refl (a : Wire) : Prec a a := Or.inr ⟨rfl, Or.inr ⟨rfl, Nat.le_refl _⟩⟩
+
+private theorem prec_trans {a b c : Wire} (h₁ : Prec a b) (h₂ : Prec b c) : Prec a c := by
+  rcases h₁ with h₁ | ⟨e₁, h₁ | ⟨f₁, s₁⟩⟩ <;> rcases h₂ with h₂ | ⟨e₂, h₂ | ⟨f₂, s₂⟩⟩
+  · exact Or.inl (String.lt_trans h₁ h₂)
+  all_goals first
+    | exact Or.inl (by rw [← e₂]; exact h₁)
+    | exact Or.inl (by rw [e₁]; exact h₂)
+    | exact Or.inr ⟨e₁.trans e₂, Or.inl (String.lt_trans h₁ h₂)⟩
+    | exact Or.inr ⟨e₁.trans e₂, Or.inl (by rw [← f₂]; exact h₁)⟩
+    | exact Or.inr ⟨e₁.trans e₂, Or.inl (by rw [f₁]; exact h₂)⟩
+    | exact Or.inr ⟨e₁.trans e₂, Or.inr ⟨f₁.trans f₂, Nat.le_trans s₁ s₂⟩⟩
+
+private theorem disjoint_symm {a b : Wire} (h : disjoint a b = true) : disjoint b a = true := by
+  simp only [disjoint, Bool.or_eq_true, bne_iff_ne, ne_eq, decide_eq_true_eq] at h ⊢
+  rcases h with ((((h | h) | h) | h) | h) | h
+  · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl fun e => h e.symm))))
+  · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inr fun e => h e.symm))))
+  · exact Or.inl (Or.inl (Or.inr h))
+  · exact Or.inl (Or.inl (Or.inl (Or.inr h)))
+  · exact Or.inr h
+  · exact Or.inl (Or.inr h)
+
+private theorem squeeze {x y z : String} (h₁ : x < y ∨ x = y) (h₂ : y < z ∨ y = z) (h : x = z) : x = y ∧ y = z := by
+  subst h
+  rcases h₁ with h₁ | h₁
+  · rcases h₂ with h₂ | h₂
+    · exact absurd (String.lt_trans h₁ h₂) (String.lt_irrefl _)
+    · exact absurd (h₂ ▸ h₁) (String.lt_irrefl _)
+  · exact ⟨h₁, h₁.symm⟩
+
+private theorem pruned {a w v : Wire} (haw : Prec a w)
+    (hk : ¬ (a.reader == w.reader && a.port == w.port && decide (w.start < a.start + a.readerUnits)) = true)
+    (hwv : Prec w v) : disjoint a v = true := by
+  simp only [disjoint, Bool.or_eq_true, bne_iff_ne, ne_eq, decide_eq_true_eq]
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, not_and, Nat.not_lt] at hk
+  by_cases hr : a.reader = v.reader
+  · obtain ⟨r₁, r₂⟩ := squeeze (haw.imp_right (·.1)) (hwv.imp_right (·.1)) hr
+    have haw' := haw.resolve_left (fun h => String.lt_irrefl _ (r₁ ▸ h)) |>.2
+    have hwv' := hwv.resolve_left (fun h => String.lt_irrefl _ (r₂ ▸ h)) |>.2
+    by_cases hp : a.port = v.port
+    · obtain ⟨p₁, p₂⟩ := squeeze (haw'.imp_right (·.1)) (hwv'.imp_right (·.1)) hp
+      have s₁ := haw'.resolve_left (fun h => String.lt_irrefl _ (p₁ ▸ h)) |>.2
+      have s₂ := hwv'.resolve_left (fun h => String.lt_irrefl _ (p₂ ▸ h)) |>.2
+      exact Or.inl (Or.inl (Or.inl (Or.inr (Nat.le_trans (hk ⟨r₁, p₁⟩) s₂))))
+    · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inr hp))))
+  · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl hr))))
+
+private theorem sweep_complete : ∀ (live ws : List Wire), (∀ a ∈ live, ∀ v ∈ ws, disjoint a v = true) →
+    ws.Pairwise (fun a b => disjoint a b = true) → sweep live ws = true
+  | _, [], _, _ => rfl
+  | live, w :: ws, h₁, h₂ => by
+    rw [List.pairwise_cons] at h₂
+    simp only [sweep, Bool.and_eq_true, List.all_eq_true]
+    refine ⟨fun a ha => disjoint_symm (h₁ a (List.mem_filter.1 ha).1 w (List.mem_cons_self ..)),
+      sweep_complete _ ws (fun a ha v hv => ?_) h₂.2⟩
+    rcases List.mem_cons.1 ha with e | e
+    · exact e ▸ h₂.1 v hv
+    · exact h₁ a (List.mem_filter.1 e).1 v (List.mem_cons_of_mem _ hv)
+
+private theorem sweep_sound : ∀ (live ws : List Wire), ws.Pairwise Prec → (∀ a ∈ live, ∀ v ∈ ws, Prec a v) →
+    sweep live ws = true →
+    (∀ a ∈ live, ∀ v ∈ ws, disjoint a v = true) ∧ ws.Pairwise (fun a b => disjoint a b = true)
+  | _, [], _, _, _ => ⟨by simp, List.Pairwise.nil⟩
+  | live, w :: ws, hp, hl, h => by
+    simp only [sweep, Bool.and_eq_true, List.all_eq_true] at h
+    obtain ⟨hall, hrest⟩ := h
+    rw [List.pairwise_cons] at hp
+    have ih := sweep_sound _ ws hp.2 (fun a ha v hv => by
+      rcases List.mem_cons.1 ha with e | e
+      · exact e ▸ hp.1 v hv
+      · exact hl a (List.mem_filter.1 e).1 v (List.mem_cons_of_mem _ hv)) hrest
+    refine ⟨fun a ha v hv => ?_, List.pairwise_cons.2 ⟨fun v hv => ih.1 w (List.mem_cons_self ..) v hv, ih.2⟩⟩
+    by_cases hk : (a.reader == w.reader && a.port == w.port && decide (w.start < a.start + a.readerUnits)) = true
+    · have hf : a ∈ live.filter fun a =>
+          a.reader == w.reader && a.port == w.port && decide (w.start < a.start + a.readerUnits) :=
+        List.mem_filter.2 ⟨ha, hk⟩
+      rcases List.mem_cons.1 hv with e | e
+      · exact e ▸ disjoint_symm (hall a hf)
+      · exact ih.1 a (List.mem_cons_of_mem _ hf) v e
+    · refine pruned (hl a ha w (List.mem_cons_self ..)) hk ?_
+      rcases List.mem_cons.1 hv with e | e
+      · exact e ▸ prec_refl w
+      · exact hp.1 v e
+
+private theorem sortedBy_pairwise : ∀ s : List Wire, sortedBy s = true → s.Pairwise Prec
+  | [], _ => .nil
+  | [_], _ => List.pairwise_singleton _ _
+  | a :: b :: ws, h => by
+    simp only [sortedBy, Bool.and_eq_true] at h
+    have ih := sortedBy_pairwise (b :: ws) h.2
+    refine List.pairwise_cons.2 ⟨fun v hv => ?_, ih⟩
+    rcases List.mem_cons.1 hv with e | e
+    · exact e ▸ before_iff.1 h.1
+    · exact prec_trans (before_iff.1 h.1) ((List.pairwise_cons.1 ih).1 v e)
+
+private theorem pairwiseDisjoint_pairwise : ∀ ws : List Wire,
+    pairwiseDisjoint ws = true ↔ ws.Pairwise (fun a b => disjoint a b = true)
+  | [] => by simp [pairwiseDisjoint]
+  | w :: ws => by
+    simp [pairwiseDisjoint, List.pairwise_cons, List.all_eq_true, pairwiseDisjoint_pairwise ws]
+
+@[csimp] theorem pairwiseDisjoint_eq_fast : @pairwiseDisjoint = @pairwiseDisjointFast := by
+  funext ws
+  simp only [pairwiseDisjointFast]
+  split
+  · rename_i hs
+    apply Bool.eq_iff_iff.2
+    rw [pairwiseDisjoint_pairwise, ← (List.mergeSort_perm ws before).pairwise_iff disjoint_symm]
+    exact ⟨sweep_complete [] _ (by simp), fun h => (sweep_sound [] _ (sortedBy_pairwise _ hs) (by simp) h).2⟩
+  · rfl
+
 /-- What `check` establishes: the wires, in order. -/
 structure Summary where
   wires : List Wire
@@ -194,6 +367,18 @@ def orderOk (c : Wiring) (o : List UnitRange) : Bool :=
     c.templates.all fun (t, tt) =>
       tiles (((o.filter (·.1 == t)).map (·.2)).mergeSort fun a b => a.1 ≤ b.1) 0 tt.units
 
+/-- `orderOk` with the templates and the order's ranges by template found once (`mapOf`, `groupBy`): the code compiled in
+its place (`orderOk_eq_fast`). -/
+def orderOkFast (c : Wiring) (o : List UnitRange) : Bool :=
+  let tm := mapOf c.templates
+  let g := groupBy (·.1) o
+  o.all (fun b => tm[b.1]?.isSome) &&
+    c.templates.all fun (t, tt) => tiles (((g.getD t []).map (·.2)).mergeSort fun a b => a.1 ≤ b.1) 0 tt.units
+
+@[csimp] theorem orderOk_eq_fast : @orderOk = @orderOkFast := by
+  funext c o
+  simp only [orderOk, orderOkFast, mapOf_get?, groupBy_getD]
+
 /-- From template `t`, `n` steps back along the first wire (by index) of each template from a template not `done`
 (`ins`: each template's wires, as their index and writer). -/
 def kahnWalk (ins : Array (List (Nat × Nat))) (done : Array Bool) : Nat → Nat → Nat
@@ -213,14 +398,19 @@ def selfRanges (ws : List Wire) (t : String) (n : Nat) : List UnitRange :=
   | rs => rs
 
 /-- `kahn`'s loop, `fuel` the templates not `done` (`ids` in id order, `ranges` each template's ranges in unit order,
-`outs` each template's readers wire by wire, `indeg` each template's wires from templates not done). -/
+`outs` each template's readers wire by wire, `indeg` each template's wires from templates not done, `ready` the templates
+not done with none). -/
 def kahnLoop (ids : Array String) (ranges : String → List UnitRange) (outs : Array (List Nat))
-    (ins : Array (List (Nat × Nat))) : Nat → Array Bool → Array Nat → List UnitRange → Except Refusal (List UnitRange)
-  | 0, _, _, acc => .ok acc.reverse
-  | fuel + 1, done, indeg, acc =>
-    match (List.range ids.size).find? (fun i => !done[i]! && indeg[i]! == 0) with
-    | some i => kahnLoop ids ranges outs ins fuel (done.set! i true) ((outs[i]!).foldl (fun a r => a.modify r (· - 1)) indeg)
-        ((ranges ids[i]!).reverse ++ acc)
+    (ins : Array (List (Nat × Nat))) :
+    Nat → Array Bool → Array Nat → Std.TreeSet Nat compare → List UnitRange → Except Refusal (List UnitRange)
+  | 0, _, _, _, acc => .ok acc.reverse
+  | fuel + 1, done, indeg, ready, acc =>
+    match ready.min? with
+    | some i =>
+      let (indeg, ready) := (outs[i]!).foldl (fun (a, q) r =>
+        let d := a[r]!
+        (a.set! r (d - 1), if d == 1 then q.insert r else q)) (indeg, ready.erase i)
+      kahnLoop ids ranges outs ins fuel (done.set! i true) indeg ready ((ranges ids[i]!).reverse ++ acc)
     | none =>
       let rest := (List.range ids.size).filter (!done[·]!)
       let t := kahnWalk ins done rest.length (rest.headD 0)
@@ -231,7 +421,7 @@ the first template by id that reads none not yet placed, each one's units cut at
 itself by (`selfRanges`), so that such a wire is in order where each of its reader ranges reads only earlier ranges.
 Where every template not placed reads one, they hold a cycle: walking back from the first of them along each one's first
 wire from one not placed, as many steps as there are of them, ends on the cycle, and the refusal names the first such
-wire of the template it ends on. In work `O(templates² + wires)` beside the cuts. -/
+wire of the template it ends on. In work `O((templates + wires) log templates)` beside the cuts. -/
 def kahn (c : Wiring) : Except Refusal (List UnitRange) :=
   let ids := ((c.templates.map (·.1)).mergeSort (· ≤ ·)).toArray
   let idx : Std.HashMap String Nat := ids.zipIdx.foldl (fun m (t, i) => m.insert t i) {}
@@ -240,8 +430,12 @@ def kahn (c : Wiring) : Except Refusal (List UnitRange) :=
   let indeg := es.foldl (fun a (_, _, r) => a.modify r (· + 1)) (Array.replicate ids.size 0)
   let outs := es.foldr (fun (_, wr, r) a => a.modify wr (r :: ·)) (Array.replicate ids.size [])
   let ins := es.foldr (fun (j, wr, r) a => a.modify r ((j, wr) :: ·)) (Array.replicate ids.size [])
-  kahnLoop ids (fun t => selfRanges c.wires t (((c.templates.lookup t).map (·.units)).getD 0)) outs ins ids.size
-    (Array.replicate ids.size false) indeg []
+  let selfWs : Std.HashMap String (List Wire) :=
+    c.wires.foldr (fun w m => if w.reader == w.writer then m.insert w.reader (w :: m.getD w.reader []) else m) {}
+  let units : Std.HashMap String Nat := c.templates.foldr (fun (t, tt) m => m.insert t tt.units) {}
+  let ready : Std.TreeSet Nat compare := (List.range ids.size).foldl (fun q i => if indeg[i]! == 0 then q.insert i else q) {}
+  kahnLoop ids (fun t => selfRanges (selfWs.getD t []) t (units.getD t 0)) outs ins ids.size
+    (Array.replicate ids.size false) indeg ready []
 
 /-- The order the circuit states, else `kahn`'s. -/
 def statedOrder (c : Wiring) : Except Refusal (List UnitRange) :=
@@ -279,6 +473,279 @@ def check (c : Wiring) : Except Refusal Summary :=
       else match orderCode c orderedWire with
         | some r => .error r
         | none => .ok ⟨c.wires, c.wires.map (rowWords c)⟩
+
+/-- `cutsOf` over the cuts as a map. -/
+def cutsOfIx (cm : Std.HashMap String (List (String × Nat))) (tid p : String) : Nat :=
+  ((cm[tid]?.getD []).lookup p).getD 1
+
+/-- `shape` over the templates and cuts as maps. -/
+def shapeIx (tm : Std.HashMap String Template) (cm : Std.HashMap String (List (String × Nat))) (w : Wire) :
+    Except Code (Template × Template) :=
+  match tm[w.reader]?, tm[w.writer]? with
+  | some rt, some wt =>
+    match rt.rows.lookup w.port, wt.outs.lookup w.out with
+    | some p, some ow =>
+      let k := cutsOfIx cm w.reader w.port
+      if !(1 ≤ w.cuts && w.cut0 + w.cuts ≤ k && (w.cuts == 1 || w.radix.getLast? == some w.cuts) &&
+          w.units % w.cuts == 0) then .error .cut
+      else if (w.offset : Int) + Circuits.Wire.lowOf w.opairs < 0 ||
+          (w.offset : Int) + Circuits.Wire.highOf w.opairs + (p.words / k : Nat) > ow then .error .width
+      else .ok (rt, wt)
+    | _, _ => .error .port
+  | _, _ => .error .template
+
+def wireCodeIx (tm : Std.HashMap String Template) (cm : Std.HashMap String (List (String × Nat))) (w : Wire) :
+    Option Code :=
+  match shapeIx tm cm w with
+  | .error e => some e
+  | .ok (rt, wt) => if boundsOk w rt wt then none else some .bounds
+
+def rowWordsIx (tm : Std.HashMap String Template) (cm : Std.HashMap String (List (String × Nat))) (w : Wire) : Nat :=
+  match tm[w.reader]? with
+  | some rt => match rt.rows.lookup w.port with
+    | some p => p.words / cutsOfIx cm w.reader w.port
+    | none => 0
+  | none => 0
+
+/-- The least `k` in `[lo, hi)` at which `f` holds, by halving, else `hi`: where `f` is monotone, `f` fails below it. -/
+def lowerBound (f : Nat → Bool) (lo hi : Nat) : Nat :=
+  if lo < hi then
+    if f ((lo + hi) / 2) then lowerBound f lo ((lo + hi) / 2) else lowerBound f ((lo + hi) / 2 + 1) hi
+  else lo
+termination_by hi - lo
+
+theorem lowerBound_false {f : Nat → Bool} (hm : ∀ k m, k ≤ m → f k = true → f m = true) (lo hi : Nat) :
+    ∀ k, lo ≤ k → k < lowerBound f lo hi → f k = false := by
+  induction lo, hi using lowerBound.induct f with
+  | case1 lo hi h hf ih =>
+    intro k hk hlt
+    rw [lowerBound] at hlt; simp only [h, hf, ↓reduceIte] at hlt
+    exact ih k hk hlt
+  | case2 lo hi h hf ih =>
+    intro k hk hlt
+    rw [lowerBound] at hlt; simp only [h, hf, ↓reduceIte] at hlt
+    by_cases hk' : (lo + hi) / 2 + 1 ≤ k
+    · exact ih k hk' hlt
+    · cases hfk : f k
+      · rfl
+      · exact absurd (hm k _ (by omega) hfk) hf
+  | case3 lo hi h =>
+    intro k hk hlt
+    rw [lowerBound] at hlt; simp only [h, ↓reduceIte] at hlt
+    omega
+
+/-- Units `[p0, p0 + n)` of a range meet units `[lo, hi)`. -/
+def meetR (lo hi : Nat) (x : UnitRange × Nat) : Bool := decide (max x.1.2.1 lo < min (x.1.2.1 + x.1.2.2) hi)
+
+/-- Each range ends where the next starts. -/
+def contiguous : List (UnitRange × Nat) → Bool
+  | x :: y :: l => y.1.2.1 == x.1.2.1 + x.1.2.2 && contiguous (y :: l)
+  | _ => true
+
+/-- A template's ranges with their ranks, sorted by first unit, and whether they are contiguous. -/
+def orderEntry (l : List (UnitRange × Nat)) : Array (UnitRange × Nat) × Bool :=
+  let s := l.mergeSort fun x y => x.1.2.1 ≤ y.1.2.1
+  (s.toArray, contiguous s)
+
+/-- Range `k` of `A` ends past unit `lo`, or `k` is past `A`'s end. -/
+def endsPast (A : Array (UnitRange × Nat)) (lo k : Nat) : Bool :=
+  if h : k < A.size then decide (lo < A[k].1.2.1 + A[k].1.2.2) else true
+
+/-- From index `k`, the ranges starting below `hi` that meet `[lo, hi)`. -/
+def scanFrom (A : Array (UnitRange × Nat)) (lo hi k : Nat) : List (UnitRange × Nat) :=
+  if h : k < A.size then
+    if A[k].1.2.1 < hi then
+      if meetR lo hi A[k] then A[k] :: scanFrom A lo hi (k + 1) else scanFrom A lo hi (k + 1)
+    else []
+  else []
+termination_by A.size - k
+
+/-- The entry's ranges meeting `[lo, hi)`: on contiguous ranges from the first ending past `lo` (`lowerBound`) to the
+first starting at `hi`, else all of them filtered. -/
+def meetsIn (e : Array (UnitRange × Nat) × Bool) (lo hi : Nat) : List (UnitRange × Nat) :=
+  if e.2 then
+    scanFrom e.1 lo hi (lowerBound (endsPast e.1 lo) 0 e.1.size)
+  else e.1.toList.filter (meetR lo hi)
+
+private theorem scanFrom_sound (A : Array (UnitRange × Nat)) (lo hi : Nat) :
+    ∀ k x, x ∈ scanFrom A lo hi k → x ∈ A.toList ∧ meetR lo hi x = true := by
+  intro k
+  induction k using scanFrom.induct A lo hi with
+  | case1 k h hp hmt ih =>
+    intro x hx
+    rw [scanFrom] at hx; simp only [h, hp, hmt, ↓reduceIte, ↓reduceDIte] at hx
+    rcases List.mem_cons.1 hx with e | e
+    · exact e ▸ ⟨Array.getElem_mem_toList h, hmt⟩
+    · exact ih x e
+  | case2 k h hp hmt ih =>
+    intro x hx
+    rw [scanFrom] at hx; simp only [h, hp, hmt, ↓reduceIte, ↓reduceDIte] at hx
+    exact ih x hx
+  | case3 k h hp =>
+    intro x hx
+    rw [scanFrom] at hx; simp only [h, hp, ↓reduceIte, ↓reduceDIte] at hx
+    cases hx
+  | case4 k h =>
+    intro x hx
+    rw [scanFrom] at hx; simp only [h, ↓reduceDIte] at hx
+    cases hx
+
+private theorem scanFrom_complete (A : Array (UnitRange × Nat)) (lo hi j : Nat) (hj : j < A.size)
+    (hmt : meetR lo hi A[j] = true) :
+    ∀ k, k ≤ j → (∀ m (hm : m < A.size), k ≤ m → m ≤ j → A[m].1.2.1 < hi) → A[j] ∈ scanFrom A lo hi k := by
+  intro k
+  induction k using scanFrom.induct A lo hi with
+  | case1 k h hp hm' ih =>
+    intro hk hb
+    rw [scanFrom]; simp only [h, hp, hm', ↓reduceIte, ↓reduceDIte]
+    by_cases e : k = j
+    · subst e; exact List.mem_cons_self ..
+    · exact List.mem_cons_of_mem _ (ih (by omega) fun m hm h1 h2 => hb m hm (by omega) h2)
+  | case2 k h hp hm' ih =>
+    intro hk hb
+    rw [scanFrom]; simp only [h, hp, hm', ↓reduceIte, ↓reduceDIte]
+    by_cases e : k = j
+    · subst e; exact absurd hmt hm'
+    · exact ih (by omega) fun m hm h1 h2 => hb m hm (by omega) h2
+  | case3 k h hp =>
+    intro hk hb
+    exact absurd (hb k h (Nat.le_refl _) hk) hp
+  | case4 k h =>
+    intro hk _
+    omega
+
+private theorem contiguous_pairwise : ∀ s : List (UnitRange × Nat), contiguous s = true →
+    s.Pairwise fun x y => x.1.2.1 + x.1.2.2 ≤ y.1.2.1
+  | [], _ => .nil
+  | [_], _ => List.pairwise_singleton _ _
+  | x :: y :: l, h => by
+    simp only [contiguous, Bool.and_eq_true, beq_iff_eq] at h
+    have ih := contiguous_pairwise (y :: l) h.2
+    refine List.pairwise_cons.2 ⟨fun z hz => ?_, ih⟩
+    rcases List.mem_cons.1 hz with e | e
+    · subst e; omega
+    · have := (List.pairwise_cons.1 ih).1 z e; omega
+
+private theorem mem_meetsIn_of (l s : List (UnitRange × Nat)) (hperm : s.Perm l) (lo hi : Nat) (x : UnitRange × Nat) :
+    x ∈ meetsIn (s.toArray, contiguous s) lo hi ↔ x ∈ l ∧ meetR lo hi x = true := by
+  simp only [meetsIn]
+  by_cases hc : contiguous s = true
+  · simp only [hc, ↓reduceIte]
+    have hp := contiguous_pairwise s hc
+    constructor
+    · intro hx
+      have := scanFrom_sound s.toArray lo hi _ x hx
+      exact ⟨hperm.mem_iff.1 (by simpa using this.1), this.2⟩
+    · rintro ⟨hx, hmt⟩
+      obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem (hperm.mem_iff.2 hx)
+      have hj' : j < s.toArray.size := by simpa using hj
+      have hpw := List.pairwise_iff_getElem.1 hp
+      have hmono : ∀ k m, k ≤ m → endsPast s.toArray lo k = true →
+          endsPast s.toArray lo m = true := by
+        intro k m hkm hk
+        simp only [endsPast] at hk ⊢
+        by_cases hm : m < s.toArray.size
+        · simp only [hm, ↓reduceDIte]
+          simp only [show k < s.toArray.size by omega, ↓reduceDIte] at hk
+          simp only [decide_eq_true_eq, List.getElem_toArray] at hk ⊢
+          rcases Nat.lt_or_eq_of_le hkm with hlt | e
+          · have := hpw k m (by simpa using (show k < s.toArray.size by omega)) (by simpa using hm) hlt
+            omega
+          · subst e; exact hk
+        · simp only [hm, ↓reduceDIte]
+      have hfj : endsPast s.toArray lo j = true := by
+        simp only [meetR, decide_eq_true_eq] at hmt
+        simp only [endsPast, hj', ↓reduceDIte, decide_eq_true_eq, List.getElem_toArray]
+        omega
+      have hge : lowerBound (endsPast s.toArray lo) 0 s.toArray.size ≤ j := by
+        refine Nat.le_of_not_lt fun hlt => ?_
+        have := lowerBound_false hmono 0 s.toArray.size j (Nat.zero_le _) hlt
+        rw [hfj] at this; cases this
+      have hmt' : meetR lo hi s.toArray[j] = true := by simpa using hmt
+      have := scanFrom_complete s.toArray lo hi j hj' hmt' _ hge (fun m hm _ hmj => by
+        simp only [meetR, decide_eq_true_eq] at hmt
+        simp only [List.getElem_toArray]
+        rcases Nat.lt_or_eq_of_le hmj with hlt | e
+        · have := hpw m j (by simpa using hm) hj hlt; omega
+        · subst e; omega)
+      simpa using this
+  · simp only [hc, Bool.false_eq_true, ↓reduceIte, List.mem_filter]
+    rw [hperm.mem_iff]
+
+theorem mem_meetsIn (l : List (UnitRange × Nat)) (lo hi : Nat) (x : UnitRange × Nat) :
+    x ∈ meetsIn (orderEntry l) lo hi ↔ x ∈ l ∧ meetR lo hi x = true :=
+  mem_meetsIn_of l _ (List.mergeSort_perm l _) lo hi x
+
+/-- The order's ranges with their ranks, by template, each template's as `orderEntry`. -/
+def orderIndex (o : List UnitRange) : Std.HashMap String (Array (UnitRange × Nat) × Bool) :=
+  (groupBy (·.1.1) o.zipIdx).map fun _ l => orderEntry l
+
+/-- `orderedWire` over `orderIndex`: only the reader's ranges meeting its reader units, and for each only the writer's
+meeting the bounds, each found by `meetsIn`. -/
+def orderedWireBin (ix : Std.HashMap String (Array (UnitRange × Nat) × Bool)) (w : Wire) : Bool :=
+  (meetsIn (ix.getD w.reader (orderEntry [])) w.start (w.start + w.readerUnits)).all fun (b, a) =>
+    let s := w.box (w.indicesIn b.2.1 b.2.2).1 (w.indicesIn b.2.1 b.2.2).2
+    (meetsIn (ix.getD w.writer (orderEntry [])) s.1.toNat (s.2.toNat + 1)).all (·.2 < a)
+
+/-- `check` with the templates, the cuts and the order's ranges by template found once: the code compiled in its place
+(`check_eq_fast`), in work `O(W log W)` beside each wire's ranges of its reader and writer. -/
+def checkFast (c : Wiring) : Except Refusal Summary :=
+  let tm := mapOf c.templates
+  let cm := mapOf c.cuts
+  if !cutsOk c then .error ⟨.cuts, none⟩
+  else match firstWire c (wireCodeIx tm cm) with
+    | some r => .error r
+    | none =>
+      if !pairwiseDisjoint c.wires then .error ⟨.overlap, none⟩
+      else match (match orderOf c with
+          | .error r => some r
+          | .ok o =>
+            let ix := orderIndex o
+            firstWire c fun w => if orderedWireBin ix w then none else some .order) with
+        | some r => .error r
+        | none => .ok ⟨c.wires, c.wires.map (rowWordsIx tm cm)⟩
+
+private theorem cutsOfIx_eq (c : Wiring) : cutsOfIx (mapOf c.cuts) = c.cutsOf := by
+  funext t p; simp only [cutsOfIx, Wiring.cutsOf, mapOf_get?]
+
+private theorem wireCodeIx_eq (c : Wiring) : wireCodeIx (mapOf c.templates) (mapOf c.cuts) = wireCode c := by
+  funext w; simp only [wireCodeIx, wireCode, shapeIx, shape, mapOf_get?, cutsOfIx_eq]
+
+private theorem rowWordsIx_eq (c : Wiring) : rowWordsIx (mapOf c.templates) (mapOf c.cuts) = rowWords c := by
+  funext w; simp only [rowWordsIx, rowWords, mapOf_get?, cutsOfIx_eq]
+
+private theorem orderIndex_getD (o : List UnitRange) (t : String) :
+    (orderIndex o).getD t (orderEntry []) = orderEntry (o.zipIdx.filter (·.1.1 == t)) := by
+  rw [orderIndex, Std.HashMap.getD_map, ← groupBy_getD, Std.HashMap.getD_eq_getD_getElem?]
+  cases (groupBy (·.1.1) o.zipIdx)[t]? <;> rfl
+
+private theorem orderedWireBin_eq (o : List UnitRange) (w : Wire) :
+    orderedWireBin (orderIndex o) w = orderedWire o w := by
+  simp only [orderedWireBin, orderedWire, ranksIn, orderIndex_getD]
+  rw [Bool.eq_iff_iff]
+  simp only [List.all_eq_true, mem_meetsIn, List.mem_filter, List.mem_map, Bool.or_eq_true, Bool.not_eq_true',
+    decide_eq_true_eq, forall_exists_index, and_imp, beq_iff_eq, meetR, Circuits.Wire.readsIn, Bool.and_eq_true,
+    Bool.and_eq_false_imp, Prod.forall]
+  constructor
+  · intro h t p0 n a hx
+    by_cases hr : t = w.reader ∧ max p0 w.start < min (p0 + n) (w.start + w.readerUnits)
+    · exact Or.inr fun x t' p n' r hy ht hm hx' => hx' ▸ h t p0 n a hx hr.1 hr.2 t' p n' r hy ht hm
+    · exact Or.inl fun ht => decide_eq_false fun hm => hr ⟨ht, hm⟩
+  · intro h t p0 n a hx ht hm t' p n' r hy ht' hm'
+    rcases h t p0 n a hx with h1 | h1
+    · exact absurd (h1 ht) (by simp [hm])
+    · exact h1 r t' p n' r hy ht' hm' rfl
+
+@[csimp] theorem check_eq_fast : @check = @checkFast := by
+  funext c
+  have ho : (match orderOf c with
+      | .error r => some r
+      | .ok o =>
+        let ix := orderIndex o
+        firstWire c fun w => if orderedWireBin ix w then none else some .order) = orderCode c orderedWire := by
+    unfold orderCode
+    split <;> simp [orderedWireBin_eq]
+  simp only [check, checkFast, wireCodeIx_eq, rowWordsIx_eq, ho]
 
 /-- The writer `(template, unit, out, offset)` of reader row `(tid, u, port, row)`, by the wires alone: the reader row is
 that unit's row `out` from its word `offset` (`Wire.offsetAt`); none when no wire covers it. -/
