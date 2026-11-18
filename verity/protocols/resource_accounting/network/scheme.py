@@ -155,6 +155,7 @@ NETWORK_ATTESTER = register(Scheme(
     check=period_check.answer,
     reader=_reading,
     premises=("NetTiming.Attester.Phase.ChargeHolds", "NetTiming.Attester.RowsCommitted"),
+    keeps_weight_copy=False,
     **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
                     S.Lacks("not a kernel scheme")),
 ))

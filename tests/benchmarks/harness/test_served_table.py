@@ -9,6 +9,7 @@ import pytest
 from verity_bench import served_render, served_table
 from verity_bench.cli import main
 from verity_bench.vllm.arms import Arm
+from verity_bench.vllm import presets
 from verity_bench.vllm.presets import FORMER_SPECS, expand_sweep, resolve_spec
 from verity_bench.vllm.runner import run_benchmark
 
@@ -29,6 +30,8 @@ SCALE = {"stock-fp8": 2.0, "commit": 2.4, "stock-fp8@compiled": 1.0, "commit@com
 R6, BIG, SMALL = ("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000", "llama31-8b-fp8-1gpu-bandwidth-served-reps6@h200",
                   "llama32-1b-fp8-1gpu-bandwidth-served")
 WIDTH_H200 = "llama31-8b-fp8-1gpu-commit-served-width@h200"
+#: POUW_ARM is the arm id the PoUW spec's runs were recorded under before the arm took the declared scheme's name
+#: (`presets.former_arm`), which the stand-in run of record keeps
 POUW, POUW_H100, POUW_ARM = ("benchmarks/served-overhead-pouw", "llama32-1b-1gpu-pouw-protocol-served@h100",
                              "pouw:pearl-c-h100-v1-h3")
 #: the id the PoUW spec's H100 runs were recorded under before its spec named no card (`presets.FORMER_IDS`)
@@ -673,6 +676,8 @@ def test_the_pouw_metric_is_its_members_readings_from_their_records_runs_and_nev
     assert got["by"][POUW, "llama-3.2-1b-h100"]["value"] is None
     assert got["validation"]["status"] == "passed" and got["validation"]["detail"].startswith("2 of 2 metrics")
 
+    [pearl] = [p for p in served_table.PROTOCOLS if p.record == "pouw-served-sm90"]
+    assert pearl.arm == "pearl-plus" == presets.former_arm(POUW_ARM) != POUW_ARM
     producer.ran("r20261117-221551-8a0b", FORMER_H100, "b32-p512-mixed", _pouw("b32-p512-mixed", H100))
     producer.label("r20261117-221551-8a0b", "run_of_record", "pouw-served-sm90", "2026-11-17T23:00:00Z")
     member = table("after")["by"][POUW, "llama-3.2-1b-h100"]
