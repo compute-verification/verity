@@ -11,8 +11,8 @@ public import Spot.Edges
 * `memberIndex a m t`: argument `a`'s index of member `m`'s leaf `t` (the circuit format's members of a batch argument).
 * `fieldOffset t f`: the first leaf of field `f` of the return `t`.
 * `WireReads P rs W e k i x w l`: wire `e` covers that read: a reader unit of `e` is member `mk` of node `k`, its row
-  `cut0` of port `i` holds index `x` at leaf `t`, and the writer unit is member `mw` of node `w`, whose field `out`
-  holds leaf `l` at `t`.
+  `cut0` of port `i` holds index `x` at leaf `t`, and the writer unit is member `mw` of node `w`, whose run of
+  fields from `f` holds leaf `l` at `t`, read from `f`'s first word of its output row `out` (`Edges.fieldWords`).
 * `EdgesExact P rs W ws`: the wires `ws` are exactly the references between root nodes: each is covered by a wire of
   `ws`, each wire covers only references, and no two wires cover one.
 * `PartsWithin P`: each argument of each root node has at most one part more than the spaces its parts read.
@@ -49,7 +49,7 @@ def fieldOffset (t : Ty) (f : ℕ) : ℕ := (((fieldsOf t).take f).map Ty.leaves
 
 /-- **Wire `e` covers a read**: reader unit `e.start + m` is member `mk` of root node `k`, whose row `e.cut0` of port
 `i` (of `len` leaves) holds argument index `x` at its leaf `t`; writer unit `e.base + m·step` is member `mw` of root
-node `w`, whose field `f` (`e.out`) holds leaf `l` at `t`. -/
+node `w`, whose output from field `f` holds leaf `l` at `t`, the wire reading its row `out` from `f`'s first word. -/
 def WireReads (P : Prog) (rs : Array TRange) (W : Wires.Wiring) (e : Wires.Wire) (k i x w l : ℕ) : Prop :=
   let b := (P.defs[P.root]!).body
   let node := b.nodes[k]!
@@ -60,7 +60,7 @@ def WireReads (P : Prog) (rs : Array TRange) (W : Wires.Wiring) (e : Wires.Wire)
     ∃ rb wb m mk mw t f, (Edges.firstUnits rs)[k]? = some (e.reader, rb) ∧
       (Edges.firstUnits rs)[w]? = some (e.writer, wb) ∧ m < e.radix.headD 0 ∧ e.start + m = rb + mk ∧
       mk < node.members ∧ t < len ∧ x = memberIndex (node.args[i]!) mk (e.cut0 * len + t) ∧
-      e.out = "o" ++ toString f ∧ f < (fieldsOf wd.ret).length ∧
+      e.out = "out" ∧ f < (fieldsOf wd.ret).length ∧ e.offset = Edges.fieldWords wd.ret f ∧
       ((wb + mw : ℕ) : ℤ) = e.base + (m : ℤ) * e.step.headD 0 ∧ mw < (b.nodes[w]!).members ∧
       l = mw * wd.outLeaves + fieldOffset wd.ret f + t
 

@@ -3,7 +3,8 @@ A window circuit's wires, checked at the size of their description (`verity.comm
 
 A window's circuit is a population of template instances (`TemplatePopulations_v1`), whose inputs are all Input gates: the
 program holds no dataflow between units. The wires are that dataflow. A wire states, once for many units, that reader
-template `reader`'s units read rows of their parameter `port` whole as row `out` of a unit of template `writer`:
+template `reader`'s units read rows of their parameter `port` whole as the words of row `out` of a unit of template
+`writer` from its word `offset`:
 
 * **The reader rows a wire covers.** A reader port is cut into `k` rows (`cuts`, default 1): row `j` is the run of the
   parameter's outer elements `[j·n/k, (j+1)·n/k)`, `k` dividing the outer length `n` and the port's words, each its own
@@ -26,7 +27,7 @@ and `wires_unrolled` pieces) holds both to the same Python reference. The verifi
 The refusals, in the order checked (`Code`): `cuts` (a cut names no template or port, or `k` is 0 or doesn't divide the
 port's outer length and words), then wire by wire `template` (its reader or writer is no template), `port` (its port is no
 input of the reader, or `out` no output of the writer), `cut` (its rows are not among the port's, or the last digit isn't
-`cuts`, or `cuts` doesn't divide the wire's reader rows), `width` (a reader row's words are not the writer row's), `bounds` (a reader unit or a writer outside its
+`cuts`, or `cuts` doesn't divide the wire's reader rows), `width` (a reader row's words from `offset` run past the writer row's), `bounds` (a reader unit or a writer outside its
 template), then `overlap` (some reader row wired twice), then the order (the section of that name): `order` (the circuit's
 order names no template, or its ranges of a template don't tile the template's units; or, naming it, the first wire the
 order doesn't put after its writers) or, with no order stated, `cycle` (the templates' wires have a cycle; naming a wire
@@ -115,7 +116,7 @@ def shape (c : Wiring) (w : Wire) : Except Code (Template × Template) :=
       let k := c.cutsOf w.reader w.port
       if !(1 ≤ w.cuts && w.cut0 + w.cuts ≤ k && (w.cuts == 1 || w.radix.getLast? == some w.cuts) &&
           w.units % w.cuts == 0) then .error .cut
-      else if p.words / k != ow then .error .width
+      else if w.offset + p.words / k > ow then .error .width
       else .ok (rt, wt)
     | _, _ => .error .port
   | _, _ => .error .template
@@ -334,9 +335,9 @@ An instance is `{"templates", "cuts", "wires", "queries"}`, and optionally `"ord
 * `templates`: `{tid: {"units", "rows": {port: [words, outer]}, "outs": {out: words}}}`, every number a natural, `units`
   and `words` at least 1;
 * `cuts`: `{tid: {port: k}}`;
-* `wires`: V3a's wire records, `{reader, port, writer, out, at, radix, base, step}` and optionally `cut: [c0, C]`: strings,
-  `at` a natural, `radix` at least one natural each at least 1, `base` an integer, `step` one integer a digit, and `C` at
-  least 1;
+* `wires`: V3a's wire records, `{reader, port, writer, out, at, radix, base, step}` and optionally `cut: [c0, C]` and
+  `offset`: strings, `at` and `offset` naturals, `radix` at least one natural each at least 1, `base` an integer, `step`
+  one integer a digit, and `C` at least 1;
 * `queries`: reader rows `[tid, unit, port, row]` to look up (a sampled proof block's);
 * `order`: ranges `[tid, at, n]`, a string and two naturals each (`UnitRange`).
 

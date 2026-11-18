@@ -19,19 +19,22 @@ root node's outputs is one `Spot.Wires.Wire` per row of the reader's port, in cl
 `UnitAt` numbers them: a root node's members after its template's units in the earlier ranges.
 
 The rule is by row. A reader row (the port whole, or one of the `k` rows the wiring cuts it into: leaves
-`[j·n/k, (j+1)·n/k)` of a member's `n`) lies in one part of its argument, and reads exactly one whole return field of
-one member of the writer node, at the field's bits. A part is a grid (`partLanes`): a row lies in one lane's run, and
-across the members a part covers its place moves by the argument's member stride, inside that run or by whole periods
-of the lanes; the writer leaves the members read are then a mixed radix of the lane's levels (`laneWire`), and a wire
-needs the writer field to stay the same, so each step is a whole number of writer members.
+`[j·n/k, (j+1)·n/k)` of a member's `n`) lies in one part of its argument, and reads one contiguous run of one member's
+output, the writer unit's: whole return fields `f … f'` of it, at their bits. The wire reads its writer's one output
+row `out` (the fields' rows end to end, each whole u16 words) from the run's first word (`fieldWords`). A part is a
+grid (`partLanes`): a row lies in one lane's run, and across the members a part covers its place moves by the
+argument's member stride, inside that run or by whole periods of the lanes; the writer leaves the members read are then
+a mixed radix of the lane's levels (`laneWire`), and a wire needs the run's place in its unit to stay the same, so each
+step is a whole number of writer members.
 
 The refusals, by name: `edge-parts` (an argument of a root node has more parts than `argPartsOk` allows),
 `edge-template` (a non-input root node whose template the ranges or the wiring don't list), `edge-form` (a scan at the
 root, as reader or writer), `not-topological` (a part reads a later node, or the node itself), `edge-rows` (a reader row
 across a part's edge, not one whole writer field, or not in closed form: a row across runs or not contiguous, members
 whose rows are no mixed radix of the lane's levels, an explicit part naming a non-input node, a reference to a
-parameter), `edge-fields` (one of those, where the part reads more than one output field of one writer: one field
-a part is the rule, `crossesFields`) and `edge-width` (a reader row's bits are not the field's).
+parameter), `edge-units` (a reader row whose leaves lie in two writer units: across a unit's end, `unitsCross`),
+`edge-run` (a run inside one unit that does not start at a field's first leaf and end at a field's last, `runAt`) and
+`edge-width` (a reader row's bits are not the run's, or a field of the run before its last is not whole u16 words).
 
 The work is the root's nodes and arguments, then each part times its port's rows: nothing per unit or per block. The
 parts are read only after `argPartsOk` has bounded them by the root's nodes.
@@ -74,11 +77,22 @@ def partsOk (P : Prog) : Bool :=
   let b := (P.defs[P.root]!).body
   (List.range b.nodes.size).all fun k => (b.nodes[k]!).args.all fun a => argPartsOk k b.params.size a.seq
 
-/-- The return field of `t` that starts at leaf `o`: its index, leaves and bits. -/
-def fieldAt (t : Ty) (o : Nat) : Option (Nat × Nat × Nat) :=
-  ((fieldsOf t).foldl (fun (acc : Option (Nat × Nat × Nat) × Nat × Nat) ty =>
-    (if acc.2.1 == o && acc.1.isNone then some (acc.2.2, ty.leaves, bitsOf ty) else acc.1,
-      acc.2.1 + ty.leaves, acc.2.2 + 1)) (none, 0, 0)).1
+/-- The first leaf of each return field of `t`, and the leaves past the last. -/
+def fieldStarts (t : Ty) : List Nat :=
+  ((fieldsOf t).foldl (fun (acc : List Nat × Nat) ty => (acc.2 :: acc.1, acc.2 + ty.leaves)) ([], 0)).1.reverse ++
+    [t.leaves]
+
+/-- The return fields `f … f'` of `t` whose leaves are exactly `[o, o + len)`; none unless the run starts at a field's
+first leaf and ends at a field's last. -/
+def runAt (t : Ty) (o len : Nat) : Option (Nat × Nat) :=
+  let st := fieldStarts t
+  let n := (fieldsOf t).length
+  match (List.range n).find? (st[·]! == o), (List.range n).find? (st[· + 1]! == o + len) with
+  | some f, some f' => if 0 < len && f ≤ f' then some (f, f') else none
+  | _, _ => none
+
+/-- The first word of field `f` in `t`'s output row `out`: the fields before it, each whole u16 words. -/
+def fieldWords (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map fun ty => (bitsOf ty + 15) / 16).sum
 
 /-- The members `[lo, lo + n)` of `M` whose row, at argument index `x0 + m·L` and `len` long, lies in the part at
 `[s0, s0 + c)`; `edge-rows` where some member's row meets the part without lying in it. -/
@@ -167,12 +181,6 @@ def laneWire (run : Nat) (lanes : List Lane) (k0 L len n : Nat) : Except String 
   if levels.isEmpty then return (ln.i, leaf.toNat, [1], [0])
   return (ln.i, leaf.toNat, levels.map (·.1), levels.map (·.2))
 
-/-- The index of the field of `t` holding leaf `o`. -/
-def fieldIx (t : Ty) (o : Nat) : Option Nat :=
-  ((fieldsOf t).foldl (fun (acc : Option Nat × Nat × Nat) ty =>
-    (if acc.2.1 ≤ o && o < acc.2.1 + ty.leaves && acc.1.isNone then some acc.2.2 else acc.1,
-      acc.2.1 + ty.leaves, acc.2.2 + 1)) (none, 0, 0)).1
-
 /-- Reference `k` of the grid `(run, lanes)`: its lane's collection and its leaf. -/
 def leafAt (run : Nat) (lanes : List Lane) (k : Nat) : Option (Bool × Nat × Int) :=
   let g := lanes.length
@@ -182,22 +190,16 @@ def leafAt (run : Nat) (lanes : List Lane) (k : Nat) : Option (Bool × Nat × In
   some (ln.p, ln.i, ln.b + ((k % (g * run) % run : Nat) : Int) * ln.e +
     ((ds.zip ln.lv).map fun (d, _, st) => (d : Int) * st).sum)
 
-/-- Whether the rows `k0 + m·L` (`m < cnt`), `len` references each, of the grid `(run, lanes)` (`c` references) read
-more than one output field of one writer node, at a row's last reference or the next member's row. -/
-def crossesFields (P : Prog) (run : Nat) (lanes : List Lane) (c k0 L len cnt : Nat) : Bool :=
+/-- Whether the row of `len` references at `k0` of the grid `(run, lanes)` (`c` references) reads two units of one
+writer node, at its first and its last reference. -/
+def unitsCross (P : Prog) (run : Nat) (lanes : List Lane) (c k0 len : Nat) : Bool :=
   let nodes := (P.defs[P.root]!).body.nodes
-  match leafAt run lanes k0 with
-  | some (false, w, l0) =>
-    if l0 < 0 || w ≥ nodes.size then false else
-    let wd := P.defs[nodes[w]!.fn]!
-    let LW := wd.outLeaves
-    if LW == 0 then false else
-    let f0 := fieldIx wd.ret (l0.toNat % LW)
-    let ks := [k0 + len - 1] ++ (if cnt > 1 then [k0 + L, k0 + L + len - 1] else [])
-    ks.any fun k => k < c && match leafAt run lanes k with
-      | some (false, w', l) => w' == w && l ≥ 0 && fieldIx wd.ret (l.toNat % LW) != f0
-      | _ => false
-  | _ => false
+  match leafAt run lanes k0, leafAt run lanes (k0 + len - 1) with
+  | some (false, w, l0), some (false, w', l) =>
+    if l0 < 0 || l < 0 || w ≥ nodes.size || w' != w || k0 + len - 1 ≥ c then false else
+    let LW := (P.defs[nodes[w]!.fn]!).outLeaves
+    LW != 0 && l0.toNat / LW != l.toNat / LW
+  | _, _ => false
 
 /-- Whether root node `k` calls an input. -/
 def isInputNode (P : Prog) (k : Nat) : Bool :=
@@ -235,10 +237,9 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
       continue
     let (run, lanes) := partLanes q
     let k0 := x0 + lo * L - s0
-    let rows := if crossesFields P run lanes q.count k0 L len cnt then "edge-fields" else "edge-rows"
     let (w, l0, radix, steps) ← match laneWire run lanes k0 L len cnt with
       | .ok v => pure v
-      | .error e => throw (if e == "edge-rows" then rows else e)
+      | .error e => throw (if e == "edge-rows" && unitsCross P run lanes q.count k0 len then "edge-units" else e)
     if radix.length != steps.length || radix.any (· == 0) then throw "edge-rows"
     if w ≥ k then throw "not-topological"
     if isInputNode P w then continue
@@ -249,12 +250,15 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
     let wd := P.defs[wnode.fn]!
     let LW := wd.outLeaves
     if LW == 0 then throw "edge-rows"
-    let some (f, fl, fb) := fieldAt wd.ret (l0 % LW) | throw rows
-    if fl != len || (radix.zip steps).any (fun (r, d) => r > 1 && d % (LW : Int) != 0) then throw rows
-    if fb != bitsOf ty / cuts then throw "edge-width"
+    if l0 % LW + len > LW then throw "edge-units"
+    let some (f, f') := runAt wd.ret (l0 % LW) len | throw "edge-run"
+    let fs := ((fieldsOf wd.ret).drop f).take (f' + 1 - f)
+    if (fs.map bitsOf).sum != bitsOf ty / cuts || fs.dropLast.any (bitsOf · % 16 != 0) then throw "edge-width"
+    if (radix.zip steps).any (fun (r, d) => r > 1 && d % (LW : Int) != 0) then throw "edge-rows"
     let wire : Spot.Wires.Wire :=
-      { reader := rt, port := port, writer := wt, out := "o" ++ toString f, start := rb + lo, radix := radix,
-        base := ((wb + l0 / LW : Nat) : Int), step := steps.map (· / (LW : Int)), cut0 := j, cuts := 1 }
+      { reader := rt, port := port, writer := wt, out := "out", start := rb + lo, radix := radix,
+        base := ((wb + l0 / LW : Nat) : Int), step := steps.map (· / (LW : Int)), cut0 := j, cuts := 1,
+        offset := fieldWords wd.ret f }
     out := out ++ [wire]
   return out
 
@@ -306,13 +310,13 @@ private def toyRanges : Array TRange :=
   #[⟨1, "A", 0, 2⟩, ⟨2, "B", 2, 2⟩, ⟨3, "A", 4, 2⟩]
 
 private def toyWiring (cuts : List (String × List (String × Nat))) : Spot.Wires.Wiring :=
-  let t (n : Nat) : Spot.Wires.Template := { units := n, rows := [("x", ⟨2, 2⟩)], outs := [("o0", 2)] }
+  let t (n : Nat) : Spot.Wires.Template := { units := n, rows := [("x", ⟨2, 2⟩)], outs := [("out", 2)] }
   { templates := [("A", t 4), ("B", t 2)], cuts := cuts, wires := [] }
 
-private def wire (r w o : String) (start : Nat) (radix : List Nat) (base : Int) (step : List Int) (cut0 : Nat) :
+private def wire (r w : String) (offset start : Nat) (radix : List Nat) (base : Int) (step : List Int) (cut0 : Nat) :
     Spot.Wires.Wire :=
-  { reader := r, port := "x", writer := w, out := o, start := start, radix := radix, base := base, step := step,
-    cut0 := cut0, cuts := 1 }
+  { reader := r, port := "x", writer := w, out := "out", start := start, radix := radix, base := base, step := step,
+    cut0 := cut0, cuts := 1, offset := offset }
 
 private def gives (P : Prog) (W : Spot.Wires.Wiring) (ws : List Spot.Wires.Wire) : Bool :=
   match edgesOf P toyRanges W with
@@ -325,12 +329,15 @@ private def refuses (P : Prog) (W : Spot.Wires.Wiring) (code : String) : Bool :=
   | .error e => e == code
 
 #guard gives (toy row2 #[.affine false 1 0 4]) (toyWiring [])
-  [wire "B" "A" "o0" 0 [2] 0 [1] 0, wire "A" "B" "o0" 2 [2] 0 [1] 0]
-#guard refuses (toy row2 #[.affine false 1 1 4]) (toyWiring []) "edge-rows"
+  [wire "B" "A" 0 0 [2] 0 [1] 0, wire "A" "B" 0 2 [2] 0 [1] 0]
+#guard refuses (toy row2 #[.affine false 1 1 4]) (toyWiring []) "edge-units"
+#guard refuses (toy (.tuple #[row2, row2]) #[.affine false 1 1 4]) (toyWiring []) "edge-run"
 #guard gives (toy (.tuple #[v16, v16]) #[.affine false 1 0 4]) (toyWiring [("B", [("x", 2)])])
-  [wire "B" "A" "o0" 0 [2] 0 [1] 0, wire "B" "A" "o1" 0 [2] 0 [1] 1, wire "A" "B" "o0" 2 [2] 0 [1] 0]
+  [wire "B" "A" 0 0 [2] 0 [1] 0, wire "B" "A" 1 0 [2] 0 [1] 1, wire "A" "B" 0 2 [2] 0 [1] 0]
+#guard gives (toy (.tuple #[v16, v16]) #[.affine false 1 0 4]) (toyWiring [])
+  [wire "B" "A" 0 0 [2] 0 [1] 0, wire "A" "B" 0 2 [2] 0 [1] 0]
 #guard gives (toy row2 #[.affine false 1 0 2, .affine false 1 2 2]) (toyWiring [])
-  [wire "B" "A" "o0" 0 [1] 0 [0] 0, wire "B" "A" "o0" 1 [1] 1 [0] 0, wire "A" "B" "o0" 2 [2] 0 [1] 0]
+  [wire "B" "A" 0 0 [1] 0 [0] 0, wire "B" "A" 0 1 [1] 1 [0] 0, wire "A" "B" 0 2 [2] 0 [1] 0]
 #guard refuses (toy row2 #[.affine false 1 0 2, .affine false 1 2 1, .affine false 1 3 1]) (toyWiring [])
   "edge-parts"
 #guard refuses (toy row2 #[.affine false 3 0 4]) (toyWiring []) "not-topological"

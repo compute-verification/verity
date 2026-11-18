@@ -996,7 +996,7 @@ def edges (j : Json) : V Json := do
     | .ok ws => Json.mkObj [("wires", Json.arr (ws.toArray.map fun e => Json.mkObj [("reader", Json.str e.reader),
         ("port", Json.str e.port), ("writer", Json.str e.writer), ("out", Json.str e.out), ("at", Lean.toJson e.start),
         ("radix", Lean.toJson e.radix), ("base", Lean.toJson e.base), ("step", Lean.toJson e.step),
-        ("cut", Json.arr #[Lean.toJson e.cut0, Lean.toJson e.cuts])]))]
+        ("cut", Json.arr #[Lean.toJson e.cut0, Lean.toJson e.cuts]), ("offset", Lean.toJson e.offset)]))]
 
 /-- `second_stage.replay_rows`' input to the rows the design's links' and wires' units read
 (`SecondStage.replayRows`): a program object and the replay block's descriptor id in it (`replay`). -/
