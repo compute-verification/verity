@@ -247,13 +247,15 @@ class Refresh:
         first = self.store._append_of(p).first
         return rota.key(self._joined[first], rota.append_class(self._ordinal[first]), t, registered=False)
 
-    def plan(self, t: int) -> Plan:
+    def plan(self, t: int, *, pending: bool = False) -> Plan:
         """The plan of window t: every kept chunk at the index it is held at, where that index's key is the one a plan
-        of t may hold it under and is encoded."""
+        of t may hold it under and is encoded, or, with `pending`, is a re-key's still awaiting the coin it is encoded
+        under before the pass reads it."""
         out = []
         for p, j in self.held.items():
             key = self._key(p, t)
-            if key is None or self.store.blocks[j] is None:
+            if key is None or (self.store.blocks[j] is None
+                               and not (pending and j != p and self.store._append_of(j).first in self.store.pending)):
                 continue
             if (REGISTRATION if j < self.rota.blocks else self._joined[self.store._append_of(j).first]) == key:
                 out.append(j)
