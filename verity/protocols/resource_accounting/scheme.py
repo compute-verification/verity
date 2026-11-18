@@ -93,12 +93,13 @@ class Loaded:
 @dataclass(frozen=True)
 class KvPool:
     """``kv``: the KV pool once allocated: ``pages`` pages of ``slots`` slots, each slot ``slot_bytes`` bytes in each of
-    ``planes`` planes, one storage a layer."""
+    ``planes`` planes, one storage a layer. ``slot_bytes`` and ``planes`` are None where the serving system leaves the
+    layers' layout to the scheme that reads them."""
 
     pages: int
     slots: int
-    slot_bytes: int
-    planes: int
+    slot_bytes: int | None
+    planes: int | None
     layers: tuple[Handle, ...]
 
 
