@@ -14,8 +14,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.commitments.periods.rows import (BC_BYTES, SCHEME, copy_private, held_ports, own_entries,
-                                             registered_header)
+from verity.commitments.periods.rows import (BC_BYTES, SCHEME, copy_private, own_entries, registered_header,
+                                             shared_entries)
 
 #: Flock's circuit prover's ``flock-circuit-inputs`` header constants (``verity_flock.circuit``) and the META keys a class leaves out
 M0_FORMAT, M0_STATEMENT, M0_BINDING_KEYS = "flock-circuit-inputs", "verity/flock-circuit", ("partition", "program_sha512", "program_digests")
@@ -123,9 +123,10 @@ def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircui
     ``verity_flock.circuit.write`` gives the circuit it composed: its SHA-512 pin, its META's statement, subcircuit, block shape
     and class, the member's global unit indices, and its ``frame_v3``.  The bodies are the period's bytes, its prover body
     made from its period's files (`rows.copy_private`) and its header's paths read off the period's (`rows.registered_header`).
-    A member that reads a registered value, or holds a wired port in its writer's tree (`rows.held_ports`), has every other
-    port registered too, as rows of its own tree or its writer's (`rows.own_entries`), the reads the verifier adds at the
-    registration's roots (`rows.own_reads`). ``circuit`` is the
+    A member that reads a registered value, or holds ports in shared trees (`rows.shared_ports`: its wired ports, its
+    outputs where its template is several members), has every other port registered too, as rows of its own tree or of
+    the shared one at the leaves the wiring gives (`rows.own_entries`, `rows.shared_entries`), the reads the verifier adds
+    at the registration's roots (`rows.own_reads`). ``circuit`` is the
     circuit's text or its `flock_circuit`, ``write`` the files to write (a member's ``inst`` is the prover's, wanted only once
     it is sampled), and ``files`` the period's ``window.json`` and ``registration.json`` as read (else read here).
     ``sparse``: each port's entry but the ``keyed`` ones (`keyed_ports` of the circuit record's openings, which ``sparse``
@@ -158,10 +159,10 @@ def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircui
     if mem.get("shared_rows"):
         head["shared_rows"] = mem["shared_rows"]
     pub = (d / f"m{k}-public.bin").read_bytes()
-    held = held_ports(win, k)
-    if mem.get("registered") or held:
+    shared = shared_entries(d, win, k)
+    if mem.get("registered") or shared:
         reads = registered_header(win, k) if mem.get("registered") else {}
-        head["registered"] = {**reads, **own_entries(mem, pub, reads, held)}
+        head["registered"] = {**reads, **shared, **own_entries(mem, pub, {*reads, *shared})}
         if sparse:
             head["registered"] = read_rows(head["registered"], mem, pub, keyed=keyed or ())
     o.mkdir(parents=True, exist_ok=True)

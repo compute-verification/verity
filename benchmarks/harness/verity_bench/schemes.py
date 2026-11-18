@@ -4,14 +4,14 @@ the PoUW kernel scheme it runs on a card, given by the card's short name (`kit.c
 - `useful_work(name)`: the registered compute scheme ``name``; ValueError naming the registered ones otherwise.
 - `served(scheme)`: ``scheme`` where an adapter entry attaches it to a served run; `NotImplementedError` otherwise.
 - `kernel_scheme(name, card, pinned)`: the PoUW kernel scheme ``name`` runs on ``card``.
-- `arch(card)`: the build target of the card record whose ``short`` is ``card``.
+- `card(short)`: the GPU card record whose ``short`` is ``short``; `arch(short)`, its build target.
 """
 
 from __future__ import annotations
 
 from verity.protocols.resource_accounting import scheme as registry
 
-__all__ = ["arch", "kernel_scheme", "served", "useful_work"]
+__all__ = ["arch", "card", "kernel_scheme", "served", "useful_work"]
 
 
 def useful_work(name: str) -> registry.Scheme:
@@ -36,18 +36,23 @@ def served(scheme: registry.Scheme) -> registry.Scheme:
     return scheme
 
 
-def arch(card: str) -> str:
-    """The ``arch`` of the GPU card record whose ``short`` is ``card``; ValueError naming the shorts otherwise."""
+def card(short: str) -> dict:
+    """The GPU card record whose ``short`` is ``short``; ValueError naming the shorts otherwise."""
     from verity.device import load_card, skus
 
     from verity_bench.kit import cards_directory
 
     directory = cards_directory()
     cards = {c.get("short"): c for c in (load_card(s, directory=directory) for s in skus("gpu", directory=directory))}
-    if card not in cards:
-        raise ValueError(f"no card record under {directory} has short {card!r}; the shorts are "
+    if short not in cards:
+        raise ValueError(f"no card record under {directory} has short {short!r}; the shorts are "
                          f"{', '.join(sorted(s for s in cards if s))}")
-    return cards[card]["arch"]
+    return cards[short]
+
+
+def arch(short: str) -> str:
+    """The ``arch`` of the GPU card record whose ``short`` is ``short`` (`card`)."""
+    return card(short)["arch"]
 
 
 def kernel_scheme(name: str, card: str, pinned: bool) -> str:

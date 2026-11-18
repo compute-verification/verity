@@ -51,7 +51,7 @@ def _norm(norm: Any, original: Any) -> Any:
         if (residual is None or not _served(x, residual) or residual.shape != x.shape or not residual.is_contiguous()
                 or not isinstance(torch.ops._C.fused_add_rms_norm, torch._ops.OpOverloadPacket)
                 or F.norm_threads(x.shape[1]) is None
-                or F.producer_warps("norm", x.shape[0], x.shape[1], F.arch(x.device.index)) is None
+                or F.producer_warps("norm", x.shape[0], x.shape[1], F.arch()) is None
                 or w.dtype != torch.bfloat16 or not w.is_contiguous()):
             return original(x, residual)
         xq = torch.empty(x.shape, dtype=torch.int8, device=x.device)
@@ -69,7 +69,7 @@ def _act(act: Any, original: Any) -> Any:
 
     def forward(x: torch.Tensor):
         if (not _served(x) or not x.is_contiguous() or x.shape[1] % 2
-                or F.producer_warps("silu", x.shape[0], x.shape[1] // 2, F.arch(x.device.index)) is None
+                or F.producer_warps("silu", x.shape[0], x.shape[1] // 2, F.arch()) is None
                 or not isinstance(torch.ops._C.silu_and_mul, torch._ops.OpOverloadPacket)
                 or act.op is not torch.ops._C.silu_and_mul):
             return original(x)

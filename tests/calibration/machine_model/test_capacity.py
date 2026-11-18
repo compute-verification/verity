@@ -91,11 +91,11 @@ def test_parse_reads_each_term_as_its_constructor():
 
 
 def test_the_cli_reports_the_pooled_sigma(capsys):
-    assert main(["capacity", "--vector", VEC, "--json", "0.745/duo:0.6+lane:0.3", "0.255/served:0.15+lane:0.6"]) == 0
+    assert main(["--device", "sm_120", "capacity", "--vector", VEC, "--json", "0.745/duo:0.6+lane:0.3", "0.255/served:0.15+lane:0.6"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["vector"] == VEC and len(d["groups"]) == 2 and d["binding"] == ["JI3n_0"]
     assert d["sigma"] == pytest.approx(0.8679, abs=1e-4) and d["sigma"] <= d["sigma_placed"] + 1e-12
     assert d["eps_capacity"] == pytest.approx(1 - d["sigma"])
-    assert main(["capacity", "--vector", VEC, "duo:0.6"]) == 0
+    assert main(["--device", "sm_120", "capacity", "--vector", VEC, "duo:0.6"]) == 0
     out = capsys.readouterr().out
     assert "σ 0.6411" in out and "ε_capacity 0.3589" in out

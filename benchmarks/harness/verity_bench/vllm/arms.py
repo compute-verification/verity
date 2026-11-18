@@ -15,7 +15,6 @@ from verity_bench.vllm.presets import NO_CONTROL, SERVED_EXECUTIONS, ArmSettings
 
 log = logging.getLogger(__name__)
 
-
 @dataclass(frozen=True)
 class Arm:
     """One engine configuration measured by the benchmark."""
@@ -121,25 +120,23 @@ def plugin(arm: Arm) -> Any | None:
 
 
 def build_bound(arm: Arm, world: int = 1) -> tuple[str, ...]:
-    """The arm's protocol entries that bind the served computation to a row Build (`protocol_options.requires_build`). An
-    entry whose protocol `verity_vllm.protocols` refuses (unknown, or its adapter not importable here) isn't one: it is
-    logged, and the engine's own build refuses it by name."""
+    """The arm's protocol entries whose served computation is a row Build's: each that requires a property with
+    ``fixes`` (`protocol_options.requests`). An entry whose protocol `verity_vllm.protocols` refuses (unknown, or its
+    adapter not importable here) requests nothing, and the engine's own build refuses it by name."""
 
     if not arm.protocols:
         return ()
     from verity.errors import Refused
     from verity_vllm import protocols as PO
 
-    ctx = PO.Context(stage="serve", enabled=arm.protocols, world=world)
-    bound = []
     for entry in arm.protocols:
         try:
-            if PO.requires_build(entry, ctx):
-                bound.append(entry)
+            PO.adapter(entry.partition(":")[0])
         except Refused as e:
             log.info("arm %r: protocol entry %r refused (%s), so it binds no Build here; the engine's build refuses it",
                      arm.id, entry, e)
-    return tuple(bound)
+    ctx = PO.Context(stage="serve", enabled=arm.protocols, world=world)
+    return tuple(dict.fromkeys(entry for entry, r in PO.requests(ctx) if getattr(r, "fixes", False)))
 
 
 def _protocol_arm(name: str, settings: ArmSettings | None = None) -> Arm:
