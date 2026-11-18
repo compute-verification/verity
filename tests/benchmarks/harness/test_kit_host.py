@@ -173,3 +173,27 @@ def test_a_gpu_target_reads_its_names_from_the_card_file_and_refuses_what_has_no
     (tmp_path / "h200-sxm-141gb.toml").write_text(h200.replace('arch = "sm_90a"', 'arch = "GH100"'))
     with pytest.raises(SystemExit, match="no architecture 'GH100'"):
         kit.gpu_target("h200-sxm-141gb", directory=tmp_path)
+
+
+@pytest.mark.parametrize("name, node", [("NVIDIA H200", "local/h200-sxm-141gb-x1/0"),
+                                        ("NVIDIA H100 80GB HBM3", "local/h100-sxm-80gb-x1/0"),
+                                        ("NVIDIA RTX PRO 6000 Blackwell Server Edition", "local/rtx-pro-6000-server-x8/0"),
+                                        (None, "local/cpu/0")])
+def test_a_session_registers_its_cards_node_file(name, node):
+    assert kit.session_node(name, 0) == node
+
+
+def test_a_session_on_a_card_two_node_files_carry_is_refused_by_name(tmp_path):
+    nodes = CARD_FILES.parent / "nodes"
+    for kind in ("h200-sxm-141gb-x1", "h200-sxm-141gb-x2"):
+        text = (nodes / "h200-sxm-141gb-x1.toml").read_text()
+        (tmp_path / f"{kind}.toml").write_text(text.replace('node = "h200-sxm-141gb-x1"', f'node = "{kind}"'))
+    with pytest.raises(SystemExit, match="h200-sxm-141gb-x1, h200-sxm-141gb-x2 all carry h200-sxm-141gb"):
+        kit.session_node("NVIDIA H200", "serving", directory=tmp_path)
+    assert kit.session_node("NVIDIA H200", "serving", kind="h200-sxm-141gb-x2") == "local/h200-sxm-141gb-x2/serving"
+
+
+def test_the_data_sheets_memory_bandwidth_is_read_from_the_card_and_refused_where_the_card_has_none():
+    assert kit.datasheet_bandwidth("NVIDIA H200") == 4_800_000_000_000
+    with pytest.raises(SystemExit, match="^the card record h100-sxm-80gb .* has no memory.datasheet_bandwidth"):
+        kit.datasheet_bandwidth("NVIDIA H100 80GB HBM3")
