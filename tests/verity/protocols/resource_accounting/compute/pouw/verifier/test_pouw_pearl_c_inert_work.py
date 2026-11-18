@@ -120,7 +120,7 @@ def elements_by_definition(ops) -> int:
 
 
 def test_salt_dead_is_the_circuits_bit():
-    """`salt_dead` is the hidden cap's bit (`circuit.words.PouwHopperE4m3SaltDead`) on     f32(α·x) and c_β: on a row of
+    """`salt_dead` is the hidden cap's bit (`ops.words.PouwHopperE4m3SaltDead`) on     f32(α·x) and c_β: on a row of
     accumulators from ±0, where the ends are f32(α·x) ± 88·c_β, to past ±448, where both saturate to one code."""
     rng = random.Random("pearl-c/salt-dead")
     beta = P.f32_bits(P.f32(0.37))
