@@ -21,6 +21,7 @@ import numpy as np
 import pytest
 from test_class_statement_unit_stager import _toy
 from test_struct_lower import TOY_READS, toy_reads  # noqa: F401
+from verity.circuits import population as PN
 from verity.circuits.defs import bind
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_config.settings import of
@@ -342,7 +343,7 @@ def test_lean_reads_the_templated_statement_as_the_flat_one(verifier, bound, tmp
     if bound:
         from test_class_statement_unit_stager import TOY
 
-        program = P.mixed_population_program([(TOY, 3), (TOY, 5)])
+        program = PN.mixed_population_program([(TOY, 3), (TOY, 5)])
         part = P.partition(program, P.template_instances_query([TOY]))
         (tmp_path / "program.json").write_bytes(canonical_json(encode_program(program)))
         (tmp_path / "partition.json").write_text(json.dumps(part))

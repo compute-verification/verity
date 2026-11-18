@@ -53,6 +53,7 @@ sys.path.insert(0, str(HERE.parent / "served_units"))
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
 import stage as SU  # noqa: E402
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.ops import gemm as OG  # noqa: E402
@@ -105,7 +106,7 @@ def chunk_cap(meta: dict) -> int:
 def window(K: int, c: int) -> tuple:
     """Template K's population of c units as a window of its own: its program, query and partition."""
     d = template(K)
-    program = P.mixed_population_program([(d, c)])
+    program = PN.mixed_population_program([(d, c)])
     query = P.template_instances_query([d])
     return program, query, P.partition(program, query)
 
@@ -259,7 +260,7 @@ def main() -> int:
 
     # the verifier's program and partition
     defs = [template(K) for K, _ in spec]
-    program = P.mixed_population_program([(d, n) for d, (_K, n) in zip(defs, spec)])
+    program = PN.mixed_population_program([(d, n) for d, (_K, n) in zip(defs, spec)])
     query = P.template_instances_query(defs)
     part = P.partition(program, query)
     pd = P.digest(part)

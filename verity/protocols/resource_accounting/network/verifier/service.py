@@ -158,6 +158,7 @@ from functools import cached_property, lru_cache
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from verity.circuits import population as PN
 from verity.circuits import boolean as BL
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -529,7 +530,7 @@ class TransferBlocks:
 
     @cached_property
     def _program(self) -> Program:
-        return P.population_program(self.unit, 1)
+        return PN.population_program(self.unit, 1)
 
     @cached_property
     def _partition(self) -> dict[str, Any]:
