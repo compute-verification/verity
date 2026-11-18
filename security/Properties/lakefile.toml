@@ -125,4 +125,5 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.ZkServer", "Properties.Core.Site",
   "Properties.Registration.Premises",
   "Properties.Assumptions", "Properties.Verity.ExecutionPhaseFiles", "Properties.InferenceOnly.Opening",
-  "Properties.InferenceOnly.PinnedRead", "Properties.InferenceOnly.RecordForm", "Properties.Verity.LedgerPinned"]
+  "Properties.InferenceOnly.PinnedRead", "Properties.InferenceOnly.RecordForm",
+  "Properties.InferenceOnly.RecordEdges", "Properties.Verity.LedgerPinned"]
