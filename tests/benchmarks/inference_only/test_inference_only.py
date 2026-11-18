@@ -186,6 +186,21 @@ def test_on_a_made_circuit_the_records_count_subtracts_a_wired_row_and_the_lean_
     assert lean["blocks"][0][2] == 19_968 and (lean["complies"], lean["failure"]) == (False, [0, "fresh"])
 
 
+@pytest.mark.parametrize("wired", ["made", "small"])
+def test_on_a_wired_window_the_lean_verifiers_fresh_bits_are_the_records_count(wired) -> None:
+    """A wired window's fresh bits a block, as the verdict counts them: the count on the session Program it hands the
+    Lean verifier (`count_instance`, through the reference the count's difftest holds the Lean to) and the record's
+    (`block_counts.fresh`), with the held weights in θ. One reading: the two are equal, so the count accepts at the
+    record's k."""
+    doc, pins = (made(wired=True), None) if wired == "made" else B.record(small())
+    row = IO.session_row(doc, pins, pins)
+    counted = IO.record_count(doc, row["slots"], pins, pins)
+    assert counted["wired"] > 0
+    inst = IO.count_instance(doc, row["table"], row["gates"], row["fresh"], row["slots"], IO.held_inputs(doc, pins, pins))
+    lean = reference(inst)["verdict"]
+    assert lean["blocks"][0][2] == row["fresh"] == counted["fresh"] and lean["complies"]
+
+
 @pytest.mark.parametrize(("value", "word"), [(1000, "within target"), (999.999, "misses"), (1, "misses")])
 def test_the_metrics_verdict_holds_its_value_to_the_goals_target(value, word) -> None:
     """The goal wants a slowdown of at least 1,000: 1,000 itself is within target, and anything below misses."""
