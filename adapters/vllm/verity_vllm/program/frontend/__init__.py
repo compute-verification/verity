@@ -23,6 +23,7 @@ or done without.
     verity_vllm.config.DEFAULT_ROW_PROTOCOLS                  the protocol set a target runs when it declares none
     verity_vllm.config.parse_protocols                        a protocol set's one spelling
     verity_vllm.config.vllm_revision                          the installed vLLM's version with its commit, for the read-back
+    verity_vllm.config.CARD_FILES                             the card files a target's card is read from
     verity_torch.inputs                                what may fill a served Program's input, for a rule's run inputs
     verity_torch.inputs.run_field                      the same, for one field a registration reads
     verity_torch.prune.kept_records                    a derivation's body in the registered compiler's form

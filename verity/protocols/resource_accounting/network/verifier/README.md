@@ -201,7 +201,7 @@ A spec-level reference for network attestation's timing channel:
   hiding-commitment registration, a row each block of G steps (G = P unless given: an execution phase's row, the slice's
   ``srv`` row; at G < P block j is the slice's ``srv{j}``, `verity_vllm.compiler.compile_slice.CompileSliceRowGroups_v1`).
   `leaf_ok` checks a proof block's row b‖c against its registered leaf, as the slice's design holds the advice's ``adv``
-  row, and `reads_port` is the same read as the Lean verifier's registered reads take it. No session of the compile slice
+  row. No session of the compile slice
   runs, only its tests call `leaf_ok`, and nothing ties the rows to what the server ran, so they are the prover's word;
 - the served rows' tie, in vLLM's compiler (`verity_vllm.compiler.served_tie`): `ServedRowsTie_v2`, a Boolean Definition
   with `check` its reference, states that an execution phase's served rows are the positions its steps' Commit holds (the
@@ -401,8 +401,8 @@ in-the-clear check, `TransferBlocks.clear`, is a debug comparison, off by defaul
 - **The attestations aren't a Spec item.** The verifier receives them in the clear from the network attester, the auditor's
   device, beside the proof system, whose public kinds have none for a trusted device's signature over a hiding
   commitment. That is a provisional exception to the four public kinds, not a fifth kind.
-- **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`TransferBlocks.unproved_outcome`,
-  its verdict `"decided_by": "clear"`), which is never zero-knowledge.
+- **A run that proves nothing** (a rehearsal, the simulator) has no outcome of record, so `TransferBlocks.network_verdict`
+  rejects its link, every window it didn't prove refused.
 
 `TransferBlocks.verify`'s verdict of record is the Lean's, `NetworkCheck.TransferBlocks`
 (`verity/protocols/resource_accounting/network/verifier/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
