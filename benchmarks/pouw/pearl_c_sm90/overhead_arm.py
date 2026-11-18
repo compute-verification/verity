@@ -325,7 +325,7 @@ class _Held:
         self.arm, self.key, self.users = arm, key, 0
         self.w = _bf16(operands.b, shape.n, shape.k)
         kernel = arm.kernel()
-        salt_key = PPD.new_salt_key(SERVED)
+        salt_key = PPD.no_salt_key(SERVED)
         roots = PPDR.weight_roots(kernel, {0: self.w}, SERVED, salt_key=salt_key)
         ch = Challenger(EPOCH, PV.coins)
         self.run = PPDR.PearlCDeviceRun(PPD.scheme_of(SERVED), f"pouw:{SERVED}", kernel, {0: self.w}, roots, ch.commitment,
