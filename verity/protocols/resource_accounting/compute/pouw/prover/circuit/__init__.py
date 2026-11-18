@@ -61,10 +61,13 @@ compares an offered one's digest with its own.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, Sequence
 
-#: the schemes that have a circuit here, each with the permutation P it pins (as `ncp-v1` and `ncp-v1-shift24` do)
-SCHEMES = {"ncp-v2": "word", "ncp-v2-shift24": "shift24"}
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import of_family
+
+#: the schemes that have a circuit here, each with the permutation P it pins: the kernel schemes' ``ncp-v2`` family
+SCHEMES = MappingProxyType({k.name: k.parameters["perm"] for k in of_family("ncp-v2")})
 
 
 #: a call's inputs that are its weight Program's outputs, in that Program's output order
