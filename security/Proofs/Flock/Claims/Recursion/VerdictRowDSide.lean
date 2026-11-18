@@ -165,7 +165,7 @@ theorem sideOf_repCtx {spec : SessionSpec} {sts : Array Stmt} {k : ℕ} (hk : k 
 /-- **`readPs` reads each rep with `readRep`**: rep `k`'s proof is the one `readRep` reads from its block of rounds,
 with the last message's `k`-th proof. -/
 theorem readPs_get {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
-    {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Claims.Msg}
+    {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Hash.Msg}
     (h : readPs spec sts c₁ r₀ rss cs fl = some pf) {k : ℕ} (hk : k < 2 * sts.size) :
     ∃ ms', readRep (repCtx spec sts c₁ r₀ cs k) ((cutLens (repLens spec sts) rss).getD k []) fl.ps[k]! =
       some (pf.1[k]!, ms') := by
@@ -187,10 +187,10 @@ theorem readPs_get {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ :
     cases h
 
 /-- `decR`'s reading, with the last message's proof. -/
-theorem decR_last {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decR_last {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) :
     ∃ (v : Ins × SessionSpec × Array Stmt) (c₁ : Coin) (r₀ : List ByteArray) (rss : List (List ByteArray))
-      (fl : FinalP) (link : List ByteArray × List ByteArray) (pf : Array Flock.Proof × List Claims.Msg),
+      (fl : FinalP) (link : List ByteArray × List ByteArray) (pf : Array Flock.Proof × List Hash.Msg),
       setupOf false x = some v ∧ as.getLast?.bind rd = some fl ∧ cs.head? = some c₁ ∧
       (rowsOf (as.headD [])).map (List.map nodeOf) = some r₀ ∧ as.tail.dropLast.mapM rowsOf = some rss ∧
       linkR v.2.2 r₀ = some link ∧ readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl = some pf ∧
@@ -216,13 +216,13 @@ theorem decR_last {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : Lis
 /-! ## The reader -/
 
 /-- Table `t`'s `fast100` schedule at the inner statement `x`, as `repCtx` reads it. -/
-def schOf (x : Claims.Msg) (t : ℕ) : Flock.Schedule :=
+def schOf (x : Hash.Msg) (t : ℕ) : Flock.Schedule :=
   match setupOf false x with
   | some v => (fast100 (tabsOf v.2.2)[t]!.m).getD default
   | none => default
 
 /-- The cap and Ligerito proof of a `rec-open` piece's side: its rep's proof as `readRep` reads it (`sideAt`). -/
-def capLigAt (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (ms : List Claims.Msg) (q : OpenPiece) :
+def capLigAt (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (ms : List Hash.Msg) (q : OpenPiece) :
     Array ByteArray × Flock.LigeritoProof :=
   match setupOf false x, ms.getLast?.bind rd, (rowsOf (ms.headD [])).map (List.map nodeOf),
     ms.tail.dropLast.mapM rowsOf with
@@ -236,12 +236,12 @@ messages whose last one `rd` reads, with round 0's nodes and the later rounds' r
 proof as `readRep` reads it from the `k`-th block of the later rounds' rows (at the default link coin: what it reads of
 the openings takes no coin, `sideOf_repCtx`), with the last message's `k`-th proof; the side is the table's `fast100`
 schedule (`schOf`, whatever the messages), and that proof's cap and Ligerito proof (`capLigAt`). -/
-def sideAt (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (ms : List Claims.Msg) (q : OpenPiece) : OpenSide :=
+def sideAt (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (ms : List Hash.Msg) (q : OpenPiece) : OpenSide :=
   ⟨schOf x q.table, (capLigAt rd x ms q).1, (capLigAt rd x ms q).2⟩
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ)
 
 /-- **A piece reads its rep's decided side**: at a decision, a piece of table `i < sts.size` and rep `r` reads the

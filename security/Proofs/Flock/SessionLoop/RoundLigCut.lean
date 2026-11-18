@@ -43,13 +43,13 @@ set_option maxHeartbeats 2000000 in
 of the lincheck's shape, from any source, level-0 commitment and pads commitment, the rep's PIOP returns at `ligAt` and
 its Ligerito opening, cut at `n`, throws there with `n + 1` bodies, as the rep does, wherever its rank check passes and
 its pair's coins are independent. -/
-theorem repCut_lig_stop (coin : ℕ → ℕ → F128) {resp : ℕ → Claims.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
+theorem repCut_lig_stop (coin : ℕ → ℕ → F128) {resp : ℕ → Hash.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     {st : Setup} (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hkm : st.fold.kLog ≤ st.m)
     (hf : ∀ (a : F128) (lw ρ : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
       ∃ v, st.fold.fold a lw ρ = .ok v)
     {sch : Schedule} {tPad : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (rep : ℕ) (dom : ByteArray) (cm0 : Commit)
     (extras : Array Claim) (ic : InnerCommit) (src : RepSrc) (prior : Array (List F128)) (words : List ℕ)
-    (l : Array Claims.Msg) {n : ℕ} (h1 : CutEq.ligAt l.size st extras ≤ n)
+    (l : Array Hash.Msg) {n : ℕ} (h1 : CutEq.ligAt l.size st extras ≤ n)
     (h2 : n < CutEq.ligAt l.size st extras + (sch.k0 + 7 + 11 * (sch.levels.size - 1)))
     (hrk : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((zerocheckCut (asksCut coin n) st.m st.digest (flat cm0.cap) ic.root (Zk.PadLayout.new st.m st.kLog sch.k0)

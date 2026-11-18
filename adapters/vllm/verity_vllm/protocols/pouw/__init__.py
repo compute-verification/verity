@@ -44,7 +44,7 @@ from verity_vllm.protocols.pouw import h1_settings as PHS
 from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 
 
-__all__ = ["Settings", "challenged", "h1_run", "keeps_weight_copy", "linear_types", "refusals", "requests"]
+__all__ = ["Settings", "challenged", "h1_run", "linear_types", "refusals", "requests"]
 
 NAME = "pouw"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
@@ -58,12 +58,6 @@ KEYS = ("coins", "retain_steps", "transcript_dir", "rows", "steps", "runner", "r
 
 def schemes() -> tuple[str, ...]:
     return tuple(sorted({*NCP_SCHEMES, *NCP_CIRCUIT_SCHEMES, H1_SCHEME}))
-
-
-def keeps_weight_copy(scheme: str) -> bool:
-    """True where the executor keeps a weight-derived copy across forwards, so its GEMMs would not read what POUS decodes:
-    none here, since H1 serves the arm's own y from the weight it is handed."""
-    return False
 
 
 def executes(scheme: str) -> tuple[str, ...]:

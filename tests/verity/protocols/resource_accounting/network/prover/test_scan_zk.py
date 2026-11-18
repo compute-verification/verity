@@ -28,6 +28,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from verity.commitments import domains as DM
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
@@ -833,7 +834,7 @@ def test_an_execution_phases_answer_is_one_stages_on_its_registration():
     sample = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
     record = {"accepted": True, "registration": reg, "draw": sample, "proved_units": list(range(N))}
     a = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused")
-    assert CC.answer_of(a)["verdict"] == "accept" and a["commitment"] == R.digest(reg) and a["protocol"] == R.PROTOCOL
+    assert CC.answer_of(a)["verdict"] == "accept" and a["commitment"] == R.digest(reg) and a["protocol"] == DM.ONE_STAGE_PROTOCOL
     assert a["public"]["bound"] == 0 and a["public"]["drawn"] == a["public"]["proved"] == list(range(N))
     assert "rests_on_period_check" not in a["public"]
     whole = SA.window_answer(reg, {**record, "complete": True}, sz.Fraction(1, 100), "unused")

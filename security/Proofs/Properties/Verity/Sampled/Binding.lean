@@ -671,7 +671,7 @@ theorem breakCalls_le (dev : History) (s : Sent) :
     omega
 
 /-- A finding's collision, as two messages. -/
-def collisionOf : Finding → Option (Claims.Msg × Claims.Msg)
+def collisionOf : Finding → Option (Hash.Msg × Hash.Msg)
   | .collision x y => some (x.data.toList, y.data.toList)
   | .forgery _ _ => none
 
@@ -684,7 +684,7 @@ open Classical in
 /-- **A pinned table v2 reads on the blobs sent at other bytes than its registered file**, of one SHA-512 with it: the
 first pinned table whose first blob sent with its digest (`tableFile`) and registered file (`PinnedTables.file`, the
 deployment's `T`) differ. -/
-noncomputable def tableCollision (T : PinnedTables) (s : Sent) : Option (Claims.Msg × Claims.Msg) :=
+noncomputable def tableCollision (T : PinnedTables) (s : Sent) : Option (Hash.Msg × Hash.Msg) :=
   Flock.MUFU_TABLES.findSome? fun t =>
     match tableFile t.sha512 s.blobs, T.file t.sha512 with
     | some a, some b => if a ≠ b ∧ Flock.Sha512.hash a = Flock.Sha512.hash b then
@@ -781,7 +781,7 @@ theorem lmsVerify_of_verifies {key : ChallengerKey} (hk : key.params = Lms.deplo
 /-- The first collision among findings that are each valid where they are collisions is a collision of
 `sha512Msg`. -/
 theorem findSome_collisionOf_valid {l : List Finding}
-    (hl : ∀ x y, Finding.collision x y ∈ l → x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) {u v : Claims.Msg}
+    (hl : ∀ x y, Finding.collision x y ∈ l → x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) {u v : Hash.Msg}
     (h : l.findSome? collisionOf = some (u, v)) : Claims.Collision Verity.sha512Msg u v := by
   obtain ⟨w, hw, hc⟩ := List.exists_of_findSome?_eq_some h
   cases w with
@@ -804,7 +804,7 @@ theorem findSome_collisionOf {l : List Finding}
     exact ⟨u, v, rfl, findSome_collisionOf_valid hl hf⟩
 
 /-- `findSome_collisionOf` ahead of any other output: the first collision among valid findings comes first. -/
-theorem findSome_collisionOf_or {l : List Finding} {o : Option (Claims.Msg × Claims.Msg)}
+theorem findSome_collisionOf_or {l : List Finding} {o : Option (Hash.Msg × Hash.Msg)}
     (hl : ∀ x y, Finding.collision x y ∈ l → x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) {x y : ByteArray}
     (hxy : Finding.collision x y ∈ l) :
     ∃ u v, (l.findSome? collisionOf).or o = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v := by
@@ -933,7 +933,7 @@ theorem finders_of_break (V : Vocab d α) (T : PinnedTables) (dev : Exchange →
       exact hv
 
 /-- What `tableCollision` outputs is a collision of `sha512Msg`. -/
-theorem tableCollision_valid {T : PinnedTables} {s : Sent} {u v : Claims.Msg} (h : tableCollision T s = some (u, v)) :
+theorem tableCollision_valid {T : PinnedTables} {s : Sent} {u v : Hash.Msg} (h : tableCollision T s = some (u, v)) :
     Claims.Collision Verity.sha512Msg u v := by
   obtain ⟨t, -, ht⟩ := List.exists_of_findSome?_eq_some h
   split at ht

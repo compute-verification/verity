@@ -71,12 +71,12 @@ open Flock FlockDeploy Transcript
 
 namespace FlockComplete.ZkTables
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-! ## One table -/
 
 /-- **`ready` at a setup of one table is `readyZk`.** -/
-theorem readyZk_of_ready {x : Claims.Msg} (h : ready H x = true) {s : Ins} {spec : SessionSpec}
+theorem readyZk_of_ready {x : Hash.Msg} (h : ready H x = true) {s : Ins} {spec : SessionSpec}
     {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1) : readyZk H x = true := by
   unfold ready at h
   unfold readyZk
@@ -90,7 +90,7 @@ def Case.toZk (c : Case H rel) (h1 : c.sts.size = 1) : CaseZk H rel :=
   ⟨c.x, c.w, c.ω, c.r, c.s, c.spec, c.sts, c.scope, c.rel_w, readyZk_of_ready c.ready c.setup h1, c.good, c.setup⟩
 
 /-- **At one table the session is `sessionSZk`'s.** -/
-theorem sessionS_one {resp : ℕ → Claims.Msg} {spec : SessionSpec} {sts : Array Flock.Stmt} (h1 : sts.size = 1)
+theorem sessionS_one {resp : ℕ → Hash.Msg} {spec : SessionSpec} {sts : Array Flock.Stmt} (h1 : sts.size = 1)
     (w : Claims.Flock.Wit) (ω : TapeZk) : sessionS H resp spec sts w ω = sessionSZk H resp spec sts w ω := by
   unfold sessionS sessionSZk
   rw [traces_one h1]
@@ -167,7 +167,7 @@ theorem Case.one_or_several (c : Case H rel) : c.sts.size = 1 ∨ 1 < c.sts.size
 
 /-- **Masked completeness at any number of tables** from the session running at every good case, and the record's
 checks and the rep's checks at every run. -/
-theorem complete_of_at (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem complete_of_at (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hSR : SessionRunsZk H rel) (hRec : ∀ o : Run H rel, RecordAt H rel o)
     (hOp : ∀ o : Run H rel, OpenAt H rel o) (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) :
     Claims.Flock.Complete H (deployZk rel) :=
@@ -208,7 +208,7 @@ theorem complete_of_at (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
 any number of tables: from `complete_zk`'s premises, which give every check at one
 table, and at several tables the statement's and the prover's pieces' (`StmtOkJ`, `ProverRunsJ`), the record's checks
 (`RecordJ`) and the rep's checks (`OpenJ`). -/
-theorem complete (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem complete (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel)
