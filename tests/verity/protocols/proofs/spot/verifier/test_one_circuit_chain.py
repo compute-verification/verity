@@ -11,6 +11,7 @@ prints one line a stage."""
 from __future__ import annotations
 
 import functools
+import hashlib
 import importlib.util
 import json
 import sys
@@ -88,16 +89,32 @@ def c_s(member: Any) -> bytes:
         raise Stop(f"prove: the prover's C_S for block {member.base} ({OC.__file__}:restrict): {e}") from e
 
 
-def python_door(member: Any, circuit_file: bytes = b"") -> tuple[Any, Any]:
+def python_door(member: Any, circuit_file: bytes = b"", public: bytes = b"",
+                partition: dict | None = None) -> tuple[Any, Any]:
     r = registered()
     with tempfile.TemporaryDirectory() as d:
         cf, pub, s = Path(d, "circuit.txt"), Path(d, "pub.bin"), Path(d, "s0")
         cf.write_bytes(circuit_file)
-        pub.write_bytes(b"")
+        pub.write_bytes(public)
         s.mkdir()
         (s / "session.json").write_text("{}")
-        return PF.verify(PF.Proof(cf, pub, (s,)), program=r["C"], partition=r["partition"], block=member.base,
-                         registered=r["theta"])
+        return PF.verify(PF.Proof(cf, pub, (s,)), program=r["C"], partition=r["partition"] if partition is None else partition,
+                         block=member.base, registered=r["theta"])
+
+
+def own_root_public(k: int) -> bytes:
+    """Member ``k``'s public file as the periods stage it, with a fresh root of its own for its wired port ``x``
+    (``frame_v3``'s roots), neither its writer's ``o0`` root nor its staged one."""
+    with tempfile.TemporaryDirectory() as d, pytest.MonkeyPatch.context() as mp:
+        d = Path(d)
+        _w, _c, doc = TI._held_window(d, mp)
+        head, body = TI._staged(d, doc["members"][k], k, d / "out")
+        writer, _ = TI._staged(d, doc["members"][k - 1], k - 1, d / "writer")
+    assert doc["members"][k]["base"] >= TI.REQUESTS, "cheat (a) needs a member whose x is wired"
+    roots = head["frame_v3"]["roots"]
+    roots["x"] = hashlib.sha512(b"own root " + roots["x"].encode()).hexdigest()
+    assert roots["x"] != writer["frame_v3"]["roots"]["o0"]
+    return json.dumps(head).encode() + b"\n" + body
 
 
 def stopped(why: tuple[str, str] | None) -> None:
@@ -145,17 +162,14 @@ def stage_lean_door() -> str:
 
 
 def stage_crossing() -> str:
-    """(a) a reader's input that is not its writer's output."""
-    (xs, _ws), _outs = TI.chain_values()
-    x = xs.copy()
-    x[2, 0] ^= 1
-    try:
-        committed(x)
-    except Stop as e:
-        if "is not the o0 row" in str(e):
-            raise Stop(f"cheat (a): refused by name at the commit (rows.py, the one position), before the door: {e}") from e
-        raise
-    raise AssertionError("cheat (a): a crossing value committed")
+    """(a) a crossing value, at the door: a member holding its own root for its wired port ``x``."""
+    win, _c = committed()
+    m = drawn(win)
+    k = win.window.members.index(m)
+    _f, why = python_door(m, public=own_root_public(k))
+    stopped(why)
+    assert why is not None, "cheat (a): the door accepted a member's own root for a wired port"
+    return f"refused: {why}"
 
 
 def stage_not_cs() -> str:
@@ -168,11 +182,15 @@ def stage_not_cs() -> str:
 
 
 def stage_left_out() -> str:
-    """(c) a partition that does not cover C's units."""
-    doc = json.loads(I.circuit_bytes(registered()["window"].circuit_record()))
-    with pytest.raises(ValueError) as e:
-        I.window_of_record({**doc, "templates": [[TI.GID, 7]]}, TI.SAMPLING_DESIGN, {TI.GID: TI.GEMM}.__getitem__)
-    raise Stop(f"cheat (c): refused by name at registration (interface.window_of_record), before the door: {e.value}")
+    """(c) a block left out, at the door: a partition whose blocks cover none of C's units (its query names no template
+    of C; the partition object has no blocks field of its own yet)."""
+    win, _c = committed()
+    part = registered()["partition"]
+    bad = {**part, "query": {**part["query"], "params": {"templates": []}}}
+    _f, why = python_door(drawn(win), partition=bad)
+    stopped(why)
+    assert why is not None, "cheat (c): the door accepted a partition that leaves C's units out"
+    return f"refused: {why}"
 
 
 STAGES = [("register", stage_register), ("commit", stage_commit), ("draw", stage_draw), ("prove", stage_prove),
