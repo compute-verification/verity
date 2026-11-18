@@ -506,8 +506,10 @@ FIRST_RUNNER = kv_blocks.RUNNERS[0]
 
 def vllms_classes(monkeypatch, store: NodeMemory, first_runner: bool = False) -> SimpleNamespace:
     """vLLM's classes as the memory hook finds them under the stand-in for vLLM (`kv_classes`), the scheduler's calls
-    recording whether the store had a pass open, a runner holding `runner`'s model and caches."""
+    recording whether the store had a pass open, a runner holding `runner`'s model and caches, its linear layers vLLM's
+    `LinearBase`."""
     fake = fake_vllm.install(monkeypatch, extra=[f"{FIRST_RUNNER}:GPUModelRunner"] if first_runner else ())
+    fake.set("vllm.model_executor.layers.linear:LinearBase", torch.nn.Linear)
     return kv_classes(fake, lambda: store.in_pass, first_runner, lambda: dict(vars(runner())))
 
 
@@ -537,7 +539,7 @@ def binder():
 
 @pytest.mark.parametrize("first_runner", [False, True])
 def test_installed_the_runners_load_registers_the_weights_and_uninstall_leaves_vllm_unpatched(monkeypatch, binder,
-                                                                                              first_runner):
+                                                                                              first_runner, request):
     """`Binder.install` subscribes to the exchange's memory and steps hooks and files ReuseOldestFreed, patching
     nothing: every patch is the memory hook's (each runner module that is there, the first runner's skipped where it is
     absent, as under the surface); a runner's loaded model's weights reach the store as registered values; `uninstall`
@@ -553,8 +555,9 @@ def test_installed_the_runners_load_registers_the_weights_and_uninstall_leaves_v
     with pytest.raises(RuntimeError, match="installed"):
         b.install(ex)
     off = kv_blocks.attach()
+    request.addfinalizer(off)
     sites = v.sites
-    assert len(sites) == (9 if first_runner else 7) and {(e.owner, e.name) for e in live(kv_blocks.TAG)} == set(sites)
+    assert len(sites) == (11 if first_runner else 8) and {(e.owner, e.name) for e in live(kv_blocks.TAG)} == set(sites)
     for i, cls in enumerate(v.runners):
         r = cls()
         r.loads = torch.nn.Sequential(*[torch.nn.Identity()] * i, torch.nn.Linear(64, 32, bias=False))

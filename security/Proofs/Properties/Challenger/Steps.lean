@@ -30,7 +30,7 @@ Under them, for the smallest session a challenger closes, one window whose one f
   window's open and its end verifies to the one window, ended (`verifyLedger_two`, `checked_two`), and opens it
   withheld (`withheldOn_two`);
 * a record signed under the key gives no reason (`recordReason_none_of_steps`), the release log of that commitment's
-  head, one root and its release shows the family's one root (`ReleasedLogOne`, not yet proved), and
+  head, one root and its release reads as the family's one root and its release (`releasedLogOf_one`), and
   `challengerStream` reads the one opening's coin (`challengerStream_one`).
 
 Each hypothesis is one step's result, so a proof of an acceptance supplies them one at a time.
@@ -74,22 +74,26 @@ theorem recordReason_none_of_steps {key : ChallengerKey} {record : Json} {r : Ch
   simp [hn, hr, hm, hd, hv, Except.toOption, pure, Except.pure, bind, Except.bind]
 
 /-- `releasedLogOf` reads the one root of a commitment's one family: the release log is the commitment's head, a root
-line `a` and its release `b`, each its own event and no coin tree's, the root line naming the family, coin 0 and the
-root, and the release naming them back; the log's entries of the family all carry the root, and coin 0 alone is
-released after it. -/
-def ReleasedLogOne : Prop :=
-  ∀ {c : LiveCommitment} {a b label root : String} {r s : Json} {bytes : ByteArray} {n : Nat},
-    c.families = [(label, n)] → treeLine a = false → treeLine b = false → event a = .ok r → event b = .ok s →
-    keys? r = some #["event", "index", "label", "received_at", "root"] →
-    keys? s = some #["after", "event", "index", "label", "released_at"] →
-    jsonStrIs (getD r "event") "root" = true → jsonStrIs (getD s "event") "release" = true →
-    (∃ t u, nat? (getD r "received_at") = some t ∧ nat? (getD s "released_at") = some u ∧ t ≤ u) →
-    getD r "label" = .str label → getD r "root" = .str root → Flock.unhex root = .ok bytes →
-    int? (getD r "index") = some 0 → int? (getD s "index") = some 0 →
-    jsonStrIs (getD s "label") label = true → jsonStrIs (getD s "after") root = true → root.length = 128 →
-    ∃ log, releasedLogOf c ["{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}", a, b] = .ok log ∧
-      byFamily c log = [(label, [bytes])] ∧ (log.filter (·.label == label)).all (·.root == bytes) = true ∧
-      releasedAfter log label bytes = [0]
+line `a` and its release `b`, each its own event and no coin tree's, the root line naming the family, coin 0 below
+the family's count and the root, received at `t`, and the release naming them back, released at `u ≥ t`. -/
+theorem releasedLogOf_one {c : LiveCommitment} {a b label : String} {r s : Json} {bytes : ByteArray} {n t u : Nat}
+    (hf : c.families = [(label, n)]) (hn : 0 < n) (hta : treeLine a = false) (htb : treeLine b = false)
+    (hr : event a = .ok r) (hs : event b = .ok s)
+    (hkr : keys? r = some #["event", "index", "label", "received_at", "root"])
+    (hks : keys? s = some #["after", "event", "index", "label", "released_at"])
+    (her : getD r "event" = .str "root") (hes : getD s "event" = .str "release")
+    (htr : nat? (getD r "received_at") = some t) (hts : nat? (getD s "released_at") = some u) (htu : t ≤ u)
+    (hl : getD r "label" = .str label) (hroot : getD r "root" = .str (Flock.hexOf bytes))
+    (hlen : (Flock.hexOf bytes).length = 128) (hb : Flock.unhex (Flock.hexOf bytes) = .ok bytes)
+    (hir : nat? (getD r "index") = some 0) (his : int? (getD s "index") = some 0)
+    (hsl : getD s "label" = .str label) (hsa : getD s "after" = .str (Flock.hexOf bytes)) :
+    releasedLogOf c ["{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}", a, b] =
+      .ok [⟨.recorded, label, 0, bytes, t, 1⟩, ⟨.released, label, 0, bytes, u, 2⟩] := by
+  have hut : ¬ u < t := Nat.not_lt.2 htu
+  unfold releasedLogOf
+  simp [hf, hn, hta, htb, hr, hs, hkr, hks, her, hes, htr, hts, hut, hl, hroot, hlen, hb, hir, his, hsl, hsa,
+    jsonStrIs, LiveCommitment.family, Except.toOption, pure, Except.pure, bind, Except.bind, List.zipIdx,
+    -Array.any_eq_true, -Array.any_eq_false]
 
 /-- `challengePhaseOf` returns the record's commitment, the roots its release log shows and the close's session: the record is
 signed under the key, the close's signature decodes and verifies over the close's message, the log has the lines the

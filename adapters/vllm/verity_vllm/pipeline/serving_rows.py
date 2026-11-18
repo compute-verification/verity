@@ -131,7 +131,7 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier import service as SV
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
@@ -403,8 +403,8 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     tmpls, sampling_design = list(partition["templates"]), sampling_design_of(partition["law"])
     q = partition.get("query")
     if q is not None and q not in TEMPLATE_QUERIES:
-        if q == P.Q_WORD[0] and sampling_design.get("law") == "stratified":
-            raise ValueError(f"a word partition ({P.Q_WORD[0]}) with the stratified sampling design: its strata are templates, which a word "
+        if q == PO.Q_WORD[0] and sampling_design.get("law") == "stratified":
+            raise ValueError(f"a word partition ({PO.Q_WORD[0]}) with the stratified sampling design: its strata are templates, which a word "
                              f"partition does not have; the serving rows' partition is {' / '.join(TEMPLATE_QUERIES)}")
         raise ValueError(f"partition query {q!r}: the serving rows' window is the template instances' partition "
                          f"({' / '.join(TEMPLATE_QUERIES)}), never a word partition")

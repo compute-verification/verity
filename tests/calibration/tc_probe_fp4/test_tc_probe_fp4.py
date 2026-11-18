@@ -40,6 +40,9 @@ import w1_price as W  # noqa: E402
 from verity.circuits.silicon import models as M  # noqa: E402
 from verity.circuits.silicon.term import PRODUCT_WIDTH  # noqa: E402
 
+H200, H100, UNKNOWN = "NVIDIA H200", "NVIDIA H100 80GB HBM3", "NVIDIA A100-SXM4-80GB"
+RTX_PRO, B200 = "NVIDIA RTX PRO 6000 Blackwell Server Edition", "NVIDIA B200"
+
 
 @pytest.fixture
 def no_nvcc(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -567,9 +570,12 @@ def test_meta_rule_dry_run_measures_the_fake_rule_and_fails_closed(no_nvcc: None
 def test_store_declarations_keep_guards_out_of_the_derivation() -> None:
     p = tool.TC_PROBE_FP4.parse(["python", "calibration/tc_probe_fp4/probe.py", "--instruction", "f8f6f4", "--out", "x",
                                  "--expect-uuid", "GPU-1", "--chain", "4", "--prebuilt", "/x/libmma_fp4_sm_120a.so"])
-    assert p["instruction"] == "f8f6f4" and p["chain"] == 4 and "expect_uuid" not in p and p["arch"] == "sm_120a"
+    assert p["instruction"] == "f8f6f4" and p["chain"] == 4 and "expect_uuid" not in p and not {"arch", "card"} & set(p)
     assert "prebuilt" not in p and "_unknown" not in p
     assert set(p) <= set(tool.TC_PROBE_FP4.key_params) | {"out", "procs"}
+    o = tool.TC_PROBE_FP4.parse(["python", "calibration/tc_probe_fp4/probe.py", "--instruction", "nvf4", "--out", "x", "--sass-only",
+                                 "--card", "NVIDIA B200"])
+    assert o["card"] == "NVIDIA B200" and set(o) <= set(tool.TC_PROBE_FP4.key_params) | {"out", "procs"}
     v = tool.TC_PROBE_FP4.parse(["python", "calibration/tc_probe_fp4/probe.py", "--instruction", "nvf4_lean_vectors", "--out", "x",
                                  "--vectors", "in/Fp4Vectors.lean", "--vector-ids", "31,34", "--chain-ids", "9"])
     assert (v["vectors"], v["vector_list"], v["vector_ids"], v["chain_ids"]) == ("in/Fp4Vectors.lean", "nvf4P7", "31,34", "9")
@@ -586,6 +592,65 @@ def test_store_declarations_keep_guards_out_of_the_derivation() -> None:
                                  "--expect-uuid", "GPU-1", "--locked-mhz", "2100"])
     assert r["cmd"] == "run" and r["family"] == "fp4" and r["locked_mhz"] == 2100
     assert not {"out", "build", "expect_uuid"} & set(r) and set(r) <= set(tool.TC_RATES_FP4.key_params)
+    f = tool.TC_RATES_FP4.parse(["python", "calibration/tc_probe_fp4/f1_rates.py", "build", "--card", "NVIDIA RTX PRO 6000", "--out", "x"])
+    assert f == {"cmd": "build", "card": "NVIDIA RTX PRO 6000", "forms": None, "family": None, "libs": None, "reps": 5,
+                 "target_ms": 100.0, "sustain_s": 2.0, "seed": 20260930, "locked_mhz": None, "corrupt_word": False,
+                 "fake_silicon": False, "tolerance": 0.02}
+    assert "card" not in r and set(f) <= set(tool.TC_RATES_FP4.key_params)
+
+
+def nvcc_line(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, card: str, source: str) -> str:
+    calls = []
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="Cuda compilation tools, release 12.9\nBuild cuda_12.9\n")
+
+    monkeypatch.setattr(P.subprocess, "run", run)
+    monkeypatch.setattr(P, "nvcc_bin", lambda: "nvcc")
+    P.build(card, tmp_path, source)
+    return " ".join(calls[-1])
+
+
+@pytest.mark.parametrize("card, source, line", [
+    (RTX_PRO, "mma_fp4.cu", "nvcc -O2 -gencode=arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared -o {out}/libmma_fp4_sm_120a.so "
+                            "{here}/mma_fp4.cu"),
+    (RTX_PRO, "cvt_fp4.cu", "nvcc -O2 -gencode=arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared -o {out}/libcvt_fp4_sm_120a.so "
+                            "{here}/cvt_fp4.cu"),
+    (B200, "tcgen05_fp4.cu", "nvcc -O2 -gencode=arch=compute_100a,code=sm_100a -Xcompiler -fPIC -shared -o "
+                             "{out}/libtcgen05_fp4_sm_100a.so {here}/tcgen05_fp4.cu")])
+def test_the_card_the_run_opened_gives_the_compiler_the_line_sm_120a_gave_it(monkeypatch, tmp_path, card, source, line) -> None:
+    assert nvcc_line(monkeypatch, tmp_path, card, source) == line.format(out=tmp_path, here=P.HERE)
+    assert P.card_flags(card) == [line.split()[2]]
+
+
+def test_a_card_of_another_architecture_and_a_host_with_no_gpu_are_refused_by_name(monkeypatch) -> None:
+    from verity_bench import kit
+    assert P.target(RTX_PRO, "f1_rates.py") == (RTX_PRO, "sm_120a") and P.target(B200, "tcgen05_fp4.cu") == (B200, "sm_100a")
+    with pytest.raises(SystemExit, match=r"the card 'NVIDIA H200' is sm_90a, and mma_fp4\.cu's kernels are sm_120a"):
+        P.target(H200, "mma_fp4.cu")
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "none"})
+    with pytest.raises(SystemExit, match="no GPU here: --card names the card a --sass-only or --fake-silicon build is for"):
+        P.target(None, "w1_price.cu")
+
+
+def test_the_compiler_is_the_machine_s_toolkit_and_none_is_refused_by_name(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("CUDA_HOME", str(tmp_path))
+    assert P.nvcc_bin() == str(tmp_path / "bin" / "nvcc") and not P.has_nvcc()
+    assert F1._cuobjdump() == str(tmp_path / "bin" / "cuobjdump")
+    monkeypatch.delenv("CUDA_HOME")
+    monkeypatch.delenv("RESEARCH_MACHINE", raising=False)
+    with pytest.raises(SystemExit, match=r"^no CUDA toolkit 13\.0: set CUDA_HOME"):
+        P.nvcc_bin()
+    assert not P.has_nvcc()
+
+
+@pytest.mark.parametrize("script, argv", [(P, ["--instruction", "nvf4", "--out", "x", "--card", RTX_PRO]),
+                                          (W, ["--out", "x", "--card", RTX_PRO])])
+def test_card_names_only_an_offline_build_s_card(capsys, script, argv) -> None:
+    with pytest.raises(SystemExit):
+        script.main(argv)
+    assert "--card names the card of a --sass-only or --fake-silicon build" in capsys.readouterr().err
 
 
 def test_f1_kernels_are_body_chains_of_their_form() -> None:
@@ -752,11 +817,11 @@ def test_offline_sass_gates(tmp_path: Path) -> None:
                 ["probe.py", "--instruction", "sp_nvf4", "--out", str(tmp_path / "sp"), "--sass-only"],
                 ["probe.py", "--instruction", "sp_nvf4_meta", "--out", str(tmp_path / "meta"), "--sass-only"],
                 ["f1_rates.py", "build", "--out", str(tmp_path / "f1")]):
+        cmd = [*cmd, "--card", RTX_PRO]
         r = subprocess.run([sys.executable, str(HERE / cmd[0]), *cmd[1:]], capture_output=True, text=True, env=env)
         assert r.returncode == 0, (cmd, r.stdout[-2000:], r.stderr[-2000:])
 
 
-H200, H100, UNKNOWN = "NVIDIA H200", "NVIDIA H100 80GB HBM3", "NVIDIA A100-SXM4-80GB"
 
 
 class Writer:

@@ -432,7 +432,7 @@ def test_only_an_arm_that_names_the_open_gate_takes_it_and_its_server_hears_whic
     assert rule == {"catch_up": "open", "arm": "prod-tick"}
     tick = {"bucket_us": 100_000, "sat_us": 7_761, "free_us": 9_485, "rule": rule}
     env = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0, private=tmp_path / "p")
-    assert NA.tick_config(tick_settings(env), "the settings", feed=False)["catch_up"] == "open"
+    assert NA.tick_config(tick_settings(env), "the settings")["catch_up"] == "open"
 
 
 def test_the_boundary_rows_arm_keeps_the_prefix_cache_on_and_hands_the_plugin_its_object(tmp_path: Path):
