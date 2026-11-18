@@ -431,7 +431,7 @@ A_CONTROL = (f"a control record is an object with the fields {', '.join(CONTROL_
 
 def digest_of(registration: object) -> str:
     """The digest a verdict record names a serve's registration by: the registration record's own
-    (`one_stage.docket.digest`). ValueError for one that is no object."""
+    (`docket_digest.digest`). ValueError for one that is no object."""
     if not isinstance(registration, Mapping):
         raise ValueError(f"a serve's registration doesn't read: it is no object: {registration!r}")
     try:
