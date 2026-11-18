@@ -233,7 +233,6 @@
   "gates/*/*/out/deployment.json",
   "gates/*/*/out/groups.json",
   "gates/*/*/out/load-relay.json",
-  "n2/**",
   "tie/**",
   "scan/**",
   "report/**"

@@ -86,13 +86,13 @@ def test_every_first_party_package_the_harness_and_the_adapter_import_is_reachab
 
 
 def test_the_python_is_the_launchs_and_the_toolkit_the_machines_with_no_path_of_a_node_named(tmp_path):
-    """env.sh names no node's directory: VERITY_BENCH_VENV is given or refused, and CUDA_HOME, where none is given, is
-    the toolkit the run's machine's [properties] list first."""
+    """env.sh names no node's directory: the Python is the launch's or this user's record of one, else refused, and
+    CUDA_HOME, where none is given, is the toolkit the run's machine's [properties] list first."""
     script = (ROOT / "benchmarks/harness/env.sh").read_text()
     assert "/workspace" not in script and "/usr/local" not in script
     ran = subprocess.run([BASH, "-c", ". benchmarks/harness/env.sh"], cwd=ROOT, env={"PATH": _tools(tmp_path)},
                          capture_output=True, text=True)
-    assert ran.returncode == 2 and "no Python at VERITY_BENCH_VENV, else VIRTUAL_ENV (both unset)" in ran.stderr
+    assert ran.returncode == 2 and "else the path recorded in" in ran.stderr and "(none of them set)" in ran.stderr
     venv = tmp_path / "py"
     (venv / "bin").mkdir(parents=True)
     (venv / "bin" / "python").symlink_to(sys.executable)
@@ -130,6 +130,47 @@ def test_without_verity_bench_venv_the_python_is_the_environment_the_launch_runs
     assert ran.returncode == 0 and ran.stdout.strip() == str(given), ran.stderr
     ran = sourced(VIRTUAL_ENV=str(tmp_path / "empty"))
     assert ran.returncode == 2 and f"({tmp_path}/empty)" in ran.stderr
+
+
+def test_a_launch_that_names_no_environment_takes_the_one_the_bootstrap_recorded(tmp_path):
+    """A launch line (`research run ... -- bash SCRIPT.sh`) gives neither VERITY_BENCH_VENV nor VIRTUAL_ENV: env.sh takes
+    the environment pod_bootstrap.sh recorded under this user's state directory, both of the launch's win over it, a
+    record of an environment that holds no Python is refused by its path, and the refusal names the command that records
+    one a machine already has."""
+    bootstrap = ROOT / "adapters/vllm/verity_vllm/ops/pod_bootstrap.sh"
+    home, state = tmp_path / "home", tmp_path / "state"
+    for name in ("pinned", "uv-env", "given"):
+        (tmp_path / name / "bin").mkdir(parents=True)
+        (tmp_path / name / "bin" / "python").symlink_to(sys.executable)
+
+    def sourced(**env: str) -> subprocess.CompletedProcess:
+        return subprocess.run([BASH, "-c", '. benchmarks/harness/env.sh && printf "%s\\n" "$VENV"'], cwd=ROOT,
+                              env={"PATH": _tools(tmp_path), "HOME": str(home), "CUDA_HOME": str(tmp_path), **env},
+                              capture_output=True, text=True)
+
+    ran = sourced()
+    assert ran.returncode == 2 and f"{home}/.local/state/verity-bench/venv" in ran.stderr
+    assert "pod_bootstrap.sh --record-venv PATH" in ran.stderr
+    recorded = subprocess.run([BASH, str(bootstrap), "--record-venv", str(tmp_path / "pinned")],
+                              env={"PATH": "/usr/bin:/bin", "HOME": str(home)}, capture_output=True, text=True)
+    assert recorded.returncode == 0, recorded.stderr
+    assert (home / ".local/state/verity-bench/venv").read_text() == f"{(tmp_path / 'pinned').resolve()}\n"
+    ran = sourced()
+    assert ran.returncode == 0 and ran.stdout.strip() == str((tmp_path / "pinned").resolve()), ran.stderr
+    ran = sourced(VIRTUAL_ENV=str(tmp_path / "uv-env"))
+    assert ran.returncode == 0 and ran.stdout.strip() == str(tmp_path / "uv-env"), ran.stderr
+    ran = sourced(VIRTUAL_ENV=str(tmp_path / "uv-env"), VERITY_BENCH_VENV=str(tmp_path / "given"))
+    assert ran.returncode == 0 and ran.stdout.strip() == str(tmp_path / "given"), ran.stderr
+
+    recorded = subprocess.run([BASH, str(bootstrap), "--record-venv", str(tmp_path / "uv-env")],
+                              env={"PATH": "/usr/bin:/bin", "HOME": str(home), "XDG_STATE_HOME": str(state)},
+                              capture_output=True, text=True)
+    assert recorded.returncode == 0 and (state / "verity-bench/venv").is_file(), recorded.stderr
+    ran = sourced(XDG_STATE_HOME=str(state))
+    assert ran.returncode == 0 and ran.stdout.strip() == str((tmp_path / "uv-env").resolve()), ran.stderr
+    (state / "verity-bench/venv").write_text(f"{tmp_path / 'gone'}\n")
+    ran = sourced(XDG_STATE_HOME=str(state))
+    assert ran.returncode == 2 and f"({tmp_path}/gone)" in ran.stderr
 
 @pytest.mark.parametrize("script", ["benchmarks/harness/overhead_node.sh",
                                     *sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / "benchmarks/harness/setup").glob("*.sh"))])

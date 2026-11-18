@@ -720,8 +720,8 @@ KNOWN: dict[str, str] = {
     "benchmarks/slowdown/slowdown/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
     "benchmarks/slowdown/slowdown/theorem.py::Partition":
         "homonym, a benchmark's serving blocks and dark leaves: rename (training)",
-    "verity/protocols/proofs/spot/prover/cost/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
-    "verity/protocols/proofs/spot/prover/cost/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
+    "calibration/sampling_plan/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
+    "calibration/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "calibration/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
     # applications/
     "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":

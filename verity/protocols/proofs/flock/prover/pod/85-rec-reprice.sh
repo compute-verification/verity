@@ -1158,6 +1158,13 @@ lean)
       --program $DD/stage/program.json > $O/lean/inner-statement.log 2> $O/lean/inner-statement.err
     echo "inner-statement lean exit $?"
   fi
+  # REC_LINKS=1: the inner statement declares links and is given no --registered tree port, so Lean refuses it (ZK_LEAN's
+  # and the inner statement's part) by checkLinked's name; that refusal is what passes, and any other verdict fails
+  LINKS_RC=0
+  refused_by_links() {
+    if grep -qs "and no tree port (tree) reads it by path" $O/lean/$1.log $O/lean/$1.err; then echo "lean $1: refused by name: a link row no tree port reads"
+    else echo "lean $1: REC_LINKS=1 and not refused by checkLinked  <- FAILS"; LINKS_RC=1; fi
+  }
   # fail closed: every statement vstage staged or oprove kept a session of, ZK_LEAN's, and the inner statement's
   PARTS=$( { [ -d $DD/v ] && (cd $DD/v && find . -name inst.bin -printf '%h\n' | sed 's:^\./::; s:/:-:g')
     for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::'); do basename $S; done; } | sort -uV | while read -r l; do want $l && echo $l; done)
@@ -1165,14 +1172,16 @@ lean)
     case $l in forged-*) continue ;; esac
     want $l && for w in $NEGS; do PARTS="$PARTS forged-inner-$w-$l"; done
   done
-  [ "${ZK_LEAN:-0}" = 1 ] && PARTS="$PARTS zk"
-  [ -f $DD/stage/circuit.txt ] && PARTS="$PARTS inner-statement"
+  for p in $([ "${ZK_LEAN:-0}" = 1 ] && echo zk) $([ -f $DD/stage/circuit.txt ] && echo inner-statement); do
+    if [ "${REC_LINKS:-0}" = 1 ]; then refused_by_links $p; else PARTS="$PARTS $p"; fi
+  done
   if [ "${LEVELS:-}" = none ] && [ -z "$PARTS" ]; then echo "lean: LEVELS=none and no ZK_LEAN: no part to check"
   else cp $DD/v-sess/*.live $O/lean/ 2>/dev/null
     # the challenger's record of a zk_served oprove (rec-run.jsonl), its forgeries' own (rec-run-<name>.jsonl) and RETRY's
     # name, which lean_verdicts.py composes V*'s parts over
     cp $DD/v-sess/rec-run*.jsonl $DD/v-sess/retried.txt $O/lean/ 2>/dev/null
     python3 verity/protocols/proofs/flock/prover/pod/lean_verdicts.py $([ -s $O/lean/rows.json ] && echo "--compose $LEAN_BIN") $O/lean $PARTS; LEAN_RC=$?; fi
+  [ $LINKS_RC = 0 ] || LEAN_RC=1
   ;;
 esac
 summary

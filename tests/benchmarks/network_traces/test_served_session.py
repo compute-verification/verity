@@ -96,7 +96,8 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert doc["request"] == (f"warden-rehearse --peer {SS.PEER} --port 18782 --minutes 10 --requests 113 --height 12 "
                               "--scan --prompts --tokens 64")
     assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.NETWORK_ATTESTER_PROMPTS_BYTES
-    assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --admit release-order "
+    assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --protocols-config "
+                                    "'{\"network-attester\": {\"order\": \"release-order\"}}' "
                                     "--scheme rows-sha512 --seal --retain-exclude hidden_m1")
     run = shlex.split(doc["runs"]["chain"])
     assert "--store-read" in run[:run.index("--")] and run[run.index("--run-max") + 1] == "14400"
@@ -454,7 +455,7 @@ def test_endpoint_publishes_nothing_that_carries_a_planted_prompt_length_or_seed
     for k, v, why in (("retain_exclude", None, "--retain-exclude hidden_m1 (serve.json: None)"),
                       ("sealed", None, "--seal (serve.json: None)"),
                       ("address", ["127.0.0.1", 18783], "--port 18782 (serve.json: 18783)"),
-                      ("admit", "arrival", "--admit release-order (serve.json: 'arrival')")):
+                      ("admit", "arrival", "--protocols-config release-order (serve.json: 'arrival')")):
         (src / "serve.json").write_text(json.dumps(serve | {k: v}))
         assert SS.main(argv) == 2 and why in capsys.readouterr().err and not out.exists()
     (src / "serve.json").write_text(json.dumps(serve))

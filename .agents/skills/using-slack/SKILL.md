@@ -23,8 +23,8 @@ msg owners PATH...` names each path's owner (longest prefix).
 
 ## Handles, inboxes and channels
 
-- **A handle is a role**, held by one coordinator; `@top` is the admin. `@console`, `@dashboard-goals` and
-  `@dashboard-metrics` are Daniel's desktop agents: nothing wakes them, so an inbox holds your ask until he opens that
+- **A handle is a role**, held by one coordinator; `@top` is the admin. `@console`, `@dashboard-goals`, `@dashboard-metrics` and
+  `@codex` are Daniel's desktop agents: nothing wakes them, so an inbox holds your ask until he opens that
   agent. Put the whole brief in the ask, and card `#ask-daniel` when it can't wait. A desktop holder picks up by hand
   when opened: `research msg names read --as HANDLE`, and answers in the source thread. Where its session can't reach
   the broker, it answers on its Linear team (the registry's `linear`), and the asker copies the answer into the thread.

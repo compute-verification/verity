@@ -90,6 +90,7 @@ _LAZY = {
     "commit_site": (f"{_SERVING}.h1.commit", "site"),
     "draw_challenger": (f"{_POUW}.verifier.window", "draw_challenger"),
     "finish_window": (f"{_SERVING}.h1.window", "finish"),
+    "fresh_salts": (f"{_POUW}.verifier.audit", "fresh_salts"),
     "h1_weight_root": (f"{_SERVING}.h1", "weight_root"),
     "in_process_draw": (f"{_SERVING}.h1.window", "in_process_draw"),
     "lead_refusals": (f"{_SERVING}.lead", "refusals"),
@@ -98,7 +99,6 @@ _LAZY = {
     "ncp_scheme": (f"{_PROVER}.schemes", "get"),
     "numpy_of": (f"{_SERVING}.h1", "numpy_of"),
     "pearl_c_refusals": (f"{_SERVING}.pearl_c", "refusals"),
-    "pearl_c_salt_key": (f"{_SERVING}.pearl_c", "no_salt_key"),
     "pearl_c_schedule": (f"{_SERVING}.pearl_c", "schedule_of"),
     "pearl_c_scheme": (f"{_PROVER}.schemes", "get"),
     "period_reason": (f"{_SERVING}.h1.window", "period_reason"),
@@ -238,6 +238,15 @@ def ready_verifier() -> Any:
     return verifier.executable()
 
 
+def pearl_c_salt_key(scheme: str) -> bytes:
+    """Refused: Pearl+ keys no salt.  B's rows are salted from the weights' registration (`pearl_c.weight_row_salts`) and
+    every other leaf with fresh bytes, which the device run takes as data (``weight_roots``' and ``PearlCDeviceRun``'s
+    ``weight_salts``)."""
+    raise NotImplementedError(f"{scheme}: Pearl+ keys no salt.  This name stays only for vLLM's adapter, which imports it "
+                              "(adapters/vllm/verity_vllm/protocols/pouw/__init__.py, its Pearl-C arm, @vllm), and goes "
+                              "with that arm's deletion")
+
+
 def __getattr__(name: str) -> Any:
     if name in _FAMILIES:
         from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import names
@@ -253,5 +262,5 @@ def __dir__() -> list[str]:
     return sorted({*globals(), *_LAZY, *_FAMILIES})
 
 
-__all__ = ["MatmulObserver", "MatmulRun", "QuantizedRows", "in_process_coins", "observe_matmul", "ready_verifier",
-           "run_matmul", "verifier_coins", "lead_in_process_certifier", *_LAZY, *_FAMILIES]
+__all__ = ["MatmulObserver", "MatmulRun", "QuantizedRows", "in_process_coins", "observe_matmul", "pearl_c_salt_key",
+           "ready_verifier", "run_matmul", "verifier_coins", "lead_in_process_certifier", *_LAZY, *_FAMILIES]
