@@ -155,9 +155,14 @@ census gives a block's, and the steady-state rate of record that rates it at the
 A block type's rate is its own Definition id's; else, where the census names the Definition on bits its proof is
 (`proved_as`, which the table prints beside the block), that one's; else, where it names its kind's largest block in the
 census (`bounded_by`), that one's, printed `bounded by` it: a larger block's rate, an upper bound on the type's cost and
-not a measurement of it. The rated count and the totals say how many types they include so bounded (`prove.rated_as`
-is the one lookup, for the table, the refusal and the totals). Then the gaps: Definitions whose served rows no block of the cut holds, each with its rows in each request and why,
-counted in no block total. Its totals are given only when every block type with blocks has a steady-state rate (under
+not a measurement of it. The rated count says how many types it includes so bounded, and a total that includes one is
+`partial`, an upper bound (`prove.rated_as` is the one lookup, for the table, the refusal and the totals).
+Then the gaps: Definitions whose served rows no block of the cut holds, each with its rows in each request and why,
+counted in no block total. The text prints a run of one family's Definitions that differ only in one static (as
+`Attention_v4{T=22..48,...}`) as one line, with how many it holds and their summed served rows, and names the gaps in
+the refusal by family and reason; the stored table keeps every Definition. A run's block types share one rate, so a
+run bounded by a larger block says `bounded by` once, and names its Definitions on bits as a run too. Its totals are
+given only when every block type with blocks has a steady-state rate (under
 the cut of record), the census holds no gap and every other slot is labelled (`cut`, `flock-single`,
 `spot-sampling`, `lean-verify`, `flock-warm`). Otherwise the command refuses them by name, each block type with no
 rate, each gap and each slot with the label that would fill it, and exits 1. Under a research run it writes the census
