@@ -190,8 +190,10 @@ def below_floor(source: Path, command: list[str], env: list[str], mem_gb: float)
         return None
     gb = reserve.ask({match[0]: pins}, ("build",))[0]
     tree = ast.parse((source / LEAN_CHECK_PY).read_text())
-    run = next(n.value.value for n in tree.body if isinstance(n, ast.Assign)
-               and any(getattr(t, "id", None) == "BELOW_FLOOR_RUN" for t in n.targets))
+    run = next((n.value.value for n in tree.body if isinstance(n, ast.Assign)
+                and any(getattr(t, "id", None) == "BELOW_FLOOR_RUN" for t in n.targets)), None)
+    if not isinstance(run, str):
+        return None
     run = run.format(gb=gb, pkg=name) + " --update" * ("--update" in words[at:])
     return (f"the build of {match[0]} needs at least {floor:g} GiB, and --mem-gb {mem_gb:g} is {reserve.gib(mem_gb):.1f} GiB, "
             f"so its node would refuse it once it took a slot: run it where it asks {gb} GB,\n  {run}")
