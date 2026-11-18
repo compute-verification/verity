@@ -628,10 +628,13 @@ REFUSED = {**{k: STORAGE.format("sampled-proofs") for k in (
     **{k: STORAGE.format("inference-only") for k in ("sampled-proofs+pous+inference-only",
                                                       "sampled-proofs+pous+inference-only+bandwidth")}}
 #: the listings no launcher gives serve-openai on which its attach raises an exception that is no scheme's refusal
-FAULTS = {**{k: (KeyError, "feed") for k in ("sampled-proofs+network-attester", "sampled-proofs+inference-only+network-attester",
-                                            "sampled-proofs+pearl-plus+network-attester")},
-          **{k: (ValueError, r"pous:p2-16448/v4: p2-16448/v4 is experimental .*no salt_source") for k in (
-              "pous", "pous+bandwidth", "pous+pearl-plus", "pous+pearl-plus+bandwidth")}}
+FAULTS = {k: (ValueError, r"pous:p2-16448/v4: p2-16448/v4 is experimental .*no salt_source") for k in (
+    "pous", "pous+bandwidth", "pous+pearl-plus", "pous+pearl-plus+bandwidth")}
+#: the listings no launcher gives serve-openai that list the network attester, whose attach in the engine's process
+#: refuses by name for the feed `serve_openai.build` passes none of
+NO_FEED = {k: "network-attester: its engine process was given no feed, the server's directory the front and the engine "
+              "share" for k in ("sampled-proofs+network-attester", "sampled-proofs+inference-only+network-attester",
+                                "sampled-proofs+pearl-plus+network-attester")}
 
 
 def served(names: list[str], events: list[Any], ex: Any) -> None:
@@ -674,7 +677,7 @@ def off_road(kind: dict[str, Any]) -> list[list[str]]:
     return [n for n in listings() if "+".join(n) in kind]
 
 
-@pytest.mark.parametrize("names", [n for n in listings() if "+".join(n) not in {**REFUSED, **FAULTS}], ids="+".join)
+@pytest.mark.parametrize("names", [n for n in listings() if "+".join(n) not in {**REFUSED, **FAULTS, **NO_FEED}], ids="+".join)
 def test_each_listing_no_launcher_gives_serves_where_it_attaches(names, device, tmp_path, monkeypatch):
     if why := next((EXCEPTED[n] for n in names if n in EXCEPTED), None):
         pytest.skip(why)
@@ -691,14 +694,12 @@ def test_each_listing_no_launcher_gives_is_refused_by_its_reason(names, device, 
         serve(names, tmp_path, monkeypatch)
 
 
-@pytest.mark.parametrize("names", off_road({k for k, (e, _) in FAULTS.items() if e is KeyError}), ids="+".join)
-def test_the_network_attester_listed_on_serve_openai_raises_a_bare_keyerror_not_a_refusal(names, device, tmp_path,
-                                                                                          monkeypatch):
-    """A fault, not a refusal: `serve_openai.build` attaches the listed schemes in the engine's process with no ``feed``,
-    and the attester's attach reads ``ctx["feed"]`` there (`network.scheme.attach`)."""
-    with pytest.raises(KeyError, match=FAULTS["+".join(names)][1]) as got:
+@pytest.mark.parametrize("names", off_road(NO_FEED), ids="+".join)
+def test_the_network_attester_listed_on_serve_openai_is_refused_by_name_for_its_feed(names, device, tmp_path, monkeypatch):
+    """`serve_openai.build` attaches the listed schemes in the engine's process with no ``feed``, which the attester's
+    attach there refuses by name (`network.scheme.attach`)."""
+    with pytest.raises(ValueError, match=re.escape(NO_FEED["+".join(names)])):
         serve(names, tmp_path, monkeypatch)
-    assert got.type is KeyError
 
 
 @pytest.mark.parametrize("names", off_road({k for k, (e, _) in FAULTS.items() if e is ValueError}), ids="+".join)
