@@ -537,16 +537,36 @@ def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(devi
 
 
 def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
-    """On the recording stand-in nothing is written, so every pass commits the poison: the repeat holds, and only the negative
-    control (the call with its tile leaves omitted) can tell. It must, for every shape."""
+    """On the recording stand-in nothing is written, so every pass's tile digests are the poison: the repeat holds, and
+    the negative control (the call with its tile leaves omitted) and the fresh salts' differing roots must tell, for every
+    shape."""
     make, _, weights, *_ = device_run
     E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     rows = E2E.gate(make(), weights)
     calls = [r for r in rows if r["check"] == "call"]
     assert [(r["n"], r["m"]) for r in calls] == [(256, 8192), (256, 32), (128, 8192), (128, 32)]
-    assert all(r["commitment_repeats"] and not r["omitted_leaves_rejected"] and not r["ok"] for r in calls)
+    assert all(r["digests_repeat"] and not r["omitted_leaves_rejected"] and not r["salts_fresh"] and not r["ok"]
+               for r in calls)
     (check,) = [r for r in rows if r["check"] == "screen"]
     assert check["ok"] and check["flags_equal"] and check["screen"] == "torch"
+
+
+def test_the_call_check_compares_under_the_salt():
+    """`call_verdict`: with every leaf's salt fresh, the same call twice passes on equal tile digests under different
+    roots; equal roots (salts not fresh), differing digests (a call that isn't deterministic) and an omitted call whose
+    digests are the first's (leaves the call didn't write) each fail; y beyond `ERR` fails; a call without hashing checks
+    y alone."""
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
+    a, b, omitted = ({"transcript_root": r, "digests": d} for r, d in ((b"r1", b"d"), (b"r2", b"d"), (b"r3", b"\xa5")))
+    assert E2E.call_verdict([a, b, omitted], 0.05)["ok"]
+    assert not E2E.call_verdict([a, b, omitted], 0.09)["ok"]
+    got = E2E.call_verdict([a, {**b, "transcript_root": b"r1"}, omitted], 0.05)
+    assert not got["ok"] and not got["salts_fresh"] and got["digests_repeat"]
+    got = E2E.call_verdict([a, {**b, "digests": b"e"}, omitted], 0.05)
+    assert not got["ok"] and not got["digests_repeat"]
+    got = E2E.call_verdict([a, b, {**omitted, "digests": b"d"}], 0.05)
+    assert not got["ok"] and not got["omitted_leaves_rejected"]
+    assert E2E.call_verdict([{"units": 1}], 0.05)["ok"] and not E2E.call_verdict([{"units": 1}], 0.09)["ok"]
 
 
 def test_the_whole_retained_check_names_the_first_call_and_field_that_differ(tmp_path):
