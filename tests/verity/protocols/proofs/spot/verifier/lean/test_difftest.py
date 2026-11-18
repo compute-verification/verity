@@ -8230,8 +8230,8 @@ def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
     `out`, each slot the row of its writer's unit its rows name, its writer's first in its cell, and binds its `x` at
     PAIR's `out` (`second_stage.at_run`), which passes, as does a slot reading nothing; read at another instance's or
     another cell's rows, at PAIR's `x`, or not read, it fails ``second-read``; without the wire, or with one naming
-    another writer port, its header fails too (``second-header``: bound at a port the interior doesn't hold it at), as
-    does a wire's for a port no session reads; and wires none derived (null or missing), naming a template of no part as
+    another writer port, its header fails too (``second-header``: bound at a port the interior doesn't hold it at; and
+    without the wire no rule places it, ``second-place-none``), as does a wire's for a port no session reads; and wires none derived (null or missing), naming a template of no part as
     reader or writer, or one whose rows don't place its reader's units, fail ``second-wires``, after ``second-links``
     when the links are none too, and a wire not of strings is refused."""
     pair, triple = SECOND_MIXED.templates
@@ -8257,7 +8257,7 @@ def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
          ["second-read", "second-values", "second-reported"]),
         (_second_with(wired, 1, registered=None), ["second-roots", "second-read", "second-values", "second-reported"]),
         ({k: v for k, v in wired.items() if k != "wires"}, ["second-wires"]),
-        ({**wired, "wires": []}, ["second-header", "second-read"]),
+        ({**wired, "wires": []}, ["second-header", "second-read", "second-place-none"]),
         ({**wired, "wires": [{**wire, "wport": "x"}]}, ["second-header", "second-read"]),
         ({**wired, "wires": [wire, {"template": pair, "port": "x", "writer": triple, "wport": "out"}],
           "rows": [*wired["rows"], {"template": pair, "port": "x", "per": 2, "runs": [[0, 3, 0, 0]]}]},
