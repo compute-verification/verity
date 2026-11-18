@@ -228,7 +228,8 @@ theorem run_accepts (reg : Registration) (hB : reg.blocks = 1) (c0 c1 root : Byt
     _root_.Poub.Session.State.releaseCoin, _root_.Poub.Session.State.deadline,
     _root_.Poub.Session.State.staleBelow, _root_.Poub.Session.State.record,
     _root_.Poub.Session.State.outcome, _root_.Poub.Session.Win.receipts, Poub.Session.live,
-    Poub.Session.cover, params1, hB,
+    Poub.Session.cover, _root_.Poub.Session.State.joinsAnother, _root_.Poub.Session.State.refreshRefusal,
+    _root_.Poub.Session.State.probationPush, params1, hB,
     hroot, plan_length, hdraw, hcheck, _root_.Poub.Session.RECEIPT_LIMIT,
     _root_.Poub.Session.STEP_LIMIT, DIGEST_BYTES]
   refine ⟨_, _, rfl, ?_, ?_⟩

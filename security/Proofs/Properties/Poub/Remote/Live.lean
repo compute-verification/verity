@@ -89,17 +89,22 @@ theorem boundary_W {s : State} {c a : Array ByteArray} {now : Nat} {r : Result} 
   all_goals (try simp only [*, ↓reduceIte])
   all_goals first | rfl | (rw [h _ rfl]; rfl)
 
+theorem slotOk_W (c a : Array ByteArray) (s : State) : (W c a s).slotOk = s.slotOk := rfl
+
 theorem append_W {s : State} {c a : Array ByteArray} {root : ByteArray} {count : Int} {origin : _root_.Poub.Origin} {slot : Option Nat} {r : Result} {s' : State}
     (he : append s root count origin slot = .ok (r, s'))
-    (h : ∀ x, s.appendCoins[s.appendSampled]? = some x → a[s.appendSampled]? = some x) :
-    append (W c a s) root count = .ok (r, W c a s') := by
+    (h : ∀ x, s.appendCoins[slot.getD s.appends.size]? = some x → x.size = Codec.COIN_BYTES →
+      a[slot.getD s.appends.size]? = some x) :
+    append (W c a s) root count origin slot = .ok (r, W c a s') := by
   unfold append State.fail at he ⊢
-  simp only [live_W] at he ⊢
-  repeat' (split at he <;> try dsimp only at he)
+  simp only [live_W, slotOk_W] at he ⊢
+  repeat' (first | split at he | (dsimp only at he; split at he))
+  all_goals (try simp only [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at he)
+  all_goals (try dsimp only at he)
   all_goals cases he
   all_goals (try simp only [*, ↓reduceIte, Bool.false_eq_true])
   all_goals (try rfl)
-  all_goals (rw [h _ ‹_›]; rfl)
+  all_goals (rename_i hc hs; rw [h _ hc (Decidable.not_not.1 hs)]; simp [Decidable.not_not.1 hs]; rfl)
 
 theorem close_W {s : State} {c a : Array ByteArray} {t : Int} {now : Nat} {r : Result} {s₁ : State}
     (h₁ : close s t now = .ok (r, s₁))
@@ -171,14 +176,16 @@ theorem step_W {s : State} {e : Event} {r : Result} {s₁ : State} {c a : Array 
     (hs : ∀ k, (∃ now, e = .start now ∨ e = .boundary now) → r = .released (some k) → c[k]! = s.coins[k]!)
     (hd : ∀ t now d, e = .close t now → r = .sampled d →
       c[s.params.windows + t.toNat]! = s.coins[s.params.windows + t.toNat]!)
-    (ha : ∀ x, s.appendCoins[s.appendSampled]? = some x → a[s.appendSampled]? = some x) :
+    (ha : ∀ root count origin slot, e = .append root count origin slot → ∀ x,
+      s.appendCoins[slot.getD s.appends.size]? = some x → x.size = Codec.COIN_BYTES →
+        a[slot.getD s.appends.size]? = some x) :
     Session.step (W c a s) e = .ok (r, W c a s₁) := by
   cases e with
   | start now =>
     injection he with he; show pure _ = _; rw [start_W he (fun k => hs k ⟨now, Or.inl rfl⟩)]; rfl
   | boundary now =>
     injection he with he; show pure _ = _; rw [boundary_W he (fun k => hs k ⟨now, Or.inr rfl⟩)]; rfl
-  | append root count origin slot => exact append_W he ha
+  | append root count origin slot => exact append_W he (ha root count origin slot rfl)
   | release runs withdrawn => injection he with he; show pure _ = _; rw [release_W, he]; rfl
   | receive t i root runs change st now =>
     injection he with he
@@ -192,7 +199,8 @@ theorem step_W {s : State} {e : Event} {r : Result} {s₁ : State} {c a : Array 
 /-- No event changes the coins or the append coins. -/
 theorem step_keeps {s : State} {e : Event} {r : Result} {s₁ : State} (he : Session.step s e = .ok (r, s₁)) :
     s₁.coins = s.coins ∧ s₁.appendCoins = s.appendCoins := by
-  have h := step_W (c := s.coins) (a := s.appendCoins) he (fun _ _ _ => rfl) (fun _ _ _ _ _ => rfl) (fun _ h => h)
+  have h := step_W (c := s.coins) (a := s.appendCoins) he (fun _ _ _ => rfl) (fun _ _ _ _ _ => rfl)
+    (fun _ _ _ _ _ _ h _ => h)
   change Session.step s e = _ at h
   rw [he] at h
   injection h with h
@@ -208,63 +216,67 @@ theorem close_params {s : State} {t : Int} {now : Nat} {r : Result} {s₁ : Stat
   repeat' (split at he <;> try dsimp only at he)
   all_goals (cases he; try rfl)
 
+/-- Setting entry `i` to `c` where it held `x`, empty or `c`, keeps every entry of a coin's size. -/
+theorem set_keeps {A : Array ByteArray} {i : Nat} {x c : ByteArray} (hx : A[i]? = some x)
+    (hc : (x.isEmpty || x == c) = true) {k : Nat} {y : ByteArray} (hy : A[k]? = some y)
+    (hs : y.size = Codec.COIN_BYTES) : (A.setIfInBounds i c)[k]? = some y := by
+  rw [Array.getElem?_setIfInBounds]
+  split
+  · rename_i hik
+    subst hik
+    rw [hx] at hy
+    cases hy
+    have hne : x.isEmpty = false := by
+      simp only [ByteArray.isEmpty, hs, Codec.COIN_BYTES]; decide
+    rw [hne, Bool.false_or] at hc
+    have hxc : x = c := eq_of_beq hc
+    subst hxc
+    have hi : i < A.size := (Array.getElem?_eq_some_iff.1 hx).1
+    simp [hi]
+  · exact hy
+
 theorem withCoin_cases {g : Nat} {s : State} {e : Event} {c : ByteArray} {s₁ : State}
     (h : Verifier.withCoin g s e c = .ok s₁) :
     (∃ i x, s.coins[i]? = some x ∧ (x.isEmpty || x == c) = true ∧ s₁ = { s with coins := s.coins.set! i c }) ∨
-      s₁ = { s with appendCoins := s.appendCoins.push c } := by
+      ∃ A : Array ByteArray, s₁ = { s with appendCoins := A } ∧
+        ∀ (k : Nat) (y : ByteArray), s.appendCoins[k]? = some y → y.size = Codec.COIN_BYTES → A[k]? = some y := by
   unfold Verifier.withCoin at h
   simp only [bind, Except.bind] at h
   repeat' (split at h <;> try dsimp only at h)
   all_goals (try contradiction)
   all_goals first
     | (left; cases h; exact ⟨_, _, ‹_›, ‹_›, rfl⟩)
-    | (right; cases h; rfl)
+    | (right; cases h; exact ⟨_, rfl, fun k y hy hs => set_keeps ‹_› ‹_› hy hs⟩)
+    | (right; cases h; refine ⟨_, rfl, fun k y hy _ => ?_⟩
+       have hk : k < s.appendCoins.size := (Array.getElem?_eq_some_iff.1 hy).1
+       rw [Array.getElem?_push, if_neg (by simp only [Array.size_append, Array.size_replicate]; omega), Array.getElem?_append_left hk]
+       exact hy)
 
-/-- What `s'` keeps of `s`'s coins: each of a coin's size, and each append coin. -/
+/-- What `s'` keeps of `s`'s coins and append coins: each of a coin's size. -/
 def CoinsLE (s s' : State) : Prop :=
   (∀ (i : Nat) (x : ByteArray), s.coins[i]? = some x → x.size = Codec.COIN_BYTES → s'.coins[i]? = some x) ∧
-    ∀ (k : Nat) (x : ByteArray), s.appendCoins[k]? = some x → s'.appendCoins[k]? = some x
+    ∀ (k : Nat) (x : ByteArray), s.appendCoins[k]? = some x → x.size = Codec.COIN_BYTES → s'.appendCoins[k]? = some x
 
-theorem coinsLE_refl (s : State) : CoinsLE s s := ⟨fun _ _ h _ => h, fun _ _ h => h⟩
+theorem coinsLE_refl (s : State) : CoinsLE s s := ⟨fun _ _ h _ => h, fun _ _ h _ => h⟩
 
 theorem coinsLE_trans {a b c : State} (h₁ : CoinsLE a b) (h₂ : CoinsLE b c) : CoinsLE a c :=
-  ⟨fun i x h hs => h₂.1 i x (h₁.1 i x h hs) hs, fun k x h => h₂.2 k x (h₁.2 k x h)⟩
+  ⟨fun i x h hs => h₂.1 i x (h₁.1 i x h hs) hs, fun k x h hs => h₂.2 k x (h₁.2 k x h hs) hs⟩
 
 theorem coinsLE_of_eq {s s' : State} (h1 : s'.coins = s.coins) (h2 : s'.appendCoins = s.appendCoins) :
     CoinsLE s s' :=
-  ⟨fun i x h _ => by rw [h1]; exact h, fun k x h => by rw [h2]; exact h⟩
+  ⟨fun i x h _ => by rw [h1]; exact h, fun k x h _ => by rw [h2]; exact h⟩
 
 theorem withCoin_W {g : Nat} {s : State} {e : Event} {c : ByteArray} {s₁ : State}
     (h : Verifier.withCoin g s e c = .ok s₁)
     (c' a' : Array ByteArray) : W c' a' s₁ = W c' a' s := by
-  rcases withCoin_cases h with ⟨_, _, _, _, rfl⟩ | rfl <;> rfl
+  rcases withCoin_cases h with ⟨_, _, _, _, rfl⟩ | ⟨_, rfl, -⟩ <;> rfl
 
 theorem withCoin_le {g : Nat} {s : State} {e : Event} {c : ByteArray} {s₁ : State}
     (h : Verifier.withCoin g s e c = .ok s₁) :
     CoinsLE s s₁ := by
-  rcases withCoin_cases h with ⟨i, x, hx, hc, rfl⟩ | rfl
-  · refine ⟨fun j y hy hs => ?_, fun k y hy => hy⟩
-    show (s.coins.setIfInBounds i c)[j]? = some y
-    rw [Array.getElem?_setIfInBounds]
-    split
-    · rename_i hij
-      subst hij
-      rw [hx] at hy
-      cases hy
-      have hne : x.isEmpty = false := by
-        simp only [ByteArray.isEmpty, hs, Codec.COIN_BYTES]; decide
-      rw [hne, Bool.false_or] at hc
-      have hxc : x = c := eq_of_beq hc
-      subst hxc
-      have hi : i < s.coins.size := (Array.getElem?_eq_some_iff.1 hx).1
-      simp [hi]
-    · exact hy
-  · refine ⟨fun j y hy _ => hy, fun k y hy => ?_⟩
-    show (s.appendCoins.push c)[k]? = some y
-    rw [Array.getElem?_push]
-    split
-    · rename_i hk; subst hk; simp at hy
-    · exact hy
+  rcases withCoin_cases h with ⟨i, x, hx, hc, rfl⟩ | ⟨A, rfl, hA⟩
+  · exact ⟨fun j y hy hs => set_keeps hx hc hy hs, fun k y hy _ => hy⟩
+  · exact ⟨fun j y hy _ => hy, hA⟩
 
 theorem sclose_W {g : Nat} {s : State} {c a : Array ByteArray} {t : Int} {now : Nat} {r : Result} {s₁ : State}
     (h₁ : Shared.close g s t now = .ok (r, s₁))
@@ -340,7 +352,9 @@ theorem sstep_W {g : Nat} (hg : 1 ≤ g) {s : State} {e : Event} {r : Result} {s
     (hs : ∀ k, (∃ now, e = .start now ∨ e = .boundary now) → r = .released (some k) → c[k]! = s.coins[k]!)
     (hd : ∀ t now d, e = .close t now → r = .sampled d →
       c[s.params.windows + t.toNat / g]! = s.coins[s.params.windows + t.toNat / g]!)
-    (ha : ∀ x, s.appendCoins[s.appendSampled]? = some x → a[s.appendSampled]? = some x) :
+    (ha : ∀ root count origin slot, e = .append root count origin slot → ∀ x,
+      s.appendCoins[slot.getD s.appends.size]? = some x → x.size = Codec.COIN_BYTES →
+        a[slot.getD s.appends.size]? = some x) :
     Shared.step g (W c a s) e = .ok (r, W c a s₁) := by
   rcases Nat.lt_or_ge g 2 with hg2 | hg2
   · obtain rfl : g = 1 := by omega
@@ -506,7 +520,7 @@ theorem event_W {g : Nat} (hg : 1 ≤ g) {s : State} {e : Event} {coin : Option 
   refine ⟨?_, coinsLE_trans hle (coinsLE_of_eq h1 h2)⟩
   rw [← hW c a]
   refine sstep_W hg hstep (fun k he hr => ?_) (fun t now d he hr => ?_)
-    (fun x hx => hc.2 _ x (by rw [h2]; exact hx))
+    (fun _ _ _ _ _ x hx hs => hc.2 _ x (by rw [h2]; exact hx) hs)
   · subst hr
     obtain ⟨x, hx, hs⟩ := unset_released he hun
     rw [bang (hc.1 k x hx hs), ← h1, bang hx]
@@ -744,6 +758,6 @@ open Live in
 theorem liveIsRun : LiveIsRun := by
   intro chunk g params reg coins appendCoins nb qs answers es p h c a hg hm hc ha
   rw [Shared.srun_toArray]
-  exact (run_sim hg hm qs h (c := c) (a := a) ⟨hc, ha⟩).1
+  exact (run_sim hg hm qs h (c := c) (a := a) ⟨hc, fun k x hx _ => ha k x hx⟩).1
 
 end Properties.Poub
