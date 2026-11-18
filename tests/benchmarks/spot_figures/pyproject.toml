@@ -66,4 +66,5 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/circuits/ops/boolean/softmax.py", "verity/circuits/ops/tables/mufu_rcp_delta_int8.xz",
           "verity/circuits/silicon/fp.py",
           "security/Proofs/Flock/SamplingGeneric/TwoFirstHitClassNumbers.lean", "benchmarks/spot_figures",
-          "calibration/hardware/cards"]
+          "calibration/hardware/cards",
+          "verity/device.py"]
