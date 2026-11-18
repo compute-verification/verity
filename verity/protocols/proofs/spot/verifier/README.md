@@ -217,8 +217,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   sample's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `security/Properties/Challenger.lean`) and holds
   the session's record to the coin trees the signed release log shows the challenger sampled and opened
   (`Spot/ChallengerTrees.lean`, `challenger.sessions_tree_reason`, `order_why`).
-  `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
-  to `verify`'s.
+  `one_stage.proofs.verdicts_v2` runs its verdicts alone, which `tests/test_proofs.py` holds to `verify`'s.
   A window of several members has a per-member form of `proofs` (the parameters' `members`, the evidence's
   `statements`; `one_stage.proofs.members_v2` writes it), which the audit's `check` reads beside the one
   statement's and decides by `checkMembersAt`: it accepts where the form's run returns with every session accepted
