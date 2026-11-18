@@ -48,10 +48,13 @@ TREE = (Path(__file__).resolve().parents[5] / "adapters" / "vllm")
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 
 
+TOOLKIT = {"CUDA_HOME": "/a/toolkit"}
+
+
 def _opts(tmp: Path, *argv: str, environ: dict[str, str] | None = None, row: str = ROW):
     env = {k: v for k, v in os.environ.items()
            if k not in ("MATCH_IMPL", "MATCH_PIPELINE", "MATCH_PHASE", "VERITY_TREE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "RESEARCH_RUN_MEM_GB")}
-    env.update(environ or {})
+    env.update({**TOOLKIT, **(environ or {})})
     # `prepare` creates the collector's build dir, whose default is a pod path (`/workspace/cp/...`) a non-root check can't create
     return cli.parse("row", ["run", row, "LLAMA32_1B", "unsloth/Llama-3.2-1B", "9535bd9b", "--sweep-dir", str(tmp), "--py", sys.executable,
                              "--native-collect-default", str(tmp / "nc_build"), *argv], env)
@@ -85,6 +88,14 @@ def test_the_match_of_record_is_the_default_and_the_caller_can_choose_the_audit(
     assert e.value.rc == 12
 
 
+def test_a_row_without_a_cuda_toolkit_is_refused_by_name(tmp_path, capsys):
+    env = {k: v for k, v in os.environ.items() if k != "CUDA_HOME"}
+    with pytest.raises(SystemExit):
+        cli.parse("row", ["run", ROW, "LLAMA32_1B", "unsloth/Llama-3.2-1B", "9535bd9b", "--sweep-dir", str(tmp_path), "--py",
+                          sys.executable], env)
+    assert "--cuda-home" in capsys.readouterr().err
+
+
 def test_machine_paths_are_defaults_that_the_environment_and_flags_override(tmp_path):
     o = _opts(tmp_path, environ={"HF_HOME": "/elsewhere/hf"})
     assert o.env.hf_home == "/elsewhere/hf" and o.env.norm_tap_so == cli.MACHINE["RunEnv.norm_tap_so"] and o.env.sweep_dir == str(tmp_path)
@@ -93,7 +104,7 @@ def test_machine_paths_are_defaults_that_the_environment_and_flags_override(tmp_
 
 
 def test_the_stage_flags_of_every_row_subcommand_are_one_set(tmp_path):
-    env = {"PY": sys.executable}
+    env = {"PY": sys.executable, **TOOLKIT}
     st = cli.parse("row", ["stage", "commit", ROW, "R", "o/r", "rev", "--pairs", "1", "--commit-args", "--x 1", "--retain", "device"], env)
     assert (st.stage, st.row, st.commit.pairs, st.commit.extra_commit_args, st.commit.retain) == ("commit", ROW, 1, "--x 1", "device")
     ch = cli.parse("row", ["chain", "--stages", "build,match", ROW, "R", "o/r", "rev", "--pairs", "1"], env)
@@ -104,7 +115,7 @@ def test_the_stage_flags_of_every_row_subcommand_are_one_set(tmp_path):
 
 def test_chain_refuses_its_own_flags_among_the_stage_flags(tmp_path):
     from verity_vllm.pipeline import row
-    ch = cli.parse("row", ["chain", ROW, "R", "o/r", "rev", "--stages", "build"], {"PY": sys.executable})
+    ch = cli.parse("row", ["chain", ROW, "R", "o/r", "rev", "--stages", "build"], {"PY": sys.executable, **TOOLKIT})
     with pytest.raises(UsageError, match="--stages"):
         row.main(ch)
 
@@ -114,7 +125,7 @@ def test_main_hands_each_subcommand_to_what_runs_it_and_returns_its_answer(tmp_p
     runs a row; `row run` runs the row at the stages its caller named; `row fa-version` prints the number alone, which a row's setup
     reads from the command's output."""
     from verity_vllm.pipeline import row
-    env = {"PY": sys.executable}
+    env = {"PY": sys.executable, **TOOLKIT}
     calls: list[tuple] = []
 
     class Store:
@@ -155,7 +166,7 @@ def test_a_rows_effective_config_is_its_file_its_stage_configs_and_what_the_call
     from verity_vllm.pipeline import row
     words = ["run", ROW, "LLAMA32_1B", "unsloth/Llama-3.2-1B", "9535bd9b", "--sweep-dir", str(tmp_path), "--py", sys.executable]
     environ = {"MATCH_IMPL": "record", "VLLM_BATCH_INVARIANT": "1", "NCCL_ALGO": "Ring", "CUDA_VISIBLE_DEVICES": "3", "HOME": "/home/nobody",
-               "VLLM_API_KEY": "dummy", "NCCL_DUMMY_TOKEN": "dummy"}
+               "VLLM_API_KEY": "dummy", "NCCL_DUMMY_TOKEN": "dummy", **TOOLKIT}
     o = cli.parse("row", [*words, "--build-jobs", "3", "--world", "2"], environ)
     monkeypatch.setattr(metadata, "version", lambda name: {"vllm": "0.0.test"}[name])
     eff = row.effective_config(o, "build,match", ("pous:s1",))
@@ -175,7 +186,7 @@ def test_a_rows_effective_config_is_its_file_its_stage_configs_and_what_the_call
         raise metadata.PackageNotFoundError(name)
 
     monkeypatch.setattr(metadata, "version", not_installed)
-    none = row.effective_config(cli.parse("row", [w.replace("__i256__", "__i999__") for w in words], {}), "build", None)
+    none = row.effective_config(cli.parse("row", [w.replace("__i256__", "__i999__") for w in words], TOOLKIT), "build", None)
     assert (none["config"], none["file"], none["run_differs_from_config"], none["overrides"]) == (None, None, [], {})
     assert (none["run"]["protocols"], none["run"]["stages"], none["vllm_installed"], none["engine_env"]) == (None, "build", None, {})
 
@@ -276,7 +287,7 @@ def _start(tmp: Path, stage_exit: str | None = None) -> tuple[subprocess.Popen, 
     os.mkfifo(ready)
     stage.write_text(f"READY = {str(ready)!r}\n" + STAGE if stage_exit is None else f"import sys; sys.exit({stage_exit})")
     d = tmp / "r"
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")])}
+    env = {**os.environ, **TOOLKIT, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")])}
     env.pop("VERITY_TIMELINE", None)
     registered_r, registered_w = os.pipe()
     # the research runner starts the row as a session leader and later killpg()s that group -- same here
