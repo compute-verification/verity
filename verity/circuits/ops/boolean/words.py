@@ -1,6 +1,7 @@
-"""PoUW's own word primitives as Boolean Definitions: the next version of each `words` primitive Pearl-C4's (`pc4`) and
-Pearl-C's (`pc8`) row units call, and of the four Keccak words their hiding tiles' digest calls (`hashes`, Keccak-p[1600]
-on (lo, hi) half-lanes), the same function on bits.
+"""PoUW's word primitives (`verity.circuits.ops.words`) as Boolean Definitions: the next version of each, the same function
+on bits. They sit beside the core's so that `versions.boolean_version` finds every one in any process; Pearl-C4's (`pc4`)
+and Pearl-C's (`pc8`) row units call them, and the hiding tiles' digest the four Keccak words (`hashes`, Keccak-p[1600] on
+(lo, hi) half-lanes).
 
     PouwF32SqrtRn_v2   (a: Array<32, Value<1>>) -> Array<32, Value<1>>                          word view: PouwF32SqrtRn_v1
     PouwETilde_v2      (e: Array<4, Value<1>>, ae: Array<8, Value<1>>) -> Array<16, Value<1>>    word view: PouwETilde_v1

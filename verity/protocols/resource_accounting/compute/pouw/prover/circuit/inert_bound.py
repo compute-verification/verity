@@ -131,7 +131,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 from ..schemes import pearl_c as C
 from ..schemes import pearl_c_inert_work as D
 from ..schemes.pearl_c_device import DEVICES
-from . import boolean as _boolean  # noqa: F401  registers the windows' _v2 Definitions Flock's lowering falls back to
+from verity.circuits.ops.boolean import words as _boolean  # noqa: F401  registers the windows' _v2 Definitions Flock's lowering falls back to
 from . import hashes as H
 from . import leaves as L
 from . import pc8

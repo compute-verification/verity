@@ -17,19 +17,14 @@ from verity.circuits.program import is_word_primitive
 CATALOGS = ("verity.circuits.ops", "verity_vllm.definitions")
 
 _POUW = "PoUW's word primitive (verity/circuits/ops/words.py): no Boolean body written yet"
-_POUW_ARITH = "PoUW's word primitive needing new arithmetic on bits: not written yet"
 _ADAPTER = "the adapter's registry: no Boolean body written yet"
 
 #: the word primitives without a Boolean body: id -> why; only shrinks
 BODYLESS: dict[str, str] = {
     **{f"Pouw{n}_v1": _POUW for n in (
-        "Add64Hi", "Add64Lo", "Add8", "AddSub8", "Bf16Neg", "BlackwellE4m3SaltDead", "BlackwellE4m3Window", "Ch32", "Chi32",
-        "Dot16U8S8", "ETilde", "FormX3", "FormX", "HopperE4m3SaltDead", "HopperE4m3Window", "Maj32", "NegBetaSum16",
-        "NoiseByte", "PackBE4", "Rotl64Hi", "Rotl64Lo", "Sha512BigSigma0Hi", "Sha512BigSigma0Lo", "Sha512BigSigma1Hi",
-        "Sha512BigSigma1Lo", "Sha512SmallSigma0Hi", "Sha512SmallSigma0Lo", "Sha512SmallSigma1Hi", "Sha512SmallSigma1Lo",
-        "SqAcc", "SqCeil", "SqGe", "Sub8", "WindowWord", "Xor32")},
-    "PouwF32SqrtRn_v1": _POUW_ARITH + " (an f32 square root, rounded to nearest; verity/circuits/ops/sqrt.py)",
-    "PouwI32ToF32Rn_v1": _POUW_ARITH + " (an i32 to f32 conversion, rounded to nearest; verity/circuits/ops/ncp.py)",
+        "Add64Hi", "Add64Lo", "Add8", "AddSub8", "Ch32", "Dot16U8S8", "FormX3", "FormX", "Maj32", "NegBetaSum16", "NoiseByte",
+        "PackBE4", "Sha512BigSigma0Hi", "Sha512BigSigma0Lo", "Sha512BigSigma1Hi", "Sha512BigSigma1Lo", "Sha512SmallSigma0Hi",
+        "Sha512SmallSigma0Lo", "Sha512SmallSigma1Hi", "Sha512SmallSigma1Lo", "Sub8", "I32ToF32Rn")},
     **{f"{n}_v1": _ADAPTER + f" ({m})" for n, m in (
         ("DsaButterflySet", "dsa_topk_mask"), ("DsaMaskCount", "dsa_topk_mask"), ("DsaMaskTag", "dsa_topk_mask"),
         ("DsaTopKAtLeastBelow", "dsa_topk_mask"), ("DsaTopKAtLeast", "dsa_topk_mask"), ("E2m1ToBf16", "marlin_moe"),
