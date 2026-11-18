@@ -339,7 +339,7 @@ class ServingTrace:
             raise ValueError(f"a step of {pages} pages, its slots kept {headroom} steps after their free, frees and "
                              f"writes more than the pool's {len(self.slots)} slots")
         self.backend, self.registration, self.pages, self.rng = backend, registration, pages, rng
-        rng.getrandbits(64)  # the draw that once seeded the append salts: a seed's load stays as it was
+        rng.getrandbits(64)  # the sample that once seeded the append salts: a seed's load stays as it was
         self.lifetime, self.headroom = lifetime, headroom
         self.replay = memory_map.Replay(memory_map.Header(registration.digest, N), registration)
         self.steps, self.served, self.cursor, self.rekeyed = 0, 0, 0, 0
