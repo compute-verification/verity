@@ -35,5 +35,5 @@ DITHER = register(Scheme(
     attach=attach,
     **dict.fromkeys(("parties", "channels", "colocated", "needs", "depends", "record", "symbol", "published",
                      "channel_schemas", "check", "reader", "premises", "tables", "output_format", "product_family",
-                     "y_committed", "salt_open_root", "kernels"), _NOT_RUN),
+                     "y_committed", "salt_open_root", "kernels", "keeps_weight_copy"), _NOT_RUN),
 ))
