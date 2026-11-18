@@ -178,6 +178,7 @@ class Attached:
         self.declared: H.Declared | None = None
         self.weights: dict[int, H.Handle] | None = None
         self.run: Any = None
+        """The open epoch's device run, which benchmarks' harness gate reads (`verity_bench.vllm.runner._pearl_c_gate`)."""
         self.session: Any = None
         self.reserved: dict[str, Any] | None = None
         self.epochs = 0
