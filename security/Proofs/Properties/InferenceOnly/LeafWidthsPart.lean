@@ -322,7 +322,7 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
     rw [hS] at h
     dsimp only at h
     by_cases hh : (ht.isSome && ht == (srcOf B below).homo? p i) = true
-    · exact homo_same S ht _ _ hh hhomo (fun wd hwd => (hht wd hwd).symm) _ hj
+    · exact homo_same S ht _ _ hh hhomo hht _ hj
     · rw [ite_eq_right hh] at h
       have hb : base + n ≤ S.leaves := by
         have hlast : n - 1 < (Part.affine p i base n).count := by change n - 1 < n; omega
@@ -435,17 +435,20 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
         rcases hh with h0 | h1
         · exact absurd (by simpa using h0 : n = 0) (by omega)
         · exact h1
-      exact homo_same S ht _ _ hh' hhomo (fun wd hwd => (hht wd hwd).symm) _ hj
+      exact homo_same S ht _ _ hh' hhomo hht _ hj
     rw [ite_eq_right hh] at h
-    split at h
-    · rename_i wd hwd
+    cases ht with
+    | none => exact (m_throw h).elim
+    | some wd =>
+      have hwd : Widths.wAt t (a + k) = wd := hht wd rfl
+      dsimp (config := { zeta := false }) only at h
       extract_lets q' crn vals lo hi' at h
       obtain ⟨hlo, hhi, -, -, -⟩ := strided_between base inner os is n hi k hk vals rfl
       have hlo' : lo ≤ atOf base inner os is k := hlo
       have hhi' : atOf base inner os is k ≤ hi' := hhi
       clear_value lo hi'
       split at h
-      · rename_i hlw
+      next hlw =>
         have hnn : 0 ≤ base + ((k / inner : ℕ) : ℤ) * os + ((k % inner : ℕ) : ℤ) * is := hq k hk
         have hkq : k / inner < (n + inner - 1) / inner := by
           have h1 : k / inner ≤ (n - 1) / inner := Nat.div_le_div_right (by omega)
@@ -464,10 +467,9 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
           (by rw [e, ← hat]; exact_mod_cast hlo') (by rw [e, ← hat]; exact_mod_cast hhi')
         rw [e] at key
         change Widths.wAt S (base + ((k / inner : ℕ) : ℤ) * os + ((k % inner : ℕ) : ℤ) * is).toNat = wd at key
-        rw [hht wd hwd]
+        rw [hwd]
         exact key
-      · exact absurd (m_pure h).1 (by simp)
-      · exact (m_throw h).elim
-    · exact (m_throw h).elim
+      next => exact absurd (m_pure h).1 (by simp)
+      next => exact (m_throw h).elim
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths
