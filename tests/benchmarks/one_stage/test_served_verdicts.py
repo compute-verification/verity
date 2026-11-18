@@ -5940,6 +5940,41 @@ def test_no_launcher_line_quotes_a_tools_stderr():
     assert found == [], found
 
 
+def test_a_refusal_on_the_closed_list_is_said_by_its_name_and_no_other_sentence_ever_prints(tmp_path, capsys):
+    """`public_files.REFUSALS` is exactly our five tools' fixed refusal sentences (a literal raise, no path, host or
+    value), each under a name: `failed` and `said` print the name where a tool's last line is one of them, after at most
+    the tool's or the exception's name, and the class and exit otherwise; a sentence off the list, or a listed one with a
+    value after it, never prints."""
+    import ast
+    import public_files as PF
+
+    root, raised = Path(S.__file__).resolve().parents[2], set()
+    for f in ("benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/records_audit.py",
+              "benchmarks/one_stage/inference_only.py", "benchmarks/one_stage/served_compare.py",
+              "benchmarks/one_stage/served_verdicts.py"):
+        raised |= {n.exc.args[0].value for n in ast.walk(ast.parse((root / f).read_text()))
+                   if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
+                   and getattr(n.exc.func, "id", None) in ("ValueError", "RuntimeError", "SystemExit") and n.exc.args
+                   and isinstance(n.exc.args[0], ast.Constant) and isinstance(n.exc.args[0].value, str)}
+    assert set(PF.REFUSALS.values()) == raised, (
+        f"a fixed refusal of ours changed: name {sorted(raised - set(PF.REFUSALS.values()))} in public_files.REFUSALS "
+        f"in place of {sorted(set(PF.REFUSALS.values()) - raised)}")
+    assert all(re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", n) for n in PF.REFUSALS)
+    end = PF.REFUSALS["request-without-end"]
+    for line, said in [(f"prove_path.py window-commit: {end}", "(refused request-without-end, exit 2): "),
+                       (f"ValueError: {PF.REFUSALS['advice-not-canonical']}", "(refused advice-not-canonical, exit 2): "),
+                       ("prove_path.py weights-registration: the checkpoint /srv/ck/7 is not of record", "(ValueError, exit 2): "),
+                       (f"prove_path.py window-commit: {end} at /srv/serve/w7", "(ValueError, exit 2): "),
+                       (f"vy-dc-h200 {end}", "(ValueError, exit 2): ")]:
+        log = tmp_path / "tool.err"
+        log.write_text(f"Traceback (most recent call last):\nValueError: x\n{line}\n")
+        assert S.failed(2, [str(log)]) == said + PRIVATE, line
+        name = said.removeprefix("(").split(",")[0]
+        assert S.tool_said(2, [str(log)]) == f"{name}; {PRIVATE}", line
+        assert S.main(["failed", "2", str(log)]) == 0 and capsys.readouterr().out == said + PRIVATE + "\n"
+        assert "/srv" not in said and "not of record" not in said
+
+
 def test_a_pieces_piece_json_leaves_without_the_node_it_ran_on_which_stays_private(tmp_path):
     """`pieces` writes each piece's `RAN` with the node it ran on, which `record` and the hand-off read in the serve dir;
     the published copy holds its exit and limit alone, the whole file in the private directory."""

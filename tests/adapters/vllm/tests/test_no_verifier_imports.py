@@ -29,16 +29,12 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         # design's rate table, the second stage's row links, registration's `Declaration`, and the challenger's client
         # types (`CoinError`, `LiveOpening`, `LiveRecord`).
         "verity_vllm/pipeline/advice.py": ("registration.verifier.registration",),
-        "verity_vllm/pipeline/boundary_rows.py": (
-            "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.second_stage",
-        ),
+        "verity_vllm/pipeline/boundary_rows.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/boundary_stop.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/commit_coins.py": (
-            "proofs.spot.verifier.challenger.challenger", "proofs.spot.verifier.challenger.challenger.CoinError",
-            "proofs.spot.verifier.challenger.challenger.LiveOpening", "proofs.spot.verifier.challenger.challenger.live_reason",
+            "proofs.spot.verifier.challenger.challenger", "proofs.spot.verifier.challenger.challenger.live_reason",
             "proofs.spot.verifier.challenger.remote",
         ),
-        "verity_vllm/pipeline/interior_links.py": ("proofs.spot.verifier.second_stage",),
         "verity_vllm/pipeline/interior_rows.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/serve_day.py": ("registration.verifier.registration",),
         "verity_vllm/pipeline/serving_rows.py": (

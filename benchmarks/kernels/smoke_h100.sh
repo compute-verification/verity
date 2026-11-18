@@ -97,6 +97,9 @@ ZY_FILE=tests/protocols/test_pouw_h1_registered_device.py
 ROWS=$SCRATCH/rows.txt
 SKIPPED=77
 CUDA="" GENCODE="" NVCC_VERSION="" GPU="" CARD_OK=0
+# the target the smoke's builds are for: Pearl-C's tree says its own (build.sh --arch; it refuses another's GENCODE)
+TARGET=$(bash "$PEARL/build.sh" --arch) && [[ "$TARGET" =~ ^[a-z]+_[0-9]+[a-z]?$ ]] || {
+  echo "smoke_h100.sh: $PEARL/build.sh --arch names no one target its kernels are built for (it said: ${TARGET:-nothing})" >&2; exit 2; }
 : > "$ROWS"
 
 sha() { sha256sum "$1" | cut -d' ' -f1; }
@@ -175,8 +178,8 @@ p_toolkit() {
     REASON="machine.py toolkit 13.0 names no toolkit with nvcc: set CUDA_HOME to the node's CUDA 13.0"
     [ "$DRY" = 1 ] && return "$SKIPPED"; return 1; }
   if arch=$(python3 "$ROOT/benchmarks/kernels/machine.py" arch); then said="the machine's record states $arch"
-  else arch=sm_90a; said="the machine's record is unread here, so sm_90a is taken and the card step holds the card to it"; fi
-  [ "$arch" = sm_90a ] || { REASON="the machine's card is $arch: this smoke is sm_90a's"; return 1; }
+  else arch=$TARGET; said="the machine's record is unread here, so $TARGET is taken, Pearl-C's build's, and the card step holds the card to it"; fi
+  [ "$arch" = "$TARGET" ] || { REASON="the machine's card is $arch: this smoke's builds are $TARGET's"; return 1; }
   GENCODE=$(python3 "$ROOT/benchmarks/kernels/machine.py" gencode "$arch") || { REASON="no -gencode for $arch"; return 1; }
   CUDA=$kit
   NVCC_VERSION=$("$CUDA/bin/nvcc" --version | grep -oE 'V[0-9]+\.[0-9]+\.[0-9]+' | head -1)
@@ -300,7 +303,9 @@ p_card_sku() {
   case $said in "CARD_SKU is not set"*) ;; *) REASON="verity_vllm.settings no longer refuses an unset CARD_SKU by that name (it said: $said), so what the card step exports is not what it reads"; return 1 ;; esac
   if sku=$(python3 "$ROOT/benchmarks/kernels/machine.py" sku 2> "$SCRATCH/card_sku.err") && [ -n "$sku" ]; then
     arch=$(vllm_arch "$sku")
-    [ "$arch" = 9.0a ] || { REASON="under CARD_SKU=$sku, this host's card's record, vLLM's settings build for '$arch', not 9.0a (sm_90a)"; return 1; }
+    [ -n "$GENCODE" ] || { REASON="no -gencode to hold vLLM's arch under CARD_SKU=$sku to (step toolkit)"; [ "$DRY" = 1 ] && return "$SKIPPED"; return 1; }
+    # vLLM writes the arch as torch does (9.0a); the toolkit step's -gencode ends with the same target without the dot
+    [ "${arch/./}" = "${GENCODE##*_}" ] || { REASON="under CARD_SKU=$sku, this host's card's record, vLLM's settings build for '$arch', not for -gencode $GENCODE"; return 1; }
     REASON="vLLM's settings refuse an unset CARD_SKU, and under CARD_SKU=$sku, this host's card's record, build for $arch; the card step sets it"
   elif [ "$DRY" = 1 ]; then
     REASON="vLLM's settings refuse an unset CARD_SKU by that name; no card here names its record ($(head -c 200 "$SCRATCH/card_sku.err" | tr '\n' ' ')), so the name is first read on the card, where the card step sets it"
@@ -358,7 +363,7 @@ c_card() {
   uuid=${uuid# } name=${name# }
   printf '%s\n' "$row" > "$O/gpu.txt"
   arch=$(python3 "$ROOT/benchmarks/kernels/machine.py" arch "$name") || { REASON="no card record names $name"; return 1; }
-  [ "$arch" = sm_90a ] || { REASON="$name's record states $arch, and the builds are sm_90a's"; return 1; }
+  [ "$arch" = "$TARGET" ] || { REASON="$name's record states $arch, and the builds are $TARGET's"; return 1; }
   sku=$(python3 "$ROOT/benchmarks/kernels/machine.py" sku "$name") && [ -n "$sku" ] || { REASON="no card record names $name, so there is no CARD_SKU to set"; return 1; }
   [ -z "${CARD_SKU:-}" ] || [ "$CARD_SKU" = "$sku" ] || { REASON="CARD_SKU is $CARD_SKU here, and $name's record is $sku"; return 1; }
   export CUDA_VISIBLE_DEVICES=$index PEARLC_EXPECT_UUID=$uuid CARD_SKU=$sku

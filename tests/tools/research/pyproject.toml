@@ -68,6 +68,7 @@ untraced = [
     "test_nebius_monitoring.py",
     "test_nebius_n2_spill.py",
     "test_nebius_sky.py",
+    "test_nebius_verifier_packaging.py",
     "test_notes.py",
     "test_notes_archive.py",
     "test_notes_sync.py",
@@ -148,7 +149,10 @@ untraced = [
 # tools/verity/graph/verity_graph/contract.py): test_vqueue_slim loads it (`vqueue_slim._declaration`), whose declaration names
 # a candidate's Lean inputs. tools/move/rename.py,
 # layout.py and restack.py: test_queue_moves_carry commits them into its origin and restacks a head across the moves they make;
-# restack.py reads its move_lines.toml beside it (`MOVE_LINES`) when test_queue_cross crosses a head. The RTX PRO 6000 node file and card: test_nebius_check holds pods/nebius/check.py's figures to them.
+# restack.py reads its move_lines.toml beside it (`MOVE_LINES`) when test_queue_cross crosses a head. calibration/hardware:
+# test_nebius_check holds pods/nebius/check.py's figures to the RTX PRO 6000 node file and card, and
+# test_nebius_verifier_packaging holds the verifier template's figures_sha512 to what benchmarks/poub_session/sheets.py, which it
+# runs, makes from the data sheets.
 # tools/agent-guard/pre_push.py: test_queue_identity holds the one identity the hook lets through beside a checkout's own to
 # the identity a crossing's commits carry (`queue.IDENTITY`).
 # tools/check/train.sh: test_landing launches the loop's own (`landing.OWN_TRAIN`) with the settings.py beside it.
@@ -166,7 +170,8 @@ inputs = ["tools/research", ".agents/skills", "verity/README.md", ".gitignore", 
           "tools/verity/lean/settings.py", "tools/check/common.py",
           "tools/verity/graph/verity_graph/contract.py",
           "tools/verity/graph/verity_graph/__init__.py",
-          "calibration/hardware/nodes/rtx-pro-6000-server-x8.toml", "calibration/hardware/cards/rtx-pro-6000-server.toml",
+          # the cards' registry, which pods/nebius/fleet.py reads by path for each platform's machine class
+          "tools/config/verity_config/registry/gpus.toml", "calibration/hardware", "benchmarks/poub_session/sheets.py",
           "tools/check/merge_map.py", "tools/check/merge_rows.py",
           "tools/check/added_lines.py", "tests/lint/retired_terms.md", "tests/lint/test_repo_lane_text.py",
           "tests/lint/test_repo_retired_terms.py",
