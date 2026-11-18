@@ -7,10 +7,13 @@ max_tokens only from above: a lower one the output still fits is another ``cert`
 certified record can refuse, and that binding is a stand-in (`compile_slice_v7`'s docstring)."""
 from __future__ import annotations
 
+import random
 from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
+from verity.circuits import boolean as BL
+from verity.circuits.partition_v2 import size_class
 from verity.protocols.interface.charge import window_charge as WC
 
 from tests.compiler.test_network_attester_compile_slice import BOOK
@@ -93,6 +96,44 @@ def test_the_length_term_at_powers_of_two(x):
     assert V7.check(x.S, short.rows)["code"] is False
     got = V7.evaluate(x.st, cases + [short])
     assert got[:-1] == [V7.ACCEPT] * len(cases) and got[-1] & (1 << 2) == 0
+
+
+def test_the_lengths_are_the_certified_rows(x):
+    """Beside the verdict, which stays the first 16 output bits, the unit outputs each arrival slot's prompt length from
+    ``cert`` as a port of its own: the honest window's arrivals' P, in a public size class of 16 + 32·K bits."""
+    honest = V7.case(x.S, x.sl, BOOK)
+    prompts = tuple(a[1] for a in x.sl.arrivals)
+    assert V7.outputs(x.st, [honest]) == [(V7.ACCEPT, prompts)]
+    assert V7.lengths(x.S, honest.rows) == prompts
+    _rows, ret = V7._sig(x.S)
+    assert BL.elements(ret) == [16] + [32] * x.S.K and size_class(16 + 32 * x.S.K) == 128
+
+
+def test_an_empty_slot_gives_zero():
+    """A window with fewer arrivals than its K slots outputs length 0 at each empty slot."""
+    st, sl = V7.demo()
+    S = SimpleNamespace(**st)
+    c = V7.case(S, replace(sl, arrivals=sl.arrivals[:2], tokens=sl.tokens[:2], max_tokens=sl.max_tokens[:2]), BOOK)
+    assert V7.outputs(st, [c]) == [(V7.ACCEPT, (9, 11, 0))]
+
+
+def test_the_lengths_match_the_reference_on_random_rows(x):
+    """On ``cert`` rows of random slot validity and prompt lengths, garbage under an empty slot included, the circuit's
+    lengths are the reference's (`compile_slice_v7.lengths`)."""
+    honest = V7.case(x.S, x.sl, BOOK)
+    F = CS.fields(x.S, V7.CODE)["cert"]
+    rng = random.Random(7)
+    cases = []
+    for _ in range(16):
+        cert, at = list(honest.rows["cert"]), 0
+        for name, n, w in F:
+            if name in ("a_valid", "a_P"):
+                cert[at:at + n * w] = [rng.getrandbits(1) for _ in range(n * w)]
+            at += n * w
+        cases.append(SimpleNamespace(rows={**honest.rows, "cert": cert}))
+    want = [V7.lengths(x.S, c.rows) for c in cases]
+    assert [q for _v, q in V7.outputs(x.st, cases)] == want
+    assert any(0 in q for q in want) and any(all(q) for q in want)
 
 
 def test_a_term_is_charged_in_its_bodys_window_when_its_output_ends_later():
