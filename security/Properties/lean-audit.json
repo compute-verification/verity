@@ -53,6 +53,7 @@
   "Properties.Spot.Rate",
   "Properties.Spot.MonitoringPeriod",
   "Properties.Spot.MonitoringPeriodLedger",
+  "Properties.Spot.ChallengerPin",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryAttester",
   "Properties.Pous.Wipe",
