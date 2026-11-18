@@ -8,6 +8,7 @@ public import Proofs.Properties.InferenceOnly.RecordGates
 public import Proofs.Properties.InferenceOnly.RecordLeafWide
 public import Proofs.Properties.InferenceOnly.RecordProgram
 public import Proofs.Properties.InferenceOnly.RecordRead
+public import Proofs.Properties.InferenceOnly.RecordRows
 public import Proofs.Properties.InferenceOnly.RecordTemplates
 public import Mathlib.Tactic
 
@@ -297,15 +298,18 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
     have h3 : u.val = s := Option.some.inj h1
     omega
 
-/-- **A block has the summary's gates, or none**: in a circuit a record the check reads lays out, every block
-has the gates the summary counts, or no gate. -/
+/-- **A block has the summary's gates, or none**: in a circuit a record the check reads lays out, of a root with no
+edge, every block has the gates the summary counts, or no gate. -/
 theorem block_gates {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c)
-    {d : Verity.RegisteredCircuit} (hd : Served form c d) :
+    (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFree c.f.P) {d : Verity.RegisteredCircuit} (hd : Served form c d) :
     ∀ u, d.D.size (d.𝓘.gates u) = (form.summarize c).gates ∨ d.𝓘.gates u = ∅ := by
   intro u
-  obtain ⟨P, doc, W, Sw, rs, at_, hdec, -, -, -, -, -, -, -, hrs, -, hO, -, -, -, hL, -, hDiv⟩ := hd
+  obtain ⟨P, doc, W, Sw, rs, at_, hdec, -, -, -, -, -, -, -, hrs, -, -, -, -, -, hL, -, hDiv⟩ := hd
   have hPc : c.f.P = P := Except.ok.inj ((decode_of_read h).symm.trans hdec)
   subst hPc
+  obtain ⟨-, -, -, -, hown, -⟩ := InferenceOnlyVerifier.Record.SecurityProofs.program_of_read h
+  have hO := ownRows_holds (readProg_of_read h)
+    (InferenceOnlyVerifier.Record.SecurityProofs.ownRuns_of_edgeFree hown hNE) hrs
   obtain ⟨f, pin, hf, hc⟩ := read_front h
   obtain ⟨rfl, hgr, -⟩ := finish_text hc
   have hDiv' : Divides c.f.P rs (slotIn c.S c.grids) at_ d.𝓘 := hDiv
