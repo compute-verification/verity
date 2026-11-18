@@ -52,9 +52,10 @@ from types import SimpleNamespace
 import numpy as np
 from verity.commitments import hm96
 from verity.circuits import boolean as BL
-from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.commitments.domains import REC_V1_VERIFIER_SALT, REC_V1_ZERO_RESIDUAL_SALT
 from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.population import wired_population_program
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array
@@ -452,8 +453,8 @@ def statement(S: dict, name: str, n: int, holo: bool = False) -> SimpleNamespace
 
     t0 = time.perf_counter()
     defn = definition(S)
-    program = P.population_program(defn, n)
-    part = P.partition(program, P.template_instance_query(defn))
+    program, query = wired_population_program([(defn, n)], {"templates": [[descriptor_id(defn), n]]})
+    part = P.partition(program, query)
     prog = P.program_sha512(program)
     sub = subcircuit(S, name)
     key = {"name": name, "n": n, "holo": holo, "definition": sub.program_digests(None)[defn.id]}
