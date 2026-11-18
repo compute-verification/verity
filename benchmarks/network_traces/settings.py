@@ -4,6 +4,13 @@ from __future__ import annotations
 
 import os
 
+#: ``1`` restores the refusals that rest only on where a party runs; unset, the run goes on and its record says where
+HOLD_PLACEMENT = "VERITY_HOLD_PLACEMENT"
+
+
+def hold_placement() -> bool:
+    return os.environ.get(HOLD_PLACEMENT) == "1"
+
 
 def host(name: str) -> str | None:
     """The address the variable `name` holds, or None while it is unset or empty. ``site.json``'s gate names one,

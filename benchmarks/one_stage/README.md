@@ -371,6 +371,15 @@ bash benchmarks/one_stage/pod.sh    # a job run from a clone of the tree, with m
 
 `check` runs nothing here.
 
+## The two-stage audits
+
+- **A served window's** (`two_stage.py`): each class's first stage, and a class's second stage through that audit,
+  round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics.
+- **A toy replay block's, end to end** (`toy.py`, `audit.py`): the boundary registered, a first-stage sample of replay
+  blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock
+  `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome,
+  with its negatives.
+
 ## The three benchmarks of the proof-layers table
 
 The proof-layers table's first three benchmarks are three runs of `a5_llama1b_h200.sh` on one work directory: Flock (a
@@ -403,7 +412,10 @@ the three partition files, the three runs and the printer, whose table it keeps 
 records each step's start, command, exit code and seconds; the peaks of the job's own memory (PSS over its session), of
 the machine's memory in use (other jobs' included) and of `WORK`'s size; and the largest process. At its end, success or
 failure, it copies the three runs' records and the bootstrap's to the results directory and removes `WORK`. It does not
-run the recursion benchmark. By hand, the same steps (the script's bootstrap writes its record under `WORK`):
+run the recursion benchmark. Its bootstrap is `kept_bootstrap.sh`'s: `pod_bootstrap.sh`'s environment kept on the node
+under `/workspace/cache/one-stage-bootstrap` (`BOOT_ROOT`), keyed by a digest of what it is built from (its `key.txt`),
+reused while the key matches and built anew when it doesn't, its venv and checkpoint before the card's lease and its taps
+under it; each run reads it under a shared lock. By hand, the same steps with the bootstrap in `WORK`:
 
 ~~~sh
 export WORK=/workspace/a5-layers A5_CARD=0 A5_CORES=40-59 GPU_LEASE_WHO=$USER

@@ -2,7 +2,7 @@
 word link (:func:`template`), and the templates a Program row's Definition holds instances of (:func:`unit_templates`: the row
 itself, a ``CUT`` family's batched members, a ``COORDS`` family's coordinates, a ``COLS`` family's column blocks, a ``PARTS``
 family's parts, a ``SLICES`` family's slices, a ``KCHUNKS`` row's K-chunks, a ``CHAINS`` row's key blocks, ends and combines,
-a ``STAGES`` row's stages, and an ``EXPERTS`` row's per-expert blocks and table reads and a ``SLOTS`` router row's slots), and
+a ``KEY_BLOCKS`` row's key blocks and ends, a ``STAGES`` row's stages, and an ``EXPERTS`` row's per-expert blocks and table reads and a ``SLOTS`` router row's slots), and
 the unit of one output word of a row (:func:`coordinate`)."""
 from __future__ import annotations
 
@@ -164,6 +164,10 @@ CHAINS = {"SparseMla_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1", "Spar
 #: a ``CHAINS`` unit's role by its index in its row family's entry
 CHAIN_ROLES = ("block", "end", "scores", "values", "keys", "cols", "combine", "split")
 CHAIN_OF = {f: CHAIN_ROLES[i] for fs in CHAINS.values() for i, f in enumerate(fs)}
+#: the row Definitions whose heads are cut along their keys as the window circuit cuts them (`attention_cuts.units`): per head,
+#: its first visited key block at its key count, each block below it at BN with its tile's `Check_inf`, and its end.  Serving
+#: commits no state between a dense attention's key blocks, so no reader of a served row reads these units
+KEY_BLOCKS = ("Attention_v4",)
 #: the row Definitions cut into stages (the ``stage`` layout, `stage_rows`), by the row family: its stage families, each carrying
 #: what the stage after it reads.  A stochastic top-p select's are every split count's top-p pipeline (stats blocks and their
 #: parts, probabilities, each round's step blocks and combines) and the select's chunks (`topp_stages`); a greedy select's are
@@ -408,7 +412,8 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     the end; `sparse_mla_split.split_chain`: a split row's at NS = 1, else per head and split its blocks so and its end in
     column blocks, and per head the combine of each column block) and then, at each width G of `values_widths`, the units the
     cut holds with each key block its scores unit, DV / G values units and its key rows' (DV + DR) / G writers (a Definition
-    two of them hold is listed once: the combine of a column block), for a ``STAGES`` row family, its cut (the ``cut`` of the
+    two of them hold is listed once: the combine of a column block), for a ``KEY_BLOCKS`` row family, its heads' units at the
+    window circuit's cut (`attention_cuts.units`), for a ``STAGES`` row family, its cut (the ``cut`` of the
     module ``STAGE_PLANS`` names: each stage Definition and its units in its ``plan``), for an ``EXPERTS`` row family, at each block of n rows
     (`block_rows`), its
     block family at N = n, the read of a block's rows, ``EmbeddingRead_v2{V=E, H=n K / 2}``, and its ``FUSED`` block reading
@@ -467,6 +472,10 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
                         hit += ((descriptor_id(c), n * int(S["N"])),)
         if spec_base(spec) in CHAINS:
             hit += tuple({u: n for _g, units in chain_ways(spec) for u, n in units}.items())
+        if spec_base(spec) in KEY_BLOCKS:
+            from verity_vllm.definitions.registry import attention_cuts
+
+            hit += tuple((descriptor_id(c), n) for c, n in attention_cuts.units(sp))
         if spec_base(spec) in STAGES:
             cut = importlib.import_module(STAGE_PLANS[spec_base(spec)]).cut
             hit += tuple((descriptor_id(c), n) for c, n in cut(sp))

@@ -167,10 +167,10 @@ def test_a_step_warns_only_where_its_peak_would_give_a_larger_figure():
 
 
 def test_the_readme_s_commands_ask_what_the_figures_give():
-    """The README's records run asks a heavy build's need and its full record an ArkLib replay's, each in GB on the
-    command and in GiB on the line under it, so a figure raised without its commands fails."""
+    """The README's records run asks a heavy build's need, in GB on the command and in GiB on the line under it, so a
+    figure raised without its command fails."""
     text = (TOOL / "README.md").read_text()
-    for tool, n in (("lean_changed.py --records", R.BUILD_HEAVY_GIB), ("check.py --build --update", R.REPLAY_ARKLIB_GIB)):
+    for tool, n in (("lean_changed.py --records", R.BUILD_HEAVY_GIB),):
         m = re.search(r"^research run .*--mem-gb (\d+) .*\n.*" + re.escape(tool) + r".*\n(.*)$", text, re.M)
         assert m and int(m[1]) == R.gb(n), tool
         assert m[2].strip().startswith(f"{R.gb(n)} GB is {R.gib(R.gb(n)):.1f} GiB"), m[2]

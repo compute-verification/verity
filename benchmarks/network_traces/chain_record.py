@@ -258,6 +258,10 @@ def network_attester_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
     cells (`network_attester_chain.io`)."""
     from benchmarks.network_traces import network_attester_chain as WC
 
+    if not (ep / "advice_trace.jsonl").is_file():
+        raise SystemExit(f"{ep} holds no advice_trace.jsonl: the endpoint step reads the endpoint's private records (its "
+                         f"serve dir, or served_session.py endpoint's --keep records/), not its art, whose report.json "
+                         f"is public (CR_ENDPOINT=<the art> reads that report alone)")
     return served_endpoint(WC.deployment(run)[0], WC.io(run), ep, eos)
 
 
@@ -291,20 +295,67 @@ def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
     return out | {"advice": info, "chain": {"bits": bits}}
 
 
+ENDPOINT_PUBLIC_FORMAT = "network-attester-endpoint-step/1"
+
+#: The endpoint step's public document (`served_session.py endpoint`'s art): each field it may hold, by its path, with
+#: its public kind. `endpoint_public` writes these and nothing else, so a field not here is never published.
+ENDPOINT_PUBLIC = {
+    "format": "structure",
+    "verdict": "output",
+    "why": "output",
+    "warden_run": "structure",
+    "at": "structure",
+    "in_the_clear": "structure",
+    "io/accepted": "output",
+    "io/violations": "output",
+    "advice/bound": "output",
+    "advice/rebuilt": "output",
+    "advice/commit_windows": "output",
+    "advice/bound_windows": "output",
+    "advice_bits/T": "structure",
+    "advice_bits/v0_total": "output",
+    "advice_bits/derived": "output",
+}
+
+
+def endpoint_public(step: dict) -> dict:
+    """`ENDPOINT_PUBLIC`'s fields of ``step`` (`network_attester_endpoint_step`'s), each a scalar; refuses any other value."""
+    doc: dict = {}
+    for path in ENDPOINT_PUBLIC:
+        *up, name = path.split("/")
+        src, dst = step | {"format": ENDPOINT_PUBLIC_FORMAT}, doc
+        for k in up:
+            src, dst = src.get(k) if isinstance(src.get(k), dict) else {}, dst.setdefault(k, {})
+        if name in src:
+            if src[name] is not None and not isinstance(src[name], (bool, int, float, str)):
+                raise ValueError(f"the endpoint step's {path} is a {type(src[name]).__name__}, not a scalar: "
+                                 f"ENDPOINT_PUBLIC publishes scalars only")
+            dst[name] = src[name]
+    return doc
+
+
 def network_attester_endpoint_step(e: dict | None) -> dict:
-    """`network_attester_endpoint`'s report: accepted when the network attester's attested I/O reads whole off its cells and the
-    endpoint's own advice is bound to it and rebuilt from it, in the clear."""
+    """`network_attester_endpoint`'s report, or its public document (`endpoint_public`): accepted when the network
+    attester's attested I/O reads whole off its cells and the endpoint's own advice is bound to it and rebuilt from it."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)",
                 "in_the_clear": CLEAR["warden_endpoint"]}
-    b, io = (e.get("chain") or {}).get("bits") or {}, e.get("io") or {}
-    advice = endpoint_advice(b)
-    io = {"accepted": io.get("accepted"), "violations": len(io.get("violations") or [])}
+    if e.get("format") == ENDPOINT_PUBLIC_FORMAT:
+        p = endpoint_public(e)
+        io, advice, bits = p.get("io") or {}, p.get("advice") or {}, p.get("advice_bits") or {}
+        if missing := [k for k in ENDPOINT_PUBLIC if k != "why" and k.split("/")[-1] not in
+                       (p if "/" not in k else p.get(k.split("/")[0]) or {})]:
+            raise ValueError(f"the endpoint's public document lacks {', '.join(missing)}: rerun `served_session.py "
+                             f"endpoint`, or pass the private keep's report.json (--keep)")
+    else:
+        b, io = (e.get("chain") or {}).get("bits") or {}, e.get("io") or {}
+        advice, bits = endpoint_advice(b), advice_bits(b)
+        io = {"accepted": io.get("accepted"), "violations": len(io.get("violations") or [])}
     why = (f"the network certifier's certified I/O doesn't read whole off its cells: {io['violations']} violation(s)"
            if not io["accepted"] else None if advice["bound"] and advice["rebuilt"]
            else "the endpoint's advice isn't bound to the certified I/O or rebuilt from it")
     return {"verdict": "refused" if why else "accepted", "why": why, "warden_run": e.get("warden_run"), "io": io,
-            "advice": advice, "advice_bits": advice_bits(b), "at": e.get("at"),
+            "advice": advice, "advice_bits": bits, "at": e.get("at"),
             "in_the_clear": CLEAR["warden_endpoint_served" if e.get("at") == SERVED_NODE else "warden_endpoint"]}
 
 

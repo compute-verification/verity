@@ -47,9 +47,9 @@
 # serve-openai scans its samples every VERITY_DRAWS_POLL_S, also 0.2: with the seal's store slim, a window's release waits on both).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
-# Published ($OUT): util.json and util.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
-# and sizes (in util.json), the step trace, the loads' timings files (times and token counts), steps.txt. Request
-# bodies, outputs, sealed windows (deleted once measured) and the H1 transcripts stay in UTIL_ROOT/scratch/<run id>.
+# Published ($OUT): util.json and util.txt (the steady state's aggregates, `served_util.py`), the profile (prof.nsys-rep),
+# steps.txt. The step trace, serve.json, summary.json, pauses.jsonl, the loads' timings files, request bodies, outputs,
+# sealed windows (deleted once measured) and the H1 transcripts stay in UTIL_ROOT/scratch/<run id>.
 set -uo pipefail
 for o in STANDIN_DRAWS:STANDIN_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
   || { echo "served-util: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
@@ -238,10 +238,10 @@ for _ in $(seq 1 1500); do
   kill -0 "$srv" 2>/dev/null || break
   sleep 2
 done
-log() { grep -aE "SERVE-OPENAI|UTIL (engine|row)|\[engine\]|H1|declare|Error|error|refus|Traceback" "$SCR/serve.log" | grep -av prompt | tail -${1:-40} > "$OUT/serve.log.txt"; }
 if [ "$up" != 1 ]; then
-  log 80; say "SERVE: not listening: $(grep -am1 -E 'UsageError|Error|refus' "$SCR/serve.log" | cut -c1-400)"
-  "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1; wait "$srv"; [ -n "$drawer" ] && kill "$drawer"; exit 10
+  "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1; wait "$srv"; rc=$?
+  say "SERVE: $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" not-listening "$SCR/serve.log" "$rc")"
+  [ -n "$drawer" ] && kill "$drawer"; exit 10
 fi
 spid=$(ss -Hltnp "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
 say "SERVE $(grep -am1 'SERVE-OPENAI listening' "$SCR/serve.log" | cut -c1-200) (pid ${spid:-unknown})"
@@ -270,10 +270,7 @@ wait "$srv"; say "SERVE stopped (exit $?)"
 reap
 [ -n "$drawer" ] && { kill "$drawer"; say "STANDIN draws $(wc -l < "$OUT/standin_samples.txt") ($STANDIN_SAMPLES, the step-input port only)"; }
 trap - TERM INT
-log
 "$NSYS" export --type sqlite --force-overwrite=true -o "$SCR/prof.sqlite" "$SCR/prof.nsys-rep" > "$OUT/nsys_export.txt" 2>&1
 say "EXPORT (exit $?): $(du -sh "$SCR/prof.nsys-rep" "$SCR/prof.sqlite" 2>/dev/null | tr '\n' ' ')"
 cp "$SCR/prof.nsys-rep" "$OUT/"
-for f in serve.json summary.json advice_trace.jsonl pauses.jsonl; do cp "$D/$f" "$OUT/" 2>/dev/null; done
-cp "$SCR/warm.timings.json" "$SCR/main.timings.json" "$OUT/" 2>/dev/null
 [ "$lrc" = 0 ]
