@@ -788,7 +788,7 @@ def commit_cmd(a: argparse.Namespace) -> dict:
         if old.get("commitment"):
             if given not in (None, old["commitment"]):
                 raise SystemExit(f"{path} has another commitment than --commitment")
-            print(f"commit: reusing {path}'s commitment", file=sys.stderr)
+            sys.stderr.write(f"commit: reusing {path}'s commitment\n")
             dump(out / "setup.json", old)
             return old
     t0 = time.perf_counter()
@@ -799,7 +799,8 @@ def commit_cmd(a: argparse.Namespace) -> dict:
     doc["commit_s"] = time.perf_counter() - t0
     for d in (store_dir, out):
         dump(d / "setup.json", doc)
-    print(json.dumps({"commitment": doc["commitment"], "segments": params.segments, "commit_s": doc["commit_s"]}))
+    out_doc = {"commitment": doc["commitment"], "segments": params.segments, "commit_s": doc["commit_s"]}
+    sys.stdout.write(json.dumps(out_doc) + "\n")
     return doc
 
 
@@ -823,8 +824,8 @@ def encode_cmd(a: argparse.Namespace) -> int:
     if a.order == "down":
         todo_list.reverse()
     workers = a.gpus if a.p2_lib else a.cpu_encoders
-    print(f"encode: {len(todo_list)} of {params.segments} segments on {workers} {'GPUs' if a.p2_lib else 'CPU encoders'}",
-          file=sys.stderr, flush=True)
+    sys.stderr.write(f"encode: {len(todo_list)} of {params.segments} segments on {workers} "
+                     f"{'GPUs' if a.p2_lib else 'CPU encoders'}\n")
     ctx = mp.get_context("spawn")
     todo, done = ctx.Queue(), ctx.Queue()
     for s in todo_list:
@@ -844,14 +845,14 @@ def encode_cmd(a: argparse.Namespace) -> int:
             exited += 1
         elif "error" in msg:
             errors.append(msg)
-            print(f"encode: worker {msg['worker']} failed: {msg['error']}\n{msg['trace']}", file=sys.stderr, flush=True)
+            sys.stderr.write(f"encode: worker {msg['worker']} failed: {msg['error']}\n{msg['trace']}\n")
         else:
             metas[msg["segment"]] = msg
             k = len(metas) - len(have)
             if k == len(todo_list) or k % max(1, len(todo_list) // 50) == 0:
                 el = time.perf_counter() - t0
-                print(f"encode: {k}/{len(todo_list)} segments in {el:.0f} s, ETA {el / k * (len(todo_list) - k):.0f} s",
-                      file=sys.stderr, flush=True)
+                sys.stderr.write(f"encode: {k}/{len(todo_list)} segments in {el:.0f} s, "
+                                 f"ETA {el / k * (len(todo_list) - k):.0f} s\n")
     for p in procs:
         p.join()
     wall = time.perf_counter() - t0
@@ -865,8 +866,8 @@ def encode_cmd(a: argparse.Namespace) -> int:
     dump(store / "setup.json", doc)
     if errors or len(metas) != params.segments:
         dump(out / "store-partial.json", doc)
-        print(f"encode: {len(metas)} of {params.segments} segments done; rerun with the same --store to resume, or "
-              "copy the other segments' seg/ and rows/ files in and run `finish`", file=sys.stderr)
+        sys.stderr.write(f"encode: {len(metas)} of {params.segments} segments done; rerun with the same --store to "
+                         "resume, or copy the other segments' seg/ and rows/ files in and run `finish`\n")
         return 1 if errors or not a.segments else 0
     finish_store(store, out, doc, metas, params, a.registration)
     return 0
@@ -880,7 +881,7 @@ def finish_cmd(a: argparse.Namespace) -> int:
     metas = done_segments(store, params)
     missing = [s for s in range(params.segments) if s not in metas]
     if missing:
-        print(f"finish: {len(missing)} segments missing, the first {missing[:8]}", file=sys.stderr)
+        sys.stderr.write(f"finish: {len(missing)} segments missing, the first {missing[:8]}\n")
         return 1
     finish_store(store, Path(a.out), doc, metas, params, a.registration)
     return 0
@@ -909,7 +910,8 @@ def finish_store(store: Path, out: Path, doc: dict[str, Any], metas: dict[int, d
     dump(out / "store.json", doc)
     dump(out / "segments.json", order)
     write_atomic(out / "SHA512SUMS", sums.encode())
-    print(json.dumps({k: doc.get(k) for k in ("commitment", "salt", "root", "w_root", "registration", "tie")}))
+    keys = ("commitment", "salt", "root", "w_root", "registration", "tie")
+    sys.stdout.write(json.dumps({k: doc.get(k) for k in keys}) + "\n")
     return doc
 
 
@@ -983,7 +985,7 @@ def verify_cmd(a: argparse.Namespace) -> int:
                 h.update(w_seg)
                 wroots.append(segment_root(params, salt, s, row_digests(w_seg, params.payload_bytes)))
                 if n % max(1, params.segments // 20) == 0:
-                    print(f"verify: decoded {n}/{params.segments} in {time.perf_counter() - t0:.0f} s", file=sys.stderr, flush=True)
+                    sys.stderr.write(f"verify: decoded {n}/{params.segments} in {time.perf_counter() - t0:.0f} s\n")
             report["decode"] = {"commitment": h.digest().hex() == doc["commitment"],
                                 "w_root": top_root(wroots).hex() == doc["w_root"], "by": "libp2v1" if a.p2_lib else "schemes.p2",
                                 "s": time.perf_counter() - t0}
@@ -999,8 +1001,8 @@ def verify_cmd(a: argparse.Namespace) -> int:
           and (not a.decode or (report["decode"]["commitment"] and report["decode"]["w_root"])))
     report["passed"] = ok
     dump(out / "verify.json", report)
-    print(json.dumps({k: report[k] for k in ("passed", "root_ok", "w_root_ok", "tie_ok", "sha512sums")}
-                     | ({"decode": report["decode"]} if a.decode else {})))
+    sys.stdout.write(json.dumps({k: report[k] for k in ("passed", "root_ok", "w_root_ok", "tie_ok", "sha512sums")}
+                                | ({"decode": report["decode"]} if a.decode else {})) + "\n")
     return 0 if ok else 1
 
 
@@ -1042,9 +1044,10 @@ def spot_cmd(a: argparse.Namespace) -> int:
     report = {"store": str(store), "root": doc["root"], "count": len(rows), "passed": passed,
               "device": bool(gpu), "blocks": rows}
     dump(out / "spot.json", report)
-    print(json.dumps({"count": len(rows), "passed": passed, "reference_matches": sum(r["reference"] for r in rows),
-                      "device_matches": sum(r.get("device", False) for r in rows) if gpu else None,
-                      "padding_blocks": sum(r["tensor"] is None for r in rows)}))
+    sys.stdout.write(json.dumps({"count": len(rows), "passed": passed,
+                                 "reference_matches": sum(r["reference"] for r in rows),
+                                 "device_matches": sum(r.get("device", False) for r in rows) if gpu else None,
+                                 "padding_blocks": sum(r["tensor"] is None for r in rows)}) + "\n")
     return 0 if passed else 1
 
 
@@ -1056,7 +1059,7 @@ def tie_cmd(a: argparse.Namespace) -> int:
     dump(store / "store.json", doc)
     out.mkdir(parents=True, exist_ok=True)
     dump(out / "store.json", doc)
-    print(json.dumps({"registration": a.registration, "tie": doc["tie"]}))
+    sys.stdout.write(json.dumps({"registration": a.registration, "tie": doc["tie"]}) + "\n")
     return 0
 
 
@@ -1231,7 +1234,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return {"finish": finish_cmd, "verify": verify_cmd, "spot": spot_cmd, "tie": tie_cmd}[args.cmd](args)
     if args.cmd == "layout":
         args.out.write_text(_dump(build(MQA16K).to_json()))
-        print(args.out)
+        sys.stdout.write(f"{args.out}\n")
         return 0
     args.out.mkdir(parents=True, exist_ok=True)
     if args.plain:
@@ -1240,7 +1243,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         files = toy(toy_shape(args.width, args.layers, args.ff), args.per_segment, args.workers)
     for name, data in files.items():
         (args.out / name).write_bytes(data)
-        print(args.out / name, len(data))
+        sys.stdout.write(f"{args.out / name} {len(data)}\n")
     return 0
 
 
