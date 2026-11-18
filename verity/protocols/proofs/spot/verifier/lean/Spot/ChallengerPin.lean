@@ -2,12 +2,15 @@
 The verifier's pin of the challenger's key: the SHA-512 of its public key, which the auditor takes from its own checkout
 (`--challenger-key-sha512 H`, with `--challenger-retired FILE`, a `challenger-key/v1` file's `retired` list), never from
 the case. One pin serves every key the challenger signs under: SPOT's coins (`VStar.Recursive.ChallengerPin`) and PoUW's
-draw coin, a period's `key` (`periodReason`, `pouw-period`). A key that is none, retired or other than the pin's is
+draw coin, a period's `key` (`PouwVerifier.Period.pinned`). A key that is none, retired or other than the pin's is
 refused by name (`keyReason`). A run with no pin says so first, on stderr (`UNPINNED`), its answer line unchanged.
+
+The pin reads the parameters the protocol itself parsed (`pinned`): the value it tests is the value the protocol's check
+is handed, so the key it pins is the key the check verifies under (`pinned_accept`).
 -/
 module
 
-public import CoreProtocol.Cli
+public import CoreProtocol.Blobs
 public import Spot.ChallengerRecord
 public import Spot.Json
 
@@ -49,24 +52,82 @@ def keyReason (pin : Pin) : Option Challenger.ChallengerKey → Option String
 
 def PERIOD : String := "verity/pouw/period/v1"
 
-/-- `keyReason` on a PoUW period's parameters `j`: its `key`, the challenger's that signs its draw coin. -/
-def periodReason (pin : Pin) (j : Json) : Option String :=
-  match getD j "key" with
+/-- `keyReason` on a PoUW period's `key` as its parameters hold it: the challenger's that signs its draw coin. -/
+def periodReason (pin : Pin) : Json → Option String
   | .null => some NONE
   | k => match Challenger.ChallengerKey.ofJson k with
     | .ok k => keyReason pin (some k)
     | .error _ => some UNREAD
 
-/-- `main` on `args`, saying first on stderr that no pin is taken. -/
-def unpinned (main : List String → IO UInt32) (args : List String) : IO UInt32 := do
-  unless args == ["id"] do IO.eprintln UNPINNED
-  main args
+/-- `P`, refusing what `why` names in the parameters `P` parsed, after its own parse and before anything else. -/
+def pinned (P : Core.Protocol) (why : P.Params → Option String) : Core.Protocol :=
+  { P with params := fun j => match P.params j with
+      | .error e => .error e
+      | .ok p => match why p with
+        | some r => .error r
+        | none => .ok p }
 
-/-- `P`, refusing parameters `why` names before its own parse reads them. -/
-def guard (P : Core.Protocol) (why : Json → Option String) : Core.Protocol :=
-  { P with params := fun j => do
-      if let some r := why j then throw r
-      P.params j }
+/-- `pinned` on a protocol that reads blobs. -/
+def pinnedB (P : Core.BlobProtocol) (why : P.Params → Option String) : Core.BlobProtocol :=
+  { P with params := (pinned P.toProtocol why).params }
+
+theorem pinned_params {P : Core.Protocol} {why : P.Params → Option String} {j : Json} {p : P.Params}
+    (h : (pinned P why).params j = .ok p) : P.params j = .ok p ∧ why p = none := by
+  simp only [pinned] at h
+  split at h
+  · cases h
+  · rename_i q hq
+    split at h
+    · cases h
+    · rename_i hw
+      cases h
+      exact ⟨hq, hw⟩
+
+/-- What `pinned P why` accepts, `P` parsed to parameters `why` names nothing in, and those are what its check read. -/
+theorem pinned_accept (P : Core.Protocol) (why : P.Params → Option String) (params commitment evidence : ByteArray)
+    (h : ((pinned P why).answer params commitment evidence).verdict = .accept) :
+    ∃ j p, Core.canonicalJson params = .ok j ∧ P.params j = .ok p ∧ why p = none := by
+  unfold Core.Protocol.answer at h
+  split at h
+  · simp at h
+  · rename_i p hp
+    cases hj : Core.canonicalJson params with
+    | error e => rw [hj] at hp; cases hp
+    | ok j =>
+      rw [hj] at hp
+      obtain ⟨h1, h2⟩ := pinned_params (P := P) (j := j) (p := p) hp
+      exact ⟨j, p, rfl, h1, h2⟩
+
+theorem pinnedB_accept (P : Core.BlobProtocol) (why : P.Params → Option String)
+    (params commitment evidence : ByteArray) (blobs : Array ByteArray)
+    (h : ((pinnedB P why).answer params commitment evidence blobs).verdict = .accept) :
+    ∃ j p, Core.canonicalJson params = .ok j ∧ P.params j = .ok p ∧ why p = none :=
+  pinned_accept (P.on blobs) why params commitment evidence h
+
+theorem keyReason_none {pin : Pin} {x : Option Challenger.ChallengerKey} (h : keyReason pin x = none) :
+    ∃ k, x = some k ∧ sha512Hex k.pub = pin.sha512 := by
+  cases x with
+  | none => simp [keyReason] at h
+  | some k =>
+    refine ⟨k, rfl, ?_⟩
+    simp only [keyReason] at h
+    split at h
+    · cases h
+    · split at h
+      · rename_i heq; exact beq_iff_eq.mp heq
+      · cases h
+
+theorem periodReason_none {pin : Pin} {k : Json} (h : periodReason pin k = none) :
+    ∃ key, Challenger.ChallengerKey.ofJson k = .ok key ∧ sha512Hex key.pub = pin.sha512 := by
+  unfold periodReason at h
+  split at h
+  · cases h
+  · split at h
+    · rename_i key hk
+      obtain ⟨k', hk', hs⟩ := keyReason_none h
+      cases hk'
+      exact ⟨key, hk, hs⟩
+    · cases h
 
 /-- The public keys a `challenger-key/v1` file's `retired` list names, as lowercase hex. -/
 def retiredOf (path : String) : IO (Array String) := do
@@ -88,10 +149,16 @@ def parse : List String → IO (Option Pin × List String)
     | rest => pure (some { sha512 := h }, rest)
   | rest => pure (none, rest)
 
-/-- A PoUW period's command line (`Core.Protocol.main`), under the pin `parse` reads ahead of it. -/
-def periodMain (P : Core.Protocol) (args : List String) : IO UInt32 := do
+/-- `main` on `args`, saying first on stderr that no pin is taken. -/
+def unpinned (main : List String → IO UInt32) (args : List String) : IO UInt32 := do
+  unless args == ["id"] do IO.eprintln UNPINNED
+  main args
+
+/-- A command line under the pin `parse` reads ahead of it: `pin`'s main under a pin, `none`'s, announced, without. -/
+def pinMain (pin : Pin → List String → IO UInt32) (none : List String → IO UInt32) (args : List String) :
+    IO UInt32 := do
   match ← parse args with
-  | (some pin, rest) => (guard P (periodReason pin)).main rest
-  | (none, rest) => unpinned P.main rest
+  | (some p, rest) => pin p rest
+  | (Option.none, rest) => unpinned none rest
 
 end Spot.ChallengerPin

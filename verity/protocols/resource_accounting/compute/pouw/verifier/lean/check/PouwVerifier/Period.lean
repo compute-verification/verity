@@ -4,6 +4,7 @@ public import CoreProtocol.Account
 public import CoreProtocol.Cli
 public import PouwVerifier.Credit
 public import PouwVerifier.CreditOnce
+public import Spot.ChallengerPin
 meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import PouwVerifier.Credit
@@ -316,6 +317,19 @@ def protocol : Core.Protocol where
   check := check
   publicJson := Published.toJson
   profileJson := profileJson
+
+/-- The period under the challenger's pin `pin`, read from the parameters the period parsed: their `key`, the key its
+check verifies the draw coin under (`Credit.periodCredit`). -/
+def pinned (pin : Spot.ChallengerPin.Pin) : Core.Protocol :=
+  Spot.ChallengerPin.pinned protocol (fun (p : Params) => Spot.ChallengerPin.periodReason pin p.key)
+
+/-- What the period under `pin` accepts, the period parsed to parameters whose `key` is the pinned key. -/
+theorem pinned_accept (pin : Spot.ChallengerPin.Pin) (params commitment evidence : ByteArray)
+    (h : ((pinned pin).answer params commitment evidence).verdict = .accept) :
+    ∃ j p, Core.canonicalJson params = .ok j ∧ paramsOf j = .ok p ∧
+      ∃ key, Spot.Challenger.ChallengerKey.ofJson p.key = .ok key ∧ Spot.sha512Hex key.pub = pin.sha512 := by
+  obtain ⟨j, p, hj, hp, hw⟩ := Spot.ChallengerPin.pinned_accept protocol _ params commitment evidence h
+  exact ⟨j, p, hj, hp, Spot.ChallengerPin.periodReason_none hw⟩
 
 private def paramsWith (sessions name : String) : ByteArray :=
   s!"\{\"key\":null,\"main\":[],\"name\":{name},\"sessions\":{sessions}}".toUTF8

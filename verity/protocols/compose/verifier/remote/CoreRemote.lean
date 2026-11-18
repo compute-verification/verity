@@ -485,7 +485,10 @@ def executionPhase : Tie :=
 
 def ties : List Tie := [run, executionPhase]
 
-def protocol : BlobProtocol := tiedSameB "verity/remote/v1" tied ties components
+/-- Remote's composite of record over the members `cs`: `components`, or those under the challenger's pin. -/
+def protocolOf (cs : List BlobProtocol) : BlobProtocol := tiedSameB "verity/remote/v1" tied ties cs
+
+def protocol : BlobProtocol := protocolOf components
 
 private def answerV1 (xs : List Case) : Answer := Cases.answerCases (protocol.on #[]) xs ⟨(List.replicate 64 0).toArray⟩
 

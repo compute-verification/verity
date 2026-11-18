@@ -64,13 +64,20 @@ def ofIds (ids : List String) : Except String BlobProtocol :=
         .error (s!"[{", ".intercalate ids}] is no composite's subprotocols ({"; ".intercalate named})" ++
           ": protocol soundness covers only those composites")
 
-/-- `product IDS ...`: the core CLI of `ofIds IDS`, under the challenger's pin when given
-(`VStar.Recursive.ChallengerPin.composite`); 64 when `IDS` is refused or missing. -/
+/-- The builder and the members of the composite `P` is, by its id; `none` for no composite. -/
+def buildOf (P : BlobProtocol) : Option ((List BlobProtocol → BlobProtocol) × List BlobProtocol) :=
+  if P.id == Core.Onsite.protocol.id then some (Core.Onsite.protocolOf, Core.Onsite.components)
+  else if P.id == Core.Remote.V1.protocol.id then some (Core.Remote.V1.protocolOf, Core.Remote.V1.components)
+  else none
+
+/-- `product IDS ...`: the core CLI of `ofIds IDS`, its members under the challenger's pin when given
+(`VStar.Recursive.ChallengerPin.compositeMain`); 64 when `IDS` is refused or missing. -/
 def main (args : List String) : IO UInt32 := do
   match args with
   | ids :: rest =>
-    match ofIds ((ids.splitOn ",").filter (· ≠ "")) with
-    | .ok P => VStar.Recursive.ChallengerPin.compositeMain P rest
+    match ofIds ((ids.splitOn ",").filter (· ≠ "")) >>= fun P => (buildOf P).elim (.error s!"{P.id} has no builder") .ok with
+    | .ok (mk, cs) =>
+      VStar.Recursive.ChallengerPin.compositeMain mk cs (fun pin => (PouwVerifier.Period.pinned pin).withoutBlobs) rest
     | .error e => IO.eprintln s!"product: {e}"; return 64
   | [] => IO.eprintln "usage: product IDS id | check PARAMS COMMITMENT EVIDENCE | serve"; return 64
 
@@ -83,6 +90,7 @@ private def remoteIds : List String := Core.Remote.components.map (·.id)
 private def remoteV1Ids : List String := Core.Remote.V1.components.map (·.id)
 
 #guard composites.map (·.1.id) == ["verity/onsite/v0", "verity/remote/v1"]
+#guard composites.all fun (P, _) => (buildOf P).isSome
 #guard onsiteIds.all known.contains && remoteV1Ids.all known.contains
 #guard known.length == (onsiteIds ++ remoteV1Ids).eraseDups.length
 

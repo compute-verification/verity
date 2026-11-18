@@ -2542,7 +2542,7 @@
    "sealed": true
   },
   "Properties.Spot": {
-   "imports": ["Spot", "VStarRecursive.ChallengerPin"],
+   "imports": ["Spot", "VStarRecursive.ChallengerPin", "PouwVerifier.Period"],
    "except": [
     "Properties.Spot.Draw",
     "Properties.Spot.Bits",
@@ -2556,7 +2556,7 @@
     "Properties.Spot.HistoryTable",
     "Properties.Spot.MonitoringPeriodLedger"
    ],
-   "why": "the properties are stated against the one-stage audit's own functions and the challenger's pin on SPOT's executable (`VStarRecursive.ChallengerPin`), on Lean core: nothing of Mathlib or of `security`"
+   "why": "the properties are stated against the one-stage audit's own functions and the challenger's pin on SPOT's executable (`VStarRecursive.ChallengerPin`) and on PoUW's period (`PouwVerifier.Period.pinned`), on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Spot.Draw": {
    "imports": ["Definitions.Claims", "Spot"],

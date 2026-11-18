@@ -10,8 +10,7 @@ public import VStarRecursive.ChallengerPin
 (`VStar.Recursive.Sampled.protocol`, under the pin when given: `ChallengerPin.sampled`; `Core.BlobProtocol.main`),
 anything else the recursive audit's (`VStar.Recursive.main`). -/
 def main : List String → IO UInt32
-  | "sampled" :: args => do
-    match ← Spot.ChallengerPin.parse args with
-    | (some pin, rest) => (VStar.Recursive.ChallengerPin.sampled pin).main rest
-    | (none, rest) => Spot.ChallengerPin.unpinned VStar.Recursive.Sampled.protocol.main rest
+  | "sampled" :: args =>
+    Spot.ChallengerPin.pinMain (fun pin => (VStar.Recursive.ChallengerPin.sampled pin).main)
+      VStar.Recursive.Sampled.protocol.main args
   | args => VStar.Recursive.main args
