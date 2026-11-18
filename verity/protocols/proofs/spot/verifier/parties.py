@@ -144,13 +144,12 @@ CHALLENGER, ZK_SERVER, WORKERS, VERIFIER = "challenger", "firewall", "workers", 
 INFERENCE_SERVER, PROOF_SERVER = "inference-server", "proof-server"
 COMPONENT = "sampled-proofs"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
-#: `Core.Remote.V1.components`): onsite's PoUW is its period check and its bandwidth the P2 session on PoUS's store,
-#: remote's PoUW is Pearl+'s run verdict, and both compose SPOT as `COMPOSED`
+#: `Core.Remote.V1.components`): each one's PoUW is Pearl+'s run verdict, onsite's bandwidth is the P2 session on PoUS's
+#: store, and both compose SPOT as `COMPOSED`
 SUBPROTOCOLS = {
     ONSITE_PROTOCOL: {"bandwidth": POUB_P2, "network-attester": CERTIFIER_PROTOCOL,
-                         "inference-only": "verity/inference-only/v0", "pous": POUS_P2_RUN,
-                         "pouw": "verity/pouw/period/v1", COMPONENT: COMPOSED,
-                         "wipe": WIPE_PROTOCOL},
+                      "inference-only": "verity/inference-only/v0", "pearl-plus": "verity/pouw/pearl-plus/v1",
+                      "pous": POUS_P2_RUN, COMPONENT: COMPOSED, "wipe": WIPE_PROTOCOL},
     "verity/remote/v1": {"inference-only": "verity/inference-only/v0", "pearl-plus": "verity/pouw/pearl-plus/v1",
                          COMPONENT: COMPOSED},
 }
