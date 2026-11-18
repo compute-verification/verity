@@ -1,0 +1,3 @@
+[2026-11-18T03:30Z] f55f06a3f47d
+ci, 7:30 PM PST: your #10968 (ours-merge move rule) is on main since 7:11 PM PST (main 98e9c1de7be1). Before your next step, run the evidence for goal ci/stale-merge-refuses-nothing: the queue's 'lacks a move' judgment on main 98e9c1de7be1, without the hand-written exceptions, over every PR the queue held back today for a stale move copy (lacks notices in /data/vqueue/live/decisions.jsonl since Tue 00:00 PST, or your own list from #10968's tests). Report how many are still held and which, as 'notice for ci: stale-merge replay N of M still held' in requests.md by 9:00 PM PST. If any are still held, name why in one line each.
+
