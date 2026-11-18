@@ -128,7 +128,7 @@ step build "$VENV/bin/verity-vllm" row run "$ROW" LLAMA32_1B_INT8 "$MODEL" "$REV
   --research-run-dir "$W/llama-kept" --stages build --config-run 1 --replay-k 460 --hidden-so "$HSO" --norm-tap-so "$NSO"
 
 NA='$NETWORK_ATTESTER'
-[ "$DRY" = 1 ] || NA=$("$PY" -c 'from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER as N; print(N.name)')
+[ "$DRY" = 1 ] || NA=$("$PY" -c 'from verity_vllm.messages import providing; print(providing("admission").name)')
 SERVE=("$VENV/bin/verity-vllm" serve-openai --model "$MODEL" --revision "$REV" --out "$W/serve" --port "$PORT"
   --run-id "fresh-$(date -u +%Y%m%dT%H%M%SZ)" --seal --max-num-batched-tokens 512
   --window-steps 256 --required-manifest "$W/predicted/manifest.json" --hidden-so "$HSO" --norm-tap-so "$NSO" --tap-cap-mb 2048
