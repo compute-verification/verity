@@ -4,14 +4,13 @@ Its scheme, ``rows-sha512``, names what the Commit commits under: hm96-sha512 ro
 roots (`verity_vllm.commit.step_rows`), over the required values of the row's Program, and the replay's sample: up to
 `--replay-per-stratum` units of every stratum, uniformly (`commit.challenge.stratum_picks`).  Its hooks are the Commit's
 committer and taps, which the Commit installs exactly as before; this option adds none, and the Commit refuses an entry
-whose scheme is not its committer's (`protocol_options.commit_guard`).  ``vllm-v1`` (`verity_vllm.commit.scheme`, SHA-256,
+whose scheme is not its committer's (`protocols.commit_context`).  ``vllm-v1`` (`verity_vllm.commit.scheme`, SHA-256,
 32-byte roots) is registered only so a recorded run's target still parses and digests as it did; a Commit refuses it by
 name.  A row whose target declares no protocols never reaches this module: `protocol_options.commit_context` returns None
 first.
 
 The Commit binds what it commits to once its roots are final (`Composition.bind`): the run roots, the Program digest and
-the required-value manifest's digest.  Its one setting, ``cut``, names the executor whose sites the window's circuit is
-cut at (`protocol_options.CUT`): serve-openai's Commit windows under Pearl+ (`serve_pearl`), whose stage is ``commit``.
+the required-value manifest's digest.  It takes no settings.
 """
 from __future__ import annotations
 
@@ -25,8 +24,6 @@ DEFAULT_SCHEME = step_rows.NAME
 RECORDED = recorded_scheme.NAME
 DESIGN = ("every replay stratum drawn, and a uniform min(k, size)-subset of its units with k = the Commit's "
        "--replay-per-stratum (commit.challenge.stratum_picks)")
-#: its settings: ``cut``, the executor whose sites the window's circuit is cut at (`protocol_options.CUT`)
-KEYS = ("cut",)
 
 
 def schemes() -> tuple[str, ...]:
@@ -40,12 +37,8 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     if scheme == RECORDED:
         return ((f"{RECORDED} (SHA-256, 32-byte roots) is kept only to read recorded runs: a Commit commits under "
                  f"{DEFAULT_SCHEME}, so declare {NAME}:{DEFAULT_SCHEME}"),)
-    own = ctx.settings_of(NAME)
-    if stray := sorted(set(own) - set(KEYS)):
-        return (f"the {NAME} settings {stray} are none of its ({', '.join(KEYS)})",)
-    if "cut" in own and not (isinstance(own["cut"], str) and own["cut"] in ctx.enabled):
-        return ((f"the {NAME} setting 'cut' is the enabled executor's entry (name:scheme) whose sites the window's circuit is "
-                 f"cut at, not {own['cut']!r} (enabled: {', '.join(ctx.enabled)})"),)
+    if own := sorted(ctx.settings_of(NAME)):
+        return (f"the {NAME} settings {own}: it takes none",)
     return ()
 
 

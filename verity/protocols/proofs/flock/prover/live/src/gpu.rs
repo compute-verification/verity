@@ -866,7 +866,7 @@ pub(crate) fn decode_with(bytes: &[u8], pcs: &PcsParams, zk: bool, salted: bool)
 }
 
 /// A block of compression slots and unit slots as Flock-CUDA's host-witness mode 1 takes it
-/// (`crate::ir_block` and `crate::ir_frame`): the BLAKE3 compression circuit at 2^14-bit slots `0 .. comp_slots`, the unit
+/// (`crate::ir_frame` and `crate::ir_sampling`): the BLAKE3 compression circuit at 2^14-bit slots `0 .. comp_slots`, the unit
 /// circuit at 2^unit_log slots `unit_pos0 ..`, Δ, and the region claims (points from `hook`) in the sparse ring switch.
 pub struct SlotStmt<'a> {
     pub digest: [u8; 32],
@@ -881,22 +881,6 @@ pub struct SlotStmt<'a> {
     pub net: &'a crate::ir_block::IrUnitNet,
     pub regions: usize,
     pub blocks: usize,
-}
-
-/// verity/flock-ir-block/v1 on the GPU: unit slots only (the compression circuit's fold is computed and unused).
-pub fn prove_units(
-    st: &crate::ir_block::IrStmt,
-    z: &[F128],
-    a: &[F128],
-    b: &[F128],
-    pcs: &PcsParams,
-    domain: &[u8],
-    hook: &mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>,
-    ch: &mut LiveChallenger,
-) -> (R1csProofLigerito, Commitment, [f64; 8]) {
-    let s = SlotStmt { digest: st.digest, k_log: st.k_log, pin: st.pin, da: &st.circuit.da, db: &st.circuit.db, comp_slots: 0, units: st.units,
-                       unit_log: st.unit_log, unit_pos0: 0, net: &st.net, regions: st.regions.len(), blocks: st.blocks() };
-    prove_slots(&s, z, a, b, pcs, domain, hook, ch)
 }
 
 #[allow(clippy::too_many_arguments)]

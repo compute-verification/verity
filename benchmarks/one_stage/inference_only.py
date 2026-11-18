@@ -460,7 +460,7 @@ def record_count(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None,
 def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: int, n: int,
                    held: Sequence[str] = ()) -> dict[str, Any]:
     """`InferenceOnlyCheck.Count`'s instance on one window: its session Definition activated at its m slots (the session
-    Program, `population.population`), its parameters ``held`` bound at registration and named in θ, its block that
+    Program, `wired_population_program`), its parameters ``held`` bound at registration and named in θ as ``0.<name>``, its block that
     Definition."""
     from verity_vllm.program.predict import block_counts as BC
 
@@ -471,10 +471,12 @@ def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: 
 def session_instance(fn: Any, m: int, table: Mapping[str, int], c: int, k: int, n: int,
                      held: Sequence[str] = ()) -> dict[str, Any]:
     from verity.circuits import codec
-    from verity.circuits.population import population
+    from verity.circuits.population import wired_population_program
     from verity.circuits.program import Program
 
-    program = Program(population(fn, m), registered=tuple(held), theta=tuple(held))
+    held = tuple(f"0.{h}" for h in held)
+    wired, _ = wired_population_program([(fn, m)], {"templates": [[codec.descriptor_id(fn), m]]})
+    program = Program(wired.fn, wired.annotations, registered=held, theta=held)
     text = codec.canonical_json(codec.encode_program(program)).decode()
     return {"program": text, "theta": sorted(program.annotations.get("theta", [])), "blocks": [codec.descriptor_id(fn)],
             "table": dict(table), "c": c, "k": k, "n": n}

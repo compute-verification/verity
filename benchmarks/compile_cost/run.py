@@ -252,7 +252,7 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--engine", default=None, help="KEY=INT,... over class G's engine (max_model_len, max_num_batched_tokens, "
                     "long_prefill_token_threshold)")
     a = ap.parse_args(argv)
-    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm import TargetProfile
     try:
         TargetProfile(card=a.card)
     except (KeyError, ValueError) as e:
@@ -350,7 +350,7 @@ def machine(card: str) -> str:
 
 def record(out: Path, model: str, window: str, execution: str, rec: dict, *, card: str) -> None:
     from verity_bench import kit
-    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm import TargetProfile
     short = kit.card_short(TargetProfile(card=card).device_name)
     w = kit.writer(out)
     fields = {"model": MODELS[model], "window": window, "execution": execution, "card": short,

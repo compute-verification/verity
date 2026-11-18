@@ -484,18 +484,16 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 #: GiB, or where a row says so the memory its suites' workers need or the slice it must fit. ci.toml's plans place the
 #: parts; slot.py books the larger of this and the slot line's book= (`booked`), and no grant passes the booking (`slot_mem_gb`)
 SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
-    # the agreement beside lean-build, Flock suite: 406 + 13%, not 15%, so that it fits vy-nebius-cpu-8's 468 GiB user slice,
-    # whose train line takes such shards and, placed there by the train minimum, a larger ask would never start
-    (("lean-agreement",), 460),
+    (("lean-agreement",), 470),                                  # the agreement beside lean-build, Flock suite: 406 + 15%
     (("lean-audit:security/Proofs",), 330),                      # security/Proofs replayed beside pytest, suites: 282 + 15%
-    # circuit-check granted the slot once alone: 292 + 15%; beside it, what `cc_mem_gb` leaves lean-suites holds vLLM's two
-    # thirds and the rest of lean-suites (105 + 15%)
+    # circuit-check granted the slot once alone: 292 + 15%; beside it, what `cc_mem_gb` leaves lean-suites holds vLLM's second
+    # third and the rest of lean-suites
     (("circuit-check",), 340),
     # ci.toml's groups of lean-suites where no row above holds them: twice (`groups` gives lean-suites half the slot) what the
     # group's parts held running alone, + 15%, which their workers fit at their worker_gb
     (("lean-suites:verity-flock:1/6",), 290),                    # beside pytest, Flock's first two sixths, vLLM's first third: 124
-    (("lean-suites:verity-flock:3/6",), 270),                    # beside lean-build, Flock's other four sixths: 115
-    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 250),   # beside the Rust build, vLLM's other two thirds: 105
+    (("lean-suites:verity-flock:3/6",), 330),                    # beside lean-build, Flock's other four sixths, vLLM's last third: 140
+    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 250),   # beside the Rust build, vLLM's second third: under 105
     (("pytest", "lean-suites"), 240),                            # pytest whole beside the parallel suites: 208 + 15%
     (("lean-build", "lean-audit"), 130),                         # lean-build, the rest of the audit, Flock suite: 110 + 15%
     (("lean-build",), 130),                                      # lean-build and the Flock suite alone: 110 + 15%
@@ -2867,11 +2865,13 @@ STEPS_LOG = "steps.jsonl"
 
 def preflight() -> list[tuple[str, list[str] | str, Path]]:
     """The steps before the groups: `uv lock --check` (a current lock needs no index), then `LINTS` (without bytecode or
-    pytest's cache, so they leave nothing in the tree), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
+    pytest's cache, so they leave nothing in the tree) under this interpreter when it has pytest, else under `uv run --locked`
+    (a shipped tree's system python3 has none), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
     uv = SETTINGS.UV or shutil.which("uv")
     lock = [uv, "lock", "--check"] if uv else "failed: no `uv` here to check `uv.lock` (run check through `uv run`)"
+    python = [sys.executable] if uv is None or importlib.util.find_spec("pytest") else [uv, "run", "--locked", "python"]
     return [("preflight-lock", lock, ROOT),
-            ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
+            ("preflight-lints", [*python, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
             ("preflight-fixtures", [sys.executable, "-B", str(Path(__file__).resolve()), "--fixtures"], ROOT)]
 
 

@@ -12,6 +12,7 @@ Definition before anything is timed; nothing here changes a committed format, an
 | `steady_walk.py`, `metrics.toml` | the metric `kernels/witness-walk-on-card-over-host`: a statement's GPU-seconds with the witness's units walked on the card over walked on the host, one member a pair of steady specs read from the store's runs: GLM-5.3's head block (`glm53-flock-steady-head-block` and its `-walk` sibling) and Llama 3.2 1B's `Gemm_v2` block (`llama32-1b-flock-steady-gemm` and its `-walk` sibling) (its suite: `tests/benchmarks/kernels/steady_walk`) |
 | `ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh` | the ship frame, below |
 | `job_nvcc.sh` | the nvcc a job's own library compiles with off the card, outside a ship |
+| `smoke_h100.sh` | the kernels' part of a smoke run on one H100: each hm96 leaf kernel that takes its salts as data (Pearl-C for sm_90a, the row engine and slot commit, the z/y commit, `commit_gpu`) held on the card to its reference for the same salt bytes, and each build's machine-code gate; `--dry` runs what a CPU can. No timing |
 
 Each directory is also a test suite, run on the CPU from the tree's root:
 
@@ -28,7 +29,7 @@ heap layout, on the lengths of the paths it reads and on how long its passes tak
 off, from a copy of their sources and with TMPDIR at paths of one length, and with a counted clock inside nvcc's front end
 (`ship_clock.c`), and the manifest names each shared library's cubins: a rebuild at the same commit, from any checkout,
 with the same toolkit at the same path and the same host compiler (a `research run --cwd source` on a node with
-`/usr/local/cuda-13.0`), reproduces every cubin byte for byte, on a busy machine too. They compile with `ship_nvcc.sh`,
+the machine's toolkit at 13.0), reproduces every cubin byte for byte, on a busy machine too. They compile with `ship_nvcc.sh`,
 nvcc with the three things its device compiler reads that follow a file's place in the tree fixed (the file names in the
 preprocessed text's line markers, the source's path, and its directory and environment): wherever a source or a header
 it includes sits, the device compiler is handed the same text and the same arguments, in the same directory, so a commit

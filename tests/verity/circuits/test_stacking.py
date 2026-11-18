@@ -147,7 +147,7 @@ def test_an_exact_int8_program_passes():
 def test_the_verdict_json_is_canonical_and_names_its_table():
     program, ends = int8_program()
     j = judge(program, ends).to_json()
-    assert j["schema"] == "verity/stacking-property/v1" and j["classes"] == P.digest()
+    assert j["schema"] == "verity/stacking-property/v2" and j["classes"] == P.digest()
     assert json.loads(canonical_json(j)) == j
     assert P.analyze(program, census(program, ends)).to_json()["classes"] == P.digest()
 
@@ -849,10 +849,10 @@ def test_a_word_split_into_its_bits_and_packed_back_is_budgeted_on_run_inputs_on
 
 
 def test_the_table_is_pinned():
-    """Changing the table changes its digest: a verdict names the one it was judged under (`classes`)."""
+    """Changing the table is a new VERSION and digest: a verdict names the one it was judged under."""
     assert json.loads(canonical_json(P.spec())) == P.spec()
     assert P.digest() == PINNED, P.digest()
 
 
-PINNED = ("6e06e5c6886a1a48ba75d530c0cec57c6dae5959f89a6457283d4c199cb5be90"
-          "d745cc53fce0c436a5c6e2d8e414b075b8549992ca93a963bd067e98a4de7886")
+PINNED = ("aaa394abf91e7785dc139e88d12eadb76dc4ee5d726cede255baf7874e385483"
+          "b6f2907db0d4e30d975ea9770d10eeecb2c6aebd188813b6f387473458cf1716")
