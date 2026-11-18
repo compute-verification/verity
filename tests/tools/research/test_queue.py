@@ -4480,10 +4480,12 @@ def _stale_world(world: World) -> tuple[str, str]:
                                           "gone.txt": None})
 
 
-def _merge_main(world: World, head: str) -> str:
-    """``head`` with `main` merged in, as a branch's owner merges it: a merge commit on the origin."""
+def _stale_merge(world: World, head: str) -> str:
+    """``head`` with `main` merged in, as a branch's owner merges it, the files it adds left where it put them: a merge commit
+    on the origin."""
     _git(world.dev, "fetch", "-q", "origin")
-    tree = _git(world.dev, "merge-tree", "--write-tree", head, "origin/main").splitlines()[0]
+    tree = _git(world.dev, "-c", "merge.directoryRenames=false", "merge-tree", "--write-tree", head,
+                "origin/main").splitlines()[0]
     merge = _git(world.dev, "commit-tree", tree, "-p", head, "-p", "origin/main", "-m", "Merge main")
     _git(world.dev, "push", "-q", "origin", f"{merge}:refs/dev/{merge}")
     return merge
@@ -4495,7 +4497,7 @@ def test_a_head_whose_own_added_line_names_a_path_a_landed_move_renamed_is_found
     the map gives, a retired path with none, a dotted module with its new name, and a file it adds under the old path."""
     base, move = _stale_world(world)
     head = world.change({"b.txt": "x\nreads old/a.txt and gone.txt\nfrom pkg.old import y\n", "old/c.txt": "c\n"}, base=base)
-    for h in (head, _merge_main(world, head)):
+    for h in (head, _stale_merge(world, head)):
         found = {(x["file"], x["line"], x["old"], x["new"]) for x in Q.stale_names(world.origin, move, h)}
         assert found == {("b.txt", 2, "old/a.txt", "new/a.txt"), ("b.txt", 2, "gone.txt", None),
                          ("b.txt", 3, "pkg.old", "pkg.new"), ("old/c.txt", 0, "old", "new/c.txt")}, found
@@ -4510,7 +4512,7 @@ def test_a_head_whose_only_stale_looking_text_is_a_kept_name_or_a_removed_line_i
     base, move = _stale_world(world)
     kept = world.change({"b.txt": 'tag = "old/scan-state/v1"\nold hands\n'}, base=base)
     removed = world.change({"doc.txt": "end\n"}, base=base)
-    assert Q.stale_names(world.origin, move, kept) == [] and Q.stale_names(world.origin, move, _merge_main(world, kept)) == []
+    assert Q.stale_names(world.origin, move, kept) == [] and Q.stale_names(world.origin, move, _stale_merge(world, kept)) == []
     assert Q.stale_names(world.origin, move, removed) == []
     back = _move_main(world, {"old/a.txt": "back\n"})
     again = world.change({"b.txt": "reads old/a.txt and old/c.txt\n"}, base=base)
@@ -4524,7 +4526,7 @@ def test_the_preflight_refuses_a_head_whose_own_line_names_a_renamed_path_naming
 
     _preflight_main(world)
     base, move = _stale_world(world)
-    world.gh.put(2, head := _merge_main(world, world.change({"b.txt": "reads old/a.txt\n"}, base=base)), ready=False)
+    world.gh.put(2, head := _stale_merge(world, world.change({"b.txt": "reads old/a.txt\n"}, base=base)), ready=False)
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 1
     err = capsys.readouterr().err
     assert f"b.txt:1 names `old/a.txt`, which the move {move[:12]} (tools/move/x_map.toml) sends to `new/a.txt`" in err, err
