@@ -277,8 +277,8 @@ theorem argIdx_lt (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode by
 /-- Reference `d` of a run read with outer stride 0 and inner stride 1 is the run's leaf `d` mod `inner`. -/
 theorem strided_get (n base inner cnt d : ℕ) :
     (Part.strided false n (base : Int) inner 0 1 cnt).get d = ⟨false, n, base + d % inner⟩ := by
-  simp only [Part.get, mul_zero, add_zero, mul_one]
-  rw [← Int.natCast_add, Int.toNat_natCast]
+  show (⟨false, n, ((base : Int) + ((d / inner : ℕ) : Int) * 0 + ((d % inner : ℕ) : Int) * 1).toNat⟩ : Ref) = _
+  rw [Int.mul_zero, Int.add_zero, Int.mul_one, ← Int.natCast_add, Int.toNat_natCast]
 
 section
 variable (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
