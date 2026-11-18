@@ -916,20 +916,65 @@ def test_the_batch_built_beside_the_lean_batch_its_tick_stages_takes_no_pr_set_a
 def test_no_lean_batch_is_staged_pinned_or_not_while_a_pr_changing_a_lean_input_that_a_batch_may_take_waits(pins):
     """Staged, a Lean batch keeps a PR changing a Lean input out of every build for its whole records run, and the batch
     staged after it would again.  So such a PR with no Lean change that a batch may take goes first, whatever its rank and
-    whether or not a pin names the Lean batch's PRs, at `lean` 0 too: the tick builds it with the PRs with no Lean change,
-    and the Lean batch is staged once it is in a candidate, on it; with the chain full, both wait, and one the tick's batch
-    has no place for keeps the Lean batch waiting as well.  One set aside goes behind the PRs waiting, the Lean batch's
-    among them, and keeps none waiting; nor does any with no records run, where no batch keeps it out."""
+    whether or not a pin names the Lean batch's PRs, at `lean` 0 too, while the chain has room for a batch to take it: the
+    tick builds it with the PRs with no Lean change, first in the batch whatever its rank, and the Lean batch is staged
+    once it is in a candidate, on it.  On a full chain holding no Lean change no batch
+    could take it, so the Lean batch is staged on the top and it waits beside that batch.  One set aside goes behind the
+    PRs waiting, the Lean batch's among them, and keeps none waiting; nor does any with no records run, where no batch keeps
+    it out."""
     touching = pr(1, None, "tools/check/check.py", lean_input=True)
     s = snap(ready=[touching, lean(2), pr(3)], records=True, **pins)
     assert decide(s) == [Build((1, 3), MAIN, 2)]
-    assert decide(replace(s, ready=(replace(touching, rank=9), lean(2), pr(3)))) == [Build((3, 1), MAIN, 2)]
+    assert decide(replace(s, ready=(replace(touching, rank=9), lean(2), pr(3)))) == [Build((1, 3), MAIN, 2)]
     assert decide(replace(s, candidates=(cand("c1", MAIN, 1, 3),))) == [Build((2,), "c1", 1, records=True)]
-    assert decide(replace(s, candidates=(cand("c8", MAIN, 8), cand("c9", "c8", 9)))) == []
-    assert decide(replace(s, ready=(pr(0), touching, lean(2)), batch=1)) == [Build((0,), MAIN, 2)]
+    assert decide(replace(s, candidates=(cand("c8", MAIN, 8), cand("c9", "c8", 9)))) == [Build((2,), "c9", 0, records=True)]
+    assert decide(replace(s, ready=(pr(0), touching, lean(2)), batch=1)) == [Build((1,), MAIN, 2)]
     aside = Outcome((1,), heads(1), INFRA, (1,), MAIN)
     assert decide(replace(s, history=(aside,))) == [Build((2,), MAIN, 2, records=True), Build((3,), MAIN, 2)]
     assert decide(replace(s, records=False)) == [Build((2,), MAIN, 2)]
+
+
+def test_a_pinned_lean_batch_is_staged_on_a_full_chain_while_a_pr_changing_a_lean_input_that_no_batch_could_take_waits():
+    """On main's chain full at `depth` and holding no Lean change, no batch could take a waiting PR changing a Lean input
+    (`Ready.lean_input`), however long the chain stays full and whatever restack puts it back in the pool, so it holds no
+    Lean batch back: the pinned batch at `lean` 0 is staged on the chain's top, and the PR waits beside it until that batch
+    is on the chain."""
+    touching = pr(5, None, "tools/check/check.py", lean_input=True)
+    s = snap(cand("c8", MAIN, 8), cand("c9", "c8", 9), ready=[lean(1), lean(2), touching], records=True, depth=2, lean=0,
+             pinned=frozenset({1, 2}))
+    assert decide(s) == [Build((1, 2), "c9", 0, records=True)]
+    assert left_out(s) == [Leave(5, "h5", "Lean input beside a staged batch", "it changes a Lean input, and a Lean batch is "
+                                 "staged: no batch beside it takes one until it is on main's chain")]
+
+
+def test_a_pr_changing_a_lean_input_still_goes_first_while_main_s_chain_has_room_for_a_batch_to_take_it():
+    """With room on main's chain the tick's batch takes the PR changing a Lean input, and the pinned Lean batch waits for it,
+    to be staged on its candidate; the Lean PRs' reason says the chain has room."""
+    touching = pr(5, None, "tools/check/check.py", lean_input=True)
+    s = snap(cand("c8", MAIN, 8), ready=[lean(1), lean(2), touching], records=True, depth=2, lean=0, pinned=frozenset({1, 2}))
+    assert decide(s) == [Build((5,), "c8", 1)]
+    why = ("no Lean batch is staged while #5, which changes a Lean input, waits and main's chain has room for a batch to take "
+           "it: it goes first")
+    assert left_out(s) == [Leave(1, "h1", "Lean waits", why), Leave(2, "h2", "Lean waits", why)]
+    assert decide(replace(s, candidates=(cand("c8", MAIN, 8), cand("c5", "c8", 5)))) == [Build((1, 2), "c5", 0, records=True)]
+
+
+def test_no_second_lean_batch_is_staged_while_main_s_chain_holds_one_and_a_pr_changing_a_lean_input_waits():
+    """A Lean batch staged on a full chain kept the PR changing a Lean input out of every build for its records run.  While
+    that batch is on main's chain and the PR waits, no other Lean batch is staged, full as the chain is, so the PR isn't
+    kept out by batch after batch: the next is staged once the PR is on the chain too.  A full chain holding no Lean change
+    stages it."""
+    touching = pr(5, None, "tools/check/check.py", lean_input=True)
+    s = snap(cand("c1", MAIN, 1), cand("c8", "c1", 8), ready=[lean(1), lean(2), touching], records=True, depth=2)
+    assert decide(s) == []
+    assert left_out(s) == [
+        Leave(2, "h2", "Lean waits", "no Lean batch is staged while #5, which changes a Lean input, waits and main's chain "
+                                     "holds #1's Lean change: no other Lean batch is staged while that one is on the chain, "
+                                     "until it is too"),
+        Leave(5, "h5", "chain full", "main's chain is full at --depth 2")]
+    on = replace(s, candidates=(cand("c1", MAIN, 1), cand("c5", "c1", 5)))
+    assert decide(on) == [Build((2,), "c5", 0, records=True)]
+    assert decide(replace(s, candidates=(cand("c7", MAIN, 7), cand("c8", "c7", 8)))) == [Build((1,), "c8", 0, records=True)]
 
 
 def test_with_a_records_run_no_lean_batch_is_staged_on_a_chain_holding_a_pr_set_aside_before_that_changes_a_lean_input():
@@ -994,10 +1039,12 @@ def test_left_out_names_the_lean_prs_and_the_lean_inputs_a_staged_batch_keeps_ou
     assert decide(capped) == [Build((1,), MAIN, 2, records=True), Build((4,), MAIN, 2)]
     assert left_out(capped) == [Leave(2, "h2", "Lean limit", "behind the Lean PRs ranked before it: a Lean batch holds at most 1 (--lean)")]
     first = snap(ready=[pr(0), touching, lean(2)], records=True, batch=1)
-    assert decide(first) == [Build((0,), MAIN, 2)]
+    assert decide(first) == [Build((3,), MAIN, 2)]
     assert left_out(first) == [
-        Leave(3, "h3", "batch full", "behind the PRs ranked before it: a batch holds at most 1 (--batch)"),
-        Leave(2, "h2", "Lean waits", "no Lean batch is staged while #3, which changes a Lean input, waits: it goes first")]
+        Leave(0, "h0", "batch full", "behind #3, which changes a Lean input and goes first, ahead of rank, while a Lean batch "
+                                     "waits for it: a batch holds at most 1 (--batch)"),
+        Leave(2, "h2", "Lean waits", "no Lean batch is staged while #3, which changes a Lean input, waits and main's chain "
+                                     "has room for a batch to take it: it goes first")]
     aside = Outcome((1,), heads(1), INFRA, (1,), MAIN)
     waits = snap(cand("c1", MAIN, 1), ready=[lean(1), lean(2)], history=[aside], records=True, depth=3)
     (wait,) = decide(waits)
@@ -1973,6 +2020,8 @@ class World:
         self.put: dict[str, str] = {}            # this tick's Commits: the staged batch -> what it put on main's chain
         self.opened: dict[str, str] = {}         # a staged batch -> the batch it was first staged as, itself or one it repairs
         self.behind: dict[int, set[str]] = {}    # a PR changing a Lean input, waiting -> the staged batches it waited behind
+        self.unheld: set[str] = set()            # staged batches first staged on a full chain holding no Lean change
+        self.unheld_now: set[tuple[int, ...]] = set()   # the members of the Lean batch this tick stages so, if it does
         self.lockers = frozenset(m for m in numbers if self.marks[m].lean and rng.random() < 0.7) if records else frozenset()
         self.locks: dict[str, frozenset[int]] = {MAIN: frozenset()}      # sha -> the lock records its tree holds
         self.regenerated_on: dict[str, frozenset[int]] = {}             # sha -> the Lean inputs its records were regenerated on
@@ -2431,7 +2480,8 @@ class World:
         holds the pinned Lean PRs alone while one waits, else at most `lean`, a wide one alone, on no chain holding a wide one
         in flight; with records runs it is staged, only while no other batch stays staged, on no chain holding a PR set aside
         before that changes a Lean input (`erred`), and, pinned or not, only while no PR with no Lean change that changes a
-        Lean input waits, whatever its rank: it would keep that PR out; with none, it goes on `main` or on a top holding no
+        Lean input waits, whatever its rank, where a batch could take it or the chain holds a Lean change: it would keep
+        that PR out; with none, it goes on `main` or on a top holding no
         Lean change.  A batch of PRs with no Lean change, beside a staged batch, holds none changing a Lean input and no PR
         set aside; a Lean PR set aside goes behind the PRs with no Lean change waiting."""
         by = {c.sha: c for c in s.candidates}
@@ -2471,7 +2521,8 @@ class World:
                 self.seen["a suspect of a fail above bisected once its base passed" if o.base in landed else
                           "a suspect of a fail above back in once its base failed"] += 1
         self.seen["a batch of PRs of the quick tier built"] += a.members[0] in s.plain
-        ranked = sorted(a.members, key=lambda m: (ready[m].rank, m))
+        goes = self.goes_first(s, acts)
+        ranked = sorted(a.members, key=lambda m: (not (goes and ready[m].lean_input and not ready[m].lean), ready[m].rank, m))
 
         def opens(first: list[int]) -> set[int]:
             """What may open the batch: the PR first in rank, or, that one a move, which goes last or waits for a batch with
@@ -2494,8 +2545,16 @@ class World:
             assert not first or a.members[0] in opens(first), f"{where}: a Lean batch not opened by the Lean PR first in rank"
             plain = [r for r in waiting if not r.lean]
             assert first or not plain, f"{where}: a Lean PR set aside built while a PR with no Lean change waited"
-            ahead = [r.number for r in plain if r.lean_input] if s.records else []
-            assert not ahead, f"{where}: a Lean batch staged while #{ahead[0]}, which changes a Lean input, waits: it goes first"
+            chain = self.chain(s, acts)
+            held = [m for c in chain for m in c.members if m in flown and flown[m].lean]
+            touching = [r.number for r in plain if r.lean_input] if s.records else []
+            ahead = touching if len(chain) < s.depth or held else []
+            assert not ahead, (f"{where}: a Lean batch staged while #{ahead[0]}, which changes a Lean input, waits and "
+                               + ("a batch could take it" if len(chain) < s.depth else
+                                  f"the chain holds #{held[0]}'s Lean change") + ": it goes first")
+            self.seen["a Lean batch staged on a full chain while a PR changing a Lean input waited"] += bool(touching)
+            if touching:
+                self.unheld_now.add(a.members)
             wide = [m for m in leans if m in s.wide]
             assert not wide or len(leans) == 1, f"{where}: a wide PR built with another Lean PR"
             assert not [m for m in below if flown[m].lean and m in s.wide], f"{where}: a Lean PR built on a wide PR in flight"
@@ -2514,8 +2573,13 @@ class World:
             self.seen["a wide PR built"] += bool(wide)
         else:
             beside = bool(staged) or any(b.records for b in acts if isinstance(b, Build))
-            first = [r.number for r in waiting if not r.lean and not (beside and r.lean_input)]
+            first = sorted((r for r in waiting if not r.lean and not (beside and r.lean_input)),
+                           key=lambda r: not (goes and r.lean_input))
+            first = [r.number for r in first]
             assert not first or a.members[0] in opens(first), f"{where}: a batch not opened by the PR first in rank"
+            self.seen["a PR changing a Lean input opened a batch ahead of rank"] += bool(
+                goes and ready[a.members[0]].lean_input and any(r.rank < ready[a.members[0]].rank for r in waiting
+                                                                if not r.lean and not r.lean_input))
             assert not beside or not any(ready[m].lean_input for m in a.members), (
                 f"{where}: a PR changing a Lean input built beside a staged batch")
             assert first or not beside, f"{where}: a PR set aside built beside a staged batch"
@@ -2537,8 +2601,8 @@ class World:
         it out: no batch stays staged, the chain holds no wide Lean change, nor, with records runs, a PR set aside before that
         changes a Lean input (`erred`), and, with no records run, it has room and a top holding no Lean change; with records
         runs it waits, pinned or not, while a PR with no Lean change that changes a Lean input waits, which goes first: the
-        tick builds it when the chain has room.  And it builds a batch of PRs with no Lean change whenever one that a batch may
-        take waits and the chain has room, on the batch the tick commits too: beside a staged batch, one changing no Lean
+        tick builds it when the chain has room, and while the chain holds a Lean change it waits however full the chain.
+        And it builds a batch of PRs with no Lean change whenever one that a batch may take waits and the chain has room, on the batch the tick commits too: beside a staged batch, one changing no Lean
         input; with no records run, unless the Lean batch took the tick's build.  It says it builds nothing (`Wait`) only while
         a Lean PR waits for such a chain and no PR with no Lean change is ready to take.  The tick's rebuilds
         (`Build.replaces`) are none of these builds, and one staged again keeps a Lean batch out as a batch kept staged."""
@@ -2561,7 +2625,8 @@ class World:
         wide = [m for c in chain for m in c.members if flown[m].lean and m in s.wide]
         top = [m for m in chain[-1].members if flown[m].lean] if chain and not s.records else []
         admit = [r for r in self.takeable(s, acts, lean[0] if lean else None) if r.lean and (s.lean or r.number in s.pinned)]
-        turn = [r.number for r in waiting if r.lean_input and not r.lean] if admit and s.records else []
+        held = [m for c in chain for m in c.members if flown[m].lean]
+        turn = [r.number for r in waiting if r.lean_input and not r.lean] if admit and s.records and (room or held) else []
         erred = self.erred(s, acts)
         assert lean or not admit or staged or wide or erred or top or turn or not (s.records or room), (
             f"{where}: no Lean batch opened while #{admit[0].number} could be admitted and nothing is staged")
@@ -2589,9 +2654,11 @@ class World:
         """Within one staging: a ready PR with no Lean change that changes a Lean input, which a batch may take, is kept out
         of the builds beside a staged batch, and it waits so behind one staged batch at most, the one staged before it was
         ready (the same batch staged again is that one still).  None is staged while it waits, so it is in a build before
-        the next one is; ``s``: the snapshot once the tick's actions are applied."""
+        the next one is, but for one staged on a full chain holding no Lean change, where no batch could take it (`unheld`);
+        ``s``: the snapshot once the tick's actions are applied."""
+        self.unheld_now = set()
         replaced = {c.repairs for c in s.candidates}
-        staged = {self.opened[c.sha] for c in s.candidates if c.waits and c.sha not in replaced}
+        staged = {self.opened[c.sha] for c in s.candidates if c.waits and c.sha not in replaced} - self.unheld
         waiting = {r.number for r in self.pool(s, []) if r.lean_input and not r.lean}
         self.behind = {m: self.behind.get(m, set()) | staged for m in waiting}
         for m, batches in self.behind.items():
@@ -2639,6 +2706,17 @@ class World:
                 out[m, h] = (o.state if o.state != UNSAID else FAIL if o.base in landed else
                              UNSAID if m in o.suspects else FAIL), o
         return out
+
+    def goes_first(self, s: Snapshot, acts: list) -> bool:
+        """Whether, with records runs and a Lean PR waiting, a PR with no Lean change that changes a Lean input waits (`pool`)
+        where a batch could take it, main's chain having room, or where the chain holds a Lean change: it holds the Lean
+        batch back, and opens the tick's batches of PRs with no Lean change ahead of rank, so the chain's next room is its."""
+        chain = self.chain(s, acts)
+        flown = {**{r.number: r for r in s.ready}, **{r.number: r for r in s.flying}}
+        held = any(m in flown and flown[m].lean for c in chain for m in c.members)
+        pool = self.pool(s, acts)
+        return s.records and (len(chain) < s.depth or held) and any(r.lean for r in pool) and any(
+            r.lean_input and not r.lean for r in pool)
 
     def takeable(self, s: Snapshot, acts: list, upto: Build | None = None) -> list[Ready]:
         """`pool` without the members of the tick's builds before ``upto``, or of all of them."""
@@ -2786,6 +2864,8 @@ class World:
         self.locks[sha] = self.locks[base] if locks is None else locks
         if staged:
             self.opened[sha] = self.opened.get(repairs, sha)
+            if repairs is None and members in self.unheld_now:
+                self.unheld.add(sha)
             self.cands[sha] = Candidate(sha, base, members, heads, tries=0, records=RecordsRun(), waits=True, repairs=repairs)
             self.due[sha], self.records_due[sha] = None, self.tick + self.rng.randint(1, 8)
             return sha
@@ -2940,11 +3020,12 @@ def test_the_simulated_queue_with_records_runs_builds_plain_batches_beside_a_sta
     lock records of its Lean inputs, a Lean batch's regenerated on that tree's Lean inputs; and that a red or a leave takes
     out only its suspects or that member, a Lean candidate it drops and a staged batch holding a leaver staged again in its
     tick (`World.restacked`).  And those of a tick's builds (`World.admits`, `World.batched`): a Lean batch is staged
-    whenever a Lean PR could be admitted and none stays staged, on a full chain too, but, pinned or not, only once no PR
-    changing a Lean input waits, and on no chain holding one set aside before; the tick that stages it builds the PRs with
+    whenever a Lean PR could be admitted and none stays staged, on a full chain too, but, pinned or not, not while a PR
+    changing a Lean input waits that a batch could take or beside a Lean change on the chain, which goes first, ahead of
+    rank, and on no chain holding one set aside before; the tick that stages it builds the PRs with
     no Lean change beside it, and the tick that puts one on main's chain builds on it there; never two Lean batches a tick,
     nor two of the others, beside the tick's rebuilds.  And a PR changing a Lean input waits behind one staged batch at
-    most (`World.waits`).  Every scenario settles within `ticks`."""
+    most, but for those staged on a full chain holding no Lean change (`World.waits`).  Every scenario settles within `ticks`."""
     seen: Counter[str] = Counter()
     for seed in SEEDS:
         seen.update(_settle(World(seed, wide=seed % 3 == 0, pinned=seed % 4 == 0, records=True)).seen)
@@ -2961,6 +3042,8 @@ def test_the_simulated_queue_with_records_runs_builds_plain_batches_beside_a_sta
                  "a Lean batch waited for a PR changing a Lean input to go first",
                  "a pinned Lean batch waited for a PR changing a Lean input to go first",
                  "a PR changing a Lean input that waited behind a staged batch went ahead of the next",
+                 "a Lean batch staged on a full chain while a PR changing a Lean input waited",
+                 "a PR changing a Lean input opened a batch ahead of rank",
                  "a Lean PR waited for a PR set aside before to leave the chain",
                  "a PR set aside waited behind a staged batch", "a pinned Lean batch built",
                  "an unpinned Lean PR built beside pins",
@@ -3093,9 +3176,10 @@ def _coming(seed: int, policy: Callable[[Snapshot], list] = decide) -> World:
 def test_a_pr_changing_a_lean_input_is_in_a_build_within_one_staging_while_pinned_lean_batches_keep_coming_at_lean_0():
     """Pins only order the Lean PRs: at `lean` 0, with a pinned Lean PR waiting whenever a staged batch goes onto main's
     chain, a ready PR with no Lean change that changes a Lean input, which a batch may take, waits behind one staged
-    batch at most, the one staged before it was ready (`World.waits`).  No pinned batch is staged while it waits
-    (`World.batched`): it goes ahead of the next into a build, as soon as the chain has room, and that batch is staged
-    once it is in a candidate, back to back with the last where no such PR waits.  Every invariant holds and every world
+    batch at most, the one staged before it was ready, but for those staged on a full chain holding no Lean change, where
+    no batch could take it (`World.waits`).  Else no pinned batch is staged while it waits (`World.batched`): it goes
+    ahead of the next into a build, ahead of rank, as soon as the chain has room, and that batch is staged once it is in a
+    candidate, back to back with the last where no such PR waits.  Every invariant holds and every world
     settles within `ticks`."""
     seen: Counter[str] = Counter()
     for seed in SEEDS:
