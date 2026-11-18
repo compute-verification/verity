@@ -23,8 +23,8 @@ REGISTRY = Registry(
       "--local's working directory, the only place it writes: the checkpoint, the package caches, the lease's lock "
       "files where no `gpu-lease` is installed, and each run's records under runs/"),
     S("LOCAL_NODE", str, None, VALUE,
-      "--local's node sheet (`calibration/hardware/nodes/`), in place of the one for this machine's card (`LOCAL_SHEETS`); the "
-      "verifier's node is one card of it"),
+      "--local's node sheet (`calibration/hardware/nodes/`), in place of the one whose `device.sku` is this machine's "
+      "card (`sheet_of`); the verifier's node is one card of it"),
     S("VLLM_PY", str, None, VALUE,
       "--local's vLLM interpreter, a Python with vLLM installed, which serves the checkpoint and fetches it"),
     S("ARENA_GIB", str, None, VALUE,
