@@ -493,7 +493,7 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
     (out / "runs.jsonl").write_text(json.dumps(row, default=str) + "\n")
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1, default=str) + "\n")
     b = (verdict.get("replay_deferred") or {}).get("bundles") or [{}]
-    return {"row_dir": str(d), "bundle": b[0].get("path"), "manifest_sha256": b[0].get("manifest_sha256"), "bytes": b[0].get("bytes"),
+    return {"row_dir": str(d), "bundle": b[0].get("path"), "bytes": b[0].get("bytes"),
             "commit_scheme": scheme, "binding_map_digest": bmap["digest"], "binding_map_entries": bmap["entries_n"],
             "requests": [q["request_id"] for q in reqs], "port_layout": layout, "seal_s": round(time.perf_counter() - t0, 3),
             "phases_s": {"binding_map": round(t_map - t0, 3), "store": round(t_store - t_map, 3),

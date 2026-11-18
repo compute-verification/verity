@@ -354,7 +354,7 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
     units = [d for d, _ in defs.values()]
     one = "templates" not in params
     digests = tuple(P.program_digest(Program(u)) for u in units)
-    schemas = {m.port(p): m.schema(p) for m in mine.members for p in CS.port_leaves(m)}
+    schemas = {t: s for t, (s, _n) in mine.trees.items()}
     strata = [s["template"] for s in D.derive(mine.program, mine.query, mine.law, mine.work_table).get("strata") or ()]
     taken = program_values(mine.program)
     public = [("population", "N, the window's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),

@@ -1,12 +1,12 @@
 """PoUW's serving side: what runs beside a served model to commit its matrix multiplies, one directory a scheme (`h1`,
-`pearl_c`, and `ncp` for ``ncp-v1`` and ``ncp-v2``), the live coins the schemes' windows draw (`coins`), and the calls'
+`pearl_c`), the live coins the schemes' windows draw (`coins`), and the calls'
 operands, devices and circuits beside them.
 
 A workload reaches it only through the names this module exports. Per call there are two:
 
 * `run_matmul(run, site, x, weight, bias)`: run this matrix multiply under PoUW, y = x weightᵀ (+ bias), served and
-  committed by ``run`` (a `MatmulRun`): ``ncp-v1`` (`NcpRun`), ``ncp-v2`` (`NcpCircuitRun`) or a workload's own (Pearl-C's run
-  on the device is the workload's).
+  committed by ``run`` (a `MatmulRun`): a workload's own (Pearl-C's run on the device is the
+  workload's).
 * `observe_matmul(run, site, x, weight, y, ...)`: a matrix multiply the workload served itself, recorded by ``run`` (a
   `MatmulObserver`), which computes nothing: H1 (`H1Run`), whose ``x`` is the int8 arm's s8 rows. The workload hands
   H1 its arm's GEMM and dequantization first (`use_int8_arm`, `int8_arm.Int8Arm`).
@@ -33,21 +33,13 @@ _SERVING = f"{_PROVER}.serving"
 #: each exported name's module and attribute, read from it at every lookup (never cached here), so an import inside a
 #: function sees the module's current attribute
 _LAZY = {
-    "NcpRun": (f"{_SERVING}.ncp", "NcpRun"),
-    "NcpCircuitRun": (f"{_SERVING}.ncp", "NcpCircuitRun"),
-    "NcpSettings": (f"{_SERVING}.ncp", "NcpSettings"),
-    "LayerRows": (f"{_SERVING}.ncp", "LayerRows"),
-    "weight_operands": (f"{_SERVING}.ncp", "weight_operands"),
-    "QUANTIZER": (f"{_SERVING}.ncp", "QUANTIZER"),
     "quantize": (f"{_SERVING}.operands", "quantize"),
-    "host_array": (f"{_SERVING}.ncp", "host"),
     "use_int8_arm": (f"{_SERVING}.int8_arm", "use"),
     "use_tensors": (f"{_SERVING}.tensors", "use"),
     "use_h1_device": (f"{_SERVING}.tensors", "use_h1"),
     "H1Run": (f"{_SERVING}.h1", "H1Run"),
     "PearlCKernel": (f"{_SERVING}.pearl_c.kernel", "Kernel"),
     "PearlC": (f"{_PROVER}.schemes.pearl_c", "PearlC"),
-    "H100": (f"{_PROVER}.schemes.pearl_c_device", "H100"),
     "reserve_salt": (f"{_SERVING}.coins.window", "reserve_salt"),
     "gate_of": (f"{_SERVING}.coins.window", "gate_of"),
     "served_passes": (f"{_SERVING}.pearl_c.window", "served_passes"),

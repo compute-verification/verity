@@ -50,7 +50,7 @@
 # whose A5 line is the audit's verdict, whose REGISTERED line the window's kind, commitment and run root length, and whose
 # COINS line (also summary.json's ``coins``) the coins, the card and which check accepted. No other file of the row is
 # published (with A5_KEEP=1 they stay on the machine): match/spec.json holds the prompts, commit/ the token record, the bundle and
-# the slim keep (the committed store with its salts, the weights key, the opened weights, the requests and served tokens),
+# the slim keep (the committed store with its salts, the opened weights and their salts, the requests and served tokens),
 # and stages.txt, row.log and the stages' logs can quote a served token on a FAIL. Under KEPT, beside the row dir: each
 # stage's output, the row dir's sizes and what `row run` writes for a research run (result.json, its evidence/ copies of
 # the row's records and the Commit's window, which the stages get KEPT for, never the published run dir).
