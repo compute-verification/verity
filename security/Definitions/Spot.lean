@@ -30,6 +30,7 @@ what each policy's damage is (integrity's damaged egress, control at the public 
 detection, with the named assumptions `DetectionPressure` and `TrustedModel`, the independent sample, and deviations from
 the honest egress. `SamplePressure`: the deployed sample, `k` of the `n` units uniformly without replacement, and the samples
 that miss an incorrect set. `ChiPool`: the halt `Δ` windows after the first caught window's commitment, and what leaves
-through it (`Strategy.cumLag`, `Strategy.cumUpToLag`). -/
+through it (`Strategy.cumLag`, `Strategy.cumUpToLag`). `Limits`: the exfiltration, infiltration and inference-only limits
+as statements over the circuit's description, each given the sampling layer's soundness. -/
 
 @[expose] public section
