@@ -865,18 +865,29 @@ def _class(lines: Sequence[str]) -> str:
     return found[-1] if found else "no exception"
 
 
+def _refused(lines: Sequence[str]) -> str | None:
+    import public_files as PF
+
+    return PF.refusal(next((line for line in reversed(lines) if line.strip()), ""))
+
+
 def failed(rc: object, logs: Sequence[str]) -> str:
-    """A tool's failure by its last exception's class and its exit status alone (``-`` is stdin): a tool's log holds
-    paths, hosts and its inputs' values, so no line of it is said."""
-    return f"({_class(_logs(logs))}, exit {rc}): its log is in the run's private directory"
+    """A tool's failure by its refusal's name where its log's last line is one of our tools' fixed refusals
+    (`public_files.REFUSALS`), else by its last exception's class, and its exit status (``-`` is stdin): a tool's log
+    holds paths, hosts and its inputs' values, so no line of it is said."""
+    lines = _logs(logs)
+    if name := _refused(lines):
+        return f"(refused {name}, exit {rc}): its log is in the run's private directory"
+    return f"({_class(lines)}, exit {rc}): its log is in the run's private directory"
 
 
 def tool_said(rc: object, logs: Sequence[str]) -> str:
-    """Our tool's own last line where it passed (its verdict), else its last exception's class alone, for a line that
-    says the exit status itself."""
+    """Our tool's own last line where it passed (its verdict), else its refusal's name (`failed`) or its last exception's
+    class alone, for a line that says the exit status itself."""
     lines = _logs(logs)
     if str(rc) != "0":
-        return f"{_class(lines)}; its log is in the run's private directory"
+        name = _refused(lines)
+        return f"{f'refused {name}' if name else _class(lines)}; its log is in the run's private directory"
     return next((line for line in reversed(lines) if line.strip()), "")
 
 

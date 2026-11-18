@@ -403,13 +403,14 @@ def shape(layout: Mapping[str, Any], steps: int) -> tuple[int, int, int]:
     return k, int(layout["m"]), calls
 
 
-def reuse(window: Mapping[str, Any], layout: Mapping[str, Any], steps: int, key: bytes,
+def reuse(window: Mapping[str, Any], layout: Mapping[str, Any], steps: int, salts: Any,
           rows_of: Callable[[str, int, np.ndarray], np.ndarray]) -> dict[str, Reused]:
     """The audited circuit's tables (`shape`) as its registered values, each W's table of it (``window``, the window's
     registration, `registration`): round s's A table ``<prefix>a/<K>@<s>`` as `credit.commit_rows` of (s, K), and its
     input-ids table ``<prefix>ids@<s>`` as `credit.commit_ids` of s. Each holds the rows ``rows_of(name, rows, empty)``
     gives (the rows the circuit's proof blocks make of it, every other row ``empty``: zero codes of scale 0, an id
-    `words.EMPTY_ID`), salted as H1 salts W's (H1's ``key``, at the table's `names.nonce` or `names.IDS_NONCE` + s),
+    `words.EMPTY_ID`), salted as H1 salts W's (H1's kept ``salts``, `pouw_h1_prover.salts_of`, at the table's
+    `names.nonce` or `names.IDS_NONCE` + s),
     under W's entry's domain. ValueError unless each is W's entry of it in root, leaves and words: the proof blocks don't
     make the table H1 committed, so the window's registration can't reuse it."""
     k, m, _calls = shape(layout, steps)
@@ -424,16 +425,17 @@ def reuse(window: Mapping[str, Any], layout: Mapping[str, Any], steps: int, key:
             raise ValueError(f"the window's registration registers no {h1}, which the audited circuit reads as {name}")
         words = np.ascontiguousarray(rows_of(name, n, empty), dtype=np.uint16)
         dom = bytes.fromhex(e["domain"])
-        bcs, levels = NR._numpy(words, key, nonce, None, dom)
+        ys = salts.at(nonce, n)
+        bcs, levels = NR._numpy(words, ys, dom)
         got = out[name] = Reused(program=str(window.get("program")), value=name, words=int(words.shape[1]),
-                                 word_bits=RV.WORD_BITS, rows=NR.Rows(words, n), salts=NR.Salts(key, nonce, n), bcs=bcs,
+                                 word_bits=RV.WORD_BITS, rows=NR.Rows(words, n), salts=NR.Salts(ys, n), bcs=bcs,
                                  levels=levels, schema=G.SCHEMA_V2, domain_id=dom)
         if (got.root.hex(), got.leaves, got.words, RV.WORD_BITS) != (e.get("root"), e.get("leaves"), e.get("words"),
                                                                      e.get(RV.WIDTH_KEY, RV.WORD_BITS)):
             raise ValueError(f"{name}: the rows the audited circuit's proof blocks make of it are not the window's "
                              f"registration's {h1} (root {got.root.hex()[:16]}… for {str(e.get('root'))[:16]}…, "
                              f"{got.leaves} rows of {got.words} words for {e.get('leaves')} of {e.get('words')}): the model "
-                             "didn't make the table H1 committed, or H1's key is another")
+                             "didn't make the table H1 committed, or H1's salts are another window's")
     return out
 
 

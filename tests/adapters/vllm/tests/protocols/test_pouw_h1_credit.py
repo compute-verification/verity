@@ -59,7 +59,7 @@ def _window(j10r: bool = False):
         return out
 
     served.receipts = receipts
-    run = PH.H1Run("t", SALT, {0: "q", 1: "k", 2: "o"}, shapes, 64, 2, key=bytes([7]) * 32, served=served)
+    run = PH.H1Run("t", SALT, {0: "q", 1: "k", 2: "o"}, shapes, 64, 2, served=served)
     rng, g = np.random.default_rng(5), torch.Generator().manual_seed(5)
     ws = [(torch.from_numpy(rng.integers(-127, 128, (n, k), dtype=np.int8)), torch.rand(n, 1, generator=g) + 0.5)
           for n, k in shapes]
@@ -82,7 +82,7 @@ def test_credit_accepts_the_honest_window_and_refuses_each_negative_by_name(j10r
     w = PC.of_run(run, run.served)
     assert PC.bc_of(PC.CC.OK_ROW, PC.CC.ok_salt(w.window, 0)) == w.ok.bcs[0]
     units = [w.u0(0), w.u0(0) + 3, w.u0(2) + 1, w.u0(5)]
-    got = PC.check(w, units, lambda c: held[c], lambda c: words[c], run._key)
+    got = PC.check(w, units, lambda c: held[c], lambda c: words[c], run._salts)
     print("\n".join(PC.lines(got)))
     assert got["honest"]["accepted"], got["honest"]
     negs = got["negatives"]
