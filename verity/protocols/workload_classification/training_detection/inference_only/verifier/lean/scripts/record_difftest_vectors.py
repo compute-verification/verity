@@ -100,7 +100,7 @@ from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.population import mixed_population_program, wired_population_program
 from verity.circuits.program import Program
-from verity.circuits.refs import array_of, record_of, tuple_of
+from verity.circuits.refs import Affine, Concat, array_of, as_grid, concat, record_of, refs_from_json, spell, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.commitments.periods.edges import INPUT_ID
 
@@ -1057,12 +1057,12 @@ def shaped() -> list[dict]:
 
     def shared(nodes: list, desc: dict) -> None:
         """`Feed`'s selection not mapped: every unit handed the first unit's input gates."""
-        _share(units(nodes)[-1], 0, desc["types"].index(["Value", 16]))
+        _share(nodes, units(nodes)[-1], 0, desc["types"].index(["Value", 16]))
 
     def computed(nodes: list, _desc: dict) -> None:
         """`Select`'s row handed `Norm`'s output, computed gates, in place of input gates."""
         select = units(nodes)[-2]
-        count = select["args"][0]["refs"]["affine"][3]
+        count = _refs(nodes, select["args"][0]["refs"]).count
         select["args"][0]["refs"] = {"affine": ["n", nodes.index(units(nodes)[2]), 0, count]}
 
     def split(apart: bool):
@@ -1076,9 +1076,10 @@ def shaped() -> list[dict]:
             for node, m in ((norm, h), (second, n - h)):
                 node["n"] = m
                 for a in node["args"]:
-                    _, src, start, count = a["refs"]["affine"]
-                    per = count // n
-                    a["refs"]["affine"] = ["n", src, start + (per * h if node is second else 0), per * m]
+                    refs = _refs(nodes, a["refs"])
+                    per = refs.count // n
+                    lo = per * h if node is second else 0
+                    a["refs"] = _spelled(refs.slice(lo, lo + per * m))
                     a["type"] = _halved(desc, a["type"], m)
                 node["out"] = _halved(desc, node["out"], m)
             at = k + 2 if apart else k + 1
@@ -1086,12 +1087,13 @@ def shaped() -> list[dict]:
             moved = {i: i + (i >= at) for i in range(len(nodes))}
             ret = desc["definitions"][desc["root"]]["body"]["ret"]["concat"]
             for j, r in reversed(list(enumerate(ret))):
-                _, i, start, count = r["affine"]
-                if i == k:
-                    ret[j:j + 1] = [{"affine": ["n", k, start, count * h // n]},
-                                    {"affine": ["n", at, start, count * (n - h) // n]}]
+                run, lanes = as_grid(refs_from_json(r))
+                if {i for _, i, *_ in lanes} == {k}:
+                    whole = spell(run, lanes)
+                    ret[j:j + 1] = [_spelled(whole.slice(0, whole.count * h // n)),
+                                    _spelled(Affine("n", at, whole.base, whole.count * (n - h) // n))]
                 else:
-                    r["affine"][1] = moved[i] if i > k else i
+                    ret[j] = spell(run, tuple((s, moved[i] if i > k else i, *x) for s, i, *x in lanes)).to_json()
         return edit
 
     first("2x3 one input run handed to two rows", lowered(2, 3), 27, reroot=twice, broken="own-rows")
@@ -1460,12 +1462,35 @@ def _leaves(t: list) -> list[int]:
     return _leaves(t[2]) * t[1] if t[0] == "Array" else [w for f in t[1] for w in _leaves(f)]
 
 
-def _share(node: dict, j: int, member: int) -> None:
+def _refs(nodes: list, j: dict):
+    """A body's references `j` in any part form the Program writes, an alias resolved to the earlier argument's."""
+    if "alias" in j:
+        k, a = j["alias"]
+        return _refs(nodes, nodes[k]["args"][a]["refs"])
+    if "concat" in j:
+        return concat([_refs(nodes, x) for x in j["concat"]])
+    return refs_from_json(j)
+
+
+def _spelled(refs) -> dict:
+    """`refs` with each part in the first form that spells it (`refs.spell`)."""
+    out = [spell(*as_grid(p)).to_json() for p in (refs.parts if isinstance(refs, Concat) else [refs])]
+    return out[0] if len(out) == 1 else {"concat": out}
+
+
+def _run(nodes: list, j: dict) -> Affine | None:
+    """`j`'s references where they are one run of one root node's leaves, else None."""
+    p = _refs(nodes, j)
+    p = None if isinstance(p, Concat) else spell(*as_grid(p))
+    return p if isinstance(p, Affine) and p.space == "n" else None
+
+
+def _share(nodes: list, node: dict, j: int, member: int) -> None:
     """A batch's argument `j` no longer mapped: every member handed the first member's leaves, of the type at
     `member` of the descriptor's types."""
-    at, count = node["args"][j]["refs"]["affine"][1::2]
+    refs = _refs(nodes, node["args"][j]["refs"])
     node["axes"][j] = None
-    node["args"][j].update(type=member, refs={"affine": ["n", at, 0, count // node["n"]]})
+    node["args"][j].update(type=member, refs=_spelled(refs.slice(0, refs.count // node["n"])))
 
 
 def _commit(case: dict, record: str, program: str | None = None) -> None:
@@ -1625,7 +1650,8 @@ def _break(rng, made: dict, how: str) -> bool:
         desc = json.loads(inst["program"])
         nodes, types = desc["definitions"][desc["root"]]["body"]["nodes"], desc["types"]
         #: every argument of every unit's node, an input node's leaves: (node, argument, input node, leaves)
-        runs = [(k, j, *a["refs"]["affine"][1::2]) for k, n in enumerate(nodes) for j, a in enumerate(n["args"])]
+        runs = [(k, j, r.idx, r.count) for k, n in enumerate(nodes) for j, a in enumerate(n["args"])
+                if (r := _run(nodes, a["refs"])) is not None]
         if how == "row-twice":
             found = [(a, b) for a in runs for b in runs if a[:2] != b[:2] and nodes[a[2]]["fn"] == nodes[b[2]]["fn"]
                      and b[3] <= a[3]]
@@ -1652,7 +1678,7 @@ def _break(rng, made: dict, how: str) -> bool:
                 half = rng.randint(1, count - 1)
                 arg["refs"] = {"concat": [{"affine": ["n", at, 0, half]}, {"affine": ["n", at, 0, count - half]}]}
             elif how == "row-broadcast":
-                _share(nodes[k], j, other)
+                _share(nodes, nodes[k], j, other)
             elif how == "row-computed":
                 arg["refs"] = {"affine": ["n", other, 0, count]}
             elif how == "row-explicit":
