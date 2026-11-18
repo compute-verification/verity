@@ -13,6 +13,7 @@ set -uo pipefail
 export O=${OUT:?}
 CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2
 export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
+GENCODE=$(python3 benchmarks/kernels/machine.py gencode sm_120a) || exit 2
 export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm
 # the references import their siblings as verity's modules, from the clone's root
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}
@@ -21,12 +22,12 @@ trap 'rm -rf "$BIN"' EXIT
 PY=${CG_PYTHON:-python3}
 REF=${CG_REF_PYTHON:-"uv run --no-project --with numpy --with python-sat --with-editable benchmarks/pouw/exact_kit python3"}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
-nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$BIN/cpv" $D/cpv.cu -lcuda -lcublasLt -lnvidia-ml \
+nvcc -O3 -std=c++17 --no-compress -gencode "$GENCODE" -Xptxas -v -o "$BIN/cpv" $D/cpv.cu -lcuda -lcublasLt -lnvidia-ml \
   > "$O/build.log" 2>&1
 rc=$?
 echo "build rc $rc" | tee -a "$O/rc.txt"
 [ "$rc" = 0 ] || { tail -40 "$O/build.log"; exit 4; }
-$PY verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py "$BIN/cpv" --json "$O/sass_gate.json" > "$O/sass_gate.txt" 2>&1
+$PY verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py --cuda-bin "$CUDA_HOME/bin" "$BIN/cpv" --json "$O/sass_gate.json" > "$O/sass_gate.txt" 2>&1
 echo "sass_gate (whole binary) rc $?" | tee -a "$O/sass_gate.txt"
 # cpv.cu includes cgemm.cu and so egemm.cu's kernels, some never launched; as in crun.sh, the gate passes only if every
 # flagged instruction is in one of those (a pv kernel takes PvArgs, so the pattern never excuses one)

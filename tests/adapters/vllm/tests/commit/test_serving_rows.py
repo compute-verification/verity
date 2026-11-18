@@ -31,7 +31,7 @@ from verity.commitments.rowleaf import (
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 from verity_vllm.commit import index as IX
@@ -40,7 +40,7 @@ from verity_vllm.definitions.registry import b1  # noqa: F401  (registers RoPEHe
 VECTOR = json.loads((Path(__file__).parent / "serving_row_leaf_vector.json").read_text())
 DEFS = (bind(REGISTRY["RoPEHead_v1"], D=64), bind(REGISTRY["SiluMul_v1"], I=64))
 TEMPLATES = [P.template_id(d) for d in DEFS]
-DESIGN = D.parse_design("subset:1")
+DESIGN = RND.parse_design("subset:1")
 RUN = "ab" * 32
 
 
@@ -289,7 +289,7 @@ def s8_window(chunks: list[tuple[int, int]], n: int = 5) -> tuple[SR.Binding, li
     ms = [SR.Member(P.template_id(t), (("x", 34), ("w", 34)), (("o0", 1),), size, base, name=f"{P.template_id(t)}/c{j}",
                     schemas=(("x", SEG), ("w", V2), ("o0", V2)), tables=(("x", size), ("w", size)))
           for j, (base, size) in enumerate(chunks)]
-    return SR.Binding(*IF.listed_program([(t, n)], ()), D.parse_design("stratified:2"), RUN, tuple(ms)), ms
+    return SR.Binding(*IF.listed_program([(t, n)], ()), RND.parse_design("stratified:2"), RUN, tuple(ms)), ms
 
 
 def test_bit_row_chunks_commit_each_port_under_its_schema_and_tile_their_template(tmp_path):

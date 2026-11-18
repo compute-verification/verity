@@ -43,17 +43,10 @@ theorem Scheme.accountingLayer : Scheme.AccountingLayer := by
 /-- **A richer run.** The audit's bound read along a map `f` from a scheme's runs to the audit's outcomes, with the
 probability that map's, is the audit's bound at the scheme's runs: the scheme's `Run` may carry more than the audit's
 outcome (committed values, rows, a log). -/
-theorem AuditBoundAt.comap {U Run Run' : Type} {L : Run → SamplingDesign U} {pr' : (Run' → Prop) → ℝ≥0∞}
+theorem AuditBound.comap {U Run Run' : Type} {L : Run → SamplingDesign U} {pr' : (Run' → Prop) → ℝ≥0∞}
     (f : Run' → Run) {accepts : Run → Prop} {incorrect : Run → Finset U} {ε : ℝ≥0∞} :
-    AuditBoundAt L (fun p => pr' fun r => p (f r)) accepts incorrect ε ↔
-      AuditBoundAt (fun r => L (f r)) pr' (fun r => accepts (f r)) (fun r => incorrect (f r)) ε :=
-  Iff.rfl
-
-/-- **A richer run, under one design.** -/
-theorem AuditBound.comap {U Run Run' : Type} {L : SamplingDesign U} {pr' : (Run' → Prop) → ℝ≥0∞} (f : Run' → Run)
-    {accepts : Run → Prop} {incorrect : Run → Finset U} {ε : ℝ≥0∞} :
     AuditBound L (fun p => pr' fun r => p (f r)) accepts incorrect ε ↔
-      AuditBound L pr' (fun r => accepts (f r)) (fun r => incorrect (f r)) ε :=
+      AuditBound (fun r => L (f r)) pr' (fun r => accepts (f r)) (fun r => incorrect (f r)) ε :=
   Iff.rfl
 
 /-- **The accounting layer over a period.** -/

@@ -232,7 +232,7 @@ open Classical in
 theorem live_le {A Ξ : Type} [Fintype A] [Fintype Ξ] {Np : ℕ} (R : JointRun A (Fin Np)) (w : Fin Np → ℝ) (Kd : ℕ)
     (ρ δs : ℝ) (hρN : ∀ t, ρ * Np * w t ≤ 1) (hδs : 0 < δs) :
     prob (fun ω : A × (Equiv.Perm (Fin Np) × Ξ) =>
-      (∀ v ∈ Pouw.Window.subsetDraw Kd ω.2.1, R.same ω.1 v) ∧
+      (∀ v ∈ (Verity.SamplingDesign.permPrefix Np Kd).draw ω.2.1, R.same ω.1 v) ∧
         Real.log (1 / δs) ≤ ρ * Kd * ∑ v, if ¬ R.same ω.1 v then w v else 0) ≤ δs := by
   rw [prob_prod]
   refine expect_le_of_le hδs.le fun a => ?_
@@ -245,9 +245,9 @@ theorem live_le {A Ξ : Type} [Fintype A] [Fintype Ξ] {Np : ℕ} (R : JointRun 
       div_le_one_of_le₀ (by exact_mod_cast (Finset.card_le_univ Bd).trans_eq (Fintype.card_fin Np))
         (Nat.cast_nonneg _)
     refine prob_le_of_slices _ hδs.le fun _ => ?_
-    calc prob (fun σ : Equiv.Perm (Fin Np) => (∀ v ∈ Pouw.Window.subsetDraw Kd σ, R.same a v) ∧
+    calc prob (fun σ : Equiv.Perm (Fin Np) => (∀ v ∈ (Verity.SamplingDesign.permPrefix Np Kd).draw σ, R.same a v) ∧
           Real.log (1 / δs) ≤ ρ * Kd * ∑ v, if ¬ R.same a v then w v else 0)
-        ≤ prob (fun σ : Equiv.Perm (Fin Np) => ∀ v ∈ Pouw.Window.subsetDraw Kd σ, v ∉ Bd) :=
+        ≤ prob (fun σ : Equiv.Perm (Fin Np) => ∀ v ∈ (Verity.SamplingDesign.permPrefix Np Kd).draw σ, v ∉ Bd) :=
           prob_mono fun σ h v hv hB => (Finset.mem_filter.mp hB).2 (h.1 v hv)
       _ ≤ (1 - (Bd.card : ℝ) / Np) ^ Kd := Budget.miss_le Kd Np Bd
       _ ≤ (1 - ρ * ∑ v, if ¬ R.same a v then w v else 0) ^ Kd :=
@@ -291,7 +291,7 @@ theorem circuitWorkSeeded : ResourceAccounting.Guarantees.Compose.CircuitWorkSee
   let BadW : Fin Cd.rounds → Paths (Fin Tq → B) Cd.rounds → Prop := fun r a' =>
     BrW r a' ∨ (0 < wholeTheta Sc Cd r.val ∧ ∃ q, Real.log (Tq / δg) / wholeTheta Sc Cd r.val ≤ gW r q a')
   let PL : Paths (Fin Tq → B) Cd.rounds × (Equiv.Perm (Fin Np) × Ξ) → Prop := fun ω =>
-    (∀ v ∈ Pouw.Window.subsetDraw Kd ω.2.1, R.same ω.1 v) ∧
+    (∀ v ∈ (Verity.SamplingDesign.permPrefix Np Kd).draw ω.2.1, R.same ω.1 v) ∧
       Real.log (1 / δs) ≤ ρ * Kd * ∑ v, if ¬ R.same ω.1 v then shareCone Sc Cd Np v else 0
   let Live : Paths (Paths (Fin Tq → B) Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) 1 → Prop := fun x => PL (coinAt x 0)
   have hOff' : prob (fun x : Paths (Paths (Fin Tq → B) Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) 1 =>
@@ -328,7 +328,7 @@ theorem circuitWorkSeeded : ResourceAccounting.Guarantees.Compose.CircuitWorkSee
     · exact Or.inl (Or.inl (Or.inr hOx))
     by_cases hBx : ∃ r ∈ (Finset.univ : Finset (Fin Cd.rounds)), BadF r (coinAt x 0).1 ∨ BadW r (coinAt x 0).1
     · exact Or.inl (Or.inr hBx)
-    have hpass : ∀ v ∈ Pouw.Window.subsetDraw Kd (coinAt x 0).2.1, R.same (coinAt x 0).1 v := by
+    have hpass : ∀ v ∈ (Verity.SamplingDesign.permPrefix Np Kd).draw (coinAt x 0).2.1, R.same (coinAt x 0).1 v := by
       have h1 := hOf.2 x fun w i => hEoff x hEx w i (hOf.1 x hacc w i)
       rw [hG] at h1
       exact h1.1

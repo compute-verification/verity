@@ -360,7 +360,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
   the verifier's copies (R1 to R8), `matches_public` to its public file, `receipt` logs it, `digest` names it, and `window_domain` is a
   registered root's commitment domain (`verity.commitments.window`'s, which an integration commits under).
-- `draw`: `parse_design` reads a sampling design's text, `derive` expands a rule over the verifier's program and query (and
+- `draw`: `derive` expands a rule over the verifier's program and query (and
   a work table), `check_draw` holds a sample to the docket and the verifier's sampling design, and `check_proved`
   holds the proved proof blocks to the sample; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
@@ -507,8 +507,8 @@ core's `tests/verity/circuits/partition_vectors.json` and `template_instance_vec
 ### Sampling designs as text and as registered
 
 - A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (`flock-circuit serve
-  --draw`'s syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_design`), each number in ASCII digits
-  (`draw.digits`, as the Lean reads them; a sample's `p` too).
+  --draw`'s syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`randomness.parse_design`), each number in ASCII digits
+  (`randomness.digits`, as the Lean reads them; a sample's `p` too).
 - As objects they are the forms `one_stage.draw`'s docstring gives, the rules expanded by `draw.derive`. The
   docket carries the sampling design expanded.
 - `derive` refuses a `K` outside `[1, N]`, a work sampling design without the verifier's work table, a subcircuit the
