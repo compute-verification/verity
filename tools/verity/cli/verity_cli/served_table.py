@@ -140,7 +140,9 @@ def _pearlplus_params(scheme: Scheme, cid: str, params: Mapping[str, Any]) -> di
 
 
 _COMMIT = re.compile(r"[0-9a-f]{40}")
-LOADS = ("varied", "fixed")
+#: the served window's loads (served_verdicts.sh's LOAD); ``front``, network-accounting's: the network attester's front's
+#: group is the run's one load and its audited window
+LOADS = ("varied", "fixed", "front")
 
 
 def _served(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -233,6 +235,10 @@ HEADERS = {
         "The served window under the network attester, SPOT and the memory wipe (verity/onsite-network/v0, a",
         "deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for",
         "its memory attester.", *_UNDECIDED),
+    "onsite_network_front": (
+        "onsite_network.toml with the network attester's front as the run's one load (load front): the one run in",
+        "which the network attester's chain and the window's compute audit see the same window, so the period check",
+        "can reach its tied form.", *_UNDECIDED),
     "remote": (
         "The served window under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the",
         "inference-only policy. No auditor's device is at the site: the developer's parties are on the prover node",
@@ -246,12 +252,12 @@ def listed(demo: str) -> tuple[str, ...]:
     return tuple(tomllib.loads((APPLICATIONS / f"{demo}.toml").read_text())["protocols"])
 
 
-#: an application's own workload values over the shared defaults, for the applications that tie their workload to the
-#: schemes they list, each of which then states its declared `Scheme.tie` over its parameters' defaults; remote and
-#: onsite both serve the tie
+#: an application's own workload values over the shared defaults, each of whose listed schemes then states its declared
+#: `Scheme.tie` over its parameters' defaults; remote and onsite both serve the tie, and onsite_network_front only the
+#: front's load
 _TIED = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
          "precision": "bfloat16", "slots": 4, "window-steps": 2, "load": "fixed"}
-DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED}
+DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED, "onsite_network_front": {"load": "front"}}
 
 
 def tied(protocols: Sequence[str]) -> dict[str, dict[str, Any]]:

@@ -3175,6 +3175,7 @@
     {"file": "tests/adapters/vllm/flock/test_ir_sampling.py", "count": 1},
     {"file": "tests/adapters/vllm/flock/test_lean_typed_statement.py", "count": 1},
     {"file": "tests/adapters/vllm/flock/test_typed_statement.py", "count": 1},
-    {"file": "verity/circuits/ops/words.py", "count": 3}
+    {"file": "verity/circuits/ops/words.py", "count": 3},
+    {"file": "applications/onsite_network_front.toml", "count": 10}
   ]
 }
