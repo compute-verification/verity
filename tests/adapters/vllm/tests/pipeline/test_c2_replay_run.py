@@ -226,16 +226,6 @@ def test_a_registration_that_raises_leaves_the_weights_unverified_and_says_why()
     assert got == {"equal": None, "note": ("by reference, unverified at replay: RuntimeError('" + "x" * 300)[:200]}
 
 
-@pytest.mark.parametrize("entries, live", [(["pouw:ncp-v2"], "pouw:ncp-v2"), (["sampled-proofs:rows-sha512", "pouw:ncp-v2-shift24"], "pouw:ncp-v2-shift24"),
-                                           (["pouw:another-scheme"], None), (["sampled-proofs:ncp-v2"], None), ([], None), (None, None)])
-def test_a_run_is_live_only_when_a_protocol_entry_s_replay_reads_the_live_run(tmp_path: Path, entries: list[str] | None,
-                                                                              live: str | None) -> None:
-    protocols = None if entries is None else SimpleNamespace(entries=entries)
-    s = sources(tmp_path)
-    s.protocols = protocols
-    assert C2.live_only_entry(protocols) == live and C2.live_only(s) == live
-
-
 def readings(monkeypatch: pytest.MonkeyPatch, *kb: int | None) -> None:
     left = list(kb)
     monkeypatch.setattr(C2, "rss_kb", lambda: (left.pop(0), None))

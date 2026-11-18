@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import sys
-
 import torch
 from verity.circuits.refs import Coll
 from verity_torch.frontend.derive import Alloc
@@ -229,8 +227,7 @@ class TritonGemmRule(InPlaceRule):
     `b` is `W.t()` (a view of the [N, K] parameter: stride_bk == 1, stride_bn == K); the kind takes W as [N, K].  When the only reader
     of `c` is the linear's bias add (`_bias_add_reader`), the pair is one `GemmBias_v1{K,N}(a row, W, b)` per row bound to the add's
     value instead, on the target whose GEMM is `Gemm_v1`, and one `GemmBias_v2{K,N,DOT}` on a target whose record says `gemm_bias_dot`
-    (`frontend.targets.gemm_bias_spec`: cc 9.0 and cc 12.0).  Under `pouw:ncp-v2` a linear layer's launch is its call's served rows:
-    `NcpLinearRow_v1{K,N}`, or `NcpLinearRowBias_v1{K,N}` bound to the bias add's value on any target (`_pouw_scheme`)."""
+    (`frontend.targets.gemm_bias_spec`: cc 9.0 and cc 12.0)."""
     modes = frozenset({"profile"})
     info = RuleInfo("TritonGemm[vllm-bi]", 3, "in-place-binding",
                     applies_to="verity_cba::triton_launch of batch_invariant.matmul_kernel_persistent (kernel name + constexprs pinned)",
@@ -304,8 +301,7 @@ class TritonGemmRule(InPlaceRule):
         K, N = shape_of(bc.type)[0]
         w_nk = _untransposed(ctx, b, K, N, ctx.hint_name(node) + "/W")  # b = W.t(): the kind's W is [N, K] — a reference rearrangement
         accepted, dot = _target_kinds()   # the target's registered k16 step selects Gemm_v1 (accepted) or Gemm_v2{DOT}
-        pouw = _pouw_scheme(node)
-        bias_role = ("pouw_linear_row_bias", {}) if pouw is not None else gemm_bias_role()
+        bias_role = gemm_bias_role()
         fused = _bias_add_reader(node, c, ctx, len(rows), N) if bias_role is not None else None
         if bias_role is not None and fused is not None:
             add, bn = fused
@@ -319,10 +315,7 @@ class TritonGemmRule(InPlaceRule):
             if ctx.weight_of(bn) is not None:
                 ctx.bind_weight_role(bn, self, "linear.bias", N=N)
         else:
-            if pouw is not None:
-                fn = ctx.kind("pouw_linear_row", node, K=K, N=N)
-            else:
-                fn = ctx.kind("gemm", node, K=K, N=N) if accepted else ctx.kind("gemm_dot", node, K=K, N=N, DOT=dot)
+            fn = ctx.kind("gemm", node, K=K, N=N) if accepted else ctx.kind("gemm_dot", node, K=K, N=N, DOT=dot)
             outs = [ctx.call(fn, r, w_nk, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
             ctx.rebind(c, from_rows(outs, lead), self, what="c")
         ctx.bind_weight_role(b, self, "linear.weight", K=K, N=N)
@@ -331,46 +324,7 @@ class TritonGemmRule(InPlaceRule):
         tgt = active_gemm_target()
         ctx.record(self, node, {"K": K, "N": N, "rows": len(rows), "lookup_key": lookup_key(meta), "pins": pins, "pin_source": src,
                                 "gemm_target": tgt.key, "gemm_target_dot": tgt.dot, "W_is_parameter": wl.name if wl else None,
-                                "bias_add": fused[0].name if fused else None, "pouw": pouw}, emitted=f"{fn.id} x{len(rows)}")
-
-
-def linear_types() -> tuple[type, ...]:
-    """The classes of a PoUW linear layer: vLLM's ``LinearBase``, the PoUW adapter's executed site (lm_head is not one)."""
-    from vllm.model_executor.layers.linear import LinearBase
-    return (LinearBase,)
-
-
-def module_type(cls) -> type | None:
-    """A module stack entry's class. `torch.export` records it as its qualified name (``module.QualName``), resolved in the
-    already imported module; an fx trace records the type itself."""
-    if isinstance(cls, type):
-        return cls
-    if not isinstance(cls, str):
-        return None
-    parts = cls.split(".")
-    for i in range(len(parts) - 1, 0, -1):
-        obj = sys.modules.get(".".join(parts[:i]))
-        if obj is None:
-            continue
-        for name in parts[i:]:
-            obj = getattr(obj, name, None)
-        return obj if isinstance(obj, type) else None
-    return None
-
-
-def _pouw_scheme(node) -> str | None:
-    """The PoUW scheme a launch is lowered under: the active target's ``pouw:<scheme>`` when that scheme has a circuit
-    (`verity_vllm.protocols.has_circuit`) and the launch belongs to a linear layer (`linear_types`, by the class of the innermost
-    module in the node's module stack)."""
-    from verity_vllm import protocols as PO
-
-    entries = dict(e.split(":", 1) for e in (active_target_profile().protocols or ()))
-    scheme = entries.get("pouw")
-    if scheme is None or not PO.has_circuit(f"pouw:{scheme}"):
-        return None
-    stack = node.meta.get("nn_module_stack")    # a node no module call made (a placeholder, an output) has none
-    cls = module_type(list(stack.values())[-1][1]) if stack else None
-    return scheme if cls is not None and issubclass(cls, linear_types()) else None
+                                "bias_add": fused[0].name if fused else None}, emitted=f"{fn.id} x{len(rows)}")
 
 
 def _bias_add_reader(launch, c, ctx, M: int, N: int):

@@ -132,7 +132,6 @@ def test_a_write_started_beside_the_checks_is_the_one_defer_takes(tmp_path: Path
     started = RB.start(site.out, 1, site.com, site.rc, site.args, None)
     assert started is not None and site.defer(started=started)
     assert site.deferred[1]["engine_of_record"] == started.engine and site.deferred[1][RB.HASHED] == started.hashed and site.store_bytes() > 0
-    assert RB.start(site.out, 1, site.com, site.rc, site.args, SimpleNamespace(entries=["pouw:ncp-v2"])) is None, "a live-only run defers nothing"
     taken, deferred = logged()
     assert re.fullmatch(r"\[delta\] REPLAY BUNDLE \(pair 1\): store written in [0-9.]+ s beside the checks before the C2 site "
                         r"\(waited [0-9.]+ s here\)", taken), taken

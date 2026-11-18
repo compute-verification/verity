@@ -22,9 +22,8 @@ weights (`at_commit`), and after its warm-ups, so every ``apply`` an executor se
 
 **Refused** (`refusals`): an unknown protocol; a scheme its package does not register, or an adapter not on this tree;
 a protocols config naming a protocol the run does not enable; a set at TP > 1 (each rank would install its own, which is
-not wired); two executors at one site; beside SPOT, an executor whose protocol package has no circuit for its
-scheme (`circuit_registry`, `traced_as`: every PoUW scheme but ``ncp-v2``); and
-whatever an adapter refuses for its context (SPOT outside the Commit stage, for one).
+not wired); two executors at one site; beside SPOT, any executor (no protocol package has a circuit for what an
+executor computes); and whatever an adapter refuses for its context (SPOT outside the Commit stage, for one).
 
 **Weights of record.**  An option that releases weights from the model returns their plaintext from
 ``Installed.weights()``; the Commit's replay reads and re-registers the live weights through `weights_view` /
@@ -34,13 +33,7 @@ whatever an adapter refuses for its context (SPOT outside the Commit stage, for 
 protocol, its entry and what it commits to, with the SHA-256 of its canonical JSON.  It is a placeholder: each protocol's
 verifier checks its own claims, and nothing checks the links between them yet.  A Commit's verdict carries the set and the
 record's digest (`Composition.verdict`); it is of record like any other, because every option a Commit admits is one the
-Program describes: an executor is refused until its
-protocol package has a circuit for its scheme (``traced_as``).
-
-**Circuits.**  What SPOT traces an executor's computation as is what its protocol package registers under the
-protocol's name (`scheme.register_circuits`: ``schemes``, those with a circuit, and ``traced_as(scheme, m, k, n)``, the
-circuit of one executed call; PoUW registers ``pouw``).  The selector admits an executor beside SPOT only for a scheme with a circuit, and `traced_as`
-gives the Commit the circuit of each executed call.
+Program describes: an executor is refused beside SPOT.
 """
 from __future__ import annotations
 
@@ -54,7 +47,6 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
 from verity import hooks as H
-from verity.protocols.resource_accounting import scheme as schemes
 from verity_vllm import config, messages
 from verity_vllm.engine import hooks
 from verity_vllm.protocols.interface import Context, Installed, Option, Target
@@ -67,8 +59,7 @@ __all__ = ["RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Opt
            "adapter",
            "WeightsView", "at_capture", "at_commit", "capture_context", "commit_context", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
-           "parse", "refusals", "refused", "register_weights", "requests", "undeclared", "weights_view",
-           "circuit_registry", "has_circuit", "traced_as"]
+           "parse", "refusals", "refused", "register_weights", "requests", "undeclared", "weights_view"]
 
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
@@ -125,21 +116,6 @@ def load_settings(value: str | Path | Mapping[str, Any] | None) -> dict[str, dic
     if bad:
         raise ValueError(f"protocols config: the entries of {bad} are not objects")
     return {str(k): dict(v) for k, v in doc.items()}
-
-
-def circuit_registry(name: str) -> schemes.Circuits | None:
-    """The circuits protocol ``name``'s package registered by that name (`scheme.register_circuits`), None when it
-    registered none: its adapter's import registers them."""
-    return schemes.CIRCUITS.get(name)
-
-
-def traced_as(entry: str, m: int, k: int, n: int) -> Any:
-    """The circuit SPOT traces for one executed call of ``entry`` (``pouw:ncp-v2``) of shape m × k → n: its
-    Definition, partition query, served outputs and sampling layout.  None when the scheme has no circuit; a shape outside the
-    circuit raises the protocol package's ``DomainError``."""
-    name, _, scheme = entry.partition(":")
-    reg = circuit_registry(name)
-    return None if reg is None else reg.traced_as(scheme, m, k, n)
 
 
 def requests(ctx: Context) -> list[tuple[str, H.Request]]:
@@ -199,15 +175,6 @@ def from_engine(ctx: Context, llm: Any, *, epoch: int = 0) -> Context:
     return dataclasses.replace(ctx, settings=settings, filled={})
 
 
-def has_circuit(entry: str) -> bool:
-    """Whether ``entry`` (``pouw:ncp-v2``) names a scheme its protocol's package registered a circuit for
-    (`circuit_registry`), once its adapter is imported, which registers them; `Refused` for an unknown protocol."""
-    name, _, scheme = entry.partition(":")
-    adapter(name)
-    reg = circuit_registry(name)
-    return reg is not None and scheme in reg.schemes
-
-
 def refusals(ctx: Context) -> tuple[str, ...]:
     """Every reason the run described by ``ctx`` cannot enable ``ctx.enabled`` (empty: it can)."""
     out: list[str] = []
@@ -249,9 +216,9 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             if site in executors:
                 out.append(f"{entry}: {site} already has an executor, {executors[site]}; a site has one")
             executors.setdefault(site, entry)
-        if sites and sampled and not has_circuit(entry):
+        if sites and sampled:
             out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, "
-                       f"so SPOT would trace it as the stock computation (refused until the option names one: traced_as)")
+                       f"so SPOT would trace it as the stock computation")
     return tuple(out)
 
 

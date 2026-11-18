@@ -17,7 +17,6 @@ from typing import Any
 
 import pytest
 
-from verity.protocols.resource_accounting import scheme as schemes
 from verity_vllm import config, errors
 from verity_vllm import llm as L
 from verity_vllm import protocols as PO
@@ -597,58 +596,32 @@ def test_a_site_has_one_executor(monkeypatch):
         (f"hold:band-chain/d12/v1: {APPLY} already has an executor, pouw:ncp-v1; a site has one",)
 
 
-POUW_SCHEMES = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", "pearl-fp8-v4")
+POUW_SCHEMES = ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4")
 
 
 def _refused_beside_spot(scheme):
-    """The refusal of an executor whose scheme has no circuit, word for word."""
+    """The refusal of an executor beside SPOT, word for word."""
     return (f"pouw:{scheme}: executes {APPLY}, and the Program has no Definition for what it computes there, so SPOT "
-            f"would trace it as the stock computation (refused until the option names one: traced_as)")
+            f"would trace it as the stock computation")
 
 
 def _commit(*enabled):
     return PO.Context(stage="commit", enabled=config.parse_protocols(enabled))
 
 
-def test_beside_spot_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
-    """`verity.protocols.resource_accounting.compute.pouw.prover.circuit` has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
-    that scheme is admitted beside SPOT, and every other one keeps its refusal, word for word.  Without SPOT nothing changes."""
-    from verity.protocols.resource_accounting.compute.pouw.prover import circuit
-    assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"} and PO.circuit_registry("pouw").schemes is circuit.SCHEMES
+def test_an_executor_is_refused_beside_spot_and_admitted_without_it(monkeypatch):
+    """No protocol package has a circuit for what an executor computes, so beside SPOT every executing scheme is refused,
+    word for word, before its engine exists; without SPOT nothing changes."""
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
-    assert PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:rows-sha512")) == ()
-    for scheme in ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"):
-        assert PO.refusals(_commit(f"pouw:{scheme}", "sampled-proofs:rows-sha512")) == (_refused_beside_spot(scheme),)
     for scheme in POUW_SCHEMES:
+        assert PO.refusals(_commit(f"pouw:{scheme}", "sampled-proofs:rows-sha512")) == (_refused_beside_spot(scheme),)
         assert PO.refusals(_serve(f"pouw:{scheme}")) == ()
-    p = TargetProfile.default().with_overrides(protocols=("pouw:ncp-v2", "sampled-proofs:rows-sha512"))
-    assert PO.commit_context(p) is not None and ROW.row_protocols(None, {"engine": {"target": p.to_json()}}) == p.protocols
     with pytest.raises(PO.Refused):
         PO.commit_context(TargetProfile.default().with_overrides(protocols=("pouw:ncp-v1", "sampled-proofs:rows-sha512")))
     with pytest.raises(PO.Refused) as r:
         ROW.row_protocols("pouw:ncp-v1,sampled-proofs:rows-sha512", {})
     assert r.value.reasons == (_refused_beside_spot("ncp-v1"),)
-
-
-def test_traced_as_is_the_circuit_of_one_executed_call():
-    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import (
-        DomainError,
-    )
-    t = PO.traced_as("pouw:ncp-v2", 16, 64, 16)
-    assert t.scheme == "ncp-v2" and t.definition.name == "NcpLinear" and t.served == 16 * 16
-    assert PO.traced_as("pouw:ncp-v1", 16, 64, 16) is None and PO.traced_as("pouw:pearl-fp8-v4", 16, 64, 16) is None
-    assert PO.traced_as("hold:band-chain/d12/v1", 16, 64, 16) is None and PO.circuit_registry("hold") is None
-    with pytest.raises(DomainError, match="64 [|] k"):
-        PO.traced_as("pouw:ncp-v2", 16, 65, 16)
-
-
-def test_without_its_circuit_registry_pouw_stays_refused_beside_spot(monkeypatch):
-    pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
-    pouw.EXECUTES = (APPLY,)
-    monkeypatch.delitem(schemes.CIRCUITS, "pouw", raising=False)
-    assert PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:rows-sha512")) == (_refused_beside_spot("ncp-v2"),)
-    assert PO.traced_as("pouw:ncp-v2", 16, 64, 16) is None
 
 
 def test_every_option_commits_to_the_weights_before_any_installs(monkeypatch):
