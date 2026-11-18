@@ -1291,7 +1291,7 @@ class GpuBackend:
         torch.cuda.synchronize()
         self.gpus = [Gpu(torch, g) for g in range(count)]
         self.rng = np.random.default_rng(seed)
-        self.rng.bytes(32)  # the draw that once made the salt key: the seeded draws after it stay as they were
+        self.rng.bytes(32)  # the sample that once made the salt key: the seeded samples after it stay as they were
         self.salt_key = secrets.token_bytes(32)
         self.gates: dict = {}
         self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, seed, gpus=self.gpus,

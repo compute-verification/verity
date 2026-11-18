@@ -67,15 +67,10 @@ def repository_root(start: str | Path | None = None) -> Path:
 
 
 def _commit(root: Path) -> str:
-    recorded = settings.RESEARCH_SOURCE_SHA
-    if recorded:
-        return recorded
-    try:
-        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True,
-                                       stderr=subprocess.DEVNULL).strip()
-    except (OSError, subprocess.CalledProcessError):
-        raise ValueError(f"{root} is no git checkout and RESEARCH_SOURCE_SHA is unset, so nothing says which commit this "
-                         "tree is: run under `research run`, which sets it (--tree-sha for a tree without .git)") from None
+    if found := kit.commit(root):
+        return found
+    raise ValueError(f"{root} is no git checkout and RESEARCH_SOURCE_SHA is unset, so nothing says which commit this "
+                     "tree is: run under `research run`, which sets it (--tree-sha for a tree without .git)")
 
 
 def toolchain(root: Path, spec: ResolvedSpec, *, commit: str | None = None) -> Toolchain:

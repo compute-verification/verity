@@ -20,6 +20,7 @@ import re
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from typing import Any
 
+from verity_bench import kit
 from verity_bench import prove as P
 from verity_bench import prove_flock as PF
 from verity_bench.prove_common import (
@@ -32,7 +33,6 @@ from verity_bench.prove_common import (
     WARMED,
     Workload,
     _label,
-    _superseded,
     card,
     of_record,
 )
@@ -101,7 +101,7 @@ def slots(store: Any, w: Workload, system: str, sampling: str | None) -> list[di
         except ValueError as e:
             out.append({"slot": slot, "record": w.record(slot), "why": str(e)})
     for slot, what in ANY_OF_RECORD.items():
-        if not any(not _superseded(store, t) for t in records(store).get(w.record(slot), [])):
+        if not any(not kit.superseded(store, t) for t in records(store).get(w.record(slot), [])):
             out.append({"slot": slot, "record": w.record(slot),
                         "why": (f"no {what} of record: no run labelled `{RUN_OF_RECORD}={w.record(slot)}` that is not "
                                 f"superseded (label one: {_label(w.record(slot))})")})
