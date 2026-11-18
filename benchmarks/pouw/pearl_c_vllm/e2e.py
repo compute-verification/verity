@@ -310,18 +310,22 @@ def arm_of(mode: str, run, args):
                                                       run_id=settings.RESEARCH_RUN_ID))
 
 
+def tile_digests(run, ended: dict) -> bytes:
+    """An ended pass's tiles' unsalted digests, the leaves the tree salts (`run.leaves`, read before the next pass poisons
+    them; a pass ended without `lag`).  A pass without hashing has no tiles and no leaves: empty."""
+    return run.leaves[:run.nb * ended["tiles"]].cpu().numpy().tobytes() if ended["tiles"] else b""
+
+
 def under_salt(run, ended: dict) -> dict:
-    """An ended pass as the call check compares it: its transcript root and its tiles' unsalted digests, the leaves the
-    tree salts (`run.leaves`, read before the next pass poisons them; a pass ended without `lag`)."""
-    return {"transcript_root": ended["transcript_root"],
-            "digests": run.leaves[:run.nb * ended["tiles"]].cpu().numpy().tobytes()}
+    """An ended pass as the call check compares it: its transcript root and its tiles' unsalted digests (`tile_digests`).
+    A pass with hashing only: without it a pass has no root."""
+    return {"transcript_root": ended["transcript_root"], "digests": tile_digests(run, ended)}
 
 
 def unsalted(run, ended: dict) -> dict:
     """What two passes of the same calls must share although each draws fresh salts: the SHA-512 of their tiles' unsalted
-    digests (`under_salt`), their units and their tiles; never a root."""
-    return {"digests": hashlib.sha512(under_salt(run, ended)["digests"]).hexdigest(), "units": ended["units"],
-            "tiles": ended["tiles"]}
+    digests (`tile_digests`), their units and their tiles; never a root, so a pass without hashing has it too."""
+    return {"digests": hashlib.sha512(tile_digests(run, ended)).hexdigest(), "units": ended["units"], "tiles": ended["tiles"]}
 
 
 def call_verdict(commits: list[dict], err: float) -> dict:
@@ -1032,11 +1036,12 @@ def memory_mib() -> int | None:
         return None
 
 
-def smoke(args) -> None:
+def smoke(args) -> bool:
     """Untimed: both engines resident on the GPU, and each one's first sampling calls.  The stock FP8 engine starts and
     samples; then the Pearl-C engine starts beside it (its install and gates) and samples as stock BF16 and as ``pearlc``.
     Writes each step's time and the GPU's memory use after it, the gates, and the greedy tokens' agreement with BF16.  With
-    ``--retain``, the arm then serves `SERVED`'s requests, each a retained ``pearlc`` pass under its own name."""
+    ``--retain``, the arm then serves `SERVED`'s requests, each a retained ``pearlc`` pass under its own name.
+    Returns whether it passed (no error recorded and every gate ok); `main` exits nonzero when it didn't."""
     ctx, coins = mp.get_context("spawn"), epoch_coins(args, 0)
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "coins": coins.commitment.to_json(), "scheme": getattr(args, "scheme", SCHEME),
                  "schedule": getattr(args, "schedule", "serial"),
@@ -1080,6 +1085,7 @@ def smoke(args) -> None:
     ok = "error" not in out and out.get("gate_ok", False)
     run_result.write(args.out, ok, "pearl-c vLLM e2e smoke: both engines resident, the arm gated, each one's first sampling calls",
                      json.dumps({k: v for k, v in out.items() if k != "gate"}), [(s["step"], s["s"], "s") for s in out["steps"]])
+    return ok
 
 
 def wikitext_windows(model: str, limit: int | None) -> list[list[int]]:
@@ -1240,8 +1246,7 @@ def main() -> None:
     if args.statement and not args.whole_step:
         ap.error("--statement commits the forwards vLLM replays whole: it needs --whole-step")
     if args.smoke:
-        smoke(args)
-        return
+        sys.exit(0 if smoke(args) else 1)
     if args.perplexity:
         sys.exit(perplexity(args))
     ctx, coins, p = mp.get_context("spawn"), epoch_coins(args, 0), prompts(args.reps)

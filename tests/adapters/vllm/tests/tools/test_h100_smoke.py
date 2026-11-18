@@ -26,7 +26,7 @@ a = sys.argv[1:]
 rec = {"argv": a}
 if a[:1] == ["-"]:
     body = sys.stdin.read()
-    if "verity_vllm" not in body and "runpy" not in body:
+    if "providing(" in body or ("verity_vllm" not in body and "runpy" not in body):
         sys.exit(subprocess.run([sys.executable, "-c", body, *a[1:]]).returncode)
     if "--protocols-config" in a:
         rec["config"] = json.load(open(a[a.index("--protocols-config") + 1]))
