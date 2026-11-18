@@ -99,8 +99,9 @@
 # *-private.bin: the rows and their salts), a circuit (its pin is), a request value (the stand-in's workload.json, its prompts)
 # nor a serve's own records (serve.json, windows.jsonl: only vLLM's mirror publishes them, through serve_mirror.PUBLIC).
 # The rest goes to PP_KEEP=DIR (0700, refused under $OUT or the run dir; without it, scratch removed at exit): a window's
-# partition and the files beside it, the advice's length, the tools' logs and error output, the machine's shape, and the
-# commit's and audits' logs whole: $OUT and stdout get their lines as public_log.py lets them go.
+# registration, commit.json, partition and the files beside them, the advice's length, the tools' logs and error output,
+# the machine's shape, and the commit's and audits' logs whole: $OUT and stdout get their lines as public_log.py lets
+# them go.
 set -uxo pipefail
 PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../one_stage/public_files.py
 PL=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_log.py  # a log as it may leave: the fields its reader reads, errors by their class
@@ -233,12 +234,13 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   local crc=$?
   python3 "$PL" $K/$name/commit.log > $O/$name/commit.log
   [ $crc = 0 ] || { tail -30 $O/$name/commit.log; return 1; }
-  for d in $W/$name-windows/rank*; do   # its registration public; its partition and the files beside it kept
-    mkdir -p $O/$name/windows/$(basename $d) $K/$name/windows/$(basename $d) && cp $d/registration.json $O/$name/windows/$(basename $d)/ \
-      && cp $d/{window,partition,index}.json $d/m*-public.bin $K/$name/windows/$(basename $d)/
-    [ ! -e $d/circuit.json ] || cp $d/circuit.json $O/$name/windows/$(basename $d)/
+  # its circuit public; its registration and commit.json (each a binding made from the advice's true length), its partition
+  # and the files beside them kept
+  for d in $W/$name-windows/rank*; do
+    mkdir -p $K/$name/windows/$(basename $d) && cp $d/{registration,window,partition,index}.json $d/m*-public.bin $K/$name/windows/$(basename $d)/
+    [ ! -e $d/circuit.json ] || { mkdir -p $O/$name/windows/$(basename $d) && cp $d/circuit.json $O/$name/windows/$(basename $d)/; }
   done
-  cp $W/$name-windows/commit.json $O/$name/windows/
+  cp $W/$name-windows/commit.json $K/$name/windows/
   if [ -n "${PP_KEEP_WINDOWS:-}" ]; then   # the windows whole, the prover's files included, for a later job on this node
     mkdir -p "$PP_KEEP_WINDOWS" && rm -rf "$PP_KEEP_WINDOWS/$name-windows" && cp -a $W/$name-windows "$PP_KEEP_WINDOWS/" || return 1
     R keep "$PP_KEEP_WINDOWS" --owner @proofs --expires 7d --priority low \
