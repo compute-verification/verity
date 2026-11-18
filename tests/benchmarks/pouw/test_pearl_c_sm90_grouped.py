@@ -18,6 +18,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import wei
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes  # noqa: E402
 from verity_torch.pouw.pearl_c import run_device as PPDR
 from verity_torch.pouw.pearl_c import grouped as PG  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
@@ -261,7 +262,7 @@ def device_run(experts: int, n: int = 128, k: int = 1024, retain=None, schedule=
     roots = PPDR.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
     ch = Challenger(0, np.random.default_rng(7).bytes)
     coins = ch.commitment, ch.open("salt", weights_root(roots))
-    run = PPDR.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, capacity=1 << 12,
+    run = PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, capacity=1 << 12,
                               schedule=schedule, salt_key=SALT_KEY)
     run.begin(retain=retain)
     return run, weights

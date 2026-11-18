@@ -34,6 +34,7 @@ class _CallsNet(Protocol):
     world: int
     dot: Any
     tp: Any
+    device: str | None
 
     @property
     def capture_sizes(self) -> tuple[int, ...]: ...
@@ -137,7 +138,8 @@ class _Calls:
 
     def cublas(self, xs: list[Refs], w: Coll, f32: bool = False, sampled: bool = False) -> list[Refs]:
         """An unbiased bf16 GEMM on cuBLAS's captured route at the launch's tokens (its sequences for the `sampled` rows): bf16 out
-        (`CublasLinearRule`), or f32 (`CublasRouterRule`: the router family's route, or a direct call's where the shape has its own)."""
+        (`CublasLinearRule`), or f32 (`CublasRouterRule`: the router family's route, or a direct call's where the shape has its own).
+        The route is the pin of the device φ names (`bf16_gemm_check.default_cublas_route`); a device with no pin is refused by name."""
         from verity_vllm.definitions.registry.bf16_gemm_check import (
             default_cublas_route,
         )
@@ -146,7 +148,10 @@ class _Calls:
         )
         M, (N, K) = self.launch.tokens(len(xs), sampled), _arr_shape(w.type)
         phase = _f32out_phase(K, N) if f32 else "linear"
-        route = default_cublas_route(phase, M, K, N)
+        try:
+            route = default_cublas_route(phase, M, K, N, self.net.device)
+        except KeyError as e:
+            _refuse(f"a bf16 {phase} GEMM of M={M}, K={K}, N={N} on {self.net.device!r}: {e.args[0]} (bf16_gemm_check.device_pin)")
         if route is None:
             _refuse(f"a bf16 {phase} GEMM of M={M}, K={K}, N={N} (no captured vLLM-default cuBLAS route)")
         split = route[0] == "splitk"

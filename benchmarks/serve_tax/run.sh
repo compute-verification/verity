@@ -37,9 +37,9 @@
 # and FIND_LOAD in the environment are refused. --find-load serves stock alone over its load's rungs (serve_tax.LOADS;
 # requests in flight up to the profile's prompts) and prints where its output
 # tokens a second stop rising: the file's line, the version to raise and the pin test's digest
-# (OUT/find_load.{json,txt}); it edits no file. --feature ARM serves stock and ARM in turn at the profile's one load,
-# two lifetimes of three reps each, and writes the result's three lines, the first our extra card time a token
-# (OUT/serving_profile.{json,txt}). Where ARM
+# (OUT/find_load.json); it edits no file. --feature ARM serves stock and ARM in turn at the profile's one load,
+# two lifetimes of three reps each, and writes the run's result through the kit's report: its three lines, the first
+# our extra card time a token under the model's metric id. Where ARM
 # refuses what the profile has on, the result is `cannot run` in the refusal's words and the job exits 1, as for an
 # arm whose run refuses it; where a change on our side alone lets the same prompts through, ARM is served with it
 # (OURS, its label in the result) as the second line, stock unchanged. The passes are planned within the model's
