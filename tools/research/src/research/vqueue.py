@@ -1365,8 +1365,10 @@ def _next(s: Snapshot, pool: list[Ready], outcomes: list[Outcome], chain: list[C
     first, in the tick's batch or a later one.  On a full chain holding no Lean change no batch could take it, and the batch
     opens.  None opens
     while the chain holds a wide Lean change; nor, with a records run, while it holds a lone PR set aside before at its
-    head (`_told`) that changes a Lean input: when its check errs again it leaves the chain, and a batch staged on it is
-    staged again; nor, with no records run (`Snapshot.records` off: it takes a place on the chain), on a top candidate
+    head (`_told`) that has a Lean change: when its check errs again it leaves the chain, and a batch staged on it is
+    staged again (one with no Lean change, set aside at its head, `_set_aside`, holds none back, as it goes first no
+    more, `_goes_first`); nor, with a records run, on a top candidate that is a lone PR set aside before, which its check
+    decides first; nor, with no records run (`Snapshot.records` off: it takes a place on the chain), on a top candidate
     holding a Lean change, so at most every second build is one."""
     newest = _newest(outcomes, {r.number: r.head for r in pool})
     leans = {r.number: r for r in pool if r.lean}
@@ -1381,13 +1383,16 @@ def _next(s: Snapshot, pool: list[Ready], outcomes: list[Outcome], chain: list[C
         return (), ""
     wide = [m for c in chain for m in c.members if m in built and _wide(built[m], s.wide)]
     aside = [c.members[0] for c in chain if s.records and len(c.members) == 1 and _told(c, outcomes)
-             and (r := built.get(c.members[0])) is not None and (r.lean or r.lean_input)]
+             and (r := built.get(c.members[0])) is not None and (r.lean or r.lean_input)
+             and not (not r.lean and _set_aside(r.number, r.head, outcomes))]
+    under = [c.members[0] for c in chain[-1:] if s.records and len(c.members) == 1 and _told(c, outcomes)]
     top = [m for m in chain[-1].members if m in built and built[m].lean] if chain and not s.records else []
-    if not members or not (wide or aside or top):
+    if not members or not (wide or aside or under or top):
         return members, ""
     held = (f"the chain holds #{wide[0]}'s wide Lean change" if wide else
             f"the chain holds #{aside[0]}, set aside before, which changes a Lean input" if aside else
-            f"the newest candidate, {chain[-1].sha[:12]}, holds #{top[0]}'s Lean change")
+            f"the chain's top, {chain[-1].sha[:12]}, holds only #{under[0]}, set aside before, whose check decides it first"
+            if under else f"the newest candidate, {chain[-1].sha[:12]}, holds #{top[0]}'s Lean change")
     return (), (f"nothing built: with a Lean change, {', '.join(f'#{n}' for n in members)} wait{'s' * (len(members) == 1)} "
                 f"while {held}, and no PR with no Lean change is ready to take")
 
