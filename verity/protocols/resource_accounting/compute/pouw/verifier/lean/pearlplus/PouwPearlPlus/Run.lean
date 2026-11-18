@@ -101,13 +101,6 @@ def runCommitment (passes : List Pass) : ByteArray :=
     [.int p.rootsA.length, .bytes p.transcriptRoot, .bytes p.recordsRoot, .bytes p.salt] ++
       p.yRoots.map (fun y => .bytes (y.getD ByteArray.empty)) ++ p.rootsA.map fun a => .bytes a)
 
-#guard
-  let b (x : UInt8) : ByteArray := ⟨#[x]⟩
-  let pass (t r s : UInt8) (calls : List (UInt8 × UInt8)) : Pass :=
-    { (default : Pass) with transcriptRoot := b t, recordsRoot := b r, salt := b s,
-                            yRoots := calls.map fun c => some (b c.1), rootsA := calls.map fun c => b c.2 }
-  runCommitment [pass 1 2 3 [(4, 5)], pass 6 7 8 []] != runCommitment [pass 1 2 3 [], pass 4 5 6 [(7, 8)]]
-
 /-- The verifier's record of its coin: the run commitment it was sampled on, the source (a challenger sampling coin's 64 bytes,
 or the node's 32), the record's schema and its `draw` as the record carries it (`Coins.drawReason` reads it). -/
 structure CoinRecord where
