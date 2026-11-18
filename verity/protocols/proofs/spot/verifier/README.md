@@ -33,7 +33,8 @@ configs, Definitions) or advice charged at its width. A value the served hardwar
 atomics order, a split choice) is never among them as a free witness: serving makes it canonical so a block computes it,
 or it is advice.
 
-Under a two-stage sampling design the same three roles run `parties.SPOT_TWO_PROTOCOL`. The first stage samples replay blocks.
+At ``levels`` 2, a two-stage sampling design, the same three roles run `parties.SPOT_TWO_PROTOCOL`, which SPOT[Flock]'s
+definition chooses under its own id (`ProtocolDef.chosen`). The first stage samples replay blocks.
 The proof server replays them and sends the verifier their interior docket (`Interior`). Once it is in, the
 verifier samples the second stage on fresh coins (`Second`). The proof server then proves the second stage's proof
 blocks, one session a template, and the verifier audits both stages.
@@ -383,7 +384,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
 - `parties`: SPOT[Flock]'s `InferenceServer`, `ProofServer` and `SpotVerifier` (`SPOT_MANIFEST`, `SPOT_PROTOCOL`,
   `spot_params_of`), in two stages with `TwoStageProofServer` and `TwoStageVerifier` (`SPOT_TWO_MANIFEST`,
-  `SPOT_TWO_PROTOCOL`), the core deployment's `ZkServer`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
+  `SPOT_TWO_PROTOCOL`, chosen at ``levels`` 2), the core deployment's `ZkServer`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
   the `Challenger` both run, `PROTOCOLS` by id, and `IDS`, the configuration's subprotocol names and their protocol ids.
 - `consumers`: `infiltration_bound`, `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `window_place`: `of`, `family` and `run`, the place a docket's window names in its window's session, the
