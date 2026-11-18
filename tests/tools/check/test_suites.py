@@ -2409,6 +2409,9 @@ def test_what_a_run_has_to_do_is_the_seconds_of_the_kept_passes_of_the_tests_it_
     assert S.todo_seconds(s, S.Part((1,), 2, ("pkg/tests/test_c.py",), (), "d", 0.1), mods) is None
     by_id = S.Part((3, 4, 5, 6), 6, (), (), "d", 4 / 6, "id")
     assert S.todo_seconds(s, by_id, mods) == 1000.0 * 4 / 6, "a part by test id: its share of the suite's"
+    assert S.todo_seconds(s, None, mods, longest=True) == 600.0, "its longest test"
+    assert S.todo_seconds(s, None, mods, ["tests/test_a.py::t1"], longest=True) == 300.0, "of those it doesn't reuse"
+    assert S.todo_seconds(s, by_file, mods, longest=True) == 100.0 and S.todo_seconds(s, by_id, mods, longest=True) == 600.0
 
 
 def test_a_parallel_suite_that_reuses_nothing_gets_workers_beside_a_longer_last_duration(tmp_path, monkeypatch):
@@ -2448,7 +2451,7 @@ def test_a_suite_that_declares_workers_runs_on_at_least_that_many_up_to_half_of_
     [shared] = [x for x in S.shared_lanes([cc, defs, a, b], seconds, 88, 260.0) if cc in x.suites]
     assert shared.suites == [cc] and S.wide_workers(cc, shared.procs, shared.gb) == 10
     lanes = S.wide_lanes([cc, defs, a, b], seconds, 88, 260.0)
-    assert lanes == [S.Lane([cc], 14, 112.0), *S.shared_lanes([defs, a, b], seconds[1:], 74, 148.0)]
+    assert lanes == [S.Lane([cc], 14, 112.0), *S.wide_lanes([defs, a, b], seconds[1:], 74, 148.0)]
     longest = [3000.0, *seconds[1:]]
     assert S.wide_lanes([cc, defs, a, b], longest, 88, 260.0) == S.shared_lanes([cc, defs, a, b], longest, 88, 260.0), \
         "a share that gives it as many already is as it was"
@@ -2456,6 +2459,18 @@ def test_a_suite_that_declares_workers_runs_on_at_least_that_many_up_to_half_of_
     assert S.wide_lanes([cc, defs], seconds[:2], 88, 100.0)[0] == S.Lane([cc], 6, 48.0), "at most half the GB at its worker_gb"
     assert S.wide_lanes([cc, defs], seconds[:2], 40, None) == [S.Lane([cc], 14, None), S.Lane([defs], 26, None)]
     assert S.wide_lanes([cc], [300.0], 88, 260.0) == [S.Lane([cc], 88, 260.0)], "alone, all of them"
+    pouw = S.Suite("pouw", "p", (), (), parallel=True, worker_gb=4.5)
+    commitments = S.Suite("commitments", "m", (), (), parallel=True, worker_gb=8)
+    ops, num = (S.Suite(n, n, (), (), parallel=True) for n in ("ops", "num"))
+    shard = [pouw, commitments, cc, ops, num]
+    work, most = [3571.0, 2500.0, 1286.0, 174.0, 166.0], [60.0, 120.0, 30.0, 20.0, 40.0]
+    own = S.wide_lanes(shard, work, 30, 84.0, True)
+    assert {s.name: S.wide_workers(s, x.procs, x.gb) for x in own for s in x.suites}["commitments"] == 2, \
+        "a lane each: cc held to 5 at 8 GB, and ops' and num's lanes hold their GB after they pass"
+    chosen = S.wide_lanes(shard, work, 30, 84.0, longest=most)
+    assert chosen == S.wide_lanes(shard, work, 30, 84.0, False) and \
+        {s.name: S.wide_workers(s, x.procs, x.gb) for x in chosen for s in x.suites}["commitments"] == 5, \
+        "the longest beside the rest one at a time ends first: commitments on 5, cc on them in its turn"
     (tmp_path / "pkg").mkdir()
     pyproject = tmp_path / "pkg" / "pyproject.toml"
     head = '[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n[tool.verity.tests]\n'
@@ -2479,7 +2494,7 @@ def test_a_suite_books_one_worker_at_its_worker_gb_and_each_other_at_its_typical
     assert [(x.procs, x.gb) for x in lanes] == [(7, 55.0), (3, 39.0)], "each further worker takes what it books of the GB left"
     held = S.Suite("held", "h", (), (), parallel=True, worker_gb=13, typical_worker_gb=7, workers=8)
     light = S.Suite("light", "l", (), (), parallel=True)
-    assert S.wide_lanes([light, held], [900.0, 100.0], 40, 124.0)[0] == S.Lane([held], 8, 62.0), "half the GB holds 8"
+    assert S.wide_lanes([light, held], [900.0, 100.0], 40, 124.0, True)[0] == S.Lane([held], 8, 62.0), "half the GB holds 8"
     (tmp_path / "pkg").mkdir()
     pyproject = tmp_path / "pkg" / "pyproject.toml"
     head = '[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n'
@@ -2513,12 +2528,15 @@ def test_the_line_ends_near_its_tests_seconds_spread_over_every_process(tmp_path
 
     seconds = [work[s.name][0] for s in suites]
     spread = sum(seconds) / 32
-    lanes = S.wide_lanes(suites, seconds, 32, None)
-    assert [x.suites for x in lanes] == [[s] for s in suites]
+    longest = [work[s.name][1] for s in suites]
+    lanes = S.wide_lanes(suites, seconds, 32, None, longest=longest)
+    assert [x.suites for x in lanes] == [[s] for s in suites], "defs' 600 s test would hold the rest's lane one at a time"
+    assert [x.suites for x in S.wide_lanes(suites, seconds, 32, None)] == [suites[:1], suites[1:]], \
+        "counted at its seconds alone, defs spreads over the rest's workers and the two lanes end first"
     end = _line_end(S, lanes, cost)
     assert end <= 1.1 * spread and end < _line_end(S, [S.Lane(suites, 32, None)], cost)
     gb = 32 * S.TEST_PROCESS_GB
-    held = S.wide_lanes(suites, seconds, 64, gb)
+    held = S.wide_lanes(suites, seconds, 64, gb, longest=longest)
     assert sum(x.gb for x in held) <= gb and all(S.wide_workers(s, x.procs, x.gb) * S.worker_gb(s) <= x.gb
                                                  for x in held for s in x.suites), "each lane's workers fit its share of the GB"
     assert _line_end(S, held, cost) <= 1.1 * spread, "the memory bounds the workers as the processes did"
