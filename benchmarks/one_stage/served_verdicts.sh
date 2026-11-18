@@ -76,7 +76,7 @@
 #     Every unit of a template the served model's compiler of record lists as a transfer gate (prove_path.GATES_OF_RECORD)
 #     is proved beside the sampled rest, which only a work rate (work-rate:NUM/DEN) samples, so the preflight refuses a partition of another sampling design
 #     or without them; PP_SETS names their input sets.
-#  4. PoUW (H1 credit, or with POUW=pearlplus Pearl+'s own served run, below), PoUS, the bandwidth audit and the network
+#  4. PoUW (H1 credit, or with POUW=pearlplus Pearl+'s verdict over the window's own epoch, below), PoUS, the bandwidth audit and the network
 #     attester: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it, one at a time (the network attester's alone, the longest,
 #     from the moment the window is picked, beside step 3, its lines said after the others'; split in two, the answer step
@@ -329,23 +329,18 @@
 # under VERITY_HOLD_PLACEMENT=1 its composite is a development check (COMPOSE_DEVELOPMENT), never the record's verdict:
 # the record stays pending and the exit is 2 at best (step 5); only the compose follow-on's composite, on an auditor
 # device, is of record. Its $OUT is published as every run's is.
-# POUW=pearlplus (default h1) makes Pearl+ PoUW's piece instead: H1_GATE defaults empty (set, the preflight refuses
-# it), and POUW_CMD to 'bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"' within POUW_TIMEOUT 120m, which
-# once the window is audited serves Pearl+ (pouw:pearl-c-h100-v1-h3, Llama 3.2 1B's BF16 checkpoint) on this card under
-# its own lease, every pass retained in the serve dir's private/, and takes Pearl+'s verdict over them (verify.json in
-# the piece's dir; first, by default, it gives up the passes' rows over a debit cap from the card's counts, V-EX): a development
-# piece, since its passes are not the window SPOT audited (its header has the rest). Its epoch's salt coin is
+# POUW=pearlplus (default h1) makes Pearl+ PoUW's piece instead, and needs PEARLPLUS_TIE=1 (the preflight refuses it
+# without): H1_GATE defaults empty (set, the preflight refuses it), and POUW_CMD to
+# 'bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"' within POUW_TIMEOUT 120m, which once the window is
+# audited takes Pearl+'s verdict over the window's own epoch (verify.json in the piece's dir; first, by default, it gives
+# up the passes' rows over a debit cap from the card's counts, V-EX; its header has the rest). Its epoch's salt coin is
 # a live session's of its own on vy-challenger-1: PEARLC_CHALLENGER_GATE defaults to the lane's gate command (H1_GATE's
 # default under h1), PEARLC_CHALLENGER_PEER to H1_PEER where there is a gate and PEARLC_CHALLENGER_LANE to H1_LANE's, `served_verdicts.py gate`
 # must find no period of that lane open, as for H1, and the piece holds each pass's salt to the session under
-# H1_KEY_SHA512 and MAIN_FILE's line, as H1's piece does. The piece opens the lane's Pearl-C period right before its
-# retained serve and closes it right before its verifier's sample, a sample session's of its own on that gate, reserved as
-# the lane's first reserve after the close and opened on the run's commitment (served_pearlplus.sh's steps 2 and 4);
-# while the period is open its cap refuses every other reserve of the lane. PEARLC_CHALLENGER_GATE set
-# empty leaves Pearl+'s coins an
+# H1_KEY_SHA512 and MAIN_FILE's line, as H1's piece does. PEARLC_CHALLENGER_GATE set empty leaves Pearl+'s coins an
 # in-process challenger's: the COINS line, the run's first, leads with that, and the piece claims no verdict. A peer
 # set with the gate empty is a pair the preflight refuses.
-# With PEARLPLUS_TIE=1 too, the window itself is served under Pearl+, the way H1_TIE ties H1's: serve-openai serves
+# Under PEARLPLUS_TIE=1 the window itself is served under Pearl+, the way H1_TIE ties H1's: serve-openai serves
 # pearl-plus by its name on its one engine (`serve_pearl`, --protocols with --protocols-config naming the cubin
 # PEARLPLUS-CUBIN built before the lease), one Pearl+ epoch a Commit window beside SPOT cut at Pearl+'s linears
 # (--pearl-tables, the kernel of PEARLPLUS_ARM: default Pearl+'s declared option, as records hold it), so the window's linears are the Pearl+ matmuls whose passes are committed, each window's retained in
@@ -563,8 +558,7 @@ if [ "$POUW" = pearlplus ]; then
     PEARLC_CHALLENGER_LANE=${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}
   # shellcheck disable=SC2016
   export POUW_CMD=${POUW_CMD-'bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"'} POUW_TIMEOUT=${POUW_TIMEOUT:-120m}
-  [ -z "$PEARLPLUS_TIE" ] \
-    || export PEARLPLUS_TIE_CMD="cd $(printf %q "$TREE") && bash benchmarks/one_stage/served_verdicts.sh pearl-tie \"\$@\""
+  export PEARLPLUS_TIE_CMD="cd $(printf %q "$TREE") && bash benchmarks/one_stage/served_verdicts.sh pearl-tie \"\$@\""
 else
   H1_GATE=${H1_GATE-$LANE_GATE}
 fi
@@ -623,6 +617,8 @@ case ${LOAD:=varied} in varied | fixed | front | session) ;; *) say "PREFLIGHT: 
 case $POUW in h1 | pearlplus) ;; *) say "PREFLIGHT: POUW is h1 or pearlplus, not $POUW"; exit 3 ;; esac
 [ "$POUW" = h1 ] || [ -z "$H1_GATE" ] \
   || { say "PREFLIGHT: POUW=pearlplus is PoUW's piece, so the endpoint serves no H1, and H1_GATE is set: set it empty"; exit 3; }
+[ "$POUW" != pearlplus ] || [ -n "$PEARLPLUS_TIE$FOLLOW$COMPOSE" ] \
+  || { say "PREFLIGHT: POUW=pearlplus is Pearl+'s piece over the window's own epoch, held to its W, and PEARLPLUS_TIE is empty: set PEARLPLUS_TIE=1"; exit 3; }
 [ "$POUW" != pearlplus ] || [ -n "$PEARLC_CHALLENGER_GATE" ] || [ -z "$PEARLC_CHALLENGER_PEER" ] \
   || { say "PREFLIGHT: PEARLC_CHALLENGER_PEER is $PEARLC_CHALLENGER_PEER and PEARLC_CHALLENGER_GATE is empty, which leaves Pearl+'s coins in-process, and Pearl+'s serve and verify refuse a peer with no gate (bench_arm.py's live coins): unset PEARLC_CHALLENGER_PEER, or set PEARLC_CHALLENGER_GATE (unset, it is the lane's gate)"; exit 3; }
 case $PRODUCT in
@@ -2315,14 +2311,11 @@ if [ "${1:-}" = v3c ]; then  # an existing serve dir's window: D and K set, its 
 fi
 
 H1_COINS="PoUW H1: not served (H1_GATE empty)"
-PEARLPLUS="PoUW: Pearl+'s own served run on this card after the window's (POUW=pearlplus)"
-[ -z "$PEARLPLUS_TIE" ] || PEARLPLUS="PoUW: Pearl+ on the window's own engine, its passes the window's linears (POUW=pearlplus, PEARLPLUS_TIE)"
+PEARLPLUS="PoUW: Pearl+ on the window's own engine, its passes the window's linears (POUW=pearlplus, PEARLPLUS_TIE)"
 LIVE_GATE=$H1_GATE LIVE_LANE=${H1_LANE:-vllm} LEAD=
 if [ "$POUW" = pearlplus ] && [ -n "$PEARLC_CHALLENGER_GATE" ]; then
   LIVE_GATE=$PEARLC_CHALLENGER_GATE LIVE_LANE=$PEARLC_CHALLENGER_LANE
-  PP_CREDIT="it credits nothing"
-  [ -z "$PEARLPLUS_TIE" ] || PP_CREDIT="which the record takes as PoUW's verdict of record, the prover side's, only where pearlplus_of_record holds it"
-  H1_COINS="$PEARLPLUS, its epoch's salt coin a live session's of its own on vy-challenger-1's gate (peer $PEARLC_CHALLENGER_PEER, lane $PEARLC_CHALLENGER_LANE), each pass's salt checked by core_check.live_salt in its piece, its serve inside a Pearl-C period of that lane's own, and its replay's draws a draw session's coin on that gate, reserved withheld once the period closed and opened on the run's commitment, taken once before the replay, checked against the signed ledger in its piece and cited by store id in the POUW line's coin; a development piece, $PP_CREDIT"
+  H1_COINS="$PEARLPLUS, its epoch's salt coin a live session's of its own on vy-challenger-1's gate (peer $PEARLC_CHALLENGER_PEER, lane $PEARLC_CHALLENGER_LANE), each pass's salt checked by core_check.live_salt in its piece, its serve inside a Pearl-C period of that lane's own, and its replay's draws a draw session's coin on that gate, reserved withheld once the period closed and opened on the run's commitment, taken once before the replay, checked against the signed ledger in its piece and cited by store id in the POUW line's coin; a development piece, which the record takes as PoUW's verdict of record, the prover side's, only where pearlplus_of_record holds it"
 elif [ "$POUW" = pearlplus ]; then
   LEAD="Pearl+'s epoch coins are in-process and the record claims no Pearl+ verdict; "
   H1_COINS="$PEARLPLUS, its epoch's coins an in-process challenger's (PEARLC_CHALLENGER_GATE empty), which the serving process holds, and its replay's draws the Lean verifier's IO.getRandomBytes on this node, taken once before the replay and cited by store id in the POUW line's coin; a development piece, it credits nothing"

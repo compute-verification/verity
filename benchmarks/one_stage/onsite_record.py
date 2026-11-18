@@ -340,8 +340,8 @@ POUW = (f"{POUW_OPEN}: the record credits no PoUW freed compute, and no figure o
         "(noFoldRound) and describe neither Dither v3.2's proof block nor the PoUW piece the run serves. That piece is "
         "PoUW H1 + fx1 (eps1-sm120-h1fx1, served_verdicts.sh's default POUW=h1), checked over H1's J10-R period "
         "(PouwVerifier.Credit.window), a development run under the lane's development key that credits nothing; Pearl+ "
-        "(POUW=pearlplus: served_pearlplus.sh, its own seeded load after the window's serve) is a development piece "
-        "too, untied, and credits nothing. ``served`` is what each COINS line says the run's PoUW piece was")
+        "(POUW=pearlplus with PEARLPLUS_TIE: served_pearlplus.sh over the window's own epoch) is a development piece "
+        "too, and credits nothing by itself. ``served`` is what each COINS line says the run's PoUW piece was")
 #: the verdicts ``of_record.holds`` doesn't read, since the record claims nothing of them (`POUW`), and under a composite
 #: of record without PoUW (`WITHOUT_POUW`) remote's too, whose composite composes PoUW's case
 NOT_CLAIMED = ("PoUW",)

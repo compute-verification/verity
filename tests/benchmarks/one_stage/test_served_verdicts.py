@@ -4520,7 +4520,7 @@ def test_a_run_of_record_takes_a_development_sessions_coins_as_simulated_unless_
 
 @pytest.mark.parametrize("extra, other", [
     ({"H1_GATE": GATE, "H1_PEER": "vy-dc-h200-3"}, "H1_PEER"),
-    ({"POUW": "pearlplus", "H1_PEER": "vy-dc-h200-3"}, "PEARLC_CHALLENGER_PEER"),
+    ({"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "H1_PEER": "vy-dc-h200-3"}, "PEARLC_CHALLENGER_PEER"),
 ])
 def test_the_preflight_refuses_a_v3c_peer_other_than_the_one_the_runs_other_live_session_names(tmp_path, extra, other):
     """On the served node V3c's audit's session and H1's (H1_PEER), or Pearl+'s (PEARLC_CHALLENGER_PEER, default
@@ -4532,19 +4532,19 @@ def test_the_preflight_refuses_a_v3c_peer_other_than_the_one_the_runs_other_live
                                       "other one does"], [])
 
 
-PEARLPLUS_RUN = "PoUW: Pearl+'s own served run on this card after the window's (POUW=pearlplus)"
+PEARLPLUS_RUN = "PoUW: Pearl+ on the window's own engine, its passes the window's linears (POUW=pearlplus, PEARLPLUS_TIE)"
 FAKE_GATE = ('case "$1" in\n'
              f"ledger) echo '{LEDGER_LINE}' ;;\n"
              f"""pins) echo '{{"commit": "{"ef" * 20}", "main": "{"ef" * 20}", "pinned_utc": "2026-10-26T21:35:00Z"}}' ;;\n"""
              "*) exit 2 ;;\nesac")
 
 
-@pytest.mark.parametrize("live, tie", [(True, False), (True, True), (False, False)])
-def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins_are_live(tmp_path, live, tie):
+@pytest.mark.parametrize("live", [True, False])
+def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins_are_live(tmp_path, live):
     """Under POUW=pearlplus the run checks the gate Pearl+'s serve reserves its session through, PEARLC_CHALLENGER_GATE
     (a lane with a period open would be refused), and the COINS line says Pearl+'s epoch's salt coin is a live session's
-    of its own there, its piece crediting nothing, or under PEARLPLUS_TIE, where Pearl+ serves the window itself, taken as
-    PoUW's verdict of record only where `pearlplus_of_record` holds it; with PEARLC_CHALLENGER_GATE empty no gate is
+    of its own there, Pearl+ serving the window itself, its piece taken as PoUW's verdict of record only where
+    `pearlplus_of_record` holds it; with PEARLC_CHALLENGER_GATE empty no gate is
     checked, and the COINS line, the record's first, leads with the coins being in-process and the record claiming no
     Pearl+ verdict."""
     venv = tmp_path / "toy-venv" / "bin"
@@ -4553,17 +4553,14 @@ def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins
     _script(gate := tmp_path / "gate", FAKE_GATE)
     (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
     (one / "served_verdicts.py").symlink_to(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py")
-    env = {**(PEARL_TIED if tie else {}), "POUW": "pearlplus", "PEARLC_CHALLENGER_GATE": str(gate) if live else ""}
+    env = {**PEARL_TIED, "PEARLC_CHALLENGER_GATE": str(gate) if live else ""}
     rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200",
                                       PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **env)
     assert rc == 17 and lines[-1] == "STOP at predict (exit 17)", lines
     tail = f";{V3C_COINS} the bandwidth audit's: vy-auditor-2's bw_party, inside PoUS's piece"
     if live:
-        run, credit = PEARLPLUS_RUN, "it credits nothing"
-        if tie:
-            run = "PoUW: Pearl+ on the window's own engine, its passes the window's linears (POUW=pearlplus, PEARLPLUS_TIE)"
-            credit = ("which the record takes as PoUW's verdict of record, the prover side's, only where "
-                      "pearlplus_of_record holds it")
+        run = PEARLPLUS_RUN
+        credit = "which the record takes as PoUW's verdict of record, the prover side's, only where pearlplus_of_record holds it"
         assert lines[0] == (f"GATE ready: lane vllm's open period None; the ledger's 1 entries; pinned {'ef' * 6} (main "
                             f"{'ef' * 6}, 2026-10-26T21:35:00Z), on the verifier's first-parent line of main"), lines
         assert lines[1] == (f"COINS sampled proofs: {LOCAL_COINS}; {run}, its epoch's salt coin a live session's "
@@ -4598,9 +4595,10 @@ def test_under_pouw_pearlplus_the_challenger_peer_takes_its_default_only_where_t
     _script(gate := tmp_path / "gate", FAKE_GATE)
     (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
     (one / "served_verdicts.py").symlink_to(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py")
-    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", POUW="pearlplus",
+    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200",
                                       PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
-                                      PEARLC_CHALLENGER_GATE=str(gate) if live else "", PEARLC_CHALLENGER_PEER=peer)
+                                      **{**PEARL_TIED, "PEARLC_CHALLENGER_GATE": str(gate) if live else "",
+                                         "PEARLC_CHALLENGER_PEER": peer})
     assert rc == 17 and lines[-1] == "STOP at predict (exit 17)", lines
     assert said.read_text().splitlines() == [str(gate) if live else "", exported]
 
@@ -4652,7 +4650,7 @@ def test_the_preflight_refuses_a_pearlplus_challenger_peer_with_no_gate(tmp_path
     tree.mkdir()
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
-           "POUW": "pearlplus", **extra}
+           "POUW": "pearlplus", "PEARLPLUS_TIE": "1", **extra}
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
@@ -4747,7 +4745,7 @@ def test_under_pearlplus_tie_the_pieces_tie_commits_the_window_cut_at_pearls_lin
      f"PEARL-TIE: window-commit class {W63K4} refused (no exception, exit 2): {PRIVATE}"),
     ({"BREAK_CHAIN": "1"}, 16, f"PEARL-TIE: window-commit's registration R is chained after {'ef' * 8}…, not right after "
                                f"Pearl+'s W {DD.digest(PEARL_WREC)[:16]}…"),
-    ({"PEARLPLUS_TIE": ""}, 3, "PEARL-TIE: PEARLPLUS_TIE or V3C_CLASS is empty"),
+    ({"PEARLPLUS_TIE": "", "POUW": "h1", "H1_GATE": ""}, 3, "PEARL-TIE: PEARLPLUS_TIE or V3C_CLASS is empty"),
     ({"V3C_LAW": ""}, 3, "PEARL-TIE: V3C_LAW is empty: the tied window's rule is the launch's, a stratified rate"),
 ])
 def test_a_pearl_tie_whose_commit_is_refused_or_not_chained_right_after_w_fails(tmp_path, extra, rc, said):
@@ -4799,7 +4797,8 @@ def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and
     rc = {"unequal": 1, "died": 2}.get(case, 0)
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out"),
            "ORDER": str(tmp_path / "order"), "V3C_CLASS": W63K4, **PEARL_TIES, "FAKE_COMPARE_RC": str(rc),
-           "REV": "ccf98f3652864935e2973dd22fe15fffd514f865", **({"PEARLPLUS_TIE": ""} if case == "untied" else {})}
+           "REV": "ccf98f3652864935e2973dd22fe15fffd514f865",
+           **({"PEARLPLUS_TIE": "", "POUW": "h1", "H1_GATE": ""} if case == "untied" else {})}
     run = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", "served-compare", "7"], cwd=tree, env=env,
                          check=False, capture_output=True, text=True)
     lines = run.stdout.splitlines()
@@ -5238,7 +5237,6 @@ SHORT_INODES = SHORT_OF_INODES.format(short=772288, inodes=772388, held=NONE_KEP
                                    "says - free of - on {at}"),
     (PEARL_TIED, "2000000 772388 /workspace", None),
     (PEARL_TIED, "0 0 /workspace", None),
-    ({"POUW": "pearlplus", "PEARLC_CHALLENGER_GATE": ""}, "2000000 100 /workspace", None),
     ({}, "2000000 100 /workspace", None),
 ])
 def test_the_preflight_refuses_a_pearlplus_tie_where_the_serve_dirs_filesystem_has_fewer_inodes_free_than_two_commits(
@@ -6447,7 +6445,7 @@ TIED_NOT_PEARLPLUS = ("PREFLIGHT: the hand-off's window is tied to Pearl+'s W (P
 
 @pytest.mark.parametrize("handed, forged, composed", [
     ({}, {}, "h1"),
-    ({"POUW": "pearlplus"}, {}, "pearlplus"),
+    ({"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "H1_TIE": None}, {}, "pearlplus"),
     ({}, {"PEARLPLUS_TIE": "1"}, None),
     ({}, {"POUW": None, "PEARLPLUS_TIE": "1"}, None),
 ])

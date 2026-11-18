@@ -1,24 +1,21 @@
 """`served_pearlplus.sh` in toy trees whose steps each note their argv.
 
-Under PEARLPLUS_TIE: Pearl+'s piece over the window's own epoch, which serve-openai's Pearl+ (`serve_openai.scheme_settings`) retained
+Pearl+'s piece over the window's own epoch, which serve-openai's Pearl+ (`serve_openai.scheme_settings`) retained
 in the serve dir's ``pearl/w<k>/``: the epoch taken as the piece's passes, the give-up on the card, ``retain
 --window-record W``, PEARLPLUS_TIE_CMD's window commit before the coin, and ``verify --tie W``.
 
-The give-up before the verifier's coin, with stand-ins for served_passes.py, debit.py, served_verdicts.py,
-pearl_c_sm90.sh's setup and gpu-lease: it asks ``served_passes.py volunteer-needed`` before anything is built or served,
-gives the rows over a debit cap up (on the card by default) exactly when the answer is yes, refuses to serve with the
-give-up turned off then, leaves it off when the answer is no unless PEARLPLUS_VOLUNTEER asks for it, stops on any other
+The give-up before the verifier's coin, with stand-ins for served_passes.py, debit.py, served_verdicts.py and
+gpu-lease: it asks ``served_passes.py volunteer-needed`` before anything is built or checked, gives the rows over a
+debit cap up (on the card by default) exactly when the answer is yes, refuses to go on with the give-up turned off then, leaves it off when the answer is no unless PEARLPLUS_VOLUNTEER asks for it, stops on any other
 answer, and hands PEARLPLUS_OVER_CAP to both the question and the verdict."""
 
 from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -36,7 +33,8 @@ def opt(name):
     return argv[argv.index(name) + 1] if name in argv else None
 script, cmd = Path(argv[0]).name, argv[1] if len(argv) > 1 else None
 if script == "served_passes.py" and cmd == "volunteer-needed":
-    print("yes reject")
+    print(os.environ.get("TOY_NEEDED", "yes reject"))
+    sys.exit(0 if os.environ.get("TOY_NEEDED", "yes reject") else 2)
 elif script == "debit.py":
     Path(opt("--out")).write_text("{}")
 elif script == "served_passes.py" and cmd == "volunteer":
@@ -70,7 +68,7 @@ def _piece(tmp_path: Path, served: dict | None, period: dict | None = None, firs
            declared: dict | None = None, **extra: str) -> tuple[subprocess.CompletedProcess, Path, Path]:
     """The piece on window 7 of a toy serve dir whose ``pearl/w7/served.json`` is ``served`` (none if None), whose
     window serve left ``pearlplus/period.json`` `period` (none if None), ``deployment-registration.json`` `first` (none
-    if None) and ``declaration.json`` `declared` (none if None), under PEARLPLUS_TIE with the window serve's cubin and a
+    if None) and ``declaration.json`` `declared` (none if None), with the window serve's cubin and a
     toy gpu-lease: the run, the serve dir and the toy tree."""
     tree, bin_, venv, sd = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "one_stage", tree / "benchmarks" / "harness", tree / ".venv" / "bin", bin_, venv,
@@ -95,7 +93,7 @@ def _piece(tmp_path: Path, served: dict | None, period: dict | None = None, firs
         (sd / "deployment-registration.json").write_text(json.dumps(first))
     if declared is not None:
         (sd / "declaration.json").write_text(json.dumps(declared))
-    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "PEARLPLUS_TIE": "1",
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent),
            "PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": str(tmp_path / "cubin" / "pearl_c_sm90.cubin"),
            "PEARLPLUS_JOBS": "1", "PEARLPLUS_TIE_CMD": f'printf "%s\\n" "$@" > {tmp_path}/tie.args; echo "PEARL-TIE: tied"',
            **extra}
@@ -266,107 +264,38 @@ def test_under_pearlplus_tie_and_the_gate_the_piece_samples_only_after_a_period_
         assert not (sd / "pearl" / "w7" / "coin.json").exists()
 
 
-RECORD = '''import json, os, sys
-from pathlib import Path
-with open(os.environ["CALLS"], "a") as f:
-    f.write(json.dumps({"tool": Path(sys.argv[0]).name, "argv": sys.argv[1:]}) + "\\n")
-rest = sys.argv[1:]
-at = lambda flag: Path(rest[rest.index(flag) + 1])
-'''
-PASSES = '''if rest[0] == "volunteer-needed":
-    print(os.environ["NEEDED"])
-    sys.exit(0 if os.environ["NEEDED"] else 2)
-if rest[0] == "serve":
-    at("--passes").mkdir(parents=True, exist_ok=True)
-if rest[0] in ("serve", "volunteer", "verify"):
-    at("--out").write_text("{}")
-print(rest[0], "ok")
-'''
-SETUP = '''echo '{"tool": "pearl_c_sm90.sh", "argv": []}' >> "$CALLS"
-mkdir -p "$RESEARCH_RUN_DIR/k/debit" && touch "$RESEARCH_RUN_DIR/k/pearl_c_sm90.cubin" "$RESEARCH_RUN_DIR/k/debit/debit_sm90.cubin"
-echo '{"ok": true}' > "$RESEARCH_RUN_DIR/k/harness_gate.json"
-PEARLC_KERNEL=pearl_c_sm90 PEARLC_CUBIN=$RESEARCH_RUN_DIR/k/pearl_c_sm90.cubin
-'''
-SERVED = ["volunteer-needed", "pearl_c_sm90.sh", "serve"]
-CHECKED = ["verify", "lean"]
-
-
-def _untied(tmp_path: Path, needed: str, volunteer: str | None = None) -> Any:
-    """The untied piece on window 3 in a toy tree whose served_passes.py, served_verdicts.py, debit.py and setup each note
-    their argv in ``calls``, ``volunteer-needed`` answering `needed`: a function running it under more environment, which
-    returns its exit code, its output and the calls in order."""
-    tree, d, p, calls = tmp_path / "tree", tmp_path / "serve", tmp_path / "piece", tmp_path / "calls"
-    one = tree / "benchmarks" / "one_stage"
-    one.mkdir(parents=True)
-    shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "served_pearlplus.sh", one)
-    (tree / ".venv" / "bin").mkdir(parents=True)
-    (tree / ".venv" / "bin" / "python").symlink_to(sys.executable)
-    (one / "served_verdicts.py").write_text(RECORD + 'print("POUW-DEV {}")\n')
-    pouw = tree / "benchmarks" / "pouw"
-    (pouw / "pearl_c_vllm").mkdir(parents=True)
-    (pouw / "pearl_c_vllm" / "served_passes.py").write_text(RECORD + PASSES)
-    (pouw / "pearl_c_sm90").mkdir()
-    (pouw / "pearl_c_sm90" / "debit.py").write_text(RECORD + 'at("--out").write_text("{}")\n')
-    (tree / "benchmarks" / "harness" / "setup").mkdir(parents=True)
-    (tree / "benchmarks" / "harness" / "env.sh").write_text('VENV=$VERITY_BENCH_VENV\n')
-    (tree / "benchmarks" / "harness" / "setup" / "pearl_c_sm90.sh").write_text(SETUP)
-    bin_ = tmp_path / "bin"
-    bin_.mkdir()
-    (bin_ / "gpu-lease").write_text('#!/bin/sh\nwhile [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n')
-    (bin_ / "gpu-lease").chmod(0o755)
-    d.mkdir()
-    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "CALLS": str(calls), "NEEDED": needed,
-           "VERITY_BENCH_VENV": str(tree / ".venv"), "PEARLPLUS_PASSES_RAM": "", "PEARLPLUS_UNRETAINED": "",
-           **({} if volunteer is None else {"PEARLPLUS_VOLUNTEER": volunteer})}
-
-    def run(**more: str) -> tuple[int, str, list[dict]]:
-        calls.unlink(missing_ok=True)
-        r = subprocess.run(["bash", "benchmarks/one_stage/served_pearlplus.sh", str(d), "3", str(p)], cwd=tree,
-                           env={**env, **more}, capture_output=True, text=True, check=False)
-        return r.returncode, r.stdout + r.stderr, [json.loads(x) for x in calls.read_text().splitlines()]
-    return run
+CHECKED = ["verify", "coin", "lean"]
 
 
 @pytest.mark.parametrize("needed, volunteer, steps", [
-    ("yes reject", None, [*SERVED, "debit.py", "volunteer --device", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
-    ("yes reject", "cpu", [*SERVED, "volunteer", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
-    ("yes reject", "", ["volunteer-needed"]),
-    ("no uncredited", None, [*SERVED, *CHECKED, "pearlplus"]),
-    ("no uncredited", "", [*SERVED, *CHECKED, "pearlplus"]),
-    ("no uncredited", "1", [*SERVED, "debit.py", "volunteer --device", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
-    ("", None, ["volunteer-needed"]),
+    ("yes reject", None, ["debit.py", "volunteer --device", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
+    ("yes reject", "cpu", ["volunteer", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
+    ("yes reject", "", []),
+    ("no uncredited", None, ["retain", *CHECKED, "pearlplus"]),
+    ("no uncredited", "", ["retain", *CHECKED, "pearlplus"]),
+    ("no uncredited", "1", ["debit.py", "volunteer --device", "retain --volunteer", *CHECKED, "pearlplus --volunteer"]),
+    ("", None, []),
 ])
 def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_skipped_then(tmp_path, needed, volunteer, steps):
-    d, run = tmp_path / "serve", _untied(tmp_path, needed, volunteer)
-    rc, said, got = run()
+    run, sd, _tree = _piece(tmp_path, _epoch(), TOY_NEEDED=needed,
+                            **({} if volunteer is None else {"PEARLPLUS_VOLUNTEER": volunteer}))
+    said = run.stdout + run.stderr
     flags = {"volunteer": "--device", "retain": "--volunteer", "pearlplus": "--volunteer"}
     names = []
-    for c in got:
-        name = c["argv"][0] if c["tool"] in ("served_passes.py", "served_verdicts.py") else c["tool"]
-        names.append(f"{name} {flags[name]}" if flags.get(name) in c["argv"] else name)
-    assert names == steps, said
-    if steps == ["volunteer-needed"]:
-        assert rc == 2 and not (d / "private" / "pearlplus" / "setup.log").exists(), said
-        assert ("POUW volunteer: refused, so nothing is served" if needed else "volunteer-needed answered ''") in said
+    for a in _steps(tmp_path):
+        name = a[1] if Path(a[0]).name in ("served_passes.py", "served_verdicts.py") else Path(a[0]).name
+        names.append(f"{name} {flags[name]}" if flags.get(name) in a else name)
+    assert names == ["volunteer-needed", *steps], said
+    if not steps:
+        assert run.returncode == 2 and not (sd / "private" / "pearlplus" / "setup.paths").exists(), said
+        assert ("POUW volunteer: refused, so nothing is checked" if needed else "volunteer-needed answered ''") in said
         return
-    assert rc == 0, said
-    if "verify" in steps and not any(s.startswith("volunteer ") or s == "volunteer" for s in steps):
+    assert run.returncode == 0, said
+    if not any(s.startswith("volunteer") for s in steps):
         assert f"POUW volunteer: not run: Pearl+'s verdict credits a drawn row over its debit cap nothing (over-cap rule " \
                f"{needed.split()[1]})" in said
     if needed == "yes reject" and volunteer is None:
-        rc, said, got = run(PEARLPLUS_OVER_CAP="reject")
-        asked = {c["argv"][0]: c["argv"] for c in got if c["tool"] == "served_passes.py"}
-        assert rc == 0 and asked["volunteer-needed"] == ["volunteer-needed", "--over-cap", "reject"], said
+        run, _sd, _tree = _piece(tmp_path / "over-cap", _epoch(), TOY_NEEDED=needed, PEARLPLUS_OVER_CAP="reject")
+        asked = {a[1]: a for a in _steps(tmp_path / "over-cap") if Path(a[0]).name == "served_passes.py"}
+        assert run.returncode == 0 and asked["volunteer-needed"][1:] == ["volunteer-needed", "--over-cap", "reject"]
         assert asked["verify"][asked["verify"].index("--over-cap") + 1] == "reject"
-
-
-def test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_sample(tmp_path):
-    """Under the gate the untied piece opens the lane's Pearl-C period right before its retained serve and closes it only
-    right before verify samples, after the give-up and retain: while it is open its cap of 1, which the serve's salt session
-    fills, refuses every other reserve of the lane, so none comes between its close and the sample, which a compose takes
-    only as the lane's first reserve after the close."""
-    rc, said, got = _untied(tmp_path, "yes reject")(PEARLC_CHALLENGER_GATE="ssh gate")
-    names = [" ".join(c["argv"][:2]) if c["argv"][:1] == ["pearlplus-period"] else
-             c["argv"][0] if c["tool"] in ("served_passes.py", "served_verdicts.py") else c["tool"] for c in got]
-    assert rc == 0 and names == ["volunteer-needed", "pearl_c_sm90.sh", "pearlplus-period open", "serve", "debit.py",
-                                 "volunteer", "retain", "pearlplus-period close", *CHECKED, "pearlplus"], said
