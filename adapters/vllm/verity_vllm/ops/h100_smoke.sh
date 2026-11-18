@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Does: serves ONE window of bf16 Llama 3.2 1B (unsloth at 9535bd9b) on the H100 through serve-openai with its rows-sha512 Commit and seals it, then opens the sealed bundle against its record on the CPU.
 # Does NOT show: a recompute on a processor (the replay is the sealed bundle opened against its record), an audit, or a traced Build on the H100.
-# Needs: PY (default the node's /workspace/venv312/bin/python, both branches), CUDA_HOME (12.9, machine.py's), HF_HOME (/workspace/hf), PYTHONPATH, VERITY_PROTOCOLS_CONFIG (all set here), CUDA_VISIBLE_DEVICES from the lease; the norm tap (no hidden tap: the row's manifest names no hidden class).
+# Needs: PY (default the node's /workspace/venv312/bin/python, both branches), CUDA_HOME (12.9, machine.py's), CARD_SKU (machine.py sku), HF_HOME (/workspace/hf), PYTHONPATH, VERITY_PROTOCOLS_CONFIG (all set here), CUDA_VISIBLE_DEVICES from the lease; the norm tap (no hidden tap: the row's manifest names no hidden class).
 # Writes: the serve's directory, the private directory (keys, salts) and every log under SR, outside the run's directory; under $OUT only smoke.txt, the last line.
 #   research run --on vy-h100-1 --cwd source -- taskset -c 0-9 bash adapters/vllm/verity_vllm/ops/h100_smoke.sh   (DRY=1: off the card)
 set -euo pipefail
@@ -20,16 +20,17 @@ if [ "$DRY" = 1 ]; then
   SCRATCH=$(mktemp -d) SR=$SCRATCH/smoke
 else
   SR=/workspace/research/vllm-servedproof/serve-root/smoke-${RESEARCH_RUN_ID:-local}
-  CUDA_HOME=$("$PY" benchmarks/kernels/machine.py toolkit 12.9) || { echo "SMOKE REFUSED toolkit: the machine lists no CUDA 12.9 (machine.py, above)"; exit 3; }
-  export CUDA_HOME HF_HOME=/workspace/hf HF_HUB_OFFLINE=1
-  export PATH=$(dirname "$PY"):$CUDA_HOME/bin:$PATH
-  SNAP=$HF_HOME/hub/models--unsloth--Llama-3.2-1B/snapshots/$REV
-  [ -s "$NSO" ] || { echo "SMOKE REFUSED norm tap: no $NSO; build it outside the lease (no card):" \
-    "cd $TREE/adapters/vllm && CUDA_HOME=$CUDA_HOME CARD_SKU=h100-sxm-80gb bash verity_vllm/ops/pod_norm_tap.sh"; exit 3; }
-  { [ -s "$SNAP/config.json" ] && ls "$SNAP"/*.safetensors > /dev/null 2>&1; } || {
-    echo "SMOKE REFUSED model: $MODEL at $REV is not in $HF_HOME; fetch it outside the lease:" \
-      "HF_HOME=$HF_HOME $PY -c \"from huggingface_hub import snapshot_download as s; s('$MODEL', revision='$REV')\""; exit 3; }
 fi
+CUDA_HOME=$("$PY" benchmarks/kernels/machine.py toolkit 12.9) || { echo "SMOKE REFUSED toolkit: the machine lists no CUDA 12.9 (machine.py, above)"; exit 3; }
+CARD_SKU=$("$PY" benchmarks/kernels/machine.py sku) || { echo "SMOKE REFUSED card: the machine's record names no card sku for this host (machine.py sku, above)"; exit 3; }
+export CUDA_HOME CARD_SKU HF_HOME=/workspace/hf HF_HUB_OFFLINE=1
+export PATH=$(dirname "$PY"):$CUDA_HOME/bin:$PATH
+SNAP=$HF_HOME/hub/models--unsloth--Llama-3.2-1B/snapshots/$REV
+[ -s "$NSO" ] || { echo "SMOKE REFUSED norm tap: no $NSO; build it outside the lease (no card):" \
+  "cd $TREE/adapters/vllm && CUDA_HOME=$CUDA_HOME CARD_SKU=$CARD_SKU bash verity_vllm/ops/pod_norm_tap.sh"; exit 3; }
+{ [ -s "$SNAP/config.json" ] && ls "$SNAP"/*.safetensors > /dev/null 2>&1; } || {
+  echo "SMOKE REFUSED model: $MODEL at $REV is not in $HF_HOME; fetch it outside the lease:" \
+    "HF_HOME=$HF_HOME $PY -c \"from huggingface_hub import snapshot_download as s; s('$MODEL', revision='$REV')\""; exit 3; }
 OUT=${OUT:-${RESEARCH_RUN_DIR:-$SR}/out}
 D=$SR/serve PRED=$SR/predicted PORT=${PORT:-18282}
 mkdir -p "$SR" "$OUT"
@@ -68,13 +69,23 @@ if run := os.environ.get("RESEARCH_RUN_DIR"):
     except cli.UsageError as e:
         print("INSIDE THE RUN DIR REFUSED:", str(e)[:60])
 EOF
+  CUDA_VISIBLE_DEVICES= "$PY" - <<'EOF'
+import os
+from verity_vllm import settings
+from verity_vllm.commit.committer import native_ext, native_jit
+from verity_vllm.config import cuda_arch
+sku, home = settings.card_sku(), settings.cuda_home()
+missing = [p for p in native_jit.source_paths(native_ext.HERE) if not os.path.exists(p)]
+assert not missing, missing
+print(f"COMMITTER SETTINGS READ: CARD_SKU {sku}, arch {cuda_arch(sku)}, CUDA_HOME {home}, the native collector's sources present")
+EOF
   "$PY" - "${LOAD[@]}" <<'EOF'
 import runpy, sys
 a = runpy.run_path(sys.argv[1])["parser"]().parse_args(sys.argv[2:])
 assert a.varied == 1 and not a.fixed, a
 print("LOAD PARSED:", a.varied, "request(s), max_tokens", a.max_tokens)
 EOF
-  echo "SMOKE DRY OK"
+  echo "SMOKE DRY OK; not exercised off the card: the model load, the committer's construction and its native collector's JIT build, the request, the seal and the open"
   exit 0
 fi
 
