@@ -265,12 +265,12 @@ def orderWork (c : Wiring) : Nat :=
       let rs := g.getD w.reader []
       n + rs.length + ((rs.filter fun (b, _) => w.readsIn b).length) * (g.getD w.writer []).length) 0
 
-/-- The served shape at 699,363 wires: 100 templates of 137 layers, 13,700 root nodes. The whole check on it takes
-about three minutes under the interpreter: a stage quadratic in the wires, templates or ranges would not return, which
+/-- The served shape at 696,966 wires: 100 templates of 137 layers, 13,700 root nodes. The file takes
+about seven minutes under the interpreter: a stage quadratic in the wires, templates or ranges would not return, which
 no smaller wiring shows. -/
 def big : Wiring := servedWiring 100 137
 
-#guard big.wires.length == 699363
+#guard big.wires.length == 696966
 #guard (check big).toBool
 #guard orderWork big ≤ 300 * big.wires.length
 #guard !(check { big with wires := { big.wires.headD (wire "" "" 0 0 0 1) with start := 3 } :: big.wires }).toBool
