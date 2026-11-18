@@ -93,7 +93,7 @@ SHARED = Registry(__file__, (), *(Setting(*a) for a in (
     ("OMP_NUM_THREADS", int, None, WHERE, "the threads of a CPU reference's BLAS: how fast it runs, not what it computes"),
     ("FILL_JOB", str, None, WHERE, "the fill job a process runs as (research's fill runner sets it): it names a run's outputs"),
     ("SPOT_LEVELS", str, None, VALUE, "the levels of blocks a served command commits and audits (SPOT: 1, or 2: outer "
-                                      "blocks, then inner blocks inside each drawn outer block): what the prover served, "
+                                      "blocks, then inner blocks inside each sampled outer block): what the prover served, "
                                       "never what the verifier checks; a command that can't run it refuses it by name "
                                       "(`verity.protocols.proofs.spot.verifier.levels`)"),
     ("DITHER_NUMA_RECORD", json.loads, None, WHERE, "the NUMA binding benchmarks/kernels/numabind/numabind.py started the process "
