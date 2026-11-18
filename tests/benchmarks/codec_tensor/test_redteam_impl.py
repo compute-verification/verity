@@ -81,19 +81,20 @@ def test_rbd1_a_block_is_a_function_of_the_store_and_its_index() -> None:
     assert np.array_equal(a, b) and np.array_equal(a, vectors_of_store_bytes(32, 1, 32))
 
 
-def test_rbd2_a_kv_receipt_is_a_driver_receipt_of_one_registered_block() -> None:
+@pytest.mark.parametrize("word", SR.KV_WORDS)
+def test_rbd2_a_kv_receipt_is_a_driver_receipt_of_one_registered_block(word) -> None:
     """The step commits its KV receipts in the pass's one tree after the weights' (kv_attn form 13, `kv_rc_receipts`).
-    Token-layer u·layers + l of the KV region is the store's block nvec + u·layers + l, 32 whole words of 128 bytes, and
-    has one receipt at that index: σ is the KV heads' shares of form 13's MMA over the words its decoder lanes read
-    (`kv_fragment_sketch`) under the pass's signs, and the receipt is `SketchReceipter`'s, so `AuditRun.verify` takes an
-    honest KV opening.  It was a third kind: other signs, another hash domain, and 4,096 bytes from 16 tokens' head
-    shares under a half-block index."""
+    Token-layer u·layers + l of the KV region is the store's block nvec + u·layers + l, whole words (32 of 128 bytes at
+    p1024, 64 of 64 at p512), and has one receipt at that index: σ is the KV heads' shares of form 13's MMA over the
+    words its decoder lanes read (`kv_fragment_sketch`) under the pass's signs, and the receipt is `SketchReceipter`'s,
+    so `AuditRun.verify` takes an honest KV opening.  It was a third kind: other signs, another hash domain, and 4,096
+    bytes from 16 tokens' head shares under a half-block index."""
     slots, layers, nvec = 5, 3, 4
     blocks = nvec + slots * layers
     store = np.random.default_rng(2).integers(0, 256, blocks * SR.BLOCK, dtype=np.uint8)
-    m = SR.kv_vectors(slots, layers, nvec * SR.BLOCK)
+    m = SR.kv_vectors(slots, layers, nvec * SR.BLOCK, word)
     assert SR.rb.plan_of(m, blocks) == SR.rb.Plan.of(range(nvec, blocks), blocks)
-    sk = SR.kv_fragment_sketch(store[m], SR.kv_sign_frags(SR.sign_bits(SEED)))
+    sk = SR.kv_fragment_sketch(store[m], SR.kv_sign_frags(SR.sign_bits(SEED), word), word)
     receipter = SR.rb.SketchReceipter(SEED)
     assert SR.receipts_of(SEED, sk, nvec) == [receipter(j, store[j * SR.BLOCK:(j + 1) * SR.BLOCK].tobytes(), b"\0")
                                               for j in range(nvec, blocks)]
