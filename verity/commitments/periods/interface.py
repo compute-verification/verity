@@ -2791,14 +2791,24 @@ class Window:
                         raise ValueError(f"{m.key} {p}: a unit's recorded row is not the row of {param!r} it reads")
                     d["rows"][p] = CS.ValueRows(values[param], tuple(int(x) for x in positions), sampled.salts(param, positions))
                     self._entries.setdefault(m.key, {})[p] = sampled.entry(param, positions)
-            wired = {x.port for x in m.wired}
+            wired = {x.port: x for x in m.wired}
             for r, x in d["rows"].items():
                 if x is None and r not in wired:
                     raise ValueError(f"{m.key} {r}: recorded by reference, but no wire or registered read fills it")
                 if r in wired:
+                    if x is not None and not np.array_equal(x, self._output(wired[r], cat)[self.window.reads(m, r)]):
+                        raise ValueError(f"{m.key}: a {r} row is not the {wired[r].out} row of the {wired[r].writer} unit "
+                                         "that wrote it")
                     d["rows"][r] = CS.WIRED
             data.append(d)
         return CS.commit(self.window, data, workers=workers, salts_of={**given, **salts_of}, strings_of=strings_of)
+
+    def _output(self, w: WI.Wired, cat: dict[str, Any]) -> np.ndarray:
+        """Writer template ``w.writer``'s recorded ``w.out`` rows, its units in root order: the leaves of its tree."""
+        if w.writer not in cat:
+            cat[w.writer] = self._words(w.writer)
+        lay = self.circuit._by_id[w.writer][1]
+        return cat[w.writer][len(lay.rows) + [p for p, _ in lay.outs].index(w.out)]
 
     def _written(self, values: Mapping[str, Any]) -> dict[str, dict[str, tuple[list[Any], np.ndarray]]]:
         """Each history writer's output (by template, then port): for each of its template's units, the committed table
