@@ -3318,7 +3318,7 @@ def test_the_preflight_prints_what_a_warn_gate_at_main_says_as_a_warning_and_tak
 #: the added-lines warn gate and what it reads at `main`, committed into the origin as they are in this checkout
 ADDED = "tools/check/added_lines.py"
 ADDED_FILES = {DRIVE_FLAGS: f'warn_gates = ["{ADDED}"]\n', **{f: (Path(__file__).resolve().parents[3] / f).read_text() for f in (
-    ADDED, "GLOSSARY.md", "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py")}}
+    ADDED, "tests/lint/retired_terms.md", "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py")}}
 
 
 def test_the_preflight_prints_the_lines_an_issue_id_is_added_on_and_the_fix_and_marks_the_pr(world, capsys):
@@ -3966,7 +3966,7 @@ def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monk
     assert goal_gates == [Q.goal_gate] * 3                                               # the goal gate isn't the preflight's
     with pytest.raises(SystemExit) as e:
         research_main(["queue", "status", "--no-preflight"])
-    assert e.value.code == 2 and "--no-preflight is for ready only" in capsys.readouterr().err
+    assert e.value.code == 2 and "--no-preflight is for ready only, not status" in capsys.readouterr().err
 
 
 def test_research_queue_judge_marks_through_the_goal_gate(world, monkeypatch):
@@ -4258,6 +4258,46 @@ def test_a_landed_move_that_adds_its_own_map_judges_a_head_lacking_it_by_that_ma
     names = world.change({"e.txt": "reads c.txt\n"}, base=base)
     assert Q.lacked_moves(world.origin, move, clean) == []
     assert Q.lacked_moves(world.origin, move, names) == [(move, "tools/move/own_map.toml", ["c.txt"])]
+
+
+def _commit(world: World, tree_of: str, *parents: str, msg: str) -> str:
+    """A commit of ``tree_of``'s tree on ``parents`` with message ``msg``, on the origin."""
+    tree = _git(world.dev, "rev-parse", f"{tree_of}^{{tree}}")
+    sha = _git(world.dev, "commit-tree", tree, *(x for p in parents for x in ("-p", p)), "-m", msg)
+    _git(world.dev, "push", "-q", "origin", f"{sha}:refs/dev/{sha}")
+    return sha
+
+
+def test_a_move_main_holds_only_through_a_merge_that_kept_its_first_parents_tree_and_ran_itself_is_no_move_a_head_lacks(world):
+    """A branch's earlier, landed work merged back with `-s ours` brought into `main`'s history a copy of a move `main` ran
+    itself, by another commit the head holds: the merge's tree is its first parent's, so the copy changed nothing on `main`,
+    and the head lacks nothing (`moves_between`, `lacked_moves`). A copy whose line `main` never ran elsewhere stays, as
+    restack.py's moved merge holds a move in flight whose change its rerun, with no move line, brought; a move on `main`'s
+    first-parent line, and the same line again on a merge's second parent with its tree, are still found, and
+    `move_lines.toml`'s `move = false` still takes one out. The same case is restack.py's (`test_restack.py`)."""
+    line = "Move\n\nLayout-move: tools/move/x_map.toml"
+    base = _move_main(world, {"tools/move/x_map.toml": '[paths]\n"c.txt" = "moved/c.txt"\n'})
+    copy = _commit(world, world.change({"moved/c.txt": "c\n"}, base=base), base, msg=line)
+    ran = _commit(world, world.change({"moved/c.txt": "c\n", "r.txt": "r\n"}, base=base), base, msg=line)
+    head = world.change({"e.txt": "reads c.txt\n"}, base=ran)
+    beside = world.change({"m.txt": "1\n"}, base=ran)
+    ours = _commit(world, beside, beside, copy, msg="Merge the branch's earlier, landed work, keeping this tree (-s ours)")
+    _git(world.dev, "push", "-q", "origin", f"{ours}:refs/heads/main")
+    assert Q.moves_between(world.origin, ours, head) == []
+    assert Q.lacked_moves(world.origin, ours, head) == []
+    inflight = _commit(world, world.change({"tools/move/y_map.toml": '[paths]\n"d.txt" = "moved/d.txt"\n',
+                                             "moved/d.txt": "d\n"}, base=ours), ours,
+                       msg="Move\n\nLayout-move: tools/move/y_map.toml")
+    rerun = _commit(world, inflight, ours, msg="restack: rerun tools/move/layout.py")
+    moved = _commit(world, rerun, rerun, inflight, msg="Merge the layout move into the branch, restacked")
+    real = _commit(world, world.change({"n.txt": "n\n"}, base=moved), moved, msg=line)
+    side = _commit(world, world.change({"s.txt": "s\n"}, base=real), real, msg=line)
+    landed = _commit(world, side, real, side, msg="Queue: #2 lands the move")
+    assert [m for m, _ in Q.moves_between(world.origin, landed, head)] == [inflight, real, side]
+    assert Q.lacked_moves(world.origin, landed, head) == [(real, "tools/move/x_map.toml", ["c.txt"]),
+                                                          (side, "tools/move/x_map.toml", ["c.txt"])]
+    corrected = world.change({Q.MOVE_LINES: f'["{real}"]\nmove = false\nreason = "It ran nothing."\n'}, base=landed)
+    assert [m for m, _ in Q.moves_between(world.origin, corrected, head)] == [inflight, side]
 
 
 def test_a_head_crosses_a_move_in_flight_whose_map_at_its_head_and_on_main_retires_nothing_its_own_change_names(world):
@@ -5051,8 +5091,11 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
-                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for open and edit only: `eject` would act"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for open and edit only: `ready` would act")):
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for open, edit only, not eject"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for open, edit only, not ready"),
+                      (["queue", "status", "--issue", "X-1"], "--issue is for open, link only, not status"),
+                      (["queue", "cross", "--title", "x"], "--title is for open, edit only, not cross"),
+                      (["queue", "stats", "--mark"], "--mark is for ready only, not stats")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err

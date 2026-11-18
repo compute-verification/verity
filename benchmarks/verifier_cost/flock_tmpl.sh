@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The H1 tile unit in flock-ir-tmpl/v2 against its flat form: per K, flock_read.py --circuit-only builds the 4×8
+# The H1 tile unit in flock-ir-tmpl/v2 against its flat form: per K, flock_read.py builds the 4×8
 # tile's statement circuit (`prover/lowering/h1unit.Shape(K)`), `python -m verity_flock.tmpl` writes its unit's templated form,
 # and flock-tmpl (flock_tmpl/Main.lean, built in a scratch Lake package against the checkout's verifier) times the
 # templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines against the circuit's flat unit byte for byte. Run from a
@@ -34,7 +34,7 @@ EOF
 X=$S/tmpl/.lake/build/bin/flock-tmpl
 for k in "$@"; do
   w=$S/k$k
-  /usr/bin/time -v uv run python benchmarks/verifier_cost/flock_read.py "$k" "$w" --circuit-only > "$O/stage-$k.out" \
+  /usr/bin/time -v uv run python benchmarks/verifier_cost/flock_read.py "$k" "$w" > "$O/stage-$k.out" \
     2> "$O/stage-time-$k.txt" || { tail -40 "$O/stage-time-$k.txt" >&2; exit 1; }
   cp "$w/build.json" "$O/build-$k.json"
   /usr/bin/time -v uv run python -m verity_flock.tmpl "$w/circuit.txt" "$O/unit-$k.tmpl" > "$O/emit-$k.out" \

@@ -1,8 +1,10 @@
 import json
 from pathlib import Path
 
+import pytest
 from verity_bench import kit
 
+from verity_proof_throughput import cli
 from verity_proof_throughput import record as REC
 
 
@@ -19,6 +21,16 @@ def test_a_member_names_the_model_the_card_and_the_prover_count():
     assert REC.member("bf16-k6144", "NVIDIA H200", 2) == "glm-5.3-h200-2-provers"
     assert REC.member("bf16-k6144", "none", 1) == "glm-5.3-cpu-1-prover"
     assert REC.member("bf16-k2048", "NVIDIA H200", 1) == "llama-3.2-1b-h200-1-prover"
+    assert REC.member("bf16-k2048", "NVIDIA H100 80GB HBM3", 2) == "llama-3.2-1b-h100-2-provers"
+
+
+def test_a_card_no_record_holds_gets_no_reading_and_fails_the_run(tmp_path, capsys):
+    w = kit.writer(tmp_path)
+    w.stamp["card"] = "NVIDIA Nonesuch"
+    assert REC.write(w, tmp_path / "out", "bf16-k2048", 64, {1: [point("a")]}) == 1
+    doc = json.loads((tmp_path / "result.json").read_text())
+    assert doc["measurements"] == [] and "NVIDIA Nonesuch" in doc["validation"]["detail"]
+    assert "NVIDIA Nonesuch" in capsys.readouterr().out
 
 
 def test_provers_at_once_sum_their_verified_rates():
@@ -60,10 +72,10 @@ def stand_in(seen, rates):
 def test_record_runs_one_prover_then_two_at_once_each_verified_and_writes_a_reading_a_prover_count(tmp_path):
     seen = []
     out = tmp_path / "out"
-    points = REC.run(tmp_path, out, "bf16-k6144", 64, [2, 1], ["32-47", "80-95"], "node-a", "r1", start=stand_in(seen, [4.0, 3.0, 5.0]))
+    points = REC.run(tmp_path, out, "bf16-k6144", 64, [2, 1], ["0", "1"], ["0-9", "10-19"], "node-a", "r1", start=stand_in(seen, [4.0, 3.0, 5.0]))
     assert [s for s, _ in seen] == ["job.sh", "verify.sh", "job.sh", "job.sh", "verify.sh", "verify.sh"]
     jobs = [e for s, e in seen if s == "job.sh"]
-    assert [e["LEASE_CORES"] for e in jobs] == ["32-47", "32-47", "80-95"]
+    assert [(e["LEASE_CARD"], e["LEASE_CORES"]) for e in jobs] == [("0", "0-9"), ("0", "0-9"), ("1", "10-19")]
     assert len({e["SESSIONS_LOCK"] for e in jobs[1:]}) == 2 and all(e["B"] == "64" for e in jobs)
     assert len({e["PORT"] for e in jobs[1:]}) == 2
     assert all(e["BUNDLE"].startswith("art:") and e["PROVE_RUN"] == "r1" for s, e in seen if s == "verify.sh")
@@ -72,7 +84,17 @@ def test_record_runs_one_prover_then_two_at_once_each_verified_and_writes_a_read
     got = {m["member"].rsplit("-", 2)[-2]: m["value"] for m in doc["measurements"] if m["name"] == REC.METRIC}
     assert got == {"1": 4.0, "2": 8.0} and doc["validation"]["status"] == "passed"
     assert all(m["model"] == "glm-5.3" and m["values"].startswith("stand-in") for m in doc["measurements"])
+    leases = {m["provers"]: m["leases"] for m in doc["measurements"]}
+    first, second = {"card": "0", "cores": "0-9"}, {"card": "1", "cores": "10-19"}
+    assert leases == {1: [first], 2: [first, second]}
     assert all(f"out/{p['dir']}/verifier/result.json" in doc["validation"]["evidence"] for g in points.values() for p in g)
+
+
+@pytest.mark.parametrize("cards, cores, flag", [("0", "0-9,10-19", "--cards"), ("0,0", "0-9,10-19", "--cards"),
+                                                ("0,1", "0-9,0-9", "--cores")])
+def test_record_refuses_provers_without_a_card_and_cores_of_their_own(cards, cores, flag):
+    with pytest.raises(SystemExit, match=flag):
+        cli.main(["record", "--provers", "1,2", "--cards", cards, "--cores", cores])
 
 
 def test_a_prover_that_fails_leaves_its_count_without_a_value_and_the_run_failed(tmp_path):
@@ -80,7 +102,7 @@ def test_a_prover_that_fails_leaves_its_count_without_a_value_and_the_run_failed
         Path(env["OUT"]).mkdir(parents=True, exist_ok=True)
         return Done(1)
     out = tmp_path / "out"
-    points = REC.run(tmp_path, out, "bf16-k6144", 64, [1], ["32-47"], "node-a", "r1", start=start)
+    points = REC.run(tmp_path, out, "bf16-k6144", 64, [1], ["0"], ["0-9"], "node-a", "r1", start=start)
     assert REC.write(kit.writer(tmp_path), out, "bf16-k6144", 64, points) == 1
     doc = json.loads((tmp_path / "result.json").read_text())
     assert doc["measurements"][0]["value"] is None and doc["validation"]["status"] == "failed"
