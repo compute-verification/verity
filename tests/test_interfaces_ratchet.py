@@ -28,8 +28,8 @@ ratchet's count, naming apart what a ruling keeps (``KEPT``). Tests (``tests/``,
 - ``second_descriptions``: ceilings on the number of Lean or Python files naming each copy of the one circuit handed to
   a verifier beside it (positions, links, wirings, a second circuit, partition or gate count, the adapter's hand wiring)
   and each open statement that ties such a copy to the circuit (``SECOND``); they go to zero on ``one-circuit``. A name
-  with namesakes is counted by its qualified form and its defining file. `Claims.Sampling`'s ``Prog`` stack is counted
-  apart in the proofs tree (``PROOFS``), where it may stay as proof-only definitions."""
+  with namesakes is counted by its qualified form and its defining file. The second stack is counted by its name,
+  `Claims.Sampling`, and apart in the proofs tree (``PROOFS``), where it may stay as proof-only definitions."""
 
 from __future__ import annotations
 
@@ -146,36 +146,47 @@ def _claims_sampling(text: str) -> bool:
                for m in _SAMPLING_OPEN.finditer(text))
 
 
+_SAMPLING_NAME = re.compile(r"(?<![\w.])Claims\.Sampling\b")
+_SAMPLING_IMPORT = re.compile(r"^\s*(?:public\s+)?import\s+\S*Definitions\.Claims\.Sampling(?:Two)?\s*$", re.M)
+
+
+def _claims_sampling_named(text: str) -> bool:
+    """Whether a Lean file reads or names the second stack, `Claims.Sampling`: by its namespace, by importing its
+    modules, or by its ``Prog`` bare (`_claims_sampling`)."""
+    return bool(_SAMPLING_NAME.search(text) or _SAMPLING_IMPORT.search(text)) or _claims_sampling(text)
+
+
 _PERIODS = "verity/commitments/periods/interface.py"
 PROOFS = "security/Proofs/"
-#: {ceiling's name: (the files it counts in: a prefix, or ``!`` and a prefix they are not under, and a suffix; the file
-#: defining it under its bare name or ""; a substring every match holds; the test of a file's text)}
+#: {ceiling's name: (the files it counts in: a prefix, or ``!`` and a prefix they are not under, and a suffix; the files
+#: defining it under its bare name; a substring every match holds; the test of a file's text)}
 SECOND = {
-    "CutIsRegistered": ("", ".lean", "", "CutIsRegistered", re.compile(r"\bCutIsRegistered\b").search),
-    "PositionsCarry": ("", ".lean", "", "PositionsCarry", re.compile(r"\bPositionsCarry\b").search),
-    "EdgeFreeReads": ("", ".lean", "", "EdgeFreeReads", re.compile(r"\bEdgeFreeReads\b").search),
-    "posOf": ("", ".lean", "", "posOf", re.compile(r"\bposOf\s*:\s*ByteArray\b").search),
-    "HmLinks": ("", ".lean", "", "HmLinks", re.compile(r"\bHmLinks\b").search),
-    "checkLinked": ("", ".lean", "", "checkLinked", re.compile(r"\bcheckLinked\b").search),
-    "wiringOf": ("", ".lean", "", "wiringOf", re.compile(r"\bwiringOf\b").search),
-    "wiresWide": ("", ".lean", "", "wiresWide", re.compile(r"\bwiresWide\b").search),
-    "Circuit.ofAudit": ("", ".lean", "", "Circuit.ofAudit", re.compile(r"\bCircuit\.ofAudit\b").search),
-    "Partition.ofAudit": ("", ".lean", "", "Partition.ofAudit", re.compile(r"\bPartition\.ofAudit\b").search),
-    "RegisteredCircuit.ofPartition": ("", ".lean", "", "ofPartition", re.compile(r"\bofPartition\b").search),
-    "Claims.Sampling.Prog (read)": (f"!{PROOFS}", ".lean", "security/Definitions/Claims/Sampling.lean", "Sampling",
-                                    _claims_sampling),
-    "Claims.Sampling.Prog (proofs)": (PROOFS, ".lean", "", "Sampling", _claims_sampling),
-    "unitGates": ("", ".lean", "verity/protocols/proofs/flock/verifier/Flock/TemplateQuery.lean", "unitGates",
+    "CutIsRegistered": ("", ".lean", (), "CutIsRegistered", re.compile(r"\bCutIsRegistered\b").search),
+    "PositionsCarry": ("", ".lean", (), "PositionsCarry", re.compile(r"\bPositionsCarry\b").search),
+    "EdgeFreeReads": ("", ".lean", (), "EdgeFreeReads", re.compile(r"\bEdgeFreeReads\b").search),
+    "posOf": ("", ".lean", (), "posOf", re.compile(r"\bposOf\s*:\s*ByteArray\b").search),
+    "HmLinks": ("", ".lean", (), "HmLinks", re.compile(r"\bHmLinks\b").search),
+    "checkLinked": ("", ".lean", (), "checkLinked", re.compile(r"\bcheckLinked\b").search),
+    "wiringOf": ("", ".lean", (), "wiringOf", re.compile(r"\bwiringOf\b").search),
+    "wiresWide": ("", ".lean", (), "wiresWide", re.compile(r"\bwiresWide\b").search),
+    "Circuit.ofAudit": ("", ".lean", (), "Circuit.ofAudit", re.compile(r"\bCircuit\.ofAudit\b").search),
+    "Partition.ofAudit": ("", ".lean", (), "Partition.ofAudit", re.compile(r"\bPartition\.ofAudit\b").search),
+    "RegisteredCircuit.ofPartition": ("", ".lean", (), "ofPartition", re.compile(r"\bofPartition\b").search),
+    "Claims.Sampling (read)": (f"!{PROOFS}", ".lean", ("security/Definitions/Claims/Sampling.lean",
+                                                       "security/Definitions/Claims/SamplingTwo.lean"), "Sampling",
+                               _claims_sampling_named),
+    "Claims.Sampling (proofs)": (PROOFS, ".lean", (), "Sampling", _claims_sampling_named),
+    "unitGates": ("", ".lean", ("verity/protocols/proofs/flock/verifier/Flock/TemplateQuery.lean",), "unitGates",
                   re.compile(r"\bTemplateQuery\.unitGates\b").search),
-    "cut_wires": ("", ".py", "", "cut_wires", re.compile(r"\bcut_wires\b").search),
-    "served_program": ("", ".py", "", "served_program", re.compile(r"(?<!h1\.)\bserved_program\b").search),
-    "registered_reads": ("", ".py", _PERIODS, "registered_reads",
+    "cut_wires": ("", ".py", (), "cut_wires", re.compile(r"\bcut_wires\b").search),
+    "served_program": ("", ".py", (), "served_program", re.compile(r"(?<!h1\.)\bserved_program\b").search),
+    "registered_reads": ("", ".py", (_PERIODS,), "registered_reads",
                          re.compile(r"\b(?:interface|IF|I)\.registered_reads\b").search),
-    "check_wires": ("", ".py", "", "check_wires", re.compile(r"\bcheck_wires\b").search),
-    "check_order": ("", ".py", _PERIODS, "check_order", re.compile(r"\b(?:interface|IF|I)\.check_order\b").search),
-    "def wire(": ("adapters/vllm/verity_vllm/pipeline/", ".py", "", "def wire(",
+    "check_wires": ("", ".py", (), "check_wires", re.compile(r"\bcheck_wires\b").search),
+    "check_order": ("", ".py", (_PERIODS,), "check_order", re.compile(r"\b(?:interface|IF|I)\.check_order\b").search),
+    "def wire(": ("adapters/vllm/verity_vllm/pipeline/", ".py", (), "def wire(",
                   re.compile(r"^def wire\(", re.M).search),
-    "port_map": ("", ".py", "", "port_map", re.compile(r"\bport_map\b").search),
+    "port_map": ("", ".py", (), "port_map", re.compile(r"\bport_map\b").search),
 }
 CEILINGS = ("lean_old_names", "second_descriptions")
 TOOLKIT = ("the machine's record of its toolkits, read by one function: `verity_bench.kit.toolkit(version)` "
@@ -418,7 +429,7 @@ def scan(files: dict[str, str]) -> Scan:
                     s.found["lean_old_names"].setdefault(name, []).append(path)
         for name, (under, suffix, home, hint, test) in SECOND.items():
             inside = not path.startswith(under[1:]) if under.startswith("!") else path.startswith(under)
-            if inside and path.endswith(suffix) and (path == home or hint in text and test(text)):
+            if inside and path.endswith(suffix) and (path in home or hint in text and test(text)):
                 s.found["second_descriptions"].setdefault(name, []).append(path)
     for c, areas in named.items():
         if len(areas) < 2:
@@ -594,14 +605,18 @@ def test_a_second_description_is_counted() -> None:
              "security/C.lean": "open Claims.Sampling\nopen FlockSoundness\ntheorem t (C : Prog) : True := x\n",
              "security/Definitions/G.lean": "def g (C : Claims.Sampling.Prog) : Prop := True\n",
              "security/Proofs/H.lean": "theorem t (C : Claims.Sampling.Prog) : C.runIn r u g = none := x\n",
+             "security/Definitions/I.lean": "def i (s : Claims.Sampling.AuditStatement) : Prop := True\n",
+             "security/Definitions/J.lean": "module\n\npublic import Definitions.Claims.SamplingTwo\n",
+             "security/Proofs/K.lean": "theorem k : Claims.Sampling.RelS s w := x\n",
+             "security/Definitions/L.lean": "import Proofs.Flock.Claims.Sampling.KS\ndef l := Spot.Sampling.Partition\n",
              "security/D.lean": "def f := posOf θ F\ndef g := Spot.Bits.unitGates kp u\n",
              "verity/E.py": "import verity.commitments.periods.interface as IF\nIF.check_order(u, w, o)\n",
              "adapters/x/row_tables.py": "def check_order(tables):\n    pass\n",
              "adapters/vllm/verity_vllm/pipeline/k_rows.py": "def wire(ms, tmpls, rows):\n    return ms\n",
              "adapters/vllm/verity_vllm/pipeline/w.py": "def f():\n    def wire(w, lo, hi):\n        pass\n",
              "tests/F.lean": "theorem t : HmLinks := x\n"}
-    assert _flagged("second_descriptions", files) == {"posOf": 1, "CutIsRegistered": 1, "Claims.Sampling.Prog (read)": 2,
-                                                      "Claims.Sampling.Prog (proofs)": 1, "check_order": 1, "def wire(": 1}
+    assert _flagged("second_descriptions", files) == {"posOf": 1, "CutIsRegistered": 1, "Claims.Sampling (read)": 5,
+                                                      "Claims.Sampling (proofs)": 2, "check_order": 1, "def wire(": 1}
 
 
 def test_a_list_only_shrinks() -> None:

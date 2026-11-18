@@ -241,8 +241,8 @@
  },
  "second_descriptions": {
   "Circuit.ofAudit": 5,
-  "Claims.Sampling.Prog (proofs)": 54,
-  "Claims.Sampling.Prog (read)": 13,
+  "Claims.Sampling (proofs)": 365,
+  "Claims.Sampling (read)": 59,
   "CutIsRegistered": 1,
   "EdgeFreeReads": 4,
   "HmLinks": 15,
