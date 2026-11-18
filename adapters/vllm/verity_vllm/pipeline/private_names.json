@@ -1,0 +1,6 @@
+{
+ "schema": "verity/private-names/v1",
+ "kept_apart": ["replay_bundle_p", "replay_slim_p"],
+ "private": ["tokens.json", "tokens_p*.json", "match_stoch.json", "sampled_replay*.json", "requests.jsonl", "step_trace.jsonl",
+             "advice_trace.jsonl", "load*.jsonl", "topology.json", "timeline.jsonl", "timeline_report.json"]
+}
