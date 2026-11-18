@@ -134,7 +134,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NamedTuple
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
@@ -303,13 +303,42 @@ class WindowCompiler:
 
     def lower(self, advice: bytes) -> Lowered:
         """`__call__`'s circuit with its lowering (`Lowered`)."""
-        if type(advice) is not bytes:
-            raise Unexpressible(f"the advice is a bit string, bytes, not a {type(advice).__name__}")
-        return lower(self.registered, self.cls, None, self.grain,
-                     requests=requests_of(advice_of(self.registered, advice), self.cls))
+        return self._lower(advice)[1]
 
     def __call__(self, advice: bytes) -> IF.Circuit:
         return self.lower(advice).circuit
+
+    def schedule(self, advice: bytes) -> dict[tuple[str, int], Scheduled]:
+        """Each credited call of ``advice``'s circuit, a linear's run of units keyed by its template and first unit, at the
+        engine step whose row computes its position and its place among that step's rows' positions, in the advice's
+        rows by step (`Scheduled`); refused exactly where `__call__` is."""
+        decoded, low = self._lower(advice)
+        at: dict[tuple[int, int], tuple[int, int]] = {}
+        for s, st in enumerate(decoded.steps):
+            place = 0
+            for r in st.rows:
+                for p in range(r.start, r.start + r.n):
+                    at.setdefault((r.request, p), (s, place))
+                    place += 1
+        assert low.requests is not None
+        out = {}
+        for k, prog in enumerate(low.programs):
+            for p, tid, u, count in prog.calls:
+                out[(tid, u)] = Scheduled(count, *at[(low.requests[k], p)])
+        return dict(sorted(out.items()))
+
+    def _lower(self, advice: bytes) -> tuple[Any, Lowered]:
+        if type(advice) is not bytes:
+            raise Unexpressible(f"the advice is a bit string, bytes, not a {type(advice).__name__}")
+        decoded = advice_of(self.registered, advice)
+        return decoded, lower(self.registered, self.cls, None, self.grain, requests=requests_of(decoded, self.cls))
+
+
+class Scheduled(NamedTuple):
+    """A credited call's run of ``units``, at engine step ``step``, the ``place``-th position its rows compute."""
+    units: int
+    step: int
+    place: int
 
 
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
@@ -328,6 +357,6 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     return class_circuit(registered, cls, None, grain, tables)
 
 
-__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Request", "Row", "Tables", "WEIGHTS",
-           "WindowClass", "WindowCompiler", "check_provable", "class_circuit", "class_program", "lower", "requests_of", "stop_ids",
+__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Request", "Row", "Scheduled", "Tables",
+           "WEIGHTS", "WindowClass", "WindowCompiler", "check_provable", "class_circuit", "class_program", "lower", "requests_of", "stop_ids",
            "takes", "window_circuit"]

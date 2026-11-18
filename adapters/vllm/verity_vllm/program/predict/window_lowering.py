@@ -110,6 +110,8 @@ class _Program:
         self.linears: list[int] = []
         self.arows: dict[int, Row] = {}
         self.ys: dict[int, Row] = {}
+        #: each linear's runs of units, ``(position, tid, at, count)``: the calls PoUW credits (`WindowCompiler.schedule`)
+        self.calls: list[tuple[int, str, int, int]] = []
 
     def segments(self, refs: Refs) -> list[tuple[str, Any, int, int]]:
         """``refs`` as word ranges: ``("n", node, lo, hi)`` of a node's output or ``("p", name, lo, hi)`` of a parameter."""
@@ -342,6 +344,7 @@ class _Program:
             self.b.feed(tid, "x", u, count, xs)
             self.b.read(tid, "w", u, (count,), lo + s0 * K, (m * K,))
             pieces.append((s0, s0 + count * m, Row(tid, u, "o0", m)))
+            self.calls.append((self.position - 1, tid, u, count))
         self.outs[j] = pieces
         self.gemms[j] = (node.fn, xs, lo)
 
@@ -363,6 +366,7 @@ class _Program:
             self.b.read(tid, "w", u, (count,), lo + s0 * K // 2, (m * K // 2,))
             self.b.read(tid, "sw", u, (count,), slo + 2 * s0, (2 * m,))
             pieces.append((s0, s0 + count * m, Row(tid, u, "o0", m)))
+            self.calls.append((self.position - 1, tid, u, count))
         self.outs[j] = pieces
 
     def _heads(self, fn: Any, family: str, count: int) -> Any:

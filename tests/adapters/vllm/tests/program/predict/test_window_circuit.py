@@ -321,6 +321,46 @@ def test_the_registered_compiler_places_each_request_at_the_anchor_its_advice_ca
         WC.WindowCompiler(reg, SLOTS, GRAIN)(_anchored(THREE, (0, 8, 16)))
 
 
+def _rows_by_step(compiler, window) -> tuple[dict, list[list[tuple[int, int, int]]]]:
+    """``window``'s schedule and its calls as rows by step, ``(request, start, n)``: each call's request and position read
+    from the span that holds its units."""
+    data = S.I1.encode(S._session(*window)[0])
+    sched, low = compiler.schedule(data), compiler.lower(data)
+    of = {(tid, u): (low.requests[slot], p) for tid, runs in low.spans.items() for at, n, slot, p in runs for u in range(at, at + n)}
+    by: dict[int, dict[int, tuple[int, int]]] = {}
+    for key, c in sched.items():
+        assert by.setdefault(c.step, {}).setdefault(c.place, of[key]) == of[key]
+    rows: list[list[tuple[int, int, int]]] = []
+    for s in sorted(by):
+        rows.append([])
+        for place in sorted(by[s]):
+            q, p = by[s][place]
+            if rows[-1] and rows[-1][-1][0] == q and rows[-1][-1][1] + rows[-1][-1][2] == p:
+                rows[-1][-1] = (q, rows[-1][-1][1], rows[-1][-1][2] + 1)
+            else:
+                rows[-1].append((q, p, 1))
+    return {key: (of[key], c) for key, c in sched.items()}, rows
+
+
+def test_the_schedule_is_each_credited_calls_step_and_place_from_the_advice():
+    """`WindowCompiler.schedule`: each linear's run of units at the engine step whose row computes its position and its
+    place among that step's positions, from the advice alone. On the fixed load it is `FixedLoad.schedule` (and each call
+    at `FixedLoad.at`); on a window that chunks a prompt it is that window's rows; it refuses where the compiler does."""
+    compiler = WC.WindowCompiler(S._registered(), CLASS, GRAIN)
+    calls, rows = _rows_by_step(compiler, FULL)
+    assert rows == WC.FixedLoad.schedule(CLASS)
+    assert all((c.step, c.place) == WC.FixedLoad.at(CLASS, q, p) for (q, p), c in calls.values())
+    # every GEMM unit is a call's but the token select's own x0, the LM head's first column it recomputes
+    gemms = {IF.descriptor_id(fn): (fn.bindings["N"], n) for fn, n in compiler(S.I1.encode(S._session(*FULL)[0])).templates
+             if fn.name == "Gemm"}
+    rest = set(gemms) - {tid for tid, _ in calls}
+    assert [gemms[t][0] for t in rest] == [1] and sum(c.units for _, c in calls.values()) == sum(
+        n for t, (_, n) in gemms.items() if t not in rest)
+    assert _rows_by_step(compiler, FULL_LATER)[1] == [[(0, 0, 4), (1, 0, 2)], [(0, 4, 1), (1, 2, 2)], [(1, 4, 1)]]
+    with pytest.raises(Unexpressible, match="the advice is a bit string"):
+        compiler.schedule(S._session(*FULL)[0])
+
+
 @pytest.mark.slow
 def test_a_served_window_is_one_wired_program_its_members_fed_by_hand():
     """WINDOW's circuit, Programs of 5 and 4 positions, is one wired Program with no free row, and node by node on made-up
