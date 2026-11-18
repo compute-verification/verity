@@ -714,9 +714,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
                                                       weights, arrivals, values, histories))
         got = [read[m.key] for m in ms]
     data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values, IF.member_ranges(window.members))
-    valued = [tuple(p for p, _w in m.rows if isinstance(d["rows"].get(p), CS.ValueRows)) for m, d in zip(ms, data, strict=True)]
-    if any(valued):
-        window = replace(window, members=tuple(replace(m, values=v) for m, v in zip(ms, valued, strict=True)))
+    window = WT.valued(window, data)
     data = CH.held_rows(window, data)
     strings_of: dict[str, bytes] = {}
     if histories is not None:
