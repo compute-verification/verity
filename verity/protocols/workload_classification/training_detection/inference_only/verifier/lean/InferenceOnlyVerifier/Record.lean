@@ -390,13 +390,12 @@ values, each a distinct step, so a radix past `n`, or more than `n` sums, is mor
 has first words. The work is the digits with a step, each at most `n` values over at most `n` sums. -/
 def offsetSteps (n : Nat) : List (Nat × Int) → Option (List Int)
   | [] => some [0]
-  | (r, s) :: ps => do
-    let rest ← offsetSteps n ps
-    if s == 0 then return rest
-    if r == 0 || r > n then none
-    let os := ((List.range r).flatMap fun d => rest.map fun a => (d : Int) * s + a).foldl (fun t x => t.insert x) []
-    if os.length > n then none
-    return os
+  | (r, s) :: ps => (offsetSteps n ps).bind fun rest =>
+    if s == 0 then some rest
+    else if r == 0 || r > n then none
+    else
+      let os := ((List.range r).flatMap fun d => rest.map fun a => (d : Int) * s + a).foldl (fun t x => t.insert x) []
+      if os.length > n then none else some os
 
 /-- **Every wire lands whole** (the module docstring's "Wires whole"), or the first wire that does not, as a
 refusal's message: the wire, its offset, its two rows' bits or its two leaf widths, and the fix. A wire's index reads
