@@ -463,7 +463,7 @@ def samplingDesign (ss : Array Flock.Draw.WorkStratum) (k : Json) : R (Array Flo
   let total := Flock.Draw.totalWork ss
   pure (ss.map fun s => { s.toStratum with k := Flock.Draw.workK k s.work s.size total s.floor })
 
-def SCHEMA : String := "verity-ir/descriptor/v1"
+def SCHEMA : String := Flock.Program.SCHEMA
 def WINDOW_FN : String := "PouwH1Window_v3"
 def RECORD : List String := ["TILES", "LINEARS", "CALLS", "M", "PREFIX"]
 def TILE_FN : String := "PouwH1WindowTile_v1"
@@ -475,7 +475,7 @@ def J10R : List String := ["call", "blocks"]
 def TILE_K_STEP : Nat := 32
 def TILE_K_LIMIT : Nat := 2 ^ 17
 def DESCRIPTOR_FORM : String :=
-  "the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, compact, " ++
+  s!"the window's descriptor is not a {SCHEMA} descriptor in canonical JSON (keys sorted, compact, " ++
   "ASCII: the bytes program_digest hashes) with its callees, definitions, program function and root"
 def NOT_WINDOW : String :=
   "the window's circuit is not an H1 window: its program function is not PouwH1Window_v3{TILES=…,LINEARS=…," ++
@@ -1791,7 +1791,7 @@ def LIVE_FORM : String :=
   "(circuit.live.program_v2 of its tables' T, its S rounds and its PREFIX, canonical JSON without annotations) and " ++
   "each round's live@<s> proof outcome, unit s round s's"
 def LIVE_DESCRIPTOR_FORM : String :=
-  "the window's live descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON with its callees, " ++
+  s!"the window's live descriptor is not a {SCHEMA} descriptor in canonical JSON with its callees, " ++
   "definitions, program function and root"
 def NOT_LIVE : String :=
   "the window's live circuit is not a live Program: its program function is not PouwLiveWindow_v2{T=…,S=…," ++
@@ -2268,7 +2268,6 @@ example : DRAW_TAG = Domains.POUW_H1_SAMPLING := rfl
 example : ROUND_TAG = Domains.POUW_H1_ROUND_A := rfl
 example : COMMIT_TAG = Domains.POUW_H1_COMMIT.toUTF8.push 0 := rfl
 example : COMMIT_FORMAT = Domains.REGISTRATION := rfl
-example : SCHEMA = Domains.IR_DESCRIPTOR := rfl
 example : REQUESTS_IDS_TAG = Domains.POUW_H1_REQUEST_IDS := rfl
 example : WEIGHTS_TAG = Domains.POUW_H1_WEIGHTS := rfl
 
