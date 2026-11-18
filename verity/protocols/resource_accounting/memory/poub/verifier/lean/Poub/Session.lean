@@ -11,14 +11,14 @@ its openings coin at W + t, and the append coins in the order sampled). Each eve
 
 * `start`, `boundary`: the coin released (`none` at the close after the last window);
 * `append(root, count)`: the first index and its coin `c_a`; rejected `append` if malformed or past the codec's
-  `max_blocks`, `coin` if its root was sent before or the last window's roots are final;
+  `max_blocks` or an origin `State.originOk` refuses, `coin` if its root was sent before or the last window's roots are final;
 * `release(runs, withdrawn)`: rejected `release` unless the runs are a canonical plan of the store with none released
   before, and `withdrawn` is empty or a canonical plan of appended blocks inside the runs that no plan received before
   held (memory-map/v1's withdrawn blocks, released before their encode landed);
 * `receive(t, i, root, plan, step)`: rejected `malformed` (a root not 64 bytes), `order` (not the next root, a window
   already final, or past a paced window's k roots), `late` (past `D_t = b_t + A`), `step` (missing, not above the previous pass's, or 2^64 or more), `plan`
   (not a canonical plan of the store so far, whole, as runs or as a change of the previous pass's, one holding a
-  released block, or one that would take its window's receipts to `RECEIPT_LIMIT`, 2^64), `lifetime` (an appended block that joined a window L or more before);
+  released block, or one that would take its window's receipts to `RECEIPT_LIMIT`, 2^64), `lifetime` (an appended block that joined a window L or more before; with refresh, a registered block at `t ≥ L`), `probation` (with refresh, an appended block whose payload was born less than L windows before);
 * `close(t)`: the window's samples, once its roots are final (the next window's first root, `D_t` passed, or a paced
   window's k roots once its boundary has left); rejected `few` under `min_passes` roots, `coin` at the last window if an append's coin went unused;
 * `verify(t, openings)`: `verifyWindow`'s verdict (`checkWindow` on the samples); rejected `malformed` on a window with
@@ -55,6 +55,10 @@ structure Params where
   windowNs : Nat
   lifetime : Nat
   pace : Option Pace := none
+  /-- Refresh: an append may re-key registered blocks or a fresh append's (`Origin`), a plan in window `t` holds a
+  registered block only while `t < lifetime`, and an appended one only once its payload's birth `b` (`State.born`) has
+  `b + lifetime ≤ t` (`probation`). Off, appends are fresh and `receive` is as without it. -/
+  refresh : Bool := false
 
 structure Win where
   challenge : ByteArray
@@ -105,7 +109,7 @@ structure State where
 inductive Event
   | start (now : Nat)
   | boundary (now : Nat)
-  | append (root : ByteArray) (count : Int)
+  | append (root : ByteArray) (count : Int) (origin : Origin := .fresh)
   | release (runs withdrawn : Array (Int × Int))
   | receive (t i : Int) (root : ByteArray) (runs : Option (Array (Int × Int)))
       (change : Option (Array (Int × Int) × Array (Int × Int))) (step : Option Int) (now : Nat)
@@ -146,6 +150,28 @@ def State.staleBelow (s : State) (t : Nat) : Nat :=
   | some a => a.first
   | none => s.extent
 
+/-- The window in which append `a`'s payloads were first committed: the window its origin append joined (`joined`, or
+the window being filled for one not joined yet), `none` for a re-key of registered blocks or past the appends. -/
+def State.born (s : State) (a : Nat) : Option Nat :=
+  match (s.appends[a]?.map (·.origin) : Option Origin) with
+  | some Origin.fresh => some (s.joined.getD a s.filling)
+  | some (Origin.rekey k) => some (s.joined.getD k s.filling)
+  | _ => none
+
+/-- Whether `first … first + count − 1` holds a block of an append whose payloads were born less than `lifetime`
+windows before `t`. -/
+def State.probation (s : State) (t first count : Nat) : Bool :=
+  (Array.range s.appends.size).any fun a =>
+    let x := s.appends[a]!
+    x.first < first + count && first < x.first + x.count && (s.born a).any (t < · + s.params.lifetime)
+
+/-- `append`'s check of an origin: `fresh`, or with refresh a re-key of registered blocks or of an earlier fresh
+append. -/
+def State.originOk (s : State) : Origin → Bool
+  | .fresh => true
+  | .registered => s.params.refresh
+  | .rekey k => s.params.refresh && (s.appends[k]?.any (·.origin == .fresh))
+
 def State.record (s : State) (t : Nat) : WindowRecord :=
   let w := s.windows[t]!
   { index := t, challenge := w.challenge,
@@ -169,9 +195,10 @@ def boundary (s : State) (now : Nat) : Result × State := Id.run do
   if t + 1 < s.params.windows then return (.released (some (t + 1)), s.releaseCoin (t + 1) now)
   return (.released none, s)
 
-def append (s : State) (root : ByteArray) (count : Int) : Except String (Result × State) := do
+def append (s : State) (root : ByteArray) (count : Int) (origin : Origin := .fresh) :
+    Except String (Result × State) := do
   if let some r := live s then return (r, s)
-  if root.size ≠ DIGEST_BYTES || count < 1 || s.extent + count.toNat > s.reg.codec.maxBlocks then
+  if root.size ≠ DIGEST_BYTES || count < 1 || s.extent + count.toNat > s.reg.codec.maxBlocks || !s.originOk origin then
     return s.fail s.filling .append
   if s.appends.any (·.root == root) || (s.windows.size == s.params.windows && (s.windows.back?.map (·.final)).getD false)
   then return s.fail s.filling .coin
@@ -181,7 +208,7 @@ def append (s : State) (root : ByteArray) (count : Int) : Except String (Result 
   return (.appended first coin,
     { s with
       appendSampled := s.appendSampled + 1
-      appends := s.appends.push ⟨first, n, root, coin⟩
+      appends := s.appends.push { first, count := n, root, coin, origin }
       head := some (appendHead s.head first n root)
       extent := first + n })
 
@@ -249,6 +276,10 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
   s := { s with joined := s.joined ++ Array.replicate (s.appends.size - s.joined.size) t }
   let below := s.staleBelow t
   if below > N && plan.runs.any fun (f, c) => f < below && f + c > N then return s.fail t .lifetime
+  if s.params.refresh then
+    if s.params.lifetime ≤ t && plan.runs.any fun (f, _) => f < N then return s.fail t .lifetime
+    if plan.runs.any fun (f, c) => f + c > N && s.probation t (max f N) (f + c - max f N) then
+      return s.fail t .probation
   let post := if extent == N then 0 else plan.runs.foldl (fun n (f, c) => n + (f + c - max f N)) 0
   let head := s.head
   let add := fun (w : Win) =>
@@ -324,7 +355,7 @@ theorem verify_eq_verifyBy (s : State) (t : Int) (openings : Array Opening) :
 def step (s : State) : Event → Except String (Result × State)
   | .start now => pure (start s now)
   | .boundary now => pure (boundary s now)
-  | .append root count => append s root count
+  | .append root count origin => append s root count origin
   | .release runs withdrawn => pure (release s runs withdrawn)
   | .receive t i root runs change st now => pure (receive s t i root runs change st now)
   | .close t now => close s t now

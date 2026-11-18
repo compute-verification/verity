@@ -22,6 +22,8 @@ prover's openings of them, in the order sampled. Each opening, in `_check`'s ord
    of its append's tree, under that root;
 5. `receipt`: the receipt recomputed from the block under the registration's kind and the pass's seed not the opened one.
 
+A session with refresh also rejects a plan with `probation` (`Session.receive`) and an opening with `origin-path`.
+
 A window with another number of openings than samples is `malformed`. `tile` is never reached: a registration that binds
 PoUW's tiles is refused (`Registration.make?`), a form no proof here covers.
 -/
@@ -39,14 +41,14 @@ def LAYOUT : String := "store-order/v0"
 /-- `audit.FAILURES`. -/
 inductive Failure
   | late | order | step | plan | lifetime | append | coin | release | few | malformed
-  | receiptPath | codec | payloadPath | tile | receipt
+  | receiptPath | codec | payloadPath | tile | receipt | probation | originPath
 deriving BEq, Repr, DecidableEq
 
 def Failure.name : Failure → String
   | .late => "late" | .order => "order" | .step => "step" | .plan => "plan" | .lifetime => "lifetime"
   | .append => "append" | .coin => "coin" | .release => "release" | .few => "few" | .malformed => "malformed"
   | .receiptPath => "receipt-path" | .codec => "codec" | .payloadPath => "payload-path" | .tile => "tile"
-  | .receipt => "receipt"
+  | .receipt => "receipt" | .probation => "probation" | .originPath => "origin-path"
 
 /-- What the store is (`audit.Registration`), with its codec key. -/
 structure Registration where
@@ -101,13 +103,23 @@ def payloadDomain (node : ByteArray) (blocks : Nat) : Flock.FV3.Sha512.Domain :=
 
 def Registration.payloadDomain (r : Registration) : Flock.FV3.Sha512.Domain := Poub.payloadDomain r.node r.blocks
 
-/-- An append the verifier received: store indices `first … first + count − 1`, its payload tree's root, and the coin
-`c_a` it answered with. -/
+/-- Where an append's payloads were first committed: by the append itself (`fresh`), by the registration (`registered`,
+a re-key of registered blocks), or by append `k` (`rekey k`, a re-key of that append's blocks, which is itself fresh).
+A re-key encodes those payloads again under its own coin. -/
+inductive Origin
+  | fresh
+  | registered
+  | rekey (k : Nat)
+deriving BEq, Repr, DecidableEq, Inhabited
+
+/-- An append the verifier received: store indices `first … first + count − 1`, its payload tree's root, the coin
+`c_a` it answered with, and where its payloads were first committed (`fresh` in a session without refresh). -/
 structure Append where
   first : Nat
   count : Nat
   root : ByteArray
   coin : ByteArray
+  origin : Origin := .fresh
 deriving Inhabited
 
 /-- `append_domain(registration digest, first, count)`. -/
