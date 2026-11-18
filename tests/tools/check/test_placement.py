@@ -402,12 +402,13 @@ def test_a_quick_tier_on_auto_goes_where_a_check_slot_is_free_whatever_its_lean_
 
     n1 = machine([slot("a", HOLDER), slot("c", HOLDER)], [waiter() for _ in range(10)], pools=lean())
     n2 = machine([slot("d"), slot("e", HOLDER)], pools=lean(free=0, waiting=2))
-    got, why = Q.place("auto", ROOT, read=lambda names: {N1: n1, N2: n2})
-    assert got == N2 and why.startswith("a check slot and a Lean check slot are free (check slots: d free, e held; 0 waiting ahead")
+    got, why, twins, _ = Q.place("auto", ROOT, read=lambda names: {N1: n1, N2: n2})
+    assert twins == [] and got == N2 and why.startswith("a check slot and a Lean check slot are free (check slots: d free, e held; 0 waiting ahead")
     assert CHECK.choose([N1, N2], {N1: n1, N2: n2})[1].startswith("the fewest waiting ahead")       # a check's pick: no room on n2
     n2_lean_unread = n2 | {"lean": {"error": "PermissionError: /workspace/research/locks/lean-slots"}}
-    assert Q.place(f"{N1},{N2}", ROOT, read=lambda names: {N1: n1, N2: n2_lean_unread})[0] == N2
-    got, why = Q.place(f"{N1},{N2}", ROOT, read=lambda names: {n: "exit 255: no route to host" for n in names})
+    assert Q.place(f"{N1},{N2}", ROOT, read=lambda names: {N1: n1, N2: n2_lean_unread})[:3:2] == (N2, [N2, N1]), \
+        "a twin waits in the other line too, as check.py's `twins` places a check's"
+    got, why, *_ = Q.place(f"{N1},{N2}", ROOT, read=lambda names: {n: "exit 255: no route to host" for n in names})
     assert got is None and why == f"no machine's slots could be read; skipped {N1}: exit 255: no route to host; skipped {N2}: exit 255: no route to host"
 
 

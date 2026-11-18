@@ -8,7 +8,7 @@ probe is one Attempt on a GPU node, and its records are its result: no code redu
 ## Try it
 
 `uv run tools/check/suites.py calibration/bandwidth` tests the runner, on any machine. On a node, as the command of a
-`research run`, `verity bench bandwidth chip|write_gpu|write_host [ARGS]` (`run.sh`) runs one probe's script:
+`research run`, `verity calibrate bandwidth chip|write_gpu|write_host [ARGS]` (`run.sh`) runs one probe's script:
 
 | Probe | What it measures | What it writes under `$OUT` |
 | --- | --- | --- |
