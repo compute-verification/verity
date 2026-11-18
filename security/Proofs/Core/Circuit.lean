@@ -134,6 +134,29 @@ theorem localEval_of_not_mem (X : C.Trace) {u : Fin n} {g : Fin C.N} (h : P.unit
     P.localEval X u g = X g :=
   C.run_fixed (by simp [h])
 
+/-- **A unit's local evaluation is its restricted circuit's run**: `localEval X u` runs `C_S`, for `S` the unit's
+gates, with every gate outside the unit held at `X`. -/
+theorem localEval_eq_restrict_run (X : C.Trace) (u : Fin n) :
+    P.localEval X u = (C.restrict (P.gates u)).run fun g => if P.unit g = some u then none else some (X g) := by
+  funext g
+  induction g using WellFoundedLT.induction with
+  | _ g ih =>
+  by_cases hu : P.unit g = some u
+  · have hin : C.isInput g = false := by
+      cases hi : C.isInput g
+      · rfl
+      · exact absurd ((P.input_iff g).2 hi) (by simp [hu])
+    have hS : g ∈ P.gates u ∧ C.isInput g = false := ⟨by simp [gates, hu], hin⟩
+    rw [P.localEval_of_mem X hu]
+    refine Eq.trans ?_ ((C.restrict (P.gates u)).run_free
+      (fix := fun g => if P.unit g = some u then none else some (X g)) (g := g) (by simp [hu])).symm
+    show _ = (if g ∈ P.gates u ∧ C.isInput g = false then C.op g _ else 0)
+    rw [if_pos hS]
+    exact C.op_congr g _ _ fun a ha => ih a (C.reads_lt g a ha)
+  · rw [P.localEval_of_not_mem X hu]
+    exact ((C.restrict (P.gates u)).run_fixed
+      (fix := fun g => if P.unit g = some u then none else some (X g)) (g := g) (b := X g) (by simp [hu])).symm
+
 theorem mem_incorrect {X : C.Trace} {u : Fin n} : u ∈ P.incorrect X ↔ ¬ P.Correct X u := by
   classical
   simp [incorrect]
