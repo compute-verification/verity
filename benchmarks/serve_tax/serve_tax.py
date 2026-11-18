@@ -10,7 +10,7 @@ integration's pin, on the same node, workload and SLO.
     serve_tax.py run --arm tick-certifier --model-id ID --client vllm-bench --loads NAME=RUNG --tick-ms SAT,FREE
                      --side server [--front PORT] [--cells NAME=N,...] [--stop-at TIME] --out DIR
     serve_tax.py run --arm tick-certifier --model-id ID --client vllm-bench --loads NAME=RUNG [--pass-prompts ...]
-                     --side client --attester-windows N [--front PORT] [--cells NAME=N,...] [--reps 3] --out DIR
+                     --side client --attester-windows N --private DIR [--front PORT] [--cells NAME=N,...] [--reps 3] --out DIR
     serve_tax.py passes --loads NAME[=RUNG+RUNG...],... [--dataset NAME=FILE] [--fetch] [--arms "ARM ..." --model-id ID]
     serve_tax.py dataset LOAD [--fetch]
     serve_tax.py metrics DIR [--slo-ttft-s S --slo-tpot-s S]
@@ -50,9 +50,9 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``bi-eager``: ``eager`` with ``VLLM_BATCH_INVARIANT=1``, the committing path's execution with nothing committed;
 - ``record``: the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`, the recorder serve-openai uses), in
   the engine core, written by a thread of its own (`servetax_plugin`);
-- ``release-order``: requests added in the network attester's release order (`serve_admit.ReleaseOrder` in the engine
+- ``release-order``: requests added in the network attester's release order (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder` in the engine
   core, `servetax_plugin.ReleaseGate`), the client standing in for the network attester, which numbers them in send order;
-- ``tick``: the certified tick (`serve_admit.TickGate` under vLLM's server, `verity_vllm.pipeline.scheme_plugin`), τ_sat and
+- ``tick``: the certified tick (`verity.protocols.resource_accounting.network.prover.admission.TickGate` under vLLM's server, `verity_vllm.pipeline.scheme_plugin`), τ_sat and
   τ_free given or calibrated on a ``record`` trace (`tick`), the client standing in for the network attester (`corpus.StandIn`);
 - ``tokens``: each window's tokens committed: every prompt id and every sampled id, 4 bytes a token, in ``rows-sha512``
   rows (`verity_vllm.commit.step_rows`), hashed off the engine loop at each window's close (`servetax_plugin.TokenCommit`).
@@ -2180,7 +2180,7 @@ def tail_records(d: Path, pattern: str, at: dict[str, int]) -> list[dict]:
 
 
 def tick_counts(recs: list[dict]) -> dict:
-    """What the certified tick's gate logged over a pass (`serve_admit.TickGate`): the requests it admitted, how many it
+    """What the certified tick's gate logged over a pass (`verity.protocols.resource_accounting.network.prover.admission.TickGate`): the requests it admitted, how many it
     deferred by one step or more, how many steps each was held (steps: requests), the steps that admitted any, and its
     events by kind (an ``opened`` gate ordered nothing after it)."""
     held = [k for r in recs if "admitted" in r for k in r.get("held_steps", ())]
@@ -2513,8 +2513,9 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
     the engine empties its prefix cache for it (`servetax_plugin.IdleReset`). The network attester runs the windows fixed
     when it starts and cuts every connection at their end, so no pass starts that can't be expected to end before
     (`stop_before`), and the side then waits for the network attester's end. Then network attestation's offline check reads the
-    run with the shim's record of each connection (DIR/certifier/client.json), and DIR/meta.json, an arm's, holds
-    what it found (`attester_record`). It exits 0 where every pass was sent, the run is accepted and no answer was
+    run with the shim's record of each connection (PRIVATE/certifier/client.json: the network attester's run and the
+    shim's records, each request's and answer's digest among them, are kept in ``--private``), and DIR/meta.json, an
+    arm's, holds what it found (`attester_record`). It exits 0 where every pass was sent, the run is accepted and no answer was
     short of its length."""
     import secrets
 
@@ -2534,9 +2535,13 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
     if model.served not in served:
         raise SystemExit(f"the server behind the id front on loopback port {a.front} serves {', '.join(served)}, not "
                          f"{model.served}")
-    out, run_dir = Path(a.out), SHARED.RESEARCH_RUN_DIR
-    cert = out / "certifier"
-    cert.mkdir(parents=True, exist_ok=True)
+    if not a.private:
+        raise SystemExit("--private DIR: where the client side keeps the network attester's run and the shim's records "
+                         "(each request's and answer's digest), outside every run's directory")
+    out, run_dir, private = Path(a.out), SHARED.RESEARCH_RUN_DIR, private_dir(a)
+    cert = private / "certifier"
+    for d in (out, cert):
+        d.mkdir(parents=True, exist_ok=True)
     env = tree_env()
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "side": CLIENT,
             "model_id": a.model_id, "model": model.ref, "checkpoint": str(checkpoint),
@@ -2569,7 +2574,7 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
             origin = json.loads((cert / "deployment.json").read_text())["origin_unix"]
             end = origin + a.attester_windows * cells["window"] * cells["bucket_ms"] / 1000
             with open(out / "shim.log", "wb") as log:
-                shim = popen(shim_argv(cert / "deployment.json", checkpoint, out / "shim.jsonl"),
+                shim = popen(shim_argv(cert / "deployment.json", checkpoint, private / "shim.jsonl"),
                              stdout=subprocess.PIPE, stderr=log, env=env, text=True)
             procs.append(shim)
             port = announced(shim, "the shim", out / "shim.log")["listening"][1]
@@ -2616,7 +2621,7 @@ def certified_client(a: argparse.Namespace, run: Callable[..., subprocess.Comple
             except subprocess.TimeoutExpired:
                 raise RuntimeError(f"the network certifier had not ended {ATTESTER_END_S:.0f} s after its last "
                                    "window (attester.log)") from None
-            lines = [json.loads(x) for x in (out / "shim.jsonl").read_text().splitlines() if x.strip()]
+            lines = [json.loads(x) for x in (private / "shim.jsonl").read_text().splitlines() if x.strip()]
             (cert / "client.json").write_text(json.dumps(cell_shim.client_doc(lines)))
             with open(out / "check.log", "wb") as log:
                 meta["certifier"]["check_exit"] = run([sys.executable, str(ATTESTER), "check", "--run", str(cert)],

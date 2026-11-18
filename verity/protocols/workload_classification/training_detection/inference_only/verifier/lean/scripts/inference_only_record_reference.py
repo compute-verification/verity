@@ -262,12 +262,18 @@ def own_rows(program, form_only: bool = False) -> None:
     from verity.circuits.cut import member_refs
     from verity.circuits.layout import Scope, resolve_gate
     from verity.circuits.parts import n_members
-    from verity.circuits.refs import Strided
+    from verity.circuits.refs import Grid, Strided
     nodes = program.root.body.nodes
 
+    def reads(s, i) -> bool:
+        return s == "n" and 0 <= i < len(nodes) and not is_input(nodes[i].fn)
+
     def edge(p) -> bool:
-        return (isinstance(p, (Affine, Strided)) and p.space == "n" and 0 <= p.idx < len(nodes)
-                and not is_input(nodes[p.idx].fn))
+        if isinstance(p, Grid):
+            return any(reads(s, i) for s, i, *_x in p.lanes)
+        if isinstance(p, Explicit):
+            return any(reads(r[0], r[1]) for r in p.items)
+        return isinstance(p, (Affine, Strided)) and reads(p.space, p.idx)
 
     def run(p) -> bool:
         return (isinstance(p, Affine) and p.space == "n" and 0 <= p.idx < len(nodes) and is_input(nodes[p.idx].fn)
@@ -277,9 +283,6 @@ def own_rows(program, form_only: bool = False) -> None:
     runs = sorted((p.idx, p.base, p.count) for p in parts if run(p) and p.count > 0)
     if any(node.form == "batch" and None in node.axes for _, node in units) or not all(map(run, parts)) \
             or any(a[0] == b[0] and a[1] + a[2] > b[1] for a, b in zip(runs, runs[1:])):
-        if any(isinstance(p, Explicit) and any(r[0] == "n" and 0 <= r[1] < len(nodes) and not is_input(nodes[r[1]].fn)
-                                               for r in p.items) for p in parts):
-            raise Malformed("edge-rows")
         raise refused("own-rows", OWN_ROWS)
     if form_only:
         return
@@ -401,9 +404,22 @@ def program_wires(desc: dict, tids, cuts) -> list[dict]:
     return got["wires"]
 
 
+def root_order(desc: dict, tids) -> list[tuple[str, int, int]]:
+    """The root's ranges of the templates `tids` in node order, each `(template, first unit, units)` with a template's
+    units counted in its own ranges (`RecordText.orderOf`)."""
+    by, own, out = set(tids), {}, []
+    for x in desc["definitions"][desc["root"]]["body"]["nodes"]:
+        tid = desc["callees"][x["fn"]]
+        if tid in by:
+            n = x["n"] if x["form"] == "batch" else 1
+            out.append((tid, own.get(tid, 0), n))
+            own[tid] = own.get(tid, 0) + n
+    return out
+
+
 def wires_of(templates: list[Template], rec: dict, desc: dict) -> tuple[list[dict], dict]:
     """The record's wiring (`RecordText.wiring`): the record's cuts and the wires the Program's root states
-    (`program_wires`), refused (`wires`) where it refuses them or as
+    (`program_wires`) with the root's order (`root_order`), refused (`wires`) where it refuses them or as
     `verity.commitments.periods.interface.check_wires` refuses them."""
     import verity.commitments.periods.interface as IF
     cuts = rec.get("cuts", {})
@@ -411,7 +427,7 @@ def wires_of(templates: list[Template], rec: dict, desc: dict) -> tuple[list[dic
                     t.units) for t in templates}
     try:
         wires = tuple(IF.Wire.of(x) for x in program_wires(desc, (t.tid for t in templates), cuts))
-        IF.check_wires(lays, wires, IF._cuts(cuts), None)
+        IF.check_wires(lays, wires, IF._cuts(cuts), root_order(desc, [t.tid for t in templates]))
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise Malformed("wires") from e
     return [{**w.doc(), "c0": w.cut[0], "C": w.cut[1]} for w in wires], IF._cuts(cuts)
