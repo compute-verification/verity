@@ -155,6 +155,7 @@ from pathlib import Path, PurePosixPath
 from typing import IO, Any, Callable
 
 from . import clone
+from .store.private import REFUSED_FILE
 from .telemetry.events import utc_now_ms
 from .telemetry.job import address_names, hide_addresses, write_json_atomic
 
@@ -172,7 +173,8 @@ SHIP_CHUNK = 1 << 20                          # the launcher never holds more of
 STALE_PARTIAL_MIN = 30                        # a <root>/src/*.partial-* directory with nothing written for this long belongs to a dead ship
 _RC_DIGEST = 75                               # the ship script's exit when the received archive is not the launcher's (nothing extracted)
 WORKLOAD_CWD_DEFAULT = "run_dir"              # the machine-side runner's default workload cwd; a shipped package without this line predates it
-SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch.json", "refused.json", "events.jsonl", "slot.json")
+SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch.json", "refused.json", "events.jsonl", "slot.json",
+               REFUSED_FILE)
 TERMINAL = ("done", "failed", "cancelled")
 FETCHED_FILE = ".fetched"                     # <run>/.fetched on the machine: written by `fetch --all` once every file verified
 FETCHED_SCHEMA = "research/fetched/v0.1"

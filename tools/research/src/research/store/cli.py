@@ -215,9 +215,10 @@ def cmd_put(argv: list[str]) -> int:
     ap.add_argument("--meta", default=None, help="JSON object or @file")
     ap.add_argument("--ref", action="append", default=[], metavar="name=art:...")
     g = ap.add_mutually_exclusive_group()
-    g.add_argument("--file", default=None)
-    g.add_argument("--tree", default=None, help="a directory; with a `run_id` in --meta, refused (exit 1, nothing stored) when it holds "
-                                                "a file a `withdrawn` label of that run's artifacts covers (`research data withdraw --path`)")
+    g.add_argument("--file", default=None, help="a file; refused (exit 1, nothing stored) when it is private (research/store/private.py)")
+    g.add_argument("--tree", default=None, help="a directory; refused (exit 1, nothing stored) when it holds a private file "
+                                                "(research/store/private.py), or, with a `run_id` in --meta, a file a `withdrawn` label "
+                                                "of that run's artifacts covers (`research data withdraw --path`)")
     ap.add_argument("--preserve", action="store_true", help="push to the remote and verify (exit 1 unless PRESERVED)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
@@ -237,7 +238,17 @@ def cmd_put(argv: list[str]) -> int:
                   "artifacts on purpose (`research data withdraw`); delete them from the tree and from every other local copy, "
                   "then put the rest", file=sys.stderr)
             return 1
-    art = st.put_artifact(ns.kind, meta, _refs(ns.ref), file=Path(ns.file) if ns.file else None, tree=Path(ns.tree) if ns.tree else None)
+    from .private import PrivateFiles
+
+    try:
+        art = st.put_artifact(ns.kind, meta, _refs(ns.ref), file=Path(ns.file) if ns.file else None, tree=Path(ns.tree) if ns.tree else None)
+    except PrivateFiles as e:
+        for r in e.refused:
+            print(f"research data put: {r['path']}: private ({r['rule']}, {r['owner']})", file=sys.stderr)
+        print(f"research data put: REFUSED, nothing stored: {len(e.refused)} private file(s) under {ns.tree or ns.file}. A private file is "
+              "never stored: move it out and put the rest; a lane that needs one stored changes research/store/private.py in a "
+              "reviewed change", file=sys.stderr)
+        return 1
     rep, why, gone = None, None, ""
     if ns.preserve:
         rep = st.push(art, preserve=True)

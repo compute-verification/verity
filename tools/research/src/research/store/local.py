@@ -297,11 +297,17 @@ class LocalStore:
 
     # ---- artifacts ----------------------------------------------------------------------------------------------------------------------
 
-    def put_artifact(self, kind: str, meta: dict, refs: dict | None = None, *, file: Path | None = None, tree: Path | None = None) -> str:
+    def put_artifact(self, kind: str, meta: dict, refs: dict | None = None, *, file: Path | None = None, tree: Path | None = None,
+                     private_checked: bool = False) -> str:
         """Hash the payload, store its blobs, write the canonical manifest, index; return the art id.  Idempotent: the same content
-        yields the same id and touches nothing that already exists."""
+        yields the same id and touches nothing that already exists.  private.PrivateFiles, storing nothing, when the payload holds a
+        private file (store.private); `private_checked`: the caller refused them by their own paths (custody, from the run dir)."""
         if file is not None and tree is not None:
             raise ValueError("put_artifact takes file= or tree=, not both")
+        if not private_checked and (file is not None or tree is not None):
+            from .private import check_payload
+
+            check_payload([Path(file)] if file is not None else _rel_files(Path(tree)) if Path(tree).is_dir() else [])
         blobs: list[tuple[Path, str]] = []
         payload = None
         if file is not None:

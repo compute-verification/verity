@@ -86,6 +86,8 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str, head_fallback: bool 
         rep["errors"].append(f"manifest: {type(e).__name__}: {e}")
         return rep
     rep["kind"] = m.kind
+    if refused := (m.meta or {}).get("refused_files"):                  # a run record: custody's private files, in no artifact
+        rep["refused"] = refused
     hex_ = ids.hex_of(art_id)
     if mode == "recorded":
         rec = st.index.replicas(art_id).get("remote") or {}
@@ -379,6 +381,12 @@ def format_target(t: dict[str, Any]) -> list[str]:
 
 
 def _art_status(ar: dict[str, Any]) -> str:
+    refused = (f"; {ar['refused']} private file(s) refused (never uploaded, left on the run's machine: `research data custody RUN` "
+               f"lists them)" if ar.get("refused") else "")
+    return _status(ar) + refused
+
+
+def _status(ar: dict[str, Any]) -> str:
     if ar["preserved"]:
         return f"PRESERVED ({ar.get('verified')})"
     w = "; ".join(_withdrawal_lines(ar.get("withdrawn") or []))

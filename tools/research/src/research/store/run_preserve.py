@@ -409,7 +409,13 @@ def _preserve(run_dir: Path, custody_dir: Path, req: dict[str, Any]) -> dict[str
     from . import preserved
     from .local import LocalStore
 
+    from .private import rule_for
+
     fd, rel = _open(run_dir, req["path"])
+    if rule := rule_for(rel, Path(os.path.realpath(run_dir)) / rel):
+        os.close(fd)
+        raise Refusal(f"{rel} is private ({rule.what}: {rule.reason}; {rule.owner}), and a private file is never stored; the run's "
+                      f"custody refuses it too and leaves it on the machine")
     run_id, root = CU.run_id_of(run_dir), custody_dir / STORE
     tmp = root / "scratch" / f".preserve-{run_id}-{secrets.token_hex(4)}"
     try:

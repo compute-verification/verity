@@ -1710,6 +1710,8 @@ def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = wa
                 rc = s["rc"] if isinstance(s["rc"], int) and s["rc"] != 0 else 1
             why = f": {s['why']}" if s.get("why") else ""
             print(f"research: run {run_id} {s['state']} (rc {s['rc']}){why}", file=sys.stderr)
+            if s.get("custody_refused"):
+                print(f"research: run {run_id}: {_refused_text(s['custody_refused'])}", file=sys.stderr)
             return rc
         if (rec or {}).get("last_fetch_error"):
             print(f"research: run {run_id}: machine unreachable (rc {rec['last_fetch_error'].get('rc')}); still waiting", file=sys.stderr)
@@ -2030,6 +2032,13 @@ def _fmt(s: dict) -> str:
     return f"{s['id']:<24} {str(s['state']):<10} {rc:>3}  {(s['class'] or ''):<22} {res:<4} {val:<8} {str(s['project']):<10} {where:<11} {str(s['stage']):<16} {cmd}"
 
 
+def _refused_text(refused: list[dict]) -> str:
+    from .store.private import summary
+
+    return (f"{len(refused)} private file(s) refused by custody: never uploaded, left on the run's machine and never evicted: "
+            f"{summary(refused)}")
+
+
 def cmd_status(argv: list[str]) -> int:
     from . import checkview, memmark
 
@@ -2124,6 +2133,8 @@ def cmd_status(argv: list[str]) -> int:
             print(f"{'':<26}mem  unread: {s['scope_memory_error']}")
         if one and s["has_status"] and s["state"] not in R.ACTIVE:
             print(f"{'':<26}mem  {memmark.line(s.get('memory'))}")
+        if refused := s.get("custody_refused"):
+            print(f"{'':<26}priv {_refused_text(refused)}")
         for line in (check or []) if s is rows[0] else []:
             print(f"{'':<26}{line}")
     active = sum(1 for s in rows if s["state"] in R.ACTIVE)

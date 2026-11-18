@@ -19,7 +19,11 @@ published on the machine that ran it with a minted key, so custody no longer dep
 The record uploads the run's own files, everything under out/ (the workload's $OUT), the files matching its `--declared-output`
 globs, and undeclared files up to UNDECLARED_LIMIT_BYTES; every other file is listed (path, bytes, sha256) without bytes (`select`; how jobs declare outputs:
 .agents/skills/writing-runs/SKILL.md).  The listing is the record's `meta.trimmed` when it fits in TRIMMED_INLINE_BYTES, else the
-file TRIMMED_LISTING in the record's own tree, named by `meta.trimmed_listing` (`trimmed_of`).  A credential a run may be sent
+file TRIMMED_LISTING in the record's own tree, named by `meta.trimmed_listing` (`trimmed_of`).  A private file (store.private:
+by where it lies, its name or its text; a symlink naming or resolving to one) is never uploaded, listed or evicted: the rest of
+the record is stored, the refused paths with their rules go in REFUSED_FILE (in the run dir and the record), the record's
+`meta.refused_files` and `meta.refused`, and `.custody`'s `refused`, and custody says so on launcher.log and its own output
+(`refusal_warning`).  A credential a run may be sent
 (CREDENTIALS) is deleted from the run dir before its record is taken, whatever the run's tool and however it ended, so no record
 holds one; a refused launch deletes it from the request dir (remote.py).
 
@@ -52,6 +56,7 @@ from typing import Any, Callable, Iterator
 from ..env import DIRTY_CAPTURE
 from ..telemetry.job import write_json_atomic
 from ..telemetry.run import OUT_DIR
+from . import private as P
 from .attempt import TERMINAL as TERMINAL_STATES
 from .evict import EVICTED_FILE
 
@@ -110,10 +115,11 @@ def _sha256(p: Path) -> str:
         return hashlib.file_digest(f, "sha256").hexdigest()
 
 
+REFUSED_FILE = P.REFUSED_FILE                 # written into the run dir and its record by custody, never scanned for private text
 #: The runner's own files, always uploaded; everything else is kept only when it matches a declared output (`declared_globs`).
 #: DIRTY_CAPTURE is a dirty source's bytes (env.py): never trimmed, so the record, not the machine's tree, is their durable copy.
 RUN_FILES = frozenset({"stdout.log", "stderr.log", "launcher.log", "sampler.log", "job.json", "status.json", "events.jsonl", "failure.json",
-                       "result.json", "launch.json", "remote.json", "refused.json", "slot.json", DIRTY_CAPTURE})
+                       "result.json", "launch.json", "remote.json", "refused.json", "slot.json", DIRTY_CAPTURE, REFUSED_FILE})
 #: The runner's own files under stamped names (fnmatch on the run-dir-relative path): the stall watch's py-spy dumps (telemetry.run),
 #: and the runner's answers to `research run-preserve` (run_preserve.ANSWERS).
 RUN_FILE_GLOBS = ("logs/stall-*.txt", "control/preserve/answers/*")
@@ -139,14 +145,26 @@ def declared_globs(run_dir: Path) -> list[str]:
 
 
 def select(run_dir: Path, limit: int | None = None) -> tuple[list[str], list[dict[str, Any]]]:
-    """(files the run record uploads, [{path, bytes, sha256}] of the files it only lists): the run's own files, every file matching a
-    declared glob (`declared_globs`; fnmatch on the path relative to the run dir, so `*` crosses `/`: `out/*` is all of out/, `*` is
-    everything), and undeclared files up to `limit` bytes in total."""
+    """(files the run record uploads, [{path, bytes, sha256}] of the files it only lists): `choose`'s, private files in neither."""
+    kept, trimmed, _ = choose(run_dir, limit)
+    return kept, trimmed
+
+
+def choose(run_dir: Path, limit: int | None = None) -> tuple[list[str], list[dict[str, Any]], list[dict[str, Any]]]:
+    """(files the run record uploads, [{path, bytes, sha256}] of the files it only lists, [{path, rule, owner}] of the private files
+    it refuses): the run's own files, every file matching a declared glob (`declared_globs`; fnmatch on the path relative to the run
+    dir, so `*` crosses `/`: `out/*` is all of out/, `*` is everything), and undeclared files up to `limit` bytes in total, none
+    that `private.RULES` refuses, which no glob or run-file name brings in.  A symlink is never followed or uploaded; one that
+    names or resolves to a private file is refused too."""
     d = Path(run_dir)
     limit = UNDECLARED_LIMIT_BYTES if limit is None else limit
     globs = declared_globs(d)
     kept, trimmed, used = [], [], 0
+    refused = P.scan(d, links_only=True)
     for rel in run_files(d):
+        if rel != REFUSED_FILE and (rule := P.rule_for(rel, d / rel)):
+            refused.append(P.refusal(rel, rule))
+            continue
         size = (d / rel).stat().st_size
         if is_run_file(rel) or any(fnmatch.fnmatchcase(rel, g) for g in globs):
             kept.append(rel)
@@ -155,7 +173,15 @@ def select(run_dir: Path, limit: int | None = None) -> tuple[list[str], list[dic
             kept.append(rel)
         else:
             trimmed.append({"path": rel, "bytes": size, "sha256": _sha256(d / rel)})
-    return kept, trimmed
+    return kept, trimmed, sorted(refused, key=lambda r: r["path"])
+
+
+def refusal_warning(refused: list[dict[str, Any]], where: str = "this machine") -> str | None:
+    if not refused:
+        return None
+    return (f"custody REFUSED {len(refused)} private file(s), not uploaded and left on {where}: {P.summary(refused)}. The rest of "
+            f"the run record is stored; every refused path and its rule is in the run's {MARKER} and {REFUSED_FILE}. Keep private files "
+            f"out of the run dir; the list is research/store/private.py")
 
 
 def trim_warning(trimmed: list[dict[str, Any]]) -> str | None:
@@ -210,12 +236,24 @@ def put_run_record(st: Any, run_dir: Path, run_id: str) -> str | None:
     tmp = root / f".custody-{run_id}-{secrets.token_hex(4)}"
     tmp.mkdir(parents=True)
     try:
-        kept, trimmed = select(Path(run_dir))
+        kept, trimmed, refused = choose(Path(run_dir))
+        listed = _write_refused(Path(run_dir), refused)
+        if listed and REFUSED_FILE not in kept:
+            kept.append(REFUSED_FILE)
         rels = stage(Path(run_dir), tmp, kept)
+        if refused and not listed:
+            (tmp / REFUSED_FILE).unlink(missing_ok=True)        # a stale hard link to the run dir's copy: never write through it
+            write_json_atomic(tmp / REFUSED_FILE, {"schema": P.REFUSED_SCHEMA, "refused": refused})
+            rels.append(REFUSED_FILE)
         if not rels:
             return None
-        size = sum((Path(run_dir) / r).stat().st_size for r in rels)
+        size = sum((tmp / r).stat().st_size for r in rels)
         meta: dict[str, Any] = {"run_id": run_id, "files": len(rels), "bytes": size}
+        if refused:
+            meta["refused_files"] = len(refused)
+            if len(json.dumps(refused, separators=(",", ":"))) <= TRIMMED_INLINE_BYTES:
+                meta["refused"] = refused
+            print(f"research: {refusal_warning(refused)}", file=sys.stderr)
         if trimmed:
             listing = json.dumps(trimmed, separators=(",", ":"))
             if len(listing) <= TRIMMED_INLINE_BYTES:
@@ -224,9 +262,38 @@ def put_run_record(st: Any, run_dir: Path, run_id: str) -> str | None:
                 (tmp / TRIMMED_LISTING).write_text(listing)
                 meta.update(trimmed_listing=TRIMMED_LISTING, trimmed_files=len(trimmed), trimmed_bytes=sum(t["bytes"] for t in trimmed))
             print(f"research: {trim_warning(trimmed)}", file=sys.stderr)
-        return st.put_artifact(KIND, meta, tree=tmp)
+        return st.put_artifact(KIND, meta, tree=tmp, private_checked=True)   # `choose` refused by the run dir's own paths
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _write_refused(run_dir: Path, refused: list[dict[str, Any]]) -> bool:
+    """Whether the run dir now holds REFUSED_FILE listing `refused`; with none refused, a listing an earlier publish left goes.  A run
+    dir custody can't write into (a sealed one) keeps the listing in its record alone."""
+    p = run_dir / REFUSED_FILE
+    try:
+        if not refused:
+            if p.is_file() and not p.is_symlink():
+                p.unlink()
+            return False
+        if p.is_symlink() or p.is_dir():
+            return False
+        write_json_atomic(p, {"schema": P.REFUSED_SCHEMA, "refused": refused})
+        return True
+    except OSError as e:
+        print(f"research: custody: {p} not written ({e.strerror}); the refused paths are in the run record's {REFUSED_FILE}", file=sys.stderr)
+        return False
+
+
+def refused_of(st: Any, record: str, man: Any = None) -> list[dict[str, Any]]:
+    """The run record's listing of the private files custody refused: `meta.refused`, or its REFUSED_FILE (fetched when not local)."""
+    man = man or st.get_manifest(record)
+    meta = man.meta or {}
+    if not meta.get("refused_files"):
+        return []
+    if "refused" in meta:
+        return list(meta["refused"])
+    return P.listed(Path(st.fetch(record, paths=[REFUSED_FILE])))
 
 
 def trimmed_of(st: Any, record: str, man: Any = None) -> list[dict[str, Any]]:
@@ -341,6 +408,8 @@ def verify(st: Any, run_dir: Path, run_id: str | None = None, *, mark: bool = Tr
     man = st.get_manifest(rr)
     want = {f.path: (f.bytes, f.sha256) for f in (man.payload.files or []) if f.path != TRIMMED_LISTING}
     want.update({t["path"]: (t["bytes"], t["sha256"]) for t in trimmed_of(st, rr, man)})
+    refused = refused_of(st, rr, man)
+    private = {r["path"] for r in refused}
     t0 = time.time()
     have: dict[str, list[Any]] = {}
     for rel in run_files(d):
@@ -348,7 +417,7 @@ def verify(st: Any, run_dir: Path, run_id: str | None = None, *, mark: bool = Tr
             continue
         p = d / rel
         have[rel] = [p.stat().st_size, _sha256(p)]
-    extra = sorted(set(have) - set(want))
+    extra = sorted(set(have) - set(want) - private)
     changed = sorted(r for r in set(have) & set(want) if tuple(have[r]) != want[r])
     if extra or changed:
         rep["error"] = (f"{len(extra)} file(s) not in the run record, {len(changed)} changed since it was taken: "
@@ -356,6 +425,8 @@ def verify(st: Any, run_dir: Path, run_id: str | None = None, *, mark: bool = Tr
         return rep
     rep.update(preserved=True, verified_from=t0, verified_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), files=have,
                gone=sorted(set(want) - set(have)), host=os.uname().nodename)
+    if refused:
+        rep["refused"] = refused
     if mark:
         write_json_atomic(d / MARKER, rep)
     return rep
@@ -499,6 +570,14 @@ def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, condit
     from .local import LocalStore
 
     d = Path(run_dir)
+    try:
+        refused = choose(d)[2]
+    except OSError as e:
+        refused = []
+        print(f"research: custody: the run dir's private files were not listed before its record ({e}); its record refuses them all "
+              "the same", file=sys.stderr)
+    if said := refusal_warning(refused):
+        print(f"research: {said}", file=sys.stderr)        # into launcher.log, before the record takes it
     sys.stdout.flush()
     sys.stderr.flush()
     divert_output(d, custody_dir)
@@ -531,6 +610,8 @@ def runner_publish(run_dir: Path, custody_dir: Path, *, tool: Any = None, condit
                         f"this one with a fresh key); {rep['error']}")
     if warn:
         rep["size_warning"] = warn
+    if refused and not rep.get("preserved"):
+        rep["refused"] = refused
     if rep.get("preserved"):
         write_json_atomic(d / MARKER, rep)                  # verified_from precedes it; nothing below writes into the run dir
     else:
@@ -819,7 +900,8 @@ def triage_report(st: Any, roots: list[Path], *, older_min: float | None = None,
             "rows": rows, "needs_action": len(todo), "settling": sum(1 for r in rows if r["settling"])}
 
 
-__all__ = ["ACTIONS", "CREDENTIALS", "EXCLUDED", "JOB_ACCESS", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output",
+__all__ = ["ACTIONS", "CREDENTIALS", "EXCLUDED", "JOB_ACCESS", "KIND", "MARKER", "PUBLISH_LOG", "REFUSED_FILE", "SCHEMA", "choose",
+           "custody_env", "divert_output", "refusal_warning", "refused_of",
            "drop_credentials", "force_refusal", "has_custody", "job_env", "mark_failed", "marker_problem", "mint_for_machine", "mint_reader",
            "READ_ACTIONS", "READ_DIR_NAME", "reader_env", "push_run",
            "put_run_record", "ran_evidence", "run_files", "runner_publish", "trimmed_of", "triage", "triage_row", "verify"]

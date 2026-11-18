@@ -30,6 +30,7 @@ from ..telemetry.events import utc_now_ms
 from ..telemetry.job import write_json_atomic
 from . import canon
 from . import derivation as D
+from .private import PrivateFiles, rule_for
 from .tool import Tool
 
 ATTEMPT_SCHEMA = "research/attempt/v0.1"
@@ -193,7 +194,8 @@ def build(run_dir: Path | str, *, tool: Tool | dict[str, Any] | str | None = Non
 # ---- publish --------------------------------------------------------------------------------------------------------------------------------
 
 def _stage_run_files(run_dir: Path, rels: list[str], into: Path) -> tuple[int, list[str]]:
-    """Copy each listed path (file or directory, recursively) under `into` preserving the relative path.  Returns (files, missing)."""
+    """Copy each listed path (file or directory, recursively) under `into` preserving the relative path, but a private file
+    (store.private), which the run record lists as refused.  Returns (files, missing)."""
     n, missing = 0, []
     for rel in rels:
         p = Path(rel)
@@ -203,12 +205,16 @@ def _stage_run_files(run_dir: Path, rels: list[str], into: Path) -> tuple[int, l
         src = run_dir / p
         if src.is_file():
             dst = into / p
+            if rule_for(p.as_posix(), src, follow=True):
+                continue
             dst.parent.mkdir(parents=True, exist_ok=True)
             if not dst.exists():
                 shutil.copy2(src, dst)
                 n += 1
         elif src.is_dir():
             for f in sorted(x for x in src.rglob("*") if x.is_file()):
+                if rule_for(f.relative_to(run_dir).as_posix(), f, follow=True):
+                    continue
                 dst = into / f.relative_to(run_dir)
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 if not dst.exists():
@@ -275,35 +281,46 @@ def typed_outputs(run_dir: Path, st: Any, run_id: str) -> dict[str, str]:
             else:
                 raise ValueError(f"outputs.json: {name}: ref {k}={v!r} is neither an art: id nor @<earlier output>")
         optional = bool(ent.get("optional"))
-        if "file" in ent:
-            p = _rel_under(run_dir, ent["file"])
-            if not p.is_file():
-                if optional:
-                    continue
-                raise FileNotFoundError(f"outputs.json: {name}: file {ent['file']!r} is absent")
-            out[name] = st.put_artifact(kind, meta, refs or None, file=p)
-        elif "tree" in ent:
-            p = _rel_under(run_dir, ent["tree"])
-            if not p.is_dir() or not any(x.is_file() for x in p.rglob("*")):
-                if optional:
-                    continue
-                raise FileNotFoundError(f"outputs.json: {name}: tree {ent['tree']!r} is absent or empty")
-            out[name] = st.put_artifact(kind, meta, refs or None, tree=p)
-        elif "files" in ent:
-            rels = _dedupe(list(ent.get("files") or []))
-            with tempfile.TemporaryDirectory(prefix=f"research-out-{name}-") as tmp:
-                n, missing = _stage_run_files(run_dir, rels, Path(tmp))
-                if n == 0:
-                    if optional:
-                        continue
-                    raise FileNotFoundError(f"outputs.json: {name}: none of {rels} exists under the run dir")
-                meta.setdefault("files", n)
-                if missing:
-                    meta.setdefault("missing", missing)
-                out[name] = st.put_artifact(kind, meta, refs or None, tree=Path(tmp))
-        else:
-            out[name] = st.put_artifact(kind, meta, refs or None)
+        try:
+            got = _typed_output(run_dir, st, name, kind, meta, refs, ent, optional)
+        except PrivateFiles as e:
+            print(f"research: outputs.json: {name} not stored: {e}; the run record lists them as refused", file=sys.stderr)
+            continue
+        if got is not None:
+            out[name] = got
     return out
+
+
+def _typed_output(run_dir: Path, st: Any, name: str, kind: str, meta: dict[str, Any], refs: dict[str, str], ent: dict[str, Any],
+                  optional: bool) -> str | None:
+    """One `outputs.json` entry's art id, None when an optional one is absent; PrivateFiles when its payload holds a private file."""
+    if "file" in ent:
+        p = _rel_under(run_dir, ent["file"])
+        if not p.is_file():
+            if optional:
+                return None
+            raise FileNotFoundError(f"outputs.json: {name}: file {ent['file']!r} is absent")
+        return st.put_artifact(kind, meta, refs or None, file=p)
+    if "tree" in ent:
+        p = _rel_under(run_dir, ent["tree"])
+        if not p.is_dir() or not any(x.is_file() for x in p.rglob("*")):
+            if optional:
+                return None
+            raise FileNotFoundError(f"outputs.json: {name}: tree {ent['tree']!r} is absent or empty")
+        return st.put_artifact(kind, meta, refs or None, tree=p)
+    if "files" in ent:
+        rels = _dedupe(list(ent.get("files") or []))
+        with tempfile.TemporaryDirectory(prefix=f"research-out-{name}-") as tmp:
+            n, missing = _stage_run_files(run_dir, rels, Path(tmp))
+            if n == 0:
+                if optional:
+                    return None
+                raise FileNotFoundError(f"outputs.json: {name}: none of {rels} exists under the run dir")
+            meta.setdefault("files", n)
+            if missing:
+                meta.setdefault("missing", missing)
+            return st.put_artifact(kind, meta, refs or None, tree=Path(tmp))
+    return st.put_artifact(kind, meta, refs or None)
 
 
 def _dedupe(items: list[Any]) -> list[str]:
@@ -362,7 +379,10 @@ def _publish(run_dir: Path, *, tool: Any, store: Any, remote_push: bool | None, 
     tool = _resolve_tool(tool, job.get("store") or {})
     outputs: dict[str, str | None] = {"result": None, "run_files": None}
     res = result.check(run_dir, run_id)
-    if res.valid and res.doc is not None:
+    if res.valid and res.doc is not None and (rule := rule_for("result.json", run_dir / "result.json")):
+        print(f"research: result.json not stored as the run's result: it is private ({rule.what}, {rule.owner}); the run record lists it "
+              "as refused", file=sys.stderr)
+    elif res.valid and res.doc is not None:
         doc = res.doc
         rels = _dedupe(list(doc.get("artifacts") or []) + list(doc.get("measurement_files") or []))
         if rels:
