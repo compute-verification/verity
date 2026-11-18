@@ -6,9 +6,11 @@ framing broken, and a period in each form the period's guarantee doesn't cover),
 names, so agreeing on it holds which rule refused the period."""
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import shutil
+import subprocess
 from collections import Counter
 from pathlib import Path
 
@@ -120,3 +122,60 @@ def test_a_descriptor_not_utf8_is_left_to_the_credit(raw):
     d["windows"][0]["descriptor"] = raw.hex()
     got = PC.case_twin(cases.serve(d))
     assert got["verdict"] == "reject" and not got["reason"].startswith("form: "), got["reason"]
+
+
+def _run(exe: Path, flags: list[str], params: dict, case: dict, tmp: Path) -> tuple[int, dict, str]:
+    files = [tmp / "params.json", tmp / "commitment.bin", tmp / "evidence.json"]
+    files[0].write_text(D.canonical(params))
+    files[1].write_bytes(bytes.fromhex(case["commitment"]))
+    files[2].write_bytes(bytes.fromhex(case["evidence"]))
+    p = subprocess.run([str(exe), *flags, "check", *map(str, files)], capture_output=True, text=True, check=False)
+    return p.returncode, json.loads(p.stdout.strip().splitlines()[-1]), p.stderr
+
+
+def _pin(tmp: Path, public: str, retired: list[str]) -> list[str]:
+    keyfile = tmp / "challenger-key.json"
+    keyfile.write_text(json.dumps({"retired": [{"pubkey": k} for k in retired]}))
+    return ["--challenger-key-sha512", hashlib.sha512(bytes.fromhex(public)).hexdigest(),
+            "--challenger-retired", str(keyfile)]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("cheat, reason", [
+    (None, None), ("forger", "challenger-key-not-pinned"), ("retired", "challenger-key-retired"),
+    ("none", "challenger-key-none"), ("pin-retired", "challenger-key-retired")])
+def test_pouw_period_under_the_challengers_pin(tmp_path, cheat, reason) -> None:
+    """`pouw-period --challenger-key-sha512 H --challenger-retired FILE` accepts an honest period whose `key`, the
+    challenger's that signs the draw coin, is the pinned one, with the unpinned line; it refuses by name, at its
+    parameters, a period whose key is the forger's, one FILE retires (the pinned key included), or none. Unpinned, it
+    says so first on stderr."""
+    case = cases.instance(random.Random("honest/credit"))
+    exe = D.build(LEAN, "pouw-period")
+    public = case["params"]["key"]["public"]
+    forger = bytes(b ^ 0x5A for b in bytes.fromhex(public)).hex()
+    params = dict(case["params"])
+    if cheat == "none":
+        params["key"] = None
+    elif cheat in ("forger", "retired"):
+        params["key"] = {**params["key"], "public": forger}
+    pin = _pin(tmp_path, public, {"retired": [forger], "pin-retired": [public]}.get(cheat, []))
+    rc, got, err = _run(exe, pin, params, case, tmp_path)
+    if cheat is None:
+        off = _run(exe, [], params, case, tmp_path)
+        assert rc == 0 and got["verdict"] == "accept" and got == off[1], got
+        assert off[2].splitlines()[0] == "challenger's key not pinned: the case names it" and "not pinned" not in err
+    else:
+        assert rc == 1 and got["reason"].startswith(f"params: {reason}: "), got
+
+
+@pytest.mark.slow
+def test_onsite_under_the_challengers_pin_refuses_a_period_member_whose_key_is_the_forgers(tmp_path) -> None:
+    """Onsite's composite (`onsite`) under the pin refuses, at its parameters and by name, a PoUW period member whose key
+    is the forger's, before any member is read."""
+    case = cases.instance(random.Random("honest/credit"))
+    public = case["params"]["key"]["public"]
+    member = {**case["params"], "key": {**case["params"]["key"], "public": bytes(80 * [7]).hex()[:len(public)]}}
+    exe = D.build(LEAN.parents[5] / "compose" / "verifier" / "onsite", "onsite")
+    params = {"components": [{"id": "verity/pouw/period/v1", "params": member}]}
+    rc, got, _ = _run(exe, _pin(tmp_path, public, []), params, {"commitment": "", "evidence": "7b7d"}, tmp_path)
+    assert rc == 1 and got["reason"].startswith("params: challenger-key-not-pinned: "), got

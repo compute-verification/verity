@@ -11,7 +11,7 @@ public import VStarRecursive.ChallengerPin
 anything else the recursive audit's (`VStar.Recursive.main`). -/
 def main : List String → IO UInt32
   | "sampled" :: args => do
-    match ← VStar.Recursive.ChallengerPin.parse args with
+    match ← Spot.ChallengerPin.parse args with
     | (some pin, rest) => (VStar.Recursive.ChallengerPin.sampled pin).main rest
-    | (none, rest) => VStar.Recursive.Sampled.protocol.main rest
+    | (none, rest) => Spot.ChallengerPin.unpinned VStar.Recursive.Sampled.protocol.main rest
   | args => VStar.Recursive.main args

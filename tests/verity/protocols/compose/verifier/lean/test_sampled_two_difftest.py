@@ -276,6 +276,9 @@ def _pinned(tmp_path: Path, sha512: str, retired: list[str], params: dict | None
                           capture_output=True, text=True, check=False)
 
 
+UNPINNED = "challenger's key not pinned: the case names it"
+
+
 def _key() -> str:
     params = json.loads((_case_dir() / "params.json").read_text())
     (key,) = {params["boundary"]["challenger"]["key"]["public"],
@@ -285,16 +288,19 @@ def _key() -> str:
 
 @pytest.mark.slow
 @pytest.mark.parametrize("pin, retired, verdict", [
-    ("right", False, None), ("other", False, "challenger-key-not-pinned"), ("other", True, "challenger-key-retired")])
+    ("right", False, None), ("other", False, "challenger-key-not-pinned"), ("other", True, "challenger-key-retired"),
+    ("right", True, "challenger-key-retired")])
 def test_the_honest_play_under_a_pin(tmp_path, pin, retired, verdict) -> None:
     """The kept honest play (`CASE`) under the pin of its challenger's key is accepted, with the unpinned check's line;
     under another pin it is refused at its parameters by `challenger-key-not-pinned`, and with its key in the verifier's
-    retired list by `challenger-key-retired`."""
+    retired list by `challenger-key-retired`, the pinned key included. Unpinned, the check says so first on stderr."""
     key = _key()
     sha = hashlib.sha512(bytes.fromhex(key)).hexdigest() if pin == "right" else hashlib.sha512(b"forger").hexdigest()
     on = _pinned(tmp_path, sha, [key] if retired else [])
     if verdict is None:
-        assert on.returncode == 0 and on.stdout == _check(tmp_path).stdout, (on.stdout + on.stderr)[-4000:]
+        off = _check(tmp_path)
+        assert on.returncode == 0 and on.stdout == off.stdout, (on.stdout + on.stderr)[-4000:]
+        assert off.stderr.splitlines()[0] == UNPINNED and UNPINNED not in on.stderr, off.stderr[-4000:]
     else:
         assert on.returncode == 1 and json.loads(on.stdout)["reason"].startswith(f"params: {verdict}: "), \
             (on.stdout + on.stderr)[-4000:]
