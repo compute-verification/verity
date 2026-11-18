@@ -18,6 +18,9 @@ SHAPES = (
     ("synthetic b<k>-<i> (serve_load bursts)", r"b\d+-\d+"),
     ("synthetic <tag>-<n> (attester_load reps, attester warm-ups)", r"(warmup-.+|.+-rep\d+)-\d+"),
     ("synthetic <letter><n> (u<n>, q<n>, r<n>)", r"[uqr]\d+"),
+    ("synthetic <word>-smoke[-<n>] (llama1b_serve_seal.sh's smokes)", r"[a-z]+-smoke(-\d+)?"),
+    ("synthetic none-<n> (active_replay's sessionless requests)", r"none-\d+"),
+    ("synthetic <name>.<n> (the network certifier front's sessions, certifier_serve.py)", r"[A-Za-z0-9_-]+\.\d+"),
     ("email-like", r"[^@\s]+@[^@\s]+\.[^@\s]+"),
     ("contains whitespace", r".*\s.*"),
 )
