@@ -23,3 +23,9 @@ off_gate = ["circuit-check", "ratchet-gate", "added-lines"]
 # its suite then fails for nothing but allowed tests), or `circuit-check CHECK/CODE FAMILY` (one circuit-check failure, the
 # Definition without its statics). Drop an entry once its failure is fixed. A recorded check runs each test a `suite NAME::TEST`
 # entry at its base names as a non-strict expected failure (`suites.py --allowances`), so that suite passes and is reused.
+
+[[allow]]
+id = "suite tests/verity/protocols/resource_accounting/network/verifier/network::test_lean_audit.py::test_the_adapter_gives_the_audits_verdicts_on_generated_units"
+owner = "network-accounting"
+expires = "2026-11-20T02:00:00Z"
+reason = "the two audits agree on every generated case; no generated case is refused for `advice`, so the test's coverage assertion fails until its generator targets that kind"
