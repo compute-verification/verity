@@ -270,16 +270,16 @@ def servedProtocol (id : String) (schemes : Schemes) (served : String) : Core.Pr
   publicJson := Public.toJson
   profileJson := profileJson
 
-/-- The wipe's command line (`Core.Protocol.main`) of `mkProtocol id schemes`, and `serve --server NAME`: `serve` held
+/-- The wipe's command line (`Core.Protocol.main`) of `mkProtocol id schemes`, and `--server NAME serve`: `serve` held
 to the served node NAME (`servedProtocol`). -/
 def mainOf (id : String) (schemes : Schemes) : List String → IO UInt32
-  | ["serve", "--server", served] => (servedProtocol id schemes served).main ["serve"]
+  | ["--server", served, "serve"] => (servedProtocol id schemes served).main ["serve"]
   | args => (mkProtocol id schemes).main args
 
-/-- `wipe-protocol`'s command line: `protocol`'s, and `serve --server NAME` (`mainOf`). -/
+/-- `wipe-protocol`'s command line: `protocol`'s, and `--server NAME serve` (`mainOf`). -/
 def main : List String → IO UInt32 := mainOf ID SCHEMES
 
-/-- `wipe-protocol-test`'s command line: `testProtocol`'s, and `serve --server NAME` (`mainOf`). -/
+/-- `wipe-protocol-test`'s command line: `testProtocol`'s, and `--server NAME serve` (`mainOf`). -/
 def testMain : List String → IO UInt32 := mainOf (TEST_PREFIX ++ ID) TEST_SCHEMES
 
 /-- **What a wipe accounts for** (`Core.Account`): the foreign bits the server may still hold after an accepted wipe

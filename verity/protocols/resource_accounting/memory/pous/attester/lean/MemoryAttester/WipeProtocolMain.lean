@@ -6,7 +6,7 @@ public import MemoryAttester.WipeProtocol
 `verity/wipe/v0`, the streamed-label wipe's verdict under S1's LMS. `id` prints the protocol id; `check PARAMS
 COMMITMENT EVIDENCE` reads three files and prints the outcome's canonical JSON line; `serve` reads one case a line on
 standard input, `{"commitment": hex, "evidence": hex, "params": JSON}`, and prints one outcome line for each;
-`serve --server NAME` does the same held to the served node NAME, refusing by name a case of another server
+`--server NAME serve` does the same held to the served node NAME, refusing by name a case of another server
 (`MemoryAttester.WipeProtocol.mainOf`). An
 accepted wipe's outcome publishes `foreign_bits` and `eps` among its fields (`certify`), and a session not yet signed is
 undecided. `tests/test_wipe_protocol.py` drives `serve` on its named wipes, and `wipe_period.py`, in the verifier's

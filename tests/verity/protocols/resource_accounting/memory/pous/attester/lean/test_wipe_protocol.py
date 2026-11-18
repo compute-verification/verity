@@ -7,7 +7,7 @@ segment at `k = 2152` (`r = 24`) and one at `k = 5231` (`r = 59`) with memory pa
 egress of 0 MiB, each accepted and not certified, its count named as the evidence writer's, one whose evidence gives no
 egress (accepted, not certified) and one whose egress is out of range (rejected), a
 prover keeping one label past the threshold of foreign content, a late read and a session never signed, each with the
-verdict it is aimed at; a commitment of no reads, refused by both as they decode it; and `serve --server NAME`, the
+verdict it is aimed at; a commitment of no reads, refused by both as they decode it; and `--server NAME serve`, the
 served road's, which refuses by name a case of another server than the served node NAME and answers the served node's
 as `serve` does."""
 
@@ -182,7 +182,7 @@ OTHER_SERVER = "the case is a wipe of another server than {}"
 
 def _served(exe: str, served: str, cases: list[dict]) -> list[dict]:
     lines = "".join(D.canonical({k: c[k] for k in ("commitment", "evidence", "params")}) + "\n" for c in cases)
-    p = subprocess.run([str(D.build(M.PACKAGE, exe)), "serve", "--server", served], input=lines, capture_output=True,
+    p = subprocess.run([str(D.build(M.PACKAGE, exe)), "--server", served, "serve"], input=lines, capture_output=True,
                        text=True, check=True)
     return [json.loads(x) for x in p.stdout.splitlines()]
 
