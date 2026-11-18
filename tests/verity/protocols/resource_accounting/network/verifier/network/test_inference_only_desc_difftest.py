@@ -136,7 +136,8 @@ def test_the_shared_members_read_both_nodes():
 
 def test_the_mistyped_ones_are_reinterpretations():
     """The mistyped instances come just before the pinned ones. On each of the `shapes()` and each pair reading that
-    isn't well-typed, the codec refuses the Program as `E_REINTERPRET` and the reference refuses it (`program`); each
+    isn't well-typed, the codec refuses the Program as `E_REINTERPRET` (a shape that reads an input node at a width that
+    divides its own, off its whole leaves, as `recut-boundary`) and the reference refuses it (`program`); each
     well-typed neighbour gets a verdict; and the tampered declarations hold both."""
     mv = _load("mistyped_vectors")
     first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.mistyped())
@@ -153,7 +154,7 @@ def test_the_mistyped_ones_are_reinterpretations():
     shapes, pairs = mv.shapes(), mv.pairs_all()
     hows = [how for how in mv.PAIR_HOWS for _ in mv.PAIR_SIZES[how in mv.WELL_TYPED]]
     for inst in shapes:
-        assert "E_REINTERPRET" in why(inst) and reference.check_desc(inst) == {"error": "program"}
+        assert any(n in why(inst) for n in ("E_REINTERPRET", "recut-boundary")) and reference.check_desc(inst) == {"error": "program"}
     for how, inst in zip(hows, pairs, strict=True):
         if how in mv.WELL_TYPED:
             assert why(inst) is None and "error" not in reference.check_desc(inst)
