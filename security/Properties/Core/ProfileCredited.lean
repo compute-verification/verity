@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Core.LevelsCredited
+public import Definitions.Core.Scheme
 public import CoreProtocol.Profile
 
 /-!
@@ -8,8 +8,9 @@ public import CoreProtocol.Profile
 
 `Core.Integrity.creditedProblem` (`verity/protocols/interface/CoreProtocol/Profile.lean`) is the code's refusal of a
 profile's credited blocks, by which SPOT's check (`Spot.OneStage.check`) and every reader of a profile
-(`Core.Integrity.ofJson`) refuse. `Unsplit` says that what it doesn't refuse is `Verity.Levels.CreditedUnsplit` of the
-levels the profile records (`Records`): each credited block is a block of the first level and of every later one.
+(`Core.Integrity.ofJson`) refuse. `Unsplit` says that when a profile's credited numbers are those of a placed
+scheme's credited blocks at the first level (`Verity.Scheme.Placed.credited`), what it doesn't refuse is
+`Verity.Scheme.Placed.Unsplit` under the levels the profile records (`Records`).
 -/
 
 @[expose] public section
@@ -31,12 +32,13 @@ def Records {G : Type} [Fintype G] [DecidableEq G] (p : Integrity) (L : Verity.L
     ∀ i (l : Verity.Level G) (q : Core.Level), L.levels[i]? = some l → p.levels[i]? = some q →
       ∀ X ∈ above L i, (l.blocks.parts.filter (· ⊆ X)).card = q.size
 
-/-- **What the credited refusal accepts is `CreditedUnsplit`**: for levels `L` that a profile `p` of at least one
-level records, and credited blocks `Cr` of the first level that `num` numbers among `p.credited`, a profile whose
-credited blocks `creditedProblem` doesn't refuse has `L.CreditedUnsplit Cr`. -/
+/-- **What the credited refusal accepts is credited unsplit**: for levels `L` that a profile `p` of at least one
+level records, and a placed scheme `P` whose credited blocks are blocks of the first level whose numbers under `num`
+are `p.credited`, a profile whose credited blocks `creditedProblem` doesn't refuse has `P.Unsplit L`. -/
 def Unsplit : Prop :=
-  ∀ (p : Integrity) (G : Type) [Fintype G] [DecidableEq G] (L : Verity.Levels G) (Cr : Finset (Finset G))
-    (num : Finset G → ℕ), p.levels ≠ #[] → Records p L → (∀ b ∈ Cr, b ∈ above L 1 ∧ num b ∈ p.credited) →
-    p.creditedProblem = none → L.CreditedUnsplit Cr
+  ∀ (p : Integrity) (S : Verity.Scheme) (G : Type) [Fintype G] [DecidableEq G] (P : S.Placed G)
+    (L : Verity.Levels G) (num : Finset G → ℕ), p.levels ≠ #[] → Records p L →
+    (∀ b ∈ P.credited, b ∈ above L 1 ∧ num b ∈ p.credited) → (∀ c ∈ p.credited, ∃ b ∈ P.credited, num b = c) →
+    p.creditedProblem = none → P.Unsplit L
 
 end Core.Integrity
