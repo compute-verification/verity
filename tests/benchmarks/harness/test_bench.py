@@ -482,14 +482,14 @@ def test_the_config_a_declared_schemes_arm_hands_passes_that_schemes_own_setting
     """A protocol arm whose entry is a declared scheme's name hands it settings it takes, read as
     `verity_vllm.LLM` reads them (`option_settings`) and checked by the scheme's own `settings`: its in-process coins
     the string its settings say, ``coins = "in-process"``, or, where the spec gives one, its challenger's address alone."""
+    from verity.protocols.compose import schemes
     from verity.protocols.resource_accounting.scheme import settings
-    from verity_vllm import messages
     from verity_vllm.llm import option_settings
 
     spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
     arm = next(a for a in resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings) if a.protocols)
     entry, = arm.protocols
-    scheme = messages.declarations.load()[entry]
+    scheme = schemes.get(entry)
     assert entry == scheme.name == "pearl-plus"
     environ = {"PEARLC_KERNEL": "/tree/kernels/pearl_c_sm90", "PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90.cubin"}
     config = protocols_config(arm, environ)

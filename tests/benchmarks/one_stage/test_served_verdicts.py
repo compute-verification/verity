@@ -4635,9 +4635,9 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
     assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
     at = {f: argv[argv.index(f) + 1] for f in ("--protocols", "--protocols-config", "--model", "--revision", "--precision",
                                                "--window-steps")}
-    assert at == {"--protocols": "pouw:pearl-c-h100-v1-h3", "--model": "unsloth/Llama-3.2-1B",
+    assert at == {"--protocols": "pearl-plus", "--model": "unsloth/Llama-3.2-1B",
                   "--revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "--precision": "bfloat16", "--window-steps": "4",
-                  "--protocols-config": json.dumps({"pouw": {"device": "cuda", "kernel": "pearl_c_sm90",
+                  "--protocols-config": json.dumps({"pearl-plus": {"device": "cuda", "kernel": "pearl_c_sm90",
                                                              "cubin": "/c/pearl_c_sm90.cubin"},
                                                     **json.loads(RELEASE_ORDER)})}
     assert argv.count("--protocols") == argv.count("--protocols-config") == 1 and "--h1-prover" not in argv and "--h1-window-commit" not in argv
@@ -4647,9 +4647,9 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
     assert {f: gated[gated.index(f) + 1] for f in ("--challenger-gate", "--challenger-peer", "--challenger-lane")} == {
         "--challenger-gate": GATE, "--challenger-peer": "vy-dc-h200", "--challenger-lane": "compute-accounting"}
     assert gated.count("--protocols") == 1 and "--h1-prover" not in gated
-    assert "users" not in json.loads(gated[gated.index("--protocols-config") + 1])["pouw"]
+    assert "users" not in json.loads(gated[gated.index("--protocols-config") + 1])["pearl-plus"]
     _rc, fronted = _serve_argv(tmp_path / "fronted", {**PEARL_TIES, **cubin, **live, "CERTIFIER_FRONT": "true"})
-    assert json.loads(fronted[fronted.index("--protocols-config") + 1])["pouw"]["users"] == r"fixed\.[0-9]+"
+    assert json.loads(fronted[fronted.index("--protocols-config") + 1])["pearl-plus"]["users"] == r"fixed\.[0-9]+"
     assert "--pearl-users" not in fronted and fronted.count("--protocols-config") == 1
     calls, d = (tmp_path / "calls").read_text().splitlines(), tmp_path / "serve" / "pearlplus"
     assert [c.split("prove_path/prove_path.py ", 1)[-1] for c in calls[-4:-2]] == [
