@@ -28,8 +28,10 @@ steps, every subprotocol in one shape, the Lean verdict with the JointPooledLive
   every subprotocol but `BY_NAME`'s carries, is each Lean premise its scheme's guarantee is stated under, by name
   (`Scheme.premises`, ``[]`` claiming none), or why its declaration does not say them. ``unbounded``, beside a
   declared one whose scheme `bound` refuses at what its answer's profile gives, is that refusal's sentence (``why``)
-  and the terms it lacks by name (``terms``); its verdict stays its answer's unless `UNDECIDED_WHEN_UNBOUNDED` names
-  it. A subprotocol whose ``server``
+  and the terms it lacks by name (``terms``): its verdict stays its answer's, and it holds at no δ, its ``at`` giving
+  that sentence as why, so `compose` lists it under ``not_established``. ``refused``, beside a subprotocol whose piece refused to run (its runner row's verdict `REFUSED`, the
+  node's state: no card, a busy card), is the refusal's sentence: its answer is undecided with that reason, its
+  quantity's value null, its error 1, so it is never accepted, never dropped and holds at no δ. A subprotocol whose ``server``
   is not the block's is carried but not composed.
 * ``composed``: ``answer``, the Lean check of the block's product (`CHECKS`: ``onsite check``, or ``remote check`` or
   ``remote-v1 check``)'s answer on the block (protocol, verdict, reason, commitment), None when it didn't run; ``verdict``, that answer's
@@ -54,6 +56,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tomllib
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
@@ -67,18 +70,47 @@ from verity.commitments.domains import ONSITE_PROTOCOL
 
 FORMAT = "verity/block-record/v2"
 EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1")
-SUBPROTOCOLS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
+#: the onsite application, whose components the record's subprotocols are (`RUNNER_KEYS`)
+ONSITE_APPLICATION = Path(__file__).resolve().parents[4] / "applications" / "onsite_full.toml"
+#: the stored format's word for a verifier row (a declaration's ``record``) where it isn't the row's own, and for a row
+#: the format keeps although its component charges nothing: the words the stored records read, kept so their bytes
+#: stay. It isn't a scheme's name (the application's word) nor its row (the verifier's): network-attester's row is
+#: ``communication``, stored as ``certifier``, which stored fixtures read
+STORED: Mapping[str, str] = {"communication": "certifier", "work": "pouw", "space": "pous", "integrity": "integrity"}
 #: keys and a label stored records hold under their older words: a record's subprotocols, an integrity quantity's (and
 #: a member's) count of sampled proof blocks, and the integrity bound's unit
 BY_SUBPROTOCOL, SAMPLED, INTEGRITY_UNIT = "legs", "drawn", "wrong units"
-#: the runner's protocol keys, by subprotocol
-RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
+
+
+def _runner_keys() -> dict[str, str]:
+    """Each subprotocol's verifier row, by its key in the record: the onsite application's components in its order,
+    each through its declared ``record`` and `STORED`. A component that charges nothing (``resource`` a `Lacks`) is a
+    subprotocol only where `STORED` keeps its row; one no scheme declares only under a word of `STORED`, whose row
+    that entry gives."""
+    out: dict[str, str] = {}
+    for name in tomllib.loads(ONSITE_APPLICATION.read_text())["protocols"]:
+        if name not in schemes.DECLARATIONS:
+            row = next((r for r, word in STORED.items() if word == name), None)
+            if row is None:
+                raise ValueError(f"{name}: no scheme declares it and block_record.STORED has no row stored as {name!r}: "
+                                 "declare its scheme, with its record")
+            out[name] = row
+            continue
+        scheme = schemes.get(name)
+        row = S.declared(scheme, "record")
+        if not isinstance(scheme.resource, S.Lacks) or row in STORED:
+            out[STORED.get(row, row)] = row
+    return out
+
+
+#: the runner's protocol keys, by subprotocol (`_runner_keys`), and the subprotocols, in the onsite application's order
+RUNNER_KEYS = _runner_keys()
+SUBPROTOCOLS = tuple(RUNNER_KEYS)
 #: the subprotocols no declared scheme reads (`Scheme.reader`): the sampled proofs, undeclared, and the work row, H1's,
 #: whose scheme names no quantity; each is read here by name, and a test holds the list to only shrink
 BY_NAME = ("integrity", "pouw")
-#: the subprotocols whose verdict is undecided, with its sentence as the reason, where `S.bound` refuses their row;
-#: certifier's (network's) never without network's yes
-UNDECIDED_WHEN_UNBOUNDED: tuple[str, ...] = ()
+#: a runner row's verdict for a piece that refused to run, with its sentence as ``reason``
+REFUSED = "refused"
 #: why a row whose declaration bounds it reads unbounded when its answer's profile gives no bound's inputs
 NO_INPUTS = ("its answer's profile gives no bound's inputs (delta, missable, charges, epsilon), and the missable cost "
              "and the error are the profile's alone")
@@ -200,11 +232,14 @@ def _scheme(subprotocol: str) -> S.Scheme:
                      f"declare its scheme there, with its reader")
 
 
-def at_deltas(subprotocol: str, quantity: Mapping[str, Any], error: Fraction) -> dict[str, Any]:
-    """The subprotocol's certificate at each δ of `DELTAS` (module docstring)."""
+def at_deltas(subprotocol: str, quantity: Mapping[str, Any], error: Fraction, unbounded: str | None = None) -> dict[str, Any]:
+    """The subprotocol's certificate at each δ of `DELTAS` (module docstring); none holds for a row its scheme's
+    `bound` refuses, whose sentence ``unbounded`` is."""
     out: dict[str, Any] = {}
     for d in DELTAS:
-        if subprotocol == "integrity" and "members" in quantity:
+        if unbounded is not None:
+            out[str(d)] = {"holds": False, "why": unbounded}
+        elif subprotocol == "integrity" and "members" in quantity:
             m = quantity["members"]
             out[str(d)] = {"holds": False, "why": f"the sample reached {m['sampled']} of {m['registered']} members, so "
                            f"no bound over the workload's {quantity['of']} proof blocks holds; "
@@ -228,6 +263,8 @@ def subprotocol(name: str, row: Mapping[str, Any], *, server: str, runs: Sequenc
         return None
     if source not in ("real", "fixture"):
         raise ValueError(f"source {source!r}: real or fixture")
+    if row.get("verdict") == REFUSED:
+        return _refused(name, row, server=server, runs=runs, source=source)
     a = row["answer"]
     quantity, error, error_from = _quantity(name, row)
     answer = {k: a.get(k) for k in ("verdict", "reason", "commitment", "public")}
@@ -240,13 +277,30 @@ def subprotocol(name: str, row: Mapping[str, Any], *, server: str, runs: Sequenc
     if named is not None and (why := named_terms_bad(named)):
         raise ValueError(f"{name}: its answer's profile's named_terms: {why}")
     declared = {} if name in BY_NAME else {"premises": _premises(_scheme(name)), **_bound(_scheme(name), profile)}
-    if name in UNDECIDED_WHEN_UNBOUNDED and "unbounded" in declared:
-        answer |= {"verdict": "undecided", "reason": declared["unbounded"]["why"]}
     return {"protocol": a["protocol"], "owner": row.get("owner"), "server": server, "source": source,
             "answer": answer,
-            "quantity": quantity, "error": str(error), "error_from": error_from, "at": at_deltas(name, quantity, error),
+            "quantity": quantity, "error": str(error), "error_from": error_from, "at": at_deltas(name, quantity, error, declared.get("unbounded", {}).get("why")),
             "runs": list(runs)} | ({} if named is None else {"named_terms": {k: dict(t) for k, t in named.items()}}) \
         | declared
+
+
+def _refused(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str) -> dict[str, Any]:
+    """A subprotocol whose piece refused to run (the node's state: no card, a busy card): undecided with the refusal's
+    sentence as its reason and its ``refused``, its quantity's value null, its error 1, so it holds at no δ."""
+    why = str(row.get("reason") or "")
+    if not why:
+        raise ValueError(f"{name}: a refused row says why it refused, by name")
+    if name in BY_NAME:
+        symbol, unit = ("integrity bound", INTEGRITY_UNIT) if name == "integrity" else ("W_cert", "work")
+        protocol = str(row.get("protocol") or name)
+    else:
+        scheme = _scheme(name)
+        symbol, unit, protocol = S.declared(scheme, "symbol"), S.declared(scheme, "published")[0], scheme.protocol
+    quantity = {"symbol": symbol, "value": None, "unit": unit}
+    return {"protocol": protocol, "owner": row.get("owner"), "server": server, "source": source,
+            "answer": {"verdict": "undecided", "reason": f"refused to run: {why}", "commitment": None, "public": None},
+            "refused": why, "quantity": quantity, "error": "1", "error_from": REFUSED,
+            "at": at_deltas(name, quantity, Fraction(1)), "runs": list(runs)}
 
 
 def _bound(scheme: S.Scheme, profile: Mapping[str, Any]) -> dict[str, Any]:
@@ -353,7 +407,6 @@ def from_period(report: Mapping[str, Any], *, steps: tuple[int, int], deployment
         row = report["protocols"].get(key)
         subprotocols[name] = None if row is None else subprotocol(name, row, server=server, runs=row.get("runs") or [report["run"]],
                                                   source=source)
-    subprotocols["wipe"] = None
     for name, x in (extra or {}).items():
         subprotocols[name] = subprotocol(name, x["row"], server=x["server"], runs=x["runs"], source=x.get("source", "real"))
     if ran := dropped_ran(subprotocols, product):
@@ -383,11 +436,16 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
         key = f"subprotocol:{name}"
         if lg["source"] not in ("real", "fixture"):
             bad[key] = "its source is neither real nor fixture"
-        if lg["at"] != at_deltas(name, lg["quantity"], frac(lg["error"])):
-            bad[key] = "its certificates at the deltas are not its quantity's at its error"
+        if lg["at"] != at_deltas(name, lg["quantity"], frac(lg["error"]), lg.get("unbounded", {}).get("why")):
+            bad[key] = "its certificates at the deltas are not its quantity's at its error, or hold though its bound is refused"
         m = lg["quantity"].get("members") or {}
-        if (lg["quantity"]["value"] is None) != (name == "integrity" and m.get("sampled", 0) < m.get("registered", 0)):
-            bad[key] = "its quantity's value is null exactly when it is integrity's and its sample missed a member"
+        if (lg["quantity"]["value"] is None) != ("refused" in lg or (
+                name == "integrity" and m.get("sampled", 0) < m.get("registered", 0))):
+            bad[key] = ("its quantity's value is null exactly when it refused to run, or is integrity's and its sample "
+                        "missed a member")
+        if "refused" in lg and (lg["answer"]["verdict"], lg["answer"]["reason"]) != (
+                "undecided", f"refused to run: {lg['refused']}"):
+            bad[key] = "a refused subprotocol is undecided, its reason its refusal"
         if "named_terms" not in lg:
             if name in NAMES_TERMS:
                 bad[key] = f"it names no term its error leaves out; {NAMES_TERMS_FIX}, and the record is built from that"

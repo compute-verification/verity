@@ -87,7 +87,7 @@ REGISTRY = Registry(
                                          "the card (bench_arm.kernel_directory)"),
     S("PEARLC_CUBIN", str, None, VALUE, "the cubin the arm loads; unset, the kernel directory's build.sh cubin"),
     S("PEARLC_SCHEME", str, None, VALUE, "the kernel scheme served_pearlplus.sh's Pearl-C period names; unset, "
-                                         "pearl-c-h100-v1-h3"),
+                                         "the one Pearl+ declares (compose.schemes pearl-plus option)"),
     S("PEARLC_SCHEDULE", str, "deferred", VALUE, "when the arm's hashes run: deferred (the served schedule) or serial"),
     S("PEARLC_BENCH_EPOCH", int, 20261014, VALUE, "the arm's PoUW epoch"),
     S("PEARLC_CHALLENGER_GATE", str, None, WHERE, "infra's gate as an ssh command: with PEARLC_CHALLENGER_PEER, the salt coin "

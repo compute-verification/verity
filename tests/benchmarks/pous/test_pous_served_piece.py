@@ -37,6 +37,9 @@ from verity.protocols.resource_accounting.memory.pous.attester import challenger
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
+from verity.protocols.resource_accounting import scheme as resource_scheme
+from verity.protocols.resource_accounting.memory.pous import scheme as pous_scheme
+from verity.protocols.resource_accounting.memory.pous.prover import served as pous_served
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import setup as pous_setup
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import POINT, P2Params
@@ -79,7 +82,6 @@ SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdic
 fakes = _load("pous_fakes", ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_fakes.py")
 ts = _load("pous_test_signer", ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py")
 BR = _load("pous_served_block_record", ROOT / "benchmarks" / "one_stage" / "interfaces" / "verity_e2e_demo" / "block_record.py")
-pous = SP.pous
 
 
 def _tensors(plain: bool = False) -> dict[str, torch.Tensor]:
@@ -270,7 +272,7 @@ def _gone(*args, **kw):
 
 def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, between=lambda: None, **kw):
     """`_run` in the two parts `served_piece.sh` runs: `sessions`, which leaves no answer, then ``between``, then
-    `answers` with the challenger's sides and the adapter's setup out of reach."""
+    `answers` with the challenger's sides and PoUS's setup out of reach."""
     auditor = auditor or Auditor(tmp_path)
     monkeypatch.setattr(CS, "salt", auditor.salt)
     monkeypatch.setattr(CR, "session", auditor.session)
@@ -287,7 +289,7 @@ def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, bet
     assert early is None
     between()
     with monkeypatch.context() as m:
-        for mod, name in ((CS, "salt"), (CR, "session"), (SP.PO, "install"), (SP.HB, "held")):
+        for mod, name in ((CS, "salt"), (CR, "session"), (SP.messages, "Exchange"), (SP.HB, "held")):
             m.setattr(mod, name, _gone)
         return SP.answers(s.serve, 3, s.out, trusted_sha512=trusted, private=s.private, schemes=ts.SCHEMES,
                           protocol=TEST_PROTOCOL, **kw)
@@ -320,14 +322,33 @@ def test_with_no_lean_an_honest_store_is_undecided_and_the_python_is_named(serve
     assert SV.piece_row("space", served.out.parent)["verdict"] == "undecided"
 
 
+def test_a_records_wipe_row_says_its_accept_certifies_nothing_when_uncertified():
+    """The served wipe, `WipeProtocol.uncounted`, accepts with ``foreign_bits`` = ``memory_bits`` and ε 0: its quantity
+    says in words that it certified nothing; a counted wipe's says what its judge computed. The verdict, the value and
+    the error are the answer's either way, and no δ holds, each for the scheme's refusal of its bound."""
+    m = 1 << 28
+    public = {"certified": False, "egress_mib": 0, "eps": "0", "foreign_bits": m, "k": 2152, "memory_bits": m, "r": 59}
+    answer = {"protocol": "verity/wipe/v0", "verdict": "accept", "reason": None, "commitment": "00", "public": public,
+              "profile": {"k": 2152}}
+    row = BR.subprotocol("wipe", {"answer": answer}, server=NODE, runs=[])
+    refusal = str(resource_scheme.unbounded(pous_scheme.WIPE))
+    assert row["answer"]["verdict"] == "accept" and row["error"] == "0" and row["unbounded"]["why"] == refusal
+    assert row["at"] and all(a == {"holds": False, "why": refusal} for a in row["at"].values())
+    assert row["quantity"] == {"symbol": "foreign_bits", "value": m, "unit": "bits", "k": 2152, "r": 59, "M": m,
+                               "certified": False, "certifies": pous_scheme.WIPE_UNCERTIFIED}
+    assert pous_scheme.WIPE_UNCERTIFIED.startswith("not certified: survivors bounded by nothing")
+    counted = BR.subprotocol("wipe", {"answer": answer | {"public": public | {"certified": True, "foreign_bits": 7,
+                                                                             "eps": "1/8"}}}, server=NODE, runs=[])
+    assert counted["quantity"]["certifies"] == pous_scheme.WIPE_CERTIFIES and counted["error"] == "1/8"
+
+
 def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served, tmp_path, monkeypatch):
     """The served weights held as C*, the session answered from it, the verifier's tie and check: an accept, which the
     composed run's row and the block record read as PoUS's certificate (0 bits at the small point, which no certificate
     covers); the weights covered are the linears, the rest of the checkpoint and the serving state named outside."""
-    types = pous.linear_types
     answer, calls = _run(served, tmp_path, monkeypatch)
     assert answer["verdict"] == "accept", answer["reason"]
-    assert json.loads((served.out / "answer.json").read_text()) == answer and pous.linear_types is types
+    assert json.loads((served.out / "answer.json").read_text()) == answer
     assert json.loads((served.out / "pous.json").read_text())["key_pin"] == "run"
     assert not mc.holds(answer["profile"]["placement"])
     row = SV.piece_row("space", served.out.parent)
@@ -627,12 +648,12 @@ def test_kept_sessions_under_another_id_than_the_windows_are_not_answered(served
 def test_a_store_missing_blocks_is_rejected_with_its_reason(served, tmp_path, monkeypatch):
     """A prover that no longer holds most of C* answers the challenged blocks it dropped with zeros: the run's check
     refuses the session, and the answer is a reject with its reason, still under a hiding commitment."""
-    held = pous.PousOption.answer
+    held = pous_served.Served.answer
     dropped = set(range(8, 48))
 
     def lost(self, i):
         return bytes(self.store.params.block_bytes) if i in dropped else held(self, i)
-    monkeypatch.setattr(pous.PousOption, "answer", lost)
+    monkeypatch.setattr(pous_served.Served, "answer", lost)
     answer, calls = _run(served, tmp_path, monkeypatch)
     assert answer["verdict"] == "reject" and answer["reason"] and len(calls) == 1
     assert answer["public"] is None and answer["profile"] is None and len(bytes.fromhex(answer["commitment"])) == 64

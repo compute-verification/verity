@@ -6,7 +6,7 @@ registered tables at the rows the verifier reads them.
 * **extract** (the H1 venv: it unpickles the prover's saved window, whose classes import torch). From the window's record
   (``pouw-h1-calls.json``: its manifest checked by `pouw_h1_challenger.manifest_reason`, so the served trees' entries
   are the ones its ``calls_root`` binds), the sampled proof blocks (``--drawn``, `h1_prove/served.py`'s), the period's
-  descriptor and the prover's private directory (``--prover``, `pouw_h1_prover`: its salt key, each call's kept values
+  descriptor and the prover's private directory (``--prover``, `pouw_h1_prover`: its salt file, each call's kept values
   and the saved window ``state/`` `pouw_h1_handoff.FILE`): the verifier's own reads of the sampled proof block's call
   (`credit.registered_file` at the record's roots, the window's root, steps and Program salt), and for each of its data
   ports (the unit's 32 A rows, its 32 B rows and its z/y record; ``pub`` and ``o1`` are the verifier's own rows, which no
@@ -57,6 +57,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "h1_prove"))
 sys.path.insert(0, str(HERE))
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
 
 import h1form as F  # noqa: E402
@@ -444,7 +445,7 @@ def prepare(a: argparse.Namespace) -> None:
     rec = R.record(ctx.reg.program, ctx.reg.query, {"law": "subset", "k": 1}, L.SCHEME, [],
                    {"kind": "served-window", "window": op["window"], "draw_root": op["draw_root"], "unit": u,
                     "call": unit["call"]}, partition=ctx.reg.part, registered=list(win.values()))
-    d = R.digest(rec)
+    d = DD.digest(rec)
     pa = L.partials(leaf, (a_root, b_root))
     # the partials' salts come from a private opening salt, so prepares of disjoint lane sets (on several nodes) commit
     # the one produced tree the unit's lanes read

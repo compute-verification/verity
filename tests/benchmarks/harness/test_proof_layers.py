@@ -506,7 +506,9 @@ def test_a_layers_sh_run_gives_its_three_layers_each_a_statements_figures_as_sta
     assert results["sampling"].ran_with.startswith("ran with: coins local challenger; parameters development (a development")
     assert results["sampling"].eps_delta == "at most 895 of 2,560 incorrect proof blocks except with probability 2^-20"
     assert results["flock"].eps_delta == PL.NOT_STATED and results["zk"].device.startswith("GPU 4 (gpu-lease's")
-    line = table_lines(PL.render(list(results.values()) + [PL.read("recursion", None)]))
+    text = PL.render(list(results.values()) + [PL.read("recursion", None)])
+    line = table_lines(text)
+    assert "\n\n- ε at δ: each sampled block on its own inputs; the wires between blocks are not held\n" in text and "- ε at δ:" not in PL.render([results["flock"]])
     assert "| 2 s a statement of 2,048 proof blocks; 3 s a statement of 512 proof blocks (Flock's prove_total_s) |" in line["Flock"]
     assert "| 6 s a statement of 26 proof blocks; 7 s a statement of 6 proof blocks (Lean's verify) |" in line["with sampling"]
     assert "900 bytes a statement of 2,048 proof blocks; 901 bytes a statement of 512 proof blocks (one rep's proof)" in line["Flock"]

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
@@ -246,7 +247,7 @@ def _reusing(log, entry, outputs):
     with ``outputs``, chained after the log's last record: (the stream, the record, its call)."""
     stream = FC.Stream(VALUED, WINDOW, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock(),
                        values=(VALUE,), log=log)
-    rec = _record(values=(VALUE,), previous=R.digest(log[-1]) if log else None, registered=[{**entry, "value": "t"}])
+    rec = _record(values=(VALUE,), previous=DD.digest(log[-1]) if log else None, registered=[{**entry, "value": "t"}])
     return stream, rec, lambda r=rec: stream.register(r, _ports(values=(VALUE,)), counts=COUNTS, registered={"t": 4},
                                                        outputs=outputs)
 
@@ -261,7 +262,7 @@ def test_a_window_reusing_an_earlier_records_value_runs_to_an_accepted_outcome_b
     docket on a stream with no log before it (``R6-previous``, ``R7-output``, ``R7-domain``)."""
     entry = {"value": "w/t", "root": "5a" * 64, "leaves": 2, "words": 4, "domain": "6b" * 64}
     w = _earlier(-1, registered=[entry])
-    outputs = {"t": {"record": R.digest(w), "value": "w/t"}}
+    outputs = {"t": {"record": DD.digest(w), "value": "w/t"}}
     stream, honest, register = _reusing([w], entry, outputs)
     reg = register()
     assert stream.log == (w, honest) and reg.order == 0 and reg.receipt["received"] == "1"
@@ -288,7 +289,7 @@ def test_a_registration_reads_the_earlier_record_its_outputs_name_whatever_the_l
     port = {"port": "o", "root": "8d" * 64, "leaves": 2,
             "domain": R.window_domain(part["program"], P.digest(part), "o", SCHEMA, 2, RUN)}
     w, x = _earlier(-2, roots=[port]), _earlier(-1)
-    outputs = {"t": {"record": R.digest(w), "port": "o"}}
+    outputs = {"t": {"record": DD.digest(w), "port": "o"}}
     entry = {"value": "t", "root": port["root"], "leaves": 2, "words": 4, "domain": port["domain"]}
     stream, rec, register = _reusing([w, x], entry, outputs)
     assert stream._earlier(rec, None, outputs) == [w, x] and stream._earlier(rec) == [x]

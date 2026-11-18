@@ -46,13 +46,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.circuits.codec import canonical_json
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import names as NM
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
@@ -350,7 +350,7 @@ def reused(run: Any, window: Any, record: Any) -> str | None:
         return f"the named record has no canonical JSON: {e}"
     if why is not None:
         return f"the named record is not a Commit record credit reads: {why[1]}"
-    previous = REG.digest(window)
+    previous = DD.digest(window)
     if record.get("previous") != previous:
         return (f"the named record's previous is not the window registration's digest {previous[:16]}…: it is chained "
                 "right after the registration whose tables it reuses")
@@ -403,13 +403,14 @@ def shape(layout: Mapping[str, Any], steps: int) -> tuple[int, int, int]:
     return k, int(layout["m"]), calls
 
 
-def reuse(window: Mapping[str, Any], layout: Mapping[str, Any], steps: int, key: bytes,
+def reuse(window: Mapping[str, Any], layout: Mapping[str, Any], steps: int, salts: Any,
           rows_of: Callable[[str, int, np.ndarray], np.ndarray]) -> dict[str, Reused]:
     """The audited circuit's tables (`shape`) as its registered values, each W's table of it (``window``, the window's
     registration, `registration`): round s's A table ``<prefix>a/<K>@<s>`` as `credit.commit_rows` of (s, K), and its
     input-ids table ``<prefix>ids@<s>`` as `credit.commit_ids` of s. Each holds the rows ``rows_of(name, rows, empty)``
     gives (the rows the circuit's proof blocks make of it, every other row ``empty``: zero codes of scale 0, an id
-    `words.EMPTY_ID`), salted as H1 salts W's (H1's ``key``, at the table's `names.nonce` or `names.IDS_NONCE` + s),
+    `words.EMPTY_ID`), salted as H1 salts W's (H1's kept ``salts``, `pouw_h1_prover.salts_of`, at the table's
+    `names.nonce` or `names.IDS_NONCE` + s),
     under W's entry's domain. ValueError unless each is W's entry of it in root, leaves and words: the proof blocks don't
     make the table H1 committed, so the window's registration can't reuse it."""
     k, m, _calls = shape(layout, steps)
@@ -424,16 +425,17 @@ def reuse(window: Mapping[str, Any], layout: Mapping[str, Any], steps: int, key:
             raise ValueError(f"the window's registration registers no {h1}, which the audited circuit reads as {name}")
         words = np.ascontiguousarray(rows_of(name, n, empty), dtype=np.uint16)
         dom = bytes.fromhex(e["domain"])
-        bcs, levels = NR._numpy(words, key, nonce, None, dom)
+        ys = salts.at(nonce, n)
+        bcs, levels = NR._numpy(words, ys, dom)
         got = out[name] = Reused(program=str(window.get("program")), value=name, words=int(words.shape[1]),
-                                 word_bits=RV.WORD_BITS, rows=NR.Rows(words, n), salts=NR.Salts(key, nonce, n), bcs=bcs,
+                                 word_bits=RV.WORD_BITS, rows=NR.Rows(words, n), salts=NR.Salts(ys, n), bcs=bcs,
                                  levels=levels, schema=G.SCHEMA_V2, domain_id=dom)
         if (got.root.hex(), got.leaves, got.words, RV.WORD_BITS) != (e.get("root"), e.get("leaves"), e.get("words"),
                                                                      e.get(RV.WIDTH_KEY, RV.WORD_BITS)):
             raise ValueError(f"{name}: the rows the audited circuit's proof blocks make of it are not the window's "
                              f"registration's {h1} (root {got.root.hex()[:16]}… for {str(e.get('root'))[:16]}…, "
                              f"{got.leaves} rows of {got.words} words for {e.get('leaves')} of {e.get('words')}): the model "
-                             "didn't make the table H1 committed, or H1's key is another")
+                             "didn't make the table H1 committed, or H1's salts are another window's")
     return out
 
 
@@ -453,8 +455,8 @@ def named(run: Any) -> tuple[str | None, dict[str, Any]]:
         raise
     if why is not None:
         return None, _unnamed(why)
-    return canonical_json(dict(record)).hex(), {"named": True, "registration": REG.digest(window),
-                                                "record": REG.digest(record)}
+    return canonical_json(dict(record)).hex(), {"named": True, "registration": DD.digest(window),
+                                                "record": DD.digest(record)}
 
 
 def _unnamed(why: str) -> dict[str, Any]:

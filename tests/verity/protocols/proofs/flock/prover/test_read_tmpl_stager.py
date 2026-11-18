@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from test_class_statement_unit_stager import TOY, TOY_ROWS
-from test_tmpl_statement import _tmpl
+from tmpl_toy import toy_tmpl
 from verity.circuits.boolean import BIT
 from verity.circuits.boolean.forms import add
 from verity.circuits.boolean.trace import definition
@@ -58,7 +58,7 @@ def test_the_read_template_is_the_executables_text_parsed_once_a_shape(tmp_path,
     """`read_tmpl.template` runs the executable ``V H`` once a shape and parses its text; `read_tmpl.of` asks it for a bound
     ``EmbeddingRead_v2`` at its V and H and for nothing else. A refusal is the executable's own words, and a missing
     executable says how to build it."""
-    text = T.write(_tmpl())
+    text = T.write(toy_tmpl())
     (tmp_path / "t.txt").write_text(text)
     monkeypatch.setattr(RT, "EXE", str(_stand_in(tmp_path, f"cat {tmp_path / 't.txt'}")))
     assert T.write(RT.template(7, 3)) == text

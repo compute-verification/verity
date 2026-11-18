@@ -92,7 +92,8 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   run (no kept run, a rehearsal the gate's check didn't pass, a build, a tool or the chain failing without a report,
   an input missing, the leak guard failing, or SIGTERM from the piece's time limit) is `NotRun`, and the piece then
   refuses, releasing nothing from the hold and keeping no case: DIR keeps only its logs (`LOGS`) and gets
-  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the attester missing.
+  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the attester refused by that sentence
+  (undecided in the block record, never accepted, never dropped).
   Each step it runs (the build, the chain, the check and the leak
   guard) is a process group of its own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`,
   SIGKILL), so nothing a step started outlives it; a SIGTERM while a step runs is held until the step's group has
@@ -188,7 +189,7 @@ ROWS = "verity/network-rows/v1"
 UNMET = "unmet: this piece establishes no trusted-device and gives no bound on that ground"
 #: the front's refusal without ``--peer``
 NO_PEER = ("--peer is unset: the served node's name in the gate's peers file, which `verity run` passes from the "
-           "binding network-certifier.certifier.peer")
+           "binding network-attester.network-attester.peer")
 #: the machine of a chain step whose `CHAINED` names none
 UNNAMED = "a machine the chain step did not name"
 #: the front's public outcome, copied beside the kept fetch
@@ -781,13 +782,17 @@ def run_chain(keep: Path, run: str, endpoint: Path, eos: str, sample: int | None
 
 
 def lean_exe(name: str, given: str | None) -> str:
-    """``given``, else the executable ``name`` of `LEAN_DIR`, built here."""
+    """``given``, else the executable ``name`` of `LEAN_DIR`, built here under every test's Lake build lock
+    (`verifier.executable`): Lake builds `LEAN_DIR`'s path requires, SPOT's and Flock's among them, in their own `.lake`."""
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
     if given:
         return given
-    got = captured(["lake", "build", name], cwd=LEAN_DIR)
-    exe = LEAN_DIR / ".lake" / "build" / "bin" / name
-    if got.returncode or not exe.is_file():
-        raise NotRun(f"lake build {name} (exit {got.returncode}): {(got.stdout + got.stderr)[-400:]}")
+    try:
+        exe = V.executable(name, LEAN_DIR)
+    except V.LeanError as e:
+        raise NotRun(str(e)) from None
+    if not exe.is_file():
+        raise NotRun(f"lake build {name} wrote no {exe}")
     return str(exe)
 
 

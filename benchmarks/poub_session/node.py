@@ -10,8 +10,8 @@ arenas     each engine exports its arena over CUDA IPC (`engine.<g>.json` in --e
            tier's, and the hello's layout labels each arena's weights chunks weights and the rest filler, the host
            tier one region of it (`store_layout.regions`). With --model-dir each arena is first held to the checkpoint's
            (`held_to_checkpoint`)
-register   the payload tree over the plain weights as served, salted under the verifier's payload key (its first
-           message); at the registration the engines pause (ctl.json's
+register   the payload tree over the plain weights as served, salted under a payload key the backend draws itself
+           from fresh randomness (`GpuBackend`; the verifier sends none); at the registration the engines pause (ctl.json's
            pause), the device gates run, the arenas are encoded in place at the key, and the engines get the key and
            their arena's first block, check that decoding gives back their plain bytes and probe (`engine.py`), and
            serve again, decoding each weight as it is used; their checks join the gates
@@ -40,14 +40,14 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
-
 import device  # noqa: E402
 import keep  # noqa: E402
 import store_layout  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 from engine import IpcHandle, write_json  # noqa: E402
 from prover import ProverSide, parse_plan  # noqa: E402
+
+from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 
 BLOCK = device.BLOCK
 
@@ -230,6 +230,8 @@ def main() -> int:
     ap.add_argument("--layout-workers", type=int, default=16, help="--model-dir's hashing processes")
     ap.add_argument("--rows", type=int, default=None, choices=device.rb.ROWS,
                     help="the registration's sketch rows k_s, sent in the hello (default: the receipt kind's, 16)")
+    ap.add_argument("--codec", default=device.rcodec.DEFAULT.name,
+                    help="the registration's codec; --kv's kv.so must be built at its width and masking")
     device.add_arguments(ap)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -268,7 +270,7 @@ def main() -> int:
                        warmup_ns=round(a.warmup_ms * 1e6), defer_openings=not a.overlap_openings,
                        log=log)
         out["overlap_openings"] = a.overlap_openings
-        cal = p.register(rows=a.rows)
+        cal = p.register(codec=wire.codec_named(a.codec), rows=a.rows)
         log(f"node: registered, calibration {json.dumps(cal)}")
         out.update({"calibration": cal, "gates": backend.gates, "calibration_trace": backend.calibration_trace,
                     "registration": wire.registration_json(p.registration), "sessions": []})

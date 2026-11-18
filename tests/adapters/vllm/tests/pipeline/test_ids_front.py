@@ -26,7 +26,7 @@ from tests.pipeline import test_serve_openai as served
 from verity.protocols.resource_accounting.network.prover import id_relay as R
 from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity import release as REL
 
 P = 140
 FIELDS = {"model": "m", "user": "u", "prompt": [128000, 791, 4062], "max_tokens": 2, "temperature": 0.0, "top_p": 1.0, "seed": 0}
@@ -414,12 +414,14 @@ def test_a_relayed_connection_whose_client_has_ended_its_sending_gets_the_server
 
 def test_a_server_that_is_not_there_closes_the_connection():
     """With nothing listening at the server's address, an id request's connection and any other's are closed with
-    nothing sent; the id request's record says a connection broke."""
+    nothing sent; the id request's record says a connection broke, and the other's break record names the server."""
     with socket.create_server(("127.0.0.1", 0)) as gone:
         address = gone.getsockname()[:2]
     with Fronted(address) as f:
         assert f.send(released()) == b"" and f.send(b"GET /v1/models HTTP/1.1\r\n\r\n") == b""
-    assert [(r["ended"], r["why"]) for r in f.log] == [(False, "a connection broke (ConnectionRefusedError)")]
+    ids, other = f.log
+    assert (ids["ended"], ids["why"]) == (False, "a connection broke (ConnectionRefusedError)")
+    assert (other["broken"], other["error"], set(other)) == ("server", "ConnectionRefusedError", {"broken", "error", "at"})
 
 
 def test_the_command_is_registered_with_the_scans_payload_as_its_default():

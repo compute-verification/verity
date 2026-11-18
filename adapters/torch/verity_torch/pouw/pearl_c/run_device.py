@@ -15,9 +15,9 @@ torch's current stream, in the device's primary context:
   `fresh_weight_salts`), put once a weight; A's are fresh operating-system bytes a call, written before the call's launches
   or its graph's replay (`host.fresh_into`); the tiles' are fresh at the pass's end (`ends`); y's are fresh and kept
   beside its tree (`served_y_device`).  A retained pass keeps every salt beside the rows it salts.
-* **The weight side**, once per weight and epoch (`_Weight`).  B's FP32 words (the BF16 weight widened, exact) are hashed
-  into B's row tree (phase ``epoch``), whose root must be the committed one.  Then, with the salt's seed_B, come E_B's
-  and the F lines, B's statistics and forming, B̃·F_A, G and P_B (phase ``job``).  B's FP32 copy is dropped after, so the
+* **The weight side**, once per weight and epoch (`_Weight`).  B's FP32 words (the BF16 weight widened, exact; a weight
+  in any other format is refused, `_weight_words`) are hashed into B's row tree (phase ``epoch``), whose root must be the
+  committed one.  Then, with the salt's seed_B, come E_B's and the F lines, B's statistics and forming, B̃·F_A, G and P_B (phase ``job``).  B's FP32 copy is dropped after, so the
   weight side keeps about a byte per weight (B̃) beside the model's own weight.
 * **Each call** (`gemm`):
   - x's rows are widened into A's FP32 words, with zero filler rows up to m₁₆ (the domain's 16 | m; filler is committed as
@@ -123,7 +123,6 @@ from verity_torch.pouw.pearl_c.host import (
     _write,  # noqa: F401 - kept importable here, as the tests read it
     _zeros,
     call_keys,  # noqa: F401 - kept importable here, as callers read it
-    fresh_into,
     memmove,
     write_manifest,  # noqa: F401 - kept importable here, as callers read it
 )
@@ -199,26 +198,36 @@ def _weight_salts(weight_salts: dict[int, bytes], w: int, n: int) -> bytes:
     return got
 
 
+def _weight_words(w: int, weight: Any) -> Any:
+    """Weight `w`'s FP32 words, which its B tree commits; refused unless it is BF16, the format its retained rows are
+    written in (`ends`' ``rows.bf16``), so that they widen back to exactly those words."""
+    import torch
+    if weight.dtype != torch.bfloat16:
+        raise ValueError(f"weight {w} is {weight.dtype}: Pearl+ commits a weight's FP32 words and retains its rows as BF16, "
+                         "so it takes a bfloat16 weight (serve the model in bfloat16)")
+    return weight.to(torch.float32).contiguous()
+
+
 def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = kernel_names("pearl-c")[0], *,
                  weight_salts: dict[int, bytes]) -> dict[int, bytes]:
     """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase, under the scheme
     `scheme` names: its device record is the pipeline variant, and its hashing format gives the tree hash.  B's rows are
     salted with `weight_salts`' (each weight's, `HM96_SALT` bytes a row: its registration's), which its run is given too."""
-    import torch
     s = pouw_schemes.get(scheme)
     variant, hash = s.device.name, hash_format(s).tree_hash
     R, out = kernel.run, {}
     nb = R.NB
     for w, weight in weights.items():
         n, k = weight.shape
+        xb = _weight_words(w, weight)
         size = R.Pipeline.sizes(R.BM, n, k, R.BM)
         b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "faT32", "fbT32", "fbT128", "rowdig_b", "segdig_b",
                                                                   "salts_b")}
         _put(b["salts_b"], _weight_salts(weight_salts, w, n))
         keys, const = _zeros(128, weight.device), _constants(weight.device)
         _put(keys[64:], rows_domain(weight_binding(w), -2, n, hash).domain_id)
-        xb = weight.to(torch.float32).contiguous()
-        pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
+        pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0,
+                                              "salts_b": (b["salts_b"].data_ptr(), size["salts_b"])}, xb.data_ptr(),
                          {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **_constant_keys(const)},
                          variant=variant)
         _run(kernel, pipe, EPOCH_STEPS, _stream(weight.device))
@@ -402,9 +411,9 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
     # ---- the weight side --------------------------------------------------------------------------------------------
 
     def _weight_side(self, w: int, weight: Any) -> _Weight:
-        import torch
         K, R = self.kernel, self.kernel.run
         n, k = weight.shape
+        xb = _weight_words(w, weight)
         size = R.Pipeline.sizes(R.BM, n, k, R.BM)
         b = {name: _zeros(size[name], weight.device) for name in WEIGHT_BUFFERS}
         keys = _zeros(128, weight.device)
@@ -412,10 +421,10 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         seed_b = C.seed_b(self.salt, self.roots[w], self.scheme.hashing)
         kk = C.keys_of(self.scheme, self.epoch, mm, seed_b)
         _put(keys, kk["line_b"].ljust(64, b"\0") + kk["dom_b"])
-        xb = weight.to(torch.float32).contiguous()
         seg = _zeros(size["segdig_b"], weight.device)
         _put(b["salts_b"], self.weight_salts[w])
-        pipe = _pipeline(K, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0, "segdig_b": seg.data_ptr()},
+        pipe = _pipeline(K, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0, "segdig_b": seg.data_ptr(),
+                                         "salts_b": (b["salts_b"].data_ptr(), size["salts_b"])},
                          xb.data_ptr(), {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **self.const_keys},
                          variant=self.variant)
         stream = _stream(weight.device)
@@ -505,8 +514,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             bufs = {**{x: t.data_ptr() for x, t in wt.b.items()}, **{x: t.data_ptr() for x, t in sh.b.items()}, "y": 0,
                     "leaves": 0, "pd_count": sh.count.data_ptr()}
             own = _zeros(sh.size["salts_a"], self.device) if self._graphed(sh.m16) else None
-            if own is not None:
-                bufs["salts_a"] = own.data_ptr()
+            bufs["salts_a"] = ((sh.b["salts_a"] if own is None else own).data_ptr(), sh.size["salts_a"])
             kp = self.key_slots[self.order[w]].data_ptr() if self._graphed(sh.m16) else sh.keys.data_ptr()
             keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 64, "dom_a": kp, "unit": kp + self.nb,
                     **self.const_keys}
