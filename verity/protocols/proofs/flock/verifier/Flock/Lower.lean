@@ -287,7 +287,7 @@ where
 def alignUp (n span : Nat) : Nat := (n + span - 1) / span * span
 
 /-- **The block's template**: Definition `d` of `P` and every Definition it reaches, one template Definition each, callees
-first, then the root: the input rows (input bit `i` at column `i`), `d` placed once on them, its returns copied to the
+first, then the root: the input rows (port bit `i` at column `i`, every port bit a row), `d` placed once on them, its returns copied to the
 output rows, and the constant. `inPorts`/`outPorts` are the port widths in bits, ports concatenated, low bit first. -/
 def lower (P : Prog) (d : Nat) (inPorts outPorts : Array Nat) : V Tmpl.Tmpl := do
   let some defn := P.defs[d]? | throw s!"no Definition {d}"
@@ -308,7 +308,7 @@ def lower (P : Prog) (d : Nat) (inPorts outPorts : Array Nat) : V Tmpl.Tmpl := d
   let one := const + 1
   let root : Tmpl.Def :=
     { cols := const + 1, ins := 0,
-      rows := ((List.range N).map (fun c => (c, #[c], #[c]))).toArray ++
+      rows := ((List.range inBits).map (fun c => (c, #[c], #[c]))).toArray ++
         ((List.range Mo).map fun k => (oStart + k, #[base + rets[k]!], #[one])).toArray,
       calls := #[{ def_ := e, count := 1, base, stride := cols,
                    segs := if N == 0 then #[] else #[{ len := N, at_ := 0, step := 0, reps := 1, rstride := 0 }] }] }

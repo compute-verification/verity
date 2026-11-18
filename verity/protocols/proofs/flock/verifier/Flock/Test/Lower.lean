@@ -34,11 +34,11 @@ def tmpl : V Tmpl.Tmpl := do
 /-! The unrolled rows' values, the test's reference. -/
 
 /-- The unrolled template's columns on input bits `x`: the input rows `x`, every other written column `(A·z)(B·z)` in
-column order (each reads earlier columns), the constant 1, and an unwritten column 0. A reference: no verifier runs it. -/
+column order (each reads earlier columns and the constant, the last column), the constant 1, and an unwritten column 0. A reference: no verifier runs it. -/
 def solve (t : Tmpl.Tmpl) (x : Array Bool) : V (Array Bool) := do
   let acc ← Tmpl.Tmpl.rows t
   let k := t.constPos
-  let sum := fun (z : Array Bool) (r : Array Nat) => r.foldl (fun b c => b != z.getD c false) false
+  let sum := fun (z : Array Bool) (r : Array Nat) => r.foldl (fun b c => b != (c == k || z.getD c false)) false
   return (List.range acc.ra.size).foldl (fun z c =>
     z.push (if c < x.size then x[c]! else if c == k then true
       else if acc.set.getD c false then sum z acc.ra[c]! && sum z acc.rb[c]! else false)) #[]
