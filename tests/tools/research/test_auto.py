@@ -867,7 +867,12 @@ def test_on_auto_spills_to_the_pool_as_a_pool_run_with_the_kinds_time(tmp_path, 
     assert remote.flag_value(kw["harness_args"], "--cwd") == "source"
     err = capsys.readouterr().err
     assert f"research run --on auto: spilled to {CPU1}'s research pool, from " in err and "a slot is free there now" in err
+    cap = "research run --on auto: it is cut 60 min after it starts, the default cap: `research run --timeout 2h` (any length) raises it"
+    assert cap in err.splitlines(), "a run under the default cap is told the flag that raises it"
     assert kw["env"]["CHECK_RUN_MEM_GB"] == "16", "the slot reserves the larger of its mem= and the sized run's"
+    assert main([*runs, "--timeout", "2h", "--", "pytest", "-q"]) == 3
+    assert launched[-1]["command"][launched[-1]["command"].index("--run-max") + 1] == "7200"
+    assert "default cap" not in capsys.readouterr().err, "a run that names its time is not told of the default"
 
 
 def test_on_auto_keeps_in_the_launch_where_it_sent_the_job_and_why(tmp_path, monkeypatch, capsys):
@@ -888,7 +893,7 @@ def test_on_auto_keeps_in_the_launch_where_it_sent_the_job_and_why(tmp_path, mon
         printed = capsys.readouterr().err.splitlines()
         assert all(f"research run --on auto: {line}" in printed for line in launched[-1]["auto"]["said"]), "the words it printed"
     free, last, queued = (kw["auto"] for kw in launched)
-    assert (free["machine"], free["pool"]) == (CPU1, "research") and len(free["said"]) == 2
+    assert (free["machine"], free["pool"]) == (CPU1, "research") and len(free["said"]) == 3
     assert free["said"][0].startswith(f"spilled to {CPU1}'s research pool, from ")
     assert f"({N2}'s share: 0 of 48 CPUs free, 2 claim(s), 56 waiting; " in free["said"][0], "what the queue's node answered"
     assert f"; {CPU5}'s research pool: slots r0 held; 2 waiting: " in free["said"][0], "and each pool"
@@ -903,6 +908,7 @@ def test_on_auto_keeps_in_the_launch_where_it_sent_the_job_and_why(tmp_path, mon
     assert last["said"][1].startswith(f"warning: it isn't expected to start within 10 min: no estimate of when it starts on {CPU1}'s")
     assert (queued["machine"], queued["pool"]) == (N2, None) and queued["said"][0].startswith(f"queued onto {N2} as agent-test, from ")
     assert queued["said"][0].endswith(f"; {CPU1}'s research pool: slots r0 held; 9 waiting: no pool slot is free, and it starts on {N2} now)")
+    assert queued["said"][-1].startswith("it is cut 60 min after it starts, the default cap: "), "the queue's cap is said too"
     assert [kw["machine_name"] for kw in launched] == [CPU1, CPU1, N2]
 
 

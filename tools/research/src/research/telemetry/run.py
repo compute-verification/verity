@@ -72,6 +72,8 @@ def _marker(attempt_dir: Path, actor: str, target_pid: int | None, target_pgid: 
 CONTROL_TIMEOUT = Path("control") / "timeout_s"     # attempt-dir relative; written by `tele set-timeout`, re-read by the run loop
 OUT_DIR = "out"                                     # attempt-dir relative; the workload's $OUT, which custody always uploads in full
 EX_NO_MEMORY_LIMIT = 75                               # EX_TEMPFAIL: the workload never started; it can start once its login gets its scope
+#: What raises a run's cap, as the launch of a run under the default cap and the reason of a run cut at its cap both say it.
+RAISE_CAP = "`research run --timeout 2h` (any length) raises it"
 #: The clock (seconds) the stage timeout runs on; a test replaces it to decide when the deadline passes.  The recorded times
 #: (started_mono, ended_mono, wall_s) stay on time.monotonic, the clock of every event's t_mono.
 clock = time.monotonic
@@ -351,7 +353,7 @@ def run(a: argparse.Namespace, cmd: list[str], poll: Callable[[], None] | None =
                 em.mark(a.stage, "cancel_seen", actor=stop_actor, grace_s=stop_grace, reason=req.get("reason"))
             if timeout and clock() - armed >= timeout and not timed_out:
                 timed_out = True
-                _marker(d, "timeout", None, proc.pid, signal.SIGTERM, f"stage {a.stage} exceeded timeout_s={timeout} ({limit})", None, True, a.job)
+                _marker(d, "timeout", None, proc.pid, signal.SIGTERM, f"stage {a.stage} exceeded timeout_s={timeout} ({limit}); {RAISE_CAP}", None, True, a.job)
                 if sweep is None:
                     sweep = Sweep(proc.pid, str(d.resolve()), leader_start=starttime)
                     stop_actor, stop_grace, deadline = "timeout", a.grace, clock() + a.grace
