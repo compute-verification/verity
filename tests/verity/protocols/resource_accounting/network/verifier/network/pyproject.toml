@@ -4,6 +4,7 @@
 # program, the LMS port and Flock's verifier, all under `verity/`.
 [tool.pytest.ini_options]
 testpaths = ["."]
+pythonpath = ["../../../../../../.."]   # the repository root: its tests import others' as `tests.X`, the tests of X
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
@@ -15,11 +16,14 @@ untraced = [
     "test_network_check_protocol.py",
     "test_network_period_protocol.py",
     "test_network_records_protocol.py",
+    "test_network_rows_agreement.py",
     "test_network_span_protocol.py",
 ]
 # `verity_difftest`, through which the network checks' tests speak to their Lean executables
 # the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in
-inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "tools/difftest/python/verity_difftest"]
+# the network attester's runs (`relay_runs`), which the rows audit's agreement test holds both checks to
+inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "tools/difftest/python/verity_difftest",
+          "tests/verity/protocols/resource_accounting/network/attester/relay_runs.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

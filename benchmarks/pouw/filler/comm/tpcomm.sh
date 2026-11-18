@@ -18,6 +18,7 @@
 set -uo pipefail
 export O=${OUT:?}
 CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4  # the machine's toolkit at 13.0
+GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") || exit 4
 export PATH=$CUDA_HOME/bin:$PATH
 D=benchmarks/pouw/filler/comm
 export B; B=$(mktemp -d /tmp/tpcomm.XXXXXX); trap 'rm -rf "$B"' EXIT
@@ -34,7 +35,7 @@ echo "$DFILL_COINS" > "$O/coins.txt"
 nvcc --version | tail -2 > "$O/nvcc.txt"
 grep -m1 -E "define NCCL_(MAJOR|VERSION_CODE)" /usr/include/nccl.h >> "$O/nvcc.txt" 2>&1
 nvidia-smi topo -m > "$O/topo.txt" 2>&1
-nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/tpcomm" $D/tpcomm.cu -lcublasLt -lnvidia-ml -ldl -lnccl \
+nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -o "$B/tpcomm" $D/tpcomm.cu -lcublasLt -lnvidia-ml -ldl -lnccl \
   > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
 grep -A3 -E "Compiling entry function '_Z(7kfill_k|10tp_dpass_k|10tp_drain_k)" "$O/build.log" | grep -E "Compiling|Used|spill" > "$O/regs.txt"
 # the filler path (tp_dfill_k) and the deferred kernels must be only IMMA.16832.S8.S8 with C = RZ (SCORER v4 / Theorem K):
