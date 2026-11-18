@@ -147,6 +147,7 @@ public import Proofs.Flock.SpotFlock.LayoutAt
 public import Proofs.Flock.Bridge
 public import Proofs.Flock.Bridge.Transports
 public import Proofs.Flock.Bridge.TransportsRefs
+public import Proofs.Flock.Bridge.GateARowChecks
 public import Proofs.Flock.SamplingBoundary
 public import Proofs.Flock.SamplingScope
 public import Proofs.Flock.ZkAny

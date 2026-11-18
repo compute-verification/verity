@@ -81,6 +81,7 @@ def family_definitions() -> dict[str, object]:
     import importlib
 
     from verity.circuits.defs import FunctionDefinition
+
     from verity_vllm.definitions.registry.catalog import load
 
     load()

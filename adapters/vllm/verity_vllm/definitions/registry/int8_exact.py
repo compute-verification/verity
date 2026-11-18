@@ -53,14 +53,21 @@ import math
 import struct
 
 import numpy as np
-
 from verity.circuits.defs import bind, composite, primitive
 from verity.circuits.ops import gemm as GEMM
 from verity.circuits.ops import prims as CP
 from verity.circuits.ops import s8 as S8
-from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, I32Add, I32Le, SelectI32
+from verity.circuits.ops.scalar import (
+    F32Fabs,
+    F32Fmaxf,
+    F32Fminf,
+    I32Add,
+    I32Le,
+    SelectI32,
+)
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import tables as T

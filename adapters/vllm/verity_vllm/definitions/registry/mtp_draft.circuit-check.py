@@ -19,6 +19,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.circuits.defs import bind
     from verity.circuits.ops import gemm as G
     from verity.circuits.ops.boolean import gemm as BG
+
     from verity_vllm.definitions.registry import cublas_bf16 as CB
     from verity_vllm.definitions.registry import mtp_draft as MD
 

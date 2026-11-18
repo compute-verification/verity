@@ -73,7 +73,12 @@ def _commit(root: Path) -> str:
     recorded = settings.RESEARCH_SOURCE_SHA
     if recorded:
         return recorded
-    return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True,
+                                       stderr=subprocess.DEVNULL).strip()
+    except (OSError, subprocess.CalledProcessError):
+        raise ValueError(f"{root} is no git checkout and RESEARCH_SOURCE_SHA is unset, so nothing says which commit this "
+                         "tree is: run under `research run`, which sets it (--tree-sha for a tree without .git)") from None
 
 
 def _file_sha256(path: Path) -> str:
@@ -440,25 +445,46 @@ def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Pat
                     now=now)
 
 
+def here_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
+    """The point in this process's own run, on the machine it was started on: the cards its environment gives it
+    (CUDA_VISIBLE_DEVICES) and the CPUs it may use, with no lease, slot or node of ours; the spec's env and setup as a
+    direct point's `--env` gives them."""
+
+    spec = vllm_spec(plan)
+    return ["env", *(f"{name}={setting}" for name, setting in point_environment(spec).items()),
+            *_point_command(source, item, root)]
+
+
 def _execute(command: Sequence[str], root: Path) -> int:
     return subprocess.run(command, cwd=root, check=False).returncode
 
 
 def dispatch(plan: Plan, source: str | Path, *, root: Path | None = None, execute: Executor = _execute,
-             direct: str | None = None, command: DirectCommand = direct_command) -> int:
+             direct: str | None = None, command: DirectCommand = direct_command, here: bool = False) -> int:
     """Launch one recorded research run for each incomplete point and each point named again (`again`), in the spec's
     order: queued, or with `direct` on that
     node's GPU slots, each as `command` gives it (a vLLM point's `direct_command`; a steady-state point's is
     `steady_plan.direct_command`). Each launch returns once its run has started on the node, where the runs take the
-    slots in turn. The first launch that fails stops the rest; its exit code, or 0."""
+    slots in turn. With `here`, the one point to launch runs in this process's run (`here_command`), which records it.
+    The first launch that fails stops the rest; its exit code, or 0."""
 
     root = root or repository_root()
+    if direct is not None and here:
+        raise ValueError("--here runs the points on this machine, --direct NODE on that node's slots: give one")
     if direct is not None:
         direct_minutes(plan.spec, direct)
+    if here and len(todo := [item for item in plan.points if item.passing_run is None or item.again]) > 1:
+        raise ValueError(f"--here runs one point, whose result is this run's: spec {plan.spec.id!r} has {len(todo)} to "
+                         f"run ({', '.join(item.point.id for item in todo)}); run them with --direct NODE or the queue")
     for item in plan.points:
         if item.passing_run is not None and not item.again:
             continue
-        argv = research_command(plan, source, item, root) if direct is None else command(plan, source, item, root, direct)
+        if here:
+            argv = here_command(plan, source, item, root)
+        elif direct is None:
+            argv = research_command(plan, source, item, root)
+        else:
+            argv = command(plan, source, item, root, direct)
         rc = execute(argv, root)
         if rc:
             return rc
