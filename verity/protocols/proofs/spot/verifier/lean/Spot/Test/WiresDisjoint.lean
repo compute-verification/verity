@@ -347,8 +347,9 @@ def servedRanges : Array Flock.TemplateQuery.TRange :=
 
 /-- The served shape's templates as the record text reads them. -/
 def bigTmpls : List Spot.RecordText.Tmpl :=
-  big.templates.map fun (tid, t) => { tid, defn := 0, units := t.units, rows := t.rows.map (fun (p, q) => (p, q.words, q.outer)),
-    outs := t.outs }
+  big.templates.map fun (tid, t) =>
+    { tid, defn := 0, units := t.units, outs := t.outs,
+      rows := t.rows.map (fun (p, q) => (p, q.words, q.outer)) }
 
 #guard match Spot.RecordText.inputsOf bigTmpls big (Lean.Json.mkObj []) with
   | .ok x => x.decls.length == big.wires.length && x.decls.all (·.bits == 64) &&
