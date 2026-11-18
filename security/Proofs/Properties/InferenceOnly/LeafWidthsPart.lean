@@ -57,7 +57,7 @@ theorem residues_mem (stride : ℤ) (count L bound : ℕ) (A : List ℕ) (hL : 0
     · rw [ite_eq_left hbound] at h
       injection h with h
       subst h
-      rw [List.mem_eraseDups, List.mem_map]
+      rw [List.mem_map]
       exact ⟨k, List.mem_range.2 hk, rfl⟩
     · rw [ite_eq_right hbound] at h
       exact absurd h (by simp)
@@ -93,16 +93,28 @@ theorem src_ty (B : Body) (below : ℕ) (r : Ref) (S : Ty) (hr : BodiesOk.RefIn 
       exact ⟨h2, rfl⟩
     · exact absurd h (by simp)
 
-/-- Where the check finds a type and a source of one same width, a leaf of the one is as wide as a leaf of the
+/-- **Leaves of one width have it each.** -/
+theorem sliceWidth_wAt (t : Ty) (a n w : ℕ) (h : Widths.sliceWidth t a n = some w) (k : ℕ) (hk : k < n)
+    (hak : a + k < t.leaves) : Widths.wAt t (a + k) = w := by
+  have hm := wAt_mem_rangeWidths t a (a + n) (a + k) (Nat.le_add_right _ _) (by omega) hak
+  unfold Widths.sliceWidth at h
+  split at h
+  · rename_i w' hw'
+    rw [hw'] at hm
+    rw [List.mem_singleton.1 hm]
+    exact Option.some.inj h
+  · exact absurd h (by simp)
+
+/-- Where the check finds a slice and a source of one same width, a leaf of the one is as wide as a leaf of the
 other. -/
-theorem homo_same (t S : Ty) (o : Option ℕ) (h : ((Widths.homo t).isSome && Widths.homo t == o) = true)
-    (ho : o = Widths.homo S) (j j' : ℕ) (hj : j < S.leaves) (hj' : j' < t.leaves) :
-    Widths.wAt S j = Widths.wAt t j' := by
+theorem homo_same (S : Ty) (ht o : Option ℕ) (wt : ℕ) (h : (ht.isSome && ht == o) = true)
+    (ho : o = Widths.homo S) (hht : ∀ w, ht = some w → wt = w) (j : ℕ) (hj : j < S.leaves) :
+    Widths.wAt S j = wt := by
   rw [Bool.and_eq_true] at h
   obtain ⟨h1, h2⟩ := h
   obtain ⟨w, hw⟩ := Option.isSome_iff_exists.1 h1
-  have h3 : Widths.homo t = o := by simpa using h2
-  rw [homo_wAt t w hw j' hj', homo_wAt S w (by rw [← ho, ← h3, hw]) j hj]
+  have h3 : ht = o := by simpa using h2
+  rw [hht w hw, homo_wAt S w (by rw [← ho, ← h3, hw]) j hj]
 
 /-! ## A strided part's corners -/
 
@@ -280,12 +292,15 @@ theorem walk_loop_gen (n : ℕ) (f : ℕ → Option Bool × Unit → Widths.M (F
 /-- **A part the width check passes names leaves of the widths its type gives them.** -/
 theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w' : ℕ) (hq : BodiesOk.PartNonneg q)
     (hi : PartInner q) (ha : a + q.count ≤ t.leaves) (hin : ∀ k < q.count, BodiesOk.RefIn B (q.get k))
-    (h : (Widths.partOk (srcOf B below) t (Widths.homo t) a q).run w = .ok true w') :
+    (h : (Widths.partOk (srcOf B below) t (Widths.sliceWidth t a q.count) a q).run w = .ok true w') :
     ∀ k < q.count, ∀ S, (srcOf B below).ty? (q.get k).p (q.get k).i = some S →
       Widths.wAt S (q.get k).j = Widths.wAt t (a + k) := by
   intro k hk S hS
   have hjr := hin k hk
   obtain ⟨hj, hhomo⟩ := src_ty B below (q.get k) S hjr hS
+  have hht : ∀ wd, Widths.sliceWidth t a q.count = some wd → Widths.wAt t (a + k) = wd := fun wd hwd =>
+    sliceWidth_wAt t a q.count wd hwd k hk (by omega)
+  generalize Widths.sliceWidth t a q.count = ht at h hht
   cases q with
   | explicit items =>
     unfold Widths.partOk at h
@@ -306,8 +321,8 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
     dsimp only at h
     rw [hS] at h
     dsimp only at h
-    by_cases hh : ((Widths.homo t).isSome && Widths.homo t == (srcOf B below).homo? p i) = true
-    · exact homo_same t S _ hh hhomo _ _ hj (by omega)
+    by_cases hh : (ht.isSome && ht == (srcOf B below).homo? p i) = true
+    · exact homo_same S ht _ _ hh hhomo hht _ hj
     · rw [ite_eq_right hh] at h
       have hb : base + n ≤ S.leaves := by
         have hlast : n - 1 < (Part.affine p i base n).count := by change n - 1 < n; omega
@@ -414,86 +429,47 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
     dsimp (config := { zeta := false }) only at h
     rw [hS] at h
     dsimp (config := { zeta := false }) only at h
-    by_cases hh : (n == 0 || (Widths.homo t).isSome && Widths.homo t == (srcOf B below).homo? p i) = true
-    · have hh' : ((Widths.homo t).isSome && Widths.homo t == (srcOf B below).homo? p i) = true := by
+    by_cases hh : (n == 0 || ht.isSome && ht == (srcOf B below).homo? p i) = true
+    · have hh' : (ht.isSome && ht == (srcOf B below).homo? p i) = true := by
         rw [Bool.or_eq_true] at hh
         rcases hh with h0 | h1
         · exact absurd (by simpa using h0 : n = 0) (by omega)
         · exact h1
-      exact homo_same t S _ hh' hhomo _ _ hj (by omega)
+      exact homo_same S ht _ _ hh' hhomo hht _ hj
     rw [ite_eq_right hh] at h
-    extract_lets at_ jp q' crn vals lo hi' at h
-    have hjp : ∀ w₁ w₁', (jp ()).run w₁ = .ok true w₁' →
-        Widths.wAt S (atOf base inner os is k) = Widths.wAt t (a + k) := by
-      intro w₁ w₁' hj'
-      unfold jp at hj'
-      obtain ⟨r, w₂, hloop, hj'⟩ := m_bind hj'
-      obtain ⟨r1, r2⟩ := r
-      rcases walk_loop n (fun k => Widths.wAt S (at_ k) != Widths.wAt t (a + k)) w₁ w₂ _ hloop with ⟨hall, -⟩ | hr
-      · have e : at_ k = atOf base inner os is k := rfl
-        rw [← e]
-        simpa using hall k hk
-      · dsimp only at hr hj'
-        subst hr
-        dsimp only at hj'
-        exact absurd (m_pure hj').1 (by simp)
-    clear_value jp
-    split at h
-    · rename_i wd hwd
-      obtain ⟨hlo, hhi, k', hk', hmax⟩ := strided_between base inner os is n hi k hk vals rfl
+    cases ht with
+    | none => exact (m_throw h).elim
+    | some wd =>
+      have hwd : Widths.wAt t (a + k) = wd := hht wd rfl
+      dsimp (config := { zeta := false }) only at h
+      extract_lets q' crn vals lo hi' at h
+      obtain ⟨hlo, hhi, -, -, -⟩ := strided_between base inner os is n hi k hk vals rfl
       have hlo' : lo ≤ atOf base inner os is k := hlo
       have hhi' : atOf base inner os is k ≤ hi' := hhi
-      have hmax' : hi' = atOf base inner os is k' := hmax
       clear_value lo hi'
-      have hhiS : hi' + 1 ≤ S.leaves := by
-        have hlt := (src_ty B below ((Part.strided p i base inner os is n).get k') S (hin k' hk') hS).1
-        change atOf base inner os is k' < S.leaves at hlt
-        omega
-      by_cases hrw : (Widths.rangeWidths S lo (hi' + 1) == [wd]) = true
-      · have hmem := wAt_mem_rangeWidths S lo (hi' + 1) (atOf base inner os is k) hlo' (by omega) hj
-        rw [beq_iff_eq.1 hrw, List.mem_singleton] at hmem
-        rw [hmem, homo_wAt t wd hwd (a + k) (by omega)]
-      rw [ite_eq_right hrw] at h
-      obtain ⟨c1, c2, c3, c4⟩ := cover_spec S lo (hi' + 1) (by omega) hhiS
       split at h
-      · rename_i m f hcs
-        extract_lets L r0 at h
-        by_cases hLpos : f.leaves > 0
-        · rw [ite_eq_left hLpos] at h
-          split at h
-          · rename_i A B' hres
-            injection hres with hA hB
-            by_cases hlen : A.length * B'.length ≤ 4096
-            · rw [ite_eq_left hlen] at h
-              by_cases hall : (A.all fun x => B'.all fun y =>
-                  Widths.wAt f ((r0 + (x : ℤ) + (y : ℤ)) % (L : ℤ)).toNat == wd) = true
-              · have hnn : 0 ≤ base + ((k / inner : ℕ) : ℤ) * os + ((k % inner : ℕ) : ℤ) * is := hq k hk
-                have hkq : k / inner < (n + inner - 1) / inner := by
-                  have h1 : k / inner ≤ (n - 1) / inner := Nat.div_le_div_right (by omega)
-                  have h2 : (n - 1 + inner) / inner = (n - 1) / inner + 1 := Nat.add_div_right _ hi
-                  have h3 : n + inner - 1 = n - 1 + inner := by omega
-                  rw [h3, h2]
-                  omega
-                have hxA := residues_mem os ((n + inner - 1) / inner) f.leaves 4096 A hLpos hA (k / inner) hkq
-                have hyB := residues_mem is inner f.leaves 4096 B' hLpos hB (k % inner) (Nat.mod_lt _ hi)
-                rw [List.all_eq_true] at hall
-                have h1 := hall _ hxA
-                rw [List.all_eq_true] at h1
-                have h2 := beq_iff_eq.1 (h1 _ hyB)
-                have e := strided_residue base os is (Widths.cover S lo (hi' + 1)).2 f.leaves (k / inner)
-                  (k % inner) hLpos hnn (le_trans c1 hlo')
-                change (atOf base inner os is k - (Widths.cover S lo (hi' + 1)).2) % f.leaves = _ at e
-                rw [c4 (atOf base inner os is k) (by omega) (by omega), hcs, wAt_array m f _ hLpos,
-                  homo_wAt t wd hwd (a + k) (by omega), e]
-                exact h2
-              · rw [ite_eq_right hall] at h
-                exact hjp _ _ h
-            · rw [ite_eq_right hlen] at h
-              exact hjp _ _ h
-          · exact hjp _ _ h
-        · rw [ite_eq_right hLpos] at h
-          exact hjp _ _ h
-      · exact hjp _ _ h
-    · exact hjp _ _ h
+      next hlw =>
+        have hnn : 0 ≤ base + ((k / inner : ℕ) : ℤ) * os + ((k % inner : ℕ) : ℤ) * is := hq k hk
+        have hkq : k / inner < (n + inner - 1) / inner := by
+          have h1 : k / inner ≤ (n - 1) / inner := Nat.div_le_div_right (by omega)
+          have h2 : (n - 1 + inner) / inner = (n - 1) / inner + 1 := Nat.add_div_right _ hi
+          have h3 : n + inner - 1 = n - 1 + inner := by omega
+          rw [h3, h2]
+          omega
+        have e : (⟨p, i, base, is, [((n + inner - 1) / inner, os)]⟩ : Lane).leafAt (k / inner) (k % inner) =
+            base + ((k / inner : ℕ) : ℤ) * os + ((k % inner : ℕ) : ℤ) * is := by
+          simp only [Lane.leafAt, Lane.leafAt.go]
+          ring
+        have hat : ((atOf base inner os is k : ℕ) : ℤ) =
+            base + ((k / inner : ℕ) : ℤ) * os + ((k % inner : ℕ) : ℤ) * is := Int.toNat_of_nonneg hnn
+        have key := laneWidth_sound (l := ⟨p, i, base, is, [((n + inner - 1) / inner, os)]⟩) hlw
+          (t := k / inner) (o := k % inner) (by simpa [Lane.periods] using hkq) (Nat.mod_lt _ hi)
+          (by rw [e, ← hat]; exact_mod_cast hlo') (by rw [e, ← hat]; exact_mod_cast hhi')
+        rw [e] at key
+        change Widths.wAt S (base + ((k / inner : ℕ) : ℤ) * os + ((k % inner : ℕ) : ℤ) * is).toNat = wd at key
+        rw [hwd]
+        exact key
+      next => exact absurd (m_pure h).1 (by simp)
+      next => exact (m_throw h).elim
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.LeafWidths

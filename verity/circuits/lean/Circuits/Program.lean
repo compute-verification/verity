@@ -707,10 +707,10 @@ def residues (stride : Int) (count L cap : Nat) : Option (List Nat) :=
   let s := (stride % (L : Int)).toNat
   let g := Nat.gcd s L
   if count ≥ L / g then (if L / g ≤ cap then some ((List.range (L / g)).map (· * g)) else none)
-  else if count ≤ cap then some ((List.range count).map fun k => k * s % L).eraseDups else none
+  else if count ≤ cap then some ((List.range count).map fun k => k * s % L) else none
 
 /-- `{(x + y) mod L : x ∈ A, y ∈ B}`. -/
-def sumMod (L : Nat) (A B : List Nat) : List Nat := (A.flatMap fun x => B.map fun y => (x + y) % L).eraseDups
+def sumMod (L : Nat) (A B : List Nat) : List Nat := A.flatMap fun x => B.map fun y => (x + y) % L
 
 /-- The residues mod `L` that `Lane.leafAt`'s levels `lv` add at the periods they count, where each level's and each
 sum's have at most `cap` members. -/
@@ -887,11 +887,16 @@ def firstBad (s : Src) (t : Ty) (a : Nat) (q : Part) : M (Option Nat) := do
       if bad k then return some k
     return none
 
+/-- The one width of `t`'s leaves `a … a + n`, if they have one. -/
+def sliceWidth (t : Ty) (a n : Nat) : Option Nat :=
+  match rangeWidths t a (a + n) with
+  | [w] => some w
+  | _ => none
+
 /-- The first part of the references `seq`, read as a `t`, that names leaves of another width, with the leaf it starts at. -/
 def seqBad (s : Src) (t : Ty) (seq : Seq) : M (Option (Nat × Part)) := do
   for q in seq.parts, a in seq.starts do
-    let ht := match rangeWidths t a (a + q.count) with | [w] => some w | _ => none
-    if !(← partOk s t ht a q) then return some (a, q)
+    if !(← partOk s t (sliceWidth t a q.count) a q) then return some (a, q)
   return none
 
 def TAIL : String :=
