@@ -64,21 +64,72 @@ POOL_WAIT_S = 14400
 
 
 def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = None, wait_s: float = POOL_WAIT_S,
-            twin: str | None = None) -> list[str]:
+            twin: str | None = None, end: str | None = None, slot: str | None = None, timed: bool = False) -> list[str]:
     """CMD as a run in `pool`, the one way a lane's run takes it: `env CHECK_SLOTS=POOL python3 tools/check/slot.py --by
-    LANE [--wait-max POOL_WAIT_S --run-max S] [--twin PAIR] -- nice -n 19 CMD...`, naming slot.py by its path in the run's own
-    shipped tree (so the run's cwd is its source); the launch names the machine's own copy instead where the machine has one
-    (`node_copy`). `run_max` is the run's --timeout: slot.py counts it from taking the slot, so the wait in the pool's line
-    isn't spent from it, and a run with no slot in `wait_s` exits NOT_STARTED (75) without running CMD.  The
-    runner's own timeout must then cover both (`research run --pool` makes it wait_s + S). `twin` is slot.py's --twin: the
-    pair a run `--on auto` placed carries, so a late twin on another machine can take the run from this line (`late_twin`)."""
+    LANE [--wait-max POOL_WAIT_S --run-max S] [--end UTC] [--only-slot NAME] [--twin PAIR] -- nice -n 19 CMD...`, niced so a
+    lane's run yields the cores to the checks, but for a `timed` one (`research run --timed`), whose time is its result; naming
+    slot.py by its path in the run's own shipped tree (so the run's cwd is its source); the launch names the machine's own
+    copy instead where the machine has one (`node_copy`). `run_max` is the run's --timeout: slot.py counts it from taking the
+    slot, so the wait in the pool's line isn't spent from it, and a run with no slot in `wait_s` exits NOT_STARTED (75)
+    without running CMD.  The runner's own timeout must then cover both (`research run --pool` makes it wait_s + S). `end` is
+    a booked period's end (`research run --end`) and `slot` the one slot the run takes (`--slot`). `twin` is slot.py's
+    --twin: the pair a run `--on auto` placed carries, so a late twin on another machine can take the run from this line
+    (`late_twin`)."""
     if not POOL_NAME.fullmatch(pool):
         raise ValueError(f"no pool {pool!r}: a pool is a name of letters, digits, '_' or '-' (the pools every node may have are "
                          f"{', '.join(sorted(POOLS))}; a node's own, as node 1's leanrec, are under {LOCKS})")
+    if slot is not None and not POOL_NAME.fullmatch(slot):
+        raise ValueError(f"--slot {slot!r}: a slot's name is letters, digits, '_' or '-', as its pool's slots file names it")
     limit = ["--wait-max", f"{wait_s:g}", "--run-max", f"{run_max:g}"] if run_max else []
+    booked = [*(["--end", end] if end else []), *(["--only-slot", slot] if slot else [])]
     pair = ["--twin", twin] if twin else []
-    return ["env", f"CHECK_SLOTS={pool_slots(pool)}", "python3", SLOT_PATHS[0], "--by", lane, *limit, *pair, "--", "nice", "-n", "19",
-            *command]
+    return ["env", f"CHECK_SLOTS={pool_slots(pool)}", "python3", SLOT_PATHS[0], "--by", lane, *limit, *booked, *pair, "--",
+            *([] if timed else ["nice", "-n", "19"]), *command]
+
+
+def end_left(end: str, now: float) -> float:
+    """The seconds from ``now`` (epoch seconds) to ``end``, a booked period's end as `research run --end` takes it: an ISO time
+    in UTC ending in Z. ValueError, with the form, on anything else."""
+    if not end.endswith("Z"):
+        raise ValueError(f"--end {end!r} is not a UTC time ending in Z (2026-11-19T05:00:00Z)")
+    try:
+        t = datetime.fromisoformat(end[:-1])
+    except ValueError:
+        raise ValueError(f"--end {end!r} is not an ISO time (2026-11-19T05:00:00Z)") from None
+    if t.tzinfo is not None:
+        raise ValueError(f"--end {end!r} names an offset before its Z; give the time in UTC (2026-11-19T05:00:00Z)")
+    return t.replace(tzinfo=UTC).timestamp() - now
+
+
+def slot_names(text: str) -> list[str]:
+    """The slots a pool's slots file names (slot.py's `parse`: each line's first word, comments and lines of fewer than two
+    words left out)."""
+    return [f[0] for line in text.splitlines() if len(f := line.split("#")[0].split()) >= 2]
+
+
+def named_slot(command: list[str]) -> tuple[str, str] | None:
+    """The pool's slots file and the slot a run in a pool's line names (`in_pool`'s `--only-slot`), or None for any other
+    command."""
+    if not (command[:1] == ["env"] and through_slot(command)):
+        return None
+    opts = command[4:command.index("--", 4)]
+    if "--only-slot" not in opts[:-1]:
+        return None
+    return command[1].partition("=")[2], opts[opts.index("--only-slot") + 1]
+
+
+def slot_refusal(command: list[str], listing: str | None) -> str | None:
+    """Why a run that names a slot (`named_slot`) is refused at launch, given its machine's slots file as ``listing`` (None:
+    the machine has no such file); None where the file names the slot, and for a run that names none."""
+    if (named := named_slot(command)) is None:
+        return None
+    path, slot = named
+    if listing is None:
+        return f"--slot {slot}: the machine has no {path}, so it has no such pool"
+    have = slot_names(listing)
+    if slot in have:
+        return None
+    return f"--slot {slot}: {path} has no slot of that name; its slots are {', '.join(have) or 'none'}"
 
 
 def late_twin(command: list[str], home: str, wait_s: float) -> list[str]:

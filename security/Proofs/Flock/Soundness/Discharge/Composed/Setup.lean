@@ -37,7 +37,7 @@ What is left reads `bodyOf`, the refinement, and is stated here as three named f
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game Audit Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL FlockLevel3 ZkView
+open Game Spot.Sampling Exec Refine Flock Model ZkSession ZkLink ZkExec DecodeZL FlockLevel3 ZkView
 
 local notation "𝔽" => FlockLevel3.GF128
 

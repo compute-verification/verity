@@ -356,6 +356,17 @@ reaches = [
 
 [[place]]
 paths = [
+    "verity/protocols/compose/schemes.py",
+]
+loads = [
+    "verity/protocols/experimental",
+    "verity/protocols/resource_accounting/compute/pouw/scheme.py",
+    "verity/protocols/resource_accounting/network/scheme.py",
+    "verity/protocols/resource_accounting/scheme.py",
+]
+
+[[place]]
+paths = [
     "verity/protocols/compose/verifier",
 ]
 trusted = true
@@ -502,7 +513,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/scan_period.py",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
-    "verity/protocols/resource_accounting/network/prover/window_charge.py",
+    "verity/protocols/interface/charge/window_charge.py",
 ]
 
 [[place]]
@@ -875,7 +886,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/serve_head.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
     "adapters/vllm/verity_vllm/pipeline/window_chain.py",
-    "verity/protocols/resource_accounting/network/prover/window_charge.py",
+    "verity/protocols/interface/charge/window_charge.py",
 ]
 
 [[place]]

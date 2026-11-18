@@ -35,10 +35,20 @@ from verity_vllm.engine import env as engine_env
 from verity_vllm.engine.profiles import transport
 from verity_vllm.records.schema_ids import SERVED_SWITCHES_SCHEMA
 
-__all__ = ["DEFAULTS", "ENFORCE_EAGER", "apply", "declared", "execution", "execution_env", "of_summary", "read_rank",
-           "record", "require"]
+__all__ = ["DEFAULTS", "ENFORCE_EAGER", "KERNEL_PROFILE_OVERRIDES", "apply", "declared", "execution", "execution_env",
+           "kernels", "of_summary", "read_rank", "record", "require"]
 
 SCHEMA = SERVED_SWITCHES_SCHEMA
+#: Explicit engine arguments that can select kernels outside the engine profile, so outside a row's Build.
+KERNEL_PROFILE_OVERRIDES = ("dtype", "quantization", "compilation_config", "attention_backend", "attention_config", "moe_backend")
+
+
+def kernels(engine_args: Mapping[str, Any] | None) -> str | tuple[str, ...]:
+    """The kernels an engine built with ``engine_args`` serves, as the workload declares them: ``"profile"`` when no
+    argument overrides the engine profile's, else the overriding arguments (`KERNEL_PROFILE_OVERRIDES`)."""
+    over = tuple(k for k in KERNEL_PROFILE_OVERRIDES if (engine_args or {}).get(k) is not None)
+    return over or "profile"
+
 #: The default of a switch vLLM resolves from the rest of the config: whatever it resolves is its own.
 RESOLVED = "resolved by vLLM"
 #: Each switch as vLLM leaves it when nothing sets it (vllm/envs.py, vllm/config/).

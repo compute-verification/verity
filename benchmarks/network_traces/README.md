@@ -33,23 +33,19 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   checked under and then each registration it held, and `cost`, which measures a close); `network_attester_chain.py` is
   the chain's reads of a relay run, and network attestation's `prover/network_attester_zk.py` reads the relay's bucket rows
   in the proof system.
-- **Proofs in zero knowledge.** Each driver, in network attestation's `prover/` but for `compile_slice_zk.py` here, proves its
+- **Proofs in zero knowledge.** Each driver, in network attestation's `prover/`, proves its
   proof blocks with Flock `prove --zk` behind the Lean ZK server and holds them by the Lean
   `verity-verify-proof verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of record), `n2_tie_zk.py`
   (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the
-  scan's answers held by `NetworkCheck.Period`) and `compile_slice_zk.py` (the compile slice). `leak_scan.py`, in
+  scan's answers held by `NetworkCheck.Period`). `leak_scan.py`, in
   `prover/` too, is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with
-  the vLLM adapter's `verity_vllm.pipeline.window_chain` (a served endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network
-  attestation must refuse, each by the check and code that refuse it), `leak_guard.py` (the record's leak guard, below)
-  and `prover/released_keys.py` (the keys a record releases, each declared public by name, below).
+  the vLLM adapter's `verity_vllm.pipeline.window_chain` (a served endpoint's Commit periods as one I1 v0 advice),
+  `leak_guard.py` (the record's leak guard, below) and `prover/released_keys.py` (the keys a record releases, each declared public by name, below).
   `prover/block_attester.py` writes a period's accepted answer into the block record.
   `served_session.py` is the served session's runbook (below).
 - **The weights' load:** the network attester's `attester/load_relay.py`, `load_bench.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
-- **A cheating server:** `deviations.py` puts a deviating process between the relay and the server's id front, plants
-  a random string, and tries six ways to send it out, each with a network attester process of its own;
-  `deviations.sh` is its tries as a job behind one ssh forward (below).
 - **A second count:** `capture_flows.py` sums a packet capture taken beside a relay run by flow and direction and holds
   it against the relay's record of that run (below).
 
@@ -156,84 +152,6 @@ committed execution phase (`scan_zk.py --v3c`: its scan state and slot entries a
 `period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
 V3c's; each step releases through its own hold. The verifier reads an audit's state entry among its `roots` and its
 `registered` alone, and a workload's execution phase's registration holds its `SCAN_STATE` among its `registered`.
-
-## A cheating server
-
-`deviations.py` is the cheating server on the relay's path (`negatives.py` is the catalogue of what each check
-refuses). A deviating process sits between the network attester (`network_attester_serve.py`'s relay, in its id egress form)
-and the server's id front. It plants a random string and tries one way to send it out, a class a try; a receiver that
-reads only what the client got scores the bits it has back; and the table sets them beside the check that refuses the
-class, in the refusal's own words, and what the leak bound charges. The dry run, against the stand-in id endpoint:
-
-    uv run benchmarks/network_traces/deviations.py try --stand-in --out DIR
-
-Against a served front, whose `HOST:PORT` is the value of an environment variable the command names:
-
-    FRONT=HOST:PORT uv run benchmarks/network_traces/deviations.py try --front-env FRONT --out DIR \
-        [--cell-bytes B] [--tail S] [-- --window T --delay D ...]
-
-And against a served front that listens on its own node's loopback, as a `research run` job on a node that holds a
-tunnel key to it (`deviations.sh`: one ssh forward, then the tries, then a guard that fails the job if anything it
-keeps holds an address; `research run --env` records none of the three values, and `REACH_ONLY=1` ends the job
-once the front is reached, with no try):
-
-    PEER_AUTHORITY=USER@HOST[:SSH_PORT] FRONT_AUTHORITY=HOST:PORT TUNNEL_KEY=FILE \
-        bash benchmarks/network_traces/deviations.sh [TRY-FLAG ...] [-- REHEARSE-FLAG ...]
-
-Then the table again, once the server's record of the tries' sampled ids is there:
-
-    uv run benchmarks/network_traces/deviations.py table --out DIR --ids REQUESTS.jsonl
-
-- The six classes (`--class`, by default all, each one try, in this order): `honest`, the control; `tokens`, a
-  planted bit in each output id; `length`, a response's last id event dropped to set its count's parity; `fail`, a
-  response withheld; `extra`, bytes out of the id form after the trailer; `bucket`, a response held `--hold-ms`, a bit
-  a connection over `--bucket-requests` connections. When honest is refused no other class is tried.
-- Two deviations are not tried, and no row says anything of either:
-  - a response with an id event more than the server's own. `length` only drops a response's last id event and never
-    adds one.
-  - a failure part-way through a response. `fail` withholds a response whole, so the relay fails its connection at
-    the first egress cell; no try has a server send some of a response's cells and withhold the rest.
-- A try is the deviating process, then `network_attester_serve.py rehearse --ids` through it: a key, the traffic, the relay,
-  its client and its offline check, on the host's clock. The flags after `--` are the rehearsal's own, the schedule's
-  among them; `--cell-bytes` is the relay's B, which fixes an id event's size. `--tail` covers a connection admitted
-  at the last request's time: the schedule's delay and its cells.
-- The front's address has no default. Only the deviating process reads it, from its environment, and nothing a try
-  writes holds it: the relay's upstream is the deviating process on the loopback.
-- A try keeps `DIR/CLASS.json`: the schedule, the check's verdict and its words, each connection's request name,
-  release number, cells' kinds, the ids it was sent and the bits planted on it, the egress record's cells, the
-  watermark's last line, lost releases and error, and the size and SHA-256 of every file of its run directory. The
-  run directory, with the relay's records and their salts, is under `--scratch`, by default a temporary directory
-  that is removed. The table is made from `DIR` alone.
-- The relay's check refuses `fail`, `extra` and a `bucket` hold past a cell's deadline, in its audit's words; a
-  shorter hold is accepted and isn't seen at the client's bucket. `tokens` and `length` leave id-form cells, which the
-  relay's check accepts; the I/O tie's content refuses them (`io_tie.cells_match` on each bucket of the egress
-  record). Its map is the attested placement, a stand-in for the advice's.
-- The tie needs the Commit's sampled ids of each request: `--ids`, the server's record, or under `--stand-in` the
-  stand-in's own. Without them the tie isn't run and the row says so. A line of `--ids` is a request's `output_ids`
-  under its `user`, or under its `id` `verity-RUN-N`, the name the attested tick gives a request: the network attester's
-  run id and the request's release number. A try also names its request i `CLASS-TAG-i` (`--tag`, by default a random
-  one a command). Either way one record of the server over every try, and over what it served before them, holds
-  each request once.
-- A refusal counts only where it is the deviation's: the tie refuses exactly the ids the planted bits changed or the
-  connections whose last event was dropped, and the relay failed exactly the connections withheld or held, or each
-  connection at the cell after a response the front sent whole. A row refused for anything else didn't do what its
-  check says: a server that answers out of the id form, or stops, is never a deviation refused.
-- The receiver reads a cell's bucket, never when inside its bucket it arrived. That channel is
-  `calibration/attester_timing`'s to measure: `verity bench attester_timing run --attacks burst`.
-- The command exits 0 when honest was accepted and each other class was refused by its check, or wasn't shown to the
-  client; 1 when a class did otherwise, honest was refused, or a try wrote no check (it has no row, and the classes
-  after it are still tried); and 2 when none of those and a row is shown neither way, as `tokens` and `length` are
-  until the tie has the server's record.
-- A lost release or a watermark's error stops the tries. Under `--watermark` (a rehearsal flag, after `--`) the
-  network attester names on its watermark each release that its server connection lost. A try that lost a release
-  did not reach its server whole, and a server whose gate does not read lost names stops ordering there. So after
-  each try the command reads the network attester's own log of the run, in the try's run directory: when its
-  `watermark` names a lost release or an error, or the network attester ran with the watermark and wrote no log, no
-  later class is tried, the command says which try it stopped at, why, and which classes it left, and it exits 5.
-  The log has an error only where the stream did not open, backed up, or was closing before a line or its
-  terminating chunk was written, so its server did not get the watermark whole; a stream that ended clean has none.
-  A try keeps what that log says of the watermark: its last line, the lost releases and the kind of error that
-  stopped it, if one did.
 
 ## A second count from a packet capture
 

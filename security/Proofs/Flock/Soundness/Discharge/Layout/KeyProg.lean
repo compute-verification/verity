@@ -37,7 +37,7 @@ gate. At `Discharge/Placed`'s places (`Placed.Sites.progPlaces_keyProg`):
 
 namespace FlockSoundness.Discharge.Layout
 
-open Flock FlockLevel3 Model Audit Binding Placed
+open Flock FlockLevel3 Model Spot.Sampling Binding Placed
 
 /-! ## The program's gates -/
 

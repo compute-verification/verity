@@ -9,7 +9,7 @@ public import Definitions.Slowdown.Guarantees.Remote
 premises on the protocols, `PouwSound`, `SampledDetection` and one declaration's count verdict, replaced by what each
 protocol's own guarantee gives on live coins and by each day's verdict. A window is one round of the verifier's live coins: window `t`'s
 coins `Ω t` are uniform and independent of the other windows', and a run of the period is `ξ : (t : Fin T) → Ω t`. Each
-leg is stated as `Proofs.Flock.Soundness.Audit.Periods` states a period's bound: at any value of the other windows'
+leg is stated as `Proofs.Spot.Sampling.Periods` states a period's bound: at any value of the other windows'
 coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
 
 * **PoUW** (in place of `PouwSound`): window `t`'s certificate is incorrect (`incorrect t`: accepted with the window's time
@@ -32,7 +32,7 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   own window's other blocks, and it folds the knowledge term into `q`, where the protocol's is additive per window. The
   statement does not need it: a block's time is its window's, and each identity's escaped blocks are bounded at the
   predictable time its faulty blocks reach `K + 1`, the stopped, per-identity form of `IntegrityPooled`'s own
-  argument, which `FlockSoundness.Audit.Periods.prCoin_forall_sum_le_pow` bounds by `(1 − q)^(K+1)`. That is a tail
+  argument, which `Spot.Sampling.Periods.prCoin_forall_sum_le_pow` bounds by `(1 − q)^(K+1)`. That is a tail
   bound, so the escape term needs no Markov's inequality: `J (1 − q)^(K+1)` at an escape share `J K B/C`, against
   `SlowdownRemote`'s `J ((1 − q)/q) B/(θC)`.
 * **The halt**: `TerminalDetection` stays a named premise. The halt is code (`Fleet`'s R5-all in

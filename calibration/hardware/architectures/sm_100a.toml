@@ -1,0 +1,14 @@
+# sm_100a, the architecture-specific target of compute capability 10.0 (Blackwell): what selects machine code for the
+# cards whose `arch` names it, and nothing of any card (calibration/hardware/README.md). Each toolkit gate is a CUDA
+# toolkit that builds for the target and the oldest driver its release notes require.
+
+name = "sm_100a"
+capability = "10.0"
+virtual = "compute_100a"
+source = "NVCC documentation (CUDA 13.5), section 5.2 'GPU Feature List': 'GPUs are named sm_xy, where x denotes the major compute capability, and y the minor compute capability', sm_100a among 'Blackwell support'; section 4.2.7.1 --gpu-architecture: an architecture-specific real target compiles under its own virtual one (the '-arch=sm_90a' example: '--gpu-architecture=compute_90a')"
+
+[[toolkit]]
+version = "12.8"
+ptx_isa = "8.7"
+driver_min = "570.26"
+source = "CUDA 12.8 Release Notes, section 1.2 'New Features': 'This release adds compiler support for the following Nvidia Blackwell GPU architectures: SM_100, SM_101, SM_120'; PTX ISA 9.5, Table 73 'PTX Release History': PTX ISA 8.7, 'CUDA 12.8, driver r570' (its first row listing sm_100a is PTX ISA 8.6, 'CUDA 12.7', a version Table 4 lists no toolkit of); CUDA Toolkit 13.5 Release Notes, Table 4 'Corresponding Driver Versions (CUDA 12.9 and earlier)': 'CUDA 12.8 GA', Linux x86_64 '>=570.26'"

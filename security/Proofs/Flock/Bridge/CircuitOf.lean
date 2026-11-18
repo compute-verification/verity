@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Core.Circuit
 import Proofs.Flock.Bridge.Lowers
 import Proofs.Flock.SamplingBoundary
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
@@ -109,14 +109,14 @@ theorem Circuit.ofAudit_op (g : Fin C.N) (v : (Circuit.ofAudit C).Trace) :
 /-- A transcript of bits as core's. -/
 def Circuit.ofBits (xs : Fin C.N → Bool) : (Circuit.ofAudit C).Trace := fun g => BitVec.ofBool (xs g)
 
-variable {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+variable {n : ℕ} (P : Spot.Sampling.Partition C n)
 
 theorem Partition.ofAudit_unit : (Partition.ofAudit P).unit = P.unit := rfl
 
 theorem Partition.mem_committed_ofAudit (g : Fin C.N) :
     g ∈ (Partition.ofAudit P).committed ↔ g ∈ P.committed := by
   classical
-  simp only [Partition.committed, FlockSoundness.Audit.Partition.committed, Finset.mem_filter,
+  simp only [Partition.committed, Spot.Sampling.Partition.committed, Finset.mem_filter,
     Finset.mem_univ, true_and, isInput_coreOp, args_coreOp, List.mem_toFinset, Partition.ofAudit_unit]
 
 theorem Partition.localEval_ofAudit (xs : Fin C.N → Bool) (u : Fin n) (g : Fin C.N) :
@@ -158,7 +158,7 @@ theorem Partition.incorrect_ofAudit (xs : Fin C.N → Bool) :
     (Partition.ofAudit P).incorrect (Circuit.ofBits xs) = P.incorrect xs := by
   classical
   ext u
-  rw [Partition.mem_incorrect, FlockSoundness.Audit.Partition.mem_incorrect]
+  rw [Partition.mem_incorrect, Spot.Sampling.Partition.mem_incorrect]
   refine not_congr ⟨fun h g hg hu => ?_, fun h g hg hu => ?_⟩
   · have e := h g ((Partition.mem_committed_ofAudit P g).2 hg) hu
     rw [Partition.localEval_ofAudit] at e
@@ -233,11 +233,11 @@ theorem exists_lower_reads {κ : Fin C.N → Option Bool} {g h : Fin C.N} (hg : 
 
 /-- **A committed wire of a unit is on its lowered unit's boundary**: an output's position is returned, and a wire
 another unit reads is read at its position by one of that unit's lowered gates. -/
-theorem boundary_posOf {κ : Fin C.N → Option Bool} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n}
+theorem boundary_posOf {κ : Fin C.N → Option Bool} {n : ℕ} {P : Spot.Sampling.Partition C n} {u : Fin n}
     {g : Fin C.N} (hg : g ∈ P.committed) (hu : P.unit g = some u) :
     (progOf C κ).Boundary (unitGates P u) (posOf C g) = true := by
   classical
-  simp only [FlockSoundness.Audit.Partition.committed, Finset.mem_filter, Finset.mem_univ, true_and] at hg
+  simp only [Spot.Sampling.Partition.committed, Finset.mem_filter, Finset.mem_univ, true_and] at hg
   simp only [Prog.Boundary, Bool.or_eq_true, List.contains_iff_mem, decide_eq_true_eq, List.any_eq_true,
     List.mem_range, Bool.and_eq_true, decide_not, Bool.not_eq_true', decide_eq_false_iff_not]
   rcases hg with hin | hout | ⟨h, hgh, hne⟩
@@ -256,7 +256,7 @@ theorem boundary_posOf {κ : Fin C.N → Option Bool} {n : ℕ} {P : FlockSoundn
 /-- **A unit that is not faulty is correct on its openings**: when its lowered proof block is correct in
 `progOf C κ` on its committed values `val` (and any interior `ι`), each committed wire of the unit holds, in the wire
 values `val` opens, what the unit computes from them. -/
-theorem correct_of_progCorrect {κ : Fin C.N → Option Bool} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+theorem correct_of_progCorrect {κ : Fin C.N → Option Bool} {n : ℕ} (P : Spot.Sampling.Partition C n)
     (u : Fin n) (val : ℕ → Option Bool) (ι : ℕ → Bool)
     (h : (progOf C κ).Correct ((progOf C κ).refIn (unitGates P u) val ι) (unitGates P u)) :
     P.Correct (openedOf C κ val) u := by
@@ -300,13 +300,13 @@ theorem correct_of_progCorrect {κ : Fin C.N → Option Bool} {n : ℕ} (P : Flo
 
 /-- **A unit incorrect in the wire values a witness opens is faulty** in the sampling statement of `progOf C κ`, under any
 design and strata. -/
-theorem incorrect_subset_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+theorem incorrect_subset_faulty {n : ℕ} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
     {ns : List ℕ} (hns : ns.sum = n) (r : OneStage) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg)
     (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool)
     (w : Wit) {u : Fin n} (hu : u ∈ P.incorrect (openedOf C κ (w.val H Cm (stmtOf P κ r desc q roots)))) :
     u.val ∈ faulty H Cm (stmtOf P κ r desc q roots) (partOf P κ ns) w := by
   classical
-  rw [FlockSoundness.Audit.Partition.mem_incorrect] at hu
+  rw [Spot.Sampling.Partition.mem_incorrect] at hu
   have hlt := u.isLt
   refine Finset.mem_filter.2 ⟨Finset.mem_range.2 (by rw [blocks_length_partOf P hns]; omega), ?_⟩
   rintro ⟨b, hb, ι, hι⟩
@@ -316,7 +316,7 @@ theorem incorrect_subset_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C 
   rw [ref_blockOf, correct_blockOf] at hι
   exact hu (correct_of_progCorrect P u _ ι hι.1)
 
-theorem card_incorrect_le_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+theorem card_incorrect_le_faulty {n : ℕ} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
     {ns : List ℕ} (hns : ns.sum = n) (r : OneStage) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg)
     (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (w : Wit) :
     (P.incorrect (openedOf C κ (w.val H Cm (stmtOf P κ r desc q roots)))).card ≤
@@ -327,7 +327,7 @@ theorem card_incorrect_le_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C
 
 /-- **The sampling relation bounds the incorrect proof blocks**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` under
 `subset kd` leaves fewer than `K₀` of the circuit's units incorrect in the wire values it opens, whatever the strata. -/
-theorem card_incorrect_lt_of_relS {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+theorem card_incorrect_lt_of_relS {n : ℕ} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
     {ns : List ℕ} (hns : ns.sum = n) (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg)
     (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (w : Wit)
     (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ (.subset kd) desc q roots)

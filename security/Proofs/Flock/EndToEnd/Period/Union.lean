@@ -16,7 +16,7 @@ import Proofs.Flock.Soundness.Game
   block's event happens with probability at most `Σ_i ε i`.
 * `monitoringPeriod_horizon`: if at every such strategy the sampling block's records all carry one weight `w` and the sampling
   block's "miss" event has probability at most `x ^ w`, then every sampling block misses with total weight at least `M`
-  with probability at most `x ^ M`, for `x ≤ 1`. It is `FlockSoundness.Audit.SamplingDesign.pooled_escape`'s induction on the
+  with probability at most `x ^ M`, for `x ≤ 1`. It is `Spot.Sampling.SamplingDesign.pooled_escape`'s induction on the
   period's game tree: sampling block `i`'s weight is fixed by the strategy that plays it, before its coins.
 
 * `monitoringPeriod_unionE`: `monitoringPeriod_union` against bounds `ε i + f i τ` that read the strategy: the sum gains `f`'s expectation

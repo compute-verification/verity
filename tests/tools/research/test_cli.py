@@ -221,16 +221,16 @@ def test_run_queue_places_the_job_then_launches_on_the_placed_machine_with_its_w
     monkeypatch.setattr(remote, "launch", launch)
     monkeypatch.setenv("RESEARCH_LANE", "lane-x")
     base = ["run", "--runs-dir", str(tmp_path / "runs"), "--queue", "--source", str(src), "--project", "verity"]
-    assert main([*base, "--mem-gb", "64", "--gpus", "1", "--max-min", "10", "--preemptible", "--quiet", "--class", "bench",
+    assert main([*base, "--mem-gb", "64", "--card", "3", "--max-min", "10", "--preemptible", "--timed", "--class", "bench",
                  "--kind", "vllm.commit", "--", "true"]) == 0
     err = capsys.readouterr().err
     assert "the queue places run" in err and "warning: stub warning" in err
     argv = json.loads((src / "infra" / "cluster" / "src" / "cluster" / "__main__.py.argv").read_text())
     assert argv[:2] == ["submit", str(src / "infra" / "cluster" / "descriptions" / "nebius.toml")]
     for k, v in (("--project", "verity"), ("--submitter", "lane-x"), ("--class", "bench"), ("--gpus", "1"), ("--mem-gb", "64"),
-                 ("--max-s", "600"), ("--preempt", "requeue")):
+                 ("--max-s", "600"), ("--preempt", "requeue"), ("--gpu-ids", "3")):
         assert argv[argv.index(k) + 1] == v, k
-    assert "--quiet" in argv
+    assert "--quiet" in argv, "--timed is the queue's quiet job"
     [kw] = seen
     assert kw["machine_name"] == "vy-nebius-2" and kw["queue"]["wrap"] == ["env", "HELD=1"] and kw["mem_gb"] is None
     assert kw["queue"]["workload_wrap"] == ["lease", "--"] and (kw["queue"]["kind"], kw["queue"]["phase"]) == ("vllm.commit", "gpu")
@@ -502,6 +502,51 @@ def test_gpus_with_on_reaches_the_machine_and_without_on_or_queue_means_nothing(
     on = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2"]
     assert main([*on, "--gpus", "8", "--", "true"]) == 0 and main([*on, "--", "true"]) == 0
     assert seen == [8, None]
+
+
+def test_card_leases_exactly_those_cards_and_timed_unnices_a_pool_run_and_times_its_lease(tmp_path, monkeypatch, capsys):
+    """`--card` is the run's lease of exactly those cards (gpu-lease's --on), its count the --gpus it implies or must agree
+    with; `--timed` makes that lease a timed one and runs a pool run's workload without `nice -n 19`."""
+    from research import remote
+
+    seen = []
+    monkeypatch.setattr(remote, "launch", lambda **kw: seen.append(kw) or {"phase": "launched", "pod_id": "p1",
+                                                                           "remote_run_dir": "/r", "launch": {"runner_pid": 1}})
+    on = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2"]
+    assert main([*on, "--card", "2", "--card", "5,6", "--timed", "--", "true"]) == 0
+    kw = seen[-1]
+    assert (kw["gpus"], kw["cards"], kw["timed"]) == (3, [2, 5, 6], True)
+    req = {"gpus": kw["gpus"], "cards": kw["cards"], "timed": kw["timed"]}
+    assert remote.gpu_lease_wrap(req) == ["gpu-lease", "3", "--wait", "--on", "2,5,6", "--timed", "--mem-gb", "0", "--"]
+    assert main([*on, "--gpus", "1", "--card", "4", "--", "true"]) == 0 and (seen[-1]["cards"], seen[-1]["timed"]) == ([4], False)
+    assert main([*on, "--gpus", "2", "--", "true"]) == 0 and seen[-1]["cards"] is None
+    assert len(seen) == 3
+    for bad, said in ((["--gpus", "2", "--card", "4"], "--gpus 2 and --card 4 (1 card(s)) disagree: give --card alone, or --gpus 1"),
+                      (["--card", "4,4"], "--card 4,4 names a card twice"),
+                      (["--card", "x"], "--card x: a card is its index"),
+                      (["--timed"], "--timed un-nices a --pool run and makes a --gpus or --card lease a timed one")):
+        assert main([*on, *bad, "--", "true"]) == 2, bad
+        assert said in capsys.readouterr().err
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--card", "1", "--", "true"]) == 2
+    assert "--card and --timed are for a run on a machine (--on MACHINE) or the queue's" in capsys.readouterr().err
+    assert len(seen) == 3
+
+    pool = [*on, "--source", ".", "--stay", "--pool", "gpu", "--as", "benchmarks", "--timeout", "30m"]
+    assert main([*pool, "--timed", "--", "python3", "bench.py"]) == 0
+    assert seen[-1]["command"][-3:] == ["--", "python3", "bench.py"] and seen[-1]["timed"] is True
+    assert main([*pool, "--", "python3", "bench.py"]) == 0
+    assert seen[-1]["command"][-6:] == ["--", "nice", "-n", "19", "python3", "bench.py"] and seen[-1]["timed"] is False
+
+
+def test_card_and_timed_refuse_a_shipped_research_package_that_would_not_pass_them_to_gpu_lease(tmp_path):
+    from research import remote
+
+    pkg = tmp_path / "research"
+    pkg.mkdir()
+    (pkg / "remote.py").write_text("def gpu_lease_wrap(req):\n    pass\n")
+    assert remote.knows_gpus(pkg) and not remote.knows_gpus(pkg, 'req.get("cards")')
+    here = Path(remote.__file__).parent
+    assert remote.knows_gpus(here, 'req.get("cards")') and remote.knows_gpus(here, 'req.get("timed")')
 
 
 def test_pss_flags_for_a_source_tree_that_predates_them_are_refused_before_placement(tmp_path, monkeypatch, capsys):

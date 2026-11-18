@@ -19,15 +19,16 @@ commitment). The verifier then samples every call's units at once, by a sampling
 the receipt's digest (C1). Then each call's sampled proof blocks are proved in a session of their own, the calls in order, each
 session reading only its call's share of the sample and `R`. The window accepts when every call's session accepts.
 
-This is the vocabulary of that game, in the form of Flock's one-stage audit (`FlockSoundness.Audit`, which the window
+This is the vocabulary of that game, in the form of Flock's one-stage audit (`Spot.Sampling`, which the window
 guarantee `audit_executionPhase_split_of_record` is stated over), on its own so that a guarantee can be stated over it:
 
 * `Game`, `Strategy`, `prob`, `avg` and `prCoin`, core's (`Verity.Game`): a public-coin interaction with live coins, a
   deterministic prover strategy, the exact probability of an outcome over the verifier's coins, and the uniform average
   and probability;
 * `SamplingDesign`, a sampling design over units, and its missProb (`L.missProb B`), the probability that its sample misses a set, both core's
-  (`Verity.SamplingDesign`, `Definitions.Core.Draw`); `SamplingDesign.prod`, the calls' sampling designs each sampled on its own coins, the product distribution that
-  distinct contexts give (M1);
+  (`Verity.SamplingDesign`, `Definitions.Core.Draw`); `SamplingDesign.prod`, core's product of designs by kind, here
+  each call a kind sampled by its own design on its own coins, the product distribution that distinct contexts give
+  (M1);
 * `auditReg`: the registration, then the coin of the sampling design at that registration, then the session on its sample (C1);
 * `WUnit`, `slice`, `seqCalls`, `executionPhaseSession`: a window's units (a call and a unit of that call), a call's share of a
   sample, and the calls' sessions in order;
@@ -179,11 +180,6 @@ section Window
 
 variable {C : ℕ} {n : Fin C → ℕ}
 
-/-- **The product distribution** (M1): each call samples by its own sampling design, on its own coins. -/
-def SamplingDesign.prod (L : (c : Fin C) → SamplingDesign (Fin (n c))) : SamplingDesign (WUnit n) where
-  Ω := (c : Fin C) → (L c).Ω
-  draw ω := Finset.univ.sigma fun c => (L c).draw (ω c)
-
 /-- Call `c`'s share of a window's sample. -/
 def slice (S : Finset (WUnit n)) (c : Fin C) : Finset (Fin (n c)) :=
   Finset.univ.filter fun u => (⟨c, u⟩ : WUnit n) ∈ S
@@ -229,7 +225,7 @@ noncomputable def along (sess : Fin C → Game Bool) (F : (c : Fin C) → Strate
       thenExp (f := onAccept (seqCalls sess cs)) (onAcceptExp (seqCalls sess cs) fun s' => along sess F cs s') (sess c) s
 
 /-- **What the analysis of one call fixes**, in the randomized-extraction form (`ExtractionAnalysis` in
-`Proofs/Flock/Soundness/Audit/Extraction.lean`): from each state `τ` of call `c`'s session on its share `S` of the sample,
+`Proofs/Spot/Sampling/Extraction.lean`): from each state `τ` of call `c`'s session on its share `S` of the sample,
 * `ks S R τ u`: `Pr[the session accepts ∧ extraction of the drawn unit u fails]`;
 * `link S R τ u X`: `Pr[it accepts ∧ extraction of u succeeds but differs from the transcript X on u's wires]`, the
   roots its seed reads among them;
@@ -266,7 +262,7 @@ def CallAnalysis.KnowledgeSound {Reg Tr : Type} {U : UnitStmts Tr n} {c : Fin C}
 `R` and every rule that picks a sampled proof block before the sessions' first coin, the average over the sample of call `c`'s
 `link` at the picked unit if it is one of `c`'s, at the state the window's run brings to `c`'s session (`along`),
 against the window's committed transcript, is at most `εbind_c(R, τ)`, a function of the window's state as `BindSound`'s
-`εbind` is (`Proofs/Flock/Soundness/Audit/Extraction.lean`): the link's finder bounds it at the state. The committed
+`εbind` is (`Proofs/Spot/Sampling/Extraction.lean`): the link's finder bounds it at the state. The committed
 transcript is a function of the prover's state at registration, so it is the same for every call and every sample. The
 picked unit's `link` is at its place `⟨c, u⟩` (`CallAnalysis`): no state or rule sets a unit's position, and the roots
 its seed reads are the committed transcript's, fixed before the sample. -/
@@ -330,7 +326,7 @@ the context `digest(R)` (A4, `prf/sha-512`), from a fresh uniform source (A5), w
 (M1), on every family. For the service's sample it holds at `η = 0` on the copy-closed sets (`CopyClosed`). -/
 def MissProbWithin {Reg : Type} (Lw : Reg → SamplingDesign (WUnit n)) (L : Reg → (c : Fin C) → SamplingDesign (Fin (n c)))
     (𝓑 : Finset (WUnit n) → Prop) (η : ℝ≥0∞) : Prop :=
-  ∀ R B, 𝓑 B → (Lw R).missProb B ≤ (SamplingDesign.prod (L R)).missProb B + η
+  ∀ R B, 𝓑 B → (Lw R).missProb B ≤ (Verity.SamplingDesign.prod (L R)).missProb B + η
 
 /-- **What the served pass committed**, as the window's units read it, fixed before the window's registration:
 * `anchor p`: the words the served pass committed for the inputs (activations and weights) of the tile at position
@@ -379,7 +375,7 @@ It is open on main, where `δin = 1` is the only bound: the window's tile Progra
 when the window's Program reads the `-h3` leaf in gates (`tile_read`) and `window_problem` is a Program the verifier
 requires: then the
 outputs' half is that Program's opening of the `-h3` root, and the inputs' half is Flock's `AnchorsSound` (`δ_in`,
-`Proofs/Flock/Soundness/Audit/OneStage.lean`), each a binding term at the window's state. -/
+`Proofs/Spot/Sampling/OneStage.lean`), each a binding term at the window's state. -/
 def ServedTie {Reg Tr : Type} (Lw : Reg → SamplingDesign (WUnit n)) (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (committed : (R : Reg) → Cont Lw (executionPhaseSession sess) R → Tr) (U : UnitStmts Tr n) (P : ServedPass Tr n U.Pos)
     (δin : (R : Reg) → Cont Lw (executionPhaseSession sess) R → ℝ≥0∞) : Prop :=
