@@ -55,8 +55,6 @@ DEADLINE_NS = 10**9
 SESSION_PROCESS = "poub-session"
 #: what the parts of `POUB` on a served run that are declared and not built wait on
 GOAL = "memory-accounting/memory-protocols-declared"
-#: what `refresh` waits on: a session with the setting on accepted by the Lean verifier
-REFRESH_GOAL = "memory-accounting/refresh-session-accepted"
 #: the sketch bound's error at a fixed receipt layout, `δSketch g b Q P N εrank`
 #: (security/Definitions/Poub/Guarantees/RemoteSketch.lean): g the guess term's bits, b the bits of the sign keys'
 #: birthday term
@@ -117,8 +115,6 @@ LAUNCHER = ("store", "challenge", "reader", "regions")
 
 
 def _check_settings(values: Mapping[str, Any]) -> str | None:
-    if values["refresh"]:
-        return f"refresh waits on {REFRESH_GOAL}: a session with it on, accepted by the Lean verifier"
     for name in ("weight_blocks", "window"):
         if values[name] < 0:
             return f"{name} is a count, 0 or more, not {values[name]}"
@@ -338,5 +334,5 @@ def session(verifier: str, **kw: Any) -> Any:
 
 
 __all__ = ["BANDWIDTH", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "DELTA_SKETCH", "GOAL", "LAUNCHER", "POUB", "PROVER",
-           "REFRESH_GOAL", "REUSE_OLDEST_FREED", "SESSION", "SESSION_PROCESS", "SETTINGS", "attach", "delta_sketch", "prover",
+           "REUSE_OLDEST_FREED", "SESSION", "SESSION_PROCESS", "SETTINGS", "attach", "delta_sketch", "prover",
            "requests", "session"]

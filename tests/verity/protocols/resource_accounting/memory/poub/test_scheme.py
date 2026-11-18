@@ -196,8 +196,7 @@ def test_poubs_settings_are_refresh_and_what_its_binder_holds_each_refused_by_na
     assert S.settings(poub.POUB, {"passes": False, "kv": False, "weight_blocks": 5}) == {
         **defaults, "passes": False, "kv": False, "weight_blocks": 5}
     assert S.settings(poub.POUB, {"window": 2})["window"] == 2
-    with pytest.raises(ValueError, match=f"poub: refresh waits on {poub.REFRESH_GOAL}"):
-        S.settings(poub.POUB, {"refresh": True})
+    assert S.settings(poub.POUB, {"refresh": True}) == {**defaults, "refresh": True}
     with pytest.raises(ValueError, match="has no setting"):
         S.settings(poub.POUB, {"lifetime": 2})
     for name, wrong, kind in (("refresh", 1, "bool"), ("passes", 0, "bool"), ("kv", "no", "bool"),
