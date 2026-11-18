@@ -9,21 +9,22 @@ public (`arith_encode.first_carry`). Every later one is a function of the decisi
 the way the scan's state is in the replay's state chain vLLM's compiler commits (`verity_vllm.compiler.replay_chain`):
 each window has a produced value `VALUE` of two rows, its carry-in and its carry-out, and `ChargeLink_v1{N}` is
 `ChargeCount_v1{N}` reading its carry from row 0 and holding its carry' to row 1. This module is that chain: the row
-(`encode`, `carry_of`), the commitment and reads (`commit_window`, `reads`), the verifier's check of how the windows
-join (`check_chain`), and the Boolean part with its specification (`ChargeLink`, `reference_link`).
+(`encode`, `carry_of`), its reads (`reads`) and the Boolean part with its specification (`ChargeLink`,
+`reference_link`); the rows' commitment and the check of how the windows join are the compiler's
+(`verity_vllm.compiler.charge_rows`).
 
 **The row**, `ROW_BITS` = 96 bits, six u16 words: n0 3×15 | n1 3×15 | run 1×2, each element least significant bit
 first, then four zero bits (`arith_encode._CARRY`'s fields in order).
 
-**The carry.** Window w's row 0 is window w − 1's row 1 under the same salt (`commit_window(carry=…)`), so its opening
-b‖c is the same, and the verifier checks they're equal (`check_chain`). Window 0's row 0 is the priors' row under its
-public salt (`start_salt`), whose opening the verifier computes (`start_opening`). Row 1 is under a fresh salt.
+**The carry.** Window w's row 0 is window w − 1's row 1 under the same salt (`charge_rows.commit_window(carry=…)`), so its opening
+b‖c is the same, and the verifier checks they're equal (`charge_rows.check_chain`). Window 0's row 0 is the priors' row under its
+public salt (`charge_rows.start_salt`), whose opening the verifier computes (`charge_rows.start_opening`). Row 1 is under a fresh salt.
 
 **Why a restart is refused.** The verifier holds window 0's carry-in to the priors (`CH-first`) and each later
 window's to the last one's carry-out (`CH-carry`), on every session, and the proof block holds each window's carry-out
 to its charge's carry' from its carry-in (ok). So, window by window, the carry each window is charged from is the one
 `code_v1` carries over the whole session. A prover that restarts the counts mid-session, at the priors or at counts
-fitted to the window, either breaks the chain, which `check_chain` refuses, or claims a proof block whose ok is 0, which
+fitted to the window, either breaks the chain, which `charge_rows.check_chain` refuses, or claims a proof block whose ok is 0, which
 fails that proof block's proof as any false proof block does. A carry row's padding needs no check: window 0's is the
 priors' row, and every later one a proved proof block's carry-out.
 
@@ -47,20 +48,16 @@ from verity.circuits.boolean.forms import ZERO, Circuit, and_reduce
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
-from verity.commitments import hm96
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
+from verity.commitments.history import BC_BYTES
 from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
 from verity.protocols.resource_accounting.network.verifier.arith_encode import Carry, ChargeBook
 from verity.commitments.gates.bits import BIT
 from verity.circuits.boolean.trace import part as _part
-from verity.protocols.proofs.spot.verifier.one_stage import produced
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 VALUE = "replay-charge"
 WORD_BITS = 16
 _CARRY_BITS = sum(n * w for _, n, w in AE._CARRY)
 ROW_BITS = WORD_BITS * -(-_CARRY_BITS // WORD_BITS)
-_INST = hm96.SHA512
 
 
 # --- the row ----------------------------------------------------------------------------------------------------------
@@ -119,71 +116,9 @@ def session(N: int, book: dict, windows: Sequence[tuple[Sequence[int], Sequence[
     return out
 
 
-# --- the chain --------------------------------------------------------------------------------------------------------
-
-def start_salt(program: str, value: str = VALUE) -> bytes:
-    """The public salt of the session's first carry row (`registered.supplied_salts`' row 0 of `value`)."""
-    return G.supplied_salts(program, value, 1)[0]
-
-
-def _opening(words: Sequence[int], salt: bytes) -> bytes:
-    return _INST.commit_string(_INST.default_key, G.row_digest(words, WORD_BITS, SCHEMA), salt)
-
-
-def start_opening(program: str, book: dict) -> bytes:
-    """b‖c of the priors' row under `start_salt`, which the verifier computes from the registered book."""
-    return _opening(row(encode(AE.first_carry(book))), start_salt(program))
-
-
-def commit_rows(program: str, value: str, first: Sequence[int], out: Sequence[int], registration: str,
-                carry: G.Registered | None = None, salt: bytes | None = None) -> G.Registered:
-    """A window's produced `value` of two carry rows, given as bits: row 0 `first` under `start_salt` for the session's
-    first window (`carry` None), else the previous window's row 1 under its salt; row 1 `out` under `salt` (default
-    fresh, `hm96`'s `fresh_salt`)."""
-    if carry is None:
-        rows0, salt0 = row(first), start_salt(program, value)
-    else:
-        rows0, salt0 = carry.rows[-1], carry.salts[-1]
-    return produced.commit(program, value, [rows0, row(out)], registration,
-                           [salt0, salt if salt is not None else _INST.fresh_salt()], WORD_BITS, SCHEMA)
-
-
-def commit_window(program: str, book: dict, carry_out: Carry, registration: str, carry: G.Registered | None = None,
-                  salt: bytes | None = None) -> G.Registered:
-    """A window's produced value: its carry-in row and `carry_out`'s. `carry`: the previous window's value, whose row 1
-    is this window's row 0 under the same salt; for the session's first window (None), row 0 is the priors' row under
-    `start_salt`. `salt`: row 1's (default fresh, `hm96`'s `fresh_salt`)."""
-    return commit_rows(program, VALUE, encode(AE.first_carry(book)), encode(carry_out), registration, carry, salt)
-
-
 def reads() -> dict[str, dict[str, int]]:
     """The charging proof block's rows: `carry_in` 0 and `carry_out` 1."""
     return {VALUE: {"carry_in": 0, "carry_out": 1}}
-
-
-def openings(value: G.Registered) -> list[bytes]:
-    """Each carry row's b‖c, as the produced record's `openings` give them."""
-    return list(value.bcs)
-
-
-def check_chain(windows: Sequence[Sequence[bytes]], program: str, book: dict) -> str | None:
-    """The verifier's check of a session's carry rows, given each window's two openings b‖c in order: None, or why not.
-    `CH-rows`: a window isn't 2 carry rows; `CH-first`: the session doesn't start at the book's priors under their
-    public salt; `CH-carry`: a window's carry-in isn't the previous window's carry-out."""
-    return check_rows(windows, start_opening(program, book))
-
-
-def check_rows(windows: Sequence[Sequence[bytes]], start: bytes) -> str | None:
-    """`check_chain` given the session's first carry row's opening `start`."""
-    for w, rows in enumerate(windows):
-        if len(rows) != 2:
-            return f"CH-rows: window {w} has {len(rows)} carry rows, not 2"
-    if windows and bytes(windows[0][0]) != start:
-        return "CH-first: the session's first carry isn't the book's priors under their public salt"
-    for w in range(1, len(windows)):
-        if bytes(windows[w][0]) != bytes(windows[w - 1][1]):
-            return f"CH-carry: window {w}'s carry-in isn't window {w - 1}'s carry-out"
-    return None
 
 
 # --- the circuit ------------------------------------------------------------------------------------------------------
@@ -362,10 +297,10 @@ def size(N: int) -> dict[str, int]:
     out = dict(_staged(N))
     out["ands"] = sum(v for k, v in out.items() if k != "carry")
     return {**out, "row_bits": ROW_BITS, "rows_per_window": 2, "reads_per_window": 2, "path_depth": 1,
-            "record_bytes_per_window": 2 * produced.BC_BYTES}
+            "record_bytes_per_window": 2 * BC_BYTES}
 
 
 __all__ = ["ChargeLink", "LENGTH_BITS", "ROW_BITS", "SliceCharge", "VALUE", "WORD_BITS", "book_fields", "book_of", "book_values",
-           "build_link", "carry_of", "check_chain", "check_length_slots", "check_rows", "commit_rows", "commit_window", "encode",
-           "evaluate_links", "ints", "link_arguments", "link_unit", "openings", "reads", "reference_link", "row",
-           "session", "size", "start_opening", "start_salt", "unrow"]
+           "build_link", "carry_of", "check_length_slots", "encode",
+           "evaluate_links", "ints", "link_arguments", "link_unit", "reads", "reference_link", "row",
+           "session", "size", "unrow"]

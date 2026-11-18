@@ -25,7 +25,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
   code_v1 sends it (`lengths.widths`). The demo's and the corpus's window is the session's first, so its carry-in is
   the book's first carry under its public salt; w212's is the carry over windows 0 … 211 of the run, each window's
   decisions and its requests' length terms as its replay gives them, which `prove` commits window by window
-  (`window_charge.commit_window`; a stand-in: those windows' units aren't proved here), so w212's ``cin`` is window
+  (`charge_rows.window_commit`; a stand-in: those windows' units aren't proved here), so w212's ``cin`` is window
   211's carry-out row under its salt; `prove` checks that the unit charges window 212 what the chain does.
 * **The statement**: one template of n units, each the slice's rows under fresh salts, one unit a kind (the slice's
   `REFUSED`, or `--kinds`' in their order). ``honest``; ``flip``, a decision flipped in its window row (the advice row
@@ -60,7 +60,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
   ``cert`` row is the attested record's commitment (a stand-in: one ``cert`` row under the attester's salt, b‖c as
   `a7.opens` recomputes it; ``arrival``, ``tokens`` and ``max-tokens`` hold rows other than it, and ``max-tokens`` this
   check alone refuses), and its ``cin`` and ``cout`` rows are the window's carry rows in the session's chain
-  (`window_charge.check_chain` on the earlier windows' openings and the unit's two).
+  (`charge_rows.window_check_chain` on the earlier windows' openings and the unit's two).
 * **The verifier** opens each unit's ``pub`` row to its own copy (the declared charge and the registered book,
   `compile_slice_v7.pub`) and its verdict ``o0``, under the salts the prover sends for those two rows; never ``adv``,
   ``cert``, ``srv``, ``cin``, ``cout`` or ``wit``. A unit passes when its verdict is `compile_slice.ACCEPT` and its
@@ -99,7 +99,6 @@ sys.path.insert(0, str(REPO))
 
 from benchmarks.network_traces import zk_drivers  # noqa: E402
 from verity.protocols.resource_accounting.network.prover import leak_scan as LS, network_attester_zk as WZ  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import charge_chain as CC  # noqa: E402
 from verity_vllm.compiler import compile_slice as CS  # noqa: E402
 from verity_vllm.compiler import served_rows as SR  # noqa: E402
 from verity.commitments import advice as ADV  # noqa: E402
@@ -107,6 +106,7 @@ from verity.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 from verity_vllm.compiler import compile_slice_v7 as V7  # noqa: E402
 from verity.protocols.resource_accounting.network.prover import window_charge as WC  # noqa: E402
+from verity_vllm.compiler import charge_rows as CR
 
 FIXTURES = REPO / "tests/verity/protocols/resource_accounting/network/verifier/fixtures"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"
@@ -258,11 +258,11 @@ def run_session(D: int, windows: list[tuple[list[int], list]]) -> list[tuple[int
 
 def chain(x: SimpleNamespace, program: str, registration: str) -> SimpleNamespace:
     """The session's carry chain before the slice's window: ``values``, the earlier windows' produced carry values
-    (`window_charge.commit_window`, none for the session's first window), the window's honest carry-in ``carry``, the
-    salt of its ``cin`` row (the last carry-out's, or the first carry's public `charge_chain.start_salt`) and on w212
+    (`charge_rows.window_commit`, none for the session's first window), the window's honest carry-in ``carry``, the
+    salt of its ``cin`` row (the last carry-out's, or the first carry's public `charge_rows.start_salt`) and on w212
     ``window``, the chain's charge for window `WINDOW`."""
     if x.name != "w212":
-        return SimpleNamespace(values=[], carry=WC.first_carry(BOOK), salt=CC.start_salt(program, WC.VALUE),
+        return SimpleNamespace(values=[], carry=WC.first_carry(BOOK), salt=CR.start_salt(program, WC.VALUE),
                                public=True)
     run = run_windows()
     d, rq = run[WINDOW]
@@ -272,7 +272,7 @@ def chain(x: SimpleNamespace, program: str, registration: str) -> SimpleNamespac
     ses = run_session(x.S.D, run)
     values = []
     for _length, _row_in, row_out in ses[:WINDOW]:
-        values.append(WC.commit_window(program, BOOK, WC.carry_of(row_out), registration, values[-1] if values else None))
+        values.append(CR.window_commit(program, BOOK, WC.carry_of(row_out), registration, values[-1] if values else None))
     return SimpleNamespace(values=values, carry=WC.carry_of(ses[WINDOW][1]), salt=values[-1].salts[-1], public=False,
                            charged=sum(s[0] for s in ses[:WINDOW]), window=ses[WINDOW][0])
 
@@ -474,7 +474,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
     """The statement registered, every unit sampled by the verifier's Lean, proved --zk behind the ZK server and held by
     Lean `verify --zk` (or with ``a.plain`` proved plain on the keyed coin tree and held by Lean `verify --coins tree`);
     then the verifier's side per unit: ``pub`` opened to its own copy, the verdict read, the bindings checked on b‖c
-    (`advice_leaf_ok`, `served_rows.leaf_ok`, `certified`, `window_charge.check_chain`). Writes what the verifier
+    (`advice_leaf_ok`, `served_rows.leaf_ok`, `certified`, `charge_rows.window_check_chain`). Writes what the verifier
     received under ``out / "verifier"``."""
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
     out.mkdir(parents=True, exist_ok=True)
@@ -538,7 +538,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
     bcs = a7.public_bcs(m["dir"] / f"pub-{n}.bin", m["ports"])
     rows, sent = [], []
     served, record = binds["served"], binds["served"].record()
-    earlier = [CC.openings(v) for v in binds["chain"].values]
+    earlier = [CR.openings(v) for v in binds["chain"].values]
     for i, u in enumerate(units):
         word = m["oks"][i]
         opened = ((m["base"] + i) in held
@@ -548,7 +548,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
         srv_ok = all(SR.leaf_ok(record, binds["run_root"], k, bcs[i][r], served.registration.open(k).path)
                      for r, k in srv_leaves(sg.S, record, i))
         cert_ok = bcs[i]["cert"] == binds["certified"]
-        why = WC.check_chain(earlier + [[bcs[i]["cin"], bcs[i]["cout"]]], binds["program"], BOOK)
+        why = CR.window_check_chain(earlier + [[bcs[i]["cin"], bcs[i]["cout"]]], binds["program"], BOOK)
         bound = adv_ok and srv_ok and cert_ok and why is None
         verdict = ("malformed" if not opened else "accept" if word == CS.ACCEPT and bound else "reject")
         rows.append({"unit": m["base"] + i, "kind": u.kind, "verdict_word": word, "flags": u.case.flags, "adv_bound": adv_ok,
@@ -755,7 +755,7 @@ def prove(a) -> int:
     same = all(bcs[i]["adv"] == ADV.INST.commit_string(ADV.INST.default_key,
                                                        BitRowLeaf(n_bits).layout().digest(bit_row((u.words["adv"], 16))[0]),
                                                        salts["adv"][i]) for i, u in enumerate(units))
-    carry_same = all(bcs[i][r] == CC._opening(u.words[r], salts[r][i]) for i, u in enumerate(units) for r in ("cin", "cout"))
+    carry_same = all(bcs[i][r] == CR.opening(u.words[r], salts[r][i]) for i, u in enumerate(units) for r in ("cin", "cout"))
     srv_same = [all(bcs[i][r] == served.bc(k) for r, k in srv_leaves(x.S, served.record(), i)) for i in range(n)]
     srv_want = [u.kind != "sixpass-own" for u in units]
     chain_want = [u.chained for u in units]

@@ -943,7 +943,7 @@ charge's references one for one: `ChargeCount_v1{N}`'s (`arith_encode.py`'s `ref
 `reference_window`, `security/Definitions/Certifier/WindowCharge.lean`). Which slots ask (`en`) is not charged
 because it is not advice: the compile slice, its charge included, is proved on every advised execution phase and never sampled,
 so `en` is pinned by that slice's scan, and the carry across execution phases is chained from the book's priors
-(`charge_chain.check_chain`). That the circuits compute the Lean definitions (`ChargeCount_v1`'s `AdviceV1.window`,
+(`charge_rows.check_chain`). That the circuits compute the Lean definitions (`ChargeCount_v1`'s `AdviceV1.window`,
 `ChargeCount_v2`'s `WindowCharge.window`) is held by tests: circuit-check holds each circuit to its Python reference,
 and the Lean is held to those references by the charge difftests: the network attester's program's `NetworkAttester.AdviceV1`
 and `NetworkAttester.WindowCharge`, proved equal to the definitions (`CodeChargesV1`, `CodeChargesWhole`), give what

@@ -16,6 +16,8 @@ from verity.protocols.resource_accounting.network.prover import window_charge as
 from verity.commitments.gates.bits import ands
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.commitments import hm96
+from verity_vllm.compiler import charge_rows as CR
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 
 FIXTURE = Path(__file__).parent / "fixtures" / "arith_encode_vectors.json"
 PROGRAM, REGISTRATION = "window-charge-test", "ab" * 64
@@ -226,18 +228,18 @@ def test_the_chain_on_the_cut_is_code_v1s():
         ses = WC.session(N, H, O, L, book, slots)
         values = []
         for _length, _c_in, c_out in ses:
-            values.append(WC.commit_window(PROGRAM, book, WC.carry_of(c_out), REGISTRATION,
+            values.append(CR.window_commit(PROGRAM, book, WC.carry_of(c_out), REGISTRATION,
                                            values[-1] if values else None))
         ops = [list(v.bcs) for v in values]
-        assert WC.check_chain(ops, PROGRAM, book) is None
-        assert WC.check_chain(ops, "another-program", book).startswith("CH-first")
+        assert CR.window_check_chain(ops, PROGRAM, book) is None
+        assert CR.window_check_chain(ops, "another-program", book).startswith("CH-first")
         if len(ops) > 2:
-            assert WC.check_chain([ops[0], ops[2]], PROGRAM, book).startswith("CH-carry")
+            assert CR.window_check_chain([ops[0], ops[2]], PROGRAM, book).startswith("CH-carry")
         wb = WC.window_book(book, N, H, O)[0]
         cases = [(wb, WC.CC.unrow(v.rows[0]), WC.CC.unrow(v.rows[1]), *sl) for v, sl in zip(values, slots)]
         assert WC.evaluate_links(N, H, O, L, cases) == [(1, length) for length in lens], s["source"]
     v = values[0]
-    assert v.salts[0] == WC.CC.start_salt(PROGRAM, WC.VALUE) and v.bcs[0] == WC.start_opening(PROGRAM, book)
+    assert v.salts[0] == CR.start_salt(PROGRAM, WC.VALUE) and v.bcs[0] == CR.window_start_opening(PROGRAM, book)
 
 
 @pytest.mark.slow
@@ -321,15 +323,15 @@ def test_rows():
         with pytest.raises(ValueError):
             WC.encode(bad)
     book = _streams()[0]["decisions"]["book"]
-    v0 = WC.commit_window(PROGRAM, book, carry, REGISTRATION)
-    v1 = WC.commit_window(PROGRAM, book, carry, REGISTRATION, v0)
-    assert v0.rows[0] == WC.CC.row(WC.encode(WC.first_carry(book))) and v0.bcs[0] == WC.start_opening(PROGRAM, book)
-    assert v0.salts[0] != WC.CC.start_salt(PROGRAM) and v0.bcs[0] != WC.CC.start_opening(PROGRAM, book)
+    v0 = CR.window_commit(PROGRAM, book, carry, REGISTRATION)
+    v1 = CR.window_commit(PROGRAM, book, carry, REGISTRATION, v0)
+    assert v0.rows[0] == WC.CC.row(WC.encode(WC.first_carry(book))) and v0.bcs[0] == CR.window_start_opening(PROGRAM, book)
+    assert v0.salts[0] != CR.start_salt(PROGRAM) and v0.bcs[0] != CR.start_opening(PROGRAM, book)
     assert (v1.rows[0], v1.salts[0], v1.bcs[0]) == (v0.rows[1], v0.salts[1], v0.bcs[1])
     assert WC.reads() == {WC.VALUE: {"carry_in": 0, "carry_out": 1}}
     forged = produced.commit(PROGRAM, WC.VALUE, [WC.CC.row(WC.encode(WC.WindowCarry())), v0.rows[1]], REGISTRATION,
-                             [hm96.SHA512.fresh_salt(), hm96.SHA512.fresh_salt()], WC.CC.WORD_BITS, WC.CC.SCHEMA)
-    assert WC.check_chain([list(forged.bcs)], PROGRAM, book).startswith("CH-first")
+                             [hm96.SHA512.fresh_salt(), hm96.SHA512.fresh_salt()], WC.CC.WORD_BITS, SCHEMA)
+    assert CR.window_check_chain([list(forged.bcs)], PROGRAM, book).startswith("CH-first")
 
 
 @pytest.mark.slow

@@ -25,7 +25,7 @@ window's blocks (`served_rows.register`'s G); at G = P the unit is the first, so
   (`served_rows.leaf`); step u is checked against row u // G;
 - ``cin`` and ``cout``, the charge's carry-in and carry-out (`charge_chain.encode`'s 96 bits): the window's reads of
   rows 0 and 1 of its `charge_chain.VALUE` value, which the verifier holds by their b‖c to the session's carry chain
-  (`charge_chain.check_chain`);
+  (`charge_rows.check_chain`);
 - ``wit``, the witness: the state rows S_1 … S_{P+1} and the window row W_1 (`replay_chain`'s layouts), each step's
   arrivals ``arr`` and decision bits ``bits``, each step's prefix hits ``hit`` (its W + A candidates') and the cache rows
   C_0 … C_P (`cache_step.cache_fields`: the table and each running slot's walk entry), and at AS = 1 each step's
@@ -76,7 +76,7 @@ window row keeps it and by ``steps`` when the scan reads past the count; a carry
 where the served window admitted user-1 at the sixth ask is refused by ``rows`` (0x2F) with the served rows in
 ``srv``; with its own rows there, the circuit accepts and the native
 b‖c check refuses ``srv``. A restarted carry-in (the priors, or counts fitted to the window) is accepted by the unit,
-which takes any carry-in, and refused by `charge_chain.check_chain` (``CH-carry``) on its b‖c.
+which takes any carry-in, and refused by `charge_rows.check_chain` (``CH-carry``) on its b‖c.
 
 **Stand-ins** (named, each a piece not ready):
 - *the evictable and returned counts*: the derived evictable and returned-block counts are held at 0 (ReplayStep_v1's
