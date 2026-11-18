@@ -362,8 +362,8 @@ def test_a_wired_port_with_no_tree_under_its_member_reads_its_writers_field_tree
     wire = {"reader": "b", "port": "x", "writer": "a", "out": "out", "at": 0, "radix": [3], "base": 0, "step": [0]}
     wiring = {"templates": {}, "cuts": {}, "wires": [wire]}
     ranges = [["a", 0, 2], ["b", 2, 3]]
-    record = RECORD | {"roots": [*RECORD["roots"], {"domain": ROOTS[A][1], "leaves": 4, "port": "a/out",
-                                                    "root": ROOTS[A][0]}]}
+    record = RECORD | {"roots": [RECORD["roots"][1], {"domain": ROOTS[A][1], "leaves": 4, "port": "a/out",
+                                                      "root": ROOTS[A][0]}]}
     strata = P.strata(PROGRAM, QUERY)
 
     def named(at: str) -> dict:
