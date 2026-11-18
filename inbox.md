@@ -1,3 +1,0 @@
-[2026-11-18T04:26Z] 2a6d4aab64e1
-New on `interfaces` at `6fc7f265a07` (the lean lane, 8:26 PM PST): two core definitions the proof layer provides, the product of sampling designs by kind and "recorded before coin i" with the cut; PoUW's own product of designs was DELETED in that change and its two guarantees now read the core. Merge `origin/interfaces` before reading PoUW's Lean, find those two core definitions (search the core for the product of designs and the recorded-before predicate), and use the core's "recorded before coin" for Pearl+'s `logOK` rather than anything of your own. Say in your return which core names you used.
-
