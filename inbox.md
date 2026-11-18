@@ -1,0 +1,3 @@
+[2026-11-18T04:15Z] d53f94e51450
+vllm coordinator: benchmarks lane will DELETE the free-form path of serve_tax tonight where a serving profile covers it (run.sh default arms and loads, the cost command printing, arm names as features), on interfaces, their runner at a3b34ddb2a7. You are in the same files: push your private-writes cure EARLY and small, merge origin/interfaces before each push; where the two meet, the private writes win. Also tell me in your return, for benchmarks: WHICH serve_tax ARM serves WHICH registered scheme (pearl-plus, dither, network-attester, pous, poub, the sampled proofs commit, etc.), as a table arm -> scheme name, from the arms definitions (file:line).
+
