@@ -426,7 +426,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     program, query = IF.listed_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], ())
     table = work_table_of(sampling_design, n_of, transfer_gates)
     if table is not None:
-        table = {P.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
+        table = {PO.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
     sampling_design, table = SV.params_sampling_design(sampling_design["rate"], program, query, table) if "rate" in sampling_design else (sampling_design, table)
     window = CS.Binding(program, query, sampling_design, run_root, tuple(ms), tables, context, table)
     want = partition.get("partition_digest")
@@ -714,9 +714,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
                                                       weights, arrivals, values, histories))
         got = [read[m.key] for m in ms]
     data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values, IF.member_ranges(window.members))
-    valued = [tuple(p for p, _w in m.rows if isinstance(d["rows"].get(p), CS.ValueRows)) for m, d in zip(ms, data, strict=True)]
-    if any(valued):
-        window = replace(window, members=tuple(replace(m, values=v) for m, v in zip(ms, valued, strict=True)))
+    window = WT.valued(window, data)
     data = CH.held_rows(window, data)
     strings_of: dict[str, bytes] = {}
     if histories is not None:

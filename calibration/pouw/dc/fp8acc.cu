@@ -11,7 +11,6 @@
 //
 //   fp8acc gate DIR     every arm x class; one JSON line each and DIR/summary.json; exit 0 exact, 4 not, 2 no device
 //   fp8acc selftest DIR the same with ideal accumulators (no GPU): the planes, E4M3 encoding and word identity
-// Build: nvcc -O3 -std=c++17 -gencode arch=compute_100a,code=sm_100a fp8acc.cu -o fp8acc   (run.sh on a B200)
 #include <cuda_runtime.h>
 
 #include <cmath>
