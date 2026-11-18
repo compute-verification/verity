@@ -14,6 +14,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     served ids over that small combine with two stop ids, and at GLM-5.3's (its three EOS ids, a model of 131,072 ids) at
     O = 128, each under `MAX_GATES`, so kept in ``--all`` with no pin."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import greedy_stages as G
 
     small = dict(V=320, N=16, O=4, STOP=(37, 301), MAX_MODEL_LEN=64)

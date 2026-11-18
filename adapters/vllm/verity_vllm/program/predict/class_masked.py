@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from verity.circuits.defs import bind
+
 from verity_vllm.definitions.registry import sparse_mla as SM
 
 if TYPE_CHECKING:
