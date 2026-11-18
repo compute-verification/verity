@@ -47,7 +47,7 @@ def test_the_blocks_ride_in_the_circuit_record_and_the_verifier_holds_their_proo
     plan = "ab" * 32
     win = I.Window(blocked(chain_blocks(plan=plan)), RUN, TI.SAMPLING_DESIGN, 2)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
-    assert doc["blocks"] == win.circuit.blocks_record() == {
+    assert doc["blocks"] == win.circuit.blocks_record(2) == {
         "format": I.BLOCKS, "proof": {"units": 8, "partition": doc["partition"], "plan": plan},
         "inference": {"slots": 2, "steps": 2, "entries": [{"template": GID, "at": 0, "radix": [2, 2, 2],
                                                            "axes": ["-", "step", "slot"], "step": 0}]}}
@@ -240,7 +240,7 @@ def test_cmp92s_class_circuit_has_one_inference_and_nothing_free(circuit):
         [e.doc() for e in circuit.blocks.inference]
     count = I.input_count(json.loads(json.dumps(circuit.description())), **held("positions", "weights", "request"))
     assert count["free"] == 0 and count["ingress"] == 0, count
-    assert circuit.blocks_record()["proof"] == {"units": 17548,
+    assert circuit.blocks_record(1 << 20)["proof"] == {"units": 17548,
                                                 "partition": I.descriptor_record(circuit, 1 << 20)["partition"]}
 
 
@@ -255,4 +255,4 @@ def test_cmp92s_members_come_from_its_record_and_its_blocks_are_the_same_under_a
     for run in ("ab" * 64, "cd" * 64):
         w = I.window_of_record({**rec, "run": run, "context": ""}, TI.SAMPLING_DESIGN, I.resolve)
         assert w.members == I.members(plain, cap)
-    assert I.circuit_bytes(rec["blocks"]) == I.circuit_bytes(plain.blocks_record())
+    assert I.circuit_bytes(rec["blocks"]) == I.circuit_bytes(plain.blocks_record(cap))
