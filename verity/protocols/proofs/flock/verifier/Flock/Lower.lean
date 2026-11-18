@@ -18,7 +18,7 @@ Definition's own structure, in the description's size, and never from unrolled r
   row `(c, A, B)`, `z_c = (A·z)(B·z)`; an AND of more inputs is that, left to right. A `call` node is a `CALL` of one copy.
   A `batch` node's `n` copies are one region, written as one `CALL` a piece (`Work.batch`): members whose mapped
   references lie in one affine part each are one `CALL` whose inputs step per copy, and a member with a reference the
-  descriptor lists in an explicit part is a `CALL` of its own. So a Definition's `CALL`s are at most `Defn.callBound`, its
+  descriptor lists in an explicit part is a `CALL` of its own. So a Definition's `CALL`s are at most `callBound`, its
   nodes, parts and explicit references, never its members. A `scan` node is two `CALL`s: its first iteration on `init`,
   then the rest, each reading the previous one's carry (`Work.scan`).
 - **Bindings and returns are columns.** A call's input that is not one reference, and a Definition's returned leaf that is
@@ -257,7 +257,7 @@ def pieceEnd (ins : Array (Arg × Nat)) (n m0 : Nat) : V (Option Nat) := do
 
 /-- The CALLs `lower` writes for node `x` at most: a scan's two, a call's one, a primitive node's none, and a batch's one
 plus two for each part and one for each explicit reference of its mapped arguments (`Work.batch`). -/
-def Node.callBound (x : Node) : Nat :=
+def nodeCallBound (x : Node) : Nat :=
   match x.form with
   | .prim => 0
   | .call => 1
@@ -265,9 +265,9 @@ def Node.callBound (x : Node) : Nat :=
   | .batch => x.args.foldl (fun acc a => if a.dims.isNone then acc else
       a.seq.parts.foldl (fun acc q => acc + 2 + match q with | .explicit it => it.size | _ => 0) acc) 1
 
-/-- **The CALLs `lower` writes for Definition `d`'s template Definition at most**: `Σ` over its nodes of `Node.callBound`,
+/-- **The CALLs `lower` writes for Definition `d`'s template Definition at most**: `Σ` over its nodes of `nodeCallBound`,
 which is at most `2 · nodes + 2 · parts + explicit references` of its body: proportional to its description. -/
-def Defn.callBound (d : Defn) : Nat := d.body.nodes.foldl (fun acc x => acc + x.callBound) 0
+def callBound (d : Defn) : Nat := d.body.nodes.foldl (fun acc x => acc + nodeCallBound x) 0
 
 /-- A Definition's resolved rows and calls, its columns counted. -/
 def Work.finish (w : Work) (ins : Nat) : Tmpl.Def :=
@@ -348,12 +348,12 @@ def Work.bindOne (w : Work) (st : Array Nat) (r : Ref) (s n : Nat) : V (Work × 
 /-- The batch's pieces from member `m0`: each its first member, its count and its bindings. A piece of members whose mapped
 references lie in one affine part each is one stepping CALL; a member with a reference in an explicit part is a piece of
 its own, each input bound to its reference. `shared` binds an argument not mapped, the same for every member. Each step
-takes at least one member, so the pieces are at most `Node.callBound`'s. -/
+takes at least one member, so the pieces are at most `nodeCallBound`'s. -/
 def Work.pieces (w : Work) (st : Array Nat) (ins : Array (Arg × Nat)) (shared : Array (Option Bind)) (n m0 : Nat)
     (acc : Array (Nat × Nat × Array Bind)) : V (Work × Array (Nat × Nat × Array Bind)) := do
-  if h : n ≤ m0 then return (w, acc) else
+  if _h : n ≤ m0 then return (w, acc) else
   let m1 := ((← pieceEnd ins n m0).getD (m0 + 1))
-  if h1 : m0 + 1 < m1 then
+  if _h1 : m0 + 1 < m1 then
     let bs ← (List.range ins.size).foldlM (fun bs j => do
       match shared[j]! with
       | some b => return bs.push b
@@ -375,7 +375,7 @@ termination_by n - m0
 decreasing_by all_goals omega
 
 /-- A batch node's `n` copies of template Definition `e` (`cols` columns, its returns `rets`) in one region of copies,
-as one CALL a piece (`Work.pieces`): at most `Node.callBound x` CALLs. -/
+as one CALL a piece (`Work.pieces`): at most `nodeCallBound x` CALLs. -/
 def Work.batch (w : Work) (st : Array Nat) (callee : Defn) (x : Node) (e cols : Nat) (rets : Array Nat) : V Work := do
   if x.n == 0 then
     let (w', bs) ← w.binds st callee x

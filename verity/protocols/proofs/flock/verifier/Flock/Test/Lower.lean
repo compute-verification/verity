@@ -124,7 +124,7 @@ def scanTmpl : V Tmpl.Tmpl := do
 `Perm_v1`: a batch of four `Xor2_v1` over axis 1 of `Array<2, Array<4, Value<1>>>`, member `m` reading references `m`
 and `4 + m` of its argument, as a hand-written Boolean body's levels list theirs: all explicit, or affine and explicit
 parts mixed. Its outputs on all 16 inputs are the XORs its references name, and its template Definition's `CALL`s are
-the pieces, within `Defn.callBound`. -/
+the pieces, within `Lower.callBound`. -/
 
 def xorDef : Program.Defn :=
   { key := "Xor2_v1", id := "Xor2_v1", prim := true, params := #[("x", .array 2 (.value 1))], ret := .value 1, gates := 1,
@@ -154,7 +154,7 @@ Definition's `CALL`s number `calls`, within the bound. -/
 def permOk (ps : Array Program.Part) (calls : Nat) : Bool := match permTmpl ps with
   | .ok t =>
     let refs := (Program.Seq.ofParts ps).toArray
-    (t.defs.getD (t.root - 1) default).calls.size == calls && calls ≤ (permDef ps).callBound &&
+    (t.defs.getD (t.root - 1) default).calls.size == calls && calls ≤ Lower.callBound (permDef ps) &&
     (List.range 16).all fun x => match outputs t 4 (bits x 4) with
       | .ok bs => (List.range 4).all fun m => bs[m]! == (x.testBit refs[m]!.j != x.testBit refs[4 + m]!.j)
       | .error _ => false
