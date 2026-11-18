@@ -142,9 +142,10 @@ class QueryInapplicable(ValueError):
 def call_scope(fn: Any) -> tuple[Any, Any]:
     """(circuit, activation of `fn`) in a one-Call Program: the Call's parameters are Input gates, its returned leaves designated
     outputs.  A returned leaf a real Program does not read only shrinks out(S), so widths here bound those in any Program."""
-    from .defs import CompositeDefinition
+    from .defs import CompositeDefinition, recut_unread
     from .ports import forward, harness
     from .program import Program
+    recut_unread(fn, "cut.call_scope")
     params, ret = fn.signature()
     shell = harness(CompositeDefinition(f"Word[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(fn, *a),
                                         register=False, ports=forward(fn)))

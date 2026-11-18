@@ -93,21 +93,35 @@ class StepEnded:
 
 
 @dataclass(frozen=True)
-class RunBegan:
-    """``steps``: the instrumented run ``run`` begins: its steps from ``step`` on are the run's."""
+class PhaseOpened:
+    """``steps``: execution phase ``phase`` (numbered from 0 by its committer) opens before any of its values is
+    committed; its first step is ``step``. Phases are emitted only where a committer commits the workload in phases."""
 
     hook: ClassVar[str] = "steps"
-    run: str
+    phase: int
     step: int
 
 
 @dataclass(frozen=True)
-class RunEnded:
-    """``steps``: the instrumented run ``run`` ends after step ``step``."""
+class PhaseClosed:
+    """``steps``: execution phase ``phase`` closes after step ``step``, before the next one opens, its values committed
+    under the Program whose digest is ``program``."""
 
     hook: ClassVar[str] = "steps"
-    run: str
+    phase: int
     step: int
+    program: bytes
+
+
+@dataclass(frozen=True)
+class PhaseCommitted:
+    """``steps``: closed execution phase ``phase``'s committed values have root ``root`` (empty: it committed none).
+    After its `PhaseClosed`, and where the committer finalizes off the serving loop, on the committer's thread, possibly
+    after later phases opened."""
+
+    hook: ClassVar[str] = "steps"
+    phase: int
+    root: bytes
 
 
 @dataclass(frozen=True)
@@ -201,7 +215,7 @@ class OutputsComplete:
 
 #: every event a served run emits, each read through its ``hook``
 EVENTS = (Declared, RegisteredValues, InputArrived, StepBegan, StepComputed, StepEnded, ValueProduced, BlockDue, RangesDeclared,
-          RangeAllocated, RangeWritten, RangeFreed, OutputReleased, OutputsComplete, RunBegan, RunEnded)
+          RangeAllocated, RangeWritten, RangeFreed, OutputReleased, OutputsComplete, PhaseOpened, PhaseClosed, PhaseCommitted)
 
 
 @dataclass(frozen=True)
@@ -396,5 +410,5 @@ type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBou
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldResident",
            "Broken", "Commits", "ENGINE", "FRONT", "FixRanges", "Front", "Releases", "Reports", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RefuseProperty", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
-           "Route", "RunBegan", "RunEnded", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
+           "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

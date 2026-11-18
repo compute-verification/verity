@@ -203,10 +203,10 @@ def install(sched: Any, exchange: messages.Exchange | None = None, key: Callable
 
 
 def register(attach: Callable[[messages.Exchange], Any], key: Callable[[str], str] = request_key,
-             refuse: Callable[[Hook], Callable[[str, str], None]] | None = None) -> None:
+             refuse: Callable[[Hook, Any], Callable[[str, str], None]] | None = None) -> None:
     """In an engine core process (a vLLM general plugin's ``register``): for each engine core, ``attach`` files its
     schemes' requests on this process's exchange and subscribes them, and the hook goes on the core's scheduler, held
-    through the core's input loop (`core_gate.SEAM`'s gate ``admission``); ``refuse(hook)`` answers the exchange's
+    through the core's input loop (`core_gate.SEAM`'s gate ``admission``); ``refuse(hook, core)`` answers the exchange's
     `hooks.RefuseInput` from then on."""
     from verity_vllm.engine.core_gate import SEAM
 
@@ -215,7 +215,7 @@ def register(attach: Callable[[messages.Exchange], Any], key: Callable[[str], st
         attach(ex)
         hook = install(core.scheduler, ex, key)
         if refuse is not None:
-            ex.refuse = refuse(hook)
+            ex.refuse = refuse(hook, core)
         return hook
 
     SEAM.gate("admission", make)

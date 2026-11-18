@@ -237,8 +237,8 @@ A proof's own Merkle trees, such as Flock's Ligerito column trees, hide their un
 - the leaf is `tree_leaf`.
 
 Opening a column reveals the column and its salt. `flock-leaf/hm96-sha256` reserves exactly `hm96-sha256/v1`'s
-sizes: a 128-byte salt and a 160-byte key. `hm96-sha512/v1` needs 192 and 256. Salts from the prover's seeded stream, like the
-operating system's, are modelled as uniform, so the leaves hide statistically given uniform salts (section 3). The key is fixed
+sizes: a 128-byte salt and a 160-byte key. `hm96-sha512/v1` needs 192 and 256. Their salts come from a source section 3's
+"Randomness" allows, and the leaves hide as it says. The key is fixed
 before the root and is never a witness (section 5).
 
 ## 8. Hashes and claims
