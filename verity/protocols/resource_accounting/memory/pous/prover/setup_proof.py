@@ -1,5 +1,4 @@
-"""PoUS's setup as a sampled proof about the store, the prover's side: a sampled block's place and inputs to the setup
-unit, which `window.SetupIntegration` records into the window the proof system proves.
+"""PoUS's setup as a sampled proof about the store, the prover's side: a block's place and its inputs to the setup unit.
 
 The store C* holds W's registered rows row-aligned (`setup_circuit`'s layout): block u is slot u mod n of row ⌊u/n⌋,
 n = ⌈N/P⌉ slots a row of N bytes.  The auditor's challenger samples `SAMPLE` of the store's B blocks after the store's
