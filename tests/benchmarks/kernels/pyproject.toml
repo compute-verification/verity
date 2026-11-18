@@ -1,5 +1,5 @@
 # ship.sh's frame, without a GPU: what ship_nvcc.sh hands the device compiler, and a ship build's cubin from two places of
-# the tree; and which shared objects the H100 smoke's device_libs.gate chooses.
+# the tree; which shared objects the H100 smoke's device_libs.gate chooses; and where the smoke script takes its target from.
 [tool.pytest.ini_options]
 testpaths = ["."]
 
@@ -12,5 +12,5 @@ inputs = ["benchmarks/kernels/ship.sh", "benchmarks/kernels/ship_nvcc.sh", "benc
           "benchmarks/kernels/ship_clock.c", "benchmarks/kernels/job_nvcc.sh", "benchmarks/kernels/machine.py",
           "benchmarks/harness/verity_bench", "tools/config/verity_config", "verity/__init__.py", "verity/channel.py",
           "verity/device.py", "verity/errors.py", "calibration/hardware/cards", "calibration/hardware/architectures",
-          "benchmarks/kernels/device_libs_gate.py",
+          "benchmarks/kernels/device_libs_gate.py", "benchmarks/kernels/smoke_h100.sh",
           "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py"]
