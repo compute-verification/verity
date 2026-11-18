@@ -245,7 +245,7 @@ def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, m
 
     fake = SimpleNamespace(NAME="pous", schemes=lambda: ("band-chain/d12/v1",), refusals=lambda scheme, ctx: (), install=install)
     monkeypatch.setitem(sys.modules, "verity_vllm.protocols.fake_pous", fake)
-    monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
+    monkeypatch.setitem(config.PROTOCOLS, "pous", "fake_pous")
     real = va.build_engine
     monkeypatch.setattr(va, "build_engine", lambda *a, **kw: SimpleNamespace(**vars(real(*a, **kw)), model=model))
     llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:band-chain/d12/v1", protocols_config={"pous": {"cpu": 3}})
@@ -266,7 +266,7 @@ def test_each_llm_files_on_its_own_builds_exchange_and_generates_in_it(built, mo
                            requests=lambda scheme, ctx: asks,
                            install=lambda scheme, target: PO.Option(name=f"pous:{scheme}", hooks=target.hooks(f"pous:{scheme}")))
     monkeypatch.setitem(sys.modules, "verity_vllm.protocols.fake_pous", fake)
-    monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
+    monkeypatch.setitem(config.PROTOCOLS, "pous", "fake_pous")
     from verity_vllm.engine import vllm_adapter as va
     stand_in = va.build_engine
     monkeypatch.setattr(va, "build_engine", lambda *a, **kw: SimpleNamespace(**vars(stand_in(*a, **kw)), model=model))

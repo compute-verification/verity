@@ -966,7 +966,7 @@ def test_serve_openais_tick_setup_takes_the_admission_hook_the_build_installed()
     sched = Sched()
     built = admission.install(sched)
     loop = SimpleNamespace(submit=lambda adm: None, abort=lambda eid: None, tick=lambda rec: None, gate=None, hook=None)
-    opts = SimpleNamespace(admit="tick", tick_bucket_ms=5.0, tick_sat_ms=1.0, tick_free_ms=1.0, admit_hold_ms=1000.0)
+    opts = SimpleNamespace(admit="tick", tick_bucket_ms=5.0, tick_sat_ms=1.0, tick_free_ms=1.0, admit_hold_ms=1000)
     try:
         hook, order = so.network_admission(loop, sched, opts)
         assert hook is built is loop.hook and order.take is loop.tick and loop.gate.hold_s == 1.0

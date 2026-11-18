@@ -51,6 +51,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 )
 from verity_torch.pouw.pearl_c import run_device as PPDR
 
+from verity_vllm import config
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
@@ -306,7 +307,7 @@ def _fake_pous(monkeypatch):
         return PO.Option(name=f"pous:{scheme}", hooks=h)
     vars(mod)["install"] = install
     monkeypatch.setitem(sys.modules, mod.__name__, mod)
-    monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
+    monkeypatch.setitem(config.PROTOCOLS, "pous", "fake_pous")
 
 
 def test_ncp_v1_keeps_no_weight_copy_so_the_selector_admits_pous_beside_it(monkeypatch):
