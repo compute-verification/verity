@@ -21,12 +21,19 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 N, W, L = 16, 6, 2
 
 
+def diff(a, b):
+    if isinstance(a, dict) and isinstance(b, dict):
+        return {k: diff(a.get(k), b.get(k)) for k in sorted(set(a) | set(b)) if a.get(k) != b.get(k)}
+    if isinstance(a, list) and isinstance(b, list) and len(a) == len(b):
+        return {i: diff(x, y) for i, (x, y) in enumerate(zip(a, b)) if x != y}
+    return a, b
+
+
 def differing(d: dict | None):
-    """A disagreement on the session's record as the fields the Lean's and the books' records differ in."""
+    """A disagreement on the session's record as where the Lean's record, then the books', differ."""
     if not d or d.get("event") != "record":
         return d
-    lean, books = (d[side].get("record") or {} for side in ("lean", "python"))
-    return {k: (lean.get(k), books.get(k)) for k in sorted(set(lean) | set(books)) if lean.get(k) != books.get(k)}
+    return diff(*(d[side].get("record") or {} for side in ("lean", "python")))
 
 
 @pytest.mark.parametrize("plan", ["honest", "kv:2"])
