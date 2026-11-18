@@ -876,13 +876,14 @@ private def toyκ (g : Nat) : Option Bool := if g == 0 then some true else if g 
 #guard owners toy == #[some 0, none, some 0, some 1, some 0, none, some 1, none]
 #guard (List.range toy.size).all fun g => (owners toy).getD g none == owner toy g
 
-/-- Two 16-bit inputs and three 1-bit inputs into one 32-bit primitive: leaves of widths 16, 16, 1, 1, 1 and 32. -/
+/-- Two 16-bit inputs and three 1-bit inputs into one 32-bit primitive, whose stand-in Boolean body reads one 1-bit
+constant: leaves of widths 16, 16, 1, 1, 1 and 32. -/
 private def mixed : String :=
   "{\"annotations\":{},\"boolean\":{\"TMix_v1\":\"StandIn[TMix]_v1\"},\"callees\":[\"Input16_v1\",\"Input1_v1\",\"TMix_v1\",\"Const1[0x0]_v1\"],\"definitions\":{\"Const1[0x0]_v1\":{\"form\":\"primitive\",\"id\":\"Const1[0x0]_v1\",\"params\":[],\"ret\":[\"Value\",1]},\"Input16_v1\":{\"form\":\"primitive\",\"id\":\"Input16_v1\",\"params\":[],\"ret\":[\"Value\",16]},\"Input1_v1\":{\"form\":\"primitive\",\"id\":\"Input1_v1\",\"params\":[],\"ret\":[\"Value\",1]},\"Root[TMix_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":0,\"form\":\"batch\",\"n\":2,\"out\":0},{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":3,\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,2]},\"type\":0},{\"refs\":{\"affine\":[\"n\",1,0,3]},\"type\":1}],\"fn\":2,\"form\":\"primitive\",\"out\":2}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"Root[TMix_v1]_v1\"},\"StandIn[TMix]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"fn\":3,\"form\":\"primitive\",\"out\":3}],\"params\":[[\"a\",[\"Array\",2,[\"Array\",16,[\"Value\",1]]]],[\"b\",[\"Array\",3,[\"Value\",1]]]],\"ret\":{\"explicit\":[[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0],[\"n\",0,0]]},\"ret_type\":[\"Array\",32,[\"Value\",1]]},\"form\":\"composite\",\"id\":\"StandIn[TMix]_v1\"},\"TMix_v1\":{\"form\":\"primitive\",\"id\":\"TMix_v1\",\"params\":[[\"a\",[\"Array\",2,[\"Value\",16]]],[\"b\",[\"Array\",3,[\"Value\",1]]]],\"ret\":[\"Value\",32]}},\"program_fn\":\"TMix_v1\",\"root\":\"Root[TMix_v1]_v1\",\"schema\":\"verity-ir/descriptor/v2\",\"types\":[[\"Array\",2,[\"Value\",16]],[\"Array\",3,[\"Value\",1]],[\"Value\",32],[\"Value\",1]]}"
 
 #guard match Flock.Program.decode mixed.toUTF8 with
   | .ok P => P.defs.all fun d => !d.prim ||
-      defWidth d == (if d.key == "Input16_v1" then 16 else if d.key == "Input1_v1" then 1 else 32)
+      defWidth d == (if d.key == "Input16_v1" then 16 else if d.key == "Input1_v1" || d.key == "Const1[0x0]_v1" then 1 else 32)
   | .error _ => false
 
 /-- A file of one template instance on a unit of no ports. -/
