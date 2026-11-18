@@ -363,14 +363,45 @@ structure Runs where
   shared : List (Nat × Nat × Nat)
   deriving Inhabited
 
+/-- Node `i` of the root is an input node, a primitive or a batch of one, whose leaves are its gates. -/
+def inputAt (P : Prog) (i : Nat) : Bool :=
+  ((P.defs[P.root]!).body.nodes[i]?.map fun n =>
+    Desc.isInputNode P n && (n.form == .prim || n.form == .batch)).getD false
+
+/-- The run of input leaves part `q` reads, `(input node, first leaf, leaves)`, and whether it reads it more than
+once: an affine part over an input node reads its run once; a strided part over one from a leaf at or after 0 with
+outer stride 0, inner stride 1 and a count a multiple of its inner run reads its reference k at the run's leaf k mod
+the run, more than once where its count passes the run. None for any other part. -/
+def partRun (P : Prog) : Part → Option ((Nat × Nat × Nat) × Bool)
+  | .affine false i base count => if inputAt P i then some ((i, base, count), false) else none
+  | .strided false i base inner os is count =>
+    if inputAt P i && os == 0 && is == 1 && 0 ≤ base && 0 < inner && count % inner == 0 then
+      some ((i, base.toNat, min inner count), inner < count)
+    else none
+  | _ => none
+
+/-- `rowRuns` over the parts `parts`: each a run (`partRun`), and two runs, of one argument or of two, the same run or
+sharing no leaf. It costs the parts, sorted. -/
+def runsOf (P : Prog) (parts : List Part) : Option Runs :=
+  let runs := parts.filterMap (partRun P)
+  let sorted := (runs.filter fun r => r.1.2.2 > 0).mergeSort fun a b =>
+    a.1.1 < b.1.1 || (a.1.1 == b.1.1 && a.1.2.1 ≤ b.1.2.1)
+  let next := sorted.zip sorted.tail
+  let prev := (none :: sorted.map (some ·.1)).zip sorted
+  if runs.length == parts.length &&
+      next.all (fun (a, b) => a.1 == b.1 || a.1.1 != b.1.1 || a.1.2.1 + a.1.2.2 ≤ b.1.2.1) then
+    some { own := (prev.zip (sorted.tail.map (some ·.1) ++ [none])).filterMap fun ((p, r), n) =>
+             if r.2 || p == some r.1 || n == some r.1 then none else some r.1,
+           shared := sorted.filterMap (fun r => if r.2 then some r.1 else none) ++
+             next.filterMap fun (a, b) => if a.1 == b.1 then some a.1 else none }
+  else none
+
 /-- **The root's rows as runs of input leaves** (the module docstring's "Rows of its own" and "Shared runs"), read
 from the root's body: every part of an argument of a root node that is no input node, but a part reading another
 such node's outputs (a grid, in every lane; an edge, which the record's wiring holds: `Spot.Edges.edgesOf`), is a run
-of leaves of one of the root's input nodes (an input node a primitive or a batch of one, a leaf a gate): an affine
-part, or a strided part from a leaf at or after 0 with outer stride 0, inner stride 1 and a count a multiple of its
-inner run, whose reference k is the run's leaf k mod the run; a batch maps every argument over its members (each
-has the `dims` resolution reads a member's leaves by); and two runs, of one argument or of two, are the same run or share no leaf.
-None where the root is of another form. It costs the root's argument parts, sorted. -/
+of leaves of one of the root's input nodes (`partRun`); a batch maps every argument over its members (each has the
+`dims` resolution reads a member's leaves by); and two runs are the same run or share no leaf (`runsOf`). None where
+the root is of another form. -/
 def rowRuns (P : Prog) : Option Runs :=
   let nodes := (P.defs[P.root]!).body.nodes
   let units := nodes.toList.filter fun n => !Desc.isInputNode P n
@@ -379,26 +410,8 @@ def rowRuns (P : Prog) : Option Runs :=
     | .explicit it => it.any fun r => !r.p && (nodes[r.i]?.map fun n => !Desc.isInputNode P n).getD false
     | .grid _ lanes => lanes.all fun l => !l.p && (nodes[l.i]?.map fun n => !Desc.isInputNode P n).getD false
     | _ => false
-  let input := fun (i : Nat) =>
-    (nodes[i]?.map fun n => Desc.isInputNode P n && (n.form == .prim || n.form == .batch)).getD false
-  let parts := units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)
-  let runs := parts.filterMap fun
-    | .affine false i base count => if input i then some ((i, base, count), false) else none
-    | .strided false i base inner 0 1 count =>
-      if input i && 0 ≤ base && inner > 0 && count % inner == 0 then
-        some ((i, base.toNat, min inner count), count > inner)
-      else none
-    | _ => none
-  let sorted := (runs.filter fun r => r.1.2.2 > 0).mergeSort fun a b =>
-    a.1.1 < b.1.1 || (a.1.1 == b.1.1 && a.1.2.1 ≤ b.1.2.1)
-  let next := sorted.zip sorted.tail
-  let prev := (none :: sorted.map (some ·.1)).zip sorted
-  if units.all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) && runs.length == parts.length &&
-      next.all (fun (a, b) => a.1 == b.1 || a.1.1 != b.1.1 || a.1.2.1 + a.1.2.2 ≤ b.1.2.1) then
-    some { own := (prev.zip (sorted.tail.map (some ·.1) ++ [none])).filterMap fun ((p, r), n) =>
-             if r.2 || p == some r.1 || n == some r.1 then none else some r.1,
-           shared := sorted.filterMap (fun r => if r.2 then some r.1 else none) ++
-             next.filterMap fun (a, b) => if a.1 == b.1 then some a.1 else none }
+  if units.all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) then
+    runsOf P (units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·))
   else none
 
 /-- **Every unit's rows are input gates, each its own or a shared run's**: `rowRuns` reads the root. -/
