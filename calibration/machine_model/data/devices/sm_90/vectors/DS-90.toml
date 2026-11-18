@@ -4,6 +4,7 @@
 # the measured facets replaced by the axioms.
 name = "DS-90"
 epoch = "DS-90"
+catch_all = "NOROW"      # A2's catch-all: the class every warp instruction no other class names counts in
 summary = "sm_90 on the data sheet: DS_issue, DS_tensor, DS_alu, DS_imad, DS_shfl, and the measured DS_uniform"
 rows = ["DS_issue", "DS_tensor", "DS_alu", "DS_imad", "DS_shfl", "DS_uniform"]
 credits = []
