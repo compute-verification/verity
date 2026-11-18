@@ -35,6 +35,8 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/store.py", "verity/protocols/resource_accounting/memory/poub/verifier/session",
           "verity/protocols/resource_accounting/memory/poub/verifier/__init__.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/audit.py",
+          # refresh's slot schedule, which `audit.py` imports
+          "verity/protocols/resource_accounting/memory/poub/verifier/rota.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/codec.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/wire.py",
           "verity/protocols/resource_accounting/memory/poub/verifier/coins.py",
