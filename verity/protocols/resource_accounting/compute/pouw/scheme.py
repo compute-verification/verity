@@ -30,11 +30,14 @@ from typing import Any
 
 from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover import workload
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import runs_on
 from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
 from verity.protocol import Channel, Role
 from verity.protocols.resource_accounting.scheme import VERIFIER, Block, Charge, Lacks, Order, Scheme, Term, register
 
-OPTION = "pouw:pearl-c-h100-v1-h3"
+#: the kernel scheme it runs, on every card its row allows
+KERNEL = "pearl-c-h100-v1-h3"
+OPTION = f"pouw:{KERNEL}"
 #: the weight formats its kernel reads, quantizing them itself; a quantized (FP8) weight is refused, not misread
 READS = ("bf16", "fp16", "fp32")
 
@@ -474,7 +477,9 @@ PEARL_PLUS = register(Scheme(
     channel_schemas=Lacks("no Schema is declared for PearlSalt"),
     record_owner="compute-accounting",
     tables=("pearl-a", "pearl-y", "pearl-b"),
-    number_format="bf16",
+    output_format="bf16",
+    product_family="fp8-e4m3-rowwise",
     y_committed=True,
     salt_open_root=epoch_open_root,
+    kernels=runs_on(KERNEL),
 ))

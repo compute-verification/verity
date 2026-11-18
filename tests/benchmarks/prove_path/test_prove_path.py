@@ -52,6 +52,7 @@ from typing import Any
 
 import pytest
 
+from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, docket as R
 from verity.commitments import randomness as RND
@@ -1607,7 +1608,7 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     assert PP.main([*argv, "--deployment-record", str(first)]) == 0
     reg, rec, said = json.loads(out.read_text()), json.loads(first.read_text()), json.loads(capsys.readouterr().out)
     assert rec == WW.deployment_record(reg) and said["deployment"] == R.digest(rec) and said["roots"] == 16
-    assert (rec["format"], rec["protocol"], rec["previous"]) == (R.FORMAT_V2, R.PROTOCOL, None)
+    assert (rec["format"], rec["protocol"], rec["previous"]) == (DM.REGISTRATION, DM.ONE_STAGE_PROTOCOL, None)
     assert [e["value"] for e in rec["registered"]] == sorted(reg["values"])
     assert {e["value"]: e for e in rec["registered"]} == reg["values"]
     assert all(set(e) == {"value", "root", "leaves", "words", "domain"} for e in rec["registered"])
