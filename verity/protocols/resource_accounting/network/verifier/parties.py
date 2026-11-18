@@ -28,8 +28,9 @@ execution phase ``(link, window)`` their heads name:
 
 - ``out-opening`` carries the witness (`AttestedOut.witness`): the rows' salts in order, `out_commit.SALT_BYTES` bytes
   a row. The attester hands it to the prover alone, so it is private and never enters a record.
-- ``out-record`` carries the record (`AttestedOut.public`) as canonical JSON: the value's signed head, which the
-  verifier reads with `out_commit.check_out`. Its root is a hiding commitment, so it is public. It is a body and not a
+- ``out-record`` carries the record (`AttestedOut.public`) as canonical JSON: the value's signed head.
+  `out_commit.check_out` checks it (its key, session, execution phase, shape, domain and LMS signature), and no
+  verifier calls `check_out` or reads the record. Its root is a hiding commitment, so it is public. It is a body and not a
   head's fields because its signature alone, in hex, is past a head's bound (`channel.MAX_HEAD`) at the deployed LMS
   parameters.
 
