@@ -37,11 +37,7 @@ untraced = [
     "test_salt_bind.py",
     "test_sass_census_dump.py",
     "test_served_zk.py",
-    "test_theory_duo_kernel.py",
-    "test_theory_fold_kernel.py",
-    "test_theory_fold_root.py",
     "test_theory_fold_wide3.py",
-    "test_theory_fold_wide32.py",
 ]
 # test_lean_headline compares the headline instances' Lean data (security/Definitions/Pouw/Headline) with what
 # lean_headline.py writes, and test_lean_headline_dc the data-centre ones' (security/Definitions/Pouw/HeadlineDc)

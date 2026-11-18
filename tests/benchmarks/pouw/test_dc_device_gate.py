@@ -16,7 +16,7 @@ DC = "calibration/pouw/dc"
 NAMES = {"9.0": "NVIDIA H200", "10.0": "NVIDIA B200", "12.0": "NVIDIA RTX PRO 6000 Blackwell Server Edition"}
 SKUS = {"9.0": "h200-sxm-141gb", "10.0": "b200-sxm-180gb", "12.0": "rtx-pro-6000-server"}
 #: (script, the compute capabilities whose targets it has forms for, its exit when the build is refused)
-JOBS = [("run.sh", ["9.0", "10.0"], 1), ("uni.sh", ["9.0", "10.0"], 1), ("pipe.sh", ["10.0"], 1), ("ffill.sh", ["9.0"], 1),
+JOBS = [("run.sh", ["9.0", "10.0"], 1), ("uni.sh", ["9.0", "10.0"], 1), ("ffill.sh", ["9.0"], 1),
         ("s8_mma.sh", ["9.0", "10.0"], 4)]
 OWN = [(s, cc, refused) for s, ccs, refused in JOBS for cc in ccs]
 OTHER = [(s, cc) for s, ccs, _ in JOBS for cc in NAMES if cc not in ccs]
@@ -57,7 +57,7 @@ def test_any_other_card_is_refused_before_anything_is_built(tmp_path, script, cc
     assert not (tmp_path / "run" / "out" / "env" / "nvcc.txt").exists()
 
 
-@pytest.mark.parametrize("script", ["run.sh", "uni.sh", "pipe.sh", "ffill.sh"])
+@pytest.mark.parametrize("script", ["run.sh", "uni.sh", "ffill.sh"])
 def test_with_no_card_a_build_takes_the_card_files_sku_and_is_refused_without_one(tmp_path, script):
     cc = next(ccs for s, ccs, _ in JOBS if s == script)[0]
     done = _start(tmp_path / "none", script, [], None, DC_BUILD_ONLY="1")
