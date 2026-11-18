@@ -354,9 +354,10 @@ attester"), and it charges a `format` failure the same.
      record, and would make the network attester parse the server's JSON.
    - With one fixed byte grammar (`IoTieCell`'s reference), the network attester stays a relay of one cell form. The gate is one
      `parse_cell` check in `network_attester.NetworkAttester._egress`, where it cuts a `DATA` or `END` cell.
-2. **In the audit.** The I/O tie holds every released cell to the map: its kind, its stream, and an `END` or `PAD` at its
-   slot. It holds each `DATA` cell's id to the Commit's sampled id at the map's port entry ("The I/O tie"). That is the
-   egress half of explanation: y's ids are the circuit's outputs.
+2. **In the audit.** Designed, with a prototype on a fake upstream ("The I/O tie"): the I/O tie holds every released
+   cell to the map: its kind, its stream, and an `END` or `PAD` at its slot. It holds each `DATA` cell's id to the
+   Commit's sampled id at the map's port entry ("The I/O tie"). That is the egress half of explanation: y's ids are the
+   circuit's outputs.
    - Whether the Commit's id is the one the circuit computes is SPOT's sampled audit of the served blocks. A wrong id
      from an unsampled block is a wrong block, and is charged.
 
@@ -1371,8 +1372,9 @@ against 100 at 160). The same string under another registered pool decodes to an
 
 *The order's tie.* `v1.decode_full` returns `Decoded(advice, streams, arrival)`. `streams[q]` is the network attester's ordinal of
 I1 request q's connection: the order permutation (`walk.order`) through the arrival order, a stable named field.
-The I/O tie's egress tie checks each cell's stream against its request q through it. That replaces v4's stream == q, which
-refuses honest traffic wherever the engine's order isn't the network attester's.
+Designed, with a prototype on a fake upstream: the I/O tie's egress tie checks each cell's stream against its request
+q through it. That replaces v4's stream == q, which refuses honest traffic wherever the engine's order isn't the
+network attester's.
 
 *The windows* (A5). Step s's execution phase is the earliest that releases an output at step s or later (the last
 when none follows): the first whose rows a value read at step s can change. Arrival i's ingress execution phase is the

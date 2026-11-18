@@ -5,15 +5,16 @@ into the audit's appends, releases and plan changes.
 ~~~text
 line 1       {"schema": "verity/memory-map/v1", "registration": hex(Registration.digest), "blocks": N,
               "block_bytes": 4096}
-line 2, …    {"step": s, "freed": [slot, …], "written": [[slot, j, hex(d_j)], …], "withdrawn": [j, …]}, one per serving
-              step that wrote, freed or withdrew a block, steps strictly increasing; "withdrawn" only on a step that
-              withdraws one (a map without any reads as before it had the key)
+line 2, …    {"step": s, "freed": [slot, …], "written": [[slot, j, hex(d_j)], …], "withdrawn": [j, …],
+              "rekeyed": [[slot, j], …]}, one per serving step that wrote, freed, withdrew or re-keyed a block, steps
+              strictly increasing; "withdrawn" only on a step that withdraws one and "rekeyed" only on one whose refresh
+              re-keys landed (a map without either reads as before it had the key)
 slot         4,096 bytes of the node's memory, named by the registered block it held at registration (vLLM: its
               registry's region block index, a KV pool's pages registered as filler), or from N up for memory outside
               the registered store, below 2^63.  A slot below N starts live, holding registered block `slot`; one at
               or above N is live once written
-j            the store index the writer gave the block: the store's next fresh one, N plus every block written or
-              withdrawn before in the session, in record order
+j            the store index the writer gave the block: the store's next fresh one, N plus every block written,
+              withdrawn or re-keyed before in the session, in record order
 d_j          codec.digest(payload_j), the sha512/row/v2 digest of the block's 4,096-byte payload, 64 bytes: the device
               encodes the payload under its bound key (codec.binding(d_j, j, key, c_a)) at index j, once the verifier
               has sent its append's coin c_a
@@ -66,6 +67,14 @@ between, and withdrawn if its last structural reader comes first.  A block appen
 or w + 1, so its re-key, recorded at a step before the first pass of window w + L, falls at age L − 1 at the latest.
 At L = 1 that is the window it was appended in, before it may be resident, so a session that defers residency has
 L ≥ 2 (`audit.Params.deferred`).
+
+Refresh.  Under refresh (the session's `params.refresh`) every credited block, registered and filler included, is
+re-keyed on the public slot schedule (`rota.Schedule`), whose re-key appends carry their origin and no payload root of their own.  A re-key whose
+encode lands is recorded in that line's `rekeyed` as [slot, j]: the slot's block, live and neither freed nor written
+at the step, is released and the slot holds j, the same payload under the re-key's fresh coin.  Its origin
+(`Change.rekeyed`) is the store index of the registered or written block that payload was first committed at, never
+an earlier re-key.  A line's writes, withdrawals and re-keys take the store's next fresh indices together, each once,
+the re-keys in index order.
 
 The record is the prover's: `d_j` is a hash of user data, a witness, never public (AGENTS.md's zero-knowledge rule).
 The prover's audit side commits the digests of the blocks serving completes in an append tree (`audit.append_tree`,
@@ -148,20 +157,33 @@ class Written:
 
 
 @dataclass(frozen=True, slots=True)
+class Rekeyed:
+    """A refresh re-key a step records once its encode lands: the slot whose block it re-keys and the store index the
+    re-key took. The payload is the slot's block's, unchanged, so it carries no digest."""
+
+    slot: int
+    index: int
+
+
+@dataclass(frozen=True, slots=True)
 class Step:
-    """One serving step's record: the slots it freed, then the blocks it wrote, in index order, and the appended
-    indices it withdrew, in index order (none by default)."""
+    """One serving step's record: the slots it freed, then the blocks it wrote, in index order, the appended indices
+    it withdrew, in index order (none by default), and the refresh re-keys whose encodes landed, in index order (none
+    by default)."""
 
     step: int
     freed: tuple[int, ...]
     written: tuple[Written, ...]
     withdrawn: tuple[int, ...] = ()
+    rekeyed: tuple[Rekeyed, ...] = ()
 
     def to_json(self) -> dict:
         out = {"freed": list(self.freed), "step": self.step,
                "written": [[w.slot, w.index, w.digest.hex()] for w in self.written]}
         if self.withdrawn:
             out["withdrawn"] = list(self.withdrawn)
+        if self.rekeyed:
+            out["rekeyed"] = [[r.slot, r.index] for r in self.rekeyed]
         return out
 
 
@@ -194,11 +216,14 @@ def header(doc: object) -> Header:
 
 
 def step(doc: object) -> Step:
-    if type(doc) is not dict or not {"freed", "step", "written"} <= set(doc) <= {"freed", "step", "withdrawn", "written"}:
-        raise MemoryMapError("a step's line is {step, freed, written}, with withdrawn if it withdraws a block")
+    if (type(doc) is not dict
+            or not {"freed", "step", "written"} <= set(doc) <= {"freed", "rekeyed", "step", "withdrawn", "written"}):
+        raise MemoryMapError("a step's line is {step, freed, written}, with withdrawn if it withdraws a block and "
+                             "rekeyed if a refresh re-key's encode landed")
     s = _int(doc["step"], "a step", audit.STEP_LIMIT)
-    if type(doc["freed"]) is not list or type(doc["written"]) is not list or type(doc.get("withdrawn", [])) is not list:
-        raise MemoryMapError(f"step {s}'s freed, written and withdrawn are lists")
+    if (type(doc["freed"]) is not list or type(doc["written"]) is not list
+            or type(doc.get("withdrawn", [])) is not list or type(doc.get("rekeyed", [])) is not list):
+        raise MemoryMapError(f"step {s}'s freed, written, withdrawn and rekeyed are lists")
     freed = tuple(_int(x, f"step {s}'s freed slot", SLOT_LIMIT) for x in doc["freed"])
     written = []
     for w in doc["written"]:
@@ -207,7 +232,13 @@ def step(doc: object) -> Step:
         written.append(Written(_int(w[0], f"step {s}'s written slot", SLOT_LIMIT),
                                _int(w[1], f"step {s}'s store index", 1 << 64), _digest(w[2], f"step {s}'s d_j")))
     withdrawn = tuple(_int(j, f"step {s}'s withdrawn index", 1 << 64) for j in doc.get("withdrawn", []))
-    return Step(s, freed, tuple(written), withdrawn)
+    rekeyed = []
+    for r in doc.get("rekeyed", []):
+        if type(r) is not list or len(r) != 2:
+            raise MemoryMapError(f"step {s}'s re-key is [slot, index], not {r!r}")
+        rekeyed.append(Rekeyed(_int(r[0], f"step {s}'s re-keyed slot", SLOT_LIMIT),
+                               _int(r[1], f"step {s}'s re-key's store index", 1 << 64)))
+    return Step(s, freed, tuple(written), withdrawn, tuple(rekeyed))
 
 
 def parse(lines: Iterable[str]) -> tuple[Header, Iterator[Step]]:
@@ -241,13 +272,15 @@ class Change:
     """What one step does to the audit's store: from `first`, the step's fresh indices, the blocks it writes, with
     digests `digests` (none if empty) at `indices`, and those it withdraws (`withdrawn`, canonical runs); and the store
     indices it releases, freed, overwritten or withdrawn, as canonical runs (`released`, which covers `withdrawn`: the
-    prover sends both, `AuditRun.release(released, withdrawn)`)."""
+    prover sends both, `AuditRun.release(released, withdrawn)`), and its refresh re-keys as (index, origin) pairs in
+    index order, the origin the store index of the registered or written block whose payload it carries (`rekeyed`)."""
 
     step: int
     first: int
     digests: tuple[bytes, ...]
     released: tuple[tuple[int, int], ...]
     withdrawn: tuple[tuple[int, int], ...] = ()
+    rekeyed: tuple[tuple[int, int], ...] = ()
 
     @property
     def count(self) -> int:
@@ -255,17 +288,19 @@ class Change:
 
     @property
     def indices(self) -> tuple[int, ...]:
-        """The store indices of the blocks the step writes, `digests`' in order: its fresh ones less those withdrawn."""
-        gone = {j for f, c in self.withdrawn for j in range(f, f + c)}
+        """The store indices of the blocks the step writes, `digests`' in order: its fresh ones less those withdrawn
+        or re-keys."""
+        gone = {j for f, c in self.withdrawn for j in range(f, f + c)} | {j for j, _ in self.rekeyed}
         return tuple(j for j in range(self.first, self.first + self.count + len(gone)) if j not in gone)
 
     def append_tree(self, registration: bytes, salts: Sequence[bytes]) -> MerkleTree | None:
         """The step's append tree under fresh `salts`, a salt a block (`audit.append_tree`), whose root and `count`
-        go to `AuditRun.append`; None if the step wrote nothing.  A step that withdraws a block has none: its writes
-        are not the whole of the append its blocks went out in when they completed, whose tree is the one sent."""
-        if self.withdrawn:
-            raise MemoryMapError(f"step {self.step} withdraws a block, so its writes are not one append's whole: the "
-                                 "tree is the append made when its blocks completed")
+        go to `AuditRun.append`; None if the step wrote nothing.  A step that withdraws a block or records a re-key has
+        none: its writes are not the whole of the append its blocks went out in when they completed, whose tree is the
+        one sent, and a re-key's payload root is its origin's."""
+        if self.withdrawn or self.rekeyed:
+            raise MemoryMapError(f"step {self.step} withdraws a block or records a re-key, so its writes are not one "
+                                 "append's whole: the tree is the append made when its blocks completed")
         return audit.append_tree(registration, self.first, self.digests, salts) if self.digests else None
 
 
@@ -283,6 +318,7 @@ class Replay:
                                  f"{head.registration.hex()[:16]}… of {head.blocks} blocks")
         self.header, self.extent, self.last, self.taken = head, head.blocks, -1, -1
         self.moved: dict[int, int | None] = {}
+        self.origin: dict[int, int] = {}
         self._added: set[int] = set()
         self._removed: set[int] = set()
 
@@ -305,20 +341,36 @@ class Replay:
                                      "is live once written, and a freed one until it is written again")
         if len({w.slot for w in s.written}) != len(s.written):
             raise MemoryMapError(f"step {s.step} writes a slot twice")
-        first, k = self.extent, len(s.written) + len(s.withdrawn)
+        first, k = self.extent, len(s.written) + len(s.withdrawn) + len(s.rekeyed)
         if (any(not first <= j < first + k for j in s.withdrawn)
                 or any(a >= b for a, b in zip(s.withdrawn, s.withdrawn[1:]))):
             raise MemoryMapError(f"step {s.step} withdraws {list(s.withdrawn)}: a withdrawal takes the index its block's "
                                  f"write would have, among the step's fresh ones from {first}, in increasing order")
-        taken = set(s.withdrawn)
+        rekeys = [r.index for r in s.rekeyed]
+        if (any(not first <= j < first + k for j in rekeys) or any(a >= b for a, b in zip(rekeys, rekeys[1:]))
+                or set(rekeys) & set(s.withdrawn)):
+            raise MemoryMapError(f"step {s.step} re-keys to {rekeys}: a re-key takes the index its append gave it, "
+                                 f"among the step's fresh ones from {first}, in increasing order, none withdrawn")
+        touched = [*s.freed, *(w.slot for w in s.written)]
+        for r in s.rekeyed:
+            if self.holds(r.slot) is None or r.slot in touched:
+                raise MemoryMapError(f"step {s.step} re-keys slot {r.slot}, which holds no block or which the step also "
+                                     "frees, writes or re-keys: a re-key carries a live slot's payload, unchanged")
+            touched.append(r.slot)
+        taken = set(s.withdrawn) | set(rekeys)
         for w, j in zip(s.written, (j for j in range(first, first + k) if j not in taken)):
             if w.index != j:
                 raise MemoryMapError(f"step {s.step}'s block at slot {w.slot} has index {w.index}, not the store's next "
-                                     f"fresh one, {j}: N plus every block written or withdrawn before, in record order")
+                                     f"fresh one, {j}: N plus every block written, withdrawn or re-keyed before, in "
+                                     "record order")
+        rekeyed = tuple((r.index, self.origin.get(old, old)) for r in s.rekeyed if (old := self.holds(r.slot)) is not None)
         gone = [self.holds(slot) for slot in s.freed]
         self.moved.update((slot, None) for slot in s.freed)
         gone += [j for w in s.written if (j := self.holds(w.slot)) is not None]
+        gone += [self.holds(r.slot) for r in s.rekeyed]
         self.moved.update((w.slot, w.index) for w in s.written)
+        self.moved.update((r.slot, r.index) for r in s.rekeyed)
+        self.origin.update(rekeyed)
         self.extent = first + k
         self.last = s.step
         for j in gone:
@@ -327,8 +379,9 @@ class Replay:
             else:
                 self._removed.add(j)
         self._added.update(w.index for w in s.written)
+        self._added.update(rekeys)
         return Change(s.step, first, tuple(w.digest for w in s.written), _runs(gone + list(s.withdrawn)),
-                      _runs(s.withdrawn))
+                      _runs(s.withdrawn), rekeyed)
 
     def take(self, step: int) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
         """The plan's change for the pass that covers `step`, since the last `take`, for a prover whose plans hold
@@ -354,11 +407,11 @@ def schedule(head: Header, steps: Iterable[Step], appends: Sequence[tuple[int, i
     sends the plans this schedule gives."""
     replay, write, free = Replay(head), {}, {}
     for s in steps:
-        for slot in [*s.freed, *(w.slot for w in s.written)]:
+        for slot in [*s.freed, *(w.slot for w in s.written), *(r.slot for r in s.rekeyed)]:
             if (j := replay.holds(slot)) is not None:
                 free[j] = s.step
         replay.apply(s)
-        write.update((w.index, s.step) for w in s.written)
+        write.update((w.index, s.step) for w in [*s.written, *s.rekeyed])
     registered: list[list[int]] = []
     for j in sorted(j for j in free if j < head.blocks):
         if registered and registered[-1][0] + registered[-1][1] == j and registered[-1][2] == free[j]:
@@ -372,4 +425,4 @@ def schedule(head: Header, steps: Iterable[Step], appends: Sequence[tuple[int, i
         tuple(passes))
 
 
-__all__ = ["Change", "Header", "MemoryMapError", "Replay", "Step", "Written", "dumps", "parse", "schedule"]
+__all__ = ["Change", "Header", "MemoryMapError", "Rekeyed", "Replay", "Step", "Written", "dumps", "parse", "schedule"]
