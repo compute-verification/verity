@@ -83,9 +83,16 @@ def scheme_of(name: str, **instance: Any) -> C.PearlC:
     return schemes.get(name, **instance)
 
 
+def _runs(name: str) -> None:
+    """Refuse a scheme this device path doesn't run, one outside the kernel schemes' ``pearl-c`` family."""
+    if named(name).family != "pearl-c":
+        raise KeyError(f"{name!r}: this device path runs {', '.join(names('pearl-c'))}")
+
+
 def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
     """Every linear outside the scheme's domain or its kernels' (`KERNEL_GRAIN`), by weight id."""
-    s, out = scheme_of(name), []
+    _runs(name)
+    s, out = schemes.get(name), []
     gk, gn = KERNEL_GRAIN[s.device.name]
     for w, (n, k) in sorted(shapes.items()):
         if k % gk or n % gn:
@@ -100,5 +107,5 @@ def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
 
 def new_salt_key(scheme: str) -> bytes:
     """A fresh prover hm96 salt key for `scheme`'s trees (their salts, kept by the prover and never in a record)."""
-    scheme_of(scheme)
+    _runs(scheme)
     return os.urandom(32)
