@@ -4,7 +4,11 @@ Standard library only: `prove_records` reads the inputs from the store's records
 
 **The workload** is its block census (`Census`): every block type (a Definition at its statics) with the proof blocks of
 it a served token takes and log2 of its witness bits (k_log), and the MACs a served token takes. A cut (a `partition`
-card) replaces the block types of the served rows it recuts.
+card) replaces the block types of the served rows it recuts. A block type of a word Definition may name the Definition on
+bits its proof is (`proved_as`, at its own statics) and its kind's largest block in the census, where that one is at
+least as large in every measure (`bounded_by`). A type's steady-state rate is read by its own id, else by its
+`proved_as`, else by its `bounded_by` (`rated_as`); a rate read by `bounded_by` is a larger block's, an upper bound on
+the type's cost and not a measurement of it, and the totals say when they include one.
 
 **A proof system** (`ProofSystem`) turns a census into a `Table`: a row a block type with the blocks of it proved a
 served token, the prover GPU-seconds a block and where that figure is from (`SOURCES`, best first):
@@ -124,7 +128,8 @@ PROOF_BYTES_BASIS = (
 class Block:
     """A block type of a census: a Definition at its statics as the census spells it, the served rows it is cut from
     (`kind`, which a cut replaces by), the proof blocks of it a served token takes, log2 of its witness bits, and a
-    block's served MACs and AND gates where the census holds them."""
+    block's served MACs and AND gates where the census holds them, and the census's `proved_as` and `bounded_by` where
+    it gives them (`rated_as`)."""
 
     name: str
     kind: str
@@ -132,6 +137,8 @@ class Block:
     k_log: int | None = None
     macs: float | None = None
     ands: int | None = None
+    proved_as: str | None = None
+    bounded_by: str | None = None
 
 
 @dataclass(frozen=True)
@@ -155,7 +162,8 @@ class Census:
         """The census of a `block-census/v1` record's `census.json`, one request's counts over its tokens."""
 
         tokens = sum(doc["tokens"].values())
-        blocks = tuple(Block(name, ", ".join(sorted(d["of"])), count / tokens, d.get("k_log"), d.get("macs"), d.get("ands"))
+        blocks = tuple(Block(name, ", ".join(sorted(d["of"])), count / tokens, d.get("k_log"), d.get("macs"), d.get("ands"),
+                             d.get("proved_as"), d.get("bounded_by"))
                        for name, d in doc["definitions"].items() if (count := d["prefill"] + d["decode"]))
         return cls(blocks, doc["per_request"]["circuit_macs"] / tokens, doc["per_request"]["macs"] / tokens)
 
@@ -217,6 +225,23 @@ def definition_id(spec: str) -> str:
     return _BOOL.sub(lambda m: m[1].capitalize(), spelled).replace("[", "(").replace("]", ")")
 
 
+#: what a block type's rate is read by where its own id has none, in order, as the census names each: the Definition on
+#: bits its proof is, then its kind's largest block in the census, whose rate bounds its cost from above
+PROVED_AS, BOUNDED_BY = "proved_as", "bounded_by"
+
+
+def rated_as(name: str, proved_as: str | None, bounded_by: str | None,
+             rated: Callable[[str], bool]) -> tuple[str, str | None, str | None]:
+    """The id a block type's rate is read by, which census field gave it (`PROVED_AS`, `BOUNDED_BY`, or None: its own
+    name) and that field's spec: its own id where `rated` holds it, else its `proved_as`'s, else its `bounded_by`'s,
+    else its own id, unrated."""
+
+    for how, spec in ((PROVED_AS, proved_as), (BOUNDED_BY, bounded_by)):
+        if not rated(definition_id(name)) and spec is not None and rated(definition_id(spec)):
+            return definition_id(spec), how, spec
+    return definition_id(name), None, None
+
+
 # ---- the table ---------------------------------------------------------------------------------------------------------------
 
 
@@ -235,7 +260,9 @@ class Cost:
     steady-state rows timed at its prover count and cores, as (blocks, a statement's GPU-seconds, the run or art that
     holds it), the size that prices it first; empty where they timed one size or none. `steady` is the steady-state
     row the figure rests on, the type's own or its family's (None from any other source): what the figure was read
-    from, which two costs with the same figures needn't share, so it takes no part in comparing them."""
+    from, which two costs with the same figures needn't share, so it takes no part in comparing them. `rated_as` is the
+    census field and its spec a steady-state figure was read by where it isn't the type's own (`rated_as`): a
+    `BOUNDED_BY` figure is a larger block's, an upper bound."""
 
     source: str
     seconds: float | None = None
@@ -255,6 +282,7 @@ class Cost:
     sizes: tuple[tuple[int, float, str], ...] = ()
     lean_statement: LeanVerify | None = None
     steady: Steady | None = field(default=None, compare=False)
+    rated_as: tuple[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -405,7 +433,8 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     """A table's rows, the share of the proving time each source covers, and the totals, given a served token's
     GPU-seconds. The totals are `measured` only when every block type is measured at steady state, and `partial` when a
     type has no figure: `missing` then names each such type, the most blocks first, with its share of the blocks, and
-    of the MACs where every row holds them (a type with no time has no share of the proving time). `planned` is the
+    of the MACs where every row holds them (a type with no time has no share of the proving time). `bounded` names each
+    type priced at a larger block's steady-state rate (`BOUNDED_BY`), which makes every total an upper bound. `planned` is the
     same blocks at their sampling plan's own prices, where the plan states them (`_planned`). `above_cores` is the
     share of the proving time that rests on steady-state rows timed at more cores than the table's host holds
     (`_above_cores`), and `off_node` how many of the steady-state rows that price a type ran with their card on
@@ -463,6 +492,8 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
         status = "partial"
     else:
         status = "measured" if table.rows and all(r.cost.source == STEADY for r in table.rows) else "modeled"
+    bounded = [{"block": r.block, "bounded_by": r.cost.rated_as[1]} for r in table.rows
+               if r.cost.seconds is not None and r.cost.rated_as and r.cost.rated_as[0] == BOUNDED_BY]
     unread = [{"record": s.record, "run": s.run, "type": s.type, "definition": s.definition, "provers": s.provers,
                "cores": s.cores, "seconds": s.seconds / s.blocks if s.measured else None, "why": s.refused}
               for s in table.unread]
@@ -471,7 +502,7 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
         "unread": unread,
         "totals": {
             "status": status, "steady_time_share": steady, "above_cores": _above_cores(table),
-            "off_node": _off_node(table), "missing": missing,
+            "off_node": _off_node(table), "missing": missing, "bounded": bounded,
             "blocks_per_token": blocks, "gpu_seconds_per_token": total, "gpu_seconds_per_token_range": [low, high],
             "tokens_per_gpu_second": share(1.0, total),
             "tokens_per_gpu_second_range": [share(1.0, high), share(1.0, low)],

@@ -12,11 +12,17 @@ from pathlib import Path
 import pytest
 from prove_helpers import (
     FIXTURES,
+    HEAD_END,
+    HEAD_END_BITS,
     REPO,
     Store,
     _outside_a_research_run,  # noqa: F401  (autouse)
     designed,
+    first,
+    on_bits,
     recorded,
+    steady,
+    without_names,
 )
 from verity_bench import kit, spot_status
 from verity_bench import prove as P
@@ -173,6 +179,63 @@ def test_the_command_prints_the_census_and_refuses_the_ratio_by_name(tmp_path, m
     kept = json.loads((within / PC.CENSUS_TABLE).read_text())
     assert kept["census"]["blocks"] == {"r0": 40, "r1": 31} and kept["refusal"] == doc["refusal"]
     assert not (within / R.TABLE).exists()
+
+
+def census_page(found: dict, refusal: dict | None = None) -> list[str]:
+    return PC.render({"census": found | {"art": "art:census", "record": ONE_B.record(R.CENSUS), "run": "r0",
+                                         "steady": ONE_B.record(R.STEADY), "provers": 1, "cores": 10},
+                      "refusal": refusal})
+
+
+def test_a_block_types_rate_is_its_own_ids_else_its_proved_as_else_its_bounded_by_and_the_table_says_which():
+    """A word block type proved as its Definition on bits takes that one's rate, and the table names it beside the
+    block; one whose own Definition on bits has none takes its kind's largest block's, and the table says `bounded by`
+    and that the rated count includes it, an upper bound; one whose own id has a rate takes it and prints as it did
+    before the census named either. The refusal reads the rates the same way, and with neither field the word blocks
+    have no rate, as before."""
+
+    big, small, end = first(190, 192, 2), first(5, 128, 2), P.definition_id(HEAD_END)
+    rates = {P.definition_id(big): steady("attn-first", P.definition_id(big), "r20261118-000000-0001", 8, 4.0),
+             end: steady("attn-end", end, "r20261118-000000-0002", 8, 1.0),
+             P.definition_id(HEAD_END_BITS): steady("attn-end2", P.definition_id(HEAD_END_BITS), "r20261118-000000-0003",
+                                                    8, 2.0)}
+    doc = on_bits()
+    found = PC.table([(None, doc)], rates)
+    rate = {r["block"]: r["rate"] for r in found["rows"]}
+    assert rate == {
+        first(190, 192): {"record": "r20261118-000000-0001", "type": "attn-first", "provers": 1, "cores": 10, "proved_as": big},
+        first(5, 128): {"record": "r20261118-000000-0001", "type": "attn-first", "provers": 1, "cores": 10, "bounded_by": big},
+        HEAD_END: {"record": "r20261118-000000-0002", "type": "attn-end", "provers": 1, "cores": 10}}
+    assert PC.refusal(P.Census.of(doc), found, rates, []) is None
+    lines = census_page(found)
+    assert (f"| `{first(5, 128)}` proved as `{small}` | 22 | 100,000 | 30 | 30 | 3.000e+06 | `attn-first` at 1 prover(s), "
+            f"10 cores (r20261118-000000-0001), bounded by `{big}` |") in lines
+    assert (f"| `{first(190, 192)}` proved as `{big}` | 26 | 10,000,000 | 2 | 2 | 2.000e+07 | `attn-first` at 1 prover(s), "
+            "10 cores (r20261118-000000-0001) |") in lines
+    assert (f"| `{HEAD_END}` | 20 | 1,000 | 4 | 4 | 4.000e+03 | `attn-end` at 1 prover(s), 10 cores "
+            "(r20261118-000000-0002) |") in lines
+    assert ("Rated: 3 of 3 block types, 36 of 36 proof blocks, 1 block type(s) of them (30 proof blocks) bounded by a "
+            "larger block's rate, an upper bound on their cost and not a measurement of it.") in lines
+
+    plain = without_names(doc)
+    bare = PC.table([(None, plain)], rates)
+    assert {r["block"]: r["rate"] for r in bare["rows"]} == {first(5, 128): None, HEAD_END: rate[HEAD_END],
+                                                              first(190, 192): None}
+    assert [r["block"] for r in PC.refusal(P.Census.of(plain), bare, rates, [])["no_rate"]] == [first(5, 128), first(190, 192)]
+    text = "\n".join(census_page(bare))
+    assert "proved as" not in text and "bounded by" not in text and "Rated: 1 of 3 block types, 4 of 36 proof blocks.\n" in text
+    assert [x for x in lines if HEAD_END in x] == [x for x in census_page(bare) if HEAD_END in x]
+
+
+def test_a_block_type_whose_definition_on_bits_has_no_rate_and_no_bound_names_it_and_has_none():
+    """With no rate at its own id, its `proved_as` or its `bounded_by`, a block type has no rate, the refusal names it
+    by its census name, and the table names its Definition on bits, the one a measurement would rate it by."""
+
+    doc = on_bits()
+    found = PC.table([(None, doc)], {})
+    assert all(r["rate"] is None for r in found["rows"])
+    assert {r["block"] for r in PC.refusal(P.Census.of(doc), found, {}, [])["no_rate"]} == set(doc["definitions"])
+    assert (f"| `{HEAD_END}` proved as `{HEAD_END_BITS}` | 20 | 1,000 | 4 | 4 | 4.000e+03 | none |") in census_page(found)
 
 
 def test_a_census_of_another_model_or_with_no_census_file_is_refused(tmp_path):

@@ -251,7 +251,9 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
                f"{_n(t['tokens_per_gpu_second'])}{_range(t['tokens_per_gpu_second_range'])}"),
               (f"- prover GPUs per serving GPU: {_n(t['gpus_per_serving_gpu'])}{_range(t['gpus_per_serving_gpu_range'])}, "
                f"{t['status']}: steady-state measurements cover {t['steady_time_share']:.1%} of "
-               f"{'the proving time it prices' if t['missing'] else 'its proving time'}")]
+               f"{'the proving time it prices' if t['missing'] else 'its proving time'}"
+               + (f"; an upper bound, since {len(t['bounded'])} block type(s) are priced at a larger block's rate "
+                  "(bounded by)" if t.get("bounded") else ""))]
     if t["missing"]:
         named = "; ".join(f"`{_short(m['block'])}` ({_missing_share(m)})" for m in t["missing"][:MISSING_NAMED])
         more = len(t["missing"]) - MISSING_NAMED

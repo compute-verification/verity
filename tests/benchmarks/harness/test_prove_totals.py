@@ -13,11 +13,16 @@ from prove_helpers import (
     CUT,
     GEMM32,
     GEMM64,
+    HEAD_END,
+    HEAD_END_BITS,
     NORM,
     SESSIONS,
     _outside_a_research_run,  # noqa: F401  (autouse)
+    first,
+    on_bits,
     plan,
     steady,
+    without_names,
 )
 from verity_bench import prove as P
 from verity_bench import prove_flock as PF
@@ -152,6 +157,39 @@ def test_the_report_gives_each_sources_share_and_the_totals_with_their_range():
     assert measured["status"] == "measured" and measured["verifier_seconds_per_token"] is None and measured["missing"] == []
     modeled = P.report(PF.Flock(unverified, SESSIONS, "art:card").table(P.Census.of(CENSUS)), 1.0)["totals"]
     assert modeled["status"] == "modeled" and modeled["missing"] == [] and modeled["steady_time_share"] < 1.0
+
+
+def test_the_totals_price_a_word_block_at_its_definition_on_bits_and_say_when_a_larger_blocks_rate_bounds_one():
+    """The totals take a block type's steady-state rate as the census table does (`prove.rated_as`): its own id's, else
+    its `proved_as`'s, else its `bounded_by`'s, each row's note naming which; a row staged on bits is read, not unread.
+    A total that includes a `bounded_by` rate names those types and says it is an upper bound. With neither field, the
+    rows on bits are unread and the word types are priced as before."""
+
+    big, end = first(190, 192, 2), P.definition_id(HEAD_END)
+    rows = (steady("attn-first", P.definition_id(big), "r20261118-000000-0001", 8, 8.0),
+            steady("attn-end", end, "r20261118-000000-0002", 8, 4.0),
+            steady("attn-end2", P.definition_id(HEAD_END_BITS), "r20261118-000000-0003", 8, 16.0))
+    out = P.report(PF.Flock(rows, SESSIONS, "art:card").table(P.Census.of(on_bits())), 1.0)
+    got = {r["block"]: r for r in out["rows"]}
+    assert {b: (r["source"], r["seconds"]) for b, r in got.items()} == {
+        first(190, 192): (P.STEADY, 1.0), first(5, 128): (P.STEADY, 1.0), HEAD_END: (P.STEADY, 0.5)}
+    assert got[first(190, 192)]["note"].startswith(f"proved as `{big}`; `attn-first` ")
+    assert got[first(5, 128)]["note"].startswith(f"bounded by `{big}`, a larger block's rate: an upper bound on this "
+                                                 "type's cost, not a measurement of it; `attn-first` ")
+    assert got[HEAD_END]["note"].startswith("`attn-end` ") and out["unread"] == []
+    t = out["totals"]
+    assert t["status"] == "measured" and t["bounded"] == [{"block": first(5, 128), "bounded_by": big}]
+    page = {"workload": "toy", "model": "Toy", "provers": 1, "cores": 10, "inputs": [], "refused": [], "macs_in_blocks": 1.0,
+            **out, "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
+            "periods": {"gates_basis": "stated", "only": None, "rows": []}}
+    assert ("measured: steady-state measurements cover 100.0% of its proving time; an upper bound, since 1 block type(s) "
+            "are priced at a larger block's rate (bounded by)\n") in R.render(page)
+
+    plain = P.report(PF.Flock(rows, SESSIONS, "art:card").table(P.Census.of(without_names(on_bits()))), 1.0)
+    assert {r["block"]: r["source"] for r in plain["rows"]} == {
+        first(190, 192): P.MODELED, first(5, 128): P.MODELED, HEAD_END: P.STEADY}
+    assert {u["type"] for u in plain["unread"]} == {"attn-end2", "attn-first"} and plain["totals"]["bounded"] == []
+    assert "upper bound" not in R.render(page | plain)
 
 
 def test_a_total_whose_every_type_is_steady_or_warm_is_modeled_never_measured():

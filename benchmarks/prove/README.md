@@ -152,7 +152,11 @@ Definition's and each gap's rows and each phase's tokens (`prove.summed`).
 `llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager`) is a workload whose census is printed first
 (`verity_bench/prove_census.py`): each block type's proof blocks in each request and summed, its AND gates where the
 census gives a block's, and the steady-state rate of record that rates it at the stated provers and cores, or `none`.
-Then the gaps: Definitions whose served rows no block of the cut holds, each with its rows in each request and why,
+A block type's rate is its own Definition id's; else, where the census names the Definition on bits its proof is
+(`proved_as`, which the table prints beside the block), that one's; else, where it names its kind's largest block in the
+census (`bounded_by`), that one's, printed `bounded by` it: a larger block's rate, an upper bound on the type's cost and
+not a measurement of it. The rated count and the totals say how many types they include so bounded (`prove.rated_as`
+is the one lookup, for the table, the refusal and the totals). Then the gaps: Definitions whose served rows no block of the cut holds, each with its rows in each request and why,
 counted in no block total. Its totals are given only when every block type with blocks has a steady-state rate (under
 the cut of record), the census holds no gap and every other slot is labelled (`cut`, `flock-single`,
 `spot-sampling`, `lean-verify`, `flock-warm`). Otherwise the command refuses them by name, each block type with no
