@@ -87,6 +87,8 @@ research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V
                                          # --wait: 20 min at most, then exit 79 (research/waitcap.py)
 research run --on MACHINE [--custody-ttl 6h] ...    # the default: the machine puts the attempt + every run file on the store's remote (store README §10.1)
 research run --on MACHINE --no-custody-r2 ...       # opt out: the records stay on the machine until `research fetch --all`
+research run --on MACHINE|auto|--queue --cold-lean-build REASON ... -- CMD   # a raw `lake build` of an analysis package (security/),
+                                         # refused at launch otherwise: `verity lean try` and `lean_changed.py --records` restore it from a kept tree
 research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N]
              [--gpu-model M] [--cpus N] [--class work|bench|...] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...   # the one queue (infra/cluster): placed, then an --on run in its CPU allocation, a GPU leased around the workload alone
 research data custody RUN [--publish] | --triage                 # a run's custody on the remote, from any machine; the runs root by custody state
@@ -106,7 +108,7 @@ research velocity [--line|--json]  # the velocity score from records, never a ga
 research compare ORIGINAL... REPLAY [--expect E] [--json]   # a replay's verdict against the runs it replays (compare.py)
 research digest --as LANE   # what changed for a lane since its last digest (digest.py)
 research queue vqueue|status|ready|review|eject|open|edit|link  # the verified queue onto `main` (vqueue_loop.py, queue.py)
-research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
+research queue judge RUN [TWIN...] [--by LANE]  # the mark `queue ready --on` writes, from its quick-tier run (or the twin that ran) that ended after its caller died
 research queue stats [--json] [--short] [--rounds] [--until TS]  # queue_table.py
 research lean-times ...  # Lean tasks' p95
 research run-times [--hours 12] [--on MACHINE,...] [--json]  # each run's wait to start, setup and run time, by kind, machine and pool (run_times.py)
@@ -492,10 +494,10 @@ until then, with how to keep it: `research keep RUNDIR --owner @LANE --expires D
 files (`--declared-output`); a run with a keep record never goes this way. Each deleted run's line says how much of it was
 stored nowhere else, and the pass's summary counts these runs apart from the never-stored and the covered ones.
 
-`rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
+`rm` is the one way to delete data you don't own on a node, where the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
-`--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. Each
-decision of an `--apply` (delete, refuse, failed) is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
+`--approved-by` handle as owner (`UNHELD_APPROVER` for one no registry handle holds) and are not `keep`. No job script may name
+the path, and nothing in it may be read-only or a mount. Each decision of an `--apply` is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
 with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`.
 
 ### Slack

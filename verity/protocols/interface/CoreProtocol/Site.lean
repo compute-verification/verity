@@ -348,7 +348,7 @@ abbrev Composite : Type := List String
 
 /-- **Onsite**, the spec's `Verity.Registration.Composite.onsite`: the ids of `Core.Onsite.components`. -/
 def Composite.onsite : Composite :=
-  ["verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
+  ["verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/pearl-plus/v1",
     "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"]
 
 /-- **Remote**, the spec's `Verity.Registration.Composite.remote`: the ids of `Core.Remote.V1.components`. -/

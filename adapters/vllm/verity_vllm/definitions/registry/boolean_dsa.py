@@ -28,20 +28,32 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from itertools import accumulate
 
-from verity.circuits.evaluation import bits as BS
 from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import (
+    NOT,
+    ONE,
+    OR,
+    ZERO,
+    add,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+    sub,
+)
+from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.refs import Coll, concat
-from verity.circuits.types import Array, Tuple
+from verity.circuits.evaluation import bits as BS
 from verity.circuits.ops.boolean import attention as BA
 from verity.circuits.ops.boolean import cast as BC
 from verity.circuits.ops.boolean import elementwise as EW
-from verity.circuits.silicon import fp as FP
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import mufu as BM
 from verity.circuits.ops.boolean import scalar as SC
-from verity.circuits.boolean.forms import ONE, ZERO, NOT, OR, add, and_reduce, const_bits, mux, or_reduce, sub
-from verity.circuits.boolean.trace import definition
+from verity.circuits.refs import Coll, concat
+from verity.circuits.silicon import fp as FP
+from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry.boolean_attention import _Bits
 from verity_vllm.definitions.registry.topp_word_gates import I32ToF32 as I32ToF32V1

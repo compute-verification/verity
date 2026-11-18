@@ -18,9 +18,9 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
-from verity.protocols.resource_accounting.memory.pous.verifier.verifier import MerkleTree
 from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.randomness import derive, frame
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import MerkleTree
 
 from . import reference as R
 from . import wire as Wi
@@ -213,7 +213,7 @@ def negative_vectors(vector: dict) -> dict:
     """The kit's 31 cases at v4's offsets (frame offset = body offset + 10): CHALLENGE's epoch at 10, audit id at 74,
     round at 106, index at 108, nonce at 116; AUDIT_OPEN's k at 107 and flags at 125; a w = 64 RESPONSE's block at 120,
     path count at 128 and first sibling at 130; SETUP_ROOT's root at 114."""
-    M, F, I, A = Wi.FAIL_MALFORMED, Wi.FAIL_IDENTITY, Wi.FAIL_AUTHENTICATION, Wi.FAIL_SUCCESS
+    M, F, AU, A = Wi.FAIL_MALFORMED, Wi.FAIL_IDENTITY, Wi.FAIL_AUTHENTICATION, Wi.FAIL_SUCCESS
     base = [bytes.fromhex(m["bytes"]) for m in vector["setup_messages"]] + [bytes.fromhex(vector["audit_open"])]
     for x in vector["exchanges"]:
         base += [bytes.fromhex(x["challenge"]), bytes.fromhex(x["response"])]
@@ -269,7 +269,7 @@ def negative_vectors(vector: dict) -> dict:
         base[:c0_at] + [Wi.challenge_message(epoch, audit_id, 0, wrong.uniform(nblocks, 0), wrong.stream(("nonce", 0), 32))],
         F, 0)
 
-    add("flipped-sibling", "authentication", last(r0_at, lambda f: _flip(f, 130)), I, 0)
+    add("flipped-sibling", "authentication", last(r0_at, lambda f: _flip(f, 130)), AU, 0)
     count = int.from_bytes(base[r0_at][128:130], "big")
     add("declared-path-count-body-mismatch", "malformed",
         last(r0_at, lambda f: _splice(f, 128, 130, (count + 1).to_bytes(2, "big"))), M, 0)
@@ -282,10 +282,10 @@ def negative_vectors(vector: dict) -> dict:
 
     add("well-formed-wrong-sibling-count", "malformed", last(r0_at, drop_sibling), M, 0)
     swapped = bytes.fromhex(vector["blocks"][(vector["exchanges"][0]["index"] + 1) % nblocks])
-    add("swapped-leaf", "authentication", last(r0_at, lambda f: _splice(f, 120, 128, swapped)), I, 0)
+    add("swapped-leaf", "authentication", last(r0_at, lambda f: _splice(f, 120, 128, swapped)), AU, 0)
     frames = base[:open_at + 1]
     frames[setup_count - 1] = _flip(frames[setup_count - 1], 114)
-    add("wrong-verification-root", "authentication", frames, I, 0)
+    add("wrong-verification-root", "authentication", frames, AU, 0)
 
     add("late-by-one-nanosecond", "deadline", base[:r0_at + 1], Wi.FAIL_LATE, 0, times=[R.DELTA_NS + 1])
     add("exact-deadline-boundary", "deadline", list(base), A, 2, times=[R.DELTA_NS, R.DELTA_NS])

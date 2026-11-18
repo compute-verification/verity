@@ -75,6 +75,8 @@ def outside_a_slot(monkeypatch):
     monkeypatch.delenv("CHECK_SLOTS", raising=False)
     monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
     monkeypatch.delenv(SLOT.MIN_MEM_ENV, raising=False)
+    monkeypatch.delenv(SLOT.RUN_CORES_ENV, raising=False)
+    monkeypatch.delenv(SLOT.RUN_BOOK_ENV, raising=False)
 
 
 @pytest.fixture(autouse=True)
@@ -490,6 +492,30 @@ def test_a_pool_the_machine_lacks_is_refused_naming_the_pools_it_has(tmp_path, m
     assert "doesn't have" in err and err.rstrip().endswith(f": proofs; exit {SLOT.NOT_STARTED}")
 
 
+def test_the_missing_pools_advice_launches_a_run_in_a_pool_the_machine_has(tmp_path, monkeypatch, capsys):
+    import re
+    import shlex
+
+    from research import remote
+    from research.cli import main as research_main
+
+    (tmp_path / "proofs").mkdir()
+    (tmp_path / "proofs" / "slots").write_text("p0 0-1\n")
+    monkeypatch.setenv("CHECK_SLOTS", str(tmp_path / "soundness" / "slots"))
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "soundness" / "slots")
+    assert SLOT.main(["--", "true"], now=lambda: NOW) == SLOT.NOT_STARTED
+    advice = re.search(r"`research (run [^`]*)`", capsys.readouterr().err)[1]
+    argv = shlex.split(advice.replace("MACHINE", "m").replace("NAME", "proofs").replace("LANE", "x").replace("CMD", "true"))
+    launched = []
+    monkeypatch.setattr(remote, "launch", lambda **kw: launched.append(kw) or {
+        "phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}})
+    monkeypatch.setenv("RESEARCH_RUNS", str(tmp_path / "runs"))
+    monkeypatch.chdir(ROOT)
+    assert research_main(argv) == 0, capsys.readouterr().err
+    [kw] = launched
+    assert kw["machine_name"] == "m" and "CHECK_SLOTS=/workspace/research/locks/proofs/slots" in kw["command"]
+
+
 def test_a_slots_file_that_lists_none_is_not_started_naming_the_pools_beside_it(tmp_path, monkeypatch, capsys):
     """A machine with pools and no check slots (its slots file is there and lists none) runs nothing and says so with
     NOT_STARTED, which a caller reads as a check that never ran, not as one that failed; the message names the pools a run
@@ -510,7 +536,7 @@ def test_a_slots_file_that_lists_none_is_not_started_naming_the_pools_beside_it(
         (tmp_path / name).mkdir()
         (tmp_path / name / "slots").write_text(text)
     err = not_started()
-    assert "`research run --on MACHINE --pool NAME --as LANE`): proofs, research; " in err
+    assert "--pool NAME --as LANE -- CMD`): proofs, research; " in err
     assert "trains" not in err and ".bak-" not in err
     assert "`research queue ready N --on auto` places a quick tier itself" in err
     assert not list(tmp_path.glob("check-*"))   # no lock taken and no line joined
@@ -1946,6 +1972,51 @@ def _shard(monkeypatch, tmp_path: Path, free: list[int]) -> dict:
 
     monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
     return ran
+
+
+def test_a_run_that_names_its_cores_and_booking_takes_the_smallest_slot_that_fits_and_books_only_that(tmp_path, monkeypatch, capsys):
+    """A quick tier held a lane slot's 16 cores and booked its mem= of 15 GiB while it used a few of each. Naming its own cores
+    (RUN_CORES_ENV) it takes the slot of the fewest cores that has as many, an 8-core one over the first line; naming its booking
+    (RUN_BOOK_ENV) it books that much of the slot's mem=, which stays what CMD plans on, and a booking over a line's own book=
+    or under the run's ask moves nothing. A machine with no slot of its cores starts nothing, at once, and says so."""
+    (tmp_path / "slots").write_text("l0 0-15 mem=15\nq0 16-27 mem=15\nq1 28-35 mem=15\nt 36-131 only=trains mem=300 book=4\n")
+    ran = _shard(monkeypatch, tmp_path, [2000])
+
+    def take(*opts):
+        return SLOT.main([*opts, "--", "suites.py"], now=lambda: NOW, sleep=lambda s: pytest.fail("waited"))
+
+    with pytest.raises(Exec):
+        take("--by", "lane-1")
+    assert ran == {"slot": "l0", "mem": "15", "book": "15"}, "without an ask: the first free slot, booking its mem="
+    monkeypatch.setenv(SLOT.RUN_CORES_ENV, "8")
+    monkeypatch.setenv(SLOT.RUN_BOOK_ENV, "6")
+    with pytest.raises(Exec):
+        take("--by", "lane-1")
+    assert ran == {"slot": "q1", "mem": "15", "book": "6"}, "8 cores: q1's 8 before q0's 12 and l0's 16; 6 of its 15 GiB booked"
+    reservation = json.loads((tmp_path / "ramlock" / "check-q1.json").read_text())
+    assert reservation["gb"] == round(6 * 2 ** 30 / 1e9, 1), "the ledger holds the booking, not mem="
+    assert json.loads((tmp_path / "check-q1.who").read_text())["reserves_gib"] == 6
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "10")
+    with pytest.raises(Exec):
+        take("--by", "lane-1")
+    assert ran["book"] == "10", "the run's ask is never booked under"
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV)
+    monkeypatch.setenv(SLOT.RUN_CORES_ENV, "96")
+    with pytest.raises(Exec):
+        take("--priority", "--by", "ci")
+    assert ran == {"slot": "t", "mem": "300", "book": "4"}, "a line booking less than the run keeps its own book="
+    monkeypatch.setenv(SLOT.RUN_CORES_ENV, "17")
+    ran.clear()
+    capsys.readouterr()
+    assert take("--by", "lane-1") == SLOT.NOT_STARTED and ran == {}, "no lane slot has 17 cores"
+    assert (f"needs a slot of at least 17 cores ({SLOT.RUN_CORES_ENV}), and {tmp_path / 'slots'} has l0 (16 cores), q0 (12 "
+            "cores), q1 (8 cores)") in capsys.readouterr().err
+    for bad in ("0", "half", "6.5"):
+        monkeypatch.setenv(SLOT.RUN_BOOK_ENV, bad)
+        monkeypatch.setenv(SLOT.RUN_CORES_ENV, "8")
+        with pytest.raises(SystemExit, match=f"{SLOT.RUN_BOOK_ENV}='{bad}' is not a whole number above 0"):
+            take("--by", "lane-1")
+    assert (SLOT.RUN_CORES_ENV, SLOT.RUN_BOOK_ENV) == ("CHECK_RUN_CORES", "CHECK_RUN_BOOK_GB"), "research's queue.QUICK_ASK names them"
 
 
 def _check():

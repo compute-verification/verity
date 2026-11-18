@@ -19,7 +19,7 @@ from typing import Any
 
 from verity_config import dumps, sha256, value
 
-from verity_bench import settings
+from verity_bench import kit, settings
 from verity_bench.steady_spec import SteadyPoint, SteadySpec
 from verity_bench.vllm.presets import ResolvedSpec, SweepPoint, expand_sweep, former_name, resolve_spec
 
@@ -100,6 +100,10 @@ COMMIT_MARGIN_S = 86_400
 PULL_JOBS = 64
 
 
+def _utc(t: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
+
+
 def _show(root: Path, commit: str, field: str) -> str:
     process = subprocess.run(["git", "show", "-s", f"--format={field}", commit], cwd=root, capture_output=True, text=True)
     if process.returncode != 0:
@@ -109,13 +113,14 @@ def _show(root: Path, commit: str, field: str) -> str:
 
 class StoreCompletion:
     """The newest attempt `research data lookup` finds for a point at its commit's tree, with validation passed and rc 0
-    (a killed run's result.json may read as passed; a dirty tree has no reuse key): from this machine's catalog, else,
+    (a killed run's result.json may read as passed; a dirty tree has no reuse key), and not started as a trial
+    (`kit.trial_attempt`): from this machine's catalog, else,
     unless `local_only`, from the store's remote, pulled once per commit since `COMMIT_MARGIN_S` before it; no reindex."""
 
     def __init__(self, store: Any = None, *, root: Path | None = None, local_only: bool = False,
-                 log: Callable[[str], None] | None = None):
-        self._store, self.root, self.local_only = store, root, local_only
-        self._log = log or (lambda message: print(f"verity-bench: {message}", file=sys.stderr))
+                 log: Callable[[str], None] | None = None, clock: Callable[[], float] = time.time):
+        self._store, self.root, self.local_only, self._clock = store, root, local_only, clock
+        self._log = log or (lambda message: print(f"verity-bench: {message}", file=sys.stderr, flush=True))
         self._pulled: set[str] = set()
 
     @property
@@ -142,7 +147,8 @@ class StoreCompletion:
         root = self.root or repository_root()
         attempts = cli_prov.lookup(tools_registry.load("verity_bench.tool:VLLM_BENCH_POINT", root), root, store=self.store,
                                    params={"identity": identity}, source_tree=_show(root, commit, "%T"))["attempts"]
-        passing = [a["id"] for a in attempts if a["status"].get("validation") == "passed" and a["status"].get("rc") == 0]
+        passing = [a["id"] for a in attempts if a["status"].get("validation") == "passed" and a["status"].get("rc") == 0
+                   and not kit.trial_attempt(a)]
         return passing[-1] if passing else None
 
     def pull_since(self, started: int) -> int:
@@ -191,10 +197,15 @@ class StoreCompletion:
 
         from research.store import labels_sync
 
-        remote = self._remote()
-        report = labels_sync.sync(self.store, push=False)
-        self._log(f"pulled {len(report['pulled'])} labels from {remote.describe()} "
-                  f"({report['already']} of {report['remote_before']} were here)")
+        remote, start = self._remote(), self._clock()
+        self._log(f"{_utc(start)} pulling labels from {remote.describe()} into {self.store.root}")
+        theirs = labels_sync.remote_labels(remote)
+        listed = self._clock()
+        report = labels_sync.sync(self.store, push=False, theirs=theirs)
+        end = self._clock()
+        self._log(f"{_utc(end)} pulled {len(report['pulled'])} labels from {remote.describe()} "
+                  f"({report['already']} of {report['remote_before']} were here, {report['pack']} of them from the labels "
+                  f"pack): listed in {listed - start:.0f} s, synced in {end - listed:.0f} s")
         for line in report["bad"][:5]:
             self._log(f"skipped label {line}")
         return len(report["pulled"])
@@ -320,6 +331,8 @@ def _env_flags(spec: ResolvedSpec) -> list[str]:
     flags = []
     if venv := settings.VERITY_BENCH_VENV:
         flags += ["--env", f"VERITY_BENCH_VENV={venv}"]
+    if kit.is_trial():
+        flags += ["--env", f"{kit.TRIAL}=1"]
     for name, setting in point_environment(spec).items():
         flags += ["--env", f"{name}={setting}"]
     return flags
