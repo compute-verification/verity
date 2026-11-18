@@ -1272,14 +1272,14 @@ def test_the_bandwidth_answer_names_who_graded_it_where_the_launcher_reads_it(tm
                "receipts": 1, "unit_bytes": 8224, "units": 1, "windows": [0], "wrong_at_most": 0}
     judged = p2_parties.core_answer({"protocol": p2_parties.PROTOCOL, "registration": "cd" * 64, **session})
     (d := tmp_path / "bandwidth").mkdir()
-    answer = SP.BW.public_answer(judged, bytes(64), "beside the served window", 1000, d)
-    assert answer["profile"]["placement"] == {"unchecked": dict(mc.UNCHECKED), "graded_by": SP.BW.GRADED_BY}
+    answer = BW.public_answer(judged, bytes(64), "beside the served window", 1000, d)
+    assert answer["profile"]["placement"] == {"unchecked": dict(mc.UNCHECKED), "graded_by": BW.GRADED_BY}
     assert not {mc.PREMISE, mc.PREMISE_BEFORE} & set(answer["profile"]["placement"])
     (d / "answer.json").write_text(json.dumps(answer))
     row = SV.piece_row("bandwidth", tmp_path)
-    assert SV.graded_by(row) == SP.BW.GRADED_BY and SP.BW.GRADED_BY.endswith(
+    assert SV.graded_by(row) == BW.GRADED_BY and BW.GRADED_BY.endswith(
         "a live verdict on the auditor's device exists (poub-verifier, its bandwidth party) and is not the one this row "
         "reads")
     for product, tail in (("remote", ""), ("onsite", f"; {SV.ONSITE_UNDECIDED}")):
         said = SV.ran_by("bandwidth", row | {"answer_from": "as written"}, product)["answer_from"]
-        assert said == f"as written; {SP.BW.GRADED_BY}{tail}" and SV.PIECE not in said
+        assert said == f"as written; {BW.GRADED_BY}{tail}" and SV.PIECE not in said
