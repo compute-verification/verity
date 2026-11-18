@@ -159,7 +159,7 @@ def test_the_block_program_agrees(pieces, units):
         assert block[k] == want[k], k
     assert [(n["fn"], n["form"], [a["refs"] for a in n["args"]]) for n in block["nodes"]] == \
         [(n["fn"], n["form"], n["refs"]) for n in want["nodes"]]
-    reached = {Word: {Word, Sum}, Rows: {Rows, Sum}, Sum: {Sum}, ADD: set()}
+    reached = {Word: {Word}, Rows: {Rows, Sum}, Sum: {Sum}, ADD: set()}
     fns = [fn for _k, fn in PO.calls(top()[0])]
     ours = set().union(*(reached[fns[u]] for u in units))
     assert set(out["lifted"]) == {descriptor_id(lifted(fn)) for fn in ours}
