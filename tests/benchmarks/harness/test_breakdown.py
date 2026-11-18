@@ -7,6 +7,7 @@ import json
 
 import pytest
 
+from bench_standins import CPUS, QUIET
 from test_served_table import ADDED, Producer, _fresh
 from verity_bench import breakdown as B
 from verity_bench.cli import main
@@ -83,7 +84,7 @@ class SpanEngine:
         return {"token_digest": _token_digest({f"{point.id}-0": (7, 9)}), "generated_tokens": TOKENS,
                 "metrics": {"time_per_output_token_s": tpot_s, "time_to_first_token_s": 1.0, "tokens_per_s": 1 / tpot_s,
                             "peak_gpu_memory_bytes": 1.0},
-                "spans": {"span": spans}, "extras": extras}
+                "spans": {"span": spans}, "extras": extras, "host": QUIET}
 
     def close(self):
         pass
@@ -101,7 +102,7 @@ def _result(point_id="b8-p512-mixed", *, arms=B.ARMS, span_scale=1.0, reps=2):
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     resolved = tuple(Arm(arm, control=None if arm == B.PLAIN else B.PLAIN) for arm in arms)
     return run_benchmark(resolve_spec(B.SPEC).preset, resolved, (point,), sweep="quick", reps=reps,
-                         factory=SpanFactory(span_scale), git_commit="c" * 40)
+                         factory=SpanFactory(span_scale), git_commit="c" * 40, cpus=CPUS)
 
 
 def _rows(entry):

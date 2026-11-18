@@ -699,59 +699,30 @@ def test_a_seeded_session_is_refused_off_the_logical_clock_and_off_the_test_sign
     assert list(tmp_path.iterdir()) == []
 
 
-@pytest.mark.parametrize("record", ["lean", "python"])
-def test_the_memory_attester_records_both_verdicts_whichever_is_the_records(record, monkeypatch):
-    """`judge` runs the Lean verdict and the Python's on every session and keeps both in the witness; `RECORD_VERDICT` picks
-    the record's, and where the two agree the record is the same either way."""
-    from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
-
-    live = _live()
-    monkeypatch.setattr(live, "RECORD_VERDICT", record)
-    doc, _ = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1)
-    assert doc["audits_accepted_under_signer"] == 1 and doc["audits_accepted"] == 0
-    for rec in doc["records"]:
-        w = rec["witness"]
-        assert w["record_verdict"] == record and w["reasons"] == ["signature scheme 'test/lms-sha512/n64-w1-h1/v0' is not accepted"]
-        assert w["verdicts"] == {name: {"accepted": False, "reasons": w["reasons"]} for name in ("lean", "python")}
-        assert w["verdicts_under_signer"] == {name: {"accepted": True, "reasons": []} for name in ("lean", "python")}
-
-
-@pytest.mark.parametrize("record", ["lean", "python"])
-@pytest.mark.parametrize("forced", ["lean", "python"])
-def test_a_disagreement_between_the_verdicts_rejects_the_session(forced, record, monkeypatch):
-    """`forced`'s verdict flips its accept bit: under `memory_attester.SCHEMES` it accepts the test-signed sessions the other
-    rejects, and under the signer's mapping it rejects the honest ones the other accepts.  Each session is rejected for the
-    disagreement, with both verdicts named, whichever one accepted and whichever is the record's."""
-    import json
-
+@pytest.mark.parametrize("flip", [False, True])
+def test_the_memory_attesters_verdict_is_the_leans_alone(flip, monkeypatch):
+    """`judge` takes each session's verdict from the Lean alone and never runs the Python's: the Lean's answer, flipped or
+    not, is the record's, under `memory_attester.SCHEMES` and under the signer's own mapping."""
     from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
     from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 
     live = _live()
+    lean = live.lean_verdict().verdict
 
-    def flipped(verdict):
-        def flip(*args, **kw):
-            v = verdict(*args, **kw)
-            return mc.Verdict(not v.accepted, () if not v.accepted else ("forced",), v.late, v.wrong)
-        return flip
+    def judged(*args, **kw):
+        v = lean(*args, **kw)
+        return mc.Verdict(not v.accepted, () if not v.accepted else ("forced",), v.late, v.wrong) if flip else v
 
-    monkeypatch.setattr(live, "RECORD_VERDICT", record)
-    if forced == "python":
-        monkeypatch.setattr(mc, "verdict", flipped(mc.verdict))
-    else:
-        lean = live.lean_verdict().verdict
-        monkeypatch.setattr(live, "lean_verdict", lambda: types.SimpleNamespace(verdict=flipped(lean), server=lambda: None))
-    other = "python" if forced == "lean" else "lean"
+    monkeypatch.setattr(live, "lean_verdict", lambda: types.SimpleNamespace(verdict=judged, server=lambda: None))
+    monkeypatch.setattr(mc, "verdict", lambda *_a, **_k: pytest.fail("the Python verdict ran"))
     doc, _ = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1)
-    assert doc["audits"] == 1 and doc["audits_accepted"] == doc["audits_accepted_under_signer"] == 0
+    assert doc["audits"] == 1
+    assert (doc["audits_accepted"], doc["audits_accepted_under_signer"]) == ((1, 0) if flip else (0, 1))
     for rec in doc["records"]:
         w = rec["witness"]
-        for verdicts, reasons, accepted in ((w["verdicts"], w["reasons"], forced), (w["verdicts_under_signer"],
-                                                                                    w["reasons_under_signer"], other)):
-            assert {name: v["accepted"] for name, v in verdicts.items()} == {forced: accepted == forced,
-                                                                             other: accepted == other}
-            assert reasons == [f"{live.DISAGREE}: lean {json.dumps(verdicts['lean'])}, python {json.dumps(verdicts['python'])}"]
-        assert rec["public"]["verdict"] == {"accepted": False} and not rec["accepted_under_signer"]
+        assert not {"record_verdict", "verdicts", "verdicts_under_signer"} & set(w)
+        scheme = ["signature scheme 'test/lms-sha512/n64-w1-h1/v0' is not accepted"]
+        assert (w["reasons"], w["reasons_under_signer"]) == (([], ["forced"]) if flip else (scheme, []))
 
 
 def _live():
