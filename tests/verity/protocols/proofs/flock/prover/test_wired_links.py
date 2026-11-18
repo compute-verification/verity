@@ -388,7 +388,7 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
     bad, out = at("honest", *bound, reads="wrong_field.reads.json")
     print("wrong_field", out.strip().splitlines()[-1])
     assert bad is None and "reads its writer's whole output row" in out, out
-    # a link reads one whole return field of its writer, from the field's first word (the unit's one field, at 0), and
+    # a link reads one whole return field of its writer, from the field's first leaf (the unit's one field, at 0), and
     # nothing else (HmLinks.checkUnit)
     bad, out = at("wrong_offset", *bound)
     print("wrong_offset", out.strip().splitlines()[-1])

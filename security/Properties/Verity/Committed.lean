@@ -24,7 +24,7 @@ statement's roots, as `Sessions.opens` opens every read: one value at one positi
 writer's row and no comparison of two rows is left.
 
 Two more, each a named `Prop` stated and not proved, are what Flock's checks give `ReadsByPath`: `LinksExact`, that a
-link's leaves are one whole return field of one writer unit, from its first word (`Flock.HmLinks.checkUnit`), and
+link's leaves are one whole return field of one writer unit, from its first leaf (`Flock.HmLinks.checkUnit`), and
 `LinkRowsByPath`, that each link row opens the registered root at its writer's leaf in the writer template's tree
 (`Flock.Registered.check` on the reads `Flock.Registered.withTrees` gives).
 -/
@@ -80,7 +80,7 @@ open Flock.HmLinks (nodes unitAt ownerAt count outGates) in
 /-- **A link reads its writer's outputs exactly** (`Flock.HmLinks.checkUnit`): where a circuit's links parse and
 `checkUnit` accepts reader `i` of the public file, every parameter leaf of the reader's unit that the program wires to
 another unit's output lies in exactly one link, and every link's leaves are circuit inputs, or one whole return field
-of one writer unit (`Flock.HmLinks.fieldSpans`), leaf for leaf, from the field's first word. -/
+of one writer unit (`Flock.HmLinks.fieldSpans`), leaf for leaf, from the field's first leaf. -/
 def LinksExact : Prop :=
   ∀ (c : Flock.Circuit) (P : Flock.Program.Prog) (links : Array Flock.HmLinks.Link) (popIdx : Array Nat) (i w : Nat),
     Flock.HmLinks.parse c = .ok links →
