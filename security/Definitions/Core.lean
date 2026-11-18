@@ -15,7 +15,9 @@ public import Definitions.Core.Levels
 public import Definitions.Core.CircuitLevels
 public import Definitions.Core.LevelsCount
 public import Definitions.Core.LevelsCredited
+public import Definitions.Core.LevelsKinds
 public import Definitions.Core.Scheme
+public import Definitions.Core.ZkCompiler
 public import Definitions.Core.Challenger
 public import Definitions.Core.Decisive
 public import Definitions.Core.Scalar
@@ -42,6 +44,7 @@ and defines none of its own: a circuit and its trace, a partition into proof blo
 the ones here.
 
 * Schemes: `Scheme` (what a resource accounting protocol supplies, and `Scheme.GetsBack`, what it gets back).
+* Zero knowledge: `ZkCompiler` (an argument and a hiding commitment give a ZK argument).
 * Circuits: `Circuit` (gates, traces, `Implements`), `Boolean` (the Boolean profile), `Expand` (a multi-bit circuit as
   a Boolean one), `Digest`.
 * Partitions: `Partition` (committed wires, a proof block's correctness), `Annotation`, `PrivatePartition`,
@@ -52,7 +55,8 @@ the ones here.
   (`Definitions.Registration`).
 * Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Levels` (a sample drawn
   level by level, outer blocks then inner blocks; `LevelsCount`, its count at δ; `CircuitLevels`, those of a circuit's
-  nested partitions), `Challenger`, `Decisive`.
+  nested partitions; `LevelsKinds`, the first level drawn by kind), `Challenger` (the log's order, the cut, coin
+  families and values derived from the log's prefix), `Decisive`.
 * Memory checking: `MemCheck` (a multiset's fingerprint and a key's print over a finite field).
 * A check moved inside proofs: `InProofs` (an accepted run leaves fewer than `K₀` proof blocks failing a check).
 * Word semantics: `Scalar`, `Prims`, `Fp32`, `TC` (the tensor cores); `NaiveStrassen` (two tilings in the tensor-core

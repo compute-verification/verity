@@ -61,7 +61,7 @@ variable {C : Verity.Boolean.Circuit}
 /-- **An unbound unit's lowered gates are correct at no interior values**: under openings `opens` that hold at the
 constants `κ` (which fix only inputs) and wherever `val` opens a value, a unit unbound in the transcript `val` opens
 (`openedOf C κ val`) is not correct in `progOf C κ` on `val`, whatever its interior values `ι`. -/
-theorem not_correct_of_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+theorem not_correct_of_unbound {n : ℕ} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
     (val : ℕ → Option Bool)
     (opens : (g : Fin (Verity.Circuit.ofAudit C).N) → BitVec ((Verity.Circuit.ofAudit C).w g) → Prop)
     (hκ : ∀ g b, κ g = some b → (C.op g).isInput = true)
@@ -121,7 +121,7 @@ theorem not_correct_of_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n
 /-- **The unbound units are faulty, at slots of lowered gates**: in the sampling statement `s` of `progOf C κ`, under
 any partition `Ps` whose slot `u` is unit `u`'s lowered gates and any witness `w`, a unit unbound in the transcript `w`
 opens, under openings that hold at the constants and wherever `w` opens a value, is faulty. -/
-theorem unbound_subset_faulty_slots {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+theorem unbound_subset_faulty_slots {n : ℕ} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
     (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (hs : s.prog = progOf C κ)
     (Ps : Claims.Sampling.Partition) (hslot : ∀ u : Fin n, Ps.blocks[u.val]? = some (unitGates P u)) (w : Wit)
     (opens : (g : Fin (Verity.Circuit.ofAudit C).N) → BitVec ((Verity.Circuit.ofAudit C).w g) → Prop)
@@ -142,7 +142,7 @@ theorem unbound_subset_faulty_slots {n : ℕ} (P : FlockSoundness.Audit.Partitio
 
 /-- **The unbound units are faulty, at their proof blocks**: as `unbound_subset_faulty_slots`, at `partOf P κ ns`,
 whose slot `u` is unit `u`'s proof block `blockOf P κ u`, at any strata `ns` that sum to `n`. -/
-theorem unbound_subset_faulty_partOf {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+theorem unbound_subset_faulty_partOf {n : ℕ} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
     {ns : List ℕ} (hns : ns.sum = n) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement)
     (hs : s.prog = progOf C κ) (w : Wit)
     (opens : (g : Fin (Verity.Circuit.ofAudit C).N) → BitVec ((Verity.Circuit.ofAudit C).w g) → Prop)
@@ -166,7 +166,7 @@ honest inputs `Xr`, in a statement at the roots `roots`, under the openings `ope
 wherever the commitment opens under `roots` (`hop`), satisfies `unbound_subset_faulty_slots`' and
 `unbound_subset_faulty_partOf`'s premises on the openings, and leaves no unit unbound, when the commitment opens every
 value the constants don't fix and the constants fix only inputs and agree with `Xr`'s evaluation. -/
-theorem unbound_subset_faulty_honest {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+theorem unbound_subset_faulty_honest {n : ℕ} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
     (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (Xr : Fin C.N → Bool)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true) (hκ : ∀ g b, κ g = some b → C.eval Xr g = b)
     (hcom : ∀ g, κ g = none → ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C g, C.eval Xr g, d⟩ = true)
@@ -209,7 +209,7 @@ def notCircuit : Verity.Boolean.Circuit where
   outputs := {1}
 
 /-- `notCircuit`'s negation, its one unit. -/
-def notPartition : FlockSoundness.Audit.Partition notCircuit 1 where
+def notPartition : Spot.Sampling.Partition notCircuit 1 where
   unit g := if g.val = 0 then none else some 0
   input_iff := by decide
 

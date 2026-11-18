@@ -1,12 +1,13 @@
 """``--admit tick`` under vLLM's own OpenAI server, without serve-openai (`serve_admit`'s certified tick): `TickFeed`, the
 server's ASGI ``--middleware``, appends the network attester's releases and its watermark to a feed file, and `register`, a
-vLLM general plugin, puts a `serve_admit.TickGate` that reads the feed (`FeedReader`) in front of every V1 scheduler the
-engine core process builds, and makes the engine core's input loop wait on it. Both read ``VERITY_TICK`` (`tick_config`).
+vLLM general plugin, makes a `serve_admit.TickGate` that reads the feed (`FeedReader`) a hold of the adapter's admission
+hook on every engine core the process builds (`verity_vllm.engine.admission.register`). Both read ``VERITY_TICK``
+(`tick_config`).
 The trace corpus serves so (`benchmarks/network_e2e/traces/corpus.py`, ``--admit tick``).
 
 vLLM loads its general plugins in each of its processes, the API server's included, so this module imports only the
-stdlib, `verity_vllm.settings`, `verity_vllm.engine.hooks` and `serve_admit`, and `register` imports vLLM only once
-``VERITY_TICK`` is set. `serve_admit` reads a watermark line with the network attester's own reader
+stdlib, `verity_vllm.settings` and `serve_admit`, and `register` imports the admission hook only once ``VERITY_TICK`` is
+set. `serve_admit` reads a watermark line with the network attester's own reader
 (`verity.protocols.resource_accounting.network.verifier.release`, which imports only the stdlib), and imports it when the first line
 comes, so only the API server's process does, and it needs ``verity``, this package's dependency, on its path.
 """
@@ -16,18 +17,17 @@ import asyncio
 import json
 import math
 import os
-import queue
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.engine.hooks import Hooks
-from verity_vllm.pipeline.serve_admit import (LOST, RELEASE_HEADER, WATERMARK_PATH, Tick, TickGate, Watermark, install,
+from verity import hooks as H
+from verity_vllm.pipeline.serve_admit import (LOST, RELEASE_HEADER, WATERMARK_PATH, Tick, TickGate, Watermark,
                                               open_watermark, release_of)
 
-__all__ = ["CATCH_UPS", "OTHER_PATHS", "SAMPLED_PATHS", "TICK_ENV", "FeedReader", "RuleGate", "TickFeed", "non_draft_tokens",
-           "register", "route_of", "tick_config", "unseeded"]
+__all__ = ["CATCH_UPS", "OTHER_PATHS", "SAMPLED_PATHS", "TICK_ENV", "FeedReader", "RuleGate", "TickFeed", "register",
+           "route_of", "tick_config", "unseeded"]
 
 #: `register`'s and `TickFeed`'s configuration, a JSON object (`tick_config`)
 TICK_ENV = "VERITY_TICK"
@@ -64,7 +64,7 @@ def tick_config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | No
 
 class RuleGate(TickGate):
     """`TickGate` under a tick rule other than the registered one, for measuring it. ``token_ns``: T also advances that
-    many nanoseconds for each non-draft token a step schedules (`non_draft_tokens`), on a clock of nanoseconds that T
+    many nanoseconds for each non-draft token a step schedules (`hooks.StepBegan.slots`), on a clock of nanoseconds that T
     is the floor of in µs, so nothing rounds. ``catch_up="marks"``: before a step at which no request waits in
     the scheduler, T moves up to the close of the newest watermark line the gate holds; which line is the server's
     choice, so each move logs a ``catch_up`` event with its advice bits, log₂(1 + the lines since the last such step
@@ -79,41 +79,32 @@ class RuleGate(TickGate):
     def _reset(self) -> None:
         super()._reset()
         self.seen, self.ns = -1, 0
-        self.tokens = {"non_draft": 0, "draft": 0}
+        self.tokens = {"non_draft": 0}
 
-    def ready(self, sched: Any) -> bool:
+    def ready(self, due: H.StepDue) -> bool:
         if self.catch_up == "marks" and self.opened is None:
             self._pull()
-            if (self.run is not None and self.lines and sched.running
-                    and not (sched.waiting or getattr(sched, "skipped_waiting", None))):
+            if self.run is not None and self.lines and due.active and not due.queued:
                 m = len(self.lines) - 1
                 k = m - max(self.seen, self.tick.closed(self.T))
                 self.seen = m
                 if k > 0:
                     self._event("catch_up", step=self.steps, T=self.T, to=self.tick.close(m), bits=math.log2(1 + k))
                     self.T = self.tick.close(m)
-        return super().ready(sched)
+        return super().ready(due)
 
-    def scheduled(self, sched: Any, out: Any) -> None:
+    def on(self, event: Any) -> None:
         steps = self.steps
-        super().scheduled(sched, out)
+        super().on(event)
         if self.steps > steps:
-            n, drafts = non_draft_tokens(out)
+            n = event.slots
             self.tokens["non_draft"] += n
-            self.tokens["draft"] += drafts
             self.ns += n * self.token_ns
             self.T += self.ns // 1000
             self.ns %= 1000
 
     def summary(self) -> dict[str, Any]:
         return {**super().summary(), "rule": {"token_ns": self.token_ns, "catch_up": self.catch_up, "tokens": dict(self.tokens)}}
-
-
-def non_draft_tokens(out: Any) -> tuple[int, int]:
-    """A scheduler output's tokens less its draft tokens, and its draft tokens: the sum of its rows' n as the replay's
-    step forms it, the batch's token limit less the budget it leaves (`replay_step.reference`), which models no draft."""
-    drafts = sum(len(d) for d in (getattr(out, "scheduled_spec_decode_tokens", None) or {}).values())
-    return out.total_num_scheduled_tokens - drafts, drafts
 
 
 class FeedReader:
@@ -351,68 +342,23 @@ def _log_to(directory: str | None) -> Callable[[dict[str, Any]], None] | None:
     return log
 
 
-def _gated_init(init: Callable[..., None], cfg: Mapping[str, Any]) -> Callable[..., None]:
-    def __init__(self: Any, *args: Any, **kwargs: Any) -> None:
-        init(self, *args, **kwargs)
-        kw = {"hold_s": cfg["hold_s"], "pull": FeedReader(cfg["feed"]), "log": _log_to(cfg["log"])}
-        rule = {k: cfg[k] for k in ("token_ns", "catch_up") if cfg.get(k) not in (None, 0, "quiet")}
-        gate = RuleGate(cfg["tick"], **rule, **kw) if rule else TickGate(cfg["tick"], **kw)
-        self._verity_tick_hooks = install(self, gate)
-    return __init__
+def _gate(cfg: Mapping[str, Any]) -> TickGate:
+    kw = {"hold_s": cfg["hold_s"], "pull": FeedReader(cfg["feed"]), "log": _log_to(cfg["log"])}
+    rule = {k: cfg[k] for k in ("token_ns", "catch_up") if cfg.get(k) not in (None, 0, "quiet")}
+    return RuleGate(cfg["tick"], **rule, **kw) if rule else TickGate(cfg["tick"], **kw)
 
 
-def _gated_input(orig: Callable[[Any], None]) -> Callable[[Any], None]:
-    """`EngineCoreProc._process_input_queue` under a gate: it returns once the gate is ready and the engine has work,
-    handling client requests meanwhile, and waits on the input queue at most ``poll_s`` at a time while the gate waits."""
-    def _process_input_queue(self: Any) -> None:
-        gate = getattr(self.scheduler, "_verity_tick", None)
-        if gate is None:
-            return orig(self)
-        while True:
-            while not self.input_queue.empty():
-                self._handle_client_request(*self.input_queue.get_nowait())
-            if not self.is_running():
-                gate.open("the engine core is shutting down")
-                return
-            ok = gate.ready(self.scheduler)
-            if ok and self.has_work():
-                return
-            if ok:
-                self._notify_idle_state_callbacks()
-                if self.input_queue.empty():
-                    with self.aborts_queue.mutex:
-                        self.aborts_queue.queue.clear()
-            try:
-                req = self.input_queue.get(timeout=None if ok else gate.poll_s)
-            except queue.Empty:
-                continue
-            self._handle_client_request(*req)
-    return _process_input_queue
-
-
-def _gated_has_work(orig: Callable[[Any], bool]) -> Callable[[Any], bool]:
-    def has_work(self: Any) -> bool:
-        gate = getattr(self.scheduler, "_verity_tick", None)
-        return orig(self) or (gate is not None and gate.pending())
-    return has_work
-
-
-_PLUGIN: list[Hooks] = []
+_PLUGIN: list[Mapping[str, Any]] = []
 
 
 def register() -> None:
     """``--admit tick`` under vLLM's own OpenAI server, as a vLLM general plugin (entry point group
-    ``vllm.general_plugins``, run in each of its processes): with ``VERITY_TICK`` set (`tick_config`), every V1 scheduler
-    built in this process gets a `serve_admit.TickGate` that reads the feed (`serve_admit.install`, keyed by the client's
-    X-Request-Id), and the engine core process's input loop waits on it (`EngineCoreProc._process_input_queue` and
-    ``has_work``). Idempotent."""
+    ``vllm.general_plugins``, run in each of its processes): with ``VERITY_TICK`` set (`tick_config`), every engine core
+    built in this process gets a `serve_admit.TickGate` that reads the feed, a hold of the adapter's admission hook on its
+    scheduler (`verity_vllm.engine.admission.register`, keyed by the client's X-Request-Id). Idempotent."""
     cfg = tick_config()
     if cfg is None or _PLUGIN:
         return
-    from vllm.v1.core.sched.scheduler import Scheduler
-    from vllm.v1.engine.core import EngineCoreProc
-    hooks = Hooks(tag="admit-tick")
-    hooks.wrap(Scheduler, "__init__", lambda init: _gated_init(init, cfg))
-    hooks.wrap(EngineCoreProc, "_process_input_queue", _gated_input)
-    hooks.wrap(EngineCoreProc, "has_work", _gated_has_work)
-    _PLUGIN.append(hooks)
+    from verity_vllm.engine import admission
+    admission.register(lambda exchange: _gate(cfg).attach(exchange))
+    _PLUGIN.append(cfg)

@@ -107,7 +107,7 @@ theorem run_units {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.On
     rw [hx1] at hsv
     exact ⟨a, x.2, keys, record, spec, tabs, rest, proofs,
       files_statement (statementAt_files hfiles ((membersHeld_zip hheld).2 z hz).2.1 ha), hs, hsv⟩
-  · rw [← provedHeld_ok hprov, FlockSoundness.Audit.SampleExec.mem_qsort, hmem x]
+  · rw [← provedHeld_ok hprov, Spot.Sampling.SampleExec.mem_qsort, hmem x]
     exact ⟨fun h => h.elim (fun h0 => absurd h0 (Array.not_mem_empty x)) id, Or.inr⟩
 
 /-! ## The sessions' units over the members -/

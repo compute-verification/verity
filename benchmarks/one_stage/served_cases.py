@@ -28,7 +28,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   `spot-one-stage check` on the case, goes to the verdicts alone.
 * **`verity/sampled-proofs/v1`** (`sampled_case`, `SAMPLED`): both composites' SPOT subprotocol
   (`Core.Remote.components`, `Core.Onsite.components`, `VStar.Recursive.Sampled`), v2's case (`v2_case`, below) with
-  ``form`` ``one-stage`` in its params and its evidence (`with_form`), which the dispatcher splits off before one-stage
+  one level's form in its params and its evidence (`with_levels`), which the dispatcher splits off before one-stage
   v2's decoders read the rest:
   its params name ``proofs`` and its evidence the proofs' files in place of v1's verdicts, as the dispatcher requires.
   None when v2's case is refused, which the refusal says, and each composite then names SPOT missing. a5
@@ -65,9 +65,6 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   compose its v0, which publishes the division and its blocks' profiles, as a stated exception (`composite.EXCEPTIONS`).
   The policy's Lean package and the Python its check is held to are named by the module `POLICY`, loaded when this
   case is asked for; on a tree that leaves the policy out the case is refused saying so.
-* **The inference-only rows case** (`inference_only_rows_case`, `INFERENCE_ONLY_ROWS`: `verity/inference-only/rows/v1`,
-  the policy's check counted in rows of the templates' circuit files) is an interface whose body is not written; no
-  composite lists the protocol, and `produce` makes no such case.
 * **PoUW's period case** (`period_case`, `PERIOD`: `verity/pouw/period/v1`, both composites' work subprotocol):
   `pouw_piece.py period`'s case and answer as it wrote them (``--period``; with ``--serve-dir``, `served_pouw.sh`'s
   ``D/private/pouw/period`` when it holds a case), taken once every window of the period names R as its Commit record
@@ -141,6 +138,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+from verity.protocols.proofs.spot.verifier import levels as LV
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
 from verity.protocols.resource_accounting.compute.pouw.verifier import period_check as PC
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
@@ -156,15 +154,8 @@ SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock_recursion/verifier/le
 #: `vstar-recursive`'s command for SPOT (`VStarRecursiveMain.main` sends ``sampled`` to
 #: `VStar.Recursive.Sampled.protocol`), ahead of ``check``
 SAMPLED_CMD = ("sampled",)
-#: The form remote's SPOT case names: one-stage v2's audit (`VStar.Recursive.Sampled.ONE_STAGE`)
-ONE_STAGE = "one-stage"
 V2 = PF.V2
 INFERENCE_ONLY = "verity/inference-only/v0"
-#: the policy's check in rows of the templates' circuit files (`InferenceOnly.RowsProtocol`), whose case
-#: `inference_only_rows_case` makes
-INFERENCE_ONLY_ROWS = "verity/inference-only/rows/v1"
-#: the goal `inference_only_rows_case` serves
-ROWS_GOAL = "network/policy-check-counts-rows"
 #: the module beside this file that says where the tree holds the policy's check: its Lean package and executable
 #: (``LEAN``) and the Python that check is held to (``reference``), which `policy` loads by name
 POLICY = "inference_only_lean"
@@ -354,23 +345,18 @@ def v2_case(audit: Path) -> dict[str, Any]:
     return case
 
 
-def with_form(case: Mapping[str, Any], form: str = ONE_STAGE) -> dict[str, Any]:
-    """``case`` as SPOT reads it (`VStar.Recursive.Sampled`): its params and its evidence each with ``form``,
-    which the dispatcher splits off before that form's decoders read the rest."""
+def with_levels(case: Mapping[str, Any], levels: int = 1) -> dict[str, Any]:
+    """``case`` as SPOT reads it (`VStar.Recursive.Sampled`) at ``levels`` (`levels.with_levels`): its params and its
+    evidence each naming the levels' form, which the dispatcher splits off before that form's decoders read the rest."""
     try:
-        evidence = json.loads(bytes.fromhex(case["evidence"]))
+        return LV.with_levels(case, levels, codec.canonical_json)
     except (KeyError, TypeError, ValueError) as e:
-        raise Refused(f"the case's evidence is not JSON: {type(e).__name__}: {e}") from None
-    _need(isinstance(case.get("params"), Mapping) and isinstance(evidence, dict)
-          and "form" not in case["params"] and "form" not in evidence,
-          "the case's params and evidence must be objects that name no form")
-    return {**case, "evidence": codec.canonical_json(evidence | {"form": form}).hex(),
-            "params": {**case["params"], "form": form}}
+        raise Refused(f"the case is not SPOT's at {levels} level(s): {type(e).__name__}: {e}") from None
 
 
 def sampled_case(audit: Path) -> dict[str, Any]:
-    """Remote's SPOT case (module docstring): v2's (`v2_case`) in the form ``one-stage``."""
-    return with_form(v2_case(audit))
+    """Remote's SPOT case (module docstring): v2's (`v2_case`) at one level."""
+    return with_levels(v2_case(audit))
 
 
 def period_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
@@ -607,17 +593,6 @@ def inference_only_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamm
               "parameters": parameters(desc, root, v1["params"].get("parameters")), "program": text}
     evidence = {"owner": ["input" if i else 0 for i in inputs], "provenance": [], "theta": []}
     return {"commitment": v1["commitment"], "evidence": codec.canonical_json(evidence).hex(), "params": params}
-
-
-def inference_only_rows_case(v1: Mapping[str, Any], record: str, circuits: Sequence[tuple[str, Path]],
-                             alpha: Fraction | int | str, gamma: int, log: Sequence[Mapping[str, Any]] = (),
-                             pins: Sequence[str] = (), order: Any = None) -> dict[str, Any]:
-    """The rows case (`INFERENCE_ONLY_ROWS`) from v1's case of the window's audit: params ``alpha`` and ``gamma`` (α
-    and Γ in rows), ``circuits`` (each of ``record``'s templates, in its order, with the SHA-512 of its circuit file
-    in ``circuits``), ``log``, ``pins`` and ``program`` (v1's params' Program as canonical text); commitment R;
-    evidence ``{"record"}``, or ``{"order", "record"}`` given ``order``: the execution phase's circuit record ``record``
-    (the text R commits); blobs the circuit files."""
-    raise NotImplementedError(f"{INFERENCE_ONLY_ROWS}'s served case is not written: goal {ROWS_GOAL}")
 
 
 def division_policy(v1: Mapping[str, Any], log: Sequence[Mapping[str, Any]], exe: str | os.PathLike,

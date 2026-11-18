@@ -495,7 +495,7 @@ end claims
 
 section family
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Exec FlockSoundness.Model FlockSoundness.Audit
+open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Exec FlockSoundness.Model Spot.Sampling
 open FlockLevel3 FlockVBridge.InnerAccepts FlockVBridge.Stages
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]

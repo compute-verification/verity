@@ -17,7 +17,8 @@ from __future__ import annotations
 
 from verity_vllm.commit import scheme as recorded_scheme
 from verity_vllm.commit import step_rows
-from verity_vllm.protocols.interface import Context, Option, Target
+from verity import hooks as H
+from verity_vllm.protocols.interface import BUILD_BOUND, Context, Option, Target
 
 NAME = "sampled-proofs"
 DEFAULT_SCHEME = step_rows.NAME
@@ -48,10 +49,9 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     return ()
 
 
-def requires_build(scheme: str, ctx: Context) -> bool:
+def requests(scheme: str, ctx: Context) -> tuple[H.Request, ...]:
     """SPOT verifies the Program emitted by the row's Build."""
-
-    return True
+    return (BUILD_BOUND,)
 
 
 def install(scheme: str, target: Target) -> Option:

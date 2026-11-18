@@ -32,7 +32,7 @@ open Spot
 
 namespace Properties.Spot.SecurityProofs
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 
 /-- A `subset` sample that succeeds holds each index once, each below `n`. -/
 theorem subset_nodup {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Draw.subset k n src = some D) :

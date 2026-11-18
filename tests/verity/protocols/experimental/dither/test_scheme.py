@@ -24,6 +24,7 @@ def test_block_cost_is_an_output_cells_credit() -> None:
 
 def test_bound_refuses_a_charge_it_does_not_state() -> None:
     names = {c.name: 1 for c in DS.DITHER.charges}
-    assert S.bound(DS.DITHER, Fraction(1, 10**6), 5, names).uncredited == 5 + len(names)
+    with pytest.raises(ValueError, match="dither: its delta_scheme .* is not said"):
+        S.bound(DS.DITHER, Fraction(1, 10**6), 5, names)
     with pytest.raises(ValueError, match="charges are"):
         S.bound(DS.DITHER, Fraction(1, 10**6), 0, {"inert-work": 0})

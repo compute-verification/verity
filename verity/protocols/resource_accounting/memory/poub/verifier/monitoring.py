@@ -18,7 +18,7 @@ adaptive prover. A period's row covers those T sessions, so its error is their w
 `protocol.NO_BOUND` with the sum and no amount, neither that total nor a figure below (`protocol.no_bound`). Under 1
 it also prints, at each δ:
 
-- **Pooled** (`pooled_step`): the count bound `FlockSoundness.Audit.Periods.prCoin_count_le_choose`. When each
+- **Pooled** (`pooled_step`): the count bound `Spot.Sampling.Periods.prCoin_count_le_choose`. When each
   session, given the earlier ones, is accepted with its `q_bytes` more than its reads with probability at most p, at
   least M of the T are with probability at most C(T, M)·p^M. M is the least count within δ (`short_sessions`), so
   except with δ at least T − M + 1 sessions' `q_bytes` are reads: the period has at least (T − M + 1)·`q_bytes` of
@@ -49,8 +49,8 @@ from verity.protocols.resource_accounting.memory.pous.verifier.wipe_monitoring i
 from . import codec, pooled
 
 FORMAT = "verity/remote-bandwidth-monitoring-period/v1"
-STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose",
-             "file": "security/Proofs/Flock/Soundness/Audit/Periods.lean"}
+STATEMENT = {"name": "Spot.Sampling.Periods.prCoin_count_le_choose",
+             "file": "security/Proofs/Spot/Sampling/Periods.lean"}
 EXCEPT = ("Σ_t adv_t, the PRF advantage of each window of each of the period's sessions (SHA-512 stream as PRF: not "
           "priced, not assumed): every δ and error here reads δ + Σ_t adv_t")
 """What every δ and error of a table leaves out, which the table carries beside them (`except_also`)."""

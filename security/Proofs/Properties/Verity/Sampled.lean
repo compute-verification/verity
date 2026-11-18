@@ -114,7 +114,7 @@ files and at the strategy a strategy of the period's game projects to. This modu
 
 namespace Verity.Sampled
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open FlockSoundness.Discharge.Tables (LiveOutJ)
@@ -342,7 +342,7 @@ noncomputable def extend (S : Widening) : Live where
 
 /-- **The sample's sampling design**: the session's sampling design over the population as `Spot.Select.select` samples it,
 `Spot.Draw.sampleUnits` on the device's bytes in order; a sample that fails samples every unit. -/
-noncomputable def L : FlockSoundness.Audit.SamplingDesign A.n where
+noncomputable def L : Spot.Sampling.SamplingDesign A.n where
   Ω := A.Ω
   draw ω :=
     match _root_.Spot.Draw.sampleUnits A.design A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) with
@@ -390,7 +390,7 @@ noncomputable def sim (τ : FlockSoundness.Game.Strategy A.game) :=
 /-- **V5's extractor at a strategy of the live audit**: `XplurZC` at the simulator's registration and continuation. -/
 noncomputable def Xr (τ : FlockSoundness.Game.Strategy A.game) :=
   XplurZC execArith hs512 A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb
-    (FlockSoundness.Audit.reg (A.sim τ)) (FlockSoundness.Audit.cont (A.sim τ)) A.k A.Rw
+    (Spot.Sampling.reg (A.sim τ)) (Spot.Sampling.cont (A.sim τ)) A.k A.Rw
 
 /-- The rewinding table finders' budget at `t` calls, `2t + 2v`: two runs after a cap, and the two conflicting openings
 verified. -/
@@ -410,10 +410,10 @@ def qM (t : ℕ) : ℝ := 2 * t + 2 * A.h
 knowledge finders at `2t + 2v` and `t + v` (`TableCRZ`), and `ecr/sha-512` at the link finders at `t + w` per run
 (`LinkCRZC`), as V5 takes them. -/
 structure FinderCR (τ : FlockSoundness.Game.Strategy A.game) (t : ℕ) : Prop where
-  table : ∀ ω j, TableCRZ execArith hs512 (planZHJP A.dj A.y₀ (A.L.draw ω) (FlockSoundness.Audit.reg (A.sim τ))) j
-    (zcStrat execArith hs512 (planZHJP A.dj A.y₀) (FlockSoundness.Audit.cont (A.sim τ) ω)) (A.qF t) (A.qS t)
+  table : ∀ ω j, TableCRZ execArith hs512 (planZHJP A.dj A.y₀ (A.L.draw ω) (Spot.Sampling.reg (A.sim τ))) j
+    (zcStrat execArith hs512 (planZHJP A.dj A.y₀) (Spot.Sampling.cont (A.sim τ) ω)) (A.qF t) (A.qS t)
   link : LinkCRZC execArith hs512 A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb
-    (FlockSoundness.Audit.reg (A.sim τ)) (FlockSoundness.Audit.cont (A.sim τ)) A.k A.Rw A.M (A.tL t)
+    (Spot.Sampling.reg (A.sim τ)) (Spot.Sampling.cont (A.sim τ)) A.k A.Rw A.M (A.tL t)
 
 /-- **The sample's term**: the sampling design's own miss at the claim's share, the largest probability that the sample holds no proof
 block of a set of more than an `ε` share of them, the acceptance probability of the sampling design's one-stage design

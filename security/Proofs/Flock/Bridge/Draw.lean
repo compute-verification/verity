@@ -242,7 +242,7 @@ theorem sampleUnits_miss_le {samplingDesign : Flock.Draw.SamplingDesign} {ns : L
 /-- **The deployed sample as a sampling design**: `Spot.Draw.sampleUnits` under `samplingDesign` over `[0, pop)` on the source `t`'s bytes,
 read in order as one stream; a sample that runs out of them samples every unit. -/
 def execSel {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ} (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256)
-    (samplingDesign : Flock.Draw.SamplingDesign) (pop : ℕ) : Audit.SamplingDesign n where
+    (samplingDesign : Flock.Draw.SamplingDesign) (pop : ℕ) : Spot.Sampling.SamplingDesign n where
   Ω := Ω
   draw ω := match Spot.Draw.sampleUnits samplingDesign pop (Properties.Spot.bytesOf (t ω 0)) with
     | .ok r => univ.filter fun u => u.val ∈ r.1
@@ -258,14 +258,14 @@ theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : 
   classical
   rcases W.eq_empty_or_nonempty with rfl | ⟨b, hb⟩
   · rw [Finset.map_empty, pa_empty_of_samplingDesignOn hlaw, ENNReal.ofReal_one]
-    exact Audit.SamplingDesign.escape_le_one _ _
+    exact Spot.Sampling.SamplingDesign.escape_le_one _ _
   have hU : W.map Fin.valEmbedding ⊆ Finset.range n := fun u hu => by
     obtain ⟨v, -, rfl⟩ := Finset.mem_map.1 hu
     exact Finset.mem_range.2 v.isLt
   let E : (i : Fin 1) → (Fin (L i) → Fin 256) → Prop := fun _ g => ∃ units read,
     Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf g) = .ok (units, read) ∧
       ∀ u ∈ W.map Fin.valEmbedding, u ∉ units
-  have hfin : prCoin (E 0) ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top (Audit.SampleExec.prCoin_le_one _)
+  have hfin : prCoin (E 0) ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top (Spot.Sampling.SampleExec.prCoin_le_one _)
   calc (execSel (n := n) t samplingDesign n).missProb W ≤ prCoin (fun ω => E 0 (t ω 0)) := by
         refine prCoin_mono fun ω hd => ?_
         change Disjoint (match Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf (t ω 0)) with
@@ -370,13 +370,13 @@ theorem samplingDesignSized_size {n : ℕ} {samplingDesign : Flock.Draw.Sampling
   | bernoulli a b => exact hlaw.elim
   | stratified K St =>
     obtain ⟨hnd, hsum⟩ := hlaw
-    have hch := (Audit.StrataExec.strataProblem_none (Audit.StrataExec.ofJson_stratified hD rfl).1).2.2.2
+    have hch := (Spot.Sampling.StrataExec.strataProblem_none (Spot.Sampling.StrataExec.ofJson_stratified hD rfl).1).2.2.2
     have hin : ∀ u ∈ (Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList,
         u ∈ St.toList.flatMap fun s => Properties.Spot.SecurityProofs.expand s.units.toList := by
       intro u hu
-      obtain ⟨r, hr, h1, h2⟩ := Audit.StrataExec.chain_covers hch u (Nat.zero_le u) (hlt u hu)
-      have hr' := (Audit.StrataExec.qsort_perm _ _).subset hr
-      rw [Audit.StrataExec.foldl_units] at hr'
+      obtain ⟨r, hr, h1, h2⟩ := Spot.Sampling.StrataExec.chain_covers hch u (Nat.zero_le u) (hlt u hu)
+      have hr' := (Spot.Sampling.StrataExec.qsort_perm _ _).subset hr
+      rw [Spot.Sampling.StrataExec.foldl_units] at hr'
       obtain ⟨s, hs, hrs⟩ := List.mem_flatMap.1 hr'
       exact List.mem_flatMap.2 ⟨s, hs, mem_expand_of_mem hrs h1 h2⟩
     have hc : ∀ s ∈ St.toList, ((Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList.filter fun u =>
@@ -400,14 +400,14 @@ theorem samplingDesignSized_size {n : ℕ} {samplingDesign : Flock.Draw.Sampling
       _ = kd := hsum
   | work K ws =>
     obtain ⟨hnd, hsum⟩ := hlaw
-    have hch := Audit.StrataExec.workProblem_chain (Audit.StrataExec.ofJson_work hD rfl)
+    have hch := Spot.Sampling.StrataExec.workProblem_chain (Spot.Sampling.StrataExec.ofJson_work hD rfl)
     have hin : ∀ u ∈ (Discharge.ZkLink.drawOf (.work K ws) n S).units.toList,
         u ∈ (ws.toList.map (·.toStratum)).flatMap fun s =>
           Properties.Spot.SecurityProofs.expand s.units.toList := by
       intro u hu
-      obtain ⟨r, hr, h1, h2⟩ := Audit.StrataExec.chain_covers hch u (Nat.zero_le u) (hlt u hu)
-      have hr' := (Audit.StrataExec.qsort_perm _ _).subset hr
-      rw [Audit.StrataExec.foldl_units_work] at hr'
+      obtain ⟨r, hr, h1, h2⟩ := Spot.Sampling.StrataExec.chain_covers hch u (Nat.zero_le u) (hlt u hu)
+      have hr' := (Spot.Sampling.StrataExec.qsort_perm _ _).subset hr
+      rw [Spot.Sampling.StrataExec.foldl_units_work] at hr'
       obtain ⟨w, hw, hrw⟩ := List.mem_flatMap.1 hr'
       exact List.mem_flatMap.2 ⟨w.toStratum, List.mem_map_of_mem hw, mem_expand_of_mem hrw h1 h2⟩
     have hc : ∀ s ∈ ws.toList, ((Discharge.ZkLink.drawOf (.work K ws) n S).units.toList.filter fun u =>
@@ -505,9 +505,9 @@ theorem samplingDesignOn_size {n : ℕ} {samplingDesign : Flock.Draw.SamplingDes
 /-- A `subset k n` sample that ends holds `k` units. -/
 theorem subset_size {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Draw.subset k n src = some D) :
     D.size = k := by
-  rw [Audit.SampleExec.subset_eq] at h
+  rw [Spot.Sampling.SampleExec.subset_eq] at h
   obtain ⟨sw, -, rfl⟩ := Option.map_eq_some_iff.1 h
-  rw [← Array.length_toList, (Audit.StrataExec.qsort_perm _ _).length_eq, Array.length_toList, Array.size_map,
+  rw [← Array.length_toList, (Spot.Sampling.StrataExec.qsort_perm _ _).length_eq, Array.length_toList, Array.size_map,
     Array.size_range]
 
 open Properties.Spot.SecurityProofs (bind_ok bind_error onWith_take) in
@@ -570,7 +570,7 @@ theorem stratifiedWith_size (src : ByteArray) (strata : Array Flock.Draw.Stratum
     obtain ⟨rfl, hsz⟩ := loop _ _ _ _ _ _ hl
     rw [StateT.run_pure] at h
     obtain ⟨h1, _⟩ := Prod.mk.inj (Except.ok.inj h)
-    rw [← Option.some.inj h1, ← Array.length_toList, (Audit.StrataExec.qsort_perm _ _).length_eq,
+    rw [← Option.some.inj h1, ← Array.length_toList, (Spot.Sampling.StrataExec.qsort_perm _ _).length_eq,
       Array.length_toList, hsz, Array.size_empty, Nat.zero_add]
     congr 1
     refine List.ext_getElem (by simp) fun i h₁ _ => ?_

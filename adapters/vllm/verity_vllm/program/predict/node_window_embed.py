@@ -9,8 +9,8 @@ The width is one, fixed at registration: a table's salts are its field's place a
 widths of one field would take the same salts, and `shard_param` and the lowering refuse any width but `WIDTH`. The window
 declares the tables as parameters of the rank's registration and commits nothing: the prover commits them once a process.
 
-The tables are not weights: `window_weights.weight_nonces` numbers every name it is handed, so a table among them moves the
-plain weights' nonces and their roots stop being the registration's. `split` keeps the window's tables
+The tables are not weights: the weights' registration holds no salt of theirs, so a table handed to `window_weights` is
+refused. `split` keeps the window's tables
 (``/b<b>/vocab``, ``/b<b>/table``) and the absorption weights' entry (``/bnk``) apart from its plain weights; they go to
 the tables' registration (`expert_tables`, its nonces from `expert_tables.TABLES_NONCE`), the rest to `window_weights`.
 A batched GEMM's ``w`` reads its ``/bnk`` entry by a registered read (`node_window_sparse.entry`), so none of its rows is free.

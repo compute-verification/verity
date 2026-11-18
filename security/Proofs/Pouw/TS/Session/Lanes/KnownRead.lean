@@ -38,7 +38,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 import Std.Tactic.BVDecide.Normalize.Prop
@@ -353,10 +353,10 @@ theorem unitLog_of_scopeOkH {c : _root_.Flock.Circuit} (h : Layout.scopeOkH c = 
   exact h.1.1.2
 
 /-- An output a unit computes is one of its committed wires. -/
-theorem mem_io_of_output {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+theorem mem_io_of_output {C : Verity.Boolean.Circuit} {n : ℕ} (P : Spot.Sampling.Partition C n)
     {u : Fin n} {g : Fin C.N} (hg : g ∈ C.outputs) (hu : P.unit g = some u) : g ∈ P.io u := by
   classical
-  simp only [FlockSoundness.Audit.Partition.io, Finset.mem_filter]
+  simp only [Spot.Sampling.Partition.io, Finset.mem_filter]
   exact ⟨P.mem_committed_of_output hg, Or.inl hu⟩
 
 variable {s : RowsSession}

@@ -91,6 +91,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
 import clear_work as CW  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PD  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes  # noqa: E402
 from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
@@ -163,7 +164,7 @@ def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -
     raw = path.read_bytes()
     man = json.loads(raw)
     PD.manifest_schema(man, recorded=True)
-    scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
+    scheme = pouw_schemes.get(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
     matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
     epoch, _ = PD.manifest_epoch(man, coins, recorded=True)
     records = VR.records_of(man, matmuls)

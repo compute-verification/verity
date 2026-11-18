@@ -134,7 +134,7 @@ def setupHiddenV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coi
         let note ← v.derive c prog indices
         let wires ← HmLinks.check c pop (HmLinks.readersOf draw) prog
         let linking := if wires == 0 && !linked then "; no cut wire between the statement's units"
-          else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}, each reader's link row the writer's committed output row"
+          else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}, each reader's link row read by path in its writer's output field's tree"
         pure (some { f with derived := true, note := note ++ linking })
       else if linked then throw "META links: Linking is checked under a template query (Q_template_instance v0, Q_template_instances v0) only"
       else v.qword c pub prog f

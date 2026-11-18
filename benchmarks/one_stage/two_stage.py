@@ -164,7 +164,7 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
-from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
+from verity.protocols.proofs.spot.verifier import levels as LV, second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
 from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import descriptor_id
@@ -875,7 +875,7 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
     record commits, and a port that reads a parameter it commits, reads that port of ``boundary``, at the root, leaves
     and domain that record gives it, unit j of the i-th sampled block its row ``sample[i]·per + at[j]``
     (`interior_rows.Return.rows`, `interior_rows.Input.rows`); a wired port its writer's
-    output port of the interior record, and any other its own, each unit its own leaf (`rows.Binding.held`). A read's
+    output tree of the interior record, and any other its own, each unit its own leaf (`rows.Binding.tree`). A read's
     verdict of registered tables (``d.verdicts``) reads its value as a link's port does, so a verdict the interior
     registers no such value for is refused by name and never read at the read's own port. A return
     round 1's record doesn't commit is read at its own port too: round 2 refuses that read (``second-read``), and
@@ -895,7 +895,7 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
                 ports[p] = LK.reads(boundary, y.value, words, m.schema(p), y.rows(sample), m.base, registered=REG)
                 continue
             if x is None:
-                ports[p] = LK.reads(interior, window.held(m, p), words, m.schema(p), window.held_leaves(m, p), m.base,
+                ports[p] = LK.reads(interior, window.tree(m, p), words, m.schema(p), window.reads(m, p).tolist(), m.base,
                                     registered=REG)
                 continue
             if x.value not in values:
@@ -932,11 +932,11 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
         member_stager(template_fn(m.template), m, bind).stage(
             rows, at, REFERENCE_KEY, indices=range(m.base, m.base + m.n),
             tables={r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16) for r, w in m.rows},
-            refs={r: np.asarray(window.held_leaves(m, r)) for r in rows})
+            refs={r: window.refs(m, r) for r in rows})
         (at / "inst.bin").unlink()
         with open(at / "pub.bin", "rb") as f:
             header = json.loads(f.readline())
-        reads = LK.reads_file({p: {"value": linked.get((m.template, p), window.held(m, p)), "words": int(words),
+        reads = LK.reads_file({p: {"value": linked.get((m.template, p), window.tree(m, p)), "words": int(words),
                                    "word_bits": REG.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
                                for p, words in m.all_rows}, registered=REG)
         read = read_record(template_fn(m.template), at / "circuit.txt", header["circuit_sha512"])
@@ -1066,6 +1066,13 @@ def _round_two_own(replay: Program, key: str, sample: Sequence[int], window: CS.
     return own
 
 
+def round_two(python: Mapping[str, Any] | None, lean: Sequence[str] | None) -> dict[str, Any]:
+    """Round 2's verdict of record: the Python twin's verdict ``python`` (`second_stage.check_twin`'s JSON) held to the
+    statement codes ``lean`` the Lean verifier's run of the stream gave (`second_stage.held_to_lean`)."""
+    codes = SS.held_to_lean(None if python is None else python["codes"], lean)
+    return {"ok": codes == [], "codes": codes}
+
+
 def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_dir: Path, source: Callable[[dict], dict],
                  brec: dict, irec: dict, sample: list[int], second: tuple[dict, dict, dict], reads: dict[str, dict],
                  proofs: dict, out: Path, provenance: dict, *, replay: tuple[Program, str],
@@ -1102,10 +1109,14 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     if refusals:  # why a session never ran: flock-circuit's own words (a statement outside its shape, say)
         got["proof_server_refused"] = refusals
     stmts = None
-    if s.get("draw") is not None:
+    if (units := s.get("draw")) is not None:
         stmts = statements(out / "audit", window)
         (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
         got["pins"] = pins(proofs, stmts)
+        own = _round_two_own(*replay, sample, window, irec, brec, units, record, proofs, tie)
+        got["round_two_python"] = SS.check_twin(True, own, stmts).to_json()
+        got["round_two_negatives"] = {name: SS.check_twin(True, own, tampered).ok is False
+                                      for name, tampered in (("dropped", stmts[:-1]), ("none", None))}
     return s, ok, record, got, stmts
 
 
@@ -1499,7 +1510,7 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
             with SC.capture(out / "run-input.json") if form_case else contextlib.nullcontext():
                 summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
             codes = summary["outcome"].get("statements")
-            summary["round_two"] = None if codes is None else {"ok": codes == [], "codes": codes}
+            summary["round_two"] = None if codes is None else round_two(summary.get("round_two_python"), codes)
             if form_case:
                 summary["form_case"] = SC.from_run(out)
         ok = held(s, summary.get("round_two"), summary.get("outcome"), summary.get("pins"))
@@ -1601,6 +1612,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                    help="write the two-stage form's case of this run under OUT/form (sampled_two_case.from_run)")
     g.add_argument("--out", required=True)
     a = ap.parse_args(argv)
+    from verity_config.settings import of
+
+    try:
+        LV.command(of(__file__).raw(LV.ENV), (2,), 2)
+    except LV.Refused as e:
+        ap.error(f"{e} (one level: a5.py)")
     if a.cmd == "second":
         if a.gpus is not None:
             a5 = _a5()
@@ -1616,6 +1633,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.stop_design and not a.stop:
         ap.error("--stop-design is the sampling design over the stop blocks of the rule --stop gives")
     pubs = [json.loads((Path(d) / BR.COMMIT).read_text()) for d in a.boundary]
+    for d, pub in zip(a.boundary, pubs, strict=True):
+        try:
+            if (n := LV.served(pub)) != 2:
+                ap.error(f"--boundary {d}: its record serves {n} level(s), not the two this command audits")
+        except LV.Refused as e:
+            ap.error(f"--boundary {d}: {e}")
     if len({(p["run"], p["window"]) for p in pubs}) != 1:
         ap.error("--boundary: every class of one window (one run and window index)")
     window = {"binding": json.loads(Path(a.advice).read_text())["binding"]} if a.advice else None

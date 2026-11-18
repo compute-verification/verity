@@ -176,7 +176,7 @@ def sentCommits (s : Flock.ZkServer.Schedule) (sent : List Flock.ZkServer.Sent) 
 
 /-- The salts' bytes, in order. -/
 def saltsOf {n : ℕ} (b : Fin n → Fin 192 → Fin 256) : List ByteArray :=
-  List.ofFn fun i => FlockSoundness.Audit.SamplingDesign.streamOf (b i)
+  List.ofFn fun i => Spot.Sampling.SamplingDesign.streamOf (b i)
 
 /-- **One worker's context at the live session** at the salt bytes `b`: the tape, the commitments the ZK server sent
 (`sentCommits`), the worker's randomness and the salts of the transcript's commit strings, `b`'s first

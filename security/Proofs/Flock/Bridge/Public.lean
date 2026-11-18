@@ -64,7 +64,7 @@ at the knowledge finders' budgets `q_F = 2(t' + v)` and `q_S = t' + v` and the l
 
 namespace Flock.Guarantees
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open FlockSoundness.Discharge.Tables (LiveOutJ)
@@ -73,7 +73,7 @@ open scoped ENNReal
 /-- **The committed wires the units read or write, summed over the units**: `Σ_u |io u|`, a bound on the commit strings
 any sample reads. -/
 noncomputable def _root_.Flock.Bridge.ioSum {C : Verity.Boolean.Circuit} {n : ℕ}
-    (P : FlockSoundness.Audit.Partition C n) : ℕ :=
+    (P : Spot.Sampling.Partition C n) : ℕ :=
   ∑ u, (P.io u).card
 
 /-- **The sampled audit's public error**: the sample's miss, the knowledge term at Flock ZK's parameters
