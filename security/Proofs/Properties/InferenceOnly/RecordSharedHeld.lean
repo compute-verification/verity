@@ -767,8 +767,10 @@ def LeafPart : Prop :=
           i < ((P.defs[P.root]!).body.nodes[k]!).args.size ∧
             ∃ q ∈ (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts.toList, ∃ b, partRun P q = some (x, b)
 
-/-- **`LeafPart`, where shared runs lie in their nodes' leaves**: the leaf is in a part's run of an input node
-(`unit_leaf`), and that run and `x` hold one gate, so they are one run (`node_of_gate`, `run_eq_of_gate`). -/
+/-- **`LeafPart`, where shared runs lie in their nodes' leaves**: the shared run `x` is the run of a part at its own
+place (`runsOf_shared`, `rowRuns_runsOf`), and the leaf lies in a part of its argument (`unit_leaf`): a run, which holds
+one gate with `x`, so is `x` or apart from it (`node_of_gate`, `runs_shared`), or a strided part's row, apart from every
+run of another place (`pieces_apart`). -/
 theorem leafPart_of (hIN : SharedInNode) : LeafPart := by
   intro P hP hO R hR k hk hu hf m hm i t g hi ht hres x hx hlo hhi
   obtain ⟨hov, hlayb⟩ := Properties.Record.SecurityProofs.read_walk hP
@@ -782,21 +784,27 @@ theorem leafPart_of (hIN : SharedInNode) : LeafPart := by
   obtain ⟨n, j, hleaf, hn, hj, ho, hg⟩ := Properties.SecurityProofs.Resolve.unit_leaf bytes P hdec hov hlayb hO hk hu
     hf hm hia ht ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off
   have hgn := hg g hres
-  obtain ⟨qi, base, count, hq, hrun, h1, h2, hjj⟩ := hleaf
-  have hpos := Properties.SecurityProofs.Resolve.run_pos hrun h1 h2
-  obtain ⟨⟨y, b⟩, hpy⟩ : ∃ yb, partRun P ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]!) = some yb := by
-    cases hp : partRun P ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]!) with
-    | none => simp [runOf, hp] at hrun
-    | some yb => exact ⟨yb, rfl⟩
-  have hy : y = (n, base, count) := by simpa [runOf, hpy] using hrun
-  subst hy
-  obtain ⟨-, runs, hrr, hro⟩ := rowRuns_own hO
-  rw [hR] at hrr
-  cases hrr
-  obtain ⟨hunit, hpart⟩ := Properties.SecurityProofs.Resolve.part_mem hk hu hia hq
-  have hqm := List.mem_flatMap.2 ⟨_, hunit, hpart⟩
-  obtain ⟨hx0, q', hq', b', hpx⟩ := runsOf_shared hro hx
-  obtain ⟨-, hxn, hxin, hxf⟩ := runOf_some (show runOf P q' = some x by simp [runOf, hpx])
+  obtain ⟨hx0, q', hq', b', hpx⟩ := runsOf_shared (rowRuns_runsOf hR) hx
+  unfold rowParts at hq'
+  dsimp only at hq'
+  obtain ⟨hq1, -⟩ := List.mem_filter.1 hq'
+  obtain ⟨nd, hnd, hqn⟩ := List.mem_flatMap.1 hq1
+  obtain ⟨a, ha, hqa⟩ := List.mem_flatMap.1 hqn
+  obtain ⟨hndm, hux⟩ := List.mem_filter.1 hnd
+  obtain ⟨kx, hkx, hke⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hndm)
+  have hke' : (P.defs[P.root]!).body.nodes[kx]! = nd := by rw [getElem!_pos _ kx hkx]; exact hke
+  subst hke'
+  have hux' : InferenceOnlyVerifier.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[kx]!) = false := by simpa using hux
+  obtain ⟨ix, hix, hie⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 ha)
+  have hie' : ((P.defs[P.root]!).body.nodes[kx]!).args[ix]! = a := by rw [getElem!_pos _ ix hix]; exact hie
+  subst hie'
+  obtain ⟨qx, hqx, hqe⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 (List.mem_filter.1 hqa).1)
+  have hqe' : (((P.defs[P.root]!).body.nodes[kx]!).args[ix]!).seq.parts[qx]! = q' := by
+    rw [getElem!_pos _ qx hqx]; exact hqe
+  subst hqe'
+  have hrx : runOf P ((((P.defs[P.root]!).body.nodes[kx]!).args[ix]!).seq.parts[qx]!) = some x := by
+    simp [runOf, hpx]
+  obtain ⟨-, hxn, hxin, hxf⟩ := runOf_some hrx
   have hxl := hIN P hP R hR x hx
   obtain ⟨-, hc, hno⟩ := Properties.SecurityProofs.Resolve.decoded_root bytes P hdec x.1 hxn
   have hprim : (P.defs[((P.defs[P.root]!).body.nodes[x.1]!).fn]!).prim = true := by
@@ -807,16 +815,41 @@ theorem leafPart_of (hIN : SharedInNode) : LeafPart := by
   have hox : (P.defs[P.root]!).body.offsets[x.1 + 1]! =
       (P.defs[P.root]!).body.offsets[x.1]! + ((P.defs[P.root]!).body.nodes[x.1]!).out.leaves := by
     rw [(hL P.root hroot.1 hroot.2).2.2 x.1 hxn, hg1, hleaves, Nat.mul_one]
-  have hjb : base ≤ j ∧ j < base + count := by
-    rw [hjj]
-    exact ⟨Nat.le_add_right _ _, Nat.add_lt_add_left (Nat.mod_lt _ hpos) _⟩
   obtain ⟨hn1, hj1⟩ := Properties.SecurityProofs.Resolve.node_of_gate P (hL P.root hroot.1) hroot.2 hxn hn
     (j := g - (P.defs[P.root]!).body.offsets[x.1]!) (by omega) hj hox ho (by omega)
-  have hxy := run_eq_of_gate hro hq' hqm hpx hpy hx0 hpos (jx := g - (P.defs[P.root]!).body.offsets[x.1]!)
-    (jy := j) ⟨by omega, by omega⟩ hjb ⟨hn1, hj1⟩
-  refine ⟨hia, _, ?_, b, by rw [hxy]; exact hpy⟩
-  rw [getElem!_pos _ qi hq]
-  exact Array.mem_toList_iff.2 (Array.getElem_mem hq)
+  have hjx : x.2.1 ≤ j ∧ j < x.2.1 + x.2.2 := by omega
+  rcases hleaf with ⟨qi, base, count, hq, hrun, h1, h2, hjj⟩ | ⟨qi, pc, hq, hpn, hpc, hpc1, hpc2, hpcpos, hplo, hphi, -⟩
+  · have hpos := Properties.SecurityProofs.Resolve.run_pos hrun h1 h2
+    have hjb : base ≤ j ∧ j < base + count := by
+      rw [hjj]
+      exact ⟨Nat.le_add_right _ _, Nat.add_lt_add_left (Nat.mod_lt _ hpos) _⟩
+    obtain ⟨⟨y, b⟩, hpy⟩ : ∃ yb, partRun P ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]!) = some yb := by
+      cases hp : partRun P ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]!) with
+      | none => simp [runOf, hp] at hrun
+      | some yb => exact ⟨yb, rfl⟩
+    have hy : y = (n, base, count) := by simpa [runOf, hpy] using hrun
+    subst hy
+    have hmem : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]! ∈
+        (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts.toList := by
+      rw [getElem!_pos _ qi hq]
+      exact Array.mem_toList_iff.2 (Array.getElem_mem hq)
+    by_cases hsame : k = kx ∧ i = ix ∧ qi = qx
+    · obtain ⟨rfl, rfl, rfl⟩ := hsame
+      exact ⟨hia, _, hmem, b', hpx⟩
+    · rcases runs_shared hO hk hu hia hq hkx hux' hix hqx hrun hrx hpos hx0 hsame with ⟨e, -⟩ | hap
+      · exact ⟨hia, _, hmem, b, by rw [← e]; exact hpy⟩
+      · have hap' : n ≠ x.1 ∨ base + count ≤ x.2.1 ∨ x.2.1 + x.2.2 ≤ base := hap
+        omega
+  · exfalso
+    by_cases hsame : k = kx ∧ i = ix ∧ qi = qx
+    · obtain ⟨rfl, rfl, rfl⟩ := hsame
+      rw [hpx] at hpn
+      cases hpn
+    · have hmx : (x, false) ∈ pieces P ((((P.defs[P.root]!).body.nodes[kx]!).args[ix]!).seq.parts[qx]!) := by
+        simp [pieces, hpx]
+      have hap := pieces_apart hO hk hu hia hq hkx hux' hix hqx hsame hpc hmx (Or.inl hpc2) hpcpos hx0
+      have hap' : pc.1.1 ≠ x.1 ∨ pc.1.2.1 + pc.1.2.2 ≤ x.2.1 ∨ x.2.1 + x.2.2 ≤ pc.1.2.1 := hap
+      omega
 
 /-- **`SharedHeld`, from the stage, where a shared leaf is read by a part over its run** (`LeafPart`). -/
 theorem sharedHeld_of (hNE : EdgeFreeReads) (h3 : LeafPart) : SharedHeld := by
@@ -1002,7 +1035,7 @@ theorem sharedInNode_holds : SharedInNode := by
   dsimp only at hj
   omega
 
-/-- **`SharedHeld`, where every record `read` accepts is of a root with no edge and no strided part's rows.** -/
+/-- **`SharedHeld`, where every record `read` accepts is of a root with no edge.** -/
 theorem sharedHeld_holds (hNE : EdgeFreeReads) : SharedHeld := sharedHeld_of hNE (leafPart_of sharedInNode_holds)
 
 end InferenceOnlyVerifier.Record.SecurityProofs
