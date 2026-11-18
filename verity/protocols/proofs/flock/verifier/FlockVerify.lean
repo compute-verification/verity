@@ -336,7 +336,9 @@ the file marks `read_in_full` (`KnownRead.readOf`) as one row of its registered 
 template parameter each port reads (`Registered.paramsOf`, which `Registered.checkCover` holds the program's registered
 reads to), the ports it binds to the window's committed values (`RegBound.ofJson`, which `RegBound.check` reads), and
 the file's digest, the SHA-512 of its canonical JSON (`sha512Of`), which a verdict names it by. With `--wired F`, the
-wired Program the unwired `--program` is cut from, each tree port's reads are derived from it (`Registered.wiredReads`). -/
+wired Program the unwired `--program` is cut from, each tree port's reads are derived from it (`Registered.wiredReads`),
+refused unless `--wired-digest` names its digest, the one SPOT's check bound to the cut (`Spot.Cut.check`,
+`Docket.Verifier.recordDigest`). -/
 def registeredFile (args : List String) (flag : String := "--registered") (ctx : String := "registered reads") :
     IO (Except String (Option (Array Registered.Port × Array (String × Array (Array Nat × ByteArray)) ×
       Array String × Array RegBound.Bound × String))) := do
@@ -366,6 +368,10 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
           let own ← match ← wired, flag == "--registered" with
             | some b, true => do
               let W ← Program.decode b
+              let d := hexOf W.sha512
+              unless argOf args "--wired-digest" == some d do
+                throw s!"wired-digest: the wired Program's digest {d} is not the one SPOT's check bound to the cut \
+                  (--wired-digest {(argOf args "--wired-digest").getD "none"})"
               pure (own.map fun p => if p.tree.isSome then { p with wired := some W } else p)
             | _, _ => pure own
           let known ← Registered.knownOf j

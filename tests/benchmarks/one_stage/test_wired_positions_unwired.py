@@ -1,7 +1,9 @@
 """The periods pair (writer ``Gemm_v2{K=16,N=16}``, reader ``Gemm_v2{K=16,N=8}`` whose ``x`` is the writer's ``o0``) staged
 under the order-keeping cut, each member through `verity-verify-proof statement` with ``--program`` the cut and
 ``--wired`` the record's wired Program: the reader's ``x`` is a tree port with ``param`` and no link row, so the verifier
-derives its position (`Registered.wiredReads`) and refuses a statement that names another."""
+derives its position (`Registered.wiredReads`) and refuses a statement that names another. The two meet by digest:
+SPOT's cut check (`Spot.Cut.checkWith`, the spot difftest's `cut_why`) holds ``--wired`` and the registered circuit
+record to ``--program``, and Flock refuses a ``--wired`` whose digest is not the one it bound (``--wired-digest``)."""
 from __future__ import annotations
 
 import json
@@ -44,15 +46,23 @@ def _wired(c: IF.Circuit):
 
 
 class Staged:
-    def __init__(self, exe: Path, tmp: Path, members: list, honest: dict):
-        self.exe, self.tmp, self.members, self.honest = exe, tmp, members, honest
+    def __init__(self, exe: Path, tmp: Path, members: list, honest: dict, digest: str, cut: dict):
+        self.exe, self.tmp, self.members, self.honest, self.digest, self.cut = exe, tmp, members, honest, digest, cut
+
+    def cut_why(self, wired: str) -> dict:
+        """SPOT's cut check of the wired Program in ``wired`` under the registered circuit record."""
+        exe = SC.build(ROOT / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean", "spot-difftest")
+        j = {**self.cut, "wired": json.loads((self.tmp / wired).read_bytes())}
+        p = subprocess.run([str(exe)], input=json.dumps({"fn": "cut_why", "input": j}) + "\n", capture_output=True,
+                           text=True)
+        return json.loads(p.stdout.splitlines()[0])
 
     def statement(self, k: int, reads: str | None, public: str | None = None, wired: str | None = "wired.json"):
         sd, pub, _ = self.members[k]
         args = ["--circuit", str(sd / "circuit.txt"), "--public", public or str(pub),
                 "--partition", str(self.tmp / "partition.json"), "--program", str(self.tmp / "program.json")]
         if wired:
-            args += ["--wired", str(self.tmp / wired)]
+            args += ["--wired", str(self.tmp / wired), "--wired-digest", self.digest]
         if reads:
             args += ["--registered", reads]
         p = subprocess.run([str(self.exe), "statement", *args], capture_output=True, text=True)
@@ -100,7 +110,7 @@ def staged(tmp_path_factory) -> Staged:
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(IF.Circuit, "program", lambda self: wired_population_program(
             list(self.templates), {**self.description(), "external": list(self.external), "wires": []}))
-        cut = circuit.program()[0]
+        cut, cut_query = circuit.program()
         win = IF.Window(circuit, RUN, RND.parse_design("stratified:1"), 4)
         win.record(WRITER, [x, w], [y])
         win.record(READER, [None, w8], [y8])
@@ -133,7 +143,9 @@ def staged(tmp_path_factory) -> Staged:
     for f in ("reads", "reads_from", "tree", "param"):
         e.pop(f, None)
     e |= {"tree": {"template": WID, "field": "o0"}, "param": "x", "reads": []}
-    return Staged(exe, tmp, members, honest)
+    record = {**circuit.description(), "external": list(circuit.external)}
+    spot_cut = {"cut": json.loads(canonical_json(encode_program(cut))), "record": record, "query": cut_query}
+    return Staged(exe, tmp, members, honest, program_digest(_wired(circuit)), spot_cut)
 
 
 def _refused(rc: int, out: str, *words: str) -> None:
@@ -182,9 +194,10 @@ def test_another_writer_template_is_refused(staged):
     _refused(rc, out, f"reads {RID}'s tree", f"unit 1's writer, unit 0, is {WID}'s")
 
 
-@pytest.mark.xfail(strict=True, reason="nothing binds --wired to the registration: closed by the docket's rule that the "
-                   "wired Program's digest is the one the record's program names, and by Spot.Cut.check that the cut of "
-                   "--wired and its record is --program")
 def test_a_wired_program_of_another_record_of_the_same_shape_is_refused(staged):
+    """SPOT's cut check accepts the registered wired Program and refuses the other record's by name (`cut-record`), and
+    Flock refuses it given the digest SPOT bound."""
+    assert staged.cut_why("wired.json") == {"output": {"refusal": None}}
+    assert staged.cut_why("wired-same-shape.json") == {"output": {"refusal": "cut-record"}}
     rc, out = staged.statement(1, staged.reads("honest"), wired="wired-same-shape.json")
-    assert rc != 0, out
+    _refused(rc, out, "wired-digest")
