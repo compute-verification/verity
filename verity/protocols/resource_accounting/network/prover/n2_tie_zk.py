@@ -65,7 +65,7 @@ from types import SimpleNamespace
 from typing import NamedTuple
 
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC
-from verity.protocols.resource_accounting.network.prover import leak_scan as LS, n2_zk as Z
+from verity.protocols.resource_accounting.network.prover import leak_scan as LS, n2_zk as Z, proof_drivers
 from verity.protocols.resource_accounting.network.verifier import head_check as HC
 from verity.protocols.resource_accounting.network.verifier import io_request as Q, service as SVC
 from verity.protocols.resource_accounting.network.verifier import tie_service as TS, network_attester as W, network_attester_rows as WR
@@ -365,8 +365,8 @@ def stager(M, tie: TS.IngressTie, out: Path) -> SimpleNamespace:
     t, was = time.time(), gc.isenabled()
     gc.disable()
     try:
-        st = M.CS.UnitStager(tie.proof_block, "unit/ingress-tie-bucket", rows, [(M.V2, (0,))],
-                             circuit=out / "circuit.txt", bind=bound)
+        st = proof_drivers.unit_stager(tie.proof_block, "unit/ingress-tie-bucket", rows, [(M.V2, (0,))],
+                                       circuit=out / "circuit.txt", bind=bound)
         st.pin
     finally:
         if was:

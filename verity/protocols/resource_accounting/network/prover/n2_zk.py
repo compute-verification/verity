@@ -315,8 +315,8 @@ def stager(M, lw: TransferBlocks, out: Path) -> SimpleNamespace:
     t, was = time.time(), gc.isenabled()
     gc.disable()
     try:
-        st = M.CS.UnitStager(lw.proof_block, "unit/n2-link-window", rows, [(M.V2, (0,))], circuit=out / "circuit.txt",
-                             bind=bound)
+        st = proof_drivers.unit_stager(lw.proof_block, "unit/n2-link-window", rows, [(M.V2, (0,))],
+                                       circuit=out / "circuit.txt", bind=bound)
         st.pin
     finally:
         if was:

@@ -1462,8 +1462,8 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], T: int, out: Path) -> 
         sdir = out / tp
         sdir.mkdir(exist_ok=True)
         n_outs = len(outs) + (tp not in ROWS_O0)
-        st = M.CS.UnitStager(defs[tp], f"unit/scan-{tp}", [(r, ROW_SCHEMAS.get((tp, r), M.V2), b, [r]) for r, b in ins],
-                             [(M.V2, (j,)) for j in range(n_outs)], circuit=sdir / "circuit.txt", bind=bound)
+        st = proof_drivers.unit_stager(defs[tp], f"unit/scan-{tp}", [(r, ROW_SCHEMAS.get((tp, r), M.V2), b, [r]) for r, b in ins],
+                                       [(M.V2, (j,)) for j in range(n_outs)], circuit=sdir / "circuit.txt", bind=bound)
         st.pin
         stagers[tp] = SimpleNamespace(defn=defs[tp], st=st, base=base, n=cnt, out=sdir, ins=ins, outs=outs,
                                       lower_s=round(time.time() - t, 1))

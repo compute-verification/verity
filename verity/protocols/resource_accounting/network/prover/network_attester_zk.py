@@ -264,8 +264,8 @@ def stager(M, B: int, n: int, out: Path) -> SimpleNamespace:
     (out / "program.json").write_bytes(M.canonical_json(M.encode_program(program)))
     bound = {"partition": M.P.digest(part), "program": part["program"]}
     t = time.time()
-    st = M.CS.UnitStager(defn, "unit/warden-row", [("row", M.V2, 8 * B, ["row"])], [(M.V2, (0,))],
-                         circuit=out / "circuit.txt", bind=bound)
+    st = proof_drivers.unit_stager(defn, "unit/warden-row", [("row", M.V2, 8 * B, ["row"])], [(M.V2, (0,))],
+                                   circuit=out / "circuit.txt", bind=bound)
     st.pin
     (tid, base, cnt), = M.P.ranges(program, query)
     assert tid == M.P.template_id(defn) and cnt == n

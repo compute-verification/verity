@@ -51,3 +51,13 @@ def drivers() -> ProofDrivers:
                            "or call proof_drivers.install first")
     return _installed
 
+
+#: the layout mode a network proof block's templated statement is laid out at (`UnitStager`'s ``layout``)
+LAYOUT = "iv/hybrid/4"
+
+
+def unit_stager(definition, name: str, in_rows, out_rows, **kw):
+    """Flock's `UnitStager` on a network proof block: its statement the template `struct_lower` computes from the block's
+    Definition, never its unrolled rows."""
+    return drivers().class_statement.UnitStager(definition, name, in_rows, out_rows, layout=LAYOUT, structural=True, **kw)
+

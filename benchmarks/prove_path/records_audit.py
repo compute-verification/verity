@@ -204,6 +204,7 @@ from verity.protocols.registration.verifier import registration as G  # noqa: E4
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
 from verity.protocols.compose import schemes  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import proof_drivers as PD  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
@@ -827,24 +828,20 @@ def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping
 
 def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[str, Any]]:
     """A template's circuit from its Definition and its statement in the circuit record (Flock's `UnitStager` on the record's
-    ``in_rows``, ``out_rows`` and a flat statement's ``reads`` or a templated one's ``layout`` and ``structural``), bound to the
-    window's partition and program: a5's composer for its members. a5's compose cache keys it by its ``inputs``
+    ``in_rows`` and ``out_rows``, its statement the template `struct_lower` computes from the Definition at the network
+    proof blocks' layout, `proof_drivers.unit_stager`'s), bound to the window's partition and program: a5's composer for its
+    members. a5's compose cache keys it by its ``inputs``
     (`a5.compose_key`; a composer without them is never cached): the stager's label, the statement and, for a table read, the
     executable whose template its unit is (`read_tmpl.digest`), as `compose_circuit.template_inputs` keys a ``--template``
     compose, so a circuit kept under another build of the verifier's read is not taken."""
     from verity_flock import read_tmpl as RT
 
-    form = {"layout": st["layout"], "structural": bool(st["structural"])} if st.get("layout") else {"reads": st["reads"]}
-
     def compose(out: Path, partition: str, program: str) -> dict[str, Any]:
-        from verity_flock import circuit as FC
         from verity_flock.class_statement import UnitStager
 
         s = UnitStager(fn, "unit/window", [(p, sc, int(b), list(ps)) for p, sc, b, ps in st["in_rows"]],
                        [(sc, tuple(ix)) for sc, ix in st["out_rows"]], circuit=Path(out),
-                       bind={"partition": partition, "program": program}, **form)
-        if form.get("reads") == "slots":
-            FC.IL.write_tables(Path(out).parent / "tables")
+                       bind={"partition": partition, "program": program}, layout=PD.LAYOUT, structural=True)
         return {"subcircuit": s.meta.get("subcircuit"), "pin": s.pin, "class_sha512": s.class_sha512, "k_log": s.meta["k_log"]}
     compose.inputs = ["unit/window", st, *([RT.digest()] if RT.is_read(fn) else [])]
     return compose
