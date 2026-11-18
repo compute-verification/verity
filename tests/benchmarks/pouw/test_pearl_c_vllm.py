@@ -31,6 +31,7 @@ from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
 from verity_torch.pouw.pearl_c import ends as ENDS
 from verity_torch.pouw.pearl_c import host as PH
+from verity_torch.pouw.pearl_c import passes as PP
 from verity_torch.pouw.pearl_c import served_y_device as SYD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
@@ -327,50 +328,76 @@ def test_nohash_forms_and_multiplies_without_hashing(device_run):
     assert run.end() == {"units": 1, "base": 0, "tiles": 0, "hashing": False, "schedule": "serial"}
 
 
-def test_passes_number_their_calls_across_the_epoch(device_run):
-    """Each pass's calls continue the execution phase's indices (`pouw_pass.call_index`), its buffers positional: three calls, then
-    two in the next pass take 3 and 4.  A check that repeats a pass from its index (`begin`'s ``at``) shares its indices,
-    and the pass after continues past every index the execution phase has used, never from the repeat's end; so does a call after
-    `finish`."""
-    make, _, weights, *_ = device_run
+def test_a_calls_index_is_its_round_and_its_position_and_no_caller_chooses_one(device_run):
+    """A call's index is its place (`passes.call_index`): its pass's round among the epoch's passes with calls times
+    `ROUND_CALLS`, plus its position in the pass.  Three calls, then two in the next pass, take round 1's positions 0 and 1;
+    a pass without a call takes no round; so does a call after `finish`.  A caller's own index is refused by name, at
+    `begin` and at `repeat_at`, and the keys a call uploads carry the derived index."""
+    make, kernel, weights, roots, salt = device_run
     run = make()
     x = torch.randn(16, 1024).to(torch.bfloat16)
     for w in (0, 1, 0):
         run.gemm(w, x, weights[w], None)
+    assert [u.index for u in run.cur.matmuls] == [0, 1, 2]
     first = run.end_pass()
+    assert run.cur.base is None and run.rounds() == 1
     for w in (1, 0):
         run.gemm(w, x, weights[w], None)
-    assert first["base"] == 0 and [u.index for u in run.cur.matmuls] == [3, 4] and run.cur.base == 3
+    assert first["base"] == 0 and [u.index for u in run.cur.matmuls] == [PP.ROUND_CALLS, PP.ROUND_CALLS + 1]
+    sh = run._shape(16, 256, 1024)
+    assert PPDR._bytes(sh.keys[:168]) == PPDR.call_keys(salt, roots[0], PP.ROUND_CALLS + 1, 16, run.tree_hash)
     second = run.end_pass()
-    assert second["base"] == 3 and run.epoch_calls() == 5
-    run.begin(at=0)
-    run.gemm(0, x, weights[0], None)
-    assert [u.index for u in run.cur.matmuls] == [0]
-    run.repeat_at = 3
+    assert second["base"] == PP.ROUND_CALLS and run.rounds() == 2
     run.end_pass()
-    assert run.cur.base == 3 and run.repeat_at is None
-    run.end_pass()
-    assert run.cur.base == 5
+    run.begin()
+    assert run.rounds() == 2 and "base" not in run.end()
+    for at in (0, 2 * PP.ROUND_CALLS, PP.ROUND_CALLS + 1):
+        with pytest.raises(ValueError, match="which the device derives and no caller chooses"):
+            run.begin(at=at)
+        with pytest.raises(ValueError, match="repeat_at.*no caller chooses"):
+            run.repeat_at = at
+    assert run.repeat_at is None and run.rounds() == 2 and not hasattr(run, "epoch_calls") and not hasattr(run, "pass_base")
     run.gemm(1, x, weights[1], None)
     run.finish()
-    assert run.cur.base is None and run.epoch_calls() == 6
+    assert run.cur.base is None and run.rounds() == 3
     run.gemm(0, x, weights[0], None)
-    assert run.cur.base == 6 and [u.index for u in run.cur.matmuls] == [6]
+    assert run.cur.base == 3 * PP.ROUND_CALLS and [u.index for u in run.cur.matmuls] == [3 * PP.ROUND_CALLS]
 
 
-def test_the_epochs_call_at_2_to_the_32_is_refused_on_the_device(device_run):
-    """A call whose index would reach `pearl_c.CALL_RANGE` (2^32, the row seed's range) raises before it runs, naming the
-    fix: the execution phase ends and the install takes a new salt."""
+def test_two_runs_under_the_same_coins_give_a_pass_the_same_indices(device_run):
+    """What a check that runs a pass twice does in place of a chosen index: a device run of its own for each, whose rounds
+    both number from 0, so the two passes' calls have the same places."""
+    make, _, weights, *_ = device_run
+    x = torch.randn(16, 1024).to(torch.bfloat16)
+    got = []
+    for _ in range(2):
+        run = make()
+        for w in (0, 1):
+            run.gemm(w, x, weights[w], None)
+        got.append([u.index for u in run.cur.matmuls])
+        run.finish()
+    assert got[0] == got[1] == [0, 1]
+
+
+def test_the_epochs_last_round_is_its_last_and_a_rounds_calls_stay_inside_it(device_run):
+    """An epoch holds `EPOCH_ROUNDS` rounds, so every index is below `protocol.CALL_RANGE` (2^32, the row seed's range):
+    the last round's first call has index 2^32 - `ROUND_CALLS`, and a call of the round after raises before it runs,
+    naming the fix: the execution phase ends and the install takes a new salt.  A round's position never reaches
+    `ROUND_CALLS`."""
     make, kernel, weights, *_ = device_run
+    assert PP.ROUND_CALLS * PP.EPOCH_ROUNDS == C.CALL_RANGE and PP.ROUND_CALLS == PPD.CALL_CAPACITY
     run = make()
     x = torch.randn(16, 1024).to(torch.bfloat16)
-    run.begin(at=C.CALL_RANGE - 1)
+    run._rounds = PP.EPOCH_ROUNDS - 1
     run.gemm(0, x, weights[0], None)
-    assert [u.index for u in run.cur.matmuls] == [C.CALL_RANGE - 1]
+    assert [u.index for u in run.cur.matmuls] == [C.CALL_RANGE - PP.ROUND_CALLS]
+    run.end_pass()
     kernel.dev.log.clear()
-    with pytest.raises(RuntimeError, match="2\\^32 calls.*reinstall under a new salt"):
+    with pytest.raises(RuntimeError, match="rounds.*2\\^32 calls.*reinstall under a new salt"):
         run.gemm(1, x, weights[1], None)
-    assert not kernel.dev.log and len(run.cur.matmuls) == 1
+    assert not kernel.dev.log
+    with pytest.raises(RuntimeError, match="would pass its 65536 calls"):
+        PP.call_index(make(), PP.ROUND_CALLS + 1)
 
 
 def test_a_pass_screens_at_most_its_flag_rows(device_run):
@@ -848,7 +875,7 @@ def test_an_attached_pearl_plus_after_its_first_step_holds_the_run_the_harness_g
     served.step()
     run = served.scheme.run
     assert isinstance(run, cls) and isinstance(run.schedule.name, str) and run.omit == frozenset()
-    assert all(callable(getattr(run, f)) for f in ("begin", "end", "gemm", "poison", "epoch_calls"))
+    assert all(callable(getattr(run, f)) for f in ("begin", "end", "gemm", "poison", "rounds"))
     assert isinstance(run.details, dict) and run.scheme is not None
     assert {w: x.tensor.data_ptr() for w, x in run.weights.items()} == {w: t.data_ptr() for w, t in weights.items()}
     assert run.commits["weights_root"] == run.epoch.weights_root.hex() and "registration" in run.commits
@@ -3991,7 +4018,7 @@ def test_eager_calls_leave_every_filler_row_zero_as_m_moves_within_a_shape(devic
 
 def test_each_calls_a_root_lands_at_its_position_and_its_keys_take_the_epochs_index(device_run):
     """Two steps of the same three calls: each call's A root lands at its position in its pass's buffer, and its keys are
-    those of its index in the execution phase, so the second step's calls are 3, 4 and 5 and share no keys with the first's."""
+    those of its place in the execution phase, so the second step's calls are round 1's positions 0, 1 and 2 and share no keys with the first's."""
     make, _, weights, roots, salt = device_run
     run = make()
     for step in range(2):
@@ -4003,10 +4030,10 @@ def test_each_calls_a_root_lands_at_its_position_and_its_keys_take_the_epochs_in
             run.gemm(w, torch.randn(8, 1024).to(torch.bfloat16), weights[w], None)
             size = run._pipe(w, sh)[0].size["tree_a"]
             assert PPDR._bytes(run.roots_buf[64 * i:64 * (i + 1)]) == PPDR._bytes(tree[size - 64:size])
-            assert PPDR._bytes(sh.keys[:168]) == PPDR.call_keys(salt, roots[w], 3 * step + i, 16, run.tree_hash)
-        assert [u.index for u in run.cur.matmuls] == [3 * step, 3 * step + 1, 3 * step + 2]
+            assert PPDR._bytes(sh.keys[:168]) == PPDR.call_keys(salt, roots[w], PP.ROUND_CALLS * step + i, 16, run.tree_hash)
+        assert [u.index for u in run.cur.matmuls] == [PP.ROUND_CALLS * step + i for i in range(3)]
         run.end_pass()
-    assert run.cur.base == run.epoch_calls() == 6
+    assert run.cur.base is None and run.rounds() == 2
 
 
 def test_the_host_path_commits_what_the_reference_path_commits(device_run, tmp_path):

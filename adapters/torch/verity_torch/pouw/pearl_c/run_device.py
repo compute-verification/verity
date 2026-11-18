@@ -131,6 +131,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.la
 from verity_torch.pouw.pearl_c.lanes_device import LaneCalls
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.manifest import SaltCoins, SaltOpening, epoch_of
 from verity_torch.pouw.pearl_c.passes import (
+    CHOSEN_INDEX,
     EpochCalls,
     call_index,
     pass_dir,
@@ -367,7 +368,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             "pass_end": ("an engine step's commitment read back at the next end" + (", its tile tree on a stream of its own"
                                                                                      if aside_ends else "")) if lag_ends else "read back at its end",
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound"}
-        self.cur = _Pass(None)              # no pass yet: `begin` reads it for the epoch's calls so far (`pass_base`)
+        self.cur = _Pass(None)              # no pass yet
         self.begin()
 
     # ---- the schedule -----------------------------------------------------------------------------------------------
@@ -625,15 +626,19 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
 
     def begin(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None,
               stepped: bool = False, at: int | None = None) -> None:
-        """A new pass: its own transcript under the install's epoch, its indices from `pass_base` (``at``), under `schedule` (the
+        """A new pass: its own transcript under the install's epoch, its calls' indices their place (`passes.call_index`: its
+        round, taken at its first call, and each call's position), under `schedule` (the
         last pass's own when None; a schedule changes only between passes, and before a pass's first call by `eager_forward`).
+        ``at``, a caller's own first index, is refused by name (`passes.CHOSEN_INDEX`).
         With `retain`, the pass writes what the prover opens from into that directory, from poisoned outputs, and its manifest
         names `run`.  `stepped`: a step's end begins it."""
+        if at is not None:
+            raise ValueError(f"{self.entry}: begin(at={at!r}): {CHOSEN_INDEX}")
         self.join_sides()                   # the last pass's side lanes are done before anything new
         retain = retain or pass_dir(self)
         last, self._eager_from = self._eager_from or self.schedule, None
         self._use(last if schedule is None else schedule_of(schedule, self.scheme, self.kernel))
-        self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped, base=self.pass_base(at))
+        self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped)
         if retain and self.hashing:
             self.poison()
 
