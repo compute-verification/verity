@@ -26,7 +26,8 @@ handle owned, as a lane's worker by an issue key in its name, the lane that issu
 with (the record's `placed_by`: `name`, `label` or `team`, with its `issue`, or `handle`) rings that lane
 whatever its result and its sender's status, and says how the lane was found, so a wrong placement shows where it rings; the
 worker's later runs are any worker's. The runs of one read whose sender
-no handle owns, and no name places, are one post that leads with infra's handle, naming each run's sender, rung as an alert;
+no handle owns, and no name places, are one post that leads with infra's handle, naming each run's sender (and, for one of
+the team's agents, its name), rung as an alert;
 one whose senders infra was all rung for at an earlier run (`quiet`) rings no one. A record this relay can't render
 (a kind it doesn't know, or one missing what its sentence needs) is posted as its raw JSON to infra, never as a sentence of ?s.
 A record the watch marks `quiet` (a run its own lane cancelled, a worker relaunch it declined, an alert or a run of an
@@ -284,7 +285,9 @@ def unsent(u: dict) -> str:
     s = str(u.get("sender") or "")
     a = re.search(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", s)
     who = f"<https://cursor.com/agents/{a[0]}|{a[0][:11]}>" if a else (f"`{s}`" if s else "no `submitted_by` or `--by`")
-    return f"{u.get('run')} on {u.get('node')} ({u.get('what') or '?'}, {u.get('state')} rc={u.get('rc')}) sent by {who}"
+    title = f", the team's agent \u201c{u['title']}\u201d" if u.get("title") else ""
+    return (f"{u.get('run')} on {u.get('node')} ({u.get('what') or '?'}, {u.get('state')} rc={u.get('rc')}) sent by "
+            f"{who}{title}")
 
 
 def text(rec: dict) -> str:

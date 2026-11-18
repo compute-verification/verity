@@ -4,6 +4,8 @@
 section names (`arch = sm_90a`, `code for sm_100a`), its functions, its instructions, and each dotted opcode's count
 with its first instruction as an example (`IMMA.16832.S8.S8`: `R4, R8, R6, R4`). `merge` folds those objects into one
 census an architecture: every dotted opcode, its count, the sources it appears in, an example, and its base opcode.
+`elfs`, `plan`, `join`, `version` and `key` are dump.sh's: binaries cut into runs of their ELFs to disassemble in
+parallel, the runs' counts joined into each binary's, and where that count is kept between runs.
 
     cuobjdump -sass lib.so | python sass_count.py count --source libcublasLt > lt.json
     python sass_count.py merge counts/*.json > census.json
@@ -14,6 +16,7 @@ Stdlib only, so it runs on a node's system Python beside the toolkit.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -63,6 +66,79 @@ def count(lines: Iterable[str], source: str, only: str | None = None) -> dict:
     return {"source": source, "archs": archs}
 
 
+def elfs(listing: Iterable[str]) -> list[str]:
+    """The ELF files a `cuobjdump -lelf` or `-xelf all` listing names, in its order, the order a dump of the whole binary
+    meets them. cuobjdump names them after the path it was given, so a listing names the files of its own run."""
+    return [m.group(1) for line in listing if (m := re.search(r"\bELF file\s+\d+:\s+(\S+)", line))]
+
+
+#: what setting up one ELF costs `cuobjdump -sass`, in bytes of SASS it disassembles in that time
+PER_ELF = 100_000
+
+
+def plan(binaries: list[tuple[str, int, list[tuple[str, int]] | None]], jobs: int
+         ) -> list[tuple[int, str, int, list[str] | None]]:
+    """dump.sh's units: each binary (its sha, its bytes, and its extracted ELFs' names and bytes in their order, None when
+    they couldn't be extracted) cut into runs of consecutive ELFs weighing about 1/(8 jobs) of the whole each, so no unit
+    outlasts the rest; a binary without ELFs is one unit (None), dumped whole. Each unit: weight, sha, index, ELFs."""
+    def weight(e: tuple[str, int]) -> int:
+        return e[1] + PER_ELF
+    total = sum(sum(map(weight, es)) if es else size for _, size, es in binaries)
+    target = max(1, total // (8 * max(1, jobs)))
+    out: list[tuple[int, str, int, list[str] | None]] = []
+    for sha, size, es in binaries:
+        if not es:
+            out.append((size, sha, 0, None))
+            continue
+        run: list[str] = []
+        w = i = 0
+        for e in es:
+            run.append(e[0])
+            w += weight(e)
+            if w >= target:
+                out.append((w, sha, i, run))
+                run, w, i = [], 0, i + 1
+        if run:
+            out.append((w, sha, i, run))
+    return out
+
+
+def join(parts: list[dict], source: str) -> dict:
+    """One binary's `count` from its parts' in order (each a `count` of a run of its ELFs, in the binary's order): each
+    architecture's functions, instructions and opcodes summed, an opcode's example the first part's that has it, and the
+    architectures in the order the parts first meet them, so it equals a `count` of the whole binary's dump."""
+    archs: dict[str, dict] = {}
+    for p in parts:
+        for arch, a in p["archs"].items():
+            t = archs.setdefault(arch, {"funcs": 0, "instrs": 0, "ops": {}})
+            t["funcs"] += a["funcs"]
+            t["instrs"] += a["instrs"]
+            for op, (n, ex) in a["ops"].items():
+                if (e := t["ops"].get(op)) is None:
+                    t["ops"][op] = [n, ex]
+                else:
+                    e[0] += n
+    return {"source": source, "archs": archs}
+
+
+def version(files: list[Path], tool: str) -> str:
+    """The dump's version: SHA-256 over the counting code's files and the disassembler's `--version` text, so a count
+    made by other code or another cuobjdump is never read back from the cache."""
+    h = hashlib.sha256()
+    for f in files:
+        h.update(f.name.encode() + b"\0" + f.read_bytes() + b"\0")
+    h.update(tool.encode())
+    return h.hexdigest()
+
+
+def key(ver: str, sha256: str, source: str) -> str:
+    """A binary's count's path in the cache: the dump's version, the binary's SHA-256 and the source name its count
+    carries."""
+    if not re.fullmatch(r"[0-9a-f]{64}", ver) or not re.fullmatch(r"[0-9a-f]{64}", sha256):
+        raise ValueError("version and sha256 are 64 hex digits each")
+    return f"{ver}/{sha256}/{source.replace('/', '_')}.json"
+
+
 def merge(objs: list[dict]) -> dict:
     """One census a device family: every dotted opcode's count, its sources and an example, and each base opcode's."""
     out: dict[str, dict] = {}
@@ -104,6 +180,20 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("count")
     c.add_argument("--source", required=True)
     c.add_argument("--arch", help="count only this architecture's sections")
+    u = sub.add_parser("plan", help="dump.sh's units under its work directory: `weight sha index path` a line, and each "
+                                    "unit's ELFs in WORK/parts/SHA/INDEX.list")
+    u.add_argument("--jobs", type=int, required=True)
+    u.add_argument("--work", type=Path, required=True)
+    j = sub.add_parser("join", help="one binary's count from its parts' counts, in order")
+    j.add_argument("--source", required=True)
+    j.add_argument("files", type=Path, nargs="+")
+    v = sub.add_parser("version", help="the dump's version")
+    v.add_argument("--tool", required=True, help="cuobjdump --version's text")
+    v.add_argument("files", type=Path, nargs="+")
+    k = sub.add_parser("key", help="a count's path in the cache")
+    k.add_argument("version")
+    k.add_argument("sha256")
+    k.add_argument("source")
     m = sub.add_parser("merge")
     m.add_argument("files", type=Path, nargs="+")
     s = sub.add_parser("summary")
@@ -111,6 +201,30 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     if a.cmd == "count":
         json.dump(count(sys.stdin, a.source, a.arch), sys.stdout)
+    elif a.cmd == "plan":
+        binaries, paths = [], {}
+        for line in (a.work / "fresh").read_text().splitlines():
+            sha, path = line.split("\t")[:2]
+            paths[sha] = path
+            x = a.work / "elf" / f"{sha}.x"
+            names = elfs(x.read_text(errors="replace").splitlines()) if x.is_file() else []
+            d = a.work / "elf" / sha
+            ok = bool(names) and len(set(names)) == len(names) and all((d / n).is_file() for n in names)
+            if names and not ok:
+                print(f"dump: {path}: {sum(not (d / n).is_file() for n in names)} of its {len(names)} ELFs weren't "
+                      "extracted, so it is dumped whole", file=sys.stderr)
+            binaries.append((sha, Path(path).stat().st_size, [(n, (d / n).stat().st_size) for n in names] if ok else None))
+        for w, sha, i, run in plan(binaries, a.jobs):
+            if run is not None:
+                (a.work / "parts" / sha / f"{i:06d}.list").write_text("".join(f"{a.work / 'elf' / sha / n}\n"
+                                                                              for n in run))
+            print(f"{w}\t{sha}\t{'-' if run is None else f'{i:06d}'}\t{paths[sha]}")
+    elif a.cmd == "join":
+        json.dump(join([json.loads(f.read_text()) for f in a.files], a.source), sys.stdout)
+    elif a.cmd == "version":
+        print(version(a.files, a.tool))
+    elif a.cmd == "key":
+        print(key(a.version, a.sha256, a.source))
     elif a.cmd == "merge":
         objs = []
         for f in a.files:

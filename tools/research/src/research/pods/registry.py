@@ -14,7 +14,8 @@ The registry is a directory with one TOML file per machine, `<dir>/<name>.toml`,
 `pod_id`, `project` or `projects`, and optionally `root`, `python`, `guard`, `ramlock`; a Nebius VM's `nebius_instance_id`, and the
 `deadline` fleet.py's sampler copies from its /etc/research/deadline, and its `unreachable_since` while no sample reads it; `stopped_since`,
 which `research pods stopped` writes; `lane`, the lane whose budget line pays for it, infra when
-unset) plus who registered it and when.  A machine marked `stopped_since`, or `unreachable_since` for UNREACHABLE_OUT_MIN, is out
+unset) plus who registered it and when, and last its `[properties]` table, what a job may do there, each with the command that
+read it (`verity_bench.kit.machine_properties`), which a re-registration of the same binding and fleet.py's marks keep.  A machine marked `stopped_since`, or `unreachable_since` for UNREACHABLE_OUT_MIN, is out
 of placement (`left_out`): `research run --on auto` asks it nothing and `research deploy` writes it into no list of machines, and
 it is still reached by name.  A `provider = "slurm"` machine, a node of a cluster that is not ours, is reached only through
 batch jobs its `via` machine submits, and its file holds no address (research.pods.slurm says what it holds).  Two
@@ -62,7 +63,7 @@ NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 POD_ID_RE = re.compile(r"[a-z0-9]{8,32}")
 KNOWN_KEYS = ("provider", "pod_id", "host", "port", "user", "rate_usd_per_hour", "project", "projects", "root", "python", "guard", "ramlock",
               "nebius_instance_id", "lane", "deadline", "unreachable_since", "stopped_since")
-KEPT_KEYS = ("lane", "deadline", "stopped_since")   # a re-registration of the same binding that doesn't set them keeps the old file's
+KEPT_KEYS = ("lane", "deadline", "stopped_since", "properties")   # a re-registration of the same binding that doesn't set them keeps the old file's
 #: the minutes a machine's `unreachable_since` stands before placement leaves it out. The sampler writes that mark on its own
 #: (fleet.py, after UNREACH_S without an answer) and clears it at the next answer, so a machine that is slow for a few samples,
 #: or restarted, keeps its place; `stopped_since` is a person's word and counts at once
@@ -263,12 +264,32 @@ def _toml_value(v: Any) -> str:
         return repr(v)
     if isinstance(v, (list, tuple)):
         return "[" + ", ".join(_toml_value(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{ " + ", ".join(f"{_toml_key(k)} = {_toml_value(x)}" for k, x in v.items()) + " }"
     return json.dumps(str(v), ensure_ascii=True)       # a JSON string with ASCII escapes is a valid TOML basic string
 
 
+def _toml_key(k: str) -> str:
+    return k if re.fullmatch(r"[A-Za-z0-9_-]+", k) else json.dumps(k, ensure_ascii=True)
+
+
 def render_entry(name: str, entry: dict) -> str:
+    """The file of machine `name`: its keys, then each table (`[properties]`), whose keys a TOML file can only hold last."""
     head = f"# machine {name}: written by `research pods register`; one file per machine (research.pods.registry)\n"
-    return head + "".join(f"{k} = {_toml_value(v)}\n" for k, v in entry.items() if v is not None)
+    keys = "".join(f"{_toml_key(k)} = {_toml_value(v)}\n" for k, v in entry.items() if v is not None and not isinstance(v, dict))
+    tables = "".join(f"\n[{_toml_key(k)}]\n" + "".join(f"{_toml_key(kk)} = {_toml_value(x)}\n" for kk, x in v.items())
+                     for k, v in entry.items() if isinstance(v, dict))
+    return head + keys + tables
+
+
+def properties_copy(name: str, entry: dict) -> str | None:
+    """The file `research run` puts in a run's inputs/ as NAME.toml: the machine's name and its `[properties]` table, and no
+    other field of its record (no address, user, pod id or key); None for a record without the table."""
+    props = entry.get("properties")
+    if not isinstance(props, dict):
+        return None
+    return (f"# machine {name}'s [properties], copied from its record by `research run`\nmachine = {_toml_value(name)}\n\n"
+            "[properties]\n" + "".join(f"{_toml_key(k)} = {_toml_value(v)}\n" for k, v in props.items()))
 
 
 def write_entry(d: Path, name: str, entry: dict) -> Path:

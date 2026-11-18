@@ -8,8 +8,8 @@ from __future__ import annotations
 from functools import lru_cache
 
 import numpy as np
-
 from verity.circuits.ops import mufu as MU
+
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics.act_rows import silu_mul_expf_rows
 from verity_vllm.definitions.numerics.libdevice import nv_logf

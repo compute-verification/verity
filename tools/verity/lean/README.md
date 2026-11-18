@@ -57,16 +57,15 @@ research run --on auto --mem-gb 133 --max-min 120 --project verity --source . --
   --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update
   133 GB is 123.9 GiB, a heavy build's need. The fast path (the lean-proofs skill): PKG's records and its requirers';
   `lean_changed.py --ask PKG` prints PKG's ask
-research run --on auto --mem-gb 307 --max-min 180 --project verity --source . --cwd clone -- \
-  python3 tools/verity/lean/check.py --build --update PKG
-  307 GB is 285.9 GiB, an ArkLib replay's need. A full record, left at lean-audit/audit-TAG/lean-audit.json;
-  `check.py --ask --build PKG` prints PKG's ask
 ~~~
 
 `check.py`'s docstring and `--help` have the other flags (`--closure`, `--replay-cache`, `--program-cache`, `--artifacts`,
 `--regenerate`, `--bookkeeping warn`, `--facts`, the facts stages); `lean_audit.py`'s and `lean_changed.py`'s have the jobs'
 own.
 `check.py` exits 0 when every package passes, 1 when one fails, and 2 on a usage error or a refusal.
+`check.py --build` without `--artifacts` refuses on a node whose builds are sandboxed and whose artifact cache holds
+modules, naming `lean_changed.py --records PKG` (the line above), which builds on a kept tree and restores from that cache;
+`--no-artifacts` builds cold on purpose, as the uncached check does.
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
 through the kernel into an empty environment. It needs one module per root and a lot of memory, and checks the closure

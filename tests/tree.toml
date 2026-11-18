@@ -79,7 +79,7 @@ means = "the architecture"
 
 [[tree]]
 path = "GLOSSARY.md"
-means = "the Glossary: terms, notation, narrower senses and older names"
+means = "the Glossary: terms and notation"
 
 [[tree]]
 path = "pyproject.toml"
@@ -95,7 +95,7 @@ means = "the workspace's lock"
 
 [[tree]]
 path = "artifacts.json"
-means = "every replicated fixture, by its art: id"
+means = "the fixture registry: every replicated fixture, by its art: id"
 
 [[tree]]
 path = ".agents/"
