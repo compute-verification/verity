@@ -30,7 +30,7 @@ from verity.circuits.refs import array_of, coll_concat
 from verity.circuits.types import Array
 from verity.circuits.private_circuits import universal as U
 from verity.commitments import hm96
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 
 from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
@@ -116,12 +116,12 @@ def _cut(lanes: tuple, lo: int, hi: int) -> tuple:
     return tuple([p[lo:hi] for p in part] for part in lanes)
 
 
-def _reads(tree: G.Registered, template: str, port: str | None) -> dict:
+def _reads(tree: RG.Registered, template: str, port: str | None) -> dict:
     """The verifier's own `--registered` file for a statement of this program: every unit's output row at its leaf, and the
     link row ``port`` a tree port of the template's output field."""
-    ext = {**G.width_entry(G.WORD_BITS), **G.schema_entry(G.SCHEMA)}
+    ext = {**RG.width_entry(RG.WORD_BITS), **RG.schema_entry(RG.SCHEMA)}
     ports = {} if port is None else {port: {**tree.entry(), **ext, "tree": {"template": template, "field": "out"}, "reads": []}}
-    return {"format": G.READS, "ports": {**ports, "out": {**tree.entry(), **ext, "reads": list(range(tree.leaves))}}}
+    return {"format": RG.READS, "ports": {**ports, "out": {**tree.entry(), **ext, "reads": list(range(tree.leaves))}}}
 
 
 def _stage(topo, d: Path, wired: bool):
@@ -149,7 +149,7 @@ def _stage(topo, d: Path, wired: bool):
     else:
         honest = _lanes(units, cl, tp, inputs)
         template = descriptor_id(fn)
-        tree = G.Registered.commit(program_digest(program), f"{template}/out",
+        tree = RG.Registered.commit(program_digest(program), f"{template}/out",
                                    [[p[u] for p in honest[1]] for u in CS.tree_leaves(tp, template)])
         readers = replace(wiring, indices=list(range(N, tp.population)), tree=tree)
         st = {"writers": CS.stage(units, SPEC, shape, cl, _cut(honest, 0, N), d / "writers", packed=True,
@@ -166,7 +166,7 @@ def _stage(topo, d: Path, wired: bool):
                              share_rows=False, salts=own)
         port = _meta(d / "honest")["links"][0]["port"]
         _edit(d / "honest", d / "other_leaf", N, port, refs={0: 1, 1: 0})
-        bc = hm96.SHA512.commit_string(hm96.SHA512.default_key, G.row_digest([1 - b for b in tree.rows[0]]), tree.salts[0])
+        bc = hm96.SHA512.commit_string(hm96.SHA512.default_key, RG.row_digest([1 - b for b in tree.rows[0]]), tree.salts[0])
         _edit(d / "honest", d / "other_words", N, port, rows={0: bc})
         (d / "writers.reads.json").write_text(json.dumps(_reads(tree, template, None)))
         (d / "readers.reads.json").write_text(json.dumps(_reads(tree, template, port)))
