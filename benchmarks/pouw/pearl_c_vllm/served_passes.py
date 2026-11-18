@@ -247,15 +247,14 @@ def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
 
 
 def undeclared(entries) -> str | None:
-    """Why a served arm of ``entries`` can't run: the first Pearl-C entry whose kernel row names no declared scheme
-    (`kernel_schemes.KernelScheme.scheme`), which no served path serves; None when there is none."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import BY_NAME
+    """Why a served arm of ``entries`` can't run: the first Pearl-C entry that is no declared scheme's option
+    (`messages.option`), as the RTX PRO 6000's is none, which no served path serves; None when there is none."""
+    from verity_vllm import messages as M
 
     for e in entries:
-        row = BY_NAME.get(e.partition(":")[2]) if e.startswith(ARM_PREFIX) else None
-        if row is not None and not row.scheme:
-            return (f"{e}: no declared scheme serves Pearl-C on {row.parameters.get('device', 'that card')}, so no served "
-                    "arm runs it; its kernel's own benchmarks (bench_arm.py, e2e.py) run it directly")
+        if e.startswith(ARM_PREFIX) and M.option(e) is None:
+            return (f"{e}: no declared scheme serves Pearl-C on that card, so no served arm runs it; its kernel's own "
+                    "benchmarks (bench_arm.py, e2e.py) run it directly")
     return None
 
 
