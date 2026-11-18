@@ -85,6 +85,9 @@ class ReleaseOrder:
     `passed` says a numbered request won't be submitted (refused, or its connection ended). All of it runs on the HTTP
     server's event loop. ``schedule(delay_s, fn)`` arms the skip (default: the running loop's ``call_later``)."""
 
+    #: the release headers `key` reads, the release's number and its run
+    headers = (RELEASE_HEADER, RUN_HEADER)
+
     def __init__(self, forward: Callable[[Any], None], abort: Callable[[str], None], *, hold_s: float,
                  schedule: Callable[[float, Callable[[], None]], Any] | None = None) -> None:
         self.forward, self.abort_forward, self.hold_s, self._schedule = forward, abort, float(hold_s), schedule
@@ -503,6 +506,9 @@ class TickGate:
         have none."""
         return bool(self.held) or self.wait_start is not None
 
+    def record(self) -> dict[str, int]:
+        return self.tick.record()
+
     def summary(self) -> dict[str, Any]:
         return {**self.counts, "tick": self.tick.record(), "hold_s": self.hold_s, "runs": len(self.runs), "steps": self.steps,
                 "T_us": self.T, "next": self.next, "buckets": len(self.lines), "ended": self.ended, "held_now": len(self.held),
@@ -779,7 +785,8 @@ class Admitter:
                  submit: Callable[[Any], None] | None = None, abort: Callable[[str], None] | None = None,
                  take: Callable[[dict[str, Any]], None] | None = None,
                  pull: Callable[[], Iterable[Mapping[str, Any]]] | None = None,
-                 log: Callable[[dict[str, Any]], Any] | None = None, clock: Callable[[], float] = time.monotonic) -> None:
+                 log: Callable[[dict[str, Any]], Any] | None = None, clock: Callable[[], float] = time.monotonic,
+                 schedule: Callable[[float, Callable[[], None]], Any] | None = None) -> None:
         order = cfg.get("order", "tick") if isinstance(cfg, Mapping) else None
         if order not in ORDERS:
             raise ValueError(f"{source}: order one of {list(ORDERS)}, not {order!r}")
@@ -790,7 +797,7 @@ class Admitter:
         self.installed = False
         self._off: list[Callable[[], None]] = []
         if order == "release-order":
-            self.front = ReleaseOrder(submit, abort, hold_s=float(cfg.get("hold_ms", 5000)) / 1000)
+            self.front = ReleaseOrder(submit, abort, hold_s=float(cfg.get("hold_ms", 5000)) / 1000, schedule=schedule)
             return
         tc = tick_config({k: v for k, v in cfg.items() if k != "order"}, source, feed=False)
         kw = {"hold_s": tc["hold_s"], "clock": clock, "pull": pull, "log": log}

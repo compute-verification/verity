@@ -45,6 +45,8 @@ ALLOWED: dict[str, str] = {
     "adapters/torch/verity_torch/pouw/pearl_c/ends.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/run_device.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/served_y_device.py": "@compute-accounting",
+    # the step rows run on a card under a fresh OS key a step, expanded there by SHA-512; a change of that kernel can't be
+    # gated until a card holds it to the reference, so these two stay by ruling until then
     "adapters/vllm/verity_vllm/commit/committer/native_rows.cu": "@vllm",
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
@@ -73,7 +75,6 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/weights.py": "@compute-accounting",
-    "verity/protocols/resource_accounting/memory/poub/verifier/session/verifier.py": "@memory-accounting",
     "verity/protocols/resource_accounting/memory/pous/prover/served_weights.py": "@memory-accounting",
 }
 #: the rulings that admit a keyed derivation: {ruling: its condition}
@@ -92,17 +93,13 @@ RULED: dict[str, tuple[str, tuple[str, ...]]] = {
     "verity/protocols/resource_accounting/memory/poub/prover/node_store/registry.py": ("@memory-accounting", (PASS_TREE,)),
     "verity/protocols/resource_accounting/memory/poub/prover/poub_session/device.py": ("@memory-accounting",
                                                                                       (PASS_TREE, PAYLOAD_TREE)),
-    "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py": ("@memory-accounting", (PAYLOAD_TREE,)),
     "verity/protocols/resource_accounting/memory/poub/verifier/store.py": ("@memory-accounting", (PASS_TREE, PAYLOAD_TREE)),
 }
 #: a line that writes, sends, logs or serializes what it names: a writer's call, a key's hex, or the name as a string's
 #: field (a manifest's or a message's)
 WRITES = re.compile(r"\.(?:send|write|write_bytes|write_text|dump|dumps|save|savez|tofile)\(|\bprint\(|\blog(?:ger)?\.|\.hex\(\)")
 #: {file of a ruled module that still writes or sends a ruled key: the lane that stops it}
-WRITTEN: dict[str, str] = {
-    "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py": "@memory-accounting",
-    "verity/protocols/resource_accounting/memory/poub/verifier/session/verifier.py": "@memory-accounting",
-}
+WRITTEN: dict[str, str] = {}
 LANES = {"@compute-accounting", "@kernels", "@lean", "@memory-accounting", "@network-accounting", "@proofs", "@vllm"}
 
 

@@ -25,7 +25,7 @@ weights (`at_commit`), and after its warm-ups, so every ``apply`` an executor se
 a protocols config naming a protocol the run does not enable; a set at TP > 1 (each rank would install its own, which is
 not wired); two executors at one site; beside SPOT, an executor whose protocol package has no circuit for its
 scheme (`circuit_registry`, `traced_as`: every PoUW scheme but ``ncp-v2``), unless the window's circuit is cut at its sites (`CUT`,
-below); with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (``keeps_weight_copy``); and
+below); with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (`keeps_weight_copy`); and
 whatever an adapter refuses for its context (SPOT outside the Commit stage, for one).
 
 **Weights of record.**  An option that releases weights from the model (POUS) returns their plaintext from
@@ -43,7 +43,7 @@ protocol package has a circuit for its scheme (``traced_as``).
 protocol's name (`scheme.register_circuits`: ``schemes``, those with a circuit, and ``traced_as(scheme, m, k, n)``, the
 circuit of one executed call; PoUW registers ``pouw``).  The selector admits an executor beside SPOT only for a scheme with a circuit, and `traced_as`
 gives the Commit the circuit of each executed call.  An executor with none whose calls commit tables a window's circuit
-can be cut at (an adapter's ``cuts``: Pearl-C's, whose calls commit their A rows and y) is admitted only when the
+can be cut at (`cuts`: Pearl-C's, whose calls commit their A rows and y) is admitted only when the
 SPOT setting ``cut`` (`CUT`) names it: serve-openai's Commit windows under Pearl+ (`serve_pearl`), whose
 window-commit cuts each window's circuit at its linears and reads Pearl+'s tables there (`window_class.PearlTables`).  A
 row's Commit (`at_row`, `commit_context`) replays the row's request Programs, which are never cut, and refuses ``cut``.
@@ -74,7 +74,7 @@ __all__ = ["ADAPTERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Inst
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
            "parse", "refusals", "refused", "register_weights", "requests", "undeclared", "weights_view",
-           "CUT", "circuit_registry", "traced_as"]
+           "CUT", "circuit_registry", "cuts", "keeps_weight_copy", "traced_as"]
 
 #: protocol -> its adapter module in this package
 ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "spot"}
@@ -248,7 +248,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
                 out.append(f"{entry}: {site} already has an executor, {executors[site]}; a site has one")
             executors.setdefault(site, entry)
         if sites and sampled and not _has_circuit(name, scheme):
-            if not getattr(mod, "cuts", lambda s: False)(scheme):
+            if not cuts(name, scheme):
                 out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, "
                            f"so SPOT would trace it as the stock computation (refused until the option names one: "
                            f"traced_as)")
@@ -259,13 +259,30 @@ def refusals(ctx: Context) -> tuple[str, ...]:
                            f"takes it only in a window whose circuit is cut at its sites and reads the tables its calls commit "
                            f"(window_class.PearlTables), which the sampled-proofs setting '{CUT}' names ({{\"sampled-proofs\": "
                            f"{{\"{CUT}\": \"{entry}\"}}}})")
-        if ctx.scheme("pous") is not None and name != "pous" and getattr(mod, "keeps_weight_copy", lambda s, c: False)(scheme, ctx):
+        if ctx.scheme("pous") is not None and keeps_weight_copy(name, scheme):
             out.append(f"{entry}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read "
                        f"what POUS stores (prepare its weight operands per forward from the weight it is handed)")
     if cut is not None and cut != cut_at:
         out.append(f"the sampled-proofs setting '{CUT}' names {cut!r}, and a window's circuit is cut only at the sites of an "
-                   f"enabled executor with no circuit of its own whose calls commit the tables the cut reads (an adapter's cuts)")
+                   f"enabled executor with no circuit of its own whose calls commit the tables the cut reads (cuts)")
     return tuple(out)
+
+
+def cuts(protocol: str, scheme: str) -> bool:
+    """Whether an execution phase's circuit can be cut at ``scheme``'s sites, reading the tables each executed call
+    commits in place of its computation (`window_class.PearlTables`): Pearl-C's, whose calls commit their A rows and y."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES
+    return protocol == "pouw" and scheme in PEARL_C_SCHEMES
+
+
+def keeps_weight_copy(protocol: str, scheme: str) -> bool:
+    """True where the executor keeps a weight-derived copy across forwards, so its GEMMs would not read what POUS decodes:
+    Pearl-C's B̃, formed once per install (`pouw_pearl_c_device.PearlCDeviceRun`), and ncp-v2's weight sides, committed at
+    each weight's first call and reused (`NcpCircuitRun.sides`), and the lead's, which its backend loads once per install
+    (`lead.LeadBackend.load`).  ncp-v1 forms its operands per call from the weight it is handed."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (LEAD_SCHEME, NCP_CIRCUIT_SCHEMES,
+                                                                                    PEARL_C_SCHEMES)
+    return protocol == "pouw" and scheme in {*PEARL_C_SCHEMES, *NCP_CIRCUIT_SCHEMES, LEAD_SCHEME}
 
 
 def _uncut(ctx: Context) -> list[str]:
@@ -419,13 +436,13 @@ def weights_view(comp: Composition | None, model: Any) -> Any:
     return WeightsView(model, plain) if plain else model
 
 
-def register_weights(comp: Composition | None, com: Any) -> Any:
-    """``com.register_weights()`` over the weights of record: through `weights_view` while an option holds them released."""
+def register_weights(comp: Composition | None, com: Any, replay: bool = False) -> Any:
+    """``com.register_weights(replay)`` over the weights of record: through `weights_view` while an option holds them released."""
     view = weights_view(comp, com.model)
     if view is com.model:
-        return com.register_weights()
+        return com.register_weights(replay=replay)
     with hooks.patched(com, "model", view):
-        return com.register_weights()
+        return com.register_weights(replay=replay)
 
 
 def undeclared(enabled: tuple[str, ...] = ()) -> tuple[str, ...]:

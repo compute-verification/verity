@@ -134,10 +134,7 @@ def launch(exchange: messages.Exchange, names: list[str]) -> list[tuple[str, Any
             scheme = schemes.get(name)
         except KeyError as e:
             raise UsageError(f"--protocols: {e.args[0]}") from None
-        if not hasattr(scheme, "attach"):
-            raise NotImplementedError(f"vllm/adapter-imports-no-protocol: scheme {name!r} files no requests on an exchange "
-                                      "(Scheme.attach(exchange, ctx) is not in the scheme registry yet)")
-        scheme.attach(exchange, {})
+        exchange.attach(scheme)
     started = exchange.beside()
     if not started:
         raise UsageError(f"--protocols {','.join(names) or '(none)'}: no scheme starts a process beside the server "
