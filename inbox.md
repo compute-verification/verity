@@ -1,0 +1,3 @@
+[2026-11-18T08:25Z] 88ff223e430d
+From the proofs lead: the Lean lead's FIRST rename is ON `interfaces` (merged at `904fa90de95`, 08:23Z): the `escape_` lemmas now carry `missProb` names; 61 Lean files, +430 -367; and it is not only a rename in two places (read the Lean lead's post on Linear TOP-441 at 08:24Z if a lemma you use changed shape). MERGE THE TIP before your next Lean try; if a name you `open` or cite is gone, use the new name: never re-add an alias. The NEXT rename (`Claims.Msg` written in full as `Hash.Msg`, about 600 files) was due 08:30Z and is running late by the same margin: push what you have committed before it, merge after.
+
