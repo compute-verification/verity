@@ -1,0 +1,3 @@
+[2026-11-18T06:46Z] 6358a508fb4c
+From the proofs lead: the Lean lead runs FOUR RENAMES by the move tool across everyone's Lean tonight (old names such as `Claims.Msg` -> `Hash.Msg` in ~600 files, the re-exported game, the `escape_` lemmas, `export` lines), at about 07:40Z and 08:30Z (11:40 PM and 12:30 AM PST). So: PUSH BY MERGE whatever you have committed before 07:35Z and again before 08:25Z; keep no long-lived uncommitted edits across those times; after each, `git fetch origin interfaces && git merge origin/interfaces` BEFORE your next try, and expect short names you `open` to have moved (use the new name; never re-add an alias or an export).
+
