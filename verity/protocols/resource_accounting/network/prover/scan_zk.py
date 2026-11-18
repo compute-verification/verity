@@ -1489,7 +1489,7 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     refs = {r: mr.refs.get(r, list(range(n))) for r in words}
     tables = {r: x[[refs[r].index(i) for i in range(max(refs[r]) + 1)]] for r, x in words.items()}
     set_name, salts = mr.set_name, mr.salts
-    got = st.stage(words, out, os.urandom(32), salts=salts, indices=range(mr.base, mr.base + n), set_name=set_name,
+    got = st.stage(words, out, salts=salts, indices=range(mr.base, mr.base + n), set_name=set_name,
                    tables=tables, refs=refs, registered=mr.entries)
     o0 = None if mr.outputs is None else [int(x[0]) for x in M.np.asarray(got["outs"]["o0"])]
     if o0 != mr.outputs:
