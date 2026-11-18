@@ -17,11 +17,11 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops.boolean import versions as SW
+from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
+
 from verity_vllm.definitions.registry import boolean_io_shell as BX
 from verity_vllm.definitions.registry import io_shell as X
 from verity_vllm.definitions.registry.dead_free import TokenSelectCombineV2
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
-
 from verity_vllm.program.predict import scan_state as SS
 
 MODEL, V = "served-model", 128256
@@ -165,9 +165,7 @@ def _lane(tok: int, slot: list[int], occ: int, head: list[int]) -> list[int]:
 
 
 def _scan(fn, state) -> list[int]:
-    out, lane = _run(fn, list(state)), fn.bindings["NP"] + 4
-    return [v for j in range(0, len(out), 32 + lane)
-            for v in (sum(b << i for i, b in enumerate(out[j:j + 32])), *out[j + 32:j + 32 + lane])]
+    return _run(fn, list(state))
 
 
 def test_the_scan_slots_read_is_its_reference_and_reads_each_field_where_it_is_packed():

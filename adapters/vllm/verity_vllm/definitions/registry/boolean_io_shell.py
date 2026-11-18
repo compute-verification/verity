@@ -13,10 +13,10 @@ compare, a select as `forms.mux`, an AND and a NOT of bits), and bit i of a byte
 so a field's selects of constant words are ANDs with one wire and its sums fold above the field's largest value.  No table or
 lookup gate.  Every byte of the body reaches ``ok``.
 
-`ScanSlots_v3` takes the row as the u16 words it is registered as and gives each field at its readers' width: the token as
-the 32 bits `EmbeddingRead_v1` reads, the slot, occupancy word and head as the i32s `TokenFeed_v1`, `SelectEntry_v1` and
-`SelectCollect_v1` read. Its words become bits and its bits words through `WordBits{16}` and `BitsWord{32}`, which are
-wiring; between them it copies each lane's fields out of the row as they are, its ids zero-extended, and computes one thing:
+`ScanSlots_v3` takes the row as the u16 words it is registered as and gives each field as the i32 its readers take: the token
+`EmbeddingRead_v2`'s, the slot, occupancy word and head `TokenFeed_v1`'s, `SelectEntry_v1`'s and `SelectCollect_v1`'s. Its
+words become bits and its bits words through `WordBits{16}` and `BitsWord{32}`, which are wiring; between them it copies
+each lane's fields out of the row as they are, its ids zero-extended, and computes one thing:
 the slot its first position carries on, whose count is the prompt's length minus one (mod 2^32), a borrow chain of 30 ANDs a
 lane. Every lane's is computed in every unit, so a unit's lanes but its own Program's are its cost and nobody's input.
 """
@@ -31,8 +31,9 @@ from verity.circuits.boolean.trace import emit, trace
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.population import BitsWord, WordBits
-from verity.circuits.refs import Coll, concat
+from verity.circuits.refs import Coll
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import io_shell as X
 from verity_vllm.definitions.registry.boolean_dsv4_indices import GateOps
 
@@ -154,17 +155,13 @@ def scan_bits(S) -> tuple[Any, list, Any]:
 def _scan_words(B, S, state):
     T, params, ret = scan_bits(S)
     out = emit(T, params, ret, B, B.batch(bind(WordBits, W=16), state, axes=(0,)))
-    n, lanes = S.NP + 4, range(len(S.OCC))
-    lane = 32 * (n + 1)
-    words = B.batch(bind(BitsWord, W=32), Coll(Array(len(S.OCC) * n, X.BITS32),
-                                               concat([out.refs.slice(lane * j + 32, lane * (j + 1)) for j in lanes])), axes=(0,))
-    return Coll(X.slots_sig(S)[1], concat([r for j in lanes
-                                           for r in (out.refs.slice(lane * j, lane * j + 32), words.refs.slice(n * j, n * (j + 1)))]))
+    words = B.batch(bind(BitsWord, W=32), Coll(Array(len(S.OCC) * (S.NP + 5), X.BITS32), out.refs), axes=(0,))
+    return Coll(X.slots_sig(S)[1], words.refs)
 
 
 ScanSlotsV3 = CompositeDefinition("ScanSlots", 3, SCAN_STATICS, X.slots_sig, _scan_words,
                                   doc="Each lane's first position's token and slot, occupancy word and head from the scan's "
-                                      "state row of u16 words, each field but the token an i32 (`io_shell`'s module docstring; "
+                                      "state row of u16 words, each an i32 (`io_shell`'s module docstring; "
                                       "`io_shell.scan_reference`).",
                                   refuse=X.slots_refuse,
                                   conformance="not-yet-established: the network attester's scan state row as its Programs "

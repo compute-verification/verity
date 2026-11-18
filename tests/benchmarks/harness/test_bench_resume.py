@@ -15,7 +15,6 @@ from verity_bench import jobs
 from verity_bench.cli import main
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import (
-    GPUS,
     expand_sweep,
     resolve_spec,
 )
@@ -24,7 +23,7 @@ from verity_bench.vllm.runner import (
 )
 
 COMMITTED = calendar.timegm((2026, 10, 21, 12, 0, 0))
-RTX = GPUS["rtx-pro-6000"].nvidia_smi_name
+RTX = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
 
 
 def _repo(tmp_path):

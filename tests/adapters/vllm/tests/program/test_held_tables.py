@@ -9,6 +9,7 @@ from verity.circuits import constants as K
 from verity.circuits import operations as O
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
+
 from verity_vllm.definitions.registry import b1, dense, hopper
 from verity_vllm.definitions.registry import boolean_dsv4_moe as BD
 from verity_vllm.definitions.registry import dsv4_moe as D

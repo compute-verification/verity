@@ -144,6 +144,10 @@ path = "verity/errors.py"
 means = "the shared exception classes"
 
 [[tree]]
+path = "verity/hooks.py"
+means = "the events a served run emits and the requests a scheme files, in the circuit's words"
+
+[[tree]]
 path = "verity/runtime/"
 means = "runs parties over channels (pipes, framing, handshake)"
 
@@ -176,6 +180,10 @@ means = "flock, with spot and recursion on it, spot_flock on those and spot_floc
 [[tree]]
 path = "verity/protocols/resource_accounting/"
 means = "the resource accounting layer: compute/pouw, memory/pous, memory/poub and network, on the proofs"
+
+[[tree]]
+path = "verity/protocols/resource_accounting/scheme.py"
+means = "what a resource scheme is given, supplies and gets back, and the one registry a configuration names it from"
 
 [[tree]]
 path = "verity/protocols/resource_accounting/compute/"
@@ -226,6 +234,10 @@ protocol = true
 path = "verity/protocols/resource_accounting/compute/pouw/"
 means = "proof of useful work"
 protocol = true
+
+[[tree]]
+path = "verity/protocols/resource_accounting/compute/pouw/scheme.py"
+means = "Pearl+ as a resource scheme, registered as pearl-plus"
 
 [[tree]]
 path = "verity/protocols/resource_accounting/memory/pous/"

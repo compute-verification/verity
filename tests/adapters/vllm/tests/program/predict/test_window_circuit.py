@@ -21,22 +21,21 @@ from typing import Any
 import numpy as np
 import pytest
 from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.circuits.population import BitsWord, WordBits, wired_population_program
+from verity.circuits.population import wired_population_program
 from verity.circuits.program import is_input
-from verity.circuits.refs import runs
+from verity.circuits.refs import Concat, runs
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import wiring as WI
-from verity_vllm.definitions.registry import io_shell as IO
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
-from verity.protocols.resource_accounting.compute.pouw.verifier import audit as AU
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit as AU
+from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 
 from tests.check.test_weights_of_record import _bf16, write_safetensors
 from tests.program.predict import test_steps as S
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.program import model as M
 from verity_vllm.program.predict import scan_state as SS
@@ -67,7 +66,7 @@ ONE = ([(4, 2, G2)], [[(0, 0, 4)], [(0, 4, 1)]])
 EIGHT = ([(1 + i % 4, 2, G2) for i in range(8)], [[(i, 0, 1 + i % 4) for i in range(8)], [(i, 1 + i % 4, 1) for i in range(8)]])
 #: three requests: two at step 0, the third (one output) arriving at step 1
 THREE = ([(4, 2, G2), (2, 2, G2), (3, 1, {**S.GREEDY, "max_tokens": 1})], [[(0, 0, 4), (1, 0, 2)], [(0, 4, 1), (1, 2, 1), (2, 0, 3)]])
-EMB, GROUPS = "EmbeddingRead_v1{V=256,H=64}", "TokenSelectGroups_v1{C=64,G=16}"
+EMB, GROUPS = "EmbeddingRead_v2{V=256,H=64}", "TokenSelectGroups_v1{C=64,G=16}"
 FEED = "TokenFeed_v1{NP=4,FIRST=false}"
 #: the scan state read at TINY's 2 lanes (4,548 words a row), each position's select with its collector (the first
 #: position's, every later one's) and the last's with the slot's entry
@@ -252,13 +251,13 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
     assert Counter((family[w.reader], w.port, family[w.writer], w.out) for w in circuit.wires) == {
         ("AttnBlockFirst_v1", "k", "RoPEHead_v1", "o0"): 5, ("AttnBlockFirst_v1", "q", "RoPEHead_v1", "o0"): 5,
         ("AttnBlockFirst_v1", "v", "Gemm_v2", "o0"): 5, ("AttnHeadEnd_v1", "l", "AttnBlockFirst_v1", "o1"): 5,
-        ("AttnHeadEnd_v1", "o", "AttnBlockFirst_v1", "o2"): 5, ("EmbeddingRead_v1", "tok", "ScanSlots_v3", "o0"): 1,
-        ("EmbeddingRead_v1", "tok", "ScanSlots_v3", "o4"): 1, ("EmbeddingRead_v1", "tok", "TokenFeed_v1", "o0"): 1,
-        ("EmbeddingRead_v1", "tok", "SelectCollect_v1", "o0"): 1, ("Gemm_v2", "x", "AttnHeadEnd_v1", "o0"): 1,
+        ("AttnHeadEnd_v1", "o", "AttnBlockFirst_v1", "o2"): 5, ("EmbeddingRead_v2", "tok", "ScanSlots_v3", "o0"): 1,
+        ("EmbeddingRead_v2", "tok", "ScanSlots_v3", "o4"): 1, ("EmbeddingRead_v2", "tok", "TokenFeed_v1", "o0"): 1,
+        ("EmbeddingRead_v2", "tok", "SelectCollect_v1", "o0"): 1, ("Gemm_v2", "x", "AttnHeadEnd_v1", "o0"): 1,
         ("Gemm_v2", "x", "RMSNormFusedCuda_v2", "o0"): 16, ("Gemm_v2", "x", "RMSNormTriton_v5", "o0"): 5,
-        ("Gemm_v2", "x", "SiluMul_v2", "o0"): 1, ("RMSNormFusedCuda_v2", "res", "EmbeddingRead_v1", "o0"): 5,
+        ("Gemm_v2", "x", "SiluMul_v2", "o0"): 1, ("RMSNormFusedCuda_v2", "res", "EmbeddingRead_v2", "o0"): 5,
         ("RMSNormFusedCuda_v2", "res", "RMSNormFusedCuda_v2", "o1"): 5, ("RMSNormFusedCuda_v2", "x", "Gemm_v2", "o0"): 20,
-        ("RMSNormTriton_v5", "x", "EmbeddingRead_v1", "o0"): 1, ("RoPEHead_v1", "x", "Gemm_v2", "o0"): 20,
+        ("RMSNormTriton_v5", "x", "EmbeddingRead_v2", "o0"): 1, ("RoPEHead_v1", "x", "Gemm_v2", "o0"): 20,
         ("SelectCollect_v1", "best", "TokenSelectGroups_v1", "o0"): 2, ("SelectCollect_v1", "head", "ScanSlots_v3", "o3"): 1,
         ("SelectCollect_v1", "head", "ScanSlots_v3", "o7"): 1, ("SelectCollect_v1", "idx", "TokenSelectGroups_v1", "o1"): 2,
         ("SelectCollect_v1", "state", "SelectCollect_v1", "o1"): 2, ("SelectCollect_v1", "x0", "Gemm_v2", "o0"): 2,
@@ -363,7 +362,7 @@ def test_the_scan_state_row_is_ingress_scans_and_its_wide_read_is_one_row_a_slot
 def test_the_weights_and_the_embedding_are_registered_reads(window):
     """Each weight a port reads is its own registered parameter at the port's row width (`WB.weight_param`), and the scan
     state is one more (the window's 16 buckets' rows of 4,548 words): GEMM slices, norms and RoPE read their rows from
-    their weight's at public positions, and the embedding is `EmbeddingRead_v1`'s opening of the table over its V rows of
+    their weight's at public positions, and the embedding is `EmbeddingRead_v2`'s opening of the table over its V rows of
     H, keyed by ``tok`` and pinned by its verdict, the table a parameter of its own (`WB.table_param`, its rows ``row-seg``
     leaves). With TINY's tied embeddings the LM head's slices read the embedding at 1,024 words a row, and the token
     select's ``x0`` unit its first row at 64, the table's width but a ``row/v2`` read; o_proj's slices, 8 columns, read
@@ -426,7 +425,7 @@ def test_every_weight_read_is_whole_rows_of_its_own_weight_at_its_ports_width(wi
 def test_the_window_forms_its_members_each_read_port_a_table_of_its_weights_rows(window):
     """`interface.members` forms the window's members (as the record's verifier does, `window_of_record`): every read covers
     whole members and reads whole rows, so a GEMM slice's ``w`` is a shared-row table of its weight's rows. Slow (about 70 s
-    on one core) for the population Program `members` builds, `EmbeddingRead_v1`'s Merkle path traced once; the cheap
+    on one core) for the population Program `members` builds, `EmbeddingRead_v2`'s Merkle path traced once; the cheap
     check of the same rows is `test_every_weight_read_is_whole_rows_of_its_own_weight_at_its_ports_width`."""
     circuit, ids = window
     ms = IF.members(circuit, 64)
@@ -440,7 +439,7 @@ def test_core_registers_every_unit_of_the_window(window):
     """Core's registration of the window (`partition.evaluate` of its population program and template query, the record's
     verifier's) accepts every unit, its ranges the circuit's: every template has a gate, so no gather or row copy stands
     in for its reader's ports, and an instance commits within the widest public class. Slow (about a minute) for the
-    population program, `EmbeddingRead_v1`'s Merkle path traced once; no cheaper test runs core's own refusals."""
+    population program, `EmbeddingRead_v2`'s Merkle path traced once; no cheaper test runs core's own refusals."""
     circuit, _ = window
     part = P.evaluate(*circuit.program())
     assert {t: n for _k, t, _lo, n in part.ranges} == {IF.descriptor_id(fn): n for fn, n in circuit.templates}
@@ -1144,12 +1143,14 @@ def by_hand(circuit: IF.Circuit, inputs: dict[str, np.ndarray], prog: Any) -> di
 def wired_matches_by_hand(circuit: IF.Circuit, prog: Any) -> None:
     inputs = made_up(prog)
     vals, mine = node_outputs(prog, inputs), by_hand(circuit, inputs, prog)
-    ranges = iter(circuit.description()["order"])
-    for node, v in zip(prog.root.body.nodes, vals):
-        if not is_input(node.fn) and descriptor_id(node.fn) in mine:
-            tid, lo, n = next(ranges)
-            assert descriptor_id(node.fn) == tid and np.array_equal(v.reshape(n, -1), mine[tid][lo:lo + n]), (tid, lo)
-    assert next(ranges, None) is None
+    batches = [(descriptor_id(node.fn), node.n, v) for node, v in zip(prog.root.body.nodes, vals)
+               if not is_input(node.fn) and descriptor_id(node.fn) in mine]
+    for tid, lo, n in circuit.description()["order"]:
+        while n:
+            got, m, v = batches.pop(0)
+            assert got == tid and m <= n and np.array_equal(v.reshape(m, -1), mine[tid][lo:lo + m]), (tid, lo)
+            lo, n = lo + m, n - m
+    assert not batches
 
 
 @pytest.fixture(scope="module")
@@ -1159,16 +1160,28 @@ def tiny_wired():
 
 
 @pytest.mark.slow
-def test_the_tiny_class_circuit_is_one_wired_program_of_registered_rows_with_a_wiring_at_each_width_change(tiny_wired):
-    """Every root parameter is a registered read's value, a table read's root or domain or an opening's port, and no row is
-    free: the 14 wires and the scan state's read between words and bits pass through `WordBits`/`BitsWord`. Slow (about a
+def test_the_tiny_class_circuit_is_one_wired_program_of_registered_rows_with_no_width_change(tiny_wired):
+    """Every root parameter is a registered read's value, a table read's root or domain or an opening's port, no row is
+    free, and every wire and read joins equal widths, so the wired Program adds no Definition of its own. Slow (about a
     minute to build): only the whole class holds every wire kind."""
     circuit, prog, query = tiny_wired
     assert prog.annotations["free"] == []
     assert root_kinds(circuit, prog) == {"read": 17, "table read": 2, "opening": 3}
-    assert prog.fn.gates == 110_483_744
-    wiring = [descriptor_id(bind(d, W=w)) for d, w in ((BitsWord, 16), (BitsWord, 32), (WordBits, 16), (WordBits, 32))]
-    assert query["params"]["templates"] == circuit.ids + wiring
+    assert prog.fn.gates == 110_483_188
+    assert query["params"]["templates"] == circuit.ids
+
+
+def _parts(refs: Any) -> list[Any]:
+    return [q for p in refs.parts for q in _parts(p)] if isinstance(refs, Concat) else [refs]
+
+
+@pytest.mark.slow
+def test_the_tiny_class_wired_roots_parts_are_within_its_wires_times_its_ranges(tiny_wired):
+    circuit, prog, _ = tiny_wired
+    d = circuit.description()
+    nodes = [n for n in prog.root.body.nodes if not is_input(n.fn)]
+    parts = sum(len(_parts(a.refs)) for n in nodes for a in n.args)
+    assert (len(nodes), parts) == (159, 932) and parts <= len(d["wires"]) * len(d["order"])
 
 
 @pytest.mark.slow

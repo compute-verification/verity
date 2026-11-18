@@ -14,7 +14,7 @@ what `interior_rows.interior` takes as ``links`` and ``tables``, and the challen
 * `Supply`, `supplied`, `sources`, `history`: a parameter the verifier supplies. `supplied` makes its value at public
   salts and the verifier fills it from its own sources (`sources`), reading each source's bytes by the row's leaf type
   (`DIGEST` or `INDEX`), so no row there is one the prover picks after the coins. Three kinds:
-  a table read's ``root`` and ``domain`` (`EmbeddingRead_v1{V, H}`), each sampled span's the table round 1 served for it
+  a table read's ``root`` and ``domain`` (`EmbeddingRead_v2{V, H}`), each sampled span's the table round 1 served for it
   (`boundary_tables`: committed at serve, its root a port of the class's round-1 record, its rows filled to its class's
   C, `boundary_tables.class_rows`), which the challenger names from its own sample and copies round 1's root for
   (`history`), the tables' strings published (`interior_rows.Interior.published`), so the verifier recomputes the served
@@ -60,7 +60,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 from verity_vllm.pipeline import boundary_tables as BT
 from verity_vllm.pipeline import serving_rows as SRW
 
-#: a table read's parameters (`gates.embedding`'s `EmbeddingRead_v1`): its key, its table's root and domain id, its opening
+#: a table read's parameters (`gates.embedding`'s `EmbeddingRead_v2`): its key, its table's root and domain id, its opening
 READ = ("tok", "root", "domain", "row", "salt", "path")
 _HM = hm96.SHA512
 
@@ -527,7 +527,7 @@ def history(boundary: Mapping[str, Any], names: Sequence[str], words: int, posit
 
 
 def reader(m: CS.Member) -> tuple[int, int] | None:
-    """(V, H) of a member of table reads (`EmbeddingRead_v1{V, H}`), None for any other."""
+    """(V, H) of a member of table reads (`EmbeddingRead_v2{V, H}`), None for any other."""
     fn = SRW.template(m.template).fn
     if tuple(p for p, _t in fn.signature()[0]) != READ:
         return None

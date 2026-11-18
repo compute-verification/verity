@@ -435,8 +435,7 @@ def record(out: Path, rows: list[dict]) -> None:
                    ", ".join(missing) or ("ok" if rows else "no model directory"))
     card = res.stamp["card"]
     try:
-        card = "cpu" if card == "none" else kit.card_short(card.split(", ")[0],
-                                                           directory=ROOT / "calibration/hardware/cards")
+        card = "cpu" if card == "none" else kit.card_short(card.split(", ")[0])
     except SystemExit as e:
         print(f"{METRIC}: no reading, the card {card!r} has no member name: {e}")
         return

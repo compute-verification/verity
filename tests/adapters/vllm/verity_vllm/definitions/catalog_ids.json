@@ -28,6 +28,7 @@
 "AddWidenedBf16_v2",
 "Advance_v1",
 "AllGather2_v1",
+"AllGatherTail_v1",
 "AllGather_v1",
 "AllGather_v2",
 "AllReduce2_v1",

@@ -1,7 +1,10 @@
 """ε against a fixed verification budget B: what each lever costs, what it buys, and the ε-optimal allocation
 (Derived).
 
-    uv run benchmarks/pouw/budget.py [--md OUT] [--json OUT] [--sweep] [--sampling-sweep TREE]
+    uv run benchmarks/pouw/budget.py [--card NAME] [--md OUT] [--json OUT] [--sweep] [--sampling-sweep TREE]
+
+`--card` reports only the family of that card, by the name nvidia-smi gives it (a host stamp's `card`), and refuses a card
+no family prices.
 
 B is the verification overhead as a fraction of the plain workload's compute: GPU-seconds a plain GPU-second of the
 family, with every other resource converted at its price. Its parts:
@@ -46,9 +49,11 @@ from pathlib import Path
 #: what `grind_price.py` and the tests read
 __all__ = [
     "ALLOCATED", "CONDITIONAL", "Config", "DEFICIT", "FAMILIES", "FILL_DATA", "FILL_GRID", "FILL_MIXES", "LN_INV_DELTA",
-    "P_PASS", "REGIMES", "SAMPLING_DATA", "SPEND_GRID", "TODAY_SAMPLES", "allocation", "curve", "hash_leaves", "levers",
-    "main", "optimum", "point", "sample", "spend_for", "today", "unconditional",
+    "P_PASS", "REGIMES", "SAMPLING_DATA", "SPEND_GRID", "TODAY_SAMPLES", "allocation", "curve", "family", "hash_leaves",
+    "levers", "main", "optimum", "point", "sample", "spend_for", "today", "unconditional",
 ]
+
+CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
 
 LN_INV_DELTA = 41 * math.log(2)   # ℓ_s at δ_s = 2⁻⁴¹, the machine model's luck budget (deficit 0.002368 at p = ¾)
 ROUNDS = 48_000                   # S: one week of 12.6 s rounds (Theorem S; SPEC)
@@ -120,6 +125,8 @@ class Family:
     #: P·V uncredited: ε_skip's most over the cells without P·V, and P·V's share of ♭ at the binding cell (eps_budget)
     skip_no_pv: float
     pv_share: float
+    #: the `short` of the card file (calibration/hardware/cards/) of the GPU `gpu_usd_h` prices
+    card: str
     #: fillers the headline already carries, (lane instructions a word, class mix)
     pre_fill: tuple[tuple[float, tuple[tuple[str, float], ...]], ...] = ()
     #: P·V noised as `pv` instead of `peel` (sm_120 only, the one device with pv designs): ε_skip's ratio and the
@@ -148,17 +155,31 @@ def _fill_data() -> dict:
 FAMILIES = (
     Family("sm_120", "sm_120", "H1 + fx1 (dither-c-peel + IMAD fill 1, VF3r-16)", "dither-c-peel", "VF3r-16",
            "RTX PRO 6000", 1.80, "vy-nebius-1/2: $14.40/h for 8 GPUs with their host (measured price)",
-           served=0.1737, route=0.0012505, skip_no_pv=0.001321, pv_share=0.0184, pre_fill=((1.0, (("IMAD", 1.0),)),),
-           pv_noise=(0.341 / 0.417, -0.010)),
+           served=0.1737, route=0.0012505, skip_no_pv=0.001321, pv_share=0.0184, card="rtx-pro-6000",
+           pre_fill=((1.0, (("IMAD", 1.0),)),), pv_noise=(0.341 / 0.417, -0.010)),
     Family("H200", "sm_90", "LI-CP-W redux L32, ffill at p = 1 (DC-90-ri, decisions 98 and 99)",
            "dither-2s-licpw-redux-p1-l32", "DC-90-ri",
            "H200", 5.40, "vy-dc-h200: $5.40/h, one GPU with its host (measured price)",
-           served=0.0979, route=0.0, skip_no_pv=0.0, pv_share=0.0185),
+           served=0.0979, route=0.0, skip_no_pv=0.0, pv_share=0.0185, card="h200"),
     Family("B200", "sm_100", "LI-CP-W redux L32, ♭ without LDTM, the fold the checks read (DC-100-ri)",
            "dither-2s-licpw-redux-ldtm0-l32", "DC-100-ri",
            "B200", 7.00, "vy-dc-b200: $7.00/h, one GPU with its host (measured price)",
-           served=0.2061, route=0.0, skip_no_pv=0.0, pv_share=0.0185),
+           served=0.2061, route=0.0, skip_no_pv=0.0, pv_share=0.0185, card="b200"),
 )
+
+
+def family(name: str) -> Family:
+    """The family of the card nvidia-smi names `name`, read through its card file (`verity_bench.kit.card_short`);
+    refused, naming the fix, where no family prices it."""
+    from verity_bench.kit import card_short
+
+    short = card_short(name, directory=CARD_FILES)
+    found = [f for f in FAMILIES if f.card == short]
+    if not found:
+        raise SystemExit(f"no family of budget.FAMILIES prices {name} ({short}): add a Family with card={short!r}, its "
+                         "gpu_usd_h (dollars an hour of one GPU with its host) and price_source, and its design's filler "
+                         "sweep in budget_fill.json (`budget.py --sweep`, on a machine model that prices its device)")
+    return found[0]
 
 
 def sweep(out: Path = FILL_DATA) -> dict:
@@ -529,12 +550,14 @@ def summary(fams=FAMILIES, **kw) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--card", help="the card, as nvidia-smi names it: report its family alone")
     ap.add_argument("--md")
     ap.add_argument("--json")
     ap.add_argument("--sweep", action="store_true", help="regenerate budget_fill.json from the machine model first")
     ap.add_argument("--sampling-sweep", metavar="TREE", type=Path,
                     help="regenerate budget_sampling.json from OPT2's planner on TREE first")
     a = ap.parse_args(argv)
+    fams = (family(a.card),) if a.card else FAMILIES
     if a.sweep:
         sweep()
         _fill_data.cache_clear()
@@ -542,14 +565,14 @@ def main(argv: list[str] | None = None) -> int:
         sampling_sweep(a.sampling_sweep)
         _sampling_data.cache_clear()
         curve.cache_clear()
-    text = render()
+    text = render(fams)
     print(text)
     if a.md:
         with open(a.md, "w") as fh:
             fh.write(text + "\n")
     if a.json:
         with open(a.json, "w") as fh:
-            json.dump(summary(), fh, indent=1, default=str)
+            json.dump(summary(fams), fh, indent=1, default=str)
     return 0
 
 

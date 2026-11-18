@@ -25,6 +25,7 @@ from verity.circuits.ops.boolean import attention as BA
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import mufu as BM
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import boolean_softcap as BSC
 from verity_vllm.definitions.registry import fa2_softcap as FS
 from verity_vllm.definitions.registry import prims as P

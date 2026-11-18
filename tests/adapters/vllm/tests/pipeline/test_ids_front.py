@@ -16,6 +16,7 @@ import threading
 from typing import Any
 
 import pytest
+from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 from verity.protocols.resource_accounting.network.verifier import release as REL
 
@@ -215,13 +216,13 @@ class Fronted:
 
 
 def test_an_id_request_is_its_fields_whatever_release_headers_it_came_with():
-    """`serve_protocol.id_request_fields`: the fields of an id request in its P + 9-byte cells, bare or as the network
+    """`ids_protocol.id_request_fields`: the fields of an id request in its P + 9-byte cells, bare or as the network
     attester forwards it (the release, the run and the bucket); None in other cells, cut short, or changed by a byte."""
     for request in (served.id_request(P), released(), REL.with_release(served.id_request(P), 0)):
-        assert proto.id_request_fields(request, P) == FIELDS
-    assert proto.id_request_fields(released(), P + 1) is None and proto.id_request_fields(released()[:-1], P) is None
-    assert proto.id_request_fields(released().replace(b'"stream":true', b'"stream":True'), P) is None
-    assert proto.id_request_fields(b"", P) is None
+        assert idp.id_request_fields(request, P) == FIELDS
+    assert idp.id_request_fields(released(), P + 1) is None and idp.id_request_fields(released()[:-1], P) is None
+    assert idp.id_request_fields(released().replace(b'"stream":true', b'"stream":True'), P) is None
+    assert idp.id_request_fields(b"", P) is None
 
 
 def test_the_servers_copy_keeps_the_release_and_asks_for_the_token_ids():
@@ -238,7 +239,7 @@ def test_the_servers_copy_keeps_the_release_and_asks_for_the_token_ids():
     assert b"x-verity" not in bare and REL.release_of(bare.partition(b"\r\n\r\n")[0] + b"\r\n\r\n") is None
 
 
-@pytest.mark.parametrize("payload", [P, proto.ID_PAYLOAD])
+@pytest.mark.parametrize("payload", [P, idp.ID_PAYLOAD])
 def test_before_vllms_framing_an_id_request_is_answered_as_protocol_ids_answers_it(tmp_path, payload):
     """The front before the server whose framing is vLLM's (`PlainProtocol`, its usage chunk forced): the network
     attester's id request comes back as ``--protocol ids`` sends it from the same engine, each sampled id one event of P
@@ -248,7 +249,7 @@ def test_before_vllms_framing_an_id_request_is_answered_as_protocol_ids_answers_
         raw = f.send(released(payload))
         assert f.send(served.id_request(payload)) == raw
     assert raw == b"".join(IT.id_event(t, payload) for t in (4853, 4884)) + IT.TRAILER
-    ids = proto.IdsProtocol(True, payload=payload, base=proto.PlainProtocol(True))
+    ids = idp.IdsProtocol(payload=payload, base=proto.PlainProtocol(True))
     with served.Serving(tmp_path / "ids", commit=False, protocol=ids) as direct:
         assert direct.send(released(payload)) == raw
     assert f.log == [{"n": 4, "run": b"run".hex(), "bucket": 9, "prompt": 3, "ids": 2, "ended": True, "why": None, "at": 1.0,
@@ -261,7 +262,7 @@ def test_every_other_connection_gets_the_servers_own_answer(tmp_path):
     """Through the front, what isn't an id request in the front's cells reaches the server unchanged and its answer
     comes back whole: ``/v1/models``, ``/tokenize``, the network attester's shim's streamed POST (vLLM's chunks, with their
     token ids), and an id request in other cells, which the server answers in HTTP. None is recorded."""
-    with served.Serving(tmp_path, commit=False) as s, Fronted(s.http.address, proto.ID_PAYLOAD) as f:
+    with served.Serving(tmp_path, commit=False) as s, Fronted(s.http.address, idp.ID_PAYLOAD) as f:
         models = f.ask("GET", "/v1/models")
         tokens = f.ask("POST", "/tokenize", json.dumps({"model": "m", "prompt": "a bb ccc"}).encode())
         shim = served.shims_request(s.http.address[1])
@@ -414,7 +415,7 @@ def test_a_server_that_is_not_there_closes_the_connection():
 
 def test_the_command_is_registered_with_the_scans_payload_as_its_default():
     opts = cli.parse("ids-front", ["--upstream", "127.0.0.1:18745"], environ={})
-    assert (opts.upstream, opts.listen, opts.id_payload, opts.log) == ("127.0.0.1:18745", "127.0.0.1:18746", proto.ID_PAYLOAD, None)
+    assert (opts.upstream, opts.listen, opts.id_payload, opts.log) == ("127.0.0.1:18745", "127.0.0.1:18746", idp.ID_PAYLOAD, None)
     assert F.address("node-a:18745") == ("node-a", 18745)
     for bad in ("18745", "host:", ":18745", "host:port"):
         with pytest.raises(UsageError):

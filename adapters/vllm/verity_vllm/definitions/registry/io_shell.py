@@ -83,7 +83,7 @@ Registered functions:
                              (body: N u8 bits) -> (ok: bit, LP i32, max_tokens, temperature, top_p: i32, seeded: bit, seed: i64,
                              user: RID u8), schema v1 (`boolean_io_shell`)
   TokenFeed{NP,FIRST}        (slot: NP + 1 i32[, sel: i32]) -> (tok: i32, slot: NP + 1 i32)
-  ScanSlots{NS,NP,...}       (state: NS u16) -> (tok: i32 bits, slot: NP + 1 i32, occ: i32, head: 2 i32)
+  ScanSlots{NS,NP,...}       (state: NS u16) -> (tok: i32, slot: NP + 1 i32, occ: i32, head: 2 i32)
                              a lane (`boolean_io_shell`)
   OutCollect{KO,FIRST}       (head: 2 i32 | state: KO + 2 i32, tok: i32) -> KO + 2 i32
   SlotEntry{KO,IDB,NP,STOP}  (occ: i32, state: KO + 2 i32) -> ⌈(33 + KO·IDB) / 16⌉ u16 bits
@@ -111,6 +111,7 @@ from verity.circuits.ops.scalar import (
 )
 from verity.circuits.refs import Coll, broadcast, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry.dead_free import TokenSelectCombineV2
 from verity_vllm.definitions.registry.prims import BIT, I32
@@ -431,7 +432,7 @@ def slots_refuse(S: dict) -> str | None:
 
 
 def slots_sig(S):
-    lane = (BITS32, Array(S.NP + 1, I32), I32, Array(2, I32))
+    lane = (I32, Array(S.NP + 1, I32), I32, Array(2, I32))
     return (("state", Array(S.NS, Value(16))),), Tuple(*[t for _ in S.OCC for t in lane])
 
 
