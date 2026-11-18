@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`InferenceOnlyCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 714 cases (600 random circuits,
-two in five broken in one way, 94 shaped ones, most in the shape of a served class, and 20 toys of edges) and, on each,
+`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 717 cases (600 random circuits,
+two in five broken in one way, 92 shaped ones, most in the shape of a served class, and 25 toys of edges) and, on each,
 `scripts/inference_only_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
@@ -125,7 +125,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 714 cases and the reference's results, byte for byte as the record pins them."""
+    """All 717 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -141,7 +141,7 @@ def test_the_generator_covers_what_it_says(random_cases, shaped):
         assert (m["case"]["spot"] is None) == (m["broken"] in vectors.EARLY)
         assert isinstance(r["kinds"], list) == isinstance(r["exported"], list) == ("error" not in detail)
         assert ("message" in detail) == (m["broken"] in ("own-rows", "leaf-widths"))
-    assert {m["broken"] for m in made} == set(vectors.BROKEN) | {None}
+    assert {m["broken"] for m in made} == set(vectors.BROKEN) | {"wires", None}
     assert {m["how"] for m in random_cases if m["broken"]} == {how for hows in vectors.BROKEN.values() for how in hows}
     good = [r for r in results if "error" not in r["detail"]]
     assert {r["detail"]["failure"] for r in good} == {None, "size", "nci"}
@@ -165,7 +165,7 @@ def test_the_generator_covers_what_it_says(random_cases, shaped):
     # a record that lists its members, as the interface reads them back, states no wires: refused, not read as none
     listed = json.loads(shaped[LISTED]["case"]["instance"]["record"])
     assert "wires" not in listed and len(IF._listed_members(listed)) == len(listed["templates"])
-    assert shaped[LISTED]["case"]["spot"]["wires"] is None
+    assert shaped[LISTED]["case"]["spot"] is None
     # the text of no wire and nothing else names no Program: refused before its wires are read
     assert json.loads(shaped[BARE]["case"]["instance"]["record"]) == {"wires": []}
 
@@ -465,11 +465,11 @@ def test_every_row_is_counted_and_a_block_is_a_slot(shaped):
 def test_a_row_is_declared_once(shaped):
     """What a row holds is read from the one declaration that fills it, so a record that declares a row twice says
     two things of it: the first declaration found would decide, and a row that ingress fills could count as a
-    registered read. The form refuses such a record, whichever two of a wire, a registered read, a table read, an
-    opening's port and ingress declare the row: two wires by the wires' own check (`wires`), any other pair with the
-    declarations (`inputs`). Each case is the accepted record with one declaration more and nothing else changed. The
-    second declaration is well formed: with the row's first declaration dropped the stage takes the record, so each
-    is refused for the row it shares and for nothing else."""
+    registered read. The form refuses such a record with the declarations (`inputs`), whichever two of a wire, a
+    registered read, a table read, an opening's port and ingress but two wires declare the row. Each case is the
+    accepted record with one declaration more and nothing else changed. Where the record's first declaration fills
+    the row, the second is well formed: with the first dropped the stage takes the record, so each is refused for the
+    row it shares and for nothing else. Where the Program's root wires the row, the wires the check reads hold it."""
     held = shaped["2x3 registered"]["case"]
     *_, templates = ref.front(held["instance"], held["trusted"])
     built = json.loads(held["instance"]["record"])
@@ -481,7 +481,7 @@ def test_a_row_is_declared_once(shaped):
         ref.Inputs(templates, cuts, wires, rec)
 
     declarations(built)
-    assert {stage for stage, *_ in vectors.TWICE.values()} == {"wires", "inputs"}
+    assert {stage for stage, *_ in vectors.TWICE.values()} == {"inputs"}
     for what, (stage, declare, drop) in vectors.TWICE.items():
         m = shaped[f"2x3 {what}"]
         r = vectors.results(m["case"])
@@ -492,6 +492,9 @@ def test_a_row_is_declared_once(shaped):
         with pytest.raises(ref.Malformed) as refusal:
             declarations(twice)
         assert refusal.value.code == stage, what
+        if isinstance(drop, tuple):
+            assert drop in {(w["reader"], w["port"]) for w in ref.wires_of(templates, built, program)[0]}, what
+            continue
         drop(alone)
         assert alone != built, what
         declare(alone)
