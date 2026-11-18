@@ -281,6 +281,33 @@ def test_a_nested_suites_files_are_outside_the_inputs_unless_declared(tmp_path, 
 
 
 @pytest.mark.parametrize("workers", [1, 2])
+@pytest.mark.parametrize("blind", ["its PYTHONPATH lacks", "its -I flag"])
+def test_a_python_a_test_starts_without_the_tracer_fails_the_suite_naming_it_and_the_fix(tmp_path, monkeypatch, workers, blind):
+    """A Python a test starts with the tracer off its PYTHONPATH (as circuit-check's `_untraced` starts one) or under -I reads
+    what no key holds: it fails the suite, naming its command, why it runs blind and how to start it traced."""
+    if workers > 1:
+        pytest.importorskip("xdist")
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    child = HERE / "guard" / "child"
+    stripped = blind == "its PYTHONPATH lacks"
+    read = "import sys; open(sys.argv[1]).read()"
+    (tmp_path / "pkg" / "tests" / "test_reads.py").write_text(
+        "import os, subprocess, sys\nfrom pathlib import Path\nOUT = Path(__file__).resolve().parents[2] / 'outside' / 'by_test.txt'\n\n"
+        "def test_child():\n"
+        "    env = dict(os.environ, PYTHONPATH=os.pathsep.join(p for p in os.environ['PYTHONPATH'].split(os.pathsep)\n"
+        "                                                  if not os.path.isfile(os.path.join(p, 'verity_suite_reads.py'))))\n"
+        + (f"    subprocess.run([sys.executable, '-c', {read!r}, str(OUT)], env=env, check=True)\n" if stripped else
+           f"    subprocess.run([sys.executable, '-I', '-c', {read!r}, str(OUT)], check=True)\n"))
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs", workers)
+    assert (r.status, r.counts["passed"], r.outside) == ("failed", 1, {}), r.log.read_text()
+    [(kind, why, who)] = r.child_reads
+    assert (kind, who) == ("E", ["tests/test_reads.py::test_child"])
+    assert why == (f"the tracer did not start: `{sys.executable}{'' if stripped else ' -I'} -c {read} {tmp_path}/outside/by_test.txt` "
+                   f"runs without it ({blind + ' ' + str(child) if stripped else blind}); start it with the suite's PYTHONPATH "
+                   f"(which holds {child}) and VERITY_SUITE_* variables, and without -I, -E or -S, or give the test a stand-in for it")
+
+
+@pytest.mark.parametrize("workers", [1, 2])
 def test_every_test_starts_without_the_machines_markers_caches_and_slot(tmp_path, monkeypatch, workers):
     """Host-dependent tests failed five full checks in 16 h, each fixed one test at a time: cpu-1's /etc/vy/runs-via-slot, node 1's
     real check caches, a slot's CHECK_SLOT. In every suite a test module sees, at import and in each test, every marker the

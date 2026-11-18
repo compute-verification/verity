@@ -78,9 +78,11 @@ used: the workspace metadata files they opened, the installed distributions they
 dependencies, and the imports that found nothing. A pass is reused only while each of those is as it was. A Python a test
 starts, or a Python started by a program it starts, traces its own opens while it keeps the suite's PYTHONPATH and environment
 (`guard/child/`): one that opens a file outside the inputs fails the suite as the test would, and so does one whose tracer
-doesn't start; the failure names the test and the file. Nothing sees into other programs (bash, git, `uv`, a Python run with
-`-I`, `-E` or `-S`, or on a PYTHONPATH without the tracer): what they read is unchecked, and checking it would mean keying
-their suite on the whole tree. List what they read under `inputs`, or give the test a stand-in for it. The one exception is the
+doesn't start; the failure names the test and the file. A Python a traced process starts while a test module is collected or
+run that can't trace itself (run with `-I`, `-E` or `-S`, or without the tracer's PYTHONPATH entry or variables) fails the
+suite too, naming its command and how to start it traced; a suite run (`-p verity_suite_guard`) has its own guard. Nothing
+sees into other programs (bash, git, `uv`): what they read is unchecked, and checking it would mean keying their suite on the
+whole tree. List what they read under `inputs`, or give the test a stand-in for it. The one exception is the
 suite's own build outputs (`artifacts`, a Lean executable reads only what its arguments name): such a program's start is taken
 as reading the repository paths it is given, a file with the files beside it and a directory whole, checked against the inputs
 like any read, and `lake build` of them in their package as reading nothing the key doesn't hold (`VERITY_SUITE_PROGRAMS`).

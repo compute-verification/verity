@@ -14,7 +14,8 @@ It also traces what a per-test key narrowed to the files the tests use (`suites.
 - `L` a repository directory listed (`os.listdir`, `os.scandir`: imports, `glob`, `pkgutil` list what they search);
 - `X` a program started that this tracer won't see into, so what it reads is unknown: anything but a machine probe (`PROBES`),
   a Python that loads this tracer (the suite's PYTHONPATH, `VERITY_SUITE_READS` and a test module in `VERITY_SUITE_MODULE`,
-  and no `-I`, `-E` or `-S`), or one of the suite's declared build outputs (`VERITY_SUITE_PROGRAMS`, `given`).
+  and no `-I`, `-E` or `-S`), or one of the suite's declared build outputs (`VERITY_SUITE_PROGRAMS`, `given`);
+- `E` a Python started while a test module is collected or run that won't load this tracer (`refused`), which fails the suite.
 
 A declared build output (a Lean executable) reads what its arguments name and what it derives from them, and nothing else of the
 repository, so its start is traced as `F` reads instead: each argument (or `--flag=` value) that names a repository path, a file
@@ -35,11 +36,17 @@ _PYTHON = re.compile(r"^python(\d+(\.\d+)?)?$")
 PROBES = frozenset({"uname", "true", "false", "nproc", "getconf", "hostname", "id", "whoami", "ldconfig", "lscpu", "nvidia-smi"})
 #: more files than this under a declared output's argument: traced as a program no tracer sees into, not file by file
 GIVEN_MAX = 5000
+_GUARDED = ("-p", "verity_suite_guard")
 
 
 def _source(path: str) -> str:
     m = _PYC.match(path)
     return os.path.join(m.group(1), f"{m.group(2)}.py") if m else path
+
+
+def _python(argv) -> bool:
+    exe = os.fsdecode(argv[0])
+    return bool(_PYTHON.match(os.path.basename(exe)) or os.path.realpath(exe) == os.path.realpath(sys.executable))
 
 class Reads:
     def __init__(self, env=os.environ):
@@ -103,20 +110,41 @@ class Reads:
         """Whether a program started with ``argv`` (and ``env``, None when inherited) is a Python that traces itself here."""
         if not argv:
             return False
-        exe = os.fsdecode(argv[0])
-        if os.path.basename(exe) in PROBES:
+        if os.path.basename(os.fsdecode(argv[0])) in PROBES:
             return True
+        return _python(argv) and self.blind(argv, env) is None
+
+    def blind(self, argv, env) -> str | None:
+        """Why the Python ``argv`` starts (with ``env``, None when inherited) won't load this tracer; None when it will."""
         flags = [os.fsdecode(a) for a in argv[1:] if isinstance(a, (str, bytes))]
-        if not (_PYTHON.match(os.path.basename(exe)) or os.path.realpath(exe) == os.path.realpath(sys.executable)):
-            return False
         for a in flags:
             if a in ("-c", "-m") or not a.startswith("-") or a.startswith("--"):
                 break
             if set(a[1:]) & set("IES"):
-                return False
+                return f"its {a} flag"
         env = os.environ if env is None else {os.fsdecode(k): os.fsdecode(v) for k, v in env.items()}
-        return (all(env.get(k) for k in ("VERITY_SUITE_READS", "VERITY_SUITE_MODULE", "VERITY_SUITE_ROOT"))
-                and self.here.rstrip("/") in [os.path.realpath(p) for p in env.get("PYTHONPATH", "").split(os.pathsep) if p])
+        if missing := [k for k in ("VERITY_SUITE_READS", "VERITY_SUITE_MODULE", "VERITY_SUITE_ROOT") if not env.get(k)]:
+            return f"its environment lacks {', '.join(missing)}"
+        if self.here.rstrip("/") not in [os.path.realpath(p) for p in env.get("PYTHONPATH", "").split(os.pathsep) if p]:
+            return f"its PYTHONPATH lacks {self._shown(self.here)}"
+        return None
+
+    def _shown(self, path: str) -> str:
+        path = path.rstrip("/")
+        return os.path.relpath(path, self.root) if path.startswith(self.inside) else path
+
+    def refused(self, argv, env) -> str | None:
+        """Why a test's Python started with ``argv`` fails the suite: it runs blind (`blind`) while a test module is collected or
+        run, so what it reads is outside every key. A suite run (`-p verity_suite_guard`) is guarded by its own report; a
+        Python started outside any test module (an xdist worker) is the guard's."""
+        if not (os.environ.get("VERITY_SUITE_MODULE") and _python(argv)) or _GUARDED in zip(argv[1:], argv[2:]):
+            return None
+        if (why := self.blind(argv, env)) is None:
+            return None
+        cmd = " ".join(" ".join(os.fsdecode(a) for a in argv if isinstance(a, (str, bytes))).split())
+        return (f"the tracer did not start: `{cmd[:400]}{'...' if len(cmd) > 400 else ''}` runs without it ({why}); start it "
+                f"with the suite's PYTHONPATH (which holds {self._shown(self.here)}) and VERITY_SUITE_* variables, "
+                "and without -I, -E or -S, or give the test a stand-in for it")
 
     def given(self, argv, cwd) -> list[str] | None:
         """The repository files (from the root) a declared build output started with ``argv`` in ``cwd`` reads, [] for `lake build`
@@ -171,7 +199,8 @@ class Reads:
             if self.seeable(argv, env):
                 return []
             if (files := self.given(argv, cwd)) is None:
-                return [("X", os.fsdecode(argv[0]) if argv else "?")]
+                why = self.refused(argv, env) if argv else None
+                return [("X", os.fsdecode(argv[0]) if argv else "?"), *([("E", why)] if why else [])]
             return [("F", f) for f in files] + [("O", f) for f in files if self.outside(os.path.join(self.root, f))]
         elif event in ("os.system", "os.spawn"):
             return [("X", event)]
@@ -212,7 +241,7 @@ class Reads:
         for kind, rel in hits:
             if (kind, module, rel) not in self.sent:
                 self.sent.add((kind, module, rel))
-                self.write(kind, module, rel, test if kind == "O" else "")
+                self.write(kind, module, rel, test if kind in ("O", "E") else "")
 
     def install(self) -> None:
         """Trace this process (a child a test started): every open, attributed to the module it inherited."""

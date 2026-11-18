@@ -88,8 +88,9 @@ reused only while everything its tests read is unchanged. When it fails:
   `[[tool.verity.tests.reads]]` entry with `tests` (the files, from the suite's directory) and `paths` (what they read,
   Python included). An entry naming no test file or no file of the tree is refused.
 
-A Python a test starts is guarded like the test: declare the file its failure names, or give the test a stand-in.
-Programs the guard can't trace (bash, git, a Python run with `-I`, `-E` or `-S` or off the suite's PYTHONPATH) fail
+A Python a test starts is guarded like the test: declare the file its failure names, or give the test a stand-in. One that
+can't trace itself (run with `-I`, `-E` or `-S`, or with the suite's PYTHONPATH or `VERITY_SUITE_*` variables taken out of its
+environment) fails the suite, naming its command: start it with them. Other programs the guard can't trace (bash, git) fail
 nothing, so list what they read, and list a path a test only checks the existence of (the guard sees opens, not
 `stat()`). The graph's test-file runner fails a file that starts one unless its suite lists it under `[tool.verity.tests]
 untraced`, which keys it on the suite's whole tree. A test that builds or runs a Lake package lists its lakefile, and its suite goes in `AFTER_LEAN`
