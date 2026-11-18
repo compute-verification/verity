@@ -1595,7 +1595,7 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     seen = json.loads((tmp_path / "seen.json").read_text())
     w = tmp_path / "serve" / "sampled-proofs-served" / "window"
     assert seen["argv"][:2] == ["sampled", "check"] and seen["argv"][5:] == [str(w / "m0" / "p0.bin")]
-    assert json.loads(seen["files"]["params.json"]) == {"form": "one-stage", "proofs": {}, "verifier": "toy"}
+    assert json.loads(seen["files"]["params.json"]) == {"levels": 1, "proofs": {}, "verifier": "toy"}
     assert json.loads(seen["files"]["commitment.bin"]) == LEAN_RECORD
     plain = [x for x in argv if x not in ("--sampled-lean", "--sampled-exe", argv[-1])]
     _rc, _line, node_rows = _recorded(tmp_path, plain, capsys)
