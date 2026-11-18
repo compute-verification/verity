@@ -75,7 +75,6 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/weights.py": "@compute-accounting",
-    "verity/protocols/resource_accounting/memory/pous/prover/served_weights.py": "@memory-accounting",
 }
 #: the rulings that admit a keyed derivation: {ruling: its condition}
 PASS_TREE = ("the bandwidth audit's pass tree: its leaves' salts are expanded on the card from a key drawn fresh from the "
