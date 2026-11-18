@@ -1946,11 +1946,27 @@ def epsilon(a: Mapping[str, Any]) -> str | None:
 
 
 def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, Any]:
-    """A subprotocol's report row from its answer (checked to be a core answer first); ``run`` is the recording run."""
+    """A subprotocol's report row from its answer (checked to be a core answer first); ``run`` is the recording run. A
+    one-stage accept whose public ``complete`` is not true is `NOT_COMPLETE`, its reason naming the entries its audit
+    record under ``out`` left without a verdict."""
+    from verity.commitments.domains import ONE_STAGE_PROTOCOL
+    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import NOT_COMPLETE
+
     a = check_answer(a)
     runs = json.loads((out / "runs.json").read_text()) if (out / "runs.json").exists() else []
     accepted = a["verdict"] == "accept"
-    return {"protocol": a["protocol"], "owner": owner, "verdict": a["verdict"], "reason": a["reason"],
+    verdict, reason = a["verdict"], a["reason"]
+    if accepted and a["protocol"] == ONE_STAGE_PROTOCOL and a["public"].get("complete") is not True:
+        try:
+            rec = next((_json(f) for f in (out / "window" / "audit.json", out / "audit.json") if f.is_file()), None)
+        except ValueError:
+            rec = None
+        verdicts = rec.get("verdicts") if isinstance(rec, dict) else None
+        null = sorted(k for k, v in verdicts.items() if isinstance(v, dict) and v.get("accepted") is None) \
+            if isinstance(verdicts, dict) else []
+        verdict, reason = NOT_COMPLETE, ("its accept is not complete: " + (
+            f"its audit record has no verdict of {', '.join(null)}" if null else "its public `complete` is not true"))
+    return {"protocol": a["protocol"], "owner": owner, "verdict": verdict, "reason": reason,
             "commitment": a["commitment"], "quantity": a["public"] if accepted else None,
             "delta": (a["profile"] or {}).get("delta") if isinstance(a["profile"], dict) else None,
             "epsilon": epsilon(a) if accepted else None, "runs": [*([run] if run else []), *runs], "answer": a}
