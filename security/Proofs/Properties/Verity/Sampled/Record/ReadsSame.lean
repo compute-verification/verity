@@ -222,6 +222,8 @@ private def portsV (fmt : V String) (kin : Bool) (tail : Bool → V (Array Regis
     throw s!"{ctx}: a {Registered.FORMAT} file holds the keys {Registered.FILE_KEYS} and no other"
   tail v1
 
+-- `rfl` unfolds `portsOf` and its restatement whole
+set_option maxHeartbeats 1000000 in
 private theorem ports_view (j : Json) :
     Registered.portsOf j = portsV (J.str j "format" "registered reads") (Registered.keysIn j Registered.FILE_KEYS)
       (fun v1 => portsTail v1 (j.getObjVal? "ports")) := rfl
