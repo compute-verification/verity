@@ -107,7 +107,7 @@ class Exchange:
         return lambda: self.subscribers[hook].remove(entry) if entry in self.subscribers[hook] else None
 
     def request(self, name: str, request: H.Request) -> None:
-        """File scheme ``name``'s request; kernels and gates filed later run outside earlier ones."""
+        """File scheme ``name``'s request; kernels and gates filed earlier run outside later ones."""
         kind = type(request).__name__
         if isinstance(request, H.RefuseInput):
             self.requests.append((name, request))
@@ -159,7 +159,7 @@ class Exchange:
         """A due block's output: emitted to ``blocks``' subscribers, then computed by the filed kernels, the workload's
         ``original`` innermost; inputs a kernel hands inward replace the block's for every kernel inside it."""
         self.emit(due)
-        kernels = [r.kernel for _, r in self._filed(H.ComputeBlockWith)]
+        kernels = [r.kernel for _, r in self._filed(H.ComputeBlockWith)][::-1]
 
         def level(i: int, inputs: Mapping[str, H.Handle] | None) -> H.Handle:
             if i < 0:
@@ -252,13 +252,11 @@ def listed_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
 
 def attach_listed(exchange: Exchange, listed: Sequence[tuple[schemes.Scheme, Mapping[str, Any]]], **ctx: Any) -> list[Any]:
     """Each scheme of ``listed`` (a configuration's list, each with its settings) attached on ``exchange`` with ``ctx``
-    (`Exchange.attach`), once `listed_refusals` refuses none; what each attach returned, in list order.  The scheme
-    listed earlier is the outer: a kernel filed later runs outside one filed earlier (`Exchange.request`), so the list
-    attaches last first."""
+    (`Exchange.attach`) in list order, once `listed_refusals` refuses none, so the scheme listed earlier is the outer
+    (`Exchange.request`); what each attach returned."""
     if bad := listed_refusals([s for s, _ in listed]):
         raise Refused("listed schemes", "; ".join(bad))
-    got = [exchange.attach(s, given, **ctx) for s, given in reversed(listed)]
-    return got[::-1]
+    return [exchange.attach(s, given, **ctx) for s, given in listed]
 
 
 _CURRENT: Exchange | None = None

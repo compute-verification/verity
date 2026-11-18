@@ -235,7 +235,7 @@ def test_pearl_cs_option_attaches_pearl_plus_by_name_on_the_build_and_close_rele
                  for e, n in (("pouw:a-v1", "a"), ("pous:b-v1", "b"))}
     monkeypatch.setattr(messages, "option", stand_ins.get)
     both = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:a-v1,pous:b-v1")
-    assert order == ["b", "a"] and sorted(both._engine.exchange.attached) == ["a", "b"] and both.protocols is None
+    assert order == ["a", "b"] and sorted(both._engine.exchange.attached) == ["a", "b"] and both.protocols is None
     with pytest.raises(ValueError, match="2 schemes attached by name, not one"):
         _ = both.scheme
     monkeypatch.undo()
