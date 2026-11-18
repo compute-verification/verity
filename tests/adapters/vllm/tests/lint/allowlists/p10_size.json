@@ -6,7 +6,7 @@
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1339},
     {"file": "verity_vllm/observe/fold/fold.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1273},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2541},
-    {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 896},
+    {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 944},
     {"file": "verity_vllm/program/frontend/rules/vllm_moe.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 865},
     {"file": "verity_vllm/definitions/numerics/twins.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1015},
     {"file": "verity_vllm/definitions/registry/b1.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1146},
@@ -25,6 +25,10 @@
     {"file": "verity_vllm/compiler/replay_chain.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 811},
     {"file": "verity_vllm/compiler/replay_step.py", "kind": "function", "symbol": "_build", "detail": "lines", "count": 275},
     {"file": "verity_vllm/compiler/replay_step.py", "kind": "function", "symbol": "reference", "detail": "lines", "count": 161},
-    {"file": "verity_vllm/compiler/replay_step.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1011}
+    {"file": "verity_vllm/compiler/replay_step.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1011},
+    {"file": "verity_vllm/pipeline/serve_openai.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 933},
+    {"file": "verity_vllm/config.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 871},
+    {"file": "verity_vllm/definitions/registry/tp_allreduce.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 828},
+    {"file": "verity_vllm/pipeline/interior_rows.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 802}
   ]
 }
