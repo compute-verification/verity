@@ -94,9 +94,6 @@ PUBLIC = {
     "verity_vllm.engine.int8_k_scales": "I1: the int8 attention's K scales, a calibrated parameter of the served "
                                         "checkpoint: its manifest (MANIFEST), a revision's table (table) and a calibration's "
                                         "entry (entry, with_entry), which benchmarks/ppl's calibration job writes",
-    "verity_vllm.engine.pool_row": "I1: the carried pool's row, a prefix cache's block pool at a window's edge (snapshot, row, "
-                                   "export), its genesis reset and its BlockKey_v1 keys (install_keys), which "
-                                   "benchmarks/network_e2e/encodings drives over recorded traces",
     "verity_vllm.engine.profiles.dense_generic": "I1: a checkpoint role's HF config.json: the checkpoints the manifests "
                                                  "pin (MANIFEST, checkpoint_entries), a pin's config (pinned_hf_config, "
                                                  "find_hf_config, hf_snapshot) and its profile module's name, which "
