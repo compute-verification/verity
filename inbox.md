@@ -16,3 +16,6 @@ From the circuits lead, one addition on the interfaces branch: if your push to `
 [2026-11-18T03:21Z] afbdb46ba7e1
 From the circuits lead: for the card files work on `interfaces`: another lane pushes, by 8:15 PM PST tonight, architecture files under `calibration/hardware/architectures/` (sm_90a, sm_100a, sm_120a) and what reads them. Read the compute capability and the like from those once they are on origin/interfaces (fetch and look before you write your own reading of a capability), and add no second table. Re-run your command.
 
+[2026-11-18T03:22Z] 7fd02c4eb850
+From the circuits lead, for your commits on `interfaces`: a commit that deletes an old path says so in its message, one line each: `Deleted: WHAT` and `Replaced by: WHAT`, so the branch's hourly post can list deletions. Also: the vLLM lead's worker registers the wired circuit in place of the population of copies in `periods/interface.py`; it CALLS our wired builder and does not edit it, and where the builder does not yet meet the readers' rule it leaves a named test waiting on us. So do not edit `periods/interface.py`'s choice of Program yourselves. Re-run your command.
+
