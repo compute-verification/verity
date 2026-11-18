@@ -8,7 +8,10 @@ just before its model runner loads the model, so that they hear the model's `hoo
 site attaches, the exchange answered with what vLLM's
 configuration declares, the admission hook (`engine.admission.register`, keyed by the client's X-Request-Id) on its
 scheduler, and what each scheme holds released (`hooks.Releases`) when the engine core shuts down. A scheme's
-`hooks.RefuseInput` there aborts the input, its reason in the engine core's log.
+`hooks.RefuseInput` there aborts the input, its reason the client's ``stop_reason`` (`aborts`).
+
+No committer runs here, so there are no execution phases (no `hooks.PhaseOpened`, `PhaseClosed` or `PhaseCommitted`):
+a scheme's epoch is the server's life, from its attach to its release.
 
 vLLM loads its general plugins in each of its processes, so `register` imports vLLM only once ``VERITY_PROTOCOLS`` is
 set, and the engine's side acts only in a process that builds an engine core.
@@ -41,9 +44,9 @@ OTHER_PATHS = frozenset({"/health", "/ping", "/version", "/v1/models", "/metrics
 
 
 def config(environ: Mapping[str, str] | None = None) -> tuple[list[str], dict[str, Any]]:
-    """``VERITY_PROTOCOLS``'s names and ``VERITY_PROTOCOLS_CONFIG``'s object (``feed`` required with a name, and each
-    scheme's settings under its name); no names,
-    nothing."""
+    """``VERITY_PROTOCOLS``'s names and ``VERITY_PROTOCOLS_CONFIG``'s object (``feed`` required with a name, ``gate``
+    infra's challenger gate command where a scheme's coins come through it, and each scheme's settings under its name);
+    no names, nothing."""
     names = [n for n in settings.get("VERITY_PROTOCOLS", environ) if n]
     if not names:
         return [], {}
@@ -52,6 +55,15 @@ def config(environ: Mapping[str, str] | None = None) -> tuple[list[str], dict[st
         raise ValueError("VERITY_PROTOCOLS_CONFIG: a JSON object with feed, the directory the server's front and its engine "
                          f"share, and each scheme's configuration under its name, not {cfg!r:.80}")
     return names, cfg
+
+
+def challenger_gate(command: str | None) -> Callable[..., Mapping[str, Any]] | None:
+    """The auditor device's challenger gate over infra's gate command ``command`` (``VERITY_PROTOCOLS_CONFIG``'s
+    ``gate``), each scheme's ``ctx["gate"]`` in the engine; None without one."""
+    if not command:
+        return None
+    from verity_vllm.pipeline.commit_coins import ChallengerGate
+    return ChallengerGate(command).call
 
 
 def declared(vllm_config: Any, attached: Mapping[str, Mapping[str, Any]] | None = None) -> H.Declared:
@@ -73,14 +85,18 @@ def declared(vllm_config: Any, attached: Mapping[str, Mapping[str, Any]] | None 
 
 def attach(exchange: messages.Exchange, vllm_config: Any, names: list[str], cfg: Mapping[str, Any]) -> list[Any]:
     """Each scheme ``names`` on ``exchange`` in the engine, then the exchange answered (`messages.Exchange.answer`); what
-    each attach returned, in order. A tensor-parallel engine is refused by `GOAL`."""
+    each attach returned, in order. An engine on more than one GPU, or whose model runner is not in the engine core's
+    process (where its scheduler and steps are), is refused by `GOAL`."""
     from verity.protocols.compose import schemes
 
     pc = vllm_config.parallel_config
-    if pc.tensor_parallel_size * pc.pipeline_parallel_size != 1:
-        raise NotImplementedError(f"{GOAL}: schemes inside vLLM's server on one GPU, not tensor_parallel_size "
-                                  f"{pc.tensor_parallel_size} × pipeline_parallel_size {pc.pipeline_parallel_size}")
-    got = [exchange.attach(schemes.get(n), cfg.get(n) or {}, process=H.ENGINE, feed=cfg["feed"]) for n in names]
+    shape = (pc.tensor_parallel_size, pc.pipeline_parallel_size, pc.data_parallel_size, pc.distributed_executor_backend)
+    if shape != (1, 1, 1, "uni"):
+        raise NotImplementedError(f"{GOAL}: schemes inside vLLM's server on one GPU with its uniprocess executor, not "
+                                  f"tensor_parallel_size {shape[0]} × pipeline_parallel_size {shape[1]} × "
+                                  f"data_parallel_size {shape[2]} under distributed_executor_backend {shape[3]!r}")
+    gate = challenger_gate(cfg.get("gate"))
+    got = [exchange.attach(schemes.get(n), cfg.get(n) or {}, gate=gate, process=H.ENGINE, feed=cfg["feed"]) for n in names]
     if fixed := sorted({r.ranges for _, r in exchange.requests if isinstance(r, H.FixRanges)}):
         if len(fixed) > 1:
             raise RuntimeError(f"schemes fix the KV pool at {fixed} blocks: one size")
@@ -89,21 +105,32 @@ def attach(exchange: messages.Exchange, vllm_config: Any, names: list[str], cfg:
     return got
 
 
-def aborts(hook: Any, log: Callable[[str], Any] = lambda s: print(s, file=sys.stderr, flush=True),
-           status: Any = None) -> Callable[[str, str], None]:
-    """The engine's answer to a `hooks.RefuseInput`: input ``input``'s requests in ``hook``'s scheduler finished with
-    ``status`` (vLLM's ``FINISHED_ABORTED`` by default), as vLLM's server finishes one whose client went away, and ``why``
-    logged."""
+def aborts(hook: Any, core: Any, log: Callable[[str], Any] = lambda s: print(s, file=sys.stderr, flush=True),
+           vllm: Any = None) -> Callable[[str, str], None]:
+    """The engine's answer to a `hooks.RefuseInput`: input ``input``'s requests in ``hook``'s scheduler finished as
+    aborted, and each sent to its client finished with ``finish_reason`` abort and ``why`` as its ``stop_reason``, which
+    vLLM's OpenAI server puts in the response's choice; ``why`` logged too. ``vllm`` holds vLLM's ``RequestStatus``,
+    ``FinishReason``, ``EngineCoreOutput`` and ``EngineCoreOutputs`` unless given."""
     def refuse(input: str, why: str) -> None:
+        v = vllm or _vllm()
         rids = [rid for table in (hook.held, hook.live) for rid, i in table.items() if i == input]
         log(f"verity: input {input} refused ({len(rids)} request(s) aborted): {why}")
-        if rids:
-            if status is None:
-                from vllm.v1.request import RequestStatus
-                hook.sched.finish_requests(rids, RequestStatus.FINISHED_ABORTED)
-            else:
-                hook.sched.finish_requests(rids, status)
+        by_client: dict[int, list[str]] = {}
+        for r in hook.sched.finish_requests(rids, v.RequestStatus.FINISHED_ABORTED) if rids else ():
+            by_client.setdefault(r.client_index, []).append(r.request_id)
+        for client, ids in by_client.items():
+            outs = [v.EngineCoreOutput(i, [], finish_reason=v.FinishReason.ABORT, stop_reason=why) for i in ids]
+            core.output_queue.put_nowait((client, v.EngineCoreOutputs(finished_requests=ids, outputs=outs)))
     return refuse
+
+
+def _vllm() -> Any:
+    from types import SimpleNamespace
+
+    from vllm.v1.engine import EngineCoreOutput, EngineCoreOutputs, FinishReason
+    from vllm.v1.request import RequestStatus
+    return SimpleNamespace(RequestStatus=RequestStatus, FinishReason=FinishReason, EngineCoreOutput=EngineCoreOutput,
+                           EngineCoreOutputs=EngineCoreOutputs)
 
 
 def register(environ: Mapping[str, str] | None = None, core: type | None = None,
@@ -136,9 +163,16 @@ def register(environ: Mapping[str, str] | None = None, core: type | None = None,
 
     def stop(orig: Callable[..., Any]) -> Callable[..., Any]:
         def shutdown(self: Any, *a: Any, **kw: Any) -> Any:
+            failed: list[BaseException] = []
             while held:
-                held.pop(0).release()
-            return orig(self, *a, **kw)
+                try:
+                    held.pop(0).release()
+                except Exception as e:  # noqa: BLE001 -- each scheme is released, and vLLM shut down, before it is raised
+                    failed.append(e)
+            r = orig(self, *a, **kw)
+            if failed:
+                raise failed[0]
+            return r
         return shutdown
 
     detach = kv_blocks.attach()
