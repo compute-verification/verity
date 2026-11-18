@@ -1158,7 +1158,7 @@ def test_v_ex_past_its_count_cap_fails_the_audit():
         W.UnitRecord(u, 20, K, (3,), (), (3,))
 
 
-#: A salt key under which `lifecycle`'s A row 15 passes the per-row rules but its F1′ passes R1's bound (about 0.8% of
+#: A salt key whose stream (`PCW.keyed_salts`) puts `lifecycle`'s A row 15 where it passes the per-row rules but its F1′ passes R1's bound (about 0.8% of
 #: keys put an honest row there).
 R1_ROW_15_KEY = bytes.fromhex("d9e961187e3be9353349a07b9a22359e0586881919c91ee714ad84f07c92a8e6")
 
@@ -1167,7 +1167,7 @@ def failures(s, epoch, prover, tr, splits, records) -> set[str]:
     return {v.reason for v in CW.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8).audit.verdicts if not v.ok}
 
 
-def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound():
+def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound(monkeypatch):
     """`volunteer`, the honest prover's remedy for a tile over the cap, on a scheme whose debit puts tile position 7 at 20
     units per word against a cap of 1 per credited word, at a salt key where R1 also excludes A row 15.  R1's rows are
     `declare`'s on the transcript, excluded, so `volunteer` gives up only A row 7 (not a column, which leaves the tile
@@ -1179,6 +1179,7 @@ def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound():
             return Fraction(20 * len(cols) * (7 in rows)), Fraction(len(rows) * len(cols))
 
     s = Heavy("nvfp4", k_min=128, tile=(16, 16), n_min=16)
+    PCW.keyed_salts(monkeypatch, R1_ROW_15_KEY, 9, 3)
     epoch, prover, tr, rows_a, rows_b = lifecycle(s)
     splits, u = {9: W.Split(K)}, epoch.workload.matmuls[0]
     declare = functools.partial(CW.declare, s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
@@ -1198,10 +1199,11 @@ def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound():
         "matmul 3: more voluntary rows than V-EX allows (⌈m/64⌉ = 1 of A, ⌈n/64⌉ = 1 of B)"
 
 
-def test_volunteer_leaves_r1s_rows_to_the_declaration():
+def test_volunteer_leaves_r1s_rows_to_the_declaration(monkeypatch):
     """At the same salt key on the plain scheme, R1 excludes A row 15, no tile is over the cap, and `volunteer` gives
     up nothing."""
     s = F.PearlC4("nvfp4", k_min=128, tile=(16, 16), n_min=16)
+    PCW.keyed_salts(monkeypatch, R1_ROW_15_KEY, 9, 3)
     epoch, prover, tr, rows_a, rows_b = lifecycle(s)
     splits = {9: W.Split(K)}
     records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, transcript=tr)
