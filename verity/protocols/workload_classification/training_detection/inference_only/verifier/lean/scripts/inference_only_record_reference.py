@@ -718,9 +718,8 @@ def wires_of(templates: list[Template], rec: dict, desc: dict) -> tuple[list[dic
     `verity.commitments.periods.interface.check_wires` refuses them."""
     import verity.commitments.periods.interface as IF
     cuts = rec.get("cuts", {})
-    lays = {t.tid: (IF.RowLayout(tuple((p, w) for p, w, _ in t.rows), (("out", sum(n for _, n in t.outs)),), (),
-                                 tuple(n for *_, n in t.rows)), t.units) for t in templates}
     try:
+        lays = {t.tid: (IF.layout(t.fn), t.units) for t in templates}
         wires = tuple(IF.Wire.of(x) for x in program_wires(desc, (t.tid for t in templates), cuts))
         IF.check_wires(lays, wires, IF._cuts(cuts), root_order(desc, [t.tid for t in templates]))
     except (ValueError, KeyError, TypeError, AttributeError) as e:
