@@ -77,11 +77,16 @@ from . import targets as TG
 from . import units as UN
 
 REPO = Path(__file__).resolve().parents[5]
+#: both lowering budgets under --model, unless given: every served binding is lowered whole
+MODEL_LOWER_MAX = 1 << 62
 
 
 def _options(a: argparse.Namespace) -> CK.Options:
-    return CK.Options(vectors=a.vectors, seed=a.seed, X=a.X, W=a.W, extras=a.extras, lower_max_gates=a.lower_max_gates,
-                      lower_max_ands=a.lower_max_ands,
+    gates, ands = (MODEL_LOWER_MAX, MODEL_LOWER_MAX) if a.model is not None else (CK.Options.lower_max_gates,
+                                                                                  CK.Options.lower_max_ands)
+    return CK.Options(vectors=a.vectors, seed=a.seed, X=a.X, W=a.W, extras=a.extras,
+                      lower_max_gates=gates if a.lower_max_gates is None else a.lower_max_gates,
+                      lower_max_ands=ands if a.lower_max_ands is None else a.lower_max_ands,
                       struct_max_gates=a.struct_max_gates)
 
 
@@ -1518,11 +1523,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-X", type=int, default=CK.Options.X)
     ap.add_argument("-W", type=int, default=CK.Options.W)
     ap.add_argument("--extras", type=int, default=CK.Options.extras)
-    ap.add_argument("--lower-max-gates", type=int, default=CK.Options.lower_max_gates,
+    ap.add_argument("--lower-max-gates", type=int, default=None,
                     help="lower a composite Definition whole when it has at most this many IR gates (else it is left to a "
-                         "template's units); a Boolean one is lowered whole whatever its gates")
-    ap.add_argument("--lower-max-ands", type=int, default=CK.Options.lower_max_ands,
-                    help="lower a Definition whole when the piece pins estimate at most this many ANDs")
+                         "template's units); a Boolean one is lowered whole whatever its gates (default "
+                         f"{CK.Options.lower_max_gates}; with --model, none)")
+    ap.add_argument("--lower-max-ands", type=int, default=None,
+                    help="lower a Definition whole when the piece pins estimate at most this many ANDs (default "
+                         f"{CK.Options.lower_max_ands}; with --model, none)")
     ap.add_argument("--struct-max-gates", type=int, default=CK.Options.struct_max_gates,
                     help="realize a composite of at most this many IR gates by its structural lowering too "
                          "(c-flock:struct_lower: verity_flock.struct_lower's template, evaluated from the template; 0: none "
@@ -1537,7 +1544,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", type=Path, metavar="PHI",
                     help="the served bindings of the model this φ file registers (`Phi.to_json()`, as a served run states it) at "
                          "--class: the Definition of each proof block of its class circuit, each a named target "
-                         "(`targets.served_targets`); one that no configuration can check is named and fails the run")
+                         "(`targets.served_targets`); one that no configuration can check is named and fails the run.  Each "
+                         "is lowered whole and compared on random vectors, as neither lowering budget holds unless given: "
+                         "about 33 minutes and 94 GB for Llama 3.2 1B at --class 4,27,2 and -j 2")
     ap.add_argument("--class", dest="window_class", metavar="SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]",
                     help="with --model: the window class its circuit is of")
     ap.add_argument("--list", action="store_true",

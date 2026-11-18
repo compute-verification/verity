@@ -9,6 +9,7 @@ from collections import Counter
 
 import pytest
 
+from circuit_check import checks as CK
 from circuit_check import cli
 from circuit_check import targets as TG
 
@@ -40,17 +41,34 @@ def test_a_tiny_models_served_bindings_are_its_class_circuits_proof_blocks_each_
     assert printed[-1].startswith("circuit-check --model: 35 served binding(s) of 14 families at class 1,2,2, 0 not checkable")
 
 
+def test_a_model_is_lowered_whole_unless_a_budget_is_given(tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(cli, "run", lambda specs, opts, **kw: seen.append(opts) or CK.report([], opts))
+    phi = tmp_path / "phi.json"
+    phi.write_text(json.dumps(PHI))
+    model = ["--model", str(phi), "--class", "1,2,2", "--no-cache"]
+    assert cli.main(model) == 0
+    assert (seen[-1].lower_max_gates, seen[-1].lower_max_ands) == (cli.MODEL_LOWER_MAX, cli.MODEL_LOWER_MAX)
+    assert cli.main([*model, "--lower-max-gates", "7"]) == 0
+    assert (seen[-1].lower_max_gates, seen[-1].lower_max_ands) == (7, cli.MODEL_LOWER_MAX)
+    assert cli.main([*model, "--lower-max-ands", "9"]) == 0
+    assert (seen[-1].lower_max_gates, seen[-1].lower_max_ands) == (cli.MODEL_LOWER_MAX, 9)
+
+
 @pytest.mark.slow
 def test_the_report_says_how_each_served_binding_was_compared_on_random_vectors(tmp_path, monkeypatch, capsys):
-    """Four of the tiny model's bindings checked for real, one of each kind: a Flock lowering compared (``lowering``), a kernel
-    only (``kernel``), and none over the whole-Definition budget or lowered as its template's units (``none``, with why)."""
+    """Four of the tiny model's bindings checked for real at the catalog's budgets, one of each kind: a Flock lowering
+    compared (``lowering``), a kernel only (``kernel``), and none over the whole-Definition budget or lowered as its
+    template's units (``none``, with why); at --model's own, the one over the budget is lowered whole."""
     four = {"TokenFeed_v1", "SiluMul_v2", "RoPEHead_v1", "RMSNormFusedCudaTail_v1"}
     served = TG.served_targets
     monkeypatch.setattr(TG, "served_targets", lambda config, cls: (
         [fid for fid in served(config, cls)[0] if fid.partition("{")[0] in four], {}))
     phi, out = tmp_path / "phi.json", tmp_path / "report.json"
     phi.write_text(json.dumps(PHI))
-    assert cli.main(["--model", str(phi), "--class", "1,2,2", "--no-cache", "-j", "1", "--out", str(out)]) == 0
+    run = ["--model", str(phi), "--class", "1,2,2", "--no-cache", "-j", "1", "--out", str(out)]
+    assert cli.main([*run, "--lower-max-gates", str(CK.Options.lower_max_gates),
+                     "--lower-max-ands", str(CK.Options.lower_max_ands)]) == 0
     model = json.loads(out.read_text())["model"]
     by = {fid.partition("{")[0]: c for fid, c in model["compared"].items()}
     assert by["TokenFeed_v1"] == {"by": "lowering", "realizations": ["c-flock:ir_lower"]}
@@ -59,3 +77,7 @@ def test_the_report_says_how_each_served_binding_was_compared_on_random_vectors(
     assert by["RMSNormFusedCudaTail_v1"]["by"] == "none" and by["RMSNormFusedCudaTail_v1"]["reason"] == "units"
     assert model["counts"] == {"bindings": 4, "lowering": 1, "kernel": 1, "other": 0, "none": 2}
     assert "compared on random vectors 1 by lowering, 1 by kernel, 0 by other, 2 by nothing" in capsys.readouterr().out
+    four.intersection_update({"RoPEHead_v1"})
+    assert cli.main(run) == 0
+    model = json.loads(out.read_text())["model"]
+    assert list(model["compared"].values()) == [{"by": "lowering", "realizations": ["c-flock:ir_lower"]}]
