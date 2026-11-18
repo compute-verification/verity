@@ -81,7 +81,7 @@ def test_the_served_row_is_4213_units_of_56_templates() -> None:
     us = LR.units(t)
     by = Counter(d.base_id for _, d in us)
     assert by == {"DsaTopKDigitCount_v1": 32, "DsaTopKDigitPick_v2": 4, "DsaTopKMaskBlock_v2": 8, "DsaMaskPositions_v2": 8,
-                  "DsaPositionsMerge_v2": 1, "DsaPositionsChunk_v1": 64, "DsaPositionsSlot_v1": 2048, "EmbeddingRead_v1": 2048}
+                  "DsaPositionsMerge_v2": 1, "DsaPositionsChunk_v1": 64, "DsaPositionsSlot_v1": 2048, "EmbeddingRead_v2": 2048}
     ids = Counter(descriptor_id(d) for _, d in us)
     assert (len(us), len(ids)) == (4213, 56)
     assert sorted(ids.values()) == [1] * 53 + [64, 2048, 2048]
@@ -128,7 +128,7 @@ def test_the_layout_takes_it_inline_and_round_two_links_and_wires_each_units_ope
              for x, _per, _runs in SS.wire_runs(defs, descriptor_id(L.replay))}
     assert {("DsaPositionsChunk_v1", "slots", "DsaPositionsMerge_v2", "o0"),
             ("DsaPositionsSlot_v1", "slots", "DsaPositionsChunk_v1", "o0"),
-            ("EmbeddingRead_v1", "tok", "DsaPositionsSlot_v1", "o0")} <= wires
+            ("EmbeddingRead_v2", "tok", "DsaPositionsSlot_v1", "o0")} <= wires
     returns = [(x.template, x.port, per) for x, per, _ in SS.link_runs(defs, descriptor_id(L.replay)) if x.value == BR.RETURN]
     assert returns == [(descriptor_id(t.bindings["READ"]), "o1", L.verdict_rows[0])]
 
