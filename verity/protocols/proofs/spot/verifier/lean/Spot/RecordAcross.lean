@@ -95,34 +95,15 @@ def receiptReason (received : List ByteArray) (earlier later : ByteArray) : Opti
     if a < b then none
     else some s!"the challenger's log shows coin {b} released after the later registration and coin {a} after the earlier registration: the earlier registration's coins come first"
 
-/-- The roots of the `root` events among the release log `log`'s lines after its head, in the log's own order: for
-each coin the challenger released, of whatever family, the root it had received (`Challenger.releasedRootsOf` reads the
-same lines family by family). A line that is no event, and an event that is no `root`, give none. It checks no line's
-form: `receivedOf` reads a log only once `Challenger.trustedChallengePhaseOf` holds it. -/
-def rootLines (log : Json) : List ByteArray :=
-  match log with
-  | .arr lines => lines.toList.tail.filterMap fun
-    | .str line =>
-      match Challenger.event line with
-      | .ok e =>
-        if jsonStrIs (getD e "event") "root" then
-          match getD e "root" with
-          | .str r => (Flock.unhex r).toOption
-          | _ => none
-        else none
-      | .error _ => none
-    | _ => none
-  | _ => []
-
 /-- The roots the challenger received, one for each coin it released, over every family's lines in its signed log's own
-order (`rootLines`), from the session the auditor's ledger opens on `window` under the verifier's key `key`, once that
-session's files hold (`Challenger.trustedChallengePhaseOf`, as `Challenger.coinsReason` reads them, `main` the verifier's copy
-of main's first-parent history). -/
+order (`Challenger.releasedLogOf`), from the session the auditor's ledger opens on `window` under the verifier's key
+`key`, once that session's files hold (`Challenger.trustedChallengePhaseOf`, as `Challenger.coinsReason` reads them,
+`main` the verifier's copy of main's first-parent history). -/
 def receivedOf (key : Challenger.ChallengerKey) (main coins : Json) (window : String) : V (List ByteArray) := do
   let session := getD coins "session"
-  let _ ← Challenger.trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
+  let (_, log) ← Challenger.trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
     (getD coins "pins") main session
-  return rootLines (getD session "log")
+  return (log.filter (·.kind == .recorded)).map (·.root)
 
 def NO_LOG : String := "the challenger's session published no signed log to read the order from"
 
@@ -393,24 +374,42 @@ private def threeLines : List String :=
    rootLine "draw/1" 0 (wide 2), releaseLine "draw/1" 0 (wide 2),
    rootLine "draw/1" 1 (wide 2), releaseLine "draw/1" 1 (wide 2)]
 
-private def logOf (lines : List String) : Json := Json.arr (lines.map Json.str).toArray
+private def ordered (log : List String) : Option (List (String × Nat × ByteArray)) :=
+  (Challenger.releasedLogOf threeFamilies log).toOption.map fun l =>
+    (l.filter (·.kind == .recorded)).map fun e => (e.label, e.pos, e.root)
 
--- the log is one `Challenger.releasedRootsOf` reads, family by family
-#guard (Challenger.releasedRootsOf threeFamilies threeLines).toOption ==
+private def rootsOf (log : List String) : Option (List ByteArray) := (ordered log).map (·.map (·.2.2))
+
+-- the log is one `Challenger.releasedLogOf` reads: by family it is the families' roots in order
+#guard ((Challenger.releasedLogOf threeFamilies threeLines).toOption.map (Challenger.byFamily threeFamilies)) ==
   some [("window", [wide 9]), ("draw/0", [wide 1]), ("draw/1", [wide 2, wide 2])]
--- the same lines' roots over every family, in the log's order: the head, the releases and a coin tree's line give none
-#guard rootLines (logOf threeLines) == [wide 9, wide 1, wide 2, wide 2]
+-- and over every family it is one order, at the lines that hold them: a coin tree's line is read past
+#guard ordered threeLines ==
+  some [("window", 1, wide 9), ("draw/0", 3, wide 1), ("draw/1", 6, wide 2), ("draw/1", 8, wide 2)]
 -- the order across two families: the earlier registration's coin, then the later's two
-#guard receiptReason (rootLines (logOf threeLines)) (wide 1) (wide 2) == none
-#guard (receiptReason (rootLines (logOf threeLines)) (wide 2) (wide 1)).isSome
--- the head is no coin's line, whatever it says; no log gives no root
-#guard rootLines (logOf [rootLine "draw/0" 0 (wide 1)]) == []
-#guard rootLines (logOf []) == []
-#guard rootLines .null == []
--- a line that is not its own canonical JSON is no event, and neither is one that is no string
-#guard rootLines (Json.arr #[Json.str "", Json.str "{ \"event\": \"root\", \"root\": \"01\" }", Json.null]) == []
--- `rootLines` holds a line to no more than that: the log's form is `Challenger.trustedChallengePhaseOf`'s to check, before it
-#guard rootLines (Json.arr #[Json.str "", Json.str "{\"event\":\"root\",\"root\":\"01\"}"]) == [root 1]
+#guard (rootsOf threeLines).map (receiptReason · (wide 1) (wide 2)) == some none
+#guard ((rootsOf threeLines).map (receiptReason · (wide 2) (wide 1))).map Option.isSome == some true
+-- families interleaved: the log's order, not the families', is what it returns
+#guard rootsOf (threeLines.take 1 ++ [rootLine "draw/1" 0 (wide 2), releaseLine "draw/1" 0 (wide 2),
+  rootLine "draw/0" 0 (wide 1), releaseLine "draw/0" 0 (wide 1)]) == some [wide 2, wide 1]
+-- a release stamped before its own root's receipt is refused by name
+#guard (match Challenger.releasedLogOf threeFamilies (threeLines.take 1 ++
+  [lineOf [("event", Json.str "root"), ("index", Lean.toJson (0 : Nat)), ("label", Json.str "window"),
+    ("received_at", Lean.toJson (5 : Nat)), ("root", Json.str (Flock.hexOf (wide 9)))],
+   lineOf [("after", Json.str (Flock.hexOf (wide 9))), ("event", Json.str "release"), ("index", Lean.toJson (0 : Nat)),
+    ("label", Json.str "window"), ("released_at", Lean.toJson (4 : Nat))]]) with
+  | .error e => e == Challenger.RELEASED_BEFORE_RECEIVED
+  | .ok _ => false)
+-- the cut: every root of the payload families stands before every release of the key families
+#guard ((Challenger.releasedLogOf threeFamilies threeLines).toOption.map fun l =>
+  (Challenger.cut l ["window", "draw/0"] ["draw/1"], Challenger.cut l ["draw/1"] ["draw/0"],
+   Challenger.cut l ["window"] ["window"], Challenger.cut l [] ["window"])) == some (true, false, true, true)
+#guard ((Challenger.releasedLogOf threeFamilies threeLines).toOption.map fun l =>
+  match l with
+  | a :: b :: _ => (Challenger.before a b, Challenger.before b a)
+  | _ => (false, false)) == some (true, false)
+-- the head is no coin's line, whatever it says
+#guard (Challenger.releasedLogOf threeFamilies [rootLine "draw/0" 0 (wide 1)]).toOption.isNone
 
 private def audited (digest : String) (accepted : Json) (complete : Json := .bool true) : Json :=
   Json.mkObj [("format", Json.str FORMAT), ("registration_digest", Json.str digest), ("accepted", accepted),

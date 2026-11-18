@@ -2,7 +2,7 @@
   "rule": "P1 (use core's abstractions; never copy or patch them)",
   "entries": [
     {"file": "verity_vllm/compiler/advice_check.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.commitments.gates.frame_v3._refs"},
-    {"file": "verity_vllm/compiler/advice_check.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.protocols.resource_accounting.network.verifier.advice._Reader"},
+    {"file": "verity_vllm/compiler/advice_check.py", "kind": "core-private", "symbol": "<module>", "detail": "verity_vllm.pipeline.advice_code.format._Reader"},
     {"file": "verity_vllm/compiler/advice_check.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.protocols.resource_accounting.network.verifier.head_check._Consts"},
     {"file": "verity_vllm/compiler/advice_check.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.protocols.resource_accounting.network.verifier.head_check._coll"},
     {"file": "verity_vllm/compiler/cache_step.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.commitments.gates.frame_v3._refs"},
