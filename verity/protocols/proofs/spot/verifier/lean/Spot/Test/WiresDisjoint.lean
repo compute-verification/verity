@@ -165,12 +165,12 @@ def kahnDraws : List (Nat × Nat × Nat × Bool × Bool) :=
 previous layer, ports 1 and 2 the template before it (template 0: its own previous layer): 51 wires a root node. -/
 def servedWiring (T L : Nat) : Wiring :=
   let port : Port := { words := 68, outer := 17 }
-  let tm : Template := { units := 2 * L, rows := [("p0", port), ("p1", port), ("p2", port)], outs := [("o", 68)] }
+  let tm : Template := { units := 2 * L, rows := [("p0", port), ("p1", port), ("p2", port)], outs := [("o", 4)] }
   let tn (j : Nat) : String := s!"t{1000000 + j}"
   let wires := (List.range T).flatMap fun j => (List.range L).flatMap fun l => (List.range 17).flatMap fun r =>
     let mk (p : String) (wr b : Nat) : Wire :=
       { reader := tn j, port := p, writer := tn wr, out := "o", start := 2 * l, radix := [2], base := b, step := [1],
-        cut0 := r, cuts := 1, offset := 4 * r }
+        cut0 := r, cuts := 1 }
     let self := if l > 0 then [mk "p0" j (2 * (l - 1))] else []
     let prev := if j > 0 then [mk "p1" (j - 1) (2 * l), mk "p2" (j - 1) (2 * l)]
       else if l > 0 then [mk "p1" j (2 * (l - 1)), mk "p2" j (2 * (l - 1))] else []
@@ -213,14 +213,15 @@ def code : Except Refusal Summary → String
   | .ok _ => "ok"
   | .error r => r.code.name
 
-/-- A wiring from seed `x`: `nt` templates of ports `p`, `q` (cut in 1 or 2) and output `o`, the first repeated when
-`dup`; `nw` wires, mostly well formed, a writer mostly at or before its reader, some naming no template or port, rows or widths past the port's, or units past the
-template's; a stated order of the templates' units in random pieces and ranks when `stated`. -/
+/-- A wiring from seed `x`: `nt` templates of ports `p`, `q` (cut in 1 or 2) and outputs `o`, `h` (`p`'s and `q`'s
+words), the first repeated when `dup`; `nw` wires, mostly well formed, a writer mostly at or before its reader, some
+naming no template or port, rows or widths past the port's, or units past the template's; a stated order of the
+templates' units in random pieces and ranks when `stated`. -/
 def checkWiring (x nt nw : Nat) (stated dup : Bool) : Wiring :=
   let names := (List.range nt).map fun i => s!"t{(i * 7 + 3) % nt}"
   let pp : Port := { words := 4, outer := 2 }
   let pq : Port := { words := 2, outer := 2 }
-  let tm : Template := { units := 8, rows := [("p", pp), ("q", pq)], outs := [("o", 4)] }
+  let tm : Template := { units := 8, rows := [("p", pp), ("q", pq)], outs := [("o", 4), ("h", 2)] }
   let ts := names.map fun n => (n, tm)
   let ts := if dup then ts ++ [(names.headD "t0", { tm with units := 4 })] else ts
   let cuts := names.filterMap fun n => if (n.length + x) % 2 == 0 then some (n, [("p", 2)]) else none
@@ -231,9 +232,9 @@ def checkWiring (x nt nw : Nat) (stated dup : Bool) : Wiring :=
     let reader := if d x₆ 53 == 0 then "nope" else names.getD r ""
     let port := if d x₆ 29 == 1 then "z" else if d x₅ 2 == 0 then "p" else "q"
     let n := 1 + d x₄ 3
-    ({ reader, port, writer := names.getD wr "", out := if d x₆ 31 == 2 then "z" else "o", start := d x₃ 8,
-       radix := [n], base := (d x₅ 6 : Int), step := [1], cut0 := if d x₆ 7 == 0 then 1 else 0, cuts := 1,
-       offset := d x₂ 3 } :: acc, x₆)) ([], x)
+    ({ reader, port, writer := names.getD wr "", out := if d x₆ 31 == 2 then "z" else if port == "q" then "h" else "o", start := d x₃ 8,
+       radix := [n], base := (d x₅ 6 : Int), step := [1], cut0 := if d x₆ 7 == 0 then 1 else 0, cuts := 1 }
+       :: acc, x₆)) ([], x)
   let order := if stated then
       some (names.flatMap fun n => let k := (lcg (x + n.length)) / 2 ^ 40 % 3
         if k == 0 then [(n, 0, 8)] else if k == 1 then [(n, 0, 4), (n, 4, 4)] else [(n, 0, 3), (n, 4, 4)])
@@ -256,7 +257,8 @@ def codes : List String := checkDraws.map fun (x, nt, nw, st, dup) => code (chec
 /-- Two templates reading each other: `kahn`'s cycle. -/
 def cyclic : Wiring :=
   let c := checkWiring 0 2 0 false false
-  { c with wires := [{ wire "t1" "p" 0 1 0 1 with writer := "t0" }, { wire "t0" "p" 0 1 0 1 with writer := "t1" }] }
+  { c with wires := [{ wire "t1" "q" 0 1 0 1 with writer := "t0", out := "h" },
+    { wire "t0" "q" 0 1 0 1 with writer := "t1", out := "h" }] }
 
 #guard code (check cyclic) == "cycle" && sameCheck (check cyclic) (checkOld cyclic)
 
