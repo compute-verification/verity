@@ -89,8 +89,9 @@ reused only while everything its tests read is unchanged. When it fails:
   Python included). An entry naming no test file or no file of the tree is refused.
 
 A Python a test starts is guarded like the test: declare the file its failure names, or give the test a stand-in. One started
-in the suite's environment with the tracer (`tools/check/guard/child`) taken off its PYTHONPATH fails the suite, naming its
-command: keep it there. Programs the guard can't trace (bash, git, a Python run with `-I`, `-E` or `-S` or in an environment
+in the suite's environment with the tracer (`tools/check/guard/child`) taken off its PYTHONPATH fails the suite, naming the line
+that started it: keep the tracer there. `STRIPPED` (`tools/check/suites.py`) lists today's, by suite and file, and only shrinks:
+a whole run that finds fewer asks for its entry to be lowered. Programs the guard can't trace (bash, git, a Python run with `-I`, `-E` or `-S` or in an environment
 without the suite's `VERITY_SUITE_*` variables) fail
 nothing, so list what they read, and list a path a test only checks the existence of (the guard sees opens, not
 `stat()`). The graph's test-file runner fails a file that starts one unless its suite lists it under `[tool.verity.tests]

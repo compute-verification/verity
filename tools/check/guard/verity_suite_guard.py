@@ -127,7 +127,7 @@ def _audit(event: str, args: tuple) -> None:
     for kind, rel in hits:
         if kind == "X":
             _untraced.setdefault(_current, set()).add(rel)
-        elif kind == "E":
+        elif kind == "S":
             _tracer.write(kind, _current, rel, _test)
         elif kind == "O":
             _outside.setdefault(rel, _current)

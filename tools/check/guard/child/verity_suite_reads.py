@@ -15,8 +15,8 @@ It also traces what a per-test key narrowed to the files the tests use (`suites.
 - `X` a program started that this tracer won't see into, so what it reads is unknown: anything but a machine probe (`PROBES`),
   a Python that loads this tracer (the suite's PYTHONPATH, `VERITY_SUITE_READS` and a test module in `VERITY_SUITE_MODULE`,
   and no `-I`, `-E` or `-S`), or one of the suite's declared build outputs (`VERITY_SUITE_PROGRAMS`, `given`);
-- `E` a Python started in the suite's environment while a test module is collected or run, with no copy of this tracer on its
-  PYTHONPATH (`refused`), which fails the suite.
+- `S` a Python started in the suite's environment while a test module is collected or run, with no copy of this tracer on its
+  PYTHONPATH (`refused`): the repository line that started it and its command, which `suites.py` holds to `STRIPPED`.
 
 A declared build output (a Lean executable) reads what its arguments name and what it derives from them, and nothing else of the
 repository, so its start is traced as `F` reads instead: each argument (or `--flag=` value) that names a repository path, a file
@@ -141,9 +141,10 @@ class Reads:
         return _python(argv) and not _isolated(argv) and _guarded(env) and _on_path(env)
 
     def refused(self, argv, env, module: str) -> str | None:
-        """Why a Python started with ``argv`` while test module ``module`` is collected or run fails the suite: it runs in the
-        suite's environment with no copy of this tracer on its PYTHONPATH, so what it reads is outside every key. A suite run
-        (`-p verity_suite_guard`) is guarded by its own report; a Python started outside any test module (``module`` "*": an
+        """``site command`` for a Python started with ``argv`` while test module ``module`` is collected or run that runs in the
+        suite's environment with no copy of this tracer on its PYTHONPATH, so what it reads is outside every key; None for any
+        other program. The site is the innermost repository line on the stack that started it (``module`` when none is). A suite
+        run (`-p verity_suite_guard`) is guarded by its own report; a Python started outside any test module (``module`` "*": an
         xdist worker) is the guard's."""
         if module == "*" or not _python(argv) or _isolated(argv) or _GUARDED in zip(argv[1:], argv[2:]):
             return None
@@ -151,10 +152,17 @@ class Reads:
         if not _guarded(env) or _on_path(env):
             return None
         cmd = " ".join(" ".join(os.fsdecode(a) for a in argv if isinstance(a, (str, bytes))).split())
-        here = self.here.rstrip("/")
-        return (f"the tracer did not start: `{cmd[:400]}{'...' if len(cmd) > 400 else ''}` runs in the suite's environment with "
-                f"its read tracer taken off PYTHONPATH; keep {os.path.relpath(here, self.root) if here.startswith(self.inside) else here} "
-                "on the PYTHONPATH the test was given, or give the test a stand-in for it")
+        return f"{self._site() or module} `{cmd[:400]}{'...' if len(cmd) > 400 else ''}`"
+
+    def _site(self) -> str | None:
+        guard = os.path.join(os.path.dirname(self.here.rstrip("/")), "")
+        f = sys._getframe(1)
+        while f is not None:
+            path = os.path.realpath(f.f_code.co_filename)
+            if path.startswith(self.inside) and not path.startswith((*self.prefix, guard)):
+                return f"{os.path.relpath(path, self.root)}:{f.f_lineno}"
+            f = f.f_back
+        return None
 
     def given(self, argv, cwd) -> list[str] | None:
         """The repository files (from the root) a declared build output started with ``argv`` in ``cwd`` reads, [] for `lake build`
@@ -190,8 +198,8 @@ class Reads:
         return sorted(files)
 
     def trace(self, event: str, args: tuple, module: str = "*") -> list[tuple[str, str]]:
-        """(`F`, path), (`L`, directory), (`O`, path), (`X`, program) or (`E`, why) for an audit event while test module ``module``
-        is collected or run."""
+        """(`F`, path), (`L`, directory), (`O`, path), (`X`, program) or (`S`, site and command) for an audit event while test
+        module ``module`` is collected or run."""
         if event in ("open", "ctypes.dlopen"):
             if args and isinstance(args[0], (str, bytes, os.PathLike)) and (p := self.traced(os.fsdecode(args[0]))):
                 return [("F", p)]
@@ -210,8 +218,8 @@ class Reads:
             if self.seeable(argv, env):
                 return []
             if (files := self.given(argv, cwd)) is None:
-                why = self.refused(argv, env, module) if argv else None
-                return [("X", os.fsdecode(argv[0]) if argv else "?"), *([("E", why)] if why else [])]
+                site = self.refused(argv, env, module) if argv else None
+                return [("X", os.fsdecode(argv[0]) if argv else "?"), *([("S", site)] if site else [])]
             return [("F", f) for f in files] + [("O", f) for f in files if self.outside(os.path.join(self.root, f))]
         elif event in ("os.system", "os.spawn"):
             return [("X", event)]
@@ -252,7 +260,7 @@ class Reads:
         for kind, rel in hits:
             if (kind, module, rel) not in self.sent:
                 self.sent.add((kind, module, rel))
-                self.write(kind, module, rel, test if kind in ("O", "E") else "")
+                self.write(kind, module, rel, test if kind in ("O", "S") else "")
 
     def install(self) -> None:
         """Trace this process (a child a test started): every open, attributed to the module it inherited."""
