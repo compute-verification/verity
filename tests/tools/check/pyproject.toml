@@ -66,8 +66,9 @@ untraced = [
 # shard's package), the Slack registry, whose handles are the owners `ci.toml` may name, and what of research the fixture
 # fetch and the run tooling import beyond its `exports` (with `research run --pool`'s placement, which `--record --pool`
 # reuses, the check view whose circuit-check reader the live record shares, the executor's keys and labels, which
-# `tasks.py costs` reads, and `jobuser`, which names the job unit `clone.not_over` asks for a run's processes before a
-# machine's clone is made), the move script whose word maps move_check applies, and the vLLM integration's ratchet gate,
+# `tasks.py costs` reads, `jobuser`, which names the job unit `clone.not_over` asks for a run's processes before a
+# machine's clone is made, and the verified queue's reading of a tree's Lean inputs, `vqueue_slim.lean_inputs` with what it
+# imports, by which a shard's ask counts security/Proofs' replay), the move script whose word maps move_check applies, and the vLLM integration's ratchet gate,
 # which the ratchet-gate step runs on a toy train, the two lints whose sites the added-lines step counts on a toy repository,
 # the `verity` command, whose `verity check` the cold-start smoke runs, and
 # the test files of the one-stage audit's two longest tests (benchmarks/one_stage's and the vLLM adapter's), which ci.toml's
@@ -87,7 +88,10 @@ inputs = ["tools/check", ".agents/skills/using-slack/registry.json", "READY.json
           "tools/research/src/research/telemetry/classify.py", "tools/research/src/research/telemetry/procs.py",
           "tools/research/src/research/telemetry/pyspy.py", "tools/research/src/research/telemetry/run.py",
           "tools/research/src/research/telemetry/scope.py", "tools/research/src/research/auto.py",
-          "tools/research/src/research/jobuser.py",
+          "tools/research/src/research/jobuser.py", "tools/research/src/research/vqueue_slim.py",
+          "tools/research/src/research/vqueue.py", "tools/research/src/research/vqueue_records.py",
+          "tools/research/src/research/landing.py", "tools/research/src/research/carry.py", "tools/research/src/research/notes.py",
+          "tools/research/src/research/reds.py", "tools/research/src/research/pods/workproc.py",
           "tools/research/src/research/pods/nebius/slot_only.py", "adapters/vllm/tools/ratchet_gate.py",
           "tests/lint/test_repo_env_reads.py", "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py",
           "tools/research/src/research/__init__.py", "tools/verity/graph/verity_graph/__init__.py", "tools/research/src/research/store/__init__.py", "tools/research/src/research/telemetry/__init__.py",
