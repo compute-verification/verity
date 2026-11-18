@@ -107,7 +107,8 @@ One failed gate times nothing. Every metric is reported as a mean and as a ratio
 
 Every gate is the benchmark's own check, run by its process on the served node: each stored gate says so as
 `checked_by: piece`, and the result's table prints it. `checked_by` takes proofs' runners and no word of our own
-(`verity_bench.checked_by`: `piece`, `lean`, `device`, from `RAN_BY` in `benchmarks/one_stage/served_verdicts.py`). The
+(`kit_report.CHECKED_BY`: `piece`, in the words of proofs' `PIECE` in `benchmarks/one_stage/served_verdicts.py`, and
+`lean`). The
 served table, the overhead table, a steady point's `out/verdict.json`, `lean-verify`'s record and `prove layers` say who
 ran their checks in the same words. A result stored before the field says `not recorded`.
 
