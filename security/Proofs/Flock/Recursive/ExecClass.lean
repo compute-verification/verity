@@ -57,7 +57,7 @@ function of it (`execClassAt`), so the class's fields are no hypotheses and the 
 
 namespace FlockSoundness.Discharge.Recursion
 
-open Game Audit
+open Game Spot.Sampling
 
 /-- A region with its bytes dropped: its name, free bits, mask and fixed bits. -/
 def stripBytes (r : Flock.Region) : Flock.Region := { r with bytes := fun _ => ByteArray.empty }

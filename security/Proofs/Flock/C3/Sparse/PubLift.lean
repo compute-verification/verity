@@ -37,7 +37,7 @@ namespace FlockC3.Sparse
 noncomputable section
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
 open FlockC3.Compose FlockC3.Reps
 open FlockVBridge.Sparse (SCoins pubOf)

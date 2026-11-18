@@ -12,7 +12,8 @@ public import Proofs.Properties.InferenceOnly.RecordWired
 # The record check's own form lays out a circuit
 
 `form_laidOut` (`Properties.Record.LaidOut`): every record `read` accepts lays out a registered circuit
-(`Properties.Record.Served`), clause by clause.
+(`Properties.Record.Served`), clause by clause, under two hypotheses: `own-rows` admits only roots whose arguments
+are runs of input leaves (`OwnRowsRuns`), and the wiring has the front's templates (`FinishTemplates`).
 
 * The texts. The Program is the instance's, decoded (`decode_of_read`), and the record's text parses
   (`inst_of_read`); the wiring's cuts and wires, the slots and the reasons rows are held are the text's
@@ -66,13 +67,16 @@ theorem unwhole_of_read {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h
 
 /-- **A record `read` accepts lays out a registered circuit**: the wired circuit of its Program, with θ the gates of
 the rows the check holds and the blocks the slots. -/
-theorem served_of_read {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c) :
+theorem served_of_read (hRuns : InferenceOnlyVerifier.Record.SecurityProofs.OwnRowsRuns)
+    (hFT : InferenceOnlyVerifier.Record.SecurityProofs.FinishTemplates) {j tr : Json}
+    {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c) :
     ∃ d, Served form c d := by
   have hP := readProg_of_read h
   obtain ⟨-, -, -, -, hown, -⟩ := program_of_read h
+  have hown := hRuns _ hown
   obtain ⟨text, htext, hcuts, hwires⟩ := wiring_of_read h
   have hS := wired_of_read h
-  obtain ⟨rs, hrs, hT⟩ := templates_of_read h
+  obtain ⟨rs, hrs, hT⟩ := templates_of_read hFT h
   obtain ⟨hts, hwh⟩ := unwhole_of_read h
   have hO := ownRows_holds hP hown hrs
   have hG := gatesOwn hP hrs
@@ -91,9 +95,9 @@ end InferenceOnlyVerifier.Properties.Record.SecurityProofs
 namespace InferenceOnlyVerifier.Record.SecurityProofs
 
 /-- **The record check's own form lays out a circuit** (`Properties.Record.LaidOut`). -/
-theorem form_laidOut : Properties.Record.LaidOut form := by
+theorem form_laidOut (hRuns : OwnRowsRuns) (hFT : FinishTemplates) : Properties.Record.LaidOut form := by
   intro j tr c h
   have h' : read j tr = .ok c := h
-  exact Properties.Record.SecurityProofs.served_of_read h'
+  exact Properties.Record.SecurityProofs.served_of_read hRuns hFT h'
 
 end InferenceOnlyVerifier.Record.SecurityProofs

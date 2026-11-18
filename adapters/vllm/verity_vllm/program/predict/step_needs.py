@@ -3,7 +3,7 @@ each Definition by id with its calls, and, where `dsa` would raise `Unexpressibl
 while the rest of the step is still counted.
 
 Each selection is the one `dsa._Model` makes, through the same registry calls (the all-reduce's served route and the capture that
-covers it, the captured cuBLAS route, the LL bf16 tier, the grouped top-k kernel, the tuned fused-MoE tile, FA3's split count over
+covers it, the captured cuBLAS route of φ's device, the LL bf16 tier, the grouped top-k kernel, the tuned fused-MoE tile, FA3's split count over
 the launch's key counts) and the vocabulary's kind at the statics `dsa` passes (`common.kind`). Every token-count-dependent
 selection reads the step's launch: the tokens the CUDA-graph dispatch pads it to. A request's query rows past the decode threshold
 are one refusal per row and layer (the dense-MHA prefill backend while its sequence fits INDEX_TOPK keys, the sparse-MQA prefill past
@@ -165,7 +165,11 @@ class StepNeeds:
         )
         N, K = self._shape[w]
         phase = _f32out_phase(K, N) if f32 else "linear"
-        route = default_cublas_route(phase, M, K, N)
+        try:
+            route = default_cublas_route(phase, M, K, N, self.net.device)
+        except KeyError as e:
+            return Need("router-gemm" if f32 else "cublas-bf16-gemm", _id(f"cublas-{phase}", K=K, N=N, M=M),
+                        f"no route pin: {e.args[0]}", "on a pinned device")
         if route is None:
             return Need("router-gemm" if f32 else "cublas-bf16-gemm", _id(f"cublas-{phase}", K=K, N=N, M=M), "no capture",
                         "at other statics")

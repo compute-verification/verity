@@ -218,7 +218,7 @@ theorem returnsOwn (hP : ReadProg P)
 
 /-- **What a gate of a unit reads is the unit's own** (`OperandsOwn`): an operand of a gate inside a unit is an
 earlier gate of the unit or a leaf of one of the unit's reader rows. -/
-theorem operandsOwn (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.ownRows P = true)
+theorem operandsOwn (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) : OperandsOwn P rs W := by
   intro tid u sc g p ops sc' hu hlo hhi hgate o ho
@@ -270,7 +270,7 @@ private theorem row_ext (r r' : Row) (h1 : r.tid = r'.tid) (h2 : r.unit = r'.uni
 
 /-- **Every unit's rows are its own input gates** (`OwnRows`): a leaf of a reader row is an input gate, and a gate
 is a leaf of one row at most, at one place. -/
-theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.ownRows P = true)
+theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs) :
     OwnRows P rs W := by
   obtain ⟨hr, hrp, hL, -⟩ := read_bodies hP

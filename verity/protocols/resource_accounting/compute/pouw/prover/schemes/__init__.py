@@ -55,7 +55,7 @@ def of(scheme: str, card: str, pinned: bool, **config: Any) -> PoUWScheme:
     """The scheme the resource scheme ``scheme`` runs on the card whose short name is ``card``, with registration
     pinning the weights B or not (`kernel_schemes.resolve`)."""
     entry = resolve(scheme, card, pinned)
-    return build(entry, **config) if entry.card else build(entry, card=card, pinned=pinned, **config)
+    return build(entry, **config) if entry.cards else build(entry, card=card, pinned=pinned, **config)
 
 
 def register(family: str, make: Callable[..., PoUWScheme]) -> None:

@@ -54,7 +54,7 @@ What none of this covers: that a session `verify --zk` accepts exists at a sampl
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 
 variable {n mPts : ℕ}

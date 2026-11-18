@@ -521,7 +521,7 @@ KNOWN: dict[str, str] = {
         "duplicate of the data sheet (`Verity.Accel.Card`; `ResourceAccounting.TS.Sheet`): becomes the one data-sheet type, in Core, which the other two read (proofs)",
     "security/Definitions/Flock/Accounting/Bound.lean::FlockSoundness.Accounting.Stmt":
         "duplicate of `Flock.Stmt`: becomes a reading of its shape (lean)",
-    "security/Definitions/Flock/Circuit.lean::FlockSoundness.Audit.Partition":
+    "security/Definitions/Flock/Circuit.lean::Spot.Sampling.Partition":
         "duplicate of `Verity.Partition`: becomes it (a copy of Core's) (lean)",
     "security/Definitions/Flock/Game.lean::FlockSoundness.Game":
         "duplicate of `Verity.Game`: becomes it (deleted) (lean)",

@@ -38,15 +38,9 @@ theorem slot_of_unit {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h : 
   obtain ⟨f, pin, hf, hc⟩ := read_front h
   obtain ⟨rfl, hg, -⟩ := finish_text hc
   have hts := front_text hf
-  obtain ⟨hnd, hmap⟩ := templatesOf_ranges hts hrs
-  obtain ⟨i, t, -, -, ht, htt, -, hut, -⟩ := (unitAt_iff hts hrs tid u sc).1 hu
-  have hd : (c.f.ts.map (·.tid)).Nodup := by
-    have e : c.f.ts.map (·.tid) = rs.toList.map (·.template) := by
-      have := congrArg (List.map Prod.fst) hmap
-      simpa [List.map_map, Function.comp_def] using this
-    rw [e]
-    exact hnd
-  obtain ⟨g, hgm, hlo, hhi⟩ := gridsOf_covers hg hd (List.mem_of_getElem? ht) hut
+  obtain ⟨hd, -⟩ := templatesOf_ranges hts hrs
+  obtain ⟨t, ht, htt, hut⟩ := (unitAt_iff hts hrs tid u).1 ⟨sc, hu⟩
+  obtain ⟨g, hgm, hlo, hhi⟩ := gridsOf_covers hg hd ht hut
   rw [htt] at hgm
   have hS := (gridsOf_ok hg).1
   have hex : ∃ g', ((c.grids.lookup tid).getD []).find? (fun g => g.start ≤ u && u < g.start + g.units) = some g' :=

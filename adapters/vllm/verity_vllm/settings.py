@@ -244,6 +244,8 @@ SETTINGS: dict[str, Setting] = _declare(
     # ---- operations (ops/*.sh)
     S("VERITY_RELEASE_TAG", str, None, WHERE, "the release a compiled Commit logs"),
     S("VERITY_TREE_COMMIT", str, None, WHERE, "the commit of VERITY_TREE a compiled Commit logs"),
+    S("CARD_SKU", str, None, WHERE, "the SKU of the card file (calibration/hardware/cards) of this host's GPUs, whose arch a CUDA "
+      "extension built here compiles to"),
     # ---- other programs' variables the library reads
     S("CUBLASLT_WORKSPACE_SIZE", str, None, VALUE, "cuBLASLt's workspace in KiB; the replay's dependencies record it"),
     S("CUBLAS_WORKSPACE_CONFIG", str, None, VALUE, "cuBLAS's workspace configuration, :SIZE:COUNT; the replay's dependencies record it"),
@@ -361,6 +363,15 @@ def cuda_home() -> str:
     if not home:
         raise ValueError("CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)")
     return home
+
+
+def card_sku() -> str:
+    """The card file this host's GPUs are (`CARD_SKU`), refused by name when unset."""
+    sku = get("CARD_SKU")
+    if not sku:
+        raise ValueError("CARD_SKU is not set: set it to the SKU of the card file of this host's GPUs (calibration/hardware/cards; "
+                         "a node's placement entry names it)")
+    return sku
 
 
 def put(name: str, value: str) -> None:
