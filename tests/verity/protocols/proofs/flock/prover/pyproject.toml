@@ -76,6 +76,8 @@ inputs = [
     "verity/protocols/proofs/spot", "verity/circuits/partition_query.py", "verity/commitments/rate.py", "verity/commitments/randomness", "tests/verity/commitments/randomness",
     # the Lean decoder's width refusals against the codec, on the inference-only difftest's mistyped descriptors
     "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts",
+    # and the stand-in Boolean bodies of their hand primitives
+    "tests/verity/circuits/stand_in.py",
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
     # tree to RecVStar's
     "verity/protocols/proofs/flock/verifier/Flock/Zk.lean", "verity/protocols/proofs/flock/verifier/Flock/Tags.lean", "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",

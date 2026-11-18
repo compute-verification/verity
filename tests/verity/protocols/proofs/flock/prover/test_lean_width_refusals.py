@@ -12,6 +12,15 @@ import pytest
 from test_lean_verifier import LEAN, VERIFIER
 
 
+def _load(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+#: the stand-in Boolean bodies of the inference-only scripts' hand primitives
+stand_in = _load("stand_in", Path(__file__).resolve().parents[4] / "circuits" / "stand_in.py")
 INFERENCE_ONLY_SCRIPTS = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "workload_classification" / "training_detection" / "inference_only" / "verifier" / "lean" / "scripts"
 
 
@@ -43,11 +52,11 @@ def test_width_refusals_agree_with_the_codec(tmp_path):
     template's bits and its bits as them (`_tile_window`): the Lean decoder, which Flock's verifier, `InferenceOnlyCheck` and
     PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` exactly those the codec does, with the codec's message
     (`verity/protocols/proofs/flock/prover/agreement/README.md`'s D22; `qword_program_agree.py --widths`)."""
-    spec = importlib.util.spec_from_file_location("desc_difftest_vectors", INFERENCE_ONLY_SCRIPTS / "desc_difftest_vectors.py")
-    V = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(V)
+    V = _load("desc_difftest_vectors", INFERENCE_ONLY_SCRIPTS / "desc_difftest_vectors.py")
+    with stand_in.registered():
+        mistyped = V.mistyped()
     with open(tmp_path / "widths.jsonl", "w") as f:
-        for inst in [*V.mistyped(), {"program": _tile_window(False)}, {"program": _tile_window(True)}]:
+        for inst in [*mistyped, {"program": _tile_window(False)}, {"program": _tile_window(True)}]:
             desc = json.loads(inst["program"])
             try:
                 V.reference.codec.decode_program(desc, V.reference.declared(desc))

@@ -22,8 +22,9 @@ untraced = [
 # `verity_difftest`, through which the network checks' tests speak to their Lean executables
 # the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in
 # the network attester's runs (`relay_runs`), which the rows audit's agreement test holds both checks to
+# the stand-in Boolean bodies (`stand_in`) of the inference-only scripts' hand primitives
 inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "tools/difftest/python/verity_difftest",
-          "tests/verity/protocols/resource_accounting/network/attester/relay_runs.py"]
+          "tests/verity/protocols/resource_accounting/network/attester/relay_runs.py", "tests/verity/circuits/stand_in.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
