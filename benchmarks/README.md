@@ -13,24 +13,25 @@ and write, and the index of every directory.
 says. In a fresh clone, `uv sync --all-packages --extra torch-cpu` makes the environment every runner here runs in,
 and `uv run verity bench NAME [ARGS]` runs one. What each measures is its row in the index below, and its runner's
 header gives its machine, its arguments and what it writes. These are the directories that have one, with a runner's
-subcommands or defaults in parentheses: `attester_load`, `attester_timing` (`run`, `guard`, `serve`, `observe`,
-`score`, `table`, `target`), `bool_build_cost`, `certifier_term`, `circuit_properties` (`--models llama32-1b --out DIR`, Llama 3.2
-1B's layer alone and its point, on a CPU), `compile_cost`, `compute`, `dsa_topk`, `exfiltration`, `f32_exhaustive`,
-`flock_s8_block`, `inference_only`, `landing`, `lean_unread_gate` (`--against REV`, its guard), `memory`, `mempool`
-(`--quick`), `native_peak` (bf16 at 8192^3), `network_traces`, `numerical` (one of `verity_numerical`'s tools by
-name; `numerical judge` compares two results under the proof campaign's contract), `overhead` (`points`, `run`,
+subcommands or defaults in parentheses: `attester_load`, `bool_build_cost`, `certifier_term`, `compile_cost`,
+`compute`, `dsa_topk`, `exfiltration`, `flock_s8_block`, `inference_only`, `landing`, `lean_unread_gate`
+(`--against REV`, its guard), `memory`, `mempool` (`--quick`), `network_traces`, `numerical` (one of
+`verity_numerical`'s tools by name; `numerical judge` compares two results under the proof campaign's contract), `overhead` (`points`, `run`,
 `table`), `pouw NAME` (`pouw/NAME/`'s runner; given no NAME, the names), `ppl` (`eval`, `submit`, `report`,
 `baseline`), `prod_repro`, `proof_throughput` (`record`: one prover and two at once on one node's H200s), `prove`
 (`--system flock|spot`; `lean-verify`, the Lean verifier timed on one kept proof; `layers`, the proof benchmark by
-layer from its four runs, as `prove/README.md` says), `prove_path`, `poub_session`, `rate_squaring` (`sq` on one GPU,
-`ifma` on the host's CPUs), `recursion_e2e` (`plan`, `run`, `result`, `table`, `store`), `replay_ladder`,
-`route_capture`, `scan_cost`, `serve_tax`, `serving_cost` (`minify RUN`, `exact`, `capture RUN`, `price`, `confirm`:
-"The serving cost in five stages"), `served_commit`, `served_errors`, `served_units` (`fp8-coord:K=6144`),
-`tc_probe` (`sm120.mma.m16n8k32.e4m3`'s canary), `tc_probe_fp4` (`nvf4` with its SASS check), `tensor_duty`,
-`training_slowdown` (`CONFIG`; `ENTRY --library --root DIR`, one library entry's step traced on a CPU), `unit_block`,
-`unit_lowering`, `unit_walk`, `verifier_cost` and `word_codec`. `verity calibrate bandwidth` runs
-`calibration/bandwidth/`'s: the device ceilings PoUB's timing cites, one probe a run (`chip` and `write_gpu` on one GPU,
-`write_host` on the host's CPUs).
+layer from its four runs, as `prove/README.md` says), `prove_path`, `poub_session`, `recursion_e2e` (`plan`, `run`,
+`result`, `table`, `store`), `replay_ladder`, `route_capture`, `scan_cost`, `serve_tax`, `serving_cost` (`minify RUN`,
+`exact`, `capture RUN`, `price`, `confirm`: "The serving cost in five stages"), `served_commit`, `served_errors`,
+`served_units` (`fp8-coord:K=6144`), `unit_block`, `unit_lowering`, `unit_walk`, `verifier_cost` and `word_codec`.
+
+`verity calibrate NAME [ARGS]` runs `calibration/NAME/`'s runner the same way. These measurements live there, not
+here: `attester_timing` (`run`, `guard`, `serve`, `observe`, `score`, `table`, `target`), `bandwidth` (the device
+ceilings PoUB's timing cites, one probe a run: `chip` and `write_gpu` on one GPU, `write_host` on the host's CPUs),
+`circuit_properties` (`--models llama32-1b --out DIR`, Llama 3.2 1B's layer alone and its point, on a CPU),
+`f32_exhaustive`, `native_peak` (bf16 at 8192^3), `rate_squaring` (`sq` on one GPU, `ifma` on the host's CPUs),
+`tc_probe` (`sm120.mma.m16n8k32.e4m3`'s canary), `tc_probe_fp4` (`nvf4` with its SASS check), `tensor_duty` and
+`training` (`CONFIG`, the training slowdown; `ENTRY --library --root DIR`, one library entry's step traced on a CPU).
 
 A directory without a runner is run by the commands its README names, or its main module's docstring where it has no
 README. `benchmarks/kernels/`'s directories have no `verity bench` name: each runs as its script's header says. `verity-bench` is the
