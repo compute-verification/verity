@@ -4,7 +4,7 @@
 #   env WZ_MEM_GB=64 CHECK_SLOTS=SLOTS python3 tools/check/slot.py --by LANE -- \
 #     bash benchmarks/network_traces/network_attester_zk.sh
 #   as a job of at most 180 minutes on 16 CPUs and 64 GB.
-# The run: a network-certifier-serve rehearsal against the fake endpoint (`network_attester_serve.py rehearse --fake`), whose network
+# The run: a network-attester-serve rehearsal against the fake endpoint (`network_attester_serve.py rehearse --fake`), whose network
 # attester commits and signs each window's bucket rows while serving; then `network_attester_zk.py prove` on it.
 # env: WZ_MEM_GB (what job.sh's stages may take, within the slot's)  WZ_REQUESTS (rehearse's --requests, 6)
 #      WZ_UNITS (network_attester_zk.py's --units, 16)  WZ_CACHE (the build cache, kept across runs where
@@ -30,7 +30,7 @@ export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
 [ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "wzk: no ZK server frame"; exit 7; }
 
 RUN=$W/run
-log "wzk: network-certifier-serve rehearsal (fake endpoint, requests ${WZ_REQUESTS:-6})"
+log "wzk: network-attester-serve rehearsal (fake endpoint, requests ${WZ_REQUESTS:-6})"
 (cd benchmarks/network_traces && "$PY" -m verity.protocols.resource_accounting.network.attester.network_attester_serve rehearse --fake --out "$RUN" --requests "${WZ_REQUESTS:-6}" \
   --rate 1 --tail 5 --max-tokens 64 --prompt-max 64 --start-in 2) 2>&1 | tee -a "$OUT/wzk.log" | tail -3
 [ -f "$RUN/check.json" ] || { log "wzk: rehearsal FAILED"; exit 7; }

@@ -10,13 +10,13 @@ corpus's) and codes the replay's timing input.
 whether it had arrived or not, and when the engine is quiet (nothing running or waiting) the next arrival is what starts
 the next step, so neither costs a bit. So the advice is one binary decision per open step, whether the next request had
 arrived (`decisions`): `gamma_values` sends each request's count of open steps passed over as Elias gamma, and `encode`
-codes the decisions with an adaptive binary arithmetic code inside the replay, one bit string per certifier window. Its
+codes the decisions with an adaptive binary arithmetic code inside the replay, one bit string per attester window. Its
 contexts (`CONTEXTS`) are the request's passes so far, its attested ingress bucket against the release buckets around
 the step (`_Clock`), and its attested egress: the replay, forked at the open step and run on with the request arriving
 now or a step later and nothing after it, says which of its steps emit its outputs, and an earlier request's output from
 each of those steps says which bucket it left in (`_Egress`). `decode` replays from that advice and the attested I/O
 alone, and
-`table` counts the bits per certifier window against I1 v0's (`advice.bits_by_window`, else `v0_widths`).
+`table` counts the bits per attester window against I1 v0's (`advice.bits_by_window`, else `v0_widths`).
 
 **With a draft** the replay takes one more input, the drafts each row kept, and `draft_table` reports a trace's two
 classes of advice: the arrivals (the residual advice above) and the kept count (`kept_bits`: charged at the bits of
@@ -69,7 +69,7 @@ class Releases:
 class Trace:
     """A served run's step trace (`verity-vllm/step-trace/v1`), its requests in the order they reached the engine, with
     the attester's view of its timing when the trace has a clock: each request's ingress time and each step's release
-    time (its output's tokens leaving through the egress certifier), or each kept output's own (`output_t`) where the
+    time (its output's tokens leaving through the network attester at egress), or each kept output's own (`output_t`) where the
     recorder saw them leave one by one; and `releases`, a run served under the attested tick's releases."""
 
     engine: Engine
@@ -154,7 +154,7 @@ class Certified:
     release: list[list[int]] | None
 
     def windows(self, window_buckets: int) -> list[int]:
-        """Each request's certifier window (its ingress bucket's); one window without a clock."""
+        """Each request's attester window (its ingress bucket's); one window without a clock."""
         return [0] * len(self.requests) if self.ingress is None else [b // window_buckets for b in self.ingress]
 
 
@@ -354,13 +354,13 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
     The hook records no arrivals, so a request's engine order and admission step are its first scheduling (FCFS schedules
     new requests in arrival order), and a step's release is the time its output was back. With `egress="client"` each
     kept output left when the client got the streamed chunk that carried it (its `chunks`), which is what an egress
-    certifier on the link sees.
+    network attester on the link sees.
 
     A server with a draft (`_draft`: its ``--speculative-config``) is read as a `DraftEngine`. The replay then needs
     the drafts each row kept, which the hook doesn't name: they are read off the tokens the model runner sampled for
     the row (`_sampled`), as each request's `RequestIO.kept` and the trace's `emitted`.
 
-    A request's attested ingress is the client's send time (`ingress="client"`, a passive certifier on the link),
+    A request's attested ingress is the client's send time (`ingress="client"`, a passive network attester on the link),
     or with `ingress="warden"` the server's own arrival stamp (`arrival`, its body read), the order vLLM schedules in.
     That is not what design v3's network attester certifies: behind it the engine still follows the body read, and the network attester's
     release order (a, ordinal) leaves order exceptions to charge (the corpus's `<trace>.released` traces carry it as
@@ -536,7 +536,7 @@ def gamma_values(rp: Replay) -> list[int | None]:
 
 def _clocked(cert: Certified) -> tuple[list[int], list[list[int]]]:
     if cert.ingress is None or cert.release is None:
-        raise ValueError("the trace has no certifier clock (ingress_t and release_t)")
+        raise ValueError("the trace has no network attester clock (ingress_t and release_t)")
     return cert.ingress, cert.release
 
 
@@ -694,7 +694,7 @@ class _Decoder:
 
 
 def windows(trace: Trace, *, bucket_s: float, window_buckets: int) -> tuple[list[int], list[int]]:
-    """Each request's certifier window (its ingress bucket's) and each step's (its release bucket's); one window without a
+    """Each request's attester window (its ingress bucket's) and each step's (its release bucket's); one window without a
     clock."""
     if not trace.clocked():
         return [0] * len(trace.requests), [0] * len(trace.steps)
@@ -705,7 +705,7 @@ def windows(trace: Trace, *, bucket_s: float, window_buckets: int) -> tuple[list
 
 @dataclass
 class Code:
-    """The residual advice under the adaptive code: one bit string per certifier window (a request's decisions go in its
+    """The residual advice under the adaptive code: one bit string per attester window (a request's decisions go in its
     ingress window's), and what an ideal coder would spend (`ideal`, bits)."""
 
     contexts: str                   # one of CONTEXTS
@@ -810,7 +810,7 @@ def decode(cert: Certified, code: Code, kept: Kept | None = None) -> Replay:
     return replay(cert.engine, cert.requests, decide=decide, kept=kept)
 
 
-# --- bits per certifier window ----------------------------------------------------------------------------------------
+# --- bits per attester window ----------------------------------------------------------------------------------------
 
 
 def width(n: int) -> int:
@@ -880,7 +880,7 @@ def framed_bits(n: int) -> int:
 
 
 def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0: Any = None) -> dict[str, Any]:
-    """Per certifier window: I1 v0's bits (`advice.bits_by_window` when the module is given as `v0`, else
+    """Per attester window: I1 v0's bits (`advice.bits_by_window` when the module is given as `v0`, else
     `v0_widths`), the steps the replay matched, and the residual advice's bits under each code (Elias gamma; the adaptive
     code, unclocked and clocked), each code checked by decoding it back to the trace's steps."""
     truth = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
@@ -1068,7 +1068,7 @@ def read_any(p: Path, *, egress: str = "engine", ingress: str = "client", within
 
 def main(argv: Sequence[str] | None = None) -> None:
     import argparse
-    ap = argparse.ArgumentParser(description="Bits per certifier window: I1 v0 against the replay's residual advice.")
+    ap = argparse.ArgumentParser(description="Bits per attester window: I1 v0 against the replay's residual advice.")
     ap.add_argument("traces", nargs="+", type=Path,
                     help="step traces (*.jsonl; <name>.tokens.json beside one with prefix caching) or trace-corpus "
                          "trace dirs")

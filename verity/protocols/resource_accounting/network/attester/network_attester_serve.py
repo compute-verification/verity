@@ -1,4 +1,4 @@
-"""network-certifier-serve: the active network attester (`verity.protocols.resource_accounting.network.verifier.network_attester`) on one host, a relay in front of any TCP
+"""network-attester-serve: the active network attester (`verity.protocols.resource_accounting.network.verifier.network_attester`) on one host, a relay in front of any TCP
 server, and the offline check of what it published.
 
 **Topology.** Each client connection reaches the network attester's listener. The network attester opens one
@@ -37,7 +37,7 @@ prompts of 16–1024 tokens (log-uniform; words at 0.75 a token, so approximatel
 (log-uniform) under real EOS, temperature 0, 0.7 or 1, and a seed on about half the requests. `--temperature` and
 `--top-p` put the same on every request instead (the gate's `warden-rehearse` always gives both): an endpoint applies
 its own generation config to a request that omits them. `rehearse --ids` sends the scan's traffic instead (`id_traffic`,
-at the same sampling when given): network-certifier-form id requests (`id_form.id_request`, offset 0), each answered by
+at the same sampling when given): network-attester-form id requests (`id_form.id_request`, offset 0), each answered by
 the fake endpoint as an id-form response (`id_response`: one `io_tie.id_event` cell an output id, then `io_tie.TRAILER`,
 at most `egress_cells` − 1 ids), what `scan_zk.py prove --warden-run` proves; the gate's `warden-rehearse --scan` sends
 it to the peer's endpoint, at scan_zk's schedule. `--prompts FILE` (with `--ids`) gives the id requests' prompts instead
@@ -310,7 +310,7 @@ def varied_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prom
 def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_tokens: tuple[int, int] = (16, 1024),
                max_tokens: tuple[int, int] = (1, 64), start_s: float = 0.0, temperature: float | None = None,
                top_p: float | None = None, users: str = "user") -> list[dict]:
-    """n network-certifier-form id requests (`id_form.id_request`'s fields), each {"at": seconds from the origin, "ids":
+    """n network-attester-form id requests (`id_form.id_request`'s fields), each {"at": seconds from the origin, "ids":
     its fields}: Poisson arrivals at `rate`, prompts of log-uniform length of ids below 2^17, `max_tokens` log-uniform,
     and the sampling parameters picked as `varied_traffic` picks them (top_p 1), or `temperature` and `top_p`, when
     given, every request's; the arrivals, prompts, lengths and seeds are the seed's either way. Request i's `user` is
@@ -369,7 +369,7 @@ def read_prompts(data: bytes, params: NetworkAttesterParams) -> list[list[int]]:
 def prompt_traffic(prompts: list[list[int]], n: int, *, model: str, params: NetworkAttesterParams, max_tokens: int,
                    rate: float = 0.5, seed: int = 0, start_s: float = 0.0, temperature: float | None = None,
                    top_p: float | None = None, window_per_group: bool = False, users: str = "user") -> list[dict]:
-    """n network-certifier-form id requests (`id_traffic`'s items) of the given prompts, request j's
+    """n network-attester-form id requests (`id_traffic`'s items) of the given prompts, request j's
     ``prompts[j mod len]`` with exactly `max_tokens`: at `id_traffic`'s Poisson arrivals, or under `window_per_group` in
     groups of ``len(prompts)`` (at most `lanes`), group g's requests together half a bucket into window g·G (G =
     `group_windows`), so group g's cells are exactly its windows' (``groups``). The seeds are the seed's either way."""
@@ -769,7 +769,7 @@ class PublisherProcess:
         self.rows = ctx.Queue()
         self.results, results = ctx.Pipe(duplex=False)
         self.lines, lines = ctx.Pipe(duplex=False) if params.head_offset is not None else (None, None)
-        self.process = ctx.Process(target=_publisher_main, name="network-certifier-publisher", daemon=True,
+        self.process = ctx.Process(target=_publisher_main, name="network-attester-publisher", daemon=True,
                                    args=(self.rows, results, out, key, session, params, commit, load_heads, base_ms,
                                          ordinal, lines))
         self.process.start()
@@ -970,7 +970,7 @@ def prepare_process(params: NetworkAttesterParams) -> dict:
     report["mlock"] = _memlock(libc)
     for key, value in report.items():
         if (key == "allocator" and value != "malloc") or str(value).startswith("not"):
-            print(f"network-certifier-serve: {key}: {value}", file=sys.stderr, flush=True)
+            print(f"network-attester-serve: {key}: {value}", file=sys.stderr, flush=True)
     return report
 
 
@@ -1100,7 +1100,7 @@ def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shi
 async def client(deployment: dict, endpoints: dict, traffic: list[dict], out: Path, clock=raw_clock) -> dict:
     """Each request of `traffic` on a connection of its own at its time after the deployment's origin, through the
     shim, to the listener `endpoints` names; returns what `client.json` holds. An item with ``ids`` (`id_traffic`) is
-    sent as its network-certifier-form id request (`id_form.id_request`, offset 0) and its response read as id-form. It
+    sent as its network-attester-form id request (`id_form.id_request`, offset 0) and its response read as id-form. It
     runs on the network attester's host and reads that host's raw clock, the one the origin is a reading of
     (`origin_raw`), so that a cell's arrival is laid against the grid on the grid's own clock however long the run."""
     params = NetworkAttesterParams(**deployment["params"])
@@ -1258,10 +1258,10 @@ def rehearse(args) -> int:
     out.mkdir(parents=True, exist_ok=True)
     params = rp.schedule(_params(args), args)
     me = [sys.executable, str(HERE / "network_attester_serve.py")]
-    scratch = Path(tempfile.mkdtemp(prefix="network-certifier-serve-"))
+    scratch = Path(tempfile.mkdtemp(prefix="network-attester-serve-"))
     procs: list[subprocess.Popen] = []
     try:
-        make_key(scratch / "network_certifier", args.height)
+        make_key(scratch / "network_attester", args.height)
         if load:
             try:
                 lr.relay_load(args.load_store, LK.SHAPES[args.load_shape], args.load_sinks, args.load_program, out,
@@ -1286,7 +1286,7 @@ def rehearse(args) -> int:
         with open(out / "serve.log", "w") as log:
             serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen",
                                              "%s:%d" % args.listen if kept else "127.0.0.1:0",
-                                             "--out", str(out), "--key", str(scratch / "network_certifier"), "--session",
+                                             "--out", str(out), "--key", str(scratch / "network_attester"), "--session",
                                              secrets.token_hex(32), "--windows", str(windows), "--start-in",
                                              str(args.start_in), "--slack", str(args.slack), "--paced-ms",
                                              str(args.paced_ms), *_flags(args), *rp.flags_of(params),
@@ -1404,7 +1404,7 @@ def parser() -> argparse.ArgumentParser:
                         "admits nothing in the run's last span buckets, and the run lasts at least long enough to "
                         "admit the last request before them (closing_windows)")
     r.add_argument("--ids", action="store_true",
-                   help="network-certifier-form id requests (id_traffic), answered id-form (the fake's --id-payload): "
+                   help="network-attester-form id requests (id_traffic), answered id-form (the fake's --id-payload): "
                         "the scan's traffic (scan_zk.py --warden-run)")
     r.add_argument("--prompts", type=Path,
                    help="with --ids: the requests' prompts, a JSON array of token-id arrays, request j's the (j mod n)-th "

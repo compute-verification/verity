@@ -8,7 +8,7 @@ bytes unchanged in content or not at all: no tokenizer, API, request or stop str
 addition is on the server's side (`release`): each HTTP request's place in the release order and its release bucket on
 the server's copy, and, with `watermark`, a stream that tells the server each bucket's close. What the network attester
 decides is the framing and the timing, both public functions of the schedule (`NetworkAttesterParams`), and it certifies every
-cell it sends with the attester's grid (`grid.Certifier`) and attestations (`certificate.Issuer`, in the runner).
+cell it sends with the attester's grid (`grid.Attester`) and attestations (`certificate.Issuer`, in the runner).
 
 **Cells.** Every cell is B = `cell_bytes` bytes, `link_frame.encode_frame(kind, ordinal, payload)`: the header (kind u8,
 the connection's ordinal u32, the payload's length u32), at most P = B − 9 payload bytes, zero fill. `DATA` carries
@@ -263,7 +263,7 @@ from functools import cached_property
 from typing import Any, NamedTuple
 
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
-from verity.protocols.resource_accounting.network.verifier.grid import Certifier, GridParams, Reason, BlockGrid, Row, Status, row_count
+from verity.protocols.resource_accounting.network.verifier.grid import Attester, GridParams, Reason, BlockGrid, Row, Status, row_count
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIGITS, MAX_TOKENS_AT, id_request_max_tokens
 from verity.protocols.resource_accounting.network.verifier.io_tie import parse_cell
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD, decode_frame, encode_frame
@@ -785,9 +785,9 @@ class NetworkAttester:
         self.params, self.connect = params, connect
         self.origin, self.windows, self.clock, self.slack = origin, windows, clock, slack
         self.sleep = sleep if sleep is not None else (lambda delay: precise_sleep(delay, self.clock))
-        self.egress = Certifier(egress_link, params.grid)
-        self.ingress = Certifier(ingress_link, params.grid)
-        self.fails = Certifier(fails_link, params.fails_grid)
+        self.egress = Attester(egress_link, params.grid)
+        self.ingress = Attester(ingress_link, params.grid)
+        self.fails = Attester(fails_link, params.fails_grid)
         self.records: list[BlockGrid] = []
         self.publish = publish or (lambda record, grid: self.records.append(record))
         self.withheld: list[BlockGrid] = []

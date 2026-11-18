@@ -38,7 +38,7 @@ import pytest
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
 from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
 from verity.protocols.resource_accounting.network.verifier.network_attester import (
-    END, FAIL, NetworkAttester as Certifier, NetworkAttesterParams as Parameters, cells, read_cell,
+    END, FAIL, NetworkAttester, NetworkAttesterParams as Parameters, cells, read_cell,
 )
 
 HERE = (Path(__file__).resolve().parents[3] / "calibration" / "attester_timing")
@@ -684,7 +684,7 @@ class _Wire:
         return 0
 
 
-async def _certify(attack: str, intervals: int) -> tuple[Certifier, list[tuple[int, int, int]], int, dict[int, int]]:
+async def _certify(attack: str, intervals: int) -> tuple[NetworkAttester, list[tuple[int, int, int]], int, dict[int, int]]:
     """The network attester on a clock the test moves, at the benchmark's schedule, one client, and the server's
     plan: each write reaches the attester before the first tick at or after its time. Returns the attester, the
     client's cells as (tick, kind, last byte), the first interval the server wrote for and its bits."""
@@ -701,7 +701,7 @@ async def _certify(attack: str, intervals: int) -> tuple[Certifier, list[tuple[i
         upstream.append(_Wire(lambda: attester.ticks))
         return upstream[0].reader, upstream[0]
 
-    attester = Certifier(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+    attester = NetworkAttester(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
     running = asyncio.create_task(attester.run())
     client = _Wire(lambda: attester.ticks, cells(parties.HELLO, params.cell_bytes))
     client.reader.feed_eof()

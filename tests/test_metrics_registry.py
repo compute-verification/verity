@@ -362,7 +362,6 @@ PINNED_FIX = ("take the node, the card and the cores as parameters (`research ru
               "--cores CORES`) and take the lease through the runner, so the command is typed for any node and card")
 #: {metrics.toml: its commands that name a machine or take a bare gpu-lease}; an entry only falls
 ALLOWED = {
-    "benchmarks/attester_load/metrics.toml": 3,  # network-accounting
     "benchmarks/dsa_topk/metrics.toml": 1,  # proofs
     "benchmarks/flock_s8_block/metrics.toml": 1,  # proofs
     "infra/dashboard/metrics.toml": 1,  # console

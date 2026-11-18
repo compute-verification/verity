@@ -116,7 +116,7 @@ class BlockGrid:
     status: Status
 
 
-class Certifier:
+class Attester:
     """One link's active attester (W1–W6): constant-rate, left-packed, FIFO and fail-closed.
 
     - **Enqueue.** The sender hands frames with `enqueue`. A frame handed during bucket t, before its cutoff, is eligible

@@ -23,7 +23,7 @@ from verity.protocols.resource_accounting.network.verifier.certificate import (
     MarkRefused, RecordHead, certificate_digest, certificate_message, depth, empty, frames_root, mark_digest, marks_link, open_frame,
     parameters_digest, real_frames, record_head, verify_frame)
 from verity.protocols.resource_accounting.network.verifier.commitment import commit
-from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, GridParams, Reason, BlockGrid, Status, Certifier, fill
+from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, GridParams, Reason, BlockGrid, Status, Attester, fill
 from verity.protocols.resource_accounting.network.verifier.schedule import ClockSync, run_shaper
 
 from test_network_attester_audit import FRAMES, P, SYNC_SET, SYNCS, honest_ready, ingress_run
@@ -159,14 +159,14 @@ def certified(raw):
 def scenarios():
     """The audit and commitment tests' egress runs: honest, late, tampered, faulted, duplicated, missing a window,
     and out-of-set advice with and without a tampered later window."""
-    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     late_ready = honest_ready()
     late_ready[3] = 7
-    late = run_shaper(FRAMES, late_ready, SYNCS, Certifier("responses", P))
+    late = run_shaper(FRAMES, late_ready, SYNCS, Attester("responses", P))
     rows = [list(row) for row in honest[0].grid]
     rows[0][0] = b"\xff"
     tampered = [BlockGrid("responses", 0, tuple(tuple(r) for r in rows), COMPLETE)] + honest[1:]
-    w = Certifier("responses", P)
+    w = Attester("responses", P)
     faulted = run_shaper(FRAMES, honest_ready(), SYNCS[:1], w)
     w.fault(Reason.MONITOR_UNAVAILABLE)
     for _ in range(P.buckets):
@@ -174,7 +174,7 @@ def scenarios():
     faulted.append(w.close_window())
     duplicated = tampered[:1] + honest
     declared = [SYNCS[0], ClockSync(3, 1), SYNCS[2]]
-    advised = run_shaper(FRAMES, honest_ready(), declared, Certifier("responses", P))
+    advised = run_shaper(FRAMES, honest_ready(), declared, Attester("responses", P))
     rows = [list(row) for row in advised[2].grid]
     rows[2][0] = b"\xff"
     advised_tampered = advised[:2] + [BlockGrid("responses", 2, tuple(tuple(r) for r in rows), advised[2].status)]
@@ -202,8 +202,8 @@ def test_attested_audit_matches_raw_audit_with_two_links_and_one_clock(tmp_path)
     signer = signers.signer(tmp_path)
     key = signer.public_key()
     other = [SYNCS[0], ClockSync(2, 1), SYNCS[2]]
-    responses = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
-    tokens = run_shaper(FRAMES, honest_ready(), other, Certifier("tokens", P))
+    responses = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
+    tokens = run_shaper(FRAMES, honest_ready(), other, Attester("tokens", P))
     issuer = Issuer(signer, SESSION)
     for recs in ((responses, tokens), (certify_all(issuer, responses), certify_all(issuer, tokens))):
         audit = Audit()
@@ -230,7 +230,7 @@ def test_an_honest_window_is_complete_so_the_issuer_refuses_nothing_honest(tmp_p
     """Honest runs close every window complete, egress and ingress at either timing, so the issuer, which certifies
     only a complete record, certifies every window and refuses none."""
     signer = signers.signer(tmp_path)
-    egress = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    egress = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     early = ingress_run([[2, 0, 0, 0], [1, 1, 0, 0], [0, 0, 0, 0]])
     late = ingress_run([[0, 0, 0, 2], [0, 0, 1, 1], [0, 0, 0, 3]])
     issuer = Issuer(signer, SESSION)
@@ -245,7 +245,7 @@ def test_a_attestation_cannot_move_to_another_phase_or_key(tmp_path):
     forging the signature is a `signature` violation, and only in that window."""
     signer = signers.signer(tmp_path)
     key = signer.public_key()
-    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     certified = certify_all(Issuer(signer, SESSION), honest)
     c0, c1 = certified[0], certified[1]
 
@@ -279,7 +279,7 @@ def test_an_incomplete_record_gets_no_attestation_and_a_relayed_status_is_bound(
     no leaf spent, and its window is a `no-verdict`. The status is the signed head's: a faulted head signed anyway (by
     `sign`, as a forger would have to) that a relay edits to complete breaks the attestation."""
     signer = signers.signer(tmp_path)
-    w = Certifier("requests", P)
+    w = Attester("requests", P)
     w.fault(Reason.DROPPED)
     for _ in range(P.buckets):
         w.tick()
@@ -301,7 +301,7 @@ def test_an_incomplete_record_gets_no_attestation_and_a_relayed_status_is_bound(
 def test_a_record_past_the_deadline_is_no_verdict_and_other_parameters_a_mismatch(tmp_path):
     signer = signers.signer(tmp_path)
     key = signer.public_key()
-    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     issuer = Issuer(signer, SESSION)
     parameters = parameters_digest(P, SYNC_SET)
     late = [issuer.certify(honest[0], EGRESS, P, parameters, deadline=False)] + certify_all(issuer, honest[1:])
@@ -320,7 +320,7 @@ def test_a_record_past_the_deadline_is_no_verdict_and_other_parameters_a_mismatc
 
 def test_attested_records_need_the_key_and_ingress_its_parameters(tmp_path):
     signer = signers.signer(tmp_path)
-    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     certified = certify_all(Issuer(signer, SESSION), honest)
     with pytest.raises(ValueError, match="public key"):
         egress_verdicts(certified)
@@ -334,7 +334,7 @@ def test_attested_records_need_the_key_and_ingress_its_parameters(tmp_path):
 def test_a_signer_with_missing_or_behind_state_refuses_and_the_window_fails_closed(tmp_path):
     """No state: nothing is signed and every window is `no-verdict`. State restored from an old copy: the signer
     refuses rather than reuse a leaf, and the windows from then on are `no-verdict` until the state is current."""
-    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     signer = signers.signer(tmp_path)
     key = signer.public_key()
     old, current = tmp_path / "old-state.json", tmp_path / "current-state.json"
@@ -359,7 +359,7 @@ def test_a_signer_with_missing_or_behind_state_refuses_and_the_window_fails_clos
 def test_a_second_signer_on_one_state_or_below_its_floor_refuses(tmp_path):
     """The leaf state is held by the signer that opened it: a second signer on it refuses until the first closes, and a
     signer whose floor is past the state (a restore from before a published leaf) refuses outright."""
-    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     parameters = parameters_digest(P, SYNC_SET)
     first = signers.signer(tmp_path)
     assert Issuer(first, SESSION).certify(honest[0], EGRESS, P, parameters) is not None
@@ -376,7 +376,7 @@ def test_a_second_signer_on_one_state_or_below_its_floor_refuses(tmp_path):
 def test_a_session_already_started_is_refused_and_its_windows_fail_closed(tmp_path):
     """The device runs once per session id: a second run of the key under a session its state has started, after a
     restart, signs nothing and every window is `no-verdict`; under a fresh session it signs from the next leaf."""
-    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     first = signers.signer(tmp_path)
     key = first.public_key()
     assert egress_verdicts(certify_all(Issuer(first, SESSION), honest), key) == [None, None, None]
@@ -392,7 +392,7 @@ def test_a_session_already_started_is_refused_and_its_windows_fail_closed(tmp_pa
 def test_a_attestation_from_another_session_is_a_signature_violation(tmp_path):
     """The cross-session replay: attestations the key signed in another session of the attester, honest ones of the
     same execution phases, are a `signature` violation in this session, every window; in their own they are accepted."""
-    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     signer = signers.signer(tmp_path)
     key = signer.public_key()
     other = certify_all(Issuer(signer, OTHER_SESSION), honest)
@@ -409,7 +409,7 @@ def test_the_attestation_signs_the_record_digest_salted_by_the_attester(tmp_path
     fresh per record: one record attested twice is signed under two digests, neither of them R. The host's check
     reads the attestation alone; a record handed with another salt, or a salt of another length, is refused."""
     signer = signers.signer(tmp_path)
-    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
+    honest = run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))
     fixed = certify_all(Issuer(signer, SESSION, coins=lambda n: b"\x07" * n), honest[:1])[0]
     R = fixed.head.digest()
     assert fixed.salt == b"\x07" * 64 and certificate_digest(fixed.salt, R) == fixed.certificate.digest
@@ -629,7 +629,7 @@ def one_of_each(tmp_path):
     and a mark's."""
     signer = signers.signer(tmp_path)
     issuer = Issuer(signer, SESSION, coins=fresh_coins())
-    record = certify_all(issuer, run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))[:1])[0]
+    record = certify_all(issuer, run_shaper(FRAMES, honest_ready(), SYNCS, Attester("responses", P))[:1])[0]
     ingress = certify_all(issuer, ingress_run([[2, 0, 0, 0]]), INGRESS)[0]
     mark = issuer.mark("responses", 3, MARK)
     return signer.public_key(), record, {"record": record.certificate, "ingress": ingress.certificate,

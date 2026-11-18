@@ -20,7 +20,7 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 
-from verity.protocols.resource_accounting.network.verifier.grid import Grid, GridParams, BlockGrid, Certifier, fill, released
+from verity.protocols.resource_accounting.network.verifier.grid import Grid, GridParams, BlockGrid, Attester, fill, released
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -126,7 +126,7 @@ def run_shaper(
     frames: Sequence[LogicalFrame],
     ready: Sequence[int],
     syncs: Sequence[ClockSync],
-    attester: Certifier,
+    attester: Attester,
 ) -> list[BlockGrid]:
     """An honest sender's shaper driving a network attester over len(syncs) windows.
 

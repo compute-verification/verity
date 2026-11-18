@@ -9,7 +9,7 @@ and doesn't read. `Refused`, with the Lean's message, for a link that is no link
 network attester and a host (the attester's other half, to the outside; a host's bare uplink; a link between two
 hosts; a memory attester's link), a network attester whose registered key is not lower-case hex, a key that is not the
 attester's registered key, and a network attester's link that states no capacity, with or without a reason no
-certifier splits it: there is no line rate to read for it.
+network attester splits it: there is no line rate to read for it.
 
 The registered key of a network attester is the string the checks' `key` parameter is: its LMS public key, I ‖ T[1],
 in lower-case hex. `key_refusal` is the one function that reads it.

@@ -776,7 +776,7 @@ def _lines(path: Path) -> list[tuple[int, str]]:
 def _said(key: str, session: str, runs: Sequence[str]) -> str:
     """The answer's line on what the registrations' files of ``runs`` say they were checked under."""
     return (f"`{REGISTRATIONS_FILE}` of {', '.join(runs)} says its registrations were checked under the network "
-            f"certifier's key whose SHA-512 is {key}, in the session {session}: the reader holds neither, and "
+            f"attester's key whose SHA-512 is {key}, in the session {session}: the reader holds neither, and "
             "compares them with nothing")
 
 
