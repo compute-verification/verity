@@ -1,6 +1,7 @@
 {
  "digests": {
   "Accept_v1{K=2}": "ff4b08e725eba2f184fddbe3db86713795e6f6a4199372be1c5020496bac712e8fe3a222df70cff16d72fcf69c10985fd68f478beea4328dde4b98188281ac87",
+  "Accept_v1{K=5}": "c5ce2140ec2c794b81c532b72bf7166e6c28da4dec6652e19cbbcff5f1beb205d68e5e0c52badbc0b3244af857d6ee10472ee66f31c968b5841ab3432858bb45",
   "AddRef_v1{N=16,DT='bf16'}": "37dec80c71cc6e72a735df1054961d7e236669751d9ad762850c40ebb87b9e14e61bc69a1e4d2963de7e6cdd2e491ea5b66f1808b6b6eba29d3fed4b6ff4d87f",
   "AddRef_v1{N=16,DT='f32'}": "daa7538dc3e84da13454e814823b1d383645e302c3de3a52714ac01da559056b9025c62bdc6a75d553710ba192da7c2c4ee00484eab276bfae71e66f910ce53d",
   "AddScalarBf16_v3{N=16}": "110de145eb958cd0e7e65771a4e1dd53eb980dc5320e1552ed07f74cc458edbacfe8ce8da883557d06cd3b4abc275883257f72a34733722023278cfa0a5814c2",
@@ -257,6 +258,9 @@
   "Gemm_v1{K=32,N=96}": "4896eba840f1d55a30cbc1248955f3a748508a6f37f9037cdd958b245e8453963c7ac0b6ca43ea3eeb049bbc55e7d9d157f253550ac986fca9b33f6ad49b1947",
   "Gemm_v1{K=48,N=3}": "525ebe90f46b695b8571804bab841e2a84166db86500799e08a06de38933c8ba75604f535d8e69c27e6896b8c5692fd99ccb78e164150f6be2702e14bbae2f09",
   "Gemm_v1{K=64,N=8}": "aaa7460fe126507c08f5b4df47e496902beba824a45ea05d39d8b22331ae4adf7dc999a08dc4f12601ad1bdb9abcdc6539e78b127d9628c2cf6e6c40046be2cd",
+  "GreedyAccept_v1{K=2,V=200}": "9a375c530b721f1becc4614baf0439ada5cb3ce32a07accf643b897af0f10e6d6b8663515b8724287ca3141a84ef7c605bac652bb12ca155d46227d20280dd80",
+  "GreedyAccept_v1{K=2,V=8}": "694dbd53a2f14029aa47169dbc13548b0fd828cb12d70b8463dadd96346fcbd15cf8f5187d06e9d9375d1161a7973866d5a55cfcf17d24a47196502cc73e2156",
+  "GreedyAccept_v1{K=5,V=154880}": "b6c65e5d2368e6efc8e9dc127b7a395981cd2cd2c3dce0f9f875cb47f4d263e310c51987da6986ddea4d53577effb4b803dd9b9a07deeec97e2735bdaceb85e6",
   "I64ToI32_v1": "24ecbd63ddce8333bb2ed3213b62102a39c1d813507d0d79b2621d71757d2707f5dc4c393c84f0c382ea68229bec1c085e7a360bdd647fada5ed1e6215a7ceff",
   "LServe_v2{C={e2f2f43eb046},LP=3,STEPS=2,EOS=(7),GUARD='in',LAG=0,GEMM={4130e3ca726d},ATTENTION={35db6738c571},NORM={4d524c30089f}}": "8851d85c081af7454d566d0c433b58bd6997c26475db9f93706ffc2dc59cbbae0adb5359ca6815e62262cbeb1681a9c216166a6e2d03c4b75dacecce3a34c250",
   "LayerNormRef_v1{N=16,EPS=1e-05,DT='bf16'}": "6c5d6c09f38c29358895dbfecb8eca3fdb677d27db43d47128af4658bb94248757d4fba71389e2f86a55e943462ff29140a34f8d1bc7c1308b81c003eb93f4a4",
@@ -468,6 +472,7 @@
   "GeluTanhMulBf16_v3": "tables",
   "GemmCoordinate_v1": "b1",
   "Gemm_v1": "b1",
+  "GreedyAccept_v1": "spec",
   "I64ToI32_v1": "ref_prims",
   "LServe_v2": "lifted",
   "LayerNormRef_v1": "ref_prims",
@@ -656,6 +661,7 @@
   "GeluTanhMulBf16_v3",
   "GemmCoordinate_v1",
   "Gemm_v1",
+  "GreedyAccept_v1",
   "I64ToI32_v1",
   "LServe_v2",
   "LayerNormRef_v1",
@@ -719,6 +725,10 @@
   [
    "definition",
    "Accept_v1{K=2}"
+  ],
+  [
+   "definition",
+   "Accept_v1{K=5}"
   ],
   [
    "definition",
@@ -1743,6 +1753,18 @@
   [
    "definition",
    "Gemm_v1{K=64,N=8}"
+  ],
+  [
+   "definition",
+   "GreedyAccept_v1{K=2,V=200}"
+  ],
+  [
+   "definition",
+   "GreedyAccept_v1{K=2,V=8}"
+  ],
+  [
+   "definition",
+   "GreedyAccept_v1{K=5,V=154880}"
   ],
   [
    "definition",

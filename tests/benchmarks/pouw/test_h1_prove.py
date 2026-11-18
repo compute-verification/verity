@@ -471,6 +471,7 @@ def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch):
     assert not hasattr(fell.low, "template") and fell.pin == flat.pin
 
 
+@pytest.mark.slow
 def test_ks_statement_rows_are_the_h1_tiles_rows_under_either_ports():
     """`h1window.statement_rows`, the rows the auditor's lowering writes K's circuit file on: under h1_prove's ports
     (`h1unit.ports`) the stager's rows as `Shape` sizes them (an A or B row K / 2 + 2 words, the record 3 R C, the public

@@ -9,6 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions at small statics: the column at the kernel's 8 rows, an entry at one column per lane (D = 32),
     a head of two groups of 8 with a rotary suffix of 4, the fill at 16 slots."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_dsv4_indexer as BI
 
     return [

@@ -16,8 +16,8 @@ import threading
 from pathlib import Path
 
 import pytest
+from test_p2_party import SESSION_ID, TOY, Clock, MemoryLog, Prover, exe, request, signer, store  # noqa: F401
 
-from test_p2_party import TOY, MemoryLog, Prover, SESSION_ID, Clock, exe, request, signer, store  # noqa: F401
 from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_lean, p2_parties
 

@@ -9,6 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The word Definitions: the dot at K 2048 over 16 lanes and at K 4096 over 32 (the served kernel's two block shapes), and
     the rows at small statics."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import cublas_gemv as GV
 
     return [
@@ -21,6 +22,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 def _boolean_roots() -> list[Any]:
     """On bits: the dot over 16 lanes of four steps and over 32 of two, and the rows at two W rows."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import cublas_gemv as GV
 
     return [

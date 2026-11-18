@@ -19,7 +19,6 @@ from verity.circuits import (
 )
 from verity.circuits.codec import IdentityConflict
 from verity.circuits.defs import CompositeDefinition
-from verity_vllm.definitions.registry import b1
 
 from tests.program.test_running_example import (
     Add16,
@@ -29,6 +28,7 @@ from tests.program.test_running_example import (
     Relu16,
     make_program,
 )
+from verity_vllm.definitions.registry import b1
 
 V16 = Value(16)
 A2 = Array(2, V16)

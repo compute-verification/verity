@@ -15,6 +15,7 @@ import json
 import os
 
 import pytest
+
 from verity_vllm.definitions.registry.topp_geometry import (
     SPLIT_MAX_BATCH,
     registered_splits,

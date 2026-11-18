@@ -17,8 +17,8 @@ sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/
 
 import bandwidth as B
 from p2_store import store as ST
-from p2_v1 import serve as SV
 
+from p2_v1 import serve as SV
 from verity.protocols.resource_accounting.memory.poub.verifier import p2
 from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
 

@@ -123,7 +123,7 @@ def live(root: Path, now: float) -> tuple[list[str], int]:
 
 def leave(run_dir: Path, asks: dict, source: Path, what: dict, sends: list[Path], *, now: Callable[[], float] = time.time) -> str:
     """Leave an asker of the launch of the run in ``run_dir`` behind (`start`) and say so in a line. ``asks`` is what the
-    launch asked: of `auto` (cpus, mem_gb, lean), its answer (home, the machine, and pool), the commit it shipped from the
+    launch asked: of `auto` (cpus, mem_gb, lean, needs), its answer (home, the machine, and pool), the commit it shipped from the
     checkout ``source`` and the first's wait for a slot (wait_s); ``what`` is the request as `remote.launch` took it and
     ``sends`` its --send files. A launch whose asker can't be started is still launched: the line says the run won't move
     by itself. So is one that finds MAX_ASKERS alive under its runs root already (`live`): it leaves none, and the line
@@ -228,10 +228,12 @@ def ask(source: Path, m: dict, tried: dict[str, str], seen: str | None = None) -
     it still would. A machine in ``tried`` reads as what it says there."""
     from . import auto
 
-    docs = {**auto.read(source, m["cpus"], peers=True, **({"lean": True} if m["lean"] else {})), **tried}
-    if seen and (still := auto.elsewhere({seen: docs.get(seen, "not read")}, m["home"], m["cpus"], m["mem_gb"], lean_pool=m["lean"]))[0]:
+    needs = auto.LeanNeeds(**m["needs"]) if m.get("needs") else None
+    docs = {**auto.read(source, m["cpus"], peers=True, needs=needs, **({"lean": True} if m["lean"] else {})), **tried}
+    if seen and (still := auto.elsewhere({seen: docs.get(seen, "not read")}, m["home"], m["cpus"], m["mem_gb"], lean_pool=m["lean"],
+                                         needs=needs))[0]:
         return still
-    return auto.elsewhere(docs, m["home"], m["cpus"], m["mem_gb"], lean_pool=m["lean"])
+    return auto.elsewhere(docs, m["home"], m["cpus"], m["mem_gb"], lean_pool=m["lean"], needs=needs)
 
 
 def launch(source: Path, m: dict, twin: dict, wait_s: float) -> dict:

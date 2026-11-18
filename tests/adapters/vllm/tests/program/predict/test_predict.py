@@ -20,9 +20,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from verity_vllm.definitions.registry.tp_allreduce import settings_of
 
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
+from verity_vllm.definitions.registry.tp_allreduce import settings_of
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
 from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
 from verity_vllm.program.predict import build as BUILD
@@ -139,8 +139,8 @@ def test_dsa_rank_step_equals_the_record(rank, tmp_path):
 
 @pytest.mark.slow
 @pytest.mark.parametrize("wrapper,shape,digest", [
-    ("step", {"M": 8, "pos0": 8}, "c2397f404dbdce59d0770588b4a2529981aeb4b3d6d5658ae5918586bd050a1a3fa690b1b9620467ec25b625eae6eb201977a0d2139f62789f98e58e3fefd39d"),
-    ("request", {"LP": 11, "T": 12}, "2d72a39ea47db02a9a40300435fbd7e37dbdb3ac35d73527378db28eee818ecb26e1cbfdcbbf2c32cf179a47c4da71ba0e2d6c698ca83ffa65018d01ca66643b"),
+    ("step", {"M": 8, "pos0": 8}, "562e290d02aeb6efb06786f508a90ae9ea08748ab3f8b4777f0c56f76b4cd6d09cab8cb9bf0d21346c7af16f2e9b174a728f1bc7f8e12c5b2ccd48121b0dfb60"),
+    ("request", {"LP": 11, "T": 12}, "d2ede82f0989fdf7a43e45dbca1b6adb3a9c29b245f1d6058c583bbd72599d4cb9be7724df848104e448a966bc5e3d6a60b0c255f5c32db575ea15611c8b0175"),
 ])
 def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_path):
     """GLM-5.3's B8 mixed-arrivals row (no batch invariance) at rank 0, as the Build traced it: the step of 8
@@ -155,15 +155,14 @@ def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_pa
     (GLM53_S1, "step", {"M": 1, "pos0": 8},
      "746b518918f6ad8b280cca0a347df80e5dba1876bdddad668b8ee75e6801b9d948d55fb2ad7515c41c344b8fa56096ae4d84e31716f6065589ebba03202b24a3"),
     (GLM53_S8, "step", {"M": 8, "pos0": 8},
-     "eeed9ef4e8974d1a9f00fd133423624192ddb2d760d4d5d1da9dc9c73e45f215f274c5d00ce1b5f2a216a9fc2c08c95c1bd7ad5e7a8b37c19510eb68cfb69662"),
+     "1a572036533ba212766ed728bb945b0f695b209b29a95966d2417643578a6b3d789dfdaf5e480cc033531e63c68015b098d884235dde0a80762574b60accd486"),
     (GLM53_S8, "request", {"LP": 25, "T": 6},
-     "4ad3eaa14e8b3b1afdb8bd97e63866c35fd91741524c6e7790d7dcfc7497d49c224a3bf0f5677dd3905fdf19e7d150173f7f2a134510b80cda70873e35710dc2"),
+     "4709aa07ded03c4a2fb0807ae9c21222b4078dd12544ee40c92c9eff600a6b6d589b49621eb413d2a581ca0edbfafc878c411a8de8ce1b6d968e14877fed6e71"),
 ])
 def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp_path):
     """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0: the B1 step as the Build traced it, and the B8 step
-    and second request at the same registered split count, the select after the vocabulary's all-gather.  The B8 row's traced Build
-    read a derived `splits` Input, which serving no longer produces (`engine.topp_pin`); these two
-    digests are the registered-S Programs, until that row is rebuilt.  The second request's launch batch is its realized arrival
+    and second request at the same registered split count (`engine.topp_pin`), the select after the vocabulary's all-gather, as
+    the B8 row's traced Build pins them.  The second request's launch batch is its realized arrival
     (`engine.arrivals.realized_arrive_steps`): the first request ends at forward 1, so the idle engine prefills it alone at forward 2
     and it decodes alone, not beside the step-13 prefills its declared arrive_step 9 would put it with."""
     r = build_program(_row_phi(row, "GLM53", tmp_path), wrapper, **shape)

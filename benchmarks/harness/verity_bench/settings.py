@@ -50,6 +50,8 @@ REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
     S("RESEARCH_RUN_DIR", str, ".", WHERE, "the run directory a point writes result.json in"),
     S("OUT", str, None, WHERE, "the directory a point writes its outputs in; unset, RESEARCH_RUN_DIR/out"),
     S("RESEARCH_RUN_ID", str, "local", WHERE, "the research run a point is, which its result names"),
+    S("RESEARCH_MACHINE", str, None, WHERE, "the registered machine `research run --on` launched the run onto, whose "
+      "[properties] the launch put in RESEARCH_RUN_DIR/inputs/<name>.toml (kit.machine_properties' default)"),
     S("RESEARCH_SOURCE_SHA", str, None, VALUE, "the commit research run shipped, which a point's identity hashes; unset, the "
       "checkout's HEAD"),
     # ---- gpu-lease's (the kit's host stamp)

@@ -32,7 +32,7 @@ def markdown(doc: dict[str, Any]) -> str:
                 f"each V* statement's {q.get('OPROVE_RUNS')} after {q.get('OPROVE_WARM')} "
                 f"(lease {q.get('GPU_MAX_MIN', '?')} min)"
                 + (f", V* statements {q['OPROVE_JOBS']} at a time" if q.get("OPROVE_JOBS") else "")
-                + f", {q.get('REPEAT')} repeats per CPU step")
+                + f", {q.get('REPEAT')} repeats of vstage, vcap and lean")
     runs = doc.get("run_params")
     h = doc.get("headline") or {}
     st = doc.get("staged")

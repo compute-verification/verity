@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import pytest
 from verity_torch.frontend import rules as T
+from verity_torch.frontend.rules.base import ANY
+from verity_torch.frontend.rules.training import training_rules
+
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.program.frontend import rules as R
 from verity_vllm.program.frontend.rules import padding, profile
-from verity_torch.frontend.rules.base import ANY
-from verity_torch.frontend.rules.training import training_rules
 
 
 def _namespaces(rule) -> set[str]:

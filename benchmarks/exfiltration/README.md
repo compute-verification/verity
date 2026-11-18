@@ -30,9 +30,10 @@ uv run verity bench exfiltration --from benchmarks/exfiltration/made_up
 ## The two parts
 
 - **The compute audit's part** is the break-even planner's bound (`benchmarks/spot_figures/breakeven/`): what the
-  wrong blocks of a sampled audit can carry at δ. The planner prices one case of its plan over one scope at a pinned
-  audit budget β: the share of total compute it costs (serving with its wait, proving, the replay, the pool, the edge
-  and compiling) and the bound in bits. The command takes row `(ii) honest`, the plan of record's row, with every
+  wrong blocks of a sampled audit can carry at δ, under the audit's limit: each sampled block on its own inputs; the
+  wires between blocks are not held. The planner prices one case of its plan over one scope at a pinned audit budget
+  β: the share of total compute it costs (serving with its wait, proving, the replay, the pool, the edge and
+  compiling) and the bound in bits. The command takes row `(ii) honest`, the plan of record's row, with every
   modeled lever at its measured value, at the step that prices the verifier as measured, and reads it at the β
   where its total is the share: the total is a line in β fitted over the pinned budgets, and ln(bound) is linear in ln β
   between the two that bracket it. The row plans for the weights / λ, and its part is λ times its bound. `--row` and
@@ -177,7 +178,7 @@ The record is one JSON object (`served_share` in `exfiltration.py`):
 - `run`: the served run's id.
 - `commit`: the commit its second stage ran; `runs`: each of its four runs (`serve`, `first`, `replay`, `second`)
   as `{"run", "commit", "dirty", "why", "machine"}`, null for a run whose directory the reader wasn't given. The
-  resampling holes are read at these commits (below).
+  holes are read at these commits (below).
 - `prove`, `staging`, `replay`, `interior`: each a list of what held GPUs for that part, one entry a session or a
   step, each `{"seconds": S, "gpus": G}`: the seconds it held them and how many it held. A step that started no
   process on a card is on 0 GPUs and adds no GPU-seconds; a part whose entries are all on 0 GPUs prints "on CPUs: no
@@ -218,7 +219,7 @@ each one with the file it read and what that file holds instead. It computes no 
 
 ## What a served run's audit showed
 
-From a record that holds `audit` the command prints one more section, before the resampling holes
+From a record that holds `audit` the command prints one more section, before SPOT's holes
 (`benchmarks/harness/verity_bench/served_row.py`; `served_run` in the JSON), read against the tree:
 
 - **The verdict**, in the verifier's own words: how many of the sampled proof blocks' proofs the Lean verifier accepted, then the
@@ -234,10 +235,10 @@ From a record that holds `audit` the command prints one more section, before the
   which is after the first stage's sample; every verdict a verifier that is not Lean decided; every Lean verdict
   whose lock entry (`security/lean-audit.json`) is missing or lists open premises; and the final accept where it was
   not given, or is not complete. Which verifier decides each kind of verdict, and the lock entry that covers it, are
-  data (`verity_bench/data/served_row.json`). The resampling holes and the cited theorem are the next block's, and
+  data (`verity_bench/data/served_row.json`). SPOT's holes and the cited theorem are the next block's, and
   this one prints no line on them.
 - **The mark** is `proved` only where that list is empty, the final accept is given and complete, the cited
-  theorem's lock entry lists no open premise and each resampling hole is closed at every one of the served run's
+  theorem's lock entry lists no open premise and each of SPOT's holes is closed at every one of the served run's
   four runs' commits, as the next block reads them; `run, not proved` otherwise.
 - **The prover's seconds** as the record holds them, said as "at most" where they are a session's, with the cards
   the provers ran on and what the data file notes of a card.
@@ -394,13 +395,15 @@ plan of the case, is left out and listed under "Refused".
 - **Each monitoring period over all compute, under the label**: the same scopes, with the network attester's term
   and the two together under `all three`, and under each other row at D_j = 1. Every amount's column carries the
   label in its header, and no amount of the table is of record. Each line ends with its errors, the table above's.
-- **SPOT's resampling holes in the code that ran**, over the compute audit's runs of record, or with `--served-run`
+- **SPOT's holes in the code that ran**, over the compute audit's runs of record, or with `--served-run`
   over the served run's own code instead: its record's `commit` and each of its runs' commits, each listed, a hole
   closed only where its fix is an ancestor of every one of them. Where any of the four runs is not given, such a
   hole prints "closed at the runs read", naming the runs read and those not given, and the label stays `SPOT`. The
   block holds the label (`SPOT`, or
-  `SPOT soundness` only when both holes are closed), each hole's status, and the theorem with its open premises as
-  the lock lists them (`verity_bench.spot_status`; `spot_holes` in the JSON).
+  `SPOT soundness` only when every hole is closed), each hole's status, and the theorem with its open premises as
+  the lock lists them (`verity_bench.spot_status`; `spot_holes` in the JSON). The holes are the two resampling holes
+  and the wires between proof blocks, open until the registered circuit carries its wires; while it is open, the
+  audit's limit: each sampled block on its own inputs; the wires between blocks are not held.
 
 With `--json` the document holds the same: a scope's monitoring period has its `eps`, its `error` (the two together's,
 null for a scope no run of record holds) and its `phases`, and an amount that has no bound is null.

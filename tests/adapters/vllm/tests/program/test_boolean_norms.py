@@ -29,6 +29,7 @@ from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean import mufu as MU
 from verity.circuits.parts import n_members
 from verity.circuits.silicon import fp
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import boolean_norms as BN
 from verity_vllm.definitions.registry import prims as P

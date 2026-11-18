@@ -778,7 +778,7 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
 #: the old path's landing branch, frozen since the verified queue took over, which the queue reads as landed
 CHECKED = "checked"
 #: branches no sweep touches: the trunk and the old path's frozen branches
-KEEP_BRANCHES = frozenset({"main", CHECKED, "next", "queue-shadow"})
+KEEP_BRANCHES = frozenset({"main", CHECKED, "next"})
 #: a lead's run branch (`cursor/verity-<lead>-XXXX`), which its agent pushes to again
 RUN_BRANCH_RE = re.compile(r"cursor/verity-[a-z0-9-]+-[0-9a-f]{4}")
 

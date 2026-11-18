@@ -9,6 +9,7 @@ def _boolean_roots() -> list[Any]:
     """vLLM's Boolean RoPE at the kernel rows' `RoPE_v1` binding, which reaches its head and halves, and vLLM's GPT-J RoPE on
     bits at two heads of 8."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_rope
 
     return [
@@ -23,6 +24,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     `fused_norm_rope` writes the latent cache row's words 512-575 with it, beside `DsaRMSNorm_v1{N=512}`'s words 0-511
     (`verity_vllm.observe.fold.patterns.dsa.DsaNormRope`; `dsa_norm`'s sidecar)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_rope
 
     return [

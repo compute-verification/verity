@@ -8,10 +8,11 @@ segments   the store's N blocks as contiguous segments of whole chunks: first a 
            the GPU reads over its own PCIe link. Segment s holds blocks base_s … base_s + n_s − 1, and every position,
            leaf and node index is the store's, so the tree is `receipts.tree` over the whole store in block order
            whatever the GPUs and tiers (one GPU and no host tier is the same code)
-payload    N blocks of seeded random bytes, each 128-byte word's top byte below 0x80 (so below p1024 and p512), or a
+payload    N blocks of seeded random bytes, each 128-byte word's top byte below 0x80 (so below p1024; a 64-byte p512
+           word whose top byte that leaves is at least p = 2^512 − 569 with probability 569/2^512), or a
            buffer a GPU as it is (`hbm`: a serving engine's weights, `node.py`) and then a host tier of zeros (the
            store `poub.store` lays out), its tree the driver's `audit.payload_tree` with salt_j =
-           `store_salt(key, PAYLOAD_LABEL, j)`, key the verifier's (`set_payload_key`) or else the store's own;
+           `store_salt(key, PAYLOAD_LABEL, j)`, key the store's own from the operating system, never sent or written;
            built a chunk at a time on the chunk's GPU and retained on the CPU, so it does not displace the store
 store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.cu`) on each segment's GPU at the
            registration's key and the store's positions
@@ -119,7 +120,10 @@ def digests(words) -> list[bytes]:
 
 def percentiles(xs: list[int]) -> dict:
     """p50, p99, p99.9 and the max of sorted xs."""
-    at = lambda q: xs[min(len(xs) - 1, int(q * len(xs)))]
+
+    def at(q: float) -> int:
+        return xs[min(len(xs) - 1, int(q * len(xs)))]
+
     return {"p50": at(0.5), "p99": at(0.99), "p999": at(0.999), "max": xs[-1]}
 
 
@@ -194,7 +198,10 @@ def stall_report(observed: list, trace: list, history, clock0: tuple, stats: lis
             continue
         t0, n = la[0], len(la)
         G = (n - 13) // 2
-        ms = lambda x: round((x - t0) / 1e6, 3)
+
+        def ms(x: int, t0: int = t0) -> float:
+            return round((x - t0) / 1e6, 3)
+
         lo_us, hi_us = (wall0 + (t0 - perf0)) / 1e3, (wall0 + (observed[i] - perf0)) / 1e3
         rows.append({"pass": i, "interval_ms": iv[i - 1] / 1e6, "gpu_ms": round(t["gpu_ms"], 3),
                      "part_ms": [round(x, 3) for x in t["part_ms"]], "host_ms": [round(x, 3) for x in t["host_ms"]],
@@ -439,7 +446,7 @@ class DeviceStore:
             raise ValueError("a host tier needs GPUs with streams of their own")
         total = blocks + host_blocks
         self.torch, self.lib, self.lib_open, self.kv, self.blocks, self.key = torch, lib, lib_open, kv, total, key
-        self.payload_key = key
+        self.payload_key = secrets.token_bytes(32)
         self.rows = rows
         for each in (lib, lib_open):
             each.set_rows(rows)
@@ -1284,16 +1291,13 @@ class GpuBackend:
         torch.cuda.synchronize()
         self.gpus = [Gpu(torch, g) for g in range(count)]
         self.rng = np.random.default_rng(seed)
-        self.salt_key = self.rng.bytes(32)
+        self.rng.bytes(32)  # the sample that once made the salt key: the seeded samples after it stay as they were
+        self.salt_key = secrets.token_bytes(32)
         self.gates: dict = {}
         self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, seed, gpus=self.gpus,
                                  host_blocks=host_blocks, hbm=hbm, **self.host, **self.shape)
         self.store.pass_mode(leaf_ctas)
-        self.payload_key = self.salt_key
-
-    def set_payload_key(self, key: bytes) -> None:
-        """Salt the payload tree with the verifier's key (`prover.ProverSide.register`), before its root is taken."""
-        self.payload_key = self.store.payload_key = key
+        self.payload_key = self.store.payload_key
 
     def payload_root(self, node: bytes) -> bytes:
         self.node = node
@@ -1312,7 +1316,6 @@ class GpuBackend:
         self.gates["encoded_last_block"] = self.store.block(last) == self.reference_last
         if not self.gates["encoded_last_block"]:
             raise RuntimeError("the store's last block is not the codec's encode of its payload")
-        self.encode_bytes_per_s = rate
         return {"encode_bytes_per_s": rate, "blocks": self.blocks, "bytes": self.blocks * BLOCK}
 
     def set_sketch_ctas(self, ctas: int) -> None:
@@ -1653,7 +1656,7 @@ class GpuBackend:
 
 def add_arguments(ap) -> None:
     ap.add_argument("--lib", required=True, help="session.so")
-    ap.add_argument("--kv", required=True, help="kv.so at the registration's codec (p1024 masked)")
+    ap.add_argument("--kv", required=True, help="kv.so at the registration's codec's width and masking (run.sh's KV_DEFS)")
     ap.add_argument("--gib", type=float, default=16.0,
                     help="the store's size across every GPU, rounded down to whole --chunk-blocks (need not be a power "
                          "of two; the GPUs' shards differ by at most a chunk)")

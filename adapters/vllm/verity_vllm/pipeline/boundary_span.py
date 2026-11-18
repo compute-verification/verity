@@ -30,8 +30,13 @@ def cap(n: int) -> int:
 
 
 def class_size(v: Any) -> bool:
-    """Whether ``v`` is a class's size, of prompt ids or of outputs (`Span.shape`)."""
+    """Whether ``v`` is a class's size of outputs (`Span.shape`)."""
     return type(v) is int and v >= MIN_CAP and v & (v - 1) == 0
+
+
+def prompt_size(v: Any) -> bool:
+    """Whether ``v`` is a class's size of prompt ids (`Span.shape`): a prompt's exact length, at least 1."""
+    return type(v) is int and v >= 1
 
 
 @dataclass(frozen=True)
@@ -49,8 +54,8 @@ class Span:
 
     @property
     def shape(self) -> tuple[int, int]:
-        """Its class (P, O)."""
-        return cap(len(self.prompt)), cap(len(self.served))
+        """Its class (P, O): P its prompt's length, O the least power of two at least `MIN_CAP` that holds its ids."""
+        return len(self.prompt), cap(len(self.served))
 
     def to_json(self) -> dict[str, Any]:
         return {"engine_id": self.engine_id, "prompt": list(self.prompt), "sampling": dict(self.sampling),
@@ -92,14 +97,14 @@ def _words(u32s: Sequence[int]) -> np.ndarray:
     return np.stack([a & 0xFFFF, a >> 16], axis=-1).astype(np.uint16).reshape(-1)
 
 
-def ingress_row(span: Span, prompt_cap: int) -> np.ndarray:
-    """Span's `b.ingress` row at prompt size P, as u16 words."""
-    if len(span.prompt) > prompt_cap:
-        raise ValueError(f"{span.engine_id}: {len(span.prompt)} prompt ids past the class's {prompt_cap}")
+def ingress_row(span: Span, prompt: int) -> np.ndarray:
+    """Span's `b.ingress` row at prompt size P, as u16 words: a class's P is its prompts' exact length, so no id pads."""
+    if len(span.prompt) != prompt:
+        raise ValueError(f"{span.engine_id}: {len(span.prompt)} prompt ids, not the class's {prompt}")
     s = {**{k: None for k in SAMPLING}, **span.sampling}
     vals = {**s, "lp": len(span.prompt), "seeded": s["seed"] is not None}
     head = [w for k, t in FIELDS for w in _u32(k, t, vals[k])]
-    return _words(head + list(span.prompt) + [0] * (prompt_cap - len(span.prompt)))
+    return _words(head + list(span.prompt))
 
 
 def egress_row(span: Span, output_cap: int, head: bool = True) -> np.ndarray:

@@ -141,7 +141,7 @@ def test_the_audit_replays_the_import_closure_against_the_kept_cache_and_a_fresh
     a = argv(tmp_path / "fresh")
     run_cache = Path(a[a.index("--replay-cache") + 1])
     # the packages of one fresh run share a cache in its scratch tree, gone with it; the kept one isn't read
-    assert "--closure" in a and "--artifacts" not in a and run_cache.name == "lean-replay"
+    assert "--closure" in a and "--artifacts" not in a and "--no-artifacts" in a and run_cache.name == "lean-replay"
     assert run_cache.parent.name.startswith(LA.SCRATCH) and not run_cache.parent.exists()
     assert named(a) and AUDIT.build_roots_over(run_cache, named(a)) == []
     assert Path(a[a.index("--program-cache") + 1]).parent == run_cache.parent
@@ -823,7 +823,8 @@ def test_without_the_sandbox_nothing_is_restored_and_nothing_kept(tmp_path, monk
     rc = LA.run(out, tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps", log=logged.append,
                 urls={"bundle": "file:///nowhere"})
     assert rc == 0 and sorted((out / "builds.txt").read_text().split("\n")[:-1]) == ["pkg/a cold", "pkg/b cold"]
-    assert "--artifacts" not in json.loads((out / "argv.json").read_text()) and calls == []
+    a = json.loads((out / "argv.json").read_text())
+    assert "--artifacts" not in a and "--no-artifacts" in a and calls == []
     assert {p: p.stat().st_mtime_ns for p in store.rglob("*")} == kept, "nothing it built is kept"
     assert any("builds without the sandbox" in ln for ln in logged)
 

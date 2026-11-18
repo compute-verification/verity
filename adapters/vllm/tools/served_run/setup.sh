@@ -67,8 +67,12 @@ if repo.startswith("verity-int8/"):
     want = [(pins[0].get(row) or {}).get("workload") if pins else None] * 2
 else:
     keys, of = ("program_digest", "manifest_digest"), "served_verdicts.sh's BUILD_OF_RECORD"
-    m = re.search(r"BUILD_OF_RECORD=\$\{BUILD_OF_RECORD:-(\w+):(\w+)\}", open(f"{tree}/benchmarks/one_stage/served_verdicts.sh").read())
-    want = list(m.groups()) if m else [None, None]
+    m = re.search(rf"^\s*{re.escape(row)}\)\s*BUILD_OF_RECORD=\$\{{BUILD_OF_RECORD:-(\w+):(\w+)\}}",
+                  open(f"{tree}/benchmarks/one_stage/served_verdicts.sh").read(), re.M)
+    if m is None:
+        print(f"{row} has no {of}: its predicted {':'.join(str(g.get(k)) for k in keys)} is what a pin there names, once its traced Build agrees")
+        sys.exit(0)
+    want = list(m.groups())
 have = [g.get(k) for k in keys]
 print(f"{keys} {':'.join(map(str, have))} are {of}" if have == want else
       f"{keys} {':'.join(map(str, have))} are not {of}, {':'.join(map(str, want))}")

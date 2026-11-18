@@ -15,10 +15,7 @@ for f in "$ROW/manifest.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$FLOCK_WORK/flock-gpu
 done
 cp "$IN/$row_id.json" adapters/vllm/workloads/ || exit 2
 
-real=$(command -v gpu-lease) || { log "no gpu-lease on this node: nothing run"; exit 2; }
-mkdir -p "$RESEARCH_RUN_DIR/bin"
-printf '#!/usr/bin/env bash\n# the window run leases card %s alone: --on %s after the count\n[ "$1" = status ] && exec %q status\nn=$1; shift\nexec %q "$n" --on %s "$@"\n' \
-  "$CARD" "$CARD" "$real" "$real" "$CARD" > "$RESEARCH_RUN_DIR/bin/gpu-lease" && chmod +x "$RESEARCH_RUN_DIR/bin/gpu-lease"
+. adapters/vllm/tools/served_run/pin_card.sh "$RESEARCH_RUN_DIR/bin" || exit 2
 held=$(nvidia-smi -i "$CARD" --query-compute-apps=pid --format=csv,noheader 2>/dev/null | wc -l)
 used=$(nvidia-smi -i "$CARD" --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | tr -dc 0-9)
 lease=$("$real" status 2>/dev/null | awk -v c="$CARD" '$1 == c {$1 = ""; print substr($0, 2)}')
@@ -32,7 +29,7 @@ LEASE_MIN=${LEASE_MIN:-$(( lease_min < 150 ? lease_min : 150 ))}
 [ ! -f "$IN/main.txt" ] || export MAIN_FILE=$IN/main.txt
 log "coins: ${PP_CHALLENGER:-local} (peer ${PP_PEER:-none}${DEVELOPMENT:+, a development run})"
 log "window run of $row_id from $SHA on $(hostname), card $CARD (free: 0 processes, ${used} MiB, lease: $lease), cores $CORES, lease at most $LEASE_MIN min, COMPOSE_NODE $COMPOSE_NODE${PEARLPLUS_TIE:+, tied to Pearl+}"
-export PATH=$RESEARCH_RUN_DIR/bin:$PATH LEASE_MIN OUT
+export LEASE_MIN OUT
 mkdir -p "$SERVE_ROOT" /dev/shm/vllm-served-run && chmod 700 "$SERVE_ROOT" /dev/shm/vllm-served-run
 D=/dev/shm/vllm-served-run/${RESEARCH_RUN_ID:?run under research run}; export D
 echo "$D" > "$OUT/serve_dir.txt"

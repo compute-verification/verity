@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -144,6 +145,22 @@ def test_a_sample_copies_each_vms_deadline_into_its_registry_entry_once(tmp_path
     assert F.registry()["vy-dc-h200"] == {"provider": "ssh", "host": "203.0.113.7", "deadline": "2026-10-20T04:00:00Z"}
     assert F.registry()["vy-dc-b200"]["deadline"] == "2026-10-20T04:00:00Z"
     assert F.record_deadlines(rows, F.registry()) == [] and len(synced) == 1
+
+
+def test_a_mark_goes_among_the_top_level_keys_and_leaves_the_properties_table_as_it_was(tmp_path, monkeypatch):
+    monkeypatch.setattr(F, "MACHINES_D", tmp_path / "machines.d")
+    F.MACHINES_D.mkdir()
+    table = '# its properties\n[properties]\ncards = { value = 1, read = "nvidia-smi -L | wc -l" }\n'
+    f = F.MACHINES_D / "vy-dc-h200.toml"
+    f.write_text(f'provider = "ssh"\nhost = "203.0.113.7"\ndeadline = "2026-10-19T16:00:00Z"\n\n{table}')
+    F.set_key("vy-dc-h200", "deadline", "2026-10-20T04:00:00Z")
+    F.set_key("vy-dc-h200", "unreachable_since", "2026-10-20T05:00:00Z")
+    assert f.read_text() == ('provider = "ssh"\nhost = "203.0.113.7"\ndeadline = "2026-10-20T04:00:00Z"\n'
+                             f'unreachable_since = "2026-10-20T05:00:00Z"\n\n{table}')
+    F.set_key("vy-dc-h200", "unreachable_since", None)
+    got = tomllib.loads(f.read_text())
+    assert "unreachable_since" not in got and got["deadline"] == "2026-10-20T04:00:00Z"
+    assert got["properties"] == {"cards": {"value": 1, "read": "nvidia-smi -L | wc -l"}}
 
 
 def test_each_sample_pass_replaces_its_last_sample_whole_with_no_vm_running_too(tmp_path, monkeypatch):

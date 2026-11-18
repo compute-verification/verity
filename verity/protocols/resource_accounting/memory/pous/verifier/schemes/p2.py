@@ -73,8 +73,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import cached_property
 
-from verity.commitments.scheme import DIGEST_BYTES
 from verity.commitments.randomness import frame
+from verity.commitments.scheme import DIGEST_BYTES
 
 from ..codec import Codec
 from ..labels import salt_value, tag
@@ -308,14 +308,28 @@ def chacha_block(key: bytes, counter: int, nonce: int, rounds: int = 8) -> bytes
     s = list(x)
 
     def qr(a: int, b: int, c: int, d: int) -> None:
-        x[a] = (x[a] + x[b]) & _M32; x[d] ^= x[a]; x[d] = ((x[d] << 16) | (x[d] >> 16)) & _M32
-        x[c] = (x[c] + x[d]) & _M32; x[b] ^= x[c]; x[b] = ((x[b] << 12) | (x[b] >> 20)) & _M32
-        x[a] = (x[a] + x[b]) & _M32; x[d] ^= x[a]; x[d] = ((x[d] << 8) | (x[d] >> 24)) & _M32
-        x[c] = (x[c] + x[d]) & _M32; x[b] ^= x[c]; x[b] = ((x[b] << 7) | (x[b] >> 25)) & _M32
+        x[a] = (x[a] + x[b]) & _M32
+        x[d] ^= x[a]
+        x[d] = ((x[d] << 16) | (x[d] >> 16)) & _M32
+        x[c] = (x[c] + x[d]) & _M32
+        x[b] ^= x[c]
+        x[b] = ((x[b] << 12) | (x[b] >> 20)) & _M32
+        x[a] = (x[a] + x[b]) & _M32
+        x[d] ^= x[a]
+        x[d] = ((x[d] << 8) | (x[d] >> 24)) & _M32
+        x[c] = (x[c] + x[d]) & _M32
+        x[b] ^= x[c]
+        x[b] = ((x[b] << 7) | (x[b] >> 25)) & _M32
 
     for _ in range(rounds // 2):
-        qr(0, 4, 8, 12); qr(1, 5, 9, 13); qr(2, 6, 10, 14); qr(3, 7, 11, 15)
-        qr(0, 5, 10, 15); qr(1, 6, 11, 12); qr(2, 7, 8, 13); qr(3, 4, 9, 14)
+        qr(0, 4, 8, 12)
+        qr(1, 5, 9, 13)
+        qr(2, 6, 10, 14)
+        qr(3, 7, 11, 15)
+        qr(0, 5, 10, 15)
+        qr(1, 6, 11, 12)
+        qr(2, 7, 8, 13)
+        qr(3, 4, 9, 14)
     return struct.pack("<16I", *((a + b) & _M32 for a, b in zip(x, s)))
 
 

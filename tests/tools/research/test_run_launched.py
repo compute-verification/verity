@@ -41,11 +41,22 @@ def _run(tmp_path: Path, *extra: str, command: tuple[str, ...] = (PY, "-c", "pri
                  *extra, "--", *command])
 
 
+def test_an_option_neither_run_nor_its_runner_takes_is_refused_before_anything_ships(tmp_path, machine, capsys):
+    """`research run` passes what its own parser doesn't take on to its runner, which on a machine parses it only after the
+    launch has shipped the tree: an option neither knows (`--note`, which is quick_tier.py's) was refused there, by the
+    runner, as `unrecognized arguments`. The launch refuses it itself and ships nothing."""
+    assert _run(tmp_path, "--note", "why") == 2
+    err = capsys.readouterr().err
+    assert "research run: unrecognized arguments: --note why: neither `research run` nor the runner it starts takes them" in err
+    assert not machine.exists() and not (tmp_path / "runs").exists(), "nothing shipped, no run dir taken"
+    assert _run(tmp_path, "--grace=5", "--declared-output", "out/*", "--inherit-io") == 0, "the runner's own options pass"
+
+
 def test_a_runner_that_fails_at_argument_parsing_is_refused_with_its_error_not_launched(tmp_path, machine, capsys):
-    rc = _run(tmp_path, "--no-such-harness-flag")
+    rc = _run(tmp_path, "--grace", "soon")
     err = capsys.readouterr().err
     assert rc == 3 and " launched on " not in err
-    assert "refused on m (RunnerFailed)" in err and "unrecognized arguments: --no-such-harness-flag" in err, "the runner's own error"
+    assert "refused on m (RunnerFailed)" in err and "argument --grace: invalid float value: 'soon'" in err, "the runner's own error"
     [rid] = [p.name for p in (tmp_path / "runs").iterdir()]
     run_dir = machine / "runs" / rid
     refused = json.loads((run_dir / "refused.json").read_text())
@@ -233,7 +244,7 @@ def test_a_launcher_whose_first_delivery_dropped_reports_the_refusal_not_launche
     monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **k: ["sh", str(fakessh)])
     monkeypatch.setattr(remote.time, "sleep", lambda s: go.release())     # the back-off between deliveries: the runner goes on
     try:
-        rc = _run(tmp_path, "--no-such-harness-flag")
+        rc = _run(tmp_path, "--grace", "soon")
         err = capsys.readouterr().err
         [rid] = [p.name for p in (tmp_path / "runs").iterdir()]
         wait_exit(int((tmp_path / "lr.pid").read_text()))

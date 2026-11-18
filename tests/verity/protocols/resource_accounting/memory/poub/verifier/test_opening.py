@@ -16,8 +16,7 @@ import pytest
 from poub_fakes import Clock, Entropy
 
 from verity.commitments import gates
-from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
-from verity.protocols.resource_accounting.memory.poub.prover import opening_prover
+from verity.protocols.resource_accounting.memory.poub.prover import audit_prover, opening_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, receipts
 from verity.protocols.resource_accounting.memory.poub.verifier import opening as O
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan

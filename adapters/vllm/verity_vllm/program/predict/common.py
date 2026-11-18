@@ -64,19 +64,20 @@ def _ptypes(spec) -> tuple:
     return tuple(t for _, t in params)
 
 
-def with_checks(model: Any, out: Coll, B: Any = None, stop: dict | None = None, sampled: Sequence | None = None) -> tuple[Coll, dict | None]:
+def with_checks(model: Any, out: Coll, B: Any = None, stop: dict | None = None, sampled: Sequence | None = None,
+                klass: Any = None) -> tuple[Coll, dict | None]:
     """`out`, then `derive`'s checks output where the model made any (`model.checks`: (one bit, what it checks) each, which the
     verifier requires to be 1), a stochastic request's seed rule follows them (`sampled`: its sampler's seed, then its
     `seed_rule.PARAMS` Inputs; `seed_rule.check`'s Calls next on the Builder `B`) and its length rule last (`stop`:
-    `frontend.stop_rule.check` over `out`), and what `derive`'s provenance says of them: the Program returns the tuple (out,
-    checks). Each is refused unless a declared relation computes it (`program.inputs.check`)."""
+    `frontend.stop_rule.check` over `out`, or a class form's, ``klass.check``), and what `derive`'s provenance says of them:
+    the Program returns the tuple (out, checks). Each is refused unless a declared relation computes it (`program.inputs.check`)."""
     from verity.circuits.types import Tuple
-
     from verity_torch import inputs
+
     from verity_vllm.program.frontend import seed_rule as SEED
     from verity_vllm.program.frontend import stop_rule as SR
     checks = [*(getattr(model, "checks", None) or ()), *([] if sampled is None else [SEED.check(B, sampled[0], sampled[1:])]),
-              *([] if stop is None else [SR.check(B, out, stop)])]
+              *([] if stop is None else [SR.check(B, out, stop)]), *([] if klass is None else [klass.check(B, out)])]
     if not checks:
         return out, None
     for c, what in checks:
@@ -115,14 +116,14 @@ class _Stochastic:
 def request_passes(wrapper: str, LP: int | None, T: int | None, M: int, C: int, chunks: tuple[int, ...] | None,
                    dense: bool, edge: bool = False) -> tuple[bool, tuple[int, ...], list[int], list[bool]]:
     """A wrapper's forward passes, as `drive` runs them -> (resumed, its prefill chunks, each pass's rows, whether each samples): a
-    `step`'s M rows; a `request`'s prefill of rows C..LP-1 after a history of C (in its `chunks` when it ran in several launches,
+    `step`'s M rows (after its history of C, which `build.build_program` holds to pos0); a `request`'s prefill of rows C..LP-1 after a history of C (in its `chunks` when it ran in several launches,
     only the last sampling) and its T decodes; or, off the `dense` decoder, one resumed at decode C >= LP, its decodes C..LP+T-1,
     and one whose rows are a Commit window's edge (`edge`, `build.build_program`'s), which may stop inside its prompt at LP + T
     (T < 0), sampling nothing."""
     lp: Any = LP   # as given: a step states neither, and where one is read without being stated it is int(None)'s TypeError
     t: Any = T
     E = int(lp) + int(t) if wrapper == "request" else 0
-    if C and not 0 < C < (int(lp) if dense else E):
+    if C and wrapper == "request" and not 0 < C < (int(lp) if dense else E):
         raise Unexpressible(f"vocabulary cannot express: a history of {C} rows for a prompt of {LP}" +
                             (" (0 < C < LP)" if dense else f" and {T} decodes (0 < C < LP + T)"))
     if edge and (wrapper != "request" or dense) or wrapper == "request" and not (int(t) >= 0 or edge and max(C, 0) < E):
@@ -167,17 +168,21 @@ def drive(model: Any, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: 
     for p in range(max(C, LP), LP + T):
         if batch is not None:
             model.launch.step = step
-        fed: Any = toks[-1] if toks else last   # as given: a resume handed no `last` is None's AttributeError
+        # as given: a resume handed no `last` is None's AttributeError; a class form feeds its select's key
+        fed: Any = getattr(policy, "key", None)
+        fed = fed if fed is not None else toks[-1] if toks else last
         hid = model.forward([Coll(Value(32), fed.refs)], p)
         toks.append(model.sample(hid[-1], len(toks), p, policy))
         step += 1
     return toks
 
 
-def select_token(call, k, logits: Refs, V: int, pos: int, policy: _Stochastic | None) -> Coll:
+def select_token(call, k, logits: Refs, V: int, pos: int, policy: Any) -> Coll:
     """The token of a row's V logits at position `pos` (`call(fn, *refs)` emits, `k(role, **statics)` is
     the kind): greedy `TokenSelect`, or `GumbelTopPTokenSelect[vllm]` at the registered S, its per-row constants in operand order
-    (top_p, pos, temperature, S)."""
+    (top_p, pos, temperature, S), or a class form's select (a policy with ``select``: `class_window.Selects`)."""
+    if hasattr(policy, "select"):
+        return policy.select(call, k, logits, V)
     if policy is None:
         return call(k("token_select", V=V), logits)
     fn = k("token_select_stochastic_split", V=V, S=int(policy.S))

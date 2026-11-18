@@ -36,12 +36,12 @@ def test_every_vllm_import_of_the_library_is_listed():
             uses.setdefault(key, set()).add(R.rel(p))
     assert len(uses) > 50
     missing = {k: sorted(v) for k, v in uses.items() if k not in SURFACE}
-    assert not missing, ("vLLM imports that tests/lint/vllm_surface.py doesn't list: add each with why the integration "
+    assert not missing, ("vLLM imports that tests/adapters/vllm/tests/lint/vllm_surface.py doesn't list: add each with why the integration "
                          "needs it, or reach it through a module that already imports it:\n"
                          + "\n".join(f"  {k}: {', '.join(v)}" for k, v in sorted(missing.items())))
     stale = sorted(set(SURFACE) - set(uses))
     if stale:
-        warnings.warn(f"entries of tests/lint/vllm_surface.py that nothing imports: delete each once no change in flight "
+        warnings.warn(f"entries of tests/adapters/vllm/tests/lint/vllm_surface.py that nothing imports: delete each once no change in flight "
                       f"adds its import: {stale}", stacklevel=1)
 
 

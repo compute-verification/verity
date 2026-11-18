@@ -8,10 +8,8 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-from verity.commitments.merkle import Opening
-from verity.protocols.resource_accounting.memory.poub.verifier import audit
-from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb
 
+from verity.commitments.merkle import Opening
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.interface import (
     IDENTITY,
     Append,
@@ -32,6 +30,8 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     runs_of,
 )
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.verify import verify_opening
+from verity.protocols.resource_accounting.memory.poub.verifier import audit
+from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb
 
 WORD = 64
 BLOCK = 256

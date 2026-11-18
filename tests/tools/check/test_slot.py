@@ -492,6 +492,30 @@ def test_a_pool_the_machine_lacks_is_refused_naming_the_pools_it_has(tmp_path, m
     assert "doesn't have" in err and err.rstrip().endswith(f": proofs; exit {SLOT.NOT_STARTED}")
 
 
+def test_the_missing_pools_advice_launches_a_run_in_a_pool_the_machine_has(tmp_path, monkeypatch, capsys):
+    import re
+    import shlex
+
+    from research import remote
+    from research.cli import main as research_main
+
+    (tmp_path / "proofs").mkdir()
+    (tmp_path / "proofs" / "slots").write_text("p0 0-1\n")
+    monkeypatch.setenv("CHECK_SLOTS", str(tmp_path / "soundness" / "slots"))
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "soundness" / "slots")
+    assert SLOT.main(["--", "true"], now=lambda: NOW) == SLOT.NOT_STARTED
+    advice = re.search(r"`research (run [^`]*)`", capsys.readouterr().err)[1]
+    argv = shlex.split(advice.replace("MACHINE", "m").replace("NAME", "proofs").replace("LANE", "x").replace("CMD", "true"))
+    launched = []
+    monkeypatch.setattr(remote, "launch", lambda **kw: launched.append(kw) or {
+        "phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}})
+    monkeypatch.setenv("RESEARCH_RUNS", str(tmp_path / "runs"))
+    monkeypatch.chdir(ROOT)
+    assert research_main(argv) == 0, capsys.readouterr().err
+    [kw] = launched
+    assert kw["machine_name"] == "m" and "CHECK_SLOTS=/workspace/research/locks/proofs/slots" in kw["command"]
+
+
 def test_a_slots_file_that_lists_none_is_not_started_naming_the_pools_beside_it(tmp_path, monkeypatch, capsys):
     """A machine with pools and no check slots (its slots file is there and lists none) runs nothing and says so with
     NOT_STARTED, which a caller reads as a check that never ran, not as one that failed; the message names the pools a run
@@ -512,7 +536,7 @@ def test_a_slots_file_that_lists_none_is_not_started_naming_the_pools_beside_it(
         (tmp_path / name).mkdir()
         (tmp_path / name / "slots").write_text(text)
     err = not_started()
-    assert "`research run --on MACHINE --pool NAME --as LANE`): proofs, research; " in err
+    assert "--pool NAME --as LANE -- CMD`): proofs, research; " in err
     assert "trains" not in err and ".bak-" not in err
     assert "`research queue ready N --on auto` places a quick tier itself" in err
     assert not list(tmp_path.glob("check-*"))   # no lock taken and no line joined

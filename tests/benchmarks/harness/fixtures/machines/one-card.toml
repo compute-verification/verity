@@ -1,0 +1,24 @@
+# machine one-card: a register entry made up for the tests, its address a dummy, with every property read
+provider = "ssh"
+host = "dummy.invalid"
+user = "research"
+project = "verity"
+root = "/workspace/research"
+deadline = "2026-11-19T04:00:00Z"
+
+[properties]
+kind = { value = "h100-sxm-80gb-x1", read = "the node kind's file" }
+card = { value = "h100-sxm-80gb", read = "nvidia-smi --query-gpu=name, matched to driver" }
+cards = { value = 1, read = "nvidia-smi -L | wc -l" }
+cpus = { value = 16, read = "nproc" }
+threads_per_core = { value = 2, read = "lscpu" }
+numa = { value = [{ card = 0, node = 0, cpus = "0-15" }], read = "cat /sys/bus/pci/devices/0000:8d:00.0/numa_node; lscpu" }
+toolkit = { value = { directory = "/usr/local/cuda-13.0", version = "13.0", loader = "lib64", others = [{ directory = "/usr/local/cuda-12.9", version = "12.9" }] }, read = "readlink -f /usr/local/cuda; nvcc --version" }
+compiler = { value = true, read = "test -x /usr/local/cuda-13.0/bin/nvcc" }
+profiler = { value = "allowed", read = "grep RmProfilingAdminOnly /proc/driver/nvidia/params" }
+clock_lock = { value = true, read = "sudo nvidia-smi -lgc 1500, then -rgc" }
+root = { value = true, read = "sudo -n true" }
+lease = { value = "gpu-lease", read = "command -v gpu-lease" }
+launcher = { value = { start = "research run --on one-card", sets = ["RESEARCH_RUN_DIR", "OUT", "CUDA_VISIBLE_DEVICES"] }, read = "research.jobuser.PASS_NAMES" }
+python = { value = "3.12.3", read = "python3 --version" }
+job_cap_minutes = { value = "none", read = "no job queue" }

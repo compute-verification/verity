@@ -1,6 +1,5 @@
-"""`p2-audit-wire/v4`, the P2 audit's byte-exact frames (`verity/protocols/resource_accounting/memory/pous/verifier/DESIGN.md`, "P2"): the builders the
-vectors are made with, and the reference verifier, `verify_audit`, which reads a setup and one audit transcript and returns
-the exact `FINAL` frame.
+"""`p2-audit-wire/v4`, the P2 audit's byte-exact frames: the builders the vectors are made with, and the reference
+verifier, `verify_audit`, which reads a setup and one audit transcript and returns the exact `FINAL` frame.
 
 A port of the P2 kit's `p2_audit_verifier.py` (`p2-audit-wire/v1`) onto `reference.py`, PoUS's verification tree
 (`verity.protocols.resource_accounting.memory.pous.verifier.verifier`: `MerkleTree`, `path_length`, `verify_path`) and `verity.commitments.randomness`, with
@@ -455,7 +454,8 @@ def verify_audit(frames: Sequence[bytes], elapsed_ns: Sequence[int], *, verifier
         response_hash = hashlib.sha512(response_frame).digest()
         transcript.append(response_frame)
 
-        def fail(code: int, flags: int = 0) -> bytes:
+        def fail(code: int, flags: int = 0, *, j: int = j, index: int = index, elapsed: int = elapsed,
+                 challenge_hash: bytes = challenge_hash, response_hash: bytes = response_hash) -> bytes:
             records.append(record(j, index, elapsed, flags, challenge_hash, response_hash))
             return stop(code)
 

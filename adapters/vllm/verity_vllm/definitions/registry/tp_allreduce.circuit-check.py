@@ -17,6 +17,7 @@ GLM53_MULTIMEM_ALONE = (256,)
 
 def _glm53_served(mnnvl: bool, multimem_rows: tuple[int, ...]) -> list[Any]:
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import tp_allreduce as TA
 
     out: dict[str, Any] = {}
@@ -58,6 +59,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     tree for 4-7, and one 16-byte vector of it at GLM-5.3's tree; and NCCL's tree all-reduce of 8 elements at WORLD 4 down the
     TP4 capture's chain."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import tp_allreduce as TA
 
     trees = (TA.chain(8),) * 4 + ((((0, 1), (2, 3)), ((4, 5), (6, 7))),) * 4

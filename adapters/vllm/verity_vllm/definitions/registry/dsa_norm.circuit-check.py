@@ -10,6 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     apply unit of 64 elements; `TritonBlockRMSNorm_v1` at DeepSeek-V4's (q 1536 and kv 512 of a 2048 block on 8 warps, eps 1e-6);
     `DsaLatentRow_v1` at GLM-5.3's latent row (kv_c 512, k_pe 64)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsa_norm
 
     return [

@@ -111,7 +111,7 @@ def test_a_finished_run_that_custody_did_not_preserve_has_a_low_record_that_expi
 
     for name, state in ((RUN2, "done"), (RUN3, "cancelled")):
         r = record(ended(root, name, status=state, campaign="pouw"), root).record
-        assert (r["owner"], r["why"].split(":")[0]) == ("pouw", f"no run custody (it ended {state})"), "no lane: the campaign owns it"
+        assert (r["owner"], r["why"].split(":")[0]) == ("runner", f"no run custody (it ended {state})"), "no lane: runner, never the campaign"
     no_created = record(ended(root, "r20260923-100000-0001", created_utc=None), root).record
     assert (no_created["owner"], no_created["created"]) == ("runner", None), "no lane or campaign: runner"
 

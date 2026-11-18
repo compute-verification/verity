@@ -1,4 +1,4 @@
-"""`research queue stats` with no `--log`: the merge queue's core numbers as one table, read live in under two minutes.
+"""`research queue stats`: the merge queue's core numbers as one table, read live in under two minutes.
 
 Each row is one number with its unit, over three windows: now, the last hour, and the last 24 hours. What is read:
 
@@ -441,7 +441,9 @@ def _remote(machine: str, script: str, *args: str, timeout: float = 100) -> tupl
         return None, f"no answer in {timeout:g} s"
     answer = next((line for line in reversed(p.stdout.splitlines()) if line.startswith("{")), None)
     if answer is None:
-        return None, (p.stderr or p.stdout).strip()[-200:] or f"rc {p.returncode}"
+        from .remote import name_addresses
+
+        return None, name_addresses(p.stderr or p.stdout, machine=machine).strip()[-200:] or f"rc {p.returncode}"
     try:
         return json.loads(answer), ""
     except ValueError as e:
@@ -525,7 +527,7 @@ def own_changes(bases: dict[str, tuple[str, list[str]]], repo: Path = CHECKOUT, 
 
     with ThreadPoolExecutor(8) as ex:
         got = list(ex.map(one, [(pr, base, h) for pr, (base, heads) in bases.items() for h in heads]))
-    known.update({at: own for _, at, own in got if not at.startswith(" ")})
+    known.update({at: own for _, at, own in got if own is not None})
     try:
         kept.parent.mkdir(parents=True, exist_ok=True)
         tmp = kept.with_name(f"{kept.name}.{os.getpid()}.tmp")
@@ -672,10 +674,10 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
             doc["open"] = {}
             doc["errors"].append("gh pr list: no list of open PRs")
     try:
-        import tomllib
+        from .policy import PATH, parse
 
-        doc["off_gate"] = tomllib.loads((CHECKOUT / "tools/check/policy.toml").read_text())["off_gate"]
-    except (OSError, ValueError, KeyError, IndexError):
+        doc["off_gate"] = list(parse((CHECKOUT / PATH).read_text()).off_gate)
+    except (OSError, ValueError):
         doc["off_gate"] = list(OFF_GATE)
     built = {(str(pr), head) for r in doc["control"].get("decisions", []) if r["action"] in ("advance", "build") and not r.get("shadow")
              for pr, head in zip(r.get("members") or [], r.get("heads") or [])}
@@ -1202,8 +1204,11 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         landed = f"{inside} of {len(got)} landed ({inside / len(got):.0%})" if got else "none landed"
         if not waits:
             return landed
-        n, hits = len(got) + len(waits), inside + len(waits) - late
-        return landed + f"; with the {len(waits)} marked in the window and waiting, {late} past 2 h: {hits} of {n} ({hits / n:.0%})"
+        if not late:
+            return landed + f"; {len(waits)} marked in the window and waiting, none past 2 h yet"
+        n = len(got) + late
+        return landed + (f"; with the {late} marked in the window and waiting past 2 h, misses already: {inside} of {n} "
+                         f"({inside / n:.0%}); {len(waits) - late} waiting under 2 h not counted yet")
 
     how = ("mark: the first `ready` label after the last `ready = false` among those of each head of the PR whose own change the "
            "head that landed still carries: the head itself, each head a restack across a move made it from (the commit's subject "
@@ -1217,9 +1222,9 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         "at the head a restack across a move made it from, so a merge of `main` and its new mark restart the clock; landing: the "
         "loop's `advance` of `main`; by landing time")
     add("1", "Share on `main` within 2 h of the mark", "", share(hour), share(day), f"{TARGET_SHARE:.0%}",
-        "first, of the PRs landed in the window, those within 2 h of the mark (`Mark to `main``); then, over those PRs and the PRs "
-        "marked in the window and waiting now, the landed within 2 h and the waiting that have waited 2 h or less, a wait past "
-        "2 h a miss")
+        "first, of the PRs landed in the window, those within 2 h of the mark (`Mark to `main``); then the same over those "
+        "PRs and the PRs marked in the window and waiting past 2 h now, each a miss already; a PR waiting 2 h or less is not "
+        "counted until it lands or passes 2 h")
     add("1", "Marks an hour", "", f"{sum(m >= hour for m in marks)}", f"{sum(m >= day for m in marks) / hours:.1f}",
         "", "marks in force on open PRs and on PRs landed; a mark withdrawn since is not counted")
     add("1", "Landings an hour (PRs; moves of `main`)", "", f"{len(win(m2m, hour))} PRs; {sum(m >= hour for m in moves)} moves",

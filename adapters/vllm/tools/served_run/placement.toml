@@ -39,10 +39,30 @@ key-sha512 = "27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae0
 gate-key = "${HOME}/.ssh/vllm_lane_ed25519"
 address = "${VY_AUDITOR_2_HOST}:47611"
 
+[node.vy-h100-1]
+VENV = "/workspace/venv312"
+# the taps build against the venv's torch, built with CUDA 12.9
+CUDA_HOME = "/usr/local/cuda-12.9"
+NVDISASM_PATH = "/usr/local/cuda-13.0/bin"
+HF_HOME = "/workspace/research/vllm-servedproof/hf"
+LLAMA_ROOT = "/workspace/research/vllm-servedproof/llama"
+FLOCK_WORK = "/workspace/research/vllm-servedproof/flock-work"
+DISK_FLOOR_GB = "60"
+HIDDEN_SO = "/workspace/research/vllm-servedproof/taps/fa2/build/fa3_matReqG/verity_fa3_matReqG.so"
+NORM_TAP_SO = "/workspace/research/vllm-servedproof/taps/norm_tap/build/verity_norm_tap.so"
+SERVE_ROOT = "/workspace/research/vllm-servedproof/serve-root"
+# the commit the taps were built at
+TAPS_AT = "962b517e613e5c0eece1dce159083c3ee4ec85d0"
+
+[node.vy-h100-1.rows]
+tied_row = "llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager"
+
+[node.vy-h100-1.builds]
+
 [node.vy-nebius-cpu-14]
 
 [run.setup]
-node = "vy-spot-glm53"
+node = "${NODE:-vy-spot-glm53}"
 research = ["--cwd", "clone", "--custody-ttl", "24h", "--timeout", "6h"]
 wrap = ["taskset", "-c", "${CORES}"]
 send_workload = true
@@ -51,7 +71,7 @@ env = { CARD = "${CARD}", CORES = "${CORES}", END = "${END}", GPU_LEASE_WHO = "v
 [run.setup.tie]
 
 [run.window]
-node = "vy-spot-glm53"
+node = "${NODE:-vy-spot-glm53}"
 research = ["--cwd", "clone", "--custody-ttl", "24h", "--timeout", "6h"]
 wrap = ["taskset", "-c", "${CORES}"]
 send_workload = true
@@ -87,7 +107,7 @@ research = ["--cwd", "clone", "--custody-ttl", "24h", "--timeout", "120m"]
 send = ["${HANDOFF}/compose.tar", "${HANDOFF}/compose.tar.sha256"]
 
 [run.copy]
-node = "vy-spot-glm53"
+node = "${NODE:-vy-spot-glm53}"
 research = ["--cwd", "clone", "--custody-ttl", "24h", "--timeout", "3h"]
 env = { SERVED_RUN = "${SERVED_RUN}", AUDIT_NODE = "${AUDIT_NODE}" }
 
@@ -101,3 +121,9 @@ main_line = true
 env = { PP_GATE_KEY = "~/.ssh/vllm_lane_ed25519", PP_CHALLENGER_KEY = "tests/benchmarks/pouw/fixtures/challenger-key.json" }
 
 [run.audit.coins.development]
+
+[run.device-pin]
+node = "${NODE:-vy-spot-glm53}"
+research = ["--cwd", "clone", "--custody-ttl", "24h", "--timeout", "45m"]
+wrap = ["taskset", "-c", "${CORES}"]
+env = { CARD = "${CARD}", CORES = "${CORES}", GPU_LEASE_WHO = "vllm-device-pin" }

@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 
 import pytest
+
 from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.observe.events import (
     DispatchEnter,
@@ -115,14 +116,15 @@ def test_int8_exact_config_keeps_the_linears_its_list_names_bf16():
     out; every other linear is the plain arm; a fused layer with some shards kept, or kept experts, are refused."""
     pytest.importorskip("vllm")
     torch = pytest.importorskip("torch")
+    from vllm.model_executor.layers.fused_moe import RoutedExperts
+    from vllm.model_executor.layers.linear import LinearBase, UnquantizedLinearMethod
+
     from verity_vllm.engine.int8_vllm import (
         Int8ExactConfig,
         Int8KeptLinearMethod,
         Int8PlainLinearMethod,
     )
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of, kept
-    from vllm.model_executor.layers.fused_moe import RoutedExperts
-    from vllm.model_executor.layers.linear import LinearBase, UnquantizedLinearMethod
 
     class Linear(LinearBase):
         def __init__(self):

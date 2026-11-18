@@ -17,6 +17,7 @@ import fcntl
 import hashlib
 import os
 import re
+import shlex
 import sys
 import time
 from pathlib import Path
@@ -32,6 +33,35 @@ LEAN_BUILD = re.compile(r"(?:^|[\s/'\"(;&|])(?:lake|lean_changed\.py|lean_audit\
 
 def builds_lean(command: list[str]) -> bool:
     return bool(LEAN_BUILD.search(" ".join(command)))
+
+
+#: the directory of the analysis's Lean packages (tools/verity/lean/unread.py's `ANALYSIS`), the tree's only packages that
+#: pin Mathlib or ArkLib, so the only ones a cold `lake build` of takes hours over; the code's Lean pins neither
+ANALYSIS_DIR = "security"
+SEGMENT = re.compile(r"&&|\|\||[;|&\n()]")
+
+
+def analysis_build(command: list[str], cwd: str | None = None) -> str | None:
+    """The directory a raw `lake build` in ``command`` builds an analysis package in, None for none: the run's ``cwd``, a `cd`
+    before it, or Lake's `-d`/`--dir`, read from the command's words alone. The Lean tools' own builds (lean_changed.py,
+    `verity lean try`, lean_audit.py, check.py) run Lake inside them, so none of them is one."""
+    at = cwd
+    for seg in SEGMENT.split(" ".join(command)):
+        try:
+            words = shlex.split(seg)
+        except ValueError:
+            words = seg.split()
+        if "cd" in words[:-1]:
+            at = words[words.index("cd") + 1]
+        lake = next((i for i, w in enumerate(words) if os.path.basename(w) == "lake"), None)
+        if lake is None or "build" not in words[lake + 1:]:
+            continue
+        rest = words[lake + 1:]
+        dirs = [at, *(rest[i + 1] for i, w in enumerate(rest[:-1]) if w in ("-d", "--dir")),
+                *(w.split("=", 1)[1] for w in rest if w.startswith("--dir="))]
+        if hit := next((d for d in dirs if d and ANALYSIS_DIR in Path(d).parts), None):
+            return hit
+    return None
 
 
 def lock_path(runs_root: Path, tree: Path) -> Path:

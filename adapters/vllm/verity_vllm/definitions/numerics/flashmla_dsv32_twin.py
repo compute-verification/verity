@@ -15,12 +15,12 @@ token count gives.
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.kernels import tc as CK
+from verity.circuits.ops.prims import HopperBF16WgmmaDot16
+
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import flashmla_twin as T
 from verity_vllm.definitions.numerics.kernel_registry import register
-from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 
 U32 = np.uint32
 

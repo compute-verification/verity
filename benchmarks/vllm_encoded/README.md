@@ -31,5 +31,8 @@ on every SM or on a partition of its own (`topup_sms`, below).
 `bandwidth-plain` and `bandwidth-audit` are the credited lines (`bench_arm.CREDITED`): a table cites them as the audit's
 cost. Every other arm is an ablation and measures cost only.
 
-[`DESIGN.md`](DESIGN.md) holds each arm's settings, the SM partition, what the gate's credit requires, the spans' parts,
-and how an ablation names these arms.
+Each arm's settings, the SM partition and what the gate's credit requires are in `bench_arm.py`, and the spans' parts
+in `step_spans.py`. `paged.cu` and `paged.py` are PoUB's prover's
+(`verity/protocols/resource_accounting/memory/poub/prover/word_codec/`), which `stack.sh` and
+`benchmarks/harness/setup/vllm_encoded.sh` build there. Nothing in the tree builds `ve.cu`: `serve.py` loads a build of
+it from `--lib`.

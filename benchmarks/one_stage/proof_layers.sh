@@ -11,14 +11,19 @@
 # from the tree's root. Settings:
 #   A5_CARD        the H200's index, as nvidia-smi numbers the cards (gpu-lease's --on)
 #   A5_CORES       the CPUs every step runs on (taskset -c, gpu-lease's --cores), e.g. 40-59
-#   WORK           a new or empty directory for the bootstrap's environment, the partition files and the three runs,
-#                  removed when the script ends, success or failure, after their records are copied to --out
+#   WORK           a new or empty directory for the partition files and the three runs, removed when the script ends,
+#                  success or failure, after their records are copied to --out; the bootstrap's environment is kept on
+#                  the node by kept_bootstrap.sh, built before the card's lease where it needs no card, and reused while
+#                  its key matches
 #   GPU_LEASE_WHO  who every lease is recorded for, where gpu-lease is installed
 #   A5_STEPS       optional, the prover's batch: the request steps [LO, HI) whose proof blocks the window holds (the
 #                  partition file's scope.steps; unset, the file's own), so the proof blocks each layer's Flock statement
 #                  holds; set to other steps than the file's own, the zero-knowledge layer proves every proof block by
 #                  rate:1/1 in place of subset:880, the sampling layer still samples 256 of them, and every member the
 #                  printer writes ends in the batch (`prove layers --batch`); the file's own steps are the batch unset
+#   A5_KEEP        optional, a new directory outside WORK: the sampling run's served window (its serving-rows, the
+#                  prover's files included) copied there before WORK is removed, for `benchmarks/recursion_e2e/stage.sh
+#                  WINDOW=`; it stays on the machine
 #   --out DIR      where the results go (default $RESEARCH_RUN_DIR/out in a research run, else ./out): the three runs'
 #                  records (out-flock, out-zk, out-sampling), the bootstrap's (bootstrap), the printer's table
 #                  (proof-layers.txt, and proof-layers.json in a research run), each step's output (STEP.log) and GNU
@@ -42,7 +47,7 @@ while [ $# -gt 0 ]; do
   case $1 in
     --dry-run) DRY=1; shift ;;
     --out) [ $# -ge 2 ] || refuse "--out needs a directory"; RESULTS=$2; shift 2 ;;
-    *) refuse "$1: the settings are A5_CARD, A5_CORES, WORK, GPU_LEASE_WHO and A5_STEPS in the environment, then --out DIR and --dry-run" ;;
+    *) refuse "$1: the settings are A5_CARD, A5_CORES, WORK, GPU_LEASE_WHO, A5_STEPS and A5_KEEP in the environment, then --out DIR and --dry-run" ;;
   esac
 done
 for s in A5_CARD A5_CORES WORK; do
@@ -54,6 +59,9 @@ LEASE=; command -v gpu-lease >/dev/null && LEASE=1
 A5_STEPS=${A5_STEPS:-}
 [ -z "$A5_STEPS" ] || { [[ $A5_STEPS =~ ^([0-9]+)-([0-9]+)$ ]] && [ "${BASH_REMATCH[1]}" -lt "${BASH_REMATCH[2]}" ]; } \
   || refuse "A5_STEPS=$A5_STEPS: LO-HI, the request steps [LO, HI) the window holds, LO below HI, e.g. 1-8; or unset for the partition file's"
+A5_KEEP=${A5_KEEP:-}
+[ -z "$A5_KEEP" ] || { [[ $A5_KEEP = /* ]] && [ ! -e "$A5_KEEP" ] && [[ $A5_KEEP/ != "${WORK%/}"/* ]]; } \
+  || refuse "A5_KEEP=$A5_KEEP: an absolute path that doesn't exist yet and is not under WORK, which is removed at the end"
 [ -f "$ME" ] || refuse "run from the tree's root: cd to the clone, then bash $ME"
 for t in nvidia-smi taskset python3; do
   command -v "$t" >/dev/null || refuse "no $t on PATH: the runs need it; install it and rerun"
@@ -101,13 +109,13 @@ run() {  # SETTINGS NAME: one run of a5_llama1b_h200.sh on NAME's partition file
 }
 STEPS=(bootstrap partition-flock partition-zk partition-sampling flock zk sampling layers)
 declare -A CMD=(
-  [bootstrap]="cd adapters/vllm && $ON bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B_INT8 --out $(q "$WORK/bootstrap")"
+  [bootstrap]="taskset -c $(q "$A5_CORES") bash benchmarks/one_stage/kept_bootstrap.sh $A5_CARD LLAMA32_1B_INT8 $(q "$WORK/bootstrap") $ON"
   [partition-flock]=$(part stratified-rate:880/880 flock)
   [partition-zk]=$(part $ZK_DESIGN zk)
   [partition-sampling]=$(part subset:256 sampling)
   [flock]=$(run "A5_PLAIN=1 " flock)
   [zk]=$(run "" zk)
-  [sampling]=$(run "" sampling)
+  [sampling]=$(run "${A5_KEEP:+A5_KEEP=1 }" sampling)
   [layers]="PATH=\$HOME/.local/bin:\$PATH uv run verity bench prove layers --flock $(q "$WORK/out-flock") --zk $(q "$WORK/out-zk") --sampling $(q "$WORK/out-sampling")${A5_STEPS:+ --batch $A5_STEPS} | tee $(q "$RESULTS/proof-layers.txt")"
 )
 HOW="card $A5_CARD taken directly (no gpu-lease)"; [ -z "$LEASE" ] || HOW="leases recorded for $GPU_LEASE_WHO"
@@ -131,10 +139,17 @@ sample() {  # one line: the job's own PSS, the machine's memory in use and WORK'
 peak() { tail -n +"$((from + 1))" "$MEM" | awk -v c="$1" '$c > m {m = $c} END {printf "%.1f GB", m * 1024 / 1e9}'; }
 ( while :; do sample; sleep 10; done ) &
 SAMPLER=$!
+keep() {  # the sampling run's window copied to A5_KEEP; fails unless exactly one is under WORK
+  local w=() o
+  for o in "$WORK"/a5-llama1b/*/serving-rows; do [ ! -d "$o" ] || w+=("$o"); done
+  if [ ${#w[@]} = 1 ] && cp -a "${w[0]}" "$A5_KEEP"; then log "kept: the sampling run's window in $A5_KEEP"
+  else log "A5_KEEP=$A5_KEEP: no one sampling window under $WORK/a5-llama1b to keep (${#w[@]} found)"; return 1; fi
+}
 finish() {  # at exit, success or failure: the records copied to --out, then WORK removed
   local rc=$? o
   kill "$SAMPLER" 2>/dev/null
   for o in out-flock out-zk out-sampling bootstrap; do [ ! -e "$WORK/$o" ] || cp -a "$WORK/$o" "$RESULTS/"; done
+  [ -z "$A5_KEEP" ] || keep || [ "$rc" != 0 ] || rc=3
   log "WORK=$WORK at the end: $(du -sh "$WORK" 2>/dev/null | cut -f1); removing it"
   rm -rf "$WORK" && log "removed: $WORK"
   rm -f "$MEM"
@@ -158,5 +173,9 @@ for n in "${STEPS[@]}"; do
   sample
   log "STEP $i/${#STEPS[@]} $n: rc $rc in $((SECONDS - t0)) s; peak memory: this job's $(peak 1), the machine's in use $(peak 2); largest process ${rss:-not measured}; WORK's peak $(peak 3), $(du -sh "$WORK" | cut -f1) after"
   [ "$rc" = 0 ] || { log "stopped at $n (rc $rc): its output is $RESULTS/$n.log"; exit "$rc"; }
+  if [ "$n" = bootstrap ]; then
+    boot=$(tail -1 "$RESULTS/$n.log"); exec 9< "$boot.lock" && flock -s 9 || { log "can't lock $boot.lock"; exit 3; }
+    export VENV=$boot/venv312 HF_HOME=$boot/hf A5_TAPS=$boot/cp
+  fi
 done
 log "all ${#STEPS[@]} steps passed: the table is $RESULTS/proof-layers.txt"

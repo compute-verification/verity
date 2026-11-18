@@ -35,14 +35,14 @@ from verity.circuits import Program, bind
 from verity.circuits.codec import decode_program, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.types import Array, RecordType, Tuple, Value
+
+from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1
 from verity_vllm.definitions.numerics import serve3_reference as ref
 from verity_vllm.definitions.registry import b1, serve3
 from verity_vllm.definitions.registry import lifted as L
 from verity_vllm.definitions.registry import pad_prims as PP
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import weights_type
-
-from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1
 
 I32, BF16 = Value(32), Value(16)
 N_EVENTS = D_MAX + 1  # prefill event + D_MAX decode events (the Serve_v2 skeleton; SPEC R3 maps this to Workload_v1's T = cap−1)
@@ -989,6 +989,7 @@ def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and
     from verity.circuits.codec import decode_program, encode_program
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.refs import coll_concat
+
     from verity_vllm.definitions.registry.prims import I32
 
     def twin_sig(S):

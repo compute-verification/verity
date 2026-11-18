@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
+
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.registry import b1, dense, hopper
 from verity_vllm.definitions.registry import fa2_check_inf as F2
@@ -12,9 +15,6 @@ from verity_vllm.definitions.registry import prims as P
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.query import program_view as PV
-
-from verity.circuits.defs import bind
-from verity.circuits.evaluation.reference import evaluate
 
 FA2 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": P.Fa2InvSum}
 PRO6000 = TargetProfile(compute_capability=(12, 0), num_sms=188)

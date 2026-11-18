@@ -312,14 +312,14 @@ def test_served_switches_with_a_problem_refuse_the_build_before_a_committer_is_m
 
 
 def test_a_device_no_card_is_registered_for_refuses_the_build_before_a_committer_is_made(monkeypatch, tmp_path, caplog):
-    facts = {**FACTS, "device": "NVIDIA H100 80GB HBM3"}
+    facts = {**FACTS, "device": "NVIDIA L40S"}
     with pytest.raises(Unmodelled) as why:
         sm.device_of(facts)
     run = _Run(monkeypatch, tmp_path, facts=facts)
     assert run.main() == 3
     assert run.log == _before_the_committer(run)
-    assert "NVIDIA H100 80GB HBM3" in str(why.value)
-    assert run.read("match.json") == {"ok": False, "build_refused": str(why.value), "facts": {**run.facts(), "device": "NVIDIA H100 80GB HBM3"}}
+    assert "NVIDIA L40S" in str(why.value)
+    assert run.read("match.json") == {"ok": False, "build_refused": str(why.value), "facts": {**run.facts(), "device": "NVIDIA L40S"}}
     assert _said(caplog) == _lines(ENGINE_LINE, f"Build refused: {why.value}")
 
 

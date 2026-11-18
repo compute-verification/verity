@@ -15,10 +15,15 @@ are built again without them in the same tick.
                                                    after a Linear magic word, a bare key of a team main's Slack registry
                                                    lists, or an `Issue: none: REASON` line); --json gives each its `issue`,
                                                    stdout holding the JSON alone (the notices go to stderr)
-    research queue eject PR --reason TEXT [--by HANDLE]
+    research queue eject PR --reason TEXT [--by HANDLE] [--force REASON]
                                                    keep the PR's current head out of the verified queue's candidates, and a new
                                                    head whose own change is the same (`StoreLabels`); a ready mark re-admits it;
-                                                   posted as HANDLE to `CI` and the owner in the merge thread (exit 1 if it couldn't be)
+                                                   posted as HANDLE to `CI` and the owner in the merge thread (exit 1 if it couldn't be);
+                                                   refused, naming the batch, while a staged Lean batch or a candidate put on
+                                                   main's chain from one carries the head (`Queue.staged_holding`, read from the
+                                                   loop's log on the control pod), when that log can't be read, or when the ancestor
+                                                   test fails for any reason but not being an ancestor, unless --force, which
+                                                   reads no log
     research queue ready PR (--on MACHINE | --local | --mark) [--by LANE] [--no-preflight] [--sha SHA] [--json]
                                                    the owner's word that the PR is ready at its current head (a new push needs it
                                                    again unless its own change is the marked head's;
@@ -753,21 +758,27 @@ CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "flock
 #: an entry of `DriveFlags.lowrisk_excludes`, `DriveFlags.verdict_plain` or `DriveFlags.verdict_excludes`: a directory from the
 #: repository's root ending in `/`, one file's path from the root (a `/` before its end, no glob), or a file name glob (no `/`)
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+(?:[\w.-]+)?|[\w.*?\[\]-]+")
-#: an entry of `DriveFlags.bottom_ring`: a handle as a post that starts with it rings it (`slack.NAME_TOKEN_RE`)
-HANDLE_RE = re.compile(r"@[a-z0-9][a-z0-9._-]*")
-#: drive.toml's `executor` (off, shadow beside the after-landing run, or on in its place) and `verdict_carry` (off, shadow logged
-#: only, or on written)
+#: drive.toml's `verdict_carry` and `signed_verdicts`: off, shadow (logged only) or on
 MODES = ("off", "shadow", "on")
-#: drive.toml's `close_unlandable`: off, log (each close it would make, only logged) or on
-CLOSE_UNLANDABLE = ("off", "log", "on")
 #: the keys drive.toml's `command_line` may name
 COMMAND_LINE = ("on", "marked_after", "regenerate_locks", "after_landing_no_cache")
 #: drive.toml keys whose code was deleted: code deployed ahead of `main` still reads them in `main`'s drive.toml, so even a
 #: strict parse ignores them, with a note, rather than refuse every tick
-DELETED_KEYS = ("max_lean_checks", "nonlean_first", "reviewed_first")
+DELETED_KEYS = ("max_lean_checks", "nonlean_first", "reviewed_first", "executor", "executor_enqueue",
+                "lowrisk_per_tick", "close_unlandable", "bottom_ring", "bottom_wait_min")
 #: what every command says to a `--first`, refusing it: the landing order is the priority file's alone
 FIRST_RETIRED = ("--first is retired: the verified queue's priority file (`research queue vqueue --priority-file`) holds the "
                  "landing order; list the PRs there, first to land first")
+#: the commands that read each command's own flag; a flag not named here is every command's
+COMMAND_FLAGS = {
+    "--jobs": ("map-moves", "cross"), "--main": ("cross",), "--move-commit": ("cross",), "--only": ("cross",),
+    "--push": ("cross",), "--from": ("cross",), "--reason": ("eject",), "--force": ("eject",), "--on": ("ready", "judge"), "--local": ("ready",),
+    "--mark": ("ready",), "--again": ("ready",), "--no-preflight": ("ready",),
+    "--land": ("review",), "--hold": ("review",), "--ref": ("review",), "--over": ("review",), "--head": ("open",),
+    "--draft": ("open",), "--base": ("open",), "--title": ("open", "edit"), "--body-file": ("open", "edit"),
+    "--issue": ("open", "link"), "--dry-run": ("open", "edit"), "--sha": ("open", "ready", "eject", "review"),
+    "--json": ("status", "ready", "review", "stats"), "--tip": ("map-moves",), "--out": ("map-moves", "cross"),
+    "--short": ("stats",), "--rounds": ("stats",), "--reds": ("stats",), "--until": ("stats",), "--days": ("delegate",)}
 #: what `DriveFlags.signed_verdicts` "on" keeps off the low-risk lane: who holds each handle, and the code that judges a label
 SIGNED_GUARDS = (str(REGISTRY), "tools/research/src/research/labelauth.py", "tools/research/src/research/queue.py",
                  "tools/research/src/research/landing.py")
@@ -814,8 +825,6 @@ class DriveFlags:
     stale_close_days: int = 0
     #: PRs the stale rule never judges: their owners keep them open with a reason
     stale_keep: tuple[int, ...] = ()
-    #: old path: close each open PR nothing will land ("on"; "log", only log each it would close; "off")
-    close_unlandable: str = "off"
     #: the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`vqueue_slim.start`):
     #: 1, or a plan's N; it takes about its longest shard rather than every step on one slot; "auto" or "auto:MAX", the shard
     #: planner's N (`tools/check/shards.py`), at most MAX (default its MAX_SHARDS), each shard `--shard auto:K/N`
@@ -823,9 +832,7 @@ class DriveFlags:
     #: the keys a command line may override, of `COMMAND_LINE`
     command_line: tuple[str, ...] = ("on",)
     #: the low-risk lane: the verified queue takes a PR whose change is `lowrisk` on its ready mark alone; off, only on review
-    #: (`lowrisk_per_tick` is the old path's)
     lowrisk_lane: bool = True
-    lowrisk_per_tick: int = 20
     #: what keeps a change off the low-risk lane (`lowrisk`): a directory from the root (ending in `/`), one file's path from
     #: the root, or a file name glob; none, the lane lands nothing
     lowrisk_excludes: tuple[str, ...] = ()
@@ -835,18 +842,10 @@ class DriveFlags:
     #: the entries of `lowrisk_excludes` the land verdicts gate doesn't read, each written as it is there: what keeps a change
     #: off the low-risk lane only so that a reader sees it, which a land verdict already is (`plain_excludes`)
     verdict_plain: tuple[str, ...] = ()
-    #: the task executor after landing (`research.executor`): "off", "shadow" or "on", which only the old path's drive read
-    executor: str = "off"
-    #: the task executor's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it
-    #: puts `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
-    executor_enqueue: tuple[str, ...] = ()
     #: a land verdict at an older head of a member's PR carries to its head when the commits since only merge trusted ones
     #: (`research.carry`): "off"; "shadow", the loop logs what it would carry and writes nothing; "on", it writes the land
     #: verdict at the head as `CI`
     verdict_carry: str = "off"
-    #: old path: who it rang while its `next`'s lowest member waited for a land verdict, and the minutes before each ring
-    bottom_ring: tuple[str, ...] = ("@ci", "@top")
-    bottom_wait_min: int = 30
     #: whether a ready mark or land verdict counts only when its `label_auth` companion authenticates it as its author's, or as
     #: an agent's its name is delegated to (`research.labelauth`, `StoreLabels`), a mode of `MODES` (`signed_mode`): "off"
     #: (written false), none is judged; "shadow", each counts as written and the verified queue's loop logs each it counted
@@ -907,24 +906,14 @@ class DriveFlags:
                 raise bad("after_landing_shards", "a whole number, 1 or a shard plan's N in tools/check/ci.toml, or "
                                                   "\"auto\" or \"auto:MAX\" (the shard planner's N, at most MAX)")
             got["after_landing_shards"] = v
-        for k, modes in (("executor", MODES), ("verdict_carry", MODES), ("close_unlandable", CLOSE_UNLANDABLE)):
-            if k in doc:
-                if doc[k] not in modes:
-                    raise bad(k, f"one of {', '.join(modes)}")
-                got[k] = doc[k]
-        if "executor_enqueue" in doc:
-            v = doc["executor_enqueue"]
-            if not (isinstance(v, list) and v and all(isinstance(x, str) and x for x in v)):
-                raise bad("executor_enqueue", "a command as a non-empty list of its words, as [\"python3\", \"enqueue.py\"]")
-            got["executor_enqueue"] = tuple(v)
+        if "verdict_carry" in doc:
+            if doc["verdict_carry"] not in MODES:
+                raise bad("verdict_carry", f"one of {', '.join(MODES)}")
+            got["verdict_carry"] = doc["verdict_carry"]
         if "marked_after" in doc:
             if not (isinstance(doc["marked_after"], str) and MARK_TIME_RE.fullmatch(doc["marked_after"])):
                 raise bad("marked_after", "a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
             got["marked_after"] = doc["marked_after"]
-        if "lowrisk_per_tick" in doc:
-            if type(doc["lowrisk_per_tick"]) is not int or doc["lowrisk_per_tick"] < 1:
-                raise bad("lowrisk_per_tick", "a whole number, 1 or more (`lowrisk_lane = false` turns the lane off)")
-            got["lowrisk_per_tick"] = doc["lowrisk_per_tick"]
         if "restack_jobs" in doc:
             if type(doc["restack_jobs"]) is not int or doc["restack_jobs"] < 1:
                 raise bad("restack_jobs", "a whole number, 1 or more")
@@ -947,15 +936,6 @@ class DriveFlags:
             if both := [x for x in plain if x in got.get("verdict_excludes", ())]:
                 raise bad("verdict_plain", f"{', '.join(both)} is also an entry of verdict_excludes, which keeps it on the "
                                            "whole check: remove it from one of the two")
-        if "bottom_ring" in doc:
-            v = doc["bottom_ring"]
-            if not (isinstance(v, list) and v and all(isinstance(x, str) and HANDLE_RE.fullmatch(x) for x in v)):
-                raise bad("bottom_ring", "a non-empty list of handles, each `@` and its lower-case name, as [\"@ci\"]")
-            got["bottom_ring"] = tuple(v)
-        if "bottom_wait_min" in doc:
-            if type(doc["bottom_wait_min"]) is not int or doc["bottom_wait_min"] < 1:
-                raise bad("bottom_wait_min", "a whole number of minutes, 1 or more")
-            got["bottom_wait_min"] = doc["bottom_wait_min"]
         for k in ("regenerate_locks", "verdict_first", "lowrisk_lane"):
             if k in doc:
                 if not isinstance(doc[k], bool):
@@ -3058,6 +3038,38 @@ class Queue:
         self.save_state(state)
         return prs[pr]
 
+    def staged_holding(self, pr: int) -> list[str]:
+        """The verified queue's staged Lean batches, and the candidates `Commit` put on main's chain from staging, that carry
+        ``pr``'s head (`loop_staged`): each as one of its members or under one, as its commits hold it.  An eject of it would
+        drop that batch and its records run with it, and every candidate built on it; ``eject --force REASON`` overrides.
+        Raises when the loop's log can't be read, or when `git merge-base --is-ancestor` fails for any reason but not being
+        an ancestor (a missing object included), so nothing is ejected blind."""
+        self._clone()
+        p = next((p for p in self.github.open_prs() if p.number == pr), None)
+        if p is None:
+            return []
+        cands, err = loop_staged()
+        if err:
+            raise QueueError(f"the verified queue's log can't be read ({err}), so it isn't known whether a staged Lean batch "
+                             f"carries #{pr}'s head: eject --force REASON ejects it anyway")
+        held = []
+        for c in cands:
+            sha = str(c.get("sha") or "")
+            if p.head not in (c.get("heads") or ()):
+                self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/pull/{pr}/head:refs/queue/eject/pr",
+                             f"+refs/heads/queue/{sha[:12]}:refs/queue/eject/candidate", ok=None)
+                checked = _git(self.workdir, "merge-base", "--is-ancestor", p.head, sha, check=False)
+                if checked.returncode == 1:
+                    continue
+                if checked.returncode:
+                    detail = " ".join((checked.stderr or checked.stdout).split())[-300:]
+                    raise QueueError(f"`git merge-base --is-ancestor` of #{pr}'s head and {sha[:12]} exited "
+                                     f"{checked.returncode}" + (f" ({detail})" if detail else "") + ", so it isn't known "
+                                     "whether a staged Lean batch carries the head: eject --force REASON ejects it anyway")
+            kind = "staged off main's chain" if c.get("staged") else "put on main's chain from staging"
+            held.append(f"{sha[:12]} (#{', #'.join(str(m) for m in c.get('members') or ())}, {kind})")
+        return held
+
     def tell_ejected(self, p: PR, reason: str, by: str, post: Callable[..., bool] | None = None) -> int:
         """A hand ejection's notice, posted as ``by`` in the merge thread to `CI` and the lane that owns ``p`` (only a handle's
         holder may post as it).  The loop's
@@ -3962,10 +3974,11 @@ def _launch(argv: list[str], cwd: Path) -> subprocess.CompletedProcess:
 
 def quick_run(rid: str, on: str, wt: Path, at: str, base: str, *, merged: str | None = None, audit: list[str] | None = None,
               by: str = "", project: str = "verity", wait_s: float = REMOTE_WAIT_S, timeout_s: float = REMOTE_TIMEOUT_S,
-              pool: str = "", priority: bool = False, twin: str = "", twin_after: float = 0, note: str = "") -> list[str]:
+              pool: str = "", priority: bool = False, rank: int | None = None, twin: str = "", twin_after: float = 0,
+              note: str = "") -> list[str]:
     """The `research run` of the quick tier at ``at`` (``wt``, a checkout of it, its `--source`) since ``base`` as run ``rid`` on
     machine ``on`` (`RemoteQuickTier`): in a check slot of the machine (of its ``pool``'s), a `--priority` one with
-    ``priority``, waiting `wait_s` for it and running `timeout_s` in it; ``merged``, the PR head when ``at`` is its merge onto
+    ``priority`` (at `slot.py --rank` ``rank`` when given), waiting `wait_s` for it and running `timeout_s` in it; ``merged``, the PR head when ``at`` is its merge onto
     ``base``; ``audit``, `LEAN_AUDIT` when it audits (`lean_audit`); ``twin``, its `slot.py --twin` (PAIR on the pair's home,
     PAIR@HOME elsewhere, joining the line after ``twin_after``); ``note``, the line its log starts with."""
     slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
@@ -3973,7 +3986,8 @@ def quick_run(rid: str, on: str, wt: Path, at: str, base: str, *, merged: str | 
     args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
             *(["--merged", merged] if merged else []), *(["--lean-audit", shlex.join(audit)] if audit else []),
             *(["--note", note] if note else []), "--", *QUICK_TIER]
-    opts = [*(["--priority"] if priority else []), *(["--by", by] if by else []),
+    opts = [*(["--priority"] if priority else []), *(["--rank", str(rank)] if priority and rank is not None else []),
+            *(["--by", by] if by else []),
             *(["--twin", twin] if twin else []), *(["--twin-after", f"{twin_after:g}"] if twin and twin_after else []),
             "--wait-max", f"{wait_s:g}", "--run-max", f"{timeout_s:g}"]
     return [sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", project,
@@ -4173,11 +4187,11 @@ def tier_report(d: Path, rid: str, on: str, status: dict):
     """Run ``rid``'s result.json (its records in ``d``, its `status.json` ``status``) as a `quick_tier` report, and None; or None and
     why it isn't one."""
     from .result import check
+    from .vqueue import NEVER_RAN
 
     res = check(d, rid)
     if not res.present and status.get("rc") == SLOT_NOT_STARTED:
-        return None, NotStarted(f"run {rid} on {on} waited for a check slot until its --wait-max and never ran the tier "
-                                f"(`research inspect {rid}`)")
+        return None, NotStarted(f"run {rid} on {on} {NEVER_RAN} (`research inspect {rid}`)")
     if not res.present:
         return None, f"run {rid} on {on} ended {status.get('state')} (exit {status.get('rc')}) without a result.json (`research inspect {rid}`)"
     if not res.valid:
@@ -6127,6 +6141,39 @@ LEAN_AUDIT_STEP = "lean-audit"
 KEY_COMMAND = "tools/verity/lean/lean_changed.py"
 
 
+#: run on the control pod over the loop's decision log: each candidate a done build line staged (`records_first`) or that a
+#: `Commit` built from a staged batch (`repairs`), and no drop has dropped since, by sha, the latter's `staged` false
+STAGED_SCRIPT = r'''
+import json, sys
+alive = {}
+for line in open(sys.argv[1] + "/decisions.jsonl", errors="replace"):
+    try:
+        r = json.loads(line)
+    except ValueError:
+        continue
+    if not isinstance(r, dict) or not isinstance(r.get("sha"), str):
+        continue
+    sha, action = r["sha"], r.get("action")
+    if action == "build" and r.get("done") and (r.get("records_first") or r.get("repairs")):
+        alive[sha] = {"sha": sha, "members": r.get("members") or [], "heads": r.get("heads") or [],
+                      "staged": bool(r.get("records_first"))}
+    elif action == "build" and r.get("done") and sha in alive:
+        alive[sha]["staged"] = False
+    elif action == "drop":
+        alive.pop(sha, None)
+print(json.dumps({"candidates": list(alive.values())}))
+'''
+
+
+def loop_staged() -> tuple[list[dict], str]:
+    """(The live loop's staged Lean batches and the candidates `Commit` built from them still in flight, as `STAGED_SCRIPT`
+    reads its decision log on the control pod, read-only; why that read failed, else "")."""
+    from .queue_table import CONTROL, LIVE, _remote
+
+    got, err = _remote(CONTROL, STAGED_SCRIPT, LIVE)
+    return (list((got or {}).get("candidates") or []), err) if got is not None else ([], err or "no answer")
+
+
 def ejection(store, pr: PR) -> str | None:
     """Why ``pr``'s current head was ejected, when the newest `ready` label on it is `research queue eject`'s `false` (its reason in
     `ref`), pulled from the store's remote first; else None, and None when that pull fails: this saves a revert, and the after-landing
@@ -6910,6 +6957,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--from", dest="from_dir", type=Path, metavar="DIR", help="cross --push: push what a run left in DIR (its "
                     f"{CROSS_REPORT} and {CROSS_BUNDLE}, from `research fetch RUN --all`) instead of crossing anew")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
+    ap.add_argument("--force", metavar="REASON", help="eject: eject it though a staged Lean batch of the verified queue, or a "
+                    "candidate put on main's chain from one, carries its head (refused without it: the batch, its records run "
+                    "and every candidate on it would be dropped), and why, in its notice; also when the loop's log can't be "
+                    "read. It reads no log: that read is a call through vy-control-gate, which takes no --force")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
                     help="eject, ready, judge: who ejects it, the handle its notice is posted as (default merge-queue, which no "
                          "one holds, so the notice fails) or says it's ready (no default: the owner's lane), "
@@ -6991,6 +7042,10 @@ def main(argv: list[str]) -> int:
         ap.error("vqueue comes first, its options after it: research queue vqueue --help")
     if a.first is not None:
         ap.error(FIRST_RETIRED)
+    for act in ap._actions:
+        verbs = COMMAND_FLAGS.get(act.option_strings[0] if act.option_strings else "", (a.command,))
+        if a.command not in verbs and getattr(a, act.dest, act.default) != act.default:
+            ap.error(f"{act.option_strings[0]} is for {', '.join(verbs)} only, not {a.command}")
     global MERGED_ROOT
     MERGED_ROOT = a.preflight_root or MERGED_ROOT
     if a.command == "stats":
@@ -7004,12 +7059,14 @@ def main(argv: list[str]) -> int:
     if a.command == "cross":
         if a.from_dir is not None and not a.push:
             ap.error("cross: --from DIR goes with --push: it pushes what a dry run left in DIR")
-        return _cross(a)
-    if a.issue is not None and a.command not in ("open", "link"):
-        ap.error("--issue is for open and link only")
+        try:
+            return _cross(a)
+        except QueueError as e:
+            print(f"research queue: {e}", file=sys.stderr)
+            return 1
     if a.command == "link":
-        if not (a.pr and a.pr.isdigit() and a.issue and ISSUE_KEY_RE.fullmatch(a.issue)) or a.dry_run:
-            ap.error("link needs the PR number and --issue KEY (its Linear issue, like ENG-123), and has no --dry-run")
+        if not (a.pr and a.pr.isdigit() and a.issue and ISSUE_KEY_RE.fullmatch(a.issue)):
+            ap.error("link needs the PR number and --issue KEY (its Linear issue, like ENG-123)")
         try:
             repo = remote_and_repo(a.remote, a.repo, Path.cwd())[1]
             print(f"research queue link: {link_issue(a.issue, f'https://github.com/{repo}/pull/{a.pr}')}")
@@ -7064,12 +7121,8 @@ def main(argv: list[str]) -> int:
             return 1
     if a.marked_after and not MARK_TIME_RE.fullmatch(a.marked_after):
         ap.error(f"--marked-after {a.marked_after!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
-    if a.dry_run:
-        ap.error(f"--dry-run is for open and edit only: `{a.command}` would act for real")
     if a.command == "ready" and bool(a.on) + a.local + a.mark != 1:
         ap.error("ready takes one of --on MACHINE (the quick tier as a run there, in a check slot), --local (here) and --mark (no tier)")
-    if a.no_preflight and a.command != "ready":
-        ap.error("--no-preflight is for ready only")
     if a.command == "judge" and not a.pr:
         ap.error("judge needs the quick tier's run id")
     if a.command in ("ready", "judge") and not a.by:
@@ -7161,7 +7214,16 @@ def main(argv: list[str]) -> int:
                           over=a.over)
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
-        told = q.tell_ejected(q.eject(a.pr, a.reason, a.by, sha=a.sha), a.reason, a.by)
+        if a.force is not None:
+            # no staged_holding: its log read is a vy-control-gate call, and the gate takes no --force
+            reason = f"{a.reason} (forced over a staged batch carrying it: {a.force})"
+        else:
+            if held := q.staged_holding(a.pr):
+                raise QueueError(f"#{a.pr}'s head is carried by the verified queue's {'; '.join(held)}: ejecting it drops that "
+                                 "batch, its records run with it, and every candidate built on it, so nothing is ejected; eject "
+                                 "--force REASON ejects it anyway")
+            reason = a.reason
+        told = q.tell_ejected(q.eject(a.pr, reason, a.by, sha=a.sha), reason, a.by)
         print(f"research queue: #{a.pr}'s mark is withdrawn; the verified queue leaves it out until a ready mark re-admits it, "
               "and a candidate in flight holding it still lands it as built unless the eject is ci's or not by its "
               "owner")
