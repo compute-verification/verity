@@ -49,8 +49,8 @@ taken into a closed row; an output of 8 bits (`short_output`), which lacks bits 
 into one leaf and into a closed row alike; and an output of 31 bits (`odd_output`), two words, its bits rounded
 up: refused into a row of two words, which holds a bit it lacks, and a record that wires it into a row of one
 word refused by the wires' own check. Then a root that
-hands a unit a row that is not input gates of its own: the served shape with one input run handed to two rows, and
-with a row every unit shares; and one that hands `Select`'s row part of `Norm`'s output, an edge, refused by the edges
+hands a unit a row that is not input gates of its own: the served shape with one input run handed to two rows, a
+shared weight's run no registered read declares (`shared-unheld`), and with a row every unit shares; and one that hands `Select`'s row part of `Norm`'s output, an edge, refused by the edges
 (`edge-rows`). Then a text the form reads nothing of: the served shape's
 record as one that lists its members, which states no wires, refused by the wires' reader; and the text of no wire
 and nothing else, which names no Program, refused with its templates. Then a row declared twice (`TWICE`): the served
@@ -1161,7 +1161,7 @@ def shaped() -> list[dict]:
             _split_reads(desc, moved, ret, k, cut, pos)
         return edit
 
-    first("2x3 one input run handed to two rows", lowered(2, 3), 27, reroot=twice, broken="own-rows")
+    first("2x3 one input run handed to two rows", lowered(2, 3), 27, reroot=twice, broken="shared-unheld")
     first("2x3 a row every unit shares", lowered(2, 3), 28, reroot=shared, broken="own-rows")
     first("2x3 a row of computed gates", lowered(2, 3), 29, reroot=computed, broken="wires")
     c = lowered(2, 3)

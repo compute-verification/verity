@@ -291,7 +291,7 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
 
 #: the cases on a unit's rows, each with the stage that refuses it
 ROWS = {
-    "2x3 one input run handed to two rows": "own-rows",
+    "2x3 one input run handed to two rows": "shared-unheld",
     "2x3 a row every unit shares": "own-rows",
     "2x3 a row of computed gates": "wires",
 }
@@ -325,15 +325,16 @@ def test_a_units_rows_are_input_gates_of_its_own(shaped, monkeypatch):
     """The form counts a unit's row by what the record says fills it, which says something of the circuit only where
     the row is input gates of that unit alone. The root says which gates a unit's rows are: a row an edge of the root
     fills holds its writer's computed gates, every other row is the unit's own, and the form refuses a root that hands
-    an own row anything but input gates of its own (`own-rows`): the input gates of another row, or the first unit's
-    for every unit. Each case here is the accepted one with its root so edited, the record the same but for
+    an own row anything but input gates of its own (`own-rows`): the first unit's input gates for every unit. A run
+    of input gates handed to two rows is a shared weight's, refused where no registered read declares it
+    (`shared-unheld`). Each case here is the accepted one with its root so edited, the record the same but for
     the Program it names; without the refusal the reference reads the same of each as of the accepted one, and
     accepts it."""
     held = shaped["2x3 registered"]
     want = vectors.results(held["case"])
     doc = json.loads(held["case"]["instance"]["record"])
     made = {what: shaped[what] for what, stage in ROWS.items() if stage == "own-rows"}
-    assert len(made) == 2
+    assert len(made) == 1
     for what, m in made.items():
         r, inst = vectors.results(m["case"]), m["case"]["instance"]
         assert r["detail"] == r["public"] == {"error": "own-rows", "message": ref.OWN_ROWS}, what
