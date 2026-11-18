@@ -1,7 +1,8 @@
 """`block_census.py`: each row's cut (the row itself when it fits and is no longer than its family's `WHOLE_UP_TO`, else each
 slot's coarsest fitting option, else a gap with its finest option's reason; a ``COLS`` or ``WIDE_COORDS`` row or slot at its fitting width of least leakage-weighted proving
 cost; no proof block
-for a row of no gate or no input; a ``CHAINS`` row's key blocks as scores and values units before whole), the slots of each
+for a row of no gate or no input; a ``CHAINS`` row's key blocks as scores and values units before whole; a ``KEY_BLOCKS``
+row's units, the window circuit's cut of its heads, short or long), the slots of each
 kind of split the serving rows' tables name, and the census's counts per
 Definition, phase, token and request over the ranks, one request at a time for a row of several request shapes. The sized units are stand-ins: nothing is bound or lowered."""
 
@@ -142,6 +143,27 @@ def test_a_sliced_row_past_its_bound_takes_n_units_of_one_slice(n):
     assert (B.spec_statics(templates[0][0]), templates[0][1]) == (B.spec_statics(row), 1)
     kind, got, _why = B.cut(row, family(row, [unit(s, k) for s, k in templates[1:]], est_log=27))
     assert (kind, [(B.spec_statics(u["spec"]), u["n"]) for u in got]) == ("split", [({"N": 1, "H": 32, "D": 128}, n)])
+
+
+#: rows of Llama-3.2-1B's FA3 attention on the H200 as its census names them: a prefill row of 5 keys and one of 159 at
+#: kBlockN 128, and a decode row of 257 keys at 192
+FA3_ROW = 'Attention_v4{{T={},NH=32,KVH=8,D=64,BN={},DOT={{"fn":"HopperBF16WgmmaDot16_v1"}},INV={{"fn":"Fa3InvSum_v1"}},MASKED_FROM={}}}'
+
+
+@pytest.mark.parametrize("T, bn, masked_from, blocks", [(5, 128, 0, 1), (159, 128, 1, 2), (257, 192, 1, 2)])
+def test_an_attention_row_short_or_long_is_its_heads_key_blocks_and_ends(T, bn, masked_from, blocks):
+    """A ``KEY_BLOCKS`` row's slots are its unit templates (the window circuit's cut of its heads, `attention_cuts.units`,
+    which tests/adapters/vllm holds to the lowering's plan): each a slot, taken for a row that fits whole too (`WHOLE_UP_TO`)."""
+    row = FA3_ROW.format(T, bn, masked_from)
+    templates = B.ST.unit_templates(row)
+    assert templates[0] == (row, 1) and B.past_whole(row)
+    assert [(B.spec_base(t), n) for t, n in templates[1:]] == [
+        ("AttnBlockFirst_v1", 32), *([("AttnBlock_v4", 32 * (blocks - 1))] if blocks > 1 else []), ("AttnHeadEnd_v1", 32)]
+    units = [unit(t, n) for t, n in templates[1:]]
+    assert B.slots(row, units) == [[[u]] for u in units]
+    for est_log in (22, 28):
+        kind, got, _why = B.cut(row, family(row, units, est_log=est_log))
+        assert (kind, [(u["spec"], u["n"]) for u in got]) == ("split", list(templates[1:]))
 
 
 def test_the_served_sparse_attention_partition_names_a_decode_rows_units_at_the_census_s_width():
@@ -315,6 +337,17 @@ def test_main_writes_the_census_the_table_and_the_card(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["block_census.py", "--sized", str(tmp_path / "s0.json"), "--out", str(tmp_path / "o")])
     assert B.main() == 0
     assert {p.name for p in (tmp_path / "o").iterdir()} == {"census.json", "table.md", "card.json"}
+
+
+def test_a_staged_definition_s_ands_stand_beside_its_estimate_and_replace_it_in_the_staged_total():
+    rows = {"Lin_v1{N=1}": family("Lin_v1{N=1}", steps={"0": 2, "1": 1}, ands=10),
+            "Big_v1{}": family("Big_v1{}", steps={"0": 1}, ands=100)}
+    c = B.staged(B.census([doc(0, rows)]), [{"census": "Lin_v1{N=1}", "ands": 7}, {"census": "Other_v1{}", "ands": 1}])
+    assert c["definitions"]["Lin_v1{N=1}"]["staged_ands"] == 7 and "staged_ands" not in c["definitions"]["Big_v1{}"]
+    assert c["totals"]["prefill"]["staged_ands"] == 2 * 7 + 100 and c["per_request"]["staged_ands"] == 3 * 7 + 100
+    md = B.table(c)
+    assert "| 10 (staged 7) |" in md and "| proof blocks' ANDs (staged where staged) | 28.5 | 3.5 | 121 |" in md
+    assert "staged" not in B.table(B.census([doc(0, rows)]))
 
 
 def test_a_row_of_several_request_shapes_is_censused_one_request_at_a_time():

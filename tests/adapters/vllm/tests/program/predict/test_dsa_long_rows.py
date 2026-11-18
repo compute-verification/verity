@@ -24,17 +24,25 @@ from typing import Any
 
 import numpy as np
 import pytest
-
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
 from verity.circuits.refs import runs
-from verity.circuits.types import Array, Tuple as TupleT, Value
-from verity_vllm.definitions.registry import dsa_topk_mask as M
-from verity_vllm.definitions.registry.dsa_topk import topk_set, waksman_apply, waksman_switches
+from verity.circuits.types import Array, Value
+from verity.circuits.types import Tuple as TupleT
+
+from tests.program.predict.test_node import _first_layers
+from tests.program.predict.test_predict import GLM53, _row_phi
+from tests.program.predict.test_steps import GREEDY, HF_CONFIG_DIR, _class_g, _session
 from verity_vllm.check.batch import own
+from verity_vllm.definitions.registry import dsa_topk_mask as M
+from verity_vllm.definitions.registry.dsa_topk import (
+    topk_set,
+    waksman_apply,
+    waksman_switches,
+)
 from verity_vllm.engine.profiles.engine_classes import CLASS_G_SERVED, DSA_TOPK_ENV
-from verity_vllm.program.frontend.rules.vllm_dsa import PAD_SCORE, long_row_keys
 from verity_vllm.program import workload as W
+from verity_vllm.program.frontend.rules.vllm_dsa import PAD_SCORE, long_row_keys
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.batch import workload_labels
 from verity_vllm.program.predict.build import build_program
@@ -43,9 +51,6 @@ from verity_vllm.program.predict.dsa import run_bits, run_field
 from verity_vllm.program.predict.node import build_node_program
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.score import request_component
-from tests.program.predict.test_node import _first_layers
-from tests.program.predict.test_predict import GLM53, _row_phi
-from tests.program.predict.test_steps import GREEDY, HF_CONFIG_DIR, _class_g, _session
 
 TOPK = 4
 I32 = Value(32)
@@ -130,6 +135,31 @@ def test_a_row_past_index_topk_selects_its_top_k_from_its_logits(phi):
         min(i + 1, TOPK) for i in range(6)] * 4
     src = r.program.fn.bindings["SRC"]["inputs"]
     assert src[0] == [6] and len(src) == len(params) - 1, "the SRC inputs are the wrapper's, without the weights"
+
+
+def test_an_indexer_layers_calls_are_its_launchs_logits_then_each_rows_selection(phi):
+    """A step of 6 rows is one launch (`sparse_attn_indexer`: one MQA-logits kernel over its rows, then one top-k): on each full
+    indexer layer every row's DsaMqaLogits, then in row order rows 0-3's DsaTopKShortRow and rows 4-5's DsaTopKMask and
+    DsaButterflySettings, not each row's logits beside its selection."""
+    r = build_program(phi, "step", M=6, pos0=0, with_desc=False)
+    tag = {"DsaMqaLogits_v3": "L", "DsaTopKShortRow_v1": "S", "DsaTopKMask_v1": "M", "DsaButterflySettings_v1": "B"}
+    seq = "".join(tag.get(n.fn.id.split("{", 1)[0], "") for n in r.program.fn.body.nodes)
+    assert seq == ("L" * 6 + "S" * 4 + "MB" * 2) * 3
+
+
+def test_a_request_past_the_logits_budget_is_launched_in_runs_of_rows(monkeypatch):
+    """vLLM cuts a request whose rows × keys pass its logits budget into launches of max(1, budget // keys) rows
+    (`split_indexer_prefill_chunks`), each its rows' logits and then their selections; a block's rows select in the launch that
+    holds them, at the block's keys."""
+    import verity_vllm.program.frontend.rules.vllm_dsa as V
+
+    monkeypatch.setattr(V, "MAX_LOGITS", 12)
+    seen: list[tuple] = []
+    V.emit_indexer([1, 2, 3, 4, 5, 6], [(6, [3, 4, 5])], lambda i, n: seen.append(("logits", i, n)) or i,
+                   lambda i, n, lg: seen.append(("alone", i, n)), lambda N, rows, lgs: seen.append(("block", N, rows, lgs)))
+    assert seen == [("logits", 0, 1), ("logits", 1, 2), ("alone", 0, 1), ("alone", 1, 2),
+                    ("logits", 2, 3), ("logits", 3, 6), ("alone", 2, 3), ("block", 6, [3], [3]),
+                    ("logits", 4, 6), ("logits", 5, 6), ("block", 6, [4, 5], [4, 5])]
 
 
 def test_the_shared_layer_reads_the_last_indexer_layers_settings(phi):
@@ -403,10 +433,11 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     the advice's side (`pipeline.edge.fields`) holds each port's members as each window's Program returns them.  What no cheaper
     test can: that a window's edges carry a request past INDEX_TOPK whole, through a window it idles in."""
     from verity.circuits.types import field_types
+
+    from tests.program.predict.test_steps import CACHE_ON
     from verity_vllm.pipeline import edge as E
     from verity_vllm.pipeline import window_advice as WA
     from verity_vllm.program.predict.steps import Registered, compile_steps
-    from tests.program.predict.test_steps import CACHE_ON
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     reg = _class_g(tmp_path, engine=CACHE_ON, model={"hf_config": hf})
     reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)

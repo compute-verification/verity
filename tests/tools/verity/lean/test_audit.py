@@ -2449,6 +2449,73 @@ def test_a_fetch_sandbox_keeps_the_network_and_writes_only_the_packages_lake_and
     assert victim.read_text() == "orig\n"
 
 
+USER_RUN = Path(f"/run/user/{os.getuid()}")
+USER_BUS = {"XDG_RUNTIME_DIR": str(USER_RUN), "DBUS_SESSION_BUS_ADDRESS": f"unix:path={USER_RUN}/bus"}
+needs_user_bus = pytest.mark.skipif(not ((USER_RUN / "bus").is_socket() and shutil.which("systemd-run")),
+                                    reason="no user service manager here (no bus at /run/user/UID/bus, or no systemd-run)")
+REACHING_OUT = """import Lake
+open Lake DSL
+#eval IO.FS.writeFile "{marker}" "ran\\n"
+#eval IO.FS.writeFile "{beside}" "pwned\\n"
+#eval do
+  let args := #["--user", "--wait", "--collect", "-q", "--", "touch", "{asked}"]
+  let env := #[("XDG_RUNTIME_DIR", some "{run}"), ("DBUS_SESSION_BUS_ADDRESS", some "unix:path={run}/bus")]
+  let o ← IO.Process.output {{ cmd := "systemd-run", args, env }}
+  IO.FS.writeFile "{marker}.asked" s!"exit {{o.exitCode}}: {{o.stderr}}"
+package p
+@[default_target] lean_lib P
+"""
+
+
+@needs_unshare
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+@pytest.mark.parametrize("way", ["a-write-beside-the-package", pytest.param("the-service-manager", marks=needs_user_bus)])
+def test_setup_runs_a_lakefile_s_code_only_in_its_fetch_sandbox(tmp_path, monkeypatch, way):
+    """A lakefile runs code when its workspace loads: this one writes a marker in `.lake`, a file beside the package, and
+    asks the job user's service manager to write another. Unsandboxed (`lake env true`) it does all three; through
+    `setup` it runs (the marker) and neither other file is written."""
+    toolchain = (HERE / "fixtures" / "control" / "lean-toolchain").read_text().strip()
+
+    def package(d: Path) -> tuple[Path, Path, Path]:
+        (d / "pkg" / ".lake").mkdir(parents=True)
+        pkg, marker, beside, asked = d / "pkg", d / "pkg" / ".lake" / "ran", d / "Victim.lean", d / "asked"
+        (pkg / "lean-toolchain").write_text(toolchain + "\n")
+        (pkg / "P.lean").write_text("def P.x : Nat := 1\n")
+        (pkg / "lakefile.lean").write_text(REACHING_OUT.format(marker=marker, beside=beside, asked=asked, run=USER_RUN))
+        return pkg, marker, beside if way == "a-write-beside-the-package" else asked
+
+    pkg, marker, reached = package(tmp_path / "open")
+    r = subprocess.run(["lake", "env", "true"], cwd=pkg, env=A.lake_env(), capture_output=True, text=True)
+    assert marker.exists() and reached.exists(), r.stdout + r.stderr
+    pkg, marker, reached = package(tmp_path / "setup")
+    monkeypatch.setattr(A, "_INSTALLED", set())
+    monkeypatch.setenv("MATHLIB_CACHE_DIR", str(tmp_path / "mathlib"))
+    assert A.sandboxed()
+    _, text = A.setup(pkg, toolchain, tmp_path / "setup.log")
+    assert marker.exists(), text
+    assert not reached.exists(), text
+
+
+@needs_unshare
+@needs_user_bus
+@pytest.mark.parametrize("fetch", [False, True], ids=["build", "fetch"])
+def test_the_job_user_s_service_manager_runs_nothing_for_a_sandboxed_command(tmp_path, fetch):
+    """Through the job user's bus, `systemd-run --user` starts a program outside every namespace. It does for a command
+    outside the sandbox; from inside a build's or a fetch's sandbox it is refused, and the program never runs."""
+    (rw := tmp_path / "rw").mkdir()
+
+    def ask(prefix: list[str], name: str) -> tuple[subprocess.CompletedProcess, bool]:
+        r = subprocess.run([*prefix, "systemd-run", "--user", "--wait", "--collect", "-q", "--", "touch",
+                            str(tmp_path / name)], env=os.environ | USER_BUS, capture_output=True, text=True)
+        return r, (tmp_path / name).exists()
+
+    r, wrote = ask([], "outside")
+    assert r.returncode == 0 and wrote, r.stderr
+    r, wrote = ask([*(A.UNSHARE_NET if fetch else A.UNSHARE), "--", "bash", str(A.TOOL / "sandbox.sh"),
+                    *(["--net"] if fetch else []), str(rw), "--"], "inside")
+    assert r.returncode != 0 and not wrote, r.stdout + r.stderr
+
+
 def test_setup_sh_refuses_a_toolchain_that_is_no_release_of_lean_before_elan_runs(tmp_path):
     """elan downloads a toolchain from the repository its name gives, and `setup.sh` then runs its `lean` and `lake`:
     `attacker/lean4:v4.34.0` is refused before any `elan` runs."""
@@ -3531,6 +3598,60 @@ requiresModuleSystem = true
 name = "DepTest"
 plugins = ["Plug:shared"]
 '''
+
+class Built(Exception):
+    """What a `--build` past the artifact-cache refusal reaches first (`reserved`, stubbed)."""
+
+
+def built(*a, **k):
+    raise Built
+
+
+def cached_node(tmp_path, monkeypatch, modules=True):
+    """A sandboxed node whose artifact cache (under `CHECK_CACHE`) indexes a module unless not ``modules``, and `check.py
+    --build` of a toy package there, returning its exit or raising `Built` once past the refusal."""
+    pkg, root = toy(tmp_path), HERE.parents[3]
+    monkeypatch.setenv("CHECK_CACHE", str(cache := tmp_path / "check-cache"))
+    (index := cache / "lean-artifacts" / A.sibling("module_keys").INDEX).mkdir(parents=True)
+    if modules:
+        (index / "k").write_text("")
+    monkeypatch.setattr(A, "reserved", built)
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+    return pkg, cache / "lean-artifacts", lambda *flags: A.main([str(pkg), "--build", *flags, "--out", str(tmp_path / "out"),
+                                                                  "--repo", str(root)])
+
+
+def test_a_build_that_could_restore_from_the_nodes_artifact_cache_and_does_not_is_refused(tmp_path, monkeypatch, capsys):
+    """`--build` on a sandboxed node whose artifact cache indexes modules, with none of `--artifacts`, `--no-artifacts`,
+    `--fresh` or `--dev-cache`, refuses before any build and names the records route for each package it names."""
+    pkg, store, run = cached_node(tmp_path, monkeypatch)
+    assert run("--update") == 2
+    err = capsys.readouterr().err
+    assert f"lean_changed.py --records {A.rel(pkg)} --update\n" in err and f"--artifacts {store}" in err
+    assert run() == 2 and f"--records {A.rel(pkg)}\n" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("flags", [["--artifacts", "STORE"], ["--no-artifacts"], ["--fresh"], ["--dev-cache"]],
+                         ids=["candidate-check", "uncached-check", "fresh", "dev-cache"])
+def test_a_build_with_the_cache_or_cold_on_purpose_is_not_refused(tmp_path, monkeypatch, flags):
+    """The candidate's check (`lean_audit.py` passes `--artifacts`), the uncached check (`--no-artifacts`), `--fresh` and
+    `--dev-cache` build on a node the refusal covers."""
+    _, store, run = cached_node(tmp_path, monkeypatch)
+    with pytest.raises(Built):
+        run(*(str(store) if f == "STORE" else f for f in flags), "--update")
+
+
+def test_a_build_is_not_refused_without_the_sandbox_or_without_cached_modules(tmp_path, monkeypatch):
+    """A node whose builds aren't sandboxed keeps no artifact cache a build may read, and an empty cache restores nothing:
+    `--build` there builds as before."""
+    _, _, run = cached_node(tmp_path / "empty", monkeypatch, modules=False)
+    with pytest.raises(Built):
+        run("--update")
+    _, _, run = cached_node(tmp_path / "unsandboxed", monkeypatch)
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    with pytest.raises(Built):
+        run("--update")
+
 
 
 def test_the_dependencies_plugins_are_named_once_each():
@@ -8592,6 +8713,32 @@ def test_a_run_whose_lake_a_build_is_still_writing_fails_loudly(tmp_path, monkey
         with A._WROTE:
             A._WRITING.discard(pkg.resolve() / ".lake")
     assert len(fails) == 1 and fails[0].startswith("runs: a build is still writing") and ran == []
+
+
+def test_a_run_beside_the_samples_read_hold_on_its_lake_runs(tmp_path, monkeypatch):
+    pkg, ran, tests = _runs(tmp_path, monkeypatch, {"args": []})
+    monkeypatch.setattr(A, "writable", lambda p: [p.resolve() / ".lake"])
+    with A.writing(pkg, reads=True):
+        assert tests() == ([], {"T": {"args": []}}) and len(ran) == 1
+    with A.writing(pkg):
+        fails, _ = tests()
+    assert len(fails) == 1 and fails[0].startswith("runs: a build is still writing") and len(ran) == 1
+    assert not A._WRITING and not A._READING
+
+
+def test_an_update_keeps_the_run_records_it_could_not_rederive(tmp_path, monkeypatch):
+    entry = {"args": ["{v.txt}"], "data": {"v.txt": sha("12\n"), "w.txt": sha("13\n")}}
+    pkg, ran, tests = _runs(tmp_path, monkeypatch, entry)
+    with A._WROTE:
+        A._WRITING.add(pkg.resolve() / ".lake")
+    try:
+        fails, now = tests(update=True)
+    finally:
+        with A._WROTE:
+            A._WRITING.discard(pkg.resolve() / ".lake")
+    assert fails[0].startswith("runs: a build is still writing") and now == {"T": entry} and ran == []
+    assert tests(update=True) == ([f"runs: T's data v.txt is missing from {pkg}", f"runs: T's data w.txt is missing from {pkg}"],
+                                  {"T": {"args": ["{v.txt}"], "data": {"v.txt": sha("12\n")}}}) and ran == []
 
 
 def test_a_run_names_paths_outside_its_package_only_through_repo(tmp_path):

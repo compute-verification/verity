@@ -32,8 +32,8 @@ import struct
 from collections.abc import Callable
 from typing import Any
 
+from verity.channel import Body, Int, Json, Message, Schema
 from verity.commitments.identity import canonical_json_bytes
-from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.party import (
     Finish,
     Identity,
@@ -42,7 +42,7 @@ from verity.party import (
     Send,
     Timer,
 )
-from verity.channel import Body, Int, Json, Message, Schema
+from verity.protocol import Channel, Manifest, ProtocolDef, Role
 
 from . import audit, receipts
 from . import coins as C

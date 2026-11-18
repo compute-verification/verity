@@ -141,15 +141,4 @@ theorem band_family_continuous_time_average : Pous.Guarantees.BandFamilyContinuo
   · exact band_cont_time_average_row 2 97 (by norm_num) (by norm_num) N hN
   · exact band_cont_time_average_row 5 111 (by norm_num) (by norm_num) N hN
 
-/-! ## `ε_proof` at one segment -/
-
-theorem βOne_5_111 : βOne 5 111 = 265253616 := rfl
-
-/-- `ε_proof` at one segment and `β = βOne D k`: `1 − (β − 512)/2^28`. -/
-theorem band_epsProof_one (d : ℕ) (dom : ℕ → Bits 512) (β : ℕ) :
-    epsProof (chainBandSeg 1 (2 ^ 9) d 524288 512 dom) β = 1 - ((β : ℝ) - 512) / 2 ^ 28 := by
-  show (1 : ℝ) - ((β : ℝ) - ((1 * 2 ^ 9 : ℕ) : ℝ)) / (((1 * 2 ^ 9 : ℕ) : ℝ) * ((524288 : ℕ) : ℝ)) = _
-  norm_num
-
-
 end PousContinuous
