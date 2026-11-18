@@ -32,4 +32,24 @@ def SharedHeld : Prop :=
     ∀ g, Properties.Record.SharedLeaf c.f.P g → ∃ h : {h : Spot.RecordText.Held // Properties.Record.SharesRun h},
       ∀ r l lo hi, Properties.Record.RowLeaf c.f.P rs c.W r l g lo hi → c.heldAt r = some h.1
 
+/-- **A digest as a port's words** (`interface.digest_words`): the 64 bytes `d` spells in hex as eight big-endian
+64-bit words, each its four 16-bit words least significant first (`Flock.unhex`); none unless `d` spells 64 bytes. -/
+def digestWords (d : String) : Option (Array Nat) := do
+  let bs ← (_root_.Flock.unhex d).toOption
+  if bs.size != 64 then none
+  pure ((List.range 32).map fun k =>
+    let x := (List.range 8).foldl (fun a b => 256 * a + (bs[8 * (k / 4) + b]!).toNat) 0
+    x / 65536 ^ (k % 4) % 65536).toArray
+
+/-- **A table read's row is its table's registration.** For every record the check accepts, each input row `r` it
+holds as a table read, `.table name p root`, is held in its proof block's session (`heldRow`) to the words of the root
+(`root`), else the domain id, of the log's first record's last registration of `p`. Open: no code compares a table
+read's row with the registration. It is what crediting a table read's row as θ (`Record.kindOf`) means, as
+`Properties.Record.PinnedOpens` is for an opened row. -/
+def TableReadHeld (heldRow : Record.Case → Spot.RecordText.Row → Option (Array Nat)) : Prop :=
+  ∀ (j tr : Json) (c : Record.Case), Record.read j tr = .ok c →
+    ∀ r name p root, c.heldAt r = some (.table name p root) →
+      ∃ e d w, Theta.lastWith c.f.T.log[0]! "registered" "value" p = some e ∧
+        Theta.strAt e (if root then "root" else "domain") = some d ∧ digestWords d = some w ∧ heldRow c r = some w
+
 end InferenceOnlyVerifier.Record.SecurityProofs
