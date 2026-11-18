@@ -69,7 +69,6 @@ from verity.protocols.resource_accounting.network.verifier import network_attest
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate
 from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkAttesterParams, cell
-from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 
@@ -214,7 +213,7 @@ def committed_value(program: str, head: WR.CellsHead, port: str, rows: list[list
 def value_port(v: RV.Registered, reads_from: int = 0) -> dict:
     """The verifier's own `--registered` port of a registered value `v` at its root (a committed value's,
     `committed_value`, the one the registration names): unit `reads_from + i` reads its row i."""
-    return produced.port(v.value, v.entry(), v.root.hex(), list(range(v.leaves)), WR.SCHEMA) | \
+    return RV.port(v.value, v.entry(), v.root.hex(), list(range(v.leaves)), WR.SCHEMA) | \
         ({RV.READS_FROM: int(reads_from)} if reads_from else {})
 
 

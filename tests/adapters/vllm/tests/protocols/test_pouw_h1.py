@@ -382,8 +382,8 @@ def test_h1_is_refused_by_name_beside_a_scheme_that_releases_the_weights(monkeyp
     serve = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings())
     assert PO.refusals(serve) == ()
     ex.request("pous", H.ReleaseValue("l0.weight", lambda: None))
-    assert PO.refusals(serve) == (f"{_entry()}: the first-stage hash scheme commits its weights from each layer's weight, "
-                                  "which pous releases on this build (ReleaseValue): they don't run in one process",)
+    assert PO.refusals(serve) == (f"{_entry()}: commits its weights from each layer's weight at install "
+                                  "(READS_LAYER_WEIGHT), which pous releases on this build (ReleaseValue): they don't run in one process",)
 
 
 def test_h1_is_admitted_beside_spot_and_executes_nowhere():
