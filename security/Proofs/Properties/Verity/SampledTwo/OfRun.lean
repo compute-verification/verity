@@ -164,7 +164,7 @@ theorem acceptedTwo_of_formAccepts {C : CaseOf} [hsn : Fact (SampledNoneAt C)] {
     unfold inputOn
     rw [hk]
     exact hik
-  obtain ⟨-, c₂, ξ₂, r, i', it', run, hin, hat, -⟩ :=
+  obtain ⟨c₂, ξ₂, r, i', it', run, hin, hat, -⟩ :=
     SpotFlock.RunsAs.acceptedTwo_of_check (hrule o k p cm e hk hdec)
       (fun _ _ _ i'' _ hin'' hit'' => hsn.out o i'' _ hA₀ (hon hin'') hit'') hacc
   have hi' : inputOn C o = some i' := hon hin

@@ -960,6 +960,17 @@ def kept_tree(tree: Path) -> bool:
     return base in to.parents or (at.parent.resolve() == base and cache != to and cache not in to.parents)
 
 
+def named_tree(tree: Path | None) -> Path | None:
+    """``--tree`` as given: a bare NAME is the tree `RECORDS`/NAME this node keeps (`verity lean try --tree NAME`, a kept tree
+    of a branch), which must exist, since one made here empty would build cold; a path is taken as it is. Raises
+    FileNotFoundError naming the directory when the node keeps no tree of that name."""
+    if tree is None or str(tree) != tree.name or tree.name in ("", ".", ".."):
+        return tree
+    if not (at := LA.COMMON.cache_dir() / RECORDS / tree.name).is_dir():
+        raise FileNotFoundError(f"this node keeps no tree {tree.name} ({at}): nothing ran, and this says nothing about the file")
+    return at
+
+
 #: `--records`' kept passes, beside its trees: `<inputs_key>.json` for each package whose records passed on those inputs, the
 #: newest `PASSES_KEPT` of them
 PASSES, PASSES_KEPT = "passes", 4000
@@ -2382,7 +2393,8 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="lean_changed.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("--deps", type=Path, default=LA.COMMON.cache_dir() / "lean-deps", help="the audit's kept dependencies")
     ap.add_argument("--tree", type=Path, help=f"with --records, --try or --build: the slot tree (default: {RECORDS}/build-I, "
-                    f"the Lean slot's, under the check cache); it must be under {RECORDS}/")
+                    f"the Lean slot's, under the check cache); it must be under {RECORDS}/. With --try or --build, a bare "
+                    f"NAME is {RECORDS}/NAME, a tree this node keeps (`named_tree`)")
     ap.add_argument("--records", metavar="PKG",
                     help=f"audit PKG's records without the kernel replay, on a tree kept per Lean slot of pool {FAST_POOL}, "
                     f"else with check.py --dev-cache on this checkout (a {FAST_KIND} result, which no merge accepts)")
@@ -2449,6 +2461,11 @@ def main(argv: list[str]) -> int:
     if a.try_ or a.build:
         if a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild or (a.try_ and a.build) or (a.try_ and a.no_wait):
             ap.error("--try and --build take only --deps and --tree (--build also --no-wait), and not each other")
+        try:
+            a.tree = named_tree(a.tree)
+        except FileNotFoundError as e:
+            print(f"lean_changed: {e}", flush=True)
+            return 2
         if a.build:
             if a.siblings:
                 ap.error("--siblings goes with --try")

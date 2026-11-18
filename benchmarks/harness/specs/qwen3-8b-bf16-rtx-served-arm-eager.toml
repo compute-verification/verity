@@ -1,6 +1,7 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "qwen3-8b-bf16-rtx-served-arm-eager"
+cards = ["rtx-pro-6000"]
 # qwen3-8b-bf16-rtx-served-arm with the eager Commit (commit-rows-4k-eager, control stock) in place of the compiled one.
 arms = ["stock", "stock@compiled", "commit-rows-4k-eager"]
 arm_modules = ["served_commit.served_arm:EAGER_ROWS_4K"]
@@ -17,7 +18,6 @@ model = "Qwen/Qwen3-8B"
 revision = "b968826d9c46dd6066d109eabc6255188de91218"
 case = "QWEN3_8B"
 precision = "bfloat16"
-gpu_id = "rtx-pro-6000"
 gpu_count = 1
 vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
 

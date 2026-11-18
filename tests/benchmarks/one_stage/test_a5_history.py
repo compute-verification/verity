@@ -7,6 +7,7 @@ the Lean answers and none is under a Lean that can't run."""
 
 from __future__ import annotations
 
+import hashlib
 import argparse
 import json
 import sys
@@ -31,6 +32,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "protoco
 import a0  # noqa: E402
 import a5 as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
+
+
+def fixed(w, seed: int = 0) -> dict[str, bytes]:
+    """Salts a test hands in for every port a commit takes in full (`rows.full_ports`), so two commits of one period are
+    one commitment."""
+    from verity.commitments.periods import rows
+
+    w = getattr(w, "window", w)
+    return {p: hashlib.shake_256(f"{seed} {p}".encode()).digest(n * rows.SALT_BYTES) for p, n in rows.full_ports(w).items()}
 
 G8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
 G8ID = descriptor_id(G8)
@@ -61,7 +71,7 @@ def _window(d: Path, n: int = 4):
                         registered=I.Registered({}, histories=(I.History("latent", "program", G8ID, "o0", 8, runs, 16),)))
     win = I.Window(circuit, RUN, D.parse_design(SAMPLING_DESIGN), 2, registered={"latent": table})
     win.record(G8, [x, w], [y])
-    c = win.close(salt_key=bytes(32))
+    c = win.close(salts_of=fixed(win))
     win.write(c, d, {"label": "test"}, registrar=R)
     doc, rec = (json.loads((d / f).read_text()) for f in ("circuit.json", "registration.json"))
     return win.window, doc, rec, {m.key: c.public_body(k) for k, m in enumerate(win.window.members)}, table

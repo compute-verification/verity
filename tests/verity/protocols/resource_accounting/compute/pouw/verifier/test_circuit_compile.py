@@ -296,7 +296,7 @@ FAMILIES = {
     "s8dot": (lambda: Program(bind(S8.S8Dot, **S8.SMOKE_PLAIN)), [("S8Dot_v1", (1, 64, 1))]),
     "s8matmul": (lambda: Program(bind(MATMUL_INC, N=3)), [("S8Matmul_v1", (1, 64, 3))]),
     "gemmacc-shared-x": (lambda: Program(bind(SHARED_X, K=64, N=3)), [("GemmAccumulatorS8_v1", (1, 64, 3))]),
-    "scaledmm-nested": (lambda: Program(bind(G.ScaledMmS8, K=64, N=3, **G.GEMM_SM120_S8)), [("GemmAccumulatorS8_v1", (1, 64, 3))]),
+    "scaledmm-nested": (lambda: Program(bind(G.ScaledMmS8V3, K=64, N=3, **G.GEMM_SM120_S8)), [("GemmAccumulatorS8_v1", (1, 64, 3))]),
     "gemmacc-bits": (lambda: Program(bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8)), [("GemmAccumulatorS8_v2", (1, 64, 1))]),
     "two-calls": (lambda: Program(bind(TWICE)), [("GemmAccumulatorS8_v1", (1, 64, 1))] * 2),
 }

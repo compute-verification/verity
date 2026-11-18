@@ -327,14 +327,14 @@ def dense_layer_weights_type(C: dict[str, Any]) -> RecordType:
 
 
 def _int8_fields(fields: list[tuple[str, Any]]) -> list[tuple[str, Any]]:
-    """A dense layer's fields under the exact-int8 checkpoint (`INT8_EXACT_QUANT`): each linear of `FP8_LINEAR_FIELDS` is s8 `[N][K]`
-    (`Value<8>`, the stored bytes) followed by its f32 per-row scale `[N][1]` (`weight_scale`, the checkpoint's and vLLM's shape)."""
-    from verity_vllm.definitions.registry.prims import F32
+    """A dense layer's fields under the exact-int8 checkpoint (`INT8_EXACT_QUANT`): each linear of `FP8_LINEAR_FIELDS` is its s8
+    `[N][K]` as the u16 words it is registered as, `[N][K/2]` (a code's byte low first), followed by its f32 per-row scale
+    (`weight_scale`, the checkpoint's and vLLM's `[N, 1]`) as `[N][2]` words, low first."""
     scale_of = dict(FP8_LINEAR_FIELDS)
     out: list[tuple[str, Any]] = []
     for n, t in fields:
         if n in scale_of:
-            out += [(n, Array(t.n, Array(t.elem.n, Value(8)))), (scale_of[n], Array(t.n, Array(1, F32)))]
+            out += [(n, Array(t.n, Array(t.elem.n // 2, Value(16)))), (scale_of[n], Array(t.n, Array(2, Value(16))))]
         else:
             out.append((n, t))
     return out
@@ -462,10 +462,9 @@ def weights_type(C: dict[str, Any]) -> RecordType:
     if not C.get("tie_word_embeddings", True) and "lm_head" not in dict(fields):
         fields.append(("lm_head", Array(C["V"], Array(C["H"], BF16))))   # guard: b1.weights_type may carry the untied field itself
     if C.get("INT8_LM_HEAD"):
-        # the int8 LM head (`INT8_EXACT_LMHEAD_QUANT`): s8 `[V][H]` and its f32 per-row scale `[V][1]`, as `_int8_fields` states a linear
-        from verity_vllm.definitions.registry.prims import F32
+        # the int8 LM head (`INT8_EXACT_LMHEAD_QUANT`): s8 `[V][H]` and its f32 per-row scale as u16 words, as `_int8_fields` states a linear
         i = next(k for k, (n, _) in enumerate(fields) if n == "lm_head")
-        fields[i:i + 1] = [("lm_head", Array(C["V"], Array(C["H"], Value(8)))), ("lm_head_ws", Array(C["V"], Array(1, F32)))]
+        fields[i:i + 1] = [("lm_head", Array(C["V"], Array(C["H"] // 2, Value(16)))), ("lm_head_ws", Array(C["V"], Array(2, Value(16))))]
     if C.get("embed_normalizer") is not None:
         # Gemma-2 scales the embedding by `model.normalizer`, a 0-d bf16 *buffer* vLLM's
         # `Gemma2Model.__init__` registers as `torch.tensor(hidden_size ** 0.5)` at the model dtype — a root with no checkpoint

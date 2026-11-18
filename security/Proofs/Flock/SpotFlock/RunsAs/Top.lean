@@ -33,7 +33,7 @@ theorem foldl_fail_ne : ∀ (l : List (String × Json)) (c : Spot.Check), (c.cod
 /-- **Round 2's check with no code had statements**: without them it fails at the cells, the statements or the
 design. -/
 theorem statements_some {b : Bool} {own : Spot.SecondStage.Own} {stmts : Option (Array Json)}
-    (h : (Spot.SecondStage.check b own stmts).codes = #[]) : ∃ ss, stmts = some ss := by
+    (h : (Spot.SecondStage.check own stmts).codes = #[]) : ∃ ss, stmts = some ss := by
   cases stmts with
   | some ss => exact ⟨ss, rfl⟩
   | none =>

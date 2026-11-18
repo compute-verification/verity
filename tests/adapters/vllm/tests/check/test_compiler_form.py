@@ -154,7 +154,7 @@ def test_a_fold_is_put_in_the_form_only_when_every_component_counts_no_dead_gate
 
 
 def test_a_component_naming_only_the_dead_free_versions_is_in_the_form_whatever_dead_gates_it_counts(tmp_path, programs):
-    """An int8 request Program in the compiler's form counts dead gates no rule of the form removes (its unnarrowed `ScaledMmS8_v1`
+    """An int8 request Program in the compiler's form counts dead gates no rule of the form removes (its unnarrowed `ScaledMmS8_v3`
     qkv on the prompt rows), so its derive report alone keeps the fold as it ran and every request compares unequal (Llama-3.2-1B
     int8 B4 on an H200: RMSNormTriton_v5 against the fold's v1 at each request's first norm).  Its Program
     names the dead-free versions and none of the v1s they replace, as the Build's histogram of TINY's request Program does; the
@@ -164,10 +164,10 @@ def test_a_component_naming_only_the_dead_free_versions_is_in_the_form_whatever_
     dead = {"dead_computed_gates": 30912, "approximate": False}
     built, ran = (_spec_histogram(p) for p in programs)
     assert "RMSNormTriton_v5" in {CF._base(k)[1] for k in built} and "RMSNormTriton_v1" in {CF._base(k)[1] for k in ran}
-    int8 = {'RMSNormTriton_v5{N=2048,EPS={"f64":"0x1.4f8b588e368f1p-17"}}': 33, "ScaledMmS8_v1{K=2048,N=3072}": 16,
+    int8 = {'RMSNormTriton_v5{N=2048,EPS={"f64":"0x1.4f8b588e368f1p-17"}}': 33, "ScaledMmS8_v3{K=2048,N=3072}": 16,
             "TokenSelect_v4{V=128256}": 1, "batch:RoPEHead_v1{D=64}": 2}
     both = {**int8, "TokenSelect_v1{V=128256}": 1}
-    neither = {"ScaledMmS8_v1{K=2048,N=3072}": 16}
+    neither = {"ScaledMmS8_v3{K=2048,N=3072}": 16}
     named = {nm: _component(tmp_path, nm, dead, h) for nm, h in
              (("build_request_tiny", built), ("build_request_LP11_T8", int8), ("build_request_unpruned", ran), ("both", both),
               ("neither", neither))}

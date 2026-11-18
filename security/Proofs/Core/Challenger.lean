@@ -22,7 +22,8 @@ other two premises (`SampleAfterRecorded_nontrivial_log`), where the bound fails
 
 The log's order: what is recorded before coin `i` (`Log.recordedBefore_congr`) and a value derived from the log's
 prefix before it (`DerivedBefore.congr`) are fixed before coin `i`, by `FlipsAfterRecorded`; the set
-`SampleAfterRecorded` samples against is such a value (`derivedBefore_before`).
+`SampleAfterRecorded` samples against is such a value (`derivedBefore_before`). A value derived before coin 0 is one
+value on every run (`DerivedBefore.const`), and roots recorded in order join in order (`Log.JoinsAt.mono`).
 -/
 
 @[expose] public section
@@ -100,6 +101,12 @@ theorem recordedBefore_congr {n : Nat} {log : (Fin n → C) → Log R C} (hflip 
   unfold RecordedBefore
   rw [hflip i ω ω' h]
 
+/-- **Roots recorded in order join in order**: when the log records the roots `root t` in the order of `t`, the coin
+each joins at never decreases in `t`. -/
+theorem JoinsAt.mono {l : Log R C} {root : Nat → R} {j : Nat → Nat} (hj : l.JoinsAt root j)
+    (hord : l.RecordsInOrder root) : Monotone j := fun t t' htt =>
+  (hj t (j t')).1 (hord t t' htt _ ((hj t' (j t')).2 le_rfl))
+
 end Log
 
 /-- **A value derived from the log's prefix before coin `i` is fixed before coin `i`**: under `FlipsAfterRecorded`,
@@ -109,6 +116,12 @@ theorem DerivedBefore.congr {R C V : Type} {n : Nat} {log : (Fin n → C) → Lo
     (h : ∀ j : Fin n, j.val < i → ω j = ω' j) : v ω = v ω' := by
   obtain ⟨f, hf⟩ := hv
   rw [hf, hf, hflip i ω ω' h]
+
+/-- **A value derived from the log before its first coin is one value on every run**: a map the log fixes before
+coin 0 reads no coin at all. -/
+theorem DerivedBefore.const {R C V : Type} {n : Nat} {log : (Fin n → C) → Log R C} {v : (Fin n → C) → V}
+    (hflip : FlipsAfterRecorded log) (hv : DerivedBefore log v 0) (ω ω' : Fin n → C) : v ω = v ω' :=
+  hv.congr hflip fun _ hj => absurd hj (Nat.not_lt_zero _)
 
 /-- What `SampleAfterRecorded` samples against, a set `bad` reads off the log before coin `i`, is a value derived
 from the log's prefix. -/

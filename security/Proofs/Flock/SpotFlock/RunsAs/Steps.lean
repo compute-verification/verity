@@ -14,12 +14,11 @@ import Proofs.Flock.Claims.Sampling.Select.Code
 An accepted two-stage run of `Run.run` passed its first stage on the challenger's bytes with no closure map, its second
 stage over the first stage's proved units, and round 2's statement check with no code (`accepted_steps`). The run's
 answer names `accept` only where the boundary audit and round 2's attached record both read accepted; round 2's record
-reads accepted only where its check has no code (`codes_of_attach`), and that check at the form's switch has no code
-only where the check with the form allowed has none (`check_true_of_codes`).
+reads accepted only where its check has no code (`codes_of_attach`).
 
 Each stage's check of its challenges gave no code on the bytes it read (`Run.coinsCode … = none`, in
 `accepted_steps`), and each stage's registration passed the registration check with no code (`accepted_registered`).
-The walks are public: `run_path` over `Run.run` at either switch, `interiorSteps_ok` over the interior's steps.
+The walks are public: `run_path` over `Run.run`, `interiorSteps_ok` over the interior's steps.
 -/
 
 @[expose] public section
@@ -85,7 +84,7 @@ registration check under the sampling design the rule gives its population and t
 ran with no closure map on the challenger's bytes and the check of them gave no code on the bytes it read, the second
 stage ran over the first stage's proved units, then the second stage's audit, and the answer names `accept` where
 both audits read accepted. -/
-theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j) :
+theorem run_path {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
     ∃ (n : ℕ) (rule : Spot.Select.Rule) (samplingDesign : Json) (workTable : Option Json) (resolved : Spot.Select.Rule)
@@ -105,7 +104,7 @@ theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run
       ∃ (inner : Option (Spot.Run.Interior × Json × Json × Json × ℕ)) (acc₂ : Bool)
         (staged : List (String × Json)) (receipt : Json) (sym : String) (pub audit : Json),
         Spot.Run.secondStage i ((Spot.Draw.proved draw).map Int.toNat) = .ok (.ok inner) ∧
-        Spot.Run.interiorAudit form i ((Spot.Draw.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
+        Spot.Run.interiorAudit i ((Spot.Draw.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
         j = Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read),
           ("symbol", Json.str sym), ("public", pub), ("audit", audit)] ++ staged) ∧
         (sym = "accept" → ∃ rec_, (Spot.jeq (Spot.getD rec_ "accepted") (.bool true) && acc₂) = true) := by
@@ -170,9 +169,9 @@ theorem interiorSteps_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {k : Spot
 
 /-- **Round 2's audit of an interior**: the run's `Own` (`runOwn`) at the interior's strata, the audit record of the
 second stage's sample, the answer whether round 2's attached record reads accepted, and one staged entry. -/
-private theorem interiorAudit_some {form : Bool} {i : Spot.Run.Input} {sample : Array ℕ} {it : Spot.Run.Interior}
+private theorem interiorAudit_some {i : Spot.Run.Input} {sample : Array ℕ} {it : Spot.Run.Interior}
     {receipt draw samplingDesign : Json} {read : ℕ} {acc : Bool} {staged : List (String × Json)}
-    (h : Spot.Run.interiorAudit form i sample (some (it, receipt, draw, samplingDesign, read)) = .ok (acc, staged)) :
+    (h : Spot.Run.interiorAudit i sample (some (it, receipt, draw, samplingDesign, read)) = .ok (acc, staged)) :
     (∃ e, staged = [("interior", e)]) ∧ ∃ rec_ strata,
       Spot.Run.audit i it.params.verifier it.record receipt draw samplingDesign
         (it.provedUnits.getD (Spot.Draw.proved draw))
@@ -180,7 +179,7 @@ private theorem interiorAudit_some {form : Bool} {i : Spot.Run.Input} {sample : 
           it.params.windowValues = .ok rec_ ∧
       Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata ∧
       acc = Spot.jeq (Spot.getD (Spot.SecondStage.attach rec_
-        (Spot.SecondStage.checkAny form (runOwn i it sample strata draw) it.statements)
+        (Spot.SecondStage.checkAny (runOwn i it sample strata draw) it.statements)
         (Spot.SecondStage.interiorReads (runOwn i it sample strata draw) ((it.statements.getD #[]).toList)))
         "accepted") (.bool true) := by
   unfold Spot.Run.interiorAudit at h
@@ -218,7 +217,7 @@ bytes under `Select.resolve`'s rule and the work table `Rule.tableOver` expands,
 code on the bytes it read (`Run.coinsCode`, under the run's key, its copy of main's history and its family); its second
 stage ran on the interior's bytes over the units the first stage proves, at the replay block's cells and the rule's
 counts, and the same check gave no code on the bytes it read, under the same key and the interior's family; and
-round 2's statement check with the form allowed reports no code at the `Own` the run builds (`runOwn`). -/
+round 2's statement check reports no code at the `Own` the run builds (`runOwn`). -/
 theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
     i.closure = none ∧
     ∃ (workTable : Option Json) (resolved : Spot.Select.Rule) (draw : Json) (rest : Array ℕ) (read : ℕ),
@@ -238,7 +237,7 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
         Spot.Run.coinsCode i.key i.main it.coins it.record it.params.verifier.windowRoot it.family
           (it.source.extract 0 read₂) = none ∧
         Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata ∧
-        (Spot.SecondStage.check true (runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂)
+        (Spot.SecondStage.check (runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂)
           it.statements).codes = #[] := by
   obtain ⟨grain, replay, k, hr⟩ := ha.two
   rcases run_path ha.run with ⟨step, codes, hj⟩ | ⟨_, _, _, workTable, resolved, draw, rest, read, -, -, -, ht,
@@ -262,7 +261,7 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
     refine ⟨Option.not_isSome_iff_eq_none.1 hc, workTable, resolved, draw, rest, read, ht, hres, hsel,
       none_of_forall hcoins, grain, replay, k, ns, ids, ks, draw₂, read₂, strata, hr, hns, hids, hks, hss,
       none_of_forall hcoins₂, hstrata, ?_⟩
-    exact check_true_of_codes (codes_of_attach hwf hacc.symm)
+    exact codes_of_attach hwf hacc.symm
 
 /-- **The registrations an accepted two-stage run checked.** Its boundary record passed the registration check with
 no code, under the run's parameters with the sampling design the rule gives the record's population and the work table the rule

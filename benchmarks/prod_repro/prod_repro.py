@@ -645,9 +645,11 @@ def tokens(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path, s
     if arm_dir is None or of[1:] != (load, rep, run):
         return not_measured(f"the replay in {replay_dir} is of another window (arm {of[0]}, load {of[1]}, rep {of[2]}, "
                             f"run {of[3]}), not of {ours}'s {load} rep {rep} of run {run}")
+    if not rec.get("private"):
+        return not_measured(f"the replay in {replay_dir} names no private directory, where it keeps its tokens")
     try:
         w = R.window(arm_dir, load, rep)
-        got = R.read_tokens(replay_dir)
+        got = R.read_tokens(Path(rec["private"]))
     except (SystemExit, OSError, KeyError, ValueError) as e:
         return not_measured(f"the served window or the replay's tokens can't be read back: {type(e).__name__}: {e}")
     served = {r["engine_id"]: r["served"] for r in w["requests"]}

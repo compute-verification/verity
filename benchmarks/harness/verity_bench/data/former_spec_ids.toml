@@ -1,0 +1,10 @@
+# Each spec id a run was recorded under before its spec named no card, as the spec and the card (its `short`) it is now
+# (`presets.FORMER_IDS`). A stored run's record reads it; no launch takes a former id.
+
+[former]
+"llama32-1b-1gpu-pouw-protocol-served-h200" = { spec = "llama32-1b-1gpu-pouw-protocol-served", card = "h200" }
+"llama32-1b-1gpu-pouw-protocol-served-h100" = { spec = "llama32-1b-1gpu-pouw-protocol-served", card = "h100" }
+"llama32-1b-bf16-rtx-served-arm" = { spec = "llama32-1b-bf16-served-arm", card = "rtx-pro-6000" }
+"llama32-1b-bf16-h200-served-arm" = { spec = "llama32-1b-bf16-served-arm", card = "h200" }
+"llama32-1b-bf16-h100-served-arm" = { spec = "llama32-1b-bf16-served-arm", card = "h100" }
+"llama31-8b-fp8-1gpu-commit-served-width-h200" = { spec = "llama31-8b-fp8-1gpu-commit-served-width", card = "h200" }

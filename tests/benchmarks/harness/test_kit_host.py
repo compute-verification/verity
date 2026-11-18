@@ -106,7 +106,7 @@ def test_any_other_card_is_refused_naming_the_workloads(card):
     assert not kit.is_card(card, "h200")
     assert kit.wrong_card("steady", "h200", card) == (
         f"the card is a {card}, not the h200 of spec 'steady' (NVIDIA H200): run it on a node whose card is a NVIDIA H200, "
-        "or use the spec for this card")
+        "or name this card where the spec lists it (`SPEC@CARD`)")
 
 
 def test_each_gpu_a_spec_may_name_is_one_card_records_short():
@@ -125,5 +125,5 @@ def test_a_gpu_target_reads_its_names_from_the_card_file_and_refuses_what_has_no
         kit.gpu_target("xeon-6776p-2s", directory=CARD_FILES)
     h200 = (CARD_FILES / "h200-sxm-141gb.toml").read_text()
     (tmp_path / "h200-sxm-141gb.toml").write_text(h200.replace('arch = "sm_90a"', 'arch = "GH100"'))
-    with pytest.raises(SystemExit, match="arch 'GH100'"):
+    with pytest.raises(SystemExit, match="no architecture 'GH100'"):
         kit.gpu_target("h200-sxm-141gb", directory=tmp_path)

@@ -871,7 +871,7 @@ theorem located_rising (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hsz : 
   obtain rfl : k = k' := Option.some.inj (hk.symm.trans hk')
   obtain rfl : p = p' := Except.ok.inj (hp.symm.trans hp')
   obtain rfl : e = e' := Except.ok.inj (he.symm.trans he')
-  obtain ⟨-, c₂', ξ₂', run, i, rn, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hck
+  obtain ⟨c₂', ξ₂', run, i, rn, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hck
   obtain ⟨⟨s', hs', hc₂'⟩, hξ', hrun, hall, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   obtain rfl : s = s' := Except.ok.inj (hs.symm.trans hs')
   obtain rfl : c₂ = c₂' := Except.ok.inj (hc₂.symm.trans hc₂')
@@ -959,7 +959,7 @@ theorem readLinkFirst (C : CaseOf) : ReadLinkFirst C := by
   obtain rfl : k = k' := Option.some.inj (hk.symm.trans hk')
   obtain rfl : p = p' := Except.ok.inj (hp.symm.trans hp')
   obtain rfl : e = e' := Except.ok.inj (he.symm.trans he')
-  obtain ⟨-, c₂', ξ₂', run, i, rn, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hck
+  obtain ⟨c₂', ξ₂', run, i, rn, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hck
   obtain ⟨⟨s', hs', hc₂'⟩, -, hrun, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   obtain rfl : s = s' := Except.ok.inj (hs.symm.trans hs')
   obtain rfl : c₂ = c₂' := Except.ok.inj (hc₂.symm.trans hc₂')

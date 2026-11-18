@@ -21,6 +21,19 @@ LOAD = "burst"
 ARMS = ("--stock", "compiled", "--again", "compiled-again", "--ours", "record")
 
 
+TMP = Path()
+
+
+@pytest.fixture(autouse=True)
+def _kept_in(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys.modules[__name__], "TMP", tmp_path)
+
+
+def kept(d: Path) -> Path:
+    """The private directory the synthetic arm or replay at ``d`` keeps its request values in, outside every run dir."""
+    return TMP / "private" / d.relative_to(TMP)
+
+
 def rid(tag: str, i: int) -> str:
     return f"cmpl-{tag}-{i:05d}-0-0123abcd"
 
@@ -35,8 +48,8 @@ def step_trace(out: Path, d: Path, tag: str, config: dict) -> None:
             {"kind": "arrive", "request": b, "before_step": 0, "sampling": {"max_tokens": 2}, "t": 0.0},
             {"kind": "step", "step": 0, "rows": [[a, 0, 50], [b, 16, 34]], "cache_hit": {b: 16}, "emitted": {a: 1, b: 1}, "t": 0.1},
             {"kind": "step", "step": 1, "rows": [[a, 50, 1], [b, 50, 1]], "cache_hit": {}, "emitted": {a: 1, b: 1}, "t": 0.2}]
-    (d / "server").mkdir(parents=True, exist_ok=True)
-    with gzip.open(d / "server" / "step_trace.9.jsonl.gz", "wt") as f:
+    (kept(d) / "server").mkdir(parents=True, exist_ok=True)
+    with gzip.open(kept(d) / "server" / "step_trace.9.jsonl.gz", "wt") as f:
         f.write("".join(json.dumps(r) + "\n" for r in recs))
 
 
@@ -55,6 +68,7 @@ def corpus_arm(out: Path, name: str, tok_per_s: list[float], *, argv: tuple[str,
     (out / "plan.jsonl").write_text("".join(json.dumps({"i": i, "prompt_ids": [i, i + 1]}) + "\n" for i in range(2)))
     (d / "meta.json").write_text(json.dumps({
         "arm": name, "parent": None, "what": name, "model_id": "moonlight", "model": "repo@rev", "client": "corpus",
+        "private": str(kept(d)),
         "rates": {LOAD: 1000.0}, "run_id": run, "commit": "c" * 40, "checkpoint": str(ck), "plan": str(out / "plan.jsonl"),
         "server_argv": ["-m", "vllm.entrypoints.openai.api_server", "--max-model-len", "4096", "--seed", "0", *argv],
         "startup_s": 12.5, "loads": [{"load": LOAD, "rep": k, "rate": 1000.0, "requests": 2, "unfinished": 0}
@@ -88,8 +102,9 @@ def replayed(out: Path, ours: str = "record", *, tokens: dict[str, list[int]] | 
     (d / "replay.json").write_text(json.dumps({
         "arm_dir": str(out / ours), "served_run_id": "r-1", "run_id": "r-1", "load": load, "rep": 1, "mode": "compiled",
         "served_mode": "compiled", "served_window_s": 0.2, "replay_wall_s": 0.3, "engine_ready_s": 9.0,
-        "served_under": None, **R.compare(w, got), **over}))
-    R.write_tokens(d, got["tokens"])
+        "served_under": None, "private": str(kept(d)), **R.compare(w, got), **over}))
+    kept(d).mkdir(parents=True, exist_ok=True)
+    R.write_tokens(kept(d), got["tokens"])
     if keep_steps:
         (d / "replay_steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in got["steps"]))
     return d
@@ -208,7 +223,7 @@ def test_a_replay_that_stops_short_or_runs_another_schedule_fails_too(tmp_path: 
 def end_step(out: Path, ended: bool) -> str:
     """Add a third step to the record arm's served trace, one that emits nothing: the second request scheduled once
     more, after both requests ``ended`` in the step before it or while that request still runs. The request."""
-    f, b = out / "record" / "server" / "step_trace.9.jsonl.gz", rid(f"{LOAD}1", 1)
+    f, b = kept(out / "record") / "server" / "step_trace.9.jsonl.gz", rid(f"{LOAD}1", 1)
     with gzip.open(f, "rt") as lines:
         recs = [json.loads(x) for x in lines]
     recs[-1]["finished"] = {rid(f"{LOAD}1", 0): "length", b: "length"} if ended else {rid(f"{LOAD}1", 0): "length"}
@@ -380,7 +395,7 @@ def test_files_the_benchmarks_readers_refuse_end_their_lines_and_not_the_report(
     assert "cost: not measured: compiled did not serve load burst" in txt and "tokens: reproduced" in txt
     # a record that is not JSON, a step trace cut short: the part that reads it says so
     monkeypatch.setattr(S, "arm_metrics", real)
-    (out / "record/server/step_trace.9.jsonl.gz").write_bytes(b"not gzip")
+    (kept(out / "record") / "server/step_trace.9.jsonl.gz").write_bytes(b"not gzip")
     rc, txt, r = run(out)
     assert rc == 0 and "record's settings can't be read from the job's files: BadGzipFile" in r["ran"]["unread"]["record"]
     assert "tokens: not measured: the served window or the replay's tokens can't be read back: BadGzipFile" in txt
@@ -590,6 +605,7 @@ def bench_arm(out: Path, name: str, passes: dict[str, list[float]], ids: str | N
     d.mkdir(parents=True)
     (d / "meta.json").write_text(json.dumps({
         "arm": name, "parent": None, "what": name, "model_id": "glm53", "model": "repo@rev", "client": "vllm-bench", "rates": {},
+        "private": str(kept(d)),
         "run_id": "r-1", "commit": "c" * 40, "server_argv": list(argv), "startup_s": 300.0,
         "passes": {p: {"load": p.rpartition("@")[0], "concurrency": int(p.rpartition("@")[2])} for p in passes},
         "loads": [{"load": p, "rep": i, "rate": None, "requests": 200, "unfinished": 0}
@@ -604,7 +620,7 @@ def bench_arm(out: Path, name: str, passes: dict[str, list[float]], ids: str | N
                  "t0_unix": t0 + 200.0 * (i - 1), "wall_s": 105.0} | ({"schedule": schedule} if schedule else {})))
             if (p, i) == (ids, 1):
                 step_trace(out, d, tag, {"enable_prefix_caching": True, "max_model_len": 4096})
-                with gzip.open(d / "server" / "ids.9.jsonl.gz", "wt") as f:
+                with gzip.open(kept(d) / "server" / "ids.9.jsonl.gz", "wt") as f:
                     f.write("".join(json.dumps({"id": rid(tag, k), "prompt_ids": [k, k + 1], "output_ids": [7, k]}) + "\n"
                                     for k in range(2)))
 
@@ -1586,11 +1602,24 @@ def bash(script: Path, *argv: str, run_dir: Path | None = None, **env: str) -> s
     if run_dir:
         (run_dir / "started").unlink(missing_ok=True)
     return subprocess.run(["bash", str(script), *argv], capture_output=True, text=True, check=False, env={
-        **base, "VENV": str(Path(sys.executable).parents[1]), **({"RESEARCH_RUN_DIR": str(run_dir)} if run_dir else {}), **env})
+        **base, "VENV": str(Path(sys.executable).parents[1]), **({"RESEARCH_RUN_DIR": str(run_dir)} if run_dir else {}),
+        "PRIVATE": str(TMP / "private"), **env})
 
 
 def started(run_dir: Path) -> dict[str, str]:
     return dict(x.split("=", 1) for x in (run_dir / "started").read_text().splitlines())
+
+
+def test_the_runner_refuses_by_name_an_arm_that_records_and_a_replay_without_private(tmp_path: Path):
+    script, run_dir = runner(tmp_path), tmp_path / "run"
+    run_dir.mkdir()
+    p = bash(script, *ARMS, run_dir=run_dir, PRIVATE="")
+    assert p.returncode == 2 and "prod_repro: arms record record their step traces or served ids" in p.stdout
+    assert not (run_dir / "started").exists()
+    p = bash(script, "--ours", "compiled", "--stock", "none", "--again", "none", run_dir=run_dir, PRIVATE="")
+    assert "record their step traces" not in p.stdout and (run_dir / "started").exists()
+    p = bash(script, "--replay-of", str(tmp_path), "--load", LOAD, run_dir=run_dir, PRIVATE="")
+    assert p.returncode == 2 and "--replay-of replays, and a replay keeps its tokens on the node: PRIVATE" in p.stdout
 
 
 def test_the_runner_serves_the_three_arms_a_burst_and_replays_ours_then_reports(tmp_path: Path):
@@ -1603,7 +1632,7 @@ def test_the_runner_serves_the_three_arms_a_burst_and_replays_ours_then_reports(
         "argv": "", "ARMS": "compiled compiled-again record", "RATES": "burst=1000", "REPS": "3", "REQUESTS": "800",
         "SPAN_S": "unset", "REPLAY": "burst", "REPLAY_FROM": str(run_dir / "out/record"), "REPLAY_MODES": "compiled",
         "MODEL_ID": "moonlight", "CLIENT": "corpus", "MAX_MODEL_LEN": "8192", "PASS_PROMPTS": "unset", "STOP_AT": "unset",
-        "SAMPLED": "unset", "PRIVATE": "unset", "LIFETIMES": "unset", "LEAVE_OUT": "unset"}
+        "SAMPLED": "unset", "PRIVATE": str(tmp_path / "private"), "LIFETIMES": "unset", "LEAVE_OUT": "unset"}
     assert "the replay's engine: vLLM's own (record serves with no other vLLM plugin of ours" in p.stdout
     assert "tokens: reproduced: 2 requests replayed" in p.stdout and p.stdout.endswith("prod_repro: 2 of 3 lines measured\n")
     assert (run_dir / "out/prod_repro.txt").read_text() in p.stdout
@@ -1739,11 +1768,14 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms(tmp
         "prod-record", "replay-compiled"]
     assert "stock prod, stock again not served, ours prod-record" in p.stdout and "tokens: reproduced: 2 requests replayed" in p.stdout
     assert "advice: not measured: the scheduler replay refuses the pass: " in p.stdout
-    # read again without a GPU and without the node's directory, the earlier job says the same
+    # read again without a GPU and without the node's directory, the earlier job's counters are the ones it kept in
+    # OUT, and what the arm and the replay kept on the node (the step trace, the tokens) is not there to read
     shutil.rmtree(private)
     again = bash(script, "--report", str(run_dir / "out"), "--load", "chat=16", "--replay", "chat@16", "--again", "none",
                  PRIVATE=str(private))
-    assert again.returncode == 0 and again.stdout == p.stdout
+    topk = lambda txt: [x for x in txt.splitlines() if x.startswith("  the canonical top-k")]  # noqa: E731
+    assert len(topk(p.stdout)) == 2 and topk(again.stdout) == topk(p.stdout)
+    assert again.returncode == 1 and "tokens: not measured: the served window or the replay's tokens can't be read back" in again.stdout
     # the serve ended well and the replay left nothing: the job fails, and says the replay did not end
     shutil.rmtree(run_dir / "out/replay-compiled")
     (run_dir / "out/replay-compiled.log").write_text("serve-tax: no arrival of load chat@16 rep 1\n")
