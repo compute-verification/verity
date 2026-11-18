@@ -41,7 +41,7 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
     registration and the bench's frozen input sets.
 - `live/`: the Rust crate `flock-live`, which the pod scripts drop into a Flock `b684b12` checkout as
   `crates/flock-live`: the prover and verifier binaries (`flock-circuit`, `flock-pure`, `flock-ir-frame`,
-  `flock-ir-sampling`, `flock-ir-block`, `flock-vllm-v1`, …) and the live-coin session. Under `--zk` with
+  `flock-ir-sampling`, `flock-ir-block`, …) and the live-coin session. Under `--zk` with
   `FC_ZK_SERVER=1`, `flock-circuit` is the prover workers' side of the ZK server, which is Lean
   (`../verifier/Flock/ZkServer`, `flock-zk-server`, and its release side `../../recursion/verifier/zk_server/`):
   `live/PROTOCOL.md` §10.4 says what each side computes.
@@ -63,7 +63,7 @@ writes them as staging's `rows/`, to diff the two mirrors.
 ## Hill-climb points in GPU sessions
 
 A BF16 hill-climb point (`verity/protocols/proofs/flock/prover/pod/74-gemm-hill.sh`, its records by
-`verity/protocols/proofs/flock/prover/pod/gemm_hill.py`) runs in a GPU session: one job on node 1,
+`benchmarks/proof_throughput/gemm_hill.py`) runs in a GPU session: one job on node 1,
 one preflight check (byte identity at B = 16), then `POINTS=N` points of one statement. A session's points share one tree,
 one binary, one `FC_*` set and one K; a setting that differs needs a session of its own. A point whose key (the binaries, the
 `FC_*` settings, the GPU) differs from its check's fails, and with it the session.
@@ -78,7 +78,7 @@ one binary, one `FC_*` set and one K; a setting that differs needs a session of 
    ~~~sh
    RESEARCH_STORE=/workspace/jobs/store PYTHONPATH=$T/tools/research/src \
    RESEARCH_BIN="/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research" \
-     python3 $T/verity/protocols/proofs/flock/prover/pod/gemm_hill.py rollup --attempt RUN --run-dir /workspace/jobs/runs/RUN \
+     python3 $T/benchmarks/proof_throughput/gemm_hill.py rollup --attempt RUN --run-dir /workspace/jobs/runs/RUN \
        --file /workspace/usage/hillclimb/bf16-GemmCoordinate_v2-K8192.json
    ~~~
 

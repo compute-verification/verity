@@ -109,7 +109,9 @@ from verity.circuits.defs import bind, composite
 from verity.circuits.ops.prims import ZERO32, const
 from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity_vllm.config import TARGET_NUM_SMS
+from verity.device import compute_capability, load_card, number
+
+from verity_vllm.config import CARD_FILES
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16
@@ -143,7 +145,6 @@ MULTIMEM_VECTOR = MULTIMEM_ALIGN_BYTES // 2
 #: the record of the run that replayed `CAPTURE_RUNS`' kept multimem words on `AllReduceMultimemVector_v1`'s batch
 #: (tests/properties/glm53_multimem_replay.py)
 MULTIMEM_REPLAY_RUN = EVIDENCE["glm53_multimem_replay"]["run_record"]
-H200_SMS = TARGET_NUM_SMS["h200"]
 _NEG_ZERO32 = const(32, 0x80000000)
 
 #: vLLM's all-reduce settings: name -> (custom all-reduce on, torch symmetric memory on), FlashInfer's all-reduce on in each.
@@ -160,8 +161,9 @@ _DEFAULT_RUNS = CAPTURE_RUNS[2:]
 GLM53_H200_TREE = ((((((0, (1, 2)), 3), 5), 6), 4), 7)
 #: vLLM's batch-invariant mode (``VLLM_BATCH_INVARIANT=1``), the setting under which every TP all-reduce is pynccl's
 BATCH_INVARIANT = "batch-invariant"
-#: (compute capability, SMs) of the RTX PRO 6000 Blackwell Server Edition
-RTX_PRO_6000 = ("12.0", 188)
+#: (compute capability, SMs) of the RTX PRO 6000 Blackwell Server Edition, its card file's
+_RTX_PRO_CARD = load_card("rtx-pro-6000-server", directory=CARD_FILES)
+RTX_PRO_6000 = ("%d.%d" % compute_capability(_RTX_PRO_CARD), int(number(_RTX_PRO_CARD["sm"]["count"])))
 #: the records of three runs on an RTX PRO 6000 node: Llama-3.1-70B int8's TP4 capture (GPUs 2, 3, 6, 7, NCCL 2.29.7), the replay
 #: of its every all-reduce through `AllReduceNcclTree_v1` (`tests/properties/tp4_nccl_tree_replay.py replay`: 5152 calls,
 #: 1,514,110,976 rank words, GO) and NCCL's tree probed on GPUs 0, 1, 2, 5 (``probe``: the same chain, NaNs 0x7FFF)
@@ -264,9 +266,11 @@ def fused_max_tokens(N: int, tp: int) -> int:
     return FI_MAX_BYTES // (N * 2)
 
 
-def mnnvl_grid(M: int, N: int, sm_count: int = H200_SMS) -> tuple[int, int]:
+def mnnvl_grid(M: int, N: int, sm_count: int | None = None) -> tuple[int, int]:
     """(BLOCK, CLUSTER) of FlashInfer's `adjustGridConfig(M, N, 8, useCluster=true)` with one load per thread, the geometry of
-    both fused kernels; at N = 6144 on an H200: M <= 16 (96, 8), 17..33 (192, 4), 34..66 (384, 2), past it (768, 1)."""
+    both fused kernels, on `sm_count` SMs (None: `UNSTATED_NODE`'s device's); at N = 6144 on 132: M <= 16 (96, 8), 17..33
+    (192, 4), 34..66 (384, 2), past it (768, 1)."""
+    sm_count = UNSTATED_NODE[0][1] if sm_count is None else sm_count
     ceil = lambda a, b: -(-a // b)  # noqa: E731
     threads = ceil(N, 8)
     cluster = 8
@@ -430,8 +434,10 @@ def _node_entries(rec: dict) -> list[Captured]:
 #: Every covered route: `_BASE_CAPTURED`'s, and each node record's keyed on its node tree (`_node_entries`)
 CAPTURED = (*_BASE_CAPTURED, *(e for rec in NODE_RECORDS for e in _node_entries(rec)))
 #: the node (device, TREES, FTZ) `covered` takes for a registration that states no TREES and FTZ, on a device the caller names
-#: or this one: `CAPTURE_RUNS`' node, `GLM53_H200_TREE` on every owner, FTZ off; None refuses it (`node_refusal`'s `TREE_UNSTATED`)
-UNSTATED_NODE = (("9.0", H200_SMS), multimem_trees((GLM53_H200_TREE,) * 8, 8), False)
+#: or this one: `CAPTURE_RUNS`' node, `GLM53_H200_TREE` on every owner, FTZ off, at the device its record holds; None refuses it
+#: (`node_refusal`'s `TREE_UNSTATED`)
+_UNSTATED = (multimem_trees((GLM53_H200_TREE,) * 8, 8), False)
+UNSTATED_NODE = (next(node_key(r)[0] for r in NODE_RECORDS if node_key(r)[1:] == (8, *_UNSTATED)), *_UNSTATED)
 
 
 def node_refusal(trees, ftz, *, device, world: int = 8) -> str | None:

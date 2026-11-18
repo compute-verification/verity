@@ -4,6 +4,8 @@ public import Definitions.Core.Scheme
 public import Definitions.Core.Partition
 public import Definitions.Core.Challenger
 public import Definitions.Core.Assumptions
+public import Definitions.Core.Interaction
+public import Definitions.Spot.Sampling.Analysis
 public import Definitions.Certifier.Tap
 public import Mathlib.Data.Nat.Log
 public import Mathlib.Data.Set.Card
@@ -87,8 +89,9 @@ def ChargeHolds {Chan : Type} [Fintype Chan] (ρ : Chan → ph.C.Trace) (op : ph
 end Phase
 
 /-- One execution phase's run as the attester's scheme reads it: the committed values, the attester's record (rows
-and channel), the audit's verdict and sample, the challenger's log, and whether the attester's committed rows opened
-two ways. -/
+and channel), the audit's verdict and sample, the challenger's log, the SHA-512 evaluations (input, output) that check
+the attester's openings and the proofs' openings of the egress gates, and the SHA-512 calls the run makes, its
+prover's included. -/
 structure PhaseRun (ph : Phase) (Chan Root Coin : Type) where
   X : ph.C.Trace
   rows : ph.Rows
@@ -96,7 +99,8 @@ structure PhaseRun (ph : Phase) (Chan Root Coin : Type) where
   ok : Bool
   sample : Finset (Fin ph.m)
   log : Challenger.Log Root Coin
-  opensTwo : Prop
+  calls : List (Claims.Msg × Claims.Msg)
+  hashCalls : ℕ
 
 /-- **The committed values carry the attester's rows, the registered values and the operator's ingress**: the premise
 under which the scheme's incorrect blocks are the record's. -/
@@ -106,7 +110,8 @@ def RowsCommitted {ph : Phase} {Chan Root Coin : Type} (ρ : Chan → ph.C.Trace
 
 /-- **The network attester's scheme at one execution phase**, in bits: a run's larger side is the bits of the records
 its incorrect blocks explain; its smaller side is none; a block costs the bits a wrong instance of it can set; the log
-records every root `fixed` names before every coin. -/
+records every root `fixed` names before every coin; it breaks where the checked SHA-512 evaluations collide, which is
+where the attester's committed rows can open two ways. -/
 noncomputable def scheme (ph : Phase) {Chan : Type} [Fintype Chan] (ρ : Chan → ph.C.Trace) (op : ph.Operator Chan)
     (hop : op.ReadsBefore) (Root Coin : Type) (Complete : Chan → Prop) (fixed : Root → Prop) (δtap : ℝ≥0∞)
     (hcharge : ph.ChargeHolds ρ op) : Scheme where
@@ -115,13 +120,54 @@ noncomputable def scheme (ph : Phase) {Chan : Type} [Fintype Chan] (ρ : Chan �
   charges := ph.charges Chan
   Run := PhaseRun ph Chan Root Coin
   accepts r := r.ok = true ∧ Complete r.chan
-  over r := Nat.clog 2 (ph.Explainable ρ op (ph.incorrectOf r.X)).ncard
-  under _ := 0
+  «over» r := Nat.clog 2 (ph.Explainable ρ op (ph.incorrectOf r.X)).ncard
+  «under» _ := 0
   logOK r := r.log.Cut fixed fun _ => True
   incorrect r := ph.incorrectOf r.X
-  breaks r := r.opensTwo
+  breaks r := (Claims.findColl r.calls).isSome
   δscheme := δtap
   charge r _ _ _ := by simpa using hcharge hop (ph.incorrectOf r.X)
+
+/-- The collision finder a phase's runs on the coins `S` give: the first collision among a run's checked SHA-512
+evaluations, at a cost of the run's SHA-512 calls. -/
+def callsFinder {ph : Phase} {Chan Root Coin S : Type} [Fintype S] [Nonempty S] (play : S → PhaseRun ph Chan Root Coin) :
+    Claims.Finder where
+  S := S
+  out s := Claims.findColl (play s).calls
+  cost s := (play s).hashCalls
+
+/-- **The scheme's break event is within its term**: with the scheme's term `ecrBound` of the runs' finder at the
+budget `q`, and every evaluation a run checks an evaluation of `H`, the probability over the coins that a run breaks is
+at most the term. -/
+def BreaksWithinTerm : Prop :=
+  ∀ (ph : Phase) (Chan : Type) [Fintype Chan] (ρ : Chan → ph.C.Trace) (op : ph.Operator Chan) (hop : op.ReadsBefore)
+    (Root Coin : Type) (Complete : Chan → Prop) (fixed : Root → Prop) (hcharge : ph.ChargeHolds ρ op)
+    (H : Claims.Msg → Claims.Msg) (S : Type) [Fintype S] [Nonempty S] (play : S → PhaseRun ph Chan Root Coin) (q : ℝ),
+    (∀ s, ∀ p ∈ (play s).calls, H p.1 = p.2) →
+    let Sc := scheme ph ρ op hop Root Coin Complete fixed (Claims.ecrBound H (callsFinder play) q) hcharge
+    ENNReal.ofReal (Claims.Pr fun s => Sc.breaks (play s)) ≤ Sc.δscheme
+
+/-- **The attester's scheme gets back at one execution phase**: where the proof system's analysis of the phase's audit
+is knowledge sound and binding, the runs' verdict and sample are at most as likely as the audit's, the runs' committed
+values have the incorrect blocks of the analysis's committed transcript but with probability zero, and the break event
+is within the scheme's term, the scheme gets back at every cutoff, the audit's error its knowledge and binding errors at
+the strategy's registration and state. -/
+def PhaseGetsBack : Prop :=
+  ∀ (ph : Phase) (Chan : Type) [Fintype Chan] (ρ : Chan → ph.C.Trace) (op : ph.Operator Chan) (hop : op.ReadsBefore)
+    (Root Coin : Type) (Complete : Chan → Prop) (fixed : Root → Prop) (δtap : ℝ≥0∞) (hcharge : ph.ChargeHolds ρ op)
+    (L : SamplingDesign (Fin ph.m)) (Reg : Type) (session : Finset (Fin ph.m) → Reg → Game Bool)
+    (A : Spot.Sampling.ExtractionAnalysis L Reg session)
+    (εks εbind : (R : Reg) → Spot.Sampling.Cont L Reg session R → ℝ≥0∞),
+    A.KnowledgeSound εks → A.BindSound εbind → ∀ (σ : Game.Strategy (Spot.Sampling.audit L Reg session))
+    (pr : (PhaseRun ph Chan Root Coin → Prop) → ℝ≥0∞),
+    (∀ p q : PhaseRun ph Chan Root Coin → Prop, (∀ r, p r → q r) → pr p ≤ pr q) →
+    (∀ p q : PhaseRun ph Chan Root Coin → Prop, pr (fun r => p r ∨ q r) ≤ pr p + pr q) →
+    (∀ p : Bool × Finset (Fin ph.m) → Prop,
+      pr (fun r => p (r.ok, r.sample)) ≤ Game.prob p (Spot.Sampling.audit L Reg session) σ) →
+    pr (fun r => ph.incorrectOf r.X ≠ A.incorrect (A.committedOf σ)) = 0 →
+    pr (scheme ph ρ op hop Root Coin Complete fixed δtap hcharge).breaks ≤ δtap →
+    ∀ δ, (scheme ph ρ op hop Root Coin Complete fixed δtap hcharge).GetsBack (fun _ => L) pr δ
+      (εks (Spot.Sampling.reg σ) (Spot.Sampling.cont σ) + εbind (Spot.Sampling.reg σ) (Spot.Sampling.cont σ))
 
 /-- **The secrets one execution phase's record singles out**: over the secrets whose phase's committed values the
 design misses with probability above `δ`, at most the number of such block sets times two to the missable bits plus

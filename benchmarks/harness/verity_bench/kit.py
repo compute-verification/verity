@@ -1,6 +1,7 @@
 """The harness kit: the calls benchmarks' runners share, each written once.
 
 - `lease(gpus, minutes, on=None, cores=None)`: the `gpu-lease` argv a job's command follows, with its bound.
+- `free_port()`: a loopback port the system has free now, for a server a runner starts.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `card_short(name)`: the card's name in a measurement's member, from the one card record under `cards_directory()` whose
@@ -79,6 +80,7 @@ import platform
 import re
 import shlex
 import shutil
+import socket
 import statistics
 import subprocess
 import sys
@@ -139,6 +141,12 @@ def lease(gpus: int, minutes: float, *, on: str | None = None, cores: str | None
         raise ValueError(f"a lease needs its bound in minutes, not {minutes!r}")
     return ["gpu-lease", str(gpus), "--wait", *(["--on", on] if on else []), *(["--cores", cores] if cores else []),
             "--max-min", str(math.ceil(minutes)), "--"]
+
+
+def free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
 # ---- the host stamp ----------------------------------------------------------------------------------------------------------
@@ -213,6 +221,10 @@ def cards_directory() -> Path:
     return Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
 
+def nodes_directory() -> Path:
+    return cards_directory().parent / "nodes"
+
+
 def _gpu_cards(directory: Path) -> list[dict]:
     from verity.device import load_card, skus
 
@@ -260,11 +272,11 @@ def card_sku(name: str, *, directory: Path | None = None) -> str:
 
 
 def card_nodes(sku: str, *, directory: Path | None = None, cards: Path | None = None) -> list[str]:
-    """The node files' kinds in ``directory`` (``calibration/hardware/nodes`` by default) whose ``device.sku`` is ``sku``."""
+    """The node files' kinds in ``directory`` (`nodes_directory` by default) whose ``device.sku`` is ``sku``."""
     from verity.device import load_node, node_kinds
 
     cards = cards or cards_directory()
-    directory = directory or cards.parent / "nodes"
+    directory = directory or nodes_directory()
     return [k for k in node_kinds(directory=directory)
             if load_node(k, directory=directory, cards_directory=cards)["device"]["sku"] == sku]
 

@@ -326,7 +326,20 @@ HERE = Path(__file__).resolve().parent
 
 
 def nvcc_bin() -> str | None:
-    return shutil.which("nvcc") or ("/usr/local/cuda/bin/nvcc" if Path("/usr/local/cuda/bin/nvcc").is_file() else None)
+    """nvcc on PATH, else the machine's toolkit at 13.0 (`verity_bench.kit.toolkit`: $CUDA_HOME, else the run's machine's
+    record); None where neither has one."""
+    if found := shutil.which("nvcc"):
+        return found
+    harness = str(HERE.parents[1] / "benchmarks" / "harness")
+    if harness not in sys.path:
+        sys.path.insert(0, harness)
+    from verity_bench import kit
+
+    try:
+        nvcc = Path(kit.toolkit("13.0")) / "bin" / "nvcc"
+    except SystemExit:
+        return None
+    return str(nvcc) if nvcc.is_file() else None
 
 
 def build_nvfp4(out: Path) -> tuple[Path, str]:
@@ -334,7 +347,7 @@ def build_nvfp4(out: Path) -> tuple[Path, str]:
     on plain sm_120); returns (path of the .so, nvcc version line)."""
     nvcc = nvcc_bin()
     if nvcc is None:
-        raise FileNotFoundError("nvcc not found (PATH or /usr/local/cuda/bin)")
+        raise FileNotFoundError("nvcc not found (PATH, or the machine's toolkit at 13.0)")
     so = out / f"lib{Path(NVFP4_SOURCE).stem}_{NVFP4_ARCH}.so"
     ver = subprocess.run([nvcc, "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
     subprocess.run([nvcc, "-O2", f"-gencode=arch=compute_{NVFP4_ARCH[3:]},code={NVFP4_ARCH}", "-Xcompiler", "-fPIC", "-shared", "-o", str(so),
@@ -727,7 +740,7 @@ def main(argv: list[str] | None = None) -> int:
         if (major, minor) != (12, 0):
             skipped = f"the sm_120 mma.sync kind::mxf4nvf4 instruction needs cc 12.0; this card is sm_{major}{minor} ({envd['device']})"
         elif nvcc_bin() is None:
-            skipped = "nvcc not found (PATH or /usr/local/cuda/bin): cannot build mma_peak_fp4.cu"
+            skipped = "nvcc not found (PATH, or the machine's toolkit at 13.0): cannot build mma_peak_fp4.cu"
 
     files: list[str] = []
     results: list[dict] = []

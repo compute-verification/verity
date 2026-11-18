@@ -323,7 +323,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         SC.build(bdir, out)
         log = out / "build.log"
-        rc = SC.sh([SC.NVCC, *SC.NVFLAGS, "-o", str(bdir / "fscore"), str(HERE / "fscore.cu"), *SC.LIBS], out=log, err=log)
+        rc = SC.sh([SC.nvcc(), *SC.NVFLAGS, "-o", str(bdir / "fscore"), str(HERE / "fscore.cu"), *SC.LIBS], out=log, err=log)
         if rc:
             raise SystemExit(f"build of fscore failed (rc {rc}); see {log}")
         inner = [sys.executable, str(HERE / "fused_score.py"), "measure", a.arm, "--bin", str(bdir), "--out", str(out),

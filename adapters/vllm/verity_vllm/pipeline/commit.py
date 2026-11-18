@@ -1177,8 +1177,14 @@ def main(args: Options) -> None:
     moe_attached = False
     coms: dict[str, Any] = {}
     GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
-    _settings = PO.own_auditor(args.protocols_config or wl.get("protocols_config"), va.target_of_workload(wl, args.target))   # PoUW's coins: this process's challenger (the Commit is its run's own auditor)
-    _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=PO.commit_guard(va.target_of_workload(wl, args.target), settings=_settings, commit_scheme=args.commit_scheme), execution=va.execution_of_workload(wl))
+    _target = va.target_of_workload(wl, args.target)
+    _settings = PO.own_auditor(args.protocols_config or wl.get("protocols_config"), _target)   # PoUW's coins: this process's challenger (the Commit is its run's own auditor)
+    try:
+        PO.commit_context(_target, settings=_settings, commit_scheme=args.commit_scheme)
+    except PO.Refused as e:
+        print(f"[delta] REFUSE (fail-closed): {e}", flush=True)
+        raise SystemExit(3) from None
+    _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=_target, execution=va.execution_of_workload(wl))
     _rs is not None and _rs.before_build(_ekw)
     TL.start("engine.build", case=_ekw["case"], max_num_seqs=args.max_num_seqs, execution=_ekw["execution"])
     eng = va.build_engine(_ekw["checkpoints"], max_num_seqs=_ekw["max_num_seqs"], case=_ekw["case"], engine_args=_ekw["engine_args"],

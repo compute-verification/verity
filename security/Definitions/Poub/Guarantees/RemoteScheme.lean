@@ -107,7 +107,8 @@ blocks' bits beyond the bits read on the node and the missable cost with probabi
 def ReadsGetsBack : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (T : Trace Ω) (b : ℕ) (δs : ℝ) (D : Verity.SamplingDesign (Fin T.passes × Fin T.blocks))
     (ε : ℝ≥0∞),
-    Verity.AuditBound D (ResourceAccounting.Remote.Run.prE (Ω := Ω)) T.accepts T.wrong ε → SketchBound T δs →
+    Verity.AuditBound (fun _ => D) (ResourceAccounting.Remote.Run.prE (Ω := Ω)) T.accepts T.wrong ε →
+    SketchBound T δs →
     ∀ δ, (T.scheme b (ENNReal.ofReal δs)).GetsBack (fun _ => D) (ResourceAccounting.Remote.Run.prE (Ω := Ω)) δ ε
 
 /-- **The bits read, through the scheme, at the deployed receipts.** `ReadsGetsBack` on a trace over a remote
@@ -121,7 +122,8 @@ def ReadsGetsBackDeployed : Prop :=
     ∑ j, G j ≤ Q + P → ∑ j, qtot j ≤ Q →
     ResourceAccounting.Assumptions.SketchHashRandom A (((Q : ℝ) + P) ^ 2 / 2 ^ 513) → KeyBudget A qtot → Receipted A T →
     Present A T →
-    Verity.AuditBound D (ResourceAccounting.Remote.Run.prE (Ω := Outcome β Hs N 128)) T.accepts T.wrong ε →
+    Verity.AuditBound (fun _ => D) (ResourceAccounting.Remote.Run.prE (Ω := Outcome β Hs N 128)) T.accepts T.wrong
+      ε →
     ∀ δ, (T.scheme b (ENNReal.ofReal (δSketch 216 513 Q P N εrank))).GetsBack (fun _ => D)
       (ResourceAccounting.Remote.Run.prE (Ω := Outcome β Hs N 128)) δ ε
 

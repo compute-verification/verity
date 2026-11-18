@@ -395,7 +395,7 @@ def main(args: argparse.Namespace) -> int:
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
     t_all = time.time()
-    instr, arch = args.instruction, args.arch or "sm_120a"
+    instr = args.instruction
     if args.chain != 1:
         raise SystemExit("--chain is not defined for the sparse rows")
     if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
@@ -404,10 +404,11 @@ def main(args: argparse.Namespace) -> int:
     if args.expect_model and args.expect_model not in models:
         raise SystemExit(f"--expect-model {args.expect_model!r} is not a candidate of {instr} ({sorted(models)})")
     sass_check = args.sass_check or args.sass_only
-    if args.fake_silicon and not P.shutil.which(P.nvcc_bin()):
-        so, nvcc = None, "not built (fake silicon)"
+    if args.fake_silicon and not P.has_nvcc():
+        so, nvcc, arch = None, "not built (fake silicon)", None
     else:
-        so, nvcc = P.build(arch, out, "mma_fp4.cu")
+        card, arch = P.target(args.card, "mma_fp4.cu")
+        so, nvcc = P.build(card, out, "mma_fp4.cu")
     dev = FakeSparse(instr, args.fake_silicon) if args.fake_silicon else (None if args.sass_only else SparseDevice(so))
     # the dense twin: the same build's dense kernels (a fake run: the pinned dense model's words)
     dense = P.FakeProbe(DENSE[instr], "verity") if args.fake_silicon else (None if args.sass_only else P.Probe(so))

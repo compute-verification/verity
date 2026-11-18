@@ -97,7 +97,6 @@ import multiprocessing as mp
 import os
 import platform
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -477,9 +476,17 @@ def card_target(card: str, ids: list[str]) -> str:
 # --- the kernel ----------------------------------------------------------------------------------------------------------------
 
 
+#: the CUDA toolkit the kernels are built with, the run's machine's (`kit.toolkit`)
+TOOLKIT = "13.0"
+#: the translation units of `a`-feature instructions (tcgen05), built for the card's SASS alone: -arch also embeds the
+#: architecture's PTX, which refuses them
+SASS_ONLY = frozenset({"tcgen05_tiles.cu"})
+
+
 def cuda_bin(tool: str) -> str:
-    found = shutil.which(tool)
-    return found or f"/usr/local/cuda/bin/{tool}"  # the CUDA images do not put the toolkit on a non-login PATH
+    from verity_bench import kit
+
+    return str(Path(kit.toolkit(TOOLKIT)) / "bin" / tool)
 
 
 def build(tu: str, card: str, out: Path) -> tuple[Path, str]:
@@ -489,8 +496,7 @@ def build(tu: str, card: str, out: Path) -> tuple[Path, str]:
     so = out / f"lib{Path(tu).stem}_{arch}.so"
     nvcc_bin = cuda_bin("nvcc")
     nvcc = subprocess.run([nvcc_bin, "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
-    # sm_100a's tcgen05 is an `a`-feature instruction: a plain -arch=sm_100a also embeds compute_100 PTX, which refuses it
-    target = ["-gencode", kit.card_gencode(card)] if arch == "sm_100a" else [f"-arch={arch}"]
+    target = ["-gencode", kit.card_gencode(card)] if tu in SASS_ONLY else [f"-arch={arch}"]
     subprocess.run([nvcc_bin, "-O2", *target, "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / tu)], check=True)
     ident = " / ".join(line.strip() for line in nvcc)
     Path(f"{so}.nvcc").write_text(ident + "\n")

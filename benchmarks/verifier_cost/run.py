@@ -252,8 +252,9 @@ def _partition_row(exe: Path, tmp: str, prog, query: dict, repeat: int) -> dict:
 
 
 def partition(args) -> int:
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.circuits import partition_object as PO
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.population import wired_population_program
 
     args.exe = built(args.exe)
     out = Path(args.out)
@@ -289,8 +290,8 @@ def partition(args) -> int:
                 largest = max(distinct.values(), key=lambda fn: fn.gates)
                 for n in POPULATION:
                     add(head | {"shape": "population", "query": "template", "n": n, "template": largest.id}
-                        | _partition_row(args.exe, tmp, P.population_program(largest, n),
-                                         PO.template_instance_query(largest), args.repeat))
+                        | _partition_row(args.exe, tmp, *wired_population_program(
+                                             [(largest, n)], {"templates": [[descriptor_id(largest), n]]}), args.repeat))
     result = {"schema": PARTITION_SCHEMA, "verifier": "sampled-proofs partition", "workload": "Serve_v1",
               "repeat": args.repeat, "unrolled_max": args.unrolled_max, "rows": rows}
     (out / "partition.json").write_text(json.dumps(result, indent=1) + "\n")
