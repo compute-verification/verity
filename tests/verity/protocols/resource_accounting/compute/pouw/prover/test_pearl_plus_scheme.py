@@ -78,6 +78,7 @@ class _Run:
         self.calls: list = []
         self.passes = 0
         self.finished = False
+        self.retain_dir = None
 
     def finish(self) -> None:
         self.finished = True
@@ -225,6 +226,51 @@ def test_each_phase_opens_a_salt_session_of_its_own(monkeypatch, tmp_path) -> No
         one.step(H.PhaseOpened(1, 1))
 
 
+def test_a_retained_phase_writes_its_record_beside_its_passes(monkeypatch, tmp_path) -> None:
+    ex, runs = _Exchange(), []
+
+    def opened(self, weights, own):
+        run = _Run()
+        run.retain_dir, run.commits = tmp_path / f"w{self.phase}", {"coins": {"epoch": self.phase}, "pass_index": None}
+        run.retain_dir.mkdir()
+        manifest = run.retain_dir / "manifest.json"
+        manifest.write_text(json.dumps({"matmuls": [{"real_rows": 2, "n": 16, "k": 16}]}))
+        run.details["passes"] = [{"units": 1, "tiles": 4, "manifest": str(manifest)} for _ in range(2)]
+        runs.append(run)
+        return run
+
+    monkeypatch.setattr(PS.Attached, "open", opened)
+    on = PS.PEARL_PLUS.attach(ex, IN_PROCESS)
+    ex.emit(H.RegisteredValues((("w", "w"),), operands={"w": 3}))
+    ex.emit(H.PhaseOpened(0, 0))
+    ex.emit(H.PhaseClosed(0, 1, b""))
+    ex.emit(H.PhaseOpened(1, 2))
+    runs[1].details["passes"][1] = {"units": 2, "tiles": 4}
+    ex.emit(H.PhaseClosed(1, 4, b""))
+    served = [json.loads((tmp_path / f"w{p}" / "served.json").read_text()) for p in (0, 1)]
+    assert [json.loads((tmp_path / f"w{p}" / "coins.json").read_text()) for p in (0, 1)] == [{"epoch": 0}, {"epoch": 1}]
+    assert served[0]["schema"] == SV.SERVED_SCHEMA and served[0]["entry"] == PS.OPTION and served[0]["window"] == 0
+    assert (served[0]["commit_steps"], served[0]["passes_with_calls"], served[0]["ok"]) == (2, 2, True)
+    assert served[0]["coins"]["source"] == "in-process"
+    assert [p["macs"] for p in served[0]["passes"]] == [512, 512]
+    assert served[1]["ok"] is False and served[1]["error"] == (
+        "its passes with calls are 2 and its phase's steps 3, so round s isn't step s; pass 1 has 2 calls, not one a "
+        "linear (1); pass 1 retained no manifest")
+
+
+def test_each_phases_passes_are_retained_in_a_directory_of_its_own(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(SV, "PearlCKernel", _Kernel, raising=False)
+    monkeypatch.setattr(SV, "in_process_coins", lambda window: _Coins())
+    monkeypatch.setattr(T, "_pearl_c", lambda: _Device)
+    on = PS.Attached({"settings": {**IN_PROCESS["settings"], "transcript_dir": str(tmp_path / "t")}})
+    on.phased, on.phase = True, 2
+    run = on.open({0: W0}, on.own)
+    assert run.retain_dir == tmp_path / "t" / "w2" and run.begun == 1
+    assert {oct(d.stat().st_mode & 0o777) for d in (tmp_path / "t", tmp_path / "t" / "w2")} == {"0o700"}
+    on.phased, on.phase = False, None
+    assert on.open({0: W0}, on.own).retain_dir == tmp_path / "t"
+
+
 def test_a_step_that_computed_without_steps_computed_is_refused(monkeypatch) -> None:
     ex, run = _attached(monkeypatch)
     ex.emit(H.StepBegan(0, ("a",), 8))
@@ -292,6 +338,11 @@ class _DeviceRun(_Run):
         super().__init__()
         self.made = (scheme.name, entry, kernel, weights, roots, coins, opening, kw)
         self.commits: dict = {}
+        self.cur = SimpleNamespace(matmuls=[])
+        self.begun = 0
+
+    def begin(self) -> None:
+        self.begun += 1
 
 
 class _Device:
