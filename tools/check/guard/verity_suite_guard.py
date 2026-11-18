@@ -121,7 +121,7 @@ def _audit(event: str, args: tuple) -> None:
     if _tracer is None or _tracer.busy:
         return
     try:
-        hits = _tracer.trace(event, args)
+        hits = _tracer.trace(event, args, _current)
     except (TypeError, ValueError):
         hits = []
     for kind, rel in hits:
