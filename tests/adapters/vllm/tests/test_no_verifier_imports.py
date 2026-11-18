@@ -53,14 +53,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/protocols/pouw/h1_settings.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
     },
     "network-accounting": {},
-    "memory-accounting": {
-        # `protocols/pous.py` reads the schemes for its refusals, setup's salt draw, and the period's certificate and gaps
-        # for its details; the store, its encode and decode and the period are pous's prover's (`weight_store`).
-        "verity_vllm/protocols/pous.py": (
-            "resource_accounting.memory.pous.verifier.period", "resource_accounting.memory.pous.verifier.schemes",
-            "resource_accounting.memory.pous.verifier.schemes.p2", "resource_accounting.memory.pous.verifier.setup",
-        ),
-    },
+    "memory-accounting": {},
 }
 
 
