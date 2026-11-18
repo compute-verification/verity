@@ -20,7 +20,7 @@ that `Rows.value` makes of them, and a served y is taken under any statics of it
 computes (`Slot`'s ``cut``), at every prompt position, the last layer's too, which prefill prunes there but the engine
 computes (`Served`).
 Every other unit holds its Definition's function of the window's values:
-- a slot's `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
+- a slot's `ScanSlots_v3` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
   (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
   prompt bound its token and the slot it carries (`io_shell.feed_reference`), each token select's `SelectCollect_v1` its
   second row, the select collected on from the lane's head (`io_shell.collect_reference`), and the last position's
@@ -476,7 +476,7 @@ class Rows:
     unit's source and an embedding read's opening ports, from each slot's `Slot` (in slot order) and the circuit's
     registered values by parameter (`window_weights.weight_values` with their rows kept, and the scan state's,
     `scan_state.SCAN_STATE`, with its rows: the network attester's, a row a bucket of the window), of which an embedding
-    read opens its table's (its ``rows``, ``salts`` and ``path``) and a slot's `ScanSlots_v2` reads the scan state's row at
+    read opens its table's (its ``rows``, ``salts`` and ``path``) and a slot's `ScanSlots_v3` reads the scan state's row at
     its anchor. Refused unless every unit's every row is filled once."""
 
     def __init__(self, lowered: Lowered, slots: Sequence[Slot], registered: Mapping[str, Any]) -> None:
@@ -580,7 +580,7 @@ class Rows:
             self._heads(nodes[j], plan, calls, S)
 
     def _scan(self, P: Any, S: Slot, picks: Sequence[int]) -> None:
-        """The slot's scan units: its `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan
+        """The slot's scan units: its `ScanSlots_v3` every lane's first token and slot, occupancy word and head of the scan
         state row at its anchor (its lane's row the slot's, refused by name where it isn't), each position's
         `SelectCollect_v1` but the last its select collected on from the lane's head (its ``o1``; its select ``o0`` is the
         node's), and the last's `SelectEntry_v1` its entry of the scan's Programs' row."""
@@ -693,7 +693,7 @@ def _elements(words: np.ndarray, width: int) -> np.ndarray:
 
 def _lanes(P: Any, state: Sequence[Any], of: Callable[..., list] = IO.slots_reference) -> list[Any]:
     """Every lane of ``state``'s row at class Program ``P``'s anchor: its row and head (`io_shell.slots_reference`), or
-    ``of``'s (`io_shell.scan_reference`: `ScanSlots_v2`'s outputs)."""
+    ``of``'s (`io_shell.scan_reference`: `ScanSlots_v3`'s outputs)."""
     b = P.scan.bindings
     row = np.asarray(state[P.anchor], dtype=np.uint16).reshape(-1)
     return of(row.tolist(), b["NP"], b["IDB"], b["K0"], b["K"], b["OCC"], b["LP"], b["MAX"], b["IDS"])

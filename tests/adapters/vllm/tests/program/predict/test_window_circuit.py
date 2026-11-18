@@ -71,7 +71,7 @@ EMB, GROUPS = "EmbeddingRead_v1{V=256,H=64}", "TokenSelectGroups_v1{C=64,G=16}"
 FEED = "TokenFeed_v1{NP=4,FIRST=false}"
 #: the scan state read at TINY's 2 lanes (4,548 words a row), each position's select with its collector (the first
 #: position's, every later one's) and the last's with the slot's entry
-SCAN, ENTRY = "ScanSlots_v2{NS=4548,NP=4,IDB=17,K0=12,K=45}", "SelectEntry_v1{V=256,C=16,KO=2,FIRST=false,IDB=17,NP=4}"
+SCAN, ENTRY = "ScanSlots_v3{NS=4548,NP=4,IDB=17,K0=12,K=45}", "SelectEntry_v1{V=256,C=16,KO=2,FIRST=false,IDB=17,NP=4}"
 COLLECT0, COLLECT = "SelectCollect_v1{V=256,C=16,KO=2,FIRST=true}", "SelectCollect_v1{V=256,C=16,KO=2,FIRST=false}"
 
 
@@ -137,7 +137,7 @@ def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_o
     """At the class of record's slots, 4 a boundary at buckets 0 and 16 (at TINY's bounds of 4 prompt ids and 2 outputs), a
     window of three requests (two anchored at bucket 0, one at 16) and one of eight (four at each) emit the
     same circuit, the same descriptor digest (SHA-512 of its description's bytes) and the same blocks: eight class Programs,
-    each slot's `ScanSlots_v2` unit reading its lane of the scan's state row before its anchor (rows 0 and 16 of the 4-lane
+    each slot's `ScanSlots_v3` unit reading its lane of the scan's state row before its anchor (rows 0 and 16 of the 4-lane
     scan's 9,090 words) and its last position making its entry of the scan's Programs' row."""
     eight = _circuit(EIGHT, cls=SLOTS, placed=[(0, 1)] * 4 + [(16, 17)] * 4)
     three = _circuit(THREE, cls=SLOTS, placed=[(0, 1), (16, 18), (16, 31)])
@@ -231,7 +231,7 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
     down_proj's 8 at K 128, its RoPE a unit a head, its attention a unit a head a Call of `AttentionHead_v19`'s body
     (position p's first key block of p + 1 keys, `AttnBlockFirst_v1{NVIS=p + 1}`, and its end), its token select four
     units of four groups each and a combine, its first position's token, slot, occupancy word and head its lane's of the scan state row
-    (`ScanSlots_v2`), positions 1..3's tokens `TokenFeed_v1` units, each position's combine its select collected
+    (`ScanSlots_v3`), positions 1..3's tokens `TokenFeed_v1` units, each position's combine its select collected
     (`SelectCollect_v1`), and its last position's its entry too (`SelectEntry_v1`). A port read as m writer rows is cut m ways, each
     row its writer's as it is (a key block's keys and values a row a position, the fused norm's ``x`` a row a slice), and
     the wiring is a pattern per run, the two slots' one, not a wire per unit, but for the scan's outputs, named for their
@@ -252,28 +252,28 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
     assert Counter((family[w.reader], w.port, family[w.writer], w.out) for w in circuit.wires) == {
         ("AttnBlockFirst_v1", "k", "RoPEHead_v1", "o0"): 5, ("AttnBlockFirst_v1", "q", "RoPEHead_v1", "o0"): 5,
         ("AttnBlockFirst_v1", "v", "Gemm_v2", "o0"): 5, ("AttnHeadEnd_v1", "l", "AttnBlockFirst_v1", "o1"): 5,
-        ("AttnHeadEnd_v1", "o", "AttnBlockFirst_v1", "o2"): 5, ("EmbeddingRead_v1", "tok", "ScanSlots_v2", "o0"): 1,
-        ("EmbeddingRead_v1", "tok", "ScanSlots_v2", "o4"): 1, ("EmbeddingRead_v1", "tok", "TokenFeed_v1", "o0"): 1,
+        ("AttnHeadEnd_v1", "o", "AttnBlockFirst_v1", "o2"): 5, ("EmbeddingRead_v1", "tok", "ScanSlots_v3", "o0"): 1,
+        ("EmbeddingRead_v1", "tok", "ScanSlots_v3", "o4"): 1, ("EmbeddingRead_v1", "tok", "TokenFeed_v1", "o0"): 1,
         ("EmbeddingRead_v1", "tok", "SelectCollect_v1", "o0"): 1, ("Gemm_v2", "x", "AttnHeadEnd_v1", "o0"): 1,
         ("Gemm_v2", "x", "RMSNormFusedCuda_v2", "o0"): 16, ("Gemm_v2", "x", "RMSNormTriton_v5", "o0"): 5,
         ("Gemm_v2", "x", "SiluMul_v2", "o0"): 1, ("RMSNormFusedCuda_v2", "res", "EmbeddingRead_v1", "o0"): 5,
         ("RMSNormFusedCuda_v2", "res", "RMSNormFusedCuda_v2", "o1"): 5, ("RMSNormFusedCuda_v2", "x", "Gemm_v2", "o0"): 20,
         ("RMSNormTriton_v5", "x", "EmbeddingRead_v1", "o0"): 1, ("RoPEHead_v1", "x", "Gemm_v2", "o0"): 20,
-        ("SelectCollect_v1", "best", "TokenSelectGroups_v1", "o0"): 2, ("SelectCollect_v1", "head", "ScanSlots_v2", "o3"): 1,
-        ("SelectCollect_v1", "head", "ScanSlots_v2", "o7"): 1, ("SelectCollect_v1", "idx", "TokenSelectGroups_v1", "o1"): 2,
+        ("SelectCollect_v1", "best", "TokenSelectGroups_v1", "o0"): 2, ("SelectCollect_v1", "head", "ScanSlots_v3", "o3"): 1,
+        ("SelectCollect_v1", "head", "ScanSlots_v3", "o7"): 1, ("SelectCollect_v1", "idx", "TokenSelectGroups_v1", "o1"): 2,
         ("SelectCollect_v1", "state", "SelectCollect_v1", "o1"): 2, ("SelectCollect_v1", "x0", "Gemm_v2", "o0"): 2,
         ("SelectEntry_v1", "best", "TokenSelectGroups_v1", "o0"): 1, ("SelectEntry_v1", "idx", "TokenSelectGroups_v1", "o1"): 1,
-        ("SelectEntry_v1", "occ", "ScanSlots_v2", "o2"): 1, ("SelectEntry_v1", "occ", "ScanSlots_v2", "o6"): 1,
+        ("SelectEntry_v1", "occ", "ScanSlots_v3", "o2"): 1, ("SelectEntry_v1", "occ", "ScanSlots_v3", "o6"): 1,
         ("SelectEntry_v1", "state", "SelectCollect_v1", "o1"): 1, ("SelectEntry_v1", "x0", "Gemm_v2", "o0"): 1,
         ("SiluMul_v2", "gu", "Gemm_v2", "o0"): 1, ("TokenFeed_v1", "sel", "SelectCollect_v1", "o0"): 2,
-        ("TokenFeed_v1", "slot", "ScanSlots_v2", "o1"): 1, ("TokenFeed_v1", "slot", "ScanSlots_v2", "o5"): 1,
+        ("TokenFeed_v1", "slot", "ScanSlots_v3", "o1"): 1, ("TokenFeed_v1", "slot", "ScanSlots_v3", "o5"): 1,
         ("TokenFeed_v1", "slot", "TokenFeed_v1", "o1"): 1, ("TokenSelectGroups_v1", "x", "Gemm_v2", "o0"): 1}
     assert circuit.external == (f"{ids[SCAN]}/state", f"{ids[ENTRY]}/o0")
 
 
 def test_a_positions_token_is_its_feed_below_the_prompt_bound_and_the_previous_select_past_it(window):
     """Each slot's request is its lane's of the scan state row before its anchor (both slots at bucket 0, lanes 0 and 1, row 0
-    of the registered scan state), read by its `ScanSlots_v2` unit, whose lane k is its outputs ``o4k`` to ``o4k+3``: the
+    of the registered scan state), read by its `ScanSlots_v3` unit, whose lane k is its outputs ``o4k`` to ``o4k+3``: the
     first position's token and slot (its `TokenFeed_v1`'s), the occupancy word and the head. Position 0's embedding reads
     its lane's token and position 1's feed its lane's slot; each later feed reads its predecessor's slot and the previous
     position's select, and position p's embedding reads its feed's token for p < 4 and position p - 1's select at p = 4. A
@@ -334,7 +334,7 @@ def state_row(scan, fields) -> list[int]:
 def test_the_scan_state_row_is_ingress_scans_and_its_wide_read_is_one_row_a_slot():
     """The scan state row a slot reads is `ingress_scan.layout`'s, its head then each lane's fields, ``occ`` (the slot's
     occupancy word, 1 when its Program starts at the row's boundary) among them: at the class of record (4 lanes, KO 64,
-    the scan's cells of record) 9,353 u16 words, lane j's fields 37,387 bits apart. `ScanSlots_v2` reads it whole, one
+    the scan's cells of record) 9,353 u16 words, lane j's fields 37,387 bits apart. `ScanSlots_v3` reads it whole, one
     registered row a slot, and gives every lane's first token (2 words), slot (2,050 at 1,024 prompt ids), occupancy word
     (2) and head (4), of which a slot's lane's four are wired: its unit is 1 + 4·4 rows, 12 of them unread. A row packed by
     the layout (`state_row`) reads back each lane's fields, ids at `io_shell.position`, and its first position's token and

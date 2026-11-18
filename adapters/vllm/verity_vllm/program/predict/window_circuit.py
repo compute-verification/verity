@@ -10,7 +10,7 @@ the token select, position p attending to keys 0..p. So the circuit is a functio
 request, arrival steps, prompt lengths, output lengths and key counts are values, never structure.
 
 A slot's request comes from the network attester's scan: boundary b's Programs read the scan's state row before it
-(`scan_state.SCAN_STATE`, registered) through `boolean_io_shell.ScanSlots_v2` (`scan_state.bridge`), which gives each lane
+(`scan_state.SCAN_STATE`, registered) through `boolean_io_shell.ScanSlots_v3` (`scan_state.bridge`), which gives each lane
 its first position's token (its prompt's first id) and the slot it carries on, its occupancy word and its head (its prompt's
 length and ``max_tokens``). Every later position's token is `io_shell.TokenFeed_v1{prompt, FIRST=False}`'s below the class's
 prompt limit (the prompt's id below its length, else the previous position's select), and past it the previous position's
@@ -86,7 +86,7 @@ Given H1's tables of the window (`Tables`, `window_class`), the circuit reads ea
 output row (`interface.Read`) that holds the proof block's output row to the registered row: each quantizer at the
 tables' K is `Int8RowQuant_v5{K, R, ROUND}`, its ``o2`` a row of its round's A table, and each position's token row a row of
 its round's input-ids table, at a fixed load's rows (`Tables.at`). Each reader reads one table, and each table's readers are
-templates of their own: round s's quantizers bind ROUND = s, round 0's token rows are its `ScanSlots_v2` and `TokenFeed_v1`
+templates of their own: round s's quantizers bind ROUND = s, round 0's token rows are its `ScanSlots_v3` and `TokenFeed_v1`
 units' and a later round's the select before it, `io_shell.SelectCollect_v2{..., ROUND}`. So a sample stratified by
 template (one stratum a template) has a reader of every table.
 
@@ -104,7 +104,7 @@ it (`interface.ordered`, the circuit's ``order``).
 
 The circuit's blocks (`interface.Blocks`) carry its inference block: a unit's slot is its slot (its class Program; the blocks'
 slots are the class's S) and its step its position, T the class's positions. An embedding opens its position, the stack, LM head
-and token select with its collector after it are that position's (the last's with the entry), and a slot's `ScanSlots_v2`
+and token select with its collector after it are that position's (the last's with the entry), and a slot's `ScanSlots_v3`
 unit its first position's. An allocation's units are one entry, its slots' runs at one step side by side (the slot
 digit, then the run), and like entries that follow on merge, at one step and then at consecutive steps
 (`window_builder.inference`).

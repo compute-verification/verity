@@ -371,7 +371,7 @@ A spec-level reference for network attestation's timing channel:
   slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy
   word `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt
   ids, which the scan reads off the network attester's signed ingress cells, so no other tie holds them to the attested bytes;
-  `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `ScanSlots_v2`), and
+  `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `ScanSlots_v3`), and
   `window_state` the rows an execution phase's circuit from bucket t0 reads, the scan's rows t0 − 1 on (the
   empty state's for row −1). A Program gives all its outputs to its entry at its anchor (its read bit, n, u32, and 64
   ids of 17 bits at w63's class, 71 words, the row `SlotEntry_v1` writes); an execution phase's
