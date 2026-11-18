@@ -5,7 +5,7 @@ GPU, and judges them.
   research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=<you> \
       -- python3 benchmarks/pouw/harness/ieee_pin.py [--toolkit NAME=CUDA_HOME ...]
 
-Toolkits: 12.9.1 from `jobs/toolkit.sh`, 13.0.1 the run's machine's (`benchmarks/kernels/machine.py toolkit 13.0`),
+Toolkits: 12.9.1 from `jobs/toolkit.sh`, 13.0.1 the run's machine's (`verity_bench.kit.toolkit`),
 unless --toolkit names them; each must be a toolkit of
 `sass_pins.json`, and every one given is judged. A toolkit's target is its name's suffix (13.0.1-sm_90a builds sm_90a and
 runs on an sm_90 card; no suffix, sm_120a), and one run's toolkits share one target, since one leased GPU runs every binary.
@@ -35,7 +35,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import tomllib
 from pathlib import Path
 
 #: what `jobs/pin_target.sh` and the tests read
@@ -45,28 +44,28 @@ __all__ = [
 ]
 
 HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[2]
+# the tree's import roots, as `benchmarks/kernels/machine.py` puts them, for a run under the bare `python3`
+sys.path += [str(p) for p in (ROOT / "benchmarks" / "harness", ROOT / "tools" / "config", ROOT) if str(p) not in sys.path]
+
+from verity.device import load_architecture  # noqa: E402
+from verity_bench import kit  # noqa: E402
 
 
 def _gate():
-    """The SASS gate under the name every file that loads it gives it, so a process holds one: the tree's, or the copy
-    beside this file where the two were copied out of the tree."""
+    """The SASS gate under the name every file that loads it gives it, so a process holds one."""
     name = "pouw_harness_sass_gate"
     if name not in sys.modules:
-        tree = HERE.parent.parent.parent / "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py"
-        spec = importlib.util.spec_from_file_location(name, tree if tree.is_file() else HERE / "sass_gate.py")
+        tree = ROOT / "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py"
+        spec = importlib.util.spec_from_file_location(name, tree)
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]
 
 
 SG = _gate()
-#: the pinned builds' source: the tree's, beside the pins, or the copy beside this file where the two were copied out
-_TREE_SOURCE = HERE.parent.parent.parent / "verity/protocols/resource_accounting/compute/pouw/prover/ieee_pin.cu"
-SOURCE = _TREE_SOURCE if _TREE_SOURCE.is_file() else HERE / "ieee_pin.cu"
-#: the architecture files (calibration/hardware/architectures): the tree's, or the copy beside this file where it was
-#: copied out; read with the standard library, as `verity.device.load_architecture` reads them
-_TREE_ARCHITECTURES = HERE.parent.parent.parent / "calibration/hardware/architectures"
-ARCHITECTURES = _TREE_ARCHITECTURES if _TREE_ARCHITECTURES.is_dir() else HERE / "architectures"
+#: the pinned builds' source, beside the pins
+SOURCE = ROOT / "verity/protocols/resource_accounting/compute/pouw/prover/ieee_pin.cu"
 #: the target of a toolkit whose name has no suffix, as sass_pins.json names them
 DEFAULT_TARGET = "sm_120a"
 #: the compute capability (major and minor digits) ieee_pin.cu builds and runs `units_checks` for
@@ -74,11 +73,10 @@ UNITS_SM = 90
 
 
 def architecture(arch: str) -> dict:
-    path = ARCHITECTURES / f"{arch}.toml"
-    if not path.is_file():
-        raise PinFailed(f"no target {arch}: no architecture file {path} (the targets are "
-                        f"{sorted(f.stem for f in ARCHITECTURES.glob('*.toml'))})")
-    return tomllib.loads(path.read_text())
+    try:
+        return load_architecture(arch, directory=kit.cards_directory().parent / "architectures")
+    except KeyError as e:
+        raise PinFailed(f"no target {arch}: {e.args[0]}") from None
 
 
 def sm_of(arch: str) -> int:
@@ -96,7 +94,7 @@ def arch_of(toolkit: str) -> str:
 
 
 def nvcc_args(arch: str) -> list[str]:
-    return ["-O3", "-std=c++17", "-gencode", f"arch={architecture(arch)['virtual']},code={arch}", "--no-compress"]
+    return ["-O3", "-std=c++17", "-gencode", kit.arch_gencode(arch), "--no-compress"]
 
 
 PINNED = [[], ["-fmad=false"]]
@@ -134,8 +132,11 @@ def toolkit_sh_home() -> str:
 
 
 def machine_home(version: str) -> str:
-    """CUDA `version`'s home on the run's machine: CUDA_HOME, else the one its [properties] list (machine.py's refusal else)."""
-    return _run([sys.executable, str(HERE.parents[2] / "benchmarks" / "kernels" / "machine.py"), "toolkit", version]).strip()
+    """CUDA `version`'s home on the run's machine (`kit.toolkit`): CUDA_HOME, else the one its [properties] list."""
+    try:
+        return kit.toolkit(version)
+    except SystemExit as e:
+        raise PinFailed(str(e)) from None
 
 
 def homes(specs: list[str], pins: dict) -> dict[str, str]:
