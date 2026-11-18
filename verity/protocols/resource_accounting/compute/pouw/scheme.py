@@ -40,7 +40,7 @@ def tile_macs(shape: Mapping[str, int]) -> int:
 #: run), ``cubin`` its cubin, ``schedule`` the schedule each pass runs under (`serving.SCHEDULES`),
 #: ``transcript_dir`` where passes are retained, the salt's source, ``coins`` (``in-process``: a challenger held in this
 #: process, crediting nothing) or ``challenger`` (the auditor device's, HOST:PORT) with ``session`` (the gate's reserve
-#: answer, which the launcher's ``ctx["gate"]`` opens), and ``tie-uniform``
+#: answer, which the launcher's ``ctx["gate"]``, the gate in its own words, opens), and ``tie-uniform``
 SETTINGS: dict[str, Any] = {"tie-uniform": False, "kernel": "", "cubin": "", "schedule": "serial", "transcript_dir": "",
                             "coins": "", "challenger": "", "session": {}}
 COINS = ("", "in-process")
@@ -139,8 +139,8 @@ class Attached:
             raise ValueError("pearl-plus: neither 'coins' nor 'challenger' is among its settings (ctx['settings']): the salt is "
                              "the challenger's salt coin, opened after the weights' root, and there is no beacon")
         if self.own["challenger"] and not callable(self.gate):
-            raise ValueError("pearl-plus: with a 'challenger', its launcher passes ctx['gate'], gate(session, root): the "
-                             "gate's open of the reserved session on the salt epoch's root (serving.h1.window.Gate)")
+            raise ValueError("pearl-plus: with a 'challenger', its launcher passes ctx['gate'], the auditor device's "
+                             "challenger gate in its own words, gate(*words) -> answer (commit_coins.ChallengerGate.call)")
         if self.own["challenger"] and self.private is None:
             raise ValueError("pearl-plus: with a 'challenger', its launcher passes ctx['private'], the scheme's private "
                              "directory: the salt epoch's number must survive a restart, or a later server would open a "
@@ -233,7 +233,8 @@ class Attached:
         roots = device.weight_roots(kernel, weights, name)
         k, carried = None, None
         if own["challenger"]:
-            given = SimpleNamespace(challenger=own["challenger"], session=dict(own["session"]), gate=self.gate)
+            given = SimpleNamespace(challenger=own["challenger"], session=dict(own["session"]),
+                                    gate=SV.gate_of(self.gate))
             self.session, coins, opening, _, carried, k = SV.salt_session(OPTION, given, SV.weights_root(roots), True,
                                                                           epoch=spend_epoch(self.private))
         else:

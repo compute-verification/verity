@@ -38,8 +38,8 @@ def test_bound_reads_its_term_at_the_parameters_given() -> None:
         S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, names, {"q": 1, "N": 1})
 
 
-def _gate(sid, root):
-    return {}
+def _gate(*words):
+    return {"session": words[2], "root": words[4], "commitment": "c"} if words[0] == "open" else {}
 
 
 SESSION = {"session": "s-1"}
@@ -296,7 +296,10 @@ def test_a_challenger_opens_one_session_for_the_servers_life(monkeypatch, tmp_pa
     monkeypatch.setattr(SV, "finish_window", lambda run, session: finished.append(session), raising=False)
     on = PS.Attached({**CTX, "private": str(tmp_path)})
     on.run = on.open({0: W0}, on.own)
-    assert opened == [(PS.OPTION, "127.0.0.1:1", SESSION, _gate, SV.weights_root({0: bytes([0]) * 64}), True, 0)]
+    [(entry, at, session, gate, root, opens, epoch)] = opened
+    w = SV.weights_root({0: bytes([0]) * 64})
+    assert (entry, at, session, root, opens, epoch) == (PS.OPTION, "127.0.0.1:1", SESSION, w, True, 0)
+    assert gate("s-1", "ab") == {"session": "s-1", "root": "ab", "commitment": "c"}
     assert on.run.made[2] == ("kernel", "k.so", None)
     assert on.run.made[5:] == ("c", "o", {"pass_index": 0, "schedule": "serial"})
     assert on.run.commits["coin_source"] == SV.H1_CHALLENGER and on.run.commits["session"] == {"gate": 1}
