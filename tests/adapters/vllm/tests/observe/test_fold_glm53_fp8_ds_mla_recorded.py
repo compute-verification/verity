@@ -125,7 +125,7 @@ BF16_DIGEST = "72169a2ef982ffe8fa2152c9548e93235afad8df0d9d2213831f2f43e25a8cf9"
 
 def test_the_bf16_cache_s_launches_fold_as_before():
     ctx = B._ctx(B.TWO, slots=[5, 70])
-    ctx.header = dataclasses.replace(ctx.header, profile={"gpu": {"multi_processor_count": 132}})
+    ctx.header = dataclasses.replace(ctx.header, profile={"gpu": {"compute_capability": "9.0", "multi_processor_count": 132}})
     made = [D.DsaNormRope().match(B._norm(), ctx), D.DsaQ().match(B._q(), ctx), D.DsaIndexShare().match(B._share(), ctx),
             D.DsaSparseMla().match(B._mla(**B.MLA_DEFAULT, **B._halves())[0], ctx), D.DsaNormRope().match(B._norm(indexer=False), ctx)]
     others = [p for p in D.dsa_patterns() if type(p).__module__ in (D.__name__, F.__name__)

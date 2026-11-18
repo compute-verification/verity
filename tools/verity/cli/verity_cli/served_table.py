@@ -964,10 +964,12 @@ PHASE = "phase.json"
 def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     """The verifier's onsite line over what the application's serving step published in ``state``'s ``out/`` and
     nothing else: the record (``record/verdicts.json``) of the execution phase ``serve/phase.json`` names, the line's
-    ``block`` its seal's SHA-512, in `verity_cli.run`'s verdict form. The serving node composed that record, so each of
-    its accepts, each row's and the combined verdict, reads undecided, `AS_WRITTEN` in the reason, whatever a row's
-    ``answer_from`` (printed, deciding nothing) says; a reject or an error stands. A component that charges nothing
-    keeps its row's verdict like any other; the line's ``charges_nothing`` says why it has no figure. Refused
+    ``block`` its seal's SHA-512, in `verity_cli.run`'s verdict form: its verdicts as the record has them, each row's
+    ``answer_from`` (printed, deciding nothing) saying who wrote it. Under ``VERITY_HOLD_PLACEMENT=1``
+    (`verity_cli.settings.hold_placement`), since the workload's node composed that record, each of its accepts, each
+    row's and the combined verdict, reads undecided, `AS_WRITTEN` in the reason; a reject or an error stands either way.
+    A component that charges nothing keeps its row's verdict like any other; the line's ``charges_nothing`` says why it
+    has no figure. Refused
     (``window``, ``record``) when either file isn't there."""
     out = state / "out"
     phase, report = out / "serve" / PHASE, out / "record" / "verdicts.json"
@@ -989,14 +991,15 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     reason = (wrong or composed.get("reason")) if verdict == "reject" else \
         (f"missing {missing}" if missing else None) or (f"no row for {absent}" if absent else None) \
         or (composed.get("lean") if verdict != "accept" else None)
-    # The serving node composed this record, so none of its accepts stands; one recomputed by the verifier would.
-    held = (["the composed verdict"] if verdict == "accept" else []) + \
-        sorted(c for c, v in components.items() if v == "accept")
-    components = {c: "undecided" if v == "accept" else v for c, v in components.items()}
-    if verdict == "accept":
-        verdict = "undecided"
-    if held and verdict == "undecided":
-        reason = "; ".join(x for x in (reason, "not accepted: " + ", ".join(f"{h} {AS_WRITTEN}" for h in held)) if x)
+    if machine_settings.hold_placement():
+        # The workload's node composed this record, so none of its accepts stands; one recomputed by the verifier would.
+        held = (["the composed verdict"] if verdict == "accept" else []) + \
+            sorted(c for c, v in components.items() if v == "accept")
+        components = {c: "undecided" if v == "accept" else v for c, v in components.items()}
+        if verdict == "accept":
+            verdict = "undecided"
+        if held and verdict == "undecided":
+            reason = "; ".join(x for x in (reason, "not accepted: " + ", ".join(f"{h} {AS_WRITTEN}" for h in held)) if x)
     on = coins_on(cfg, bindings_of(state))
     developer = {p["machine"] for p in cfg["party"] if p["principal"] == "developer"}
     return {"block": seal, "components": components, "answer_from": answer_from, "product": product, "reason": reason,
