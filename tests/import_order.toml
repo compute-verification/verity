@@ -373,6 +373,7 @@ loads = [
     "verity/commitments/crypto",
     "verity/protocols/resource_accounting/compute/pouw/prover",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
+    "verity/protocols/resource_accounting/scheme.py",
 ]
 
 [[place]]
