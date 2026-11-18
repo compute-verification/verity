@@ -319,10 +319,23 @@ def link_ports(uc: ProofBlockCircuit, groups: list[list[int]], reads: list[list]
     return out, origin, spans
 
 
-def _link_frame(uc: ProofBlockCircuit, group: list[int], at: int) -> tuple[int, int]:
+def _field_starts(fn: Any) -> list[int]:
+    """The first output leaf of each of ``fn``'s return fields, then its output leaves."""
+    ret = fn.signature()[1]
+    out = [0]
+    for f in getattr(ret, "fields", None) or (ret,):
+        out.append(out[-1] + (f[1] if isinstance(f, tuple) else f).leaves)
+    return out
+
+
+def _link_frame(uc: ProofBlockCircuit, starts: list[int], group: list[int], at: int) -> tuple[int, int]:
     """A link port's row (`_framed`): its writer's whole output row, one of the class's own units' (``uc``'s outputs, as
-    ``out`` holds them), the group's words at outputs ``at``, ``at + 1``, …'s."""
+    ``out`` holds them), the group's words at outputs ``at``, ``at + 1``, …'s, which are one whole return field of the
+    template (``starts``: `_field_starts`); else a ValueError."""
     widths = [uc.in_widths[t] for t in group]
+    if starts[-1] != len(uc.out_widths) or at not in starts[:-1] or starts[starts.index(at) + 1] != at + len(widths):
+        raise ValueError(f"a wire reads one whole return field of its writer: outputs [{at}, {at + len(widths)}) are not one "
+                         f"field's (its fields' first outputs {starts[:-1]} of {starts[-1]})")
     if widths != list(uc.out_widths[at:at + len(widths)]):
         raise ValueError(f"a link's reads of widths {widths[:4]}... are not its writer's outputs from {at}")
     return sum(_words(w) for w in uc.out_widths[:at]), sum(_words(w) for w in uc.out_widths)
@@ -679,8 +692,8 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     ``wiring`` (a template-instance partition, lanes with source identities, the instances its ``indices``): META names the
     template as the size class's ``definition`` (the class names itself in ``program_digests``), and every read of another
     unit's outputs is a link port (`link_ports`, META ``links``): its row the writer's whole output row (one word per output,
-    as ``out`` holds them, never packed), the reader's leaves at their outputs' words from the link's offset (`_link_frame`),
-    one table row per reading instance, committed under the writer's ``out`` salt (and, ``strict``, checked here to be the
+    as ``out`` holds them, never packed), the reader's leaves one whole return field of the writer's, at that field's words
+    (`_link_frame`; a read of part of a field or of several is refused), one table row per reading instance, committed under the writer's ``out`` salt (and, ``strict``, checked here to be the
     writer's row).
 
     ``pad``: the statement padded to ``pad`` instances (a public cap, `rec_shape`), the lanes its first and the rest fillers:
@@ -733,7 +746,8 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         leaf = {u: i for i, u in enumerate(tree_leaves(tp, definition))} if wiring.tree is not None else None
         groups, origin, spans = link_ports(uc, groups, reads, n_out)
         packs = [packed and s is None for s in spans]
-        frames = [None if s is None else _link_frame(uc, g, s[2]) for g, s in zip(groups, spans)]
+        starts = _field_starts(act.fn)
+        frames = [None if s is None else _link_frame(uc, starts, g, s[2]) for g, s in zip(groups, spans)]
         for s in spans:
             ws = None
             if s is not None:

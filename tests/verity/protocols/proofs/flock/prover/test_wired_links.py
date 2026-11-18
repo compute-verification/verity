@@ -7,7 +7,8 @@ same circuit with link rows that differ, as do a reader whose read is moved to a
 whose link row is a row of other words under its writer's salt (``other_words``). The Lean verifier
 (`verity-verify-proof statement --program --registered`, when a Lean toolchain is present) accepts the writers and the
 honest readers and refuses every cheat, a linked statement without its program, and one without registered reads, and
-accepts a reader of part of its writer's outputs (``partial``), whose link row is the writer's whole row from an offset; a
+accepts a reader of one return field of a two-field writer (``field``), whose link row is the writer's whole row, the
+field from its offset (a read of part of a field, or of several, is refused at staging); a
 one-layer statement, with no cut wire, is accepted with its units derived when staged with `Wiring`, and as before when
 staged without. When ``FLOCK_CIRCUIT`` names a build of ``flock-circuit``, the live verifier gives the same verdicts
 with its own links file. Linking binds a public topology; it does not hide the topology."""
@@ -27,8 +28,8 @@ from verity.circuits import partition_object as PO
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
-from verity.circuits.refs import array_of, coll_concat
-from verity.circuits.types import Array
+from verity.circuits.refs import array_of, coll_concat, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.circuits.private_circuits import universal as U
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 from verity.commitments import registered_value as RV
@@ -41,8 +42,12 @@ G, N_IN, N_OUT, N = 4, 4, 2, 2
 NC = N_IN + N_OUT
 #: layer 0 reads c[0:4]; layer 1 reads c[4:6], then layer 0's outputs
 WIRED = ((("c", 0, N_IN),), (("c", N_IN, NC), ("u", 0, 0, N_OUT)))
-#: layer 1 reads c[4:6] and c[0], then layer 0's second output alone: a link from offset 1
+#: layer 1 reads c[4:6] and c[0], then layer 0's second output alone: part of its one return field
 PART = ((("c", 0, N_IN),), (("c", N_IN, NC), ("c", 0, 1), ("u", 0, 1, N_OUT)))
+#: of `TWO_FIELDS`' units, layer 1 reads layer 0's second return field (its second output): a link from offset 1
+FIELD = ((("c", 0, N_IN),), (("c", N_IN, NC), ("c", 0, 1), ("f", 0, 1, 0, 1)))
+#: layer 1 reads both of layer 0's return fields in one run
+FIELDS = ((("c", 0, N_IN),), (("c", N_IN, NC), ("f", 0, 0, 0, 1), ("f", 0, 1, 0, 1)))
 FLAT = ((("c", 0, N_IN),),)
 SPEC = "q-template-instance"
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
@@ -53,16 +58,27 @@ SPOT = LEAN.parents[1] / "spot" / "verifier" / "lean"
 pytestmark = pytest.mark.slow
 
 
-def _program(topo):
-    fn = bind(U.UniversalUnit, G=G, N_IN=N_IN, N_OUT=N_OUT)
+TWO_FIELDS = CompositeDefinition(
+    "WiredLinksTwoFields", 1, ("G", "N_IN", "N_OUT"),
+    lambda S: (U._signature(S)[0], Tuple(Array(1, U.BIT), Array(S.N_OUT - 1, U.BIT))),
+    lambda B, S, *colls: (lambda y: tuple_of(y[0:1], y[1:S.N_OUT]))(U._body(B, S, *colls)), register=False)
+
+
+def _read(c, us, t: int, p: tuple):
+    if p[0] == "c":
+        return c[t][p[1]:p[2]]
+    return us[p[1]][t][p[2]:p[3]] if p[0] == "u" else us[p[1]][t][p[2]][p[3]:p[4]]
+
+
+def _program(topo, unit=U.UniversalUnit):
+    fn = bind(unit, G=G, N_IN=N_IN, N_OUT=N_OUT)
     params, ret = fn.signature()
     sig = [("c", Array(N, Array(NC, U.BIT)))] + [(f"{nm}{i}", t) for i in range(len(topo)) for nm, t in params[:-1]]
 
     def body(B, S, c, *ps):
         us = []
         for i, parts in enumerate(topo):
-            xs = array_of([coll_concat(Array(N_IN, U.BIT), [c[t][p[1]:p[2]] if p[0] == "c" else us[p[1]][t][p[2]:p[3]] for p in parts])
-                           for t in range(N)])
+            xs = array_of([coll_concat(Array(N_IN, U.BIT), [_read(c, us, t, p) for p in parts]) for t in range(N)])
             us.append(B.batch(fn, *ps[3 * i:3 * i + 3], xs, axes=(None, None, None, 0), n=N))
         return us[-1]
 
@@ -121,13 +137,13 @@ def _cut(lanes: tuple, lo: int, hi: int) -> tuple:
     return tuple([p[lo:hi] for p in part] for part in lanes)
 
 
-def _stage(topo, d: Path, wired: bool):
+def _stage(topo, d: Path, wired: bool, unit=U.UniversalUnit):
     """The program, its partition and the stagings: honest (with `Wiring`), and with ``wired`` the writers (layer 0, its
     output rows the tree's), the two cheats among layer 1's statements (x reads layer 0's outputs flipped; the honest rows
     under link salts of their own), and the honest lanes with every instance's own rows (``own``, ``share_rows=False``), each
     with the verifier's `--registered` (``<name>.reads.json``); else the honest lanes staged without `Wiring` (``plain``)."""
     rng = random.Random(f"test-wired-links/{len(topo)}")
-    fn, program = _program(topo)
+    fn, program = _program(topo, unit)
     nets = [U.pad(U.PrivateCircuit(N_IN, tuple((rng.randrange(4), rng.randrange(N_IN + g), rng.randrange(N_IN + g))
                                                for g in range(G)),
                                    tuple(rng.randrange(N_IN + G) for _ in range(N_OUT))), G, N_IN) for _ in topo]
@@ -200,10 +216,10 @@ def staged(tmp_path_factory):
 
 
 @pytest.fixture(scope="module")
-def partial(tmp_path_factory):
+def field(tmp_path_factory):
     CS.cache_slot_circuits()
-    d = tmp_path_factory.mktemp("partial")
-    return d, _stage(PART, d, True)
+    d = tmp_path_factory.mktemp("field")
+    return d, _stage(FIELD, d, True, TWO_FIELDS)
 
 
 def _meta(d: Path) -> dict:
@@ -252,10 +268,10 @@ def test_honest_link_rows_are_their_writers_output_rows_and_each_cheat_breaks_th
     assert all(bc["wrong_salt"](t, port) != bc["writers"](t, "out") for t in range(N))
 
 
-def test_a_read_of_part_of_a_writers_outputs_links_its_whole_row_from_its_offset(partial):
-    """Reader instance t reads writer t's second output alone: its link row is still writer t's whole output row, the same
-    `b || c`, and the link names offset 1."""
-    d, (_fn, _p, _q, tp, _st) = partial
+def test_a_read_of_one_return_field_links_its_writers_whole_row_from_the_fields_offset(field):
+    """Reader instance t reads writer t's second return field (its second output): its link row is still writer t's whole
+    output row, the same `b || c`, and the link names offset 1."""
+    d, (_fn, _p, _q, tp, _st) = field
     [link] = _meta(d / "honest")["links"]
     x0 = len(tp.inputs(0)) - N_IN
     assert link == {"port": link["port"], "leaves": [x0 + N_IN - 1, x0 + N_IN], FC.LINK_AT: 1}
@@ -263,6 +279,13 @@ def test_a_read_of_part_of_a_writers_outputs_links_its_whole_row_from_its_offset
     bc = {k: _bc(d / k, N) for k in ("writers", "honest", "own", "made_up")}
     assert all(bc[k](t, link["port"]) == bc["writers"](t, "out") for k in ("honest", "own") for t in range(N))
     assert all(bc["made_up"](t, link["port"]) != bc["writers"](t, "out") for t in range(N))
+
+
+@pytest.mark.parametrize("topo,unit", [(PART, U.UniversalUnit), (FIELDS, TWO_FIELDS)], ids=["part-of-a-field", "two-fields"])
+def test_a_wire_of_part_of_a_return_field_or_of_several_is_refused_by_name(topo, unit, tmp_path):
+    CS.cache_slot_circuits()
+    with pytest.raises(ValueError, match="a wire reads one whole return field of its writer"):
+        _stage(topo, tmp_path, True, unit)
 
 
 def test_link_triples_refuse_a_cut_wire_no_link_carries_a_read_at_another_offset_and_not_a_run(staged):
@@ -347,8 +370,8 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_lean_accepts_a_read_from_an_offset_and_refuses_a_made_up_one(partial):
-    d, _st = partial
+def test_lean_accepts_a_read_of_one_return_field_and_refuses_a_made_up_one(field):
+    d, _st = field
     subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     bound = ["--partition", str(d / "partition.json"), "--program", str(d / "program.desc")]
 
