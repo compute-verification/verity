@@ -752,8 +752,9 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
     for i, (p, step) in enumerate(zip(passes, steps)):
         man = json.loads(Path(p["manifest"]).read_text())
         mans.append(man)
-        assert p["base"] == 2 * i
-        assert [(u["index"], u["weight"], u["real_rows"]) for u in man["matmuls"]] == [(2 * i + j, w, m) for j, (w, m) in enumerate(step)]
+        assert p["base"] == PP.ROUND_CALLS * i
+        assert [(u["index"], u["weight"], u["real_rows"]) for u in man["matmuls"]] == [
+            (PP.ROUND_CALLS * i + j, w, m) for j, (w, m) in enumerate(step)]
         assert man["commitment"] == {"root": p["transcript_root"], "count": p["tiles"]} and sorted(man["weights"]) == ["0", "1"]
     assert passes_distinct(mans) is None
     for f in ("weights/0.rows.bf16", "weights/0.tree", "weights/1.rows.bf16", "weights/1.tree"):
@@ -766,7 +767,7 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
 #: `_retained_files`' digest of the three steps below as the retention path wrote them when each call's copies, its record,
 #: y's root and the pass's files and manifest were all waited for in its step, under Pearl+'s kernel scheme
 #: (``pearl-c-h100-v1-h3``), every fresh salt `seeded_device_salts`'
-RETAINED_DIGEST = "5ab93ab77cd0f996a83ffcce36a8ac89ec0f8df4175c930caaa9b6b747c6751f"
+RETAINED_DIGEST = "16837623d625907f37e5ab18ca09160501095583d8f5dfc596a6a6302cd2c737"
 
 
 def _retained_files(root: Path) -> dict[str, str]:

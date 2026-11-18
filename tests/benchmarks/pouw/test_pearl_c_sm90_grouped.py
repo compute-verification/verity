@@ -24,6 +24,7 @@ from verity_torch.pouw.pearl_c import run_device as PPDR
 from verity_torch.pouw.pearl_c import grouped as PG  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
 from verity_torch.pouw.pearl_c.host import joined  # noqa: E402
+from verity_torch.pouw.pearl_c.passes import ROUND_CALLS  # noqa: E402
 
 SCHEME = "pearl-c-h100-v1-h3"
 STEPS = ["pd_commit_gm_851", "stats_s5", "eprime", "form_s5_g", "gemm_words_g_d", "pa", "gemm_pearlc_g_d", "pd_tiles_g_979"]
@@ -389,8 +390,8 @@ def test_each_calls_table_is_its_layouts_with_its_keys_leaves_and_pass_offsets(s
         if call == 2:
             run.end_pass()
         pos, tiles, flag_rows = len(run.cur.matmuls), run.cur.tiles, run.cur.flag_rows
-        index = run.cur.base + pos
-        assert index == call * len(us)
+        index = (call // 2) * ROUND_CALLS + pos         # its place: the pass's round, the call's position in it
+        assert pos == (call % 2) * len(us) and run.rounds() == (call + 1) // 2
         PG.gemm_grouped(run, ws, torch.randn(sum(counts), k).to(torch.bfloat16), counts)
         assert [u.index for u in run.cur.matmuls[pos:]] == list(range(index, index + len(us)))
         g = run._groups[ws]
