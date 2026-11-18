@@ -1968,7 +1968,8 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
 
     monkeypatch.setattr(PP.I2Compiler, "load", loaded)
     monkeypatch.setattr(WC, "takes", lambda *a, **k: None)
-    monkeypatch.setattr(WC, "lower", lambda *a, **k: None)
+    monkeypatch.setattr(WC, "lower", lambda *a, **k: SimpleNamespace(circuit=None))
+    monkeypatch.setattr(WC, "check_provable", lambda *a, **k: None)
     (tmp_path / "advice.bin").write_bytes(s.data)
     with pytest.raises(Loaded):
         PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",

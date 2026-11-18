@@ -50,6 +50,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier.period import (
     SESSION_DOMAIN,
     SETUP_WORKERS,
     Run,
+    W,
     answer,
     case,
     deployment,
@@ -62,7 +63,6 @@ from verity.protocols.resource_accounting.memory.pous.verifier.period import (
     unjudged,
 )
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
-
 
 type Prover = Callable[[Sequence[bytes]], Callable[[int], bytes]]
 """The prover's side of the session: from the blocks of `C*` it was sent, its answer to each index."""

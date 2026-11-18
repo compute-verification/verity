@@ -5,11 +5,12 @@
 #   research run --on <node> --project verity --campaign pouw --source <tree> --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=dc -- bash calibration/pouw/dc/run.sh
 #
-# The card is the one the run opened: its card record's `arch` picks the family (sm_90a: sm90, sm_100a: sm100; another
-# is refused before anything is built) and its architecture file gives nvcc's -gencode (probe.py arch, gencode).
+# The card is the one the run opened: its card record's `arch` picks the family, sources and gates from archs.py's table
+# (an architecture it lacks is refused before anything is built) and its architecture file gives nvcc's -gencode
+# (probe.py arch, gencode).
 # Outside the lease: build every binary and SASS-gate it (gate-build.txt; a refusal stops the run). Under one lease:
 # dgemm gate on three small shapes, each dump rechecked by dgemm_ref.py (dgemm/gate-<shape>/result.json, ref.json); dgemm
-# bench only if every gate is exact (dgemm/bench.jsonl); on sm100, fp8acc gate (fp8acc/: is kind::f8f6f4 exact in emu8's
+# bench only if every gate is exact (dgemm/bench.jsonl); where the table says fp8acc (sm_100a), fp8acc gate (fp8acc/: is kind::f8f6f4 exact in emu8's
 # binades, the B300 question; its CPU selftest runs at build); probe.py run on the family's probes and scalar.cu
 # (probes/, scalar/: rows.jsonl, gate.json, times.jsonl) with nvidia-smi sampled every 200 ms (env/smi.csv); then
 # analyze.py (analysis.json, verdict.json).
@@ -28,14 +29,15 @@ NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
 CARD=(${DC_SKU:+--sku "$DC_SKU"})
 ARCH=$(python3 "$PROBE" arch "${CARD[@]}") || exit 2
-case "$ARCH" in
-  sm_90a) FAM=sm90; SRC=sm90_wgmma; GATES=("128 256 256 7" "256 512 1024 11" "192 384 2048 13") ;;
-  sm_100a) FAM=sm100; SRC=sm100_tcgen05; GATES=("128 256 256 7" "256 512 1024 11" "384 768 2048 13") ;;
-  *) echo "run.sh: the card's target is $ARCH, and dc has probes for sm_90a and sm_100a only: nothing built" >&2; exit 2 ;;
-esac
+FAM=$(python3 "$HERE/archs.py" "$ARCH" family) || exit 2
+SRC=$(python3 "$HERE/archs.py" "$ARCH" source)
+mapfile -t GATES < <(python3 "$HERE/archs.py" "$ARCH" gates)
+FP8ACC=$(python3 "$HERE/archs.py" "$ARCH" fp8acc)
 if [ "${DC_JBREAK:-}" = 1 ]; then
-  [ "$FAM" = sm90 ] || { echo "run.sh: DC_JBREAK stresses the sm_90a rows, and the card's target is $ARCH" >&2; exit 2; }
-  FAM=sm90jb; SRC=sm90_jbreak; GATES=(); DC_ONLY=${DC_ONLY:-^jb}
+  JB=$(python3 "$HERE/archs.py" "$ARCH" jbreak)
+  [ -n "$JB" ] || { echo "run.sh: DC_JBREAK has no stress rows for $ARCH, the card's target (archs.py's jbreak)" >&2; exit 2; }
+  FAM=${FAM}jb; SRC=$JB; GATES=(); DC_ONLY=${DC_ONLY:-^jb}
+  FP8ACC=
 fi
 GENCODE=$(python3 "$PROBE" gencode "${CARD[@]}") || exit 2
 BENCH=("4096 4096 4096" "8192 8192 8192" "512 8192 8192")
@@ -55,7 +57,7 @@ if [ "${DC_LEASED:-}" != 1 ]; then
     || "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" "$HERE/dgemm.cu" -o "$WORK/dgemm" \
     >>"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
   extra=("$WORK/dgemm")
-  if [ "$FAM" = sm100 ]; then
+  if [ -n "$FP8ACC" ]; then
     "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" "$HERE/fp8acc.cu" -o "$WORK/fp8acc" \
       >>"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
     mkdir -p "$OUT/fp8acc-selftest"
@@ -106,7 +108,7 @@ else
   echo "run.sh: a dgemm gate is not exact; no bench (result.json's lbo_sbo_swapped says whether the descriptor fields are)" >&2
 fi
 
-if [ "$FAM" = sm100 ] && [ -z "${DC_ONLY:-}" ]; then
+if [ -n "$FP8ACC" ] && [ -z "${DC_ONLY:-}" ]; then
   mkdir -p "$OUT/fp8acc"
   "$WORK/fp8acc" gate "$OUT/fp8acc" | tee "$OUT/fp8acc/result.jsonl"
   frc=${PIPESTATUS[0]}
@@ -131,7 +133,7 @@ record=(--record "$OUT")
 [ $prc = 0 ] || record+=(--failed "probe.py run refused or failed a binary")
 [ $exact = 1 ] || record=(--record "$OUT" --failed "a dgemm gate is not exact")
 ROOT=$HERE/../../..
-[ "$FAM" = sm90jb ] || PYTHONPATH="$ROOT/benchmarks/harness:$ROOT/tools/config${PYTHONPATH:+:$PYTHONPATH}" \
+[ "${DC_JBREAK:-}" = 1 ] || PYTHONPATH="$ROOT/benchmarks/harness:$ROOT/tools/config${PYTHONPATH:+:$PYTHONPATH}" \
   python3 "$HERE/analyze.py" "$FAM" "$OUT" --json "$OUT/analysis.json" "${record[@]}" | tee "$OUT/verdict.json"
 [ $exact = 1 ] || exit 4
 [ $prc = 0 ] || exit 1
