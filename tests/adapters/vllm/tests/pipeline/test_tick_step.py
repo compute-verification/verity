@@ -79,8 +79,8 @@ class Unit:
     frees: dict[int, int] = dataclasses.field(default_factory=dict)             # request -> blocks returned
 
 
-def record(monkeypatch: pytest.MonkeyPatch, e: SC.Engine, ios: list[SC.RequestIO],
-           released: list[int]) -> tuple[RP.Replay, list[Unit]]:
+def record(monkeypatch: pytest.MonkeyPatch, e: SC.Engine, ios: list[SC.RequestIO], released: list[int],
+           tick: SC.Tick | SC.Rule = TICK) -> tuple[RP.Replay, list[Unit]]:
     """The replay under the tick, and what each of its schedules saw. Asserts the skipped queue is empty after each."""
     asy = e.async_scheduling
     units: list[Unit] = []
@@ -121,7 +121,7 @@ def record(monkeypatch: pytest.MonkeyPatch, e: SC.Engine, ios: list[SC.RequestIO
         m.setattr(RP.Scheduler, "schedule", recorded_schedule)
         m.setattr(PL.BlockPool, "hit", recorded_hit)
         m.setattr(PL.BlockPool, "free_request", recorded_free)
-        rp = RP.replay(e, ios, tick=TICK, released=released)
+        rp = RP.replay(e, ios, tick=tick, released=released)
     return rp, units
 
 

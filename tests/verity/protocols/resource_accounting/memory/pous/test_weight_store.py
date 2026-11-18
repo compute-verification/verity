@@ -7,6 +7,7 @@ import importlib
 import sys
 
 import pytest
+
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params

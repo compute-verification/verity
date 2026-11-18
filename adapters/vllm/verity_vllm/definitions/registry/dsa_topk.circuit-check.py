@@ -23,6 +23,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     Waksman read at small statics shaped as GLM-5.3's (an odd N, K = N - 1; reaching `DsaWaksmanSwap_v1`,
     `DsaWaksmanPick_v1` and both `Xor3x*`)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsa_topk
 
     return [

@@ -29,7 +29,8 @@ second stream
 The main stream's parts sum to its steps' time. The append and the top-up (`bench_arm`) run beside it, so they overlap
 it. A fused launch is one part: the codec decode of a decode step's weights and KV is inside ``linear``, ``lm_head``
 and ``attention`` with their MMA and sketches, and only the audit's span over the plain arm's (the same part) is its
-cost. Each mark's own time is in the part it ends; ``marks`` counts them.
+cost. Each mark's own time is in the part it ends; ``marks`` counts them, so read a spans arm's parts, and the cost from
+its spans-off twin.
 """
 from __future__ import annotations
 

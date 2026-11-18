@@ -2806,7 +2806,8 @@ def network_attester_outcome(out: Path, witness: Path, requests: int | None = No
     outcome is therefore one whose lines are all in `out`.
 
     Of `witness` itself the outcome says nothing: a file's name says what the run got to, and its size follows
-    what the peer sent."""
+    what the peer sent. ``auditor.py publish RUN OUT`` runs it on a job's own run and prints the outcome: the one
+    publisher of a network attester run, the gate's and every runner's."""
     for name in NETWORK_ATTESTER_PUBLIC:
         if name == "deployment.json":
             if (deployment := public_deployment(witness / name)) is not None:
@@ -3158,6 +3159,9 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(line, sort_keys=True))
         elif argv[:1] == ["pinned"] and len(argv) == 3:
             print(record_pin(host.pins, argv[1], argv[2], datetime.now(timezone.utc)))
+        elif argv[:1] == ["publish"] and len(argv) == 3:
+            Path(argv[2]).mkdir(parents=True, exist_ok=True)
+            print(json.dumps(network_attester_outcome(Path(argv[2]), Path(argv[1])), sort_keys=True))
         elif argv[:1] == ["keygen"] and len(argv) == 1:
             from verity.commitments.crypto import lms
             key, state = load_key(host)
@@ -3170,7 +3174,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print("usage: auditor.py gate VERB ... | reserve SESSION | admit SESSION | run SESSION | period-open NAME LANE BY CAP CIRCUIT [FIELD=VALUE ...] "
                   "| period-close NAME LANE|- BY | declare LANE BY PROGRAM BLOCKS DAY|- | certifier-run RUN "
-                  "| pinned COMMIT MAIN | keygen", file=sys.stderr)
+                  "| pinned COMMIT MAIN | keygen | publish RUN OUT", file=sys.stderr)
             return 2
     except Refused as e:
         print(f"refused: {e}", file=sys.stderr)

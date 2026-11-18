@@ -41,6 +41,7 @@ from __future__ import annotations
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.definitions.registry.prims import BF16

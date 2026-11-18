@@ -30,4 +30,4 @@ host; there is nothing here to run by hand.
   no pipelining, a hard deadline and every late answer counted (`security/Proofs/Pous/Continuous/Verifier.lean`).
 
 The proofs of the properties are in `security/Proofs/Properties/Pous/` (`MemoryAttester.lean`, `Wipe.lean`,
-`Component.lean`), and the PoUS guarantees the verdicts serve are in `verity/protocols/resource_accounting/memory/pous/verifier/DESIGN.md`.
+`Component.lean`), and the PoUS guarantees the verdicts serve are listed in `security/lean-audit.json`.

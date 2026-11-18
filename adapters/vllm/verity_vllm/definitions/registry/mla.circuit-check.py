@@ -11,6 +11,7 @@ def _boolean_roots() -> list[Any]:
     shared-expert combine at 8 elements with GLM-4.7-Flash's routed_scaling_factor."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import gemm as BG
+
     from verity_vllm.definitions.registry import mla
 
     HOP = BG.HopperBF16WgmmaDot16

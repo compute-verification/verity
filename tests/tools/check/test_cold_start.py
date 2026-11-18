@@ -134,6 +134,13 @@ def test_check_py_reaches_its_first_step_from_a_fresh_tree(shipped):
     assert "holds none of the workspace yet" in out, _tail(out)
 
 
+def test_check_py_preflight_passes_its_lints_from_a_fresh_tree(shipped):
+    """`python3 tools/check/check.py --preflight` in a fresh tree, under a python3 without pytest."""
+    tree, env = shipped
+    hit, out = _until(["python3", "tools/check/check.py", "--preflight"], tree, env, r"^check: preflight-lints: passed")
+    assert hit, _tail(out)
+
+
 def test_the_verity_command_reaches_checks_first_step_from_a_fresh_tree(shipped):
     """`uv run --extra torch-cpu verity check`, AGENTS.md's whole check, in a fresh tree: the CLI installs, finds check.py and
     passes its first step."""

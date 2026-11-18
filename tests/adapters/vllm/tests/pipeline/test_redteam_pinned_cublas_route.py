@@ -124,6 +124,7 @@ def test_another_library_device_or_torch_is_a_departure(fact, served):
     assert ok is False and why is not None and why.endswith(f"served otherwise: {fact} {served!r} (pin: {BC.ROUTE_CONDITIONS[fact]!r})")
 
 
+
 def test_a_fact_the_rank_could_not_read_or_did_not_record_is_refused_by_name():
     unread = {**HONEST, "cublas": {**HONEST["cublas"], "cublas_version": "unavailable: LookupError: 0 libcublas.so* mapped []"}}
     assert (_gates(unread)[1] or "").endswith("served otherwise: cublas_version 'unavailable: LookupError: 0 libcublas.so* mapped []' (pin: 120901)")

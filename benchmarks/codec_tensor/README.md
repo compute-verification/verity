@@ -18,6 +18,7 @@ uv run tools/check/suites.py benchmarks/codec_tensor
 On the CPU, it checks `wide.py`, `sketch_receipt.py` and `sketching.py` against the audit's code and
 `tests/vectors.json`. It writes no result.
 
-| Script | Needs | Writes under `--out` |
-| --- | --- | --- |
-| `bench.py` | one GPU, and `wt.cu`'s libraries (`--lib PATH`, one per field) | `codec-tensor.json` and `bench.log` |
+On one GPU, as the command of a `research run`, `verity bench codec_tensor --lib PATH [--lib PATH ...] --out DIR`
+(`run.py`) gates `wt.cu`'s libraries (one per field) against `wide.py`, then times them. It writes `codec-tensor.json`
+and `bench.log` under `--out`, and its numbers and its gates' validation as the run's `result.json` through the
+harness's kit. The code it times is `bench.py`'s, which `benchmarks/vllm_encoded`'s stack also imports.

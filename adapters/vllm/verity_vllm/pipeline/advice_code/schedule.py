@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 __all__ = ["BlockHashes", "cdiv", "DraftEngine", "Engine", "FINISHED", "PREEMPTED", "RequestIO", "RequestState", "Row",
-    "RUNNING", "speculative", "Step", "Tick", "WAITING"]
+    "Rule", "RUNNING", "speculative", "Step", "Tick", "WAITING"]
 
 
 # a request's status (`vllm.v1.request.RequestStatus`)
@@ -142,6 +142,22 @@ class Tick:
     def close(self, a: int) -> int:
         """When bucket a closes: (a + 1)·τ_b."""
         return (a + 1) * self.bucket_us
+
+
+@dataclass(frozen=True)
+class Rule:
+    """The tick's constants in the clock's unit, a `Tick`'s being microseconds with ``token`` 0 and ``quiet``. A step with
+    rows also advances T by ``token`` for each token it schedules that is not a draft. With ``quiet`` T jumps to the next
+    arrival's bucket close only when nothing runs or waits, else whenever nothing waits."""
+
+    bucket: int
+    sat: int
+    free: int
+    token: int = 0
+    quiet: bool = True
+
+    def close(self, a: int) -> int:
+        return (a + 1) * self.bucket
 
 
 @dataclass(frozen=True)

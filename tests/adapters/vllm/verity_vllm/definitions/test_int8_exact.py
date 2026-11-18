@@ -9,18 +9,18 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate, evaluate_batch
-from verity.circuits.types import Array
 from verity.circuits.ops.boolean.versions import boolean_version
+from verity.circuits.types import Array
+from verity.commitments.periods import interface as IF
+
 from verity_vllm.definitions.registry import boolean_int8 as BX
 from verity_vllm.definitions.registry import int8_exact as X
 from verity_vllm.definitions.registry.prims import BF16
-from verity.commitments.periods import interface as IF
 
 K = 2048
 

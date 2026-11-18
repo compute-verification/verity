@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from verity_bench import prove as P
+from verity_bench import prove_census as PC
 from verity_bench.prove_common import (
     LEAN,
     SAMPLING,
@@ -208,8 +209,14 @@ def _record(target: str | None) -> str:
 
 
 def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
-    """The table as Markdown; `rows`: only the block types that take the most proving time, the rest in one row."""
+    """The table as Markdown; `rows`: only the block types that take the most proving time, the rest in one row. A
+    table with a census table (`prove_census`) ends with it; one whose totals are refused is that and the refusal."""
 
+    if "census" in doc:
+        census = "\n".join(PC.render(doc)) + "\n"
+        if doc["refusal"] is not None:
+            return f"# verity bench prove: {doc['system']} on {doc['workload']} ({doc['model']})\n\n" + census
+        return render({k: v for k, v in doc.items() if k != "census"}, rows) + "\n" + census
     t, spot = doc["totals"], doc["system"].startswith("spot")
     planned = t.get("planned")
     lines = [f"# verity bench prove: {doc['system']} on {doc['workload']} ({doc['model']})", "",
@@ -244,7 +251,9 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
                f"{_n(t['tokens_per_gpu_second'])}{_range(t['tokens_per_gpu_second_range'])}"),
               (f"- prover GPUs per serving GPU: {_n(t['gpus_per_serving_gpu'])}{_range(t['gpus_per_serving_gpu_range'])}, "
                f"{t['status']}: steady-state measurements cover {t['steady_time_share']:.1%} of "
-               f"{'the proving time it prices' if t['missing'] else 'its proving time'}")]
+               f"{'the proving time it prices' if t['missing'] else 'its proving time'}"
+               + (f"; an upper bound, since {len(t['bounded'])} block type(s) are priced at a larger block's rate "
+                  "(bounded by)" if t.get("bounded") else ""))]
     if t["missing"]:
         named = "; ".join(f"`{_short(m['block'])}` ({_missing_share(m)})" for m in t["missing"][:MISSING_NAMED])
         more = len(t["missing"]) - MISSING_NAMED
@@ -278,7 +287,7 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
     lines += _lean_rows(doc, rows)
     p = doc["periods"]
     lines += ["", (f"Per monitoring period, over all compute ({p['gates_basis']}); every total is the table's ratio scaled, "
-              f"not measured at that size{', and partial as that ratio is' if t['missing'] else ''}:"), "",
+              f"not measured at that size{', and partial as that ratio is' if t['status'] == 'partial' else ''}:"), "",
               "| compute | period | serving GPUs | served AND gates | prover GPUs | prover GPU-seconds |",
               "| --- | --- | --- | --- | --- | --- |"]
     lines += [f"| {x['compute']} | {x['period']} | {_n(x['serving_gpus'])} | {_n(x['served_gates'])} | {_n(x['prover_gpus'])} | "

@@ -126,6 +126,10 @@ def test_a_trial_through_the_door_is_admitted_and_never_of_record(tmp_path, monk
     with pytest.raises(ValueError, match=r"r20261104-030000-0001 is a trial run"):
         R.record_run(s.store, "r20261104-030000-0001")
     assert not s.store.labels("r20261104-030000-0001", key=R.RUN_OF_RECORD)
+    # labelled by hand all the same, the table shows its points refused as a trial's, never as a figure
+    s.store.add_label("r20261104-030000-0001", R.RUN_OF_RECORD, R.RUN_RECORD, by="benchmarks", ts="2026-11-04T04:00:00Z")
+    rows = R.gamma_rows(s.store)
+    assert rows and all(not r["of_record"] and r["why"].startswith("r20261104-030000-0001 is a trial run") for r in rows)
 
 
 def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_why(tmp_path, scheme):

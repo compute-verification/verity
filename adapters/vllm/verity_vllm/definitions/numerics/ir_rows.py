@@ -47,10 +47,11 @@ def f64_statics(statics: dict[str, Any]) -> dict[str, Any]:
 def ir_row(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
     """One ROW of `family{statics}`: arg g = the instance's parameter g, as words.  Returns {"0": words, "out": words} (a module's
     output is spelt `0` when the row is the module's return, `out` inside its body)."""
+    from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_batch, kernels
     from verity.circuits.evaluation.batch import type_dtype
     from verity.circuits.evaluation.reference import signature_of
-    from verity.circuits.defs import bind
+
     from verity_vllm.definitions.numerics.dense_rows import KERNEL as DENSE
 
     d = bind(_definitions()[family], **f64_statics(statics))

@@ -30,12 +30,17 @@ LEAN, WARMED = "lean-verify", "flock-warm"
 @dataclass(frozen=True)
 class Workload:
     """A workload the command prices: the model its records name, the card its prover and its serving run on
-    (`overhead.CARDS`), and the fleet whose serving MFU prices a served token (`FLEETS`)."""
+    (`overhead.CARDS`), and the fleet whose serving MFU prices a served token (`FLEETS`). A `steady_only` workload's
+    census is printed on its own first (`prove_census`), and its totals are given only where every block type with
+    blocks is measured at steady state, its census holds no gap and every other slot is labelled; else they are refused
+    by name. `member`: the member of each metric's line its measurements are."""
 
     name: str
     model: str
     card: str
     fleet: str
+    steady_only: bool = False
+    member: str | None = None
 
     def record(self, slot: str) -> str:
         return record_name(self.name, slot)
@@ -48,7 +53,8 @@ def record_name(workload: str, slot: str) -> str:
 
 
 WORKLOADS = {w.name: w for w in (Workload("glm53", "GLM-5.3", "h200", "world-h200"),
-                                 Workload("llama32-1b", "Llama-3.2-1B", "h200", "world-h200"))}
+                                 Workload("llama32-1b", "Llama-3.2-1B", "h200", "world-h200", steady_only=True,
+                                          member="llama-3.2-1b-h200"))}
 
 
 # ---- records ---------------------------------------------------------------------------------------------------------------

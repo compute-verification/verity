@@ -13,11 +13,9 @@ import shutil
 import pous_test_signer
 import pytest
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester
-from verity.protocols.resource_accounting.memory.pous.verifier import audit
-from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger
-from verity.protocols.resource_accounting.memory.pous.attester import wipe_stream
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester, wipe_challenger, wipe_stream
 from verity.protocols.resource_accounting.memory.pous.attester.continuous import ContinuousMemoryAttester
+from verity.protocols.resource_accounting.memory.pous.verifier import audit
 
 
 def _wall_clock() -> int:

@@ -4,3 +4,5 @@ come from (`challengers`), and the framed messages between the verifier's proces
 verifier's process is `verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py`, which hands `verifier.main` what a verifier
 imports none of: the LMS verify a served or gate session's signatures are checked with, and the challenger's own
 process. The prover's process is `verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py`."""
+
+__all__: list[str] = []

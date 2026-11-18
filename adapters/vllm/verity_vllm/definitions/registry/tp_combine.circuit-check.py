@@ -12,6 +12,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     3 and 4, so both trees; row 1 of vLLM's custom 2-stage all-reduce of 4 rows of 16 (one pack per owner), which meets
     owners 2 and 3; and a row of 32 as 4 chunk rows of 8."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import tp_allreduce as TA
     from verity_vllm.definitions.registry import tp_combine as TC
 

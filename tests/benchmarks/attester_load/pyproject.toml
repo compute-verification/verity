@@ -1,12 +1,12 @@
-# `verity bench attester_load` (`run.py`). Not a package: its schedule, its guard and what it writes for a fixed arm
-# (`uv run tools/check/suites.py benchmarks/attester_load`).
+# `verity bench attester_load` (`run.py`) and its pacing replay (`pacing.py`). Not a package: its schedule, its guard
+# and what it writes for a fixed arm (`uv run tools/check/suites.py benchmarks/attester_load`).
 [tool.pytest.ini_options]
 testpaths = ["."]
 
 [tool.verity.tests]
-# The tests read the scan class's schedule from `scan_zk.py` in process and write a fixed arm's result through the
-# harness kit's writer, which reads its settings through verity_config.
-inputs = ["benchmarks/attester_load", "verity",
+# The tests read the scan class's schedule from `scan_zk.py` in process, the GLM-5.3 network attester's card, and write
+# a fixed arm's result through the harness kit's writer, which reads its settings through verity_config.
+inputs = ["benchmarks/attester_load", "verity", "benchmarks/spot_figures/cards/certifier.glm-5.3.json",
     "benchmarks/harness/verity_bench/__init__.py",
     "benchmarks/harness/verity_bench/kit.py",
     "benchmarks/harness/verity_bench/kit_report.py",

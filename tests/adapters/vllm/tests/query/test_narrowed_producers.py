@@ -22,8 +22,6 @@ try:
 except ModuleNotFoundError:
     pytest.skip("could not import 'torch'", allow_module_level=True)
 
-from verity_vllm.definitions.registry import b1
-
 from tests.query.test_boolean_manifest import _write
 from verity_vllm.acquire.sources import narrowed_source as NS
 from verity_vllm.check.replay import coverage as COV
@@ -32,6 +30,7 @@ from verity_vllm.check.replay import population as RP
 from verity_vllm.check.replay.evaluate import evaluate
 from verity_vllm.commit.binding import build_binding_map
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.definitions.registry import b1
 from verity_vllm.query.manifest.bind import Binder, coverage_check
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import request_manifest

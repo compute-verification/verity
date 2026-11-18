@@ -8,12 +8,11 @@ from __future__ import annotations
 
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition
 from verity.circuits.defs import bind as ir_bind
-from verity.circuits.refs import concat, tuple_of
 from verity.circuits.refs import Coll as _Coll
 from verity.circuits.refs import array_of as _array_of
+from verity.circuits.refs import concat, tuple_of
 from verity.circuits.types import Array, RecordType, Value
 from verity.circuits.types import Tuple as TupleT
-
 from verity_torch.frontend.rules.family import (
     RegisteredFamily,
     expand_leaves,
@@ -26,7 +25,6 @@ from verity_torch.frontend.rules.family import _runs as _runs
 # ---------------------------------------------------------------------------------------------------------
 # the registered families of the vLLM eager profile
 # ---------------------------------------------------------------------------------------------------------
-
 from verity_vllm.definitions.registry import b1 as _b1
 
 

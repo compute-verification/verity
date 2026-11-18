@@ -13,16 +13,16 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
 from verity.circuits.ops.boolean.versions import boolean_version
+from verity.commitments.periods import interface as IF
+
 from verity_vllm.definitions.registry import cuda_rmsnorm as C
 from verity_vllm.definitions.registry import cuda_rmsnorm_split as NS
-from verity.commitments.periods import interface as IF
 
 _spec = importlib.util.spec_from_file_location("rows_of_test_rmsnorm_fused_add", Path(__file__).with_name("test_rmsnorm_fused_add.py"))
 _rows_test = importlib.util.module_from_spec(_spec)

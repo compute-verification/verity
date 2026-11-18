@@ -448,13 +448,15 @@ def test_the_records_run_gives_train_sh_bookkeeping_warn(tmp_path):
 
 
 def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unranked_priority_checks(tmp_path, monkeypatch):
-    """Each part of a candidate's check and its records run ask for their check slot at `AFTER_LANDING_SLOT_RANK`
-    (CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`), whatever the loop's own environment says: a ranked
-    priority waiter takes the next free slot ahead of the unranked, so `main` never waits on a slot for a `train.sh`
-    launched by hand."""
+    """Each part of a candidate's check asks for its check slot at rank 1 (`landing.CHECK_SLOT_RANK`) and its records run at
+    rank 0 (`AFTER_LANDING_SLOT_RANK`), as CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`, whatever the loop's
+    own environment says: a ranked priority waiter takes the next free slot ahead of the unranked, so `main` never waits on a
+    slot for a `train.sh` launched by hand, and a records run goes ahead of every check shard."""
     import types
 
-    from research.landing import AFTER_LANDING_SLOT_RANK, launched
+    from research.landing import AFTER_LANDING_SLOT_RANK, CHECK_SLOT_RANK, launched
+
+    assert (AFTER_LANDING_SLOT_RANK, CHECK_SLOT_RANK) == (0, 1)
 
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setenv("CHECK_SLOT_RANK", "7")
@@ -470,10 +472,33 @@ def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unran
             os.waitpid(job["pid"], 0)
         return launched(job)[1]
 
-    ranked = f"rank=[{AFTER_LANDING_SLOT_RANK}]"
-    assert f"{ranked} argv=[{'c' * 40} m1 --deferred pytest --shard 1/3]" in tail(
+    assert f"rank=[1] argv=[{'c' * 40} m1 --deferred pytest --shard 1/3]" in tail(
         d.launch_after_landing(repo, "c" * 40, "m1", "pytest", shard="1/3"))
-    assert f"{ranked} argv=[{'c' * 40} m1 --deferred lean-audit --bookkeeping-warn]" in tail(d.launch_locks(repo, "c" * 40, "m1"))
+    assert f"rank=[0] argv=[{'c' * 40} m1 --deferred lean-audit --bookkeeping-warn]" in tail(d.launch_locks(repo, "c" * 40, "m1"))
+
+
+def _slot_opts(argv: list[str]) -> list[str]:
+    """The `slot.py` options of a `queue.quick_run` argv: what follows the slot script, up to the `--` before its job."""
+    i = next(i for i, a in enumerate(argv) if a.endswith("slot.py"))
+    return argv[i + 1:argv.index("--", i)]
+
+
+def test_a_candidates_quick_tier_takes_a_check_slot_at_rank_0_and_quick_run_ranks_only_when_asked(tmp_path, monkeypatch):
+    """A candidate's quick tier (`quick_launch`), short and on `main`'s critical path, waits in a `--priority` check slot at
+    `--rank 0`, ahead of every part of a candidate's check (rank 1); `queue.quick_run` passes a rank only when given one with
+    ``priority``, so `research queue ready`'s own quick tiers stay unranked."""
+    from research.queue import quick_run
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    got = {}
+    monkeypatch.setattr(landing, "detach", lambda repo, argv, env, **_: got.setdefault("argv", argv) and {"dir": "", "pid": 0})
+    landing.quick_launch(tmp_path, "c" * 40, "b" * 40, "m1")
+    opts = _slot_opts(got["argv"])
+    assert opts[:3] == ["--priority", "--rank", "0"] and opts.count("--rank") == 1, opts
+    wt = tmp_path / "wt"
+    assert "--rank" not in _slot_opts(quick_run("r1", "m1", wt, "c" * 40, "b" * 40, priority=True))
+    assert "--rank" not in _slot_opts(quick_run("r1", "m1", wt, "c" * 40, "b" * 40, rank=0))
+    assert _slot_opts(quick_run("r1", "m1", wt, "c" * 40, "b" * 40, priority=True, rank=1))[:3] == ["--priority", "--rank", "1"]
 
 
 def test_a_landings_launches_carry_the_queues_credentials_the_loops_train_sh_and_bookkeeping(tmp_path, monkeypatch):
@@ -1163,19 +1188,19 @@ MARKED = {NEW: "marker", OLD: "old-marker"}
     ({OLDER: [("top", "hold", "T1", "x"), ("rev", "land", "T2")]}, "no land verdict", "lane-1", True,
      (OLDER, f"held by top (x) at {OLDER[:12]}", False)),
     ({OLD: [("rev", "land", "T2"), ("rev", "hold", "T1", "x")]}, "no land verdict", "lane-1", True, (OLD, "only merges", True)),
-    ({OLD: [("rev", "land", "T1")]}, "no land verdict", "ci", True, (OLD, "@ci is among its owners, so its verdict wouldn't count",
-                                                                     False)),
+    ({OLD: [("rev", "land", "T1")]}, "no land verdict", "ci", True, (OLD, "only merges", True)),
+    ({OLD: [("@ci", "land", "T1")]}, "no land verdict", "ci", True, None),
     ({OLDER: [("rev", "land", "T1")], OLD: [("rev2", "land", "T2")]}, "no land verdict", "lane-1", True,
      (OLD, "only merges", True)),
 ], ids=["carries", "no-carry", "owners-only", "held-here", "newer-hold", "owners-hold", "tie-hold", "standing-hold",
-        "standing-hold-older", "reviewers-newest", "ci-owned", "newest-land"])
+        "standing-hold-older", "reviewers-newest", "ci-owned", "ci-owned-own-land", "newest-land"])
 def test_the_verdict_carry_takes_the_newest_land_at_an_older_head_but_for_a_hold_or_an_owners_own(world, labels, why, owner,
                                                                                                  carries, got):
     """`Landing._carried_from`: of each reviewer's newest verdict at each older head, a hold by anyone or a land by none of the
     PR's owners nor the head's ready mark's author (without case or a leading `@`), the newest decides, a hold over a land of
     the same time.  A hold at the new head (``why``) or a newer one at an older head keeps it, as a hold standing at the land's
-    own head does; `CI` among its owners carries nothing; else the land carries when `delta` says so, of the new head over the
-    land's, trusting the landed tips and the trusted heads."""
+    own head does; else the land carries when `delta` says so, of the new head over the land's, trusting the landed tips and
+    the trusted heads, a PR `CI` owns as any lane's (its own land counting no more than any owner's)."""
     from research.carry import Delta
     from research.store.model import Label
 
@@ -1184,11 +1209,48 @@ def test_the_verdict_carry_takes_the_newest_land_at_an_older_head_but_for_a_hold
                 reviews=lambda pr, head: [Label(f"pr/{pr}@{head}", "reviewed", v, by, ts, *ref)
                                           for by, v, ts, *ref in labels.get(head, ())])
     q.handle = lambda pr: None
+    q._clone()
     d.delta = lambda old, new, landed, trusted: asked.append((old, new, landed, trusted)) or Delta(
         "merge-only" if carries else "edited-merge", "only merges")
     assert d._carried_from(Member(1, NEW, owner, ""), [OLDER, OLD], why, ["m" * 40], {"t" * 40}) == got
     assert asked == ([(got[0], NEW, ["m" * 40], {"t" * 40})] if got and got[1] in ("only merges", "edited-merge: only merges")
                      else [])
+
+
+def test_a_hold_at_a_later_head_voids_an_older_heads_land_however_old_the_hold(world):
+    """`Landing._carried_from` over real heads: a land at ``old`` newer than a hold at ``later``, a head pushed on it, carries
+    nothing (`carry.voided`), and neither does one a later head that took ``old``'s place holds. A hold at an ancestor of
+    the land's head is what that head answered, so the land carries; and a land at a head after the held one carries as the
+    newest that stands, though an older head's land is newer still."""
+    from research.carry import Delta
+    from research.store.model import Label
+
+    earlier = world.change({"a.txt": "0\n"})
+    old = world.change({"a.txt": "1\n"}, base=earlier)
+    later = world.change({"a.txt": "2\n"}, base=old)
+    latest = world.change({"a.txt": "3\n"}, base=later)
+    rebased = world.change({"b.txt": "1\n"})
+    new = world.change({"a.txt": "4\n"}, base=latest)
+    q = world.queue()
+    q._clone()
+    _git(q.workdir, "fetch", "-q", "origin", *(f"refs/dev/{c}" for c in (earlier, old, later, latest, rebased, new)))
+
+    def judged(labels: dict[str, list[tuple[str, str, str]]]):
+        d = Landing(q, on="", ready_by=lambda pr, head: None,
+                    reviews=lambda pr, head: [Label(f"pr/{pr}@{head}", "reviewed", v, by, ts, "why")
+                                              for by, v, ts in labels.get(head, ())])
+        q.handle = lambda pr: None
+        d.delta = lambda o, n, landed, trusted: Delta("merge-only", f"only merges from {o[:12]}")
+        return d._carried_from(Member(1, new, "lane-1", ""), sorted(labels), "no land verdict", ["m" * 40], set())
+
+    void = f"top's hold at {later[:12]} (why), a later head, voids the land at {old[:12]}"
+    assert judged({later: [("top", "hold", "T1")], old: [("rev", "land", "T2")]}) == (old, void, False)
+    assert judged({rebased: [("top", "hold", "T1")], old: [("rev", "land", "T2")]}) == (
+        old, f"top's hold at {rebased[:12]} (why), a later head, voids the land at {old[:12]}", False)
+    assert judged({earlier: [("top", "hold", "T1")], old: [("rev", "land", "T2")]}) == (
+        old, f"only merges from {old[:12]}", True)
+    assert judged({later: [("top", "hold", "T1")], latest: [("rev", "land", "T2")], old: [("rev2", "land", "T3")]}) == (
+        latest, f"only merges from {latest[:12]}", True)
 
 
 def test_a_landing_reads_verdicts_and_ready_marks_from_the_store_and_whose_verdict_doesnt_count(world):

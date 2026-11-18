@@ -35,7 +35,7 @@ BOT = "B0VERITY"
 BOT_USER = "U0VERITYBOT"                                 # the bot's user, as auth.test names it
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "compute-research", "memory-accounting", "network-accounting",
-           "console", "dashboard-goals", "dashboard-metrics", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training", "soundness", "goals"]
+           "console", "dashboard-goals", "dashboard-metrics", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training", "soundness", "goals", "codex"]
 
 
 class FakeSlack:
@@ -1234,6 +1234,31 @@ def test_verify_author_fetches_the_message_and_fails_closed(fake, registry, caps
     assert verify({"ts": alert["ts"], "channel": ALERTS}) == 0
     assert verify({"ts": "9.9", "channel": COORD}) == 1
     assert verify({"ts": ours["ts"], "channel": "CUNKNOWN"}, "--channel", "agent-coordination") == 1
+
+
+def test_verify_author_names_an_external_poster_who_authorizes_nothing(fake, registry, capsys):
+    """Codex, Daniel's desktop agent, posts through Verity's bot under its own username or under none.  Either is an author
+    the registry names once it lists them, and neither authorizes; another app's bot under no username is nobody."""
+    named = fake.add(COORD, text="x", username="Codex", bot_id=BOT)
+    bare = fake.add(COORD, text="x", bot_id=BOT)
+    other = fake.add(COORD, text="x", bot_id="BOTHER")
+
+    def verify(m, *extra):
+        return run(capsys, "verify-author", "--event", json.dumps({"ts": m["ts"], "channel": COORD}), "--why", *extra)
+
+    reg = {k: v for k, v in json.loads(registry.read_text()).items() if k not in ("external_posters", "unnamed_poster")}
+    registry.write_text(json.dumps(reg))
+    assert [verify(m)[0] for m in (named, bare, other)] == [1, 1, 1]
+    registry.write_text(json.dumps({**reg, "external_posters": ["Codex"]}))
+    assert [verify(m)[0] for m in (named, bare, other)] == [0, 1, 1]
+    registry.write_text(json.dumps({**reg, "external_posters": ["Codex"], "unnamed_poster": "Codex"}))
+    assert [verify(m)[0] for m in (named, bare, other)] == [0, 0, 1]
+    assert "allowed: Verity's bot as Codex, an external poster: it may ask, and authorizes nothing" in verify(named)[2]
+    assert "as Codex (no username, which the registry gives to Codex), an external poster" in verify(bare)[2]
+    rc, _, err = verify(bare, "--authorizes")
+    assert rc == 1 and "only a named human" in err
+    with pytest.raises(slack.SlackError, match="unnamed_poster"):
+        slack.check_registry({**reg, "external_posters": ["Codex"], "unnamed_poster": "Someone"}, "r")
 
 
 def test_verify_author_allows_nobody_when_the_registry_has_no_ids(fake, registry, capsys):
@@ -3057,7 +3082,7 @@ def test_the_retired_terms_name_what_to_write_and_skip_code_and_quoted_mentions(
         (service, "proof system"), ("legs", doc["leg"]), ("NCI", doc["NCI, novel communication intensity"]),
         ("commit period", doc["sampling period, sampling block, PoUW's commit period"])]
     assert vocabulary.retired('a proof block, `drawn.py` and "draw"') == []
-    assert vocabulary.instead("nothing like it") == "see GLOSSARY.md's older names"
+    assert vocabulary.instead("nothing like it") == "see tests/lint/retired_terms.md"
     assert "no/such/table.py" in vocabulary.table(Path("no/such/table.py"))["error"] and vocabulary.retired("a draw", {}) == []
     assert "skipped" not in vocabulary.table()
 

@@ -28,6 +28,7 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.types import Array, RecordType, Value
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry.prims import BF16
 

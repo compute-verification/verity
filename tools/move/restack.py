@@ -26,8 +26,9 @@ same script rather than by rename detection:
 4. run the result's own `pins.py --regen` (`PINS_FILES`) at its root, which runs each stale pin's command, and commit what it
    rewrote (`--no-pins` skips it). A result with a pin still stale, its command failed, is `pins-stale`.
 
-Before the steps, M is checked to be what the script writes on B, by running it there (`check_generated`): as long as step 2,
-and the same for every branch. With `--kept`, a check that passed is kept as a file under
+Before step 1, M is checked to be what the script writes on B, by running it there (`check_generated`): as long as step 2,
+and the same for every branch. A branch that already contains M, is up to date, or is `based-after` M (below) runs no script
+on M, and M isn't checked for it. With `--kept`, a check that passed is kept as a file under
 `~/.cache/verity-check/restack-generated/`, in the check's cache, and one kept there is read: on one machine the first
 restack across a move pays for the check and the rest don't. The file's key is everything that decides the check
 (`generated_key`); a file that is unreadable, malformed or of another key counts for nothing, and the script runs.
@@ -680,7 +681,6 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
     onto = rev(onto, cwd) if onto else move
     if not contains(move, onto, cwd):
         raise SystemExit(f"--onto {onto[:12]} doesn't contain the move {move[:12]}")
-    generated = check_generated(move, base, python, cwd)
     r = {"branch": branch, "head": head, "move": move, "base": base, "onto": onto, "steps": []}
     _, plain = merge_trees(head, onto, cwd)
     r["plain"] = {"status": "conflicted" if plain else "clean", "files": plain}
@@ -694,6 +694,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
                 "error": refused_after(branch, late, base, move, command, [])}
     tip, ran = head, False
     if not contains(move, head, cwd):
+        generated = check_generated(move, base, python, cwd)
         if not contains(base, head, cwd):
             tree, conflicts = merge_trees(head, base, cwd)
             if conflicts:
@@ -766,18 +767,83 @@ def move_line(commit: str, cwd: str | None) -> tuple[str, tuple[str, ...]] | Non
     return (LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())) if m else None
 
 
+#: whether a merge's tree is its first parent's (an `-s ours` merge, which took nothing from its other parents), by commit id
+KEEPS_FIRST: dict[str, bool] = {}
+#: the commits a tip reaches through its trees over its whole history (`reached`), and the bodies of those with a move line,
+#: by the tip, for `ran`: the last few tips
+REACHED: dict[str, tuple[frozenset[str], dict[str, str]]] = {}
+
+
+def reached(graph: dict[str, tuple[str, list[str]]], cwd: str | None) -> set[str]:
+    """The commits of ``graph`` (each commit of a range `TIP ^HEAD`, or of TIP's whole history: its tree and parents) that TIP
+    reaches without stepping from a merge whose tree is its first parent's to one of its other parents: such a merge (`-s
+    ours`, as a branch's earlier, landed work is merged back keeping the tree) took nothing from that side. A first parent
+    outside ``graph`` has its tree read, once for all; a merge whose trees can't be read keeps every parent. The same walk as
+    research's `queue.reached`."""
+    parents = {p for _, ps in graph.values() for p in ps}
+    outside = sorted({ps[0] for c, (_, ps) in graph.items() if len(ps) > 1 and c not in KEEPS_FIRST and ps[0] not in graph})
+    p = git("rev-parse", *(f"{x}^{{tree}}" for x in outside), cwd=cwd, ok=(0, 128)) if outside else None
+    trees = dict(zip(outside, p.stdout.decode().split())) if p is not None and p.returncode == 0 else {}
+    for c, (tree, ps) in graph.items():
+        if len(ps) > 1 and c not in KEEPS_FIRST and (first := graph[ps[0]][0] if ps[0] in graph else trees.get(ps[0])):
+            KEEPS_FIRST[c] = tree == first
+    seen, todo = set(), [c for c in graph if c not in parents]
+    while todo:
+        if (c := todo.pop()) in seen or c not in graph:
+            continue
+        seen.add(c)
+        ps = graph[c][1]
+        todo.extend(ps[:1] if KEEPS_FIRST.get(c) else ps)
+    return seen
+
+
+def ran(tip: str, lines: dict[str, dict], want: set[str], cwd: str | None) -> set[str]:
+    """The move lines of ``want`` that ``tip`` holds at a commit it reaches through its trees (`reached` over its whole
+    history): a commit's own line, or its entry's in ``lines``, and none whose entry says `move = false`. What the history
+    holds (the commits reached, and the bodies of those with a move line) is read once a tip, by two logs."""
+    if tip not in REACHED:
+        log = out("log", "--format=%H %T %P", tip, cwd=cwd)
+        on = reached({c: (t, ps) for c, t, *ps in (x.split() for x in log.splitlines() if x)}, cwd)
+        log = out("log", "--no-merges", "-E", "--grep=^(Move|Layout-move): tools/move/", "--format=%H%x00%B%x1e", tip, cwd=cwd)
+        bodies = dict(rec.partition("\x00")[::2] for rec in filter(None, (x.strip() for x in log.split("\x1e"))))
+        if len(REACHED) >= 4:
+            REACHED.clear()
+        REACHED[tip] = (frozenset(on), {c: b for c, b in bodies.items() if c in on})
+    on, bodies = REACHED[tip]
+    held = set()
+    for commit in {*bodies, *lines}:
+        entry = lines.get(commit, {})
+        if commit in on and entry.get("move") is not False and (
+                m := MOVE_LINE.search(entry.get("line") or bodies.get(commit, ""))) and m[0] in want:
+            held.add(m[0])
+    return held
+
+
 def moves_on(ref: str, head: str, cwd: str | None) -> list[tuple[str, str, tuple[str, ...]]]:
     """The moves ``ref`` has and ``head`` lacks, oldest first: (commit, script, arguments) of each commit with a move line,
-    its `MOVE_LINES` entry's where it has one; none whose entry says `move = false`."""
-    log = out("log", "--topo-order", "--reverse", "--no-merges", "--format=%H%x00%B%x1e", ref, f"^{head}", cwd=cwd)
-    found, lines = [], corrections()
+    its `MOVE_LINES` entry's where it has one, and none whose entry says `move = false`. A move ``ref`` holds only through the
+    other parents of a merge that kept its first parent's tree (`reached`) is left out where ``ref`` also holds its move line
+    at a commit it reaches through its trees (`ran`): that merge took none of the copy's change, and ``ref`` ran the same
+    line itself. Without such a line it stays in, since its change may have reached ``ref`` by another commit (this script's
+    rerun of a move, which carries no move line, on its moved merge's first parent). The same rule as research's
+    `queue.moves_between`."""
+    log = out("log", "--topo-order", "--reverse", "--format=%H %T %P%x00%B%x1e", ref, f"^{head}", cwd=cwd)
+    recs = []
     for rec in filter(None, (x.strip() for x in log.split("\x1e"))):
-        commit, body = rec.split("\x00", 1)
-        if lines.get(commit, {}).get("move") is False:
+        line, body = rec.split("\x00", 1)
+        commit, tree, *parents = line.split()
+        recs.append((commit, tree, parents, body))
+    on = reached({c: (t, ps) for c, t, ps, _ in recs}, cwd)
+    moves, lines = [], corrections()
+    for commit, _, parents, body in recs:
+        if len(parents) > 1 or lines.get(commit, {}).get("move") is False:
             continue
         if m := MOVE_LINE.search(lines.get(commit, {}).get("line") or body):
-            found.append((commit, LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())))
-    return found
+            moves.append((commit, m))
+    held = {m[0] for commit, m in moves if commit in on}
+    if lost := {m[0] for commit, m in moves if commit not in on} - held:
+        held |= ran(recs[-1][0], lines, lost, cwd)
+    return [(commit, LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())) for commit, m in moves if commit in on or m[0] not in held]
 
 
 def _glob(path: str, glob: str) -> bool:

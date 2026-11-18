@@ -555,29 +555,4 @@ theorem B2Audit_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch 
       (fixed_setup hset) (fixed_ingress hin) fixed_arrival fixed_ticksIn hcount)
 
 
-open Responder in
-/-- **`B2Adds` on a fixed schedule**, from `B2Adds` at `t z x = t`, `span = t k` and `τ = 0`. -/
-theorem B2Adds_fixed :
-  ∀ {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (N c : ℕ)
-    (δ ε : ℝ≥0∞), Pous.AuditSecureOn sch .sequential N 0 0 0 c δ ε →
-    ∀ (q k : ℕ) (W : Pous.Bits sch.n) (S : Pous.Bits q → Pous.Outcome sch c → Actual.Run L) (X : Finset L)
-      (t : ℕ → ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ) {α : Type*}
-      (help : Pous.Bits q → Pous.Outcome sch c → α) (ζ : ℕ → List Bool → Pous.Bits q) (M H : ℕ),
-      (∀ z, CausalFrom (S z)) → StrictMono t →
-      (∀ z x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
-        (S z x).content X (t 0) = (S z x').content X (t 0) ∧ help z x = help z x') →
-      (∀ z x x' (j : Fin c), help z x = help z x' → x.2.2 j = x'.2.2 j →
-        (S z x).crossing (↑X)ᶜ ↑X (period t j) = (S z x').crossing (↑X)ᶜ ↑X (period t j)) →
-      (∀ z, (Set.range (help z)).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) →
-      (∀ z x (j : Fin c), (S z x).mem X (t j) ≤ M) →
-      (∀ z x (j : Fin c), ζ j ((S z x).content X (t j)) = z) →
-      Pous.pr (fun x : Pous.Bits q × Pous.Outcome sch c =>
-          Responder.PassesFixed sch W (S x.1) X t ans x.2 ∧ ¬ q + N < M + 1 + H + k) ≤ δ + ε + c * (2⁻¹ : ℝ≥0∞) ^ k := by
-  intro L _ B w p _ sch N c δ ε hsec q k W S X t ans α help ζ M H hc ht hset hin hcount hm hζ
-  exact (pr_mono fun x hx => ⟨⟨fixed_timely ht c, hx.1⟩, hx.2⟩).trans
-    (B2Adds sch N c δ ε hsec q k W S X (fun _ _ => t) (t c) ans help ζ M 0 H hc
-      (fun _ _ j => ht (Nat.lt_succ_self j)) (fun z => fixed_setup (hset z)) (fun z => fixed_ingress (hin z))
-      (fun _ => fixed_arrival) (fun _ => fixed_ticksIn) hcount (fun _ _ => fixed_timely ht c) hm hζ)
-
-
 end ResourceAccounting.SecurityProofs

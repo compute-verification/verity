@@ -29,6 +29,7 @@ from __future__ import annotations
 from verity.circuits.defs import PrimitiveDefinition, bind, composite
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import fp8_moe as FM
 from verity_vllm.definitions.registry import prims as P

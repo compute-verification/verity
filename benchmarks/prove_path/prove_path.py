@@ -1548,7 +1548,8 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     try:
         one = CZ.project(seen, probe, cls, CZ.label(SS.bridge(cls.scan, cls.prompt)),
                          lambda T, BN: fa2_masked_from(T, 1, 0, BN, False))
-        sizes = {"program": CZ.size(one), "window": CZ.size(one, cls.slots)}
+        sources = json.loads((HERE / "sources.json").read_text())
+        sizes = {"program": CZ.size(one, sources), "window": CZ.size(one, sources, cls.slots)}
     except ValueError as e:
         raise ValueError(f"{e} (the probe's census: {json.dumps(seen, sort_keys=True)})") from None
     return {"class": asdict(cls), "positions": cls.positions, "requests": requests,

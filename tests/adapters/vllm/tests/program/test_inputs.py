@@ -9,10 +9,10 @@ import pytest
 from verity.circuits.defs import Builder, PrimitiveDefinition, bind
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import Array, Value
-from verity_vllm.definitions.registry import dsa_topk
-
 from verity_torch import inputs as IN
 from verity_torch.frontend.registration import RunInputs
+
+from verity_vllm.definitions.registry import dsa_topk
 
 ROOT = Path(__file__).resolve().parents[5]
 FIX = "serve it canonically"

@@ -19,19 +19,19 @@ from verity.circuits.defs import bind as ir_bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array as Arr_
 from verity.circuits.types import Tuple as Tup_
+from verity_torch.frontend.correspond import compare_bodies
+from verity_torch.frontend.derive import Unsupported
+from verity_torch.frontend.derive_examples import NegMoE
+
 from verity_vllm.definitions.numerics.serve3_reference import materialize
 from verity_vllm.definitions.registry import b1, serve3
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import stop_check as SC
-
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend import stop_rule as SR
-from verity_torch.frontend.correspond import compare_bodies
-from verity_torch.frontend.derive import Unsupported
-from verity_torch.frontend.derive_examples import NegMoE
-from verity_vllm.program.frontend.vllm_derive import derive, derive_report
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.family import DecoderLayerT
+from verity_vllm.program.frontend.vllm_derive import derive, derive_report
 
 REF = dict(mode="reference")
 PROF = dict(mode="profile", profile="b1-eager")

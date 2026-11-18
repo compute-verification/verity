@@ -114,12 +114,12 @@ def _session(K: int, late: int | None = None):
     rounds = [Round(j, RNG.randrange(1 << 20), 1000 * j, 1000 * j + 500, _rand(64)) for j in range(K)]
     if late is not None:
         rounds[late] = Round(late, rounds[late].index, 0, c.limit_ns + 1, rounds[late].digest)
-    I = _rand(16)
-    m = R.memory_attester_message(I, c.session, mc.message(c, mc.COMPLETE, rounds))
+    ident = _rand(16)
+    m = R.memory_attester_message(ident, c.session, mc.message(c, mc.COMPLETE, rounds))
     head = json.dumps({**c.header(), "ended": mc.COMPLETE, "rounds": K}, sort_keys=True, separators=(",", ":")).encode()
     flat = b"".join(r.value() for r in rounds) + bytes(S.RECORD_BYTES * (K % 2))
     rows = [flat[184 * t:184 * (t + 1)] for t in range(S.records_rows(K))]
-    return c, len(head), head + bytes(S.head_bytes(len(head)) - len(head)), S.signed_context(I, c.session), rows, m
+    return c, len(head), head + bytes(S.head_bytes(len(head)) - len(head)), S.signed_context(ident, c.session), rows, m
 
 
 def test_the_signed_digest_reference_is_the_memory_attesters() -> None:

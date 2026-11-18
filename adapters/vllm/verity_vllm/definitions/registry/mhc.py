@@ -77,13 +77,20 @@ from __future__ import annotations
 
 from verity.circuits.census import silicon_step
 from verity.circuits.defs import bind, composite, primitive
-from verity.circuits.refs import Coll, concat, tuple_of
-from verity.circuits.types import Array, Tuple
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import F32Neg
+from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.silicon.models import HOPPER_BF16_WGMMA_K16, GroupSum
 from verity.circuits.silicon.term import TF32, tf32_product
-from verity.circuits.silicon.total import NAN, Inf, fp32_value, group_step_total, pack_value
+from verity.circuits.silicon.total import (
+    NAN,
+    Inf,
+    fp32_value,
+    group_step_total,
+    pack_value,
+)
+from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry import moe as M

@@ -14,8 +14,19 @@ from dataclasses import dataclass
 from verity.circuits.defs import bind
 from verity.commitments.crypto import lms as R
 
-from .session_circuit import (RECORD_BYTES, RECORDS_PER_ROW, PousRound, PousSessionDigest, PousSessionSig, head_bytes,
-                              records_rows, round_ok, session_digest, session_sig_ok, signed_context)
+from .session_circuit import (
+    RECORD_BYTES,
+    RECORDS_PER_ROW,
+    PousRound,
+    PousSessionDigest,
+    PousSessionSig,
+    head_bytes,
+    records_rows,
+    round_ok,
+    session_digest,
+    session_sig_ok,
+    signed_context,
+)
 
 __all__ = ["KINDS", "SessionStatements", "SessionUnit", "prove_session", "session_statements"]
 

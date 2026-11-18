@@ -32,7 +32,12 @@ from verity_bench.prove import (
     Row,
     Table,
     definition_id,
+    rated_as,
 )
+
+#: how a row's note names the census field its steady-state figure was read by (`prove.rated_as`)
+RATED_AS = {"proved_as": "proved as `{}`",
+            "bounded_by": "bounded by `{}`, a larger block's rate: an upper bound on this type's cost, not a measurement of it"}
 
 #: the verifier a steady-state row times
 VERIFIER = ("the proof server's own verifier (`flock-circuit serve --zk`), its seconds a statement (a row's `verify_s`) "
@@ -323,7 +328,11 @@ class Flock:
     newest run's; one of no block type of the census measures nothing. `boolean`: whether the tree registers a
     Definition (by its id) as the Boolean version of a census type (by its census name). A row staged in another
     Definition than its type's own is named as the type's Boolean version only where `boolean` says it is one, and as
-    another Definition where it says not or none is given."""
+    another Definition where it says not or none is given; `boolean` is asked about the type the row prices, so types
+    that share one `proved_as` or `bounded_by` row are each named by their own answer. A type takes its steady-state
+    measurement by its own id, else by its census `proved_as`, else by its `bounded_by` (`prove.rated_as`), and its note
+    names which; a row staged as either is read, not unread, and a type's note names such a row's attempt, other
+    prover counts and fewer cores as it names its own."""
 
     steady: Sequence[Steady] = ()
     sessions: Sequence[Session] = ()
@@ -343,10 +352,19 @@ class Flock:
         tried: dict[str, Steady] = {}
         elsewhere: dict[str, set[int]] = {}
         under: dict[str, set[int]] = {}
-        held = {definition_id(b.name): b.name for b in census.blocks}
+        own = {definition_id(b.name): b.name for b in census.blocks}
+        held = dict(own)
+        for b in census.blocks:
+            for spec in (b.proved_as, b.bounded_by):
+                if spec is not None:
+                    held.setdefault(definition_id(spec), spec)
 
-        def form(s: Steady) -> str:
-            return _form(s, s.form is not None and self.boolean is not None and self.boolean(held[s.definition], s.form))
+        def form(s: Steady, block: str | None = None) -> str:
+            """`s`'s Definition as a note names it, asking `boolean` about `block` (the type it prices), else about the
+            Definition `s` was staged for: several types can share a `proved_as` or `bounded_by` row."""
+
+            return _form(s, s.form is not None and self.boolean is not None
+                         and self.boolean(block or held[s.definition], s.form))
 
         unread = []
         names: dict[str, set[str]] = {}
@@ -383,22 +401,26 @@ class Flock:
                 warmed[w.definition] = w
         timed: dict[str, LeanVerify] = {}
         for v in self.lean:
-            if v.definition in held and ((prior := timed.get(v.definition)) is None or v.run > prior.run):
+            if v.definition in own and ((prior := timed.get(v.definition)) is None or v.run > prior.run):
                 timed[v.definition] = v
         lean_seconds, lean_bytes = _lean_figures(census, timed)
         seconds_of, bytes_of = lean_seconds.prices(), lean_bytes.prices()
         rows = []
         for b in census.blocks:
-            spelled = definition_id(b.name)
+            spelled, how, spec = rated_as(b.name, b.proved_as, b.bounded_by, measured.__contains__)
+            mine = [definition_id(b.name), *([definition_id(b.proved_as)] if b.proved_as else [])]
+            noted = [*mine, *([definition_id(b.bounded_by)] if b.bounded_by else [])]
             if m := measured.get(spelled):
                 where = m.held if m.art is None else f"{m.held}, measured in {m.run}"
                 others = _sizes(m, sized[spelled])
                 also = "".join(f"; another size, {o.fill} ({o.record})" for o in others)
+                read_as = "" if how is None else f"{RATED_AS[how].format(spec)}; "
                 cost = Cost(STEADY, m.seconds / m.blocks, m.record,
-                            f"`{m.type}` ({form(m)}), {m.at}, {m.fill} ({where}){also}{_above(m, self.cores)}", m.type,
-                            verifier_seconds=None if m.verifier_seconds is None else m.verifier_seconds / m.blocks,
+                            f"{read_as}`{m.type}` ({form(m, b.name)}), {m.at}, {m.fill} ({where}){also}{_above(m, self.cores)}",
+                            m.type, verifier_seconds=None if m.verifier_seconds is None else m.verifier_seconds / m.blocks,
                             provers=m.provers, cores=m.cores, blocks=m.blocks, definition=m.proved, steady=m,
-                            sizes=tuple((x.blocks, x.seconds, x.record) for x in [m, *others]) if others else ())
+                            sizes=tuple((x.blocks, x.seconds, x.record) for x in [m, *others]) if others else (),
+                            rated_as=None if how is None else (how, spec))
             else:
                 kin = families.get(_family(spelled), [])
                 if proved := warmed.get(spelled):
@@ -406,13 +428,13 @@ class Flock:
                 else:
                     cost = _kin(b, kin, self.cores, form) if kin else single(b)
                 why = []
-                if t := tried.get(spelled):
+                if t := next((tried[k] for k in noted if k in tried), None):
                     why.append(f"steady state tried as `{t.type}` at {t.at} in {t.run} ({t.held}): {t.refused}")
                     cost = replace(cost, staged=t.type)
-                if counts := elsewhere.get(spelled):
+                if counts := set().union(*(elsewhere.get(k, ()) for k in noted)):
                     why.append(f"measured at steady state at {', '.join(map(str, sorted(counts)))} provers, which "
                                f"price no type at {self.provers}")
-                if fewer := under.get(spelled):
+                if fewer := set().union(*(under.get(k, ()) for k in noted)):
                     why.append(f"measured at steady state at {', '.join(map(str, sorted(fewer)))} cores, which price no "
                                f"type at {self.cores}")
                 if why:
@@ -422,7 +444,8 @@ class Flock:
             seconds, size = seconds_of(b) or (None, None, None), bytes_of(b) or (None, None, None)
             cost = replace(cost, lean_seconds=seconds[0], lean_source=seconds[1], proof_bytes=size[0],
                            proof_bytes_source=size[1], lean_statement=seconds[2])
-            rows.append(Row(b.name, b.k_log, b.per_token, cost, b.macs, staged_as=tuple(sorted(names.get(spelled, ())))))
+            staged_as = set().union(*(names.get(k, ()) for k in mine))
+            rows.append(Row(b.name, b.k_log, b.per_token, cost, b.macs, staged_as=tuple(sorted(staged_as))))
         basis = (None if steady_rate is None else
                  f"every type not measured at steady state at {self.provers} prover{'' if self.provers == 1 else 's'} "
                  f"priced at the full-statement steady-state types' median, "

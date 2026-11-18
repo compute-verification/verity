@@ -44,6 +44,7 @@ from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.refs import Coll, broadcast
 from verity.circuits.silicon import fp
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 

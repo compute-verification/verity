@@ -1,5 +1,5 @@
 """Pearl-C4's reference replay on real activations (CPU; a development shortcut: the protocol's check is a ZK proof,
-PouwCheck), per linear of a capture directory (``manifest.json``: each linear's input file and shape, and the model's
+PouwVerifier), per linear of a capture directory (``manifest.json``: each linear's input file and shape, and the model's
 ``snapshot``): X, the linear's input rows (float32 holding BF16 exactly), and its weight W (the snapshot's BF16
 safetensors); or of a capture npz file (X and W of each linear as float32 holding BF16), judged in the clear as
 the scheme (`verity.protocols.experimental.pearl_c4.prover.pearl_c4`) judges a unit:

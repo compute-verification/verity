@@ -46,5 +46,6 @@ print(audit.run_timed(v, blocks.__getitem__).accepted)                  # True
 | P2, `p2-16448/v4` | Experimental and never the default, but what a period runs. |
 | P3 | The fast research codec. |
 
-[`DESIGN.md`](DESIGN.md) states what each codec and the wipe rest on, word for word, and holds the entry points, the
-lifecycle through the generic protocol, the memory attester's records and P2's construction.
+What each codec rests on is its certificate in its module (`band.py`, `dense.py`, `schemes/p2.py`, `scheme.py`). The
+lifecycle is `protocol.py`'s, the memory attester's records are `../attester/memory_attester.py`'s, and the wipe's are
+`streamed_wipe.py`'s.

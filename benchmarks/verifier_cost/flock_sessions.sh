@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # The Lean verifier's seconds on a served block type's sessions, on one core, by the statement's blocks.
-#   1. hidden_zk/job.sh's builds (flock-circuit's proving build on CPUs, the Lean verity-verify-proof, a venv), and flock-read
-#      (flock_read/Main.lean) in a scratch Lake package against a copy of the built verifier
+#   1. hidden_zk/job.sh's builds (flock-circuit's proving build on CPUs, the Lean verity-verify-proof, a venv)
 #   2. flock_sessions.py stage: the block type's flat statement at `full`, as served_units/stage.py stages a census type,
 #      and from the same lowering the statement's first N blocks for each N given
 #   3. per N: one loopback --zk session of the CPU prover sampling all N blocks (job.sh's `session`), then
@@ -10,8 +9,7 @@
 #      session of the same statement and one `verify` handed both, a call of two sessions
 #   4. sessions.tar, where it is sent: a proof server's saved sessions of the full statement (one directory a session),
 #      all handed to one `verify` FS_REPS times, then the first of them alone
-#   5. flock-read on the circuit (the read's phases), one `verify` under `perf record` where the node has perf, and
-#      flock_sessions.py summary
+#   5. one `verify` under `perf record` where the node has perf, and flock_sessions.py summary
 # `verify` reads the statement once a call (its `inputs` line), then sets up and checks each session it was handed (the
 # session's own lines), so a call's seconds split into a part paid once a circuit and a part paid a session; summary.json
 # has both and their growth with the blocks. A census statement binds no Program, so the verifier refuses every session
@@ -23,7 +21,7 @@
 # env: FS_MEM_GB (the job's --mem-gb)  FS_REPS=2  FS_CORE (the core every verify is pinned to; default the last one this
 #      process may run on)  FS_PIN (a prefix the staged circuit's SHA-512 must have)  FS_CACHE (job.sh's HZ_CACHE)
 # $OUT gets stage.json and pin.txt (stage.py's), per call TAG.{err,out,time} (TAG nN-repI, nN-pair, saved-repI or saved-one), per N
-# nN/ (job.sh's session files and session.json), phases.jsonl, perf-symbols.txt and summary.json.
+# nN/ (job.sh's session files and session.json), perf-symbols.txt and summary.json.
 set -uo pipefail
 SPEC=${1:?usage: flock_sessions.sh census:NAME [N...]}
 shift
@@ -48,17 +46,6 @@ log "flock-sessions: $SPEC at full and at ($NS) blocks, $REPS verifies each"
     > "$OUT/stage.out" 2> "$OUT/stage.err"; echo $? > "$W/stage.rc" ) &
 staging=$!
 setup
-
-READ=$W/read/.lake/build/bin/flock-read
-# job.sh's build is the verifier beside the packages it requires by path (lean_copy), its .lake a link into the verifier's
-# own directory there: all of it is copied, and flock-read requires the verifier at its place in the copy
-BUILT=$(cd "$(dirname "$LEAN")/../../.." && pwd -P)
-PKG=$(cd -P "$(dirname "$LEAN")/../../.." && pwd)
-PKG=$W/verifier${PKG#"$BUILT"}
-cp -a "$BUILT" "$W/verifier" && mkdir -p "$W/read" && cp "$V/flock_read/Main.lean" "$PKG/lean-toolchain" "$W/read/" \
-  && printf 'name = "flock_read"\ndefaultTargets = ["flock-read"]\n\n[[require]]\nname = "flock_verifier"\npath = "%s"\n\n[[lean_exe]]\nname = "flock-read"\nroot = "Main"\n' \
-    "$PKG" > "$W/read/lakefile.toml" && (cd "$W/read" && lake build flock-read) > "$OUT/build-read.log" 2>&1
-[ -x "$READ" ] || { log "flock-read did not build: $(tail -3 "$OUT/build-read.log" 2> /dev/null | tr '\n' '|' | cut -c1-300)"; READ=; }
 
 wait $staging
 rc=$(cat "$W/stage.rc" 2> /dev/null || echo 99)
@@ -119,11 +106,6 @@ for N in $NS; do
   fi
 done
 
-if [ -n "$READ" ]; then
-  /usr/bin/time -v -o "$OUT/read.time" taskset -c "$CORE" "$READ" "$D/circuit.txt" "$D/pub.bin" verity/flock-circuit > "$OUT/read.out" 2> "$OUT/read.err"
-  grep '^PHASE ' "$OUT/read.out" | sed 's/^PHASE //' > "$OUT/phases.jsonl"
-  log "flock-read: $(spent "$OUT/read.time")"
-fi
 [ ${#SAVED[@]} -eq 0 ] || FIRST="$D/pub.bin ${SAVED[0]}"
 if [ -n "$FIRST" ] && command -v perf > /dev/null; then
   pk=$(taskset -c "$CORE" "$LEAN" archive-put "$A" "${FIRST% *}" | awk 'NR == 1 {print $1}')

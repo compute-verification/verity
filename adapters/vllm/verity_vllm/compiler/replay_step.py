@@ -537,8 +537,9 @@ def _build(C, S, *elements, tap: dict | None = None, derive=None):
     already made, so a composition binds them without new gates: ``run``, ``wait`` and ``arr`` (the slots' records,
     after a quiet step's arrival moves into waiting slot 0), ``forced``, ``free`` (the state's); per running slot
     ``needs``, ``backs``, ``avail`` (free plus the returns of the slots after it), ``upto`` (the needs up to it),
-    ``kept``, ``popped`` and ``run_n``; ``cnt0``; per candidate ``cands`` (reach, admit, new, ntok, hb, n, and ``at``,
-    the running count before it: its placed slot when admitted), filled as the waiting loop goes; the placed slots'
+    ``kept``, ``popped`` and ``run_n``; ``preempted``; ``cnt0``; per candidate ``cands`` (reach, admit, new, ntok, hb, n, and
+    ``at``, the running count before it: its placed slot when admitted), filled as the waiting loop goes; ``budget``, what
+    the waiting loop leaves of T (T less it is the tokens the step schedules); the placed slots'
     records ``slots``; and per placed slot ``update`` (on, comp after the row, sampled before AS's fin mask, leave,
     held, keep). With PC, a caller that computes the prefix layer's counts rather than reading them passes `derive`,
     whose methods the trace calls where it reads them, so their wires can depend on the step's own:
@@ -638,6 +639,7 @@ def _build(C, S, *elements, tap: dict | None = None, derive=None):
         run_n.append(_sel(C, kept[j], ns[j]))
         budget = _sub(C, budget, run_n[j], TW)
     preempted = or_reduce(C, popped)
+    tap["preempted"] = preempted
 
     # the waiting loop: W waiting slots, then A arrivals
     stage("waiting")
@@ -699,6 +701,7 @@ def _build(C, S, *elements, tap: dict | None = None, derive=None):
         adm.append((admit, hb, _pad(n, TW)))
         cands.append({"reach": reach, "admit": admit, "new": new, "ntok": ntok, "at": at, "hb": hb, "n": _pad(n, TW)})
     bad.append(going)
+    tap["budget"] = budget
     if derive is not None:
         derive.candidates(tap)
 

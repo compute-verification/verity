@@ -6,10 +6,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity.device import load_card
 
 from verity_vllm.config import TARGET_NUM_SMS, TARGETS
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.program.predict import compiled
 
 CARD_FILES = Path(__file__).resolve().parents[5] / "calibration/hardware/cards"

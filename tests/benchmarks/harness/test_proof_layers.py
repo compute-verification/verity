@@ -408,6 +408,30 @@ def test_the_device_is_the_outputs_own_words(tmp_path):
     assert PL.read("recursion", str(recursion(tmp_path / "r"))).device == "not stated"
 
 
+def test_a_point_says_its_provers_device_and_its_member_the_card_served_on(tmp_path):
+    """A CPU prover's points say ``processors`` beside the member that names the H200 the workload was served on."""
+
+    cpu = {"RoPEHead_v1{D=64}": {"gpus": 0, "device": None, "lean_verify_s": 8.0,
+                                 "timing": {"prove_total_s": 20.0, "proof_bytes": [500, 500]}}}
+    results = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path / "c", timing=cpu)))]
+    own = [m for m in PL.measured(results, IDS) if m["member"] == SERVES]
+    assert [m["name"] for m in own] == list(IDS) and {m["extra"]["prover_device"] for m in own} == {"processors"}
+    assert {m["member"] for m in PL.measured(results, IDS)} == {f"{SERVES}-flock", f"{SERVES}-flock-zero-knowledge", SERVES}
+    assert PL.prover_device("GPU 4 (gpu-lease's record of each flock-circuit prove)").startswith("GPU 4")
+    assert PL.prover_device(PL.NOT_STATED) == PL.NOT_STATED
+
+
+def test_a_batch_study_writes_its_own_members_and_the_own_batch_the_plain_ones(tmp_path):
+    cpu = {"RoPEHead_v1{D=64}": {"gpus": 0, "device": None, "lean_verify_s": 8.0,
+                                 "timing": {"prove_total_s": 20.0, "proof_bytes": [500, 500]}}}
+    results = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path, timing=cpu)))]
+    for batch, word in ((None, ""), ("1-4", "-b4"), ("1-16", "-b16"), ("3-8", "-b3-8")):
+        assert {m["member"] for m in PL.measured(results, IDS, batch)} == {
+            f"{SERVES}-flock{word}", f"{SERVES}-flock-zero-knowledge{word}", f"{SERVES}{word}"}
+    with pytest.raises(ValueError, match="LO-HI request steps"):
+        PL.batch_word("8-1")
+
+
 def test_prove_without_the_store_refuses_in_one_line(monkeypatch, capsys):
     """An outside machine has no store client, or no remote it can read: `prove` names what it needs and exits 2."""
 
@@ -482,7 +506,9 @@ def test_a_layers_sh_run_gives_its_three_layers_each_a_statements_figures_as_sta
     assert results["sampling"].ran_with.startswith("ran with: coins local challenger; parameters development (a development")
     assert results["sampling"].eps_delta == "at most 895 of 2,560 incorrect proof blocks except with probability 2^-20"
     assert results["flock"].eps_delta == PL.NOT_STATED and results["zk"].device.startswith("GPU 4 (gpu-lease's")
-    line = table_lines(PL.render(list(results.values()) + [PL.read("recursion", None)]))
+    text = PL.render(list(results.values()) + [PL.read("recursion", None)])
+    line = table_lines(text)
+    assert "\n\n- ε at δ: each sampled block on its own inputs; the wires between blocks are not held\n" in text and "- ε at δ:" not in PL.render([results["flock"]])
     assert "| 2 s a statement of 2,048 proof blocks; 3 s a statement of 512 proof blocks (Flock's prove_total_s) |" in line["Flock"]
     assert "| 6 s a statement of 26 proof blocks; 7 s a statement of 6 proof blocks (Lean's verify) |" in line["with sampling"]
     assert "900 bytes a statement of 2,048 proof blocks; 901 bytes a statement of 512 proof blocks (one rep's proof)" in line["Flock"]
@@ -618,3 +644,23 @@ def test_a_layers_sh_results_commit_is_the_sha_after_source_never_one_printed_be
     assert PL.read("zk", str(tmp_path)).commit == SHA
     (d / "job.log").write_text(f"21:30:00Z fetch: main at {'1' * 40}\n")
     assert PL.read("zk", str(tmp_path)).commit is None
+
+
+def test_a_recursion_run_says_how_many_of_a_served_members_proof_blocks_its_inner_statement_holds(tmp_path):
+    """stage.sh's ``staged`` record: N of the member's M proof blocks, and that the served values were committed again,
+    so the outer proof is not tied to the served registration; seeded inputs say so."""
+
+    def read(name: str, staged: dict) -> str:
+        root = recursion(tmp_path / name)
+        f = root / "out" / "recursion_e2e.json"
+        f.write_text(json.dumps({**json.loads(f.read_text()), "staged": staged}))
+        return PL.read("recursion", str(root)).workload
+
+    st = {"subcircuit": "rope-head/d64/neox-bf16", "n": 16, "window": {"run": "ab" * 64, "member": 0}}
+    tail = ("the served values committed again under plain leaves for the recursion, not the served commitment; "
+            "the outer proof is not tied to the served registration")
+    assert read("subset", {**st, "subset": {"member": 0, "n": 880, "units": list(range(16))}}).startswith(
+        f"rope-head/d64/neox-bf16: 16 of 880 proof blocks of a served window's member 0, {tail}")
+    assert read("whole", st).startswith(f"rope-head/d64/neox-bf16: 16 of 16 proof blocks of a served window's member 0, {tail}")
+    assert read("seeded", {"subcircuit": "rope-head/d64/neox-bf16", "n": 16}).startswith(
+        "rope-head/d64/neox-bf16 x 16, seeded inputs, not served values")

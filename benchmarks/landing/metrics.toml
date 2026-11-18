@@ -1,7 +1,7 @@
 # This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
 # enforces it.
 
-# a local research run from a checkout on an agent VM with the team's keys: it reads the control pod, GitHub and the store's
+# run on the control pod itself (`runs`): it reads the pod's landing log, GitHub through the pod's read token and the store's
 # labels, which no CPU node reaches (benchmarks/landing/README.md)
 [[metric]]
 id = "ci/plain-mark-to-main-p90"
@@ -12,6 +12,7 @@ axis = "Hours from validated to merged, 90th percentile over the last 7 days, fo
 better = "lower"
 command = "research run --project verity --cwd source -- bash benchmarks/landing/run.sh"
 every = "12h"
+runs = "control"
 goal = "ci/landing-two-hours"
 
 [[metric]]
@@ -23,4 +24,5 @@ axis = "Hours from validated to merged, 90th percentile over the last 7 days, fo
 better = "lower"
 command = "research run --project verity --cwd source -- bash benchmarks/landing/run.sh"
 every = "12h"
+runs = "control"
 goal = "ci/lean-landing-two-hours"

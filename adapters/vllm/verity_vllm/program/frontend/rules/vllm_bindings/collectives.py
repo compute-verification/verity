@@ -5,8 +5,6 @@ from __future__ import annotations
 import torch
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
-from verity_vllm.definitions.registry import tp_allreduce
-
 from verity_torch.frontend.derive import StaticIndex
 from verity_torch.frontend.rules.base import OpRule, RuleInfo
 from verity_torch.frontend.rules.common import (
@@ -15,13 +13,15 @@ from verity_torch.frontend.rules.common import (
     rows_of,
     shape,
 )
+from verity_torch.frontend.strided_views import _tensor_type
+from verity_torch.frontend.value_types import shape_of
+
+from verity_vllm.definitions.registry import tp_allreduce
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_allreduce_settings,
     active_target_profile,
     launch_tokens_of,
 )
-from verity_torch.frontend.strided_views import _tensor_type
-from verity_torch.frontend.value_types import shape_of
 
 # -- tensor-parallel collectives: `verity_tp::*` ops emitted by the construction's CollectiveBus (cb_a/tp_ops.py) ----------
 

@@ -1,6 +1,6 @@
 """A class-G request's rows in a Commit window (`steps`): where its history ends and its Program begins (`segment_of`), the
 prefill chunks and launches its Program reads (`launch_of`), and what the window's edges carry (`edge_of`); and a batch-invariant
-request's launch context where FA3's tile reads it (`seqlen_q_of`). A request's rows are
+request's launch context where FA3's tile reads it (`seqlen_q_of`); and a served step's step-Program shape (`step_of`). A request's rows are
 `steps.Rows`, (step, index in the step, advice row) in step order."""
 from __future__ import annotations
 
@@ -65,6 +65,18 @@ def seqlen_q_of(tp: Any, LP: int, T: int, C: int, rows: Sequence[tuple[int, int,
         return ()
     q = tuple(max(n for n, _ in step) for step in launch)
     return () if q == (LP - C, *(1,) * T) else q
+
+
+def step_of(step: Any) -> tuple[int, int, int]:
+    """A served engine step's step-wrapper shape (M, pos0, C) from its advice step (I1's `StepAdvice`): its one row's n rows at
+    positions start.. after a history of `start`, the positions its request had computed, so a row of it scores the keys it scored
+    when served (`build.build_program`'s step at C = pos0). Refused for a step of several rows: the step wrapper is one sequence's
+    rows, and such a step's rows are its requests' Programs' (`steps.RowRef`)."""
+    if len(step.rows) != 1:
+        raise Unexpressible(f"vocabulary cannot express: a step Program of a step of {len(step.rows)} rows (the step wrapper is one "
+                            f"sequence's rows)")
+    row, = step.rows
+    return row.n, row.start, row.start
 
 
 def edge_groups(net: Any, q: Any) -> tuple[str, ...]:

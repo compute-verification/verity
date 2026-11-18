@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -112,12 +113,19 @@ def replay_record(tmp: Path, status: str = "passed", **fingerprint) -> Path:
                   fingerprint={"arm_dir": "/data/prod-record.1", "load": "agentic@4", "rep": 2} | fingerprint)
 
 
-def circuit_check_record(tmp: Path, ok: bool = True, rows: tuple[str, ...] = tuple(BINDINGS)) -> Path:
+def circuit_check_record(tmp: Path, ok: object = True, rows: tuple[str, ...] = tuple(BINDINGS),
+                         warned: tuple[str, ...] = ()) -> Path:
     d = record(tmp, CC, None)
+    warning = {"name": "partition/unchecked:Dsa_v1", "check": "partition", "code": "unchecked",
+               "definition": "Dsa_v1", "count": 1}
     (d / S.CIRCUIT_CHECK).write_text(json.dumps({
         "schema": S.CIRCUIT_CHECK_SCHEMA, "options": {},
-        "summary": {"ok": ok, "failures": 0 if ok else 1, "failure_names": [] if ok else ["exhaustive"]},
-        "targets": [{"row": r} for r in rows]}))
+        "summary": {"ok": ok, "failures": 0 if ok else 1, "failure_names": [] if ok else ["exhaustive"],
+                    "unchecked": {"items": len(warned), "definitions": 1 if warned else 0},
+                    "warnings": {"partition/unchecked": {"total": 1, "definitions": 1, "by_definition": {"Dsa_v1": 1}}}
+                    if warned else {}},
+        "targets": [{"kind": "definition", "target": r, "failures": [], "warnings": [warning] if r in warned else [],
+                     "seconds": 0.1, "peak_gb": 0.1, "block": {}} for r in rows]}))
     return d
 
 
@@ -189,8 +197,22 @@ def test_exact_passes_on_a_passed_replay_and_circuit_check_saying_what_it_could_
                                                  "replay_kind": "python", "held_to_minify": False}.items()
     assert r["workload_fingerprint"]["bindings"] == BINDINGS
     assert "`arm_dir` '/data/prod-record.1'" in r["validation"]["detail"]
+    assert "0 of the 1 named bindings unchecked" in r["validation"]["detail"]
     assert "could not be held to minify run" in capsys.readouterr().out
-    assert json.loads((out / "exact.json").read_text())["replay"]["kind"] == "python"
+    doc = json.loads((out / "exact.json").read_text())
+    assert doc["replay"]["kind"] == "python"
+    assert doc["circuit_check"]["unchecked"] == {"count": 0, "of": 1, "bindings": [],
+                                                 "report": {"items": 0, "definitions": 0}}
+
+
+def test_exact_reports_an_unchecked_binding_without_refusing(store, tmp_path):
+    store[MINIFY], store[REPLAY] = minify_record(tmp_path), replay_record(tmp_path)
+    store[CC] = circuit_check_record(tmp_path, warned=tuple(BINDINGS))
+    out = tmp_path / "exact"
+    assert exact(out, "--circuit-check", CC, "--bindings", *BINDINGS) == 0
+    assert (f"1 of the 1 named bindings unchecked (a warning, which never fails: {BINDINGS[0]}; the report's "
+            "`summary.unchecked`: 1 items on 1 definitions)") in result(out)["validation"]["detail"]
+    assert json.loads((out / "exact.json").read_text())["circuit_check"]["unchecked"]["count"] == 1
 
 
 def test_exact_holds_a_replay_that_names_its_minify_run(store, tmp_path):
@@ -207,6 +229,7 @@ def test_exact_holds_a_replay_that_names_its_minify_run(store, tmp_path):
 @pytest.mark.parametrize("ok, rows, why", [
     (False, tuple(BINDINGS), "failed over 1 targets, failing exhaustive"),
     (True, ("Other_v1/glm53",), f"failed over 1 targets, holding none of {BINDINGS[0]}"),
+    ("true", tuple(BINDINGS), "failed over 1 targets"),
 ])
 def test_exact_fails_where_circuit_check_fails_or_misses_a_binding(store, tmp_path, ok, rows, why):
     store[MINIFY], store[REPLAY] = minify_record(tmp_path), replay_record(tmp_path)
@@ -218,7 +241,8 @@ def test_exact_fails_where_circuit_check_fails_or_misses_a_binding(store, tmp_pa
 
 def test_exact_refuses_without_a_circuit_check_report_naming_circuits(store, tmp_path):
     store[MINIFY], store[REPLAY] = minify_record(tmp_path), replay_record(tmp_path)
-    with pytest.raises(SystemExit, match="no circuit-check verdict on the real model's bindings.*both are circuits'"):
+    with pytest.raises(SystemExit, match="no circuit-check verdict on the real model's bindings.*--out .*circuits' "
+                                         "command for that set is coming$"):
         exact(tmp_path / "exact")
     with pytest.raises(SystemExit, match="no circuit-check verdict"):
         exact(tmp_path / "exact", "--circuit-check", CC)
@@ -410,3 +434,53 @@ def test_confirm_reads_no_figure_from_a_price_under_another_id(store, tmp_path):
         {"name": "vllm/prod-serving-cost-glm53", "value": 2.5, "mark": "partial", "member": MEMBER}])
     with pytest.raises(SystemExit, match="holds no priced figure under benchmarks/serving-cost-priced"):
         S.main(["confirm", "--price", PRICE, "--measured", MEASURED])
+
+
+def _stored(out: Path) -> str:
+    r = result(out)
+    volatile = {"commit", "run", "host", "version"}
+    r["measurements"] = [{k: v for k, v in m.items() if k not in volatile} for m in r["measurements"]]
+    doc = {"result": r, "priced": json.loads((out / "priced.json").read_text())}
+    return hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest()
+
+
+@pytest.mark.parametrize("units, below, prefill, digest", [
+    ((), True, True, "919cf2acb8bfa16c69c745dc43a83bd00406195b88a68f60ca10dc7c06c620d2"),
+    ((UNITS,), True, True, "054ce6f725613251a5229743025756321c1d8367eec1dc286bb763921bcf2243"),
+    ((), True, False, "b31d5b90a556ca54e271d634ba0e1b73b3af5c7b6b205f65807a6b2150d7ad5e"),
+    ((), False, True, "b8cc7273efde2e4d3bfb3a1b6fb274ddba4135a1daaa349ca09fff3ae1073978"),
+])
+def test_price_stores_the_record_it_stored_before_it_called_priced_price(store, tmp_path, units, below, prefill, digest):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path, below=below, prefill=prefill)
+    store[UNITS] = units_record(tmp_path, UNITS, S.UNITS_KIND, PREFILL, shapes="prefill")
+    price(tmp_path / "price", *units)
+    assert _stored(tmp_path / "price") == digest
+
+
+def test_price_reads_a_units_run_as_stress_py_units_stores_it(store, tmp_path):
+    from benchmarks.dsa_topk import units as U
+
+    def timer(values: str, rows: int, keys: int, how: str | None) -> dict:
+        us = 1e-4 * rows * keys / 64
+        if how is None:
+            return {"fast_us": us, **{p: {"ok": True, "us": 2 * us, "added_us": us, "per_call": {"rows_long": rows}}
+                                      for p in U.PASSES.values()}}
+        return {"copy_us": us, **{p: {"ok": True, "one_call": {"rows_long": rows, "rows_bisected": rows}, "us": 5 * us}
+                                  for p in U.PASSES.values()}}
+
+    run = tmp_path / UNITS
+    assert U.write(run / "out", run / "result.json", "prefill", U.lines("prefill", timer), "a stand-in")
+    store[MINIFY], store[CAPTURE], store[UNITS] = minify_record(tmp_path), capture_record(tmp_path), run
+    out = tmp_path / "price"
+    assert price(out, UNITS) == 0
+    (m,) = result(out)["measurements"]
+    assert m["mark"] == "modeled" and m["unpriced"] == [] and m["inputs"] == ["modeled", CAPTURE, MINIFY, UNITS]
+    assert {x["path"]: x["runs"] for x in m["priced_by"]}["prefill steps, cut pass, every row failed, over the base"] \
+        == [UNITS]
+
+
+def test_price_refuses_arms_the_capture_did_not_serve(store, tmp_path):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path)
+    with pytest.raises(SystemExit, match="the capture served none of prod-record-bisect: give --ours an arm it served"):
+        S.main(["price", "--capture", CAPTURE, "--minify", MINIFY, "--ours", "prod-record-bisect", "--out",
+                str(tmp_path / "price")])

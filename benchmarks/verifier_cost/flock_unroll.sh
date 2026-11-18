@@ -41,7 +41,7 @@ step() {  # step NAME K ARGS...: flock-tmpl ARGS, its PHASE lines appended to un
 }
 for k in "$@"; do
   w=$S/k$k
-  /usr/bin/time -v uv run python benchmarks/verifier_cost/flock_read.py "$k" "$w" --circuit-only > "$O/stage-$k.out" \
+  /usr/bin/time -v uv run python benchmarks/verifier_cost/flock_read.py "$k" "$w" > "$O/stage-$k.out" \
     2> "$O/stage-time-$k.txt" || { tail -40 "$O/stage-time-$k.txt" >&2; exit 1; }
   cp "$w/build.json" "$O/build-$k.json"
   uv run python -m verity_flock.tmpl "$w/circuit.txt" "$O/unit-$k.tmpl" > "$O/emit-$k.out" 2> "$O/emit-time-$k.txt" \

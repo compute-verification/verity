@@ -9,7 +9,13 @@ from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.query.module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
-from verity_vllm.query.required import Q_WORD_ID, Q_WORD_TEXT, _profile, query_header, request_manifest
+from verity_vllm.query.required import (
+    Q_WORD_ID,
+    Q_WORD_TEXT,
+    _profile,
+    query_header,
+    request_manifest,
+)
 from verity_vllm.query.units import ValueRef as R
 
 

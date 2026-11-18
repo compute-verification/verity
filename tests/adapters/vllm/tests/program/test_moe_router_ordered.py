@@ -11,13 +11,13 @@ import json
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.registry import moe
-from verity_vllm.program.frontend.target_profile import TargetProfile
-
 from verity.circuits.codec import encode_program
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
+
+from verity_vllm.definitions.registry import moe
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 NAN, PINF, NINF, PZ, NZ = 0x7FC0, 0x7F80, 0xFF80, 0x0000, 0x8000
 

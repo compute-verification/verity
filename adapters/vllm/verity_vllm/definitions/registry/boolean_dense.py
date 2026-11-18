@@ -27,14 +27,14 @@ RN32(1 / C), `dense.reciprocal_bits`, `Bf16MulScalar`'s f32(C)); a scalar every 
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits import boolean as BL
-from verity.circuits.defs import bind
-from verity.circuits.types import Array
-from verity.circuits.ops.boolean import elementwise as EW
-from verity.circuits.silicon import fp
 from verity.circuits.boolean.forms import const_bits
 from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import dense as D
 from verity_vllm.definitions.registry import prims as P

@@ -33,5 +33,5 @@ def test_each_row_names_a_module_of_the_tree_or_warns() -> None:
     """It warns and fails nothing: a move in ``verity/`` is another change's, and the row is renamed after it."""
     stale = naming_nothing(I.SIDES, R.REPO)
     if stale:
-        warnings.warn("rows of SIDES (tests/lint/_imports.py) that name no package or module of the tree: rename each to "
+        warnings.warn("rows of SIDES (tests/adapters/vllm/tests/lint/_imports.py) that name no package or module of the tree: rename each to "
                       f"where its modules are now, or delete it: {stale}", stacklevel=1)

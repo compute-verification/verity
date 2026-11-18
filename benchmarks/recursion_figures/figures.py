@@ -72,7 +72,8 @@ FIGURES = {"cost": "CPU core-years", "ks": "log₂ of the knowledge-soundness er
 #: the figures a research run keeps beside its result, relative to the run's directory
 KEPT = "out/recursion-figures.json"
 
-FORMAT = "recursion-e2e/figures/v2"
+#: v3: the knowledge-soundness bound's terms are `ks_log2`, which v2 named `levels`
+FORMAT = "recursion-e2e/figures/v3"
 CENSUS = HERE.parents[1] / "calibration" / "census"
 YEAR_S = dict(MONITORING_PERIODS)["year"]
 #: κ, the per-session term, and ε, the per-SHA-512-call term, log₂ (``RecDeploy.recursiveBitsK_deployed``)
@@ -164,8 +165,8 @@ def figures(doc: dict[str, Any], times: Mapping[str, Mapping[str, float] | None]
                 "scaled: a stream a machine, a session a window",
         "scaled": "every machine audited as this run's session audited its window, a session a machine a window; the world "
                   "as machines of the datacenter's size; covered compute is each session's statement's ANDs"},
-        "levels": {"kappa_log2": KAPPA_LOG2, "eps_log2": EPS_LOG2, "knowledge_log2": KNOWLEDGE_LOG2,
-                   "hash_rate_log2": HASH_RATE_LOG2}}
+        "ks_log2": {"kappa_log2": KAPPA_LOG2, "eps_log2": EPS_LOG2, "knowledge_log2": KNOWLEDGE_LOG2,
+                    "hash_rate_log2": HASH_RATE_LOG2}}
     leak_session = math.log2(1 + S) if S else None
     fl = {}
     fs = fleets(census)

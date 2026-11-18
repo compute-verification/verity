@@ -27,6 +27,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+
 from verity.protocols.resource_accounting.memory.poub.prover.node_store import memory_map as store_map
 from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.interface import (
@@ -44,7 +45,6 @@ from verity.protocols.resource_accounting.memory.poub.verifier import audit, mem
 from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec
 from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb
 from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier, wire
-
 
 from .test_memory_map import BLOCK, PAGES, SLOT_BYTES, SLOTS, kv_payload
 from .test_registry import CODEC, RECEIPT

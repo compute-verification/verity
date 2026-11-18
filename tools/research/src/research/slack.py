@@ -161,7 +161,7 @@ PAGE_SECTIONS = ("## The problem", "## Background", "## The design the rules wan
                  "## Sources")
 REPLY_CALLOUT = ('<callout icon="✍️" color="yellow_bg">\n'
                  "\t**Your reply.** Write below this line: a decision, a question or a change. "
-                 "Top relays it to the lane, which answers under your text starting with its handle.\n"
+                 "Top relays it to the lane, which answers in a comment starting with its handle.\n"
                  "</callout>\n")                                 # top's asks relay reads the text after the bold line
 SKILL_ASKING = ".agents/skills/asking-daniel/SKILL.md"
 WAIT_EVERY_S = 30
@@ -378,9 +378,13 @@ def check_registry(reg: dict, path: str) -> dict:
         raise SlackError(f"registry {path}: external_posters: the usernames under which something other than `research msg` "
                          "posts through Verity's bot (Daniel's desktop agent, Codex), so the Slack events service delivers "
                          "their posts; never a handle's or the router's")
+    if reg.get(UNNAMED) is not None and reg[UNNAMED] not in ext:
+        raise SlackError(f"registry {path}: {UNNAMED}: the one of external_posters ({', '.join(ext) or 'none listed'}) whose "
+                         "posts through Verity's bot carry no username")
     return reg
 
 
+UNNAMED = "unnamed_poster"   # `research msg` and the events service always post under a username; this external poster doesn't
 EXTERNAL_POSTER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{0,39}$")   # lower-cased, it's a doorbell's author
 
 
@@ -1740,14 +1744,21 @@ def fetch_message(api: Slack, ch: str, ts: str, thread: str | None) -> dict | No
     return next((m for m in msgs if m.get("ts") == ts), None)
 
 
+EXTERNAL_ROLE = "an external poster: it may ask, and authorizes nothing"
+
+
 def author_allowed(msg: dict, reg: dict, key: str, names: set[str] | frozenset = frozenset()) -> str | None:
     """Why `msg`'s author is one of ours, or None: Verity's bot (the registry's `bot_id`, under a handle's username, a routed
-    name in `names`, or the router), a bot the channel lists (`bots`: alerting), a named human (`humans`, by Slack user
+    name in `names`, or the router; or an `external_posters` name, or no username where the registry names its
+    `unnamed_poster`), a bot the channel lists (`bots`: alerting), a named human (`humans`, by Slack user
     id) or a collaborator (`collaborators`, who may ask but authorizes nothing). An entry without an id allows nobody."""
     if msg.get("bot_id"):
         handles = {h["handle"] for h in reg["handles"]} | set(names) | {"router"}
         if reg.get("bot_id") and msg["bot_id"] == reg["bot_id"] and msg.get("username") in handles:
             return f"Verity's bot as @{msg['username']}"
+        if ours(msg, reg) and (ext := msg.get("username") or reg.get(UNNAMED)) in reg.get("external_posters", []):
+            return (f"Verity's bot as {ext}" + ("" if msg.get("username") else f" (no username, which the registry gives to {ext})")
+                    + f", {EXTERNAL_ROLE}")
         for b in channels(reg)[key].get("bots", []):
             if b.get("bot_id") and msg["bot_id"] == b["bot_id"]:
                 return f"#{key}'s bot {b['name']} ({b['bot_id']})"
@@ -3069,7 +3080,7 @@ def check_length(reg: dict, ch: str, text: str, limit: int) -> None:
         return
     if found := vocabulary.retired(plain(text)):
         print("research msg: retired term(s), posted anyway: " + "; ".join(f"{t!r}: write {w}" for t, w in found)
-              + " (GLOSSARY.md's older names; a name quoted in backticks is kept)", file=sys.stderr)
+              + " (tests/lint/retired_terms.md; a name quoted in backticks is kept)", file=sys.stderr)
     if (n := len(plain(text).split())) <= limit:
         return
     if n > 2 * limit:

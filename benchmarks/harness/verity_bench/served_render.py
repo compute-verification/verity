@@ -168,7 +168,8 @@ def measurements(table: Mapping[str, Any], metrics: Mapping[str, str]) -> list[d
     """Each of `metrics` (an id for the row it names, ``SPEC/POINT``) as `kit.Writer.measurement`'s arguments: the row's
     arm over stock as served (`SERVED`) in time per output token, as a percent over stock, with its 95% interval, its
     run and result art as inputs and its caveats, then each of its protocol's members' rows at the same point under the
-    same id, with its `member`; a row with no ratio has no value and says why."""
+    same id, with its `member`; a metric that names a member's row has its members' readings only, none of its own; a
+    row with no ratio has no value and says why."""
 
     rows = {f"{row['spec']}/{row['point']}": row for row in table["rows"]}
     skipped = {f"{s['spec']}/{s['point']}": s["why"] for s in table["skipped"]}
@@ -178,7 +179,8 @@ def measurements(table: Mapping[str, Any], metrics: Mapping[str, str]) -> list[d
         protocol = next((row["protocol"] for row in table["rows"] if row["spec"] == spec), None)
         members = {(row["member"], row["spec"]): row.get("why") for row in table["rows"]
                    if row["protocol"] == protocol and row.get("member")}
-        out.append(_measurement(name, at, rows, skipped))
+        if spec not in {other for _, other in members}:
+            out.append(_measurement(name, at, rows, skipped))
         out += [_measurement(name, f"{other}/{point}", rows, skipped, member, why or f"no timed {point} in its record")
                 for (member, other), why in members.items()]
     return out
@@ -208,7 +210,7 @@ def _measurement(name: str, at: str, rows: Mapping[str, Any], skipped: Mapping[s
 def record(table: Mapping[str, Any], metrics: Mapping[str, str]) -> None:
     """Writes the table into this research run's result (`kit.writer`): the table as `TABLE`, named a measurement file
     and the validation's evidence, the rows' runs in the fingerprint, `measurements` under `metrics`' ids, and a
-    validation passed only when every metric has a value without a member."""
+    validation passed only when every metric with a reading of its own has a value."""
 
     writer = kit.writer(settings.RESEARCH_RUN_DIR)
     kept = writer.out / TABLE
@@ -218,9 +220,10 @@ def record(table: Mapping[str, Any], metrics: Mapping[str, str]) -> None:
                        runs=sorted({row["run"] for row in table["rows"] if row["run"]}))
     writer.measurement_file(TABLE)
     found = measurements(table, metrics)
+    own = {m["name"] for m in found if "member" not in m}
     missing = [m["name"] for m in found if "why" in m and "member" not in m]
     for m in found:
         writer.measurement(m.pop("name"), m.pop("value"), m.pop("unit"), **m)
     writer.validation("failed" if missing else "passed", "verity_bench.served_table.collect",
-                      f"{len(metrics) - len(missing)} of {len(metrics)} metrics have a served ratio"
+                      f"{len(own) - len(missing)} of {len(own)} metrics have a served ratio"
                       + (f"; none for {', '.join(missing)}" if missing else ""), [TABLE])

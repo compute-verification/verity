@@ -248,6 +248,15 @@ class Index:
             self.db.execute("INSERT OR REPLACE INTO labels VALUES (?,?,?,?,?,?,?)",
                             (d["target"], d["key"], scalar_text(d.get("value")), d["by"], d["ts"], d.get("ref"), str(path)))
 
+    def index_labels(self, rows: Iterable[tuple[Label | dict, Path | str]]) -> None:
+        """`index_label` of each (label, path) in one transaction: a commit costs milliseconds on a node's disk, a row microseconds."""
+        docs = [(label.to_doc() if isinstance(label, Label) else label, path) for label, path in rows]
+        with self.db:
+            self.db.execute("BEGIN")
+            self.db.executemany("INSERT OR REPLACE INTO labels VALUES (?,?,?,?,?,?,?)",
+                                [(d["target"], d["key"], scalar_text(d.get("value")), d["by"], d["ts"], d.get("ref"), str(path))
+                                 for d, path in docs])
+
     def set_replica(self, art_id: str, location: str, verified_utc: str | None, detail: str | None = None, verified: str | None = None) -> None:
         """`verified` names the check behind `verified_utc` (README §7): `sha256-readback`, `etag-md5`, or both comma-joined."""
         with self.db:

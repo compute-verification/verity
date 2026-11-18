@@ -139,9 +139,6 @@ class Backend:
         self.host = {"host_ctas": 16, "host_consumers": 8}
         self.blocks = self.store.blocks
 
-    def set_payload_key(self, key: bytes) -> None:
-        pass
-
     def payload_root(self, node: bytes) -> bytes:
         return bytes(rb.DIGEST_BYTES)
 

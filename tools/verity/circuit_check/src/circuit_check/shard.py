@@ -15,6 +15,9 @@ targets its hash gives it, its records are the ones its manifest names, and thei
 they then give again.  `cli.combined` orders the records by place and makes of them the report the unsharded run makes
 (`checks.report`), so its summary, verdict and exit status are the unsharded run's.
 
+``--reached BASE`` names the targets a change reaches: none when no path it changes (`changed`) is one a check can read
+(`reaching`), else the targets no cache entry gives, which is what an ``--all --catalog-units`` run from that cache checks.
+
 This module decides which targets a run checks and how shards' records are joined, never what a check computes: it is no
 input of any target (`cache.SHARD`, outside the checker's version)."""
 from __future__ import annotations
@@ -23,6 +26,8 @@ import hashlib
 import json
 import os
 import re
+import subprocess
+import tomllib
 from pathlib import Path
 from typing import Iterable
 
@@ -31,6 +36,9 @@ from . import checks as CK
 SCHEMA = "verity-circuit-check/shard/v1"
 MANIFEST = "manifest.json"
 RECORDS = "records.json"
+CHECKER = "tools/verity/circuit_check"
+#: circuit-check's suite, whose ``[tool.verity.tests] inputs`` its guard holds every read of the tree to
+SUITE = "tests/tools/verity/circuit_check/pyproject.toml"
 
 
 class Refused(ValueError):
@@ -178,5 +186,29 @@ def read(dirs: Iterable[Path]) -> tuple[dict, list[dict], list[dict]]:
     return first["request"], records, [m for _, m in sorted(ms, key=lambda dm: dm[1]["shard"])]
 
 
-__all__ = ["MANIFEST", "RECORDS", "Refused", "SCHEMA", "digest", "manifest", "mine", "parse", "read", "shard_of", "unjoined",
-           "write"]
+def changed(repo: Path, base: str) -> list[tuple[str, str]]:
+    """Each path the checkout changes since its merge base with ``base``, committed or not, untracked included, with git's
+    status letter (``A`` added, ``D`` deleted, ``M`` modified, ...)."""
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout
+
+    parts = git("diff", "-z", "--name-status", "--no-renames", git("merge-base", base, "HEAD").strip()).split("\0")[:-1]
+    return [*zip(parts[::2], parts[1::2]), *(("A", p) for p in git("ls-files", "-z", "-o", "--exclude-standard").split("\0") if p)]
+
+
+def declared(repo: Path) -> list[str]:
+    """The places of the tree circuit-check's suite declares it reads (`SUITE`)."""
+    return tomllib.loads((repo / SUITE).read_text())["tool"]["verity"]["tests"]["inputs"]
+
+
+def reaching(paths: Iterable[tuple[str, str]], inputs: Iterable[str]) -> list[str]:
+    """Of the changed ``paths`` (status, path), those a check can read: a file modified under the checker or a place of
+    ``inputs`` (`declared`), prose aside, and a path added or deleted anywhere, which a module lookup or a probe can find by
+    its name.  When none is, the change reaches no target."""
+    inputs = list(inputs)
+    under, exact = tuple(p.rstrip("/") + "/" for p in (CHECKER, *inputs)), set(inputs)
+    return [p for s, p in paths if s != "M" or ((p in exact or p.startswith(under)) and not p.endswith(".md"))]
+
+
+__all__ = ["CHECKER", "MANIFEST", "RECORDS", "Refused", "SCHEMA", "SUITE", "changed", "declared", "digest", "manifest", "mine",
+           "parse", "reaching", "read", "shard_of", "unjoined", "write"]

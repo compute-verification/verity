@@ -10,6 +10,7 @@ def _boolean_roots() -> list[Any]:
     each, every lane about 300,000) and at a full group plus a remainder; the stream key, setup, lane and their pieces are
     static-free; and libdevice's logf without flush-to-zero (`NvLogf_v5`), which no select calls."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import gumbel_boolean as GB
 
     return [

@@ -302,9 +302,10 @@ def _prove(args: Any) -> int:
                               cores=args.cores, local_only=args.local_only)
     if getattr(args, "metrics", None) and settings.is_set("RESEARCH_RUN_DIR"):
         prove_records.record(doc, args.metrics)
-    if args.steady_rows:
+    refused = doc.get("refusal") is not None
+    if args.steady_rows and not refused:
         args.steady_rows.write_text(json.dumps(prove_records.P.steady_rows(doc), indent=1) + "\n")
-    if args.system == "spot":
+    if args.system == "spot" and not refused:
         doc["spot_holes"] = spot_status.status(spot_status.runs_of(doc["inputs"]))
     if args.json:
         print(json.dumps(doc, indent=1, sort_keys=True))
@@ -312,7 +313,7 @@ def _prove(args: Any) -> int:
         print(prove_records.render(doc, args.rows), end="")
         if "spot_holes" in doc:
             print("\n" + spot_status.render(doc["spot_holes"]))
-    return 0
+    return 1 if refused else 0
 
 
 def _prove_parser(commands: Any) -> None:

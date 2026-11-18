@@ -10,6 +10,7 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.ops.boolean.versions import boolean_version
+
 from verity_vllm.definitions.registry import boolean_scalar as BR
 from verity_vllm.definitions.registry import ref_prims as RP
 

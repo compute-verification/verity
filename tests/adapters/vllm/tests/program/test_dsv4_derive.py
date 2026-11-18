@@ -48,6 +48,10 @@ import torch
 import torch.fx.traceback as fxt
 import torch.nn as nn
 from torch._library.infer_schema import infer_schema
+
+from tests import fake_vllm
+from tests.program.test_dsa_norm import ptx_block_model
+from tests.program.test_dsv4_indexer import head as inv_rope_head
 from verity_vllm.definitions.numerics import deepgemm_twins as DT
 from verity_vllm.definitions.numerics import dsv4_compressor_twin as DC
 from verity_vllm.definitions.numerics import dsv4_qnorm_insert_twin as TQ
@@ -55,17 +59,16 @@ from verity_vllm.definitions.numerics import flashmla_prefill_twin as FP
 from verity_vllm.definitions.numerics import flashmla_twin as FT
 from verity_vllm.definitions.numerics import marlin_moe_rows as MR
 from verity_vllm.definitions.numerics import mhc_twin as W
-from verity_vllm.definitions.numerics.dsv4_moe_twin import clamp_twin, hash_twin, router_twin
+from verity_vllm.definitions.numerics.dsv4_moe_twin import (
+    clamp_twin,
+    hash_twin,
+    router_twin,
+)
 from verity_vllm.definitions.numerics.serve3_reference import materialize
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.definitions.registry import hopper
-
-from tests import fake_vllm
-from tests.program.test_dsa_norm import ptx_block_model
-from tests.program.test_dsv4_indexer import head as inv_rope_head
 from verity_vllm.program.frontend import marlin_moe_leaf as mml
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
 from verity_vllm.program.frontend.export_compat import (
     InertEvent,
@@ -88,6 +91,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 from verity_vllm.program.frontend.target_profile import TargetProfile
+from verity_vllm.program.frontend.vllm_derive import derive_report
 
 
 class _Overlapped(nn.Module):

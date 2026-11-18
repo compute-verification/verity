@@ -3,7 +3,8 @@
 
 # Each is a row of the served table (`served_overhead.py`, `verity-bench served-table`): a protocol's arm over stock FP8
 # as served (compiled), in time per output token, paired by rep, on Llama-3.1-8B at batch 32 with 512-token mixed
-# prompts, read from the store's runs; a member is the same on another model or card.
+# prompts, read from the store's runs; a member is the same on another model or card, and a metric of members only
+# has no reading of its own.
 [[metric]]
 id = "benchmarks/served-overhead-commit"
 title = "Served overhead of committing values"
@@ -25,3 +26,14 @@ better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/harness/served_overhead.py"
 every = "7d"
 goal = "benchmarks/six-directories-wired"
+
+[[metric]]
+id = "benchmarks/served-overhead-pouw"
+title = "Served overhead of useful work"
+owner = "benchmarks"
+unit = "percent"
+axis = "Percent that PoUW's useful work (Pearl-C on sm_90a) adds to vLLM's time per output token over stock FP8 compiled, as vLLM serves it, at batch 32 with 512-token mixed prompts, every reading a member naming its model and card: Llama 3.2 1B on one H100 (llama-3.2-1b-h100)."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/harness/served_overhead.py"
+every = "7d"
+goal = "benchmarks/harness-runs-on-h100"
