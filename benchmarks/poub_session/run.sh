@@ -57,6 +57,8 @@
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
 # with PROVER_ARGS such as --kv-every and --kv-pool. Its passes take the CPU's time, so JITTER_MS must cover one.
+# On a card (no CPU, SERVE unset or node) CODEC defaults to the deployed codec (`codec.DEFAULT`), and p512/kK is the other
+# codec kv.cu is built for (KV_DEFS); SERVE=row's Commit registers the deployed codec only.
 # LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it (default: the
 # windows of WINDOW_MS in 30 s, or a paced session's groups, `audit.lifetime_windows`).
 #
@@ -89,8 +91,8 @@
 #      no GPU visible (STAGES, default
 #      build,commit, in a config run, CONFIG_RUN default 1: the Build, the word check and one instrumented Commit,
 #      the run the session audits; BUILD_GPU=1 leaves the Build to the lease) in SWEEP_DIR (default: scratch removed
-#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; the row's records under 1 MiB are kept in
-#      out/row). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
+#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; never inside the run's directory: the row's
+#      public records, keep.py's ROW, are kept in out/row, and nothing else of it). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
 #      holds no vLLM), CUDA_HOME/bin (--cuda-bin) and ROW_ARGS (such as --norm-tap-so PATH);
 #   3. ROLE=both: builds the Lean verifier (LEAN_EXE: that executable instead), starts the verifier on VERIFIER_CPUS
 #      and goes on once it listens;
@@ -227,9 +229,24 @@ B=$(mktemp -d "${TMPDIR:-/tmp}/remote-session.XXXXXX") || exit 3
 SV= # ROLE=both's verifier of a served session, a process group of its own
 trap '[ -n "$SV" ] && kill -- "-$SV" 2> /dev/null; rm -rf "$B"' EXIT
 export B RS GIB=${GIB:-16}
-# kv.cu's defines at the session's codec, p1024 masked, squaring by FOLD 6 as the paged build does
-# (benchmarks/vllm_encoded/stack.sh's KVDEFS): each build of the session's kv.so reads them here, node.sh's too
-export KV_DEFS="-DKV_FIELD=1024 -DKV_MASK=1 -DKV_FOLD6=1"
+# The codec a card's session registers and its kv.so is built for: CODEC, default the deployed one, read here from
+# the codec's module and written nowhere in this script (CPU= and SERVE=tiny default to p512/k2 below). kv.cu's build fixes the width and masking, the registration's key the
+# rounds. p1024 squares by FOLD 6 as the paged build does (benchmarks/vllm_encoded/stack.sh's KVDEFS); p512 is kv.cu's
+# plain build. Each build of the session's kv.so reads KV_DEFS, node.sh's too.
+DEPLOYED=$("$PY" -c 'from verity.protocols.resource_accounting.memory.poub.verifier import codec; print(codec.DEFAULT.name)') ||
+  refuse "$PY cannot read the deployed codec (verifier/codec.py's DEFAULT)"
+export CARD_CODEC=${CODEC:-$DEPLOYED}
+case $CARD_CODEC in
+  p1024/k[2-8]/masked) KV_DEFS="-DKV_FIELD=1024 -DKV_MASK=1 -DKV_FOLD6=1" ;;
+  p512/k[2-8]) KV_DEFS="-DKV_FIELD=512" ;;
+  *) KV_DEFS= ;;
+esac
+export KV_DEFS
+if [ "$ROLE" != verifier ] && [ -z "${CPU:-}" ] && [ "${SERVE:-}" != tiny ]; then
+  [ -n "$KV_DEFS" ] || refuse "CODEC=$CARD_CODEC: a card's session is built at p1024/kK/masked or p512/kK, K from 2 to 8"
+  [ "${SERVE:-}" != row ] || [ "$CARD_CODEC" = "$DEPLOYED" ] ||
+    refuse "SERVE=row's Commit registers the deployed $DEPLOYED, not CODEC=$CARD_CODEC"
+fi
 [ "$ROLE" != both ] || [ -z "${LEAN_EXE:-}" ] || [ -x "$LEAN_EXE" ] || refuse "LEAN_EXE=$LEAN_EXE is not an executable"
 lean_exe() { # LEAN_EXE, else the Lean verifier built in its package
   [ -n "${LEAN_EXE:-}" ] && return 0
@@ -322,6 +339,18 @@ if [ "${SERVE:-}" = node ] && [ "$ROLE" = both ]; then
   lean_exe
   VERIFY+=(--lean-exe "$LEAN_EXE")
 fi
+eval "KEYARGS=(${VERIFIER_ARGS:-})"
+for ((k = 0; k < ${#KEYARGS[@]}; k++)); do
+  case ${KEYARGS[k]} in
+    --challenger-key=*) KEYDIR=${KEYARGS[k]#*=} ;;
+    --challenger-key) KEYDIR=${KEYARGS[k + 1]:-} ;;
+    *) continue ;;
+  esac
+  case $(realpath -m "$KEYDIR")/ in
+    "$(realpath -m "$RESEARCH_RUN_DIR")"/*) refuse "--challenger-key $KEYDIR is inside the run's directory, which custody" \
+      "uploads: the challenger's key directory holds its seed; give one outside it" ;;
+  esac
+done
 if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
   mkdir -p "$(dirname "$REGISTRY")" || exit 3
@@ -416,15 +445,19 @@ card_free() { # NOWAIT=1 with GPU: 75 where a compute process is on those cards,
 }
 if [ -n "$SERVED" ]; then
   card_free || exit 75
-  keep_row() { # the row's records under 1 MiB, into out/row
+  keep_row() { # the row's public records (keep.py's ROW), into out/row
     [ -d "$SWEEP/$ROW" ] || return 0
-    mkdir -p "$O/row" && (cd "$SWEEP/$ROW" && find . -type f -size -1024k -print0 | xargs -0 -r cp --parents -t "$O/row")
+    "$PY" $RS/keep.py row "$SWEEP/$ROW" "$O/row"
   }
   drop_connection() { # a verifier still waiting for its prover ends at a connection opened and dropped
     (exec 3<> "/dev/tcp/127.0.0.1/$PORT") 2> /dev/null
   }
   if [ "$SERVED" = row ]; then
     SWEEP=${SWEEP_DIR:-$B/sweep}
+    case $(realpath -m "$SWEEP")/ in
+      "$(realpath -m "$RESEARCH_RUN_DIR")"/*) refuse "SWEEP_DIR=$SWEEP is inside the run's directory, which custody uploads:" \
+        "the row's Commit directory holds private files (its tokens, replays and timelines); give a scratch directory" ;;
+    esac
     mkdir -p "$SWEEP" || refuse "SWEEP_DIR=$SWEEP can't be made"
     export NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-$B/nc_build} CONFIG_RUN=${CONFIG_RUN:-1}
     read -r CK REPO REV _ < <("$VV" epoch resolve "$ROW")
@@ -546,7 +579,7 @@ fi
     wait $S || { tail -40 "$O/session.ptxas"; exit 4; }
     wait $K || { tail -40 "$O/kv.ptxas"; exit 4; }
     sha256sum "$B"/*.so > "$O/libs.sha256"
-    DEV=(--lib "$B/session.so" --kv "$B/kv.so" --gib "$GIB")
+    DEV=(--lib "$B/session.so" --kv "$B/kv.so" --gib "$GIB" --codec "$CARD_CODEC")
   fi
   V=
   if [ "$ROLE" = both ]; then
