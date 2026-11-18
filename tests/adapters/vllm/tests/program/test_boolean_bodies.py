@@ -16,15 +16,10 @@ from verity.circuits.program import is_word_primitive
 
 CATALOGS = ("verity.circuits.ops", "verity_vllm.definitions")
 
-_POUW = "PoUW's word primitive (verity/circuits/ops/words.py): no Boolean body written yet"
 _ADAPTER = "the adapter's registry: no Boolean body written yet"
 
 #: the word primitives without a Boolean body: id -> why; only shrinks
 BODYLESS: dict[str, str] = {
-    **{f"Pouw{n}_v1": _POUW for n in (
-        "Add64Hi", "Add64Lo", "Add8", "AddSub8", "Ch32", "Dot16U8S8", "FormX3", "FormX", "Maj32", "NegBetaSum16", "NoiseByte",
-        "PackBE4", "Sha512BigSigma0Hi", "Sha512BigSigma0Lo", "Sha512BigSigma1Hi", "Sha512BigSigma1Lo", "Sha512SmallSigma0Hi",
-        "Sha512SmallSigma0Lo", "Sha512SmallSigma1Hi", "Sha512SmallSigma1Lo", "Sub8", "I32ToF32Rn")},
     **{f"{n}_v1": _ADAPTER + f" ({m})" for n, m in (
         ("DsaButterflySet", "dsa_topk_mask"), ("DsaMaskCount", "dsa_topk_mask"), ("DsaMaskTag", "dsa_topk_mask"),
         ("DsaTopKAtLeastBelow", "dsa_topk_mask"), ("DsaTopKAtLeast", "dsa_topk_mask"), ("E2m1ToBf16", "marlin_moe"),

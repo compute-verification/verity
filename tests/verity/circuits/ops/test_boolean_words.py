@@ -237,3 +237,116 @@ def test_chi_commits_its_output_in_forms_and_traces_no_gate_for_it():
     C.output("o", out)
     assert C.counts()["ands"] == 64 and all(len(x.s) == 1 and x.c == 0 for x in out)
     assert B.PouwChi32.traced().counts == {"and": 32, "xor": 32, "not": 32}
+
+
+def _rows(d, ref, rows):
+    """d on each row of flat word arguments (an array parameter's words in a row) equals its word primitive."""
+    params, _ = ref.signature()
+    n = [t.n if hasattr(t, "n") else 1 for _, t in params]
+    cut = np.cumsum([0] + n)
+    arrs = [np.asarray([r[cut[i]:cut[i + 1]] for r in rows], dtype=np.uint64) for i in range(len(n))]
+    got = evaluate_words(d, *arrs).reshape(-1).tolist()
+    want = [ref.evaluate(*r) for r in rows]
+    bad = [i for i in range(len(rows)) if got[i] != want[i]]
+    assert not bad, [(rows[i], hex(got[i]), hex(want[i])) for i in bad[:3]]
+
+
+#: the bodies of `words`' bytes, int7 entries, accumulator, SHA-512 words and dequantization, and each one's ANDs
+MECHANICAL = {"PouwPackBE4": 0, "PouwNoiseByte": 23, "PouwDot16U8S8": 2_079, "PouwFormX": 7, "PouwFormX3": 20, "PouwAdd8": 7,
+              "PouwSub8": 7, "PouwAddSub8": 14, "PouwNegBetaSum16": 153, "PouwAdd64Lo": 31, "PouwAdd64Hi": 63, "PouwCh32": 32,
+              "PouwMaj32": 32, "PouwI32ToF32Rn": 368,
+              **{f"PouwSha512{n}{h}": 0 for n in ("BigSigma0", "BigSigma1", "SmallSigma0", "SmallSigma1") for h in ("Hi", "Lo")}}
+I7_ALL, U8_ALL = range(128), range(256)
+#: int7's and s8's ends: 0, ±1, the largest and smallest
+I7_EDGES, U8_EDGES = [0, 1, 0x3F, 0x40, 0x7F], [0, 1, 0x7F, 0x80, 0xFF]
+
+
+@pytest.mark.parametrize("name", sorted(MECHANICAL))
+def test_each_is_the_next_version_of_its_word_found_by_the_lookup_with_its_ands(name):
+    from verity.circuits.ops.boolean import versions as V
+    d, w = getattr(B, name), getattr(W, name)
+    assert word_of(d) is w and d.id == w.id.replace("_v1", "_v2") and V.boolean_version(w).id == d.id
+    assert is_boolean(d.bind()) and d.traced().counts["and"] == MECHANICAL[name]
+
+
+@pytest.mark.parametrize("name", ["PouwFormX", "PouwAdd8", "PouwSub8"])
+def test_the_two_operand_bytes_on_every_input(name):
+    _rows(getattr(B, name), getattr(W, name), [(a, e) for a in I7_ALL for e in U8_ALL])
+
+
+@pytest.mark.parametrize("name", ["PouwFormX3", "PouwAddSub8"])
+def test_the_three_operand_bytes_on_every_int7_and_edge_bytes_and_random(name):
+    R = random.Random(20261118)
+    rows = [(a, e, f) for a in I7_ALL for e in U8_EDGES for f in U8_EDGES]
+    rows += [(R.randrange(128), R.randrange(256), R.randrange(256)) for _ in range(4000)]
+    _rows(getattr(B, name), getattr(W, name), rows)
+
+
+def test_pack_on_edge_entries_and_random():
+    R = random.Random(1)
+    rows = [(a, b, c, d) for a in I7_EDGES for b in I7_EDGES for c in I7_EDGES for d in I7_EDGES]
+    _rows(B.PouwPackBE4, W.PouwPackBE4, rows + [tuple(R.randrange(128) for _ in range(4)) for _ in range(2000)])
+
+
+def test_noise_byte_on_every_low_six_bits_of_each_byte_and_random():
+    """Each byte position, every value of its low six bits under random other bits, and c's high bits ignored."""
+    R = random.Random(2)
+    rows = [((v | R.getrandbits(2) << 6) << 8 * c | R.getrandbits(32) & ~(0xFF << 8 * c), c | R.getrandbits(30) << 2)
+            for c in range(4) for v in range(64)]
+    _rows(B.PouwNoiseByte, W.PouwNoiseByte, rows + [(R.getrandbits(32), R.getrandbits(32)) for _ in range(2000)])
+
+
+def test_dot_on_extreme_and_random_products_and_wrapping_accumulators():
+    """The largest products of either sign (u8 255 by s8 −128 and 127), zero, accumulators at the wrap, and random."""
+    R = random.Random(3)
+    rows = [(acc, *[x] * 16, *[y] * 16) for acc in (0, 1, M32, 1 << 31, (1 << 31) - 1) for x in U8_EDGES for y in U8_EDGES]
+    rows += [(R.getrandbits(32), *[R.randrange(256) for _ in range(32)]) for _ in range(2000)]
+    _rows(B.PouwDot16U8S8, W.PouwDot16U8S8, rows)
+
+
+def test_neg_beta_sum_on_extreme_and_random_entries():
+    R = random.Random(4)
+    rows = [(acc, *[y] * 16) for acc in (0, 1, M32, 1 << 31) for y in U8_EDGES]
+    rows += [(R.getrandbits(32), *[R.randrange(256) for _ in range(16)]) for _ in range(2000)]
+    _rows(B.PouwNegBetaSum16, W.PouwNegBetaSum16, rows)
+
+
+def test_the_64_bit_add_on_every_carry_edge_and_random():
+    """Low halves that carry and don't, high halves that wrap, and random."""
+    R = random.Random(5)
+    rows = [(ah, al, bh, bl) for ah in U32_EDGES[:4] for al in U32_EDGES for bh in U32_EDGES[:4] for bl in U32_EDGES]
+    rows += [tuple(R.getrandbits(32) for _ in range(4)) for _ in range(2000)]
+    _rows(B.PouwAdd64Hi, W.PouwAdd64Hi, rows)
+    _rows(B.PouwAdd64Lo, W.PouwAdd64Lo, [(al, bl) for _ah, al, _bh, bl in rows])
+
+
+@pytest.mark.parametrize("name", ["PouwCh32", "PouwMaj32"])
+def test_choose_and_majority_on_every_edge_triple_and_random(name):
+    R = random.Random(6)
+    rows = [(a, b, c) for a in U32_EDGES for b in U32_EDGES for c in U32_EDGES]
+    _rows(getattr(B, name), getattr(W, name), rows + [tuple(R.getrandbits(32) for _ in range(3)) for _ in range(2000)])
+
+
+@pytest.mark.parametrize("name", [f"PouwSha512{n}{h}" for n in ("BigSigma0", "BigSigma1", "SmallSigma0", "SmallSigma1")
+                                  for h in ("Hi", "Lo")])
+def test_each_sigma_half_on_every_single_bit_word_and_random(name):
+    """Every one-bit word (so each input bit lands where its rotations and shift send it), edges and random words."""
+    R = random.Random(7)
+    rows = [(x >> 32, x & M32) for x in [1 << i for i in range(64)] + [0, (1 << 64) - 1]]
+    _rows(getattr(B, name), getattr(W, name), rows + [(R.getrandbits(32), R.getrandbits(32)) for _ in range(2000)])
+
+
+def test_the_i32_conversion_on_every_binades_ends_ties_and_random():
+    """Zero, ±1, each power of two and its neighbours, the halfway points past 2^24 (ties to even both ways), the most
+    negative word, and random words."""
+    R = random.Random(8)
+    xs = {0, 1, M32, 1 << 31, (1 << 31) - 1}
+    for e in range(31):
+        for v in ((1 << e) - 1, 1 << e, (1 << e) + 1):
+            xs |= {v & M32, -v & M32}
+    for e in range(25, 31):
+        for q in (0x800000, 0x800001, 0xFFFFFF):
+            for r in (-1, 0, 1):
+                v = (q << (e - 23)) + (1 << (e - 24)) + r
+                xs |= {v & M32, -v & M32}
+    _rows(B.PouwI32ToF32Rn, W.PouwI32ToF32Rn, [(x,) for x in sorted(xs)] + [(R.getrandbits(32),) for _ in range(4000)])
