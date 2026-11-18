@@ -4689,13 +4689,14 @@ def test_under_gate_check_an_early_red_is_compared_with_nothing_and_its_drop_can
 
 
 @pytest.mark.parametrize("main_said", [True, False])
-def test_under_gate_check_a_red_above_a_running_candidate_drops_the_stack_above_it_once_its_base_or_main_has_said(
+def test_under_gate_check_a_red_above_a_running_candidate_drops_the_stack_above_it_at_once(
         env, monkeypatch, main_said):
     """Four candidates stacked, one PR each: the third one's check fails a suite while those below it still run.  The
     failing test meets only its own member's files, so `main`'s run stands for its base's (`vqueue.Failed.main_tests`): once
-    that passed, it is decided at once; while `main`'s runs too, it waits, and in the tick its base's check passes, while the
-    lowest's still runs, it is decided.  Its member, meeting the failing test, is ejected, the one above it is dropped as a
-    base failure, each one's shards cancelled, and that one's PR is built again on its base in the same tick."""
+    that passed, it is decided at once: its member, meeting the failing test, is ejected, the one above it is dropped as a
+    base failure, each one's shards cancelled, and that one's PR is built again on its base in the same tick.  While
+    `main`'s runs too, it is dropped at once with its member waiting for its base's word (`vqueue.UNSAID`), the one above it
+    built again on its base, and once that base lands its member is built again alone."""
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
     env.put(2, {"b.txt": "1\n"})
@@ -4709,11 +4710,23 @@ def test_under_gate_check_a_red_above_a_running_candidate_drops_the_stack_above_
         runs.end(main)
     runs.fail(three, 1, rows=(_row(NEW),))
     if not main_said:
-        assert not {"eject", "drop"} & {*_acts(loop.tick())} and not env.withdrawn and not env.cancelled
-        runs.end(two)
+        logged = loop.tick()
+        assert _acts(logged) == ["slim", "drop", "drop", "build", "slim"] and not env.withdrawn, logged
+        held, above, rebuilt = logged[1:4]
+        assert (held["sha"], held["outcome"]["state"], held["outcome"]["suspects"]) == (three, vqueue.UNSAID, [3])
+        assert (above["sha"], above["why"], rebuilt["base"], rebuilt["members"]) == (four, vqueue.BASE_DROPPED, two, [4])
+        for c in seen[-1].candidates:
+            runs.end(c.sha)
+        runs.end(main)
+        loop.tick()
+        logged = loop.tick()
+        assert [(r["action"], r["sha"]) for r in logged if r["action"] in ("advance", "build")] == [
+            ("advance", two), ("build", next(r["sha"] for r in logged if r["action"] == "build"))]
+        assert next(r for r in logged if r["action"] == "build")["members"] == [3] and not env.withdrawn
+        return
     logged = loop.tick()
     failed = {c.sha: c for c in seen[-1].candidates}[three].verdict.failed
-    assert {f.main_tests for f in failed} == {frozenset() if main_said else None}       # not its base's word, once that said
+    assert {f.main_tests for f in failed} == {frozenset()}
     assert _acts(logged)[-5:] == ["eject", "drop", "drop", "build", "slim"] and env.withdrawn == [(3, head)]
     failed, above, rebuilt = logged[-4:-1]
     assert (failed["sha"], failed["outcome"]["state"], failed["beside_cancelled"]) == (three, FAIL, ["c-10", "c-11", "c-12"])
@@ -5103,8 +5116,9 @@ def test_under_gate_check_on_main_red_on_lean_audit_a_candidate_that_took_it_kee
     inherited: it lands.  The one on it, changing no Lean input, took lean-audit from it: pending while the lowest is in
     flight, nothing taken into its record, then failed on the run beside `main`'s failure of it once the lowest has landed,
     inherited too, so it lands, its record keeping that failure.  The candidate on it, whose member changes a Lean file,
-    fails lean-audit the same way: read against that record, the run beside `main` once it lands, its failure is inherited,
-    not its own, and it lands in the same tick with no rerun or ejection."""
+    fails lean-audit the same way before that one has said: it is dropped, its member waiting for that word
+    (`vqueue.UNSAID`), and since that one lands on an inherited failure, the failure maybe its, its member goes back in:
+    built again on it, it fails lean-audit as `main` does, inherited, and lands with no rerun or ejection."""
     main = env.main()
     env.put(1, {"Security/Proofs/A.lean": "-- a\n"})
     env.put(2, {"b.txt": "1\n"})
@@ -5120,11 +5134,17 @@ def test_under_gate_check_on_main_red_on_lean_audit_a_candidate_that_took_it_kee
     logged = loop.tick()
     assert env.main() == lean and {x.sha: x.verdict.state for x in seen[-1].candidates}[a] == PENDING
     assert not any(vqueue_slim.answers(r["record"]) for r in env.lines() if r["action"] == "slim" and r["sha"] == a)
-    logged += loop.tick()
+    held = next(r for r in logged if r["action"] == "drop" and r["sha"] == c)
+    assert (held["outcome"]["state"], held["outcome"]["suspects"]) == (vqueue.UNSAID, [3])
+    logged = loop.tick()
     recs = {x: [r for r in env.lines() if r["action"] == "slim" and r["sha"] == x][-1]["record"] for x in (lean, a)}
-    assert env.main() == c and recs[a]["lean_audit_from"] == lean
+    assert env.main() == a and recs[a]["lean_audit_from"] == lean
     assert recs[a]["verdict"]["failed"] == recs[lean]["verdict"]["failed"] and vqueue_slim.answers(recs[a])
-    assert not {"rerun", "eject"} & set(_acts(logged)) and env.withdrawn == []
+    again = next(r for r in logged if r["action"] == "build")
+    assert (again["base"], again["members"]) == (a, [3])
+    runs.end(again["sha"], 1, "lean-audit", log=AUDIT)
+    logged += loop.tick()
+    assert env.main() == again["sha"] and not {"rerun", "eject"} & set(_acts(logged)) and env.withdrawn == []
 
 
 def test_under_gate_check_a_red_while_the_shards_run_with_several_suspects_is_bisected(env, monkeypatch):

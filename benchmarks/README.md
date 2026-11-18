@@ -16,7 +16,7 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | Command | What it runs |
 | --- | --- |
 | `verity bench attester_load` | what the network attester costs the requests it carries: the added time to a response's first and last byte against the endpoint straight, the ticks' lateness at its schedule's capacity, and that capacity stated |
-| `verity bench bandwidth` | the device ceilings PoUB's timing cites, one probe a run: `chip` (what a card holds on chip) and `write_gpu` on one GPU, `write_host` on the host's CPUs |
+| `verity calibrate bandwidth` | the device ceilings PoUB's timing cites, one probe a run: `chip` (what a card holds on chip) and `write_gpu` on one GPU, `write_host` on the host's CPUs |
 | `verity bench bool_build_cost` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule, timed |
 | `verity bench certifier_term` | the network attester's term for GLM-5.3 at a scope's load, in bits and GB |
 | `verity bench attester_timing` | the bits an interval a server moves through when the network attester releases its bytes: `run`, `guard`, `serve`, `observe`, `score`, `table` and `target` |
@@ -151,6 +151,12 @@ made_up=True)`: the line `a made-up record, not a run's` is printed under the au
 `made_up: true` and is no audit, and every measurement written from it is marked `modeled` (figures no run measured)
 and carries `made_up: true`, so its `result.json` passed on alone never reads as a run's measurement. A fixture record
 passes `made_up=True` wherever it is reported, whatever its own files say of its coins, parameters or commit.
+
+**A trial** is a run whose numbers are for its launcher alone: a probe from a branch, a study at other settings, a run
+on a stand-in model, a comparison run. Start one with `research run --env VERITY_BENCH_TRIAL=1 ...` in front of the
+registered command (the overhead, vLLM and steady doors forward the variable from the launcher's environment). Its
+writer puts every measurement in `out/trial-measurements.json` and none in `result.json`, which says `trial: true`, so no
+number of it reaches a metric's line; a trial's run is never labelled a run of record, a plan's passing run or a served row.
 
 `kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=..., made_up=..., withdrawn=..., from_run=...)` is the command's
 last step, and the printed and written forms are the kit's (`harness/README.md`'s "The kit").
