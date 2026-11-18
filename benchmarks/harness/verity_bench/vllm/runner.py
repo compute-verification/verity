@@ -14,7 +14,7 @@ from collections.abc import Mapping
 from typing import Any, Protocol
 
 
-from verity_bench import checked_by
+from verity_bench.kit_report import PIECE
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.arms import Arm
 from verity_bench.vllm.presets import Preset, SweepPoint
@@ -536,7 +536,7 @@ def run_benchmark(
         "baseline": baseline,
         "sweep": [p.to_json() for p in points],
         # every gate is this process's own, on the served node; an arm gate names its coins (Pearl-C's `detail.coins`)
-        "gates": [{**g, "checked_by": checked_by.PIECE} for g in gates],
+        "gates": [{**g, "checked_by": PIECE} for g in gates],
         "execution": {"interleave": mode, "resident_failure": resident_failure, "reps": reps, "warmups": warmups,
                       "max_warmups": max_warmups,
                       "schedule": schedule},
