@@ -4,8 +4,9 @@ beside it, on a processor: one driver (`serve`) runs serve-openai's own function
 Each negative control breaks one stand-in and the smoke fails by that reason.
 
 What a processor can't run stays a stand-in, each emitting by hand where the serve's emitter needs a card (`HAND`):
-build_engine's answer (it reads the row's checkpoint manifest), the native committer's `ValueProduced` and the engine's
-input batch. Not driven: the window's seal (``--seal``, a sealer process) and the plugin's attach (`scheme_plugin`). A
+build_engine's answer (it reads the row's checkpoint manifest), the native committer's `ValueProduced`, the engine's
+input batch and the HTTP route around the server's admission. Not driven: the window's seal (``--seal``, a sealer
+process) and the plugin's attach (`scheme_plugin`), the launcher form that passes the network attester its ``feed``. A
 scheme a processor can't attach fails with its reason unless `EXCEPTED` names what it lacks and what covers it instead."""
 
 from __future__ import annotations
@@ -50,7 +51,9 @@ SETTINGS = {"pearl-plus": {"kernel": "stand-in"}, "network-attester": {"bucket_u
 #: the stages where the stand-in emits by hand what the serve's emitter emits on a card, each a place it can drift
 HAND = {"declared": "engine.build.build_engine's ex.answer(H.Declared(...)): it reads the row's checkpoint manifest",
         "values": "commit/committer/native_host.py's ValueProduced, from the native committer's module hooks",
-        "batch": "vLLM's input batch (ib, ids) the committer reads from execute_model's argument"}
+        "batch": "vLLM's input batch (ib, ids) the committer reads from execute_model's argument",
+        "route": "serve_openai.Server.completions: the client's sends go through Server.admit, its order's release key, "
+                 "arrive and submit as the route does, with no socket and no stream (Pump.send)"}
 #: schemes a processor can't attach, each with what it lacks and what covers it instead
 EXCEPTED = {"wipe": "the card's facts (device, links, disk, dram, streamer, idle_mib, ...) a processor has none of; "
                     "tests/verity/protocols/resource_accounting/memory/pous/test_wipe_served.py covers its attach and "
