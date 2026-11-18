@@ -286,18 +286,29 @@ def card_arch(name: str | None = None, *, sku: str | None = None, directory: Pat
     return card["arch"]
 
 
-def card_gencode(name: str | None = None, *, sku: str | None = None, directory: Path | None = None) -> str:
-    """nvcc's ``-gencode`` value for the card `card_arch` finds for ``name`` or ``sku``: ``arch=<virtual>,code=<name>``
-    of its ``arch``'s architecture file (`verity.device.load_architecture`, in the architectures beside the cards);
-    refused by name where no architecture file states it."""
+def _gencode(arch: str) -> str:
     from verity.device import load_architecture
 
+    found = load_architecture(arch, directory=cards_directory().parent / "architectures")
+    return f"arch={found['virtual']},code={found['name']}"
+
+
+def arch_gencode(arch: str) -> str:
+    """nvcc's ``-gencode`` value for the target ``arch`` (``sm_90a``): ``arch=<virtual>,code=<name>`` of its architecture
+    file (`verity.device.load_architecture`, in the architectures beside the cards); refused by name where none states it."""
     try:
-        arch = load_architecture(card_arch(name, sku=sku, directory=directory),
-                                 directory=cards_directory().parent / "architectures")
+        return _gencode(arch)
+    except KeyError as e:
+        raise SystemExit(f"target {arch!r}: {e.args[0]}") from None
+
+
+def card_gencode(name: str | None = None, *, sku: str | None = None, directory: Path | None = None) -> str:
+    """`arch_gencode` of the card `card_arch` finds for ``name`` or ``sku``; refused by the card's name where no
+    architecture file states its ``arch``."""
+    try:
+        return _gencode(card_arch(name, sku=sku, directory=directory))
     except KeyError as e:
         raise SystemExit(f"{f'card {sku!r}' if sku else f'the card nvidia-smi names {name!r}'}: {e.args[0]}") from None
-    return f"arch={arch['virtual']},code={arch['name']}"
 
 
 def machine_arch(*, directory: Path | None = None) -> str:
