@@ -35,7 +35,7 @@ the facts:
 - ``ready``: called with the judge's path before the judge answers (`wipe_run.subprotocol`'s ``ready``); `built` by
   default, which waits for a judge its launcher still builds beside the wipe (`served_wipe.sh`).
 
-It refuses, by name, before any session: outside the engine's process (``ctx["process"]``), with no side, with no
+It refuses, by name, before any session: outside its piece's process (``ctx["process"]``), with no side, with no
 private directory, with no pin handed to it, with no challenger binding, and on a busy card. The case and the record
 go to ``ctx["private"]`` (``wipe.case.json``, ``wipe.json``); the report returned (`Wiped`) gives the record and its
 summary. The challenger's run key and session log are in a scratch directory removed before it returns."""
@@ -175,16 +175,18 @@ def refusals(ctx: Mapping[str, Any]) -> tuple[str, ...]:
     s = {**ctx["settings"], **facts}
     if why := check(s):
         out.append(why)
-    if ctx.get("process") != H.ENGINE:
-        out.append(f"it runs in the engine's process, before the model loads, not in {ctx.get('process')!r}")
+    if ctx.get("process") != H.PIECE:
+        out.append(f"it runs in its piece's process, before any engine is on the card, not in {ctx.get('process')!r}")
     if ctx.get("side_of") is None:
         out.append("no challenger's side was handed to it (ctx['side_of'], the runtime's Side.of)")
     if ctx.get("private") is None:
         out.append("no private directory was handed to it, where its case goes")
+    if "party" not in ctx:
+        out.append("no party was handed to it (ctx['party'], the memory challenger's, which the scheme hands)")
     if not s["run_keys"]:
         if ctx.get("pins") is None:
             out.append("no pin was handed to it (ctx['pins'], the application's [[pin]] entries)")
-        elif pin_of(ctx["pins"], ctx["party"]) is None and not ctx.get("trusted"):
+        elif "party" in ctx and pin_of(ctx["pins"], ctx["party"]) is None and not ctx.get("trusted"):
             out.append(f"the pins handed to it give the {ctx['party']} no key for the wipe")
         if not s["host"]:
             out.append("no challenger binding (host, address, command) and run_keys unset")
