@@ -39,7 +39,7 @@ or its Definition's function of the window's values), every input by reference b
 fixes all three, so a label is class structure and never a value: which slots are occupied, at what lengths, and where a
 node's value came from (`SOURCES`) are the scan state's and the rows' own, committed hiding, and the labels show none of
 them. The window takes `FORMS` as its ``forms`` (`interface.Window.record`). The index they make is the prover's, bound
-by its hiding leaf under `index_salt`.
+by its hiding leaf under the salt `Window.write` draws from the OS and keeps in ``index-salt.bin``.
 """
 from __future__ import annotations
 
@@ -702,15 +702,13 @@ def scan_slots(lowered: Lowered, state: Sequence[Any]) -> list[tuple[list[int], 
     return [_lanes(P, state)[P.lane] for P in lowered.programs]
 
 
-def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], key: bytes | None = None,
-                index: int | None = None, *, window: str) -> G.Registered:
+def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *, window: str) -> G.Registered:
     """`scan_state.SCAN_STATE`'s value: ``rows``, the scan's state rows a window of ``cls`` reads (row a the state before
     bucket a, `ingress_scan.window_state`'s bits), as ``row/v2`` rows, each under 192 fresh bytes from the OS, a
     per-window value under ``program``, its circuit's `window_circuit.population_digest`, and the execution phase's open
     root ``window``. It is the prover's side of the tree (its rows, salts and levels) for the window's prover and the
     scan's alike: the scan's state ports open their rows in it, by its root and domain, and its salts exist only in it and
-    in the files written from it (the window's ``v<j>-private.bin``, `scan_zk.SCAN_STATE_FILE`). ``key`` and ``index``
-    are unread (`benchmarks/prove_path/prove_path.py` still passes them)."""
+    in the files written from it (the window's ``v<j>-private.bin``, `scan_zk.SCAN_STATE_FILE`)."""
     bits = np.asarray(rows, dtype=np.uint16)
     if bits.shape != (cls.buckets, IS.state_bits(cls.scan)) or bits.max(initial=0) > 1:
         raise ValueError(f"a window of {cls.buckets} buckets reads {cls.buckets} state rows of {IS.state_bits(cls.scan)} "
@@ -720,8 +718,8 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], k
                              row_salts=os.urandom(cls.buckets * CS.SALT_BYTES), window=window)
 
 
-def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence[int], int]], key: bytes | None = None,
-                  index: int | None = None, *, window: str) -> G.Registered:
+def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence[int], int]], *,
+                  window: str) -> G.Registered:
     """`state_value` where no scan ran: the rows that give slot k its row (occupancy, prompt length, ids) and
     ``max_tokens``, ``slots[k]``, at its anchor and lane (`scan_slots`), every other field zero."""
     scan = cls.scan
@@ -734,12 +732,5 @@ def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence
     return state_value(program, cls, [IS.encode(scan, st) for st in states], window=window)
 
 
-def index_salt(key: bytes | None = None, index: int | None = None) -> bytes:
-    """A window's index salt (`interface.Window.write`'s ``index_salt``, `rows.index_leaf`): 192 fresh bytes from the OS,
-    which `Window.write` keeps in the window's ``index-salt.bin``, as it does when given none. ``key`` and ``index`` are
-    unread (`benchmarks/prove_path/prove_path.py` still passes them)."""
-    return os.urandom(CS.SALT_BYTES)
-
-
-__all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "Served", "Slot", "index_salt", "positions",
-           "scan_slots", "standin_state", "state_value"]
+__all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "Served", "Slot", "positions", "scan_slots",
+           "standin_state", "state_value"]

@@ -9,6 +9,7 @@ TINY's slots and the class of record's.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -661,8 +662,7 @@ def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
     of those rows under the weights record's program and `audit.hm96_salt`'s salts at `window_weights.weight_nonces`' (the
     registration's roots, `weights_registration`), and the entries name nothing but each value's size, domain and hiding
     root. The scan state is no value of the committer's but the network attester's, a row a bucket of the window. Each
-    value is in its reading ports' rows, which a window's commit refuses otherwise. A window's index salt is 192 fresh
-    bytes from the OS, no value's salt. Another parameter is refused."""
+    value is in its reading ports' rows, which a window's commit refuses otherwise. Another parameter is refused."""
     low, fields, got, *_ = window
     assert set(got) == set(low.circuit.registered.params)
     reads = low.circuit.registered.reads
@@ -680,8 +680,6 @@ def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
         ref = CR.Registered.commit(program, name, rows.tolist(), salts, schema=schema)
         assert got[name].entry() == ref.entry() and got[name].levels == ref.levels and got[name].schema == schema
         assert set(got[name].entry()) == {"value", "root", "leaves", "words", "domain"}
-    index = [WR.index_salt() for _ in range(2)]
-    assert {len(s) for s in index} == {192} and len({bytes(v.salts[0]) for v in got.values()} | set(index)) == len(got) + 2
     down = got[WB.weight_param("model.layers.0.mlp.down_proj.weight", 1024)].rows[:]
     assert down.shape == (8, 1024) and np.array_equal(down.reshape(-1), fields["model.layers.0.mlp.down_proj.weight"])
     with pytest.raises(ValueError, match="'weights/x@3/rows' is no weight parameter"):
@@ -890,7 +888,7 @@ def test_two_windows_differing_in_occupancy_and_lengths_have_one_public_record(w
     the registration's provenance all agree, and the index and its salt are prover only. What the labels test can't
     reach: everything else `Window.write` makes public. Slow (minutes) for the two windows' closes, as the test above."""
     low, _f, values, *_ = window
-    pub, salt = {}, WR.index_salt()
+    pub, salt = {}, os.urandom(CS.SALT_BYTES)
     for name, (state, slots) in _two(window).items():
         vals = {**values, SS.SCAN_STATE: state}
         win = IF.Window(low.circuit, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
@@ -907,8 +905,9 @@ def test_two_windows_differing_in_occupancy_and_lengths_have_one_public_record(w
 
 @pytest.mark.slow
 def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_verifier_derives(window, tmp_path):
-    """Its index salt, fresh, is read back from the window's ``index-salt.bin`` under the index leaf it registers. Slow
-    (minutes) for the window's close, which no cheaper path to `Window.write` skips."""
+    """Written as `prove_path` writes it, with no index salt given, its index salt is 192 fresh bytes read back from the
+    window's ``index-salt.bin`` under the index leaf it registers. Slow (minutes) for the window's close, which no cheaper
+    path to `Window.write` skips."""
     low, _f, values, _w, slots = window
     c, words = low.circuit, SS.words(CLASS.scan)
     assert c.registered.values == (SS.SCAN_STATE,)
@@ -919,11 +918,11 @@ def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_ve
     win = IF.Window(c, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
     win.supply(CR)
     WR.Rows(low, slots, vals).record(win)
-    salt = WR.index_salt()
-    win.write(win.close(), tmp_path, {}, registrar=REG, index_salt=salt)
+    win.write(win.close(), tmp_path, {}, registrar=REG)
     rec = json.loads((tmp_path / "registration.json").read_text())
     kept = (tmp_path / CS.INDEX_SALT).read_bytes()
-    assert kept == salt and CS.index_leaf((tmp_path / "index.json").read_bytes(), kept).hex() == rec["window"]["index_leaf"]
+    assert len(kept) == CS.SALT_BYTES and kept not in {bytes(s) for s in state.salts}
+    assert CS.index_leaf((tmp_path / "index.json").read_bytes(), kept).hex() == rec["window"]["index_leaf"]
     (e,) = rec["registered"]
     scan = CR.Registered.commit(digest, SS.SCAN_STATE, list(state.rows), list(state.salts), schema=CR.SCHEMA_V2, window=RUN)
     want = CR.registered_entries(program, {SS.SCAN_STATE: words}, {SS.SCAN_STATE: CR.SCHEMA_V2}, RUN)[SS.SCAN_STATE]
