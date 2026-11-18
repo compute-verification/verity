@@ -284,7 +284,7 @@ class Server:
                  submit: Callable[[Admission], None], abort: Callable[[str], None], model_root: str = "",
                  clock: Callable[[], float] = time.time, order: H.Front | None = None,
                  exchange: M.Exchange | None = None,
-                 arrive: Callable[[str, str, Mapping[str, str]], None] | None = None) -> None:
+                 arrive: Callable[[str, str, Mapping[str, str], str | None], None] | None = None) -> None:
         self.proto, self.served_name, self.max_model_len = proto, served_name, int(max_model_len)
         self.ex, self.arrive = exchange or M.current(), arrive
         self.ex.refuse = self.refuse
@@ -462,7 +462,7 @@ class Server:
         req, adm = self.admit(b, lambda d: loop.call_soon_threadsafe(deltas.put_nowait, d), release, proto, times)
         created, model = int(self.clock()), self.served_name
         if self.arrive is not None:
-            self.arrive(adm.engine_id, first_line, dict(headers or {}))
+            self.arrive(adm.engine_id, first_line, dict(headers or {}), adm.user)
         self.live[adm.engine_id] = adm
         self.submit(adm)
         self.served += 1
