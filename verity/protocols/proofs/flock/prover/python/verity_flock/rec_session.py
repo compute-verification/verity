@@ -55,9 +55,10 @@ from verity.commitments import coin_tree as CT
 from . import rec_algebra as A
 from . import rec_live as RL
 from .record_text import session_text
+from verity.commitments.domains import FLOCK_IR_BLOCK
 
 HIDDEN = ("unit",)
-UNIT_FORMAT = "flock-ir-unit/v2"
+UNIT_FORMAT = FLOCK_IR_BLOCK
 #: the sparse streams' Open label
 SPARSE_LABEL = b"verity/rec-sparse/v1"
 

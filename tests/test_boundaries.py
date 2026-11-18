@@ -1053,7 +1053,6 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/program/predict/window_class.py",
     "adapters/vllm/verity_vllm/program/predict/window_rows.py",
     "adapters/vllm/verity_vllm/program/predict/window_weights.py",
-    "adapters/vllm/verity_vllm/protocols/poub/remote.py",
     "adapters/vllm/verity_vllm/protocols/pous.py",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
@@ -1099,7 +1098,6 @@ SPOT_VERIFIER = ("verity.protocols.proofs.spot.verifier",)
 #: format or a re-export is read where it is defined (`verity.commitments`, `verity.circuits`), and verifier code stays in
 #: the verifier.
 SPOT_VERIFIER_IMPORTERS = (
-    "adapters/vllm/verity_vllm/compiler/served_rows.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_stop.py",
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",

@@ -190,18 +190,19 @@ from verity.commitments import randomness as RND
 from .one_stage.verdict import Verdict, _Collect
 from verity.protocols.proofs.spot.verifier.challenger.challenger import ChallengerKey
 from verity.protocols.proofs.spot.verifier.challenger.coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
+from verity.commitments.domains import FRAME_V3_SHA512_ROOT, PROOF_SERVICE_OUTCOME, PROOF_SERVICE_STREAM
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
 HIDING = "hm96-sha512/"
 #: A tree over the roots of hiding trees (`row_table.ROOTS_SCHEMA`); a Value of it names its leaves' schema (`over`).
-ROOTS = "frame-v3-sha512/root/v1"
+ROOTS = FRAME_V3_SHA512_ROOT
 KINDS = ("structure", "output", "coins", "commitment")
 SOURCES = ("parameter", "window")
 PHASES = ("epoch", "serve", "interior", "in-deadline")
 #: A two-stage outcome's profile's level of replay blocks, above one-stage's `audit.LEVEL` of proof blocks.
 REPLAY = "replay"
-STREAM = "verity/proof-service/stream/v0"
-OUTCOME = "verity/proof-service/outcome/v0"
+STREAM = PROOF_SERVICE_STREAM
+OUTCOME = PROOF_SERVICE_OUTCOME
 ACCEPT, REJECT, LATE, HALTED = "accept", "reject", "late", "halted"
 #: The most rounds (dockets) one proof session covers.
 ROUNDS = 4
@@ -1590,7 +1591,7 @@ class Stream:
     challenger builds each docket's population program from it and the docket's N. Or `unit` is a window's
     templates, a sequence of Definitions (a TP rank's served window: each provable family of the step): the check's
     `program` is their digests and its query `Q_template_instances` over them, both in the window's order, and each
-    docket's population program is their mixed population (`partition.mixed_population_program`) at the counts
+    docket's population program is their mixed population (`population.mixed_population_program`) at the counts
     `register` is given, under one sample by the Spec's sampling design (`stratified:K`: a stratum per template, each sampled at least
     once; `work:K`: at least the work table's floor). It is one program and one query, as for one template, so the
     verifier's sample and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
@@ -1635,7 +1636,7 @@ class Stream:
     history (`_earlier`), with the verdicts the whole log gives.
 
     A window's stream may take `values`, the values its mixed population takes ahead of its templates' parameters
-    (`partition.mixed_population_program`'s, `(name, leaves, width)` each, `width` an integer or a leaf type's shape, a
+    (`population.mixed_population_program`'s, `(name, leaves, width)` each, `width` an integer or a leaf type's shape, a
     `Digest`'s `(8, 64, 1)`), which a registration registers as its program's (R7, which reads each by its type: a
     supplied value of `Digest`s in Digest order); the stream's digest names them. Or a window's stream takes `program`, the challenger's own copy of
     the window's Program where it is another form than the mixed population (the network attester's scan in its

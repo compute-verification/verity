@@ -85,8 +85,13 @@ class Device:
     code: int            # the p_B device byte (H100 = 0, B200 = 1 in Pearl; 2 is ours)
     lg2_delta: int
     window_bits: int     # W, the census grid's bits below the window anchor
-    width: int           # significand width of one rank-32 atom's grouped sum
+    atom: tc_models.GroupSum  # the rank-32 atom's silicon model
     windowed: bool       # a fresh accumulator every 128 products, promoted to the total by one FP32 add (H100)
+
+    @property
+    def width(self) -> int:
+        """Significand width of one rank-32 atom's grouped sum: its silicon model's."""
+        return self.atom.width
 
     @property
     def delta(self) -> float:
@@ -97,9 +102,9 @@ class Device:
         return 14 + self.lg2_delta
 
 
-H100 = Device("h100", 0, 0, 13, 14, True)
-B200 = Device("b200", 1, -1, 25, 26, False)
-ADA = Device("ada", 2, 0, 13, 14, True)
+H100 = Device("h100", 0, 0, 13, tc_models.HOPPER_E4M3_K32, True)
+B200 = Device("b200", 1, -1, 25, tc_models.BLACKWELL_SM100_E4M3, False)
+ADA = Device("ada", 2, 0, 13, tc_models.ADA_E4M3_M16N8K32, True)
 DEVICES = {d.name: d for d in (H100, B200, ADA)}
 WINDOW = 128
 

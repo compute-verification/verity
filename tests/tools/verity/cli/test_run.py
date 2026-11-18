@@ -94,6 +94,7 @@ REFUSALS = {
     "unknown-protocol": lambda c: c.update(protocols=[*ONSITE, "telepathy"]),
     "repeated": lambda c: c.update(protocols=["sampled-proofs", "sampled-proofs"]),
     "requires": lambda c: c.update(protocols=["certifier"]),
+    "order": lambda c: c.update(protocols=list(ONSITE[::-1])),
     "composite": lambda c: c.update(protocols=["sampled-proofs", "certifier"]),
     "unknown-workload": lambda c: c["workload"].update(name="mainframe"),
     "unknown-params": lambda c: c.update(protocols=list(REMOTE), params={SP.IDS["pous"]: {}}),
@@ -126,6 +127,16 @@ REFUSALS = {
 @pytest.mark.parametrize("name", sorted(REFUSALS))
 def test_a_configuration_is_refused_by_name(name):
     assert refused(edit(REFUSALS[name])) == name
+
+
+def test_a_requirement_listed_after_its_dependent_is_refused_naming_both():
+    later = ["certifier", "sampled-proofs", *(p for p in ONSITE if p not in ("certifier", "sampled-proofs"))]
+    with pytest.raises(Refused) as e:
+        K.check(edit(lambda c: c.update(protocols=later)), REG.components, REG.workloads)
+    assert (e.value.name, str(e.value)) == ("order", "order: certifier requires sampled-proofs, so protocols lists "
+                                                     "sampled-proofs before certifier")
+    assert K.check(edit(lambda c: c.update(protocols=list(ONSITE))), REG.components, REG.workloads)["protocols"] == \
+        list(ONSITE)
 
 
 @pytest.mark.parametrize("protocols", [("sampled-proofs",), ("sampled-proofs", "certifier"), ("pouw",), ONSITE[:-1],
@@ -505,7 +516,7 @@ def test_onsites_smaller_sets_are_read_and_hashed_and_their_verdict_is_undecided
     """Each of onsite's two smaller sets is a deployment with an id of its own, never onsite's: `check` reads it, and
     `verity run` runs its parties and records each period's verdict under that id, undecided, since no composite
     takes it, even where every subprotocol's verifier accepts."""
-    cfg = config(K.UNACCEPTED[cid])
+    cfg = config([p for p in ONSITE if p in K.UNACCEPTED[cid]])
     assert K.composite(cfg["protocols"], REG.components) == cid and K.digest(cfg) != K.digest(config())
     rc, lines = run(tmp_path, verifier_says(accepting(cfg, cid)), cfg=cfg)
     assert rc == 2 and [(x["product"], x["verdict"]) for x in lines] == [(cid, "undecided")]
@@ -515,7 +526,7 @@ def test_onsites_smaller_sets_are_read_and_hashed_and_their_verdict_is_undecided
 
 @pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
 def test_a_smaller_sets_record_never_carries_onsites_id(tmp_path, capsys, cid):
-    cfg = config(K.UNACCEPTED[cid])
+    cfg = config([p for p in ONSITE if p in K.UNACCEPTED[cid]])
     rc, lines = run(tmp_path, verifier_says(accepting(cfg, "verity/onsite/v0")), cfg=cfg)
     out = capsys.readouterr().out
     assert rc == 2 and [(x["product"], x["verdict"]) for x in lines] == [(cid, "undecided")]
@@ -527,7 +538,7 @@ def test_a_smaller_sets_record_never_carries_onsites_id(tmp_path, capsys, cid):
 @pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
 def test_a_smaller_sets_verdict_the_table_combined_is_passed_through_with_who_combined_it(tmp_path, capsys, cid,
                                                                                           verdict, rc):
-    cfg = config(K.UNACCEPTED[cid])
+    cfg = config([p for p in ONSITE if p in K.UNACCEPTED[cid]])
     by = f"python: no Lean verifier takes {cid}"
     line = {**accepting(cfg, "verity/onsite/v0"), "verdict": verdict, "combined_by": by}
     got, lines = run(tmp_path, verifier_says(line), cfg=cfg)

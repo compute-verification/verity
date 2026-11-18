@@ -21,7 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as S
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes import REGISTRY, p2 as S
 
 ROOT = Path(__file__).resolve().parents[7]
 sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py").parents[1]))
@@ -30,7 +30,8 @@ from p2_store.load import (COLUMNS, LEAD, MATRICES, PARAMS, PARTS, PAYLOAD, ROW,
                            Tensor, blocks_of, matrix_name)
 
 SCHEMA = "verity-pous/p2-store-layout/v1"
-SCHEME = "p2-16448/v4"
+#: the store's coding scheme, by its name in PoUS's registry: the one registered at the store's `PARAMS`
+[SCHEME] = [name for name, (_, point) in REGISTRY.items() if point == PARAMS]
 
 Read = Callable[[int, int], bytes]
 

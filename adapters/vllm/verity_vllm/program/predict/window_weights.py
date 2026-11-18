@@ -154,7 +154,7 @@ def _weights(registered: Any, grain: Grain, served_params: Any = ()) -> tuple[An
     window's record's, ``weights/<label>@<words>``: its slice units' rows of a weight, `pipeline.weight_rows`) with their
     words, wired or not, and those by field. Refused (ValueError) for a served parameter of no field, or of a table."""
     r, fields = _fields(registered)
-    every = lower(registered, WEIGHTS_CLASS, None, grain, provable=False).circuit.registered.params
+    every = lower(registered, WEIGHTS_CLASS, None, grain).circuit.registered.params
     params = {p: every[p] for p in weight_params(every)}
     words = {n: int(np.prod(s, dtype=np.int64)) * int(b) // 16 for n, s, b in fields}
     for p in served_params:

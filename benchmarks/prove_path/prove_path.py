@@ -1532,7 +1532,7 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     requests = len(compile_advice(compiler, Path(a.advice).read_bytes()))
     probe, cls = window_class_of(a.probe), window_class_of(a.window_class)
     t0 = time.time()
-    seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1, provable=False))
+    seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1))
     lowered = time.time() - t0
     try:
         one = CZ.project(seen, probe, cls, CZ.label(SS.bridge(cls.scan, cls.prompt)),

@@ -1607,6 +1607,23 @@ def test_a_small_period_reaches_its_verdict(server):
     D.run(dataclasses.replace(PORT, inputs=st.sampled_from(small)), examples=2 * len(small), server=server)
 
 
+@pytest.mark.slow
+def test_the_network_attesters_declared_check_answers_by_the_built_program(tmp_path):
+    """The network attester's declared check run against the built Lean program, which the check's own tests stand in
+    for: the honest period accepted, a forged certificate refused by name, a `network-rows` answer refused as another
+    protocol's."""
+    from verity.protocols.compose import schemes
+
+    check = schemes.get("network-attester").check
+    period, rows = str(D.build(LEAN, "network-period")), str(D.build(LEAN, "network-rows"))
+    honest = build("rows-honest", 0, small=True)
+    assert check(period, honest, tmp_path / "honest")["verdict"] == ACCEPT
+    forged = check(period, build("rows-cert-forged", 0, small=True), tmp_path / "forged")
+    assert forged["verdict"] == REJECT and forged["reason"].startswith("window 0: certificates")
+    with pytest.raises(ValueError, match="'verity/network-rows/v1', not verity/certifier/v0"):
+        check(rows, honest, tmp_path / "rows")
+
+
 def test_each_kind_of_case_is_answered_as_lean_answers(server):
     """`case(kind, seed)` reaches its kind's verdict for each kind, the ones that fail to decode refused where they fail
     (a digest only once the commitment decodes); an accepted period's eps is its scans' deltas summed with its tied

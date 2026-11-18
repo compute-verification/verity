@@ -1,6 +1,6 @@
-"""One served Pearl-C run through `verity_vllm.LLM` alone, every pass it commits retained, then the run's one verdict over
-all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each engine step's end, a step held to one pass's
-``max_step_tokens``).
+"""One served Pearl-C run through `verity_vllm.LLM` alone, Pearl+ attached by name, every pass it commits retained, then the
+run's one verdict over all of them: the scheme's pass boundary under serving (`pouw.scheme.Attached.step`: each engine
+step's end, a step held to one pass's ``max_step_tokens``).
 
   served_passes.py serve --passes DIR --out served.json [--spec SPEC] [--arm ARM] [--requests 32] [--prompt-tokens 512]
                          [--output-tokens 16] [--max-num-batched-tokens N] [--no-retain [--seeded]]
@@ -21,14 +21,15 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
 spec's setup exports) as serve-openai's ``--protocols-config`` takes them for the same arm (`serve_openai.scheme_settings`):
 the scheme's own settings alone, the server setting each epoch's coins and its transcript dir itself.
 
-``serve`` builds the spec's preset with its Pearl-C arm (`pearl_c_arm`: ``--arm``, else the spec's one; `verity_bench`'s
-``engine_args`` and ``protocols_config``, whose in-process challenger is the epoch's coins) and the pouw setting
+``serve`` builds the spec's preset (`verity_bench`'s ``engine_args``) with its Pearl-C arm's declared scheme attached by
+name on the build's exchange (`pearl_c_arm`: ``--arm``, else the spec's one, whose entry is the scheme's option,
+`messages.option`; `scheme_settings`), one epoch for the run, its salt coin the in-process challenger's, and its
 ``transcript_dir`` DIR, so each pass is retained in its own ``DIR/pass-NNNNN``; the challenger's coin commitment goes to
-``DIR/coins.json`` before the engine starts.  With ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER`` set the epoch's
-salt coin is a live session's on the auditor device instead (`bench_arm.live_coins`: a salt-only session reserved under
-``PEARLC_CHALLENGER_LANE`` before the engine starts, which the install opens on its salt epoch's root and closes at
-``close``), and ``DIR/coins.json`` is that session's commitment, written once the install has opened it; the document's
-``coins`` says which (`pearl_c.window.coins_of`: the source, the session without its secret, and how it closed).  A warm-up
+``DIR/coins.json`` once the scheme is released.  With ``PEARLC_CHALLENGER_GATE``, ``PEARLC_CHALLENGER_PEER`` and
+``PEARLC_PRIVATE`` set the epoch's salt coin is a live session's on the auditor device instead (the scheme reserves it
+under ``PEARLC_CHALLENGER_LANE``, joining the lane's open period, opens it on its weights' root and closes it at
+release), and ``DIR/coins.json`` is that session's commitment; the document's ``coins`` says which
+(`pearl_c.window.coins_of`: the source, the session without its secret, and how it closed).  A warm-up
 ``generate`` of one short request takes the first calls' one-time
 costs (the screen's Triton build), unless ``--no-warm-up``: a run held to a class's fixed load (``verify --tie W --class``)
 takes it, as its retained and dropped rounds are to be the class's alone, and the warm-up's are rounds before them; then one timed ``generate`` call serves R requests of P seeded random prompt tokens and
@@ -41,7 +42,7 @@ and exits non-zero unless the timed call's passes hold calls in at least three (
 within its caps.  ``--no-retain`` serves the same with no ``transcript_dir``: each pass is committed and none is written,
 so its walls are the option's without retention, its passes have no manifest or MACs, and ``verify`` refuses it
 (``retained`` false).  With ``--seeded`` too (`seed_install`; refused with retention or the challenger gate) the
-in-process challenger's coins and the install's hm96 salt key are sampled from fixed streams (`seeded`), so its
+in-process challenger's coins are sampled from a fixed stream (`seeded`), so its
 commitments hide nothing and bind nothing a verdict may read: two seeded serves of one load sample the same salt and key.
 
 ``same`` holds two seeded serves of one load (their ``served.json``) to the same passes, field by field (`KEEP`: each
@@ -179,16 +180,16 @@ import sys
 import time
 from fractions import Fraction
 from pathlib import Path
+from types import SimpleNamespace
 
 from verity_config.settings import of
 from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
-
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
 SPEC = HERE.parents[1] / "harness" / "specs" / "llama32-1b-1gpu-pouw-protocol-served.toml"
-#: the arm `serve` serves without ``--arm``: the spec's one PoUW Pearl-C arm (``pouw:pearl-c-sm120-v1-h3`` on an RTX PRO
-#: 6000, ``pouw:pearl-c-h100-v1-h3`` on an H100 or H200)
+#: the arm `serve` serves without ``--arm``: the spec's one PoUW Pearl-C arm, Pearl+'s ``pouw:pearl-c-h100-v1-h3`` on an
+#: H100 or H200
 ARM_PREFIX = "pouw:pearl-c-"
 SCHEMA = "verity-pouw/pearl-plus-served-verify/v1"
 #: t = 459 accepted samples leave ε ≈ 1% of the tickets' weight on wrong tiles at δ = 1/100 (`verify_run.epsilon`)
@@ -247,9 +248,22 @@ def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
     return [[3 + (seed + i * 1_000_003 + j * 97_409) % (vocab - 4) for j in range(tokens)] for i in range(requests)]
 
 
+def undeclared(entries) -> str | None:
+    """Why a served arm of ``entries`` can't run: the first Pearl-C entry that is no declared scheme's option
+    (`messages.option`), as the RTX PRO 6000's is none, which no served path serves; None when there is none."""
+    from verity_vllm import messages as M
+
+    for e in entries:
+        if e.startswith(ARM_PREFIX) and M.option(e) is None:
+            return (f"{e}: no declared scheme serves Pearl-C on that card, so no served arm runs it; its kernel's own "
+                    "benchmarks (bench_arm.py, e2e.py) run it directly")
+    return None
+
+
 def pearl_c_arm(spec, name: str | None = None):
     """The spec's PoUW Pearl-C arm (`ARM_PREFIX`) ``name``, else its one; SystemExit naming them when it has none, several
-    or not ``name``."""
+    or not ``name``, naming its entry when it is no declared scheme's option (`undeclared`), and naming its entries
+    unless they are one, the scheme it attaches by name."""
     from verity_bench.vllm import arms as A
 
     got = [a for a in A.resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
@@ -258,7 +272,37 @@ def pearl_c_arm(spec, name: str | None = None):
     if len(picked) != 1:
         want = name or f"a spec's one {ARM_PREFIX}* arm"
         raise SystemExit(f"served_passes.py serves {want}; {spec.id} has {[a.id for a in got] or 'none'}")
+    if why := undeclared(picked[0].protocols):
+        raise SystemExit(f"served_passes.py: {why}")
+    if len(picked[0].protocols) != 1:
+        raise SystemExit(f"served_passes.py: a served arm attaches one declared scheme by its option; {picked[0].id} is "
+                         f"{list(picked[0].protocols)}")
     return picked[0]
+
+
+def scheme_settings(arm, scheme, transcript_dir: Path | None) -> tuple[dict, dict]:
+    """``arm``'s declared ``scheme``'s settings and its launcher's ctx, as serve-openai attaches it
+    (`serve_openai.scheme_settings`): the spec's arm settings that are the scheme's (each ``"$NAME"`` read from the
+    environment), its passes retained under ``transcript_dir``, and its salt a session an epoch reserved under
+    ``PEARLC_CHALLENGER_LANE`` as ``PEARLC_CHALLENGER_PEER`` through ``PEARLC_CHALLENGER_GATE`` (its gate and ledger),
+    each epoch's number spent under ``PEARLC_PRIVATE``, else in-process."""
+    from verity_bench.vllm import arms as A
+
+    # read with no protocol enabled, so no in-process challenger flips coins the scheme samples per epoch itself
+    pouw = A.protocols_config(dataclasses.replace(arm, protocols=()), os.environ).get("pouw", {})
+    own = {k: v for k, v in pouw.items() if k in scheme.settings}
+    if transcript_dir is not None:
+        own["transcript_dir"] = str(transcript_dir)
+    if not settings.PEARLC_CHALLENGER_GATE:
+        return {**own, "coins": "in-process"}, {}
+    if not (settings.PEARLC_CHALLENGER_PEER and settings.PEARLC_PRIVATE):
+        raise SystemExit("served_passes.py serve: PEARLC_CHALLENGER_GATE needs PEARLC_CHALLENGER_PEER and PEARLC_PRIVATE, "
+                         "the directory outside the run output where the scheme keeps its salt epoch's number")
+    from verity_vllm.pipeline.commit_coins import ChallengerGate
+
+    gate = ChallengerGate(settings.PEARLC_CHALLENGER_GATE)
+    own.update(challenger="127.0.0.1:0", lane=settings.PEARLC_CHALLENGER_LANE, peer=settings.PEARLC_CHALLENGER_PEER)
+    return own, {"gate": gate.call, "ledger": gate.ledger, "private": settings.PEARLC_PRIVATE}
 
 
 def seeded(label: str):
@@ -275,52 +319,43 @@ def seeded(label: str):
     return draw
 
 
-def seed_install(pouw: dict) -> None:
-    """`serve --seeded`: the PoUW settings' in-process challenger sampling from `seeded` coins, in this process. The
-    leaves' salts are fresh bytes from the OS all the same: nothing seeds them."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+def seed_install() -> None:
+    """`serve --seeded`: the in-process challenger's entropy (`serving.in_process_coins`, the verifier's ``coins``)
+    sampled from `seeded` coins, in this process. The leaves' salts are fresh bytes from the OS all the same: nothing
+    seeds them."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
 
-    pouw["coins"] = Challenger(0, seeded("coins"))
+    verifier.coins = seeded("coins")
 
 
 def serve(args: argparse.Namespace) -> int:
     if args.seeded and (args.retain or settings.PEARLC_CHALLENGER_GATE):
         raise SystemExit(SEEDED_ALONE)
-    from verity_bench.vllm import arms as A
+    from verity import hooks as H
     from verity_bench.vllm import presets as P
     from verity_bench.vllm import engine as RN
+    from verity_vllm import messages as M
     from verity_vllm.engine import env as engine_env
 
     spec = P.resolve_spec(args.spec)
     arm = pearl_c_arm(spec, args.arm)
+    scheme = M.option(arm.protocols[0])
     preset = spec.preset
     engine = RN.engine_args(preset, arm.precision or preset.precision, resident=False, eager=True)
     if args.max_num_batched_tokens:
         engine["max_num_batched_tokens"] = args.max_num_batched_tokens
-    config = A.protocols_config(arm, os.environ)
     passes = Path(args.passes)
     passes.mkdir(parents=True, exist_ok=True)
-    if args.retain:
-        config["pouw"]["transcript_dir"] = str(passes)
-    sys.path.insert(0, str(HERE))
-    import bench_arm as BA
-
-    config["pouw"], reserved = BA.live_coins(config["pouw"], settings.PEARLC_CHALLENGER_GATE, settings.PEARLC_CHALLENGER_PEER,
-                                             settings.PEARLC_BENCH_EPOCH, settings.PEARLC_CHALLENGER_LANE)
+    own, ctx = scheme_settings(arm, scheme, passes if args.retain else None)
     if args.seeded:
-        seed_install(config["pouw"])
-    if reserved is None:
-        (passes / "coins.json").write_text(json.dumps(config["pouw"]["coins"].commitment.to_json()) + "\n")
+        seed_install()
     engine_env.apply_engine(None)
     from verity_vllm import LLM
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
     from vllm import SamplingParams
 
-    llm = LLM(preset.model, revision=preset.revision, protocols=",".join(arm.protocols), protocols_config=config, **engine)
-    option = llm.protocols.get("pouw")
-    run = option.end_pass.__self__
-    if reserved is not None:
-        (passes / "coins.json").write_text(json.dumps(run.commits["coins"]) + "\n")
+    attached = M.build().attach(scheme, own, process=H.ENGINE, **ctx)
+    llm = LLM(preset.model, revision=preset.revision, **engine)
     core, walls = llm._engine.llm.llm_engine, []
     step = core.step
 
@@ -335,14 +370,21 @@ def serve(args: argparse.Namespace) -> int:
     if args.warm_up:
         llm.generate([{"prompt_token_ids": p} for p in prompts(vocab, 1, 16)],
                      SamplingParams(max_tokens=2, ignore_eos=True, temperature=0.0), use_tqdm=False)
-    warm, warm_steps = len(run.details["passes"]), len(walls)
+    warm, warm_steps = len(attached.run.details["passes"]) if attached.run is not None else 0, len(walls)
     sp = SamplingParams(max_tokens=args.output_tokens, ignore_eos=True, temperature=0.0)
     batch = [{"prompt_token_ids": p} for p in prompts(vocab, args.requests, args.prompt_tokens)]
     t0 = time.perf_counter()
     outs = llm.generate(batch, sp, use_tqdm=False)
     wall = time.perf_counter() - t0
+    run = attached.run
+    if run is None:
+        raise SystemExit(f"served_passes.py serve: {scheme.name} opened no run: no step served a token")
     llm.close()
+    attached.release()
     close = time.perf_counter() - t0 - wall
+    (passes / "coins.json").write_text(json.dumps(run.commits["coins"]) + "\n")
+    reserved = ((attached.life or {}).get("reserved") or {}).get("session")
+    option = SimpleNamespace(commitment=lambda: run.commits, info=lambda: run.details)
     caps = {"tiles": run.capacity, "units": PPD.CALL_CAPACITY, "screened_rows": len(run.flag_buf)}
     got = passes_of(run.details["passes"], warm)
     held = [p for p in got if p["units"]]
@@ -633,9 +675,7 @@ def arm(args: argparse.Namespace) -> int:
     from verity_vllm import messages as M
 
     picked = pearl_c_arm(P.resolve_spec(args.spec), args.arm)
-    if len(picked.protocols) != 1 or (scheme := M.option(picked.protocols[0])) is None:
-        raise SystemExit(f"served_passes.py arm: serve-openai attaches one declared scheme by its option; {picked.id} is "
-                         f"{list(picked.protocols)}")
+    scheme = M.option(picked.protocols[0])
     # read with no protocol enabled, so no in-process challenger flips coins the server samples per epoch itself
     pouw = A.protocols_config(dataclasses.replace(picked, protocols=()), os.environ).get("pouw", {})
     doc = {"pouw": {k: v for k, v in pouw.items() if k in scheme.settings}}

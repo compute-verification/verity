@@ -86,6 +86,7 @@ import a0  # noqa: E402
 import a7  # noqa: E402
 from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
+from verity.ports import free_port  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
@@ -360,10 +361,8 @@ def _session(m: Member, s: dict, h: Any, local: list[int], tools: Tools, sdir: P
         env = {"FC_ZK_SERVER": "1", "FC_ZK_SERVER_LEAN": tools.zk_server, **a0.zk_server_env(s)} if tools.zk_server else {}
         if m.forge:
             env["FC_ZK_SELF_CHECK"] = "skip"
-        from verity_bench import kit
-
         t = time.time()
-        record, live = a0.session(tools.bin, s, s["n"], f"subset:{len(local)}", kit.free_port(), sdir,
+        record, live = a0.session(tools.bin, s, s["n"], f"subset:{len(local)}", free_port(), sdir,
                                   sample_file=sdir / "draw.json", zk=True, env=env)
         session_s = round(time.time() - t, 1)
         return record, live, a0.lean_verify(tools.lean, s, s["n"], sdir, zk=True), session_s
@@ -723,7 +722,7 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     reg_o = RV.Registered.commit(prog, "dot", out_words(fn, x, weights[positions]).tolist(), None, RV.WORD_BITS, V2)
     own = G.reads_file(program, query, {xn: K, "weights": K}, {xn: reg_x.root.hex(), "weights": reg.root.hex()},
                        schemas={xn: V2, "weights": V2})
-    own["ports"]["o0"] = {**reg_o.entry(), **RV.width_entry(RV.WORD_BITS), **G.schema_entry(V2), "reads": list(range(n))}
+    own["ports"]["o0"] = {**reg_o.entry(), **RV.width_entry(RV.WORD_BITS), **RV.schema_entry(V2), "reads": list(range(n))}
     out.mkdir(parents=True, exist_ok=True)
     (out / "registered.json").write_text(json.dumps(own, sort_keys=True))
     table, refs = G.table(positions)

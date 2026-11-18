@@ -57,11 +57,14 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from run import EXE, _reference, timed
-from verity.commitments import docket_digest as DD
+from run import EXE, _reference, timed  # noqa: E402
+
+from verity.circuits.codec import canonical_json  # noqa: E402
+from verity.commitments import docket_digest as DD  # noqa: E402
+from verity.commitments.domains import IR_DESCRIPTOR  # noqa: E402
 
 SCHEMA = "verity/nci-glm/v1"
-DESCRIPTOR = "verity-ir/descriptor/v1"
+DESCRIPTOR = IR_DESCRIPTOR
 #: the demo's policy (README.md): Γ gates per inference block, α fresh input bits per gate
 GAMMA = 2 ** 44
 ALPHA = (1, 2 ** 25)
@@ -84,10 +87,6 @@ INPUT = re.compile(r"^(Registered)?Input[1-9][0-9]*_v1$")
 SLICES = ("MoeRouterSigmoidBias_v1{", "AllReduceRmsNormMnnvl_v1{", "DeepGemmFp8Linear_v1{K=6144,N=2624}")
 #: a slice's divisions: per root node (its body node `k`, or None for an input node), its inference block label
 SLICE_DIVISIONS = {"session": lambda k: 0, "call": lambda k: k}
-
-
-def canonical(v) -> str:
-    return json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
 def load(path: Path) -> tuple[dict, dict]:
@@ -191,7 +190,7 @@ class Writer:
         return self._c[key]
 
     def type(self, t) -> int:
-        s = canonical(t)
+        s = canonical_json(t)
         if s not in self._t:
             self._t[s] = len(self.types)
             self.types.append(t)
@@ -240,7 +239,7 @@ class Writer:
                 d = d | {"body": d["body"] | {"nodes": [self.node(src, nd, same) for nd in d["body"]["nodes"]]}}
                 self._todo += [(f, src) for f in record_fns(d["bindings"])]
             have = self.defs.setdefault(key, d)
-            if have is not d and canonical(have) != canonical(d):
+            if have is not d and canonical_json(have) != canonical_json(d):
                 raise ValueError(f"definition {key!r} differs between the sources")
         defs = self.defs | {root: {"bindings": {}, "form": "composite", "id": root,
                                    "body": {"nodes": nodes, "params": [], "ret": ret, "ret_type": ret_type}}}
@@ -407,7 +406,7 @@ def join(srcs: list[Source], bodies: list[dict], colls: list[list[int]]) -> dict
         for k in range(prev[r] + 1, len(bodies[r]["nodes"])):
             place(r, k, W.node(srcs[r], bodies[r]["nodes"][k], move[r]))
     t = bodies[0]["ret_type"]
-    if t[0] != "Array" or any(canonical(b["ret_type"]) != canonical(t) for b in bodies):
+    if t[0] != "Array" or any(canonical_json(b["ret_type"]) != canonical_json(t) for b in bodies):
         raise ValueError("the ranks' requests return different types")
     fn, ret_type = f"NodeTp{R}_v1", ["Array", R * t[1], t[2]]
     W.defs[fn] = {"bindings": {}, "form": "composite", "id": fn,
@@ -493,7 +492,7 @@ def write_instance(path: Path, ptext: str, theta: list, owner: list, gamma: int,
 def described(desc: dict) -> tuple[str, dict]:
     """The program's canonical text and its sizes: SHA-512, bytes, root nodes, definitions, gates (computed and input),
     and the bits of its input nodes by binding."""
-    text = canonical(desc)
+    text = canonical_json(desc).decode()
     nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
     gate = gates_of(desc)
     bits = {"run": 0, "registration": 0}

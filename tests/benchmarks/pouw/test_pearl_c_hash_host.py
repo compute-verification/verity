@@ -516,6 +516,28 @@ def test_device_trees_refuse_a_wrong_count_or_size_of_salts_before_any_launch(ho
             trees(y, index, salts)
 
 
+def test_served_y_tree_launches_state_the_salts_length_to_hm_level0(host, monkeypatch):
+    """`tree_launches` hands `hm_level0` its salts with their length: a buffer a salt short, a salt long or a byte short of
+    `m` rows' is refused by name before the leaf launch, and the right length launches it."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+    m = 4
+    salts = host.put(salts_of("tree-launches", m + 1))
+    p = SimpleNamespace(dev=host, keys={"hm": host.put(audit.hm96_kernel_constants()), "dom_b": host.put(bytes(64))}, b={},
+                        tree_setup=lambda *a: [], row_digests=lambda *a: None, levels=lambda *a: None)
+    launched: list[str] = []
+    launch = host.launch
+    monkeypatch.setattr(host, "launch", lambda name, *a, **kw: launched.append(name) or launch(name, *a, **kw), raising=False)
+
+    def go(given: int) -> None:
+        SY.tree_launches(R, p, host.alloc(64 * m), host.alloc(64 * m), 0, m, m, 0, lambda r, c: 0, salts, given)
+    for given in (R.HM_SALT * (m - 1), R.HM_SALT * (m + 1), R.HM_SALT * m - 1):
+        with pytest.raises(ValueError, match=f"tree 'b''s salts: {given} bytes for {m} leaves, which take {R.HM_SALT * m}"):
+            go(given)
+    assert not launched
+    go(R.HM_SALT * m)
+    assert launched == ["hm_leaves", "s512_frame_leaves"]
+
+
 def test_served_y_device_trees_refuse_a_width_whose_first_tree_isnt_commit_ys(host, monkeypatch):
     """A width's first device tree is held to `commit_y` over a fixed 129-row y under the same fresh salts, so a tree with a
     node off is refused, naming the node, and the width's pipeline isn't kept: the next call checks again.  A tree left as

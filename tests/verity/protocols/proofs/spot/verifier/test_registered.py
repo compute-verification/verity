@@ -121,7 +121,7 @@ def test_a_16_bit_value_binds_only_the_five_keys():
     from verity.commitments.identity import identity_digest_sha512
 
     prog = P.program_digest(_program())
-    binding = identity_digest_sha512(RV.REGISTERED_DOMAIN, {"program": prog, "value": "W", "schema": G.SCHEMA, "words": 2,
+    binding = identity_digest_sha512(RV.REGISTERED_DOMAIN, {"program": prog, "value": "W", "schema": RV.SCHEMA, "words": 2,
                                                            "leaves": 5})
     assert RV.domain(prog, "W", 2, 5).domain_id == RV.domain(prog, "W", 2, 5, 16).domain_id
     assert RV.domain(prog, "W", 2, 5).binding == binding and len(binding) == 64
@@ -301,7 +301,7 @@ def test_the_verifiers_reads_file_names_a_bit_row_values_format():
         assert list(doc["ports"]["w"])[-2:] == ["row_schema", "reads"]
         with pytest.raises(ValueError, match="10 leaves are not rows of 2 .4 of its leaves in a"):
             G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, schemas={"W": schema})
-    assert G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, schemas={"W": G.SCHEMA}) == v1
+    assert G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, schemas={"W": RV.SCHEMA}) == v1
     with pytest.raises(ValueError, match="not 'hm96-sha512/row/v3'"):
         G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, schemas={"W": "hm96-sha512/row/v3"})
 
@@ -1022,7 +1022,7 @@ def test_a_supplied_value_in_a_bit_row_format_is_its_leaves_packed():
         assert R.check(rec, **{**mine, "schemas": {"pouw.roots": other}}).codes == ("R7-supplied",)
         assert not R.check(rec, **{**check, "registered": words}).ok
         assert R.check(base, **mine).codes == ("R7-words", "R7-domain", "R7-supplied")
-    assert flat.schema == G.SCHEMA and R.check(base, **check).ok
+    assert flat.schema == RV.SCHEMA and R.check(base, **check).ok
 
 
 def _history(body_flip: bool = False) -> tuple[dict, str, str]:

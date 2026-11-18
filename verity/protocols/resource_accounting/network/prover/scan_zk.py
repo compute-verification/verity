@@ -220,7 +220,7 @@ from typing import Mapping, NamedTuple, Sequence
 
 from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.network.prover import leak_scan as LS, proof_drivers, network_attester_zk as WZ
-from verity.circuits import boolean as BL
+from verity.circuits import boolean as BL, population as PN
 from verity.circuits.boolean import trace as TR
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, bind
@@ -246,7 +246,7 @@ from verity.protocols.resource_accounting.network.verifier.certificate import Di
 from verity.protocols.proofs.spot.verifier.challenger import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
-from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA, produced
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
@@ -605,7 +605,7 @@ def tree_port(kind: str, reg: ADV.Committed, reads: list[int], reads_from: int) 
     """The verifier's own ``--registered`` port of `kind`'s registration: unit ``reads_from + i`` reads leaf reads[i]."""
     n = len(reg.rows)
     e = {"leaves": n, "words": reg.n_bits // 16, "word_bits": 16, "domain": tree_domain(reg).domain_id.hex()}
-    port = produced.port(value(kind), e, reg.root.hex(), reads, _schema(reg))
+    port = RV.port(value(kind), e, reg.root.hex(), reads, _schema(reg))
     return port | ({RV.READS_FROM: int(reads_from)} if reads_from else {})
 
 
@@ -1437,7 +1437,7 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], T: int, out: Path) -> 
     counts = counts_of(members)
     nb, scan = T // cls.EVERY, templates == TEMPLATES
     prog = scan_program(cls, templates, T) if scan else \
-        M.P.mixed_population_program([(defs[tp], counts[tp]) for tp in templates])
+        PN.mixed_population_program([(defs[tp], counts[tp]) for tp in templates])
     query = M.P.template_instances_query([defs[tp] for tp in templates])
     part = M.P.partition(prog, query)
     if scan:

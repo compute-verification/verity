@@ -1385,8 +1385,7 @@ def test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets(
     from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit
 
     reg = Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target=H200), default_seed=7)
-    circuit = class_circuit(reg, WindowClass(4, 32, 4), None, Grain(gemm_words=1024, rows=256, select=64),
-                            provable=False)
+    circuit = class_circuit(reg, WindowClass(4, 32, 4), None, Grain(gemm_words=1024, rows=256, select=64))
     program, query = circuit.program()
     v1 = v1_case(program, query)
     alpha, gates = SC.division_policy(v1, [], inference_only_exe, tmp_path / "s")

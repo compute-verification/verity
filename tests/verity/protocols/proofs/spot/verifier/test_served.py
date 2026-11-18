@@ -77,7 +77,7 @@ def test_the_registration_it_builds_passes_r7_and_the_file_is_the_verifiers():
     assert sr.ports == {"w": {"value": "W", "root": reg.root.hex(), "leaves": 5, "words": 2, "word_bits": 16,
                               "domain": reg.domain.domain_id.hex(), "reads": list(POS)}}
     assert sr.file_bytes() == canonical_json(sr.file) and json.loads(sr.file_bytes()) == sr.file
-    assert sr.partition == P.partition(prog, Q) and tree.row_schema == G.SCHEMA and "row_schema" not in tree.entry()
+    assert sr.partition == P.partition(prog, Q) and tree.row_schema == RV.SCHEMA and "row_schema" not in tree.entry()
     assert register_served(prog, Q, [tree], ports={"w": "cs"}).ports.keys() == {"cs"}
 
 

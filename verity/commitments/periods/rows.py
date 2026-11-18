@@ -1503,7 +1503,7 @@ def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping
                 continue
             wire = w.wire(m, p)
             ports[p] = {"value": own_value(port), "root": e["root"], "leaves": int(e["leaves"]), "words": words[p],
-                        "word_bits": RV.WORD_BITS, "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
+                        "word_bits": RV.WORD_BITS, "domain": e["domain"], RV.SCHEMA_KEY: m.schema(p),
                         **({"reads": w.reads(m, p).tolist(), RV.READS_FROM: m.base} if wire is None else
                            {"tree": {"template": wire.writer, "field": wire.out}, "reads": []})}
         out[m.key] = {**f, "ports": dict(sorted(ports.items()))}

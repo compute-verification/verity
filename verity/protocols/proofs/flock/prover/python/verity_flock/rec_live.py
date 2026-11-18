@@ -119,6 +119,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+from verity.circuits.codec import canonical_json
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.commitments import coin_tree as CT
@@ -127,15 +128,15 @@ from verity.commitments import hm96
 from .rec_algebra import fast100
 from .record_text import session_text
 
-KIND = "rec/inner-transcript/v1"
-SESSION_KIND = "flock-live-session/v1"
+KIND = DM.REC_INNER_TRANSCRIPT
+SESSION_KIND = DM.FLOCK_LIVE_SESSION
 #: the circuit registration the session was held to (``verity/registration/v2``, written at staging and bound by META:
 #: `verity_flock.inner_registered.REGISTRATION`), copied into the session directory: its ``registered`` entries include
 #: the top of each table with no root at ``Commit``
 REGISTRATION = "circuit-registration.json"
 #: how a record's tree tops are salted: each 64-byte node a registered row (``hm96-sha512/row/v1``) under its own salt
 #: (`commit_top`)
-TOPS = "hm96-sha512/v1/node-row"
+TOPS = DM.HM96_SHA512_NODE_ROW
 
 OP_DOMAIN, OP_LABEL, OP_OBSERVE, OP_SQUEEZE, OP_BYTES = 1, 2, 3, 4, 5
 KIND_SCALAR, KIND_SLICE = 1, 2
@@ -149,7 +150,7 @@ RESP_OK, RESP_COINS, RESP_REFUSED, RESP_VERDICT, RESP_WORDS, RESP_SAMPLE = range
 #: u16 words per block of a message row: one SHA-512 block, 8 field elements
 ROW_WORDS = 64
 #: `Flock.ZkServer.Contract.COINS_TAG`: the coin message's tag
-COINS_TAG = b"verity/firewall-coins/v0\0"
+COINS_TAG = DM.ZK_SERVER_COINS.encode() + b"\0"
 #: the stream name of the link points' coins (``Commit``'s answer), round 0, in the challenger's commitments and the transcript
 LINK_COINS = "link"
 COINS_KIND = "rec/inner-coins/v0"
@@ -444,7 +445,7 @@ def refused(what: str) -> str:
 def canonical(v) -> str:
     """``v`` as the ZK server compares it with the pinned schedule: JSON with sorted keys and no spaces, so ``2`` and ``2.0``
     (or ``true`` and ``1``) differ."""
-    return json.dumps(v, sort_keys=True, separators=(",", ":"))
+    return canonical_json(v).decode()
 
 
 def rep_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], int, int]]:

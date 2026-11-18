@@ -37,6 +37,7 @@ import a0  # noqa: E402
 from circuit_check import targets as TG  # noqa: E402
 from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.ports import free_port  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
@@ -78,8 +79,6 @@ def stage_case(st, rows: dict, flip: tuple[int, ...], d: Path, set_name: str) ->
 
 
 def main() -> int:
-    from verity_bench import kit
-
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True, help="flock-circuit, the proving build (sha512, glue)")
     ap.add_argument("--lean", required=True, help="verity-verify-proof")
@@ -110,7 +109,7 @@ def main() -> int:
         if flip:
             os.environ["FC_ZK_SELF_CHECK"] = "skip"
         try:
-            record, live = a0.session(a.bin, sd, N, f"subset:{N}", kit.free_port(), d / "run", zk=True)
+            record, live = a0.session(a.bin, sd, N, f"subset:{N}", free_port(), d / "run", zk=True)
         finally:
             os.environ.pop("FC_ZK_SELF_CHECK", None)
         lean = a0.lean_verify(a.lean, sd, N, d / "run", zk=True)
