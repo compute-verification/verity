@@ -28,7 +28,7 @@ heap layout, on the lengths of the paths it reads and on how long its passes tak
 off, from a copy of their sources and with TMPDIR at paths of one length, and with a counted clock inside nvcc's front end
 (`ship_clock.c`), and the manifest names each shared library's cubins: a rebuild at the same commit, from any checkout,
 with the same toolkit at the same path and the same host compiler (a `research run --cwd source` on a node with
-`/usr/local/cuda-13.0`), reproduces every cubin byte for byte, on a busy machine too. They compile with `ship_nvcc.sh`,
+the machine's toolkit at 13.0), reproduces every cubin byte for byte, on a busy machine too. They compile with `ship_nvcc.sh`,
 nvcc with the three things its device compiler reads that follow a file's place in the tree fixed (the file names in the
 preprocessed text's line markers, the source's path, and its directory and environment): wherever a source or a header
 it includes sits, the device compiler is handed the same text and the same arguments, in the same directory, so a commit
