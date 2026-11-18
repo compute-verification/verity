@@ -383,8 +383,8 @@ def widthName : Option Nat → String
 
 /-- **Every wire lands whole** (the module docstring's "Wires whole"), or the first wire that does not, as a
 refusal's message: the wire, its offset, its two rows' bits or its two leaf widths, and the fix. A wire reads the
-field of its writer's return whose first word in the unit's output row is the wire's offset (`field`,
-`Spot.Edges.fieldWord`); an offset that is no field's first word is refused. Of every wire, that field's bits are
+field of its writer's return, of a bit or more, whose first word in the unit's output row is the wire's offset
+(`field`, `Spot.Edges.fieldWord`); an offset that is no such field's first word is refused. Of every wire, that field's bits are
 the row's (`short`), the row's words those `Spot.Wires.check` gives it (`Summary.rowWords`): so the row is that one
 field, whole, and a field's bits are its own words'. And a wire is taken in one of two ways. The reader's row is
 closed (`Leaves.closed`): its leaves are of one bit and its Definition passes none of them on, whatever the writer's
@@ -397,7 +397,8 @@ def unwhole (P : Prog) (ts : List Tmpl) (ls : List Leaves) (s : Spot.Wires.Summa
   let closed := fun (tid port : String) => ((leaves tid).map fun l => l.closed.contains port).getD false
   let field := fun (w : Spot.Wires.Wire) => (ts.find? (·.tid == w.writer)).bind fun t =>
     let ret := (P.defs[t.defn]!).ret
-    (List.range (fieldsOf ret).length).find? fun f => Spot.Edges.fieldWord ret f == w.offset
+    (List.range (fieldsOf ret).length).find? fun f =>
+      Spot.Edges.fieldWord ret f == w.offset && 0 < bits (fieldsOf ret)[f]!
   let short := fun (w : Spot.Wires.Wire) (f n : Nat) =>
     match (leaves w.writer).bind fun l => l.bits.lookup s!"o{f}" with
     | some b => if b == 16 * n then none else some (b, 16 * n)
