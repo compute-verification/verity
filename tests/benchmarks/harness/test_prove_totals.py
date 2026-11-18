@@ -198,6 +198,35 @@ def test_the_totals_price_a_word_block_at_its_definition_on_bits_and_say_when_a_
     assert "upper bound" not in R.render(page | plain)
 
 
+def test_types_that_share_one_bounded_by_are_each_named_by_their_own_boolean_answer_in_either_census_order():
+    """Two word types bounded by one larger block, its row staged in a Boolean form the tree registers for the first
+    type only: each type's note asks about itself, so the first says its Boolean version and the second another
+    Definition, whichever the census names first. A refused row of the bound, and one at another prover count, are named
+    in a bounded type's note as its own would be."""
+
+    big, bool_form = first(190, 192, 2), "AttnBlockFirstBool_v1{D=64,NVIS=190,BN=192}"
+    a, b = first(5, 128), first(3, 128)
+
+    def census(*order: str) -> P.Census:
+        return P.Census.of({"tokens": {"prefill": 8, "decode": 0}, "per_request": {"circuit_macs": 0, "macs": 0}, "definitions": {
+            s: {"k_log": 22, "ands": 10**5, "of": {"Attention_v4": "split"}, "prefill": 4, "decode": 0, "bounded_by": big}
+            for s in order}})
+
+    rows = (steady("attn-first", P.definition_id(big), "r20261118-000000-0001", 8, 8.0, form=bool_form),)
+    flock = PF.Flock(rows, SESSIONS, "art:card", boolean=lambda block, form: (block, form) == (a, bool_form))
+    notes = [{r.block: r.cost.note for r in flock.table(census(*order)).rows} for order in ((a, b), (b, a))]
+    assert notes[0] == notes[1]
+    assert f"(its Boolean version, `{bool_form}`)" in notes[0][a]
+    assert f"(another Definition, `{bool_form}`)" in notes[0][b]
+
+    refused = (steady("attn-first", P.definition_id(big), "r20261118-000000-0002", 8, None, refused="out of memory"),
+               steady("attn-first", P.definition_id(big), "r20261118-000000-0003", 8, 8.0, provers=2))
+    (row,) = PF.Flock(refused, SESSIONS, "art:card").table(census(a)).rows
+    assert row.cost.source != P.STEADY
+    assert "steady state tried as `attn-first`" in row.cost.note and "out of memory" in row.cost.note
+    assert "measured at steady state at 2 provers, which price no type at 1" in row.cost.note
+
+
 def test_a_total_whose_every_type_is_steady_or_warm_is_modeled_never_measured():
     """Only steady-state and warm-session rows, every type priced from a run of its own: the total is still modeled,
     since a statement proved from warm sessions on one card is not the steady state."""
