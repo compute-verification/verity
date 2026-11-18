@@ -1,0 +1,3 @@
+[2026-11-18T10:38Z] 9d4c490903e5
+From proofs lead, 10:50Z: DROP item (2) (the two lines in prove_path.py 1709 and records_audit.py 694): network-accounting owns those two files by path and makes the change itself, a different one: the sites ask the declared `kernels` with the record CARD and compare (Pearl+ own kernel for the card the record was made on), not the one kernel in the option. Do NOT edit either file. If you already found whether a second pearl-c kernel can be carried by a Pearl+ window record (another card), put that fact in your return: it is exactly what they need. Items (1), (3), (4) stand; in (4) skip any of the five files that is under benchmarks/prove_path.
+
