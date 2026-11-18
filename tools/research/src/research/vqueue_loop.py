@@ -3468,8 +3468,9 @@ class Loop:
         try:
             audit = self._audit_from(d, main, line, below, lent)
             suites = self._suites_from(d, main, line, below, lent)
-            after = self.slim.replaced(Past.read(self.log_path, self.now() - self.slim.CARRY_WAIT_S).lines,
-                                       line.get("members") or (), self.now()) if self.gate in CHECKS else {}
+            past = Past.read(self.log_path, self.now() - self.slim.CARRY_WAIT_S).lines if self.gate in CHECKS else []
+            after = self.slim.replaced(past, line.get("members") or (), self.now()) if past else {}
+            prefer = self.slim.preferred(past, line.get("members") or (), self.now()) if past else []
             with self.steps("launch"):
                 rec, error = self.slim.start(d, line["sha"], line["base"],
                                              **({"shards": self.shards} if self.gate in CHECKS else {}),
@@ -3478,7 +3479,8 @@ class Loop:
                                              **({"deselect": f} if (f := getattr(self.world, "deselect_file", None)) else {}),
                                              **({"after": after} if after else {}),
                                              **({"heavy_on": heavy} if heavy else {}),
-                                             **({"avoid": tuple(avoid)} if avoid else {})), None
+                                             **({"avoid": tuple(avoid)} if avoid else {}),
+                                             **({"prefer": prefer} if prefer else {})), None
         except (QueueError, ValueError, OSError, subprocess.SubprocessError) as e:
             rec, error = None, f"{type(e).__name__}: {e}"[-600:]
         return self._line(n, main, origin, "slim", **line, why=why, record=rec, done=True,
@@ -3643,7 +3645,8 @@ class Loop:
         """Cancel ``c``'s check, and the run beside it and its records run while they run (they would hold drive's machines for
         nothing), delete its branch and log its outcome.  A run still launching (its shards, of a sharded one) has no run ids
         yet: its record is logged (`beside_launching`, `records_launching`), and `_launched` cancels it once it has them; an
-        auto plan still being made is given up (`vqueue_slim.abandon`), so no shard of it launches.  Where the check gates, the
+        auto plan still being made is given up (`vqueue_slim.abandon`), so no shard of it launches.  The machines its shards
+        took (``beside_took``) are where its passes are kept, which a rebuild's shards prefer (`vqueue_slim.preferred`).  Where the check gates, the
         line says how graph2's check, in shadow, read (``graph2``), and one `_follow` keeps is left running (``follow``).
         One decided on a check that gates failed while it ran (an early red) logs when its first failure was written and
         when it was dropped (``early_red``).  One whose check passed while its runs still run steps off the gate
@@ -3675,6 +3678,7 @@ class Loop:
                            **({"graph2": _ended(shadow) or PENDING} if shadow is not None else {}),
                            **({"follow": follow} if follow is not None else {}),
                            **({"beside_cancelled": ids} if ids else {}), **({"beside_cancel_failed": failed} if failed else {}),
+                           **({"beside_took": kept["took"]} if kept.get("took") else {}),
                            **({"beside_launching": rec} if "launch" in rec or "shards" in rec else {}),
                            **({"off_gate_running": kept} if unread else {}),
                            **({"records_cancelled": rids} if rids else {}),

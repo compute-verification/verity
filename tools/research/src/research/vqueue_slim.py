@@ -33,7 +33,8 @@ of failing tests.
 
 The check that gates (`research queue vqueue --gate check`).  `start` with ``shards`` launches a whole check of the
 candidate in place of the run of `SLIM_STEPS`: every step of `AFTER_LANDING` as that many shards, one launch a shard on its
-own machines first and then every other (`shard_machines`), with the same keywords (`Landing.beside_args`).  ``shards`` `auto:N` (`AUTO_SHARDS`) is N
+own machines first and then every other (`shard_machines`), with the same keywords (`Landing.beside_args`); a rebuild's shard
+names first the machines its dropped predecessor's took (``prefer``, `preferred`).  ``shards`` `auto:N` (`AUTO_SHARDS`) is N
 shards of an auto plan of the candidate's tree, which splits pytest by suite where ci.toml's plans can't split it: `start`
 has `check.py --shard-plan --deferred STEPS --n N` make it in the background (`Landing.plan_shards`), and the first `judge`
 that finds it made (`Landing.planned`) launches every shard `--shard auto:K/N` with its file, which is removed once each
@@ -299,6 +300,22 @@ def replaced(lines: Iterable[dict], members: Iterable[int], now: float) -> dict[
     return out
 
 
+def preferred(lines: Iterable[dict], members: Iterable[int], now: float) -> list[list[str]]:
+    """Each shard's machines that the checks a candidate holding ``members`` replaces took (`replaced`'s drops, their
+    ``beside_took``), the latest drop's first: there its passes are kept (`suites.cached` reads the passes of every slot of
+    its machine), which `start`'s ``prefer`` puts first."""
+    want, out = set(members), []
+    for r in reversed(list(lines)):
+        at = _epoch(r.get("at"))
+        if at is None or now - at > CARRY_WAIT_S or not want & set(r.get("members") or ()):
+            continue
+        for k, ms in enumerate(r.get("beside_took") or ()):
+            if k == len(out):
+                out.append([])
+            out[k] += [m for m in ms if m not in out[k]]
+    return out
+
+
 def left(driver: Landing, rid: str) -> bool:
     """Whether run ``rid`` has left its passes where a check's launch finds them: it ended and custody published its record,
     so the store's remote holds its attempt, which `check.run_packs` reads its packs from."""
@@ -349,7 +366,8 @@ def _lending(sha: str | None):
 
 def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None,
           audit_from: str | None = None, after: dict[str, float] | None = None, heavy_on: str = "",
-          avoid: Iterable[str] = (), suites_from: str | None = None) -> dict | None:
+          avoid: Iterable[str] = (), suites_from: str | None = None,
+          prefer: Iterable[Iterable[str]] = ()) -> dict | None:
     """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it: `SLIM_STEPS` but those a run
     of every step of ``sha`` above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's
     keywords (`Landing.beside_args`: ratchet-gate judges the merges above ``base``), on the queue's machines (`Landing.on`).
@@ -370,6 +388,9 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     does a launch that waited for the records of the runs it replaces (``after``).  With ``avoid`` (machines: those the
     runs of its record before failed on, ``erred_on``, as the loop launches it again after infra), each launch goes to its
     machines but those (`landing.elsewhere`), all of them where that leaves none, and the record keeps them (``avoid``).
+    With ``prefer`` (each shard's machines, the whole run's first: those the checks it replaces took, `preferred`), each
+    shard's list names its own of them first, so it goes where their passes are kept when a slot there is free and elsewhere
+    at once when none is (`_ahead`), and the record keeps them (``prefer``).
     The record to keep (`Landing._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then, or each
     shard's in ``shards``, which `judge` makes ``groups``, each shard's ids); the candidate (``tip``), ``base``, when it
     launched (``at``), the ``steps`` it runs and those it skips (``skip``), ``gate`` (`CHECK`) with ``shards``, and
@@ -401,6 +422,7 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     steps = [s for s in every if s not in skip]
     sent = ",".join(every if n else steps)
     heavy_on = heavy_on if n and LEAN_STEP in every else ""
+    prefer = [list(p) for p in prefer]
     what = (f"train.sh {sha[:12]} {driver.on} --deferred {sent}{flags}"
             + (f" as an auto plan's {n} shards" if auto else f" as {n} shards" if n > 1 else "")
             + (f" as candidate {sha[:12]}'s check" if n else f" beside candidate {sha[:12]}'s check")
@@ -414,7 +436,8 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
            **({"gate": CHECK} if n else {}), **({"lean_audit_from": audit_from} if audit_from else {}),
            **({"suites_from": suites_from} if suites_from else {}), **({"deselect": True} if left else {}),
            **({"carry": sorted(after)} if after else {}), **({"heavy_on": heavy_on} if heavy_on else {}),
-           **({"avoid": sorted(set(avoid))} if avoid else {})}
+           **({"avoid": sorted(set(avoid))} if avoid else {}),
+           **({"prefer": prefer} if any(prefer) else {})}
     go = {"what": what, "sent": sent, "kw": kw, "n": n, "auto": auto}
     awaited, gone = _awaiting(driver, after or {})
     if awaited:
@@ -488,6 +511,27 @@ def _quick(driver: Landing, rec: dict) -> Verdict:
     return _keep(rec, Verdict(FAIL, (_failure(QUICK_STEP, k, key(driver.repo, base, QUICK_STEP), parts),), ended=True), [])
 
 
+def _took(rec: dict, states: dict[str, tuple]) -> None:
+    """Keep in ``rec``, a check that gates, each shard's machines (of its ``groups``, the whole run as one) whose run took a
+    slot there, by ``states``: running, or ended but as a twin that never started or was stopped for a sibling; once seen,
+    kept (``took``), as a drop's cancel ends every run alike.  A rebuild's shards prefer them (`preferred`)."""
+    groups = rec.get("groups") or [rec["ids"]]
+    was = rec.get("took") or [[] for _ in groups]
+    now = [sorted({*w, *(s[4] for r in g if len(s := states.get(r) or ()) > 4 and s[4] and (
+        s[0] == "running" or s[0] not in ACTIVE and s[1] not in (NOT_STARTED, SIGTERM_RC)))}) for g, w in zip(groups, was)]
+    if any(now):
+        rec["took"] = now
+
+
+def _ahead(on: str, prefer: Iterable[str]) -> str:
+    """``on`` (machines, a comma list) with those of ``prefer`` it names first, in ``prefer``'s order, the rest after in
+    theirs: check.py places a check on the first machine of its list with a slot free (`check.choose`), so a busy one costs
+    no wait."""
+    ms = on.split(",")
+    lead = [m for m in dict.fromkeys(prefer) if m in ms]
+    return ",".join([*lead, *(m for m in ms if m not in lead)])
+
+
 def _erred(rec: dict) -> dict:
     """``rec``, a quick tier's record, keeping the machine it ran on as ``erred_on``."""
     if rec.get("on"):
@@ -502,18 +546,18 @@ def _go(driver: Landing, rec: dict, go: dict, gone: list[str]) -> str | None:
     whole run, of one) on ``rec``'s ``heavy_on``; ``gone``, the runs it waited for in vain, kept as ``carry_without``.  None,
     logged, once launched; the tail of a launch that registered no run, logged."""
     sha, sent, kw, n, carry, lend = rec["tip"], go["sent"], go["kw"], go["n"], rec.get("carry") or (), rec.get("suites_from")
-    heavy_on, avoid = rec.get("heavy_on") or "", rec.get("avoid") or ()
+    heavy_on, avoid, prefer = rec.get("heavy_on") or "", rec.get("avoid") or (), rec.get("prefer") or ()
     if go["auto"]:
         got, tail = {"ids": [], "plan": {**driver.plan_shards(driver.repo, sha, sent, n=n), "n": n, "deferred": sent,
                                          "kw": kw}}, ""
     elif n > 1:
-        got, tail = _launch(driver, sha, sent, kw, n, carry=carry, heavy_on=heavy_on, avoid=avoid, lend=lend)
+        got, tail = _launch(driver, sha, sent, kw, n, carry=carry, heavy_on=heavy_on, avoid=avoid, lend=lend, prefer=prefer)
         if got is not None and not any("launch" in r for r in got["shards"]):
             _grouped(got)
     else:
+        on = elsewhere(_ahead(heavy_on or driver.on, prefer[0] if prefer else ()), avoid)
         with _carrying(carry), _lending(lend):
-            got, tail = driver._started(driver.launch_after_landing(driver.repo, sha, elsewhere(heavy_on or driver.on, avoid), sent,
-                                                               **kw, train_from=OWN_TRAIN))
+            got, tail = driver._started(driver.launch_after_landing(driver.repo, sha, on, sent, **kw, train_from=OWN_TRAIN))
     if got is None:
         driver.q.log(f"research queue vqueue: {go['what']} registered no run: {tail}")
         return tail
@@ -538,18 +582,20 @@ def _waited(driver: Landing, rec: dict) -> Verdict:
 
 def _launch(driver: Landing, sha: str, sent: str, kw: dict, n: int, plan: str | None = None,
             carry: Iterable[str] = (), heavy_on: str = "", doc: dict | None = None,
-            avoid: Iterable[str] = (), lend: str | None = None) -> tuple[dict | None, str]:
+            avoid: Iterable[str] = (), lend: str | None = None,
+            prefer: list[list[str]] | tuple = ()) -> tuple[dict | None, str]:
     """Each of ``n`` shards of candidate ``sha``'s check launched on its machines (`shard_machines`): `--shard K/N` of ci.toml's
     plan, or of the auto plan ``doc`` whose file is ``plan``, `--shard auto:K/N` with it, each naming the runs ``carry``
     (`_carrying`) and the candidate ``lend`` whose check answers for suites keyed as there (`_lending`); with
     ``heavy_on``, the shards that audit `HEAVY_PART` (`heavy_shards`) on those machines instead; each
-    shard's machines but ``avoid``'s where another remains (`landing.elsewhere`).  The record of every shard's launch
-    (``shards``); None with the tail of one that registered no run, the others' runs cancelled."""
+    shard's machines but ``avoid``'s where another remains (`landing.elsewhere`), ``prefer``'s of it first (`_ahead`).  The
+    record of every shard's launch (``shards``); None with the tail of one that registered no run, the others' runs
+    cancelled."""
     ons = shard_machines(driver.on, n)
     if heavy_on:
         heavy = heavy_shards(driver, sha, n, doc)
         ons = [heavy_on if k in heavy else on for k, on in enumerate(ons, 1)]
-    ons = [elsewhere(on, avoid) for on in ons]
+    ons = [elsewhere(_ahead(on, prefer[k] if k < len(prefer) else ()), avoid) for k, on in enumerate(ons)]
     with _carrying(carry), _lending(lend):
         got = [driver._started(driver.launch_after_landing(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
                                                       **({"shard_plan": plan} if plan else {}), train_from=OWN_TRAIN))
@@ -604,7 +650,8 @@ def _planned(driver: Landing, rec: dict, what: str) -> Verdict:
         why = f"has {doc['n']} shards, not {plan['n']}"
     got, tail = (None, f"its auto plan {why}") if why is not None else _launch(
         driver, rec["tip"], plan["deferred"], plan["kw"], plan["n"], str(Path(plan["out"]) / AUTO_PLAN), rec.get("carry") or (),
-        heavy_on=rec.get("heavy_on") or "", doc=doc, avoid=rec.get("avoid") or (), lend=rec.get("suites_from"))
+        heavy_on=rec.get("heavy_on") or "", doc=doc, avoid=rec.get("avoid") or (), lend=rec.get("suites_from"),
+        prefer=rec.get("prefer") or ())
     if got is None:
         abandon(rec)
         return _keep(rec, _down(rec, f"registered no run: {tail}"))
@@ -682,6 +729,8 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     if not (ids := rec["ids"]):
         return _keep(rec, _down(rec, "registered no run"))
     states = driver.states(driver.repo, ids)
+    if check:
+        _took(rec, states)
     if lost := driver._lost(rec, states):
         states = {r: ("lost", -1) for r in states}
     if any(st in ACTIVE for st, *_ in states.values()):
