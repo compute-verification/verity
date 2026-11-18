@@ -250,6 +250,33 @@ def test_a_request_program_is_read_by_the_one_sidecar_that_defines_its_reader(mo
         TG.request_program("x")
 
 
+def test_a_models_served_bindings_are_targets_where_their_ids_resolve_and_named_with_why_where_not(monkeypatch):
+    """`targets.served_targets`: the one sidecar that defines `SERVED_READER` builds a model's served bindings from its
+    configuration at a class; an id `definition` resolves to that Definition is a target, and one it refuses, or resolves to
+    another Definition, is named with why, never dropped."""
+    from circuit_check import cache as CC
+
+    a, b, rec = (types.SimpleNamespace(id=i, d=1) for i in ("A_v1", "B_v1", "Rec_v1{R={0123456789ab}}"))
+    asked = []
+    _binding_files(monkeypatch, vllm={"served_bindings": lambda config, cls: asked.append((config, cls)) or [a, b, rec]})
+
+    def definition(spec):
+        if spec == rec.id:
+            raise KeyError("record static {0123456789ab}: no Definition the suite checks is bound to a record of that digest")
+        return a if spec == a.id else types.SimpleNamespace(id=spec, d=2)
+
+    monkeypatch.setattr(TG, "definition", definition)
+    monkeypatch.setattr(CC, "descriptor", lambda fn: str(fn.d))
+    named, unbound = TG.served_targets("phi.json", "4,27,2")
+    assert asked == [("phi.json", "4,27,2")] and named == ["A_v1"]
+    assert unbound == {"B_v1": "its id names another Definition here than the one the configuration builds",
+                       rec.id: "KeyError: 'record static {0123456789ab}: no Definition the suite checks is bound to a record of "
+                               "that digest'"}
+    _binding_files(monkeypatch, a={}, b={})
+    with pytest.raises(ValueError, match="phi.json: a model's served bindings is read by the one sidecar .* 0 that"):
+        TG.served_targets("phi.json", "4,27,2")
+
+
 def test_a_struct_slots_split_is_read_by_the_one_sidecar_that_defines_its_reader(monkeypatch):
     """`structural_slots` reads a split as the row check reads a request Program, importing nothing of Flock: the sidecar
     beside `verity_flock.struct_slots` defines the reader, and a tree with none or two is refused by name."""

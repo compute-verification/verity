@@ -23,6 +23,12 @@ node through `research run --on auto`. `circuit-check --help` lists every other 
 `circuit-check --reached BASE` lists the `--all` targets a change since BASE reaches, from the cache's own record of what
 each read, and `--check` checks them; `--update-pins` with `--check` re-pins those it checks and reuses the rest.
 
+`circuit-check --model PHI --class SLOTS,PROMPT,OUTPUTS` checks a model's served bindings, read from its configuration
+alone: the Definitions of the proof blocks of its class circuit at that window class. `PHI` is the φ file a served run
+records. Each binding is a target of its own. A binding whose id no catalog Definition resolves, such as a record
+static, is named with the reason it can't be resolved, and the run fails. `--list` prints the bindings without checking
+any.
+
 ## Failures, warnings and the cache
 
 It exits 1 when a check fails, and names each failure (`FAIL NAME`). Redundant and dead gates are warnings with counts

@@ -61,6 +61,50 @@ def test_named_targets_run_on_every_core_and_reuse_checks_cache(runs, tmp_path, 
     assert got[-1]["cache"] == tmp_path / "mine" and got[-1]["jobs"] == cli.auto_jobs()
 
 
+def test_a_models_served_bindings_are_named_targets_and_one_no_configuration_checks_fails_the_run(runs, monkeypatch, tmp_path,
+                                                                                                   capsys):
+    """``--model PHI --class SPEC`` checks the model's served bindings (`targets.served_targets`) as named targets, one per
+    core from check's own cache; ``--list`` prints them and checks none.  A binding no configuration can check is named on
+    a line of its own and in the report's ``model``, and fails the run (``summary.ok`` false, exit 1); ``--list`` names it
+    and exits 0.  With none to check, nothing is run."""
+    got, traced = runs
+    served = {"bindings": (["F32Add_v1", "F32Mul_v1"], {})}
+    asked = []
+    monkeypatch.setattr(TG, "served_targets", lambda config, cls: asked.append((config, cls)) or served["bindings"])
+    out = tmp_path / "report.json"
+    model = ["--model", "phi.json", "--class", "4,27,2"]
+    assert cli.main([*model, "--out", str(out)]) == 0
+    assert asked == [("phi.json", "4,27,2")] and got[-1]["specs"] == ["F32Add_v1", "F32Mul_v1"]
+    assert got[-1]["jobs"] == 6 and got[-1]["cache"] == cli.default_cache() and traced == [cli.REPO]
+    rep = json.loads(out.read_text())
+    assert rep["model"] == {"config": "phi.json", "class": "4,27,2", "bindings": ["F32Add_v1", "F32Mul_v1"], "not_checkable": {}}
+    assert rep["summary"]["ok"] and "2 of the model's 2 served binding(s), 0 not checkable from a configuration" in capsys.readouterr().out
+    runs_before = len(got)
+    assert cli.main([*model, "--list", "--out", str(out)]) == 0 and len(got) == runs_before and len(traced) == 1
+    printed = capsys.readouterr().out.splitlines()
+    assert printed[:2] == ["definition F32Add_v1", "definition F32Mul_v1"]
+    assert printed[-1].startswith("circuit-check --model: 2 served binding(s) of 2 families at class 4,27,2, 0 not checkable")
+    assert json.loads(out.read_text())["bindings"] == ["F32Add_v1", "F32Mul_v1"]
+    rec = "Rec_v1{R={0123456789ab}}"
+    served["bindings"] = (["F32Add_v1"], {rec: "KeyError: 'record static {0123456789ab}'"})
+    assert cli.main([*model, "--out", str(out)]) == 1 and got[-1]["specs"] == ["F32Add_v1"]
+    rep = json.loads(out.read_text())
+    assert not rep["summary"]["ok"] and rep["model"]["not_checkable"] == {rec: "KeyError: 'record static {0123456789ab}'"}
+    printed = capsys.readouterr().out
+    assert f"not checkable from a configuration: {rec}: KeyError" in printed
+    assert "1 of the model's 2 served binding(s), 1 not checkable from a configuration" in printed
+    assert cli.main([*model, "--list"]) == 0 and f"not checkable from a configuration: {rec}" in capsys.readouterr().out
+    served["bindings"] = ([], {rec: "KeyError"})
+    runs_before = len(got)
+    assert cli.main(model) == 1 and len(got) == runs_before
+    for argv in (["--class", "4,27,2"], ["--list"], ["--model", "phi.json"], [*model, "--all"], [*model, "F32Add_v1"],
+                 [*model, "--shard", "1/2", "--shard-dir", str(tmp_path)]):
+        with pytest.raises(SystemExit) as e:
+            cli.main(argv)
+        assert e.value.code == 2, argv
+    assert "--class and --list name a model's served bindings" in capsys.readouterr().err
+
+
 def test_the_targets_a_change_reaches_are_repinned_and_the_rest_reused(runs, monkeypatch, tmp_path):
     got, _ = runs
     pinned: list[dict] = []

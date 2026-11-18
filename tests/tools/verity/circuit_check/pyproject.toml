@@ -71,6 +71,7 @@ workers = 14
 # H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage. spot/challenger.py:
 # pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
 # verity_config: conftest.py reads the session's variables through the suite's registry (settings.py), built on its registry.
+# calibration/hardware/cards: test_model.py's served bindings go through the engine profiles, which read the served card files.
 inputs_only = true
 inputs = ["tools/verity/circuit_check", "verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "tools/config/verity_config",
@@ -219,7 +220,15 @@ inputs = ["tools/verity/circuit_check", "verity/__init__.py", "tools/config/veri
           "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/resource_accounting/memory/poub/verifier/__init__.py", "verity/protocols/resource_accounting/memory/poub/verifier/commitments",
           "tests/adapters/vllm/tests/__init__.py", "verity/protocols/resource_accounting/memory/pous/__init__.py", "tests/adapters/vllm/tests/check/__init__.py",
           # test_superseded_versions.py: the list it holds the superseded versions to
-          "tests/lint/allowlists/superseded_versions.json"]
+          "tests/lint/allowlists/superseded_versions.json",
+          # test_model.py: what the sidecar's `served_bindings` imports to lower a model's class circuit
+          "adapters/vllm/verity_vllm/engine/profiles", "adapters/vllm/verity_vllm/engine/arrivals.py",
+          "adapters/vllm/verity_vllm/engine/engine_driver.py", "adapters/vllm/verity_vllm/engine/handle.py",
+          "adapters/vllm/verity_vllm/errors.py", "adapters/vllm/verity_vllm/log.py", "adapters/vllm/verity_vllm/target_family.py",
+          "adapters/vllm/verity_vllm/pipeline/advice_windows.py", "adapters/vllm/verity_vllm/pipeline/cli.py",
+          "adapters/vllm/verity_vllm/pipeline/launch_context.py", "adapters/vllm/verity_vllm/pipeline/window_advice.py",
+          "adapters/vllm/verity_vllm/pipeline/tp", "verity/protocols/resource_accounting/compute/pouw/prover/serving",
+          "calibration/hardware/cards"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -238,6 +247,7 @@ tests = [
     "test_block.py",
     "test_bodies.py",
     "test_declared_tables.py",
+    "test_model.py",
     "test_named_targets.py",
     "test_pinned_targets.py",
     "test_ranges.py",
@@ -268,7 +278,7 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = ["test_attention_split.py", "test_attention_split_digests_*.py", "test_bodies.py",
-         "test_declared_tables.py", "test_metadata_files.py", "test_named_targets.py",
+         "test_declared_tables.py", "test_metadata_files.py", "test_model.py", "test_named_targets.py",
          "test_pinned_targets.py", "test_ranges.py", "test_split_prims_serve.py",
          "test_structural.py", "test_structural_slots.py", "test_superseded_versions.py",
          "test_targets.py"]
@@ -286,6 +296,15 @@ paths = [
 [[tool.verity.tests.reads]]
 tests = ["test_targets.py"]
 paths = ["verity/protocols/proofs/flock/prover/python/verity_flock/struct_slots.circuit-check.py"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_model.py"]
+paths = [
+    "adapters/vllm/verity_vllm/__init__.circuit-check.py", "adapters/vllm/verity_vllm/program", "adapters/vllm/verity_vllm/engine",
+    "adapters/vllm/verity_vllm/pipeline", "adapters/vllm/verity_vllm/errors.py", "adapters/vllm/verity_vllm/log.py",
+    "adapters/vllm/verity_vllm/target_family.py", "verity/protocols/resource_accounting/compute/pouw/prover",
+    "calibration/hardware/cards",
+]
 
 [[tool.verity.tests.reads]]
 tests = ["test_shard.py", "test_split_prims_serve.py"]
