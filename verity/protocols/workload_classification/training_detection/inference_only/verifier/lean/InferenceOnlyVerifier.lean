@@ -13,6 +13,8 @@ public import InferenceOnlyVerifier.RecordCount
 public import InferenceOnlyVerifier.RecordRows
 public import InferenceOnlyVerifier.RecordChosen
 public import InferenceOnlyVerifier.RecordDifftest
+public import InferenceOnlyVerifier.RecordWired
+public import InferenceOnlyVerifier.RecordWiredDifftest
 public import InferenceOnlyVerifier.ThetaDifftest
 public import InferenceOnlyVerifier.Protocol
 public import InferenceOnlyVerifier.RowsProtocol

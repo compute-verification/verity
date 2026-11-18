@@ -10,6 +10,7 @@ public import Proofs.Properties.InferenceOnly.DigestDecode
 public import Proofs.Properties.InferenceOnly.DigestRefs
 public import Proofs.Properties.InferenceOnly.DigestParts
 public import Proofs.Properties.InferenceOnly.DigestPins
+public import Proofs.Properties.InferenceOnly.RecordEdges
 public import Proofs.Properties.InferenceOnly.DigestReads
 public import Proofs.Properties.InferenceOnly.DecodeEmpty
 import all Lean.Data.Json.Basic
