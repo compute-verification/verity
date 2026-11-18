@@ -63,6 +63,12 @@ class Labels:
         return {h: list(labs) for (m, h), labs in self.verdicts.items()
                 if key == vocab.REVIEWED and m == n and h != head and labs}
 
+    def at(self, head: str) -> list[int]:
+        return sorted({m for m, h in self.verdicts if h == head})
+
+    def lands(self, n: int, head: str) -> bool:
+        return Q.unreviewed(self.verdicts.get((n, head), []), (f"lane-{n}",)) is None
+
     def ready_by(self, n: int, head: str) -> str:
         return f"lane-{n}"
 
@@ -1792,6 +1798,39 @@ def test_a_merge_of_another_pr_s_head_carries_once_that_head_lands_on_its_own_ve
     assert [r["members"] for r in recs if r["action"] == "build"] == [[2, 1]]
 
 
+@pytest.mark.parametrize("theirs, carries", [([LAND], True), ([], False),
+                                             ([LAND, Lab("other", "hold", "2026-01-02T00:00:00Z", "wait")], False),
+                                             ([Lab("lane-2", "land", "2026-01-01T00:00:00Z")], False)],
+                         ids=["its-own-land", "no-verdict", "held", "owners-own"])
+def test_a_merge_of_another_pr_s_older_head_carries_when_that_head_has_its_own_land(env, theirs, carries):
+    """#1 merges #2's older head, which is neither landed nor #2's head now: #1's land carries when that head has a land
+    verdict of its own there by someone not #2's owner and no hold, read through the queue's labels, and not otherwise.  (#1
+    holds #2's commits, so it still lands after #2, as containment says.)"""
+    old2 = env.o.change({"b.txt": "2\n"})
+    new2 = env.o.change({"b.txt": "2, re-headed\n"}, base=old2)
+    old1 = env.o.change({"a.txt": "1\n"})
+    _carry_main(env, "on")
+    new1 = _merge(env.o, old1, old2)
+    env.o.gh.put(1, new1)
+    env.o.gh.put(2, new2)
+    env.labels.verdicts |= {(1, old1): [LAND], (1, new1): [], (2, old2): theirs, (2, new2): []}
+    recs = env.loop(policy).tick()
+    (rec,) = [r for r in recs if r["action"] == "carry" and r["number"] == 1]
+    assert rec["carries"] is carries and (carries or f"untrusted-parent: {new1[:12]} merges {old2[:12]}" in rec["why"])
+
+
+def test_a_land_carries_to_a_new_head_of_a_pr_ci_owns_as_to_any_lanes(env):
+    """A PR whose owners include ci took no carried land, so every merge of `main` into one of ci's changes waited for a new
+    read: its land at an older head carries as any lane's does."""
+    old = env.o.change({"a.txt": "1\n"})
+    main = _carry_main(env, "on")
+    env.o.gh.put(1, new := _merge(env.o, old, main), body="Lane `ci`.")
+    env.labels.verdicts |= {(1, old): [LAND], (1, new): []}
+    recs = env.loop(policy).tick()
+    assert [(r["number"], r["carries"]) for r in recs if r["action"] == "carry"] == [(1, True)]
+    assert [r["members"] for r in recs if r["action"] == "build"] == [[1]]
+
+
 def test_a_merge_of_the_old_path_s_checked_carries_a_land_as_drive_trusts_checked_beside_main(env):
     """`checked`, frozen since the switch, holds what landed under drive's rules and reaches `main` in an aggregate of it: a
     head that only merges it carries its land, as drive's carry trusts the tips of `checked` and `main` (`carry.trust`)."""
@@ -1832,6 +1871,36 @@ def test_wide_file_and_pins_file_name_the_files_the_world_reads_each_tick_by_def
         with pytest.raises(Built):
             L.main([*common, *extra])
     assert seen == [default, tmp_path / "file"]
+
+
+def test_a_batch_needing_the_whole_check_is_built_apart_unless_no_apart_and_only_where_the_land_verdicts_gate(
+        monkeypatch, tmp_path, env):
+    """The loop builds batches needing the whole check apart (`Loop.apart`) unless `--no-apart` is given, and only under `--gate
+    verdict`, with records runs or not: under another gate its snapshot says none is."""
+    seen: list[bool] = []
+
+    class Built(Exception):
+        pass
+
+    def loop(world, *args, **kw):
+        seen.append(kw["apart"])
+        raise Built
+
+    real = L.Loop
+    monkeypatch.setattr(L, "Loop", loop)
+    monkeypatch.setattr(Q, "remote_and_repo", lambda *a: ("origin", "owner/repo"))
+    monkeypatch.setattr(Q, "credential_args", lambda *a: ())
+    monkeypatch.setattr(Q, "GitHub", lambda slug: None)
+    common = ["--repo", str(tmp_path / "repo"), "--store", str(tmp_path / "store"), "--lock", str(tmp_path / "lock"),
+              "--log", str(tmp_path / "log" / "decisions.jsonl"), "--once"]
+    for extra in ([], ["--no-apart"]):
+        with pytest.raises(Built):
+            L.main([*common, *extra])
+    assert seen == [True, False]
+    monkeypatch.setattr(L, "Loop", real)
+    assert env.loop(vqueue.decide, apart=True, slim=vqueue_slim, gate=L.VERDICT_GATE).apart
+    assert not env.loop(vqueue.decide, apart=True).apart
+    assert env.loop(vqueue.decide, apart=True, records=object(), slim=vqueue_slim, gate=L.VERDICT_GATE).apart
 
 
 @pytest.mark.parametrize("heavy, on", [("1\n", "big"), ("1\n", ""), ("*\n", "big")], ids=["big", "off", "every"])
@@ -2857,7 +2926,8 @@ class Slim:
     as `judge` keeps them, each failed step a `Failed` whose inputs are ``inputs`` and kind ``kinds`` names, and the machines
     ``erred_on`` names for its run kept in its record.  Each record judged is kept in ``judged``, and each start's ``avoid`` in
     ``avoided``.  With ``launching``, a candidate's start is a detached launch, pending until ``registered`` names the run ids it printed
-    for its sha (none: it registered no run)."""
+    for its sha (none: it registered no run); with ``shards`` too, one launch a shard, each named by its directory in
+    ``registered``, and one that registered no run keeps infra for the whole run while the others still launch."""
 
     def __init__(self):
         self.started: list[tuple] = []
@@ -2866,7 +2936,7 @@ class Slim:
         self.steps: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}
         self.inputs = frozenset({"tests/**"})
         self.judged: list = []
-        self.launching, self.registered = False, {}
+        self.launching, self.registered, self.shards = False, {}, 0
         self.kinds: dict[str, str] = {}
         self.erred_on: dict[str, list[str]] = {}
         self.avoided: list[tuple[str, ...]] = []
@@ -2877,14 +2947,34 @@ class Slim:
             self.below.append((driver, sha))
             return {"ids": [f"main-{len(self.below)}"], "tip": sha, "base": base}
         self.started.append((driver, sha, base))
+        if self.launching and self.shards:
+            return {"ids": [], "at": 0.0, "tip": sha, "base": base, "shards": [
+                {"ids": [], "launch": {"dir": f"train-{len(self.started)}-{k}", "pid": 1}} for k in range(1, self.shards + 1)]}
         if self.launching:
             return {"ids": [], "launch": {"dir": f"train-{len(self.started)}", "pid": 1}, "tip": sha, "base": base}
         return {"ids": [f"run-{len(self.started)}"], "tip": sha, "base": base}
+
+    def shards_registered(self, driver, rec: dict) -> list[str]:
+        new = []
+        for s in rec.get("shards") or ():
+            if "launch" in s and (ids := self.registered.get(s["launch"]["dir"])) is not None:
+                del s["launch"]
+                s["ids"] = list(ids)
+                new += ids
+        return new
 
     def judge(self, driver, rec: dict | None) -> Verdict:
         self.judged.append(rec)
         if rec is None:
             return Verdict(INFRA, (), (vqueue.Failed("the run beside its check registered no run", ":no run", frozenset()),))
+        if "shards" in rec:
+            if "verdict" not in rec:
+                if not (dead := [s for s in rec["shards"] if "launch" in s and self.registered.get(s["launch"]["dir"]) == []]):
+                    return Verdict(PENDING)
+                for s in dead:
+                    del s["launch"]
+                rec["verdict"] = INFRA
+            return Verdict(INFRA, (), (vqueue.Failed("registered no run: a shard", f"{rec['tip']}:no run", frozenset()),))
         if "launch" in rec:
             if rec["tip"] not in self.registered:
                 return Verdict(PENDING)
@@ -3235,6 +3325,39 @@ def test_a_run_beside_still_launching_when_its_candidate_is_dropped_is_cancelled
     again = env.loop(vqueue.decide, clone="again", slim=slim)
     again.world.slim_driver = lambda: "drive"
     assert again.tick() == [] and len(slim.started) == 1                                          # settled, once
+
+
+def test_a_drop_while_shards_of_the_run_beside_still_launch_cancels_each_shard_s_run_once_it_registers(env):
+    """A shard that registered no run keeps infra for the whole run beside the check while its other shards still launch; a
+    drop then keeps their launches (`beside_launching`), and each shard's run is cancelled once it registers, logged with the
+    shards left launching until none is: no run outlives its candidate, and nothing is read off the gate as if its runs ended."""
+    env.put(1, {"a.txt": "1\n"})
+    slim = Slim()
+    slim.launching, slim.shards = True, 3
+    loop = env.loop(vqueue.decide, slim=slim)
+    loop.world.slim_driver = lambda: "drive"
+    _, built, started = loop.tick()
+    sha, dirs = built["sha"], [s["launch"]["dir"] for s in started["record"]["shards"]]
+    slim.registered[dirs[0]] = []                                   # shard 1 registered no run
+    env.labels.held.add(1)                                          # and its candidate is dropped in the same tick
+    drop = next(r for r in loop.tick() if r["action"] == "drop")
+    assert [s.get("launch", {}).get("dir") for s in drop["beside_launching"]["shards"]] == [None, *dirs[1:]], drop
+    assert "off_gate_running" not in drop and env.cancelled == [] and loop.tick() == []      # still launching
+    why = f"vqueue: candidate {sha[:12]} was dropped: {drop['why']}"
+    slim.registered[dirs[1]] = ["run-a"]
+    (one,) = loop.tick()
+    assert (one["action"], one["sha"], one["dropped"], one["beside_cancelled"], env.cancelled) == (
+        "slim", sha, False, ["run-a"], [(["run-a"], why)])
+    assert [s.get("launch", {}).get("dir") for s in one["beside_launching"]["shards"]] == [None, None, dirs[2]]
+    assert loop.tick() == []
+    slim.registered[dirs[2]] = ["run-b"]
+    (two,) = loop.tick()
+    assert (two["dropped"], two["beside_cancelled"], "beside_launching" in two, env.cancelled[1:]) == (
+        True, ["run-b"], False, [(["run-b"], why)])
+    assert two["why"] == "its candidate was dropped while it launched: a shard's run cancelled" and loop.tick() == []
+    again = env.loop(vqueue.decide, clone="again", slim=slim)
+    again.world.slim_driver = lambda: "drive"
+    assert again.tick() == [] and len(env.cancelled) == 2                                       # settled, once
 
 
 def test_a_dropped_candidate_s_run_beside_its_check_is_cancelled_while_it_runs_and_one_that_ended_is_left(env):

@@ -49,6 +49,7 @@ from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import BIT, BitOr, I32Add, I32Le, SelectI32
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.numerics import dsv4_decode_indices_twin
 from verity_vllm.definitions.registry import fp8_moe_experts as FX
 from verity_vllm.definitions.registry import marlin_moe as MM

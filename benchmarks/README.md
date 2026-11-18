@@ -21,6 +21,7 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | `verity bench certifier_term` | the network attester's term for GLM-5.3 at a scope's load, in bits and GB |
 | `verity bench attester_timing` | the bits an interval a server moves through when the network attester releases its bytes: `run`, `guard`, `serve`, `observe`, `score`, `table` and `target` |
 | `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside the slowdown calculator's shape-derived ones; `--models llama32-1b --out DIR`, Llama 3.2 1B's layer alone and its point, on a CPU |
+| `verity bench codec_tensor` | the tensor-core wide-word codec on one GPU: `wt.cu`'s libraries gated against `wide.py`, then their read, rates, decodes and GEMMs timed |
 | `verity bench compile_cost` | wall time and peak memory, by phase, of compiling a class-G window's Programs |
 | `verity bench compute` | the compute audit's number: the share of a served model's MACs that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record |
 | `verity bench dsa_topk` | the canonical top-k on one GPU node: its outputs run to run and in two processes at once, the plugin as vLLM loads it, and its cost |
@@ -156,7 +157,8 @@ passes `made_up=True` wherever it is reported, whatever its own files say of its
 on a stand-in model, a comparison run. Start one with `research run --env VERITY_BENCH_TRIAL=1 ...` in front of the
 registered command (the overhead, vLLM and steady doors forward the variable from the launcher's environment). Its
 writer puts every measurement in `out/trial-measurements.json` and none in `result.json`, which says `trial: true`, so no
-number of it reaches a metric's line; a trial's run is never labelled a run of record, a plan's passing run or a served row.
+number of it reaches a metric's line. It is never a plan's passing run, and every record step refuses a labelled one
+(`kit.trial_why`), naming the launch that makes it of record.
 
 `kit.report(name, text, doc, measured, ran_with=..., accepted=..., why=..., made_up=..., withdrawn=..., from_run=...)` is the command's
 last step, and the printed and written forms are the kit's (`harness/README.md`'s "The kit").

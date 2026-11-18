@@ -76,6 +76,7 @@ from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import BIT, BitNot, BitOr, I32Add, I32Le, SelectI32
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.numerics import dsv4_decode_metadata_twin
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry import dsv4_indexer as IX

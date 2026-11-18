@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""RunPod, which now hosts only the control pod (`vy-control-verity`): create, list, get, ssh and terminate, plus the REST and
+"""RunPod, which now hosts only the control pod (`vy-control-verity`): create, list, get, ssh and terminate, plus the
 GraphQL calls the budgets guard and `research notes` make. Nebius runs every node (`pods/nebius/`).
 
 Reads the API key from ``~/.runpod/config.toml`` and never prints it.  Talks to
-the REST API (``https://rest.runpod.io/v1``).  RunPod counts the account's REST
-calls and its GraphQL calls apart, each by the minute, the hour and the UTC day,
-and answers 429 past a count.  So the two reads, one pod (``get``) and every pod
-(``pods``), ask GraphQL when REST gives no answer, and hand back REST's shape
-with the fields ``_as_rest`` lists; the balance is GraphQL's alone.
+GraphQL (``https://api.runpod.io/graphql``): RunPod's REST host no longer
+resolves.  The two reads, one pod (``get``) and every pod (``pods``), hand back
+the shape RunPod's REST API gave, with the fields ``_as_rest`` lists, and
+``terminate`` is GraphQL's ``podTerminate``.  Creating a pod has no GraphQL
+form here yet and is refused by name (``_request``); the control machine's
+helper creates one meanwhile.
 
 Every call that reaches RunPod is one line of ``api-calls.log`` under
 ``$XDG_STATE_HOME/research/runpod/`` (default ``~/.local/state``): the time, the
@@ -30,7 +31,7 @@ forgotten and RunPod asked.
 Where the laptop files are absent (a cloud VM with only the Cursor secrets) the
 environment stands in, and a file that exists always wins:
 ``RUNPOD_API_KEY`` for the API key (with the default GraphQL URL), and with
-neither, the REST calls are asked of the control pod's gate (``pods/door.py``);
+neither, the pod calls are asked of the control pod's gate (``pods/door.py``);
 ``RUNPOD_SSH_KEY_B64`` for the ssh key, decoded once to a mode-600 file under
 ``$XDG_STATE_HOME/research/runpod/`` (default ``~/.local/state``), with its
 known_hosts beside it.  Neither value is ever printed.
@@ -64,11 +65,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .. import settings
 
-REST = "https://rest.runpod.io/v1"
 CONFIG = Path.home() / ".runpod" / "config.toml"
 SSH_KEY = Path.home() / ".runpod" / "ssh" / "runpodctl-ssh-key"
 KNOWN_HOSTS = Path.home() / ".runpod" / "ssh" / "veritor-campaign-known_hosts"
@@ -80,7 +80,7 @@ ADDRESS_TTL_S = 3600.0              # how long a pod's kept address is used befo
 ADDRESS_KEYS = ("host", "port", "user", "pod_name", "cost_per_hr", "rate_observed_utc", "gpu")    # a runpod machine's target, as kept
 HOST_KEY_CONNECT_S = 5              # ssh's ConnectTimeout for the handshake that asks a host for its key (`host_key`) ...
 HOST_KEY_S = 20.0                   # ... and the whole handshake's bound
-#: what the GraphQL reads ask of a pod: the fields `_as_rest` turns into REST's
+#: what the GraphQL reads ask of a pod: the fields `_as_rest` turns into the REST API's shape
 POD_FIELDS = ("id name desiredStatus costPerHr createdAt machineId machine { gpuTypeId } "
               "runtime { ports { ip isIpPublic privatePort publicPort type } }")
 #: the clock of the kept addresses and the call log, and the runner of `host_key`'s ssh and `drop_key`'s ssh-keygen: a test's stand-ins
@@ -178,8 +178,11 @@ def _struck(text: str, cfg: dict[str, Any]) -> str:
 
 
 def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
+    """RunPod's pod call `method path` (`GET /pods`, `GET /pods/ID`, `POST /pods`, `DELETE /pods/ID`), answered in the shape
+    RunPod's REST API gave.  With a key here GraphQL is asked, and a create is refused; with none the control pod's gate
+    is asked, and makes this same call there with the account's key."""
     try:
-        cfg = _config()
+        _config()
     except PodError as no_key:
         # a machine with no RunPod key asks the control pod's gate, which holds the account's (pods/door.py)
         try:
@@ -187,34 +190,16 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
         except ImportError:                 # this file alone on a pod: no package around it
             raise no_key from None
         return door.api(method, path, body, no_key=str(no_key))
-    data = json.dumps(body).encode() if body is not None else None
-    request = urllib.request.Request(  # noqa: S310 (REST, a literal https URL)
-        f"{REST}{path}",
-        data=data,
-        method=method,
-        headers={
-            "Authorization": f"Bearer {cfg['apikey']}",
-            "Content-Type": "application/json",
-            "User-Agent": "veritor-campaign/0.1",
-        },
-    )
-    pod_id = path[len("/pods/"):].split("/", 1)[0] if path.startswith("/pods/") else None
-    try:
-        with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310 (REST, a literal https URL)
-            raw = response.read()
-            _note_call("rest", method, path, getattr(response, "status", None), getattr(response, "headers", None))
-    except urllib.error.HTTPError as error:
-        _note_call("rest", method, path, error.code, error.headers)
-        detail = _struck(error.read().decode(errors="replace"), cfg)[:500]
-        what = "not found (terminated, or never existed)" if error.code == 404 else detail
-        raise PodError(f"{method} {path} -> HTTP {error.code}: {what}", code=error.code, pod_id=pod_id) from None
-    except ValueError:                          # its text quotes the header it could not send, which holds the key
-        _note_call("rest", method, path, None, None)
-        raise PodError(f"{method} {path}: the RunPod config's API key holds a character no request can carry", pod_id=pod_id) from None
-    except (urllib.error.URLError, TimeoutError, OSError) as error:
-        _note_call("rest", method, path, None, None)
-        raise PodError(f"{method} {path}: {type(error).__name__}: {getattr(error, 'reason', None) or error}", pod_id=pod_id) from None
-    return json.loads(raw) if raw else None
+    pod = re.fullmatch(r"/pods/([^/]+)", path)
+    if (method, path) == ("GET", "/pods"):
+        return _graphql_pods()
+    if method == "GET" and pod:
+        return _graphql_pod(pod[1])
+    if method == "DELETE" and pod:
+        return _graphql_terminate(pod[1])
+    raise PodError(f"{method} {path}: refused, since RunPod's REST host (rest.runpod.io) no longer resolves and this call has no "
+                   "GraphQL form here yet (INF-896); create a pod with the control machine's helper meanwhile",
+                   pod_id=pod[1] if pod else None)
 
 
 def _graphql(query: str) -> Any:
@@ -273,10 +258,8 @@ def _note_call(api: str, method: str, what: str, status: int | None, headers: An
     can't be written is said once on stderr."""
     try:
         get = headers.get if headers is not None else (lambda _name: None)
-        left = dict(re.findall(r'"(minute|hour|day)";r=(\d+)', str(get("ratelimit") or "")))    # REST: `"day";r=N;t=S, ...`
-        for window in ("minute", "hour", "day"):                                                  # GraphQL: one header a window
-            if window not in left and re.fullmatch(r"\d+", str(get(f"x-ratelimit-remaining-{window}") or "")):
-                left[window] = str(get(f"x-ratelimit-remaining-{window}"))
+        left = {window: str(get(f"x-ratelimit-remaining-{window}")) for window in ("minute", "hour", "day")
+                if re.fullmatch(r"\d+", str(get(f"x-ratelimit-remaining-{window}") or ""))}
         line = " ".join([time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(clock())), api, method, what,
                          str(status) if status is not None else "none",
                          *(f"{window}={left[window]}" for window in ("day", "hour", "minute") if window in left),
@@ -316,7 +299,7 @@ def _graphql_data(query: str, pod_id: str | None = None) -> dict[str, Any]:
 
 
 def _as_rest(pod: dict[str, Any]) -> dict[str, Any]:
-    """A GraphQL pod (`POD_FIELDS`) as REST gives one, with the fields `research` reads: id, name, desiredStatus, costPerHr,
+    """A GraphQL pod (`POD_FIELDS`) as the REST API gave one, with the fields `research` reads: id, name, desiredStatus, costPerHr,
     createdAt, machineId, machine.gpuTypeId, and publicIp and portMappings from its public TCP ports."""
     ports = [p for p in ((pod.get("runtime") or {}).get("ports") or []) if p.get("isIpPublic") and p.get("type") == "tcp"]
     ssh = [p for p in ports if p.get("privatePort") == 22] or ports
@@ -334,6 +317,13 @@ def _graphql_pod(pod_id: str) -> dict[str, Any]:
     return _as_rest(pod)
 
 
+def _graphql_terminate(pod_id: str) -> None:
+    """`podTerminate`, the mutation the pod's own lease ends it with (`sh/lease.sh`).  A pod GraphQL does not know is gone, a
+    `PodError` with code 404, as REST's DELETE gave."""
+    _graphql_pod(pod_id)
+    _graphql_data(f'mutation {{ podTerminate(input: {{podId: "{pod_id}"}}) }}', pod_id)
+
+
 def _graphql_pods() -> list[dict[str, Any]]:
     listing = (_graphql_data(f"{{ myself {{ pods {{ {POD_FIELDS} }} }} }}").get("myself") or {}).get("pods")
     if not isinstance(listing, list):
@@ -341,30 +331,9 @@ def _graphql_pods() -> list[dict[str, Any]]:
     return [_as_rest(p) for p in listing]
 
 
-def _read(rest: Callable[[], Any], graphql: Callable[[], Any]) -> Any:
-    """REST's answer, or GraphQL's when REST gives none: its rate limit (HTTP 429), a server error, or no answer at all.  Any
-    other status is REST's answer (404: the pod is gone) and is raised as it came.  With no key here REST was asked of the control
-    pod's gate, which has no verb for GraphQL, so its failure stands."""
-    try:
-        return rest()
-    except PodError as refused:
-        if refused.code is not None and refused.code != 429 and refused.code < 500:
-            raise
-        try:
-            _config()
-        except PodError:
-            raise refused from None
-        try:
-            return graphql()
-        except PodError as error:
-            if error.code == 404:
-                raise
-            raise PodError(f"{refused}; {error}", code=refused.code, pod_id=refused.pod_id) from None
-
-
 def pods() -> list[dict[str, Any]]:
     """Every pod of the account."""
-    return _read(lambda: _request("GET", "/pods") or [], _graphql_pods)
+    return _request("GET", "/pods") or []
 
 
 def _address_file(pod_id: str) -> Path | None:
@@ -563,7 +532,7 @@ def list_pods() -> None:
 
 
 def get(pod_id: str) -> dict[str, Any]:
-    return _read(lambda: _request("GET", f"/pods/{pod_id}"), lambda: _graphql_pod(pod_id))
+    return _request("GET", f"/pods/{pod_id}")
 
 
 def ssh_target(pod: dict[str, Any]) -> tuple[str, int] | None:
