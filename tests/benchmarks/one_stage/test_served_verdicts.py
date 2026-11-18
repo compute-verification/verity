@@ -6155,7 +6155,7 @@ def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_n
     (tmp_path / "order").unlink()
     rc, lines, order = _compose(tmp_path, HOST="vy-auditor-2", LEAN="accept")
     assert rc == 0 and order == ["composite", "record"], (lines, order)
-    assert lines[0] == COMPOSED.format(audit="V3c's audit from cpu-6", sampled=f"v3c-wK-{VTAG}/audit", verdict="PASS")
+    assert lines[0] == COMPOSED.format(audit="V3c's audit from its follow-on node", sampled=f"v3c-wK-{VTAG}/audit", verdict="PASS")
     argv = json.loads((tmp_path / "order.record").read_text())
     assert argv[argv.index("--sampled-proofs") + 1] == str(d / v3c) and "--sampled-lean" in argv
     for x in ("serve", "compose-out"):
@@ -7762,7 +7762,7 @@ FRONT_CALL = "benchmarks/network_traces/attester_piece.py front 18190 TMP/serve 
 FRONT_LINE = "TMP/tree/benchmarks/one_stage/served_verdicts.py front-line TMP/serve/private/certifier-front/session.json"
 SAID_UP = ["SERVE SERVE-OPENAI listening",
            "NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free "
-           "(weights-registration exit 1: )"]
+           f"(weights-registration (no exception, exit 1): {PRIVATE})"]
 SAID_FRONT = ["CERTIFIER-FRONT (exit 0): "]
 SAID_LOAD = [f"REQUESTS (exit 0, release run {RELEASE_RUN}): every request answered",
              "TIMINGS: no TMP/serve/load.timings.json"]
