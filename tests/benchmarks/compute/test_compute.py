@@ -467,7 +467,7 @@ def test_the_command_line_names_the_useful_work_scheme(store, capsys):
 def test_a_scheme_no_served_run_attaches_is_not_implemented():
     with pytest.raises(NotImplementedError, match=r"^dither is not served: no adapter entry attaches it to a served run"):
         C.main(["--protocol", "dither", "--from", str(RECORD)])
-    assert C.served(C.useful_work("pearl-plus")).protocol == "verity/pouw/pearl-plus/v1"
+    assert C.useful_work("pearl-plus").protocol == "verity/pouw/pearl-plus/v1"
 
 
 @pytest.mark.parametrize("edits, why", [

@@ -148,10 +148,8 @@ are written as one entry each, with no value and why. A made-up record's entries
 from __future__ import annotations
 
 import argparse
-import importlib
 import json
 import math
-import os
 import re
 import sys
 import tomllib
@@ -161,17 +159,16 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity.device import Site, load_card, rate
-from verity.protocols.resource_accounting import scheme as schemes
-from verity_bench import kit
+from verity.protocols.resource_accounting.scheme import Scheme
+from verity_bench import kit, schemes
 from verity_bench.kit_report import RUN_ID
 
 CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
-PROTOCOLS = Path(__file__).resolve().parents[2] / "verity/protocols"
 
 __all__ = ["ABSENT", "ANSWER", "CREDITABLE", "OF_CREDITABLE", "RAN", "SHARE", "DELTA_S", "DELTA_S_MARK", "DEVELOPMENT", "EPSILON_S", "HELD_TO_W", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
            "POLICY",
            "RECORDS", "RESTS_ON", "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
-           "amounts", "capacity", "coins", "from_dir", "from_run", "main", "member", "model_macs", "served", "uncredited_words",
+           "amounts", "capacity", "coins", "from_dir", "from_run", "main", "member", "model_macs", "uncredited_words",
            "useful_work"]
 
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
@@ -277,30 +274,14 @@ class Unreadable(Exception):
     """A run, its policy or its record can't be read."""
 
 
-def useful_work(name: str) -> schemes.Scheme:
-    """The compute scheme registered under ``name``, after importing every ``scheme.py`` under `verity/protocols` that
-    imports the registry (each registers its scheme when imported); `Unreadable` naming the registered compute schemes
-    for any other name."""
-    for root, dirs, files in os.walk(PROTOCOLS):
-        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
-        path = Path(root) / "scheme.py"
-        if "scheme.py" in files and f"from {schemes.__name__} import" in path.read_text():
-            importlib.import_module(".".join(path.relative_to(PROTOCOLS.parents[1]).with_suffix("").parts))
-    compute = sorted(n for n, s in schemes.SCHEMES.items() if s.resource == "compute")
-    if name not in compute:
-        raise Unreadable(f"--protocol {name!r} is no registered compute scheme; registered: {', '.join(compute)}")
-    return schemes.get(name)
-
-
-def served(scheme: schemes.Scheme) -> schemes.Scheme:
-    """``scheme``, where a served run of it leaves an answer to read: `NotImplementedError` where no adapter entry
-    attaches it to a served run (`Scheme.option` empty)."""
-    if not scheme.option:
-        raise NotImplementedError(
-            f"{scheme.name} is not served: no adapter entry attaches it to a served run, so no kernel computes its "
-            f"workload's products while serving and no verifier ({scheme.protocol}) answers for a served run of it; a "
-            "run of it leaves no answer to read")
-    return scheme
+def useful_work(name: str) -> Scheme:
+    """The registered compute scheme ``name``, where a served run of it leaves an answer to read (`schemes.served`):
+    `Unreadable` naming the registered compute schemes for another name, `NotImplementedError` for a scheme no served
+    run attaches."""
+    try:
+        return schemes.served(schemes.useful_work(name))
+    except ValueError as e:
+        raise Unreadable(str(e)) from None
 
 
 def _under(path: str, prefix: str) -> bool:
@@ -385,7 +366,7 @@ def _held(tree: Path, path: str) -> Any:
     return json.loads((tree / path).read_text()) if (tree / path).is_file() else None
 
 
-def credit(tree: Path, scheme: schemes.Scheme) -> dict:
+def credit(tree: Path, scheme: Scheme) -> dict:
     """The Pearl+ verifier's credit in the record under `tree`: `NoNumber` unless its answer is `scheme`'s verifier's
     (`Scheme.protocol`), an accept with a
     credit that is no test instance's, and the record holds the Lean verifier's verdict and its comparison with the
@@ -660,7 +641,7 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
                     for c in worst]}
 
 
-def document(tree: Path, scheme: schemes.Scheme, commit: str | None, run: str | None, withdrawn: list[str],
+def document(tree: Path, scheme: Scheme, commit: str | None, run: str | None, withdrawn: list[str],
              given: Path | None = None) -> dict:
     """The printed document of the record under `tree`, of the useful-work scheme `scheme`: the number, its unit, the
     commit the run ran from and the run, then what the number is made of. `withdrawn` is what was withdrawn of the rest of
@@ -775,7 +756,7 @@ def commit_of(attempt: dict) -> str | None:
     return f"{source['commit']}-dirty" if source.get("commit") and source.get("dirty") else source.get("commit")
 
 
-def from_run(store: EvidenceStore, run: str, scheme: schemes.Scheme, per_call: bool = False, given: Path | None = None,
+def from_run(store: EvidenceStore, run: str, scheme: Scheme, per_call: bool = False, given: Path | None = None,
              top: int = 10) -> dict:
     """The printed document of recorded run `run` of `scheme`; with `per_call`, its give-up by cause and by call too
     (`split`)."""
@@ -806,7 +787,7 @@ def stated(tree: Path | None) -> tuple[tuple[str, dict] | None, str]:
     return said, "" if said else coins_text(c)
 
 
-def from_dir(record: Path, scheme: schemes.Scheme, per_call: bool = False, given: Path | None = None,
+def from_dir(record: Path, scheme: Scheme, per_call: bool = False, given: Path | None = None,
              top: int = 10) -> dict:
     """The printed document of the run record of `scheme` in the directory `record` (module docstring), through no
     store: the run
@@ -940,7 +921,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
         ap.error("--uncredited and --top go with --per-call")
     tree = None
     try:
-        scheme = served(useful_work(a.protocol))
+        scheme = useful_work(a.protocol)
         if RUN_ID.fullmatch(a.source) and not Path(a.source).is_dir():
             doc = from_run(store_of(), a.source, scheme, a.per_call, a.uncredited, a.top)
         else:

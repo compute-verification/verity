@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None, *,
                     help="a calibration/tensor_duty --arms fp32-beside run on an H200: its honest arm A rate")
     a = ap.parse_args(argv)
     try:
-        scheme = compute.served(compute.useful_work(a.protocol))
+        scheme = compute.useful_work(a.protocol)
         store = store_of()
         share_doc = compute.from_run(store, a.run, scheme)
         doc = document(share_doc, honest_rate(duty_points(store, a.duty)), a.duty)
