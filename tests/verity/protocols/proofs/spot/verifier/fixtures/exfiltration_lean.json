@@ -1,12 +1,12 @@
 {
  "source": "verifier/tests/lean/ExfiltrationVectors.lean via verifier/tests/lean/generate.sh",
- "statement": "FlockSoundness.Audit.Partition.audit_exfiltration",
+ "statement": "Spot.Sampling.Partition.audit_exfiltration",
  "inputs": {
-  "tests/verity/protocols/proofs/spot/verifier/lean/ExfiltrationVectors.lean": "3ebd22ab25f62944f90f33a9ccc38df3683c4904b89252c238dd8dfbf3ef7d38",
-  "security/Proofs/Flock/Soundness/Audit/Influence.lean": "45493607fa4e6e01c017bed0fea7894555d6e86a091629cbe66d72de5802b19f",
-  "security/Proofs/Flock/Soundness/Audit/SamplingDesign.lean": "e111cd96ad9588e38af3624fd5947a95ceb4ea4f749d862350e7cc96544c3695",
-  "security/Proofs/Flock/Soundness/Audit/Stratified.lean": "b4fe1ef871903be23db629f3abd91fd3c61ee1dd4eab162d2f198bf681101d92",
-  "security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean": "c75d7649bb6a772ccd76e958437dbf8f68182684171dbb0aae9d2ab902bbc6b7",
+  "tests/verity/protocols/proofs/spot/verifier/lean/ExfiltrationVectors.lean": "d56f60d9abaa279a1108b17943f1fbb6c8852dfa2de4d4179ea92fcce274989b",
+  "security/Proofs/Spot/Sampling/Influence.lean": "21d3ef3177d486c04047e0bf39bd9c02f4c20f89f992f90ea1b8e50dd0630f87",
+  "security/Proofs/Spot/Sampling/SamplingDesign.lean": "668796aea8d64265ecb516cb4d34723fd590ac4073666a2ef83655bcd0e891fe",
+  "security/Proofs/Spot/Sampling/Stratified.lean": "d99842ad0c5980587806aac1c657fe82bb077074c87de6479417f395d9eb4140",
+  "security/Proofs/Spot/Sampling/StratifiedMiss.lean": "88727748269a2954007d99d50c21d7bd0e2ce43b707d3d87198dd96901b62615",
   "security/Proofs/lake-manifest.json": "c6689ebebe63bcc33710b71c7e1f9ed83c294c1670734ec61ab28a5a91f70a21",
   "security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632"
  },
