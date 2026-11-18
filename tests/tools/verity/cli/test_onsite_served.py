@@ -491,13 +491,13 @@ def test_the_onsite_lines_trusted_device_takes_the_network_attesters_placement(t
     premise = "unmet: the network attester ran on the workload's machine prover-node under a key made for the run"
     answer = tmp_path / "out" / "pieces" / "certifier" / "answer.json"
     answer.parent.mkdir(parents=True)
-    answer.write_text(json.dumps({"profile": {"placement": {"kind": "prover-node", mc.PREMISE: premise,
-                                                            "key_pin": "run", "coins_on": T.PROVER_NODE}}}))
+    answer.write_text(json.dumps({"protocol": T.MANIFESTS["network-attester"].id, "profile": {"placement": {
+        "kind": "prover-node", mc.PREMISE: premise, "key_pin": "run", "coins_on": T.PROVER_NODE}}}))
     monkeypatch.setattr(T, "onsite_check", lambda cfg, state: {"verdict": "undecided"})
     (tmp_path / T.BINDINGS).write_text(json.dumps(BINDINGS))
     line, = T.live(cfg, tmp_path, [T.VERIFIER]).outcomes[T.VERIFIER]["outcome"]["verdicts"]
     assert line[mc.PREMISE] == {"network-attester": premise}
-    answer.write_text(json.dumps({"profile": {}}))
+    answer.write_text(json.dumps({"protocol": T.MANIFESTS["network-attester"].id, "profile": {}}))
     line, = T.live(cfg, tmp_path, [T.VERIFIER]).outcomes[T.VERIFIER]["outcome"]["verdicts"]
     assert line[mc.PREMISE] == {}
 
