@@ -5,7 +5,7 @@
      "query": {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}}}
 
 * **Digest.** `SHA-512("verity/partition/v1\\0" || canon(object))`, canon = `codec.canonical_json` (keys sorted, no whitespace, ASCII).
-* **Program.** `codec.program_digest`: SHA-512 over the canonical descriptor (`codec.encode_program`, schema `verity-ir/descriptor/v1`,
+* **Program.** `codec.program_digest`: SHA-512 over the canonical descriptor (`codec.encode_program`, schema `verity-ir/descriptor/v2`,
   annotations excluded) -- the bytes the evaluator's input is defined over; a descriptor of another schema is refused.  It carries no
   domain prefix (the object and owners digests do).
 * **Query.** Nothing about the partition is stored: owners, units and the committed set are what `evaluate(program, query)` computes,
