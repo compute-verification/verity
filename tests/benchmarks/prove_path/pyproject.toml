@@ -47,6 +47,9 @@ inputs = ["calibration/hardware/cards", "verity", "adapters/vllm", "adapters/tor
           "benchmarks/pouw/pearl_c_vllm/verify_run.py", "benchmarks/pouw/pearl_c_vllm/fast_tile.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear", "benchmarks/pouw/settings.py", "tests/benchmarks/pouw/pyproject.toml",
           "tools/config/verity_config",
+          # `verity_bench.kit_report`: the words served_tie_window's result says who checked it in
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit_report.py",
+          "benchmarks/harness/verity_bench/settings.py",
           # verity_difftest, which test_prove_path imports: under `verity` until the difftest map moved it
           "tools/difftest", "benchmarks/prove_path"]
 

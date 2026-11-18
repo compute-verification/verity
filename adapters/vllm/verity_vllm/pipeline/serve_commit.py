@@ -37,8 +37,9 @@ yet absorbed); a request may still span windows. ``disk`` (`serve_guard.DiskFloo
 filesystem under its floor, and ``on_floor`` then hears why (the server stops). ``mirror`` (`serve_mirror.Mirror`) copies into the
 run's ``$OUT``, after each close and each seal, the fields `serve_mirror.PUBLIC` names of the records it lists, and nothing else.
 
-With ``served`` (the statics of the compile slice the windows are proved by, `SERVED_SLICE`; `served_statics`) each close
-also commits the step rows the window ran
+With ``served`` (the statics of the compile slice built to prove the windows, `SERVED_SLICE`; `served_statics`; no
+session of the compile slice runs and no proof of it runs, so today the rows registered at serve time are the prover's
+word) each close also commits the step rows the window ran
 (`verity_vllm.compiler.served_rows.register`, under the window's run root): each request named by its arrival
 id, its index in the order the engine admitted the run's requests. The record's public part (the registration's
 binding, root, count and row width, with the statics and the slice) goes into the window's ``windows.jsonl`` line, beside
@@ -69,8 +70,9 @@ from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 from verity_vllm.pipeline.spans import commit_s_of, end_lap, gc_of, phases_of
 
-#: The compile slice the served windows are proved by, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
-#: rows and schedule, charging the window's decisions and each certified arrival's output length. The serve path commits
+#: The compile slice built to prove the served windows, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
+#: rows and schedule, which state the charge of the window's decisions and each certified arrival's output length; no
+#: session of it runs and no proof of it runs. The serve path commits
 #: only the rows v1 and v7 share, ``srv`` (the served rows); the rest of v7's are the prover's.
 SERVED_SLICE = "CompileSlice_v7"
 #: Why a window the certified tick admitted (order ``tick``) names no slice: its served rows record's ``no_slice``, and
