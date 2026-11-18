@@ -76,7 +76,7 @@ def ReadsByPath (k : Verity.Registration.Composite) : Prop :=
 
 end Vocab
 
-open Flock.HmLinks (nodes unitAt ownerAt count outGates writerOf treeLeaf) in
+open Flock.HmLinks (nodes unitAt ownerAt count outGates) in
 /-- **A link reads its writer's outputs exactly** (`Flock.HmLinks.checkUnit`): where a circuit's links parse and
 `checkUnit` accepts reader `i` of the public file, every parameter leaf of the reader's unit that the program wires to
 another unit's output lies in exactly one link, and every link's leaves are circuit inputs, or one whole return field
@@ -94,7 +94,7 @@ def LinksExact : Prop :=
             unitAt (nodes P) v = some (kv, mv) ∧ outGates P kv mv = .ok og ∧
             (l.off, l.hi - l.lo) ∈ Flock.HmLinks.fieldSpans P kv ∧ ops.extract l.lo l.hi = og.extract l.off (l.off + (l.hi - l.lo)))
 
-open Flock.HmLinks (nodes writerOf treeLeaf) in
+open Flock.HmLinks (nodes writerOf) in
 /-- **Every link row is read by path at its writer's leaf** (`Flock.Registered.check`): where the verifier's registered
 reads, their tree ports' reads given from its program (`Flock.Registered.withTrees`), accept a linked statement that
 names each port once, every link row is a tree port of field `out` whose rows are its registered rows' width
@@ -110,7 +110,7 @@ def LinkRowsByPath : Prop :=
     ∀ l ∈ links, ∃ reg ∈ own', ∃ tmpl : String, reg.name = (c.ports.getD l.port default).name ∧
       reg.tree = some (tmpl, Flock.Registered.OUT_FIELD) ∧ reg.fits (c.ports.getD l.port default) ∧
       ∀ i < pub.n, ∃ (v leaf : Nat) (positions : Array Nat) (paths : Array ByteArray),
-        writerOf P (nodes P) (indices.getD i 0) l.lo = .ok (some v) ∧ treeLeaf P (nodes P) v = some (tmpl, leaf) ∧
+        writerOf P (nodes P) (indices.getD i 0) l.lo = .ok (some v) ∧ Flock.HmLinks.treeLeaf P (nodes P) v = some (tmpl, leaf) ∧
         Flock.Registered.entry pub reg = .ok (positions, paths) ∧
         Flock.Registered.opens reg (Flock.Registered.tableRow pub t l.port (Flock.Registered.ref t c.ports.size l.port i))
           leaf (paths.getD (Flock.Registered.ref t c.ports.size l.port i) ByteArray.empty)

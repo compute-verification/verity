@@ -14,7 +14,6 @@ staged without. When ``FLOCK_CIRCUIT`` names a build of ``flock-circuit``, the l
 with its own links file. Linking binds a public topology; it does not hide the topology."""
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import random
@@ -205,19 +204,19 @@ def _edit(src: Path, dst: Path, n: int, port: str, refs: dict) -> None:
 
 def _edit_meta(src: Path, dst: Path, edit) -> None:
     """``src``'s statement with its circuit's META changed by ``edit`` (in place on the parsed object) and the circuit's
-    digest restated wherever the statement names it, every other byte unchanged."""
+    digest and class restated wherever the statement names them, every other byte unchanged."""
     shutil.copytree(src, dst)
-    old = (src / "circuit.txt").read_bytes()
-    head, line, rest = old.decode().split("\n", 2)
+    old = (src / "circuit.txt").read_text()
+    head, line, rest = old.split("\n", 2)
     meta = json.loads(line[5:])
     edit(meta)
     compact = '": ' not in line
-    new = "\n".join([head, "META " + json.dumps(meta, separators=(",", ":") if compact else None), rest]).encode()
-    (dst / "circuit.txt").write_bytes(new)
-    was, now = hashlib.sha512(old).hexdigest().encode(), hashlib.sha512(new).hexdigest().encode()
-    for f in dst.iterdir():
-        if f.is_file() and f.name != "circuit.txt" and was in (b := f.read_bytes()):
-            f.write_bytes(b.replace(was, now))
+    new = "\n".join([head, "META " + json.dumps(meta, separators=(",", ":") if compact else None), rest])
+    (dst / "circuit.txt").write_text(new)
+    for was, now in ((FC.digest(old), FC.digest(new)), (FC.class_digest(old), FC.class_digest(new))):
+        for f in dst.iterdir():
+            if f.is_file() and f.name != "circuit.txt" and was.encode() in (b := f.read_bytes()):
+                f.write_bytes(b.replace(was.encode(), now.encode()))
 
 
 @pytest.fixture(scope="module")
