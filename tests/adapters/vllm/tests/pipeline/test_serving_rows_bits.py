@@ -65,7 +65,7 @@ def _staged(tid: str, d: Path, lean: bool = False) -> dict:
     tp = ST.template(tid)
     in_rows, out_rows = CR.unit_rows(tp)
     st = UnitStager(tp.fn, f"unit/{tid}", in_rows, out_rows, circuit=d / "circuit.txt", bind=BIND, **CR.statement(tp))
-    st.stage(_random_rows(in_rows, 2, 11), d, b"k" * 32, indices=[0, 1])
+    st.stage(_random_rows(in_rows, 2, 11), d, indices=[0, 1])
     got = {"why": PF.ks_form_why(d / "circuit.txt", d / "pub.bin"), "k_log": st.meta["k_log"], "regions": len(st.ports)}
     if lean:
         p = subprocess.run([str(VERIFY), "ks-form", "--statement", PF.STATEMENT, "--circuit", str(d / "circuit.txt"), "--public",

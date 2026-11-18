@@ -35,7 +35,10 @@ def source(radix: Sequence[int], base: int, step: Sequence[int], i: Any) -> np.n
 class Wired:
     """Reader port ``port``'s wire into the tree of writer template ``writer``'s output field ``out`` (`tree`): unit ``u``
     of the reader's template reads the tree's leaf ``source(radix, base, step, (u - at) * cut[1] + row - cut[0])``, for
-    ``u`` in ``[at, at + prod(radix) / cut[1])`` (`interface.Wire`'s closed form at the port's row ``row`` of its cut)."""
+    ``u`` in ``[at, at + prod(radix) / cut[1])`` (`interface.Wire`'s closed form at the port's row ``row`` of its cut).
+    With reader steps ``rstep`` (an uncut wire), index ``i`` of ``prod(radix)`` is reader unit ``source(radix, at, rstep,
+    i)`` reading leaf ``source(radix, base, step, i)``: strided on both sides, a repeat its slowest digit. Several such
+    pieces may wire one port, each of its units read by one (`reads`)."""
     port: str
     writer: str
     out: str
@@ -45,34 +48,61 @@ class Wired:
     step: tuple[int, ...]
     cut: tuple[int, int] = (0, 1)
     row: int = 0
+    rstep: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
-        for k in ("radix", "step", "cut"):
+        for k in ("radix", "step", "cut", "rstep"):
             object.__setattr__(self, k, tuple(int(x) for x in getattr(self, k)))
         if (not self.radix or len(self.step) != len(self.radix) or min(self.radix) < 1 or self.at < 0 or self.cut[1] < 1
-                or not self.cut[0] <= self.row < self.cut[0] + self.cut[1]):
+                or not self.cut[0] <= self.row < self.cut[0] + self.cut[1]
+                or (self.rstep and (len(self.rstep) != len(self.radix) or self.cut != (0, 1)))):
             raise ValueError(f"{self.doc()}: a wire is a first reader unit, one step a digit of radix 1 or more, and a row of "
-                             "its cut")
+                             "its cut; reader steps, one a digit, only uncut")
 
     @property
     def reader_units(self) -> int:
         return int(np.prod(self.radix)) // self.cut[1]
 
+    def units(self, lo: int, n: int) -> tuple[np.ndarray, np.ndarray]:
+        """The reader's units in ``[lo, lo + n)`` (its template's) the wire reads, as offsets from ``lo``, and the leaf of
+        the writer's tree each reads."""
+        if not self.rstep:
+            u = np.arange(max(lo, self.at), min(lo + n, self.at + self.reader_units), dtype=np.int64)
+            return u - lo, source(self.radix, self.base, self.step, (u - self.at) * self.cut[1] + self.row - self.cut[0])
+        i = np.arange(self.reader_units, dtype=np.int64)
+        u = source(self.radix, self.at, self.rstep, i)
+        mine = (u >= lo) & (u < lo + n)
+        return u[mine] - lo, source(self.radix, self.base, self.step, i[mine])
+
     def positions(self, lo: int, n: int) -> np.ndarray:
-        """The leaves of the writer's tree that the reader's units ``lo`` to ``lo + n`` (its template's) read."""
-        if lo < self.at or lo + n > self.at + self.reader_units:
-            raise ValueError(f"{self.doc()}: reader units [{lo}, {lo + n}) are not all the wire's")
-        i = (np.arange(lo, lo + n, dtype=np.int64) - self.at) * self.cut[1] + self.row - self.cut[0]
-        return source(self.radix, self.base, self.step, i)
+        """The leaves of the writer's tree that the reader's units ``lo`` to ``lo + n`` (its template's) read, every one
+        of them the wire's."""
+        return reads((self,), lo, n)
 
     def doc(self) -> dict[str, Any]:
         return {"port": self.port, "writer": self.writer, "out": self.out, "at": self.at, "radix": list(self.radix),
-                "base": self.base, "step": list(self.step), **({"cut": list(self.cut), "row": self.row} if self.cut != (0, 1) else {})}
+                "base": self.base, "step": list(self.step), **({"cut": list(self.cut), "row": self.row} if self.cut != (0, 1) else {}),
+                **({"rstep": list(self.rstep)} if self.rstep else {})}
 
     @classmethod
     def of(cls, d: Mapping[str, Any]) -> Wired:
         return cls(d["port"], d["writer"], d["out"], int(d["at"]), tuple(d["radix"]), int(d["base"]), tuple(d["step"]),
-                   tuple(d.get("cut", (0, 1))), int(d.get("row", 0)))
+                   tuple(d.get("cut", (0, 1))), int(d.get("row", 0)), tuple(d.get("rstep", ())))
+
+
+def reads(pieces: Sequence[Wired], lo: int, n: int) -> np.ndarray:
+    """The leaf each of a reader port's units ``lo`` to ``lo + n`` reads, from its pieces (one port's wires); refused
+    unless each unit is read by exactly one."""
+    out, seen = np.zeros(n, dtype=np.int64), np.zeros(n, dtype=np.int64)
+    for w in pieces:
+        at, leaves = w.units(lo, n)
+        out[at] = leaves
+        np.add.at(seen, at, 1)
+    if n and (seen != 1).any():
+        bad = np.flatnonzero(seen != 1)[:4] + lo
+        raise ValueError(f"{[w.doc() for w in pieces][:2]}: reader units {bad.tolist()} are read by {seen[bad - lo].tolist()} "
+                         "wires, not one each")
+    return out
 
 
 def table(positions: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -109,14 +139,15 @@ def strings(publics: Mapping[str, bytes], m: Any, port: str) -> np.ndarray | Non
 def validate(members: Sequence[Any], templates: Mapping[str, int], owns: Mapping[str, int]) -> None:
     """Refuse a wiring that is not, for each wired port of a member, one row of its writer template's output field a unit,
     of the port's words and schema, inside that template's units; each port wired at most once. ``templates``: each
-    template's unit count; ``owns``: each member's first unit among its template's own, by key."""
+    template's unit count; ``owns``: each member's first unit among its template's own, by key. A port's pieces (`reads`)
+    share one writer and output field, and read each of its units once."""
     outs = {}
     for m in members:
         for o, _w in m.outs:
             outs[(m.template, o)] = (dict(m.out_rows)[o], m.schema(o))
     for m in members:
-        if len({w.port for w in m.wired}) != len(m.wired):
-            raise ValueError(f"{m.key}: ports {[w.port for w in m.wired]} are wired more than once")
+        if len({w.port for w in m.wired}) != len({(w.port, w.writer, w.out) for w in m.wired}):
+            raise ValueError(f"{m.key}: a port of {[w.port for w in m.wired]} is wired to two trees")
         lo = owns[m.key]
         for w in m.wired:
             if w.port not in dict(m.rows):
@@ -125,7 +156,9 @@ def validate(members: Sequence[Any], templates: Mapping[str, int], owns: Mapping
             if got != (dict(m.rows)[w.port], m.schema(w.port)):
                 raise ValueError(f"{m.key}: its {w.port} rows ({dict(m.rows)[w.port]} words, {m.schema(w.port)}) are not "
                                  f"{tree(w.writer, w.out)}'s rows ({got})")
-            at = w.positions(lo, m.n)
+            _, at = w.units(lo, m.n)
             if len(at) and (at.min() < 0 or at.max() >= templates[w.writer]):
                 raise ValueError(f"{m.key}: wire {w.doc()} reads leaves outside {tree(w.writer, w.out)}'s "
                                  f"{templates[w.writer]}")
+        for p in {w.port for w in m.wired}:
+            reads([w for w in m.wired if w.port == p], lo, m.n)

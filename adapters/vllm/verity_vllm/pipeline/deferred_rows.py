@@ -156,7 +156,7 @@ def from_bundle(bundle: str | os.PathLike, row_dir: str, partition_file: str, ou
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Options:
-    """verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O [--checkpoint-dir CK ...] [--tables REG --tables-key KEY]:
+    """verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O [--checkpoint-dir CK ...] [--tables REG]:
     a deferred Commit's serving rows and one-stage registration, from its sealed replay bundle (`from_bundle`)."""
     bundle: str = option("bundle", help="the sealed replay bundle (<commit out>/replay_bundle_p<pair>)")
     row_dir: str = option("--row-dir", help="the row dir holding the Build's Programs of record (and manifest.json)")
@@ -171,7 +171,6 @@ class Options:
                                            help="the Commit's required manifest (default: its recorded path, else <row-dir>/manifest.json)")
     threads: int = option("--threads", type=int, default=8, help="threads opening the weights")
     workers: int | None = option("--workers", type=int, default=None, help="processes hashing the rows (default: min(16, CPUs))")
-    tables_key: str | None = option("--tables-key", default=None, help="the committer's key file its per-expert tables are registered under")
     tables: str | None = option("--tables", default=None, help="the per-expert tables' registration (records.expert_tables)")
 
 
@@ -182,7 +181,7 @@ def main(o: Options) -> int:
         ck = WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision)
     try:
         from_bundle(o.bundle, o.row_dir, o.partition, o.out, checkpoint=ck, required_manifest=o.required_manifest, threads=o.threads,
-                    workers=o.workers, tables={"key": o.tables_key, "registration": o.tables} if o.tables else None)
+                    workers=o.workers, tables={"registration": o.tables} if o.tables else None)
     except CPU.Refused as e:
         print(f"[serving-rows] REFUSED: {e}", flush=True)
         return 2

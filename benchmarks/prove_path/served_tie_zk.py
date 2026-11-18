@@ -228,7 +228,7 @@ def stager(M, defn, St, n: int, out: Path) -> SimpleNamespace:
                            program_file=out / "program.json")
 
 
-def stage(M, sg: SimpleNamespace, name: str, units: list, salt_key: bytes, salts: dict) -> dict:
+def stage(M, sg: SimpleNamespace, name: str, units: list, salts: dict) -> dict:
     t0 = time.time()
     st, n, out = sg.st, len(units), sg.out / "stage"
     k_log = st.meta["k_log"]
@@ -237,7 +237,7 @@ def stage(M, sg: SimpleNamespace, name: str, units: list, salt_key: bytes, salts
         raise SystemExit(f"{name}: m = {k_log} + {nbl} is outside 25 .. {M.a7.M_MAX} (--zk and flock-circuit's shape)")
     data = {r: M.np.asarray([u.words[r] for u in units], dtype=M.np.uint16) for r, _b in ST.rows(units[0].St)}
     set_name = f"{st.iset.name}-{name}"
-    got = st.stage(data, out, salt_key, salts=salts, indices=range(sg.base, sg.base + n), set_name=set_name)
+    got = st.stage(data, out, salts=salts, indices=range(sg.base, sg.base + n), set_name=set_name)
     (out / "inst.bin").rename(out / f"inst-{n}.bin")
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
@@ -388,7 +388,6 @@ def prove(a) -> int:
     zk_drivers.install()
     M = N2._one_stage()
     defn = ST.unit(**d.st)
-    secret = os.urandom(32)
     av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, points=[], arms=["fw"], cold=1, serve_run=a.serve_run)
     ok = True
     honest, groups = d.units["window"], statements(d, a.per)
@@ -404,7 +403,7 @@ def prove(a) -> int:
         log(f"{name}: lowered in {sg.lower_s} s, k_log {meta['k_log']}, vus_per_block {meta['vus_per_block']}, "
             f"{len(units)} units")
         salts = {"srv": [u.reg.registration.salts[0] for u in units]}
-        m = stage(M, sg, name, units, hashlib.sha512(secret + name.encode()).digest()[:32], salts)
+        m = stage(M, sg, name, units, salts)
         refs = [u.verdict for u in units]
         if m["oks"] != refs:
             raise SystemExit(f"{name}: the staged verdict words {m['oks']} are not the reference's {refs}")

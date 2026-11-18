@@ -16,6 +16,8 @@ from typing import Any, Protocol
 
 from verity_vllm.pipeline.advice_code import format as I1
 
+__all__ = ["join"]
+
 
 class WindowAdvice(Protocol):
     """What `join` reads of the serving system's window advice: the version of a window that aborts a request
