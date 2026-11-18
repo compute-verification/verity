@@ -7,7 +7,7 @@
 TARGET is a `machines.toml` name, a RunPod pod id, or a pod name (`vy-ligerito-sumcheck-2`; a project suffix such as the
 `-veritor-campaign` that `pods create` appends is optional, `pods.POD_SUFFIXES`).  The address is `remote.pod_target`'s: the one last read
 from RunPod while the host there proves the host key recorded for it (ssh to it is then strict about that key), read again when
-it does not or the read is over an hour old (the REST API's flaky empty mappings are retried), so nothing hard-codes an ip/port
+it does not or the read is over an hour old (RunPod's flaky empty mappings are retried), so nothing hard-codes an ip/port
 that changes when a pod restarts.  A machine name asks RunPod for nothing else; a pod id or pod name also costs one listing of
 the account's pods.
 
@@ -196,7 +196,7 @@ def _ship_rsync(src: Path, files: list[str], dest: str, transport: SshTransport 
     finally:
         os.unlink(fl.name)
     if r.returncode != 0:
-        raise remote.Refused(f"rsync failed (rc {r.returncode}): {r.stderr.strip()[-400:]}")
+        raise remote.Refused(f"rsync failed (rc {r.returncode}): {remote.name_addresses(r.stderr).strip()[-400:]}")
 
 
 def _ship_tar(src: Path, files: list[str], dest: str, transport: SshTransport | LocalTransport, timeout: float = 1800) -> None:
@@ -214,7 +214,7 @@ def _ship_tar(src: Path, files: list[str], dest: str, transport: SshTransport | 
         print(f"connect: the tar on {dest} closed its input before every file was sent; its stderr says why", file=sys.stderr)
     finally:
         p.stdin.close()
-    err = p.stderr.read().decode(errors="replace")
+    err = remote.name_addresses(p.stderr.read().decode(errors="replace"))
     if p.wait(timeout=timeout) != 0:
         raise remote.Refused(f"tar stream to {dest} failed (rc {p.returncode}): {err.strip()[-400:]}")
 

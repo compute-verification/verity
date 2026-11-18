@@ -51,8 +51,6 @@ the lock's sections, each naming the docstring with the detail. This is the work
   takes the slot. Commit each record it kept under `lean-audit/record/`; no merge check accepts its result. It repairs
   a slot tree another run left mid-way: never delete or copy one. `--allow CODE:ENTRY` takes a finding ruled open, cured before the mark, as known: it stays red
   (exit 3, no pass), and its regenerated record goes to `allowed-record/`, never `record/`.
-- **A full record**: `check.py --build --update PKG` through `research run` (the README's line), unwrapped, leaves it
-  at `lean-audit/audit-TAG/lean-audit.json`.
 - **A Lean pool at 0 is closed on that machine**: a request for it is refused at once, saying why; run it where
   `lean_slot.py --status` lists a slot of that pool.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean
@@ -105,8 +103,8 @@ the lock's sections, each naming the docstring with the detail. This is the work
 - **Watch upstream for what you assume**: a named assumption or hand proof a pinned dependency could prove gets an
   `upstream.watch` entry; on a new hit, say in the PR whether it discharges the assumption, and `--ack` it
   (`upstream.py`'s docstring).
-- **A changed record is a changed claim**: an `--update` change you didn't mean is your edit changing what that
-  guarantee says. Undo it, or say so in the PR and paste the printout.
+- **A changed record is a changed claim**: an `--update` change you didn't mean is your edit changing that
+  guarantee. Undo it, or say so in the PR with the printout.
 - **A move is not a change**: `check.py --update --moved MOVES.json PKG` on the record as it was (the README's "The
   records"; the fast path's `--records PKG --update --moved MOVES.json` takes it to PKG's requirers too). A lift needs
   no map.

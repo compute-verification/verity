@@ -18,6 +18,8 @@ COMMAND = re.compile(r"`([^`]*\b(?:uv run|uv sync|research|python3?|git|suites\.
 REMEDIATED = {
     ("tools/check/suites.py", "changed_base", "--changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD)"):
         "tests/tools/check/test_suites.py::test_the_changed_refusals_advice_run_in_a_stale_checkout_gets_past_it",
+    ("tools/check/slot.py", "main", "research run --on MACHINE --project verity --source . --pool NAME --as LANE -- CMD"):
+        "tests/tools/check/test_slot.py::test_the_missing_pools_advice_launches_a_run_in_a_pool_the_machine_has",
 }
 
 #: (file, function, the command it names) -> "owner: why", each untested when this test landed
@@ -32,7 +34,7 @@ KNOWN = {
     ("tools/check/check.py", "main", "check.py --record --cc-records --on M"): "ci: untested",
     ("tools/check/check.py", "main", "X && uv run --extra torch-cpu python tools/check/check.py"):
         "ci: syncs the tree's own environment before running there; no test runs it from the refused state",
-    ("tools/check/slot.py", "main", "research run --pool NAME"): "ci: untested",
+    ("tools/check/slot.py", "main", "research queue ready N --on auto"): "ci: launches a quick tier on a node; untested",
     ("tools/check/slot.py", "main", "check.py --slots"): "ci: lists the slots; untested",
 }
 

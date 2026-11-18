@@ -44,7 +44,18 @@ switch: each binds the schedule's `_v2` and its columns, the coordinates' bodies
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import NOT, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, sub
+from verity.circuits.boolean.forms import (
+    NOT,
+    OR,
+    ZERO,
+    add,
+    and_reduce,
+    const_bits,
+    multiply,
+    mux,
+    or_reduce,
+    sub,
+)
 from verity.circuits.boolean.trace import definition, word_of
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.ops.boolean import elementwise as EW
@@ -52,6 +63,7 @@ from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import scalar as SC
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import boolean_dense as BDN
 from verity_vllm.definitions.registry import boolean_fp8_moe as BFM
 from verity_vllm.definitions.registry import fp8_moe_experts as X
