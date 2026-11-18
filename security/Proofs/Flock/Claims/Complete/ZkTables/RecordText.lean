@@ -20,7 +20,7 @@ namespace FlockComplete.ZkTables
 open Flock Transcript FlockComplete FlockDeploy With FlockComplete.Replay
 open Lean (Json)
 
-variable {H : Claims.Msg → Claims.Msg}
+variable {H : Hash.Msg → Hash.Msg}
 
 /-- The length of the `hello` the masked prover writes: the verifier's, parsed, with the prover's nonce put in, printed
 canonically; the verifier's own where the spec names no keyed coin tree. -/
@@ -103,7 +103,7 @@ theorem recordZk_size_of (h64 : Claims.Out64 H) {spec : SessionSpec} {t : String
     (st : Flock.Stmt) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hms : st.merkle = MerkleScheme.hm96Sha512)
     (hkm : st.c.kLog ≤ st.m) (hreg : st.regions.size ≤ 1024) (hpm : spec.mPts = st.mPts) (hmp : st.mPts ≤ 64)
     (hpt : spec.points ≤ 2) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) {k : ℕ}
-    (r : Fin k → Coin) {rec : String × Array ByteArray} {bodies : Array Claims.Msg}
+    (r : Fin k → Coin) {rec : String × Array ByteArray} {bodies : Array Hash.Msg}
     (hrun : (sessionPZk (asksS fun j => (Claims.coinSeq r j).bytes) (Hashes.ofSha512 (Claims.hOf H)) spec
       #[Setup.ofCircuit st] words trs tape).go #[] = (.ok rec, bodies)) :
     rec.1.utf8ByteSize ≤ 2 ^ 8 * specText spec + 2 ^ 40 := by
@@ -114,7 +114,7 @@ theorem recordZk_size_of (h64 : Claims.Out64 H) {spec : SessionSpec} {t : String
 
 /-- **The honest masked record fits its length word** at one table whose statement has `25 ≤ m ≤ 35`, the `hm96`
 leaf, `kLog ≤ m`, at most `2^10` regions and `m_pts ≤ 64`, where its spec's text is under `2^55`. -/
-theorem recordFitsZk_of_text (h64 : Claims.Out64 H) {x : Claims.Msg} {spec : SessionSpec} {t : String}
+theorem recordFitsZk_of_text (h64 : Claims.Out64 H) {x : Hash.Msg} {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json}
     (hown : Flock.JsonParse.parse spec.hello = .ok own) {hz : String} (hc : canon (JsonRT.helloJ own) = .ok hz)
     (st : Flock.Stmt) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hms : st.merkle = MerkleScheme.hm96Sha512)
