@@ -2334,7 +2334,7 @@ if [ -n "${CERTIFIER_CMD:-}" ]; then  # network attestation's chain is the longe
   CERT_TASKSET=(); NCPU=$(nproc)
   command -v taskset > /dev/null && [ "$NCPU" -gt 2 ] && CERT_TASKSET=(taskset -c "${CERT_CPUS:-2-$((NCPU - 1))}")
   ${CERT_TASKSET[@]+"${CERT_TASKSET[@]}"} "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$KN" --out "$OUT/pieces" \
-    --product "$PRODUCT" --only attester > "$OUT/pieces-certifier.txt" 2>&1 &
+    --product "$PRODUCT" --only certifier > "$OUT/pieces-certifier.txt" 2>&1 &
   CERT=$!
 fi
 advice
@@ -2377,7 +2377,7 @@ if [ -n "$SPLIT" ]; then
 fi
 
 # 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
-pieces ${CERT:+--skip attester}
+pieces ${CERT:+--skip certifier}
 [ -z "$CERT" ] || { wait "$CERT"; publish_lines < "$OUT/pieces-certifier.txt"; }
 # under PEARLPLUS_TIE, once Pearl+'s piece wrote W: the served compare, whose line the record names
 SC=() sc=0
