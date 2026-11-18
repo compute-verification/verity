@@ -368,7 +368,6 @@ IDLE_RECENT_S = 6 * 3600    # an IDLE agent is read only if it changed this rece
 IN_TURN = ("CREATING", "RUNNING")   # `GET /v0/agents/{id}`'s status of an agent in a turn; FINISHED, ERROR or EXPIRED out of one
 STOP_S = 5 * 60             # a worker's v0 status the watch can't take as its stop's (in a turn, unread, or read within
 #                             `DROPPED_S` of its change) is read again this often
-STOPS_SWEEP = 20            # v0 statuses read a sweep: a fresh deploy reads one for each worker it watches
 SETTLE_S = 60               # a v0 status read this long after a worker's change is the stop's; one read sooner may predate a turn
 HANDIN_S = 2 * 3600         # a comment on an integrator's issue with none of the integrator's after it, this old: its lead is rung
 HANDIN_RETRY_S = 10 * 60    # an issue Linear answers for with an error (no such issue) is read again this often
@@ -487,7 +486,12 @@ WORKER_IDLE_S = 12 * 3600       # a worker IDLE this long is read again only whe
 TASK_DONE_SLACK_S = 120
 WORKER_LONG_S = 6 * 3600        # ACTIVE this long is recorded once (--worker-long-h)
 WORKER_KEEP_S = 2 * 86400       # a worker idle or gone this long, in no recent note and no integrator, is forgotten
-WORKERS_NEW = 20                # workers off the listing read by id for the first time per sweep: a fresh notes clone names hundreds
+#: a sweep's reads for workers (by id, v0 statuses, a stop's conversation), in `read_order`; a worker is read by id only
+#: while `FOLLOW_UP` more are left, so a stop it shows gets its v0 status and conversation reads in the same sweep
+WORKER_READS = 80
+FOLLOW_UP = 2
+WORKER_NEW_S = 3 * 3600         # a worker first heard of this recently and never read is read with the ones just launched
+PARENT_ACTIVE_S = 3600          # a worker whose coordinator was ACTIVE this recently is read before the rest
 STALE_STOP_S = 3600             # a worker's stop the watch first sees this long after it is not rung: it may have reported back
 SILENT_S = 90 * 60              # ACTIVE with no note of its and no push to its branches this long: rung, again a window later
 COORD_SILENT_S = 60 * 60        # ... a coordinator's window, in one turn and with no assistant text either, rung to top
@@ -1364,7 +1368,7 @@ class Watch:
         self.agent_status: dict[str, str] = {}              # listed agent -> its status as this sweep read it, for run_ended
         self.runless: frozenset[str] = frozenset()          # listed agents with no run: judged as workers
         self.listing: dict[str, dict] = {}                  # every agent on this sweep's listing, by id
-        self.worker_reads: tuple[int, int] = (0, 0)         # workers judged from the listing, and read by id, at the last sweep
+        self.worker_reads: tuple[int, ...] = ()         # workers judged from the listing, and read by id, at the last sweep
         self.registry, self.routes, self.timers = registry, routes, timers
         self.doorbells = ""                         # whether doorbells.json was fresh, stale or missing at the last sweep
         self.runs: dict[str, Run] = {}
@@ -1408,7 +1412,8 @@ class Watch:
         self.final: dict[str, dict] = {}                          # run -> its terminal record, never read again (not saved)
         self.reopened: dict[str, int] = {}                        # followed run -> times dropped for a broken stream (not saved)
         self.learn_tried: dict[str, float] = {}                   # sender whose brief named no launcher -> when (not saved)
-        self.stops_left = STOPS_SWEEP                             # v0 statuses the current sweep may still read
+        self.reads_left = WORKER_READS                            # worker reads the current sweep may still make
+        self.active_at: dict[str, float] = {}                     # listed agent -> when a listing last had it ACTIVE (not saved)
         self.learn_left = 0                                       # briefs the current node read may still read
 
     def save(self) -> None:
@@ -2138,7 +2143,7 @@ class Watch:
         entry): the watch saw it leave ACTIVE, its `updatedAt` moved, which a Task resume's message does, or something named
         it again (a Task call, a note, a registration); and again every `STOP_S` while that read can't be taken as the
         stop's: v0 has it in a turn, the read failed, or it came within `DROPPED_S` of the change, when a turn may not have
-        begun. `STOPS_SWEEP` reads a sweep at most; one left over is made at the next."""
+        begun. Each read is one of the sweep's `reads_left`; one left over is made at the next."""
         if status == "ERROR":
             return True
         s, updated = w.get("stop") or {}, w["updated"]
@@ -2147,9 +2152,9 @@ class Watch:
         early = s.get("t", 0.0) - updated < SETTLE_S <= t - updated      # read before a turn could begin: read once more
         if not new and not early and not (open_ and t - s["t"] >= STOP_S):
             return s.get("status") == "ERROR"
-        if self.stops_left <= 0:
+        if self.reads_left <= 0:
             return False
-        self.stops_left -= 1
+        self.reads_left -= 1
         try:
             got = str((self.api.get(f"/v0/agents/{agent}") or {}).get("status") or "")
         except (urllib.error.URLError, OSError, ValueError) as e:
@@ -2212,41 +2217,55 @@ class Watch:
             self.save()
         return kids
 
+    def read_order(self, agent: str, w: dict, t: float, kids: dict[str, dict], coords: dict[str, str]) -> tuple:
+        """Where a worker comes in the sweep's reads: (a) last read ACTIVE, or in a turn by its last v0 status; (b) launched
+        or resumed by a Task call the watch saw since its last read, or never read and first heard of within `WORKER_NEW_S`;
+        (c) its coordinator (its parent, or the agent holding its handle) ACTIVE on a listing within `PARENT_ACTIVE_S`;
+        (d) the rest, the longest unread first. The first three are those that can have just stopped."""
+        heard, read = w.get("heard", 0.0), w.get("read")
+        if w.get("status") == "ACTIVE" or (w.get("stop") or {}).get("status") in IN_TURN:
+            return 0, -heard
+        if (kids.get(agent) or {}).get("t", 0.0) > (read or 0.0) or (read is None and t - heard < WORKER_NEW_S):
+            return 1, -heard
+        mine = {w.get("parent") or ""} | {a for a, h in coords.items() if w.get("handle") and h == w["handle"]}
+        if any(t - self.active_at.get(a, -PARENT_ACTIVE_S) < PARENT_ACTIVE_S for a in mine if a):
+            return 2, -heard
+        return 3, read or 0.0
+
     def watch_workers(self, coords: dict[str, str], listed: set[str], t: float, kids: dict[str, dict]) -> None:
-        """Judge each known worker by its status and `updatedAt` on the sweep's listing, read by id (`GET /v1/agents/{id}`)
-        only when the listing lacks it: record `worker_idle` once per stop (`updatedAt` at an IDLE read that left ACTIVE,
-        moved since the last read, or, at the first read, lies within `STALE_STOP_S`) unless its parent got its Task result
-        as it stopped, `worker_long` once when it has been ACTIVE `worker_long_s`, and `crashed` once per stop when the
-        platform says it stopped with an error (`stopped`), in place of any other record of that stop. A worker has no runs
-        the API lists and can't be started (400 legacy workflow), so only its coordinator can resume it (Task); the watch
-        records, never acts. One with neither a handle nor a lane (`place_workers`) is recorded once as `unplaced`, and its
-        alerts are marked `quiet`. An agent the list has is the sweep's to read, but for one with no run (`runless`), which
-        the sweep can't judge: it is judged here as any worker. Its API calls a sweep, past the sweep's one listing: none for
-        a worker on the listing, one `GET /v1/agents/{id}` for each off it that is read (`WORKERS_NEW` first reads at most),
-        and at most `STOPS_SWEEP` v0 statuses (`stopped`)."""
+        """Judge each known worker by its status and `updatedAt`: record `worker_idle` once per stop (`updatedAt` at an IDLE
+        read that left ACTIVE, moved since the last read, or, at the first read, lies within `STALE_STOP_S`) unless its
+        parent got its Task result as it stopped, `worker_long` once when it has been ACTIVE `worker_long_s`, and `crashed`
+        once per stop when the platform says it stopped with an error (`stopped`), in place of any other record of that
+        stop. A worker has no runs the API lists and can't be started (400 legacy workflow), so only its coordinator can
+        resume it (Task); the watch records, never acts. One with neither a handle nor a lane (`place_workers`) is recorded
+        once as `unplaced`, and its alerts are marked `quiet`.
+        A worker is read by id (`GET /v1/agents/{id}`): the listing holds coordinators and API-launched agents, not a lead's
+        Task workers. One the listing does hold with no run (`runless`), which the sweep can't judge, is judged from the
+        listing, with no read. A sweep makes at most `WORKER_READS` worker reads, by id, v0 statuses (`stopped`) and one
+        conversation read for each stop held to post (`wake_of`, counted when it is held), in `read_order`; a worker is
+        read only while `FOLLOW_UP` more reads are left, so a stop it shows is followed up in the same sweep. One IDLE for
+        `WORKER_IDLE_S` is read only when a note of its changes, or the order puts it ahead of the rest; a 404 never again."""
         before = json.dumps([self.workers, self.owners], sort_keys=True)
-        self.worker_status, new, self.stops_left = {}, 0, STOPS_SWEEP
-        listed_n = by_id = 0
-        # the most recently heard first: `WORKERS_NEW` a sweep reaches a worker heard today before a backlog heard last week
-        for agent, w in sorted(self.workers.items(), key=lambda kv: (-kv[1].get("heard", 0.0), kv[0])):
-            if (agent in listed and agent not in self.runless) or agent in coords:  # the sweep's to read, or a coordinator now
-                self.workers.pop(agent)
-                continue
-            if w.get("gone"):
-                continue
+        owed = sum(1 for b in self.bursts.values() for x in b["items"] if x["kind"] == "worker_idle")
+        self.worker_status, self.reads_left = {}, WORKER_READS - owed
+        listed_n, by_id, left = 0, [0, 0, 0, 0], 0
+        for agent in [a for a, w in self.workers.items() if (a in listed and a not in self.runless) or a in coords]:
+            self.workers.pop(agent)                     # the sweep's to read, or a coordinator now
+        order = {a: self.read_order(a, w, t, kids, coords) for a, w in self.workers.items() if not w.get("gone")}
+        for agent in sorted(order, key=lambda a: (order[a], a)):
+            w, group = self.workers[agent], order[agent][0]
             if (info := self.listing.get(agent)) is not None:
                 listed_n += 1
             else:
                 idle_long = w.get("status") == "IDLE" and t - w.get("updated", t) >= WORKER_IDLE_S
-                stop = w.get("stop") or {}
-                turn = stop.get("status") in IN_TURN and t - stop["t"] >= STOP_S    # v0 has it in a turn: read until that ends
-                if idle_long and w["heard"] <= w.get("read", 0) and not turn:
+                if group == 3 and idle_long and w["heard"] <= w.get("read", 0):
                     continue
-                if "read" not in w:
-                    if new >= WORKERS_NEW:
-                        continue
-                    new += 1
-                by_id += 1
+                if self.reads_left <= FOLLOW_UP:
+                    left += 1
+                    continue
+                self.reads_left -= 1
+                by_id[group] += 1
                 try:
                     info = self.api.get(f"/v1/agents/{agent}")
                 except urllib.error.HTTPError as e:
@@ -2310,12 +2329,14 @@ class Watch:
                     print(f"{iso(t)} worker {agent} idle: its parent got its Task result, so no one is rung", file=sys.stderr,
                           flush=True)
                 else:
+                    self.reads_left -= 1                # its conversation, read as it is posted (`wake_of`)
                     self.hold("worker_idle", r, t, w, at=iso(updated), since=iso(updated), **detail, **self.work(agent, w, t))
             elif status == "ARCHIVED":
                 w["gone"] = True
-        if (listed_n, by_id) != self.worker_reads:
-            self.worker_reads = (listed_n, by_id)
-            print(f"{iso(t)} workers judged: {listed_n} from the listing, {by_id} read by id", file=sys.stderr, flush=True)
+        if (reads := (listed_n, *by_id, left)) != self.worker_reads:
+            self.worker_reads = reads
+            print(f"{iso(t)} workers judged: {listed_n} from the listing; read by id, by `read_order`'s group: {by_id}; "
+                  f"{left} left for a later sweep, its {WORKER_READS} reads spent", file=sys.stderr, flush=True)
         # an integrator is kept while its entry stands: its name says which comments on its issue are its own
         for agent in [a for a, w in self.workers.items() if (w.get("gone") or w.get("status") == "IDLE")
                       and t - max(w.get("updated", t), w["heard"]) >= WORKER_KEEP_S and a not in self.integrators]:
@@ -3170,6 +3191,7 @@ class Watch:
         # the key sees every agent on the account (its owner's own too);
         # only Verity's are followed, restarted or woken, and only they are status rows
         listed, agents = set(self.listing), [a for a in agents if verity(a)]
+        self.active_at.update({a["id"]: t for a in agents if a.get("status") == "ACTIVE"})
         self.runless = frozenset(a["id"] for a in agents if not a.get("latestRunId"))
         self.coords = coords = holders(self.registry, self.routes)
         self.holders_all = all_holders(self.registry, self.routes)

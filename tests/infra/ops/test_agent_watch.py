@@ -1867,14 +1867,47 @@ def test_an_agent_the_platform_reports_in_error_is_crashed_and_never_idle(tmp_pa
     assert f"/v0/agents/{W1_}" not in api.gets[before:]
 
 
-def test_the_workers_heard_most_recently_are_read_first_when_more_are_new_than_a_sweep_reads(tmp_path, monkeypatch):
-    """A backlog of workers heard days ago, sorted ahead by id, kept a reviewer heard today from being read for hours."""
-    monkeypatch.setattr(W, "WORKERS_NEW", 1)
-    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("IDLE", "2026-10-18T19:00:00Z"),
-                                                           W2_: worker("IDLE", "2026-10-18T19:00:00Z")})
-    w.workers = {W1_: {"heard": T0 - 5 * 86400 + 60, "lane": "x"}, W2_: {"heard": T0 - 60, "lane": "x"}}
+def test_a_worker_never_read_and_first_heard_of_recently_is_read_before_an_old_idle_one(tmp_path, monkeypatch):
+    """336 known workers had never been read: a sweep's reads ran out on workers read many times before. A worker never
+    read and first heard of within `WORKER_NEW_S` is read ahead of an idle one the watch has read, however recently a
+    note of that one's changed."""
+    monkeypatch.setattr(W, "WORKER_READS", W.FOLLOW_UP + 1)
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("IDLE", W.iso(T0 - 7200)),
+                                                           W2_: worker("IDLE", W.iso(T0 - 7200))})
+    w.workers = {W1_: {"heard": T0 - 60, "lane": "x", "read": T0 - 1800, "status": "IDLE", "updated": T0 - 7200},
+                 W2_: {"heard": T0 - W.WORKER_NEW_S + 60, "lane": "x"}}
     w.sweep(lambda r: None)
     assert f"/v1/agents/{W2_}" in api.gets and f"/v1/agents/{W1_}" not in api.gets
+
+
+@pytest.mark.parametrize("budget", [12, 9])
+def test_a_sweep_short_of_reads_reads_every_worker_that_can_have_just_stopped_first(tmp_path, monkeypatch, budget):
+    """A sweep's reads ran out before it reached every worker, and the ones it left were those that had just stopped.
+    With fewer reads than known workers, every worker last read ACTIVE and every one a Task call just launched is read
+    before any idle one, the idle ones are those left, and a stop among the first is rung at that sweep's flush."""
+    monkeypatch.setattr(W, "WORKER_READS", budget)
+    active, kids, idle = ([f"bc-{c}{i}{c * 6}-0000-0000-0000-{i:012x}" for i in range(n)]
+                          for c, n in (("a", 3), ("b", 2), ("d", 10)))
+    api, clock, w = coordinators(tmp_path, [], {})
+    for a in active:
+        api.workers[a] = worker("ACTIVE", W.iso(T0 - 3600), name="A")
+        w.workers[a] = {"heard": T0 - 86400, "lane": "circuits", "handle": "circuits", "parent": CO, "read": T0 - 300,
+                        "status": "ACTIVE", "updated": T0 - 3600, "since": T0 - 3600, "long": False}
+    stop = T0 - W.BURST_QUIET_S - 60
+    api.workers[active[2]] = worker("IDLE", W.iso(stop), name="A")
+    for a in kids:
+        api.workers[a] = worker("ACTIVE", W.iso(T0 - 60), name="K")
+        w.child(CO, {"args": {"agentId": a, "description": "K"}}, T0 - 60)
+    for a in idle:
+        api.workers[a] = worker("IDLE", W.iso(T0 - 7200), name="D")
+        w.workers[a] = {"heard": T0 - 86400, "lane": "circuits", "handle": "circuits", "read": T0 - 600, "status": "IDLE",
+                        "updated": T0 - 7200}
+    w.sweep(lambda r: None)
+    read = [g.rsplit("/", 1)[1] for g in api.gets if g.startswith("/v1/agents/") and g.count("/") == 3]
+    assert set(active + kids) <= set(read) and read[:len(active + kids)] == sorted(read[:len(active + kids)])
+    assert set(read[len(active + kids):]) < set(idle), "only idle ones after them, and not all of them"
+    assert [r["at"] for r in idles(tmp_path, active[2])] == [W.iso(stop)], "its stop rung in the same sweep"
+    assert len([g for g in api.gets if "/agents/bc-" in g]) <= budget
 
 
 def test_a_worker_that_goes_idle_is_recorded_once_per_transition(tmp_path):
@@ -2055,8 +2088,10 @@ def test_worker_reads_are_bounded_and_a_long_idle_worker_is_read_only_when_a_not
         reads.append([g for g in api.gets[before:] if g.count("/") == 3 and g.startswith("/v1/")])
         stops.append([g for g in api.gets[before:] if g.count("/") == 3 and g.startswith("/v0/")])
         clock.t += 60
-    assert [len(r) for r in reads] == [W.WORKERS_NEW, W.WORKERS_NEW, 9, 0], \
-        "20 first reads a sweep; a listed agent is no worker; one IDLE for 12 h isn't read again"
+    n = (W.WORKER_READS - W.FOLLOW_UP) // 2
+    assert [len(r) for r in reads] == [n, 49 - n, 0, 0], \
+        "two reads a worker (by id, then v0) out of a sweep's WORKER_READS; a listed agent is no worker; one IDLE for 12 h " \
+        "isn't read again"
     assert all(len(set(r)) == len(r) for r in reads), "at most one read per worker a sweep"
     assert [[g[4:] for g in r] for r in stops] == [[g[4:] for g in r] for r in reads], \
         "and one read of how it stopped (its v0 status), with its first read: FINISHED, so never again"
