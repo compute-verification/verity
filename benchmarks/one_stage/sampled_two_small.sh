@@ -19,7 +19,7 @@
 #   registers no value of the prover's. SMALL_ARGS, where given, is the serve's arguments instead; SMALL_FIRST and
 #   SMALL_SECOND pass `first` and `second` more. A serve without --logits leaves the select's inputs a value the
 #   prover registers after the first stage's sample, which the second stage refuses (second-inputs): that play's case
-#   is not one the form accepts. ROUND_TWO prints the second stage's statement check as the run's summary has it.
+#   is not one the form accepts. ROUND_TWO prints the second stage's statement check as the run's summary has it (the Python twin's codes held to the Lean run's: ROUND_TWO_PYTHON beside it), ROUND_TWO_NEGATIVES the tampered statements round two refuses (one dropped, none), NEGATIVES the audit's tampered inputs refused.
 set -euo pipefail
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
@@ -84,6 +84,8 @@ echo "second rc=$rc" | tee -a "$O/machine.txt"
 "${PY[@]}" -c 'import json,sys; s=json.load(open(sys.argv[1])); print("INTERIOR " + json.dumps(s.get("interior", {}).get("members")))' \
   "$W/second/summary.json" || true
 "${PY[@]}" -c 'import json,sys; s=json.load(open(sys.argv[1])); print("ROUND_TWO " + json.dumps(s.get("round_two"), sort_keys=True))' \
+  "$W/second/summary.json" || true
+"${PY[@]}" -c 'import json,sys; s=json.load(open(sys.argv[1])); print("ROUND_TWO_PYTHON " + json.dumps((s.get("round_two_python") or {}).get("codes"))); print("ROUND_TWO_NEGATIVES " + json.dumps(s.get("round_two_negatives"), sort_keys=True)); print("NEGATIVES " + json.dumps({k: (v if isinstance(v, bool) else bool(v.get("refused"))) for k, v in ((s.get("audit") or {}).get("negatives") or {}).items()}, sort_keys=True))' \
   "$W/second/summary.json" || true
 for f in summary.json run-input.json coins.json statements.json audit/summary.json audit/case-v2.json \
          audit/case-v2-error.txt; do

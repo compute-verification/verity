@@ -48,7 +48,7 @@ files = [
   "security/Definitions/Flock.lean",
   "security/Definitions/Flock/Accounting/*",
   "security/Definitions/Flock/Arith.lean",
-  "security/Definitions/Flock/Audit/*",
+  "security/Definitions/Spot/Sampling/*",
   "security/Definitions/Flock/Circuit.lean",
   "security/Definitions/Flock/Compiled.lean",
   "security/Definitions/Flock/Defs.lean",

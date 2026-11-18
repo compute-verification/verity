@@ -707,10 +707,9 @@ theorem remote_soundness_executionPhase (I : ExecutionPhaseInstance d α) (K₀ 
     (hC : I.ClaimReads (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest))
     (hWa : I.ExecutionPhaseAt .remote) (hWR : I.ExecutionPhaseReads .remote ev filesDec)
     (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)) .remote)
-    (hW : I.base.PouwSound .remote)
-    (hWi : (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)).WiresSound .remote) :
+    (hW : I.base.PouwSound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)).SoundnessAt .remote :=
   Verity.remote_soundness_of_subprotocols ι α d _
-    (I.spotSound K₀ .remote reg ev filesDec record₀ recordDigest hC hWa hWR hTwo) hW hWi
+    (I.spotSound K₀ .remote reg ev filesDec record₀ recordDigest hC hWa hWR hTwo) hW
 
 end Verity.Sampled

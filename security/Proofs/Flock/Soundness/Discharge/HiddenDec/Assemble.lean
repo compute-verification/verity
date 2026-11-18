@@ -47,7 +47,7 @@ outcome verity-verify-proof accepts under hidden outputs:
 
 namespace FlockSoundness.Discharge.HiddenDec
 
-open Flock Refine Exec Game Model Accounting Audit
+open Flock Refine Exec Game Model Accounting Spot.Sampling
 open FlockSoundness.Discharge.DecodeZL
 open FlockSoundness.Discharge.HiddenExec
 

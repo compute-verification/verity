@@ -394,7 +394,7 @@ theorem part_small {sh : Flock.Shape} {j : ℕ} {S : Flock.RecOpen.GfS} {ns : Li
 
 section Unit
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 
 /-- **A copy of the verifier's laid-out `rec-residuals` unit, in a unit of any partition, computes its residuals**
 (`laid_part`). Let the verifier build `net` from `RecResiduals.unitLaid S ns nv` (`netOf`), and let unit `u` be an
@@ -417,7 +417,7 @@ end Unit
 
 section Decode
 
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockVBridge.Decode
 
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}

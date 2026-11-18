@@ -60,7 +60,7 @@ and its carry are witness until the slice binds them):
   On w212 both cases charge less than the honest 27 bits (24).
 - *`bit` is the committed decisions:* ``adv``'s row, which the verifier holds to the advice registration's leaf.
 - *The carry is the session's:* ``cout`` must be the charge's carry' from ``cin`` (``code``). The verifier holds ``cin``
-  and ``cout`` by their b‖c to the session's carry chain (`charge_chain.check_chain`), beside the advice, served-row and
+  and ``cout`` by their b‖c to the session's carry chain (`charge_rows.check_chain`), beside the advice, served-row and
   attested-record bindings. The proof block accepts a restarted carry-in (the priors, or counts fitted to the execution phase),
   and the chain refuses it: ``CH-first`` on a session's first execution phase, ``CH-carry`` after it.
 - The slice-level cases are `tests/adapters/vllm/tests/compiler/test_network_attester_compile_slice_phase14.py`.
@@ -74,14 +74,14 @@ class is protocol structure. So a session proves every execution phase at its en
 D 32, P 54, K 4, no prefix caching, and 8eb1's AsyncScheduler (AS = 1). The scheduler is engine configuration, so it
 is the class's and never an execution phase's: an AS chosen per execution phase would show whether its schedule matched sync
 order. w212 (requests 308–310, 21 proof blocks, 14 decisions) is padded into it
-(`tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212_class_async.json`: an empty arrival slot, 18
+(`tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212_class_async.json`: an empty arrival slot, 18
 decisions past the count with en 0, and 33 idle steps). The seal's rows are in ``srv``
 (`verity_vllm.compiler.served_rows.step_rows`), each held to its request's slot through ``map``.
 - It proves w212's charge of its decisions. Its order's charge is the I/O tie's, outside this proof (What a proof of
   the slice covers, above).
 - `compile_slice_zk` refuses a w212 fixture whose engine isn't the trace header's. `replay_vectors --slice` replays an
   execution phase at the trace's own scheduler unless asked for the sync class (`--AS 0`).
-- The proof block is 1,021,302 ANDs, 123,120 of them the map's ([served-shape.md](served-shape.md)). Of them,
+- The proof block is 1,021,302 ANDs, 123,120 of them the map's ([served-shape.md](../../../../../../adapters/vllm/verity_vllm/compiler/served-shape.md)). Of them,
   ChargeLink_v1{32} is 97,159, and 5,509 are its copies of the words it carries from decision to decision
   ([charge-chain.md](charge-chain.md)).
 - Without prefix caching the slice makes no CacheStep_v1 call and ``cache`` is 1. So a made-up cache table can't be
