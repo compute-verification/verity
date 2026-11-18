@@ -20,7 +20,8 @@ A piece is what one party does in the run (`Piece`), in one of four ways (``runs
   this machine hands it its party key (`held`). What doesn't reach the table yet (the served store, the card, setup's
   request, the party key) raises `NotImplementedError` (`NOT_YET`) before anything starts;
 - ``check``: the verifier's onsite check, `served_verdicts.py record` over the served window's public record, whose
-  composed verdict is the period's; under remote, the record the compose answer holds (`remote_check`). PoUW's row
+  composed verdict is the period's; under remote, the record the compose answer holds, else the
+  served node's own over its composite (`remote_check`). PoUW's row
   there is Pearl+'s verdict under ``pearl-plus`` (the runner's ``POUW=pearlplus``), H1's under ``pouw``.
 
 A piece names the scripts it runs (``scripts``), which must be in the tree, and the deploy bindings it reads: those of
@@ -1019,30 +1020,44 @@ def _record_line(said: Path) -> dict[str, Any] | None:
 
 
 def remote_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
+    """Remote's verifier line over its final record: the compose gate's answer (``out/compose``, `served_verdicts.sh
+    gate-compose`'s) where one was written, else the served node's own record (``out``), which it composed over its
+    composite (``out/composite``, served_composite.sh's, under ``COMPOSE_OFF_NODE=0`` with ``COMPOSITE`` not set
+    empty). As onsite's line, under ``VERITY_HOLD_PLACEMENT=1`` each accept of a record the served node composed, a
+    row's or the composed verdict, reads undecided, `AS_WRITTEN` in the reason. Refused by name: ``record`` where the
+    record can't be read or is another product's, ``composite`` where there is neither the gate's answer nor the
+    node's composite."""
     out = state / "out"
     answer = out / "compose"
-    composed = (answer / "record" / "verdicts.json").is_file()
-    base = answer if composed else out
+    gate = (answer / "record" / "verdicts.json").is_file()
+    base = answer if gate else out
     line, f = _record_line(base / "verdicts.txt"), base / "record" / "verdicts.json"
     if line is None or not f.is_file():
         raise Refused("record", f"remote's verifier reads the record in {base}, which has "
                                 + ("no RECORD line in verdicts.txt" if line is None else "no record/verdicts.json"))
     if line.get("product") != "remote":
         raise Refused("record", f"the record in {base} is composed for {line.get('product')!r}, not remote")
+    if not gate and not any((out / "composite").glob("*/composite.json")):
+        raise Refused("composite", f"remote's record is composed over a composite, and there is none: no compose answer "
+                                   f"in {answer} and no composite in {out / 'composite'} (the served node's record says "
+                                   f"{line.get('composed')!r}: {line.get('lean')}): compose on the served node "
+                                   "(COMPOSE_OFF_NODE=0, COMPOSITE not set empty) or answer through the compose gate")
     report = json.loads(f.read_text())
-    rows = report.get("protocols", {}) if composed else {}
+    rows = report.get("protocols", {})
     free = {c: why for c in cfg["protocols"] if (why := charges_nothing(c))}
     components = {c: rows.get(ROWS.get(c, c), {}).get("verdict", "absent") for c in cfg["protocols"]}
-    held = sorted(f"{c} {v}" for c, v in components.items() if v != "accept")
+    held = {f"{c} {v}" for c, v in components.items() if v != "accept"}
     if components.get("inference-only") == "accept" \
             and str(rows[ROWS["inference-only"]].get("answer_from", AS_WRITTEN)).startswith(AS_WRITTEN):
-        held.append(f"inference-only {AS_WRITTEN}")
-    verdict = VERDICTS.get(line.get("composed"), "undecided") if composed else "undecided"
-    reason = (None if composed else f"no compose answer in {answer}: remote's final record is composed off the "
-                                    "served node, from its compose hand-off (the served node's own record says "
-                                    f"{line.get('composed')!r})") \
-        or line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None) \
-        or (f"not accepted: {', '.join(held)}" if held else None)
+        held.add(f"inference-only {AS_WRITTEN}")
+    verdict = VERDICTS.get(line.get("composed"), "undecided")
+    if not gate and machine_settings.hold_placement():
+        held |= {f"{c} {AS_WRITTEN}" for c, v in components.items() if v == "accept"}
+        held |= {f"the composed verdict {AS_WRITTEN}"} if verdict == "accept" else set()
+        components = {c: "undecided" if v == "accept" else v for c, v in components.items()}
+    reason = line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None) \
+        or (line.get("lean") if not gate and verdict != "accept" else None) \
+        or (f"not accepted: {', '.join(sorted(held))}" if held else None)
     on, workload = gate_coins_on(cfg, bindings_of(state)), {p["name"]: p["machine"] for p in cfg["party"]}[WORKERS]
     return {"block": report.get("window"), "components": components, "product": REMOTE, "reason": reason,
             "registration": None, "coins": "simulated" if workload in on.values() else coins_of(cfg), "coins_on": on,

@@ -270,7 +270,6 @@ ACCEPTED = {"integrity": {"verdict": "accept"}, "work": {"verdict": "accept"}}
 #: inference-only's row as a verifier-side run would write it: its answer recomputed off the served node
 CHECKED = {"verdict": "accept", "answer_from": "recomputed on this host by its Lean verifier"}
 ALL_ACCEPTED = {c: "accept" for c in T.listed("remote")}
-ABSENT = {c: "absent" for c in T.listed("remote")}
 YES = {"composed": "accept", "product": "remote"}
 
 
@@ -354,16 +353,46 @@ def test_inference_onlys_row_as_the_served_node_wrote_it_holds_the_verdict(tmp_p
     assert f'AS_WRITTEN = "{T.AS_WRITTEN}"' in text
 
 
-def test_without_a_compose_answer_no_cell_reads_the_prover_nodes_own_record(tmp_path):
+def test_without_a_compose_answer_or_the_nodes_composite_remotes_line_is_refused_by_name(tmp_path):
+    """A record the served node wrote with no composite (``COMPOSITE`` set empty, or nothing composed) is no line:
+    refused by name, where it once read silently undecided."""
     cfg = R.load(CONFIG, REG)
-    written(tmp_path / "out", YES, {**ACCEPTED, "inference-only": CHECKED}, {"verdict": "accept"})
+    written(tmp_path / "out", {**YES, "lean": "no composite was read"}, {**ACCEPTED, "inference-only": CHECKED})
+    with pytest.raises(T.Refused) as e:
+        T.remote_check(cfg, tmp_path)
+    assert e.value.name == "composite"
+    assert f"no compose answer in {tmp_path / 'out' / 'compose'}" in e.value.detail
+    assert f"no composite in {tmp_path / 'out' / 'composite'}" in e.value.detail
+    assert "'accept': no composite was read" in e.value.detail
+
+
+def nodes_composite(out: Path) -> None:
+    (out / "composite" / "remote").mkdir(parents=True, exist_ok=True)
+    (out / "composite" / "remote" / "composite.json").write_text(json.dumps({"product": "remote"}))
+
+
+def test_remotes_line_reads_the_record_the_served_node_composed_over_its_composite(tmp_path, monkeypatch):
+    """With no compose answer, the line is the served node's own record, which it composed over its composite
+    (served_composite.sh's ``out/composite``); as onsite's, under the placement hold each of its accepts reads
+    undecided and a reject stands."""
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    cfg = R.load(CONFIG, REG)
+    nodes_composite(tmp_path / "out")
+    written(tmp_path / "out", YES, {**ACCEPTED, "inference-only": CHECKED})
     got = T.remote_check(cfg, tmp_path)
-    assert got["verdict"] == "undecided" and got["components"] == ABSENT
-    assert got["reason"].startswith(f"no compose answer in {tmp_path / 'out' / 'compose'}")
-    assert got["reason"].endswith("(the served node's own record says 'accept')")
-    written(tmp_path / "out", {"composed": "reject", "product": "remote"}, {"work": {"verdict": "reject"}})
+    assert (got["verdict"], got["components"], got["reason"], got["block"]) == ("accept", ALL_ACCEPTED, None, 3)
+    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
     got = T.remote_check(cfg, tmp_path)
-    assert got["verdict"] == "undecided" and got["components"] == ABSENT
+    assert got["verdict"] == "undecided" and set(got["components"].values()) == {"undecided"}
+    assert f"the composed verdict {T.AS_WRITTEN}" in got["reason"]
+    written(tmp_path / "out", {"composed": "reject", "product": "remote"}, {**ACCEPTED, "work": {"verdict": "reject"}})
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["components"]["pearl-plus"]) == ("reject", "reject")
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT")
+    written(tmp_path / "out", {"composed": "pending", "product": "remote", "lean": "its Lean gave no answer"},
+            {**ACCEPTED, "inference-only": CHECKED})
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["reason"]) == ("undecided", "its Lean gave no answer")
 
 
 def test_remotes_verifier_refuses_by_name_a_record_it_cannot_read_or_of_another_product(tmp_path):
