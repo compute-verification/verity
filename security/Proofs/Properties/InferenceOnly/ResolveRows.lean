@@ -297,7 +297,10 @@ theorem own_index_inj {inner os d d' : ℕ} (hin : 0 < inner) (hos : inner ≤ o
   have hpos : 0 < os := Nat.lt_of_lt_of_le hin hos
   have e : ∀ a r, r < os → (a * os + r) / os = a := fun a r hr => by
     rw [Nat.add_comm, Nat.add_mul_div_right _ _ hpos, Nat.div_eq_of_lt hr, Nat.zero_add]
-  have ha : d / inner = d' / inner := by rw [← e _ _ hr, ← e _ _ hr', h]
+  have ha : d / inner = d' / inner :=
+    calc d / inner = (d / inner * os + d % inner) / os := (e _ _ hr).symm
+      _ = (d' / inner * os + d' % inner) / os := by rw [h]
+      _ = d' / inner := e _ _ hr'
   have hm : d % inner = d' % inner := by rw [ha] at h; omega
   rw [← Nat.div_add_mod d inner, ← Nat.div_add_mod d' inner, ha, hm]
 
