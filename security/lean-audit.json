@@ -4017,7 +4017,9 @@
    "Claims.SamplingGeneric.FlockArgKSTable": "proved of every Flock record, decoder, tables' lengths and errors, and naming of a table (`Claims.SamplingGeneric.flockArgKSTable`)",
    "Claims.SamplingGeneric.FlockKSTable": "proved of every Flock record, decoder, tables' lengths and errors, naming of a table and compiled verifier over it (`Claims.SamplingGeneric.flockKSTable`)",
    "Claims.SamplingGeneric.FlockKSRegTable": "proved of every Flock record, decoder, tables' lengths and errors, naming of a table and compiled verifier over it (`Claims.SamplingGeneric.flockKSRegTable`)",
-   "Claims.SamplingGeneric.FlockRerunsTable": "proved of every Flock record, tables' lengths and errors, and naming of a table (`Claims.SamplingGeneric.flockRerunsTable`)"
+   "Claims.SamplingGeneric.FlockRerunsTable": "proved of every Flock record, tables' lengths and errors, and naming of a table (`Claims.SamplingGeneric.flockRerunsTable`)",
+   "Verity.Levels.MissesAsDesign": "a helper the levels' proofs take: the levels' sample misses each set of slots with the claims design's acceptance probability, a hypothesis of `Proofs/Core/LevelsProofBlocks` and `Proofs/Spot/Sampling/Levels`; no deployment meets it on its own",
+   "Verity.Levels.SlotsAreBlocks": "a helper the levels' proofs take: `blk` places a claims partition's slots one to one onto the last level's blocks, a hypothesis of `Proofs/Core/LevelsProofBlocks` and `Proofs/Spot/Sampling/Levels`; no deployment meets it on its own"
   },
   "generic": {
    "Claims.SamplingGeneric.CompilerKS": "Claims.SamplingGeneric.compilerKS",
@@ -5507,7 +5509,6 @@
  "witnesses_assumed": {
   "Claims.ExpectedCR": "ecr/sha-512 at one collision finder is a computational assumption about SHA-512 that no theorem concludes, so a witness takes it as it stands.",
   "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "commitment hiding, which no theorem concludes: by definition it is `Claims.Hm96Hiding` at the deployed instance (hm96's mask `ZkView.My` and salt hash `ZkView.saltHash` at δ₁ = 2^-193) and adds no assumption, and only a zero-knowledge guarantee's witness takes it, as the trust base's extra premise is trusted for the zero-knowledge guarantees only.",
-  "Verity.Vocab.WiresSound": "not an assumption about the world but an unproved statement about SPOT's extractor at the deployed vocabulary: on a play sampled proofs accept, at most a 2ε share of the committed units read a row that is not the row the record's wiring gives them, but for twice sampled proofs' error. Where the deployment runs sessions that error is finite, so the statement holds only by its proof, which Lean does not have yet (it is listed under `open`); until then a witness leaves it as it stands. No clause of the conclusions that take it reads it.",
   "Verity.Sampled.TwoStageBound": "not an assumption about the world but an unproved statement about SPOT's verifier at its two-stage form: at parameters that name the form, the probability that its sampled verdict holds while the claim fails is at most the error. The verifier accepts the form ahead of its proof, so no theorem concludes the bound and no instance can; until Lean proves it a witness leaves it as it stands. No clause of the conclusions that take it reads it."
  },
  "layers": {

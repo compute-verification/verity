@@ -937,11 +937,11 @@
    "due": "2026-11-30"
   },
   "Verity.Vocab.CutIsRegistered": {
-   "owner": "@top",
+   "owner": "@proofs",
    "issue": "LEAN-186",
-   "due": "2026-11-30",
+   "due": "2026-11-18",
    "waits": "Verity.remote_soundness_of_subprotocols",
-   "why": "the unwired Program and positions are the cut of the registered wired Program; open until the registration's check exists; owner to be named by top"
+   "why": "the unwired Program and positions are the cut of the registered wired Program; open until the registration's check exists"
   },
   "Verity.Vocab.InferenceOnlySound": {
    "owner": "@lean",
@@ -958,9 +958,9 @@
   "Verity.Vocab.PositionsCarry": {
    "owner": "@proofs",
    "issue": "LEAN-186",
-   "due": "2026-11-30",
+   "due": "2026-11-24",
    "waits": "Verity.remote_soundness_of_subprotocols",
-   "why": "on an accepted play all but an ε share of units carry the values their named positions commit to; owed a proof from the per-block check; read by no guarantee yet"
+   "why": "`named` is given, not defined: if it names no gate's place, `Carries` holds of every unit; needs, with the registration's check, every input gate of a wired reader row named and each place naming at most one gate"
   },
   "Verity.Vocab.PousSound": {
    "owner": "@memory-accounting",
