@@ -472,4 +472,5 @@ PEARL_PLUS = register(Scheme(
     published=("MACs", Fraction(1)),
     channel_schemas=Lacks("no Schema is declared for PearlSalt"),
     record_owner="compute-accounting",
+    tables=("pearl-a", "pearl-y", "pearl-b"),
 ))

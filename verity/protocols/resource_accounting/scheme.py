@@ -260,6 +260,9 @@ class Scheme:
     the exact factor from ``unit`` (``("bytes", 1/8)`` for an amount in bits published in bytes, ``(unit, 1)`` where
     it is the same); and ``record_owner``, the lane the record names as answering for its row. ``composed_protocol``
     is the protocol id it carries inside a composite where that differs from ``protocol``, None where it is the same.
+    ``tables``, the names of the value tables its run registers in the window record, a value of table ``t`` named
+    ``t/...``; ``number_format``, the number format of the output y its blocks hand the served model (``bf16``); and
+    ``y_committed``, whether each of its calls commits that y.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     is a `Lacks` saying so: it is in the one table with its parties and record, and `bound` and `credited` refuse it by
@@ -298,6 +301,9 @@ class Scheme:
     published: tuple[str, Fraction] | Lacks = UNDECLARED
     record_owner: str | Lacks = UNDECLARED
     composed_protocol: str | None = None
+    tables: tuple[str, ...] | Lacks = UNDECLARED
+    number_format: str | Lacks = UNDECLARED
+    y_committed: bool | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
