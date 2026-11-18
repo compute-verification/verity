@@ -148,8 +148,8 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   rows at to a registered read (`check_ok_refs`), every statement's registered reads to its template's reference
   statement's but for the run's fields, a registered value's rows among what they hold (`check_ok_values`), every
   session's sample to the second sample, cell by cell, and every read it reports to a statement's.
-* **The form**: once every check passes, the run is refused last (`two-stage-form`) unless `FORM` allows it; while it
-  doesn't, no run passes (`check_refused`).
+* **The form**: once every check passes, the run is refused last (`two-stage-form`) unless `FORM` allows it; `FORM`
+  allows it, so a run whose every check passes is accepted, ahead of the soundness proof of its form (`FORM`).
 -/
 module
 
@@ -171,15 +171,15 @@ namespace Spot.SecondStage
 
 open Lean (Json)
 
-/-- **The switch**: whether the verifier accepts a two-stage run whose every check of round 2 passes. Off, it refuses
-each one last (`two-stage-form`). Three things withhold the accept. SPOT[Flock]'s two-stage guarantee
-(`Flock.SecurityProofs.SpotKSTwo`) takes as a premise that each gate's value has one address, fixed before the run
-(`SpotFlock.AddressesConnected`), which nothing proves from this check. No theorem says that a run this verifier
-accepts is one the verifier that guarantee is stated about (`SpotFlock.V`) accepts. And the composite's sampled
-component has no two-stage form, nor a subprotocol for one, under the one soundness theorem (`Verity.Soundness`). The switch
-turns on only once the two-stage form is under that theorem: SPOT[Flock]'s own two-stage theorem does not turn it
-on. -/
-def FORM : Bool := false
+/-- **The switch**: whether the verifier accepts a two-stage run whose every check of round 2 passes. It is on: the
+verifier accepts the form ahead of its proof, by Daniel's ruling of Mon 16 Nov, and a two-stage accept's record says its
+form is not yet proved. Off, it refuses each one last (`two-stage-form`). Three things stand between the form and its
+proof. SPOT[Flock]'s two-stage guarantee (`Flock.SecurityProofs.SpotKSTwo`) takes as a premise that each gate's value has
+one address, fixed before the run (`SpotFlock.AddressesConnected`), which nothing proves from this check. No theorem
+says that a run this verifier accepts is one the verifier that guarantee is stated about (`SpotFlock.V`) accepts. And
+the composite's sampled component has no two-stage form, nor a subprotocol for one, under the one soundness theorem
+(`Verity.Soundness`). -/
+def FORM : Bool := true
 
 def FORM_WHY : String :=
   "refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the soundness " ++

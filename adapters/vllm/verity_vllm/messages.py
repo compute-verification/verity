@@ -1,8 +1,9 @@
 """The messages between the adapter and the prover, in both directions.
 
-In one process, through the `Exchange`: the adapter's hooks emit the events of `verity.hooks`, and a scheme, attached by
-its name before the engine is built, subscribes to their hooks and files its requests, each answered yes or refused by
-the scheme's name before serving starts.  The exchange names no scheme; the adapter's hooks translate vLLM's engine,
+In one process, through its one `Exchange` (`current`): the adapter's hooks emit the events of `verity.hooks` to the
+subscribers of their hooks, and a scheme, attached by its name before the engine is built, files its requests, each
+answered yes or refused by the scheme's name before serving starts.  A subscriber only reads, so it may attach at any
+time; a request changes what is served, so none is filed after the first answer.  The exchange names no scheme; the adapter's hooks translate vLLM's engine,
 requests, tokens and KV blocks into the circuit's words.
 
 On disk, by their protocols' declarations (each protocol's `prover/workload.py`): a body is checked against its declared
@@ -24,50 +25,55 @@ from verity.protocols.resource_accounting.compute.pouw.prover import workload as
 from verity.protocols.resource_accounting.memory.pous.prover import workload as pous
 from verity.protocols.resource_accounting.network.prover import workload as certifier
 
-__all__ = ["TYPES", "Exchange", "append", "body", "close", "current", "line", "lines", "open_exchange", "read", "write"]
+__all__ = ["TYPES", "Exchange", "append", "body", "close", "current", "line", "lines", "read", "write"]
 
 type Subscriber = Callable[[Any], None]
 
 
 class Exchange:
-    """One served run's exchange: subscribers by hook and requests by scheme, filed until `answer` and fixed after it."""
+    """One process's exchange: subscribers by hook, requests by scheme (filed until `answer`, fixed after it), and the
+    workload's step, as the last `StepBegan` emitted it."""
 
     def __init__(self) -> None:
         self.subscribers: dict[str, list[tuple[str, Subscriber]]] = {h: [] for h in H.HOOKS}
         self.requests: list[tuple[str, H.Request]] = []
         self.declared: H.Declared | None = None
         self.fixed = False
+        self.step = 0
+        #: set by a launcher that starts each `beside` process before serving
+        self.launches = False
 
-    def _filing(self, name: str, what: str) -> None:
-        if self.declared is not None:
-            raise Refused(name, f"files {what} after the requests were answered; attach before the engine is built")
-
-    def subscribe(self, name: str, hook: str, fn: Subscriber) -> None:
-        """Scheme ``name`` receives every event of ``hook``, in the order the adapter emits them."""
-        self._filing(name, f"on {hook!r}")
+    def subscribe(self, name: str, hook: str, fn: Subscriber) -> Callable[[], None]:
+        """``name`` receives every event of ``hook`` from now on, in the order the adapter emits them; returns its
+        removal."""
         if hook not in H.HOOKS:
             raise Refused(name, f"{hook!r} is not a hook of a served run {H.HOOKS}")
-        self.subscribers[hook].append((name, fn))
+        entry = (name, fn)
+        self.subscribers[hook].append(entry)
+        return lambda: self.subscribers[hook].remove(entry) if entry in self.subscribers[hook] else None
 
     def request(self, name: str, request: H.Request) -> None:
         """File scheme ``name``'s request; kernels and gates filed later run outside earlier ones."""
-        self._filing(name, type(request).__name__)
+        if self.declared is not None:
+            raise Refused(name, f"files {type(request).__name__} after the requests were answered; attach before the "
+                                "engine is built")
         self.requests.append((name, request))
 
     def _filed[R](self, kind: type[R]) -> list[tuple[str, R]]:
         return [(n, r) for n, r in self.requests if isinstance(r, kind)]
 
     def answer(self, declared: H.Declared) -> bool:
-        """Answer every request before the engine is built: `Refused` under the first refused scheme's name, with all
+        """Answer every request before an engine is built: `Refused` under the first refused scheme's name, with all
         its reasons; else True when a scheme's required property fixes the build.  Emits ``declared``."""
-        if self.declared is not None:
-            raise Refused("exchange", "the requests were answered already")
         why: dict[str, list[str]] = {}
         for name, r in self.requests:
             if isinstance(r, H.RequireProperty) and declared.properties.get(r.property) != r.value:
                 why.setdefault(name, []).append(f"requires {r.property} = {r.value!r}: {r.why}")
             elif isinstance(r, H.RefuseProperty) and declared.properties.get(r.property) == r.value:
                 why.setdefault(name, []).append(f"refuses {r.property} = {r.value!r}: {r.why}")
+            elif isinstance(r, H.StartBeside) and not self.launches:
+                why.setdefault(name, []).append(f"starts {r.process} beside the workload, and no launcher in this "
+                                                "process starts one")
         if why:
             name, reasons = next(iter(why.items()))
             raise Refused(name, "; ".join(reasons))
@@ -81,7 +87,9 @@ class Exchange:
         return bool(self.subscribers[hook])
 
     def emit(self, event: Any) -> None:
-        for _, fn in self.subscribers[event.hook]:
+        if isinstance(event, H.StepBegan):
+            self.step = event.step
+        for _, fn in tuple(self.subscribers[event.hook]):
             fn(event)
 
     def compute(self, due: H.BlockDue, original: Callable[[Mapping[str, H.Handle] | None], H.Handle]) -> H.Handle:
@@ -120,26 +128,25 @@ class Exchange:
         """Whether range ``range_`` must stay allocated at ``step`` (`HoldResident`)."""
         return any(r.range == range_ and step < r.until for _, r in self._filed(H.HoldResident))
 
+    def beside(self) -> list[tuple[str, H.StartBeside]]:
+        """The processes schemes asked to start beside the workload, by scheme, for the launcher to start before
+        serving."""
+        return self._filed(H.StartBeside)
+
 
 _CURRENT: Exchange | None = None
-_IDLE = Exchange()
-
-
-def open_exchange() -> Exchange:
-    """The served run's exchange, opened before its engine is built; refuses a second one in the process."""
-    global _CURRENT
-    if _CURRENT is not None:
-        raise Refused("exchange", "an exchange is open in this process already; close it first")
-    _CURRENT = Exchange()
-    return _CURRENT
 
 
 def current() -> Exchange:
-    """The open exchange, or an idle one no scheme reads."""
-    return _CURRENT if _CURRENT is not None else _IDLE
+    """This process's exchange, opened on first use."""
+    global _CURRENT
+    if _CURRENT is None:
+        _CURRENT = Exchange()
+    return _CURRENT
 
 
 def close() -> None:
+    """End this process's exchange; the next `current` opens a fresh one."""
     global _CURRENT
     _CURRENT = None
 
