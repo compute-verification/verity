@@ -1,6 +1,7 @@
 """The session's node figures, read from the node's data sheets: its node file and the GPU and host cards it names
 (`verity.device`'s `load_node` and `load_card`), through `timing.Figures.of_sheets`, with the figures no sheet states
-(`UNSHEETED`).  `python sheets.py NODE` writes them as the verifier's `--figures` reads them."""
+(`UNSHEETED`).  `python sheets.py NODE` writes them as the verifier's `--figures` reads them, and `python sheets.py --sha512
+NODE` their digest, as its `--figures-sha512` pins it."""
 
 from __future__ import annotations
 
@@ -58,12 +59,15 @@ def figures(node: str, *, count: int | None = None) -> timing.Figures:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if len(args) != 1:
-        print("usage: sheets.py NODE: the figures of a node of kind NODE (a node file's name under "
-              "calibration/hardware/nodes), as the session verifier's --figures reads them", file=sys.stderr)
+    digest = args[:1] == ["--sha512"]
+    if len(args) != 1 + digest:
+        print("usage: sheets.py [--sha512] NODE: the figures of a node of kind NODE (a node file's name under "
+              "calibration/hardware/nodes), as the session verifier's --figures reads them, or (--sha512) their "
+              "digest, which its --figures-sha512 pins", file=sys.stderr)
         return 2
     try:
-        print(json.dumps(figures(args[0]).to_json(), sort_keys=True))
+        fig = figures(args[-1])
+        print(fig.sha512() if digest else json.dumps(fig.to_json(), sort_keys=True))
     except ValueError as e:
         print(f"sheets.py: {e}", file=sys.stderr)
         return 3
