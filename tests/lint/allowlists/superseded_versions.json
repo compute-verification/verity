@@ -162,6 +162,7 @@
     {"file": "adapters/vllm/verity_vllm/definitions/registry/fp8_moe.py", "kind": "superseded", "symbol": "MoeExpertFp8BlockCoordinateW", "detail": "MoeExpertFp8BlockCoordinateW_v1"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/gemm_bias.py", "kind": "superseded", "symbol": "GemmBias", "detail": "GemmBias_v1"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/gemm_bias.py", "kind": "superseded", "symbol": "GemmBiasCoordinate", "detail": "GemmBiasCoordinate_v1"},
+    {"file": "adapters/vllm/verity_vllm/definitions/registry/gumbel_boolean.py", "kind": "superseded", "symbol": "GumbelNoiseLane", "detail": "GumbelNoiseLane_v3"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/gumbel_boolean.py", "kind": "superseded", "symbol": "NvLogf", "detail": "NvLogf_v3"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/int8_exact.py", "kind": "superseded", "symbol": "Exp2Lut127", "detail": "Exp2Lut127_v1"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/int8_exact.py", "kind": "superseded", "symbol": "Int8LutAttentionRow", "detail": "Int8LutAttentionRow_v1"},
