@@ -469,7 +469,7 @@ def _layout(m: CS.Member) -> tuple[Any, ...]:
 
 def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str, sample: Sequence[int], *, row: str,
              replay: str | None = None, previous: str | None = None, kind: str = "served",
-             salt_key: bytes | None = None, device: DeviceCommit | None = None, wires: Sequence[Any] = (),
+             device: DeviceCommit | None = None, wires: Sequence[Any] = (),
              tables: Sequence[HT.HistoryTable] = (), served: Mapping[str, Any] | None = None,
              positions: int | None = None, links: Sequence[Link] = (), rows: Sequence[Any] = (),
              window_root: str | None = None, returns: Sequence[tuple[Return, LK.Port]] = (),
@@ -481,8 +481,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     ``previous`` (the boundary registration's digest ``boundary`` by default) under the window ``{kind, run, row,
     interior: true, replay_sample}``: ``row`` the served workload's row, ``replay_sample`` the replay sample in order
     (round 2's ``second-interior-order``), ``replay`` the replay's run when given. Every leaf's salt is fresh from the OS,
-    but at a port ``links`` name, whose rows keep their value's salts; ``salt_key``: tests only, the salts derived from it
-    (`ml.windows.rows.commit`). ``device``: the commitment made on the
+    but at a port ``links`` name, whose rows keep their value's salts. ``device``: the commitment made on the
     rows' device (`committed`), registered in place of committing the spans' rows, which it never reads. ``wires`` and
     ``rows``: the replay block's, as `interior_window` takes them; a wired port's replayed rows must be its writers'
     output rows, each unit's the writer unit's round 2 reads there, which are what the interior commits. ``tables``: ``tables[i]`` sampled span i's, one a span exactly when a template reads a
@@ -577,7 +576,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
         for name, x in IL.values(links).items():
             if isinstance(x, Operand):
                 reads = [(rows, at) for rows, (y, _k, at) in zip(took, placed, strict=True) if y.value == name]
-                given[name] = IL.operand(prog, x, reads, q, schemas[name], salt_key, window_root)
+                given[name] = IL.operand(prog, x, reads, q, schemas[name], window_root)
         held = {name: np.asarray(v.rows, dtype=np.uint16) for name, v in given.items()}
         for took_rows, (x, k, at) in zip(took, placed, strict=True):
             v = given[x.value]
@@ -591,11 +590,10 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
             data[k]["rows"][x.port] = CS.ValueRows(v, at)
         linked = {window.members[k].port(x.port) for x, k, _at in placed}
         _as_served(data, cells, back, "outs")
-        fresh = {} if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()
-                                                 if p not in linked}
+        fresh = {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items() if p not in linked}
         fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in back}
         fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in took_in}
-        c = CS.commit(window, data, salt_key=salt_key, salts_of=fresh or None)
+        c = CS.commit(window, data, salts_of=fresh or None)
     provenance = {"row": row, "interior": True, "replay_sample": [int(u) for u in sample],
                   **({"replay": replay} if replay is not None else {})}
     rec = CS.registration(c, provenance, boundary if previous is None else previous, kind=kind, registrar=R,

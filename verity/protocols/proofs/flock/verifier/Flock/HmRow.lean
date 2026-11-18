@@ -2291,6 +2291,21 @@ def outGates (P : Program.Prog) (k m : Nat) : V (Array Nat) := do
   let L := (P.defs[node.fn]!).outLeaves
   (Array.range L).mapM fun j => Program.resolve P P.rootScope ⟨false, k, if node.form == .batch then m * L + j else j⟩
 
+/-- The unit whose output reader unit `u`'s parameter leaf `t` reads (`ownerOf`), none where the leaf is a circuit input. -/
+def writerOf (P : Program.Prog) (ns : List NodeUnits) (u t : Nat) : V (Option Nat) := do
+  let some (k, m) := unitAt ns u | throw s!"links: unit {u} is outside the program's {count ns} units"
+  let ops ← Program.operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!) m
+  pure ((ops[t]?).bind (ownerAt ns))
+
+/-- Unit `v`'s template (its node's callee) and its leaf in each of that template's output field trees: its rank among
+the template's units in the root body's order, the members of the earlier nodes of that callee and then its own. -/
+def treeLeaf (P : Program.Prog) (ns : List NodeUnits) (v : Nat) : Option (String × Nat) := do
+  let (k, m) ← unitAt ns v
+  let body := (P.defs[P.root]!).body
+  let fn := body.nodes[k]!.fn
+  let before := ns.foldl (fun n (k', mm, _, _) => if k' < k && body.nodes[k']!.fn == fn then n + mm else n) 0
+  pure ((P.defs[fn]!).key, before + m)
+
 /-- Linking for the population's reader `i` (its place in the public file), with `unitOf` a unit's node and member and
 `ownerOf` the unit whose gates hold a gate (of `n` units): every parameter leaf of the unit that reads another unit's output
 lies in a link of `links`; each link's leaves are either all circuit inputs (the row is an ordinary input row) or exactly

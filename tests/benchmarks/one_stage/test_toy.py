@@ -37,17 +37,16 @@ import toy as T
 
 N, Q = 6, 3
 SAMPLE = (4, 1, 5)
-KEY = b"\x07" * 32
 
 
 @pytest.fixture(scope="module")
 def run(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("two-stage-toy")
     u = T.ingress(N)
-    bc = T.boundary(u, Q, salt_key=KEY)
+    bc = T.boundary(u, Q)
     brec = T.write(bc, tmp / "boundary", {"toy": "boundary"}, index_salt=b"\x01" * 192)
     digest = R.digest(brec)
-    it = T.interior(bc, digest, SAMPLE, salt_key=b"\x08" * 32)
+    it = T.interior(bc, digest, SAMPLE)
     irec = T.write(it.committed, tmp / "interior", {"interior": True, "boundary": digest, "replay_sample": list(SAMPLE)},
                    previous=digest, registered=it.registered, index_salt=b"\x02" * 192)
     return {"tmp": tmp, "u": u, "bc": bc, "brec": brec, "digest": digest, "it": it, "irec": irec}
@@ -186,7 +185,7 @@ def test_a_link_row_off_another_leaf_and_a_broken_wire_are_refused(run):
     assert not REG.verify_read(bc.domains[value], port.root, SAMPLE[1], honest[0], path, T.V2)
     off = T.one_bit_off(port.rows_at(SAMPLE))
     assert int((T.bits(off) != T.bits(port.rows_at(SAMPLE))).sum()) == 1
-    bad = T.interior(bc, run["digest"], SAMPLE, salt_key=b"\x08" * 32, replayed=off)
+    bad = T.interior(bc, run["digest"], SAMPLE, replayed=off)
     x = rows_bc(bad.committed, lin.port("row"), Q)[0]
     assert x != honest[0] and not REG.verify_read(bc.domains[value], port.root, SAMPLE[0], x, path, T.V2)
     lout, egress = it.window.members[4], T.boundary_ports(bc.window)["o0"]

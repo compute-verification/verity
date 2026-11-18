@@ -10,9 +10,9 @@ registered circuit is inference, not training).
 `Core.Composites.ofIds`, which names the composite a configuration's verifier runs, refuses v0's subprotocols.
 
 **The open gap.** Remote's composed guarantee, `Verity.remote_soundness_of_subprotocols`, is proved at its compiled
-verifier from three open premises: SPOT's and PoUW's targets (`Vocab.SpotSound`, `PouwSound`) and, for the policy,
-whose clause is proved on the Program its check judges, the statement that ties it to the committed files' wires
-(`Vocab.WiresSound`). The other statement on the committed files, one gate a row (`Flock.Bridge.GateARow`), is
+verifier from two open premises, SPOT's and PoUW's targets (`Vocab.SpotSound`, `PouwSound`). The policy's clause is
+proved on the Program its check judges; what ties it to the committed files' wires, each wire one commitment read by path
+at its writer's leaf, is `Vocab.ReadsByPath`, stated and not proved, which the theorem does not take yet. The other statement on the committed files, one gate a row (`Flock.Bridge.GateARow`), is
 proved (`Flock.Bridge.gateARow`).
 
 This file is an outline with signposts; the Lean is the definition. The vocabulary is `GLOSSARY.md`,
@@ -268,7 +268,7 @@ part 6's premises say why that shape trains little.
 1. *Remote's verdict means the policy accepted the same registration.* **Proved** of the case as sent: the policy
    accepted its own case, on SPOT's record (`Properties.Composition.AcceptMeans`, `AcceptSame`, `AcceptTied`), and
    remote's soundness carries its clause, `Properties.Remote.PolicyHeld`, proved by `Vocab.inferenceOnlySound`. That
-   the case's circuit is the committed files' is **open** (`Vocab.WiresSound`: the open gap).
+   the case's circuit is the committed files' is **open** (`Vocab.ReadsByPath`: the open gap).
 2. *The policy's check accepts ⇒ `Theta.evaluate` complies ⇒ `Desc.evaluate` complies.*
    `InferenceOnlyCheck.Properties.ProtocolAccepts`, **proved**: where the policy's check accepts, `Theta.evaluate`
    accepts with `complies` true, and `Desc.evaluate` gives that verdict too. θ's provenance:
@@ -403,7 +403,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 ### What's open
 
 - **Chaining the parts in Lean.**
-  - `Vocab.SpotSound` and `Vocab.PouwSound` aren't proved at remote, nor `Vocab.WiresSound`, which ties the
+  - `Vocab.SpotSound` and `Vocab.PouwSound` aren't proved at remote, nor `Vocab.ReadsByPath`, which ties the
     policy's clause, proved on the Program its check judges, to the committed files' wires.
   - `SampledKSLiveV3` doesn't read part 1's theorem.
   - `ServiceSound` and `Slowdown.Assumptions.PouwSound` are undischarged premises.
@@ -417,7 +417,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
 - **The inference-only policy's link to the bound** (part 4, links 1, 5 and 6): the policy's clause on the committed
-  files (`Vocab.WiresSound`, above); bounds on k_F and k_a per inference block; and the bound reading
+  files (`Vocab.ReadsByPath`, above); bounds on k_F and k_a per inference block; and the bound reading
   a verdict's rate.
 - **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
   its check inside the ZK server is open.

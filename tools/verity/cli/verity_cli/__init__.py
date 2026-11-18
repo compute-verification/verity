@@ -30,7 +30,8 @@
                                     status, and last the axiom probe: each theorem whose
                                     axioms go beyond the standard three (`sorryAx` too), or none, or each that failed, when
                                     lean has an error on its own lines (on a project machine with
-                                    --on auto); --siblings: then fail on a name another module of its package declares too
+                                    --on auto); --siblings: then fail on a name another module of its package declares too;
+                                    --on MACHINE --tree NAME: on the tree NAME that machine keeps (a branch's kept tree)
     verity lean deployed [--rev REV] [--today YYYY-MM-DD]
                                     the deployed guarantees' rows as JSON, read from the Lean locks at REV by git alone:
                                     each one's gap as the running checkout's Lean check computes it, and each open or gap
@@ -56,7 +57,7 @@ ROOT = HERE.parents[1]
 #: the check's scripts, which `verity check`, `verity ci` and `verity tasks` start
 CHECK = ROOT / "tools" / "check"
 LAKEFILES = ("lakefile.lean", "lakefile.toml")
-USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P] [--as LANE]]\n"
+USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P] [--as LANE] [--tree NAME]]\n"
          "verity lean deployed [--rev REV] [--today YYYY-MM-DD]")
 #: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
@@ -237,13 +238,18 @@ def _lean(args: list[str]) -> int:
                     "--on auto` places it")
     ap.add_argument("--pool", help="with --on: the machine's pool for it")
     ap.add_argument("--as", dest="lane", metavar="LANE", help="with --on: the lane the pool's slot names (default $RESEARCH_LANE)")
+    ap.add_argument("--tree", metavar="NAME", help="with --on MACHINE: elaborate it on the tree NAME that MACHINE keeps under "
+                    "lean-records/ (a branch's kept tree), synced to your checkout first; the run stays on MACHINE (research "
+                    "run --stay), since no other machine keeps that tree")
     if not args or args[0] != "try":
         raise SystemExit(USAGE)
     a = ap.parse_args(args[1:])
     if a.on is None:
-        if a.pool or a.lane:
-            ap.error("--pool and --as go with --on")
+        if a.pool or a.lane or a.tree:
+            ap.error("--pool, --as and --tree go with --on")
         return _lean_here(a.file, a.siblings)
+    if a.tree and (a.on == "auto" or "/" in a.tree or a.tree in (".", "..")):
+        ap.error("--tree takes a tree's NAME, kept on the one machine --on names (not auto)")
     tree = _tree(a.file)
     file = a.file if not Path(a.file).is_file() else os.path.relpath(Path(a.file).resolve(), tree)
     if file.startswith(os.pardir + os.sep) or not (tree / file).is_file():
@@ -254,10 +260,11 @@ def _lean(args: list[str]) -> int:
         source = _snapshot(tree, Path(tmp))
         try:
             p = subprocess.Popen([*research, "run", "--on", a.on, *(["--pool", a.pool] if a.pool else []),
-                                  *(["--as", a.lane] if a.lane else []), "--project", "verity",
+                                  *(["--as", a.lane] if a.lane else []), *(["--stay"] if a.tree else []),
+                                  "--project", "verity",
                                   "--source", str(source), "--cwd", "clone", "--wait", "--wait-every", "5", "--",
                                   "python3", "tools/verity/lean/lean_changed.py", "--try", file,
-                                  *(["--siblings"] if a.siblings else [])],
+                                  *(["--siblings"] if a.siblings else []), *(["--tree", a.tree] if a.tree else [])],
                                  cwd=ROOT, stderr=subprocess.PIPE, text=True)
             said = []
             for line in p.stderr:
