@@ -346,12 +346,18 @@ def test_a_dropped_block_rejects(toy, tmp_path):
     assert got.verdict == "reject" and got.answer["reason"] == f"setup: segment 1 of C* is not 8 blocks of {q.block_bytes} bytes"
 
 
-def test_attaching_pous_by_name_loads_no_selector_and_nothing_of_useful_works():
+def test_attaching_pous_by_name_loads_no_selector_and_no_other_scheme():
+    """Attaching PoUS by name imports neither the adapter's selector nor any module of another scheme's package:
+    useful work's, the network attester's or PoUB's."""
+    ra = "verity.protocols.resource_accounting."
     probe = ("import sys\n"
              "from verity.protocols.compose import schemes\n"
              "from verity_vllm import messages\n"
-             "messages.Exchange().attach(schemes.get('pous'), {}, salt_source='a5' * 32, experimental=True)\n"
-             "bad = sorted(m for m in sys.modules if m == 'verity_vllm.protocols' or '.pouw' in m)\n"
+             "messages.Exchange().attach(schemes.get(schemes.named('option', 'pous:p2-16448/v4')), {},\n"
+             "                           salt_source='a5' * 32, experimental=True)\n"
+             f"other = ({ra + 'compute'!r}, {ra + 'network'!r}, {ra + 'memory.poub'!r})\n"
+             "bad = sorted(m for m in sys.modules if m == 'verity_vllm.protocols' or '.pouw' in m\n"
+             "             or any(m == o or m.startswith(o + '.') for o in other))\n"
              "assert not bad, bad\n")
     got = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
     assert got.returncode == 0, got.stderr[-2000:]

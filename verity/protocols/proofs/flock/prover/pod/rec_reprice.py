@@ -1,6 +1,6 @@
 """85-rec-reprice's inner statement program (``85-rec-reprice.sh``): ``N`` instances of ``GemmCoordinate_v2{K, DOT}``, the
-population program of that template (`one_stage.partition.population_program`, instance i is unit i), cut by
-``Q_template_instance`` v0, as `rec_inner.stage` binds pod 80's RoPE d64 statement: the sampling design's strata are the template's
+population program of that template (`wired_population_program`, instance i is unit i), cut by
+``Q_template_instances`` v0, as `rec_inner.stage` binds pod 80's RoPE d64 statement: the sampling design's strata are the template's
 instances and every unit is an instance of the circuit's own template, which Lean's verifier derives from the program.
 ``K`` and ``N`` come from the environment.
 
@@ -47,9 +47,16 @@ def population() -> int:
 
 
 def program():
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+    return population_query()[0]
 
-    return P.population_program(template(), population())
+
+def population_query():
+    """The inner statement's population program and its template query (`rec_inner.stage`'s)."""
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.population import wired_population_program
+
+    t, n = template(), population()
+    return wired_population_program([(t, n)], {"templates": [[descriptor_id(t), n]]})
 
 
 def chain_program():
@@ -88,9 +95,11 @@ def partition(d: Path, prog=None) -> dict:
     t, n = template(), population()
     if why := RB.inner(n):
         raise SystemExit(why)
+    links = os.environ.get("REC_LINKS") == "1"
+    query = P.template_instance_query(t) if links else population_query()[1]
     if prog is None:
-        prog = chain_program() if os.environ.get("REC_LINKS") == "1" else P.population_program(t, n)
-    part = P.partition(prog, P.template_instance_query(t))
+        prog = chain_program() if links else program()
+    part = P.partition(prog, query)
     with open(d / "circuit.txt") as f:
         f.readline()
         meta = json.loads(f.readline()[5:])

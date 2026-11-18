@@ -840,7 +840,7 @@ def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
 def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_path):
     src, dst = tmp_path / "serve", tmp_path / "OUT"
     src.mkdir()
-    (src / "windows.jsonl").write_bytes(b'{"window": 0, "steps": 3, "run_id": "r", "step_roots": ["a", "b", "c"]}\n{"window": ')
+    (src / "windows.jsonl").write_bytes(b'{"window": 0, "steps": 3, "run_id": "r", "step_roots": ["a", "b", "c"], "passed": true}\n{"window": ')
     (src / "serve.json").write_text('{"model": "m", "address": ["10.0.0.1", 8000]}')
     (src / "requests.jsonl").write_text('{"prompt_ids": [1]}\n')
     (src / "advice_trace.jsonl").write_text('{"kind": "header"}\n')
@@ -880,13 +880,12 @@ def _full(spec: dict, plant: bool) -> dict:
 def test_the_mirror_copies_only_the_fields_public_names_at_every_level_and_no_other_file(tmp_path):
     """The rule, not the list: whatever `PUBLIC` holds, a record mirrors as exactly its named fields, an unnamed one planted at
     the top, in a nested record, in each element of a list of records, or as a record inside a named field, left out; a file
-    `PUBLIC` doesn't list is not mirrored, nor can a mirror be asked for one; and every named field has one of the four kinds."""
-    assert sm.KINDS == ("structure", "output", "coin", "commitment")
-
-    def kinds(spec: dict) -> list:
-        return [x for s in spec.values() for x in (kinds(s) if isinstance(s, dict) else [s])]
-
-    assert all(k in sm.KINDS for spec in sm.PUBLIC.values() for k in kinds(spec)) and sm.MIRRORED == tuple(sm.PUBLIC)
+    `PUBLIC` doesn't list is not mirrored, nor can a mirror be asked for one; and a table with a field of any other kind than
+    `KINDS` is refused, naming its file, field and kind, by the check the module runs on `PUBLIC` at import."""
+    sm.check_kinds(sm.PUBLIC)
+    with pytest.raises(ValueError, match=r"windows\.jsonl: served_rows\.root: kind 'undecided' is not one of KINDS"):
+        sm.check_kinds({**sm.PUBLIC, "windows.jsonl": {"window": sm.KINDS[0], "served_rows": {"root": "undecided"}}})
+    assert sm.MIRRORED == tuple(sm.PUBLIC)
     src, dst = tmp_path / "serve", tmp_path / "OUT"
     src.mkdir()
     for name, spec in sm.PUBLIC.items():
@@ -992,3 +991,19 @@ def test_a_windows_record_splits_its_steps_commit_time_by_thread_and_leaves_the_
     assert sc.commit_s_of(rc) == {"serving": {"acquisition": 0.002, "movement": 0.001, "wait": 0.05},
                                   "worker": {"hashing": 0.09, "worker_idle": 0.01, "root_finalisation": 0.001, "device_pool_wait": 0.005}}
     assert sc.commit_s_of(SimpleNamespace(spans={"per_step": {}})) is None and sc.commit_s_of(None) is None
+
+
+def test_the_target_and_statics_lists_name_only_their_sources_fields_and_state_what_they_leave_out():
+    """`_TARGET` and `_STATICS` are written out by hand so that a field added at a source stays in the serve dir until it is
+    listed; this holds each name to its source (`TargetProfile.to_json`'s fields, `compile_slice.STATICS` and the block's
+    ``G``), refusing a name the source doesn't write, and holds every source name the list leaves out to `LEFT_OUT`."""
+    from dataclasses import fields
+
+    from verity_vllm.compiler import compile_slice as CS
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+
+    sources = {"target": (sm.PUBLIC["serve.json"]["target"], {f.name for f in fields(TargetProfile)}),
+               "served_rows_statics": (sm.PUBLIC["serve.json"]["served_rows_statics"], set(CS.STATICS) | {"G"})}
+    for name, (listed, source) in sources.items():
+        assert not (stray := sorted(set(listed) - source)), f"{name}: {stray} aren't fields its source writes"
+        assert sorted(source - set(listed)) == sorted(sm.LEFT_OUT[name]), f"{name}: left out, but not in LEFT_OUT"

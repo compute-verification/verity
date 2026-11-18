@@ -210,7 +210,7 @@ theorem sampleCoins_roots {key : ChallengerKey} {w label : String} {after : Byte
   refine ⟨cm, roots, ls, lines, hts, hlog, hls, fun r hr => ?_, (Verity.Sampled.releasedLogOf_ok hrr hcm).2.1⟩
   obtain ⟨e, he, rfl⟩ := List.mem_map.1 hr
   obtain ⟨he, hk⟩ := List.mem_filter.1 he
-  exact hall e he (beq_iff_eq.1 ((Bool.and_eq_true _ _).1 hk).2)
+  exact hall e he (beq_iff_eq.1 ((Bool.and_eq_true _ _).mp hk).2)
 
 /-- **The first session's read shows a family after one root where its roots do**, and its roots show the first
 sample's family after the sample's digest alone. -/
