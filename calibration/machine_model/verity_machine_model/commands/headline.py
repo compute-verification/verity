@@ -16,6 +16,8 @@ import json
 
 from verity_machine_model import headline as H
 
+READS_DEVICE = False
+
 
 def add(sub: argparse._SubParsersAction) -> None:
     hl = sub.add_parser("headline")

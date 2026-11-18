@@ -105,7 +105,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.InferenceOnly.Desc.Cover", "Properties.InferenceOnly.Theta", "Properties.InferenceOnly.Count",
   "Properties.Spot", "Properties.Spot.Draw", "Properties.Spot.Bits", "Properties.Spot.Interval",
   "Properties.Spot.FactorUpper", "Properties.Spot.TwoStageCheck", "Properties.Spot.Halt", "Properties.Spot.Second",
-  "Properties.Spot.Wires", "Properties.Spot.Members", "Properties.Spot.Tables", "Properties.Spot.HistoryTable",
+  "Properties.Spot.Wires", "Properties.Spot.Edges", "Properties.Spot.Members", "Properties.Spot.Tables", "Properties.Spot.HistoryTable",
   "Properties.Spot.Rate", "Properties.Spot.MonitoringPeriod", "Properties.Spot.MonitoringPeriodLedger",
   "Properties.Core.Evaluate", "Properties.Certifier.Records", "Properties.Spot.PlanCheck", "Properties.NetworkPeriod",
   "Properties.Certifier.Registered",
@@ -123,7 +123,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Verity.Committed", "Properties.Flock.Circuit.GateARow",
   "Properties.Ties", "Properties.Flock.Nets", "Properties.Remote",
   "Properties.InferenceOnly.Record", "Properties.Pous.WipeSigned", "Properties.Pous.WipeCount", "Properties.Challenger",
-  "Properties.ZkServer", "Properties.Core.Site",
+  "Properties.ZkServer", "Properties.Core.Site", "Properties.Core.ProfileCredited", "Properties.Core.ProfileCredited",
   "Properties.Registration.Premises",
   "Properties.Assumptions", "Properties.Verity.ExecutionPhaseFiles", "Properties.InferenceOnly.Opening",
   "Properties.InferenceOnly.PinnedRead", "Properties.InferenceOnly.RecordForm", "Properties.Verity.LedgerPinned"]

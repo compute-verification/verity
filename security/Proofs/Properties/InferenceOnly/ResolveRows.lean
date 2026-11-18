@@ -6,7 +6,7 @@ public import Proofs.Properties.InferenceOnly.RecordOwn
 /-!
 # A unit's row is input gates of its own
 
-A unit is a member of a root node that is no input node, a call or a batch. Where `Record.ownRows` holds, a leaf of
+A unit is a member of a root node that is no input node, a call or a batch. Where `Record.SecurityProofs.OwnRuns` holds, a leaf of
 one of its parameters resolves in two steps: up to the root, at a reference of the node's argument (`rs_unit`), and
 there to a gate of an input node, since the reference lies in a part that is a run of an input node's leaves
 (`arg_leaf`). So the leaf is gate `j` of input node `n` (`unit_leaf`), and no two leaves of units are one gate
@@ -143,7 +143,7 @@ def LeafAt (P : Prog) (k i x n j : ℕ) : Prop :=
     j = base + (x - ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).starts[q]!)
 
 /-- **A leaf of an input node is a reference of one argument, at one place.** -/
-theorem leafAt_inj {P : Prog} (hown : Record.ownRows P = true) {k i x k' i' x' n j : ℕ}
+theorem leafAt_inj {P : Prog} (hown : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P) {k i x k' i' x' n j : ℕ}
     (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
     (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size)
@@ -189,7 +189,7 @@ theorem node_of_gate (P : Prog) (hl : Walk.LaidOut P P.root) (hp : (P.defs[P.roo
 of root node `k`, a call or a batch that is no input node, reads leaf `t` of its parameter `i` at a reference within
 the node's argument `i`. -/
 theorem argIdx_lt (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-    (hown : Record.ownRows P = true) {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
+    (hown : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P) {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
     (hf : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
     {m : ℕ} (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members) {i : ℕ}
@@ -219,7 +219,7 @@ theorem argIdx_lt (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode by
 
 section
 variable (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-  (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (hown : Record.ownRows P = true)
+  (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (hown : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
 include hdec hov hlay hown
 
 /-- **A reference of an argument of a root node that is no input node is a leaf of an input node, and resolves

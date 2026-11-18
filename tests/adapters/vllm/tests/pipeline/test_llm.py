@@ -212,7 +212,7 @@ def test_a_refused_set_raises_before_the_engine_is_built(built):
     ("compilation_config", {"mode": 0}),
 ])
 def test_a_build_dependent_option_refuses_kernel_profile_overrides_before_build(built, option, value):
-    with pytest.raises(ValueError, match=rf"sampled-proofs:rows-sha512: engine overrides {option} .* no longer match its Build"):
+    with pytest.raises(ValueError, match=rf"sampled-proofs:rows-sha512: its served computation is the row's Build.* \(kernels \('{option}',\)\)"):
         L.LLM(
             LLAMA[0],
             revision=LLAMA[1],
@@ -445,12 +445,13 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
 
     from verity_vllm.engine import build as B
     from verity_vllm.engine import engine_profile as prof
-    from verity_vllm.engine import sparse_mla, topp_pin
+    from verity_vllm.engine import kv_blocks, sparse_mla, topp_pin
     monkeypatch.setenv("VERITY_DSA_TOPK", "0")
     monkeypatch.setattr(prof, "apply_env", lambda: {})
     monkeypatch.setattr(B.served, "apply", lambda execution: {})
     monkeypatch.setattr(sparse_mla, "arm", lambda: None)
     monkeypatch.setattr(topp_pin, "arm", lambda: None)
+    monkeypatch.setattr(kv_blocks, "attach", lambda: lambda: None)
     seen = {}
 
     class _VllmLLM:

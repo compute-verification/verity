@@ -42,7 +42,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.ResourceAccounting.Served
 import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Spot.Sampling.SamplingDesign
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.VBridge.Full
 import Std.Tactic.BVDecide.Normalize.Bool
@@ -65,7 +65,7 @@ doing work samples all its units, and a set of positive work escapes never.
 namespace Properties.Pouw.Credit.SecurityProofs
 
 open Lean (Json toJson)
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset
+open FlockSoundness FlockSoundness.Game Spot.Sampling Finset
 open Properties.Pouw.Strata (unitWork)
 open scoped ENNReal NNReal
 

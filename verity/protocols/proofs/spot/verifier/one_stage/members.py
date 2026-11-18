@@ -45,9 +45,8 @@ Where it is not Lean's step for step, each on a case neither side accepts:
   reaches.
 * **Inputs the per-member parsers refuse** raise `Outside`: this reads parameters and evidence as
   `membersParamsOfJson` and `membersEvidenceOf` parsed them.
-* **The members' wiring** (the parameters' ``proofs.wiring``, `OneStageZk.wiringOf`, held by `wiresHeld` after the
-  sessions): parameters naming one raise `Outside`. This reads no circuit's ports or public file's rows, which that
-  check compares.
+* **The members' wiring** (the parameters' ``proofs.wiring``, `OneStageZk.wiringOf`, whose wired ports read their
+  writers' output field trees, `fieldRoots`): parameters naming one raise `Outside`.
 * **A registered file's own form** (`Flock.Registered.ofJson`, which `classHeld` and each statement read it through).
   This reads a member's registered file by the fields `classHeld` compares, `Outside` where one is not a registered
   port's; the file's other refusals are the Flock verifier's, at the member's session, and are not answered here for a
@@ -132,8 +131,8 @@ MEMBER_UNITS = ("units: the public file's units.indices are not exactly the memb
 def unwired_why(port: str) -> str:
     """`OneStageZk.UNWIRED_WHY`: the refusal of a member's public file naming ``port`` at a root its slice holds none
     of."""
-    return (f"public file: port {port} has no tree under the member, and the wiring names no writer of it in one member: "
-            "a wired port is its writer's output root")
+    return (f"public file: port {port} has no tree under the member, and the record names no tree of its writer's "
+            "output field: a wired port reads its writer's output field's tree")
 
 
 #: `OneStageZk.provedHeld`'s refusal
@@ -225,7 +224,7 @@ def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dic
     form = Outside("the parameters and the evidence are not in the per-member form as its parsers read it "
                    "(`OneStageZk.membersParamsOfJson`, `membersEvidenceOf`)")
     if isinstance(params.get("proofs"), dict) and "wiring" in params["proofs"]:
-        raise Outside("the parameters name the members' wiring, whose check (`OneStageZk.wiresHeld`) this does not run")
+        raise Outside("the parameters name the members' wiring, whose reads by path (`OneStageZk.fieldRoots`) this does not run")
     try:
         ms, sts = params["proofs"]["members"], evidence["proofs"]["statements"]
         ok = (set(params["proofs"]) == {"members"} and set(evidence["proofs"]) == {"statements"} and isinstance(ms, dict)
@@ -420,66 +419,32 @@ def _slice(m: Mapping[str, Any], roots: Sequence[Mapping[str, Any]], record: Map
     return {"population": _count(m), "roots": list(roots), "scheme": record.get("scheme")}
 
 
-def _box(w: Mapping[str, Any], lo: int, hi: int) -> tuple[int, int]:
-    """`Spot.Wires.Wire.box`: bounds on the writers of the wire `w`'s reader indices ``lo`` to ``hi``, digit by digit,
-    the fastest first."""
-    pairs = list(zip(w["radix"], w["step"]))[::-1]
-    a = b = w["base"]
-    for k, (r, s) in enumerate(pairs):
-        if lo // r == hi // r:
-            q, rest = lo // r, 0
-            for r2, s2 in pairs[k + 1:]:
-                rest += q % r2 * s2
-                q //= r2
-            return a + min(lo % r * s, hi % r * s) + rest, b + max(lo % r * s, hi % r * s) + rest
-        a, b, lo, hi = a + min(0, s * (r - 1)), b + max(0, s * (r - 1)), lo // r, hi // r
-    return a, b
+def _field_root(record: Mapping[str, Any], template: str, field: str, port: str) -> dict[str, Any] | None:
+    """`OneStageZk.fieldRootOf`: the record's ``fields`` entry of the writer template's output field, its domain,
+    leaves and root under the reader's port name; else None."""
+    fs = record.get("fields")
+    r = next((f for f in fs if f.get("template") == template and f.get("field") == field), None) \
+        if isinstance(fs, list) else None
+    return None if r is None else {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": port, "root": r.get("root")}
 
 
-def _member_at(spans: Sequence[tuple[str, int, int]], g: int) -> str | None:
-    """`OneStageZk.memberAt`'s member: the first of ``(name, first, count)`` holding the population's unit ``g``."""
-    return next((name for name, lo, n in spans if lo <= g < lo + n), None)
-
-
-def _wired_root(wiring: Mapping[str, Any], ranges: Sequence[Sequence[Any]], spans: Sequence[tuple[str, int, int]],
-                roots: Mapping[str, Sequence[Mapping[str, Any]]], m: tuple[str, int, int],
-                w: Mapping[str, Any]) -> dict[str, Any] | None:
-    """`OneStageZk.wiredRoot`: the root of the member ``m``'s port the whole-port wire ``w`` reads, its writer's output
-    root under the reader's port name, where `_box`'s bounds on the writers of every unit of ``m`` are units of one
-    member; else None."""
-    _, f, n = m
-    rng = next(((a, c) for t, a, c in ranges if t == w["reader"] and a <= f and f + n <= a + c), None)
-    _c0, cuts = w.get("cut", [0, 1])
-    if rng is None or cuts != 1 or wiring.get("cuts", {}).get(w["reader"], {}).get(w["port"], 1) != 1 or n <= 0:
-        return None
-    lo = f - rng[0]
-    units = 1
-    for r in w["radix"]:
-        units *= r
-    if not (w["at"] <= lo and lo + n <= w["at"] + units // cuts):
-        return None
-    a, b = _box(w, lo - w["at"], lo - w["at"] + n - 1)
-    wr = next(((a_, c_) for t, a_, c_ in ranges if t == w["writer"]), None)
-    if wr is None or not (0 <= a and b < wr[1]):
-        return None
-    wa, wb = _member_at(spans, wr[0] + a), _member_at(spans, wr[0] + b)
-    if wa is None or wa != wb:
-        return None
-    e = next((r for r in reversed(roots.get(wa, [])) if r.get("port") == w["out"]), None)
-    return None if e is None else {**e, "port": w["port"]}
-
-
-def wired_roots(wiring: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: Mapping[str, Any],
-                roots: Mapping[str, Sequence[Mapping[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
-    """`OneStageZk.wiredRoots`: each member's roots `roots` (`_roots`'), then for each wire of `wiring` (the parameters'
-    ``proofs.wiring``) whose port the member has no root of, its writer's root (`_wired_root`), at the partition's
-    ranges ``ranges`` (each ``[template, first, count]``)."""
-    spans = [(name, _first(m), _count(m)) for name, m in ms.items()]
+def field_roots(wiring: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: Mapping[str, Any],
+                record: Mapping[str, Any], roots: Mapping[str, Sequence[Mapping[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    """`OneStageZk.fieldRoots`: each member's roots `roots` (`_roots`'), then for each wire of `wiring` into the
+    template whose range of ``ranges`` (each ``[template, first, count]``) holds the member's units, at a port the
+    member has no root of, its writer's output field's tree (`_field_root`), the first wire's of each port."""
     out = {}
     for name, m in ms.items():
-        mine = list(roots.get(name, []))
-        out[name] = mine + [e for w in wiring.get("wires", []) if not any(r.get("port") == w["port"] for r in mine)
-                            if (e := _wired_root(wiring, ranges, spans, roots, (name, _first(m), _count(m)), w)) is not None]
+        f, n = _first(m), _count(m)
+        got = list(roots.get(name, []))
+        for w in wiring.get("wires", []):
+            if any(r.get("port") == w["port"] for r in got):
+                continue
+            if not any(t == w["reader"] and a <= f and f + n <= a + c for t, a, c in ranges):
+                continue
+            if (e := _field_root(record, w["writer"], w["out"], w["port"])) is not None:
+                got.append(e)
+        out[name] = got
     return {**roots, **out}
 
 
@@ -489,7 +454,7 @@ def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, 
     each its units as ranges ``[lo, hi)``: ``{name: {population, roots, scheme}}``, the member's count of units, the
     docket's roots that are its own, its name taken off each port (`OneStageZk.rootsOf`), with, where the parameters
     name a ``wiring`` (at the partition's ``ranges``, each ``[template, first, count]``), each wired port its writer's
-    root (`wired_roots`, `OneStageZk.membersRootsOf`), and the docket's scheme. `population_why` holds a member's
+    output field's tree (`field_roots`, `OneStageZk.membersRootsOf`), and the docket's scheme. `population_why` holds a member's
     public file to its slice. `ValueError` with Lean's reason where the members are not laid over the docket's
     population (`OneStageZk.laidHeld`) or a root of the docket is not one member's: an audit outside the per-member
     form's run reads a member's slice here, never by a rule of its own."""
@@ -500,7 +465,7 @@ def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, 
     except _Refused as e:
         raise ValueError(str(e)) from None
     if wiring is not None:
-        roots = wired_roots(wiring, ranges, ms, roots)
+        roots = field_roots(wiring, ranges, ms, record, roots)
     return {name: _slice(m, roots[name], record) for name, m in ms.items()}
 
 
@@ -775,4 +740,4 @@ def run_reason(run: Run | None, refused: str | None) -> str | None:
 __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER",
            "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
-           "members_run", "population_why", "run_reason", "unwired_why", "wired_roots"]
+           "members_run", "population_why", "run_reason", "unwired_why", "field_roots"]

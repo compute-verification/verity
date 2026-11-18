@@ -107,8 +107,8 @@ def test_the_kit_finds_a_card_by_its_driver_name_only_through_the_devices_lookup
     asked = []
     lookup = verity.device.gpu_card_reporting
     monkeypatch.setattr(verity.device, "gpu_card_reporting", lambda name, **k: asked.append(name) or lookup(name, **k))
-    assert [kit.card_short("NVIDIA H200"), kit.card_sku("NVIDIA H200"), kit.card_arch("NVIDIA H200")] == [
-        "h200", "h200-sxm-141gb", "sm_90a"]
+    assert [kit.card_record("NVIDIA H200")["sku"], kit.card_short("NVIDIA H200"), kit.card_arch("NVIDIA H200")] == [
+        "h200-sxm-141gb", "h200", "sm_90a"]
     assert kit.is_card("NVIDIA H200", "h200") and asked == ["NVIDIA H200"] * 4
     h200 = (CARD_FILES / "h200-sxm-141gb.toml").read_text()
     (tmp_path / "h200-sxm-141gb.toml").write_text(re.sub(r'(?m)^short = .*\n', "", h200))
@@ -150,12 +150,6 @@ def test_each_gpu_a_spec_may_name_is_one_card_records_short():
     shorts = [kit.card_short(d["value"]) for sku in skus("gpu", directory=CARD_FILES)
               for d in load_card(sku, directory=CARD_FILES).get("driver", ())]
     assert set(registry()) <= set(shorts), sorted(set(registry()) - set(shorts))
-
-
-def test_a_card_sku_is_the_file_of_the_record_card_short_reads_and_refused_as_it_is():
-    assert [kit.card_sku(n, directory=CARD_FILES) for n in ("NVIDIA H200", "NVIDIA H100 80GB HBM3")] == ["h200-sxm-141gb", "h100-sxm-80gb"]
-    with pytest.raises(SystemExit, match="^0 GPU card files"):
-        kit.card_sku("NVIDIA H100 PCIe", directory=CARD_FILES)
 
 
 def test_a_gpu_target_reads_its_names_from_the_card_file_and_refuses_what_has_none(tmp_path):

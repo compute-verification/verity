@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedAccL
 public import Proofs.Flock.Soundness.Discharge.Exec.DecodeL
-public import Proofs.Flock.Soundness.Audit.FlockLink
+public import Proofs.Flock.SpotFlock.Sampling.FlockLink
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
@@ -51,7 +51,7 @@ record's `t·N_s(8N₀/e)/2^256` with `Q_s` in place of `N_s`, up to lower-order
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting Extract LinkFinder Audit Audit.Partition
+open Game Model Accounting Extract LinkFinder Spot.Sampling Spot.Sampling.Partition
 open scoped ENNReal
 
 /-- The executable's field. -/

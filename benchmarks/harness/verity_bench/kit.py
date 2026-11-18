@@ -253,10 +253,6 @@ def card_named_short(short: str, *, directory: Path | None = None) -> dict:
     return held[0]
 
 
-def card_sku(name: str, *, directory: Path | None = None) -> str:
-    return card_record(name, directory=directory)["sku"]
-
-
 def card_arch(name: str, *, directory: Path | None = None) -> str:
     """The ``arch`` of `card_record`'s record for ``name``: the target (``sm_90a``) machine code is built for."""
     return card_record(name, directory=directory)["arch"]

@@ -333,10 +333,11 @@ class DeviceWords:
     decode = encode
 
 
-def store_weights(runner, install: Install, args) -> list:
-    """The store's weight regions: every parameter left after the install (identity), and each encoded linear's words."""
-    from verity_vllm.protocols.poub.binder import WeightRegion, model_weights
-    out = model_weights(runner)
+def store_weights(values, install: Install, args) -> list:
+    """The store's weight regions: every registered value left after the install (identity), and each encoded linear's
+    words."""
+    from verity.protocols.resource_accounting.memory.poub.prover.binder import WeightRegion, model_weights
+    out = model_weights(values)
     for name, lin in install.linears:
         nbytes = lin.store.numel() * lin.store.element_size()
         words = getattr(lin, "words", None) or lin.store.numel()
@@ -618,7 +619,9 @@ def main() -> None:
         hook_runner(hooks, install)
     binder = None
     if args.store:
-        from verity_vllm.protocols.poub.binder import Binder, Every
+        from verity_vllm import messages
+        from verity_vllm.engine import kv_blocks
+        from verity.protocols.resource_accounting.memory.poub.prover.binder import Binder, Every
         from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
         window = {}
         if args.store_window:
@@ -626,7 +629,8 @@ def main() -> None:
             sigma = lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32]
             window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64),
                       "tiles": NoiseTiles()}
-        binder = Binder(NodeMemory(), weights=lambda r: store_weights(r, install, args), **window).install()
+        kv_blocks.attach()
+        binder = Binder(NodeMemory(), weights=lambda v: store_weights(v, install, args), **window).install(messages.current())
     max_tokens_cap = args.steps + math.ceil(max(batches) * max(contexts) / args.max_batched_tokens) + 8
     cc = {"cudagraph_capture_sizes": CAPTURE}
     if not args.compiled:

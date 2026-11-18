@@ -74,7 +74,7 @@ and `wrPD` `PlainSampleDec`'s for `plainVerdictAt`:
 
 namespace FlockSoundness.Discharge.PlaysCoin
 
-open Flock FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge.Exec Model Accounting Audit
+open Flock FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge.Exec Model Accounting Spot.Sampling
 
 theorem roundGroups_erase (dec : ℕ → ByteArray → List Msg) :
     ∀ (j : ℕ) (rs : List Round), roundGroups dec j (rs.map Round.erase) = roundGroups dec j rs

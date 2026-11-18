@@ -15,7 +15,7 @@ RUN = "r20261016-000000-0000"
 
 
 def test_solve_prints_the_numbers_and_the_check(capsys):
-    assert main(["solve", "VF3j-16"]) == 0
+    assert main(["--device", "sm_120", "solve", "VF3j-16"]) == 0
     out = capsys.readouterr().out
     assert "τ 0.0610   U/F_low 1.1563   margin 2.000" in out
     assert "(reproduced)" in out and "1306 attacks in 13 families at X ≥ 1.0: pass" in out
@@ -34,10 +34,10 @@ VF3Q_LOADS = ["LDS64", "LDG64", "LDG256", "LDG128NA", "LDG128CG", "LDG256CG"]
 
 
 def test_solve_defaults_to_the_current_vector(capsys):
-    assert main(["solve", "--json"]) == 0
+    assert main(["--device", "sm_120", "solve", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["vector"] == model().current and d["failures"] == [] and d["unreproduced"] == []
-    assert main(["solve", "VF3r-16", "--json"]) == 0
+    assert main(["--device", "sm_120", "solve", "VF3r-16", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert round(d["tau"], 4) == 0.0556 and d["failures"] == [] and d["unreproduced"] == []
     assert (round(d["uf_low"], 4), d["margin"]) == (1.1563, 2.0)
@@ -48,19 +48,19 @@ def test_solve_defaults_to_the_current_vector(capsys):
     uni = next(c for c in d["copies"] if c["kind"] == "UNI")
     assert uni["words"] == 32 and round(uni["price"], 2) == 29.59 and uni["measured"] > 32
     assert uni["what"].startswith("UR fan-out")
-    assert main(["solve", "VF3p-16", "--json"]) == 0
+    assert main(["--device", "sm_120", "solve", "VF3p-16", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["floors"]["copy16"]["absent"] == VF3Q_LOADS
-    assert main(["solve", "VF3l-16", "--json"]) == 0
+    assert main(["--device", "sm_120", "solve", "VF3l-16", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["floors"]["copy16"]["absent"] == MMA_FORMS + VF3Q_LOADS
 
 
 def test_list_census_attacks(capsys):
-    assert main(["list"]) == 0
+    assert main(["--device", "sm_120", "list"]) == 0
     out = capsys.readouterr().out
     assert "VF3i-strict-r8" in out and "superseded by VF3i-strict" in out
-    assert main(["census", "VF3j", "--kind", "FFMA"]) == 0
+    assert main(["--device", "sm_120", "census", "VF3j", "--kind", "FFMA"]) == 0
     assert capsys.readouterr().out.startswith("FFMA: ")
-    assert main(["attacks", "VF3j-16", "--design", "U±64, F±1", "-n", "1"]) == 0
+    assert main(["--device", "sm_120", "attacks", "VF3j-16", "--design", "U±64, F±1", "-n", "1"]) == 0
     assert "X 2.000" in capsys.readouterr().out
 
 
@@ -196,6 +196,19 @@ def test_a_card_no_device_models_is_refused_by_name_not_read_as_another_of_its_t
         device_of("h100")
     with pytest.raises(SystemExit, match="one of --device, --card or --data"):
         main(["--device", "sm_90", "--card", "h200-sxm-141gb", "theta"])
+
+
+def test_a_command_given_no_device_is_refused_by_name():
+    """DESIGN.md "Devices": no device is the default; a command that reads one device's model names it, and the ones
+    that read every device they cover take none."""
+    for cmd in ("solve", "theta", "eps", "render"):
+        with pytest.raises(SystemExit, match=rf"^machine-model {cmd} reads one device's model and was given none: name "
+                                             r"it with --device sm_NN or --card SKU \(sm_120, the rtx-pro-6000-server; "
+                                             r"sm_90, the h200-sxm-141gb; sm_100, the b200-sxm-180gb\)$"):
+            main([cmd])
+    assert main([]) == 0
+    with pytest.raises(SystemExit, match="lean-headline writes every family's instances from this package's own data"):
+        main(["--device", "sm_120", "lean-headline", "--check"])
 
 
 def test_each_data_centre_reading_names_the_card_its_device_models():
