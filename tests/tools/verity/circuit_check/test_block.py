@@ -137,6 +137,30 @@ def test_a_held_definition_is_reported_held_and_a_held_one_that_fits_is_stale(mo
     assert [n for n in CK.summarize([past])["failure_names"] if n.startswith("block/past-range CircuitCheckBlock_v1")]
 
 
+def test_a_held_target_s_progress_row_and_the_last_line_count_it_apart_from_its_failures(monkeypatch, capsys):
+    """A held Definition past the block: its line in ``progress`` (`cli.progress_row`) says why, and its ``failures`` count
+    what the verdict counts, so not its ``block/past-range``; the last line counts it held, not failed.  A held one that fits
+    counts its ``block/stale-hold``."""
+    from verity_flock import circuit as FC
+    from circuit_check import cli
+
+    fn = _toy()
+    holds = {fn.id: ("a toy", "toy.circuit-check.unkeyed.json")}
+    entry = {**CK.check_definition(fn, OPTS, as_call=False), "kind": "definition", "target": fn.id}
+    row = cli.progress_row(entry, holds)
+    assert row["failures"] == len(entry["failures"]) + 1 and "held" not in row
+    monkeypatch.setattr(FC, "K_MAX", 19)
+    F = CK.Findings()
+    past = {**entry, "block": CK.block_range(fn, F), "failures": F.failures}
+    assert [f["code"] for f in F.failures] == ["past-range"]
+    assert {k: cli.progress_row(past, holds)[k] for k in ("failures", "held")} == {"failures": 0, "held": "a toy"}
+    assert cli.progress_row(past, {})["failures"] == 1 and "held" not in cli.progress_row(past, {})
+    _held(monkeypatch, {fn.id: "a toy"})
+    assert cli.verdict(CK.report([past], OPTS), out=None, what="shard 1/4: 1 target(s)") == 0
+    assert capsys.readouterr().out.splitlines()[-1].startswith(
+        "circuit-check: shard 1/4: 1 target(s), 0 failure(s), 1 held past the block, ")
+
+
 def test_a_cut_call_is_held_to_the_block_by_each_unit(monkeypatch):
     """A Call whose module's ``CUTS`` names its family (its cut, or the module whose ``cut`` it is): the whole (2^29 bits) needs
     no block, each unit of its cut does; the entry carries the largest unit's block, the whole's and each unit's with its

@@ -228,10 +228,11 @@ def test_a_tp2_build_without_a_declared_target_counts_the_host_s_devices(tmp_pat
 ROW_H200 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 
 
-@pytest.mark.parametrize("row, name", [(ROW_H200, "NVIDIA H200"), (ROW_90, "No CUDA GPUs are available")])
+@pytest.mark.parametrize("row, name", [(ROW_H200, "NVIDIA H200"), (ROW_90, "NVIDIA H100 80GB HBM3"),
+                                       (ROW_89, "No CUDA GPUs are available")])
 def test_a_gpu_free_build_answers_the_device_name_its_row_class_reports(tmp_path, monkeypatch, vllm_without_nvml, row, name):
     """vLLM reads its tuned fused-MoE config by `current_platform.get_device_name()` (`get_config_file_name`: GLM-5.3's Build), which
-    raises with no device; a GPU-free Build answers the name its row's class reports, and a class `DEVICE_NAME` does not list fails there."""
+    raises with no device; a GPU-free Build answers the name its row's class reports, and a class no card record names fails there."""
     wl = tmp_path / "row.json"
     wl.write_text(json.dumps({"sweep": {"row_id": row}}))
     assert devices.device_name(None) is None and devices.device_name(_wl(tmp_path)) is None, "no row id: no name"

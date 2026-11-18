@@ -37,13 +37,16 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    NCP_SCHEMES as SCHEMES,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    PEARL_C_ROW_ALIGN as ROW_ALIGN,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     a_value,
     b_value,
-    NCP_SCHEMES as SCHEMES,
-    PEARL_C_ROW_ALIGN as ROW_ALIGN,
     y_value,
 )
-
 
 from . import scan_state as SS
 from .build import Unexpressible

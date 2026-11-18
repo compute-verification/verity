@@ -10,7 +10,9 @@ def _boolean_roots() -> list[Any]:
     `boolean_norms`' whole norms), and their apply units at G = 8."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import mufu as BM
-    from verity_vllm.definitions.registry import boolean_norms as BN, boolean_norms_split as BS
+
+    from verity_vllm.definitions.registry import boolean_norms as BN
+    from verity_vllm.definitions.registry import boolean_norms_split as BS
 
     return [
         bind(BS.RMSNormSumSqCudaVector8, N=16, EPS=1e-5, BLOCK=2, **BN.CUDA_WORD),

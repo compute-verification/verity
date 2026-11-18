@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -753,3 +754,39 @@ def test_offline_sass_gates(tmp_path: Path) -> None:
                 ["f1_rates.py", "build", "--out", str(tmp_path / "f1")]):
         r = subprocess.run([sys.executable, str(HERE / cmd[0]), *cmd[1:]], capture_output=True, text=True, env=env)
         assert r.returncode == 0, (cmd, r.stdout[-2000:], r.stderr[-2000:])
+
+
+H200, H100, UNKNOWN = "NVIDIA H200", "NVIDIA H100 80GB HBM3", "NVIDIA A100-SXM4-80GB"
+
+
+class Writer:
+    def __init__(self) -> None:
+        self.members = []
+
+    def measurement(self, name, value, unit, *a, member=None, extra=None, **k) -> dict:
+        self.members.append(member)
+        return {"name": name, "value": value, "unit": unit, "member": member, **(extra or {})}
+
+
+def writer(monkeypatch: pytest.MonkeyPatch) -> Writer:
+    from verity_bench import kit
+    w = Writer()
+    monkeypatch.setattr(kit, "writer", lambda out, *a, **k: w)
+    return w
+
+SWEEP = {"sweep": {"gated_elements": 64, "total_mismatches_vs_model": {"m": 0}}}
+
+
+@pytest.mark.parametrize("card, member", [(H200, "f8f6f4-h200"), (H100, "f8f6f4-h100")])
+def test_a_member_names_the_card_records_short(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, card: str,
+                                               member: str) -> None:
+    w = writer(monkeypatch)
+    P.record(tmp_path, "f8f6f4", card, SWEEP, "m")
+    assert w.members == [member]
+
+
+def test_a_card_no_record_names_writes_no_point_and_is_named(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    w = writer(monkeypatch)
+    with pytest.raises(SystemExit, match=re.escape(repr(UNKNOWN))):
+        P.record(tmp_path, "f8f6f4", UNKNOWN, SWEEP, "m")
+    assert w.members == []

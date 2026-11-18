@@ -1,9 +1,17 @@
 # security/Properties: what the code does
 
-The package `security_properties` (`security/Properties/lakefile.toml`): statements about the code's Lean functions,
-the checks each protocol runs, each listed in `security/Properties/lean-audit.json` and proved under
-`security/Proofs/Properties/` (`proved_in`). [`security/README.md`](../README.md) has the argument and what code outside
-`security/` may do.
+This tree states what the code's Lean functions do: the checks each protocol runs. Each statement is listed in
+`security/Properties/lean-audit.json` and proved under `security/Proofs/Properties/` (`proved_in`). The tree is the
+package `security_properties` (`security/Properties/lakefile.toml`). [`security/README.md`](../README.md) has the
+argument and what code outside `security/` may do.
+
+## Try it
+
+~~~sh
+git grep -n "^def .* : Prop" -- security/Properties/Pous.lean
+~~~
+
+This lists the statements PoUS's root module makes about its code, each with its line. It needs only the checkout.
 
 ## Who may import it
 

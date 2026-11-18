@@ -18,13 +18,13 @@ sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/resource_accounting/
 sys.path.insert(0, str(HERE.parents[2]))
 sys.path.insert(0, str(HERE))
 
-from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import timing  # noqa: E402
-
 import engine  # noqa: E402
 import store_layout as sl  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
 from test_session import run  # noqa: E402
+
+from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import timing  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
 
 ROLE = "synthetic-bf16"
 FIGURES = timing.RTX_PRO_6000_NODE

@@ -24,4 +24,5 @@ inputs_only = true
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", "verity/circuits",
           "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py", "tools/research/src/research/store",
           "tools/config/verity_config",
-          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/silicon", "calibration/tc_probe_fp4"]
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/silicon", "calibration/tc_probe_fp4",
+          "benchmarks/harness/verity_bench", "calibration/hardware/cards", "verity/device.py", "verity/channel.py", "verity/errors.py"]

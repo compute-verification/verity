@@ -2,8 +2,9 @@
 as `METRIC` into the run's result (`verity_bench.kit`), one member a pair of `PAIRS`: GPU-seconds a statement of the
 pair's block at `PROVERS` prover, from the passing run of its walk spec's point (`FC_UNIT_WALK=1`) over the same from its
 base spec's, its member the model and the card, both rates and both runs beside it. Each point is timed by
-`uv run verity-bench run SPEC --direct NODE --card N --cores CPUS`. A pair whose points have no passing runs, or whose
-rows differ in more than the walk, writes its member without a value and says why; a run where no pair has one is refused.
+`uv run verity-bench run SPEC --direct NODE --card N --cores CPUS`. A pair whose points have no passing runs, whose
+rows differ in more than the walk, or whose card no card record's `driver` names, writes its member without a value and
+says why; a run where no pair has one is refused.
 
     research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/kernels/steady_walk.py
 """
@@ -41,8 +42,16 @@ def gpu_seconds(row: Mapping[str, Any]) -> float:
     return row["gpus"] / row["statements_per_s"]
 
 
-def machine(card: str) -> str:
-    return "-".join(card.lower().split()).removeprefix("nvidia-")
+def machine(spec_card: str, reported: str) -> tuple[str, str | None]:
+    """The member's card: the ``short`` of the card record whose ``driver`` holds ``reported`` (`kit.card_short`), else
+    the spec's card and why."""
+    from verity_bench import kit
+    from verity_bench.overhead import CARD_FILES
+
+    try:
+        return kit.card_short(reported, directory=CARD_FILES), None
+    except SystemExit as refused:
+        return spec_card, str(refused)
 
 
 def why_not(pair: Pair, base: Mapping[str, Any], walk: Mapping[str, Any]) -> str | None:
@@ -62,8 +71,9 @@ def why_not(pair: Pair, base: Mapping[str, Any], walk: Mapping[str, Any]) -> str
 
 def entry(pair: Pair, model: str, card: str, base: Mapping[str, Any] | None = None, walk: Mapping[str, Any] | None = None,
           runs: Mapping[str, str] | None = None, why: str | None = None) -> dict:
-    """One member's measurement: the ratio of two passing rows that differ in the walk alone, else no value and why."""
-    member = f"{model}-{machine(card)}"
+    """One member's measurement, `card` its card's short name: the ratio of two passing rows that differ in the walk
+    alone, else no value and why."""
+    member = f"{model}-{card}"
     if why is None and base is not None and walk is not None:
         why = why_not(pair, base, walk)
     if why is not None or base is None or walk is None or runs is None:
@@ -135,8 +145,11 @@ def measure(store: Any, pair: Pair) -> tuple[dict, dict]:
             return entry(pair, model, spec.card, why=found), {}
     if base_card != walk_card:
         return entry(pair, model, spec.card, why=f"the points ran on a {base_card} and a {walk_card}, not one card"), {}
+    card, refused = machine(spec.card, walk_card)
+    if refused:
+        return entry(pair, model, card, why=refused), {}
     runs = {"base": base_run, "walk": walk_run}
-    return entry(pair, model, walk_card, base, walk, runs), {"walk": walk, "host": base, "runs": runs}
+    return entry(pair, model, card, base, walk, runs), {"walk": walk, "host": base, "runs": runs}
 
 
 def main(out: Path) -> None:

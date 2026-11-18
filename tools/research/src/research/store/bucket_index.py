@@ -14,8 +14,9 @@ never lists `objects/` or opens a payload. A label's id is `label:` + the sha256
 every record read is checked against its key, and one that fails is reported and left out.
 
 `index(remote, db)` lists the bucket, reads the records the index lacks and writes their rows (idempotent). Runs are listed from
-the newest indexed run id (`start-after`), and in full once `FULL_RUNS_EVERY` has passed, for a run whose custody published it
-late. `index(public_remote, db, policy=PUBLIC, private=private_db)` rebuilds the public tables from the private index: the
+`RUNS_MARGIN` before the newest indexed run's start (`start-after`), since a run is stored when it ends, after runs that
+started later; and in full once `FULL_RUNS_EVERY` has passed, for a run whose custody was published by hand later still.
+`index(public_remote, db, policy=PUBLIC, private=private_db)` rebuilds the public tables from the private index: the
 artifacts whose manifests are in the public bucket, each run that produced one (its doc cut to `PUBLIC_RUN_FIELDS`) and the
 `PUBLIC_LABEL_KEYS` labels on those targets (cut to `PUBLIC_LABEL_FIELDS`). Both are whitelists.
 
@@ -48,6 +49,9 @@ PRIVATE, PUBLIC = "private", "public"
 MANIFESTS, ATTEMPTS, LABELS = "manifests/", "attempts/", "labels/"
 RUNS_TAIL = "attempts/>"                                # the listings row of the start-after listing of runs
 FULL_RUNS_EVERY = timedelta(hours=1)
+# Twice the longest a run's own custody can store it after its start: its key lives at most research.cli.CUSTODY_TTL_LIMIT_S (24 h),
+# whatever --timeout says, and a run stored later than that was published by hand, which the hourly full listing takes in.
+RUNS_MARGIN = timedelta(hours=48)
 FIELD_MAX = 1024
 IN_BATCH = 500                                          # ids per IN (...) list: under SQLite's 999 bound parameters
 ENVELOPE_ONLY = frozenset({"redteam-findings/v1"})     # meta (the findings' text) stays in the bucket
@@ -500,17 +504,25 @@ def _read(remote, keys: list[tuple[str, str | None]], jobs: int) -> tuple[list[R
     return [rows[i] for i in sorted(rows)], sorted(errors)
 
 
+def runs_tail_start(newest: str | None) -> str | None:
+    """The key the tail listing of runs starts after: `RUNS_MARGIN` before the start of the run `newest`, or None (list in full)
+    when it is no run id."""
+    if newest is None or not ids.is_run_id(newest):
+        return None
+    return f"{ATTEMPTS}r{datetime.strptime(newest[1:16], '%Y%m%d-%H%M%S') - RUNS_MARGIN:%Y%m%d-%H%M%S}"
+
+
 def _private(remote, idx, *, jobs: int, full: bool, now: datetime, batch: int, log) -> dict:
     stamp = _stamp(now)
     have = idx.ids()
-    newest = idx.newest_run()
+    tail_from = runs_tail_start(idx.newest_run())
     last_full = idx.listed_at(ATTEMPTS)
-    runs_full = full or newest is None or last_full is None or now - datetime.fromisoformat(last_full.replace("Z", "+00:00")) >= FULL_RUNS_EVERY
+    runs_full = full or tail_from is None or last_full is None or now - datetime.fromisoformat(last_full.replace("Z", "+00:00")) >= FULL_RUNS_EVERY
     listings = {MANIFESTS: remote.list_times(MANIFESTS), LABELS: remote.list_times(LABELS)}
     if runs_full:
         listings[ATTEMPTS] = remote.list_times(ATTEMPTS)
     else:
-        listings[RUNS_TAIL] = remote.list_times(ATTEMPTS, start_after=f"{ATTEMPTS}{newest}.json")
+        listings[RUNS_TAIL] = remote.list_times(ATTEMPTS, start_after=tail_from)
     want = [(k, m) for keys in listings.values() for k, m in keys if record_key(k) and record_id(k) not in have]
     rep = {"listed": {p: len(v) for p, v in listings.items()}, "runs_listing": "full" if runs_full else "tail", "read": 0,
            "added": {"artifact": 0, "run": 0, "label": 0}, "errors": []}

@@ -62,7 +62,6 @@ SURFACE = {
     # determinism
     "vllm.model_executor.determinism:batch_invariant": "batch-invariant mode, which replay facts, the RMSNorm source and "
                                                        "the frontend read",
-    "vllm.model_executor.determinism.batch_invariant:bmm_batch_invariant": "the batch-invariant bmm the MLA capture calls",
     "vllm.model_executor.determinism.batch_invariant_configs:_get_tuned_matmul_arch_family":
         "vLLM's tuned GEMM arch family for a device, which the GEMM targets and the profile record (private to vLLM)",
     # layers
@@ -130,7 +129,6 @@ SURFACE = {
     "vllm.v1.attention.backends.registry:AttentionBackendEnum": "the backends' names: CUSTOM for the int8 backend, and the "
                                                                 "frontend's profile knob",
     "vllm.v1.attention.backends.registry:register_backend": "registers the int8 attention backend as CUSTOM",
-    "vllm.v1.attention.ops.triton_decode_attention:decode_attention_fwd": "the Triton MLA decode the MLA capture calls",
     "vllm.v1.kv_cache_interface:is_quantized_kv_cache": "whether the KV cache is quantized in any of vLLM's modes, which "
                                                         "the int8 attention backend refuses",
     "vllm.v1.kv_cache_layout:KVCacheLayout": "the KV layout the int8 attention backend declares",
@@ -139,7 +137,5 @@ SURFACE = {
     # sampling
     "vllm.v1.sample.ops:topk_topp_triton": "the Triton top-p kernels, whose split statistics the top-p probe reads",
     "vllm.v1.sample.ops.topk_topp_triton": "the Triton top-p module, which topp_pin pins and its check installs",
-    "vllm.v1.sample.ops.topk_topp_sampler:apply_top_k_top_p": "vLLM's top-k and top-p, which the top-p adapter calls",
     "vllm.v1.worker.gpu.sample.gumbel:apply_temperature": "the temperature kernel the top-p adapter and probe call",
-    "vllm.v1.worker.gpu.sample.gumbel:gumbel_sample": "the Gumbel sampling kernel the top-p adapter calls",
 }

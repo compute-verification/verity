@@ -13,6 +13,7 @@ def _boolean_roots() -> list[Any]:
     from verity.circuits.ops.boolean import attention as BAT
     from verity.circuits.ops.boolean import gemm as BG
     from verity.circuits.ops.boolean import mufu as BM
+
     from verity_vllm.definitions.registry import boolean_softcap as BSC
 
     return [

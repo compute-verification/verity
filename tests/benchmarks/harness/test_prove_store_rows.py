@@ -21,6 +21,7 @@ from prove_helpers import (
     registered,
     run_files,
 )
+from verity_bench import kit
 from verity_bench import prove as P
 from verity_bench import prove_records as R
 from verity_bench import steady as S
@@ -78,6 +79,24 @@ def test_a_labelled_steady_point_whose_own_verdict_failed_prices_nothing_and_is_
     assert all(f"refused {newest}: {why}" in m["inputs"] for m in (head, seconds))
     assert (head["mark"], head["value"]) == next((m["mark"], m["value"]) for m in R.measurements(
         without, {"a/x": "gpus_per_serving_gpu"}))
+    assert f"- {newest} (`prove-glm53-flock-steady`): {why}" in R.render(doc)
+
+
+def test_a_labelled_trial_and_an_art_of_its_rows_price_nothing_and_are_named_as_a_trial(tmp_path):
+    newest = RUNS[-1]
+    s, _ = recorded(tmp_path)
+    s.label(newest, R.SUPERSEDED_BY, "r20991231-000000-0000")
+    without = R.build("flock", "glm53", store=s.fresh("without"), root=REPO)
+
+    s, _ = recorded(tmp_path / "trial")
+    s.ran(newest, run_files(tmp_path / "trial", newest), env={kit.TRIAL: "1"})
+    whole = json.loads((FIXTURES / "steady" / newest / "rate" / "rate.json").read_text())
+    art = s.record(s.tree("evidence/v1", R.ART_RATES, whole, {"runs": [newest]}), R.STEADY)
+    doc = R.build("flock", "glm53", store=s.fresh(), root=REPO)
+    why = kit.trial_why(newest, {"params": {"env": {kit.TRIAL: "1"}}})
+    assert why.startswith(f"{newest} is a trial run (VERITY_BENCH_TRIAL), and a trial is never of record")
+    assert {x["target"]: x["why"] for x in doc["refused"]} == {newest: why, art: why}
+    assert doc["sources"] == without["sources"] and not any(r.get("record") in (newest, art) for r in doc["rows"])
     assert f"- {newest} (`prove-glm53-flock-steady`): {why}" in R.render(doc)
 
 

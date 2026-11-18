@@ -426,7 +426,7 @@ def summary(a: argparse.Namespace) -> int:
 
 
 def record(out: Path, rows: list[dict]) -> None:
-    sys.path.insert(0, str(ROOT / "benchmarks/harness"))
+    sys.path[:0] = [str(ROOT / "benchmarks/harness"), str(ROOT)]
     from verity_bench import kit
 
     res = kit.writer(out)
@@ -434,7 +434,12 @@ def record(out: Path, rows: list[dict]) -> None:
     res.validation("failed" if missing or not rows else "passed", "every replay run.sh started wrote its replay.json",
                    ", ".join(missing) or ("ok" if rows else "no model directory"))
     card = res.stamp["card"]
-    card = "cpu" if card == "none" else card.split(", ")[0].removeprefix("NVIDIA ").lower().replace(" ", "-")
+    try:
+        card = "cpu" if card == "none" else kit.card_short(card.split(", ")[0],
+                                                           directory=ROOT / "calibration/hardware/cards")
+    except SystemExit as e:
+        print(f"{METRIC}: no reading, the card {card!r} has no member name: {e}")
+        return
     for r in (r for r in rows if r["pin"] == "pinned"):
         reps = [x for x in r["replays"] if "bit_exact" in x]
         worst = min(reps, key=lambda x: x["rows_exact_share"]) if reps else None

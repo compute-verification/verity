@@ -20,8 +20,8 @@ under a nonzero scale (`scale_only`) is admitted, and so is a block of 32 of the
 A's bytes and masks its receipt by them.  Nothing here refuses such a
 row, and no execution phase reads this unit yet.  So an admit bit is not a live tile: credit must count only tiles live in-circuit,
 and that is the served tally's to establish, not this unit's.  The unit is generic over the execution phase: an execution phase maps its call
-to t and its slots to groups of 16, and nothing else of the execution phase reaches it (served_h1's A tables of T slots, the static
-execution phase's side A of m slots).
+to t and its slots to groups of 16, and nothing else of the execution phase reaches it (the static execution phase's side A of m
+slots).
 """
 from __future__ import annotations
 

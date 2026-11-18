@@ -22,7 +22,7 @@ from . import COLLECTOR_VERSION, RESOURCES_SCHEMA
 from .cgroup import Cgroup, scope_for
 from .events import Emitter, stream_id, utc_now_ms
 from .job import write_json_atomic
-from .procs import diskstats, gpu_sample, pss, snapshot_tree, statvfs
+from .procs import diskstats, foreign_pids, gpu_sample, pss, snapshot_tree, statvfs
 
 #: The clock (seconds) that decides which readings are due within a round and times the smaps_rollup reads; a test replaces it.
 #: The loop's sleeps, gaps and linger, and the records' t_mono, stay on time.monotonic.
@@ -55,6 +55,7 @@ class Sampler:
         self.samples = 0
         self.skipped: dict[str, int] = {}
         self.cg = Cgroup()
+        self.runner = os.getppid()       # the harness that started this sampler and the workload
         wl_cg = Cgroup(a.root_pid) if a.root_pid else None
         self.scope, self.scope_reason = scope_for(self.cg, wl_cg)
         self.gpu_state: str = "unknown"
@@ -117,7 +118,9 @@ class Sampler:
                 alive = False
             out_cur = {o["pid"]: o["starttime_ticks"] for o in outsiders}
             out_gone = [{"pid": p, "comm": self.known_outsiders[p][1]} for p in self.known_outsiders if out_cur.get(p) != self.known_outsiders[p][0]]
+            foreign = foreign_pids(self.cg.dir, self.runner) if self.cg.dir is not None else None
             self.write("process", "process", {"processes": rows, "truncated": truncated, "selected": total, "created": created, "gone": gone,
+                                              "cgroup_foreign_pids": foreign,
                                               "root_pid": self.a.root_pid, "pgid": self.a.pgid,
                                               "outsiders": outsiders[: self.a.max_outsiders], "outsiders_total": len(outsiders), "outsiders_gone": out_gone,
                                               "outsiders_note": "other processes visible in the same pod cgroup (shared scope); needed for OOM attribution"})

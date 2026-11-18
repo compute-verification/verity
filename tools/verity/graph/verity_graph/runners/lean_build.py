@@ -21,7 +21,8 @@ from . import call
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
         'export PATH="$HOME/.elan/bin:$PATH"; ')
-LAKE_BUILD = ELAN + "mkdir -p .lake && exec flock .lake/verity-build.lock lake build"
+LAKE_BUILD = ELAN + ('d=$PWD; until [ -z "$d" ] || [ -d "$d/verity/circuits/difftest" ]; do d=${d%/*}; done; '
+                     'L=${d:+$d/verity/circuits/difftest/}.lake; mkdir -p "$L" && exec flock "$L/harness-build.lock" lake build')
 #: the output holding the build but its executables, and where in a package's `.lake` the digest of the one it holds is
 TREE, STAMP = "lake-build", "graph-build.sha512"
 

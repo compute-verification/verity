@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from verity_bench import kit
 from verity_bench.exfiltration_common import (
     AGREED,
     CLASS_FIELDS,
@@ -101,9 +102,17 @@ def verdict_runs(store: Any) -> dict[str, list[str]]:
 def stop_charge(root: Path, store: Any, labelled: Mapping[str, Sequence[str]]) -> Any:
     """How the stop class is charged by the records the runs of ``labelled`` (`verdict_runs`) hold: the stop
     verdicts' reader's answer (`READER`'s `of_runs`), which `attester` hands the calculator. The reader is handed
-    every run of ``labelled`` and, as superseded, those another run replaces; this reads none of their files itself."""
+    every run of ``labelled`` (`handed_runs`'s) and, as superseded, those another run replaces; this reads none of
+    their files itself."""
 
     return _reader().of_runs(store, list(labelled), [run for run, by in labelled.items() if by])
+
+
+def handed_runs(store: Any, labelled: Mapping[str, Sequence[str]]) -> dict[str, list[str]]:
+    """The runs of ``labelled`` (`verdict_runs`) the stop verdicts' reader is handed: every one but a trial, which
+    `stop_verdicts` lists as refused (`kit.trial_why`)."""
+
+    return {run: list(by) for run, by in labelled.items() if not kit.trial_attempt(store.get_attempt(run) or {})}
 
 
 def stop_verdicts(store: Any, labelled: Mapping[str, Sequence[str]]) -> tuple[list[dict], list[str], list[dict]] | None:

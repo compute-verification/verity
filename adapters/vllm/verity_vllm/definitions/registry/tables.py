@@ -29,12 +29,13 @@ from __future__ import annotations
 from functools import lru_cache
 
 from verity.circuits.boolean import table as BT
-from verity.circuits.evaluation import RegisteredTable
 from verity.circuits.codec import register_lazy_family
 from verity.circuits.defs import PrimitiveDefinition, composite
-from verity.circuits.types import Array, Value
+from verity.circuits.evaluation import RegisteredTable
 from verity.circuits.ops import scalar as SC
 from verity.circuits.ops.prims import const
+from verity.circuits.types import Array, Value
+
 from verity_vllm.definitions.registry import dense
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16

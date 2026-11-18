@@ -431,7 +431,7 @@ def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path
         SIGTERM=signal.SIGTERM, SIG_IGN=signal.SIG_IGN, signal=lambda sig, h: handlers.__setitem__(sig, h)))
     monkeypatch.setattr(rec, "resource", types.SimpleNamespace(
         RLIMIT_NOFILE=0, getrlimit=lambda _: (1024, 1024), setrlimit=lambda *_: None))
-    monkeypatch.setattr(rec, "identity", lambda: {"host": "h", "gpu": {"index": 0, "uuid": "GPU-0", "name": "fake"},
+    monkeypatch.setattr(rec, "identity", lambda: {"host": "h", "gpu": {"index": 0, "uuid": "GPU-0", "name": "NVIDIA H100 80GB HBM3"},
                                                   "affinity": list(range(8)), "watched": [], "env": {}})
     monkeypatch.setattr(rec, "local_model", lambda name, _: name)
     monkeypatch.setattr(rec, "offline_engine", offline_engine)
@@ -445,8 +445,9 @@ def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path
     meta = json.loads((tmp_path / "meta.json").read_text())
     summary = json.loads((tmp_path / "summary.json").read_text())
     (m,) = json.loads((tmp_path / "result.json").read_text())["measurements"]
-    assert (m["name"], m["unit"], m["mark"], m["model"], m["mode"], m["card"]) == (
-        rec.METRIC, "ms", "measured", "unsloth/Llama-3.2-1B", "bi-eager", "fake")
+    assert (m["name"], m["unit"], m["mark"], m["member"], m["model"], m["mode"], m["card"]) == (
+        rec.METRIC, "ms", "measured", "llama-3.2-1b-h100-bi-eager", "unsloth/Llama-3.2-1B", "bi-eager",
+        "NVIDIA H100 80GB HBM3")
     assert rc == (143 if evict else 0) and meta["ended"]["evicted"] is bool(evict)
     if evict == "at startup":
         assert "t0_mono" not in meta and summary["error"] == "the job ended before t0"
@@ -460,6 +461,13 @@ def test_an_evicted_chunk_converts_what_it_recorded_and_exits_143(tmp_path: Path
     assert len(json.loads((tmp_path / "trace.json").read_text())["configurations"]) == 1
     if evict:
         assert 90_000 <= meta["ended"]["stopped_ms"] < 96_000
+
+
+def test_the_member_is_the_model_the_card_s_short_name_and_the_mode() -> None:
+    assert rec.member("unsloth/Llama-3.2-1B", "NVIDIA H200", "plaintext") == "llama-3.2-1b-h200-plaintext"
+    assert rec.member("unsloth/Llama-3.2-1B", "NVIDIA H100 80GB HBM3", "commit") == "llama-3.2-1b-h100-commit"
+    with pytest.raises(SystemExit, match="NVIDIA L4"):
+        rec.member("unsloth/Llama-3.2-1B", "NVIDIA L4", "plaintext")
 
 
 def test_collections_add_up_each_collection_and_take_resets(monkeypatch) -> None:

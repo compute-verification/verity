@@ -9,8 +9,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`verity.circuits.tiny`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
-    from verity_vllm.definitions.registry import b1, lifted
     from verity.circuits.tiny import TINY
+
+    from verity_vllm.definitions.registry import b1, lifted
 
     lifted_profile = {"GEMM": b1.GEMM_AMPERE, "ATTENTION": b1.ATTENTION_FA2, "NORM": b1.norm_bundle(TINY)}
     return [

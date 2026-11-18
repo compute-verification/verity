@@ -43,9 +43,20 @@ from types import SimpleNamespace
 
 from verity.circuits.defs import composite
 from verity.circuits.ops.prims import const
-from verity.circuits.ops.scalar import U16, BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectI32, U32Hi16
+from verity.circuits.ops.scalar import (
+    U16,
+    BitAnd,
+    BitNot,
+    BitOr,
+    I32Add,
+    I32Eq,
+    I32Le,
+    SelectI32,
+    U32Hi16,
+)
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry.dsa import I32Sub
 from verity_vllm.definitions.registry.prims import I32
@@ -120,11 +131,17 @@ def reference16(ids: Sequence[int], max_tokens: int, stops: Sequence[int], promp
     return n + (finish << N_BITS)
 
 
+def length_limit(o, max_tokens, prompt_len, max_model_len):
+    """The first length that ends a request by its length: ``max_tokens`` or ``max_model_len - prompt_len``, the less, and 1
+    where that is below 1 (the module docstring)."""
+    room = o.isub(max_model_len, prompt_len)
+    most = o.isel(o.ile(max_tokens, room), max_tokens, room)
+    return o.isel(o.ile(most, o.word(0)), o.word(1), most)
+
+
 def stop(o, S, ids: list, max_tokens, stops: list, prompt_len, max_model_len) -> tuple:
     """`StopRule_v1`'s body: (n, finish) of the module docstring."""
-    room = o.isub(max_model_len, prompt_len)
-    cap = o.isel(o.ile(max_tokens, room), max_tokens, room)
-    cap = o.isel(o.ile(cap, o.word(0)), o.word(1), cap)
+    cap = length_limit(o, max_tokens, prompt_len, max_model_len)
     s = o.word(S.T + 1)
     for i in reversed(range(S.T)):
         hit = o.ieq(ids[i], stops[0])

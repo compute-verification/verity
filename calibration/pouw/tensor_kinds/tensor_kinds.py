@@ -1,12 +1,12 @@
-"""Fit each MMA form's joint issue coefficient from a tensor_kinds run (sm_120, or sm_89 with
-TK_ARCH=89 or sm_100 with TK_ARCH=100: there each form also has an alone4 point, and JI3e, sm_120's rows, isn't
-loaded). A spec point whose run recorded each role's own cycles also gets the exact co-run reading: the MMA warps'
+"""Fit each MMA form's joint issue coefficient from a tensor_kinds run (sm_120, or sm_90, sm_100 or sm_89: there each
+form also has an alone4 point, and JI3e, sm_120's rows, isn't loaded). A spec point whose run recorded each role's own cycles also gets the exact co-run reading: the MMA warps'
 SMSP-cycles a MMA and the lane warps' instructions a SMSP-cycle, each over its own time.
 
     python tensor_kinds.py OUT_DIR            # reads OUT_DIR/tensor_kinds.jsonl and OUT_DIR/sass/tensor_kinds.sass
     python tensor_kinds.py refit OUT_DIR...   # VF3n-16's JI3n rows from every program of these runs, as JSON
     python tensor_kinds.py search OUT_DIR     # a search.sh run (M1c): every schedule's program, the control, the gates
     python tensor_kinds.py refit OUT_DIR... --search SEARCH_DIR...   # VF3o-16's JI3o rows, the margin measured
+    python tensor_kinds.py target CARD        # the TK_SM run.sh builds for the card nvidia-smi names CARD
 
 For every timed case it reads the kernel's loops in the SASS (a loop is the instructions from a label to the backward
 branch that targets it), counts MMA and other instructions an iteration, and turns the run's per-SM counts into
@@ -34,16 +34,27 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-__all__ = ["KIND", "MMA", "NOISE", "SCHED", "analyze", "main"]
+__all__ = ["KIND", "MMA", "NOISE", "SCHED", "analyze", "main", "target"]
 
 MMA = re.compile(r"^(IMMA|HMMA|QMMA|OMMA|DMMA|BMMA)")
 REF = "imma_s8_m16n8k32"
+#: The one SASS instruction `REF`'s PTX MMA is on every target: a reference that lowers otherwise measures something else.
+REF_SASS = "IMMA.16832.S8.S8"
+CARDS = Path(__file__).resolve().parents[2] / "hardware/cards"
+#: A card record's `arch` -> the TK_SM tensor_kinds.cu has forms for.
+TARGETS = {"sm_120a": 120, "sm_90a": 90, "sm_100a": 100, "sm_89": 89}
 NOISE = 0.02
 #: The mixed points' lane op (IADD3 and FFMA alternating) alone must issue at least this many warp instructions a
 #: SMSP-cycle, or the mixed points bind on a pipe's own rate instead of the issue facet and overstate a.
 LANE_MIN = 0.9
 LANES = ("iadd3", "ffma", "iadd3_ffma")
 MIXED_LANE = "iadd3_ffma"
+#: The most adds or FFMAs in a row the mixed lane loop's SASS may issue. The source alternates them; ptxas keeps that,
+#: or swaps one pair beside the loop's compare (sm_89, sm_90a), and both issue at one a SMSP-cycle. Runs of three
+#: and four (sm_120a, when k_opalone's end stored the k_spec roles) bind on a pipe and read below LANE_MIN.
+LANE_RUN_MAX = 2
+#: A loop counter's add, `IADD3 Rn, Rn, 0x1, RZ` (sm_120a's syntax names the carry predicates), not a lane op.
+COUNTER = re.compile(r"^IADD3 (R\d+), (?:PT, PT, )?\1, 0x1, RZ$")
 #: VF3e's joint issue rows as the machine model's census holds them, fitted beside
 #: IMMA s8 m16n8k32 and OMMA: SMSP-cycles a MMA and a other instruction. Every program of every form must load each at
 #: most 1 - NOISE.
@@ -151,7 +162,7 @@ def opcode(ins: str) -> str:
 
 
 def loops(body: list[tuple[int, str, str]]) -> list[dict]:
-    """Each backward branch's loop (target a label or an address): its MMA opcodes and counts an iteration."""
+    """Each backward branch's loop (target a label or an address): its MMA opcodes, counts an iteration and lane order."""
     by_label = {lab: i for i, (_, lab, _) in enumerate(body) if lab}
     by_addr = {a: i for i, (a, _, _) in enumerate(body)}
     out = []
@@ -168,8 +179,24 @@ def loops(body: list[tuple[int, str, str]]) -> list[dict]:
         # sm_89's ptxas moves part of an add.u32 stream to the FMA pipe as IMAD.IADD: an add all the same
         out.append({"mma": len(mma), "mma_ops": sorted(set(mma)), "other": len(seg) - len(mma),
                     "iadd3": sum(o.startswith(("IADD3", "IMAD.IADD")) for o in seg),
-                    "ffma": sum(o.startswith("FFMA") for o in seg)})
+                    "ffma": sum(o.startswith("FFMA") for o in seg), "order": lane_order(body[i : j + 1])})
     return out
+
+
+def lane_order(seg: list[tuple[int, str, str]]) -> str:
+    """The loop's adds (IADD3, IMAD.IADD; `I`) and FFMAs (`F`) in issue order, the loop counter's add left out."""
+    out = []
+    for _, _, ins in seg:
+        o = opcode(ins)
+        if o.startswith("FFMA"):
+            out.append("F")
+        elif o.startswith(("IADD3", "IMAD.IADD")) and not COUNTER.match(ins):
+            out.append("I")
+    return "".join(out)
+
+
+def longest_run(order: str) -> int:
+    return max((len(m) for m in re.findall(r"I+|F+", order)), default=0)
 
 
 def kernel_key(name: str) -> tuple[str, str, int] | None:
@@ -199,6 +226,8 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
         fails.append(f"sm_89: groups {sorted(groups)} finished, want 0-3")
     if arch == 100 and done and 0 not in groups:
         fails.append(f"sm_100: groups {sorted(groups)} finished, want 0 (int8)")
+    if arch == 90 and done and groups != {0, 1}:
+        fails.append(f"sm_90: groups {sorted(groups)} finished, want 0-1")
     sass = parse_sass((out / "sass" / "tensor_kinds.sass").read_text())
     kl = {}
     for fn, body in sass.items():
@@ -212,6 +241,9 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
         if not L or len(L) != 1 or L[0]["mma"] or L[0]["iadd3"] + L[0]["ffma"] < 64:
             fails.append(f"opalone {r['form']}: loops {L} (want one loop of >= 64 IADD3 and FFMA)")
             continue
+        if r["form"] == MIXED_LANE and (n := longest_run(L[0]["order"])) > LANE_RUN_MAX:
+            fails.append(f"opalone {MIXED_LANE}: ptxas scheduled the lane loop as {L[0]['order']} (I an add, F an "
+                         f"FFMA): {n} of a kind in a row, over {LANE_RUN_MAX}, binds on a pipe and not on issue")
         # 8 warps a SMSP, every instruction of the loop body an iteration
         lanes[r["form"]] = 8 * r["iters"] * L[0]["other"] / r["cyc_med"]
     if MIXED_LANE not in lanes:
@@ -239,6 +271,9 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
         sass_per_ptx = ml["mma"] / PTX_MMAS[base]
         if ml["mma"] % PTX_MMAS[base]:
             fails.append(f"{key}: {ml['mma']} SASS MMAs a loop, not a multiple of {PTX_MMAS[base]}")
+        if form == REF and (ml["mma_ops"] != [REF_SASS] or sass_per_ptx != 1):
+            fails.append(f"{key}: the loop's MMAs are {ml['mma']} {', '.join(ml['mma_ops'])} for {PTX_MMAS[base]} PTX "
+                         f"MMAs, want one {REF_SASS} each")
         want_iadd3 = 8 * R if base == "mixu" else 0
         if base == "mixu" and ml["iadd3"] + ml["ffma"] < want_iadd3:
             fails.append(f"{key}: {ml['iadd3'] + ml['ffma']} IADD3 and FFMA in the loop, want >= {want_iadd3}")
@@ -441,18 +476,46 @@ def search_report(out: Path) -> tuple[str, list[str]]:
 METRIC = "compute-research/eight-bit-mma-issue-cost"
 
 
+def target(card: str, directory: Path = CARDS) -> tuple[str, int]:
+    """(short, TK_SM) of the card record in `directory` whose `driver` holds `card`, the name nvidia-smi gives the GPU;
+    refused, naming why, for a card no record holds (`kit.card_short`) or an `arch` tensor_kinds.cu has no forms for."""
+    from verity.device import load_card, skus
+    from verity_bench import kit
+
+    short = kit.card_short(card, directory=directory)
+    [rec] = [c for c in (load_card(s, directory=directory) for s in skus("gpu", directory=directory))
+             if card in {d["value"] for d in c.get("driver", ())}]
+    if rec.get("arch") not in TARGETS:
+        raise SystemExit(f"tensor_kinds: the {short} card's arch is {rec.get('arch')!r}, and tensor_kinds.cu has forms "
+                         f"for {', '.join(TARGETS)} only: no build, no point")
+    return short, TARGETS[rec["arch"]]
+
+
+def _built(out: Path) -> int | None:
+    rows = [json.loads(x) for x in (out / "tensor_kinds.jsonl").read_text().splitlines() if x.startswith("{")]
+    return next((r.get("sm", 120) for r in rows if r.get("done")), None)
+
+
 def record(out: Path, summary: dict, fails: list[str]) -> None:
-    """Writes the run's validation and, when no gate failed, `REF`'s `a` as `METRIC` into the run's result."""
+    """Writes the run's validation and, when no gate failed, `REF`'s `a` as `METRIC` into the run's result, its member
+    the short of the card the stamp names, which must be the card the binaries were built for."""
     from verity_bench import kit
 
     w = kit.writer(out)
+    try:
+        card, sm = target(w.stamp["card"])
+    except SystemExit as ex:
+        fails = [*fails, str(ex)]
+    else:
+        if (built := _built(out)) not in (None, sm):
+            fails = [*fails, f"the binaries are sm_{built}'s, and the {card} card is sm_{sm}"]
     detail = "; ".join(fails) if fails else f"every gate held over {len(summary)} forms"
     w.validation("failed" if fails else "passed", "tensor_kinds.analyze", detail)
     if fails:
         return
     s = summary.get(REF) or {}
     a = s.get("a")
-    w.measurement(METRIC, a, "issue cycles a MMA", mark="measured",
+    w.measurement(METRIC, a, "issue cycles a MMA", mark="measured", member=card,
                   why=None if a is not None else f"the run timed no mixed point of {REF}",
                   extra={"form": REF, "a_per_slot": s.get("a_per_slot"), "slots": s.get("slots")})
 
@@ -461,6 +524,9 @@ def main(argv: list[str]) -> int:
     """`--record` beside OUT_DIR also writes the run's result (`record`)."""
     if rec := "--record" in argv:
         argv = [x for x in argv if x != "--record"]
+    if argv[1] == "target":
+        print(target(argv[2])[1])
+        return 0
     if argv[1] == "refit":
         args = argv[2:]
         cut = args.index("--search") if "--search" in args else len(args)

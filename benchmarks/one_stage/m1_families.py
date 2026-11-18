@@ -1,5 +1,5 @@
 """M1's family census: a rank's Programs of record (a deferred TP Commit's Build, as `tp.serving_rows.window_of_record`
-loads them), every Program row of the given request steps by its Definition (the row's ``spec``), with what the serving
+loads them, or a single-card Commit's as rank 0 of a world of 1, `row_record`), every Program row of the given request steps by its Definition (the row's ``spec``), with what the serving
 rows' partition makes of it: its unit templates (`serving_rows.unit_templates`: the row itself, and a ``CUT`` family's
 batched members), whether it is a template the rows commit (`serving_rows.template`: u16 ports, else the reason), the rows
 `describe` cannot address, its port words (`serving_rows.members`' rule) and its Definition's word gates. No value is read.
@@ -15,6 +15,7 @@ templates past the row itself: ``units``), and for each ``--also`` Definition (`
 
     PYTHONPATH=... python benchmarks/one_stage/m1_families.py --commit ROW/commit --build-root ROW/build \\
       --workload adapters/vllm/workloads/ROW.json --rank 0 --steps 16 --out families.json
+    (a single-card row: --build-root ROW, its build_request*/ at the top level, --rank 0)
     PYTHONPATH=...:<tree>/verity/protocols/proofs/flock/prover/python python benchmarks/one_stage/m1_families.py --estimate families.json --out sized.json \\
       [--also 'CublasSplitKGemmF32Out_v1{K=6144,N=1,..}' ...] [--also-file SPECS.txt]
 """
@@ -167,14 +168,61 @@ def sizes(census: str, out: str, also: list[str] = ()) -> int:
     return 0
 
 
+def one_card_record(commit_dir: str | Path) -> dict:
+    """A single-card Commit's record in `tp.serving_rows.record`'s keys, as a world of 1: its last instrumented pair-0 run
+    (``runs.jsonl``), its workload's sha256, and rank 0's Programs of record, the Commit's ``--program-digest`` and its
+    ``--required-manifest``'s component digests (the set its replay checks the Programs against). A run with a TP run root
+    is a tensor-parallel record and refused."""
+    d = Path(commit_dir)
+    rows = [json.loads(x) for x in (d / "runs.jsonl").read_text().splitlines() if x.strip()]
+    row = next((r for r in reversed(rows) if r.get("arm") != "control" and r.get("pair") == 0), None)
+    if row is None:
+        raise SystemExit(f"{d / 'runs.jsonl'}: no pair-0 instrumented run (the Commit failed before its run)")
+    if "tp_run_root" in (row.get("commit") or {}):
+        raise SystemExit(f"{d / 'runs.jsonl'}: a tensor-parallel run (it has a TP run root): pass --build-root ROW/build")
+    argv = [str(x) for x in json.loads((d / "versions.json").read_text()).get("argv") or []]
+    flag = lambda k: argv[argv.index(k) + 1] if k in argv[:-1] else None  # noqa: E731
+    man = flag("--required-manifest")
+    if man and not Path(man).is_file():
+        raise SystemExit(f"{d / 'versions.json'}: the Commit's --required-manifest {man} is not there")
+    of_record = {flag("--program-digest")} - {None}
+    if man:
+        m = json.loads(Path(man).read_text())
+        of_record |= {str(x) for x in m.get("component_digests") or []}
+        of_record |= {str(c["program_digest"]) for c in (m.get("components") or {}).values()
+                      if isinstance(c, dict) and c.get("program_digest")}
+    if not of_record:
+        raise SystemExit(f"{d / 'versions.json'}: the Commit names no --program-digest or --required-manifest, so no Program of record")
+    return {"world": 1, "of_record": {"0": sorted(of_record)}, "label": row.get("label"), "workload": flag("--workload"),
+            "workload_sha256": row.get("workload_sha256")}
+
+
+def row_record(commit: str, build_root: str, rank: int) -> tuple[dict, str]:
+    """The Commit's record and the dir of rank ``rank``'s Programs: a tensor-parallel row's (`tp.serving_rows.record`, its
+    Programs in ``build_root/rank<r>/``) or a single-card row's (`one_card_record`, rank 0 alone, its Programs at the row's
+    top level, ``build_root`` itself); any other is refused by name."""
+    root = Path(build_root)
+    if (root / f"rank{rank}").is_dir():
+        from verity_vllm.pipeline.tp import serving_rows as TS
+
+        return TS.record(commit), str(root / f"rank{rank}")
+    if (root / "build_request").is_dir() or any(p.is_dir() for p in root.glob("build_request_LP*")):
+        if rank != 0:
+            raise SystemExit(f"{build_root}: a single-card row's Programs are rank 0's alone, not rank {rank}'s")
+        return one_card_record(commit), str(root)
+    raise SystemExit(f"{build_root}: no rank{rank}/ (a tensor-parallel row's build) and no build_request*/ (a single-card row's "
+                     "top level): pass --build-root ROW/build for a tensor-parallel row, ROW for a single-card one")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--estimate", default=None, metavar="CENSUS", help="add each family's estimated size to this census's output")
     ap.add_argument("--also", action="append", default=[], metavar="SPEC",
                     help="with --estimate: also size this Definition (a split's unit that main doesn't have); repeatable")
     ap.add_argument("--also-file", default=None, metavar="PATH", help="with --estimate: --also for each line of this file")
-    ap.add_argument("--commit", help="the deferred TP Commit's --out (runs.jsonl, versions.json)")
-    ap.add_argument("--build-root", help="each rank's Programs of record in rank<r>/")
+    ap.add_argument("--commit", help="the Commit's --out (runs.jsonl, versions.json)")
+    ap.add_argument("--build-root", help="a tensor-parallel row's build, each rank's Programs of record in rank<r>/; or a "
+                                         "single-card row's dir, its build_request*/ at the top level")
     ap.add_argument("--workload")
     ap.add_argument("--rank", type=int, default=0)
     ap.add_argument("--steps", default="16", help="comma-separated request steps described per family, or all")
@@ -188,18 +236,17 @@ def main() -> int:
 
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import rank_replay as RR
-    from verity_vllm.pipeline.tp import serving_rows as TS
     from verity_vllm.pipeline.workload_file import workload_file
 
     t0 = time.time()
-    rec = TS.record(a.commit)
+    rec, programs = row_record(a.commit, a.build_root, a.rank)
     world = int(rec["world"])
     doc = json.loads(workload_file(a.workload).read_text())
     if hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest() != rec["workload_sha256"]:
         raise SystemExit(f"{a.workload}: not the workload the record served")
     reqs = [{"request_id": f"r{i}", "arrive_step": int(q.get("arrive_step") or 0), "prompt_len": len(q["prompt_token_ids"]),
              "max_tokens": int(q["max_tokens"])} for i, q in enumerate(doc["requests"])]
-    p = RR.load({"programs": {str(a.rank): str(Path(a.build_root) / f"rank{a.rank}")}, "of_record": rec["of_record"], "requests": reqs},
+    p = RR.load({"programs": {str(a.rank): programs}, "of_record": rec["of_record"], "requests": reqs},
                 a.rank, world, definitions=False)
     load_s = round(time.time() - t0, 1)
     print(f"M1F loaded rank {a.rank} of {world}: {len(p.progs)} request Programs in {load_s} s", flush=True)

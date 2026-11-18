@@ -11,8 +11,8 @@ DITHER = (Path(__file__).resolve().parents[4] / "benchmarks" / "hash" / "dither"
 
 
 def test_loads_by_path_and_holds_the_standalone_files_to_their_declarations() -> None:
-    reg = of(DITHER / "sbench.py")
-    assert reg is of(DITHER / "dither_so.py") and Path(reg.path) == DITHER / "settings.py"
+    reg = of(DITHER / "dbw.py")
+    assert reg is of(DITHER / "forms.py") and Path(reg.path) == DITHER / "settings.py"
     assert reg.prefixes == ("DITHER_", "SBENCH_", "HB_")
     assert reg.standalone_problems() == []
 

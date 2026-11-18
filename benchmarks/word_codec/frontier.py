@@ -98,8 +98,8 @@ TENSOR_MODELS = {"70b": "llama-3.1-70b", "8b": "llama-3.1-8b"}
 
 
 def load_tensor(src: str) -> tuple[dict, str | None]:
-    """A `codec-tensor.json` (`benchmarks/codec_tensor/bench.py`'s): a path, or the art of its run's
-    files."""
+    """A `codec-tensor.json` (`verity bench codec_tensor`'s, `benchmarks/codec_tensor/run.py`): a path, or the art of
+    its run's files."""
     if not src.startswith("art:"):
         return json.loads(Path(src).read_text()), None
     root = Path(research("data", "fetch", src, "--path", "out/codec-tensor.json").strip().splitlines()[-1])

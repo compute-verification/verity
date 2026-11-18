@@ -6,6 +6,7 @@ outcome here depends on a clock or on the machine's load: what is checked is tha
 control decides, not the numbers."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
 import json
@@ -479,14 +480,14 @@ def test_every_checkout_of_the_same_native_source_compiles_one_copy_left_untouch
     from band_gpu import native
 
     copy = native._stable_copy(str(tmp_path))
-    assert open(copy, "rb").read() == open(native.SOURCE, "rb").read()
+    assert Path(copy).read_bytes() == Path(native.SOURCE).read_bytes()
     os.utime(copy, ns=(1, 1))
     assert native._stable_copy(str(tmp_path)) == copy and os.stat(copy).st_mtime_ns == 1   # ninja sees nothing to rebuild
     other = tmp_path / "checkout" / "pous_native.cu"
     other.parent.mkdir()
     other.write_bytes(b"// another source\n")
     monkeypatch.setattr(native, "SOURCE", str(other))
-    assert native._stable_copy(str(tmp_path)) == copy and open(copy, "rb").read() == b"// another source\n"
+    assert native._stable_copy(str(tmp_path)) == copy and Path(copy).read_bytes() == b"// another source\n"
 
 
 def test_the_recompute_gate_fails_a_run_whose_challenges_missed_every_dropped_block():
@@ -758,7 +759,5 @@ def test_the_harness_moves_every_one_of_its_threads_off_the_memory_attesters_and
         stop.set()
         t.join()
         for x in os.listdir("/proc/self/task"):
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 os.sched_setaffinity(int(x), here)
-            except ProcessLookupError:
-                pass

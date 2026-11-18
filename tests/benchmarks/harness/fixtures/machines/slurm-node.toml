@@ -1,0 +1,17 @@
+# machine slurm-node: a node made up for the tests, reached only through Slurm jobs, so no register entry; most properties unread
+[properties]
+kind = { value = "unread", read = "none: no node kind of its cards" }
+card = { value = "unread", read = "none: no card file" }
+cards = { value = 8, read = "sinfo" }
+cpus = { value = 224, read = "sinfo" }
+threads_per_core = { value = "unread", read = "lscpu inside a job, not run" }
+numa = { value = "unread", read = "lscpu inside a job, not run" }
+toolkit = { value = "none", read = "ls -d /usr/local/cuda* inside a job" }
+compiler = { value = false, read = "command -v nvcc inside a job" }
+profiler = { value = "unread", read = "grep RmProfilingAdminOnly inside a job, not run" }
+clock_lock = { value = "unread", read = "nvidia-smi -lgc inside a job, not run" }
+root = { value = false, read = "sudo -n true inside a job" }
+lease = { value = "none", read = "Slurm allocates the job's cards" }
+launcher = { value = { start = "sbatch", sets = [] }, read = "the job script" }
+python = { value = "unread", read = "python3 --version inside a job, not run" }
+job_cap_minutes = { value = 10080, read = "sinfo's partitions" }

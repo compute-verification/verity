@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 import tomllib
 import types
 from pathlib import Path
@@ -41,7 +42,7 @@ def _result(out: Path) -> dict:
 
 def test_two_rows_differing_in_the_walk_record_the_ratio_and_its_member(sw: types.ModuleType, tmp_path: Path) -> None:
     glm, llama = sw.PAIRS
-    entries = [sw.entry(glm, "glm-5.3", "NVIDIA H200", _row(False, 0.4), _row(True, 0.5), {"base": "r1", "walk": "r2"}),
+    entries = [sw.entry(glm, "glm-5.3", "h200", _row(False, 0.4), _row(True, 0.5), {"base": "r1", "walk": "r2"}),
                sw.entry(llama, "llama-3.2-1b", "h200", why="no passing run")]
     sw.record(tmp_path, entries, {"glm-5.3-h200": {"runs": {"base": "r1", "walk": "r2"}}})
     doc = _result(tmp_path)
@@ -64,8 +65,29 @@ def test_two_rows_differing_in_the_walk_record_the_ratio_and_its_member(sw: type
 ])
 def test_rows_differing_in_more_than_the_walk_give_no_value(sw: types.ModuleType, base: dict, walk: dict,
                                                             says: str) -> None:
-    e = sw.entry(sw.PAIRS[1], "llama-3.2-1b", "NVIDIA H200", base, walk, {"base": "r1", "walk": "r2"})
+    e = sw.entry(sw.PAIRS[1], "llama-3.2-1b", "h200", base, walk, {"base": "r1", "walk": "r2"})
     assert e["value"] is None and says in e["why"] and e["member"] == "llama-3.2-1b-h200"
+
+
+@pytest.mark.parametrize(("reported", "member", "value"), [
+    ("NVIDIA H200", "glm-5.3-h200", 0.8),
+    ("NVIDIA H100 80GB HBM3", "glm-5.3-h100", 0.8),
+    ("NVIDIA A100-SXM4-80GB", "glm-5.3-h200", None),
+])
+def test_the_member_takes_the_card_record_short_of_the_reported_name(
+        sw: types.ModuleType, monkeypatch: pytest.MonkeyPatch, reported: str, member: str, value: float | None) -> None:
+    import verity_bench
+    workloads = types.SimpleNamespace(WORKLOADS={"w": types.SimpleNamespace(model="GLM-5.3")})
+    monkeypatch.setattr(verity_bench, "prove_common", workloads, raising=False)
+    monkeypatch.setitem(sys.modules, "verity_bench.prove_common", workloads)
+    spec = types.SimpleNamespace(workload="w", card="h200")
+    monkeypatch.setattr(sw, "passing", lambda name, block: (name, f"run-{name}", None, spec))
+    walked = {sw.PAIRS[0].base: _row(False, 0.4), sw.PAIRS[0].walk: _row(True, 0.5)}
+    monkeypatch.setattr(sw, "row_and_card", lambda store, run, point: (walked[point], reported))
+    e, rows = sw.measure(None, sw.PAIRS[0])
+    assert (e["member"], e["value"]) == (member, pytest.approx(0.8) if value else None)
+    if value is None:
+        assert e["why"].startswith("0 card records under ") and "'NVIDIA A100-SXM4-80GB'" in e["why"] and rows == {}
 
 
 def test_a_run_where_no_member_has_a_value_is_refused(sw: types.ModuleType, tmp_path: Path) -> None:

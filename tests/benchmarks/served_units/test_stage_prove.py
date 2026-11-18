@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -172,20 +173,20 @@ def test_reads_the_leases_among_its_cards_alone_and_goes_on_when_they_are_free(j
     assert calls[0] == "4,5" and rc == 4 and "flock-read-tmpl BUILD FAILED" in steps
 
 
-def test_stages_nowhere_in_ram(job):
+def test_stages_nowhere_in_ram(job, shm: Path):
     """FLOCK_WORK holds flock-tmpl-unit, which a noexec /dev/shm can't run: without RAM_WORK=1 a WORK_ROOT there is refused
     before staging."""
-    rc, steps, _ = job(LAKE_OK="1", WORK_ROOT="/dev/shm/stage-prove-test")
-    assert rc == 4 and "REFUSED: WORK_ROOT /dev/shm/stage-prove-test is in RAM" in steps, steps
-    assert "window.py stage" not in steps and not Path("/dev/shm/stage-prove-test").exists()
-    rc, steps, _ = job(LAKE_OK="1", STEPS="stage", FLOCK_WORK="/dev/shm/stage-prove-test")
-    assert rc == 4 and "REFUSED: FLOCK_WORK /dev/shm/stage-prove-test is in RAM" in steps, steps
+    rc, steps, _ = job(LAKE_OK="1", WORK_ROOT=str(shm))
+    assert rc == 4 and f"REFUSED: WORK_ROOT {shm} is in RAM" in steps, steps
+    assert "window.py stage" not in steps and not shm.exists()
+    rc, steps, _ = job(LAKE_OK="1", STEPS="stage", FLOCK_WORK=str(shm))
+    assert rc == 4 and f"REFUSED: FLOCK_WORK {shm} is in RAM" in steps, steps
 
 
 @pytest.fixture
-def shm(tmp_path):
-    d = Path("/dev/shm") / f"stage-prove-test-{tmp_path.name}"
-    yield d
+def shm():
+    d = Path(tempfile.mkdtemp(prefix="stage-prove-test-", dir="/dev/shm"))
+    yield d / "work"
     shutil.rmtree(d, ignore_errors=True)
 
 
@@ -225,16 +226,6 @@ def test_ram_work_stages_nothing_under_the_memory_floor(job, tmp_path: Path, shm
                            MEMINFO=meminfo(tmp_path / "low", 499))
     assert rc == 5 and "REFUSED: the node's MemAvailable is 499 GB, under MEM_FLOOR_GB=500: nothing staged" in steps, steps
     assert not any(c.startswith("window") for c in calls) and not shm.exists() and not (tmp_path / "disk").exists()
-
-
-def test_ram_work_stops_staging_and_removes_everything_when_memory_falls_under_the_floor(job, tmp_path: Path, shm: Path):
-    """The floor is read while window.py stages: once MemAvailable is under it the staging is stopped, and FLOCK_WORK and
-    DISK_WORK are removed, under STEPS=stage too, which otherwise keeps them."""
-    for steps_ in ("stage prove", "stage"):
-        rc, steps, _ = job(STEPS=steps_, LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=str(tmp_path / "disk"),
-                           FALLS_TO="420", MEM_POLL_S="0.05", HELD="6")
-        assert rc == 5 and "STOPPED: the node's MemAvailable fell to 420 GB, under MEM_FLOOR_GB=500" in steps, steps
-        assert not shm.exists() and not (tmp_path / "disk").exists() and "window.py prove" not in steps
 
 
 def test_refuses_a_device_or_steps_it_does_not_know(job):

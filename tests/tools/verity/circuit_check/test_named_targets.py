@@ -61,6 +61,16 @@ def test_named_targets_run_on_every_core_and_reuse_checks_cache(runs, tmp_path, 
     assert got[-1]["cache"] == tmp_path / "mine" and got[-1]["jobs"] == cli.auto_jobs()
 
 
+def test_the_targets_a_change_reaches_are_repinned_and_the_rest_reused(runs, monkeypatch, tmp_path):
+    got, _ = runs
+    pinned: list[dict] = []
+    monkeypatch.setattr(cli, "update_pins", pinned.append)
+    monkeypatch.setattr(cli.SH, "changed", lambda repo, base: ["verity/circuits/ops/gemm.py"])
+    monkeypatch.setattr(cli.SH, "reaching", lambda changed, declared: changed)
+    cli.main(["--reached", "main", "--check", "--update-pins", "-q"])
+    assert got[-1]["cache"] == cli.default_cache() and got[-1]["units"] and len(pinned) == 1
+
+
 @pytest.mark.slow
 def test_a_check_that_runs_a_cpp_model_is_stored_after_the_prebuild(tmp_path, monkeypatch):
     """The C++ models compile on first use, and a check that compiled one would start a program the tracer cannot see, so its

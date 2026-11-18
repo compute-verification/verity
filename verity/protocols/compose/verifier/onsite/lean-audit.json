@@ -19,7 +19,7 @@
     "NetworkVerifier.Period",
     "NetworkVerifier.Span",
     "PousVerifier.RunProtocol",
-    "PouwVerifier.Period",
+    "PouwPearlPlus.Protocol",
     "Poub.P2Protocol",
     "Spot.OneStage",
     "Spot.OneStageZk",

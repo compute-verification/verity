@@ -46,6 +46,7 @@ class CublasLinear:
         if tp.batch_invariant or tuple(tp.compute_capability) != (9, 0):
             return None
         from verity_vllm.definitions.registry import bf16_gemm_check
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_device_name
 
         a = bound_args(node)
         x, w, bias = a.get("input", a.get("arg0")), a.get("weight", a.get("arg1")), a.get("bias", a.get("arg2"))
@@ -63,7 +64,7 @@ class CublasLinear:
         roots = ctx.roots_of(w)
         if not any(r.role == "weight" for r in roots):
             return unsupported(node, "the linear's weight is not a checkpoint parameter (weight Root)", w=repr(w))
-        route = bf16_gemm_check.default_cublas_route("linear", M, K, N)
+        route = bf16_gemm_check.default_cublas_route("linear", M, K, N, active_device_name())
         if route is None:
             return unsupported(node, "no captured vLLM-default cuBLAS linear route", M=M, K=K, N=N)
         T = _targets()

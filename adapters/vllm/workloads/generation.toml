@@ -137,6 +137,9 @@ reasons = { moe_backend = "vLLM's own selection for GLM-5.3's block-FP8 experts 
 note_prefix = "R12 "
 arrival_rule = "round"
 
+[row."llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager"]
+target = { compute_capability = [9, 0], num_sms = 132, async_scheduling = false }
+
 [row."llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"]
 target = { compute_capability = [9, 0], num_sms = 132, async_scheduling = false }
 

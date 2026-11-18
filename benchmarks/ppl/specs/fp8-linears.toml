@@ -1,0 +1,6 @@
+description = "plain FP8 E4M3 linears in pearl-c-linears' scope, no PoUW and no noise: one scale per token and per output row, rounded to nearest, products in FP32; lm_head and attention bf16"
+
+[[linear]]
+step = "fp"
+fmt = "e4m3"
+scale = "channel"

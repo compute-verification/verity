@@ -56,14 +56,17 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
+    registered_commit,
+    registered_salts,
+)
+from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
+
+from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.definitions.numerics.rows import ROWS
 from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity_vllm.definitions.registry import io_shell as IO
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-
-from verity_vllm.check.replay.checks import check_rows
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit, registered_salts
 from verity_vllm.query.manifest import format as RM
 
 from . import scan_state as SS

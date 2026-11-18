@@ -175,6 +175,16 @@ class _Admission:
 ENGINE_ID = re.compile(r"^(?:cmpl|chatcmpl)-(.+)-\d+-[0-9a-f]{8}$")
 
 
+#: vLLM's client's pass and user at the end of a request id's run (`serve_tax.load_tag`'s ``-r{rep}``, a user's ``-u{j}``)
+PASS_USER = re.compile(r"-r\d+(?:-u\d+)?$")
+
+
+def edge_load(key: tuple[str, int] | None) -> str | None:
+    """The load whose serving an edge's period counts: ``key``'s run without vLLM's client's pass and user, so that a
+    load's passes and users are one count."""
+    return PASS_USER.sub("", key[0]) if key else None
+
+
 def release_key(engine_id: str) -> tuple[str, int] | None:
     """(run, n) from an X-Request-Id ``{run}-{n}`` inside the server's engine id."""
     m = ENGINE_ID.match(engine_id)
@@ -546,8 +556,7 @@ def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = tim
     def add_request(orig):
         def wrapped(request, *a, **kw):
             if tag is None or tag in request.request_id:
-                key = release_key(request.request_id)
-                load[0] = key[0] if key else None
+                load[0] = edge_load(release_key(request.request_id))
                 start(load[0])
             return orig(request, *a, **kw)
         return wrapped

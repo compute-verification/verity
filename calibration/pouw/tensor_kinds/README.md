@@ -12,12 +12,14 @@ runs as its source.
 
 ## Run it
 
-Each job is the command of a `research run` on a node with the card, from a pushed commit. `run.sh` times every form of
-an RTX PRO 6000 by default and of a B200 under `TK_ARCH=100`:
+Each job is the command of a `research run` on a node with the card, from a pushed commit. `run.sh` builds for the
+card it holds: the arch of the card record (`../../hardware/cards/`) whose `driver` holds the name nvidia-smi gives it.
+It times every native form of an RTX PRO 6000, the int8 and f16/bf16 `mma.sync` forms of an H200 or H100, and the legacy
+forms of a B200; a card no record holds refuses:
 
 ~~~text
-research run --on MACHINE --project verity --source /workspace --cwd clone --custody-ttl 12h \
-  --env GPU_LEASE_WHO=LANE -- bash calibration/pouw/tensor_kinds/run.sh
+research run --on NODE --project verity --source . --cwd source -- env GPU_LEASE_WHO=LANE \
+  gpu-lease 1 --wait --on CARD --cores CORES --max-min 25 -- bash calibration/pouw/tensor_kinds/run.sh
 ~~~
 
 ## Read a run

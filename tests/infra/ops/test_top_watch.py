@@ -202,6 +202,41 @@ def test_a_new_comment_is_quoted_unless_it_starts_with_a_handle():
     assert len(ring.rings) == 2
 
 
+HANDLES = ["infra", "proofs", "ci", "lean", "soundness", "compute-accounting", "top"]
+AGENTS = ["soundness, Tue 17 Nov 6:05 PM PST: the lemma holds.", "soundness (lead), Tue 17 Nov 6:05 PM PST, taken as B.",
+          "proofs (lead): done.", "ci, 5:31 PM PST: green.", "infra (lead), Tue 17 Nov 6:13 PM PST, relay fixed.",
+          "lean (WIRES, Claude Opus), Tue 17 Nov 6:20 PM PST: rebuilt.", "proofs:", "proofs 03:20Z: noted.",
+          "proofs, 26 Oct 03:20Z: accepted.", "top: logged.", "@soundness: see above", "  **soundness**: B applied.",
+          "**infra (lead)**, 5:31 PM: done", "Soundness, Tuesday 6:05 pm PST: ok", "compute-accounting 17:05 UTC: rerun.",
+          "ci, Nov 17, 5:31 PM PST: merged.", "lean (lead)", "infra, 6 PM PST: up."]
+DANIELS = ["proofs, please restate", "soundness is right here", "top should decide", "B. Not trusted", "yes",
+           "infra can you check", "Go with B, but keep the tests.", "Note: keep TileChecks on the same plan.",
+           "proofs, 3 options is too many", "soundness (and lean) should agree first", "lean is wrong at 5:31",
+           "ci should rerun at 6 PM", "Why not C?", "A, at 03:20Z", "nobody: please wait", "proofsx: hmm"]
+
+
+@pytest.mark.parametrize("text", AGENTS)
+def test_an_agents_signed_note_is_the_agents(text):
+    assert T.agent_lead(HANDLES).match(text)
+
+
+@pytest.mark.parametrize("text", DANIELS)
+def test_daniels_own_text_is_his(text):
+    assert not T.agent_lead(HANDLES).match(text)
+
+
+def test_another_leads_signed_note_on_a_lanes_page_rings_nobody_and_logs_one_line(capsys):
+    n, ring, state = Notion(page("p1")), Ring(), {}
+    n.body("p1")
+    T.asks_pass(state, n, None, "ds", NOW, False, HANDLES)
+    n.body("p1", ("b1", "soundness, Tue 17 Nov 6:05 PM PST: the restated lemma covers your case."), ("b2", "Taken as B."))
+    n.comments["p1"] = [{"id": "c1", "rich_text": rt("infra (lead), Tue 17 Nov 6:13 PM PST, relay fixed.")}]
+    T.asks_pass(state, n, ring, "ds", NOW + 900, False, HANDLES)
+    assert ring.rings == [] and n.patches == []
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if "agent's note skipped" in ln]
+    assert len(lines) == 3 and "soundness, Tue 17 Nov 6:05 PM PST: the restated lemma covers'" in lines[0] and " proofs p1 " in lines[0]
+
+
 def test_a_dry_run_writes_nothing_to_notion():
     n, ring = Notion(page("p1", Approve=True)), Ring()
     n.body("p1")

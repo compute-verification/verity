@@ -72,6 +72,23 @@ def test_env_and_spaces_reach_the_workload(tmp_path):
     assert (runs_root / "r2" / "stdout.log").read_text() == "bar baz | two  words\n"
 
 
+def test_no_record_of_the_machines_run_holds_a_hidden_address_and_the_workload_gets_it(tmp_path):
+    """launch.json, job.json and status.json name the request's `hidden_addresses` (documentation addresses here) and redact a
+    `*_HOST` variable's value, wherever it sits; the workload's own output is its own."""
+    named, host = "192.0.2.21", "192.0.2.22"
+    req, runs_root = _request(tmp_path, "r3", [PY, "-c", "import os, sys; print(os.environ['VY_GATE'], sys.argv[1])", f"research@{named}"],
+                              env={"VY_GATE": f"ssh research@{host} true", "VY_X_HOST": host})
+    doc = json.loads(req.read_text())
+    req.write_text(json.dumps({**doc, remote.HIDDEN_ADDRESSES: {named: "vy-named"}}))
+    assert remote.launch_request(req)["started"]
+    run_dir = runs_root / "r3"
+    _wait_terminal(run_dir)
+    assert (run_dir / "stdout.log").read_text() == f"ssh research@{host} true research@{named}\n"
+    for name in ("launch.json", "job.json", "status.json"):
+        text = (run_dir / name).read_text()
+        assert (named in text, host in text, "research@vy-named" in text) == (False, False, True), name
+
+
 def test_exclusive_refuses_a_live_holder_and_reclaims_a_dead_one(tmp_path):
     gate = Gate(tmp_path / "gate")
     req1, runs_root = _request(tmp_path, "hold", [PY, "-c", Gate.WAIT, str(gate.path)], exclusive=True)

@@ -145,7 +145,8 @@ What doesn't change:
 ## What an accepted audit means
 
 Each guarantee below is listed in the lock (`security/lean-audit.json`), which records its statement, the definitions it
-reads and its named assumptions.
+reads and its named assumptions. On a served execution phase, an accept holds each sampled block on its own inputs; the wires
+between blocks are not held, a limit that stands until the registered circuit carries its wires as edges.
 
 **A `--zk` session's acceptance, read in the sampling relation.** `Flock.SecurityProofs.SampledKSLiveV3`
 (`security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `verity-verify-proof verify --zk` accepts the transcript and the

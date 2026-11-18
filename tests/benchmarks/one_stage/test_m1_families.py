@@ -1,13 +1,15 @@
 """`m1_families.py --estimate`: each family's split units (its unit templates past the row itself) sized once however many
 families share them, each listed with its count per row; the ``--also`` Definitions (and ``--also-file``'s non-blank lines)
 sized as ``candidates``; `sized`'s verdict on a Definition from its estimate and block, or the reason it has none; an
-estimate's served MACs, the census's count of its tensor-core steps' products; and a block's bits per port.
+estimate's served MACs, the census's count of its tensor-core steps' products; a block's bits per port; and the record a
+census reads, a tensor-parallel row's or a single-card row's as rank 0 of a world of 1, any other refused.
 Nothing is lowered: `sized`, `estimate`, `block`, the serving rows' `_bind` and each leaf's cost are stand-ins."""
 
 from __future__ import annotations
 
 import json
 import math
+import re
 import sys
 import types
 from pathlib import Path
@@ -159,3 +161,54 @@ def test_a_block_gives_each_parameters_and_returned_fields_bits():
     b = M.block(fn, 1000)
     assert (b["in_bits"], b["out_bits"], b["row_bits"]) == ([24, 32], [8, 32], 24 + 32 + 16 + 32)
     assert b["rows_log"] <= b["est_log"] <= M.K_MAX
+
+
+R0, R1, PD = "a" * 128, "b" * 128, "c" * 128
+
+
+def one_card_row(root: Path, *, tp_run_root: bool = False, manifest: bool = True) -> Path:
+    """A single-card row as `pipeline/row.py` leaves it: its build at the top level (``build_step/``, ``build_request*/``,
+    ``build_workload/``, no ``build/rank*/``) and one instrumented run in ``commit/runs.jsonl``, whose ``--required-manifest``
+    lists the request Programs of record."""
+    for d in ("build_step", "build_request", "build_request_LP11_T8", "build_workload", "commit"):
+        (root / d).mkdir(parents=True)
+    commit = {"run_root": "d" * 128} | ({"tp_run_root": "e" * 128} if tp_run_root else {})
+    run = {"arm": "instrumented", "pair": 0, "label": root.name, "workload_sha256": "f" * 64, "commit": commit}
+    (root / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    argv = ["commit.py", "--workload", "workloads/w.json", "--program-digest", PD]
+    if manifest:
+        (root / "manifest.json").write_text(json.dumps({"component_digests": [R1, R0], "components": {"r0": {"program_digest": R0}}}))
+        argv += ["--required-manifest", str(root / "manifest.json")]
+    (root / "commit" / "versions.json").write_text(json.dumps({"argv": argv}))
+    return root
+
+
+def test_a_single_card_row_is_rank_0_of_a_world_of_1_with_its_commits_programs_of_record(tmp_path):
+    row = one_card_row(tmp_path / "row")
+    rec, programs = M.row_record(str(row / "commit"), str(row), 0)
+    assert programs == str(row)
+    assert rec == {"world": 1, "of_record": {"0": sorted([R0, R1, PD])}, "label": "row", "workload": "workloads/w.json",
+                   "workload_sha256": "f" * 64}
+
+
+def test_a_single_card_row_without_a_manifest_takes_its_program_digest_alone(tmp_path):
+    row = one_card_row(tmp_path / "row", manifest=False)
+    assert M.row_record(str(row / "commit"), str(row), 0)[0]["of_record"] == {"0": [PD]}
+
+
+def test_a_tensor_parallel_row_is_read_from_its_rank_dir_by_its_tp_record(tmp_path, monkeypatch):
+    from verity_vllm.pipeline.tp import serving_rows as TS
+
+    (tmp_path / "build" / "rank1").mkdir(parents=True)
+    monkeypatch.setattr(TS, "record", lambda commit: {"world": 2, "of": commit})
+    assert M.row_record("C", str(tmp_path / "build"), 1) == ({"world": 2, "of": "C"}, str(tmp_path / "build" / "rank1"))
+
+
+@pytest.mark.parametrize("make, rank, why", [
+    (lambda p: p.mkdir(), 0, "pass --build-root ROW/build for a tensor-parallel row, ROW for a single-card one"),
+    (lambda p: one_card_row(p), 1, "rank 0's alone, not rank 1's"),
+    (lambda p: one_card_row(p, tp_run_root=True), 0, "a tensor-parallel run (it has a TP run root)")])
+def test_a_row_neither_tensor_parallel_nor_single_card_is_refused_with_the_fix(tmp_path, make, rank, why):
+    make(tmp_path / "row")
+    with pytest.raises(SystemExit, match=re.escape(why)):
+        M.row_record(str(tmp_path / "row" / "commit"), str(tmp_path / "row"), rank)

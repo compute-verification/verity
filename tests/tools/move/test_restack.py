@@ -340,6 +340,24 @@ def test_a_move_whose_map_main_deleted_after_it_landed_is_crossed_by_the_map_at_
     assert "app/util.py" not in paths(repo, r["result"]) and "tools/move/layout_map.toml" not in paths(repo, r["result"])
 
 
+def test_each_move_is_named_as_its_crossing_starts_and_many_moves_say_how_to_cross_in_parts(repo, monkeypatch, capsys):
+    """A crossing of many moves runs for minutes with nothing to print until its end: each move writes a line as it starts,
+    and from `MANY_MOVES` on the first line counts them and names each, so a carry in parts can begin at once."""
+    monkeypatch.setattr(RS, "SCRIPT_ARGS", RS.SCRIPT_ARGS)
+    git(repo, "checkout", "-q", "-B", "main", "base")
+    move = generate(repo, LINE)
+    on(repo, "pr", ("add extra", {"app/extra.py": "from app.util import f3\n"}))
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--main", "main", "--json"]) == 0
+    said = capsys.readouterr()
+    assert f"restack.py: pr: move 1 of 1, {move[:12]} (" in said.err and "each crossed in turn" not in said.err
+    monkeypatch.setattr(RS, "MANY_MOVES", 1)
+    assert RS.main(["pr", "--main", "main", "--json"]) == 0
+    first, started = capsys.readouterr().err.splitlines()[:2]
+    assert "pr lacks 1 moves, each crossed in turn" in first and first.endswith(f"oldest first: {move[:12]}")
+    assert started.startswith("restack.py: pr: move 1 of 1, ")
+
+
 @pytest.fixture
 def late(repo, monkeypatch):
     """main as a move that lands late leaves it: the first move, made on `base`, reaches main by a merge after main went on
@@ -583,6 +601,25 @@ def on_base(monkeypatch):
 
     monkeypatch.setattr(RS, "run_script", run_script)
     return ran
+
+
+def test_the_move_is_checked_only_for_a_branch_its_script_runs_on(repo, on_base):
+    """A layout move's check runs the script over the whole tree on the move's base. A branch based after the move (skipped
+    in a crossing of many), one that already holds it, and one up to date run no script on it, so they pay no check; the
+    branch the script runs on still does."""
+    git(repo, "checkout", "-q", "-b", "later", "base")
+    later = commit(repo, "main after the move's base", {"app/main.py": MAIN + "from app.util import f3\n"})
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "-s", "ours", "--no-ff", "-m", "land later", later)
+    on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
+    git(repo, "branch", "held", "move")
+    on(repo, "held", ("after the move", {"NOTES.md": "notes\n"}))
+    git(repo, "checkout", "-q", "-b", "moved-on", "move")
+    onto = commit(repo, "main after the move", {"CHANGES.md": "changes\n"})
+    assert RS.restack("later", "move", cwd=str(repo), main="main")["status"] == "based-after" and on_base == []
+    assert RS.restack("held", "move", onto=onto, cwd=str(repo))["status"] == "clean" and on_base == []
+    assert RS.restack("move", "move", cwd=str(repo))["status"] == "up-to-date" and on_base == []
+    assert RS.restack("pr", "move", cwd=str(repo))["status"] == "clean" and on_base == [git(repo, "rev-parse", "base")]
 
 
 def test_without_kept_no_check_is_kept_and_none_is_read(repo, cache, on_base):
@@ -1410,6 +1447,39 @@ def test_a_commit_its_entry_says_is_no_move_is_read_as_none_by_both_readers_and_
     assert RS.moves_on("main", "pr", str(repo)) == []
     r = RS.carry("pr", RS.moves_on("main", "pr", str(repo)), "main", cwd=str(repo), main="main", found=True)
     assert r["status"] == "no-moves"
+
+
+def test_a_move_main_holds_only_through_a_merge_that_kept_its_first_parents_tree_and_ran_itself_is_none_a_branch_lacks(
+        repo, lines):
+    """A branch's earlier, landed work merged back with `-s ours` brought into main's history a copy of a move main ran
+    itself, by another commit: the merge's tree is its first parent's, so the copy changed nothing on main, and `moves_on`
+    leaves it out, as research's `queue.moves_between` does (`test_queue.py`), whether the branch holds main's run or lacks
+    it too. A copy whose line main never ran elsewhere stays, as this script's moved merge holds a move in flight whose
+    change its rerun, with no move line, brought; a move on main's first-parent line, the same line again on a merge's
+    second parent with its tree, and `move = false` are as they were."""
+    ran = commit(repo, "main runs the move itself" + LINE, {"NOTES.md": "notes, ran\n"})
+    git(repo, "checkout", "-q", "-b", "stale", "base")
+    copy = commit(repo, "a copy of the move, made again on the branch" + LINE, {"NOTES.md": "notes, copied\n"})
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "--no-ff", "-s", "ours", "-m", "merge the branch's earlier, landed work, keeping this tree", "stale")
+    assert RS.tree_of("HEAD", str(repo)) == RS.tree_of("HEAD^1", str(repo)) and RS.contains(copy, "main", str(repo))
+    layout = (RS.LINE_SCRIPT["Layout-move"], ("--map", "tools/move/layout_map.toml"))
+    assert RS.moves_on("main", ran, str(repo)) == []
+    assert RS.moves_on("main", "pr", str(repo)) == [(ran, *layout)]
+    git(repo, "checkout", "-q", "-b", "inflight")
+    inflight = commit(repo, "a move in flight\n\nLayout-move: tools/move/other_map.toml", {"NOTES.md": "notes, moved\n"})
+    git(repo, "checkout", "-q", "main")
+    commit(repo, "restack: rerun tools/move/layout.py", {"NOTES.md": "notes, moved\n"})
+    git(repo, "merge", "-q", "--no-ff", "-s", "ours", "-m", "merge the layout move, restacked", "inflight")
+    real = commit(repo, "a move on main" + LINE, {"README.md": "readme 2\n"})
+    git(repo, "checkout", "-q", "-b", "side")
+    side = commit(repo, "a move a merge lands" + LINE, {"README.md": "readme 3\n"})
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "--no-ff", "-m", "land the side's move", "side")
+    found = [(inflight, RS.LINE_SCRIPT["Layout-move"], ("--map", "tools/move/other_map.toml")), (real, *layout), (side, *layout)]
+    assert RS.moves_on("main", ran, str(repo)) == found, "the copy stays out, the moves that changed main are in"
+    correct(lines, {real: {"move": False, "reason": "It ran nothing."}})
+    assert RS.moves_on("main", ran, str(repo)) == [found[0], found[2]]
 
 
 @pytest.mark.parametrize("entry, fix", [

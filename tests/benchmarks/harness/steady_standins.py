@@ -145,9 +145,10 @@ class Store:
         self.store.push(art)
         return art
 
-    def ran(self, run: str, files: Path | None, *, identity: str | None = None, rc: int = 0, dirty: bool = False) -> str:
+    def ran(self, run: str, files: Path | None, *, identity: str | None = None, rc: int = 0, dirty: bool = False,
+            env: dict | None = None) -> str:
         """A run's attempt on the remote: a run of the point `identity` as `research run` records it, or (None) a run
-        from before the harness; its `files` a run record (None: it kept none)."""
+        from before the harness; its `files` a run record (None: it kept none); `env` its `--env`."""
 
         from research.store import canon, derivation
 
@@ -156,7 +157,7 @@ class Store:
         drv = derivation.derivation_id(tool, {}, params, {}, []) if identity else "drv:" + "0" * 64
         attempt = {
             "schema": "research/attempt/v0.1", "id": run, "tool": tool, "derivation": drv, "reuse_key": None, "argv": [],
-            "params": params, "key_params": sorted(params), "inputs": {}, "conditions": {}, "key_conditions": [],
+            "params": params | ({"env": env} if env else {}), "key_params": sorted(params), "inputs": {}, "conditions": {}, "key_conditions": [],
             "source": {"commit": "c" * 40, "tree": "d" * 40, "dirty": dirty}, "closure": None,
             "execution": {"start_utc": f"{run[1:5]}-{run[5:7]}-{run[7:9]}T{run[10:12]}:{run[12:14]}:{run[14:16]}Z"},
             "cost": None, "status": {"state": "done" if rc == 0 else "failed", "rc": rc,

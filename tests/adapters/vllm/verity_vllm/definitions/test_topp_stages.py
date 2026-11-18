@@ -20,11 +20,11 @@ from collections import Counter
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import lookup_primitive
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.types import Tuple
+
 from verity_vllm.definitions.numerics import topp_stage_twins as TW
 from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import topp_keep_builder as K
@@ -207,7 +207,8 @@ def _mask_chunks(V: int, lg, ops: dict, S: int, outs: dict) -> dict:
 def _check_mask_chunks(V: int, lg, ops: dict, S: int) -> tuple[np.ndarray, dict, list]:
     """The mask chunks chained along the row are `TopPMask_v4{V,S}` on its temperature-scaled lanes, and each carries the
     positions the select chunk of its lanes carries in the twin; returns the masked row, the twin's outputs and the chunks."""
-    from verity_vllm.definitions.registry import dead_free as DF, sampling_rows as SR
+    from verity_vllm.definitions.registry import dead_free as DF
+    from verity_vllm.definitions.registry import sampling_rows as SR
 
     _, outs = TW.stage_rows(V, lg, splits=S, **ops)
     got = _mask_chunks(V, lg, ops, S, outs)

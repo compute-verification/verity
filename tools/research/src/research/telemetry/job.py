@@ -25,6 +25,53 @@ from .events import stream_id, utc_now_ms
 #: records name machines and never their addresses
 SECRET_KEY = re.compile(r"(TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|[-_]KEY\b|APIKEY|API[-_]KEY|_HOST$|^FLEET_JUMP$)", re.I)
 SECRET_VALUE = re.compile(r"^(hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$")
+REDACTED = "<redacted>"
+#: a value shorter than this is no machine's address (`FOO_HOST=1`), and hiding it would garble every record
+ADDRESS_MIN = 4
+
+#: {an address: what this process's records say in its place}, set by the runner before it writes any (`hide`)
+_HIDDEN: dict[str, str] = {}
+
+
+def address_names(env: dict[str, str], registered: dict[str, str] | None = None, command: list[str] = ()) -> dict[str, str]:
+    """{address: the name a record gives in its place}: each registered machine's address (`registered`, name -> address) by the
+    machine's name, and the value of each `*_HOST` variable of the launch's environment or of a `K=V` word of its command by its
+    machine's name where the register holds that address, else REDACTED."""
+    by_addr = {a: n for n, a in (registered or {}).items() if isinstance(a, str) and len(a) >= ADDRESS_MIN}
+    words = (w.partition("=") for w in command if "=" in w and not w.startswith("-"))
+    for k, v in [*env.items(), *((k, v) for k, _, v in words)]:
+        if k.endswith("_HOST") and isinstance(v, str) and len(v) >= ADDRESS_MIN:
+            by_addr.setdefault(v, REDACTED)
+    return by_addr
+
+
+def hide(names: dict[str, str]) -> None:
+    """Make `names` (`address_names`) the addresses every record this process writes through `hide_addresses` leaves out."""
+    _HIDDEN.clear()
+    _HIDDEN.update(names)
+
+
+def hide_addresses(value: Any, names: dict[str, str] | None = None) -> Any:
+    """`value` (a record) with each address of `names` (default: this process's, `hide`) replaced by its name wherever it occurs as
+    a whole token inside a string, a key's included: `user@ADDRESS`, `ssh ... ADDRESS`, `${X:-ADDRESS}`. Only the record changes;
+    the run still gets the real values. Files a run ships as inputs (--send, its source tree) are outside the launcher's reach and
+    are recorded as they are written."""
+    names = _HIDDEN if names is None else names
+    if not names:
+        return value
+    alt = "|".join(re.escape(a) for a in sorted(names, key=len, reverse=True))
+    rx = re.compile(rf"(?<![A-Za-z0-9_.])(?:{alt})(?![A-Za-z0-9_-]|\.[A-Za-z0-9])")
+
+    def walk(v: Any) -> Any:
+        if isinstance(v, str):
+            return rx.sub(lambda m: names[m.group()], v)
+        if isinstance(v, dict):
+            return {walk(k): walk(x) for k, x in v.items()}
+        if isinstance(v, (list, tuple)):
+            return [walk(x) for x in v]
+        return v
+
+    return walk(value)
 
 
 def redact_argv(argv: list[str]) -> tuple[list[str], list[str]]:
@@ -156,7 +203,7 @@ def build_job(*, project: str, task: str, job: str, attempt: int, lane: str, gen
     unavailable = {}
     if not env["gpu"]["available"]:
         unavailable["gpu"] = env["gpu"]["reason"]
-    return {"schema": JOB_SCHEMA, "written_utc": utc_now_ms(), "writer_stream": stream_id(),
+    return hide_addresses({"schema": JOB_SCHEMA, "written_utc": utc_now_ms(), "writer_stream": stream_id(),
             "ownership": {"project": project, "task": task, "job": job, "attempt": attempt, "lane": lane, "generation": generation},
             "computation": {"tree_sha": tree_sha, "tree_sha_reason": None if tree_sha else "not supplied", "release_tag": release_tag,
                             "workload_digest": workload_digest, "workload_digest_reason": None if workload_digest else "not supplied",
@@ -169,7 +216,7 @@ def build_job(*, project: str, task: str, job: str, attempt: int, lane: str, gen
                           "reservation": reservation, "policy_version": policy_version, "policy_sha256": policy_sha256},
             "telemetry": {"schema": SCHEMA, "collector_version": COLLECTOR_VERSION, "classifier_version": CLASSIFIER_VERSION,
                           "instruments": [i for i in instruments if i not in unavailable], "instruments_unavailable": unavailable,
-                          "cadence_s": cadence_s, "pss_every_s": pss_every_s, "level": level}}
+                          "cadence_s": cadence_s, "pss_every_s": pss_every_s, "level": level}})
 
 
 def write_json_atomic(path: str | Path, doc: dict[str, Any]) -> None:
@@ -246,6 +293,7 @@ def set_status(attempt_dir: str | Path, state: str, **kv: Any) -> dict[str, Any]
     st["updated_utc"] = utc_now_ms()
     st["updated_mono"] = time.monotonic()
     st["updated_stream"] = stream_id()
+    kv = hide_addresses(kv)
     st.setdefault("transitions", []).append({"state": state, "t_utc": st["updated_utc"], "t_mono": st["updated_mono"], "stream": st["updated_stream"], **kv})
     for k, v in kv.items():
         st[k] = v

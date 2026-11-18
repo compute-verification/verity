@@ -17,10 +17,14 @@ from verity.protocols.resource_accounting.network.verifier import advice as I1
 
 from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
 from verity_vllm.engine.served_seed import DEFAULT_SEED
+from verity.circuits.defs import bind
+from verity_vllm.definitions.registry import b1_tp2 as B1T
+from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.program.predict import node_window as NW
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered, plan_steps, request_program
+from verity_vllm.program.predict.window_builder import Row
 
 GLM53 = {"repo": "zai-org/GLM-5.3", "revision": "aca966e4e02791568aa6a4ced368624b3d897f42"}
 TARGET = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, "attention_backend": None,
@@ -101,6 +105,30 @@ def test_two_level_gather(window):
     linear = _tid(circuit, r"ScaledMmFp8BlockSharedScale_v1\{K=6144,N=1,G=128\}")
     assert {(linear, level1, "parts"), (level1, level2, "parts"), (level2, sumsq, "x"), (level1, apply, "x")} <= pairs
     assert circuit.cuts[apply]["x"] == 4 and circuit.cuts[level1]["parts"] == 64 and circuit.cuts[level2]["parts"] == 32
+
+
+@pytest.mark.parametrize("n", [131, 2177])
+def test_uneven_gather(program, n):
+    """A whole read of n rows of one score (2 words) that no chunk size divides into levels, 131 (a prime) or 2,177 = 7 x 311
+    (the decode's scores past 2,176 keys), is chunks of 127 rows and one copy of two widths reading the chunks and the rows
+    left over as they are, so no row is free; its circuit passes the wires' and proof blocks' checks."""
+    w = NW.NodeWindow(program, {})
+    w.b.label = (0, 0)
+    t, a = w.unit("scores", bind(D.DsaMqaLogitsV3, N=1, H=32, D=128), n)
+    (row,) = w._whole([tuple(Row(t, a + i, "o0", 2) for i in range(n)) for _ in range(1)])
+    rt, ra = w.unit("reader", bind(B1T.AllGather, WORLD=1, N=2 * n), 1)
+    w.b.feed(rt, "parts", ra, 1, (row,), ((1, 0),))
+    circuit = w.circuit()
+    G, r = divmod(n, 127)
+    chunk, tail = _tid(circuit, r"AllGather_v1\{WORLD=127,N=2\}"), _tid(circuit, r"AllGatherTail_v1\{.*\}")
+    assert tail == f"AllGatherTail_v1{{WORLD={G},N=254,TAIL={r},TN=2}}" and circuit.units[chunk] == G
+    assert circuit.cuts[tail] == {"tail": r, **({"parts": G} if G > 1 else {})} and circuit.cuts[chunk] == {"parts": 127}
+    assert {(x.writer, x.reader, x.port) for x in circuit.wires} == {
+        (t, chunk, "parts"), (chunk, tail, "parts"), (t, tail, "tail"), (tail, rt, "parts")}
+    assert not w.free
+    IF.check_wires(circuit.layouts, circuit.wires, circuit.cuts)
+    for tid, fn in w.b.fns.items():
+        IF.check_proof_block(fn, circuit.cuts.get(tid))
 
 
 def test_free_inputs(program, window):

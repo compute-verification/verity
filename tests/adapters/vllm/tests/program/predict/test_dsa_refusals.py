@@ -140,6 +140,13 @@ def test_the_all_reduces_switches_are_the_engines(cut):
         _reduced(_engine(symm_off, disable_custom_all_reduce=True), 1)
 
 
+def test_an_engine_that_sets_the_indexer_logits_budget_is_refused(cut):
+    """vLLM launches the indexer's logits in runs of rows under `VLLM_SPARSE_INDEXER_MAX_LOGITS_MB`, which the decoder writes at
+    vLLM's default (`vllm_dsa.emit_indexer`) and the domain does not model: an engine that sets it is refused by name."""
+    with pytest.raises(Unexpressible, match=re.escape("env VLLM_SPARSE_INDEXER_MAX_LOGITS_MB=256 (the switches modelled")):
+        decoder(_engine(cut(), {"VLLM_SPARSE_INDEXER_MAX_LOGITS_MB": "256"}))
+
+
 def test_a_history_opens_once_and_before_a_layers_first_call(cut):
     """`open_with` after layer 0 has written a row, its own or a first opening's, is refused, and leaves every history as it was."""
     model, x, prefix, _ = _model(cut(), 2)

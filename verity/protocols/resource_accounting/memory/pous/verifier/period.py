@@ -24,9 +24,10 @@ memory attester's device was given) and the prover's openings (`openings_of`, fr
 served store where `case` carries the table and `C*`. It certifies nothing, and its profile says why (`SIGNED_GAPS`);
 setup's acceptance is the open premise `SETUP_ACCEPTED`, among its certificate's hypotheses.
 
-`trusted-device`'s premise, that the memory attester runs on a machine the developer doesn't control, holds only
-under a committed configuration, for a session signed under a key its `[[pin]]` entries give the memory attester
-(`period.json`'s `deployment`), whatever the host names say; the subprotocol says which (`challenger_session.placement`).
+`trusted-device`'s premise, that the memory attester runs on a machine the developer doesn't control, never holds on
+the workload's machine: for a session signed under a key a committed configuration's `[[pin]]` entries give the memory
+attester (`period.json`'s `deployment`), it reads that the key matched the pins this machine was handed
+(`memory_attester.MATCHED`), whatever the host names say; the subprotocol says which (`challenger_session.placement`).
 The setup's salt is still sampled on the node, and its check runs there too: every verdict rests on setup checked by
 the developer, not the auditor, which the subprotocol says beside the premise.
 """

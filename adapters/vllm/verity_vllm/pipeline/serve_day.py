@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from verity import device as S
+from verity.channel import Refused
 from verity.protocols.registration.verifier import registration as G
 from verity_vllm import messages as M
 from verity_vllm.config import UsageError, option
@@ -144,14 +145,14 @@ def declare(opts: Any, out: Path) -> Day | None:
     if d.day_params:
         try:
             params = G.params_of(json.loads(M.read(Path(d.day_params), "MonitoringPeriodDeclaration")))
-        except (OSError, ValueError) as e:
+        except (OSError, ValueError, Refused) as e:
             raise UsageError(f"--day-params {d.day_params}: {e}") from None
     try:
         day = append(Path(d.day_log), G.Declaration(d.day, d.day_program, blocks_of(d.day_blocks)), params)
     except G.Refused as e:
         raise UsageError(f"--day {d.day}: the registration log {d.day_log} refuses its declaration, {e}: day {d.day} is "
                          "declared already, to another circuit, and a day has one") from None
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, Refused) as e:
         raise UsageError(f"--day-log {d.day_log}: {e}") from None
     (out / FILE).write_text(json.dumps({**day.describe(), "entry": day.entry.to_json()}, indent=1, sort_keys=True) + "\n")
     return day
@@ -213,7 +214,8 @@ def register(path: Path, item: Mapping[str, Any], params: tuple[str, S.Auditor] 
         try:
             entry = _chained(path, composite, log, auditor, G.Information((item,)))
         except G.Refused as e:
-            was = f": it registers {json.dumps(held[0], sort_keys=True)} already, and registers each item once" if held else ""
+            was = (f": it registers {json.dumps(held[0], sort_keys=True)} already, and registers each item once; a new "
+                   "log (a new DAY_LOG) takes this one") if held else ""
             raise ValueError(f"the log refuses the item, {e}{was}") from None
         return Item(item, entry.digest(), path, "now")
 
@@ -222,8 +224,10 @@ def register_compiler(run: Path, item: Mapping[str, Any], log: str | os.PathLike
                       params: str | os.PathLike | None = None) -> Item | None:
     """B's item (kind ``builder``) registered in the log the serve run ``run`` declared its day in (module docstring):
     the log its `FILE` names, or ``log``, a copy of it, held to the declaration `FILE` names, under ``params`` (the
-    log's parameters, as ``--day-params``). A log registers one compiler for its life: a deployment whose compiler
-    changes (its adapter code, or ℓ) starts a new log. None for a run that declared no day and is given no ``log``:
+    log's parameters, as ``--day-params``). A log registers one compiler for its life, and the digest covers the whole
+    content of ``adapters/vllm`` and ``verity``, serve.json's φ, the default seed, ℓ and the transfer gates: after any
+    commit touching them, a docstring included, a kept log refuses the next run's, and a new log takes it. None for a
+    run that declared no day and is given no ``log``:
     nothing is registered. ValueError, naming the log, where it isn't the run's or refuses the item (`register`)."""
     file = Path(run) / FILE
     if not file.exists():

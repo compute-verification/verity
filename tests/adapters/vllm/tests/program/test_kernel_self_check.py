@@ -9,11 +9,11 @@ import pkgutil
 import numpy as np
 import pytest
 from verity.circuits.evaluation import kernels, self_check
+
+from verity_vllm.commit import challenge as CH
 from verity_vllm.definitions import registry
 from verity_vllm.definitions.numerics import kernel_registry as KR
 from verity_vllm.definitions.numerics import rows, twins
-
-from verity_vllm.commit import challenge as CH
 
 N = 6
 # a registry module registers its composites' twins as it loads, and the pairs are read at collection: unless this file
@@ -42,6 +42,7 @@ def test_attention_kernels_on_scores_below_two_to_the_minus_63(monkeypatch):
     q = 0, whose every ex2 input is 0."""
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate
+
     from verity_vllm.definitions.numerics import derived_rows as DR
     from verity_vllm.definitions.registry import b1
 

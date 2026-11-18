@@ -334,7 +334,7 @@ def test_the_commands_each_kind_runs(tmp_path):
     assert "--preflight" not in D.command({"kind": "lean-regen", "payload": {"packages": ["p"]}}, "t1", "py", None, preflight=False)
     assert D.command({"kind": "audit-main", "payload": {"commit": C1}}, "t1", "py", None) == [
         "py", "tools/check/check.py", "--record", "--on", "t1", "--base", D.EMPTY_TREE, "--no-cache"]
-    assert "check.py --build --update verity/protocols/proofs/flock/prover/agreement/soundness" in regen[-1]
+    assert "check.py --build --no-artifacts --update verity/protocols/proofs/flock/prover/agreement/soundness" in regen[-1]
     assert '$RESEARCH_RUN_DIR/records/$p' in regen[-1] and regen[-1].endswith("exit $rc")
 
 

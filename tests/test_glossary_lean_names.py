@@ -1,10 +1,11 @@
-"""Every Lean name the one symbol table gives exists (`GLOSSARY.md`, "Notation"), and every one the security argument's
-status table gives (`security/README.md`, "Where each step stands").
+"""Every Glossary entry is in its one form, every Lean name the Notation gives exists (`GLOSSARY.md`), and so does every
+one the security argument's status table gives (`security/README.md`, "Where each step stands").
 
-A row's Lean column names declarations of the tree's Lean (`security/` and the Lean packages under `verity/`), written
-in backticks, full (`Verity.Circuit`) or as a suffix of the full name (`Circuit.size`); a structure's field counts
-(`Verity.RegisteredCircuit.θ`), and so does a namespace (`ResourceAccounting.Compose`). A part of the cell, between semicolons, that
-says "not yet in Lean" is not checked until that lands.
+An entry is one line, `- **Term** (area): definition. Code: `name`, `name2`.`, the area and the code names optional. A
+Notation entry's code names are declarations of the tree's Lean (`security/` and the Lean packages under `verity/`),
+full (`Verity.Circuit`) or as a suffix of the full name (`Circuit.size`); a structure's field counts
+(`Verity.RegisteredCircuit.θ`), and so does a namespace (`ResourceAccounting.Compose`). A part of a status table's cell,
+between semicolons, that says "not yet in Lean" is not checked until that lands.
 """
 from __future__ import annotations
 
@@ -56,20 +57,36 @@ def lean_names() -> set[str]:
     return names
 
 
-def notation_cells() -> list[str]:
-    """The Lean column of every row of the Notation section's tables."""
+_ENTRY = re.compile(r"- \*\*(?P<term>[^*]+)\*\*(?: \((?P<area>[^()]+)\))?: (?P<definition>.+?)"
+                    r"(?: Code: (?P<code>`[^`]+`(?:, `[^`]+`)*)\.)?")
+
+
+def entries(section: str) -> list[tuple[str, str | None, str, list[str]]]:
+    """(term, area, definition, code names) for each entry of a section of the Glossary; a line not in the form fails."""
     text = (ROOT / GLOSSARY).read_text(encoding="utf-8")
-    section = text[text.index("## Notation"):]
-    section = section[:section.index("\n## ", 1)]
-    rows = [line for line in section.splitlines() if line.startswith("| ") and not line.startswith(("| Symbol", "|---"))]
-    return [re.split(r"(?<!\\)\|", row)[3].strip() for row in rows]
+    body = text[text.index(f"\n## {section}\n") + len(section) + 5:]
+    body = body[:body.find("\n## ")] if "\n## " in body else body
+    parsed = []
+    for line in body.splitlines():
+        if not line:
+            continue
+        m = _ENTRY.fullmatch(line)
+        assert m, f"{GLOSSARY}, {section}: not an entry `- **Term** (area): definition. Code: `name`.`: {line[:120]}"
+        parsed.append((m["term"], m["area"], m["definition"], _NAME.findall(m["code"] or "")))
+    return parsed
 
 
-def test_every_row_names_its_lean_or_says_it_has_none():
-    cells = notation_cells()
-    assert len(cells) > 20, "the Notation section's tables were not found"
-    bare = [cell for cell in cells if cell != "—" and not _NAME.search(cell) and "not yet in Lean" not in cell]
-    assert not bare, f"a row's Lean column names no declaration and says no 'not yet in Lean (ISSUE)': {bare}"
+def test_every_entry_parses():
+    terms, notation = entries("Terms"), entries("Notation")
+    assert len(terms) > 100 and len(notation) > 20, f"{GLOSSARY}'s Terms or Notation section was not found"
+    keys = [term.lower() for term, *_ in terms]
+    assert keys == sorted(keys), f"{GLOSSARY}'s Terms are out of alphabetical order"
+    assert len(set(keys)) == len(keys), f"{GLOSSARY} has a term twice: give it one entry"
+
+
+def notation_cells() -> list[str]:
+    """The code names of every Notation entry, one cell each."""
+    return ["; ".join(f"`{name}`" for name in code) for *_, code in entries("Notation")]
 
 
 def security_status_cells() -> list[str]:

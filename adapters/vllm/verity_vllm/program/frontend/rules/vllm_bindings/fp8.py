@@ -5,15 +5,17 @@ from __future__ import annotations
 import numpy as np
 import torch
 from verity.circuits.refs import Coll, array_of
-from verity_vllm.definitions.registry.fp8 import QUANT_GROUPS, weight_blocks
-
-from verity_vllm.program.frontend import targets as T
 from verity_torch.frontend.derive import Alloc, refuse
 from verity_torch.frontend.rules.base import (
     InPlaceRule,
     OpRule,
     RuleInfo,
     ViewRule,
+)
+from verity_torch.frontend.rules.bindings.operands import (
+    BF16,
+    _untransposed,
+    aten,
 )
 from verity_torch.frontend.rules.common import (
     dtype_is,
@@ -23,15 +25,13 @@ from verity_torch.frontend.rules.common import (
     rows_of,
     shape,
 )
+
+from verity_vllm.definitions.registry.fp8 import QUANT_GROUPS, weight_blocks
+from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
     launch_tokens_of,
-)
-from verity_torch.frontend.rules.bindings.operands import (
-    BF16,
-    _untransposed,
-    aten,
 )
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 

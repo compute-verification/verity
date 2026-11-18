@@ -359,7 +359,7 @@ def test_a_lock_passes_on_its_records_and_is_stale_with_the_command_that_regener
 
     stale = recorded | {"guarantees": recorded["guarantees"] | {"Control.main_thm": {"owner": "@lean"}}}
     res = lock(tree, tmp_path, stale, "stale", envs)
-    assert res["status"] == "fail" and res["detail"]["regenerate"] == "python3 tools/verity/lean/check.py --build --update ctl"
+    assert res["status"] == "fail" and res["detail"]["regenerate"] == "python3 tools/verity/lean/lean_changed.py --records ctl --update"
     assert "is stale" in res["detail"]["error"] and res["detail"]["regenerate"] in res["detail"]["error"]
     assert json.loads(artifact(tmp_path / "stale", res, "records")) == recorded, "its records are the lock it regenerates"
 

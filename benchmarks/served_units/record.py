@@ -6,12 +6,13 @@ import sys
 from pathlib import Path
 
 from verity_bench import kit
+from verity_bench.overhead import CARD_FILES
 
 PROVE, PEAK = "circuits/proof-block-prove-seconds", "circuits/proof-block-peak-memory"
 
 
 def machine(card: str) -> str:
-    return "cpu" if card == "none" else "-".join(card.lower().split()).removeprefix("nvidia-")
+    return "cpu" if card == "none" else kit.card_short(card, directory=CARD_FILES)
 
 
 def member(model: str, tag: str, machine: str) -> str:

@@ -13,8 +13,8 @@
 #include <cstdlib>
 #include <vector>
 
-// TK_SM: the target, 120 (RTX PRO 6000, the default) or 89 (L40S, RTX 4090: its own form list and an alone4 point a
-// form). TK_GROUP: build one group of the target's forms (-1: all), so run.sh compiles the groups in parallel.
+// TK_SM: the target, 120 (RTX PRO 6000, the default), 90 (H200, H100), 100 (B200) or 89 (L40S, RTX 4090); each but
+// 120 has its own form list and an alone4 point a form. TK_GROUP: build one group of the target's forms (-1: all), so run.sh compiles the groups in parallel.
 #ifndef TK_SM
 #define TK_SM 120
 #endif
@@ -53,6 +53,16 @@ struct BlockClk {
     rec[blockIdx.x].role[1] = (r1);                    \
   }
 #define CLK_END(rec) CLK_END_ROLES(rec, 0, 0)
+// The block's cycles and SM only; its roles are left as they were (setup zeroes them, and main times the lane ops
+// before any k_spec writes one).
+#define CLK_END_CYC(rec)                               \
+  __syncthreads();                                     \
+  if (threadIdx.x == 0) {                              \
+    rec[blockIdx.x].cyc = clock64() - _t0;             \
+    int s_;                                            \
+    asm volatile("mov.u32 %0, %%smid;" : "=r"(s_));    \
+    rec[blockIdx.x].smid = s_;                         \
+  }
 
 struct Timing {
   double ms = 0, cyc_med = 0, cyc_min = 0, cyc_max = 0, mhz = 0, role_med[2] = {0, 0};
@@ -106,8 +116,8 @@ Timing run_timed(F launch, int nblocks, BlockClk* d_rec, int reps = 5) {
   return best;
 }
 
-// Dynamic shared memory that keeps a second block off an SM (sm_120 and sm_89: 100 KB a SM; sm_100: 228 KB).
-#if TK_SM == 100
+// Dynamic shared memory that keeps a second block off an SM (sm_120 and sm_89: 100 KB a SM; sm_100 and sm_90: 228 KB).
+#if TK_SM == 100 || TK_SM == 90
 constexpr int ONE_BLOCK_SMEM = 120 * 1024;
 #else
 constexpr int ONE_BLOCK_SMEM = 60 * 1024;
@@ -626,7 +636,9 @@ __device__ __forceinline__ uint32_t fold_acc(typename F::Acc (*d)[4]) {
 }
 
 // A lane op alone at 8 warps a SMSP (ISSUE's saturation geometry): tensor_kinds.py gates on LANE_MIX issuing at ~1
-// a SMSP-cycle, so the mixed points sit on the issue facet rather than on a pipe's own rate.
+// a SMSP-cycle, so the mixed points sit on the issue facet rather than on a pipe's own rate. It ends with CLK_END_CYC:
+// CLK_END's role stores make sm_120a's ptxas schedule the LANE_MIX loop as runs of up to four IADD3 or FFMA, which
+// issue below one a SMSP-cycle; without them the loop alternates as the source does (tensor_kinds.py checks the order).
 template <int X>
 __global__ void __launch_bounds__(1024) k_opalone(int iters, uint32_t* sink, BlockClk* rec) {
   Lane r;
@@ -637,7 +649,7 @@ __global__ void __launch_bounds__(1024) k_opalone(int iters, uint32_t* sink, Blo
 #pragma unroll
     for (int q = 0; q < 64; q++) lane_op<X>(r, q);
   }
-  CLK_END(rec)
+  CLK_END_CYC(rec)
   sink[blockIdx.x * blockDim.x + threadIdx.x] = threadIdx.x + consume(r);
 }
 
@@ -832,6 +844,7 @@ static void setup() {
   CK(cudaDeviceGetAttribute(&g_sms, cudaDevAttrMultiProcessorCount, d));
   CK(cudaMalloc(&g_sink, (size_t)g_sms * 1024 * 4));
   CK(cudaMalloc(&g_rec, (size_t)g_sms * sizeof(BlockClk)));
+  CK(cudaMemset(g_rec, 0, (size_t)g_sms * sizeof(BlockClk)));
 }
 
 #ifndef TENSOR_KINDS_NO_MAIN
@@ -910,6 +923,34 @@ int main() {
   form<QmmaE4m3k32>();
   form<QmmaE4m3k16F32>();
   form<QmmaSpE4m3k64Ada>();
+  form<ImmaS8k32>();
+#endif
+#elif TK_SM == 90
+  // H200, H100: the int8 and f16/bf16 mma.sync forms ptxas lowers to one IMMA or HMMA each on sm_90a. Its FP8 forms
+  // unpack to f16 for HMMA, and s4 and b1 xor run as two s8 IMMAs and two BMMA ANDs: none is a form of its own.
+  // Group 0 is int8, the reference first and last; group 1 f16/bf16, the reference last.
+#if TK_IN(0)
+  opalone<LANE_IADD3>("iadd3");
+  opalone<LANE_FFMA>("ffma");
+  opalone<LANE_MIX>("iadd3_ffma");
+  form<ImmaS8k32>();
+  form<ImmaU8S8k32>();
+  form<ImmaS8k32Sat>();
+  form<ImmaS8k16>();
+  form<ImmaS8m8k16>();
+  form<ImmaSpS8k32>();
+  form<ImmaSpS8k64>();
+  form<ImmaS8k32>();
+#endif
+#if TK_IN(1)
+  form<HmmaF16k16F32>();
+  form<HmmaF16k16F16>();
+  form<HmmaBf16k16F32>();
+  form<HmmaF16k8F32>();
+  form<HmmaF16k8F16>();
+  form<HmmaBf16k8F32>();
+  form<HmmaSpF16k16>();
+  form<HmmaSpF16k32>();
   form<ImmaS8k32>();
 #endif
 #else

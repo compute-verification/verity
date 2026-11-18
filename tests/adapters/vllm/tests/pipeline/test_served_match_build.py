@@ -129,8 +129,8 @@ def test_a_process_that_was_not_given_its_own_compile_dirs_is_refused_before_the
 
 def test_a_device_that_is_not_registered_is_refused_before_the_build(process, tmp_path):
     _graph(tmp_path)
-    with pytest.raises(Unmodelled, match="NVIDIA H100"):
-        sm.build_here(_Source(), _facts(tmp_path, device="NVIDIA H100 80GB HBM3"), SCHEDULE, 3, str(tmp_path / "out"))
+    with pytest.raises(Unmodelled, match="NVIDIA L40S"):
+        sm.build_here(_Source(), _facts(tmp_path, device="NVIDIA L40S"), SCHEDULE, 3, str(tmp_path / "out"))
     assert process == []
 
 

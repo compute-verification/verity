@@ -47,6 +47,7 @@ def device_dump(path, s: F.PearlC4, swap_leaves=False, flip_root_a=False) -> Non
                  prover.weight_roots[9], b"".join(leaves[::-1] if swap_leaves else leaves))
 
 
+@pytest.mark.slow
 def test_replay_accepts_the_device_transcript(tmp_path):
     s = V.scheme("nvfp4", True)
     device_dump(tmp_path, s)

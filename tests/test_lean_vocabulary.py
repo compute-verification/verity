@@ -695,14 +695,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/pouw/pearl_c_vllm/e2e.py::Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
     "benchmarks/pouw/proved_ticks.py::Sheet": "homonym, a family's priced headline design: rename (compute-accounting)",
-    "benchmarks/pouw/served_h1/coins.py::Coins":
-        "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/served_h1/coins.py::Session":
-        "homonym, the old word for a run, here a gate session: rename (compute-accounting)",
-    "benchmarks/pouw/served_h1/partials.py::Window":
-        "duplicate of the execution block (no canonical yet): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/served_h1/serve.py::Record":
-        "homonym, a served request's benchmark result: rename (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/of_record.py::Record":
         "homonym, a check's two verdicts side by side: rename (compute-accounting)",
     "benchmarks/pouw/served_zk/replay_window.py::Window":

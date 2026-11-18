@@ -14,9 +14,10 @@ import sys
 from verity_bench.cli import main
 
 #: the metrics `benchmarks/harness/metrics.toml` holds this benchmark to, by id: each the served table's row at
-#: ``SPEC/POINT``
+#: ``SPEC/POINT``; one that names a member's row has its members' readings only
 METRICS = {"benchmarks/served-overhead-commit": "llama31-8b-fp8-1gpu-commit-served-width-h200/b32-p512-mixed",
-           "benchmarks/served-overhead-pous-bandwidth-audit": "llama31-8b-fp8-1gpu-bandwidth-served-r6/b32-p512-mixed"}
+           "benchmarks/served-overhead-pous-bandwidth-audit": "llama31-8b-fp8-1gpu-bandwidth-served-r6/b32-p512-mixed",
+           "benchmarks/served-overhead-pouw": "llama32-1b-1gpu-pouw-protocol-served-h100/b32-p512-mixed"}
 
 if __name__ == "__main__":
     sys.exit(main(["served-table", *sys.argv[1:]], metrics=METRICS))

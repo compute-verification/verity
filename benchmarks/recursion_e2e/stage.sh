@@ -10,7 +10,8 @@
 #     taskset -c 0-31 bash benchmarks/recursion_e2e/stage.sh SUBCIRCUIT=silu-mul-v2/i8192/bf16 N=3 GPU=0 \
 #     FLOCK_WORK=/workspace/cache/rec-bench STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,negative
 # env: SUBCIRCUIT (a census-style id)  N=3 (seeded inputs; WINDOW: the member's own n)  SEED (rec_inner.py's)
-#      WINDOW=DIR MEMBER=0  FLOCK_WORK=/workspace/jobs/rec-bench  TAG=rb-<run id>
+#      WINDOW=DIR MEMBER=0  UNITS=A-B,C (WINDOW: those instances alone, committed again: not the member's statement)
+#      FLOCK_WORK=/workspace/jobs/rec-bench  TAG=rb-<run id>
 #      SERVE_RUN=DIR SERVE_WINDOW=0 (with WINDOW: the window's run root must be the one DIR/windows.jsonl published for it)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
@@ -40,7 +41,7 @@ sys.exit(0 if ok else 1)' "$WINDOW" "$SERVE_RUN" "${SERVE_WINDOW:-0}" | tee "$O/
   fi
   /usr/bin/time -v -o "$O/time-stage.txt" $PY verity/protocols/proofs/flock/prover/pod/rec_inner.py stage-window --window "$WINDOW" \
     --member "${MEMBER:-0}" --subcircuit "$SUBCIRCUIT" --sets "$S/sets" --out "$DD/stage" --zk-out "$DD/stage-zk" \
-    > "$O/stage.json" 2> "$O/stage.err" || { tail -20 "$O/stage.err"; exit 1; }
+    ${UNITS:+--units "$UNITS"} > "$O/stage.json" 2> "$O/stage.err" || { tail -20 "$O/stage.err"; exit 1; }
 else
   N=${N:-3}
   for d in stage stage-zk; do

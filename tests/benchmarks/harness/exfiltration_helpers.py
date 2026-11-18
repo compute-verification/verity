@@ -90,9 +90,9 @@ class Store:
         return LocalStore(self.tmp / name, config_path=self.config)
 
     def ran(self, run: str, rows: list[dict] | Mapping[str, list[dict] | str] | None, *, plan: dict | None = None,
-            name: str = E.ROWS_FILES[0]) -> str:
+            name: str = E.ROWS_FILES[0], env: dict | None = None) -> str:
         """A run's attempt on the remote, its run record holding `rows` as the planner's rows, in the file `name` or
-        by file (a file's rows, or its text), and `plan` as its plan (neither: it kept no files)."""
+        by file (a file's rows, or its text), and `plan` as its plan (neither: it kept no files); `env` its `--env`."""
 
         from research.store import canon
 
@@ -110,7 +110,8 @@ class Store:
             self.store.push(record)
         attempt = {
             "schema": "research/attempt/v0.1", "id": run, "tool": {"name": "bash", "version": None},
-            "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": {}, "key_params": [], "inputs": {},
+            "derivation": "drv:" + "0" * 64, "reuse_key": None, "argv": [], "params": {"env": env} if env else {},
+            "key_params": [], "inputs": {},
             "conditions": {}, "key_conditions": [], "source": {"commit": "c" * 40, "dirty": False}, "closure": None,
             "execution": {"start_utc": f"{run[1:5]}-{run[5:7]}-{run[7:9]}T00:00:00Z"}, "cost": None,
             "status": {"state": "done", "rc": 0, "validation": None},

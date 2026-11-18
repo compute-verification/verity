@@ -1,4 +1,4 @@
-# The tensor-core wide-word codec's benchmark and its tests. Not a package: `wt.cu` and `bench.py` run on a GPU node,
+# The tensor-core wide-word codec's benchmark and its tests. Not a package: `wt.cu` and `run.py` run on a GPU node,
 # and the byte-exact reference with the kernel's tensor-core decomposition and lane-by-lane carries (`wide.py`)
 # run here as a suite (`uv run tools/check/suites.py benchmarks/codec_tensor`), on PoUB's
 # codec (`wide.py`'s field, keys and rounds).
@@ -27,4 +27,8 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/
           "verity/protocols/proofs/spot/verifier/challenger/challenger.py", "verity/protocols/proofs/spot/verifier/challenger/remote.py",
           "verity/commitments/crypto",
           "verity/circuits", "verity/commitments", "verity/commitments/randomness",
-          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "benchmarks/codec_tensor"]
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "benchmarks/codec_tensor",
+          # test_run writes run.py's result through the harness's kit
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
+          "tools/config/verity_config"]

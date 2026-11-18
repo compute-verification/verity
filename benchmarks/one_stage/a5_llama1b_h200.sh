@@ -118,7 +118,7 @@ fi
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   uv sync --all-packages --extra torch-cpu || exit 5
-  (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) || exit 7
+  (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server flock-read-tmpl) || exit 7
   (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier spot-difftest spot-one-stage-zk) || exit 7
   RESEARCH_RUN_DIR=$OUT/prebuild FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || exit 6
 ) > "$OUT/prebuild.log" 2>&1 &

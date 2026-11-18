@@ -5,7 +5,9 @@ proof-block boundary of a partition of the program and registers the commitment 
 on the auditor's challenger's coins, the developer proves the sampled proof blocks, and the verifier checks the proofs. It never runs any part
 of the computation. An accepted audit yields an integrity profile (`verity.protocols.proofs.spot.verifier.profile.IntegrityProfile`): except with
 probability δ, at most so many proof blocks are incorrect, a proof block being incorrect when its committed outputs differ from its gates
-applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
+applied to its committed inputs. On a served run, that holds of each sampled block on its own inputs; the wires between
+blocks are not held, a limit that stands until the registered circuit carries its wires as edges.
+The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
 SPOT (`verity/sampled-proofs/v1`) is a protocol of both configurations: remote (`verity/remote/v1`,

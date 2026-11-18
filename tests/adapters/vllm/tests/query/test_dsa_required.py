@@ -10,25 +10,24 @@ each step closed by an `o_proj` reading the W_UV product and a sampling event:
   ports the source declares."""
 from __future__ import annotations
 
-from verity_vllm.pipeline import manifest as M
-from verity_vllm.query.manifest import format as MF
-
 import copy
 import json
 from collections import defaultdict
 
 import pytest
-from verity_vllm.definitions.registry import hopper
+from verity_torch.frontend.emit import NAMESPACE
 
 from tests.acquire.glm53_model import CMAP, ENV
 from tests.program import test_dsa_derive as T
 from verity_vllm.acquire.sources import attention_source as AS
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_torch.frontend.emit import NAMESPACE
+from verity_vllm.definitions.registry import hopper
+from verity_vllm.pipeline import manifest as M
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.frontend.rules.vocab import PROFILES
+from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, Port, ProgramView, from_instances
 from verity_vllm.query.required import Population, request_manifest

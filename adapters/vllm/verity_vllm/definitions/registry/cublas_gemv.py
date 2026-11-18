@@ -22,6 +22,7 @@ from verity.circuits.ops import fp32 as W
 from verity.circuits.ops import prims as P
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.definitions.registry import ll_bf16 as LL
 

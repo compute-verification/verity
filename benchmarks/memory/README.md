@@ -23,10 +23,12 @@ what the session ran with. `verity bench memory --help` lists its other ways in.
 ## What you need
 
 - **[uv](https://docs.astral.sh/uv/getting-started/installation/)**, which runs every command here.
-- **A Linux machine with one NVIDIA H200 or RTX PRO 6000 Blackwell.** These are the cards the tree has a data sheet
-  (`calibration/hardware/nodes/`) for, and the share is of the card's own sheet. An H100 has none, so `--local` prints no number
-  there, saying so, before it starts anything. Another card needs a data sheet (named with `LOCAL_NODE`), and a result
-  against a sheet that is not `main`'s is not comparable.
+- **A Linux machine with an NVIDIA GPU whose card file (`calibration/hardware/cards/`) lists the name nvidia-smi
+  gives it in `driver`.** The share is of the card's node file (`calibration/hardware/nodes/`), the one whose
+  `device.sku` is that card (`LOCAL_NODE` names another): an H200 or an RTX PRO 6000 Blackwell today. On a card with
+  a card file and no node file, such as an H100, the session runs and prints no share, since the node's read rate
+  holds its host's and no host of it is on record. A card with no card file is refused before anything starts, and a
+  result against a sheet that is not `main`'s is not comparable.
 - **A vLLM environment, `VLLM_PY`:** a Python with vLLM installed (`uv venv V && uv pip install --python V/bin/python
   vllm`). Without it `--local` runs nothing and says how to make one. It serves the checkpoint and fetches it:
   `unsloth/Llama-3.2-1B` at the revision core's pin names
@@ -109,7 +111,8 @@ card's share at its own sheet has no target; the goal's 0.14 at an error of at m
 and the benchmark result to `DIR/result.json`, its metric `memory-accounting/one-machine-read-rate-uncertified` (`metrics.toml`)
 beside the bytes and the error, and two metrics of their own from the session's calibration as the prover reports it:
 `memory-accounting/one-card-pass-time`, the median pass in ms, and `memory-accounting/one-card-bare-read-rate`, the
-bare read of the card's memory in TB a second, each point's `member` its model and card (`llama-3.2-1b-h200`).
+bare read of the card's memory in TB a second, each point's `member` its model and the `short` of the card record
+holding nvidia-smi's name for the card (`llama-3.2-1b-h200`); a card no record names writes neither, and says why.
 The session's records (the verifier's `verifier.json`, every process's log) go to a new
 directory under `LOCAL_WORK/runs/`, which stderr names; `verity bench memory --from DIR` reads it again with nothing of
 ours. The two reference numbers printed beside a node's number are runs in our evidence store, so `--local` prints

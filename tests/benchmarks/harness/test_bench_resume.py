@@ -39,8 +39,9 @@ def _repo(tmp_path):
     return repo, subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
 
 
-def _attempt(run, identity, repo, *, validation="passed", rc=0, dirty=False, tree=None, tool="vllm_bench_point"):
-    """An attempt as `research run` records it from `repo` (from another commit's `tree`, or another `tool`)."""
+def _attempt(run, identity, repo, *, validation="passed", rc=0, dirty=False, tree=None, tool="vllm_bench_point", run_env=None):
+    """An attempt as `research run` records it from `repo` (from another commit's `tree`, or another `tool`; `run_env` its
+    `--env`)."""
 
     from research import env
     from research.store import derivation
@@ -48,7 +49,8 @@ def _attempt(run, identity, repo, *, validation="passed", rc=0, dirty=False, tre
     source = {**env.source_identity(env.source_conditions(repo)), **({"tree": tree} if tree else {}), "dirty": dirty}
     drv = derivation.derivation_id({"name": tool, "version": "0"}, {}, {"identity": identity}, {}, ["hw.gpu.family"])
     return {"schema": "research/attempt/v0.1", "id": run, "tool": {"name": tool, "version": "0"}, "derivation": drv,
-            "reuse_key": derivation.reuse_key(drv, source), "argv": [], "params": {"identity": identity}, "inputs": {},
+            "reuse_key": derivation.reuse_key(drv, source), "argv": [],
+            "params": {"identity": identity, **({"env": run_env} if run_env else {})}, "inputs": {},
             "key_params": ["identity"], "conditions": {}, "key_conditions": [], "source": source, "closure": None,
             "execution": {"start_utc": f"{run[1:5]}-{run[5:7]}-{run[7:9]}T{run[10:12]}:{run[12:14]}:{run[14:16]}Z"},
             "cost": None, "status": {"state": "done", "rc": rc, "validation": validation}, "outputs": {}, "telemetry": None}
@@ -78,6 +80,21 @@ def test_resume_counts_only_a_clean_exited_passing_run_of_the_same_identity_and_
     identity = jobs.point_identity(spec.config_sha256, pins, point)
     assert identity != jobs.point_identity(spec.config_sha256, replace(pins, vllm_pin="0" * 40), point)
     assert identity != jobs.point_identity("0" * 64, pins, point)
+
+
+def test_a_trial_is_never_a_points_passing_run_and_a_trial_launch_says_so(tmp_path, monkeypatch):
+    from research.store.local import LocalStore
+
+    (repo, commit), ident = _repo(tmp_path), "f" * 64
+    store, config = _stores(tmp_path, [_attempt("r20261021-130000-0001", ident, repo),
+                                       _attempt("r20261021-140000-0002", ident, repo, run_env={"VERITY_BENCH_TRIAL": "1"})])
+    assert jobs.StoreCompletion(LocalStore(store, config_path=config), root=repo)(ident, commit) == "r20261021-130000-0001"
+    spec = resolve_spec("llama31-8b-fp8-1gpu")
+    monkeypatch.delenv("VERITY_BENCH_TRIAL", raising=False)
+    assert "VERITY_BENCH_TRIAL=1" not in jobs._env_flags(spec)
+    monkeypatch.setenv("VERITY_BENCH_TRIAL", "1")
+    flags = jobs._env_flags(spec)
+    assert flags[flags.index("VERITY_BENCH_TRIAL=1") - 1] == "--env"
 
 
 def _stores(tmp_path, remote_attempts):
@@ -126,6 +143,36 @@ def test_a_point_another_machine_ran_counts_and_an_absent_point_stays_missing(tm
     assert again(found, commit) == "r20261021-130000-0001" and len(logged) == 1, "a local hit reads no remote"
     assert again(absent, commit) == "r20261021-160000-0005"
     assert logged[-1].startswith("pulled 1 attempts") and logged[-1].endswith("(3 of 4 were here)")
+
+
+def test_a_kept_store_pulls_only_the_labels_written_since_and_the_log_times_the_pull(tmp_path):
+    """A node keeps its store between runs: the next pull lists the remote again, so a label written since the last one
+    is pulled and nothing else is; each pull's start and end are stamped, with the listing's and the sync's seconds."""
+
+    from research.store.local import LocalStore
+
+    root, config = _stores(tmp_path, [])
+    producer = LocalStore(tmp_path / "producer", config_path=config)
+    for n in range(3):
+        producer.add_label(f"r20261021-13000{n}-000{n}", "note", f"n{n}", by="benchmarks", ts="2026-10-21T13:00:00Z")
+        producer.push_labels([f"r20261021-13000{n}-000{n}"])
+    ticks = iter([1_794_960_000.0, 1_794_960_090.0, 1_794_960_150.0, 1_794_960_300.0, 1_794_960_301.0, 1_794_960_302.0])
+    logged = []
+    lookup = jobs.StoreCompletion(LocalStore(root, config_path=config), root=tmp_path, log=logged.append,
+                                  clock=lambda: next(ticks))
+    remote = lookup.store.remote.describe()
+    assert lookup.pull_labels() == 3
+    producer.add_label("r20261021-130000-0000", "superseded_by", "r20261021-130001-0001", by="benchmarks",
+                       ts="2026-10-21T14:00:00Z")
+    producer.push_labels(["r20261021-130000-0000"])
+    assert lookup.pull_labels() == 1
+    assert [label.value for label in lookup.store.labels("r20261021-130000-0000")] == ["n0", "r20261021-130001-0001"]
+    assert logged == [f"2026-11-18T00:00:00Z pulling labels from {remote} into {root}",
+                      f"2026-11-18T00:02:30Z pulled 3 labels from {remote} (0 of 3 were here, 0 of them from the labels "
+                      "pack): listed in 90 s, synced in 60 s",
+                      f"2026-11-18T00:05:00Z pulling labels from {remote} into {root}",
+                      f"2026-11-18T00:05:02Z pulled 1 labels from {remote} (3 of 4 were here, 0 of them from the labels "
+                      "pack): listed in 1 s, synced in 1 s"]
 
 
 def test_without_a_remote_the_lookup_refuses_unless_told_to_read_the_catalog_alone(tmp_path):

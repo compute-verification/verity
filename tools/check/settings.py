@@ -80,6 +80,10 @@ SETTINGS: dict[str, Setting] = _declare(
     S("CHECK_RUN_MEM_GB", str, None, WHERE, "the memory a `research run --mem-gb` run asks of a slot (research's cli sets it), "
       "or a train check's shard (`check.py --record --priority`, `shard_ask_gib`): slot.py raises each slot's mem= to it and "
       "books the larger of it and the line's book=", "placement: which slot a run waits for and what it books"),
+    S("CHECK_RUN_BOOK_GB", str, "", WHERE, "the GiB a run books of a whole slot's mem=, as the line's book= would, never more "
+      "than the line books (research's `queue.QUICK_ASK` sets it for a quick tier)", "placement: what a run books"),
+    S("CHECK_RUN_CORES", str, "", WHERE, "the cores a run needs: slot.py takes the slot of the fewest cores with at least that "
+      "many (research's `queue.QUICK_ASK` sets it for a quick tier)", "placement: which slot a run waits for"),
     S("CHECK_SCOPE_UNIT", str, None, WHERE, "the check's own systemd scope, which slot.py sets on a scope=1 slot: the spans read "
       "its memory (`spans.check_memory`)", "telemetry: the memory a check took"),
     S("CHECK_SLOT", str, None, WHERE, "the check slot this process holds (slot.py sets it for CMD)", "placement: the slot held"),
@@ -90,8 +94,9 @@ SETTINGS: dict[str, Setting] = _declare(
     S("CHECK_SLOT_BOOK_GB", str, "", WHERE, "the GB the check slot books for the run it holds (slot.py sets it, `booked`): "
       "no grant of CHECK_SLOT_MEM_GB passes it (`check.slot_mem_gb`)", "it sizes how much runs at once, never what a step "
       "computes"),
-    S("CHECK_SLOT_RANK", str, "", WHERE, "the rank `slot.py --rank` orders priority waiters by: the verified queue's checks "
-      "of a candidate and its records run's (`research.landing.AFTER_LANDING_SLOT_RANK`), none for a hand `train.sh`", "placement: "
+    S("CHECK_SLOT_RANK", str, "", WHERE, "the rank `slot.py --rank` orders priority waiters by: the verified queue's records "
+      "run's (`research.landing.AFTER_LANDING_SLOT_RANK`) and a candidate's check's (`research.landing.CHECK_SLOT_RANK`), none "
+      "for a hand `train.sh`", "placement: "
       "the order the verified queue's checks take slots in"),
     S("CHECK_STORE_CUSTODY", str, None, WHERE, "the recording run's custody dir, which check gives its steps in place of the "
       "RESEARCH_* that named the store (`store_io`)", "where the store's key is, not what a step computes"),

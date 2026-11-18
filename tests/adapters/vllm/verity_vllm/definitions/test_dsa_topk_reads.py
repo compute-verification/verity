@@ -26,8 +26,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-
-from verity_config import verity_settings as settings
 from verity.circuits import evaluation as E
 from verity.circuits.boolean.trace import Traced, trace
 from verity.circuits.defs import bind
@@ -37,12 +35,14 @@ from verity.commitments import row_table as RT
 from verity.commitments.gates import embedding as EM
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.periods import interface as IF
 from verity.commitments.rowleaf import bit_row
+from verity_config import verity_settings as settings
+
 from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
 from verity_vllm.definitions.registry import dsa_topk_mask as M
 from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
 from verity_vllm.definitions.registry import dsa_topk_reads as R
-from verity.commitments.periods import interface as IF
 
 SERVED_TOPK, SERVED_V, SERVED_H = 2048, 1 << 17, 576
 #: the score of a key past a row's own in today's long row (vllm_dsa's PAD_SCORE)

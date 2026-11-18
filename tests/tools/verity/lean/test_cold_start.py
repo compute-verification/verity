@@ -72,8 +72,10 @@ def test_the_lean_check_builds_and_audits_a_package_in_a_fresh_tree(tmp_path, mo
         if k.startswith(("AWS_", "R2_", "RESEARCH_", "VERITY_", "PYTEST_")) or k in ("VIRTUAL_ENV", "PYTHONPATH"):
             monkeypatch.delenv(k)
     env = Names(remote._runner_env({"tool": str(tool)}, tmp_path / "root" / "runs", str(tree), {"source_sha": tree.name}))
-    # no node's slot policy (whether its slots list an audit pool, how long they're held) decides a one-package build here
-    env.update(XDG_CACHE_HOME=str(tmp_path / "cache"), LEAN_SLOTS=str(tmp_path / "no-lean-slots"))
+    # no node's slot policy (whether its slots list an audit pool, how long they're held) or artifact cache decides a
+    # one-package build here
+    env.update(XDG_CACHE_HOME=str(tmp_path / "cache"), LEAN_SLOTS=str(tmp_path / "no-lean-slots"),
+               CHECK_CACHE=str(tmp_path / "check-cache"))
     p = subprocess.run(["python3", "tools/verity/lean/check.py", "--build", "--out", str(tmp_path / "out"), PKG], cwd=tree, env=env,
                        capture_output=True, text=True)
     shown = "\n".join((p.stdout + p.stderr).splitlines()[-30:])

@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from verity_bench import kit
 from verity_bench.exfiltration_common import (
     BASIS_SOURCES,
     CASE_KEYS,
@@ -41,11 +42,13 @@ def _label(key: str = RUN_OF_RECORD, value: str = RECORD) -> str:
 
 def _run_files(store: Any, run: str, names: Sequence[str]) -> tuple[Path | None, list[str], str | None]:
     """Where the files ``names`` of a run's files that it holds are fetched to, and which it holds; or why it has none:
-    the run is not in the store, or kept no run files."""
+    the run is not in the store, is a trial (`kit.trial_why`), or kept no run files."""
 
     attempt = store.get_attempt(run)
     if attempt is None:
         return None, [], "not in the store or on its remote"
+    if why := kit.trial_why(run, attempt):
+        return None, [], why
     out = attempt.get("outputs") or {}
     files = out.get("run_files") or out.get("run_record")
     if not files:

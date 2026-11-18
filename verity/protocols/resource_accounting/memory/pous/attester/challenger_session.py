@@ -274,9 +274,10 @@ def placement(node: str, host: str, key_sha512: str | None = None, *, pins: Sequ
               verifier: str | None = None) -> dict[str, Any]:
     """Which host ran each party, what those names say (`kind`: ``own-host``, a challenger host other than the node, or
     ``prover-node``), and `trusted-device`'s premise, `memory_attester.trusted_device`'s for the session's key: the
-    names are the run's own, so they bound nothing, and the premise holds only for `key_sha512`, the SHA-512 of the key
-    the session was signed under, when the configuration whose hash is `configuration`, one of `committed`, pins it
-    for the challenger's PoUS sessions (`pins`, its `[[pin]]` entries); and `SETUP` under ``setup``."""
+    names are the run's own, so they bound nothing, and the premise never holds here: for `key_sha512`, the SHA-512 of
+    the key the session was signed under, when the configuration whose hash is `configuration`, one of `committed`,
+    pins it for the challenger's PoUS sessions (`pins`, its `[[pin]]` entries), it reads `memory_attester.MATCHED`;
+    and `SETUP` under ``setup``."""
     kind = "own-host" if host != node else "prover-node"
     names = (f"the memory attester ran on {host}, not the prover's {node}" if kind == "own-host" else
              f"the memory attester ran on the prover's node {node}")

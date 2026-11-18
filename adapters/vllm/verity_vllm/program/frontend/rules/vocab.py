@@ -8,6 +8,14 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from verity.circuits.defs import bind as ir_bind
+from verity_torch import dsa_table as _dsa_table
+from verity_torch.frontend.rules.vocab import (
+    PROFILES,
+    REFERENCE_CPU_F32,
+    Vocabulary,
+    vocabulary_for,
+)
+
 from verity_vllm.definitions.registry import act as _act
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import b1_tp2 as TP2
@@ -30,7 +38,9 @@ from verity_vllm.definitions.registry import flashmla as _flashmla
 from verity_vllm.definitions.registry import flashmla_dsv32 as _flashmla_dsv32
 from verity_vllm.definitions.registry import flashmla_prefill as _flashmla_prefill
 from verity_vllm.definitions.registry import fp8 as _fp8
-from verity_vllm.definitions.registry import fp8_ds_mla_upconvert as _fp8_ds_mla_upconvert
+from verity_vllm.definitions.registry import (
+    fp8_ds_mla_upconvert as _fp8_ds_mla_upconvert,
+)
 from verity_vllm.definitions.registry import fp8_moe as _fm
 from verity_vllm.definitions.registry import fp8_moe_experts as _x
 from verity_vllm.definitions.registry import fp8_vocab as _fp8_vocab
@@ -52,10 +62,7 @@ from verity_vllm.definitions.registry import (
 from verity_vllm.definitions.registry import tp_allreduce as _tp_allreduce
 from verity_vllm.definitions.registry import value_inputs as _vi
 from verity_vllm.definitions.registry.dsv4_decode_indices import gather_i32
-
-from verity_torch import dsa_table as _dsa_table
 from verity_vllm.program.frontend import targets as _targets
-from verity_torch.frontend.rules.vocab import PROFILES, REFERENCE_CPU_F32, Vocabulary, vocabulary_for
 
 
 def _int8():
