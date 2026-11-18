@@ -65,6 +65,12 @@ takes the chain over its appends when the pass is launched (`audit_prover.Store.
 sent, never dropped at a boundary, since a coin no root follows rejects the session; one dropped before its appends
 went out sends nothing, and the next pass sends its appends and changes too.
 
+Under refresh (the session message's `refresh`, absent off), a kv or kvdrop session over the reference backend, without
+serving ahead, re-keys on the rota (`audit_prover.Refresh`): the trace's step at a window's first pass sends that
+window's due re-keys, each append message naming its `origin`, before its pages; a page's own coin encodes nothing,
+its first encode its first re-key's; and each pass's plan is the rota's for its window, every opening of a re-key's
+block naming its origin's position.
+
 Every root's message names the step its pass covers (`AuditRun.receive(..., step=...)`, the verifier's `memory_map`,
 "Passes and steps"): with serving ahead, the step the pass took; otherwise the backend's `step_of(ticket)` if it has one, which
 a serving backend takes from its engine, and else the count of the session's passes launched before it. A serving
@@ -105,6 +111,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(Path(__file__).resolve().parents[7]))
 
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.prover.rota import Rota  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, memory_map, receipts as rb  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
@@ -162,6 +169,11 @@ def parse_plan(plan: str) -> list[tuple[str, float]]:
 def payload(rng: random.Random) -> bytes:
     """A random payload block whose last word is below any codec's p."""
     return rng.randbytes(rcodec.BLOCK_BYTES - 16) + bytes(16)
+
+
+def origin_json(origin) -> dict:
+    """A re-key's origin as the append message names it: {"registered": a} or {"append": k, "at": o}."""
+    return {"registered": origin[1]} if origin[0] == "registered" else {"append": origin[1], "at": origin[2]}
 
 
 def runs_of(blocks) -> tuple[tuple[int, int], ...]:
@@ -332,7 +344,7 @@ class ServingTrace:
     (`ahead`, an `Ahead`), `run` is serving on its own thread and `take` the session's half at each pass."""
 
     def __init__(self, backend, registration: audit.Registration, pages: int, pool: int, rng: random.Random,
-                 lifetime: int, headroom: int = 0) -> None:
+                 lifetime: int, headroom: int = 0, refresh: audit_prover.Refresh | None = None) -> None:
         N = registration.blocks
         pool = max(1, min(pool, N))
         self.slots = list(range(N - pool, N)) + list(range(N, N + max(1, pool // 4)))
@@ -353,6 +365,11 @@ class ServingTrace:
         self.released: list[int] = []
         self.withdrawn: list[int] = []
         self.appended: list[int] = []
+        self.refresh, self.rekeyed_to, self.slot_of = refresh, -1, {}
+
+    def rekeys_due(self, window: int) -> bool:
+        """Under refresh, whether `window`'s re-keys are still to be made."""
+        return window > self.rekeyed_to and bool(self.refresh.due(window))
 
     def stale(self, window: int) -> list[int]:
         """The slots holding a block written `lifetime` windows or more before `window`, by its index."""
@@ -399,6 +416,8 @@ class ServingTrace:
         """Step s's record, the session's, in `window`: serving's frees and writes, then (if `rekey`) the re-keys of the
         blocks stale in `window`, at the store's next fresh indices, appended to the backend's store and placed in
         their slots; None for a step that changes nothing."""
+        if self.refresh is not None:
+            return self._refreshed(s, window, freed, writes)
         slots, payloads = [x for x, _ in writes], [m for _, m in writes]
         rekey = [x for x in self.stale(window) if x not in slots and x not in freed] if rekey else []
         if not (freed or slots or rekey):
@@ -426,6 +445,50 @@ class ServingTrace:
         self.live.difference_update(gone)
         return change
 
+    def _refreshed(self, s: int, window: int, freed, writes) -> memory_map.Change | None:
+        """Step s's record under refresh: serving's frees and writes, its pages committed and never encoded under
+        their own append's coin, and at the window's first step its due re-keys (`audit_prover.Refresh.due`) of the
+        chunks still kept, each in its chunk's slot and recorded as the line's `rekeyed`."""
+        r, store = self.refresh, self.backend.store
+        slots, payloads = [x for x, _ in writes], [m for _, m in writes]
+        for x in [*freed, *slots]:
+            if (j := self.replay.holds(x)) is not None:
+                p = self.replay.origin.get(j, j)
+                r.held.pop(p, None)
+                self.slot_of.pop(p, None)
+        due = r.due(window) if window > self.rekeyed_to else ()
+        self.rekeyed_to = max(self.rekeyed_to, window)
+        if not (freed or slots or due):
+            return None
+        self.steps += bool(slots)
+        place = getattr(self.backend, "place", lambda first, slots, step: None)
+        rekeys, rekeyed = [], []
+        for origin, count in due:
+            a = self.backend.rekey(origin, count)
+            at = [self.slot_of.get(p, p) for p in (store.origin_position(j) for j in range(a.first, a.first + a.count))]
+            rekeyed += [memory_map.Rekeyed(x, a.first + u) for u, x in enumerate(at)]
+            place(a.first, at, s)
+            r.appended(a, window)
+            rekeys.append(a)
+            self.rekeyed += a.count
+            if a.origin[0] == "append":
+                self.appended.extend(range(a.first, a.first + a.count))
+        first = self.replay.extent + sum(a.count for a in rekeys)
+        written = tuple(memory_map.Written(x, first + u, rcodec.digest(m)) for u, (x, m) in enumerate(zip(slots, payloads)))
+        change = self.replay.apply(memory_map.Step(s, tuple(freed), written, (), tuple(rekeyed)))
+        self.appends.extend(rekeys)
+        if slots:
+            a = self.backend.append(payloads, [self.salts.randbytes(rb.SALT_BYTES) for _ in payloads])
+            if a.first != first or a.digests != change.digests:
+                raise AssertionError("the store's append is not the memory map's")
+            place(a.first, slots, s)
+            r.appended(a, window)
+            self.slot_of.update((a.first + u, x) for u, x in enumerate(slots))
+            self.appends.append(a)
+            self.appended.extend(range(a.first, a.first + a.count))
+        self.released.extend(j for f, c in change.released for j in range(f, f + c))
+        return change
+
     def run(self, ahead: Ahead, every: int, fenced: bool = True) -> None:
         """Serving on its own thread, until the session ends: step s writes pages when s + 1 is a multiple of `every`,
         each write past `ahead`'s free fence unless not `fenced`."""
@@ -446,7 +509,10 @@ class ServingTrace:
             self.record(r, window, *(got or ((), ())), rekey=r == s - 1)
         return s
 
-    def plan(self) -> rb.Plan:
+    def plan(self, window: int | None = None) -> rb.Plan:
+        """Every live block, or under refresh the plan the rota gives `window`, its re-keys encoded before the pass."""
+        if self.refresh is not None:
+            return self.refresh.plan(window, pending=True)
         return rb.Plan(runs_of(sorted(self.live)), self.replay.extent)
 
 
@@ -505,6 +571,9 @@ class CpuBackend:
 
     def append(self, payloads, salts) -> audit_prover.Append:
         return self.store.append(payloads, salts)
+
+    def rekey(self, origin, count: int) -> audit_prover.Append:
+        return self.store.rekey(origin, count)
 
     def place(self, first: int, slots, step: int) -> None:
         """The slots of the blocks step `step` appended from `first`, in order."""
@@ -575,7 +644,8 @@ class CpuBackend:
         for p in positions:
             c, j = p // rb.PER_LEAF, plan.block(p)
             leaf = b"".join(ys[rb.PER_LEAF * c:rb.PER_LEAF * (c + 1)])
-            out.append((self.store.blocks[j], leaf, salts[c], tree.open(c).path, *self.store.committed(j)))
+            out.append((self.store.blocks[j], leaf, salts[c], tree.open(c).path, *self.store.committed(j),
+                        self.store.origin_position(j)))
         return out
 
 
@@ -655,7 +725,8 @@ class ProverSide:
         for j, ((i, items), got) in enumerate(zip(passes, fields)):
             for (k, p), f in zip(items, got):
                 out[k] = audit.Opening(i, p, f[0], f[1], f[2], tuple(f[3]), f[4], tuple(f[5]), b"",
-                                       f[6] if len(f) > 6 else b"")
+                                       f[6] if len(f) > 6 else b"",
+                                       **({} if len(f) < 8 or f[7] is None else {"origin_position": f[7]}))
             fields[j] = None
         del fields
         parts = [out[k:k + OPENINGS_PART] for k in range(0, len(out), OPENINGS_PART)] or [[]]
@@ -719,6 +790,14 @@ class ProverSide:
         N = self.backend.blocks
         getattr(self.backend, "begin_session", lambda: None)()
         trace = serving = None
+        refresh = None
+        if head.get("refresh", False):
+            if mode not in ("kv", "kvdrop") or self.ahead is not None or not hasattr(self.backend, "rekey"):
+                raise ValueError(f"a refresh session re-keys by appends: a kv or kvdrop session over a backend that "
+                                 f"re-keys (--cpu), without --ahead, not {mode}")
+            if type(head.get("lifetime")) is not int:
+                raise ValueError("a refresh session's period is its lifetime cap, which the session message names")
+            refresh = audit_prover.Refresh(self.backend.store, Rota(N, head["lifetime"], W))
         if mode in TRACED:
             if not hasattr(self.backend, "append"):
                 raise ValueError(f"a {mode} session needs a backend that appends blocks after the codec seed (--cpu)")
@@ -726,7 +805,7 @@ class ProverSide:
                 raise ValueError("a kvoverwrite session's serving runs ahead of its passes (ahead=K)")
             trace = ServingTrace(self.backend, self.registration, int(fraction), self.kv_pool,
                                  random.Random(self.rng.getrandbits(64)), head["lifetime"],
-                                 self.kv_headroom)
+                                 self.kv_headroom, refresh)
             if self.ahead is not None:
                 trace.ahead = Ahead(self.ahead, self.fill)
                 serving = threading.Thread(target=trace.run, args=(trace.ahead, self.kv_every, mode != "kvoverwrite"),
@@ -811,13 +890,13 @@ class ProverSide:
                 t, i, after, start = moved(t, i, after, start)
             else:
                 due = n > 0 and n % self.kv_every == 0
-                if due or (n > 0 and trace.stale(t)):
+                if due or (n > 0 and (trace.rekeys_due(t) if trace.refresh is not None else trace.stale(t))):
                     trace.step(n - 1, t, due)
             if mode == "kvdrop":
                 backend.arm(trace.appended)
             elif mode == "servedrop":
                 backend.arm(trace.appended[:int(fraction)])
-            plan = trace.plan()
+            plan = trace.plan(t) if getattr(trace, "refresh", None) is not None else trace.plan()
             ticket = backend.launch(i, after, plan)
             return _Pass(t, i, ticket, clock() if ahead is not None else start,
                          step=step_of(ticket) if step_of is not None and ahead is None else n, plan=plan,
@@ -858,7 +937,10 @@ class ProverSide:
                 return gone
             todo = trace.appends[sent_appends:x.upto[0]]
             for a in todo:
-                self.conn.send({"type": "append", "root": a.root.hex(), "count": a.count})
+                msg = {"type": "append", "root": a.root.hex(), "count": a.count}
+                if a.origin is not None:
+                    msg["origin"] = origin_json(a.origin)
+                self.conn.send(msg)
                 sent_appends, x.flushed = sent_appends + 1, True
             for a in todo:
                 reply = self._appended(pending)
@@ -866,7 +948,9 @@ class ProverSide:
                     return reply
                 if reply["first"] != a.first:
                     raise ValueError(f"the verifier placed the append from block {a.first} at {reply['first']}")
-                backend.encode_append(a.first, bytes.fromhex(reply["coin"]))
+                # Under refresh a page's first encode is its first re-key's, so its own coin encodes nothing.
+                if getattr(trace, "refresh", None) is None or a.origin is not None:
+                    backend.encode_append(a.first, bytes.fromhex(reply["coin"]))
             return None
 
         if serving is not None:

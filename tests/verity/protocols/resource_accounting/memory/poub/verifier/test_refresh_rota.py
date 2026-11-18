@@ -53,19 +53,26 @@ def test_a_registered_block_is_plannable_in_every_window_and_a_fresh_one_from_th
 
 @pytest.mark.parametrize("n, life, w", SHAPES)
 def test_the_due_lists_name_each_rekey_once(n, life, w):
+    """Fresh appends are 2k + 1 among the session's appends (re-keys between them), so the class is the fresh ordinal
+    k mod L, not the append's index."""
     rota = Rota(n, life, w)
-    fresh = {2 * k + 1: k % w for k in range(9)}
+    fresh = [(2 * k + 1, k % w, 1 + 300 * k) for k in range(9)]
     due_reg = {r: rota.registered_due(r) for r in range(w + 2)}
     for j in range(n):
         want = set(rota.rekeys(0, rota.registered_class(j)))
         assert want == {r for r, runs in due_reg.items() for a, count in runs if a <= j < a + count}
         assert all(sum(a <= j < a + count for a, count in runs) <= 1 for runs in due_reg.values())
-    for k, b in fresh.items():
-        want = set(rota.rekeys(b, rota.append_class(k)))
-        assert want == {r for r in range(w + 2) if k in rota.appends_due(r, fresh)}
+    for f, (k, b, count) in enumerate(fresh):
+        want = set(rota.rekeys(b, f % life))
+        for r in range(w + 2):
+            pieces = [(o, m) for kk, o, m in rota.appends_due(r, fresh) if kk == k]
+            assert bool(pieces) == (r in want)
+            if pieces:
+                assert [j for o, m in pieces for j in range(o, o + m)] == list(range(count))
+                assert all(m <= REKEY_MAX for _, m in pieces)
     for r in range(w + 2):
-        assert rota.due(r, fresh) == (*(("registered", a) for a, _ in due_reg[r]),
-                                      *(("append", k) for k in rota.appends_due(r, fresh)))
+        assert rota.due(r, fresh) == (*((("registered", a), m) for a, m in due_reg[r]),
+                                      *((("append", k, o), m) for k, o, m in rota.appends_due(r, fresh)))
 
 
 def test_a_registered_class_is_rekeyed_in_appends_of_at_most_rekey_max_blocks():
