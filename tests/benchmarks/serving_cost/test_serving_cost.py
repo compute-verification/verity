@@ -73,12 +73,12 @@ def lifetime(out: Path, name: str, seconds: float, mode: str | None, decode: tup
         (p / "result.json").write_text(json.dumps({"duration": seconds}))
     (d / "meta.json").write_text(json.dumps({"left_out": 1, "env": {"VERITY_DSA_TOPK": mode} if mode else {},
                                              "server_argv": ["--tensor-parallel-size", "8"]}))
-    steps = [{"kind": "header", "config": {"speculative": {"num_speculative_tokens": 5}}},
-             {"kind": "step", "step": 0, "rows": [["p", 0, 4000]] if prefill else [], "t": 101.0}]
-    steps += [{"kind": "step", "step": i + 1, "rows": [[f"r{j}", start, 6] for j in range(n)], "t": 102.0 + i}
+    steps = [{"kind": "header", "num_speculative_tokens": 5},
+             {"kind": "step", "step": 0, "rows": [[0, 4000]] if prefill else [], "t": 101.0}]
+    steps += [{"kind": "step", "step": i + 1, "rows": [[start, 6] for _ in range(n)], "t": 102.0 + i}
               for i, (n, start) in enumerate(decode)]
     (d / "server").mkdir()
-    with gzip.open(d / "server" / "step_trace.1.jsonl.gz", "wt") as f:
+    with gzip.open(d / "server" / "steps.1.jsonl.gz", "wt") as f:
         f.write("".join(json.dumps(r) + "\n" for r in steps))
 
 

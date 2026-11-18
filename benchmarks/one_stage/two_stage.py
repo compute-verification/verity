@@ -178,10 +178,7 @@ HERE = (Path(__file__).resolve().parent)
 FORMAT = "verity-vllm/two-stage/stage1/v0"
 CHALLENGER = "two_stage.py on the auditor's challenger's coins"
 FIRST_STAGE = "stage1.json"
-#: what round 2 refused every two-stage run by while the form's switch was off (`second_stage.FORM`)
-FORM_REFUSED = "two-stage-form"
-#: what an accepted two-stage outcome says of its form: the verifier accepts it ahead of its proof (`second_stage.FORM`),
-#: and no guarantee is quoted for a two-stage run
+#: what an accepted two-stage outcome says of its form: the verifier accepts it ahead of its proof, and no guarantee is quoted for a two-stage run
 NOT_COVERED = ("the two-stage form is not yet proved: the verifier accepts it ahead of its proof, and no guarantee "
                "covers a two-stage run")
 #: whether the replay block is the class's registered request Definition. It is `boundary_rows`' stand-in (module
@@ -807,7 +804,7 @@ class Replayed:
 
 
 def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, window_root: str | None = None,
-             rids: Mapping[str, str] | None = None, salt_key: bytes | None = None, unlinked: bool = False,
+             rids: Mapping[str, str] | None = None, unlinked: bool = False,
              kept: Path | None = None, clock: Callable[[], float] | None = None,
              tables: Mapping[str, Sequence[str]] | None = None, registered: Mapping[str, Any] | None = None,
              pins: Mapping[str, Mapping[str, Any]] | None = None, tied: Tied | None = None) -> Replayed:
@@ -822,8 +819,8 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     stream's coins committed to the docket's digest. ``c``: the class's commitment, reopened from its files
     (`boundary_rows.reopen`), whose spans say which requests were sampled and what the serve emitted for them, and
     whose salts open the return's rows.
-    ``window_root``: the open root of the challenger session the second stage's coins come from. ``salt_key``: tests
-    only. ``unlinked``: a class round 2 derives no wires from is committed with no link and no wire (`design`).
+    ``window_root``: the open root of the challenger session the second stage's coins come from. ``unlinked``: a class
+    round 2 derives no wires from is committed with no link and no wire (`design`).
     ``kept``: the directory the serve kept the rows and salts of the select's inputs in (`boundary_logits.load`'s),
     for a class whose record commits them: the rows are held to the record's root before anything is committed.
     ``clock``: read before the capture and after the window's files are written, for `Replayed.commit_s`: the
@@ -843,7 +840,7 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     t0 = None if clock is None else clock()
     per, launches = spans_of(c, capture, sample, rids)
     it = IR.interior(per, d.cells, again.docket.digest, sample, row=again.pub["window"], links=d.links,
-                     wires=d.wires, rows=d.rows, served=again.record, window_root=window_root, salt_key=salt_key,
+                     wires=d.wires, rows=d.rows, served=again.record, window_root=window_root,
                      returns=[(x, c.port(x.value)) for x in d.returns if x.held],
                      inputs=[(x, kept_port(c, x.value, kept)) for x in d.inputs], registered=registered, pins=pins)
     record = IR.write(it, directory)
@@ -1127,7 +1124,7 @@ def complete(audits: list[Mapping[str, Any] | None]) -> bool:
     """Whether an accepted outcome on the audit records ``audits`` is complete: Lean's (`second_stage.complete`), and
     False while no entry answers it (it raises its goal), so no outcome here is complete before Lean says so."""
     try:
-        return SS.complete(SS.FORM, REQUEST_DEFINITION, audits)
+        return SS.complete(REQUEST_DEFINITION, audits)
     except NotImplementedError:
         return False
 
@@ -1167,8 +1164,7 @@ def held(s: Mapping[str, Any], r2: Mapping[str, Any] | None, o: Mapping[str, Any
     """Whether an honest second stage held: every check before the sample passed, every session's circuit file is the
     one its template's params name (`pins`, ``files``), every Lean verdict accepted, the sessions' registered reads
     the verifier's own, every negative refused, round 2 ``r2`` accepting the statements, and the stream's outcome ``o``
-    accepted, or refused by round 2's two-stage form alone (`FORM_REFUSED`, where `second_stage.FORM` is off): the
-    interior's audit record failing no check but round 2's, by that code at most, and the replay sample's none. A
+    accepted. A
     run whose interior docket registers a value a replay block's input may not read (`INPUTS_REFUSED`, in
     ``r2``'s codes or the outcome's) never held, whatever else it reports: its sessions proved replay blocks over inputs
     the prover chose after the first stage's sample."""
@@ -1179,10 +1175,7 @@ def held(s: Mapping[str, Any], r2: Mapping[str, Any] | None, o: Mapping[str, Any
     return (all((s.get("checks_before_draw") or {}).values()) and bool(files) and all((files or {}).values())
             and audit.get("complete") is True and audit.get("registered_reads") is True
             and all(v is True for v in (audit.get("verdicts") or {}).values()) and bool(refused) and all(refused)
-            and (r2 or {}).get("ok") is True and o is not None
-            and (o.get("accepted") is True
-                 or (o.get("interior") in ([], ["statements"]) and o.get("statements") in ([], [FORM_REFUSED])
-                     and o.get("replay_sample") == [])))
+            and (r2 or {}).get("ok") is True and o is not None and o.get("accepted") is True)
 
 
 def prove(a: argparse.Namespace, r: Replayed, out: Path,

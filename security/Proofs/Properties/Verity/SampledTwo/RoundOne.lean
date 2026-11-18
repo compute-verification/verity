@@ -170,9 +170,9 @@ open Lean (Json)
 
 /-- **An accepted two-stage case's second stage reads a coin**: where the two-stage check accepts, the run of
 record's input holds an interior on the second stage's bytes, and those are at least 64. -/
-theorem second_source_size {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem second_source_size {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
+    (h : checkBlobsAtInner p c ξ e bs = .accept pub prof) :
     ∃ c₂ ξ₂ r i it, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ i.interior = some it ∧ it.source = ξ₂ ∧
       64 ≤ ξ₂.size := by
   obtain ⟨c₂, ξ₂, r, i, run, samplingDesign, it, grain, replay, k, ns, ids, ks, hi, -, -, hsc, hit, hsrc, -, -, -, -, -, -,

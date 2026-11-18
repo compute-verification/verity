@@ -20,8 +20,6 @@
   and `second-verified`, read against the rank member in place of an interior part, with the window-domain binding at
   the rank's program, partition digest and run (`portBinding`); and `ranks-wire-tree`: the writer rows a sampled reader
   member reads through a port lie in one rank's window, so its session reads the port from one committed tree.
-* **The form**: it runs behind `Spot.SecondStage.FORM`, the one switch, and is refused last (`two-stage-form`) were
-  that off.
 
 * **A member's session** (`ownFor`) is `Spot.SecondStage`'s part of one block: the member's units in its rank's
   window, the interior its rank's docket record (`Given.dockets`). Each port it reads through a wire reads through the
@@ -480,25 +478,23 @@ def PARTS_WHY : String := "a sampled proof block is in no rank member"
 
 /-- Every failure of statements `stmts` over the joined record `rec` and what round 2 holds beside it `g`, its ranks'
 records `records`, served records `served` and registrations `regs` at the serve's root `root`, `logged` whether a
-registration is in the log before the period's challenge, and the sampled proof blocks `sample`; when there is none and the
-form isn't allowed, its refusal. -/
-def failures (allow : Bool) (g : Given) (rec : Json) (records : Array Json) (served : Array (String × String))
+registration is in the log before the period's challenge, and the sampled proof blocks `sample`. -/
+def failures (g : Given) (rec : Json) (records : Array Json) (served : Array (String × String))
     (regs : Array Spot.Ranks.Registered) (root : String) (logged : String → Bool) (sample : Array (String × Nat))
     (stmts : List Json) : List (String × Json) :=
   let ranks := Spot.Ranks.failures rec records served regs root logged
-  let found := match Spot.Ranks.Ranks.ofJson? (getD rec "ranks") with
-    | none => ranks
-    | some rs => match partsOf? rs regs sample with
-      | none => ranks ++ [("ranks-members", Json.str PARTS_WHY)]
-      | some ms => ranks ++ wireTreeFailures rs rec ms ++ sessionFailures g rs regs rec ms sample stmts
-  if found.isEmpty && !allow then [("two-stage-form", Json.str Spot.SecondStage.FORM_WHY)] else found
+  match Spot.Ranks.Ranks.ofJson? (getD rec "ranks") with
+  | none => ranks
+  | some rs => match partsOf? rs regs sample with
+    | none => ranks ++ [("ranks-members", Json.str PARTS_WHY)]
+    | some ms => ranks ++ wireTreeFailures rs rec ms ++ sessionFailures g rs regs rec ms sample stmts
 
-/-- **Round 2's check over the joined record** (module docstring), the form allowed when `allow` (`Spot.SecondStage.FORM`
-in the run): each code once, with the detail it first failed with. -/
-def check (allow : Bool) (g : Given) (rec : Json) (records : Array Json) (served : Array (String × String))
+/-- **Round 2's check over the joined record** (module docstring): each code once, with the detail it first failed
+with. -/
+def check (g : Given) (rec : Json) (records : Array Json) (served : Array (String × String))
     (regs : Array Spot.Ranks.Registered) (root : String) (logged : String → Bool) (sample : Array (String × Nat))
     (stmts : List Json) : Check :=
-  (failures allow g rec records served regs root logged sample stmts).foldl (fun c x => c.fail x.1 x.2) {}
+  (failures g rec records served regs root logged sample stmts).foldl (fun c x => c.fail x.1 x.2) {}
 
 /-- A registration's member from `{key, base, units, outs}`, `outs` a list of `[port, leaves]`. -/
 def heldOf? (j : Json) : Option Spot.Ranks.Held := do
@@ -533,10 +529,9 @@ def isObj (j : Json) : Bool := match j with | .obj _ => true | _ => false
 
 def str? (j : Json) : Option String := match j with | .str s => some s | _ => none
 
-/-- The `second_window` piece: `{allow, given, record, records, served, registrations, root, logged, sample, statements}`
+/-- The `second_window` piece: `{given, record, records, served, registrations, root, logged, sample, statements}`
 to `{failures}`, each `[code, detail]` in `failures`' order, `given` `{dockets, boundary, verified, refs, ref_reads}`. -/
 def piece (j : Json) : Except String Json := do
-  let .bool allow := getD j "allow" | throw "allow is not a boolean"
   let gj := getD j "given"
   let .arr dockets := getD gj "dockets" | throw "given.dockets is not a list"
   let some verified := (match getD gj "verified" with | .arr a => a.mapM checkedOf? | _ => none)
@@ -557,7 +552,7 @@ def piece (j : Json) : Except String Json := do
   let some sample := pairsOf? nat? (getD j "sample") | throw "sample is not a list of [template, unit]"
   let .arr stmts := getD j "statements" | throw "statements is not a list"
   let g : Given := { dockets, boundary := getD gj "boundary", verified, refs, refReads }
-  let fs := failures allow g rec_ records served regs root (logged.contains ·) sample stmts.toList
+  let fs := failures g rec_ records served regs root (logged.contains ·) sample stmts.toList
   return Json.mkObj [("failures", .arr (fs.map fun (c, d) => Json.arr #[.str c, d]).toArray)]
 
 end Spot.SecondWindow

@@ -175,7 +175,8 @@ def test_prod_all_on_is_sent_through_its_release_front_and_records_what_a_price_
         monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100, free_port=lambda: port))
         assert S.main(["run", "--arm", "prod-all-on", "--model-id", "glm53", "--checkpoint", str(tmp_path / "ck"),
                        "--client", "vllm-bench", "--loads", "long=1", "--reps", "2", "--warm-s", "0", "--tick-ms",
-                       "34.7,42.4", "--edges-every-s", "60", "--out", str(out)]) == 0
+                       "34.7,42.4", "--edges-every-s", "60", "--private", str(tmp_path / "private"), "--out",
+                       str(out)]) == 0
     tick, cfg = json.loads(envs[0]["VERITY_TICK"]), json.loads(envs[0][S.PLUGIN_ENV])
     assert (tick["bucket_us"], tick["sat_us"], tick["free_us"]) == (100000, 34700, 42400)
     assert (cfg["record"], cfg["ids"], cfg["idle_reset"], cfg["every_s"], cfg["kv_copy"]) == (True, True, True, 60.0, "all")

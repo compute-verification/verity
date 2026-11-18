@@ -354,5 +354,5 @@ def test_grid_slice_builds_and_gates(tmp_path):
     assert {g["name"] for g in gs} == picks | mem | l2
     src = tmp_path / "slice.cu"
     src.write_text(gen.emit_cu(gs))
-    _, verdicts = probe.gate_all(probe.build(tmp_path / "b", [src]))
+    _, verdicts = probe.gate_all(probe.build(tmp_path / "b", [src], "NVIDIA RTX PRO 6000 Blackwell Server Edition"))
     assert [v["probe"] for v in verdicts if not v["passed"]] == []

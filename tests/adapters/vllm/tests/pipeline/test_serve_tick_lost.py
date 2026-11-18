@@ -18,14 +18,14 @@ from typing import Any
 import pytest
 from verity.protocols.resource_accounting.network.verifier import release as REL
 
-from tests.pipeline.test_serve_admit_tick import RUN, TICK, hooked, read_all, request
+from tests.pipeline.test_serve_admit_tick import RUN, TICK, read_all, request
 from tests.pipeline.test_serve_advice import REG, C, SchedEngine, Server, _body
 from tests.pipeline.test_serve_openai import Tokenizer, records
 from verity_vllm import messages
+from verity_vllm.engine import admission
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.engine.engine_driver import external_id
 from verity_vllm.pipeline import advice as ADV
-from verity.protocols.resource_accounting.network.prover import admission as na
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.advice_code import codec as V1
 from verity_vllm.pipeline.advice_code import schedule as SC
@@ -77,9 +77,7 @@ class TickServer(Server):
 
     engine_of = TickEngine
 
-    def order(self) -> na.TickAdmit:
-        self.gate = self.loop.gate = na.TickGate(TICK, hold_s=60.0, clock=lambda: 0.0)
-        self.ticked = self.loop.hook = hooked(self.engine.sched, self.gate, key=external_id)
+    def order(self) -> Any:
         self.added, self.lines = threading.Semaphore(0), threading.Semaphore(0)
         admitted = self.windows.admitted
 
@@ -93,9 +91,13 @@ class TickServer(Server):
                 self.lines.release()
 
         self.windows.admitted = counted
-        admit = na.TickAdmit(self.submit, self.loop.abort, take)
-        admit.attach(messages.current())
-        return admit
+        ex = messages.current()
+        got = messages.attester().attach(ex, {"admit": {"order": "tick", "hold_ms": 60_000, **TICK.record()},
+                                              "submit": self.submit, "abort": self.loop.abort, "take": take,
+                                              "clock": lambda: 0.0})
+        self.gate = self.loop.gate = got.gate
+        self.ticked = self.loop.hook = admission.install(self.engine.sched, ex, external_id)
+        return got.front
 
     def __exit__(self, *exc: Any) -> None:
         self.loop.stop()

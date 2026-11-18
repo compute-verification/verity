@@ -172,7 +172,7 @@ theorem none_of_forall {o : Option String} (h : ∀ a, o = some a → False) : o
 set_option maxHeartbeats 4000000 in
 /-- **A run that returned refused at a step, or passed its coin check**: the coin check (`coinsCode`) at the run's
 key, main's history, coin evidence, record, window and family on the first `read` bytes of its source gave no code. -/
-theorem run_coins (i : Spot.Run.Input) (form : Bool) (j : Json) (h : Spot.Run.run i form = .ok j) :
+theorem run_coins (i : Spot.Run.Input) (j : Json) (h : Spot.Run.run i = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
     ∃ read, Spot.Run.coinsCode i.key i.main i.coins i.record i.params.verifier.windowRoot i.family
@@ -243,7 +243,7 @@ theorem firstReads_of_shown (θ : ByteArray) (hS : FirstCoinsShown θ) : FirstRe
     simp only [Except.ok.injEq, Prod.mk.injEq] at h1'
     exact h1'
   rw [← hp, ← hc, ← he] at hacc
-  obtain ⟨-, c₂, ξ₂, r, i, run, hi, hrun, -, -, hsym, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
+  obtain ⟨c₂, ξ₂, r, i, run, hi, hrun, -, -, hsym, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
   obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -, hdig⟩ := VStar.Recursive.SampledTwo.inputAt_ok hi
   rcases run_coins _ true run hrun with ⟨step, codes, rfl⟩ | ⟨read, hcc⟩
   · have hs := SpotFlock.str_of_jeq (SpotFlock.jeq_symm hsym)

@@ -15,7 +15,7 @@ from verity_vllm.pipeline import advice as A
 
 
 def test_every_declared_message_is_a_type():
-    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows", "PoUSStore"} <= M.TYPES.types
+    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows", "PoUSStore"} <= M.types().types
 
 
 def test_a_type_no_protocol_declares_is_refused():
@@ -205,7 +205,6 @@ def test_exchange_starts_through_every_gate_and_holds():
     ex, g1, g2, started = M.Exchange(), Gate(), Gate(), []
     ex.request("a", H.StartOnBoundary(g1))
     ex.request("b", H.StartOnBoundary(g2))
-    ex.request("a", H.HoldRelease("in-0", 5))
     ex.request("b", H.HoldResident(7, 3))
     ex.start("in-0", lambda: started.append("in-0"))
     assert ex.pending() and not started
@@ -213,15 +212,20 @@ def test_exchange_starts_through_every_gate_and_holds():
     assert not started
     g2.held.pop()()
     assert started == ["in-0"] and not ex.pending()
-    assert ex.held("in-0", 4) and not ex.held("in-0", 5) and not ex.held("in-1", 0)
     assert ex.resident(7, 2) and not ex.resident(7, 3)
 
 
-def test_one_exchange_a_process():
+def test_one_exchange_a_build_and_the_build_in_scope_is_current():
     M.close()
     ex = M.current()
     try:
-        assert M.current() is ex and not ex.wants("values")
+        assert M.current() is ex and M.build() is ex and not ex.wants("values")
+        ex.answer(H.Declared("", {}))
+        later = M.build()
+        assert later is not ex and M.current() is later and M.build() is later
+        with M.using(ex):
+            assert M.current() is ex
+        assert M.current() is later
     finally:
         M.close()
     assert M.current() is not ex
@@ -251,8 +255,8 @@ def test_a_build_request_is_filed_before_the_build_and_any_other_before_the_firs
         ex.request("pouw", H.RequireProperty("eager", True, "its kernels"))
     ex.request("pouw", H.ComputeBlockWith(lambda due, original: original(None)))
     ex.step = 0
-    with pytest.raises(Refused, match=r"pouw: files HoldRelease after serving began \(step 0\)"):
-        ex.request("pouw", H.HoldRelease("in-0", 3))
+    with pytest.raises(Refused, match=r"pouw: files HoldResident after serving began \(step 0\)"):
+        ex.request("pouw", H.HoldResident(0, 3))
 
 
 def test_a_route_has_one_scheme_and_an_input_is_refused_while_serving():

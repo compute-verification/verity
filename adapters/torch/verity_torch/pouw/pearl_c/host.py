@@ -73,20 +73,17 @@ def _put(t: Any, data: bytes) -> None:
     t[:len(data)].copy_(host.pin_memory() if t.is_cuda else host, non_blocking=t.is_cuda)
 
 
-def _constants(scheme: Any, device: Any, salt_key: bytes | None) -> Any:
-    """The pipeline's constant keys on the device: the prover's hm96 salt key and, from byte 256,
-    `audit.hm96_kernel_constants`."""
-    if salt_key is None or len(salt_key) != 32:
-        raise ValueError(f"{scheme.name}: -h3's trees take the prover's 32-byte hm96 salt key")
+def _constants(device: Any) -> Any:
+    """The pipeline's constant key on the device: `audit.hm96_kernel_constants`.  The trees' hm96 salts are no key's: each
+    tree's are bytes in its pipeline's ``salts_<tree>`` buffer (the kernel's `run.Pipeline.salts`)."""
     consts = hm96_kernel_constants()
-    t = _zeros(256 + len(consts), device)
-    _put(t, salt_key.ljust(256, b"\0") + consts)
+    t = _zeros(len(consts), device)
+    _put(t, consts)
     return t
 
 
 def _constant_keys(t: Any) -> dict[str, int]:
-    p = t.data_ptr()
-    return {"salt_key": p, "hm": p + 256}
+    return {"hm": t.data_ptr()}
 
 
 class _TorchStream:

@@ -965,16 +965,13 @@ class TwinDev(RecordingDev):
 
 @pytest.mark.parametrize("scheme", KERNEL_SCHEMES)
 def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
-    """The constants the pipeline reads (the prover's salt key, then `audit.hm96_kernel_constants`) and a run's tree hash are
-    the scheme's: hm96-sha512's.  Without the prover's 32-byte key the constants are refused."""
+    """The constants the pipeline reads (`audit.hm96_kernel_constants`, and no salt key: a tree's salts are its buffer's
+    bytes) and a run's tree hash are the scheme's: hm96-sha512's."""
     s = pouw_schemes.get(scheme)
     kernel = PPD.Kernel(R, RecordingDev(), "0" * 64)
-    for bad in (None, bytes(31)):
-        with pytest.raises(ValueError, match="salt key"):
-            PPDR._constants(s, torch.device("cpu"), bad)
-    t = PPDR._constants(s, torch.device("cpu"), SALT_KEY)
-    assert PPDR._bytes(t) == SALT_KEY.ljust(256, b"\0") + hm96_kernel_constants()
-    assert PPDR._constant_keys(t) == {"salt_key": t.data_ptr(), "hm": t.data_ptr() + 256}
+    t = PPDR._constants(torch.device("cpu"))
+    assert PPDR._bytes(t) == hm96_kernel_constants()
+    assert PPDR._constant_keys(t) == {"hm": t.data_ptr()}
     rng = np.random.default_rng(1)
     weights = {0: torch.from_numpy(bf16_words(rng, 128, 1024).view(np.float32).copy()).to(torch.bfloat16)}
     roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)

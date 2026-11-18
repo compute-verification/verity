@@ -11,7 +11,7 @@ from test_served_table import ADDED, Producer, _fresh
 from verity_bench import breakdown as B
 from verity_bench.cli import main
 from verity_bench.vllm.arms import Arm
-from verity_bench.vllm.presets import expand_sweep, load_spec
+from verity_bench.vllm.presets import expand_sweep, resolve_spec
 from verity_bench.vllm.runner import _token_digest, run_benchmark
 
 TOKENS, GRAPH_STEPS, EAGER_STEPS = 416, 63, 4
@@ -100,7 +100,7 @@ class SpanFactory:
 def _result(point_id="b8-p512-mixed", *, arms=B.ARMS, span_scale=1.0, reps=2):
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     resolved = tuple(Arm(arm, control=None if arm == B.PLAIN else B.PLAIN) for arm in arms)
-    return run_benchmark(load_spec(B.SPEC).preset, resolved, (point,), sweep="quick", reps=reps,
+    return run_benchmark(resolve_spec(B.SPEC).preset, resolved, (point,), sweep="quick", reps=reps,
                          factory=SpanFactory(span_scale), git_commit="c" * 40)
 
 

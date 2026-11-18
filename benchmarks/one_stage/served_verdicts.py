@@ -2371,7 +2371,7 @@ def witness(paths: Sequence[str]) -> list[tuple[str, str]]:
         why = why or (WITNESS_TOPS.get(parts[0]) if len(parts) > 1 else None)
         why = why or ("H1's prover state (its key)" if parts[:2] == ("private", "h1") else None)
         why = why or next((w for pat, w in WITNESS_NAMES.items() if fnmatch.fnmatchcase(parts[-1], pat)), None)
-        why = why or ("a salt file (prover only)" if any(x.endswith(".salts") for x in parts[:-1]) else None)
+        why = why or ("a salt file (prover only)" if any(x.endswith(".salts") for x in parts) else None)
         if why:
             out.append((p, why))
     return out
