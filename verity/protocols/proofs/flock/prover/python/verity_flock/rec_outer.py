@@ -282,7 +282,7 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
     (d / "registered.json").write_text(json.dumps(own))
     tables = {"row": rows, "aux": aux, "acc": np.array(acc_rows, np.uint16), "coef": coef, "dirs": dirs}
     outs = {"out": np.asarray(out_rows, np.uint16), "acc_out": np.asarray(out_acc, np.uint16)}
-    FC.write(text, SimpleNamespace(name=f"rec-L{level['level']}", subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin", None,
+    FC.write(text, SimpleNamespace(name=f"rec-L{level['level']}", subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin",
              list(range(n)), share_rows=True, outs=outs, tables=tables, refs={nm: list(range(n)) for nm in tables}, salts=salts,
              registered=registered, digests=tuple(info["digests"]))
     meta = FC.meta_of(text)
