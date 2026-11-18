@@ -896,9 +896,9 @@ def declared(**edit) -> I.Circuit:
     return I.Circuit("declared", ((EMB, 3), (G8, 6), (GEMM, 3)), **{**parts, **edit})
 
 
-#: the wired builder reads a registered value only in leaves of its port's width or of one bit (`population._converts`,
-#: verity/circuits/population.py:167-174), and puts a width conversion at the root (population.py:348-353)
-WAITS_WIDTH = "waits on circuits: the wired builder's width folds (population.py:167-174, 348-353)"
+#: pins the records' digests, a member's tables and `Window.close`'s ``carried`` and two-rows refusal as they stood before
+#: a member of a template of several members held tables and a registered value was leafed once in its registration's tree
+WAITS_COMMITMENTS = "waits on commitments: pins records and Window.close as they stood before a value was leafed once"
 #: the wired builder binds the SHA-512 of the record's WIRED_FIELDS (population.py:362-363), so a record field the Program
 #: doesn't read (boundary reads, named free rows) changes the Program's digest
 WAITS_RECORD_HASH = "waits on circuits: the record's hash in the wired Program's binding (population.py:362-363)"
@@ -1341,7 +1341,7 @@ BOUNDARY = (I.Read(EID, "tok", "ids", at=2, radix=(1,), base=0, step=(0,)),
             I.Read(GID, "o0", "o0", at=0, radix=(3,), base=0, step=(16,)))
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
+@pytest.mark.xfail(strict=True, reason=WAITS_COMMITMENTS)
 def test_a_record_without_boundary_reads_ranks_or_free_rows_keeps_its_bytes():
     """The records of circuits that declare no boundary reads, ranks or free rows, a stated one with every other
     declaration, a plain period's and one with registered reads, are the bytes they were before `Circuit.boundary_reads`,
@@ -1664,7 +1664,6 @@ def registered(n: int = 12, cap: int = 4, params: dict | None = None, held: tupl
     return win, w
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_inputs():
     """The record format: the reads in the record's ``registered``, its other fields only when declared, and the free
     input bits counted from the description alone. A pin names its parameter alone: ``w``'s holds no ``w/a@8``, whose
@@ -1697,7 +1696,6 @@ def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_
             I.input_count({**doc, "registered": bad}, BY_ID.__getitem__)
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_registered_values_shape_is_the_width_of_the_port_its_reads_name():
     """`read_shape`: ``w``'s rows are ``wrow``'s width, its leaves over that, and a value no read names, one read at two
     widths or one whose leaves aren't whole rows is refused."""
@@ -1717,7 +1715,6 @@ def test_a_registered_values_shape_is_the_width_of_the_port_its_reads_name():
         I.read_shape(odd, "w")
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_circuits_values_are_parameters_of_its_program_ahead_of_its_units():
     """`Registered.values`: registered parameters the circuit's program takes as its own, ahead of its units', in 16-bit
     leaves (`program_values`), so a circuit of one template with values is a ``TemplatePopulations``. Its record names them
@@ -1740,7 +1737,6 @@ def test_a_circuits_values_are_parameters_of_its_program_ahead_of_its_units():
             replace(circuit, registered=replace(reg, values=bad))
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_period_registers_its_circuits_values_by_their_entries_chained_after_the_last_record(tmp_path):
     """With values, `Window.write` registers each by its committed value's entry, in the circuit's order, chained after
     ``previous``, and names the record v2 (core's ``record`` makes it ``verity/registration/v2`` with entries); without,
@@ -1767,7 +1763,6 @@ def test_a_period_registers_its_circuits_values_by_their_entries_chained_after_t
     assert not (tmp_path / "unheld").exists()
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_registration_names_the_values_its_period_outputs_after_its_ports(tmp_path):
     """`rows.registration` names each value the period ``outputs`` for a later record among the record's roots, after the
     period's own ports and by its port, root, leaves and domain alone; with none, the roots are the ports'. An output named
@@ -1798,7 +1793,7 @@ def test_a_registration_names_the_values_its_period_outputs_after_its_ports(tmp_
     assert roots == [*ports, out]
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
+@pytest.mark.xfail(strict=True, reason=WAITS_COMMITMENTS)
 def test_a_read_covers_whole_members_and_reads_whole_rows():
     """Members are cut where a read's units begin or end, as where a wire's do, so a read covers whole members: units 2..11
     read the weight's rows as tables and units 0 and 1 hold their own rows."""
@@ -1815,7 +1810,7 @@ def test_a_read_covers_whole_members_and_reads_whole_rows():
                            registered=reg(I.Read(TID, "x", "w", 0, (12, 2), 0, (0, K // 4), cut=(0, 2)))), RUN, SAMPLING_DESIGN, 4)
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
+@pytest.mark.xfail(strict=True, reason=WAITS_COMMITMENTS)
 def test_the_period_commits_each_read_port_as_a_table_of_the_registered_rows_under_their_salts():
     """A member a read covers is a shared-row member: its read port's table the distinct rows its units read, under the
     registered value's salts, each unit's ref its row; its other ports its units' own rows. The header names the rows'
@@ -1851,7 +1846,6 @@ def test_the_period_commits_each_read_port_as_a_table_of_the_registered_rows_und
         twice.close()
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_port_reading_a_tables_parameter_is_a_row_seg_row():
     """A port whose reads read a declared table's parameter is an ``hm96-sha512/row-seg/v1`` row (`seg_ports`) in its
     template's statement, its members (the verifier's, derived from the record, the same) and its ``--registered`` file,
@@ -1879,7 +1873,6 @@ def test_a_port_reading_a_tables_parameter_is_a_row_seg_row():
 FP32_SEG = {"row_schema": SEG, "word_bits": 32}
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
 def test_a_value_of_a_declared_format_is_read_in_it(tmp_path):
     """`Registered.formats`: ``w`` declared 32-bit leaves in ``row-seg/v1`` rows is read in them. Its port is a ``row-seg/v1``
     row in its template's statement and its members (the verifier's, from the record, the same), its program takes it as
@@ -2607,7 +2600,7 @@ def test_a_linked_members_x_rows_are_rows_of_the_row_tables_schema(monkeypatch):
                                  *linked.members[k + 1:]))
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_WIDTH)
+@pytest.mark.xfail(strict=True, reason=WAITS_COMMITMENTS)
 def test_a_row_committed_under_a_registered_values_salt_is_the_values_row(monkeypatch):
     """An input row recorded in full is committed under its registered value's salt (`rows.commit`'s ``salts_of``), and
     `Window.close` hands over the ``b || c`` that salt carries in the value's own tree (``carried``). `rows.commit`

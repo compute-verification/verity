@@ -1032,7 +1032,7 @@ def round_two_twin(replay: Program, key: str, sample: Sequence[int], window: CS.
     """Round 2's statement check by its Python twin (`second_stage.check_twin`), for tests only: the verdict of record is
     the Lean verifier's, inside the stream's run (`Run.run`), whose statement codes the outcome carries (``outcome``'s
     ``statements``) and the summary's ``round_two`` reads from it."""
-    return SS.check_twin(True, _round_two_own(replay, key, sample, window, irec, brec, drawn, record, proofs, tie),
+    return SS.check_twin(_round_two_own(replay, key, sample, window, irec, brec, drawn, record, proofs, tie),
                          stmts).to_json()
 
 
@@ -1114,8 +1114,8 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
         (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
         got["pins"] = pins(proofs, stmts)
         own = _round_two_own(*replay, sample, window, irec, brec, units, record, proofs, tie)
-        got["round_two_python"] = SS.check_twin(True, own, stmts).to_json()
-        got["round_two_negatives"] = {name: SS.check_twin(True, own, tampered).ok is False
+        got["round_two_python"] = SS.check_twin(own, stmts).to_json()
+        got["round_two_negatives"] = {name: SS.check_twin(own, tampered).ok is False
                                       for name, tampered in (("dropped", stmts[:-1]), ("none", None))}
     return s, ok, record, got, stmts
 

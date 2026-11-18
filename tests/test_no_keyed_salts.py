@@ -2,7 +2,9 @@
 here: fresh operating-system bytes drawn for its leaf (`verity.commitments.hm96.SHA512.fresh_salt()`) and handed on as
 data; or the one keyed stream the Lean lists (`KeyedUniform`), `verity.commitments.randomness`'s `stream` under a key its
 `derive` makes from fresh operating-system bytes, drawn fresh for the unit it salts (a step, a pass, a registration) and
-never reused. Any other derivation of a salt from a key is a third one.
+never reused. Any other derivation of a salt from a key is a third one. A leaf that hides nothing may take a public salt,
+derived by SHA-512 from public names alone and said to be public where it is made; it is outside the rule. The rule is
+stated in `verity/commitments/hm96/PROTOCOL.md`, section 3, "Randomness" (`RULE`).
 
 The scan reads tracked Python, Lean, CUDA, C and Rust sources for the third derivations found by reading the tree, by name
 or by the domain label each hashes under (`NAMES`): the hm96 salt function and the ChaCha20 block it is built on, keyed
@@ -47,7 +49,6 @@ ALLOWED: dict[str, str] = {
     "adapters/torch/verity_torch/pouw/h1/registered_device.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/ends.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/run_device.py": "@compute-accounting",
-    "adapters/torch/verity_torch/pouw/pearl_c/served_y_device.py": "@compute-accounting",
     # the step rows' processor twin is ruled (RULED's native_rows.cu); the registered weights' `tensor_key` expansion here is not
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
@@ -83,8 +84,10 @@ PAYLOAD_TREE = ("the bandwidth audit's payload tree: its salts are expanded from
 STEP_ROWS = ("the step rows: their salts are expanded on the card by their own SHA-512 expansion, until the shared expander "
              "of the listed stream exists, from a key drawn fresh from the operating system for each step, never reused and "
              "never written")
+#: where the tree states the salts' rule and its ruled derivations: hm96's protocol, section 3, "Randomness"
+RULE = ("verity/commitments/hm96/PROTOCOL.md", "derivations kept for now by a ruling, each with its condition")
 #: {ruling: (the file in the tree that states it as a rule, a phrase of that statement), or None while nothing does}
-STATED: dict[str, tuple[str, str] | None] = {PASS_TREE: None, PAYLOAD_TREE: None, STEP_ROWS: None}
+STATED: dict[str, tuple[str, str] | None] = {PASS_TREE: RULE, PAYLOAD_TREE: RULE, STEP_ROWS: RULE}
 #: {ruling: (the module it covers, the names its keys go by there)}
 SCOPE = {PASS_TREE: ("verity/protocols/resource_accounting/memory/poub/", ("salt_key", "salt-key")),
          PAYLOAD_TREE: ("verity/protocols/resource_accounting/memory/poub/", ("payload_key", "payload-key")),

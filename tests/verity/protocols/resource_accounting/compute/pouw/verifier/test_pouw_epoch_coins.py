@@ -174,9 +174,6 @@ def test_a_served_window_flips_every_coin_from_its_entropy_and_none_from_the_os(
 OS_RANDOMNESS = {
     "protocols/resource_accounting/compute/pouw/prover/circuit/anchors.py": "ncp-v2's window secret (`Ledger.open`'s `_fresh_source`, `secrets`), named "
                                             "by A5's uniform/python-secrets",
-    "protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py": "the reference prover's hm96 hiding key when its caller "
-                                                             "gives none (`Prover.salt_key`), the committer's secret "
-                                                             "and no coin",
     "protocols/proofs/spot/verifier/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean "
                                                            "(`_dumps`), no coin",
     "protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/rows_bench.py": "the bench's hiding salts, no coin",
@@ -190,7 +187,6 @@ OS_RANDOMNESS = {
                                                              "credit nothing",
     "protocols/resource_accounting/compute/pouw/prover/serving/lead/rows.py": "the keyed rows' key and salt, the prover's secrets and no "
                                                              "coin",
-    "protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py": "`new_salt_key`, the prover's hm96 salt key, no coin",
     "protocols/proofs/spot/prover/audit/local_challenger.py": "the development challenger's session token and gate "
                                                               "secret, compose's service and no SPOT coin",
     "protocols/proofs/spot/verifier/one_stage/member_trees.py": "the tree relay's shared secret with its verifier "
