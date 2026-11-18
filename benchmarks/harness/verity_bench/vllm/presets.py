@@ -196,6 +196,13 @@ def former_specs() -> dict[str, tuple[str, str]]:
     return {old: (entry["spec"], entry["card"]) for old, entry in tomllib.loads(FORMER_IDS.read_text())["former"].items()}
 
 
+def retired_spec(spec_id: str) -> str | None:
+    """Why a spec deleted with no successor refuses a launch (`FORMER_IDS`' ``[retired]``); None for any other id. Its
+    stored runs read under the id itself."""
+
+    return tomllib.loads(FORMER_IDS.read_text()).get("retired", {}).get(spec_id)
+
+
 def current_spec(spec_id: str) -> str:
     """The name a stored run's spec id has now: for a former id (`FORMER_IDS`), its spec, ``@CARD`` where that spec runs on
     more than its card; else the id itself."""
@@ -218,6 +225,8 @@ def _spec_path(spec: str | Path) -> Path:
     if now := former_spec(name):
         raise ConfigError(f"spec {name!r} is {now[0]!r} on the {now[1]}, `{now[0]}@{now[1]}`: its former id names a "
                           "stored run's spec, and no run is launched under it")
+    if why := retired_spec(name):
+        raise ConfigError(f"spec {name!r} is refused: {why}")
     raise ConfigError(f"no benchmark spec {spec!r}")
 
 

@@ -60,7 +60,7 @@ theorem accept_read {k : Verity.Registration.Composite} {x : Verity.Exchange} {a
   obtain ⟨key, hch, hafter⟩ := source_of hdr
   obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
   rw [hrξ] at hraw
-  obtain ⟨cm, roots, htsn, -⟩ := drawCoins_ok hraw
+  obtain ⟨cm, roots, htsn, hcm, -⟩ := drawCoins_ok hraw
   obtain ⟨_, hsn⟩ := trustedChallengePhaseOf_ok htsn
   obtain ⟨_, hso⟩ := challengePhaseNamed_ok hsn
   obtain ⟨ls, lines, hlog, hls, hrr⟩ := challengePhaseOf_ok hso
@@ -91,7 +91,7 @@ theorem accept_read {k : Verity.Registration.Composite} {x : Verity.Exchange} {a
     rw [coinTreesOf_fold _ hct]
     rfl
   obtain ⟨lr, hlr⟩ := Option.isSome_iff_exists.1
-    (readLog_isSome dr.label c.digest (named.toList.map (·.2.2.1)) ξ hF (releasedRootsOf_pairsOk hrr))
+    (readLog_isSome dr.label c.digest (named.toList.map (·.2.2.1)) ξ hF (releasedLogOf_ok hrr hcm).1)
   have hlogged := hl (lr.map Binding.Read.ofV2) (by
     show lr.map Binding.Read.ofV2 ∈ (logRead x.sent).map (·.map Binding.Read.ofV2)
     rw [hread, hlr]

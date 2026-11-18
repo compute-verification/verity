@@ -172,7 +172,7 @@ session state holding two openings of one column-tree leaf passes with extractio
 (`Claims.Hm96Hiding`), is statistical, a bound on every event at once, so no machine hard-codes it: an analysis whose
 `ZK` is only hiding reads `βz = 0` and the constant `δz`. -/
 def ServiceSoundStagedPerProver (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B n' Ar)
-    (e : S.Seed ≃ Paths (DStage St n L np B n') R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
+    (e : S.Seed ≃ Paths (DStage St n L np B n') R) (sha : Hash.Msg → Hash.Msg) (fb fz : Finders Mc S R)
     (δb βb δz βz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
@@ -301,7 +301,7 @@ binding or zero knowledge in some round (N1, X-RO commitments; F1 and F2, Flock'
 - `δz` is per prover because Flock's soundness has a collision term of the prover's, while hm96's hiding is
   statistical (`βz = 0` for an analysis whose `ZK` is only hiding). -/
 def ServiceSoundOverlapPerProver (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar)
-    (e : S.Seed ≃ Paths (OSpot St n L np B n') R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
+    (e : S.Seed ≃ Paths (OSpot St n L np B n') R) (sha : Hash.Msg → Hash.Msg) (fb fz : Finders Mc S R)
     (δb βb δz βz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
@@ -413,7 +413,7 @@ break is at most `δb + βb · Pr[fb Ω' M r w finds a collision of sha]` and it
 `δz + βz · Pr[fz Ω' M r w …]`. Everything `ServiceSoundStagedPerProver` says of its form, finders and budgets holds
 here unchanged: it assumes nothing of SHA-512, and `ecr/sha-512` enters only the floors' bound (`breakBound`). -/
 def ServiceSoundStagedJ10RPerProver (Mc : Machine) (S : Service) (run : JRunMap Mc S R St n L B n' Ar)
-    (e : S.Seed ≃ Paths (JStage St n L B n') R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
+    (e : S.Seed ≃ Paths (JStage St n L B n') R) (sha : Hash.Msg → Hash.Msg) (fb fz : Finders Mc S R)
     (δb βb δz βz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
@@ -489,7 +489,7 @@ def ServiceSoundOverlapJ10R (Mc : Machine) (S : Service) (run : JORunMap Mc S R 
 call design, with `ServiceSoundOverlapJ10R`'s seed, round protocol, uniform sample and play, and each round's breaks
 bounded through the adversary's own collision finders as `ServiceSoundOverlapPerProver` states. -/
 def ServiceSoundOverlapJ10RPerProver (Mc : Machine) (S : Service) (run : JORunMap Mc S R St n L B n' Ar)
-    (e : S.Seed ≃ Paths (OJSpot St n L B n') R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
+    (e : S.Seed ≃ Paths (OJSpot St n L B n') R) (sha : Hash.Msg → Hash.Msg) (fb fz : Finders Mc S R)
     (δb βb δz βz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',

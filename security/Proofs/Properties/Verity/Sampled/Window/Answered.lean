@@ -141,21 +141,21 @@ longer than every answered one and than the one before, the cuts the stop fixes 
 (`CutsAt`), at a position that keeps the invariant and whose stop, the coins written in and consumed, the trace's end
 is past; the walk from the trace's end stops where `StopOf` says, with those logs answered too (`Walked`); and the
 trace answered `N` rounds or ended at a stop the decoders submit nothing at. -/
-theorem RoundsEnd.order {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
+theorem RoundsEnd.order {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Hash.Msg}
     {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
     (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) (hsub : D.sub J (fun _ => none) = none)
     (bitsOf : (s : SubmitJ J) → (Fin s.n → 𝔽) → List Bool)
     (hM : ∀ q s x, M.round q J s x = writeOpening (finish sg θ F c rq) q.s' (bitsOf s x))
     (hB : ∀ g' s x, ¬ B g' J s x → ¬ EmptyAt (finish sg θ F c rq) g' (bitsOf s x))
-    {Ks₀ : Fin R → DigestCut Claims.Msg g} {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ}
-    {rs : Fin J → Fin 2 → List Flock.Round} {p q r : Pos g σ Claims.Msg (Fin R)} {out : LiveOutJ J mPts}
+    {Ks₀ : Fin R → DigestCut Hash.Msg g} {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ}
+    {rs : Fin J → Fin 2 → List Flock.Round} {p q r : Pos g σ Hash.Msg (Fin R)} {out : LiveOutJ J mPts}
     {Lg : List Release} (hU : PicksOnce P Lg) (hLg : (CoinTape.run g σ r.tape).log = Lg)
     (he : RoundsEnd D M dg J B rootB pts N rs p q out) :
     p.Inv Ks₀ → q.Past r →
     ∀ (pre : List Release) (f : List Release → Game Exchange) (a : Fin R → Prop) (done : List (List Release)),
       (∀ log, f log = finish sg θ F c rq (pre ++ log)) → StopOf P rv pre f a p.toStop → Walked P Lg pre a done →
-      ∃ (as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)))) (ms : List (List Release))
+      ∃ (as : List (Pos g σ Hash.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)))) (ms : List (List Release))
         (pre' : List Release) (f' : List Release → Game Exchange) (a' : Fin R → Prop)
         (done' : List (List Release)),
         out = ⟨rootB, pts, as.foldl (fun rs a =>
@@ -249,7 +249,7 @@ the first stop fixes pick, those cuts at the bytes it answers; each answered sto
 log longer than `L₀` and than the one before (`RoundsEnd.order`); the walk from the session's end stops where `StopOf`
 says, with `L₀` and those logs answered too (`Walked`); and the trace answered the member's `N` rounds or ended at a
 stop the decoders submit nothing at. -/
-theorem MemberReach.order {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
+theorem MemberReach.order {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Hash.Msg}
     {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
     (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {i : ℕ}
@@ -261,14 +261,14 @@ theorem MemberReach.order {P : Fin R → List Release → Frame → Prop} {rv : 
     (hM : ∀ q s x, (M.member i (memberPts m)).round q (memberTabs S Rg m) s x =
       writeOpening (finish sg θ F c rq) q.s' (bitsOf s x))
     (hB : ∀ g' s x, ¬ B i g' (memberTabs S Rg m) s x → ¬ EmptyAt (finish sg θ F c rq) g' (bitsOf s x))
-    {Ks₀ : Fin R → DigestCut Claims.Msg g} {p q r : Pos g σ Claims.Msg (Fin R)}
+    {Ks₀ : Fin R → DigestCut Hash.Msg g} {p q r : Pos g σ Hash.Msg (Fin R)}
     {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} {Lg : List Release} (hU : PicksOnce P Lg)
     (hLg : (CoinTape.run g σ r.tape).log = Lg) (h : MemberReach D M BL B S Rg i m p q out) (hqr : q.Past r)
     (hi : p.Inv Ks₀) {pre : List Release} {f : List Release → Game Exchange} {a : Fin R → Prop}
     {done : List (List Release)} (hf : ∀ log, f log = finish sg θ F c rq (pre ++ log))
     (hSO : StopOf P rv pre f a p.toStop) (hA : Walked P Lg pre a done) (hK : ¬ ∀ j, p.toStop.Ks j = .skip) :
     ∃ (pts : Fin 2 → Fin (memberPts m) → 𝔽) (L₀ : List Release)
-      (as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ (memberTabs S Rg m)) × (Fin s.n → 𝔽))))
+      (as : List (Pos g σ Hash.Msg (Fin R) × ((s : SubmitJ (memberTabs S Rg m)) × (Fin s.n → 𝔽))))
       (ms : List (List Release)) (pre' : List Release) (f' : List Release → Game Exchange) (a' : Fin R → Prop)
       (done' : List (List Release)),
       out = ⟨(D i).root p.toStop.modes, pts, as.foldl (fun rs a =>

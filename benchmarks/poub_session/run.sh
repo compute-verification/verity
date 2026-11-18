@@ -73,7 +73,7 @@
 # (the default) or servedrop:K. SERVE=row runs row ROW's Commit under the audit, `verity-vllm row run ROW CHECKPOINT
 # REPO REV` with the checkpoint `verity-vllm epoch resolve ROW` names and REMOTE_VERIFIER at the verifier: its Commit
 # puts the store binder on its engine and proves the store in lockstep with its first instrumented run, a pass an
-# engine step (`verity_vllm.protocols.poub.remote.CommitSession`: one GPU, synchronous scheduling declared
+# engine step (`verity.protocols.resource_accounting.memory.poub.prover.commit_session.CommitSession`: one GPU, synchronous scheduling declared
 # in the row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). ROW is a row
 # id whose file `verity_vllm.config.row_file` finds (ROW_FILE: that file instead): a stored row whose target declares
 # the synchronous scheduling a session needs, such as

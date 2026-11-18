@@ -20,6 +20,7 @@ from verity_bench.vllm import presets
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.arms import (
     build_bound,
+    protocols_config,
     resolve_arms,
 )
 from verity_bench.vllm.engine import (
@@ -438,7 +439,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     class Run:
         def __init__(self, y, **commits):
             self.y, self.omit, self.details = y, frozenset(), {"passes": [{}]}
-            self.scheme, self.schedule = SimpleNamespace(name="pearl-c-sm120-v1-h3"), SimpleNamespace(name="deferred")
+            self.scheme, self.schedule = SimpleNamespace(name="pearl-c-h100-v1-h3"), SimpleNamespace(name="deferred")
             self.commits = {"weights_root": "ab" * 64, **commits}
             g = torch.Generator().manual_seed(0)
             self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
@@ -475,6 +476,58 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     after = epoch_open_root(bytes.fromhex("ab" * 64), 0).hex()
     assert live["passed"] and live["coins"] == {"source": "challenger", "session": session, "pass_index": 0,
                                                 "salt_after": after}
+
+
+def test_the_config_a_declared_schemes_arm_hands_passes_that_schemes_own_settings_check():
+    """A protocol arm whose entry names a declared scheme (`messages.option`) hands it settings it takes, read as
+    `verity_vllm.LLM` reads them (`option_settings`) and checked by the scheme's own `settings`: its in-process coins
+    the string its settings say, ``coins = "in-process"``, or, where the spec gives one, its challenger's address alone."""
+    from verity.protocols.resource_accounting.scheme import settings
+    from verity_vllm import messages
+    from verity_vllm.llm import option_settings
+
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
+    arm = next(a for a in resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings) if a.protocols)
+    entry, = arm.protocols
+    scheme = messages.option(entry)
+    assert scheme is not None and scheme.name == "pearl-plus"
+    environ = {"PEARLC_KERNEL": "/tree/kernels/pearl_c_sm90", "PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90.cubin"}
+    config = protocols_config(arm, environ)
+    own = option_settings(entry, config)
+    assert own == {"kernel": environ["PEARLC_KERNEL"], "cubin": environ["PEARLC_CUBIN"], "coins": "in-process"}
+    assert settings(scheme, own)["coins"] == "in-process"
+    live = replace(arm, protocols_config={"pouw": {**arm.protocols_config["pouw"], "challenger": "10.0.0.7:7000",
+                                                   "lane": "benchmarks", "peer": "node-1"}})
+    own = option_settings(entry, protocols_config(live, environ))
+    assert "coins" not in own and settings(scheme, own)["challenger"] == "10.0.0.7:7000"
+
+
+def test_a_served_schemes_gate_refuses_by_name_where_its_device_run_is_not_found(monkeypatch):
+    """A guard never fails open: an arm serving a declared useful-work scheme whose engine exposes no device run is
+    refused, naming the scheme, and not passed as ``provided`` False; the run Pearl+'s attach holds (``llm.scheme.run``)
+    is the one gated; an arm that serves no declared scheme keeps its unprovided gate."""
+    from verity_torch.pouw.pearl_c.run_device import PearlCDeviceRun
+
+    from verity_bench.vllm import engine as E
+
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
+    arm = next(a for a in resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings) if a.protocols)
+
+    def engine(arm, scheme):
+        got = object.__new__(E._VllmEngine)
+        got.arm, got.obj, got.served = arm, None, E._served_scheme(arm)
+        got.llm = SimpleNamespace(protocols=None, scheme=scheme)
+        return got
+
+    for attached in (None, SimpleNamespace(run=None)):
+        gate = engine(arm, attached).custom_gate()
+        assert gate["passed"] is False and gate["provided"] is True and gate["scheme"] == "pearl-plus"
+        assert "could not find the served scheme pearl-plus's device run" in gate["refused"]
+    run = object.__new__(PearlCDeviceRun)
+    monkeypatch.setattr(E, "_pearl_c_gate", lambda r: {"passed": r is run, "provided": True})
+    assert engine(arm, SimpleNamespace(run=run)).custom_gate() == {"passed": True, "provided": True}
+    h1 = replace(arm, protocols=("pouw:eps1-sm120-h1fx1",))
+    assert engine(h1, None).custom_gate() == {"passed": True, "provided": False}
 
 
 def test_the_readme_states_the_contract_the_code_keeps():

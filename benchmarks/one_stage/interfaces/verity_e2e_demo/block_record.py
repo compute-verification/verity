@@ -24,7 +24,9 @@ steps, every subprotocol in one shape, the Lean verdict with the JointPooledLive
   `NAMES_TERMS` (bandwidth) always carries and another may, is the terms its ``error`` leaves out, as its answer's
   profile names them: PoUB's ``ledger.NAMED_TERMS``, each term ``{claim, term, value: null, in_total: false, status}``.
   They have no number, so ``error``, ``at`` and every sum of this record hold none of them and each reads with them
-  beside it (`error_form`): ``holds`` at δ says the claim holds except with δ and those terms. A subprotocol whose ``server``
+  beside it (`error_form`): ``holds`` at δ says the claim holds except with δ and those terms. ``premises``, which
+  every subprotocol but `BY_NAME`'s carries, is each Lean premise its scheme's guarantee is stated under, by name
+  (`Scheme.premises`, ``[]`` claiming none), or why its declaration does not say them. A subprotocol whose ``server``
   is not the block's is carried but not composed.
 * ``composed``: ``answer``, the Lean check of the block's product (`CHECKS`: ``onsite check``, or ``remote check`` or
   ``remote-v1 check``)'s answer on the block (protocol, verdict, reason, commitment), None when it didn't run; ``verdict``, that answer's
@@ -55,6 +57,8 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocol import DELTAS, MONITORING_PERIODS
+from verity.protocols.compose import schemes
+from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 from verity.commitments.domains import ONSITE_PROTOCOL
 
@@ -66,6 +70,9 @@ SUBPROTOCOLS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
 BY_SUBPROTOCOL, SAMPLED, INTEGRITY_UNIT = "legs", "drawn", "wrong units"
 #: the runner's protocol keys, by subprotocol
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
+#: the subprotocols no declared scheme reads (`Scheme.reader`): the sampled proofs, undeclared, and the work row, H1's,
+#: whose scheme names no quantity; each is read here by name, and a test holds the list to only shrink
+BY_NAME = ("integrity", "pouw")
 #: the subprotocols each product composes: onsite every subprotocol, remote those that need no hardware of the auditor's at the site
 PRODUCTS = {"onsite": SUBPROTOCOLS, "remote": ("integrity", "pouw")}
 #: the subprotocols whose error leaves terms out: each one's row names them (``answer.profile.named_terms``), or is refused
@@ -148,9 +155,17 @@ def error_form(error: Any, named: Mapping[str, Mapping[str, Any]] | None) -> str
 
 
 def _quantity(subprotocol: str, row: Mapping[str, Any]) -> tuple[dict[str, Any], Fraction, str]:
-    """A subprotocol's certificate, its error and where the error is read from, out of its runner row (or the wipe's subprotocol)."""
+    """A subprotocol's certificate, its error and where the error is read from, out of its runner row (or the wipe's
+    subprotocol): its scheme's `Reading` (`Scheme.reader`) under its declared ``symbol`` and published unit, or, for a
+    subprotocol of `BY_NAME`, read here."""
+    if subprotocol not in SUBPROTOCOLS:
+        raise ValueError(f"{subprotocol}: not a subprotocol of {SUBPROTOCOLS}")
+    if subprotocol not in BY_NAME:
+        scheme = _scheme(subprotocol)
+        reading = S.declared(scheme, "reader")(row)
+        return ({"symbol": S.declared(scheme, "symbol"), "value": reading.value,
+                 "unit": S.declared(scheme, "published")[0], **reading.figures}, reading.error, reading.error_from)
     q, a = row.get("quantity") or {}, row["answer"]
-    pub = a.get("public") or {}
     if subprotocol == "integrity":
         members = row.get("members") or {}
         if members.get("sampled", 0) < members.get("registered", 0):
@@ -158,23 +173,22 @@ def _quantity(subprotocol: str, row: Mapping[str, Any]) -> tuple[dict[str, Any],
                      "members": dict(members), "by_member": list(row["by_member"])}, frac(row["delta"]), "delta")
         return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": INTEGRITY_UNIT, **_sample(a)},
                 frac(row["delta"]), "delta")
-    if subprotocol == "pouw":
-        w = q["work"]
-        return ({"symbol": "W_cert", "value": int(w["credited"]), "unit": "work", "tiles": int(w["credited_tiles"])},
-                frac(row["delta"]), "delta")
-    if subprotocol == "pous":
-        return ({"symbol": "S0", "value": int(q["s_bits"]), "unit": "bits", "certified": bool(q["certified"])},
-                frac(q["eps"]), "quantity.eps")
-    if subprotocol == "bandwidth":
-        return ({"symbol": "Q_cert", "value": int(q["q_bytes"]), "unit": "bytes"}, frac(q["eps"]), "quantity.eps")
-    if subprotocol == "certifier":
-        return ({"symbol": "K", "value": int(q["K"]), "unit": "bits", "windows": int(q["windows"])}, frac(q["eps"]),
-                "quantity.eps")
-    if subprotocol == "wipe":
-        k = pub.get("k", (a.get("profile") or {}).get("k"))
-        return ({"symbol": "foreign_bits", "value": int(pub["foreign_bits"]), "unit": "bits", "k": k, "r": pub.get("r"),
-                 "M": int(pub["memory_bits"]), "certified": bool(pub["certified"])}, frac(pub["eps"]), "answer.public.eps")
-    raise ValueError(f"{subprotocol}: not a subprotocol of {SUBPROTOCOLS}")
+    w = q["work"]
+    return ({"symbol": "W_cert", "value": int(w["credited"]), "unit": "work", "tiles": int(w["credited_tiles"])},
+            frac(row["delta"]), "delta")
+
+
+def _scheme(subprotocol: str) -> S.Scheme:
+    """The declared scheme whose row is ``subprotocol``'s (`Scheme.record`, its runner key): the scheme of its name when
+    one is declared, so only that scheme's module is imported, else the one whose record is its runner key."""
+    key = RUNNER_KEYS.get(subprotocol, subprotocol)
+    if subprotocol in schemes.DECLARATIONS and schemes.get(subprotocol).record == key:
+        return schemes.get(subprotocol)
+    for scheme in schemes.load().values():
+        if scheme.record == key:
+            return scheme
+    raise ValueError(f"{subprotocol}: no declared scheme's record is {key!r} (verity.protocols.compose.schemes); "
+                     f"declare its scheme there, with its reader")
 
 
 def at_deltas(subprotocol: str, quantity: Mapping[str, Any], error: Fraction) -> dict[str, Any]:
@@ -216,10 +230,18 @@ def subprotocol(name: str, row: Mapping[str, Any], *, server: str, runs: Sequenc
         raise ValueError(f"{name}: its answer's profile names no term its error leaves out; {NAMES_TERMS_FIX}")
     if named is not None and (why := named_terms_bad(named)):
         raise ValueError(f"{name}: its answer's profile's named_terms: {why}")
+    premises = {} if name in BY_NAME else {"premises": _premises(_scheme(name))}
     return {"protocol": a["protocol"], "owner": row.get("owner"), "server": server, "source": source,
             "answer": answer,
             "quantity": quantity, "error": str(error), "error_from": error_from, "at": at_deltas(name, quantity, error),
-            "runs": list(runs)} | ({} if named is None else {"named_terms": {k: dict(t) for k, t in named.items()}})
+            "runs": list(runs)} | ({} if named is None else {"named_terms": {k: dict(t) for k, t in named.items()}}) \
+        | premises
+
+
+def _premises(scheme: S.Scheme) -> list[str] | str:
+    """What the record writes beside a declared scheme's figure: each Lean premise its guarantee is stated under, by
+    name (`Scheme.premises`), or, where its declaration does not say them, why not."""
+    return scheme.premises.why if isinstance(scheme.premises, S.Lacks) else list(scheme.premises)
 
 
 def compose(server: str, subprotocols: Mapping[str, Any], product: str = "onsite") -> dict[str, Any]:

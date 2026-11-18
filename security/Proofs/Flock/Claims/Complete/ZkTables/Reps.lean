@@ -85,7 +85,7 @@ open Lean (Json JsonNumber)
 commitment `cm` under the tape's level `i`, the extra claims `e`, and the tape's pads at table `i` committed as `ic`,
 returns a proof with `q`, from the empty transcript at its domain and `n` sends, ending at the rounds `rs`, at some
 earlier claim points and mask words (`RepRunZk` at table `i`). -/
-def RepRunJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup)
+def RepRunJ (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup)
     (v : Schedule × ℕ) (tr : Trace) (cm : Commit) (e : Array Claim) (tape : TapeZk) (i rep : ℕ) (rs : Array Round)
     (n : ℕ) (q : Zk.ZkProof → Prop) : Prop :=
   ∃ p ic l t' l' prior ws, innerCommitP (Hashes.ofSha512 h : Hashes V)
@@ -98,7 +98,7 @@ def RepRunJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : Se
       (tape.lanePad i) (tape.salt i rep) (tape.nonce i rep) prior ws).run
         (Transcript.init #[] (spec.domain spec.tables[i]! rep).toUTF8)).go l = (.ok (p, t'), l')
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The honest masked run, rep by rep**: the record decodes to the streams the session returned, `2` per table,
 every round retained; the sends are the link of the tables' caps, then the streams' rounds; and at each table, with
@@ -461,7 +461,7 @@ any number of tables: from `complete_zk`'s premises, and at
 several tables the statement's and the prover's pieces' (`StmtOkJ`, `ProverRunsJ`), the proof files' (`RepShapedJ`),
 and per rep the ring switch, the masked Ligerito and the inner proof (`RepChecksJ`), the premises `complete_zk` takes
 at one table. -/
-theorem completeJO (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem completeJO (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel)
@@ -473,7 +473,7 @@ theorem completeJO (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
 any number of tables, from premises stated per table at every good case, one table's as several's: the statement's
 `hello` (`StmtAt`), the prover's pieces (`ProverRunsAt`), the rep proofs' shapes (`RepShapedAt`), and per rep the
 ring switch, the masked Ligerito and the inner proof (`RepChecksAt`). -/
-theorem completeAll (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem completeAll (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hS : ∀ c : Case H rel, StmtAt c)
     (hPR : ∀ c : Case H rel, ProverRunsAt c) (hR : ∀ c : Case H rel, RepShapedAt c)
     (hC : ∀ o : Run H rel, RepChecksAt H rel o) (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) :

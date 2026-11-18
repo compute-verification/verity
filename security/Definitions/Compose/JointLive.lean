@@ -148,12 +148,12 @@ def Holds (c : Certificates) (s : Verity.Game.Strategy G) : Audit → O → Prop
   | .network, o => (r.world s o).commWithin c.K
 
 /-- **The probability that subprotocol `a`'s finder, built from the strategy `s`, outputs a collision of `H`.** -/
-noncomputable def collides (H : Claims.Msg → Claims.Msg) (a : Audit) (s : Verity.Game.Strategy G) : ℝ≥0∞ :=
+noncomputable def collides (H : Hash.Msg → Hash.Msg) (a : Audit) (s : Verity.Game.Strategy G) : ℝ≥0∞ :=
   ENNReal.ofReal ((r.finder a s).Pr H)
 
 /-- **Subprotocol `a`'s error at the strategy `s`**: its error `δ`, plus its reduction's loss at the probability that
 its finder, built from `s`, outputs a collision of `H`. -/
-noncomputable def error (H : Claims.Msg → Claims.Msg) (a : Audit) (δ : ℝ≥0∞) (loss : ℝ≥0∞ → ℝ≥0∞)
+noncomputable def error (H : Hash.Msg → Hash.Msg) (a : Audit) (δ : ℝ≥0∞) (loss : ℝ≥0∞ → ℝ≥0∞)
     (s : Verity.Game.Strategy G) : ℝ≥0∞ :=
   δ + loss (r.collides H a s)
 

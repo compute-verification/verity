@@ -613,7 +613,7 @@ def chunk_leaves(row: bytes, k: int) -> list[bytes]:
 def chunk_words(rows: Sequence[bytes], k: int) -> list[list[int]]:
     """A table's leaves over ``rows`` at contraction ``k`` (each `ROW`(k)'s bytes): each row's `chunk_leaves` in turn, each
     leaf its K_c / 2 + 2 u16 words, its bytes little-endian in pairs (``hm96-sha512/row/v2`` rows, as
-    `registered.Registered.commit` takes them)."""
+    `registered_value.Registered.commit` takes them)."""
     return [[leaf[i] | leaf[i + 1] << 8 for i in range(0, len(leaf), 2)] for row in rows for leaf in chunk_leaves(row, k)]
 
 

@@ -46,10 +46,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
+from verity.commitments import domains as DM
 from verity.circuits.codec import canonical_json
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import names as NM
@@ -250,7 +252,7 @@ class CommitTap:
 
     def record(self, served: Any) -> dict[str, Any]:
         """The Commit's ``verity/registration/v2`` record of its values, under the window's Program."""
-        return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "program": served.program_digest,
+        return {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "program": served.program_digest,
                 "window": {"kind": "served", "refused": list(self.refused)},
                 "registered": [self.values[n] for n in sorted(self.values)]}
 
@@ -310,7 +312,7 @@ def registration(run: Any, previous: str | None = None, day: Mapping[str, Any] |
     window also names the day's declaration (``day``, ``declaration``). It is the one-stage log's record whose tables a
     named Commit record reuses (`reused`)."""
     served = run.served
-    return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "program": served.program_digest,
+    return {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "program": served.program_digest,
             "window": {"kind": "served", "entry": run.entry, "open_root": served.root, "refused": list(served.refused),
                        **dict(day or {})},
             "registered": served.entries(), "previous": previous}
@@ -369,7 +371,7 @@ def reused(run: Any, window: Any, record: Any) -> str | None:
 
 
 @dataclass(frozen=True)
-class Reused(G.Registered):
+class Reused(RV.Registered):
     """A table of the window's registration W as a registered value of the audited circuit (`reuse`): W's rows, salts and
     tree of it, under W's entry's domain ``domain_id``, by the circuit's name of it, so its entry is W's entry but in name.
     W's entry names its domain by id alone (round 0's input ids bind the window's session, which W doesn't hold), so it
@@ -384,7 +386,7 @@ class Reused(G.Registered):
 
     def entry(self) -> dict[str, Any]:
         return {"value": self.value, "root": self.root.hex(), "leaves": self.leaves, "words": self.words,
-                **G.width_entry(self.word_bits), "domain": self.domain_id.hex()}
+                **RV.width_entry(self.word_bits), "domain": self.domain_id.hex()}
 
 
 def shape(layout: Mapping[str, Any], steps: int) -> tuple[int, int, int]:
@@ -424,10 +426,10 @@ def reuse(window: Mapping[str, Any], layout: Mapping[str, Any], steps: int, key:
         dom = bytes.fromhex(e["domain"])
         bcs, levels = NR._numpy(words, key, nonce, None, dom)
         got = out[name] = Reused(program=str(window.get("program")), value=name, words=int(words.shape[1]),
-                                 word_bits=G.WORD_BITS, rows=NR.Rows(words, n), salts=NR.Salts(key, nonce, n), bcs=bcs,
+                                 word_bits=RV.WORD_BITS, rows=NR.Rows(words, n), salts=NR.Salts(key, nonce, n), bcs=bcs,
                                  levels=levels, schema=G.SCHEMA_V2, domain_id=dom)
-        if (got.root.hex(), got.leaves, got.words, G.WORD_BITS) != (e.get("root"), e.get("leaves"), e.get("words"),
-                                                                     e.get(G.WIDTH_KEY, G.WORD_BITS)):
+        if (got.root.hex(), got.leaves, got.words, RV.WORD_BITS) != (e.get("root"), e.get("leaves"), e.get("words"),
+                                                                     e.get(RV.WIDTH_KEY, RV.WORD_BITS)):
             raise ValueError(f"{name}: the rows the audited circuit's proof blocks make of it are not the window's "
                              f"registration's {h1} (root {got.root.hex()[:16]}… for {str(e.get('root'))[:16]}…, "
                              f"{got.leaves} rows of {got.words} words for {e.get('leaves')} of {e.get('words')}): the model "

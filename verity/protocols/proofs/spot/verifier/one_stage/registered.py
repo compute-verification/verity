@@ -4,12 +4,12 @@ every read of one at a public position opened against that commitment.
 A *registered value* is a root parameter of the program, read row by row: row `r` is its `words` leaves from
 `r * words`, in the parameter's leaf order, each leaf `word_bits` bits (16 or 32: the parameter's leaf width rounded up
 to whole u16 words, `width`). Each row is committed as the circuit statement commits that port's row
-(`hm96-sha512/row/v1`): its u16 words (`row_words`: each leaf `word_bits / 16` words, low first, zero-padded to whole
+(`hm96-sha512/row/v1`): its u16 words (`registered_value.row_words`: each leaf `word_bits / 16` words, low first, zero-padded to whole
 SHA-512 chunks of 64 words, as a Flock port row and its `values` row are laid out), `x = SHA-512(sha512_row_prefix(ROLE_X,
 16, n) || row)` over those `n` words u16 LE, a 192-byte salt `y` sampled from the operating system once, at docket,
 `b || c = hm96.SHA512.commit_string(default_key, x, y)`, and the frame-v3-sha512 leaf `row_leaf(D, r,
 hm96.SHA512.tree_leaf(default_key, b || c), "hm96-sha512/row/v1")`. The value's root is the frame-v3-sha512 root over its
-rows, under the domain `D` (`domain`): `CommitmentDomain(B, -2, RangeIndexedDomain(0, rows), hash="sha512")`, `B` the 64
+rows, under the domain `D` (`registered_value.domain`): `CommitmentDomain(B, -2, RangeIndexedDomain(0, rows), hash="sha512")`, `B` the 64
 bytes of `identity_digest_sha512("verity/one-stage/registered-domain/v1", {"program", "value", "schema", "words", "leaves"})`, with
 `"word_bits"` beside them when it is not 16 (16 is the default, so a 16-bit value's domain, entry and root are what they
 were before `word_bits`). The prover keeps the rows and salts; the docket names the root.
@@ -21,8 +21,8 @@ opens under no other's domain. A value the verifier holds across windows (the we
 value did before it: the verifier names which (`registration.check`'s `held`, with its pinned, supplied and output
 values), and its domain is the same in every window.
 
-A value read by a bit-row port is committed in that port's row format instead (`schema`, one of `SCHEMAS`): under
-`hm96-sha512/row/v2` a row is the bit row of its leaves (`bit_row((row, word_bits))`: its `row_words` with no padding,
+A value read by a bit-row port is committed in that port's row format instead (`schema`, one of `registered_value.SCHEMAS`): under
+`hm96-sha512/row/v2` a row is the bit row of its leaves (`bit_row((row, word_bits))`: its `registered_value.row_words` with no padding,
 little-endian), `x = sha512_row_v2_digest` over it, and its leaf `row_leaf(D, r, ..., "hm96-sha512/row/v2")`; under
 `hm96-sha512/row-seg/v1` the same bit row under `sha512_row_seg_digest`, its leaf under `"hm96-sha512/row-seg/v1"`. The
 domain is the same in every format; the leaf frame binds the format. The verifier's reads file names a value's format
@@ -57,7 +57,7 @@ read as a circuit's `Digest` holds them (`digest_leaves`: each big-endian 64-bit
 first). Its rows are
 committed as any registered value's, in the row format the verifier names for it (`schema`, as the port that reads it:
 under a bit-row format each row's parameter leaves packed into its `word_bits`-bit leaves, `bit_words`, so a `Digest`
-row of `row/v2` is 32 u16 words), under public salts (`supplied_salts`, row i's from the program's digest, the value's
+row of `row/v2` is 32 u16 words), under public salts (`registered_value.supplied_salts`, row i's from the program's digest, the value's
 name and i alone), so its root is a function of the record and the verifier's bytes: R7 recomputes it
 (`supplied_root`) and refuses a record whose entry names another (`R7-supplied`). PoUW's seed inputs are such values: a
 proof block's seed then reads the roots its operands are committed under, which the prover can't choose.
@@ -66,65 +66,37 @@ from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
 from verity.commitments import hm96
-from verity.commitments.identity import identity_digest_sha512
-from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
-from verity.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
-                                            bit_row, row_leaf, sha512_row_digest, sha512_row_seg_digest,
-                                            sha512_row_v2_digest)
+from verity.commitments.merkle import CommitmentDomain, merkle_depth
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 from verity.circuits.codec import canonical_json, jcs_domain_error
 from verity.circuits.partition_object import TemplatePartition
 from verity.circuits.program import Program
 from verity.circuits.refs import runs as ref_runs
 from verity.circuits.types import Array, Value
+from verity.commitments import registered_value as RV
 
 from . import partition as P
-from verity.commitments.domains import (
-    ONE_STAGE_PERIOD_SALT, ONE_STAGE_REGISTERED_DOMAIN, ONE_STAGE_SUPPLIED_SALT, REGISTERED_READS_V0,
-    REGISTERED_READS_V1,
-)
+from verity.commitments.domains import ONE_STAGE_PERIOD_SALT, REGISTERED_READS_V0, REGISTERED_READS_V1
 
-REGISTERED_DOMAIN = ONE_STAGE_REGISTERED_DOMAIN
 READS = REGISTERED_READS_V0
-#: the format whose port may carry `READS_FROM`: proof block `reads_from + i` reads `reads[i]`, every other proof block nothing; each
+#: the format whose port may carry `registered_value.READS_FROM`: proof block `reads_from + i` reads `reads[i]`, every other proof block nothing; each
 #: of its objects holds only its own keys (Flock's `Registered.FORMAT`, `FILE_KEYS`, `PORT_KEYS`)
 READS_V1 = REGISTERED_READS_V1
-READS_FROM = "reads_from"
 #: the `READS_V1` key naming the ports bound to the window's committed values, each `{"root", "domain"}` (`Flock.RegBound`)
 BOUND = "bound"
 SCHEMA = SCHEMA_HM96_SHA512_ROW
 SCHEMA_V2 = SCHEMA_HM96_SHA512_ROW_V2
 SCHEMA_SEG = SCHEMA_HM96_SHA512_ROW_SEG
-#: a registered value's row formats, each a Flock port's (`Flock.Registered.SCHEMAS`)
-SCHEMAS = (SCHEMA, SCHEMA_V2, SCHEMA_SEG)
 #: the reads-file key a value of another format than `SCHEMA` adds
 SCHEMA_KEY = "row_schema"
-#: the default leaf width, which the domain and the entry name only by leaving `word_bits` out
-WORD_BITS = 16
-WIDTHS = (16, 32)
 #: a SHA-512 digest as a circuit's `Digest` holds it: eight words of 64 one-bit leaves (`digest_leaves`)
 DIGEST = Array(8, Array(64, Value(1)))
-#: u16 words per SHA-512 block: a statement's row port is whole blocks
-BLOCK = 64
-OWNER = -2
-ENTRY_KEYS = ("value", "root", "leaves", "words", "domain")
-#: the entry key a value of another width than `WORD_BITS` adds
-WIDTH_KEY = "word_bits"
 #: the reads-file key of a port not named after the template parameter it reads: that parameter's `reads` key, which the
 #: Lean verifier holds its program's registered reads to (`Flock.Registered.PARAM_KEY`, `checkCover`)
 PARAM_KEY = "param"
-#: the domain binding's key a per-window value adds: the window's open root
-WINDOW_KEY = "window"
-#: the domain binding's key a produced value adds: the digest of the docket whose sample it follows (`produced`)
-PRODUCED_KEY = "produced"
-#: the domain binding's key a value committed inside its window's open root adds in the window's place: the session the
-#: auditor's ledger opened for the window (PoUW's round-0 input-ids table, `credit.domain_of`)
-SESSION_KEY = "session"
-SUPPLIED_SALT = ONE_STAGE_SUPPLIED_SALT
 WINDOW_SALT = ONE_STAGE_PERIOD_SALT
 #: a supplied row's source kinds: a served port's root, a registered value's root, the verifier's own bytes, a position
 #: after the log's, the verifier's coin bound to the record's window
@@ -134,74 +106,9 @@ _HEX = re.compile(r"[0-9a-f]+")
 _DEC = re.compile(r"0|[1-9][0-9]*")
 
 
-def _width(word_bits: int) -> int:
-    if word_bits not in WIDTHS:
-        raise ValueError(f"a registered value's leaves are {' or '.join(map(str, WIDTHS))} bits, not {word_bits!r}")
-    return int(word_bits)
-
-
-def width_entry(word_bits: int) -> dict[str, int]:
-    """`{"word_bits": word_bits}`, or nothing for the default 16: what a domain binding and an entry add."""
-    return {} if _width(word_bits) == WORD_BITS else {WIDTH_KEY: int(word_bits)}
-
-
-def _schema(schema: str) -> str:
-    if schema not in SCHEMAS:
-        raise ValueError(f"a registered value's rows are {', '.join(SCHEMAS)} rows, not {schema!r}")
-    return schema
-
-
 def schema_entry(schema: str) -> dict[str, str]:
     """`{"row_schema": schema}`, or nothing for the default `hm96-sha512/row/v1`: what a reads-file port adds."""
-    return {} if _schema(schema) == SCHEMA else {SCHEMA_KEY: schema}
-
-
-def window_root(window: str | None) -> str | None:
-    """The window's open root a per-window value's domain binds: None, or lowercase hex of 64 bytes; ValueError
-    otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
-    if window is not None and not (isinstance(window, str) and len(window) == 128 and _HEX.fullmatch(window)):
-        raise ValueError(f"a window root is lowercase hex of 64 bytes, not {window!r}")
-    return window
-
-
-def domain(program: str, value: str, words: int, leaves: int, word_bits: int = WORD_BITS,
-           window: str | None = None, produced: str | None = None, session: str | None = None) -> CommitmentDomain:
-    """`window`: the window's open root, for a per-window value (none for a value held across windows). `produced`: the
-    docket's digest, for a value produced after its sample (`one_stage.produced`), which binds it in the window's
-    place. `session`: the window's session, for a value whose root the window's open root contains, which so can't bind
-    that root, in the window's place."""
-    if sum(x is not None for x in (window, produced, session)) > 1:
-        raise ValueError("a domain binds one of the window's open root, a registration and a session, not two")
-    if session is not None and not (isinstance(session, str) and session):
-        raise ValueError(f"a session is a nonempty string, not {session!r}")
-    if produced is not None and not (isinstance(produced, str) and len(produced) == 128 and _HEX.fullmatch(produced)):
-        raise ValueError(f"a registration digest is lowercase hex of 64 bytes, not {produced!r}")
-    binding = identity_digest_sha512(REGISTERED_DOMAIN, {
-        "program": program, "value": value, "schema": SCHEMA, "words": int(words), "leaves": int(leaves),
-        **width_entry(word_bits), **({} if window_root(window) is None else {WINDOW_KEY: window}),
-        **({} if produced is None else {PRODUCED_KEY: produced}), **({} if session is None else {SESSION_KEY: session})})
-    return CommitmentDomain(binding, OWNER, RangeIndexedDomain(0, int(leaves)), hash="sha512")
-
-
-def row_words(row: Sequence[int], word_bits: int = WORD_BITS, schema: str = SCHEMA) -> list[int]:
-    """A registered row as the statement's port row: each leaf's `word_bits / 16` u16 words, low first, zero-padded to
-    whole SHA-512 chunks (`BLOCK` words); a bit row's (`SCHEMA_V2`, `SCHEMA_SEG`) unpadded."""
-    k, bound = _width(word_bits) // 16, 1 << word_bits
-    out: list[int] = []
-    for v in row:
-        if not 0 <= int(v) < bound:
-            raise ValueError(f"registered leaf {v} does not fit {word_bits} bits")
-        out += [(int(v) >> (16 * i)) & 0xFFFF for i in range(k)]
-    return out + [0] * (-len(out) % BLOCK if _schema(schema) == SCHEMA else 0)
-
-
-def row_digest(row: Sequence[int], word_bits: int = WORD_BITS, schema: str = SCHEMA) -> bytes:
-    """The row's `x`, as the statement hashes the port's row: `sha512/row/v1` over its u16 words (`row_words`), role x;
-    under `SCHEMA_V2` or `SCHEMA_SEG`, `sha512/row/v2` or `sha512/row-seg/v1` over its leaves' bit row."""
-    if _schema(schema) == SCHEMA:
-        return sha512_row_digest(row_words(row, word_bits), 16, ROLE_X)
-    data, n = bit_row((row_words(row, word_bits, schema), 16))
-    return sha512_row_v2_digest(data, n) if schema == SCHEMA_V2 else sha512_row_seg_digest(data, n)
+    return {} if RV.known_schema(schema) == SCHEMA else {SCHEMA_KEY: schema}
 
 
 def width(program: Program, value: str) -> int:
@@ -211,8 +118,8 @@ def width(program: Program, value: str) -> int:
     if t is None:
         raise ValueError(f"{value!r} is not a parameter of the program")
     w = t.homogeneous_width()
-    if w is None or not 0 < w <= max(WIDTHS):
-        raise ValueError(f"parameter {value!r}: its leaves are not one width of at most {max(WIDTHS)} bits "
+    if w is None or not 0 < w <= max(RV.WIDTHS):
+        raise ValueError(f"parameter {value!r}: its leaves are not one width of at most {max(RV.WIDTHS)} bits "
                          f"({sorted(t.width_set())})")
     return 16 * -(-w // 16)
 
@@ -251,7 +158,7 @@ def row_leaves(program: Program, value: str, words: int, schema: str = SCHEMA) -
     """The parameter's leaves in one registered row of `words` leaves: `words` under `SCHEMA`, each parameter leaf its own
     registered leaf; under a bit-row schema the row's `words * word_bits` bits, as many parameter leaves of the parameter's
     own width as they hold (H1's A: K int8 codes of one-bit leaves, K/2 u16 words)."""
-    if _schema(schema) == SCHEMA or words < 1:
+    if RV.known_schema(schema) == SCHEMA or words < 1:
         return words
     word_bits = width(program, value)
     w = dict(program.fn.signature()[0])[value].homogeneous_width()
@@ -270,86 +177,6 @@ def shape(program: Program, value: str, words: int, schema: str = SCHEMA) -> int
     return n // k
 
 
-def leaf(dom: CommitmentDomain, position: int, bc: bytes, schema: str = SCHEMA) -> bytes:
-    return row_leaf(dom, position, _INST.tree_leaf(_INST.default_key, bc), _schema(schema))
-
-
-@dataclass(frozen=True)
-class Registered:
-    """The prover's side of one registered value: its rows and salts (private), every row's `b || c`, the tree."""
-
-    program: str
-    value: str
-    words: int
-    word_bits: int
-    rows: tuple[tuple[int, ...], ...]
-    salts: tuple[bytes, ...]
-    bcs: tuple[bytes, ...]
-    levels: tuple[tuple[bytes, ...], ...]
-    schema: str = SCHEMA
-    window: str | None = None
-    produced: str | None = None
-    session: str | None = None
-
-    @classmethod
-    def commit(cls, program: str, value: str, rows: Sequence[Sequence[int]], salts: Sequence[bytes] | None = None,
-               word_bits: int = WORD_BITS, schema: str = SCHEMA, window: str | None = None,
-               produced: str | None = None, session: str | None = None) -> "Registered":
-        """`salts`: one per row, sampled once (default: fresh from the operating system) and never used for any other row.
-        `word_bits`: every leaf's width (the verifier's `width` of the parameter). `schema`: the row format of the port
-        that reads it (`SCHEMAS`). `window`: the window's open root, for a per-window value; `produced`: the docket's
-        digest, for a value produced after its sample; `session`: the window's session, for a value its open root contains
-        (`domain`)."""
-        rows = tuple(tuple(int(w) for w in r) for r in rows)
-        words = len(rows[0]) if rows else 0
-        if not rows or not words or any(len(r) != words for r in rows):
-            raise ValueError("a registered value is at least one row, every row the same width")
-        salts = tuple(bytes(s) for s in salts) if salts is not None else tuple(_INST.fresh_salt() for _ in rows)
-        if len(salts) != len(rows) or any(len(s) != _INST.salt_bytes for s in salts):
-            raise ValueError(f"one {_INST.salt_bytes}-byte salt per row")
-        if len(set(salts)) != len(salts):
-            raise ValueError("a salt is never reused: equal salts on two rows reveal the XOR of their digests")
-        bcs = tuple(_INST.commit_string(_INST.default_key, row_digest(r, word_bits, schema), s) for r, s in zip(rows, salts))
-        dom = domain(program, value, words, len(rows), word_bits, window, produced, session)
-        return cls(program, value, words, int(word_bits), rows, salts, bcs,
-                   tree_levels(dom, [leaf(dom, i, bc, schema) for i, bc in enumerate(bcs)]), schema, window, produced,
-                   session)
-
-    @property
-    def leaves(self) -> int:
-        return len(self.rows)
-
-    @property
-    def root(self) -> bytes:
-        return self.levels[-1][0]
-
-    @property
-    def domain(self) -> CommitmentDomain:
-        return domain(self.program, self.value, self.words, self.leaves, self.word_bits, self.window, self.produced,
-                      self.session)
-
-    def entry(self) -> dict[str, Any]:
-        """What the docket names: `{"value", "root", "leaves", "words", "domain"}`, and `"word_bits"` when it is not
-        16."""
-        return {"value": self.value, "root": self.root.hex(), "leaves": self.leaves, "words": self.words,
-                **width_entry(self.word_bits), "domain": self.domain.domain_id.hex()}
-
-    def path(self, position: int) -> bytes:
-        out, i = b"", position
-        for level in self.levels[:-1]:
-            out += level[i ^ 1]
-            i >>= 1
-        return out
-
-    def statement(self, positions: Sequence[int]) -> tuple[list[tuple[int, ...]], list[bytes], dict[str, Any]]:
-        """A statement's table of the rows at `positions`: the rows and their registered salts (the prover's), and the
-        header entry `{"value", "positions", "paths"}`."""
-        if any(not 0 <= p < self.leaves for p in positions):
-            raise ValueError(f"a position is outside the value's {self.leaves} rows")
-        return ([self.rows[p] for p in positions], [self.salts[p] for p in positions],
-                {"value": self.value, "positions": [int(p) for p in positions], "paths": [self.path(p).hex() for p in positions]})
-
-
 def table(reads: Sequence[int]) -> tuple[list[int], list[int]]:
     """Each instance's position as a shared-row table: the distinct positions in first-read order, and each instance's ref.
     The positions are public, so the layout reveals nothing the program does not."""
@@ -364,7 +191,7 @@ def verify_read(dom: CommitmentDomain, root: bytes, position: int, bc: bytes, pa
     depth = merkle_depth(dom.count)
     if not 0 <= position < dom.count or len(bc) != _INST.proven_bytes or len(path) != 64 * depth:
         return False
-    digest, i = leaf(dom, position, bc, schema), position
+    digest, i = RV.leaf(dom, position, bc, schema), position
     for level in range(depth):
         sib = path[64 * level:64 * level + 64]
         digest = dom.node(level, i >> 1, *((digest, sib) if i % 2 == 0 else (sib, digest)))
@@ -460,23 +287,14 @@ def registered_entries(program: Program, values: Mapping[str, int], schemas: Map
     """The verifier's own `{value: {"leaves", "words", "word_bits", "domain"}}` for the parameters it expects registered
     (`values`: `{parameter: words}`), from its own program (`word_bits`: `width`; `leaves`: `shape`, in the value's row
     format from `schemas`, default `SCHEMA`). `window`: the window's open root, which every value's domain binds but the
-    ones in `fixed`, the values it holds across windows (`domain`)."""
+    ones in `fixed`, the values it holds across windows (`registered_value.domain`)."""
     prog = P.program_digest(program)
     out = {}
     for v, w in values.items():
         n, b = shape(program, v, w, (schemas or {}).get(v, SCHEMA)), width(program, v)
         out[v] = {"leaves": n, "words": int(w), "word_bits": b,
-                  "domain": domain(prog, v, w, n, b, None if v in fixed else window).domain_id.hex()}
+                  "domain": RV.domain(prog, v, w, n, b, None if v in fixed else window).domain_id.hex()}
     return out
-
-
-def supplied_salts(program: str, value: str, n: int) -> list[bytes]:
-    """Row i's public salt of a supplied value: 192 bytes of SHA-512 in counter mode (`SHA-512(m ‖ u32be c)` for c < 3, each
-    output whole) over `SUPPLIED_SALT`, the program's SHA-512 hex, the value's name and i (u32 little-endian), NUL between
-    them. They hide nothing the record doesn't show: the reads need only the commitment's binding."""
-    head = SUPPLIED_SALT.encode() + b"\0" + program.encode() + b"\0" + value.encode() + b"\0"
-    return [b"".join(hashlib.sha512(head + i.to_bytes(4, "little") + c.to_bytes(4, "big")).digest()
-                     for c in range(_INST.salt_bytes // 64)) for i in range(n)]
 
 
 def sources(supplied: Any) -> dict[str, list[list[tuple[str, str]]]]:
@@ -632,7 +450,7 @@ def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[st
 def _in_format(program: Program, value: str, got: list[list[int]], word_bits: int, schema: str) -> list[list[int]]:
     """Supplied rows of the parameter's leaves as rows of `schema`: themselves under `SCHEMA`, else each packed into
     `word_bits`-bit leaves (`bit_words`)."""
-    if _schema(schema) == SCHEMA:
+    if RV.known_schema(schema) == SCHEMA:
         return got
     w = dict(program.fn.signature()[0])[value].homogeneous_width()
     return [bit_words(r, w, word_bits) for r in got]
@@ -643,7 +461,7 @@ def supplied_root(program: Program, value: str, rows: Sequence[Sequence[tuple[st
                   prog: str | None = None, binding: Mapping[str, str] | None = None, schema: str = SCHEMA) -> str:
     """The root R7 holds a supplied value's entry to: its rows (`supplied_rows`), as many as the verifier's own entry's
     `leaves` (`registered_entries`), each the parameter's leaves of one row of its `words` leaves in `schema`
-    (`row_leaves`), committed in `schema` under `supplied_salts` at its `word_bits`. `prog`: `program`'s digest
+    (`row_leaves`), committed in `schema` under `registered_value.supplied_salts` at its `word_bits`. `prog`: `program`'s digest
     (`P.program_digest`), when the caller holds it."""
     got = supplied_rows(program, value, rows, rec, supplied, log, binding)
     k = row_leaves(program, value, want["words"], schema)
@@ -651,21 +469,21 @@ def supplied_root(program: Program, value: str, rows: Sequence[Sequence[tuple[st
         raise ValueError(f"supplied value {value!r}: rows of {[len(r) for r in got]} leaves, not {want['leaves']} of "
                          f"{k}")
     prog = prog or P.program_digest(program)
-    return Registered.commit(prog, value, _in_format(program, value, got, want["word_bits"], schema),
-                             supplied_salts(prog, value, len(got)), want["word_bits"], schema).root.hex()
+    return RV.Registered.commit(prog, value, _in_format(program, value, got, want["word_bits"], schema),
+                             RV.supplied_salts(prog, value, len(got)), want["word_bits"], schema).root.hex()
 
 
 def supplied_value(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
                    supplied: Sequence[str] = (), log: Sequence[Any] = (), prog: str | None = None,
-                   binding: Mapping[str, str] | None = None, schema: str = SCHEMA) -> Registered:
+                   binding: Mapping[str, str] | None = None, schema: str = SCHEMA) -> RV.Registered:
     """The prover's side of a supplied value: the rows the verifier fills from `rec` (a record without this value's own
     entry will do: no row reads it), the log and the binding under the public salts, in `schema` (the row format the
     verifier names for it), whose `entry()` the record registers and whose `statement` opens a proof block's reads like
     any registered value's."""
     got = supplied_rows(program, value, rows, rec, supplied, log, binding)
     prog, b = prog or P.program_digest(program), width(program, value)
-    return Registered.commit(prog, value, _in_format(program, value, got, b, schema),
-                             supplied_salts(prog, value, len(got)), b, schema)
+    return RV.Registered.commit(prog, value, _in_format(program, value, got, b, schema),
+                             RV.supplied_salts(prog, value, len(got)), b, schema)
 
 
 def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, int], roots: Mapping[str, str],
@@ -720,10 +538,8 @@ def bind_ports(file: Mapping[str, Any], ports: Iterable[str], roots: Mapping[str
     return {**file, BOUND: {p: {"root": roots[p]["root"], "domain": roots[p]["domain"]} for p in free}}
 
 
-__all__ = ["BLOCK", "BOUND", "DIGEST", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
-           "SCHEMA_SEG", "SCHEMA_V2", "SESSION_KEY", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WINDOW_SALT",
-           "WORD_BITS",
-           "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "half_leaves", "held_gates", "leaf", "leaves_of", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
-           "row_digest", "row_leaves", "row_words", "schema_entry", "shape", "sources",
-           "supplied_root", "supplied_rows", "supplied_salts", "supplied_value", "table", "verify_read", "width",
-           "width_entry", "window_root", "window_salt"]
+__all__ = ["BOUND", "DIGEST", "PARAM_KEY", "READS", "SCHEMA", "SCHEMA_KEY", "SCHEMA_SEG", "SCHEMA_V2",
+           "SOURCES", "WINDOW_SALT", "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests",
+           "half_leaves", "held_gates", "leaves_of", "log_base", "parameter_gates", "reads", "reads_file",
+           "registered_entries", "row_leaves", "schema_entry", "shape", "sources", "supplied_root", "supplied_rows",
+           "supplied_value", "table", "verify_read", "width", "window_salt"]

@@ -70,7 +70,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **A statement some run accepts carries a sample**, at the inputs `Deploy.V` reads of it (`acc_sample`). -/
-theorem acc_sample_of_setup {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
+theorem acc_sample_of_setup {zk : Bool} {x : Hash.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts)) :
     ∃ d, ins.read.draw = some d := by
   obtain ⟨ins', spec', sts', d, hset', hd⟩ := acc_sample hacc
@@ -80,7 +80,7 @@ theorem acc_sample_of_setup {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock
 end Gen
 
 /-- **A statement some run accepts carries a sample**, at the inputs `Deploy.V` reads of it (`acc_sample`). -/
-theorem acc_sample_of_setup {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
+theorem acc_sample_of_setup {zk : Bool} {x : Hash.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts)) :
     ∃ d, ins.read.draw = some d :=
   Gen.acc_sample_of_setup (S := S₀) (zk := zk) (x := x) (hacc := hacc) (ins := ins) (spec := spec) (sts := sts)
@@ -92,7 +92,7 @@ variable [S : ZkSetup]
 
 /-- **`Deploy.V`'s setup of a masked statement in scope is `verify --zk`'s at its sample**: `Read.setup` under `--zk`
 reads `zkTags` and `zkCoins` (`zkInputs`), and the scope refuses `--public-inputs`. -/
-theorem setupAt_of_setupOf {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem setupAt_of_setupOf {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) :
     ins.read.zk = true ∧ setupAt (ZkExec.zkInputs ins.read.I) ins.read.draw = .ok (spec, sts) := by
@@ -108,7 +108,7 @@ end Gen
 
 /-- **`Deploy.V`'s setup of a masked statement in scope is `verify --zk`'s at its sample**: `Read.setup` under `--zk`
 reads `zkTags` and `zkCoins` (`zkInputs`), and the scope refuses `--public-inputs`. -/
-theorem setupAt_of_setupOf {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem setupAt_of_setupOf {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) :
     ins.read.zk = true ∧ setupAt (ZkExec.zkInputs ins.read.I) ins.read.draw = .ok (spec, sts) :=
@@ -121,7 +121,7 @@ variable [S : ZkSetup]
 
 /-- **The scope fixes `verify --zk`'s tags**: at a masked statement in scope, the inputs `Deploy.V` reads are untyped,
 with retained rounds and `hm96-sha512/v1` leaves (`InScope`'s `form`, which is `Read.form` at `zkTags`). -/
-theorem tags_of_inScope {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem tags_of_inScope {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) :
     ins.read.I.tags.typed = false ∧ ins.read.I.tags.retainRounds = true ∧
@@ -143,7 +143,7 @@ end Gen
 
 /-- **The scope fixes `verify --zk`'s tags**: at a masked statement in scope, the inputs `Deploy.V` reads are untyped,
 with retained rounds and `hm96-sha512/v1` leaves (`InScope`'s `form`, which is `Read.form` at `zkTags`). -/
-theorem tags_of_inScope {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem tags_of_inScope {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) :
     ins.read.I.tags.typed = false ∧ ins.read.I.tags.retainRounds = true ∧
@@ -157,7 +157,7 @@ session's link points, the openings `opnD` and decoder `decD` are right at `zkTa
 accepts at the setup at `d` at `wrS` (`DecodesTable`, `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`): at public
 outputs `decodesTable_zkTabs` under `TagsOkZJ`, at hidden outputs `decodesTableH_zkTabs` under `TagsOkZHJ`, every
 table passing the shape check (`setup_shapeOk`). -/
-theorem decodesTable_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem decodesTable_deploy {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])

@@ -91,7 +91,7 @@ where a stream `y` has the coins of the live session's rep stream `2j + r` and r
 openings sampled at the positions `y`'s last round's coins give (`PadsRep`), the run's verifier opened those queries
 against the inner proof's root at those positions (`zkVerifyRepWith_inner`), so two of them at one position with
 different pairs collide among its calls (`tiedColl_of_verifyInner`). -/
-theorem zk_padsClash_tied {L : List (Claims.Msg × Claims.Msg)} {spec : SessionSpec} {sts : Array Stmt}
+theorem zk_padsClash_tied {L : List (Hash.Msg × Hash.Msg)} {spec : SessionSpec} {sts : Array Stmt}
     {record : String} {proofs : Array ByteArray} {lv : Live} {j rr : ℕ} {sch : Schedule} {tPad : ℕ}
     (hv : Zk.verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) record proofs = .ok ())
     (hlv : liveOf spec record = .ok lv) (hj : j < sts.size) (hsch : Zk.schedule sts[j].wideLeaf sts[j].m = .ok (sch, tPad))
@@ -161,7 +161,7 @@ at `OpensRows` (`decodesTableR_deploy`), so table `j`'s rep `r` reads `Q` querie
 file's inner-proof openings at `wrS`'s transcript, sampled at the positions its rep stream's last round's coins give; that
 stream has the run's rep stream's coins (`recordsLiveAtS_wrS`) and the proof file is the run's, so two of them at one
 position with different pairs collide in the run's log (`zk_padsClash_tied`). -/
-theorem zkViewClashQP (x : Claims.Msg) : ZkViewClashQ x PadsZ := by
+theorem zkViewClashQP (x : Hash.Msg) : ZkViewClashQ x PadsZ := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C _ r hacc s' spec' sts' link c₁ mids f hact hret
   obtain ⟨a, ⟨hV, pend, hpl, ha⟩, hcl⟩ := hret
   subst a
@@ -233,7 +233,7 @@ at `OpensRows` (`decodesTableR_deploy`), so table `j`'s rep `r` reads `Q` querie
 file's inner-proof openings at `wrS`'s transcript, sampled at the positions its rep stream's last round's coins give; that
 stream has the run's rep stream's coins (`recordsLiveAtS_wrS`) and the proof file is the run's, so two of them at one
 position with different pairs collide in the run's log (`zk_padsClash_tied`). -/
-theorem zkViewClashQP (x : Claims.Msg) : ZkViewClashQ x PadsZ :=
+theorem zkViewClashQP (x : Hash.Msg) : ZkViewClashQ x PadsZ :=
   Gen.zkViewClashQP (S := S₀) (x := x)
 
 end Clash
