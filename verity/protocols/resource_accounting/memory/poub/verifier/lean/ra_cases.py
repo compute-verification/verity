@@ -172,8 +172,9 @@ def registration_of(v: Any) -> audit.Registration:
 
 
 def opening_json(o: audit.Opening) -> dict:
-    return {"block": o.block.hex(), "digest": o.digest.hex(), "leaf": o.leaf.hex(), "leaf_salt": o.leaf_salt.hex(),
-            "pass": o.pass_index, "payload_path": [x.hex() for x in o.payload_path],
+    origin = {} if o.origin_position is None else {"origin_position": o.origin_position}
+    return origin | {"block": o.block.hex(), "digest": o.digest.hex(), "leaf": o.leaf.hex(),
+            "leaf_salt": o.leaf_salt.hex(), "pass": o.pass_index, "payload_path": [x.hex() for x in o.payload_path],
             "payload_salt": o.payload_salt.hex(), "position": o.position,
             "receipt_path": [x.hex() for x in o.receipt_path], "tile": o.tile.hex()}
 
@@ -181,7 +182,26 @@ def opening_json(o: audit.Opening) -> dict:
 def opening_of(v: Any) -> audit.Opening:
     return audit.Opening(int_(v, "pass"), int_(v, "position"), hex_(v, "block"), hex_(v, "leaf"), hex_(v, "leaf_salt"),
                          tuple(hexes(v, "receipt_path")), hex_(v, "payload_salt"), tuple(hexes(v, "payload_path")),
-                         hex_(v, "tile"), hex_(v, "digest"))
+                         hex_(v, "tile"), hex_(v, "digest"),
+                         int_(v, "origin_position") if "origin_position" in v else None)
+
+
+def origin_json(origin: audit.Origin | None) -> dict | None:
+    if origin is None:
+        return None
+    return {"registered": origin[1]} if origin[0] == "registered" else {"append": origin[1], "at": origin[2]}
+
+
+def origin_of(v: Any) -> audit.Origin | None:
+    """An append's `origin` (the wire note's §3): absent or null for a fresh append, `{"registered": a}` or
+    `{"append": k, "at": o}` for a re-key."""
+    if v is None:
+        return None
+    if isinstance(v, dict) and set(v) == {"registered"}:
+        return "registered", nat(v, "registered")
+    if isinstance(v, dict) and set(v) == {"append", "at"}:
+        return "append", nat(v, "append"), nat(v, "at")
+    raise D.Reject("an origin is {\"registered\": a} or {\"append\": k, \"at\": o}")
 
 
 def event_of(v: Any) -> tuple:
@@ -191,7 +211,7 @@ def event_of(v: Any) -> tuple:
     if kind in ("start", "boundary"):
         return kind, nat(v, "now")
     if kind == "append":
-        return kind, hex_(v, "root"), int_(v, "count")
+        return kind, hex_(v, "root"), int_(v, "count"), origin_of(v.get("origin"))
     if kind == "release":
         return kind, runs_of(_get(v, "runs"), "runs"), runs_of(_get(v, "withdrawn"), "withdrawn")
     if kind == "receive":
@@ -276,7 +296,7 @@ def apply(s: AuditRun, clock: Clock, e: tuple) -> dict:
             c = s.boundary()
             return {"released": None if c is None else c.index}
         if kind == "append":
-            out = s.append(e[1], e[2])
+            out = s.append(e[1], e[2], e[3])
             return verdict_json(out) if isinstance(out, audit.Verdict) else {"coin": out[1].hex(), "first": out[0]}
         if kind == "release":
             return _done(s.release(e[1], e[2]))
@@ -298,7 +318,8 @@ def summary(s: AuditRun) -> dict:
     root, the block size and the registration's fields its digest binds, and of each window's profile its samples; and
     `sessionFn`'s `groups_per_coin` when it isn't 1."""
     rec = s.record()
-    shared = {} if rec.groups_per_coin == 1 else {"groups_per_coin": rec.groups_per_coin}
+    shared = ({} if rec.groups_per_coin == 1 else {"groups_per_coin": rec.groups_per_coin}) | (
+        {"refresh": True} if rec.refresh else {})
     return shared | {"appended": rec.appended, "appends": None if rec.appends is None else rec.appends.hex(),
             "blocks": rec.blocks, "lifetime": rec.lifetime, "pace": None if rec.pace is None else rec.pace.to_json(),
             "registration": rec.registration.hex(), "released": rec.released,
@@ -306,6 +327,7 @@ def summary(s: AuditRun) -> dict:
                          "drawn": w.profile.drawn["receipt"], "heads": [None if h is None else h.hex() for h in w.heads],
                          "lengths": list(w.lengths), "opened_ns": w.opened_ns, "post_seed": list(w.post_seed),
                          "released_ns": w.released_ns, "stale": list(w.stale), "steps": list(w.steps)}
+                        | ({"probation": list(w.probation)} if w.probation else {})
                         for w in rec.windows]}
 
 
@@ -336,6 +358,8 @@ def session_of(v: Any) -> tuple[dict, list[bytes], list[bytes], int]:
     kw["deferred"] = _bool(p, "deferred")
     kw["pace"] = pace_of(_get(p, "pace"))
     kw["groups_per_coin"] = _positive(p, "groups_per_coin") if "groups_per_coin" in p else 1
+    if "refresh" in p:
+        kw["refresh"] = _bool(p, "refresh")
     Params(1, **kw)
     committed = hexes(v, "coins")
     if len(committed) != Params(1, **kw).coins or any(len(c) != coins.COIN_BYTES for c in committed):
@@ -517,6 +541,62 @@ def store(world: World) -> audit_prover.Store:
 REFUSED = "refused"
 
 
+@dataclasses.dataclass(frozen=True)
+class Rekey:
+    """A re-key append, the prover's (a stub of the wire note's §3 until the prover has one): the origin's payloads'
+    digests, re-encoded at fresh indices from `first` under the re-key's coin, with no payload tree of its own."""
+
+    first: int
+    digests: tuple[bytes, ...]
+    origin: audit.Origin
+    root: bytes
+
+    @property
+    def count(self) -> int:
+        return len(self.digests)
+
+
+class RekeyStore(audit_prover.Store):
+    """A store whose appends may be re-keys (`Rekey`): a re-key's block opens with its origin's payload salt and path
+    and the origin's store index (`origin_position`)."""
+
+    @classmethod
+    def of(cls, base: audit_prover.Store) -> RekeyStore:
+        out = cls.__new__(cls)
+        out.__dict__.update(base.__dict__)
+        return out
+
+    def origin_position(self, j: int) -> int | None:
+        if j < self.registration.blocks:
+            return None
+        a = self._append_of(j)
+        if type(a) is not Rekey:
+            return None
+        if a.origin[0] == "registered":
+            return a.origin[1] + j - a.first
+        return self.appends[a.origin[1]].first + a.origin[2] + j - a.first
+
+    def committed(self, j: int) -> tuple[bytes, tuple[bytes, ...], bytes]:
+        pos = self.origin_position(j)
+        if pos is None:
+            return super().committed(j)
+        salt, path, _ = super().committed(pos)
+        a = self._append_of(j)
+        return salt, path, a.digests[j - a.first]
+
+    def rekey(self, origin: audit.Origin, count: int) -> Rekey:
+        """A re-key of `count` of the origin's payloads, awaiting its coin (`encode`)."""
+        first = self.extent
+        base = (origin[1] if origin[0] == "registered" else self.appends[origin[1]].first + origin[2])
+        payloads = [self.payload(base + u) for u in range(count)]
+        a = Rekey(first, tuple(codec.digest(m) for m in payloads), origin,
+                  audit.rekey_root(self.registration.digest, first, count, origin))
+        self.blocks.extend([None] * count)
+        self.pending[first] = tuple(payloads)
+        self.appends.append(a)
+        return a
+
+
 def _runs_json(runs) -> list | None:
     return None if runs is None else [list(r) for r in runs]
 
@@ -529,12 +609,14 @@ class Run:
     def __init__(self, world: World | None = None, *, windows: int = 2, samples: int = 10**6, min_passes: int = 1,
                  lifetime: int | None = None, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
                  not_before_ns: int = 0, cheat: Callable[[audit_prover.Store], audit_prover.Store] | None = None,
-                 pace: audit.Pace | None = None, groups_per_coin: int = 1) -> None:
+                 pace: audit.Pace | None = None, groups_per_coin: int = 1, refresh: bool = False) -> None:
         self.store = store(World() if world is None else world)
+        if refresh:
+            self.store = RekeyStore.of(self.store)
         reg = self.store.registration
         self.params = Params(reg.blocks, deadline_ns, windows, samples=samples, min_passes=min_passes,
                              window_ns=window_ns, codec=reg.codec, receipt=reg.receipt, rows=reg.rows, lifetime=lifetime,
-                             deferred=deferred, pace=pace, groups_per_coin=groups_per_coin)
+                             deferred=deferred, pace=pace, groups_per_coin=groups_per_coin, refresh=refresh)
         self.clock = Clock()
         self.clock.now = not_before_ns
         self.not_before_ns = not_before_ns
@@ -578,9 +660,13 @@ class Run:
             self.t, self.i = self.t + 1, 0
         return out
 
-    def commit(self, root: bytes, count: int) -> Any:
-        """An append's root sent: its coin kept and, if the store awaits it, the append's blocks encoded under it."""
-        out = self._call({"kind": "append", "root": root.hex(), "count": count}, lambda: self.s.append(root, count))
+    def commit(self, root: bytes, count: int, origin: audit.Origin | None = None) -> Any:
+        """An append's root sent, a re-key's with its `origin`: its coin kept and, if the store awaits it, the append's
+        blocks encoded under it."""
+        event = {"kind": "append", "root": root.hex(), "count": count}
+        if origin is not None:
+            event["origin"] = origin_json(origin)
+        out = self._call(event, lambda: self.s.append(root, count, origin))
         if isinstance(out, tuple):
             first, coin = out
             self.append_coins.append(coin)
@@ -593,6 +679,12 @@ class Run:
         a = self.store.append(pages(self.store.extent, count, label),
                               salts(b"page salts %d" % self.store.extent, count))
         self.commit(a.root, a.count)
+        return a
+
+    def rekey(self, origin: audit.Origin, count: int) -> Rekey:
+        """A re-key of `count` of `origin`'s payloads (`RekeyStore.rekey`), its root sent."""
+        a = self.store.rekey(origin, count)
+        self.commit(a.root, a.count, origin)
         return a
 
     def release(self, runs, withdrawn=()) -> Any:
@@ -635,7 +727,11 @@ class Run:
         return out
 
     def openings(self, t: int) -> list[audit.Opening]:
-        return [self.prover.open(self.passes[t, i], q) for i, q in self.draws[t]]
+        out = [self.prover.open(self.passes[t, i], q) for i, q in self.draws[t]]
+        if type(self.store) is not RekeyStore:
+            return out
+        return [dataclasses.replace(o, origin_position=self.store.origin_position(self.passes[t, o.pass_index].plan.block(
+            o.position))) for o in out]
 
     def verify(self, t: int, openings: list[audit.Opening] | None = None) -> Any:
         opened = self.openings(t) if openings is None else openings
@@ -668,7 +764,8 @@ class Run:
                 "params": {"deadline_ns": p.deadline_ns, "deferred": p.deferred, "lifetime": p.lifetime,
                            "min_passes": p.min_passes, "pace": None if p.pace is None else p.pace.to_json(),
                            "samples": p.samples, "window_ns": p.window_ns, "windows": p.windows}
-                | ({} if p.groups_per_coin == 1 else {"groups_per_coin": p.groups_per_coin}),
+                | ({} if p.groups_per_coin == 1 else {"groups_per_coin": p.groups_per_coin})
+                | ({"refresh": True} if p.refresh else {}),
                 "registration": registration_json(self.store.registration)}
 
 
@@ -1336,11 +1433,139 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
 }
 
 
+# --- refresh (`Params.refresh`): Python alone until the Lean has it ----------------------------------------------------
+
+REFRESH = dict(refresh=True, lifetime=2, windows=5)
+"""N = 6 at L = 2: registered blocks 0 … 2 are rota class 0, re-keyed to join the even windows, and 3 … 5 class 1, the
+odd ones; the session's first fresh append is class 0."""
+
+
+def _blocks(r: Run, runs) -> Plan:
+    """The plan of `runs`' blocks in order, adjacent runs joined."""
+    return Plan.of(sorted(j for f, c in runs for j in range(f, f + c)), r.store.extent)
+
+
+def _refresh_to(r: Run, upto: int, plans: dict | None = None) -> dict:
+    """The honest refresh session's windows below `upto`, each window's plan `plans[t]` if given, and the appends that
+    join window `upto`: the appends it makes, by name. Window 0 reads the registered store; class 1's re-key (R1) and a
+    fresh append F join window 1, which reads class 0 under the registration's key and R1; class 0's re-key (R2) and
+    F's first re-key (K1) join window 2, and so on, every block read under a key fewer than L windows old, and F's
+    payload, born in window 1, read only from window 3, under K1."""
+    plans, got = plans or {}, {}
+
+    def run(t: int, runs) -> None:
+        r.boundary()
+        r.run(_blocks(r, plans.get(t, runs)))
+
+    r.start()
+    r.run()
+    got["R1"] = r.rekey(("registered", 3), 3)
+    got["F"] = r.append(2)
+    if upto == 1:
+        return got
+    run(1, ((0, 3), (got["R1"].first, 3)))
+    got["R2"] = r.rekey(("registered", 0), 3)
+    got["K1"] = r.rekey(("append", 1, 0), 2)
+    if upto == 2:
+        return got
+    run(2, ((got["R1"].first, 3), (got["R2"].first, 3)))
+    got["R3"] = r.rekey(("registered", 3), 3)
+    if upto == 3:
+        return got
+    run(3, ((got["R2"].first, 3), (got["R3"].first, 3), (got["K1"].first, 2)))
+    got["R4"] = r.rekey(("registered", 0), 3)
+    got["K2"] = r.rekey(("append", 1, 0), 2)
+    if upto == 4:
+        return got
+    run(4, ((got["R3"].first, 3), (got["R4"].first, 3), (got["K2"].first, 2)))
+    return got
+
+
+def honest_refresh(r: Run, edit: Callable | None = None) -> None:
+    _refresh_to(r, 5)
+    r.boundary()
+    r.finish(edit)
+
+
+def refresh_plan(t: int, runs: Callable[[Run, dict], tuple]) -> Callable[[Run], None]:
+    """The honest refresh session up to window t, whose first plan is `runs(r, appends)` instead."""
+    def scenario(r: Run) -> None:
+        got = _refresh_to(r, t)
+        r.boundary()
+        r.run(_blocks(r, runs(r, got)))
+    return scenario
+
+
+DECLARED = "declared"
+
+
+def rekey_origin(origin: audit.Origin, count: int, *, upto: int = 1, root: bytes | str | None = None) -> Callable:
+    """The honest refresh session's appends up to window `upto`, then a re-key from `origin` (its root `root` if given:
+    `DECLARED` for the declaration's own, `audit.rekey_root`, where the store has no such origin), then the next
+    window's first root."""
+    def scenario(r: Run) -> None:
+        _refresh_to(r, upto)
+        if root is None:
+            r.rekey(origin, count)
+        else:
+            sent = (audit.rekey_root(r.store.registration.digest, r.store.extent, count, origin) if root == DECLARED
+                    else root)
+            r.commit(sent, count, origin)
+        r.boundary()
+        r.run(Plan(((0, 3),), r.store.extent))
+    return scenario
+
+
+def off_origin(r: Run) -> None:
+    """Refresh off: an append that names an origin, with its declaration's own root."""
+    r.start()
+    r.run()
+    r.commit(audit.rekey_root(r.store.registration.digest, r.store.extent, 3, ("registered", 3)), 3, ("registered", 3))
+
+
+def on_rekey(o: audit.Opening) -> bool:
+    return o.origin_position is not None
+
+
+REFRESH_SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
+    "honest-refresh": (World(), REFRESH, honest_refresh, "accepted"),
+    "refresh-lifetime-registered": (World(), REFRESH, refresh_plan(2, lambda r, g: ((0, 3), (g["R1"].first, 3))),
+                                    "lifetime"),
+    "refresh-probation": (World(), REFRESH, refresh_plan(1, lambda r, g: ((0, 3), (g["F"].first, 2))), "probation"),
+    "refresh-probation-fresh-at-its-period": (World(), REFRESH,
+                                              refresh_plan(3, lambda r, g: ((g["R2"].first, 3), (g["F"].first, 2))),
+                                              "lifetime"),
+    "refresh-origin-off-rota": (World(), REFRESH, rekey_origin(("registered", 0), 3, upto=1), "origin"),
+    "refresh-origin-early": (World(), REFRESH, rekey_origin(("append", 1, 0), 2, upto=1), "origin"),
+    "refresh-rekey-of-a-rekey": (World(), REFRESH, rekey_origin(("append", 0, 0), 3, upto=2), "append"),
+    "refresh-origin-past-append": (World(), REFRESH, rekey_origin(("append", 1, 1), 2, upto=2), "append"),
+    "refresh-origin-past-store": (World(), REFRESH, rekey_origin(("registered", 4), 3, upto=1), "append"),
+    "refresh-origin-unreceived": (World(), REFRESH, rekey_origin(("append", 2, 0), 1, upto=1, root=DECLARED),
+                                  "append"),
+    "refresh-coin-before-commit": (World(), REFRESH, rekey_origin(("registered", 3), 3, upto=1, root=bytes(64)),
+                                   "append"),
+    "refresh-off-origin": (World(), dict(REFRESH, refresh=False), off_origin, "append"),
+    "refresh-origin-path": (World(), REFRESH, lambda r: honest_refresh(r, replace_at(
+        1, first(on_rekey), payload_salt=lambda o: flip(o.payload_salt))), "origin-path"),
+    "refresh-origin-path-sibling": (World(), REFRESH, lambda r: honest_refresh(r, replace_at(
+        3, first(lambda o: on_rekey(o) and o.origin_position >= 6), payload_path=lambda o: o.payload_path[:-1]
+        + (bytes(64),))), "origin-path"),
+    "refresh-origin-position": (World(), REFRESH, lambda r: honest_refresh(r, replace_at(
+        1, first(on_rekey), origin_position=lambda o: o.origin_position + 1)), "malformed"),
+    "refresh-origin-position-missing": (World(), REFRESH, lambda r: honest_refresh(r, replace_at(
+        1, first(on_rekey), origin_position=None)), "malformed"),
+    "refresh-origin-position-on-registered": (World(), REFRESH, lambda r: honest_refresh(r, replace_at(
+        0, first(lambda o: True), origin_position=0)), "malformed"),
+}
+"""The refresh scenarios: what each new rejection catches, and one accepted session. They run against the Python
+alone (`test_refresh.py`) until `Poub.Session` has refresh (DRAW256's); then they join `SCENARIOS`."""
+
+
 @functools.cache
 def recorded(name: str) -> tuple[dict, str | None]:
     """Scenario `name`'s case and the outcome the recorded session reached. Cached and shared by every test in the
     process: copy the case before editing it."""
-    world, kw, build, _ = SCENARIOS[name]
+    world, kw, build, _ = SCENARIOS[name] if name in SCENARIOS else REFRESH_SCENARIOS[name]
     r = Run(world, **kw)
     build(r)
     return r.case(), r.s.outcome
