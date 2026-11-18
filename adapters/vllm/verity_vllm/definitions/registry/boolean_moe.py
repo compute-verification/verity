@@ -58,14 +58,27 @@ every selection score but NaN, which `MoeRouterBiasScore_v1` never makes.
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
-from verity.circuits.defs import bind
-from verity.circuits.refs import Coll, array_of, concat
-from verity.circuits.types import Array, Tuple
-from verity.circuits.ops.boolean import elementwise as EW
-from verity.circuits.silicon import fp
-from verity.circuits.boolean.forms import NOT, OR, ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, shr, sub
-from verity.circuits.ops.boolean.mufu import MufuEx2Ftz, MufuRcpFtz
+from verity.circuits.boolean.forms import (
+    NOT,
+    ONE,
+    OR,
+    ZERO,
+    add,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+    shr,
+    sub,
+)
 from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean.mufu import MufuEx2Ftz, MufuRcpFtz
+from verity.circuits.refs import Coll, array_of, concat
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import moe as M
 from verity_vllm.definitions.registry import prims as P
 

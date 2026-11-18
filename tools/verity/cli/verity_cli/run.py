@@ -39,9 +39,10 @@ also gets an archive of the commit that runs, ``STATE/tree.tar`` (its files unde
 (``tree``) beside the commit (``program``) and each party's process reads as ``VERITY_PROGRAM`` and ``VERITY_TREE``.
 
 A party the table starts first (its ``STARTS``, `Start`: the bindings it writes, by subprotocol, its ``serve`` and
-``stop``, and the seconds `verity run` waits, ``within``) starts before every other party here, in a process of its own
-(``start CONFIG STATE PARTY MACHINE...``), its output in ``STATE/logs/<party>.log``; with ``--bindings`` giving every
-binding it writes it isn't started, since it runs where they say, and giving only some is refused (``binding``).
+``stop``, the seconds `verity run` waits, ``within``, and the ``(subprotocol, key)`` of those a party run elsewhere
+needn't give, ``optional``) starts before every other party here, in a process of its own (``start CONFIG STATE PARTY
+MACHINE...``), its output in ``STATE/logs/<party>.log``; with ``--bindings`` giving every binding it writes but the
+optional ones it isn't started, since it runs where they say, and giving only some of those is refused (``binding``).
 `verity run` waits for what it writes, ``STATE/public/<party>/bindings.json`` (written whole, by a rename: a table per
 subprotocol of strings and integers), and adds it to the run's bindings before any party that reads them starts; one
 that ends first, writes other keys or writes none within ``within`` seconds is refused by name (``bindings``), and the
@@ -75,9 +76,13 @@ onsite's ``block`` is its execution phase's seal digest, the one the served wind
 onsite's line reads a record the serving node composed, so its accepts, each row's and the combined one, read
 ``undecided`` (`served_table.AS_WRITTEN` in the reason); ``answer_from`` names each row's stated source and decides nothing.
 onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
-developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here.
+developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here, and the
+network attester's, from its piece's placement (where it ran, its key and its ``coins_on``).
 onsite's has ``coins_on``: the machine each memory attester's key and coins were made on, the attester's where its
 binding is given, else the workload's, a development run's, which makes ``coins`` ``simulated``.
+remote's has ``coins_on``, over the placement's: the machine each component whose challenger gate is optional had its
+coins flipped on, the challenger's where its gate is bound, else the workload's, which makes ``coins`` ``simulated``;
+onsite's has Pearl+'s by the same rule.
 
 ``coins`` is ``simulated`` when the challenger's host is one a prover's party is on (its machine, or two machines this
 host stands for), else ``development`` (the keys are made for the run). ``simulated`` names each premise the placement
@@ -142,6 +147,7 @@ class Start:
     serve: Callable[[Mapping[str, Any], Path], None]
     stop: Callable[[Mapping[str, Any], Path], None]
     within: int = 600
+    optional: frozenset[tuple[str, str]] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -296,7 +302,7 @@ def dry(cfg: Mapping[str, Any], reg: Registry, chosen: Sequence[str], bound: Map
 def starting(reg: Registry, chosen: Sequence[str], bound: Mapping[str, Any]) -> list[str]:
     out = []
     for p in (p for p in chosen if p in reg.starts):
-        keys = [(c, k) for c, ks in reg.starts[p].writes.items() for k in ks]
+        keys = [(c, k) for c, ks in reg.starts[p].writes.items() for k in ks if (c, k) not in reg.starts[p].optional]
         given = [f"{p}.{c}.{k}" for c, k in keys if k in bound.get(p, {}).get(c, {})]
         if given and len(given) < len(keys):
             raise Refused("binding", f"--bindings gives {', '.join(given)} of what {p} writes, not all of it: give "

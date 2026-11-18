@@ -51,7 +51,9 @@ from verity_bench.proof_layers_parse import (
 from verity_bench.proof_layers_print import (
     document,
     has_number,
+    batch_word,
     measured,
+    prover_device,
     render,
 )
 from verity_bench.proof_layers_result import (
@@ -97,6 +99,7 @@ __all__ = [
     "Result",
     "Unreadable",
     "add_arguments",
+    "batch_word",
     "detect",
     "document",
     "fetch",
@@ -104,6 +107,7 @@ __all__ = [
     "locate",
     "measured",
     "per_unit",
+    "prover_device",
     "read",
     "read_a5",
     "read_layers_sh",
@@ -111,6 +115,7 @@ __all__ = [
     "read_recursion",
     "render",
     "run",
+    "staged_words",
 ]
 
 
@@ -224,6 +229,19 @@ def _statement_instances(d: Path) -> int | None:
     return counts.pop() if len(counts) == 1 else None
 
 
+def staged_words(st: dict) -> str:
+    """What a recursion run's inner statement (stage.sh's ``stage.json``) holds: N of a served window member's M proof
+    blocks, the served values committed again under plain leaves, or seeded inputs."""
+
+    win, sub = st.get("window"), st.get("subset")
+    if not win:
+        return f"{st['subcircuit']} x {st['n']}, seeded inputs, not served values"
+    of, member = (sub["n"], sub["member"]) if sub else (st["n"], win["member"])
+    return (f"{st['subcircuit']}: {st['n']} of {of} proof blocks of a served window's member {member}, the served values "
+            "committed again under plain leaves for the recursion, not the served commitment; the outer proof is not "
+            "tied to the served registration")
+
+
 def read_recursion(d: Path, result: Result) -> None:
     """recursion_e2e.json: the headline's verdict (an accept only where Lean composed V*'s parts into the recursive
     statement and accepted it: ``ok`` and ``composed``), one recursive run's path without Lean's step as the prover's
@@ -232,7 +250,7 @@ def read_recursion(d: Path, result: Result) -> None:
     doc = json.loads((d / "recursion_e2e.json").read_text())
     h, p, inputs = doc.get("headline") or {}, doc.get("params") or {}, doc.get("inputs") or {}
     st = doc.get("staged")
-    shape = f"{st['subcircuit']} x {st['n']}" if st else f"K = {p.get('K', '?')}, N = {p.get('N', '?')}"
+    shape = staged_words(st) if st else f"K = {p.get('K', '?')}, N = {p.get('N', '?')}"
     inner = [c.strip() for c in CLAUSE.split(str(inputs.get("inner") or "")) if c.strip()]
     result.workload = shape + (f": {inner[0]}" if inner else "")
     result.accepted = h.get("ok") is True and h.get("composed") is True
@@ -435,7 +453,9 @@ def read_a5(d: Path, result: Result) -> None:
     else:
         result.said(_challenger(coins.get("source"), coins.get("challenger")), None, said)
     result.commit, result.commit_from = _commit(d / "machine.txt"), "machine.txt's git HEAD"
-    result.serves = _serves(_text(d / "machine.txt"))
+    result.serves, unheld = _serves(_text(d / "machine.txt"))
+    if unheld:
+        result.notes.append(unheld)
     result.proof = "plain" if summary.get("plain") else "zk" if summary else None
     result.device = _device((summary.get("timing") or {}).values())
     result.eps_delta = (_epsilon(summary.get("epsilon")) or _incorrect((summary.get("audit") or {}).get("wrong_units"))
@@ -549,9 +569,13 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         parser.add_argument(f"--{layer}", metavar="DIR|RUN",
                             help=f"the output the benchmark result for {named[layer]} is read from: a run's out/ directory, "
                                  "or a run id fetched through the store")
+    parser.add_argument("--batch", metavar="LO-HI",
+                        help="a batch study's request steps, not the partition file's own scope: every member it writes "
+                             "ends in that batch (-b16 for 1-16), so the plain members hold the own batch alone")
 
 
 def run(args: argparse.Namespace) -> int:
     results = [read(layer, getattr(args, layer)) for layer in LAYERS]
-    kit.report(REPORT, render(results), document(results), measured(results, getattr(args, "metrics", None) or {}))
+    kit.report(REPORT, render(results), document(results),
+               measured(results, getattr(args, "metrics", None) or {}, getattr(args, "batch", None)))
     return 0 if has_number(results) else 1

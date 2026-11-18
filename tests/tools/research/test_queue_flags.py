@@ -20,9 +20,6 @@ landing_gates = ["gates/g.py"]
 verdict_first = false
 stale_days = 3
 stale_close_days = 7
-close_unlandable = "log"
-bottom_ring = ["@ci"]
-bottom_wait_min = 45
 """
 
 
@@ -30,9 +27,8 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
     f = DriveFlags.parse(FLAGS)
     assert f == DriveFlags(on="m1,m2", marked_after="2026-10-12T06:00:00Z", regenerate_locks=True,
                            land="review", after_landing_no_cache=True, landing_gates=("gates/g.py",), verdict_first=False,
-                           stale_days=3, stale_close_days=7, close_unlandable="log", bottom_ring=("@ci",), bottom_wait_min=45)
+                           stale_days=3, stale_close_days=7)
     assert DriveFlags.parse("") == DriveFlags() == DriveFlags(None, None, False, "review", None, False)
-    assert (DriveFlags().bottom_ring, DriveFlags().bottom_wait_min) == (("@ci", "@top"), 30)
     assert DriveFlags.parse("after_landing_shards = 3\n").after_landing_shards == 3
     assert DriveFlags.parse("restack_jobs = 1\n").restack_jobs == 1
     assert DriveFlags.parse('warn_steps = ["ratchet-gate"]\n').warn_steps == ("ratchet-gate",)
@@ -43,24 +39,16 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
     assert [DriveFlags.parse(f'after_landing_shards = "{v}"\n').after_landing_shards for v in ("auto", "auto:4")] == ["auto", "auto:4"]
     assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
                         "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= warn_steps= verdict_first=False "
-                        "stale_days=3 stale_close_days=7 stale_keep= close_unlandable=log after_landing_shards=1 command_line=on lowrisk_lane=True "
-                        "lowrisk_per_tick=20 lowrisk_excludes= verdict_excludes= verdict_plain= executor=off executor_enqueue= verdict_carry=off bottom_ring=@ci "
-                        "bottom_wait_min=45 signed_verdicts=off restack_jobs=3")
-    assert [DriveFlags.parse(f'executor = "{v}"\n').executor for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
+                        "stale_days=3 stale_close_days=7 stale_keep= after_landing_shards=1 command_line=on lowrisk_lane=True "
+                        "lowrisk_excludes= verdict_excludes= verdict_plain= verdict_carry=off "
+                        "signed_verdicts=off restack_jobs=3")
     assert [DriveFlags.parse(f'verdict_carry = "{v}"\n').verdict_carry for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
-    assert [DriveFlags.parse(f'close_unlandable = "{v}"\n').close_unlandable for v in ("off", "log", "on")] == ["off", "log", "on"]
-    assert DriveFlags.parse('executor_enqueue = ["python3", "enqueue.py"]\nstale_keep = [2692, 2693]\n') == DriveFlags(
-        executor_enqueue=("python3", "enqueue.py"), stale_keep=(2692, 2693))
+    assert DriveFlags.parse("stale_keep = [2692, 2693]\n") == DriveFlags(stale_keep=(2692, 2693))
     for text, why in (('on = "m1,m2"', 'on = \'m1,m2\': a list of names, as ["a", "b"]'),
-                      ("executor_enqueue = []", "executor_enqueue = []: a command as a non-empty list of its words"),
-                      ('executor_enqueue = ["python3", ""]', "executor_enqueue = ['python3', '']: a command as a non-empty"),
-                      ('executor_enqueue = "enqueue.py"', "executor_enqueue = 'enqueue.py': a command as a non-empty"),
                       ("stale_keep = [0]", "stale_keep = [0]: a list of PR numbers, as [2692, 2693]"),
                       ('stale_keep = ["2692"]', "stale_keep = ['2692']: a list of PR numbers"),
                       ("stale_keep = 2692", "stale_keep = 2692: a list of PR numbers"),
-                      ('executor = "yes"', "executor = 'yes': one of off, shadow, on"),
                       ("verdict_carry = true", "verdict_carry = True: one of off, shadow, on"),
-                      ('close_unlandable = "yes"', "close_unlandable = 'yes': one of off, log, on"),
                       ("on = []", "on = []: at least one machine"),
                       ("after_landing_shards = 0", "after_landing_shards = 0: a whole number, 1 or a shard plan's N"),
                       ('after_landing_shards = "auto:0"', "after_landing_shards = 'auto:0': a whole number, 1 or a shard plan's N"),
@@ -69,7 +57,6 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ('regenerate_locks = "yes"', "regenerate_locks = 'yes': true or false"),
                       ("verdict_first = 1", "verdict_first = 1: true or false"),
                       ("lowrisk_lane = 1", "lowrisk_lane = 1: true or false"),
-                      ("lowrisk_per_tick = 0", "lowrisk_per_tick = 0: a whole number, 1 or more"),
                       ("restack_jobs = 0", "restack_jobs = 0: a whole number, 1 or more"),
                       ("restack_jobs = 2.5", "restack_jobs = 2.5: a whole number, 1 or more"),
                       ("lowrisk_excludes = []", "lowrisk_excludes = []: a non-empty list of directories"),
@@ -80,15 +67,6 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ("verdict_excludes = []", "verdict_excludes = []: a non-empty list of directories"),
                       ('verdict_excludes = ["/tools/"]', "verdict_excludes = ['/tools/']: a non-empty list"),
                       ("verdict_plain = []", "verdict_plain = []: a non-empty list of directories"),
-                      ("bottom_ring = []", "bottom_ring = []: a non-empty list of handles, each `@` and its lower-case name, "
-                                           "as [\"@ci\"]"),
-                      ('bottom_ring = "@ci"', "bottom_ring = '@ci': a non-empty list of handles"),
-                      ('bottom_ring = ["ci"]', "bottom_ring = ['ci']: a non-empty list of handles"),
-                      ('bottom_ring = ["@ci @top"]', "bottom_ring = ['@ci @top']: a non-empty list of handles"),
-                      ('bottom_ring = ["@CI"]', "bottom_ring = ['@CI']: a non-empty list of handles"),
-                      ("bottom_wait_min = 0", "bottom_wait_min = 0: a whole number of minutes, 1 or more"),
-                      ("bottom_wait_min = 0.5", "bottom_wait_min = 0.5: a whole number of minutes"),
-                      ('bottom_wait_min = "30"', "bottom_wait_min = '30': a whole number of minutes"),
                       ('land = "fast"', "land = 'fast': one of review"),
                       ('land = "check"', "land = 'check': train landing was deleted with its code: drive lands on "
                                          "review only"),
@@ -124,10 +102,10 @@ def test_the_strict_parse_refuses_an_unknown_key_naming_the_keys_it_reads_and_th
         DriveFlags.parse("stale_day = 4\n", "d.toml", strict=True)
     assert str(e.value) == ("d.toml: unknown key 'stale_day' (did you mean 'stale_days'?): this research reads only on, "
                             "marked_after, regenerate_locks, land, land_into, after_landing_no_cache, landing_gates, "
-                            "warn_gates, warn_steps, verdict_first, stale_days, stale_close_days, stale_keep, close_unlandable, "
+                            "warn_gates, warn_steps, verdict_first, stale_days, stale_close_days, stale_keep, "
                             "after_landing_shards, command_line, lowrisk_lane, "
-                            "lowrisk_per_tick, lowrisk_excludes, verdict_excludes, verdict_plain, executor, executor_enqueue, verdict_carry, bottom_ring, "
-                            "bottom_wait_min, signed_verdicts, restack_jobs; "
+                            "lowrisk_excludes, verdict_excludes, verdict_plain, verdict_carry, "
+                            "signed_verdicts, restack_jobs; "
                             "rename or remove it, or update this research")
 
 
@@ -140,11 +118,15 @@ def test_a_client_ignores_every_key_it_doesnt_read_a_near_miss_too_so_it_parses_
 def test_a_key_whose_code_was_deleted_is_ignored_so_a_main_that_still_sets_it_parses(capsys):
     """Code deployed ahead of `main` reads `main`'s drive.toml, which keeps a deleted key until `main` reaches the commit that
     removed it: refusing it would stop every tick."""
-    f = DriveFlags.parse(FLAGS + "max_lean_checks = 10\nnonlean_first = false\nreviewed_first = false\n", "d.toml", strict=True)
+    old = ("max_lean_checks = 10\nnonlean_first = false\nreviewed_first = false\n"
+           'executor = "shadow"\nexecutor_enqueue = ["python3", "enqueue.py"]\nlowrisk_per_tick = 20\n'
+           'close_unlandable = "log"\nbottom_ring = ["@ci"]\nbottom_wait_min = 30\n')
+    f = DriveFlags.parse(FLAGS + old, "d.toml", strict=True)
     assert f == DriveFlags.parse(FLAGS)
     err = capsys.readouterr().err
     assert all(f"d.toml: ignoring key {k!r}, which this research doesn't read (its code was deleted: remove it)" in err
-               for k in ("max_lean_checks", "nonlean_first", "reviewed_first")), err
+               for k in ("max_lean_checks", "nonlean_first", "reviewed_first", "executor", "executor_enqueue",
+                         "lowrisk_per_tick", "close_unlandable", "bottom_ring", "bottom_wait_min")), err
 
 
 def test_the_gates_are_read_whatever_other_keys_drive_toml_holds(tmp_path):
@@ -191,8 +173,9 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
     (`DriveFlags.plain_excludes`) is `lowrisk_excludes` without the entries `verdict_plain` lists, and then
     `verdict_excludes`, each entry once; with `lowrisk_excludes` or `verdict_excludes` absent, nothing, whatever
     `verdict_plain` holds.  Over this tree's drive.toml, a change to Lean, a lock, a Lake file or the trusted hashes, the
-    check, the research tool (the code that lands and reverts among it), the Lean check, the circuit language, a verifier or
-    a device takes the whole check before it lands, whatever its land verdicts."""
+    Lean check, the circuit language, a verifier, a device or the verifier machine's deployment takes the whole check before
+    it lands, whatever its land verdicts; the landing system's own code (the check, the research tool, the move tool, the
+    merge drivers) lands on its land verdicts and the quick tier."""
     flags = DriveFlags.parse('lowrisk_excludes = ["*.lean", "a/"]\nverdict_excludes = ["a/", "b/x.py"]\n')
     assert flags.plain_excludes == ("*.lean", "a/", "b/x.py")
     flags = DriveFlags.parse('lowrisk_excludes = ["*.lean", "a/", "c/", "x.toml"]\nverdict_plain = ["c/", "x.toml"]\n'
@@ -206,15 +189,16 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
     root = Path(__file__).resolve().parents[3]
     flags = DriveFlags.parse((root / "tools/check/drive.toml").read_text())
     for path in ("security/Proofs/Core/X.lean", "tools/pous_grader/lean-audit.json", "security/lakefile.toml",
-                 "security/lean-toolchain", "security/lake-manifest.json", "x/TRUSTED.sha256", ".gitattributes",
-                 "tools/check/check.py", "tools/check/drive.toml", "tools/check/policy.toml",
-                 *(f"tools/research/src/research/{m}.py" for m in ("queue", "landing", "vqueue", "vqueue_loop", "vqueue_slim",
-                                                                    "cli", "merge", "carry", "labelauth")),
+                 "security/lean-toolchain", "security/lake-manifest.json", "x/TRUSTED.sha256",
+                 "tools/research/src/research/pods/nebius/verifier/setup.sh",
                  "tools/verity/lean/check.py", "verity/circuits/program.py", "verity/commitments/x.py",
                  "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py",
                  "verity/protocols/compose/verifier/live_challenger/auditor.py"):
         assert not lowrisk([path, "README.md"], flags.plain_excludes), f"drive.toml's excludes let {path} land on a verdict"
-    for path in ("GLOSSARY.md", "calibration/census/README.md"):
+    for path in ("GLOSSARY.md", "calibration/census/README.md", ".gitattributes", "tools/check/check.py",
+                 "tools/check/drive.toml", "tools/check/policy.toml", "tools/move/restack.py",
+                 *(f"tools/research/src/research/{m}.py" for m in ("queue", "landing", "vqueue", "vqueue_loop", "vqueue_slim",
+                                                                    "cli", "merge", "carry", "labelauth"))):
         assert lowrisk([path], flags.plain_excludes), f"drive.toml's excludes keep {path} on the whole check"
 
 
@@ -227,18 +211,19 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
     ("benchmarks/one_stage/a5.py", None),
     ("verity/protocols/resource_accounting/network/attester/network_attester_serve.py", None),
     ("benchmarks/poub_session/auditor_line.py", None),
-    ("tools/move/restack.py", None),
+    ("tools/move/restack.py", "tools/move/"),
     ("verity/circuits/program.py", None),
-    ("tools/research/src/research/vqueue_loop.py", None),
-    ("tools/check/drive.toml", None),
+    ("tools/research/src/research/vqueue_loop.py", "tools/research/"),
+    ("tools/research/src/research/pods/nebius/verifier/setup.sh", None),
+    ("tools/check/drive.toml", "tools/check/"),
     ("verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py", None),
     ("tests/verity/protocols/compose/verifier/lean/pyproject.toml", None),
 ], ids=lambda x: x or "-")
 def test_each_verdict_plain_entry_frees_its_files_for_the_gate_and_the_rest_stay_on_the_whole_check(path, entry):
     """Over this tree's drive.toml and files: a file kept off the low-risk lane only by an entry of `verdict_plain` (``entry``)
-    is plain where the land verdicts gate, and still off the low-risk lane; the code an auditor's device runs, the move tool,
-    the circuit language, the research tool, the check, a verifier's `__init__.py` and a Lean package's `pyproject.toml`,
-    which entries the gate reads keep off, are not plain."""
+    is plain where the land verdicts gate, and still off the low-risk lane; the code an auditor's device runs, the circuit
+    language, the verifier machine's deployment, a verifier's `__init__.py` and a Lean package's `pyproject.toml`, which
+    entries the gate reads keep off, are not plain."""
     root = Path(__file__).resolve().parents[3]
     flags = DriveFlags.parse((root / DRIVE_FLAGS).read_text())
     assert (root / path).is_file() and not lowrisk([path], flags.lowrisk_excludes)

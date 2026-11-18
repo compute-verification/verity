@@ -387,7 +387,7 @@ def test_the_party_follows_period_json(tmp_path) -> None:
     assert CS.placement("n0", "n0", key, **under)["kind"] == "prover-node"
     assert CS.placement("n0", "auditor-host", key, **under) == {
         "parties": {"memory_attester": "auditor-host", "prover": "n0", "verifier": "n0"}, "kind": "own-host",
-        CS.PREMISE: f"holds: the session is signed under the key configuration {conf} pins for memory-challenger's "
+        CS.PREMISE: f"{mc.MATCHED}: the session is signed under the key configuration {conf} pins for memory-challenger's "
                     "pous sessions; the memory attester ran on auditor-host, not the prover's n0",
         "setup": CS.SETUP}
     assert CS.SETUP == "setup checked by the developer, not the auditor"

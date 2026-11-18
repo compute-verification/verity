@@ -24,6 +24,7 @@ segment and parallel across segments.  Every tensor is `uint8` on one CUDA devic
 from __future__ import annotations
 
 import torch
+
 from verity.protocols.resource_accounting.memory.pous.verifier import primitives
 from verity.protocols.resource_accounting.memory.pous.verifier.codec import Codec
 from verity.protocols.resource_accounting.memory.pous.verifier.params import OPERATING_POINT, SALT_BITS, TAG_BITS

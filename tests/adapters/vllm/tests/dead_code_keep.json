@@ -24,6 +24,9 @@
   "verity_vllm.compiler.compile_slice_v6": "CompileSlice_v6, the pool row's slice (verity.commitments.pool_row), held by tests/compiler/test_network_attester_compile_slice_v6.py; benchmarks/mempool and benchmarks/network_e2e/encodings import it",
   "verity_vllm.compiler.compile_slice_v7": "CompileSlice_v7, the slice charging the length terms, held by tests/compiler/test_network_attester_compile_slice_v7.py; benchmarks/network_traces/compile_slice_zk.py proves it",
   "verity_vllm.compiler.served_statics": "the served statics' Definition, held by tests/compiler/test_network_attester_served_statics.py; benchmarks/prove_path/served_statics_zk.py and served_tie_window.py prove it",
-  "verity_vllm.compiler.served_tie": "the served tie's Definition, held by tests/compiler/test_network_attester_served_tie.py; benchmarks/prove_path/served_tie_zk.py and served_tie_window.py prove it"
+  "verity_vllm.compiler.served_tie": "the served tie's Definition, held by tests/compiler/test_network_attester_served_tie.py; benchmarks/prove_path/served_tie_zk.py and served_tie_window.py prove it",
+  "verity_vllm.pipeline.tick_slice": "TickSlice_v1, the compile slice under the certified tick, read by its circuit-check sidecar and tests/pipeline/test_tick_slice.py",
+  "verity_vllm.program.predict.mtp": "dsa's MTP draft layer: its part of the weights record (draft_layer, the name-to-path map a match reads) and the draft forward, held against the pin's launches by tests/program/test_predict_mtp.py; live once the predictor builds a drafted request's Program, which domain.check_phi refuses until then",
+  "verity_vllm.definitions.numerics.greedy_accept_twin": "numpy twin of the greedy rejection kernels' tiled argmax and accept at the vLLM pin, held to registry.spec's GreedyAccept_v1 by tests/program/test_greedy_accept.py (LIVE registry.spec); live once a drafted request's Program binds it"
  }
 }
