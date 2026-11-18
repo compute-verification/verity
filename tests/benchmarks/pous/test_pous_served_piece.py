@@ -277,7 +277,7 @@ def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, bet
     monkeypatch.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
     trusted = kw.pop("trusted_sha512", hashlib.sha512(auditor.signer.public_key).hexdigest())
     kw.setdefault("deployment", _deployment(hashlib.sha512(auditor.signer.public_key).hexdigest()))
-    card = {k: kw.pop(k) for k in ("rounds", "bw_party", "bw_host", "bw_request") if k in kw}
+    card = {k: kw.pop(k) for k in ("rounds", "bw_party", "bw_host", "bw_request", "bw_card") if k in kw}
     both = {k: kw[k] for k in ("bw_trusted_sha512",) if k in kw}
     _judge(monkeypatch, kw)
     early = SP.sessions(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
@@ -860,9 +860,14 @@ def _bandwidth(tmp_path, record=lambda request: request, **kw):
              f"--device {tmp_path / 'parties' / 'bw'} --listen 127.0.0.1:0 --pous-record {tmp_path / 'parties' / 'pous'} "
              f"--challenger {challenger} --windows 2 --passes 2 --samples 4 --window-ns 1000000 --deadline-ns 1000000")
     auditor = Auditor(tmp_path, keep=tmp_path / "parties" / "pous", record=record, draw=lambda n: SOURCE[:n])
-    return {"auditor": auditor, "bw_party": party, "bw_host": "127.0.0.1",
+    return {"auditor": auditor, "bw_party": party, "bw_host": "127.0.0.1", "bw_card": "NVIDIA H200",
             "bw_request": SP.HB.request(NODE.encode(), windows=2, passes=2, samples=4, window_s=0.001,
                                         deadline_s=0.001)} | kw
+
+
+def test_a_bandwidth_session_naming_no_card_off_cuda_is_refused_by_name(served, tmp_path, monkeypatch):
+    with pytest.raises(SP.Refusal, match="name it with --bw-card$"):
+        _run(served, tmp_path, monkeypatch, **(_bandwidth(tmp_path) | {"bw_card": None}))
 
 
 def test_the_held_sessions_request_is_the_auditors_session():
