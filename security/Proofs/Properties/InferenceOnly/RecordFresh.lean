@@ -5,6 +5,7 @@ public import Proofs.Properties.InferenceOnly.RecordFreshRows
 public import Proofs.Properties.InferenceOnly.RecordKinds
 public import Proofs.Properties.InferenceOnly.RecordSlots
 public import Proofs.Properties.InferenceOnly.RecordTally
+public import Circuits.Wire
 public import Mathlib.Tactic
 
 /-!
@@ -122,7 +123,7 @@ theorem slotRows_mem {S : ℕ} {gs : List Grid} {s : ℕ} {w : Spot.Wires.Wire} 
   rw [Finset.mem_product, List.mem_toFinset, List.mem_filter, List.mem_range'_1, Finset.mem_Ico] at hp
   obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4, h5⟩ := hp
   refine ⟨rfl, rfl, by simpa using h3, h5, ?_⟩
-  simp only [Spot.Wires.Wire.indexOf, beq_self_eq_true, Bool.true_and, decide_eq_true h1, decide_eq_true h2,
+  simp only [Circuits.Wire.indexOf, beq_self_eq_true, Bool.true_and, decide_eq_true h1, decide_eq_true h2,
     decide_eq_true h4, decide_eq_true h5, ite_true, Option.isSome_some]
 
 /-- **The rows of a slot a wire covers number what the tally counts**: the wire's units in the slot
