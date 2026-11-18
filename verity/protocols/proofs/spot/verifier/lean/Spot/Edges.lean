@@ -3,11 +3,13 @@ module
 public import Flock.TemplateQuery
 public import Spot.Bits
 public import Spot.Wires
+public import Std.Data.HashSet
 meta import Flock.Program
 meta import Flock.TemplateQuery
 meta import Spot.Bits
 meta import Spot.Wires
 meta import Std.Data.HashMap
+meta import Std.Data.HashSet
 
 /-!
 # The wires a Program's root states
@@ -22,14 +24,15 @@ one member of the writer node, at the field's bits. Across the members a part co
 moves by the argument's member stride, and the writer leaf it reads by the part's image of that stride; a wire needs
 the writer field to stay the same, so the image is a whole number of writer members.
 
-The refusals, by name: `edge-parts` (the root has more parts than `partsBound`), `edge-template` (a non-input root
-node whose template the ranges or the wiring don't list), `edge-form` (a scan at the root, as reader or writer),
-`not-topological` (a part reads a later node, or the node itself), `edge-rows` (a reader row across a part's edge, not
-one whole writer field, or not in closed form: a strided part whose row is not contiguous or whose stride the members
-don't keep, an explicit part naming a non-input node, a reference to a parameter) and `edge-width` (a reader row's bits
-are not the field's).
+The refusals, by name: `edge-parts` (an argument of a root node has more parts than `argPartsOk` allows),
+`edge-template` (a non-input root node whose template the ranges or the wiring don't list), `edge-form` (a scan at the
+root, as reader or writer), `not-topological` (a part reads a later node, or the node itself), `edge-rows` (a reader row
+across a part's edge, not one whole writer field, or not in closed form: a strided part whose row is not contiguous or
+whose stride the members don't keep, an explicit part naming a non-input node, a reference to a parameter) and
+`edge-width` (a reader row's bits are not the field's).
 
-The work is the root's nodes and arguments, then each part times its port's rows: nothing per unit or per block.
+The work is the root's nodes and arguments, then each part times its port's rows: nothing per unit or per block. The
+parts are read only after `argPartsOk` has bounded them by the root's nodes.
 -/
 
 @[expose] public section
@@ -46,16 +49,28 @@ def firstUnits (rs : Array TRange) : Std.HashMap Nat (String × Nat) :=
     let b := acc.2.getD r.template 0
     (acc.1.insert r.node (r.template, b), acc.2.insert r.template (b + r.count))) ({}, {})).1
 
-/-- The root's argument parts, counted per argument without reading them. -/
-def partsOf (P : Prog) : Nat :=
-  (P.defs[P.root]!).body.nodes.foldl (fun a x => x.args.foldl (fun a g => a + g.seq.parts.size) a) 0
+/-- The space a part reads: its node or parameter, or an explicit part's first reference's; none for an empty one. -/
+def partKey : Part → Option (Bool × Nat)
+  | .affine p i _ _ => some (p, i)
+  | .strided p i _ _ _ _ _ => some (p, i)
+  | .explicit it => it[0]?.map fun r => (r.p, r.i)
 
-/-- The most parts a root may have: the record's wires, plus one part per argument of each ranged root node. A part
-that reads a non-input node gives at least one wire, one per row of its port, which the record states, and the
-input leaves an argument reads are one part of it. A builder that emits a part per block emits about as many parts
-as units, which this refuses from the parts' counts alone. -/
-def partsBound (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Nat :=
-  W.wires.length + rs.foldl (fun a r => a + ((P.defs[P.root]!).body.nodes[r.node]!).args.size) 0
+/-- Whether an argument of root node `k`, in a root of `np` parameters, has at most one part more than the spaces
+(`partKey`) its parts read. A builder that folds an argument's reads of one writer node into one part, and its reads
+of the inputs into a part an input node, meets it; one that emits a part per block has about as many parts in an
+argument as members, and is refused. The bound is in the Program's own nodes alone: it reads neither the ranges nor
+the record's wires. The parts are read only below `k + np + 2`, which no accepted argument exceeds, as distinct
+spaces number at most the earlier nodes, the parameters and the empty part; an argument reading a later node may be
+refused here rather than as `not-topological`. -/
+def argPartsOk (k np : Nat) (s : Flock.Program.Seq) : Bool :=
+  s.parts.size ≤ k + np + 2 &&
+    s.parts.size ≤ (s.parts.foldl (fun (h : Std.HashSet (Option (Bool × Nat))) q => h.insert (partKey q)) {}).size
+      + 1
+
+/-- Whether every argument of every root node meets `argPartsOk`. -/
+def partsOk (P : Prog) : Bool :=
+  let b := (P.defs[P.root]!).body
+  (List.range b.nodes.size).all fun k => (b.nodes[k]!).args.all fun a => argPartsOk k b.params.size a.seq
 
 /-- The return field of `t` that starts at leaf `o`: its index, leaves and bits. -/
 def fieldAt (t : Ty) (o : Nat) : Option (Nat × Nat × Nat) :=
@@ -82,13 +97,14 @@ def membersIn (x0 L len M s0 c : Nat) : Except String (Nat × Nat) :=
     let on := if olo ≤ ohi then ohi - olo + 1 else 0
     if cn != on then .error "edge-rows" else .ok (clo.toNat, cn.toNat)
 
-/-- The writer leaf of the part's in-part index `k0` and the leaf step of a member stride `L` over `n` members, where the
-row of `len` leaves is contiguous in the writer. -/
+/-- The writer leaf of the part's in-part index `k0` and the leaf step of a member stride `L` over `n` members, where
+the row of `len` leaves is contiguous in the writer. -/
 def leafOf (q : Part) (k0 L len n : Nat) : Except String (Nat × Bool × Nat × Int) :=
   match q with
   | .affine p i b _ => if p then .error "edge-rows" else .ok (i, false, b + k0, (L : Int))
   | .strided p i b inner os is _ =>
-    if p || !(len == 1 || (is == 1 && k0 % inner + len ≤ inner)) || !(n ≤ 1 || L % inner == 0) then .error "edge-rows"
+    if p || !(len == 1 || (is == 1 && k0 % inner + len ≤ inner)) || !(n ≤ 1 || L % inner == 0) then
+      .error "edge-rows"
     else
       let l := b + ((k0 / inner : Nat) : Int) * os + ((k0 % inner : Nat) : Int) * is
       if l < 0 then .error "edge-rows" else .ok (i, false, l.toNat, ((L / inner : Nat) : Int) * os)
@@ -150,10 +166,10 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
     out := out ++ [wire]
   return out
 
-/-- **The wires the Program's root states**, under the ranges `rs` and the record's wiring `W` (its templates, cuts
-and stated wires): the module docstring's rule, in the root's node, argument and part order, or the first refusal. -/
+/-- **The wires the Program's root states**, under the ranges `rs` and the record's wiring `W` (its templates and
+cuts): the module docstring's rule, in the root's node, argument and part order, or the first refusal. -/
 def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except String (List Spot.Wires.Wire) := do
-  if partsOf P > partsBound P rs W then throw "edge-parts"
+  if !partsOk P then throw "edge-parts"
   let fu := firstUnits rs
   let nodes := (P.defs[P.root]!).body.nodes
   let mut out : List Spot.Wires.Wire := []
@@ -197,13 +213,9 @@ private def toy (aRet : Ty) (bParts : Array Part) : Prog :=
 private def toyRanges : Array TRange :=
   #[⟨1, "A", 0, 2⟩, ⟨2, "B", 2, 2⟩, ⟨3, "A", 4, 2⟩]
 
-private instance : Inhabited Spot.Wires.Wire :=
-  ⟨{ reader := "", port := "", writer := "", out := "", start := 0, radix := [], base := 0, step := [], cut0 := 0,
-     cuts := 1 }⟩
-
-private def toyWiring (cuts : List (String × List (String × Nat))) (wires : Nat) : Spot.Wires.Wiring :=
+private def toyWiring (cuts : List (String × List (String × Nat))) : Spot.Wires.Wiring :=
   let t (n : Nat) : Spot.Wires.Template := { units := n, rows := [("x", ⟨2, 2⟩)], outs := [("o0", 2)] }
-  { templates := [("A", t 4), ("B", t 2)], cuts := cuts, wires := (List.range wires).map fun _ => default }
+  { templates := [("A", t 4), ("B", t 2)], cuts := cuts, wires := [] }
 
 private def wire (r w o : String) (start : Nat) (radix : List Nat) (base : Int) (step : List Int) (cut0 : Nat) :
     Spot.Wires.Wire :=
@@ -220,15 +232,17 @@ private def refuses (P : Prog) (W : Spot.Wires.Wiring) (code : String) : Bool :=
   | .ok _ => false
   | .error e => e == code
 
-#guard gives (toy row2 #[.affine false 1 0 4]) (toyWiring [] 2)
+#guard gives (toy row2 #[.affine false 1 0 4]) (toyWiring [])
   [wire "B" "A" "o0" 0 [2] 0 [1] 0, wire "A" "B" "o0" 2 [2] 0 [1] 0]
-#guard refuses (toy row2 #[.affine false 1 1 4]) (toyWiring [] 2) "edge-rows"
-#guard gives (toy (.tuple #[v16, v16]) #[.affine false 1 0 4]) (toyWiring [("B", [("x", 2)])] 3)
+#guard refuses (toy row2 #[.affine false 1 1 4]) (toyWiring []) "edge-rows"
+#guard gives (toy (.tuple #[v16, v16]) #[.affine false 1 0 4]) (toyWiring [("B", [("x", 2)])])
   [wire "B" "A" "o0" 0 [2] 0 [1] 0, wire "B" "A" "o1" 0 [2] 0 [1] 1, wire "A" "B" "o0" 2 [2] 0 [1] 0]
-#guard gives (toy row2 #[.affine false 1 0 2, .affine false 1 2 2]) (toyWiring [] 3)
+#guard gives (toy row2 #[.affine false 1 0 2, .affine false 1 2 2]) (toyWiring [])
   [wire "B" "A" "o0" 0 [1] 0 [1] 0, wire "B" "A" "o0" 1 [1] 1 [1] 0, wire "A" "B" "o0" 2 [2] 0 [1] 0]
-#guard refuses (toy row2 #[.affine false 1 0 2, .affine false 1 2 2]) (toyWiring [] 0) "edge-parts"
-#guard refuses (toy row2 #[.affine false 3 0 4]) (toyWiring [] 2) "not-topological"
-#guard refuses (toy (.tuple #[.value 8, .value 24]) #[.affine false 1 0 4]) (toyWiring [("B", [("x", 2)])] 3) "edge-width"
+#guard refuses (toy row2 #[.affine false 1 0 2, .affine false 1 2 1, .affine false 1 3 1]) (toyWiring [])
+  "edge-parts"
+#guard refuses (toy row2 #[.affine false 3 0 4]) (toyWiring []) "not-topological"
+#guard refuses (toy (.tuple #[.value 8, .value 24]) #[.affine false 1 0 4]) (toyWiring [("B", [("x", 2)])])
+  "edge-width"
 
 end Spot.Edges
