@@ -174,6 +174,11 @@ def test_poubs_settings_are_refresh_and_what_its_binder_holds_each_refused_by_na
         S.settings(poub.POUB, {"window": 2, "passes": False})
 
 
+def test_the_remote_session_keeps_a_weight_derived_copy_and_the_bandwidth_audit_keeps_none() -> None:
+    assert S.declared(poub.POUB, "keeps_weight_copy") is True
+    assert S.declared(poub.BANDWIDTH, "keeps_weight_copy") is False
+
+
 def test_what_each_lacks_says_why() -> None:
     with pytest.raises(LookupError, match="poub declares no record: no combined record"):
         S.declared(poub.POUB, "record")
