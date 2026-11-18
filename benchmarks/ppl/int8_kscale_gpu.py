@@ -35,6 +35,7 @@ import windows as W  # noqa: E402
 def run(a: argparse.Namespace) -> dict:
     from transformers import AutoTokenizer
 
+    from verity_bench import kit
     from verity_vllm.engine.build import build_engine, target_mismatches
     from verity_vllm.engine.stock import sampling
     from verity_vllm import TargetProfile
@@ -49,7 +50,7 @@ def run(a: argparse.Namespace) -> dict:
     target = TargetProfile.from_device().with_overrides(int8_exact="linears")
     with tempfile.TemporaryDirectory() as scratch:
         eng = build_engine(scratch_checkpoints(a.checkpoints, entry, Path(scratch)), case=a.role, target=target, max_num_seqs=len(wins),
-                           engine_args=json.loads(a.engine_args))
+                           engine_args=json.loads(a.engine_args), card=kit.card_sku(kit.host_stamp()["card"]))
     assert not target_mismatches(eng), target_mismatches(eng)
     cal = Calibrator(eng.model)
     eng.llm.generate([{"prompt_token_ids": w.tolist()} for w in wins], sampling(temperature=0.0, max_tokens=1), use_tqdm=False)

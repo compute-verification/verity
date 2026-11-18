@@ -279,9 +279,11 @@ def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequ
     token, hashing on host threads (`native_host`) can't keep up with the mixes. The staging is sized from the mix's
     envelope as the Commit stage arms it (`size_arena`) over the windowed worker's device ring (`enable_windows`), and
     refused here, before any request, when it doesn't fit beside the engine."""
+    from verity_bench import kit
     from verity_vllm.engine import vllm_adapter as va
 
     eng = va.build_engine(CHECKPOINTS, max_num_seqs=args.max_num_seqs, case=ROLES[args.model], execution="bi-eager",
+                          card=kit.card_sku(kit.host_stamp()["card"]),
                           engine_args={"max_model_len": args.max_model_len,
                                        "max_num_batched_tokens": args.max_num_batched_tokens,
                                        "gpu_memory_utilization": args.gpu_memory_utilization})
