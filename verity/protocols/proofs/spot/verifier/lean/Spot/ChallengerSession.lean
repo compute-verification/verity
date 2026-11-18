@@ -13,7 +13,9 @@ leaf (`challenger.json`):
 
 `end` 0x00 when the client closed the session and 0x01 ‖ ended otherwise. `challengePhaseOf` is `session_of`: the record under
 the key (`recordReason`), the close signed under it, the log the one the close signs, line for line, a session its
-client closed, and the roots it received (`releasedRootsOf`), which reads past the log's coin-tree lines (`treeLine`;
+client closed, and the roots and releases of every family in the log's one order (`releasedLogOf`), which refuses a
+release stamped before its root's receipt (`RELEASED_BEFORE_RECEIVED`) and reads past the log's coin-tree lines
+(`treeLine`;
 `ChallengerTrees` reads them). A line is refused unless it is its own canonical JSON (`Flock.canon`) in at most
 `MAX_LOG_LINE` characters, so Lean's parser and Python's read every accepted line alike.
 
@@ -55,8 +57,8 @@ credits a session reads it there: `creditedChallengePhase` (the pin first, then 
 refusal throws Python's `CoinError` text.
 
 The difftest's pieces: `challenger_close` (`ChallengerClose.from_json` and `close_message`), `challenger_released`
-(`log_chain` and `released_roots_of`), `challenger_ledger` (`audited_session`), `challenger_day` (`declared_day`),
-`challenger_head` (`ledger_head`),
+(`log_chain`, `released_log_of` and `by_family`), `challenger_ledger` (`audited_session`), `challenger_day`
+(`declared_day`), `challenger_head` (`ledger_head`),
 `challenger_session` (`trusted_session_of`), `challenger_credited` (`credited_session`) and `challenger_pinned`
 (`pinned_session`), each `{"refused": why}` where Python refuses.
 -/
@@ -215,11 +217,9 @@ def event (line : String) : V Json := do
   unless sortedKeys j do throw LOG_MALFORMED
   pure j
 
-private def pairs : List String → List (String × String)
-  | a :: b :: rest => (a, b) :: pairs rest
+private def pairsOf {α : Type} : List α → List (α × α)
+  | a :: b :: rest => (a, b) :: pairsOf rest
   | _ => []
-
-private def isTime (j : Json) : Bool := (nat? j).isSome
 
 /-- `tree_line`: whether release log line `line` is a coin tree's (`ChallengerTrees.coinTreesOf`), an event whose
 `event` is `TREE_EVENT` or `OPEN_EVENT`. -/
@@ -228,43 +228,94 @@ def treeLine (line : String) : Bool :=
   | .ok j => jsonStrIs (getD j "event") TREE_EVENT || jsonStrIs (getD j "event") OPEN_EVENT
   | .error _ => false
 
+/-- Two stamps of the one challenger's clock compared for which came first: an order, never a duration. -/
+def RELEASED_BEFORE_RECEIVED : String :=
+  "the challenger's release log stamps a coin's release before its root's receipt"
+
+inductive EntryKind where
+  | recorded
+  | released
+  deriving DecidableEq, Repr
+
+/-- An entry of the release log as `Verity.Challenger.Entry`'s: a root `recorded` or a coin `released`, at line `pos`
+(the head is line 0). `root` is the root recorded, or the root the coin is released after; `time` its `received_at` or
+`released_at`. -/
+structure Entry where
+  kind : EntryKind
+  label : String
+  index : Nat
+  root : ByteArray
+  time : Nat
+  pos : Nat
+
+/-- The roots and releases of every family, in the one order the release log holds them. -/
+abbrev Log := List Entry
+
+/-- `before`: entry `a` stands earlier than entry `b` in the release log, the order `Verity.Challenger.Log.before`
+reads. -/
+def before (a b : Entry) : Bool := a.pos < b.pos
+
 /-- The roots the challenger received, by family in order. -/
 abbrev Roots := List (String × List ByteArray)
 
-/-- `released_roots_of` (module docstring): the roots the release log `log` shows the challenger received, its head
-naming `c`, each root followed by its coin's release, its coin trees' lines aside (`treeLine`). -/
-def releasedRootsOf (c : LiveCommitment) (log : List String) : V Roots := do
+/-- `by_family`: the roots of `log` received in each of `c`'s families, in order. -/
+def byFamily (c : LiveCommitment) (log : Log) : Roots :=
+  c.families.map fun (l, _) => (l, (log.filter fun e => e.kind == .recorded && e.label == l).map (·.root))
+
+/-- `cut`, lean's cut as a check: every root of a family in `payloads` stands before every release of a family in
+`keys`. -/
+def cut (log : Log) (payloads keys : List String) : Bool :=
+  let last := ((log.filter fun e => e.kind == .recorded && payloads.contains e.label).map (·.pos)).max?
+  let first := ((log.filter fun e => e.kind == .released && keys.contains e.label).map (·.pos)).min?
+  match last, first with
+  | some r, some k => r < k
+  | _, _ => true
+
+/-- `released_log_of` (module docstring): the roots and releases the release log `log` shows, its head naming `c`,
+each root followed by its coin's release, released no earlier than its root's receipt, its coin trees' lines aside
+(`treeLine`). -/
+def releasedLogOf (c : LiveCommitment) (log : List String) : V Log := do
   let head := "{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}"
   unless log.head? == some head do
     throw s!"the challenger's release log is not coin commitment {(Flock.hexOf c.root).take 16}'s"
-  let rest := log.tail.filter fun l => !treeLine l
+  let rest := (log.zipIdx.drop 1).filter fun (l, _) => !treeLine l
   if rest.length % 2 == 1 then throw "the challenger's release log ends on a root without its release"
-  let mut roots : Array (String × Array ByteArray) := (c.families.map fun (l, _) => (l, #[])).toArray
-  for (a, b) in pairs rest do
+  let mut counts : Array (String × Nat) := (c.families.map fun (l, _) => (l, 0)).toArray
+  let mut out : Array Entry := #[]
+  for ((a, i), (b, j)) in pairsOf rest do
     let r ← event a
     let s ← event b
     let ok := keys? r == some #["event", "index", "label", "received_at", "root"] &&
       keys? s == some #["after", "event", "index", "label", "released_at"] &&
-      jsonStrIs (getD r "event") "root" && jsonStrIs (getD s "event") "release" &&
-      isTime (getD r "received_at") && isTime (getD s "released_at")
+      jsonStrIs (getD r "event") "root" && jsonStrIs (getD s "event") "release"
     let .str label := getD r "label" | throw LOG_MALFORMED
-    let some k := roots.findIdx? (·.1 == label) | throw LOG_MALFORMED
+    let some k := counts.findIdx? (·.1 == label) | throw LOG_MALFORMED
     let .str root := getD r "root" | throw LOG_MALFORMED
     let some bytes := (Flock.unhex root).toOption | throw LOG_MALFORMED
-    let n : Int := (roots[k]?.map (·.2.size)).getD 0
-    unless ok && int? (getD r "index") == some n && int? (getD s "index") == some n &&
+    let some received := nat? (getD r "received_at") | throw LOG_MALFORMED
+    let some released := nat? (getD s "released_at") | throw LOG_MALFORMED
+    let n : Nat := (counts[k]?.map (·.2)).getD 0
+    unless ok && int? (getD r "index") == some (n : Int) && int? (getD s "index") == some (n : Int) &&
         jsonStrIs (getD s "label") label && jsonStrIs (getD s "after") root && root.length == 128 do
       throw LOG_MALFORMED
-    roots := roots.modify k fun (l, rs) => (l, rs.push bytes)
-  return roots.toList.map fun (l, rs) => (l, rs.toList)
+    if released < received then throw RELEASED_BEFORE_RECEIVED
+    counts := counts.modify k fun (l, m) => (l, m + 1)
+    out := out.push ⟨.recorded, label, n, bytes, received, i⟩ |>.push ⟨.released, label, n, bytes, released, j⟩
+  return out.toList
 
 def rootsJson (roots : Roots) : Json :=
   Json.mkObj (roots.map fun (l, rs) => (l, Json.arr (rs.toArray.map fun r => Json.str (Flock.hexOf r))))
 
-/-- `session_of` (module docstring): the coin commitment the challenger signed under `key`, the roots its release log
-shows it received and its session id, from its record, its release log's lines and its signed close (`null` when the
-verifier has none). -/
-def challengePhaseOf (key : ChallengerKey) (record log close : Json) : V (LiveCommitment × Roots × String) := do
+def logJson (log : Log) : Json :=
+  Json.arr <| log.toArray.map fun e =>
+    Json.mkObj [("index", Lean.toJson e.index),
+      ("kind", Json.str (if e.kind == .recorded then "recorded" else "released")), ("label", Json.str e.label), ("pos", Lean.toJson e.pos), ("root", Json.str (Flock.hexOf e.root)),
+      ("time", Lean.toJson e.time)]
+
+/-- `session_of` (module docstring): the coin commitment the challenger signed under `key`, the roots and releases its
+release log shows in its one order (`releasedLogOf`) and its session id, from its record, its release log's lines and
+its signed close (`null` when the verifier has none). -/
+def challengePhaseOf (key : ChallengerKey) (record log close : Json) : V (LiveCommitment × Log × String) := do
   if let some why ← recordReason key record then throw why
   let r ← ChallengerRecord.ofJson record
   if close.isNull then throw NO_CLOSE
@@ -282,7 +333,7 @@ def challengePhaseOf (key : ChallengerKey) (record log close : Json) : V (LiveCo
     throw s!"the challenger's release log has {lines.length} lines, not the {c.lines} its close record signs"
   unless logChain lines == c.chain do throw "the challenger's release log is not the one its close record signs"
   if let some e := c.ended then throw s!"the challenger's session ended without its client closing it: {e}"
-  return (r.commitment, ← releasedRootsOf r.commitment lines, c.session)
+  return (r.commitment, ← releasedLogOf r.commitment lines, c.session)
 
 private def isDigest (j : Json) (n : Nat := 128) : Bool :=
   match j with
@@ -838,13 +889,13 @@ def ledgerHead (heads : Json) (key : ChallengerKey) : V Json := do
 def logDigest (lines : List String) : String :=
   Flock.hexOf (Flock.Sha512.hash (String.join (lines.map (· ++ "\n"))).toUTF8)
 
-/-- `session_named` (module docstring): the coin commitment and the roots of session `a`, from its files
+/-- `session_named` (module docstring): the coin commitment and the log of session `a` (`releasedLogOf`), from its files
 `{close, hellos, log, record}`, when its close names the ledger's session, its record the open's host, the record was
 signed at the leaf the ledger's end names over the commitment it names, and its release log and refused hellos are the
 ones the end sealed, as many hellos as the end counts. -/
-def challengePhaseNamed (a : Audited) (key : ChallengerKey) (session : Json) : V (LiveCommitment × Roots) := do
+def challengePhaseNamed (a : Audited) (key : ChallengerKey) (session : Json) : V (LiveCommitment × Log) := do
   unless keys? session == some #["close", "hellos", "log", "record"] do throw CHALLENGE_PHASE_FORM
-  let (c, roots, sid) ← challengePhaseOf key (getD session "record") (getD session "log") (getD session "close")
+  let (c, log, sid) ← challengePhaseOf key (getD session "record") (getD session "log") (getD session "close")
   unless sid == a.session do
     throw s!"the challenger's session is {sid}, not {a.session}, the one the auditor's ledger opens for this window"
   let r ← ChallengerRecord.ofJson (getD session "record")
@@ -862,7 +913,7 @@ def challengePhaseNamed (a : Audited) (key : ChallengerKey) (session : Json) : V
   let hellos ← hs.toList.mapM fun | .str s => pure s | _ => throw HELLOS_FORM
   unless jsonStrIs (getD a.files HELLOS_FILE) (logDigest hellos) && hellos.length == a.refusedHellos do
     throw s!"the challenger's refused hellos are not the {a.refusedHellos} the auditor's ledger sealed at its session's end"
-  return (c, roots)
+  return (c, log)
 
 
 /-- `circuit_reason` (module docstring): why a window doesn't count toward `period` (`none`: no period holds it), whose
@@ -946,11 +997,11 @@ def pinnedChallengePhase (ledger window : Json) (key : ChallengerKey) (pins main
   if let some why := firstParentReason a.session (strOf (getD opened "pinned")) main then throw why
   return a
 
-/-- `trusted_session_of` (module docstring): the coin commitment and the roots of the one session the auditor's ledger
+/-- `trusted_session_of` (module docstring): the coin commitment and the log of the one session the auditor's ledger
 opens for `window` under `key`, run from a commit the host's pins log `pins` records on main's first-parent line `main`
 (`pinnedChallengePhase`), from that session's files `{close, hellos, log, record}`. -/
 def trustedChallengePhaseOf (ledger window : Json) (key : ChallengerKey) (pins main session : Json)
-    : V (LiveCommitment × Roots) := do
+    : V (LiveCommitment × Log) := do
   challengePhaseNamed (← pinnedChallengePhase ledger window key pins main) key session
 
 /-- `credited_session` (module docstring): `pinnedChallengePhase`, counted toward its period when `descriptor` hashes to the
@@ -981,14 +1032,16 @@ def closePiece (j : Json) : V Json := do
     let m ← closeMessage I host (← LiveCommitment.ofJson (getD j "commitment")) c.session c.lines c.chain c.ended
     return Json.mkObj [("close", c.toJson), ("message", Json.str (Flock.hexOf m))]
 
-/-- `{"commitment", "log"}` to `log_chain` and `released_roots_of`'s. -/
+/-- `{"commitment", "log"}` to `log_chain`, `released_log_of`'s and `by_family`'s of it. -/
 def releasedPiece (j : Json) : V Json := do
   request j #["commitment", "log"]
   let .arr ls := getD j "log" | throw "log is not a list of strings"
   let lines ← ls.toList.mapM fun | .str s => pure s | _ => throw "log is not a list of strings"
   pure <| refusing do
-    let roots ← releasedRootsOf (← LiveCommitment.ofJson (getD j "commitment")) lines
-    return Json.mkObj [("chain", Json.str (Flock.hexOf (logChain lines))), ("roots", rootsJson roots)]
+    let c ← LiveCommitment.ofJson (getD j "commitment")
+    let log ← releasedLogOf c lines
+    return Json.mkObj [("chain", Json.str (Flock.hexOf (logChain lines))), ("log", logJson log),
+      ("roots", rootsJson (byFamily c log))]
 
 private def auditedJson (a : Audited) : Json :=
   Json.mkObj [("cap", a.cap), ("circuit", a.circuit), ("commitment", Json.str a.commitment),
@@ -1035,8 +1088,8 @@ def headPiece (j : Json) : V Json := do
 def challengePhasePiece (j : Json) : V Json := do
   request j #["key", "ledger", "main", "pins", "session", "window"]
   pure <| refusing do
-    let (c, roots) ← trustedChallengePhaseOf (getD j "ledger") (getD j "window") (← ChallengerKey.ofJson (getD j "key"))
+    let (c, log) ← trustedChallengePhaseOf (getD j "ledger") (getD j "window") (← ChallengerKey.ofJson (getD j "key"))
       (getD j "pins") (getD j "main") (getD j "session")
-    return Json.mkObj [("commitment", c.toJson), ("roots", rootsJson roots)]
+    return Json.mkObj [("commitment", c.toJson), ("roots", rootsJson (byFamily c log))]
 
 end Spot.Challenger
