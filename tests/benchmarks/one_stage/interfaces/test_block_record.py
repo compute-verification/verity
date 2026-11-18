@@ -218,6 +218,30 @@ def test_each_declared_schemes_row_is_its_readers_and_only_the_undeclared_are_re
         R._quantity("attester", row)
 
 
+def test_each_row_its_scheme_bounds_not_carries_why_beside_it_and_keeps_its_verdict(monkeypatch) -> None:
+    """`S.bound` refuses all four declared rows today (PoUS's help and the bandwidth audit's six Γ charges nothing
+    bounds, the wipe's own term unsaid, the network attester's premises unsaid): each carries that sentence and the
+    terms it lacks, and its verdict is still its answer's. Naming a row in `UNDECIDED_WHEN_UNBOUNDED` makes it
+    undecided with the sentence as its reason, and only that row."""
+    report, wipe = _accepting_report()
+    built = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    legs = built["legs"]
+    lacking = {"pous": "help", "bandwidth": "chip", "wipe": "Verity.Scheme.δscheme", "certifier": "premises"}
+    for name, term in lacking.items():
+        refused = R.S.unbounded(R._scheme(name))
+        assert legs[name]["unbounded"] == {"why": str(refused), "terms": list(refused.terms)} and term in refused.terms
+        assert legs[name]["answer"]["verdict"] == "accept"
+    assert not any("unbounded" in legs[k] for k in R.BY_NAME)
+    assert built["composed"]["legs"] == {k: "accept" for k in R.SUBPROTOCOLS}
+    jsonschema.Draft202012Validator(SCHEMA).validate(built)
+    assert R.check(built) == {} and R.UNDECIDED_WHEN_UNBOUNDED == ()
+    monkeypatch.setattr(R, "UNDECIDED_WHEN_UNBOUNDED", ("pous",))
+    again = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    assert again["legs"]["pous"]["answer"]["verdict"] == "undecided"
+    assert again["legs"]["pous"]["answer"]["reason"] == legs["pous"]["unbounded"]["why"]
+    assert again["composed"]["legs"] == {k: "undecided" if k == "pous" else "accept" for k in R.SUBPROTOCOLS}
+
+
 def test_pous_writes_its_state_bound_and_a_record_under_the_older_name_still_reads() -> None:
     """PoUS's quantity is written as `S0`, the verifier's `s_bits`, in a record built here as in the fixtures, and no
     other quantity has that symbol. The same record under `S_cert`, the quantity's older name, fits the schema and
