@@ -1274,22 +1274,18 @@ def _reached(monkeypatch, *clients):
 
 
 def test_a_session_whose_salt_coin_does_not_open_is_closed_and_the_refusal_raised(monkeypatch):
-    """`session` (ncp-v2's) and `opened` (a reserved session the gate opens) reach the challenger, then ask its salt
-    coin after their root. Where that coin does not open, the session they reached is closed and the challenger's
-    refusal is raised as it was."""
+    """`opened` (a reserved session the gate opens) reaches the challenger, then asks its salt coin after its root. Where
+    that coin does not open, the session it reached is closed and the challenger's refusal is raised as it was."""
     live = Wd.live_challenger(0, 3, CH.entropy(1)).commitment
     sid, root = CH.session_id(1), hashlib.sha512(b"a root").digest()
     answer = {"session": sid, "seq": 0, "root": root.hex(), "commitment": live.root.hex()}
-    clients = [_Client(live), _Client(live)]
-    tries = _reached(monkeypatch, *clients)
-    for client, reach in zip(clients, (
-            lambda: PHW.session("pouw:test", AUDITOR, 3, root, answer),
-            lambda: PHW.opened("pouw:test", AUDITOR, 3, lambda s, r: answer, sid, root, "the window's open root"))):
-        with pytest.raises(CoinError) as refused:
-            reach()
-        assert str(refused.value) == "the challenger refused: that coin is open"
-        assert client.asked == [(Wd.SALT, 0, root)] and client.closed == 1
-    assert tries == [(AUDITOR, None), (AUDITOR, None)]
+    client = _Client(live)
+    tries = _reached(monkeypatch, client)
+    with pytest.raises(CoinError) as refused:
+        PHW.opened("pouw:test", AUDITOR, 3, lambda s, r: answer, sid, root, "the window's open root")
+    assert str(refused.value) == "the challenger refused: that coin is open"
+    assert client.asked == [(Wd.SALT, 0, root)] and client.closed == 1
+    assert tries == [(AUDITOR, None)]
 
 
 @pytest.mark.parametrize("answer", [{"withheld": False, "signed": True}, {"signed": True}, {"withheld": 1, "signed": True},

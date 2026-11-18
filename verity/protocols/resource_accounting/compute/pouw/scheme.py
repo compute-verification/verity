@@ -434,8 +434,7 @@ class Attached:
         if own["challenger"]:
             k = spend_epoch(self.private)
             given = SimpleNamespace(challenger=own["challenger"], session=self.reserve(k), gate=SV.gate_of(self.gate))
-            self.session, coins, opening, _, carried, k = SV.salt_session(OPTION, given, SV.weights_root(roots), True,
-                                                                          epoch=k)
+            self.session, coins, opening, _, carried, k = SV.salt_session(OPTION, given, SV.weights_root(roots), epoch=k)
         else:
             held = SV.in_process_coins(self.epochs - 1)
             coins, opening = held.commitment, held.open("salt", SV.weights_root(roots))
