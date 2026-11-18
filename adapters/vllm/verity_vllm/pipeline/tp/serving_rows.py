@@ -160,8 +160,7 @@ def write_node_window(st: Mapping[str, Any], request: Mapping[str, Any], tp: Map
     (`node_window_rows.commit_rank_window`) under ``run`` = `run_of` (TP run root, rank), the string `write` uses, and the
     partition's sampling design. Returns `write`'s five keys and ``window``, the rank's H, which `gather` writes into ``tp.json``.
     The request's ``joined`` is the joined record registered before the serve: `require` refuses, before the engine, a
-    node-window request without ``cap``, ``partition``, ``joined`` or a Program for every rank, or whose joined record
-    names free rows (`node_window_rows.check_free`); `commit` holds the ranks' ``circuit.json`` to it
+    node-window request without ``cap``, ``partition``, ``joined`` or a Program for every rank; `commit` holds the ranks' ``circuit.json`` to it
     (`node_window_rows.rank_records`) before it returns, before the coin."""
     raise NotImplementedError("vllm/compiler-wires-period-pieces: no rank commits a node window yet: rank_rows picks no "
                               "form, and node_window_rows.served_values is not built")
