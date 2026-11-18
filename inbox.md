@@ -1,0 +1,3 @@
+[2026-11-18T04:18Z] 6cf61b05c736
+Small addition to item C, in `tests/benchmarks/pouw/test_pearl_c_vllm.py`, the give-up test (`test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_inert_bound`, about line 1854): the guard `assert drawn & set(over)` uses the verdict's whole tile list, which includes the tile appended for excluded rows, so it can pass when the coin sampled no tile over the bound. Make the guard compare the SAMPLED tiles only (the first `drawn` of the list / the verdicts that are not exclusion tiles; read how `tiles`, `drawn`, `exclusion_tiles` are laid out in `verify_run` before choosing the slice). Keep `--draws 32` and the main assertion unchanged. If the guard then fails, that is a finding: report it, do not weaken it.
+
