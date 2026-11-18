@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-#: what `theory/fold_kernel_check.py`, `edited_gemm/egemm_depthr_check.py` and the tests read
+#: what the tests read
 __all__ = ["rotl", "rotr"]
 
 
