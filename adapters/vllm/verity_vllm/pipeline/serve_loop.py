@@ -8,9 +8,9 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from verity import hooks as H
 from verity_vllm.engine.admission import Hook
 from verity_vllm.engine.served_seed import SeedCoins, served
-from verity.protocols.resource_accounting.network.prover.admission import TickGate
 from verity_vllm.pipeline.serve_admit import Admission, Delta
 from verity_vllm.pipeline.serve_commit import CommitWindows, ingress_of
 
@@ -21,7 +21,7 @@ class EngineLoop:
     ``has_unfinished_requests``); ``commit`` a `CommitWindows` or None. With ``cap`` (``--window-requests``), at most ``cap``
     requests are in the engine at once: later ones wait in ``held``, in admission order, and go in as running ones finish.
     With ``hook`` (the admission hook on the engine's scheduler, `engine.admission`), the loop steps only once it is
-    ready, and a drain opens it; with ``gate`` (``--admit tick``, a `network.prover.admission.TickGate` among the hook's holds), the
+    ready, and a drain opens it; with ``gate`` (``--admit tick``, the network attester's gate among the hook's holds), the
     gate's records come through `tick`, in queue order with the admissions.
 
     Each request goes into the engine with the seed `engine.served_seed.served` gives it: a stochastic one that sent none is
@@ -31,7 +31,7 @@ class EngineLoop:
     _STOP = object()
 
     def __init__(self, engine: Any, commit: CommitWindows | None = None, cap: int = 0,
-                 clock: Callable[[], float] = time.time, gate: TickGate | None = None, hook: Hook | None = None,
+                 clock: Callable[[], float] = time.time, gate: H.Gate | None = None, hook: Hook | None = None,
                  coins: SeedCoins | None = None) -> None:
         self.engine, self.commit, self.cap, self.clock, self.gate, self.hook = engine, commit, int(cap), clock, gate, hook
         own = getattr(commit, "coins", None)

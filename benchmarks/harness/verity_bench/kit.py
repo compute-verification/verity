@@ -250,6 +250,20 @@ def card_arch(name: str, *, directory: Path | None = None) -> str:
     return _card_named(name, directory or cards_directory())["arch"]
 
 
+def card_gencode(name: str, *, directory: Path | None = None) -> str:
+    """nvcc's ``-gencode`` value for the card `card_arch` finds for ``name``: ``arch=<virtual>,code=<name>`` of its
+    ``arch``'s architecture file (`verity.device.load_architecture`, in the architectures beside the cards); refused by
+    name where no architecture file states it."""
+    from verity.device import load_architecture
+
+    try:
+        arch = load_architecture(card_arch(name, directory=directory),
+                                 directory=cards_directory().parent / "architectures")
+    except KeyError as e:
+        raise SystemExit(f"the card nvidia-smi names {name!r}: {e.args[0]}") from None
+    return f"arch={arch['virtual']},code={arch['name']}"
+
+
 def machine_arch(*, directory: Path | None = None) -> str:
     """The ``arch`` of the run's machine's card: `machine_properties()`'s ``card``, a card record's name in ``directory``,
     with no card needed; refused by name where it is unread."""
@@ -389,7 +403,7 @@ def wrong_card(workload: str, short: str, card: str, *, directory: Path | None =
         return None
     want = " or ".join(d["value"] for c in _gpu_cards(directory) if c.get("short") == short for d in c.get("driver", ()))
     return (f"the card is a {card}, not the {short} of spec {workload!r} ({want}): run it on a node whose card is a "
-            f"{want}, or use the spec for this card")
+            f"{want}, or name this card where the spec lists it (`SPEC@CARD`)")
 
 
 # ---- the paired ratio --------------------------------------------------------------------------------------------------------

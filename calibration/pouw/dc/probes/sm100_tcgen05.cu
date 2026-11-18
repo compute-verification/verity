@@ -1,5 +1,5 @@
 // The tensor measurement M4 on datacenter Blackwell (sm_100a, B200) as opcode probes.
-// Build with ../opcode_probe/probe.py build --arch sm_100a; gated and poisoned as every opcode probe (probe.cuh).
+// Build with ../opcode_probe/probe.py build on an sm_100a card; gated and poisoned as every opcode probe (probe.cuh).
 // tcgen05.mma (cta_group::1) is issued by one thread into tensor memory (TMEM, 512 columns allocated a CTA) from one
 // shared-memory tile (no-swizzle K-major descriptors, dc.cuh); its completion is one mbarrier phase after the loop.
 //   tc_<kind>_m<M>_n<N>   4 tcgen05.mma an iteration into two accumulators (M4a: slots written a tensor-pipe cycle;

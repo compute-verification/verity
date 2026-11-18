@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# The tensor-duty sweep (duty.cu) on one GPU. Builds outside the lease, in a scratch directory under the run's own; then,
-# under one gpu-lease (the job's own when it already holds one, GPU_LEASE_UUID), sets the leased GPU's power limit to the
-# board's maximum (-pl) and, for each of CLOCKS, locks its SM clock there (nvidia-smi -lgc; `default` resets it, -rgc),
-# warms the card and runs every arm, class, fill, burst and duty. A clock whose lock fails is skipped; the default clock
-# still runs. On exit it resets the clock and puts the power limit back to the board's default. nvidia-smi samples the
-# GPU every SMI_MS ms (200) while the lease is held. Last, summarize.py judges its data sheet's clock.tensor by the
-# points, and the run exits nonzero unless it passes.
+# The tensor-duty sweep (duty.cu) on one GPU, an sm_90a card's (its card record's `arch`; another card is refused before
+# anything is built, and nvcc's -gencode is its architecture file's: probe.py arch, gencode). Builds outside the lease,
+# in a scratch directory under the run's own; then, under one gpu-lease (the job's own when it already holds one,
+# GPU_LEASE_UUID), sets the leased GPU's power limit to the board's maximum (-pl) and, for each of CLOCKS, locks its SM
+# clock there (nvidia-smi -lgc; `default` resets it, -rgc), warms the card and runs every arm, class, fill, burst and
+# duty. A clock whose lock fails is skipped; the default clock still runs. On exit it resets the clock and puts the
+# power limit back to the board's default. nvidia-smi samples the GPU every SMI_MS ms (200) while the lease is held.
+# Last, summarize.py judges its data sheet's clock.tensor by the points, and the run exits nonzero unless it passes.
 #
 #   research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash calibration/tensor_duty/run.sh [--arms fp32-beside] [--no-lock]
@@ -130,8 +131,12 @@ fi
 S=$(mktemp -d -p "$(dirname "$O")" scratch.XXXXXX)
 trap 'rm -rf "$S"' EXIT
 export TMPDIR=$S PYTHONDONTWRITEBYTECODE=1
+PROBE=(env "PYTHONPATH=$D/../..:$D/../../benchmarks/harness:$D/../../tools/config" python3 "$D/../pouw/opcode_probe/probe.py")
+ARCH=$("${PROBE[@]}" arch) || exit 2
+[ "$ARCH" = sm_90a ] || { echo "tensor_duty: the card's target is $ARCH, and duty.cu has forms for sm_90a only: nothing built" >&2; exit 2; }
+GENCODE=$("${PROBE[@]}" gencode) || exit 2
 nvcc --version > "$O/nvcc.txt" 2>&1
-nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v -I"$D" -o "$S/duty" \
+nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -I"$D" -o "$S/duty" \
   "$D/duty.cu" > "$O/build.log" 2>&1
 echo "build rc $?" | tee -a "$O/rc.txt"
 [ -x "$S/duty" ] || { tail -40 "$O/build.log"; exit 1; }
