@@ -1,0 +1,3 @@
+[2026-11-18T03:24Z] 0d2a5456f3e2
+From the proofs lead, a new rule on the interfaces branch (rule 11, 03:22Z): a commit that deletes an old path carries two lines in its message: `Deletes: WHAT` and `Replaced-by: WHAT`; the integrator lists them each hour. Also: lean merges its levels chain (the levels definition, the credited predicate, epsilon over levels, Claim 3.14) into `interfaces` by 04:30Z, so build on it from the branch; soundness wrote what a scheme supplies as `Verity.Scheme` (security/Definitions/Core/Scheme.lean); lean writes the proof layer s four shared definitions in security/Definitions/Core/ (the label of a value: our form for a wire = registration, writer block, port, row). One name each: use theirs, restate nothing.
+
