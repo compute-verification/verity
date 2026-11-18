@@ -24,7 +24,8 @@ the blocks: after ``load_model`` it attaches the runner's linear sites once a sc
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
+import weakref
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -96,6 +97,7 @@ class Served:
     answered: int = 0
     periods: int = 0
     _decode: Any = None
+    _bound: list[Callable[[Any], None]] = field(default_factory=list)
 
     @property
     def entry(self) -> str:
@@ -105,6 +107,7 @@ class Served:
         if why := launcher_refusals(self.scheme, self.ctx):
             raise ValueError(f"{self.entry}: {'; '.join(why)}")
         self.exchange = exchange
+        _ATTACHED[exchange] = self
         exchange.subscribe(NAME, "declared", self.declared)
         exchange.subscribe(NAME, "memory", self.registered)
         exchange.request(NAME, H.ComputeBlockWith(self.kernel))
@@ -145,6 +148,8 @@ class Served:
                         "layout": ws.layout_digest(layout)}
         for name in tensors:
             self.exchange.request(NAME, H.ReleaseValue(name, (lambda n: lambda: self.decoded(n))(name)))
+        for fn in self._bound:
+            fn(self.store)
 
     def decoded(self, name: str) -> Any:
         """Registered weight ``name`` decoded from ``C*`` into a fresh buffer on ``C*``'s device."""
@@ -221,6 +226,21 @@ class Served:
         self.answered += 1
         return ws.answer(self.store, index)
 
+    def on_bound(self, fn: Callable[[Any], None]) -> None:
+        """``fn(store)`` once ``C*`` is encoded (`weight_store.Store`), at once if it already is: how a sibling scheme
+        attached on this exchange (`of`) reads the store PoUS holds."""
+        self._bound.append(fn)
+        if self.store is not None:
+            fn(self.store)
+
+
+_ATTACHED: weakref.WeakKeyDictionary[Any, Served] = weakref.WeakKeyDictionary()
+
+
+def of(exchange: Any) -> Served | None:
+    """The PoUS setup attached on ``exchange``, or None where none is."""
+    return _ATTACHED.get(exchange)
+
 
 def attach(exchange: Any, ctx: Mapping[str, Any], scheme: str) -> Served:
     """PoUS under ``scheme`` on ``exchange``, with what its launcher passed in ``ctx`` (`LAUNCHER`)."""
@@ -229,5 +249,5 @@ def attach(exchange: Any, ctx: Mapping[str, Any], scheme: str) -> Served:
     return s
 
 
-__all__ = ["EAGER", "LAUNCHER", "NAME", "Served", "attach", "check_settings", "launcher_refusals",
+__all__ = ["EAGER", "LAUNCHER", "NAME", "Served", "attach", "check_settings", "launcher_refusals", "of",
            "requests", "source_refusal"]

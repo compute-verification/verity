@@ -113,7 +113,5 @@ def test_refresh_is_poubs_one_setting_off_by_default() -> None:
 
 
 def test_what_each_lacks_says_why() -> None:
-    with pytest.raises(LookupError, match="bandwidth attaches through no hook"):
-        poub.BANDWIDTH.attach(None, {})
     with pytest.raises(LookupError, match="poub declares no record: no combined record"):
         S.declared(poub.POUB, "record")
