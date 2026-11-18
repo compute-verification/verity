@@ -42,19 +42,21 @@ theorem frontWired_eq {j tr : Json}
   · rename_i he
     rw [he]
     cases hp : (Record.parse j >>= fun i => decodeProgram i.program) with
-    | error e => simp [Except.toOption, Except.map, bind, Except.bind]
-    | ok P => simp [Except.toOption, h P hp, Except.map, bind, Except.bind]
+    | error e => simp [Except.toOption, Except.map, throw, throwThe, MonadExceptOf.throw]
+    | ok P => simp [Except.toOption, h P hp, Except.map, bind, Except.bind, throw, throwThe, MonadExceptOf.throw]
   · rfl
 
 /-- **The wired reading agrees with `read`** on every instance whose root has no edge. -/
 theorem readWired_eq_read {j tr : Json}
     (h : ∀ P, (Record.parse j >>= fun i => decodeProgram i.program) = .ok P → hasEdge P = false) :
-    readWired j tr = read j tr := by
-  unfold readWired read
+    readWired j tr = Record.read j tr := by
+  unfold readWired Record.read
   rw [frontWired_eq h]
   cases front j tr with
   | error e => rfl
-  | ok f => simp [Except.map, bind, Except.bind, finishWired_nil]
+  | ok f =>
+    simp [Except.map, bind, Except.bind, finishWired_nil]
+    rfl
 
 open InferenceOnlyVerifier.Properties.Record in
 /-- **With no edge, `OwnOrEdgeRows` is `OwnRows`.** -/
