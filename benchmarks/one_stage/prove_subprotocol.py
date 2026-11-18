@@ -86,6 +86,7 @@ import a0  # noqa: E402
 import a7  # noqa: E402
 from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity.ports import free_port  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
@@ -437,7 +438,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
     window = window or {"kind": "stand-in", "of": "the proof subprotocol's members (prove_subprotocol.py)",
                         "members": {s["name"]: {"template": P.template_id(s["defn"]), "units": [s["base"], s["base"] + s["n"]]}
                                     for s in staged}, "link": "none"}
-    honest = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    honest = DK.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     rec = mutate(copy.deepcopy(honest)) if mutate else honest
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}

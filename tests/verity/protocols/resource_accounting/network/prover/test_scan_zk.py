@@ -34,6 +34,7 @@ from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 
 
 
@@ -328,7 +329,7 @@ def test_a_starts_record_is_held_to_the_log_s_last_record_and_refused_at_another
             if r.kind != "stale":
                 ports[sz.CARRY_PORT] = {x: ms["last"].ports["o1"][x] for x in ("root", "leaves", "domain")}
             want = {p: {"leaves": e["leaves"], "domain": e["domain"]} for p, e in ports.items()}
-            rec = R.record(program, q, law, sz.S.SCHEME, [{"port": p, **e} for p, e in sorted(ports.items())],
+            rec = DK.record(program, q, law, sz.S.SCHEME, [{"port": p, **e} for p, e in sorted(ports.items())],
                            {"kind": "stand-in", "of": r.name}, leaf_layer="ee" * 64, **carry.record)
 
             def check(record, given, program=program, q=q, law=law, want=want, tied=tied):
@@ -612,7 +613,7 @@ def test_the_scans_answer_names_its_lanes_tied_or_nothing_and_the_period_check_h
     assert lanes == PC.prog_params(cls.NR)
     roots = [{"port": PC.prog_name(j), "root": "aa" * 64, "leaves": nb, "domain": f"b{j}" * 64} for j in range(cls.NR)]
     want = {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in roots}
-    reg = R.record(root, query, design, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
+    reg = DK.record(root, query, design, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
     shared = every > 1
     v = R.check(reg, root, query, design, sz.S.SCHEME, want, leaf_layer="ee" * 64, tied=lanes)
     assert v.ok and v.rests_on_period_check == (lanes if shared else ()), v
@@ -662,7 +663,7 @@ def test_a_scan_registered_with_a_second_tied_input_is_refused_by_the_period_che
     query, design = sz.PA.template_instances_query([unit]), RND.parse_design(f"stratified:{N}")
     roots = [{"port": PC.prog_name(j), "root": "aa" * 64, "leaves": nb, "domain": f"b{j}" * 64} for j in range(cls.NR)]
     want = {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in roots}
-    reg = R.record(root, query, design, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
+    reg = DK.record(root, query, design, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
     for some in ((), lanes, ("state",), (lanes[0], "state")):
         v = R.check(reg, root, query, design, sz.S.SCHEME, want, leaf_layer="ee" * 64, tied=some)
         assert v.codes == ("R8-shared-input",) and v.rests_on_period_check == some, (some, v)
@@ -830,7 +831,7 @@ def test_an_execution_phases_answer_is_one_stages_on_its_registration():
     T = 4
     program, query, law = _program(T)
     N = 2 * T + 1
-    reg = R.record(program, query, law, sz.S.SCHEME,
+    reg = DK.record(program, query, law, sz.S.SCHEME,
                    [{"port": "rows/egress/1", "root": "aa" * 64, "leaves": T, "domain": "bb" * 64}],
                    {"kind": "stand-in"}, leaf_layer="ee" * 64)
     sample = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
@@ -864,7 +865,7 @@ def test_an_audit_refused_with_every_member_held_answers_its_execution_phase_nam
     regs, results = {}, {}
     for w in range(G):
         (d := out / f"honest-{w}").mkdir(parents=True)
-        regs[w] = R.record(*_program(h.T), sz.S.SCHEME, [], {"kind": "stand-in", "of": w}, leaf_layer="ee" * 64)
+        regs[w] = DK.record(*_program(h.T), sz.S.SCHEME, [], {"kind": "stand-in", "of": w}, leaf_layer="ee" * 64)
         (d / "registration.json").write_text(json.dumps(regs[w]))
         results[f"honest-{w}"] = {"window_accepted": False, "why": {"lean-verify/egress-0": None},
                                   "failed": {"registered": ["registered"]}}
@@ -982,7 +983,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     win = {"kind": "stand-in", "reads": {"scan/state": reads}, "empty": {sz.CARRY: carry.empty}}
 
     def registration(named: list[dict], layer: str = "ee", window: dict = win) -> dict:
-        return R.record(program, query, law, sz.S.SCHEME, named, window, leaf_layer=layer * 64, **carry.record)
+        return DK.record(program, query, law, sz.S.SCHEME, named, window, leaf_layer=layer * 64, **carry.record)
 
     reg, chain = (registration(roots, x) for x in ("ee", "ff"))
     other = {**reg, "program": "ab" * 64}
@@ -1004,7 +1005,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
         law = RND.parse_design(f"subset:{sampled}") if sampled else blaw
         held = {"value": sz.SCAN_STATE, "words": st.n_bits // 16, **(scan_state or {})}
         window = {"kind": "served", "activations": {"program": "c3" * 64, "values": {sz.SCAN_STATE: held}}}
-        breg = R.record(block, bquery, law, sz.S.SCHEME,
+        breg = DK.record(block, bquery, law, sz.S.SCHEME,
                         [*({"port": q, **o} for q, o in zip(ports, o0, strict=True)), *stated],
                         window if served else {"kind": "stand-in"}, leaf_layer="cc" * 64,
                         registered=[held] if registered else ())
@@ -1457,7 +1458,7 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     def record(ports: dict) -> dict:
         roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **w} for i, (p, w) in enumerate(ports.items())]
         law, table = sz.S.params_sampling_design(rule, program, query, None)
-        return R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64, work_table=table)
+        return DK.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64, work_table=table)
 
     assert sz.S.check_public(spec, record(want)).ok
     v = sz.S.check_public(spec, record({**want, "scan/other": {"leaves": 1, "domain": "ff" * 64}}))
