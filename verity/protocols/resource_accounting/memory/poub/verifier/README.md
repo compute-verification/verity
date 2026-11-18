@@ -42,5 +42,18 @@ the Lean verifier beside the books (below). Not all of it is zero knowledge yet:
   the seed only on the stacking property's (`audit.PostSeedVerdict`); without them it credits the node's reads of its
   registered store. Only `benchmarks/one_stage/a7.py` proves the units.
 
+## Refresh
+
+Refresh is one setting of the session (`refresh`, off by default; off, no message or record changes). On, appends
+fill the slots of a public schedule, a function of the registered blocks, the lifetime L, the windows and the fresh
+slots a window F (`fresh_slots`), fixed before any coin (`Poub.Session.Params.slotAt`). Window w's slots, in order, are
+the re-key of the whole registered run of class w mod L (from w = 1), the re-key of each fresh slot of windows
+w − L, w − 2L, …, and F fresh slots of at most 512 blocks. Each append names its slot and joins its slot's window.
+A plan holds a registered block only while t < L, and an appended block only L windows after the window its payload was
+first committed in. The ledger credits a refresh session's appended blocks on its schedule check alone, with no
+stacking verdict and no carrier, and reports the most any pass held in probation beside γ. Append coins are taken in the order appends arrive, and an empty slot takes none. So the
+guarantee's coin of a slot is the coin of the append that fills it, which the Lean statement takes as a coupling,
+rather than a coin the challenger keys by slot.
+
 [`DESIGN.md`](DESIGN.md) holds the entry points, which side is the definition and why the Lean decides alone, replaying a
 recorded session, and what each module does.
