@@ -3087,7 +3087,7 @@ def main(argv: list[str] | None = None) -> int:
             blind = [f"a Python that {who(w)} started could not start its read guard ({why.removeprefix('the tracer did not start: ')})"
                      for k, why, w in r.child_reads if k == "E"]
             lines = files + blind
-            print(f"        processes its tests started read outside its inputs, so nothing vouches for its pass:\n          "
+            print("        processes its tests started read outside its inputs, so nothing vouches for its pass:\n          "
                   + "\n          ".join(lines[:10]) + (f"\n          and {len(lines) - 10} more" if len(lines) > 10 else "")
                   + (f"\n        list each file under [tool.verity.tests] inputs in {s.path}/pyproject.toml with a comment saying why, "
                      "or give the test a stand-in for it" if files else ""))
