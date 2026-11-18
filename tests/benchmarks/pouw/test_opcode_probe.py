@@ -437,8 +437,7 @@ def test_nvcc_is_the_one_nvcc_names_then_cuda_homes(tmp_path, monkeypatch):
 
 def _cuda_tools() -> bool:
     try:
-        probe.nvcc()
-        G.H.find_tools()
+        G.H.find_tools(Path(probe.nvcc()).parent)
     except (SystemExit, G.H.SassGateFailed, OSError):
         return False
     return True

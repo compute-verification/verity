@@ -16,7 +16,7 @@ from verity_vllm.engine.env import INDUCTOR_DIR_MARK
 from verity_bench import jobs, settings
 from verity_bench.vllm.arms import plugin, protocols_config, resolve_arms
 from verity_bench.vllm.engine import PASS_COUNTS, ProcessEngineFactory, _pass_totals, _pearl_c_run, arm_execution, engine_args
-from verity_bench.vllm.presets import SPEC_ROOT, load_spec, resolve_spec, served
+from verity_bench.vllm.presets import SPEC_ROOT, ArmSettings, load_spec, resolve_spec, served
 
 
 def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_eager_spec(monkeypatch):
@@ -163,8 +163,12 @@ def test_the_h200_pearl_c_setup_serves_without_batch_invariance_and_with_sm90s_b
     for script in (stand_in / "bash", python):
         script.chmod(0o755)
     spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
+    # the setup reads the build's target from the run's machine's card (the fixture's is an H100: sm_90a)
+    (tmp_path / "run" / "inputs").mkdir(parents=True)
+    shutil.copy(Path(__file__).parent / "fixtures" / "machines" / "one-card.toml", tmp_path / "run" / "inputs" / "m.toml")
     env = {"PATH": f"{stand_in}:/usr/bin:/bin", "VERITY_BENCH_VENV": str(tmp_path / "venv312"), "CUDA_HOME": str(tmp_path),
-           "RESEARCH_RUN_DIR": str(tmp_path / "run"), "VLLM_BATCH_INVARIANT": "1", **jobs.point_environment(spec)}
+           "RESEARCH_RUN_DIR": str(tmp_path / "run"), "RESEARCH_MACHINE": "m", "VLLM_BATCH_INVARIANT": "1",
+           **jobs.point_environment(spec)}
 
     def served(**job: str) -> str:
         ran = subprocess.run(["bash", "benchmarks/harness/run_point.sh"], cwd=root, env={**env, **job},
@@ -177,12 +181,13 @@ def test_the_h200_pearl_c_setup_serves_without_batch_invariance_and_with_sm90s_b
 
 
 def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(monkeypatch, tmp_path):
-    """``served_passes.py arm`` writes the H200 spec's Pearl-C arm as serve-openai's Pearl+ arm takes it
-    (`serve_pearl.config_of`): `serve_pearl.CONFIG`'s keys alone, the setup's paths read in, no challenges flipped (the
-    server flips each window's); an unset ``$`` value is refused, naming it."""
+    """``served_passes.py arm`` writes the H200 spec's Pearl-C arm as serve-openai's ``--protocols-config`` takes it
+    (`serve_openai.scheme_settings`): the scheme's own settings alone, the setup's paths read in, no challenges flipped
+    (the server flips each epoch's); an unset ``$`` value is refused, naming it."""
     from benchmarks.pouw.pearl_c_vllm import served_passes as SP
     from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
-    from verity_vllm.pipeline import serve_pearl as SPL
+    from verity.protocols.resource_accounting.scheme import settings
+    from verity_vllm import messages as M
 
     def flipped(n):
         raise AssertionError("served_passes.py arm flipped challenges")
@@ -195,9 +200,9 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
     monkeypatch.setenv("PEARLC_KERNEL", "/tree/benchmarks/pouw/pearl_c_sm90")
     assert SP.main(["arm", "--spec", spec, "--out", str(out)]) == 0
     doc = json.loads(out.read_text())
-    assert doc == {"pouw": {"device": "cuda", "kernel": "/tree/benchmarks/pouw/pearl_c_sm90",
+    assert doc == {"pouw": {"kernel": "/tree/benchmarks/pouw/pearl_c_sm90",
                             "cubin": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"}}
-    assert SPL.config_of(str(out)) == doc
+    settings(M.option("pouw:pearl-c-h100-v1-h3"), {**doc["pouw"], "coins": "in-process"})
 
 
 def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):
@@ -277,21 +282,20 @@ def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
     assert b32.reps == 6 and b32.sweep == replace(spec.sweep, id="b32", batches=(32,))
 
 
-def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_served_protocol_arm(monkeypatch):
-    """`llama31-8b-1gpu-pearl-c-whole-served` times the whole-step arm beside the protocol arm as served (its settings the
-    protocol row's) and the compiled engine. Under the eager spec, the arm's overrides build vLLM's FULL decode graphs at
-    the preset's capture sizes without torch.compile, at the `compiled` label, which `verity_vllm.LLM` accepts, and its
-    run takes the graph path's options and serial schedule."""
+def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_compiled_engine(monkeypatch):
+    """`llama31-8b-1gpu-pearl-c-whole-served` times the whole-step arm beside the compiled engine, on the protocol spec's
+    preset. Under the eager spec, the arm's overrides build vLLM's FULL decode graphs at the preset's capture sizes
+    without torch.compile, at the `compiled` label, which `verity_vllm.LLM` accepts, and its run takes the graph path's
+    options and serial schedule."""
 
     from verity_vllm.llm import resolve_options
 
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
-    spec = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served@rtx-pro-6000")
-    pearl = "pouw:pearl-c-sm120-v1-h3"
-    assert spec.arm_settings[pearl] == resolve_spec("llama31-8b-1gpu-pouw-protocol-served").arm_settings[pearl]
+    spec = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served")
+    protocol = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
+    assert replace(spec.preset, id=protocol.id, gpu_id=protocol.preset.gpu_id) == protocol.preset
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert [(a.id, a.precision, a.control, a.execution, a.experimental) for a in arms] == [
-        ("stock-fp8", "fp8", None, None, False), (pearl, "bfloat16", None, None, False),
         ("stock-fp8@compiled", "fp8", None, "compiled", False), ("pouw-pearl-c-whole", "bfloat16", None, None, True)]
     assert arms[-1].engine_label == "graphs-mode0" and arms[-1].to_json()["engine_label"] == "graphs-mode0"
     whole = plugin(arms[-1])
@@ -325,21 +329,20 @@ def test_the_1b_whole_step_spec_is_the_1b_pouw_spec_on_the_h100_with_the_whole_s
 
 def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the_h100_record(monkeypatch):
     """`llama31-8b-1gpu-pearl-c-whole-served` on one H200 is its preset there, the whole-step arm beside compiled stock
-    alone (`[card_settings.h200]`), its setup building pearl_c_sm90's cubin; the arm takes the useful-work scheme by its registered name
+    alone, its setup building pearl_c_sm90's cubin; the arm takes the useful-work scheme by its registered name
     and, on a card of the H200's target, the kernel scheme Pearl+ runs there (`pearl-c-h100-v1-h3`) from the tree's
     pearl_c_sm90 directory or PEARLC_KERNEL and its build.sh cubin, and builds the same engine."""
     from verity_bench.schemes import arch
 
     root = Path(__file__).resolve().parents[3]
     monkeypatch.syspath_prepend(str(root))
-    spec, rtx = (resolve_spec(f"llama31-8b-1gpu-pearl-c-whole-served@{card}") for card in ("h200", "rtx-pro-6000"))
-    assert (spec.preset.gpu_id, spec.preset.engine_settings, spec.preset.model) == ("h200", rtx.preset.engine_settings,
-                                                                                     rtx.preset.model)
+    spec = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served@h200")
+    assert spec == resolve_spec("llama31-8b-1gpu-pearl-c-whole-served") and spec.preset.gpu_id == "h200"
     assert (root / spec.setup).is_file() and "pearl_c_sm90/build.sh" in (root / spec.setup).read_text()
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert [(a.id, a.execution, a.experimental) for a in arms] == [("stock-fp8@compiled", "compiled", False),
                                                                    ("pouw-pearl-c-whole", None, True)]
-    assert dict(spec.arm_settings) == {"stock-fp8@compiled": rtx.arm_settings["stock-fp8@compiled"]}
+    assert dict(spec.arm_settings) == {"stock-fp8@compiled": ArmSettings(control="none")}
     from benchmarks.pouw.pearl_c_vllm import bench_arm
     assert bench_arm.PEARL_C_WHOLE.protocol == bench_arm.PEARL_C.protocol == "pearl-plus"
     assert arch(spec.preset.gpu_id) == arch("h100")

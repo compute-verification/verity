@@ -409,14 +409,13 @@ class Serving:
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
                  served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None,
-                 arm: Any = None, runner: Runner | None = None, pool: tuple[Any, int] | None = None,
+                 arm: Any = None, runner: Runner | None = None,
                  no_slice: str | None = None) -> None:
         self.runner = runner if runner is not None else Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
                                        clock=lambda: 0.0, wall=lambda: 0.0, served=served, no_slice=no_slice, marks=marks,
-                                       arm=arm(self.runner) if arm is not None else None,
-                                       **({"pool": pool[0], "pool_block": pool[1]} if pool else {})) if commit else None
+                                       arm=arm(self.runner) if arm is not None else None) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
         self.server = so.Server(proto=protocol or proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512,
                                 tokenizer=Tokenizer(),
@@ -1006,16 +1005,17 @@ def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp
 
 
 def test_a_window_the_tick_admitted_names_no_slice_and_says_why(tmp_path):
-    """No compile slice replays the certified tick's admission. So under ``--admit tick`` (`serve_openai.no_slice`) each
+    """No compile slice replays the certified tick's admission. So under order ``tick`` (`serve_openai.no_slice`) each
     window's served rows record has a null ``slice`` and says why in ``no_slice``, and serve.json says it once
     (`serve_openai.no_slice_record`). Its rows are committed as under any other admission, where the record is, byte
     for byte, the commitment's with the statics and `SERVED_SLICE`, and serve.json has no field more."""
-    def opts(*more: str) -> so.Options:
+    def opts(order: str | None = None) -> so.Options:
+        more = ["--protocols-config", json.dumps({so.M.providing("admission").name: {"order": order}})] if order else []
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
 
-    why = so.no_slice(opts("--admit", "tick"))
+    why = so.no_slice(opts("tick"))
     assert why == sc.NO_TICK_SLICE and sc.SERVED_SLICE in why
-    assert [so.no_slice(o) for o in (opts(), opts("--admit", "arrival"), opts("--admit", "release-order"))] == [None] * 3
+    assert [so.no_slice(o) for o in (opts(), opts("arrival"), opts("release-order"))] == [None] * 3
     statics = served_statics()
     for name, no_slice, named in (("named", None, {"slice": "CompileSlice_v7"}), ("tick", why, {"slice": None, "no_slice": why})):
         (out := tmp_path / name).mkdir()
@@ -1085,48 +1085,3 @@ def test_the_served_class_defaults_to_the_engines_and_refuses_too_few_rows():
         so.served_class(opts("--served-rows-class", '{"X": 1}'))
     with pytest.raises(cli.UsageError, match="under --max-num-seqs 8"):
         so.preflight(opts("--served-rows-class", '{"R": 4}'), which=lambda _: "/v/bin/ninja")
-
-
-# ---------------------------------------------------------------------------------------------------------------- pool rows
-
-def test_each_close_exports_the_prefix_cache_s_pool_row(tmp_path):
-    """With the engine's pool and its block size, each close writes the pool's row and root to pool_rows/w<k>.json and
-    its NB and root to the window's line. A pool a running request holds blocks of is refused by name in the line, and
-    the window, which no coin reads the row of yet, still passes."""
-    from verity.commitments import pool_row as R
-
-    from tests.engine.test_pool_row import WANT, B, pool
-
-    root = R.root(WANT).hex()
-    (tmp_path / "free").mkdir()
-    (tmp_path / "held").mkdir()
-    with Serving(tmp_path / "free", window_steps=2, pool=(pool, B)) as s:
-        serve_concurrently(s, [CERTIFIER_BODY, dict(CERTIFIER_BODY, prompt=[5, 6])])
-    wins = records(tmp_path / "free", "windows.jsonl")
-    assert len(wins) > 1 and all(w["passed"] and w["pool_row"] == {"nb": 6, "root": root} for w in wins)
-    assert json.loads((tmp_path / "free" / "pool_rows" / f"w{wins[-1]['window']}.json").read_text())["root"] == root
-    with Serving(tmp_path / "held", window_steps=4, pool=(lambda: pool(free=(3, 1, 5, 2), held=(4,)), B)) as s:
-        serve_concurrently(s, [CERTIFIER_BODY])
-    wins = records(tmp_path / "held", "windows.jsonl")
-    assert wins and all(w["passed"] and "1 blocks are held" in w["pool_row"]["refused"] for w in wins)
-    with pytest.raises(ValueError, match="needs both the live pool and its blocks' size"):
-        sc.CommitWindows(None, tmp_path, run_id="t", window_steps=4, pool=pool)
-
-
-def test_the_pool_row_setting_is_a_token_width_and_needs_the_prefix_cache(tmp_path, monkeypatch):
-    man = predicted.row(tmp_path)
-
-    def opts(*more: str) -> so.Options:
-        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), *more], environ={})
-
-    def ninja(_: str) -> str:
-        return "/v/bin/ninja"
-
-    so.preflight(opts(), which=ninja)
-    monkeypatch.setenv("VERITY_POOL_ROW", "18")
-    with pytest.raises(cli.UsageError, match="needs --prefix-caching and the Commit"):
-        so.preflight(opts(), which=ninja)
-    so.preflight(opts("--prefix-caching"), which=ninja)
-    monkeypatch.setenv("VERITY_POOL_ROW", "-1")
-    with pytest.raises(cli.UsageError, match="a token width is at least 1"):
-        so.preflight(opts("--prefix-caching"), which=ninja)

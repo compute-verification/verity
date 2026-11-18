@@ -66,12 +66,12 @@ to them: `read_run`'s own proof, which reads its records only through `Lines.tre
 theorem read_run_lines {dev : History} {log : List Release} (hP : Verity.Sampled.Lines.PrintsLog dev log)
     {pk : ByteArray} {w label : String} {after : ByteArray} {recs : List Json} {r : Properties.Challenger.Run}
     (hr : r ∈ dev.runs pk) (ho : OpensOn dev pk w r.id)
-    (hcr : ∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) {ts : Array LoggedTree}
+    (hcr : ∃ c entries, r.commitment = some c ∧ releasedLogOf c r.log = .ok entries) {ts : Array LoggedTree}
     (hts : coinTreesOf r.log = .ok ts) (hL : Verity.Sampled.Lines.TreeLines recs r.log) {out : List Release}
     (h : Verity.Sampled.readLog label after recs (r.released label after) r.log = some out) :
     List.Forall₂ Verity.Sampled.Lines.ReadOf out log := by
   obtain ⟨hp, hξ⟩ := hP pk w r hr ho
-  obtain ⟨c, roots, -, hroots⟩ := id hcr
+  obtain ⟨c, entries, -, hroots⟩ := id hcr
   rw [Verity.Sampled.Lines.readLog_head hroots] at h
   have hT := Verity.Sampled.Lines.trees_log hts
   have hn : (r.log.filterMap Verity.Sampled.Lines.helloRoot).Nodup := hT.roots ▸ hT.nodup

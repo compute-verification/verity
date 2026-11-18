@@ -61,3 +61,51 @@ def test_a_verifier_started_without_figures_is_refused_by_name(tmp_path, monkeyp
     with pytest.raises(SystemExit) as e:
         VP.main()
     assert e.value.code == 2 and "--figures FILE" in capsys.readouterr().err.splitlines()[-1]
+
+
+def test_a_figures_file_not_the_one_its_pinned_digest_names_is_refused_and_a_record_names_the_figures_it_read(
+        tmp_path, monkeypatch, capsys):
+    """`--figures-sha512` holds the file to the digest the verifier's configuration pins: a lenient file (half the
+    squaring ceiling, half S_chip) is refused before the process listens.  The pinned file is read, and the record
+    the process writes, here a refused registration's, carries the figures whole and their digest."""
+    from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier as V
+
+    fixture = timing.Figures.of_json(json.loads(FIXTURE.read_text()))
+    lenient = tmp_path / "lenient.json"
+    lenient.write_text(json.dumps({**fixture.to_json(), "gpu_chip_bytes": fixture.gpu_chip_bytes // 2,
+                                   "gpu_squarings_per_s": {w: r / 2 for w, r in fixture.gpu_squarings_per_s.items()}}))
+    out = tmp_path / "out"
+    pinned = ["verifier_process.py", "--out", str(out), "--check-workers", "0", "--figures-sha512", fixture.sha512()]
+    monkeypatch.setattr(sys, "argv", [*pinned, "--figures", str(lenient)])
+    with pytest.raises(SystemExit) as e:
+        VP.main()
+    assert e.value.code == 2 and f"not {fixture.sha512()}, the one --figures-sha512 pins" in capsys.readouterr().err
+    assert not (out / "verifier.json").exists()
+
+    class Server:
+        def accept(self):
+            return None, ("prover", 1)
+
+    class Refusing:
+        def __init__(self, conn, **kw):
+            assert kw["figures"] == fixture
+
+        def register(self):
+            raise ValueError("refused here")
+
+        def registry_json(self):
+            return {}
+
+        def stop(self):
+            pass
+
+    monkeypatch.setattr(V.wire, "listen", lambda host, port: Server())
+    monkeypatch.setattr(V.wire, "Conn", lambda sock: None)
+    monkeypatch.setattr(V, "Verifier", Refusing)
+    monkeypatch.setattr(sys, "setswitchinterval", lambda s: None)
+    monkeypatch.setattr(sys, "argv", [*pinned, "--figures", str(FIXTURE)])
+    assert VP.main() == 3
+    record = json.loads((out / "verifier.json").read_text())
+    assert record["refused"] == "refused here"
+    assert (record["figures"], record["figures_sha512"]) == (json.loads(FIXTURE.read_text()), fixture.sha512())
+    assert timing.Figures.of_json(json.loads(lenient.read_text())).sha512() != fixture.sha512()

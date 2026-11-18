@@ -6,11 +6,18 @@ verifier never registered.
 A new scheme adds its name here, one line; `get` imports its module on first use, which registers it
 (`verity.protocols.resource_accounting.scheme.register`), so a reader loads only the schemes an application lists;
 `load` imports every module and returns the registry.
+
+A shell script reads a declaration through this module's one command, run from the tree's root (the standard library
+alone imports it), which prints one field of the scheme named NAME (`FIELDS`), or exits 2 naming the declared ones:
+
+    python3 -m verity.protocols.compose.schemes NAME protocol|option|settings
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import json
+import sys
+from collections.abc import Mapping, Sequence
 from importlib import import_module
 from types import MappingProxyType
 
@@ -50,4 +57,25 @@ def load() -> Mapping[str, Scheme]:
     return MappingProxyType(dict(S.SCHEMES))
 
 
-__all__ = ["DECLARATIONS", "get", "load"]
+#: what the command prints of a scheme: its id, its adapter option, its settings' defaults as JSON
+FIELDS = {"protocol": lambda s: s.protocol, "option": lambda s: s.option,
+          "settings": lambda s: json.dumps(dict(s.settings), sort_keys=True)}
+
+
+def main(argv: Sequence[str]) -> int:
+    if len(argv) != 2 or argv[1] not in FIELDS:
+        print(f"usage: python3 -m verity.protocols.compose.schemes NAME {'|'.join(FIELDS)}", file=sys.stderr)
+        return 2
+    try:
+        print(FIELDS[argv[1]](get(argv[0])))
+    except KeyError as e:
+        print(f"schemes: {e.args[0]}", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
+
+
+__all__ = ["DECLARATIONS", "FIELDS", "get", "load", "main"]
