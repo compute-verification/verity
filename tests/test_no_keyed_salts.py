@@ -56,7 +56,6 @@ ALLOWED: dict[str, str] = {
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
     "verity/commitments/crypto/chacha20.py": "@proofs",
     "verity/commitments/hm96/batch.py": "@proofs",
-    "verity/protocols/experimental/dither/prover/dither.py": "@compute-accounting",
     "verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs": "@proofs",
     "verity/protocols/proofs/flock/prover/live/src/zk_hooks.rs": "@proofs",
     "verity/protocols/proofs/flock/prover/live/src/zk_server.rs": "@proofs",
