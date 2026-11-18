@@ -204,7 +204,6 @@
     {"file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py", "kind": "superseded", "symbol": "AttnBlockSoftcap", "detail": "AttnBlockSoftcap_v4"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py", "kind": "superseded", "symbol": "RMSNormTriton", "detail": "RMSNormTriton_v3"},
     {"file": "verity/protocols/interface/charge/arith_encode.py", "kind": "superseded", "symbol": "ChargeCount", "detail": "ChargeCount_v1"},
-    {"file": "adapters/vllm/verity_vllm/compiler/cache_step.py", "kind": "superseded", "symbol": "CacheStep", "detail": "CacheStep_v1"},
     {"file": "verity/protocols/interface/charge/charge_chain.py", "kind": "superseded", "symbol": "ChargeLink", "detail": "ChargeLink_v1"},
     {"file": "adapters/vllm/verity_vllm/compiler/compile_slice.py", "kind": "superseded", "symbol": "CompileSlice", "detail": "CompileSlice_v1"},
     {"file": "adapters/vllm/verity_vllm/compiler/compile_slice.py", "kind": "superseded", "symbol": "CompileSliceRowGroups", "detail": "CompileSliceRowGroups_v1"},

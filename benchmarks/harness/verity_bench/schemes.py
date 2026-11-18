@@ -63,6 +63,5 @@ def arch(short: str) -> str:
 
 def kernel_scheme(name: str, card: str, pinned: bool) -> str:
     """The PoUW kernel scheme the served useful-work scheme ``name`` runs on the card ``card`` (its short name), with
-    registration pinning the weights or not (the scheme's declared ``kernels``, `kernel_schemes.runs_on`, which refuses a
-    card its build doesn't run on by name)."""
+    registration pinning the weights or not (its declared ``kernels``, whose `LookupError` names the cards it runs on)."""
     return registry.declared(served(useful_work(name)), "kernels")(card, pinned=pinned)
