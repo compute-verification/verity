@@ -13,7 +13,11 @@
                                                  # sooner there, a slot of a CPU node's research pool (research/auto.py's `spill`: every CPU node);
                                                  # a machine that can start no run is passed over, and the launch says which and why;
                                                  # where it went and why is kept with the run: `inspect` prints it on the VM that launched
-                                                 # it, and the machine's request.json holds it (`auto`)
+                                                 # it, and the machine's request.json holds it (`auto`); a Lean records run below its
+                                                 # package's floor is refused at launch with the run to launch instead (auto.below_floor)
+  research run --on MACHINE|auto|--queue [--cold-lean-build REASON] [...] -- CMD...   # a raw `lake build` of an analysis package
+                                                 # (security/) is refused at launch, naming the Lean tools that restore it from a kept
+                                                 # tree; REASON builds it cold on purpose, recorded in job.json (treelock.analysis_build)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--env-host MACHINE ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
@@ -372,6 +376,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                     help="run a workload whose shell script pipes without `pipefail` (`bash -lc 'a | tee f'`), which is refused "
                          "otherwise: the run's exit code is then the pipe's last command's, whatever failed before it "
                          "(research/pipefail.py)")
+    ap.add_argument("--cold-lean-build", default=None, metavar="REASON",
+                    help="with --on or --queue: run a raw `lake build` of an analysis package (under security/), which is refused "
+                         "otherwise: it builds Mathlib cold, where `verity lean try FILE --on auto` (an edit loop) and "
+                         "`tools/verity/lean/lean_changed.py --records PKG` (records) restore it from a kept tree. REASON says "
+                         "why it builds cold, and is recorded in job.json")
     ns, harness_opts = ap.parse_known_args(opts)
     ns.started = started
     from . import launcher
@@ -381,6 +390,13 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         return 2
     if not ns.claimed and not ns.allow_pipe and (why := pipefail.refusal(command)):
         print(f"research run: refused: {why}", file=sys.stderr)
+        return 2
+    if (ns.on or ns.queue) and not ns.claimed and not ns.cold_lean_build \
+            and (at := treelock.analysis_build(command, remote.flag_value(harness_opts, "--cwd"))):
+        print(f"research run: refused: the workload runs a raw `lake build` of an analysis package ({at}), which builds it and "
+              "Mathlib cold in the run's tree, where the Lean tools restore them from a kept tree on the node: for an edit loop, "
+              "`verity lean try FILE --on auto`; for records, `python3 tools/verity/lean/lean_changed.py --records PKG --update`. "
+              "A cold build on purpose: --cold-lean-build REASON (recorded in job.json)", file=sys.stderr)
         return 2
     if ns.id is not None and not ns.claimed:
         from .store import ids as store_ids
@@ -439,6 +455,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         return 2
     if getattr(ns, "auto", False):
         _auto_size(ns, harness_opts, command)
+        from . import auto
+
+        mem = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
+        if why := auto.below_floor(Path(ns.source), command, ns.env, mem):
+            print(f"research run --on auto: refused: {why}", file=sys.stderr)
+            return 2
         return _auto_launch(ns, harness_opts, command, clones)
     return _run_placed(ns, harness_opts, command, clones)
 
@@ -705,6 +727,8 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
         job["run"]["cwd_clone"] = clone_rec
     if tree_lock:
         job["run"]["lean_tree_lock"] = str(tree_lock)
+    if ns.cold_lean_build:
+        job["run"]["cold_lean_build"] = ns.cold_lean_build
     try:                                                          # which build each installed binary is (binprov.py); never stops a run
         from .binprov import snapshot
 
@@ -1612,6 +1636,8 @@ def _run_remote(ns: argparse.Namespace, root: Path, harness_opts: list[str], com
         harness_args += ["--scratch", s]
     if ns.campaign:
         harness_args += ["--campaign", ns.campaign]
+    if ns.cold_lean_build:
+        harness_args += ["--cold-lean-build", ns.cold_lean_build]
     run_dir = _take_run_dir(ns, root)
     run_id = run_dir.name
     custody = ns.custody_r2 is not False

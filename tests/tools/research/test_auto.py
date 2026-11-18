@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from research import asker, auto, cores, remote
+from research import asker, auto, cli, cores, remote
 from research.cli import main
 from research.pods.nebius import slot_only
 
@@ -1781,3 +1781,53 @@ def test_a_description_that_does_not_parse_gives_no_share_and_says_so(tmp_path, 
     assert auto.share_cpus(tmp_path) is None
     assert f"research run: {tmp_path / auto.DESCRIPTION} unread, so verity has no share on vy-nebius-2 (TOMLDecodeError" in \
         capsys.readouterr().err
+
+
+def _lean_tree(tmp_path: Path) -> Path:
+    """A tree with the Lean tool's figures and check.py, a package `security` pinning Mathlib and one pinning nothing."""
+    repo = _auto_repo(tmp_path)
+    for f in (auto.LEAN_RESERVE_PY, auto.LEAN_RESERVE_PY.with_suffix(".json"), auto.LEAN_CHECK_PY):
+        (repo / f).parent.mkdir(parents=True, exist_ok=True)
+        (repo / f).write_bytes((REPO / f).read_bytes())
+    for pkg, deps in (("security", ["batteries", "mathlib"]), ("verity/circuits/base", [])):
+        (repo / pkg).mkdir(parents=True)
+        (repo / pkg / "lean-audit.json").write_text("{}")
+        (repo / pkg / "lakefile.toml").write_text(f'name = "{pkg.rsplit("/", 1)[-1]}"\n')
+        (repo / pkg / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": d} for d in deps]}))
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    return repo
+
+
+def _reserve():
+    spec = importlib.util.spec_from_file_location("test_lean_reserve", REPO / auto.LEAN_RESERVE_PY)
+    reserve = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reserve)
+    return reserve
+
+
+RECORDS = ["python3", "tools/verity/lean/lean_changed.py", "--records"]
+
+
+def test_a_records_run_below_its_packages_floor_is_refused_at_launch_with_the_nodes_line(tmp_path, monkeypatch, capsys):
+    """A records run below its floor waited its turn for a Lean slot and was then refused in seconds; the launch refuses it
+    instead, naming the run the node would have named (`check.py`'s BELOW_FLOOR_RUN at the package's ask)."""
+    launched = []
+    monkeypatch.setattr(cli, "_auto_launch", lambda ns, harness, command, clones: launched.append((command, ns.mem_gb)) or 0)
+    repo, R = _lean_tree(tmp_path), _reserve()
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--source", str(repo)]
+    for mem in ([], ["--mem-gb", "40"]):
+        assert main([*runs, *mem, "--", *RECORDS, "security", "--update"]) == 2
+        err = capsys.readouterr().err
+        assert f"research run --on auto: refused: the build of security needs at least {R.ONE_JOB_GIB} GiB" in err
+        assert (f"\n  research run --on auto --mem-gb {R.gb(R.BUILD_HEAVY_GIB)} --max-min 120 --project verity --source . "
+                "--cwd clone --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records security "
+                "--update\n") in err
+    floor_gb = str(math.ceil(R.ONE_JOB_GIB * 2**30 / 1e9))
+    assert main([*runs, "--mem-gb", floor_gb, "--", *RECORDS, "security"]) == 0
+    assert main([*runs, "--env", "VERITY_LEAN_MEM_FLOOR_GIB=0", "--", *RECORDS, "security"]) == 0
+    assert main([*runs, "--", "bash", "-lc", " ".join([*RECORDS, "Security"])]) == 0, "a name matching no package is the node's"
+    assert main([*runs, "--", *RECORDS, "base"]) == 0, "a package pinning neither Mathlib nor ArkLib has no floor"
+    for light in (["verity", "lean", "try", "security/Definitions/Core.lean"],
+                  ["python3", "tools/verity/lean/lean_changed.py", "--try", "security/Definitions/Core.lean"]):
+        assert main([*runs, "--", *light]) == 0, "an edit loop's node refuses nothing for memory"
+    assert len(launched) == 6 and launched[0] == ([*RECORDS, "security"], float(floor_gb))
