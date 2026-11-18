@@ -564,11 +564,10 @@ fi
       | head -1)" 2>&1) || { echo "run.sh: no node for the session to register: $SNODE"; exit 3; }
     nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
       --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
-    CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i "${GPU_LEASE_UUID%%,*}" | head -1)
-    SM=${CC/./}
-    [[ $SM =~ ^[0-9]+$ ]] || { echo "run.sh: the leased card names no compute capability ($CC)"; exit 4; }
-    [ "${CC%%.*}" -ge 9 ] && SM+=a
-    FLAGS=(-O3 -gencode "arch=compute_$SM,code=sm_$SM" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
+    ARCH=$(python3 benchmarks/kernels/machine.py arch "$(nvidia-smi --query-gpu=name --format=csv,noheader \
+      -i "${GPU_LEASE_UUID%%,*}" | head -1)" 2>&1) && GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$ARCH" 2>&1) ||
+      { echo "run.sh: no build target for the leased card: ${GENCODE:-$ARCH}"; exit 4; }
+    FLAGS=(-O3 -gencode "$GENCODE" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
     nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/resource_accounting/memory/poub/prover/poub_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
     nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
     wait $S || { tail -40 "$O/session.ptxas"; exit 4; }
