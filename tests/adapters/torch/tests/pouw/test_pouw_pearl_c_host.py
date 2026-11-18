@@ -199,7 +199,7 @@ class _CardBytes:
 
 def test_on_a_card_one_fill_launch_on_the_given_stream_else_the_current_one(keys, monkeypatch):
     """No host bytes: one `sha512_stream` fill of the pass's next leaves, on raw stream `raw` where given, else the
-    device's current stream (`_stream`)."""
+    device's current stream (`_stream`), each block's message held to its one length, 87 bytes."""
     import torch
     dev, log, fills, salts = torch.device("cuda", 0), [], [], PH.PassSalts()
     monkeypatch.setattr(PH, "fill_lib", lambda d: ("lib", d))
@@ -209,7 +209,7 @@ def test_on_a_card_one_fill_launch_on_the_given_stream_else_the_current_one(keys
     PH.fresh_into(_CardBytes(dev, log), 32, 123, salts=salts)
     PH.fresh_into(_CardBytes(dev, log), 7, salts=salts)
     assert [f[:3] for f in fills] == [(("lib", dev), PH.SALT_INDEX, 0), (("lib", dev), PH.SALT_INDEX, 32)]
-    assert [f[3]["stream"] for f in fills] == [123, 777]
+    assert [f[3] for f in fills] == [{"stream": 123, "length": 87}, {"stream": 777, "length": 87}]
     assert log == [("slice", HM96_SALT * 32), ("view", (32, HM96_SALT)), ("slice", HM96_SALT * 7), ("view", (7, HM96_SALT))]
 
 

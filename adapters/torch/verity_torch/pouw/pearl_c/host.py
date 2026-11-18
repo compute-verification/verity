@@ -63,8 +63,12 @@ _copiers: dict[tuple[int, int | None], Any] = {}           # each (process, devi
 SALT_STREAM, SALT_INDEX = "verity/pearl-c/hm96-salts/v1", "s"
 #: where the card's salt fill (`sha512_stream`) is built
 FILL_BUILD = Path.home() / ".cache" / "verity" / "sha512_stream"
+#: the bytes SHA-512 hashes for every block of every pass's salts: one length, whatever the key or counter
+SALT_MESSAGE_BYTES = 87
 if HM96_SALT != SX.LEAF_BYTES:
     raise ImportError(f"an hm96 salt is {HM96_SALT} bytes, the stream's leaf {SX.LEAF_BYTES}")
+if SX.message_bytes(SALT_INDEX) != SALT_MESSAGE_BYTES:
+    raise ImportError(f"a salt block hashes {SX.message_bytes(SALT_INDEX)} bytes, not {SALT_MESSAGE_BYTES}")
 
 
 def torch_uint8() -> Any:
@@ -101,7 +105,7 @@ class PassSalts:
     """One pass's hm96 salts: `Key.stream` at `SALT_INDEX` under a key `derive` makes from 32 fresh operating-system bytes
     at the pass's first fill, each fill the leaves after the last's, so no two leaves share a counter.  `drop`, at the
     pass's end or the begin that replaces it, clears the key, and every fill after it is refused (`SaltsRefused`).  The
-    key is never written or sent."""
+    key is never written or sent.  Hiding of these leaves is no better than the key's 256 bits (hm96 PROTOCOL section 3)."""
 
     def __init__(self) -> None:
         self.lock, self.pid = threading.Lock(), os.getpid()
@@ -154,7 +158,7 @@ def fresh_into(dst: Any, n: int, raw: int | None = None, *, salts: PassSalts | N
         dst[:len(data)].copy_(torch.frombuffer(bytearray(data), dtype=torch.uint8))
         return
     SX.fill(fill_lib(dst.device), dst[:HM96_SALT * n].view(n, HM96_SALT), key, SALT_INDEX, first,
-            stream=raw if raw is not None else _stream(dst.device))
+            stream=raw if raw is not None else _stream(dst.device), length=SALT_MESSAGE_BYTES)
 
 
 def _constants(device: Any) -> Any:
