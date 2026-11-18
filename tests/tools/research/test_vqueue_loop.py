@@ -3203,7 +3203,8 @@ def test_a_tick_judges_the_runs_beside_its_candidates_checks_at_once_each_once(e
     assert loop.tick() == [] and judged == ["run-2", "run-1"]
     slim.end("run-2", "pytest")
     judged.clear()
-    (failed,) = loop.tick()
+    failed, dropped = loop.tick()
+    assert (dropped["action"], dropped["sha"]) == ("drop", two["sha"]), dropped
     assert sorted(judged) == ["run-1", "run-2"] and (failed["action"], failed["sha"], failed["why"]) == (
         "slim", two["sha"], "judged fail"), failed
     assert failed["record"]["verdict"]["state"] == FAIL
