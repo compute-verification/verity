@@ -519,7 +519,7 @@ def test_only_an_audit_on_the_gates_coins_whose_sessions_took_their_own_coin_tre
         assert "\n" not in why
 
 
-def _sampled_coins(tmp_path: Path, summary: dict | str | None, *args: str, audit: str = "sampled-proofs-served",
+def _sampled_coins(tmp_path: Path, summary: dict | str | None, *args: str, audit: str = "private/logs/sampled-proofs/keep/served",
                    **extra: str) -> tuple[int, list[str]]:
     """`served_verdicts.sh ARGS` (default `sampled-coins`) on a serve dir whose records audit under ``audit`` (step 3's
     by default) kept ``summary`` as its summary.json (none where None; a string as the file's text), ``extra`` added to
@@ -1619,7 +1619,7 @@ def _lean_handed(tmp_path: Path) -> tuple[list[str], Path]:
     from verity.circuits import codec
 
     d = tmp_path / "serve"
-    w = d / "sampled-proofs-served" / "window"
+    w = d / "private/logs/sampled-proofs/keep/served" / "window"
     (w / "m0").mkdir(parents=True)
     (w / "m0" / "p0.bin").write_bytes(b"proof")
     v1 = {"params": {"verifier": "toy"}, "commitment": codec.canonical_json(LEAN_RECORD).hex(),
@@ -1627,7 +1627,7 @@ def _lean_handed(tmp_path: Path) -> tuple[list[str], Path]:
     (w / "case.json").write_text(json.dumps(v1))
     (w / "case-v2.json").write_text(json.dumps({**v1, "params": {"verifier": "toy", "proofs": {}},
                                                 "blobs": [str(w / "m0" / "p0.bin")]}))
-    (d / "sampled-proofs-served" / "summary.json").write_text(json.dumps({"refused": "the node's own verdict"}))
+    (d / "private/logs/sampled-proofs/keep/served" / "summary.json").write_text(json.dumps({"refused": "the node's own verdict"}))
     (p := tmp_path / "pieces" / "pouw").mkdir(parents=True)
     (p / "answer.json").write_text(json.dumps({"verdict": "accept", "reason": None, "commitment": "ef" * 64,
                                                **ACCEPTS["pouw"]}))
@@ -1635,7 +1635,7 @@ def _lean_handed(tmp_path: Path) -> tuple[list[str], Path]:
     exe = tmp_path / "vstar-recursive"
     exe.write_text(FAKE_SAMPLED_LEAN)
     exe.chmod(0o755)
-    return (["record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"),
+    return (["record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "private/logs/sampled-proofs/keep/served"),
              "--pieces", str(tmp_path / "pieces"), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
              "--product", "remote", "--steps", "0,3", "--off-node", "--sampled-lean", "--sampled-exe", str(exe)], exe)
 
@@ -1672,14 +1672,14 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     assert line["answers"] == {"sampled proofs": S.LEAN_HERE + MAIN, "PoUW": pouw_from}
     assert (rows["integrity"]["answer_from"], rows["work"]["answer_from"]) == (S.LEAN_HERE + MAIN, pouw_from)
     seen = json.loads((tmp_path / "seen.json").read_text())
-    w = tmp_path / "serve" / "sampled-proofs-served" / "window"
+    w = tmp_path / "serve" / "private/logs/sampled-proofs/keep/served" / "window"
     assert seen["argv"][:2] == ["sampled", "check"] and seen["argv"][5:] == [str(w / "m0" / "p0.bin")]
     assert json.loads(seen["files"]["params.json"]) == {"levels": 1, "proofs": {}, "verifier": "toy"}
     assert json.loads(seen["files"]["commitment.bin"]) == LEAN_RECORD
     plain = [x for x in argv if x not in ("--sampled-lean", "--sampled-exe", argv[-1])]
     _rc, _line, node_rows = _recorded(tmp_path, plain, capsys)
     for name, body in edit.items():
-        target = tmp_path / "serve" / "sampled-proofs-served" / name
+        target = tmp_path / "serve" / "private/logs/sampled-proofs/keep/served" / name
         if body is None:
             target.unlink()
         else:
@@ -1746,7 +1746,7 @@ def test_a_spot_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nod
     row's error, recomputed here, never the node's verdict."""
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
-    w = tmp_path / "serve" / "sampled-proofs-served" / "window"
+    w = tmp_path / "serve" / "private/logs/sampled-proofs/keep/served" / "window"
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
     other = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": "00" * 64}
     monkeypatch.setenv("ANSWER", "" if change == "no-line" else json.dumps(other))
@@ -1773,7 +1773,7 @@ def test_a_spot_check_that_was_not_started_leaves_the_audits_own_row_naming_the_
 
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
-    w = tmp_path / "serve" / "sampled-proofs-served" / "window"
+    w = tmp_path / "serve" / "private/logs/sampled-proofs/keep/served" / "window"
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
     monkeypatch.setenv("ANSWER", json.dumps({**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1"}))
     limit = SC.CHECK_BLOBS_GB * 10**9
@@ -5331,8 +5331,8 @@ SHORT = "this node has 196 GB, under the 290 GB V3c's audit needs (V3C_AUDIT_MEM
 #: what a deferral's follow-on reads in `_deferred`'s serve dir, but for V3c's window dir and the deferral's own files
 DEFERRED_READS = ("weights_registration.json", f"window-circuit-w7-{VTAG}-tie.json", "windows.jsonl", "seals.jsonl",
                   "requests.jsonl", "h1/log.jsonl", "h1/w7/registration.json", "h1/w7/record.json",
-                  "h1/w7/window-commit.json", "sampled-proofs-served/summary.json", "sampled-proofs-served/window/audit.json",
-                  "sampled-proofs-served/window/registration.json", "sampled-proofs-served/runs.json",
+                  "h1/w7/window-commit.json", "private/logs/sampled-proofs/keep/served/summary.json", "private/logs/sampled-proofs/keep/served/window/audit.json",
+                  "private/logs/sampled-proofs/keep/served/window/registration.json", "private/logs/sampled-proofs/keep/served/runs.json",
                   "private/pouw/period/case.json", "private/pouw/period/answer.json")
 #: `served_verdicts.py record` as the shell runs it: its verdict the Lean answer of the composite under its
 #: ``--composite`` (``pending`` without one, or with a development one), and its exit `S.RECORD_EXIT`'s
@@ -5383,12 +5383,12 @@ def _deferred(tmp_path: Path, **extra: str | None) -> subprocess.CompletedProces
              "weights_registration.json": {},
              "seals.jsonl": {"window": 7, "requests": ["a"]},
              "requests.jsonl": {"user": "a", "engine_id": "a", "windows": [7], "check": {"passed": True}},
-             "sampled-proofs-served/summary.json": {"audit": {}},
-             "sampled-proofs-served/window/audit.json": {"accepted": True},
-             "sampled-proofs-served/window/registration.json": {"format": "toy"},
-             "sampled-proofs-served/runs.json": ["r0"], "private/pouw/period/case.json": {"evidence": "beef"},
+             "private/logs/sampled-proofs/keep/served/summary.json": {"audit": {}},
+             "private/logs/sampled-proofs/keep/served/window/audit.json": {"accepted": True},
+             "private/logs/sampled-proofs/keep/served/window/registration.json": {"format": "toy"},
+             "private/logs/sampled-proofs/keep/served/runs.json": ["r0"], "private/pouw/period/case.json": {"evidence": "beef"},
              "private/pouw/period/answer.json": {"protocol": "verity/pouw/period/v1"},
-             "windows/w7/rows.bin": {}, "weights_registration.salts/0.bin": {}, "sampled-proofs-served/window/sessions/0.json": {}}
+             "windows/w7/rows.bin": {}, "weights_registration.salts/0.bin": {}, "private/logs/sampled-proofs/keep/served/window/sessions/0.json": {}}
     for f, body in files.items():
         (d / f).parent.mkdir(parents=True, exist_ok=True)
         (d / f).write_text(json.dumps(body))
@@ -5798,7 +5798,7 @@ def _run_end(tmp_path: Path, **env: str | None) -> tuple[int, list[str], list[st
     (out / "verdicts.txt").touch()
     full = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOST": "vy-dc-h200", "TPY": sys.executable,
             "ORDER": str(tmp_path / "order"), "D": str(tmp_path / "serve"), "OUT": str(out), "K": "7",
-            "SP": str(tmp_path / "serve" / "sampled-proofs-served"), "PRODUCT": "remote", "H1_KEY_SHA512": "ab" * 64,
+            "SP": str(tmp_path / "serve" / "private/logs/sampled-proofs/keep/served"), "PRODUCT": "remote", "H1_KEY_SHA512": "ab" * 64,
             "COMPOSE_OFF_NODE": "0", **env}
     run = subprocess.run(["bash", "-c", RUN_END + script[start:end]], cwd=tree, check=False, capture_output=True,
                          text=True, env={k: v for k, v in full.items() if v is not None})
@@ -5863,19 +5863,19 @@ def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_fol
 
 
 #: a5's v2 case's blobs in `_handed`'s serve dir: its circuit, public file, lookup table, and a session's record and proof
-BLOBS = tuple(f"sampled-proofs-served/window/m0/{f}" for f in (
+BLOBS = tuple(f"private/logs/sampled-proofs/keep/served/window/m0/{f}" for f in (
     "circuit.txt", "pub-0.bin", "tables/t0.bin", "session-m0/sessions/s0/session.json", "session-m0/sessions/s0/p0.bin"))
 #: what `_handed`'s serve dir holds that no hand-off may carry: the a5 member's prover files beside its blobs, a value
 #: file, V3c's index salts, H1's prover state, a key, the weights' salt file, a row dir, the advice and the requests
-HELD_BACK = ("sampled-proofs-served/window/m0/inst-0.bin", "sampled-proofs-served/window/m0/prover/rows.bin",
+HELD_BACK = ("private/logs/sampled-proofs/keep/served/window/m0/inst-0.bin", "private/logs/sampled-proofs/keep/served/window/m0/prover/rows.bin",
              f"v3c-w7-{VTAG}/window/values/a.bin", f"v3c-w7-{VTAG}/window/index-salt.bin", "private/h1/key",
              "private/weights.key", "weights_registration.salts/0.bin", "windows/w7/rows.bin",
              "advice/w7/private/advice.bin", "requests.jsonl")
 #: what the composite and the final record read in `_handed`'s serve dir, but for the blobs and the hand-off's own files
 HANDED_READS = ("h1/log.jsonl", "h1/w7/record.json", "h1/w7/registration.json", "private/pouw/period/answer.json",
-                "private/pouw/period/case.json", "sampled-proofs-served/runs.json", "sampled-proofs-served/summary.json",
-                "sampled-proofs-served/window/audit.json", "sampled-proofs-served/window/case-v2.json",
-                "sampled-proofs-served/window/case.json", "sampled-proofs-served/window/registration.json",
+                "private/pouw/period/case.json", "private/logs/sampled-proofs/keep/served/runs.json", "private/logs/sampled-proofs/keep/served/summary.json",
+                "private/logs/sampled-proofs/keep/served/window/audit.json", "private/logs/sampled-proofs/keep/served/window/case-v2.json",
+                "private/logs/sampled-proofs/keep/served/window/case.json", "private/logs/sampled-proofs/keep/served/window/registration.json",
                 f"v3c-w7-{VTAG}/audit/window/case.json")
 HANDED_OWN = ("private/compose/compose.env", "private/compose/inference-only.json",
               "private/compose/pieces/pouw/answer.json", "private/compose/pieces/pouw/served.json")
@@ -5900,7 +5900,7 @@ def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True
     commit SHA (``files`` replaces a file's body, by its path, None leaving it unwritten; ``pouw`` PoUW's answer, or
     ``piece`` PoUW's piece dir, copied whole; ``extra`` adds to the environment, None unsetting)."""
     d, out = tmp_path / "serve", tmp_path / "served-out"
-    sp = "sampled-proofs-served"
+    sp = "private/logs/sampled-proofs/keep/served"
     served = {"seals.jsonl": {"window": 7, "requests": ["a"]},
              "windows.jsonl": {"window": 7, "run_root": "ab" * 64, "passed": True, "commit": {"steps": 3}},
              "requests.jsonl": {"user": "a", "engine_id": "a", "windows": [7], "check": {"passed": True}},
@@ -5959,7 +5959,7 @@ def test_the_served_nodes_compose_hand_off_lists_and_hashes_the_verifier_side_fi
     assert _env_of(dc / "compose.env", COMPOSES) == {
         "K": "7", "PRODUCT": "remote", "POUW": "h1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
         "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "",
-        "SAMPLED_AUDIT": "sampled-proofs-served", "STEPS": "0,3"}
+        "SAMPLED_AUDIT": "private/logs/sampled-proofs/keep/served", "STEPS": "0,3"}
     listed = (dc / "inputs.txt").read_text().splitlines()
     assert listed == [*sorted([*HANDED_READS, *BLOBS, *HANDED_OWN]), "private/compose/inputs.sha256"]
     assert not set(listed) & set(HELD_BACK) and S.witness(listed) == []
@@ -6039,7 +6039,7 @@ def test_a_hand_off_after_v3cs_audit_gives_the_record_that_audit_and_carries_its
     assert _handed(tmp_path, files=files).returncode == 0
     d, dc = tmp_path / "serve", tmp_path / "serve" / "private" / "compose"
     assert _env_of(dc / "compose.env", "SAMPLED_AUDIT") == {"SAMPLED_AUDIT": v3c}
-    step3 = {f"sampled-proofs-served/{f}" for f in ("summary.json", "window/audit.json", "window/registration.json",
+    step3 = {f"private/logs/sampled-proofs/keep/served/{f}" for f in ("summary.json", "window/audit.json", "window/registration.json",
                                                     "runs.json")}
     listed = (dc / "inputs.txt").read_text().splitlines()
     assert listed == [*sorted([*(set(HANDED_READS) - step3), *files, *BLOBS, *HANDED_OWN]),
@@ -6052,17 +6052,17 @@ def test_a_hand_off_after_v3cs_audit_gives_the_record_that_audit_and_carries_its
 
 
 @pytest.mark.parametrize("blob, said", [
-    ("sampled-proofs-served/window/m0/inst-0.bin", ": it would carry a file the list doesn't name ("
-     "sampled-proofs-served/window/m0/inst-0.bin: not on the hand-off's list (public_files.PUBLIC))"),
-    ("sampled-proofs-served/window/m0/prover/rows.bin", ": it would carry a file the list doesn't name ("
-     "sampled-proofs-served/window/m0/prover/rows.bin: not on the hand-off's list (public_files.PUBLIC))"),
+    ("private/logs/sampled-proofs/keep/served/window/m0/inst-0.bin", ": it would carry a file the list doesn't name ("
+     "private/logs/sampled-proofs/keep/served/window/m0/inst-0.bin: not on the hand-off's list (public_files.PUBLIC))"),
+    ("private/logs/sampled-proofs/keep/served/window/m0/prover/rows.bin", ": it would carry a file the list doesn't name ("
+     "private/logs/sampled-proofs/keep/served/window/m0/prover/rows.bin: not on the hand-off's list (public_files.PUBLIC))"),
     ("/elsewhere/pub-0.bin", f" (no exception, exit 1): {PRIVATE}"),
 ])
 def test_a_hand_off_that_would_carry_a_witness_or_a_blob_outside_the_serve_dir_is_refused(tmp_path, blob, said):
     """No witness leaves the served node: a case naming a prover's file as a blob, or a blob outside the serve dir, refuses
     the hand-off, which writes no sums for a copy to be held to."""
     run = _handed(tmp_path, (*BLOBS, blob))
-    case = tmp_path / "serve" / "sampled-proofs-served" / "window" / "case-v2.json"
+    case = tmp_path / "serve" / "private/logs/sampled-proofs/keep/served" / "window" / "case-v2.json"
     assert run.returncode == 1
     assert (tmp_path / "served-out" / "verdicts.txt").read_text().splitlines() == [
         "HANDOFF refused" + said]
@@ -6233,7 +6233,7 @@ def _compose(tmp_path: Path, keep: tuple[str, ...] = (), link: tuple[str, Path] 
 COMPOSED = ("COMPOSE on COMPOSE_NODE: the final record and the composite of the served "
             "node, from its compose hand-off (verifier-side files, no witness; {audit}; the record's sampled "
             "proofs {sampled}), each file as it hashed it (the serve dir's private/compose/inputs.sha256): {verdict}")
-STEP3 = "sampled-proofs-served"
+STEP3 = "private/logs/sampled-proofs/keep/served"
 
 
 @pytest.mark.parametrize("lean, exit", [(None, 2), ("accept", 0), ("reject", 1), ("undecided", 2)])
@@ -6255,7 +6255,7 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
     assert json.loads(lines[-1].removeprefix("RECORD "))["composed"] == {"undecided": "pending"}.get(lean, lean or "pending")
     argv = json.loads((tmp_path / "order.record").read_text())
     assert argv[:17] == [
-        "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"), "--pieces",
+        "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "private/logs/sampled-proofs/keep/served"), "--pieces",
         str(d / "private" / "compose" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
         "vy-dc-h200", "--steps", "0,3"]
     assert (argv[17], len(argv[18]), argv[19:23], argv[25:]) == (
@@ -6272,7 +6272,7 @@ COMPOSE_CLASH = ("PREFLIGHT: the compose follow-on runs at the hand-off's settin
 
 
 @pytest.mark.parametrize("keep, change, extra, line", [
-    ((), "sampled-proofs-served/window/m0/pub-0.bin", {}, COMPOSED.format(
+    ((), "private/logs/sampled-proofs/keep/served/window/m0/pub-0.bin", {}, COMPOSED.format(
         audit="no V3c audit", sampled=STEP3, verdict="FAIL (the serve dir's private/compose/check.log)")),
     ((), None, {"HOST": "vy-dc-h200"}, "PREFLIGHT: this is the served node (SERVED_NODE), which the prover controls, so "
      "nothing composed here claims a record: compose on COMPOSE_NODE"),
@@ -6713,7 +6713,7 @@ def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
     d, out, gate = tmp_path / "serve", tmp_path / "served-out", tmp_path / "gate-host"
     v1 = {"params": {"verifier": "toy"}, "commitment": codec.canonical_json(LEAN_RECORD).hex(),
           "evidence": codec.canonical_json({"draw": [0, 3]}).hex()}
-    sp = "sampled-proofs-served"
+    sp = "private/logs/sampled-proofs/keep/served"
     cases = {f"{sp}/window/case.json": v1, f"{sp}/summary.json": {"refused": "the node's own verdict"},
              f"{sp}/window/case-v2.json": {**v1, "params": {"verifier": "toy", "proofs": {}},
                                            "blobs": [str(d / b) for b in BLOBS]}}
@@ -6791,14 +6791,14 @@ def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_
 
 
 @pytest.mark.parametrize("extra, said", [
-    ({"TAMPER": "sampled-proofs-served/summary.json"}, "sampled-proofs-served/summary.json isn't the file the served node "
+    ({"TAMPER": "private/logs/sampled-proofs/keep/served/summary.json"}, "private/logs/sampled-proofs/keep/served/summary.json isn't the file the served node "
      "hashed: its SHA-256 isn't its sum (1 such)"),
-    ({"TAMPER": "sampled-proofs-served/window/case-v2.json"}, "sampled-proofs-served/window/case-v2.json isn't the file the "
+    ({"TAMPER": "private/logs/sampled-proofs/keep/served/window/case-v2.json"}, "private/logs/sampled-proofs/keep/served/window/case-v2.json isn't the file the "
      "served node hashed"),
     ({"CARRY": "private/h1/key"}, "the hand-off carries the served run's witness: private/h1/key (H1's prover state (its "
      "key))"),
-    ({"CARRY": "sampled-proofs-served/window/m0/inst-0.bin"}, "the hand-off carries the served run's witness: "
-     "sampled-proofs-served/window/m0/inst-0.bin"),
+    ({"CARRY": "private/logs/sampled-proofs/keep/served/window/m0/inst-0.bin"}, "the hand-off carries the served run's witness: "
+     "private/logs/sampled-proofs/keep/served/window/m0/inst-0.bin"),
     ({"CARRY": "notes.txt"}, "the hand-off carries notes.txt, which its sums don't list"),
 ])
 def test_the_compose_gate_refuses_a_hand_off_off_its_sums_or_carrying_a_witness_and_composes_nothing(tmp_path, extra, said):
@@ -7350,7 +7350,7 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     and without composite.py in the tree, or onsite's cases without ONSITE_PIECES (benchmarks/pous/onsite_pieces.sh), it
     says so and fails, since no Lean answered. PRODUCT=remote reads neither PoUS's case nor the wipe's, and runs
     remote's Lean alone. A serve dir with no V3c
-    audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
+    audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/private/logs/sampled-proofs/keep/served``) once it holds a
     case, but not under H1's tie (a ``SERVE_DIR/h1/log.jsonl``), whose cases are on the record H1 named; and no product
     is handed a case under ``SERVE_DIR/private/pouw``, tied or not, whose period case reaches a product only as
     served_cases.py writes it, tied to that record. On the served node (SERVED_NODE unset) under VERITY_HOLD_PLACEMENT=1 it
@@ -7378,7 +7378,7 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     v2 = d / "private" / "sampled-proofs-v2"
     (tree / "benchmarks" / "one_stage" / "served_cases.py").write_text(f'''import json, sys
 from pathlib import Path
-assert sys.argv[1:3] in (["--serve-dir", "{d}"], ["--audit", "{d}/sampled-proofs-served"]), sys.argv
+assert sys.argv[1:3] in (["--serve-dir", "{d}"], ["--audit", "{d}/private/logs/sampled-proofs/keep/served"]), sys.argv
 assert sys.argv[3:] == ["--private", "{d}/private", "--from-division"], sys.argv
 Path("{tmp_path}", "served_cases.argv").write_text(json.dumps(sys.argv[1:3]))
 Path("{v2}").mkdir(parents=True)
@@ -7458,12 +7458,12 @@ sys.exit(1)
         "memory limit of its own")]
     _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
     assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--serve-dir", str(d)]
-    (d / "sampled-proofs-served" / "window").mkdir(parents=True)
-    (d / "sampled-proofs-served" / "window" / "case.json").write_text("{}")
     (out / "verdicts.txt").unlink()
     shutil.rmtree(d / "private")
+    (d / "private/logs/sampled-proofs/keep/served" / "window").mkdir(parents=True)
+    (d / "private/logs/sampled-proofs/keep/served" / "window" / "case.json").write_text("{}")
     assert run().returncode == 0
-    assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--audit", str(d / "sampled-proofs-served")]
+    assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--audit", str(d / "private/logs/sampled-proofs/keep/served")]
     (d / "h1").mkdir()
     (d / "h1" / "log.jsonl").write_text("")
     (out / "verdicts.txt").unlink()
@@ -8511,3 +8511,59 @@ def test_the_launcher_and_the_composite_read_the_hold_only_through_placement_sh(
         assert not [x for x in code if "hold_placement()" in x], name
         reads = [x for x in code if "${VERITY_HOLD_PLACEMENT" in x and not x.startswith("case ${VERITY_HOLD_PLACEMENT:-} in")]
         assert not reads, (name, reads)
+
+
+#: the served arm's files that hold what the runner keeps private: the window's registration (its binding is made from
+#: the true bits), its cases, its audit record, the summaries with the advice's length and each rank's charge
+SERVED_ARM_HELD = ("summary.json", "runs.json", "rank0/summary.json", "window/summary.json", "window/registration.json",
+                   "window/case.json", "window/case-v2.json", "window/audit.json")
+
+
+def test_the_served_arm_is_read_from_the_runners_keep_and_no_published_entry_names_it():
+    """Step 3's records audit is read where the path prover's runner keeps it, under the serve dir's private logs: the
+    launcher's every reader, the composite's and the hand-off list's name that one path, and no ``OUT/`` entry lets any
+    of its files leave."""
+    import public_files as PF
+
+    one = HERE.parents[2] / "benchmarks" / "one_stage"
+    sh, comp = ((one / f).read_text() for f in ("served_verdicts.sh", "served_composite.sh"))
+    arm = re.search(r"^SERVED_ARM=(\S+)$", sh, re.M)[1]
+    keep = re.search(r'PP_KEEP="\$LOGS/([^"]+)"', sh)[1]
+    assert re.search(r"^LOGS=\$D/private/logs$", sh, re.M) and arm == f"private/logs/{keep}/served" == PF.SERVED_ARM
+    assert "SP=$D/$SERVED_ARM" in sh.splitlines()
+    assert f'"$D/{arm}/window/case.json"' in comp and f'--audit "$D/{arm}"' in comp
+    assert "sampled-proofs-served" not in sh + comp
+    for f in SERVED_ARM_HELD:
+        assert PF.listed(f"OUT/sampled-proofs/served/{f}") is None, f
+        assert PF.private_why(f"{arm}/{f}"), f
+
+
+@pytest.mark.parametrize("kept", [False, True])
+def test_the_launcher_takes_the_served_arm_into_the_keep_and_leaves_none_of_it_under_out(tmp_path, kept):
+    """Where run.sh published the served arm under OUT, the launcher moves it into the keep before anything reads it;
+    where run.sh kept it, the launcher reads the keep's and leaves OUT's public form to `publish`."""
+    sh = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text().splitlines()
+    i = sh.index("# run.sh keeps the served arm in $SP; where it published it under OUT instead, it goes to $SP before anything reads it")
+    block = "\n".join(sh[i:i + 3])
+    d, out = tmp_path / "serve", tmp_path / "out"
+    sp = d / S_ARM
+    pub = out / "sampled-proofs" / "served"
+    for f in SERVED_ARM_HELD:
+        (pub / f).parent.mkdir(parents=True, exist_ok=True)
+        (pub / f).write_text(json.dumps({"advice": 37291, "from": "out"}))
+    if kept:
+        (sp / "window").mkdir(parents=True)
+        (sp / "window" / "registration.json").write_text(json.dumps({"from": "keep"}))
+    env = {"PATH": os.environ["PATH"], "SP": str(sp), "OUT": str(out), "SAY_PY": sys.executable,
+           "SV": str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py")}
+    r = subprocess.run(["bash", "-c", block], env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    assert r.returncode == 0, r.stdout + r.stderr
+    if kept:
+        assert json.loads((sp / "window" / "registration.json").read_text()) == {"from": "keep"}
+        assert not (sp / "summary.json").exists()
+    else:
+        assert not pub.exists()
+        assert {p.relative_to(sp).as_posix() for p in sp.rglob("*") if p.is_file()} == set(SERVED_ARM_HELD)
+
+
+S_ARM = "private/logs/sampled-proofs/keep/served"

@@ -1,6 +1,5 @@
 module
 
-public import Mathlib.Data.Finset.Card
 public import Spot.Edges
 
 /-!
@@ -31,7 +30,7 @@ open Flock.TemplateQuery (TRange)
 
 /-- **A reference between root nodes**: root node `k`'s argument `i` reads, at index `x`, leaf `l` of root node `w`,
 neither an input node. -/
-def RootRef (P : Prog) (k i x w l : ℕ) : Prop :=
+def RootRef (P : Prog) (k i x w l : Nat) : Prop :=
   let b := (P.defs[P.root]!).body
   k < b.nodes.size ∧ Edges.isInputNode P k = false ∧ i < (b.nodes[k]!).args.size ∧
     x < ((b.nodes[k]!).args[i]!).seq.count ∧ ((b.nodes[k]!).args[i]!).seq.get x = ⟨false, w, l⟩ ∧
@@ -39,18 +38,18 @@ def RootRef (P : Prog) (k i x w l : ℕ) : Prop :=
 
 /-- Argument `a`'s index of member `m`'s leaf `t`: `((t / L)·d + m)·L + t % L` for an argument mapped over an axis of
 dimensions `(d, L)`, else `t`. -/
-def memberIndex (a : Arg) (m t : ℕ) : ℕ :=
+def memberIndex (a : Arg) (m t : Nat) : Nat :=
   match a.dims with
   | some (d, L) => ((t / L) * d + m) * L + t % L
   | none => t
 
 /-- The first leaf of field `f` of the return `t`. -/
-def fieldOffset (t : Ty) (f : ℕ) : ℕ := (((fieldsOf t).take f).map Ty.leaves).sum
+def fieldOffset (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map Ty.leaves).sum
 
 /-- **Wire `e` covers a read**: reader unit `e.start + m` is member `mk` of root node `k`, whose row `e.cut0` of port
 `i` (of `len` leaves) holds argument index `x` at its leaf `t`; writer unit `e.base + m·step` is member `mw` of root
 node `w`, whose field `f` (`e.out`) holds leaf `l` at `t`. -/
-def WireReads (P : Prog) (rs : Array TRange) (W : Wires.Wiring) (e : Wires.Wire) (k i x w l : ℕ) : Prop :=
+def WireReads (P : Prog) (rs : Array TRange) (W : Wires.Wiring) (e : Wires.Wire) (k i x w l : Nat) : Prop :=
   let b := (P.defs[P.root]!).body
   let node := b.nodes[k]!
   let ty := ((P.defs[node.fn]!).params[i]!).2
@@ -61,7 +60,7 @@ def WireReads (P : Prog) (rs : Array TRange) (W : Wires.Wiring) (e : Wires.Wire)
       (Edges.firstUnits rs)[w]? = some (e.writer, wb) ∧ m < e.radix.headD 0 ∧ e.start + m = rb + mk ∧
       mk < node.members ∧ t < len ∧ x = memberIndex (node.args[i]!) mk (e.cut0 * len + t) ∧
       e.out = "o" ++ toString f ∧ f < (fieldsOf wd.ret).length ∧
-      ((wb + mw : ℕ) : ℤ) = e.base + (m : ℤ) * e.step.headD 0 ∧ mw < (b.nodes[w]!).members ∧
+      ((wb + mw : Nat) : Int) = e.base + (m : Int) * e.step.headD 0 ∧ mw < (b.nodes[w]!).members ∧
       l = mw * wd.outLeaves + fieldOffset wd.ret f + t
 
 /-- **The wires are exactly the references between root nodes**: each reference is covered by a wire of `ws`, each
@@ -72,11 +71,12 @@ def EdgesExact (P : Prog) (rs : Array TRange) (W : Wires.Wiring) (ws : List Wire
     ws.Pairwise fun e e' => ∀ k i x w l, ¬ (WireReads P rs W e k i x w l ∧ WireReads P rs W e' k i x w l)
 
 /-- **Each root argument within the parts bound**: at most one part more than the spaces (`Edges.partKey`) its parts
-read. -/
+read, counted as a list of them without repeats. -/
 def PartsWithin (P : Prog) : Prop :=
   let b := (P.defs[P.root]!).body
-  ∀ k < b.nodes.size, ∀ (j : ℕ) (hj : j < (b.nodes[k]!).args.size),
-    ((b.nodes[k]!).args[j]).seq.parts.size ≤
-      (((b.nodes[k]!).args[j]).seq.parts.toList.map Edges.partKey).toFinset.card + 1
+  ∀ k < b.nodes.size, ∀ (j : Nat) (hj : j < (b.nodes[k]!).args.size),
+    ∃ keys : List (Option (Bool × Nat)), keys.Nodup ∧
+      (∀ x, x ∈ keys ↔ x ∈ ((b.nodes[k]!).args[j]).seq.parts.toList.map Edges.partKey) ∧
+        ((b.nodes[k]!).args[j]).seq.parts.size ≤ keys.length + 1
 
 end Properties.Spot.Edges
