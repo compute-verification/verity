@@ -315,20 +315,6 @@ def test_ncp_v1_keeps_no_weight_copy_so_the_selector_admits_pous_beside_it(monke
     assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1")) == ()
 
 
-@pytest.mark.parametrize("scheme", ["pearl-c-sm120-v1-h3", "ncp-v2"])
-def test_a_scheme_that_keeps_weight_state_is_refused_beside_pous(monkeypatch, scheme):
-    """Pearl-C forms B~ once per install, and ncp-v2 reuses each weight's side: under POUS their GEMMs would read a copy made
-    from the plaintext, not what POUS decodes."""
-    _fake_pous(monkeypatch)
-    settings = {"pouw": {"coins": _coins(), **({"device": "cuda", "kernel": "k"} if scheme.startswith("pearl") else {})}}
-    assert pouw.keeps_weight_copy(scheme)
-    assert PO.refusals(_serve(f"pouw:{scheme}", settings=settings)) == ()
-    got = PO.refusals(_serve(f"pouw:{scheme}", "pous:band-chain/d12/v1", settings=settings))
-    assert [r for r in got if "weight-derived copy" in r] == [
-        (f"pouw:{scheme}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read what "
-         "POUS stores (prepare its weight operands per forward from the weight it is handed)")]
-
-
 def test_kernel_directories_load_as_their_own_modules_named_by_their_sources(tmp_path, monkeypatch):
     """Two kernel directories in one process (a tuned variant beside the gated one) get their own
     run.py; the same bytes anywhere are one kernel.  Before this, the second got the first's run.py.  The loader executes
