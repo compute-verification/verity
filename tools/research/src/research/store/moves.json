@@ -5435,6 +5435,11 @@
         "tests/verity/protocols/proofs/spot/prover/test_cost_recursion.py": "tests/calibration/sampling_plan/test_cost_recursion.py",
         "tests/verity/protocols/proofs/spot/prover/test_cost_transformer.py": "tests/calibration/sampling_plan/test_cost_transformer.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/prover/audit/class_size.py": "benchmarks/prove_path/class_size.py"
+      }
     }
   ]
 }

@@ -400,7 +400,6 @@ paths = [
 ]
 loads = [
     "verity/commitments/crypto",
-    "verity/commitments/periods",
     "verity/protocols/proofs/spot/verifier",
 ]
 

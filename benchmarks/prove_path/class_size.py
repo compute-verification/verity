@@ -16,7 +16,7 @@ key block, which the tests hold to the exact lowering at larger classes:
   block reads its keys and values a row a key, so the exact lowering refuses a block past 126 keys, more than a unit's 256
   rows; the projection counts it all the same.
 
-The class's scan binding's label and ``masked_from`` are the adapter's, which SPOT never imports: its caller hands them
+The class's scan binding's label and ``masked_from`` are the adapter's: its caller hands them
 over (``label(scan_state.bridge(cls.scan, cls.prompt))``, and ``attention_vocab.fa2_masked_from(T, 1, 0, BN, False)``
 as a function of T and BN).
 
