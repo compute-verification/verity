@@ -594,7 +594,8 @@ def test_a_cards_session_builds_kv_cu_and_registers_at_codec(node, codec, define
     (nvcc,) = [c for c in node.calls() if c.startswith("nvcc ") and c.endswith(kv)]
     assert nvcc.split(" -o ")[0].endswith(f"-Xptxas -v {defines}")
     (prover,) = [c for c in node.calls() if c.startswith("card prover ")]
-    assert prover.split("--gib 16 ")[1].startswith(f"--codec {codec or 'p1024/k3/masked'}")
+    from verity.protocols.resource_accounting.memory.poub.verifier import codec as deployed
+    assert prover.split("--gib 16 ")[1].startswith(f"--codec {codec or deployed.DEFAULT.name}")
 
 
 def test_tiny_takes_serve_or_servedrop(node):
