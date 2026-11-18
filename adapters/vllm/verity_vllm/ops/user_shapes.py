@@ -1,42 +1,68 @@
-"""Counts stored runs' request users by the shape our load tools give a body's `user`, printing counts only, never a user.
+"""Counts stored runs' request users by shape, printing counts only, never a user: a request_users.jsonl line's ``user``,
+a seals.jsonl line's ``requests`` (each the body's ``user``, else the server's HTTP id).
 
-    python3 user_shapes.py LIST    LIST: one path a line, each a run's request_users.jsonl (or requests.jsonl)
+    python3 user_shapes.py LIST    LIST: one path a line, each a copy of request_users.jsonl or seals.jsonl
 """
 import json
 import re
 import sys
 from collections import Counter
 
-SHAPES = {
-    "varied.NNNNN (tools/served_run/serve_load.py:139; pipeline/commit_arb.py:231)": r"varied\.\d{5}(\.t\d+)?",
-    "fixed.NNNNN (tools/served_run/serve_load.py:148; benchmarks/one_stage/rehearsal_window.py:57)": r"fixed\.\d{5}",
-    "bK-I (tools/served_run/serve_load.py:234)": r"b\d+-\d+",
-    "user-I (network/prover/scan_zk.py:395; tools/advice_run.py:72)": r"user-\d+",
-    "req-NNNNN (benchmarks/network_e2e/traces/corpus.py:265, serve_tax's loads)": r"req-\d{5}",
-    "warmup-TAG-I (benchmarks/network_traces/attester_piece.py:300)": r"warmup-.+-\d+",
-    "NAME-repR-I (benchmarks/attester_load/run.py:83,280)": r".+-rep\d+-\d+",
-    "qI (benchmarks/compile_cost/run.py:100)": r"q\d+",
-}
-COMPILED = [(name, re.compile(rx)) for name, rx in SHAPES.items()]
+#: the server's HTTP id (serve_admit.new_http_id), then the labels our load tools make up, then the generic shapes
+SHAPES = (
+    ("server-made HTTP id (cmpl-/chatcmpl- + hex)", r"(chat)?cmpl-[0-9a-f]{32}(-\d+)?"),
+    ("UUID", r"[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}"),
+    ("synthetic <word>.<n> (serve_load varied./fixed.)", r"(varied|fixed)\.\d+(\.t\d+)?"),
+    ("synthetic user-<n> (network front, advice_run)", r"user-\d+"),
+    ("synthetic req-<n> (trace corpus, serve_tax)", r"req-\d+"),
+    ("synthetic b<k>-<i> (serve_load bursts)", r"b\d+-\d+"),
+    ("synthetic <tag>-<n> (attester_load reps, attester warm-ups)", r"(warmup-.+|.+-rep\d+)-\d+"),
+    ("synthetic <letter><n> (u<n>, q<n>, r<n>)", r"[uqr]\d+"),
+    ("email-like", r"[^@\s]+@[^@\s]+\.[^@\s]+"),
+    ("contains whitespace", r".*\s.*"),
+)
+COMPILED = [(name, re.compile(rx, re.S)) for name, rx in SHAPES]
+
+
+def length_class(n: int) -> str:
+    return "1-8" if n <= 8 else "9-32" if n <= 32 else "33-128" if n <= 128 else ">128"
 
 
 def shape(user) -> str:
     if user is None:
         return "none sent"
-    return next((name for name, rx in COMPILED if rx.fullmatch(str(user))), "matches no shape")
+    if not isinstance(user, str):
+        return "not a string"
+    return next((name for name, rx in COMPILED if rx.fullmatch(user)),
+                f"matches no shape, length {length_class(len(user))}")
+
+
+def users_of(path: str, record: dict) -> list:
+    if path.endswith("seals.jsonl"):
+        return list(record.get("requests") or []) if isinstance(record, dict) else []
+    return [record.get("user")] if isinstance(record, dict) else []
 
 
 def main(listing: str) -> int:
-    total, files, unreadable = Counter(), 0, 0
+    by_kind: dict[str, Counter] = {}
+    files, unreadable, bad_lines = Counter(), Counter(), Counter()
     for path in filter(None, map(str.strip, open(listing))):
+        kind = "seals.jsonl" if path.endswith("seals.jsonl") else "request_users.jsonl"
         try:
-            lines = [json.loads(x) for x in open(path) if x.strip()]
-        except (OSError, ValueError):
-            unreadable += 1
+            text = open(path, encoding="utf-8", errors="replace").read()
+        except OSError:
+            unreadable[kind] += 1
             continue
-        files += 1
-        total.update(shape(r.get("user")) for r in lines)
-    print(json.dumps({"files": files, "unreadable": unreadable, "by_shape": dict(total.most_common())}, indent=1))
+        files[kind] += 1
+        counts = by_kind.setdefault(kind, Counter())
+        for line in filter(str.strip, text.splitlines()):
+            try:
+                counts.update(shape(u) for u in users_of(path, json.loads(line)))
+            except ValueError:
+                bad_lines[kind] += 1
+    print(json.dumps({"files_read": dict(files), "unreadable": dict(unreadable), "bad_lines": dict(bad_lines),
+                      "by_shape": {k: dict(c.most_common()) for k, c in by_kind.items()},
+                      "totals": {k: sum(c.values()) for k, c in by_kind.items()}}, indent=1))
     return 0
 
 
