@@ -1778,9 +1778,6 @@ def resolveStep (P : Prog) : Scope × Ref → V (Nat ⊕ (Scope × Ref))
     | _ => pure (.inr (parent, a.seq.get j))
   | (sc, ⟨false, k, j⟩) => do
     let body := (P.defs[sc.d]!).body
-    if body.recut.any (·.1 == k) then
-      throw (s!"recut-gates: input nodes {(body.recut.map (·.1)).toList} are read in leaves of part of their width, " ++
-        "which the gate layout doesn't lay out")
     let node := body.nodes[k]!
     let o := sc.off + body.offsets[k]!
     let callee := P.defs[node.fn]!
@@ -1799,8 +1796,32 @@ def resolveStep (P : Prog) : Scope × Ref → V (Nat ⊕ (Scope × Ref))
       pure (.inr (.child sc node.fn (o + m * callee.gates) k m, callee.body.ret.get jj))
 
 /-- `layout.resolve`: the gate a body-scoped reference denotes in an activation, up through parameters and down through node
-outputs until a primitive. -/
-def resolve (P : Prog) (sc : Scope) (r : Ref) : V Nat := Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r)
+outputs until a primitive. Refused (`recut-gates`, `Program.circuit`'s refusal) while the root reads an input node recut
+(`Body.recut`): a gate is one leaf of its width, and the layout has no operand of part of a gate. -/
+def resolve (P : Prog) (sc : Scope) (r : Ref) : V Nat :=
+  if (P.defs[P.root]!).body.recut.isEmpty then Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r)
+  else throw (s!"recut-gates: input nodes {((P.defs[P.root]!).body.recut.map (·.1)).toList} are read in leaves of part " ++
+    "of their width, which the gate layout doesn't lay out")
+
+theorem resolve_run {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (h : resolve P sc r = .ok a) :
+    Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r) = .ok a := by
+  unfold resolve at h
+  split at h
+  · exact h
+  · cases h
+
+theorem resolve_eq {P : Prog} (h : (P.defs[P.root]!).body.recut = #[]) (sc : Scope) (r : Ref) :
+    resolve P sc r = Steps.run "scope resolution" (resolveStep P) Steps.FUEL (sc, r) := by
+  unfold resolve
+  rw [h]
+  rfl
+
+theorem resolve_recut {P : Prog} {sc : Scope} {r : Ref} {a : Nat} (h : resolve P sc r = .ok a) :
+    (P.defs[P.root]!).body.recut = #[] := by
+  unfold resolve at h
+  split at h
+  · exact Array.isEmpty_iff.mp (by assumption)
+  · cases h
 
 /-- `partition_object.order_violation`: the first reference naming neither a parameter of its body nor an earlier node of it
 (a body's `ret` may name any node), over every body the root reaches, root first and callees in node order, each
