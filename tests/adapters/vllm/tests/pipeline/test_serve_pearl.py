@@ -30,6 +30,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     Workload,
     activation_binding,
     commit_rows,
+    fresh_salts,
     weights_root,
 )
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
@@ -133,6 +134,7 @@ class Run(PP.EpochCalls, PassEnds):
         self.commits = {"scheme": s.name, "salt": self.salt.hex(), "weights_root": self.epoch.weights_root.hex(),
                         "coins": coins.to_json(), "salt_opening": opening.to_json()}
         self.details: dict[str, list[dict]] = {"passes": []}
+        self.salts: dict[int, tuple[list[bytes], list[bytes]]] = {}
         self.retain_dir, self.retained, self.cur, self.finished = None, 0, None, False
         RUNS.append(self)
         self.begin()
@@ -149,14 +151,14 @@ class Run(PP.EpochCalls, PassEnds):
         index = PP.call_index(self)
         y = (x.float() @ weight.float().T).to(torch.bfloat16)
         a, y16 = _rows(x, y)
-        root_a = commit_rows(activation_binding(self.salt, index), index, [r.tobytes() for r in a], HM96, self.salt_key,
-                             index).commitment.root
+        sa, sy = self.salts.setdefault(index, (fresh_salts(len(a)), fresh_salts(len(y16))))
+        root_a = commit_rows(activation_binding(self.salt, index), index, [r.tobytes() for r in a], HM96, sa).commitment.root
         cur = self.cur
         assert cur is not None, "a call in no pass"
         cur.matmuls.append(Matmul(index, Shape(len(a), k, n), w))
         cur.records.append({"index": index, "m": len(a), "k": k, "n": n, "weight": w, "real_rows": m,
                             "root_a": root_a.hex(),
-                            "y": {"root": SY.commit_y(y16.tobytes(), n, self.salt, index, self.salt_key)[0].hex()}})
+                            "y": {"root": SY.commit_y(y16.tobytes(), n, self.salt, index, sy)[0].hex()}})
         return y
 
     def end(self, lag=False, behind=False):
@@ -167,7 +169,7 @@ class Run(PP.EpochCalls, PassEnds):
             cur.retain.mkdir(mode=0o700)
             (path := cur.retain / "manifest.json").write_text(json.dumps(
                 {"entry": self.entry, "scheme": self.scheme.name, "salt": self.salt.hex(),
-                 "hm96_salt_key": self.salt_key.hex(), "weights": self.weights, "matmuls": cur.records}))
+                 "weights": self.weights, "matmuls": cur.records}))
             out["manifest"] = str(path)
         self.details["passes"].append(out)
         return out
@@ -236,7 +238,7 @@ def test_each_window_is_one_epoch_a_pass_a_step_numbered_as_the_toys_and_its_w_r
         W = PWR.write(tmp_path / f"W{k}.json", served["passes"], range(CLASS.outputs))
         assert W["window"]["salt"] == RUNS[k].salt.hex() and W["window"]["entry"] == SPL.ENTRY
         manifests = [json.loads(Path(p["manifest"]).read_text()) for p in served["passes"]]
-        key, entries = bytes.fromhex(manifests[0]["hm96_salt_key"]), iter(W["registered"])
+        key, entries = RUNS[k].salt_key, iter(W["registered"])
         for s in range(CLASS.outputs):
             for c in range(CALLS):
                 u, i = manifests[s]["matmuls"][c], s * CALLS + c
@@ -246,9 +248,10 @@ def test_each_window_is_one_epoch_a_pass_a_step_numbered_as_the_toys_and_its_w_r
                 ea, ey = next(entries), next(entries)
                 assert (ea["value"], ea["leaves"], ey["value"], ey["leaves"]) == (
                     PEARL.a(s, c), PEARL.a_rows(CLASS, s), PEARL.y(s, c), PEARL.rows(CLASS, s))
+                sa, sy = RUNS[k].salts[i]
                 assert ea["root"] == commit_rows(activation_binding(RUNS[k].salt, i), i, [r.tobytes() for r in a], HM96,
-                                                 key, i).commitment.root.hex()
-                assert ey["root"] == SY.commit_y(y16.tobytes(), u["n"], RUNS[k].salt, i, key)[0].hex()
+                                                 sa).commitment.root.hex()
+                assert ey["root"] == SY.commit_y(y16.tobytes(), u["n"], RUNS[k].salt, i, sy)[0].hex()
         assert [(e["value"], e["root"], (e["leaves"], e["words"])) for e in entries] == [
             (PEARL.b(c), (bytes([c + 1]) * 32 + key).hex(), SHAPES[c]) for c in range(CALLS)]
         salts.append((RUNS[k].salt, key))
