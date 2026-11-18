@@ -498,9 +498,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "int8_row_quant": "Int8RowQuant_v1{K}: verity_int8::row_quant on one bf16 token row -> (x_q s8[K], s_a f32): s_a = "
                              "RN32(max(amax, RN32(1e-30))/127), x_q = clamp(rint(RN32(x/s_a)), ±127) (registry.int8_exact)",
-           "int8_scaled_mm": "ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}: verity_int8::scaled_mm on one quantized row -> "
+           "int8_scaled_mm": "ScaledMmS8_v3{K,N,DOT=BlackwellS8ImmaDot32_v1}: verity_int8::scaled_mm on one quantized row -> "
                              "y bf16[N], ScaledMmS8Coordinate_v1 per output: K/32 satfinite s8 IMMA steps, y = bf16(RN32(RN32(f32(acc)·s_a)·s_w)); "
-                             "W s8 [N,K] + s_w f32 [N] Inputs (ml.circuits.ops.gemm)",
+                             "W s8 [N,K] + s_w f32 [N] Inputs as their registered u16 words, [N][K/2] and [N][2] (verity.circuits.ops.gemm)",
            "int8_kv_quant": "Int8KvQuant_v1{S,D}: verity_int8::kv_quant_batch's slice for one KV head of one request's S-key window -> (K' s8 [S,D] under "
                             "the layer's K scale (a Const32), V' s8 [S,D] per channel over the window, s_v f32 [D], f32(V'_0) [D]) "
                             "(registry.int8_exact)",

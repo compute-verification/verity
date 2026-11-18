@@ -2,7 +2,7 @@
 its second and compared. GLM-5.3 at TP8 is the case it is for; any `serve_tax` model runs.
 
     tp_restore.py preflight --model-id glm53 [--max-model-len N] [--tp N] [--kv-cache-dtype FORMAT]
-    tp_restore.py serve --model-id glm53 --c4 C4 --out OUT --scratch DIR [--rate 10] [--span-s 240]
+    tp_restore.py serve --model-id glm53 --c4 C4 --private P --out OUT --scratch DIR [--rate 10] [--span-s 240]
                         [--edges-at 120,170,220] [--plan-file PLAN.jsonl] [--unseeded-share 0.5] [--sampling own]
                         [--max-model-len 40960] [--tp N] [--kv-cache-dtype FORMAT] [--long-share 0.05]
                         [--long-tokens 8192,32768]
@@ -20,7 +20,9 @@ samples theirs, and the rest carry the public seed rule's. A named ``--sampling`
 and nothing is seeded, so with no greedy or seeded row in a batch vLLM samples with FlashInfer's sampler and the CUDA
 generator. Each edge writes under ``--scratch``, because its blocks are tens of GB and stay out of the run's record; the
 first ``--dump`` edges write their blocks, the rest only their digests and state. OUT
-gets each ``edge.json``, the step outputs from the first edge to the last, the client's records and the step trace.
+gets each ``edge.json`` and the client's records; ``--private``, a directory outside every run's, holds what holds
+request values, on the node (its meta.json names it, `serve_tax.private_of`): the step trace and the step outputs
+from the first edge to the last, under server/.
 Once the last edge is written the server stops, unless ``--run-out``: nothing after it is compared, and the requests in
 flight then are recorded with the tokens they streamed.
 
@@ -227,7 +229,7 @@ def preflight(a: argparse.Namespace) -> int:
 def serve(a: argparse.Namespace) -> int:
     model = S.MODELS[a.model_id]
     checkpoint = Path(a.checkpoint) if a.checkpoint else model.checkpoint()
-    out, scratch = Path(a.out), Path(a.scratch)
+    out, scratch, private = Path(a.out), Path(a.scratch), S.private_dir(a)
     out.mkdir(parents=True, exist_ok=True)
     scratch.mkdir(parents=True, exist_ok=True)
     need = S.plan_need({"load": a.rate}, a.span_s, a.requests)
@@ -250,7 +252,7 @@ def serve(a: argparse.Namespace) -> int:
     argv = served_argv(a, checkpoint, port)
     srv = out / "server"
     srv.mkdir(exist_ok=True)
-    env = S.server_env(arm, srv, site, None, 600.0, 600.0) | PINS | {AUTOTUNE_ENV: str(scratch / "autotune")}
+    env = S.server_env(arm, srv, site, None, 600.0, 600.0, private=private) | PINS | {AUTOTUNE_ENV: str(scratch / "autotune")}
     env[E.ENV] = json.dumps({"out": str(scratch / "edges"), "at_s": a.edges_at, "dump": a.dump, "savers": a.saver,
                              "outputs": True, "whole_pool": True})
     meta: dict[str, Any] = {"schema": SCHEMA, "model_id": a.model_id, "model": f"{model.repo}@{model.revision}",
@@ -259,7 +261,7 @@ def serve(a: argparse.Namespace) -> int:
                             "long_share": None if a.plan_file else a.long_share, "long_tokens": a.long_tokens,
                             "server_argv": argv[1:], "pins": PINS, "edges_at": a.edges_at, "dump": a.dump, "savers": a.saver,
                             "scratch": str(scratch), "autotune_dir": str(scratch / "autotune"), "versions": S.versions(),
-                            "host": os.uname().nodename}
+                            "host": os.uname().nodename, "private": str(private)}
     meta["open_files"] = S.open_files()
     rc = 0
     t = time.monotonic()
@@ -290,7 +292,7 @@ def serve(a: argparse.Namespace) -> int:
         if watcher.is_alive():
             watcher.join()
         meta["server_stop"] = S.stop(server)
-        meta["edges"] = copy_edges(scratch / "edges", out / "edges")
+        meta["edges"] = copy_edges(scratch / "edges", out / "edges", private / "server" / "edges")
         (out / "meta.json").write_text(json.dumps(meta, indent=1))
     if len(meta["edges"]) < 2:
         print(f"[tp-restore] serve: {len(meta['edges'])} edge(s) taken, 2 needed (edges at {a.edges_at} s)"
@@ -299,13 +301,14 @@ def serve(a: argparse.Namespace) -> int:
     return rc
 
 
-def copy_edges(src: Path, dst: Path) -> list[dict]:
-    """Each edge's ``edge.json``, and the step outputs, from the scratch directory into the run's record, and a summary
-    of each edge with its KV root and its files' bytes."""
+def copy_edges(src: Path, dst: Path, kept: Path) -> list[dict]:
+    """Each edge's ``edge.json`` from the scratch directory into the run's record, and the step outputs, which hold
+    request values, into ``kept`` on the node, and a summary of each edge with its KV root and its files' bytes."""
     got = []
     dst.mkdir(parents=True, exist_ok=True)
     if (src / "outputs.jsonl").exists():
-        shutil.copy2(src / "outputs.jsonl", dst / "outputs.jsonl")
+        kept.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src / "outputs.jsonl", kept / "outputs.jsonl")
     for e in sorted(src.glob("edge-*/edge.json")):
         (dst / e.parent.name).mkdir(parents=True, exist_ok=True)
         shutil.copy2(e, dst / e.parent.name / "edge.json")
@@ -358,6 +361,14 @@ def engine_args(server_argv: Sequence[str], config: Mapping[str, Any]) -> Any:
 def config_difference(served: Mapping[str, Any], restored: Mapping[str, Any]) -> dict[str, list]:
     """The scheduler and cache settings (step-trace header ``config``) whose values differ: name -> [served, restored]."""
     return {k: [served.get(k), restored.get(k)] for k in sorted(set(served) | set(restored)) if served.get(k) != restored.get(k)}
+
+
+def served_outputs(served: Path) -> Path:
+    """The served step outputs, under the private directory the serve's meta.json names (`serve_tax.private_of`)."""
+    kept = S.private_of(served)
+    if kept is None:
+        raise SystemExit(f"{served / 'meta.json'} names no private directory, where its step outputs are kept")
+    return kept / "server" / "edges" / "outputs.jsonl"
 
 
 def served_trace(served: Path) -> list[dict]:
@@ -723,7 +734,7 @@ def restore(a: argparse.Namespace) -> int:
     want = interval_tokens(recs, client, s1, s2)
     res["tokens"] = {"requests": len(want), "served": sum(map(len, want.values())), "replayed": sum(map(len, tokens.values())),
                      "first_difference": first_token_difference(want, tokens)}
-    served_outs = read_outputs(served / "edges" / "outputs.jsonl", s1, s2)
+    served_outs = read_outputs(served_outputs(served), s1, s2)
     replayed_outs = {s: o for s, o in outs.items() if s < s2}
     classes_file = served / "load" / "classes.json"
     classes = json.loads(classes_file.read_text()) if classes_file.exists() else {}
@@ -795,6 +806,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--run-out", action="store_true",
                    help="serve the whole load and its drain; by default the server stops once the last edge is written")
     s.add_argument("--out", required=True)
+    s.add_argument("--private", required=True,
+                   help="a directory outside every run's, for the step trace and the step outputs, which hold request values")
     s.add_argument("--scratch", required=True)
     r = sub.add_parser("restore")
     r.add_argument("--served", required=True)
