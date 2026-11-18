@@ -20,7 +20,7 @@ S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 
-ARCH=sm_90a bash verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh "$O/p2lib" > "$O/build.log" 2>&1
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) ARCH=sm_90a bash verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh "$O/p2lib" > "$O/build.log" 2>&1
 step build $?
 uv venv -q -p 3.12 "$S/venv" && uv pip install -q -p "$S/venv" torch numpy safetensors huggingface_hub > "$O/venv.log" 2>&1
 step venv $?

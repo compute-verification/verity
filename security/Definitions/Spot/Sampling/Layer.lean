@@ -43,14 +43,4 @@ def Sound : Prop :=
       prCoin (fun ω => E (A.committedOf σ) (L.draw ω) ∧ Disjoint (L.draw ω) (A.incorrect (A.committedOf σ))) +
         εks (reg σ) (cont σ) + εbind (reg σ) (cont σ)
 
-/-- **The sampling layer's count curve** (stated): with `Sound`'s takes, every audit strategy accepts with at least `K`
-incorrect units in its committed transcript with probability at most `L.miss K` plus `εks` and `εbind`. Proved by
-`Spot.Sampling.extraction_audit_count`. -/
-def SoundCount : Prop :=
-  ∀ {U : Type} [DecidableEq U] (L : Verity.SamplingDesign U) (Reg : Type) (session : Finset U → Reg → Game Bool)
-    (A : ExtractionAnalysis L Reg session) (εks εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞),
-    A.KnowledgeSound εks → A.BindSound εbind → ∀ (K : ℕ) (σ : Strategy (audit L Reg session)),
-    prob (fun o => o.1 = true ∧ K ≤ (A.incorrect (A.committedOf σ)).card) (audit L Reg session) σ ≤
-      L.miss K + εks (reg σ) (cont σ) + εbind (reg σ) (cont σ)
-
 end Spot.Sampling

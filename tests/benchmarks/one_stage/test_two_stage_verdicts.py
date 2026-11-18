@@ -103,7 +103,7 @@ def _interior(d: TS.Design, window, *, verdicts: bool = True) -> dict:
     registered += [{"value": x.value, "root": "0e" * 64, "leaves": Q * x.per, "domain": "d1" * 64}
                    for x in d.verdicts if verdicts]
     linked = {x.port for x in d.links}
-    roots = [{"port": window.held(m, p), "root": "aa" * 64, "leaves": max(window.held_leaves(m, p)) + 1,
+    roots = [{"port": window.tree(m, p), "root": "aa" * 64, "leaves": int(window.leaves(m, p).max()) + 1,
               "domain": "da" * 64} for p, _w in m.all_rows if p not in linked]
     return {"registered": registered, "roots": roots}
 
@@ -139,7 +139,7 @@ def test_the_verifier_reads_the_verdict_at_its_value_and_never_at_the_blocks_own
     assert all(got[p]["value"] == f"{KEY}/{p}" and got[p]["reads"] == rows for p in IR.TABLE)
     before = replace(d, verdicts=())
     own = TS.verifier_reads(before, window, _interior(before, window), {"roots": []}, SAMPLE)[m.key]["ports"]
-    assert own[SS.OPENING_VERDICT]["value"] == window.held(m, SS.OPENING_VERDICT) != o1["value"]
+    assert own[SS.OPENING_VERDICT]["value"] == window.tree(m, SS.OPENING_VERDICT) != o1["value"]
     with pytest.raises(ValueError, match=f"'o1' reads {KEY}/root/opened, which the interior registration doesn't register"):
         TS.verifier_reads(d, window, _interior(d, window, verdicts=False), {"roots": []}, SAMPLE)
 
