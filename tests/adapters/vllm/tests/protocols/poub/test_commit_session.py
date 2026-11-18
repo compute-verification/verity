@@ -70,7 +70,7 @@ class Binding:
         self.made = (args, kwargs)
         self.calls: list[Any] = []
 
-    def install(self) -> Binding:
+    def install(self, exchange) -> Binding:
         self.calls.append("install")
         return self
 

@@ -444,7 +444,7 @@ class TickGate:
             for rec in self.pull():
                 self.take(rec)
 
-    def attach(self, exchange: Any, name: str = "certifier") -> None:
+    def attach(self, exchange: Any, name: str = "network") -> None:
         """File this gate on ``exchange`` (a `verity_vllm.messages.Exchange`) under scheme ``name``, and subscribe it to
         the ``steps`` hook."""
         exchange.request(name, H.StartOnBoundary(self))

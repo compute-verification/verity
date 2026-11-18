@@ -258,8 +258,24 @@ def test_a_feature_that_refuses_is_cannot_run_and_its_second_line_is_served_with
     assert lines[0] == (f"1. cannot run: {UNSEEDED} (arm tick-unseeded refuses sampling, which the profile has on)")
     assert lines[1] == "the second line, the same prompts with on our side alone seeded for ours (stock unchanged):"
     assert [x[:5] for x in lines[2:5]] == ["  1. ", "  2. ", "  3. "]
-    assert json.loads((tmp_path / "out" / "serving_profile.json").read_text()) == r
-    assert (tmp_path / "out" / "serving_profile.txt").read_text() == text + "\n"
+    result = json.loads((tmp_path / "out" / "result.json").read_text())
+    assert not (tmp_path / "out" / "serving_profile.json").exists()
+    assert (result["kind"], result["validation"]["status"]) == ("serve-tax-profile/v1", "failed")
+    assert result["workload_fingerprint"] | {"source_sha": None} == {
+        "profile": "coding-agent", "version": 1, "digest": r["digest"], "model": "glm53", "card": "h200", "stock": "prod",
+        "feature": "tick-unseeded", "load": "agentic-256k", "point": 4, "source_sha": None}
+    got = {(m["name"], m["member"]): m for m in result["measurements"]}
+    ours = "glm-5.3-h200-tick-unseeded-over-prod-coding-agent"
+    refused = got["vllm/serving-cost-glm53", ours]
+    assert (refused["value"], refused["why"]) == (None, f"cannot run: {UNSEEDED}")
+    second = got["vllm/serving-cost-glm53", f"{ours}-seeded"]
+    assert (second["unit"], second["mark"], second["label"], second["reading"]) == (
+        "percent", "measured", "our extra card time a token", "ours slower")
+    assert second["value"] == pytest.approx(100 * r["second"]["throughput"]["value"], abs=0.01)
+    assert second["ci95"] == [pytest.approx(100 * x, abs=0.01) for x in r["second"]["throughput"]["ci95"]]
+    assert got["ttft_p50_s", f"{ours}-seeded"]["value"] == r["second"]["latency"]["ours"]["ttft_p50_s"]
+    assert got["within", "glm-5.3-h200-prod-coding-agent"]["value"] == r["second"]["within"]["stock"]["within"]
+    assert len(got) == 2 + 2 * len(S.SIDE_FIGURES)
     # where no change on our side lets the profile through, nothing is served and there is no second line
     rc, r, text = S.profile_result([], "coding-agent", "glm53", "prod-restore", False)
     assert rc == 1 and "second" not in r and r["cannot_run"][0]["change"] is None
@@ -269,8 +285,12 @@ def test_a_feature_that_refuses_is_cannot_run_and_its_second_line_is_served_with
 def test_the_results_three_lines_come_first_in_order_then_the_profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     ours = [[rep(1, 90, 0.3, 0.025, 80), rep(2, 91), rep(3, 89)], [rep(1, 90), rep(2, 90.5), rep(3, 89.5)]]
     dirs = arm_dirs(tmp_path, monkeypatch, "agentic-256k", {"prod": STOCK, "prod-record": ours})
-    rc, r, text = S.profile_result(dirs, "coding-agent", "glm53", "prod-record", False)
+    rc, r, text = S.profile_result(dirs, "coding-agent", "glm53", "prod-record", False, tmp_path / "res")
     assert rc == 0 and list(r)[:3] == ["throughput", "latency", "within"]
+    result = json.loads((tmp_path / "res" / "result.json").read_text())
+    cost = next(m for m in result["measurements"] if m["name"] == "vllm/serving-cost-glm53")
+    assert (result["validation"]["status"], cost["member"], cost["cost_unit"], cost["value"]) == (
+        "passed", "glm-5.3-h200-prod-record-over-prod-coding-agent", "lifetime", round(100 * r["throughput"]["value"], 2))
     t = r["throughput"]
     assert (t["label"], t["unit"], t["reps"]) == ("our extra card time a token", "lifetime", 2)
     assert t["verdict"] == "ours slower" and t["ci95"][0] > t["floor"]
@@ -354,7 +374,10 @@ def test_find_load_prints_the_files_line_the_version_to_raise_and_the_pin(tmp_pa
     assert text.splitlines()[2:5] == [f"in benchmarks/production.toml, under [profiles.chat.in_flight]: llama32-1b.{card} = 16",
                                       "and under [profiles.chat]: version = 2 (from 1)",
                                       f'in tests/benchmarks/harness/test_profiles.py, PINS: "chat": (2, "{digest}"),']
-    assert (tmp_path / "out" / "find_load.txt").read_text() == text + "\n"
+    assert json.loads((tmp_path / "out" / "find_load.json").read_text()) == r
+    result = json.loads((tmp_path / "out" / "result.json").read_text())
+    assert (result["kind"], result["validation"]["status"], result["measurements"]) == (
+        "serve-tax-profile/v1", "passed", [])
     assert P.PATH.read_text(encoding="utf-8") == text_
     # stock still rising at its highest rung: no line
     metrics["loads"] = {f"chat@{c}": x for c, x in reps.items() if c <= 12}
