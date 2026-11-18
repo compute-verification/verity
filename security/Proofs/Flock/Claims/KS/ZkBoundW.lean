@@ -194,7 +194,7 @@ most its `ε_c⁻` and level-0 term (`session_sound_of_table_accZ_w`), whose mea
 (`tableErr`), its old roots at those bounds (`mean_epsSZ_le_rawJ`) and level 0's, at most the slack's escapes' term
 (`Claims.Flock.slackEscW_term`). -/
 theorem zk_le_sessionsJW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
-    (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl) {x : Claims.Msg} {spec : SessionSpec}
+    (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl) {x : Hash.Msg} {spec : SessionSpec}
     (st : ℕ → Stmt) (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
       (T j).sch = Accounting.m1Schedule (st j).wideLeaf (st j).m ∧ (T j).t = Accounting.m1Pad (st j).wideLeaf (st j).m ∧ (T j).e = 2 ∧
@@ -347,7 +347,7 @@ most its `ε_c⁻` and level-0 term (`session_sound_of_table_accZ_w`), whose mea
 (`tableErr`), its old roots at those bounds (`mean_epsSZ_le_rawJ`) and level 0's, at most the slack's escapes' term
 (`Claims.Flock.slackEscW_term`). -/
 theorem zk_le_sessionsJW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
-    (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl) {x : Claims.Msg} {spec : SessionSpec}
+    (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl) {x : Hash.Msg} {spec : SessionSpec}
     (st : ℕ → Stmt) (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
       (T j).sch = Accounting.m1Schedule (st j).wideLeaf (st j).m ∧ (T j).t = Accounting.m1Pad (st j).wideLeaf (st j).m ∧ (T j).e = 2 ∧
@@ -417,7 +417,7 @@ it self-clashes. Each fork term's mean `Adv` is at most its fork event's probabi
 round (`Claims.Flock.forkSlack` at `δ ≥ 0`), only level 0's event of a table is at round `0`, and the slack fits the
 masked weight's room (`Claims.Flock.SlackFitW`). -/
 def ZkSessWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
-    (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
+    (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Hash.Msg → ℕ → List 𝔽 → Prop) (x : Hash.Msg) {mPts : ℕ}
     (T : ℕ → TabZK 𝔽 mPts) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
     ∃ (rd : (j : ℕ) → Claims.Flock.IZW (T j).sch.levels.length → Fin ((V true).k x))
@@ -478,7 +478,7 @@ it self-clashes. Each fork term's mean `Adv` is at most its fork event's probabi
 round (`Claims.Flock.forkSlack` at `δ ≥ 0`), only level 0's event of a table is at round `0`, and the slack fits the
 masked weight's room (`Claims.Flock.SlackFitW`). -/
 def ZkSessWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
-    (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
+    (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Hash.Msg → ℕ → List 𝔽 → Prop) (x : Hash.Msg) {mPts : ℕ}
     (T : ℕ → TabZK 𝔽 mPts) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
     ∃ (rd : (j : ℕ) → Claims.Flock.IZW (T j).sch.levels.length → Fin ((V true).k x))
@@ -537,7 +537,7 @@ the deployed weight per round (`slackEscW_fitsForkR_zk`), and at each tape and t
 at table `j`'s error. -/
 theorem zk_tableBoundEachAccAtR_of_sessionsW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
-    (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) {x : Claims.Msg}
+    (rel : Readable.Parsed → Readable.Relation) (Ok : Hash.Msg → ℕ → List 𝔽 → Prop) {x : Hash.Msg}
     (hn : Claims.Flock.nTab (deployZk rel) x = (tables true x).length) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j)) (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
@@ -574,7 +574,7 @@ round (`slackEscW_fitsForkR_zk`), from the bound at each table's own error
 (`zk_tableBoundEachAccAtR_of_sessionsW`), each at most `ε_table` (`tableErr_le_εtable`). -/
 theorem zk_tableBoundJAccAtR_of_sessionsW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
-    (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) {x : Claims.Msg}
+    (rel : Readable.Parsed → Readable.Relation) (Ok : Hash.Msg → ℕ → List 𝔽 → Prop) {x : Hash.Msg}
     (hn : Claims.Flock.nTab (deployZk rel) x = (tables true x).length) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j)) (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
@@ -600,7 +600,7 @@ table `j` is committed to `T j`. The escapes are the tables' with level 0's and 
 round (`slackEscW_fitsForkR_zk`), and at each tape and table the bound is `zk_le_sessionsJW`. -/
 theorem zk_tableBoundJAccAtR_of_sessionsW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (hA : A.Correct) (Hs : Hashes 𝔽 D Sl)
-    (rel : Readable.Parsed → Readable.Relation) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) {x : Claims.Msg}
+    (rel : Readable.Parsed → Readable.Relation) (Ok : Hash.Msg → ℕ → List 𝔽 → Prop) {x : Hash.Msg}
     (hn : Claims.Flock.nTab (deployZk rel) x = (tables true x).length) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j)) (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧

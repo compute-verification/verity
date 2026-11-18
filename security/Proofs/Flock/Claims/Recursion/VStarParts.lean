@@ -213,7 +213,7 @@ theorem climb_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st) (hfl
 
 /-- **`Flock.check` at the deployed parser**: the statement bytes decode to a statement the verifier's parser returns
 (`Parses`), at whose readable form the witness satisfies `RelS`. -/
-theorem relS_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem relS_of_check {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) :
     ∃ p, parseBytes decode x = some p ∧ Parses p ∧ Claims.Flock.RelS (toReadable relation p) w := by
   unfold Claims.Flock.check parseOf at h
@@ -230,7 +230,7 @@ theorem relS_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w 
 /-- **Every table's layout and model at `Flock.check`**: at an untyped parsed statement without the verifier's own
 public input words, each table has the verifier's layout, and its model statement (at the regions the soundness proof
 reads) is satisfied by the table's share of the hidden values (`relS_layout`). -/
-theorem layout_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem layout_of_check {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size) :
     ∃ (L : FlockSoundness.Layout p.sts[t]) (regs : List (Model.Region p.sts[t].c.kLog (p.sts[t].m - p.sts[t].c.kLog))),
@@ -243,7 +243,7 @@ theorem layout_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {
 
 /-- **Every table is flat at `Flock.check`**: at an untyped statement without public input words, each table's circuit
 is one `HmRow.parse` returned (`tableAt`), which carries no template. -/
-theorem flat_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem flat_of_check {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
     (hrec : Flock.HmOut.recUnit p.sts[t].c.unit.name = true) : p.sts[t].c.tmpl = none := by
@@ -280,7 +280,7 @@ theorem recUnit_opening {n : String} {q : ℕ × ℕ × ℕ} (h : Flock.RecOpeni
 wherever `Flock.check` holds at the deployed parser, at an untyped parsed statement without public input words, a
 table `RecResiduals.check` accepted as part `j` of a shape's algebra holds, at every copy whose input columns hold `W`
 and `vv`, the part's residuals at `W`, `vv` on the copy's output columns. -/
-theorem partCols_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem partCols_of_check {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
     (hc : RecResiduals.check p.sts[t].c = .ok ()) {m k cl j : ℕ}
@@ -300,7 +300,7 @@ theorem partCols_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg}
 holds at the deployed parser, at an untyped parsed statement without public input words, a table `RecOpen.check`
 accepted under `LANES` and `H` holds, at every copy whose input columns hold a row, its siblings, `acc`, the
 coefficients and the position's bits, the climb from the row's leaf and the consistency term on its output columns. -/
-theorem climb_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
+theorem climb_of_check {decode : Hash.Msg → Option Read} {x : Hash.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
     {o g u : ℕ} (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog)) (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv)

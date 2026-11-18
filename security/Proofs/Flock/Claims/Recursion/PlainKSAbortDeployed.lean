@@ -100,7 +100,7 @@ open Classical in
 /-- **A simulator at the verdict at the sample gives the plain table bound counted per round, on accepted first runs**:
 `plain_tableBoundθAt_of_simD`'s escapes and proof, with the escapes on accepted first runs
 (`Claims.Flock.slackEsc_onAcc₁`) and their fit counted per round (`Claims.Escapes.FitsFork.fitsForkR`). -/
-theorem plain_tableBoundθAccAtR_of_simD {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem plain_tableBoundθAccAtR_of_simD {x : Hash.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
     {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
@@ -161,7 +161,7 @@ theorem plain_tableBoundθAccAtR_of_simD {x : Claims.Msg} {ins : Ins} {spec : Se
 open Classical in
 /-- **At `leafPlain`**: `plain_tableBoundθAt_of_simDU`'s escapes and proof, on accepted first runs and counted per
 round, as `plain_tableBoundθAccAtR_of_simD`. -/
-theorem plain_tableBoundθAccAtR_of_simDU {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem plain_tableBoundθAccAtR_of_simDU {x : Hash.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
     {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
@@ -221,7 +221,7 @@ theorem plain_tableBoundθAccAtR_of_simDU {x : Claims.Msg} {ins : Ins} {spec : S
 
 /-- **The plain table bound counted per round, on accepted first runs, at every statement some run accepts**:
 `plain_tableBoundθAt_all`'s cases at `plain_tableBoundθAccAtR_of_simD` and `plain_tableBoundθAccAtR_of_simDU`. -/
-theorem plain_tableBoundθAccAtR_all {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) :
+theorem plain_tableBoundθAccAtR_all {x : Hash.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) :
     Claims.Flock.TableBoundθAccAtR sha512 (deployPlain Readable.relation) (wordLen false) (wide false) x := by
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
   obtain ⟨ins, spec, sts, d, hset, hd⟩ := acc_sample hno
@@ -296,7 +296,7 @@ open Lean (Json)
 
 open Classical in
 /-- `plain_tableBoundθAccAtR_of_simD` at `VK keep`. -/
-theorem plain_tableBoundθAccAtR_of_simDK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem plain_tableBoundθAccAtR_of_simDK (keep : Bool → Bool) {x : Hash.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
     {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
@@ -356,7 +356,7 @@ theorem plain_tableBoundθAccAtR_of_simDK (keep : Bool → Bool) {x : Claims.Msg
 
 open Classical in
 /-- `plain_tableBoundθAccAtR_of_simDU` at `VK keep`. -/
-theorem plain_tableBoundθAccAtR_of_simDUK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem plain_tableBoundθAccAtR_of_simDUK (keep : Bool → Bool) {x : Hash.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     {st : Stmt} {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
     {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
@@ -415,7 +415,7 @@ theorem plain_tableBoundθAccAtR_of_simDUK (keep : Bool → Bool) {x : Claims.Ms
         (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ) hsc'))
 
 /-- `plain_tableBoundθAccAtR_all` at `VK keep`. -/
-theorem plain_tableBoundθAccAtR_allK (keep : Bool → Bool) {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (VK keep) x) :
+theorem plain_tableBoundθAccAtR_allK (keep : Bool → Bool) {x : Hash.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (VK keep) x) :
     Claims.Flock.TableBoundθAccAtR sha512 (deployPlainK keep Readable.relation) (wordLen false) (wide false) x := by
   obtain ⟨s, hs, hin⟩ := accK_inScope keep Readable.relation hno
   obtain ⟨ins, spec, sts, d, hset, hd⟩ := accK_sample keep hno

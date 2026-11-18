@@ -98,7 +98,7 @@ theorem mem_zkRepCols_of {lv : Flock.Level} {coins : Array F128} {rows : Array (
 /-- **An accepted plain rep opens a later-level position iff its query coin samples it.** At an accepted plain run, at
 table 0's rep `r < 2` and level `1 ≤ ℓ` of the table's `fast100` schedule, some level-`ℓ` column is at `q` iff `q` is
 among the level's positions at the first `plainQN` elements of the run's coin `plainQRound`. -/
-theorem plain_levelCols_queriedK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plain_levelCols_queriedK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {c : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (VK keep) x ω c).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ}
     (hs : setupOf false x = some (s, spec, sts)) (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch)
@@ -232,7 +232,7 @@ theorem plain_levelCols_queriedK (keep : Bool → Bool) {Ω : Type} {P : Claims.
     exact ⟨_, hjq ▸ mem_zkRepCols_of hj (by rw [hrows]; exact hj) (by rw [← hlq]; exact hj)⟩
 
 /-- `plain_levelCols_queriedK` at the deployed plain verifier (`keep := id`). -/
-theorem plain_levelCols_queried {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plain_levelCols_queried {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {c : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (V false) x ω c).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule} {r ℓ : ℕ}
     (hs : setupOf false x = some (s, spec, sts)) (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch)

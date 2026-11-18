@@ -57,7 +57,7 @@ open Flock FlockDeploy
 
 /-- **The honest masked prover's program** on the statement `x`, the witness `w` and the tape `ω`; the empty message
 where the statement sets up no session or the prover cannot run it, which the verifier refuses. -/
-def progZk (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk) : PI Claims.Msg :=
+def progZk (x : Hash.Msg) (w : Claims.Flock.Wit) (ω : TapeZk) : PI Hash.Msg :=
   match setupOf true x with
   | none => .ret []
   | some (_, spec, sts) => do

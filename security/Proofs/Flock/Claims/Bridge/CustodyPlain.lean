@@ -114,8 +114,8 @@ theorem recordsLiveJ_iff {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Fin
 /-- **Custody gives `RecordsLiveAtP`**: where `Deploy.V false`'s checks pass on a plain statement that sets up at its
 sample `d` with no `--public-inputs`, and the record's sample is the statement's, the last message's record and proof
 files are a record of the run's live outcome (`viewOf`), at any `J` of the session's tables. -/
-theorem recordsLiveAtP_of_checks {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+theorem recordsLiveAtP_of_checks {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
     {J mPts : ℕ} {d : Json} (hs : s.setup = .ok (spec, sts)) (hzk : s.read.zk = false)
     (hpi : s.read.publicInputs = none) (hdraw : Exec.recordDraw f.record = s.read.draw)
     (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) (hc : checks false s spec x link c₁ mids f = .ok ()) :
@@ -152,9 +152,9 @@ theorem recordsLiveAtP_of_checks {s : Ins} {spec : SessionSpec} {sts : Array Stm
 on a statement with no `--public-inputs` of sample `d`, the last message's record and proof files are accepted by `verify`
 (`Accepts`) at the statement's inputs, and record the run's live outcome `viewOf` (`RecordsLiveAtP`): the record's sample
 is the statement's as a value (`recordSample_of_decide`). -/
-theorem accepts_of_decide_plain {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+theorem accepts_of_decide_plain {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} {J mPts : ℕ} {d : Json}
+    {mids : List (Hash.Msg × Coin)} {f : Final} {J mPts : ℕ} {d : Json}
     (ha : act false x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((next false x as cs).eval sha512).1 = .acc) (hpi : s.read.publicInputs = none)
     (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
@@ -198,9 +198,9 @@ theorem recordsLiveJ_wrP {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Fin
 with no `--public-inputs` of sample `dj S`, `verify` accepts what `wrP` writes for the run's live outcome at `Jf S R ≤`
 the session's tables. -/
 theorem accepts_wrP {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg → ℕ)
-    {S : Finset (Fin n)} {R : Reg} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+    {S : Finset (Fin n)} {R : Reg} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (ha : act false x as cs = .decide s spec sts link c₁ mids f)
+    {mids : List (Hash.Msg × Coin)} {f : Final} (ha : act false x as cs = .decide s spec sts link c₁ mids f)
     (hacc : ((next false x as cs).eval sha512).1 = .acc) (hpi : s.read.publicInputs = none)
     (hd : s.read.draw = some (dj S)) (hJ : Jf S R ≤ spec.tables.size) :
     Exec.Accepts s.read.I (wrP s.read.I dj Jf S R (viewOf (Jf S R) mPts spec link c₁ f)) := by

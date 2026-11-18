@@ -207,7 +207,7 @@ sample, every prover and tape, every table `j` and table of columns, every rep `
 simulated strategy after `Commit` (`zkSimAt`) follows `SchedC`: the tables in front by `Lock.PreSched` after their
 coins (`zkFront`), then table `j`, rep 0 first after its `repRounds`, with `r · repRounds + zkCapDist` of its coins
 before the tables after it flip any, short of runs where table `j` opens nothing. -/
-def ZkBatchAlign (x : Claims.Msg) : Prop :=
+def ZkBatchAlign (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -232,7 +232,7 @@ sample, every prover and tape, every table `j` and table of columns, every rep `
 simulated strategy after `Commit` (`zkSimAt`) follows `SchedC`: the tables in front by `Lock.PreSched` after their
 coins (`zkFront`), then table `j`, rep 0 first after its `repRounds`, with `r · repRounds + zkCapDist` of its coins
 before the tables after it flip any, short of runs where table `j` opens nothing. -/
-def ZkBatchAlign (x : Claims.Msg) : Prop :=
+def ZkBatchAlign (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -251,7 +251,7 @@ def ZkBatchAlign (x : Claims.Msg) : Prop :=
 /-- **The slot at the schedule's split count from the schedule**: `ZkFrontAlign` from `ZkBatchAlign` by
 `schedZ_of_schedC` and `slotRSZ_of_batch` at `dist_lockRepZ_zkCap`'s distance, and by `slotRSZ_of_ge` at the last
 level. -/
-theorem zkFrontAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkFrontAlign x := by
+theorem zkFrontAlign_of_batch {x : Hash.Msg} (h : ZkBatchAlign x) : ZkFrontAlign x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u
   by_cases hℓ : ℓ.val + 1 < (zkTabs h0 L hz hk hlay j).sch.levels.length
   · obtain ⟨-, -, -, -, -, hl⟩ := zkTabs_facts h0 L hz hk hlay j
@@ -268,7 +268,7 @@ end Gen
 /-- **The slot at the schedule's split count from the schedule**: `ZkFrontAlign` from `ZkBatchAlign` by
 `schedZ_of_schedC` and `slotRSZ_of_batch` at `dist_lockRepZ_zkCap`'s distance, and by `slotRSZ_of_ge` at the last
 level. -/
-theorem zkFrontAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkFrontAlign x :=
+theorem zkFrontAlign_of_batch {x : Hash.Msg} (h : ZkBatchAlign x) : ZkFrontAlign x :=
   Gen.zkFrontAlign_of_batch (S := S₀) (x := x) (h := h)
 
 namespace Gen
@@ -276,13 +276,13 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The slot alignment from the schedule.** -/
-theorem zkSlotAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkSlotAlign x :=
+theorem zkSlotAlign_of_batch {x : Hash.Msg} (h : ZkBatchAlign x) : ZkSlotAlign x :=
   zkSlotAlign_of_front (zkFrontAlign_of_batch h)
 
 end Gen
 
 /-- **The slot alignment from the schedule.** -/
-theorem zkSlotAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkSlotAlign x :=
+theorem zkSlotAlign_of_batch {x : Hash.Msg} (h : ZkBatchAlign x) : ZkSlotAlign x :=
   Gen.zkSlotAlign_of_batch (S := S₀) (x := x) (h := h)
 
 end FlockDeploy.KS

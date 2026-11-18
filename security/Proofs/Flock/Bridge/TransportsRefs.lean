@@ -440,7 +440,7 @@ theorem transports_shapedS (R : Reg) (hrows : RowsOk c)
     (hy : y.length = saltLen)
     (he : (vbS dj y₀ ht hc hscope hU hpub (Reg := Reg)).com (p, v, y) =
       (vbS dj y₀ ht hc hscope hU hpub (Reg := Reg)).cs R ((vbS dj y₀ ht hc hscope hU hpub).pos g)) :
-    ∃ d : Claims.Msg, (commitDepL ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n))
+    ∃ d : Hash.Msg, (commitDepL ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n))
         (rowsOfL c hU n (LeafMap.ofPublic c pub n)) c (LeafMap.ofPublic c pub n)
         (rootsOfL c (LeafMap.ofPublic c pub n))).Opens sha512Msg (rootsOfL c (LeafMap.ofPublic c pub n))
       ⟨posOf ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)) g,

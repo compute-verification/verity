@@ -90,7 +90,7 @@ theorem rootsColl_none_of_collidesPub_false {c : Flock.Circuit} {pub : Flock.Pub
   PortRoots.rootsColl_none_iff.2 (fixes_of_collidesPub_false hpt h)
 
 /-- **The run's population check is `PopMatches`.** -/
-theorem popMatches_of_popOk {desc : Claims.Msg} {qr : Lean.Json} {n : ℕ} {p : Spot.Program}
+theorem popMatches_of_popOk {desc : Hash.Msg} {qr : Lean.Json} {n : ℕ} {p : Spot.Program}
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (h : Spot.Slots.popOk p qr n = true) :
     PopMatches desc qr n := by
   show popCheck desc qr n = true
@@ -107,7 +107,7 @@ def LiveAcceptsKS {n : ℕ} {Reg : Type} (I : FlockSoundness.Discharge.Exec.Inpu
 
 /-- **The SPOT run passes the registration's population** (`Spot.Run.run`, `population-order`):
 the descriptor `desc` parses and its population under the query `qr` is `n` units in order (`Slots.popOk`). -/
-def RunPopOk (desc : Claims.Msg) (qr : Lean.Json) (n : ℕ) : Prop :=
+def RunPopOk (desc : Hash.Msg) (qr : Lean.Json) (n : ℕ) : Prop :=
   ∃ p, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧ Spot.Slots.popOk p qr n = true
 
 open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
@@ -136,7 +136,7 @@ def SampledKSLiveRoots : Prop :=
     -- the game's units are the public file's population
     (_hn : pub.n = n)
     -- the statement's descriptor, and the registration's query
-    (desc : Claims.Msg) (qr : Lean.Json)
+    (desc : Hash.Msg) (qr : Lean.Json)
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
