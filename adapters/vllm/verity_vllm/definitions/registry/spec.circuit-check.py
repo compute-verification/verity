@@ -10,8 +10,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     leaf families they do not reach, at small statics; the greedy accept at two drafts over four chunks of logits, the last
     one short, and over 8 logits, where it is lowered whole and compared; and `Accept_v1` at GLM-5.3's five drafts."""
     from verity.circuits.defs import bind
-    from verity_vllm.definitions.registry import spec
     from verity.circuits.tiny import TINY, TINY_NOBIAS
+
+    from verity_vllm.definitions.registry import spec
 
     long = {**TINY, "MAX_POS": 16}
     return [
@@ -29,6 +30,7 @@ def _by_calls_roots() -> list[Any]:
     """`GreedyAccept_v1` at GLM-5.3's statics (five drafts, 154,880 logits a row), checked by its calls: its six
     `TokenSelect_v4` rows are past what circuit-check builds whole, and each callee is a target of a sidecar."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import spec
 
     return [bind(spec.GreedyAccept, K=5, V=154880)]

@@ -27,10 +27,17 @@ from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
-
 from verity.circuits.ops import mufu
+
 from verity_vllm.definitions.numerics import fa2_model as FA
-from verity_vllm.definitions.numerics.gemm_relation import GemmRelationError, _arg_cols, _const, _extra, _node_of, _words
+from verity_vllm.definitions.numerics.gemm_relation import (
+    GemmRelationError,
+    _arg_cols,
+    _const,
+    _extra,
+    _node_of,
+    _words,
+)
 
 MODEL_VERSION = "fa2-sm8x-hdim128-bf16.v1"
 TABLE_SHA256 = {  # what the MUFU Definitions evaluate through: another table is another Definition version, not a new pin

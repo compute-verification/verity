@@ -11,6 +11,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.liveness import dead_gates
 from verity.circuits.program import Program
+
 from verity_vllm.definitions.registry import dead_free as DF
 from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import topp_standalone as TS
