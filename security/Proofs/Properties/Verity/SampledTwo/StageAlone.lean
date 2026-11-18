@@ -150,7 +150,8 @@ theorem interiorShown_look {c : LiveCommitment} {log : Log} {label : String} (af
   | cons p fs ih =>
     by_cases hl : p.1 = label
     · simp [hl, Verity.Sampled.look]
-    · simp only [List.find?_cons, beq_iff_eq, hl, decide_false, List.map_cons] at hf ⊢
+    · have hb : (p.1 == label) = false := by simpa using hl
+      simp only [List.find?_cons, hb] at hf ⊢
       exact ih hf
 
 /-- **Roots that don't show a coin count none**: where a session's log, which commits no root, shows no coin of
@@ -159,7 +160,7 @@ theorem countFresh_zero {c : LiveCommitment} {log : List String} {out : Log} {la
     {after : ByteArray} (hr : releasedLogOf c log = .ok out) (hc : out.any (·.kind == .committed) = false)
     (h : VStar.Recursive.SampledTwo.interiorShown (byFamily c out) label after = false) :
     Verity.Sampled.countFresh label after (log.tail.filter fun l => !treeLine l) = 0 := by
-  obtain ⟨-, hL, -, hF⟩ := Verity.Sampled.releasedLogOf_ok hr hc
+  obtain ⟨-, hL, -, hF, -⟩ := Verity.Sampled.releasedLogOf_ok hr hc
   rw [Verity.Sampled.countFresh_eq, ← hL label, List.length_eq_zero_iff, List.filter_eq_nil_iff]
   intro x hx hxa
   rw [beq_iff_eq] at hxa

@@ -333,6 +333,9 @@ def test_run_queue_needs_a_source_tree_with_the_queue_and_queue_flags_need_queue
     assert main([*plain, "--kind", "lean-audit", "--", "true"]) == 2
     assert main([*plain, "--gpu-host", "--", "true"]) == 2
     assert "--gpu-host declare a job to the queue" in capsys.readouterr().err
+    assert main([*plain, "--max-min", "120", "--", "true"]) == 2
+    assert capsys.readouterr().err.strip().endswith("--max-min declare a job to the queue and mean nothing without --queue; "
+                                                    "without it a run's longest time is --timeout (`--timeout 2h`)")
 
 
 def test_gpu_host_reaches_the_queue_as_its_flag(tmp_path, monkeypatch, capsys):
@@ -506,6 +509,10 @@ def test_a_run_of_many_suites_budgets_one_test_process_a_cpu_and_reserves_a_shar
         assert shape["reserve_gb"] == reserved, (cmd, cpus)
     named = suite_size.size(repo, [*run, "a"], None)
     assert named["mem_gb"] == 64 and "reserve_gb" not in named, "named suites: their workers at their worker_gb, reserved whole"
+    (repo / "a/pyproject.toml").write_text('[project]\nname = "a"\n[tool.pytest.ini_options]\n[tool.verity.tests]\nworker_gb = 13\n'
+                                           'typical_worker_gb = 7\nparallel = true\n')
+    assert suite_size.size(repo, [*run, "a"], 8)["mem_gb"] == 13 + 7 * 7, "one worker at its worker_gb, the rest at typical"
+    assert suite_size.size(repo, [*run], 8)["mem_gb"] == 13 + 7 * 7
 
 
 def test_gpus_with_on_reaches_the_machine_and_without_on_or_queue_means_nothing(tmp_path, monkeypatch, capsys):

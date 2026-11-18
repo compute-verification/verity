@@ -94,7 +94,7 @@ def runtime(monkeypatch):
     """The table with PoUS's and PoUB's parties as runtime pieces, the path `live` keeps for a protocol the runtime
     starts, which no listed piece takes now."""
     for (c, party), piece in RUNTIME_PARTIES.items():
-        monkeypatch.setitem(T.PARTIES, c, {**T.PARTIES[c], party: piece})
+        monkeypatch.setitem(T.PIECES, c, {**T.PIECES[c], party: piece})
 
 
 def toml(tables: dict) -> str:
@@ -168,7 +168,7 @@ def test_a_memory_attesters_placement_reads_the_configurations_pins_under_its_ha
     matched them, and another protocol's pin, no key or a configuration nobody committed reads rehearsal. No other party
     gets a placement."""
     cfg = R.load(CONFIG, REG)
-    piece = {c: p for c in ("pous", "wipe") for p in [T.PARTIES[c]["memory-challenger"]]}
+    piece = {c: p for c in ("pous", "wipe") for p in [T.PIECES[c]["memory-challenger"]]}
     pin = {p["protocol"]: p["key-sha512"] for p in cfg["pin"]}
     key = {c: "ab" * 32 + c.encode().hex() for c in pin}
     monkeypatch.setitem(cfg, "pin", [p | {"key-sha512": hashlib.sha512(bytes.fromhex(key[p["protocol"]])).hexdigest()}
@@ -183,7 +183,7 @@ def test_a_memory_attesters_placement_reads_the_configurations_pins_under_its_ha
         assert not mc.holds(T.placement(cfg, piece[c], None))
     monkeypatch.setattr(mc, "committed", lambda: frozenset())
     assert T.placement(cfg, piece["wipe"], {"public_key": key["wipe"]})[mc.PREMISE].startswith(mc.UNCOMMITTED)
-    assert T.placement(cfg, T.PARTIES["pous"]["prover"], {"public_key": key["pous"]}) is None
+    assert T.placement(cfg, T.PIECES["pous"]["prover"], {"public_key": key["pous"]}) is None
     assert pin.keys() == {"pous", "wipe", "bandwidth"}
 
 
@@ -228,7 +228,7 @@ def test_the_attester_and_the_policy_are_declared_from_their_manifests_whole():
     attester, policy = REG.components["network-attester"], REG.components["inference-only"]
     assert (attester.id, attester.parties, attester.channels) == (NC.ID, NC.MANIFEST.parties, NC.MANIFEST.channels)
     assert (policy.id, policy.parties, policy.channels) == (IO.ID, IO.MANIFEST.parties, IO.MANIFEST.channels)
-    assert list(REG.parties["network-attester"]) == [NC.WORKERS, NC.NETWORK_ATTESTER, NC.VERIFIER]
+    assert list(REG.parties["network-attester"]) == [r.name for r in NC.MANIFEST.parties]
     assert list(REG.parties["inference-only"]) == [IO.VERIFIER]
     cfg = R.load(CONFIG, REG)
     sent = {(c["from"], c["to"]): c["messages"] for c in cfg["channel"]}
@@ -267,7 +267,7 @@ def test_a_dry_run_prints_each_runtime_party_with_its_protocol_role_machine_cloc
     runtime = {(x["party"], e["component"]): e for x in got["plan"] for e in x["entries"] if e["runs"] == T.RUNTIME}
     assert set(runtime) == set(RUNTIME)
     for (party, component), (protocol, role, machine, clock) in RUNTIME.items():
-        e, s = runtime[party, component], T.PARTIES[component][party].session
+        e, s = runtime[party, component], T.PIECES[component][party].session
         assert (e["role"], e["machine"], e["clock"], e["raises"]) == (role, machine, clock, T.NOT_YET)
         address = RUNTIME_BINDINGS[s.listener][component]["address"]
         assert e["listens" if party == s.listener else "dials"] == address
@@ -403,7 +403,7 @@ def test_a_run_raises_at_its_request_until_the_two_sides_compare_it(tmp_path, mo
     are compared nowhere yet (`request_bound`)."""
     monkeypatch.setitem(CP.PROTOCOL.starts, T.CS.CHALLENGER, lambda configuration, bound, state: Start({"k": 1}))
     monkeypatch.setattr(T, "held", lambda piece, role: T.Held(None, None))
-    piece, cfg = T.PARTIES["pous"][T.MEMORY_ATTESTER], R.load(CONFIG, REG)
+    piece, cfg = T.PIECES["pous"][T.MEMORY_ATTESTER], R.load(CONFIG, REG)
     with pytest.raises(NotImplementedError) as e:
         T.prepare(cfg, tmp_path, BINDINGS, piece)
     assert e.value.args == (T.NOT_YET,)
@@ -441,7 +441,7 @@ def test_the_bandwidth_verifiers_start_reads_the_memory_attesters_run_beside_it(
 
     monkeypatch.setitem(T.POUB.starts, T.P2.VERIFIER, start)
     with pytest.raises(NotImplementedError):
-        T.prepare(R.load(CONFIG, REG), tmp_path, RUNTIME_BINDINGS, T.PARTIES["bandwidth"][T.BANDWIDTH_VERIFIER])
+        T.prepare(R.load(CONFIG, REG), tmp_path, RUNTIME_BINDINGS, T.PIECES["bandwidth"][T.BANDWIDTH_VERIFIER])
     assert got["bound"] == {**RUNTIME_BINDINGS["bandwidth-verifier"]["bandwidth"],
                             "challenger": str(tmp_path / "runs" / "pous" / T.MEMORY_ATTESTER)}
     assert got["state"] == tmp_path / "runs" / "bandwidth" / T.BANDWIDTH_VERIFIER
@@ -760,7 +760,7 @@ def test_the_wipe_runs_in_the_workload_under_the_configurations_pin_and_no_party
 @pytest.mark.parametrize("pinned", [True, False])
 def test_served_wipe_gets_the_configurations_pin_and_no_other(tmp_path, pinned):
     cfg = R.load(NETWORK, REG)
-    cmd = T.PARTIES["wipe"][T.PROVER].variables(cfg if pinned else {**cfg, "pin": []}, NETWORK_BINDINGS)["WIPE_CMD"]
+    cmd = T.PIECES["wipe"][T.PROVER].variables(cfg if pinned else {**cfg, "pin": []}, NETWORK_BINDINGS)["WIPE_CMD"]
     env = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path), "WIPE_KEY_SHA512": "f" * 128,
            "VERITY_PINS": json.dumps(cfg["pin"]), "WIPE_COMMAND": "true", "WIPE_PROTOCOL_EXE": "true",
            "GPU_LEASE_UUID": "no-such-card"}
@@ -808,7 +808,7 @@ def test_pouss_and_poubs_command_line_carries_the_configurations_pins_and_no_oth
                           "others": [{**p, "key-sha512": other[p["protocol"]]} for p in cfg["pin"]]}[pins]}
     tables = {**BINDINGS, "memory-challenger": {**BINDINGS["memory-challenger"], "pous": {
         "address": "192.0.2.1:7000", "command": "ssh -i key auditor-1 challenger_party", "key-sha512": "d" * 128}}}
-    hooks = {k: v for x in ("pous", "bandwidth") for k, v in T.PARTIES[x][T.PROVER].variables(cfg, tables).items()
+    hooks = {k: v for x in ("pous", "bandwidth") for k, v in T.PIECES[x][T.PROVER].variables(cfg, tables).items()
              if k != "POUS_ARGS"}
     hooks["POUS_ARGS"] = T.variables(cfg, tables)["POUS_ARGS"]
     py = Path(stand_in(tmp_path, "python", ARGV))
@@ -981,7 +981,7 @@ DEMO = ARGS0 + """echo "$TMPDIR $(stat -c %a "$TMPDIR")" > "$(dirname "$0")/tmpd
 def served_wipe(tmp: Path, bindings_: dict, **env: str) -> tuple[subprocess.CompletedProcess, Path]:
     """served_wipe.sh run as the workload runs it on an idle card, with demo.sh's stand-in, its Lean built."""
     cfg = R.load(CONFIG, REG)
-    hooks = T.PARTIES["wipe"][T.PROVER].variables(cfg, bindings_)
+    hooks = T.PIECES["wipe"][T.PROVER].variables(cfg, bindings_)
     executable(tmp, "nvidia-smi", IDLE)
     demo = executable(tmp, "demo.sh", DEMO)
     run = {"PATH": os.pathsep.join([str(tmp), str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp),
@@ -1052,7 +1052,7 @@ def test_the_workloads_bindings_are_the_runners_settings_under_the_pieces_hooks(
 
 
 def test_pouws_piece_hands_the_runner_the_main_file_its_challenger_writes():
-    cfg, piece = R.load(CONFIG, REG), T.PARTIES["pouw"][T.WORKERS]
+    cfg, piece = R.load(CONFIG, REG), T.PIECES["pouw"][T.WORKERS]
     gate = BINDINGS["challenger"]["pouw"]
     assert "MAIN_FILE" not in piece.variables(cfg, BINDINGS)
     assert piece.variables(cfg, {"challenger": {"pouw": {**gate, "main-file": "/run/public/challenger/main.txt"}}}

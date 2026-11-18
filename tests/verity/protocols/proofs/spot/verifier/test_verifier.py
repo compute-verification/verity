@@ -4,15 +4,19 @@ and `RECORD_VERDICT` switches the record back to Python in one line."""
 
 from __future__ import annotations
 
+import fcntl
 import itertools
 import json
 import re
+import subprocess
+import threading
 from pathlib import Path
 
 import pytest
 
 import verity_difftest
 from test_service import DELTA, OTHER, PAIR, QUERY, RUN, SCHEMA, SESSION, _lean, _ports, _record, _spec, _stream
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json
 from verity.protocols.proofs.spot.verifier.challenger import challenger as C, coins as T
@@ -264,7 +268,7 @@ def test_a_disagreement_is_refused_naming_both(monkeypatch):
     assert rec["checks"]["verifiers"]["codes"] == [V.DISAGREE] and rec["verifiers"]["agree"] is False
     detail = rec["checks"]["verifiers"]["detail"]
     assert detail["fields"] == ["registration_digest"] and detail["lean"] == {"registration_digest": "00" * 64}
-    assert detail["python"] == {"registration_digest": R.digest(reg.record)}
+    assert detail["python"] == {"registration_digest": DD.digest(reg.record)}
     stream.deliver(draw, [SESSION])
     out = stream.outcome(draw, _lean(), {"statement": "stub"})
     assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["verifiers"]
@@ -464,3 +468,35 @@ def test_the_switch_is_one_line(monkeypatch):
 def test_the_build_convention_is_the_difftest_harness():
     assert V.BUILD_LOCK == verity_difftest.BUILD_LOCK
     assert f'name = "{V.EXE}"' in (V.PACKAGE / "lakefile.toml").read_text()
+
+
+def test_two_builds_started_together_run_lake_one_at_a_time(tmp_path, monkeypatch):
+    """Two `executable` builds of two packages started at once, as two suites' fixtures start them in one tree, each run
+    Lake holding `BUILD_LOCK`, so never together: Lake builds a package's path requires (SPOT's, Flock's) in their own
+    `.lake`, and two builds writing one dependency's `.lake` at once fail on each other's half-written files."""
+    monkeypatch.setattr(V, "BUILD_LOCK", tmp_path / ".lake" / "harness-build.lock")
+    ran, start = [], threading.Barrier(2)
+
+    def lake(argv, cwd, **kw):
+        with open(V.BUILD_LOCK) as probe:
+            try:
+                fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                ran.append((argv[-1], "unlocked"))
+            except BlockingIOError:
+                ran.append((argv[-1], "held"))
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(V.subprocess, "run", lake)
+    got = {}
+
+    def build(name):
+        start.wait()
+        got[name] = V.executable(f"together-{name}", tmp_path / name)
+
+    threads = [threading.Thread(target=build, args=(n,)) for n in ("a", "b")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(ran) == [("together-a", "held"), ("together-b", "held")]
+    assert got == {n: tmp_path / n / ".lake" / "build" / "bin" / f"together-{n}" for n in ("a", "b")}

@@ -7,10 +7,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks" / "poub_session")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "poub_session"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import auditor_line as al
+
 from verity.protocols.resource_accounting.memory.poub.verifier.poub_session import verifier_process as VP
 
 REAL = {(m, name): getattr(m, name) for m, name in (

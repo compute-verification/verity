@@ -28,10 +28,8 @@ from typing import Any
 
 from verity_bench import jobs, kit
 from verity_bench.vllm import result as result_format
-from verity_config import ConfigError
-
 from verity_bench.vllm.presets import (FORMER_SPEC, FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, current_spec, expand_sweep,
-                                       former_specs, load_spec, resolve_spec, split_card)
+                                       former_arm, former_specs, load_spec, resolve_spec, spec_file, split_card)
 from verity_bench.vllm.runner import summarize
 
 SCHEMA = "verity-bench/served-table/v1"
@@ -58,6 +56,31 @@ ORDER BY a.start_utc DESC, a.id DESC
 
 
 @dataclass(frozen=True)
+class Member:
+    """A protocol's member: ``model``'s runs of ``spec`` on the card whose file is ``card`` (its ``sku``, under
+    `kit.cards_directory`), whose record gives its ``short``: the member's name (`name`, ``MODEL-SHORT``) and its rows'
+    spec (`key`, the spec as a run on that card names it, `_on_card`)."""
+
+    model: str
+    spec: str
+    card: str
+
+    @property
+    def short(self) -> str:
+        from verity.device import load_card
+
+        return load_card(self.card, directory=kit.cards_directory())["short"]
+
+    @property
+    def name(self) -> str:
+        return f"{self.model}-{self.short}"
+
+    @property
+    def key(self) -> str:
+        return _on_card(self.spec, self.short)
+
+
+@dataclass(frozen=True)
 class Protocol:
     """A protocol's served rows: its `arm` over `stock-fp8@compiled`, and `own_arm` (default `arm`) over `eager_stock`,
     the eager stock engine its runs time beside it (None where their stock isn't eager). The rows are every point of
@@ -69,7 +92,7 @@ class Protocol:
     eager_stock: str | None
     own_arm: str | None = None
     record: str = ""
-    members: tuple[tuple[str, str], ...] = ()
+    members: tuple[Member, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -88,11 +111,11 @@ class Live:
 PROTOCOLS = (
     # The bandwidth specs run every arm but the compiled one on decode-only CUDA graphs: no eager stock.
     Protocol("PoUS bandwidth audit", (), "bandwidth-audit", None, record="pous-bandwidth-audit",
-             members=(("llama-3.1-8b-h200", "llama31-8b-fp8-1gpu-bandwidth-served-reps6@h200"),
-                      ("llama-3.2-1b-h200", "llama32-1b-fp8-1gpu-bandwidth-served"))),
+             members=(Member("llama-3.1-8b", "llama31-8b-fp8-1gpu-bandwidth-served-reps6", "h200-sxm-141gb"),
+                      Member("llama-3.2-1b", "llama32-1b-fp8-1gpu-bandwidth-served", "h200-sxm-141gb"))),
     Protocol("Commit", (), "commit@compiled", None, record="commit"),
-    Protocol("Pearl+ served", (), "pouw:pearl-c-h100-v1-h3", "stock-fp8", record="pouw-served-sm90",
-             members=(("llama-3.2-1b-h100", "llama32-1b-1gpu-pouw-protocol-served@h100"),)),
+    Protocol("Pearl+ served", (), "pearl-plus", "stock-fp8", record="pouw-served-sm90",
+             members=(Member("llama-3.2-1b", "llama32-1b-1gpu-pouw-protocol-served", "h100-sxm-80gb"),)),
     Protocol("H1 served, GPU commit path (cost only, in-process coins)", (), "pouw:eps1-sm120-h1fx1", "stock-int8",
              record="h1-served"),
 )
@@ -156,13 +179,9 @@ def _on_card(spec: str, card: str | None) -> str:
     """`spec` as the card its run was on names it (``SPEC@CARD``), unless that card is its spec's one card now: a run on a
     card the spec no longer lists keeps its card's name."""
 
-    if card is None or split_card(spec)[1] is not None:
+    if card is None or split_card(spec)[1] is not None or spec_file(spec) is None:
         return spec
-    try:
-        cards = load_spec(spec).cards
-    except ConfigError:
-        return spec
-    return spec if cards == (card,) else f"{spec}@{card}"
+    return spec if load_spec(spec).cards == (card,) else f"{spec}@{card}"
 
 
 def spec_added(root: Path, spec: str) -> int:
@@ -209,7 +228,8 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], poi
            record: str | None = None, card: str | None = None) -> tuple[list[Found], str | None]:
     """The result's points (those of `points`, else all) as rows, or why the result can't stand: a `superseded_by`
     label, an invalid result, a run on another card than `card` (where one is asked), or a point without every one of
-    `arms` timed. The caveats are the result's, its run's and the `record` art's that named the run."""
+    `arms` timed, each under its id now (`former_arm`). The caveats are the result's, its run's and the `record` art's
+    that named the run."""
 
     labels = _labels(store, [art, run, *([record] if record else [])])
     if superseded := [label["value"] for label in labels if label["key"] == SUPERSEDED_BY]:
@@ -222,7 +242,8 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], poi
     ran_on = (doc["identity"].get("preset") or {}).get("gpu_id")
     if card is not None and ran_on != card:
         return [], f"ran on the {ran_on}, not the {card}"
-    rows = [row for row in doc["points"] if points is None or row["point"]["id"] in points]
+    rows = [{**row, "arms": {former_arm(arm) or arm: v for arm, v in row["arms"].items()}}
+            for row in doc["points"] if points is None or row["point"]["id"] in points]
     if not rows:
         return [], f"no timed point {', '.join(points or ())}"
     for row in rows:
@@ -475,7 +496,7 @@ def collect(store: Any, *, protocols: Sequence[Protocol] | None = None, factors:
     rows = []
     for protocol in protocols:
         own = protocol.own_arm or protocol.arm
-        members = {spec: member for member, spec in protocol.members}
+        members = {m.key: m.name for m in protocol.members}
         head = {"protocol": protocol.name, "arm": protocol.arm, "served_stock": SERVED,
                 "own_arm": own if protocol.eager_stock else None, "eager_stock": protocol.eager_stock}
         seen = set()

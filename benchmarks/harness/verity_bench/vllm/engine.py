@@ -74,10 +74,10 @@ def _pearl_c_run(llm: Any) -> Any | None:
 
 
 def _served_scheme(arm: Arm) -> str | None:
-    """The declared useful-work scheme the arm serves (its entry's `messages.option`), None for any other arm."""
-    from verity_vllm import messages
+    """The declared useful-work scheme the arm serves (its entry, a declared scheme's name), None for any other arm."""
+    from verity_bench.vllm.presets import declared_schemes
 
-    return next((s.name for e in arm.protocols if (s := messages.option(e)) is not None), None)
+    return next((e for e in arm.protocols if e in declared_schemes()), None)
 
 
 def _no_run(scheme: str) -> dict[str, Any]:
@@ -312,6 +312,9 @@ class _VllmEngine:
         if self.obj is None:
             run = _pearl_c_run(self.llm) if self.arm.protocols else None
             if run is not None:
+                if run.retain_dir is not None:
+                    raise SystemExit("the harness gate begins and ends passes of its own; it can't run on a run that "
+                                     "retains its passes")
                 return _pearl_c_gate(run, self.served)
             return _no_run(self.served) if self.served else {"passed": True, "provided": False}
         got = _callback(self.obj, "gate", self.target, None)
