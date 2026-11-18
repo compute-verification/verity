@@ -4438,16 +4438,6 @@ def profile_features(stock: str) -> list[str]:
     return [n for n in ARMS if n not in STOCK and stock_of(n) == stock and not same_engine(n, stock)]
 
 
-#: what a component lacks before an arm here can serve it inside vLLM's server, whose it is to add, in words
-UNSERVED = {
-    "pearl-plus": "compute-accounting: Pearl+'s scheme has an attach, but vLLM's scheme plugin "
-                  "(verity_vllm.pipeline.scheme_plugin) hands it its declared settings alone (scheme.settings: "
-                  "tie-uniform), and its attach (pouw.scheme.Attached) refuses a run without 'coins' or 'challenger' and "
-                  "'kernel' among them; then Attached.keyed raises until vllm keys each linear weight in RegisteredValues; "
-                  "and it requests an eager engine, world 1 and no async steps, more than stock's one change",
-}
-
-
 def components() -> dict:
     """The components an application names and how each checks its settings: `verity config check`'s
     (`verity_cli.served_table.MANIFESTS`, each a `verity.config.Component` whose ``params`` checks its
@@ -4488,8 +4478,8 @@ def feature_of(words: Sequence[str]) -> Feature:
 
 def feature(words: Sequence[str], stock: str) -> str:
     """The arm ``--feature NAME [KEY=VALUE ...]`` (`feature_of`) serves beside ``stock``: of `profile_features`, the
-    one whose `Arm.feature` is that component at those settings. `NotImplementedError` naming the goal, and what the
-    component lacks (`UNSERVED`), for one no arm over ``stock`` serves yet."""
+    one whose `Arm.feature` is that component at those settings. `NotImplementedError` naming the goal for one no arm
+    over ``stock`` serves yet."""
     want = feature_of(words)
     for n in profile_features(stock):
         if (f := ARMS[n].feature) is not None and f.name == want.name:
@@ -4498,8 +4488,7 @@ def feature(words: Sequence[str], stock: str) -> str:
                     return n
             except SystemExit:
                 continue
-    raise NotImplementedError(f"benchmarks/serving-profiles-first-number: no arm over {stock} serves {want}"
-                              + (f"; {UNSERVED[want.name]}" if want.name in UNSERVED else ""))
+    raise NotImplementedError(f"benchmarks/serving-profiles-first-number: no arm over {stock} serves {want}")
 
 
 def refusals(name: str, rows: dict | None = None) -> list[dict]:

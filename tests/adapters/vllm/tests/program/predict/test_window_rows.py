@@ -293,7 +293,7 @@ def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
     window's last are refused."""
     prompts = ((17, 3, 250, 9), (5, 77, 42), (1, 2), (9, 8, 7, 6))
     ingress, outputs = _traffic(SLOTS_CLASS, prompts, (0, 0, 0, 5))
-    scan = SLOTS_CLASS.scan
+    scan = IS.Class(**SLOTS_CLASS.scan.shape)
     assert SR.scan_anchors(SLOTS_CLASS, ingress, outputs) == {1: 16, 2: 16, 3: 16, 4: 32}
     for w, want in ((0, [None, 1, None, 2, None, 3, None, None]), (1, [None] * 6 + [4, None])):
         rows, starts = SR.scan_state(SLOTS_CLASS, ingress, outputs, w * SLOTS_CLASS.buckets)
@@ -760,7 +760,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
         if (off := np.flatnonzero((got != want).any(axis=1))).size:
             bad[tid] = off.tolist()
     assert bad == {}
-    c = win.close(salt_key=bytes(32))
+    c = win.close()
     assert c is not None
     labels = win.labels()
     seen = {lab["form"] for m in labels["members"] for *_, lab in m["labels"]}

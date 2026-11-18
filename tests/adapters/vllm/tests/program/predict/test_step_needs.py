@@ -41,13 +41,14 @@ def test_a_row_that_pins_no_revision_has_no_snapshot_dir_to_write(tmp_path, monk
         workload_phi(CLASS_G_ROW, "GLM53")
 
 
-def test_a_device_named_by_no_str_names_no_tuned_file(S):
-    """The cuBLAS route pin and the tuned fused-MoE file a step's GEMMs take their routes and tiles from are named by φ's
-    `device_name`: one that is no str has no name to put in either, an AttributeError, and is no missing file's refusal."""
+def test_a_target_that_names_no_card_names_no_tuned_file(S):
+    """The cuBLAS route pin and the tuned fused-MoE file a step's GEMMs take their routes and tiles from are named by the
+    target's card's `device_name`: a target that names no card has no name to put in either, an AttributeError, and is no
+    missing file's refusal."""
     doc = S.phi.to_json()
-    numbered = StepNeeds(Phi.from_json({**doc, "target": {**doc["target"], "device_name": 200}}))
-    with pytest.raises(AttributeError, match="'int' object has no attribute 'replace'"):
-        numbered.step(8, 8, [], [100 + i for i in range(8)], 8, {"greedy": 8}, True)
+    uncarded = StepNeeds(Phi.from_json({**doc, "target": {k: v for k, v in doc["target"].items() if k != "card"}}))
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'replace'"):
+        uncarded.step(8, 8, [], [100 + i for i in range(8)], 8, {"greedy": 8}, True)
 
 
 def test_a_cublas_gemm_reads_the_pin_of_the_device_phi_names(S, monkeypatch):
@@ -61,7 +62,7 @@ def test_a_cublas_gemm_reads_the_pin_of_the_device_phi_names(S, monkeypatch):
     assert [StepNeeds(S.phi).step(*st) for st in steps] == named
     monkeypatch.undo()
     doc = S.phi.to_json()
-    h100 = StepNeeds(Phi.from_json({**doc, "target": {**doc["target"], "device_name": "NVIDIA H100 80GB HBM3"}}))
+    h100 = StepNeeds(Phi.from_json({**doc, "target": {**doc["target"], "card": "h100-sxm-80gb"}}))
     need = h100.step(*steps[0])
     assert ("cublas-bf16-gemm", "cublas-linear", "no route pin") in _gaps(need)
     cublas = [n for n in need if n.id.startswith("cublas-")]
