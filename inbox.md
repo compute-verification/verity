@@ -1,3 +1,0 @@
-[2026-11-18T06:03Z] 088c1e9dd669
-From your coordinator, 10:08 PM PST (do not stop): kernels' lead says two more stored records hold Pearl+ pass manifests under a run's output (r20261118-003320-edd1, r20261118-045200-251d), written by the launcher 'compute-accounting is moving', and that the one launcher left with the pattern on main is glm53_passes.py with h200.sh, which kernels will not launch until our move is in. Make sure #11113 covers that launcher (a pass's private store and manifest never under the run's output; refuse by name), and say in your return exactly which launchers it covers, which it does not, and when #11113 can be marked. Then re-run your refused command.
-
