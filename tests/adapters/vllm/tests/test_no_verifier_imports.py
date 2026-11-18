@@ -90,7 +90,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         ),
         "verity_vllm/pipeline/advice_code/lengths.py": ("resource_accounting.network.verifier.advice",),
         "verity_vllm/pipeline/advice_code/window_code.py": ("resource_accounting.network.verifier.arith_encode.CW",),
-        "verity_vllm/pipeline/id_relay.py": ("resource_accounting.network.verifier.release",),
+        "verity/protocols/resource_accounting/network/prover/id_relay.py": ("resource_accounting.network.verifier.release",),
         "verity_vllm/pipeline/serve_admit.py": ("resource_accounting.network.verifier.release.read_watermark",),
         "verity_vllm/pipeline/serve_commit.py": ("resource_accounting.network.verifier.charge_chain",),
         "verity_vllm/pipeline/serve_head.py": ("resource_accounting.network.verifier.release",),
