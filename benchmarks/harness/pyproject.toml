@@ -3,7 +3,7 @@ name = "verity-bench"
 version = "0.1.0"
 description = "Shared benchmark harnesses for Verity's integrations."
 requires-python = ">=3.12"
-dependencies = ["verity-config", "verity-vllm"]
+dependencies = ["verity-config", "verity-flock", "verity-vllm"]
 
 [project.scripts]
 verity-bench = "verity_bench.cli:main"
@@ -17,4 +17,5 @@ packages = ["verity_bench"]
 
 [tool.uv.sources]
 verity-config = { workspace = true }
+verity-flock = { workspace = true }
 verity-vllm = { workspace = true }
