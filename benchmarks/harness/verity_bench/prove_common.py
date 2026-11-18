@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeGuard
 
-from verity_bench import steady
+from verity_bench import kit, steady
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, records
 
 CARD_SCHEMA = "spot-card/v1"
@@ -60,10 +60,6 @@ WORKLOADS = {w.name: w for w in (Workload("glm53", "GLM-5.3", "h200", "world-h20
 # ---- records ---------------------------------------------------------------------------------------------------------------
 
 
-def _superseded(store: Any, target: str) -> list[str]:
-    return [str(lab.value) for lab in store.labels(target, key=SUPERSEDED_BY)]
-
-
 def _label(name: str) -> str:
     return f"`research data label TARGET {RUN_OF_RECORD} {name} --by LANE`"
 
@@ -77,10 +73,10 @@ def of_record(store: Any, name: str, what: str, given: str | None = None) -> str
     found = labelled if given is None else [given]
     if not found:
         raise ValueError(f"no {what} of record: nothing in the store carries `{RUN_OF_RECORD}={name}` (label one: {_label(name)})")
-    live = [t for t in found if not _superseded(store, t)]
+    live = [t for t in found if not kit.superseded(store, t)]
     if not live:
         raise ValueError(f"the {what} of record is superseded: "
-                         + ", ".join(f"{t} by {', '.join(_superseded(store, t))}" for t in found)
+                         + ", ".join(f"{t} by {', '.join(kit.superseded(store, t))}" for t in found)
                          + f" (label what replaces it: {_label(name)})")
     if len(live) > 1:
         raise ValueError(f"{len(live)} targets carry `{RUN_OF_RECORD}={name}` and none is superseded: {', '.join(live)}; "
