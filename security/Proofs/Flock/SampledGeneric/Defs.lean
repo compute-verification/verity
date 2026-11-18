@@ -1,12 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Spot.Sampling.Extraction
 public import Proofs.Flock.Soundness.LinkCarry
 
 /-!
 # The sampled audit as a compiler, generic in the proof system: its objects
 
-The sampled audit compiles a proof system for proof blocks and a sampling design into an audit (`Audit.audit`): the
+The sampled audit compiles a proof system for proof blocks and a sampling design into an audit (`Spot.Sampling.audit`): the
 prover registers its commitment to the trace, the verifier samples proof blocks by the sampling design with live coins
 after the registration, and the proof system's session proves the sampled proof blocks against the registration. This
 file defines what the compiler takes and what its theorem reads; `Statements.lean` states the theorem.
@@ -33,7 +33,7 @@ file defines what the compiler takes and what its theorem reads; `Statements.lea
 
 namespace FlockSoundness.SampledGeneric
 
-open Game Audit LinkFinder
+open Game Spot.Sampling LinkFinder
 open scoped ENNReal
 
 /-! ## The commitment to the trace -/

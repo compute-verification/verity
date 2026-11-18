@@ -19,12 +19,12 @@ extractor settles on.
 
 namespace FlockSoundness.Binding
 
-open Game Model Accounting Refine Audit
+open Game Model Accounting Refine Spot.Sampling
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Spot.Sampling.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
-  {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
+  {decode : Spot.Sampling.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
 
 namespace Layout
 
@@ -71,7 +71,7 @@ theorem registered_weights_hm96 (hHm : rs.Computes) {S : Finset (Fin n)} {R : Re
 
 end HmRows
 
-open Audit.Partition in
+open Spot.Sampling.Partition in
 /-- **`registered_weights` for the audit's extraction**: when the extractor settles, for a sampled proof block `u` of the sample `ω`,
 on a message of its table (`cand … = some M`), the value that message holds at the commit string of each of `u`'s wires is
 the registered one, or `collide` of the two openings is a SHA-512 collision. -/

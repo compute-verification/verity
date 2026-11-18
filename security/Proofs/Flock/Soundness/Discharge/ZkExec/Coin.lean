@@ -39,7 +39,7 @@ such result (`accZ_lig`).
 
 namespace FlockSoundness.Discharge.ZkExec
 
-open Game Audit Exec Refine Model Accounting ZkSession
+open Game Spot.Sampling Exec Refine Model Accounting ZkSession
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128

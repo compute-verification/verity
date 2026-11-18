@@ -35,6 +35,7 @@ on it).
 module
 
 public import Lean.Data.Json
+public import Circuits.Wire
 public import Std.Data.HashMap
 
 @[expose] public section
@@ -42,6 +43,16 @@ public import Std.Data.HashMap
 namespace Spot.Wires
 
 open Lean (Json JsonNumber toJson)
+open Circuits
+
+export Circuits (Wire)
+export Circuits.Wire (prodR accum lowOf highOf boxLow boxHigh)
+export Circuits.Json (int? nat? keysOf fields field natAt natOf intOf strOf arrOf sameKeys)
+export Circuits (WIRE_KEYS)
+
+namespace Wire
+export Circuits.Wire (ofJson)
+end Wire
 
 /-- A reader input port: its u16 words, and its outer length (the parameter's outermost array length, 1 when it is not
 an array), which its cut divides. -/
@@ -57,20 +68,6 @@ structure Template where
   outs : List (String × Nat)
   deriving Repr
 
-/-- A wire (the module docstring); `start` is the record's `at`. -/
-structure Wire where
-  reader : String
-  port : String
-  writer : String
-  out : String
-  start : Nat
-  radix : List Nat
-  base : Int
-  step : List Int
-  cut0 : Nat
-  cuts : Nat
-  deriving Repr, BEq
-
 /-- A window circuit's wiring, the dataflow between its proof blocks: the templates by descriptor id, the cuts
 (`{tid: {port: k}}`), the wires, and the order of its units' ranges when it states one (`UnitRange`). -/
 structure Wiring where
@@ -82,61 +79,6 @@ structure Wiring where
 
 /-- The number of rows template `tid`'s port `p` is cut into (absent: 1). -/
 def Wiring.cutsOf (c : Wiring) (tid p : String) : Nat := (((c.cuts.lookup tid).getD []).lookup p).getD 1
-
-/-- The digits' radices and steps, the fastest digit first. -/
-def Wire.pairs (w : Wire) : List (Nat × Int) := (w.radix.zip w.step).reverse
-
-/-- The product of the radices of `ps`. -/
-def prodR (ps : List (Nat × Int)) : Nat := ps.foldr (fun p n => p.1 * n) 1
-
-/-- The reader rows the wire covers: the product of its radices. -/
-def Wire.units (w : Wire) : Nat := prodR w.pairs
-
-/-- `Σ_k d_k · step_k` for index `i`, `ps` the radices and steps fastest first (`Wire.pairs`). -/
-def accum : List (Nat × Int) → Nat → Int
-  | [], _ => 0
-  | (r, s) :: ps, i => ((i % r : Nat) : Int) * s + accum ps (i / r)
-
-/-- Reader index `i`'s writer unit. -/
-def Wire.writerAt (w : Wire) (i : Nat) : Int := w.base + accum w.pairs i
-
-/-- `Σ_k min 0 (step_k · (radix_k − 1))`. -/
-def lowOf : List (Nat × Int) → Int
-  | [] => 0
-  | (r, s) :: ps => min 0 (s * ((r : Int) - 1)) + lowOf ps
-
-/-- `Σ_k max 0 (step_k · (radix_k − 1))`. -/
-def highOf : List (Nat × Int) → Int
-  | [] => 0
-  | (r, s) :: ps => max 0 (s * ((r : Int) - 1)) + highOf ps
-
-/-- The least and the greatest writer the wire reads, in closed form. -/
-def Wire.span (w : Wire) : Int × Int := (w.base + lowOf w.pairs, w.base + highOf w.pairs)
-
-/-- A lower bound on `accum ps i` over indices `lo ≤ i ≤ hi`, digit by digit fastest first: where every such index has
-the same higher digits, its digit's least term and theirs; else the digit's least term over all its values and the bound
-on the higher digits. -/
-def boxLow : List (Nat × Int) → Nat → Nat → Int
-  | [], _, _ => 0
-  | (r, s) :: ps, lo, hi =>
-    if lo / r = hi / r then min (((lo % r : Nat) : Int) * s) (((hi % r : Nat) : Int) * s) + accum ps (lo / r)
-    else min 0 (s * ((r : Int) - 1)) + boxLow ps (lo / r) (hi / r)
-
-/-- The upper bound `boxLow` mirrors. -/
-def boxHigh : List (Nat × Int) → Nat → Nat → Int
-  | [], _, _ => 0
-  | (r, s) :: ps, lo, hi =>
-    if lo / r = hi / r then max (((lo % r : Nat) : Int) * s) (((hi % r : Nat) : Int) * s) + accum ps (lo / r)
-    else max 0 (s * ((r : Int) - 1)) + boxHigh ps (lo / r) (hi / r)
-
-/-- Bounds on the writers of reader indices `lo … hi`, in closed form (`Wire.writerAt_mem_box`). -/
-def Wire.box (w : Wire) (lo hi : Nat) : Int × Int := (w.base + boxLow w.pairs lo hi, w.base + boxHigh w.pairs lo hi)
-
-/-- Reader index `i`'s reader unit and row. -/
-def Wire.readerAt (w : Wire) (i : Nat) : Nat × Nat := (w.start + i / w.cuts, w.cut0 + i % w.cuts)
-
-/-- The reader units the wire covers. -/
-def Wire.readerUnits (w : Wire) : Nat := w.units / w.cuts
 
 /-! ## Refusals -/
 
@@ -310,14 +252,6 @@ def orderOf (c : Wiring) : Except Refusal (List UnitRange) :=
   | .ok o => if orderOk c o then .ok o else .error ⟨.order, none⟩
   | .error r => .error r
 
-/-- The first and the last reader index of the wire's reader units in units `[p0, p0 + n)` of its reader. -/
-def Wire.indicesIn (w : Wire) (p0 n : Nat) : Nat × Nat :=
-  ((max p0 w.start - w.start) * w.cuts, (min (p0 + n) (w.start + w.readerUnits) - w.start) * w.cuts - 1)
-
-/-- Units `(t, at, n)` meet the wire's reader units. -/
-def Wire.readsIn (w : Wire) (b : UnitRange) : Bool :=
-  b.1 == w.reader && decide (max b.2.1 w.start < min (b.2.1 + b.2.2) (w.start + w.readerUnits))
-
 /-- The wire is in order `o`, in closed form: for each range meeting its reader units, every range meeting the bounds on
 the writers of its reader indices there ranks below it. -/
 def orderedWire (o : List UnitRange) (w : Wire) : Bool :=
@@ -343,11 +277,6 @@ def check (c : Wiring) : Except Refusal Summary :=
         | some r => .error r
         | none => .ok ⟨c.wires, c.wires.map (rowWords c)⟩
 
-/-- Whether wire `w` covers reader row `(tid, u, port, row)`, and if so its index. -/
-def Wire.indexOf (w : Wire) (tid : String) (u : Nat) (port : String) (row : Nat) : Option Nat :=
-  if w.reader == tid && w.port == port && w.start ≤ u && u < w.start + w.readerUnits && w.cut0 ≤ row &&
-     row < w.cut0 + w.cuts then some ((u - w.start) * w.cuts + (row - w.cut0)) else none
-
 /-- The writer `(template, unit, out)` of reader row `(tid, u, port, row)`, by the wires alone; none when no wire covers it. -/
 def Summary.writerOf (s : Summary) (tid : String) (u : Nat) (port : String) (row : Nat) : Option (String × Int × String) :=
   s.wires.findSome? fun w => (w.indexOf tid u port row).map fun i => (w.writer, w.writerAt i, w.out)
@@ -364,11 +293,6 @@ The verifier never runs it: it is what `check` is held to, by the difftest and t
 
 /-- A reader row `(template, unit, port, row)` and its writer `(template, unit, out)`. -/
 abbrev Entry := (String × Nat × String × Nat) × (String × Int × String)
-
-/-- Every reader row the wire covers, with its writer, index by index. -/
-def Wire.entries (w : Wire) : List Entry :=
-  (List.range w.units).map fun i =>
-    ((w.reader, (w.readerAt i).1, w.port, (w.readerAt i).2), (w.writer, w.writerAt i, w.out))
 
 /-- The bounds entry by entry. -/
 def boundsRef (w : Wire) (rt wt : Template) : Bool :=
@@ -419,73 +343,6 @@ An instance is `{"templates", "cuts", "wires", "queries"}`, and optionally `"ord
 Anything else is refused as malformed. The output is `{"ok": false, "code", "wire"}` (`wire` null but for a wire's own
 refusal) or `{"ok": true, "wired_rows", "wired_bits", "spans", "lookups"}`: per wire its least and greatest writer, and per
 query its writer `[tid, unit, out]` or null. -/
-
-def int? : Json → Option Int
-  | .num n => if n.exponent == 0 then some n.mantissa else none
-  | _ => none
-
-def nat? (j : Json) : Option Nat := (int? j).bind fun i => if 0 ≤ i then some i.toNat else none
-
-def keysOf : Json → Option (List String)
-  | .obj kvs => some (kvs.toArray.map (·.1)).toList
-  | _ => none
-
-def fields : Json → Except String (List (String × Json))
-  | .obj kvs => .ok (kvs.toArray.map fun ⟨k, v⟩ => (k, v)).toList
-  | _ => .error "not an object"
-
-def field (j : Json) (k : String) : Except String Json :=
-  match j.getObjVal? k with
-  | .ok v => .ok v
-  | .error _ => .error s!"no {k}"
-
-def natAt (j : Json) (k : String) : Except String Nat := do
-  match nat? (← field j k) with
-  | some n => .ok n
-  | none => .error s!"{k} is not a natural"
-
-def natOf (what : String) (j : Json) : Except String Nat :=
-  match nat? j with
-  | some n => .ok n
-  | none => .error s!"{what} is not a natural"
-
-def intOf (what : String) (j : Json) : Except String Int :=
-  match int? j with
-  | some n => .ok n
-  | none => .error s!"{what} is not an integer"
-
-def strOf (what : String) : Json → Except String String
-  | .str s => .ok s
-  | _ => .error s!"{what} is not a string"
-
-def arrOf (what : String) : Json → Except String (List Json)
-  | .arr a => .ok a.toList
-  | _ => .error s!"{what} is not a list"
-
-def sameKeys (j : Json) (ks : List String) (what : String) : Except String Unit :=
-  match keysOf j with
-  | some got => if got.mergeSort (· ≤ ·) == ks.mergeSort (· ≤ ·) then .ok () else .error s!"{what}: keys {got}, not {ks}"
-  | none => .error s!"{what} is not an object"
-
-def WIRE_KEYS : List String := ["reader", "port", "writer", "out", "at", "radix", "base", "step"]
-
-def Wire.ofJson (j : Json) : Except String Wire := do
-  let ks := (keysOf j).getD []
-  if ks.contains "cut" then sameKeys j ("cut" :: WIRE_KEYS) "a wire" else sameKeys j WIRE_KEYS "a wire"
-  let s := fun k => do strOf k (← field j k)
-  let radix ← (← arrOf "radix" (← field j "radix")).mapM (natOf "a radix")
-  let step ← (← arrOf "step" (← field j "step")).mapM (intOf "a step")
-  if radix.isEmpty || radix.length != step.length || radix.any (· < 1) then
-    throw "a wire is at least one digit of radix 1 or more, and one step a digit"
-  let (cut0, cuts) ← match j.getObjVal? "cut" with
-    | .ok cj => do
-      let xs ← (← arrOf "cut" cj).mapM (natOf "a cut")
-      match xs with
-      | [a, b] => if 1 ≤ b then pure (a, b) else throw "a wire's cut is [c0, C], C at least 1"
-      | _ => throw "a wire's cut is [c0, C]"
-    | .error _ => pure (0, 1)
-  return { reader := ← s "reader", port := ← s "port", writer := ← s "writer", out := ← s "out",
-           start := ← natAt j "at", radix, base := ← intOf "base" (← field j "base"), step, cut0, cuts }
 
 def Template.ofJson (j : Json) : Except String Template := do
   sameKeys j ["units", "rows", "outs"] "a template"
