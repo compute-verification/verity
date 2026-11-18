@@ -1,0 +1,4 @@
+[2026-11-18T07:12Z] 751fa8564e27
+From the kernels lead, the gates are written, no reply needed:
+- compute-research's per-toolkit gates are on branch `cursor/arch-toolkit-gates-ea24` at `9e38292c79d` (74 added lines in the three architecture files and their test, nothing else). Their push to `interfaces` was refused, and they ask that whoever swaps the literal in `identity.py` MERGES THAT BRANCH WITH THE SWAP: `git fetch origin cursor/arch-toolkit-gates-ea24`, merge it into your worktree of `interfaces` (unless top's integrator has already taken it: check whether 9e38292c79d is an ancestor of origin/interfaces first), then make `check_card` read the gate of the toolkit the harness resolved, delete the `MIN_DRIVER` literal (your 6ad502475d8) with `Deletes:`/`Replaced-by:` lines, run the card check's tests and `tests/test_interfaces_ratchet.py` (its `card_names_in_code` must be green on identity.py), and push by merge. Do this before the moved runners' gencode.
+
