@@ -1,6 +1,6 @@
 """The axiom probe `verity lean try` runs: lean's exit 0 says a file elaborates, not that its theorems are proved, since one
-resting on `sorry` (`sorryAx`) or an `axiom` elaborates too.  So `try` elaborates a copy of FILE with `#print axioms N`
-appended for each of its top-level theorems (`theorems`: a scan of its code, comments and strings aside, that tracks
+resting on `sorry` (`sorryAx`) or an `axiom` elaborates too.  So `try` elaborates a copy of FILE (whose `include_str`
+paths still read from FILE's directory, `rehomed`) with `#print axioms N` appended for each of its top-level theorems (`theorems`: a scan of its code, comments and strings aside, that tracks
 `namespace`, `section`, `mutual` and `end`), in one elaboration, and its last line (`summary`) names each theorem whose
 axioms go beyond `propext`, `Classical.choice` and `Quot.sound`, or says none do.  An error on an appended line is the
 probe's own (`own_rc`): the file's status is lean's on its own lines.  Where those fail, none of `#print axioms`' answers
@@ -11,6 +11,7 @@ says "does not depend on any axioms".
 Stdlib only: `lean_changed.py --try` and the CLI's local `verity lean try` both load it."""
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Callable
@@ -36,6 +37,8 @@ ANSWERS = re.compile(r"'.+?' (?:depends on axioms: \[|does not depend on any axi
 PRIVATE = re.compile(r"^_private\..*?\.0\.")
 #: a Lean error's position, as lean prints it (`F:L:C: error`) and as Lake does (`error: F:L:C:`)
 ERROR_AT = re.compile(r"^(?:error: )?(?:\./)*(\S+?\.lean):(\d+):\d+: error", re.M)
+#: `include_str` with a literal path, which Lean reads from the directory of the file it elaborates
+INCLUDE = re.compile(r'(include_str\s+)"([^"\\\n]*)"')
 
 
 def code(text: str) -> str:
@@ -123,6 +126,21 @@ def with_probe(text: str, names: list[str]) -> str:
     return text + ("" if text.endswith("\n") else "\n") + "\n" + "".join(f"#print axioms {n}\n" for n in names)
 
 
+def rehomed(text: str, home: str, copy: str) -> str:
+    """``text``, a file in the directory ``home``, as its copy at ``copy`` reads the same files: each `include_str` of its
+    code with a relative literal path, which Lean takes from the directory of the file it elaborates, gets the way from
+    the copy's directory back to ``home`` in front.  Both paths are from the package; lines and everything else are
+    kept."""
+    back, plain = os.path.relpath(home or ".", os.path.dirname(copy) or "."), code(text)
+
+    def to(m: re.Match) -> str:
+        if not plain.startswith("include_str", m.start()) or m.group(2).startswith("/"):
+            return m.group(0)
+        return f'{m.group(1)}"{back}/{m.group(2)}"'
+
+    return INCLUDE.sub(to, text)
+
+
 def errors(output: str) -> list[tuple[str, int]]:
     """(file, line) of each error lean reports in ``output``."""
     return [(m.group(1), int(m.group(2))) for m in ERROR_AT.finditer(output)]
@@ -175,9 +193,10 @@ def summary(names: list[str], output: str, failures: list[str] | None = None) ->
 
 
 def probe(pkg: Path, rel: str, text: str,
-          lean: Callable[[str, Callable[[str], None]], tuple[int, str]]) -> tuple[int, str, str]:
-    """(the file's status, the probe's line, lean's output) for ``text``, the file at ``rel`` in package ``pkg``: its copy
-    with the probe appended, written at `COPIES`/``rel`` under ``pkg`` and elaborated by ``lean`` (given that path from
+          lean: Callable[[str, Callable[[str], None]], tuple[int, str]], home: str | None = None) -> tuple[int, str, str]:
+    """(the file's status, the probe's line, lean's output) for ``text``, the file at ``rel`` in package ``pkg``, whose own
+    directory there is ``home`` (``rel``'s by default): its copy with the probe appended and its `include_str` paths read
+    from ``home`` (`rehomed`), written at `COPIES`/``rel`` under ``pkg`` and elaborated by ``lean`` (given that path from
     ``pkg`` and where to hand each line of lean's output as it comes; lean's (status, output)), then removed.  It prints
     lean's lines as they come up to `#print axioms`' first answer, and the rest once lean is done: as it is when the file's
     own status is 0, and less every answer when its own lines fail, since an answer for a theorem of a file lean refuses
@@ -187,7 +206,7 @@ def probe(pkg: Path, rel: str, text: str,
     names = list(dict.fromkeys(name for name, _, _ in found))
     copy = COPIES / rel
     (pkg / copy).parent.mkdir(parents=True, exist_ok=True)
-    (pkg / copy).write_text(with_probe(text, names))
+    (pkg / copy).write_text(with_probe(rehomed(text, os.path.dirname(rel) if home is None else home, str(copy)), names))
     answers: list[str] = []
 
     def show(line: str) -> None:
