@@ -14,7 +14,7 @@ from verity import hooks as H
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_served as WS
-from verity.protocols.resource_accounting.memory.pous.scheme import WIPE
+from verity.protocols.resource_accounting.memory.pous.scheme import MEMORY_ATTESTER, WIPE
 from verity.protocols.resource_accounting.memory.pous.verifier.wipe_period import LIMIT_NS
 
 PIN = {"party": "memory-challenger", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0", "key-sha512": "ab" * 64}
@@ -72,7 +72,8 @@ def test_a_fact_its_launcher_doesnt_hand_is_refused_by_name(tmp_path) -> None:
 def _ctx(tmp_path, given=None, **launcher):
     given = given or {}
     return ({"settings": S.settings(WIPE, {k: v for k, v in given.items() if k in WIPE.settings}), "private": tmp_path,
-             "process": H.ENGINE, "side_of": lambda *a: None, "pins": [PIN]}
+             "process": H.ENGINE, "side_of": lambda *a: None, "pins": [PIN],
+             "party": MEMORY_ATTESTER}
             | WS.FACTS | {k: v for k, v in given.items() if k in WS.FACTS} | launcher)
 
 
