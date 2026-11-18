@@ -8,10 +8,17 @@ nothing.
 
 from __future__ import annotations
 
+from typing import Any
+
 from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Scheme, register
 
 #: `Pouw.Dither.Prover.epsWorkSound`: the error of `Pouw.Guarantees.Dither.WorkSound`, over every term of ε_skip
 _EPS = "Pouw.Dither.Prover.epsWorkSound"
+
+
+def attach(exchange: Any, ctx: Any) -> None:
+    raise NotImplementedError("dither: its kernels (the noised segments' and the last segment's, `PouwDitherBlock_v1` "
+                              "and `PouwDitherLast_v1`) are not built; kernels builds them")
 
 DITHER = register(Scheme(
     name="dither",
@@ -23,4 +30,5 @@ DITHER = register(Scheme(
         "ImportWithinCertifier", "OwnDither", "CoinsConfidential")),
     log=(Order("operand roots", "seeds"), Order("value roots", "check")),
     charges=(Charge("sample", _EPS), Charge("egress", _EPS), Charge("answers", _EPS)),
+    attach=attach,
 ))

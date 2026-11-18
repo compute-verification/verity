@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
 from .ports import bind_ports
-from .refs import Affine, Coll, Concat, Explicit, Grid, Refs, Strided, concat
+from .refs import Affine, Coll, Concat, Explicit, Grid, Refs, Strided, concat, recut
 from .types import Array, RecordType, Tuple as TupleT, Type, Value, field_at, field_starts, field_types, range_widths, remove_axis
 
 StaticValue = Any  # int | str | tuple[int, ...] | FunctionDefinition
@@ -340,6 +340,7 @@ class Body:
     nodes: list[BodyNode]
     ret: Refs
     offsets: list[int]  # gate offset of node k within this function; len == len(nodes) + 1
+    recut: dict[int, int] = field(default_factory=dict)  # input node k: q, its references in leaves of 1/q its width
 
     def __post_init__(self) -> None:
         # a frontend may replace its builder's parameters before `finish`, and a body can be made without a builder
@@ -588,6 +589,7 @@ class _Widths:
         self.token = object()  # this check's entry in a `PartLog`'s memo
         self._src: dict[tuple[str, int], tuple[Type | None, int | None, int]] = {}
         self._same: dict[tuple[int, int], bool] = {}
+        self.recut: dict[int, int] = {}
 
     def src(self, s: str, i: int) -> tuple[Type | None, int | None, int]:
         """(type, homogeneous width, leaves) of parameter or node `i`; (None, None, 0) when there is none, or when `i` is node
@@ -611,11 +613,31 @@ class _Widths:
         (w,) = range_widths(T, j, j + 1)
         return w
 
+    def _recut(self, i: int, q: int) -> None:
+        if self.recut.setdefault(i, q) != q:
+            raise ValueError(f"recut-width: input node {i} read in leaves of two widths; an input node is read at one")
+
+    def input_width(self, s: str, i: int) -> int | None:
+        """The leaf width of input node `i` (PROTOCOL.md §5.2), None for any other source."""
+        if s != "n" or not 0 <= i < min(self.below, len(self.nodes)):
+            return None
+        if getattr(getattr(self.nodes[i], "fn", None), "family", None) != "Input":
+            return None
+        return self.src(s, i)[1]
+
     def other(self, p: Refs, w: int) -> int | None:
-        """The first leaf of part `p` (no `Concat`) whose width is not `w`, as an offset into `p`; None when there is none."""
+        """The first leaf of part `p` (no `Concat`) whose width is not `w`, as an offset into `p`; None when there is none. An
+        input node is read at any width that divides its own, in whole leaves (`refs.recut`, which refuses the rest)."""
         if isinstance(p, Explicit):
-            return next((k for k, (s, i, j) in enumerate(p.items) if self.leaf(s, i, j) not in (None, w)), None)
+            for s, i, j in p.items:
+                if (W := self.input_width(s, i)) is not None:
+                    self._recut(i, recut(W, w, Explicit(((s, i, j),)), self.src(s, i)[2]))
+            return next((k for k, (s, i, j) in enumerate(p.items)
+                         if self.input_width(s, i) is None and self.leaf(s, i, j) not in (None, w)), None)
         if not p.count:
+            return None
+        if (W := self.input_width(p.space, p.idx)) is not None:  # type: ignore[attr-defined]
+            self._recut(p.idx, recut(W, w, p, self.src(p.space, p.idx)[2]))  # type: ignore[attr-defined]
             return None
         T, h, n = self.src(p.space, p.idx)  # type: ignore[attr-defined]
         if T is None or h == w:
@@ -875,7 +897,7 @@ class Builder:
         hit = W.first(out)
         if hit is not None:
             raise W.refuse("the body's return", out.type, hit)
-        return Body(self.params, self.ret_type, self.nodes, out.refs, self.offsets)
+        return Body(self.params, self.ret_type, self.nodes, out.refs, self.offsets, {k: q for k, q in W.recut.items() if q > 1})
 
 
 def primitive(name: str, version: int, params: Sequence[tuple[str, Type]], ret: Value, doc: str = "",

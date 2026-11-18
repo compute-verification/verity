@@ -10,7 +10,7 @@ drains every step in flight and schedules nothing; then
    without resetting the cache), so no block is held and each request continues in the next window as an arrival of its
    prompt and its ``e`` outputs, hitting its own cached blocks;
 3. **requeues** every waiting request in release order: the order of the scheduler's request table
-   (``Scheduler.requests``, in the order ``add_request`` received them), which under the certified tick (`tick_plugin`,
+   (``Scheduler.requests``, in the order ``add_request`` received them), which under the certified tick (`scheme_plugin`,
    whose gate adds requests in release order) is the release order;
 4. keeps the prefix cache, and records the edge (`Cut.edges`, and a line of ``cut.PID.jsonl`` under ``log``).
 
@@ -31,7 +31,7 @@ tokens it samples.
 ``VERITY_CUT`` is a JSON object: ``every_s`` (an edge every so many seconds of the engine core's clock from its first
 step; one that falls while the engine is idle is taken at its next step) or ``every_steps`` (every so many scheduler
 steps), ``hold_s`` (30 by default), ``log`` (a directory) and ``feed`` (a file). **Learning e.** With ``feed``, `SentFeed`,
-the OpenAI server's ASGI ``--middleware`` (inside `tick_plugin.TickFeed`), appends each streamed completion's count of
+the OpenAI server's ASGI ``--middleware`` (inside `scheme_plugin.Front`), appends each streamed completion's count of
 output token ids as its bytes leave the server, keyed by its X-Request-Id, and the engine core reads them every step
 (`Sent`): e is what the server has sent, an upper bound on what the network attester in front of it has released, which
 takes its place once the network attester posts its released counts in the same records. Without ``feed``, e is the count the
@@ -39,7 +39,7 @@ engine emitted, so the hold is the drain alone. Refused at the engine core's fir
 FCFS, a KV connector, and more than one data-parallel engine.
 
 vLLM loads its general plugins in each of its processes, the API server's included, so this module imports only the
-stdlib, `verity_vllm.settings`, `verity_vllm.errors`, `verity_vllm.engine.admission` and `tick_plugin`, and `register` imports the seam,
+stdlib, `verity_vllm.settings`, `verity_vllm.errors`, `verity_vllm.engine.admission` and `scheme_plugin`, and `register` imports the seam,
 and through it vLLM, only once ``VERITY_CUT`` is set.
 """
 from __future__ import annotations
@@ -56,7 +56,7 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.errors import Refused
 from verity_vllm.engine.admission import request_key
-from verity_vllm.pipeline.tick_plugin import SAMPLED_PATHS, FeedReader, route_of
+from verity_vllm.pipeline.scheme_plugin import SAMPLED_PATHS, FeedReader, route_of
 
 __all__ = ["CUT_ENV", "Cut", "Sent", "SentFeed", "cut_config", "make", "register"]
 
@@ -90,7 +90,7 @@ def cut_config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | Non
 
 
 class Sent:
-    """Each open response's sent output count, from the records `SentFeed` appends (``pull``, a `tick_plugin.FeedReader`):
+    """Each open response's sent output count, from the records `SentFeed` appends (``pull``, a `scheme_plugin.FeedReader`):
     `poll` reads what came since the last call, and calling it on an engine request gives its count, 0 before any."""
 
     def __init__(self, pull: Callable[[], list[dict[str, Any]]]) -> None:
