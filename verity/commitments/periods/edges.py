@@ -1,8 +1,9 @@
 """The wires a Program's root states, read off its nodes (`Spot.Edges.edgesOf`): each argument part of a root node that
 reads an earlier non-input root node's outputs is one wire per row of the reader's port, in closed form, or the first
-refusal by name (`edge-parts`, `edge-template`, `edge-form`, `not-topological`, `edge-rows`, `edge-units` where a
-reader row reads two writer units, `edge-run` where its run in one unit is not whole fields, `edge-width`). A wire reads
-its writer unit's one output row ``out`` from word ``offset``. The program
+refusal by name (`edge-template`, `edge-form`, `not-topological`, `edge-rows`, `edge-units` where a reader row reads
+two writer units, `edge-run` where its row in one unit is not one whole return field, `edge-width`). A wire reads its
+writer unit's one output row ``out`` from word ``offset``, the field's first leaf; adjacent affine parts that continue
+one another read as one. The program
 is a descriptor (`circuits/PROTOCOL.md` §4), the ranges ``[node, template, first, count]`` and the wiring the record's
 (its ``templates`` and ``cuts``). The work is the root's nodes and arguments, then each part times its port's rows."""
 from __future__ import annotations
@@ -58,7 +59,7 @@ def _axis_dims(t, ax: int):
 def _parts(j, args: list) -> list[tuple]:
     """A sequence's flat parts: ``("e", items)`` or ``("g", run, lanes, count, written)``, each lane
     ``(p, i, base, e, ((radix, step), ...))`` (an affine or strided part is the one-lane grid it spells, `written`
-    false), a concat spliced and an alias resolved to the earlier argument's parts (``args[k][a]``)."""
+    None or False), a concat spliced and an alias resolved to the earlier argument's parts (``args[k][a]``)."""
     if "alias" in j:
         k, a = j["alias"]
         return list(args[k][a])
@@ -66,7 +67,7 @@ def _parts(j, args: list) -> list[tuple]:
         return [q for x in j["concat"] for q in _parts(x, args)]
     if "affine" in j:
         s, i, b, c = j["affine"]
-        return [("g", max(c, 1), ((s == "p", i if c else 0, b, 1, ()),), c, False)]
+        return [("g", max(c, 1), ((s == "p", i if c else 0, b, 1, ()),), c, None)]
     if "strided" in j:
         s, i, b, inner, os, is_, c = j["strided"]
         T = max(1, -(-c // inner))
@@ -77,7 +78,7 @@ def _parts(j, args: list) -> list[tuple]:
         return [("g", run, lanes, len(lanes) * run * _periods(lanes[0]), True)]
     if "explicit" in j:
         return [("e", tuple((s == "p", i, leaf) for s, i, leaf in j["explicit"]))]
-    raise ValueError(f"edge-parts: references {json.dumps(j)}: not affine, strided, grid, explicit, concat or alias")
+    raise ValueError(f"edge-form: references {json.dumps(j)}: not affine, strided, grid, explicit, concat or alias")
 
 
 def _periods(lane) -> int:
@@ -91,32 +92,35 @@ def _count(q) -> int:
     return q[3] if q[0] == "g" else len(q[1])
 
 
-def _keys(q) -> list:
-    if q[0] == "g":
-        return [(p, i) for p, i, *_x in q[2]]
-    return [(q[1][0][0], q[1][0][1]) if q[1] else None]
-
-
-def _arg_parts_ok(k: int, np_: int, parts: list) -> bool:
-    if len(parts) > k + np_ + 2:
-        return False
-    return len(parts) <= len({x for q in parts for x in _keys(q)}) + 1
+def _merged(parts: list) -> list[tuple]:
+    """``(part, first reference)`` of each part, adjacent affine parts over one space whose second continues the first
+    read as one (`Spot.Edges.merged`)."""
+    out: list[tuple] = []
+    s0 = 0
+    for q in parts:
+        if out and q[0] == "g" and q[4] is None and out[-1][0][0] == "g" and out[-1][0][4] is None:
+            (_, _, ((p, i, b, _e, _lv),), c, _w), at = out[-1]
+            p2, i2, b2, _e2, _lv2 = q[2][0]
+            if p == p2 and i == i2 and c > 0 and q[3] > 0 and b2 == b + c:
+                out[-1] = (("g", c + q[3], ((p, i, b, 1, ()),), c + q[3], None), at)
+                s0 += q[3]
+                continue
+        out.append((q, s0))
+        s0 += _count(q)
+    return out
 
 
 def _run_at(t, o: int, ln: int):
-    """The return fields ``(f, f')`` of `t` whose leaves are exactly ``[o, o + ln)``, else None."""
+    """The return field `f` of `t` whose leaves are exactly ``[o, o + ln)``, else None."""
     starts = [0]
     for ty in _fields(t):
         starts.append(starts[-1] + _leaves(ty))
-    n = len(starts) - 1
-    f = next((x for x in range(n) if starts[x] == o), None)
-    f2 = next((x for x in range(n) if starts[x + 1] == o + ln), None)
-    return (f, f2) if f is not None and f2 is not None and ln > 0 and f <= f2 else None
+    return next((f for f in range(len(starts) - 1) if ln > 0 and starts[f] == o and starts[f + 1] == o + ln), None)
 
 
-def _field_word(t, f: int) -> int:
-    """The first word of field `f` in `t`'s output row ``out``: the fields before it, each whole u16 words."""
-    return sum((_bits(ty) + 15) // 16 for ty in _fields(t)[:f])
+def _field_offset(t, f: int) -> int:
+    """The first leaf of field `f` of `t`, its first word in the unit's output row ``out``."""
+    return sum(_leaves(ty) for ty in _fields(t)[:f])
 
 
 def _leaf_at(q, k: int):
@@ -165,11 +169,11 @@ def _members_in(x0: int, L: int, ln: int, M: int, s0: int, c: int) -> tuple[int,
 
 
 def _grid_ok(R, k: int, q) -> None:
-    """A grid's lanes count one number of periods (else `edge-parts`), and each lane over an earlier root node lies
+    """A grid's lanes count one number of periods (else `edge-rows`), and each lane over an earlier root node lies
     inside that node's outputs at both its extremes (else `edge-rows`), in O(levels) a lane."""
     _, run, lanes, _c, _w = q
     if len({_periods(x) for x in lanes}) != 1:
-        raise Refusal("edge-parts")
+        raise Refusal("edge-rows")
     for p, i, b, e, lv in lanes:
         lo = hi = b
         for rad, d in ((run, e), *lv):
@@ -305,17 +309,17 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
             raise Refusal("edge-rows")
         if l0 % lw + ln > lw:
             raise Refusal("edge-units")
-        run = _run_at(wn["ret"], l0 % lw, ln)
-        if run is None:
+        f = _run_at(wn["ret"], l0 % lw, ln)
+        if f is None:
             raise Refusal("edge-run")
-        fs = _fields(wn["ret"])[run[0]:run[1] + 1]
-        if sum(_bits(x) for x in fs) != _bits(ty) // cuts or any(_bits(x) % 16 for x in fs[:-1]):
+        fb = _bits(_fields(wn["ret"])[f])
+        if fb != _bits(ty) // cuts or fb != 16 * ln:
             raise Refusal("edge-width")
         if any(r > 1 and d % lw != 0 for r, d in zip(radix, steps)):
             raise Refusal("edge-rows")
         out.append({"reader": rt, "port": port, "writer": wt, "out": "out", "at": rb + lo, "radix": radix,
                     "base": wb + l0 // lw, "step": [d // lw for d in steps],
-                    "cut": [j, 1], "offset": _field_word(wn["ret"], run[0])})
+                    "cut": [j, 1], "offset": _field_offset(wn["ret"], f)})
     return out
 
 
@@ -335,8 +339,6 @@ def edges(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], wiring: Mapp
         fu[node] = (t, b)
         acc[t] = b + count
     try:
-        if not all(_arg_parts_ok(k, R.params, g["parts"]) for k, x in enumerate(R.nodes) for g in x["args"]):
-            raise Refusal("edge-parts")
         out = []
         for k, x in enumerate(R.nodes):
             if x["input"]:
@@ -346,12 +348,10 @@ def edges(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], wiring: Mapp
             if x["form"] == "scan":
                 raise Refusal("edge-form")
             for i, g in enumerate(x["args"]):
-                s0 = 0
-                for q in g["parts"]:
+                for q, s0 in _merged(g["parts"]):
                     if q[0] == "g" and q[4]:
                         _grid_ok(R, k, q)
                     out += _part_wires(R, fu, templates, cuts_of, k, i, q, s0)
-                    s0 += _count(q)
         return {"wires": out}
     except Refusal as e:
         return {"refusal": str(e)}
