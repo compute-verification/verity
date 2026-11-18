@@ -23,7 +23,8 @@ if [ "${CPW_LEASED:-}" != 1 ]; then
   "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
   PROBE="$HERE/../opcode_probe/probe.py"
   ARCH=$(python3 "$PROBE" arch) || exit 2
-  [ "$ARCH" = sm_120a ] || { echo "cpw_sass.sh: the card's target is $ARCH, and cpw_sass.cu has forms for sm_120a only: nothing built" >&2; exit 2; }
+  WANT=$(python3 "$PROBE" arch --sku rtx-pro-6000-server) || exit 2
+  [ "$ARCH" = "$WANT" ] || { echo "cpw_sass.sh: the card's target is $ARCH, and cpw_sass.cu has forms for $WANT only: nothing built" >&2; exit 2; }
   GENCODE=$(python3 "$PROBE" gencode) || exit 2
   BIN="$OUT/bin/cpw_sass"
   flags=(-O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v)
@@ -31,7 +32,7 @@ if [ "${CPW_LEASED:-}" != 1 ]; then
   if "$NVCC" "${flags[@]}" -DCPW_ST256 "$HERE/cpw_sass.cu" -o "$BIN" >"$OUT/build_st256.log" 2>&1; then
     mv "$OUT/build_st256.log" "$OUT/build.log"
   else
-    echo "cpw_sass.sh: st.global.v8.b32 refused on sm_120a (build_st256.log); building without mode 7" >&2
+    echo "cpw_sass.sh: st.global.v8.b32 refused on $ARCH (build_st256.log); building without mode 7" >&2
     "$NVCC" "${flags[@]}" "$HERE/cpw_sass.cu" -o "$BIN" >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
   fi
   sha256sum "$BIN" >"$OUT/bin/cpw_sass.sha256"
