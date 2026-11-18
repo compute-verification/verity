@@ -198,6 +198,7 @@ import hashlib
 import json
 import math
 import os
+import shlex
 import shutil
 import signal
 import statistics
@@ -212,6 +213,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
+from types import MappingProxyType
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -724,13 +726,16 @@ def front_end(arm: Arm, given: str | None) -> str:
 
 
 def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blocks: int | None = None,
-                max_model_len: int | str | None = None, front: str = PYTHON, added: Sequence[str] = ()) -> list[str]:
+                max_model_len: int | str | None = None, front: str = PYTHON, added: Sequence[str] = (),
+                limits: bool = True) -> list[str]:
     """The server's command: vLLM's Python server, or behind `RUST` ``vllm serve``, the command that starts the Rust
     front end (under `RUST_ENV`, `server_env`). ``added`` (`published_args`) goes on the line of an arm that starts the
     server as the recipe does, after the recipe's flags and the runner's, and is refused where it names a flag the line
     already sets, but for ``--seed=N``, which takes the place of the line's ``--seed 0``; no other arm's line takes
-    it."""
-    base = base_args(max_model_len, UNPUBLISHED if arm.published else ())
+    it. Without ``limits`` (a profile's job, `run --profile`) an arm that does not start as the recipe does has no
+    context limit and no limit on the requests at once of ours: vLLM's own, as `benchmarks/production.toml` serves it."""
+    base = (base_args(max_model_len, UNPUBLISHED if arm.published else ()) if limits or arm.published
+            else base_args(None, ("--max-model-len", *UNPUBLISHED)))
     serve = (["vllm.entrypoints.cli.main", "serve", str(checkpoint)] if front == RUST
              else ["vllm.entrypoints.openai.api_server", "--model", str(checkpoint)])
     mode = model.published_tokenizer.get(front)
@@ -1511,7 +1516,7 @@ def sends_seed(arm: Arm) -> bool:
 
 def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int, d: Path, tag: str,
                dataset: str | None = None, prompts: int | None = None, seed: int = 0, sampled: bool = False,
-               seeded: bool = False, lifetime: int | None = None) -> list[str]:
+               seeded: bool = False, lifetime: int | None = None, defaults: bool = False) -> list[str]:
     """One pass of vLLM's client against the server on ``port``: ``load``'s prompts (the same ones under one seed, so
     every arm and rep serves the same requests) at concurrency ``rung``, greedy and each decoding to its length, with
     goodput against the model's SLO and its result saved to ``d``. A ``sampled`` pass's requests are sampled instead
@@ -1527,13 +1532,19 @@ def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int,
     prompt's planned length: held at ``rung`` in flight whatever the file's arrivals (``--no-self-timed``), or, at
     `ARRIVING`, each sent at its arrival after the pass starts, which is the client's way with such a file, with no
     bound on the requests in flight. A sessions load's client is one user's (`drive_bench`): its file the user's own,
-    ``rung`` 1."""
+    ``rung`` 1. A profile's pass (``defaults``, `run --profile`) sends no sampling flag, so the server samples by the
+    model's generation_config, and only where ``seeded`` the user and its seed."""
     slo = dict(zip(("ttft", "tpot"), model.slo))
     held = [] if rung == ARRIVING else [*(["--no-self-timed"] if load.plan or load.sessions else []),
                                         "--request-rate", "inf", "--max-concurrency", str(rung)]
-    sampling = ["--temperature", "0"] if not sampled else [
-        "--temperature", str(SAMPLED["temperature"]), "--top-p", str(SAMPLED["top_p"]),
-        "--extra-body", json.dumps({"user": tag, **({"seed": user_seed(tag, lifetime)} if seeded else {})})]
+    if defaults:
+        sampling = ["--extra-body", json.dumps({"user": tag, "seed": user_seed(tag, lifetime)})] if seeded else []
+    elif not sampled:
+        sampling = ["--temperature", "0"]
+    else:
+        sampling = [
+            "--temperature", str(SAMPLED["temperature"]), "--top-p", str(SAMPLED["top_p"]),
+            "--extra-body", json.dumps({"user": tag, **({"seed": user_seed(tag, lifetime)} if seeded else {})})]
     return [sys.executable, "-m", "vllm.entrypoints.cli.main", "bench", "serve", "--backend", "openai",
             "--base-url", f"http://127.0.0.1:{port}", "--endpoint", "/v1/completions",
             "--model", model.served, "--tokenizer", str(checkpoint),
@@ -1592,7 +1603,7 @@ def merged(results: Sequence[dict]) -> dict:
 
 def drive_bench(port: int, model: Model, checkpoint: Path, load: Load, rung: int, tag: str, d: Path,
                 dataset: str | None = None, seed: int = 0, lib: object | None = None, prompts: int | None = None,
-                sampled: bool = False, seeded: bool = False, lifetime: int | None = None,
+                sampled: bool = False, seeded: bool = False, lifetime: int | None = None, defaults: bool = False,
                 run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
                 clock: Callable[[], float] = time.monotonic, now: Callable[[], float] = time.time) -> dict:
     """One pass sent by vLLM's client (`bench_argv`): its output in d/bench.log, the result it saved in d/result.json,
@@ -1613,8 +1624,8 @@ def drive_bench(port: int, model: Model, checkpoint: Path, load: Load, rung: int
             raise RuntimeError(f"the client's result would be saved in {saved}, inside the run's directory, which leaves "
                                "the node with each request's generated text: TMPDIR, outside every run's directory")
         to = [saved / u.name if load.sessions else saved for u, *_ in jobs]
-        argvs = [bench_argv(model, checkpoint, port, load, c, to[k], name, f, prompts, seed, sampled, seeded, lifetime)
-                 for k, (_, name, c, f) in enumerate(jobs)]
+        argvs = [bench_argv(model, checkpoint, port, load, c, to[k], name, f, prompts, seed, sampled, seeded, lifetime,
+                            defaults) for k, (_, name, c, f) in enumerate(jobs)]
 
         def client(k: int) -> int:
             jobs[k][0].mkdir(parents=True, exist_ok=True)
@@ -1763,7 +1774,9 @@ def run(a: argparse.Namespace) -> int:
     """Serve one arm (`serve`), what it keeps on the node in ``--private``. Where none is given and the arm keeps
     something (`keeps_private`): under vLLM's client, a cost's run, which nothing reads those files of afterwards, a
     fresh directory outside the run's, removed when the arm stops; under the corpus client, a serve whose later stages
-    read them, refused before anything starts."""
+    read them, refused before anything starts. Under ``--profile`` the profile's checks come first (`profile_run`)."""
+    if getattr(a, "profile", None):
+        profile_run(a)
     if ARMS[a.arm].attester:
         return certified(a)
     out, held = Path(a.out).resolve(), SHARED.RESEARCH_RUN_DIR
@@ -1831,6 +1844,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     bench = a.client == BENCH
+    held = profile_run(a) if getattr(a, "profile", None) else None
     given = published_context(a.arm, a.model_id, a.max_model_len) if arm.published else a.max_model_len
     if bench:
         if why := corpus_only(arm):
@@ -1867,7 +1881,8 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     port = corpus().free_port()
     front = front_end(arm, getattr(a, "published_frontend", None))
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context, front,
-                       published_args(getattr(a, "published_args", None)))
+                       published_args(getattr(a, "published_args", None)), limits=held is None)
+    argv += held["args"] if held else []
     BODY_EXTRA.clear()
     BODY_EXTRA.update({"logprobs": 0} if arm.logprobs else {})
     edges = edge_config(arm, model, a, rates, load_tag(next(iter(passes)), 1, True) if bench else None)
@@ -1905,7 +1920,8 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             "seeded": a.sampled and sends_seed(arm), "end_of_text_ids": end_of_text_ids(checkpoint),
             "sampling": arm.sampling, "logprobs": arm.logprobs, "edges": edges, "parts": parts_of(a.arm, edges),
             "gpu_busy": lib is not None, "no_gpu_busy": no_nvml, "versions": versions(), "host": os.uname().nodename,
-            "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES, "open_files": nofile, "loads": []}
+            "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES, "open_files": nofile, "loads": [],
+            **({"profile": {k: v for k, v in held.items() if k != "args"}} if held else {})}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
     t = time.monotonic()
     with open(srv / "server.log", "wb") as log:
@@ -1933,6 +1949,10 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             n, c = passes[name]
             if front is not None:
                 time.sleep(IDLE_S)
+            if held:
+                return drive_bench(sends_to, model, checkpoint, as_profile(LOADS[n], a.profile), c, tag, d, sent.get(n),
+                                   a.seed, busy, pass_prompts(LOADS[n], c, lines.get(n), a.warm_s if warm else None),
+                                   False, held["seeded"], a.lifetime, True)
             return drive_bench(sends_to, model, checkpoint, LOADS[n], c, tag, d, sent.get(n), a.seed, busy,
                                pass_prompts(LOADS[n], c, lines.get(n), a.warm_s if warm else None, sizes.get(n)),
                                a.sampled, a.sampled and sends_seed(arm), a.lifetime)
@@ -2206,6 +2226,11 @@ def attester_record(check: dict | None, lines: Sequence[dict]) -> dict:
             "tick_lateness_ms": summary.get("tick_lateness_ms")}
 
 
+#: why an arm behind the network attester (`Arm.attester`) takes no sampling: `certified`'s refusal of ``--sampled``
+SERVED_GREEDY = ("arm {arm} is served greedy: the network certifier's id request states temperature 0 and its own seed, "
+                 "whatever the client's completion asks (--sampled is another arm's)")
+
+
 def certified(a: argparse.Namespace) -> int:
     """Serve one side of an arm behind the network attester (`Arm.attester`): ``--side server`` on the node
     (`certified_server`) or ``--side client`` where the network attester runs (`certified_client`), both given the same
@@ -2217,8 +2242,7 @@ def certified(a: argparse.Namespace) -> int:
                          f"and the id front before it, and --side {CLIENT} where the network certifier runs, a host "
                          "that reaches the id front and is never the node")
     if a.sampled:
-        raise SystemExit(f"arm {a.arm} is served greedy: the network certifier's id request states temperature 0 and "
-                         "its own seed, whatever the client's completion asks (--sampled is another arm's)")
+        raise SystemExit(SERVED_GREEDY.format(arm=a.arm))
     return (certified_server if a.side == SERVER else certified_client)(a)
 
 
@@ -4112,6 +4136,367 @@ def _gb(x: float | None) -> float | None:
 LOAD_OVERHEAD_S, STOP_S = 5.0, 60.0
 
 
+#: the changes on our side alone that a profile's job makes where an arm of ours refuses what the profile has on, each
+#: named as its label says it; stock is never changed
+OURS_CHANGES = {"seeded": "seeded for ours", "prefix-cache-off": "prefix cache off for ours"}
+#: `--find-load`'s ladder: a session profile's users, the requests in flight of the others, these up to its prompts
+SESSIONS_LADDER, LADDER = (1, 2, 4, 8), (4, 8, 12, 16, 24, 32, 48)
+#: the reps of a lifetime and the lifetimes of a profile's job: `--find-load` serves stock once, `--feature` serves stock
+#: and the feature twice each, turned round, six paired reps with stock's two lifetimes the noise floor (`own_noise`)
+FIND_REPS, FEATURE_REPS, FEATURE_LIFETIMES = 3, 3, 2
+
+
+def profiles():
+    """`verity_bench.profiles` (benchmarks/harness), the reader of `benchmarks/production.toml`. Loaded where a profile
+    is read, as the kit is (`kit`)."""
+    harness = str(ROOT / "benchmarks/harness")
+    if harness not in sys.path:
+        sys.path.insert(0, harness)
+    from verity_bench import profiles as P
+
+    return P
+
+
+def profile_doc(profile: str, model_id: str) -> tuple:
+    """The profiles' reader and their file read, ``profile`` and ``model_id`` refused where the file holds neither."""
+    P = profiles()
+    doc = P.load()
+    if profile not in doc.profiles:
+        raise SystemExit(f"--profile {profile}: the profiles of {P.PATH.name} are {', '.join(doc.profiles)}")
+    if model_id not in doc.models:
+        raise SystemExit(f"--profile {profile}: {P.PATH.name} holds no model {model_id} (it holds "
+                         f"{', '.join(doc.models)})")
+    return P, doc
+
+
+def profile_stock(profile: str, model_id: str) -> str:
+    """The stock arm a profile's job serves ``model_id`` with: ``prod``, the recipe's line, for a model whose recipe
+    this file holds, else ``compiled`` at vLLM's own limits (`server_argv`'s ``limits``). Refused where its server line
+    is not the file's stock launch (`profiles.serve_argv`)."""
+    P, doc = profile_doc(profile, model_id)
+    model = MODELS[model_id]
+    stock = "prod" if model.published else REFERENCE
+    ours = server_argv(ARMS[stock], model, Path("/ckpt"), 1,
+                       max_model_len=published_context(stock, model_id, None) if ARMS[stock].published else None,
+                       limits=False)
+    theirs = P.serve_argv(doc, model_id, "/ckpt", port=1)
+    if ours[ours.index("--model") + 2:] != theirs[3:]:
+        raise SystemExit(f"--profile on {model_id}: {stock}'s server line {' '.join(ours[ours.index('--model') + 2:])} "
+                         f"is not {P.PATH.name}'s stock launch {' '.join(theirs[3:])}: make them one")
+    return stock
+
+
+def profile_load(profile: str, model_id: str) -> str:
+    """The load of `LOADS` a profile's job sends ``model_id``: coding-agent's cut at the model's context (its dataset and
+    turns), chat's and fixed-size's own."""
+    P, doc = profile_doc(profile, model_id)
+    if profile == "chat":
+        return "chat"
+    if profile == "fixed-size":
+        return "long"
+    ds, context = P.dataset(doc, profile, model_id), doc.models[model_id].context
+    return next(n for n, x in LOADS.items() if x.sessions and x.file and x.file.sha512 == ds.sha512
+                and x.context == context)
+
+
+def as_profile(load: Load, profile: str | None) -> Load:
+    """``load`` as ``profile`` sends it: each request's output its length where the profile names one (fixed-size's
+    1,024 tokens, where the long load sends 128)."""
+    out = (PROFILE.get(profile or "") or {}).get("output")
+    if out is None or "--random-output-len" not in load.dataset:
+        return load
+    flags = list(load.dataset)
+    flags[flags.index("--random-output-len") + 1] = str(out)
+    return replace(load, dataset=tuple(flags))
+
+
+def profile_features(stock: str) -> list[str]:
+    """The arms of ours a profile's job can serve beside ``stock``: each made from it, less its twins."""
+    return [n for n in ARMS if n not in STOCK and stock_of(n) == stock and not same_engine(n, stock)]
+
+
+def refusals(name: str, rows: dict | None = None) -> list[dict]:
+    """What of a profile the arm ``name`` refuses, in the words of the code that refuses it: the piece (``sampling``,
+    ``the cache`` or ``vLLM's client``), the words, and the change on our side alone that lets the same prompts through
+    (`OURS_CHANGES`), None where none does. A profile's client sends no sampling flag, so under the certified tick a
+    request without a seed is refused (`verity_vllm.pipeline.tick_plugin.unseeded`) unless the arm's client sends
+    each user's seed (`sends_seed`); history tables with prefix caching on are refused by the boundary commitment
+    (``rows``, the job's ``--boundary-rows`` or the arm's); an arm behind the network attester is served greedy
+    (`SERVED_GREEDY`); an arm whose passes only the corpus client sends cannot take vLLM's (`corpus_only`). No arm
+    refuses draft tokens."""
+    arm, out = ARMS[name], []
+    if str(ROOT / "adapters/vllm") not in sys.path:
+        sys.path.insert(0, str(ROOT / "adapters/vllm"))
+    if arm.attester:
+        out.append({"piece": "sampling", "words": SERVED_GREEDY.format(arm=name), "change": None})
+    if why := corpus_only(replace(arm, seeds=True)):
+        out.append({"piece": "vLLM's client", "words": f"arm {name} needs the corpus client, not vLLM's: {why} "
+                                                       f"(--client {CORPUS})", "change": None})
+    elif arm.tick and not sends_seed(arm):
+        from verity_vllm.pipeline.tick_plugin import unseeded
+
+        out.append({"piece": "sampling", "words": unseeded(json.dumps({"stream": True}).encode()), "change": "seeded"})
+    rows = rows or arm.rows
+    if "boundary_rows" in arm.plugin and rows.get("tables") and "--no-enable-prefix-caching" not in arm.args:
+        from verity_vllm.pipeline.boundary_windows import BoundaryWindows
+
+        try:
+            BoundaryWindows.install(argparse.Namespace(tables=rows["tables"]),
+                                    argparse.Namespace(cache_config=argparse.Namespace(enable_prefix_caching=True)), None)
+        except ValueError as e:
+            out.append({"piece": "the cache", "words": str(e), "change": "prefix-cache-off"})
+    return out
+
+
+def profile_run(a: argparse.Namespace) -> dict:
+    """``run --profile``'s checks and what it serves under the profile: the profile's name, version and digest, the
+    changes on our side (``ours``, labels) with the server flags they add (``args``), and whether each user's seed is
+    sent (an arm that keeps the record or says so, `sends_seed`, or ``--ours seeded``). The profile fixes the load
+    (``--loads`` names its load at the rungs to serve), the sampling, the context limit and the stock launch, so the
+    flags that set them are refused; so is an arm that is neither stock nor an arm of ours beside it, a change on
+    stock's side, and an arm whose refusals the changes named leave standing."""
+    P, doc = profile_doc(a.profile, a.model_id)
+    fixed = [(flag, what) for flag, what, given in (
+        ("--sampled", "the sampling: none is sent, so the server samples by the model's generation_config", a.sampled),
+        ("--max-model-len", "the context limit: the file's", a.max_model_len),
+        ("--pass-prompts", "the prompts a pass sends", a.pass_prompts),
+        ("--published-args", "the stock launch", getattr(a, "published_args", None)),
+        ("--published-frontend", "the stock launch", getattr(a, "published_frontend", None))) if given]
+    if fixed:
+        flag, what = fixed[0]
+        raise SystemExit(f"--profile {a.profile} fixes {what} ({P.PATH.name}): drop {flag}")
+    if a.client != BENCH:
+        raise SystemExit(f"--profile {a.profile} is sent by vLLM's client: --client {BENCH}")
+    stock, load = profile_stock(a.profile, a.model_id), profile_load(a.profile, a.model_id)
+    if list(parse_loads(a.loads or "")) != [load]:
+        raise SystemExit(f"--profile {a.profile} on {a.model_id} serves load {load} alone: --loads {load}=RUNG")
+    ours = [x for x in (a.ours or "").split(",") if x]
+    if bad := [x for x in ours if x not in OURS_CHANGES]:
+        raise SystemExit(f"--ours {','.join(bad)}: the changes on our side are {', '.join(OURS_CHANGES)}")
+    if a.arm == stock:
+        if ours:
+            raise SystemExit(f"--ours on {stock}: stock is never changed; a change on our side goes on the arm of ours")
+    elif a.arm not in profile_features(stock):
+        raise SystemExit(f"--profile {a.profile} on {a.model_id} serves {stock} or one arm of ours beside it: "
+                         f"{', '.join(profile_features(stock))}")
+    standing = [r for r in ([] if a.arm == stock else refusals(a.arm, a.boundary_rows)) if r["change"] not in ours]
+    if standing:
+        r = standing[0]
+        raise SystemExit(f"arm {a.arm} cannot run under --profile {a.profile}: {r['words']}"
+                         + (f" (--ours {r['change']}: {OURS_CHANGES[r['change']]})" if r["change"] else ""))
+    return {"name": a.profile, "version": doc.profiles[a.profile].version, "digest": P.digest(doc, a.profile),
+            "ours": [OURS_CHANGES[x] for x in ours], "seeded": "seeded" in ours or sends_seed(ARMS[a.arm]),
+            "args": ["--no-enable-prefix-caching"] if "prefix-cache-off" in ours else []}
+
+
+def profile_plan(profile: str, model_id: str, feature: str | None, find_load: bool) -> dict[str, str]:
+    """What run.sh serves for ``--profile``, as its variables: ``--find-load``, stock alone over the ladder
+    (`SESSIONS_LADDER`, `LADDER` up to the profile's prompts) in one lifetime of `FIND_REPS` reps; ``--feature``, stock
+    and the feature at the profile's one load in `FEATURE_LIFETIMES` lifetimes of `FEATURE_REPS` reps, the feature with
+    the changes on our side its refusals need (``OURS``), and no arm at all where a refusal has none; and the minutes
+    the job plans its passes within, the model's (``CAP_MIN``)."""
+    P, doc = profile_doc(profile, model_id)
+    if (feature is None) == (not find_load):
+        raise SystemExit(f"--profile {profile} takes --feature ARM or --find-load, one of them")
+    stock, load = profile_stock(profile, model_id), profile_load(profile, model_id)
+    plan = {"STOCK": stock, "OURS": "", "CAP_MIN": str(doc.models[model_id].cap_minutes)}
+    if find_load:
+        prompts = doc.profiles[profile].prompts
+        ladder = SESSIONS_LADDER if LOADS[load].sessions else tuple(c for c in LADDER if c <= prompts)
+        return plan | {"ARMS": stock, "LOADS": f"{load}={'+'.join(map(str, ladder))}", "REPS": str(FIND_REPS),
+                       "LIFETIMES": "1"}
+    if feature not in profile_features(stock):
+        raise SystemExit(f"--feature {feature}: one arm of ours over {stock}, {model_id}'s stock under the profiles: "
+                         f"{', '.join(profile_features(stock))}")
+    try:
+        point = P.load_point(doc, profile, model_id)
+    except P.ConfigError:
+        raise SystemExit(f"--profile {profile} on {model_id}: the load is {P.NOT_FOUND}: run --find-load first and "
+                         f"write the line it prints into {P.PATH.name}") from None
+    refused = refusals(feature)
+    changes = sorted({r["change"] for r in refused if r["change"]}, key=list(OURS_CHANGES).index)
+    can = all(r["change"] for r in refused)
+    return plan | {"ARMS": f"{stock} {feature}" if can else "", "LOADS": f"{load}={point}", "REPS": str(FEATURE_REPS),
+                   "LIFETIMES": str(FEATURE_LIFETIMES), "OURS": ",".join(changes) if can else ""}
+
+
+def side_lines(by: dict[int, dict], reps: list[int]) -> dict:
+    """One side's figures at the profile's load over ``reps``: its output tokens a second (the mean), its time to first
+    token and time per output token, median and P99, each the median over the reps of a pass's own, and the requests
+    within the profile's bounds out of those it sent."""
+    def mid(key: str) -> float | None:
+        xs = [by[k][key] for k in reps if by[k].get(key) is not None]
+        return statistics.median(xs) if xs else None
+
+    met, sent = sum(by[k].get("met") or 0 for k in reps), sum(by[k].get("sent") or 0 for k in reps)
+    return {"output_tok_per_s": statistics.fmean(by[k].get("output_tok_per_s") or 0.0 for k in reps) if reps else None,
+            **{k: mid(k) for k in ("ttft_p50_s", "ttft_p99_s", "tpot_p50_s", "tpot_p99_s")},
+            "met": met, "sent": sent, "within": met / sent if sent else None}
+
+
+def three_lines(stock: dict, ours: dict, load: str, point: int, cap: str | None) -> dict:
+    """The result's three lines for ``ours`` beside ``stock`` at ``load``'s ``point``: (a) output tokens a second at
+    full load, stock's over ours less one, the median of the paired ratios with the kit's interval (`serving_cost`),
+    ``cannot tell`` where that interval widened by the noise floor (stock's own lifetimes, `own_noise`) holds zero, or
+    there is no interval (fewer than six paired reps) or no floor, or ``cap`` stopped a side; (b) time to first token
+    and time per output token, median and P99, ours beside stock; (c) the share of requests within the profile's
+    bounds, each side's. A side not served has no rep."""
+    stock, ours = (x if x else {"loads": {}} for x in (stock, ours))
+    c = serving_cost(stock, ours, load, point)
+    a, b = bench_rungs(stock, load).get(point, []), bench_rungs(ours, load).get(point, [])
+    ra, rb = {r["rep"]: r for r in a}, {r["rep"]: r for r in b}
+    reps = sorted(set(ra) & set(rb))
+    noise = own_noise(ra)
+    floor = abs(noise["value"]) if noise and noise.get("value") is not None else None
+    why = (cap or ("no rep of the two sides pairs" if c is None else
+                   f"{c['reps']} paired reps, fewer than six, give no interval" if "ci95" not in c else
+                   "stock has no noise floor (fewer than two lifetimes)" if floor is None else None))
+    if why is None:
+        lo, hi = c["ci95"]
+        said = "ours slower" if lo - floor > 0 else "ours faster" if hi + floor < 0 else "cannot tell"
+        why = None if said != "cannot tell" else "the interval widened by the noise floor holds zero"
+    else:
+        said = "cannot tell"
+    return {"throughput": {"value": c and c["value"], "ci95": c and c.get("ci95"), "reps": len(reps), "floor": floor,
+                           "verdict": said, "why": why},
+            "latency": {"ours": {k: v for k, v in side_lines(rb, reps).items() if "_s" in k},
+                        "stock": {k: v for k, v in side_lines(ra, reps).items() if "_s" in k}},
+            "within": {side: {k: v for k, v in side_lines(by, reps).items() if k in ("met", "sent", "within")}
+                       for side, by in (("ours", rb), ("stock", ra))}}
+
+
+def _ms(x: float | None) -> str:
+    return "—" if x is None else f"{x * 1e3:.1f} ms"
+
+
+def lines_text(r: dict, bounds: str) -> list[str]:
+    """The three lines in words, numbered in their order."""
+    t, lat, w = r["throughput"], r["latency"], r["within"]
+    ci = f" [{t['ci95'][0]:+.1%}, {t['ci95'][1]:+.1%}]" if t["ci95"] else ""
+    floor = "no noise floor" if t["floor"] is None else f"noise floor ±{t['floor']:.1%} (stock's two lifetimes)"
+    return ["1. output tokens a second at full load, stock's over ours less one: "
+            + ("—" if t["value"] is None else f"{t['value']:+.1%}{ci}")
+            + f" (median of {t['reps']} paired ratios, the kit's 95% interval); {floor}: {t['verdict']}"
+            + (f" ({t['why']})" if t["why"] else ""),
+            "2. time to first token, median / P99: ours " + " / ".join(_ms(lat["ours"][k]) for k in ("ttft_p50_s", "ttft_p99_s"))
+            + ", stock " + " / ".join(_ms(lat["stock"][k]) for k in ("ttft_p50_s", "ttft_p99_s"))
+            + "; time per output token, median / P99: ours "
+            + " / ".join(_ms(lat["ours"][k]) for k in ("tpot_p50_s", "tpot_p99_s"))
+            + ", stock " + " / ".join(_ms(lat["stock"][k]) for k in ("tpot_p50_s", "tpot_p99_s")),
+            f"3. within the bounds ({bounds}): "
+            + ", ".join(f"{side} " + ("—" if w[side]["within"] is None else f"{w[side]['within']:.1%}")
+                        + f" of {w[side]['sent']} requests" for side in ("ours", "stock"))]
+
+
+def profile_tail(P: object, doc: object, profile: str, model_id: str, served: list[dict]) -> dict:
+    """What the result says after its three lines: the profile's name, version and digest, the model and whether its
+    result is a quick check, the vLLM pin and the vLLM each arm served, and the differences from the published
+    command that apply to the profile and the model."""
+    m = doc.models[model_id]
+    return {"profile": profile, "version": doc.profiles[profile].version, "digest": P.digest(doc, profile),
+            "model": f"{m.repository}@{m.revision}", "model_id": model_id, "quick_check": m.quick_check,
+            "vllm": doc.vllm, "served_vllm": sorted({a.get("vllm") or "unknown" for a in served}),
+            "differences": [{"command": d.command, "profile": d.profile, "why": d.why} for d in doc.differences
+                            if (not d.profiles or profile in d.profiles) and (not d.models or model_id in d.models)]}
+
+
+def tail_text(r: dict) -> list[str]:
+    return [f"profile {r['profile']} v{r['version']} (digest {r['digest'][:12]}), model {r['model_id']} ({r['model']})"
+            + (", a quick check" if r["quick_check"] else ""),
+            f"vLLM pin {r['vllm']}; served {', '.join(r['served_vllm'])}",
+            *(["differences that apply:"] + [f"  {d['command']} -> {d['profile']}: {d['why']}" for d in r["differences"]]
+              if r["differences"] else [])]
+
+
+def bounds_text(doc: object, profile: str) -> str:
+    said = {"first_token": f"first token within {doc.bounds.first_token_s:g} s",
+            "token": f"each token within {doc.bounds.token_s * 1e3:g} ms"}
+    return " and ".join(said[b] for b in doc.profiles[profile].within)
+
+
+def profile_result(dirs: list[Path], profile: str, model_id: str, feature: str | None, find_load: bool,
+                   out: Path | None = None) -> tuple[int, dict, str]:
+    """A profile's job's result from its arms' directories, written to OUT/serving_profile.{json,txt} with
+    ``--feature`` or OUT/find_load.{json,txt} with ``--find-load``: its exit status (1 where the feature cannot run, as
+    run.sh's job exits 1 for an arm whose run refuses it, the result written all the same), the result and its
+    text."""
+    P, doc = profile_doc(profile, model_id)
+    stock, load = profile_stock(profile, model_id), profile_load(profile, model_id)
+    metas = [json.loads((d / "meta.json").read_text()) for d in dirs]
+    by = joined([arm_metrics(d) for d in dirs])
+    stopped = [f"{m['arm']} stopped before {m['stopped']['before']} rep {m['stopped']['rep']}" for m in metas
+               if m.get("stopped")]
+    cap = (f"the job's {doc.models[model_id].cap_minutes} minutes ran out: " + "; ".join(stopped)) if stopped else None
+    if find_load:
+        r, text = find_load_result(P, doc, profile, model_id, by.get(stock), load, cap)
+        name = "find_load"
+        rc = 0
+    else:
+        point = P.load_point(doc, profile, model_id)
+        refused = refusals(feature)
+        if refused:
+            changes = [r["change"] for r in refused]
+            r = {"cannot_run": refused}
+            text = [f"1. cannot run: {x['words']} (arm {feature} refuses {x['piece']}, which the profile has on)"
+                    for x in refused]
+            if all(changes):
+                labels = [OURS_CHANGES[x] for x in changes]
+                second = three_lines(by.get(stock), by.get(feature), load, point, cap)
+                r["second"] = {"ours": labels, **second}
+                text += [f"the second line, the same prompts with on our side alone {', '.join(labels)} "
+                         "(stock unchanged):", *(f"  {x}" for x in lines_text(second, bounds_text(doc, profile)))]
+            else:
+                text += ["no second line: no change on our side alone lets the profile's prompts through"]
+            rc = 1
+        else:
+            r = three_lines(by.get(stock), by.get(feature), load, point, cap)
+            text = lines_text(r, bounds_text(doc, profile))
+            rc = 0
+        r |= {"feature": feature, "stock": stock, "load": load, "point": point}
+        text += [f"{feature} beside {stock} at {load}, {point} {'users' if LOADS[load].sessions else 'in flight'}, "
+                 f"{FEATURE_LIFETIMES} lifetimes of {FEATURE_REPS} reps each"]
+        name = "serving_profile"
+    r |= profile_tail(P, doc, profile, model_id, [by[a] for a in by])
+    text += tail_text(r)
+    if out is not None:
+        out.mkdir(parents=True, exist_ok=True)
+        (out / f"{name}.json").write_text(json.dumps(r, indent=1))
+        (out / f"{name}.txt").write_text("\n".join(text) + "\n")
+    return rc, r, "\n".join(text)
+
+
+def find_load_result(P: object, doc: object, profile: str, model_id: str, ref: dict | None, load: str,
+                     cap: str | None) -> tuple[dict, list[str]]:
+    """``--find-load``'s result: stock's output tokens a second at each rung it served, and where they stop rising (the
+    rung of the most, `peak`, with a rung served above it): the line of `benchmarks/production.toml` that names it,
+    the profile's version raised by one, and the digest the pin test then holds (`profiles.digest` of the file with
+    that line). Where stock still rises at its highest rung served it cannot tell, and prints no line. It edits no
+    file."""
+    rungs = bench_rungs(ref, load) if ref else {}
+    each = {c: statistics.fmean(r.get("output_tok_per_s") or 0.0 for r in rungs[c]) for c in sorted(rungs)}
+    key = "users" if doc.profiles[profile].users else "in_flight"
+    r: dict = {"load": load, "key": key, "output_tok_per_s": {str(c): v for c, v in each.items()}, "cap": cap}
+    text = [f"{model_id} stock at {load}: " + ", ".join(f"{c} {key.replace('_', ' ')} {v:.0f} tok/s"
+                                                         for c, v in each.items())]
+    if not rungs:
+        return r | {"verdict": "cannot tell", "why": cap or "stock served no rung"}, text + ["cannot tell: no rung served"]
+    top = peak(ref, load, 0)[0]
+    if top == max(rungs):
+        why = f"stock still rises at its highest rung served ({top})" + (f"; {cap}" if cap else "")
+        return r | {"verdict": "cannot tell", "why": why}, text + [f"cannot tell: {why}: no line"]
+    old = doc.profiles[profile]
+    new = replace(old, **{key: MappingProxyType({**getattr(old, key), model_id: top})})
+    digest = P.digest(replace(doc, profiles=MappingProxyType({**doc.profiles, profile: new})), profile)
+    line = f"{model_id} = {top}"
+    r |= {"verdict": "saturated", "peak": top, "line": line, "table": f"profiles.{profile}.{key}",
+          "raise_version": old.version + 1, "pin": [old.version + 1, digest]}
+    return r, text + [f"saturated: output tokens a second stop rising at {top} ({'+'.join(map(str, each))} served)",
+                      f"in {P.PATH.relative_to(ROOT)}, under [profiles.{profile}.{key}]: {line}",
+                      f"and under [profiles.{profile}]: version = {old.version + 1} (from {old.version})",
+                      f"in tests/benchmarks/harness/test_profiles.py, PINS: \"{profile}\": ({old.version + 1}, "
+                      f"\"{digest}\"),"]
+
+
 def parse_stop_at(text: str | None) -> float | None:
     """``--stop-at``: a time with its zone, as ``2030-01-01T00:00:00Z``, in seconds since the epoch."""
     if text is None:
@@ -4231,6 +4616,12 @@ def main(argv: list[str] | None = None) -> int:
                    "--FLAG=VALUE, given as --published-args=--FLAG=VALUE,... (no other arm's line takes them)")
     r.add_argument("--max-model-len", type=context_arg, help="the engines' context limit, a number of tokens or auto "
                    "(default: BASE_ARGS's)")
+    r.add_argument("--profile", choices=tuple(PROFILE),
+                   help="serve as benchmarks/production.toml's profile does: its stock launch, its load at --loads' "
+                        "rungs, no sampling flag (the model's generation_config) and its output lengths (profile_run)")
+    r.add_argument("--ours", metavar="CHANGE,...",
+                   help=f"under --profile, changes on our side alone where the arm refuses the profile: "
+                        f"{', '.join(f'{k} ({v})' for k, v in OURS_CHANGES.items())}")
     r.add_argument("--edges-s", metavar="S,S,...", help="the restore arms' edges, seconds after the first load's first request")
     r.add_argument("--edges-every-s", type=float, metavar="S", help="an edge each S seconds of each load's serving instead")
     r.add_argument("--save-kv", metavar="K,...", help="the edges whose KV bytes and state a restore arm keeps "
@@ -4289,6 +4680,16 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("arm", type=Path, metavar="ARM_DIR")
     f.add_argument("--budget-s", type=float, required=True)
     f.add_argument("--reps", type=int, required=True)
+    pr = sub.add_parser("profile", help="a profile's job (run.sh --profile): `plan`, what it serves, as run.sh's "
+                                        "variables, before any GPU is held; `result`, its result from the arms' "
+                                        "directories")
+    pr.add_argument("step", choices=("plan", "result"))
+    pr.add_argument("dirs", nargs="*", type=Path)
+    pr.add_argument("--profile", required=True, choices=tuple(PROFILE))
+    pr.add_argument("--model-id", required=True, choices=sorted(MODELS))
+    pr.add_argument("--feature", metavar="ARM", help="one arm of ours beside stock at the profile's load")
+    pr.add_argument("--find-load", action="store_true", help="stock alone over the ladder: where it saturates")
+    pr.add_argument("--out", type=Path, help="result: write serving_profile.* or find_load.* there")
     c = sub.add_parser("checkpoint", help="the model's pinned snapshot under HF_HOME")
     c.add_argument("--model-id", required=True, choices=sorted(MODELS))
     c = sub.add_parser("standin", help="a stand-in's checkpoint directory: its cut config and the model's tokenizer")
@@ -4314,6 +4715,14 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "checkpoint":
         print(MODELS[a.model_id].checkpoint())
         return 0
+    if a.cmd == "profile":
+        if a.step == "plan":
+            plan = profile_plan(a.profile, a.model_id, a.feature, a.find_load)
+            print("\n".join(f"{k}={shlex.quote(v)}" for k, v in plan.items()))
+            return 0
+        rc, _, text = profile_result(a.dirs, a.profile, a.model_id, a.feature, a.find_load, a.out)
+        print(text)
+        return rc
     if a.cmd == "standin":
         return standin(MODELS[a.model_id], Path(a.tokenizer_from), Path(a.out))
     if a.cmd == "plan":
