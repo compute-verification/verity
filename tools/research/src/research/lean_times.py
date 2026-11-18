@@ -98,7 +98,8 @@ def reports(paths: list[str], read: Callable[[str], bytes]) -> list[dict]:
     for p in sorted(p for p in paths if AUDIT_JSON.match(p)):
         try:
             doc = json.loads(read(p))
-        except ValueError:
+        except ValueError as e:
+            print(f"research lean-times: {p} is not JSON ({e}): its package reports are left out", file=sys.stderr)
             continue
         for r in (doc.get("packages") or []) if isinstance(doc, dict) else []:
             if isinstance(r, dict) and isinstance(r.get("seconds"), dict):
