@@ -1,0 +1,1 @@
+lean/WIRED scratch notes: never merged anywhere. scratch/ holds the scripts the served-class rounds run; posts/ the TOP-441 posts.
