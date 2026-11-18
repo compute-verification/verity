@@ -507,16 +507,185 @@ def rowWordsIx (tm : Std.HashMap String Template) (cm : Std.HashMap String (List
     | none => 0
   | none => 0
 
-/-- `ranksIn` over the order's ranges by template, with their ranks (`groupBy`). -/
-def ranksInIx (g : Std.HashMap String (List (UnitRange × Nat))) (t : String) (lo hi : Nat) : List Nat :=
-  ((g.getD t []).filter fun ((s, p0, n), _) => s == t && decide (max p0 lo < min (p0 + n) hi)).map (·.2)
+/-- The least `k` in `[lo, hi)` at which `f` holds, by halving, else `hi`: where `f` is monotone, `f` fails below it. -/
+def lowerBound (f : Nat → Bool) (lo hi : Nat) : Nat :=
+  if lo < hi then
+    if f ((lo + hi) / 2) then lowerBound f lo ((lo + hi) / 2) else lowerBound f ((lo + hi) / 2 + 1) hi
+  else lo
+termination_by hi - lo
 
-/-- `orderedWire` over the order's ranges by template: only the reader's ranges, and in each only the writer's. -/
-def orderedWireIx (g : Std.HashMap String (List (UnitRange × Nat))) (w : Wire) : Bool :=
-  (g.getD w.reader []).all fun (b, a) =>
-    !w.readsIn b ||
-      let s := w.box (w.indicesIn b.2.1 b.2.2).1 (w.indicesIn b.2.1 b.2.2).2
-      (ranksInIx g w.writer s.1.toNat (s.2.toNat + 1)).all (· < a)
+theorem lowerBound_false {f : Nat → Bool} (hm : ∀ k m, k ≤ m → f k = true → f m = true) (lo hi : Nat) :
+    ∀ k, lo ≤ k → k < lowerBound f lo hi → f k = false := by
+  induction lo, hi using lowerBound.induct f with
+  | case1 lo hi h hf ih =>
+    intro k hk hlt
+    rw [lowerBound] at hlt; simp only [h, hf, ↓reduceIte] at hlt
+    exact ih k hk hlt
+  | case2 lo hi h hf ih =>
+    intro k hk hlt
+    rw [lowerBound] at hlt; simp only [h, hf, ↓reduceIte] at hlt
+    by_cases hk' : (lo + hi) / 2 + 1 ≤ k
+    · exact ih k hk' hlt
+    · cases hfk : f k
+      · rfl
+      · exact absurd (hm k _ (by omega) hfk) hf
+  | case3 lo hi h =>
+    intro k hk hlt
+    rw [lowerBound] at hlt; simp only [h, ↓reduceIte] at hlt
+    omega
+
+/-- Units `[p0, p0 + n)` of a range meet units `[lo, hi)`. -/
+def meetR (lo hi : Nat) (x : UnitRange × Nat) : Bool := decide (max x.1.2.1 lo < min (x.1.2.1 + x.1.2.2) hi)
+
+/-- Each range ends where the next starts. -/
+def contiguous : List (UnitRange × Nat) → Bool
+  | x :: y :: l => y.1.2.1 == x.1.2.1 + x.1.2.2 && contiguous (y :: l)
+  | _ => true
+
+/-- A template's ranges with their ranks, sorted by first unit, and whether they are contiguous. -/
+def orderEntry (l : List (UnitRange × Nat)) : Array (UnitRange × Nat) × Bool :=
+  let s := l.mergeSort fun x y => x.1.2.1 ≤ y.1.2.1
+  (s.toArray, contiguous s)
+
+/-- Range `k` of `A` ends past unit `lo`, or `k` is past `A`'s end. -/
+def endsPast (A : Array (UnitRange × Nat)) (lo k : Nat) : Bool :=
+  if h : k < A.size then decide (lo < A[k].1.2.1 + A[k].1.2.2) else true
+
+/-- From index `k`, the ranges starting below `hi` that meet `[lo, hi)`. -/
+def scanFrom (A : Array (UnitRange × Nat)) (lo hi k : Nat) : List (UnitRange × Nat) :=
+  if h : k < A.size then
+    if A[k].1.2.1 < hi then
+      if meetR lo hi A[k] then A[k] :: scanFrom A lo hi (k + 1) else scanFrom A lo hi (k + 1)
+    else []
+  else []
+termination_by A.size - k
+
+/-- The entry's ranges meeting `[lo, hi)`: on contiguous ranges from the first ending past `lo` (`lowerBound`) to the
+first starting at `hi`, else all of them filtered. -/
+def meetsIn (e : Array (UnitRange × Nat) × Bool) (lo hi : Nat) : List (UnitRange × Nat) :=
+  if e.2 then
+    scanFrom e.1 lo hi (lowerBound (endsPast e.1 lo) 0 e.1.size)
+  else e.1.toList.filter (meetR lo hi)
+
+private theorem scanFrom_sound (A : Array (UnitRange × Nat)) (lo hi : Nat) :
+    ∀ k x, x ∈ scanFrom A lo hi k → x ∈ A.toList ∧ meetR lo hi x = true := by
+  intro k
+  induction k using scanFrom.induct A lo hi with
+  | case1 k h hp hmt ih =>
+    intro x hx
+    rw [scanFrom] at hx; simp only [h, hp, hmt, ↓reduceIte, ↓reduceDIte] at hx
+    rcases List.mem_cons.1 hx with e | e
+    · exact e ▸ ⟨Array.getElem_mem_toList h, hmt⟩
+    · exact ih x e
+  | case2 k h hp hmt ih =>
+    intro x hx
+    rw [scanFrom] at hx; simp only [h, hp, hmt, ↓reduceIte, ↓reduceDIte] at hx
+    exact ih x hx
+  | case3 k h hp =>
+    intro x hx
+    rw [scanFrom] at hx; simp only [h, hp, ↓reduceIte, ↓reduceDIte] at hx
+    cases hx
+  | case4 k h =>
+    intro x hx
+    rw [scanFrom] at hx; simp only [h, ↓reduceDIte] at hx
+    cases hx
+
+private theorem scanFrom_complete (A : Array (UnitRange × Nat)) (lo hi j : Nat) (hj : j < A.size)
+    (hmt : meetR lo hi A[j] = true) :
+    ∀ k, k ≤ j → (∀ m (hm : m < A.size), k ≤ m → m ≤ j → A[m].1.2.1 < hi) → A[j] ∈ scanFrom A lo hi k := by
+  intro k
+  induction k using scanFrom.induct A lo hi with
+  | case1 k h hp hm' ih =>
+    intro hk hb
+    rw [scanFrom]; simp only [h, hp, hm', ↓reduceIte, ↓reduceDIte]
+    by_cases e : k = j
+    · subst e; exact List.mem_cons_self ..
+    · exact List.mem_cons_of_mem _ (ih (by omega) fun m hm h1 h2 => hb m hm (by omega) h2)
+  | case2 k h hp hm' ih =>
+    intro hk hb
+    rw [scanFrom]; simp only [h, hp, hm', ↓reduceIte, ↓reduceDIte]
+    by_cases e : k = j
+    · subst e; exact absurd hmt hm'
+    · exact ih (by omega) fun m hm h1 h2 => hb m hm (by omega) h2
+  | case3 k h hp =>
+    intro hk hb
+    exact absurd (hb k h (Nat.le_refl _) hk) hp
+  | case4 k h =>
+    intro hk _
+    omega
+
+private theorem contiguous_pairwise : ∀ s : List (UnitRange × Nat), contiguous s = true →
+    s.Pairwise fun x y => x.1.2.1 + x.1.2.2 ≤ y.1.2.1
+  | [], _ => .nil
+  | [_], _ => List.pairwise_singleton _ _
+  | x :: y :: l, h => by
+    simp only [contiguous, Bool.and_eq_true, beq_iff_eq] at h
+    have ih := contiguous_pairwise (y :: l) h.2
+    refine List.pairwise_cons.2 ⟨fun z hz => ?_, ih⟩
+    rcases List.mem_cons.1 hz with e | e
+    · subst e; omega
+    · have := (List.pairwise_cons.1 ih).1 z e; omega
+
+private theorem mem_meetsIn_of (l s : List (UnitRange × Nat)) (hperm : s.Perm l) (lo hi : Nat) (x : UnitRange × Nat) :
+    x ∈ meetsIn (s.toArray, contiguous s) lo hi ↔ x ∈ l ∧ meetR lo hi x = true := by
+  simp only [meetsIn]
+  by_cases hc : contiguous s = true
+  · simp only [hc, ↓reduceIte]
+    have hp := contiguous_pairwise s hc
+    constructor
+    · intro hx
+      have := scanFrom_sound s.toArray lo hi _ x hx
+      exact ⟨hperm.mem_iff.1 (by simpa using this.1), this.2⟩
+    · rintro ⟨hx, hmt⟩
+      obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem (hperm.mem_iff.2 hx)
+      have hj' : j < s.toArray.size := by simpa using hj
+      have hpw := List.pairwise_iff_getElem.1 hp
+      have hmono : ∀ k m, k ≤ m → endsPast s.toArray lo k = true →
+          endsPast s.toArray lo m = true := by
+        intro k m hkm hk
+        simp only [endsPast] at hk ⊢
+        by_cases hm : m < s.toArray.size
+        · simp only [hm, ↓reduceDIte]
+          simp only [show k < s.toArray.size by omega, ↓reduceDIte] at hk
+          simp only [decide_eq_true_eq, List.getElem_toArray] at hk ⊢
+          rcases Nat.lt_or_eq_of_le hkm with hlt | e
+          · have := hpw k m (by simpa using (show k < s.toArray.size by omega)) (by simpa using hm) hlt
+            omega
+          · subst e; exact hk
+        · simp only [hm, ↓reduceDIte]
+      have hfj : endsPast s.toArray lo j = true := by
+        simp only [meetR, decide_eq_true_eq] at hmt
+        simp only [endsPast, hj', ↓reduceDIte, decide_eq_true_eq, List.getElem_toArray]
+        omega
+      have hge : lowerBound (endsPast s.toArray lo) 0 s.toArray.size ≤ j := by
+        refine Nat.le_of_not_lt fun hlt => ?_
+        have := lowerBound_false hmono 0 s.toArray.size j (Nat.zero_le _) hlt
+        rw [hfj] at this; cases this
+      have hmt' : meetR lo hi s.toArray[j] = true := by simpa using hmt
+      have := scanFrom_complete s.toArray lo hi j hj' hmt' _ hge (fun m hm _ hmj => by
+        simp only [meetR, decide_eq_true_eq] at hmt
+        simp only [List.getElem_toArray]
+        rcases Nat.lt_or_eq_of_le hmj with hlt | e
+        · have := hpw m j (by simpa using hm) hj hlt; omega
+        · subst e; omega)
+      simpa using this
+  · simp only [hc, Bool.false_eq_true, ↓reduceIte, List.mem_filter]
+    rw [hperm.mem_iff]
+
+theorem mem_meetsIn (l : List (UnitRange × Nat)) (lo hi : Nat) (x : UnitRange × Nat) :
+    x ∈ meetsIn (orderEntry l) lo hi ↔ x ∈ l ∧ meetR lo hi x = true :=
+  mem_meetsIn_of l _ (List.mergeSort_perm l _) lo hi x
+
+/-- The order's ranges with their ranks, by template, each template's as `orderEntry`. -/
+def orderIndex (o : List UnitRange) : Std.HashMap String (Array (UnitRange × Nat) × Bool) :=
+  (groupBy (·.1.1) o.zipIdx).map fun _ l => orderEntry l
+
+/-- `orderedWire` over `orderIndex`: only the reader's ranges meeting its reader units, and for each only the writer's
+meeting the bounds, each found by `meetsIn`. -/
+def orderedWireBin (ix : Std.HashMap String (Array (UnitRange × Nat) × Bool)) (w : Wire) : Bool :=
+  (meetsIn (ix.getD w.reader (orderEntry [])) w.start (w.start + w.readerUnits)).all fun (b, a) =>
+    let s := w.box (w.indicesIn b.2.1 b.2.2).1 (w.indicesIn b.2.1 b.2.2).2
+    (meetsIn (ix.getD w.writer (orderEntry [])) s.1.toNat (s.2.toNat + 1)).all (·.2 < a)
 
 /-- `check` with the templates, the cuts and the order's ranges by template found once: the code compiled in its place
 (`check_eq_fast`), in work `O(W log W)` beside each wire's ranges of its reader and writer. -/
@@ -531,8 +700,8 @@ def checkFast (c : Wiring) : Except Refusal Summary :=
       else match (match orderOf c with
           | .error r => some r
           | .ok o =>
-            let g := groupBy (·.1.1) o.zipIdx
-            firstWire c fun w => if orderedWireIx g w then none else some .order) with
+            let ix := orderIndex o
+            firstWire c fun w => if orderedWireBin ix w then none else some .order) with
         | some r => .error r
         | none => .ok ⟨c.wires, c.wires.map (rowWordsIx tm cm)⟩
 
@@ -545,39 +714,38 @@ private theorem wireCodeIx_eq (c : Wiring) : wireCodeIx (mapOf c.templates) (map
 private theorem rowWordsIx_eq (c : Wiring) : rowWordsIx (mapOf c.templates) (mapOf c.cuts) = rowWords c := by
   funext w; simp only [rowWordsIx, rowWords, mapOf_get?, cutsOfIx_eq]
 
-private theorem ranksInIx_eq (o : List UnitRange) (t : String) (lo hi : Nat) :
-    ranksInIx (groupBy (·.1.1) o.zipIdx) t lo hi = ranksIn o t lo hi := by
-  simp only [ranksInIx, ranksIn, groupBy_getD, List.filter_filter]
-  congr 1
-  apply List.filter_congr
-  intro ⟨⟨s, p0, n⟩, a⟩ _
-  by_cases h : s = t <;> simp [h]
+private theorem orderIndex_getD (o : List UnitRange) (t : String) :
+    (orderIndex o).getD t (orderEntry []) = orderEntry (o.zipIdx.filter (·.1.1 == t)) := by
+  rw [orderIndex, Std.HashMap.getD_map, ← groupBy_getD, Std.HashMap.getD_eq_getD_getElem?]
+  cases (groupBy (·.1.1) o.zipIdx)[t]? <;> rfl
 
-private theorem orderedWireIx_eq (o : List UnitRange) (w : Wire) :
-    orderedWireIx (groupBy (·.1.1) o.zipIdx) w = orderedWire o w := by
-  simp only [orderedWireIx, orderedWire, ranksInIx_eq, groupBy_getD]
+private theorem orderedWireBin_eq (o : List UnitRange) (w : Wire) :
+    orderedWireBin (orderIndex o) w = orderedWire o w := by
+  simp only [orderedWireBin, orderedWire, ranksIn, orderIndex_getD]
   rw [Bool.eq_iff_iff]
-  simp only [List.all_eq_true, List.mem_filter]
+  simp only [List.all_eq_true, mem_meetsIn, List.mem_filter, List.mem_map, Bool.or_eq_true, Bool.not_eq_true',
+    decide_eq_true_eq, forall_exists_index, and_imp, beq_iff_eq, meetR, Circuits.Wire.readsIn, Bool.and_eq_true,
+    Bool.and_eq_false_imp, Prod.forall]
   constructor
-  · intro h x hx
-    by_cases hr : (x.1.1 == w.reader) = true
-    · exact h x ⟨hx, hr⟩
-    · have : w.readsIn x.1 = false := by simp [Circuits.Wire.readsIn, hr]
-      simp [this]
-  · intro h x hx
-    exact h x hx.1
+  · intro h t p0 n a hx
+    by_cases hr : t = w.reader ∧ max p0 w.start < min (p0 + n) (w.start + w.readerUnits)
+    · exact Or.inr fun x t' p n' r hy ht hm hx' => hx' ▸ h t p0 n a hx hr.1 hr.2 t' p n' r hy ht hm
+    · exact Or.inl fun ht => decide_eq_false fun hm => hr ⟨ht, hm⟩
+  · intro h t p0 n a hx ht hm t' p n' r hy ht' hm'
+    rcases h t p0 n a hx with h1 | h1
+    · exact absurd (h1 ht) (by simp [hm])
+    · exact h1 r t' p n' r hy ht' hm' rfl
 
 @[csimp] theorem check_eq_fast : @check = @checkFast := by
   funext c
   have ho : (match orderOf c with
       | .error r => some r
       | .ok o =>
-        let g := groupBy (·.1.1) o.zipIdx
-        firstWire c fun w => if orderedWireIx g w then none else some .order) = orderCode c orderedWire := by
+        let ix := orderIndex o
+        firstWire c fun w => if orderedWireBin ix w then none else some .order) = orderCode c orderedWire := by
     unfold orderCode
-    split <;> simp [orderedWireIx_eq]
+    split <;> simp [orderedWireBin_eq]
   simp only [check, checkFast, wireCodeIx_eq, rowWordsIx_eq, ho]
-  rfl
 
 /-- The writer `(template, unit, out, offset)` of reader row `(tid, u, port, row)`, by the wires alone: the reader row is
 that unit's row `out` from its word `offset` (`Wire.offsetAt`); none when no wire covers it. -/
