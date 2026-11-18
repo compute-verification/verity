@@ -271,6 +271,7 @@
   "Proofs.Properties.Verity.SampledTwo.CoinMapDistribution",
   "Proofs.Properties.Verity.SampledTwo.CoinStages",
   "Proofs.Properties.Verity.SampledTwo.CouplingOf",
+  "Proofs.Properties.Verity.SampledTwo.Instance",
   "Proofs.Properties.Verity.SampledTwo.Cover",
   "Proofs.Properties.Verity.SampledTwo.Cut",
   "Proofs.Properties.Verity.SampledTwo.CutHeld",

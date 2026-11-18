@@ -222,6 +222,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.SampledTwo.CouplingOf", "Proofs.Properties.Verity.Majority",
   "Proofs.Properties.Verity.SampledTwo.Majority", "Proofs.Properties.Verity.SampledTwo.Binding",
   "Proofs.Properties.Verity.SampledTwo.JoinElems", "Proofs.Properties.Verity.SampledTwo.Joined",
+  "Proofs.Properties.Verity.SampledTwo.Instance",
   "Proofs.Properties.Verity.SampledTwo.SessionDev", "Proofs.Properties.Verity.SampledTwo.SessionOpened",
   "Proofs.Properties.Verity.SampledTwo.SessionLogged", "Proofs.Properties.Verity.SampledTwo.SessionCut",
   "Proofs.Properties.Verity.SampledTwo.SessionTreeless", "Proofs.Properties.Verity.SampledTwo.GoodCase",
