@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import re
 import subprocess
@@ -67,6 +68,8 @@ _MOVED = ("import sys; sys.path.insert(0, sys.argv[1]); import restack as R\n"
 MOVED_RE = re.compile(r"^moved ([0-9a-f]{40,64})$", re.M)
 #: how long one move's script runs at most on one commit (`moved_tree`): a layout map on the whole tree, `uv lock` with it
 MOVED_TIMEOUT_S = 1800.0
+#: what a move's script writes on the move's base (`hand_tree`), by the clone, the move and the `restack.py` that ran it
+_ON_BASE: dict[tuple[str, str, str], tuple[str | None, str]] = {}
 
 
 @dataclass(frozen=True)
@@ -171,8 +174,12 @@ def moved_tree(repo: Path, commit: str, move: str, restack: Path, timeout: float
 def hand_tree(repo: Path, commit: str, move: str, restack: Path) -> tuple[str | None, str]:
     """(the tree `tools/move/restack.py` leaves once it brings onto ``commit`` (its rerun of ``move``) the change ``move`` made
     beside its script, its `hand` paths and the map it adds: the queue's merge of ``commit`` and ``move`` over what the
-    script writes on the move's base (`moved_tree`), as restack.py merges them, ''), or (None, why it couldn't)."""
-    tree, why = moved_tree(repo, "", move, restack)
+    script writes on the move's base (`moved_tree`, run once a move and `restack.py`), as restack.py merges them, ''), or
+    (None, why it couldn't)."""
+    key = (str(repo), move, hashlib.sha256((restack / "restack.py").read_bytes()).hexdigest())
+    if key not in _ON_BASE:
+        _ON_BASE[key] = moved_tree(repo, "", move, restack)
+    tree, why = _ON_BASE[key]
     if tree is None:
         return None, why
     if tree == Q._out(repo, "rev-parse", f"{move}^{{tree}}"):
