@@ -641,8 +641,9 @@ def test_a2u_issue_bound_and_uniform_price(tmp_path):
     assert edge["a2u_holds"] and 1 < edge["max_issue_low"] < 1 + a2.TOL
 
 
-def _h32_run(out: Path, s8_rate: float = 1 / 32, drop: str = "") -> Path:
-    """emp.sh time's output for h32.py: each class's least form at a known rate, and the forms beside it."""
+def _h32_run(out: Path, s8_rate: float = 1 / 32, drop: str = "", card: str | None = H200) -> Path:
+    """emp.sh time's output for h32.py: each class's least form at a known rate, and the forms beside it, on ``card``
+    (nvidia-smi's name in env/device.csv; none written for None)."""
     acc = {"s8": ("IGMMA.64x256x32.S8.S8*", 128), "e4m3": ("QGMMA.64x256x32.F32.E4M3.E4M3*", 128),
            "e5m2": ("QGMMA.64x256x32.F32.E5M2.E5M2*", 128), "e4m3f16": ("QGMMA.64x256x32.F16.E4M3.E4M3*", 64),
            "e5m2f16": ("QGMMA.64x256x32.F16.E5M2.E5M2*", 64), "f16": ("HGMMA.64x256x16.F32*", 128),
@@ -668,6 +669,9 @@ def _h32_run(out: Path, s8_rate: float = 1 / 32, drop: str = "") -> Path:
     for b in ("sm90_h32", "sm90_h32_tc"):
         (out / b).mkdir(parents=True, exist_ok=True)
         (out / b / "rows.jsonl").write_text("".join(json.dumps(ln) + "\n" for ln in lines if ln["binary"] == b))
+    if card is not None:
+        (out / "env").mkdir(exist_ok=True)
+        (out / "env" / "device.csv").write_text(f"name, uuid, compute_cap\n{card}, GPU-0, 9.0\n")
     return out
 
 
@@ -691,11 +695,11 @@ def test_h32_prices_each_class_and_writes_the_lean_table(tmp_path):
     assert t["fields"]["int32"]["probe"] == "x_iadd_r" and t["fields"]["tc"]["probe"] == "wa_b1_n256"
     assert t["co_issue"]["probe"] == "wu_dadd" and abs(t["co_issue"]["price"] - 16) < 1e-9
     assert t["h32"] and t["floor_tc"] == {"a": 32, "c": 32} and not t["missing"]
-    assert h.lean(t) == ("def h200Measured : Prices100 where\n  mac := nominalMac\n  tc := 32\n  ffma := 32\n"
+    assert h.lean(t, "h200") == ("def h200Measured : Prices100 where\n  mac := nominalMac\n  tc := 32\n  ffma := 32\n"
                          "  int32 := 32\n  fp64 := 32\n  other := 36\n")
     fast = h.table(h.read(_h32_run(tmp_path / "fast", s8_rate=1 / 31)))
     assert fast["mac"]["s8"]["mac"] == 0 and not fast["h32"] and fast["floor_tc"]["a"] == 0
-    assert "    | .s8 => 0\n    | .f16F32 => 2\n" in h.lean(fast)
+    assert "    | .s8 => 0\n    | .f16F32 => 2\n" in h.lean(fast, "h200")
     run = _h32_run(tmp_path / "partial", drop="x_dadd")
     part = h.table(h.read(run))
     assert part["missing"] == ["fp64"] and "h32" not in part
@@ -703,3 +707,30 @@ def test_h32_prices_each_class_and_writes_the_lean_table(tmp_path):
     bad = {"binary": "b", "probe": "p", "note": "c=ffma w=FMUL:1", "rates": {"0:FADD": 4.0}, "run": "r1", "tags": []}
     with pytest.raises(ValueError, match="FMUL"):
         h.price(bad)
+
+
+@pytest.mark.parametrize("card, short", [(H100, "h100"), (H200, "h200")])
+def test_h32_names_the_lean_table_for_the_card_the_run_opened(tmp_path, card, short):
+    """h32.py: the Lean table is named the run's card file's `short` and `Measured`, its card the one env/device.csv
+    names; the rest of what it writes is the same on either card."""
+    run = _h32_run(tmp_path / "run", card=card)
+    assert h.main([str(run), "--json", str(tmp_path / "t.json"), "--lean", str(tmp_path / "t.lean")]) == 0
+    assert (tmp_path / "t.lean").read_text().split("\n", 1)[0] == f"def {short}Measured : Prices100 where"
+    other = _h32_run(tmp_path / "other", card=H200 if card == H100 else H100)
+    assert h.main([str(other), "--json", str(tmp_path / "o.json"), "--lean", str(tmp_path / "o.lean")]) == 0
+    assert (tmp_path / "t.json").read_text() == (tmp_path / "o.json").read_text()
+    assert (tmp_path / "t.lean").read_text().split("\n", 1)[1] == (tmp_path / "o.lean").read_text().split("\n", 1)[1]
+
+
+def test_h32_refuses_a_run_naming_no_card_or_two_cards_together(tmp_path):
+    """h32.py refuses, writing nothing, a run whose output names no card, and runs of two cards handed together."""
+    lean = tmp_path / "t.lean"
+    bare = _h32_run(tmp_path / "bare", card=None)
+    with pytest.raises(SystemExit, match="names no one card"):
+        h.main([str(bare), "--lean", str(lean)])
+    a, b = _h32_run(tmp_path / "a", card=H100), _h32_run(tmp_path / "b", card=H200)
+    with pytest.raises(SystemExit, match="2 cards"):
+        h.main([str(a), str(b), "--lean", str(lean)])
+    assert not lean.exists()
+    with pytest.raises(SystemExit, match=re.escape(UNKNOWN)):
+        h.main([str(_h32_run(tmp_path / "unknown", card=UNKNOWN)), "--lean", str(lean)])

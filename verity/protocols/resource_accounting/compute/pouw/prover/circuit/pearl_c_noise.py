@@ -32,7 +32,9 @@ and a Boolean version (``_v2``) whose word view it is; on bits a byte is 8 bits,
 On bits each hash is one compression of its message from its label's midstate, a constant, written with
 `verity.commitments.gates.sha512`'s `compress_gadget`. A word gate returns one value, so a compression's word form is one
 gate a byte of one primitive, byte ``at`` of its value (``PearlCSeedBByte_v1`` and its like), each fed its index as a
-constant; no Boolean version computes one byte alone. That primitive's evaluator reads no table by index and keeps no memo,
+constant. No circuit computes one byte of a compression alone: that primitive's Boolean body (``PearlCSeedBByte_v2``) is
+the whole value's, the compression, then ``at``'s select of its byte, (n − 1) · 8 ANDs more, so the word form on bits
+counts its compression once a byte, where the Boolean version (``_v2``) counts it once. That primitive's evaluator reads no table by index and keeps no memo,
 so it declares none (`PrimitiveDefinition.tables`): a labelled hash is `hashlib`'s SHA-512 of the label's block and the
 message, and a compression from a given state, which `hashlib` does not give, is `_compress`, whose round constants are
 computed as FIPS 180-4 defines them. One written with `compress_ref` would reach SHA-512's round constants as a table.
@@ -54,7 +56,7 @@ from functools import lru_cache
 from typing import Callable
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, compress_columns, const_bits, multiply
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, compress_columns, const_bits, multiply, mux
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
 from verity.circuits.ops.boolean.scalar import f32_to_e4m3_sat
@@ -66,9 +68,9 @@ from verity.circuits.silicon import fp
 from verity.circuits.types import Array, Value
 from verity.commitments import rowleaf
 from verity.commitments.gates.sha512 import IV, compress_gadget, midstate, pad_tail
-from verity.circuits.ops.boolean.versions import sigma_lift
+from verity.circuits.ops.boolean.versions import catalog_loader, sigma_lift
 
-__all__ = ["BLOCK", "BYTES32", "BYTES64", "NORM_E", "NORM_F", "ROLES", "ROW_WORDS", "PearlCLineCode", "PearlCLineCodeV2", "PearlCLineCodes",
+__all__ = ["BLOCK", "BYTE_BODIES", "BYTES32", "BYTES64", "NORM_E", "NORM_F", "ROLES", "ROW_WORDS", "PearlCLineCode", "PearlCLineCodeV2", "PearlCLineCodes",
            "PearlCLineCodesV2", "PearlCLineInt", "PearlCLineIntV2", "PearlCLineKey", "PearlCLineKeyByte", "PearlCLineKeyV2",
            "PearlCLineNormRoot", "PearlCLineNormRootV2", "PearlCLineRaw", "PearlCLineRawByte", "PearlCLineRawV2",
            "PearlCLineScale", "PearlCLineScaleV2", "PearlCNoiseLine", "PearlCNoiseLineV2", "PearlCRowBlock", "PearlCRowBlockByte",
@@ -176,6 +178,17 @@ def _bytes(word: list) -> list[list]:
     return [word[i:i + 8] for i in range(0, len(word), 8)]
 
 
+#: each byte primitive's Boolean body, by the primitive's name
+BYTE_BODIES: dict[str, CompositeDefinition] = {}
+
+
+def _select(C, values: list[list], at: list) -> list:
+    """``values[at]``, ``at``'s bits least significant first: a tree of selects, a byte at each of its n − 1 nodes."""
+    for s in at:
+        values = [mux(C, s, values[i + 1], values[i]) for i in range(0, len(values), 2)]
+    return values[0]
+
+
 def _compression(name: str, params: tuple, n: int, value: Callable, value_bits: Callable, rule: str, reference: str,
                  on_bits: str) -> tuple[PrimitiveDefinition, CompositeDefinition, CompositeDefinition]:
     """A value of ``n`` bytes that SHA-512 compressions make of ``params``: (its byte primitive, its word form, its Boolean
@@ -195,6 +208,9 @@ def _compression(name: str, params: tuple, n: int, value: Callable, value_bits: 
                                doc=f"{rule}, its {n} bytes: `{reference}`.")
     bits = definition(name, 2, lambda C, *el: value_bits(C, el), tuple((p, BL.bit_type(t)) for p, t in params),
                       BL.bit_type(ret), word=bind(word), conformance=held, doc=f"{rule} on bits ({on_bits}): {name}_v1")
+    BYTE_BODIES[f"{name}Byte"] = definition(f"{name}Byte", 2, lambda C, *el: _select(C, value_bits(C, el[:-1]), el[-1]),
+        tuple((p, BL.bit_type(t)) for p, t in (*params, ("at", at_type))), BL.bit_type(U8), word=byte,
+        conformance="protocol-defined", doc=f"Byte ``at`` of {rule}, on bits: {name}_v2's gates, then ``at``'s select")
     return byte, word, bits
 
 
@@ -499,3 +515,12 @@ PearlCRowLineV2 = sigma_lift(PearlCRowLine, 2)
 #: gate besides: every AND of it is in one of them, and each is under that size with its lowering pinned
 UNITS = {"PearlCRowSeed_v2": ("PearlCRowSeedHead_v2", "PearlCRowSeedTail_v2"),
          "PearlCNoiseLine_v2": ("PearlCLineRaw_v2", "PearlCLineCodes_v2")}
+
+
+def _catalog() -> list[str]:
+    """Nothing to import: this module's Boolean Definitions are registered as it loads, and registering drops every lookup
+    made before."""
+    return []
+
+
+catalog_loader(_catalog)
