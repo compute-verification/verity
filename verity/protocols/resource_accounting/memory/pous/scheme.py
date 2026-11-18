@@ -21,7 +21,8 @@ whose row bounds the foreign bits a server may still hold after an accepted wipe
 block in the circuit and no adapter option. `Pous.SecurityProofs.StreamedWipe` is proved with no named assumption;
 onsite's soundness takes the wipe's target, `WipeSound`, as a premise. Its sides: over is the prior content's bits kept,
 under is zero. Its own term is unsaid: `Pous.Guarantees.StreamedWipe`'s compression term `k·C(N,g+1)·2^(M+E)/2^(q+(g+1)b)`
-and `Adv_PRF` depend on the run's parameters, which a term said as one number can't carry.
+has no Lean constant of its own (`StreamedWipe.bound` adds the sampling term `(g/N)^k`), and `Adv_PRF`
+(`StreamedWipe.prfAdvantage`) has no value, so no `Term` evaluates it.
 """
 
 from __future__ import annotations
@@ -74,6 +75,8 @@ POUS = register(Scheme(
         "one-design": "its own: `challenges` indices of C*'s blocks, uniform, revealed one at a time",
     },
     delta_scheme=Fraction(1, 2**128),
+    over="the credited store: ⌊ρ·|C|⌋ bits of C*, ρ = 18/19 (`Pous.Scheme.stateBound` at `Pous.Params.ρ`)",
+    under="the bits the device holds through the period, in bits",
     requests=_pous_requests,
     attach=_pous_attach,
 ))
@@ -86,6 +89,8 @@ WIPE = register(Scheme(
     assumptions=("Verity.Vocab.WipeSound", TRUSTED_DEVICE),
     log=(Order("fill", "reveal"),),
     charges=(),
+    over="the prior content's bits kept through an accepted wipe, in bits",
+    under="zero bits: nothing is credited for what is kept",
     requires={
         "one-labelling": "its own labels, SHA-512 under a key fresh for the server and the wipe, derived by the memory "
                          "attester",

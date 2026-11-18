@@ -46,7 +46,7 @@ P2_STORE = Path(__file__).resolve().parent / "p2" / "p2_store"
 def registered(scheme: str) -> Any:
     """The registered scheme ``scheme`` (`verifier.schemes`), None when none is."""
     from verity.protocols.resource_accounting.memory.pous.verifier import schemes as pous_schemes
-    return pous_schemes.REGISTRY.get(scheme)
+    return pous_schemes.get(scheme) if scheme in pous_schemes.REGISTRY else None
 
 
 def geometry(scheme: str) -> Any:
