@@ -137,7 +137,7 @@ class Committed:
         dense.tensors = {n: t for n, t in ck.tensors.items() if not EXPERTS.search(n)}
         experts.tensors = {n: t for n, t in ck.tensors.items() if EXPERTS.search(n)}
         words, wd = CPU.open_weights(bdir, tree, root, dense, threads=a.threads, tp={"world": int(dd["world"]), "rank": 0})
-        wd["ue8m0"] = self.rewritten(tree, dense, words, Path(a.roles).parent, p.index.prefix, {"world": int(dd["world"]), "rank": 0})
+        wd["ue8m0"] = self.rewritten(bdir, tree, dense, words, Path(a.roles).parent, p.index.prefix, {"world": int(dd["world"]), "rank": 0})
         ew, we = CPU.open_weights(bdir, tree, root, experts, threads=a.threads, tp={"world": 1, "rank": 0})
         words.update({n: w for n, w in ew.items() if EXPERTS.search(n)})
         self.consumed: set[str] = set()
@@ -167,7 +167,7 @@ class Committed:
               f"({we['mismatched_n']} mismatched), {self.record['open_s']} s; {PENDING}", flush=True)
 
     @staticmethod
-    def rewritten(tree: dict, ck, words: dict, program_dir: Path, prefix: str, tp: dict) -> dict:
+    def rewritten(bundle: Path, tree: dict, ck, words: dict, program_dir: Path, prefix: str, tp: dict) -> dict:
         """The registered tensors the checkpoint's own words do not open that vLLM rewrites at load (the Build's `weight_roles`:
         DeepGEMM's ue8m0 requant, MLA's kv_b absorbed into W_UK_T/W_UV), composed through `fp8_ue8m0.Rewrites` as the deferred
         replay's attempt 2 composes them, each opened only against its committed tensor root; added to ``words``."""
@@ -189,7 +189,7 @@ class Committed:
                 out["unopened"] += 1
                 continue
             raw = np.ascontiguousarray(arr).reshape(-1).view(np.uint8)
-            if raw.size != int(nb) or CPU.tensor_root_of(tree, i, raw) != bytes.fromhex(tree["tensor_roots"][i]):
+            if raw.size != int(nb) or CPU.tensor_root_of(bundle, tree, i, raw) != bytes.fromhex(tree["tensor_roots"][i]):
                 out["mismatched"].append(n)
                 continue
             words[n] = raw.view(CPU.WORDS[dt][1])
