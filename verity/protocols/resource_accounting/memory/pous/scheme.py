@@ -150,7 +150,7 @@ def _wipe_check_settings(values: Any) -> str | None:
 
 
 def _wipe_attach(exchange: Any, ctx: Any) -> Any:
-    return wipe_served.attach(exchange, ctx)
+    return wipe_served.attach(exchange, {**ctx, "party": MEMORY_ATTESTER})
 
 
 WIPE = register(Scheme(
