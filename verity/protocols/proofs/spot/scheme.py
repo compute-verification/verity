@@ -29,6 +29,7 @@ S.register(S.Scheme(
     needs=frozenset({"windows"}),
     depends=(),
     pieces={"workers": S.Launch(optional=("gate", "peer", "key", "gate-key"), reaches="challenger")},
+    answers=S.Lacks("has no piece that answers outside an exchange"),
     record="integrity",
     symbol=CHARGES_NOTHING,
     published=CHARGES_NOTHING,
