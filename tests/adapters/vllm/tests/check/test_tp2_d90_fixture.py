@@ -725,8 +725,10 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
     rec_sha = {str(r): hashlib.sha256((cap / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in (0, 1) if (cap / f"coll.rank{r}.jsonl").exists()}
     if provenance_of_other_run:
         rec_sha = {k: "f" * 64 for k in rec_sha}
-    tm.write_text(json.dumps({"provenance": _provenance(6, rec_sha=rec_sha, digest_mismatches=(
-        [{"rank": 0, "step": 1, "k": 0, "tensor": "out", "why": "stored .pt out sha256 differs from the recorder row"}] if provenance_digest_mismatch else ()))}))
+    prov = _provenance(6, rec_sha=rec_sha, digest_mismatches=(
+        [{"rank": 0, "step": 1, "k": 0, "tensor": "out", "why": "stored .pt out sha256 differs from the recorder row"}] if provenance_digest_mismatch else ()))
+    tm.with_name("recorder_sha256.json").write_text(json.dumps(prov.pop("recorder_sha256")))
+    tm.write_text(json.dumps({"provenance": prov}))
     wl = tmp_path / "workload.json"
     wl.write_text(json.dumps({"requests": [{"request_id": REQ, "prompt_token_ids": PROMPT, "max_tokens": 2}]}))
     gp = {r: tmp_path / f"gprog_r{r}.json" for r in (0, 1)}
@@ -833,9 +835,9 @@ def test_fold_match_entry_point_passes_on_the_fixture(tmp_path, monkeypatch):
     assert [c["name"] for c in xr["checks"]] == ["count", "order", "op", "segmentation", "site", "shard_linkage", "producer", "step", "recorder",
                                                  "value", "provenance", "links", "complete"]
     assert len(xr["peer_binding"]) == 12 and res["cross_rank"]["peer_binding_n"] == 12
-    # the record names the tp2_match.json it consumed, by digest, and the recorder digests that record was bound to
+    # the record names the tp2_match.json it consumed, by digest; the recorder digests that record was bound to stay beside it
     assert res["tp2_match"]["sha256"] == hashlib.sha256(_P(res["tp2_match"]["path"]).read_bytes()).hexdigest()
-    assert res["tp2_match"]["recorder_sha256"] == {str(r): hashlib.sha256((_P(res["capture"]) / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in (0, 1)}
+    assert "recorder_sha256" not in res["tp2_match"]
     # the TP1 Match-dir layout per rank, for the checker of record and the fast path (mfast): capture/log.jsonl.gz + program.json + instances.jsonl
     for r in (0, 1):
         assert (out / f"rank{r}" / "capture" / "log.jsonl.gz").exists() and (out / f"rank{r}" / "program.json").exists() and (out / f"rank{r}" / "instances.jsonl").exists()
