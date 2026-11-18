@@ -12,12 +12,13 @@ set -uo pipefail
 export O=${OUT:?}
 CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2
 export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
+GENCODE=$(python3 benchmarks/kernels/machine.py gencode sm_120a) || exit 2
 export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm
 export B; B=$(mktemp -d /tmp/floored-gemm.XXXXXX); trap 'rm -rf "$B"' EXIT
 STAGE=${STAGE:-all}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvcc --version | tail -2 > "$O/nvcc.txt"
-nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/fgemm" $D/fgemm.cu -lcuda -lcublasLt -lnvidia-ml \
+nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -o "$B/fgemm" $D/fgemm.cu -lcuda -lcublasLt -lnvidia-ml \
   > "$O/build.log" 2>&1 || { tail -80 "$O/build.log"; exit 4; }
 grep -E "spill|Used" "$O/build.log" | head -60
 cuobjdump -sass "$B/fgemm" > "$B/fgemm.sass"

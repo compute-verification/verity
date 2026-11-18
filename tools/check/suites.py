@@ -1870,10 +1870,12 @@ def _last_passes(dirs: list[Path]) -> dict[str, tuple[str, float]]:
 
 
 def longest(suite: Suite, n: int) -> list[str]:
-    """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first: of
-    which the guard starts the longest it collected at the heads of the workers' shares (`heavy_first`). An order only, which no
-    key or verdict reads."""
+    """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first,
+    of the test modules the tree holds: of which the guard starts the longest it collected at the heads of the workers' shares
+    (`heavy_first`). An order only, which no key or verdict reads."""
     last = _last_passes([per_test_dir(suite)])
+    held = {m for m in {node.split("::", 1)[0] for node in last} if (ROOT / suite.path / m).is_file()}
+    last = {node: v for node, v in last.items() if node.split("::", 1)[0] in held}
     return sorted(last, key=lambda node: (-last[node][1], node))[:n]
 
 
