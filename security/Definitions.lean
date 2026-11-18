@@ -53,7 +53,6 @@ public import Definitions.Claims
 public import Definitions.Claims.Encodings
 public import Definitions.Claims.Recursion
 public import Definitions.Claims.RecursionGeneric
-public import Definitions.Claims.Layer.Recursion
 public import Definitions.Claims.RecursionLin
 public import Definitions.Claims.Sampling
 public import Definitions.Claims.SamplingGeneric
@@ -99,7 +98,6 @@ public import Definitions.Poub.Assumptions.RemoteOutside
 public import Definitions.Pouw.Assumptions.CreditedWords
 public import Definitions.Poub.Assumptions.RemoteP2
 public import Definitions.Compose.Assumptions.Parties
-public import Definitions.Compose.Layer
 public import Definitions.Pouw.Assumptions.TS.Fixed
 public import Definitions.ResourceAccounting.Guarantees
 public import Definitions.Hash.Assumptions

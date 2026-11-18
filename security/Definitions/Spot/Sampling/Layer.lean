@@ -3,50 +3,23 @@ module
 public import Definitions.Core.Draw
 
 /-!
-# The sampling layer: its interface and its theorem's shape
+# The sampling layer's theorem, stated
 
-The sampling layer is SPOT's, namespace `Spot.Sampling`. It sits on the argument system (`Definitions.Core.Layer.Argument`)
-and under the recursion layer and compose.
+**Takes** a sampling design `L` over the units `Fin n` (a partition's proof blocks; one level's design, or the design a
+levels sample induces on the units), the session the argument system runs on each sample after the registration
+`Reg`, and that session's analysis: transcripts, the incorrect set of each, the committed transcript, and per sampled
+unit the failure probabilities `ks` (accepts, extraction fails) and `link` (extraction disagrees with the committed
+transcript), covering acceptance at each sampled incorrect unit. **Gives** `Pr[accept ∧ E(X, S)] ≤
+Pr_S[E(X, S) ∧ S misses incorrect(X)] + ε_ks + ε_bind`, `X` the committed transcript: `ε_ks` the argument system's
+knowledge error at a unit picked before the session's coins, averaged over the sample, `ε_bind` the commitment's binding
+error; the first term is at most `L.miss K` at `E = (K ≤ |incorrect X|)`.
 
-**What it takes.** Units `Fin n`, a circuit's proof blocks under its partition; a sampling design `L` over them, the
-verifier's live coins; the registration type `Reg`, sent before the coin; and the argument system's session on each
-sample against each registration. Of the argument system it takes its analysis at each sampled unit: transcripts `Tr`
-with the incorrect set of each; the committed transcript, a function of the prover's state at registration; and two
-failure probabilities, `ks` (the session accepts while extraction of `u` fails) and `link` (extraction succeeds but
-disagrees with the committed transcript on `u`'s wires), which cover acceptance at every sampled incorrect unit.
+`Sound` is `FlockSoundness.Audit.extraction_audit_le`'s statement with `ExtractionAnalysis`'s fields as binders and
+`audit` unfolded, so `extraction_audit_le ⟨Tr, inc, com, ks, link, cover⟩ hks hlink E σ` proves it.
 
-**What it gives** (`Sound`). For every event `E` on the committed transcript `X` and the sample `S`,
-`Pr[accept ∧ E(X, S)] ≤ Pr_S[E(X, S) ∧ S ∩ incorrect(X) = ∅] + ε_ks(σ) + ε_bind(σ)`.
-
-**Its error, in the layer below's.** `ε_ks` is the argument system's knowledge error at the sampled unit any rule picks
-before the session's first coin, averaged over the sample (`κ` and the collision terms of `Verity.ProofSystem.KS` at the
-instance's extractor); `ε_bind` is the commitment's binding error at the committed transcript. The sampling term is the
-design's own: at `E = (K ≤ |incorrect X|)` it is `L.miss K`, at `E = (W ⊆ incorrect X)` it is `L.missProb W`.
-
-**Levels.** `L` is any design over the units. Lean's levels (`Verity.Levels`) enter as the design their sample induces on
-the units, and one level is `L` itself, so `Sound` at a levels design is `Sound` at that `L` and needs no second form.
-
-**What proves it.** `Spot.Sampling.sound`, today `FlockSoundness.Audit.extraction_audit_le`
-(`Proofs/Flock/Soundness/Audit/Extraction.lean`), once lean's move places it. `Sound` is that theorem's statement with
-`ExtractionAnalysis`'s fields as binders and `audit`, `reg`, `cont`, `committedOf`, `atTgt`, `KnowledgeSound` and
-`BindSound` unfolded, so one term proves it:
-`fun _ _ _ _ Tr inc com ks link cover _ _ hks hlink E σ => sound ⟨Tr, inc, com, ks, link, cover⟩ hks hlink E σ`.
-The game and the analysis are written out here because the definitions package can't read the proofs tree; when the
-move lifts `audit` and `ExtractionAnalysis` into `Definitions/Spot/Sampling/`, `Sound` reads them by name in that change.
-
-**Instances.**
-* SPOT[Flock] (`SpotFlock`), the ZK compiled analysis (`Flock.Bridge.analysisZCRegC`): `Flock.Guarantees.SampledKSLiveV5`
-  and `Flock.Guarantees.SampledKSLiveV3`, deployed and proved. The recursive guarantees reach it through
-  `extraction_audit_sampled` (`Proofs/Flock/Recursive/Transfer.lean`).
-* The compiler generic in the argument system, `FlockSoundness.SampledGeneric` (`Flock.Guarantees.GenericSampledKS`):
-  proved, not deployed.
-* `Claims.SamplingGeneric.CompilerKS` and PoUW's sampled window (`Proofs/Pouw/TS/Sampled.lean`) state the same bound
-  and prove it apart; they are to be its instances.
-
-**Duplicates, for next week.** `FlockSoundness.Audit.audit_le` proves the deterministic-extractor case again rather
-than through `ExtractionAnalysis`; `FlockSoundness.Discharge.Exec.auditLive` is the game again with its transcript kept;
-`FlockSoundness.SampledGeneric.ProofSystem` is `Claims.SamplingGeneric.Arg` again, and both are a second
-`Verity.ProofSystem`.
+**Instances.** `Flock.Guarantees.SampledKSLiveV5` and `SampledKSLiveV3`, deployed and proved, apply
+`extraction_audit_le` (V3 also `extraction_audit_count`, which `Sound` does not state). `Claims.SamplingGeneric.CompilerKS`
+and `FlockSoundness.SampledGeneric` state the layer apart and prove it; nothing deployed instantiates either.
 -/
 
 @[expose] public section
@@ -61,7 +34,7 @@ open scoped ENNReal
 before the session's first coin by `εks` and `εbind` on average over the sample: every audit strategy accepts with an
 event `E` of the committed transcript and the sample with probability at most the sample's probability of `E` while
 missing every incorrect unit, plus `εks` and `εbind` at the strategy's registration and state. Proved by
-`Spot.Sampling.sound` (today `FlockSoundness.Audit.extraction_audit_le`) once the move places it. -/
+`FlockSoundness.Audit.extraction_audit_le`. -/
 def Sound : Prop :=
   ∀ (n : ℕ) (L : SamplingDesign (Fin n)) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool)
     (Tr : Type) (incorrect : Tr → Finset (Fin n))
