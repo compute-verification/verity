@@ -56,18 +56,24 @@ private def tagged (frame : String) (H : ByteArray → ByteArray) (tag : String)
   let m := (← Flock.canonUtf8 manifest).toUTF8
   return H (frame.toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t ++ Flock.be64 m.size.toUInt64 ++ m)
 
-/-- `registered_value.domain(program, value, words, leaves, word_bits, ...).domain_id` (`verity/commitments/registered_value.py`), `leaves`
-the value's rows: `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512").domain_id`, `B` the 64 bytes of
+/-- `registered_value.domain(program, value, words, leaves, word_bits, ...).binding` (`verity/commitments/registered_value.py`), `leaves`
+the value's rows, whose domain is `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512")`: `B` the 64 bytes of
 `identity_digest_sha512("verity/one-stage/registered-domain/v1", {"program", "value", "schema", "words", "leaves"})` with
 `"word_bits"` beside them when it is not 16, and `extra` after them (a per-window value's `"window"`, a produced value's
 `"produced"`). -/
-def domainWith (program value : String) (words leaves wordBits : Nat) (extra : List (String × Json)) :
+def bindingWith (program value : String) (words leaves wordBits : Nat) (extra : List (String × Json)) :
     V ByteArray := do
   if !WIDTHS.contains wordBits then throw s!"a registered value's leaves are 16 or 32 bits, not {wordBits}"
   let manifest := Json.mkObj ([("program", Json.str program), ("value", Json.str value), ("schema", Json.str HmRow.ROW_SCHEMA),
     ("words", Lean.toJson words), ("leaves", Lean.toJson leaves)] ++
     (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]) ++ extra)
-  let binding ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash REGISTERED_DOMAIN manifest
+  tagged "verity/tagged-sha512/v1" Flock.Sha512.hash REGISTERED_DOMAIN manifest
+
+/-- `registered_value.domain(...).domain_id`: `bindingWith`'s binding `B` as a frame-v3 domain over the value's `leaves`
+rows (above). -/
+def domainWith (program value : String) (words leaves wordBits : Nat) (extra : List (String × Json)) :
+    V ByteArray := do
+  let binding ← bindingWith program value words leaves wordBits extra
   let positions ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash "veritor/indexed-domain/range/v1"
     (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
   return FV3.hash "domain" [binding, FV3.uint 0, positions, FV3.uint leaves] Flock.Sha512.hash
