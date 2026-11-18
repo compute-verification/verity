@@ -25,14 +25,17 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+import numpy as np
+
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce
 from verity.circuits.boolean.trace import emit, trace
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.population import BitsWord, WordBits
-from verity.circuits.refs import Coll
-from verity.circuits.types import Array, Tuple
+from verity.circuits.evaluation.batch import register_kernel
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array, Tuple, Value
 
 from verity_vllm.definitions.registry import io_shell as X
 from verity_vllm.definitions.registry.boolean_dsv4_indices import GateOps
@@ -123,12 +126,23 @@ def decrement(C, bits: list) -> list:
     return out
 
 
+def _spans(S) -> list[tuple[int, int]]:
+    return [(a, w) for o, lp, m, ids in zip(S.OCC, S.LP, S.MAX, S.IDS)
+            for a, w in ((o, 32), (lp, 32), (m, 32), *((ids + S.IDB * X.position(S.K0, S.K, p), S.IDB) for p in range(S.NP)))]
+
+
+def read_words(S) -> list[int]:
+    return sorted({b // 16 for a, w in _spans(S) for b in range(a, a + w)})
+
+
 def _scan(S):
+    words = read_words(S)
+
     def run(C, *state):
-        x = [b for w in state for b in w]
+        x = {16 * j + i: b for j, w in zip(words, state) for i, b in enumerate(w)}
 
         def word(lo: int, w: int) -> list:
-            return x[lo:lo + w] + [ZERO] * (32 - w)
+            return [x[lo + i] for i in range(w)] + [ZERO] * (32 - w)
 
         out = []
         for o, lp, m, ids in zip(S.OCC, S.LP, S.MAX, S.IDS):
@@ -145,7 +159,7 @@ _SCANS: dict[tuple, Any] = {}
 
 def scan_bits(S) -> tuple[Any, list, Any]:
     lane = (X.BITS32, Array(S.NP + 1, X.BITS32), X.BITS32, Array(2, X.BITS32))
-    params, ret = [Array(S.NS, Array(16, BL.BIT))], Tuple(*[t for _ in S.OCC for t in lane])
+    params, ret = [Array(len(read_words(S)), Array(16, BL.BIT))], Tuple(*[t for _ in S.OCC for t in lane])
     key = tuple(getattr(S, k) for k in SCAN_STATICS)
     if key not in _SCANS:
         _SCANS[key] = trace(_scan(S), params, ret)
@@ -154,7 +168,8 @@ def scan_bits(S) -> tuple[Any, list, Any]:
 
 def _scan_words(B, S, state):
     T, params, ret = scan_bits(S)
-    out = emit(T, params, ret, B, B.batch(bind(WordBits, W=16), state, axes=(0,)))
+    read = Coll(Array(params[0].n, Value(16)), concat([state.refs.slice(j, j + 1) for j in read_words(S)]))
+    out = emit(T, params, ret, B, B.batch(bind(WordBits, W=16), read, axes=(0,)))
     words = B.batch(bind(BitsWord, W=32), Coll(Array(len(S.OCC) * (S.NP + 5), X.BITS32), out.refs), axes=(0,))
     return Coll(X.slots_sig(S)[1], words.refs)
 
@@ -166,5 +181,14 @@ ScanSlotsV3 = CompositeDefinition("ScanSlots", 3, SCAN_STATICS, X.slots_sig, _sc
                                   refuse=X.slots_refuse,
                                   conformance="not-yet-established: the network attester's scan state row as its Programs "
                                               "read their slots, and each slot's first position's token feed")
+
+
+
+def scan_rows(state, NP, IDB, K0, K, OCC, LP, MAX, IDS, **_):
+    lanes = [X.scan_reference(r, NP, IDB, K0, K, OCC, LP, MAX, IDS) for r in np.asarray(state, dtype=np.uint64).tolist()]
+    return np.asarray([[v for k, s, o, h in row for v in (k, *s, o, *h)] for row in lanes], dtype=np.uint64), None
+
+
+register_kernel(ScanSlotsV3, scan_rows, domain="every state row")
 
 BOOLEAN_IO_SHELL = [IngressPromptV2, IngressSampledV1, ScanSlotsV3]

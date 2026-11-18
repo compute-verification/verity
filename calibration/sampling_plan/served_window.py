@@ -47,7 +47,7 @@ with it.  The samples barely differ between rungs, so the replay moves the total
 (`verity.protocol`'s `MONITORING_PERIODS`: a week, a month and a year) of windows at the stock step; the samples are about Λ/ε whatever
 the scope, the commitment grows with it.  Exfiltration: ℓ = `LEAK_BITS` a window.
 
-    uv run python verity/protocols/proofs/spot/prover/cost/served_window.py --out DIR [--weight W] [--rates R ...] [--no-planner]
+    uv run python calibration/sampling_plan/served_window.py --out DIR [--weight W] [--rates R ...] [--no-planner]
 """
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ from fractions import Fraction
 from math import log, log2
 from pathlib import Path
 
-from verity.protocols.proofs.spot.prover.cost.inputs import (EPILOGUE, I, K_MAX, KEY, MEASURED, S8_STEP, block_k_log, cap,
+from inputs import (EPILOGUE, I, K_MAX, KEY, MEASURED, S8_STEP, block_k_log, cap,
                                                              observations)
 
 from verity.protocol import MONITORING_PERIODS
@@ -69,7 +69,7 @@ from verity.protocols.proofs.spot.prover.optimize import (PROVING_ONLY, Candidat
                                                            Objective, ReplayGrain, for_target, grain_costs, leak_count,
                                                            loc_bits, met_replay, row_ands, sqrt_grain)
 
-ROOT = Path(__file__).resolve().parents[6]
+ROOT = Path(__file__).resolve().parents[2]
 
 DELTA = float(WINDOW_DELTA)
 LAMBDA = log(1 / DELTA)
