@@ -143,13 +143,12 @@ BASE_LEAN = {"core_base": (), "core_circuits": ("core_base",), "core_commitments
 #: through a card file citing an ``art:`` id, never as an import, and code a protocol runs moves out to the package that
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
-    # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
+    # Flock's measurement campaign and its tests
     **dict.fromkeys((
         "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
-        "verity/protocols/proofs/flock/prover/python/verity_flock/bench.py", "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
-        "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py",
+        "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/register.py",
-        "tests/verity/protocols/proofs/flock/prover/test_backend_bench.py", "tests/verity/protocols/proofs/flock/prover/test_class_statement.py",
+        "tests/verity/protocols/proofs/flock/prover/test_class_statement.py",
         "tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py",
     ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s contract, cell, generator suites and frozen instances"),
     # research's registry of measuring tools
