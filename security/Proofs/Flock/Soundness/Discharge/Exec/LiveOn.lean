@@ -16,7 +16,7 @@ sample it makes, `T S R` must be the table verity-verify-proof sets up there, `m
 
 namespace FlockSoundness.Discharge.Exec
 
-open Game Model Accounting Refine Audit Audit.Partition
+open Game Model Accounting Refine Spot.Sampling Spot.Sampling.Partition
 open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128

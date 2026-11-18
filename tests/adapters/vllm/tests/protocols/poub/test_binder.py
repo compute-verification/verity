@@ -35,7 +35,7 @@ from verity_vllm import messages
 from verity_vllm.engine import kv_blocks
 from verity_vllm.engine.hooks import live
 from verity_vllm.engine.kv_blocks import KERNEL_BLOCK_SIZES
-from verity_vllm.protocols.poub.binder import (
+from verity.protocols.resource_accounting.memory.poub.prover.binder import (
     Binder,
     Every,
     Inbox,
