@@ -401,14 +401,14 @@ def heard() -> Iterator[list[Any]]:
         M.Exchange.emit = emit
 
 
-def request(j: int, framing: str) -> tuple[dict, bytes]:
+def request(j: int, framing: str, ids: int = IDS, steps: int = STEPS) -> tuple[dict, bytes]:
     """The fixed load's request ``j``, its body parsed and as sent: an id request under ``ids``, as the attester's front
     sends it, else a completions request with the same prompt and length."""
     if framing == "ids":
         from verity.protocols.resource_accounting.network.verifier.id_form import id_request
-        raw = id_request(model="m", user=f"fixed.{j}", prompt=[100 + j] * IDS, max_tokens=STEPS, frame_bytes=4096, offset=0)
+        raw = id_request(model="m", user=f"fixed.{j}", prompt=[100 + j] * ids, max_tokens=steps, frame_bytes=4096, offset=0)
         return json.loads(raw.partition(b"\r\n\r\n")[2]), raw
-    body = {"prompt": [100 + j] * IDS, "max_tokens": STEPS, "min_tokens": STEPS, "ignore_eos": True, "temperature": 0,
+    body = {"prompt": [100 + j] * ids, "max_tokens": steps, "min_tokens": steps, "ignore_eos": True, "temperature": 0,
             "stream": True, "user": f"fixed.{j}"}
     return body, b"POST /v1/completions HTTP/1.1\r\n\r\n" + json.dumps(body).encode()
 
@@ -480,7 +480,7 @@ class Pump:
 def serve(names: list[str], out: Path, monkeypatch: pytest.MonkeyPatch,
           broken: Callable[[str, Any], None] = lambda stage, it: None, order: str = "arrival",
           settings: dict[str, dict[str, Any]] | None = None, options: tuple[str, ...] = (),
-          framing: tuple[str, ...] = ()) -> tuple[list[Any], Any]:
+          framing: tuple[str, ...] = (), load: tuple[int, int, int] = (REQUESTS, IDS, STEPS)) -> tuple[list[Any], Any]:
     """serve-openai's run, stage by stage, over the stand-ins with ``names`` listed in order: the attach and the build
     (`serve_openai.build`), the learn-only warm-up (`serve_learn.warmed`), the network attester's admission under an
     ``order`` other than ``arrival`` (`serve_openai.network_admission`), the fixed load through the engine loop
@@ -490,7 +490,8 @@ def serve(names: list[str], out: Path, monkeypatch: pytest.MonkeyPatch,
     ``settings`` go over each scheme's `SETTINGS`, ``options`` after serve-openai's, and ``framing`` is its
     ``--protocol``: by default ``vllm``, or the attester's ``ids``, each request then an id request
     (`id_form.id_request`). vLLM's request classes are not here, so `VllmProtocol` is `PlainProtocol` (the same framing
-    without them) wherever the serve makes one. ``broken(stage, it)`` breaks a
+    without them) wherever the serve makes one. ``load`` is the fixed load's requests, prompt ids and steps, the steps a
+    window's. ``broken(stage, it)`` breaks a
     stand-in at each stage, for a negative control."""
     from verity_vllm.engine import build as engine_build
     from verity_vllm.pipeline import serve_commit as sc
@@ -510,9 +511,10 @@ def serve(names: list[str], out: Path, monkeypatch: pytest.MonkeyPatch,
     doc = {n: {**SETTINGS.get(n, {}), **(settings or {}).get(n, {})} for n in names}
     if order != "arrival":
         doc["network-attester"] = {**SETTINGS["network-attester"], **doc.get("network-attester", {}), "order": order}
-    seqs, cap = (REQUESTS // 2, REQUESTS // 2) if order == "arrival" else (REQUESTS, 0 if order == "tick" else REQUESTS)
+    n, ids, length = load
+    seqs, cap = (n // 2, n // 2) if order == "arrival" else (n, 0 if order == "tick" else n)
     (row := out / "row").mkdir()
-    opts = parse(*SHAPE, *framing, "--max-num-seqs", str(seqs), "--window-requests", str(cap),
+    opts = parse(*SHAPE, "--window-steps", str(length), *framing, "--max-num-seqs", str(seqs), "--window-requests", str(cap),
                  *(("--protocols", ",".join(names)) if names else ()), *(("--protocols-config", json.dumps(doc)) if doc else ()),
                  "--out", str(out / "serve"), "--precision", "bfloat16", "--required-manifest", str(predicted.row(row)),
                  *options)
@@ -570,9 +572,9 @@ def serve(names: list[str], out: Path, monkeypatch: pytest.MonkeyPatch,
             server = so.Server(proto=proto.framings()[opts.protocol](opts.force_include_usage, **given), served_name="m", max_model_len=opts.max_model_len,
                                tokenizer=Tokenizer(), defaults={}, submit=loop.submit, abort=loop.abort, clock=lambda: 7,
                                order=front, arrive=so.arrival(engine))
-            sends = [(request(j, opts.protocol),
+            sends = [(request(j, opts.protocol, ids, length),
                       {} if order == "arrival" else {"x-verity-release": str(j), "x-verity-release-run": RUN})
-                     for j in [*range(1, REQUESTS), 0]]
+                     for j in [*range(1, n), 0]]
             broken("load", sends)
             pump.thread.start()
             releases = (pump.send(server, sends) if order == "arrival"
@@ -589,7 +591,7 @@ def serve(names: list[str], out: Path, monkeypatch: pytest.MonkeyPatch,
             assert not lost, f"hooks a scheme subscribed at its attach and no longer hears: {lost}"
             if order == "release-order":
                 got = engine.log[served]
-                assert len(got) == REQUESTS, (f"window 0's first step holds {len(got)} of the fixed load's {REQUESTS} "
+                assert len(got) == n, (f"window 0's first step holds {len(got)} of the fixed load's {n} "
                                               f"requests: {got}")
             so.write_reports(M.current(), out)
         finally:
@@ -647,6 +649,25 @@ def served(names: list[str], events: list[Any], ex: Any) -> None:
 def test_each_form_the_launchers_give_serves(form, device, tmp_path, monkeypatch):
     names, order, settings, framing = ROAD[form]
     served(names, *serve(names, tmp_path, monkeypatch, order=order, settings=settings, framing=framing))
+
+
+def remote() -> tuple[list[str], tuple[int, int, int]]:
+    """The remote application's own definition (``applications/remote.toml``): its listed schemes and the fixed load of
+    its Pearl+ class (requests, prompt ids, steps), whose steps are its workload's window steps."""
+    app = tomllib.loads((REPO / "applications" / "remote.toml").read_text())
+    n, ids, steps = (int(x) for x in app["params"]["verity/pouw/pearl-plus/v1"]["class"].split(","))
+    assert (n, steps) == (app["workload"]["params"]["slots"], app["workload"]["params"]["window-steps"])
+    return app["protocols"], (n, ids, steps)
+
+
+def test_the_remote_application_serves_its_class_under_release_order(device, tmp_path, monkeypatch):
+    """The remote application as defined, walked through serve-openai on a processor: its listed schemes attached as the
+    engine attaches them, the attester's release order its launcher always gives (`served_verdicts.sh`'s serve), and its
+    class's fixed load entering window 0's first step whole. What its launcher runs around the serve off the card (the
+    tie's circuit at the class and the inference-only policy, `served_verdicts.sh`'s pearl_circuit and
+    inference_policy) is not a serve's event."""
+    names, load = remote()
+    served(names, *serve(names, tmp_path, monkeypatch, order="release-order", load=load))
 
 
 def off_road(kind: dict[str, Any]) -> list[list[str]]:
