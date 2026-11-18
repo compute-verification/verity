@@ -959,8 +959,10 @@ def charges_nothing(component: str) -> str | None:
 def unchecked(components: Sequence[str], said: Mapping[str, str]) -> dict[str, str]:
     """``said``, each component's stated source, with each entry of what its declared scheme's run has that no
     auditor-side entry checks (`Scheme.unchecked`), its name and its sentence, at its end, for each of ``components``
-    whose declaration lists any, whatever its row."""
-    return {**said, **{c: "; ".join([*filter(None, [said.get(c)]), *(f"{n} {w}" for n, w in why.items())])
+    whose declaration lists any, whatever its row; an entry the stated source says already (the launcher's record
+    ends it so, `served_verdicts.declared_unchecked`) is not said twice."""
+    return {**said, **{c: "; ".join([*filter(None, [said.get(c)]), *(e for n, w in why.items()
+                                                                     if (e := f"{n} {w}") not in said.get(c, ""))])
                        for c in components if c in schemes.DECLARATIONS and (why := schemes.get(c).unchecked)}}
 
 

@@ -1282,4 +1282,5 @@ def test_the_bandwidth_answer_names_who_graded_it_where_the_launcher_reads_it(tm
         "reads")
     for product, tail in (("remote", ""), ("onsite", f"; {SV.ONSITE_UNDECIDED}")):
         said = SV.ran_by("bandwidth", row | {"answer_from": "as written"}, product)["answer_from"]
-        assert said == f"as written; {BW.GRADED_BY}{tail}" and SV.PIECE not in said
+        assert said == f"as written; {BW.GRADED_BY}{tail}; {'; '.join(f'{n} {w}' for n, w in mc.UNCHECKED.items())}" \
+            and SV.PIECE not in said

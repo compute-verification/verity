@@ -1413,8 +1413,8 @@ def declared_unchecked(protocol: Any) -> str:
     ``unchecked``), or empty."""
     from verity.protocols.compose import schemes
 
-    return next((u for n in schemes.DECLARATIONS
-                 if (s := schemes.get(n)).protocol == protocol and (u := getattr(s, "unchecked", ""))), "")
+    return next(("; ".join(f"{k} {w}" for k, w in u.items()) for n in schemes.DECLARATIONS
+                 if (s := schemes.get(n)).protocol == protocol and (u := getattr(s, "unchecked", {}))), "")
 
 
 def ran_by(key: str, row: Mapping[str, Any], product: str) -> dict[str, Any]:
@@ -2493,7 +2493,7 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
         elif v == "accept":
             t = terms(r, (subprotocols or {}).get(k))
             s = ("accept" if server is not None else "accept, naming no server: not carried") + (f" ({'; '.join(t)})" if t else "")
-            if unchecked := declared_unchecked(r.get("protocol")):
+            if (unchecked := declared_unchecked(r.get("protocol"))) and unchecked not in "; ".join(t):
                 s += f", {unchecked}"
             if str(r.get("answer_from") or "").startswith(PEARLPLUS_FROM):
                 s += f", {PEARLPLUS_SAID}"

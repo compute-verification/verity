@@ -897,6 +897,12 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
         for k, c in NAMES.items() if c in UNCHECKED_ENDS and k in ("work", "space", "wipe", *rows)}
 
 
+def test_an_entry_the_launchers_record_says_already_is_said_once_on_the_line() -> None:
+    said = {"pearl-plus": f"{T.AS_WRITTEN} (its piece files in work/); {COINS_UNCHECKED}",
+            "pous": f"{T.AS_WRITTEN} (its piece files in space/); {ATTESTER_UNCHECKED}"}
+    assert {c: T.unchecked(PROTOCOLS, said)[c] for c in said} == said
+
+
 @pytest.mark.parametrize("source", NOT_WRITTEN)
 def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp_path, capsys, monkeypatch, source):
     """``answer_from`` is the serving node's word too: under the placement hold, a record whose every row says it was
