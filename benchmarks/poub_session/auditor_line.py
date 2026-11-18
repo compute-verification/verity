@@ -572,7 +572,8 @@ def union_error(rows: list[dict]) -> dict:
 def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     """Whether the run's registered store is `model`'s ({name, checkpoint_sha512}, from `source`): the verifier's
     binding (verifier.json's `binding`, in a record made while the verifier could bind it) held the hello's payload root
-    to the root of the store the pinned checkpoint lays out under the verifier's payload key, the Lean verifier deciding it (`lean`, its
+    to the root of the store the pinned checkpoint lays out under the verifier's payload key (only a record from before
+    the payload key became the prover's has one: the verifier now sends no key and binds nothing), the Lean verifier deciding it (`lean`, its
     `hold`'s answer: bound, at that root), that root is the registration's, and the binding's model is `model`.
     `bound` says whether it is. A run with no binding, or with no model to hold one to, is unbound: its store is the
     developer's choice (`store`), which the line is then conditional on (`premise`, `STORE_PREMISE`), and `ok`.

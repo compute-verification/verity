@@ -1106,7 +1106,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   while [ "$i" -lt "${#h1[@]}" ]; do
     if [ "${h1[$i]}" = --protocols-config ]; then cfg=${h1[$((i + 1))]}; i=$((i + 2)); else rest+=("${h1[$i]}"); i=$((i + 1)); fi
   done
-  h1=("${rest[@]}" --protocols-config "$("$PY" -c 'from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER as N; import json, sys; v = sys.argv[1]; d = (json.loads(v) if v.lstrip().startswith("{") else json.load(open(v))) if v else {}; print(json.dumps({**d, N.name: {**d.get(N.name, {}), "order": "release-order"}}))' "$cfg")")
+  "$PY" -m verity.protocols.compose.schemes network-attester settings > /dev/null || return 9
+  h1=("${rest[@]}" --protocols-config "$("$PY" -c 'import json, sys; v, n = sys.argv[1:]; d = (json.loads(v) if v.lstrip().startswith("{") else json.load(open(v))) if v else {}; print(json.dumps({**d, n: {**d.get(n, {}), "order": "release-order"}}))' "$cfg" network-attester)")
   local polls=450
   if [ -n "${H1_TIE:-}" ]; then  # a window's line waits for its release, which waits for its window commit
     h1+=(--h1-window-commit "cd $(printf %q "$TREE") && bash benchmarks/one_stage/served_verdicts.sh tie \"\$@\"")

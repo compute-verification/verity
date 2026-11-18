@@ -185,7 +185,8 @@ def test_the_served_shape(shaped):
         "2x3 none committed": refused, "4x35 none committed": refused,
         "2x3 another root": refused, "2x3 no root read": refused, "2x3 a constant verdict": refused,
         "2x3 one wire from the next slot": refused,
-        "2x3 the order beside the record": (None, None), "2x3 the run's record first": (None, None)}
+        "2x3 the order beside the record": (None, None), "2x3 the run's record first": (None, None),
+        "2x3 the key a 32-bit word, its writers' too": (None, None)}
     # in rows the rate rule decides each the same way: a size's cases list the same units, so a block's rows are
     # those of the accepted case, which the policy's `Γ` and `α` in rows hold exactly
     for what, r in got.items():

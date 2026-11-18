@@ -42,7 +42,7 @@ gives the same guarantee and leaves the scan's chain as it is.
 - Its charge is `charge_chain.build_link(C, D, book, cin, cout, en, bits)`, `ChargeLink_v1{D}`, over the decisions
   the execution phase loads (next section). `book` is `book_fields(D)`, the public tables without the carry. `bits` are `adv`'s
   D decisions, and en_i = i < its `count`. Its ok is the verdict's `code` bit, and its bits are held to c_w (`charge`).
-- The verifier runs `charge_check.check_chain` on the charge rows' openings.
+- `charge_check`'s `check_chain` checks the openings of a session; no verifier calls it.
 - The prover commits each execution phase with `commit_window(program, book, carry', registration, carry=previous)`.
 
 ## One carry for proof blocks and execution phases

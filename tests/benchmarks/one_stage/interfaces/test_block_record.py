@@ -172,8 +172,8 @@ def _accepting_report() -> tuple[dict, dict]:
     p0 = _load("block-record-r2-period0")
     profile = {"levels": [{"name": "unit", "size": 1024}], "drawn": {"unit": 2}}
     rows = {}
-    for name, key in R.RUNNER_KEYS.items():
-        lg = p0["legs"][name]
+    for name in ("integrity", "pouw", "pous", "bandwidth", "certifier"):
+        lg, key = p0["legs"][name], R.RUNNER_KEYS[name]
         q = {"integrity": {"bound": 299}, "pouw": {"work": {"credited": 262144, "credited_tiles": 128}},
              "pous": {"s_bits": 0, "certified": False, "eps": "0"}, "bandwidth": {"q_bytes": 6963200, "eps": lg["error"]},
              "certifier": {"K": 15764, "windows": 1, "eps": "1/100"}}[name]
@@ -461,3 +461,30 @@ def test_a_period_s_blocks_are_core_s_block_count() -> None:
     for p in periods.values():
         assert p["blocks_per_machine"] == block_count(p["seconds"], window_s)
         assert p["blocks"] == block_count(p["seconds"], window_s, machines)
+
+
+def test_the_subprotocols_are_the_onsite_applications_components_through_their_rows_and_the_stored_words() -> None:
+    """`SUBPROTOCOLS` and `RUNNER_KEYS` are the onsite application's components through each declaration's ``record``
+    and the format's `STORED`; the schema, data on disk, requires exactly them."""
+    import tomllib
+
+    from verity.protocols.compose import schemes
+    legs = SCHEMA["properties"]["legs"]
+    assert tuple(legs["required"]) == R.SUBPROTOCOLS == tuple(R.RUNNER_KEYS) == R.PRODUCTS["onsite"]
+    assert set(legs["properties"]) == set(R.SUBPROTOCOLS)
+    listed = tomllib.loads(R.ONSITE_APPLICATION.read_text())["protocols"]
+    io, spot = schemes.get("inference-only"), schemes.get("sampled-proofs")
+    assert "inference-only" in listed and isinstance(io.resource, R.S.Lacks) and io.record not in R.STORED
+    assert io.record not in R.RUNNER_KEYS.values(), "inference-only charges nothing and the format keeps no row of it"
+    assert isinstance(spot.resource, R.S.Lacks) and R.RUNNER_KEYS[R.STORED[spot.record]] == spot.record
+    assert R.RUNNER_KEYS["certifier"] == schemes.get("network-attester").record == "communication"
+
+
+def test_a_component_no_scheme_declares_is_a_subprotocol_only_under_a_stored_word(tmp_path, monkeypatch) -> None:
+    app = tmp_path / "onsite.toml"
+    app.write_text('protocols = ["pouw", "nonesuch"]\n')
+    monkeypatch.setattr(R, "ONSITE_APPLICATION", app)
+    with pytest.raises(ValueError, match="nonesuch: no scheme declares it and block_record.STORED has no row stored"):
+        R._runner_keys()
+    app.write_text('protocols = ["pouw"]\n')
+    assert R._runner_keys() == {"pouw": "work"}
