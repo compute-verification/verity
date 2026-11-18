@@ -268,7 +268,7 @@ private def challenger : Json := Json.mkObj [("key", Json.mkObj [("H", 20), ("W"
 /-- One-stage v2's params: v1's over the log `log`, with `outputs`, the challenger and `W`'s open root as the execution phase's,
 and `proofs`, the circuit and public files' SHA-512s and the verifier's registered file. -/
 private def sampledParams (log : Array Json) (outputs : Option Json) : Json := Json.mkObj ([("anchors", Json.arr #[]),
-  ("challenger", challenger), ("delta", "1/10"), ("form", "one-stage"), ("law", samplingDesign), ("leaf_layer", rep "ee"),
+  ("challenger", challenger), ("delta", "1/10"), ("law", samplingDesign), ("leaf_layer", rep "ee"),
   ("log", Json.arr log), ("parameters", signature), ("partition", partition), ("ports", ports),
   ("program", jsonOf descriptor),
   ("proofs", Json.mkObj [("circuit", rep "c0"), ("public", rep "c2"), ("registered", readsFile)]),
@@ -280,7 +280,7 @@ private def sampledParams (log : Array Json) (outputs : Option Json) : Json := J
 SHA-512 (`proofs`) in place of verdicts, and coins no challenger signed. -/
 private def sampledEvidence (rec : Json) : Json :=
   Json.mkObj [("coins", Json.mkObj []), ("draw", jsonOf r#"{"k":1,"law":"subset","population":1,"units":[0]}"#),
-    ("form", "one-stage"), ("instances", 1),
+    ("instances", 1),
     ("proofs", Json.mkObj [("sessions", Json.arr #[Json.mkObj [("name", rep "ab"), ("record", rep "c3"),
       ("reps", Json.mkObj [])]])]),
     ("proved_units", jsonOf "[0]"), ("receipt", Json.mkObj [("registration", digestOf rec)]),
@@ -341,9 +341,9 @@ private def grantedOf (rec : Json) (e : Spot.OneStageZk.Evidence) : Array (Strin
     ("registered", Json.mkObj reads), ("session", s.name)])
 
 /-- SPOT with its sample's coins and its sessions' proofs granted: `VStar.Recursive.Sampled.protocol`'s decoders
-and digest, and in the one-stage form the check `OneStageZk.checkBlobsAt` ends in, v1's `check` on the verdicts the
+and digest, and at one level the check `OneStageZk.checkBlobsAt` ends in, v1's `check` on the verdicts the
 sessions' run gives (`grantedOf`), held to the caller's check as SPOT holds it (`VStar.Recursive.Caller.gate`);
-the recursive form refused. -/
+two levels refused. -/
 private def proved : Core.Protocol where
   id := VStar.Recursive.Sampled.PROTOCOL
   Params := VStar.Recursive.Sampled.Params
@@ -358,7 +358,7 @@ private def proved : Core.Protocol where
   check p c e := match p, e with
     | .inl p, .inl e => VStar.Recursive.Caller.gate c.record p.base.verifier
       (Spot.OneStage.check p.base c { e.base with verdicts := grantedOf c.record e })
-    | _, _ => .reject "the one-stage form only"
+    | _, _ => .reject "one level only"
   publicJson := Spot.OneStage.publicJson
   profileJson := Core.Integrity.toJson
 
@@ -375,7 +375,7 @@ private def provedOn (log : Array Json) (outputs : Option Json) : Answer := answ
 #guard (sampled #[recW] (some (outputsOf (digestOf recW)))).verdict == .reject
 #guard (sampled #[recW] (some (outputsOf (digestOf recW)))).reason.map (·.startsWith "coins: ") == some true
 #guard (answerOf (noBlobs VStar.Recursive.Sampled.protocol) { sampledOn #[recW] (some (outputsOf (digestOf recW))) recR with
-    evidence := (textOf (Json.mkObj [("form", "one-stage"), ("verdicts", Json.mkObj [])])).toUTF8 }).reason ==
+    evidence := (textOf (Json.mkObj [("verdicts", Json.mkObj [])])).toUTF8 }).reason ==
   some s!"evidence: the evidence names no proofs: {VStar.Recursive.Sampled.V1_REFUSED}"
 
 -- with the coins and the session's proofs granted, v2 accepts `R` after `W`, its tables output values that reuse `W`'s

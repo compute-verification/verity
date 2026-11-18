@@ -33,8 +33,8 @@ remote composite's error is the union bound over its subprotocols' errors (`Veri
 
 - **Guarantee.** `Verity.Sampled.remote_soundness_deployedReady`, the remote composite's soundness at SPOT's live session
   (`Verity.Sampled.Live.delta`), and `Verity.remote_soundness_of_subprotocols`, the union bound it instantiates. The
-  script reads their open premises (three: `Verity.Sampled.Instance.FamiliesPinned`, `Verity.Vocab.PouwSound`,
-  `Verity.Vocab.WiresSound`) and named assumptions from the locks and prints them.
+  script reads their open premises (three: `Verity.Sampled.Instance.FamiliesPinned`, `Verity.Sampled.TwoStageBound`,
+  `Verity.Vocab.PouwSound`) and named assumptions from the locks and prints them.
 - **Bases.** Lean doesn't instantiate the remote guarantee at numeric parameters: its one instance, the honest witness,
   has every error ⊤, and no lock guarantee states a term's value. So no term is `proved at these parameters`. A term is
   `formula proved, value evaluated here` where each parameter it reads is of kind (a) or (b) below, and `assumed` where

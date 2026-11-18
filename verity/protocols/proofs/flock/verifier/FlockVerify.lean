@@ -135,7 +135,8 @@ def buildStmt (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (t
   else if tags.hm96Rows then do
     let st ← if tags.hiddenOutputs then Stmt.setupHidden tags circuitB pubB coins tables draw partition program publicInputs
       else Stmt.setupH tags circuitB pubB coins tables draw partition program
-    if tags.plainLeaves then checkDescription st registered else checkRegistered st registered
+    if tags.plainLeaves then checkDescription st registered
+    else checkRegistered st (← Registered.withTrees st.c st.pub program registered)
     checkIdentifier st identifier
     return st
   else do
@@ -156,7 +157,7 @@ def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
     let (spec, sts) ← Stmt.setupTables tags circuitB pubB coins count tables draw partition program work stratified closure
       publicInputs
     for st in sts do
-      checkRegistered st registered
+      checkRegistered st (← Registered.withTrees st.c st.pub program registered)
       checkIdentifier st identifier
     Registered.checkFull registered draw
     return (spec, sts)
@@ -225,7 +226,7 @@ def buildSessionOf (parsed : V Circuit) (tags : Tags) (circuitB pubB compB : Byt
     let (spec, sts) ← Stmt.setupTablesOf parsed tags circuitB pubB coins count tables draw partition program work stratified
       closure publicInputs
     for st in sts do
-      checkRegistered st registered
+      checkRegistered st (← Registered.withTrees st.c st.pub program registered)
       checkIdentifier st identifier
     Registered.checkFull registered draw
     return (spec, sts)
@@ -262,7 +263,7 @@ def buildSessionBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg : B
     let (spec, sts) ← Stmt.setupTablesBy readDesc readProg parsed tags circuitB pubB coins count tables draw partition
       program work stratified closure publicInputs
     for st in sts do
-      checkRegistered st registered
+      checkRegistered st (← Registered.withTrees st.c st.pub program registered)
       checkIdentifier st identifier
     Registered.checkFull registered draw
     return (spec, sts)

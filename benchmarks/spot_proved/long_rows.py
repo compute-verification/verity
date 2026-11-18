@@ -7,14 +7,13 @@ TREE holds ``benchmarks/serve_tax/replay.py``, whose `window` reads the served w
 ``(request, first position, tokens)`` attends to ``first position + tokens`` keys at its last token, and output token i of a
 request was sampled from the row attending to ``len(prompt) + i`` keys. For each side of the split it counts the served
 steps (a step is long when any of its rows is), the rows and the sampled tokens, and how many of each the replay
-(``replay_steps.jsonl``, ``replay_tokens.jsonl.gz``) reproduced. Requests the serve aborted are listed apart: the client
+(``replay_steps.jsonl``, and ``replay_tokens.jsonl.gz`` in the private directory its ``replay.json`` names) reproduced. Requests the serve aborted are listed apart: the client
 received none of their tokens, so only their rows are compared. It also gives the served rows' longest keys, decode and
 prefill, and how many rows pass each power of two from 16,384 keys.
 """
 from __future__ import annotations
 
 import argparse
-import gzip
 import json
 import sys
 from pathlib import Path
@@ -77,11 +76,14 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     sys.path.insert(0, str(a.tree / "benchmarks" / "serve_tax"))
     import replay
+    import serve_tax as S
 
     w = replay.window(a.arm_dir, a.load, a.rep)
     steps = {s["step"]: s["rows"] for s in map(json.loads, (a.replay / "replay_steps.jsonl").read_text().splitlines()) if s}
-    with gzip.open(a.replay / "replay_tokens.jsonl.gz", "rt") as f:
-        tokens = {r["request"]: r["tokens"] for r in map(json.loads, f) if r}
+    kept = S.private_of(a.replay)
+    if kept is None:
+        raise SystemExit(f"{a.replay}/replay.json names no private directory, where the replay keeps its tokens")
+    tokens = replay.read_tokens(kept)
     res = split(w, steps, tokens, a.keys)
     text = json.dumps(res, indent=1)
     if a.out:

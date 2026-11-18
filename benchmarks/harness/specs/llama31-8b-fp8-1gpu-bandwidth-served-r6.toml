@@ -1,6 +1,7 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-fp8-1gpu-bandwidth-served-r6"
+cards = ["rtx-pro-6000"]
 # PoUS's bandwidth audit on served inference: the bandwidth audit's plain stack (bandwidth-plain) and its encoded,
 # receipted stack (bandwidth-audit, gated against bandwidth-plain), each with the fill-sk16 filler over the paged KV pool,
 # beside stock FP8 on the same graph path and stock FP8 as vLLM serves it, so the audit has a ratio to compiled serving as
@@ -35,7 +36,6 @@ id = "llama31-8b-fp8-1gpu-bandwidth-served-r6"
 model = "/workspace/pouw/mvp-e2e/models/llama-3.1-8b-instruct"
 model_digest = "98e25b0ecbb3eff924ea9fad4673feea9ea6457d2f45db5b5b60e88205de1daa"
 precision = "fp8"
-gpu_id = "rtx-pro-6000"
 gpu_count = 1
 vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
 

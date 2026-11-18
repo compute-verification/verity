@@ -340,7 +340,7 @@ class _Held:
         self.wpipe = PPDR._pipeline(kernel, R.BM, wt.n, wt.k,
                                    {**{x: t.data_ptr() for x, t in wt.b.items()}, "line_a": 0, "segdig_b": self.seg.data_ptr()},
                                    self.xb.data_ptr(), {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 64,
-                                                        **self.run.const_keys}, variant=self.run.variant, weight=0)
+                                                        **self.run.const_keys}, variant=self.run.variant)
         self.wsteps = PPDR._steps(self.wpipe, PPD.EPOCH_STEPS + PPD.JOB_STEPS)
         self.ytrees = DeviceTrees(self.run)
 
@@ -387,6 +387,7 @@ class _YTree:
                                "take the wide row-digest kernels (hash_wide.cuh), which the loaded cubin lacks; build one that "
                                "has them")
         self.p, self.rows, self.launches = trees.pipe(n, index), SY.chunk_rows(m, n), SY.tree_launches
+        self.salts = trees.salts(m, index)
         self.tree = PPDR._zeros(self.R.NB * (2 * self.R.pow2(m) - 1), run.device)
         self.bufs = [self.tree] + [PPDR._zeros(size, run.device) for size in (64 * m, 64 * (n // 256) * self.rows, 4 * n * self.rows)]
         self.at = tuple(t.data_ptr() for t in self.bufs)
@@ -399,7 +400,7 @@ class _YTree:
         def widened(r: int, count: int) -> int:
             R.widen_a(dev, y + 2 * n * r, words, count, count, n, pdl=False)
             return words
-        self.launches(R, self.p, tree, dig, seg, self.m, self.rows, self.index, widened)
+        self.launches(R, self.p, tree, dig, seg, self.m, self.rows, self.index, widened, self.salts)
 
 
 class _Call:

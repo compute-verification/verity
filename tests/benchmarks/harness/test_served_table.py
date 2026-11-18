@@ -28,9 +28,11 @@ SCALE = {"stock-fp8": 2.0, "commit": 2.4, "stock-fp8@compiled": 1.0, "commit@com
          "pouw:pearl-c-h100-v1-h3": 12.4}
 R6, BIG, SMALL = ("llama31-8b-fp8-1gpu-bandwidth-served-r6", "llama31-8b-fp8-1gpu-bandwidth-served-h200",
                   "llama32-1b-fp8-1gpu-bandwidth-served-h200")
-WIDTH_H200 = "llama31-8b-fp8-1gpu-commit-served-width-h200"
-POUW, POUW_H100, POUW_ARM = ("benchmarks/served-overhead-pouw", "llama32-1b-1gpu-pouw-protocol-served-h100",
+WIDTH_H200 = "llama31-8b-fp8-1gpu-commit-served-width@h200"
+POUW, POUW_H100, POUW_ARM = ("benchmarks/served-overhead-pouw", "llama32-1b-1gpu-pouw-protocol-served@h100",
                              "pouw:pearl-c-h100-v1-h3")
+#: the id the PoUW spec's H100 runs were recorded under before its spec named no card (`presets.FORMER_IDS`)
+FORMER_H100 = "llama32-1b-1gpu-pouw-protocol-served-h100"
 
 
 class ScaledEngine:
@@ -76,21 +78,21 @@ def _result(point_id: str, commit_scale: float, reps: int = 2, gpu: str = RTX) -
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     arms = (Arm("stock-fp8"), Arm("commit", control="stock-fp8"), Arm("stock-fp8@compiled"),
             Arm("commit@compiled", control="stock-fp8@compiled"))
-    return run_benchmark(load_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=reps,
+    return run_benchmark(resolve_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=reps,
                          factory=ScaledFactory(commit_scale, gpu), git_commit="c" * 40)
 
 
 def _audit(point_id: str, scale: float, gpu: str) -> dict:
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     arms = (Arm("stock-fp8@compiled"), Arm("bandwidth-audit", control="stock-fp8@compiled"))
-    return run_benchmark(load_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
+    return run_benchmark(resolve_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
                          factory=ScaledFactory(scale, gpu), git_commit="c" * 40)
 
 
 def _pouw(point_id: str, gpu: str) -> dict:
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     arms = (Arm("stock-fp8"), Arm(POUW_ARM), Arm("stock-fp8@compiled"))
-    return run_benchmark(load_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
+    return run_benchmark(resolve_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
                          factory=ScaledFactory(1.0, gpu), git_commit="c" * 40)
 
 
@@ -613,7 +615,7 @@ def test_the_bandwidth_audits_member_specs_are_its_record_spec_on_one_h200_and_t
     big, small = resolve_spec(BIG).preset, resolve_spec(SMALL).preset
     assert (big.model, big.revision, big.case, big.model_digest) == (
         r6.preset.model, r6.preset.revision, r6.preset.case, r6.preset.model_digest)
-    pinned = resolve_spec("llama32-1b-1gpu-pouw-protocol-served-h200").preset
+    pinned = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200").preset
     assert (small.model, small.revision, small.case, small.model_digest) == (
         pinned.model, pinned.revision, pinned.case, None)
     [protocol] = [p for p in served_table.PROTOCOLS if p.record == "pous-bandwidth-audit"]
@@ -674,7 +676,7 @@ def test_the_pouw_metric_is_its_members_readings_from_their_records_runs_and_nev
     assert got["by"][POUW, "llama-3.2-1b-h100"]["value"] is None
     assert got["validation"]["status"] == "passed" and got["validation"]["detail"].startswith("2 of 2 metrics")
 
-    producer.ran("r20261117-221551-8a0b", POUW_H100, "b32-p512-mixed", _pouw("b32-p512-mixed", H100))
+    producer.ran("r20261117-221551-8a0b", FORMER_H100, "b32-p512-mixed", _pouw("b32-p512-mixed", H100))
     producer.label("r20261117-221551-8a0b", "run_of_record", "pouw-served-sm90", "2026-11-17T23:00:00Z")
     member = table("after")["by"][POUW, "llama-3.2-1b-h100"]
     assert (member["value"], member["unit"], member["mark"], member["device"]) == (

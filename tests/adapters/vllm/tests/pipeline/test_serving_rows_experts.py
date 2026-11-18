@@ -193,14 +193,22 @@ def cut(rows, tmpls=TMPLS, caps=CAPS):
     return plan, EX.wire(EX.cut(SRW.members(tmpls, rows, None, caps), plan), plan)
 
 
+@pytest.fixture(autouse=True)
+def unregistered(monkeypatch):
+    """`committer`'s tables name no registered root (None), which `expert_rows._registered` then does not hold them to; a
+    committer of a registration's roots is held to them."""
+    held = EX._registered
+    monkeypatch.setattr(EX, "_registered", lambda got, c: got if all(c["roots"][p] is None for p in got) else held(got, c))
+
+
 def committer(plan, rank=0, at=None):
     """`expert_rows.committer`'s dict for the plan's tables, their salts in a salt file at ``at`` (a fresh directory when None),
-    each table's its own and the rank's: a salt for each of a table's rows, one an expert."""
+    each table's its own and the rank's: a salt for each of a table's rows, one an expert; no root registered (`unregistered`)."""
     leaves = {param: int(plan.of[t][0][3]["statics"]["E"]) for t in plan.what if plan.what[t][0] != "gemm"
               for _at, _n, _b, param, _l in plan.tables(t)}
     at = Path(tempfile.mkdtemp()) / "tables.salts" if at is None else Path(at)
     SF.write(at, {p: random.Random(f"{rank}/{p}").randbytes(n * SF.SALT_BYTES) for p, n in leaves.items()})
-    return {**COMMITTER, "salts": at, "values": frozenset(leaves)}
+    return {**COMMITTER, "salts": at, "roots": dict.fromkeys(leaves)}
 
 
 def stager(t: str) -> UnitStager:
@@ -338,7 +346,7 @@ def test_a_read_of_a_table_the_committer_did_not_commit_and_a_pair_routed_outsid
     with pytest.raises(ValueError, match="not among the committer's tables"):
         SRW.read_all(ms, layer.rows, layer.store, None, tables={p: v for p, v in tables.items() if p != gone})
     with pytest.raises(ValueError, match="holds no salts for the table"):
-        EX.commit_tables(plan, layer.store, None, None, SRW._slices, {**committer(plan), "values": frozenset()})
+        EX.commit_tables(plan, layer.store, None, None, SRW._slices, {**committer(plan), "roots": {}})
     rows = [rs[1:] if t == SLOTS else rs for t, rs in zip(TMPLS, layer.rows)]
     with pytest.raises(ValueError, match="routed by a row outside"):
         cut(rows)
@@ -354,6 +362,7 @@ def test_the_committer_reads_its_tables_registration_through_its_record(layer, t
                           blocks={"w13": NR}, values={p: v.entry() for p, v in tables.items()}).dump()
     (tmp_path / "tables-rank0.json").write_text(json.dumps(doc))
     spec = {"registration": str(tmp_path / "tables-rank{rank}.json")}
+    want = {**want, "roots": {p: v.root.hex() for p, v in tables.items()}}
     assert EX.of_request(spec) == want and EX.of_request(None) is None
     assert XT.ExpertTables.of(json.loads(json.dumps(doc)), "t").dump() == doc
     for bad, why in [({**doc, "schema": "verity-vllm/weights-registration/v1"}, "schema"), ({**doc, "format": 1}, "format"),
@@ -537,7 +546,7 @@ def test_two_ranks_windows_each_commit_and_open_their_own_registration_and_a_fus
         doc = XT.ExpertTables(program=want["program"], repo="test/moe", revision="0" * 40, world=2, rank=rank, prefix="",
                               blocks={"w2": NR}, values={p: v.entry() for p, v in tables.items()}).dump()
         (tmp_path / f"tables-rank{rank}.json").write_text(json.dumps(doc))
-        assert EX.of_request(spec, rank) == want
+        assert EX.of_request(spec, rank) == {**want, "roots": {p: v.root.hex() for p, v in tables.items()}}
         ranks.append((ns, rows, plan, ms, tables))
     assert sorted(ranks[0][4]) == sorted(ranks[1][4]) and all(ranks[0][4][p].root != ranks[1][4][p].root for p in ranks[0][4])
     for ns, rows, plan, ms, tables in ranks:

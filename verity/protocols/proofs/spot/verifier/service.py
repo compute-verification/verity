@@ -2448,8 +2448,7 @@ class Stream:
         challenger's. `statements` are the second-stage sessions' (`second_stage`), which round 2
         holds to the verdicts of record that checked them (each one's header, registered reads and sample, by the digests
         and sample a verdict names), the interior docket and the second stage's cells as the interior
-        docket's audit record's `statements` check: a two-stage outcome without them fails it, and so does every
-        one where `second_stage.FORM` is off, which refuses the two-stage form. `proofs` is the auditor's params naming each template's
+        docket's audit record's `statements` check: a two-stage outcome without them fails it. `proofs` is the auditor's params naming each template's
         circuit file and the reference header and registered reads round 2 holds its statements to (`template_circuits`;
         without them every statement fails ``second-header`` and ``second-values``), which the run of record reads from
         its interior params. The outcome accepts
@@ -2603,7 +2602,7 @@ class Stream:
                      supplied=SS.supplied_of(R.resolved(e.interior_copies[5], e.interior_history)),
                      fixed=(*(e.interior_copies[6] or ()), *(e.interior_copies[10] or ())),
                      reads=template_reads(proofs), tables=pinned_tables(proofs))
-        rec = SS.attach(rec, SS.check_twin(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
+        rec = SS.attach(rec, SS.check_twin(own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots,
                                   certified=sorted(e.certified or ()))
