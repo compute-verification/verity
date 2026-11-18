@@ -45,7 +45,9 @@ the tree's own program, its locks in LOCAL_WORK unless the machine has a lease d
 The run's records stay in LOCAL_WORK/runs/ (the research run's own directory under one). A session whose store is below `STORE_MIN` of the card's memory prints no number. The verifier
 and the coins ran on the machine being measured, so the number is a measurement to improve on and not an audit: the
 text says so first, and the JSON says it under `local`. It reads no evidence store, so the two references beside it
-are left out with that reason.
+are left out with that reason. The card is the card file whose `driver` holds nvidia-smi's name for
+it, and the verifier's node one card of the node file that carries it; on a card no node file carries, the session
+runs and prints no share (`card_only`).
 
 Beside the number it prints two references, each from its run in the store with the run's date and card and the error
 its record states: PoUS's state bound over a card's memory, and the share a wipe left foreign at most.
@@ -89,7 +91,7 @@ from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
 
-from verity.device import load_card, load_node
+from verity.device import load_card, load_node, node_kinds, skus
 from verity.protocol import no_bound
 from verity.protocols.resource_accounting.memory.poub.verifier import ledger as poub_ledger
 from verity.protocols.resource_accounting.memory.poub.verifier import receipts, timing
@@ -134,9 +136,6 @@ RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.jso
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
 LOCAL = "local: the verifier and its coins ran on the machine being measured"
-#: the node sheet (`calibration/hardware/nodes/`) of a --local session's card, by a word of the name nvidia-smi gives it, taken at
-#: that one card: the share is of the one card's read rate (LOCAL_NODE names another sheet)
-LOCAL_SHEETS = {"H200": "h200-sxm-141gb-x1", "RTX PRO 6000": "rtx-pro-6000-server-x8"}
 #: what a --local result's digests are of: the session's verifier, and the data sheets its node is read from
 VERIFIER = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "verifier"
 SHEETS = ROOT / "calibration" / "hardware"
@@ -515,16 +514,49 @@ def gpu_of(run: Callable = subprocess.run) -> tuple[str, str]:
     return name.strip(), cc.strip()
 
 
-def sheet_of(name: str) -> str:
-    """The node sheet of card `name`: LOCAL_NODE where it is set, else `LOCAL_SHEETS`'."""
+def sheet_of(name: str) -> tuple[str, str | None]:
+    """The card file and the node file of card `name`, the name nvidia-smi gives it: the GPU card whose `driver` holds
+    `name` exactly, and LOCAL_NODE where it is set, else the one node file whose `device.sku` is that card, or None
+    where no node file names it (`local` then runs the session and prints no share)."""
     if kind := SETTINGS.LOCAL_NODE:
-        return kind
-    if (kind := next((k for word, k in LOCAL_SHEETS.items() if word in name), None)) is None:
-        raise CouldNotRun(f"the tree has no data sheet for {name} (calibration/hardware/nodes/ has "
-                          f"{', '.join(LOCAL_SHEETS.values())} for its cards), and the share is of the card's own sheet: "
-                          "add its card and a node of it there (calibration/hardware/README.md) and name the node with LOCAL_NODE; "
-                          "a result against a sheet not on main is not comparable, and its digest says so")
-    return kind
+        node = load_node(kind, directory=NODE_FILES, cards_directory=CARD_FILES)
+        return node["device"]["sku"], kind
+    cards = [s for s in skus("gpu", directory=CARD_FILES)
+             if name in {d["value"] for d in load_card(s, directory=CARD_FILES).get("driver", ())}]
+    if len(cards) != 1:
+        raise CouldNotRun(f"{len(cards)} card files of calibration/hardware/cards/ have {name!r}, the card nvidia-smi "
+                          f"names here, in `driver`: add {{ value = {json.dumps(name)}, source = ... }} to its one card "
+                          "file's `driver`, adding its <sku>.toml (calibration/hardware/README.md) if it has none, and a "
+                          "node file of it to calibration/hardware/nodes/ for a share; a result against a sheet not on "
+                          "main is not comparable, and its digest says so")
+    nodes = [k for k in node_kinds(directory=NODE_FILES)
+             if load_node(k, directory=NODE_FILES, cards_directory=CARD_FILES)["device"]["sku"] == cards[0]]
+    if len(nodes) > 1:
+        raise CouldNotRun(f"the node files {', '.join(nodes)} all carry {cards[0]}, the card here: name the one this "
+                          "machine is with LOCAL_NODE")
+    return cards[0], nodes[0] if nodes else None
+
+
+def card_bytes(sku: str) -> int:
+    """Card `sku`'s memory, its card file's `store.dram`, the verifier's `--hbm-bytes` where no node file carries it."""
+    return int(load_card(sku, directory=CARD_FILES)["store"]["dram"]["value"])
+
+
+def card_only(sku: str, record: Path) -> str:
+    """Why a session on card `sku`, which no node file names, prints no share, beside its verdict in the verifier's
+    `record`: the share is of the node's read rate, its host's DRAM in it, and no host of the card is on record."""
+    if (why := refusal(record)) is not None:
+        return why
+    try:
+        vs = json.loads(record.read_text())["sessions"][0]
+    except (OSError, KeyError, IndexError, TypeError, ValueError) as e:
+        raise CouldNotRun(f"the verifier's record doesn't read as one ({type(e).__name__}: {e})") from e
+    said = ("was accepted by the Lean verifier" if vs.get("accepted") is True and vs.get("verdict") == "lean" else
+            f"was not accepted by the Lean verifier ({(vs.get('failure') or {}).get('failure') or vs.get('verdict')})")
+    return (f"session {vs.get('k')} {said}, and no node file of calibration/hardware/nodes/ carries {sku}, so no host "
+            "of it is on record and no share is printed: the verifier's ledger in its record is against its default "
+            f"node, not this card's; a node file of {sku} with its host card (calibration/hardware/README.md) gives "
+            "the share")
 
 
 def one_card(kind: str) -> tuple[dict, int]:
@@ -613,8 +645,9 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
         raise CouldNotRun("--local serves with vLLM, and VLLM_PY names no vLLM interpreter: make one (`uv venv "
                           "VENV && uv pip install --python VENV/bin/python vllm`) and set VLLM_PY=VENV/bin/python")
     name, _ = gpu_of(run)
-    kind, work = sheet_of(name), Path(SETTINGS.LOCAL_WORK).expanduser()
-    node, hbm_bytes = one_card(kind)
+    (sku, sheet), work = sheet_of(name), Path(SETTINGS.LOCAL_WORK).expanduser()
+    node, hbm_bytes = one_card(sheet) if sheet else ({}, card_bytes(sku))
+    kind = sheet or sku
     arena, util = arena_of(hbm_bytes)
     work.mkdir(parents=True, exist_ok=True)
     snap = checkpoint(work, SETTINGS.VLLM_PY, run)
@@ -639,8 +672,11 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
                                                    shlex.quote(f"{held}/{NODE_FILE}"), "--hbm-bytes", str(hbm_bytes)]))}
     if shutil.which("gpu-lease") is None and not LEASE_DIR.is_dir():
         env.setdefault("GPU_LEASE_DIR", str(work / "gpu-lease"))
+    if sheet is None:
+        env["VERIFIER_ARGS"] = " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--hbm-bytes", str(hbm_bytes)]))
     print(f"memory: --local serves {ROLE} on {name} with a {arena} GiB arena of its {hbm_bytes / 2 ** 30:.0f} GiB, the "
-          f"verifier's node one card of {kind}; its records go to the directory on the next line, which `verity bench "
+          f"verifier's node {f'one card of {sheet}' if sheet else f'{sku} alone, with no node file: no share'}; its "
+          "records go to the directory on the next line, which `verity bench "
           f"memory --from` reads back\n  {held}/out", file=sys.stderr)
     done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
     if done.returncode:
@@ -648,6 +684,8 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
             raise NoNumber(f"{why} (run.sh exited {done.returncode}); its logs are above and in {held}/out")
         raise CouldNotRun(f"the node's session failed (run.sh exited {done.returncode}); its logs are above and in "
                           f"{held}/out")
+    if sheet is None:
+        raise NoNumber(f"{card_only(sku, Path(held) / 'out' / 'verifier.json')}; its logs are above and in {held}/out")
     s = session(Path(held) / "out" / "verifier.json", None)
     if s["store_bytes"] < STORE_MIN * hbm_bytes:
         raise NoNumber(f"the store is {_gb(s['store_bytes'])}, {s['store_bytes'] / hbm_bytes:.3f} of the card's "
