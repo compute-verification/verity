@@ -89,7 +89,7 @@ PROTOCOLS = (
              members=(("llama-3.1-8b-h200", "llama31-8b-fp8-1gpu-bandwidth-served-reps6@h200"),
                       ("llama-3.2-1b-h200", "llama32-1b-fp8-1gpu-bandwidth-served"))),
     Protocol("Commit", (), "commit@compiled", None, record="commit"),
-    Protocol("PoUW served on sm_90a", (), "pouw:pearl-c-h100-v1-h3", "stock-fp8", record="pouw-served-sm90",
+    Protocol("Pearl+ served", (), "pouw:pearl-c-h100-v1-h3", "stock-fp8", record="pouw-served-sm90",
              members=(("llama-3.2-1b-h100", "llama32-1b-1gpu-pouw-protocol-served@h100"),)),
     Protocol("H1 served, GPU commit path (cost only, in-process coins)", (), "pouw:eps1-sm120-h1fx1", "stock-int8",
              record="h1-served"),

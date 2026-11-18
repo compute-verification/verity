@@ -26,6 +26,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.circuits import population as PN
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
@@ -97,7 +98,7 @@ SHARED = _opt_in("VERITY_VLLM_INTERIOR_TABLE", "about 5 minutes on a CPU to buil
 def _boundary() -> CS.Binding:
     """Round 1's stand-in boundary, one member of the replay block's `SPANS` units. Built on first use, never at
     import: every test worker imports the module to collect it, and the boundary's program holds every span's reads."""
-    return CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), {"law": "subset", "k": Q},
+    return CS.Binding(PN.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), {"law": "subset", "k": Q},
                       RUN, (CS.Member(P.template_id(BLOCK), (("ingress", 64),), (("egress", 64),), SPANS),))
 
 

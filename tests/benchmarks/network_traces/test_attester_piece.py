@@ -437,7 +437,7 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_attester_missing(case, tmp_
     assert {"no kept run": "no network attester run kept", "corrupt fetch": "fetch.tar.gz: ReadError", "no report": "the chain wrote no report (exit 7)",
             "no build": "network-period check: FileNotFoundError",
             "no rows build": "network-rows check: FileNotFoundError", "time limit": "SIGTERM: the piece's time limit",
-            "foreign answer": "no verity/certifier/v0 verdict"}[case] in why
+            "foreign answer": "the protocol 'other', not verity/certifier/v0"}[case] in why
     if case != "no kept run":
         assert not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
@@ -1085,7 +1085,7 @@ def test_the_front_without_its_peer_is_refused_by_the_settings_name_before_the_g
     serve, out = tmp_path / "serve", tmp_path / "out"
     assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key"), *flags]) == 2
     why = json.loads((out / "session.json").read_text())["refused"]
-    assert why == CP.NO_PEER and "network-certifier.certifier.peer" in why
+    assert why == CP.NO_PEER and "network-attester.network-attester.peer" in why
     assert not (tmp_path / "request").exists() and not (tmp_path / "asked").exists()
 
 

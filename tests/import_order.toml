@@ -106,12 +106,7 @@ loader = "verity/protocols/proofs/flock"
 loaded = "adapters"
 files = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/boolean_export.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/class_statement.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/ir_lower.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/ir_sampling.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/tail_pieces.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/templates/silu_mul_v2.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py",
 ]
 
@@ -404,7 +399,7 @@ loads = [
 
 [[place]]
 paths = [
-    "verity/protocols/proofs/spot/prover/registered_reads.py",
+    "verity/protocols/proofs/spot/prover/produced.py",
 ]
 loads = [
     "verity/commitments",
@@ -416,6 +411,15 @@ paths = [
 ]
 loads = [
     "verity/channel.py",
+    "verity/runtime",
+]
+
+[[place]]
+paths = [
+    "verity/protocols/proofs/spot/scheme.py",
+]
+loads = [
+    "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
 
@@ -536,7 +540,7 @@ loads = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/protocols/compose/schemes.py",
+    "verity/protocols/proofs/spot/prover/produced.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/protocols/resource_accounting/compute/pouw/scheme.py",
@@ -551,7 +555,6 @@ paths = [
 ]
 loads = [
     "verity/protocols/resource_accounting/compute/pouw/prover",
-    "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
@@ -839,6 +842,7 @@ loads = [
     "verity/commitments/crypto",
     "verity/commitments/periods",
     "verity/commitments/randomness",
+    "verity/protocols/proofs/spot/prover/produced.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/resource_accounting/network/verifier",
     "verity/runtime",
@@ -885,8 +889,13 @@ loaded_by = [
 paths = [
     "verity/protocols/resource_accounting/scheme.py",
 ]
+
+[[place]]
+paths = [
+    "verity/protocols/workload_classification/training_detection/inference_only/scheme.py",
+]
 loads = [
-    "verity/channel.py",
+    "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
 

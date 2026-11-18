@@ -284,6 +284,25 @@ def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_r
     assert run.commits["transcript_root"] == out["transcript_root"]
 
 
+def test_the_transcripts_leaves_are_hashed_under_its_salts_with_their_length_stated(device_run, monkeypatch):
+    """A pass's end hands `hm_level0` the transcript's salts buffer and its length, `HM_SALT` bytes a tile, so the kernels'
+    own refusal of a wrong length guards it, and its hm_leaves launch reads that buffer."""
+    make, kernel, weights, *_ = device_run
+    run = make()
+    run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+    given, level0 = [], R.Pipeline.hm_level0
+
+    def spy(p, tag, *a, **kw):
+        given.append((tag, kw))
+        return level0(p, tag, *a, **kw)
+    monkeypatch.setattr(R.Pipeline, "hm_level0", staticmethod(spy))
+    kernel.dev.log.clear()
+    tiles = run.end()["tiles"]
+    (tag, kw), = given
+    assert tag == "t" and kw["salt_bytes"] == R.HM_SALT * tiles
+    assert [p[2] for n, _, p, _ in kernel.dev.log if n == "hm_leaves"] == [kw["salts"]]
+
+
 def test_a_call_over_whole_128_row_tiles_runs_the_128_tile_chain(device_run):
     """At m a multiple of 128 the chain runs on 128 x 128 tiles (gemm_pearlc, on the mainloop), writing C~, U and y, and the
     tile leaves read them."""
@@ -384,6 +403,41 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
         y, tree = (tmp_path / u["y"]["rows"]["path"]).read_bytes(), (tmp_path / u["y"]["tree"]["path"]).read_bytes()
         root, want = SY.commit_y(y, u["n"], salt, u["index"], split_salts((tmp_path / u["y"]["salts"]["path"]).read_bytes()))
         assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
+
+
+def test_a_retained_pass_refuses_a_weight_tree_whose_root_moved_after_the_build(device_run, tmp_path):
+    """A retained pass writes each weight's tree from the device beside the build's root: a tree_b whose root bytes were
+    written after the build is refused by the weight's name before any of the pass's last files is written, and an
+    untouched one is retained."""
+    make, _, weights, roots, _ = device_run
+    for touched in (True, False):
+        run = make()
+        d = tmp_path / str(touched)
+        run.begin(retain=str(d))
+        run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+        if touched:
+            run.weights[1].b["tree_b"][-64:] ^= 0x5A
+            with pytest.raises(ValueError, match=r"weight 1's tree on the device roots at [0-9a-f]{16}, not its build's "
+                                                  f"{roots[1].hex()[:16]}: its tree_b was written after the build"):
+                run.end()
+            assert not (d / "weights").exists() and not (d / "leaves").exists()
+        else:
+            man = json.loads(Path(run.end()["manifest"]).read_text())
+            assert (d / man["weights"]["1"]["tree"]["path"]).read_bytes()[-64:] == roots[1]
+
+
+@pytest.mark.parametrize("dtype", ["float16", "float32"])
+def test_the_weight_build_refuses_a_weight_that_is_not_bfloat16(device_run, dtype):
+    """Pearl+ commits a weight's FP32 words and retains its rows as BF16, so a weight in another format (whose words BF16
+    does not hold) is refused by name and dtype, by `weight_roots` and by a run's own build, before either allocates."""
+    make, kernel, weights, roots, _ = device_run
+    bad = {0: weights[0].to(getattr(torch, dtype)), 1: weights[1]}
+    refusal = f"weight 0 is torch.{dtype}: Pearl\\+ commits a weight's FP32 words and retains its rows as BF16"
+    with pytest.raises(ValueError, match=refusal):
+        PPDR.weight_roots(kernel, bad, SCHEME, weight_salts=salts_b(bad))
+    with pytest.raises(ValueError, match=refusal):
+        PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, bad, roots, *salt_coin(roots),
+                             capacity=1 << 12, weight_salts=salts_b(bad))
 
 
 def test_a_retained_call_given_its_y_tree_retains_that_tree_and_never_makes_one(device_run, tmp_path, monkeypatch):
@@ -696,6 +750,27 @@ def test_the_pinned_ring_hands_out_disjoint_regions_and_frees_them_in_order(monk
     ring.give(d[0])
     ring.give(e[0])
     assert not ring.live and ring.take(1000)[0][:2] == [0, 1000]
+
+
+def test_an_attached_pearl_plus_after_its_first_step_holds_the_run_the_harness_gate_reads(monkeypatch):
+    """`Attached.run` after the first step with tokens is the device run `verity_bench.vllm.runner._pearl_c_gate` checks,
+    with every name that gate and `bench_arm.PearlCArm.gate` read on it, its ``weights_root`` in the commits the run
+    itself made."""
+    rng = np.random.default_rng(41)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    cls = PPDR.PearlCDeviceRun
+    served = _Steps(monkeypatch, PPD.Kernel(R90, H100Dev(), "0" * 64), weights, [[(0, 8), (1, 8)]])
+    assert served.scheme.run is None
+    served.step()
+    run = served.scheme.run
+    assert isinstance(run, cls) and isinstance(run.schedule.name, str) and run.omit == frozenset()
+    assert all(callable(getattr(run, f)) for f in ("begin", "end", "gemm", "poison", "epoch_calls"))
+    assert isinstance(run.details, dict) and run.scheme is not None
+    assert {w: x.tensor.data_ptr() for w, x in run.weights.items()} == {w: t.data_ptr() for w, t in weights.items()}
+    assert run.commits["weights_root"] == run.epoch.weights_root.hex() and "registration" in run.commits
+    assert run.commits.get("coin_source", "in-process") == "in-process"
+    served.release()
 
 
 def test_a_step_over_one_pass_is_refused_before_its_forward(monkeypatch):

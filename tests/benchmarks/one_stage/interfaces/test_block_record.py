@@ -244,6 +244,27 @@ def test_each_row_its_scheme_bounds_not_carries_why_beside_it_and_keeps_its_verd
     assert again["composed"]["legs"] == {k: "undecided" if k == "pous" else "accept" for k in R.SUBPROTOCOLS}
 
 
+def test_a_piece_that_refused_to_run_shows_undecided_by_its_sentence_never_accepted_nor_dropped() -> None:
+    """A refusal to run (the wipe on a busy card) is in the record by name: undecided with its sentence, its value
+    null and held at no δ, neither accepted nor missing, and a record that says otherwise is refused."""
+    report, _ = _accepting_report()
+    busy = {"verdict": R.REFUSED, "reason": "card 0 is busy: another process holds it", "owner": "memory-accounting"}
+    rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE,
+                        extra={"wipe": {"row": busy, "server": report["node"], "runs": ["r"]}})
+    lg = rec["legs"]["wipe"]
+    assert lg["answer"]["verdict"] == "undecided" and lg["refused"] == busy["reason"]
+    assert lg["answer"]["reason"] == f"refused to run: {busy['reason']}" and lg["quantity"]["value"] is None
+    assert not any(at["holds"] for at in lg["at"].values())
+    assert rec["composed"]["legs"]["wipe"] == "undecided" and "wipe" not in rec["composed"]["missing"]
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert R.check(rec) == {}
+    forged = copy.deepcopy(rec)
+    forged["legs"]["wipe"]["answer"]["verdict"] = "accept"
+    assert "subprotocol:wipe" in R.check(forged)
+    with pytest.raises(ValueError, match="says why it refused"):
+        R.subprotocol("wipe", {"verdict": R.REFUSED}, server="n0", runs=["r"])
+
+
 def test_pous_writes_its_state_bound_and_a_record_under_the_older_name_still_reads() -> None:
     """PoUS's quantity is written as `S0`, the verifier's `s_bits`, in a record built here as in the fixtures, and no
     other quantity has that symbol. The same record under `S_cert`, the quantity's older name, fits the schema and
