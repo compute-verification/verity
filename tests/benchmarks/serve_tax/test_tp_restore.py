@@ -161,7 +161,7 @@ def test_the_plugin_site_declares_the_edges_beside_the_step_trace(tmp_path):
                    "[vllm.general_plugins]\nverity_tp_edge = tp_edge:register\n"]
 
 
-def test_each_edges_record_is_copied_out_of_the_scratch_directory(tmp_path):
+def test_each_edges_record_is_copied_out_of_the_scratch_directory_into_the_private_one(tmp_path):
     for e in (4, 9):
         d = tmp_path / "scratch" / f"edge-{e:06d}"
         d.mkdir(parents=True)
@@ -170,13 +170,14 @@ def test_each_edges_record_is_copied_out_of_the_scratch_directory(tmp_path):
                                                  "ranks": [{"layer_digests": ["a", f"b{e}"]}]}))
         (d / "digests.rank0.bin").write_bytes(b"x")
     (tmp_path / "scratch" / "outputs.jsonl").write_text('{"step":3,"out":{}}\n')
-    got = T.copy_edges(tmp_path / "scratch", tmp_path / "out", tmp_path / "private" / "server" / "edges")
+    kept = tmp_path / "private" / "server" / "edges"
+    got = T.copy_edges(tmp_path / "scratch", kept)
     assert [g["edge"] for g in got] == [4, 9] and got[0]["trace_step"] == 3 and got[0]["blocks"] == 3
     assert got[1]["dir"] == str(tmp_path / "scratch" / "edge-000009")
     assert got[0]["files"]["digests.rank0.bin"] == 1 and len(got[0]["kv_root"]) == 128
     assert got[0]["kv_root"] != got[1]["kv_root"]
-    assert sorted(p.name for p in (tmp_path / "out").rglob("*")) == ["edge-000004", "edge-000009", "edge.json", "edge.json"]
-    assert (tmp_path / "private" / "server" / "edges" / "outputs.jsonl").read_text() == '{"step":3,"out":{}}\n'
+    assert sorted(p.name for p in kept.rglob("*")) == ["edge-000004", "edge-000009", "edge.json", "edge.json", "outputs.jsonl"]
+    assert (kept / "outputs.jsonl").read_text() == '{"step":3,"out":{}}\n'
 
 
 def test_a_serving_plans_requests_send_their_own_sampling_and_a_share_of_the_sampled_go_unseeded(monkeypatch):

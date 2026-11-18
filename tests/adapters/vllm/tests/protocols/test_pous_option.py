@@ -151,10 +151,10 @@ def test_pous_registers_p2_v4_as_its_default_and_refuses_what_it_cannot_run():
 
 
 def test_with_pous_on_the_selector_refuses_an_option_that_keeps_a_weight_copy(monkeypatch):
-    _fake_pouw(monkeypatch, lambda scheme, target: None, keeps=True)
-    got = PO.refusals(_ctx("pouw:ncp-v1", ENTRY))
-    assert any(r.startswith("pouw:ncp-v1: keeps a weight-derived copy") for r in got)
-    assert PO.refusals(_ctx("pouw:ncp-v1", settings={})) == ()
+    _fake_pouw(monkeypatch, lambda scheme, target: None, scheme="ncp-v2")
+    got = PO.refusals(_ctx("pouw:ncp-v2", ENTRY))
+    assert any(r.startswith("pouw:ncp-v2: keeps a weight-derived copy") for r in got)
+    assert PO.refusals(_ctx("pouw:ncp-v2", settings={})) == ()
 
 
 def test_a_tiny_int8_model_is_held_as_p2_and_served_bit_exact(toy):
@@ -351,12 +351,11 @@ def test_a_dropped_block_rejects(toy, tmp_path):
         assert got.verdict == "reject" and got.answer["reason"] == f"setup: segment 1 of C* is not 8 blocks of {q.block_bytes} bytes"
 
 
-def _fake_pouw(monkeypatch, install, keeps=False):
+def _fake_pouw(monkeypatch, install, scheme="ncp-v1"):
     mod = types.ModuleType("verity_vllm.protocols.fake_pouw")
-    vars(mod).update(NAME="pouw", schemes=lambda: ("ncp-v1",), refusals=lambda s, c: (), install=install,
-                     keeps_weight_copy=lambda scheme, ctx: keeps)
+    vars(mod).update(NAME="pouw", schemes=lambda: (scheme,), refusals=lambda s, c: (), install=install)
     monkeypatch.setitem(sys.modules, mod.__name__, mod)
-    monkeypatch.setitem(PO.ADAPTERS, "pouw", "fake_pouw")
+    monkeypatch.setitem(config.PROTOCOLS, "pouw", "fake_pouw")
 
 
 def test_pous_wraps_around_pouw_so_pouws_gemm_reads_the_decoded_weight(toy, monkeypatch):

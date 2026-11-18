@@ -13,25 +13,59 @@ from verity.protocols.resource_accounting.network.prover.lengths_row import Leng
 from verity.protocols.resource_accounting.network.prover.response_tie import ResponseTieNoStop, ResponseTieStop
 from verity.protocols.resource_accounting.network.verifier.io_request import IoTieRequest
 from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBucket, IoTieContent, IoTieRoute
+from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Port, Scheme, register
 from verity import hooks as H
-from verity.protocols.resource_accounting.network.prover import id_relay
-from verity.protocols.resource_accounting.network.prover.admission import Admitter
+from verity.protocols.resource_accounting.network.prover import id_relay, workload
+from verity.protocols.resource_accounting.network.prover.ids_protocol import IdsProtocol
+from verity.protocols.resource_accounting.network.prover.admission import ORDERS, Admitter, FrontFeed, engine, tick_config
 
 DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, IoTieContent, IoTieBucket, IoTieRequest,
                ResponseTieStop, ResponseTieNoStop, LengthsRow)
 
 
+#: the scheme's settings and their defaults: ``order`` ``arrival`` admits no request in release order (the id relay
+#: instead); ``release-order`` and ``tick`` are `prover.admission.Admitter`'s, which reads the rest under ``tick``;
+#: ``log``, a directory for the engine's tick log (`prover.admission.engine`), none where empty
+SETTINGS = {"order": "arrival", "hold_ms": 5000, "bucket_us": 100_000, "sat_us": 0, "free_us": 0, "token_ns": 0,
+            "catch_up": "quiet", "arm": "", "log": ""}
+
+
+def _check(values: Mapping[str, Any]) -> str | None:
+    if values["order"] not in ("arrival", *ORDERS):
+        return f"order one of {['arrival', *ORDERS]}, not {values['order']!r}"
+    if values["hold_ms"] < 1:
+        return f"hold_ms a positive number of milliseconds, not {values['hold_ms']!r}"
+    if values["order"] == "tick":
+        try:
+            tick_config({k: v for k, v in values.items() if k != "order"}, "tick", feed=False)
+        except ValueError as e:
+            return str(e)
+    return None
+
+
+def settings(given: Mapping[str, Any]) -> dict[str, Any]:
+    """The network attester's settings with ``given`` over their defaults (`SETTINGS`)."""
+    return S.settings(NETWORK_ATTESTER, given)
+
+
 def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
-    """The scheme on a served run's ``exchange``. With ``admit`` in ``ctx``, its admission (`prover.admission.Admitter`,
-    the configuration ``admit`` with ``ctx``'s ``source``, ``submit``, ``abort``, ``take``, ``pull``, ``log`` and
-    ``clock``), installed and returned; without, the id relay beside the workload (`START_ID_RELAY`)."""
-    if "admit" not in ctx:
+    """The scheme on a served run's ``exchange`` under ``ctx["settings"]`` (`settings`). Under an ``order`` other than
+    ``arrival``, its admission (`prover.admission.Admitter`, with ``ctx``'s ``source``, ``submit``, ``abort``, ``take``,
+    ``pull``, ``log``, ``clock`` and ``schedule``), installed and returned; else the id relay beside the workload
+    (`START_ID_RELAY`). Where the front and the engine run in two processes (``ctx["process"]``), each process's side of
+    the certified tick, on the server's feed directory (`prover.admission.FrontFeed`, `prover.admission.engine`)."""
+    s = settings(ctx.get("settings", {}))
+    if ctx.get("process") == H.FRONT:
+        return FrontFeed(ctx["feed"]).attach(exchange, NETWORK_ATTESTER.name)
+    if ctx.get("process") == H.ENGINE:
+        return engine(s, ctx["feed"]).install(exchange, NETWORK_ATTESTER.name)
+    if s["order"] == "arrival":
         for r in requests(ctx):
             exchange.request(NETWORK_ATTESTER.name, r)
         return None
-    kw = {k: ctx[k] for k in ("source", "submit", "abort", "take", "pull", "log", "clock") if k in ctx}
-    return Admitter(ctx["admit"], **kw).install(exchange, NETWORK_ATTESTER.name)
+    kw = {k: ctx[k] for k in ("source", "submit", "abort", "take", "pull", "log", "clock", "schedule") if k in ctx}
+    return Admitter(s, **kw).install(exchange, NETWORK_ATTESTER.name)
 
 
 def output_bits(definition: Any) -> Callable[[Mapping[str, int]], int]:
@@ -44,12 +78,15 @@ START_ID_RELAY = H.StartBeside("id-relay", id_relay.READERS)
 
 
 def requests(ctx: Mapping[str, Any]) -> tuple[Any, ...]:
-    """The id relay beside the workload where ``ctx`` configures no admission (``admit``), else nothing."""
-    return () if "admit" in ctx else (START_ID_RELAY,)
+    """The id relay beside the workload under ``order`` ``arrival`` (`attach`), else nothing."""
+    return (START_ID_RELAY,) if settings(ctx.get("settings", {}))["order"] == "arrival" else ()
 
 
 NETWORK_ATTESTER = register(Scheme(
     name="network-attester",
+    messages=workload.MESSAGES,
+    framings={IdsProtocol.name: IdsProtocol},
+    provides=("admission",),
     protocol="verity/certifier/v0",
     resource="egress",
     blocks=tuple(Block(d.id, output_bits(d)) for d in DEFINITIONS),
@@ -63,6 +100,8 @@ NETWORK_ATTESTER = register(Scheme(
         Charge("start", "start"),
         Charge("tied-entries", "scans[].faulty_entries"),
     ),
+    settings=SETTINGS,
+    check_settings=_check,
     hooks=("declared", "steps"),
     requires={"one-labelling": "the network attester's rows (`verifier.network_attester_rows`)",
               "one-design": "each scan's own sample at its δ (`prover.scan_zk`)"},
@@ -72,4 +111,5 @@ NETWORK_ATTESTER = register(Scheme(
     processes={"id-relay": id_relay.process},
 ))
 
-__all__ = ["DEFINITIONS", "NETWORK_ATTESTER", "START_ID_RELAY", "attach", "output_bits", "requests"]
+__all__ = ["DEFINITIONS", "NETWORK_ATTESTER", "SETTINGS", "START_ID_RELAY", "attach", "output_bits", "requests",
+           "settings"]
