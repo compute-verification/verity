@@ -1,15 +1,13 @@
 """Storage outside useful work at a linear layer's ``apply``, as a served engine composes them: PoUS attached by its
 scheme's name on the exchange, the linear site attached after vLLM's ``load_model`` with the weights PoUS stores
-released (`engine.kv_blocks`), then H1 enabled through the selector (`protocols.install`), one forward. Useful work's
-GEMM must be handed the weight PoUS decoded; the model's own ``layer.weight`` is the released, empty tensor. It is
-expected to fail: H1's install commits its weights from ``layer.weight`` (`protocols.pouw._install_h1`,
-`commit_weights`), which PoUS has already released to an empty tensor at ``load_model``, so it raises before any
-forward, and nothing hands H1 the registered plain weights.
+released (`engine.kv_blocks`), then the first-stage hash scheme (H1) enabled through the selector (`protocols.install`).
 
-The exchange alone: two kernels filed in the application's order, ``pous`` then ``pouw``, the earlier listed must be
-the outer (`verity.config.check`: where two schemes wrap one site, the earlier is the outer). It is not:
-`messages.Exchange.request` runs a kernel filed later outside earlier ones, so filing in list order puts the later
-listed outside. That case is expected to fail until the attach files in the order the list means."""
+Today the pair in one process is refused by name: H1 commits its weights from each layer's weight, which PoUS has
+released (`protocols.refusals`). The case that H1's GEMM is handed the weight PoUS decoded, while the layer's own
+weight is the released, empty tensor, is kept expected-to-fail for the day H1 is declared on the exchange.
+
+The exchange alone: two kernels filed in the application's order, ``pous`` then ``pouw``; the earlier listed is the
+outer (`verity.config.check`; `messages.Exchange.request`)."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -25,6 +23,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import
 from tests.protocols import test_pouw_h1 as T1
 from tests.protocols._needs_torch import torch
 from verity_vllm import messages
+from verity_vllm.errors import Refused
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.engine import kv_blocks as KB
@@ -53,9 +52,9 @@ class Model(T1.Model):
         return ((f"l{i}.{p}", getattr(m, p)) for i, m in enumerate(self.layers) for p in ("weight", "weight_scale"))
 
 
-@pytest.mark.xfail(strict=True, raises=ValueError,
-                   reason="H1 commits its weights from layer.weight, which PoUS released at load_model (shape (0,))")
-def test_h1s_gemm_is_handed_the_weight_pous_decoded_and_the_layer_holds_the_released_weight(monkeypatch):
+def _released(monkeypatch):
+    """The toy H1 model with PoUS attached on the current exchange, the linear site attached and l0's weight released,
+    as `kv_blocks`' ``load_model`` leaves them; its int8 arm records the weight it is handed and the layer's own."""
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
     monkeypatch.setattr(ws, "geometry", lambda scheme: SMALL)
     model = Model(Linear(32, 1))
@@ -81,10 +80,32 @@ def test_h1s_gemm_is_handed_the_weight_pous_decoded_and_the_layer_holds_the_rele
     vllm_site.attach(sites, site_hooks)                                  # kv_blocks' load_model: the site, then release
     KB._Hook.release_values(SimpleNamespace(released=[]), model, ex)
     assert layer.weight.numel() == 0
+    return model, layer, plain, seen, site_hooks
 
+
+def test_storage_beside_the_first_stage_hash_scheme_in_one_process_is_refused_by_name(monkeypatch):
+    model, _layer, _plain, _seen, site_hooks = _released(monkeypatch)
+    try:
+        with pytest.raises(Refused) as e:
+            PO.install(model, PO.Context(stage="serve", enabled=(T1._entry(),), settings=T1._settings()))
+    finally:
+        site_hooks.uninstall()
+    assert f"{T1._entry()}: the first-stage hash scheme commits its weights from each layer's weight, which pous " \
+           "releases on this build (ReleaseValue): they don't run in one process" in str(e.value)
+
+
+@pytest.mark.xfail(strict=True, raises=Refused,
+                   reason="refused by name until the first-stage hash scheme is declared on the exchange: it commits "
+                          "its weights from layer.weight, which PoUS released at load_model")
+def test_h1s_gemm_is_handed_the_weight_pous_decoded_and_the_layer_holds_the_released_weight(monkeypatch):
+    model, layer, plain, seen, site_hooks = _released(monkeypatch)
     settings = T1._settings()
     runner = settings["pouw"]["runner"]
-    comp = PO.install(model, PO.Context(stage="serve", enabled=(T1._entry(),), settings=settings))
+    try:
+        comp = PO.install(model, PO.Context(stage="serve", enabled=(T1._entry(),), settings=settings))
+    except Refused:
+        site_hooks.uninstall()
+        raise
     try:
         runner.execute_model(T1._so(("a", [5], 4)))
         x = (torch.randn(1, T1.K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
@@ -97,8 +118,6 @@ def test_h1s_gemm_is_handed_the_weight_pous_decoded_and_the_layer_holds_the_rele
     assert torch.equal(seen["handed"], plain), "H1's GEMM was not handed the weight PoUS decoded"
 
 
-@pytest.mark.xfail(strict=True, reason="Exchange.request runs a kernel filed later outside earlier ones (messages.py "
-                                       "109): filed in list order, the later listed is the outer, not the earlier")
 def test_two_kernels_filed_in_list_order_put_the_earlier_listed_outside():
     ex = messages.Exchange()
     order = []
