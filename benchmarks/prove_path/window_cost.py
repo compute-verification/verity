@@ -66,6 +66,8 @@ sys.path.insert(0, str(HERE))
 import class_rows as CR  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import class_size as CS  # noqa: E402
 
+SOURCES = json.loads((HERE / "sources.json").read_text())
+
 FIRST, END = "AttnBlockFirst_v1", "AttnHeadEnd_v1"
 #: a first block's families (`class_size.FIRSTS`): v2's body is v1's node for node, so it is priced as v1
 FIRSTS = CS.FIRSTS
@@ -147,7 +149,7 @@ def unit_ands(lab: str, target: str = "h200") -> int:
             return FA3_FIRST[s["NVIS"] - 1]
         if fam == "AttnBlock_v4" and s["D"] == 64 and s["NVIS"] == s["BN"]:
             return FA3_FULL[(s["BN"], s["CHECK"])]
-    return CS.measured(lab)[0]
+    return CS.measured(lab, SOURCES)[0]
 
 
 @dataclass(frozen=True)
@@ -324,7 +326,7 @@ LEVERS = {
     "W": "wired ports by reference",
     "R": "registered ports by reference",
     "L4": "one Merkle root over members",
-    "P": CS.SOURCES["levers"]["P"],
+    "P": SOURCES["levers"]["P"],
 }
 
 
@@ -706,7 +708,7 @@ def report(doc: dict) -> str:
     if st:
         lines += ["", f"serving's own stream commit, made while it serves, before the window's commit and beside it (rows-sha512: "
                   f"{STREAM_ROW} compressions a 4 KiB row; the seal's store at {SEAL_BYTES_S / 1e9:.3f} GB/s, "
-                  f"{CS.SOURCES['seal_store']}), the full window; {STREAM_LEVER}:", "",
+                  f"{SOURCES['seal_store']}), the full window; {STREAM_LEVER}:", "",
                   "| schedule | stream bytes | fa*.m1 bytes (share) | commit ANDs (ratio) | commit s at 3.1 (4.79) G/s (ratio) | "
                   "seal s (ratio) | under F: commit ANDs (ratio) | commit s (ratio) | seal s (ratio) |",
                   "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]

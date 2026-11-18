@@ -27,9 +27,10 @@
 #      SC_PORT (`prove --port`, the sessions' first loopback port: by default 7811 + 16 × the lowest core the slot
 #      pins the job to, so that runs in two slots of one machine never share a session's port)
 # Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
-# nor a circuit (its pin is kept), nor a session's archive, nor a signer's state (the deployment's or the tamper's). A
-# rehearsal's public files go in $OUT/warden; its records and salts (the prover's) and its request values (traffic.json's
-# requests, client.json's responses) nowhere.
+# nor a circuit (its pin is kept), nor a session's archive, nor a signer's state (the deployment's or the tamper's),
+# nor answers.json, whose registrations carry their wiring (the summary keeps each answer's verdict and public part).
+# What the gate publishes of a rehearsal goes in $OUT/warden (`auditor.py publish`); its records, heads and salts (the
+# prover's) and its request values (traffic.json's requests, client.json's responses) nowhere.
 set -uo pipefail
 export HZ_CONFIGS=sczk HZ_MEM_GB=${SC_MEM_GB:?}
 SC_CACHE=${SC_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -89,9 +90,7 @@ if [ -n "${SC_REHEARSE:-}" ]; then
     | tee -a "$OUT/warden-rehearse.log" | cut -c1-4000
   log "sczk: rehearsal rc ${PIPESTATUS[0]}"
   mkdir -p "$OUT/warden"
-  for f in deployment.json cells.jsonl certified.jsonl check.json warden.json serve.log; do
-    [ -f "$W/warden/$f" ] && cp "$W/warden/$f" "$OUT/warden/"
-  done
+  "$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$W/warden" "$OUT/warden" > "$OUT/warden/outcome.json"
   SC_WARDEN_RUN=$W/warden
 fi
 CH=()
@@ -116,6 +115,6 @@ log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_D
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/sczk"
 (cd "$W/sczk" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'instances.bin' ! -path '*/archive/*' \
-  ! -name '*signer-state.json*' ! -name '*-private.bin' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/sczk/")
+  ! -name '*signer-state.json*' ! -name '*-private.bin' ! -name answers.json -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/sczk/")
 log "sczk: done, rc $rc"
 exit "$rc"

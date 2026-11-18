@@ -133,15 +133,24 @@ class PearlCDevice(Protocol):
     """Pearl-C's run on the device, which a served Pearl+ opens (`compute.pouw.scheme.Attached.open`)."""
 
     PearlCDeviceRun: Callable[..., Any]
-    """One install's run (`PearlCDeviceRun(scheme, entry, kernel, weights, roots, coins, opening, ...)`): its ``gemm``,
-    ``end_pass``, ``finish``, ``commits`` and ``details``."""
+    """One install's run (`PearlCDeviceRun(scheme, entry, kernel, weights, roots, coins, opening, ..., weight_salts)`):
+    its ``gemm``, ``end_pass``, ``finish``, ``commits`` and ``details``."""
 
-    def weight_roots(self, kernel: Any, weights: dict[int, Any], scheme: str) -> dict[int, bytes]:
-        """Each weight's B-row tree root, by its block key, before any salt."""
+    def weight_roots(self, kernel: Any, weights: dict[int, Any], scheme: str, *,
+                     weight_salts: dict[int, bytes]) -> dict[int, bytes]:
+        """Each weight's B-row tree root, by its block key, before any salt, its rows salted with ``weight_salts``."""
         ...
 
     def step_tokens(self, run: Any, calls: int) -> int:
         """The most tokens one step's forward can carry in one pass of ``run``."""
+        ...
+
+    runs: dict[str, Any]
+    """The live runs `linear_op`'s body reads, by the attached scheme's build key."""
+
+    def linear_op(self) -> Callable[..., Any]:
+        """``verity_pouw::pearl_plus_linear(x, weight, bias, entry, w) -> y``: one call as one dispatcher op, whose body
+        is ``runs[entry].gemm(w, x, weight, bias)``, what a Match capture records."""
         ...
 
 

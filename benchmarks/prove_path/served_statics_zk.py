@@ -55,6 +55,7 @@ import served_tie_zk as STZ  # noqa: E402
 from verity_vllm.compiler import served_rows as SR  # noqa: E402
 from verity_vllm.compiler import served_statics as SS, served_tie as ST  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 
 CLASSES = {k: {s: c[s] for s in ("R", "P", "IW", "L", "T")} for k, c in STZ.CLASSES.items()}
 OPENED = ("o0", "pub")
@@ -174,9 +175,11 @@ def shared_bcs(path: Path, ports: list) -> list[dict[str, bytes]]:
 
 
 def stager(M, defn, St, n: int, out: Path) -> SimpleNamespace:
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.population import wired_population_program
+
     rows = [(r, M.V2, b, [r]) for r, b in SS.rows(St)]
-    program = M.P.mixed_population_program([(defn, n)])
-    query = M.P.template_instances_query([defn])
+    program, query = wired_population_program([(defn, n)], {"templates": [[descriptor_id(defn), n]]})
     part = M.P.partition(program, query)
     out.mkdir(parents=True, exist_ok=True)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
@@ -238,7 +241,7 @@ def audit(M, N2, a, sg, m: dict, units: list, d: SimpleNamespace, out: Path, por
         want[f"{name}/{p_}"] = wd
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": wd["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_design(f"stratified:{n}")
+    law = RND.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the served rows held to their Programs' statics on a sealed served window "
                                       f"({a.serve_run.name} w{a.window})",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},

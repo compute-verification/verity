@@ -54,6 +54,7 @@ import pytest
 
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, docket as R
+from verity.commitments import randomness as RND
 from verity.circuits.codec import canonical_json
 from verity.commitments import salt_file as SF
 from verity.commitments.periods import interface as IF, rows as CS
@@ -1969,7 +1970,7 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
     (tmp_path / "advice.bin").write_bytes(s.data)
     with pytest.raises(Loaded):
         PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
-                 str(tmp_path / "advice.bin"), "--key", str(tmp_path / "private" / "key"), "--registration", "unread",
+                 str(tmp_path / "advice.bin"), "--registration", "unread",
                  "--checkpoint-dir", "unread", "--sampling-design", "rate:1/4", "--out", str(out)],
                 kept_ingress=lambda serve_dir: None, scan_state_file="unread")
     assert seen["root"].parent == out.parent and seen["held"] == {seen["root"]} and not seen["root"].exists()
@@ -2000,7 +2001,7 @@ def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure
     assert [(g["port"], g["at"], g["units"], g["step"]) for g in doc[IF.WINDOW_INGRESS]] == [
         ("in0", 0, 4, 0), ("in0", 4, 1, 1), ("in0", 5, 4, 2), ("in0", 9, 1, 3), ("in0", 10, 1, 4)]
     assert "ingress" not in doc
-    mine = IF.window_of_record(doc, DR.parse_design(LAYER0["law"]), IF.resolve)
+    mine = IF.window_of_record(doc, RND.parse_design(LAYER0["law"]), IF.resolve)
     inputs = 11 * 16 * 2 * 128
     assert doc["templates"] == [["SiluMul_v2{I=128}", 11]] and bits > 0
     assert RA.leak_count(mine.members, (), bits) == {"inputs": inputs, "wired": 0, "ingress": 0, "registered": 0, "external": 0,

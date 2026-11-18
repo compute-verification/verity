@@ -26,8 +26,8 @@ stages the ``--units`` chunks, or the combine, of a synthetic logits row of V (`
 
 A structural statement proved with ``--bin`` takes ``--tmpl-unit-bin``: flock-tmpl-unit places its unit's rows for the prover
 (`a0.templated`), and Lean verifies it as the templated statement.  Proved on the default rows, the unit is bound to a
-population Program of its one Definition at ``--n`` instances and that Program's partition (`partition.mixed_population_program`,
-as `verifier_cost/flock_served.py` binds a served kind), which Lean's verify reads (``--program``, ``--partition``); without a
+population Program of its one Definition at ``--n`` instances and that Program's partition
+(`population.wired_population_program`), which Lean's verify reads (``--program``, ``--partition``); without a
 Program it refuses every session once its checks pass.
 
     PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
@@ -462,9 +462,10 @@ def main() -> int:
     held, bind, base = {}, {}, 0
     if a.bin and not (a.call_n or a.chunk_k or a.call_w or a.row or a.vchunks):
         from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-        from verity.circuits.codec import canonical_json, encode_program
+        from verity.circuits.codec import canonical_json, descriptor_id, encode_program
+        from verity.circuits.population import wired_population_program
 
-        program, query = P.mixed_population_program([(fn, a.n)]), P.template_instances_query([fn])
+        program, query = wired_population_program([(fn, a.n)], {"templates": [[descriptor_id(fn), a.n]]})
         part = P.partition(program, query)
         (_, base, _), = P.ranges(program, query)
         d.mkdir(parents=True, exist_ok=True)

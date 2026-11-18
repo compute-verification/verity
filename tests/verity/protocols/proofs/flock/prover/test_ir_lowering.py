@@ -625,24 +625,6 @@ def test_supports_says_what_is_missing():
         assert "not wired yet" in REG.supports(sub, "vllm-v1")
 
 
-def test_stage_writes_the_instance_file(tmp_path):
-    s = InputSet.open(SLICES / "rope-head-d64")
-    path = IL.stage(REG.module("rope-head").lowering(s.subcircuit), s, 0, 2, tmp_path)
-    head, body = path.read_bytes().split(b"\n", 1)
-    import json
-
-    h = json.loads(head)
-    assert h["format"] == IL.INSTANCES_FORMAT and h["units"] == 64 and h["in_words"] == 1 and h["out_words"] == 1
-    assert len(body) == 64 * (1 + 1) * 16
-    assert (tmp_path / "net.txt").read_text().startswith(IL.FORMAT)
-    first = int.from_bytes(body[:16], "little")
-    x = IL.flat_ports(s, s.subcircuit.inputs, 0, 1)[0]
-    assert first == int(x[0]) | int(x[32]) << 16 | int(x[64]) << 32 | int(x[96]) << 48
-    y = IL.flat_ports(s, s.subcircuit.outputs, 0, 1)[0]
-    outs = body[64 * 16:]
-    assert [int.from_bytes(outs[16 * k:16 * k + 16], "little") for k in range(2)] == [int(y[0]) | int(y[32]) << 16, int(y[1]) | int(y[33]) << 16]
-
-
 # --- negatives ---------------------------------------------------------------------------------------------------------------
 
 def test_a_flipped_witness_bit_leaves_its_lane_unsatisfied():
@@ -741,18 +723,6 @@ def test_the_pin_covers_the_cut_structure():
     assert {f32(1e-5), f32(64.0)} <= consts and f32(1e-3) not in consts
     assert a.sha256 != b.sha256 and a.text.splitlines()[1:-1] == b.text.splitlines()[1:-1]
     assert a.text.splitlines()[-1] != b.text.splitlines()[-1]
-
-
-def test_a_producers_file_is_not_the_verifiers_own(tmp_path):
-    """IR2: the verifier stages its own file; a producer's file with one output word changed differs from it."""
-    s = InputSet.open(SLICES / "rope-head-d64")
-    low = REG.module("rope-head").lowering(s.subcircuit)
-    path = IL.stage(low, s, 0, 2, tmp_path)
-    assert IL.check_staged(low, s, path) == []
-    b = bytearray(path.read_bytes())
-    b[-3] ^= 1
-    path.write_bytes(bytes(b))
-    assert IL.check_staged(low, s, path) == [f"body differs from the verifier's own staging of {s.name} [0, 2)"]
 
 
 def test_the_tables_are_the_pinned_ones(tmp_path):

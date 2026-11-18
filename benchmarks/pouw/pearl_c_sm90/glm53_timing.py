@@ -257,11 +257,11 @@ def device_run(shapes: list[tuple[int, int]], scheme: str = glm53.SCHEME, cubin:
     gen = torch.Generator(device=dev).manual_seed(20261023)
     weights = {w: (0.05 * torch.randn(n, k, device=dev, generator=gen)).to(torch.bfloat16) for w, (n, k) in enumerate(shapes)}
     kernel = PPD.Kernel.load(str(KERNEL), cubin)
-    salt_key = PPD.no_salt_key(scheme)
-    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=salt_key)
+    weight_salts = PPDR.fresh_weight_salts(weights)
+    roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=weight_salts)
     ch = Challenger(EPOCH, verifier.coins)
     run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots, ch.commitment,
-                              ch.open("salt", weights_root(roots)), salt_key=salt_key, schedule=schedule, graphs=graphs)
+                              ch.open("salt", weights_root(roots)), weight_salts=weight_salts, schedule=schedule, graphs=graphs)
     return run, weights, kernel, gen
 
 
