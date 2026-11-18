@@ -94,3 +94,9 @@ def test_the_statics_refuse_a_prefix_cache():
         TL.statics(2, 1, 3, {**CS.DEMO_ENGINE, "max_num_seqs": 2}, 3, Q=3, D=1, P=6, K=3, tau=10, sat=6, free=4,
                    token=1, carry=3)
     assert TL.unit(**st).id.startswith("TickSlice_v1{")
+
+
+def test_the_statics_refuse_the_catch_up_while_requests_run():
+    st, _ = TL.demo()
+    with pytest.raises(ValueError, match="the tick's slice has no catch-up while requests run: TCU = 0"):
+        TL._sig(SimpleNamespace(**{**st, "TCU": 1}))
