@@ -9,6 +9,13 @@ public import Proofs.Core.Game.Basic
 public import Proofs.Core.Game.Interleave
 public import Proofs.Core.Game.Union
 public import Proofs.Core.Game.Prob
+public import Proofs.Core.Levels
+public import Proofs.Core.LevelsTwo
+public import Proofs.Core.LevelsMiss
+public import Proofs.Core.CircuitLevels
+public import Proofs.Core.LevelsCircuit
+public import Proofs.Core.LevelsCredited
+public import Proofs.Core.LevelsCount
 public import Proofs.Core.Prob
 public import Proofs.Core.Coins
 public import Proofs.Core.Game.Poly
