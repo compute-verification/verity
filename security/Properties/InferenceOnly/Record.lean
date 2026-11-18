@@ -177,13 +177,13 @@ def InLeaf (P : Prog) (sc : Scope) (k : ℕ) (port : String) (row l g lo hi : �
     Flock.Program.resolve P sc (⟨true, i, (inRow (P.defs[sc.d]!) i k row).1 + l⟩ : Ref) = .ok g ∧
     lo = bitAt (inRow (P.defs[sc.d]!) i k row).2 l ∧ hi = lo + (inRow (P.defs[sc.d]!) i k row).2[l]!
 
-/-- Leaf `l` of the field that starts at leaf `off` of the output row of the activation `sc` is Program gate `g`, at
-bits `[lo, hi)` of the field: the field `f`, of a leaf or more, whose first leaf is `off` (`Spot.Edges.fieldOffset`),
+/-- Leaf `l` of the field that starts at word `off` of the output row of the activation `sc` is Program gate `g`, at
+bits `[lo, hi)` of the field: the field `f`, of a word or more, whose first word is `off` (`Spot.Edges.fieldWord`),
 which a wire at offset `off` reads. An activation of a primitive has the default body, whose `ret` resolves to the activation's own gate:
 the one leaf of its one field, at word 0, is that gate. -/
 def OutLeaf (P : Prog) (sc : Scope) (off : ℕ) (l g lo hi : ℕ) : Prop :=
-  ∃ f, Spot.Edges.fieldOffset (P.defs[sc.d]!).ret f = off ∧ f < (fieldsOf (P.defs[sc.d]!).ret).length ∧
-    0 < ((fieldsOf (P.defs[sc.d]!).ret)[f]!).leaves ∧ l < (outRow (P.defs[sc.d]!) f).2.size ∧
+  ∃ f, Spot.Edges.fieldWord (P.defs[sc.d]!).ret f = off ∧ f < (fieldsOf (P.defs[sc.d]!).ret).length ∧
+    0 < Spot.Edges.wordsOf (fieldsOf (P.defs[sc.d]!).ret)[f]! ∧ l < (outRow (P.defs[sc.d]!) f).2.size ∧
     Flock.Program.resolve P sc ((P.defs[sc.d]!).body.ret.get ((outRow (P.defs[sc.d]!) f).1 + l)) = .ok g ∧
     lo = bitAt (outRow (P.defs[sc.d]!) f).2 l ∧ hi = lo + (outRow (P.defs[sc.d]!) f).2[l]!
 

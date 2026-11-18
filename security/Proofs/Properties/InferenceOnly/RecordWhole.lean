@@ -5,8 +5,8 @@ public import Proofs.Properties.InferenceOnly.RecordBlocks
 /-!
 # What the record check tests of a wire's two rows
 
-`Record.unwhole` refuses a record with a wire whose offset is no first leaf of a field of its writer's return of a
-leaf or more, whose field is not the bits of the row it fills, or whose two rows' leaves do not line up. This module
+`Record.unwhole` refuses a record with a wire whose offset is no first word of a field of its writer's return of a
+word or more, whose field is not the bits of the row it fills, or whose two rows' leaves do not line up. This module
 states what a record it accepts has, of each wire, in the terms of the two templates' Definitions (`whole_spec`): the
 wire's field is the row's words, whole; and either the reader's parameter has leaves of one bit and is none of what
 its Definition passes on, or each side's leaves are of one width and the writer's divides the reader's.
@@ -74,13 +74,13 @@ theorem widths_divide {a b : Option Nat}
   | some _, none, h => simp at h
 
 /-- **What `unwhole` tests of one wire**, with the words `Spot.Wires.check` gives its row: the writer is a template,
-and the wire's offset is the first leaf of a field of its Definition's return of a leaf or more; that field's bits,
+and the wire's offset is the first word of a field of its Definition's return of a word or more; that field's bits,
 where its leaves are found, are the row's words'; and the reader's row is closed, or each side has a leaf width and
 the writer's divides the reader's. -/
 theorem unwhole_none {P : Prog} {ts : List Tmpl} {ls : List Leaves} {s : Spot.Wires.Summary}
     (h : unwhole P ts ls s = none) {w : Spot.Wires.Wire} {n : Nat} (hw : (w, n) ∈ s.wires.zip s.rowWords) :
     ∃ t j, ts.find? (·.tid == w.writer) = some t ∧ j < (fieldsOf (P.defs[t.defn]!).ret).length ∧
-      Spot.Edges.fieldOffset (P.defs[t.defn]!).ret j = w.offset ∧ 0 < ((fieldsOf (P.defs[t.defn]!).ret)[j]!).leaves ∧
+      Spot.Edges.fieldWord (P.defs[t.defn]!).ret j = w.offset ∧ 0 < Spot.Edges.wordsOf (fieldsOf (P.defs[t.defn]!).ret)[j]! ∧
       (∀ b, ((ls.find? (·.tid == w.writer)).bind fun l => l.bits.lookup ("o" ++ toString j)) = some b →
         b = 16 * n) ∧
       (((ls.find? (·.tid == w.reader)).map fun l => l.closed.contains w.port).getD false = true ∨
@@ -244,7 +244,7 @@ theorem closed_spec (passed : Array (List Nat)) {i : Nat} (hi : i < (P.defs[t.de
 end Shaped
 
 /-- **What the record check tests of a wire**, in the terms of its two templates' Definitions and the words
-`Spot.Wires.check` gives its row: the wire's offset is the first leaf of a field of the writer's return of a leaf
+`Spot.Wires.check` gives its row: the wire's offset is the first word of a field of the writer's return of a word
 or more, and that field is the row's words, whole; and either the reader's parameter has leaves of one bit and is none
 of what its Definition hands on, or each side's leaves are of one width and the writer's divides the reader's. -/
 theorem whole_spec {P : Prog} {passed : Array (List Nat)} {ts : List Tmpl} (hd : (ts.map (·.tid)).Nodup)
@@ -253,8 +253,8 @@ theorem whole_spec {P : Prog} {passed : Array (List Nat)} {ts : List Tmpl} (hd :
     (hw : (w, n) ∈ s.wires.zip s.rowWords)
     {tr tw : Tmpl} (htr : tr ∈ ts) (htw : tw ∈ ts) (hr : tr.tid = w.reader) (hwt : tw.tid = w.writer)
     {i : Nat} (hi : i < (P.defs[tr.defn]!).params.size) (hp : (P.defs[tr.defn]!).params[i].1 = w.port) :
-    ∃ j, j < (fieldsOf (P.defs[tw.defn]!).ret).length ∧ Spot.Edges.fieldOffset (P.defs[tw.defn]!).ret j = w.offset ∧
-      0 < ((fieldsOf (P.defs[tw.defn]!).ret)[j]!).leaves ∧ bits (fieldsOf (P.defs[tw.defn]!).ret)[j]! = 16 * n ∧
+    ∃ j, j < (fieldsOf (P.defs[tw.defn]!).ret).length ∧ Spot.Edges.fieldWord (P.defs[tw.defn]!).ret j = w.offset ∧
+      0 < Spot.Edges.wordsOf (fieldsOf (P.defs[tw.defn]!).ret)[j]! ∧ bits (fieldsOf (P.defs[tw.defn]!).ret)[j]! = 16 * n ∧
       ((Widths.homo (P.defs[tr.defn]!).params[i].2 = some 1 ∧
           i ∉ passed[tr.defn]?.getD (List.range (P.defs[tr.defn]!).params.size)) ∨
         ∃ r o, Widths.homo (P.defs[tr.defn]!).params[i].2 = some r ∧
