@@ -491,6 +491,8 @@ def test_endpoint_refuses_on_its_serve_dir_and_flags(tmp_path, monkeypatch, caps
     serve = json.loads((src / "serve.json").read_text())
     for k, v, why in (("retain_exclude", None, "--retain-exclude hidden_m1 (serve.json: None)"),
                       ("sealed", None, "--seal (serve.json: None)"),
+                      ("scheme", None, "--scheme rows-sha512 (serve.json: None)"),
+                      ("scheme", "vllm-v1", "--scheme rows-sha512 (serve.json: 'vllm-v1')"),
                       ("address", ["127.0.0.1", 18783], "--port 18782 (serve.json: 18783)"),
                       ("admit", "arrival", "--protocols-config release-order (serve.json: 'arrival')")):
         (src / "serve.json").write_text(json.dumps(serve | {k: v}))

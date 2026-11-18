@@ -204,6 +204,8 @@ SSH = ("ssh", "-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "Se
 ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol ids --id-payload 503 " \
            "--protocols-config '{{\"network-attester\": {{\"order\": \"release-order\"}}}}' " \
            "--seal --retain-exclude hidden_m1"
+#: serve-openai's defaults the endpoint's flags leave out but `served_as` still holds serve.json to
+DEFAULTED = ("--scheme", "rows-sha512")
 #: serve-openai's default --max-model-len, which the endpoint's flags name only past it
 CONTEXT = 512
 #: the endpoint's map from its engine requests to the network attester's, in its serve dir: each engine request's
@@ -680,8 +682,9 @@ def rebuild(src: Path, dest: Path, records: list[dict], eos: list[int]) -> Path:
 
 
 def served_as(serve: dict, port: int) -> list[str]:
-    """Each of `ENDPOINT`'s flags that serve.json shows the endpoint didn't serve with, beside what it recorded."""
-    words, off = shlex.split(ENDPOINT.format(port=port))[2:], []
+    """Each of `ENDPOINT`'s flags and `DEFAULTED`'s that serve.json shows the endpoint didn't serve with, beside what it
+    recorded."""
+    words, off = [*shlex.split(ENDPOINT.format(port=port))[2:], *DEFAULTED], []
     host, at = (serve.get("address") or [None, None])[:2]
     for i, w in enumerate(words):
         if not w.startswith("--"):
