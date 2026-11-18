@@ -6,7 +6,10 @@ leaf, salt or path, a plan without the block at the sampled position, a receipt 
 give. The Boolean unit equals its reference on toy blocks with those negatives, and the parts equal theirs at the deployed
 fields and cost the gates pinned here. The second version's reference gives v1's verdict on every opening under the identity
 plan, opens a block past 2^16 in a store past 2^16 blocks and refuses one a position off, and its unit equals it, at 64 sign
-rows too. Its range admits each row bound's costliest split of `LEVELS` and refuses a level more by name."""
+rows too. Its range admits each row bound's costliest split of `LEVELS` and refuses a level more by name. The third version
+(a block of a re-key append) accepts an honest opening whose payload is its origin's, registered or an append's, in the
+audit's own origin trees, refuses each wrong one by name (a wrong origin path, salt, rank, position, root, domain or depth
+origin-path), never sets payload-path, holds its range to v2's less the value tree, and its unit equals it, bare and in rows."""
 from __future__ import annotations
 
 import random
@@ -45,6 +48,7 @@ PARTS = {
     ("LeafMatch", (16, 40)): (9646, 9034, 561),
     ("LeafMatchV2", (16,)): (8848, 8316, 561),
     ("BlockVerdict", (64,)): (69, 2, 5),
+    ("BlockVerdictV2", (64,)): (67, 0, 4),
 }
 V2 = "hm96-sha512/row/v2"
 PER_LEAF = BC.PER_LEAF
@@ -574,3 +578,181 @@ def test_the_toy_unit_v2_is_its_reference() -> None:
         refs = [BC.opening_check_v2(S_, a) for a in group]
         assert refs.count(1) == 2
         assert _gates(bind(BC.BlockOpeningCheckV2, **vars(S_)), group) == refs
+
+
+# --- the third version: a block of a re-key append, its payload under its origin's root ------------------------------------
+
+def _v3(S, **kw) -> SimpleNamespace:
+    """v2's statics as v3's: the origin's tree DO (v2's DP) in place of the payload's and the value's, and ``kw``."""
+    return SimpleNamespace(**{**{k: v for k, v in vars(S).items() if k not in ("P", "DP", "DV")}, "DO": S.DP, **kw})
+
+
+TOY_V3 = _v3(TOY_V2)
+
+
+def _rekey_opening(rng: random.Random, S, registered: bool, encode, n: int, j: int | None = None,
+                   origin: tuple | None = None) -> SimpleNamespace:
+    """An honest opening of block j of a re-key append (past a registration of 4 blocks, under the re-key's coin), sampled
+    at position j of a pass whose plan is the identity over a store of n blocks, its payload its origin's: registered
+    block a (rank and position a) of a registration of up to 2^DO blocks, or block o of a fresh append of up to
+    min(512, 2^DO) at store indices from first (rank o, position first + o). Every tree is sparse (`frame_v3.root_at_ref`),
+    unless ``origin`` gives the origin's payload, salt, tree (root, domain id, rank, position, depth) and path."""
+    j = rng.randrange(4, n) if j is None else j
+    seed, coin = rng.randbytes(32), rng.randbytes(32)
+    pay, salt = (_payload(rng, S), rng.randbytes(BC.SALT_BYTES)) if origin is None else origin[:2]
+    block = encode(S, seed, j, pay, coin)
+    if S.BYTES == CO.BLOCK_BYTES:
+        pass_seed = rng.randbytes(64)
+        prefix, signs = RC.sketch_prefix(pass_seed), RC.sign_bits(pass_seed, S.ROWS)
+    else:
+        prefix, signs = rng.randbytes(128), [rng.randbytes(S.BYTES // 8) for _ in range(S.ROWS)]
+    c = j // PER_LEAF
+    ys = [rng.randbytes(64) for _ in range(min(PER_LEAF, n - PER_LEAF * c))]
+    ys[j % PER_LEAF] = BC.receipt(prefix, j, block, signs)
+    row, rsalt = b"".join(ys), rng.randbytes(BC.SALT_BYTES)
+
+    def tree(value: bytes, rank: int, position: int, count: int) -> tuple:
+        dom, depth = rng.randbytes(64), merkle_depth(count)
+        path = [rng.randbytes(64) for _ in range(depth)]
+        return FV.root_at_ref(dom, V2, value, rank, position, path), dom, depth, path
+
+    rroot, rdom, rdepth, rpath = tree(_hidden(row, rsalt), c, c, -(-n // PER_LEAF))
+    if origin is not None:
+        (oroot, odom, rank, position, odepth), opath = origin[2:]
+    elif registered:
+        count = rng.randrange(2, (1 << S.DO) + 1)
+        rank = position = rng.randrange(count)
+        oroot, odom, odepth, opath = tree(_hidden(pay, salt), rank, position, count)
+    else:
+        count = rng.randrange(2, min(512, 1 << S.DO) + 1)
+        rank = rng.randrange(count)
+        position = rng.randrange(4, 1 << 20) + rank
+        oroot, odom, odepth, opath = tree(_hidden(pay, salt), rank, position, count)
+    S = SimpleNamespace(**{**vars(S), "LEAF": len(ys)})
+    trees = ((rroot, rdom, rdepth), (oroot, odom, rank, position, odepth))
+    pub = BC.opening_public_v3(S, seed, j, coin, prefix, signs, *trees)
+    return SimpleNamespace(S=S, j=j, seed=seed, coin=coin, prefix=prefix, signs=signs, trees=trees, rank=rank,
+                           position=position, args=BC.opening_args_v3(S, pub, block, pay, row, rsalt, salt, rpath, opath))
+
+
+def _v3_cases(o: SimpleNamespace) -> dict[str, tuple[dict, str | None]]:
+    """The honest opening, then each with one thing wrong, and the check it fails (None: accepted)."""
+    a, j = o.args, o.j
+    k = j % PER_LEAF
+    root, dom, rank, position, depth = o.trees[1]
+    return {"honest": (a, None), "tampered block": (dict(a, block=_flip(a["block"], 3)), "codec"),
+            "other payload": (dict(a, payload=_flip(a["payload"], 1, 4)), "codec"),
+            "wrong coin": (dict(a, coin=_flip(a["coin"], 7)), "codec"),
+            "receipt leaf altered": (dict(a, leaf=_flip(a["leaf"], 32 * k + 2)), "receipt-path"),
+            "receipt path": (dict(a, rpath=_flip(a["rpath"], 7)), "receipt-path"),
+            "position one past": (dict(a, pos=BC._u16s(j + 1, 2)), "receipt-path"),
+            "other pass's signs": (dict(a, signs=[x ^ 0x5A5A for x in a["signs"]]), "receipt"),
+            "origin path": (dict(a, opath=_flip(a["opath"], 9)), "origin-path"),
+            "origin's salt": (dict(a, salts=_flip(a["salts"], 96 + 5)), "origin-path"),
+            "origin at another rank": (dict(a, orank=_flip(a["orank"])), "origin-path"),
+            "origin at another position": (dict(a, opos=_flip(a["opos"])), "origin-path"),
+            "the re-key's own position as the origin's": (dict(a, opos=BC._u16s(j, 2)),
+                                                          None if j == position else "origin-path"),
+            "another root": (dict(a, oroot=_flip(a["oroot"], 4)), "origin-path"),
+            "another domain": (dict(a, odom=_flip(a["odom"], 4)), "origin-path"),
+            "origin tree deeper than its path": (dict(a, odepth=[o.S.DO + 1]), "origin-path"),
+            "origin tree shallower": (dict(a, odepth=[depth - 1]), "origin-path")}
+
+
+@pytest.mark.parametrize("S", [TOY_V3, _v3(_v2(P512, **SMALL)), _v3(_v2(P1024, **SMALL))], ids=["toy", "p512-k2", "p1024-k3-masked"])
+def test_v3_refuses_a_rekey_opening_off_its_origin_by_name(S) -> None:
+    """A re-key's block, its origin registered or an append, is accepted honest and refused by the check each wrong
+    opening names: among them its payload's leaf on a wrong path, salt, rank, position, root, domain or depth of the
+    origin's tree (origin-path); bit 3 (payload-path) is never set."""
+    encode = _toy_encode if (S.N, S.C) == BC.TOY else _core_encode
+    rng = random.Random(S.N + 3)
+    for registered in (True, False):
+        o = _rekey_opening(rng, S, registered, encode, 40, rng.randrange(17, 39))
+        for name, (a, want) in _v3_cases(o).items():
+            got = BC.opening_check_v3(o.S, a)
+            assert BC.verdict(got, BC.VERDICT_V3) == want, (registered, name, got)
+            assert not got & 1 << 3
+
+
+def test_v3_opens_the_audits_origin_trees() -> None:
+    """The audit's own origin trees, the registration's payload tree (`audit.payload_tree`, in `payload_domain`) and a
+    fresh append's (`audit.append_tree`, in `append_domain`), open a re-key's payload at the origin's rank and position;
+    the re-key's own position j, or the origin's rank as its position, in their place is refused origin-path."""
+    rng = random.Random(23)
+    S = _v3(_v2(P512, **SMALL), DO=4)
+    node, reg, first, at = rng.randbytes(32), rng.randbytes(64), 40, 5
+    pays = [_payload(rng, S) for _ in range(12)]
+    salts = [rng.randbytes(BC.SALT_BYTES) for _ in pays]
+    for tree, position in ((AU.payload_tree(node, pays, salts), at),
+                           (AU.append_tree(reg, first, [CO.digest(p) for p in pays], salts), first + at)):
+        assert tree.domain.positions.start + at == position
+        origin = (pays[at], salts[at], (tree.commitment.root, tree.domain.domain_id, at, position,
+                                        merkle_depth(tree.domain.count)), tree.open(position).path)
+        o = _rekey_opening(rng, S, True, _core_encode, 40, 30, origin)
+        assert BC.opening_check_v3(o.S, o.args) == 1
+        assert BC.verdict(BC.opening_check_v3(o.S, dict(o.args, opos=BC._u16s(o.j, 2))), BC.VERDICT_V3) == "origin-path"
+    assert BC.verdict(BC.opening_check_v3(o.S, dict(o.args, opos=BC._u16s(at, 2))), BC.VERDICT_V3) == "origin-path"
+
+
+def test_v3s_rows_hold_every_parameter_and_its_public_rows_are_the_verifiers() -> None:
+    rng = random.Random(24)
+    for S in (_v3(_v2(P512)), TOY_V3):
+        params, _ = BC._opening_signature_v3(S)
+        laid = BC.opening_rows_v3(S)
+        assert [p for _r, _b, ps in laid for p in ps] == [n for n, _ in params]
+        assert sum(b for _r, b, _ps in laid) == sum(t.leaves for _, t in params)
+        assert [r for r, _b, _ps in laid] == ["pub", "signs", "block", "payload", "leaf", "aux"]
+    o = _rekey_opening(rng, TOY_V3, False, _toy_encode, 40)
+    rows = BC.opening_rows_v3(o.S)
+    pub = {k: o.args[k] for _r, _b, ps in rows[:2] for k in ps}
+    assert BC.row_words(rows[:2], pub) == BC.row_words(rows[:2], o.args)
+
+
+@pytest.mark.parametrize("rows", sorted(BC.LEVELS_V3))
+def test_v3s_range_is_v2s_less_the_value_tree(rows) -> None:
+    """At each row bound, the costliest legal splits of `LEVELS_V3`'s levels (or of the widths' 60, at 16 rows, where the
+    levels bound doesn't bind) are admitted at every field and a level more refused by name; a whole node's store (DR 23,
+    DO 27) is admitted at 64 rows, and the 789 GB store's (DR 24, DO 28) at 16 rows and not at 64."""
+    low = max((r for r in BC.LEVELS_V3 if r < rows), default=0) + 1
+    top = BC.LEVELS_V3[rows]
+    assert top == BC.LEVELS[rows] - 1
+    most = min(top, 28 + 32)
+    for n in (low, rows):
+        for field in ((1024, 105), (512, 569), BC.TOY):
+            for split in ((most - 32, 32), (28, most - 28)):
+                S = SimpleNamespace(N=field[0], C=field[1], K=3, MASKED=1, BYTES=4096, ROWS=n, LEAF=16,
+                                    **dict(zip(("DR", "DO"), split)))
+                assert BC.opening_rows_v3(S)
+        if top < 28 + 32:
+            for more in (dict(DR=most - 31, DO=32), dict(DR=28, DO=most - 27)):
+                with pytest.raises(ValueError, match=f"^BlockOpeningCheck_v3: DR \\+ DO is at most {top} levels at {low} to "
+                                                     f"{rows} sketch rows, not {top + 1}"):
+                    BC.opening_rows_v3(_v3(_v2(P1024), ROWS=n, **more))
+    assert BC.opening_rows_v3(_v3(_v2(P1024), ROWS=64, DR=23, DO=27))
+    assert BC.opening_rows_v3(_v3(_v2(P1024), ROWS=16, DR=24, DO=28))
+    with pytest.raises(ValueError, match="^BlockOpeningCheck_v3: DR \\+ DO is at most 51 levels"):
+        BC.opening_rows_v3(_v3(_v2(P1024), ROWS=64, DR=24, DO=28))
+
+
+@pytest.mark.parametrize("bad", [dict(K=4), dict(ROWS=65), dict(LEAF=17), dict(DR=29), dict(DO=33), dict(DO=0)])
+def test_a_v3_binding_past_its_range_is_refused_by_name(bad) -> None:
+    with pytest.raises(ValueError, match="^BlockOpeningCheck_v3: "):
+        BC.opening_rows_v3(_v3(_v2(P1024), **bad))
+
+
+@pytest.mark.slow
+def test_the_toy_unit_v3_is_its_reference() -> None:
+    """A few minutes (the compressions' and reads' first trace): the only evaluation of v3's wiring, the origin's read at
+    its own rank and position under the origin's salt, the bound binding's constant one, and the verdict's origin-path bit,
+    bare and in the unit's six rows."""
+    rng = random.Random(25)
+    for S in (TOY_V3, _v3(TOY_V2, MASKED=1)):
+        group = [x for registered in (True, False)
+                 for x, _w in _v3_cases(_rekey_opening(rng, S, registered, _toy_encode, 35, 33)).values()]
+        S_ = SimpleNamespace(**{**vars(S), "LEAF": 3})
+        refs = [BC.opening_check_v3(S_, a) for a in group]
+        assert refs.count(1) >= 2 and len({r for r in refs if r != 1}) >= 4
+        assert _gates(bind(BC.BlockOpeningCheckV3, **vars(S_)), group) == refs
+        rows = BC.opening_rows_v3(S_)
+        laid = [{r: w for r, w in BC.row_words(rows, a).items()} for a in group]
+        assert _gates(bind(BC.BlockOpeningUnitV3, **vars(S_)), laid) == refs
