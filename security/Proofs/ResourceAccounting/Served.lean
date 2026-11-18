@@ -27,7 +27,7 @@ open Claims renaming Ex → expect
 namespace Properties.Served.SecurityProofs
 
 open Pouw.RelativeSecurity
-open ResourceAccounting.SecurityProofs.Compose.Budget (forall_mem_subsetDraw rest prob_mem)
+open ResourceAccounting.SecurityProofs.Compose.Budget (forall_mem_permPrefix rest prob_mem)
 open ResourceAccounting.SecurityProofs.TS.Stages (prob_prod)
 
 theorem prob_eq_pr {α : Type} [Fintype α] (p : α → Prop) : prob p = Claims.Pr p := by
@@ -42,12 +42,12 @@ theorem card_rest_le {n : ℕ} (B : Finset (Fin (n + 1))) (p : Fin (n + 1)) : (r
 least `C(N − |B|, K)/C(N, K)`. -/
 theorem miss_ge : ∀ (K N : ℕ) (B : Finset (Fin N)), K ≤ N →
     ((N - B.card).choose K : ℝ) / (N.choose K : ℝ) ≤
-      prob (fun π : Equiv.Perm (Fin N) => ∀ v ∈ Pouw.Window.subsetDraw K π, v ∉ B)
+      prob (fun π : Equiv.Perm (Fin N) => ∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw π, v ∉ B)
   | 0, N, B, _ => by
     classical
-    have h1 : prob (fun π : Equiv.Perm (Fin N) => ∀ v ∈ Pouw.Window.subsetDraw 0 π, v ∉ B) = 1 := by
+    have h1 : prob (fun π : Equiv.Perm (Fin N) => ∀ v ∈ (Verity.SamplingDesign.permPrefix N 0).draw π, v ∉ B) = 1 := by
       rw [prob_eq_card, Finset.filter_true_of_mem fun π _ =>
-        (forall_mem_subsetDraw (K := 0) π fun v => v ∉ B).mpr fun i hi => absurd hi (Nat.not_lt_zero _),
+        (forall_mem_permPrefix (K := 0) π fun v => v ∉ B).mpr fun i hi => absurd hi (Nat.not_lt_zero _),
         Finset.card_univ]
       exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
     rw [h1]
@@ -60,7 +60,7 @@ theorem miss_ge : ∀ (K N : ℕ) (B : Finset (Fin N)), K ≤ N →
     have hstep : ∀ p : Fin (n + 1),
         ((n - B.card).choose K : ℝ) / (n.choose K : ℝ) * (if p ∈ B then 0 else 1) ≤
           prob fun e : Equiv.Perm (Fin n) =>
-            ∀ v ∈ Pouw.Window.subsetDraw (K + 1) (Equiv.Perm.decomposeFin.symm (p, e)), v ∉ B := by
+            ∀ v ∈ (Verity.SamplingDesign.permPrefix (n + 1) (K + 1)).draw (Equiv.Perm.decomposeFin.symm (p, e)), v ∉ B := by
       intro p
       by_cases hp : p ∈ B
       · rw [ite_eq_left hp, mul_zero]
@@ -71,12 +71,12 @@ theorem miss_ge : ∀ (K N : ℕ) (B : Finset (Fin N)), K ≤ N →
         refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
         exact_mod_cast Nat.choose_le_choose K (by have := card_rest_le B p; omega)
       refine hle.trans ((miss_ge K n (rest B p) hK).trans (prob_mono fun e he => ?_))
-      refine (forall_mem_subsetDraw _ _).mpr fun i hi => ?_
+      refine (forall_mem_permPrefix _ _).mpr fun i hi => ?_
       rcases Fin.eq_zero_or_eq_succ i with rfl | ⟨j, rfl⟩
       · rw [Equiv.Perm.decomposeFin_symm_apply_zero]
         exact hp
       · have hj : j.val < K := by simpa using hi
-        have hmiss := (forall_mem_subsetDraw _ _).mp he j hj
+        have hmiss := (forall_mem_permPrefix _ _).mp he j hj
         rw [Equiv.Perm.decomposeFin_symm_apply_succ]
         simpa [rest] using hmiss
     refine le_trans ?_ (expect_mono hstep)

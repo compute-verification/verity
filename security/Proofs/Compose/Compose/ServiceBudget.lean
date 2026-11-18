@@ -9,7 +9,7 @@ public import Proofs.ResourceAccounting.Lemmas.Compose
 
 `ResourceAccounting.Guarantees.Compose.ServiceBudget`, step 4 of `Proofs.Compose.Compose`, in three parts.
 
-* **The miss bound** (`miss_le`): a uniform permutation's `K`-subset (`Pouw.Window.subsetDraw`) misses a set `B` of
+* **The miss bound** (`miss_le`): a uniform permutation's `K`-subset (`Verity.SamplingDesign.permPrefix`) misses a set `B` of
   the `N` tiles with probability at most `(1 − |B|/N)^K`. By induction on `K` through `Equiv.Perm.decomposeFin`: the
   first image is uniform and must miss `B`, and the rest is a uniform permutation of `N − 1` tiles that must miss a
   set of at least `|B|` of them (`card_le_rest`).
@@ -32,9 +32,9 @@ open ResourceAccounting.SecurityProofs.TS.Stages (prob_prod sum_le_card_of_expec
 
 /-! ## The miss bound -/
 
-theorem forall_mem_subsetDraw {N K : ℕ} (π : Equiv.Perm (Fin N)) (P : Fin N → Prop) :
-    (∀ v ∈ Pouw.Window.subsetDraw K π, P v) ↔ ∀ i : Fin N, i.val < K → P (π i) := by
-  simp [Pouw.Window.subsetDraw]
+theorem forall_mem_permPrefix {N K : ℕ} (π : Equiv.Perm (Fin N)) (P : Fin N → Prop) :
+    (∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw π, P v) ↔ ∀ i : Fin N, i.val < K → P (π i) := by
+  simp [Verity.SamplingDesign.permPrefix]
 
 /-- The tiles of `Fin n` whose image under `decomposeFin.symm (p, ·)`'s tail map lies in `B`. -/
 def rest {n : ℕ} (B : Finset (Fin (n + 1))) (p : Fin (n + 1)) : Finset (Fin n) :=
@@ -59,7 +59,7 @@ theorem prob_mem {n : ℕ} (B : Finset (Fin n)) : prob (fun v : Fin n => v ∈ B
 
 /-- **The miss bound**: a uniform permutation's `K`-subset misses `B` with probability at most `(1 − |B|/N)^K`. -/
 theorem miss_le : ∀ (K N : ℕ) (B : Finset (Fin N)),
-    prob (fun π : Equiv.Perm (Fin N) => ∀ v ∈ Pouw.Window.subsetDraw K π, v ∉ B) ≤ (1 - (B.card : ℝ) / N) ^ K
+    prob (fun π : Equiv.Perm (Fin N) => ∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw π, v ∉ B) ≤ (1 - (B.card : ℝ) / N) ^ K
   | 0, _, _ => by
     rw [pow_zero]
     exact prob_le_one _
@@ -77,14 +77,14 @@ theorem miss_le : ∀ (K N : ℕ) (B : Finset (Fin N)),
     rw [prob_equiv Equiv.Perm.decomposeFin, prob_prod]
     have hstep : ∀ p : Fin (n + 1),
         (prob fun e : Equiv.Perm (Fin n) =>
-          ∀ v ∈ Pouw.Window.subsetDraw (K + 1) (Equiv.Perm.decomposeFin.symm (p, e)), v ∉ B) ≤
+          ∀ v ∈ (Verity.SamplingDesign.permPrefix (n + 1) (K + 1)).draw (Equiv.Perm.decomposeFin.symm (p, e)), v ∉ B) ≤
           c ^ K * (if p ∈ B then 0 else 1) := by
       intro p
       by_cases hp : p ∈ B
       · rw [ite_eq_left hp, mul_zero]
         refine (prob_mono (q := fun _ : Equiv.Perm (Fin n) => False) fun e he => ?_).trans
           (le_of_eq (by unfold prob Claims.prUniform; simp))
-        have := (forall_mem_subsetDraw _ _).mp he 0 (Nat.succ_pos K)
+        have := (forall_mem_permPrefix _ _).mp he 0 (Nat.succ_pos K)
         rw [Equiv.Perm.decomposeFin_symm_apply_zero] at this
         exact this hp
       rw [ite_eq_right hp, mul_one]
@@ -106,8 +106,8 @@ theorem miss_le : ∀ (K N : ℕ) (B : Finset (Fin N)),
             _ ≤ ((rest B p).card : ℝ) / n := div_le_div_of_nonneg_right hBr hn'.le
       have h0 : 0 ≤ 1 - ((rest B p).card : ℝ) / n := sub_nonneg.mpr (div_le_one_of_le₀ hrest (Nat.cast_nonneg _))
       refine (prob_mono fun e he => ?_).trans (hmiss.trans (pow_le_pow_left₀ h0 hle K))
-      refine (forall_mem_subsetDraw _ _).mpr fun i hi => ?_
-      have := (forall_mem_subsetDraw _ _).mp he i.succ (by simp; omega)
+      refine (forall_mem_permPrefix _ _).mpr fun i hi => ?_
+      have := (forall_mem_permPrefix _ _).mp he i.succ (by simp; omega)
       rw [Equiv.Perm.decomposeFin_symm_apply_succ] at this
       simpa [rest] using this
     refine (expect_mono hstep).trans ?_
@@ -459,12 +459,12 @@ theorem serviceBudget : ResourceAccounting.Guarantees.Compose.ServiceBudget := b
   set e := Real.exp ((a * (W.joint stg).share w x .folded + b * (W.joint stg).share w x .whole) / Λ)
   have he0 : 0 ≤ e := (Real.exp_pos _).le
   have hE : (expect fun β : Equiv.Perm (Fin N) × Ξ =>
-      (if (∀ v ∈ Pouw.Window.subsetDraw K β.1, (W.joint stg).same x v) then e else 0)) ≤
-      e * prob (fun π : Equiv.Perm (Fin N) => ∀ v ∈ Pouw.Window.subsetDraw K π, v ∉ B) := by
+      (if (∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw β.1, (W.joint stg).same x v) then e else 0)) ≤
+      e * prob (fun π : Equiv.Perm (Fin N) => ∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw π, v ∉ B) := by
     rw [← prob_fst (β := Ξ), prob_eq_expect, ← expect_mul_left]
     refine expect_mono fun β => ?_
-    by_cases h : ∀ v ∈ Pouw.Window.subsetDraw K β.1, (W.joint stg).same x v
-    · have h' : ∀ v ∈ Pouw.Window.subsetDraw K β.1, v ∉ B := fun v hv hB =>
+    by_cases h : ∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw β.1, (W.joint stg).same x v
+    · have h' : ∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw β.1, v ∉ B := fun v hv hB =>
         (Finset.mem_filter.mp hB).2 (h v hv)
       rw [ite_eq_left h, ite_eq_left h', mul_one]
     · rw [ite_eq_right h]
@@ -486,7 +486,7 @@ theorem serviceBudget : ResourceAccounting.Guarantees.Compose.ServiceBudget := b
   refine le_trans ?_ hpath
   refine le_trans (le_trans (expect_mono fun β => ?_) hE) ?_
   · dsimp only
-    by_cases h : ∀ v ∈ Pouw.Window.subsetDraw K β.1, (W.joint stg).same x v
+    by_cases h : ∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw β.1, (W.joint stg).same x v
     · rw [ite_eq_left h, ite_eq_left h]
     · rw [ite_eq_right h, ite_eq_right h]
   · refine mul_le_mul_of_nonneg_left ((miss_le K N B).trans (pow_le_pow_left₀ (sub_nonneg.mpr hB1) ?_ K)) he0
