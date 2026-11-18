@@ -97,6 +97,9 @@ KEPT = {"scheme_name_tables": {
     "benchmarks/pouw/pearl_c_vllm/served_step.sh": "a refusal quoting a scheme's registered id (top, 18 Nov)",
     "benchmarks/pouw/pearl_c4/ship.sh":
         "a pinned commit message, whose hash is every rebuilt ship's launch path (top, 18 Nov)",
+    "benchmarks/pouw/harness/native/build.sh":
+        "the NVFP4 units and the CUTLASS baselines stating their one target, the block-scaled `mma.sync`, which no "
+        "architecture file states (top, 18 Nov)",
     "verity/commitments/cuda/commit_slots/slots.py":
         "a key of a pinned fixture, `commit-slots-v1.json`, whose digest a suite pins (top, 18 Nov)",
     "benchmarks/pouw/hidden_zk/registered.sh":
