@@ -106,6 +106,7 @@ class Listing:
         self.files = [glob(g) for g in self.globs]
         if not (isinstance(doc["keys"], dict) and doc["keys"]):
             raise Malformed(f"{where}: its keys are key paths, each with its kind")
+        self.keys: dict[str, str] = dict(doc["keys"])
         self.root = Node()
         for key, kind in doc["keys"].items():
             if kind not in KINDS:

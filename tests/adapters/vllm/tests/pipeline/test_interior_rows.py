@@ -20,7 +20,8 @@ import pytest
 
 from verity.circuits import population as PN
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.program import Program
@@ -185,7 +186,7 @@ def _boundary(world, block=BLOCK) -> tuple[dict, dict, str]:
     window, tokens = _boundary_window(len(PROMPTS), block), _tokens(world)
     c = CS.commit(window, [{"rows": {"ingress": np.stack([_ids(p) for p in PROMPTS.values()])},
                             "outs": {"egress": np.stack([_ids(tokens[r]) for r in PROMPTS])}}])
-    rec = CS.registration(c, {"stand_in": "boundary"}, None, registrar=R)
+    rec = CS.registration(c, {"stand_in": "boundary"}, None, registrar=DK)
     return rec, CS.expected_ports(window), CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)})
 
 

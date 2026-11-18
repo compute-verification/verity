@@ -31,6 +31,7 @@ from pathlib import Path
 
 import numpy as np
 
+from verity_vllm.definitions.registry.cublas_bf16 import TRAIN_CC
 from verity_vllm.definitions.registry.fa2_train_bwd import train_sdpa_backward
 
 #: name -> (capture case, which of its heads, (B, H), rows)
@@ -43,7 +44,7 @@ BLOCK = {"l16/unit": ("bwd/l16/det/unit", 3, (2, 16))}
 
 def _head(d, case: str, bh: tuple[int, int]) -> dict:
     """The bindings of the head Definition at the case's shape: its key block `BN` and dQ buffers `NS`."""
-    return train_sdpa_backward(*bh, *d[f"{case}/q"].shape[1:]).bindings
+    return train_sdpa_backward(*bh, *d[f"{case}/q"].shape[1:], TRAIN_CC).bindings
 
 
 def cut(d) -> dict[str, np.ndarray]:
