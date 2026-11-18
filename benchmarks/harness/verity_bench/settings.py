@@ -29,7 +29,7 @@ S = Setting
 REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
     # ---- the dispatcher and a point's job (jobs.py, run_point.sh, env.sh, setup/)
     S("VERITY_BENCH_VENV", str, None, WHERE, "the node's pinned-vLLM Python a point runs under (env.sh), which "
-      "the launch gives (a point refuses without it): an interpreter, whose vLLM and torch versions the result's identity records"),
+      "the launch gives, else the environment the launch runs in ($VIRTUAL_ENV; a point refuses with neither): an interpreter, whose vLLM and torch versions the result's identity records"),
     S("VERITY_BENCH_SETUP", str, None, VALUE, "the spec's setup script, which run_point.sh sources before the point's Python "
       "(the dispatcher sets it from the spec; a point refuses any other)"),
     S("VERITY_BENCH_LIB_CACHE", str, None, WHERE, "the node's cache of the libraries setup/vllm_encoded.sh builds, each under its "
