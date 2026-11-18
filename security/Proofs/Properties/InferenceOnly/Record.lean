@@ -286,8 +286,11 @@ private theorem below_iff (rs : Array TRange) (tid : String) (u : ℕ) : ∀ n, 
         u = ((rs.extract 0 i).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 + m) ↔
       u < ((rs.extract 0 n).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0)
   | 0, _ => by
-    have he : rs.extract 0 0 = #[] := Array.extract_zero
-    simp [he]
+    have h0 : ((rs.extract 0 0).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 = 0 := by
+      rw [Array.extract_zero]
+      simp
+    rw [h0]
+    simp
   | n + 1, hn => by
     have ih := below_iff rs tid u n (by omega)
     rw [before_succ rs tid (by omega : n < rs.size)]
