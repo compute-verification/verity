@@ -24,7 +24,7 @@ measured units of 5.1e6 to 3.0e7 ANDs, so the row subcircuits' (up to 2e8) are e
 the sampled requests (`REPLAY_BLOCKS` of the block's own run) and committing every unit's outputs (a design rule, not a
 choice) are priced beside the proving, not traded against it.
 
-    uv run python verity/protocols/proofs/spot/prover/cost/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad]
+    uv run python calibration/sampling_plan/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad]
         [--card h200]
 """
 from __future__ import annotations
@@ -35,8 +35,8 @@ from dataclasses import asdict, dataclass, field, replace
 from math import ceil, exp, log
 from pathlib import Path
 
-from verity.protocols.proofs.spot.prover.cost import transformer as X
-from verity.protocols.proofs.spot.prover.cost.inputs import CARDS, I, cap
+from calibration.sampling_plan import transformer as X
+from calibration.sampling_plan.inputs import CARDS, I, cap
 
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 from verity.protocols.proofs.spot.prover.candidates import shape_of

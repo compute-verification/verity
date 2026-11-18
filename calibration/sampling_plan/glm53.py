@@ -30,7 +30,7 @@ arithmetic), that count over the population (ε), and those blocks' output bits,
 sampled no incorrect block escapes, so all three are 0 at every δ; a smaller sample is charged what its bound gives.
 These rows are the plan's: they read no verdict, and say what a sampling design charges, nothing of a served class.
 
-    uv run python verity/protocols/proofs/spot/prover/cost/glm53.py [--card PATH] [--requests N]
+    uv run python calibration/sampling_plan/glm53.py [--card PATH] [--requests N]
 
 ``--stop T [--delta D]`` needs the stop block and the response tie from a caller that holds the adapter and network
 attestation (`main`'s ``blocks_of``).
@@ -46,7 +46,7 @@ from typing import Any
 
 from verity.circuits.evaluation import bits
 from verity.commitments.periods.interface import proof_block_k_log
-from verity.protocols.proofs.spot.prover.cost.inputs import MEASURED
+from calibration.sampling_plan.inputs import MEASURED
 from verity.protocols.proofs.spot.prover.optimize import Candidate
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA, Stratified, Stratum
 

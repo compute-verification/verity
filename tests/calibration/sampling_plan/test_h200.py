@@ -10,8 +10,8 @@ from math import ceil, log
 
 import pytest
 
-from verity.protocols.proofs.spot.prover.cost import h200 as H
-from verity.protocols.proofs.spot.prover.cost.inputs import observations
+from calibration.sampling_plan import h200 as H
+from calibration.sampling_plan.inputs import observations
 
 M = H.Shape()
 

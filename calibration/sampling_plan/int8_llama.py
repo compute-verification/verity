@@ -17,7 +17,7 @@ a sampled proof block's witness is rebuilt by re-running its request, one 2K pro
 the plain rate: the `request` replay grain, met when the sample holds any of its units.  A request's values depend on its
 own tokens alone (the served engine is batch-invariant), so no co-scheduled request is re-run with it.
 
-    uv run python verity/protocols/proofs/spot/prover/cost/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
+    uv run python calibration/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from dataclasses import replace
 from math import ceil, log
 from pathlib import Path
 
-from verity.protocols.proofs.spot.prover.cost.inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, Model, cap, leaf_chain,
+from calibration.sampling_plan.inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, Model, cap, leaf_chain,
                                                              observations, s8_coord_ands, serve_rows, tree_chain)
 
 from verity.protocols.proofs.spot.prover.candidates import Shape, cuts, pressure

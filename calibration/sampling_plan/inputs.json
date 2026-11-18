@@ -1,5 +1,5 @@
 {
- "about": "The measured inputs of SPOT's cost model (verity/protocols/proofs/spot/prover/cost/inputs.py reads them): each input a value, a low and a high, its source and its status (M measured, A assumed, D derived), in GPU-seconds of an RTX PRO 6000 (sm_120); the models' shapes; and the cost model's observations by card, each card with the builds and hardware they key and its price ratio (an input's name).",
+ "about": "The measured inputs of SPOT's cost model (calibration/sampling_plan/inputs.py reads them): each input a value, a low and a high, its source and its status (M measured, A assumed, D derived), in GPU-seconds of an RTX PRO 6000 (sm_120); the models' shapes; and the cost model's observations by card, each card with the builds and hardware they key and its price ratio (an input's name).",
  "inputs": {
   "cpu": {
    "value": 0.01818181818181818,

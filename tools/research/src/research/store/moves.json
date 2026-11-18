@@ -5414,6 +5414,22 @@
         "verity/protocols/proofs/flock/prover/pod/gemm_slowdown.py": "benchmarks/proof_throughput/gemm_slowdown.py",
         "tests/verity/protocols/proofs/flock/prover/test_gemm_hill.py": "tests/benchmarks/proof_throughput/test_gemm_hill.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/prover/cost/__init__.py": "calibration/sampling_plan/__init__.py",
+        "verity/protocols/proofs/spot/prover/cost/cpu_budget.py": "calibration/sampling_plan/cpu_budget.py",
+        "verity/protocols/proofs/spot/prover/cost/glm53.py": "calibration/sampling_plan/glm53.py",
+        "verity/protocols/proofs/spot/prover/cost/h200.py": "calibration/sampling_plan/h200.py",
+        "verity/protocols/proofs/spot/prover/cost/inputs.py": "calibration/sampling_plan/inputs.py",
+        "verity/protocols/proofs/spot/prover/cost/int8_llama.py": "calibration/sampling_plan/int8_llama.py",
+        "verity/protocols/proofs/spot/prover/cost/recursion.py": "calibration/sampling_plan/recursion.py",
+        "verity/protocols/proofs/spot/prover/cost/served_window.py": "calibration/sampling_plan/served_window.py",
+        "verity/protocols/proofs/spot/prover/cost/transformer.py": "calibration/sampling_plan/transformer.py",
+        "tests/verity/protocols/proofs/spot/prover/test_cost_glm53.py": "tests/calibration/sampling_plan/test_cost_glm53.py",
+        "tests/verity/protocols/proofs/spot/prover/test_cost_recursion.py": "tests/calibration/sampling_plan/test_cost_recursion.py",
+        "tests/verity/protocols/proofs/spot/prover/test_cost_transformer.py": "tests/calibration/sampling_plan/test_cost_transformer.py"
+      }
     }
   ]
 }

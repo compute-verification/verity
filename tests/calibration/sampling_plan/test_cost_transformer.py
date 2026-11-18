@@ -14,14 +14,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.proofs.spot.prover.cost import transformer as T
+from calibration.sampling_plan import transformer as T
 from verity.protocols.proofs.spot.verifier.one_stage.draw import work_k
 from verity.protocols.proofs.spot.prover.optimize import Candidate
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as G
 
-CENSUS = Path(__file__).resolve().parents[6] / "calibration" / "census" / "hardware.json"
+CENSUS = Path(__file__).resolve().parents[3] / "calibration" / "census" / "hardware.json"
 CIR_100 = ("Argmax", "EmbedSelect", "Quant", "Relu", "Rms", "Softmax")
 #: units of several instances of one Definition, which no Definition of their own composes yet
 GROUPS = ("Bf16AddRow", "EmbedRow", "PvHead", "QkHead", "S8Tile")

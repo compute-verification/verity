@@ -2,7 +2,7 @@
 run, V*'s staging, V*'s zk_served releases one at a time, and the Lean step that checks every release), scaled to every
 machine-window of a deployment over a week, a month and a year.
 
-    python verity/protocols/proofs/spot/prover/cost/recursion.py --result recursion_e2e.json \
+    python calibration/sampling_plan/recursion.py --result recursion_e2e.json \
         --census calibration/census/deployments.json --fleet benchmarks/slowdown/data/reference.toml \
         [--sessions-per-window 1] [--out DIR]
 
@@ -22,7 +22,7 @@ import json
 import tomllib
 from pathlib import Path
 
-from verity.protocols.proofs.spot.prover.cost.cpu_budget import PERIODS
+from calibration.sampling_plan.cpu_budget import PERIODS
 
 DEPLOYMENT = "dc-12500-machines-600s"
 WORLD = "world-h200"
