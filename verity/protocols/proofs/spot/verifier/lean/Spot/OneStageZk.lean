@@ -597,7 +597,7 @@ slot and the port the row names (`rowName`), is the writer's output row's in the
 (else `WIRES_SAMPLED`). It loads the members a unit of the sample with a wired row, or one of its writers, is in. -/
 def wiresOn (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array (String × Nat × Nat))
     (ms : Array (String × Nat × Nat)) (sample : Array Nat) (load : String → V Rows) : V Unit := do
-  let spans ← W.templates.mapM fun (tid, t) =>
+  let spans ← W.templates.toArray.mapM fun (tid, t) =>
     let s := spansOf rs tid
     if !s.isEmpty && s.foldl (fun n x => n + x.2.2) 0 == t.units then pure (tid, s) else throw WIRES_TEMPLATE
   let bf := byFirst spans
@@ -715,7 +715,7 @@ member's public file naming it is refused by name (`UNWIRED_WHY`). Its cost is t
 def wiredRoots (W : Spot.Wires.Wiring) (rs : Array (String × Nat × Nat)) (ms : Array Member)
     (roots : Std.HashMap String (Array Json)) : Std.HashMap String (Array Json) :=
   let mspans := ms.map fun m => (m.name, m.first, m.count)
-  let spans := W.templates.map fun (tid, _) => (tid, spansOf rs tid)
+  let spans := W.templates.toArray.map fun (tid, _) => (tid, spansOf rs tid)
   let bf := byFirst spans
   ms.foldl (fun acc m =>
     let mine := roots.getD m.name #[]
