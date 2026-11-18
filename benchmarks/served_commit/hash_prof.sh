@@ -3,7 +3,7 @@
 # VARIANT, then one variant under Nsight Systems (per-kernel time) and, with NCU=1, one 256 MiB window's kernels under Nsight Compute
 # (occupancy, issue, stalls), the SM clock sampled beside it all. The extension is JIT-built before the lease. Measurement only.
 # cwd: the source tree's root.
-#   VENV (default /workspace/cache/kernels-kfuse/venv312), CUDA_HOME (/usr/local/cuda-13.0), BUILD (the JIT parent dir),
+#   VENV (default /workspace/cache/kernels-kfuse/venv312), CUDA_HOME (the machine's toolkit at 13.0), BUILD (the JIT parent dir),
 #   VARIANTS (default fold window fold16 fold256 nolevels phases1 fused), NSYS_VARIANT (fold), NCU (1), LEASE_MIN (15)
 #   fold: the worker's levels kept, held leaves folded at ROWS_FOLD_BYTES, copies on a copy stream; window: each window's subtree
 #   alone with its copies and one sync (the worker before the held folds); fold16, fold256: folds at 16 or 256 MiB of leaves;
@@ -12,7 +12,8 @@ set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=${TREE:-$PWD}
 VENV=${VENV:-/workspace/cache/kernels-kfuse/venv312}
-export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
+CUDA_HOME=${CUDA_HOME:-$(python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.0)} || { echo "no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+export CUDA_HOME
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 # the collector's JIT build reads the card's arch from its card file (vLLM's CARD_SKU): the card the run is on, from the kit
 CARD_SKU=${CARD_SKU:-$(python "$TREE/benchmarks/kernels/machine.py" sku)} || exit 2
