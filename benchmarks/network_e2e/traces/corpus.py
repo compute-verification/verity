@@ -818,7 +818,9 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
     if tick:
         name = tick_modules()[0].scheme_name()
         env["VERITY_PROTOCOLS"] = name
-        env["VERITY_PROTOCOLS_CONFIG"] = json.dumps({"feed": str(d / "raw"), name: {
+        # the attester's admission keeps nothing across servers: its private directory is the job's scratch
+        env["VERITY_PROTOCOLS_CONFIG"] = json.dumps({"feed": str(d / "raw"), "out": str(d / "raw"),
+                                                     "private": tempfile.mkdtemp(prefix="verity-private-"), name: {
             **{k: tick[k] for k in ("bucket_us", "sat_us", "free_us")}, "hold_ms": TICK_HOLD_MS, "log": str(d / "raw")}})
     arr = traffic.arrivals(requests, rate)
     ids = [request_id(r["i"]) for r in requests]
