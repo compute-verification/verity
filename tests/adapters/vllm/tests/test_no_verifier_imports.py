@@ -93,7 +93,6 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/pipeline/ids_front.py": ("resource_accounting.network.verifier.release",),
         "verity_vllm/pipeline/serve_admit.py": ("resource_accounting.network.verifier.release.read_watermark",),
         "verity_vllm/pipeline/serve_commit.py": ("resource_accounting.network.verifier.charge_chain",),
-        "verity_vllm/pipeline/serve_protocol.py": ("resource_accounting.network.verifier.release",),
         "verity_vllm/pipeline/window_advice.py": (
             "resource_accounting.network.verifier.advice", "resource_accounting.network.verifier.advice.KINDS",
             "resource_accounting.network.verifier.advice.MalformedAdvice", "resource_accounting.network.verifier.advice.Output",

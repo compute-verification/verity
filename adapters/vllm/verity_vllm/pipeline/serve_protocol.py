@@ -1,18 +1,15 @@
 """`verity-vllm serve-openai`'s completion protocol: each ``/v1/completions`` request parsed and each response framed as vLLM's
 OpenAI server does it. `VllmProtocol` is that server's own classes; `PlainProtocol` is the same framing without vLLM, for the
-CPU tests; `framing_agrees` holds the two to each other. `IdsProtocol` (``--protocol ids``) streams the scan's id form
-instead to the network attester's id requests, since it forwards the server's bytes into its cells unchanged,
-and answers every other request as vLLM does (`of`)."""
+CPU tests; `framing_agrees` holds the two to each other. ``--protocol ids`` is `ids_protocol.IdsProtocol` over
+`VllmProtocol`."""
 from __future__ import annotations
 
-import dataclasses
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.resource_accounting.network.prover.workload import FRAME_HEADER, id_event, id_request
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity.protocols.resource_accounting.network.prover.ids_protocol import ID_PAYLOAD, IdsProtocol
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
 
@@ -220,88 +217,12 @@ class VllmProtocol(PlainProtocol):
                                        token_ids=token_ids, prompt_token_ids=prompt_token_ids)]).model_dump_json()
 
 
-#: the scan's cell payload, P = B − 9 at its B = 512-byte cells: ``--id-payload``'s default
-ID_PAYLOAD = 503
+def ids(force_include_usage: bool = False, *, payload: int = ID_PAYLOAD) -> IdsProtocol:
+    """``--protocol ids``: the network attester's id form over `VllmProtocol`."""
+    return IdsProtocol(payload=payload, base=VllmProtocol(force_include_usage))
 
 
-def id_request_fields(request: bytes, payload: int) -> dict[str, Any] | None:
-    """The fields (`workload.id_request`'s keywords) of `request`, its head and body as the server read them, where it is an id
-    request as the network attester forwards it: without the release headers it puts on the server's copy
-    (`release.with_release`), exactly `workload.id_request` of its own fields in the scan's B = P + 9-byte cells (P =
-    ``payload``). None for anything else."""
-    head, _, body = request.partition(b"\r\n\r\n")
-    line, *fields = head.split(b"\r\n")
-    kept = b"".join(f + b"\r\n" for f in fields
-                    if f.partition(b":")[0].strip().lower() not in (REL.RELEASE_HEADER, REL.RUN_HEADER, REL.BUCKET_HEADER))
-    try:
-        b = json.loads(body)
-        got = {k: b[k] for k in ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")}
-        canonical = id_request(**got, frame_bytes=payload + FRAME_HEADER.size)
-        return got if canonical == line + b"\r\n" + kept + b"\r\n" + body else None
-    except (ValueError, KeyError, TypeError):
-        return None
-
-
-class IdsProtocol:
-    """The scan's id form (``--protocol ids``) for the network attester's id requests, and ``base`` for every other request (`of`),
-    so that clients straight to the endpoint (the network attester's shim and probes, the load) get vLLM's HTTP and JSON.
-    The network attester relays bytes: what the server sends goes into its egress cells unchanged, and the scan's egress reads
-    each cell as one id event. So a streamed response here has no HTTP head and no chunked body:
-    - each token id its own `workload.id_event` of P = ``payload`` bytes (``created`` 0, ``model`` "verity", the id
-      right-aligned in 10 characters, spaces before the blank line), whatever the delta carries;
-    - no usage chunk, whatever ``force_include_usage``;
-    - then exactly `workload.TRAILER`, ``data: [DONE]`` and the blank line, whose position the network attester checks
-      against the stop rule; a stream the engine fails sends neither it nor any text, only its ids so far before the
-      connection closes (`error_end`).
-
-    Requests are parsed and sampled as ``base`` does (`VllmProtocol` by default, `PlainProtocol` on CPU), and a whole
-    response (``stream`` false) is its."""
-
-    name = "ids"
-    http = False
-
-    def __init__(self, force_include_usage: bool = False, *, payload: int = ID_PAYLOAD, base: PlainProtocol | None = None) -> None:
-        id_event(0, payload)
-        self.payload = payload
-        self.base = VllmProtocol(force_include_usage) if base is None else base
-
-    def of(self, request: bytes) -> IdsProtocol | PlainProtocol:
-        """This protocol if `request` is a network attester's id request (`id_request_of`), else ``base``."""
-        return self if self.id_request_of(request) else self.base
-
-    def id_request_of(self, request: bytes) -> bool:
-        """Whether `request` (its head and body as the server read them) is an id request as the network attester forwards it
-        (`id_request_fields`) in the scan's B = P + 9-byte cells."""
-        return id_request_fields(request, self.payload) is not None
-
-    def parse(self, body: Any) -> Completion:
-        req = self.base.parse(body)
-        return dataclasses.replace(req, include_usage=False, continuous_usage=False,
-                                   return_token_ids=req.return_token_ids or req.stream)
-
-    def sampling_params(self, req: Completion, max_tokens: int, defaults: Mapping[str, Any]) -> Any:
-        return self.base.sampling_params(req, max_tokens, defaults)
-
-    def brought(self, req: Completion) -> dict[str, Any]:
-        return self.base.brought(req)
-
-    def max_tokens(self, req: Completion, max_model_len: int, prompt_len: int, defaults: Mapping[str, Any]) -> int:
-        return self.base.max_tokens(req, max_model_len, prompt_len, defaults)
-
-    def events(self, *, token_ids: list[int] | None, **_: Any) -> bytes:
-        return b"".join(id_event(int(t), self.payload) for t in token_ids or ())
-
-    def error_end(self, error: str) -> None:
-        """None, whatever ``error`` says: a failed stream stops after its ids so far, without `workload.TRAILER`, so the
-        network attester sees it unterminated rather than ended early, and no server-chosen text leaves; the reason stays
-        in the server's record."""
-        return None
-
-    def response(self, **kw: Any) -> str:
-        return self.base.response(**kw)
-
-
-PROTOCOLS = {"vllm": VllmProtocol, "plain": PlainProtocol, "ids": IdsProtocol}
+PROTOCOLS = {"vllm": VllmProtocol, "plain": PlainProtocol, "ids": ids}
 
 
 FRAMING_BASE = {"request_id": "cmpl-0123-0", "created": 1, "model": "m"}
