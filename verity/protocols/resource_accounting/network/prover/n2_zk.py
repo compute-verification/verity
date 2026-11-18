@@ -474,7 +474,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
         late = stream.deliver(sample, delivered.sessions())
         t = time.time()
         outcome = late or lw.outcome(stream, sample, x.certificates, rd.syncs, delivered,
-                                     circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None)
+                                     opening=x.opening if a.debug_clear else None)
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]
         verdict = (body.get("audit") or {}).get("verdicts", {}).get(SVC.VERIFIER) or {}

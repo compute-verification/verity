@@ -11,9 +11,8 @@ one of those rows, or SHA-512 collides. h1_prove's `ok` rows are such a value: r
 `ok_salt(window, u)` (`h1unit.register_ok`).
 
 A statement publishes a tree of its own for such a port, over its instances' rows at its own domain. The verifier
-computes that tree too (`publishedRoot`), and lists a statement's known trees for the ZK server's release side
-(`knownTrees`, `knownList`; `verity-verify-proof known-trees`), which holds the statement's trees to the list
-(`ZkServer.Salts.readsKnown`).
+computes that tree too (`publishedRoot`). A list of a statement's known trees for the ZK server's release side is
+`knownList` of `knownEntry`s, which the release side holds the statement's trees to (`ZkServer.Salts.readsKnown`).
 -/
 
 @[expose] public section
@@ -81,21 +80,6 @@ def checkKnownAll (own : Array Port) (known : Array (String × Array (Array Nat 
 
 /-! ### The trees a statement publishes at known content -/
 
-/-- The value's rows the table of port `reg` holds in a statement whose instances are the units `indices`: instance
-`i`'s row is the row the verifier's program reads in unit `indices[i]` (`Port.readAt`), in instance order. Refused
-where the program reads no row of the value in one of the units, and where two instances read one row: an input
-port's table then holds that row once and an output row's table once an instance (`registered.table`), and this reads
-no port's direction. -/
-def tableRows (reg : Port) (indices : Array Nat) : V (Array Nat) := do
-  let rows ← indices.mapM fun u => match reg.readAt u with
-    | some (some p) => pure p
-    | _ => throw s!"known trees: port {reg.name}: the verifier's program reads no row of {reg.value} in unit {u}"
-  let sorted := rows.qsort (· < ·)
-  match (List.range (sorted.size - 1)).find? (fun i => sorted[i]! == sorted[i + 1]!) with
-  | some i =>
-    throw s!"known trees: port {reg.name}: two instances read row {sorted[i]!} of {reg.value}, and its table's layout is then its port's direction's"
-  | none => return rows
-
 /-- **The tree a statement publishes for a port at known content**: the frame-v3-sha512 root, at the statement's
 published domain `dom` for the port, of the table whose row `r` is the value's known row `rows[r]` (`ks`: its words
 and its salt), each leaf framed at `r` under `reg`'s schema, as `PortRoots.pubRoot` roots the public file's `b ‖ c`.
@@ -114,34 +98,6 @@ def knownEntry (dom : ByteArray) (n : Nat) (schema : String) (root : ByteArray) 
 `Register` (`ZkServer.Salts.parseKnown` reads it): `be32 K`, then the `K` entries. -/
 def knownList (entries : Array ByteArray) : ByteArray :=
   entries.foldl (· ++ ·) (Flock.be32 entries.size.toUInt32)
-
-/-- **The known trees of the statement whose public file's header is `header`**, by port, each its entry
-(`knownEntry`): for each port of `own` named at known content in `known` that the header publishes a tree for (a
-domain under `frame_v3.domain_ids`), the tree over its instances' rows (`tableRows` at the header's `units.indices`,
-`publishedRoot`) at that domain. A port at known content that the header publishes no tree for has no entry. -/
-def knownTrees (own : Array Port) (known : Array (String × Array (Array Nat × ByteArray))) (header : Json) :
-    V (Array (String × ByteArray)) := do
-  let ctx := "public file"
-  let indices ← (← J.arr (← J.get header "units" ctx) "indices" ctx).mapM (J.asNat · "a unit index")
-  let doms ← J.get (← J.get header "frame_v3" ctx) "domain_ids" s!"{ctx}.frame_v3"
-  known.filterMapM fun (name, ks) => do
-    if !J.has doms name then return none
-    let some reg := own.toList.find? (·.name == name)
-      | throw s!"known trees: known content for port {name}, which the file does not register"
-    let dom ← unhex (← J.str doms name s!"{ctx}.frame_v3.domain_ids")
-    if dom.size != 64 then throw s!"known trees: port {name}: a published domain of {dom.size} bytes, not 64"
-    let rows ← tableRows reg indices
-    if let some p := rows.find? (· ≥ ks.size) then
-      throw s!"known trees: port {name}: the verifier's program reads row {p} of {reg.value}, and its known rows are {ks.size}"
-    return some (name, knownEntry dom rows.size reg.schema (publishedRoot reg dom ks rows))
-
-/-- `knownTrees` from the verifier's registered file `registered`, each of its ports at known content held to its
-content's root first (`checkKnownAll`). -/
-def knownTreesOf (registered header : Json) : V (Array (String × ByteArray)) := do
-  let own ← ofJson registered
-  let known ← knownOf registered
-  checkKnownAll own known
-  knownTrees own known header
 
 end Registered
 end Flock

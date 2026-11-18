@@ -2,10 +2,9 @@
 `Registered.checkKnownAll` on a `--registered` file: a port named at known content (`known`: each row's u16 words and
 its salt) passes only when its root is the frame-v3-sha512 root of those rows' `hm96-sha512/row/v2` leaves, as
 `registered_value.Registered.commit` roots them; ports without `known` are untouched. And the tree a statement publishes
-for such a port (`Registered.publishedRoot`, `Registered.knownTrees`): the value's own tree where the statement's
-table is the value's rows at the value's domain, another root at another domain or layout, and an entry of the
-verifier's list for each port at known content that the statement publishes a tree for. The list the verifier writes
-(`Registered.knownList`) is the list the ZK server's release side reads (`ZkServer.Salts.parseKnown`).
+for such a port (`Registered.publishedRoot`): the value's own tree where the statement's table is the value's rows at
+the value's domain, and another root at another domain or layout. A list of known trees (`Registered.knownList`) is the
+list the ZK server's release side reads (`ZkServer.Salts.parseKnown`).
 -/
 module
 
@@ -86,50 +85,12 @@ def pubDom : ByteArray := Sha512.hash "verity/test/published-domain".toUTF8
 #guard Registered.publishedRoot reg pubDom ks #[0, 1] != root ks
 #guard Registered.publishedRoot reg dom ks #[1, 0] != root ks
 #guard Registered.publishedRoot reg dom ks #[1] != Registered.publishedRoot reg dom ks #[0]
--- an instance's row is the row its unit reads; two instances of one row, and a unit that reads none, are refused
-#guard (Registered.tableRows reg #[1, 0]).toOption == some #[1, 0]
-#guard (Registered.tableRows reg #[1]).toOption == some #[1]
-#guard !(Registered.tableRows reg #[0, 0]).toBool
-#guard !(Registered.tableRows reg #[0, 2]).toBool
-
-/-- A statement's header of instances at the units `units`, publishing a tree at `pubDom` for each of `ports`. -/
-def header (units : Array Nat) (ports : List String := ["o1"]) : Json :=
-  Json.mkObj [("units", Json.mkObj [("indices", Lean.toJson units)]),
-    ("frame_v3", Json.mkObj [("domain_ids", Json.mkObj (ports.map fun p => (p, Json.str (hexOf pubDom))))])]
-
-/-- `knownTrees` on the file's ports at the reads `OneCircuit.pos` derives from the program (`reg`'s), each port at known
-content held to its root first. -/
-def trees (units : Array Nat) (ports : List String := ["o1"]) : Except String (Array (String × ByteArray)) := do
-  let f := file (hexOf (root ks)) (some (knownJ ks))
-  let own := (← Registered.ofJson f).map ({ · with readsRel := reg.readsRel })
-  let known ← Registered.knownOf f
-  Registered.checkKnownAll own known
-  Registered.knownTrees own known (header units ports)
-
--- the one port at known content: its published domain, row count, schema index and root
-#guard (trees #[1, 0]).toOption == some #[("o1", pubDom ++ Flock.be64 2 ++ ByteArray.mk #[1] ++
-  Registered.publishedRoot reg pubDom ks #[1, 0])]
-#guard ((trees #[1]).toOption.map (·.map (·.2.size))) == some #[137]
--- a port the statement publishes no tree for has no entry, and the list of none is its count alone
-#guard (trees #[0, 1] ["i0"]).toOption == some #[]
+-- the list of none is its count alone, and the release side reads each entry as written and the list of none as none
 #guard Registered.knownList #[] == Flock.be32 0
-#guard ((trees #[0, 1]).toOption.map fun ts => (Registered.knownList (ts.map (·.2))).size) == some (4 + 137)
-/-- What the release side reads of the list the verifier writes for the statement at `units`: each entry's domain,
-row count, schema index and root. -/
-def listed (units : Array Nat) : Option (Array (ByteArray × Nat × Nat × ByteArray)) := do
-  let ts ← (trees units).toOption
-  let es ← (ZkServer.Salts.parseKnown (Registered.knownList (ts.map (·.2)))).toOption
-  if es.map (·.bytes) != ts.map (·.2) then none
-  pure (es.map fun e => (e.t.dom, e.t.n, e.t.schema, e.root))
-
--- the release side reads each entry as the verifier wrote it, and the list of none as none
-#guard listed #[1, 0] == some #[(pubDom, 2, 1, Registered.publishedRoot reg pubDom ks #[1, 0])]
-#guard listed #[1] == some #[(pubDom, 1, 1, Registered.publishedRoot reg pubDom ks #[1])]
+def entry : ByteArray := Registered.knownEntry pubDom 2 reg.schema (Registered.publishedRoot reg pubDom ks #[1, 0])
+#guard ((ZkServer.Salts.parseKnown (Registered.knownList #[entry])).toOption.map
+  (·.map fun e => (e.t.dom, e.t.n, e.t.schema, e.root))) == some #[(pubDom, 2, 1, Registered.publishedRoot reg pubDom ks #[1, 0])]
 #guard ((ZkServer.Salts.parseKnown (Registered.knownList #[])).toOption.map (·.size)) == some 0
 #guard ((ZkServer.Salts.parseKnown .empty).toOption.map (·.size)) == some 0
--- a file whose root is not its known rows' lists nothing
-#guard !(Registered.knownTreesOf (file (hexOf (Sha512.hash .empty)) (some (knownJ ks))) (header #[0, 1])).toBool
--- an instance at a unit in which the program reads no row of the value
-#guard !(trees #[0, 2]).toBool
 
 end Flock.Test.RegKnown
