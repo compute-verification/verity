@@ -1109,7 +1109,6 @@ SPOT_VERIFIER_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
     "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
     "adapters/vllm/verity_vllm/program/predict/weights_tie.py",
-    "adapters/vllm/verity_vllm/program/predict/window_weights.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
 )
