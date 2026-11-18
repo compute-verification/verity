@@ -27,7 +27,7 @@ from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
-from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_design
+from verity.commitments.randomness import parse_design
 from verity.channel import Refused
 from verity.circuits.codec import canonical_json
 from verity.commitments.crypto import lms

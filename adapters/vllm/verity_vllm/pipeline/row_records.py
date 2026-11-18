@@ -64,7 +64,7 @@ def row_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
 def declared_target(wl: str, protocols: tuple[str, ...] | None = None, row: str | None = None) -> str:
     """The row's declared TargetProfile block as sorted JSON (Build's ``--target``), "" when it declares none: the workload's, over
     the device-class profile of ``row``'s id (`target_family.declared_profile`); ``protocols`` (the row's set,
-    `protocol_options.at_row`) is laid over it as the target's ``protocols``."""
+    `row.row_protocols`) is laid over it as the target's ``protocols``."""
     t = declared_profile(row, read_json(wl)) or None
     if protocols:
         t = {**(t or {}), "protocols": list(protocols)}

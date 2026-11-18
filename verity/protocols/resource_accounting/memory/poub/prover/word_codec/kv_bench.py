@@ -347,7 +347,8 @@ def read_rate(lib: Lib, torch, store, sms: int, reps: int) -> dict:
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
     best = None
     for mult in (4, 8, 16, 32):
-        ts = timed(torch, lambda: lib.call("kv_read", ptr(store), store.numel(), ptr(xr), sms * mult, stream(torch)), reps)
+        ts = timed(torch, lambda mult=mult: lib.call("kv_read", ptr(store), store.numel(), ptr(xr), sms * mult, stream(torch)),
+                   reps)
         med = statistics.median(ts)
         if best is None or med < best[1]:
             best = (mult, med, ts)
@@ -364,12 +365,13 @@ def chain(lib: Lib, torch, what: int, k: int, ilp: int, sms: int, reps: int, tar
         grid = sms * per_sm
         steps = 4
         while True:
-            t = statistics.median(timed(torch, lambda: lib.call("kv_chain", what, k, ilp, steps, grid, ptr(xr), st), 1))
+            t = statistics.median(timed(
+                torch, lambda steps=steps, grid=grid: lib.call("kv_chain", what, k, ilp, steps, grid, ptr(xr), st), 1))
             if t > target_s / 4 or steps > 1 << 24:
                 break
             steps *= 4
         steps = max(1, int(steps * target_s / t))
-        ts = timed(torch, lambda: lib.call("kv_chain", what, k, ilp, steps, grid, ptr(xr), st), reps)
+        ts = timed(torch, lambda steps=steps, grid=grid: lib.call("kv_chain", what, k, ilp, steps, grid, ptr(xr), st), reps)
         med = statistics.median(ts)
         items = grid * 128 * steps * (ilp if what == 0 else 1)
         r = {"per_sm": per_sm, "steps": steps, "items": items, "median_s": med, "times_s": ts, "per_s": items / med}
@@ -438,7 +440,7 @@ def store_rates(lib: Lib, torch, store, ks, sms: int, reps: int, read_gbps: floa
     out = {}
     for k in ks:
         set_key(lib, lib_key(lib, k))
-        enc = timed(torch, lambda: lib.call("kv_encode", ptr(store), ptr(y), n, 0, k, sms * 8, st), 1, warm=0)[0]
+        enc = timed(torch, lambda k=k: lib.call("kv_encode", ptr(store), ptr(y), n, 0, k, sms * 8, st), 1, warm=0)[0]
         xr.zero_()
         lib.call("kv_decode", ptr(y), 0, n, 0, k, sms * 8, ptr(xr), st)
         torch.cuda.synchronize()
@@ -448,7 +450,8 @@ def store_rates(lib: Lib, torch, store, ks, sms: int, reps: int, read_gbps: floa
             continue
         best = None
         for mult in (4, 8, 16):
-            ts = timed(torch, lambda: lib.call("kv_decode", ptr(y), 0, n, 0, k, sms * mult, ptr(xr), st), reps)
+            ts = timed(torch, lambda k=k, mult=mult: lib.call("kv_decode", ptr(y), 0, n, 0, k, sms * mult, ptr(xr), st),
+                       reps)
             med = statistics.median(ts)
             if best is None or med < best[1]:
                 best = (mult, med, ts)
@@ -475,7 +478,7 @@ def token_encode(lib: Lib, torch, ks, batches, reps: int, enc_rates: dict, log) 
         for b in batches:
             n = tw * b
             lib.call("kv_encode", ptr(words), ptr(y), n, 0, k, 0, st)
-            ts = [queued(lib, torch, lambda: lib.call("kv_encode", ptr(words), ptr(y), n, 0, k, 0, st))
+            ts = [queued(lib, torch, lambda n=n, k=k: lib.call("kv_encode", ptr(words), ptr(y), n, 0, k, 0, st))
                   for _ in range(reps)]
             sm = n / enc_rates[k]["per_s"]
             out[k][b] = {"words": n, "bytes": n * f.word_bytes, "latency_s": statistics.median(ts), "times_s": ts,
@@ -533,7 +536,8 @@ def attention(lib: Lib, torch, batches, contexts, k: int, reps: int, sms: int, l
             o_p = torch.empty(b, 64, K.HEAD_DIM, dtype=torch.float32, device="cuda")
             o_e = torch.empty_like(o_p)
 
-            def run(store, encoded: int, o, layer: int, splits: int) -> None:
+            def run(store, encoded: int, o, layer: int, splits: int, *, q=q, part=part, b=b, ctx=ctx,
+                    layers=layers) -> None:
                 lib.call("kv_attn", ptr(store), encoded, ptr(q), ptr(o), ptr(part), b, ctx, layers, layer, splits, k, st)
 
             kvl = plain.view(b, ctx, layers, 2, K.KV_HEADS, K.HEAD_DIM)
@@ -563,18 +567,21 @@ def attention(lib: Lib, torch, batches, contexts, k: int, reps: int, sms: int, l
                 spin = ATTN_SPIN_CYCLES
                 per = {}
                 for sp in cands:
-                    tp = [queued(lib, torch, lambda: [run(plain, 0, o_p, l, sp) for l in range(layers)], spin) / layers
+                    tp = [queued(lib, torch, lambda sp=sp, plain=plain, o_p=o_p, layers=layers:
+                                 [run(plain, 0, o_p, layer, sp) for layer in range(layers)], spin) / layers
                           for _ in range(reps)]
                     per[sp] = {"plain_s": statistics.median(tp), "plain_times_s": tp}
                     for form, fname in ATTN_FORMS.items():
-                        te = [queued(lib, torch, lambda: [run(enc, form, o_e, l, sp) for l in range(layers)], spin)
+                        te = [queued(lib, torch, lambda sp=sp, enc=enc, form=form, o_e=o_e, layers=layers:
+                                     [run(enc, form, o_e, layer, sp) for layer in range(layers)], spin)
                               / layers for _ in range(reps)]
                         per[sp].update({f"{fname}_s": statistics.median(te), f"{fname}_times_s": te})
                 kt = kvl.permute(2, 3, 0, 4, 1, 5).contiguous()  # layer, K/V, b, kv head, token, dim
                 qt = (q.float() / scale).to(torch.bfloat16).view(b, 64, 1, K.HEAD_DIM)
                 F.scaled_dot_product_attention(qt, kt[0, 0], kt[0, 1], enable_gqa=True)
-                tt = [queued(lib, torch, lambda: [F.scaled_dot_product_attention(qt, kt[l, 0], kt[l, 1], enable_gqa=True)
-                                                  for l in range(layers)], spin) / layers for _ in range(reps)]
+                tt = [queued(lib, torch, lambda qt=qt, kt=kt, layers=layers:
+                             [F.scaled_dot_product_attention(qt, kt[layer, 0], kt[layer, 1], enable_gqa=True)
+                              for layer in range(layers)], spin) / layers for _ in range(reps)]
                 del kt
                 sp_p = min(per, key=lambda sp: per[sp]["plain_s"])
                 best = {f: min(per, key=lambda sp: per[sp][f"{f}_s"]) for f in ATTN_FORMS.values()}
@@ -619,7 +626,7 @@ def native_70b(torch, batches, reps: int, log) -> dict:
                 xc = torch.zeros(mpad, kd, device="cuda").to(torch.float8_e4m3fn)
                 xc[:b] = x
 
-            def arm():
+            def arm(xc=xc, wts=wts):
                 for wt in wts:
                     torch._scaled_mm(xc, wt, one, one, out_dtype=torch.bfloat16)
             ts = timed(torch, arm, reps)
@@ -705,7 +712,8 @@ def write_result(res: dict, libs: list[Lib], out_dir: Path) -> None:
     rel = os.path.relpath(out_dir, run_dir)
     files = [f"{rel}/kv-codec.json", f"{rel}/kv.log"]
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
-           "workload_fingerprint": {"libs": {l.name: hashlib.sha256(Path(l.path).read_bytes()).hexdigest() for l in libs},
+           "workload_fingerprint": {"libs": {lib.name: hashlib.sha256(Path(lib.path).read_bytes()).hexdigest()
+                                             for lib in libs},
                                     "seed": SEED.hex()},
            "validation": {"status": "passed" if res["ok"] else "failed", "checker": "kv codec gates",
                           "detail": "device encode and decode = kv.py, round trips, checksums", "evidence": files},
@@ -752,7 +760,7 @@ def main() -> int:
     sms = props.multi_processor_count
     res = {"device": props.name, "sms": sms, "total_memory": props.total_memory, "seed": SEED.hex(), "ks": ks,
            "batches": batches, "E_70B": E_70B, "token_bytes": K.TOKEN_BYTES, "libs": {}, "ok": True}
-    log(f"{props.name}: {sms} SMs; libs " + ", ".join(f"{l.name} ({l.field.n} bits, kmax {l.kmax})" for l in libs))
+    log(f"{props.name}: {sms} SMs; libs " + ", ".join(f"{lib.name} ({lib.field.n} bits, kmax {lib.kmax})" for lib in libs))
     for lib in libs:
         g = gate(lib, torch, ks, a.gate_ref, a.gate_words, log)
         gb = gate_bound(lib, torch, log)

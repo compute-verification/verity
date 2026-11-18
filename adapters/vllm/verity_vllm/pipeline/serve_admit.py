@@ -1,8 +1,8 @@
 """serve-openai's admissions: what a request brings to the engine (`Admission`, and `Delta`, what goes back), and the order
-and the step they are added in (``--admit``). ``arrival`` adds each request to the engine as soon as the frontend has parsed
-it, in the API server's body-read order; ``release-order`` adds them in the network attester's release order, so the advice
-needn't carry the permutation between the two; ``tick`` also fixes the step each is added at, by the certified tick, so it
-needn't carry when each arrived either.
+and the step they are added in (the admission scheme's ``order``). ``arrival`` adds each request to the engine as soon
+as the frontend has parsed it, in the API server's body-read order; ``release-order`` adds them in the network
+attester's release order, so the advice needn't carry the permutation between the two; ``tick`` also fixes the step
+each is added at, by the certified tick, so it needn't carry when each arrived either.
 
 The orders ``release-order`` and ``tick`` are the network attester's (`network.prover.admission`: `ReleaseOrder`, and the
 certified tick's `TickGate`); this module is what any admission order reads, and the step's rows it needs.
@@ -29,9 +29,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity_vllm.engine.hooks import Hooks
-
-ADMIT = ("arrival", "release-order", "tick")
-
 
 @dataclass
 class Delta:
@@ -86,20 +83,20 @@ def keep_scheduler_rows(runner: Any, scheduler: Any) -> Hooks:
     and for a scheduler policy other than FCFS, whose waiting queue is not the admission order."""
     module = sys.modules.get(type(runner).__module__)
     if not callable(getattr(module, "sort_batch_req_ids", None)):
-        raise RuntimeError(f"--admit release-order keeps the scheduler's row order through Model Runner V2's sort_batch_req_ids, "
+        raise RuntimeError(f"order release-order keeps the scheduler's row order through Model Runner V2's sort_batch_req_ids, "
                            f"which {type(runner).__module__} has none of: serve with VLLM_USE_V2_MODEL_RUNNER=1 (engine.env)")
     groups = getattr(runner, "attn_groups", None)
     if groups is None:
-        raise RuntimeError("--admit release-order reads the runner's attention backends (attn_groups), which aren't built yet: "
+        raise RuntimeError("order release-order reads the runner's attention backends (attn_groups), which aren't built yet: "
                            "keep the scheduler's rows once the engine is up")
     split = sorted({type(b).__name__ for gs in groups for g in gs for b in getattr(g, "metadata_builders", ())
                     if getattr(b, "reorder_batch_threshold", None) is not None})
     if split:
-        raise RuntimeError(f"--admit release-order keeps the scheduler's row order, but attention backend {', '.join(split)} "
+        raise RuntimeError(f"order release-order keeps the scheduler's row order, but attention backend {', '.join(split)} "
                            f"splits each batch into decodes and prefills and needs the decodes first (reorder_batch_threshold)")
     policy = getattr(getattr(scheduler, "scheduler_config", None), "policy", None)
     if policy != "fcfs":
-        raise RuntimeError(f"--admit release-order needs the FCFS scheduler, whose waiting queue is the admission order; "
+        raise RuntimeError(f"order release-order needs the FCFS scheduler, whose waiting queue is the admission order; "
                            f"this one's policy is {policy!r}")
     hooks = Hooks(tag="admit-rows")
     hooks.patch(module, "sort_batch_req_ids", scheduler_order)

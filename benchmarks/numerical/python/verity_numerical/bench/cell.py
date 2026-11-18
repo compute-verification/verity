@@ -161,7 +161,7 @@ def plan(backend: str, statement: str, input_set: str, prover: str, relation: st
     ref = resolve_input_set(input_set)
     if ref["subcircuit"] != sub.id:
         raise NotSupported(f"input set {ref['id']} is of {ref['subcircuit']}, the statement's subcircuit is {sub.id}")
-    if ref["kind"] == "set" and LW.registry(family).stage(sub) is None:
+    if ref["kind"] == "set" and judged is False and LW.registry(family).stage(sub) is None:
         raise NotSupported(f"{family}'s {sub.template.id} lowering has no stage(): its scripts regenerate their own frozen set, so "
                            f"it runs on a census set only, not on input set {ref['id']}")
     if relation is not None and not any(relation.startswith(r) for r in getattr(drv, "RELATIONS", ())):

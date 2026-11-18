@@ -42,8 +42,7 @@ from verity_vllm.engine.hooks import Hooks
 __all__ = ["BUILD_BOUND", "Context", "Option", "Target"]
 
 #: Where a composition runs: ``serve`` is `verity_vllm.LLM`; ``capture`` is a row's Match capture (its executors only, so the
-#: observed run executes what the Commit serves); ``commit`` is a Commit: a row's Commit stage, or serve-openai's Commit
-#: windows, whose composition states the executor beside the server's own Commit (`serve_pearl`).
+#: observed run executes what the Commit serves); ``commit`` is a row's Commit stage.
 STAGES = ("serve", "capture", "commit")
 #: An adapter's request whose served computation is the row Build's: the engine serves the profile's kernels.
 BUILD_BOUND = H.RequireProperty("kernels", "profile", "its served computation is the row's Build, and engine overrides can "

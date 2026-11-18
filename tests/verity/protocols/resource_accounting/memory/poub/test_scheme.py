@@ -11,7 +11,7 @@ from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.poub import scheme as poub
 from verity.protocols.resource_accounting.memory.poub.prover import binder
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, p2_parties
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, p2_parties, period
 
 
 def test_each_is_registered_under_its_one_name() -> None:
@@ -27,7 +27,7 @@ def test_bandwidth_is_the_p2_verifiers_component() -> None:
 
 
 def test_poub_is_the_remote_sessions_and_the_binders_name() -> None:
-    assert poub.POUB.protocol == audit.PROTOCOL_ID
+    assert poub.POUB.protocol == audit.PROTOCOL_ID == period.PROTOCOL
     assert binder.NAME == poub.POUB.name and poub.POUB.hooks == ("declared", "memory", "steps")
     assert set(poub.POUB.processes) == {poub.SESSION_PROCESS} == {"poub-session"}
     assert S.PROCESSES[poub.SESSION_PROCESS] is poub.POUB.processes[poub.SESSION_PROCESS]

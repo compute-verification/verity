@@ -15,13 +15,15 @@
 #    meanwhile, other programs' among them, so it stays in the job's temporary directory, which is deleted.
 # 2. The run: the rehearsal, with its offline check, in the job's temporary directory, since its records and salts are
 #    the prover's. $OUT/run keeps what the gate publishes of it (`auditor.py publish`) and nothing else.
-# 3. What is kept of the capture: $OUT/run.pcap, its packets on the run's two ports, the stand-in front's and the
-#    relay's (`endpoints.json`), headers alone. The filter reads a packet's ports in the 54 bytes kept of it: it
-#    finds IPv4's there, under at most 16 bytes of IP options, and never IPv6's, so it keeps no IPv6 packet. The
-#    front and the relay listen on IPv4's loopback.
-# 4. The reader: `capture_flows.py` on $OUT/run.pcap and the run, which it reads records and all. The front and the relay share the loopback's address,
-#    so the front's is given with its port; the load's connections to the relay are among the other flows. Its result
-#    is $OUT/capture_flows.json and its table $OUT/capture_flows.txt, also printed.
+# 3. The capture's packets on the run's two ports, the stand-in front's and the relay's (`endpoints.json`), headers
+#    alone, in the job's temporary directory: the front's port is the wire between the server and the attester, in the
+#    clear, and its packets' times and lengths follow the workload. The filter reads a packet's ports in the 54 bytes
+#    kept of it: it finds IPv4's there, under at most 16 bytes of IP options, and never IPv6's, so it keeps no IPv6
+#    packet. The front and the relay listen on IPv4's loopback.
+# 4. The reader: `capture_flows.py` on those packets and the run, which it reads records and all, in the job's
+#    temporary directory, its table too, since both count each flow. The front and the relay share the loopback's
+#    address, so the front's is given with its port; the load's connections to the relay are among the other flows.
+#    $OUT/capture_flows.json keeps its verdicts alone, each direction's and the pairing's `says`, also printed.
 # The exit is the reader's (0 read, 2 refused) where the rehearsal's check accepted its run; 1 where it didn't, the
 # run left no capture or its form isn't EGRESS's; 4 where there is no tcpdump, no right to capture or no such python,
 # or EGRESS isn't a form or a flag gives one.
@@ -73,11 +75,15 @@ print(*e["upstream"], *e["listen"], d["params"]["egress"])' "$W/run/endpoints.js
   || { log "the rehearsal left no deployment or no endpoints"; exit 1; }
 read -r front port relay listen ran <<< "$ends"
 [ "$ran" = "$EGRESS" ] || { log "the run's egress form is $ran, not EGRESS's ($EGRESS)"; exit 1; }
-tcpdump -r "$W/lo.pcap" -w "$OUT/run.pcap" "tcp port $port or tcp port $listen" 2> /dev/null \
+tcpdump -r "$W/lo.pcap" -w "$W/run.pcap" "tcp port $port or tcp port $listen" 2> /dev/null \
   || { log "the capture couldn't be read back"; exit 1; }
 
-"$PY" "$HERE/capture_flows.py" --capture "$OUT/run.pcap" --server "$front:$port" --certifier "$relay" \
-  --run "$W/run" --out "$OUT/capture_flows.json" | tee "$OUT/capture_flows.txt"
-read=${PIPESTATUS[0]}
+"$PY" "$HERE/capture_flows.py" --capture "$W/run.pcap" --server "$front:$port" --certifier "$relay" \
+  --run "$W/run" --out "$W/capture_flows.json" > "$W/capture_flows.txt"
+read=$?
+[ "$read" != 0 ] || "$PY" -c 'import json, sys
+c = json.load(open(sys.argv[1]))["compared"]
+print(json.dumps({"says": {k: c[k]["says"] for k in ("to_server", "from_server", "pairing")}}, indent=1))' \
+  "$W/capture_flows.json" | tee "$OUT/capture_flows.json"
 [ "$rehearsed" = 0 ] || { log "the rehearsal's check didn't accept its run (exit $rehearsed)"; exit 1; }
 exit "$read"

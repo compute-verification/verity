@@ -5,10 +5,11 @@ other, and the points it sweeps over. `verity-bench` ([`benchmarks/harness`](../
 a spec or a sweep, and this file says what each one is for.
 
 - A **spec** (`verity-bench/vllm-spec/v0`) is one measurement: a preset (the model at a pinned revision or a node-local
-  checkpoint with its digest, its precision, its GPU count, the vLLM pin and the engine settings), the cards it runs on
+  checkpoint with its digest, its precision, its GPU count, the vLLM pin and the engine settings; the vLLM pin, and the
+  revision of a model `benchmarks/production.toml` pins, are that file's unless the spec writes its own), the cards it runs on
   (`cards`, each card's `short`), the arms timed against each other, the sweep it runs over, its reps, and its admission.
   What a card needs in place of the spec's own (its env, setup or admission) is under `[card_settings.SHORT]`, only where
-  that card differs. Every ratio is over its baseline: `stock-fp8` when it runs, else `stock`, else its first arm.
+  that card differs; why a spec refuses a card it doesn't list is `[refused]`'s `SHORT = "why"`. Every ratio is over its baseline: `stock-fp8` when it runs, else `stock`, else its first arm.
 - A **sweep** (`verity-bench/vllm-sweep/v0`) is the points a spec runs: the product of its batches, prompt lengths
   and traffic shapes, every request sampled greedily. A spec names one by its id.
 - A **steady-state spec** (`verity-bench/steady-spec/v0`) is the proof server's rate at steady state: block types, each a
@@ -50,8 +51,9 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 
 - `llama31-8b-1gpu-pouw-protocol-served`: Pearl-C against batch-invariant eager and compiled stock FP8, in one run.
 - `llama31-8b-1gpu-pouw-protocol-served-b32`: the same at batch 32 alone, with 6 reps.
-- `llama31-8b-1gpu-pearl-c-whole-served`: Pearl-C's whole-step graph arm beside the protocol arm and both stocks on one
-  RTX PRO 6000, and against compiled stock FP8 alone on one H200.
+- `llama31-8b-1gpu-pearl-c-whole-served`: Pearl-C's whole-step graph arm against compiled stock FP8 on one H200. It
+  refuses the RTX PRO 6000, where its whole step served Pearl-C on sm_120, no declared scheme (compute-accounting's to
+  declare); its runs there before are its record's (`pearl-c-whole-step`), read as `...@rtx-pro-6000`.
 - `llama32-1b-1gpu-pouw-protocol-served`: Pearl+ (`pouw:pearl-c-h100-v1-h3`, `pearl_c_sm90`'s kernel from its setup)
   on Llama-3.2-1B's BF16 checkpoint on one H200 or H100, against eager and compiled stock FP8 at batch 32, 8,192 tokens a
   step (`served_pearlplus.sh`'s step).

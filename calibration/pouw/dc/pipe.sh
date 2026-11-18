@@ -19,8 +19,8 @@ set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export PYTHONDONTWRITEBYTECODE=1
-NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-[ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "pipe.sh: no nvcc (CUDA 13.0 has sm_100a)" >&2; exit 2; }
+NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "pipe.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+[ -x "$NVCC" ] || { echo "pipe.sh: no nvcc at $NVCC" >&2; exit 2; }
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
 PROBE="$HERE/../opcode_probe/probe.py"
 CARD=(${DC_SKU:+--sku "$DC_SKU"})

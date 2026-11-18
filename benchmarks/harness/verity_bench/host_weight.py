@@ -16,13 +16,12 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity.device import load_card, load_node, number, readings
-
-ROOT = Path(__file__).resolve().parents[3]
-CARD_FILES, NODE_FILES = ROOT / "calibration/hardware/cards", ROOT / "calibration/hardware/nodes"
+from verity_bench.kit import cards_directory, nodes_directory
 
 
-def cpu_sm_s_per_core_s(kind: str, *, nodes: Path = NODE_FILES, cards: Path = CARD_FILES) -> Fraction:
+def cpu_sm_s_per_core_s(kind: str, *, nodes: Path | None = None, cards: Path | None = None) -> Fraction:
     """The SM-seconds a host CPU core-second of node `kind` weighs, exactly."""
+    nodes, cards = nodes or nodes_directory(), cards or cards_directory()
     node = load_node(kind, directory=nodes, cards_directory=cards)
     host, gpu = (load_card(node[table]["sku"], directory=cards) for table in ("host", "device"))
     core = number(host["rate"]["ops"]) / (number(host["cpu"]["sockets"]) * number(host["cpu"]["cores"]))

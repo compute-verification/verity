@@ -12,6 +12,7 @@ from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
+from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import serving_rows as SRW
 
 DOT = '{"fn":"BlackwellS8ImmaDot32_v1"}'
@@ -92,5 +93,5 @@ def test_a_coordinate_reads_a6s_rows_off_the_rows_operands(monkeypatch):
     assert [len(g[0]["rows"]["x"]) for g in got] == [4, 2]
     assert [[e[:2] for e in g[1]] for g in got] == [[[0, 3], [3, 6]], [[3, 6]]]
     w = CS.Binding(*IF.listed_program([(bind(OG.ScaledMmS8Coordinate, K=K, **OG.GEMM_SM120_S8), 6)], ()),
-                  {"law": "stratified", "k": 2}, "ab" * 32, tuple(ms))
-    assert CS.commit(w, [g[0] for g in got]).window.population == 6
+                  {"law": "stratified", "k": 2}, "ab" * 32, tuple(CH.shared_tables(ms)))
+    assert CS.commit(w, CH.held_rows(w, [g[0] for g in got])).window.population == 6

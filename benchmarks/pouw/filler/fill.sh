@@ -7,7 +7,8 @@
 #     --send benchmarks/pouw/filler/fill.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/fill.sh"'
 set -uo pipefail
 export O=${OUT:?}
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4  # the machine's toolkit at 13.0
+export PATH=$CUDA_HOME/bin:$PATH
 D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/dcap.XXXXXX); trap 'rm -rf "$B"' EXIT
 git rev-parse HEAD > "$O/commit.txt" 2>&1

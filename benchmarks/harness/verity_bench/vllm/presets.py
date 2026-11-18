@@ -12,7 +12,14 @@ from collections.abc import Mapping
 
 from verity_config import Admission, ConfigError, gpus, load, sha256
 
-VLLM_PIN = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+from verity_bench import profiles
+
+_PRODUCTION = profiles.load()
+#: the vLLM commit every spec runs: the serving profiles' (`benchmarks/production.toml`'s ``vllm``)
+VLLM_PIN = _PRODUCTION.vllm
+#: each model the serving profiles pin, its repository to its revision (`production.toml`'s ``models``): a spec naming
+#: one of them and no revision runs that revision
+REVISIONS = {m.repository: m.revision for m in _PRODUCTION.models.values()}
 SPEC_ROOT = Path(__file__).resolve().parents[2] / "specs"
 SOURCE_ROOT = Path(__file__).resolve().parents[4]
 #: A spec's path from the source tree's root while the specs had a directory of their own, and that directory. A run
@@ -88,19 +95,18 @@ class ArmSettings:
 @dataclass(frozen=True)
 class CardSettings:
     """What a spec's run takes on one of its cards in place of the spec's own (`[card_settings.SHORT]`): only where the
-    card needs it. ``arms`` replace the spec's, and ``arm_settings`` add to its, each arm's taken whole (`card_arms`)."""
+    card needs it."""
 
     env: Mapping[str, str] = field(default_factory=dict)
     setup: str | None = None
     admission: Admission | None = None
-    arms: tuple[str, ...] = ()
-    arm_settings: Mapping[str, ArmSettings] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class BenchmarkSpec:
     """One runnable benchmark configuration before its named sweep and its card are resolved: the cards it runs on
-    (``cards``, by their `short`; none where any card will do), and what differs on one (``card_settings``)."""
+    (``cards``, by their `short`; none where any card will do), what differs on one (``card_settings``), and why it
+    refuses a card it doesn't list (``refused``, each said in that card's refusal)."""
 
     schema: str
     backend: str
@@ -112,6 +118,7 @@ class BenchmarkSpec:
     preset: SpecPreset
     cards: tuple[str, ...] = ()
     card_settings: Mapping[str, CardSettings] = field(default_factory=dict)
+    refused: Mapping[str, str] = field(default_factory=dict)
     arm_modules: tuple[str, ...] = ()
     arm_settings: Mapping[str, ArmSettings] = field(default_factory=dict)
     env: Mapping[str, str] = field(default_factory=dict)
@@ -238,6 +245,8 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
             raise ConfigError(f"{path}: gpu_count is outside {card!r}'s per-node capacity")
     if stray := sorted(set(doc.card_settings) - set(doc.cards)):
         raise ConfigError(f"{path}: card_settings {stray} name no card of the spec's cards {list(doc.cards)}")
+    if stray := sorted(set(doc.refused) & set(doc.cards) | set(doc.refused) - _card_shorts()):
+        raise ConfigError(f"{path}: refused {stray}: each names a card's `short` the spec doesn't list in cards")
     unknown = sorted(set(doc.preset.engine_settings) - set(ENGINE_SETTINGS))
     if unknown:
         raise ConfigError(f"{path}: unknown engine_settings {unknown}; known: {list(ENGINE_SETTINGS)}")
@@ -255,38 +264,20 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
         setup = PurePosixPath(given)
         if setup.is_absolute() or ".." in setup.parts or not (SOURCE_ROOT / setup).is_file():
             raise ConfigError(f"{path}: setup {given!r} must name a script in the source tree, relative to its root")
-    every = {*doc.arms, *(name for on in doc.card_settings.values() for name in on.arms)}
-    for card in doc.cards or (None,):
-        _check_arms(path, doc, card, every)
-    return doc
-
-
-def _check_arms(path: Path, doc: BenchmarkSpec, card: str | None, every: set[str]) -> None:
-    arms, arm_settings = card_arms(doc, card)
-    on = doc.card_settings.get(card, CardSettings())
-    if stray := sorted(set(on.arm_settings) - set(arms)):
-        raise ConfigError(f"{path}: card_settings.{card}.arm_settings {stray} name no arm of the {card}'s arms")
-    for name, arm in {**arm_settings, **{n: doc.arm_settings[n] for n in doc.arm_settings if n not in every}}.items():
+    for name, arm in doc.arm_settings.items():
         variant = name.partition("@")[2] in SERVED_EXECUTIONS
-        if name not in every or not (":" in name or variant):
+        if name not in doc.arms or not (":" in name or variant):
             raise ConfigError(f"{path}: arm_settings {name!r} must name a protocol arm (protocol:scheme) or a served "
                               f"variant (BUILTIN@{'|'.join(SERVED_EXECUTIONS)}) in arms")
         if variant and (arm.precision is not None or arm.protocols_config):
             raise ConfigError(f"{path}: arm_settings {name!r}: a served variant takes only its control")
         if arm.precision is not None and arm.precision not in PRECISIONS:
             raise ConfigError(f"{path}: arm_settings {name!r}: precision is one of {', '.join(PRECISIONS)}")
-        if arm.control is not None and arm.control != NO_CONTROL and (arm.control not in arms or arm.control == name):
+        if arm.control is not None and arm.control != NO_CONTROL and (arm.control not in doc.arms or arm.control == name):
             raise ConfigError(f"{path}: arm_settings {name!r}: control must be another arm in arms, or {NO_CONTROL!r}")
-
-
-def card_arms(doc: BenchmarkSpec, card: str | None) -> tuple[tuple[str, ...], dict[str, ArmSettings]]:
-    """The arms a run of ``doc`` on ``card`` times, and their settings: the card's (``card_settings``) where it names
-    any, else the spec's; each arm's settings the card's where it gives them, else the spec's."""
-
-    on = doc.card_settings.get(card, CardSettings())
-    arms = on.arms or doc.arms
-    merged = {**doc.arm_settings, **on.arm_settings}
-    return arms, {name: merged[name] for name in arms if name in merged}
+    if doc.preset.revision is None and doc.preset.model in REVISIONS:
+        doc = replace(doc, preset=replace(doc.preset, revision=REVISIONS[doc.preset.model]))
+    return doc
 
 
 def load_sweep(name: str) -> Sweep:
@@ -318,6 +309,8 @@ def run_card(doc: BenchmarkSpec, card: str | None) -> str:
             raise ConfigError(f"spec {doc.id!r} runs on {' or '.join(doc.cards) or 'any card'}, and no card is here: name "
                               f"one, `{doc.id}@CARD`")
         card = kit.card_short(found)
+    if card in doc.refused:
+        raise ConfigError(f"spec {doc.id!r} refuses the {card}: {doc.refused[card]}")
     if doc.cards and card not in doc.cards:
         raise ConfigError(f"spec {doc.id!r} runs on {', '.join(doc.cards)}, not the {card}")
     if card not in GPUS:
@@ -334,19 +327,18 @@ def resolve_spec(spec: str | Path) -> ResolvedSpec:
     doc = load_spec(spec)
     card = run_card(doc, split_card(spec)[1])
     on = doc.card_settings.get(card, CardSettings())
-    arms, arm_settings = card_arms(doc, card)
     preset = Preset(**{f.name: getattr(doc.preset, f.name) for f in fields(SpecPreset)}, gpu_id=card)
     return ResolvedSpec(
         schema=doc.schema,
         backend=doc.backend,
         id=doc.id,
-        arms=arms,
+        arms=doc.arms,
         sweep=load_sweep(doc.sweep),
         reps=doc.reps,
         eager=doc.eager,
         preset=preset,
         arm_modules=doc.arm_modules,
-        arm_settings=arm_settings,
+        arm_settings=doc.arm_settings,
         env={**doc.env, **on.env},
         setup=on.setup or doc.setup,
         admission=on.admission or doc.admission,
