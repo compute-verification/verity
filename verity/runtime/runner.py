@@ -7,7 +7,8 @@ configuration as data; the runtime reads its protocol (`protocol`, or the one en
 parties (`party`: `name`, `machine`, and `key`, the public key a handshake checks), its site when it describes one
 (`machine`: `name`, `owner`, `provides`; `link`: `ends`, `latency_ms`, `via`) and its hash (`hash`, else SHA-512 of its
 canonical JSON). `protocols[id]` is the protocol's `ProtocolDef`, its manifest and its parties' code, which the caller
-loads from a static table: core imports no protocol. The modes:
+loads from a static table: core imports no protocol. The run takes the definition it chooses for the configuration's
+`params` (`ProtocolDef.chosen`). The modes:
 
 - `simulated`: every party in this process on in-memory channels, each frame arriving after its channel's latency in
   virtual time, every clock virtual and every coin seeded; byte-identical transcripts on every rerun;
@@ -514,7 +515,8 @@ def protocol_of(config: Mapping[str, Any], protocols: Mapping[str, ProtocolDef])
         raise Refused("unknown-protocol", f"a run here is of one protocol, not {ids}")
     if ids[0] not in protocols:
         raise Refused("unknown-protocol", f"{ids[0]!r} is none of {sorted(protocols)}")
-    return ids[0], protocols[ids[0]]
+    params = config.get("params")
+    return ids[0], protocols[ids[0]].chosen(params if isinstance(params, Mapping) else {})
 
 
 class _Runs:

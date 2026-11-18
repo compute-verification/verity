@@ -225,7 +225,7 @@ class Committer:
                  declare: tuple[str, ...] = ("instance_outputs_native",)) -> None:
         self.eng, self.run_id, self.name, self.leave, self.forge, self.declare = eng, run_id, name, leave, forge, declare
         self.host = NativeHostCommitter(None, run_id=run_id, hash_threads=1, program_digest=PROGRAM)
-        self.retain = self.host.retain
+        self.retain, self.program_digest = self.host.retain, self.host.program_digest
         self.steps: list[list[tuple[str, bytes]]] = []
         self.calls: list[str] = []
         self.roots: list[str] = []
@@ -521,6 +521,29 @@ def test_a_paired_commit_that_passes(tmp_path, stand_ins, capsys):
         ("commit_verdict", {"tokens_equal": True, "min_openings": 4, "declaration": said, "required_classes": CLASSES})]
     extra = sorted(n for n in os.environ if n not in stand_ins.environ and n not in ENVIRON)
     assert extra == [], "main wrote a name the fixture does not take back"
+
+
+def test_each_instrumented_run_is_one_execution_phase_on_the_exchange(tmp_path, stand_ins, capsys):
+    """An instrumented run opens a phase before its workload, closes it after under the committer's Program, and its
+    root follows the finalize; a control run is none."""
+    from verity import hooks as H
+    from verity_vllm import messages
+
+    stand_ins.verdicts = [(True, None)]
+    messages.close()
+    heard: list = []
+    off = messages.current().subscribe("test", "steps", heard.append)
+    try:
+        run(tmp_path, capsys)
+    finally:
+        off()
+        messages.close()
+    [com] = MADE
+    program, roots = bytes(com.host.program_digest), [bytes.fromhex(r) for r in com.roots[1:]]
+    assert [(type(e), e.phase) for e in heard] == [(H.PhaseOpened, 0), (H.PhaseClosed, 0), (H.PhaseCommitted, 0),
+                                                   (H.PhaseOpened, 1), (H.PhaseClosed, 1), (H.PhaseCommitted, 1)]
+    assert [e.program for e in heard if isinstance(e, H.PhaseClosed)] == [program, program]
+    assert [e.root for e in heard if isinstance(e, H.PhaseCommitted)] == roots
 
 
 def test_a_full_collection_is_asked_for_once_before_each_run(tmp_path, stand_ins, capsys):

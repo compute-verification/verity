@@ -101,7 +101,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.codec import canonical_json, definitions, descriptor_id
-from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.defs import PrimitiveDefinition, recut_unread
 from verity.circuits.refs import Affine, Concat, Explicit
 from verity.circuits.types import Array, RecordType, Tuple
 from verity.commitments.window import window_binding
@@ -755,6 +755,7 @@ def link_runs(defs: Mapping[str, Any], key: str) -> list[tuple[Link, int, tuple[
     fn = defs.get(key)
     if fn is None or isinstance(fn, PrimitiveDefinition):
         return None
+    recut_unread(fn, "second_stage.link_runs")
     cs, shares = _callers_of(defs, fn), []
     for k, node in enumerate(fn.body.nodes):
         got = _node_links(cs, fn, k, node)
@@ -857,6 +858,7 @@ def wire_runs(defs: Mapping[str, Any], key: str) -> list[tuple[Wire, int, tuple[
     fn = defs.get(key)
     if fn is None or isinstance(fn, PrimitiveDefinition):
         return None
+    recut_unread(fn, "second_stage.wire_runs")
     cs, shares = _callers_of(defs, fn), []
     for k, node in enumerate(fn.body.nodes):
         got = _node_wires(cs, fn, k, node)

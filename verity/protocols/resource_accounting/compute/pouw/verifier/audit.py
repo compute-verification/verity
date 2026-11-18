@@ -25,7 +25,6 @@ the value.
 from __future__ import annotations
 
 import functools
-import os
 import struct
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -81,9 +80,9 @@ def hm96_salt(key: bytes, nonce: int, i: int) -> bytes:
 
 
 def fresh_salts(n: int) -> list[bytes]:
-    """``n`` leaves' salts, each `HM96_SALT` fresh bytes from the OS: the prover keeps them, and an opening carries the
-    opened leaf's alone."""
-    return [os.urandom(HM96_SALT) for _ in range(n)]
+    """``n`` leaves' salts, each `HM96_SALT` fresh bytes from the OS (`hm96.SHA512.fresh_salt`): the prover keeps them,
+    and an opening carries the opened leaf's alone."""
+    return [hm96.SHA512.fresh_salt() for _ in range(n)]
 
 
 @functools.lru_cache(maxsize=1)

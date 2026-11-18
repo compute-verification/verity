@@ -32,6 +32,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     Epoch,
     Workload,
     activation_binding,
+    fresh_salts,
     commit_rows,
     weight_binding,
     weights_root,
@@ -266,7 +267,7 @@ def test_the_executor_is_the_schemes_reference_bit_for_bit():
     b = rng.integers(-63, 64, (N, K)).astype(np.int8)
     u = Matmul(7, Shape(16, K, N), 3)
     rows = [r.tobytes() for r in a]
-    ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows, HM96, bytes(32), 7).commitment.root, b"\x22" * 32)
+    ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows, HM96, fresh_salts(len(rows))).commitment.root, b"\x22" * 32)
     noise = s.noise(ctx)
     got = OPS.ncp_tiles(s, ctx, noise, a, OPS.Operands(np.ones(N, np.float32), *OPS.stack_y(s, ctx.salt, u.weight, b, noise)))
     tile = Tile(tuple(range(16)), tuple(range(48, 64)))
@@ -312,7 +313,7 @@ def _fake_pous(monkeypatch):
 
 def test_ncp_v1_keeps_no_weight_copy_so_the_selector_admits_pous_beside_it(monkeypatch):
     _fake_pous(monkeypatch)
-    assert not PO.keeps_weight_copy("pouw", "ncp-v1")
+    assert not pouw.keeps_weight_copy("ncp-v1")
     assert PO.refusals(_serve("pouw:ncp-v1", "pous:band-chain/d12/v1")) == ()
 
 
@@ -322,7 +323,7 @@ def test_a_scheme_that_keeps_weight_state_is_refused_beside_pous(monkeypatch, sc
     from the plaintext, not what POUS decodes."""
     _fake_pous(monkeypatch)
     settings = {"pouw": {"coins": _coins(), **({"device": "cuda", "kernel": "k"} if scheme.startswith("pearl") else {})}}
-    assert PO.keeps_weight_copy("pouw", scheme)
+    assert pouw.keeps_weight_copy(scheme)
     assert PO.refusals(_serve(f"pouw:{scheme}", settings=settings)) == ()
     got = PO.refusals(_serve(f"pouw:{scheme}", "pous:band-chain/d12/v1", settings=settings))
     assert [r for r in got if "weight-derived copy" in r] == [

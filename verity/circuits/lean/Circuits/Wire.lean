@@ -6,7 +6,8 @@ A wire states, once for many units, that reader template `reader`'s units read r
 row `out` of a unit of template `writer`. Reader index `i < units` (the product of `radix`) is reader unit
 `start + i / cuts`, row `cut0 + i % cuts`; its writer is unit `base + Σ_k d_k · step_k` of `writer`, `d` the digits of `i`
 in mixed radix `radix` (the first digit the slowest). Each index counts its own template's units, and a writer unit is
-also the writer's leaf in its template's output tree of `out`.
+also the writer's leaf in its template's output tree of `out`. With reader steps `rstep` (an uncut wire, one a digit),
+index `i` is reader unit `start + Σ_k d_k · rstep_k` instead, row 0: strided on both sides by the one sum (`accum`).
 -/
 module
 
@@ -28,6 +29,7 @@ structure Wire where
   step : List Int
   cut0 : Nat
   cuts : Nat
+  rstep : List Int := []
   deriving Repr, DecidableEq
 
 namespace Wire
@@ -100,10 +102,24 @@ def indexOf (w : Wire) (tid : String) (u : Nat) (port : String) (row : Nat) : Op
   if w.reader == tid && w.port == port && w.start ≤ u && u < w.start + w.readerUnits && w.cut0 ≤ row &&
      row < w.cut0 + w.cuts then some ((u - w.start) * w.cuts + (row - w.cut0)) else none
 
+/-- The reader steps' radices and steps, the fastest digit first. -/
+def rpairs (w : Wire) : List (Nat × Int) := (w.radix.zip w.rstep).reverse
+
+/-- The reader indices of a reader-strided wire that read reader unit `u`. -/
+def stridedAt (w : Wire) (u : Nat) : List Nat :=
+  (List.range w.units).filter fun i => (w.start : Int) + accum w.rpairs i = u
+
 /-- The leaf of its writer's output tree that reader unit `u`'s row `row` of the wire's port reads: its writer unit,
-none where the wire doesn't cover that row or names a writer below unit 0. -/
+none where the wire doesn't cover that row or names a writer below unit 0. With reader steps, none unless the wire is
+uncut with one step a digit, `row` is 0 and exactly one index reads `u`. -/
 def leafAt (w : Wire) (u row : Nat) : Option Nat :=
-  (w.indexOf w.reader u w.port row).bind fun i =>
+  let i? := if w.rstep.isEmpty then w.indexOf w.reader u w.port row
+    else if w.rstep.length == w.radix.length && w.cut0 == 0 && w.cuts == 1 && row == 0 then
+      match w.stridedAt u with
+      | [i] => some i
+      | _ => none
+    else none
+  i?.bind fun i =>
     let v := w.writerAt i
     if 0 ≤ v then some v.toNat else none
 
