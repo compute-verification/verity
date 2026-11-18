@@ -370,7 +370,6 @@
     {"file": "benchmarks/pouw/pearl_c_vllm/channel_swaps.py", "count": 9},
     {"file": "benchmarks/pouw/pearl_c_vllm/fast_tile.py", "count": 3},
     {"file": "benchmarks/pouw/pearl_c_vllm/forming_headroom.py", "count": 5},
-    {"file": "benchmarks/pouw/pearl_c_vllm/h3_screen.py", "count": 2},
     {"file": "benchmarks/pouw/pearl_c_vllm/retain_profile.py", "count": 3},
     {"file": "benchmarks/pouw/pearl_c_vllm/served_inert_work.py", "count": 113},
     {"file": "benchmarks/pouw/pearl_c_vllm/served_inputs.sh", "count": 2},
