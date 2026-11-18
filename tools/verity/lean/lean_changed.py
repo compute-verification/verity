@@ -91,10 +91,8 @@ In the build sandbox a prover's sample runs on its seal, after its build passed,
 so a package whose path dependency's sample failed in the same check.py (`requires.sampled`).
 
 It audits with it, the same way, every package whose guarantees' records read PKG's build (`requirers`: PKG is in its
-`closure`, by path or by `proved_in`). Packages whose first audit takes the same flags share one check.py (`batches`), so
-a package that proves the guarantees of several of them is built, sampled and sealed once, by the process that judges
-each of them against that seal: one check.py for the whole run, except with `--update` alone, where PKG has its own and
-the requirers the next, on the record PKG's regenerated. The packages of one check.py are judged on the locks it found,
+`closure`, by path or by `proved_in`). They share one check.py (`batches`), so a package that proves the guarantees of
+several of them is built, sampled and sealed once, by the process that judges each of them against that seal. The packages of one check.py are judged on the locks it found,
 not on a record regenerated beside them: of another package's lock an audit reads no section a lock run rewrites
 (`check.JUDGED`) but that a package proving its guarantees lists none. Each package still has its own verdict and exit
 status, read from its own report and its provers' (`own_reports`), and its own `audit.json`, a requirer's under
@@ -102,13 +100,10 @@ status, read from its own report and its provers' (`own_reports`), and its own `
 directory. Of the facts documents, only PKG's own stays beside its reports (`check_argv`: `check.py --facts named`, which
 `trusted_size.py --run` reads); its provers' and the requirers' are not kept. A change to what another package's pinned
 guarantees read
-(`security/Properties`' when `security` changes) fails here, not at a candidate's Lean check. With `--update`, a requirer whose every
-failure is a record difference (`settles`) is audited again with `--update`, in a check.py of its own, so one run
-regenerates every lock the change moved; one failing for any other reason fails. That check.py runs once more after a
-sampled recompile differs only when the one the requirer shared did not, and reads the artifact cache only then. With `--moved` too, each requirer's first
-audit takes `--update --moved`
-(`first_update`; check.py reads `--moved` only with `--update`), so a rename its records read resolves before its
-failures are judged. The exit status is the first failure's. A slot tree
+(`security/Properties`' when `security` changes) fails here, not at a candidate's Lean check. With `--update` every package takes it, and
+`--moved` with it (check.py reads `--moved` only with `--update`), so one run regenerates every lock the change moved,
+each by the audit that judges it, and a rename a requirer's records read resolves before its failures are judged; a
+package failing for any other reason fails and keeps no record (`settled`). The exit status is the first failure's. A slot tree
 keeps the copies of the packages one run audits (about 170k inodes, 8 GB each), so auditing another package that fetches
 dependencies there drops the rest first: every copy its `links.json` lists but those of the packages in the `closure` of
 one this run audits (a prover's among them), which its check.py builds, so that dropping one would only have it cloned
@@ -309,7 +304,7 @@ def ask(names: list[str]) -> tuple[int, str]:
     return AUDIT.ask_lines({q: AUDIT.pinned(read(f"{q}/lake-manifest.json")) for q in audited(todo, read)}, ("build",))
 
 
-def audits(todo: list[str], pkg: str, update: bool = False, moved: Path | None = None) -> str:
+def audits(todo: list[str]) -> str:
     """The packages a `--records` run of ``todo`` audits, in its order, as its line at launch names them: for each check.py
     of the run (`batches`), its packages, `together` where it has several, and with them those their `proved_in` names
     (`provers`), which that check.py audits beside them, once."""
@@ -317,7 +312,7 @@ def audits(todo: list[str], pkg: str, update: bool = False, moved: Path | None =
         beside = list(dict.fromkeys(q for p in ps for q in provers(p) if q not in ps))
         return " and ".join(ps) + (" together" if len(ps) > 1 else "") + (f" (with {', '.join(beside)})" if beside else "")
 
-    return ", then ".join(one(ps) for _, ps in batches(todo, pkg, update, moved, lambda _: None))
+    return ", then ".join(one(ps) for _, ps in batches(todo, False))
 
 
 def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
@@ -1577,14 +1572,15 @@ def overall(records: dict[str, dict]) -> str:
 
 def conclude(pkg: str, records: dict[str, dict], rc: int, out: Path, update: bool, path: str, log=print,
              passes: dict[str, str] | None = None, allow: frozenset[tuple[str, str]] = frozenset(),
-             audited: list[Path] | None = None, mismatched: dict[str, str] | None = None) -> int:
+             audited: list[Path] | None = None, mismatched: dict[str, str] | None = None, unread_over: bool = False) -> int:
     """End a run whose packages' ``records`` are judged (`finish`): its outcome their worst (`overall`), `FAILED` too when
-    an allowance of ``allow`` matched no failure in the reports this run left under ``audited`` (`unmatched`); its exit
+    an allowance of ``allow`` matched no failure in the reports this run left under ``audited`` (`unmatched`) or an area's
+    wholly unread modules are above its cap (``unread_over``, `unread_count`); its exit
     status 0 on `PASS` and `REGENERATED`, `ALLOWED_RC` on `ALLOWED`, and ``rc`` (check.py's first failing status), else 1,
     on `FAILED`. ``mismatched`` ({module: its package}) names each module a sampled recompile caught, which the run then
     compiled (`mismatched`): the outcome is the second audit's, and the result names them."""
     outcome = overall(records)
-    if stale := unmatched(allow, audited or [], log):
+    if (stale := unmatched(allow, audited or [], log)) or unread_over:
         outcome = max(outcome, FAILED, key=OUTCOMES.index)
     if outcome == ALLOWED:
         log(f"lean-records: every failure left is one --allow named, each still in its package's report: exit {ALLOWED_RC}, "
@@ -1600,7 +1596,7 @@ def conclude(pkg: str, records: dict[str, dict], rc: int, out: Path, update: boo
 
 def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool = False, moved: Path | None = None,
                   out: Path | None = None, log=print, dev_cache: bool = False, rebuild: bool = False,
-                  allow: list[str] | None = None) -> int:
+                  allow: list[str] | None = None, unread: bool = False, count: bool = True) -> int:
     """`--records`: `check.py --build --no-replay --no-runs` on the package ``name`` names, in ``tree`` (default: the tree of the
     `build` slot it takes; any other must be under `RECORDS`), or `dev_records` where the node's Lean slots grant no `build`
     slot or ``dev_cache`` asks for it. Its outcome is its packages' worst (`settled`, `verdicts`), and `conclude` says it: it
@@ -1609,7 +1605,10 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     not under `RECORDS`, ``name`` matches no single package, an allowance of ``allow`` (`--allow CODE:ENTRY`) is one that may
     not be given (`allowances`), the memory refusal stops it or another run holds the tree past
     `TREE_WAIT_S`. A package whose records need no run (`reused`) is skipped, and with none left nothing runs and no slot is
-    taken; ``rebuild`` and ``moved`` run them all. Before it takes a slot, one line names the packages it audits, in
+    taken; ``rebuild``, ``moved`` and ``unread`` (`--unread-facts`) run them all. With ``count`` (unless
+    `--no-unread-count`) or ``unread`` the audits of `check.UNREAD_FACTS` leave `Unread.lean`'s facts, a run that audits
+    one of them audits the other too, and the run ends with lean-audit's ratchet on those facts (`unread_count`), which
+    fails it when an area's wholly unread modules are above their cap; a run that audits neither counts nothing. Before it takes a slot, one line names the packages it audits, in
     order (`audits`). Each package whose records passed or were regenerated is kept (`passed`); one that ended `ALLOWED`,
     an allowed failure in its audit's reports, is not, so the next run audits it again.
     What each check.py's builds compiled goes into the node's artifact cache when it ends, whatever its exit (`put_built`: its
@@ -1646,22 +1645,32 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
         return refused(f"{name!r} matches {len(match)} packages: {', '.join(match or pkgs)}")
     pkg = match[0]
     todo, rc = [pkg, *requirers(pkg, pkgs)], 0
-    skip = {} if rebuild or moved else reused(todo, files, log)
+    skip = {} if rebuild or moved or unread else reused(todo, files, log)
+    if count and any(p in AUDIT.UNREAD_FACTS and p not in skip for p in todo):
+        for p in [p for p in AUDIT.UNREAD_FACTS if p in skip]:
+            del skip[p]
+            log(f"lean-records: {p}: audited all the same: the unread count reads its facts beside "
+                f"{' and '.join(q for q in AUDIT.UNREAD_FACTS if q != p)}'s, and only an audit leaves them "
+                f"(--no-unread-count reuses it)")
+    facts_of = (lambda ps: True) if unread else (lambda ps: count and any(p in AUDIT.UNREAD_FACTS for p in ps))
+    unread = unread or count
     if not (todo := [p for p in todo if p not in skip]):
         log(f"lean-records: nothing to build: the records of {', '.join(skip)} need no run (--rebuild runs them anyway)")
         return conclude(pkg, verdicts({}, {}, None, ROOT, files, skip, log), 0, out, update, "reused", log, allow=allowed)
     if why := AUDIT.memory_refusal([ROOT / q for q in audited(todo)], AUDIT.reserved(), steps=("build",),
                                    run=AUDIT.BELOW_FLOOR_RUN.format(gb="{gb}", pkg=pkg) + " --update" * update):
         return refused(why, pkg)
-    log(f"lean-records: this run audits {audits(todo, pkg, update, moved)}: a `--records` run for any of them beside this "
+    log(f"lean-records: this run audits {audits(todo)}: a `--records` run for any of them beside this "
         f"one audits it again")
     if dev_cache:
-        return dev_records(pkg, todo, update, moved, out, "--dev-cache asks for it", log, files, skip, allowed)
+        return dev_records(pkg, todo, update, moved, out, "--dev-cache asks for it", log, files, skip, allowed, unread,
+                           facts_of)
     os.environ.pop(LEAN_SLOT.HELD, None)
     try:
         slot = LEAN_SLOT.hold(FAST_POOL, or_any=False)
     except LEAN_SLOT.Refused as e:
-        return dev_records(pkg, todo, update, moved, out, str(e), log, files, skip, allowed)
+        return dev_records(pkg, todo, update, moved, out, str(e), log, files, skip, allowed, unread,
+                           facts_of)
     artifacts = LA.LakeArtifacts((deps.parent / "lean-artifacts").resolve())
     if urls and sandboxed():
         try:
@@ -1682,7 +1691,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             left, killed, ok, caught = left_by(tree), {}, [], {}
             put_left(tree, left, artifacts, log)
             env, fds = {**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())}, () if slot is None else (slot,)
-            for first, batch in batches(todo, pkg, update, moved, log):
+            for first, batch in batches(todo, update):
                 t0, n, who = time.monotonic(), 0, "+".join(batch)
                 for p in batch:
                     mark(tree, package=p, phase="sync")
@@ -1715,7 +1724,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 def audit(ps: list[str], to: Path, with_update: bool) -> int:
                     nonlocal store, redone
                     got = subprocess.run(check_argv([tree / p for p in ps], to, with_update, moved, pkg in ps, artifacts=store,
-                                                    facts_cache=facts_dir(), tree=tree), cwd=tree, env=env,
+                                                    facts_cache=facts_dir(), tree=tree, unread=facts_of(ps)), cwd=tree, env=env,
                                          pass_fds=fds).returncode
                     if redone or not got or AUDIT.killed(got) or not (bad := mismatched(to, tree, log, allowed)):
                         return got
@@ -1732,7 +1741,6 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     return audit(ps, to, with_update)
 
                 all_got = audit(batch, all_out, first)
-                shared = store, redone
                 put_built(artifacts, LA.built(all_out), since, tree, log, f"lean-records: {who}")
                 log(f"lean-records: {who}: check.py exit {all_got} in {time.monotonic() - t0:.0f} s on {tree} ({n} files "
                     f"changed there{', audited twice' if redone else ''}), without the kernel replay or the tests: a "
@@ -1740,13 +1748,6 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 own = own_reports(batch, pkg, out, tree, all_got, log) if len(batch) > 1 else {batch[0]: all_got}
                 for p in batch:
                     mine_out, up, got = reports(out, pkg, p), first, own[p]
-                    if not up and regenerates(p, pkg, got, update, mine_out, tree / p, log, allowed):
-                        t1, since, (store, redone) = time.monotonic(), time.time(), shared
-                        mark(tree, package=p, phase="check", since=since, out=str(mine_out))
-                        up, got = True, audit([p], mine_out, True)
-                        put_built(artifacts, LA.built(mine_out), since, tree, log, f"lean-records: {p}")
-                        log(f"lean-records: {p}: check.py exit {got} in {time.monotonic() - t1:.0f} s on {tree}, audited again "
-                            f"with --update{', twice' if redone and not shared[1] else ''}; reports in {mine_out}")
                     if AUDIT.killed(got):
                         killed[p] = got
                     label(mine_out)
@@ -1779,8 +1780,9 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 except OSError as e:
                     log(f"lean-records: nothing bundled for other nodes: {e}")
             records = verdicts(outcomes, new, out, tree, files, skip, log, committed, allowed, pkg)
+            over = unread and unread_count(out, files, log)
             return conclude(pkg, records, rc, out, update, "slot", log, passes, allowed, [reports(out, pkg, p) for p in todo],
-                            caught)
+                            caught, over)
     finally:
         if slot is not None:
             os.close(slot)
@@ -1804,7 +1806,7 @@ def sent_urls(run_dir: str | None, log=print) -> dict[str, str]:
 
 def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out: Path, why: str, log=print,
                 files: list[str] | None = None, skip: dict[str, tuple[str, dict | None]] | None = None,
-                allow: frozenset[tuple[str, str]] = frozenset()) -> int:
+                allow: frozenset[tuple[str, str]] = frozenset(), unread: bool = False, facts_of=None) -> int:
     """`--records` where the node's Lean slots grant no `build` slot (``why``): `check.py --dev-cache --build --no-replay
     --no-runs` on this checkout's ``todo`` (PKG, then its requirers; ``skip`` those `reused` left out), one check.py for
     the packages `batches` puts together, each build restored from the published cache, with the same reports, record
@@ -1821,22 +1823,17 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
     new: dict[str, bytes] = {}
     outcomes: dict[str, str] = {}
     rc, ok, passes = 0, [], {}
-    for first, batch in batches(todo, pkg, update, moved, log):
+    for first, batch in batches(todo, update):
         t0, who, all_out = time.monotonic(), "+".join(batch), reports(out, pkg, batch[0])
         (all_out / "audit.json").unlink(missing_ok=True)
         all_got = subprocess.run(check_argv([ROOT / p for p in batch], all_out, first, moved, pkg in batch, dev=True,
-                                            facts_cache=facts_dir()), cwd=ROOT).returncode
+                                            facts_cache=facts_dir(), unread=facts_of(batch) if facts_of else unread),
+                                 cwd=ROOT).returncode
         log(f"lean-records: {who}: check.py --dev-cache exit {all_got} in {time.monotonic() - t0:.0f} s on {ROOT}, without the "
             f"kernel replay or the tests: a {FAST_KIND} result, which check and the merge gate refuse; reports in {all_out}")
         own = own_reports(batch, pkg, out, ROOT, all_got, log) if len(batch) > 1 else {batch[0]: all_got}
         for p in batch:
             mine_out, up, got = reports(out, pkg, p), first, own[p]
-            if not up and regenerates(p, pkg, got, update, mine_out, ROOT / p, log, allow):
-                t1 = time.monotonic()
-                up, got = True, subprocess.run(check_argv([ROOT / p], mine_out, True, moved, p == pkg, dev=True,
-                                                          facts_cache=facts_dir()), cwd=ROOT).returncode
-                log(f"lean-records: {p}: check.py --dev-cache exit {got} in {time.monotonic() - t1:.0f} s on {ROOT}, audited "
-                    f"again with --update; reports in {mine_out}")
             label(mine_out)
             if (b := checked(p, got, ROOT / p / LOCK, committed[f"{p}/{LOCK}"], up, log)) is not None:
                 new[f"{p}/{LOCK}"] = b
@@ -1851,7 +1848,9 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
         passes |= dict.fromkeys(passed(p, files, committed if got == 0 else committed | new, new, log), p)
     records = verdicts(outcomes, new, out, ROOT, files, skip, log, committed, allow, pkg) if files is not None else \
         {p: {"outcome": o, "inputs_key": None} for p, o in outcomes.items()}
-    return conclude(pkg, records, rc, out, update, "dev-cache", log, passes, allow, [reports(out, pkg, p) for p in todo])
+    over = unread and unread_count(out, files, log)
+    return conclude(pkg, records, rc, out, update, "dev-cache", log, passes, allow, [reports(out, pkg, p) for p in todo],
+                    unread_over=over)
 
 
 #: what lists a machine's Lean pools, which `--try` names when it is refused a `build` slot and no machine's could be read
@@ -2189,39 +2188,66 @@ def report(out: Path, at: Path) -> dict:
         if isinstance(reps, list) else {}
 
 
+def unread_count(out: Path, files: list[str] | None, log=print) -> bool:
+    """lean-audit's ratchet on wholly unread modules (`lean_audit.unread_ratchet`, against `unread-caps.json`) on the
+    `Unread.lean` facts this run's audits of `check.UNREAD_FACTS` left under ``out``, with no build: True when an area is
+    above its cap, each such area said with its count, its cap, its modules and the fix. A run whose audits left facts of
+    only one says so, with the run that counts, and one that left none is silent; neither fails."""
+    facts: dict[str, Path] = {}
+    for f in sorted(out.rglob("unread-facts.jsonl.gz"), key=lambda f: f.stat().st_mtime):
+        rep = f.parent / "report.json"
+        at = str(json.loads(rep.read_text()).get("package")) if rep.is_file() else ""
+        facts |= {p: f for p in AUDIT.UNREAD_FACTS if at.endswith(f"/{p}")}
+    if not facts:
+        return False
+    if lack := [p for p in AUDIT.UNREAD_FACTS if p not in facts]:
+        log(f"lean-records: unread: not counted: no audit of {', '.join(lack)} in this run left `Unread.lean`'s facts; "
+            f"`lean_changed.py --records security --unread-facts` counts, and a change that adds a Lean module runs it "
+            f"before its ready mark")
+        return False
+    log("lean-records: unread: the facts this run left, read with no build:\n"
+        f"  python3 tools/verity/lean/unread.py --out {out / 'unread'} "
+        + " ".join(f"--facts {facts[p]}" for p in AUDIT.UNREAD_FACTS))
+    files = files if files is not None else LA.COMMON.tracked_files(ROOT) or []
+    r = LA.unread_ratchet(list(AUDIT.UNREAD_FACTS), [], facts, files, out, log)
+    return bool(r and r.get("failures"))
+
+
 def check_argv(ats: list[Path], out: Path, update: bool, moved: Path | None, own: bool, dev: bool = False,
-               artifacts: Path | None = None, facts_cache: Path | None = None, tree: Path | None = None) -> list[str]:
+               artifacts: Path | None = None, facts_cache: Path | None = None, tree: Path | None = None,
+               unread: bool = False) -> list[str]:
     """One check.py on ``ats`` (packages' directories), without the kernel replay or the tests, its builds reading the node's
     ``artifacts`` cache where given and, in the sandbox, ``tree`` (the tree ``ats`` are in; default: this checkout) at the
     fixed path (`--tree`); with ``update``, `--update` and `--moved`, which each of ``ats`` takes. Only the run that audits
     PKG (``own``) keeps facts documents, each named package's own (`--facts named`: PKG's is the one `trusted_size.py
     --run` reads, and `own_reports` drops the others'); a run of requirers alone keeps none. With ``facts_cache`` every run
     also stores each named package's sealed stage-A facts document there (`--facts-cache`, keyed by its build, read back
-    only by the key a tree computes: `read_cached_facts`); the run is still a records audit, never the kernel replay."""
+    only by the key a tree computes: `read_cached_facts`); the run is still a records audit, never the kernel replay. With
+    ``unread``, `--unread-facts`."""
     return [sys.executable, str(AUDIT_PY), *(["--dev-cache"] if dev else []), "--build", "--no-replay", "--no-runs",
+            *(["--unread-facts"] if unread else []),
             "--facts", "named" if own else "none", *(["--artifacts", str(artifacts)] if artifacts else []),
             *(["--facts-cache", str(facts_cache)] if facts_cache else []), *(["--tree", str(tree)] if tree else []),
             *(["--update"] if update else []),
+            *([] if artifacts or dev else ["--no-artifacts"]),
             *(["--moved", str(moved.resolve())] if moved and update else []), "--out", str(out), *map(str, ats)]
 
 
-def batches(todo: list[str], pkg: str, update: bool, moved: Path | None, log=print) -> list[tuple[bool, list[str]]]:
-    """``todo`` as the check.py processes that first audit it, [(whether it takes `--update`, its packages)]: consecutive
-    packages whose first audit takes the same flags (`first_update`) share one check.py, which audits a package that proves
-    the guarantees of several of them (`proved_in`) once for all of them, where a check.py for each audits it once for
-    each. So a run without `--update`, and one with `--moved`, is one check.py; with `--update` alone PKG has its own, since
-    check.py gives `--update` to every package it is named. A package also starts another check.py when one already in
-    this one, or a package proving one's guarantees, has its directory's name without being it: check.py names a
-    package's reports by that name (`audit-<name>`) where the package is outside its checkout, as a slot tree's is."""
+def batches(todo: list[str], update: bool) -> list[tuple[bool, list[str]]]:
+    """``todo`` as the check.py processes that audit it, [(whether it takes `--update`, its packages)]: one check.py, which
+    audits a package that proves the guarantees of several of them (`proved_in`) once for all of them, where a check.py
+    for each audits it once for each. With `--update` every package takes it, so a requirer's record is regenerated by
+    the audit that judges it, as PKG's is. A package starts another check.py when one already in this one, or a package
+    proving one's guarantees, has its directory's name without being it: check.py names a package's reports by that name
+    (`audit-<name>`) where the package is outside its checkout, as a slot tree's is."""
     out: list[tuple[bool, list[str]]] = []
     names: dict[str, str] = {}
     for p in todo:
-        up = first_update(p, pkg, update, moved, log)
         mine = {re.sub(r"[^A-Za-z0-9]+", "_", Path(q).name): q for q in (p, *provers(p))}
-        if out and out[-1][0] == up and all(names.get(n, q) == q for n, q in mine.items()):
+        if out and all(names.get(n, q) == q for n, q in mine.items()):
             out[-1][1].append(p)
         else:
-            out.append((up, [p]))
+            out.append((update, [p]))
             names = {}
         names |= mine
     return out
@@ -2231,7 +2257,7 @@ def own_reports(batch: list[str], pkg: str, out: Path, base: Path, got: int, log
     """After one check.py audited the several packages of ``batch`` (under ``base``) and exited ``got``, its reports under
     the first one's directory (`reports`): {package: the exit status of a check.py on it alone}, with each package's own
     `audit.json` under its own directory as that check.py leaves it, which is all the rest of the run reads of a package
-    (`settled`, `regenerates`, `verdicts`): its report and those of the packages proving its guarantees, with `failed` and
+    (`settled`, `verdicts`): its report and those of the packages proving its guarantees, with `failed` and
     `passed` of those alone.
 
     check.py exits 1 when any package it audited fails. A package's status is 0 there only when its own reports list no
@@ -2276,23 +2302,6 @@ def own_reports(batch: list[str], pkg: str, out: Path, base: Path, got: int, log
     return status
 
 
-def settles(out: Path, at: Path, allow: frozenset[tuple[str, str]] = frozenset()) -> bool:
-    """Whether check.py's reports under ``out`` fail only the package at ``at``, and it only on record differences: its report
-    names the record `--update` writes (`regenerated`), which check.py does when every failure's code is one of
-    `RECORD_DIFFERENCE` (a statement, a `reads` group or an assumption no longer its record), which `--update` settles from
-    the build alone. With ``allow``, also when it fails on record differences beside failures ``allow`` names and on
-    nothing else: `--update` then settles the differences, and the allowed failures are what is left."""
-    try:
-        bad = [r for r in json.loads((out / "audit.json").read_text())["packages"] if r.get("failures")]
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
-        return False
-    if len(bad) != 1 or Path(str(bad[0].get("package"))).resolve() != at.resolve():
-        return False
-    fs = failures_of(bad[0])
-    return bool(bad[0].get("regenerated")) or (bool(allow) and any(c in AUDIT.RECORD_DIFFERENCE for c, _ in fs)
-                                               and all((c, e) in allow or c in AUDIT.RECORD_DIFFERENCE for c, e in fs))
-
-
 def mismatched(out: Path, tree: Path, log=print, allow: frozenset[tuple[str, str]] = frozenset()) -> dict[str, Path]:
     """{module: its package's directory} of each module whose outputs in ``tree`` check.py's sampled recompile found other
     than what its source compiles to (the reports' `sampled` `mismatched`, under ``out``), when every other failure there
@@ -2331,31 +2340,6 @@ def set_aside(mine_out: Path, out: Path, p: str) -> Path:
     return aside
 
 
-def first_update(p: str, pkg: str, update: bool, moved: Path | None, log=print) -> bool:
-    """Whether check.py's first audit of ``p`` takes `--update`: PKG's in an `--update` run, and with ``moved`` a requirer's
-    too, so that it takes `--moved`, which check.py reads only with `--update`. A rename that a requirer's records read (a
-    statement, or the hash an `unwitnessed` entry holds) fails its audit without `--moved` on a code no record difference
-    settles (`witnesses.unwitnessed-changed`), so the requirer would fail on that first audit and never reach
-    `regenerates`."""
-    if p == pkg or not update or moved is None:
-        return update and p == pkg
-    log(f"lean-records: {p} requires {pkg}: check.py --update --moved on it from its first audit, so the moves resolve "
-        f"the names its records read before its failures are judged")
-    return True
-
-
-def regenerates(p: str, pkg: str, got: int, update: bool, out: Path, at: Path, log=print,
-                allow: frozenset[tuple[str, str]] = frozenset()) -> bool:
-    """Whether requirer ``p``, which check.py just audited at ``at`` (exit ``got``, its reports under ``out``), is audited again
-    with `--update`: in an `--update` run, when it failed only because what its guarantees read changed (`settles`; with
-    ``allow``, beside failures it names), so one run regenerates its lock beside PKG's instead of failing on it."""
-    if p == pkg or not update or not got or AUDIT.killed(got) or not settles(out, at, allow):
-        return False
-    log(f"lean-records: {p} requires {pkg}, and every failure of its records is a record difference (what its guarantees "
-        f"read changed){'' if settles(out, at) else ' or one --allow names'}: check.py --update on it too")
-    return True
-
-
 def checked(p: str, got: int, record: Path, committed: bytes | None, up: bool, log=print) -> bytes | None:
     """After check.py on ``p`` exited ``got``: when it ran with `--update` (``up``) and the record it wrote (``record``)
     differs from the ``committed`` bytes, that record's bytes, which `settled` keeps where ``p``'s outcome puts them
@@ -2388,12 +2372,19 @@ def main(argv: list[str]) -> int:
                     f"else with check.py --dev-cache on this checkout (a {FAST_KIND} result, which no merge accepts)")
     ap.add_argument("--update", action="store_true", help="with --records: check.py --update")
     ap.add_argument("--moved", type=Path, metavar="FILE", help="with --records --update: check.py --update --moved FILE on PKG "
-                    "and, from their first audit, on its requirers")
+                    "and on its requirers")
     ap.add_argument("--out", type=Path, help="with --records: check.py --out DIR")
     ap.add_argument("--dev-cache", action="store_true", help="with --records: take the check.py --dev-cache path even where "
                     "a build slot is granted (its tree's dependencies are fetched cold, say)")
     ap.add_argument("--rebuild", action="store_true", help="with --records: run every package's records, even those that "
                     "passed on the same Lean inputs or that a merge of main leaves a candidate of")
+    ap.add_argument("--unread-facts", action="store_true", help="with --records: check.py --unread-facts, so the audits of "
+                    f"{' and '.join(AUDIT.UNREAD_FACTS)} leave the facts `unread.py --facts` reads without a build; it runs "
+                    "every package, as --rebuild does, and ends with the unread count")
+    ap.add_argument("--no-unread-count", action="store_true", help="with --records: skip the unread count, lean-audit's "
+                    "ratchet on wholly unread modules, which a records run otherwise runs on the facts its audits of "
+                    f"{' and '.join(AUDIT.UNREAD_FACTS)} leave, failing when an area is above its cap in unread-caps.json; "
+                    "for a run that regenerates records while another change's module holds an area above its cap")
     ap.add_argument("--allow", action="append", default=[], metavar="CODE:ENTRY",
                     help="with --records only, and repeatable: a failure this run takes as known, named by its code and the "
                     f"entry it is about as check.py's report lists them (the codes that may be: {', '.join(sorted(ALLOWABLE))}). "
@@ -2457,13 +2448,17 @@ def main(argv: list[str]) -> int:
     if a.siblings:
         ap.error("--siblings goes with --try")
     if not a.records:
-        if a.update or a.moved or a.out or a.dev_cache or a.rebuild:
-            ap.error("--update, --moved, --out, --dev-cache and --rebuild go with --records")
+        if a.update or a.moved or a.out or a.dev_cache or a.rebuild or a.unread_facts or a.no_unread_count:
+            ap.error("--update, --moved, --out, --dev-cache, --rebuild, --unread-facts and --no-unread-count go with "
+                     "--records")
         ap.error("one of --records, --try, --build and --inputs-key is required")
     if a.dev_cache and a.tree:
         ap.error("--dev-cache builds in this checkout, not in a --tree")
+    if a.unread_facts and a.no_unread_count:
+        ap.error("--unread-facts runs every package for the unread count, which --no-unread-count skips: give one")
     return audit_records(a.records, a.deps, a.tree, a.update, a.moved, a.out, log=lambda s: print(s, flush=True),
-                         dev_cache=a.dev_cache, rebuild=a.rebuild, allow=a.allow)
+                         dev_cache=a.dev_cache, rebuild=a.rebuild, allow=a.allow, unread=a.unread_facts,
+                         count=not a.no_unread_count)
 
 
 if __name__ == "__main__":

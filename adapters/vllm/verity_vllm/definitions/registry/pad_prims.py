@@ -37,6 +37,7 @@ modified anywhere.
 from __future__ import annotations
 
 from verity.circuits.ops.scalar import BitAnd, BitNot
+
 from verity_vllm.definitions.registry import prims as P
 
 ALL_NEW = [BitAnd, BitNot]

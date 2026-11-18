@@ -315,7 +315,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 398 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"security": 841, "security/Properties": 132, "verity/protocols/proofs/flock/verifier": 6}
+INLINE = {"security": 837, "security/Properties": 132, "verity/protocols/proofs/flock/verifier": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -584,7 +584,7 @@ def test_no_long_module_grows():
           + "\n  ".join(f"{f}: {n} lines" for fs in long.values() for f, n in fs.items()))
 
 
-#: the Lean declarations whose own names carry each of the Glossary's older names (`test_retired_terms.py`'s `LEAN_WORDS`)
+#: the Lean declarations whose own names carry each of the older names (`test_retired_terms.py`'s `LEAN_WORDS`)
 RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener": 37, "firewall": 26, "horizon": 31, "warden": 10, "tap": 19, "leg": 3}
 
 

@@ -52,6 +52,8 @@ for pkg in pkgs:
     os.makedirs(os.path.join(out, "audit-" + os.path.basename(pkg)), exist_ok=True)
     with open(os.path.join(out, "audit-" + os.path.basename(pkg), "report.json"), "w") as f:
         json.dump(reps[-1], f)
+    if "--unread-facts" in sys.argv:
+        open(os.path.join(out, "audit-" + os.path.basename(pkg), "unread-facts.jsonl.gz"), "wb").close()
     if "--update" in sys.argv:
         with open(os.path.join(pkg, "lean-audit.json"), "w") as f:
             f.write('{"guarantees": {"A.t": {}}}')
@@ -350,11 +352,11 @@ def test_a_links_file_left_empty_by_a_failed_write_is_no_links(repo, tmp_path, c
     assert f"dependencies copied ({k[:12]})" in capsys.readouterr().out
 
 
-def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tmp_path, monkeypatch, capsys):
+def test_the_packages_whose_records_read_the_build_are_audited_with_it(repo, tmp_path, monkeypatch, capsys):
     """`--records Security` left `security/Properties`' records, which read `security`'s build, unchecked, and an unintended
     change to three of them surfaced only at a train's check. `a` requires `p` by path and lists a guarantee, so
-    `--records p` audits `a` after it, never with `--update`; `c`, which doesn't require `p`, and a package that lists no
-    guarantee are not audited."""
+    `--records p --update` audits `a` in its check.py, with `--update` too; `c`, which doesn't require `p`, and a package
+    that lists no guarantee are not audited."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     (repo / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')
     assert LC.requirers("p", LC.LA.packages(LC.LA.COMMON.tracked_files())) == ["a"]
@@ -367,10 +369,8 @@ def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tm
     facts = ["--facts-cache", str(LC.facts_dir()), "--tree", str(tree)]
     assert [c["argv"] for c in calls] == [
         ["--build", "--no-replay", "--no-runs", "--facts", "named", *arts, *facts, "--update", "--out", str(out),
-         str(tree / "p")],
-        ["--build", "--no-replay", "--no-runs", "--facts", "none", *arts, *facts, "--out", str(out / "requirer-a"),
-         str(tree / "a")]], \
-        "only PKG's audit keeps its facts document, which `trusted_size.py --run` reads; a requirer's is read by nobody"
+         str(tree / "p"), str(tree / "a")]], \
+        "one check.py, which keeps the named packages' facts documents; `own_reports` drops the requirer's"
     assert json.loads((out / "requirer-a" / "audit.json").read_text())["kind"] == LC.FAST_KIND
     assert json.loads((tree / LC.LINKS).read_text()) == {"a": k}
     assert LC.audit_records("a", deps, tree) == 0 and len(_calls(tmp_path)) == 1, "nothing requires a"
@@ -411,8 +411,8 @@ def test_a_package_its_sources_stopped_before_its_build_is_audited_once_and_keep
                                                                                                         monkeypatch, capsys):
     """check.py builds no package whose sources already fail, and its report then holds `package`, `seconds` (empty),
     `failures` and `failure_codes`, nothing of a build. `a`, a spec whose guarantees `p` proves, is stopped so in a
-    `--records p --update` run, its report beside `p`'s, which built. `a` is audited once: not again for a sampled recompile
-    (`mismatched`), nor with `--update` (`settles`). No record is kept, only `p`'s build is offered to the artifact cache,
+    `--records p --update` run, its report beside `p`'s, which built. `a` is audited once, by the check.py that updates
+    both, and not again for a sampled recompile (`mismatched`). No record is kept, only `p`'s build is offered to the artifact cache,
     and the run fails with `a`'s report as check.py left it. `p`'s pass is kept and `a`'s is not."""
     tree, deps, out = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps", tmp_path / "reports"
     (reuse / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}, "proved_in": ["../p"]}')
@@ -423,12 +423,12 @@ def test_a_package_its_sources_stopped_before_its_build_is_audited_once_and_keep
     monkeypatch.setattr(LC.LA.LakeArtifacts, "put",
                         lambda self, reports, since=None, log=print, staged=None: put.append(sorted(reports)) or 0)
     assert LC.audit_records("p", deps, tree, update=True, out=out) == 1
-    assert [(c["argv"][-1], "--update" in c["argv"]) for c in _calls(tmp_path)] == [(str(tree / "p"), True),
-                                                                                  (str(tree / "a"), False)]
+    assert [(c["argv"][c["argv"].index("--out") + 2:], "--update" in c["argv"]) for c in _calls(tmp_path)] == [
+        ([str(tree / "p"), str(tree / "a")], True)]
     mine = out / "requirer-a"
-    assert LC.mismatched(mine, tree) == {} and not LC.settles(mine, tree / "a") and not (out / "mismatched").exists()
+    assert LC.mismatched(mine, tree) == {} and not (out / "mismatched").exists()
     assert not (out / "record").exists(), "no lock is regenerated for a package that was not built"
-    assert put == [[tree / "p"], [tree / "p"]], "the stopped package says nothing of a build (`built`), so none of it is indexed"
+    assert put == [[tree / "p"]], "the stopped package says nothing of a build (`built`), so none of it is indexed"
     assert [r for r in json.loads((mine / "audit.json").read_text())["packages"] if r["package"] == str(tree / "a")] == [
         {"package": str(tree / "a"), "seconds": {}, "failures": ["orphan: Planted.lean is not imported by the roots"],
          "failure_codes": ["orphan.file"], "kind": LC.FAST_KIND}], "the report as check.py left it, with the run's kind"
@@ -613,7 +613,7 @@ def test_the_record_update_wrote_is_kept_so_its_commit_runs_nothing_and_requirer
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     (reuse / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')
     (reuse / "p" / "lean-audit.json").write_text('{"old": 1}')
-    assert LC.audit_records("p", deps, tree, update=True) == 0 and len(_calls(tmp_path)) == 2
+    assert LC.audit_records("p", deps, tree, update=True) == 0 and len(_calls(tmp_path)) == 1
     assert (reuse / "p" / "lean-audit.json").read_text() == '{"guarantees": {"A.t": {}}}', "written back: the commit"
     assert LC.audit_records("p", deps, tree) == 0 and _calls(tmp_path) == []
     (reuse / "p" / "lean-audit.json").write_text('{"old": 1}')
@@ -738,3 +738,99 @@ def test_a_merge_that_is_not_main_s_or_that_changes_a_file_of_its_own_runs(lane,
 
     (lane / "c" / "C.lean").write_text("def c := 9\n")
     assert LC.merged("c", LC.LA.COMMON.tracked_files()) is None, "uncommitted changes"
+
+
+def test_unread_facts_goes_to_every_check_py_of_the_run_and_runs_the_packages_it_would_reuse(reuse, tmp_path):
+    """`--unread-facts` asks each check.py for `Unread.lean`'s facts; a package whose records pass on the same inputs
+    (`reused`) is audited anyway, since only an audit leaves them."""
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    (reuse / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')
+    (deps / LC.LA.deps_key(reuse / "a") / "dep").mkdir(parents=True)
+    assert LC.audit_records("p", deps, tree) == 0 and _calls(tmp_path)
+    assert LC.audit_records("p", deps, tree) == 0 and not _calls(tmp_path), "reused"
+    said = []
+    assert LC.audit_records("p", deps, tree, unread=True, log=said.append) == 0
+    calls = _calls(tmp_path)
+    assert calls and all("--unread-facts" in c["argv"] for c in calls)
+    assert not any(s.startswith("lean-records: unread:") for s in said), "no audit of security or security/Proofs"
+
+
+@pytest.fixture
+def counted(monkeypatch) -> list[dict]:
+    """`p` and `a` as the packages whose audits leave the unread facts, and lean-audit's ratchet replaced by one that
+    records the facts it is given and fails while the list it returns holds a failure (`counted[0]["failures"]`)."""
+    monkeypatch.setattr(LC.AUDIT, "UNREAD_FACTS", ("p", "a"))
+    got = [{"failures": []}]
+
+    def ratchet(pkgs, failed, facts, files, out, log=print):
+        got.append({"pkgs": pkgs, "facts": dict(facts)})
+        for f in got[0]["failures"]:
+            log(f"lean-audit: FAIL: {f}")
+        return {"failures": list(got[0]["failures"])}
+    monkeypatch.setattr(LC.LA, "unread_ratchet", ratchet)
+    return got
+
+
+def _audited(calls: list[dict]) -> list[str]:
+    return sorted(Path(p).name for c in calls for p in c["argv"][c["argv"].index("--out") + 2:])
+
+
+def test_a_records_run_counts_unread_modules_by_default_and_fails_above_a_cap(repo, tmp_path, counted):
+    """The records run that misses an area's cap is the one a candidate's lean-audit then fails on: by default it asks
+    each check.py for the facts, runs the ratchet on them and fails with its failure, which names the fix."""
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    (repo / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')
+    (deps / LC.LA.deps_key(repo / "a") / "dep").mkdir(parents=True)
+    assert LC.audit_records("p", deps, tree) == 0
+    assert all("--unread-facts" in c["argv"] for c in _calls(tmp_path))
+    assert counted[1]["pkgs"] == ["p", "a"] and {p: f.parent.name for p, f in counted[1]["facts"].items()} == \
+        {"p": "audit-p", "a": "audit-a"}
+    counted[0]["failures"] = ["unread: Proofs/Core has 8 wholly unread modules (61 declarations), above its cap of 7"]
+    said = []
+    assert LC.audit_records("p", deps, tree, log=said.append) == 1
+    assert "lean-audit: FAIL: unread: Proofs/Core has 8 wholly unread modules" in "\n".join(said)
+    assert json.loads(said[-1].removeprefix(LC.OUTCOME_LINE))["outcome"] == LC.FAILED
+    _calls(tmp_path)
+    assert LC.audit_records("p", deps, tree, count=False) == 0, "--no-unread-count"
+    assert not any("--unread-facts" in c["argv"] for c in _calls(tmp_path)) and len(counted) == 3
+
+
+def test_a_run_that_audits_one_package_of_the_unread_facts_audits_the_other_it_would_reuse(reuse, tmp_path, counted):
+    tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
+    (reuse / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')
+    (deps / LC.LA.deps_key(reuse / "a") / "dep").mkdir(parents=True)
+    assert LC.audit_records("p", deps, tree) == 0 and _audited(_calls(tmp_path)) == ["a", "p"]
+    (reuse / "a" / "Aa.lean").write_text("def a := 2\n")
+    assert LC.audit_records("p", deps, tree, count=False) == 0 and _audited(_calls(tmp_path)) == ["a"]
+    (reuse / "a" / "Aa.lean").write_text("def a := 3\n")
+    said = []
+    assert LC.audit_records("p", deps, tree, log=said.append) == 0 and _audited(_calls(tmp_path)) == ["a", "p"]
+    assert any(s.startswith("lean-records: p: audited all the same: the unread count reads its facts") for s in said)
+    assert set(counted[-1]["facts"]) == {"p", "a"}
+
+
+def test_unread_count_counts_only_where_both_audits_left_facts(tmp_path, counted):
+    out = tmp_path / "out"
+    for tag, pkg in (("audit-p", "/slot/p"), ("audit-a", "/slot/a")):
+        (out / tag).mkdir(parents=True)
+        (out / tag / "report.json").write_text(json.dumps({"package": pkg}))
+    (out / "audit-p" / "unread-facts.jsonl.gz").write_bytes(b"")
+    said = []
+    assert LC.unread_count(out, [], said.append) is False and len(counted) == 1
+    assert said == ["lean-records: unread: not counted: no audit of a in this run left `Unread.lean`'s facts; "
+                    "`lean_changed.py --records security --unread-facts` counts, and a change that adds a Lean module "
+                    "runs it before its ready mark"]
+    (out / "audit-a" / "unread-facts.jsonl.gz").write_bytes(b"")
+    said.clear()
+    assert LC.unread_count(out, [], said.append) is False
+    assert said[0].endswith(f"unread.py --out {out / 'unread'} --facts {out / 'audit-p' / 'unread-facts.jsonl.gz'} "
+                            f"--facts {out / 'audit-a' / 'unread-facts.jsonl.gz'}")
+    counted[0]["failures"] = ["unread: over"]
+    assert LC.unread_count(out, [], said.append) is True
+
+
+def test_no_unread_count_goes_with_records_and_not_with_unread_facts(capsys):
+    for argv in (["--no-unread-count"], ["--records", "p", "--unread-facts", "--no-unread-count"]):
+        with pytest.raises(SystemExit):
+            LC.main(argv)
+    assert "give one" in capsys.readouterr().err

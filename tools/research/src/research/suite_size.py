@@ -1,8 +1,9 @@
 """`research run --on auto`'s size for a suites.py run, from what each suite it runs declares in its pyproject.toml's
-`[tool.verity.tests]`: `worker_gb`, one xdist worker's peak, and `timeout_s`, the bound `--timeouts` puts on its run, stretched
+`[tool.verity.tests]`: `worker_gb`, one xdist worker's peak (each past the first at its `typical_worker_gb` where it declares
+one, as suites.py's `workers_gb` books them), and `timeout_s`, the bound `--timeouts` puts on its run, stretched
 as suites.py's `bound` stretches it for fewer workers than its `timeout_workers` (`_bound`).
 
-The run's memory is its test processes at the largest worker_gb, one per CPU (suites.py's `--jobs` is the CPUs it may use) or
+The run's memory is what its test processes book for the suite that books the most (`_workers_gb`), one per CPU (suites.py's `--jobs` is the CPUs it may use) or
 its `--jobs`; a run of many suites at no less than TEST_PROCESS_GB each. That is the budget suites.py divides among its test
 processes (its `--mem-gb`: `serial_slots` and `wide_workers` start no more than it holds at each one's figure), so a run stays
 inside it unless a process passes its own figure, and a larger one buys processes beyond the CPUs asked. A run of named suites
@@ -131,9 +132,14 @@ def declared(source: Path) -> list[dict]:
             continue
         tests = data["tool"].get("verity", {}).get("tests", {})
         out.append({"name": suite_layout.suite_name(path, data.get("project", {}), dirs), "path": path,
-                    "worker_gb": float(tests.get("worker_gb", 0)), "timeout_s": float(tests.get("timeout_s", 0)),
+                    "worker_gb": float(tests.get("worker_gb", 0)), "typical_worker_gb": float(tests.get("typical_worker_gb", 0)),
+                    "timeout_s": float(tests.get("timeout_s", 0)),
                     "timeout_workers": int(tests.get("timeout_workers", 0))})
     return out
+
+
+def _workers_gb(s: dict, workers: int) -> float:
+    return s["worker_gb"] + (workers - 1) * (s.get("typical_worker_gb") or s["worker_gb"])
 
 
 def _bound(s: dict, workers: int, undeclared: float) -> float:
@@ -180,11 +186,11 @@ def size(source: Path, command: list[str], cpus: int | None) -> dict | None:
     workers = jobs or cpus or AUTO_CPUS
     many = rev is not None or not names
     if many:
-        out["mem_gb"] = max(AUTO_MEM_GB, math.ceil(workers * max(TEST_PROCESS_GB, *(s["worker_gb"] for s in chosen))))
+        out["mem_gb"] = max(AUTO_MEM_GB, math.ceil(max(workers * TEST_PROCESS_GB, *(_workers_gb(s, workers) for s in chosen))))
         if _takes_budget(source):
             out["reserve_gb"] = max(AUTO_MEM_GB, math.ceil(out["mem_gb"] * MANY_RESERVED))
-    elif gb := max(s["worker_gb"] for s in chosen):
-        out["mem_gb"] = max(AUTO_MEM_GB, math.ceil(workers * gb))
+    elif max(s["worker_gb"] for s in chosen):
+        out["mem_gb"] = max(AUTO_MEM_GB, math.ceil(max(_workers_gb(s, workers) for s in chosen if s["worker_gb"])))
     if many:
         ts = [_bound(s, workers, UNDECLARED_S) for s in chosen]
         if (t := math.ceil(sum(ts) / workers + max(ts)) + SYNC_S) > AUTO_MAX_S:

@@ -47,8 +47,8 @@ from test_setup_difftest import _evidence_bytes, honest, setup_port, setup_proto
 from verity_difftest import protocol as P
 
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
+from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import setup as pous_setup
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 

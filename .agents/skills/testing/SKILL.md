@@ -159,7 +159,7 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
 - **Fixtures:** each sits beside its reader, in its suite's own `fixtures/`; the root has no `fixtures/`, and another
   suite that reads one lists it in its inputs. One over the 256 KiB cap is registered in `artifacts.json` and gitignored
   instead: `research data put
-  --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry and its path into `.gitignore`.
+  --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry (infra's) and its path into `.gitignore`.
   So is a benchmark's build input that only a rebuild of its data reads (the selection a stream is built from),
   whatever its size.
   The control pod exports `main`'s registry every 5 minutes, so the fixture needs no ask. `suites.py` fetches it before the suites that read it (`research data fetch-fixtures` by hand, as before

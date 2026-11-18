@@ -12,11 +12,17 @@ from pathlib import Path
 import pytest
 from prove_helpers import (
     FIXTURES,
+    HEAD_END,
+    HEAD_END_BITS,
     REPO,
     Store,
     _outside_a_research_run,  # noqa: F401  (autouse)
     designed,
+    first,
+    on_bits,
     recorded,
+    steady,
+    without_names,
 )
 from verity_bench import kit, spot_status
 from verity_bench import prove as P
@@ -137,23 +143,32 @@ def test_the_command_prints_the_census_and_refuses_the_ratio_by_name(tmp_path, m
     assert (f"{art} (`run_of_record=prove-llama32-1b-census`, run r20261117-000000-0000), 2 requests, summed: the row "
             "as served.") in out
     assert "| r0 | 5 | 3 | 40 |\n| r1 | 2 | 1 | 31 |\n| summed | 7 | 4 | 71 |\n" in out
-    assert (f"| `{GEMM}` | 23 | 273,417 | 32 | 12 | 44 | 1.203e+07 | `gemm-s8` at 1 prover(s), 24 cores ({rated}) |"
+    assert (f"| `{GEMM}` | 1 | 23 | 273,417 | 32 | 12 | 44 | 12,030,348 | `gemm-s8` at 1 prover(s), 24 cores ({rated}) |"
             in out)
-    assert f"| `{ATTN}` | 27 | 37,433,280 | 0 | 16 | 16 | 5.989e+08 | none |" in out
+    assert f"| `{ATTN}` | 1 | 27 | 37,433,280 | 0 | 16 | 16 | 598,932,480 | none |" in out
+    assert "a block may be at most 2^27." in out and "System `spot`: only the refusal's `spot-sampling` slot" in out
     assert "Rated: 1 of 3 block types, 44 of 71 proof blocks." in out
-    assert f"| `{EMBED}` | its rows alone need a 2^39 block | 4,202,739,712 | 8 | 3 | 11 |" in out
-    assert f"| `{SELECT}` | its rows alone need a 2^28 block | 22,603,069 | 4 | 2 | 6 |" in out
+    assert f"| `{EMBED}` | 1 | its rows alone need a 2^39 block | 4,202,739,712 | 8 | 3 | 11 |" in out
+    assert f"| `{SELECT}` | 1 | its rows alone need a 2^28 block | 22,603,069 | 4 | 2 | 6 |" in out
     refusal = out.split("## Prover GPUs per serving GPU: refused\n", 1)[1]
     assert refusal.startswith("\nNo total is given while any of these stands:\n\n- 2 block type(s) with blocks and no "
                               "steady-state rate at 1 prover(s) and 10 cores or more (label each run of its rate: "
-                              "`research data label TARGET run_of_record prove-llama32-1b-flock-steady --by LANE`):\n"
-                              f"  - `{ATTN}`, 1.455 blocks a served token\n  - `{NORM}`, 1 blocks a served token\n"
-                              "- 2 gap(s), served rows no block holds, each with its rows and why in the gaps above: "
-                              f"`{EMBED}`, `{SELECT}`\n")
-    for slot, what in (("cut", "cut"), ("flock-single", "single-session card"), ("spot-sampling", "sampling plan"),
-                       ("lean-verify", "Lean verifier run"), ("flock-warm", "warm-session run")):
+                              "`research data label TARGET run_of_record prove-llama32-1b-flock-steady --by LANE`), "
+                              "each with its proof blocks a served token, a served token being a prompt or a decoded "
+                              "token (as GLM-5.3's table counts it), and runs as above:\n"
+                              f"  - `{ATTN}`, 1.455 blocks a served token\n  - `{NORM}`, 1 block a served token\n"
+                              "- 2 gaps, Definitions with 17 served rows no block holds, by family and reason; each is "
+                              "named, with its served rows and why, in the gaps table above and in the census table kept "
+                              "as `out/prove-census.json` under a research run (`refusal.gaps`; `--json` prints it):\n"
+                              "  - `Embedding_v1`, its rows alone need a 2^39 block: 1 Definition, 11 served rows\n"
+                              "  - `TokenSelect_v4`, its rows alone need a 2^28 block: 1 Definition, 6 served rows\n")
+    for slot, what in (("cut", "cut"), ("flock-single", "single-session card"), ("spot-sampling", "sampling plan")):
         assert (f"- {slot} (`prove-llama32-1b-{slot}`): no {what} of record: nothing in the store carries "
                 f"`run_of_record=prove-llama32-1b-{slot}`") in refusal
+    for slot, what in (("lean-verify", "Lean verifier run"), ("flock-warm", "warm-session run")):
+        assert (f"- {slot} (`prove-llama32-1b-{slot}`): no {what} of record: no run labelled "
+                f"`run_of_record=prove-llama32-1b-{slot}` that is not superseded") in refusal
+    for slot in ("cut", "flock-single", "spot-sampling", "lean-verify", "flock-warm"):
         assert f"(label one: `research data label TARGET run_of_record prove-llama32-1b-{slot} --by LANE`)" in refusal
     assert "gpus_per_serving_gpu" not in out
 
@@ -173,6 +188,138 @@ def test_the_command_prints_the_census_and_refuses_the_ratio_by_name(tmp_path, m
     kept = json.loads((within / PC.CENSUS_TABLE).read_text())
     assert kept["census"]["blocks"] == {"r0": 40, "r1": 31} and kept["refusal"] == doc["refusal"]
     assert not (within / R.TABLE).exists()
+
+
+def census_page(found: dict, refusal: dict | None = None) -> list[str]:
+    return PC.render({"census": found | {"art": "art:census", "record": ONE_B.record(R.CENSUS), "run": "r0",
+                                         "steady": ONE_B.record(R.STEADY), "provers": 1, "cores": 10},
+                      "refusal": refusal})
+
+
+def test_a_block_types_rate_is_its_own_ids_else_its_proved_as_else_its_bounded_by_and_the_table_says_which():
+    """A word block type proved as its Definition on bits takes that one's rate, and the table names it beside the
+    block; one whose own Definition on bits has none takes its kind's largest block's, and the table says `bounded by`
+    and that the rated count includes it, an upper bound; one whose own id has a rate takes it and prints as it did
+    before the census named either. The refusal reads the rates the same way, and with neither field the word blocks
+    have no rate, as before."""
+
+    big, small, end = first(190, 192, 2), first(5, 128, 2), P.definition_id(HEAD_END)
+    rates = {P.definition_id(big): steady("attn-first", P.definition_id(big), "r20261118-000000-0001", 8, 4.0),
+             end: steady("attn-end", end, "r20261118-000000-0002", 8, 1.0),
+             P.definition_id(HEAD_END_BITS): steady("attn-end2", P.definition_id(HEAD_END_BITS), "r20261118-000000-0003",
+                                                    8, 2.0)}
+    doc = on_bits()
+    found = PC.table([(None, doc)], rates)
+    rate = {r["block"]: r["rate"] for r in found["rows"]}
+    assert rate == {
+        first(190, 192): {"record": "r20261118-000000-0001", "type": "attn-first", "provers": 1, "cores": 10, "proved_as": big},
+        first(5, 128): {"record": "r20261118-000000-0001", "type": "attn-first", "provers": 1, "cores": 10, "bounded_by": big},
+        HEAD_END: {"record": "r20261118-000000-0002", "type": "attn-end", "provers": 1, "cores": 10}}
+    assert PC.refusal(P.Census.of(doc), found, rates, []) is None
+    lines = census_page(found)
+    assert (f"| `{first(5, 128)}` proved as `{small}` | 1 | 22 | 100,000 | 30 | 30 | 3,000,000 | `attn-first` at 1 "
+            f"prover(s), 10 cores (r20261118-000000-0001), bounded by `{big}` |") in lines
+    assert (f"| `{first(190, 192)}` proved as `{big}` | 1 | 26 | 10,000,000 | 2 | 2 | 20,000,000 | `attn-first` at 1 "
+            "prover(s), 10 cores (r20261118-000000-0001) |") in lines
+    assert (f"| `{HEAD_END}` | 1 | 20 | 1,000 | 4 | 4 | 4,000 | `attn-end` at 1 prover(s), 10 cores "
+            "(r20261118-000000-0002) |") in lines
+    assert ("Rated: 3 of 3 block types, 36 of 36 proof blocks, 1 block type(s) of them (30 proof blocks) bounded by a "
+            "larger block's rate, an upper bound on their cost and not a measurement of it.") in lines
+
+    plain = without_names(doc)
+    bare = PC.table([(None, plain)], rates)
+    assert {r["block"]: r["rate"] for r in bare["rows"]} == {first(5, 128): None, HEAD_END: rate[HEAD_END],
+                                                              first(190, 192): None}
+    assert [r["block"] for r in PC.refusal(P.Census.of(plain), bare, rates, [])["no_rate"]] == [first(5, 128), first(190, 192)]
+    text = "\n".join(census_page(bare))
+    assert "proved as" not in text and "bounded by" not in text and "Rated: 1 of 3 block types, 4 of 36 proof blocks.\n" in text
+    assert [x for x in lines if HEAD_END in x] == [x for x in census_page(bare) if HEAD_END in x]
+
+
+def test_a_block_type_whose_definition_on_bits_has_no_rate_and_no_bound_names_it_and_has_none():
+    """With no rate at its own id, its `proved_as` or its `bounded_by`, a block type has no rate, the refusal names it
+    by its census name, and the table names its Definition on bits, the one a measurement would rate it by."""
+
+    doc = on_bits()
+    found = PC.table([(None, doc)], {})
+    assert all(r["rate"] is None for r in found["rows"])
+    assert {r["block"] for r in PC.refusal(P.Census.of(doc), found, {}, [])["no_rate"]} == set(doc["definitions"])
+    assert (f"| `{HEAD_END}` proved as `{HEAD_END_BITS}` | 1 | 20 | 1,000 | 4 | 4 | 4,000 | none |") in census_page(found)
+
+
+def test_a_run_bounded_by_one_larger_block_says_so_once_and_names_its_definitions_on_bits_as_a_run():
+    """First blocks of 1 to 4 keys, each proved as its own Definition on bits and none rated, take the 190-key one's
+    rate: they share it, so they print as one run line that says `bounded by` once and names their Definitions on bits
+    in the run's own notation."""
+
+    def block(nvis: int) -> dict:
+        return {"k_log": 22, "ands": 1000 * nvis, "of": {"Attention_v4": "split"}, "prefill": 3, "decode": 0, "macs": 0,
+                "proved_as": first(nvis, 128, 2), "bounded_by": first(190, 192, 2)}
+
+    big = first(190, 192, 2)
+    doc = {"tokens": {"prefill": 3, "decode": 0}, "per_request": {"circuit_macs": 30, "macs": 30},
+           "definitions": {first(190, 192): block(190) | {"k_log": 26, "proved_as": big, "bounded_by": None}}
+           | {first(n, 128): block(n) for n in range(1, 5)}}
+    del doc["definitions"][first(190, 192)]["bounded_by"]
+    rates = {P.definition_id(big): steady("attn-first", P.definition_id(big), "r20261118-000000-0001", 8, 4.0)}
+    lines = census_page(PC.table([(None, doc)], rates))
+    run_of = 'AttnBlockFirst_v{}{{D=64,NVIS=1..4,BN=128,DOT={{"fn":"HopperBF16WgmmaDot16_v{}"}}}}'
+    assert (f"| `{run_of.format(1, 1)}` proved as `{run_of.format(3, 2)}` | 4 | 22 | 1,000 to 4,000 | 12 | 12 | 30,000 | "
+            f"`attn-first` at 1 prover(s), 10 cores (r20261118-000000-0001), bounded by `{big}` |") in lines
+    assert sum("bounded by" in x for x in lines if x.startswith("| `")) == 1
+
+
+def attention(t: int, masked: int = 0, bn: int = 128) -> str:
+    return (f'Attention_v4{{T={t},NH=32,KVH=8,D=64,BN={bn},DOT={{"fn":"HopperBF16WgmmaDot16_v1"}},'
+            f'INV={{"fn":"Fa3InvSum_v1"}},MASKED_FROM={masked}}}')
+
+
+def test_the_text_groups_runs_exactly():
+    """A run of one family's Definitions differing in one static, with one reason (or one `k_log` and rate) and served
+    rows in the same requests, prints as one line; a hole, another reason, another pattern of requests or another
+    static parts runs, a Definition alone keeps its name, and the lines' Definitions and served rows, in each request
+    and in all, are the table's exactly."""
+
+    def gap(why: str, ands: int, rows: int) -> dict:
+        return {"family": "Attention_v4", "why": why, "ands": ands, "prefill": rows, "decode": 0}
+
+    def block(k_log: int, rows: int) -> dict:
+        return {"family": "Attention_v4", "k_log": k_log, "ands": 1000 * k_log, "macs": 0,
+                "of": {"Attention_v4": "row"}, "prefill": rows, "decode": 0}
+
+    both, first = {}, {}
+    for t in range(22, 49):
+        both[attention(t)] = gap(f"a 2^28 block at {1000 * t:,} ANDs", 1000 * t, 15)
+    for t in range(49, 52):
+        both[attention(t)] = gap(f"a 2^29 block at {1000 * t:,} ANDs", 1000 * t, 15)
+    for t in (60, 61, 63):
+        both[attention(t)] = gap("its rows alone need a 2^28 block", 1000 * t, 15)
+    for t in (52, 53):
+        first[attention(t)] = gap(f"a 2^29 block at {1000 * t:,} ANDs", 1000 * t, 15)
+    for t in (60, 61):
+        both[attention(t, masked=1)] = gap("its rows alone need a 2^28 block", 1000 * t, 15)
+    blocks = {attention(t): block(26 if t < 9 else 27, 15) for t in range(1, 12)}
+    blocks[attention(12, bn=192)] = block(27, 15)
+
+    def doc(gaps: dict) -> dict:
+        return {"tokens": {"prefill": 1, "decode": 0}, "definitions": blocks, "gaps": gaps}
+
+    found = PC.table([("r0", doc(both | first)), ("r1", doc(both))], {})
+    gaps, rows = PC.printed(found["gaps"], PC._gap_kind), PC.printed(found["rows"], PC._block_kind)
+    for lines, kept in ((gaps, found["gaps"]), (rows, found["rows"])):
+        assert sum(u["definitions"] for u in lines) == len(kept)
+        assert sum(u["total"] for u in lines) == sum(r["total"] for r in kept)
+        for n in ("r0", "r1"):
+            assert sum(u["requests"][n] for u in lines) == sum(r["requests"][n] for r in kept)
+        assert sorted(r["block"] for u in lines for r in u["of"]) == sorted(r["block"] for r in kept)
+    assert {(u["block"], u["definitions"]) for u in gaps} == {
+        (attention("22..48"), 27), (attention("49..51"), 3), (attention("52..53"), 2), (attention("60..61"), 2),
+        (attention(63), 1), (attention("60..61", masked=1), 2)}
+    assert {(u["block"], u["definitions"]) for u in rows} == {
+        (attention("1..8"), 8), (attention("9..11"), 3), (attention(12, bn=192), 1)}
+    assert next(u for u in gaps if u["definitions"] == 27)["total"] == 27 * 30
+    no_rate = [{"block": r["block"], "per_token": r["total"] / 2} for r in found["rows"]]
+    assert {u["block"] for _, u in PC.unrated(found["rows"], no_rate)} == {u["block"] for u in rows}
 
 
 def test_a_census_of_another_model_or_with_no_census_file_is_refused(tmp_path):

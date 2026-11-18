@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from research import cli, treelock
+from research import cli, remote, treelock
 from research.cli import main
 from research.pods.nebius import slot_only
 from waits import FakeClock
@@ -147,3 +147,75 @@ def test_a_run_waiting_for_a_check_slot_holds_no_tree(tmp_path, monkeypatch):
     assert rc == treelock.EX_NOT_STARTED and "no check slot within --wait-max 1e-09 s" in (run_dir / "stderr.log").read_text()
     assert json.loads((run_dir / "job.json").read_text())["run"]["lean_tree_lock"] == str(lock)
     assert not lock.exists() and not (run_dir / "lake.txt").exists(), "it waited for a slot and left: it never came to the tree's lock"
+
+
+@pytest.mark.parametrize("command, cwd, at", [
+    (["bash", "-lc", "uv sync -q && cd security && lake build"], None, "security"),
+    (["bash", "-lc", "cd security/Proofs; LEAN_NUM_THREADS=4 lake build Proofs 2>&1"], None, "security/Proofs"),
+    (["lake", "-d", "security/Properties", "build"], None, "security/Properties"),
+    (["/home/research/.elan/bin/lake", "build", "--dir=security"], None, "security"),
+    (["lake", "build", "Definitions"], "clone/security", "clone/security"),
+    (["bash", "-c", "cd /workspace/research/src/abc/security && lake build"], None, "/workspace/research/src/abc/security"),
+    (["python3", "tools/verity/lean/lean_changed.py", "--records", "security", "--update"], None, None),
+    (["verity", "lean", "try", "security/Definitions/Core.lean", "--on", "auto"], None, None),
+    (["python3", "tools/verity/lean/lean_audit.py", "security"], None, None),
+    (["python3", "tools/verity/lean/check.py", "--build", "--artifacts", "a", "security"], None, None),
+    (["python3", "tools/check/slot.py", "--by", "t", "--", "nice", "-n", "19", "python3", "tools/check/check.py"], None, None),
+    (["uv", "run", "--extra", "torch-cpu", "verity", "check", "lean"], None, None),
+    (["bash", "-lc", "cd verity/protocols/proofs/flock/verifier && lake build"], None, None),
+    (["bash", "-lc", "cd verity/protocols/proofs/flock/prover && cargo build --release && cargo test"], None, None),
+    (["lake", "env", "lean", "security/Definitions/Core.lean"], "source", None),
+    (["lake", "build"], "source", None),
+], ids=["cd", "cd-sub", "dash-d", "dir-eq", "cwd", "absolute", "records", "lean-try", "lean-audit", "check-artifacts",
+        "check-shard", "verity-check", "flock-verifier", "flock-rust", "lake-env", "source-root"])
+def test_a_raw_build_of_an_analysis_package_is_told_apart_from_the_lean_tools_and_the_codes_lean(command, cwd, at):
+    assert treelock.analysis_build(command, cwd) == at
+
+
+RAW = ["bash", "-lc", "cd security && lake build"]
+
+
+@pytest.fixture
+def launched(monkeypatch):
+    """Each launch `research run` went on to, in place of making it: its command and what it was launched with."""
+    seen: list[tuple[list[str], str | None]] = []
+    monkeypatch.setattr(cli, "_run_placed", lambda ns, harness, command, clones: seen.append((command, ns.cold_lean_build)) or 0)
+    monkeypatch.setattr(cli, "_auto_placement", lambda ns, harness: seen.append((["auto"], None)) or "placed")
+    return seen
+
+
+@pytest.mark.parametrize("where", [["--on", "vy-nowhere", "--project", "p"], ["--on", "auto"],
+                                   ["--queue", "--source", ".", "--project", "p"]], ids=["on", "auto", "queue"])
+def test_a_raw_build_of_an_analysis_package_on_a_machine_is_refused_at_launch_with_the_fix(tmp_path, capsys, launched, where):
+    assert main(["run", "--runs-dir", str(tmp_path), *where, "--", *RAW]) == 2
+    err = capsys.readouterr().err
+    assert "research run: refused: the workload runs a raw `lake build` of an analysis package (security)" in err
+    assert "`verity lean try FILE --on auto`" in err and "`python3 tools/verity/lean/lean_changed.py --records PKG --update`" in err
+    assert "--cold-lean-build REASON (recorded in job.json)" in err
+    assert launched == [] and list(tmp_path.iterdir()) == [], "nothing launched, no run dir taken"
+
+
+def test_a_cold_build_on_purpose_launches_and_the_machine_records_why(tmp_path, launched):
+    argv = ["run", "--runs-dir", str(tmp_path), "--on", "vy-nowhere", "--project", "p", "--cold-lean-build", "a fresh toolchain"]
+    assert main([*argv, "--", *RAW]) == 0 and launched == [(RAW, "a fresh toolchain")]
+
+
+def test_the_flag_travels_to_the_machine_and_its_record_says_why(tmp_path, monkeypatch):
+    sent: dict = {}
+    monkeypatch.setattr(remote, "launch", lambda **kw: sent.update(kw) or (_ for _ in ()).throw(remote.Refused("stop here")))
+    argv = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "vy-nowhere", "--project", "p", "--no-custody-r2",
+            "--cold-lean-build", "a fresh toolchain", "--", *RAW]
+    assert main(argv) == 3
+    at = sent["harness_args"].index("--cold-lean-build")
+    assert sent["harness_args"][at + 1] == "a fresh toolchain"
+    run_id = "r20261118-000000-0001"
+    assert main(["run", "--runs-dir", str(tmp_path / "local"), "--id", run_id, "--no-sampler", "--local-only", "a test",
+                 "--cold-lean-build", "a fresh toolchain", "--", PY, "-c", "pass"]) == 0
+    assert json.loads((tmp_path / "local" / run_id / "job.json").read_text())["run"]["cold_lean_build"] == "a fresh toolchain"
+
+
+def test_a_local_run_and_the_machine_side_are_not_judged(tmp_path, launched):
+    """A local run builds in a tree of its caller's; on the machine the launcher has judged the command already."""
+    assert main(["run", "--runs-dir", str(tmp_path), "--", *RAW]) == 0
+    assert main(["run", "--runs-dir", str(tmp_path), "--id", "r20261118-000000-abcd", "--claimed", "--", *RAW]) == 0
+    assert launched == [(RAW, None), (RAW, None)]

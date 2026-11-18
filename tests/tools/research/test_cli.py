@@ -38,6 +38,26 @@ def test_run_records_and_inspects(tmp_path, capsys):
     assert data["runs"][0]["id"] == s["id"]
 
 
+def test_a_run_records_its_launchers_lane_never_its_campaign_and_its_own_lane_wins(tmp_path, monkeypatch):
+    """job.json's lane is its retention record's owner (research.retention), which must be a lane a handle answers to."""
+    monkeypatch.delenv("TELEMETRY_LANE", raising=False)
+    monkeypatch.setenv("RESEARCH_LANE", "proofs")
+    monkeypatch.setenv("RESEARCH_CAMPAIGN", "recursion-e2e")
+
+    def lane(name: str, *opts: str) -> str | None:
+        assert main(["run", "--runs-dir", str(tmp_path / name), "--no-sampler", *opts, "--", "true"]) == 0
+        return json.loads((next((tmp_path / name).iterdir()) / "job.json").read_text())["ownership"]["lane"]
+
+    assert lane("env") == "proofs", "the launcher's $RESEARCH_LANE"
+    assert lane("as", "--as", "@infra") == "infra", "--as, as a handle without its @"
+    assert lane("own", "--lane", "compute-accounting") == "compute-accounting", "the run's own lane"
+    monkeypatch.setenv("TELEMETRY_LANE", "memory-accounting")
+    assert lane("tele") == "memory-accounting"
+    monkeypatch.delenv("TELEMETRY_LANE")
+    monkeypatch.delenv("RESEARCH_LANE")
+    assert lane("none") is None, "no lane anywhere: none, which retention reads as runner"
+
+
 RESULT_OF_ENV = ("import os, json; json.dump({'foo': os.environ.get('RSEC_FOO'), 'tok': os.environ.get('RSEC_API_TOKEN'), 'cwd': os.getcwd()}, "
                  "open('result.json', 'w'))")
 
@@ -313,6 +333,9 @@ def test_run_queue_needs_a_source_tree_with_the_queue_and_queue_flags_need_queue
     assert main([*plain, "--kind", "lean-audit", "--", "true"]) == 2
     assert main([*plain, "--gpu-host", "--", "true"]) == 2
     assert "--gpu-host declare a job to the queue" in capsys.readouterr().err
+    assert main([*plain, "--max-min", "120", "--", "true"]) == 2
+    assert capsys.readouterr().err.strip().endswith("--max-min declare a job to the queue and mean nothing without --queue; "
+                                                    "without it a run's longest time is --timeout (`--timeout 2h`)")
 
 
 def test_gpu_host_reaches_the_queue_as_its_flag(tmp_path, monkeypatch, capsys):
@@ -488,6 +511,10 @@ def test_a_run_of_many_suites_budgets_one_test_process_a_cpu_and_reserves_a_shar
     assert named["mem_gb"] == 64 and "reserve_gb" not in named, "named suites: their workers at their worker_gb, reserved whole"
     assert suite_size.selection([*run, "a", "-j", "1", "--why-serial", "b", "--changed", "r", "--slow"]) == (["a"], 1, "r"), \
         "--why-serial's value is no suite"
+    (repo / "a/pyproject.toml").write_text('[project]\nname = "a"\n[tool.pytest.ini_options]\n[tool.verity.tests]\nworker_gb = 13\n'
+                                           'typical_worker_gb = 7\nparallel = true\n')
+    assert suite_size.size(repo, [*run, "a"], 8)["mem_gb"] == 13 + 7 * 7, "one worker at its worker_gb, the rest at typical"
+    assert suite_size.size(repo, [*run], 8)["mem_gb"] == 13 + 7 * 7
 
 
 def test_gpus_with_on_reaches_the_machine_and_without_on_or_queue_means_nothing(tmp_path, monkeypatch, capsys):
