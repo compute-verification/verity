@@ -178,7 +178,7 @@ metric's keys:
 - `every`: how often its owner measures it, in minutes, hours or days (`5m`, `12h`, `7d`); a value older than that is
   stale, so a number that reaches the tab through the index needs an `every` well over the index's hour.
 - Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a
-  list of words; `version`, `changed` and `was` (below).
+  list of words; `version`, `changed`, `was`, `under`, `kind` and `needs` (below).
 
 The site refuses a metric with any other key: it lists the metric with why and shows none of it, so a new key reaches
 the site's reader before a metric uses it.
@@ -195,9 +195,16 @@ version. Whether anything else, the axis among it, changed what the number means
 row's former ids, so an id is renamed without breaking its line: the registry's reader (`research.metrics.registry`)
 resolves each to the row.
 
+A row `under = "OWNER/ID"` is a breakdown of that main number, one level deep; `research metrics show` indents it. `kind`
+is `system` (it measures Verity; the default) or `platform` (the project). `needs` lists `parameter` where the value
+depends on a security parameter and `calibration` where it uses a calibration number: each measurement then names
+them, `parameters` as `{NAME: {value, from, basis}}`, `from` the application it is read from, and `calibration` as
+`[{path, key}]`, `path` under `calibration/`. The kit refuses one naming none, by `kit_report.NEEDS`, held to the rows.
+
 The site's reader (infra's) takes `version`, `changed` and `was` on a row and `version` on a measurement
-(`SITE_TAKES_VERSIONS` in the registry's test). One part is not true yet: a reading sent from a loop through
-`research.metrics` carries no version, since the sender (infra's) doesn't take one.
+(`SITE_TAKES_VERSIONS` in the registry's test), and `under`, `kind` and `needs` on a row (`SITE_TAKES_STRUCTURE`). One
+part is not true yet: a reading sent from a loop through `research.metrics` carries no version, since the sender
+(infra's) doesn't take one.
 
 Each value carries its mark, how it was had, which the tab shows beside it: the measurement's `mark`, which the kit's
 writer requires (`measured`, `modeled` or `partial`, `kit.MARKS`; a value of None takes the one it would have had)
