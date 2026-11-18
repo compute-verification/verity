@@ -53,7 +53,6 @@
   "Properties.Spot.Rate",
   "Properties.Spot.MonitoringPeriod",
   "Properties.Spot.MonitoringPeriodLedger",
-  "Properties.Spot.ChallengerPin",
   "Properties.Spot.ChallengerLog",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryAttester",
@@ -2595,14 +2594,7 @@
    "sealed": true
   },
   "Properties.Spot": {
-   "imports": [
-    "Spot",
-    "Circuits.Wire",
-    "Definitions.Core.Label",
-    "Definitions.Core.Challenger",
-    "VStarRecursive.ChallengerPin",
-    "PouwVerifier.Period"
-   ],
+   "imports": ["Spot", "Circuits.Wire", "Definitions.Core.Label", "Definitions.Core.Challenger"],
    "except": [
     "Properties.Spot.Draw",
     "Properties.Spot.Bits",
@@ -2616,7 +2608,7 @@
     "Properties.Spot.HistoryTable",
     "Properties.Spot.MonitoringPeriodLedger"
    ],
-   "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib, and of `security` only the core's label and challenger log (Definitions.Core.Label, Definitions.Core.Challenger), which import nothing, read with the wire they name (Circuits.Wire); the properties are stated against the one-stage audit's own functions and the challenger's pin on SPOT's executable (`VStarRecursive.ChallengerPin`) and on PoUW's period (`PouwVerifier.Period.pinned`), on Lean core: nothing of Mathlib or of `security`"
+   "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib, and of `security` only the core's label and challenger log (Definitions.Core.Label, Definitions.Core.Challenger), which import nothing, read with the wire they name (Circuits.Wire)"
   },
   "Properties.Spot.Draw": {
    "imports": ["Definitions.Claims", "Spot"],

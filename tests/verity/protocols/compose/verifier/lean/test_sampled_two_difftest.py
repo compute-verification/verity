@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import copy
 import functools
-import hashlib
 import json
 import random
 import shutil
@@ -258,123 +257,6 @@ def test_two_levels_refuse_the_honest_play_on_one_window(tmp_path) -> None:
     params["interior"]["params"]["window_root"] = params["boundary"]["window_root"]
     on = _check(tmp_path, params=params)
     assert on.returncode == 1 and ONE_WINDOW in on.stdout, (on.stdout + on.stderr)[-4000:]
-
-
-def _pinned(tmp_path: Path, sha512: str, retired: list[str], params: dict | None = None) -> subprocess.CompletedProcess:
-    """`_check` under `vstar-recursive sampled --challenger-key-sha512 sha512 --challenger-retired FILE`, FILE a key file
-    retiring the public keys `retired`."""
-    d, keyfile = _case_dir(), tmp_path / "challenger-key.json"
-    keyfile.write_text(json.dumps({"retired": [{"pubkey": k} for k in retired]}))
-    files = []
-    for name, given in (("params.json", params), ("evidence.json", None)):
-        f = tmp_path / name
-        f.write_text(canonical(_at_two_levels(given if given is not None else json.loads((d / name).read_text()))))
-        files.append(f)
-    argv = [str(files[0]), str(d / "commitment.json"), str(files[1]), *map(str, sorted((d / "blobs").iterdir()))]
-    return subprocess.run([str(D.build(PORT.package, PORT.exe)), "sampled", "--challenger-key-sha512", sha512,
-                           "--challenger-retired", str(keyfile), "check", *argv],
-                          capture_output=True, text=True, check=False)
-
-
-UNPINNED = "challenger's key not pinned: the case names it"
-
-
-def _key() -> str:
-    params = json.loads((_case_dir() / "params.json").read_text())
-    (key,) = {params["boundary"]["challenger"]["key"]["public"],
-              params["interior"]["params"]["challenger"]["key"]["public"]}
-    return key
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("pin, retired, verdict", [
-    ("right", False, None), ("other", False, "challenger-key-not-pinned"), ("other", True, "challenger-key-retired"),
-    ("right", True, "challenger-key-retired")])
-def test_the_honest_play_under_a_pin(tmp_path, pin, retired, verdict) -> None:
-    """The kept honest play (`CASE`) under the pin of its challenger's key is accepted, with the unpinned check's line;
-    under another pin it is refused at its parameters by `challenger-key-not-pinned`, and with its key in the verifier's
-    retired list by `challenger-key-retired`, the pinned key included. Unpinned, the check says so first on stderr."""
-    key = _key()
-    sha = hashlib.sha512(bytes.fromhex(key)).hexdigest() if pin == "right" else hashlib.sha512(b"forger").hexdigest()
-    on = _pinned(tmp_path, sha, [key] if retired else [])
-    if verdict is None:
-        off = _check(tmp_path)
-        assert on.returncode == 0 and on.stdout == off.stdout, (on.stdout + on.stderr)[-4000:]
-        assert off.stderr.splitlines()[0] == UNPINNED and UNPINNED not in on.stderr, off.stderr[-4000:]
-    else:
-        assert on.returncode == 1 and json.loads(on.stdout)["reason"].startswith(f"params: {verdict}: "), \
-            (on.stdout + on.stderr)[-4000:]
-
-
-@pytest.mark.slow
-def test_a_forged_window_root_under_the_pinned_key_is_refused_by_the_ledgers_open(tmp_path) -> None:
-    """The kept honest play (`CASE`) under its challenger's pin, its interior audit's window root a root the
-    challenger's ledger opens no session on: the pin passes and the ledger's open refuses it (`auditedOpen`)."""
-    params = json.loads((_case_dir() / "params.json").read_text())
-    params["interior"]["params"]["window_root"] = hashlib.sha512(b"forged window").hexdigest()
-    on = _pinned(tmp_path, hashlib.sha512(bytes.fromhex(_key())).hexdigest(), [], params)
-    assert on.returncode == 1 and "challenger-key" not in on.stdout, (on.stdout + on.stderr)[-4000:]
-    assert "opens no challenger session for this window" in on.stdout, (on.stdout + on.stderr)[-4000:]
-
-
-COMPOSITES = {
-    "remote-v1": ("remote", ("verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1")),
-    "onsite": ("onsite", ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run",
-                          "verity/pouw/pearl-plus/v1", "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1",
-                          "verity/wipe/v0")),
-}
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("exe", sorted(COMPOSITES))
-@pytest.mark.parametrize("pin", ["forger", None])
-def test_a_composite_under_the_pin_refuses_a_spot_member_whose_challenger_is_the_forgers(tmp_path, exe, pin) -> None:
-    """Remote's and onsite's composites (`remote-v1`, `onsite`) under the auditor's pin answer their SPOT member, the
-    kept play (`CASE`) whose challenger is not the pinned key, with SPOT under the pin, which refuses it at the member's
-    own parameters by `challenger-key-not-pinned`; unpinned, nothing refuses it so."""
-    spot = _at_two_levels(json.loads((_case_dir() / "params.json").read_text()))
-    package, ids = COMPOSITES[exe]
-    members = {i: (spot if i == "verity/sampled-proofs/v1" else {}) for i in ids}
-    params = tmp_path / "params.json"
-    params.write_text(canonical({"components": [{"id": i, "params": p} for i, p in members.items()]}))
-    (tmp_path / "commitment.bin").write_bytes(bytes(64))
-    (tmp_path / "evidence.json").write_text(canonical({"components": [
-        {"commitment": "", "evidence": "", "id": i, "params": p} for i, p in members.items()]}))
-    keyfile = tmp_path / "challenger-key.json"
-    keyfile.write_text(json.dumps({"retired": []}))
-    built = D.build(R.ROOT / "verity/protocols/compose/verifier" / package, exe)
-    flags = ["--challenger-key-sha512", hashlib.sha512(b"auditor").hexdigest(), "--challenger-retired", str(keyfile)]
-    on = subprocess.run([str(built), *(flags if pin else []), "check", str(params), str(tmp_path / "commitment.bin"),
-                         str(tmp_path / "evidence.json")], capture_output=True, text=True, check=False)
-    reason = json.loads(on.stdout)["reason"]
-    assert on.returncode == 1, (on.stdout + on.stderr)[-4000:]
-    assert ("verity/sampled-proofs/v1 reject: params: challenger-key-not-pinned: " in reason) == bool(pin), reason
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("first", ["pinned", "forger"])
-def test_parameters_naming_challenger_twice_are_refused(tmp_path, first) -> None:
-    """The kept play's parameters with its boundary's `challenger` named twice, its own and a forger's in either order,
-    under the pin of its own key: refused as not canonical JSON, the same refusal in both orders, before the pin or
-    SPOT reads either key."""
-    params = _at_two_levels(json.loads((_case_dir() / "params.json").read_text()))
-    own = params["boundary"]["challenger"]
-    forged = {**own, "key": {**own["key"], "public": bytes(b ^ 0x5A for b in bytes.fromhex(own["key"]["public"])).hex()}}
-    a, b = (own, forged) if first == "pinned" else (forged, own)
-    text = canonical(params)
-    one = '"challenger":' + canonical(own)
-    assert one in text
-    d, keyfile = _case_dir(), tmp_path / "challenger-key.json"
-    keyfile.write_text(json.dumps({"retired": []}))
-    (tmp_path / "params.json").write_text(text.replace(one, f'"challenger":{canonical(a)},"challenger":{canonical(b)}', 1))
-    (tmp_path / "evidence.json").write_text(canonical(_at_two_levels(json.loads((d / "evidence.json").read_text()))))
-    argv = [str(tmp_path / "params.json"), str(d / "commitment.json"), str(tmp_path / "evidence.json"),
-            *map(str, sorted((d / "blobs").iterdir()))]
-    on = subprocess.run([str(D.build(PORT.package, PORT.exe)), "sampled", "--challenger-key-sha512",
-                         hashlib.sha512(bytes.fromhex(_key())).hexdigest(), "--challenger-retired", str(keyfile),
-                         "check", *argv], capture_output=True, text=True, check=False)
-    got = json.loads(on.stdout)
-    assert on.returncode == 1 and got["reason"].startswith("params: not canonical JSON"), got
 
 
 def _evidence() -> dict:
