@@ -81,11 +81,11 @@ open Flock Transcript FlockComplete FlockComplete.Replay
 
 /-- **A returning masked PIOP (`piopPZk`), in closed form**: zerocheck, lincheck and ring switch at the replies' coins,
 the rank check keeping the transcript and the sends. -/
-theorem piopPZk_split (resp : ℕ → Claims.Msg) (st : Setup) (lay : Zk.PadLayout) (hp : Array F128) (tr : Trace)
+theorem piopPZk_split (resp : ℕ → Hash.Msg) (st : Setup) (lay : Zk.PadLayout) (hp : Array F128) (tr : Trace)
     (cap root : ByteArray) (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m)
-    (t : Transcript) (l : Array Claims.Msg)
+    (t : Transcript) (l : Array Hash.Msg)
     {o : ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched} {t' : Transcript}
-    {l' : Array Claims.Msg}
+    {l' : Array Hash.Msg}
     (h : ((piopPZk (asksS resp) st lay hp tr cap root extras prior words).run t).go l = (.ok (o, t'), l')) :
     ∃ full : Array F128,
       st.fold.fold (coinOf (resp (l.size + 3 + (st.m - 6))) 0) (skipWeights (zcR resp st tr l.size).z)
@@ -136,16 +136,16 @@ theorem piopPZk_split (resp : ℕ → Claims.Msg) (st : Setup) (lay : Zk.PadLayo
 /-- **The shared phases (`innerPre`) that return, stage by stage**: the masked PIOP in closed form (`piopPZk_split`),
 then the masked Ligerito from `tPiop`, the verifier's replay of the proof with level 0's openings erased, and level 0's
 lane constraints; the constraints they return are the replay's, the two ring-switch rows and the lanes'. -/
-theorem innerPre_split (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem innerPre_split (resp : ℕ → Hash.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (t : Transcript)
-    (l : Array Claims.Msg) {o : F128 × Proof × Zk.Level0Msgs × Array (String × Zk.Lin)} {t' : Transcript}
-    {l' : Array Claims.Msg}
+    (l : Array Hash.Msg) {o : F128 × Proof × Zk.Level0Msgs × Array (String × Zk.Lin)} {t' : Transcript}
+    {l' : Array Hash.Msg}
     (h : ((SimInner.innerPre (asksS resp) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra
       lanePad salt nonce prior words).run t).go l = (.ok (o, t'), l')) :
-    ∃ (full : Array F128) (lL : Array Claims.Msg) (lg : LigeritoProof) (zl : Zk.Level0Msgs) (rec : Zk.L0Rec)
-      (tI : Transcript) (lI : Array Claims.Msg) (rp : Zk.Replayed) (x : Transcript) (lgc : Array (String × Zk.Lin)),
+    ∃ (full : Array F128) (lL : Array Hash.Msg) (lg : LigeritoProof) (zl : Zk.Level0Msgs) (rec : Zk.L0Rec)
+      (tI : Transcript) (lI : Array Hash.Msg) (rp : Zk.Replayed) (x : Transcript) (lgc : Array (String × Zk.Lin)),
       st.fold.fold (coinOf (resp (l.size + 3 + (st.m - 6))) 0) (skipWeights (zcR resp st tr l.size).z)
         ((zcR resp st tr l.size).rho.extract 0 (st.fold.kLog - 6)) = .ok full ∧
       lL.size = l.size + piopSends st extras ∧
@@ -273,12 +273,12 @@ theorem replay_holdsM {st : Flock.Stmt} {tr : Trace} (hT : TableM st tr) (lay : 
 return, at outer coins that are not `1` and extra claims at points of the table's `m_pts`, every constraint they hand
 the inner proof (the replay's, the two ring-switch rows and the lanes') vanishes at the rep's pads (`replay_holdsM`,
 `lanes_hold`). -/
-theorem innerPre_holds (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) {st : Flock.Stmt} {tr : Trace}
+theorem innerPre_holds (resp : ℕ → Hash.Msg) (hsh : ByteArray → ByteArray) {st : Flock.Stmt} {tr : Trace}
     (hT : TableM st tr) {v : Schedule × ℕ} (hv : Zk.schedule st.wideLeaf st.m = .ok v) (rep : ℕ) (dom : ByteArray)
     (cm0 : Commit) (pts : Array (Array F128)) (hpts : ∀ a ∈ pts, a.size = st.mPts) (e : Array Claim)
     (he : st.extraClaims pts = .ok e) (tape : TapeZk) (i : ℕ) (ic : InnerCommit) (prior : Array (List F128))
-    (words : List ℕ) (l : Array Claims.Msg) (hc1 : ∀ k < st.m - 13, coinOf (resp (l.size + 1)) k ≠ 1)
-    {o : F128 × Proof × Zk.Level0Msgs × Array (String × Zk.Lin)} {t' : Transcript} {l' : Array Claims.Msg}
+    (words : List ℕ) (l : Array Hash.Msg) (hc1 : ∀ k < st.m - 13, coinOf (resp (l.size + 1)) k ≠ 1)
+    {o : F128 × Proof × Zk.Level0Msgs × Array (String × Zk.Lin)} {t' : Transcript} {l' : Array Hash.Msg}
     (h : ((SimInner.innerPre (asksS resp) (Hashes.ofSha512 hsh) (Setup.ofCircuit st) v.1 v.2 rep dom tr
       (packed tr (Setup.ofCircuit st).m) cm0 e
       (padsOf tape i rep (Zk.PadLayout.new (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog v.1.k0)) ic

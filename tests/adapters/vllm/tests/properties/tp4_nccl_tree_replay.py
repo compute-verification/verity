@@ -29,7 +29,6 @@ import hashlib
 import itertools
 import json
 import os
-import socket
 import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -39,6 +38,7 @@ import numpy as np
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
+from verity.ports import free_port
 
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.registry import boolean_tp_allreduce as BA
@@ -283,19 +283,13 @@ def _probe_rank(rank: int, port: int, out: str, chain: tuple[int, ...]) -> None:
     dist.destroy_process_group()
 
 
-def _free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def probe(a: argparse.Namespace) -> dict[str, Any]:
     import torch.multiprocessing as mp
 
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
     chain = T.nccl_chain(next(c.statics["CHAIN"] for c in T.CAPTURED if c.definition == "AllReduceNcclTree_v1" and c.world == WORLD), WORLD)
-    mp.spawn(_probe_rank, args=(_free_port(), str(outdir), chain), nprocs=WORLD, join=True)
+    mp.spawn(_probe_rank, args=(free_port(), str(outdir), chain), nprocs=WORLD, join=True)
     ranks = [json.loads((outdir / f"probe.rank{r}.json").read_text()) for r in range(WORLD)]
     log = [ln.rstrip() for r in range(WORLD) for p in sorted(outdir.glob(f"nccl.rank{r}.log*")) for ln in p.read_text(errors="replace").splitlines()
            if any(s in ln for s in ("Trees", " via ", "NCCL version", "Channel 00", "Pattern", "Algo", "NCCL_P2P_DISABLE", "NCCL_ALGO"))]

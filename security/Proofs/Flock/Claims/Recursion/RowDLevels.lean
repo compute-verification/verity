@@ -323,7 +323,7 @@ theorem Lg.merkleOk_congr {hs : Hashes V} {ms : MerkleScheme} {sch : Schedule} {
 /-- **A returning honest rep passes every level's Merkle check** at its replies' coins from Ligerito's first round:
 the honest rep `repP` on a `commitP` of its table, run from a transcript at round `0` with `l` bodies sent, at hashes
 whose digests have the scheme's width (`repP_opens`, `merkleOk_of_opens`; `Run.lgMerkle_of` without the run). -/
-theorem merkleOk_of_repP (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem merkleOk_of_repP (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tr : Trace) (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) {m : ℕ} (hfast : fast100 m = some sch) (hm : 14 ≤ st.m)
     (hn : ∀ a b v, (st.merkle.opsWith (Hashes.ofSha512 h : Hashes V)).node a b = .ok v → v.size = st.merkle.digestLen)
@@ -331,7 +331,7 @@ theorem merkleOk_of_repP (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArra
       v.size = st.merkle.digestLen)
     {s0 : ℕ → ByteArray}
     (h0 : commitP (Hashes.ofSha512 h : Hashes V) st.merkle (sch.levels.getD 0 default) tbl s0 = .ok cm0)
-    (t : Transcript) (ht : t.k = 0) (l : Array Claims.Msg) {p : Proof} {t' : Transcript} {l' : Array Claims.Msg}
+    (t : Transcript) (ht : t.k = 0) (l : Array Hash.Msg) {p : Proof} {t' : Transcript} {l' : Array Hash.Msg}
     (hrun : ((repP (asksS resp) (Hashes.ofSha512 h) st sch tr tbl cm0 extras salt nonce).run t).go l =
       (.ok (p, t'), l')) :
     Lg.MerkleOk (Hashes.ofSha512 h : Hashes V) st.merkle sch p.cap p.ligerito (Lg.cfOf resp l.size)
@@ -380,7 +380,7 @@ theorem plain_widths_std :
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128)
 
 /-- **Row D's coin tie** (`levels_of_merkleOk`'s `htie`): at row G, any run of rep `r`'s verifier rows queries level
@@ -424,7 +424,7 @@ theorem hlev_of_merkleOk {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tab
 width), and the replies' coins at the queried rounds are the rep's recorded ones (`merkleOk_of_repP`). -/
 theorem hlev_of_repP {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.size) (r : Fin 2)
     (h : ByteArray → ByteArray) (hops : plain.opsWith (Hashes.ofSha512 h : Hashes Flock.V) = MerkleOps.ofScheme plain)
-    (resp : ℕ → Claims.Msg) (tr : Trace) (tbl : Array F128) (cm0 : Commit) (salt : ℕ → ℕ → ByteArray)
+    (resp : ℕ → Hash.Msg) (tr : Trace) (tbl : Array F128) (cm0 : Commit) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64)
     (hn : ∀ a b v, ((D.files cls i).st.merkle.opsWith (Hashes.ofSha512 h : Hashes Flock.V)).node a b = .ok v →
       v.size = (D.files cls i).st.merkle.digestLen)
@@ -433,7 +433,7 @@ theorem hlev_of_repP {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.
     {s0 : ℕ → ByteArray}
     (h0 : commitP (Hashes.ofSha512 h : Hashes Flock.V) (D.files cls i).st.merkle
       ((D.files cls i).sch.levels.getD 0 default) tbl s0 = .ok cm0)
-    (t : Transcript) (ht : t.k = 0) (l : Array Claims.Msg) {t' : Transcript} {l' : Array Claims.Msg}
+    (t : Transcript) (ht : t.k = 0) (l : Array Hash.Msg) {t' : Transcript} {l' : Array Hash.Msg}
     (hrun : ((repP (asksS resp) (Hashes.ofSha512 h) (D.files cls i).st
       (D.files cls i).sch tr tbl cm0 (D.files cls i).extras salt nonce).run t).go l =
         (.ok ((D.files cls i).proof r, t'), l'))
@@ -463,11 +463,11 @@ scheme is its own closures (`plain_ops_std`) and its digests are 64 bytes (`plai
 honest rep's equations: its decided proof is `repP`'s output (`hrun`) on a `commitP` of its table (`h0`), and its
 replies' coins at the queried rounds are its recorded ones (`hcoin`). -/
 theorem hlev_deployed {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.size) (r : Fin 2)
-    (resp : ℕ → Claims.Msg) (tr : Trace) (tbl : Array F128) (cm0 : Commit) (salt : ℕ → ℕ → ByteArray)
+    (resp : ℕ → Hash.Msg) (tr : Trace) (tbl : Array F128) (cm0 : Commit) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) {s0 : ℕ → ByteArray}
     (h0 : commitP (Hashes.ofSha512 Sha512.hash : Hashes Flock.V) (D.files cls i).st.merkle
       ((D.files cls i).sch.levels.getD 0 default) tbl s0 = .ok cm0)
-    (t : Transcript) (ht : t.k = 0) (l : Array Claims.Msg) {t' : Transcript} {l' : Array Claims.Msg}
+    (t : Transcript) (ht : t.k = 0) (l : Array Hash.Msg) {t' : Transcript} {l' : Array Hash.Msg}
     (hrun : ((repP (asksS resp) (Hashes.ofSha512 Sha512.hash) (D.files cls i).st
       (D.files cls i).sch tr tbl cm0 (D.files cls i).extras salt nonce).run t).go l =
         (.ok ((D.files cls i).proof r, t'), l'))

@@ -188,18 +188,19 @@ from verity.commitments import randomness as RND
 from .one_stage.verdict import Verdict, _Collect
 from verity.protocols.proofs.spot.verifier.challenger.challenger import ChallengerKey
 from verity.protocols.proofs.spot.verifier.challenger.coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
+from verity.commitments.domains import FRAME_V3_SHA512_ROOT, PROOF_SERVICE_OUTCOME, PROOF_SERVICE_STREAM
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
 HIDING = "hm96-sha512/"
 #: A tree over the roots of hiding trees (`row_table.ROOTS_SCHEMA`); a Value of it names its leaves' schema (`over`).
-ROOTS = "frame-v3-sha512/root/v1"
+ROOTS = FRAME_V3_SHA512_ROOT
 KINDS = ("structure", "output", "coins", "commitment")
 SOURCES = ("parameter", "window")
 PHASES = ("epoch", "serve", "interior", "in-deadline")
 #: A two-stage outcome's profile's level of replay blocks, above one-stage's `audit.LEVEL` of proof blocks.
 REPLAY = "replay"
-STREAM = "verity/proof-service/stream/v0"
-OUTCOME = "verity/proof-service/outcome/v0"
+STREAM = PROOF_SERVICE_STREAM
+OUTCOME = PROOF_SERVICE_OUTCOME
 ACCEPT, REJECT, LATE, HALTED = "accept", "reject", "late", "halted"
 #: The most rounds (dockets) one proof session covers.
 ROUNDS = 4

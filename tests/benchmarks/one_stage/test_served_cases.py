@@ -41,6 +41,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as PW
 from verity.protocols.proofs.spot.verifier import service as S
@@ -240,7 +241,7 @@ def h1_docket(previous: str | None = None, entry: int = 0) -> dict:
     for _, value, leaves in TABLES:
         e = {"value": value, "leaves": leaves, "words": 1, "root": "ab" * 64}
         entries.append({**e, "domain": Cr.domain_of(H1, OPEN, e)})
-    return {"format": R.FORMAT_V2, "protocol": R.PROTOCOL, "program": H1,
+    return {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "program": H1,
             "window": {"kind": "served", "entry": entry, "open_root": OPEN, "refused": []},
             "registered": entries, "previous": previous}
 
@@ -711,7 +712,7 @@ def test_the_producer_refuses_an_inference_only_case_that_would_not_be_the_windo
     if change != "no-alpha-gamma":
         argv += ["--alpha", "1", "--gamma", 1]
     if change == "log-unchained":
-        (tmp_path / "log.json").write_text(json.dumps([{"format": R.FORMAT_V2, "previous": "66" * 64}]))
+        (tmp_path / "log.json").write_text(json.dumps([{"format": DM.REGISTRATION, "previous": "66" * 64}]))
         argv += ["--log", tmp_path / "log.json"]
     if change == "gamma-bool":
         with pytest.raises(SC.Refused, match=reason):
@@ -781,14 +782,14 @@ def test_the_parameters_are_the_population_programs_and_no_other_programs():
     assert SC.inference_only_case(one, 1, 1)["params"]["parameters"] == [["x", Array(SLOTS, Array(2, Bits(8))).to_json()]]
     lone = Program(PAIR)
     desc = json.loads(codec.canonical_json(codec.encode_program(lone)))
-    rec = {"format": R.FORMAT_V2, "previous": None, "program": codec.program_digest(desc)}
+    rec = {"format": DM.REGISTRATION, "previous": None, "program": codec.program_digest(desc)}
     with pytest.raises(SC.Refused, match="isn't the population program over its root's templates"):
         SC.inference_only_case({"commitment": codec.canonical_json(rec).hex(), "params": {"program": desc}}, 1, 1)
 
 
 def test_a_log_that_chains_to_the_record_is_the_cases_log(tmp_path):
     program, query = toy()
-    first = {"format": R.FORMAT_V2, "previous": None, "program": "11" * 64}
+    first = {"format": DM.REGISTRATION, "previous": None, "program": "11" * 64}
     v1 = v1_case(program, query, previous=R.digest(first))
     assert SC.inference_only_case(v1, 1, 1, [first])["params"]["log"] == [first]
 
@@ -941,7 +942,7 @@ def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, ca
     w = h1_docket()
     on_r, on_w = tied_v1_case(w)["commitment"], codec.canonical_json(w).hex()
     commits = {"h1-registration": [on_w], "second-window": [on_r, on_w], "no-commit": [None], "no-windows": [],
-               "v1-record": [codec.canonical_json({**w, "format": R.FORMAT}).hex()]}.get(change)
+               "v1-record": [codec.canonical_json({**w, "format": DM.REGISTRATION_V1}).hex()]}.get(change)
     serve, v1, _ = tied_serve(tmp_path / "serve", commits)
     piece = serve / SC.PERIOD_PIECE
     if change == "other-answer":
@@ -1065,9 +1066,9 @@ def test_the_policys_log_is_the_serves_h1_log_through_the_records_previous(tmp_p
     """Over a serve of several windows, each window's W then R, the log before a window's R is every record through its
     own W, which chains from the deployment's first record (null previous) to R; later windows' records aren't in it."""
     w0 = h1_docket()
-    r0 = {"format": R.FORMAT_V2, "previous": R.digest(w0), "program": "11" * 64}
+    r0 = {"format": DM.REGISTRATION, "previous": R.digest(w0), "program": "11" * 64}
     w1 = h1_docket(R.digest(r0), entry=1)
-    r1 = {"format": R.FORMAT_V2, "previous": R.digest(w1), "program": "11" * 64}
+    r1 = {"format": DM.REGISTRATION, "previous": R.digest(w1), "program": "11" * 64}
     w2 = h1_docket(R.digest(r1), entry=2)
     h1_log(tmp_path, [(0, "registration", w0), (0, "record", r0), (1, "registration", w1), (1, "record", r1),
                       (2, "registration", w2)])
@@ -1096,7 +1097,7 @@ def test_on_a_serve_tied_to_pearl_plus_the_policys_log_is_w_and_the_serves_first
         return d, d / SC.PEARL_PLUS_PIECE
 
     def after(x: dict) -> dict:
-        return {"format": R.FORMAT_V2, "previous": R.digest(x), "program": "11" * 64}
+        return {"format": DM.REGISTRATION, "previous": R.digest(x), "program": "11" * 64}
 
     assert SC.pearl_log(*serve("chained", w, first), after(w)) == [first, w]
     SC._chain([first, w], after(w))
@@ -1131,7 +1132,7 @@ def test_without_an_h1_log_the_policys_case_takes_its_log_from_pearl_plus_parts(
     assert "doesn't chain from the deployment's first record" in refused[0]["reason"]
 
 
-FIRST = {"format": R.FORMAT_V2, "protocol": R.PROTOCOL, "deployment": {"kind": "weights"}, "registered": [],
+FIRST = {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "deployment": {"kind": "weights"}, "registered": [],
          "previous": None}
 
 
@@ -1188,7 +1189,7 @@ def test_the_log_is_walked_back_to_the_deployments_first_record_however_long_and
     for the earlier window's R. Where a link is missing, the first record's or one in the middle, it refuses at that
     link, naming the digest no record answers; a record nobody names is no part of any log."""
     def after(x: dict) -> dict:
-        return {"format": R.FORMAT_V2, "previous": R.digest(x), "program": "11" * 64}
+        return {"format": DM.REGISTRATION, "previous": R.digest(x), "program": "11" * 64}
 
     w0 = h1_docket(R.digest(FIRST))
     r0 = after(w0)
@@ -1224,7 +1225,7 @@ def test_a_record_file_that_does_not_parse_is_no_part_of_the_log_but_the_deploym
     walk gives the same log, and a walk refused at a missing link names each skipped file; the serve's first
     registration record (`SC.DEPLOYMENT`) truncated is still refused."""
     w0 = h1_docket(R.digest(FIRST))
-    r0 = {"format": R.FORMAT_V2, "previous": R.digest(w0), "program": "11" * 64}
+    r0 = {"format": DM.REGISTRATION, "previous": R.digest(w0), "program": "11" * 64}
     files = {SC.DEPLOYMENT: json.dumps(FIRST), Path("pearlplus/w0/registration.json"): json.dumps(w0),
              Path("pearlplus/w9/registration.json"): "",
              Path("v3c-w9-4-27-2/audit/window/registration.json"): '{"format": '}

@@ -9,7 +9,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # a test file that starts a program the read guard can't trace (bash, around run.sh): keyed on the suite's whole tree
 untraced = ["test_serve_tax.py", "test_profile.py"]
-# `servetax_plugin` on a stand-in scheduler (tests/test_plugin.py): the integration's step trace and release order, and
+# `servetax_plugin` on a stand-in scheduler (tests/test_plugin.py): the integration's step trace, and
 # the modules they import; the driver and the replay read the run's id and paths through verity_config's SHARED settings;
 # an arm names another benchmark's vLLM plugin by its file in this tree, which the driver's test checks is there; the
 # serving cost is the benchmark kit's paired ratio, and its result.json the kit's writer's; the client's shim to the
@@ -17,7 +17,7 @@ untraced = ["test_serve_tax.py", "test_profile.py"]
 # virtual clock, whose package imports the circuit language, the commitments and SPOT's verifier; the arm
 # behind the network attester names the network attester's program by its file in this tree, which its test (tests/test_certified.py,
 # both sides on stand-ins for the processes they start) checks is there
-inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.py",
+inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.py", "verity/ports.py",
     "verity/circuits",
     "verity/commitments",
     # the record entry (`Record`): SPOT's challenger imports it, and the network attester's `active` imports SPOT's verifier
@@ -44,6 +44,8 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     # schemes it registers
     "benchmarks/harness/verity_bench/schemes.py",
     "verity/protocols/resource_accounting/scheme.py",
+    # PoUW's scheme, which the schemes' table registers, imports its salt rule
+    "verity/protocols/resource_accounting/compute/pouw/verifier/salt.py",
     "verity/protocols/experimental/__init__.py",
     "verity/protocols/experimental/dither/__init__.py",
     "verity/protocols/experimental/dither/scheme.py",

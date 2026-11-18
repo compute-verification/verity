@@ -22,6 +22,7 @@ order = [
     ["verity/circuits/call_scope.py", "verity/circuits/cross_call.py", "verity/circuits/tiny.py", "verity/circuits/word.py"],
     ["verity/channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime"],
     ["verity/device.py"],
+    ["verity/protocols/resource_accounting/scheme.py"],
     ["verity/commitments/periods"],
     ["verity/protocols/proofs/spot"],
     ["verity/protocols/proofs/flock"],
@@ -67,6 +68,8 @@ reason = "the PoUS Lean check (`pous-verifier`), whose Python is run by path bes
 directory = "verity/protocols/resource_accounting/memory/poub/prover"
 owner = "memory-accounting"
 reason = "PoUB's prover, which runs on a GPU through torch, which `verity` never imports: loaded by path under its own names (`prover`, `device`, `kv`, `paged`) by the vLLM adapter and by its harness in `benchmarks/`; the session's prover party (`session_prover.py`), which only tests load by name; and the honest provers, the period's prover side and the P2 session's (`audit_prover.py`, `p2_prover.py`, `period_prover.py`, `opening_prover.py`, `p2_party_prover.py`), which tests, `benchmarks/` and the vLLM adapter load by name; and the P2 session's staging (`p2_stage/`: `bandwidth.py`, run as a script, and the `stage` and `layout` it loads), which `benchmarks/` loads by path under those names"
+known = ["verity/protocols/resource_accounting/memory/poub/scheme.py"]
+known_reason = "PoUB's declaration hands the prover out by name (`PROVER`): its binder to `POUB.attach` and its process `poub-session`, each module imported on its first use, on the machine that serves, so that an adapter gets the prover through the scheme and imports no protocol; importing the declaration loads none of it"
 
 [[distribution]]
 directory = "verity/protocols/resource_accounting/memory/pous/prover/p2"
@@ -106,9 +109,7 @@ files = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/class_statement.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/ir_lower.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/ir_sampling.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/partition_units.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/tail.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/tail_pieces.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/templates/silu_mul_v2.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py",
@@ -128,9 +129,7 @@ loader = "verity/protocols/proofs/flock"
 loaded = "benchmarks"
 files = [
     "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/bench.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/register.py",
 ]
 
@@ -459,7 +458,6 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_bindings.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_cap.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_circuits.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/rec_links.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_live.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_outer.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_residuals.py",
@@ -538,8 +536,10 @@ loads = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
+    "verity/protocols/compose/schemes.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
+    "verity/protocols/resource_accounting/compute/pouw/scheme.py",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
@@ -551,7 +551,9 @@ paths = [
 ]
 loads = [
     "verity/protocols/resource_accounting/compute/pouw/prover",
+    "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
+    "verity/runtime",
 ]
 
 [[place]]
@@ -630,7 +632,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_sample.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/tables.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/ncp.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/operands.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/lanes.py",
@@ -646,8 +647,12 @@ paths = [
 ]
 loads = [
     "verity/commitments",
+    "verity/protocols/resource_accounting/memory/poub/prover",
+    "verity/protocols/resource_accounting/memory/poub/verifier",
     "verity/protocols/resource_accounting/memory/pous/prover",
+    "verity/protocols/resource_accounting/memory/pous/verifier",
     "verity/protocols/resource_accounting/scheme.py",
+    "verity/runtime",
 ]
 
 [[place]]
@@ -678,6 +683,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/poub/prover/audit_prover.py",
     "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.py",
     "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/sketch_receipt.py",
+    "verity/protocols/resource_accounting/memory/poub/prover/commit_session.py",
     "verity/protocols/resource_accounting/memory/poub/prover/node_store/memory_map.py",
     "verity/protocols/resource_accounting/memory/poub/prover/node_store/plan.py",
     "verity/protocols/resource_accounting/memory/poub/prover/node_store/registry.py",
@@ -878,6 +884,10 @@ loaded_by = [
 [[place]]
 paths = [
     "verity/protocols/resource_accounting/scheme.py",
+]
+loads = [
+    "verity/channel.py",
+    "verity/runtime",
 ]
 
 [[place]]

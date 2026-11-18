@@ -13,8 +13,15 @@ linkage writes one bundle per instrumented run beside its outputs, `<out>/replay
                       arguments and Program refs, the required manifest's path and sha256, the retention, the Commit's row as recorded
                       (weights pin, coverage, openings), verdict inputs (declaration, required classes) and the engine's
                       configuration of record (`engine_facts_of_record`, read in the Commit's process)
-    MANIFEST.json     {schema, files: {path: {sha256, bytes}}}, written last; with the values committed and not in the store
-                      (`NOT_RETAINED`), those too
+    private.json      where the bundle's private part is (`PRIVATE_DOC`): its root and place, and the files there
+    MANIFEST.json     {schema, files: {path: {sha256, bytes}}}, written last, the private part's files by their path in the bundle
+                      too; with the values committed and not in the store (`NOT_RETAINED`), those too
+
+The private part holds what opens every committed leaf and is never in the bundle or a run's outputs: the store's salt keys
+(``store/keys.bin``) and the weights registration's salt file (``weights/tree.salts/``, `verity.commitments.salt_file`).  It goes
+under the private directory (`private_root`), at ``replay/<run root>/<digest of the bundle's path>``.  The manifest's sha256 stands in the deferred
+Commit's registration, and hides the bundle's values only because the manifest covers a salt or key file: `seal` and `open_bundle`
+refuse one that lists none (`SECRET`).  A bundle sealed with them inside (no ``private.json``) is read as it was stored.
 
 It is built under `replay_bundle_p<pair>.partial/` and renamed into place once sealed, so a bundle directory that exists is complete.
 A full store is written from the moment the run root is fixed, beside the binding and manifest coverage (`start`), so the GPU is not
@@ -30,12 +37,15 @@ import json
 import os
 import shutil
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity.commitments import salt_file as SF
+
+from verity_vllm.commit import step_rows
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import c2_replay as C2
@@ -49,8 +59,8 @@ from verity_vllm.records.schema_ids import (
 # that read them, and the two deferred records take their schema ids from `records.schema_ids`: the driver's import puts the
 # catalog's Definitions into the Definition table, and the Commit that defers its replay to a bundle never loads the driver.
 
-__all__ = ["ARGS", "HASHED", "MANIFEST", "NOT_RETAINED", "PENDING", "deferred_records", "discard", "open_bundle",
-           "partial", "path", "seal", "seal_all", "weights_extra", "write_store", "write_store_files"]
+__all__ = ["ARGS", "HASHED", "MANIFEST", "NOT_RETAINED", "PENDING", "PRIVATE", "PRIVATE_DOC", "SECRET", "deferred_records", "discard", "load_store", "open_bundle",
+           "partial", "path", "private_file", "private_refusal", "private_root", "seal", "seal_all", "weights_extra", "write_store", "write_store_files"]
 
 logger = init_logger(__name__)
 
@@ -60,6 +70,11 @@ MANIFEST = "MANIFEST.json"
 HASHED = "_hashed"
 #: the context's and manifest's key for the values committed and not retained, so not in the store (`store_dump.not_retained`)
 NOT_RETAINED = "committed_not_retained"
+#: the bundle's files that go to its private part, by their path in the bundle
+PRIVATE = ("store/keys.bin", "weights/tree.salts")
+PRIVATE_DOC = "private.json"
+#: the bundle's files that hold a salt or a salt key, by the start of their path in the bundle; a manifest lists one at least
+SECRET = (PRIVATE[0], PRIVATE[1] + "/", "store/salts/")
 ARGS = ("program_dir", "programs_root", "program_digest", "required_manifest", "replay_per_stratum", "replay_max", "replay_target", "replay_k",
         "replay_draw", "replay_workers", "replay_seed", "replay_challenge", "window_mb", "window_slots", "retain", "label", "serving_rows", "openings",
         "checkpoints", "workload", "weights_of_record", "checkpoint_dir")
@@ -73,6 +88,51 @@ def path(out: str | os.PathLike, pair: int, *, rank: int | None = None) -> Path:
 def partial(out: str | os.PathLike, pair: int, *, rank: int | None = None) -> Path:
     p = path(out, pair, rank=rank)
     return p.with_name(p.name + ".partial")
+
+
+def private_refusal(environ: Mapping[str, str] | None = None) -> str | None:
+    """Why no bundle can be written here: VERITY_PROTOCOLS_CONFIG (the schemes') names no ``private`` directory, or one inside
+    the run's directory (`serve_guard.inside_run`); None when `private_root` is its private."""
+    from verity_vllm import settings
+    from verity_vllm.pipeline.serve_guard import inside_run
+
+    env = os.environ if environ is None else environ
+    d = (settings.get("VERITY_PROTOCOLS_CONFIG", env) or {}).get("private")
+    if not d:
+        return ("a replay bundle's salt keys and salts go to VERITY_PROTOCOLS_CONFIG's private, which names none: set it, outside "
+                "the run's directory")
+    return inside_run("VERITY_PROTOCOLS_CONFIG's private", d, env)
+
+
+def private_root() -> Path:
+    """The private directory a bundle's private part goes under: VERITY_PROTOCOLS_CONFIG's ``private``; refused as
+    `private_refusal` says."""
+    from verity_vllm import settings
+
+    if why := private_refusal():
+        raise ValueError(f"replay bundle: {why}")
+    return Path(settings.get("VERITY_PROTOCOLS_CONFIG")["private"])
+
+
+def load_store(bundle: str | os.PathLike) -> tuple[Any, Any]:
+    """The bundle's store (`store_dump.load`), its salt keys from its private part or, sealed with them inside, from the store."""
+    k, inside = private_file(bundle, PRIVATE[0]), Path(bundle) / PRIVATE[0]
+    return SD.load(Path(bundle) / "store", keys=None if k is None or k == inside else k)
+
+
+def private_file(bundle: str | os.PathLike, rel: str) -> Path | None:
+    """Where the bundle's private file ``rel`` (one of `PRIVATE`) is: in its private part (`PRIVATE_DOC`), or in the bundle for one
+    sealed with it inside; None when the bundle has none.  Refused by name when both hold it, or the private part lacks it."""
+    b = Path(bundle)
+    inside, there = b / rel, None
+    if (b / PRIVATE_DOC).is_file():
+        doc = json.loads((b / PRIVATE_DOC).read_text())
+        there = Path(doc["root"]) / doc["place"] / rel if rel in doc["files"] else None
+    if there is not None and inside.exists():
+        raise ValueError(f"{b}: {rel} is both in the bundle and in its private directory {there}")
+    if there is not None and not there.exists():
+        raise ValueError(f"{b}: {rel} is not in its private directory {there}")
+    return there if there is not None else inside if inside.exists() else None
 
 
 def deferred_records(bundle: Path) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -92,7 +152,7 @@ def refuse(args: Any) -> None:
            f"--compiled-taps {args.compiled_taps}: the compiled check is its own C2" if args.compiled_taps != "off" else
            "--vu-export-dir exports from the replay, which does not run here" if args.vu_export_dir else
            "slim with --serving-rows: the plan would commit the window and seal every unit it reads; a full deferral commits it at "
-           "the C2 site (`c2_replay.serving_rows`)" if args.serving_rows and args.replay_deferred == "slim" else None)
+           "the C2 site (`c2_replay.serving_rows`)" if args.serving_rows and args.replay_deferred == "slim" else private_refusal())
     if why:
         raise SystemExit(f"--replay-deferred: {why}")
 
@@ -317,21 +377,49 @@ def write_store_files(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, e
                       digests: dict[str, str] | None = None, touched: SD.Touched | None = None,
                       extras: tuple[dict[str, Any], list[tuple[int, str, Any]]] | None = None,
                       rank: int | None = None) -> tuple[Path, dict[str, Any]]:
-    """`write_store` but for the store's ``store.json``: the partial dir and the document `store_dump.write_doc` writes there."""
+    """`write_store` but for the store's ``store.json``: the partial dir and the document `store_dump.write_doc` writes there.  The
+    keys and salts go to the bundle's private part under `private_root`."""
     p = partial(out, pair, rank=rank)
+    at = hashlib.sha256(str(path(out, pair, rank=rank).resolve()).encode()).hexdigest()[:16]
+    root, place = private_root(), f"replay/{rc.run_root.hex()}/{at}"
     if p.exists():
         shutil.rmtree(p)
+    shutil.rmtree(root / place, ignore_errors=True)
     dumped: dict[str, str] = {}
-    doc = SD.dump_files(com, rc, p / "store", digests=dumped, touched=touched)
+    doc = SD.dump_files(com, rc, p / "store", digests=dumped, touched=touched, keys_to=root / place / PRIVATE[0])
     if digests is not None:
         digests.update({f"store/{k}": v for k, v in dumped.items()})
     tree, extra = extras if extras is not None else weights_extra(com, rc, extra_names)
     (p / "weights" / "extra").mkdir(parents=True, exist_ok=True)
+    salts = {n: ys for n, ys in (getattr(com, "weights_salts", None) or {}).items() if ys}
+    if tree.get("scheme") == step_rows.NAME and any(int(nb) for *_e, nb in tree["names"]) and not salts:
+        raise ValueError("replay bundle: the committer holds no salts for its rows-sha512 weights registration (register_weights)")
+    if salts:
+        SF.write(root / place / PRIVATE[1], salts)
+    held = [rel for rel in PRIVATE if (root / place / rel).exists()]
+    (p / PRIVATE_DOC).write_text(json.dumps({"root": str(root), "place": place, "files": held}) + "\n")
     for i, _name, raw in extra:
         (p / "weights" / "extra" / f"{i}.bin").write_bytes(raw)
     wdoc = tree | {"extra": {name: i for i, name, _raw in extra}}
     (p / "weights" / "tree.json").write_text(json.dumps(wdoc, separators=(",", ":")) + "\n")
     return p, doc
+
+
+def _files(b: Path) -> dict[str, Path]:
+    """The bundle's files by their path in it, its private part's included; not its manifest."""
+    files = {f.relative_to(b).as_posix(): f for f in b.rglob("*") if f.is_file()}
+    files.pop(MANIFEST, None)
+    for rel in PRIVATE:
+        if (there := private_file(b, rel)) is not None and there.is_dir():
+            files |= {f"{rel}/{f.relative_to(there).as_posix()}": f for f in there.rglob("*") if f.is_file()}
+        elif there is not None:
+            files[rel] = there
+    return files
+
+
+def _secret_refusal(b: Path, rels: Any) -> None:
+    if not any(r.startswith(SECRET) for r in rels):
+        raise ValueError(f"{b}: the manifest lists no salt or key file ({', '.join(SECRET)}), so its sha256 hides nothing")
 
 
 def _sha256(p: Path) -> str:
@@ -351,10 +439,12 @@ def seal(out: str | os.PathLike, pair: int, context: dict[str, Any], binding_map
     if binding_map is not None:
         shutil.copyfile(binding_map, p / "binding_map.json")
     (p / "context.json").write_text(json.dumps({"schema": SCHEMA, **context}, default=str, separators=(",", ":")) + "\n")
-    rels = sorted(x.relative_to(p).as_posix() for x in p.rglob("*") if x.is_file())
+    at = _files(p)
+    rels = sorted(at)
+    _secret_refusal(p, rels)
     with ThreadPoolExecutor(8) as pool:
-        sums = dict(zip(rels, pool.map(lambda r: (hashed or {}).get(r) or _sha256(p / r), rels)))
-    files: dict[str, dict[str, Any]] = {r: {"sha256": sums[r], "bytes": (p / r).stat().st_size} for r in rels}
+        sums = dict(zip(rels, pool.map(lambda r: (hashed or {}).get(r) or _sha256(at[r]), rels)))
+    files: dict[str, dict[str, Any]] = {r: {"sha256": sums[r], "bytes": at[r].stat().st_size} for r in rels}
     man = {"schema": SCHEMA, "files": files, "bytes": sum(v["bytes"] for v in files.values()),
            "sealed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            **({NOT_RETAINED: context[NOT_RETAINED]} if context.get(NOT_RETAINED) else {})}
@@ -375,13 +465,14 @@ def open_bundle(bundle: str | os.PathLike) -> dict[str, Any]:
     man = json.loads((b / MANIFEST).read_text())
     if man.get("schema") != SCHEMA:
         raise ValueError(f"{b}: manifest schema {man.get('schema')!r} is not {SCHEMA}")
-    have = {f.relative_to(b).as_posix() for f in b.rglob("*") if f.is_file()} - {MANIFEST}
-    want = set(man["files"])
+    at = _files(b)
+    have, want = set(at), set(man["files"])
+    _secret_refusal(b, want)
     if have != want:
         raise ValueError(f"{b}: files differ from the manifest: missing {sorted(want - have)[:4]}, extra {sorted(have - want)[:4]}")
     rels = sorted(man["files"])
     with ThreadPoolExecutor(8) as pool:
-        bad = [rel for rel, got in zip(rels, pool.map(lambda r: _sha256(b / r), rels)) if got != man["files"][rel]["sha256"]]
+        bad = [rel for rel, got in zip(rels, pool.map(lambda r: _sha256(at[r]), rels)) if got != man["files"][rel]["sha256"]]
     if bad:
         raise ValueError(f"{b}: files whose sha256 is not the manifest's: {bad[:4]}")
     ctx = json.loads((b / "context.json").read_text())

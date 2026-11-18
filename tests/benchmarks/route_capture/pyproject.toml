@@ -15,6 +15,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `adapters/torch/verity_torch`: the PyTorch adapter, which the vLLM DSA rules `step_needs.StepNeeds` loads import
 inputs = [
     "calibration/hardware/cards",
+    "calibration/hardware/architectures",
     "artifacts.json",
     "tools/config/verity_config",
     "verity/__init__.py",
@@ -29,4 +30,6 @@ inputs = [
     "adapters/vllm/manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json",
     "adapters/vllm/workloads/SHA256SUMS",
     "adapters/vllm/workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json",
+    # step_needs' device profiles read the H200's architecture through verity.device
+    "verity/device.py", "verity/channel.py", "calibration/hardware/architectures/sm_90a.toml",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "benchmarks/route_capture"]

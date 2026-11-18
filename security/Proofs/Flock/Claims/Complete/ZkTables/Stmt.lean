@@ -439,10 +439,10 @@ theorem ofJson_obj {j : Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson 
   rintro rfl
   cases h
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **A masked statement in scope is set up** by `Stmt.setupTables` on what it reads, with no public inputs. -/
-theorem setupTables_of {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem setupTables_of {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hsc : Claims.Flock.Scope (deployZk rel) x) (hs : setupOf true x = some (s, spec, sts)) :
     Stmt.setupTables s.read.tags s.read.I.circuitFile s.read.I.publicFile s.read.coins s.read.I.count
       s.read.I.tables s.read.draw s.read.I.partition s.read.I.program s.read.I.work s.read.I.stratified
@@ -511,7 +511,7 @@ theorem stmtAt_of (hS : StmtOkZk H rel) (c : Case H rel) : StmtAt c :=
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables: `completeJO` with the statement's premise at several tables proved (`stmtOkJ`). -/
-theorem completeJS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem completeJS (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel)
@@ -521,7 +521,7 @@ theorem completeJS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables: `completeAll` with the statement's premise `StmtOkZk`'s at one table and proved at several. -/
-theorem completeAllS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem completeAllS (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hPR : ∀ c : Case H rel, ProverRunsAt c) (hR : ∀ c : Case H rel, RepShapedAt c)
     (hC : ∀ o : Run H rel, RepChecksAt H rel o) (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) :

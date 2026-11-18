@@ -516,16 +516,16 @@ local notation "𝔽" => FlockLevel3.GF128
 submission, a reading bounded by 1 of a uniform tape from the stop is at most its mean with a uniform round's coins
 written in, plus `γ` there. -/
 def CoinMap.RoundClose {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R mPts : ℕ} (M : CoinMap g σ Ω R mPts)
-    (γ : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) : Prop :=
-  ∀ (q : Pos g σ Claims.Msg (Fin R)) (J : ℕ) (s : SubmitJ J) (G : CoinTape q.g' q.s' → ℝ≥0∞), (∀ z, G z ≤ 1) →
+    (γ : Pos g σ Hash.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) : Prop :=
+  ∀ (q : Pos g σ Hash.Msg (Fin R)) (J : ℕ) (s : SubmitJ J) (G : CoinTape q.g' q.s' → ℝ≥0∞), (∀ z, G z ≤ 1) →
     avg G ≤ avg (fun c : Fin s.n → 𝔽 => avg fun z : CoinTape q.g' q.s' => G (M.round (q.withTape z) J s c z)) +
       γ q J s
 
 /-- **The coin map writes the live link points in within `γL` of the tape's own**: at every stop, a reading bounded by
 1 of a uniform tape from the stop is at most its mean with uniform link points written in, plus `γL` there. -/
 def CoinMap.LinkClose {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R mPts : ℕ} (M : CoinMap g σ Ω R mPts)
-    (γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) : Prop :=
-  ∀ (q : Pos g σ Claims.Msg (Fin R)) (G : CoinTape q.g' q.s' → ℝ≥0∞), (∀ z, G z ≤ 1) →
+    (γL : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞) : Prop :=
+  ∀ (q : Pos g σ Hash.Msg (Fin R)) (G : CoinTape q.g' q.s' → ℝ≥0∞), (∀ z, G z ≤ 1) →
     avg G ≤ avg (fun pts : Fin 2 → Fin mPts → 𝔽 => avg fun z : CoinTape q.g' q.s' => G (M.link (q.withTape z) pts z)) +
       γL q
 
@@ -543,17 +543,17 @@ theorem avg_le_off {C : Type} [Fintype C] (H : C → Prop) (f : C → ℝ≥0∞
 section Session
 
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} (D : Decoders R Reg)
-  (M : CoinMap g σ Ω R mPts) (J : ℕ) (γ : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (B : RoundHold)
+  (M : CoinMap g σ Ω R mPts) (J : ℕ) (γ : Pos g σ Hash.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (B : RoundHold)
 
 /-- **One stop's error** at the submission decoded there: none where the play ends; `γ` there and the next rounds'
 error over the tapes from the stop where a submission is decoded. -/
-noncomputable def stopErr (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (q : Pos g σ Claims.Msg (Fin R)) :
+noncomputable def stopErr (e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞) (q : Pos g σ Hash.Msg (Fin R)) :
     Option (SubmitJ J) → ℝ≥0∞
   | none => 0
   | some s => γ q J s + Pos.resample e q.consume
 
 /-- **The rounds' error** from the position `p`: `γ` at each stop a uniform tape from `p` reaches. -/
-noncomputable def roundsErr : ℕ → Pos g σ Claims.Msg (Fin R) → ℝ≥0∞
+noncomputable def roundsErr : ℕ → Pos g σ Hash.Msg (Fin R) → ℝ≥0∞
   | 0, _ => 0
   | N + 1, p => stopErr J γ (roundsErr N) p.toStop (D.sub J p.toStop.modes)
 
@@ -563,18 +563,18 @@ writes each round's coins in within `γ` of the tape's own, an event of the tape
 position `p`, at most its share off `B` (`roundsOff`) plus the rounds' error at `γ` and `B`'s probability at each stop,
 as its share of the tapes through `p`. -/
 theorem avg_roundsOff_le (hR : M.RoundClose γ) (Q : CoinTape g σ → Prop) :
-    ∀ (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)),
+    ∀ (N : ℕ) (p : Pos g σ Hash.Msg (Fin R)),
       avg (fun z : CoinTape p.g' p.s' => tapeInd Q (p.withTape z)) ≤
         avg (fun z : CoinTape p.g' p.s' => roundsOff D M J B Q N (p.withTape z)) +
         avg fun z : CoinTape p.g' p.s' =>
           roundsErr D J (fun q j s => γ q j s + prCoin (B q.g' j s)) N (p.withTape z)
   | 0, _ => le_self_add
   | N + 1, p => by
-    let γB : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞ := fun q j s => γ q j s + prCoin (B q.g' j s)
-    let Ψ : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞ := fun q =>
+    let γB : Pos g σ Hash.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞ := fun q j s => γ q j s + prCoin (B q.g' j s)
+    let Ψ : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞ := fun q =>
       stopOff M J B Q (roundsOff D M J B Q N) q (D.sub J q.modes)
-    let E : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞ := fun q => stopErr J γB (roundsErr D J γB N) q (D.sub J q.modes)
-    have hstop : ∀ (q : Pos g σ Claims.Msg (Fin R)) (o : Option (SubmitJ J)),
+    let E : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞ := fun q => stopErr J γB (roundsErr D J γB N) q (D.sub J q.modes)
+    have hstop : ∀ (q : Pos g σ Hash.Msg (Fin R)) (o : Option (SubmitJ J)),
         avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
           avg (fun z : CoinTape q.g' q.s' => stopOff M J B Q (roundsOff D M J B Q N) (q.withTape z) o) +
           avg fun z : CoinTape q.g' q.s' => stopErr J γB (roundsErr D J γB N) (q.withTape z) o := fun q o => by
@@ -634,8 +634,8 @@ stop**: wherever the coin map writes the link points in within `γL` of the tape
 `γ`, an event of the tape has, over a uniform tape from the stop `q`, at most its share off `BL` and `B` from there,
 plus `γL` and `BL`'s probability at the stop and the rounds' error at `γ` and `B`'s probability after it, as its share
 of the tapes through `q`. -/
-theorem resample_sessionOff_le {γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hL : M.LinkClose γL) (hR : M.RoundClose γ)
-    (BL : LinkHold mPts) (Q : CoinTape g σ → Prop) (N : ℕ) (q : Pos g σ Claims.Msg (Fin R)) :
+theorem resample_sessionOff_le {γL : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞} (hL : M.LinkClose γL) (hR : M.RoundClose γ)
+    (BL : LinkHold mPts) (Q : CoinTape g σ → Prop) (N : ℕ) (q : Pos g σ Hash.Msg (Fin R)) :
     Pos.resample (tapeInd Q) q ≤
       Pos.resample (fun q' => avg fun pts : Fin 2 → Fin mPts → 𝔽 =>
         if BL q'.g' pts then 0 else roundsOff D M J B Q N (q'.rewrite (M.link q' pts)).consume) q +
@@ -976,8 +976,8 @@ def StartWithin (A : Live) (σ : Strategy (V.game θ F c)) (M : CoinMap (V.game 
 tapes from the stop. -/
 noncomputable def couplesErr (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
-    (γ : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
-    (γL : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → ℝ≥0∞) : ℝ≥0∞ :=
+    (γ : Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
+    (γL : Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds) → ℝ≥0∞) : ℝ≥0∞ :=
   avg fun ω : (A.extend M.widening).L.Ω => Pos.resample γL (firstStop V θ F c A rd σ M ω) +
     Pos.resample (roundsErr D (A.J ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D)) γ A.N)
       (firstStop V θ F c A rd σ M ω).consume
@@ -990,14 +990,14 @@ start is within `ε₀` of the uniform tape. The stops' term carries, beside `γ
 `B` at each stop. -/
 theorem couples_of_close (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
-    {γ : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞}
-    {γL : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → ℝ≥0∞} {ε₀ : ℝ≥0∞} (BL : LinkHold A.mP) (B : RoundHold)
+    {γ : Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞}
+    {γL : Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds) → ℝ≥0∞} {ε₀ : ℝ≥0∞} (BL : LinkHold A.mP) (B : RoundHold)
     (hR : M.RoundClose γ) (hL : M.LinkClose γL) (hF : FirstStopFresh V θ F c A rd σ M)
     (hS : StartWithin V θ F c A σ M ε₀) :
     CouplesWithin V θ F c A rd σ D M BL B (ε₀ + couplesErr V θ F c A rd σ D M
       (fun q j s => γ q j s + prCoin (B q.g' j s)) (fun q => γL q + prCoin (BL q.g'))) := fun Q => by
   let R₀ := regOf V θ F c A rd σ D
-  let G : Finset (Fin A.n) → Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → ℝ≥0∞ := fun dr q =>
+  let G : Finset (Fin A.n) → Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds) → ℝ≥0∞ := fun dr q =>
     avg fun pts : Fin 2 → Fin A.mP → 𝔽 =>
       if BL q.g' pts then 0 else roundsOff D M (A.J dr R₀) B Q A.N (q.rewrite (M.link q pts)).consume
   have hG : jointOff V θ F c A rd σ D M BL B Q =
@@ -1254,9 +1254,9 @@ theorem couplingTarget_withProject_of_close (rd : Readings) (K : Constructions V
     (Q : (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
     (BL : (c : ByteArray) → Strategy (V.game θ F c) → LinkHold A.mP)
     (B : (c : ByteArray) → Strategy (V.game θ F c) → RoundHold)
-    (γ : (c : ByteArray) → (σ : Strategy (V.game θ F c)) → Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) →
+    (γ : (c : ByteArray) → (σ : Strategy (V.game θ F c)) → Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds) →
       (j : ℕ) → SubmitJ j → ℝ≥0∞)
-    (γL : (c : ByteArray) → (σ : Strategy (V.game θ F c)) → Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → ℝ≥0∞)
+    (γL : (c : ByteArray) → (σ : Strategy (V.game θ F c)) → Pos (V.game θ F c) σ Hash.Msg (Fin A.rounds) → ℝ≥0∞)
     (ε₀ : (c : ByteArray) → Strategy (V.game θ F c) → ℝ≥0∞)
     (ha : LoggedBound V k (K.withProject V rd D M) P θ F) (hq : DigestBound V k (K.withProject V rd D M) A θ F Q)
     (hR : ∀ c σ, (M A θ F c σ).RoundClose (γ c σ)) (hL : ∀ c σ, (M A θ F c σ).LinkClose (γL c σ))

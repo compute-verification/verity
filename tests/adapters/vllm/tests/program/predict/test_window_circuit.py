@@ -29,6 +29,7 @@ from verity.commitments.periods import interface as IF
 from verity.commitments.periods import wiring as WI
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 
 from tests.check.test_weights_of_record import _bf16, write_safetensors
@@ -641,7 +642,7 @@ def test_the_committers_registered_roots_hold_every_weight_read_but_the_rotary_t
                             (emb, WB.weight_param(emb, 64), G.SCHEMA_V2), (emb, WB.table_param(emb, 64), G.SCHEMA_SEG)):
         rows = ck.array(name).view(np.uint16).reshape(-1, 64).tolist()
         salts = SF.read(SF.beside(rpath), p)
-        want = G.Registered.commit(registration["program"], p, rows, [salts[192 * j:192 * (j + 1)] for j in range(len(rows))],
+        want = RV.Registered.commit(registration["program"], p, rows, [salts[192 * j:192 * (j + 1)] for j in range(len(rows))],
                                    schema=schema)
         assert want.entry() == registration["values"][p]
     other = _pins(tmp_path / "other")

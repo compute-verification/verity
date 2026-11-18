@@ -106,7 +106,7 @@ theorem sample_wf {w : Raw} {draw : Option Json}
   exact wf_norm d₀
 
 /-- A statement of the plain verifier decodes to inputs that `Raw.ins` read. -/
-theorem insOf_false {x : Claims.Msg} {s : Ins} (h : insOf false x = some s) :
+theorem insOf_false {x : Hash.Msg} {s : Ins} (h : insOf false x = some s) :
     ∃ w : Raw, w.zk = false ∧ w.ins = .ok s := by
   unfold insOf at h
   obtain ⟨w, -, h⟩ := Option.bind_eq_some_iff.1 h
@@ -550,11 +550,11 @@ theorem samplingDesign_of_samplingDesignWhy {zk : Bool} {tags : Tags} {D : Draw.
 
 /-! ## The statement at a good case -/
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **What the record needs of the statement**, at every good case: no keyed coin tree, a non-empty `Σ`, a printable
 sample that decodes to the statement's instances, and the statement's sample the one it was set up at. -/
-def StmtOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def StmtOk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : Case H rel, c.spec.coinTree = none ∧ 0 < c.spec.sigma.size ∧ SampleOk c.spec ∧ c.spec.unitSample = c.s.read.draw
 
 /-- **The case's one table**: its statement is `setupOne`'s, at the statement's tags, coins and sample. -/

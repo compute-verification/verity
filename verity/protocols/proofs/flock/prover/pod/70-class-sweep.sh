@@ -45,7 +45,8 @@ REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/fcs}/out}; W=${FLOCK_WORK:-/works
 [ "${BUILD_ONLY:-0}" = 1 ] || [ -n "${PROGRAM:-}" ] || [ -n "${RESOLVER:-}" ] \
   || { echo "REFUSED: GRAPH and DEFS name Definitions by id: RESOLVER=MODULE:FUNC binds them (FUNC(id), the registered Definition)"; exit 2; }
 G=${GPU:-1}
-SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
+SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}
+[ "$G" = 0 ] || [ -n "$SM" ] || [ -n "${BINARY:-}" ] || { echo "REFUSED: a GPU build needs SM, the compute capability of the target (90 for sm_90), and nvidia-smi read none here"; exit 2; }
 if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a Python with numpy (a local dry run)
   # the proving build never has seed injection; the selftest's harness gets its own build with it. Both are kept per pod, keyed
   # by the build scripts, patches and the prover's sources, so later runs of the same builds skip the compile and another

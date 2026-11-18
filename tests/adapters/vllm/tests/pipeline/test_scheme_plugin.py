@@ -473,7 +473,7 @@ def test_a_lost_releases_request_in_the_server_is_given_its_disconnect_and_answe
             assert sent[1]["body"] == NA.LOST.format(n=0, run="ab").encode()
         else:
             assert sent == [head, NULL if head is SIZED else {"type": "http.response.body", "body": b""}]
-        feed = SP.FeedReader(NA.feed_file(str(tmp_path)))()
+        feed = SP.FeedReader(NA.FrontFeed(str(tmp_path)).path)()
         assert feed[:2] == [{"key": "c0", "run": "ab", "n": 0, "bucket": None}, {"run": "ab", "t": 0, "n": 2, "lost": [0]}]
         # The watermark's end is its route's executor thread's, and the lost request's pass the loop's: they race.
         assert sorted(feed[2:], key=json.dumps) == sorted(

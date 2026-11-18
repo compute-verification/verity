@@ -36,6 +36,7 @@ misses an expectation.
 import argparse, hashlib, json, os, shutil, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from verity.commitments.domains import FLOCK_NETLIST
 
 
 def reads(a, s):
@@ -148,7 +149,7 @@ def modes(a):
 
 
 def upstream_cmd(a, public, extra=()):
-    flag = "--netlist" if a.statement == "verity/flock-netlist/v1" else "--circuit"
+    flag = "--netlist" if a.statement == FLOCK_NETLIST else "--circuit"
     tables = ["--tables", a.tables] if a.tables else []
     return [a.upstream, "replay", *extra, *modes(a), "--instances", public, flag, a.circuit, *tables, "--sessions"]
 

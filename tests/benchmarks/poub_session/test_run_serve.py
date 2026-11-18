@@ -20,7 +20,8 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity_bench.kit import free_port
+from verity.ports import free_port
+from verity_bench.kit import MACHINE_PROPERTIES
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -195,17 +196,35 @@ def gone(pid: int) -> bool:
     return not Path(f"/proc/{pid}").exists()
 
 
-class Node:
-    """A node of stubs under ``tmp``: its workspace (``ws``, the vLLM venv at ``venv``), its CUDA toolkits (``cuda``),
-    its programs (``bin``, on the PATH) and what the stubs wrote (``stub``); `run` runs `run.sh` on it."""
+def machine_record(path: Path, toolkits: list[dict[str, str]]) -> None:
+    """The run's copy of a machine record whose `[properties]` list `toolkits` (``{ directory, version }``, the first
+    the default) and leave every other property unread."""
+    def kit(t: dict[str, str], more: str = "") -> str:
+        return f'{{ directory = "{t["directory"]}", version = "{t["version"]}"{more} }}'
 
-    def __init__(self, tmp: Path, venv: str = "venv312", toolkits: tuple[str, ...] = ("cuda-12.9", "cuda-13.0", "cuda")):
+    others = ", ".join(map(kit, toolkits[1:]))
+    first = kit(toolkits[0], f', loader = "lib64", others = [{others}]') if toolkits else '"none"'
+    values = {k: '"unread"' for k in MACHINE_PROPERTIES} | {"toolkit": first}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("[properties]\n" + "".join(f'{k} = {{ value = {v}, read = "stub" }}\n' for k, v in values.items()))
+
+
+class Node:
+    """A node of stubs under ``tmp``: its workspace (``ws``, the vLLM venv at ``venv``), its CUDA toolkits (``cuda``,
+    each at the version its machine record lists it), its programs (``bin``, on the PATH) and what the stubs wrote
+    (``stub``); `run` runs `run.sh` on it."""
+
+    def __init__(self, tmp: Path, venv: str = "venv312",
+                 toolkits: dict[str, str] | None = None):
         self.tmp, self.ws, self.stub, self.bin = tmp, tmp / "ws", tmp / "stub", tmp / "bin"
         self.out = tmp / "run" / "out"
-        for d in (self.stub, tmp / "scratch", tmp / "home", *(tmp / "cuda" / t for t in toolkits)):
+        toolkits = {"12.9": "cuda-12.9", "13.0": "cuda-13.0"} if toolkits is None else toolkits
+        for d in (self.stub, tmp / "scratch", tmp / "home", *(tmp / "cuda" / t for t in toolkits.values())):
             d.mkdir(parents=True)
-        for t in toolkits:
+        for t in toolkits.values():
             program(tmp / "cuda" / t / "bin" / "nvcc", NVCC)
+        machine_record(tmp / "run" / "inputs" / "node.toml",
+                       [{"directory": str(tmp / "cuda" / t), "version": v} for v, t in toolkits.items()])
         (self.stub / "verifier.py").write_text(VERIFIER)
         (self.stub / "prover.py").write_text(PROVER)
         self.venv(venv)
@@ -223,7 +242,7 @@ class Node:
 
     def run(self, **env: str | None) -> subprocess.CompletedProcess:
         base = {"PATH": f"{self.bin}:{MACHINE_PATH}", "HOME": str(self.tmp / "home"), "TMPDIR": str(self.tmp / "scratch"),
-                "RESEARCH_RUN_DIR": str(self.tmp / "run"), "NODE_WORKSPACE": str(self.ws), "CUDA_ROOT": str(self.tmp / "cuda"),
+                "RESEARCH_RUN_DIR": str(self.tmp / "run"), "NODE_WORKSPACE": str(self.ws), "RESEARCH_MACHINE": "node",
                 "STUB_DIR": str(self.stub), "REAL_PY": sys.executable, "STUB_TORCH_CUDA": "12.9",
                 "GPU_LEASE": str(self.lease), "LEAN_EXE": str(self.lean), "TUNNEL_WAIT_S": "0",
                 "NODE_KIND": "rtx-pro-6000-server-x8"}
@@ -422,7 +441,7 @@ def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     # kv.cu's build, the Build with no GPU visible and the verifier all before the lease; the Commit alone under it
     assert calls == [nvcc, "row build", "verifier", lease, "row commit"]
     kept = sorted(str(f.relative_to(node.out / "row")) for f in (node.out / "row").rglob("*") if f.is_file())
-    assert kept == [f"commit/{n}" for n in ("remote_session.json", "steps.jsonl", "verdict.json")], kept
+    assert kept == [f"commit/{n}" for n in ("remote_session.json", "verdict.json")], kept
     assert not (node.out / "row" / "commit" / "runs.jsonl").exists()
     assert build["env"]["CUDA_VISIBLE_DEVICES"] == "" and commit["env"]["CUDA_VISIBLE_DEVICES"] is None
     sweep = build["argv"][build["argv"].index("--sweep-dir") + 1]
@@ -448,6 +467,44 @@ def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     # the windows fit the row's 32 steps, and the row's records are kept
     assert "--windows 3 --window-ms 2000 " in " ".join(node.verifier()["argv"])
     assert json.loads((node.out / "row/commit/remote_session.json").read_text())["accepted"] is True
+
+
+#: files a row's Commit directory holds that are private (the vLLM integration's list, the unsalted token digest of
+#: runs.jsonl, the memory map's payload digests, the Build's inputs), each holding the served tokens
+ROW_PRIVATE = ("tokens.json", "commit/tokens_p0.json", "match_stoch.json", "commit/sampled_replay_p0.json",
+               "requests.jsonl", "step_trace.jsonl", "advice_trace.jsonl", "load_0.jsonl", "topology.json",
+               "timeline.jsonl", "timeline_report.json", "replay_bundle_p0/values.json", "replay_slim_p0/keep.json",
+               "commit/runs.jsonl", "commit/memory_map.jsonl", "build_request/inputs.json", "commit/summary.json")
+SERVED_TOKENS = "[90211, 4417, 118003, 2290]"
+
+
+def test_a_row_keeps_its_public_records_and_none_of_its_private_files(node):
+    sweep = node.tmp / "sweep"
+    for rel in ROW_PRIVATE:
+        (sweep / ROW / rel).parent.mkdir(parents=True, exist_ok=True)
+        (sweep / ROW / rel).write_text(f'{{"tokens": {SERVED_TOKENS}}}\n')
+    for rel in ("stages.txt", "build_summary.json", "config_record.json", "commit/verdict.json"):
+        (sweep / ROW / rel).write_text('{"verdict": "PASS"}\n')
+    p = node.both("row", SWEEP_DIR=str(sweep))
+    assert p.returncode == 0, said(p)
+    kept = sorted(f.relative_to(node.out / "row").as_posix() for f in (node.out / "row").rglob("*") if f.is_file())
+    assert kept == sorted(["stages.txt", "build_summary.json", "config_record.json", "commit/verdict.json",
+                           "commit/remote_session.json"])
+    assert "keep.py: kept 5 of the row's public records" in p.stdout
+    held = [f for f in (node.tmp / "run").rglob("*") if f.is_file() and SERVED_TOKENS in f.read_text(errors="replace")]
+    assert held == []
+
+
+@pytest.mark.parametrize("change, why", [
+    ({"SWEEP_DIR": "{run}/out/sweep"}, "refused: SWEEP_DIR={run}/out/sweep is inside the run's directory"),
+    ({"VERIFIER_ARGS": "--challenger serve --challenger-key {run}/keys"},
+     "refused: --challenger-key {run}/keys is inside the run's directory"),
+    ({"VERIFIER_ARGS": "--challenger-key={run}/keys"}, "refused: --challenger-key {run}/keys is inside the run's directory"),
+])
+def test_a_private_store_inside_the_runs_directory_is_refused(node, change, why):
+    run = str(node.tmp / "run")
+    refused(node, node.both("row", **{k: v.format(run=run) for k, v in change.items()}), why.format(run=run))
+    assert not (node.tmp / "run" / "out" / "sweep").exists()
 
 
 # ---------------------------------------------------------------------------------------------- run.sh: the exit codes
@@ -621,18 +678,16 @@ def test_the_vllm_venv_is_the_first_there(tmp_path):
 
 
 @pytest.mark.parametrize("toolkits, torch, home", [
-    (("cuda-12.9", "cuda-13.0", "cuda"), "12.9", "cuda-12.9"),     # the toolkit of the CUDA the prover's torch is built for
-    (("cuda-12", "cuda-13.0", "cuda"), "12.9", "cuda-12"),         # else one of its major version
-    (("cuda-12.9", "cuda"), None, "cuda"),                         # a venv with no torch to ask
-    (("cuda-12.9",), "13.0", None),
-    (("cuda-13.0", "cuda-13"), "12.9", 13),                        # only another major version's: torch's JIT won't see
+    ({"12.9": "cuda-12.9", "13.0": "cuda-13.0"}, "12.9", "cuda-12.9"),  # the machine's toolkit at the CUDA torch is built for
+    ({"12.9": "cuda-12.9", "13.0": "cuda-13.0"}, None, "cuda-13.0"),    # a venv with no torch to ask: 13.0
+    ({"12.9": "cuda-12.9"}, "13.0", None),                              # the machine lists none at that version
+    ({"12.9": "cuda-13.0"}, "12.9", 13),         # a record whose 12.9 is another major version's: torch's JIT won't see
 ])
-def test_cuda_home_is_a_toolkit_the_node_has(tmp_path, toolkits, torch, home):
+def test_cuda_home_is_the_machines_toolkit_at_torchs_version(tmp_path, toolkits, torch, home):
     node = Node(tmp_path, toolkits=toolkits)
     p = node.both("row", STUB_TORCH_CUDA=torch)
     if home is None:
-        return refused(node, p, f"refused: no CUDA toolkit: CUDA_HOME is not set, and none of {tmp_path}/cuda/cuda-13 "
-                                f"{tmp_path}/cuda/cuda-13.0 {tmp_path}/cuda/cuda is a directory")
+        return refused(node, p, "refused: no CUDA toolkit 13.0: CUDA_HOME is not set, and the machine's record lists none")
     if home == 13:
         return refused(node, p, f"refused: the vLLM venv's torch is built for CUDA 12, and {tmp_path}/cuda/cuda-13.0's "
                                 "nvcc is CUDA 13: install a CUDA 12 toolkit and state CUDA_HOME")
