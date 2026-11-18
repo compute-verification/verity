@@ -1,7 +1,7 @@
 """PoUW's kernel schemes, each stated once: every `protocol.PoUWScheme` a name stands for, and every circuit scheme.
 
-A kernel scheme's ``name`` is the string a proof's identifier carries (`identifier`, where ``identified``) and a record
-stores. Its ``family`` and ``parameters`` say what builds it (`verity.protocols.resource_accounting.compute.pouw.prover
+A kernel scheme's ``name`` is the string a record stores, and ``identified`` lists it in `IDENTIFIED` (serving's
+``NCP_SCHEMES``, the vLLM integration's PoUW schemes). Its ``family`` and ``parameters`` say what builds it (`verity.protocols.resource_accounting.compute.pouw.prover
 .schemes.get`, which has a builder for each family but ``ncp-v2``, whose Programs are `prover.circuit.traced_as`'s).
 
 One that a resource scheme (`verity.protocols.resource_accounting.scheme`) runs names the architecture its build is
@@ -62,7 +62,7 @@ KERNEL_SCHEMES: tuple[KernelScheme, ...] = (
 BY_NAME: Mapping[str, KernelScheme] = MappingProxyType({k.name: k for k in KERNEL_SCHEMES})
 if len(BY_NAME) != len(KERNEL_SCHEMES):
     raise ValueError("a kernel scheme is named twice")
-#: the names a proof's identifier v1 takes, in the table's order
+#: the identified names, in the table's order
 IDENTIFIED: tuple[str, ...] = tuple(k.name for k in KERNEL_SCHEMES if k.identified)
 
 

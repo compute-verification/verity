@@ -28,7 +28,6 @@ from verity.commitments.crypto import lms
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import seeds as SD
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import ncp
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-from verity.protocols.resource_accounting.compute.pouw.verifier import identifier as I
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, Workload, commit_rows, fresh_salts, weight_binding, weights_root
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import coin_reason
@@ -251,8 +250,8 @@ def setup():
 
 def test_a_certified_epoch_applies_its_pouw_windows_salt():
     """`Epoch.certified` of PoUW execution phase 1's attester windows (2 and 3, k = 2) under a stream and a prover has salt
-    `pouw_salt(reveal, 1, stream, prover)`, 64 bytes: the seeds take it and Epoch.start's 32 bytes they refuse, the
-    identifier names it whole, and the challenger's sampling coin opens against its coins. Misaligned execution phases, a reveal,
+    `pouw_salt(reveal, 1, stream, prover)`, 64 bytes: the seeds take it and Epoch.start's 32 bytes they refuse, and
+    the challenger's sampling coin opens against its coins. Misaligned execution phases, a reveal,
     stream or prover of another width and weights that aren't the workload's are refused."""
     work, roots = setup()
     c, sampled = attester(2)
@@ -269,7 +268,6 @@ def test_a_certified_epoch_applies_its_pouw_windows_salt():
     for f in (SD.seed, SD.receipt_seed):
         with pytest.raises(ValueError, match="64-byte"):
             f(started.salt, 0, root, root)
-    assert I.identifier_v1("ncp-v1", epoch)["salt"] == epoch.salt.hex()
 
     assert coin_reason(epoch.coins, ch.open("draw", root), "draw", root) is None
 
