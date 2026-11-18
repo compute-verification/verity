@@ -162,3 +162,12 @@ def test_every_declaration_is_on_the_one_list() -> None:
                  for p in (root / d).rglob("scheme.py") if "register(" in p.read_text()}
     declaring.discard("verity.protocols.resource_accounting.scheme")
     assert declaring == set(schemes.DECLARATIONS), "add each declaration module to compose.schemes.DECLARATIONS"
+
+
+def test_a_scheme_attaches_nothing_by_default_and_registers_its_processes(monkeypatch) -> None:
+    monkeypatch.setattr(S, "PROCESSES", {})
+    assert _toy().requests(None) == () and _toy().attach(None, None) is None
+    start = lambda **readers: readers  # noqa: E731
+    monkeypatch.setattr(S, "SCHEMES", {})
+    S.register(_toy(processes={"toy-beside": start}))
+    assert S.PROCESSES == {"toy-beside": start}

@@ -23,8 +23,8 @@ in the payload and holds only public structure, hiding commitments and paths bes
   registers the seeded weights: ``registered.domain(program, value, words, leaves, word_bits)``, rows in
   ``hm96-sha512/row/v2``): ``{program, values: [{value, root, leaves, words, word_bits, domain, row_schema}]}``.
 * ``commitment``: the serving steps' commitment (kernels' commit call, `commit_slots`: step tree over
-  slot trees over unit trees over rows, only each unit's outputs committed, one row ``hm96-sha512/row/v2`` under the step's
-  salt key, Flock's ``hm96_salt`` with the slot as nonce). ``{format, reference, context, layout, layout_digest, slots,
+  slot trees over unit trees over rows, only each unit's outputs committed, one row ``hm96-sha512/row/v2`` under its own
+  fresh 192-byte salt, which the prover keeps with the step's record). ``{format, reference, context, layout, layout_digest, slots,
   blocks: [{block, root, domain, steps: [{step, root, domain}]}]}``: the run's 64-byte context, the step layout (groups of
   units of rows of byte ranges, `layout_json`), and per server-time block every step's root (what went to the challenger
   before the step's live coin) under this bundle's block tree over them (`block_domain`).
@@ -176,10 +176,13 @@ Locate = Callable[[Mapping[str, Any], str, str],
 
 @dataclass(frozen=True)
 class StepRecord:
-    """What the prover keeps of one step's commitment: its salt key and its slots' rows, in layout order. ``rows``: every
-    slot's (a sequence), or only the slots a bundle opens (``{slot: rows}``) with every slot's root in ``slot_roots``."""
+    """What the prover keeps of one step's commitment: its slots' rows' salts and its slots' rows, in layout order.
+    ``salts``: each slot's rows' fresh salts, 192 bytes a row in row order (bytes, or a (rows, 192) uint8 array: a slot of
+    the buffer the step was committed under, `slots.fresh_salts`); nothing makes them again, so the prover keeps the bytes.
+    ``rows``: every slot's (a sequence), or only the slots a bundle opens (``{slot: rows}``) with every slot's root in
+    ``slot_roots``; ``salts`` likewise."""
 
-    salt_key: bytes
+    salts: Sequence[Any] | Mapping[int, Any]
     rows: Sequence[Sequence[bytes]] | Mapping[int, Sequence[bytes]]
     slot_roots: tuple[bytes, ...] = ()
 
@@ -394,6 +397,21 @@ class _Steps:
             raise ValueError(f"block {b} step {s}: {len(rows)} slots' rows for {self.com.slots} slots")
         return rows[j]
 
+    def salts(self, b: int, s: int, j: int) -> bytes:
+        """Slot ``j``'s rows' salts, 192 bytes a row in row order."""
+        salts = self.record(b, s).salts
+        if isinstance(salts, Mapping):
+            if j not in salts:
+                raise ValueError(f"block {b} step {s}: no salts kept of slot {j}")
+        elif len(salts) != self.com.slots:
+            raise ValueError(f"block {b} step {s}: {len(salts)} slots' salts for {self.com.slots} slots")
+        y = salts[j]
+        y = bytes(y) if isinstance(y, (bytes, bytearray, memoryview)) else np.ascontiguousarray(y, dtype=np.uint8).tobytes()
+        if len(y) != SALT * self.com.layout.row_count:
+            raise ValueError(f"block {b} step {s} slot {j}: {len(y)} bytes of salts, not {SALT} a row of the layout's "
+                             f"{self.com.layout.row_count}")
+        return y
+
     def slot(self, b: int, s: int, j: int, units: Iterable[int] = ()) -> _Slot:
         """Slot ``j``'s subtree (`commit_slot`'s), keeping only ``units``' trees: at the H200's six million units a slot,
         every unit's tree is gigabytes."""
@@ -401,7 +419,7 @@ class _Steps:
         rows, keep = self.rows(b, s, j), set(units)
         if len(rows) != com.layout.row_count:
             raise ValueError(f"block {b} step {s} slot {j}: {len(rows)} rows for the layout's {com.layout.row_count}")
-        strings = S._strings(rows, S.row_salts(rec.salt_key, j, 0, len(rows)))
+        strings = S._strings(rows, self.salts(b, s, j))
         roots, trees = [], {}
         for u, (base, rows_u) in enumerate(zip(com.layout.row_base, com.layout.units, strict=True)):
             t = S._unit_tree(S.unit_domain(com.context, com.layout, u), strings[base:base + len(rows_u)])
@@ -410,7 +428,7 @@ class _Steps:
                 trees[u] = t
         sc = _Slot(strings, trees, RootTree(S.slot_domain(com.context, com.layout), roots))
         if rec.slot_roots and sc.root != rec.slot_roots[j]:
-            raise ValueError(f"block {b} step {s} slot {j}: its rows are not its committed slot root")
+            raise ValueError(f"block {b} step {s} slot {j}: its rows and salts are not its committed slot root")
         return sc
 
     def roots(self, b: int, s: int) -> tuple[bytes, ...]:
@@ -560,7 +578,7 @@ def _task(steps: _Steps, want: Wants, key: tuple[int, int, int]) -> tuple[Any, .
     """What a worker needs to rebuild one (step, slot): that slot's rows alone, under its step's slot roots."""
     b, s, slot = key
     com = steps.com
-    rec = StepRecord(steps.record(b, s).salt_key, {slot: steps.rows(b, s, slot)}, steps.roots(b, s))
+    rec = StepRecord({slot: steps.salts(b, s, slot)}, {slot: steps.rows(b, s, slot)}, steps.roots(b, s))
     return com.context, com.layout, com.slots, key, rec, [(lu, rank, bc, None, why) for lu, rank, bc, _o, why in want[key]]
 
 
@@ -637,7 +655,7 @@ def _read_entries(who: str, c: Mapping[str, Any], kind: str, row: bytes, pieces:
         if row[2 * q.at:2 * (q.at + nw)] != crow[q.start:q.start + n]:
             raise ValueError(f"{who}: words {q.at}.. are not step {q.step}'s row {q.rank} of unit {q.unit}")
         covered[q.at:q.at + nw] = True
-        csalt = S.row_salts(steps.record(c["block"], q.step).salt_key, q.slot, g, 1)
+        csalt = steps.salts(c["block"], q.step, q.slot)[SALT * g:SALT * (g + 1)]
         cs = string_of(S.ROW_SCHEMA, crow, csalt)
         out.append({"kind": "step", "at": q.at, "words": nw, "start": q.start,
                     "row": [len(payload), len(crow)], "salt": [len(payload) + len(crow), SALT], "string": cs.hex(),
