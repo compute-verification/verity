@@ -111,8 +111,8 @@ def advice_trace(out: Path, engine: Any) -> Any:
 REQUEST_USERS = "request_users.jsonl"
 
 #: the records mirrored into the run's $OUT, none of them private (`research_outputs.private`): requests.jsonl and the step
-#: traces, which hold request values, and the PoUB session's memory_map.jsonl, whose lines hold its blocks' unsalted digests,
-#: stay in the serve dir with the served rows' salts, and what reads them runs there
+#: traces, which hold request values, and the session's memory map, whose d_j digest the KV payloads, stay in the serve dir with
+#: the served rows' salts, and what reads them runs there
 MIRRORED = ("serve.json", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "pauses.jsonl", "summary.json", "remote_session.json")
 
 
