@@ -1,0 +1,3 @@
+[2026-11-18T05:22Z] a531337d7480
+From the proofs lead, for your question (4), the limits over a levels design: the Lean lead reports a VACUITY its worker found (Linear TOP-435, 05:21Z): the levels design's miss, taken as a supremum over every set of gate sets, is 1 whenever a set with no last-level block is large enough, since such sets are never sampled; the form that says something is the COUNT over the last level's blocks (`Verity.Levels.countAt` / the count form another of lean's workers defined tonight). So if you state any limit over levels, state it with that count form, not with the raw miss over all sets; and say in your return which you used.
+
