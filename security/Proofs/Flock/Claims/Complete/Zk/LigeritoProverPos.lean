@@ -60,14 +60,14 @@ open Flock Transcript Replay Replay.Lg
 variable {α β : Type}
 
 /-- The coin pair a reply carries, as `sampleKP` samples it. -/
-def coinKOf (m : Claims.Msg) : F256 := ⟨coinOf m 0, coinOf m 1⟩
+def coinKOf (m : Hash.Msg) : F256 := ⟨coinOf m 0, coinOf m 1⟩
 
 /-- A prover step that sends nothing. -/
 def LSilent (x : LP PS α) : Prop :=
   ∀ st t l a st' t' l', ((x.run st).run t).go l = (.ok ((a, st'), t'), l') → l' = l
 
 theorem lsilent_bind {x : LP PS α} {f : α → LP PS β} (hx : LSilent x) {st : LigState} {t : Transcript}
-    {l l'' : Array Claims.Msg} {r : (β × LigState) × Transcript} (h : (((x >>= f).run st).run t).go l = (.ok r, l'')) :
+    {l l'' : Array Hash.Msg} {r : (β × LigState) × Transcript} (h : (((x >>= f).run st).run t).go l = (.ok r, l'')) :
     ∃ a st₁ t₁, (((f a).run st₁).run t₁).go l = (.ok r, l'') := by
   obtain ⟨a, st₁, t₁, l₁, h₁, h₂⟩ := lp_bind_ok h
   obtain rfl := hx st t l a st₁ t₁ l₁ h₁
@@ -101,13 +101,13 @@ theorem lsilent_powB (nonce : ℕ → ℕ → UInt64) : LSilent (powP nonce 2 : 
   exact (ok_inj (show (Except.ok (((), { st with cbn := st.cbn.push 0 }),
     ap (pN 0) t), l) = _ from h)).2.2.2.symm
 
-theorem lpure_go_ok {b b' : β} {st st' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg}
+theorem lpure_go_ok {b b' : β} {st st' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg}
     (h : (((Pure.pure b : LP PS β).run st).run t).go l = (.ok ((b', st'), t'), l')) : b = b' ∧ l = l' :=
   have e := ok_inj (show (Except.ok ((b, st), t), l) = _ from h)
   ⟨e.1, e.2.2.2⟩
 
-theorem lsampleKP_bind (resp : ℕ → Claims.Msg) {f : F256 → LP PS β} {st : LigState} {t : Transcript}
-    {l l'' : Array Claims.Msg} {r : (β × LigState) × Transcript}
+theorem lsampleKP_bind (resp : ℕ → Hash.Msg) {f : F256 → LP PS β} {st : LigState} {t : Transcript}
+    {l l'' : Array Hash.Msg} {r : (β × LigState) × Transcript}
     (h : (((liftT (sampleKP (asksS resp)) >>= f).run st).run t).go l = (.ok r, l'')) :
     ∃ t₁ l₁, l₁.size = l.size + 1 ∧ (((f (coinKOf (resp l.size))).run st).run t₁).go l₁ = (.ok r, l'') := by
   obtain ⟨a, st₁, t₁, l₁, h₁, h₂⟩ := lp_bind_ok h
@@ -115,8 +115,8 @@ theorem lsampleKP_bind (resp : ℕ → Claims.Msg) {f : F256 → LP PS β} {st :
   obtain ⟨rfl, rfl, rfl, rfl⟩ := ok_inj h₁
   exact ⟨_, _, by simp, h₂⟩
 
-theorem lsampleP_bind (resp : ℕ → Claims.Msg) {f : F128 → LP PS β} {st : LigState} {t : Transcript}
-    {l l'' : Array Claims.Msg} {r : (β × LigState) × Transcript}
+theorem lsampleP_bind (resp : ℕ → Hash.Msg) {f : F128 → LP PS β} {st : LigState} {t : Transcript}
+    {l l'' : Array Hash.Msg} {r : (β × LigState) × Transcript}
     (h : (((liftT (sampleP (asksS resp)) >>= f).run st).run t).go l = (.ok r, l'')) :
     ∃ t₁ l₁, l₁.size = l.size + 1 ∧ (((f (coinOf (resp l.size) 0)).run st).run t₁).go l₁ = (.ok r, l'') := by
   obtain ⟨a, st₁, t₁, l₁, h₁, h₂⟩ := lp_bind_ok h
@@ -124,8 +124,8 @@ theorem lsampleP_bind (resp : ℕ → Claims.Msg) {f : F128 → LP PS β} {st : 
   obtain ⟨rfl, rfl, rfl, rfl⟩ := ok_inj h₁
   exact ⟨_, _, by simp, h₂⟩
 
-theorem lsampleVecP_bind (resp : ℕ → Claims.Msg) {n : ℕ} (hn : n ≠ 0) {f : Array F128 → LP PS β} {st : LigState}
-    {t : Transcript} {l l'' : Array Claims.Msg} {r : (β × LigState) × Transcript}
+theorem lsampleVecP_bind (resp : ℕ → Hash.Msg) {n : ℕ} (hn : n ≠ 0) {f : Array F128 → LP PS β} {st : LigState}
+    {t : Transcript} {l l'' : Array Hash.Msg} {r : (β × LigState) × Transcript}
     (h : (((liftT (sampleVecP (asksS resp) n) >>= f).run st).run t).go l = (.ok r, l'')) :
     ∃ t₁ l₁, l₁.size = l.size + 1 ∧
       (((f ((Array.range n).map (coinOf (resp l.size)))).run st).run t₁).go l₁ = (.ok r, l'') := by
@@ -136,15 +136,15 @@ theorem lsampleVecP_bind (resp : ℕ → Claims.Msg) {n : ℕ} (hn : n ≠ 0) {f
 
 /-- **A loop over `[0:n]`** whose every step, from a state and bodies with `I j`, yields a state and bodies with
 `I (j + 1)`, ends with `I n`. -/
-theorem lforIn_inv {σ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (I : ℕ → σ → Array Claims.Msg → Prop) (n : ℕ)
+theorem lforIn_inv {σ : Type} (body : ℕ → σ → LP PS (ForInStep σ)) (I : ℕ → σ → Array Hash.Msg → Prop) (n : ℕ)
     (hb : ∀ j < n, ∀ s st t l r st' t' l', I j s l → (((body j s).run st).run t).go l = (.ok ((r, st'), t'), l') →
       ∃ s', r = .yield s' ∧ I (j + 1) s' l')
-    {s : σ} {st : LigState} {t : Transcript} {l : Array Claims.Msg} {s' : σ} {st' : LigState} {t' : Transcript}
-    {l' : Array Claims.Msg} (h₀ : I 0 s l) (h : (((forIn [:n] s body).run st).run t).go l = (.ok ((s', st'), t'), l')) :
+    {s : σ} {st : LigState} {t : Transcript} {l : Array Hash.Msg} {s' : σ} {st' : LigState} {t' : Transcript}
+    {l' : Array Hash.Msg} (h₀ : I 0 s l) (h : (((forIn [:n] s body).run st).run t).go l = (.ok ((s', st'), t'), l')) :
     I n s' l' := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h
   simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one] at h
-  suffices key : ∀ k a (s : σ) st t (l : Array Claims.Msg), a + k = n → I a s l →
+  suffices key : ∀ k a (s : σ) st t (l : Array Hash.Msg), a + k = n → I a s l →
       (((forIn (List.range' a k) s body).run st).run t).go l = (.ok ((s', st'), t'), l') → I n s' l' from
     key n 0 s st t l (by omega) h₀ h
   intro k
@@ -177,10 +177,10 @@ theorem push_get!_of {γ : Type} [Inhabited γ] {a : Array γ} {x : γ} {f : ℕ
 /-- **What a masked Ligerito prover that returns records, by send position**: run in the pure session from the bodies
 `l`, its record's target is `T`, its out-of-domain coin is the reply to send `|l| + 1`, its lane coins are the replies
 to sends `|l| + 2` to `|l| + 1 + k_0`, and its pair's coins the replies to the next two. -/
-theorem ligeritoPZk_pos (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule) (T : F128)
+theorem ligeritoPZk_pos (resp : ℕ → Hash.Msg) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (hn : sch.n ≠ 0)
-    (hk0 : 1 ≤ sch.k0) {t t' : Transcript} {l l' : Array Claims.Msg} {P : LigeritoProof} {zl : Zk.Level0Msgs}
+    (hk0 : 1 ≤ sch.k0) {t t' : Transcript} {l l' : Array Hash.Msg} {P : LigeritoProof} {zl : Zk.Level0Msgs}
     {rc : Zk.L0Rec}
     (hrun : ((ligeritoPZk (asksS resp) hs ms sch T cm0 tb b lay hv rep tPad extra lanePad salt nonce).run t).go l =
       (.ok ((P, zl, rc), t'), l')) :
@@ -207,7 +207,7 @@ theorem ligeritoPZk_pos (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms : Merkl
   obtain ⟨_, _, _, h1⟩ := lsilent_bind lsilent_get h1
   obtain ⟨_, _, _, h1⟩ := lsilent_bind (lsilent_sendMsg _) h1
   obtain ⟨s, stC, tC, lC, hL, h1⟩ := lp_bind_ok h1
-  have hI := lforIn_inv _ (fun j (s : Array F256 × (F256 × F256) × Zk.Level0Msgs) (l' : Array Claims.Msg) =>
+  have hI := lforIn_inv _ (fun j (s : Array F256 × (F256 × F256) × Zk.Level0Msgs) (l' : Array Hash.Msg) =>
       s.1.size = j ∧ (∀ i < j, s.1[i]! = coinKOf (resp (l.size + 2 + i))) ∧
       l'.size = l.size + 2 + j + (if j = sch.k0 then 2 else 0) ∧
       (j = sch.k0 → s.2.1 = (coinKOf (resp (l.size + 2 + sch.k0)), coinKOf (resp (l.size + 3 + sch.k0))))) sch.k0

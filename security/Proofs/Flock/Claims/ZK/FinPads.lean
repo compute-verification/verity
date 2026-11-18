@@ -64,12 +64,12 @@ namespace FlockComplete
 open Flock
 
 /-- **What every returning run of `m` satisfies**: `P` at its value, its last transcript and its last history. -/
-def RunPost {α : Type} (m : TMW PS α) (P : α → Transcript → Array Claims.Msg → Prop) : Prop :=
+def RunPost {α : Type} (m : TMW PS α) (P : α → Transcript → Array Hash.Msg → Prop) : Prop :=
   ∀ s l a t l', (m.run s).go l = (.ok (a, t), l') → P a t l'
 
 namespace RunPost
 
-variable {α β : Type} {P : β → Transcript → Array Claims.Msg → Prop}
+variable {α β : Type} {P : β → Transcript → Array Hash.Msg → Prop}
 
 theorem bind {x : TMW PS α} {f : α → TMW PS β} (h : ∀ a, RunPost (f a) P) : RunPost (x >>= f) P := by
   intro s l b t l' e
@@ -98,7 +98,7 @@ theorem throw {e : String} : RunPost (MonadExcept.throw e : TMW PS β) P := by
   intro s l a t l' h
   cases h
 
-theorem mono {x : TMW PS β} {Q : β → Transcript → Array Claims.Msg → Prop} (h : RunPost x Q)
+theorem mono {x : TMW PS β} {Q : β → Transcript → Array Hash.Msg → Prop} (h : RunPost x Q)
     (hQP : ∀ a t l, Q a t l → P a t l) : RunPost x P :=
   fun s l a t l' e => hQP _ _ _ (h s l a t l' e)
 
@@ -125,11 +125,11 @@ theorem sampleVecP_asksCut (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm
     simp
 
 /-- **The pads positions the inner proof queries** at its last history `l`: its last round's `Q` coins, each mod `n`. -/
-def padQs (coin : ℕ → ℕ → F128) (l : Array Claims.Msg) (n : ℕ) : Array ℕ :=
+def padQs (coin : ℕ → ℕ → F128) (l : Array Hash.Msg) (n : ℕ) : Array ℕ :=
   ((Array.range Zk.Q).map (coin (l.size - 1))).map fun w => w.lo.toNat % n
 
 /-- **An inner proof opens `ic` at the queried positions**: its columns and salts are `ic`'s at `padQs`. -/
-def PadsAt (coin : ℕ → ℕ → F128) (ic : InnerCommit) (ip : Zk.InnerProof) (l : Array Claims.Msg) : Prop :=
+def PadsAt (coin : ℕ → ℕ → F128) (ic : InnerCommit) (ip : Zk.InnerProof) (l : Array Hash.Msg) : Prop :=
   ip.opened = (padQs coin l ic.ch.size).map (fun j => (ic.ch[j]!, ic.cm[j]!)) ∧
     ip.salts = (padQs coin l ic.ch.size).map fun j => ic.salts[j]!
 

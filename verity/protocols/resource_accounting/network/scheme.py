@@ -94,6 +94,11 @@ def _scan_state_layout(shape: Mapping[str, int]) -> Layout:
     return Layout(IS.state_bits(cls), IS.layout(cls), {"K0": cls.K0, "K": cls.K})
 
 
+def _reading(row: Mapping[str, Any]) -> S.Reading:
+    q = row["quantity"]
+    return S.Reading(int(q["K"]), Fraction(str(q["eps"])), "quantity.eps", {"windows": int(q["windows"])})
+
+
 NETWORK_ATTESTER = register(Scheme(
     name="network-attester",
     messages=workload.MESSAGES,
@@ -134,7 +139,11 @@ NETWORK_ATTESTER = register(Scheme(
     record="communication",
     symbol="K",
     published=("bits", Fraction(1)),
-    record_owner="network-accounting",
+    check=S.Lacks("the network attester's verifier of record is its owner's to declare"),
+    reader=_reading,
+    premises=S.Lacks("the network attester's premises are its owner's to name"),
+    **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
+                    S.Lacks("not a kernel scheme")),
 ))
 
 __all__ = ["DEFINITIONS", "NETWORK_ATTESTER", "SETTINGS", "START_ID_RELAY", "attach", "output_bits", "requests",

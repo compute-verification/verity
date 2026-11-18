@@ -152,7 +152,7 @@ structure Live where
   hn : pub.n = n
   hnO : pubO.n = n
   /-- the statement's descriptor -/
-  desc : Claims.Msg
+  desc : Hash.Msg
   /-- the registration's query -/
   qr : Lean.Json
   /-- the registration's population is the public file's proof blocks, in order -/
@@ -552,7 +552,7 @@ noncomputable def extract (τ : FlockSoundness.Game.Strategy A.game) : A.fileRea
 gate `r` doesn't fix to a constant, a bit the deployed commitment opens at the gate's claims position under the
 session's roots (`Flock.Bridge.posOf`, `Cd`, `roots`) opens the gate to every value whose first bit it is. -/
 def OpensUnder (r : Verity.ExecutionPhaseFiles) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
-  ∀ (h : r.circuit.N = A.Cc.N) (g : Fin r.circuit.N) (b : Bool) (d : Claims.Msg), r.consts g = none →
+  ∀ (h : r.circuit.N = A.Cc.N) (g : Fin r.circuit.N) (b : Bool) (d : Hash.Msg), r.consts g = none →
     A.Cd.Opens Claims.Sampling.sha512Msg A.roots ⟨Flock.Bridge.posOf A.Cc (Fin.cast h g), b, d⟩ = true →
       ∀ v : BitVec (r.circuit.w g), v.getLsbD 0 = b → op g v
 

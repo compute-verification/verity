@@ -107,9 +107,9 @@ theorem schedLJ_of_schedKJ' {rootB' : Array ByteArray} (hB : rootB = rootB') (n 
 
 /-- A bytes prover whose next submission is `s` keeps `SchedKJ` for one more round when `s` is on the schedule's next
 stream and it keeps `SchedKJ` after each of the round's coins. -/
-theorem schedKJ_some {nMax : ℕ} (w : Wire nMax J mPts) (H : Claims.Msg → Claims.Msg) {Ω : Type}
-    (Q : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (n : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (ss : List ℕ)
-    (hist : List (Claims.Msg × Claims.Msg)) (a : Claims.Msg) (o : Option (SubmitJ J))
+theorem schedKJ_some {nMax : ℕ} (w : Wire nMax J mPts) (H : Hash.Msg → Hash.Msg) {Ω : Type}
+    (Q : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (n : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (ss : List ℕ)
+    (hist : List (Hash.Msg × Hash.Msg)) (a : Hash.Msg) (o : Option (SubmitJ J))
     (hle : ∀ s, o = some s → s.n ≤ nMax) (s : SubmitJ J) (ho : o = some s) (ss' : List ℕ)
     (h₁ : ss = (2 * s.tab.val + s.rep.val) :: ss')
     (h₂ : ∀ c, SchedKJ dg rootB pts n (addRoundJ rs s.tab s.rep (roundOf dg s.bytes s.n c)) ss'
@@ -136,12 +136,12 @@ variable [S : ZkSetup]
 
 section Zk
 
-variable {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size)
+variable {x : Hash.Msg} {spec : SessionSpec} {sts : Array Stmt} {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size)
   (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : zkTape x)
 
 include hJ h0 in
 /-- **The simulator's submission after `k + 1` messages**, `k < zkN x`, is on stream `zkStream (k + 1)`. -/
-theorem zkSim_sub (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : hist.length = k + 1)
+theorem zkSim_sub (hist : List (Hash.Msg × Hash.Msg)) (k : ℕ) (hl : hist.length = k + 1)
     (hk : k + 1 ≤ zkN x) :
     ∃ s : SubmitJ J, (zkW J spec hw x).sub (((zkSim P x spec sts).next x hist (ω, u)).eval sha512).1 = some s ∧
       2 * s.tab.val + s.rep.val = zkStream spec sts (k + 1) := by
@@ -163,7 +163,7 @@ include hJ h0 in
 `k + 1` on. -/
 theorem schedKJ_zk (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts → 𝔽)
     (hS : (zkStreams spec sts).length = zkN x) :
-    ∀ (n : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ),
+    ∀ (n : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (hist : List (Hash.Msg × Hash.Msg)) (k : ℕ),
       hist.length = k + 1 → k + n = zkN x →
       SchedKJ spec.dg rootB pts n rs ((zkStreams spec sts).drop k)
         (toStrat _ (roundsIf (zkW J spec hw x) spec.dg rootB pts n rs)
@@ -201,12 +201,12 @@ end Gen
 
 section Zk
 
-variable {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size)
+variable {x : Hash.Msg} {spec : SessionSpec} {sts : Array Stmt} {J : ℕ} (hJ : sts.size ≤ J) (h0 : 0 < sts.size)
   (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : zkTape x)
 
 include hJ h0 in
 /-- **The simulator's submission after `k + 1` messages**, `k < zkN x`, is on stream `zkStream (k + 1)`. -/
-theorem zkSim_sub (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ) (hl : hist.length = k + 1)
+theorem zkSim_sub (hist : List (Hash.Msg × Hash.Msg)) (k : ℕ) (hl : hist.length = k + 1)
     (hk : k + 1 ≤ zkN x) :
     ∃ s : SubmitJ J, (zkW J spec hw x).sub (((zkSim P x spec sts).next x hist (ω, u)).eval sha512).1 = some s ∧
       2 * s.tab.val + s.rep.val = zkStream spec sts (k + 1) :=
@@ -218,7 +218,7 @@ include hJ h0 in
 `k + 1` on. -/
 theorem schedKJ_zk (rootB : Array ByteArray) (pts : Fin 2 → Fin spec.mPts → 𝔽)
     (hS : (zkStreams spec sts).length = zkN x) :
-    ∀ (n : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (hist : List (Claims.Msg × Claims.Msg)) (k : ℕ),
+    ∀ (n : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (hist : List (Hash.Msg × Hash.Msg)) (k : ℕ),
       hist.length = k + 1 → k + n = zkN x →
       SchedKJ spec.dg rootB pts n rs ((zkStreams spec sts).drop k)
         (toStrat _ (roundsIf (zkW J spec hw x) spec.dg rootB pts n rs)
@@ -310,7 +310,7 @@ variable [S : ZkSetup]
 
 include hz in
 /-- **There are as many streams as deployed rounds.** -/
-theorem zkStreams_length {x : Claims.Msg} {ins : Ins} (hset : setupOf true x = some (ins, spec, sts)) :
+theorem zkStreams_length {x : Hash.Msg} {ins : Ins} (hset : setupOf true x = some (ins, spec, sts)) :
     (zkStreams spec sts).length = zkN x := by
   rw [zkStreams_eq hz, length_fromS, sum_nsFrom, zkN, zkK hset, rounds_sum, List.range_eq_range']
   omega
@@ -319,7 +319,7 @@ end Gen
 
 include hz in
 /-- **There are as many streams as deployed rounds.** -/
-theorem zkStreams_length {x : Claims.Msg} {ins : Ins} (hset : setupOf true x = some (ins, spec, sts)) :
+theorem zkStreams_length {x : Hash.Msg} {ins : Ins} (hset : setupOf true x = some (ins, spec, sts)) :
     (zkStreams spec sts).length = zkN x :=
   Gen.zkStreams_length (S := S₀) (x := x) (ins := ins) (hset := hset) (hz := hz)
 

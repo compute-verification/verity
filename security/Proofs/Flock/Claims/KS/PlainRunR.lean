@@ -40,7 +40,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-! ## The run the level reader reads -/
 
 /-- **The run `plainRawLevelColsRV rd` reads on a view is `runOfR`'s** (`colsRV_eq` at `runOfRV`). -/
-theorem runOfRV_eq {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+theorem runOfRV_eq {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
     {v : Claims.Seen} (hm : v.msgs.map Prod.fst = ms)
     (hcs : (v.msgs.map Prod.snd).map outCoin = cs.dropLast ++ [default]) (hk : cs.length = (FlockDeploy.V false).k x)
     (hacc : ((nextR rd x ms cs).eval sha512).1 = .acc) : runOfRV rd v = runOfR rd x ms cs := by
@@ -59,7 +59,7 @@ theorem runOfRV_eq {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : Li
     simp only [hx, decR_dropLast rd x ms h2, actR_decide hact]
 
 /-- **On an accepted run of `VR rd`, `runOfRV` is `runOfR` at its messages and coins** (`colsRV_run` at `runOfRV`). -/
-theorem runOfRV_runD {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem runOfRV_runD {rd : Hash.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) :
     runOfRV rd (Claims.run sha512 P (VR rd) x ω r).seen =
       runOfR rd x ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst)
@@ -78,10 +78,10 @@ theorem runOfRV_runD {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims
 table `st` and two link points, `liveOfJ` reads `jAt sha512` and the verdict accepts it with the read proofs' files,
 rep `k`'s level-`ℓ` rows are `plainLevelColsOf` at `shapeOf` with `2 · |regions|` extra claims, on `liveOfJ`'s rep
 stream `k` and file `k`. -/
-theorem plainRawLevelColsRV_plain {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg}
+theorem plainRawLevelColsRV_plain {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg}
     {cs : List Coin} {v : Claims.Seen} (hrv : runOfRV rd v 0 = runOfR rd x as cs 0)
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} {lv : Live} {st : Stmt} {sch : Schedule}
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} {lv : Live} {st : Stmt} {sch : Schedule}
     (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
     (hlv : liveOfJ spec (jAt sha512 spec sts c₁ mids f) = .ok lv)
     (hv : verifyJWithMK id With.std spec (tabsOf sts) (jAt sha512 spec sts c₁ mids f)
@@ -130,7 +130,7 @@ theorem plainRawLevelColsRV_plain {rd : Claims.Msg → Option FinalP} {x : Claim
 at `d`, its proof files are the decision's files, and each rep stream of table 0 the session decodes to has, round by
 round, the coins of `liveOfJ`'s rep stream (`RecordsLiveAtDJK`, through the rounds' digests). -/
 theorem wrPDJK_viewR {I : Exec.Inputs} {d : Json} {mPts : ℕ} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalP} {lv : Live}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalP} {lv : Live}
     (hlv : liveOfJ spec (jAt sha512 spec sts c₁ mids f) = .ok lv)
     (hA : AcceptsAtDJK id I (some d) (wrPDJK id I d (viewOfJ 1 mPts spec link c₁ (jAt sha512 spec sts c₁ mids f)
       (FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps)))) :
@@ -163,10 +163,10 @@ from the decision's rep columns): on an accepted run of `VR rd` deciding at `(sp
 link points, a column rep `k` opens at `q` (`plainRepColsOf` at `shapeOf` on `liveOfJ`'s rep stream `k` and file `k`)
 is an opened row whose opening under table 0's scheme against `root_B[0]` of the decision's link, every SHA-512 input
 of it in the run's verifier log. -/
-theorem plainR_opening₀ {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plainR_opening₀ {rd : Hash.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP}
+    {mids : List (Hash.Msg × Coin)} {f : FinalP}
     (hact : actR rd x ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst)
       ((List.range ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
       .decide s spec sts link c₁ mids f)
@@ -265,10 +265,10 @@ proof, at the decision): on an accepted run of `VR rd` deciding at `(spec, sts)`
 points, a level-`ℓ` row rep `k` opens at `q` (`plainLevelColsOf` at `shapeOf` on `liveOfJ`'s rep stream `k` and file
 `k`) is an `Opening` of `q` against the flattened `ℓ − 1`-th recursive cap of rep `k`'s proof, file `k` decoded at
 `shapeOf`, every SHA-512 input of it in the run's verifier log. -/
-theorem plainR_levelOpeningD {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
+theorem plainR_levelOpeningD {rd : Hash.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg}
     {ω : Ω} {r : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP}
+    {mids : List (Hash.Msg × Coin)} {f : FinalP}
     (hact : actR rd x ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst)
       ((List.range ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
       .decide s spec sts link c₁ mids f)
@@ -402,8 +402,8 @@ theorem not_plainVerdictAtJK_nil (keep : Bool → Bool) (I : Exec.Inputs) (d : J
 
 /-- **The live verdict at the sample at the simulator's outcome gives an accepting run of `VR rd`**, where the
 simulator sends no proof files on a rejected run (`PlainSimR`'s fourth part). -/
-theorem plain_acc_of_nilR (rd : Claims.Msg → Option FinalP) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
-    {ω : Ω} {mPts : ℕ} {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire 65536 1 mPts}
+theorem plain_acc_of_nilR (rd : Hash.Msg → Option FinalP) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg}
+    {ω : Ω} {mPts : ℕ} {N : Hash.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Hash.Msg → Wire 65536 1 mPts}
     {τ : Type} {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin}
     (hnil : ∀ u r', (Claims.run sha512 P (VR rd) x ω (Φ (u, r'))).out ≠ .acc →
       (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r').proofs = #[])
@@ -423,7 +423,7 @@ live self-clash at the verdict at the sample holds only on an accepted run of `V
 outcome (`PlainSimRunR`). The J decoders' entries clash (`hE`) puts two different rows of one position among the
 decision's rep rows, at level 0 or at a later level, and both are `Opening`s in the run's log against one root
 (`plainR_opening₀`, `plainR_levelOpeningD`). -/
-theorem plainClashRunR_of (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem plainClashRunR_of (rd : Hash.Msg → Option FinalP) {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}
     {d : Json} (hd : ins.read.draw = some d) (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
@@ -520,7 +520,7 @@ theorem plainClashRunR_of (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {
 a simulator of `P` that sends no proof files on a rejected run, a decoded live outcome at the verdict at the sample is
 an accepted run of `VR rd`, and an opening of its rep `r`'s level-`ℓ + 1` slot is a row of that level the run's level
 reader holds (`plainRawLevelColsRV`), through the J decoders' later entries (`hE`). -/
-theorem plainRel_ofR (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem plainRel_ofR (rd : Hash.Msg → Option FinalP) {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}
     {d : Json} (hd : ins.read.draw = some d) (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
@@ -588,7 +588,7 @@ theorem plainRel_ofR (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {s : C
 
 /-- **A simulator at every prover** at the plain statement's one table: at every in-scope plain statement that sets up
 with one table, each prover `P` and tape `ω` have a simulator `P'` (`PlainSimR`). -/
-def PlainSimAtR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : Prop :=
+def PlainSimAtR (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (_ : tables false x = [(spec, st)]) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω),
@@ -598,7 +598,7 @@ def PlainSimAtR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : Prop :=
 `plain_hdecHAtJK`, `plain_hdecHUAtJK`), their self-clash entries (`plain_clash₀*AtJK`, `plain_laterClash*AtJK`) and
 later entries (`plain_laterEntries*AtJK`) at `keep := id`, at the simulator `PlainSimAtR` gives, through
 `plainClashRunR_of` and `plainRel_ofR`. -/
-theorem plainRdInR_of_sim (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} (hsim : PlainSimAtR rd x) :
+theorem plainRdInR_of_sim (rd : Hash.Msg → Option FinalP) {x : Hash.Msg} (hsim : PlainSimAtR rd x) :
     PlainRdInR rd x := by
   intro s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
   cases hh : ins.read.I.tags.hiddenOutputs
@@ -646,7 +646,7 @@ theorem plainRdInR_of_sim (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} (
           hS.2.2.1 hS.2.2.2 C u rr a ha r ℓ q v hv
 
 /-- **`RdAllAt` at the plain record at the deployed reader, from a simulator** (`rdAllAt_R` at `plainRdInR_of_sim`). -/
-theorem rdAllAt_R_of_sim (rd : Claims.Msg → Option FinalP)
+theorem rdAllAt_R_of_sim (rd : Hash.Msg → Option FinalP)
     (hsim : ∀ x, ¬ Claims.Flock.NoAcc sha512 (VR rd) x → PlainSimAtR rd x) :
     RdAllAt (deployPlainR Readable.relation rd) (fun _ => plainRawLevelColsRV rd) :=
   rdAllAt_R rd fun x hno => plainRdInR_of_sim rd (hsim x hno)

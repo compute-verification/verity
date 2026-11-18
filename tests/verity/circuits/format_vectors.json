@@ -1,5 +1,5 @@
 {
- "about": "Pinned vectors of verity/ml/circuits/PROTOCOL.md (the program format), checked by verity/ml/circuits/tests/test_format_spec.py; written by it with --write.",
+ "about": "Pinned vectors of verity/circuits/PROTOCOL.md (the program format), checked by tests/verity/circuits/test_format_spec.py; written by it with --write.",
  "canonical_json": {
   "in_domain": [
    [
@@ -1284,7 +1284,7 @@
   ],
   [
    "a leaf past its collection",
-   "ValueError: definition 'Root[TProg_v1]_v1' node 3: references {'affine': ['n', 0, 8, 1]} name no leaf of a parameter or a node"
+   "ValueError: recut-overrun: {'affine': ['n', 0, 8, 1]} reads past the 8 32-bit leaves of its input node"
   ],
   [
    "a node that does not exist",
@@ -1296,7 +1296,7 @@
   ],
   [
    "a strided pattern past its collection",
-   "ValueError: definition 'Root[TProg_v1]_v1' node 10: references {'strided': ['n', 0, 0, 2, 1, 7, 4]} name no leaf of a parameter or a node"
+   "ValueError: recut-overrun: {'strided': ['n', 0, 0, 2, 1, 7, 4]} reads past the 8 32-bit leaves of its input node"
   ],
   [
    "a boolean leaf",

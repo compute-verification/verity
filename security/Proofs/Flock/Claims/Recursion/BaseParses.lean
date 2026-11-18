@@ -70,7 +70,7 @@ theorem read_post : Post RecRaw.read (fun w => ∃ y, FlockDeploy.decode y = som
       exact post_pure ⟨_, hb⟩
     · exact post_failure
 
-theorem decodeRec_base {x : Claims.Msg} {w : RecRaw} (h : decodeRec x = some w) :
+theorem decodeRec_base {x : Hash.Msg} {w : RecRaw} (h : decodeRec x = some w) :
     ∃ y, FlockDeploy.decode y = some w.base := by
   unfold decodeRec at h
   split at h
@@ -80,7 +80,7 @@ theorem decodeRec_base {x : Claims.Msg} {w : RecRaw} (h : decodeRec x = some w) 
   · cases h
 
 /-- **The recursive parser's `Read` is the masked parser's, at the base.** -/
-theorem readOf_base {x : Claims.Msg} {r : _root_.Flock.Readable.Read} (h : readOfO x = some r) :
+theorem readOf_base {x : Hash.Msg} {r : _root_.Flock.Readable.Read} (h : readOfO x = some r) :
     ∃ y, FlockDeploy.readOf true y = some r := by
   unfold readOfO insO at h
   obtain ⟨s, hs, rfl⟩ := Option.map_eq_some_iff.1 h
@@ -101,7 +101,7 @@ theorem readOf_base {x : Claims.Msg} {r : _root_.Flock.Readable.Read} (h : readO
     simp [RecRaw.ins_base hi, hz', Except.toOption]
 
 /-- **The claims' relation at the recursive parser gives it at the masked parser**, at the statement's base. -/
-theorem R_base {rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation} {x : Claims.Msg}
+theorem R_base {rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation} {x : Hash.Msg}
     {w : Claims.Flock.Wit} (h : Claims.Flock.R (deployZkRec rel).parse x w) :
     ∃ y, Claims.Flock.R (FlockDeploy.deployZk rel).parse y w := by
   obtain ⟨st, hp, hs⟩ := h
@@ -121,7 +121,7 @@ theorem R_base {rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Rel
 (`vstar_complete_run_setup_at`) is in the claims' relation at `deployZkRec Readable.relation`'s parser, so its base is
 at `deployZk Readable.relation`'s (`R_base`). -/
 theorem fixture_stmt (h : HonestFixture) :
-    ∃ (y : Claims.Msg) (w : Claims.Flock.Wit),
+    ∃ (y : Hash.Msg) (w : Claims.Flock.Wit),
       Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse y w := by
   obtain ⟨mask, b0, x, aux, nOf, hd, recRest, decI, w, st, ω, r, hRun, hW, -, -⟩ := h
   obtain ⟨hR, hx, hf, hacc⟩ := hRun

@@ -241,7 +241,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **A close table extracts**, at the plain record: a table of full-width columns at a statement whose table 0 is at
 index `i`, `θ`-close to the old encoding of a message whose read step is a witness. -/
 theorem good_of_close_plain (rel : Readable.Parsed → Readable.Relation)
-    (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployPlain rel).table x 0 = some s) (i : PlainIdx)
+    (x : Hash.Msg) (s : Claims.Flock.Stmt) (hs : (deployPlain rel).table x 0 = some s) (i : PlainIdx)
     (hN : wordLen false x = 2 ^ plainLen i) (C : Fin (wordLen false x) → List 𝔽)
     (hw : ∀ q, (C q).length = 2 ^ plainLanes i) (M : Message 𝔽 (plainLanes i) (plainCols i))
     (hclose : Close (plainThetaD ⟨i, M⟩)
@@ -261,7 +261,7 @@ theorem good_of_close_plain (rel : Readable.Parsed → Readable.Relation)
 at index `i`, whose oracle is `Committed` for the old statement `S` at the deployed schedule, when a satisfying old
 witness of `S` reads as a witness of table 0's statement. -/
 theorem good_of_committed_plain (rel : Readable.Parsed → Readable.Relation)
-    (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployPlain rel).table x 0 = some s) (i : PlainIdx)
+    (x : Hash.Msg) (s : Claims.Flock.Stmt) (hs : (deployPlain rel).table x 0 = some s) (i : PlainIdx)
     (hN : wordLen false x = 2 ^ plainLen i) (C : Fin (wordLen false x) → List 𝔽)
     (hw : ∀ q, (C q).length = 2 ^ plainLanes i) (S : Statement)
     (hwit : ∀ M : Message 𝔽 (plainLanes i) (plainCols i),
@@ -285,7 +285,7 @@ theorem good_of_committed_plain (rel : Readable.Parsed → Readable.Relation)
   · rw [level₀_plainSched]
 
 /-- **At table 0's index**: the word is `2^d` long and a full-width column has `2^lanes` symbols. -/
-theorem plain_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt}
+theorem plain_at {x : Hash.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt}
     (h : (tables false x).head? = some (spec, st)) {i : PlainIdx} (hi : i.m = st.m) :
     wordLen false x = 2 ^ plainLen i ∧ ∀ u, wide false x u ↔ u.length = 2 ^ plainLanes i := by
   refine ⟨?_, fun u => ?_⟩
@@ -300,7 +300,7 @@ theorem plain_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt}
 oracle that is not `Committed` at the deployed schedule, for an old statement whose satisfying witnesses read as
 witnesses of table 0's statement. -/
 theorem not_committed_plain (rel : Readable.Parsed → Readable.Relation)
-    (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployPlain rel).table x 0 = some s) {spec : SessionSpec}
+    (x : Hash.Msg) (s : Claims.Flock.Stmt) (hs : (deployPlain rel).table x 0 = some s) {spec : SessionSpec}
     {st : _root_.Flock.Stmt}
     (hst : (tables false x).head? = some (spec, st)) (i : PlainIdx) (hi : i.m = st.m)
     (C : Fin (wordLen false x) → List 𝔽) (hw : ∀ q, wide false x (C q)) (S : Statement)
@@ -325,7 +325,7 @@ theorem padLane_zero (k0 r : ℕ) (ℓ : Fin (2 ^ k0 + 0)) : padLane k0 0 r ℓ 
 at index `i`, close at the deployed `θ` to the old padded encoding of coefficient rows whose padded witness reads as a
 witness. -/
 theorem good_of_close_zk (rel : Readable.Parsed → Readable.Relation)
-    (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x 0 = some s) (i : ZkIdx)
+    (x : Hash.Msg) (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x 0 = some s) (i : ZkIdx)
     (hN : wordLen true x = 2 ^ zkLen i) (C : Fin (wordLen true x) → List 𝔽)
     (hw : ∀ q, (C q).length = 2 ^ zkLanes i) (R : Fin (2 ^ zkLanes i) → Fin (2 ^ zkCols i + zkPad i) → 𝔽)
     (hclose : CloseRows execArith (zkLen i) (2 ^ zkCols i + zkPad i) (zkThetaD ⟨i, zkOfRows padC R⟩)
@@ -359,7 +359,7 @@ theorem good_of_close_zk (rel : Readable.Parsed → Readable.Relation)
 is at index `i`, whose oracle is `CommittedPad` for the old statement `S` at the deployed masked schedule and padding,
 when a satisfying old witness of `S` reads as a witness of table 0's statement. -/
 theorem good_of_committed_zk (rel : Readable.Parsed → Readable.Relation)
-    (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x 0 = some s) (i : ZkIdx)
+    (x : Hash.Msg) (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x 0 = some s) (i : ZkIdx)
     (hN : wordLen true x = 2 ^ zkLen i) (C : Fin (wordLen true x) → List 𝔽)
     (hw : ∀ q, (C q).length = 2 ^ zkLanes i) (S : Statement)
     (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
@@ -384,7 +384,7 @@ theorem good_of_committed_zk (rel : Readable.Parsed → Readable.Relation)
   exact key _ _ (zkLevel_table i).2 (zkLevel_table i).1 R hR hsat
 
 /-- **At table 0's index**, masked: the word is `2^d` long and a column has the `2^lanes` witness lanes. -/
-theorem zk_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt}
+theorem zk_at {x : Hash.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt}
     (h : (tables true x).head? = some (spec, st)) {i : ZkIdx} (hi : i.At st.wideLeaf st.m) :
     wordLen true x = 2 ^ zkLen i ∧ ∀ u, wide true x u ↔ u.length = 2 ^ zkLanes i := by
   refine ⟨?_, fun u => ?_⟩
@@ -399,7 +399,7 @@ theorem zk_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt}
 oracle that is not `CommittedPad` at the deployed masked schedule, for an old statement whose satisfying witnesses read
 as witnesses of table 0's statement. -/
 theorem not_committed_zk (rel : Readable.Parsed → Readable.Relation)
-    (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x 0 = some s) {spec : SessionSpec}
+    (x : Hash.Msg) (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x 0 = some s) {spec : SessionSpec}
     {st : _root_.Flock.Stmt}
     (hst : (tables true x).head? = some (spec, st)) (i : ZkIdx) (hi : i.At st.wideLeaf st.m)
     (C : Fin (wordLen true x) → List 𝔽) (hw : ∀ q, wide true x (C q)) (S : Statement)

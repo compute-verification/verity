@@ -357,7 +357,7 @@ theorem relK_succ {β : Type} (k : ℕ) (fs : List (String × ℕ)) (ts : List O
 
 open Classical in
 /-- **A frame's cut after the prover's frame `m`**, at `k + 1` frames (`frameCut`). -/
-noncomputable def frameNext {β : Type} (P : List Release → Frame → Prop) (rv : β → Option Claims.Msg) (k : ℕ)
+noncomputable def frameNext {β : Type} (P : List Release → Frame → Prop) (rv : β → Option Hash.Msg) (k : ℕ)
     (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β) (pre : List Release) :
     (m : Option (Frame × ByteArray)) → DigestCut.AgreeCut sha512Msg (relKNext k fs ts f m)
   | none => .skip
@@ -374,10 +374,10 @@ noncomputable def frameNext {β : Type} (P : List Release → Frame → Prop) (r
       .iteCut (optCut ts[i]? .skip fun T => optCut (T.next s n) .skip fun p => .coin fun d =>
         frameCut P rv k fs (ts.set i (T.bump p.1)) _ (pre ++ [⟨.opening i s n, b, TreeDraw.opened d.1 n⟩])) .skip
 
-theorem frameCut_succ {β : Type} (P : List Release → Frame → Prop) (rv : β → Option Claims.Msg) (k : ℕ)
+theorem frameCut_succ {β : Type} (P : List Release → Frame → Prop) (rv : β → Option Hash.Msg) (k : ℕ)
     (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β) (pre : List Release) :
     HEq (frameCut P rv (k + 1) fs ts f pre).cut
-      (DigestCut.send (V := Claims.Msg) fun m => (frameNext P rv k fs ts f pre m).cut) := HEq.rfl
+      (DigestCut.send (V := Hash.Msg) fun m => (frameNext P rv k fs ts f pre m).cut) := HEq.rfl
 
 /-! ## Where the walk from the sample's fill stops -/
 
@@ -393,7 +393,7 @@ coins of the family `label` answering `after` and the written coins `κ` agree. 
 def WalkFill (k : ℕ) : Prop :=
   ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Release) (f : List Release → Game Exchange),
     (∀ log, f log = finish D θ F c a (pre ++ log)) → ∀ (g' : Game Exchange), g' = relK k fs ts f →
-    ∀ (s' : Strategy g') (Ks : Fin R → DigestCut Claims.Msg g'),
+    ∀ (s' : Strategy g') (Ks : Fin R → DigestCut Hash.Msg g'),
     (∀ j, Ks j = .skip ∨ HEq (Ks j) (frameCut (rd.round j) (rd.reveal j) k fs ts f pre).cut) →
     ∀ (m : ℕ) (κ : Fin m → Fin 512 → Bool) (z : CoinTape g' s') (back : CoinTape g' s' → CoinTape g σ),
     ∃ L, CoinsAgree (freshCoins label after L) (fillCoins κ) ∧
@@ -405,7 +405,7 @@ variable {D θ F c a label after rd}
 
 theorem walkFill_nil {pre : List Release} {f : List Release → Game Exchange}
     (hf : ∀ log, f log = finish D θ F c a (pre ++ log)) {g'' : Game Exchange} (hn : g'' = f [])
-    (s'' : Strategy g'') (Ks : Fin R → DigestCut Claims.Msg g'') (x : CoinTape g'' s'')
+    (s'' : Strategy g'') (Ks : Fin R → DigestCut Hash.Msg g'') (x : CoinTape g'' s'')
     (back : CoinTape g'' s'' → CoinTape g σ) (o : Exchange)
     (h : PlayReaches (Pos.walk g'' s'' Ks x back).g' (Pos.walk g'' s'' Ks x back).s' o) :
     ∃ log', o.log = pre ++ [] ++ log' ∧ StopTail log' := by
@@ -416,7 +416,7 @@ theorem walkFill_nil {pre : List Release} {f : List Release → Game Exchange}
 theorem walkFill_opening {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {pre : List Release}
     {f : List Release → Game Exchange} (hf : ∀ log, f log = finish D θ F c a (pre ++ log)) {i s n : ℕ}
     {b : ByteArray} {g'' : Game Exchange} (hn : g'' = relKNext k fs ts f (some (.opening i s n, b)))
-    (s'' : Strategy g'') (Ks : Fin R → DigestCut Claims.Msg g'') (x : CoinTape g'' s'')
+    (s'' : Strategy g'') (Ks : Fin R → DigestCut Hash.Msg g'') (x : CoinTape g'' s'')
     (back : CoinTape g'' s'' → CoinTape g σ) (o : Exchange)
     (h : PlayReaches (Pos.walk g'' s'' Ks x back).g' (Pos.walk g'' s'' Ks x back).s' o) :
     ∃ log', o.log = pre ++ [] ++ log' ∧ StopTail log' := by
@@ -451,7 +451,7 @@ theorem walkFill_coin {k : ℕ} (IH : WalkFill (g := g) (σ := σ) D θ F c a la
     {iF : Fintype C} {iN : Nonempty C} (fs' : C → List (String × ℕ)) (ts' : C → List OpenTree) (pre : List Release)
     (f : List Release → Game Exchange) (hf : ∀ log, f log = finish D θ F c a (pre ++ log)) (r : C → Release)
     (s'' : Strategy (@Game.coin _ C iF iN fun x => relK k (fs' x) (ts' x) fun log => f (r x :: log)))
-    (Ks : Fin R → DigestCut Claims.Msg
+    (Ks : Fin R → DigestCut Hash.Msg
       (@Game.coin _ C iF iN fun x => relK k (fs' x) (ts' x) fun log => f (r x :: log)))
     (hK : ∀ j, Ks j = .skip ∨ Ks j = DigestCut.coin fun x =>
       (frameCut (rd.round j) (rd.reveal j) k (fs' x) (ts' x) (fun log => f (r x :: log)) (pre ++ [r x])).cut)
@@ -488,7 +488,7 @@ theorem walkFill_coin {k : ℕ} (IH : WalkFill (g := g) (σ := σ) D θ F c a la
     obtain ⟨log', h1, h2⟩ := hO o ho
     exact ⟨log', by rw [h1]; simp, h2⟩⟩
 
-theorem frameNext_fresh {β : Type} (hrd : PicksOpenings rd) (j : Fin R) (rv : β → Option Claims.Msg) (k : ℕ)
+theorem frameNext_fresh {β : Type} (hrd : PicksOpenings rd) (j : Fin R) (rv : β → Option Hash.Msg) (k : ℕ)
     (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β) (pre : List Release) (l : String)
     (b : ByteArray) :
     frameNext (rd.round j) rv k fs ts f pre (some (.fresh l, b)) =
@@ -498,7 +498,7 @@ theorem frameNext_fresh {β : Type} (hrd : PicksOpenings rd) (j : Fin R) (rv : �
   rw [frameNext]
   exact ite_eq_right (not_picks_fresh hrd j pre l)
 
-theorem frameNext_hello {β : Type} (hrd : PicksOpenings rd) (j : Fin R) (rv : β → Option Claims.Msg) (k : ℕ)
+theorem frameNext_hello {β : Type} (hrd : PicksOpenings rd) (j : Fin R) (rv : β → Option Hash.Msg) (k : ℕ)
     (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β) (pre : List Release)
     (spec : Flock.CoinTree.Spec) (ν : ByteArray) :
     frameNext (rd.round j) rv k fs ts f pre (some (.hello spec, ν)) =
@@ -513,7 +513,7 @@ theorem frameNext_hello {β : Type} (hrd : PicksOpenings rd) (j : Fin R) (rv : �
 theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g) (σ := σ) D θ F c a label after rd k)
     (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Release) (f : List Release → Game Exchange)
     (hf : ∀ log, f log = finish D θ F c a (pre ++ log)) (msg : Option (Frame × ByteArray)) (g'' : Game Exchange)
-    (hn : g'' = relKNext k fs ts f msg) (s'' : Strategy g'') (Ks : Fin R → DigestCut Claims.Msg g'')
+    (hn : g'' = relKNext k fs ts f msg) (s'' : Strategy g'') (Ks : Fin R → DigestCut Hash.Msg g'')
     (hK : ∀ j, Ks j = .skip ∨ HEq (Ks j) (frameNext (rd.round j) (rd.reveal j) k fs ts f pre msg).cut)
     (m : ℕ) (κ : Fin m → Fin 512 → Bool) (z : CoinTape g'' s'') (back : CoinTape g'' s'' → CoinTape g σ) :
     ∃ L, CoinsAgree (freshCoins label after L) (fillCoins κ) ∧
@@ -654,9 +654,9 @@ theorem walkFill_req {g : Game Exchange} {σ : Strategy g} {label : String} {aft
     {rd : Reading R} (hrd : PicksOpenings rd) (K : ℕ) (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (G : ByteArray → Game Exchange)
     (hG : ∀ a, G a = relK K fs [] (finish D θ F c a)) (s' : Strategy (.send ByteArray G))
-    (Ks : Fin R → DigestCut Claims.Msg (.send ByteArray G))
+    (Ks : Fin R → DigestCut Hash.Msg (.send ByteArray G))
     (hK : ∀ j, HEq (Ks j)
-      (DigestCut.send (V := Claims.Msg) fun a => (frameCut (rd.round j) (rd.reveal j) K fs [] (finish D θ F c a) []).cut))
+      (DigestCut.send (V := Hash.Msg) fun a => (frameCut (rd.round j) (rd.reveal j) K fs [] (finish D θ F c a) []).cut))
     (m : ℕ) (κ : Fin m → Fin 512 → Bool) (z : CoinTape (.send ByteArray G) s')
     (back : CoinTape (.send ByteArray G) s' → CoinTape g σ) :
     ∃ L, CoinsAgree (freshCoins label after L) (fillCoins κ) ∧
@@ -903,7 +903,7 @@ request, the releases, then the close (`game_eq_relK`). -/
 theorem roundCuts_heq (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) {R : ℕ} (rd : Reading R)
     (j : Fin R) :
     HEq (roundCuts V θ F c rd j)
-      (DigestCut.send (V := Claims.Msg) fun a => (frameCut (rd.round j) (rd.reveal j) (frames (V.families θ))
+      (DigestCut.send (V := Hash.Msg) fun a => (frameCut (rd.round j) (rd.reveal j) (frames (V.families θ))
         (V.families θ) [] (finish (V.signer θ) θ F c a) []).cut) := by
   have key : ∀ {g g' : Game Exchange} (h : g = g') (K : DigestCut.AgreeCut sha512Msg g),
       HEq (K.cast h).cut K.cut := by

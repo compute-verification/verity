@@ -65,7 +65,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-! ## An accepted run of `VE`, within its own log -/
 
 /-- **An accepted run of `VE` decides, within its own verifier log** (`acc_decide`'s proof, at `nextE`). -/
-theorem accE_decide {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem accE_decide {H : Hash.Msg → Hash.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin (VE.k x) → Coin} (h : (Claims.run H P VE x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f,
       act false x ((Claims.run H P VE x ω r).msgs.map Prod.fst)
@@ -90,9 +90,9 @@ theorem accE_decide {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prov
 
 /-- **An element-level decision within `L`**, at SHA-512 on a statement that sets up at `(spec, sts)`: the
 element-level verdict within `L`, and the checks (`decision_runs`'s proof). -/
-theorem decisionE_runs {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
-    {L : List Claims.Msg} (hs : s.setup = .ok (spec, sts)) (h : Runs sha512 (decisionE s x link c₁ mids f) () L) :
+theorem decisionE_runs {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
+    {L : List Hash.Msg} (hs : s.setup = .ok (spec, sts)) (h : Runs sha512 (decisionE s x link c₁ mids f) () L) :
     Runs sha512 (verifyWithME Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs) () L ∧
       checks false s spec x link c₁ mids f = .ok () := by
   unfold decisionE at h
@@ -108,14 +108,14 @@ theorem decisionE_runs {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {
 
 /-- **The element-level verdict within `L` is the element-level verdict with SHA-512 answered only within `L`.** -/
 theorem verdictE_within {spec : SessionSpec} {tabs : Array Setup} {record : String} {proofs : Array ByteArray}
-    {L : List Claims.Msg} (h : Runs sha512 (verifyWithME Claims.Hashes.oc spec tabs record proofs) () L) :
+    {L : List Hash.Msg} (h : Runs sha512 (verifyWithME Claims.Hashes.oc spec tabs record proofs) () L) :
     verifyWithME (hashesIn L) spec tabs record proofs = .ok () :=
   (With.verifyWithME_sim (within L) (within_hashes L) spec tabs record proofs) () h
 
 /-- **An accepted run of `VE` at `sha512`** (`acc_within`'s proof): the statement sets up, the run decides on its last
 message, read as a final message on the statement, and on the link of the prover's first message; the custody checks
 pass; and the element-level verdict accepts with SHA-512 answered only within the run's verifier log. -/
-theorem accE_within {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin (VE.k x) → Coin}
+theorem accE_within {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {r : Fin (VE.k x) → Coin}
     (h : (Claims.run sha512 P VE x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f, setupOf false x = some (s, spec, sts) ∧
       lastFinal (Claims.run sha512 P VE x ω r).seen = some f ∧
@@ -138,7 +138,7 @@ theorem accE_within {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω
 (`plain_opening_raw`'s proof, at the element-level verdict): a column `u` a rep opens at `q` is an opened row whose
 opening under table 0's scheme against `root_B[0]` of the tape's first message's link passed, every SHA-512 input of it
 in the run's verifier log. -/
-theorem plainE_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plainE_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin (VE.k x) → Coin} {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P VE x ω r).out = .acc)
     (hu : (q, u) ∈ plainRawCols (Claims.run sha512 P VE x ω r).seen) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Flock.Stmt) (st : Flock.Stmt) (sch : Flock.Schedule)
@@ -155,7 +155,7 @@ theorem plainE_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {
 
 /-- **An accepted run of `VE` opens a column only as a Merkle opening** of table 0's level 0 in its own log: a column
 `u` the run's reader opens at `q` is one a rep opens (`plainE_opening_raw`). -/
-theorem plainE_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin (VE.k x) → Coin}
+theorem plainE_opening {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {r : Fin (VE.k x) → Coin}
     {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P VE x ω r).out = .acc)
     (hu : Claims.Flock.lookCol (cols false (Claims.run sha512 P VE x ω r).seen 0) q = some u) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Flock.Stmt) (st : Flock.Stmt) (sch : Flock.Schedule)

@@ -252,15 +252,15 @@ namespace Claims.Recursion
 /-- **`IVStar` reads the last message only through `final`**: two last messages `final` reads alike give one decision
 at the same coins, with the same calls. -/
 theorem Bound.ivstar_congr_final {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-    [DecidableEq Col] (Bd : Bound Coin Col T) (x : Claims.Msg) (pre : List Claims.Msg) (a a' : Claims.Msg)
+    [DecidableEq Col] (Bd : Bound Coin Col T) (x : Hash.Msg) (pre : List Hash.Msg) (a a' : Hash.Msg)
     (cs : List Coin) (hfin : Bd.final a = Bd.final a') :
     Bd.IVStar.next x (pre ++ [a]) cs = Bd.IVStar.next x (pre ++ [a']) cs := by
   simp [Bound.IVStar, hfin]
 
 /-- **The opened view, whose columns `Bound.deploy` takes, reads the last message only through `final`.** -/
 theorem Bound.openView_congr_final {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-    [DecidableEq Col] (Bd : Bound Coin Col T) (ms : List (Claims.Msg × Claims.Out)) (a a' : Claims.Msg)
-    (o out : Claims.Out) (p : List (List (Claims.Msg × (Fin Bd.saltLen → UInt8))) × Claims.Msg)
+    [DecidableEq Col] (Bd : Bound Coin Col T) (ms : List (Hash.Msg × Claims.Out)) (a a' : Hash.Msg)
+    (o out : Claims.Out) (p : List (List (Hash.Msg × (Fin Bd.saltLen → UInt8))) × Hash.Msg)
     (hfin : Bd.final a = some p) (hfin' : Bd.final a' = some p) :
     Bd.openView ⟨ms ++ [(a, o)], out⟩ = Bd.openView ⟨ms ++ [(a', o)], out⟩ := by
   simp [Bound.openView, hfin, hfin']

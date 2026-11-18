@@ -41,6 +41,7 @@ from verity.protocols.resource_accounting.network.attester import network_attest
 from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
 from verity.protocols.resource_accounting.network.verifier import scan_answer as SA
 from verity.commitments import randomness as RND
+from verity.commitments import registered_value as RV
 
 ROOT = Path(__file__).resolve().parents[6]
 PERIOD_CASE = ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "network" / "period_case.py"
@@ -112,10 +113,10 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
     assert start.bcs["o0"] + ing.bcs["o1"] == ing.bcs["sin"] + last.bcs["sin"]
     assert ing.bcs["o2"] + last.bcs["o2"] == eg.bcs["state"]
     assert ing.ports["o1"]["root"] == ing.ports["sin"]["root"] and ing.ports["o2"]["root"] == eg.ports["state"]["root"]
-    assert ing.ports["row"]["reads"] == list(range(T - 1)) and ing.ports["row"][sz.REG.READS_FROM] == 1
-    assert last.ports["row"]["reads"] == [T - 1] and last.ports["row"][sz.REG.READS_FROM] == T
+    assert ing.ports["row"]["reads"] == list(range(T - 1)) and ing.ports["row"][RV.READS_FROM] == 1
+    assert last.ports["row"]["reads"] == [T - 1] and last.ports["row"][RV.READS_FROM] == T
     side = at.sides["egress"]
-    assert eg.ports["o1"]["reads"] == list(range(T)) and eg.ports["o1"][sz.REG.READS_FROM] == T + 1
+    assert eg.ports["o1"]["reads"] == list(range(T)) and eg.ports["o1"][RV.READS_FROM] == T + 1
     assert eg.ports["o1"]["root"] == side.head.root.hex() and eg.bcs["o1"] == list(side.cells.bcs)
     c = chain["ingress-0"]
     assert sz.targets(at, "chain-0") == ["ingress-0"]
@@ -225,7 +226,7 @@ def test_each_execution_phase_is_a_registration_its_start_the_record_befores_las
     unit's o0, which is state leaf 0, and its members reading its own rows. The first's start is the empty state's row
     at the root the verifier computes (`empty_start`). The second's start reads the first's ``last/o1``: the port of
     the first's record at its root and domain, one leaf, its b‖c the first statement's own row's under the same salt;
-    and the leaf a registered read frames from that b‖c at position 0 of the frame port's domain (`registered.leaf`,
+    and the leaf a registered read frames from that b‖c at position 0 of the frame port's domain (`registered_value.leaf`,
     the mirror of the Lean verifier's read) is, byte for byte, the leaf the first statement's frame commits (`Frame`,
     `rowleaf.row_leaf`), which a one-leaf port's root is. The stale round's start, given the state the last execution
     phase started from, opens no leaf of the last record's port."""
@@ -263,7 +264,7 @@ def test_each_execution_phase_is_a_registration_its_start_the_record_befores_las
         "value": sz.CARRY, "root": first.root.hex(), "leaves": 1, "words": words, "word_bits": 16,
         "domain": first.domain.domain_id.hex(), sz.REG.SCHEMA_KEY: v2, "reads": [0]}
     assert first.rows == (tuple(sz._words(sz.IS.encode(cls, sz.IS.empty(cls)))),)
-    assert first.salts == tuple(sz.REG.supplied_salts(digest, sz.CARRY, 1))
+    assert first.salts == tuple(RV.supplied_salts(digest, sz.CARRY, 1))
     last, start = rounds[0]["last"], rounds[1]["start"]
     frame = last.frames["o1"]
     dom = sz.ADV.domain(sz.frame_binding(last.set_name, 1, "o1"), 1)
@@ -273,7 +274,7 @@ def test_each_execution_phase_is_a_registration_its_start_the_record_befores_las
     assert (last.ports["o1"]["root"], last.ports["o1"]["domain"]) == (frame.root.hex(), dom.domain_id.hex())
     assert start.bcs["sin"] == last.bcs["o1"] and start.salts["sin"] == last.salts["o1"]
     assert start.entries["sin"] == {"value": sz.CARRY, "positions": [0], "paths": [""]}
-    read = sz.REG.leaf(dom, 0, start.bcs["sin"][0], v2)
+    read = RV.leaf(dom, 0, start.bcs["sin"][0], v2)
     assert read == frame.leaves[0] == frame.root
     assert read == sz.row_leaf(dom, 0, sz.ADV.INST.tree_leaf(sz.ADV.INST.default_key, last.bcs["o1"][0]), v2)
     assert sz.REG.verify_read(dom, frame.root, 0, start.bcs["sin"][0], b"", v2)
@@ -398,12 +399,12 @@ def test_every_port_of_every_member_is_registered_a_ports_own_rows_at_its_frame_
                 port = m.ports[p]
                 schema = port.get(sz.REG.SCHEMA_KEY, sz.REG.SCHEMA)
                 dom = sz.ADV.domain(sz.frame_binding(m.set_name, m.n, p, schema), m.n)
-                assert (port["domain"], port["leaves"], port["reads"], port.get(sz.REG.READS_FROM, 0)) == (
+                assert (port["domain"], port["leaves"], port["reads"], port.get(RV.READS_FROM, 0)) == (
                     dom.domain_id.hex(), m.n, list(range(m.n)), m.base)
                 assert m.entries[p]["positions"] == list(range(m.n))
                 for k in range(m.n):
                     bits = [m.outputs[k]] if p == "o0" else m.units[k][0] if p == "x" else m.made[p][k]
-                    bc = sz.ADV.INST.commit_string(key, sz.REG.row_digest(sz._words(bits), 16, schema), m.salts[p][k])
+                    bc = sz.ADV.INST.commit_string(key, RV.row_digest(sz._words(bits), 16, schema), m.salts[p][k])
                     assert m.bcs[p][k] == bc and sz.REG.verify_read(
                         dom, bytes.fromhex(port["root"]), k, bc, bytes.fromhex(m.entries[p]["paths"][k]), schema)
     assert own == {**{(r, "start"): [] for r in ("honest-0", "chain-0", "stale-1")},
@@ -1220,7 +1221,7 @@ def test_the_scan_leaves_out_an_empty_starts_public_salt_and_scans_a_carried_sta
     a8 = SimpleNamespace(PIECE=16, needles=lambda ps: {nd: k for k, x in ps.items() for nd in (x, x.hex().encode())},
                          find=lambda data, table: {k: 1 for nd, k in table.items() if nd in data})
     at = SimpleNamespace(setup=sz.TEST, ordinals=[1])
-    salt = sz.REG.supplied_salts("ab" * 64, sz.CARRY, 1)[0]
+    salt = RV.supplied_salts("ab" * 64, sz.CARRY, 1)[0]
     salts = {"start salt sin 0": salt}
     for carry, out in ((SimpleNamespace(empty={"salt": salt.hex()}), True), (SimpleNamespace(empty=None), False),
                        (None, False)):

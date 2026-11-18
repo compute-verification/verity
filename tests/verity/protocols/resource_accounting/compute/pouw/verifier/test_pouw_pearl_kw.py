@@ -160,3 +160,9 @@ def test_ada_tile_through_the_protocol():
     plain = [[sum(x * y for x, y in zip(a, b)) for b in map(fp8_row, fb)] for a in map(fp8_row, fa)]
     pearl, fp8 = rel_rms(tr.useful[0], exact), rel_rms(plain, exact)
     assert pearl < 0.12 and pearl < 3 * fp8          # measured: 7.8% against 3.8% for plain FP8 (δ = 1 noise, as large as the signal)
+
+
+def test_each_devices_width_is_its_atoms_silicon_width():
+    """A device's grouped-sum width is its rank-32 atom's silicon model's: the widths the devices named before."""
+    assert {d.name: (d.atom.width, d.width) for d in P.DEVICES.values()} == {"h100": (14, 14), "b200": (26, 26),
+                                                                               "ada": (14, 14)}

@@ -183,12 +183,12 @@ end Claims.SamplingGeneric
 namespace SamplingDeploy
 
 variable {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (c : Code)
-  (iroots : Claims.Msg → Claims.Seen → ℕ → List Claims.Msg)
+  (iroots : Hash.Msg → Claims.Seen → ℕ → List Hash.Msg)
 
 /-- **The compiler at the deployed record**: `Compiled.KS` of the deployed sampled verifier over Flock (`compiled`),
 from Flock's KS at `F` and its deployed decoder's list bound, the commitment's binding, the code's four facts and the
 sessions' runs, numbers and openings (`flockKS`, `sessions_compiled`). -/
-theorem ks_compiled (H : Claims.Msg → Claims.Msg) (hKS : Claims.Flock.KS H F)
+theorem ks_compiled (H : Hash.Msg → Hash.Msg) (hKS : Claims.Flock.KS H F)
     (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode) (hB : (commit c).Binds H) (hd : c.SampleDesign)
     (hr : c.Refuses H) (hi : c.InteriorFixed H iroots) (hf : c.SampleFixed)
     (hruns : Claims.Sampling.SessionRuns H (deployOf F c)) (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
@@ -196,7 +196,7 @@ theorem ks_compiled (H : Claims.Msg → Claims.Msg) (hKS : Claims.Flock.KS H F)
   Claims.SamplingGeneric.flockKS H F _ hKS hlist hB (sessions_compiled F c iroots H hd hr hi hf hruns hnum hopens)
 
 /-- **The committed form at the deployed record**: as `ks_compiled`, `KSReg` (`flockKSReg`). -/
-theorem ksReg_compiled (H : Claims.Msg → Claims.Msg) (hKS : Claims.Flock.KS H F)
+theorem ksReg_compiled (H : Hash.Msg → Hash.Msg) (hKS : Claims.Flock.KS H F)
     (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode) (hB : (commit c).Binds H) (hd : c.SampleDesign)
     (hr : c.Refuses H) (hi : c.InteriorFixed H iroots) (hf : c.SampleFixed)
     (hruns : Claims.Sampling.SessionRuns H (deployOf F c)) (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
