@@ -26,7 +26,10 @@ steps, every subprotocol in one shape, the Lean verdict with the JointPooledLive
   They have no number, so ``error``, ``at`` and every sum of this record hold none of them and each reads with them
   beside it (`error_form`): ``holds`` at δ says the claim holds except with δ and those terms. ``premises``, which
   every subprotocol but `BY_NAME`'s carries, is each Lean premise its scheme's guarantee is stated under, by name
-  (`Scheme.premises`, ``[]`` claiming none), or why its declaration does not say them. A subprotocol whose ``server``
+  (`Scheme.premises`, ``[]`` claiming none), or why its declaration does not say them. ``unbounded``, beside a
+  declared one whose scheme `bound` refuses at what its answer's profile gives, is that refusal's sentence (``why``)
+  and the terms it lacks by name (``terms``); its verdict stays its answer's unless `UNDECIDED_WHEN_UNBOUNDED` names
+  it. A subprotocol whose ``server``
   is not the block's is carried but not composed.
 * ``composed``: ``answer``, the Lean check of the block's product (`CHECKS`: ``onsite check``, or ``remote check`` or
   ``remote-v1 check``)'s answer on the block (protocol, verdict, reason, commitment), None when it didn't run; ``verdict``, that answer's
@@ -60,6 +63,7 @@ from verity.protocol import DELTAS, MONITORING_PERIODS
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
+from verity.commitments.domains import ONSITE_PROTOCOL
 
 FORMAT = "verity/block-record/v2"
 EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1")
@@ -72,6 +76,12 @@ RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandw
 #: the subprotocols no declared scheme reads (`Scheme.reader`): the sampled proofs, undeclared, and the work row, H1's,
 #: whose scheme names no quantity; each is read here by name, and a test holds the list to only shrink
 BY_NAME = ("integrity", "pouw")
+#: the subprotocols whose verdict is undecided, with its sentence as the reason, where `S.bound` refuses their row;
+#: certifier's (network's) never without network's yes
+UNDECIDED_WHEN_UNBOUNDED: tuple[str, ...] = ()
+#: why a row whose declaration bounds it reads unbounded when its answer's profile gives no bound's inputs
+NO_INPUTS = ("its answer's profile gives no bound's inputs (delta, missable, charges, epsilon), and the missable cost "
+             "and the error are the profile's alone")
 #: the subprotocols each product composes: onsite every subprotocol, remote those that need no hardware of the auditor's at the site
 PRODUCTS = {"onsite": SUBPROTOCOLS, "remote": ("integrity", "pouw")}
 #: the subprotocols whose error leaves terms out: each one's row names them (``answer.profile.named_terms``), or is refused
@@ -83,7 +93,7 @@ NAMED_TERM = ("claim", "term", "value", "in_total", "status")
 #: the protocols each product's Lean checks name in their answers (`onsite check`; `remote-v1 check`, remote's composite
 #: of record, whose work subprotocol is Pearl+'s; `remote check`, v0, is development and never of record), and
 #: `Core.Verdict`'s names
-CHECKS = {"onsite": ("verity/onsite/v0",), "remote": ("verity/remote/v1",)}
+CHECKS = {"onsite": (ONSITE_PROTOCOL,), "remote": ("verity/remote/v1",)}
 VERDICTS = ("accept", "reject", "undecided")
 JOINT_HORIZON = {"name": "Accounting.Guarantees.JointPooledLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
@@ -229,12 +239,30 @@ def subprotocol(name: str, row: Mapping[str, Any], *, server: str, runs: Sequenc
         raise ValueError(f"{name}: its answer's profile names no term its error leaves out; {NAMES_TERMS_FIX}")
     if named is not None and (why := named_terms_bad(named)):
         raise ValueError(f"{name}: its answer's profile's named_terms: {why}")
-    premises = {} if name in BY_NAME else {"premises": _premises(_scheme(name))}
+    declared = {} if name in BY_NAME else {"premises": _premises(_scheme(name)), **_bound(_scheme(name), profile)}
+    if name in UNDECIDED_WHEN_UNBOUNDED and "unbounded" in declared:
+        answer |= {"verdict": "undecided", "reason": declared["unbounded"]["why"]}
     return {"protocol": a["protocol"], "owner": row.get("owner"), "server": server, "source": source,
             "answer": answer,
             "quantity": quantity, "error": str(error), "error_from": error_from, "at": at_deltas(name, quantity, error),
             "runs": list(runs)} | ({} if named is None else {"named_terms": {k: dict(t) for k, t in named.items()}}) \
-        | premises
+        | declared
+
+
+def _bound(scheme: S.Scheme, profile: Mapping[str, Any]) -> dict[str, Any]:
+    """``{"unbounded": {why, terms}}`` where `S.bound` refuses ``scheme`` its bound at what the answer's profile gives
+    (``bound``: ``delta``, ``missable``, ``charges``, ``epsilon`` and the term's ``parameters``, the profile's alone):
+    its sentence and the terms it lacks. Empty where it gives one."""
+    inputs = profile.get("bound")
+    try:
+        if not isinstance(inputs, Mapping):
+            raise S.unbounded(scheme) or S.Unbounded(f"{scheme.name}: {NO_INPUTS}", ())
+        S.bound(scheme, frac(inputs["delta"]), int(inputs["missable"]),
+                {k: int(v) for k, v in inputs["charges"].items()}, inputs.get("parameters"),
+                epsilon=frac(inputs["epsilon"]))
+    except (ValueError, KeyError) as e:
+        return {"unbounded": {"why": str(e), "terms": list(getattr(e, "terms", ()))}}
+    return {}
 
 
 def _premises(scheme: S.Scheme) -> list[str] | str:

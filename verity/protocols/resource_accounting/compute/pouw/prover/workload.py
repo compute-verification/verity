@@ -1,10 +1,11 @@
 """PoUW's messages between the workload and the prover, H1's and Pearl+'s: what PoUW's prover asks of the workload, and
-what the workload hands it. The parties are SPOT's (`spot.prover.workload`), declared again here because this place
+what the workload hands it. H1 has no scheme declaration, so its messages live here alone; Pearl+ declares its own of
+them (`PEARL_PLUS.messages`). The parties are SPOT's (`spot.prover.workload`), declared again here because this place
 does not load SPOT's, and the one list of every protocol's messages is `tests/test_workload_messages.py`'s.
 
 ~~~text
 prover   -> workload   PoUWScheme, H1State, PoUWMonitoringPeriod
-workload -> prover     H1RunCommitment, H1Program, H1Record, H1Registration, PearlPass, PoUWValues
+workload -> prover     H1RunCommitment, H1Program, H1Record, H1Registration, PearlPass
 ~~~
 """
 
@@ -30,10 +31,9 @@ MESSAGES = (
     Schema("H1Record", 1, "commitment", body=BODY),
     Schema("H1Registration", 1, "commitment", body=BODY),
     Schema("PearlPass", 1, "private", body=BODY),
-    Schema("PoUWValues", 1, "private", body=BODY),
 )
 
 CHANNELS = (
     Channel(PROVER, WORKLOAD, ("PoUWScheme", "H1State", "PoUWMonitoringPeriod")),
-    Channel(WORKLOAD, PROVER, ("H1RunCommitment", "H1Program", "H1Record", "H1Registration", "PearlPass", "PoUWValues")),
+    Channel(WORKLOAD, PROVER, ("H1RunCommitment", "H1Program", "H1Record", "H1Registration", "PearlPass")),
 )

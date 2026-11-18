@@ -5,7 +5,8 @@
   python served_step.py table ARM_DIR... [--base stock-fp8_compiled] --out breakdown.json
 
 ``run`` builds the arm's engine as verity-bench's worker does (`engine._VllmEngine` with the spec's preset, arm settings and
-the arm's execution), runs its own gate, then ``--warmups`` and ``--reps`` runs of the point (`_VllmEngine.measure`: the
+the arm's execution), runs ``--warmups`` runs of the point, then its own gate (Pearl+'s device run opens at the first
+step with tokens), then ``--reps`` runs of the point (`_VllmEngine.measure`: the
 harness's own metrics, ``reps.json``), and records every engine step's host phases (``steps.json``): its wall time, the
 tokens and requests it scheduled, the model runner's ``execute_model`` and ``sample_tokens``, and inside them the Pearl-C
 run's calls (``pc``: `PearlCDeviceRun.gemm`, each call's Python, launches and uploads), its pass ends (``pend``:
@@ -174,13 +175,14 @@ def run(a) -> int:
     held = getattr(engine.llm, "scheme", None)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    _PHASE.update(name="gate")
-    gate = engine.custom_gate()
-    reps = []
+    reps, gate = [], {}
     try:
         for i in range(a.warmups):
             _PHASE.update(name="warmup", rep=i)
             engine.warmup(point)
+        # after a step with tokens: Pearl+ attached by name opens its device run there, and a gate before it is refused
+        _PHASE.update(name="gate")
+        gate = engine.custom_gate()
         torch.cuda.synchronize()
         torch.cuda.profiler.start()
         for i in range(a.reps):
