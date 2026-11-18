@@ -6,7 +6,7 @@ A deployment's registration is one append-only log of entries, each naming the h
 the digest of the log's last entry, or its composite's genesis when the log is empty, so the head names the whole log.
 An entry is one of three kinds:
 
-* a site entry, the Site's own (`verity.device.Entry`, `verity/registration/site/v2`): the sheets, locations and
+* a site entry, the Site's own (`site_log.Entry`, `verity/registration/site/v2`): the sheets, locations and
   links it adds to the Site, its JSON, digest and check the Site's;
 * an information entry (`Information`, `verity/registration/information/v1`): its items, each registered once in the
   log (`item_key`): θ, each registered value by its committed root, and the builder B (its digest, its advice's format
@@ -25,10 +25,10 @@ the log        {"composite": "onsite" | "remote", "entries": [ENTRY, ...]}   com
 ~~~
 
 `check` holds each entry to the log before it and raises `Refused` at the first entry that fails, by the first check it
-fails (`REFUSALS`): a site entry by the Site's (`verity.device.entry_refusal`), an information entry by `previous`,
+fails (`REFUSALS`): a site entry by the Site's (`site_log.entry_refusal`), an information entry by `previous`,
 then `configuration-unordered` (a configuration item, which the log has no coin or run to order) and then
 `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`; where every entry
-passes and the Site the log folds to lacks hardware the auditor's figures list (`verity.device.incomplete`), it
+passes and the Site the log folds to lacks hardware the auditor's figures list (`site_log.incomplete`), it
 raises `Refused` by `inventory` at the log's length. A component reads its view of an accepted log (`View`): the Site,
 θ's values (`View.value`), the builder and the days' registered circuits (`View.declared`), at the head, and the head
 after the log's first entry (`View.first`). Decoding takes exactly what the encoders write and raises `Malformed`
@@ -46,11 +46,12 @@ from typing import Any
 from verity import device as S
 from verity.device import Auditor, Malformed
 from verity.channel import canonical
+from verity.protocols.registration.verifier import site_log as L
 
 INFORMATION = "verity/registration/information/v1"
 DECLARATION = "verity/registration/declaration/v1"
 PROTOCOL = "verity/registration/log/v1"
-REFUSALS = (*S.REFUSALS, "duplicate-information", "duplicate-declaration", "configuration-unordered")
+REFUSALS = (*L.REFUSALS, "duplicate-information", "duplicate-declaration", "configuration-unordered")
 
 
 class Refused(Exception):
@@ -99,7 +100,7 @@ class Declaration:
         return S.tagged(DECLARATION, self.to_json())
 
 
-Entry = S.Entry | Information | Declaration
+Entry = L.Entry | Information | Declaration
 """An entry of the registration log: the Site's site entry, an information entry, or a declaration."""
 
 
@@ -108,14 +109,14 @@ def item_key(item: Mapping[str, Any]) -> str:
     return "theta " + item["value"] if item["kind"] == "theta" else item["kind"]
 
 
-def site(sheets: Sequence[S.Sheet] = (), locs: Sequence[S.Loc] = (), links: Sequence[S.Link] = ()) -> S.Entry:
+def site(sheets: Sequence[S.Sheet] = (), locs: Sequence[S.Loc] = (), links: Sequence[S.Link] = ()) -> L.Entry:
     """A site entry adding `sheets`, `locs` and `links`, its `previous` for `chain` to set."""
-    return S.Entry("", tuple(sheets), tuple(locs), tuple(links))
+    return L.Entry("", tuple(sheets), tuple(locs), tuple(links))
 
 
 def head(composite: str, log: Sequence[Entry]) -> str:
     """The log's head, which names it."""
-    return log[-1].digest() if log else S.genesis(composite)
+    return log[-1].digest() if log else L.genesis(composite)
 
 
 def chain(composite: str, entries: Sequence[Entry]) -> list[Entry]:
@@ -220,8 +221,8 @@ def entry_of(j: Any) -> Entry:
     if not isinstance(j, dict) or "format" not in j:
         raise Malformed("an entry: format missing")
     fmt = _str(j["format"], "an entry's format")
-    if fmt == S.SITE:
-        return S.Entry.of_json(j)
+    if fmt == L.SITE:
+        return L.Entry.of_json(j)
     if fmt == INFORMATION:
         _exactly(j, ["format", "items", "previous"], "an information entry")
         return Information(tuple(item_of(i) for i in _list(j["items"], "items")), _str(j["previous"], "previous"))
@@ -230,7 +231,7 @@ def entry_of(j: Any) -> Entry:
         previous = _hex64(j["previous"], "previous")
         blocks = tuple(_str(b, "a declaration's block") for b in _list(j["blocks"], "blocks"))
         return Declaration(_nat(j["day"], "day"), _hex64(j["program"], "program"), blocks, previous)
-    raise Malformed(f"an entry: format {fmt} is not one of [{S.SITE}, {INFORMATION}, {DECLARATION}]")
+    raise Malformed(f"an entry: format {fmt} is not one of [{L.SITE}, {INFORMATION}, {DECLARATION}]")
 
 
 def log_of(j: Any) -> tuple[str, list[Entry]]:
@@ -246,10 +247,10 @@ def _nodup(xs: Sequence[str]) -> bool:
     return len(set(xs)) == len(xs)
 
 
-def site_refusal(auditor: Auditor, composite: str, s: S.Site, head: str, e: S.Entry) -> str | None:
+def site_refusal(auditor: Auditor, composite: str, s: S.Site, head: str, e: L.Entry) -> str | None:
     """The first check a site entry `e` fails against the Site `s` and head `head` of the log before it, or None: the
-    Site's (`verity.device.entry_refusal`)."""
-    return S.entry_refusal(composite, s, head, e, auditor)
+    Site's (`site_log.entry_refusal`)."""
+    return L.entry_refusal(composite, s, head, e, auditor)
 
 
 @dataclass(frozen=True)
@@ -267,7 +268,7 @@ class State:
     heads: tuple[tuple[int, str], ...] = ()
 
     def refusal(self, auditor: Auditor, composite: str, e: Entry) -> str | None:
-        if isinstance(e, S.Entry):
+        if isinstance(e, L.Entry):
             return site_refusal(auditor, composite, self.site, self.head, e)
         if e.previous != self.head:
             return "previous"
@@ -280,8 +281,8 @@ class State:
     def add(self, e: Entry) -> State:
         s = replace(self, head=e.digest(), first=e.digest() if self.first is None else self.first,
                     entries=self.entries + 1, heads=self.heads + ((self.entries + 1, e.digest()),))
-        if isinstance(e, S.Entry):
-            return replace(s, site=s.site.add(e))
+        if isinstance(e, L.Entry):
+            return replace(s, site=L.add(s.site, e))
         if isinstance(e, Declaration):
             return replace(s, declared=s.declared + (replace(e, previous=""),))
         return replace(s, items=s.items + e.items)
@@ -296,12 +297,12 @@ def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
     """The log folded entry by entry, each held to the log before it; `Refused` at the first entry that fails, or, where
     every entry passes and the Site the log folds to is not complete against the auditor's figures, by `inventory` at
     the log's length."""
-    s = State(S.Site(), (), S.genesis(composite), 0, heads=((0, S.genesis(composite)),))
+    s = State(S.Site(), (), L.genesis(composite), 0, heads=((0, L.genesis(composite)),))
     for e in log:
         if r := s.refusal(auditor, composite, e):
             raise Refused(s.entries, r)
         s = s.add(e)
-    if S.incomplete(s.site, auditor) is not None:
+    if L.incomplete(s.site, auditor) is not None:
         raise Refused(s.entries, "inventory")
     return s
 

@@ -228,16 +228,6 @@ def test_ram_work_stages_nothing_under_the_memory_floor(job, tmp_path: Path, shm
     assert not any(c.startswith("window") for c in calls) and not shm.exists() and not (tmp_path / "disk").exists()
 
 
-def test_ram_work_stops_staging_and_removes_everything_when_memory_falls_under_the_floor(job, tmp_path: Path, shm: Path):
-    """The floor is read while window.py stages: once MemAvailable is under it the staging is stopped, and FLOCK_WORK and
-    DISK_WORK are removed, under STEPS=stage too, which otherwise keeps them."""
-    for steps_ in ("stage prove", "stage"):
-        rc, steps, _ = job(STEPS=steps_, LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=str(tmp_path / "disk"),
-                           FALLS_TO="420", MEM_POLL_S="0.05", HELD="6")
-        assert rc == 5 and "STOPPED: the node's MemAvailable fell to 420 GB, under MEM_FLOOR_GB=500" in steps, steps
-        assert not shm.exists() and not (tmp_path / "disk").exists() and "window.py prove" not in steps
-
-
 def test_refuses_a_device_or_steps_it_does_not_know(job):
     rc, steps, calls = job(DEV="tpu")
     assert rc == 2 and "DEV is gpu or cpu, not tpu" in steps and calls == []

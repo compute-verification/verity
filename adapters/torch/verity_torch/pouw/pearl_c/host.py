@@ -62,8 +62,12 @@ def torch_uint8() -> Any:
 
 
 def _zeros(n: int, device: Any) -> Any:
+    """At least 16 zero bytes on `device` as a normal tensor, even when made inside inference mode (a vLLM forward, or
+    `PearlCDeviceRun.gemm`): `_put` writes them in place outside it too (a retained pass's end), which torch refuses into
+    an inference tensor."""
     import torch
-    return torch.zeros(max(n, 16), dtype=torch.uint8, device=device)
+    with torch.inference_mode(False):
+        return torch.zeros(max(n, 16), dtype=torch.uint8, device=device)
 
 
 def _put(t: Any, data: bytes) -> None:
