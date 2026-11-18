@@ -11,9 +11,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 import pytest
-from research.vqueue import (BASE_DROPPED, BUILT, FAIL, INFRA, INFRA_SPLIT, LIST_FAILED, ON_MAIN, PASS, PENDING, Advance, Build,
-                             Candidate, Commit, Drop, Eject, Failed, Leave, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun,
-                             Retry, Ring, Snapshot, UNSAID, Verdict, Wait, decide, left_out, meets)
+from research.vqueue import (BASE_DROPPED, BUILT, FAIL, INFRA, INFRA_SPLIT, LIST_FAILED, NEVER_RAN, ON_MAIN, PASS, PENDING, Advance,
+                             Build, Candidate, Commit, Drop, Eject, Failed, Leave, Outcome, Ready, RecordsRun, Red, Regenerate,
+                             Rerun, Retry, Ring, Snapshot, UNSAID, Verdict, Wait, decide, left_out, meets)
 from research.vqueue_slim import Read, joined, read_step, read_suite, unnamed
 
 MAIN = "m0"
@@ -663,6 +663,22 @@ def test_without_tree_ejects_infra_that_persists_is_split_on_its_inputs_as_infra
                         Drop("c2", "its base failed"), *rebuilt], (tries, rings)
 
 
+def test_launches_that_never_started_above_the_lowest_are_retried_at_once_side_by_side_and_only_once():
+    """Two candidates above a pending lowest whose launches started none of their steps are both enqueued again in that
+    tick, rather than each waiting to be the lowest; one already enqueued again waits to be the lowest, and an infra error
+    from a step that ran still waits for the lowest's rules.  A quick tier's run that left its slot line unrun is such a
+    launch by its words alone, as a verdict recorded before `Failed.launch` was set for it says."""
+    unrun = (replace(task("quick-tier"), launch=True),)
+    lowest = cand("c1", MAIN, 1)
+    c2, c3 = cand("c2", "c1", 2, state=INFRA, infra=unrun), cand("c3", "c2", 3, state=INFRA, infra=unrun)
+    assert decide(snap(lowest, c2, c3, ready=prs(1, 2, 3))) == [Retry("c2"), Retry("c3")]
+    assert decide(snap(lowest, replace(c2, tries=2), c3, ready=prs(1, 2, 3))) == [Retry("c3")]
+    said = (task(f"the run beside its check (r1) run r1 on m1 {NEVER_RAN} (`research inspect r1`)"),)
+    assert decide(snap(lowest, replace(c2, verdict=Verdict(INFRA, (), said)), c3, ready=prs(1, 2, 3))) == [Retry("c2"), Retry("c3")]
+    ran = cand("c2", "c1", 2, state=INFRA, infra=(task("test-file:pkg2/tests/test_reads.py", "pkg2/mod.py"),))
+    assert decide(snap(lowest, ran, ready=prs(1, 2))) == []
+
+
 def test_infra_that_persists_is_retried_at_every_reading_and_rings_in_the_same_words_from_the_second():
     """The loop rings each (candidate, why) once, so the why changes with the erring tasks, in any order, and not with the
     enqueues: five readings ring infra once, and another set of erring tasks rings it again."""
@@ -1159,6 +1175,17 @@ def test_a_staged_batch_reads_no_verdict_and_the_chain_fills_beside_it_with_no_s
     assert decide(s) == [Advance("c0"), Drop("c0", "on main", Outcome((3,), heads(3), PASS)), Build((2,), "c0", 3)]
     s = replace(s, candidates=(cand("c0", MAIN, 3), waiting("c1", "c0", 1), cand("c2", "c0", 2)))
     assert decide(s) == decide(replace(s, depth=2)) == []
+
+
+def test_a_pr_that_conflicts_with_the_staged_batch_s_members_waits_while_it_is_staged_and_is_built_once_it_is_on_the_chain():
+    """A PR a build left out for conflicting with the staged batch's members (`Ready.staged_conflict`) is taken into no batch
+    beside that batch, the others built meanwhile, saying why; once the batch is on the chain it is built in rank order,
+    where a conflict is one with members below it, as any."""
+    under = replace(pr(2), staged_conflict=True)
+    s = snap(waiting("c1", MAIN, 1), ready=[lean(1), under, pr(3)], depth=3, records=True)
+    assert decide(s) == [Build((3,), MAIN, 3)]
+    assert [(x.number, x.cause) for x in left_out(s)] == [(2, "conflicts with staged batch")]
+    assert decide(replace(s, candidates=(cand("c1", MAIN, 1),))) == [Build((2, 3), "c1", 2)]
 
 
 @pytest.mark.parametrize("files", [("tools/check/check.py",), ("tools/pous_grader/scripts/gen.py",)],

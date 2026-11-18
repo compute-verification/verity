@@ -168,8 +168,10 @@ def _mark(doc: Mapping[str, Any], figure: str) -> tuple[float | None, str, str]:
         other = "" if low == high else f"; range {low:.6g} to {high:.6g}, the other end {t['range_basis']}"
         own = (f"; at the sampling plan's own prices, which its planner sized the sample at: {t['planned'][figure]:.6g}"
                if t.get("planned") else "")
+        bound = (f"; an upper bound, since {len(t['bounded'])} block type(s) are priced at a larger block's rate (bounded by)"
+                 if t.get("bounded") else "")
         return t[figure], mark, (f"{status}: steady-state measurements cover {t['steady_time_share']:.1%} of the proving time"
-                           f"{' it prices' if t['missing'] else ''}{other}{own}")
+                           f"{' it prices' if t['missing'] else ''}{bound}{other}{own}")
     v = t[figure]
     if v is None:
         return None, "modeled", ("not measured: no Lean verifier run of record measures a block type "
