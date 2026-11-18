@@ -1529,8 +1529,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     the record: ``FORMAT``, or ``FORMAT_V2`` with ``entries``, and ``digest``), chained after ``previous``, registering
     the values' ``entries`` and naming the roots of the values it ``outputs``; the period's provenance gets the index's hiding
     leaf (`index_leaf`), so the registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt
-    are prover only: the salt is ``index_salt`` (192 bytes, a committer's sampled under its key) or else fresh bytes from the
-    OS.  ``registered``: by member key, an outside value's reads (``salts_of``), each a header entry
+    are prover only: the salt is ``index_salt`` (192 fresh bytes from the OS the committer already holds, a recommit's
+    read back from ``index-salt.bin``) or else fresh bytes from the OS.  ``registered``: by member key, an outside value's reads (``salts_of``), each a header entry
     (``{port: {"value", "positions", "paths"}}``), whose paths ``window.json`` gives once for the period
     (``registered_paths``, by value and position; `registered_header`).  A member's ``m<k>-private.bin`` is its prover body
     less two kinds of port, rows and salts: a port given as a registered value's rows (`Committed.by_value`) its entry names

@@ -11,11 +11,11 @@
 #   sass.json            registers and tensor-core, copy and local-memory instruction counts per kernel
 #   ptxas.txt, toolchain.txt (nvcc --version and the full nvcc command line)
 # ship.sh adds the check and what the card runs it with.  Needs no uv.
-# Usage: bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh [OUT]   (default /tmp/pearl-c-sm120-ship; CUDA names the toolkit, default
-#        /usr/local/cuda-13.0)
+# Usage: bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh [OUT]   (default /tmp/pearl-c-sm120-ship; CUDA_HOME names the toolkit,
+#        which callers read from the machine)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-CUDA=${CUDA:-/usr/local/cuda-13.0}; OUT=${1:-/tmp/pearl-c-sm120-ship}
+CUDA=${CUDA_HOME:?set CUDA_HOME to a CUDA toolkit of nvcc 12.8 or later}; OUT=${1:-/tmp/pearl-c-sm120-ship}
 [ -x "$CUDA/bin/nvcc" ] || { echo "no nvcc at $CUDA" >&2; exit 1; }
 "$CUDA/bin/nvcc" --version | grep -Eq "release 12\.(8|9)|release 1[3-9]\." || { echo "$CUDA's nvcc is older than 12.8" >&2; exit 1; }
 rm -rf "$OUT"; mkdir -p "$OUT"

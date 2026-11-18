@@ -82,11 +82,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.resource_accounting.network.verifier.head_check import (
-    _coll,
-    _Consts,
-    ands,
-)
+from verity.commitments.gates.bits import _coll, _Consts, ands
 
 STATICS = ("N", "U", "TW", "RW", "L")
 

@@ -516,11 +516,12 @@ class _Decided:
 
 def test_no_outcome_of_a_stand_in_replay_block_says_it_is_complete(monkeypatch):
     """`outcome_of` reports ``complete`` beside ``accepted``. The replay block here is a stand-in for the class's
-    request Definition (`REQUEST_DEFINITION`) and the two-stage form is off (`second_stage.FORM`), so an outcome whose
-    stream accepted on two audit records that accepted and are complete is still not complete; nor is it with either
-    one switched on alone. Completeness is Lean's (`second_stage.complete`), which no entry answers yet, so with both on
-    it is not either. With Lean's answer (its twin standing in) and both on it is, and then only for an accepted
-    outcome whose records both accepted and are complete. A refused outcome is not."""
+    request Definition (`REQUEST_DEFINITION`), so an outcome whose stream accepted on two audit records that accepted and
+    are complete is still not complete, with the two-stage form allowed (`second_stage.FORM`, on) or not. Completeness is
+    Lean's (`second_stage.complete`), which no entry answers yet, so with the request Definition on it is not either.
+    With Lean's answer (its twin standing in) and the request Definition on it is, and then only for an accepted outcome
+    whose records both accepted and are complete, the form allowed. A refused outcome is not. An accepted outcome says its
+    form is not yet proved (`not_covered`), whatever it says of its completeness."""
     handed = {"sessions": [], "verdicts": {}, "statement": {}, "proved_units": [], "instances": 0, "served": [],
               "session_roots": {}}
     whole = {"accepted": True, "complete": True, "checks": {}}
@@ -528,22 +529,20 @@ def test_no_outcome_of_a_stand_in_replay_block_says_it_is_complete(monkeypatch):
     def said(stream: _Decided) -> bool:
         return TS.outcome_of(stream, None, handed, [None, None], [], {})["complete"]
 
-    assert TS.REQUEST_DEFINITION is False and SS.FORM is False
+    assert TS.REQUEST_DEFINITION is False and SS.FORM is True
     assert TS.outcome_of(_Decided(True, whole, whole), None, handed, [None, None], [], {})["accepted"] is True
+    assert TS.outcome_of(_Decided(True, whole, whole), None, handed, [None, None], [], {})["not_covered"] == TS.NOT_COVERED
+    assert TS.outcome_of(_Decided(False, whole, whole), None, handed, [None, None], [], {})["not_covered"] is None
     assert said(_Decided(True, whole, whole)) is False
     with monkeypatch.context() as m:
-        m.setattr(SS, "FORM", True)
         m.setattr(TS, "REQUEST_DEFINITION", True)
         assert said(_Decided(True, whole, whole)) is False
     monkeypatch.setattr(SS, "complete", SS.complete_twin)
     assert said(_Decided(True, whole, whole)) is False
     with monkeypatch.context() as m:
-        m.setattr(SS, "FORM", True)
-        assert said(_Decided(True, whole, whole)) is False
-    with monkeypatch.context() as m:
+        m.setattr(SS, "FORM", False)
         m.setattr(TS, "REQUEST_DEFINITION", True)
         assert said(_Decided(True, whole, whole)) is False
-    monkeypatch.setattr(SS, "FORM", True)
     monkeypatch.setattr(TS, "REQUEST_DEFINITION", True)
     assert said(_Decided(True, whole, whole)) is True
     assert said(_Decided(False, whole, whole)) is False

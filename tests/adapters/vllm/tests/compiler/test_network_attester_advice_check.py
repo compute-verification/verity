@@ -11,8 +11,8 @@ import itertools
 import random
 
 import pytest
-from verity.protocols.resource_accounting.network.verifier import advice as V
-from tests.verity.protocols.resource_accounting.network.verifier.test_network_attester_advice import (
+from verity_vllm.pipeline.advice_code import format as V
+from tests.adapters.vllm.tests.pipeline.test_advice_format import (
     FIXTURE,
     RANDOM,
     packed,

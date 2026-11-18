@@ -129,7 +129,8 @@ class Serve:
         try:
             key = Ch.ChallengerKey.from_json(json.loads((out / remote.KEY).read_text()))
             files = remote.session_files(out)
-            signed, received, _ = Ch.session_of(key, files["record"], files["log"], files["close"], self.verify)
+            signed, log, _ = Ch.session_of(key, files["record"], files["log"], files["close"], self.verify)
+            received = Ch.by_family(signed, log)
         except coins.Undecided as e:
             return {**doc, "reason": str(e), "undecided": True}
         except (Ch.CoinError, OSError, ValueError) as e:

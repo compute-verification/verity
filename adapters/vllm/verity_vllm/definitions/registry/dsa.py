@@ -63,12 +63,19 @@ dtype, rotary_embedding/base.py:59-63).  `ks` is the key's f32 scale from its ca
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32, const
+from verity.circuits.ops.scalar import (
+    F32Fabs,
+    F32Fmaxf,
+    F32Neg,
+    I32Add,
+    I32Le,
+    SelectI32,
+)
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32, const
-from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.fp8 import E4M3

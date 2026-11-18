@@ -38,7 +38,7 @@ from verity.commitments.randomness import uniform_from_words
 
 from .challenger import (COIN_BYTES, MAX_COINS, MAX_HELLOS, MAX_LEDGER_LINES, MAX_LOG_LINES, MAX_PATH, MAX_PINS,
                          WITHHELD, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify, live_reason,
-                         record_many, trusted_session_of, withheld_on)
+                         record_many, trusted_session_of, withheld_on, by_family)
 from verity.protocols.proofs.spot.verifier.one_stage.draw import digits, strata_problem
 from .remote import MAX_BATCH
 
@@ -358,8 +358,9 @@ def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins:
     sample's coins through it (`OneStage.coinsOf`). Raises `CoinError`."""
     if not isinstance(coins, Mapping) or sorted(coins) != ["ledger", "main", "pins", "segment", "session"]:
         raise CoinError(DRAW_FORM)
-    commitment, roots = trusted_session_of(coins["ledger"], {"root": window}, key, coins["pins"], coins["main"],
-                                           coins["session"], verify)
+    commitment, log = trusted_session_of(coins["ledger"], {"root": window}, key, coins["pins"], coins["main"],
+                                         coins["session"], verify)
+    roots = by_family(commitment, log)
     if not withheld_on(coins["ledger"], window):
         raise CoinError(WITHHELD)
     segment = coins["segment"]

@@ -2,8 +2,9 @@
 physical time, so that the batches can be compared across wall-clock jitter and against the rule in logical time alone;
 what isn't certified (unnumbered, late, missing, aborted, a new run, a stalled or broken watermark); the watermark's
 lines, as the network attester's own code writes them (`line`), and the releases they name lost; `tick_plugin` under
-vLLM's own server (`TickFeed`, `FeedReader` and the plugin's engine-core loop); and serve-openai's ``--admit tick`` over
-HTTP."""
+vLLM's own server (`TickFeed`, `FeedReader` and the plugin's hold on the engine core's admission hook); and serve-openai's
+``--admit tick`` over HTTP. The gate is a hold of the adapter's admission hook (`verity_vllm.engine.admission`), which
+these tests put on the stand-in scheduler."""
 from __future__ import annotations
 
 import asyncio
@@ -25,10 +26,11 @@ from verity.protocols.resource_accounting.network.verifier import release as REL
 
 from tests import fake_vllm
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Tokenizer
-from verity_vllm.engine import hooks
+from verity_vllm import messages
+from verity_vllm.engine import admission, core_gate, hooks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_admit as sa
-from verity_vllm.pipeline import serve_head as hd
+from verity.protocols.resource_accounting.network.prover import serve_head as hd
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import tick_plugin as tp
 
@@ -43,6 +45,13 @@ def line(t: int, n: int, lost: Sequence[int] = ()) -> bytes:
     k = int(size.split(b";", 1)[0], 16)
     assert rest[k:] == b"\r\n"
     return rest[:k]
+
+
+def hooked(sched: Any, gate: sa.TickGate, key: Any = lambda rid: rid) -> admission.Hook:
+    """The admission hook on ``sched``, over an exchange of its own with ``gate`` attached."""
+    ex = messages.Exchange()
+    gate.attach(ex)
+    return admission.install(sched, ex, key)
 
 
 class Req:
@@ -63,6 +72,7 @@ class Sched:
         self.seqs = seqs
         self.steps: list[list[str]] = []
         self.added: list[str] = []
+        self.handed: list[Any] = []
         self.scheduler_config = SimpleNamespace(policy=policy)
         self.vllm_config = SimpleNamespace(parallel_config=SimpleNamespace(data_parallel_size=dp))
 
@@ -89,7 +99,11 @@ class Sched:
                 self.running.remove(r)
                 self.finished_req_ids.add(r.request_id)
 
+    def update_from_output(self, scheduler_output: Any, model_runner_output: Any) -> dict:
+        return {}
+
     def finish_requests(self, ids: Any, status: Any) -> list[str]:
+        self.handed.append(ids)
         live = {r.request_id for r in (*self.waiting, *self.running)}
         ids = live if ids is None else live & set(ids)
         self.waiting = deque(r for r in self.waiting if r.request_id not in ids)
@@ -118,8 +132,7 @@ def simulate(seed: int, *, gated: bool = True, n: int = 40, lost: Sequence[int] 
     sched = Sched()
     gate = sa.TickGate(TICK, hold_s=600.0, clock=lambda: now)
     watermark = sa.Watermark(RUN, gate.take)
-    if gated:
-        sa.install(sched, gate, key=lambda rid: rid)
+    hook = hooked(sched, gate) if gated else None
     bucket = [int(r * 1e6) // TICK.bucket_us for r in rel]
     events: list[tuple[float, int, str, Any]] = []
     for i in range(n):
@@ -142,8 +155,8 @@ def simulate(seed: int, *, gated: bool = True, n: int = 40, lost: Sequence[int] 
                 assert watermark.feed(line(x, sum(b <= x for b in bucket), [i for i in sorted(lost) if bucket[i] == x]))
             else:
                 assert watermark.close()
-        if gated and not gate.ready(sched):
-            now = events[0][0] if events else now + gate.poll_s
+        if hook is not None and not hook.ready():
+            now = events[0][0] if events else now + hook.poll_s
             continue
         if sched.has_requests():
             sched.schedule()
@@ -219,7 +232,7 @@ class Gated:
         self.log: list[dict] = []
         kw = {"hold_s": hold_s, "clock": lambda: self.now, "log": self.log.append}
         self.gate = tp.RuleGate(TICK, **rule, **kw) if rule else sa.TickGate(TICK, **kw)
-        self.hooks = sa.install(self.sched, self.gate, key=lambda rid: rid)
+        self.hooks = hooked(self.sched, self.gate)
         self.watermark = sa.Watermark(RUN, self.gate.take)
 
     def release(self, n: int, bucket: int | None = None, run: str = RUN, key: str | None = None) -> None:
@@ -238,7 +251,7 @@ class Gated:
         self.sched.add_request(Req(rid, out))
 
     def step(self) -> bool:
-        if not self.gate.ready(self.sched):
+        if not self.hooks.ready():
             return False
         if self.sched.has_requests():
             self.sched.schedule()
@@ -299,15 +312,15 @@ def test_a_rule_gate_adds_its_tokens_to_t_and_catches_up_to_the_newest_line_whil
 
 def test_a_rule_gates_token_term_counts_non_draft_tokens_on_a_clock_of_nanoseconds():
     drafted = SimpleNamespace(total_num_scheduled_tokens=14, scheduled_spec_decode_tokens={"a": [3] * 5, "b": [-1] * 5})
-    assert tp.non_draft_tokens(drafted) == (4, 10)
-    assert tp.non_draft_tokens(SimpleNamespace(total_num_scheduled_tokens=7, scheduled_spec_decode_tokens={})) == (7, 0)
+    assert admission.non_draft_tokens(drafted) == (4, 10)
+    assert admission.non_draft_tokens(SimpleNamespace(total_num_scheduled_tokens=7, scheduled_spec_decode_tokens={})) == (7, 0)
     g = Gated(rule={"token_ns": 600})
     g.release(0, bucket=0)
     g.arrive("r0", out=10)
     g.lines(1)
     assert g.step() and g.gate.T == TICK.close(0) + TICK.free_us
     assert g.step() and g.gate.T == TICK.close(0) + 2 * TICK.free_us + 1
-    assert g.gate.summary()["rule"] == {"token_ns": 600, "catch_up": "quiet", "tokens": {"non_draft": 2, "draft": 0}}
+    assert g.gate.summary()["rule"] == {"token_ns": 600, "catch_up": "quiet", "tokens": {"non_draft": 2}}
 
 
 def test_the_tick_config_names_the_registered_rule_by_default_and_refuses_another_it_does_not_know(tmp_path):
@@ -428,10 +441,10 @@ def test_an_open_gate_adds_a_lost_releases_request_at_once_like_any_other():
     assert g.sched.added == ["r0", "r1"] and g.gate.lost == {0, 1} and g.gate.counts["dropped"] == 0
 
 
-def test_a_dropped_requests_abort_stops_at_the_gate():
-    """The gate keeps the id of each request it drops for a lost release, the one it held when the line came and the
-    one that comes after it, and takes it out of ``finish_requests``' ids as it does a held request's: the scheduler is
-    handed no id of a request it never saw, whatever it would do with one. An id is kept only until its abort."""
+def test_a_dropped_requests_abort_stops_at_the_hook():
+    """The hook keeps each request the gate drops for a lost release, the one it held when the line came and the one that
+    comes after it, and takes it out of ``finish_requests``' ids as it does a held request's: the scheduler is handed no
+    id of a request it never saw, whatever it would do with one. A request is kept only until its abort."""
     g = Gated()
     for n in range(4):
         g.release(n, bucket=0)
@@ -441,8 +454,9 @@ def test_a_dropped_requests_abort_stops_at_the_gate():
     g.arrive("r2")                                   # r2 comes after it
     g.arrive("r3")
     assert g.sched.added == [] and sorted(g.gate.held) == [1, 3]
-    assert g.gate.finished(["r0", "probe", "r3", "r2"]) == ["probe"]                  # r3 is held: its abort drops it, as before
-    assert g.gate.dropped_ids == set() and g.gate.finished("r0") == ["r0"]
+    g.sched.finish_requests(["r0", "probe", "r3", "r2"], "aborted")                  # r3 is held: its abort drops it, as before
+    g.sched.finish_requests("r0", "aborted")
+    assert g.sched.handed == [["probe"], ["r0"]]
     assert counts(g) == {"admitted": 0, "lost": 2, "dropped": 2, "aborted": 1, "held_now": 1}
     assert g.step() and g.sched.added == ["r1"]
 
@@ -522,13 +536,13 @@ def test_the_header_bucket_is_checked_against_the_watermark():
 
 def test_install_refuses_what_the_tick_does_not_order_and_comes_off():
     with pytest.raises(RuntimeError, match="FCFS"):
-        sa.install(Sched(policy="priority"), sa.TickGate(TICK, hold_s=1))
+        hooked(Sched(policy="priority"), sa.TickGate(TICK, hold_s=1))
     with pytest.raises(RuntimeError, match="data-parallel"):
-        sa.install(Sched(dp=2), sa.TickGate(TICK, hold_s=1))
+        hooked(Sched(dp=2), sa.TickGate(TICK, hold_s=1))
     g = Gated()
-    assert {e.name for e in hooks.live("admit-tick")} >= {"add_request", "schedule", "finish_requests", "_verity_tick"}
+    assert {e.name for e in hooks.live("scheduler-step")} >= {"add_request", "schedule", "update_from_output", "finish_requests"}
     g.hooks.uninstall()
-    assert not hasattr(g.sched, "_verity_tick") and "add_request" not in vars(g.sched)
+    assert "add_request" not in vars(g.sched)
 
 
 def test_watermark_lines_as_the_network_attester_sends_them():
@@ -793,7 +807,7 @@ class EngineCoreProc:
         self.running, self.idle_calls = True, 0
 
     def _process_input_queue(self) -> None:
-        raise AssertionError("the gated loop replaces it")
+        raise AssertionError("the seam's input loop replaces it")
 
     def has_work(self) -> bool:
         return self.scheduler.has_requests()
@@ -819,14 +833,24 @@ def plugin(tmp_path, monkeypatch):
         pass
 
     fake = fake_vllm.install(monkeypatch)
-    fake.set("vllm.v1.core.sched.scheduler:Scheduler", Scheduler)
     fake.set("vllm.v1.engine.core:EngineCoreProc", EngineCoreProc)
+    fake.set("vllm.v1.engine.core:EngineCore", type("EngineCore", (), {"step": lambda self: None,
+                                                                         "step_with_batch_queue": lambda self: None}))
     tp.register()
     tp.register()
     try:
         yield Scheduler
     finally:
-        tp._PLUGIN.pop().uninstall()
+        tp._PLUGIN.clear()
+        core_gate.SEAM.uninstall()
+        messages.close()
+
+
+def made(core: EngineCoreProc) -> tuple[admission.Hook, sa.TickGate]:
+    """The admission hook the seam makes for ``core``, and the plugin's gate it filed on the exchange."""
+    (hook,) = core_gate.SEAM._state(core).gates
+    ((_, request),) = hook.ex.requests
+    return hook, request.gate
 
 
 def test_the_plugin_gates_the_engine_cores_input_loop(plugin, tmp_path):
@@ -845,15 +869,16 @@ def test_the_plugin_gates_the_engine_cores_input_loop(plugin, tmp_path):
 
     feeder = threading.Thread(target=watermark)
     feeder.start()
-    poll = sched._verity_tick.ready
+    _, gate = made(core)
+    poll = gate.ready
 
-    def ready(s: Any) -> bool:
-        ok = poll(s)
+    def due(event: Any) -> bool:
+        ok = poll(event)
         if not ok:
             released.set()
         return ok
 
-    sched._verity_tick.ready = ready
+    gate.ready = due
     core._process_input_queue()
     assert sched.added == ["cmpl-probe-0-0123abcd"]      # the probe at once; c0 waits for bucket 0's line
     sched.schedule()
@@ -865,7 +890,7 @@ def test_the_plugin_gates_the_engine_cores_input_loop(plugin, tmp_path):
     core._process_input_queue()                          # waits until the feeder writes bucket 0's line
     feeder.join()
     assert sched.added == ["cmpl-probe-0-0123abcd", "cmpl-c0-0-0123abcd"]
-    assert sched._verity_tick.summary()["unordered"] == 1 and TICK.close(0) == sched._verity_tick.T
+    assert gate.summary()["unordered"] == 1 and TICK.close(0) == gate.T
     logged = [json.loads(x) for x in next(tmp_path.glob("tick.*.jsonl")).read_text().splitlines()]
     assert logged[0]["event"] == "unordered" and logged[-1]["admitted"] == [0, 1]
     write({"key": "c9", "run": "ab", "n": 1, "bucket": 5})
@@ -873,7 +898,7 @@ def test_the_plugin_gates_the_engine_cores_input_loop(plugin, tmp_path):
     assert sched.added[-1] == "cmpl-c0-0-0123abcd"
     core.running = False
     core._process_input_queue()
-    assert sched._verity_tick.opened == "the engine core is shutting down" and sched.added[-1] == "cmpl-c9-0-0123abcd"
+    assert gate.opened == "the engine core is shutting down" and sched.added[-1] == "cmpl-c9-0-0123abcd"
 
 
 def test_under_vllms_server_the_lost_releases_reach_the_gate_through_the_feed(plugin, tmp_path):
@@ -881,7 +906,8 @@ def test_under_vllms_server_the_lost_releases_reach_the_gate_through_the_feed(pl
     gate. Release 0's request is in the engine core before its line names it lost and release 2's comes after it:
     neither reaches the scheduler, and the abort vLLM sends when such a request's connection closes finds nothing."""
     sched = plugin()
-    gate, feed = sched._verity_tick, tp.TickFeed(App())
+    hook, gate = made(EngineCoreProc(sched))
+    feed = tp.TickFeed(App())
     ids = [f"cmpl-c{n}-0-0123abcd" for n in range(4)]
     for n in range(4):
         asgi(feed, scope_of("/v1/completions", {"x-verity-release": str(n), "x-verity-release-run": RUN, "x-request-id": f"c{n}"}),
@@ -892,15 +918,15 @@ def test_under_vllms_server_the_lost_releases_reach_the_gate_through_the_feed(pl
     assert asgi(feed, scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": RUN}), [data[:5], data[5:], b""])[0]["status"] == 200
     assert tp.FeedReader(tmp_path / "feed.jsonl")()[4:] == [{"run": RUN, "t": 0, "n": 3, "lost": [0, 2]}, {"run": RUN, "t": 1, "n": 4},
                                                             {"run": RUN, "end": True}]
-    assert gate.ready(sched) and (sched.added, gate.T) == ([ids[1]], TICK.close(0))
+    assert hook.ready() and (sched.added, gate.T) == ([ids[1]], TICK.close(0))
     sched.add_request(Req(ids[2]))
     sched.add_request(Req(ids[3]))
     assert sched.added == [ids[1]] and sorted(gate.held) == [3]
     sched.schedule()
     sched.update()
-    assert gate.ready(sched)                             # the step that frees release 1 comes first
+    assert hook.ready()                                  # the step that frees release 1 comes first
     sched.schedule()
-    assert gate.ready(sched) and (sched.added, gate.T) == ([ids[1], ids[3]], TICK.close(1))
+    assert hook.ready() and (sched.added, gate.T) == ([ids[1], ids[3]], TICK.close(1))
     assert sched.finish_requests([ids[0], ids[2]], "aborted") == []
     s = gate.summary()
     assert (s["admitted"], s["lost"], s["dropped"], s["aborted"], s["skipped"], s["late"], s["opened"]) == (2, 2, 2, 0, 0, 0, None)
@@ -1176,8 +1202,8 @@ def tick_endpoint() -> Iterator[SimpleNamespace]:
     watermark lines the server has read."""
     engine = SchedEngine()
     gate = sa.TickGate(TICK, hold_s=60.0, clock=lambda: 0.0)
-    sa.install(engine.sched, gate, key=lambda rid: rid.rsplit("-", 1)[0])
-    loop = so.EngineLoop(engine, None, gate=gate, sched=engine.sched)
+    hook = hooked(engine.sched, gate, key=lambda rid: rid.rsplit("-", 1)[0])
+    loop = so.EngineLoop(engine, None, gate=gate, hook=hook)
     held, lines = threading.Semaphore(0), threading.Semaphore(0)
     add = gate.add
 
