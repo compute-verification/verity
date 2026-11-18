@@ -12,7 +12,9 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.pipeline.serve_seal import GB
+from verity_vllm import settings
+
+GB = 10 ** 9
 
 
 class DiskFloor:
@@ -42,7 +44,7 @@ class DiskFloor:
                 f"sealed window ({int(window) / GB:.0f} GB, --window-gb): free space there or lower them")
 
 
-def out_refusal(out: str | None, environ: Mapping[str, str] = os.environ) -> str | None:
+def out_refusal(out: str | None, environ: Mapping[str, str] | None = None) -> str | None:
     """Why ``--out`` can't hold the serve's private records: none given, or it is the run's directory or inside it, which custody
     uploads with no filter by private name (only ``--copy-records-to $OUT`` writes the public records there)."""
     if not out:
@@ -53,11 +55,11 @@ def out_refusal(out: str | None, environ: Mapping[str, str] = os.environ) -> str
     return None
 
 
-def inside_run(what: str, path: str | Path, environ: Mapping[str, str] = os.environ) -> str | None:
+def inside_run(what: str, path: str | Path, environ: Mapping[str, str] | None = None) -> str | None:
     """Why ``path`` can't hold private files: it is the run's directory or inside it, which a run uploads with no filter by
     private name; None when it is outside."""
     for name in ("RESEARCH_RUN_DIR", "OUT"):
-        if (run := environ.get(name)) and Path(os.path.realpath(path)).is_relative_to(os.path.realpath(run)):
+        if (run := settings.raw(name, environ)) and Path(os.path.realpath(path)).is_relative_to(os.path.realpath(run)):
             return f"{what} {path} is ${name} ({run}) or inside it, which a run uploads with no filter by private name"
     return None
 

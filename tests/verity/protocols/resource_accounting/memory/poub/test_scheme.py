@@ -49,14 +49,20 @@ def test_poub_is_the_remote_sessions_and_the_binders_name() -> None:
 
 class Exchange:
     def __init__(self) -> None:
-        self.requests, self.subscribed = [], []
+        self.requests, self.subscribed, self.fns = [], [], []
 
     def request(self, name, request) -> None:
         self.requests.append((name, request))
 
     def subscribe(self, name, hook, fn):
         self.subscribed.append((name, hook))
+        self.fns.append((hook, fn))
         return lambda: None
+
+    def emit(self, event) -> None:
+        for hook, fn in self.fns:
+            if hook == event.hook:
+                fn(event)
 
 
 def ctx(given=None, **launcher):
@@ -72,6 +78,28 @@ def test_the_binder_subscribes_under_the_declaration() -> None:
     ex = Exchange()
     binder.Binder(None, fifo=False).install(ex)
     assert ex.requests == []
+
+
+def test_every_event_on_its_hooks_passes_the_binder_and_its_own_are_still_handled() -> None:
+    """Every event the adapter can emit on the binder's hooks (``memory`` and ``steps``) reaches its one handler,
+    whose dispatch reads only the hook: each passes, the binder's own are handled, and what is no event is refused."""
+    import torch
+    ex, w = Exchange(), torch.zeros(4096, dtype=torch.uint8)
+    b = poub.POUB.attach(ex, ctx({"passes": False, "kv": False}))
+    pool = torch.zeros(2 * 2 * 16 * 64, dtype=torch.float16)
+    sent = (H.Declared("card", {}), H.RegisteredValues((("a.weight", w),)), H.RangesDeclared(2, 16, 256, 1, (pool,)),
+            H.InputArrived("a", 3, 0), H.StepBegan(0, ("a",), 1), H.RangeAllocated((0,), "a"), H.RangeWritten(0, 0, 3),
+            H.PhaseOpened(0, 0), H.ValueProduced("b", "x", 0, None), H.BlockDue("b", 1, {"n": 1}, "int8", {}),
+            H.StepComputed(0), H.StepEnded(0), H.OutputsComplete("a", 0), H.RangeFreed((0,)), H.PhaseClosed(0, 0, b""),
+            H.PhaseCommitted(0, bytes(64)))
+    assert {type(e) for e in sent} == set(H.EVENTS)
+    for e in sent:
+        ex.emit(e)
+    assert [r.name for r in b.store.layout().regions] == ["a.weight"] and b.unregistered == {"kv": pool.untyped_storage().nbytes()} and b.step == 1
+    with pytest.raises(TypeError, match="poub: dict is no event of a served run"):
+        b.on_event({"step": 0})
+    with pytest.raises(NotImplementedError, match="without prefix caching"):
+        ex.emit(H.RangeAllocated((1,), "b", reused=True))
 
 
 def test_the_binder_holds_what_the_settings_say_over_a_store_read_back_from_it() -> None:

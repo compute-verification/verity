@@ -17,9 +17,28 @@ from verity_bench import overhead_node
 from verity_bench import overhead_records as R
 from verity_bench.cli import main
 
-#: a launch's GPU node and card, which the door takes as given and never defaults
+#: a launch's GPU node, which the door takes as given and never defaults; its card is its record's
 NODE = "gpu-node-1"
-ON = ["--on", NODE, "--card", "h200"]
+ON = ["--on", NODE]
+#: a register entry made up for the tests (`fixtures/machines`), every property read
+ONE_CARD = Path(__file__).parent / "fixtures" / "machines" / "one-card.toml"
+
+
+def _machine(directory: Path, name: str, kind: str, card: str) -> None:
+    text = ONE_CARD.read_text().replace('"h100-sxm-80gb-x1"', f'"{kind}"').replace('"h100-sxm-80gb"', f'"{card}"')
+    (directory / f"{name}.toml").write_text(text.replace("research run --on one-card", f"research run --on {name}"))
+
+
+@pytest.fixture(autouse=True)
+def machines(tmp_path, monkeypatch):
+    """The machine register `--on` is read from: NODE an H200 node, and a node with a card the door doesn't measure on."""
+
+    directory = tmp_path / "machines.d"
+    directory.mkdir()
+    _machine(directory, NODE, "h200-sxm-141gb-x1", "h200-sxm-141gb")
+    _machine(directory, "l40s-node", "l40s-x1", "l40s")
+    monkeypatch.setenv("RESEARCH_MACHINES_D", str(directory))
+    return directory
 
 SMALL, MEMBER = "llama3.2-1b", "llama-3.2-1b-h200"
 
@@ -80,13 +99,17 @@ def test_the_command_launches_each_step_as_a_research_run_on_one_gpu_and_ships_t
                               "--points-art", art, "--point", "L"]
     assert sent == [Path(s.store.fetch(art)).read_bytes()] and run[run.index("--timeout") + 1] == "60m"
     with pytest.raises(SystemExit):
-        main(["overhead", "points", "--card", "rtx-pro-6000"])
-    assert "--on NODE --card CARD: a launch names its GPU node" in capsys.readouterr().err
+        main(["overhead", "points"])
+    assert "--on NODE: a launch names the GPU node it runs on" in capsys.readouterr().err
     with pytest.raises(SystemExit):
-        main(["overhead", "points", "--on", NODE])
-    assert "--on NODE --card CARD" in capsys.readouterr().err
+        main(["overhead", "points", "--on", "l40s-node"])
+    assert "give card 'l40s'" in capsys.readouterr().err
+    with pytest.raises(SystemExit, match="machine 'gone': .*gone.toml is unreadable"):
+        main(["overhead", "points", "--on", "gone"])
     with pytest.raises(SystemExit):
-        main(["overhead", "run", "--card", "h200", "--local-only"])
+        main(["overhead", "points", *ON, "--card", "h200"])
+    with pytest.raises(SystemExit):
+        main(["overhead", "run", "--local-only"])
     assert "--scheme S, or --record RUN" in capsys.readouterr().err
 
 

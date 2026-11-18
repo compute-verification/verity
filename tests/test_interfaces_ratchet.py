@@ -83,6 +83,19 @@ KEPT = {"scheme_name_tables": {
     "calibration/pouw/dc/archs.py":
         "the tensor-form probe's one table of what it is written for on each architecture, keyed by the "
         "architecture's name (top, 18 Nov)",
+    "calibration/machine_model/verity_machine_model/cover.py":
+        "the script's own table of which per-family table of the SASS instruction reference to read for an "
+        "architecture, which no architecture file states (top, 18 Nov)",
+    "calibration/machine_model/verity_machine_model/lean_headline_dc.py":
+        "the names in the text of the generated Lean headline files, which hold it byte for byte (top, 18 Nov)",
+    "calibration/machine_model/verity_machine_model/skip.py":
+        "one build's static instruction counts of the peel kernels, a measurement of that build (top, 18 Nov)",
+    "calibration/pouw/theory/fold_min.py":
+        "each device's headline design and the certificate rows it is checked against, the script's results, which "
+        "no card or architecture file states (top, 18 Nov)",
+    "calibration/pouw/theory/fold_routes.py":
+        "the honest fold's instructions a word and the certificate's weights per device, read off the design files "
+        "(top, 18 Nov)",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh":
         "the kernel's one line stating its own target, which `build.sh --arch` reads (top, 18 Nov)",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh":

@@ -1298,6 +1298,11 @@ def test_a_trains_prs_are_its_merges_from_the_head_and_a_merge_of_main_between_t
     assert M.train_prs(["fix the test", "Merge #1 (ab)"]) == []
     assert M.lane_of(REG, "cursor/node-lockout-558b") == "infra" and M.lane_of(REG, "cursor/x-81c4") is None
     assert M.lane_of(REG, "main") is None
+    # Rule: a PR's `Lane NAME` line names its lane, as the queue reads it; weakening: a lane's worker's branch, whose suffix is
+    # no handle's holder, rings the failed job's owner in place of the PR's lane
+    assert M.lane_of(REG, "cursor/x-81c4", "Lane infra\n\nWhat it does.") == "infra"
+    assert M.lane_of(REG, "cursor/node-lockout-558b", "Lane nobody-we-know\n") == "infra", "a name the registry lacks is no lane"
+    assert M.lane_of(REG, "cursor/x-81c4", "It changes Lane lines.") is None
 
 
 def test_a_failed_check_rings_the_lane_of_each_open_pr_and_the_lander_in_the_merge_thread_once_per_run(monkeypatch):
@@ -1399,7 +1404,7 @@ def test_a_ratchet_gate_row_with_no_open_pr_at_its_commit_rings_the_lane_of_each
     prs["14"] = ("MERGED", "cursor/z-0000")                             # a branch no lane in the registry holds
     got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
     assert got["r1"].owners == ("infra", M.LANDER) and got["r1"].text.endswith(
-        "#12 `cursor/x-558b`, #14 `cursor/z-0000` (no lane in the registry).")
+        "#12 `cursor/x-558b`, #14 `cursor/z-0000` (no lane in its body or the registry).")
     refs.clear()
     prs.clear()                           # GitHub can't say whose the merges are: the job's owner and the lander hear of it
     got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
