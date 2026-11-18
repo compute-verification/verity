@@ -288,8 +288,9 @@ class Circuit:
     """A circuit as its record states it, built declaration by declaration: `templates`, each `(Definition, units)`;
     `cuts`; `wires` and `reads`, `verity.commitments.periods.interface` patterns; the registered `params`, `tables`, `roots`
     (table reads) and `openings`; `ingress`; the inference `entries` with the class's `slots` and `steps`; the `order`
-    it states, or None; `values`, the registered parameters its Program takes as inputs of its own; and `formats`, by
-    registered parameter the format of its rows where they are not 16-bit leaves in `hm96-sha512/row/v2` rows."""
+    it states, or None; `values`, the registered parameters its Program takes as inputs of its own; `formats`, by
+    registered parameter the format of its rows where they are not 16-bit leaves in `hm96-sha512/row/v2` rows; and
+    `shared`, the registered parameters whose reads its Program's root spells as runs its units share."""
 
     def __init__(self, name: str, slots: int, steps: int = 1) -> None:
         self.name, self.slots, self.steps = name, slots, steps
@@ -308,6 +309,7 @@ class Circuit:
         self.formats: dict[str, dict] = {}
         self.registered = True
         self.root: list | None = None
+        self.shared: tuple[str, ...] = ()
 
     def add(self, fn, entries: list[tuple[list[int], list[str], int]]) -> str:
         """Template `fn` with its units laid out by `entries` (`(radix, axes, step)` each, in unit order)."""
@@ -329,7 +331,8 @@ class Circuit:
         order = self.order if order is None else order
         rec = {"templates": [[t, n] for t, n in self.units.items()], "cuts": self.cuts,
                "wires": [w.doc() for w in self.wires], **({"order": order} if order is not None else {}),
-               "registered": {"params": dict(self.params), "values": list(self.values)}}
+               "registered": {"params": dict(self.params), "values": list(self.values),
+                              "reads": [d for d in (r.doc() for r in self.reads) if d["param"] in self.shared]}}
         desc = codec.encode_program(wired_population_program(self.templates, rec)[0])
         units: dict[str, int] = {}
         for x in desc["definitions"][desc["root"]]["body"]["nodes"]:
@@ -908,6 +911,25 @@ FORMATS: dict[str, tuple] = {
 }
 
 
+#: the shared weights' cases (`shaped`), each `(whose reads the root shares, how the case is then edited, the stage
+#: that refuses it)`: `Norm`'s weight, every unit the same leaves, and `Gemm`'s, each member its stretch of the run
+#: in turn, each held and with its reads dropped (`unread`); every registered read shared, as the builder spells
+#: them; and `Norm`'s spelled as listed leaves, as runs over part of the shared run, as the run twice in one argument,
+#: whose rows the check does not read one by one, or as a grid, which a Program never spells, since a strided part
+#: does
+SHARED = {
+    "Norm's weight shared, held": ("norm", None, None),
+    "Norm's weight shared, undeclared": ("norm", "unread", "shared-unheld"),
+    "Gemm's weights shared in turn, held": ("gemm", None, None),
+    "Gemm's weights shared in turn, undeclared": ("gemm", "unread", "shared-unheld"),
+    "every registered read shared, as the builder spells it": ("every", None, None),
+    "Norm's shared weight listed leaf by leaf": ("norm", "explicit", "own-rows"),
+    "Norm's shared weight a grid, which no Program spells": ("norm", "grid", "program"),
+    "Norm's shared weight the same run twice in one argument": ("norm", "twice", "shared-unheld"),
+    "Norm's shared weight overlapped by runs of part of it": ("norm", "overlap", "own-rows"),
+}
+
+
 def shaped() -> list[dict]:
     """The cases on `lowered` circuits, at two slots and three positions and at four slots and 35, each size under one
     policy: `Γ` a block's gates, `α` and `(c, k, n)` exactly what a block holds with the weights registered at the
@@ -961,7 +983,13 @@ def shaped() -> list[dict]:
     refuses is edited into the accepted record and refused with the declarations (`inputs`).
 
     Then `Norm`'s batch split into two root nodes (`SPLITS`, `split`): side by side and with `Gemm`'s between, each
-    taken with the served shape's verdict, and with the record one unit short of their sum, refused (`templates`)."""
+    taken with the served shape's verdict, and with the record one unit short of their sum, refused (`templates`).
+
+    Then a weight its units share (`SHARED`): the accepted case with the reads of some registered parameters passed
+    to the Program's builder, which spells each such row as a run of the weight's input node its units share. Held, it
+    is taken with the served shape's verdict; with its reads dropped, or handed twice in one argument, it is refused
+    (`shared-unheld`); and spelled in another form it is refused at the root (`own-rows`), or with the Program
+    (`program`)."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -1145,7 +1173,33 @@ def shaped() -> list[dict]:
               48 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + k,
               reroot=split(apart), broken="templates" if short else None,
               edit=(lambda d: d["templates"][2].__setitem__(1, d["templates"][2][1] - 1)) if short else None)
+
+    def unread(p: str):
+        """The record's registered reads of `p` dropped."""
+        return lambda d: d["registered"].update(reads=[r for r in d["registered"]["reads"] if r["param"] != p])
+
+    def spelled(how: str):
+        """The first `Norm`'s shared weight spelled another way: its leaves listed (`explicit`), a grid of a lane a
+        leaf, the run as an affine part once a member's stretch (`twice`), or runs over part of it (`overlap`)."""
+        def edit(nodes: list, _desc: dict) -> None:
+            arg = units(nodes)[2]["args"][1]
+            _, at, base, inner, _, _, count = arg["refs"]["strided"]
+            arg["refs"] = {"explicit": {"explicit": [["n", at, base + j % inner] for j in range(count)]},
+                           "grid": {"grid": [1, [["n", at, base + j, 1, [[count // inner, 0]]] for j in range(inner)]]},
+                           "twice": {"concat": [{"affine": ["n", at, base, inner]}] * (count // inner)},
+                           "overlap": {"concat": [{"affine": ["n", at, base, inner]}] * (count // inner - 1) + [
+                               {"affine": ["n", at, base + 1, inner - 1]}, {"affine": ["n", at, base, 1]}]}}[how]
+        return edit
+    params = {"norm": ("weights/norm",), "gemm": ("weights/query", "weights/mixing"),
+              "every": tuple(dict.fromkeys(r.doc()["param"] for r in lowered(2, 3).reads))}
+    for k, (what, (which, how, stage)) in enumerate(SHARED.items()):
+        c = lowered(2, 3)
+        c.shared = params[which]
+        more = {} if how is None else {"edit": unread(c.shared[0])} if how == "unread" else {"reroot": spelled(how)}
+        first(f"2x3 {what}", c, 48 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS)
+              + len(ROW_ROLE) + len(SPLITS) + k, broken=stage, **more)
     return out
+
 
 
 def _registered(root: str, n: int, bits: int, stated: int | None = None) -> tuple:
@@ -2146,7 +2200,8 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones, `shaped()`'s and `edged()`'s."""
-    return len(EDGED) + COUNT + 33 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + 1 + len(SPLITS)
+    return (len(EDGED) + COUNT + 32 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS)
+            + len(ROW_ROLE) + 1 + len(SPLITS) + len(SHARED))
 
 
 def results(case: dict) -> dict:
