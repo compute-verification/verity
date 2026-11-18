@@ -381,6 +381,20 @@ def test_the_compilers_transfer_gate_units_are_sampled_whole_beside_the_sampled_
     assert set(range(32)) <= set(draw["units"]) and len(draw["units"]) == 34 and D.check_draw(draw, rec, rec["law"]).ok
 
 
+def test_a_transfer_gate_templates_proved_count_grows_with_the_advice(gated_tp):
+    """The compiler's units are the advice's, with no padding to the cap: one request fewer halves the RoPE heads, and every one
+    is proved, so a template proved whole's count of sampled proof blocks (``draw_counts``) is the advice's length, held by
+    `benchmarks/prove_path/public_log.py`."""
+    c = gated_tp
+    comp = c["gated"]["compiler"]
+    data = {n: _advice(c, drop=d) for n, d in (("two", ()), ("one", ("r1",)))}
+    floors = {}
+    for name, d in data.items():
+        mine, _held = AW.window_of_advice(c["commit"], 0, c["partition"], comp, *AW.of_advice(comp, d)[:2])
+        floors[name] = {m.template: m.n for m in mine.members}, mine.work_table[ROPE]["floor"]
+    assert floors == {"two": ({ROPE: 32, SILU: 8}, 32), "one": ({ROPE: 16, SILU: 4}, 16)}
+
+
 def test_a_transfer_gate_unit_left_out_of_the_proved_set_is_refused(gated_tp):
     """Each way of leaving a RoPE head unproved: the proved set less one (`check_proved`), a sample trading one for an unsampled SiluMul
     row (`check_draw`, the stratum's count), and a registration whose sampling design samples the RoPE heads as the rest is (R1)."""
