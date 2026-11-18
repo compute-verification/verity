@@ -24,7 +24,7 @@ where that is 1 or more the row prints `protocol.NO_BOUND` with the sum and neit
 No number here prices a PRF's advantage, and none assumes it away. The table says so beside each number that is short
 by it, in the same closing words (`UNPRICED`).
 
-`short_sessions` is PoUB's too (`poub/verifier/monitoring.py` imports it). The periods and δs are the reporting grid's
+The periods and δs are the reporting grid's
 (`verity.protocol`'s `MONITORING_PERIODS` and `DELTAS`), and T is its `block_count`.
 
 An uncounted wipe, one whose check was given no egress count, stays vacuous: `counted` refuses every `wipe-egress/v1`

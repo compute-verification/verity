@@ -6,6 +6,7 @@ public import Properties.Flock.Circuit.UnitInst
 public import Properties.InferenceOnly
 public import InferenceOnlyVerifier.Desc
 public import Spot.BlockFront
+public import Properties.Flock.EvalBool
 
 /-!
 # From an accepted templated statement to a correct proof block of C
@@ -17,9 +18,8 @@ tree):
 * `V5Rows`: a unit the sampled proof's guarantee makes correct in the key circuit of a templated statement satisfies, at
   each copy, the rows of the net its template unrolls to (Core's `Partition.Correct` read as `Rows.Sat`, through the key
   program's wiring).
-* `LowerEval` (`FlockSoundness.Assumptions.LowerEval`): rows of the net the template `Flock.Lower.lower`
-  writes unrolls to, satisfied with the constant 1, hold at each output port bit the value `Prog.evalBool` gives the
-  block's Definition on the input port bits.
+* `LowerEval`: rows of the net the template `Flock.Lower.lower` writes unrolls to, satisfied with the constant 1, hold at
+  each output port bit the value `Prog.evalBool` gives the block's Definition on the input port bits.
 * `BlockEval`: the block's Program (`Spot.BlockFront.program`) evaluates, on C's values at its input ports, to block `u`'s
   local evaluation (`Partition.localEval`) at its output ports, where each word primitive evaluates as the Boolean
   Definition C's Boolean map names for it (`BooleanAgrees`).
@@ -70,6 +70,18 @@ def V5Rows : Prop :=
         else false
       (Rows.ofNet hU).Sat (fun x => z x.val) ∧ z (Flock.Desc.tmpl c).unroll.unit.constPos = true
 
+/-- **`LowerEval`, the template `lower` writes of Definition `d` computes `d`**: wherever the rows of the net it unrolls to
+hold with the constant 1, output port bit `k` of every output leaf `k` of `d` is `Prog.evalBool P d`'s bit `k` on the input
+port bits of `d`'s parameter leaves. The net's rows are `Rows.ofNet hb` at any proof `hb` that it is built, which every
+net `Tmpl.unroll` gives is; `Rows.ofNet` reads `hb` only as a proof, so the rows are the same at every one. -/
+def LowerEval : Prop :=
+  ∀ {P : Program.Prog} {d : ℕ} {inP outP : Array ℕ} {t : Tmpl.Tmpl} {n : Net}
+    (_hl : Flock.Lower.lower P d inP outP = .ok t) (_h : Tmpl.unroll t = .ok n) (_hu : n.unitLog ≤ 32) (hb : Built n)
+    {z : ℕ → Bool} (_hs : (Rows.ofNet hb).Sat fun c => z c.val) (_hone : z t.constPos = true),
+    ∀ k < (P.defs.getD d default).outLeaves,
+      z (Flock.Lower.outBit t k) =
+        (P.evalBool d ((List.range (P.defs.getD d default).paramLeaves).map fun i => z (Flock.Lower.inBit t i))).getD k false
+
 /-- **`BlockEval`, MERGE's (C).** The block's Program evaluates, on C's values at its input ports, to block `u`'s local
 evaluation at its output ports, bit for bit. -/
 def BlockEval : Prop :=
@@ -81,7 +93,7 @@ def BlockEval : Prop :=
       Prog.evalBool Q Q.root (portBits X fr.ins) = portBits ((partOf P blocks).localEval X u.castSucc) fr.outs
 
 /-- **`BlockCorrect`, (J): the block is correct.** Rows of the net `lower`'s template of the block's Program unrolls to,
-satisfied by `z` with the constant 1 (`FlockSoundness.Assumptions.LowerEval`'s form) and agreeing with a trace `X` of C at
+satisfied by `z` with the constant 1 (`LowerEval`'s form) and agreeing with a trace `X` of C at
 the input and output port bits, make block `u` correct in C. -/
 def BlockCorrect : Prop :=
   ∀ (P : Prog) (units : Array ℕ) (boolean : Std.HashMap String String) (fr : Spot.BlockFront.Front) (Q : Prog)

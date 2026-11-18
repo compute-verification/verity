@@ -37,13 +37,13 @@ that finds it held does nothing and says so. Then:
                 for one of its numbers now, the machine it names when it names one, and that none of this loop's launches is
                 in flight on. A command that names a CPU node runs there, in `--pool`; any other (no `--on`, `--on auto`,
                 `--on NODE` with a pool) runs on `--on`, in `--pool`. Never `auto`, never a small-disk machine (SMALL_DISK);
-              - none of its numbers has a launch of this loop's still in flight, or one that passed less than that number's
-                `every` ago, or one that failed (it ran and ended non-zero, it never ran, or its launch named no run) less
+              - none of its numbers has a launch of this loop's still in flight, or, for a number that is due, one that
+                passed less than that number's `every` ago, or one that failed (it ran and ended non-zero, it never ran, or its launch named no run) less
                 than RETRY_S or its `every`, the shorter, ago, whatever the door says (the record). A run that waited out its
                 pool's line (`slot_timeout`) is no failure: it is launched again at a later pass, unrung and uncounted;
               - it has not ended the same way (`cause`) SAME_CAUSE times running under the declaration it has now, unless
                 HOLD_S has passed since the last: a change to its rows launches it again;
-              - the record was not reset (a corrupt one moved aside) less than that number's `every` ago;
+              - the record was not reset (a corrupt one moved aside) less than a due number's `every` ago;
               - fewer than `--max-in-flight` of this loop's launches are in flight (launching, queued or running), counting
                 this pass's;
               - this pass has launched fewer than `--max`;
@@ -639,14 +639,15 @@ def streak(record: list[dict], metric: str, declared: str | None = None) -> list
     return out
 
 
-def bound(record: list[dict], r: dict, job: Job, now: float) -> tuple[str, str] | None:
-    """What in the record stops row `r`'s number now, as (its reason, the line), or None."""
+def bound(record: list[dict], r: dict, job: Job, now: float, due: bool = True) -> tuple[str, str] | None:
+    """What in the record stops row `r`'s number now, as (its reason, the line), or None. A number that is not `due` is
+    never what a launch that passed stops: a sibling with a longer `every` doesn't hold back one with a shorter."""
     i, e = str(r.get("id")), every_s(r) or 0
     mine = of(record, i)
     last = mine[-1] if mine else None
     if last and last.get("state") not in OVER:
         return "in-flight", f"its last launch, run {last.get('run') or '(not yet named)'} at {last['at']}, is still in flight"
-    if last and last["state"] == "passed" and now - at(last["ended"]) < e:
+    if due and last and last["state"] == "passed" and now - at(last["ended"]) < e:
         return "ran", f"its last launch, run {last['run']}, passed at {last['ended']}, less than {i}'s every {r['every']} ago"
     held = streak(record, i, job.declared)
     if len(held) >= SAME_CAUSE and now - at(held[0]["ended"]) < HOLD_S:
@@ -680,14 +681,16 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], li
         if v.reason in ("loop", "every"):
             skip(v.reason, v.why, said=v.reason == "every")
             continue
-        due, unlisted = [], []
+        due, unlisted, late = [], [], set()
         for r in job.rows:
             i, e = str(r.get("id")), every_s(r)
             if i not in readings:
                 unlisted.append(i)
             elif (age := readings[i].get("ageMs")) is None:
                 due.append(f"{i} has no reading")
+                late.add(i)
             elif age / 1000 > e:
+                late.add(i)
                 due.append(f"{i}'s newest reading is {span(age / 1000)} old, past its every {r['every']}")
         gone = f"the door doesn't list {', '.join(unlisted)}, so it isn't due" if unlisted else ""
         if not due:
@@ -698,10 +701,10 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], li
             skip(v.reason, f"{why}; but {v.why}", because=v.why,
                  rings=v.reason == UNLISTED or v.reason == "placeholder" and not planned(list(v.opts)))
             continue
-        if blocked := next((b for r in job.rows if (b := bound(record, r, job, now))), None):
+        if blocked := next((b for r in job.rows if (b := bound(record, r, job, now, str(r.get("id")) in late))), None):
             skip(blocked[0], f"{why}; but {blocked[1]}")
             continue
-        if held_since and (r := next((r for r in job.rows if now - at(held_since) < (every_s(r) or 0)), None)):
+        if held_since and (r := next((r for r in job.rows if str(r.get("id")) in late and now - at(held_since) < (every_s(r) or 0)), None)):
             skip("reset", f"{why}; but the record was reset at {held_since} (a corrupt one moved aside), so it waits until "
                           f"{r.get('id')}'s every {r['every']} has passed since")
             continue

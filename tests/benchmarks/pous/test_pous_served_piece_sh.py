@@ -3,9 +3,8 @@ and the piece's Python are stand-ins on PATH, the library is one named already (
 library is loaded once by the piece's Python with no card to see, and one it doesn't load, or a node that refuses
 `setarch -R` and so builds none, ends the piece before anything else. The two Lean verifiers that decide,
 `pous-run-protocol` and `poub-p2-protocol`, are built in a scratch copy of ``verity/`` beside the run's key, the card
-and the sessions, and go to `served_piece.py` as ``--case-exe`` and ``--bw-case-exe``; ones named already (POUS_EXE,
-BW_CASE_EXE) are passed as they are and nothing is built; one that doesn't build is no answer, and ends the piece with
-its own error wherever it was. The piece's Python then runs twice: its sessions under the lease (the node's
+and the sessions, and go to `served_piece.py` as ``--case-exe`` and ``--bw-case-exe``, always the ones built; one that
+doesn't build is no answer, and ends the piece with its own error wherever it was. The piece's Python then runs twice: its sessions under the lease (the node's
 `gpu-lease`, else the tree's own; none of the piece's own only inside the caller's), then, once that process ended
 and with it the lease, and both builds have ended, its answers with no card; the timeline of both is ``stamps.txt``."""
 
@@ -172,7 +171,7 @@ def test_the_two_leans_build_in_a_scratch_copy_beside_the_card_and_are_there_for
 
 
 def test_where_no_systemd_user_scope_is_made_the_answers_run_behind_prlimit_or_not_at_all(node, tmp_path):
-    d, env = tmp_path / "pieces" / "pous", node | {"POUS_EXE": "/built/" + RUN_EXE, "BW_CASE_EXE": "/built/" + BW_EXE}
+    d, env = tmp_path / "pieces" / "pous", node
     assert _piece(env, d).returncode == 0
     assert (tmp_path / "limit").read_text().splitlines() == [f"--as={1 << 30}", f"--as={128 << 30}"]
     assert [line[1] for line in _log(node) if line[0] == "piece"] == ["--sessions", "--answers"]
@@ -191,36 +190,12 @@ def test_the_answers_run_only_after_sessions_that_were_kept_and_their_exit_is_th
     """The sessions' part that exits other than 0 (an answer already, none, the lease's limit) ends the piece with its
     exit and nothing is answered; else the piece's exit is the answers' part's."""
     d = tmp_path / "pieces" / "pous"
-    r = _piece(node | exits | {"POUS_EXE": "/built/" + RUN_EXE, "BW_CASE_EXE": "/built/" + BW_EXE}, d)
+    r = _piece(node | exits, d)
     assert r.returncode == code, r.stdout + r.stderr
     ran = [line[1] for line in _log(node) if line[0] == "piece"]
     assert ran == (["--sessions"] if "FAKE_SESSIONS_EXIT" in exits else ["--sessions", "--answers"])
     assert _stamps(d)[-1] == (f"the sessions' part exit {code}" if "FAKE_SESSIONS_EXIT" in exits
                               else f"the answers' part exit {code}")
-
-
-def test_leans_built_already_are_passed_as_they_are_and_nothing_is_built(node, tmp_path):
-    """POUS_EXE and BW_CASE_EXE name the two verifiers: no `lake` runs, and in the caller's lease no card is asked
-    for. With one of them named, only the other is built."""
-    d = tmp_path / "pieces" / "pous"
-    named = {"POUS_EXE": "/built/" + RUN_EXE, "BW_CASE_EXE": "/built/" + BW_EXE}
-    r = _piece(node | named | {"GPU_LEASE_UUID": "GPU-serve0"}, d)
-    assert r.returncode == 0, r.stdout + r.stderr
-    both = [["piece", "--sessions", "GPU-serve0"], ["piece", "--answers"]]
-    assert _log(node) == [_load(node), *both] and not (d / "lake-build.log").exists()
-    argv = _argv(node)
-    assert [_option(argv, "--case-exe"), _option(argv, "--bw-case-exe")] == list(named.values())
-    assert _stamps(d) == ["start", "loaded libp2v1.so", "asked for the card", "the sessions' part exit 0",
-                          "the answers' part exit 0"]
-
-    Path(node["FAKE_LOG"]).unlink()
-    r = _piece(node | {"POUS_EXE": named["POUS_EXE"], "GPU_LEASE_UUID": "GPU-serve0"}, d)
-    assert r.returncode == 0, r.stdout + r.stderr
-    _, (_, audit, *bw), *pieces = _log(node)
-    assert audit.endswith("/" + AUDIT) and bw == ["build", BW_EXE, "package"] and pieces == both
-    argv = _argv(node)
-    assert _option(argv, "--case-exe") == named["POUS_EXE"]
-    assert _option(argv, "--bw-case-exe") == audit + "/.lake/build/bin/" + BW_EXE
 
 
 @pytest.mark.parametrize("exe, builds", [(RUN_EXE, 1), (BW_EXE, 2)])
@@ -344,24 +319,32 @@ def test_a_node_with_no_gpu_lease_gets_the_trees_own_and_only_the_callers_lease_
     script = tree / "benchmarks" / "pous" / "served_piece.sh"
     script.parent.mkdir(parents=True)
     script.write_text(SCRIPT.read_text())
+    (script.parent / READY.name).write_text(READY.read_text())
+    for package in (CHECK, AUDIT):
+        (tree / package).mkdir(parents=True)
     (tree / TREE_LEASE).parent.mkdir(parents=True)
     (tree / TREE_LEASE).write_text(LEASE.replace("GPU-own0", "GPU-tree0"))
-    path = ":".join(p for p in node["PATH"].split(":")[1:] if not (Path(p) / "gpu-lease").exists())
+    (tmp_path / "lake-only").mkdir()
+    _exe(tmp_path / "lake-only" / "lake", LAKE)
+    path = ":".join([str(tmp_path / "lake-only"),
+                     *(p for p in node["PATH"].split(":")[1:] if not (Path(p) / "gpu-lease").exists())])
     assert shutil.which("gpu-lease", path=path) is None and (ROOT / TREE_LEASE).is_file()
-    env = node | {"PATH": path, "POUS_EXE": "/built/" + RUN_EXE, "BW_CASE_EXE": "/built/" + BW_EXE}
+    env = node | {"PATH": path}
     r = _piece(env, d, script)
     assert r.returncode == 0, r.stdout + r.stderr
-    load, lease, sessions, answers = _log(node)
+    load, lease, sessions, answers = [e for e in _log(node) if e[0] != "lake"]
     assert load == _load(node) and sessions == ["piece", "--sessions", "GPU-tree0"]
     assert lease[:7] == ["lease", "1", "--wait", "--max-min", "90", "--mem-gb", "72"] and lease[-1] == "--sessions"
     assert answers == ["piece", "--answers"]
-    assert _stamps(d) == ["start", "loaded libp2v1.so", "asked for the card", "leased the card",
-                          "the sessions' part exit 0", "the answers' part exit 0"]
+    assert [s for s in _stamps(d) if not s.startswith("built ")] == [
+        "start", "loaded libp2v1.so", "the Lean builds start", "asked for the card", "leased the card",
+        "the sessions' part exit 0", "the answers' part exit 0"]
 
     Path(node["FAKE_LOG"]).unlink()
     r = _piece(env | {"GPU_LEASE_UUID": "GPU-serve0"}, d, script)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert _log(node) == [_load(node), ["piece", "--sessions", "GPU-serve0"], ["piece", "--answers"]]
+    assert [e for e in _log(node) if e[0] != "lake"] == [
+        _load(node), ["piece", "--sessions", "GPU-serve0"], ["piece", "--answers"]]
 
 
 @pytest.mark.parametrize("env, want", [
