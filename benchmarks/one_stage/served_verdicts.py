@@ -351,24 +351,24 @@ def pearlplus_coins_from(challenger: str) -> dict[str, str]:
     """Where Pearl+'s epoch coins and the replay's samples come from (`pearlplus`), its epoch's salt coin a live
     session's on `challenger` (`challenger_of`)."""
     return {"epoch": f"a salt-only session on {challenger}, reserved through the lane's gate before the engine "
-                     "started and opened by the install on its salt epoch's root; each pass's salt is held to it by "
-                     "core_check.live_salt through the auditor's signed ledger, the host's pins log and main's "
-                     "first-parent line (`pearlplus_coins`)",
+                     "started, opened on its salt epoch's root; core_check.live_salt held each pass's salt to it "
+                     "(`pearlplus_coins`): coins' signatures checked on the served node only; not checked by the "
+                     "auditor",
             "draws": f"a draw session of its own on {challenger} (verify_run.py's \"The run's draw\"), reserved "
                      "withheld through the lane's gate once its Pearl-C period closed and opened on the run's "
                      "commitment once every pass's roots are read, its draw coin the run's one source, recorded in "
-                     "the passes' coin.json before any replay and held to the session through the auditor's signed "
-                     "ledger (`pearlplus_draw`); the piece puts that record in the evidence store the moment it is "
-                     "drawn and holds the verdict to it (`coin`, `pearlplus_coin`)"}
+                     "the passes' coin.json before any replay and held to the session (`pearlplus_draw`): coins' "
+                     "signatures checked on the served node only; not checked by the auditor; the piece stores it "
+                     "as drawn and holds the verdict to it (`coin`, `pearlplus_coin`)"}
 
 
 def pearlplus_epoch_tied(challenger: str) -> str:
     """Where the epoch's salt coin comes from under PEARLPLUS_TIE (``epoch``; ``draws`` as `pearlplus_coins_from`'s), a
     live session's on `challenger` (`challenger_of`)."""
     return (f"a salt-only session on {challenger} for the window, reserved through the lane's gate as the "
-            "window opened (serve_pearl.live) and opened by the window's install on its salt epoch's root; each "
-            "pass's salt is held to it by core_check.live_salt through the auditor's signed ledger, the host's "
-            "pins log and main's first-parent line (`pearlplus_coins`)")
+            "window opened (serve_pearl.live), opened on its salt epoch's root; core_check.live_salt held each "
+            "pass's salt to it (`pearlplus_coins`): coins' signatures checked on the served node only; not checked "
+            "by the auditor")
 
 
 #: `served_step.coins_of`'s ``source`` for a live session's coins
