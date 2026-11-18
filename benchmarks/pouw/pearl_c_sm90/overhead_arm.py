@@ -325,12 +325,12 @@ class _Held:
         self.arm, self.key, self.users = arm, key, 0
         self.w = _bf16(operands.b, shape.n, shape.k)
         kernel = arm.kernel()
-        salt_key = PPD.no_salt_key(SERVED)
-        roots = PPDR.weight_roots(kernel, {0: self.w}, SERVED, salt_key=salt_key)
+        weight_salts = PPDR.fresh_weight_salts({0: self.w})
+        roots = PPDR.weight_roots(kernel, {0: self.w}, SERVED, weight_salts=weight_salts)
         ch = Challenger(EPOCH, PV.coins)
         self.run = PPDR.PearlCDeviceRun(pouw_schemes.get(SERVED), f"pouw:{SERVED}", kernel, {0: self.w}, roots, ch.commitment,
                                        ch.open("salt", weights_root(roots)), capacity=tiles_of(shape.m, shape.n),
-                                       flag_rows=m16(shape.m), salt_key=salt_key)
+                                       flag_rows=m16(shape.m), weight_salts=weight_salts)
         R, wt = kernel.run, self.run.weights[0]
         size = R.Pipeline.sizes(R.BM, wt.n, wt.k, R.BM)
         self.xb = torch.empty((wt.n, wt.k), dtype=torch.float32, device=self.run.device)
@@ -506,7 +506,8 @@ class _Call:
         mm = Matmul(PPDR.call_index(run), Unit(self.m16, self.k, self.n), 0)
         cur.matmuls.append(mm)
         cur.flag_rows, cur.tiles = self.m, self.tiles
-        run._retained(cur, mm, self.m, self.views["flags"], *run._kept(self.sh, self.pipe), y=self.views["y"],
+        run._retained(cur, mm, self.m, self.views["flags"], *run._kept(self.sh, self.pipe),
+                      run.salts_a(self.sh, self.pipe), y=self.views["y"],
                       y_tree=self.views["tree_y"], y_salts=self.y_salts)
         run.end()
         (out / "coins.json").write_text(json.dumps(run.coins.to_json()) + "\n")
