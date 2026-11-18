@@ -43,6 +43,7 @@ PROTOCOL SUMMARY (Commit phase entry: the instrumented runs + the fail-closed X-
 
 from __future__ import annotations
 
+import itertools
 import time
 
 from verity_vllm.records.commit_run import SCHEMA
@@ -91,13 +92,33 @@ if TYPE_CHECKING:
 TL = Timeline.from_env("commit_delta", hot=False)
 
 
-def run_bound(run: str, began: bool) -> None:
-    """The instrumented run ``run``'s bound on the exchange: `RunBegan` at the step it begins at, `RunEnded` at its last."""
+def phase_opened(phase: int) -> None:
+    """Execution phase ``phase`` opens on the exchange (`hooks.PhaseOpened`), at the step it begins at: an instrumented
+    run is one phase, its committer installed and nothing of it committed yet."""
     from verity import hooks as H
     from verity_vllm import messages
     ex = messages.current()
     if ex.wants("steps"):
-        ex.emit(H.RunBegan(run, ex.next_step) if began else H.RunEnded(run, ex.step))
+        ex.emit(H.PhaseOpened(phase, ex.next_step))
+
+
+def phase_closed(phase: int, program: bytes) -> None:
+    """Execution phase ``phase`` closes after its last step (`hooks.PhaseClosed`), under the Program ``program`` (empty
+    where its committer names none)."""
+    from verity import hooks as H
+    from verity_vllm import messages
+    ex = messages.current()
+    if ex.wants("steps"):
+        ex.emit(H.PhaseClosed(phase, ex.step, bytes(program)))
+
+
+def phase_committed(phase: int, root: bytes) -> None:
+    """Closed execution phase ``phase``'s root (`hooks.PhaseCommitted`), once its committer finalized it."""
+    from verity import hooks as H
+    from verity_vllm import messages
+    ex = messages.current()
+    if ex.wants("steps"):
+        ex.emit(H.PhaseCommitted(phase, bytes(root)))
 
 
 def _rid_of(order: dict, rid) -> str:
@@ -1277,6 +1298,7 @@ def main(args: Options) -> None:
     arms_all = ["control"] + (kinds if multi else ["instrumented"])
     # the measured runs start here; verdict.host_peak.printed_before_run = admission_monotonic_s < this (timestamps, not a literal)
     _RUN0 = {"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "monotonic_s": round(time.monotonic(), 3)}
+    phases = itertools.count()
     for pair in range(args.pairs):
         if multi:
             shift = pair % len(arms_all)
@@ -1301,14 +1323,15 @@ def main(args: Options) -> None:
                 if served is not None:
                     served.src.begin_run()
                 com.install()
-            run = None if arm == "control" else f"pair{pair}.{arm}"
-            run is not None and run_bound(run, began=True)
+            phase = None if arm == "control" else next(phases)
+            phase is not None and phase_opened(phase)
             r = run_workload(eng, reqs, sampling, step=None if _lock is None else _lock.step)
-            run is not None and run_bound(run, began=False)
+            phase is not None and phase_closed(phase, getattr(com, "program_digest", b"") or b"")
             if _lock is not None:
                 r["remote_session"] = RS.end_run(_rs, pair, arm)
             if arm != "control":
                 rc = com.finalize()
+                phase_committed(phase, rc.run_root)
                 t_ready = time.perf_counter()
                 com.uninstall()
                 assert_pristine(eng, base)
