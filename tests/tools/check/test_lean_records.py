@@ -775,8 +775,8 @@ def _audited(calls: list[dict]) -> list[str]:
     return sorted(Path(p).name for c in calls for p in c["argv"][c["argv"].index("--out") + 2:])
 
 
-def test_a_records_run_counts_unread_modules_by_default_and_fails_above_a_cap(repo, tmp_path, counted):
-    """The records run that misses an area's cap is the one a candidate's lean-audit then fails on: by default it asks
+def test_a_records_run_counts_unread_modules_by_default_and_fails_above_a_limit(repo, tmp_path, counted):
+    """The records run that misses an area's limit is the one a candidate's lean-audit then fails on: by default it asks
     each check.py for the facts, runs the ratchet on them and fails with its failure, which names the fix."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     (repo / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')
@@ -785,7 +785,7 @@ def test_a_records_run_counts_unread_modules_by_default_and_fails_above_a_cap(re
     assert all("--unread-facts" in c["argv"] for c in _calls(tmp_path))
     assert counted[1]["pkgs"] == ["p", "a"] and {p: f.parent.name for p, f in counted[1]["facts"].items()} == \
         {"p": "audit-p", "a": "audit-a"}
-    counted[0]["failures"] = ["unread: Proofs/Core has 8 wholly unread modules (61 declarations), above its cap of 7"]
+    counted[0]["failures"] = ["unread: Proofs/Core has 8 wholly unread modules (61 declarations), above its limit of 7"]
     said = []
     assert LC.audit_records("p", deps, tree, log=said.append) == 1
     assert "lean-audit: FAIL: unread: Proofs/Core has 8 wholly unread modules" in "\n".join(said)

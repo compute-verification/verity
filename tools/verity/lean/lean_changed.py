@@ -1575,7 +1575,7 @@ def conclude(pkg: str, records: dict[str, dict], rc: int, out: Path, update: boo
              audited: list[Path] | None = None, mismatched: dict[str, str] | None = None, unread_over: bool = False) -> int:
     """End a run whose packages' ``records`` are judged (`finish`): its outcome their worst (`overall`), `FAILED` too when
     an allowance of ``allow`` matched no failure in the reports this run left under ``audited`` (`unmatched`) or an area's
-    wholly unread modules are above its cap (``unread_over``, `unread_count`); its exit
+    wholly unread modules are above its limit (``unread_over``, `unread_count`); its exit
     status 0 on `PASS` and `REGENERATED`, `ALLOWED_RC` on `ALLOWED`, and ``rc`` (check.py's first failing status), else 1,
     on `FAILED`. ``mismatched`` ({module: its package}) names each module a sampled recompile caught, which the run then
     compiled (`mismatched`): the outcome is the second audit's, and the result names them."""
@@ -1608,7 +1608,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     taken; ``rebuild``, ``moved`` and ``unread`` (`--unread-facts`) run them all. With ``count`` (unless
     `--no-unread-count`) or ``unread`` the audits of `check.UNREAD_FACTS` leave `Unread.lean`'s facts, a run that audits
     one of them audits the other too, and the run ends with lean-audit's ratchet on those facts (`unread_count`), which
-    fails it when an area's wholly unread modules are above their cap; a run that audits neither counts nothing. Before it takes a slot, one line names the packages it audits, in
+    fails it when an area's wholly unread modules are above their limit; a run that audits neither counts nothing. Before it takes a slot, one line names the packages it audits, in
     order (`audits`). Each package whose records passed or were regenerated is kept (`passed`); one that ended `ALLOWED`,
     an allowed failure in its audit's reports, is not, so the next run audits it again.
     What each check.py's builds compiled goes into the node's artifact cache when it ends, whatever its exit (`put_built`: its
@@ -2189,9 +2189,9 @@ def report(out: Path, at: Path) -> dict:
 
 
 def unread_count(out: Path, files: list[str] | None, log=print) -> bool:
-    """lean-audit's ratchet on wholly unread modules (`lean_audit.unread_ratchet`, against `unread-caps.json`) on the
+    """lean-audit's ratchet on wholly unread modules (`lean_audit.unread_ratchet`, against each area's limit) on the
     `Unread.lean` facts this run's audits of `check.UNREAD_FACTS` left under ``out``, with no build: True when an area is
-    above its cap, each such area said with its count, its cap, its modules and the fix. A run whose audits left facts of
+    above its limit, each such area said with its count, its limit, its modules and the fix. A run whose audits left facts of
     only one says so, with the run that counts, and one that left none is silent; neither fails."""
     facts: dict[str, Path] = {}
     for f in sorted(out.rglob("unread-facts.jsonl.gz"), key=lambda f: f.stat().st_mtime):
@@ -2383,8 +2383,8 @@ def main(argv: list[str]) -> int:
                     "every package, as --rebuild does, and ends with the unread count")
     ap.add_argument("--no-unread-count", action="store_true", help="with --records: skip the unread count, lean-audit's "
                     "ratchet on wholly unread modules, which a records run otherwise runs on the facts its audits of "
-                    f"{' and '.join(AUDIT.UNREAD_FACTS)} leave, failing when an area is above its cap in unread-caps.json; "
-                    "for a run that regenerates records while another change's module holds an area above its cap")
+                    f"{' and '.join(AUDIT.UNREAD_FACTS)} leave, failing when an area is above its limit; "
+                    "for a run that regenerates records while another change's module holds an area above its limit")
     ap.add_argument("--allow", action="append", default=[], metavar="CODE:ENTRY",
                     help="with --records only, and repeatable: a failure this run takes as known, named by its code and the "
                     f"entry it is about as check.py's report lists them (the codes that may be: {', '.join(sorted(ALLOWABLE))}). "

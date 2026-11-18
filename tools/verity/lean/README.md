@@ -48,7 +48,7 @@ python tools/verity/lean/unread.py --out DIR --build
 python tools/verity/lean/lean_changed.py --records security --unread-facts
   the same with no build of its own: the records run's audits of security and security/Proofs leave the facts, and it
   ends with lean-audit's ratchet on them, as every records run that audits them does unless --no-unread-count; an area
-  above its cap fails the run, naming the area, its count, its cap and its modules
+  above its limit fails the run, naming the area, its count, its limit and its modules
 uv run tools/verity/lean/claim_ids.py [--write]
   the claim ids' table from the ids the locks' premise entries carry: exit 1 naming each row it would change, or write it
 python tools/verity/lean/merge.py --install
