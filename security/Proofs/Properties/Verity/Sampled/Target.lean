@@ -22,7 +22,7 @@ What the proof reads that is proved: Flock's knowledge soundness of the live ses
 session's sample (`Live.v5_at`, along `Live.L_eq`), A3 and `live-verifier` at the deployed device (`Live.deployed`,
 `Live.hCust`), the sampling design's miss (`Flock.Bridge.pa_partOf`, `Flock.Bridge.nsOf_sum`), the bridge from the
 committed files' unbound units to the session's incorrect proof blocks (`Live.unbound_subset_faulty_part`), and, at
-parameters that don't name the one-stage form, that SPOT accepts nothing (`recursiveForm_refused`).
+parameters that don't name the one-stage form, the open premise `TwoStageBound` (`recursiveForm_bound`).
 
 * `Live.ks`: at a session, a strategy of the live audit whose extracted transcript fails the claim at the session's share
   is accepted with probability at most the session's error (`Live.sessionDelta`). V5 at `B` the extracted witness's
@@ -187,15 +187,16 @@ theorem sqrt_le_twoRun {f : Claims.Finder} (hf : Claims.StrictBirthday Verity.sh
 
 /-- **SPOT's target at the deployed device**: soundness's vocabulary at `.sampled` reading the constructions `K`
 at the deployment's sessions `S` (`Deployed`), which cover the one-stage form (`Covers`), meets SPOT's target
-at composite `k`, from the coupling at each session (`CouplingTarget`). Off the one-stage form SPOT accepts nothing
-(`recursiveForm_refused`). -/
+at composite `k`, from the coupling at each session (`CouplingTarget`). Off the one-stage form it takes the open premise
+`TwoStageBound` (`recursiveForm_bound`). -/
 theorem spotSound_of_targets {K : Constructions V} {S : ByteArray → Array ByteArray → Option Live}
-    (hD : Deployed V K S) (hCov : Covers V k S) (hC : ∀ θ F A, S θ F = some A → CouplingTarget V k K A θ F) :
+    (hD : Deployed V K S) (hCov : Covers V k S) (hTwo : TwoStageBound V k)
+    (hC : ∀ θ F A, S θ F = some A → CouplingTarget V k K A θ F) :
     V.SpotSound k := by
   intro θ F c σ
   by_cases hP : ∃ p, ParamsAt θ p
   swap
-  · exact recursiveForm_refused V k θ hP F c σ
+  · exact recursiveForm_bound V k hTwo θ hP F c σ
   unfold Vocab.error ResourceAccounting.condError
   beta_reduce
   split_ifs with hE
