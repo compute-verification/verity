@@ -7,7 +7,8 @@ plugin, is the engine's side, in the engine core's process: the adapter's memory
 just before its model runner loads the model, so that they hear the model's `hooks.RegisteredValues` and its linear
 site attaches, the exchange answered with what vLLM's
 configuration declares, the admission hook (`engine.admission.register`, keyed by the client's X-Request-Id) on its
-scheduler, and what each scheme holds released (`hooks.Releases`) when the engine core shuts down. A scheme's
+scheduler, and what each scheme holds released (`hooks.Releases`) when the engine core shuts down, then each scheme's
+report written under the run output (`write_reports`). A scheme's
 `hooks.RefuseInput` there aborts the input, its reason the client's ``stop_reason`` (`aborts`).
 
 No committer runs here, so there are no execution phases (no `hooks.PhaseOpened`, `PhaseClosed` or `PhaseCommitted`):
@@ -25,13 +26,14 @@ import queue
 import sys
 import uuid
 from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import Any
 
 from verity import hooks as H
-from verity_vllm import messages, settings
+from verity_vllm import messages, messages as M, settings
 
 __all__ = ["GOAL", "OTHER_PATHS", "SAMPLED_PATHS", "FeedReader", "Front", "attach", "config", "declared", "register",
-           "route_of", "unseeded"]
+           "route_of", "unseeded", "write_reports"]
 
 #: the goal whose unbuilt parts raise `NotImplementedError` here
 GOAL = "vllm/scheme-on-in-vllm-server"
@@ -44,9 +46,10 @@ OTHER_PATHS = frozenset({"/health", "/ping", "/version", "/v1/models", "/metrics
 
 
 def config(environ: Mapping[str, str] | None = None) -> tuple[list[str], dict[str, Any]]:
-    """``VERITY_PROTOCOLS``'s names and ``VERITY_PROTOCOLS_CONFIG``'s object (``feed`` required with a name, ``gate``
-    infra's challenger gate command where a scheme's coins come through it, and each scheme's settings under its name);
-    no names, nothing."""
+    """``VERITY_PROTOCOLS``'s names and ``VERITY_PROTOCOLS_CONFIG``'s object (``feed`` required with a name; the
+    engine's ``out``, the run output its schemes' reports go under, and ``private``, the directory each scheme's own
+    goes under (`messages.Exchange.attach`); ``gate`` infra's challenger gate command where a scheme's coins come
+    through it; and each scheme's settings under its name); no names, nothing."""
     names = [n for n in settings.get("VERITY_PROTOCOLS", environ) if n]
     if not names:
         return [], {}
@@ -96,13 +99,42 @@ def attach(exchange: messages.Exchange, vllm_config: Any, names: list[str], cfg:
                                   f"tensor_parallel_size {shape[0]} × pipeline_parallel_size {shape[1]} × "
                                   f"data_parallel_size {shape[2]} under distributed_executor_backend {shape[3]!r}")
     gate = challenger_gate(cfg.get("gate"))
-    got = [exchange.attach(schemes.get(n), cfg.get(n) or {}, gate=gate, process=H.ENGINE, feed=cfg["feed"]) for n in names]
+    got = [exchange.attach(schemes.get(n), cfg.get(n) or {}, gate=gate, private=cfg["private"], process=H.ENGINE,
+                           feed=cfg["feed"]) for n in names]
     if fixed := sorted({r.ranges for _, r in exchange.requests if isinstance(r, H.FixRanges)}):
         if len(fixed) > 1:
             raise RuntimeError(f"schemes fix the KV pool at {fixed} blocks: one size")
         vllm_config.cache_config.num_gpu_blocks_override = fixed[0]
     exchange.answer(declared(vllm_config, exchange.attached))
     return got
+
+
+def write_reports(exchange: messages.Exchange, out: str | Path) -> None:
+    """At the workload's stop, each scheme attached on ``exchange`` released (`hooks.Releases`), then its report written
+    under ``out/schemes/<its name>/``: ``configuration.json`` its settings and ``record``, ``summary.json`` its
+    ``summary``, and from a `hooks.Commits` ``commitment.json``, its closed ``commitment``. Every scheme is released
+    and written before the first release's failure is raised. What a scheme keeps private it keeps under its own
+    ``ctx["private"]``."""
+    failed: list[BaseException] = []
+    for got in exchange.reports.values():
+        if callable(getattr(got, "release", None)):
+            try:
+                got.release()
+            except Exception as e:  # noqa: BLE001 -- every scheme is released and written before it is raised
+                failed.append(e)
+    for name, got in exchange.reports.items():
+        d = Path(out) / "schemes" / name
+        d.mkdir(parents=True, exist_ok=True)
+        record = got.record() if callable(getattr(got, "record", None)) else {}
+        M.write(d / "configuration.json", "ServingConfiguration",
+                json.dumps({"scheme": name, "settings": exchange.attached.get(name), "record": record}, indent=1,
+                           default=str).encode())
+        if callable(getattr(got, "summary", None)):
+            M.write(d / "summary.json", "RunTotals", json.dumps(got.summary(), indent=1, default=str).encode())
+        if callable(getattr(got, "commitment", None)):
+            M.write(d / "commitment.json", "Run", json.dumps(got.commitment(), indent=1, default=str).encode())
+    if failed:
+        raise failed[0]
 
 
 def aborts(hook: Any, core: Any, log: Callable[[str], Any] = lambda s: print(s, file=sys.stderr, flush=True),
@@ -142,6 +174,9 @@ def register(environ: Mapping[str, str] | None = None, core: type | None = None,
     names, cfg = config(environ)
     if not names or _PLUGIN:
         return
+    if not all(isinstance(cfg.get(k), str) and cfg[k] for k in ("out", "private")):
+        raise ValueError("VERITY_PROTOCOLS_CONFIG: the engine's schemes need out, the run output their reports go under, "
+                         "and private, the directory outside it each scheme keeps its own under")
     from verity_vllm.engine import admission, kv_blocks
     from verity_vllm.engine.hooks import Hooks
 
@@ -153,21 +188,22 @@ def register(environ: Mapping[str, str] | None = None, core: type | None = None,
         runners = tuple(importlib.import_module(m).GPUModelRunner for m in kv_blocks.RUNNERS
                         if importlib.util.find_spec(m) is not None)
     hooks = Hooks(tag="scheme-plugin")
-    held: list[Any] = []
+    built: list[messages.Exchange] = []
 
     def load(orig: Callable[..., Any]) -> Callable[..., Any]:
         def load_model(runner: Any, *a: Any, **kw: Any) -> Any:
-            held.extend(x for x in attach(messages.current(), runner.vllm_config, names, cfg) if hasattr(x, "release"))
+            built.append(ex := messages.current())
+            attach(ex, runner.vllm_config, names, cfg)
             return orig(runner, *a, **kw)
         return load_model
 
     def stop(orig: Callable[..., Any]) -> Callable[..., Any]:
         def shutdown(self: Any, *a: Any, **kw: Any) -> Any:
             failed: list[BaseException] = []
-            while held:
+            while built:
                 try:
-                    held.pop(0).release()
-                except Exception as e:  # noqa: BLE001 -- each scheme is released, and vLLM shut down, before it is raised
+                    write_reports(built.pop(0), cfg["out"])
+                except Exception as e:  # noqa: BLE001 -- every scheme is released, and vLLM shut down, before it is raised
                     failed.append(e)
             r = orig(self, *a, **kw)
             if failed:

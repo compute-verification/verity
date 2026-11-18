@@ -74,7 +74,7 @@ __all__ = ["RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Opt
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
            "parse", "refusals", "refused", "register_weights", "requests", "undeclared", "weights_view",
-           "CUT", "circuit_registry", "cuts", "has_circuit", "keeps_weight_copy", "traced_as"]
+           "CUT", "circuit_registry", "has_circuit", "traced_as"]
 
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
