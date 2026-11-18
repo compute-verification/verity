@@ -14,6 +14,9 @@ TREE=${TREE:-$PWD}
 VENV=${VENV:-/workspace/cache/kernels-kfuse/venv312}
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
+# the collector's JIT build reads the card's arch from its card file (vLLM's CARD_SKU): the card the run is on, from the kit
+CARD_SKU=${CARD_SKU:-$(python "$TREE/benchmarks/kernels/machine.py" sku)} || exit 2
+export CARD_SKU
 export PYTHONPATH=$TREE:$TREE/adapters/vllm${PYTHONPATH:+:$PYTHONPATH}
 export NATIVE_COLLECT_BUILD=${BUILD:-/workspace/research/served-commit-hash/nc} TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST:-9.0}
 export OUT TREE VENV

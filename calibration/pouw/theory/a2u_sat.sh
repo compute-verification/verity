@@ -6,7 +6,9 @@
 #   research run --queue --preemptible --on <node> --gpus 1 --mem-gb 8 --disk-gb 1 --max-min 25 --project verity \
 #     --campaign eps1 --source <tree> --cwd source --env QUEUED=1 -- bash calibration/pouw/theory/a2u_sat.sh
 #
-# Exit: 0 done, 1 build failed, 2 no nvcc, 3 a CUDA error on the device.
+# The card's record's `arch` is the target, its architecture file nvcc's -gencode (probe.py arch, gencode); another
+# card than an sm_120a one is refused before anything is built.
+# Exit: 0 done, 1 build failed, 2 no nvcc or another card, 3 a CUDA error on the device.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -17,8 +19,12 @@ if [ "${A2U_LEASED:-}" != 1 ]; then
   NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
   [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "a2u_sat.sh: no nvcc (CUDA 13.0)" >&2; exit 2; }
   "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
+  PROBE="$HERE/../opcode_probe/probe.py"
+  ARCH=$(python3 "$PROBE" arch) || exit 2
+  [ "$ARCH" = sm_120a ] || { echo "a2u_sat.sh: the card's target is $ARCH, and a2u_sat.cu has forms for sm_120a only: nothing built" >&2; exit 2; }
+  GENCODE=$(python3 "$PROBE" gencode) || exit 2
   BIN="$OUT/bin/a2u_sat"
-  "$NVCC" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v "$HERE/a2u_sat.cu" -o "$BIN" \
+  "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v "$HERE/a2u_sat.cu" -o "$BIN" \
     >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
   sha256sum "$BIN" >"$OUT/bin/a2u_sat.sha256"
   "$(dirname "$NVCC")/cuobjdump" -sass "$BIN" >"$OUT/sass/a2u_sat.sass" 2>&1

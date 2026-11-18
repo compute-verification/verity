@@ -16,9 +16,12 @@ The rate is the gate's count: a loop that `expect` says holds N instructions of 
 `iters` times by `warps` warps of each of the blocks (one an SM), over the block's cycles; the median block, then the
 median rep.
 
-  python probe.py build [--out DIR] [--card NAME] [SOURCE...]      # probes/*.cu -> DIR/STEM, the card's target's SASS only
-  python probe.py arch [--card NAME]                               # the card's target (its card record's `arch`)
-  python probe.py gencode [--card NAME]                            # nvcc's -gencode value for it (`kit.card_gencode`)
+  python probe.py build [--out DIR] [--sku SKU] [SOURCE...]       # probes/*.cu -> DIR/STEM, the card's target's SASS only
+  python probe.py arch [--card NAME | --sku SKU]                   # the card's target (its card record's `arch`)
+  python probe.py gencode [--card NAME | --sku SKU]                # nvcc's -gencode value for it (`kit.card_gencode`)
+
+The card is the run's; on a machine with none, --sku names the card file (calibration/hardware/cards/SKU.toml) to build
+for, and with neither the build is refused.
   python probe.py gate BINARY... [--json OUT]                      # CPU only; exit 8 when a verdict isn't the declared one
   python probe.py run BINARY... --out DIR [--reps N] [--scale X] [--since EPOCH] [--run-id ID]   # one GPU
 """
@@ -82,14 +85,27 @@ def card() -> str:
     return _kit().host_stamp()["card"]
 
 
-def build(out: Path, sources: list[Path], name: str) -> list[Path]:
-    """Each source for the SASS of the card nvidia-smi names `name`: the target its card record's `arch` names, with
-    nvcc's `-gencode` from that target's architecture file (`kit.card_gencode`). The host side sees the target as
-    PROBE_ARCH (90, 100, 120), so a probe table can declare the counts that target's ptxas lowers to."""
+def target(name: str | None = None, sku: str | None = None) -> dict[str, str]:
+    """What `kit.card_arch` and `kit.card_gencode` take for a build: the card file ``sku``, else the card nvidia-smi names
+    ``name``, else the run's card; refused in one line on a machine with no card and no sku."""
+    if sku:
+        return {"sku": sku}
+    name = name or card()
+    if name == "none":
+        raise SystemExit("probe: this machine has no GPU: pass --sku SKU, the card file (calibration/hardware/cards/"
+                         "SKU.toml) to build for")
+    return {"name": name}
+
+
+def build(out: Path, sources: list[Path], name: str | None = None, *, sku: str | None = None) -> list[Path]:
+    """Each source for the SASS of `target`'s card: the target its card record's `arch` names, with nvcc's `-gencode`
+    from that target's architecture file (`kit.card_gencode`). The host side sees the target as PROBE_ARCH (90, 100,
+    120), so a probe table can declare the counts that target's ptxas lowers to."""
     kit = _kit()
     out.mkdir(parents=True, exist_ok=True)
-    gencode = kit.card_gencode(name)
-    define = f"-DPROBE_ARCH={kit.card_arch(name).removeprefix('sm_').rstrip('af')}"
+    card_ = target(name, sku)
+    gencode = kit.card_gencode(**card_)
+    define = f"-DPROBE_ARCH={kit.card_arch(**card_).removeprefix('sm_').rstrip('af')}"
     built = []
     for src in sources:
         dst = out / src.stem
@@ -241,10 +257,12 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
     b.add_argument("--out", type=Path, default=Path("build"))
-    b.add_argument("--card", help="the name nvidia-smi gives the card to build for (default: the run's card)")
+    b.add_argument("--sku", help="on a machine with no card, the card file to build for (calibration/hardware/cards/SKU.toml)")
     b.add_argument("sources", nargs="*", type=Path)
     for name in ("arch", "gencode"):
-        sub.add_parser(name).add_argument("--card", help="the name nvidia-smi gives the card (default: the run's card)")
+        t = sub.add_parser(name).add_mutually_exclusive_group()
+        t.add_argument("--card", help="the name nvidia-smi gives the card (default: the run's card)")
+        t.add_argument("--sku", help="on a machine with no card, the card file (calibration/hardware/cards/SKU.toml)")
     g = sub.add_parser("gate")
     g.add_argument("binaries", nargs="+", type=Path)
     g.add_argument("--json", type=Path)
@@ -261,12 +279,12 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
 
     if a.cmd == "build":
-        for out in build(a.out, a.sources or sorted((HERE / "probes").glob("*.cu")), a.card or card()):
+        for out in build(a.out, a.sources or sorted((HERE / "probes").glob("*.cu")), sku=a.sku):
             print(out)
         return 0
     if a.cmd in ("arch", "gencode"):
         kit = _kit()
-        print((kit.card_arch if a.cmd == "arch" else kit.card_gencode)(a.card or card()))
+        print((kit.card_arch if a.cmd == "arch" else kit.card_gencode)(**target(a.card, a.sku)))
         return 0
 
     tables, verdicts = gate_all(a.binaries)

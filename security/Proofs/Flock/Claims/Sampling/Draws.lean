@@ -49,7 +49,7 @@ misses all of them with probability at most its sampling design's bound. Each re
 `Pr_eq_toReal_prCoin`:
 
 * `subset_miss_eq`, `subset_miss_le`: a uniform `k`-subset misses `B` with probability `C(n − |B|, k)/C(n, k)`, at most
-  `C(n − t, k)/C(n, k)` when `t ≤ |B|` (`SamplingDesign.subset_escape`);
+  `C(n − t, k)/C(n, k)` when `t ≤ |B|` (`Verity.SamplingDesign.subset_escape`);
 * `bernoulli_miss_eq`, `bernoulli_miss_le`: each unit sampled when its coin in `[0, den)` is below `num` misses `B` with
   probability `((den − num)/den)^|B|`, at most `((den − num)/den)^t` (`SamplingDesign.bernoulli_escape`);
 * `stratified_miss_eq`: independent uniform `k_s`-subsets of the strata miss `B` with probability
@@ -98,8 +98,8 @@ theorem miss_le_of {p b δ : ℝ} (h : p ≤ b) (hb : b ≤ δ) : p ≤ δ := h.
 theorem subset_miss_eq {n k : ℕ} (hk : k ≤ n) (B : Finset (Fin n)) :
     Claims.Pr (fun S : {S : Finset (Fin n) // S.card = k} => Disjoint S.1 B) =
       ((n - B.card).choose k : ℝ) / (n.choose k : ℝ) := by
-  have := Pr_miss_eq (SamplingDesign.subset n k hk) B
-  rw [SamplingDesign.subset_escape, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast] at this
+  have := Pr_miss_eq (Verity.SamplingDesign.subset n k hk) B
+  rw [Verity.SamplingDesign.subset_escape, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast] at this
   exact this
 
 /-- **The uniform `k`-subset misses `t` wrong regions** with probability at most `C(n − t, k)/C(n, k)`. -/

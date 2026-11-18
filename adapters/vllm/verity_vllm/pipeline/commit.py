@@ -43,6 +43,7 @@ PROTOCOL SUMMARY (Commit phase entry: the instrumented runs + the fail-closed X-
 
 from __future__ import annotations
 
+import itertools
 import time
 
 from verity_vllm.records.commit_run import SCHEMA
@@ -82,6 +83,7 @@ from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_pl
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.compiled_merge import _bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline import commit_coins as CC, poub_session as RS  # noqa: E402
+from verity_vllm.pipeline.research_outputs import TOKENS_DIGESTS  # noqa: E402
 
 if TYPE_CHECKING:
     from verity_vllm.acquire.sources import call_boundary_plan as CBP
@@ -91,13 +93,33 @@ if TYPE_CHECKING:
 TL = Timeline.from_env("commit_delta", hot=False)
 
 
-def run_bound(run: str, began: bool) -> None:
-    """The instrumented run ``run``'s bound on the exchange: `RunBegan` at the step it begins at, `RunEnded` at its last."""
+def phase_opened(phase: int) -> None:
+    """Execution phase ``phase`` opens on the exchange (`hooks.PhaseOpened`), at the step it begins at: an instrumented
+    run is one phase, its committer installed and nothing of it committed yet."""
     from verity import hooks as H
     from verity_vllm import messages
     ex = messages.current()
     if ex.wants("steps"):
-        ex.emit(H.RunBegan(run, ex.next_step) if began else H.RunEnded(run, ex.step))
+        ex.emit(H.PhaseOpened(phase, ex.next_step))
+
+
+def phase_closed(phase: int, program: bytes) -> None:
+    """Execution phase ``phase`` closes after its last step (`hooks.PhaseClosed`), under the Program ``program`` (empty
+    where its committer names none)."""
+    from verity import hooks as H
+    from verity_vllm import messages
+    ex = messages.current()
+    if ex.wants("steps"):
+        ex.emit(H.PhaseClosed(phase, ex.step, bytes(program)))
+
+
+def phase_committed(phase: int, root: bytes) -> None:
+    """Closed execution phase ``phase``'s root (`hooks.PhaseCommitted`), once its committer finalized it."""
+    from verity import hooks as H
+    from verity_vllm import messages
+    ex = messages.current()
+    if ex.wants("steps"):
+        ex.emit(H.PhaseCommitted(phase, bytes(root)))
 
 
 def _rid_of(order: dict, rid) -> str:
@@ -1263,6 +1285,7 @@ def main(args: Options) -> None:
 
     rows: list[dict] = []
     step_rows: list[dict] = []
+    digests: list[dict] = []
     tokens_ref: dict | None = None
     decl = None
     decls: dict[str, dict] = {}
@@ -1277,6 +1300,7 @@ def main(args: Options) -> None:
     arms_all = ["control"] + (kinds if multi else ["instrumented"])
     # the measured runs start here; verdict.host_peak.printed_before_run = admission_monotonic_s < this (timestamps, not a literal)
     _RUN0 = {"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "monotonic_s": round(time.monotonic(), 3)}
+    phases = itertools.count()
     for pair in range(args.pairs):
         if multi:
             shift = pair % len(arms_all)
@@ -1301,14 +1325,15 @@ def main(args: Options) -> None:
                 if served is not None:
                     served.src.begin_run()
                 com.install()
-            run = None if arm == "control" else f"pair{pair}.{arm}"
-            run is not None and run_bound(run, began=True)
+            phase = None if arm == "control" else next(phases)
+            phase is not None and phase_opened(phase)
             r = run_workload(eng, reqs, sampling, step=None if _lock is None else _lock.step)
-            run is not None and run_bound(run, began=False)
+            phase is not None and phase_closed(phase, getattr(com, "program_digest", b"") or b"")
             if _lock is not None:
                 r["remote_session"] = RS.end_run(_rs, pair, arm)
             if arm != "control":
                 rc = com.finalize()
+                phase_committed(phase, rc.run_root)
                 t_ready = time.perf_counter()
                 com.uninstall()
                 assert_pristine(eng, base)
@@ -1329,7 +1354,6 @@ def main(args: Options) -> None:
                 "step_wall_s": r["step_wall_s"], "step_wall_prefill_s": r["step_wall_s"][0],
                 "step_wall_decode_mean_s": statistics.fmean(r["step_wall_s"][1:]) if len(r["step_wall_s"]) > 1 else None,
                 "tokens_equal_ref": r["tokens"] == tokens_ref,
-                "tokens_digest": hashlib.sha256(json.dumps(r["tokens"], default=str, separators=(",", ":")).encode()).hexdigest(),   # cross-process pairing (compiled rows)
                 "gpu_mem": {"torch_max_allocated_gb": torch.cuda.max_memory_allocated() / 2**30, "torch_reserved_gb": torch.cuda.memory_reserved() / 2**30, "nvidia_smi_used_mib": nvidia_smi_used_mib()},
                 "host_mem_kb": {"rss_before": rss0, "rss_after": rss1, "hwm": hwm},
                 "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -1406,6 +1430,8 @@ def main(args: Options) -> None:
                 for i, wsec in enumerate(r["step_wall_s"]):
                     step_rows.append({"pair": pair, "arm": arm, "step": i, "wall_s": wsec})
             rows.append(row)
+            digests.append({"pair": pair, "arm": arm, "tokens_digest": hashlib.sha256(
+                json.dumps(r["tokens"], default=str, separators=(",", ":")).encode()).hexdigest()})
             extra = ""
             if rc is not None:
                 sp = rc.spans["total_s"]
@@ -1422,6 +1448,7 @@ def main(args: Options) -> None:
         with (out / "steps.jsonl").open("w") as f:
             for rw in step_rows:
                 f.write(json.dumps(rw, default=str) + "\n")
+        (out / TOKENS_DIGESTS).write_text("".join(json.dumps(d) + "\n" for d in digests))
 
     # repeated graph replay must be covered, not only compilation/warm-up: re-read the code
     # objects LOADED in this process after the LAST measured run and compare with the build-time snapshot (compile + autotune + capture):
