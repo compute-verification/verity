@@ -57,6 +57,46 @@ def test_feature_names_an_applications_component_and_its_settings_as_verity_conf
         FEATURE(["pearl-plus", "tie-uniform=true"], "prod")
 
 
+def test_pearl_plus_plans_on_one_gpu_with_a_reserved_session_a_lifetime_checked_before_any_gpu_is_held(
+        monkeypatch: pytest.MonkeyPatch):
+    """`--feature pearl-plus`'s plan at a found load (4 users, stand-ins for the file's lines): stock and the arm over it
+    at the load, three reps in each of two lifetimes, its scheme settings (run.sh's SCHEME_SETTINGS) refused by name
+    before the lease where a lifetime's server would refuse them, a reserved session opening once; GLM-5.3's
+    tensor-parallel server is vllm's goal."""
+    doc = P.load()
+    agent = doc.profiles["coding-agent"]
+    users = MappingProxyType({**agent.users, "glm53": MappingProxyType({"h200": 4}),
+                              "llama32-1b": MappingProxyType({"h200": 4})})
+    found = replace(doc, profiles=MappingProxyType({**doc.profiles, "coding-agent": replace(agent, users=users)}))
+    monkeypatch.setattr(P, "load", lambda path=P.PATH: found)
+    monkeypatch.setattr(S, "feature", FEATURE)
+
+    def own(session: str) -> dict:
+        return {"gate": "ssh -i KEY research@GATE", "pearl-plus": {
+            "kernel": "/k", "challenger": "127.0.0.1:0", "session": {"session": session}}}
+
+    with pytest.raises(SystemExit, match="^the arm's schemes need pearl-plus.kernel, pearl-plus.challenger, "
+                                         "pearl-plus.session, gate: --scheme-settings"):
+        S.profile_plan("coding-agent", "llama32-1b", ["pearl-plus"], False)
+    with pytest.raises(SystemExit, match="^--scheme-settings: arm pearl-plus is served in 2 server lifetimes and a "
+                                         "reserved session opens once"):
+        S.profile_plan("coding-agent", "llama32-1b", ["pearl-plus"], False, own("s1"))
+    with pytest.raises(SystemExit, match="^--scheme-settings: a list holds one object a server lifetime, and it has 1, "
+                                         "not one for lifetime 2$"):
+        S.profile_plan("coding-agent", "llama32-1b", ["pearl-plus"], False, [own("s1")])
+    plan = S.profile_plan("coding-agent", "llama32-1b", ["pearl-plus"], False, [own("s1"), own("s2")])
+    assert plan == {"STOCK": "compiled", "OURS": "", "CAP_MIN": "20", "CARD": "h200", "ARMS": "compiled pearl-plus",
+                    "LOADS": "agentic=4", "REPS": "3", "LIFETIMES": "2"}
+    assert S.lifetime_settings([own("s1"), own("s2")], 2) == own("s2") and S.lifetime_settings(own("s1"), 2) == own("s1")
+    assert S.lifetime_settings([own("s1"), own("s2")], None) == own("s1")
+    with pytest.raises(NotImplementedError, match="^vllm/scheme-on-in-vllm-server: arm prod-pearl-plus turns pearl-plus "
+                                                 "on inside vLLM's server, which vllm's scheme plugin does on one GPU, "
+                                                 "and glm53 serves on 8"):
+        S.profile_plan("coding-agent", "glm53", ["pearl-plus"], False, [own("s1"), own("s2")])
+    sh = (S.HERE / "run.sh").read_text()
+    assert sh.count('${SCHEME_SETTINGS:+--scheme-settings "$SCHEME_SETTINGS"}') == 2
+
+
 def test_sampled_proofs_at_two_levels_is_the_two_stage_arm_once_the_component_declares_levels(
         monkeypatch: pytest.MonkeyPatch):
     """The two-stage serve's launch line is `sampled-proofs` at `levels` 2 (`Arm.feature`), which a profile names and
