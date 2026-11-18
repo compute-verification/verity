@@ -415,6 +415,7 @@ def gemm_dot_rows(dot_of: Callable[[dict], str], x: np.ndarray, w: np.ndarray, *
 
 def _targets():
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dense
     return {
         "SquareBf16_v1": [bind(dense.SquareBf16, N=16)], "SquareF32_v1": [bind(dense.SquareF32, N=16)],

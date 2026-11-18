@@ -13,8 +13,8 @@ from functools import cache
 from typing import Any, Callable
 
 import numpy as np
-
 from verity.circuits.ops import mufu as MU
+
 from verity_vllm.definitions.registry import bf16_gemm_check as GC
 from verity_vllm.definitions.registry import torch_train as TT
 

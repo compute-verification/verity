@@ -20,9 +20,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from verity_vllm.definitions.registry.tp_allreduce import settings_of
 
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
+from verity_vllm.definitions.registry.tp_allreduce import settings_of
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
 from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
 from verity_vllm.program.predict import build as BUILD
