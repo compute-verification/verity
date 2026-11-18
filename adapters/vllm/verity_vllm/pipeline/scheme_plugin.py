@@ -44,9 +44,9 @@ OTHER_PATHS = frozenset({"/health", "/ping", "/version", "/v1/models", "/metrics
 
 
 def config(environ: Mapping[str, str] | None = None) -> tuple[list[str], dict[str, Any]]:
-    """``VERITY_PROTOCOLS``'s names and ``VERITY_PROTOCOLS_CONFIG``'s object (``feed`` required with a name, and each
-    scheme's settings under its name); no names,
-    nothing."""
+    """``VERITY_PROTOCOLS``'s names and ``VERITY_PROTOCOLS_CONFIG``'s object (``feed`` required with a name, ``gate``
+    infra's challenger gate command where a scheme's coins come through it, and each scheme's settings under its name);
+    no names, nothing."""
     names = [n for n in settings.get("VERITY_PROTOCOLS", environ) if n]
     if not names:
         return [], {}
@@ -55,6 +55,15 @@ def config(environ: Mapping[str, str] | None = None) -> tuple[list[str], dict[st
         raise ValueError("VERITY_PROTOCOLS_CONFIG: a JSON object with feed, the directory the server's front and its engine "
                          f"share, and each scheme's configuration under its name, not {cfg!r:.80}")
     return names, cfg
+
+
+def challenger_gate(command: str | None) -> Callable[..., Mapping[str, Any]] | None:
+    """The auditor device's challenger gate over infra's gate command ``command`` (``VERITY_PROTOCOLS_CONFIG``'s
+    ``gate``), each scheme's ``ctx["gate"]`` in the engine; None without one."""
+    if not command:
+        return None
+    from verity_vllm.pipeline.commit_coins import ChallengerGate
+    return ChallengerGate(command).call
 
 
 def declared(vllm_config: Any, attached: Mapping[str, Mapping[str, Any]] | None = None) -> H.Declared:
@@ -83,7 +92,8 @@ def attach(exchange: messages.Exchange, vllm_config: Any, names: list[str], cfg:
     if pc.tensor_parallel_size * pc.pipeline_parallel_size != 1:
         raise NotImplementedError(f"{GOAL}: schemes inside vLLM's server on one GPU, not tensor_parallel_size "
                                   f"{pc.tensor_parallel_size} × pipeline_parallel_size {pc.pipeline_parallel_size}")
-    got = [exchange.attach(schemes.get(n), cfg.get(n) or {}, process=H.ENGINE, feed=cfg["feed"]) for n in names]
+    gate = challenger_gate(cfg.get("gate"))
+    got = [exchange.attach(schemes.get(n), cfg.get(n) or {}, gate=gate, process=H.ENGINE, feed=cfg["feed"]) for n in names]
     if fixed := sorted({r.ranges for _, r in exchange.requests if isinstance(r, H.FixRanges)}):
         if len(fixed) > 1:
             raise RuntimeError(f"schemes fix the KV pool at {fixed} blocks: one size")
