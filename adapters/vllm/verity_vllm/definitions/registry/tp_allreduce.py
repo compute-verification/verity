@@ -120,9 +120,9 @@ from verity_vllm.definitions.registry.tp_allreduce_nodes import (NODE_FILE, NODE
 
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
            "AllReduceMultimemCoordinate", "AllReduceMultimemVector", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate",
-           "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES",
+           "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES",  # noqa: F822  (CAPTURED: the module's __getattr__, first read)
            "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "MULTIMEM_REPLAY_RUN", "MULTIMEM_VECTOR",
-           "NCCL_TREE_CARD", "NCCL_TREE_RUNS", "RTX_PRO_6000", "RmsNormMnnvl", "SETTINGS", "SYMM_MEM_MAX_BYTES", "TREE_UNRECORDED", "TREE_UNSTATED",
+           "NCCL_TREE_CARD", "NCCL_TREE_RUNS", "RTX_PRO_6000", "RmsNormMnnvl", "SETTINGS", "SYMM_MEM_MAX_BYTES", "TREE_UNRECORDED", "TREE_UNSTATED",  # noqa: F822  (RTX_PRO_6000: the module's __getattr__, first read)
            "UNSTATED_NODE", "WARP", "chain", "covered", "custom_order", "custom_owners", "custom_stage", "device_of", "eps_bits",
            "fused_max_tokens", "mnnvl_grid", "mnnvl_shot", "multimem_owners", "multimem_runs", "nccl_chain", "node_refusal",
            "offset_free", "ranks", "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters"]
