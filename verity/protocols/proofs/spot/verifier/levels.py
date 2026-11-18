@@ -1,5 +1,5 @@
 """SPOT's levels: how many levels of blocks (outer blocks, then inner blocks inside each sampled outer block) an audit
-samples, each level a partition with its sampling design. One level is the audit over one partition and its law; two
+samples, each level a partition with its sampling design. One level is the audit over one partition and its sampling design; two
 levels are the boundary docket's outer blocks under the two-level rule (its grain and count) and the interior's inner
 blocks. More are refused by name until they are built.
 

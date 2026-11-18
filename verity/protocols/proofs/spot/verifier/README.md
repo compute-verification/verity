@@ -77,7 +77,7 @@ carries a composite's acceptance to `SampledKSLiveV3`'s event.
 ## Levels
 
 SPOT is one protocol with levels (`levels.py`): each level is a partition into blocks with its sampling design. One
-level is the audit over one partition and its law. Two levels sample outer blocks first (the boundary docket, under the
+level is the audit over one partition and its sampling design. Two levels sample outer blocks first (the boundary docket, under the
 two-level rule with its grain and count), then inner blocks inside each sampled outer block (the interior). More levels
 are refused by name (`levels-not-built`). `recursive` is not a level: it is how many blocks' proofs are compressed, and
 it stays refused by name.

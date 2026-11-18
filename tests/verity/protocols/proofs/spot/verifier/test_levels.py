@@ -8,7 +8,7 @@ import pytest
 
 from verity.protocols.proofs.spot.verifier import levels as LV
 
-ONE = {"proofs": {}, "partition": {}, "law": "rate:1/2"}
+ONE = {"proofs": {}, "partition": {}, "sampling_design": "rate:1/2"}
 TWO = {"boundary": {}, "interior": {}, "rule": {}, "delta": "1/2"}
 
 
