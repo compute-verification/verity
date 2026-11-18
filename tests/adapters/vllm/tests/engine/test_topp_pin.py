@@ -112,4 +112,4 @@ def test_the_pin_is_armed_at_import_by_every_rank_and_by_the_driver_before_it_bu
     assert any(isinstance(n, ast.ImportFrom) and n.module == "verity_vllm.engine" and "topp_pin" in {a.name for a in n.names}
                for n in ast.parse(inspect.getsource(rank_worker)).body)
     src = inspect.getsource(build.build_engine)
-    assert src.index("topp_pin.arm()") < src.index("llm = LLM(**kw)")
+    assert src.index("topp_pin.arm()") < src.index("hooked(lambda: LLM(**kw))")
