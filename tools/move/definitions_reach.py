@@ -115,7 +115,8 @@ class Graph:
     def add_py(self, f: str) -> None:
         try:
             tree = ast.parse((REPO / f).read_text(errors="replace"), filename=f)
-        except SyntaxError:
+        except SyntaxError as e:
+            print(f"definitions_reach: {f} is not parsed, so it adds no edge: {e}", file=sys.stderr)
             return
         src = f[:-len(SIDECAR)] + ".py" if f.endswith(SIDECAR) else f
         self.subcommands((REPO / f).read_text(errors="replace"), f, self.edges[f])
@@ -273,10 +274,8 @@ def roots(g: Graph) -> dict[str, set[str]]:
 
 
 def lines(f: str) -> int:
-    try:
-        return len((REPO / f).read_text(errors="replace").splitlines())
-    except (IsADirectoryError, FileNotFoundError):
-        return 0
+    p = REPO / f
+    return len(p.read_text(errors="replace").splitlines()) if p.is_file() else 0
 
 
 #: the registries' ids, as `--registered` reads them: run in an interpreter that ran nothing before, as
