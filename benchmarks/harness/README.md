@@ -54,7 +54,8 @@ research run --on NODE --pool gpu --as LANE --project verity --source . --cwd so
 ~~~
 
 `VERITY_BENCH_VENV` is the node's pinned-vLLM environment (`pod_bootstrap.sh` makes one) and `HF_HOME` its checkpoint
-store; the harness defaults neither, and refuses a point with no `VERITY_BENCH_VENV`. The CUDA toolkit is `CUDA_HOME`,
+store; the harness defaults neither. With no `VERITY_BENCH_VENV`, the Python is the environment the launch runs in
+(`$VIRTUAL_ENV`: `uv run`'s, or an activated one), and a point with neither is refused. The CUDA toolkit is `CUDA_HOME`,
 else the one the machine's `[properties]` list (`benchmarks/kernels/machine.py toolkit`).
 
 `run` plans the spec as `plan` does and runs one point (`jobs.dispatch`): `--point`'s, else the spec's only point, else
