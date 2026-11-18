@@ -14,7 +14,8 @@ public-inputs-wrong.bin (one anchor bit flipped, the verifier's file wrong) and 
 public file's tail, an anchor the prover chose).
 
 `HZ_STAGE` (``fast``, the default, or ``library``): whether `fast_stage` patches the library first, for the same bytes in
-less time and memory; stage.json records which.
+less time and memory; stage.json records which. `HZ_SALTS` (a file): the rows' salts as data, read from it when it exists,
+else drawn fresh and written to it, for a second staging of the same statement (private: they open the rows).
 
 DEVELOPMENT BINDING: core's BitAnd_v1, E4m3ToF32_v1 and F32ToE2m1Sat_v1 have no Flock piece on this branch, so the row
 units lower them through `core3_scratch`'s pieces; every result of a row unit staged here is labelled 'core3 scratch'. The
@@ -48,6 +49,7 @@ ROOT = HERE.parents[2]
 ROLE, K, N, OUT = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), Path(sys.argv[4])
 FLIP = {"row_a": "fa", "row_b": "g"}      # the anchor whose word 0, instance 0, bit 0 the controls flip
 STAGE = os.environ.get("HZ_STAGE", "fast")
+SALTS = Path(os.environ["HZ_SALTS"]) if os.environ.get("HZ_SALTS") else None
 
 
 def _load(name: str, path: Path):
@@ -143,7 +145,10 @@ def main() -> None:
         at += r
     rec.update(definition=d.id, in_rows=[[r, s, b] for r, s, b, _ in in_rows], out_rows=[[s, list(ps)] for s, ps in out_rows],
                public_inputs=ports)
-    got = CS.stage_unit(d, f"unit/pouw-pc4-{ROLE}", in_rows, out_rows, rows, OUT, public_inputs=ports or None)
+    given = {p: [bytes.fromhex(s) for s in v] for p, v in json.loads(SALTS.read_text()).items()} if SALTS and SALTS.exists() else None
+    got = CS.stage_unit(d, f"unit/pouw-pc4-{ROLE}", in_rows, out_rows, rows, OUT, salts=given, public_inputs=ports or None)
+    if SALTS and given is None:
+        SALTS.write_text(json.dumps({p: [s.hex() for s in v] for p, v in got["salts"].items()}))
     t_stage = time.time() - t0
     text = fast_stage.composed() if STAGE == "fast" else (OUT / "circuit.txt").read_text()
     meta = got["meta"]
