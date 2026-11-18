@@ -21,7 +21,6 @@ public import Proofs.Properties.InferenceOnly.RecordServed
 public import Proofs.Properties.InferenceOnly.RecordTemplates
 public import Proofs.Properties.InferenceOnly.RecordUnits
 public import Proofs.Properties.InferenceOnly.RecordWhole
-public import Proofs.Properties.InferenceOnly.RecordWide
 public import Proofs.Properties.InferenceOnly.RecordWireRead
 public import Proofs.Properties.InferenceOnly.ResolveRows
 
@@ -42,9 +41,9 @@ templates are that Program's (`RecordTemplates`).
 
 Of the property's clauses on a unit: its rows are its own input gates, and what it returns and what its gates read
 are its own (`RecordRows`). Of the wires: what `Spot.Wires.check` has tested of a wire and gives of a row the wire
-covers (`RecordWire`), a wired row holds its output (`RecordWide`), whose leaves are leaves of the writer's return
-(`RecordFields`), a gate is as wide as the leaf that names it (`RecordLeafWide`), and the wires' declarations come
-first, so no row the check holds has a writer (`RecordInputs`); every wire lands whole and every bit of a wired row
+covers (`RecordWire`), whose leaves are leaves of the writer's return (`RecordFields`), a gate is as wide as the leaf
+that names it (`RecordLeafWide`), and the wires' declarations come first, so no row the check holds has a writer
+(`RecordInputs`); a wired row holds the writer's field it reads, every wire lands whole and every bit of a wired row
 is its writer's (`RecordAligned`). Every unit has a slot, and a wired circuit has its θ and its blocks
 (`RecordCircuit`). `RecordServed` puts them together: `form_laidOut`.
 

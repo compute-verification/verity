@@ -10,11 +10,14 @@ What `Spot.Wires.check` has tested of a wire, and what it gives of a row the wir
 
 * `wire_shape`, `shape_spec`: each wire of a wiring the check accepts passed `Spot.Wires.shape` and
   `Spot.Wires.boundsOk`: its reader and writer are templates of the wiring, its port a row of the reader and its
-  output an output of the writer, its rows are among the port's cut, and a row of the cut has the output's words.
+  output an output of the writer, its rows are among the port's cut, and a row of the cut, from the wire's offset,
+  lies inside the output's words.
 * `cut_divides`: a port's cut divides its outer length and its words.
 * `writerOf_wire`, `indexOf_some`: a row's writer is given by a wire that covers the row, and what covering says.
+* `check_rowWords`, `mem_rowWords`: the summary's row words are each wire's reader row's words.
 * `wire_of_writer`: all of it for a row with a writer, in one statement: the wire, its two templates and its two
-  ports, the row within the port's cut, the words of a row of the cut, and both units within their templates.
+  ports, the wire's offset, the row within the port's cut, the words of a row of the cut, and both units within
+  their templates.
 -/
 
 @[expose] public section
@@ -106,6 +109,36 @@ theorem indexOf_some {w : Spot.Wires.Wire} {t : String} {u : Nat} {p : String} {
     obtain ⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩ := hcnd
     exact ⟨h1, h2, h3, h4, h5, h6, (Option.some.inj h).symm⟩
   · cases h
+
+/-- The summary's row words are each wire's reader row's words. -/
+theorem check_rowWords {c : Spot.Wires.Wiring} {S : Spot.Wires.Summary} (h : Spot.Wires.check c = .ok S) :
+    S.rowWords = c.wires.map (Spot.Wires.rowWords c) := by
+  unfold Spot.Wires.check at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · split at h
+      · cases h
+      · split at h
+        · cases h
+        · cases h
+          rfl
+
+/-- A member of a list, beside its value, in the list zipped with its values. -/
+theorem mem_zip_map {α β : Type} (f : α → β) : ∀ (l : List α) (a : α), a ∈ l → (a, f a) ∈ l.zip (l.map f)
+  | [], _, h => by cases h
+  | x :: l, a, h => by
+    rw [List.map_cons, List.zip_cons_cons]
+    rcases List.mem_cons.1 h with rfl | h
+    · exact List.mem_cons_self
+    · exact List.mem_cons_of_mem _ (mem_zip_map f l a h)
+
+/-- A wire of a wiring `Spot.Wires.check` accepts, with its reader row's words, among the summary's. -/
+theorem mem_rowWords {c : Spot.Wires.Wiring} {S : Spot.Wires.Summary} (h : Spot.Wires.check c = .ok S)
+    {w : Spot.Wires.Wire} (hw : w ∈ c.wires) : (w, Spot.Wires.rowWords c w) ∈ S.wires.zip S.rowWords := by
+  rw [(Spot.Wires.check_sound h).1, check_rowWords h]
+  exact mem_zip_map _ _ w hw
 
 /-- A row's writer is given by a wire of the wiring that covers the row. -/
 theorem writerOf_wire {c : Spot.Wires.Wiring} {S : Spot.Wires.Summary} (h : Spot.Wires.check c = .ok S)

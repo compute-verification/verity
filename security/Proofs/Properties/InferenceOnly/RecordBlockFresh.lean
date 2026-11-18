@@ -15,8 +15,8 @@ public import Proofs.Properties.InferenceOnly.RecordRead
 public import Proofs.Properties.InferenceOnly.RecordReads
 public import Proofs.Properties.InferenceOnly.RecordRowBits
 public import Proofs.Properties.InferenceOnly.RecordRows
+public import Proofs.Properties.InferenceOnly.RecordServed
 public import Proofs.Properties.InferenceOnly.RecordTemplates
-public import Proofs.Properties.InferenceOnly.RecordWide
 public import Proofs.Properties.InferenceOnly.RecordWire
 
 /-!
@@ -95,6 +95,8 @@ theorem landing_bits {j tr : Json} {c : Case} (h : read j tr = .ok c)
     (ha : a ∈ landing c.f.P rs c.W S at_ r) :
     (∃ t ∈ c.f.ts, t.tid = r.tid ∧ ∃ row ∈ t.rows, row.1 = r.port) ∧ r.row < c.W.cutsOf r.tid r.port ∧
       D.width (landing c.f.P rs c.W S at_ r) ≤ rowBits c.f.ts c.W r.tid r.port := by
+  obtain ⟨hts₀, hwh⟩ := unwhole_of_read h
+  rw [Except.ok.inj ((wired_of_read h).symm.trans hS)] at hwh
   obtain ⟨f, pin, hf, hc⟩ := read_front h
   obtain ⟨rfl, -⟩ := finish_text hc
   have hts := front_text hf
@@ -118,7 +120,7 @@ theorem landing_bits {j tr : Json} {c : Case} (h : read j tr = .ok c)
   refine ⟨⟨t, ht, htid, _, hrowm, hp⟩, hrow, ?_⟩
   obtain ⟨ρ, hρ⟩ := ranked hS
   have hle := landing_le c.f.P rs c.W S D at_ hOwn hAl hL (leafWide hP hO hrs) (returnsOwn hP hrs hT hS)
-    (unitsComputed hP hrs) (portsNamed hrs hT) (outFits hT hS) ρ hρ r sc hu i hi' hp
+    (unitsComputed hP hrs) (portsNamed hrs hT) (outFits hP hrs hT hS hts₀ hwh) ρ hρ r sc hu i hi' hp
   have hrb := rowBits_eq c.W hnd ht (List.Nodup.of_append_left (hnames t ht)) hrowm
   dsimp only at hrb
   rw [htid, hp] at hrb
