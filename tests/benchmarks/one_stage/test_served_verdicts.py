@@ -629,7 +629,8 @@ def test_the_hand_off_of_a_record_whose_v3c_audit_was_refused_its_coin_trees_is_
 def _integrity_entry(size: int, sampled: int) -> dict:
     """The block record's sampled-proofs entry of an accepted uniform sample of ``sampled`` of ``size`` proof blocks."""
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
-         "public": {"bound": 0, "drawn": list(range(sampled)), "per_template": None, "proved": list(range(sampled))},
+         "public": {"bound": 0, "complete": True, "drawn": list(range(sampled)), "per_template": None,
+                    "proved": list(range(sampled))},
          "profile": {"levels": [{"name": "unit", "size": size}], "drawn": {"unit": sampled}, "delta": "1/2"}}
     return BR.subprotocol("integrity", S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent")), server="n", runs=[])
 
@@ -859,7 +860,7 @@ MAIN = f"; {S.BLOCKS_ALONE}; {S.TIED_BY_CONSTRUCTION}"
 
 def _accepted() -> dict:
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
-         "public": {"bound": 2, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
+         "public": {"bound": 2, "complete": True, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
          "profile": {"levels": [{"name": "unit", "size": 4}], "drawn": {"unit": 2}, "delta": "1/100"}}
     return S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent"))
 
@@ -1041,6 +1042,26 @@ def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp
     assert row["verdict"] == "error" and "no summary" in row["reason"]
     _report, rec, line = S.record(_rows(row, tmp_path), window=1, steps=(5, 11), node="n", run=None)
     assert rec is None and (line["composed"], line["by"]) == ("reject", ["sampled proofs"])
+
+
+def test_a_one_stage_accept_that_is_not_complete_rows_not_complete_and_never_composes_to_accept(tmp_path):
+    """An accept whose audit record left an entry without a verdict says so in its public ``complete``: its row is
+    `verdict_record.NOT_COMPLETE`, naming the entry, so the composed verdict is no accept and carries no block record."""
+    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import NOT_COMPLETE
+
+    (tmp_path / "window").mkdir()
+    (tmp_path / "window" / "audit.json").write_text(json.dumps(
+        {"accepted": True, "complete": False, "verdicts": {"lean": {"accepted": True}, "upstream": {"accepted": None}}}))
+    a = _accepted()["answer"]
+    row = S.row_of(S.INTEGRITY_OWNER, {**a, "public": {**a["public"], "complete": False}}, tmp_path)
+    assert (row["verdict"], row["reason"]) == (
+        NOT_COMPLETE, "its accept is not complete: its audit record has no verdict of upstream")
+    _report, rec, line = S.record(_rows(row, tmp_path), window=1, steps=(5, 11), node="n", run=None)
+    assert rec is None and line["composed"] != "accept" and line["by"] == ["sampled proofs"]
+    assert f"sampled proofs: {NOT_COMPLETE}: its accept is not complete: its audit record has no verdict of upstream" \
+        in line["reason"]
+    bare = {**a, "public": {k: v for k, v in a["public"].items() if k != "complete"}}
+    assert S.row_of(S.INTEGRITY_OWNER, bare, tmp_path / "none")["verdict"] == NOT_COMPLETE
 
 
 WIPE_ACCEPT = {"protocol": W.PROTOCOL, "verdict": "accept", "reason": None, "commitment": "cd" * 64,
