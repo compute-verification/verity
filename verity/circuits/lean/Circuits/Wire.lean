@@ -137,6 +137,18 @@ def leafAt (w : Wire) (u row : Nat) : Option Nat :=
     let v := w.writerAt i
     if 0 ≤ v then some v.toNat else none
 
+/-- `leafAt` is its case split on reader steps written out, `indexAt` unfolded. -/
+theorem leafAt_eq (w : Wire) (u row : Nat) : w.leafAt u row =
+    let i? := if w.rstep.isEmpty then w.indexOf w.reader u w.port row
+      else if w.rstep.length == w.radix.length && w.cut0 == 0 && w.cuts == 1 && row == 0 then
+        match w.stridedAt u with
+        | [i] => some i
+        | _ => none
+      else none
+    i?.bind fun i =>
+      let v := w.writerAt i
+      if 0 ≤ v then some v.toNat else none := rfl
+
 /-- Every reader row the wire covers, `(template, unit, port, row)`, with its writer `(template, unit, out, offset)`,
 index by index. -/
 def entries (w : Wire) : List ((String × Nat × String × Nat) × (String × Int × String × Nat)) :=
