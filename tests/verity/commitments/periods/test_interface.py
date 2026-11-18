@@ -2480,7 +2480,9 @@ def test_a_commit_into_a_directory_holds_a_run_and_never_the_window(monkeypatch,
     """The peak, pinned: committing 2,048 coordinates' rows into a directory, a run of 64 units at a time from a producer
     that makes each run when it is asked, allocates at its peak under a quarter of the bytes the window commits (its
     rows, salts and ``b || c``, `rows.window_bytes`), where the whole commit of the same rows, given as arrays, holds
-    more than all of them but the salts it is handed; the roots are the same."""
+    more than all of them but the salts it is handed; the roots are the same. Both are measured after a first streamed
+    commit of the window, which builds what does not grow with its rows (its partition, whose Program digest reads the
+    descriptor with its Boolean bodies)."""
     import tracemalloc
 
     n, chunk = 2048, 64
@@ -2509,9 +2511,9 @@ def test_a_commit_into_a_directory_holds_a_run_and_never_the_window(monkeypatch,
         finally:
             tracemalloc.stop()
 
-    CS.commit(replace(w), [{k: {p: a[:] for p, a in d[k].items()} for k in d} for d in made()], chunk=chunk)
     ys = fixed(w)
-    c, streamed = peak(lambda: CS.commit(w, made(), into=tmp_path, chunk=chunk, salts_of=ys))
+    CS.commit(w, made(), into=tmp_path / "first", chunk=chunk, salts_of=ys)
+    c, streamed = peak(lambda: CS.commit(w, made(), into=tmp_path / "second", chunk=chunk, salts_of=ys))
     whole, held = peak(lambda: CS.commit(w, [{k: {p: a[:] for p, a in d[k].items()} for k in d} for d in made()],
                                          chunk=chunk, salts_of=ys))
     assert c.roots == whole.roots and len(w.members) == 1
