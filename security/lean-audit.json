@@ -11600,9 +11600,6 @@
    "type_hash": "a593b5f16de693fd90b73a64aabe94764151f7633be9ae62bffeb85d6b825bb2",
    "unfolded_hash": "8d054dd09e0c02971e9c53c1d3aa1ae06e25f28a99b80aa4cbd109bdc3a3ce7d"
   },
-  "Flock.SecurityProofs.RecursiveKSEveryDeployed": {
-   "owner": "@proofs"
-  },
   "Flock.SecurityProofs.RecursiveKSEvery": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.RecursiveKSEvery : Flock.Guarantees.RecursiveKSEvery"],
