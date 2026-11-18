@@ -2130,6 +2130,27 @@ def test_a_ready_pr_left_out_of_the_ticks_builds_is_logged_once_for_each_head_an
     assert leaves()[3:] == [(3, [h3b], "held")]
 
 
+def test_a_left_out_pr_whose_reason_names_another_blocker_under_the_same_cause_is_logged_again(env):
+    """A reason whose words change while its cause holds, the PR it waits for, is logged again, each reason once: the blocker
+    a reader of the log sees is the tick's."""
+    env.put(1, {"a.txt": "1\n"})
+    h2 = env.put(2, {"b.txt": "2\n"})
+    blocker = [10]
+    loop = env.loop(vqueue.decide, batch=1, depth=1, left_out=lambda s: [
+        vqueue.Leave(2, h2, "Lean waits", f"with a Lean change, #2 waits while #{blocker[0]} waits")])
+
+    def leaves() -> list[tuple]:
+        return [(r["number"], r["cause"], r["why"]) for r in env.lines() if r["action"] == "leave"]
+
+    loop.tick()
+    loop.tick()
+    blocker[0] = 11
+    loop.tick()
+    loop.tick()
+    assert leaves() == [(2, "Lean waits", "with a Lean change, #2 waits while #10 waits"),
+                        (2, "Lean waits", "with a Lean change, #2 waits while #11 waits")]
+
+
 def test_a_tick_whose_leave_lines_fail_has_still_written_its_state_file(env):
     """The `leave` lines come last: a `left_out` that raises fails the tick only once its actions are logged and its state
     file written (`Loop.keep`)."""
