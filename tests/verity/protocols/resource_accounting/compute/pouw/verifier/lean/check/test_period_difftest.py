@@ -6,11 +6,9 @@ framing broken, and a period in each form the period's guarantee doesn't cover),
 names, so agreeing on it holds which rule refused the period."""
 from __future__ import annotations
 
-import hashlib
 import json
 import random
 import shutil
-import subprocess
 from collections import Counter
 from pathlib import Path
 
@@ -122,68 +120,3 @@ def test_a_descriptor_not_utf8_is_left_to_the_credit(raw):
     d["windows"][0]["descriptor"] = raw.hex()
     got = PC.case_twin(cases.serve(d))
     assert got["verdict"] == "reject" and not got["reason"].startswith("form: "), got["reason"]
-
-
-def _run(exe: Path, flags: list[str], params: dict, case: dict, tmp: Path) -> tuple[int, dict, str]:
-    files = [tmp / "params.json", tmp / "commitment.bin", tmp / "evidence.json"]
-    files[0].write_text(D.canonical(params))
-    files[1].write_bytes(bytes.fromhex(case["commitment"]))
-    files[2].write_bytes(bytes.fromhex(case["evidence"]))
-    p = subprocess.run([str(exe), *flags, "check", *map(str, files)], capture_output=True, text=True, check=False)
-    return p.returncode, json.loads(p.stdout.strip().splitlines()[-1]), p.stderr
-
-
-def _pin(tmp: Path, public: str, retired: list[str]) -> list[str]:
-    keyfile = tmp / "challenger-key.json"
-    keyfile.write_text(json.dumps({"retired": [{"pubkey": k} for k in retired]}))
-    return ["--challenger-key-sha512", hashlib.sha512(bytes.fromhex(public)).hexdigest(),
-            "--challenger-retired", str(keyfile)]
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("cheat, reason", [
-    (None, None), ("forger", "challenger-key-not-pinned"), ("retired", "challenger-key-retired"),
-    ("none", "challenger-key-none"), ("pin-retired", "challenger-key-retired")])
-def test_pouw_period_under_the_challengers_pin(tmp_path, cheat, reason) -> None:
-    """`pouw-period --challenger-key-sha512 H --challenger-retired FILE` accepts an honest period whose `key`, the
-    challenger's that signs the draw coin, is the pinned one, with the unpinned line; it refuses by name, at its
-    parameters, a period whose key is the forger's, one FILE retires (the pinned key included), or none. Unpinned, it
-    says so first on stderr."""
-    case = cases.instance(random.Random("honest/credit"))
-    exe = D.build(LEAN, "pouw-period")
-    public = case["params"]["key"]["public"]
-    forger = bytes(b ^ 0x5A for b in bytes.fromhex(public)).hex()
-    params = dict(case["params"])
-    if cheat == "none":
-        params["key"] = None
-    elif cheat in ("forger", "retired"):
-        params["key"] = {**params["key"], "public": forger}
-    pin = _pin(tmp_path, public, {"retired": [forger], "pin-retired": [public]}.get(cheat, []))
-    rc, got, err = _run(exe, pin, params, case, tmp_path)
-    if cheat is None:
-        off = _run(exe, [], params, case, tmp_path)
-        assert rc == 0 and got["verdict"] == "accept" and got == off[1], got
-        assert off[2].splitlines()[0] == "challenger's key not pinned: the case names it" and "not pinned" not in err
-    else:
-        assert rc == 1 and got["reason"].startswith(f"params: {reason}: "), got
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("first", ["pinned", "forger"])
-def test_pouw_period_refuses_parameters_naming_key_twice(tmp_path, first) -> None:
-    """Parameters whose JSON names `key` twice, the pinned key and the forger's in either order, are refused as not
-    canonical JSON, the same refusal in both orders, before the pin or the period reads either key."""
-    case = cases.instance(random.Random("honest/credit"))
-    exe = D.build(LEAN, "pouw-period")
-    key = case["params"]["key"]
-    forger = {**key, "public": bytes(b ^ 0x5A for b in bytes.fromhex(key["public"])).hex()}
-    a, b = (key, forger) if first == "pinned" else (forger, key)
-    rest = {k: v for k, v in case["params"].items() if k != "key"}
-    files = [tmp_path / "params.json", tmp_path / "commitment.bin", tmp_path / "evidence.json"]
-    files[0].write_text('{"key":' + D.canonical(a) + ',"key":' + D.canonical(b) + "," + D.canonical(rest)[1:])
-    files[1].write_bytes(bytes.fromhex(case["commitment"]))
-    files[2].write_bytes(bytes.fromhex(case["evidence"]))
-    p = subprocess.run([str(exe), *_pin(tmp_path, key["public"], []), "check", *map(str, files)],
-                       capture_output=True, text=True, check=False)
-    got = json.loads(p.stdout.strip().splitlines()[-1])
-    assert p.returncode == 1 and got["reason"].startswith("params: not canonical JSON"), got

@@ -37,7 +37,6 @@ theorem membersParamsOfJson_deployed {j : Json} {p : OneStageZk.Params} (h : One
        obtain ⟨q, hq, h⟩ := bind_ok h
        try dsimp only at h
        obtain ⟨_, -, h⟩ := bind_ok h
-       obtain ⟨_, -, h⟩ := bind_ok h
        simp only [pure, Except.pure, Except.ok.injEq] at h
        subst h
        have hd := Properties.Challenger.Limits.paramsParsed_deployed hq

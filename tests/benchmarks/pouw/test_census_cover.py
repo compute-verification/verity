@@ -17,8 +17,8 @@ above 0 at π* (Σ_r π*_r·c_kr > 0). The programs:
 A SASS opcode's class is the one the census reads off a timed program (`loads.rates_by_class`: `class_of`, a side unit's
 or TLD's by the program's name), on every device: the H200's and B200's data have no map of their own. An opcode it
 leaves unclassed, or whose class the statement's vector has no line for, is a warp instruction no class of the
-statement names, so it counts in the exporter's declared catch-all (`CATCH_ALL`: by device key, A2's on that device's
-data sheet; by vector name, that vector's), which must then be priced at π* itself; a class the vector lists but π*
+statement names, so it counts in the statement's vector's declared catch-all (its vector file's `catch_all`: A2's on
+a data sheet, or a measured vector's), which must then be priced at π* itself; a class the vector lists but π*
 prices at 0 is a gap whatever the catch-all. NOP is left out: it changes no state, so the program without its NOPs is
 the same program.
 
@@ -99,12 +99,13 @@ def statements() -> list[Statement]:
     """Every headline statement the exporters write: its vector, its π* and each class's price there."""
     i = H.instance()
     m = H.measured(i)
-    fam, cat = H.SM120, H.CATCH_ALL
+    fam = H.SM120
     out = [Statement(f"{fam.ns}SheetHeadline", fam.key, fam.data, fam.device, {i.pistar: Fraction(1)},
-                     {k: H.coef(i, i.pistar, k) for k in i.classes}, cat.get(fam.key) or cat.get(fam.device),
+                     {k: H.coef(i, i.pistar, k) for k in i.classes}, vector(fam.device, fam.data).catch_all or None,
                      "lean_headline.py"),
            Statement(f"{fam.ns}MeasuredHeadline", fam.key, fam.data, H.VECTOR, {m.pistar: Fraction(1)},
-                     {k: m.c[k].get(m.pistar, Fraction(0)) for k in i.classes}, cat.get(H.VECTOR), "lean_headline.py")]
+                     {k: m.c[k].get(m.pistar, Fraction(0)) for k in i.classes},
+                     vector(H.VECTOR, fam.data).catch_all or None, "lean_headline.py")]
     cat = D.CATCH_ALL
     for f in D.FAMILIES:
         for v, kind in ((f.sheet, "Sheet"), (f.measured, "Measured")):
@@ -228,7 +229,7 @@ def fix(g: Gap) -> str:
     line = f"a census line for {g.cls or 'its class'} on {' and '.join(st.lam)} in {_census_file(st)}"
     if g.cls is None:
         add = (f"Add a CLASS_RULES rule for it in facet_break/loads.py and {line}, or declare a catch-all priced on "
-               f"{' and '.join(st.lam)} (CATCH_ALL[{st.vector!r}] in {st.exporter})")
+               f"{' and '.join(st.lam)} (`catch_all` in {st.vector!r}'s vector file, which {st.exporter} reads)")
     elif g.cls not in st.price:
         add = f"Add {line}" + (f", or map {g.item} in loads.class_of to a class {st.vector} has" if g.cls != g.item
                                else "")
@@ -264,7 +265,7 @@ UNOWNED = "none yet: compute-accounting's coordinator"
 #: on them. The witnesses are census_cover_sass.json's runs: cpw_routes (RTX PRO 6000), rt3_dc (H200 and B200), and
 #: red_generic (its H200 and B200 SASS).
 CLOSING: dict[tuple[str, str], tuple[str, str]] = {
-    # sm_120, unclassed. On DS-120, the sheet's CATCH_ALL["sm_120"] (A2's NOROW, 1 at DS_issue) covers each; the
+    # sm_120, unclassed. On DS-120, the sheet's catch-all (A2's NOROW, 1 at DS_issue) covers each; the
     # measured reading (VF3r-16 at JI3s_0, VF3s-16 at JI3t_0) has neither a class nor a catch-all for any of them.
     ("sm_120", "STG.E.64"): (RT3_120, "cpw_routes modes 2 and 7's state-word stores; facet_break uc's stg64"),
     ("sm_120", "STS.64"): (RT3_120, "facet_break uc's sts64 probe"),

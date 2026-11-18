@@ -85,7 +85,7 @@ from verity.commitments.scheme import DIGEST_BYTES
 from . import compile as C
 from . import seeds as SD
 from . import segment as SG
-from .boolean import PouwXor32
+from verity.circuits.ops.boolean.words import PouwXor32
 
 SCHEME = "eps1-sm120-h1fx1"
 #: the one-stream unit's scheme (`PouwH1Tile3`)

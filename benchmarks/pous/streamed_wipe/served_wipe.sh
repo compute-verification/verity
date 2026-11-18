@@ -22,9 +22,9 @@
 #                      refused
 #   WIPE_NODE          the wiped server's id (this host's name)
 #   WIPE_CARD          the card's SKU the wipe is measured for (h200-sxm-141gb; `any` takes any), a cuda store's only
-#   WIPE_PROTOCOL_EXE  the Lean judge built already; else built here, in a scratch copy of verity/ (never this tree's
-#                      .lake), beside the lease and the wipe, which waits for it only to answer (`wipe_served.built`);
-#                      one that doesn't build ends the piece after the wipe with its own error and exit 7
+# The Lean judge, wipe-protocol, is built here in a scratch copy of verity/ (never this tree's .lake), beside the lease
+# and the wipe, which waits for it only to answer (`wipe_served.built`); no other program judges in its place, and one
+# that doesn't build ends the piece after the wipe with its own error and exit 7.
 # Inside the serve's gpu-lease (GPU_LEASE_UUID) it wipes that card; outside one it takes a card of its own (`gpu-lease 1
 # --wait`, else the tree's gpu_lease.sh) and gives it back after. DIR gets period.json, wipe.json, summary.json,
 # answer.json (wipe.json's answer), served.json (the serve dir and window, the server, the card, the lease, the run, the
@@ -42,13 +42,13 @@ SERVE_DIR=${1:?$USAGE} WINDOW=${2?$USAGE} DIR=${3:?$USAGE} SETTINGS=${4:-}
 mkdir -p "$DIR"
 DIR=$(cd "$DIR" && pwd)
 PY=${PY:-$ROOT/.venv/bin/python}
-STREAM=
+STREAM= JUDGE=
 stamp() { echo "$(date -u +%FT%TZ) $*" >> "$DIR/stamps.txt"; }
 refuse() { echo "WIPE REFUSED: $*" > "$DIR/refused.txt"; refused; }
 refused() { cat "$DIR/refused.txt"; stamp refused; exit 3; }
 # `attach.py check|run`: the settings checked and the attach's refusals made before any lease, then the wipe itself
 attach() { "$PY" - "$@" "$DIR" "$SERVE_DIR" "$WINDOW" "$SETTINGS" "${WIPE_NODE:-$(hostname)}" \
-  "${WIPE_KEY_SHA512:-}" "${WIPE_PROTOCOL_EXE:-}" "${VERITY_PINS:-}" "${VERITY_CONFIGURATION:-}" \
+  "${WIPE_KEY_SHA512:-}" "$JUDGE" "${VERITY_PINS:-}" "${VERITY_CONFIGURATION:-}" \
   "${VERITY_PROTOCOLS_CONFIG:-}" "${GPU_LEASE_UUID:-}" "${WIPE_OWN_LEASE:+own}" "$CTRL" "${STREAM:-}" <<'EOF'
 import json, os, shutil, socket, sys, tempfile
 from pathlib import Path
@@ -174,51 +174,50 @@ print(json.dumps({"host": h, "address": a, "command": shlex.split(c), "reads": 5
   export WIPE_CTRL=${DEV:+$DEV $SRC $(cat "/sys/class/net/$DEV/speed" 2>/dev/null || echo -)}
   CTRL=$WIPE_CTRL
   attach check > /dev/null || { [ $? != 3 ] || refused; exit 1; }
-  if [ -z "${WIPE_PROTOCOL_EXE:-}" ]; then
-    S=$(mktemp -d)
-    trap 'rm -rf "$S"' EXIT
-    L=verity/protocols/resource_accounting/memory/pous/attester/lean
-    # tar's exit 1 is only a file that changed as it read it: a process importing the tree's Python writes __pycache__
-    # beside it meanwhile, as a check's other suites do; 2 or more is a copy that failed
-    { tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ --warning=no-file-changed verity || [ $? = 1 ]; } \
-      | tar -C "$S" -x || { echo "WIPE FAILED: verity/ doesn't copy for wipe-protocol's build"; exit 7; }
-    export PATH="$HOME/.elan/bin:$PATH"
-    export WIPE_PROTOCOL_EXE=$S/$L/.lake/build/bin/wipe-protocol
-    BUILT=${WIPE_PROTOCOL_EXE%/*}
-    mkdir -p "$BUILT"
-    # the lock is taken before the build starts and held by the build alone, so the answer waits for its end
-    exec {LOCK}>"$BUILT/wipe-protocol.lock"
-    flock -x "$LOCK"
-    stamp "the Lean build starts"
-    (
-      command -v lake >/dev/null 2>&1 \
-        || (exec {LOCK}>&- && bash "$ROOT/tools/verity/lean/setup.sh" "$S/$L") > "$DIR/lake-setup.log" 2>&1
-      if (cd "$S/$L" && exec {LOCK}>&- && exec lake build wipe-protocol) > "$DIR/lake-build.log" 2>&1; then
-        : > "$BUILT/wipe-protocol.ok"
-        stamp "built wipe-protocol"
-      else
-        { tail -20 "$DIR/lake-build.log"; echo "WIPE FAILED: wipe-protocol doesn't build ($DIR/lake-build.log)"; } \
-          > "$BUILT/failed"
-        stamp "wipe-protocol didn't build"
-      fi
-    ) &
-    BUILDING=$!
-    exec {LOCK}>&-
-    trap 'kill "$BUILDING" 2> /dev/null || :; rm -rf "$S"' EXIT
-  fi
+  S=$(mktemp -d)
+  trap 'rm -rf "$S"' EXIT
+  L=verity/protocols/resource_accounting/memory/pous/attester/lean
+  # tar's exit 1 is only a file that changed as it read it: a process importing the tree's Python writes __pycache__
+  # beside it meanwhile, as a check's other suites do; 2 or more is a copy that failed
+  { tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ --warning=no-file-changed verity || [ $? = 1 ]; } \
+    | tar -C "$S" -x || { echo "WIPE FAILED: verity/ doesn't copy for wipe-protocol's build"; exit 7; }
+  export PATH="$HOME/.elan/bin:$PATH"
+  JUDGE=$S/$L/.lake/build/bin/wipe-protocol
+  BUILT=${JUDGE%/*}
+  mkdir -p "$BUILT"
+  # the lock is taken before the build starts and held by the build alone, so the answer waits for its end
+  exec {LOCK}>"$BUILT/wipe-protocol.lock"
+  flock -x "$LOCK"
+  stamp "the Lean build starts"
+  (
+    command -v lake >/dev/null 2>&1 \
+      || (exec {LOCK}>&- && bash "$ROOT/tools/verity/lean/setup.sh" "$S/$L") > "$DIR/lake-setup.log" 2>&1
+    if (cd "$S/$L" && exec {LOCK}>&- && exec lake build wipe-protocol) > "$DIR/lake-build.log" 2>&1; then
+      : > "$BUILT/wipe-protocol.ok"
+      stamp "built wipe-protocol"
+    else
+      { tail -20 "$DIR/lake-build.log"; echo "WIPE FAILED: wipe-protocol doesn't build ($DIR/lake-build.log)"; } \
+        > "$BUILT/failed"
+      stamp "wipe-protocol didn't build"
+    fi
+  ) &
+  BUILDING=$!
+  exec {LOCK}>&-
+  trap 'kill "$BUILDING" 2> /dev/null || :; rm -rf "$S"' EXIT
   if [ -z "${GPU_LEASE_UUID:-}" ]; then
     LEASE=(gpu-lease)
     command -v gpu-lease >/dev/null 2>&1 || LEASE=(bash "$ROOT/tools/research/src/research/pods/sh/gpu_lease.sh")
     rc=0
     stamp "asked for the card"
-    WIPE_OWN_LEASE=1 GPU_LEASE_WHO=memory-accounting "${LEASE[@]}" 1 --wait --max-min 30 -- \
+    WIPE_OWN_LEASE=$JUDGE GPU_LEASE_WHO=memory-accounting "${LEASE[@]}" 1 --wait --max-min 30 -- \
       bash "$SELF" "$SERVE_DIR" "$WINDOW" "$DIR" "$SETTINGS" || rc=$?
     exit "$rc"
   fi
 fi
 
 # under the lease: the card's SKU, then the wipe (the attach checks the card idle), then its piece
-[ -z "${WIPE_OWN_LEASE:-}" ] || stamp "leased the card"
+# under its own lease, the judge is the one the pass before the lease started building (WIPE_OWN_LEASE)
+[ -z "${WIPE_OWN_LEASE:-}" ] || { JUDGE=$WIPE_OWN_LEASE; stamp "leased the card"; }
 CTRL=${WIPE_CTRL:-}
 CARD=${GPU_LEASE_UUID%%,*}
 export CUDA_VISIBLE_DEVICES=${GPU_LEASE_UUID:-${CUDA_VISIBLE_DEVICES:-}}
@@ -244,10 +243,9 @@ SAID=$(TMPDIR=$K STREAM=${X:+$X/wipe_stream} attach run) || rc=$?
 rm -rf "$K" ${X:+"$X"}
 [ "$rc" != 3 ] || refused
 stamp "the wipe exit $rc"
-if [ -e "${WIPE_PROTOCOL_EXE:-}.lock" ] \
-   && ! bash "$ROOT/benchmarks/pous/lean_ready.sh" "${WIPE_PROTOCOL_EXE%/*}" wipe-protocol true 2> /dev/null; then
+if ! bash "$ROOT/benchmarks/pous/lean_ready.sh" "${JUDGE%/*}" wipe-protocol true 2> /dev/null; then
   echo "$SAID"
-  cat "${WIPE_PROTOCOL_EXE%/*}/failed"
+  cat "${JUDGE%/*}/failed"
   stamp "the piece stops: wipe-protocol didn't build"
   exit 7
 fi

@@ -29,7 +29,7 @@ open Lean (Json)
 
 /-- A descriptor `TemplateQuery.Desc.parse` reads, with no callee: one primitive Definition, its root. -/
 def desc (root : String) : ByteArray :=
-  ("{\"schema\":\"verity-ir/descriptor/v1\",\"callees\":[],\"definitions\":{\"" ++ root ++
+  ("{\"schema\":\"verity-ir/descriptor/v2\",\"callees\":[],\"definitions\":{\"" ++ root ++
     "\":{\"form\":\"primitive\"}},\"root\":\"" ++ root ++ "\"}").toUTF8
 
 /-- The circuit's program. -/

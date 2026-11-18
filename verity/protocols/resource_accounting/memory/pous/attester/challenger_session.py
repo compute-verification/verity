@@ -297,7 +297,7 @@ def salt(side: Side, audit: bytes, commitment: bytes) -> bytes:
     if rc == 0 and isinstance(doc.get("source"), str):
         return bytes.fromhex(doc["source"])
     why = doc.get("refused") or (f"it answered {line.strip()[:200]!r}" if "listening" in doc else f"it exited {rc}")
-    raise RuntimeError(f"the memory attester on {side.host} drew no salt: {why}")
+    raise RuntimeError(f"the memory attester on {mc.ATTESTER_MACHINE} drew no salt: {why}")
 
 
 def request_of(node: str, point: R.Point, binding: bytes, *, audit: bytes | None = None,

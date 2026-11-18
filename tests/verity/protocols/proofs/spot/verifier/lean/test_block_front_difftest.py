@@ -7,6 +7,7 @@ what the ports' closed form owes Core's definitions."""
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import shutil
@@ -18,6 +19,7 @@ import pytest
 
 import verity_difftest as D
 from verity.circuits import partition_object as PO
+from verity.circuits import restrict as R
 from verity.circuits.codec import descriptor_chunks
 from verity.circuits.evaluation.reference import signature_of
 from verity.circuits.layout import resolve
@@ -29,14 +31,19 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 
 @cache
-def chain():
-    """The one-circuit chain's wired Program (`test_one_circuit_chain.circuit`) and its descriptor's text."""
+def chain_module():
     path = HERE.parents[1] / "test_one_circuit_chain.py"
     spec = importlib.util.spec_from_file_location("one_circuit_chain_for_block_front", path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
-    program, _query = mod.circuit().program()
+    return mod
+
+
+@cache
+def chain():
+    """The one-circuit chain's wired Program (`test_one_circuit_chain.circuit`) and its descriptor's text."""
+    program, _query = chain_module().circuit().program()
     return program, b"".join(descriptor_chunks(program)).decode()
 
 
@@ -143,3 +150,58 @@ def test_the_order_is_increasing_c_index_and_the_inputs_precede_every_unit(piece
     gates = [g for g, _ in out["ins"]]
     assert gates == sorted(gates)
     assert any(g < first for g in gates) and out["ranges"] == sorted(out["ranges"])
+
+
+#: circuits' vector: the chain's first block (units 0 and 1), in(S) and out(S) as C's word-level descriptor gates
+FIRST_IN, FIRST_OUT = list(range(256)) + list(range(512, 544)), [642 + 3 * k for k in range(32)]
+
+
+@cache
+def restricted(member: int) -> R.Block:
+    """`restrict`'s block of member ``member`` (units ``2m`` and ``2m + 1``) on the chain."""
+    _program, text = chain()
+    c = text.encode()
+    query = {"name": "Q_template_instances", "version": 0, "params": {"templates": [chain_module().TI.GID]}}
+    return R.restrict(c, {"query": query}, [(2 * member, 2 * member + 2)], R.Bits(R.program(c)))
+
+
+def writer(program, g: int) -> tuple[int, int]:
+    """Gate ``g``'s root node and, for a node of a composite, its member."""
+    body = program.root.body
+    k = next(k for k in range(len(body.nodes)) if body.offsets[k] <= g < body.offsets[k + 1])
+    fn = body.nodes[k].fn
+    return k, (g - body.offsets[k]) // fn.gates if hasattr(fn, "body") else 0
+
+
+def rows(program, ports) -> list:
+    """``ports`` cut where the writer changes: ``[g<first gate>, bits, gates]``."""
+    out, last = [], None
+    for g, w in ports:
+        if writer(program, g) == last:
+            out[-1][1] += w
+            out[-1][2].append(g)
+        else:
+            out.append([f"g{g}", w, [g]])
+        last = writer(program, g)
+    return out
+
+
+@pytest.mark.parametrize("member", range(4))
+def test_the_block_files_ports_are_restricts_and_it_reads_back(pieces, member):
+    program, text = chain()
+    b = restricted(member)
+    j = {"descriptor": text, "units": [2 * member, 2 * member + 1], "boolean": BOOLEAN, "partition": "a" * 128}
+    kind, body = pieces.call("block_file", j)
+    assert kind == "output", body
+    out = json.loads(body)
+    assert [g for g, _ in out["ins"]] == list(b.inputs) and [g for g, _ in out["outs"]] == list(b.outputs)
+    if member == 0:
+        assert list(b.inputs) == FIRST_IN and list(b.outputs) == FIRST_OUT
+    assert out["rows"] == rows(program, out["ins"]) and out["out_rows"] == rows(program, out["outs"])
+    meta, words = out["meta"], [[n, (bits + 15) // 16] for n, bits, _ in out["out_rows"]]
+    assert meta["statement"] == "verity/flock-circuit" and meta["input_ports"] == len(out["rows"])
+    assert [p[0] for p in meta["ports"]] == [r[0] for r in out["rows"]] + [n for n, _ in words]
+    assert meta["out_ports"] == words
+    assert [s[1] for s in meta["row_schemas"][:len(out["rows"])]] == [r[1] for r in out["rows"]]
+    assert meta["program_sha512"] == hashlib.sha512(text.encode()).hexdigest()
+    assert len(meta["dummy"]["outputs"]) == sum(w for _, w in words)

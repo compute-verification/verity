@@ -452,8 +452,7 @@ def test_probes_build_and_gate(tmp_path):
     _, verdicts = probe.gate_all(built)
     wrong = probe.verdict_lines([v for v in verdicts if not v["correct"]])
     assert not wrong, "\n".join(wrong)
-    assert {v["probe"] for v in verdicts if not v["passed"]} == {"bad_ldsm_merged", "bad_stsm_conflict",
-                                                                 "dsm_red_add64_self"}
+    assert not [v["probe"] for v in verdicts if not v["passed"]]
 
 
 def test_clock_ceiling_requires_the_memory_clock_naming_clock_memory_with_no_default():

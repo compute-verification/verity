@@ -539,11 +539,11 @@ class IngressTie:
             all(self.outputs(r, ln) == 1 for r, ln in zip(cells.rows, lanes))
         return {"of_record": False, "accepted": accepted}
 
-    def verify(self, sample: S.Draw, delivered: Delivered, *, circuit_sha512: str, inputs: Any,
+    def verify(self, sample: S.Draw, delivered: Delivered, *, inputs: Any,
                releases: Sequence[Q.Release], head: WR.CellsHead, opening: WR.Cells | None = None) -> dict[str, Any]:
         """The verdict of record on the window's delivered proof, from public inputs and the proof alone: accepted when
         the verifier's own run of Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
-        `circuit_sha512`, and the verifier's own registered reads, `registered`: the network attester's root at `head`, the
+        and the verifier's own registered reads, `registered`: the network attester's root at `head`, the
         network attester's head of the registered root, and its own lanes of each bucket from `inputs` and `releases`, `lanes`,
         and the output words 1) accepts every session, they prove this tie's registered unit (`proved`) and every sampled
         proof block, and each sampled proof block's public row opens to the verifier's own copy (`public_arguments` on its lanes) and
@@ -584,10 +584,10 @@ class IngressTie:
         return {"format": STATEMENT, "check": self.spec.check.program, "link": self.link,
                 "window": reg["window"]["window"], "root": reg["roots"][0]["root"]}
 
-    def outcome(self, stream: S.Stream, sample: S.Draw, delivered: Delivered, *, circuit_sha512: str, inputs: Any,
+    def outcome(self, stream: S.Stream, sample: S.Draw, delivered: Delivered, *, inputs: Any,
                 releases: Sequence[Q.Release], head: WR.CellsHead, opening: WR.Cells | None = None) -> S.Outcome:
         """`stream.outcome` on the verifier's verdict (`verify`), with the registered root as the session's."""
-        verdict = self.verify(sample, delivered, circuit_sha512=circuit_sha512, inputs=inputs, releases=releases,
+        verdict = self.verify(sample, delivered, inputs=inputs, releases=releases,
                               head=head, opening=opening)
         return stream.outcome(sample, {VERIFIER: verdict}, self.statement(sample),
                               session_roots={VALUE: sample.docket.record["roots"][0]["root"]})
