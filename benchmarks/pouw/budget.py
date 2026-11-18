@@ -110,11 +110,9 @@ class Family:
     90). Its ratio 1 + γ is honest over plain int8 a MMA on the measured kernel; past y = 0 the honest time is the
     machine model's (modeled)."""
     name: str
-    device: str
     design: str
     design_name: str
     vector: str
-    gpu: str
     gpu_usd_h: float
     price_source: str
     #: ε_skip's piece only P·V's served output needs (its served epilogue and the tail's 4th IMMA, `eps_budget.floor_skip`
@@ -132,6 +130,24 @@ class Family:
     #: P·V noised as `pv` instead of `peel` (sm_120 only, the one device with pv designs): ε_skip's ratio and the
     #: whole-model γ's change, dither-c against dither-c-peel in eps_budget (8B, floor credit; pv's γ is the TS model's)
     pv_noise: tuple[float, float] | None = None
+
+    @functools.cached_property
+    def card_file(self) -> dict:
+        from verity.device import gpu_card_called
+
+        return gpu_card_called(self.card, directory=CARD_FILES)
+
+    @property
+    def device(self) -> str:
+        """The machine model's device: the card's architecture without its suffix (``sm_90a`` is ``sm_90``)."""
+        from verity.device import compute_capability
+
+        major, minor = compute_capability(self.card_file)
+        return f"sm_{major}{minor}"
+
+    @property
+    def gpu(self) -> str:
+        return self.card_file["name"]
 
     @functools.cached_property
     def fill(self) -> dict[str, list[tuple[float, float, float, float, float]]]:
@@ -153,17 +169,15 @@ def _fill_data() -> dict:
 
 
 FAMILIES = (
-    Family("sm_120", "sm_120", "H1 + fx1 (dither-c-peel + IMAD fill 1, VF3r-16)", "dither-c-peel", "VF3r-16",
-           "RTX PRO 6000", 1.80, "vy-nebius-1/2: $14.40/h for 8 GPUs with their host (measured price)",
+    Family("sm_120", "H1 + fx1 (dither-c-peel + IMAD fill 1, VF3r-16)", "dither-c-peel", "VF3r-16",
+           1.80, "vy-nebius-1/2: $14.40/h for 8 GPUs with their host (measured price)",
            served=0.1737, route=0.0012505, skip_no_pv=0.001321, pv_share=0.0184, card="rtx-pro-6000",
            pre_fill=((1.0, (("IMAD", 1.0),)),), pv_noise=(0.341 / 0.417, -0.010)),
-    Family("H200", "sm_90", "LI-CP-W redux L32, ffill at p = 1 (DC-90-ri, decisions 98 and 99)",
-           "dither-2s-licpw-redux-p1-l32", "DC-90-ri",
-           "H200", 5.40, "vy-dc-h200: $5.40/h, one GPU with its host (measured price)",
+    Family("H200", "LI-CP-W redux L32, ffill at p = 1 (DC-90-ri, decisions 98 and 99)",
+           "dither-2s-licpw-redux-p1-l32", "DC-90-ri", 5.40, "vy-dc-h200: $5.40/h, one GPU with its host (measured price)",
            served=0.0979, route=0.0, skip_no_pv=0.0, pv_share=0.0185, card="h200"),
-    Family("B200", "sm_100", "LI-CP-W redux L32, ♭ without LDTM, the fold the checks read (DC-100-ri)",
-           "dither-2s-licpw-redux-ldtm0-l32", "DC-100-ri",
-           "B200", 7.00, "vy-dc-b200: $7.00/h, one GPU with its host (measured price)",
+    Family("B200", "LI-CP-W redux L32, ♭ without LDTM, the fold the checks read (DC-100-ri)",
+           "dither-2s-licpw-redux-ldtm0-l32", "DC-100-ri", 7.00, "vy-dc-b200: $7.00/h, one GPU with its host (measured price)",
            served=0.2061, route=0.0, skip_no_pv=0.0, pv_share=0.0185, card="b200"),
 )
 

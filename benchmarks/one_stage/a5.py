@@ -230,6 +230,7 @@ HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.verifier import levels as LV  # noqa: E402
 import a5_memo as AM  # noqa: E402
@@ -493,7 +494,7 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     holds, which the evidence verified under, and the id of the one session the auditor's ledger opens on the window's
     root under that key and the stream's copy of main's history (`challenger.pinned_session`, the read `coins_reason`
     makes)."""
-    after, root = bytes.fromhex(R.digest(rec)), a.window_root
+    after, root = bytes.fromhex(DD.digest(rec)), a.window_root
     published = a.coins.evidence()
     ev = AC.evidence(published, segment)
 
@@ -915,7 +916,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary["source"], summary["commitment"] = w.get("kind"), w.get("commitment")
     receipt = R.receipt(rec, "one-stage-e2e verifier (a5.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-    summary.update(registration=R.digest(rec), leaf_layer=leaf_layer, checks_before_draw={c: v["ok"] for c, v in checks.items()},
+    summary.update(registration=DD.digest(rec), leaf_layer=leaf_layer, checks_before_draw={c: v["ok"] for c, v in checks.items()},
                    circuits={mm["m"].template: {"pin": mm["pin"], "class": mm["class"], "compose_s": mm["compose_s"],
                                                 "k_log": mm["st"]["meta"].get("k_log"), "unit_log": mm["st"]["meta"].get("unit_log"),
                                                 "vus_per_block": mm["st"]["meta"].get("vus_per_block"),
@@ -958,7 +959,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             a.stage["coins"].release(0)
     elif not streamed(a):
         p = a0.challenger_sample(a.lean, ["--population", str(n_all), "--k", str(sampling_design["k"])],
-                               {"law": "subset", "k": sampling_design["k"]}, n_all, R.digest(rec), out / "draw.log")
+                               {"law": "subset", "k": sampling_design["k"]}, n_all, DD.digest(rec), out / "draw.log")
         union_sample = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     else:
         trees = window_trees(a, members)

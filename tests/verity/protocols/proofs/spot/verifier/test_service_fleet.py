@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
 
 import test_service_sessions as T
 from test_service import SESSION, Clock, _lean, _ports, _record, _refused, _round, _stream
@@ -16,7 +17,7 @@ from test_service import SESSION, Clock, _lean, _ports, _record, _refused, _roun
 
 def _open(stream: S.Stream, n: int = 6) -> S.WindowCommitmentRecord:
     """A docket the stream receives and leaves open."""
-    previous = R.digest(stream._entries[-1].docket.record) if stream._entries else None
+    previous = DD.digest(stream._entries[-1].docket.record) if stream._entries else None
     return stream.register(_record(n, row=len(stream._entries), previous=previous), _ports(n))
 
 

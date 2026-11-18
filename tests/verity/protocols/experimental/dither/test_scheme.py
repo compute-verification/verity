@@ -22,12 +22,14 @@ def test_block_cost_is_an_output_cells_credit() -> None:
     assert sum(cost[d.base_id](d.bindings) for d in cells) == sh.k - sh.L
 
 
-def test_bound_refuses_a_charge_it_does_not_state() -> None:
-    names = {c.name: 1 for c in DS.DITHER.charges}
-    with pytest.raises(ValueError, match="dither: its delta_scheme .* is not said"):
-        S.bound(DS.DITHER, Fraction(1, 10**6), 5, names)
-    with pytest.raises(ValueError, match="charges are"):
-        S.bound(DS.DITHER, Fraction(1, 10**6), 0, {"inert-work": 0})
+def test_it_is_unbounded_by_its_unsaid_term_whatever_charges_are_given() -> None:
+    """Dither states no term of its own, so `bound` refuses it by that name before it reads the charges: its own and
+    one it does not state alike, and no number is given."""
+    refused = S.unbounded(DS.DITHER)
+    assert isinstance(refused, S.Unbounded) and refused.terms == ("Verity.Scheme.δscheme",)
+    for charges in ({c.name: 1 for c in DS.DITHER.charges}, {"inert-work": 0}):
+        with pytest.raises(S.Unbounded, match=r"dither: its delta_scheme \(Verity.Scheme.δscheme\) is not said"):
+            S.bound(DS.DITHER, Fraction(1, 10**6), 5, charges, epsilon=Fraction(0))
 
 
 def test_attach_waits_on_its_kernels() -> None:

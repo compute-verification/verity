@@ -57,6 +57,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "h1_prove"))
 sys.path.insert(0, str(HERE))
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
 
 import h1form as F  # noqa: E402
@@ -444,7 +445,7 @@ def prepare(a: argparse.Namespace) -> None:
     rec = R.record(ctx.reg.program, ctx.reg.query, {"law": "subset", "k": 1}, L.SCHEME, [],
                    {"kind": "served-window", "window": op["window"], "draw_root": op["draw_root"], "unit": u,
                     "call": unit["call"]}, partition=ctx.reg.part, registered=list(win.values()))
-    d = R.digest(rec)
+    d = DD.digest(rec)
     pa = L.partials(leaf, (a_root, b_root))
     # the partials' salts come from a private opening salt, so prepares of disjoint lane sets (on several nodes) commit
     # the one produced tree the unit's lanes read

@@ -122,6 +122,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
@@ -1436,7 +1437,7 @@ def cmd_register(a) -> int:
         print(f"REFUSED {json.dumps(e.verdict.to_json(), default=str)}", flush=True)
         return 0 if a.expect_refused else 1
     Path(a.out).write_text(json.dumps(rec, sort_keys=True))
-    print(f"REGISTERED {json.dumps({'registration': R.digest(rec)[:32], 'population': rec['population'], 'law': rec['law'], 'public': sorted(rec['window']['public'])})}",
+    print(f"REGISTERED {json.dumps({'registration': DD.digest(rec)[:32], 'population': rec['population'], 'law': rec['law'], 'public': sorted(rec['window']['public'])})}",
           flush=True)
     return 1 if a.expect_refused else 0
 

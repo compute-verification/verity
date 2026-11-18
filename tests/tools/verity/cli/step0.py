@@ -1,6 +1,6 @@
 """The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the eight
 subprotocols' declarations to a configuration (`MANIFESTS`), the ``toy`` workload's declaration (`TOY`), each party's
-entry or `LIVE` (`PARTIES`), and the live run of SPOT's core parties (`live`,
+entry or `LIVE` (`PIECES`), and the live run of SPOT's core parties (`live`,
 `verity.protocols.proofs.spot.verifier.parties`) on a machine (`Machine`).
 
 No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` are `SP.Unavailable` until a test's
@@ -273,7 +273,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str],
                        capabilities={p: m.capabilities(p) for p in here}, dial_to=dial or None)
 
 
-PARTIES: dict[str, dict[str, Entry | str]] = {
+PIECES: dict[str, dict[str, Entry | str]] = {
     "sampled-proofs": {p: LIVE for p in ("challenger", "firewall", "verifier")},
     "network-attester": {"network-attester": network_attester, "verifier": LIVE},
     **{c: {"verifier": LIVE} for c in ("pouw", "pearl-plus", "inference-only", "pous", "bandwidth", "wipe")},
