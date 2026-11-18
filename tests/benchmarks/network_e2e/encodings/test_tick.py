@@ -25,7 +25,7 @@ import pytest
 
 from verity_vllm import messages
 from verity_vllm.engine import admission
-from verity_vllm.pipeline import serve_admit as sa
+from verity.protocols.resource_accounting.network.prover import admission as na
 
 HERE = (Path(__file__).resolve().parents[4] / "benchmarks" / "network_e2e" / "encodings")
 
@@ -147,7 +147,7 @@ def serve(e, ios, times, seed: int, *, gated: bool = True, lost: Sequence[int] =
     now = [0.0]
     s = R.Scheduler(e, [ios[i] for i in kept])
     sched = Scheduler(s)
-    gate = sa.TickGate(sa.Tick(*TICK), hold_s=3600.0, clock=lambda: now[0])
+    gate = na.TickGate(na.Tick(*TICK), hold_s=3600.0, clock=lambda: now[0])
     if gated:
         ex = messages.Exchange()
         gate.attach(ex)
@@ -498,14 +498,14 @@ def test_what_the_tick_refuses():
     for bad in (0, -1, 1.5, True):
         with pytest.raises(ValueError, match="positive integer"):
             R.Tick(bad, 1, 1)
-    assert dataclasses.asdict(tk) == sa.Tick(*TICK).record()
-    assert [tk.close(b) for b in range(4)] == [sa.Tick(*TICK).close(b) for b in range(4)]
+    assert dataclasses.asdict(tk) == na.Tick(*TICK).record()
+    assert [tk.close(b) for b in range(4)] == [na.Tick(*TICK).close(b) for b in range(4)]
     for caps in (V.CAPS, *(dataclasses.replace(V.TICK_CAPS, **{c: 1}) for c in ("arrived", "hits", "resumes", "order",
                                                                                    "lag"))):
         with pytest.raises(V.AdviceCodeError, match="arrived, hits, resumes, order and lag are 0"):
             V.Registered(e, (EOS,), tick=tk, book=CV.Book.uniform(caps))
     with pytest.raises(V.AdviceCodeError, match="replay.Tick"):
-        V.Registered(e, (EOS,), tick=sa.Tick(*TICK))
+        V.Registered(e, (EOS,), tick=na.Tick(*TICK))
     V.Registered(e, (EOS,), tick=tk, book=CV.Book.uniform(V.TICK_CAPS))
     _, rec, adv, reg = tick_case(False)
     q0, last = rec.requests[0], max(q.end for q in rec.requests) + 1

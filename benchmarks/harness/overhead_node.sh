@@ -2,7 +2,8 @@
 # `verity bench overhead`'s job on a GPU node, run from the shipped source by the `research run --on NODE --cwd source` that
 # `verity_bench.overhead_records` launches, under `gpu-lease 1 --wait --max-min M`: it builds the PoUW harness for the card (native/build.sh at the
 # card's PH_ARCH, its cache under POUW_HARNESS_BUILD on the node, so a timed run compiles only a changed harness) and runs
-# `python -m verity_bench.overhead_node` on the lease's GPU, with a scratch directory outside $OUT for the Nsight report.
+# `python -m verity_bench.overhead_node` on the lease's GPU, with a private scratch directory outside $OUT (mktemp -d, 0700,
+# removed when the job exits) for the Nsight report and the arm's passes, whose salts and rows never go under $OUT.
 #
 #   bash benchmarks/harness/overhead_node.sh points --card h200 [--model M] [--precision P]
 #   bash benchmarks/harness/overhead_node.sh run --card h200 --scheme S --points points.json --points-art ART [--point P] \
