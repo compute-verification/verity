@@ -82,7 +82,7 @@ def test_a_record_whose_g_isnt_the_statics_is_refused(monkeypatch):
     d = Z.plan(S, list(WINDOW), SS.program_of(WINDOW), RUN_ROOT, 1)
     d.record = {**d.record, "G": S.P}
     with pytest.raises(SystemExit, match=f"record's G is {S.P} but the unit's statics' is 1"):
-        Z.stage(None, None, "cases", d.units["cases"], d, bytes(32), True)
+        Z.stage(None, None, "cases", d.units["cases"], d, True)
 
 
 def test_an_srb_row_shorter_than_a_piece_is_found_whole(tmp_path):

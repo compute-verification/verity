@@ -54,6 +54,7 @@ class Engine:
     rope_cache: dict | None = None  # the fused rope and KV-cache write installed at the build (`rope_cache`), None when none
     fused_producers: dict | None = None  # the int8 linears' fused producers installed at the build (`int8_producers`), None when none
     admission: Any = None  # the admission hook on the in-process scheduler (`hooked`), its steps' one emitter; None when the core is elsewhere
+    exchange: Any = None  # the exchange this build answered (`messages.build`), which its callers put in scope (`messages.using`)
 
     @property
     def vllm_config(self) -> Any:
@@ -242,7 +243,7 @@ def hooked(make: Callable[[], T]) -> tuple[T, Any, Callable[[], None]]:
 def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8,
                  verify_weights: bool = False, case: str = CASE, engine_args: dict[str, Any] | None = None, target: Any = None,
                  execution: str | None = None, env: dict[str, str] | None = None, card: str = "") -> Engine:
-    """The engine, built once the process's exchange answered its schemes' requests on what it declares (`Declared`:
+    """The engine, built once its build's exchange (`messages.build`) answered its schemes' requests on what it declares (`Declared`:
     ``card`` the card's file id, empty when the caller declares none); the in-process runner emits each step."""
     from verity_vllm.engine import engine_profile as prof
 
@@ -271,7 +272,7 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
                            "model is in the ranks' processes: declare none")
     if kw.get("enforce_eager") is False:
         prepare_compiled_process_cache()
-    ex = messages.current()
+    ex = messages.build()
     if fixed := sorted({r.ranges for _, r in ex.requests if isinstance(r, H.FixRanges)}):
         if len(fixed) > 1 or kw.get("num_gpu_blocks_override") not in (None, fixed[0]):
             raise RuntimeError(f"schemes fix the KV pool at {fixed} blocks and the engine's arguments at "
@@ -289,7 +290,8 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     build_s = time.perf_counter() - t0
     runner = handle.model_runner(llm) if world == 1 else None
     model = runner.get_model() if runner is not None else None
-    eng = Engine(llm, runner, model, cp, kw, env_flags, build_s, case, target, execution, admission=admitted)
+    eng = Engine(llm, runner, model, cp, kw, env_flags, build_s, case, target, execution, admission=admitted,
+                 exchange=ex)
     refuse_async(llm, kw.get("async_scheduling"), ex)
     eng.effective = effective_execution_doc(llm, model)      # read back from vllm_config: what this engine really executes
     if execution is not None and eng.effective.get("enforce_eager") is not None and bool(eng.effective["enforce_eager"]) != want_eager:
