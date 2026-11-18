@@ -2,14 +2,15 @@
 PROTOCOL.md §4.9: the body fixes C's bits; the word evaluator is a fast form of it), on its edge words and seeded random words.
 
 A word evaluator a verifier-side reference reads is held first, and says who reads it (`verifier_readers`): PoUW's Lean row
-primitives (their vector script) and Security's FP32, scalar and cast definitions (this suite's Lean vector tests). A primitive
-without a body is listed by name, never skipped: `NO_BODY_READ`, a named limit, when a verifier-side reference reads it, and
-`NO_BODY` otherwise. Each list shrinks as bodies are written; a listed primitive that has a body warns until it is struck off."""
+primitives (their vector script) and Security's FP32, scalar and cast definitions (this suite's Lean vector tests). A body
+declared in the tree that the lookup does not reach fails; a primitive with no body anywhere is listed by name in `NO_BODY`,
+never skipped, and a listed primitive that has a body warns until it is struck off."""
 from __future__ import annotations
 
 import importlib
 import importlib.util
 import pkgutil
+import random
 import re
 import warnings
 import zlib
@@ -33,18 +34,10 @@ HERE = Path(__file__).resolve().parents[1]
 ROW_PRIMS = ROOT / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/scripts/row_prims_vectors.py"
 N = 64
 
-#: verifier-read word primitives with no Boolean body yet: each a named limit until its body is written
-NO_BODY_READ = {"PouwBf16Neg_v1", "PouwETilde_v1", "PouwF32SqrtRn_v1", "PouwSqAcc_v1", "PouwSqCeil_v1", "PouwSqGe_v1"}
-#: the other word primitives with no Boolean body yet
-NO_BODY = {
-    "PouwAdd64Hi_v1", "PouwAdd64Lo_v1", "PouwAdd8_v1", "PouwAddSub8_v1", "PouwBlackwellE4m3SaltDead_v1",
-    "PouwBlackwellE4m3Window_v1", "PouwCh32_v1", "PouwChi32_v1", "PouwDot16U8S8_v1", "PouwFormX3_v1", "PouwFormX_v1",
-    "PouwHopperE4m3SaltDead_v1", "PouwHopperE4m3Window_v1", "PouwI32ToF32Rn_v1", "PouwMaj32_v1", "PouwNegBetaSum16_v1",
-    "PouwNoiseByte_v1", "PouwPackBE4_v1", "PouwRotl64Hi_v1", "PouwRotl64Lo_v1", "PouwSha512BigSigma0Hi_v1",
-    "PouwSha512BigSigma0Lo_v1", "PouwSha512BigSigma1Hi_v1", "PouwSha512BigSigma1Lo_v1", "PouwSha512SmallSigma0Hi_v1",
-    "PouwSha512SmallSigma0Lo_v1", "PouwSha512SmallSigma1Hi_v1", "PouwSha512SmallSigma1Lo_v1", "PouwSub8_v1",
-    "PouwWindowWord_v1", "PouwXor32_v1",
-}
+#: word primitives with no Boolean Definition anywhere under `verity/` or the adapter's definitions (`DECLARING`)
+NO_BODY: set[str] = set()
+#: where a Boolean Definition of a word primitive may be declared (`definition(..., word=...)`)
+DECLARING = (ROOT / "verity", ROOT / "adapters/vllm/verity_vllm/definitions")
 
 
 def _catalog() -> dict[str, PrimitiveDefinition]:
@@ -88,11 +81,29 @@ def _body(p: PrimitiveDefinition):
 BODIES = {k: b for k, p in PRIMS.items() if (b := _body(p)) is not None}
 
 
+def _edges(w: int) -> list[int]:
+    top, mask = 1 << (w - 1), (1 << w) - 1
+    return [0, 1, top, top | 1, mask, mask ^ top]
+
+
+def _wide(t, rng: random.Random) -> np.ndarray:
+    """`_vectors`' rows of one parameter with a leaf wider than 64 bits, as Python ints."""
+    widths = t.leaf_widths()
+    rows = [[_edges(w)[e] for w in widths] for e in range(6)]
+    rows += [[rng.choice(_edges(w)) if rng.random() < 1 / 8 else rng.getrandbits(w) for w in widths] for _ in range(N - 6)]
+    out = np.empty((N, len(widths)), dtype=object)
+    out[:] = rows
+    return out.reshape((N, *type_shape(t)))
+
+
 def _vectors(p: PrimitiveDefinition) -> list[np.ndarray]:
     """One row per width-generic edge word (every leaf that word), then seeded random rows with edges among them."""
     params = [t for _, t in p.signature()[0]]
-    rng = np.random.default_rng(zlib.crc32(p.id.encode()))
-    rand = sample_uniform(rng, N - 6, params)
+    seed = zlib.crc32(p.id.encode())
+    if any(type_dtype(t).kind == "O" for t in params):
+        rng = random.Random(seed)
+        return [_wide(t, rng) for t in params]
+    rand = sample_uniform(np.random.default_rng(seed), N - 6, params)
     out = []
     for t, r in zip(params, rand):
         widths = np.asarray(t.leaf_widths(), dtype=np.uint64).reshape(type_shape(t))
@@ -139,26 +150,30 @@ def test_word_evaluator_is_its_body(fid: str) -> None:
     _check(fid)
 
 
-@pytest.mark.parametrize("fid", sorted(NO_BODY_READ))
-def test_named_limit_verifier_read_word_evaluator_without_a_body(fid: str) -> None:
-    if fid in BODIES:
-        warnings.warn(f"{fid} has a Boolean body now: strike it from NO_BODY_READ", stacklevel=1)
-        _check(fid)
-        return
-    pytest.xfail(f"named limit: {fid}'s word evaluator, read by {READERS.get(fid, [])}, has no Boolean body to hold it to")
+def _declared(stems: set[str]) -> dict[str, list[str]]:
+    """Each of ``stems`` -> the files under `DECLARING` that declare a Boolean Definition computing it (``word=...<stem>``)."""
+    pat = re.compile(r"\bword\s*=\s*(?:\w+\.)*(" + "|".join(map(re.escape, sorted(stems))) + r")\b")
+    out: dict[str, list[str]] = {}
+    for d in DECLARING:
+        for f in sorted(d.rglob("*.py")):
+            for m in pat.finditer(f.read_text(errors="replace")):
+                out.setdefault(m[1], []).append(str(f.relative_to(ROOT)))
+    return out
 
 
-def test_primitives_without_a_body_are_listed() -> None:
-    missing = set(PRIMS) - set(BODIES)
-    read = {k for k in missing if k in READERS}
-    assert not read - NO_BODY_READ, (f"verifier-read word primitives with no Boolean body, not in NO_BODY_READ: "
-                                     f"{ {k: READERS[k] for k in sorted(read - NO_BODY_READ)} }")
-    assert not (missing - read) - NO_BODY, f"word primitives with no Boolean body, not in NO_BODY: {sorted((missing - read) - NO_BODY)}"
-    assert not (NO_BODY - set(PRIMS)) | (NO_BODY_READ - set(PRIMS)), "listed ids that are no registered word primitive"
-    stale = sorted((NO_BODY | NO_BODY_READ) - missing)
+def test_every_word_primitive_has_a_body_the_lookup_reaches() -> None:
+    missing = sorted(set(PRIMS) - set(BODIES))
+    stems = {re.sub(r"_v\d+$", "", k.split("[", 1)[0]): k for k in missing}
+    unreached = {stems[s]: fs for s, fs in _declared(set(stems)).items()} if stems else {}
+    assert not unreached, (f"word primitives whose Boolean body is declared but not reached by `versions.boolean_version` "
+                           f"(`versions.load` imports its catalogs): {unreached}")
+    unlisted = [k for k in missing if k not in NO_BODY]
+    assert not unlisted, ("word primitives with no Boolean body anywhere, not in NO_BODY: "
+                          f"{ {k: READERS.get(k, 'no verifier reads it') for k in unlisted} }")
+    assert NO_BODY <= set(PRIMS), f"NO_BODY names ids that are no registered word primitive: {sorted(NO_BODY - set(PRIMS))}"
+    stale = sorted(NO_BODY - set(missing))
     if stale:
-        warnings.warn(f"these listed primitives have a Boolean body now; strike them from NO_BODY / NO_BODY_READ: {stale}",
-                      stacklevel=1)
+        warnings.warn(f"these NO_BODY primitives have a Boolean body now; strike them: {stale}", stacklevel=1)
 
 
 def test_verifier_readers_name_registered_primitives() -> None:

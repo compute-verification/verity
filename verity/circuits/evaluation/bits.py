@@ -351,6 +351,9 @@ def peak_bytes(target: Any, n: int = 1) -> int:
 
 def _to_bits(words: np.ndarray, widths: list[int]) -> np.ndarray:
     n = words.shape[0]
+    if max(widths, default=0) > 64:
+        return np.array([[(int(r[e]) >> j) & 1 for e, w in enumerate(widths) for j in range(w)] for r in words],
+                        dtype=np.uint8).reshape(n, sum(widths))
     if len(set(widths)) == 1:
         shifts = np.arange(widths[0], dtype=np.uint64)
         return ((words.astype(np.uint64)[:, :, None] >> shifts) & np.uint64(1)).astype(np.uint8).reshape(n, -1)
@@ -365,6 +368,14 @@ def _to_bits(words: np.ndarray, widths: list[int]) -> np.ndarray:
 
 
 def _to_words(bits: np.ndarray, widths: list[int]) -> np.ndarray:
+    if max(widths, default=0) > 64:
+        out = np.empty((bits.shape[0], len(widths)), dtype=object)
+        k = 0
+        for e, w in enumerate(widths):
+            packed = np.packbits(bits[:, k:k + w].astype(np.uint8), axis=1, bitorder="little")
+            out[:, e] = [int.from_bytes(row.tobytes(), "little") for row in packed]
+            k += w
+        return out
     if len(set(widths)) == 1:
         rows = bits.astype(np.uint64).reshape(bits.shape[0], len(widths), widths[0])
         return np.bitwise_or.reduce(rows << np.arange(widths[0], dtype=np.uint64), axis=2)
@@ -389,8 +400,6 @@ def evaluate_words(target: Any, *inputs: Any) -> np.ndarray:
     cols, n = [], None
     for j, (a, t) in enumerate(zip(inputs, c.params)):
         widths = BL.elements(t)
-        if max(widths, default=1) > 64:
-            raise ValueError(f"{c.target} argument {j}: elements wider than 64 bits")
         a = np.asarray(a)
         if a.ndim == 0 or (n is not None and a.shape[0] != n) or int(np.prod(a.shape[1:], dtype=np.int64)) != len(widths):
             raise ValueError(f"{c.target} argument {j}: shape {a.shape}, expected (N, {len(widths)} elements)")
@@ -399,7 +408,7 @@ def evaluate_words(target: Any, *inputs: Any) -> np.ndarray:
         if a.size and a.dtype.kind == "i" and a.min() < 0:
             raise ValueError(f"{c.target} argument {j}: negative word")
         bits = _to_bits(a, widths)
-        if a.size and np.any(_to_words(bits, widths) != a.astype(np.uint64)):
+        if a.size and np.any(_to_words(bits, widths) != a.astype(object if max(widths) > 64 else np.uint64)):
             raise ValueError(f"{c.target} argument {j}: a word wider than its element")
         cols.append(bits)
     n = 0 if n is None else n

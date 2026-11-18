@@ -31,3 +31,7 @@ paths = ["verity/errors.py", "verity/circuits", "verity/circuits/ops", "verity/c
 [[tool.verity.tests.reads]]
 tests = ["test_settings.py"]
 paths = ["verity/circuits", "verity/circuits/ops", "verity/circuits/silicon"]
+
+[[tool.verity.tests.reads]]
+tests = ["evaluation/test_word_bodies.py"]
+paths = ["verity", "adapters/vllm/verity_vllm/definitions"]
