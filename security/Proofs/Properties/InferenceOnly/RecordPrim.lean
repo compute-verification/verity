@@ -369,8 +369,8 @@ theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Re
   refine ⟨w, hw, ⟨0, hw0, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
   · rw [hfields]
     exact Nat.zero_lt_one
-  · rw [hfields]
-    exact Nat.zero_lt_one
+  · rw [hfields, getElem!_pos _ 0 (by simp)]
+    simp [Flock.Program.Ty.leaves]
   · rw [hrow]
     exact Nat.zero_lt_one
   · rw [hrow]

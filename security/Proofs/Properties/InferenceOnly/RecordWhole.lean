@@ -107,9 +107,8 @@ theorem unwhole_none {P : Prog} {ts : List Tmpl} {ls : List Leaves} {s : Spot.Wi
         · rename_i he
           exact beq_iff_eq.1 he
         · cases hsh
-      · split_ifs at h0 with hwh
-        simp only [Bool.or_eq_true] at hwh
-        rcases hwh with hc | hc
+      · simp only [ite_eq_left_iff, reduceCtorEq, imp_false, Classical.not_not, Bool.or_eq_true] at h0
+        rcases h0 with hc | hc
         · exact Or.inl hc
         · exact Or.inr (widths_divide hc)
 
