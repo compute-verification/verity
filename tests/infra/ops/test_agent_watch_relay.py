@@ -150,6 +150,10 @@ def test_no_open_top_inbox_rings_nothing(relay, monkeypatch):
     assert len(relay.posts) == 1 and rings(relay) == []
 
 
+def replace(relay, it):
+    return relay.REPLACE.format(it=it, its="its")
+
+
 def test_a_stopped_worker_leads_with_its_lanes_handle_and_rings_that_inbox(relay):
     """Only the coordinator that launched a worker can resume it (Task): the watch can't start a worker's run."""
     proofs = relay.slack.tag(relay.slack.entry(relay.REG, "proofs"))
@@ -161,13 +165,29 @@ def test_a_stopped_worker_leads_with_its_lanes_handle_and_rings_that_inbox(relay
          "since": "2026-10-18T19:31:00Z", "hours": 6}]) + "\n"
     relay.once()
     assert relay.posts == [
-        f"{proofs} *Agent watch:* worker ZKS10 (<https://cursor.com/agents/{w}|{w}>) of lane proofs went idle at "
-        "2026-10-18T20:06:00Z; if it didn't report back, resume it with Task.",
+        f"{proofs} *Agent watch:* worker ZKS10 ({w}) of lane proofs stopped at 20:06Z; branch unknown. {replace(relay, 'it')}.",
         f"{proofs} *Agent watch:* worker W3 (<https://cursor.com/agents/{w}|{w}>) of lane proofs has been ACTIVE since "
         "2026-10-18T19:31:00Z (6 h); if it isn't working, stop it and resume it with Task."]
     ring = rings(relay)
     assert [r["thread_ts"] for r in ring] == [PROOFS_INBOX["inbox_ts"]] * 2
     assert relay.slack.DOORBELL_RE.match(ring[0]["text"])[1] == "infra" and "ZKS10" in ring[0]["text"]
+
+
+@pytest.mark.parametrize("lane", ["proofs", "a-lane-no-handle-owns-" + "x" * 80])
+def test_a_stopped_workers_doorbell_carries_what_its_lead_needs_within_the_doorbell_limit(relay, lane):
+    """A lead woken by the ring resumes or replaces the worker from the doorbell alone: its full id, its name, when it
+    stopped, where its work stands and the order for a fresh worker all fit in `DOORBELL_MAX` with the post's link, however
+    long the name, the branch, the lane and the wake-up it set."""
+    w, long = "bc-a8b63bc4-8d5b-53be-aaf8-35339162d81a", "y" * 300
+    relay.log_text["text"] = json.dumps(
+        {"kind": "worker_idle", "agent": w, "name": "SEAT-A " + long, "run": "", "lane": lane, "handle": None,
+         "at": "2026-10-19T19:22:00Z", "since": "2026-10-19T19:22:00Z", "branch": "infra/" + long,
+         "note": "lanes/proofs/" + long + ".md", "wake": "I'll check back " + long, "wake_due": "2026-10-19T19:52:00Z"}) + "\n"
+    relay.once()
+    (bell,) = [r["text"] for r in rings(relay)]
+    body = bell.split(": ", 1)[1]
+    assert len(body) <= relay.slack.DOORBELL_MAX and "the rest" not in body
+    assert all(x in body for x in (w, "SEAT-A yyy", "stopped at 19:22Z", "branch infra/yyy", replace(relay, "it"))), body
 
 
 def test_a_worker_whose_lane_no_handle_owns_rings_infra_and_says_so_never_posted_unrung(relay):
@@ -185,14 +205,13 @@ def test_a_worker_whose_lane_no_handle_owns_rings_infra_and_says_so_never_posted
                      {"kind": "worker_idle", "agent": h1, "name": "G2-2", "at": "2026-10-19T19:25:00Z"}]}]) + "\n"
     relay.once()
     assert relay.posts[0] == (
-        f"{infra} *Agent watch:* worker G2-1 → LiveEnd for FinExe (<https://cursor.com/agents/{g2}|{g2}>) went idle at "
-        "2026-10-19T19:22:00Z; if it didn't report back, resume it with Task. Before it stopped, it set its own wake-up "
-        "(\u201cI'll check back in 30 min.\u201d, due about 19:52Z). Its lane is unknown (no handle owns it or its parent), "
-        "so @infra is rung to find its coordinator.")
-    assert relay.posts[1] == (f"{kernels} *Agent watch:* worker H1 (<https://cursor.com/agents/{h1}|{h1}>) of lane kernels went "
-                              "idle at 2026-10-18T20:06:00Z; if it didn't report back, resume it with Task.")
+        f"{infra} *Agent watch:* worker G2-1 → LiveEnd for FinExe ({g2}) stopped at 19:22Z, having set a wake-up for 19:52Z; "
+        f"branch unknown. {replace(relay, 'it')}. No handle owns it "
+        "or its parent: @infra is rung to find its coordinator.")
+    assert relay.posts[1] == (f"{kernels} *Agent watch:* worker H1 ({h1}) of lane kernels stopped at 20:06Z; branch unknown. "
+                              f"{replace(relay, 'it')}.")
     assert relay.posts[2].startswith(f"{infra} *Agent watch:* 2 workers of the coordinator") and \
-        relay.posts[2].endswith("Its lane is unknown (no handle owns it or its parent), so @infra is rung to find its coordinator.")
+        relay.posts[2].endswith("No handle owns it or its parent: @infra is rung to find its coordinator.")
     assert [r["thread_ts"] for r in rings(relay)] == [INFRA_INBOX["inbox_ts"], KERNELS_INBOX["inbox_ts"], INFRA_INBOX["inbox_ts"]]
 
 
@@ -261,8 +280,8 @@ def test_a_worker_the_watch_cant_place_rings_infra_once_and_what_follows_rings_n
         "until a Task call the watch sees, a workers.d entry or a note places it (or, at the end of a run it sent, its "
         "name), its alerts are posted and ring no one.")
     assert relay.posts[1] == (
-        f"*Agent watch:* worker review-9 ({link}) went idle at 2026-10-19T19:22:00Z; if it didn't report back, resume it with "
-        "Task. The watch knows no lane for it and rang @infra once to say so: nobody is rung.")
+        f"*Agent watch:* worker review-9 ({kid}) stopped at 19:22Z; branch unknown. {replace(relay, 'it')}. The watch knows no lane "
+        "for it and rang @infra once to say so: nobody is rung.")
     assert relay.posts[2].startswith(f"*Agent watch:* worker review-9 ({link}) has been ACTIVE since 2026-10-19T13:22:00Z (6 h)")
     assert relay.posts[3].startswith("*Agent watch:* 2 workers of the coordinator") and relay.posts[3].endswith(
         "The watch knows no lane for them and rang @infra once to say so: nobody is rung.")
@@ -357,11 +376,9 @@ def test_a_worker_stopped_in_error_rings_its_lane_naming_it_and_its_issue_and_sa
     unplaced = {k: v for k, v in rec.items() if k not in ("handle", "issue")} | {"lane": "", "quiet": True}
     relay.log_text["text"] = json.dumps(rec) + "\n" + json.dumps(unplaced) + "\n"
     relay.once()
-    said = ("ended in ERROR; the watch can't start a run on a worker: resume it with Task, which only the agent that launched "
-            "it can, or relaunch it.")
-    assert relay.posts[0] == (f"{proofs} *Agent watch:* worker PRF-7 INTEGRATOR (<https://cursor.com/agents/{w}|{w}>, issue "
-                              f"PRF-7) of lane proofs {said}")
-    assert relay.posts[1].startswith(f"*Agent watch:* worker PRF-7 INTEGRATOR (<https://cursor.com/agents/{w}|{w}>) ended in")
+    assert relay.posts[0] == (f"{proofs} *Agent watch:* worker PRF-7 INTEGRATOR ({w}) of lane proofs stopped in ERROR at "
+                              f"19:22Z on PRF-7; branch unknown. {replace(relay, 'it')}.")
+    assert relay.posts[1].startswith(f"*Agent watch:* worker PRF-7 INTEGRATOR ({w}) stopped in ERROR at 19:22Z;")
     assert [kw["thread_ts"] for kw in rings(relay)] == [PROOFS_INBOX["inbox_ts"]]
 
 
@@ -389,8 +406,7 @@ def test_a_hand_in_waiting_on_an_integrator_rings_its_lead_linking_the_issue_and
         f"{proofs} {head} proofs {said}, and 2 later comments with it{then}",
         f"{proofs} {head} proofs {said}, and 1 later comment with it; the watch read no further back, so older ones may "
         f"wait too{then}",
-        f"{infra} {head} swarm-x {said}{then} Its lane is unknown (no handle owns it or its parent), so @infra is rung to "
-        "find its coordinator."]
+        f"{infra} {head} swarm-x {said}{then} No handle owns it or its parent: @infra is rung to find its coordinator."]
     assert [kw["thread_ts"] for kw in rings(relay)] == [PROOFS_INBOX["inbox_ts"]] * 3 + [INFRA_INBOX["inbox_ts"]]
     relay.posts.clear()
     relay.log_text["text"] += json.dumps({k: v for k, v in rec.items() if k != "signs"}) + "\n"
@@ -427,9 +443,9 @@ def test_workers_cut_together_in_error_are_one_post_saying_so_of_each(relay):
     relay.once()
     (post,) = relay.posts
     assert post.startswith(f"{proofs} *Agent watch:* 2 workers of @proofs's coordinator verity: proofs ")
-    assert ("PRF-7 INTEGRATOR (<https://cursor.com/agents/bc-00000001-0000-0000-0000-000000000001|bc-00000001>) stopped in "
-            "ERROR on PRF-7; SEAT-A (<https://cursor.com/agents/bc-00000002-0000-0000-0000-000000000002|bc-00000002>) stopped "
-            "in ERROR. Resume each") in post
+    assert (f"{replace(relay, 'each')}. PRF-7 INTEGRATOR (bc-00000001-0000-0000-0000-000000000001) stopped in ERROR at 19:22Z "
+            "on PRF-7; branch unknown. SEAT-A (bc-00000002-0000-0000-0000-000000000002) stopped in ERROR at 19:22Z; branch "
+            "unknown.") in post
     assert [kw["thread_ts"] for kw in rings(relay)] == [PROOFS_INBOX["inbox_ts"]]
 
 
@@ -637,14 +653,14 @@ def test_workers_that_stopped_together_are_one_post_to_the_lane_naming_each_and_
     relay.once()
     burst, alone = relay.posts
     assert burst.startswith(f"{proofs} *Agent watch:* 14 workers of @proofs's coordinator verity: proofs "
-                            f"(<https://cursor.com/agents/{co}|{co}>) stopped within 14 min: REC1 (")
-    assert all(f"{n} (<https://cursor.com/agents/" in burst for n in names) and burst.endswith("with Task.")
-    assert "INT7 (<https://cursor.com/agents/bc-00000008-0000-0000-0000-000000000008|bc-00000008>) idle at 16:56Z; it set its own " \
-           "wake-up (\u201cSetting my wake-up timer before ending the turn.\u201d)" in burst
-    assert "it set its own wake-up (\u201cA one-off wake-up fires in 15 minutes.\u201d, due about 17:05Z)" in burst
-    assert alone.endswith("Before it stopped, it set its own wake-up (\u201cA one-off wake-up fires in 15 minutes.\u201d, due "
-                          "about 17:05Z).")
+                            f"(<https://cursor.com/agents/{co}|{co}>) stopped within 14 min without reporting back. "
+                            f"{replace(relay, 'each')}. REC1 (bc-00000001-0000-0000-0000-000000000001) stopped at 16:49Z")
+    assert all(f"{m['name']} ({m['agent']})" in burst for m in members) and burst.endswith("; branch unknown.")
+    assert "INT7 (bc-00000008-0000-0000-0000-000000000008) stopped at 16:56Z, having set a wake-up; branch unknown" in burst
+    assert "G2-1 (bc-00000002-0000-0000-0000-000000000002) stopped at 16:50Z, having set a wake-up for 17:05Z" in burst
+    assert "stopped at 16:50Z, having set a wake-up for 17:05Z" in alone
     assert [r["thread_ts"] for r in rings(relay)] == [PROOFS_INBOX["inbox_ts"]] * 2, "the burst rings its lane once"
+    assert replace(relay, "each") in rings(relay)[0]["text"], "the order comes before the workers, so a cut doorbell keeps it"
 
 
 def test_a_run_its_own_lane_cancelled_and_a_relaunch_declined_are_posted_quietly_and_ring_no_one(relay):
