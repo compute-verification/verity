@@ -76,6 +76,9 @@ theorem SamplingDesign.missProb_cellSubsets {U : Type} [DecidableEq U] (m : ℕ)
   show prCoin (fun ω : (t : Fin m) → {S // S ∈ (C t).powersetCard (min (k t) (C t).card)} =>
     Disjoint (Finset.univ.biUnion fun t => (ω t).1) T) = _
   simp only [Finset.disjoint_biUnion_left]
+  haveI : ∀ t : Fin m, Nonempty {S // S ∈ (C t).powersetCard (min (k t) (C t).card)} := fun t =>
+    let h := Finset.exists_subset_card_eq (min_le_right (k t) (C t).card)
+    ⟨⟨h.choose, Finset.mem_powersetCard.2 h.choose_spec⟩⟩
   rw [prCoin_pi_forall Finset.univ
     (fun (t : Fin m) (S : {S // S ∈ (C t).powersetCard (min (k t) (C t).card)}) => Disjoint S.1 T)]
   exact Finset.prod_congr rfl fun t _ => prCoin_subset_disjoint (C t) _ T
