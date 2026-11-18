@@ -1,5 +1,5 @@
-"""`window_cut.credited`: one credited tile as a Program whose one block `restrict` gives with its word ports, evaluated
-on bits against its words and the scheme, and counted as the sum of its word primitives' bodies; `credited_sizes` of the
+"""`window_cut.credited`: one credited tile, the σ core, as a Program whose one block `restrict` gives with its bit ports,
+evaluated on bits against the σ's word view and the scheme, and counted as the sum of its gates; `credited_sizes` of the
 cut class's calls."""
 from __future__ import annotations
 
@@ -9,8 +9,10 @@ from collections import Counter
 
 import numpy as np
 import pytest
+from verity.circuits import boolean as BL
 from verity.circuits import count as CT
 from verity.circuits import restrict as R
+from verity.circuits.boolean.trace import word_of
 from verity.circuits.codec import descriptor_chunks, descriptor_id
 from verity.circuits.evaluation import evaluate, evaluate_words
 from verity.circuits.ops.boolean.versions import block_circuit, boolean_table
@@ -68,8 +70,7 @@ def _tile(seed: str, rho: int, rhor: int) -> tuple[list, tuple[bytes | None, int
 
 
 def _vectors() -> list[tuple[list, tuple]]:
-    _program, _part, _c, b = credited()
-    core = b.program.root.body.nodes[-1].fn
+    core = WK.credited_product(SCHEME, K, TM, TN, N)
     rho, rhor = core.bindings["RHO"], core.bindings["RHOR"]
     args, ref = _tile("credited", rho, rhor)
     out = [(args, ref)]
@@ -79,13 +80,13 @@ def _vectors() -> list[tuple[list, tuple]]:
     return out
 
 
-def _ports(args: list) -> list[list[int]]:
-    _program, _part, _c, b = credited()
-    words, at, out = _flat(args), 0, []
-    for _p, t in b.program.fn.signature()[0]:
-        out.append(words[at:at + t.n])
-        at += t.n
-    assert at == len(words)
+def _bits(args: list) -> list[int]:
+    params, _ret = WK.credited_product(SCHEME, K, TM, TN, N).signature()
+    out = []
+    for a, (_p, t) in zip(args, params):
+        words, widths = _flat(a), BL.elements(t)
+        assert len(words) == len(widths)
+        out += [(w >> j) & 1 for w, wd in zip(words, widths) for j in range(wd)]
     return out
 
 
@@ -96,17 +97,18 @@ def _reference(ref: tuple) -> list[int]:
 
 
 @pytest.mark.slow
-def test_the_credited_block_is_the_tile_with_its_word_ports():
-    """The block of the one unit is the tile's Definition with every input a registered port at its word width, and its
-    outputs the digest's bytes and ok. Slow: building the tile's Program and restricting it take about a minute."""
-    program, part, c, b = credited()
-    assert part["blocks"] == [[0, 1]] and part["query"]["params"]["template"] == descriptor_id(WK.credited_product(SCHEME, K, TM, TN, N))
+def test_the_credited_block_is_the_tile_with_its_bit_ports():
+    """The block of the one unit is the σ core with every input bit one registered port and its outputs the digest's bits
+    and ok. Slow: building the tile's Program and restricting it take about a minute."""
+    _program, part, _c, b = credited()
+    core = WK.credited_product(SCHEME, K, TM, TN, N)
+    assert part["blocks"] == [[0, 1]] and part["query"]["params"]["template"] == descriptor_id(core)
     params, ret = b.program.fn.signature()
-    assert [(t.n, t.elem.w) for _p, t in params] == [(TM * K + TN * K + TM * N + 2 * TM * TN, 32), (96, 8), (2 + TM, 32),
-                                                     (32 * (TN + 2 * K), 8), (1024, 32)]
+    width = 32 * (TM * K + TN * K + TM * N + 2 * TM * TN + 2 + TM + 1024) + 8 * (96 + 32 * (TN + 2 * K))
+    assert [(t.n, t.elem.w) for _p, t in params] == [(width, 1)]
     assert {R._binding(b.bits, g) for g in b.inputs} == {R.REGISTRATION}
-    assert [(t.n, t.elem.w) for t in ret.fields] == [(64, 8), (1, 1)]
-    assert [n.fn.id for n in b.program.root.body.nodes if n.form == "call"] == [WK.credited_product(SCHEME, K, TM, TN, N).id]
+    assert [(t.n, t.elem.w) for t in ret.fields] == [(64 * 8 + 1, 1)]
+    assert [n.fn.id for n in b.program.root.body.nodes if n.form == "call"] == [core.id]
 
 
 @pytest.mark.slow
@@ -122,20 +124,21 @@ def test_the_blocks_count_is_the_sum_of_its_bodies():
 
 
 @pytest.mark.slow
-def test_the_block_on_bits_is_its_words_and_the_scheme():
-    """The block on bits (each word primitive its body in the block's Boolean map) computes what the tile's Program
-    computes on words, and that is `pearl_plus_tile.reference`: on an honest tile (ok 1) and with y's word flipped at its sign, at the
-    lowest bit of its BF16 word and below it (ok 0). Slow: the block on bits is hundreds of millions of gates, the only
-    check that the bodies the count reads compute the tile."""
-    program, _part, _c, b = credited()
+def test_the_block_on_bits_is_its_word_view_and_the_scheme():
+    """The block on bits computes what the σ core's word view computes on words, and that is
+    `pearl_plus_tile.reference`: on an honest tile (ok 1) and with y's word flipped at its sign, at the lowest bit of its
+    BF16 word and below it (ok 0). Slow: the block on bits is hundreds of millions of gates, the only check that the
+    gates the count reads compute the tile."""
+    _program, _part, _c, b = credited()
     vectors = _vectors()
-    words = [_ports(args) for args, _ref in vectors]
     want = [_reference(ref) for _args, ref in vectors]
     assert want[0][-1] == 1 and [w[-1] for w in want[1:]] == [0, 0, 0]
-    assert [list(evaluate(program.fn, *(_flat(a) for a in args))) for args, _ref in vectors] == want
-    bits = block_circuit(b.program.fn, boolean_table(b.program))
-    got = evaluate_words(bits, *(np.asarray([w[i] for w in words], dtype=np.uint64) for i in range(len(words[0]))))
-    assert got.reshape(len(vectors), -1).tolist() == want
+    word = word_of(WK.credited_product(SCHEME, K, TM, TN, N))
+    assert [list(evaluate(word, *(_flat(a) for a in args))) for args, _ref in vectors] == want
+    got = evaluate_words(block_circuit(b.program.fn, boolean_table(b.program)),
+                         np.asarray([_bits(args) for args, _ref in vectors], dtype=np.uint64))
+    got = got.reshape(len(vectors), -1).tolist()
+    assert [[sum(g[8 * i + j] << j for j in range(8)) for i in range(64)] + [g[512]] for g in got] == want
 
 
 def test_the_credited_sizes_are_the_cut_calls_tiles():

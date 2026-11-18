@@ -147,7 +147,7 @@ def census(lowered: Any) -> list[dict[str, Any]]:
 
 def credited_product(scheme: str, k: int, tm: int, tn: int, n: int) -> SpecializedDefinition:
     unit = PT.tile(PS.get(scheme), k, tm, tn, n, 1)
-    return bind(PT.PearlPlusTileCore, **{s: unit.bindings[s] for s in PT.PearlPlusTileCore.statics})
+    return bind(PT.PearlPlusTileCoreV2, **{s: unit.bindings[s] for s in PT.PearlPlusTileCoreV2.statics})
 
 
 def credited(scheme: str, k: int, tm: int, tn: int, n: int) -> tuple[Program, dict[str, Any]]:
