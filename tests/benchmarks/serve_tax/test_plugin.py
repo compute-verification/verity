@@ -213,39 +213,6 @@ class Rows:
         return Rows(len(range(*s.indices(self.shape[0]))), self.shape[1])
 
 
-class Launched:
-    def __init__(self):
-        self.done = False
-
-    def ready(self) -> bool:
-        return self.done
-
-    def kernel_ms(self) -> float:
-        return 2.0
-
-
-def test_kv_edge_keeps_at_most_inflight_chunks_out_and_reports_each_edge_once():
-    now, got, out = [0.0], [], []
-
-    def launch(edge, rows):
-        out.append((edge, rows.shape[0], Launched()))
-        return out[-1][2]
-
-    kv = P.KvEdge(10.0, got.append, chunk_rows=2, inflight=1, clock=lambda: now[0], launch=launch)
-    kv.rows = lambda caches: [Rows(5, 8)]
-    kv.tick(None)
-    assert out == []
-    now[0] = 10.0
-    for _ in range(3):
-        kv.tick(None)
-        assert sum(not o[2].done for o in out) == 1
-        out[-1][2].done = True
-    kv.tick(None)
-    assert [o[:2] for o in out] == [(0, 2), (0, 2), (0, 1)]
-    assert got == [{"edge": 0, "bytes": 40, "chunks": 3, "kernel_ms": 6.0, "gb_per_s": round(40 / 6.0 / 1e6, 1), "span_s": 0.0,
-                    "t": got[0]["t"]}]
-
-
 def test_token_commit_commits_each_window_prompt_and_sampled_ids_in_order():
     now, got, seen = [0.0], [], []
     tc = P.TokenCommit(10.0, got.append, clock=lambda: now[0], commit=lambda w, data: (seen.append(data), b"\x01" * 64)[1])
@@ -284,28 +251,6 @@ def test_served_ids_keeps_each_finished_requests_prompt_ids_and_served_ids(tmp_p
     done[-1].uninstall()
     sched.add_request(Request(eid("agentic@2-r2-u0", 0), [1]))
     assert not done[0].open
-
-
-def test_kv_edge_starts_at_the_first_step_with_a_kv_cache_outside_a_capture():
-    ticks, capturing = [], [False]
-
-    class Edge:
-        def tick(self, kv):
-            ticks.append(kv)
-
-    made = []
-    run = P._kv_runner(lambda self: "out", {"out": "."}, capturing=lambda: capturing[0],
-                       edge_of=lambda: made.append(1) or Edge())
-    runner = NS()
-    assert run(runner) == "out" and not made
-    runner.kv_caches = []
-    run(runner)
-    runner.kv_caches, capturing[0] = ["kv"], True
-    run(runner)
-    assert not made
-    capturing[0] = False
-    run(runner), run(runner)
-    assert made == [1] and ticks == [["kv"], ["kv"]]
 
 
 def test_history_tables_start_on_rank_0_at_the_first_step_with_a_kv_cache_outside_a_capture(monkeypatch):

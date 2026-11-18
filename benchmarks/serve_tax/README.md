@@ -19,7 +19,6 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `release-order` | requests added in the network attester's release order (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder`, in the engine core) | `record` |
 | `tick` | admission on the certified tick (`verity_vllm.pipeline.scheme_plugin`, the network attester's scheme turned on by name), τ calibrated on `record` | `record` |
 | `tokens` | each window's tokens, 4 bytes each, committed in `rows-sha512` rows off the engine loop | `tick` |
-| `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
 | `tokens-only` | each Commit period's tokens committed as `tokens` commits them, without the tick | `record` |
 | `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
 | `boundary-rows` | the two-stage audit's boundary commitment at serve, vLLM's prefix cache left on: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
@@ -494,10 +493,9 @@ research run --on NODE --source . --cwd source --send C4.json.gz \
   --env REPLAY=saturated -- bash benchmarks/serve_tax/run.sh
 ~~~
 
-`run.sh`'s header lists its parameters (the model, reps, the loads' span, the Commit period and the KV edge's window).
-`MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint; `kv` there needs the
-edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
-The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.scheme_plugin` and the corpus client's stand-in attester,
+`run.sh`'s header lists its parameters (the model, reps, the loads' span and the Commit period).
+`MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint.
+The `tick` and `tokens` arms need `verity_vllm.pipeline.scheme_plugin` and the corpus client's stand-in attester,
 and refuse a tree without them. `tick-certifier` is two jobs: the node's (`SIDE=server`, in `run.sh`'s header),
 then the network attester's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
@@ -670,10 +668,6 @@ replay matches serving's values only when both picked the same; a window served 
 replay with it. A finished run's large files (`plan.jsonl`, `client.jsonl`) are
 evicted to its files artifact (`run-files.evicted.json` names it) after custody; `research data fetch ART --path GLOB
 --to RUN_DIR` puts them back first.
-
-The `kv` arm hashes the whole pool, free blocks too, at each edge: an upper bound on hashing the blocks live there, and a
-measurement of the cost, not a commitment of the state (a block written after the edge before the side stream reads it
-is hashed as written). With a KV window shorter than the Commit's, its tax scales down with the window's length.
 
 A restore arm (`EDGES_S`, `SAVE_KV`, `RESTORE`, `NUM_GPU_BLOCKS` in `run.sh`'s header) takes its edges at fixed seconds
 after its load's first request. Each edge first drains: the engine core schedules nothing until both batches in flight
