@@ -252,33 +252,31 @@ class Exchange:
         return out
 
 
-def _one(what: str, has: Callable[[schemes.Scheme], bool]) -> schemes.Scheme:
-    found = [s for s in declarations.load().values() if has(s)]
-    if len(found) != 1:
-        raise LookupError(f"one declared scheme {what}, not {len(found)}: {[s.name for s in found]}")
-    return found[0]
-
-
 def providing(role: str) -> schemes.Scheme:
-    """The one declared scheme that provides ``role`` (`Scheme.provides`); `LookupError` naming those that do otherwise."""
-    return _one(f"provides {role!r}", lambda s: role in s.provides)
+    """The one declared scheme that provides ``role`` (`Scheme.provides`), the only one imported; `LookupError` naming
+    those that do otherwise (`compose.schemes.named`)."""
+    return declarations.get(declarations.named("provides", role))
 
 
 def option(entry: str | None) -> schemes.Scheme | None:
     """The declared scheme whose option is ``entry`` (``name:scheme``, `Scheme.option`), which every launcher refuses,
-    naming the scheme's name to list instead; None when none is."""
-    return next((s for s in declarations.load().values() if entry and s.option == entry), None)
+    naming the scheme's name to list instead, the only one imported; None when none is."""
+    try:
+        return declarations.get(declarations.named("option", entry)) if entry else None
+    except LookupError:
+        return None
 
 
 def declaring(port: str) -> schemes.Scheme:
-    """The one declared scheme with a port named ``port`` (`Scheme.ports`); `LookupError` naming those that have otherwise."""
-    return _one(f"declares port {port!r}", lambda s: any(p.name == port for p in s.ports))
+    """The one declared scheme with a port named ``port`` (`Scheme.ports`), the only one imported; `LookupError` naming
+    those that have otherwise (`compose.schemes.named`)."""
+    return declarations.get(declarations.named("ports", port))
 
 
 def named(entry: str) -> schemes.Scheme | None:
-    """The declared scheme named ``entry``; None when none is (a declared scheme's option names it only to refuse it,
-    `option`)."""
-    return declarations.load().get(entry)
+    """The declared scheme named ``entry``, the only one imported; None when none is (a declared scheme's option names it
+    only to refuse it, `option`)."""
+    return declarations.get(entry) if entry in declarations.DECLARATIONS else None
 
 
 #: what a storage scheme declares: its resource (`Scheme.resource`) and the workload's store among its needs (`Scheme.needs`)
@@ -368,13 +366,14 @@ _TYPES: tuple[int, MessageTypes] | None = None
 
 
 def types() -> MessageTypes:
-    """The message types on disk: the proof layer's and every declared scheme's (`Scheme.messages`, by the scheme's name
-    in `verity.protocols.compose.schemes`)."""
+    """The message types on disk: the proof layer's, useful work's workload list (H1's, which no scheme declares), and
+    those of every scheme registered so far (`Scheme.messages`); `body` loads every declaration only for a type none
+    of them declares (`compose.schemes.workload_messages`)."""
     global _TYPES
-    registry = declarations.load()
+    registry = schemes.SCHEMES
     if _TYPES is None or _TYPES[0] != len(registry):
         declared = {id(m): m for s in registry.values() for m in s.messages}
-        _TYPES = (len(registry), MessageTypes((*spot.MESSAGES, *declared.values())))
+        _TYPES = (len(registry), MessageTypes((*spot.MESSAGES, *declarations.workload_messages(), *declared.values())))
     return _TYPES[1]
 
 
@@ -382,7 +381,14 @@ def body(type_: str, data: bytes) -> bytes:
     """``data`` as the body of a ``type_`` message, unchanged; `verity.channel.Refused` when its declaration refuses
     it."""
     msg = Message(type_, body=data)
-    if (why := types().schema(msg.type, msg.version).why(msg.head(), msg.body)) is not None:
+    try:
+        schema = types().schema(msg.type, msg.version)
+    except Refused as e:
+        if e.name != "unknown-type":
+            raise
+        declarations.load()
+        schema = types().schema(msg.type, msg.version)
+    if (why := schema.why(msg.head(), msg.body)) is not None:
         raise Refused(*why)
     return data
 

@@ -6,10 +6,13 @@ from __future__ import annotations
 import dataclasses
 import json
 import re
+import subprocess
+import sys
 from types import SimpleNamespace as NS
 
 import pytest
 from verity import hooks as H
+from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme as schemes
 
 from verity.channel import Body, MessageTypes, Refused
@@ -20,7 +23,18 @@ from verity_vllm.pipeline import serve_day as SD
 from verity_vllm.pipeline import serve_h1 as SH
 
 
+def test_useful_works_workload_messages_are_types_with_no_scheme_declared():
+    """H1's messages (`pouw.prover.workload.MESSAGES`), which no scheme declares, are types before any declaration is
+    imported: Pearl+'s declaration isn't what finds them."""
+    probe = ("import sys\nfrom verity_vllm import messages as M\n"
+             "assert {'H1Registration', 'H1Record', 'H1Program'} <= M.types().types\n"
+             f"assert {declarations.DECLARATIONS['pearl-plus']!r} not in sys.modules\n")
+    got = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
+    assert got.returncode == 0, got.stderr[-2000:]
+
+
 def test_every_declared_message_is_a_type():
+    declarations.load()
     assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows"} <= M.types().types
 
 
@@ -406,7 +420,7 @@ def test_a_route_has_one_scheme_and_an_input_is_refused_while_serving():
 
 def test_the_scheme_that_provides_admission_is_found_by_its_role():
     assert M.providing("admission").name == "network-attester"
-    with pytest.raises(LookupError, match="one declared scheme provides 'nothing', not 0"):
+    with pytest.raises(LookupError, match="one scheme whose provides is 'nothing', not 0"):
         M.providing("nothing")
 
 
