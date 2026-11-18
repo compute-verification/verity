@@ -165,6 +165,14 @@ def test_the_gathers_resolve_by_id_in_a_cold_decode() -> None:
     assert lookup_primitive(REGISTRY, "GatherF32x256_v1") is X.gather_f32(256)
 
 
+def test_the_e4m3_gathers_boolean_version_is_made_on_demand() -> None:
+    """`GatherE4m3x{V}_v1`'s Boolean version is a family the lookup makes from the id alone, as the other gathers', so a
+    Program over it builds in a process that never made `GatherE4m3x{V}_v2`."""
+    made = SW.made_on_demand("GatherE4m3x256_v1")
+    assert made is not None and made.id == "GatherE4m3x256_v2"
+    assert SW.boolean_version(X.gather_e4m3(256)).id == "GatherE4m3x256_v2"
+
+
 #: on bits: two tiles over two scale blocks (the step sm_120's or Hopper's), the GEMMs over a whole and a partial weight block, the
 #: gathers, and the pair forms over 3 experts
 BOOLEAN = [bind(BM.MoeExpertFp8BlockCoordinateV4, K=64, G=32, KB=32, SWAP=False, DOT=BG.BlackwellE4m3QmmaDot32),
