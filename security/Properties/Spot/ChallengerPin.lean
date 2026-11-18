@@ -27,8 +27,8 @@ under that key and no other is not stated here:
   Every Lean member that reads a challenger's key is pinned: of those, SPOT alone reads one. Pearl+'s run verdict
   (`PouwVerifier.PearlPlus.Protocol`) reads none: it opens its salt and sample coins against the root of a live
   commitment in the files it is handed (`Spot.Challenger.liveReason`, which takes no key), and no Lean check binds that
-  commitment to the challenger's key; its key is compared in Python (`served_verdicts.pearlplus_of_record`, on the
-  compose node too).
+  commitment to the challenger's key; the sessions' signatures are checked only on the served node; no compose-side
+  code verifies one.
 
 The window's root needs no comparison of its own: the coins are read only from the ledger's open whose root is the
 parameters' window root, in a ledger checked under the case's key (`Spot.Challenger.auditedOpen`), withheld on that root
