@@ -14,7 +14,7 @@ for a port: leaves of two widths, or an output past a word that is not whole wor
 template's closed rows (`closed`), `block_rows` and `chosen`. The Lean audit runs `InferenceOnlyCheck/RecordDifftestMain.lean` on the two (`runs` in
 `lean-audit.json`).
 
-Case `seed`, for the first `COUNT`, is the first random circuit of the seed's that the reference takes (`random_circuit`): one to four templates of a few gates, each
+Case `seed`, for the first `COUNT`, is a random circuit (`random_circuit`): one to four templates of a few gates, each
 reading some of its parameters' leaves (directly, through a call and through a batch) and now and then passing some
 of a parameter's one-bit leaves on (`PASSES`: itself, through a call, a callee inside a callee, a batch member or a
 scan, some only through its carry or only as its outputs, or handed to a callee that returns none of them), their units laid out by one or two inference entries each with the slot digit anywhere
@@ -1289,10 +1289,6 @@ def listed(c: Circuit):
 # Cases
 
 
-class Unexpected(AssertionError):
-    """The reference's verdict on a circuit is not the one `finish` was told."""
-
-
 def finish(rng, c: Circuit, held: dict[str, tuple], roots: dict[str, str], pins: list[str], *,
            before: int = 2, after: int = 0, order=None, policy: dict | None = None, refused: str | None = None,
            ran: dict[str, tuple] | None = None) -> dict:
@@ -1323,8 +1319,7 @@ def finish(rng, c: Circuit, held: dict[str, tuple], roots: dict[str, str], pins:
             **({"order": order} if order is not None else {})}
     tr = trusted(rng, digest, record, held, roots, before, after, ran)
     probe = ref.check_detail(inst, tr)
-    if probe.get("error") != refused:
-        raise Unexpected((c.name, probe))
+    assert probe.get("error") == refused, (c.name, probe)
     with _without(refused):
         probe = ref.check_detail(inst, tr)
         bools = ref.count(inst, tr, {"table": table, "c": 0, "k": 0, "n": 0}).get("bool_gates", 0)
@@ -1490,7 +1485,7 @@ def _turns() -> dict[int, int]:
 def case(seed: int) -> dict:
     """Case `seed`: below `COUNT` a random circuit with a random registration log, two in five of them broken, each
     in the way `WAYS` gives its turn among the broken, so every way comes up; on the first of the seed's circuits
-    that the reference takes and that has what that way breaks. Then `shaped()`'s."""
+    that has what that way breaks. Then `shaped()`'s."""
     if seed >= COUNT:
         return shaped()[seed - COUNT]
     turn = _turns().get(seed)
@@ -1512,14 +1507,11 @@ def case(seed: int) -> dict:
         rng.shuffle(pins)
         before, after = rng.choice([0, 1, 2, 2, 3]), rng.choice([0, 0, 1])
         held, ran = formats(random.Random(f"formats/{seed}/{attempt}"), c, held, roots, before)
-        try:
-            made = finish(rng, c, held, roots, pins, before=before, after=after, ran=ran)
-        except Unexpected:
-            continue
+        made = finish(rng, c, held, roots, pins, before=before, after=after, ran=ran)
         if how is None or _break(rng, made, how):
             break
     else:
-        raise AssertionError(f"case {seed}: none of its {TRIES} circuits is taken" + (f" and has what {how!r} breaks" if how else ""))
+        raise AssertionError(f"case {seed}: none of its {TRIES} circuits has what {how!r} breaks")
     if rng.random() < 0.04:
         limits = made["case"]["count"]
         rng.choice([lambda: limits.pop(rng.choice(ref.LIMITS)), lambda: limits.update(table=[]),
