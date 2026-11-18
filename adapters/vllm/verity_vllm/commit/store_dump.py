@@ -11,7 +11,8 @@ refused by name.
     store.json                  {schema, chunk, program_digest, geo_digest, run_id, layout_v2, commit_scheme, run_root, steps: [...]}
     raw/s<step>.bin             the retained bytes of the step, the ranges `steps[i].ranges` ([lo, hi) of the step stream) back to back
     levels/s<step>.bin          the step tree's levels, leaves first, 64 bytes per node (`steps[i].levels` = the widths)
-    keys.bin                    a full dump: each step's 64-byte salt key, in step order
+    keys.bin                    a full dump: each step's 64-byte salt key, in step order; where ``keys_to`` names (a replay bundle's
+                                private part, `replay_bundle.private_file`) instead when given
 
 A SLIM dump (`dump(..., touched=t)`, `t` recorded by `touched(com)` while a replay's reads were made) writes only the byte ranges and tree
 nodes those reads opened: `steps[i].ranges` the touched ranges, and `steps[i].nodes` ([level, index] in file order) the Merkle siblings
@@ -322,9 +323,10 @@ def write_doc(d: str | os.PathLike, doc: dict[str, Any], layouts: dict[int, Any]
 
 
 def dump_files(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: dict[str, str] | None = None,
-               touched: Touched | None = None) -> dict[str, Any]:
+               touched: Touched | None = None, keys_to: Path | None = None) -> dict[str, Any]:
     """`dump`'s step files under `d`, and its `store.json` document without the steps' metas (`write_doc` adds them and writes it).
-    With no ``touched``, a released window dumps slim to its sampled leaves (`kept`)."""
+    With no ``touched``, a released window dumps slim to its sampled leaves (`kept`).  ``keys_to``: where a full dump's
+    ``keys.bin`` goes instead of `d`, its digest in no ``digests``."""
     why = _refusal(com)
     if not why and touched is None:
         touched = kept(com)
@@ -342,7 +344,10 @@ def dump_files(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, dig
         done = list(pool.map(lambda sc: _dump_step(com, sc, d, touched), rc.steps))
     steps = [e for e, _ in done]
     if touched is None:
-        done.append(({}, {"keys.bin": write_file(d / "keys.bin", (memoryview(keys[int(sc.step)]) for sc in rc.steps))}))
+        kp = d / "keys.bin" if keys_to is None else Path(keys_to)
+        kp.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        kd = write_file(kp, (memoryview(keys[int(sc.step)]) for sc in rc.steps))
+        done.append(({}, {"keys.bin": kd} if keys_to is None else {}))
     if digests is not None:
         for _, dg in done:
             digests.update(dg)
@@ -450,7 +455,7 @@ class DumpedStore(NativeRangeOpenings):
     _block_holds = staticmethod(NativeHostCommitter._block_holds)
     _ctx_digest = NativeHostCommitter._ctx_digest
 
-    def __init__(self, doc: dict[str, Any], d: Path) -> None:
+    def __init__(self, doc: dict[str, Any], d: Path, keys: Path | None = None) -> None:
         self.chunk = int(doc["chunk"])
         self.program_digest = bytes.fromhex(doc["program_digest"])
         self._geo_digest = bytes.fromhex(doc["geo_digest"])
@@ -487,10 +492,15 @@ class DumpedStore(NativeRangeOpenings):
                 lvs.append(_Level(lv_buf, off, int(w), node))
                 off += int(w) * node
             self._gpu_levels[s] = lvs
-        if (d / "keys.bin").exists():
-            ks = bytes(self._map(d / "keys.bin"))
+        if keys is not None and (d / "keys.bin").exists():
+            raise ValueError(f"{d}: the salt keys are both in the store and at {keys}")
+        kp = keys if keys is not None else d / "keys.bin"
+        if not kp.exists() and doc["steps"] and not any("salted" in st for st in doc["steps"]):
+            raise ValueError(f"{d}: a full dumped store whose salt keys are neither in it nor at {keys}")
+        if kp.exists():
+            ks = bytes(self._map(kp))
             if len(ks) != step_rows.KEY_BYTES * len(doc["steps"]):
-                raise ValueError(f"{d / 'keys.bin'}: {len(ks)} bytes for {len(doc['steps'])} steps' {step_rows.KEY_BYTES}-byte salt keys")
+                raise ValueError(f"{kp}: {len(ks)} bytes for {len(doc['steps'])} steps' {step_rows.KEY_BYTES}-byte salt keys")
             self.row_keys = {int(st["step"]): ks[i * step_rows.KEY_BYTES:(i + 1) * step_rows.KEY_BYTES] for i, st in enumerate(doc["steps"])}
 
     def _gpu_salt(self, step: int, index: int) -> bytes:
@@ -513,7 +523,8 @@ class DumpedStore(NativeRangeOpenings):
         return memoryview(m)
 
 
-def load(d: str | os.PathLike) -> tuple[DumpedStore, RunRoots]:
+def load(d: str | os.PathLike, keys: Path | None = None) -> tuple[DumpedStore, RunRoots]:
+    """`dump`'s store under `d`; ``keys``: its ``keys.bin`` where it was written apart (`dump_files`' ``keys_to``)."""
     d = Path(d)
     doc = json.loads((d / "store.json").read_text())
     if doc.get("schema") != SCHEMA:
@@ -522,4 +533,4 @@ def load(d: str | os.PathLike) -> tuple[DumpedStore, RunRoots]:
                                                              int(s["n_tensors"])) for s in doc["steps"]])
     if [s.step for s in run.steps] != list(range(len(run.steps))):
         raise ValueError(f"{d / 'store.json'}: steps are not numbered densely from 0")
-    return DumpedStore(doc, d), run
+    return DumpedStore(doc, d, None if keys is None else Path(keys)), run

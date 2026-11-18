@@ -7,15 +7,21 @@ linkage writes one bundle per instrumented run beside its outputs, `<out>/replay
     weights/tree.json the committed weights root and the tree under it (`register_weights`): geo digest, chunk, the registered tensors
                       [name, dtype, shape, nbytes] in order and their tensor roots; `extra` names the registered tensors whose bytes
                       are in the bundle (buffers and engine constants, not checkpoint tensors)
-    weights/tree.salts/ the registration's salt file (`verity.commitments.salt_file`): every registered tensor's row salts, by name
     weights/extra/    those tensors' bytes, `<index>.bin` by their position in `names`
     binding_map.json  the run's binding map (`binding_map_p<pair>.json`)
     context.json      everything else the replay reads: the requests, sampling, served tokens, stop rule of record, the replay's
                       arguments and Program refs, the required manifest's path and sha256, the retention, the Commit's row as recorded
                       (weights pin, coverage, openings), verdict inputs (declaration, required classes) and the engine's
                       configuration of record (`engine_facts_of_record`, read in the Commit's process)
+    private.json      where the bundle's private part is (`PRIVATE_DOC`): its root and place, and the files there, named only
     MANIFEST.json     {schema, files: {path: {sha256, bytes}}}, written last; with the values committed and not in the store
                       (`NOT_RETAINED`), those too
+
+The private part holds what opens every committed leaf and is never in the bundle, its manifest or a run's outputs: the store's
+salt keys (``store/keys.bin``) and the weights registration's salt file (``weights/tree.salts/``, `verity.commitments.salt_file`).
+It goes under the private directory (`private_root`), at ``replay/<run root>/<bundle name>``; the manifest digests none of it, and
+a wrong key or salt is refused where its leaves fold to the committed roots.  A bundle sealed with them inside (no ``private.json``)
+is read as it was stored (`private_file`).
 
 It is built under `replay_bundle_p<pair>.partial/` and renamed into place once sealed, so a bundle directory that exists is complete.
 A full store is written from the moment the run root is fixed, beside the binding and manifest coverage (`start`), so the GPU is not
@@ -53,8 +59,8 @@ from verity_vllm.records.schema_ids import (
 # that read them, and the two deferred records take their schema ids from `records.schema_ids`: the driver's import puts the
 # catalog's Definitions into the Definition table, and the Commit that defers its replay to a bundle never loads the driver.
 
-__all__ = ["ARGS", "HASHED", "MANIFEST", "NOT_RETAINED", "PENDING", "deferred_records", "discard", "open_bundle",
-           "partial", "path", "seal", "seal_all", "weights_extra", "write_store", "write_store_files"]
+__all__ = ["ARGS", "HASHED", "MANIFEST", "NOT_RETAINED", "PENDING", "PRIVATE", "PRIVATE_DOC", "deferred_records", "discard", "load_store", "open_bundle",
+           "partial", "path", "private_file", "private_root", "seal", "seal_all", "weights_extra", "write_store", "write_store_files"]
 
 logger = init_logger(__name__)
 
@@ -64,6 +70,9 @@ MANIFEST = "MANIFEST.json"
 HASHED = "_hashed"
 #: the context's and manifest's key for the values committed and not retained, so not in the store (`store_dump.not_retained`)
 NOT_RETAINED = "committed_not_retained"
+#: the bundle's files that go to its private part, by their path in the bundle
+PRIVATE = ("store/keys.bin", "weights/tree.salts")
+PRIVATE_DOC = "private.json"
 ARGS = ("program_dir", "programs_root", "program_digest", "required_manifest", "replay_per_stratum", "replay_max", "replay_target", "replay_k",
         "replay_draw", "replay_workers", "replay_seed", "replay_challenge", "window_mb", "window_slots", "retain", "label", "serving_rows", "openings",
         "checkpoints", "workload", "weights_of_record", "checkpoint_dir")
@@ -77,6 +86,40 @@ def path(out: str | os.PathLike, pair: int, *, rank: int | None = None) -> Path:
 def partial(out: str | os.PathLike, pair: int, *, rank: int | None = None) -> Path:
     p = path(out, pair, rank=rank)
     return p.with_name(p.name + ".partial")
+
+
+def private_root(out: str | os.PathLike, given: str | os.PathLike | None = None) -> Path:
+    """The private directory a bundle's private part goes under: ``given`` (the Commit's ``--private``), else
+    VERITY_PROTOCOLS_CONFIG's ``private`` (the schemes'); refused when neither names one, or inside ``out``."""
+    from verity_vllm import settings
+    from verity_vllm.pipeline.boundary_tables import private_root as outside
+
+    d = given or (settings.get("VERITY_PROTOCOLS_CONFIG") or {}).get("private")
+    if not d:
+        raise ValueError("replay bundle: no private directory for its salt keys and salts: give the Commit --private DIR, or "
+                         "VERITY_PROTOCOLS_CONFIG's private, outside every run directory")
+    return outside(Path(d), Path(out))
+
+
+def load_store(bundle: str | os.PathLike) -> tuple[Any, Any]:
+    """The bundle's store (`store_dump.load`), its salt keys from its private part or, sealed with them inside, from the store."""
+    k, inside = private_file(bundle, PRIVATE[0]), Path(bundle) / PRIVATE[0]
+    return SD.load(Path(bundle) / "store", keys=None if k is None or k == inside else k)
+
+
+def private_file(bundle: str | os.PathLike, rel: str) -> Path | None:
+    """Where the bundle's private file ``rel`` (one of `PRIVATE`) is: in its private part (`PRIVATE_DOC`), or in the bundle for one
+    sealed with it inside; None when the bundle has none.  Refused by name when both hold it, or the private part lacks it."""
+    b = Path(bundle)
+    inside, there = b / rel, None
+    if (b / PRIVATE_DOC).is_file():
+        doc = json.loads((b / PRIVATE_DOC).read_text())
+        there = Path(doc["root"]) / doc["place"] / rel if rel in doc["files"] else None
+    if there is not None and inside.exists():
+        raise ValueError(f"{b}: {rel} is both in the bundle and in its private directory {there}")
+    if there is not None and not there.exists():
+        raise ValueError(f"{b}: {rel} is not in its private directory {there}")
+    return there if there is not None else inside if inside.exists() else None
 
 
 def deferred_records(bundle: Path) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -133,7 +176,7 @@ def start(out: Path, pair: int, com: Any, rc: Any, args: Any, protocols: Any) ->
         t0 = time.perf_counter()
         if isinstance(extras, ValueError):
             raise extras
-        write_store(out, pair, com, rc, digests=hashed, extras=extras)
+        write_store(out, pair, com, rc, digests=hashed, extras=extras, private=getattr(args, "private", None))
         return time.perf_counter() - t0
 
     fut = pool.submit(write)
@@ -192,7 +235,7 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
                            "runs in this process", pair, size / 1e9, bound / 1e9)
             return False
         hashed = {}
-        write_store(out, pair, com, rc, digests=hashed, touched=t)
+        write_store(out, pair, com, rc, digests=hashed, touched=t, private=getattr(args, "private", None))
     max_tokens = {str(q.get("request_id")): int(q.get("max_tokens") or 1) for q in reqs}
     ctx = {"pair": pair, "arm": arm, "committer": com.name, "run_root": rc.run_root.hex(), "code": versions.get("git_head"),
            "args": {k: getattr(args, k, None) for k in ARGS}, "requests": reqs, "sampling": sampling, "tokens": tokens,
@@ -308,11 +351,13 @@ def weights_extra(com: Any, rc: Any, extra_names: set[str] | None = None) -> tup
 
 def write_store(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_names: set[str] | None = None,
                 digests: dict[str, str] | None = None, touched: SD.Touched | None = None,
-                extras: tuple[dict[str, Any], list[tuple[int, str, Any]]] | None = None, rank: int | None = None) -> Path:
+                extras: tuple[dict[str, Any], list[tuple[int, str, Any]]] | None = None, rank: int | None = None,
+                private: str | os.PathLike | None = None) -> Path:
     """The bundle's store and weights, written into its partial dir (the rest follows at `seal`).  `extras`: `weights_extra`'s
     answer, read before (default: read here, with `extra_names`).  ``digests`` receives the sha256 of the store's step files as they
     were written (by their path in the bundle)."""
-    p, doc = write_store_files(out, pair, com, rc, extra_names=extra_names, digests=digests, touched=touched, extras=extras, rank=rank)
+    p, doc = write_store_files(out, pair, com, rc, extra_names=extra_names, digests=digests, touched=touched, extras=extras, rank=rank,
+                               private=private)
     SD.write_doc(p / "store", doc, com._layouts)
     return p
 
@@ -320,13 +365,16 @@ def write_store(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_n
 def write_store_files(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_names: set[str] | None = None,
                       digests: dict[str, str] | None = None, touched: SD.Touched | None = None,
                       extras: tuple[dict[str, Any], list[tuple[int, str, Any]]] | None = None,
-                      rank: int | None = None) -> tuple[Path, dict[str, Any]]:
-    """`write_store` but for the store's ``store.json``: the partial dir and the document `store_dump.write_doc` writes there."""
+                      rank: int | None = None, private: str | os.PathLike | None = None) -> tuple[Path, dict[str, Any]]:
+    """`write_store` but for the store's ``store.json``: the partial dir and the document `store_dump.write_doc` writes there.  The
+    keys and salts go to the bundle's private part under `private_root` (``private``)."""
     p = partial(out, pair, rank=rank)
+    root, place = private_root(out, private), f"replay/{rc.run_root.hex()}/{path(out, pair, rank=rank).name}"
     if p.exists():
         shutil.rmtree(p)
+    shutil.rmtree(root / place, ignore_errors=True)
     dumped: dict[str, str] = {}
-    doc = SD.dump_files(com, rc, p / "store", digests=dumped, touched=touched)
+    doc = SD.dump_files(com, rc, p / "store", digests=dumped, touched=touched, keys_to=root / place / PRIVATE[0])
     if digests is not None:
         digests.update({f"store/{k}": v for k, v in dumped.items()})
     tree, extra = extras if extras is not None else weights_extra(com, rc, extra_names)
@@ -335,7 +383,9 @@ def write_store_files(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, e
     if tree.get("scheme") == step_rows.NAME and any(int(nb) for *_e, nb in tree["names"]) and not salts:
         raise ValueError("replay bundle: the committer holds no salts for its rows-sha512 weights registration (register_weights)")
     if salts:
-        SF.write(SF.beside(p / "weights" / "tree.json"), salts)
+        SF.write(root / place / PRIVATE[1], salts)
+    held = [rel for rel in PRIVATE if (root / place / rel).exists()]
+    (p / PRIVATE_DOC).write_text(json.dumps({"root": str(root), "place": place, "files": held}) + "\n")
     for i, _name, raw in extra:
         (p / "weights" / "extra" / f"{i}.bin").write_bytes(raw)
     wdoc = tree | {"extra": {name: i for i, name, _raw in extra}}
@@ -393,5 +443,7 @@ def open_bundle(bundle: str | os.PathLike) -> dict[str, Any]:
         bad = [rel for rel, got in zip(rels, pool.map(lambda r: _sha256(b / r), rels)) if got != man["files"][rel]["sha256"]]
     if bad:
         raise ValueError(f"{b}: files whose sha256 is not the manifest's: {bad[:4]}")
+    for rel in PRIVATE:
+        private_file(b, rel)
     ctx = json.loads((b / "context.json").read_text())
     return {"path": str(b), "manifest": man, "manifest_sha256": _sha256(b / MANIFEST), "context": ctx}
