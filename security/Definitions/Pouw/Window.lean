@@ -53,9 +53,10 @@ guarantee `audit_executionPhase_split_of_record` is stated over), on its own so 
   transcript whose inputs are the anchors' and whose outputs are the served leaves' words;
 * `ServedTie` (premise `δ_in`, open on main): the window accepts while its committed transcript isn't anchored and
   served with probability at most a term of the window's state;
-* the deployed sample, SPOT (`verity/protocols/accounting/pouw/verifier/window.py`): `subsetDraw`, one uniform `K`-of-`N`
-  tile subset; `sessions`, `chunk` and `serviceSamplingDesign`, its rank-ordered sessions, each a call of the window whose units are
-  the `N` tiles; `share` and `sessionSamplingDesign`, each session's own uniform distribution; `CopyClosed`, the unit sets that hold a tile
+* the deployed sample, SPOT (`verity/protocols/accounting/pouw/verifier/window.py`): one uniform `K`-of-`N` tile subset,
+  a uniform permutation's `K`-prefix (`Verity.SamplingDesign.permPrefix N K`); `sessions`, `chunk` and
+  `serviceSamplingDesign`, its rank-ordered sessions, each a call of the window whose units are the `N` tiles; `share`,
+  the size of each session's own uniform distribution, `permPrefix N (share K cap σ)`; `CopyClosed`, the unit sets that hold a tile
   in every session or in none; `UnitStmts.copies`, the tiles' statements read in every session, and `IncorrectCopyClosed`,
   statements whose incorrect sets are copy-closed.
 -/
@@ -397,11 +398,6 @@ window's calls are the sessions: unit `⟨σ, t⟩` is tile `t` proved in sessio
 /-- The rank of `t` in `D`: how many of `D`'s units are below it. -/
 def rank {N : ℕ} (D : Finset (Fin N)) (t : Fin N) : ℕ := (D.filter (· < t)).card
 
-/-- The `K`-subset of the `N` tiles a permutation samples, the images of `0, …, K − 1`: under a uniform permutation, a
-uniform `K`-subset. -/
-def subsetDraw {N : ℕ} (K : ℕ) (π : Equiv.Perm (Fin N)) : Finset (Fin N) :=
-  (Finset.univ.filter fun i : Fin N => i.val < K).image π
-
 /-- The number of sessions of `cap` instances that hold `K` sampled tiles, `⌈K / cap⌉` (`sessions` in `window.py`). -/
 def sessions (K cap : ℕ) : ℕ := (K + cap - 1) / cap
 
@@ -410,19 +406,16 @@ session pads its instances with the filler tile, which is credited no work. -/
 def chunk {N : ℕ} (cap : ℕ) (D : Finset (Fin N)) (σ : ℕ) : Finset (Fin N) :=
   D.filter fun t => σ * cap ≤ rank D t ∧ rank D t < (σ + 1) * cap
 
-/-- **The service's sample**: a uniform permutation's `K`-subset, each sampled tile a unit of the one session that holds its
-rank. -/
+/-- **The service's sample**: a uniform permutation's `K`-prefix (`Verity.SamplingDesign.permPrefix N K`), each sampled
+tile a unit of the one session that holds its rank. -/
 def serviceSamplingDesign (N K cap : ℕ) : SamplingDesign (WUnit fun _ : Fin (sessions K cap) => N) where
   Ω := Equiv.Perm (Fin N)
-  draw π := Finset.univ.sigma fun σ => chunk cap (subsetDraw K π) σ.val
+  draw π := Finset.univ.sigma fun σ => chunk cap ((Verity.SamplingDesign.permPrefix N K).draw π) σ.val
 
-/-- The size of session `σ`'s share: `cap`, or what is left of `K` in the last session. -/
+/-- The size of session `σ`'s share: `cap`, or what is left of `K` in the last session. Session `σ`'s own sampling
+design is a uniform `share K cap σ`-subset of the `N` tiles on coins of its own,
+`Verity.SamplingDesign.permPrefix N (share K cap σ)`. -/
 def share (K cap σ : ℕ) : ℕ := min cap (K - σ * cap)
-
-/-- **Session `σ`'s own sampling design**: a uniform `share K cap σ`-subset of the `N` tiles, on coins of its own. -/
-def sessionSamplingDesign (N K cap σ : ℕ) : SamplingDesign (Fin N) where
-  Ω := Equiv.Perm (Fin N)
-  draw π := subsetDraw (share K cap σ) π
 
 /-- **Copy-closed unit sets**: a set that holds tile `t` in one session holds it in every session. The service's units'
 statements read the tile and not the session that proves it, so a transcript's incorrect proof blocks are copy-closed
