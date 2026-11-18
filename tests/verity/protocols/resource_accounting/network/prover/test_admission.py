@@ -60,12 +60,10 @@ def test_a_lost_release_in_the_engine_is_refused_through_the_exchange():
     assert ex.requests[2:] == [("n", H.RefuseInput("e0", NA.LOST.format(n=0, run=RUN)))]
 
 
-def test_a_rule_other_than_the_registered_one_is_a_rule_gate():
-    assert type(tick(token_ns=0, catch_up="quiet").gate) is NA.TickGate
-    g = tick(token_ns=500, catch_up="marks").gate
-    assert type(g) is NA.RuleGate and (g.token_ns, g.catch_up) == (500, "marks")
-    with pytest.raises(ValueError, match="only a benchmark arm that names it measures it"):
-        tick(catch_up="open")
+def test_the_token_term_is_a_setting_of_the_one_gate():
+    assert tick().gate.token_ns == 0 and tick(token_ns=500).gate.token_ns == 500
+    with pytest.raises(ValueError, match="token_ns a non-negative integer"):
+        tick(token_ns=-1)
 
 
 def test_without_submit_the_gate_alone_reads_its_records_from_pull():

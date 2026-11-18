@@ -26,6 +26,7 @@ from verity_vllm.definitions.registry.fp8 import FP8_BLOCK
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods import wiring as WI
+from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
@@ -188,14 +189,14 @@ def test_each_coordinate_s_q_and_s_are_wired_to_its_row_s_quantisation(served):
     assert [(m.base, m.n) for m in coords] == [(2 + lo, min(16, 2 * WN - lo)) for lo in range(0, 2 * WN, 16)]
     for m in coords:
         want = tuple((m.base + i - 2) // WN for i in range(m.n))
-        assert m.wired == (("in0", "o0", want), ("in1", "o1", want))
+        assert CH.writer_units(ms, m) == (("in0", "o0", want), ("in1", "o1", want))
     got = SRW.read_all(ms, rows, x["store"], None)
     for m, (g, _e) in zip(ms, got):
         if m.template == TG:
             stager(TG).reference_check(g["rows"], g["outs"])
     q = [g for m, (g, _e) in zip(ms, got) if m.template == TQ]
     for m, (g, _e) in zip(ms, got):
-        for port, out, writers in m.wired:
+        for port, out, writers in CH.writer_units(ms, m):
             assert all(g["rows"][port][i].tobytes() == q[u]["outs"][out][0].tobytes() for i, u in enumerate(writers))
     y = np.concatenate([g["outs"]["o0"] for m, (g, _e) in zip(ms, got) if m.template == TG]).reshape(-1)
     assert y.tolist() == x["words"][op(7)]["out"].tolist() + x["words"][op(8)]["out"].tolist()

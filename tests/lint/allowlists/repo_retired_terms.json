@@ -62,9 +62,6 @@
     {"file": "adapters/vllm/verity_vllm/compiler/advice_check.py", "count": 3},
     {"file": "adapters/vllm/verity_vllm/compiler/cache_step.py", "count": 2},
     {"file": "adapters/vllm/verity_vllm/compiler/compile_slice.py", "count": 2},
-    {"file": "adapters/vllm/verity_vllm/compiler/compile_slice_v4.py", "count": 4},
-    {"file": "adapters/vllm/verity_vllm/compiler/compile_slice_v5.py", "count": 6},
-    {"file": "adapters/vllm/verity_vllm/compiler/compile_slice_v6.py", "count": 15},
     {"file": "adapters/vllm/verity_vllm/compiler/replay_chain.py", "count": 22},
     {"file": "adapters/vllm/verity_vllm/compiler/replay_step.py", "count": 31},
     {"file": "adapters/vllm/verity_vllm/config.py", "count": 34},
@@ -373,7 +370,6 @@
     {"file": "benchmarks/pouw/pearl_c_vllm/channel_swaps.py", "count": 9},
     {"file": "benchmarks/pouw/pearl_c_vllm/fast_tile.py", "count": 3},
     {"file": "benchmarks/pouw/pearl_c_vllm/forming_headroom.py", "count": 5},
-    {"file": "benchmarks/pouw/pearl_c_vllm/h3_screen.py", "count": 2},
     {"file": "benchmarks/pouw/pearl_c_vllm/retain_profile.py", "count": 3},
     {"file": "benchmarks/pouw/pearl_c_vllm/served_inert_work.py", "count": 113},
     {"file": "benchmarks/pouw/pearl_c_vllm/served_inputs.sh", "count": 2},
@@ -2751,7 +2747,6 @@
     {"file": "verity/protocols/proofs/flock/prover/live/PROTOCOL.md", "count": 18},
     {"file": "verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs", "count": 195},
     {"file": "verity/protocols/proofs/flock/prover/live/src/bin/flock-gpu-link.rs", "count": 1},
-    {"file": "verity/protocols/proofs/flock/prover/live/src/bin/flock-ir-block.rs", "count": 1},
     {"file": "verity/protocols/proofs/flock/prover/live/src/bin/flock-ir-frame.rs", "count": 3},
     {"file": "verity/protocols/proofs/flock/prover/live/src/bin/flock-ir-sampling.rs", "count": 1},
     {"file": "verity/protocols/proofs/flock/prover/live/src/bin/flock-link.rs", "count": 1},
@@ -3186,7 +3181,7 @@
     {"file": "security/Proofs/Spot/Sampling/Work.lean", "count": 6},
     {"file": "verity/protocols/interface/charge/window_charge.py", "count": 58},
     {"file": "verity/protocols/interface/charge/arith_encode.py", "count": 9},
-    {"file": "benchmarks/pouw/served_zk/job.sh", "count": 21},
-    {"file": "benchmarks/proof_throughput/gemm_hill.py", "count": 1}
+    {"file": "benchmarks/proof_throughput/gemm_hill.py", "count": 1},
+    {"file": "benchmarks/pouw/served_zk/job.sh", "count": 21}
   ]
 }
