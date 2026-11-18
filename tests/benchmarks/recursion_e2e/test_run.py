@@ -20,17 +20,17 @@ def test_result_command_writes_both_files(tmp_path: Path) -> None:
     assert doc["schema"] == RP.SCHEMA and (tmp_path / "t.md").read_text().startswith("Recursion bench: K = 4096")
 
 
-def test_a_gpu_run_is_a_gpu_host_job_on_node_1s_queue(capsys) -> None:
+def test_a_gpu_run_is_a_gpu_host_job_research_run_places_or_on_the_named_machines_queue(capsys) -> None:
     assert RUN.main(["run", "--dry-run", "--N", "16", "--steps", "lean,build", "--modes", "dev"]) == 0
     cmd = capsys.readouterr().out.split()
-    assert cmd[:6] == ["research", "run", "--queue", "--on", "vy-nebius-1", "--gpu-host"]
+    assert cmd[:5] == ["research", "run", "--on", "auto", "--gpu-host"] and "--queue" not in cmd
     assert "--gpus" not in cmd                              # 85 refuses a job holding a lease: each prove leases its own
     assert cmd[cmd.index("--") + 1:][:2] == ["bash", "benchmarks/recursion_e2e/job.sh"]
     assert "N=16" in cmd and "STEPS=build,lean" in cmd     # the pipeline's order, whatever order --steps gives
     assert "--preemptible" not in cmd
-    assert RUN.main(["run", "--dry-run", "--node", "vy-nebius-2", "--preemptible", "--oprove-gpu", "1"]) == 0
+    assert RUN.main(["run", "--dry-run", "--node", "gpu-node-2", "--preemptible", "--oprove-gpu", "1"]) == 0
     cmd = capsys.readouterr().out.split()
-    assert cmd[4] == "vy-nebius-2" and "--preemptible" in cmd[:cmd.index("--")]
+    assert cmd[2:6] == ["--queue", "--on", "gpu-node-2", "--gpu-host"] and "--preemptible" in cmd[:cmd.index("--")]
 
 
 def test_env_passes_through_and_must_be_key_value(capsys) -> None:
@@ -73,27 +73,29 @@ def test_table_refuses_another_schema(tmp_path: Path) -> None:
         RUN.main(["table", str(tmp_path / "x.json")])
 
 
-def test_a_run_behind_the_zk_server_is_a_plain_run_on_a_cpu_node(capsys) -> None:
-    assert RUN.main(["run", "--dry-run", "--steps", "vcap", "--repeat", "1"]) == 0
+def test_a_direct_run_behind_the_zk_server_is_a_plain_run_on_the_cpu_node_it_names(capsys) -> None:
+    """--direct is a plain run on --on MACHINE, pinned to --cores; it names its machine and has no GPU host. Which machines
+    take plain runs is research run's launcher's to refuse, so no machine is named here."""
+    assert RUN.main(["run", "--dry-run", "--direct", "--on", "cpu-node-2", "--steps", "vcap", "--repeat", "1"]) == 0
     cmd = capsys.readouterr().out.split()
     head, job = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
-    assert head[:4] == ["research", "run", "--on", "vy-nebius-cpu-2"] and "--queue" not in head and "--gpu-host" not in head
+    assert head[:4] == ["research", "run", "--on", "cpu-node-2"] and "--queue" not in head and "--gpu-host" not in head
     assert head[head.index("--timeout") + 1] == f"{RUN.SETUP_MIN + 1}m"     # a plain run's limit is its --timeout
     assert job[:5] == ["taskset", "-c", "0-31", "bash", "benchmarks/recursion_e2e/job.sh"]
     assert "GPU=0" in job and f"FLOCK_WORK={RUN.CPU_WORK}" in job
-    assert RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-5", "--cores", "32-63", "--env", "FLOCK_WORK=/x"]) == 0
+    assert RUN.main(["run", "--dry-run", "--direct", "--on", "cpu-node-5", "--cores", "32-63", "--env", "FLOCK_WORK=/x"]) == 0
     cmd = capsys.readouterr().out.split()
-    assert cmd[3] == "vy-nebius-cpu-5" and cmd[cmd.index("taskset") + 2] == "32-63" and cmd[-1] == "FLOCK_WORK=/x"
-    with pytest.raises(SystemExit, match="only through its slots"):
-        RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-1"])
-    with pytest.raises(SystemExit, match="has no GPU"):
-        RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-2", "--oprove-gpu", "1"])
+    assert cmd[3] == "cpu-node-5" and cmd[cmd.index("taskset") + 2] == "32-63" and cmd[-1] == "FLOCK_WORK=/x"
+    with pytest.raises(SystemExit, match="names its machine"):
+        RUN.main(["run", "--dry-run", "--direct"])
+    with pytest.raises(SystemExit, match="no GPU host"):
+        RUN.main(["run", "--dry-run", "--direct", "--on", "cpu-node-2", "--oprove-gpu", "1"])
 
 
 def test_a_cpu_run_on_auto_or_a_named_cpu_node_is_a_command_research_run_takes(capsys) -> None:
     """`--on auto` is research run's queue itself, which refuses --queue: a CPU run there is the queue's options without
     --queue or --gpu-host, its job on a CPU node's GPU=0 and work tree, since the queue may place it on one. A named CPU
-    node is a plain run there; a GPU run on auto keeps its GPU host."""
+    node with --direct is a plain run there; a GPU run on auto keeps its GPU host."""
     assert RUN.main(["run", "--dry-run", "--on", "auto", "--steps", "vcap", "--repeat", "1"]) == 0
     cmd = capsys.readouterr().out.split()
     head, job = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
@@ -104,10 +106,10 @@ def test_a_cpu_run_on_auto_or_a_named_cpu_node_is_a_command_research_run_takes(c
     cmd = capsys.readouterr().out.split()
     assert cmd[:4] == ["research", "run", "--on", "auto"] and "--queue" not in cmd and "--gpu-host" not in cmd
     assert "GPU=0" in cmd
-    assert RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-3"]) == 0
+    assert RUN.main(["run", "--dry-run", "--direct", "--on", "cpu-node-3"]) == 0
     cmd = capsys.readouterr().out.split()
     head, job = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
-    assert head[:4] == ["research", "run", "--on", "vy-nebius-cpu-3"] and "--queue" not in head and "--gpu-host" not in head
+    assert head[:4] == ["research", "run", "--on", "cpu-node-3"] and "--queue" not in head and "--gpu-host" not in head
     assert job[:3] == ["taskset", "-c", "0-31"] and "GPU=0" in job
     assert RUN.main(["run", "--dry-run", "--on", "auto", "--oprove-gpu", "1"]) == 0
     cmd = capsys.readouterr().out.split()
@@ -117,15 +119,19 @@ def test_a_cpu_run_on_auto_or_a_named_cpu_node_is_a_command_research_run_takes(c
 def test_e2e_is_one_pass_with_its_negative(capsys) -> None:
     assert RUN.main(["run", "--dry-run", "--e2e", "--cpu", "--K", "64", "--N", "16", "--modes", "dev"]) == 0
     cmd = capsys.readouterr().out.split()
-    assert "--gpu-host" not in cmd and cmd[3] == "vy-nebius-cpu-2"
+    assert "--gpu-host" not in cmd and cmd[3] == "auto"
     assert "STEPS=build,inner,vstage,vcap,oprove,lean,negative" in cmd and "REPEAT=1" in cmd and "GPU=0" in cmd
     assert "WARM=0" in cmd and "RUNS=1" in cmd and "NEG=challenge,query" in cmd
 
 
+#: a plain run on a CPU node, whose limit is its --timeout
+PLAIN = ("--direct", "--on", "cpu-node-2")
+
+
 def test_release_is_one_pass_whose_limit_holds_every_window(capsys) -> None:
-    assert RUN.main(["run", "--dry-run", "--steps", "oprove"]) == 0
+    assert RUN.main(["run", "--dry-run", *PLAIN, "--steps", "oprove"]) == 0
     plain = capsys.readouterr().out.split()
-    assert RUN.main(["run", "--dry-run", "--steps", "oprove", "--release", "--env", "TREE_FROM=local"]) == 0
+    assert RUN.main(["run", "--dry-run", *PLAIN, "--steps", "oprove", "--release", "--env", "TREE_FROM=local"]) == 0
     cmd = capsys.readouterr().out.split()
     assert "RELEASE=1" in cmd and "REPEAT=1" in cmd and "WARM=0" in cmd and "RUNS=1" in cmd and cmd[-1] == "TREE_FROM=local"
     assert "RELEASE_BUDGET=1" in cmd
@@ -164,7 +170,7 @@ def test_forge_after_runs_after_lean_whenever_its_kinds_are_forged(capsys) -> No
     # asked for by name, it forges every kind it knows (job.sh's FORGE_AFTER default)
     assert "STEPS=lean,forge-after" in job_env("--steps", "forge-after,lean") and "FORGE_AFTER=" in job_env("--steps", "lean,forge-after")
     def limit(*argv: str) -> int:
-        assert RUN.main(["run", "--dry-run", *argv]) == 0
+        assert RUN.main(["run", "--dry-run", *PLAIN, *argv]) == 0
         cmd = capsys.readouterr().out.split()
         return int(cmd[cmd.index("--timeout") + 1][:-1])
 
@@ -176,7 +182,7 @@ def test_forge_after_runs_after_lean_whenever_its_kinds_are_forged(capsys) -> No
     assert all(RUN.statements(name) for v in RUN.FORGED.values() for name in v.split(","))   # each names a measured statement
     with pytest.raises(SystemExit, match="--forge: nope"):
         RUN.main(["run", "--dry-run", "--forge", "coef,nope"])
-    assert RUN.main(["run", "--dry-run", "--steps", "lean,forge-after", "--repeat", "1"]) == 0
+    assert RUN.main(["run", "--dry-run", *PLAIN, "--steps", "lean,forge-after", "--repeat", "1"]) == 0
     cmd = capsys.readouterr().out.split()
     assert cmd[cmd.index("--timeout") + 1] == f"{RUN.SETUP_MIN + RUN.OTHER_MIN['lean'] + RUN.OTHER_MIN['forge-after']}m"
 
@@ -187,7 +193,7 @@ def test_a_wired_run_budgets_its_link_part_and_its_forgery_as_the_largest_statem
         return capsys.readouterr().out.split()
 
     def limit(*argv: str) -> int:
-        cmd = launched(*argv)
+        cmd = launched(*PLAIN, *argv)
         return int(cmd[cmd.index("--timeout") + 1][:-1])
 
     assert "REC_LINKS=1" in launched("--env", "REC_LINKS=1")

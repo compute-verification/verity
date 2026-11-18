@@ -41,8 +41,8 @@ flight then are recorded with the tokens they streamed.
   request whose sampled tokens or logprob bits differ (`boundary.outputs_diff`, and per sampling class, plan kind
   and keys class: at most or past GLM-5.3's indexer top-k, `TOPK_KEYS`), the first request position whose client token
   differs, and the first layer and block whose bytes differ at the second edge, with the differing blocks per keys
-  class of the requests holding them, each edge's KV root (`kv_root`), the requests held at the first edge (per keys
-  class too) and the snapshot's bytes.
+  class of the requests holding them, whether the second edge's KV is the served one's (`kv_equal`), the requests held
+  at the first edge (per keys class too) and the snapshot's bytes.
 """
 from __future__ import annotations
 
@@ -233,7 +233,8 @@ def preflight(a: argparse.Namespace) -> int:
 def serve(a: argparse.Namespace) -> int:
     model = S.MODELS[a.model_id]
     checkpoint = Path(a.checkpoint) if a.checkpoint else model.checkpoint()
-    out, scratch, private = Path(a.out), Path(a.scratch), S.private_dir(a)
+    out, private = Path(a.out), S.private_dir(a)
+    scratch = S.outside(Path(a.scratch), out, "--scratch")
     out.mkdir(parents=True, exist_ok=True)
     scratch.mkdir(parents=True, exist_ok=True)
     need = S.plan_need({"load": a.rate}, a.span_s, a.requests)
@@ -307,8 +308,7 @@ def serve(a: argparse.Namespace) -> int:
 
 def copy_edges(src: Path, kept: Path) -> list[dict]:
     """Each edge's ``edge.json`` (its block ids and generator states) and the step outputs, which hold request values,
-    from the scratch directory into ``kept`` on the node, and a summary of each edge with its KV root and its files'
-    bytes."""
+    from the scratch directory into ``kept`` on the node, and a summary of each edge with its files' bytes."""
     got = []
     kept.mkdir(mode=0o700, parents=True, exist_ok=True)
     if (src / "outputs.jsonl").exists():
@@ -319,14 +319,13 @@ def copy_edges(src: Path, kept: Path) -> list[dict]:
         rec = json.loads(e.read_text())
         got.append({k: rec.get(k) for k in ("edge", "current_step", "trace_step", "running", "in_flight", "waiting", "pool",
                                             "check", "seconds")}
-                   | {"dir": str(e.parent), "blocks": len(rec["ids"]), "kv_root": kv_root(rec), "files": file_bytes(e.parent)})
+                   | {"dir": str(e.parent), "blocks": len(rec["ids"]), "files": file_bytes(e.parent)})
     return got
 
 
-def kv_root(rec: Mapping[str, Any]) -> str:
-    """An edge's KV root: SHA-512 over its block ids and rank 0's per-layer digests (`tp_state.digest`), in order."""
-    return hashlib.sha512(json.dumps({"ids": rec["ids"], "layers": rec["ranks"][0]["layer_digests"]},
-                                     separators=(",", ":")).encode()).hexdigest()
+def kv_equal(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
+    """Whether two edges hold the same KV: their block ids and rank 0's per-layer digests (`tp_state.digest`), in order."""
+    return a["ids"] == b["ids"] and a["ranks"][0]["layer_digests"] == b["ranks"][0]["layer_digests"]
 
 
 def file_bytes(d: Path) -> dict[str, int]:
@@ -607,7 +606,8 @@ def resolve(name: str) -> Callable[..., Any]:
 
 
 def restore(a: argparse.Namespace) -> int:
-    served, scratch, out = Path(a.served), Path(a.scratch), Path(a.out)
+    served, out = Path(a.served), Path(a.out)
+    scratch = S.outside(Path(a.scratch), out, "--scratch")
     out.mkdir(parents=True, exist_ok=True)
     meta = json.loads((served / "meta.json").read_text())
     if len(meta.get("edges", ())) < 2:
@@ -754,7 +754,7 @@ def restore(a: argparse.Namespace) -> int:
     rep2_dir = scratch / "replay" / f"edge-{edges.taken[0]['edge']:06d}"
     first2 = edge_difference(rec2, rep2, edge2, rep2_dir)
     res["edge2"] = {"blocks": len(rec2["ids"]), "first_difference": first2,
-                    "kv_root": {"served": kv_root(rec2), "replayed": kv_root(rep2)}, "replay_check": rep2["check"],
+                    "kv_equal": kv_equal(rec2, rep2), "replay_check": rep2["check"],
                     "replay_seconds": rep2["seconds"], "held": held_classes(rec2["requests"], by_keys)}
     if first2 and "layer" in first2:
         res["edge2"]["differing_by_keys"] = block_classes(
