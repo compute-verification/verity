@@ -10,9 +10,11 @@ scheme a processor can't attach fails with its reason unless `EXCEPTED` names wh
 
 from __future__ import annotations
 
+import asyncio
 import itertools
 import json
 import sys
+import threading
 import tomllib
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -32,6 +34,7 @@ from verity import hooks as H
 from verity.channel import Refused
 from verity.protocols.compose import schemes as declarations
 from verity_vllm import messages as M
+from verity_vllm.pipeline.serve_admit import Admission
 
 REPO = Path(__file__).resolve().parents[4]
 #: the requests the fixed load sends, each of ``IDS`` prompt ids and ``STEPS`` output tokens: under ``--window-requests``
@@ -39,8 +42,9 @@ REPO = Path(__file__).resolve().parents[4]
 REQUESTS, IDS, STEPS = 8, 8, 2
 PAGES, SLOTS, N, K = 40, 16, 64, 256
 #: serve-openai's options as the H100 smoke's serve gives them, at the fixed load's size
-SHAPE = ("--protocol", "plain", "--max-num-seqs", str(REQUESTS // 2), "--max-num-batched-tokens", "512", "--window-steps",
-         str(STEPS), "--max-model-len", "64")
+SHAPE = ("--protocol", "plain", "--max-num-batched-tokens", "512", "--window-steps", str(STEPS), "--max-model-len", "64")
+#: the release run's id, in hex, as `serve_load.py --release RUN` numbers the fixed load under it
+RUN = "5e0a"
 #: the settings each scheme needs beyond what `serve_openai.listed` holds, as an application's configuration gives them
 SETTINGS = {"pearl-plus": {"kernel": "stand-in"}, "network-attester": {"bucket_us": 1000, "sat_us": 100, "free_us": 10}}
 #: the stages where the stand-in emits by hand what the serve's emitter emits on a card, each a place it can drift
@@ -221,6 +225,7 @@ class GPUModelRunner:
     def __init__(self) -> None:
         self.cache_config = SimpleNamespace(block_size=SLOTS)
         self.kernel_block_sizes = [SLOTS]
+        self.attn_groups: list[Any] = []
         self.sampler = SimpleNamespace(sampling_states=SimpleNamespace(seeds=SimpleNamespace(gpu=torch.zeros(64, dtype=torch.int64))))
 
     def load_model(self) -> None:
@@ -236,13 +241,19 @@ class GPUModelRunner:
         return sampled
 
 
+def sort_batch_req_ids(num_tokens_per_req: Any, draft_tokens: Any, decode_query_len: int) -> list[str]:
+    """Model Runner V2's order of a step's requests, which `serve_admit.keep_scheduler_rows` replaces."""
+    return sorted(num_tokens_per_req)
+
+
 class LLMEngine:
     """vLLM's in-process ``LLMEngine``, its core holding the scheduler: a step schedules, runs the model and updates
     from its output, as vLLM's engine core does; a request's internal id is ``<id>-<8 hex>``."""
 
     def __init__(self, runner: GPUModelRunner, sched: Scheduler) -> None:
         self.runner, self.sched, self.n, self.ids = runner, sched, 0, {}
-        self.engine_core = SimpleNamespace(engine_core=SimpleNamespace(scheduler=sched))
+        executor = SimpleNamespace(driver_worker=SimpleNamespace(worker=SimpleNamespace(model_runner=runner)))
+        self.engine_core = SimpleNamespace(engine_core=SimpleNamespace(scheduler=sched, model_executor=executor))
         self.vllm_config = SimpleNamespace(model_config=SimpleNamespace(get_vocab_size=lambda: 32000))
 
     def add_request(self, request_id: str, prompt: dict, params: Any) -> None:
@@ -375,12 +386,85 @@ def heard() -> Iterator[list[Any]]:
         M.Exchange.emit = emit
 
 
+class Pump:
+    """The engine loop on a thread of its own (`EngineLoop.run`), as serve-openai runs it, and the load's client: the
+    loop takes each send whole before the engine steps again, and the client sends the next once the loop has taken all
+    it was given and stands idle (`CommitWindows.idle`)."""
+
+    def __init__(self, loop: Any, windows: Any) -> None:
+        self.loop, self.cv, self.sending = loop, threading.Condition(), threading.Lock()
+        self.given = self.taken = self.idle_at = 0
+        self.done, self.failed = False, None
+        submit, take, idle = loop.submit, loop._take, windows.idle
+
+        def given(adm: Any) -> None:
+            with self.cv:
+                self.given += 1
+            submit(adm)
+
+        def taken(item: Any) -> bool:
+            with self.sending:
+                pass
+            if isinstance(item, Admission):
+                with self.cv:
+                    self.taken += 1
+            return take(item)
+
+        def idled() -> None:
+            idle()
+            with self.cv:
+                if loop.q.empty():
+                    self.idle_at = self.taken
+                    self.cv.notify_all()
+        loop.submit, loop._take, windows.idle = given, taken, idled
+        self.thread = threading.Thread(target=self._run, name="engine", daemon=True)
+
+    def _run(self) -> None:
+        try:
+            self.loop.run()
+        except BaseException as e:  # noqa: BLE001  (raised again in the client's thread)
+            self.failed = e
+        finally:
+            with self.cv:
+                self.done = True
+                self.cv.notify_all()
+
+    def send(self, server: Any, sends: list[tuple[dict, dict[str, str]]]) -> list[Any]:
+        """``sends`` (each a body and its header fields) through the server's admission as its completions route takes
+        them (`Server.admit`, its order's release key and ``arrive``, ``submit``) on an event loop of their own, as the HTTP
+        thread's, with no socket; their releases."""
+        releases = []
+
+        async def route() -> None:
+            for body, headers in sends:
+                release = server.order.key(headers) if server.order is not None else None
+                _, adm = server.admit(body, lambda _d: None, release)
+                if server.arrive is not None:
+                    server.arrive(adm.engine_id, "POST /v1/completions HTTP/1.1", headers, adm.user)
+                server.submit(adm)
+                releases.append(release)
+        with self.sending:
+            asyncio.run(route())
+        with self.cv:
+            self.cv.wait_for(lambda: self.done or self.idle_at == self.given)
+        return releases
+
+
+def first_step(events: list[Any]) -> Any:
+    """The first step of the first phase (window 0)."""
+    opened = next(i for i, e in enumerate(events) if isinstance(e, H.PhaseOpened))
+    return next(e for e in events[opened:] if isinstance(e, H.StepBegan))
+
+
 def serve(names: list[str], out: Path, monkeypatch: pytest.MonkeyPatch,
-          broken: Callable[[str, Any], None] = lambda stage, it: None) -> tuple[list[Any], Any]:
+          broken: Callable[[str, Any], None] = lambda stage, it: None, order: str = "arrival") -> tuple[list[Any], Any]:
     """serve-openai's run, stage by stage, over the stand-ins with ``names`` listed in order: the attach and the build
-    (`serve_openai.build`), the learn-only warm-up (`serve_learn.warmed`), the fixed load's two windows through the engine
-    loop (`serve_openai.main`'s `CommitWindows` and `EngineLoop`) and the shutdown's reports (`write_reports`); the events
-    in their order and the exchange. ``broken(stage, it)`` breaks a stand-in at each stage, for a negative control."""
+    (`serve_openai.build`), the learn-only warm-up (`serve_learn.warmed`), the network attester's admission under an
+    ``order`` other than ``arrival`` (`serve_openai.network_admission`), the fixed load through the engine loop
+    (`serve_openai.main`'s `CommitWindows` and `EngineLoop`) and the shutdown's reports (`write_reports`); the events in
+    their order and the exchange. Under ``arrival`` the load comes as one send over two windows; under ``release-order``
+    as `serve_load.py --fixed N --release` sends it, request 0 last, and window 0's first step must hold it whole.
+    ``broken(stage, it)`` breaks a stand-in at each stage, for a negative control."""
     from verity_vllm.engine import build as engine_build
     from verity_vllm.pipeline import serve_commit as sc
     from verity_vllm.pipeline import serve_learn as sl
@@ -394,8 +478,11 @@ def serve(names: list[str], out: Path, monkeypatch: pytest.MonkeyPatch,
     monkeypatch.chdir(out)
     M.close()
     doc = {n: SETTINGS.get(n, {}) for n in names}
+    if order != "arrival":
+        doc["network-attester"] = {**SETTINGS["network-attester"], **doc.get("network-attester", {}), "order": order}
+    seqs, cap = (REQUESTS // 2, REQUESTS // 2) if order == "arrival" else (REQUESTS, 0 if order == "tick" else REQUESTS)
     (row := out / "row").mkdir()
-    opts = parse(*SHAPE, "--window-requests", str(REQUESTS // 2), "--protocols", ",".join(names),
+    opts = parse(*SHAPE, "--max-num-seqs", str(seqs), "--window-requests", str(cap), "--protocols", ",".join(names),
                  "--protocols-config", json.dumps(doc), "--out", str(out / "serve"), "--precision", "bfloat16",
                  "--required-manifest", str(predicted.row(row)))
     environ = {"CARD_SKU": "stand-in", "CUDA_HOME": "/stand-in/cuda"}
@@ -428,6 +515,7 @@ def serve(names: list[str], out: Path, monkeypatch: pytest.MonkeyPatch,
         engine = llm.vllm.llm_engine
         com = Committer(engine.runner, opts.learning.learn_host_budget_mb)
         broken("built", engine)
+        held: list[Callable[[], None]] = []
         try:
             sl.warmed(com, llm, opts)
             broken("warmed", engine)
@@ -435,17 +523,41 @@ def serve(names: list[str], out: Path, monkeypatch: pytest.MonkeyPatch,
                                        eos_ids=[Tokenizer.eos_token_id], clock=lambda: 0.0, wall=lambda: 0.0,
                                        request_cap=opts.window_requests)
             loop = so.EngineLoop(engine, windows, cap=opts.window_requests, clock=lambda: 0.0)
+            pump = Pump(loop, windows)
+            front = ticked = None
+            if order != "arrival":
+                from verity_vllm.engine.handle import model_runner, scheduler
+                from verity_vllm.pipeline.serve_admit import keep_scheduler_rows
+                rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler(engine))
+                held.append(rows.uninstall)
+                ticked, front = so.network_admission(loop, scheduler(engine), opts)
             server = so.Server(proto=proto.PlainProtocol(True), served_name="m", max_model_len=opts.max_model_len,
-                               tokenizer=Tokenizer(), defaults={}, submit=loop.submit, abort=loop.abort, clock=lambda: 7)
-            for i in range(REQUESTS):
-                body = {"prompt": [100 + i] * IDS, "max_tokens": STEPS, "min_tokens": STEPS, "ignore_eos": True,
-                        "temperature": 0, "stream": True}
-                loop.submit(server.admit(body, lambda _d: None)[1])
+                               tokenizer=Tokenizer(), defaults={}, submit=loop.submit, abort=loop.abort, clock=lambda: 7,
+                               order=front, arrive=ticked.arrive if ticked is not None else None)
+            sends = [({"prompt": [100 + j] * IDS, "max_tokens": STEPS, "min_tokens": STEPS, "ignore_eos": True,
+                       "temperature": 0, "stream": True, "user": f"fixed.{j}"},
+                      {} if order == "arrival" else {"x-verity-release": str(j), "x-verity-release-run": RUN})
+                     for j in [*range(1, REQUESTS), 0]]
+            broken("load", sends)
+            pump.thread.start()
+            releases = (pump.send(server, sends) if order == "arrival"
+                        else [r for one in sends for r in pump.send(server, [one])])
+            for r in releases:
+                if r is not None:
+                    server.order.passed(r)
             loop.drain("the fixed load is served")
-            loop.run()
+            pump.thread.join()
+            if pump.failed is not None:
+                raise pump.failed
             assert loop.error is None and windows.summary()["passed"], (loop.error, windows.summary())
+            if order == "release-order":
+                got = first_step(events).inputs
+                assert len(got) == REQUESTS, (f"window 0's first step holds {len(got)} of the fixed load's {REQUESTS} "
+                                              f"requests: {got}")
             so.write_reports(M.current(), out)
         finally:
+            for undo in held:
+                undo()
             off()
     return events, ex
 
@@ -471,6 +583,20 @@ def test_the_serves_order_with_each_listed_scheme_attached(names, device, tmp_pa
     assert not unheard(events, ex)
     phases = [type(e).__name__ for e in events if e.hook == "steps" and type(e).__name__.startswith("Phase")]
     assert phases == (["PhaseOpened", "PhaseClosed", "PhaseCommitted"] * 2 if ex.subscribers["steps"] else [])
+
+
+@pytest.mark.parametrize("names", [["pearl-plus"], ["sampled-proofs", "pearl-plus"]], ids="+".join)
+def test_the_fixed_load_in_release_order_enters_window_0s_first_step_whole(names, device, tmp_path, monkeypatch):
+    events, ex = serve(names, tmp_path, monkeypatch, order="release-order")
+    assert not stray(events), f"events of no hook's type: {stray(events)}"
+    assert not unheard(events, ex)
+
+
+def test_the_attester_admits_by_tick_after_the_warm_up(device, tmp_path, monkeypatch):
+    """Red while the exchange's step counter runs through the learn-only warm-up: the network attester's admission,
+    attached after it (`serve_openai.network_admission`), files its hold after the warm-up's steps, and the exchange
+    takes that as filed after serving began and refuses it (`messages.Exchange.request`)."""
+    serve(["pearl-plus"], tmp_path, monkeypatch, order="tick")
 
 
 def stray(events: list[Any]) -> list[str]:
@@ -529,7 +655,8 @@ NEGATIVE = {
                                                                       "after steps outside any phase"),
     "a step outside any phase after one closed": ("warmed", ["pearl-plus"], second_phase_unopened, RuntimeError,
                                                    "phase 1 closes, and the open phase is None"),
-    "CARD_SKU unset": ("options", ["pearl-plus"], lambda mp: lambda env: env.pop("CARD_SKU"), Exception, "CARD_SKU"),
+    "the load's request 0 sent first under release order": ("load", ["pearl-plus"], lambda mp: lambda sends: sends.insert(
+        0, sends.pop()), AssertionError, "window 0's first step holds 1 of"),
 }
 
 
@@ -537,5 +664,6 @@ NEGATIVE = {
 def test_each_broken_stand_in_fails_the_smoke_by_its_reason(control, device, tmp_path, monkeypatch):
     stage, names, act, error, reason = NEGATIVE[control]
     with pytest.raises(error, match=reason):
-        events, _ = serve(names, tmp_path, monkeypatch, breaking(stage, act(monkeypatch)))
+        events, _ = serve(names, tmp_path, monkeypatch, breaking(stage, act(monkeypatch)),
+                          order="release-order" if stage == "load" else "arrival")
         assert not stray(events), f"events of no hook's type: {stray(events)}"
