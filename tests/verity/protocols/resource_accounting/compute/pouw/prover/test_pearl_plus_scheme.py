@@ -271,10 +271,9 @@ def test_reports_are_the_runs_commitment_and_details(monkeypatch) -> None:
     monkeypatch.setattr(PS.Attached, "open", lambda self, weights, own: run)
     on = PS.PEARL_PLUS.attach(ex, CTX)
     ex.emit(H.RegisteredValues((("w", "w"),), operands={"w": 0}))
-    reports: H.Commits = on
-    assert reports.commitment() == {"salt_opening": "o"}
-    assert reports.record() == {"entry": PS.OPTION, "schedule": "serial", "tie-uniform": False}
-    assert reports.summary() == {"max_step_tokens": 64}
+    assert on.commitment() == {"salt_opening": "o"}
+    assert on.record() == {"entry": PS.OPTION, "schedule": "serial", "tie-uniform": False}
+    assert on.summary() == {"max_step_tokens": 64}
     on.release()
     assert finished == [True]
 

@@ -7,7 +7,7 @@ plugin, is the engine's side, in the engine core's process: the adapter's memory
 just before its model runner loads the model, so that they hear the model's `hooks.RegisteredValues` and its linear
 site attaches, the exchange answered with what vLLM's
 configuration declares, the admission hook (`engine.admission.register`, keyed by the client's X-Request-Id) on its
-scheduler, and what each scheme holds released (`hooks.Releases`) when the engine core shuts down, then each scheme's
+scheduler, and what each scheme holds released when the engine core shuts down, then each scheme's
 report written under the run output (`write_reports`). A scheme's
 `hooks.RefuseInput` there aborts the input, its reason the client's ``stop_reason`` (`aborts`).
 
@@ -110,9 +110,10 @@ def attach(exchange: messages.Exchange, vllm_config: Any, names: list[str], cfg:
 
 
 def write_reports(exchange: messages.Exchange, out: str | Path) -> None:
-    """At the workload's stop, each scheme attached on ``exchange`` released (`hooks.Releases`), then its report written
+    """At the workload's stop, each scheme attached on ``exchange`` released, then its report written
     under ``out/schemes/<its name>/``: ``configuration.json`` its settings and ``record``, ``summary.json`` its
-    ``summary``, and from a `hooks.Commits` ``commitment.json``, its closed ``commitment``. Every scheme is released
+    ``summary``, and ``commitment.json``, its closed ``commitment``, each where the scheme's report has it
+    (`verity.protocols.resource_accounting.scheme`). Every scheme is released
     and written before the first release's failure is raised. What a scheme keeps private it keeps under its own
     ``ctx["private"]``."""
     failed: list[BaseException] = []

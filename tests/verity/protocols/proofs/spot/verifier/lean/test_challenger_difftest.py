@@ -1008,7 +1008,7 @@ def _set(lines: list[str], i: int, **changes) -> list[str]:
 
 RELEASED_NAMES = ["honest", "head", "head-form", "empty", "odd", "root", "after", "index", "label", "label-release",
                   "event", "tree-event", "time", "early", "time-type", "extra", "non-canonical", "torn", "long", "float",
-                  "commitment-form", "request"]
+                  "slot-order", "slot-twice", "slot-past", "commitment-form", "request"]
 
 
 def released_case(rng: random.Random, name: str) -> Any:
@@ -1063,6 +1063,23 @@ def released_case(rng: random.Random, name: str) -> Any:
             n = json.loads(lines[i])["index"]
             written = rng.choice([f"{n}.0", f"{n}e0", f"{n}E0", f"{n * 10}e-1"])
             j["log"] = lines[:i] + [lines[i].replace(f'"index":{n},', f'"index":{written},', 1)] + lines[i + 1:]
+        case "slot-order" | "slot-twice" | "slot-past":
+            roots = [(q, json.loads(lines[q])) for q in range(1, len(lines)) if json.loads(lines[q]).get("event") == "root"]
+            q, e = rng.choice(roots)
+            count = dict(s.ch.commitment.families)[e["label"]]
+            mates = [(q2, d) for q2, d in roots if d["label"] == e["label"] and q2 != q]
+            free = [k for k in range(count) if k != e["index"] and all(d["index"] != k for _, d in mates)]
+            if name == "slot-twice":
+                j["log"] = lines + lines[q:q + 2]
+            elif name == "slot-past":
+                j["log"] = _set(_set(lines, q, index=count), q + 1, index=count)
+            elif free:
+                k = rng.choice(free)
+                j["log"] = _set(_set(lines, q, index=k), q + 1, index=k)
+            elif mates:
+                q2, d = rng.choice(mates)
+                swapped = _set(_set(lines, q, index=d["index"]), q + 1, index=d["index"])
+                j["log"] = _set(_set(swapped, q2, index=e["index"]), q2 + 1, index=e["index"])
         case "commitment-form":
             j["commitment"] = commitment_case(rng, rng.choice(COMMITMENT_NAMES[1:]))
         case "request":

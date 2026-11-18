@@ -1,0 +1,29 @@
+# Pearl-C's whole-step spec on no card: what `tools/move/layout.py --map tools/move/specs_cards_whole_step_map.toml`
+# deletes and rewrites. `llama31-8b-1gpu-pearl-c-whole-served` lists the RTX PRO 6000 and the H200, the H200's arms and
+# setup under `[card_settings.h200]`, so its H200 file goes. `llama32-1b-1gpu-pearl-c-whole-served-h100` (#10992's name for
+# the 1B whole-step spec on the H100) is `llama32-1b-1gpu-pearl-c-whole-served` on the H100. A stored run's spec id of
+# either resolves through `benchmarks/harness/verity_bench/data/former_spec_ids.toml`. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+
+[paths]
+
+[retired]
+paths = ["benchmarks/harness/specs/llama31-8b-1gpu-pearl-c-whole-served-h200.toml", "benchmarks/harness/specs/llama32-1b-1gpu-pearl-c-whole-served-h100.toml"]
+
+[drop]
+paths = ["benchmarks/harness/specs/llama31-8b-1gpu-pearl-c-whole-served-h200.toml"]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# former spec ids), files whose bytes a digest pins, the archive, `move_check.py` and its test, and `tests/tree.toml`.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**", "archive/**",
+           "tools/check/tests/test_move_check.py", "tools/check/move_check.py",
+           "tools/research/src/research/store/moves.json", "tests/tree.toml",
+           "benchmarks/harness/verity_bench/data/former_spec_ids.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[modules]

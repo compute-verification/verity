@@ -40,7 +40,7 @@ def _check(values: Mapping[str, Any]) -> str | None:
         return f"hold_ms a positive number of milliseconds, not {values['hold_ms']!r}"
     if values["order"] == "tick":
         try:
-            tick_config({k: v for k, v in values.items() if k != "order"}, "tick", feed=False)
+            tick_config({k: v for k, v in values.items() if k != "order"}, "tick")
         except ValueError as e:
             return str(e)
     return None
