@@ -354,7 +354,8 @@ def leavesOf (P : Prog) (passed : Array (List Nat)) (t : Tmpl) : Leaves :=
 
 /-- The runs of input leaves the root's argument parts read, `(input node, first leaf, leaves)` each, none empty:
 `own`, each read by one part, and `shared`, each read by one strided part that hands every member the one run or
-by more than one part ("Shared runs"). -/
+by more than one part ("Shared runs"), in the order of their nodes and first leaves, a run read by several parts
+once for each after the first. -/
 structure Runs where
   own : List (Nat × Nat × Nat)
   shared : List (Nat × Nat × Nat)
@@ -388,13 +389,14 @@ def rowRuns (P : Prog) : Option Runs :=
     | _ => none
   let sorted := (runs.filter fun r => r.1.2.2 > 0).mergeSort fun a b =>
     a.1.1 < b.1.1 || (a.1.1 == b.1.1 && a.1.2.1 ≤ b.1.2.1)
-  let merged := (sorted.foldl (fun (acc : List ((Nat × Nat × Nat) × Bool)) r => match acc with
-    | (x, _) :: rest => if x == r.1 then (x, true) :: rest else (r.1, r.2) :: acc
-    | [] => [(r.1, r.2)]) []).reverse
+  let next := sorted.zip sorted.tail
+  let prev := (none :: sorted.map (some ·.1)).zip sorted
   if units.all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) && runs.length == parts.length &&
-      (merged.zip merged.tail).all (fun (a, b) => a.1.1 != b.1.1 || a.1.2.1 + a.1.2.2 ≤ b.1.2.1) then
-    some { own := merged.filterMap fun (x, s) => if s then none else some x,
-           shared := merged.filterMap fun (x, s) => if s then some x else none }
+      next.all (fun (a, b) => a.1 == b.1 || a.1.1 != b.1.1 || a.1.2.1 + a.1.2.2 ≤ b.1.2.1) then
+    some { own := (prev.zip (sorted.tail.map (some ·.1) ++ [none])).filterMap fun ((p, r), n) =>
+             if r.2 || p == some r.1 || n == some r.1 then none else some r.1,
+           shared := sorted.filterMap (fun r => if r.2 then some r.1 else none) ++
+             next.filterMap fun (a, b) => if a.1 == b.1 then some a.1 else none }
   else none
 
 /-- **Every unit's rows are input gates, each its own or a shared run's**: `rowRuns` reads the root. -/
