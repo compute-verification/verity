@@ -137,7 +137,6 @@ theorem unwhole_none {P : Prog} {ts : List Tmpl} {ls : List Leaves} {s : Spot.Wi
   rename_i os hos
   refine ⟨os, hos, fun d hd => ?_⟩
   have h0 := List.findSome?_eq_none_iff.1 h0' d hd
-  dsimp only at h0
   split at h0
   · cases h0
   · rename_i j hf
