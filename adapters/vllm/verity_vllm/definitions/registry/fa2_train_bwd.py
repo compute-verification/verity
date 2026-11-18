@@ -54,6 +54,7 @@ from verity.circuits.refs import Coll as _Coll
 from verity.circuits.refs import array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
 
+from verity_vllm.config import card_at
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import NEG_INF32, scale_log2_bits
@@ -272,15 +273,16 @@ def Fa2TrainBwdHead(B, S, do, q, k, v, o, lse):
     return tuple_of(_Coll(rows_t, concat(dq)), _Coll(rows_t, concat(dk)), _Coll(rows_t, concat(dv)))
 
 
-def train_sdpa_backward(B: int, H: int, T: int, D: int, sms: int):
+def train_sdpa_backward(B: int, H: int, T: int, D: int, cc: tuple[int, int]):
     """The head Definition of torch's flash attention backward at (B, H, T, D) on cc 12.0 under deterministic algorithms, bound
-    (`TRAIN_SDPA_BWD`, the dQ buffers ceil(``sms`` / (B H)), ``sms`` the SMs of the card it runs on, which torch divides by B * H
-    under deterministic algorithms, at most the T / BN a row's parts can fill: more buffers are the same circuit); ValueError at a
+    (`TRAIN_SDPA_BWD`, the dQ buffers ceil(SMs / (B H)), the SMs those of the card at the caller's ``cc`` (`config.card_at`), which
+    torch divides by B * H under deterministic algorithms, at most the T / BN a row's parts can fill: more buffers are the same circuit); ValueError at a
     shape the capture doesn't cover."""
     blocks = TRAIN_SDPA_BWD.get((B, H, T, D))
     if blocks is None:
         raise ValueError(f"(B, H, T, D) = {(B, H, T, D)} is not captured: torch's flash attention backward is fitted at "
                          f"{sorted(TRAIN_SDPA_BWD)}")
+    sms = int(card_at(cc)["sm"]["count"]["value"])
     return bind(Fa2TrainBwdHead, T=T, D=D, BM=blocks[0], BN=blocks[1], NS=min(-(-sms // (B * H)), T // blocks[1]))
 
 

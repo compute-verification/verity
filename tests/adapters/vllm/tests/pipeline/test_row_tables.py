@@ -24,6 +24,7 @@ from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods import tables as TB
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 from verity.commitments import registered_value as RV
@@ -234,7 +235,7 @@ def test_the_s8_coordinate_replay_reads_each_units_x_row_from_the_table(monkeypa
 
 def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ties_it_to_the_chunks(monkeypatch, tmp_path):
     c, s, got = committed(monkeypatch)
-    win = CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
+    win = CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=DK)
     rec = json.loads((tmp_path / "registration.json").read_text())
     mine, _, _ = window()
     ports = CS.expected_ports(mine)
@@ -299,7 +300,7 @@ def test_the_audit_record_carries_each_sampled_chunks_reads_beside_the_roots_lea
     """`reported_reads`: each sampled chunk's table and root from the verifier's own reads file beside Lean's `registered`
     finding, held only when every verdict accepted and reports exactly its file's port, value and root."""
     c, _s, got = committed(monkeypatch)
-    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
+    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=DK)
     mine, _, _ = window()
     reads = TB.registered_reads(mine, {m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)},
                                  registered=REG)
@@ -328,7 +329,7 @@ def test_a_chunk_spanning_two_row_tables_is_refused_on_the_verifier_side(monkeyp
     runs the executable verifier on such a table). `registered_reads` writes no file for a member linking two tables, whatever
     built it."""
     c, _s, got = committed(monkeypatch)
-    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
+    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=DK)
     w = c.window
     bc = lambda t, r: c.bc[w.row_tables[t].port][r * CS.BC_BYTES:(r + 1) * CS.BC_BYTES]  # noqa: E731
     trees = {t: RT.RowTable(w.table_domain(t), [bc(t, r) for r in range(w.row_tables[t].n)]) for t in range(len(w.row_tables))}
@@ -351,7 +352,7 @@ def test_a_chunk_spanning_two_row_tables_is_refused_on_the_verifier_side(monkeyp
 
 def test_pouws_interface_finds_a_table_and_its_step_openings_verify_and_tampered_rows_fail(monkeypatch, tmp_path):
     c, s, got = committed(monkeypatch)
-    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
+    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=DK)
     rec = json.loads((tmp_path / "registration.json").read_text())
     mine, _, _ = window()
     live = dict(c.segment_roots)
@@ -433,7 +434,7 @@ def test_a_window_or_commit_whose_links_do_not_hold_is_refused(monkeypatch):
 @pytest.mark.parametrize("row_tables", [False, True])
 def test_window_bytes_are_the_bytes_the_window_writes(monkeypatch, tmp_path, row_tables):
     c, _s, got = committed(monkeypatch, row_tables)
-    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
+    CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=DK)
     size = lambda pat: sum(p.stat().st_size for p in Path(tmp_path).glob(pat))  # noqa: E731
     b = CS.window_bytes(c.window.members, c.window.row_tables)
     assert (b["public"], b["private"]) == (size("[mt]*-public.bin"), size("[mt]*-private.bin"))
