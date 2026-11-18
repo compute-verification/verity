@@ -234,8 +234,7 @@ What it does not say:
   `g` as the committed circuit's unit `g`.
 * **That a unit's rows are the Program's gates.** It holds a wired row to its writer's row; that a member's file
   computes its template is not in it.
-* **Anything of a composite whose SPOT case is the recursive form**, which SPOT's component refuses
-  (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`), so no case decodes to one-stage v2's parameters there. -/
+* **Anything of a composite whose SPOT case is two levels'**, which decodes to no one-stage v2 parameters. -/
 def MemberWiresHold (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c)) (o : Exchange) : Prop :=
   ∀ (p : Spot.OneStageZk.Params) (sc : Spot.OneStage.Commitment), SpotCase k o.sent p sc →

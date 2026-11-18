@@ -15,9 +15,6 @@ from typing import Any
 KEY = "levels"
 ENV = "SPOT_LEVELS"
 BUILT = (1, 2)
-#: the Lean dispatcher's field (`VStar.Recursive.Sampled.split`), derived from the levels: each level count's form
-FORM = "form"
-FORMS = {1: "one-stage", 2: "two-stage"}
 #: the parameters only two levels' have (`sampled_two_case.assemble`): the boundary docket, the interior and the rule
 TWO_LEVEL_KEYS = ("boundary", "interior", "rule")
 #: the boundary commitment's record format (`verity_vllm.records.boundary_commit.SCHEMA`), whose spans are outer blocks
@@ -35,7 +32,7 @@ class Refused(ValueError):
 
 
 def parse(value: Any, where: str) -> int:
-    """``value`` as a level count, a JSON number (a string is refused, as the Lean's `levelsForm` refuses it); refused
+    """``value`` as a level count, a JSON number (a string is refused, as the Lean's `levelsOf` refuses it); refused
     unless a whole number in `BUILT`."""
     if isinstance(value, bool) or not isinstance(value, int):
         raise Refused("levels-not-integer", f"{where} is {value!r}, not a whole number of levels")
@@ -44,10 +41,6 @@ def parse(value: Any, where: str) -> int:
     if value not in BUILT:
         raise Refused("levels-not-built", f"{where} is {value}: only {' or '.join(map(str, BUILT))} levels are built")
     return value
-
-
-def form_of(levels: int) -> str:
-    return FORMS[parse(levels, "the levels")]
 
 
 def shape(params: Mapping[str, Any]) -> int:
@@ -59,22 +52,14 @@ def shape(params: Mapping[str, Any]) -> int:
 
 
 def of_params(params: Mapping[str, Any]) -> int:
-    """The auditor's level count: the parameters' shape (`shape`), which their `KEY` and `FORM`, where present, must
-    name; parameters naming neither read as one level."""
+    """The auditor's level count (`VStar.Recursive.Sampled.split`): the parameters' `KEY`, one where absent, which must
+    be their shape's (`shape`)."""
     if not isinstance(params, Mapping):
         raise Refused("levels-shape", f"the parameters are a {type(params).__name__}, not an object")
     n = shape(params)
-    named = parse(params[KEY], "the parameters' levels") if KEY in params else None
-    form = params.get(FORM)
-    if form is not None and form not in FORMS.values():
-        raise Refused("levels-form", f"the parameters' form is {form!r}, not one of {sorted(FORMS.values())}")
-    by_form = next((k for k, f in FORMS.items() if f == form), None)
-    if named is not None and by_form is not None and named != by_form:
-        raise Refused("levels-form-mismatch", f"the parameters' levels is {named}, and their form is {form!r}")
-    declared = named if named is not None else by_form if by_form is not None else ABSENT
+    declared = parse(params[KEY], "the parameters' levels") if KEY in params else ABSENT
     if declared != n:
-        raise Refused("levels-params-mismatch",
-                      f"the parameters name {declared} level(s), and their shape is {n} levels' ({FORMS[n]!r})")
+        raise Refused("levels-params-mismatch", f"the parameters name {declared} level(s), and their shape is {n}'s")
     return n
 
 
@@ -114,20 +99,20 @@ def command(raw: str | None, runs: tuple[int, ...], default: int) -> int:
 
 def with_levels(case: Mapping[str, Any], levels: int, canonical: Callable[[dict], bytes]) -> dict[str, Any]:
     """``case`` as SPOT's dispatcher reads it (`VStar.Recursive.Sampled`): its params and its evidence (hex of
-    ``canonical`` JSON) each naming ``levels``' form; refused where either names one already, or the params' shape is
-    another level count."""
+    ``canonical`` JSON) each naming ``levels``; refused where either names it already, or the params' shape is another
+    level count."""
     import json
 
     evidence = json.loads(bytes.fromhex(case["evidence"]))
     params = case.get("params")
     if not isinstance(params, Mapping) or not isinstance(evidence, dict):
         raise Refused("levels-shape", "the case's params and evidence must be objects")
-    if FORM in params or FORM in evidence or KEY in params or KEY in evidence:
-        raise Refused("levels-named", "the case's params and evidence must name no form and no levels")
-    form = form_of(levels)
-    out = {**case, "evidence": canonical(evidence | {FORM: form}).hex(), "params": {**params, FORM: form}}
-    if (n := of_params(out["params"])) != levels:
-        raise Refused("levels-params-mismatch", f"the case's params are {n} levels' shape, not {levels}'s")
+    if KEY in params or KEY in evidence:
+        raise Refused("levels-named", "the case's params and evidence must name no levels")
+    n = parse(levels, "the levels")
+    out = {**case, "evidence": canonical(evidence | {KEY: n}).hex(), "params": {**params, KEY: n}}
+    if (m := of_params(out["params"])) != n:
+        raise Refused("levels-params-mismatch", f"the case's params are {m} levels' shape, not {n}'s")
     return out
 
 

@@ -264,12 +264,12 @@ theorem templateCircuits_readsWf {proofs query : Json} {cs : Array (String × St
 
 /-! ## The two-stage form's parameters (`VStar.Recursive.SampledTwo.paramsOfJson`) -/
 
-/-- **The form's rest of a well-formed tree is well formed** (`split`). -/
+/-- **The rest of two levels' well-formed tree is well formed** (`split`). -/
 theorem split_wf {j j' : Json} {what : String} (hj : Wf j) (h : VStar.Recursive.SampledTwo.split j what = .ok j') :
     Wf j' := by
   unfold VStar.Recursive.SampledTwo.split at h
   do_walk h to j'
-  all_goals (cases h; exact wf_without (wf_without hj "form") "levels")
+  all_goals (cases h; exact wf_without hj "levels")
 
 /-- **Parameters `paramsAt` returns are `paramsParsed`'s of the tree `Core.canonicalJson` returned.** -/
 theorem paramsAt_ok {x : Json} {q : Spot.OneStage.Params} (h : VStar.Recursive.SampledTwo.paramsAt x = .ok q) :

@@ -23,9 +23,8 @@ public import Proofs.Properties.Verity.Recursive.Assumptions
 /-!
 # SPOT's recursive configuration: the component's property and its target
 
-SPOT's recursive configuration (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`, a component of its own: SPOT's
-component refuses parameters and evidence naming the recursive form by name, `VStar.Recursive.Sampled.RECURSIVE_REFUSED`,
-and none of its cases is that form's) checks, on the prover's blobs,
+SPOT's recursive configuration (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`, a component of its own: none of SPOT's
+component's cases, one level's or two levels', is its) checks, on the prover's blobs,
 the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. This module states two things.
 
 * **The property** (`acc_of_accepts`). Take a run of the deployed recursive verifier that `RecursiveKSAt` reads

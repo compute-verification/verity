@@ -1,26 +1,18 @@
 /-
-SPOT (`verity/sampled-proofs/v1`), a `Core.BlobProtocol`: one-stage v2's audit on the proofs themselves
-(`Spot.OneStageZk`). One-stage v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's
-are its own run of the verifier. The recursive audit (`verity/sampled-proofs/recursive/v1`) is refused too, its params
-and its evidence alike, by name (`RECURSIVE_REFUSED`), and none of its types is a case here; the
-two-stage audit (`VStar.Recursive.SampledTwo`) is read and checked, then accepted while its switch
-(`SampledTwo.FORM`) is on: SPOT's soundness covers the one-stage form only, and the verifier accepts the two-stage form
-ahead of its proof.
+SPOT (`verity/sampled-proofs/v1`), a `Core.BlobProtocol` with one entry, whose case is as many levels as its `levels`
+names: one level is one-stage v2's audit on the proofs themselves (`Spot.OneStageZk`), two levels the two-stage audit
+(`VStar.Recursive.SampledTwo`), read and checked, and accepted ahead of its soundness proof; 3 or more are refused as not
+built. One-stage v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's are its own run of the
+verifier.
 
-`Core.Composition.product` reads every component's case, so SPOT is one component and the form is the params':
-
-* **params**: `{"form": "one-stage" | "recursive" | "two-stage", ...}`, the rest that form's params. The auditor fixes
-  the form with the rest of its params, before any coin. One-stage params naming no `proofs` are v1's, and refused; those
-  naming one are v2's, the one statement's or the per-member form's (`OneStageZk.paramsEitherOfJson`); the recursive form
-  is refused before its rest is read; the two-stage form reads the whole object, its `form` included
-  (`SampledTwo.paramsOfJson`);
-* **commitment**: the registration record (`OneStage.commitmentOf`), as every form reads it;
-* **evidence**: `{"form", ...}`, the rest that form's evidence; the two-stage form reads the evidence's whole bytes
-  (`SampledTwo.evidenceOf`). One-stage evidence naming no `proofs` is v1's, and refused; evidence naming one is v2's, in
-  either of its forms (`OneStageZk.evidenceEitherOf`); recursive evidence is refused before its rest is read;
-* **check**: that form's check on the blobs, its acceptance held to the caller's check (`Caller.gate`) against that
-  form's verifier; evidence of another form than the params' rejects, so only one-stage v2's check and the two-stage
-  form's run, and the two-stage form's check refuses a run only where its switch is off, which it is not.
+* **params**: `{"levels": 1 | 2, ...}`, one level where `levels` is absent, the rest that count's params. The auditor
+  fixes the count with the rest of its params, before any coin, and it must be their shape's (`shapeLevels`). One-level
+  params naming no `proofs` are v1's, and refused; those naming one are v2's, the one statement's or the per-member
+  form's (`OneStageZk.paramsEitherOfJson`); two levels' read the whole object (`SampledTwo.paramsOfJson`);
+* **commitment**: the registration record (`OneStage.commitmentOf`);
+* **evidence**: `{"levels", ...}` likewise; two levels' read the evidence's whole bytes (`SampledTwo.evidenceOf`);
+* **check**: that count's check on the blobs, its acceptance held to the caller's check (`Caller.gate`) and its profile
+  listing that many levels (`levelsHeld`); evidence of another count than the params' rejects (`MISMATCH`).
 
 The recursive audit's own command, `vstar-recursive` with any first word but `sampled`, is dispatched by the
 executable's root, not here.
@@ -42,93 +34,67 @@ open Spot
 
 def PROTOCOL : String := "verity/sampled-proofs/v1"
 
-def ONE_STAGE : String := "one-stage"
-def RECURSIVE : String := "recursive"
-
 /-- The refusal of a one-stage statement naming no `proofs`, one-stage v1's. -/
 def V1_REFUSED : String :=
   s!"one-stage v1 ({Docket.PROTOCOL}) is refused: SPOT's one-stage form is v2 " ++
     s!"({OneStageZk.PROTOCOL}), whose verdicts are its own run of the verifier on the proofs"
 
-/-- The refusal of the recursive form: SPOT's soundness covers the one-stage form only, and the verifier refuses
-every form its soundness doesn't cover. -/
-def RECURSIVE_REFUSED : String :=
-  s!"the recursive audit (verity/sampled-proofs/recursive/v1) is refused: SPOT's soundness covers one-stage v2 " ++
-    s!"({OneStageZk.PROTOCOL}) only"
-
 abbrev Params := OneStageZk.Params ⊕ SampledTwo.Params
 abbrev Evidence := OneStageZk.Evidence ⊕ SampledTwo.Evidence
-
-/-- The forms, as a refusal names them. -/
-def FORMS : String := s!"\"{ONE_STAGE}\", \"{RECURSIVE}\" or \"{SampledTwo.TWO_STAGE}\""
 
 /-- The keys only two levels' parameters hold: the boundary docket, the interior and the two-level rule. -/
 def TWO_LEVEL_KEYS : List String := ["boundary", "interior", "rule"]
 
-/-- The form a `levels` field names: `1` one level's, `2` two levels'; any other count refused by name. -/
-def levelsForm (v : Json) (what : String) : V String :=
+/-- The number of levels a `levels` field names, 1 or 2; any other count refused by name. -/
+def levelsOf (v : Json) (what : String) : V Nat :=
   match v with
   | .num n =>
     if n.exponent != 0 then throw s!"levels-not-integer: the {what}' levels is {v.compress}, not a whole number of levels"
-    else if n.mantissa == 1 then pure ONE_STAGE
-    else if n.mantissa == 2 then pure SampledTwo.TWO_STAGE
+    else if n.mantissa == 1 then pure 1
+    else if n.mantissa == 2 then pure 2
     else if n.mantissa < 1 then throw s!"levels-not-positive: the {what}' levels is {v.compress}: an audit samples at least one level"
     else throw s!"levels-not-built: the {what}' levels is {v.compress}: only 1 or 2 levels are built"
   | _ => throw s!"levels-not-integer: the {what}' levels is {v.compress}, not a whole number of levels"
 
-/-- The form the parameters' shape is: two levels' keys (`TWO_LEVEL_KEYS`) all or none. -/
-def shapeForm (j : Json) : V String :=
+/-- The number of levels the parameters' shape is: two levels' keys (`TWO_LEVEL_KEYS`) all or none. -/
+def shapeLevels (j : Json) : V Nat :=
   let held := TWO_LEVEL_KEYS.filter (fun k => (field? j k).isSome)
-  if held.isEmpty then pure ONE_STAGE
-  else if held.length == TWO_LEVEL_KEYS.length then pure SampledTwo.TWO_STAGE
+  if held.isEmpty then pure 1
+  else if held.length == TWO_LEVEL_KEYS.length then pure 2
   else throw s!"levels-shape: the parameters hold {held} of two levels' {TWO_LEVEL_KEYS}: neither shape"
 
-/-- The form an object names and its rest, less `form` and `levels`. `levels` and `form`, where both are present, must
-name one form, and an object naming neither is one level's. The parameters' (``params``) one- or two-level form must be
-their shape's (`shapeForm`): the count is the parameters', fixed before any coin, and never a record's. -/
-private def split (j : Json) (what : String) (params : Bool) : V (String × Json) := do
+/-- The levels an object names (`levels`, one where absent) and its rest, less `levels`. The parameters' (``params``)
+levels must be their shape's (`shapeLevels`): the count is the parameters', fixed before any coin, and never a
+record's. -/
+private def split (j : Json) (what : String) (params : Bool) : V (Nat × Json) := do
   let .obj kvs := j | throw s!"the {what} is not an object"
-  let byLevels ← match field? j "levels" with
-    | none => pure none
-    | some v => some <$> levelsForm v what
-  let form ← match getD j "form", byLevels with
-    | .str f, some l =>
-      if f == l then pure f
-      else throw s!"levels-form-mismatch: the {what}' levels is {(getD j "levels").compress}, and their form is {f}"
-    | .str f, none => pure f
-    | .null, some l => pure l
-    | .null, none => pure ONE_STAGE
-    | v, _ => throw s!"the {what}' form is {v.compress}, not a string ({FORMS})"
-  if params && (form == ONE_STAGE || form == SampledTwo.TWO_STAGE) then
-    let s ← shapeForm j
-    if s != form then throw s!"levels-params-mismatch: the parameters name the form {form}, and their shape is {s}'s"
-  pure (form, Json.mkObj (kvs.toArray.filter (fun kv => kv.1 != "form" && kv.1 != "levels")).toList)
+  let n ← match field? j "levels" with
+    | none => pure 1
+    | some v => levelsOf v what
+  if params then
+    let s ← shapeLevels j
+    if s != n then throw s!"levels-params-mismatch: the parameters name {n} level(s), and their shape is {s}'s"
+  pure (n, Json.mkObj (kvs.toArray.filter (fun kv => kv.1 != "levels")).toList)
 
 def paramsOfJson (j : Json) : V Params := do
-  let (form, rest) ← split j "parameters" true
-  if form == ONE_STAGE then
-    if (field? rest "proofs").isNone then throw s!"the parameters name no proofs: {V1_REFUSED}"
-    return .inl (← OneStageZk.paramsEitherOfJson rest)
-  if form == RECURSIVE then throw RECURSIVE_REFUSED
-  if form == SampledTwo.TWO_STAGE then return .inr (← SampledTwo.paramsOfJson j)
-  throw s!"the parameters' form {form} is not {FORMS}"
+  let (n, rest) ← split j "parameters" true
+  if n == 2 then return .inr (← SampledTwo.paramsOfJson j)
+  if (field? rest "proofs").isNone then throw s!"the parameters name no proofs: {V1_REFUSED}"
+  return .inl (← OneStageZk.paramsEitherOfJson rest)
 
 def evidenceOf (b : ByteArray) : V Evidence := do
-  let (form, rest) ← split (← Core.canonicalJson b) "evidence" false
-  if form == RECURSIVE then throw RECURSIVE_REFUSED
-  if form == SampledTwo.TWO_STAGE then return .inr (← SampledTwo.evidenceOf b)
-  if form == ONE_STAGE && (field? rest "proofs").isNone then throw s!"the evidence names no proofs: {V1_REFUSED}"
-  let rest := (← Flock.canon rest).toUTF8
-  if form == ONE_STAGE then return .inl (← OneStageZk.evidenceEitherOf rest)
-  throw s!"the evidence's form {form} is not {FORMS}"
+  let (n, rest) ← split (← Core.canonicalJson b) "evidence" false
+  if n == 2 then return .inr (← SampledTwo.evidenceOf b)
+  if (field? rest "proofs").isNone then throw s!"the evidence names no proofs: {V1_REFUSED}"
+  return .inl (← OneStageZk.evidenceEitherOf (← Flock.canon rest).toUTF8)
 
-/-- The form of a case of the parameters or the evidence. -/
-def formOf {α β : Type} : α ⊕ β → String
-  | .inl _ => ONE_STAGE
-  | .inr _ => SampledTwo.TWO_STAGE
+/-- The levels of a case of the parameters or the evidence. -/
+def levelsOfCase {α β : Type} : α ⊕ β → Nat
+  | .inl _ => 1
+  | .inr _ => 2
 
-/-- The refusal of evidence of the form `ef` under parameters of the form `pf`. -/
-def MISMATCH (pf ef : String) : String := s!"the evidence's form is {ef}, and the parameters' is {pf}"
+/-- The refusal of evidence of `ef` levels under parameters of `pf`. -/
+def MISMATCH (pf ef : Nat) : String := s!"the evidence is {ef} level(s), and the parameters {pf}"
 
 /-- The name of a two-level accept's coarse level: the replay blocks. -/
 def BOUNDARY_LEVEL : String := "replay"
@@ -176,9 +142,9 @@ theorem withBoundary_accept {p : SampledTwo.Params} {c : OneStage.Commitment}
   | reject s => simp [withBoundary] at h
   | undecided s => simp [withBoundary] at h
 
-/-- The refusal of an accept whose profile lists `got` levels where the parameters' form is `n` levels'. -/
+/-- The refusal of an accept whose profile lists `got` levels where the parameters name `n`. -/
 def LEVELS_PROFILE (n got : Nat) : String :=
-  s!"levels-profile-mismatch: the parameters' form is {n} level(s), and the accept's profile lists {got}"
+  s!"levels-profile-mismatch: the parameters name {n} level(s), and the accept's profile lists {got}"
 
 /-- An accept whose profile's levels list is `n` long; any other refused (`LEVELS_PROFILE`). -/
 def levelsHeld (n : Nat) : Core.Outcome OneStage.Public Core.Integrity → Core.Outcome OneStage.Public Core.Integrity
@@ -197,15 +163,15 @@ theorem levelsHeld_accept {n : Nat} {o : Core.Outcome OneStage.Public Core.Integ
   | reject s => simp [levelsHeld] at h
   | undecided s => simp [levelsHeld] at h
 
-/-- That form's check, its accept's profile listing that form's levels (`levelsHeld`): one, or two for the two-stage
-form, whose coarse level is the boundary's (`withBoundary`); evidence of another form than the params' rejects
+/-- That count's check, its accept's profile listing that many levels (`levelsHeld`): one, or two, whose coarse
+level is the boundary's (`withBoundary`); evidence of another count than the params' rejects
 (`MISMATCH`). -/
 def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match p, e with
   | .inl p, .inl e => levelsHeld 1 (Caller.gate c.record p.base.verifier (OneStageZk.checkBlobs p c e bs))
   | .inr p, .inr e => levelsHeld 2 (withBoundary p c (SampledTwo.checkBlobs p c e bs))
-  | p, e => .reject (MISMATCH (formOf p) (formOf e))
+  | p, e => .reject (MISMATCH (levelsOfCase p) (levelsOfCase e))
 
 def protocol : Core.BlobProtocol where
   id := PROTOCOL
@@ -223,22 +189,12 @@ def protocol : Core.BlobProtocol where
   profileJson := Core.Integrity.toJson
   checkBlobs := checkBlobs
 
-#guard match paramsOfJson (Json.mkObj [("form", "other")]) with
-  | .error e => e == s!"the parameters' form other is not {FORMS}"
-  | .ok _ => false
-#guard match paramsOfJson (Json.mkObj [("form", SampledTwo.TWO_STAGE)]) with
+#guard match paramsOfJson (Json.mkObj [("levels", Json.num 2)]) with
   | .error e => e.startsWith "levels-params-mismatch"
-  | .ok _ => false
-#guard match paramsOfJson (Json.mkObj [("form", SampledTwo.TWO_STAGE), ("boundary", Json.mkObj []),
-    ("interior", Json.mkObj []), ("rule", Json.mkObj [])]) with
-  | .error e => e.startsWith "the keys of the parameters"
   | .ok _ => false
 #guard match paramsOfJson (Json.mkObj [("levels", Json.num 2), ("boundary", Json.mkObj []),
     ("interior", Json.mkObj []), ("rule", Json.mkObj [])]) with
   | .error e => e.startsWith "the keys of the parameters"
-  | .ok _ => false
-#guard match paramsOfJson (Json.mkObj [("levels", Json.num 2), ("form", ONE_STAGE)]) with
-  | .error e => e == "levels-form-mismatch: the parameters' levels is 2, and their form is one-stage"
   | .ok _ => false
 #guard match paramsOfJson (Json.mkObj [("levels", Json.num 3)]) with
   | .error e => e.startsWith "levels-not-built"
@@ -258,25 +214,16 @@ def protocol : Core.BlobProtocol where
 #guard match paramsOfJson (Json.mkObj [("levels", Json.num 1), ("values", Json.mkObj [])]) with
   | .error e => e == s!"the parameters name no proofs: {V1_REFUSED}"
   | .ok _ => false
-#guard match evidenceOf "{\"form\":\"two-stage\"}".toUTF8 with
+#guard match evidenceOf "{\"levels\":2}".toUTF8 with
   | .error e => e.startsWith "the keys of the evidence"
   | .ok _ => false
-#guard match evidenceOf "{\"form\":\"recursive\"}".toUTF8 with
-  | .error e => e == RECURSIVE_REFUSED
-  | .ok _ => false
-#guard match paramsOfJson (Json.mkObj [("form", ONE_STAGE), ("values", Json.mkObj [])]) with
-  | .error e => e == s!"the parameters name no proofs: {V1_REFUSED}"
-  | .ok _ => false
-#guard match evidenceOf "{\"form\":\"one-stage\",\"verdicts\":{}}".toUTF8 with
+#guard match evidenceOf "{\"verdicts\":{}}".toUTF8 with
   | .error e => e == s!"the evidence names no proofs: {V1_REFUSED}"
-  | .ok _ => false
-#guard match paramsOfJson (Json.mkObj [("form", RECURSIVE), ("recursive", Json.mkObj [])]) with
-  | .error e => e == RECURSIVE_REFUSED
   | .ok _ => false
 #guard match levelsHeld 2 (.accept ⟨#[], #[], 0, none, true⟩
     { programs := #[], prescribed := #[], linked := false, covered := #[], delta := ⟨1, 2⟩, drawn := #[],
       levels := #[{ name := "unit", query := none, size := 4, draw := some (.subset 2) }] }) with
-  | .reject r => r == "levels-profile-mismatch: the parameters' form is 2 level(s), and the accept's profile lists 1"
+  | .reject r => r == "levels-profile-mismatch: the parameters name 2 level(s), and the accept's profile lists 1"
   | _ => false
 #guard match levelsHeld 1 (.accept ⟨#[], #[], 0, none, true⟩
     { programs := #[], prescribed := #[], linked := false, covered := #[], delta := ⟨1, 2⟩, drawn := #[],

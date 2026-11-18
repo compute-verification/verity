@@ -8,10 +8,10 @@ certificates and one-stage's answers, `tests/verity/protocols/resource_accountin
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
 `inference_only_reference.check_theta`, behind the protocol's decoders,
 `tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_protocol.py`), for SPOT (`verity/sampled-proofs/v1`)
-`spot`: its form's split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
+`spot`: its levels' split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
 refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads (behind the decoders `OneStage` reads, v1's difftest's,
 `tests/verity/protocols/proofs/spot/verifier/lean/test_difftest.py`) and its check up to its one session's coin tree, the
-recursive form's params refused by name (`RECURSIVE_REFUSED`), and the two-stage form's params through its own difftest's
+and two levels' params through their own difftest's
 twin (`sampled_two.py`) and its evidence up to its keys, the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
 `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
@@ -168,65 +168,41 @@ def _two_stage():
     return sampled_two
 
 
-#: `VStar.Recursive.Sampled.FORMS`: the forms, as a refusal names them.
-FORMS = '"one-stage", "recursive" or "two-stage"'
-
-
 #: `VStar.Recursive.Sampled.TWO_LEVEL_KEYS`
 TWO_LEVEL_KEYS = ["boundary", "interior", "rule"]
 
 
-def _levels_form(v: Any, what: str) -> str:
-    """`VStar.Recursive.Sampled.levelsForm`."""
+def _levels_of(v: Any, what: str) -> int:
+    """`VStar.Recursive.Sampled.levelsOf`."""
     if type(v) is not int:
         raise Reject(f"levels-not-integer: the {what}' levels is {canonical(v)}, not a whole number of levels")
     if v in (1, 2):
-        return "one-stage" if v == 1 else "two-stage"
+        return v
     if v < 1:
         raise Reject(f"levels-not-positive: the {what}' levels is {v}: an audit samples at least one level")
     raise Reject(f"levels-not-built: the {what}' levels is {v}: only 1 or 2 levels are built")
 
 
-def _form(j: Any, what: str, params: bool = False) -> tuple[str, dict]:
-    """`VStar.Recursive.Sampled`'s split: the form the object's ``levels`` and ``form`` name (one-stage where neither
-    does), held to the parameters' shape (``params``), and the rest."""
+def _split(j: Any, what: str, params: bool = False) -> tuple[int, dict]:
+    """`VStar.Recursive.Sampled`'s split: the levels the object's ``levels`` names (one where absent), held to the
+    parameters' shape (``params``), and the rest."""
     if not isinstance(j, dict):
         raise Reject(f"the {what} is not an object")
-    by_levels = _levels_form(j["levels"], what) if "levels" in j else None
-    f = j.get("form")
-    if isinstance(f, str):
-        if by_levels is not None and f != by_levels:
-            raise Reject(f"levels-form-mismatch: the {what}' levels is {canonical(j['levels'])}, and their form is {f}")
-        form = f
-    elif f is None:
-        form = by_levels or "one-stage"
-    else:
-        raise Reject(f"the {what}' form is {canonical(f)}, not a string ({FORMS})")
-    if params and form in ("one-stage", "two-stage"):
+    n = _levels_of(j["levels"], what) if "levels" in j else 1
+    if params:
         held = [k for k in TWO_LEVEL_KEYS if k in j]
         if held and len(held) != len(TWO_LEVEL_KEYS):
             raise Reject(f"levels-shape: the parameters hold [{', '.join(held)}] of two levels' "
                          f"[{', '.join(TWO_LEVEL_KEYS)}]: neither shape")
-        shape = "two-stage" if held else "one-stage"
-        if shape != form:
-            raise Reject(f"levels-params-mismatch: the parameters name the form {form}, and their shape is {shape}'s")
-    return form, {k: v for k, v in j.items() if k not in ("form", "levels")}
-
-
-def _recursive(rest: dict, what: str):
-    """The recursive form on a case that names no ``recursive`` (`VStar.Recursive.paramsOfJson`, `evidenceOf`), which
-    it refuses; any other is outside the mirror."""
-    if "recursive" in rest:
-        raise ValueError(f"outside the mirror: the recursive audit's {what}")
-    raise Reject(f"the {what} name no recursive")
+        shape = 2 if held else 1
+        if shape != n:
+            raise Reject(f"levels-params-mismatch: the parameters name {n} level(s), and their shape is {shape}'s")
+    return n, {k: v for k, v in j.items() if k != "levels"}
 
 
 #: `VStar.Recursive.Sampled.V1_REFUSED`: a one-stage statement naming no ``proofs`` is one-stage v1's.
 V1_REFUSED = ("one-stage v1 (verity/sampled-proofs/one-stage/v1) is refused: SPOT's one-stage form is v2 "
               "(verity/sampled-proofs/one-stage/v2), whose verdicts are its own run of the verifier on the proofs")
-#: `VStar.Recursive.Sampled.RECURSIVE_REFUSED`: the recursive form's params, refused before their rest is read.
-RECURSIVE_REFUSED = ("the recursive audit (verity/sampled-proofs/recursive/v1) is refused: SPOT's soundness "
-                     "covers one-stage v2 (verity/sampled-proofs/one-stage/v2) only")
 
 
 def _keys(j: Any, keys: list[str], what: str) -> None:
@@ -329,14 +305,10 @@ def _two_stage_evidence(j: Any) -> dict:
 
 
 def _form_params(j: Any) -> dict:
-    form, rest = _form(j, "parameters", params=True)
-    if form == "one-stage":
-        return _one_stage_params(rest)
-    if form == "recursive":
-        raise Reject(RECURSIVE_REFUSED)
-    if form == _two_stage().TWO_STAGE:
+    n, rest = _split(j, "parameters", params=True)
+    if n == 2:
         return _two_stage().params_of_json(j)
-    raise Reject(f"the parameters' form {form} is not {FORMS}")
+    return _one_stage_params(rest)
 
 
 def _covered(form_params: Callable[[Any], dict]) -> Callable[[Any], dict]:
@@ -355,27 +327,22 @@ _form_params = _covered(_form_params)
 
 def _form_evidence(b: bytes) -> dict:
     j = P.canonical_json(b)
-    form, rest = _form(j, "evidence")
-    if form == _two_stage().TWO_STAGE:
+    n, rest = _split(j, "evidence")
+    if n == 2:
         _two_stage_evidence(j)
-    if form == "one-stage":
-        return _one_stage_evidence(rest)
-    if form == "recursive":
-        _recursive(rest, "evidence")
-    raise Reject(f"the evidence's form {form} is not {FORMS}")
+    return _one_stage_evidence(rest)
 
 
-def mismatch(params_form: str, evidence_form: str) -> str:
-    """`VStar.Recursive.Sampled.MISMATCH`: the refusal of evidence in another form than the params'."""
-    return f"the evidence's form is {evidence_form}, and the parameters' is {params_form}"
+def mismatch(params_levels: int, evidence_levels: int) -> str:
+    """`VStar.Recursive.Sampled.MISMATCH`: the refusal of evidence of another count than the params'."""
+    return f"the evidence is {evidence_levels} level(s), and the parameters {params_levels}"
 
 
 def spot(case: Any) -> dict:
     """`VStar.Recursive.Sampled.protocol` on a case and its ``blobs``: one-stage v2 (`Spot.OneStageZk`,
-    `_one_stage_check`, at the coins the challenger's release gives) when its params and evidence name the form
-    ``one-stage`` and ``proofs``, a refusal of one-stage v1 (naming no ``proofs``) and of the recursive form's params
-    (`RECURSIVE_REFUSED`) by name, the two-stage form's refusals of its params (its twin's) and of its evidence's keys,
-    and a refusal of any other form, on the cases the mirror decides."""
+    `_one_stage_check`, at the coins the challenger's release gives) when its params and evidence are one level and name
+    ``proofs``, a refusal of one-stage v1 (naming no ``proofs``) by name, two levels' refusals of their params (its
+    twin's) and of their evidence's keys, on the cases the mirror decides."""
     blobs = case.get("blobs", []) if isinstance(case, dict) else []
     return P.answer(SPOT_V1, case, params=_form_params, commitment=ONE_STAGE.decode_commitment,
                     evidence=_form_evidence, digest=lambda c: c[1],
@@ -394,8 +361,8 @@ def _period_answer(case: str) -> str:
 #: A period's answer is slow to make (its windows' ledger signatures and layouts), and a composition's case asks for each
 #: subprotocol's twice, so it is made once a case.
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
-#: Integrity: SPOT (`VStar.Recursive.Sampled`), one-stage v2's audit (`Spot.OneStageZk`); one-stage v1 and the
-#: recursive audit refused, and the two-stage audit refused last while its switch is off.
+#: Integrity: SPOT (`VStar.Recursive.Sampled`): one level, one-stage v2's audit (`Spot.OneStageZk`); one-stage v1
+#: refused.
 SPOT = Ported(SPOT_V1, spot, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `Poub.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
