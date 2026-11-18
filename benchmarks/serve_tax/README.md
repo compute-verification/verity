@@ -505,6 +505,66 @@ client raises its open-file limit to the hard limit first.
 On one GPU, `MODEL_ID` is `moonlight` (the default), `glm53-standin`, `llama8b`, `qwen3-30b` or `llama32-1b`, the last three read
 from their pinned snapshots under `HF_HOME` (`serve_tax.py checkpoint --model-id ID` prints the path).
 
+### A serving profile
+
+`--profile NAME` (`coding-agent`, `chat` or `fixed-size`) serves a profile of `benchmarks/production.toml`, read through
+`verity_bench.profiles`, with this job's own server and client (`serve_tax.profile_run`). The profile sets the stock arm:
+`prod` for GLM-5.3, and stock vLLM at vLLM's own limits for the 1B, with no context limit or limit on the requests at once
+of ours. It also sets the load (its dataset, the cut and turns for the model's context, and its users or requests in
+flight), the sampling (no flag, so the model's generation_config applies, and each request stops at its recorded length,
+fixed-size's at 1,024 tokens) and the bounds a request is counted within. The flags it fixes (`--arms`, `--loads`,
+`--reps`, `LIFETIMES`, `SAMPLED`, `MAX_MODEL_LEN`, `PASS_PROMPTS`, the published arm's flags, `--target`, `WITH`) are
+refused if given too, each refusal naming the flag to drop. `--profile`, `--feature` and `--find-load` are flags alone:
+`PROFILE`, `FEATURE` and `FIND_LOAD` in the environment are refused. Without `--profile` the job is as it was.
+
+A model's stock launch is the same on each of its cards, and a profile's load is the model's on one card
+(`llama32-1b.h100`). The card is the card file whose driver name nvidia-smi gives this host's cards (`profile_card`),
+never a flag or a machine's name. The same command runs on a machine that is not ours, under `research run --local-only`
+(VCF's Slurm cluster, `benchmarks/README.md`): with no `gpu-lease` the job waits for its own cards
+(`CUDA_VISIBLE_DEVICES`) to be free, `VENV` must name an environment holding the pinned vLLM, `HF_HOME` is the hub's own
+place under `XDG_CACHE_HOME` unless given, and the commit is research run's `--tree-sha` or `RESEARCH_SOURCE_COMMIT`, with
+no `.git` needed. A tree that none of these names is refused before anything is served.
+
+- `--find-load` serves stock alone over its load's own rungs (`LOADS`), requests in flight up to the profile's prompts.
+  It says where output tokens a second stop rising and prints the file's line for this host's card, the profile's
+  version raised by one and the digest `tests/benchmarks/harness/test_profiles.py` then pins. It edits no file. A
+  profile whose load is still `not found yet` refuses `--feature` until that line is in.
+- `--feature SCHEME` names a registered useful-work scheme (`pearl-plus`, `dither`), read from the one table of schemes
+  by name (`verity_bench.schemes`); the job serves the arm of ours whose `scheme` it is (`serve_tax.feature`). A name
+  the table doesn't hold is refused, and a scheme no arm over the model's stock serves yet raises
+  `NotImplementedError` (no arm here serves one yet). It serves stock and that arm in turn at the profile's one load:
+  two server lifetimes each, three reps a lifetime, which makes six paired reps. Its result is the run's result (kind `serve-tax-profile/v1`), written
+  through the kit's report: the cost under the model's metric id (`vllm/serving-cost-glm53`), its member the arm over
+  stock and the profile (`glm-5.3-h200-prod-record-over-prod-coding-agent`), with its interval, and each side's latencies
+  and share within the bounds as measurements beside it. `verity bench serving_cost profile RUN` reads it back. The
+  result prints three lines in this order:
+  - our extra card time a token. On a load of requests in flight, stock's output tokens a second at full load over
+    ours, less one: the median of the six paired ratios with the kit's interval (`serving_cost`), its noise floor
+    stock's two lifetimes. On coding-agent's sessions, our seconds for the same requests over stock's, less one, with a
+    server lifetime its unit: the mean of the two lifetimes' costs with Student's t interval (`session_cost`), and
+    that cost's noise floor. It is `cannot tell` where the interval, widened by the noise floor, holds zero, or where
+    the two sides did not do the same work. A rep whose two sides served different numbers of output tokens is refused;
+  - time to first token and time per output token, median and P99, ours beside stock;
+  - the share of requests within the profile's bounds.
+
+  Then come the profile's name, version and digest, the model and whether its result is a quick check, the vLLM pin,
+  and the differences from the published command that apply.
+- An arm that refuses what the profile has on gives `cannot run` in the refusal's own words, stored as the result: the
+  cost with no value and the refusal as its why. The
+  job then exits 1, as it does for an arm whose run refuses it. Where a change on our side alone lets the same prompts
+  through, the arm is served with that change as a second line, labelled with it (`seeded for ours`, `prefix cache off
+  for ours`); stock is never changed. Where no such change exists, no arm is served and no GPU is held.
+
+The passes are planned within the model's `cap_minutes`: an arm starts no pass it cannot finish by then, and a side cut
+short makes the first line `cannot tell`.
+
+~~~text
+research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
+  --profile coding-agent --find-load
+research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
+  --profile coding-agent --feature pearl-plus
+~~~
+
 Under a deployment's traffic, the job serves the replay ladder's plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,
 multi-turn and 8k-32k-token prompts, half of them sampled at temperature 0.7 under the public seed rule, each stopping at
 its end of text or its max_tokens), sent as `plan.jsonl` or named by `PLAN_FILE` (then no C4 shard is needed), with FlashInfer on:

@@ -105,17 +105,17 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.ops.fp32 import BF16_NAN_TORCH, f32_to_bf16_rn_bits
 from verity.circuits.ops.fp32 import f32_sub_bits as sub
+
+from tests.properties import fa2_target_capture_gpu as C
+from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 from verity_vllm.definitions.registry import boolean_rope as BR
 from verity_vllm.definitions.registry import dsa
 from verity_vllm.definitions.registry import ref_prims as RP
 from verity_vllm.definitions.registry import sparse_mla as M
 from verity_vllm.definitions.registry import sparse_mla_split as W
-
-from tests.properties import fa2_target_capture_gpu as C
-from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.engine.env import served_defaults
-from verity_vllm.pipeline.cli import MACHINE
+from verity_vllm import settings
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-dsa-capture/v3"
@@ -164,13 +164,13 @@ def _error(e: BaseException) -> str:
 
 # ------------------------------------------------------------------------------------------------------------------------- env
 def environment(work: Path) -> tuple[dict[str, str], dict[str, str]]:
-    """vLLM's defaults (`served_defaults`), a served engine's toolchain (`CUDA_HOME`, an exported one winning, and `RunEnv.cuda_bin`
+    """vLLM's defaults (`served_defaults`), a served engine's toolchain (`CUDA_HOME` and its `bin`
     on `PATH` after the interpreter's directory, as `pipeline.row_driver` sets them) and the caches in scratch, set before vLLM is
     imported: (the env set, the switches cleared)."""
     cleared = served_defaults()
     env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(work / "triton_cache"), "DG_JIT_CACHE_DIR": str(work / "deep_gemm"),
-           "CUDA_HOME": os.environ.get("CUDA_HOME") or MACHINE["RunEnv.cuda_home"],
-           "PATH": f"{os.path.dirname(sys.executable)}:{MACHINE['RunEnv.cuda_bin']}:{os.environ.get('PATH', '')}"}
+           "CUDA_HOME": settings.cuda_home(),
+           "PATH": f"{os.path.dirname(sys.executable)}:{os.path.join(settings.cuda_home(), 'bin')}:{os.environ.get('PATH', '')}"}
     os.environ.update(env)
     return env, cleared
 
@@ -995,11 +995,12 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
     """vLLM's top-k kernels: prefill on the served logits (twice) and on synthetic rows from row start 5; the decode kernels on
     synthetic rows; the reference `DsaTopKShortRow_v1{2048}` on the lengths the rows take."""
     import torch
-    from verity.circuits.evaluation import evaluate
     from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
     from vllm import _custom_ops as ops
     from vllm.model_executor.layers.sparse_attn_indexer import RADIX_TOPK_WORKSPACE_SIZE
     from vllm.platforms import current_platform
+
     from verity_vllm.definitions.registry import dsa
 
     rec: dict[str, Any] = {"cases": {}, "errors": {}}

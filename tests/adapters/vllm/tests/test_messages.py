@@ -6,7 +6,9 @@ from __future__ import annotations
 import json
 
 import pytest
+from verity import hooks as H
 from verity.channel import Refused
+from verity.protocols.resource_accounting import scheme as schemes
 
 from verity_vllm import messages as M
 from verity_vllm.pipeline import advice as A
@@ -148,3 +150,124 @@ def test_request_program_bytes_unchanged(tmp_path):
         (tmp_path / f"before-{name}").write_text(json.dumps(doc, indent=1) + "\n")
         M.write(tmp_path / f"after-{name}", "RequestProgram", (json.dumps(doc, indent=1) + "\n").encode())
         assert (tmp_path / f"after-{name}").read_bytes() == (tmp_path / f"before-{name}").read_bytes()
+
+
+def test_exchange_answers_requests_by_name_before_serving():
+    ex = M.Exchange()
+    seen = []
+    ex.subscribe("a", "declared", seen.append)
+    ex.request("a", H.RequireProperty("eager", True, "its taps read eager modules", fixes=True))
+    ex.request("b", H.RefuseProperty("world", 2, "one rank only"))
+    declared = H.Declared("card:h100", {"eager": True, "world": 2})
+    with pytest.raises(Refused, match="b: refuses world = 2: one rank only"):
+        ex.answer(declared)
+    ex.requests.pop()
+    assert ex.answer(declared) is True and seen == [declared]
+    with pytest.raises(Refused, match="after the build was answered"):
+        ex.request("c", H.RefuseProperty("world", 1, "one rank"))
+    off = ex.subscribe("c", "values", seen.append)
+    ex.emit(H.ValueProduced("layers.0", "producer_output", 0, "rows"))
+    off()
+    ex.emit(H.ValueProduced("layers.0", "producer_output", 1, "rows"))
+    assert seen[1:] == [H.ValueProduced("layers.0", "producer_output", 0, "rows")]
+    ex.emit(H.StepBegan(4))
+    assert ex.step == 4
+
+
+def test_exchange_refuses_an_unknown_hook():
+    with pytest.raises(Refused, match="not a hook"):
+        M.Exchange().subscribe("a", "tokens", print)
+
+
+def test_exchange_nests_kernels_and_hands_inputs_inward():
+    ex = M.Exchange()
+    seen = []
+    ex.subscribe("s", "blocks", seen.append)
+    ex.request("inner", H.ComputeBlockWith(lambda due, original: ("inner", due.inputs["weight"], original(None))))
+    ex.request("outer", H.ComputeBlockWith(lambda due, original: original({"weight": "decoded"})))
+    due = H.BlockDue("layers.0.mlp", 1, {"n": 2, "k": 2}, "bf16", {"x": "x", "weight": "stored"})
+    assert ex.compute(due, lambda given: ("stock", given)) == ("inner", "decoded", ("stock", {"weight": "decoded"}))
+    assert seen == [due] and ex.computes()
+    assert M.Exchange().compute(due, lambda given: ("stock", given)) == ("stock", None)
+
+
+def test_exchange_starts_through_every_gate_and_holds():
+    class Gate:
+        def __init__(self):
+            self.held = []
+
+        def add(self, input, start):
+            self.held.append(start)
+
+        def pending(self):
+            return bool(self.held)
+
+    ex, g1, g2, started = M.Exchange(), Gate(), Gate(), []
+    ex.request("a", H.StartOnBoundary(g1))
+    ex.request("b", H.StartOnBoundary(g2))
+    ex.request("a", H.HoldRelease("in-0", 5))
+    ex.request("b", H.HoldResident(7, 3))
+    ex.start("in-0", lambda: started.append("in-0"))
+    assert ex.pending() and not started
+    g1.held.pop()()
+    assert not started
+    g2.held.pop()()
+    assert started == ["in-0"] and not ex.pending()
+    assert ex.held("in-0", 4) and not ex.held("in-0", 5) and not ex.held("in-1", 0)
+    assert ex.resident(7, 2) and not ex.resident(7, 3)
+
+
+def test_one_exchange_a_process():
+    M.close()
+    ex = M.current()
+    try:
+        assert M.current() is ex and not ex.wants("values")
+    finally:
+        M.close()
+    assert M.current() is not ex
+
+
+def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkeypatch):
+    monkeypatch.setattr(schemes, "PROCESSES", {"id-front": lambda request, ids: ("relay", request(), ids())})
+    ex = M.Exchange()
+    ex.request("network", H.StartBeside("id-front", ("server-request", "stream-token-ids")))
+    with pytest.raises(Refused, match=r"network: starts id-front beside the workload with readers \['server-request', "
+                                      r"'stream-token-ids'\] no launcher here offers"):
+        ex.answer(H.Declared("", {}))
+    ex.readers = {"server-request": lambda: "req", "stream-token-ids": lambda: [1, 2]}
+    ex.answer(H.Declared("", {}))
+    ((process, start),) = ex.beside()
+    assert process == "id-front" and start() == ("relay", "req", [1, 2])
+    other = M.Exchange()
+    other.request("network", H.StartBeside("tap"))
+    with pytest.raises(Refused, match="starts tap beside the workload, which no scheme registered"):
+        other.answer(H.Declared("", {}))
+
+
+def test_a_build_request_is_filed_before_the_build_and_any_other_before_the_first_step():
+    ex = M.Exchange()
+    ex.answer(H.Declared("", {}))
+    with pytest.raises(Refused, match="pouw: files RequireProperty after the build was answered"):
+        ex.request("pouw", H.RequireProperty("eager", True, "its kernels"))
+    ex.request("pouw", H.ComputeBlockWith(lambda due, original: original(None)))
+    ex.step = 0
+    with pytest.raises(Refused, match=r"pouw: files HoldRelease after serving began \(step 0\)"):
+        ex.request("pouw", H.HoldRelease("in-0", 3))
+
+
+def test_a_route_has_one_scheme_and_an_input_is_refused_while_serving():
+    ex = M.Exchange()
+    serve = lambda first_line, headers, body: (200, headers["run"] + b"".join(body).decode())  # noqa: E731
+    ex.request("network", H.ServeRoute("/watermark", serve))
+    with pytest.raises(Refused, match="poub: serves route /watermark, which network serves"):
+        ex.request("poub", H.ServeRoute("/watermark", serve))
+    name, answer = ex.route("/watermark")
+    assert answer("POST /watermark HTTP/1.1", {"run": "r"}, iter([b"7", b"3"])) == (200, "r73")
+    assert name == "network" and ex.route("/other") is None
+    ex.step = 0
+    told: list = []
+    ex.refuse = lambda input, why: told.append((input, why))
+    ex.request("network", H.RefuseInput("in-1", "no release stamp"))
+    assert ex.refused("in-1") == [("network", "no release stamp")] and ex.refused("in-2") == []
+    assert told == [("in-1", "no release stamp")]
+    assert H.InputArrived("in-1", 3, 0, {"x-release": "4"}, "POST /v1/completions HTTP/1.1").headers["x-release"] == "4"

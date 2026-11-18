@@ -128,7 +128,7 @@ end
 
 section
 variable (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-  (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (hown : Record.ownRows P = true)
+  (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (hown : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
 include hdec hov hlay hown
 
 /-- **A leaf of a unit's parameter resolves**, to the gate the root resolves the node's argument's reference to:
@@ -281,7 +281,7 @@ theorem unit_member {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
 /-- **A leaf of a unit's parameter resolves**, whatever the unit's Definition, where every unit's rows are its own
 (`Record.ownRows`). -/
 theorem unit_param_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
-    (hO : InferenceOnlyVerifier.Record.ownRows P = true)
+    (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves) :
@@ -298,7 +298,7 @@ a leaf of one of the unit's parameters resolves to. The gate's operands are the 
 member's references (`prim_unit_gate`), and a leaf of the unit's parameter resolves through the same reference to
 the same gate (`Resolve.unit_leaf_ok`). -/
 theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
-    (hO : InferenceOnlyVerifier.Record.ownRows P = true)
+    (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true) {p : ℕ} {ops : Array ℕ}
     {sc' : Scope} (h : P.gate sc.off = .ok (p, ops, sc')) :

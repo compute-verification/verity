@@ -36,7 +36,8 @@
 #      it fails at that (R chained after W);
 #  12. registered: out/registered/circuit.json and log.jsonl (W alone), what training reads; no program.json, as the
 #      tied path writes no Program;
-#  13. share: `benchmarks/compute/run.py --from RUN_DIR`, which prints the share from the record this wrote.
+#  13. share: `benchmarks/compute/run.py --protocol pearl-plus --from RUN_DIR`, which prints the share from the record
+#      this wrote.
 # Coins (COINS): `local` (default), a local challenger: infra's gate code (AUDITOR) on a scratch auditor host under
 # PASSES with an LMS test key (W 4, H 6), each session's challenger its own serve.py on 127.0.0.1, whose coins are the
 # Lean spot-verifier's (`benchmarks/one_stage/pearlplus_local_e2e.py init|gate|stop`): the salt coin a salt-only session's
@@ -73,7 +74,7 @@ CORES=$(nproc) && LEAN_TIMEOUT=${LEAN_TIMEOUT:-$(( CORES >= 96 ? 3600 : 3600 * 9
 # under a caller's gpu-lease (which exports GPU_LEASE_UUID, the cards it holds) the card is the lease's, and serve.sh takes
 # no lease of its own: gpu-lease isn't re-entrant, so a second lease of the held card would wait forever
 [ -z "${GPU_LEASE_UUID:-}" ] || GPU=${GPU_LEASE_UUID%%,*}
-SCHEME=pearl-c-h100-v1-h3
+PROTOCOL=pearl-plus
 SPEC=benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml
 SP=benchmarks/pouw/pearl_c_vllm/served_passes.py
 PIECE=$OUT/pieces/pouw REC=$OUT/record
@@ -135,6 +136,13 @@ CLASS=$SLOTS,$PROMPT,$OUTPUTS
   echo "verity_torch isn't importable by $PY, and the served model's PoUW hooks import it: put this tree's adapters/torch" \
        "on PYTHONPATH (export PYTHONPATH=$TREE/adapters/torch:\$PYTHONPATH), or run under research run, which does" >&2
   exit 3; }
+# the kernel scheme PROTOCOL runs on the card it serves on, and that card's file
+read -r SCHEME SKU < <("$PY" -c 'import sys
+from verity_bench import kit, schemes
+short = kit.card_short(sys.argv[2])
+print(schemes.kernel_scheme(sys.argv[1], short, pinned=True), schemes.card(short)["sku"])' "$PROTOCOL" \
+  "$(cut -d, -f2 <<< "$card" | sed 's/^ *//')") && [ -n "$SKU" ] || { echo "no kernel scheme of $PROTOCOL on $card" \
+  "(the traceback above names the table it read)" >&2; exit 3; }
 mkdir -p "$OUT/logs" "$PIECE" "$REC" || exit 3
 # the passes' directory: under research run the run's own scratch (`--cwd clone`'s, the tree's parent), else SCRATCH or
 # TMPDIR; removed on exit with the challengers stopped, unless PASSES names it
@@ -282,13 +290,13 @@ from pathlib import Path
 from verity.device import load_card, number
 from verity_vllm import TargetProfile
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-sms = int(number(load_card("h200-sxm-141gb", directory=Path(sys.argv[4]))["sm"]["count"]))
+sms = int(number(load_card(sys.argv[5], directory=Path(sys.argv[4]))["sm"]["count"]))
 doc = {"model": sys.argv[1], "revision": sys.argv[2], "default_seed": DEFAULT_SEED,
        "target": TargetProfile.default().with_overrides(compute_capability=(9, 0), num_sms=sms).to_json(),
        "execution": "bi-eager"}
 open(sys.argv[3], "w").write(json.dumps(doc, indent=1) + "\n")
 print(json.dumps(doc, sort_keys=True))
-' "$REPO" "$REV" "$REC/serve-phi.json" "$TREE/calibration/hardware/cards"
+' "$REPO" "$REV" "$REC/serve-phi.json" "$TREE/calibration/hardware/cards" "$SKU"
 }
 step cubin cubin || fail cubin
 step serve-phi phi || fail serve-phi
@@ -340,7 +348,7 @@ if [ "$failed" != 0 ]; then
     "$OUT/logs/STEP.log)" >&2
   exit 1
 fi
-step share "$PY" benchmarks/compute/run.py --from "$RUN" || failed=1
+step share "$PY" benchmarks/compute/run.py --protocol "$PROTOCOL" --from "$RUN" || failed=1
 coins > "$OUT/coins.txt"
 cat "$OUT/logs/share.log"
 exit "$failed"

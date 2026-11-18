@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import tomllib
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -119,6 +120,62 @@ def test_a_pool_runs_timeout_counts_from_taking_its_slot_not_from_its_wait(monke
     waited = seen[-1]
     assert waited["command"][4:11] == ["--by", "infra", "--wait-max", "10800", "--run-max", "2400", "--"]
     assert remote.flag_value(waited["harness_args"], "--timeout") == f"{10800 + 2400}"
+
+
+def test_a_booked_period_s_end_and_slot_reach_slot_py_and_a_bound_past_the_end_is_refused(monkeypatch, tmp_path, capsys):
+    """`--end UTC` and `--slot NAME`: a --timeout that doesn't fit before the end is refused at launch with the bound that
+    would; a pool run's wait is cut so the runner ends by the end, and slot.py gets the end and the slot (`--only-slot`)."""
+    from research import cli, remote
+    from research.cli import main
+
+    now = datetime(2026, 11, 18, 20, 0, tzinfo=UTC).timestamp()
+    monkeypatch.setattr(cli, "wall_clock", lambda: now)
+    seen = []
+    monkeypatch.setattr(remote, "launch", lambda **kw: seen.append(kw) or {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r",
+                                                                            "launch": {"runner_pid": 1}})
+    argv = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2", "--source", ".",
+            "--pool", "gpu", "--as", "benchmarks"]
+    end = "2026-11-18T21:00:00Z"
+    assert main([*argv, "--end", end, "--timeout", "61m", "--", "true"]) == 2
+    assert ("refused: --timeout 3660 s does not fit before --end 2026-11-18T21:00:00Z, 3600 s from now: give a --timeout of "
+            "at most 3600 s, or a later --end") in capsys.readouterr().err
+    assert main([*argv, "--end", end, "--", "true"]) == 2
+    assert "--end 2026-11-18T21:00:00Z bounds a run by its --timeout" in capsys.readouterr().err
+    for bad in ("2026-11-18T21:00:00", "21:00Z"):
+        assert main([*argv, "--end", bad, "--timeout", "30m", "--", "true"]) == 2
+        assert f"--end {bad!r} is not" in capsys.readouterr().err
+    assert seen == []
+
+    assert main([*argv, "--end", end, "--slot", "g2", "--timeout", "40m", "--", "true"]) == 0
+    [kw] = seen
+    cmd = kw["command"]
+    assert cmd[4:15] == ["--by", "benchmarks", "--wait-max", "1200", "--run-max", "2400", "--end", end, "--only-slot", "g2", "--"]
+    assert remote.flag_value(kw["harness_args"], "--timeout") == "3600", "the runner ends by the end"
+    assert S.named_slot(cmd) == (S.pool_slots("gpu"), "g2") and S.node_copy(cmd)[4:] == cmd[4:]
+    assert main([*argv, "--end", end, "--timeout", "40m", "--pool-wait", "600", "--", "true"]) == 0
+    assert seen[-1]["command"][6:8] == ["--wait-max", "600"], "a shorter --pool-wait stands"
+
+    plain = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2"]
+    assert main([*plain, "--slot", "g2", "--", "true"]) == 2
+    assert "--slot NAME is a slot of a pool: give the pool with --pool POOL" in capsys.readouterr().err
+    assert main([*plain, "--end", end, "--timeout", "30m", "--", "true"]) == 0, "a run on a machine, bound by the end"
+    for elsewhere in (["--on", "auto"], ["--queue"]):
+        assert main(["run", "--runs-dir", str(tmp_path / "runs"), *elsewhere, "--end", end, "--timeout", "30m", "--", "true"]) == 2
+        assert "--end is a booked period's end on a machine you name" in capsys.readouterr().err
+    with pytest.raises(ValueError, match="a slot's name"):
+        S.in_pool("gpu", "x", ["true"], slot="g2;rm")
+
+
+def test_a_named_slot_the_machine_s_slots_file_lacks_is_refused_at_launch():
+    """The launch reads the pool's slots file on the machine (`remote.launch`) and refuses a slot it doesn't name, listing
+    those it does; a run that names no slot is never asked about."""
+    cmd = S.in_pool("gpu", "x", ["true"], 600, slot="g2")
+    assert S.slot_refusal(cmd, "# GPU slots\ng0 0-15 mem=100\ng2 32-47\n") is None
+    assert S.slot_refusal(cmd, "g0 0-15\ng1 16-31  # g2 is out\n") == (
+        f"--slot g2: {S.pool_slots('gpu')} has no slot of that name; its slots are g0, g1")
+    assert S.slot_refusal(cmd, None) == f"--slot g2: the machine has no {S.pool_slots('gpu')}, so it has no such pool"
+    assert S.named_slot(S.in_pool("gpu", "x", ["true"], 600)) is None and S.slot_refusal(["true"], None) is None
+    assert S.slot_names("a 0-3\n\nb\n#c 1\n") == ["a"]
 
 
 def test_a_command_that_names_a_pool_and_the_trees_slot_py_names_the_machines_own_in_its_place():

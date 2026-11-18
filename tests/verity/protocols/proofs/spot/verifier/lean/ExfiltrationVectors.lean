@@ -1,5 +1,5 @@
-import Proofs.Flock.Soundness.Audit.Influence
-import Proofs.Flock.Soundness.Audit.StratifiedMiss
+import Proofs.Spot.Sampling.Influence
+import Proofs.Spot.Sampling.StratifiedMiss
 import Mathlib.Algebra.BigOperators.Fin
 
 /-!
@@ -21,7 +21,7 @@ Regenerate with `verifier/tests/lean/generate.sh`.
 
 namespace OneStageExfiltrationVectors
 
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Game Finset
+open FlockSoundness Spot.Sampling FlockSoundness.Game Finset
 open scoped ENNReal
 
 /-- The numerator of `audit_exfiltration`'s bound. -/
@@ -303,5 +303,5 @@ end OneStageExfiltrationVectors
 open OneStageExfiltrationVectors in
 def main : IO Unit :=
   IO.println ("{\"source\": \"verifier/tests/lean/ExfiltrationVectors.lean via verifier/tests/lean/generate.sh\", " ++
-    "\"statement\": \"FlockSoundness.Audit.Partition.audit_exfiltration\", \"vectors\": [\n" ++
+    "\"statement\": \"Spot.Sampling.Partition.audit_exfiltration\", \"vectors\": [\n" ++
     ",\n".intercalate (grid.map row) ++ "\n], \"stratified\": [\n" ++ ",\n".intercalate (gridS.map rowS) ++ "\n]}")

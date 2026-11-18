@@ -147,12 +147,13 @@ public import Proofs.Flock.SpotFlock.LayoutAt
 public import Proofs.Flock.Bridge
 public import Proofs.Flock.Bridge.Transports
 public import Proofs.Flock.Bridge.TransportsRefs
+public import Proofs.Flock.Bridge.GateARowChecks
 public import Proofs.Flock.SamplingBoundary
 public import Proofs.Flock.SamplingScope
 public import Proofs.Flock.ZkAny
 public import Proofs.Flock.Claims.Complete.Zk
 public import Proofs.Flock.EndToEnd.Joint.Bound
-public import Proofs.Flock.Soundness.Audit.StratifiedProj
+public import Proofs.Spot.Sampling.StratifiedProj
 public import Proofs.Flock.Claims.Complete
 public import Proofs.Flock.EndToEnd.Joint
 

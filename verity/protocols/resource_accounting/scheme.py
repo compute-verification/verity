@@ -14,10 +14,13 @@ the log (`Order`), its other charges (`Charge`) and its settings. It gets back a
 yet provide one of its four things uniformly, a scheme states what it requires (`REQUIREMENTS`) and the stand-in it runs
 on today (`Scheme.requires`).
 
-A served run offers every scheme the same five hooks (`HOOKS`), and a scheme names those it attaches through
-(`Scheme.hooks`): values at block boundaries (`Value`), a wrap of a linear's call (`LinearCall`, `LinearWrap`), KV block
-events (`Loaded`, `KvPool`, `KvBlocks`, `Step`), admission and release events (`Admission`, `Gate`), and the engine's
-build options (`Build`, `Builds`). The adapter hands them over and names no scheme.
+The definition is the Lean structure `Verity.Scheme` and its `Verity.Scheme.GetsBack` (`security/Definitions/Core/
+Scheme.lean`); `Scheme`, `Block`, `Order`, `Charge` and `Bound` mirror the fields a bound reads under its names (``δ``
+spelt ``delta``), and a change to either names the other's line in its message. `hooks`, `settings`, `option`,
+`ports` and `requires` are read by the adapter and the runner, by no guarantee, and have no Lean field.
+
+A served run offers every scheme the same five hooks (`verity.hooks.HOOKS`), and a scheme names those it attaches
+through (`Scheme.hooks`).
 
 A scheme's `name` is the name a configuration lists (`protocols = [...]` in `applications/NAME.toml`, which
 `verity.config.Component.name` declares), so changing schemes is changing that name. Its `protocol` is the id of the
@@ -32,148 +35,28 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from fractions import Fraction
 from types import MappingProxyType
-from typing import Any, Literal, Protocol
+from typing import Any, Literal
+
+from verity.hooks import HOOKS
 
 #: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`)
 RESOURCES: Mapping[str, str] = MappingProxyType({"compute": "MACs", "memory": "bits", "read": "bits",
                                                  "egress": "bits"})
 #: what a scheme needs of the proof layer that the layer doesn't provide every scheme the same way yet
 REQUIREMENTS = ("one-labelling", "log-order", "log-times", "coins-at-rate", "one-design")
-#: the hooks a served run offers every scheme alike: values at block boundaries, a wrap of a linear's call, KV block
-#: events, admission and release events, and the engine's build options
-HOOKS = ("values", "linear", "kv", "admission", "build")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
-
-type Handle = object
-"""A device buffer as the serving system holds it: opaque here, read only by the scheme's own prover code."""
-
-
-# --- the hooks ---------------------------------------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Value:
-    """``values``: one value as the workload produces it at a block boundary, at the site ``(module, kind, slot)``."""
-
-    module: str
-    kind: str
-    slot: int | str
-    value: Handle
-
-
-@dataclass(frozen=True)
-class LinearCall:
-    """``linear``: one call of a linear layer on one rank: the layer (``weight_id`` stable across ranks, ``n`` and ``k``
-    this rank's), its input, weight and bias."""
-
-    weight_id: int
-    qualname: str
-    n: int
-    k: int
-    weight_format: str
-    x: Handle
-    weight: Handle
-    bias: Handle | None = None
-
-
-class LinearWrap(Protocol):
-    """A scheme's wrap of a linear's call: it returns the call's output, computing it itself or through ``original``,
-    the serving system's own call, given a weight in place of the layer's or None for the layer's."""
-
-    def __call__(self, call: LinearCall, original: Callable[[Handle | None], Handle]) -> Handle: ...
-
-
-@dataclass(frozen=True)
-class Loaded:
-    """``kv``: the model's weights once loaded, by name."""
-
-    weights: tuple[tuple[str, Handle], ...]
-
-
-@dataclass(frozen=True)
-class KvPool:
-    """``kv``: the KV pool once allocated: ``pages`` pages of ``slots`` slots, each slot ``slot_bytes`` bytes in each of
-    ``planes`` planes, one storage a layer."""
-
-    pages: int
-    slots: int
-    slot_bytes: int
-    planes: int
-    layers: tuple[Handle, ...]
-
-
-@dataclass(frozen=True)
-class KvBlocks:
-    """``kv``: pages the pool handed out (``allocated``), returned with no reader left (``freed``), or handed out again
-    to a new reader (``touched``)."""
-
-    event: Literal["allocated", "freed", "touched"]
-    blocks: tuple[int, ...]
-
-
-@dataclass(frozen=True)
-class KvWrite:
-    """``count`` slots from ``offset`` of page ``block``, written in one step."""
-
-    block: int
-    offset: int
-    count: int
-
-
-@dataclass(frozen=True)
-class Step:
-    """``kv``: scheduler step ``index`` begins (``writes``, the slots it writes) or ends (``ended``)."""
-
-    index: int
-    writes: tuple[KvWrite, ...] = ()
-    ended: bool = False
-
-
-@dataclass(frozen=True)
-class Admission:
-    """``admission``: requests by their release key, ``added`` to the engine, ``scheduled`` at a step, or ``finished``."""
-
-    event: Literal["added", "scheduled", "finished"]
-    keys: tuple[str, ...]
-    step: int | None = None
-
-
-class Gate(Protocol):
-    """A scheme's hold on admission: ``add`` admits a request when the scheme calls ``admit``, and ``pending`` says
-    whether it holds any not yet admitted."""
-
-    def add(self, key: str, admit: Callable[[], None]) -> None: ...
-
-    def pending(self) -> bool: ...
-
-
-@dataclass(frozen=True)
-class Build:
-    """``build``: what a scheme's refusals read before the engine is built: the stage (``serve``, ``capture`` or
-    ``commit``), the schemes enabled with it as ``name:scheme``, the ranks, whether the engine runs eagerly, and each
-    scheme's own settings."""
-
-    stage: Literal["serve", "capture", "commit"]
-    enabled: tuple[str, ...]
-    world: int = 1
-    enforce_eager: bool = True
-    settings: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
-
-
-class Builds(Protocol):
-    """A scheme's say on the engine's build: why this run cannot enable it (empty: it can), and whether its computation
-    fixes the build's kernels so serving may not override them."""
-
-    def refusals(self, build: Build) -> tuple[str, ...]: ...
-
-    def requires_build(self, build: Build) -> bool: ...
 
 
 @dataclass(frozen=True)
 class Block:
     """A kind of block the scheme adds to the registered circuit: its Definition, an exact function of its inputs, by the
-    id `verity.commitments.periods.interface.resolve` reads, and the cost of one correct block in the scheme's resource
-    from the block's public shape."""
+    id `verity.commitments.periods.interface.resolve` reads, and ``cost``, the resource credited for one correct block.
+
+    ``cost`` takes the block's public values (its Definition's public shape and the record's values for it, such as a
+    kept width), every one of which is logged before the sample's coin: a value the prover could set after seeing the
+    sample would let it raise the cost of the sampled blocks. `Verity.Scheme`'s block is one sampled unit; a `Block`
+    here is a kind whose every unit of one kind and public values costs the same, which is how the two agree. No
+    declared cost may be below what the verdict credits for the block: a larger cost only weakens the bound."""
 
     definition: str
     cost: Callable[[Mapping[str, int]], int]
@@ -181,27 +64,49 @@ class Block:
 
 @dataclass(frozen=True)
 class Order:
-    """A condition on the verifier's log: ``committed`` is logged before the coin ``coin`` is drawn and, where
-    ``within_ns`` is set, within that many nanoseconds of it, a time only the assumption ``assumption`` reads."""
+    """A condition on the verifier's log (`Verity.Scheme.logOK`): ``committed`` is logged ``direction`` (``before`` or
+    ``after``) ``coin``, a coin drawn or another logged event, and, where ``within_ns`` is set, within that many
+    nanoseconds of it: a deadline, which no guarantee of the proof layer reads, so it names the scheme's ``assumption``
+    that does (a bound on the prover's speed, say)."""
 
     committed: str
     coin: str
+    direction: Literal["before", "after"] = "before"
     within_ns: int | None = None
     assumption: str | None = None
 
     def __post_init__(self) -> None:
+        if self.direction not in ("before", "after"):
+            raise ValueError(f"{self.committed}: an order is before or after {self.coin}, not {self.direction!r}")
         if (self.within_ns is None) != (self.assumption is None):
-            raise ValueError(f"{self.committed} before {self.coin}: a time is read only by an assumption, and "
-                             "names it")
+            raise ValueError(f"{self.committed} {self.direction} {self.coin}: a time is read only by an assumption, "
+                             "and names it")
+        if self.within_ns is not None and self.within_ns <= 0:
+            raise ValueError(f"{self.committed} {self.direction} {self.coin}: a deadline is a positive time")
 
 
 @dataclass(frozen=True)
 class Charge:
     """A known way to a correct block without spending the resource: its name, and where its bound is stated (the key
-    of the scheme's published answer that carries it, or the Lean declaration that bounds it)."""
+    of the scheme's published answer that carries it, or the Lean declaration that bounds it). A known channel is
+    declared even before anything bounds it, with ``bounded`` False and ``bound`` naming the statement to come: then
+    `bound` refuses the scheme, since a bound without it would read as complete (`Verity.Scheme.charges` is a number)."""
 
     name: str
     bound: str
+    bounded: bool = True
+
+
+@dataclass(frozen=True)
+class Port:
+    """An external port the scheme reads (``input``) or writes (``output``), laid out as the field ``field`` of the
+    public signature of its block's Definition ``definition``: the scan's state row, the released bytes' positions. The
+    adapter's lowering reads the layout from here; no guarantee reads it."""
+
+    name: str
+    direction: Literal["input", "output"]
+    definition: str
+    field: str
 
 
 @dataclass(frozen=True)
@@ -209,8 +114,9 @@ class Scheme:
     """What a resource scheme supplies. ``settings`` are its settings with their defaults, which a configuration's
     ``[params."<protocol>"]`` overrides (`settings`); ``option`` is the adapter's entry that attaches it to a served run
     (``NAME:scheme``, an adapter's ``protocols`` spelling), empty when it attaches through none; ``hooks`` the served
-    run's hooks it attaches through (`HOOKS`); ``requires`` maps each requirement it has of the proof layer to today's
-    stand-in."""
+    run's hooks it attaches through (`HOOKS`); ``ports`` the external ports it reads or writes; ``requires`` maps each
+    requirement it has of the proof layer to today's stand-in. ``delta_scheme`` is `Verity.Scheme.δscheme`, the bound on
+    the probability that one of its ``assumptions`` fails (a key guessed, a collision), zero where none can."""
 
     name: str
     protocol: str
@@ -223,6 +129,8 @@ class Scheme:
     option: str = ""
     hooks: tuple[str, ...] = ()
     requires: Mapping[str, str] = field(default_factory=dict)
+    ports: tuple[Port, ...] = ()
+    delta_scheme: Fraction = Fraction(0)
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -236,6 +144,12 @@ class Scheme:
         names = [c.name for c in self.charges]
         if len(set(names)) != len(names):
             raise ValueError(f"{self.name} names a charge twice: {names}")
+        if unknown := sorted({o.assumption for o in self.log if o.assumption} - set(self.assumptions)):
+            raise ValueError(f"{self.name}: its deadlines name {unknown}, which are not among its assumptions")
+        if unknown := sorted({p.definition for p in self.ports} - {b.definition for b in self.blocks}):
+            raise ValueError(f"{self.name}: its ports lie in {unknown}, which are not its blocks' Definitions")
+        if not 0 <= self.delta_scheme < 1:
+            raise ValueError(f"{self.name}: its own term δscheme lies in [0, 1), not {self.delta_scheme}")
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
 
@@ -257,27 +171,38 @@ def settings(scheme: Scheme, given: Mapping[str, Any]) -> dict[str, Any]:
 
 @dataclass(frozen=True)
 class Bound:
-    """What the audit's guarantee gives a scheme at cutoff ``delta``: the resource it leaves uncredited is at most
-    ``missable``, the largest cost of a set of its blocks that the sample misses with probability above ``delta``, plus
-    each of its charges' bounds."""
+    """What the audit's guarantee gives a scheme (`Verity.Scheme.GetsBack`): at cutoff ``delta``, the resource it
+    leaves uncredited is more than ``missable``, the largest cost of a set of its blocks that the sample misses with
+    probability above ``delta``, plus each of its charges' bounds, with probability at most ``delta`` plus
+    ``delta_scheme``, the scheme's own term."""
 
     scheme: str
     delta: Fraction
     missable: int
     charges: Mapping[str, int]
+    delta_scheme: Fraction = Fraction(0)
 
     @property
     def uncredited(self) -> int:
         return self.missable + sum(self.charges.values())
 
+    @property
+    def probability(self) -> Fraction:
+        """The probability that more than `uncredited` is left uncredited: ``delta + delta_scheme``."""
+        return self.delta + self.delta_scheme
+
 
 def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, int]) -> Bound:
-    """``scheme``'s `Bound`; refuses charges other than exactly the ones it states."""
+    """``scheme``'s `Bound`, carrying its own term; refuses charges other than exactly the ones it states, and a scheme
+    with a known charge nothing bounds yet."""
     if sorted(charges) != sorted(c.name for c in scheme.charges):
         raise ValueError(f"{scheme.name}'s charges are {sorted(c.name for c in scheme.charges)}, not {sorted(charges)}")
+    if unbounded := [f"{c.name} ({c.bound})" for c in scheme.charges if not c.bounded]:
+        raise ValueError(f"{scheme.name} has known charges nothing bounds yet: {', '.join(unbounded)}; a bound "
+                         "without them would read as complete")
     if not 0 < delta < 1 or missable < 0 or any(v < 0 for v in charges.values()):
         raise ValueError(f"{scheme.name}: δ lies in (0, 1) and every amount is at least 0")
-    return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)))
+    return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), scheme.delta_scheme)
 
 
 #: the registered schemes, by name: a scheme's package registers it when imported
@@ -291,6 +216,18 @@ def register(scheme: Scheme) -> Scheme:
     return scheme
 
 
+#: the processes schemes start beside a workload, by name (`verity.hooks.StartBeside`): each called with the readers
+#: its request names
+PROCESSES: dict[str, Callable[..., Any]] = {}
+
+
+def register_process(name: str, start: Callable[..., Any]) -> Callable[..., Any]:
+    if name in PROCESSES:
+        raise KeyError(f"a process named {name!r} is registered already")
+    PROCESSES[name] = start
+    return start
+
+
 def get(name: str) -> Scheme:
     """The scheme registered under ``name``; `KeyError` names the registered ones."""
     try:
@@ -299,6 +236,5 @@ def get(name: str) -> Scheme:
         raise KeyError(f"no scheme {name!r}; registered: {', '.join(sorted(SCHEMES)) or 'none'}") from None
 
 
-__all__ = ["HOOKS", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Admission", "Block", "Bound", "Build", "Builds", "Charge",
-           "Gate", "Handle", "KvBlocks", "KvPool", "KvWrite", "LinearCall", "LinearWrap", "Loaded", "Order", "Scheme",
-           "Step", "Value", "bound", "get", "register", "settings"]
+__all__ = ["PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Order", "Port", "Scheme", "bound",
+           "get", "register", "register_process", "settings"]

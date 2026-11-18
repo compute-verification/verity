@@ -11,8 +11,7 @@ record it accepts it holds as `RecordText`'s readers give it, of the check's own
 and `doc`). A statement about the check may then name those readers in place of the check.
 
 * `inst_of_read`: the Program and the text are the instance's, decoded and parsed.
-* `wiring_of_read`: the wiring's cuts and wires are the text's (`RecordText.wiresOf`, as `Spot.Wires.Wiring.ofJson`
-  reads it).
+* `wiring_of_read`: the wiring's cuts and wires are the record's wiring's (`RecordText.wiring`).
 * `slot_of_read`: a unit's block is the text's (`RecordText.slot`).
 * `declared_of_heldAt`: a row the check holds is one the text declares, for the reason it is held, the pin aside
   (`RecordText.declared`). The check may hold fewer rows than the text declares.
@@ -43,44 +42,32 @@ theorem recode_ok {α : Type} {code : String} {x : Except String α} {a : α} (h
     x = .ok a := by
   cases x <;> simp_all [recode]
 
-/-- The record's wiring keeps the text's cuts and wires. -/
-theorem wiringOf_text {f : Front} {text W : Spot.Wires.Wiring} (h : wiringOf f text = .ok W) :
-    W.cuts = text.cuts ∧ W.wires = text.wires := by
-  unfold wiringOf at h
-  split at h
-  · cases h; exact ⟨rfl, rfl⟩
-  · cases h
-
 /-- `finish` keeps its front, and reads the grids, the text's wiring and the declarations as the text's readers do. -/
 theorem finish_text {f : Front} {pin : String → Option String} {c : Case} (h : finish f pin = .ok c) :
     c.f = f ∧ gridsOf f.ts f.doc = .ok (c.S, c.grids) ∧
-      ∃ text, wiring f.doc = .ok text ∧ inputsOf f.ts text f.doc = .ok c.x ∧
+      ∃ text, wiring f.P f.doc = .ok text ∧ inputsOf f.ts text f.doc = .ok c.x ∧
         c.W.cuts = text.cuts ∧ c.W.wires = text.wires := by
   unfold finish at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   split at h
   · cases h
-  · rename_i text htext
+  · rename_i W hW
     split at h
-    · cases h
-    · rename_i W hW
-      have hcw := wiringOf_text hW
-      split at h
+    · split at h
+      · cases h
       · split at h
         · cases h
-        · split at h
+        · rename_i x hx
+          split at h
           · cases h
-          · rename_i x hx
+          split at h
+          · cases h
+          · rename_i g hg
             split at h
             · cases h
-            split at h
             · cases h
-            · rename_i g hg
-              split at h
-              · cases h
-              · cases h
-                exact ⟨rfl, hg, text, recode_ok htext, hx, hcw.1, hcw.2⟩
-      · cases h
+              exact ⟨rfl, hg, W, recode_ok hW, hx, rfl, rfl⟩
+    · cases h
 
 /-- `front` reads its templates as `templatesOf` does, of its own Program and record. -/
 theorem front_text {j tr : Json} {f : Front} (h : front j tr = .ok f) : templatesOf f.P f.doc = .ok f.ts := by
@@ -182,9 +169,9 @@ theorem program_of_read {j tr : Json} {c : Case} (h : read j tr = .ok c) :
   obtain ⟨h1, h2, h3, h4, h5⟩ := front_program hf
   exact ⟨h1, h2, h3, h4, h5, templatesOf_keyed (front_text hf)⟩
 
-/-- **The wiring's cuts and wires are the text's**, on a record `read` accepts. -/
+/-- **The wiring's cuts and wires are the record's wiring's**, on a record `read` accepts. -/
 theorem wiring_of_read {j tr : Json} {c : Case} (h : read j tr = .ok c) :
-    ∃ text, Spot.Wires.Wiring.ofJson (wiresOf c.f.doc) = .ok text ∧ c.W.cuts = text.cuts ∧ c.W.wires = text.wires := by
+    ∃ text, wiring c.f.P c.f.doc = .ok text ∧ c.W.cuts = text.cuts ∧ c.W.wires = text.wires := by
   obtain ⟨f, pin, -, hc⟩ := read_front h
   obtain ⟨rfl, -, text, ht, -, hcuts, hwires⟩ := finish_text hc
   exact ⟨text, ht, hcuts, hwires⟩

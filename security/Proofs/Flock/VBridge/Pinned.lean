@@ -41,7 +41,7 @@ circuit under that name must give back the pinned pair, not another one the file
 namespace FlockVBridge
 
 open Flock.HmNets hiding and
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Hm
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Hm
 
 theorem toString_str (s : String) : toString s = s := rfl
 

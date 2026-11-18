@@ -58,11 +58,11 @@ Scope: `designOf r` is well formed on `partOf P κ ns` when `r` is well formed o
 
 namespace Flock.Bridge
 
-open FlockSoundness.Audit
+open Spot.Sampling
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} {κ : Fin C.N → Option Bool}
 
-theorem blocks_length_partOf (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n) :
+theorem blocks_length_partOf (P : Spot.Sampling.Partition C n) {ns : List ℕ} (hns : ns.sum = n) :
     (partOf P κ ns).blocks.length = n := by
   simp [blocks_partOf P hns]
 
@@ -73,7 +73,7 @@ theorem window_zero_filter (n : ℕ) (B : Finset ℕ) : Claims.Sampling.window 0
   simp [Claims.Sampling.window]
 
 /-- `designOf r`'s `P_a` on `partOf P κ ns`: `r`'s miss on the strata `ns` at `B`'s population slots. -/
-theorem pa_partOf_window (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n)
+theorem pa_partOf_window (P : Spot.Sampling.Partition C n) {ns : List ℕ} (hns : ns.sum = n)
     (r : Claims.Sampling.OneStage) (B : Finset ℕ) :
     (designOf r).Pa (partOf P κ ns) B = r.Pa ns (Claims.Sampling.window 0 n B) := by
   show Claims.Sampling.classesPa [r] [ns.splitLengths ((List.finRange n).map (blockOf P κ))] 0 B = _
@@ -82,7 +82,7 @@ theorem pa_partOf_window (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ
 
 /-- `subset kd`'s `P_a` on `partOf P κ ns`: the population's subset miss at `B`'s population slots, whatever the
 strata. -/
-theorem pa_partOf_subset (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n) (kd : ℕ)
+theorem pa_partOf_subset (P : Spot.Sampling.Partition C n) {ns : List ℕ} (hns : ns.sum = n) (kd : ℕ)
     (B : Finset ℕ) :
     (designOf (.subset kd)).Pa (partOf P κ ns) B =
       ((n - (Claims.Sampling.window 0 n B).card).choose kd : ℝ) / (n.choose kd : ℝ) := by
@@ -90,7 +90,7 @@ theorem pa_partOf_subset (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ
   simp only [Claims.Sampling.OneStage.Pa, hns]
 
 /-- `subset kd`'s `P_a` on `partOf P κ ns` at the first `K₀` population slots: `C(n − K₀, kd)/C(n, kd)`. -/
-theorem pa_subset_range (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n) (kd : ℕ) {K₀ : ℕ}
+theorem pa_subset_range (P : Spot.Sampling.Partition C n) {ns : List ℕ} (hns : ns.sum = n) (kd : ℕ) {K₀ : ℕ}
     (hK₀ : K₀ ≤ n) :
     (designOf (.subset kd)).Pa (partOf P κ ns) (Finset.range K₀) = ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) := by
   have hF : (Finset.range K₀).filter (· < n) = Finset.range K₀ :=
@@ -99,14 +99,14 @@ theorem pa_subset_range (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ}
 
 /-- **`All` misses no proof block**: `subset n`'s `P_a` on `partOf P κ ns`, `All`'s sampling design over the `n` units, is `0` at any
 `B` holding a population slot. -/
-theorem pa_all (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n) {B : Finset ℕ}
+theorem pa_all (P : Spot.Sampling.Partition C n) {ns : List ℕ} (hns : ns.sum = n) {B : Finset ℕ}
     (hB : ∃ v ∈ B, v < n) : (designOf (.subset n)).Pa (partOf P κ ns) B = 0 := by
   obtain ⟨v, hv, hvn⟩ := hB
   have h1 : 0 < (B.filter (· < n)).card := Finset.card_pos.2 ⟨v, Finset.mem_filter.2 ⟨hv, hvn⟩⟩
   have hlt : n - (B.filter (· < n)).card < n := by omega
   rw [pa_partOf_subset P hns, window_zero_filter, Nat.choose_eq_zero_of_lt hlt, Nat.cast_zero, zero_div]
 
-theorem pa_partOf (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n)
+theorem pa_partOf (P : Spot.Sampling.Partition C n) {ns : List ℕ} (hns : ns.sum = n)
     (r : Claims.Sampling.OneStage) (B : Finset ℕ) (hB : B ⊆ Finset.range n) :
     (designOf r).Pa (partOf P κ ns) B = r.Pa ns B := by
   rw [pa_partOf_window P hns, Claims.Sampling.EndToEndSample.window_zero fun v hv => Finset.mem_range.1 (hB hv)]
@@ -148,7 +148,7 @@ theorem count : CountTarget := by
 /-! ## Scope -/
 
 /-- **`designOf r` is well formed on `partOf P κ ns`**: one rule for one class, `r`, well formed on the strata `ns`. -/
-theorem designOf_wellFormed (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n)
+theorem designOf_wellFormed (P : Spot.Sampling.Partition C n) {ns : List ℕ} (hns : ns.sum = n)
     {r : Claims.Sampling.OneStage} (hr : r.WellFormed ns) : (designOf r).WellFormed (partOf P κ ns) := by
   refine ⟨rfl, fun p hp => ?_⟩
   simp only [designOf, classes_partOf, List.zip_cons_cons, List.zip_nil_right, List.mem_cons,

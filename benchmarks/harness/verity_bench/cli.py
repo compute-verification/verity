@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -53,21 +53,36 @@ def _again_argument(parser: argparse.ArgumentParser) -> None:
 
 def _make_plan(args: Any) -> jobs.Plan:
     """The spec's plan, by its schema: a steady-state spec's points (`steady_plan`), or a vLLM spec's, with the points
-    `--again` names launched again."""
+    `--again` names launched again. `run`'s reads the catalog where one is reachable (`_where_reachable`)."""
 
     root = jobs.repository_root()
-    if getattr(args, "here", False):
-        if steady_spec.is_steady(args.spec):
-            raise ValueError("--here runs a vLLM spec's point; a steady-state spec's points run with --direct NODE")
-        if args.direct is not None:
-            raise ValueError("--here runs the points on this machine, --direct NODE on that node's slots: give one")
-        # A machine not ours holds no catalog of our runs, and a shipped tree no git that names its commit's tree.
-        plan = jobs.make_plan(args.spec, root=root, lookup=lambda _identity, _commit: None)
-    elif steady_spec.is_steady(args.spec):
-        plan = steady_plan.make_plan(args.spec, root=root, local_only=args.local_only)
-    else:
-        plan = jobs.make_plan(args.spec, root=root, lookup=jobs.StoreCompletion(root=root, local_only=args.local_only))
+    steady = steady_spec.is_steady(args.spec)
+    lookup = (steady_plan.SteadyCompletion(root=root, local_only=args.local_only,
+                                           since=lambda: steady_plan._added(root, args.spec)) if steady
+              else jobs.StoreCompletion(root=root, local_only=args.local_only))
+    if args.run is _run:
+        lookup = _where_reachable(lookup, (None, None) if steady else None)
+    plan = (steady_plan.make_plan(args.spec, root=root, lookup=lookup) if steady
+            else jobs.make_plan(args.spec, root=root, lookup=lookup))
     return jobs.again(plan, args.again) if getattr(args, "again", None) else plan
+
+
+def _where_reachable(lookup: Any, missing: Any) -> Any:
+    """`lookup`, until it finds no catalog here (a tree with no git that knows its commit, a store with no remote): then
+    no point's passing run is looked up, which it says once, and the point runs."""
+
+    skipped: list[str] = []
+
+    def found(*key: Any) -> Any:
+        if not skipped:
+            try:
+                return lookup(*key)
+            except (ValueError, RuntimeError, OSError, subprocess.CalledProcessError) as error:
+                skipped.append(str(error))
+                print(f"verity-bench: no catalog lookup here, so no passing run is reused: {error}", file=sys.stderr)
+        return missing
+
+    return found
 
 
 def _plan(args: Any) -> int:
@@ -84,31 +99,8 @@ def _check(args: Any) -> int:
     return 0 if done == len(plan.points) else 1
 
 
-def _end(text: str) -> float:
-    """`--end`'s instant, a UTC time as `2026-11-15T03:30Z`, in seconds since the epoch."""
-
-    try:
-        return datetime.strptime(text, "%Y-%m-%dT%H:%MZ").replace(tzinfo=UTC).timestamp()
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"{text!r} is not a UTC time as 2026-11-15T03:30Z") from None
-
-
 def _run(args: Any) -> int:
-    plan = _make_plan(args)
-    if args.end is not None and args.direct is None:
-        raise ValueError("--end bounds a direct point's wait for its GPU slot: it needs --direct NODE")
-    if isinstance(plan.spec, steady_spec.SteadySpec):
-        return steady_plan.dispatch(plan, args.spec, direct=args.direct, card=args.card, cores=args.cores, end=args.end)
-    if (args.card is not None or args.cores is not None) and args.direct is None:
-        raise ValueError("--card and --cores are a booked card's and its slot's on a GPU node: they need --direct NODE")
-    if args.card is not None and args.cores is None:
-        raise ValueError(f"--card {args.card} needs --cores, the booked slot's cores: the first free slot may be on "
-                         "another NUMA node than the card")
-    if args.here:
-        return jobs.dispatch(plan, args.spec, here=True)
-    return jobs.dispatch(plan, args.spec, direct=args.direct,
-                         command=lambda *point: jobs.direct_command(*point, card=args.card, cores=args.cores,
-                                                                    end=args.end))
+    return jobs.dispatch(_make_plan(args), args.spec, point=args.point)
 
 
 def _point(args: Any) -> int:
@@ -374,24 +366,11 @@ def _parser() -> argparse.ArgumentParser:
     _again_argument(plan)
     plan.set_defaults(run=_plan, command_parser=plan)
 
-    run = commands.add_parser("run", help="launch one recorded research run per incomplete point")
+    run = commands.add_parser("run", help="run one point without a passing run in this process's research run")
     _spec_argument(run)
     _again_argument(run)
-    run.add_argument("--direct", metavar="NODE", default=None,
-                     help="launch each point with `research run --on NODE` through a GPU slot of that node, not the queue")
-    run.add_argument("--here", action="store_true",
-                     help="run the spec's one point to run in this process's research run, on the machine it was started "
-                          "on: the cards its environment gives it (CUDA_VISIBLE_DEVICES) and the CPUs it may use, with no "
-                          "lease, slot or node of ours; it reads no catalog, so a passed point runs again")
-    run.add_argument("--card", type=int, default=None, metavar="INDEX",
-                     help="a booked card, which a direct point's lease is asked of alone (needs --cores)")
-    run.add_argument("--cores", default=None, metavar="CPUS",
-                     help="a booked slot, by its cores (34-43): the slot taker runs under `taskset -c CPUS`, and a vLLM "
-                          "point's lease declares them")
-    run.add_argument("--end", type=_end, default=None, metavar="UTC",
-                     help="the booked period's end (2026-11-15T03:30Z), which a direct point's run never passes: it "
-                          "waits for its slot until its max_minutes before it, and one that could not finish by then "
-                          "is not started; default: it waits up to jobs.DIRECT_WAIT_S")
+    run.add_argument("--point", default=None, metavar="POINT",
+                     help="the spec's point this run runs (default: its only point, or the one --again names)")
     run.set_defaults(run=_run, command_parser=run)
 
     check = commands.add_parser("check", help="report whether every point has a passing result")

@@ -136,7 +136,7 @@ end FlockSoundness.Discharge.Layout
 
 namespace FlockSoundness.Discharge.HiddenExec
 
-open Flock FlockLevel3 Model Audit
+open Flock FlockLevel3 Model Spot.Sampling
 open FlockSoundness.Discharge.Exec (Inputs)
 
 /-- **The public file loads alike at the committed and the statement circuit**: `HmOut.loadPublic` reads the circuit's
@@ -172,7 +172,7 @@ end FlockSoundness.Discharge.HiddenExec
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL
   HiddenExec Composed
 open FlockSoundness.Discharge.Exec (Inputs)
 

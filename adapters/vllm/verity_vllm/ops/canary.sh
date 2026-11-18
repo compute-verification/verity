@@ -34,8 +34,8 @@ cd "$VERITY_TREE" || exit 1
 # (`verity-vllm row`, PRECHECK_FAIL_TARGET_FAMILY) is waived by name here (`precheck-target WAIVED canary <tag>` in stages.txt), never on a
 # workload of record.  On an L40S the same workloads pass the check unwaived: the waiver only names a would-be failure.
 export TARGET_FAMILY_WAIVER=${TARGET_FAMILY_WAIVER:-"canary $TAG"}
-export PYTHONPATH=. HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 VLLM_BATCH_INVARIANT=1 TOKENIZERS_PARALLELISM=false CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}
-PY=${PY:-/workspace/venv-cu129/bin/python}; export PATH=$(dirname "$PY"):/usr/local/cuda/bin:$PATH
+export PYTHONPATH=. HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 VLLM_BATCH_INVARIANT=1 TOKENIZERS_PARALLELISM=false CUDA_HOME="${CUDA_HOME:?CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)}"
+PY=${PY:-/workspace/venv-cu129/bin/python}; export PATH=$(dirname "$PY"):$CUDA_HOME/bin:$PATH
 if [ -z "${NATIVE_COLLECT_BUILD:-}" ]; then
   NCB_REL=$(python3 - "$PWD" <<'EOF' 2>/dev/null
 import json, os, sys

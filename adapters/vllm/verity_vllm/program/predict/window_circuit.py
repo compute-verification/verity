@@ -10,7 +10,7 @@ the token select, position p attending to keys 0..p. So the circuit is a functio
 request, arrival steps, prompt lengths, output lengths and key counts are values, never structure.
 
 A slot's request comes from the network attester's scan: boundary b's Programs read the scan's state row before it
-(`scan_state.SCAN_STATE`, registered) through `boolean_io_shell.ScanSlots_v2` (`scan_state.bridge`), which gives each lane
+(`scan_state.SCAN_STATE`, registered) through `boolean_io_shell.ScanSlots_v3` (`scan_state.bridge`), which gives each lane
 its first position's token (its prompt's first id) and the slot it carries on, its occupancy word and its head (its prompt's
 length and ``max_tokens``). Every later position's token is `io_shell.TokenFeed_v1{prompt, FIRST=False}`'s below the class's
 prompt limit (the prompt's id below its length, else the previous position's select), and past it the previous position's
@@ -40,11 +40,11 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
   template's ``x`` at another row count (a port is cut one way, and o_proj's ``x`` is a row a head).
 - An int8 linear (`registry.int8_exact`) is its quantizer `Int8RowQuant_v1{K}`, one unit `Int8RowQuant_v3{K, R}` (v1 with
   ``x`` as R rows of K / R, R its writers' rows: one after a norm, a head's at o_proj; v5 at the K of H1's tables, below),
-  and its product `ScaledMmS8_v1{K, N}`,
-  ⌈N / n⌉ slices `ScaledMmS8_v1{K, n}` at the same weight words a slice (n = ``grain.gemm_words`` // (K / 2): an s8 weight row
-  is K / 2 words), each reading its s8 weight rows and their f32 row scales from the weights record and the quantizer's codes
-  ``x`` and scale ``sx`` whole. Words are laid out by each field's leaf width (`_spans`): a weight or node output whose leaves
-  aren't one byte width filling whole u16 words, and a read that starts inside a word, are refused.
+  and its product `ScaledMmS8_v1{K, N}`, ⌈N / n⌉ slices `ScaledMmS8_v3{K, n}` at the same weight words a slice (n =
+  ``grain.gemm_words`` // (K / 2): an s8 weight row is K / 2 words), each reading its s8 weight rows and their f32 row scales
+  as the weights record's u16 words, and the quantizer's codes ``x`` and scale ``sx`` whole. Words are laid out by each
+  field's leaf width (`_spans`): a weight or node output whose leaves aren't one byte width filling whole u16 words, and a
+  read that starts inside a word, are refused.
 - `RoPE_v1{NHEADS, D}` is its heads (`RoPEHead_v1{D}`), each reading its slice of ``x``.
 - `Attention_v18{T, NH, KVH, D, BN, ...}` is `Attention_v19`'s cut: each head's Calls (`AttentionHead_v19`'s
   body, read once a T) are its units, its first visited key block `AttnBlockFirst_v1{D, NVIS}` (keys (nb - 1)·BN ... T - 1,
@@ -86,7 +86,7 @@ Given H1's tables of the window (`Tables`, `window_class`), the circuit reads ea
 output row (`interface.Read`) that holds the proof block's output row to the registered row: each quantizer at the
 tables' K is `Int8RowQuant_v5{K, R, ROUND}`, its ``o2`` a row of its round's A table, and each position's token row a row of
 its round's input-ids table, at a fixed load's rows (`Tables.at`). Each reader reads one table, and each table's readers are
-templates of their own: round s's quantizers bind ROUND = s, round 0's token rows are its `ScanSlots_v2` and `TokenFeed_v1`
+templates of their own: round s's quantizers bind ROUND = s, round 0's token rows are its `ScanSlots_v3` and `TokenFeed_v1`
 units' and a later round's the select before it, `io_shell.SelectCollect_v2{..., ROUND}`. So a sample stratified by
 template (one stratum a template) has a reader of every table.
 
@@ -104,7 +104,7 @@ it (`interface.ordered`, the circuit's ``order``).
 
 The circuit's blocks (`interface.Blocks`) carry its inference block: a unit's slot is its slot (its class Program; the blocks'
 slots are the class's S) and its step its position, T the class's positions. An embedding opens its position, the stack, LM head
-and token select with its collector after it are that position's (the last's with the entry), and a slot's `ScanSlots_v2`
+and token select with its collector after it are that position's (the last's with the entry), and a slot's `ScanSlots_v3`
 unit its first position's. An allocation's units are one entry, its slots' runs at one step side by side (the slot
 digit, then the run), and like entries that follow on merge, at one step and then at consecutive steps
 (`window_builder.inference`).
@@ -135,11 +135,11 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Any
 
-from verity.circuits.codec import descriptor_id, program_digest
+from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.commitments.periods import interface as IF
-from verity_vllm.definitions.registry import io_shell as IO
 
+from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 
 from . import scan_state as SS
@@ -260,12 +260,6 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     return Lowered(circuit, fn, tuple(progs), b.spans)
 
 
-def population_digest(circuit: IF.Circuit) -> str:
-    """The digest of ``circuit``'s population Program, which its registered values' domains bind (`window_rows.state_value`'s
-    ``program``)."""
-    return program_digest(circuit.program()[0])
-
-
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
                    placed: Sequence[tuple[int, int | None]] | None = None, provable: bool = True,
                    tables: FixedLoad | None = None) -> IF.Circuit:
@@ -280,5 +274,5 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
 
 
 __all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Row", "Tables", "WEIGHTS",
-           "WindowClass", "class_circuit", "class_program", "lower", "population_digest", "stop_ids", "takes",
+           "WindowClass", "class_circuit", "class_program", "lower", "stop_ids", "takes",
            "window_circuit"]

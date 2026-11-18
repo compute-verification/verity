@@ -73,7 +73,6 @@ from functools import cache
 from importlib import resources
 
 import numpy as np
-
 from verity.circuits.defs import bind, composite, primitive
 from verity.circuits.ops import scalar as SC
 from verity.circuits.ops.boolean.mufu import Fit
@@ -81,6 +80,7 @@ from verity.circuits.ops.mufu import DivFullRcp
 from verity.circuits.ops.prims import const
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import sparse_mla as M

@@ -12,6 +12,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     combine, a head and a decode token of one split each; the other arms (the first block, a split's own output, a head of two
     splits, a token over a window and an extra block) are checked by id."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_flashmla as BF
 
     blk = {"D": 16, "BN": 16, "DOT": BF.FLASHMLA_DSV4["DOT"], "SCALE": 0.25}

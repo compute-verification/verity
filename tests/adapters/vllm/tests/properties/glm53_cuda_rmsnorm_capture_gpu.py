@@ -30,14 +30,14 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from tests.properties import fa2_target_capture_gpu as C
 from verity_vllm.definitions.numerics import cuda_rmsnorm_rows as R
 from verity_vllm.definitions.numerics import derived_rows as D
 from verity_vllm.definitions.registry import cuda_rmsnorm as M
 from verity_vllm.definitions.registry import prims as P
-
-from tests.properties import fa2_target_capture_gpu as C
 from verity_vllm.engine.env import served_defaults
-from verity_vllm.pipeline.cli import MACHINE
+from verity_vllm import settings
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-cuda-rmsnorm-capture/v2"
@@ -245,10 +245,10 @@ def one_case(work: Path, kind: str, m: int, n: int) -> dict[str, Any]:
 
 
 def toolchain() -> dict[str, str]:
-    """A served engine's toolchain, which `sass` compiles with: `CUDA_HOME` (an exported one winning) and `RunEnv.cuda_bin` on
+    """A served engine's toolchain, which `sass` compiles with: `CUDA_HOME` and its `bin` on
     `PATH` after the interpreter's directory, as `pipeline.row_driver` sets them."""
-    env = {"CUDA_HOME": os.environ.get("CUDA_HOME") or MACHINE["RunEnv.cuda_home"],
-           "PATH": f"{os.path.dirname(sys.executable)}:{MACHINE['RunEnv.cuda_bin']}:{os.environ.get('PATH', '')}"}
+    env = {"CUDA_HOME": settings.cuda_home(),
+           "PATH": f"{os.path.dirname(sys.executable)}:{os.path.join(settings.cuda_home(), 'bin')}:{os.environ.get('PATH', '')}"}
     os.environ.update(env)
     return env
 

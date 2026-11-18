@@ -15,17 +15,16 @@
 # device) into $FA2/build/matReq (the path row_pod.sh / commit_delta --hidden-so use; an earlier hd-64-only .so is kept as
 # build/matReq_hd64_r9/); (4) verifies: the .so loads, exposes verity_set_tap_v8 / verity_tap_hdims, tap mode 3 / src 59, and the
 # hdims mask contains every requested head dim.  Exactness per head dim is a separate step: tests/properties/fa_tap_exactness_gpu.py (needs the GPU).
-# Env: VENV (default /workspace/venv-cu129), CUDA_HOME (default: first of /usr/local/cuda-12.9, /usr/local/cuda), FA2 (default
-# /workspace/cp/fa2), FA2_TAP_HDIMS (alias HDIMS; default 64,96,128,256), FA2_TAP_ARCH (default: the device's compute capability, e.g. 8.9
-# on L40S -- the arch the exactness evidence was produced with; the pinned vLLM _vllm_fa2_C ships sm_80 SASS, pass FA2_TAP_ARCH=8.0
+# Env: VENV (default /workspace/venv-cu129), CUDA_HOME (required), FA2 (default
+# /workspace/cp/fa2), FA2_TAP_HDIMS (alias HDIMS; default 64,96,128,256), FA2_TAP_ARCH (default: the arch of the card file
+# CARD_SKU names, calibration/hardware/cards; the pinned vLLM _vllm_fa2_C ships sm_80 SASS, pass FA2_TAP_ARCH=8.0
 # to mirror that instead and record it), MAX_JOBS (default 32), REPO (default: this tree), TREE_ONLY=1 (prepare tree, no build),
 # FA2_TAP_ROW_GUARD=1 (the guarded-max build `verity_fa2_matReqG.so` in $FA2/build/matReqG: the same tree with VERITY_ROW_GUARD=1, ROW
 # word 3 = GuardNegInfZero(row_max) after a row's first key block, and VERITY_MAT_SRC=123, the MS class = each block's max * scale; neither in the default build).
 set -uo pipefail
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
 VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # the one Python 3.12 environment of verity_vllm/ops/pod_bootstrap.sh
-if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done; fi
-export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
+export CUDA_HOME=${CUDA_HOME:?set CUDA_HOME to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 export MAX_JOBS=${MAX_JOBS:-32}
 FA2=${FA2:-/workspace/cp/fa2}; HDIMS=${HDIMS:-${FA2_TAP_HDIMS:-64,96,128,256}}
 FA_SRC=${FA_SRC:-$(dirname "$FA2")/vllm-flash-attn}   # the pinned upstream tree, beside $FA2
@@ -54,8 +53,7 @@ grep -q "Verity_mat_ctx<kBlockM, kBlockN, kHeadDim>" "$FA2/trees/tap8/csrc/flash
 [ "${TREE_ONLY:-0}" = "1" ] && { echo "FA2-TAP-TREE-OK $FA2/trees/tap8"; exit 0; }
 
 # (3) build for this GPU
-ARCH=${FA2_TAP_ARCH:-$($PY -c "import torch; cc=torch.cuda.get_device_capability(0); print(f'{cc[0]}.{cc[1]}')")} || fail "no CUDA device"
-[ -n "$ARCH" ] || fail "no CUDA device (set FA2_TAP_ARCH)"
+ARCH=${FA2_TAP_ARCH:-$(PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" $PY -c "import sys; from verity_vllm.engine.profiles.devices import cuda_arch; print(cuda_arch(sys.argv[1]))" "${CARD_SKU:?set CARD_SKU to the SKU of the card file the tap compiles for (calibration/hardware/cards), or FA2_TAP_ARCH}")} || fail "no arch for card ${CARD_SKU:-}"
 OUT=$FA2/build/$BUILD
 if [ "$ROW_GUARD" != "1" ] && [ -f "$OUT/verity_fa2_matReq.so" ] && ! $PY -c "import torch,sys; torch.ops.load_library('$OUT/verity_fa2_matReq.so'); sys.exit(0 if hasattr(torch.ops.verity_fa2_matReq,'verity_tap_hdims') else 1)" 2>/dev/null; then
   log "existing $OUT is the hd-64-only build -> kept as $FA2/build/matReq_hd64_r9"; rm -rf "$FA2/build/matReq_hd64_r9"; mv "$OUT" "$FA2/build/matReq_hd64_r9"

@@ -65,18 +65,18 @@ wire's position under `Cm` and `roots`. It reads the transport only at the right
 
 namespace Flock.Bridge
 
-open FlockSoundness.Audit Claims.Sampling
+open Spot.Sampling Claims.Sampling
 
 variable {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool}
 
-theorem mem_io_of_read {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {a h : Fin C.N}
+theorem mem_io_of_read {n : ℕ} {P : Spot.Sampling.Partition C n} {u : Fin n} {a h : Fin C.N}
     (hh : P.unit h = some u) (ha : a ∈ (C.op h).args) (hne : P.unit h ≠ P.unit a) : a ∈ P.io u := by
-  simp only [FlockSoundness.Audit.Partition.io, FlockSoundness.Audit.Partition.committed, Finset.mem_filter,
+  simp only [Spot.Sampling.Partition.io, Spot.Sampling.Partition.committed, Finset.mem_filter,
     Finset.mem_univ, true_and]
   exact ⟨Or.inr (Or.inr ⟨h, ha, hne⟩), Or.inr ⟨h, hh, ha⟩⟩
 
 /-- **An input a unit owns is one of its committed wires**: an input is committed, and its owner reads it. -/
-theorem mem_io_of_owner {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {a : Fin C.N}
+theorem mem_io_of_owner {n : ℕ} {P : Spot.Sampling.Partition C n} {u : Fin n} {a : Fin C.N}
     (ha : a ∈ insOf P κ u) : a ∈ P.io u := by
   obtain ⟨hin, -, ho⟩ := mem_insOf.1 ha
   obtain ⟨h, hh, hr⟩ := reads_of_owner ho
@@ -86,7 +86,7 @@ theorem mem_io_of_owner {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : 
 
 /-- **A position the unit commits is a wire of `P.io u`**: a gate of `unitGates P u` that `Boundary` commits is the
 position of one of `u`'s wires, and that wire is committed. -/
-theorem posOf_of_boundary {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {i : ℕ}
+theorem posOf_of_boundary {n : ℕ} {P : Spot.Sampling.Partition C n} {u : Fin n} {i : ℕ}
     (hi : i ∈ unitGates P u) (hB : (progOf C κ).Boundary (unitGates P u) i = true) :
     ∃ a ∈ P.io u, i = posOf C a := by
   obtain ⟨g, hu, j, hj, rfl⟩ := mem_unitGates.1 hi
@@ -99,7 +99,7 @@ theorem posOf_of_boundary {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u 
   have hcom : g ∈ P.committed := by
     simp only [Prog.Boundary, Bool.or_eq_true, List.contains_iff_mem, decide_eq_true_eq, List.any_eq_true,
       List.mem_range, Bool.and_eq_true, decide_not, Bool.not_eq_true', decide_eq_false_iff_not] at hB
-    simp only [FlockSoundness.Audit.Partition.committed, Finset.mem_filter, Finset.mem_univ, true_and]
+    simp only [Spot.Sampling.Partition.committed, Finset.mem_filter, Finset.mem_univ, true_and]
     rcases hB with (hout | hin) | ⟨g', -, hg'u, hrd⟩
     · simp only [progOf, List.mem_map, List.mem_filter, List.mem_finRange, true_and, decide_eq_true_eq] at hout
       obtain ⟨a', ha', he⟩ := hout
@@ -127,12 +127,12 @@ theorem posOf_of_boundary {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u 
           rcases hi with hi | hi
           · exact off_ne_posOf (g := h) (a := g) (j := 0) (by omega) (by rw [Nat.add_zero]; exact hi.symm)
           · exact off_ne_posOf (g := h) (a := g) (j := 1) (by omega) hi.symm
-  simp only [FlockSoundness.Audit.Partition.io, Finset.mem_filter]
+  simp only [Spot.Sampling.Partition.io, Finset.mem_filter]
   exact ⟨hcom, Or.inl hu⟩
 
 /-- **What the unit needs, outside its interior, is its committed wires' positions**: a gate of `need` of
 `unitGates P u` outside the unit, or one the unit commits, is the position of a wire in `P.io u`. -/
-theorem need_posOf {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {i : ℕ}
+theorem need_posOf {n : ℕ} {P : Spot.Sampling.Partition C n} {u : Fin n} {i : ℕ}
     (hi : i ∈ FlockSoundness.Discharge.ZkLink.WrongSet.need (progOf C κ) (unitGates P u))
     (hB : i ∉ unitGates P u ∨ (progOf C κ).Boundary (unitGates P u) i = true) :
     ∃ a ∈ P.io u, i = posOf C a := by
@@ -189,7 +189,7 @@ theorem witDep_val {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} 
 `blockOf P κ u` is correct on committed values `val` carrying `V` at each committed wire of `u` that `κ` doesn't fix,
 whatever its interior values `ι`, at constants that fix only inputs and that are `V`'s at `u`'s committed wires
 (`lowers_of` at `wireAt`, and each input `u` owns is one of its committed wires). -/
-theorem correct_blockOf_of {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u : Fin n)
+theorem correct_blockOf_of {n : ℕ} (P : Spot.Sampling.Partition C n) (u : Fin n)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true)
     (V : Fin C.N → Bool) (hV : ∀ g, P.unit g = some u → V g = (C.op g).apply V)
     (hκ : ∀ g ∈ P.io u, ∀ b, κ g = some b → V g = b)
@@ -227,7 +227,7 @@ committed outputs are its gates applied to its committed inputs, all read from `
 `u`'s committed wires `κ` fixes, slot `u`'s proof block is correct on committed values that carry `Xu` at each committed
 wire of `u` that `κ` doesn't fix, whatever its interior values (`correct_blockOf_of` at `u`'s local evaluation on `Xu`,
 which is `Xu` on `u`'s committed wires). -/
-theorem correct_of_local {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u : Fin n)
+theorem correct_of_local {n : ℕ} (P : Spot.Sampling.Partition C n) (u : Fin n)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true)
     (Xu : Fin C.N → Bool) (hX : P.Correct Xu u) (hκ : ∀ g ∈ P.io u, ∀ b, κ g = some b → Xu g = b)
     (val : ℕ → Option Bool) (hval : ∀ g ∈ P.io u, κ g = none → val (posOf C g) = some (Xu g)) (ι : ℕ → Bool) :
@@ -235,7 +235,7 @@ theorem correct_of_local {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u :
   have hloc : ∀ g ∈ P.io u, P.localEval Xu u g = Xu g := by
     intro g hg
     by_cases hu : P.unit g = some u
-    · simp only [FlockSoundness.Audit.Partition.io, Finset.mem_filter] at hg
+    · simp only [Spot.Sampling.Partition.io, Finset.mem_filter] at hg
       exact (hX g hg.1 hu).symm
     · exact P.localEval_of_not_mem Xu hu
   exact correct_blockOf_of P u hκin (P.localEval Xu u) (fun _ hu => P.localEval_of_mem Xu hu)
@@ -245,7 +245,7 @@ theorem correct_of_local {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u :
 /-- **A unit right on its canonical openings is not faulty** (`FaultyRightTarget` at canonical openings), at constants
 `κ` that fix only inputs: a constant the unit reads is `.const`, which carries its value when `hκ` holds there, and any
 other wire it reads is transported (`correct_blockOf_of` at `C`'s evaluation on `Xr`). -/
-theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
+theorem faultyRightC {n : ℕ} (P : Spot.Sampling.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
     (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (roots : List Claims.Msg)
     (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n)

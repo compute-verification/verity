@@ -23,7 +23,7 @@ without replacement inside each, independently.
   own expansion, and the sample carries the sampling design's keys plus `population` and `units`.
 
 **The work sampling design** (the Lean verifier's `Flock.Draw.SamplingDesign.work`, its bound
-`FlockSoundness.Audit.Work.work_escape_le`): the stratified sampling design's strata and sampler, with each stratum's sample sized by the
+`Spot.Sampling.Work.work_escape_le`): the stratified sampling design's strata and sampler, with each stratum's sample sized by the
 PoUW work its proof blocks do. The verifier's work table gives each template's work per proof block, a natural number in any fixed unit,
 and its floor f_s >= 1 (`work_table`). With W = sum_s w_s n_s >= 1, stratum s samples
 k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is `{"template", "units", "work", "floor",

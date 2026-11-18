@@ -432,5 +432,5 @@ writers = [
     { lane = "circuits", file = "adapters/vllm/verity_vllm/program/predict/window_rows.py", find = "attester\\.prover" },
 ]
 readers = [
-    { lane = "network-accounting", file = "verity/protocols/resource_accounting/network/prover/window_charge.py", find = "^class Advice" },
+    { lane = "network-accounting", file = "verity/protocols/interface/charge/window_charge.py", find = "^class Advice" },
 ]

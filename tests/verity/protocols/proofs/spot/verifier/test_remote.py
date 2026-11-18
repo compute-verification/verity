@@ -194,12 +194,14 @@ class Host:
 
     def trusted(self, window: dict = WINDOW, key: C.ChallengerKey | None = None, ledger=None):
         """`remote.trusted_session` over this host's directory and the ledger's file (or `ledger`), its one head."""
-        return R.trusted_session(self.directory, [ledger or self.ledger.path], window, key or pinned_key(), lms_verify)
+        c, log = R.trusted_session(self.directory, [ledger or self.ledger.path], window, key or pinned_key(), lms_verify)
+        return c, C.by_family(c, log)
 
     def trusted_of(self, window: dict = WINDOW):
         """`challenger.trusted_session_of` over this host's files as they are, past `remote`'s check of the sealed bytes."""
-        return C.trusted_session_of(R.ledger_lines(self.ledger.path), window, pinned_key(), HOST_PINS, MAIN,
-                                    R.session_files(self.directory), lms_verify)
+        c, log = C.trusted_session_of(R.ledger_lines(self.ledger.path), window, pinned_key(), HOST_PINS, MAIN,
+                                      R.session_files(self.directory), lms_verify)
+        return c, C.by_family(c, log)
 
 
 def honest(host: Host) -> dict[str, C.LiveRecord]:
