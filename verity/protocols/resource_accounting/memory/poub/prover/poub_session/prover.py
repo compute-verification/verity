@@ -1038,7 +1038,7 @@ def main() -> int:
     ap.add_argument("--connect", default="127.0.0.1:7781")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--plan", default="honest")
-    ap.add_argument("--node", default="vy-nebius/rtx-pro-6000/0")
+    ap.add_argument("--node", required=True, help="the node the session registers, at most 64 bytes")
     ap.add_argument("--seed", type=int, default=20261013)
     ap.add_argument("--overlap-openings", action="store_true",
                     help="benchmark the old behavior: prepare each window's openings while later timed passes run")

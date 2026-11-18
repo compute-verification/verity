@@ -91,7 +91,7 @@ from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
 
-from verity.device import load_card, load_node, node_kinds
+from verity.device import load_card, load_node
 from verity.protocol import no_bound
 from verity.protocols.resource_accounting.memory.poub.verifier import ledger as poub_ledger
 from verity.protocols.resource_accounting.memory.poub.verifier import receipts, timing
@@ -132,6 +132,7 @@ BLOCK_BYTES = 4096
 #: the verifier's one-card node a --local run writes into its records before the session starts (its `--node`): the mark
 #: of a --local run, read where the run died before its out/memory.json
 NODE_FILE = "out/local-node.json"
+FIGURES_FILE = "out/local-figures.json"
 RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.json", "out/memory.json", NODE_FILE]
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
@@ -526,8 +527,7 @@ def sheet_of(name: str) -> tuple[str, str | None]:
     except SystemExit as e:
         raise CouldNotRun(f"{e}; and a node file of it to calibration/hardware/nodes/ for a share; a result against a "
                           "sheet not on main is not comparable, and its digest says so") from None
-    nodes = [k for k in node_kinds(directory=NODE_FILES)
-             if load_node(k, directory=NODE_FILES, cards_directory=CARD_FILES)["device"]["sku"] == sku]
+    nodes = kit.card_nodes(sku, directory=NODE_FILES, cards=CARD_FILES)
     if len(nodes) > 1:
         raise CouldNotRun(f"the node files {', '.join(nodes)} all carry {sku}, the card here: name the one this "
                           "machine is with LOCAL_NODE")
@@ -561,14 +561,18 @@ def one_card(kind: str) -> tuple[dict, int]:
     which the verifier takes as `--node`) and its HBM (`--hbm-bytes`), from the tree's data sheets
     (`timing.Figures.of_sheets`) at one card, so the share is of that card's read rate and its host's. A host card
     that states no measured disk read is taken at its ceiling (`disk.read_max`); the figures no sheet states are
-    `timing`'s."""
-    node = load_node(kind, directory=NODE_FILES, cards_directory=CARD_FILES)
-    node = {**node, "device": {**node["device"], "count": {**node["device"]["count"], "value": 1}}}
-    host = load_card(node["host"]["sku"], directory=CARD_FILES)
-    if "read" not in host.get("disk", {}):
-        host = {**host, "disk": {**host["disk"], "read": host["disk"]["read_max"]}}
-    figures = timing.Figures.of_sheets(node, load_card(node["device"]["sku"], directory=CARD_FILES), host)
+    `sheets.UNSHEETED`'s."""
+    figures = one_card_figures(kind)
     return poub_ledger.Node.stated(figures).to_json(), figures.hbm_bytes
+
+
+def one_card_figures(kind: str) -> timing.Figures:
+    """The figures of one card of node sheet `kind` and its host (`sheets.figures` at one GPU), which the session's
+    verifier takes as `--figures`."""
+    sys.path.insert(0, str(ROOT / "benchmarks" / "poub_session"))
+    import sheets
+
+    return sheets.figures(kind, count=1)
 
 
 def digest(path: Path) -> str:
@@ -655,6 +659,8 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
         held = tempfile.mkdtemp(prefix="run-", dir=work / "runs")
     (Path(held) / NODE_FILE).parent.mkdir(parents=True, exist_ok=True)
     (Path(held) / NODE_FILE).write_text(json.dumps(node, sort_keys=True))
+    if sheet:
+        (Path(held) / FIGURES_FILE).write_text(json.dumps(one_card_figures(sheet).to_json(), sort_keys=True))
     env = {"ENGINE_CPUS": engine_cpus, "PROVER_CPUS": prover_cpus, "VERIFIER_CPUS": verifier_cpus, **LATENESS,
            **given, **PACE, "ROLE": "both", "SERVE": "node", "GPUS": "1", "PLAN": SETTINGS.PLAN or "honest",
            "MODEL": str(snap),
@@ -664,12 +670,15 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
            "ENGINE_ARGS": " ".join(filter(None, [ENGINE_ARGS, f"--arena-gib {arena} --util {util:g}",
                                                  given.get("ENGINE_ARGS")])),
            "NODE_ARGS": " ".join(filter(None, [NODE_ARGS, f"--model-dir {shlex.quote(str(snap))}",
-                                               f"--node local/{kind}/serving", given.get("NODE_ARGS")])),
+                                               given.get("NODE_ARGS")])),
+           "SESSION_NODE": kit.session_node(name, "serving", kind=kind),
            "VERIFIER_ARGS": " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--node",
                                                    shlex.quote(f"{held}/{NODE_FILE}"), "--hbm-bytes", str(hbm_bytes)]))}
     if shutil.which("gpu-lease") is None and not LEASE_DIR.is_dir():
         env.setdefault("GPU_LEASE_DIR", str(work / "gpu-lease"))
-    if sheet is None:
+    if sheet:
+        env["FIGURES"] = f"{held}/{FIGURES_FILE}"
+    else:
         env["VERIFIER_ARGS"] = " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--hbm-bytes", str(hbm_bytes)]))
     print(f"memory: --local serves {ROLE} on {name} with a {arena} GiB arena of its {hbm_bytes / 2 ** 30:.0f} GiB, the "
           f"verifier's node {f'one card of {sheet}' if sheet else f'{sku} alone, with no node file: no share'}; its "

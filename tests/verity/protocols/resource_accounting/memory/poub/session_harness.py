@@ -5,6 +5,7 @@ session tests (`tests/benchmarks/poub_session/test_session.py` and the tests bes
 (`poub/attester/live_verifier/tests/stub_verifier.py`) run it."""
 from __future__ import annotations
 
+import json
 import os
 import queue
 import random
@@ -23,8 +24,9 @@ from verity.protocols.resource_accounting.memory.poub.verifier import timing  # 
 from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 
+FIGURES = timing.Figures.of_json(json.loads((Path(__file__).resolve().parents[6] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json").read_text()))
+
 P512 = rcodec.Codec(rcodec.P512, 2, False)
-FIGURES = timing.RTX_PRO_6000_NODE
 
 
 VERIFIER, PROVER = 0, 1

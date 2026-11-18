@@ -1,6 +1,6 @@
 """PoUB's session verifier as a process: `verity/protocols/resource_accounting/memory/poub/verifier/session/verifier.py`'s `main`, on
 this command line, handed what a verifier imports none of (it reads no `verity.ml` code beyond its frozen edges): the
-node's figures (`timing.RTX_PRO_6000_NODE`, the measured node's), the LMS verify a gate session's signatures are checked
+LMS verify a gate session's signatures are checked
 with (`lms_verify`) and a served session's (`verify`, which asks the Lean's where the Python's holds), and the
 challenger's own process `--challenger serve` starts for a session (`SERVE`). Its usage is `verifier.py`'s.
 live_verifier's host runs it under `python3 -I`, which puts neither the repository nor a venv on the path, so it puts
@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[7]))
 
 from verity.commitments.crypto import lms
 from verity.commitments.scheme import DIGEST_BYTES
-from verity.protocols.resource_accounting.memory.poub.verifier import coins, timing
+from verity.protocols.resource_accounting.memory.poub.verifier import coins
 from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 
@@ -50,7 +50,7 @@ def verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    return verifier.main(argv, figures=timing.RTX_PRO_6000_NODE, verify=lms_verify, served_verify=verify,
+    return verifier.main(argv, verify=lms_verify, served_verify=verify,
                          serve=(sys.executable, str(SERVE)))
 
 
