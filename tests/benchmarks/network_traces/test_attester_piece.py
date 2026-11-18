@@ -17,7 +17,7 @@ records that `network-rows` refuses, are rejected before any chain runs (`networ
 run's records and refuses them with cells re-cut, re-clocked or reordered, an attestation of another key, a record
 changed under its head and a schedule with a `max_tokens_cap`); a chain that refused, requests outside those
 transfer blocks and a period the check rejects are rejects; a rehearsal the gate's check failed (each request late) and
-a step that can't run (no kept run, no report, no build, the time limit) refuse, which leaves the attester missing, and no process of a step's group outlives
+a step that can't run (no kept run, no report, no build, the time limit) refuse, which leaves the attester refused by the piece's sentence, and no process of a step's group outlives
 the piece, the time limit's SIGTERM included, whenever it comes. Of the chain, DIR gets only `PUBLIC`'s key paths,
 which hold none of the window's counts or advice bits; the leak guard reads the piece's DIR against the run's witness
 and moves out any file DIR doesn't declare, a period file among them; the attestations reach DIR only through it, and
@@ -410,12 +410,28 @@ def test_a_step_leaves_no_process_of_its_group_behind_however_it_ends(tmp_path, 
     assert CP._held is None
 
 
+def _refused_row(pieces: Path, why: str) -> bool:
+    """The attester's row when its piece refused to run: ``refused`` with the piece's own sentence as its reason."""
+    row = S.piece_row("communication", pieces)
+    assert (row["verdict"], row["reason"]) == ("refused", why.strip()[:2000]), row
+    return True
+
+
+def _refused_leg(rec: dict | None, line: dict, why: str) -> None:
+    """The record over a refused attester: its leg undecided by the piece's sentence, never accepted or dropped."""
+    leg = (rec or {}).get("legs", {}).get("certifier") or {}
+    assert (leg.get("answer", {}).get("verdict"), leg.get("answer", {}).get("reason"), leg.get("refused")) == (
+        "undecided", f"refused to run: {why.strip()}", why.strip()), leg
+    assert line["composed"] == "pending" and line["verdicts"]["the network certifier"] == "refused"
+    assert "the network certifier" not in line["missing"] and "certifier" not in line["record_missing"]
+
+
 @pytest.mark.parametrize("case", ["no kept run", "corrupt fetch", "no report", "no build", "no rows build",
                                   "time limit", "foreign answer"])
-def test_a_step_that_cant_run_refuses_and_leaves_the_attester_missing(case, tmp_path, network_attester, capsys, monkeypatch):
+def test_a_step_that_cant_run_refuses_and_leaves_the_attester_refused_by_its_sentence(case, tmp_path, network_attester, capsys, monkeypatch):
     """The front's failures (the gate refusing or busy, its tunnel or ssh) keep no run; a corrupt fetch, a chain that
     ends without a report, a missing Lean build (``network-period``'s or ``network-rows``'), SIGTERM from the piece's time limit and a check that answers no
-    certifier/v0 verdict can't run: each leaves DIR/refused.txt and its log, no answer, and the attester missing."""
+    certifier/v0 verdict can't run: each leaves DIR/refused.txt and its log, no answer, and the attester refused by that sentence."""
     d = _serve_dir(tmp_path / "serve", network_attester, kept=case != "no kept run")
     if case == "corrupt fetch":
         (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(b"not a tarball")
@@ -433,7 +449,7 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_attester_missing(case, tmp_
     piece = tmp_path / "pieces" / "certifier"
     why = (piece / CP.REFUSED).read_text()
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {CP.REFUSED, "piece.log"}, why
-    assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
+    assert _refused_row(tmp_path / "pieces", why)
     assert {"no kept run": "no network attester run kept", "corrupt fetch": "fetch.tar.gz: ReadError", "no report": "the chain wrote no report (exit 7)",
             "no build": "network-period check: FileNotFoundError",
             "no rows build": "network-rows check: FileNotFoundError", "time limit": "SIGTERM: the piece's time limit",
@@ -441,7 +457,7 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_attester_missing(case, tmp_
     if case != "no kept run":
         assert not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
-    assert rec is not None and line["composed"] == "pending" and "the network certifier" in line["missing"]
+    _refused_leg(rec, line, why)
 
 
 def _piece(tmp_path: Path, network_attester: dict, chain: Path) -> tuple[int, Path, Path]:
@@ -511,11 +527,11 @@ def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, netw
     assert list((d / CP.PRIVATE / "held").iterdir()) == []
 
 
-def test_a_rehearsal_the_gates_check_failed_late_leaves_the_attester_missing_not_rejected(tmp_path, network_attester, capsys,
+def test_a_rehearsal_the_gates_check_failed_late_leaves_the_attester_refused_not_rejected(tmp_path, network_attester, capsys,
                                                                                           monkeypatch):
     """Each request late past the network attester's D·τ: the gate's check fails the rehearsal, and the served answers, longer
     than what the attester passed, don't bind to its attested ones. That is the endpoint's lateness, not the protocol
-    rejecting a served answer, so the piece refuses before any chain and the attester is missing, as for a busy gate;
+    rejecting a served answer, so the piece refuses before any chain and the attester is refused by its sentence, as for a busy gate;
     the same window on a rehearsal the check passed is a reject."""
     served = [dict(r, output=[*r["output"], 7]) for r in network_attester["records"]]
     d = _serve_dir(tmp_path / "serve", network_attester, served, fetch="late")
@@ -527,9 +543,9 @@ def test_a_rehearsal_the_gates_check_failed_late_leaves_the_attester_missing_not
                           "its check accepted False, failed ['fail']"), why
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {CP.REFUSED, "piece.log"}
     assert not (d / CP.PRIVATE / RUN / "chain").exists() and not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
-    assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
+    assert _refused_row(tmp_path / "pieces", why)
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
-    assert rec is not None and line["composed"] == "pending" and "the network certifier" in line["missing"]
+    _refused_leg(rec, line, why)
     a, _ = CP.decide(_serve_dir(tmp_path / "passed", network_attester, served), K, tmp_path / "out",
                      chain=lambda *x: pytest.fail("no chain"), check=lambda *x: {}, rows=lambda run: None)
     assert a["verdict"] == "reject" and "streamed_ids aren't the certified output" in a["reason"]
@@ -983,7 +999,7 @@ def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, ne
     (CERTIFIER_TIMEOUT) ends it; the period step then refuses too, naming the chain's refusal. The period step refuses
     where no chain step accepted in DIR, where the chain's scan read no V3c window, where V3c wrote no period.json, and
     where the verifier kept no window-circuit record beside V3c, whose class circuit V3c's audit is held to: DIR keeps
-    its logs and refused.txt, and the attester is missing."""
+    its logs and refused.txt, and the attester is refused by that sentence."""
     d = _serve_dir(tmp_path / "serve", network_attester)
     v3c, piece = _v3c(d, None if case == "no period.json" else PERIOD, committed=case != "no v3c window",
                       circuit=case != "no window-circuit record"), tmp_path / "pieces" / "certifier"
@@ -1005,7 +1021,7 @@ def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, ne
     said = (piece / "period.log").read_text()
     assert ("ATTESTER refused at the chain: " if case in ("no v3c window", "time limit") else "ATTESTER refused: ") \
         in said
-    assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
+    assert _refused_row(tmp_path / "pieces", why)
     assert not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
 
 
@@ -1495,7 +1511,7 @@ def test_close_waits_for_the_sessions_end_keeps_its_fetch_and_publishes_what_a_r
 def test_a_session_the_gates_check_refused_is_closed_and_kept_and_the_piece_doesnt_answer_for_it(tmp_path, monkeypatch):
     """The whole-run rule across a session: an end whose check didn't accept the run (here each connection late) is
     `close`'s exit, its fetch is kept all the same, and the piece's steps refuse on it (`rehearsed`), which leaves the
-    network attester missing for every window of the served run."""
+    network attester refused by that sentence for every window of the served run."""
     _session_gate(tmp_path, monkeypatch, [LISTENING])
     serve = tmp_path / "serve"
     assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 0
