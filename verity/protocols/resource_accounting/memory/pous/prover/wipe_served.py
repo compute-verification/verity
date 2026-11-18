@@ -35,6 +35,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import re
 import socket
 import subprocess
 import tempfile
@@ -149,12 +150,20 @@ def refusals(ctx: Mapping[str, Any]) -> tuple[str, ...]:
             out.append(f"the pins handed to it give the {CHALLENGER} no key for the wipe")
         if not s["host"]:
             out.append("no challenger binding (host, address, command) and run_keys unset")
+        if (t := ctx.get("trusted")) and not re.fullmatch(r"[0-9a-f]{128}", t):
+            out.append(f"the trusted key is a SHA-512 in 128 lowercase hex digits, not {t:.16}")
+        key = next((os.path.expanduser(k) for i, k in zip(s["command"], s["command"][1:]) if i == "-i"), None)
+        if key and not os.access(key, os.R_OK):
+            out.append(f"no wipe gate key {key} on {ctx.get('node') or socket.gethostname()} ({socket.gethostname()}): "
+                       f"infra installs it, and its gate verb on {s['host']} for this card")
     return tuple(out)
 
 
 @dataclass(frozen=True)
 class Wiped:
-    """The wipe's report: ``answer``, the verifier's, and ``wipe``, the record `wipe_run.subprotocol` wrote."""
+    """The wipe's report: ``answer``, the verifier's, and ``wipe``, the record `wipe_run.subprotocol` wrote with
+    ``served`` beside it: the wiped server, the card (a cuda store's UUID) and ``key_pin``, ``configuration`` where the
+    trusted key is the one the pins give the wipe, else ``run``."""
 
     answer: Mapping[str, Any]
     wipe: Mapping[str, Any]
@@ -171,13 +180,15 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
     if why := refusals(ctx):
         raise ValueError(f"{NAME}: {'; '.join(why)}")
     s = ctx["settings"]
-    if s["store"] == "cuda":
-        if why := busy(card_of(s["device"]), s["idle_mib"]):
-            raise ValueError(f"{NAME}: {why}")
+    card = card_of(s["device"]) if s["store"] == "cuda" else None
+    if card and (why := busy(card, s["idle_mib"])):
+        raise ValueError(f"{NAME}: {why}")
     pins = [dict(p) for p in ctx.get("pins") or ()]
+    key = None if s["run_keys"] else ctx.get("trusted") or pin_of(pins)
+    node = ctx.get("node") or socket.gethostname()
     doc: dict[str, Any] = {
         "tools": {} if ctx.get("judge") is None else {"wipe-protocol": str(ctx["judge"])},
-        NAME: period_wipe(s) | {"trusted_sha512": None if s["run_keys"] else ctx.get("trusted") or pin_of(pins)},
+        NAME: period_wipe(s) | {"trusted_sha512": key},
         "deployment": {"configuration": ctx.get("configuration"), "pins": pins}}
     if s["host"]:
         doc |= {"challenger_host": s["host"], "challenger": {NAME: {"command": list(s["command"]),
@@ -190,10 +201,11 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
         (Path(t) / "periods" / "wipe-challenger").mkdir(mode=0o700)
         (period / "period.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
         (private / "period.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
-        answer = wipe_run.subprotocol(period, ctx.get("node") or socket.gethostname(), private,
+        answer = wipe_run.subprotocol(period, node, private,
                                       side_of=ctx["side_of"], ready=ctx.get("ready") or built)
     (private / "wipe.case.json").chmod(0o600)
-    return Wiped(answer, json.loads((private / "wipe.json").read_text()))
+    served = {"server": node, "card": card, "key_pin": "configuration" if key and key == pin_of(pins) else "run"}
+    return Wiped(answer, json.loads((private / "wipe.json").read_text()) | {"served": served})
 
 
 __all__ = ["BINDING", "LAUNCHER", "NAME", "SMI", "UNSET", "Wiped", "attach", "built", "busy", "card_of", "check_settings",
