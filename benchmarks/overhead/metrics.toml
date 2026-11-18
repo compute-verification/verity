@@ -26,3 +26,27 @@ command = "research run --on auto --project verity --source . --cwd source --sto
 every = "7d"
 floor = 10.0
 goal = "kernels/overhead-counts-output-commitment"
+
+[[metric]]
+id = "benchmarks/pearl-plus-gamma-c"
+title = "Pearl+ overhead by card, compute-bound point"
+owner = "benchmarks"
+unit = "fraction over stock"
+axis = "Pearl+'s busy SM-time over stock FP8's, less one, over one layer's linears at each card's compute-bound point, from the runs of record, every point a member naming its model and card and saying whether it times the commitment of each product's output; a fraction, not a percent: a value of 1 is twice stock's busy SM-time."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/overhead/run.py table"
+every = "7d"
+floor = 10.0
+goal = "kernels/overhead-counts-output-commitment"
+
+[[metric]]
+id = "benchmarks/pearl-plus-gamma-l"
+title = "Pearl+ overhead by card, memory-bound point"
+owner = "benchmarks"
+unit = "fraction over stock"
+axis = "Pearl+'s busy SM-time over stock FP8's, less one, over one layer's linears at each card's memory-bound point, from the runs of record, every point a member naming its model and card and saying whether it times the commitment of each product's output; a fraction, not a percent: a value of 1 is twice stock's busy SM-time."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/overhead/run.py table"
+every = "7d"
+floor = 10.0
+goal = "kernels/overhead-counts-output-commitment"

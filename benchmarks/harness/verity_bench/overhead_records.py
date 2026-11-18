@@ -58,8 +58,8 @@ GATES = Path("benchmarks/slowdown/data/hardware.toml")
 TABLE = "out/overhead-table.json"
 #: the unit of every γ `record` writes
 GAMMA_UNIT = "busy SM-seconds over stock's, less one: a fraction, not a percent"
-#: each model but the kernel model as the words that open its member, `MODEL-CARD` (`measurements`)
-MEMBER_MODEL = {"llama3.2-1b": "llama-3.2-1b"}
+#: each model as the words that open its member, `MODEL-CARD` (`measurements`)
+MEMBER_MODEL = {"llama3.1-70b": "llama-3.1-70b", "llama3.2-1b": "llama-3.2-1b"}
 
 Executor = Callable[[Sequence[str], Path], int]
 
@@ -262,7 +262,7 @@ def gamma_rows(store: Any) -> list[dict]:
                    "gamma_weight_side_bound": p.get("gamma_weight_side_bound"), "aa": p.get("aa"),
                    "epsilon": p.get("epsilon"), "perplexity": p.get("perplexity"), "gate": p.get("gate"),
                    "linears": p.get("linears"), "commits_y": None if arm is None else bool(arm.get("commits_y")),
-                   "note": O.y_note(arm)}
+                   "note": O.row_note(arm, doc.get("card"))}
             why = whys + list(p.get("whys") or [])
             row |= {"of_record": not why, "why": "; ".join(why) or None}
             best[(row["scheme"], row["card"], row["model"], name)] = row
@@ -352,8 +352,8 @@ def build(store: Any = None, *, root: Path | None = None, local_only: bool = Fal
 
 def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
     """The measurements `record` writes: for each of `metrics`, an id for the γ of a row named ``scheme/card/point``, and
-    for each model that row's γ of record with its interval (the kernel model's as the metric's own reading, every other
-    model's as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
+    for each model that row's γ of record with its interval (the kernel model's on the kernel card as the metric's own
+    reading, every other as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
     as its target, from its run and its points' art, with its note, whether its run timed y's commitment (`commits_y`,
     where the row says) and what the γ is over; where the table has no γ of record there, no value and why."""
 
@@ -362,11 +362,11 @@ def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
     for name, row in metrics.items():
         scheme, card, point = row.split("/")
         for model in O.MODELS:
-            own = model == O.KERNEL_MODEL
+            own = model == O.KERNEL_MODEL and card == O.kernel_card()
             r = rows.get((scheme, card, model, point))
             g = (r or {}).get("gamma") or {}
             m: dict[str, Any] = {"name": name, "unit": GAMMA_UNIT, "mark": "measured", "target": O.GAMMA_MAX,
-                                 "extra": {"covers": table["covers"] if own else O.covers(model)}}
+                                 "extra": {"covers": table["covers"] if model == O.KERNEL_MODEL else O.covers(model)}}
             if not own:
                 m["member"] = f"{MEMBER_MODEL[model]}-{card}"
             if r is None or not r["of_record"] or g.get("gamma") is None:

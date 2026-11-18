@@ -6,8 +6,11 @@
 # removed when the job exits) for the Nsight report and the arm's passes, whose salts and rows never go under $OUT.
 #
 #   bash benchmarks/harness/overhead_node.sh points --card h200 [--model M] [--precision P]
-#   bash benchmarks/harness/overhead_node.sh run --card h200 --scheme S --points points.json --points-art ART [--point P] \
+#   bash benchmarks/harness/overhead_node.sh run --card h200 --scheme S --points points.json --points-art ART --point C|L \
 #     [--cubin FILE --cubin-art ART]
+#
+# Run one operating point a launch (`--point C`, and `--point L` as its own launch); `--point all` times both in one
+# bench.py process under nsys, in one lease.
 #
 # VERITY_BENCH_VENV names the Python with torch and vLLM, which the door's launch forwards; the toolkit with nvcc and
 # nsys is CUDA 13.0's, CUDA_HOME's or the run's machine's (benchmarks/kernels/machine.py toolkit 13.0).
@@ -32,8 +35,13 @@ if [[ $arch == sm_120a ]]; then
 fi
 # the harness loads the cuBLASLt of the toolkit it links (native/build.sh), which the node's own loader path need not hold
 export LD_LIBRARY_PATH=$CUDA_HOME/$lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+t0=$(date -u +%s.%N)
+echo "$(date -u -d "@$t0" +%FT%TZ) phase build start"
 POUW_HARNESS_LIB=$(PH_ARCH=$arch POUW_HARNESS_BUILD=${POUW_HARNESS_BUILD:-${XDG_CACHE_HOME:-$HOME/.cache}/pouw-harness-build} \
   bash benchmarks/pouw/harness/native/build.sh 2> "$O/harness-build.log")
+t1=$(date -u +%s.%N)
+build_s=$(awk -v a="$t0" -v b="$t1" 'BEGIN { printf "%.3f", b - a }')
+echo "$(date -u -d "@$t1" +%FT%TZ) phase build end, $build_s s"
 export POUW_HARNESS_LIB
 cp "$(dirname "$POUW_HARNESS_LIB")/build.json" "$O/harness-build.json"
 sub=$1
@@ -45,4 +53,4 @@ if [[ $sub == run ]]; then
   extra=(--scratch "$S" --nsys "$CUDA/bin/nsys" ${RESEARCH_SOURCE_SHA:+--commit "$RESEARCH_SOURCE_SHA"})
 fi
 "$PY" -m verity_bench.overhead_node "$sub" --uuid "$GPU_LEASE_UUID" --out "$O" --run-dir "$RESEARCH_RUN_DIR" \
-  --run-id "$RESEARCH_RUN_ID" "${extra[@]}" "$@"
+  --run-id "$RESEARCH_RUN_ID" --build-s "$build_s" "${extra[@]}" "$@"
