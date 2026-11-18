@@ -2,9 +2,13 @@ module
 
 public import Definitions.Core.LevelsCount
 public import Proofs.Core.LevelsTwo
+public import Proofs.Core.LevelsCredited
 
 /-!
 # The count at δ over levels
+
+`Levels.missProb_filter_blocks`: the sample draws only the last level's blocks (`Levels.design_draw`), so a set's
+miss is that of its members among them, and the count runs over those alone.
 
 `Levels.countAt_le_iff`: the count at `δ` is the least count bound, so at most `K` exactly when every set of more than
 `K` of the last level's blocks is missed with probability below `δ`. `Levels.isCountBound_one_iff`: at one level that
@@ -28,6 +32,24 @@ open scoped ENNReal
 namespace Levels
 
 variable {G : Type} [Fintype G] [DecidableEq G]
+
+theorem blocks_eq_getLast (L : Levels G) (h : L.levels ≠ []) : L.blocks = (L.levels.getLast h).blocks.parts := by
+  simp [blocks, List.getLast?_eq_some_getLast h]
+
+theorem design_draw_blocks (L : Levels G) : ∀ ω, ∀ c ∈ L.design.draw ω, c ∈ L.blocks := by
+  by_cases h : L.levels = []
+  · obtain ⟨levels, hn, hi⟩ := L
+    dsimp only at h
+    subst h
+    intro ω c hc
+    simpa [blocks, Levels.design, Level.sampleBelow, SamplingDesign.const] using hc
+  · rw [L.blocks_eq_getLast h]
+    exact L.design_draw h
+
+/-- **Only the last level's blocks count**: a set's miss is that of its members among them. -/
+theorem missProb_filter_blocks (L : Levels G) (T : Finset (Finset G)) :
+    L.design.missProb (T.filter (· ∈ L.blocks)) = L.design.missProb T :=
+  SamplingDesign.missProb_filter _ _ L.design_draw_blocks T
 
 theorem isCountBound_countAt (L : Levels G) (δ : ℝ≥0∞) : L.IsCountBound δ (L.countAt δ) :=
   fun _ hT hδ => Finset.le_sup (f := Finset.card) (Finset.mem_filter.2 ⟨Finset.mem_powerset.2 hT, hδ⟩)

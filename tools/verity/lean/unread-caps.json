@@ -19,7 +19,7 @@
   },
   "Proofs/Core": {
    "modules": 6,
-   "declarations": 50
+   "declarations": 53
   },
   "Proofs/Flock": {
    "modules": 226,
