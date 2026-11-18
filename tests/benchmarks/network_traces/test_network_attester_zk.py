@@ -42,8 +42,8 @@ needs_lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 
 def flock_verify() -> Path:
-    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
-    return LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+    return V.executable("verity-verify-proof", LEAN)
 
 
 def statement(m: dict, tmp: Path, *, ports: dict | None = None, header: tuple[str, ...] | None = None) -> tuple[int, str]:

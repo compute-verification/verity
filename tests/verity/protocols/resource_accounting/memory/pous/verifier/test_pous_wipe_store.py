@@ -37,6 +37,7 @@ from verity.protocols.resource_accounting.memory.pous.prover import wipe_store a
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party as WP
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
+from verity.runtime.stream import Side
 
 KEY = bytes(range(32))
 SMALL = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))
@@ -59,7 +60,7 @@ def test_the_gate_writes_each_power_of_two_boundary() -> None:
     boundaries = [(1 << b) // 64 for b in range(25, 38)]
     assert idx == sorted({0, n // 2, n - 1, *boundaries, *(i - 1 for i in boundaries)})
     assert {(1 << 31) // 64 - 1, (1 << 31) // 64, (1 << 32) // 64 - 1, (1 << 32) // 64} <= set(idx)
-    assert (1 << 38) // 64 > n and WS.gate_indices(64) == [0, 32, 63]
+    assert n < (1 << 38) // 64 and WS.gate_indices(64) == [0, 32, 63]
 
 
 def test_the_store_keeps_the_fill_and_answers_from_it() -> None:

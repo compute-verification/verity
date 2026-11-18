@@ -40,7 +40,7 @@ Where each part is stated in Lean:
 
 N2's count check reads the head leaf of N2's commitment and holds the head to the network attester's grid and digest. Another
 check that reads the same leaf is tied to N2's only under three conditions, each of which holds:
-1. The root is registered before either check's coins or samples (the ZK server's registration, `TransferBlocks.commit`).
+1. The root is registered before either check's coins or samples (the ZK server's registration: `TransferBlocks.commit`, recorded by the prover's `n2_zk.registration`).
 2. The leaf index, 2 + d, is fixed by the execution phase's direction (`service.HEADS`), which is public structure, not
    something the prover chooses.
 3. SHA-512 is collision resistant, as hiding commitments in frame-v3-sha512 trees already assume.
@@ -939,13 +939,19 @@ charged `c` bits or fewer (`hAs` in `security/Definitions/Certifier/Guarantees/S
 prefix-free code (Kraft). Advice v1's charge is `code_v1`'s length for the whole execution phase: its segment, every count and
 value inside the arithmetic coder, then its length terms' fixed-width tail while the registration sends them. Its
 strings are prefix-free, so at most `2^c` advice values (each execution phase's decisions, hits, order entries and length terms)
-are charged `c` bits or fewer (`protocol/charge-chain.md`, "The bound"). Lean mirrors the
+are charged `c` bits or fewer under a chained carry (`protocol/charge-chain.md`, "The bound"). Lean mirrors the
 charge's references one for one: `ChargeCount_v1{N}`'s (`arith_encode.py`'s `reference_charge`,
 `security/Definitions/Certifier/AdviceV1.lean`) and `ChargeCount_v2{N, H, O, L}`'s (`window_charge.py`'s
 `reference_window`, `security/Definitions/Certifier/WindowCharge.lean`). Which slots ask (`en`) is not charged
 because it is not advice: the compile slice, its charge included, is proved on every advised execution phase and never sampled,
-so `en` is pinned by that slice's scan, and the carry across execution phases is chained from the book's priors
-(`charge_check.check_chain`). That the circuits compute the Lean definitions (`ChargeCount_v1`'s `AdviceV1.window`,
+so `en` is pinned by that slice's scan. The carry across execution phases is not held: each execution phase's circuit
+checks that its carry-out follows from its carry-in and takes any carry-in, and no verifier holds one execution phase's
+carry-out row to the next one's carry-in, or execution phase 0's carry-in to the registered book's priors, so the chain
+is the honest prover's and not a checked fact. The check that would hold it is `charge_check`'s `check_chain`
+(`window_check_chain` for `ChargeCount_v2`), and no verifier calls it. So `hAs` holds only for a chained carry, which is
+unheld, and the coded charge `A_c` is the honest prover's, not established as a bound for any period. The network
+attester scheme's declared advice charge is the free inputs at full width (`scans[].free`) and does not read the carry.
+That the circuits compute the Lean definitions (`ChargeCount_v1`'s `AdviceV1.window`,
 `ChargeCount_v2`'s `WindowCharge.window`) is held by tests: circuit-check holds each circuit to its Python reference,
 and the Lean is held to those references by the charge difftests: the network attester's program's `NetworkAttester.AdviceV1`
 and `NetworkAttester.WindowCharge`, proved equal to the definitions (`CodeChargesV1`, `CodeChargesWhole`), give what
@@ -1215,8 +1221,8 @@ and checking state row u + 1. Steps past the execution phase's executed count ar
   Q, more than D decisions (the carried ones and the execution phase's) or P steps. A step refuses arrivals taken past what is
   left or past A, and decisions read past what is left or past A.
 - **The carry.** Execution phase w's state row 0 is execution phase w − 1's last state row, and its execution-phase
-  row 0 is execution phase w − 1's execution-phase row 1, each under the same salt (`commit_window(carry=…)`), so the verifier checks that their openings b‖c are equal
-  (`check_chain`, `C-carry`). Decisions an execution phase leaves unread carry: the load writes its own after the last
+  row 0 is execution phase w − 1's execution-phase row 1, each under the same salt (`commit_window(carry=…)`), so their
+  openings b‖c are equal for the honest prover; the check of it (`check_chain`, `C-carry`) is called by no verifier. Decisions an execution phase leaves unread carry: the load writes its own after the last
   execution-phase row's unread ones, as it does the queue's arrivals. A5 ("The windows", below) charges a
   decision to the earlier of its step's execution phase and its arrival's ingress execution phase, up to two before
   its step's: at T = 20, 5 of async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries
@@ -1399,7 +1405,9 @@ charge (the composition below): what the bound counts is the charge, not the com
   2^c strings are charged c bits or fewer (Kraft): the sampled leak bound's premise `hAs`.
   `code_v1.encode` is injective on its `windows` (`code_v1.decode` inverts it), and the order entries' inverse, the
   replay and the walk give the advice from them, so at most 2^c residuals, and so at most that many advices,
-  are accepted at a charge of c or less.
+  are accepted at a charge of c or less. This holds only for a carry chained from the registered book's priors, and
+  that chain is unheld (`hAs` is a premise of the sampled leak bound, not a checked fact): no verifier holds an
+  execution phase's carry-in to the previous one's carry-out or to the priors ("The advice's charge" above).
 - *v0's per-execution-phase parts.* Each execution phase's part is self-delimited.
 **Composition**, all in one ZK proof under the advice's hiding root:
 1. *The values are the committed advice.* The advice's hiding rows hold each execution phase's residual raw, as
@@ -1418,10 +1426,12 @@ charge (the composition below): what the bound counts is the charge, not the com
    (AS) the attested O forces each lag row, at no decision (`ReplayStep_v1`'s "Async scheduling").
 3. *The charge.* The registered code runs forward over the same values: per execution phase, `code_v1`'s segment over
    the values charged to it, in `code_v1._window`'s order, on the encoder ("The encoder in the circuit"
-   below). A decision's context is min(run, 2), run the 0s since the last 1 in the decision stream, across execution phases:
-   a function of the committed decisions, which the encoder keeps in its own state. The execution phase's coded length ℓ_w
+   below). A decision's context is min(run, 2), run the 0s since the last 1 in the decision stream: within an execution
+   phase a function of the committed decisions, which the encoder keeps in its own state, and across execution phases
+   the committed carry-in, which no verifier holds to the previous carry-out. The execution phase's coded length ℓ_w
    (`code_v1.Encoded.lens`) must be at most its declared charge c_w, a protocol output. No codeword is committed, so
-   nothing reads a segment at a data-dependent cursor, no ask forks the replay, and the bound above holds as it is.
+   nothing reads a segment at a data-dependent cursor, no ask forks the replay, and the bound above holds under a
+   chained carry.
    `CompileSlice_v1` is 1–3 for one execution phase, proved in ZK, with its stand-ins (Open).
 4. The walk over the rows, which gives I1 v0.
 5. `AdviceCheck_v1{L}` specifies what 1–4 give. The tests hold every advice v1 decodes, random and
@@ -1443,9 +1453,12 @@ charge (the composition below): what the bound counts is the charge, not the com
   `ArithCountFinish_v1{20}`. Slots past a count run with en = 0. A refusal (a symbol
   code.py refuses, more than K scalings, a count past 2^20, a charge past c_w) fails the proof block, and K = 18 never
   refuses a symbol.
-- *The context and the frequencies are the circuit's, never witness.* The context is a 2-bit run counter carried from
-  the replay's position: an arrival resets it, and a 0 raises it, saturating. (f0, f1) come from counts that start at
-  the registered book's public priors and that each coded decision raises in the circuit, across execution phases. An integer's
+- *The context and the frequencies are the circuit's within an execution phase.* The context is a 2-bit run counter
+  carried from the replay's position: an arrival resets it, and a 0 raises it, saturating. (f0, f1) come from counts
+  that each coded decision raises in the circuit, starting from the execution phase's committed carry-in. The circuit
+  checks that the carry-out follows from the carry-in and takes any carry-in; no verifier holds the carry-in to the
+  previous execution phase's carry-out, or execution phase 0's to the registered book's public priors, so across
+  execution phases the context and the counts are the prover's. An integer's
   (cum, freq, total) come from the book's public bin tables. A context or a frequency of the prover's choosing would
   pick the code per value and charge any decisions next to nothing. The compile slice computes both in the
   circuit too, at its own model (Open), and charges the position after `ArithEncodeFinish_v1`, which counts the same
@@ -1586,6 +1599,10 @@ memory operations as records, sorted once, as `verity_vllm.compiler.advice_check
   its cache never evicts, so its rows aren't the served ones, and no slice accepts it.
 
 **Open.**
+- *The charge's carry.* No verifier holds an execution phase's carry-in to the previous one's carry-out, or execution
+  phase 0's to the registered book's priors, and no verifier calls `charge_check`'s `check_chain` or
+  `window_check_chain`, so the coded charge `A_c` is the honest prover's and is not established as a bound for any
+  period ("The advice's charge").
 - *The charge's pieces* (composition item 3, "The encoder in the circuit").
   - The counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`).
     Lowering an integer (the execution phase's counts and each order entry) to its `Binned` symbols in the book's public

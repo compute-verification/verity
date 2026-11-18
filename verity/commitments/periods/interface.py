@@ -1567,7 +1567,8 @@ class Blocks:
 @dataclass(frozen=True)
 class Circuit:
     """An integration's circuit in proof blocks: ``templates``, each ``(template, units)`` in order, every template `catalog`'s
-    and of its own descriptor id; ``external``, the ports (``<descriptor id>/<port>``) that are the system's external I/O;
+    and of its own descriptor id, put in the order ``order`` first batches them where it names each once, so the record's
+    templates are its wired Program's; ``external``, the ports (``<descriptor id>/<port>``) that are the system's external I/O;
     ``wires``, the units whose input rows are other units' output rows (`Wire`, `check_wires`); ``boundary``, its I/O
     layout (the network attester's, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
     ports read as several rows (`RowLayout.cut`); ``registered`` and ``ingress``, what fills its other inputs
@@ -1597,6 +1598,11 @@ class Circuit:
         object.__setattr__(self, "cuts", _cuts(self.cuts))
         object.__setattr__(self, "ingress", tuple(self.ingress))
         object.__setattr__(self, "order", order_of({"order": self.order} if self.order is not None else {}))
+        if self.order is not None:
+            by = {descriptor_id(fn): (fn, n) for fn, n in self.templates}
+            first = list(dict.fromkeys(t for t, _, _ in self.order))
+            if sorted(first) == sorted(by) and len(by) == len(self.templates):
+                object.__setattr__(self, "templates", tuple(by[t] for t in first))
         for fn, n in self.templates:
             catalog(fn)
             layout(fn)

@@ -4,7 +4,10 @@ idle split by the copy running) sum to 100 less that mean."""
 from __future__ import annotations
 
 import json
+import os
+import re
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 
@@ -155,3 +158,64 @@ def test_a_commit_arm_served_async_is_the_served_stack_when_its_row_declares_asy
 def test_too_few_full_steps_is_said(tmp_path):
     got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl", T=16), 8, 1830.0)
     assert got["all"]["steps"] == 0 and "fewer than two" in got["all"]["note"]
+
+
+SECRET = "SECRET-request-text"
+
+
+def test_util_json_and_util_txt_hold_the_serves_aggregates_alone(tmp_path, monkeypatch, capsys):
+    """util.json's serve part is counts, sizes and seconds over the windows, the engine's steps and whether it failed, and
+    H1's release counts: no window's own row, error text, pause or release summary leaves through it or util.txt."""
+    (serve := tmp_path / "serve").mkdir()
+    (serve / "windows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in (
+        {"window": 7, "steps": 4, "committed_bytes": 2e9, "passed": True, "seconds": {"open": 1.0}, "error": SECRET},
+        {"window": 8, "steps": 4, "committed_bytes": 4e9, "passed": False, "seconds": {"open": 3.0},
+         "pouw_h1": {"error": SECRET, "seconds": 2.0}})))
+    (serve / "summary.json").write_text(json.dumps({
+        "served": 9, "engine_steps": 12, "engine_error": SECRET, "stopped_by": SECRET, "pauses": [SECRET], "release": {"x": SECRET},
+        "sealer": {"x": SECRET}, "commit": {"seals": [SECRET], "pouw_h1": {"windows": 2, "tied": 1, "untied": 1, "failed": 0,
+                                                                           "gate_passed_rows": 3, "first": SECRET}}}))
+    out = tmp_path / "util.json"
+    monkeypatch.setattr(sys, "argv", ["served_util.py", "--sqlite", str(_report(tmp_path / "prof.sqlite")), "--trace",
+                                      str(_trace(tmp_path / "advice_trace.jsonl")), "--T", "8", "--arm", "h1", "--card",
+                                      "h200-sxm-141gb", "--serve-dir", str(serve), "--out", str(out)])
+    assert U.main() == 0
+    doc, said = json.loads(out.read_text()), capsys.readouterr().out
+    assert doc["serve"]["windows"] == {"closed": 2, "passed": 1, "h1_failed": 1}
+    assert doc["serve"]["summary"] == {"engine_steps": 12, "engine_failed": True,
+                                       "pouw_h1": {"windows": 2, "tied": 1, "untied": 1, "failed": 0, "gate_passed_rows": 3}}
+    assert SECRET not in out.read_text() and SECRET not in said, said
+
+
+def test_a_stub_runs_out_and_log_hold_no_trace_timings_summary_or_serve_options(tmp_path):
+    """served_util.sh's leased part, under stand-ins for nsys, nvidia-smi, the venv's python and sleep, whose serve writes
+    the step trace, summary, pauses, serve options and the loads' timings into the serve dir and scratch: none of those
+    files, the GPU's identity, nsys's output or the profile is in $OUT, and none of their contents is in $OUT or the run's
+    stdout and stderr; $OUT holds steps.txt alone, its lines with no clock."""
+    bin_, venv, cuda, root, out = (tmp_path / x for x in ("bin", "venv/bin", "cuda", "root", "out"))
+    for d in (bin_, venv, cuda / "bin", root / "scratch" / "local" / "serve"):
+        d.mkdir(parents=True)
+    stubs = {
+        bin_ / "nsys": ('case $1 in launch) while [ $# -gt 0 ]; do [ "$1" = --out ] && d=$2; shift; done; mkdir -p "$d"\n'
+                        f'  for f in serve.json summary.json advice_trace.jsonl pauses.jsonl; do echo {SECRET} > "$d/$f"; done\n'
+                        '  echo "SERVE-OPENAI listening" ;;\nesac'),
+        bin_ / "nvidia-smi": f"echo name, {SECRET}-uuid", bin_ / "sleep": "exit 0",
+        venv / "python": ('case "$*" in *serve_load.py*) while [ $# -gt 0 ]; do [ "$1" = --out ] && o=$2; shift; done\n'
+                          f'  echo {SECRET} > "$o"; echo {SECRET} > "${{o%.jsonl}}.timings.json" ;;\nesac'),
+    }
+    for path, body in stubs.items():
+        path.write_text(f"#!/bin/sh\n{body}\n")
+        path.chmod(0o755)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "ARM": "stock", "CARD": "h200-sxm-141gb", "T": "1024",
+           "N": "1", "UTIL_ROOT": str(root), "VENV": str(venv.parent), "CUDA_HOME": str(cuda), "NSYS": str(bin_ / "nsys"),
+           "OUT": str(out), "TREE": str(HERE.parents[2]), "ROW": str(tmp_path / "row")}
+    run = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_util.sh"), "leased"],
+                         env=env, capture_output=True, text=True, check=False)
+    log = run.stdout + run.stderr
+    assert "SERVE SERVE-OPENAI listening" in log, log
+    held = {p.name for p in out.rglob("*")}
+    assert not held & {"serve.json", "summary.json", "advice_trace.jsonl", "pauses.jsonl", "warm.timings.json",
+                       "main.timings.json"}, held
+    assert SECRET not in log and not [p for p in out.rglob("*") if p.is_file() and SECRET in p.read_text(errors="replace")]
+    assert held == {"steps.txt"}, held
+    assert not [x for x in (out / "steps.txt").read_text().splitlines() if re.match(r"\d\d:\d\d:\d\dZ ", x)]
