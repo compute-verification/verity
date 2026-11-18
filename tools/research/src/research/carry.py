@@ -7,8 +7,10 @@ merges bring in from off that line is other work.  ``new`` carries the verdict o
 and each commit of that line is one of:
 
 - landed (`trusted` with no merge: on `main`);
-- a merge of two parents whose other parent is trusted (`trusted(parent, merge)`: landed, or another PR's current marked head
-  with a land verdict and no hold, which drive's containment lands first, `Queue.entries`), and whose tree is what the queue's
+- a merge of two parents whose other parent is trusted (`trusted(parent, merge)`: landed, another PR's current marked head
+  with a land verdict and no hold, which drive's containment lands first, `Queue.entries`, or any open PR's head, current or
+  older, with a land verdict of its own at that head and no hold there, read through the queue's labels: what a reviewer
+  passed as that PR's change), and whose tree is what the queue's
   merge of its parents gives (`queue.merged_tree`: its first parent's merge drivers, each conflicted pin rebuilt) but in
   generated content;
 - a commit that changes only generated content;
@@ -29,7 +31,7 @@ nor for an older head of that PR.
 
 ``python -m research.carry OLD NEW [--repo DIR] [--landed REF ...] [--head REF ...]`` prints the verdict as JSON and exits 0
 when it carries: each ``--landed`` ref and its ancestors landed (`origin/main` when none is given), each
-``--head`` another PR's marked head with a land verdict and no hold, and the first landed ref holding `tools/move/restack.py`
+``--head`` another PR's head with a land verdict at it and no hold, and the first landed ref holding `tools/move/restack.py`
 reruns the moves."""
 
 from __future__ import annotations
@@ -200,8 +202,8 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], b
             return Delta("octopus", f"{c[:12]} merges {len(ps)} parents", len(rows))
         off = [p for p in ps[1:] if not _ok(repo, "merge-base", "--is-ancestor", p, ps[0])]
         if bad := next((p for p in off if not trusted(p, c)), None):
-            return Delta("untrusted-parent", f"{c[:12]} merges {bad[:12]}, which is neither landed nor another PR's marked head "
-                         "with a land verdict and no hold", len(rows))
+            return Delta("untrusted-parent", f"{c[:12]} merges {bad[:12]}, which is neither landed nor a PR's head with a land "
+                         "verdict at it and no hold", len(rows))
         merged += off
         hand: list[str] = []
         if len(ps) == 1 and c in reruns:
@@ -252,15 +254,17 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], b
     return Delta("merge-only", why + (f", leaving {_some(left)} to the checks" if left else ""), **done)
 
 
-def trust(repo: Path, landed: Iterable[str], heads: Iterable[str] = ()) -> Callable[[str, str | None], bool]:
+def trust(repo: Path, landed: Iterable[str], heads: Iterable[str] = (),
+          lands: Callable[[str], bool] | None = None) -> Callable[[str, str | None], bool]:
     """``trusted`` for `delta`: a commit that is one of ``landed`` (`main`'s tip) or an ancestor of one, and,
-    as a parent a merge brings in, also one of ``heads`` (other PRs' current marked heads with a land verdict and no hold)."""
+    as a parent a merge brings in, also one of ``heads`` (other PRs' current marked heads with a land verdict and no hold) or
+    one ``lands`` says has a land verdict at it and no hold, its own PR's (asked only of a parent nothing else trusts)."""
     landed, heads = [t for t in landed if t], {h for h in heads if h}
 
     def trusted(c: str, merge: str | None = None) -> bool:
         if any(c == t or _ok(repo, "merge-base", "--is-ancestor", c, t) for t in landed):
             return True
-        return merge is not None and c in heads
+        return merge is not None and (c in heads or (lands is not None and lands(c)))
 
     return trusted
 
@@ -271,7 +275,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("new")
     ap.add_argument("--repo", default=".")
     ap.add_argument("--landed", action="append", default=[], help="a landed ref (default: origin/main)")
-    ap.add_argument("--head", action="append", default=[], help="another PR's marked head with a land verdict and no hold")
+    ap.add_argument("--head", action="append", default=[], help="another PR's head with a land verdict at it and no hold")
     ns = ap.parse_args(argv)
     repo = Path(ns.repo)
 

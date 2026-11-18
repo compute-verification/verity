@@ -317,6 +317,17 @@ def test_main_writes_the_census_the_table_and_the_card(tmp_path, monkeypatch):
     assert {p.name for p in (tmp_path / "o").iterdir()} == {"census.json", "table.md", "card.json"}
 
 
+def test_a_staged_definition_s_ands_stand_beside_its_estimate_and_replace_it_in_the_staged_total():
+    rows = {"Lin_v1{N=1}": family("Lin_v1{N=1}", steps={"0": 2, "1": 1}, ands=10),
+            "Big_v1{}": family("Big_v1{}", steps={"0": 1}, ands=100)}
+    c = B.staged(B.census([doc(0, rows)]), [{"census": "Lin_v1{N=1}", "ands": 7}, {"census": "Other_v1{}", "ands": 1}])
+    assert c["definitions"]["Lin_v1{N=1}"]["staged_ands"] == 7 and "staged_ands" not in c["definitions"]["Big_v1{}"]
+    assert c["totals"]["prefill"]["staged_ands"] == 2 * 7 + 100 and c["per_request"]["staged_ands"] == 3 * 7 + 100
+    md = B.table(c)
+    assert "| 10 (staged 7) |" in md and "| proof blocks' ANDs (staged where staged) | 28.5 | 3.5 | 121 |" in md
+    assert "staged" not in B.table(B.census([doc(0, rows)]))
+
+
 def test_a_row_of_several_request_shapes_is_censused_one_request_at_a_time():
     """A single-card row of a batch: one rank whose requests are of two shapes; the census refuses them together, naming
     --request, and takes each alone."""

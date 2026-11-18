@@ -173,6 +173,24 @@ class Census:
         return replace(self, blocks=kept + cut, cut=card["name"])
 
 
+def summed(docs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Several requests' `census.json`s as one of the same form, the row as served: each phase's tokens, the MACs and
+    each Definition's and each gap's prefill and decode rows summed, a Definition's statics as its first request's."""
+
+    out: dict[str, Any] = {"tokens": {}, "per_request": {"circuit_macs": 0, "macs": 0}, "definitions": {}, "gaps": {}}
+    for doc in docs:
+        for phase, n in doc["tokens"].items():
+            out["tokens"][phase] = out["tokens"].get(phase, 0) + n
+        for key in ("circuit_macs", "macs"):
+            out["per_request"][key] += doc["per_request"][key]
+        for part in ("definitions", "gaps"):
+            for name, d in doc.get(part, {}).items():
+                held = out[part].setdefault(name, d | {"prefill": 0, "decode": 0})
+                held["prefill"] += d["prefill"]
+                held["decode"] += d["decode"]
+    return out
+
+
 @dataclass(frozen=True)
 class Serving:
     """The serving rate, a stated and modeled input: a served token's MACs at the fleet's assumed serving MFU of the

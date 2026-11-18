@@ -66,6 +66,12 @@ class Labels:
         return {h: list(labs) for (m, h), labs in self.verdicts.items()
                 if key == vocab.REVIEWED and m == n and h != head and labs}
 
+    def at(self, head: str) -> list[int]:
+        return sorted({m for m, h in self.verdicts if h == head})
+
+    def lands(self, n: int, head: str) -> bool:
+        return Q.unreviewed(self.verdicts.get((n, head), []), (f"lane-{n}",)) is None
+
     def ready_by(self, n: int, head: str) -> str:
         return f"lane-{n}"
 
@@ -1814,6 +1820,39 @@ def test_a_merge_of_another_pr_s_head_carries_once_that_head_lands_on_its_own_ve
         (1, True, f"its 1 commit(s) since only merge {new2[:12]} as the queue would)"),
         *([(2, True, f"its 1 commit(s) since only merge {main[:12]} as the queue would)")] if two == "carried" else [])]
     assert [r["members"] for r in recs if r["action"] == "build"] == [[2, 1]]
+
+
+@pytest.mark.parametrize("theirs, carries", [([LAND], True), ([], False),
+                                             ([LAND, Lab("other", "hold", "2026-01-02T00:00:00Z", "wait")], False),
+                                             ([Lab("lane-2", "land", "2026-01-01T00:00:00Z")], False)],
+                         ids=["its-own-land", "no-verdict", "held", "owners-own"])
+def test_a_merge_of_another_pr_s_older_head_carries_when_that_head_has_its_own_land(env, theirs, carries):
+    """#1 merges #2's older head, which is neither landed nor #2's head now: #1's land carries when that head has a land
+    verdict of its own there by someone not #2's owner and no hold, read through the queue's labels, and not otherwise.  (#1
+    holds #2's commits, so it still lands after #2, as containment says.)"""
+    old2 = env.o.change({"b.txt": "2\n"})
+    new2 = env.o.change({"b.txt": "2, re-headed\n"}, base=old2)
+    old1 = env.o.change({"a.txt": "1\n"})
+    _carry_main(env, "on")
+    new1 = _merge(env.o, old1, old2)
+    env.o.gh.put(1, new1)
+    env.o.gh.put(2, new2)
+    env.labels.verdicts |= {(1, old1): [LAND], (1, new1): [], (2, old2): theirs, (2, new2): []}
+    recs = env.loop(policy).tick()
+    (rec,) = [r for r in recs if r["action"] == "carry" and r["number"] == 1]
+    assert rec["carries"] is carries and (carries or f"untrusted-parent: {new1[:12]} merges {old2[:12]}" in rec["why"])
+
+
+def test_a_land_carries_to_a_new_head_of_a_pr_ci_owns_as_to_any_lanes(env):
+    """A PR whose owners include ci took no carried land, so every merge of `main` into one of ci's changes waited for a new
+    read: its land at an older head carries as any lane's does."""
+    old = env.o.change({"a.txt": "1\n"})
+    main = _carry_main(env, "on")
+    env.o.gh.put(1, new := _merge(env.o, old, main), body="Lane `ci`.")
+    env.labels.verdicts |= {(1, old): [LAND], (1, new): []}
+    recs = env.loop(policy).tick()
+    assert [(r["number"], r["carries"]) for r in recs if r["action"] == "carry"] == [(1, True)]
+    assert [r["members"] for r in recs if r["action"] == "build"] == [[1]]
 
 
 def test_a_merge_of_the_old_path_s_checked_carries_a_land_as_drive_trusts_checked_beside_main(env):
