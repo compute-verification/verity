@@ -255,7 +255,7 @@ OWN_ROWS = ("the root hands a unit a row that is not input gates of its own. Eve
 
 def own_rows(program, form_only: bool = False) -> None:
     """The Lean's `ownRows` (`own-rows`). The rule, restated: every part of an argument of a root node that is no input
-    node, but a part reading another such node's outputs (an edge), is affine runs of leaves of the root's input nodes
+    node, but a part reading another such node's outputs (a grid, in every lane; an edge), is affine runs of leaves of the root's input nodes
     (each a primitive or a batch), a batch maps every argument over its members, and no two runs, of one argument or of
     two, share a leaf. Then, unless `form_only`, what the rule stands for, leaf by leaf: every leaf of every parameter
     of every unit that no edge fills, resolved through the root (`layout.resolve_gate`), is an input gate, and no gate
@@ -271,7 +271,7 @@ def own_rows(program, form_only: bool = False) -> None:
 
     def edge(p) -> bool:
         if isinstance(p, Grid):
-            return any(reads(s, i) for s, i, *_x in p.lanes)
+            return all(reads(s, i) for s, i, *_x in p.lanes)
         if isinstance(p, Explicit):
             return any(reads(r[0], r[1]) for r in p.items)
         return isinstance(p, (Affine, Strided)) and reads(p.space, p.idx)

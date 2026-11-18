@@ -340,7 +340,7 @@ def leavesOf (P : Prog) (passed : Array (List Nat)) (t : Tmpl) : Leaves :=
 
 /-- **Every unit's rows are its own input gates** (the module docstring's "Rows of its own"), read from the root's
 body: every part of an argument of a root node that is no input node, but a part reading another such node's outputs
-(an edge, which the record's wiring holds: `Spot.Edges.edgesOf`), is runs of leaves of the root's input nodes (affine
+(a grid, in every lane; an edge, which the record's wiring holds: `Spot.Edges.edgesOf`), is runs of leaves of the root's input nodes (affine
 parts and no other; an input node a primitive or a batch of one, a leaf a gate), a batch maps every argument over its
 members (each has the `dims` resolution reads a member's leaves by), and no two runs, of one argument or of two,
 share a leaf. It costs the root's argument parts, sorted. -/
@@ -350,7 +350,7 @@ def ownRows (P : Prog) : Bool :=
   let edge := fun (q : Part) => match q with
     | .affine false i _ _ | .strided false i _ _ _ _ _ => (nodes[i]?.map fun n => !Desc.isInputNode P n).getD false
     | .explicit it => it.any fun r => !r.p && (nodes[r.i]?.map fun n => !Desc.isInputNode P n).getD false
-    | .grid _ lanes => lanes.any fun l => !l.p && (nodes[l.i]?.map fun n => !Desc.isInputNode P n).getD false
+    | .grid _ lanes => lanes.all fun l => !l.p && (nodes[l.i]?.map fun n => !Desc.isInputNode P n).getD false
     | _ => false
   let parts := units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)
   let runs := parts.filterMap fun

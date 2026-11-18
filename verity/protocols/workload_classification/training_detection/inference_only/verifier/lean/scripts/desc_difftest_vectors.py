@@ -18,7 +18,8 @@ composites, root batches and scans) for `PER_FIXTURE` instances each, then six o
 `InferenceOnlyCheck.Desc.walkBound`'s limit, then four on a scan of no iterations (`empties`), three of them refused, its carry a
 value, read or not, then twelve on whole members of a batch returning leaves of two arguments they share, each another
 node's (`shared`), then `mistyped_vectors.cases()`'s (`mistyped`: references that name leaves of other widths than
-their types give them, which both sides refuse as `program`, and their well-typed neighbours), then
+their types give them, which both sides refuse as `program`, and their well-typed neighbours), then ten on
+declarations read through grid parts no older form spells (`grids`), then
 `difftest_vectors.pinned()`'s three (θ every
 input, refused, θ the registered one, accepted, and a declaration with a constant gate, accepted). θ is no input node, every one (refused, `theta-not-registered`,
 where one is bound per run), the registered ones or a random set of them. A division puts every Call in one inference block, each in
@@ -40,7 +41,7 @@ import verity.circuits
 from verity.circuits import codec
 from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program
-from verity.circuits.refs import Affine, Coll, Strided, tuple_of
+from verity.circuits.refs import Affine, Coll, Grid, Strided, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
 HERE = Path(__file__).resolve().parent
@@ -269,6 +270,56 @@ def empties() -> list[dict]:
     return out
 
 
+def grid_decl(kind: str) -> str:
+    """A declaration whose root reads leaves through a grid part (PROTOCOL.md §3) no older form spells: each run read
+    three times then the next (`repeat`), two parameters' lanes interleaved (`lanes`), a node's output read so
+    (`node`), a batch mapped over such a read (`mapped`), or one read backwards (`reversed`)."""
+    w, r = 8, 16
+    op = vectors.prim((w, w), w)
+    tied = ((3, 0), (2, 2))
+    n = 2 if kind == "lanes" else 1
+    params = tuple((f"x{i}", Array(6 if kind == "lanes" else 4, Value(w))) for i in range(n))
+
+    def lane(c: Coll, b: int, e: int, lv) -> tuple:
+        r = c.refs
+        return (r.space, r.idx, r.base + b, e, lv)
+
+    def body(B, S, *xs):
+        t = Array(12, Value(w))
+        if kind == "lanes":
+            g = Coll(t, Grid(2, (lane(xs[0], 0, 1, ((3, 2),)), lane(xs[1], 0, 1, ((3, 2),)))))
+        elif kind == "node":
+            g = Coll(t, Grid(2, (lane(B.batch(op, xs[0], xs[0], axes=(0, 0)), 0, 1, tied),)))
+        elif kind == "reversed":
+            g = Coll(t, Grid(2, (lane(xs[0], 3, -1, ((3, 0), (2, -2))),)))
+        else:
+            g = Coll(t, Grid(2, (lane(xs[0], 0, 1, tied),)))
+        if kind == "mapped":
+            return B.batch(op, g, g, axes=(0, 0))
+        return B.call(vectors.summing(12, w, r), g)
+    out_t = _probe_type(params, body)
+    fn = bind(CompositeDefinition(f"NciGrid{kind.capitalize()}", 1, (), lambda S: (params, out_t), body,
+                                  register=False))
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=()))).decode()
+
+
+GRIDS = ("repeat", "lanes", "node", "mapped", "reversed")
+
+
+def grids() -> list[dict]:
+    """Instances on `grid_decl`'s declarations, θ none (their inputs are bound per run): every Call in inference block
+    0, then each in its own."""
+    out = []
+    for kind in GRIDS:
+        text = grid_decl(kind)
+        inp, _, spans = reference.root_nodes(text)
+        calls = [k for k in range(len(inp)) if not inp[k]]
+        for own in (False, True):
+            owner = ["input" if inp[k] else (calls.index(k) if own else 0) for k in range(len(inp))]
+            out.append({"program": text, "theta": [], "owner": owner, "gamma": spans[-1][1], "alpha": [16, 1]})
+    return out
+
+
 def shared_decl(reader: str, order: tuple[str, ...]) -> str:
     """A declaration whose root batches a composite over two members, each returning its shared parameters `a` and `b`
     (in `order`), the outputs of two Calls `A` and `B` on registered inputs, and a gate (a primitive, `reader =
@@ -328,13 +379,17 @@ def mistyped() -> list[dict]:
 def instance(seed: int) -> dict:
     """Instance `seed`, with what it was made from (`shape`, `theta_kind`, `division`, `malformed`): below `COUNT` a random
     declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`, `walks()`, `empties()`,
-    `shared()` and `mistyped()`."""
+    `shared()`, `mistyped()` and `grids()`."""
     rng = random.Random(seed)
     first_decoy = COUNT + PER_FIXTURE * len(fixtures())
     first_walk = first_decoy + len(decoys())
     first_empty = first_walk + len(walks())
     first_shared = first_empty + len(empties())
     first_mistyped = first_shared + len(shared())
+    first_grid = first_mistyped + len(mistyped())
+    if seed >= first_grid:
+        return {"instance": grids()[seed - first_grid], "shape": "grid", "theta_kind": None, "division": None,
+                "malformed": None}
     if seed >= first_mistyped:
         return {"instance": mistyped()[seed - first_mistyped], "shape": "mistyped", "theta_kind": None,
                 "division": None, "malformed": None}
@@ -439,9 +494,9 @@ NAMES = ("instances", "expanded", "python")
 
 def total() -> int:
     """How many instances the audit's data has: the random ones, every fixture's, the decoys,
-    `difftest_vectors.pinned()`'s, the walks, the empties, the shared members' and the mistyped ones."""
+    `difftest_vectors.pinned()`'s, the walks, the empties, the shared members', the mistyped ones and the grids."""
     return (COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(vectors.pinned()) + len(walks())
-            + len(empties()) + len(shared()) + len(mistyped()))
+            + len(empties()) + len(shared()) + len(mistyped()) + len(grids()))
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:
