@@ -41,7 +41,6 @@ from __future__ import annotations
 import copy
 import json
 import operator
-import os
 import shutil
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
@@ -130,7 +129,7 @@ def committer_opts(opts: Options) -> SimpleNamespace:
                            retention=SL.RetentionOptions())
 
 
-def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which, environ: Mapping[str, str] = os.environ) -> None:
+def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which, environ: Mapping[str, str] | None = None) -> None:
     """What the committer would refuse after the model has loaded, refused before it."""
     if not opts.required_manifest:
         raise UsageError(f"commit-arb commits as serve-openai does, under {SS.ROWS} with the Commit of record's parts, which its "

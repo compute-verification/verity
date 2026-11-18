@@ -199,6 +199,12 @@ def test_the_breakdown_takes_each_points_newest_passing_run_that_times_every_arm
     assert "r20261024-020000-0001" in B.render(table)
 
 
+def test_the_breakdown_names_its_specs_card_by_its_card_file():
+    assert B.cards_named() == "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+    assert "on one NVIDIA RTX PRO 6000 Blackwell Server Edition, the bandwidth audit's" in B.render(
+        {"points": [], "skipped": []})
+
+
 def test_the_served_table_puts_a_records_breakdown_beside_the_protocols_row(tmp_path):
     """`served_table.BREAKDOWNS` reads the breakdown at each run of its labelled record art, not the newest run, and
     passes over a record run without the spans arms."""

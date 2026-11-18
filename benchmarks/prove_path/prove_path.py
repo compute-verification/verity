@@ -1693,10 +1693,11 @@ def window_design(rule: str, circuit: IF.Circuit) -> dict[str, Any]:
     return dict(S.params_sampling_design(rule, program, query, None)[0])
 
 
-def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dict[str, Any]], list[int], Any] | None:
+def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dict[str, Any]], list[int], Any, list[Path]] | None:
     """With ``--pearl-passes DIR`` (Pearl+'s ``pearl/w<k>/``: the window's passes, ``served.json`` and its retention):
     Pearl+'s window record W of them (``--window-registration``, ``retain --window-record W``'s), the retained passes'
-    manifests, their rounds and the circuit's tables of them (`window_class.PearlTables` under W's scheme); None without.
+    manifests, their rounds, the circuit's tables of them (`window_class.PearlTables` under W's scheme) and each pass's
+    directory, its manifest's, where it kept its salts (`pearl_c.window.reuse`'s ``dirs``); None without.
     ValueError without ``--window-registration``, beside ``--h1-prover``, for a W that is no Pearl+ window record
     (`records_audit.why_not_pearl`), or where the rounds retained aren't the class's outputs, round s the window's s-th
     step, whose calls the circuit cut at its linears reads."""
@@ -1719,7 +1720,8 @@ def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dic
     if rounds != list(range(cls.outputs)):
         raise ValueError(f"the window's retained rounds {rounds} aren't its class's {cls.outputs} outputs, round s its s-th "
                          "step, whose calls the circuit cut at its linears reads")
-    return w, [json.loads(Path(held[s]["manifest"]).read_text()) for s in rounds], rounds, WC.PearlTables(scheme)
+    manifests = [Path(held[s]["manifest"]) for s in rounds]
+    return w, [json.loads(m.read_text()) for m in manifests], rounds, WC.PearlTables(scheme), [m.parent for m in manifests]
 
 
 def window_commit_of_advice(a: argparse.Namespace, kept_ingress: KeptIngress | None = None,
@@ -1851,8 +1853,8 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
         previous = DD.digest(h1w)
     elif pearl is not None:
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
-        pw, manifests, rounds, _tables = pearl
-        values |= PWR.reuse(pw, manifests, filled.value, rounds)
+        pw, manifests, rounds, _tables, dirs = pearl
+        values |= PWR.reuse(pw, manifests, filled.value, rounds, dirs)
         previous = DD.digest(pw)
     lap("rows")
     win = IF.Window(low.circuit, run, window_design(a.sampling_design, low.circuit), a.cap, registered=values, forms=WRS.FORMS)
