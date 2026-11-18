@@ -684,7 +684,7 @@ def homo (t : Ty) : Option Nat :=
   | _ => none
 
 /-- Leaves walked one by one, past which a Program is refused: references this irregular are not read in closed form. -/
-def WALK : Nat := 2 ^ 20
+def WALK : Nat := 2 ^ 40
 
 /-- How deep two types are taken apart. -/
 def DEPTH : Nat := 256
@@ -848,10 +848,25 @@ def firstBad (s : Src) (t : Ty) (a : Nat) (q : Part) : M (Option Nat) := do
     return none
 
 /-- The first part of the references `seq`, read as a `t`, that names leaves of another width, with the leaf it starts at. -/
-def seqBad (s : Src) (t : Ty) (seq : Seq) : M (Option (Nat × Part)) := do
+def formOf : Part → String
+  | .affine p i b n => s!"affine {if p then "p" else "n"}{i} base={b} n={n}"
+  | .strided p i b inner os is n => s!"strided {if p then "p" else "n"}{i} base={b} inner={inner} os={os} is={is} n={n}"
+  | .explicit it => s!"explicit n={it.size}"
+  | .grid run lanes => s!"grid run={run} lanes={lanes.size} n={(Part.grid run lanes).count} lane0={(lanes[0]?.map fun l => s!"{if l.p then "p" else "n"}{l.i} b={l.b} e={l.e} lv={l.lv}").getD ""}"
+
+def seqBad (label : String) (s : Src) (t : Ty) (seq : Seq) : M (Option (Nat × Part)) := do
   let ht := homo t
   for q in seq.parts, a in seq.starts do
-    if !(← partOk s t ht a q) then return some (a, q)
+    let s0 ← get
+    let ok ← partOk s t ht a q
+    let s1 ← get
+    if s1 > s0 then
+      let srcHomo := match q with
+        | .affine p i _ _ | .strided p i _ _ _ _ _ => toString (s.homo? p i)
+        | .grid _ lanes => toString (lanes.toList.map fun l => s.homo? l.p l.i)
+        | .explicit _ => "-"
+      dbg_trace s!"WALKSTEP\t{s1 - s0}\t{label}\t{formOf q}\tht={ht}\tslice={rangeWidths t a (a + q.count)}\tsrcHomo={srcHomo}\tok={ok}"
+    if !ok then return some (a, q)
   return none
 
 def TAIL : String :=
@@ -882,11 +897,11 @@ def bodyBad (defs : Array Defn) (key : String) (B : Body) : M (Option String) :=
     for i in [0:node.args.size] do
       let a := node.args[i]!
       let sk := { s with below := k }
-      if let some (pos, q) ← seqBad sk a.ty a.seq then
+      if let some (pos, q) ← seqBad s!"{key}\tnode {k} ({node.form.name} {callee.id}) arg '{(callee.params[i]?.map (·.1)).getD s!"{i}"}'" sk a.ty a.seq then
         let pn := (callee.params[i]?.map (·.1)).getD s!"{i}"
         return some (refusal B key s!"node {k} ({node.form.name} {callee.id}) argument '{pn}'" sk a.ty pos q)
   let sr := { s with below := B.nodes.size }
-  if let some (pos, q) ← seqBad sr B.retType B.ret then
+  if let some (pos, q) ← seqBad s!"{key}\tret" sr B.retType B.ret then
     return some (refusal B key "the body's return" sr B.retType pos q)
   return none
 
