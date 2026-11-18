@@ -4,16 +4,16 @@ public import Properties.Flock.Circuit.CircuitOf
 public import Spot.FilePart
 
 /-!
-# `Γ`'s unit, on its own
+# `Γ`'s unit: the committed circuit has one gate a row
 
-`GateARow`, a count over the game's circuit of committed files that reads no play, in a module that imports only what
-it reads: the circuit of a file (`Flock.Bridge`'s, `Properties.Flock.Circuit.CircuitOf`) and the rows the verifier
-counts from the parsed file (`Spot.FilePart`). `Properties.Verity.Committed` says what it ties.
+`GateARow`, a count over the game's circuit of committed files that reads no play: the circuit of a file
+(`Flock.Bridge.circuitOfFile`, `Properties.Flock.Circuit.CircuitOf`) against the rows the verifier counts from the
+parsed file (`Spot.FilePart`). It is proved (`Flock.Bridge.gateARow`); `Properties.Verity.Committed` says what it ties.
 -/
 
 @[expose] public section
 
-namespace Verity
+namespace Flock.Bridge
 
 /-- **`Γ`'s unit: the committed circuit has one gate a row.** At all committed files that parse
 (`Flock.Bridge.parsedOf`), every unit of the game's circuit of them (`Flock.Bridge.circuitOfFile`, its units
@@ -31,4 +31,4 @@ def GateARow : Prop :=
       (Flock.Bridge.circuitOfFile tags cf tables pf).size ((Flock.Bridge.partsOfFile tags cf tables pf).gates u) =
         (Spot.FilePart.ofCircuit r.D.unroll r.n).m
 
-end Verity
+end Flock.Bridge
