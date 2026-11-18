@@ -3832,8 +3832,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     if not cut.exists():
         cut.write_text(CUT_BY_CALL)
     (tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "60-circuit.sh").write_text("exit 0\n")
-    for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
-              tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
+    for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
         f.write_text("")
     (d / "weights_registration.json").write_text("{}")
     if not (d / "windows.jsonl").exists():
@@ -5189,7 +5188,7 @@ def test_the_preflight_refuses_a_step_3_partition_it_cant_read_where_the_compile
                        "__bf16__): set ROW to the BF16 row's dir"),
     ({"ROW_ID": "llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager"}, "PREFLIGHT: under PEARLPLUS_TIE the served compare holds the serve to ROW_ID "
      "llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager's Build of record, which this file pins none of: pin its "
-     "PROGRAM_DIGEST:MANIFEST_DIGEST in the tied block's case, or give BUILD_OF_RECORD"),
+     "workload digest in the tied block's case, or give BUILD_OF_RECORD"),
     ({"CLASSES": "4,32,4"}, f"PREFLIGHT: PEARLPLUS_TIE commits the window at V3C_CLASS {W63K4}, whose window circuit "
                             "CLASSES (4,32,4) doesn't count: add it"),
     ({"SERVE_ARGS": "--prefix-caching"}, "PREFLIGHT: under PEARLPLUS_TIE each request's prefill computes every row of its "
@@ -8150,8 +8149,8 @@ RELEASE_ORDER = json.dumps({NETWORK_ATTESTER.name: {"order": "release-order"}})
 SERVE_OPENAI = (
     "-m verity_vllm.pipeline.cli serve-openai --model verity-int8/Llama-3.2-1B-INT8 --revision "
     "15b0976d400d796ee589e7737d03a919526bf800 --out TMP/serve --port 18190 --precision verity_int8 "
-    f"--seal --max-num-batched-tokens 512 --window-steps 256 --protocols-config {RELEASE_ORDER} --required-manifest "
-    "TMP/serve/predicted/manifest.json --hidden-so "
+    f"--seal --max-num-batched-tokens 512 --window-steps 256 --protocols-config {RELEASE_ORDER} --row-build "
+    "TMP/serve/predicted --hidden-so "
     "/workspace/research/vllm-composed-h200int8/fa2/build/fa3_matReqG/verity_fa3_matReqG.so --norm-tap-so "
     "/workspace/research/vllm-composed-h200int8/norm_tap/build/verity_norm_tap.so --tap-cap-mb 2048 "
     "--window-requests 4 --max-model-len 512 --disk-floor-gb 100 --seal-hold-gb 32")

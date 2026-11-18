@@ -14,7 +14,7 @@ sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import served_compare as SC  # noqa: E402
 
 SCHEME = "pearl-c-h100-v1-h3"
-PROGRAM, MANIFEST = "ab" * 64, "cd" * 64
+WORKLOAD = "ab" * 64
 PARAMS = {"pearl-a/0/0": 2048, "pearl-y/0/0": 128, "weights/model.layers.0.mlp.down_proj": 4096}
 CALLS = [[2048, 8192, 64]]
 FIELDS = {"model": ["m", "m"], "revision": ["r", "r"], "hf_config": ["c", "c"], "execution": ["bi-eager", "bi-eager"],
@@ -106,13 +106,10 @@ def test_cut_takes_ws_b_rows_of_the_weights_the_cuts_calls_read_and_no_other_val
 
 
 def test_build_holds_pred_to_the_rows_build_of_record(tmp_path):
-    """BUILD: predict row's predicted.json names the row's Build of record, its Program and manifest digests."""
-    (tmp_path / "predicted.json").write_text(json.dumps({"program_digest": PROGRAM, "manifest_digest": MANIFEST}))
-    assert SC.build(tmp_path, f"{PROGRAM}:{MANIFEST}")["ok"] is True
-    assert SC.build(tmp_path, f"{PROGRAM}:{'ef' * 64}") == {"ok": False, "names": [PROGRAM, MANIFEST],
-                                                           "of_record": [PROGRAM, "ef" * 64]}
-    with pytest.raises(ValueError, match="is PROGRAM_DIGEST:MANIFEST_DIGEST"):
-        SC.build(tmp_path, PROGRAM)
+    """BUILD: predict row's predicted.json names the row's Build of record, its workload digest."""
+    (tmp_path / "predicted.json").write_text(json.dumps({"workload_digest": WORKLOAD}))
+    assert SC.build(tmp_path, WORKLOAD)["ok"] is True
+    assert SC.build(tmp_path, "ef" * 64) == {"ok": False, "names": WORKLOAD, "of_record": "ef" * 64}
 
 
 @pytest.mark.parametrize("differs", [None, "revision", "circuit"])
@@ -196,13 +193,12 @@ def _main(tmp_path: Path, monkeypatch, declared: str = "ee" * 64, config: bool =
         cfg.write_text("{}")
     if kept is not None:
         (pred / SC.CONFIG_COPY).write_text(kept)
-    (pred / "predicted.json").write_text(json.dumps({"program_digest": PROGRAM, "manifest_digest": MANIFEST,
-                                                     "config": str(cfg)}))
+    (pred / "predicted.json").write_text(json.dumps({"workload_digest": WORKLOAD, "config": str(cfg)}))
     (w := serve / "pearlplus" / "w7" / "registration.json").parent.mkdir(parents=True)
     w.write_text(_w(tmp_path, "exact").read_text() if written is None else json.dumps(written[0]))
     out = tmp_path / "out"
     rc = SC.main(["--serve", str(serve), "--row", "row-1", "--class", "4,32,4", "--pearl-tables", SCHEME, "--pred",
-                  str(pred), "--of-record", f"{PROGRAM}:{MANIFEST}", "--window-record", str(w), "--out", str(out),
+                  str(pred), "--of-record", WORKLOAD, "--window-record", str(w), "--out", str(out),
                   *(["--revision", revision] if revision else [])])
     return rc, out
 

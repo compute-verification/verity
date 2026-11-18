@@ -1,6 +1,6 @@
 """The served compare: a tied Pearl+ serve dir held to the workload of record, on the CPU, once Pearl+'s piece wrote W.
 
-    served_compare.py --serve D --row ROW --class S,P,O --pearl-tables SCHEME --pred PRED --of-record PROGRAM:MANIFEST
+    served_compare.py --serve D --row ROW --class S,P,O --pearl-tables SCHEME --pred PRED --of-record WORKLOAD
         --window-record W --out DIR [--revision REV]
 
 - PHI: D's serve.json states row ROW's declared φ. serve.json's φ is read as the registered compiler reads it
@@ -15,13 +15,13 @@
   SHA-256 of the config it read, and PHI holds it to the comparing tree's config of record for the served checkpoint.
   PHI's line and verdict name the revision served and the one the row's workload declares, and under REV the last line
   names both too, so EQUAL is never read as a serve at the row's declared revision.
-- BUILD: PRED is the row's Build of record: its predicted.json names Program digest PROGRAM and manifest digest MANIFEST.
+- BUILD: PRED is the row's Build of record: its predicted.json names workload digest WORKLOAD.
 - CUT: W, Pearl+'s window record, registers exactly the circuit's Pearl+ values (`PEARL_VALUES`), each at its size in the
   circuit (two u16 words an FP32 word), under SCHEME, in 32-bit words, and beside them only what its version registers
   that the circuit never reads: at version 2 the B rows of the weights the cut's calls read (`PEARL_WEIGHTS`), each
   weight's N rows of K words a call's; at version 1 nothing.
 
-The seal's B-OF-RECORD (`served_verdicts.sh`) holds each sealed record to PRED's manifest, so this doesn't. A file a
+The seal's B-OF-RECORD (`served_verdicts.sh`) holds each sealed record to PRED's C and compiler, so this doesn't. A file a
 verdict can't read fails that verdict, naming the file. Each verdict prints a line; the last, ``SERVED-COMPARE: EQUAL``
 or ``NOT EQUAL``, is the line the record names (`served_verdicts.py record --served-compare`), kept with the verdicts in
 DIR/served_compare.json. Exit 0 iff EQUAL.
@@ -147,13 +147,9 @@ def phi(fields: Mapping[str, Any], served: Mapping[str, Any], declared: Mapping[
 
 
 def build(pred: Path, of_record: str) -> dict[str, Any]:
-    """BUILD: PRED's predicted.json names the Program digest and manifest digest `of_record` (PROGRAM:MANIFEST)."""
-    want = of_record.split(":")
-    if len(want) != 2:
-        raise ValueError(f"--of-record {of_record!r} is PROGRAM_DIGEST:MANIFEST_DIGEST")
-    p = read_json(pred / "predicted.json")
-    got = [p.get("program_digest"), p.get("manifest_digest")]
-    return {"ok": got == want, "names": got, "of_record": want}
+    """BUILD: PRED's predicted.json names the workload digest `of_record`."""
+    got = read_json(pred / "predicted.json").get("workload_digest")
+    return {"ok": got == of_record, "names": got, "of_record": of_record}
 
 
 def cut(w: Path, params: Mapping[str, int], calls: Sequence[Sequence[int]], scheme: str) -> dict[str, Any]:
@@ -206,9 +202,8 @@ def said(name: str, v: Mapping[str, Any], a: argparse.Namespace) -> str:
                 f"compared with {str(v['fields']['revision'][1])[:12]}…, the row's workload declaring "
                 f"{str(v['row_revision'])[:12]}…){end}")
     if name == "BUILD":
-        return (f"BUILD: {a.pred}/predicted.json names Program digest {str(v['names'][0])[:16]}…, manifest digest "
-                f"{str(v['names'][1])[:16]}…; the row's Build of record is {v['of_record'][0][:16]}…, "
-                f"{v['of_record'][1][:16]}…{end}")
+        return (f"BUILD: {a.pred}/predicted.json names workload digest {str(v['names'])[:16]}…; the row's Build of record is "
+                f"{v['of_record'][:16]}…{end}")
     return (f"CUT: W ({a.window_record}) registers {v['values']} values and the circuit reads {v['circuit_values']} Pearl+ "
             f"values; {v['weights']} more are weights' B rows, which W's version {v['version']} registers and the circuit "
             f"never reads; {v['differ_count']} differ in name or size (scheme {v['scheme']}, word bits {v['word_bits']}){end}")
@@ -221,7 +216,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--class", dest="cls", required=True, help="the window class, SLOTS,PROMPT,OUTPUTS")
     ap.add_argument("--pearl-tables", required=True, help="Pearl+'s scheme, whose tables the circuit is cut at")
     ap.add_argument("--pred", type=Path, required=True, help="predict row's Build: its predicted.json and its copy of the checkpoint config")
-    ap.add_argument("--of-record", required=True, help="the row's Build of record, PROGRAM_DIGEST:MANIFEST_DIGEST")
+    ap.add_argument("--of-record", required=True, help="the row's Build of record, its workload digest")
     ap.add_argument("--window-record", type=Path, required=True, help="W, Pearl+'s window record")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--revision", default=None,
