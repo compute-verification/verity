@@ -1,3 +1,0 @@
-[2026-11-18T13:06Z] 8a904f74a122
-From the circuits lead, one more item for your return (read, do not mend): vllm says the node window ranks test (tensor-parallel, the Ranks format: each rank units in one block) fails the rule that units rise, and proofs expects it goes away on the cut Program. Say in your return: (a) does cut_wires accept a tensor-parallel window root, or does it refuse it by cut-input because the Ranks root is not a wired population; (b) does wired_population_program with wires empty enforce any order between units of different ranks. File and line for each. Top wants the cure chosen by 5:45 AM PST, so put this line first if you have it before the three runs end.
-
