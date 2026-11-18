@@ -13,8 +13,8 @@ from verity.protocols.resource_accounting.network.verifier.certificate import (C
 from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
 from verity.protocols.resource_accounting.network.verifier.record_files import certified_from_json, unpack_record
-from verity.protocols.resource_accounting.network.verifier.network_attester import (END, FAIL, INTEGER_FIELDS, REFUSED,
-    NetworkAttesterParams, audit)
+from verity.protocols.resource_accounting.network.verifier.network_attester import (END, FAIL, INTEGER_FIELDS,
+    OPTIONAL_FIELDS, REFUSED, NetworkAttesterParams, audit)
 
 PROOF_DEADLINE_S = 600.0
 
@@ -74,9 +74,12 @@ def rows_audit_case(run: Path, dep: dict, params: NetworkAttesterParams) -> dict
     """The run's ``network-rows`` case (`NetworkVerifier.RowsAudit`) as `period_check.lean_check` writes it: the
     params of the deployment ``dep`` at its schedule ``params``, the commitment of the records and certified records
     in ``run``, and no evidence (``{}``). ValueError naming an execution phase's record or certified record the run
-    lacks, or a schedule in another egress form than the id form."""
+    lacks, a schedule in another egress form than the id form, or one with an optional field but `max_tokens_cap`,
+    which the case doesn't carry, so that its digest would not be the run's."""
     if params.egress != "id":
         raise ValueError(f"the rows audit's schedule is the id egress form's, not {params.egress!r}'s")
+    if carried := [f for f in OPTIONAL_FIELDS if f != "max_tokens_cap" and getattr(params, f) is not None]:
+        raise ValueError(f"the rows audit's case carries no {', '.join(carried)}, which the schedule has")
     key = RF.read_public(dep["key"])
     certified, _ = read_certified(run / "certified.jsonl")
     raw = {(name, r.window): r for name, rs in read_records(run, params).items() for r in rs}
@@ -120,7 +123,7 @@ def lean_rows(run: Path, dep: dict, params: NetworkAttesterParams, held: list[st
     lean = "accepted" if got["verdict"] == "accept" else f"refused: {got['reason']}"
     python = [p for p in held if not p.endswith(ID_FORM)]
     if (got["verdict"] == "accept") == (not python):
-        return lean, [] if got["verdict"] == "accept" else [f"network-rows: {got['reason']}"]
+        return lean, []
     said = "accepts" if not held else f"refuses ({held[0]})"
     return lean, [f"lean-disagrees: network-rows {lean}; the Python check {said}"]
 

@@ -58,8 +58,7 @@ def test_network_rows_refusing_a_run_the_python_check_refuses_is_refused_with_it
     why = "requests window 0: the certificate isn't the key's in the session"
     result = RC.check(run, rows_exe=stand_in(tmp_path / "reject", "reject", why))
     assert (result["accepted"], result["lean"]) == (False, f"refused: {why}")
-    assert UNCERTIFIED in result["problems"] and f"network-rows: {why}" in result["problems"]
-    assert not any(p.startswith("lean-disagrees") for p in result["problems"])
+    assert UNCERTIFIED in result["problems"] and not any(p.startswith("lean-disagrees") for p in result["problems"])
 
 
 def test_a_capped_or_bytes_form_schedule_is_not_covered_and_network_rows_isnt_run(tmp_path):

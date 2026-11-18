@@ -183,8 +183,9 @@ def change_record(run: Path) -> Path:
 def test_network_rows_and_the_python_check_decide_each_run_alike(tmp_path):
     """Each case's two verdicts: the honest run, the run republished under another key and the deployment naming one
     window fewer accepted by both; a forged certificate, a record changed under its head, a grid re-cut, re-clocked
-    or reordered and signed, another session, another key and a window more than the run holds refused by both, and a
-    record or a certified record missing refused by the Python check and by the case's builder before `network-rows`.
+    or reordered and signed, another session and another key refused by both, and a record or a certified record
+    missing or a window more than the run holds refused by the Python check and by the case's builder before
+    `network-rows`.
     Every disagreement is reported with both verdicts. By design: a run under a
     `max_tokens_cap` the Python check accepts and `network-rows` refuses by name; a run whose egress cell isn't
     id-form the Python audit refuses and `network-rows` accepts; and a bytes-form run the Python check accepts and
@@ -206,7 +207,6 @@ def test_network_rows_and_the_python_check_decide_each_run_alike(tmp_path):
         "another session": (edit_deployment(copied(honest, tmp_path / "session"), lambda d: d | {"session": "11" * 32}),
                             False),
         "another key": (edit_deployment(copied(honest, tmp_path / "key"), lambda d: d | {"key": other_key}), False),
-        "a window more": (edit_deployment(copied(honest, tmp_path / "more"), lambda d: d | {"windows": 3}), False),
     }
     verdicts = {}
     for name, (run, _) in runs.items():
@@ -219,7 +219,9 @@ def test_network_rows_and_the_python_check_decide_each_run_alike(tmp_path):
 
     for run, why in ((drop_record(copied(honest, tmp_path / "no-record"), RC.FAILS, 1), "fails window 1 has no record"),
                      (drop_certified(copied(honest, tmp_path / "no-cert"), RC.LINK, 1),
-                      "requests window 1 has no certified record")):
+                      "requests window 1 has no certified record"),
+                     (edit_deployment(copied(honest, tmp_path / "more"), lambda d: d | {"windows": 3}),
+                      "requests window 2 has no record")):
         assert python(run), run
         with pytest.raises(ValueError, match=f"^{why}$"):
             case(run)
