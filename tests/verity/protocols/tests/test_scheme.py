@@ -38,7 +38,7 @@ def test_picked_by_name_its_module_imported_on_first_use(monkeypatch: pytest.Mon
 
     (tmp_path / "toy_declaration.py").write_text(
         "from verity.protocols.resource_accounting import scheme as S\n"
-        "S.register(S.Scheme('toy', 'toy', 'memory', (), (), (), ()))\n")
+        "S.register(S.Scheme('toy', 'toy', 'memory', S.Lacks('a stand-in'), (), (), ()))\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setattr(schemes, "DECLARATIONS", {"toy": "toy_declaration", "absent": "toy_declaration"})
     assert "toy" not in S.SCHEMES
@@ -58,7 +58,7 @@ def test_a_shell_reads_one_field_of_a_declaration(monkeypatch: pytest.MonkeyPatc
 
     (tmp_path / "toy_shell_declaration.py").write_text(
         "from verity.protocols.resource_accounting import scheme as S\n"
-        "S.register(S.Scheme('toy', 'verity/toy/v0', 'memory', (), (), (), (), settings={'reads': 5, 'on': True},\n"
+        "S.register(S.Scheme('toy', 'verity/toy/v0', 'memory', S.Lacks('a stand-in'), (), (), (), settings={'reads': 5, 'on': True},\n"
         "                    option='toy:at-v1'))\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setattr(schemes, "DECLARATIONS", {"toy": "toy_shell_declaration"})
@@ -111,8 +111,8 @@ def test_bound() -> None:
     ({"charges": (S.Charge("on-chip", "a"), S.Charge("on-chip", "b"))}, "charge twice"),
 ])
 def test_refusals(bad: dict, match: str) -> None:
-    base = {"name": "toy", "protocol": "verity/toy/v0", "resource": "read", "blocks": (), "assumptions": (), "log": (),
-            "charges": ()}
+    base = {"name": "toy", "protocol": "verity/toy/v0", "resource": "read", "blocks": S.Lacks("a stand-in"),
+            "assumptions": (), "log": (), "charges": ()}
     with pytest.raises(ValueError, match=match):
         S.Scheme(**{**base, **bad})
 
@@ -251,16 +251,25 @@ def test_every_declaration_fills_each_field_or_says_why_not() -> None:
 
 
 def test_a_component_that_charges_nothing_is_a_scheme_bound_and_credited_refuse() -> None:
-    free = _toy(name="toy-check", resource=S.Lacks("charges nothing: it checks a policy"), record="toy")
+    nothing = S.Lacks("charges nothing: it checks a policy")
+    free = _toy(name="toy-check", resource=nothing, blocks=nothing, record="toy")
     assert S.declared(free, "record") == "toy"
     with pytest.raises(LookupError, match="toy-check declares no resource: charges nothing"):
         S.bound(free, Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, epsilon=EPS)
-    with pytest.raises(LookupError, match="toy-check declares no resource"):
-        S.credited([free], [])
+    for field in ("resource", "blocks"):
+        with pytest.raises(LookupError, match=f"toy-check declares no {field}: charges nothing"):
+            S.declared(free, field)
     with pytest.raises(LookupError, match="toy-check declares no resource"):
         free.unit
+    placed = _toy(blocks=(S.Block("Toy_v1", lambda shape: 1),))
+    assert S.credited([free], []) == frozenset()
+    assert S.credited([free, placed], [("Toy_v1", [(0, 2)])]) == {0, 1}
     with pytest.raises(ValueError, match="its resource is one of"):
         _toy(resource="disk")
+    with pytest.raises(ValueError, match="places no block"):
+        _toy(blocks=())
+    with pytest.raises(ValueError, match="charges nothing says why it has no blocks"):
+        _toy(name="toy-check", resource=nothing)
 
 
 def test_the_records_unit_is_an_exact_factor_and_schemas_are_of_carried_messages() -> None:

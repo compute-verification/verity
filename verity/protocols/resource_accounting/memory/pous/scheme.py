@@ -93,7 +93,8 @@ POUS = register(Scheme(
     messages=workload.MESSAGES,
     protocol=domains.POUS_P2_RUN,
     resource="memory",
-    blocks=(),
+    blocks=Lacks("the memory attester's session answers and checks its challenges outside the workload's circuit: no "
+                 "block of the circuit carries its cost"),
     assumptions=("Verity.Vocab.PousSound", TRUSTED_DEVICE, "Pous.P2.Assumptions.P2RingRoundSecureWide",
                  "Pous.Period.RingDeviceAt"),
     log=(Order("weights", "salt"), Order("store", "challenges")),
@@ -135,7 +136,8 @@ WIPE = register(Scheme(
     name="wipe",
     protocol=domains.WIPE_PROTOCOL,
     resource="memory",
-    blocks=(),
+    blocks=Lacks("the wipe runs before the engine loads, outside the workload's circuit: no block of the circuit "
+                 "carries its cost"),
     assumptions=("Verity.Vocab.WipeSound", TRUSTED_DEVICE),
     log=(Order("fill", "reveal"),),
     charges=(),

@@ -276,13 +276,16 @@ class Scheme:
     (``answer``, the answer, and ``quantity``, the figures read of it) and returns its `Reading`.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
-    is a `Lacks` saying so: it is in the one table with its parties and record, and `bound` and `credited` refuse it by
-    name. A declaration that names a resource is held to every check below."""
+    and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
+    its resource, blocks, unit and `bound` each refuse by name, and `credited`, which goes over every attached scheme,
+    passes over it and gives it no block. A declaration that names a resource places at least one block, or says with
+    ``blocks=Lacks(why)`` why no block of the circuit carries its cost (an audit proved outside the workload's
+    circuit), and is held to every check below."""
 
     name: str
     protocol: str
     resource: str | Lacks
-    blocks: tuple[Block, ...]
+    blocks: tuple[Block, ...] | Lacks
     assumptions: tuple[str, ...]
     log: tuple[Order, ...]
     charges: tuple[Charge, ...]
@@ -327,7 +330,13 @@ class Scheme:
             raise ValueError(f"{self.name} names a charge twice: {names}")
         if unknown := sorted({o.assumption for o in self.log if o.assumption} - set(self.assumptions)):
             raise ValueError(f"{self.name}: its deadlines name {unknown}, which are not among its assumptions")
-        if unknown := sorted({p.definition for p in self.ports} - {b.definition for b in self.blocks}):
+        if isinstance(self.resource, Lacks) and not isinstance(self.blocks, Lacks):
+            raise ValueError(f"{self.name}: a scheme that charges nothing says why it has no blocks with Lacks(why)")
+        if not isinstance(self.blocks, Lacks) and not self.blocks:
+            raise ValueError(f"{self.name}: it names a resource and places no block; where no block of the circuit "
+                             "carries its cost, its blocks say why with Lacks(why)")
+        placed = () if isinstance(self.blocks, Lacks) else self.blocks
+        if unknown := sorted({p.definition for p in self.ports} - {b.definition for b in placed}):
             raise ValueError(f"{self.name}: its ports lie in {unknown}, which are not its blocks' Definitions")
         said = not isinstance(self.delta_scheme, Lacks)
         if said and not isinstance(self.delta_scheme, Term) and not 0 <= self.delta_scheme < 1:
@@ -516,9 +525,9 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     query (`verity.protocols.proofs.spot.verifier.one_stage.partition.strata`). A declared `Block` places on the
     templates whose descriptor id is its Definition id, bare or followed by its statics (``Name_vN{...}``). Refuses a
     declared Definition id that resolves to no block, and a template two blocks would place on, of one scheme or two
-    (`Placed.inj`, and one credited set for all)."""
-    for scheme in schemes:
-        declared(scheme, "resource")
+    (`Placed.inj`, and one credited set for all). It passes over a scheme that charges nothing, or whose blocks say
+    why none is in the circuit: neither places a block."""
+    schemes = [s for s in schemes if not isinstance(s.resource, Lacks) and not isinstance(s.blocks, Lacks)]
     strata = [(tid, rs) for tid, rs in strata]
     placed: dict[str, str] = {}
     out: set[int] = set()

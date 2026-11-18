@@ -99,7 +99,7 @@ BANDWIDTH = S.register(S.Scheme(
     name="bandwidth",
     protocol=domains.POUB_P2,
     resource="read",
-    blocks=(),
+    blocks=S.Lacks(_OUTSIDE + "no block of the workload's circuit carries its cost"),
     assumptions=(*_SKETCH, "ResourceAccounting.Assumptions.WorkHardnessP2",
                  "ResourceAccounting.Remote.Held.Assumptions.SquaringCeilingP2"),
     log=(
@@ -139,7 +139,7 @@ POUB = S.register(S.Scheme(
     name="poub",
     protocol=domains.POUB_PROTOCOL,
     resource="read",
-    blocks=(),
+    blocks=S.Lacks(_OUTSIDE + "no block of the workload's circuit carries its cost"),
     assumptions=(*_SKETCH, "ResourceAccounting.Assumptions.WorkHardness",
                  "ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling"),
     log=(S.Order("registration", "challenge"), S.Order("roots", "openings")),
