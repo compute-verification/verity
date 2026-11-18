@@ -489,7 +489,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
                                  x.statement.salts, x.statement.outputs)
         late = stream.deliver(sample, delivered.sessions())
         t = time.time()
-        outcome = late or tie.outcome(stream, sample, delivered, circuit_sha512=sg.circuit_sha512, inputs=rd.inputs,
+        outcome = late or tie.outcome(stream, sample, delivered, inputs=rd.inputs,
                                       releases=rd.releases, head=x.head, opening=x.cells if a.debug_clear else None)
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]

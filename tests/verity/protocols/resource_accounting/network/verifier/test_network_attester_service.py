@@ -315,9 +315,8 @@ def test_the_verdict_of_record_is_the_proofs(tmp_path):
     sample = run.stream.select(run.register(opening))
     certs = [r.certificate for r in opening.records]
 
-    def verdict(delivered, certificates=certs, syncs=SYNCS, circuit=None, **kw):
-        return lw.verify(sample, certificates, syncs, delivered,
-                         circuit_sha512=circuit or standin.circuit_sha512(delivered), **kw)
+    def verdict(delivered, certificates=certs, syncs=SYNCS, **kw):
+        return lw.verify(sample, certificates, syncs, delivered, **kw)
 
     def prove(o, k, **kw):
         return standin.prove(lw, o, sample, SYNCS, tmp_path / f"proof-{k}", **kw)
@@ -522,8 +521,7 @@ def test_an_unset_deadline_bit_is_a_reject(tmp_path):
         sample = run.stream.select(reg)
         delivered = run.prove(opening, sample)
         assert delivered.output == 0b01
-        verdict = run.lw.verify(sample, [r.certificate for r in opening.records], SYNCS, delivered,
-                                circuit_sha512=standin.circuit_sha512(delivered))
+        verdict = run.lw.verify(sample, [r.certificate for r in opening.records], SYNCS, delivered)
         assert verdict["public"] == {"verdict": 0, "deadline": 0} and verdict["accepted"] is False
         assert "clear" not in verdict
         assert reject(run.decide(sample, opening))
@@ -539,14 +537,12 @@ def test_a_late_proof_is_a_reject(tmp_path):
     out = run.stream.deliver(sample, delivered.sessions())
     assert out is not None and not out.accepted and out.verdict.codes == ("late",) and out.public == {}
     with pytest.raises(S.Refused):
-        run.lw.outcome(run.stream, sample, certificates, SYNCS, delivered,
-                       circuit_sha512=standin.circuit_sha512(delivered))
+        run.lw.outcome(run.stream, sample, certificates, SYNCS, delivered)
     opening = run.honest(1)
     sample = run.stream.select(run.register(opening))
     delivered = run.prove(opening, sample)
     run.clock.now = 125.0
-    assert run.lw.outcome(run.stream, sample, [r.certificate for r in opening.records], SYNCS, delivered,
-                          circuit_sha512=standin.circuit_sha512(delivered)).verdict.codes == ("late",)
+    assert run.lw.outcome(run.stream, sample, [r.certificate for r in opening.records], SYNCS, delivered).verdict.codes == ("late",)
     assert run.stream.symbols == ("late", "late")
 
 
@@ -599,8 +595,7 @@ def test_the_opening_must_be_the_registered_phases(tmp_path):
         run.lw.clear(run.honest(1), sample, SYNCS)
     delivered = run.prove(opening, sample)
     with pytest.raises(ValueError, match="execution phase"):
-        run.lw.verify(sample, [r.certificate for r in opening.records], SYNCS, delivered,
-                      circuit_sha512=standin.circuit_sha512(delivered), opening=run.honest(1))
+        run.lw.verify(sample, [r.certificate for r in opening.records], SYNCS, delivered, opening=run.honest(1))
     for salts in ((SALTS[0][0],) * 4, SALTS[0][:2]):
         with pytest.raises(ValueError, match="salts"):
             run.lw.commit(0, *opening.records, salts=salts)
