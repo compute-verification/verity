@@ -24,6 +24,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           # served_piece.py reads PoUS's declaration through the schemes' one table, and the launcher's
           # declared_unchecked every declaration in it
           "verity/protocols/compose/__init__.py", "verity/protocols/compose/schemes.py", "verity/protocols/experimental",
+          "verity/protocols/proofs/spot/verifier/one_stage/verdict_record.py",
           # and attaches it on the adapter's exchange; the case's tests load SPOT's prover and the table's poub declaration
           "adapters/vllm/verity_vllm/messages.py", "verity/protocols/proofs/spot/prover/__init__.py",
           "verity/protocols/proofs/spot/prover/workload.py", "verity/protocols/resource_accounting/memory/poub/scheme.py",
