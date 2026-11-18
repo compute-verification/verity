@@ -22,6 +22,7 @@ import pytest
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, Runner, Serving, Tokenizer, records
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import network_admission as na
 from verity_vllm.pipeline import serve_admit as sa
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
@@ -42,15 +43,15 @@ class Timers:
         self.armed[-1][1]()
 
 
-def gate(hold_s: float = 5.0) -> tuple[sa.ReleaseOrder, list[str], list[str], Timers]:
+def gate(hold_s: float = 5.0) -> tuple[na.ReleaseOrder, list[str], list[str], Timers]:
     fwd, aborted, timers = [], [], Timers()
-    return sa.ReleaseOrder(lambda a: fwd.append(a.engine_id), aborted.append, hold_s=hold_s, schedule=timers), fwd, aborted, timers
+    return na.ReleaseOrder(lambda a: fwd.append(a.engine_id), aborted.append, hold_s=hold_s, schedule=timers), fwd, aborted, timers
 
 
-def arrive(g: sa.ReleaseOrder, n: int | None, run: str | None = None) -> SimpleNamespace:
-    headers = {} if n is None else {sa.RELEASE_HEADER: str(n)}
+def arrive(g: na.ReleaseOrder, n: int | None, run: str | None = None) -> SimpleNamespace:
+    headers = {} if n is None else {na.RELEASE_HEADER: str(n)}
     if run is not None:
-        headers[sa.RUN_HEADER] = run
+        headers[na.RUN_HEADER] = run
     adm = SimpleNamespace(engine_id=f"r{n}", release=g.key(headers))
     g.submit(adm)
     return adm
@@ -91,7 +92,7 @@ def test_a_release_the_network_attester_dropped_holds_the_rest_only_until_its_sk
     arrive(g, 1)                                     # it came after all: in at once, counted late
     assert fwd[-1] == "r1" and g.summary()["late"] == 1 and g.summary()["skipped"] == 1
     with pytest.raises(ValueError, match="came twice"):
-        g.key({sa.RELEASE_HEADER: "1"})
+        g.key({na.RELEASE_HEADER: "1"})
 
 
 def test_a_stale_skip_does_nothing():
@@ -106,7 +107,7 @@ def test_a_stale_skip_does_nothing():
 def test_a_refused_or_aborted_release_passes_its_turn():
     g, fwd, aborted, _ = gate()
     arrive(g, 1)
-    g.passed(g.key({sa.RELEASE_HEADER: "0"}))        # 0 was refused (a 400) before it was submitted
+    g.passed(g.key({na.RELEASE_HEADER: "0"}))        # 0 was refused (a 400) before it was submitted
     assert fwd == ["r1"]
     held = arrive(g, 3)
     g.abort(held.engine_id)                          # 3's client went away while it waited on 2
@@ -124,10 +125,10 @@ def test_unnumbered_malformed_repeated_and_new_runs():
     assert fwd == ["rNone"] and g.summary()["unordered"] == 1
     for bad in ("-1", "x", "1.5", ""):
         with pytest.raises(ValueError, match="non-negative integer"):
-            g.key({sa.RELEASE_HEADER: bad})
+            g.key({na.RELEASE_HEADER: bad})
     arrive(g, 1, run="a")
     with pytest.raises(ValueError, match="came twice"):
-        g.key({sa.RELEASE_HEADER: "1", sa.RUN_HEADER: "a"})
+        g.key({na.RELEASE_HEADER: "1", na.RUN_HEADER: "a"})
     arrive(g, 0, run="b")                            # a new run: what run a still held goes on, and b starts at 0
     assert fwd == ["rNone", "r1", "r0"] and g.run == "b" and g.next == 1
     arrive(g, 7, run="a")                            # a's, after b began: unordered
@@ -281,7 +282,7 @@ class OrderedServing:
                                         clock=lambda: 0.0, wall=lambda: 0.0)
         self.engine = OrderedEngine(self.runner)
         self.loop = so.EngineLoop(self.engine, self.windows)
-        self.order = sa.ReleaseOrder(self.loop.submit, self.loop.abort, hold_s=5.0, schedule=self.timers)
+        self.order = na.ReleaseOrder(self.loop.submit, self.loop.abort, hold_s=5.0, schedule=self.timers)
         self.server = so.Server(proto=so.PlainProtocol(True), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
                                 defaults={}, submit=self.loop.submit, abort=self.loop.abort, clock=lambda: 7, order=self.order)
         self.taken, self.gate_submit = threading.Semaphore(0), self.server.submit
