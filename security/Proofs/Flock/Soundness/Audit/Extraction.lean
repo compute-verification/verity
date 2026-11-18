@@ -192,6 +192,33 @@ theorem extraction_audit_count (A : ExtractionAnalysis L Reg session)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => absurd h.1 hB).trans
       (prCoin_false.le.trans (zero_le))
 
+/-- **The audit bound over levels, with a randomized extractor**: `extraction_audit_le` at an audit that samples the units
+whose blocks `idx u` the levels `Lv` sample. -/
+theorem extraction_audit_le_levels {G : Type} [Fintype G] [DecidableEq G] (Lv : Verity.Levels G)
+    (idx : Fin n → Finset G) (hL : SamplingDesign.ofLevels Lv idx = L) (A : ExtractionAnalysis L Reg session)
+    {εks εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) (E : A.Tr → Finset (Fin n) → Prop) (σ : Strategy (audit L Reg session)) :
+    prob (fun o => o.1 = true ∧ E (A.committedOf σ) o.2) (audit L Reg session) σ ≤
+      prCoin (fun ω => E (A.committedOf σ) ((SamplingDesign.ofLevels Lv idx).draw ω) ∧
+        Disjoint (Lv.design.draw ω) ((A.incorrect (A.committedOf σ)).image idx)) +
+      εks (reg σ) (cont σ) + εbind (reg σ) (cont σ) := by
+  subst hL
+  refine (extraction_audit_le A hks hlink E σ).trans_eq ?_
+  simp only [SamplingDesign.disjoint_ofLevels]
+
+/-- **The count curve over levels, with a randomized extractor**: `Pr[accept ∧ at least K incorrect proof blocks]` is at
+most the levels' largest miss of the blocks of `K` or more units, plus `ε_ks(σ) + ε_bind(σ)`. -/
+theorem extraction_audit_count_levels {G : Type} [Fintype G] [DecidableEq G] (Lv : Verity.Levels G)
+    (idx : Fin n → Finset G) (hL : SamplingDesign.ofLevels Lv idx = L) (A : ExtractionAnalysis L Reg session)
+    {εks εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) (K : ℕ) (σ : Strategy (audit L Reg session)) :
+    prob (fun o => o.1 = true ∧ K ≤ (A.incorrect (A.committedOf σ)).card) (audit L Reg session) σ ≤
+      (⨆ (B : Finset (Fin n)) (_ : K ≤ B.card), Lv.design.missProb (B.image idx)) +
+        εks (reg σ) (cont σ) + εbind (reg σ) (cont σ) := by
+  subst hL
+  rw [← SamplingDesign.miss_ofLevels]
+  exact extraction_audit_count A hks hlink K σ
+
 /-- **Sampled proof blocks, with a randomized extractor**, are correct up to `ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_sampled (A : ExtractionAnalysis L Reg session)
     {εks εbind : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)

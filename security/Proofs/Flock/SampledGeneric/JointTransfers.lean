@@ -166,3 +166,10 @@ theorem Flock.SecurityProofs.GenericSampledKSJoint : Flock.Guarantees.GenericSam
     (J.toTrials_transfers L) (J.toTrials L).plurality_plur hM σ hCR).trans ?_
   gcongr
   exact avg_mono fun ω => iSup₂_mono fun u hu => hks _ _ _ u hu
+
+open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
+/-- **The textbook form over levels** (`Flock.Guarantees.GenericSampledKSJointLevels`). -/
+theorem Flock.SecurityProofs.GenericSampledKSJointLevels : Flock.Guarantees.GenericSampledKSJointLevels := by
+  intro n Reg Dh Hc G _ _ Lv idx PS B Correct J κ M hJ hS hc hks hM σ hCR
+  rw [← SamplingDesign.missProb_ofLevels]
+  exact Flock.SecurityProofs.GenericSampledKSJoint n Reg Dh Hc _ PS B Correct J κ M hJ hS hc hks hM σ hCR

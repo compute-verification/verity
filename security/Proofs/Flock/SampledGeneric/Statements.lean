@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SampledGeneric.Defs
+public import Proofs.Flock.Soundness.Audit.Levels
 
 /-!
 # The sampled audit as a compiler, generic in the proof system (stated in the game model)
@@ -23,6 +24,8 @@ before the verifier's first coin.
 * `GenericSampledKSCount`: `Pr[accept ∧ |F| ≥ K] ≤ miss(K) + ε_ks + ε_bind`, the count curve;
 * `GenericSampledKSJoint`: the same for an extractor in the textbook form (`JointExtractor`), with the knowledge error
   `κ` of its definition, no slack, and the committed trace the plurality of its trials;
+* each of the five `…Levels`: the same at the audit that samples what levels sample (`SamplingDesign.ofLevels`), with
+  the sampling term the levels' own;
 * `GenericSampledZK`: the audit's view is `(ε_zk + ε_hide)`-close to a simulator's that knows no trace, from the proof
   system's zero knowledge and the commitment's hiding; `FlockZk.lean` gives the leakage form (`ZKBelow`,
   `audit_below`) the ZK server's theorem has.
@@ -113,6 +116,79 @@ def GenericSampledKSJoint : Prop :=
         L.missProb (incorrect B Correct (reg σ) ((J.toTrials L).plur (reg σ) (cont σ))) +
           avg (fun ω => ⨆ u ∈ L.draw ω, κ (L.draw ω) (reg σ) (cont σ ω) u) +
           (J.toTrials L).bindErr (reg σ) (cont σ) M
+
+/-- **`GenericSampledKS` over levels**: at the audit that samples the proof blocks whose blocks `idx u` the levels `Lv`
+sample (`SamplingDesign.ofLevels`), the sampling term is the levels' own: the sample misses the blocks of `F`. -/
+def GenericSampledKSLevels : Prop :=
+  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (G : Type) [Fintype G] [DecidableEq G] (Lv : Verity.Levels G)
+    (idx : Fin n → Finset G) (PS : ProofSystem n Reg) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
+    (Ex : Extractor PS B) (Tr : Trials (SamplingDesign.ofLevels Lv idx) PS B)
+    (Xc : (R : Reg) → Cont (SamplingDesign.ofLevels Lv idx) Reg PS.session R → B.Trace) (M : ℕ),
+    Ex.Covers Correct → Tr.Opens → Tr.WellFormed → Tr.Transfers Ex → Tr.Plurality Xc → 1 ≤ M →
+    ∀ (σ : Strategy (audit (SamplingDesign.ofLevels Lv idx) Reg PS.session))
+      (E : B.Trace → Finset (Fin n) → Prop), Tr.CR (reg σ) (cont σ) M →
+      prob (fun o => o.1 = true ∧ E (Xc (reg σ) (cont σ)) o.2)
+          (audit (SamplingDesign.ofLevels Lv idx) Reg PS.session) σ ≤
+        prCoin (fun ω => E (Xc (reg σ) (cont σ)) ((SamplingDesign.ofLevels Lv idx).draw ω) ∧
+          Disjoint (Lv.design.draw ω) ((incorrect B Correct (reg σ) (Xc (reg σ) (cont σ))).image idx)) +
+        Ex.ksAvg (SamplingDesign.ofLevels Lv idx) (reg σ) (cont σ) + Tr.bindErr (reg σ) (cont σ) M
+
+/-- **`GenericSampledKSPa` over levels**: `P_a(F)` is the levels' acceptance probability at the blocks of `F`. -/
+def GenericSampledKSPaLevels : Prop :=
+  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (G : Type) [Fintype G] [DecidableEq G] (Lv : Verity.Levels G)
+    (idx : Fin n → Finset G) (PS : ProofSystem n Reg) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
+    (Ex : Extractor PS B) (Tr : Trials (SamplingDesign.ofLevels Lv idx) PS B)
+    (Xc : (R : Reg) → Cont (SamplingDesign.ofLevels Lv idx) Reg PS.session R → B.Trace) (M : ℕ),
+    Ex.Covers Correct → Tr.Opens → Tr.WellFormed → Tr.Transfers Ex → Tr.Plurality Xc → 1 ≤ M →
+    ∀ σ : Strategy (audit (SamplingDesign.ofLevels Lv idx) Reg PS.session), Tr.CR (reg σ) (cont σ) M →
+      prob (fun o => o.1 = true) (audit (SamplingDesign.ofLevels Lv idx) Reg PS.session) σ ≤
+        Lv.design.missProb ((incorrect B Correct (reg σ) (Xc (reg σ) (cont σ))).image idx) +
+          Ex.ksAvg (SamplingDesign.ofLevels Lv idx) (reg σ) (cont σ) + Tr.bindErr (reg σ) (cont σ) M
+
+/-- **`GenericSampledKSEscape` over levels**: `Pr[accept ∧ W ⊆ F]` is at most the levels' acceptance probability at the
+blocks of `W`. -/
+def GenericSampledKSEscapeLevels : Prop :=
+  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (G : Type) [Fintype G] [DecidableEq G] (Lv : Verity.Levels G)
+    (idx : Fin n → Finset G) (PS : ProofSystem n Reg) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
+    (Ex : Extractor PS B) (Tr : Trials (SamplingDesign.ofLevels Lv idx) PS B)
+    (Xc : (R : Reg) → Cont (SamplingDesign.ofLevels Lv idx) Reg PS.session R → B.Trace) (M : ℕ),
+    Ex.Covers Correct → Tr.Opens → Tr.WellFormed → Tr.Transfers Ex → Tr.Plurality Xc → 1 ≤ M →
+    ∀ (W : Finset (Fin n)) (σ : Strategy (audit (SamplingDesign.ofLevels Lv idx) Reg PS.session)),
+      Tr.CR (reg σ) (cont σ) M →
+      prob (fun o => o.1 = true ∧ W ⊆ incorrect B Correct (reg σ) (Xc (reg σ) (cont σ)))
+          (audit (SamplingDesign.ofLevels Lv idx) Reg PS.session) σ ≤
+        Lv.design.missProb (W.image idx) + Ex.ksAvg (SamplingDesign.ofLevels Lv idx) (reg σ) (cont σ) +
+          Tr.bindErr (reg σ) (cont σ) M
+
+/-- **`GenericSampledKSCount` over levels**: `miss(K)` is the levels' largest acceptance probability at the blocks of `K`
+or more proof blocks. -/
+def GenericSampledKSCountLevels : Prop :=
+  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (G : Type) [Fintype G] [DecidableEq G] (Lv : Verity.Levels G)
+    (idx : Fin n → Finset G) (PS : ProofSystem n Reg) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
+    (Ex : Extractor PS B) (Tr : Trials (SamplingDesign.ofLevels Lv idx) PS B)
+    (Xc : (R : Reg) → Cont (SamplingDesign.ofLevels Lv idx) Reg PS.session R → B.Trace) (M : ℕ),
+    Ex.Covers Correct → Tr.Opens → Tr.WellFormed → Tr.Transfers Ex → Tr.Plurality Xc → 1 ≤ M →
+    ∀ (K : ℕ) (σ : Strategy (audit (SamplingDesign.ofLevels Lv idx) Reg PS.session)), Tr.CR (reg σ) (cont σ) M →
+      prob (fun o => o.1 = true ∧ K ≤ (incorrect B Correct (reg σ) (Xc (reg σ) (cont σ))).card)
+          (audit (SamplingDesign.ofLevels Lv idx) Reg PS.session) σ ≤
+        (⨆ (W : Finset (Fin n)) (_ : K ≤ W.card), Lv.design.missProb (W.image idx)) +
+          Ex.ksAvg (SamplingDesign.ofLevels Lv idx) (reg σ) (cont σ) + Tr.bindErr (reg σ) (cont σ) M
+
+/-- **`GenericSampledKSJoint` over levels**: `P_a(F)` is the levels' acceptance probability at the blocks of `F`. -/
+def GenericSampledKSJointLevels : Prop :=
+  ∀ (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh) (G : Type) [Fintype G] [DecidableEq G] (Lv : Verity.Levels G)
+    (idx : Fin n → Finset G) (PS : ProofSystem n Reg) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
+    (J : JointExtractor PS B)
+    (κ : (S : Finset (Fin n)) → (R : Reg) → Strategy (PS.session S R) → Fin n → ℝ≥0∞) (M : ℕ),
+    J.Judged → J.Sound Correct → (∀ S R o, 0 ≤ J.cost S R o) → J.KnowledgeSound κ → 1 ≤ M →
+    ∀ σ : Strategy (audit (SamplingDesign.ofLevels Lv idx) Reg PS.session),
+      (J.toTrials (SamplingDesign.ofLevels Lv idx)).CR (reg σ) (cont σ) M →
+      prob (fun o => o.1 = true) (audit (SamplingDesign.ofLevels Lv idx) Reg PS.session) σ ≤
+        Lv.design.missProb ((incorrect B Correct (reg σ)
+          ((J.toTrials (SamplingDesign.ofLevels Lv idx)).plur (reg σ) (cont σ))).image idx) +
+          avg (fun ω => ⨆ u ∈ (SamplingDesign.ofLevels Lv idx).draw ω,
+            κ ((SamplingDesign.ofLevels Lv idx).draw ω) (reg σ) (cont σ ω) u) +
+          (J.toTrials (SamplingDesign.ofLevels Lv idx)).bindErr (reg σ) (cont σ) M
 
 /-- **The sampled audit's zero knowledge, generic in the proof system.** For a proof system whose honest prover's view
 is `ε_zk`-close to its simulator's at every statement in its relation (`Zk.ZK`), and a commitment that is
