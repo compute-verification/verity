@@ -3,6 +3,7 @@ module
 public import Definitions.Core.Expand
 public import Definitions.Core.Partition
 public import Flock.Program
+public import Properties.Flock.EvalBool
 
 /-!
 # The registered description as core's circuit (`ofProgram`)
@@ -11,7 +12,8 @@ C is the decoded description `P` (`Flock.Program.Prog`, PROTOCOL.md) read as cor
 §6's canonical layout, in its order, each located by the decoder's own `Prog.gate`. A gate's width is its primitive's
 `Value<w>`, it is an input gate exactly when its primitive is `Input<w>_v1` or `RegisteredInput<w>_v1`, it reads its
 operands, and its operation is the meaning `sem` gives its primitive, on its operands' bits in order, each value low bit
-first. The circuit's outputs are the gates the root's return resolves to.
+first. The circuit's outputs are the gates the root's return resolves to. `ofProgram` is C: its meaning is the one
+evaluator, `Prog.evalBool`, so a primitive Definition's gate computes that Definition's value on its operands' bits.
 
 `ofProgramWith` is total by construction: a gate reads only its operands below it, so `reads_lt` holds by definition and
 the operation reads nothing else, and a gate `Prog.gate` refuses is an input of width 0. On a description `decode` accepts
@@ -123,10 +125,12 @@ def blockOf (blocks : Array (ℕ × ℕ)) (g : ℕ) : Fin (blocks.size + 1) :=
   | some i => i.castSucc
   | none => Fin.last _
 
+/-- **C**, the registered description as core's circuit: each gate's operation is `Prog.evalBool` of its primitive. -/
+def ofProgram (P : Prog) : Verity.Circuit := ofProgramWith P (Prog.evalBool P)
+
 /-- **The proof blocks**: a computed gate in range `i` of `blocks` (the partition object's gate ranges `[lo, hi)`) is in
 block `i`, one in no range in the last block; an input gate is in none. -/
-def partOf (P : Prog) (sem : ℕ → List Bool → List Bool) (blocks : Array (ℕ × ℕ)) :
-    Verity.Partition (ofProgramWith P sem) (blocks.size + 1) where
+def partOf (P : Prog) (blocks : Array (ℕ × ℕ)) : Verity.Partition (ofProgram P) (blocks.size + 1) where
   unit g := if inputAt P g then none else some (blockOf blocks g)
   input_iff g := by
     show (if inputAt P g then none else some (blockOf blocks g)) = none ↔ inputAt P g = true
@@ -181,7 +185,7 @@ theorem inputAt_of_registered {P : Prog} {g : ℕ} (h : registeredAt P g = true)
 
 /-- **Where C's values are committed** (core's `Layout`): a registered gate at its root node's entry, at its offset in
 that node; every gate in the one execution phase. -/
-def layoutOf (P : Prog) (sem : ℕ → List Bool → List Bool) : Verity.Layout (ofProgramWith P sem) where
+def layoutOf (P : Prog) : Verity.Layout (ofProgram P) where
   reg g := regAt P g
   reg_input g h := by
     show inputAt P g = true
