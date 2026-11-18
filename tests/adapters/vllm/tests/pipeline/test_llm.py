@@ -216,10 +216,24 @@ def test_a_refused_set_raises_before_the_engine_is_built(built):
     assert built == {}
 
 
-def test_pearl_cs_option_attaches_pearl_plus_by_name_on_the_build_and_close_releases_it(built, monkeypatch):
+def test_storage_attaches_by_its_name_though_the_selector_has_no_such_protocol(built, monkeypatch):
+    """``pous`` is no protocol of the selector (`config.PROTOCOLS`) but PoUS's declared scheme's name, which is attached
+    by name: what refuses it here is PoUS's own attach (`served.launcher_refusals`: the in-process LLM hands it no salt
+    source), not the selector.  A name that is neither stays the selector's to refuse, with its message."""
+    attached: list[str] = []
+    attach = messages.Exchange.attach
+    monkeypatch.setattr(messages.Exchange, "attach", lambda ex, s, given, **ctx: (attached.append(s.name), attach(ex, s, given, **ctx))[1])
+    with pytest.raises(ValueError, match="no salt_source"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous")
+    assert attached == ["pous"]
+    with pytest.raises(ValueError, match=r"protocol entry 'zk:v1': unknown protocol 'zk' \(known: pouw, sampled-proofs\)"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous,zk:v1")
+
+
+def test_pearl_plus_attaches_by_its_name_on_the_build_and_close_releases_it(built, monkeypatch):
     """The kernel is a stand-in: Pearl+ loads it at the first registered weights, which a CPU engine never emits."""
-    llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:pearl-c-h100-v1-h3",
-                protocols_config={"pouw": {"device": "cuda", "kernel": "/k.so"}})
+    llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols=["pearl-plus"],
+                protocols_config={"pearl-plus": {"device": "cuda", "kernel": "/k.so"}})
     ex = llm._engine.exchange
     assert list(ex.attached) == ["pearl-plus"] and llm.protocols is None
     assert ex.attached["pearl-plus"]["kernel"] == "/k.so" and ex.attached["pearl-plus"]["coins"] == "in-process"
@@ -229,18 +243,28 @@ def test_pearl_cs_option_attaches_pearl_plus_by_name_on_the_build_and_close_rele
     llm.close()
     llm.close()
     assert released == [True]
+    with pytest.raises(ValueError, match="pearl-plus runs on cuda"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pearl-plus", protocols_config={"pearl-plus": {"device": "cpu"}})
+
+
+def test_a_declared_schemes_option_is_refused_and_its_name_is_named(built):
+    with pytest.raises(ValueError, match="pouw:pearl-c-h100-v1-h3: names the declared scheme pearl-plus, .*takes 'pearl-plus'"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:pearl-c-h100-v1-h3")
+    with pytest.raises(ValueError, match="unknown protocol 'pous'"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:p2-16448/v4")
+    with pytest.raises(ValueError, match="protocol 'pouw' is enabled twice"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pearl-plus,pouw:eps1-sm120-h1fx1")
+
+
+def test_listed_schemes_attach_by_name_in_their_order(built, monkeypatch):
     order: list[str] = []
-    stand_ins = {e: SimpleNamespace(name=n, option=e, settings={}, check_settings=lambda own: None, requests=lambda ctx: (),
-                                    attach=lambda ex, ctx, n=n: order.append(n))
-                 for e, n in (("pouw:a-v1", "a"), ("pous:b-v1", "b"))}
-    monkeypatch.setattr(messages, "option", stand_ins.get)
-    both = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:a-v1,pous:b-v1")
+    stand_ins = {n: SimpleNamespace(name=n, option="", settings={}, check_settings=lambda own: None, requests=lambda ctx: (),
+                                    attach=lambda ex, ctx, n=n: order.append(n)) for n in ("a", "b")}
+    monkeypatch.setattr(messages.declarations, "load", lambda: stand_ins)
+    both = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="a,b")
     assert order == ["a", "b"] and sorted(both._engine.exchange.attached) == ["a", "b"] and both.protocols is None
     with pytest.raises(ValueError, match="2 schemes attached by name, not one"):
         _ = both.scheme
-    monkeypatch.undo()
-    with pytest.raises(ValueError, match="pouw:pearl-c-h100-v1-h3 runs on cuda"):
-        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:pearl-c-h100-v1-h3", protocols_config={"pouw": {"device": "cpu"}})
 
 
 @pytest.mark.parametrize("option,value", [

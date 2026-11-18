@@ -61,7 +61,7 @@ untraced = [
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
 # before and after vllm's layout move. bench_arm's live coins open their session through verity_vllm.pipeline.commit_coins.
 # test_pearl_c_sm90_overhead_arm reads the overhead door's schemes and linears (verity_bench's overhead.py), which name
-# pearl_c_sm90's arm.
+# pearl_c_sm90's arm, and the kernel scheme Pearl+ declares on a card (verity_bench's schemes.py, over the declarations).
 # test_proved_ticks_placed places PoUW's compiled Program on a block of the datacenter model (benchmarks/datacenter's
 # package, on pytest's `pythonpath`), with what that package imports of core: the registration log (registration.py, over
 # site and wire) and PoUB's block size (its codec.py); its census imports the Boolean versions' lookup
@@ -89,8 +89,6 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "adapters/vllm/verity_vllm/protocols/interface.py",
           "adapters/vllm/verity_vllm/protocols/pous.py",
           "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/operands.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/circuit.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/device.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/challenger.py",
@@ -116,7 +114,6 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/static.py",
           "adapters/torch/verity_torch/pouw/h1/tables_device.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/window.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/native.py",
           "adapters/torch/verity_torch/pouw/pearl_c/passes.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py",
           "adapters/torch/verity_torch/pouw/pearl_c/graphs.py",
@@ -178,7 +175,10 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "benchmarks/harness/verity_bench/__init__.py", "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_work.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear/__init__.py",
-          "verity/circuits/ops/boolean/versions.py", "benchmarks/pouw", "calibration/pouw"]
+          "verity/circuits/ops/boolean/versions.py", "benchmarks/pouw", "calibration/pouw",
+          "benchmarks/harness/verity_bench/schemes.py", "verity/protocols/compose/__init__.py",
+          "verity/protocols/compose/schemes.py", "verity/protocols/resource_accounting/scheme.py",
+          "verity/protocols/resource_accounting/compute/pouw/scheme.py", "verity/hooks.py", "verity/protocol.py"]
 # one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
 # check runs it as three parts by test id (`lean-suites:verity-pouw-benchmarks:K/3`, `suites.py`'s `id_part_of`), each
