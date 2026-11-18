@@ -181,7 +181,7 @@ def test_the_arch_is_the_card_records_whose_driver_holds_the_reported_name(name,
 
 
 def test_a_card_no_record_holds_is_refused_by_name():
-    with pytest.raises(SystemExit, match=r"^0 card records under .* have 'NVIDIA A100-SXM4-80GB'"):
+    with pytest.raises(SystemExit, match=r"^0 GPU card files under .* have 'NVIDIA A100-SXM4-80GB'"):
         kit.card_arch("NVIDIA A100-SXM4-80GB")
 
 
