@@ -34,6 +34,49 @@ class DefinitionTable:
 
     def __init__(self) -> None:
         self.defs: dict[str, "FunctionDefinition"] = {}
+        self.families: dict[str, tuple[re.Pattern[str], Callable[[int], "FunctionDefinition"]]] = {}
+        self._made: dict[str, "FunctionDefinition"] = {}
+
+    def add_family(self, pattern: str, make: Callable[[int], "FunctionDefinition"]) -> None:
+        """Definitions made per width on demand: the id fully matching ``pattern`` (one group, the width) is ``make(width)``.
+        Refuses a pattern added twice, and one matching a registered id that ``make`` doesn't return."""
+        pat = re.compile(pattern)
+        if pat.groups != 1:
+            raise ValueError(f"family {pattern!r}: a family's pattern has exactly one group, the width")
+        if pattern in self.families:
+            raise ValueError(f"family {pattern!r} is added twice")
+        self.families[pattern] = (pat, make)
+        try:
+            for fid in [f for f in self.defs if pat.fullmatch(f)]:
+                self.resolve(fid)
+        except ValueError:
+            del self.families[pattern]
+            raise
+
+    def resolve(self, fid: str) -> "FunctionDefinition | None":
+        """The Definition ``fid``: the registered one, else the one the `add_family` family matching ``fid`` makes, made once;
+        None for neither. Refuses an id two families match, a family making another id, and a registered id a family matches
+        that isn't the family's own Definition."""
+        if fid in self._made:
+            return self._made[fid]
+        fams = [(p, make) for p, make in self.families.values() if p.fullmatch(fid)]
+        if not fams:
+            return self.defs.get(fid)
+        if len(fams) > 1:
+            raise ValueError(f"{fid}: families {', '.join(repr(p.pattern) for p, _ in fams)} all match it; patterns of two "
+                             "families never match one id")
+        pat, make = fams[0]
+        registered = self.defs.get(fid)
+        try:
+            made = make(int(pat.fullmatch(fid)[1]))
+        except ValueError as e:
+            raise ValueError(f"{fid}: family {pat.pattern!r} can't make it: {e}") from e
+        if made.id != fid:
+            raise ValueError(f"family {pat.pattern!r} made {made.id} when asked for {fid}")
+        if registered is not None and registered is not made:
+            raise ValueError(f"{fid} is registered, and family {pat.pattern!r} matches it with another Definition")
+        self._made[fid] = made
+        return made
 
     def add(self, d: "FunctionDefinition") -> "FunctionDefinition":
         prev = self.defs.get(d.id)
