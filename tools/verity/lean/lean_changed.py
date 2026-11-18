@@ -961,7 +961,7 @@ PASSES, PASSES_KEPT = "passes", 4000
 PASS_SCHEMA = "lean-records-pass/v2"
 #: `--records`' facts cache, beside its trees and shared by every slot's: each audited package's sealed facts document
 #: (`check.py --facts-cache`), named by its build's content address (`facts_key`), outside every slot tree's build roots
-FACTS_CACHE = "facts"
+FACTS_CACHE = LA.RECORDS_FACTS
 SELF = "tools/verity/lean/lean_changed.py"
 LOCK = "lean-audit.json"
 
