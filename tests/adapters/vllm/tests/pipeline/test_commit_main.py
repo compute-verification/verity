@@ -225,7 +225,7 @@ class Committer:
                  declare: tuple[str, ...] = ("instance_outputs_native",)) -> None:
         self.eng, self.run_id, self.name, self.leave, self.forge, self.declare = eng, run_id, name, leave, forge, declare
         self.host = NativeHostCommitter(None, run_id=run_id, hash_threads=1, program_digest=PROGRAM)
-        self.retain = self.host.retain
+        self.retain, self.program_digest = self.host.retain, self.host.program_digest
         self.steps: list[list[tuple[str, bytes]]] = []
         self.calls: list[str] = []
         self.roots: list[str] = []
@@ -420,7 +420,7 @@ def control_row(tmp_path: Path, pair: int, order: int, *, step_s: float = 1.0, *
             "case": "B0", "model": "org/model", "pair": pair, "order_in_pair": order, "arm": "control", "committer": None, "committer_name": None,
             "wall_s": 3 * step_s, "iterations": 3, "engine_steps": 3, "generated_tokens": 5, "prompt_tokens": 5,
             "generated_tokens_per_s": 5 / (3 * step_s), "total_tokens_per_s": 10 / (3 * step_s), "step_wall_s": [step_s] * 3,
-            "step_wall_prefill_s": step_s, "step_wall_decode_mean_s": step_s, "tokens_equal_ref": True, "tokens_digest": TOKENS_DIGEST,
+            "step_wall_prefill_s": step_s, "step_wall_decode_mean_s": step_s, "tokens_equal_ref": True,
             "gpu_mem": {"torch_max_allocated_gb": 0.0, "torch_reserved_gb": 0.0, "nvidia_smi_used_mib": None},
             "host_mem_kb": {"rss_before": RSS[0], "rss_after": RSS[0], "hwm": RSS[1]}, "utc": UTC, **more}
 
@@ -498,7 +498,10 @@ def test_a_paired_commit_that_passes(tmp_path, stand_ins, capsys):
     [com] = MADE
     roots = com.roots[1:]
     assert ended.exit is None and ended.printed[-1] == PASS_LINE.format(n=2) and ended.printed[-2] == f"[delta] wrote {ended.out}"
-    assert ended.files() == ["declaration_stand_in.json", "runs.jsonl", "steps.jsonl", "summary.json", "summary.md", "verdict.json", "versions.json"]
+    assert ended.files() == ["declaration_stand_in.json", "runs.jsonl", "steps.jsonl", "summary.json", "summary.md", "tokens_digests.jsonl",
+                             "verdict.json", "versions.json"]
+    assert ended.rows("tokens_digests.jsonl") == [{"pair": p, "arm": a, "tokens_digest": TOKENS_DIGEST}
+                                                  for p, a in ((0, "control"), (0, "instrumented"), (1, "instrumented"), (1, "control"))]
     assert len(set(com.roots)) == 3 and com.calls == ["register_weights", *WARMUP, *RUN, *RUN, "close"]
     assert ended.doc("verdict.json") == verdict_doc(roots)
     assert less_coins(ended.rows()) == [control_row(tmp_path, 0, 0), instrumented_row(tmp_path, 0, 1, roots[0]),
@@ -521,6 +524,29 @@ def test_a_paired_commit_that_passes(tmp_path, stand_ins, capsys):
         ("commit_verdict", {"tokens_equal": True, "min_openings": 4, "declaration": said, "required_classes": CLASSES})]
     extra = sorted(n for n in os.environ if n not in stand_ins.environ and n not in ENVIRON)
     assert extra == [], "main wrote a name the fixture does not take back"
+
+
+def test_each_instrumented_run_is_one_execution_phase_on_the_exchange(tmp_path, stand_ins, capsys):
+    """An instrumented run opens a phase before its workload, closes it after under the committer's Program, and its
+    root follows the finalize; a control run is none."""
+    from verity import hooks as H
+    from verity_vllm import messages
+
+    stand_ins.verdicts = [(True, None)]
+    messages.close()
+    heard: list = []
+    off = messages.current().subscribe("test", "steps", heard.append)
+    try:
+        run(tmp_path, capsys)
+    finally:
+        off()
+        messages.close()
+    [com] = MADE
+    program, roots = bytes(com.host.program_digest), [bytes.fromhex(r) for r in com.roots[1:]]
+    assert [(type(e), e.phase) for e in heard] == [(H.PhaseOpened, 0), (H.PhaseClosed, 0), (H.PhaseCommitted, 0),
+                                                   (H.PhaseOpened, 1), (H.PhaseClosed, 1), (H.PhaseCommitted, 1)]
+    assert [e.program for e in heard if isinstance(e, H.PhaseClosed)] == [program, program]
+    assert [e.root for e in heard if isinstance(e, H.PhaseCommitted)] == roots
 
 
 def test_a_full_collection_is_asked_for_once_before_each_run(tmp_path, stand_ins, capsys):
@@ -587,7 +613,7 @@ def test_only_the_control_arm(tmp_path, stand_ins, capsys):
     ended = run(tmp_path, capsys, "--only-arm", "control")
     assert ended.exit is None and ended.printed[-1] == f"[delta] wrote {ended.out} (control arm only)"
     assert MADE == [] and [name for name, _ in stand_ins.calls] == ["build_engine"]
-    assert ended.files() == ["runs.jsonl", "steps.jsonl", "summary.json", "summary.md", "verdict.json", "versions.json"]
+    assert ended.files() == ["runs.jsonl", "steps.jsonl", "summary.json", "summary.md", "tokens_digests.jsonl", "verdict.json", "versions.json"]
     versions = versions_doc(ended, "control")
     assert ended.doc("versions.json") == versions
     assert ended.doc("verdict.json") == {"only_arm": "control", "runs": 2, "compilation": versions["compilation"]}
@@ -624,7 +650,7 @@ def test_two_arms_against_one_control(tmp_path, stand_ins, capsys):
     assert [c.calls for c in MADE] == [["register_weights", *WARMUP, *RUN, *RUN, "close"]] * 2
     assert [kw["kind"] for name, kw in stand_ins.calls if name == "attach_of_record"] == [PLUGIN, PLUGIN_2]
     assert ended.files() == ["declaration_stand_in.json", "declaration_stand_in_2.json", "runs.jsonl", "steps.jsonl", "summary.json", "summary.md",
-                             "verdict.json", "versions.json"]
+                             "tokens_digests.jsonl", "verdict.json", "versions.json"]
     assert ended.doc("verdict.json") == verdict_doc([one.roots[1], two.roots[1], one.roots[2], two.roots[2]])
     first = {"arm": PLUGIN, "kind": PLUGIN}
     second = {"arm": PLUGIN_2, "kind": PLUGIN_2, "name": "stand_in_2"}
@@ -657,7 +683,7 @@ def test_a_commit_whose_runs_fail_their_verdict_exits_3(tmp_path, stand_ins, cap
     reason = stand_ins.answers[0][1]
     assert ended.exit == 3 and reason.startswith(why)
     assert ended.printed[-1] == FAIL_LINE.format(failed=2, n=2, pair=0, arm="instrumented", why=reason)
-    assert ended.files() == ["declaration_stand_in.json", "runs.jsonl", "steps.jsonl", "summary.json", "summary.md", "verdict.json", "versions.json"]
+    assert ended.files() == ["declaration_stand_in.json", "runs.jsonl", "steps.jsonl", "summary.json", "summary.md", "tokens_digests.jsonl", "verdict.json", "versions.json"]
     assert ended.doc("verdict.json") == verdict_doc(roots, failed=2, why=reason)
     assert ("open 4" in com.calls) == (argv != ("--retain", "none"))
     rows = less_coins(ended.rows())

@@ -199,8 +199,23 @@ def test_the_gencode_is_the_cards_architecture_files(name, gencode):
 def test_a_card_whose_arch_has_no_architecture_file_is_refused_by_name(tmp_path):
     h200 = (kit.cards_directory() / "h200-sxm-141gb.toml").read_text()
     (tmp_path / "h200-sxm-141gb.toml").write_text(h200.replace('arch = "sm_90a"', 'arch = "sm_89"'))
-    with pytest.raises(SystemExit, match=r"^target 'sm_89': no architecture 'sm_89'"):
+    with pytest.raises(SystemExit, match=r"^the card nvidia-smi names 'NVIDIA H200': no architecture 'sm_89'"):
         kit.card_gencode("NVIDIA H200", directory=tmp_path)
+
+
+def test_with_no_card_the_sku_names_the_card_file_and_ends_in_the_same_architecture_file(tmp_path):
+    assert kit.card_arch(sku="h200-sxm-141gb") == "sm_90a" == kit.card_arch("NVIDIA H200")
+    assert kit.card_gencode(sku="b200-sxm-180gb") == kit.card_gencode("NVIDIA B200") == "arch=compute_100a,code=sm_100a"
+    with pytest.raises(SystemExit, match=r"^card 'xeon-6776p-2s' .* is no build target"):
+        kit.card_gencode(sku="xeon-6776p-2s")
+    with pytest.raises(SystemExit, match=r"^no card 'a100-sxm4-80gb'"):
+        kit.card_arch(sku="a100-sxm4-80gb")
+    with pytest.raises(TypeError):
+        kit.card_arch("NVIDIA H200", sku="h200-sxm-141gb")
+    h200 = (kit.cards_directory() / "h200-sxm-141gb.toml").read_text()
+    (tmp_path / "h200-sxm-141gb.toml").write_text(h200.replace('arch = "sm_90a"', 'arch = "sm_89"'))
+    with pytest.raises(SystemExit, match=r"^card 'h200-sxm-141gb': no architecture 'sm_89'"):
+        kit.card_gencode(sku="h200-sxm-141gb", directory=tmp_path)
 
 
 def test_a_card_no_record_holds_is_refused_by_name():

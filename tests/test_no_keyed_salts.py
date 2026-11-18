@@ -16,8 +16,10 @@ holds it:
   names none any more is stale, and its line goes.
 * `RULED`: derivations a ruling keeps for now, each with its owner and the rulings it rests on; each ruling has its
   condition and the place in the tree that states it (`STATED`), and `None` there warns until the owner writes that
-  sentence. No line of a ruled module writes, sends, logs or serializes a key it names (`WRITTEN` holds the files that
-  still do, and only shrinks). An entry goes when its owner moves to an allowed form or the ruling changes.
+  sentence. No line of a ruled module writes, sends, logs or serializes a key it names, except a step-rows key a replay
+  must reopen rows with, under the private replay store its condition names (`WRITTEN` holds the files that write one
+  anywhere else or where this test cannot tell, and only shrinks). An entry goes when its owner moves to an allowed form or
+  the ruling changes.
 
 The scan catches a new use of a derivation it knows by name; it cannot see a derivation under a name or label it does not
 know, nor whether a ruled key is drawn as often as its ruling says, so a green run says no known derivation spread, not
@@ -52,20 +54,18 @@ ALLOWED: dict[str, str] = {
     # the step rows' processor twin is ruled (RULED's native_rows.cu); the registered weights' `tensor_key` expansion here is not
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
-    "verity/commitments/crypto/chacha20.py": "@proofs",
     "verity/commitments/hm96/batch.py": "@proofs",
     "verity/protocols/experimental/dither/prover/dither.py": "@compute-accounting",
     "verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs": "@proofs",
-    "verity/protocols/proofs/flock/prover/live/src/zk_hooks.rs": "@proofs",
     "verity/protocols/proofs/flock/prover/live/src/zk_server.rs": "@proofs",
     "verity/protocols/proofs/flock/prover/python/verity_flock/zk_server.py": "@proofs",
     "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Salts.lean": "@proofs",
     "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Session.lean": "@proofs",
     "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Values.lean": "@proofs",
     "verity/protocols/proofs/recursion/verifier/zk_server/ZkServer/Loop.lean": "@proofs",
-    "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py": "@proofs",
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cuh": "@kernels",
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh": "@kernels",
+    # both keep ChaCha20 only for compute-accounting's callers that pass a key and a nonce and no salts
+    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cuh": "@vllm",
+    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh": "@vllm",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py": "@compute-accounting",
@@ -82,8 +82,9 @@ PASS_TREE = ("the bandwidth audit's pass tree: its leaves' salts are expanded on
 PAYLOAD_TREE = ("the bandwidth audit's payload tree: its salts are expanded from the prover's own key, drawn from the "
                 "operating system, which the verifier neither chooses nor receives and which is never written")
 STEP_ROWS = ("the step rows: their salts are expanded on the card by their own SHA-512 expansion, until the shared expander "
-             "of the listed stream exists, from a key drawn fresh from the operating system for each step, never reused and "
-             "never written")
+             "of the listed stream exists, from a key drawn fresh from the operating system for each step and never reused; "
+             "a key a replay must reopen rows with may be written to one place only: the store's private directory, outside "
+             "every run's output, on the adapter's private list, refused by custody, and never sent to a verifier")
 #: where the tree states the salts' rule and its ruled derivations: hm96's protocol, section 3, "Randomness"
 RULE = ("verity/commitments/hm96/PROTOCOL.md", "derivations kept for now by a ruling, each with its condition")
 #: {ruling: (the file in the tree that states it as a rule, a phrase of that statement), or None while nothing does}
@@ -104,8 +105,13 @@ RULED: dict[str, tuple[str, tuple[str, ...]]] = {
 #: a line that writes, sends, logs or serializes what it names: a writer's call, a key's hex, or the name as a string's
 #: field (a manifest's or a message's)
 WRITES = re.compile(r"\.(?:send|write|write_bytes|write_text|dump|dumps|save|savez|tofile)\(|\bprint\(|\blog(?:ger)?\.|\.hex\(\)")
-#: {file of a ruled module that still writes or sends a ruled key: the lane that stops it}
+#: {file of a ruled module that still writes or sends a ruled key where its ruling does not admit it: the lane that stops it}
+#: A step-rows key is admitted only under the private replay store, which no single line shows: a file can leave only once
+#: its writer takes its directory from one function that names that store, outside every run's output, and the file's name
+#: is on the adapter's private list (`verity_vllm.pipeline.research_outputs.PRIVATE`), with a check here that reads both.
 WRITTEN: dict[str, str] = {
+    # `keys.bin` goes into the replay bundle, `<out>/replay_bundle_p<pair>/store/`, inside the commit's output, private by the
+    # bundle directory's name alone
     "adapters/vllm/verity_vllm/commit/store_dump.py": "@vllm",
 }
 LANES = {"@compute-accounting", "@kernels", "@lean", "@memory-accounting", "@network-accounting", "@proofs", "@vllm"}
@@ -174,7 +180,8 @@ def _written() -> dict[str, list[str]]:
 def test_a_ruled_key_is_never_written() -> None:
     new = {path: lines for path, lines in _written().items() if path not in WRITTEN}
     assert not new, ("a ruled key is never written, sent, logged or serialized: it is drawn from the operating system "
-                     "and dropped (RULED in tests/test_no_keyed_salts.py):\n"
+                     "and dropped, except a step-rows key a replay needs, written only under the private replay store "
+                     "(STEP_ROWS in tests/test_no_keyed_salts.py):\n"
                      + "\n".join(f"  {path}: {line}" for path, lines in sorted(new.items()) for line in lines))
 
 

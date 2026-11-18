@@ -4,8 +4,9 @@ whose binding records name the templates by descriptor id. A mixed population ma
 parameters no node reads (`TemplatePopulations_v1{templates, values, counts}`). v0 of each, which names only the counts, is
 kept for the records made with it (`POPULATION_VERSIONS`).
 
-SPOT's one-stage protocol applies its template queries to them (`one_stage.partition`, which names them too), and an
-integration builds its window's program with them: both sides build the same program from the same templates and counts.
+`wired_population_program` builds a circuit record's templates as one Program, each argument's runs of rows one part.
+A template query partitions each of these Programs into its templates' units, and a prover and its verifier build the
+same Program from the same templates and counts.
 """
 from __future__ import annotations
 
@@ -22,7 +23,7 @@ from .defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinitio
 from .partition_object import template_instances_query
 from .ports import In, Leaves, Out, Ports, port_types
 from .program import Program
-from .refs import Affine, Coll, Concat, Grid, Refs, Strided, coll_concat, concat, spell
+from .refs import Affine, Coll, Concat, Grid, Refs, Strided, coll_concat, concat, recut, spell
 from .types import Array, RecordType, Tuple, Value
 
 #: The population programs' versions, the builders' default first. v1 names its templates (each one's descriptor id) in its
@@ -164,16 +165,6 @@ BitsWord = CompositeDefinition("BitsWord", 1, ("W",), lambda S: ((("bits", Array
                                doc=_bits_word.__doc__ or "", conformance="protocol-defined")
 
 
-def _converts(src: Any, dst: Any) -> int | None:
-    if src.leaf_widths() == dst.leaf_widths():
-        return None
-    a, b = src.homogeneous_width(), dst.homogeneous_width()
-    if not a or not b or 1 not in (a, b) or a * src.leaves != b * dst.leaves:
-        raise ValueError(f"leaves of {src!r} into a row of {dst!r}: a wire or read changes width only between W-bit words and "
-                         f"their one-bit leaves")
-    return max(a, b)
-
-
 def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, int]],
                              record: Mapping[str, Any]) -> tuple[Program, dict[str, Any]]:
     """`WiredPopulations_v1{templates, record, counts}` and its template query, as `Circuit.program` gives the population's:
@@ -183,13 +174,12 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
     row; a registered or boundary read's, the root parameter named for the value it reads; a table read's,
     ``<param>/<root or domain>``; an opening's port, ``<table>/<port>`` over the opening's units; any other row, the
     population's own ``<j>.<port>``. The registered values are the first parameters, in order, the rest sorted by name. A
-    wire or read from W-bit words into a row of one-bit leaves passes through a batch of `WordBits{W}` just before its
-    reader's, one from bits into words through `BitsWord{W}`, and the query lists each after the templates. The Program's
+    read into a row of narrower leaves reads its root parameter's leaves recut (`refs.recut`). The Program's
     ``annotations["free"]`` are the rows no wire, read, table read, opening or ingress fills, as the record's ``free``
     entries state rows. ``record`` is the
     binding's by the SHA-512 of the canonical JSON of its `WIRED_FIELDS`. Refused (ValueError), by name: a row two fill, a
-    wire or read between leaves of two widths neither of them one bit, a wire whose writer the order puts at or after its
-    reader."""
+    wire between leaves of two widths (wire-width), a read `refs.recut` refuses, a wire whose writer the order puts at or
+    after its reader."""
     ids = [descriptor_id(t) for t, _ in templates]
     if [list(x) for x in record.get("templates", ())] != [[tid, n] for tid, (_, n) in zip(ids, templates)]:
         raise ValueError(f"record templates {record.get('templates')}: the templates' ids and units, {ids}")
@@ -207,7 +197,6 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
         raise ValueError(f"order {record.get('order')}: its ranges tile every template's units")
     roots: dict[str, Any] = {}
     fills: dict[tuple[int, str], dict[tuple[int, int], tuple]] = {}
-    need: set[tuple[bool, int]] = set()
 
     def cut(j: int, port: str) -> int:
         return int(cuts.get(ids[j], {}).get(port, 1))
@@ -236,10 +225,11 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
         n = rt.leaves
         if rt.width_set() != {width}:
             r = rt.homogeneous_width()
-            if not width or not r or rt.leaves * r % width:
+            if not width or not r:
                 raise ValueError(f"{p}: rows of {rt!r} read {name!r} in leaves of {width} bits")
-            n = rt.leaves * r // width
-            need.add((r == 1, _converts(Array(n, Value(width)), rt)))
+            n, q = divmod(rt.leaves, recut(width, r))
+            if q:
+                raise ValueError(f"recut-boundary: {p}: a row of {rt!r} is no whole number of {name!r}'s {width}-bit leaves")
         cover = [(u, c, s * 16 // width) for u, c, s in _cover(p)]
         end = max(s for _, _, s in cover) + n
         if name not in bits:
@@ -256,8 +246,8 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
     for w in record.get("wires", ()):
         j, k, f = index[w["reader"]], index[w["writer"]], int(w["out"][1:])
         ft, rt = _fields(sigs[k][1])[f], row(j, w["port"])
-        if ww := _converts(ft, rt):
-            need.add((rt.homogeneous_width() == 1, ww))
+        if ft.leaf_widths() != rt.leaf_widths():
+            raise ValueError(f"wire-width: wire {w}: {ids[k]} writes {ft!r} into a row of {rt!r}")
         for u, c, s in _cover(w):
             if rank[(k, s)] >= rank[(j, u)]:
                 raise ValueError(f"wire {w}: its order puts writer unit {s} at or after reader unit {u}")
@@ -328,31 +318,21 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
             for p, t in sigs[j][0]:
                 k, rt = cut(j, p), row(j, p)
                 r = rt.homogeneous_width()
-                parts, widths = [], []
+                parts = []
                 for u in range(lo, lo + n):
                     for c in range(k):
                         kind, a, b, *f = fills[(j, p)][(u, c)]
-                        w = r
                         if kind == "wire":
                             wlo, out = made[a][writer(a, b)]
                             e = out[b - wlo]
                             parts.append((e[f[0]] if isinstance(sigs[a][1], (Tuple, RecordType)) else e).refs)
-                            w = _fields(sigs[a][1])[f[0]].homogeneous_width()
                         elif kind == "leaf":
-                            w = roots[a].elem.w
-                            parts.append(coll[a].refs.slice(b, b + rt.leaves * (r or w) // w))
+                            sp, ix, at = coll[a].refs[b]
+                            q = roots[a].elem.w // r if r else 1
+                            parts.append(Affine(sp, ix, at * q, rt.leaves) if q > 1 else coll[a].refs.slice(b, b + rt.leaves))
                         else:
                             v = coll[a] if kind == "whole" and b is None else coll[a][u if kind == "own" else b]
                             parts.append(v.refs.slice(c * rt.leaves, (c + 1) * rt.leaves))
-                        widths.append(w)
-                for w in sorted({w for w in widths if w != r}):
-                    at = [i for i, x in enumerate(widths) if x == w]
-                    bits = _grid([parts[i] for i in at], 1 if r == 1 else r)
-                    out = (B.batch(bind(WordBits, W=w), Coll(Array(len(at) * rt.leaves // w, Value(w)), bits), axes=(0,))
-                           if r == 1 else
-                           B.batch(bind(BitsWord, W=r), Coll(Array(len(at) * rt.leaves, Array(r, BIT)), bits), axes=(0,)))
-                    for q, i in enumerate(at):
-                        parts[i] = out.refs.slice(q * rt.leaves, (q + 1) * rt.leaves)
                 argv.append(Coll(Array(n, t), _grid(parts, t.leaves)))
             i = bisect.bisect_right(starts[j], lo)
             starts[j].insert(i, lo)
@@ -365,9 +345,8 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
                                doc="wired units of " + ", ".join(f"{n} x {t.id}" for t, n in templates), register=False)
     free_rows = [{"reader": t, "port": p, "at": at, "units": n, **({} if rows == (0, cut(index[t], p)) else {"cut": list(rows)})}
                  for t, p, at, n, rows in free]
-    wiring = [bind(WordBits if to_bits else BitsWord, W=w) for to_bits, w in sorted(need)]
     return (Program(bind(defn, **named), annotations={"free": free_rows}),
-            template_instances_query([t for t, _ in templates] + wiring))
+            template_instances_query([t for t, _ in templates]))
 
 
 def _chunks(parts: Sequence[Refs]) -> Iterator[tuple[int, str, int, int, int]]:
