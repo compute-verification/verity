@@ -33,6 +33,42 @@ def runs(tmp_path_factory):
     return {"honest": n2.phases(run), "tampered": n2.phases(run, edit=n2.one_count)}
 
 
+@pytest.mark.slow
+def test_every_statement_stages_under_fresh_salts_and_delivers_only_pub_and_o0s(runs, tmp_path, monkeypatch):
+    """`stage` on the synthetic run, the one path that writes the statements the prover proves (lowering the proof
+    block takes about a minute and a half, and nothing cheaper reaches it): every execution phase's statement is staged,
+    its ``pub`` and ``o0`` rows open to the verifier's own under the delivered salts, the ``wit`` row's salt is in the
+    prover's instance file and nowhere the verifier reads, every salt is distinct, and a second staging draws others."""
+    M = n2._one_stage()
+    sg = n2.stager(M, runs["honest"].lw, tmp_path / "stager")
+    drawn, stage_salts = [], M.FC.stage_salts
+    monkeypatch.setattr(M.FC, "stage_salts", lambda *a: drawn.append(stage_salts(*a)) or drawn[-1])
+
+    def staged(out: Path) -> list:
+        run = gate_run(out / "run")
+        members = {"honest": n2.phases(run), "tampered": n2.phases(run, edit=n2.one_count)}
+        n2.stage(M, sg, members, out)
+        return [(mb.lw, x) for mb in members.values() for x in mb.windows]
+
+    first = staged(tmp_path / "first")
+    assert len(first) == len(drawn) == sum(len(runs[name].windows) for name in n2.ROUNDS)
+    for (lw, x), salts in zip(first, drawn):
+        assert set(salts) == set(n2.SVC.PORTS) and all(len(s) == 1 for s in salts.values())
+        assert x.statement.salts == {"pub": salts["pub"][0], "o0": salts["o0"][0]}
+        bcs = n2.SVC._commitments(x.statement.dir / "pub-1.bin", 0)
+        assert n2.SVC._opens(lw.row(x.args, "pub"), lw.bits("pub"), x.statement.salts["pub"], bcs["pub"])
+        assert n2.SVC._opens(n2.SVC.output_row(x.statement.output), n2.SVC.OUT_BITS, x.statement.salts["o0"], bcs["o0"])
+        inst, pub = (x.statement.dir / "inst-1.bin").read_bytes(), (x.statement.dir / "pub-1.bin").read_bytes()
+        assert salts["wit"][0] in inst and salts["wit"][0] not in pub
+    every = [s for salts in drawn for p in n2.SVC.PORTS for s in salts[p]]
+    assert len(set(every)) == len(every)
+    delivered = {s for _, x in first for s in x.statement.salts.values()}
+    assert not delivered & {salts["wit"][0] for salts in drawn}
+    second = staged(tmp_path / "second")
+    assert len(second) == len(first) and len(drawn) == 2 * len(first)
+    assert not {s for salts in drawn[len(first):] for p in n2.SVC.PORTS for s in salts[p]} & set(every)
+
+
 def test_each_round_refuses_what_its_references_say(runs):
     honest = runs["honest"]
     assert len(honest.windows) == honest.plan["windows"] >= 2 and not honest.issuer_refused

@@ -172,8 +172,8 @@ namespace Spot.SecondStage
 open Lean (Json)
 
 /-- **The switch**: whether the verifier accepts a two-stage run whose every check of round 2 passes. It is on: the
-verifier accepts the form ahead of its proof, by Daniel's ruling of Mon 16 Nov, and a two-stage accept's record says its
-form is not yet proved. Off, it refuses each one last (`two-stage-form`). Three things stand between the form and its
+verifier accepts the form ahead of its proof, and a two-stage accept's record says what is not covered; nothing quotes a
+guarantee for such a run. Off, it refuses each one last (`two-stage-form`). Three things stand between the form and its
 proof. SPOT[Flock]'s two-stage guarantee (`Flock.SecurityProofs.SpotKSTwo`) takes as a premise that each gate's value has
 one address, fixed before the run (`SpotFlock.AddressesConnected`), which nothing proves from this check. No theorem
 says that a run this verifier accepts is one the verifier that guarantee is stated about (`SpotFlock.V`) accepts. And
