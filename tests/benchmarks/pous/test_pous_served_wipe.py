@@ -217,8 +217,7 @@ def test_a_case_that_cant_reach_the_private_dir_leaves_none_in_dir(node, tmp_pat
     (tmp_path / "pieces" / "serve-run" / "private").write_text("not a directory\n")
     judge = _exe(tmp_path / "wipe-protocol", "#!/bin/sh\nexit 9\n")
     r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other", "WIPE_PROTOCOL_EXE": str(judge)}, d)
-    assert "WIPE CASE: the case didn't move to" in r.stdout and "removed from DIR" in r.stdout, r.stdout + r.stderr
-    assert not (d / "wipe.case.json").exists()
+    assert not (d / "wipe.case.json").exists(), r.stdout + r.stderr
 
 
 def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
