@@ -212,7 +212,17 @@ REFUSED = 2
 #: the values an execution phase registers afresh under its open root, never an earlier record's: the scan's state, which
 #: the network verifier ties to its scan (stateTied); a circuit names it among its values and marks nothing else, so any
 #: other value it takes is W's
-PHASE_OWN = frozenset(p.value for p in schemes.get("network-attester").ports if p.name == "scan-state")
+def port_value(scheme: Any, port: str) -> str:
+    """The value ``scheme``'s port ``port`` registers: refused (ValueError) naming both unless it declares that port
+    exactly once, with a value."""
+    got = [p.value for p in scheme.ports if p.name == port]
+    if len(got) != 1 or not got[0]:
+        raise ValueError(f"the {scheme.name} declaration declares the port {port!r} with a value {len(got)} times, "
+                         "not once: records_audit reads the execution phase's own value from it")
+    return got[0]
+
+
+PHASE_OWN = frozenset({port_value(schemes.get("network-attester"), "scan-state")})
 
 
 def catalog_resolve(tid: str) -> Any:
@@ -687,12 +697,29 @@ def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, byt
     return {"day": day, "declarations": declarations}
 
 
+def entry_scheme(entry: str) -> str:
+    """The kernel scheme the option ``entry`` names, in the option's form ``<protocol>:<kernel scheme>`` as `pouw/scheme.py` writes it."""
+    return entry.partition(":")[2]
+
+
+def why_not_pearl(w: Any) -> str | None:
+    """Why W is no Pearl+ window record, or None where it is one: its window's ``entry`` is Pearl+'s declared option, whole
+    string against whole string, and its ``scheme`` the one that entry names (`entry_scheme`)."""
+    head = w.get("window") if isinstance(w, Mapping) else None
+    head = head if isinstance(head, Mapping) else {}
+    entry, scheme, option = head.get("entry"), head.get("scheme"), schemes.get("pearl-plus").option
+    if entry != option:
+        return f"its entry {entry} is not Pearl+'s declared option {option}"
+    if scheme != entry_scheme(entry):
+        return f"its scheme {scheme} is not the one its entry {entry} names"
+    return None
+
+
 def tie_row(tied: Mapping[str, Any]) -> dict[str, Any]:
     """The audit summary's ``tie`` for a5's ``tie`` (`tie_of`): W's digest and the values tied to it, and for Pearl+'s window
-    record (a W whose window names a Pearl-C scheme) what credits its roots (`PEARL_CREDIT`)."""
+    record (`why_not_pearl`) what credits its roots (`PEARL_CREDIT`)."""
     w = tied["log"][0]
-    scheme = (w.get("window") or {}).get("scheme")
-    pearl = isinstance(scheme, str) and scheme.startswith("pearl-c-")
+    pearl = why_not_pearl(w) is None
     return {"record": DD.digest(w), "values": sorted(tied["outputs"]), **({"credited_by": PEARL_CREDIT} if pearl else {})}
 
 

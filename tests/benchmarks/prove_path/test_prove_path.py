@@ -1968,7 +1968,8 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
 
     monkeypatch.setattr(PP.I2Compiler, "load", loaded)
     monkeypatch.setattr(WC, "takes", lambda *a, **k: None)
-    monkeypatch.setattr(WC, "lower", lambda *a, **k: None)
+    monkeypatch.setattr(WC, "lower", lambda *a, **k: SimpleNamespace(circuit=None))
+    monkeypatch.setattr(WC, "check_provable", lambda *a, **k: None)
     (tmp_path / "advice.bin").write_bytes(s.data)
     with pytest.raises(Loaded):
         PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
@@ -2088,7 +2089,8 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
     """`pearl_tie`: with ``--pearl-passes DIR`` (Pearl+'s ``pearl/w<k>/``) and ``--window-registration`` W, Pearl+'s
     window record, window-commit's circuit is cut at its linears under W's scheme (`window_class.PearlTables`) and reads
     the retained passes' manifests at their rounds; `h1_tie` then stands aside. Refused by name without W, beside
-    ``--h1-key``, for a W of no Pearl-C scheme, and where the rounds retained aren't the class's outputs."""
+    ``--h1-key``, for a W whose entry isn't Pearl+'s declared option (H1's, another Pearl-C kernel's, the FP4 kernel's) or
+    whose scheme isn't its entry's, and where the rounds retained aren't the class's outputs."""
     from verity_vllm.program.predict.window_circuit import PearlTables
 
     d, cls = tmp_path / "q", SimpleNamespace(outputs=2)
@@ -2098,7 +2100,10 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
         (m := tmp_path / f"m{i}.json").write_text(json.dumps({"salt": f"s{i}"}))
         mans.append({"pass": 4 + i, "units": 1, "manifest": str(m)})
     (d / "served.json").write_text(json.dumps({"passes": [{"pass": 3, "units": 0}, *mans]}))
-    (tmp_path / "w.json").write_text(json.dumps({"window": {"scheme": "pearl-c-h100-v1-h3"}, "registered": []}))
+    def record(name, entry, scheme):
+        (tmp_path / name).write_text(json.dumps({"window": {"entry": entry, "scheme": scheme}, "registered": []}))
+        return str(tmp_path / name)
+    record("w.json", "pouw:pearl-c-h100-v1-h3", "pearl-c-h100-v1-h3")
 
     def tie(cls=cls, **kw):
         args = {"pearl_passes": str(d), "window_registration": str(tmp_path / "w.json"), "h1_key": None, **kw}
@@ -2117,6 +2122,14 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
     (tmp_path / "h1.json").write_text(json.dumps({"program": "p" * 128}))
     with pytest.raises(ValueError, match="is no Pearl\\+ window record"):
         tie(window_registration=str(tmp_path / "h1.json"))
+    with pytest.raises(ValueError, match="its entry pouw:pearl-c-nvfp4-v0 is not Pearl\\+'s declared option "
+                                         "pouw:pearl-c-h100-v1-h3"):
+        tie(window_registration=record("c4.json", "pouw:pearl-c-nvfp4-v0", "pearl-c-nvfp4-v0"))
+    with pytest.raises(ValueError, match="its entry pouw:pearl-c-sm120-v1-h3 is not Pearl\\+'s declared option "
+                                         "pouw:pearl-c-h100-v1-h3"):
+        tie(window_registration=record("sm120.json", "pouw:pearl-c-sm120-v1-h3", "pearl-c-sm120-v1-h3"))
+    with pytest.raises(ValueError, match="its scheme pearl-c-sm120-v1-h3 is not the one its entry pouw:pearl-c-h100-v1-h3 names"):
+        tie(window_registration=record("other.json", "pouw:pearl-c-h100-v1-h3", "pearl-c-sm120-v1-h3"))
     (d / "retention.json").write_text(json.dumps({"rounds": [1, 2]}))
     with pytest.raises(ValueError, match=r"retained rounds \[1, 2\]"):
         tie()

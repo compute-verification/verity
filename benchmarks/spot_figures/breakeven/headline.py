@@ -109,7 +109,7 @@ CLASSES_A_PROOF_BLOCK = 4130
 #: the symbols of one table's level-0 codewords, at most, in a row's binding bound: assumed
 TABLE_SYMBOLS = 2 ** 23
 #: what a binding bound summed over verification phases takes of the prover: assumed. The first clause is SPOT's two
-#: resampling holes (`verity_bench.spot_status.HOLES`) closed, which the code that ran may not hold
+#: resampling holes (the first two of `verity_bench.spot_status.HOLES`) closed, which the code that ran may not hold
 ONE_SAMPLE = ("both of SPOT's resampling holes closed, one commitment and one sample; every committed window is "
               "presented")
 

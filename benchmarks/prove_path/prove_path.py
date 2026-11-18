@@ -206,7 +206,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
+from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots, why_not_pearl  # noqa: E402, F401
 from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, docket as R  # noqa: E402
@@ -1695,8 +1695,9 @@ def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dic
     """With ``--pearl-passes DIR`` (Pearl+'s ``pearl/w<k>/``: the window's passes, ``served.json`` and its retention):
     Pearl+'s window record W of them (``--window-registration``, ``retain --window-record W``'s), the retained passes'
     manifests, their rounds and the circuit's tables of them (`window_class.PearlTables` under W's scheme); None without.
-    ValueError without ``--window-registration``, beside ``--h1-key``, for a W of no Pearl-C scheme, or where the rounds
-    retained aren't the class's outputs, round s the window's s-th step, whose calls the circuit cut at its linears reads."""
+    ValueError without ``--window-registration``, beside ``--h1-key``, for a W that is no Pearl+ window record
+    (`records_audit.why_not_pearl`), or where the rounds retained aren't the class's outputs, round s the window's s-th
+    step, whose calls the circuit cut at its linears reads."""
     if not getattr(a, "pearl_passes", None):
         return None
     from verity_vllm.program.predict import window_circuit as WC
@@ -1707,8 +1708,8 @@ def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dic
         raise ValueError("--h1-key is H1's prover key: a window tied to Pearl+'s W takes its salts from the passes' manifests")
     w, d = json.loads(Path(a.window_registration).read_text()), Path(a.pearl_passes)
     scheme = str(((w if isinstance(w, dict) else {}).get("window") or {}).get("scheme"))
-    if not scheme.startswith("pearl-c-"):
-        raise ValueError(f"{a.window_registration} is no Pearl+ window record: its scheme is {scheme}")
+    if why := why_not_pearl(w):
+        raise ValueError(f"{a.window_registration} is no Pearl+ window record: {why}")
     held = [p for p in json.loads((d / "served.json").read_text())["passes"] if p.get("units")]
     rounds = (json.loads((d / "retention.json").read_text())["rounds"] if (d / "retention.json").exists()
               else list(range(len(held))))
