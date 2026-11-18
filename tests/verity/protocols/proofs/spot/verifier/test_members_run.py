@@ -399,6 +399,10 @@ def test_a_members_own_output_port_reads_its_templates_field_tree():
         DK.public_ports({"roots": [RECORD["roots"][0], {**tree, "port": "a/out"}]})
     assert str(e.value) == DK.own_field(A, "out")
     assert set(DK.public_ports({"roots": [RECORD["roots"][0], {**tree, "port": "a/o0"}]})) == {"out", "o0"}
+    strata = P.strata(PROGRAM, QUERY)
+    named = header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "o0": "cc" * 64},
+                                "roots": {"out": ROOTS[B][0], "o0": "33" * 64}})
+    assert M.population_why(UNITS[B], strata, named, got[B]) is None
 
 
 def test_a_member_named_as_another_members_template_is_refused():
@@ -408,10 +412,6 @@ def test_a_member_named_as_another_members_template_is_refused():
         with pytest.raises(ValueError) as e:
             M.slices(units, RECORD | {"roots": [{**RECORD["roots"][0], "port": "a/out"}]})
         assert str(e.value) == DK.name_template("a")
-    strata = P.strata(PROGRAM, QUERY)
-    named = header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "o0": "cc" * 64},
-                                "roots": {"out": ROOTS[B][0], "o0": "33" * 64}})
-    assert M.population_why(UNITS[B], strata, named, got[B]) is None
 
 
 def test_a_registered_files_committed_trees_are_its_windows(tmp_path):
