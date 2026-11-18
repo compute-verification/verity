@@ -102,9 +102,8 @@ service, in the clear. That is a provisional exception to the four public kinds,
 default, which adds its accept bit and decides nothing) and the tests' reference: the opening reproduces the registered
 root, each end's head check accepts (`head_check.reference`), the opening's attestations hold (`certified`) and both
 heads met their deadline. The records' cells are the scan's (`network_attester.audit`
-reads them in the clear), and the attester's host audit doesn't read them. `TransferBlocks.unproved_outcome` decides a
-run that proves nothing (a rehearsal, the simulator) on it, so its verdict says ``"decided_by": "clear"`` and is never
-zero-knowledge.
+reads them in the clear), and the attester's host audit doesn't read them. A run that proves nothing has no outcome of
+record, so `network_verdict` rejects its link, every window it didn't prove refused.
 
 **The link** (`TransferBlocks(network_attester=NetworkAttesterProfile(…))`) is the network attester's (`network_attester.NetworkAttester`) own two records of
 each execution phase: its responses on egress and its requests on ingress, on its one grid, attested under its
@@ -187,7 +186,6 @@ from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 OF_RECORD = "lean"
 
 SPEC = "verity-network-certifier/service-spec/v0"
-SESSION = "verity-network-certifier/session/v0"
 STATEMENT = "verity-network-certifier/statement/v0"
 VERDICT = "verity-network-certifier/verdict/v0"
 NETWORK_VERDICT = "verity-network-certifier/network-verdict/v0"
@@ -598,11 +596,6 @@ class TransferBlocks:
     def root(self, opening: Hidden) -> str:
         return tree_levels(self.domain(opening.window), self.leaves(opening))[-1][0].hex()
 
-    def session(self, opening: Hidden, sample: S.Draw) -> str:
-        """The delivered session's SHA-512: the registration, the sample and the salted leaves the opening reproduces."""
-        return _sha512({"format": SESSION, "registration": sample.docket.digest, "draw": _sha512(dict(sample.draw)),
-                        "leaves": [x.hex() for x in self.leaves(opening)]})
-
     # the challenger
 
     def register(self, stream: S.Stream, record: Mapping[str, Any],
@@ -907,20 +900,6 @@ class TransferBlocks:
         verdict = self.verify(sample, certificates, syncs, delivered, circuit_sha512=circuit_sha512, opening=opening)
         return stream.outcome(sample, {VERIFIER: verdict}, self.statement(sample),
                               session_roots={VALUE: sample.docket.record["roots"][0]["root"]})
-
-    def unproved_outcome(self, stream: S.Stream, sample: S.Draw, opening: Hidden,
-                         syncs: Sequence[ClockSync]) -> S.Outcome:
-        """`stream.outcome` for a run that proves nothing (a rehearsal, the simulator): on the in-the-clear check
-        (`clear`), which reads the opening, so it is never zero-knowledge, and its
-        verdict says ``"decided_by": "clear"``. The delivered session is the opening's (`session`), and its root the
-        one the opening reproduces, which one-stage's audit holds to the registered root."""
-        v = self.clear(opening, sample, syncs)
-        sessions = [self.session(opening, sample)]
-        digest = _sha512({"format": VERDICT, "registration": sample.docket.digest, "sessions": sessions,
-                          "accepted": v["accepted"], "public": v["public"], "decided_by": "clear"})
-        verdict = {**v, "of_record": True, "decided_by": "clear", "digest": digest, "sessions": sessions}
-        return stream.outcome(sample, {VERIFIER: verdict}, self.statement(sample),
-                              session_roots={VALUE: self.root(opening)})
 
     def _period(self, stream: S.Stream, windows: int | None) -> int:
         default = self.windows

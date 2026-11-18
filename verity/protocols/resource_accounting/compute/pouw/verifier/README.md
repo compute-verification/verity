@@ -119,7 +119,7 @@ difftest only.
 | --- | --- | --- | --- |
 | An execution phase | `core_check.case`, `answer` | `pouw-check serve` | `case_twin`, `answer_twin`, `check_twin` |
 | A credit period | `period_check.case`, `answer` | `pouw-period serve` | `case_twin`, `answer_twin`, `check_twin` |
-| A served execution phase's credit | `credit.window` | `Credit.window` (`window`) | `credit._window` |
+| A served execution phase's credit | `credit.window` | `Credit.executionPhase` (`window`) | `credit._window` |
 | A credit period's credit | `credit.period_credit` | `Credit.periodCredit` (`period`) | `credit._period_of` |
 | The salt | `core_check.salt_of_record` | `saltCheck` (`salt`) | `salt_twin` |
 | A live pass's salt | `core_check.live_salt` | `liveSaltCheck` (`live-salt`) | `live_salt_twin` |

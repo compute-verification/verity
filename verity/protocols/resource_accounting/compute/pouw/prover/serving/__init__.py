@@ -152,7 +152,7 @@ _LAZY = {
 }
 
 #: each exported name that lists a family of PoUW's kernel schemes (`verifier.kernel_schemes.names`), by that family
-_FAMILIES = {"NCP_CIRCUIT_SCHEMES": "ncp-v2", "PEARL_C_SCHEMES": "pearl-c"}
+_FAMILIES = {"PEARL_C_SCHEMES": "pearl-c"}
 
 
 class MatmulRun(Protocol):
