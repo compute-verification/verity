@@ -1862,7 +1862,10 @@ def test_a_premise_in_the_record_names_who_ran_its_check(tmp_path, monkeypatch, 
     doc = {"verdict": "accept", "AcceptedLive": {"met": True, "why": S.LIVE_MET},
            "SaltIsLiveCoin": {"met": True, "why": S.SALT_MET}}
     rows = {**_rows(_accepted(), tmp_path), "work": {"verdict": "missing", "why": S.DEV_WHY, "development": doc},
-            **{k: {"verdict": "error", "why": "x"} for k in ("space", "bandwidth", "wipe")}}
+            "space": {"verdict": "error", "why": "x", "owner": "memory-accounting"},
+            "bandwidth": {"verdict": "error", "why": "x", "owner": "memory-accounting",
+                          "answer": {"profile": {"placement": {"graded_by": "graded by its own piece"}}}},
+            "communication": {"verdict": "error", "why": "x", "owner": "network-accounting"}}
     io = {"verdict": "accept", "format": "verity/inference-only/v1"}
 
     def stated() -> tuple[dict, dict]:
@@ -1874,11 +1877,15 @@ def test_a_premise_in_the_record_names_who_ran_its_check(tmp_path, monkeypatch, 
     for p in S.PREMISES:
         assert got["work"]["development"][p]["met"] and said[p].startswith(S.PIECE)
         assert got["work"]["development"][p]["why"] == f"{doc[p]['why']}; {said[p]}"
-    assert all((S.ONSITE_UNDECIDED in said[k]) is (product == "onsite") for k in (*S.PREMISES, "space", "bandwidth", "wipe"))
-    kept = [k for k in ("space", "bandwidth", "wipe", "integrity", S.INFERENCE_ONLY_ROW) if got[k]["verdict"] != "dropped"]
-    assert {"integrity", S.INFERENCE_ONLY_ROW} <= set(kept)
-    for k in kept:
+    assert all((S.ONSITE_UNDECIDED in said[p]) is (product == "onsite") for p in S.PREMISES)
+    for k in ("integrity", S.INFERENCE_ONLY_ROW):
         assert got[k]["answer_from"].endswith(f"; {said[k]}")
+    if product == "onsite":
+        assert got["space"]["answer_from"].endswith(f"; {S.PIECE}; {S.ONSITE_UNDECIDED}")
+        assert got["bandwidth"]["answer_from"].endswith(f"; graded by its own piece; {S.ONSITE_UNDECIDED}")
+        assert S.PIECE not in got["communication"]["answer_from"]
+    else:
+        assert {got[k]["verdict"] for k in ("space", "bandwidth", "communication")} == {"dropped"}
     assert answers["sampled proofs"].endswith(f"; {S.BLOCKS_ALONE}; {S.TIED_BY_CONSTRUCTION}")
     assert answers["the inference-only verifier"].endswith(f"; {S.BLOCKS_ALONE}; {S.TIED_BY_CONSTRUCTION}")
     monkeypatch.setitem(S.RAN_BY, product, {**said, "SaltIsLiveCoin": "recomputed elsewhere"})
