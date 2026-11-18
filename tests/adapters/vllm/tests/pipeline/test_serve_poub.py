@@ -9,15 +9,29 @@ from typing import Any
 
 import pytest
 from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
+from verity.protocols.resource_accounting import scheme
 
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
+from verity_vllm.pipeline import poub_session
 from verity_vllm.pipeline import serve_poub as SR
 from verity_vllm.protocols.poub import remote
 
 VERIFIER = ("--remote-verifier", "127.0.0.1:7781")
+
+
+@pytest.fixture(autouse=True)
+def _registered(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The adapter's `CommitSession` stands in for the session memory-accounting registers by name."""
+    monkeypatch.setitem(scheme.PROCESSES, poub_session.SESSION, remote.CommitSession)
+
+
+def test_without_a_registered_session_the_remote_verifier_is_not_implemented(monkeypatch):
+    monkeypatch.delitem(scheme.PROCESSES, poub_session.SESSION)
+    with pytest.raises(NotImplementedError, match="vllm/adapter-imports-no-protocol: memory-accounting registers .*'poub-session'"):
+        SR.session_of(parse(*VERIFIER), "/tmp")
 
 
 def parse(*more: str) -> so.Options:

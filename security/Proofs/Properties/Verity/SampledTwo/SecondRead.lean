@@ -73,14 +73,14 @@ theorem secondCheck_read {v : Docket.Verifier} {delta : Core.Ratio} {c : OneStag
 /-- **An accepted two-stage check's second-stage bytes are the coins its sample read**: the interior audit's sample, under
 the second stage's sampling design `secondDesignOf` computes and its record's population, read `read` bytes of the bytes `ξ₂` its
 sample read, and `ξ₂` holds as many whole challenger coins as those bytes reach. -/
-theorem second_read {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem second_read {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
+    (h : checkBlobsAtInner p c ξ e bs = .accept pub prof) :
     ∃ c₂ ξ₂ run samplingDesign n units read, OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂ ∧ secondDesignOf p run = .ok samplingDesign ∧
       nat? (getD c₂.record "population") = some n ∧
       OneStage.sampledFrom { p.audit.base.verifier with samplingDesign := subsetDesign n } samplingDesign n ξ₂ = .ok (units, read) ∧
       (read + Challenger.COIN_BYTES - 1) / Challenger.COIN_BYTES = ξ₂.size / Challenger.COIN_BYTES := by
-  obtain ⟨-, c₂, ξ₂, r, i, run, hi, -, -, -, -, samplingDesign, hl, htwo⟩ := accepted_steps h
+  obtain ⟨c₂, ξ₂, r, i, run, hi, -, -, -, -, samplingDesign, hl, htwo⟩ := accepted_steps h
   obtain ⟨-, hξ, -⟩ := inputAt_ok hi
   obtain ⟨n, units, read, hn, hdf, hsz⟩ := secondCheck_read htwo
   exact ⟨c₂, ξ₂, run, samplingDesign, n, units, read, hξ, hl, hn, hdf, hsz⟩

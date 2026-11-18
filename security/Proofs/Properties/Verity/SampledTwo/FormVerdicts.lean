@@ -320,7 +320,7 @@ theorem verified_at {C : CaseOf} {o : Verity.Exchange} (hacc : FormAccepts C o) 
   have hpe : (pp, e') = (p, e) := Option.some.inj ((SessionMsgs.formOf_of_decoded hdec).symm.trans hf)
   obtain rfl : p = pp := (congrArg Prod.fst hpe).symm
   obtain rfl : e = e' := (congrArg Prod.snd hpe).symm
-  obtain ⟨-, c₂, ξ₂, r, i, run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hck
+  obtain ⟨c₂, ξ₂, r, i, run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hck
   obtain ⟨-, -, hrun, hall, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   obtain ⟨held, ts, L, roots, hheld, -, -, -, -, hrm⟩ := membersRun_ran hrun
   obtain ⟨held', hheld', hz⟩ := runMembers_stmt hrm hall

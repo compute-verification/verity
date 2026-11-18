@@ -196,7 +196,7 @@ theorem reads_or_break (dev : Exchange → History) (θ : ByteArray) (hF : First
   have ha' := ha
   obtain ⟨p, c, e, pub, prof, h1, hacc⟩ := ha'
   obtain ⟨key, d₁, ξ, hK, h3, h4⟩ := hF o.sent hθ ha p c e h1
-  obtain ⟨-, c₂, ξ₂, r, i, _run, hin, -, -, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
+  obtain ⟨c₂, ξ₂, r, i, _run, hin, -, -, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
   obtain ⟨⟨sj, hcanon, hcom⟩, h7, hrun, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   have h5 : interiorOf e = .ok c₂ := by
     unfold interiorOf
