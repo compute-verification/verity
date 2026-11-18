@@ -15,8 +15,8 @@ from pous_fakes import Clock
 from pous_test_signer import SCHEMES, TestSigner, session_log
 
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
+from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params

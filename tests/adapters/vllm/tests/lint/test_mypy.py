@@ -10,8 +10,8 @@ a directory adds it there.
 
 mypy's findings depend on what it can import: CPU torch with vLLM absent makes every vLLM type ``Any``, and another torch or
 mypy finds other things.  So the list records the environment it was taken in (``environment``), and the lint runs only in
-that one, the suite's own, refusing any other rather than miscounting.  ``python -m tests.lint.test_mypy --record`` (from
-``adapters/vllm``) writes the list from what this environment finds, as after a pin moves; the ratchet gate holds it to
+that one, the suite's own, refusing any other rather than miscounting.  ``python -m tests.adapters.vllm.tests.lint.test_mypy
+--record`` (from the repository's root) writes the list from what this environment finds, as after a pin moves; the ratchet gate holds it to
 no growth.  The gate counts the list but can't rerun this lint, whose findings need the suite's environment, so it has no
 ``NAME``: the suite runs it, every group at once, which no cheaper test can stand in for.
 
@@ -74,7 +74,7 @@ def assert_recorded_environment() -> None:
     assert now["mypy"], "no mypy here: `uv sync --all-packages --extra torch-cpu` installs the one the root `dev` group pins"
     assert was == now, (f"allowlists/{LIST}.json was recorded under {was}, and this is {now}: run the suite in its own "
                         "environment (`uv sync --all-packages --extra torch-cpu`), or, where a pin moved, re-record the list "
-                        "with `python -m tests.lint.test_mypy --record` from adapters/vllm")
+                        "with `python -m tests.adapters.vllm.tests.lint.test_mypy --record` from the repository's root")
 
 
 def errors() -> list[dict]:
@@ -151,7 +151,7 @@ def test_the_groups_cover_the_package_and_its_tests() -> None:
 
 def main(argv: list[str]) -> int:
     if argv != ["--record"]:
-        print(f"usage: python -m tests.lint.test_mypy --record   (from adapters/vllm)\n\n{__doc__}", file=sys.stderr)
+        print(f"usage: python -m tests.adapters.vllm.tests.lint.test_mypy --record   (from the repository's root)\n\n{__doc__}", file=sys.stderr)
         return 2
     found = Counter(violation(r).key for r in errors())
     doc = {"rule": RULE, "environment": environment(),
