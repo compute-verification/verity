@@ -12,7 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.resource_accounting.memory.pous.prover.responder import HonestResponder
+from verity.protocols.resource_accounting.memory.pous.prover.responder import (
+    HonestResponder,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier import dense, setup
 from verity.protocols.resource_accounting.memory.pous.verifier.audit import (
     UnsignedRounds,
@@ -20,9 +22,18 @@ from verity.protocols.resource_accounting.memory.pous.verifier.audit import (
     run_timed,
     simulate,
 )
-from verity.protocols.resource_accounting.memory.pous.verifier.codec import encode_segments, split
-from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag
-from verity.protocols.resource_accounting.memory.pous.verifier.layout import TensorLayout, decode_tensor
+from verity.protocols.resource_accounting.memory.pous.verifier.codec import (
+    encode_segments,
+    split,
+)
+from verity.protocols.resource_accounting.memory.pous.verifier.labels import (
+    salt_value,
+    tag,
+)
+from verity.protocols.resource_accounting.memory.pous.verifier.layout import (
+    TensorLayout,
+    decode_tensor,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.oracle import run
 from verity.protocols.resource_accounting.memory.pous.verifier.primitives import (
     OverwriteStepper,
@@ -30,7 +41,9 @@ from verity.protocols.resource_accounting.memory.pous.verifier.primitives import
     pad_block,
 )
 from verity.protocols.resource_accounting.memory.pous.verifier.scheme import Encoding
-from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
+    VerifierKey,
+)
 
 PARAMS = dense.DenseParams(8, 64, 3)
 SALT = bytes(range(24))

@@ -49,7 +49,9 @@ from verity.protocols.resource_accounting.memory.pous.verifier.audit import (
     Key,
     UnsignedRounds,
 )
-from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
+    VerifierKey,
+)
 
 
 @dataclass(frozen=True, slots=True)

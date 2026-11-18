@@ -15,7 +15,11 @@ from verity.protocols.resource_accounting.memory.pous.verifier.labels import (
     transpose,
     w_labels,
 )
-from verity.protocols.resource_accounting.memory.pous.verifier.oracle import PiQuery, Tweak, run
+from verity.protocols.resource_accounting.memory.pous.verifier.oracle import (
+    PiQuery,
+    Tweak,
+    run,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.params import Params
 from verity.protocols.resource_accounting.memory.pous.verifier.primitives import (
     CAPACITY_BITS,

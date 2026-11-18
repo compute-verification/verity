@@ -38,10 +38,15 @@ from typing import Any
 
 from verity_difftest import Server, build, canonical
 
-from verity.protocols.resource_accounting.memory.pous.attester import timed_audit as reference
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    timed_audit as reference,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier import protocol
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
-from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey, leaf_hash
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
+    VerifierKey,
+    leaf_hash,
+)
 
 log = logging.getLogger(__name__)
 

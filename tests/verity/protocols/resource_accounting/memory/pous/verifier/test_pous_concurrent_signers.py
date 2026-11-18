@@ -16,7 +16,9 @@ import pous_test_signer as ts
 from test_pous_memory_attester import SESSION, judge, session
 
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_attester as mc,
+)
 from verity.protocols.resource_accounting.memory.pous.attester import onsite
 
 

@@ -102,7 +102,9 @@ from verity.circuits import requirement
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.commitments.rowleaf import sha512_row_v2_prefix
 from verity.protocols.resource_accounting.memory.pous.verifier import setup, verifier
-from verity.protocols.resource_accounting.memory.pous.verifier.layout import TensorLayout
+from verity.protocols.resource_accounting.memory.pous.verifier.layout import (
+    TensorLayout,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.p2_v1 import reference
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (
     P2,

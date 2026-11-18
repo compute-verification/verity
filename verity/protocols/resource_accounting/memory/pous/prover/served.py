@@ -70,7 +70,9 @@ LAUNCHER = ("salt_source", "p2_lib", "experimental")
 
 def launcher_refusals(scheme: str, ctx: Mapping[str, Any]) -> tuple[str, ...]:
     """Why PoUS can't run ``scheme`` with what its launcher passes in ``ctx`` (`LAUNCHER`)."""
-    from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
+    from verity.protocols.resource_accounting.memory.pous.prover import (
+        weight_store as ws,
+    )
 
     out = []
     if (registered := ws.registered(scheme)) is None:
@@ -129,7 +131,9 @@ class Served:
     def registered(self, event: Any) -> None:
         if not self.own(event, H.RegisteredValues):
             return
-        from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
+        from verity.protocols.resource_accounting.memory.pous.prover import (
+            weight_store as ws,
+        )
 
         if self.settings is None:
             raise RuntimeError(f"{self.entry}: the weights were registered before the run declared its settings")
@@ -162,7 +166,9 @@ class Served:
 
     def decoded(self, name: str) -> Any:
         """Registered weight ``name`` decoded from ``C*`` into a fresh buffer on ``C*``'s device."""
-        from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
+        from verity.protocols.resource_accounting.memory.pous.prover import (
+            weight_store as ws,
+        )
 
         shape, dtype = self.shapes[name]
         out = self.store.rows.new_empty(shape, dtype=dtype)
@@ -195,7 +201,9 @@ class Served:
 
     def details(self) -> dict[str, Any]:
         """What the setup holds (`weight_store.details`)."""
-        from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
+        from verity.protocols.resource_accounting.memory.pous.prover import (
+            weight_store as ws,
+        )
 
         if self.store is None:
             raise RuntimeError(f"{self.entry}: no weights were registered, so nothing is held")
@@ -208,7 +216,9 @@ class Served:
     def audit(self, node: str, coins: bytes, **kw: Any) -> Any:
         """`weight_store.audit` of this setup on ``node`` under the auditor's ``coins``; ``kw`` as `period_prover.audit`'s
         (the prover by default this one's)."""
-        from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
+        from verity.protocols.resource_accounting.memory.pous.prover import (
+            weight_store as ws,
+        )
 
         if self.store is None or self.store.rows is None:
             raise RuntimeError(f"{self.entry}: nothing is held to audit")
@@ -218,7 +228,9 @@ class Served:
     def subprotocol(self, period_dir: Any, node: str, out: Any, *, side_of: Any, schemes: Any = None,
                     protocol: str | None = None) -> dict[str, Any]:
         """One period's PoUS of what this setup holds (`weight_store.subprotocol`), the first this setup's ``fresh``."""
-        from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
+        from verity.protocols.resource_accounting.memory.pous.prover import (
+            weight_store as ws,
+        )
 
         def audited(node: str, coins: bytes, **kw: Any) -> Any:
             got = self.audit(node, coins, **kw)
@@ -230,7 +242,9 @@ class Served:
 
     def answer(self, index: int) -> bytes:
         """The prover's reply to challenge ``index``: block ``index`` of ``C*``."""
-        from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
+        from verity.protocols.resource_accounting.memory.pous.prover import (
+            weight_store as ws,
+        )
 
         self.answered += 1
         return ws.answer(self.store, index)

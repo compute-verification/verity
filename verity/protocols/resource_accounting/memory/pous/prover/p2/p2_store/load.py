@@ -35,7 +35,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.resource_accounting.memory.pous.verifier.p2_v1 import reference as R
+from verity.protocols.resource_accounting.memory.pous.verifier.p2_v1 import (
+    reference as R,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as S
 
 from . import gpu

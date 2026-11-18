@@ -22,7 +22,9 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_attester as mc,
+)
 
 __all__ = ["SessionProofs", "UnitOutcome", "check_session", "clear_reasons", "known_reasons", "link_reasons",
            "programs"]

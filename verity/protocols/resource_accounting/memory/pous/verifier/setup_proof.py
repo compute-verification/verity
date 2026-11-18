@@ -94,7 +94,7 @@ class Claim:
                 "unit": self.unit, "law": self.law, "outcome": self.outcome.hex()}
 
     @classmethod
-    def from_json(cls, j: dict[str, Any]) -> "Claim":
+    def from_json(cls, j: dict[str, Any]) -> Claim:
         return cls(dict(j["params"]), bytes.fromhex(j["commitment"]), bytes.fromhex(j["store"]), j["unit"], j["law"],
                    bytes.fromhex(j["outcome"]))
 

@@ -6,9 +6,14 @@ import random
 
 import pytest
 
-from verity.protocols.resource_accounting.memory.pous.verifier.layout import TensorLayout, decode_tensor
+from verity.protocols.resource_accounting.memory.pous.verifier.layout import (
+    TensorLayout,
+    decode_tensor,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.params import Params
-from verity.protocols.resource_accounting.memory.pous.verifier.primitives import reference
+from verity.protocols.resource_accounting.memory.pous.verifier.primitives import (
+    reference,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.scheme import encode
 
 BASE = Params(8, 64, 3)

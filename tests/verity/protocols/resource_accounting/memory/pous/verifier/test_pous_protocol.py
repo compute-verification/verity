@@ -20,12 +20,25 @@ from pous_fakes import Clock
 from verity.commitments import claim_ids
 from verity.commitments.randomness import frame
 from verity.protocols.resource_accounting.memory.pous.prover.responder import responder
-from verity.protocols.resource_accounting.memory.pous.verifier import band, dense, primitives, protocol, schemes
+from verity.protocols.resource_accounting.memory.pous.verifier import (
+    band,
+    dense,
+    primitives,
+    protocol,
+    schemes,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.codec import Geometry
-from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag
-from verity.protocols.resource_accounting.memory.pous.verifier.layout import TensorLayout
+from verity.protocols.resource_accounting.memory.pous.verifier.labels import (
+    salt_value,
+    tag,
+)
+from verity.protocols.resource_accounting.memory.pous.verifier.layout import (
+    TensorLayout,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.params import Params
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes import band as band_scheme
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes import (
+    band as band_scheme,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (
     CERT_FAMILY_BLOCKS,
@@ -56,7 +69,9 @@ from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import
     wide320_certificate,
     wide_certificate,
 )
-from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
+    VerifierKey,
+)
 
 SALT = bytes(range(24))
 SMALL = {

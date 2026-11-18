@@ -25,11 +25,17 @@ import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_attester as mc,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier import period, run
-from verity.protocols.resource_accounting.memory.pous.verifier import setup as pous_setup
+from verity.protocols.resource_accounting.memory.pous.verifier import (
+    setup as pous_setup,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
-from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
+    VerifierKey,
+)
 
 LEAN = (Path(__file__).resolve().parents[8] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "check")
 ROOT = Path(__file__).resolve().parents[8]

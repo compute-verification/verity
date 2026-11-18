@@ -6,13 +6,16 @@ import weakref
 from fractions import Fraction
 
 import pytest
+
 from verity import hooks as H
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.pous.prover import served
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 from verity.protocols.resource_accounting.memory.pous.scheme import POUS
 from verity.protocols.resource_accounting.memory.pous.verifier import period
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (
+    P2Params,
+)
 
 torch = pytest.importorskip("torch")
 
@@ -199,7 +202,7 @@ def decoded_bits(monkeypatch, point, weights):
     ex.emit(H.Declared("card", {"eager": True}, (POUS.name,), {"pous": S.settings(POUS, {})}))
     ex.emit(H.RegisteredValues(tuple(weights.items()), operands={n: i for i, n in enumerate(weights)}))
     pb = s.store.params.payload_bytes
-    assert all(0 < (t.numel() * t.element_size()) % pb for t in plain.values())        # each ends inside its last block
+    assert all((t.numel() * t.element_size()) % pb > 0 for t in plain.values())        # each ends inside its last block
     [kernel] = [r.kernel for r in ex.filed(H.ComputeBlockWith)]
     released = ex.filed(H.ReleaseValue)
     assert [r.value for r in released] == list(plain)
@@ -232,7 +235,9 @@ def test_the_decode_hands_back_each_registered_weights_bytes_at_the_deployed_fie
     payloads), one segment of 8 blocks. About 35 s on one CPU core, the encode's roots at 16448 bits; it catches what the
     toy point can't: a payload of P2's width, whose byte order, padding and field reduction the toy's 126-byte payload
     doesn't exercise."""
-    from verity.protocols.resource_accounting.memory.pous.verifier import schemes as pous_schemes
+    from verity.protocols.resource_accounting.memory.pous.verifier import (
+        schemes as pous_schemes,
+    )
 
     q = pous_schemes.get(P2).params
     point = P2Params(q.w, q.c0, 8, 1, q.expander)

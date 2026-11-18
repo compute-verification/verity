@@ -45,13 +45,17 @@ P2_STORE = Path(__file__).resolve().parent / "p2" / "p2_store"
 
 def registered(scheme: str) -> Any:
     """The registered scheme ``scheme`` (`verifier.schemes`), None when none is."""
-    from verity.protocols.resource_accounting.memory.pous.verifier import schemes as pous_schemes
+    from verity.protocols.resource_accounting.memory.pous.verifier import (
+        schemes as pous_schemes,
+    )
     return pous_schemes.get(scheme) if scheme in pous_schemes.REGISTRY else None
 
 
 def geometry(scheme: str) -> Any:
     """The point's geometry at one segment: the registered scheme's (its width, prime and ``2^16`` blocks a segment)."""
-    from verity.protocols.resource_accounting.memory.pous.verifier import schemes as pous_schemes
+    from verity.protocols.resource_accounting.memory.pous.verifier import (
+        schemes as pous_schemes,
+    )
     return pous_schemes.get(scheme).params
 
 
@@ -95,7 +99,9 @@ def flat(t: Any) -> Any:
 
 def layout_of(scheme: str, tensors: Mapping[str, Any]) -> Any:
     """The store's frozen layout over ``tensors``: each from a block boundary, in order (`p2_store/store.py`'s ``build``)."""
-    from verity.protocols.resource_accounting.memory.pous.verifier.layout import TensorLayout
+    from verity.protocols.resource_accounting.memory.pous.verifier.layout import (
+        TensorLayout,
+    )
 
     base = geometry(scheme)
     pb, block, ranges = base.payload_bytes, 0, []
@@ -182,7 +188,9 @@ class Store:
 
     def held(self) -> Any:
         """`period_prover.EncodedStore` of what this setup left: the setup case is built from ``C*`` as held now."""
-        from verity.protocols.resource_accounting.memory.pous.prover import period_prover
+        from verity.protocols.resource_accounting.memory.pous.prover import (
+            period_prover,
+        )
         from verity.protocols.resource_accounting.memory.pous.verifier import period
         return period_prover.EncodedStore(self.point, self.published(), Blocks(self), self.digests,
                                           period.setup_case(self.params, self.commitment, self.salt, self.segments()))
@@ -190,7 +198,9 @@ class Store:
     def decode_cpu(self, offset: int, size: int) -> bytes:
         """``W`` bytes ``[offset, offset + size)`` by the scheme's codec, from the segments they fall in; refused when a
         block isn't a codeword or the range's last block is nonzero past it."""
-        from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import decode_segment
+        from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (
+            decode_segment,
+        )
 
         q = self.params
         n, pb, seg = q.blocks_per_segment, q.payload_bytes, q.segment_bytes
@@ -223,10 +233,14 @@ class Blocks:
 def encode(layout: Any, tensors: Mapping[str, Any], commitment: bytes, salt: bytes, salt_source: str,
             lib: str | None) -> Store:
     """``C*`` of ``W`` under ``salt`` on the weights' device, each segment's encode checked (module docstring)."""
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+    from verity.protocols.resource_accounting.memory.pous.attester import (
+        memory_attester as mc,
+    )
     from verity.protocols.resource_accounting.memory.pous.verifier import period
     from verity.protocols.resource_accounting.memory.pous.verifier import run as R
-    from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import expand_prefix
+    from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (
+        expand_prefix,
+    )
     from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
         DIGEST_BYTES,
         VerifierKey,
@@ -268,7 +282,9 @@ def encode(layout: Any, tensors: Mapping[str, Any], commitment: bytes, salt: byt
 def decoder(store: Store, lib: str | None) -> Callable[[Any, Any], None]:
     """``decode(placement, out)``: the placed tensor's bytes from ``C*`` into ``out`` (flat uint8, on ``C*``'s device)."""
     if store.rows.device.type == "cuda":
-        from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import expand_prefix
+        from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (
+            expand_prefix,
+        )
 
         Ld = p2_module("load")
         store.staged = Ld.EncodedRows(Ld.StoreLayout(store.params, (), expand_prefix(store.params, store.salt)), store.rows, 0,
@@ -300,7 +316,9 @@ def details(store: Store) -> dict[str, Any]:
     """What ``store``'s setup holds, for a run's summary: its tensors and their bytes, the blocks they use and ``C*``'s, where
     it is held and how it was encoded and is decoded, and what its point certifies."""
     from verity.protocols.resource_accounting.memory.pous.verifier import period
-    from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
+    from verity.protocols.resource_accounting.memory.pous.verifier.schemes import (
+        p2 as P2,
+    )
 
     q, tensors = store.params, store.layout.tensors
     device = store.rows.device
@@ -334,9 +352,15 @@ def subprotocol(store: Store | None, period_dir: str | Path, node: str, out: str
     that setup was checked by the developer, not the auditor (`challenger_session.placement`).  ``answered()`` counts the rounds the prover has answered so far.
     ``schemes`` and ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's
     in tests)."""
-    from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-    from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
+    from verity.protocols.resource_accounting.memory.pous.attester import (
+        challenger_session as CS,
+    )
+    from verity.protocols.resource_accounting.memory.pous.attester import (
+        memory_attester as mc,
+    )
+    from verity.protocols.resource_accounting.memory.pous.prover import (
+        challenger_prover as CR,
+    )
     from verity.protocols.resource_accounting.memory.pous.verifier import period
 
     doc = json.loads((Path(period_dir) / "period.json").read_text())

@@ -15,8 +15,12 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import resolve
 from verity.commitments.crypto import lms as R
 from verity.commitments.rowleaf import sha512_row_v2_digest
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import Round
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_attester as mc,
+)
+from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import (
+    Round,
+)
 from verity.protocols.resource_accounting.memory.pous.prover import session_circuit as S
 
 RNG = random.Random(11)

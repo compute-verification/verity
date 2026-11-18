@@ -14,9 +14,15 @@ import json
 from pathlib import Path
 
 from verity.protocols.resource_accounting.memory.pous.verifier import band, dense
-from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag
+from verity.protocols.resource_accounting.memory.pous.verifier.labels import (
+    salt_value,
+    tag,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.oracle import Tweak, run
-from verity.protocols.resource_accounting.memory.pous.verifier.params import OPERATING_POINT, Params
+from verity.protocols.resource_accounting.memory.pous.verifier.params import (
+    OPERATING_POINT,
+    Params,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.primitives import (
     heuristic_arx,
     key_program,

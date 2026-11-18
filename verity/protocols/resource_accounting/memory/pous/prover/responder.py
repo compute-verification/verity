@@ -14,7 +14,10 @@ from dataclasses import dataclass
 from verity.protocols.resource_accounting.memory.pous.verifier.oracle import Prog, pure
 from verity.protocols.resource_accounting.memory.pous.verifier.protocol import Scheme
 from verity.protocols.resource_accounting.memory.pous.verifier.scheme import Encoding
-from verity.protocols.resource_accounting.memory.pous.verifier.verifier import MerkleTree, tree
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
+    MerkleTree,
+    tree,
+)
 
 
 @dataclass(frozen=True, slots=True)

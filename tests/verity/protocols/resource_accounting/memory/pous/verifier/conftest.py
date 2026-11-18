@@ -13,8 +13,14 @@ import shutil
 import pous_test_signer
 import pytest
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester, wipe_challenger, wipe_stream
-from verity.protocols.resource_accounting.memory.pous.attester.continuous import ContinuousMemoryAttester
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_attester,
+    wipe_challenger,
+    wipe_stream,
+)
+from verity.protocols.resource_accounting.memory.pous.attester.continuous import (
+    ContinuousMemoryAttester,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier import audit
 
 

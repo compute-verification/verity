@@ -8,8 +8,12 @@ import random
 import pytest
 
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
-from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import block_digest
-from verity.protocols.resource_accounting.memory.pous.prover.responder import HonestResponder
+from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import (
+    block_digest,
+)
+from verity.protocols.resource_accounting.memory.pous.prover.responder import (
+    HonestResponder,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier import setup
 from verity.protocols.resource_accounting.memory.pous.verifier.audit import (
     UnsignedRounds,
@@ -21,9 +25,14 @@ from verity.protocols.resource_accounting.memory.pous.verifier.codec import (
     encode_segments,
     split,
 )
-from verity.protocols.resource_accounting.memory.pous.verifier.layout import TensorLayout, decode_tensor
+from verity.protocols.resource_accounting.memory.pous.verifier.layout import (
+    TensorLayout,
+    decode_tensor,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.params import Params
-from verity.protocols.resource_accounting.memory.pous.verifier.primitives import reference
+from verity.protocols.resource_accounting.memory.pous.verifier.primitives import (
+    reference,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.scheme import (
     P3,
     decode_segment,

@@ -11,10 +11,14 @@ import pous_test_signer as ts
 import pytest
 from pous_fakes import Clock
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_attester as mc,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier import run
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
-from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
+    VerifierKey,
+)
 
 POINT = run.Point(P2.P2Params(64, 189, 4, 2), k=3, limit_ns=1_000)
 Q = POINT.params

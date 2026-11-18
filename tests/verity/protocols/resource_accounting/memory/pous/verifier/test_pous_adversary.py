@@ -9,7 +9,10 @@ import random
 import pytest
 
 from verity.protocols.resource_accounting.memory.pous.verifier import adversary as A
-from verity.protocols.resource_accounting.memory.pous.verifier.audit import challenge_key, simulate
+from verity.protocols.resource_accounting.memory.pous.verifier.audit import (
+    challenge_key,
+    simulate,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.params import Params
 from verity.protocols.resource_accounting.memory.pous.verifier.primitives import (
     IdealTweakablePermutation,
@@ -18,7 +21,9 @@ from verity.protocols.resource_accounting.memory.pous.verifier.primitives import
     reference,
 )
 from verity.protocols.resource_accounting.memory.pous.verifier.scheme import encode
-from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
+    VerifierKey,
+)
 
 PARAMS = Params(10, 64, 3)
 

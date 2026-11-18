@@ -15,7 +15,11 @@ import json
 from collections.abc import Mapping, MutableSet, Sequence
 from dataclasses import dataclass
 
-from verity.protocols.resource_accounting.memory.pous.verifier.verifier import MerkleTree, path_length, verify_path
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
+    MerkleTree,
+    path_length,
+    verify_path,
+)
 
 from . import reference as R
 

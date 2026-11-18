@@ -41,8 +41,11 @@ from types import SimpleNamespace
 
 
 def _python():
-    from verity.protocols.resource_accounting.memory.pous.verifier.p2_v1 import reference, wire
     from verity.protocols.resource_accounting.memory.pous.verifier import verifier
+    from verity.protocols.resource_accounting.memory.pous.verifier.p2_v1 import (
+        reference,
+        wire,
+    )
     return reference, wire, verifier
 
 
@@ -726,10 +729,18 @@ def _storage(w: int, c0: int, bps: int, segments: int, k: int, delta: int, rtt: 
     """The generic protocol's gate and profile for P2 at a store: `TimedAudit` covers the audit when it runs it
     without `research`, and with `research` its certificate and gaps make the `StorageProfile`. None when `P2Params`
     refuses the store."""
-    from verity.protocols.resource_accounting.memory.pous.verifier.protocol import StorageProfile, TimedAudit
-    from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2, P2Params
-    from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey
     from verity.commitments.randomness import derive
+    from verity.protocols.resource_accounting.memory.pous.verifier.protocol import (
+        StorageProfile,
+        TimedAudit,
+    )
+    from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (
+        P2,
+        P2Params,
+    )
+    from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
+        VerifierKey,
+    )
     try:
         params = P2Params(w, c0, bps, segments)
     except ValueError:

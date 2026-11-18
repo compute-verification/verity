@@ -7,8 +7,16 @@ from pathlib import Path
 
 from verity.protocols.compose import schemes as table
 from verity.protocols.resource_accounting import scheme as S
-from verity.protocols.resource_accounting.memory.pous.scheme import POUS, POUS_TERM, WIPE
-from verity.protocols.resource_accounting.memory.pous.verifier import period, schemes, wipe_period
+from verity.protocols.resource_accounting.memory.pous.scheme import (
+    POUS,
+    POUS_TERM,
+    WIPE,
+)
+from verity.protocols.resource_accounting.memory.pous.verifier import (
+    period,
+    schemes,
+    wipe_period,
+)
 
 ROOT = Path(__file__).resolve().parents[6]
 LOCKS = (ROOT / "security" / "lean-audit.json", ROOT / "security" / "Properties" / "lean-audit.json")

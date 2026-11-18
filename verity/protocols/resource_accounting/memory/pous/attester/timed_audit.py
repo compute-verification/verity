@@ -61,10 +61,15 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.resource_accounting.memory.pous.verifier import audit as pous_audit
+from verity.protocols.resource_accounting.memory.pous.verifier import (
+    audit as pous_audit,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier import protocol, schemes
 from verity.protocols.resource_accounting.memory.pous.verifier.band import BandParams
-from verity.protocols.resource_accounting.memory.pous.verifier.verifier import DIGEST_BYTES, VerifierKey
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
+    DIGEST_BYTES,
+    VerifierKey,
+)
 
 log = logging.getLogger(__name__)
 

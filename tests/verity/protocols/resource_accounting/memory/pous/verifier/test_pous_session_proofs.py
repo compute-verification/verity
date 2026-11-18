@@ -13,9 +13,13 @@ import random
 import pytest
 
 from verity.commitments.crypto import lms as R
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_attester as mc,
+)
 from verity.protocols.resource_accounting.memory.pous.prover import session as P
-from verity.protocols.resource_accounting.memory.pous.verifier import session_proofs as V
+from verity.protocols.resource_accounting.memory.pous.verifier import (
+    session_proofs as V,
+)
 
 RNG = random.Random(3)
 K, BLOCKS, BLOCK = 5, 64, 2056
@@ -114,7 +118,9 @@ def test_the_session_is_a_window_circuit(k) -> None:
     """The staged statements as a window's circuit (`window.SessionIntegration`): its templates and wires pass the
     window's checks, one unit each for the signature and the digest and one a round, at a K with no odd round too."""
     from verity.circuits.codec import descriptor_id
-    from verity.protocols.resource_accounting.memory.pous.prover.window import SessionIntegration
+    from verity.protocols.resource_accounting.memory.pous.prover.window import (
+        SessionIntegration,
+    )
 
     st = _staged(k)[3]
     circuit = SessionIntegration(st).circuit()

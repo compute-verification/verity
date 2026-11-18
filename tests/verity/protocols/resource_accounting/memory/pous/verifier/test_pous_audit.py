@@ -10,7 +10,9 @@ import pytest
 from pous_fakes import Clock
 
 from verity.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
-from verity.protocols.resource_accounting.memory.pous.prover.responder import HonestResponder
+from verity.protocols.resource_accounting.memory.pous.prover.responder import (
+    HonestResponder,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier import setup
 from verity.protocols.resource_accounting.memory.pous.verifier.audit import (
     DEADLINE_NS,
@@ -20,9 +22,15 @@ from verity.protocols.resource_accounting.memory.pous.verifier.audit import (
     run_timed,
     simulate,
 )
-from verity.protocols.resource_accounting.memory.pous.verifier.oracle import PQuery, Tweak, pure
+from verity.protocols.resource_accounting.memory.pous.verifier.oracle import (
+    PQuery,
+    Tweak,
+    pure,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.params import Params
-from verity.protocols.resource_accounting.memory.pous.verifier.primitives import reference
+from verity.protocols.resource_accounting.memory.pous.verifier.primitives import (
+    reference,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.scheme import encode
 from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
     MerkleTree,

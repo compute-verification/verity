@@ -20,10 +20,15 @@ from pathlib import Path
 import pytest
 from verity_difftest import canonical
 
-from verity.protocols.resource_accounting.memory.pous.attester import timed_audit as live
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    timed_audit as live,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier import schemes
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
-from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey, leaf_hash
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
+    VerifierKey,
+    leaf_hash,
+)
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

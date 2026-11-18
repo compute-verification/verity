@@ -12,7 +12,9 @@ import tempfile
 from pathlib import Path
 
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_attester as mc,
+)
 
 HEIGHTS = range(1, 11)
 DIR: Path | None = None

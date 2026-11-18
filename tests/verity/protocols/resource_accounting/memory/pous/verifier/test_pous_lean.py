@@ -20,14 +20,21 @@ from verity.protocols.resource_accounting.memory.pous.verifier.labels import (
     transpose,
     w_labels,
 )
-from verity.protocols.resource_accounting.memory.pous.verifier.oracle import KeyQuery, Tweak, run
+from verity.protocols.resource_accounting.memory.pous.verifier.oracle import (
+    KeyQuery,
+    Tweak,
+    run,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.params import Params
 from verity.protocols.resource_accounting.memory.pous.verifier.primitives import (
     Primitives,
     RandomOracleKey,
     key_query,
 )
-from verity.protocols.resource_accounting.memory.pous.verifier.scheme import decode_prog, encode_prog
+from verity.protocols.resource_accounting.memory.pous.verifier.scheme import (
+    decode_prog,
+    encode_prog,
+)
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "lean_vectors.json").read_text())
 P61 = 2305843009213693951

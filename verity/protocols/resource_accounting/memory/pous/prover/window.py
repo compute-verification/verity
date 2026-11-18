@@ -18,8 +18,21 @@ import numpy as np
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import bits as EB
-from verity.commitments.periods.interface import Circuit, Integration, Read, Registered, Window, Wire
-from verity.protocols.resource_accounting.memory.pous.verifier.setup_proof import BASE, OK, SLOT, base, leaf_bytes
+from verity.commitments.periods.interface import (
+    Circuit,
+    Integration,
+    Read,
+    Registered,
+    Window,
+    Wire,
+)
+from verity.protocols.resource_accounting.memory.pous.verifier.setup_proof import (
+    BASE,
+    OK,
+    SLOT,
+    base,
+    leaf_bytes,
+)
 
 from . import answer_circuit, decode_circuit, session_circuit, verdict_circuit
 from . import setup_circuit as SP

@@ -15,7 +15,9 @@ import pytest
 import settings
 from test_pous_dense import SmallCapacity
 
-from verity.protocols.resource_accounting.memory.pous.prover.responder import HonestResponder
+from verity.protocols.resource_accounting.memory.pous.prover.responder import (
+    HonestResponder,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier import band, dense, setup
 from verity.protocols.resource_accounting.memory.pous.verifier.audit import (
     UnsignedRounds,
@@ -23,13 +25,30 @@ from verity.protocols.resource_accounting.memory.pous.verifier.audit import (
     run_timed,
     simulate,
 )
-from verity.protocols.resource_accounting.memory.pous.verifier.codec import encode_segments, split
-from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag
-from verity.protocols.resource_accounting.memory.pous.verifier.layout import TensorLayout, decode_tensor
-from verity.protocols.resource_accounting.memory.pous.verifier.oracle import KeyQuery, run
-from verity.protocols.resource_accounting.memory.pous.verifier.primitives import Primitives, key_program
+from verity.protocols.resource_accounting.memory.pous.verifier.codec import (
+    encode_segments,
+    split,
+)
+from verity.protocols.resource_accounting.memory.pous.verifier.labels import (
+    salt_value,
+    tag,
+)
+from verity.protocols.resource_accounting.memory.pous.verifier.layout import (
+    TensorLayout,
+    decode_tensor,
+)
+from verity.protocols.resource_accounting.memory.pous.verifier.oracle import (
+    KeyQuery,
+    run,
+)
+from verity.protocols.resource_accounting.memory.pous.verifier.primitives import (
+    Primitives,
+    key_program,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.scheme import Encoding
-from verity.protocols.resource_accounting.memory.pous.verifier.verifier import VerifierKey
+from verity.protocols.resource_accounting.memory.pous.verifier.verifier import (
+    VerifierKey,
+)
 
 PARAMS = band.BandParams(16, 64, 4, 3)
 SALT = bytes(range(24))

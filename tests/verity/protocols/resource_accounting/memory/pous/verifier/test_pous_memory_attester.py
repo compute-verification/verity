@@ -17,7 +17,9 @@ from pous_fakes import Clock
 from verity.commitments import rowleaf
 from verity.commitments.crypto import lms
 from verity.commitments.randomness import derive
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_attester as mc,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier import schemes
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 

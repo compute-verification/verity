@@ -21,8 +21,14 @@ from verity.protocols.resource_accounting.memory.pous.verifier.audit import (
     run_timed,
 )
 from verity.protocols.resource_accounting.memory.pous.verifier.codec import Codec, split
-from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag
-from verity.protocols.resource_accounting.memory.pous.verifier.oracle import KeyQuery, run
+from verity.protocols.resource_accounting.memory.pous.verifier.labels import (
+    salt_value,
+    tag,
+)
+from verity.protocols.resource_accounting.memory.pous.verifier.oracle import (
+    KeyQuery,
+    run,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.params import Params
 from verity.protocols.resource_accounting.memory.pous.verifier.primitives import (
     Primitives,

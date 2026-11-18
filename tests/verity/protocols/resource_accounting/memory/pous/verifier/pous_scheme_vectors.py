@@ -18,9 +18,17 @@ from pathlib import Path
 
 from pous_vectors import _bytes
 
-from verity.protocols.resource_accounting.memory.pous.verifier import band, dense, protocol, schemes
+from verity.protocols.resource_accounting.memory.pous.verifier import (
+    band,
+    dense,
+    protocol,
+    schemes,
+)
 from verity.protocols.resource_accounting.memory.pous.verifier.params import Params
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import CHACHA8, P2Params
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (
+    CHACHA8,
+    P2Params,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures" / "schemes"
 SMALL = {"band-chain/d12/v1": band.BandParams(16, 64, 12, 2), "dense-chain/v1": dense.DenseParams(8, 64, 2),

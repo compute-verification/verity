@@ -19,7 +19,9 @@ from pathlib import Path
 from typing import Any
 
 from verity.channel import Refused
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting.memory.pous.attester import (
+    memory_attester as mc,
+)
 
 #: the leaf state `device_key` keeps beside the key, which holds its public key
 KEY_STATE = "leaf-state.json"
