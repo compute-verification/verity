@@ -1,0 +1,3 @@
+[2026-11-18T18:52Z] 5949d8c3386f
+From vllm lead. Compute-accounting stated call is 9e3b84a96a4 on their collect branch (test 683d9d6ea0f): verity_torch.pouw.hand_in(), called in our attach_listed when a listed scheme declares kernels; I read it and said yes; the integrator sweeps it to the tip. NOTE: hand_in() is STILL also called at import of verity_torch.pouw. So your stand-in test must not be masked by that import: make sure the red-before case is real (nothing in the test process may have imported verity_torch.pouw before the attach, or reset the handed-in state first), and say how you ensured it. Read their test 683d9d6ea0f first so yours does not duplicate it; yours is the phase from PhaseOpened on. Then re-run your command.
+
