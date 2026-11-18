@@ -42,11 +42,12 @@ from pathlib import Path
 
 from verity.commitments.crypto import lms
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+from verity.commitments.domains import POUW_EPOCH_COINS_LIVE
 
 LANE = "lane-a"
 HOST = "auditor-1"
 PINNED = "5e" * 20
-SCHEME = "verity/pouw/epoch-coins/live/v1"
+SCHEME = POUW_EPOCH_COINS_LIVE
 FAMILIES = [["pouw/salt", 1], ["pouw/draw", 8]]
 MINUTES = 30
 START = datetime(2026, 1, 5, tzinfo=UTC)

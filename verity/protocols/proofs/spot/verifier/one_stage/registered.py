@@ -83,12 +83,16 @@ from verity.circuits.refs import runs as ref_runs
 from verity.circuits.types import Array, Value
 
 from . import partition as P
+from verity.commitments.domains import (
+    ONE_STAGE_PERIOD_SALT, ONE_STAGE_REGISTERED_DOMAIN, ONE_STAGE_SUPPLIED_SALT, REGISTERED_READS_V0,
+    REGISTERED_READS_V1,
+)
 
-REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v1"
-READS = "verity/registered-reads/v0"
+REGISTERED_DOMAIN = ONE_STAGE_REGISTERED_DOMAIN
+READS = REGISTERED_READS_V0
 #: the format whose port may carry `READS_FROM`: proof block `reads_from + i` reads `reads[i]`, every other proof block nothing; each
 #: of its objects holds only its own keys (Flock's `Registered.FORMAT`, `FILE_KEYS`, `PORT_KEYS`)
-READS_V1 = "verity/registered-reads/v1"
+READS_V1 = REGISTERED_READS_V1
 READS_FROM = "reads_from"
 #: the `READS_V1` key naming the ports bound to the window's committed values, each `{"root", "domain"}` (`Flock.RegBound`)
 BOUND = "bound"
@@ -120,8 +124,8 @@ PRODUCED_KEY = "produced"
 #: the domain binding's key a value committed inside its window's open root adds in the window's place: the session the
 #: auditor's ledger opened for the window (PoUW's round-0 input-ids table, `credit.domain_of`)
 SESSION_KEY = "session"
-SUPPLIED_SALT = "verity/one-stage/supplied-salt/v1"
-WINDOW_SALT = "verity/one-stage/window-salt/v1"
+SUPPLIED_SALT = ONE_STAGE_SUPPLIED_SALT
+WINDOW_SALT = ONE_STAGE_PERIOD_SALT
 #: a supplied row's source kinds: a served port's root, a registered value's root, the verifier's own bytes, a position
 #: after the log's, the verifier's coin bound to the record's window
 SOURCES = ("port", "value", "bytes", "position", "window")

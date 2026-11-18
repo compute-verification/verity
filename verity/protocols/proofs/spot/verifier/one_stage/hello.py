@@ -13,8 +13,9 @@ from typing import Any, Mapping, Sequence
 from verity.circuits.codec import canonical_json
 
 from .verdict import Verdict
+from verity.commitments.domains import COIN_TREE_HM96_SHA512
 
-SCHEME = "coin-tree/hm96-sha512/v2"
+SCHEME = COIN_TREE_HM96_SHA512
 _HEX = frozenset("0123456789abcdef")
 
 

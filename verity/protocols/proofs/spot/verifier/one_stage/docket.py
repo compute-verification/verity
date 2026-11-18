@@ -152,11 +152,12 @@ from verity.circuits.program import Program
 
 from . import draw as D, link_points as LP, partition as P, registered as G
 from .verdict import Verdict, _Collect
+from verity.commitments.domains import ONE_STAGE_PROTOCOL, REGISTRATION, REGISTRATION_RECEIPT, REGISTRATION_V1
 
-FORMAT = "verity/registration/v1"
-FORMAT_V2 = "verity/registration/v2"
-PROTOCOL = "verity/sampled-proofs/one-stage/v1"
-RECEIPT = "verity/registration-receipt/v1"
+FORMAT = REGISTRATION_V1
+FORMAT_V2 = REGISTRATION
+PROTOCOL = ONE_STAGE_PROTOCOL
+RECEIPT = REGISTRATION_RECEIPT
 KINDS = ("served", "stand-in")
 #: the window's field naming its seed salt (Seed salt)
 SEED_SALT = "seed_salt"

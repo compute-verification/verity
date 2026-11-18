@@ -33,9 +33,10 @@ from verity.protocols.proofs.spot.verifier.profile import (Bernoulli, IntegrityP
 
 from .draw import check_draw, check_proved, sampling_design_of
 from verity.protocols.proofs.spot.verifier.one_stage.docket import PROTOCOL, digest as registration_digest
+from verity.commitments.domains import INTEGRITY_PROFILE, ONE_STAGE_AUDIT
 
-FORMAT = "verity/one-stage/audit/v0"
-PROFILE = "verity/integrity-profile/v1"
+FORMAT = ONE_STAGE_AUDIT
+PROFILE = INTEGRITY_PROFILE
 LEVEL = "unit"
 
 

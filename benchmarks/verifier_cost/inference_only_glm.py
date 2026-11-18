@@ -60,9 +60,10 @@ sys.path.insert(0, str(HERE))
 from run import EXE, _reference, timed  # noqa: E402
 
 from verity.circuits.codec import canonical_json  # noqa: E402
+from verity.commitments.domains import IR_DESCRIPTOR  # noqa: E402
 
 SCHEMA = "verity/nci-glm/v1"
-DESCRIPTOR = "verity-ir/descriptor/v1"
+DESCRIPTOR = IR_DESCRIPTOR
 #: the demo's policy (README.md): Γ gates per inference block, α fresh input bits per gate
 GAMMA = 2 ** 44
 ALPHA = (1, 2 ** 25)

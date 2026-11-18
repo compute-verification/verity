@@ -22,9 +22,10 @@ from verity.commitments import hm96
 from verity.commitments.rowleaf import ROLE_X, row_bytes, sha512_row_prefix
 
 from . import rec_live as RL
+from verity.commitments.domains import ZK_SERVER_PUBLIC, ZK_SERVER_TRANSCRIPT
 
-FORMAT = "verity/firewall-transcript/v0"
-PUBLIC_FORMAT = "verity/firewall-public/v0"
+FORMAT = ZK_SERVER_TRANSCRIPT
+PUBLIC_FORMAT = ZK_SERVER_PUBLIC
 INST = hm96.SHA512
 
 

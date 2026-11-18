@@ -34,7 +34,7 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.program import Program
-from verity.commitments.domains import FLOCK_CIRCUIT_BINDING
+from verity.commitments.domains import FLOCK_CIRCUIT_BINDING, HM96_SHA512_ROW_V1
 from verity_flock.input_sets import InputSet
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier.one_stage import (
@@ -175,7 +175,7 @@ def hidden_outputs(meta: dict) -> bool:
 
 def ports(meta: dict, n: int) -> dict[str, tuple[str, int]]:
     """Each port the layout derives: its schema and leaf count (before hidden outputs, each output port a tree of u16 words)."""
-    out = {name: ("hm96-sha512/row/v1", n) for name, *_ in meta["ports"]}
+    out = {name: (HM96_SHA512_ROW_V1, n) for name, *_ in meta["ports"]}
     if not hidden_outputs(meta):
         out.update({name: ("u16", n * words) for name, words in meta["out_ports"]})
     return out

@@ -71,6 +71,7 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import SAMPLE_L
 from verity.protocols.proofs.spot.verifier.one_stage.docket import digest as registration_digest
 from .verifier import BUILD_LOCK, ROOT
 from .verifier import PACKAGE as V2_PACKAGE
+from verity.commitments.domains import ONE_STAGE_PROTOCOL_V2
 
 PACKAGE = ROOT / "verity/protocols/proofs/flock/verifier"
 EXE = "verity-verify-proof"
@@ -498,7 +499,7 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
 
 
 #: the one-stage audit on the proofs themselves (`Spot.OneStageZk`), which runs `verify`'s verifier on blobs
-V2 = "verity/sampled-proofs/one-stage/v2"
+V2 = ONE_STAGE_PROTOCOL_V2
 V2_EXE = "spot-one-stage-zk"
 
 

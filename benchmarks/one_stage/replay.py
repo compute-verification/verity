@@ -66,7 +66,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
 )
 from verity.commitments import randomness as RND
 from verity.circuits import codec, partition_object as PO
-from verity.commitments.domains import FLOCK_CIRCUIT_BINDING
+from verity.commitments.domains import FLOCK_CIRCUIT_BINDING, HM96_SHA512_ROW_V1, PROOF_SERVICE_OUTCOME
 from verity.commitments.identity import identity_digest, identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
@@ -75,7 +75,7 @@ from verity_vllm.definitions.registry import catalog
 import r2_population as R2
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
-ROW = "hm96-sha512/row/v1"
+ROW = HM96_SHA512_ROW_V1
 #: M0's set-bound frame domains: each tag with its identity digest (`a0.STAND_IN_BINDINGS`)
 STAND_IN_BINDINGS = {FLOCK_CIRCUIT_BINDING: identity_digest_sha512,
                      "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
@@ -1728,7 +1728,7 @@ def served_window(run: Run) -> Iterator[Case]:
                          "GAP: no derivation matches the record's ports; today's")
     sampling_design = sampling_design_at(levels[0])
     first = run.json(outcomes[0])
-    service = first.get("format") == "verity/proof-service/outcome/v0"
+    service = first.get("format") == PROOF_SERVICE_OUTCOME
     scheme = SCHEME if service else SERVED_ZK_SCHEME
     prov["scheme"] = "the proof system's `SCHEME`" if service else "served_commit's `SCHEME` (before the proof system)"
     p = params(program, query, sampling_design, ports, None, delta_of(pv["delta"]), partition=partition, scheme=scheme)

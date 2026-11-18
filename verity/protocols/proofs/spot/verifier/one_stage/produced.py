@@ -41,8 +41,9 @@ from typing import Any
 from verity.commitments.merkle import CommitmentDomain
 
 from . import registered as G
+from verity.commitments.domains import REGISTRATION_PRODUCED
 
-FORMAT = "verity/registration/produced/v1"
+FORMAT = REGISTRATION_PRODUCED
 KEYS = ("draw", "format", "openings", "produced", "registration")
 PRODUCED_KEY = G.PRODUCED_KEY
 #: a row's hm96-sha512 commitment string ``b || c``

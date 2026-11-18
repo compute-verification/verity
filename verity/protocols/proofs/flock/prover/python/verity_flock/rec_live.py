@@ -125,16 +125,17 @@ from verity.commitments import hm96
 
 from .rec_algebra import fast100
 from .record_text import session_text
+from verity.commitments.domains import FLOCK_LIVE_SESSION, HM96_SHA512_NODE_ROW, REC_INNER_TRANSCRIPT
 
-KIND = "rec/inner-transcript/v1"
-SESSION_KIND = "flock-live-session/v1"
+KIND = REC_INNER_TRANSCRIPT
+SESSION_KIND = FLOCK_LIVE_SESSION
 #: the circuit registration the session was held to (``verity/registration/v2``, written at staging and bound by META:
 #: `verity_flock.inner_registered.REGISTRATION`), copied into the session directory: its ``registered`` entries include
 #: the top of each table with no root at ``Commit``
 REGISTRATION = "circuit-registration.json"
 #: how a record's tree tops are salted: each 64-byte node a registered row (``hm96-sha512/row/v1``) under its own salt
 #: (`commit_top`)
-TOPS = "hm96-sha512/v1/node-row"
+TOPS = HM96_SHA512_NODE_ROW
 
 OP_DOMAIN, OP_LABEL, OP_OBSERVE, OP_SQUEEZE, OP_BYTES = 1, 2, 3, 4, 5
 KIND_SCALAR, KIND_SLICE = 1, 2
