@@ -3,8 +3,9 @@
 # Each rep is one `verity-vllm serve-openai --no-commit` lifetime of served_verdicts.sh's model (REPO at REV, --precision PRECISION),
 # the bench row's check (--required-manifest PRED/manifest.json, which here only refuses a row declaring async scheduling;
 # PRED is the row's Build of record, which `verity-vllm predict row` writes for ROW's name before the lease, as served_verdicts.sh's),
-# --max-model-len MAX_MODEL_LEN, --max-num-batched-tokens MNBT (default 512, served_verdicts.sh's T), --admit release-order and --window-requests
-# SLOTS, and --window-steps WINDOW_STEPS when it is set (unset: not passed), under served_verdicts.sh's engine environment
+# --max-model-len MAX_MODEL_LEN, --max-num-batched-tokens MNBT (default 512, served_verdicts.sh's T), the network attester
+# scheme's order release-order (--protocols-config under its name) and --window-requests SLOTS, and --window-steps
+# WINDOW_STEPS when it is set (unset: not passed), under served_verdicts.sh's engine environment
 # (VLLM_BATCH_INVARIANT=1, eager), then LOADS loads of `adapters/vllm/tools/served_run/serve_load.py --varied` with served_verdicts.sh's
 # REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED, each under a release run of its own. With FIXED (unset: the varied load) each
 # load is served_verdicts.sh's LOAD=fixed instead, `serve_load.py --fixed FIXED --prompt-range PROMPTS --window-steps

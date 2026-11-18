@@ -49,7 +49,7 @@ from verity_vllm import protocols as PO
 from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import index as IX
-from verity_vllm.check.replay import pouw_circuit as RC
+from verity_vllm.protocols.pouw import pouw_circuit as RC
 from verity_vllm.protocols import pouw
 from verity_vllm.query.required import Q_MODULE_BODY_ID
 

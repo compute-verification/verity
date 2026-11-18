@@ -258,13 +258,13 @@ def install(model, args, coins):
     if bad:
         raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
-    salt_key = PPD.no_salt_key(scheme)
-    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=salt_key)
+    weight_salts = PPDR.fresh_weight_salts(weights)
+    roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=weight_salts)
     tiles, rows = pass_capacity(kernel.run.TILE, [t.shape[0] for t in weights.values()])
     opening = coins.open("salt", weights_root(roots))
     run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots, coins.commitment, opening, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
-                              whole_defer=getattr(args, "whole_defer", False), capacity=tiles, flag_rows=rows, salt_key=salt_key,
+                              whole_defer=getattr(args, "whole_defer", False), capacity=tiles, flag_rows=rows, weight_salts=weight_salts,
                               whole_defer_a=getattr(args, "whole_defer_a", False),
                               whole_fork_stats=getattr(args, "whole_fork_stats", False),
                               whole_tree_sm=getattr(args, "whole_tree_sm", False))
