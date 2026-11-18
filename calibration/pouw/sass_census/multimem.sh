@@ -12,7 +12,8 @@ NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13
 [ -x "$NVCC" ] || { echo "multimem.sh: no nvcc at $NVCC" >&2; exit 2; }
 PROBE="$HERE/../opcode_probe/probe.py"
 ARCH=$(python3 "$PROBE" arch) || exit 2
-[ "$ARCH" = sm_120a ] || { echo "multimem.sh: the card's target is $ARCH, and multimem.cu is sm_120a's: nothing built" >&2; exit 2; }
+WANT=$(python3 "$PROBE" arch --sku rtx-pro-6000-server) || exit 2
+[ "$ARCH" = "$WANT" ] || { echo "multimem.sh: the card's target is $ARCH, and multimem.cu is $WANT's: nothing built" >&2; exit 2; }
 GENCODE=$(python3 "$PROBE" gencode) || exit 2
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT

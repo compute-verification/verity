@@ -25,9 +25,10 @@ its hours and its class. What counts as a landing, a mark and a Lean change, and
 research run --project verity --cwd source -- bash benchmarks/landing/run.sh
 ```
 
-It reads the control pod, GitHub and the evidence store's labels, which an agent VM with the team's keys reaches and a
-CPU node does not, so it runs as a local research run from a checkout there. It reads for about a minute and computes
-nothing heavy. A run that can't read one of its inputs writes no measurement and fails its validation.
+It reads the control pod's landing log, GitHub and the evidence store's labels, which no CPU node reaches, so its rows say
+`runs = "control"`: the rerun loop runs it as a local research run on the control pod, which reads the log in place and
+GitHub through the pod's read token. On an agent VM with the team's keys the same command reads the log over `research
+pods ssh`. It reads for about a minute and computes nothing heavy. A run that can't read one of its inputs writes no measurement and fails its validation.
 
 Its tests run the computation on a small fixture, with stand-ins for the pod, GitHub, the store and git, and need
 nothing:
