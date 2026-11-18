@@ -48,7 +48,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "adapters/vllm/verity_vllm/records/fields.py", "adapters/vllm/verity_vllm/records/workload.py",
           "adapters/vllm/verity_vllm/protocols/__init__.py", "adapters/vllm/verity_vllm/protocols/interface.py",
           "adapters/vllm/verity_vllm/protocols/pous.py", "adapters/vllm/verity_vllm/engine/__init__.py",
-          "adapters/vllm/verity_vllm/engine/hooks.py", "adapters/vllm/verity_vllm/errors.py",
+          "adapters/vllm/verity_vllm/engine/hooks.py", "verity/hooks.py", "adapters/vllm/verity_vllm/errors.py",
           "adapters/vllm/verity_vllm/records/schema_ids.py",
           # its test reads the answer back as the composed run does: its row (and the core answer's decoder, with what
           # that module imports) and the block record's subprotocol
