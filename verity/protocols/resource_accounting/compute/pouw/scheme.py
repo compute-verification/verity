@@ -45,8 +45,14 @@ class Attached:
     (`verity.hooks.Reports`) are the run's: ``record`` its commitment, which the composition's record carries, and
     ``summary`` its details; `release` finishes the run once serving ends."""
 
-    def __init__(self, ctx: Any) -> None:
-        self.ctx = ctx
+    def __init__(self, ctx: Mapping[str, Any]) -> None:
+        self.own: Mapping[str, Any] = ctx.get(PEARL_PLUS.name) or {}
+        if self.own.get("coins") is None and self.own.get("challenger") is None:
+            raise ValueError("pearl-plus: neither 'coins' nor 'challenger' is set under pearl-plus in ctx: the salt is "
+                             "the challenger's salt coin, opened after the weights' root, and there is no beacon")
+        if not self.own.get("kernel"):
+            raise ValueError("pearl-plus: no 'kernel' under pearl-plus in ctx: its run computes on the device, through "
+                             "the kernel's library")
         self.declared: H.Declared | None = None
         self.run: Any = None
         self.session: Any = None
@@ -55,15 +61,13 @@ class Attached:
         self.declared = event
 
     def registered(self, event: H.RegisteredValues) -> None:
-        self.run = self.open(*self.inputs(event))
+        self.run = self.open(self.keyed(event), self.own)
 
-    def inputs(self, event: H.RegisteredValues) -> tuple[dict[int, H.Handle], Mapping[str, Any]]:
-        """The linear weights by block key, and Pearl+'s own settings: ``kernel``, ``cubin``, ``schedule``,
-        ``transcript_dir``, and ``coins`` or ``challenger`` with its ``session`` and ``gate``."""
-        raise NotImplementedError(
-            "pearl-plus: vllm builds the two inputs its run opens on: each linear weight's block key in RegisteredValues "
-            "(the key BlockDue carries), and Pearl+'s own settings in attach's ctx (kernel, cubin, schedule, "
-            "transcript_dir, and coins or challenger with session and gate)")
+    def keyed(self, event: H.RegisteredValues) -> dict[int, H.Handle]:
+        """The linear weights by block key (the key `BlockDue` carries)."""
+        raise NotImplementedError("pearl-plus: vllm builds each linear weight's block key in RegisteredValues (the key "
+                                  "BlockDue carries), which the salt's weights root is committed over before the first "
+                                  "block")
 
     def step(self, event: Any) -> None:
         if self.run is None:
@@ -98,8 +102,10 @@ class Attached:
             SV.finish_window(self.run, self.session)
 
     def open(self, weights: Mapping[int, H.Handle], own: Mapping[str, Any]) -> Any:
-        """The device run over ``weights``: their roots committed before any salt, the salt coin opened on their root
-        (the challenger's session with ``challenger``, else ``coins``), and the run's pass limit and retained passes."""
+        """The device run over ``weights``, under Pearl+'s own settings ``own`` (``kernel``, ``cubin``, ``schedule``,
+        ``transcript_dir``, and ``coins`` or ``challenger`` with its ``session`` and ``gate``): their roots committed
+        before any salt, the salt coin opened on their root (with ``challenger``, one session for the server's life,
+        closed at `release`; else ``coins``), and the run's pass limit and retained passes."""
         from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.tensors import pearl_c_device
 

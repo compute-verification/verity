@@ -30,6 +30,9 @@ def test_bound_refuses_a_charge_it_does_not_state() -> None:
         S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, {**names, "rebuilt": 0})
 
 
+CTX = {"pearl-plus": {"challenger": "127.0.0.1:1", "kernel": "k.so"}}
+
+
 class _Exchange:
     def __init__(self) -> None:
         self.subscribed: dict[str, list] = {}
@@ -68,9 +71,9 @@ def _due(fmt: str = "bf16") -> H.BlockDue:
 
 def _attached(monkeypatch) -> tuple[_Exchange, _Run]:
     ex, run = _Exchange(), _Run()
-    monkeypatch.setattr(PS.Attached, "inputs", lambda self, event: ({3: "w"}, {}))
+    monkeypatch.setattr(PS.Attached, "keyed", lambda self, event: {3: "w"})
     monkeypatch.setattr(PS.Attached, "open", lambda self, weights, own: run)
-    on = PS.PEARL_PLUS.attach(ex, {})
+    on = PS.PEARL_PLUS.attach(ex, CTX)
     assert on.record() == {"entry": PS.OPTION, "commitment": None}
     ex.emit(H.RegisteredValues((("model.layers.0.qkv.weight", "w"),), linear=frozenset({"model.layers.0.qkv.weight"})))
     return ex, run
@@ -95,10 +98,18 @@ def test_attach_ends_a_pass_at_each_step_and_refuses_a_step_over_one(monkeypatch
         ex.emit(H.StepBegan(1, ("a",), 65))
 
 
+def test_attach_refuses_without_coins_or_a_challenger() -> None:
+    for ctx in ({}, {"pearl-plus": {"kernel": "k.so"}}):
+        with pytest.raises(ValueError, match="neither 'coins' nor 'challenger' is set under pearl-plus"):
+            PS.PEARL_PLUS.attach(_Exchange(), ctx)
+    with pytest.raises(ValueError, match="no 'kernel' under pearl-plus"):
+        PS.PEARL_PLUS.attach(_Exchange(), {"pearl-plus": {"challenger": "127.0.0.1:1"}})
+
+
 def test_opening_the_run_names_what_is_missing() -> None:
     ex = _Exchange()
-    PS.PEARL_PLUS.attach(ex, {})
-    with pytest.raises(NotImplementedError, match="vllm builds .* block key in RegisteredValues .* settings in attach's ctx"):
+    PS.PEARL_PLUS.attach(ex, CTX)
+    with pytest.raises(NotImplementedError, match="vllm builds each linear weight's block key in RegisteredValues"):
         ex.emit(H.RegisteredValues((("w", "w"),), linear=frozenset({"w"})))
 
 
@@ -142,7 +153,7 @@ def test_open_runs_the_handed_in_device_run_on_the_salt_coin(monkeypatch) -> Non
     monkeypatch.setattr(SV, "PearlCKernel", _Kernel, raising=False)
     monkeypatch.setattr(T, "_pearl_c", lambda: _Device)
     coins = _Coins()
-    run = PS.Attached({}).open({0: "w0", 1: "w1"}, {"kernel": "k.so", "coins": coins})
+    run = PS.Attached(CTX).open({0: "w0", 1: "w1"}, {"kernel": "k.so", "coins": coins})
     roots = {0: bytes([0]) * 64, 1: bytes([1]) * 64}
     assert coins.opened == [("salt", SV.weights_root(roots))]
     assert run.made == ("pearl-c-h100-v1-h3", PS.OPTION, ("kernel", "k.so", None), {0: "w0", 1: "w1"}, roots,
@@ -153,7 +164,7 @@ def test_open_runs_the_handed_in_device_run_on_the_salt_coin(monkeypatch) -> Non
 def test_open_refuses_without_the_hand_in(monkeypatch) -> None:
     monkeypatch.setattr(T, "_pearl_c", None)
     with pytest.raises(NotImplementedError, match="use_pearl_c"):
-        PS.Attached({}).open({0: "w0"}, {"kernel": "k.so", "coins": _Coins()})
+        PS.Attached(CTX).open({0: "w0"}, {"kernel": "k.so", "coins": _Coins()})
 
 
 def test_tie_uniform_is_its_one_setting() -> None:
@@ -171,12 +182,29 @@ def test_requests_eager_one_rank_and_steps_in_turn() -> None:
 def test_reports_are_the_runs_commitment_and_details(monkeypatch) -> None:
     ex, run, finished = _Exchange(), _Run(), []
     run.commits, run.finish = {"salt_opening": "o"}, lambda: finished.append(True)
-    monkeypatch.setattr(PS.Attached, "inputs", lambda self, event: ({3: "w"}, {}))
+    monkeypatch.setattr(PS.Attached, "keyed", lambda self, event: {3: "w"})
     monkeypatch.setattr(PS.Attached, "open", lambda self, weights, own: run)
-    on = PS.PEARL_PLUS.attach(ex, {})
+    on = PS.PEARL_PLUS.attach(ex, CTX)
     ex.emit(H.RegisteredValues((("w", "w"),), linear=frozenset({"w"})))
     reports: H.Reports = on
     assert reports.record() == {"entry": PS.OPTION, "commitment": {"salt_opening": "o"}}
     assert reports.summary() == {"max_step_tokens": 64}
     on.release()
     assert finished == [True]
+
+
+def test_a_challenger_opens_one_session_for_the_servers_life(monkeypatch) -> None:
+    opened, finished = [], []
+    monkeypatch.setattr(SV, "PearlCKernel", _Kernel, raising=False)
+    monkeypatch.setattr(T, "_pearl_c", lambda: _Device)
+    monkeypatch.setattr(SV, "salt_session", lambda entry, settings, root, opens: (
+        opened.append((entry, settings.challenger, root, opens)) or ("session", "c", "o", b"salt", {"gate": 1}, 0)),
+        raising=False)
+    monkeypatch.setattr(SV, "finish_window", lambda run, session: finished.append(session), raising=False)
+    on = PS.Attached(CTX)
+    on.run = on.open({0: "w0"}, CTX["pearl-plus"])
+    assert opened == [(PS.OPTION, "127.0.0.1:1", SV.weights_root({0: bytes([0]) * 64}), True)]
+    assert on.run.made[2] == ("kernel", "k.so", None) and on.run.made[5:] == ("c", "o", {"pass_index": 0})
+    assert on.run.commits == {"coin_source": SV.H1_CHALLENGER, "session": {"gate": 1}}
+    on.release()
+    assert finished == ["session"]
