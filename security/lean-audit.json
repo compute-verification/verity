@@ -25183,6 +25183,12 @@
    },
    "type_hash": "5331eb5f08954cebb0c4dda27e710eeab5c3ec3baba428f68d214b1f2d74f91d"
   },
+  "Verity.SampledTwo.couplingTargetTwo_of_joined": {
+   "owner": "@proofs"
+  },
+  "Verity.SampledTwo.twoStageBound_of_sessions": {
+   "owner": "@proofs"
+  },
   "Verity.Sampled.remote_soundness_deployedReady": {
    "owner": "@soundness",
    "signature": [
