@@ -91,7 +91,7 @@ from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
 
-from verity.device import load_card, load_node, node_kinds, skus
+from verity.device import load_card, load_node, node_kinds
 from verity.protocol import no_bound
 from verity.protocols.resource_accounting.memory.poub.verifier import ledger as poub_ledger
 from verity.protocols.resource_accounting.memory.poub.verifier import receipts, timing
@@ -521,20 +521,17 @@ def sheet_of(name: str) -> tuple[str, str | None]:
     if kind := SETTINGS.LOCAL_NODE:
         node = load_node(kind, directory=NODE_FILES, cards_directory=CARD_FILES)
         return node["device"]["sku"], kind
-    cards = [s for s in skus("gpu", directory=CARD_FILES)
-             if name in {d["value"] for d in load_card(s, directory=CARD_FILES).get("driver", ())}]
-    if len(cards) != 1:
-        raise CouldNotRun(f"{len(cards)} card files of calibration/hardware/cards/ have {name!r}, the card nvidia-smi "
-                          f"names here, in `driver`: add {{ value = {json.dumps(name)}, source = ... }} to its one card "
-                          "file's `driver`, adding its <sku>.toml (calibration/hardware/README.md) if it has none, and a "
-                          "node file of it to calibration/hardware/nodes/ for a share; a result against a sheet not on "
-                          "main is not comparable, and its digest says so")
+    try:
+        sku = kit.card(name, directory=CARD_FILES)["sku"]
+    except SystemExit as e:
+        raise CouldNotRun(f"{e}; and a node file of it to calibration/hardware/nodes/ for a share; a result against a "
+                          "sheet not on main is not comparable, and its digest says so") from None
     nodes = [k for k in node_kinds(directory=NODE_FILES)
-             if load_node(k, directory=NODE_FILES, cards_directory=CARD_FILES)["device"]["sku"] == cards[0]]
+             if load_node(k, directory=NODE_FILES, cards_directory=CARD_FILES)["device"]["sku"] == sku]
     if len(nodes) > 1:
-        raise CouldNotRun(f"the node files {', '.join(nodes)} all carry {cards[0]}, the card here: name the one this "
+        raise CouldNotRun(f"the node files {', '.join(nodes)} all carry {sku}, the card here: name the one this "
                           "machine is with LOCAL_NODE")
-    return cards[0], nodes[0] if nodes else None
+    return sku, nodes[0] if nodes else None
 
 
 def card_bytes(sku: str) -> int:

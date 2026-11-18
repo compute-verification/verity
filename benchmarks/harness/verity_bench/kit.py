@@ -3,8 +3,9 @@
 - `lease(gpus, minutes, on=None, cores=None)`: the `gpu-lease` argv a job's command follows, with its bound.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
-- `card_short(name, directory=...)`: the card's name in a measurement's member, from the one card record whose `driver`
-  holds the stamp's `card` exactly.
+- `card(name, directory=...)`: the one card record whose `driver` holds the stamp's `card` exactly, the reader every
+  benchmark finds its card by (`python3 -m verity_bench.kit card NAME FIELD` for a script); `card_short` is its `short`,
+  the card's name in a measurement's member.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
@@ -199,20 +200,29 @@ def host_stamp() -> dict:
     return stamp
 
 
-def card_short(name: str, *, directory: Path) -> str:
-    """The ``short`` of the card record in ``directory`` (``verity.device.load_card``) whose ``driver`` has ``name``, the
-    name nvidia-smi gives the card (a stamp's `card`), exactly; refused, naming what to add, unless exactly one record
-    holds it and has a ``short``, the card's name in a measurement's member."""
+def card(name: str, *, directory: Path) -> dict:
+    """The card record in ``directory`` (``verity.device.load_card``) whose ``driver`` has ``name``, the name nvidia-smi
+    gives the card (a stamp's `card`), exactly; refused, naming what to add, unless exactly one record holds it."""
     from verity.device import load_card, skus
 
     cards = [load_card(sku, directory=directory) for sku in skus("gpu", directory=directory)]
     found = [c for c in cards if name and name in {d["value"] for d in c.get("driver", ())}]
-    if len(found) != 1 or not found[0].get("short"):
+    if len(found) != 1:
         raise SystemExit(
             f"{len(found)} card records under {directory} have {name!r}, the card nvidia-smi names here, in `driver`: add "
-            f"{{ value = {json.dumps(name)}, source = ... }} to its one record's `driver` and give it a `short`, the "
-            "card's name in a measurement's member, adding its <sku>.toml there if it has none")
-    return found[0]["short"]
+            f"{{ value = {json.dumps(name)}, source = ... }} to its one record's `driver`, adding its <sku>.toml there "
+            "if it has none (calibration/hardware/README.md)")
+    return found[0]
+
+
+def card_short(name: str, *, directory: Path) -> str:
+    """The ``short`` of ``card(name)``, the card's name in a measurement's member; refused, naming what to add, where the
+    record has none."""
+    c = card(name, directory=directory)
+    if not c.get("short"):
+        raise SystemExit(f"the card record {c['sku']} under {directory} has no `short`, the card's name in a "
+                         "measurement's member: give it one")
+    return c["short"]
 
 
 # ---- the paired ratio --------------------------------------------------------------------------------------------------------
@@ -675,3 +685,13 @@ from verity_bench import kit_report  # noqa: E402
 COINS, NOT_STATED, PARAMETERS = kit_report.COINS, kit_report.NOT_STATED, kit_report.PARAMETERS
 NoRecord, Record, ran_with = kit_report.NoRecord, kit_report.Record, kit_report.ran_with
 record, record_dir, report = kit_report.record, kit_report.record_dir, kit_report.report
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 4 or sys.argv[1] != "card":
+        raise SystemExit("usage: PYTHONPATH=TREE:TREE/benchmarks/harness python3 -m verity_bench.kit card NAME FIELD: "
+                         "the card record's top-level FIELD (sku, short, arch) for NAME, the name nvidia-smi gives the card")
+    rec = card(sys.argv[2], directory=Path(__file__).resolve().parents[3] / "calibration" / "hardware" / "cards")
+    if sys.argv[3] not in rec or isinstance(rec[sys.argv[3]], (dict, list)):
+        raise SystemExit(f"the card record {rec['sku']} has no top-level `{sys.argv[3]}`: add it to its <sku>.toml")
+    print(rec[sys.argv[3]])
