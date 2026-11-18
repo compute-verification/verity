@@ -296,7 +296,9 @@ class WindowCompiler:
     interprets (its code: `steps.advice_of`), of at most ℓ = ``registered.cap_bits`` bits, refused past it by name; the
     model (``registered``), the envelope (``cls``) and the ``grain`` are the compiler's own. C is a greedy Program a request
     of the advice's prompt and outputs (`window_class.requests_of`, `lower`); the certified bodies and the scan state are
-    C's inputs, never the compiler's."""
+    C's inputs, never the compiler's. A request's sampling is its body's, never the advice's, so no advice says a sampled
+    request: `takes` refuses one where the bodies are read, and a Commit window's advice refuses one where it is made
+    (`advice.from_trace`)."""
     registered: Any
     cls: WindowClass
     grain: Grain = _GRAIN
