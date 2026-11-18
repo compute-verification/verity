@@ -9,6 +9,7 @@ import json
 import shutil
 from pathlib import Path
 
+import numpy as np
 import pytest
 from hypothesis import strategies as st
 
@@ -18,6 +19,8 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
+from verity.circuits.types import field_types
+from verity.commitments.periods import interface as I
 from verity.commitments.periods.edges import _lane_wire, _parts, edges
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
@@ -241,6 +244,9 @@ def _mixed_toy(name: str, widths: tuple, read: int) -> dict:
             "wiring": {"templates": {tw: template, tr: template}, "cuts": {}, "wires": []}}
 
 
+_LEAF_TOYS: dict = {}
+
+
 def _leaf_toy(name: str, fields: tuple, read: int, rparam) -> dict:
     """A writer (4 members) whose field `f` is ``fields[f] = (n, bits)``, `n` leaves of `bits` bits (one value where `n`
     is 0), and a reader (4 members, each one `rparam`) whose member m reads field `read` of writer unit m."""
@@ -254,7 +260,7 @@ def _leaf_toy(name: str, fields: tuple, read: int, rparam) -> dict:
     ret = Tuple(*[ty(n, b) for n, b in fields])
     writer = bind(CompositeDefinition(f"{name}W", 0, (), lambda S: ((("x", Value(32)),), ret),
                                       lambda B, S, x: tuple_of(*[val(B, x, n, b) for n, b in fields]), register=False))
-    op = {16: XOR16, 8: XOR8}[(rparam.elem if isinstance(rparam, Array) else rparam).w]
+    op = {32: XOR32, 16: XOR16, 8: XOR8}[(rparam.elem if isinstance(rparam, Array) else rparam).w]
     reader = bind(CompositeDefinition(f"{name}R", 0, (), lambda S: ((("x", rparam),), rparam),
                                       (lambda B, S, x: B.batch(op, x, x, axes=(0, 0))) if isinstance(rparam, Array)
                                       else (lambda B, S, x: B.call(op, x, x)), register=False))
@@ -275,14 +281,19 @@ def _leaf_toy(name: str, fields: tuple, read: int, rparam) -> dict:
         starts.append(starts[-1] + max(n, 1))
     ln = starts[read + 1] - starts[read]
     _nodes(desc)[r]["args"][0]["refs"] = {"strided": ["n", w, starts[read], ln, starts[-1], 1, 4 * ln]}
-    words = sum(max(n, 1) * -(-b // 16) for n, b in fields)
-    template = {"units": 4, "rows": {"x": [max(1, ln * -(-fields[read][1] // 16)), 1]}, "outs": {"out": words}}
+    words = sum(-(-max(n, 1) * b // 16) for n, b in fields)
+    template = {"units": 4, "rows": {"x": [max(1, -(-ln * fields[read][1] // 16)), 1]}, "outs": {"out": words}}
+    _LEAF_TOYS[tw] = writer, ret, rparam
     return {"program": desc, "ranges": [[w, tw, 0, 4], [r, tr, 4, 4]],
             "wiring": {"templates": {tw: template, tr: template}, "cuts": {}, "wires": []}}
 
 
 BITS16 = _leaf_toy("CoreEdgesBits16", ((16, 1), (0, 16)), 1, Value(16))
 SPANS = _leaf_toy("CoreEdgesSpans", ((2, 16), (0, 32), (3, 8)), 2, Array(3, Value(8)))
+PAIR8 = _leaf_toy("CoreEdgesPair8", ((2, 8), (0, 16)), 1, Value(16))
+QUANT = _leaf_toy("CoreEdgesQuant", ((4, 8), (0, 32)), 1, Value(32))
+QUANT_Q = _leaf_toy("CoreEdgesQuantQ", ((4, 8), (0, 32)), 0, Array(4, Value(8)))
+BYTE = _leaf_toy("CoreEdgesByte", ((0, 8), (0, 16)), 0, Value(8))
 MIXED_16_32 = _mixed_toy("CoreEdgesMixedA", (16, 32), 1)
 MIXED_32_16_32 = _mixed_toy("CoreEdgesMixedB", (32, 16, 32), 2)
 
@@ -364,10 +375,13 @@ WORD_CASES = [
     ("a 32-bit field after a 16-bit one, at word 1", MIXED_16_32, {"wires": [_wire_of(MIXED_16_32, [4], [1], offset=1)]}),
     ("a 32-bit field after a 32-bit and a 16-bit one, leaf 2 at word 3", MIXED_32_16_32,
      {"wires": [_wire_of(MIXED_32_16_32, [4], [1], offset=3)]}),
-    ("a 16-bit field after 16 one-bit leaves, at word 16 (a leaf of w bits is ceil(w/16) words)", BITS16,
-     {"wires": [_wire_of(BITS16, [4], [1], offset=16)]}),
-    ("three 8-bit leaves after two 16-bit leaves and a 32-bit one, at word 4", SPANS,
-     {"wires": [_wire_of(SPANS, [4], [1], offset=4)]}),
+    ("a 16-bit field after a field of 16 one-bit leaves, at word 1 (a field is ceil(bits/16) words)", BITS16,
+     {"wires": [_wire_of(BITS16, [4], [1], offset=1)]}),
+    ("a 16-bit field after two 8-bit leaves, at word 1", PAIR8, {"wires": [_wire_of(PAIR8, [4], [1], offset=1)]}),
+    ("the quantiser's scale after its 4 int8 leaves, at word 2", QUANT, {"wires": [_wire_of(QUANT, [4], [1], offset=2)]}),
+    ("the quantiser's 4 int8 leaves, two words from word 0", QUANT_Q, {"wires": [_wire_of(QUANT_Q, [4], [1])]}),
+    ("a row of three 8-bit leaves, which would end inside a word", SPANS, {"refusal": "edge-word"}),
+    ("a row of one 8-bit leaf", BYTE, {"refusal": "edge-word"}),
 ]
 
 
@@ -476,6 +490,24 @@ def test_the_offset_is_in_words(pieces, name, j, want):
     the twin."""
     assert _code(got := reference(j)) == want
     assert pieces.call("edges", j) == ("output", D.canonical(got))
+
+
+@pytest.mark.parametrize("j", [PAIR8, QUANT], ids=["pair", "quantiser"])
+def test_a_reader_row_is_its_writers_layout_words_at_the_wires_offset(pieces, j):
+    """The writer's row ``out`` as `interface.layout` commits it (each field `rows_of_leaves` in its ``o<j>`` words): the
+    words from the Lean wire's offset are the reader's row, and from the word-a-leaf offset (a leaf of w bits
+    ceil(w/16) words) they are not, or run past the row."""
+    writer, ret, rparam = _LEAF_TOYS[j["ranges"][0][1]]
+    kind, text = pieces.call("edges", j)
+    (wire,) = json.loads(text)["wires"]
+    lay, fs = I.layout(writer), field_types(ret)
+    f = next(k for k in range(len(fs)) if sum(n for _p, n in lay.outs[:k]) == wire["offset"])
+    vals = [[(37 * k + 11 * t + 5) % (1 << ty.leaf_widths()[0]) for t in range(ty.leaves)] for k, ty in enumerate(fs)]
+    out = np.concatenate([I.rows_of_leaves(np.array([v]), ty, n)[0] for v, ty, (_p, n) in zip(vals, fs, lay.outs)])
+    row = I.rows_of_leaves(np.array([vals[f]]), rparam, -(-rparam.leaves * rparam.leaf_widths()[0] // 16))[0]
+    old = sum(ty.leaves * -(-ty.leaf_widths()[0] // 16) for ty in fs[:f])
+    assert (out[wire["offset"]:wire["offset"] + len(row)] == row).all()
+    assert len(out[old:old + len(row)]) < len(row) or not (out[old:old + len(row)] == row).all()
 
 
 def test_a_refusal_names_its_node_argument_and_part(pieces):
