@@ -595,7 +595,9 @@ def _level_res(L: int, levels: tuple[tuple[int, int], ...]) -> list[int] | None:
 def _lane_width(S: Type, w: int, lo: int, hi: int, b: int, run: int, e: int, levels, exact: bool) -> bool | None:
     """Whether every leaf of `S` a lane reaches between its extremes lo..hi has width `w`, by structure (`Widths.laneWidth`):
     `S`'s widths between the extremes, or the residues the lane reaches in the period of the array holding them all, each of
-    which it reaches where `exact`. None where neither decides."""
+    which it reaches where `exact`. None where neither decides or the extremes pass `S`'s leaves."""
+    if S.leaves <= hi:
+        return None
     ws = range_widths(S, lo, hi + 1)
     if len(ws) == 1:
         return next(iter(ws)) == w

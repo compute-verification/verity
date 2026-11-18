@@ -736,10 +736,11 @@ def RCAP : Nat := 2 ^ 16
 
 /-- Whether every leaf of `S` that a lane reaches between its extremes `lo … hi` has width `w`, by structure: `S`'s
 widths between the extremes, or the residues the lane reaches in the period of the array holding them all, each of
-which it reaches where `exact`. `none` where neither decides; `some false` only where a leaf the lane reaches has
-another width. -/
+which it reaches where `exact`. `none` where neither decides or the extremes pass `S`'s leaves; `some false` only where
+a leaf the lane reaches has another width. -/
 def laneWidth (S : Ty) (w lo hi : Nat) (b : Int) (run : Nat) (e : Int) (lv : List (Nat × Int)) (exact : Bool) :
     Option Bool :=
+  if S.leaves ≤ hi then none else
   match rangeWidths S lo (hi + 1) with
   | [x] => some (x == w)
   | _ =>

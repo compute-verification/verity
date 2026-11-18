@@ -287,6 +287,157 @@ theorem walk_loop_gen (n : ℕ) (f : ℕ → Option Bool × Unit → Widths.M (F
   · exact Or.inl ⟨fun k hk => hall k (by simp [List.mem_range'_1, Std.Legacy.Range.size]; omega), by rw [hr]⟩
   · exact Or.inr hr
 
+/-! ## A lane's width -/
+
+/-- The product of a lane's radices. -/
+def prodR : List (ℕ × ℤ) → ℕ
+  | [] => 1
+  | (r, _) :: rest => r * prodR rest
+
+theorem foldl_prodR : ∀ (lv : List (ℕ × ℤ)) (a : ℕ), lv.foldl (fun a (r, _) => a * r) a = a * prodR lv
+  | [], a => by simp [prodR]
+  | (r, d) :: rest, a => by
+    rw [List.foldl_cons, foldl_prodR rest]
+    dsimp only [prodR]
+    ring
+
+theorem periods_prodR (l : Lane) : l.periods = prodR l.lv := by
+  unfold Lane.periods
+  rw [foldl_prodR, Nat.one_mul]
+
+theorem sumMod_mem (L : ℕ) (A B : List ℕ) {x y : ℕ} (hx : x ∈ A) (hy : y ∈ B) :
+    (x + y) % L ∈ Widths.sumMod L A B := by
+  unfold Widths.sumMod
+  exact List.mem_flatMap.2 ⟨x, hx, List.mem_map.2 ⟨y, hy, rfl⟩⟩
+
+theorem toNat_add_emod (x y : ℤ) (L : ℕ) (hL : 0 < L) :
+    ((x + y) % (L : ℤ)).toNat = ((x % (L : ℤ)).toNat + (y % (L : ℤ)).toNat) % L := by
+  have hL0 : (L : ℤ) ≠ 0 := by exact_mod_cast Nat.pos_iff_ne_zero.1 hL
+  have h1 := Int.emod_nonneg x hL0
+  have h2 := Int.emod_nonneg y hL0
+  have key : (x + y) % (L : ℤ) = ((((x % (L : ℤ)).toNat + (y % (L : ℤ)).toNat) % L : ℕ) : ℤ) := by
+    rw [Int.natCast_mod, Nat.cast_add, Int.toNat_of_nonneg h1, Int.toNat_of_nonneg h2]
+    exact Int.add_emod x y L
+  rw [key, Int.toNat_natCast]
+
+/-- **Every period's sum of levels is among `levelRes`'s residues.** -/
+theorem levelRes_mem (L cap : ℕ) (hL : 0 < L) : ∀ (lv : List (ℕ × ℤ)) (G : List ℕ) (t : ℕ),
+    Widths.levelRes L cap lv = some G → t < prodR lv → ((Lane.leafAt.go lv t) % (L : ℤ)).toNat ∈ G
+  | [], G, t, h, _ => by
+    have e : Widths.levelRes L cap [] = some [0] := rfl
+    rw [e] at h
+    injection h with h
+    subst h
+    simp [Lane.leafAt.go]
+  | [(r, d)], G, t, h, ht => by
+    have e : Widths.levelRes L cap [(r, d)] = Widths.residues d r L cap := rfl
+    rw [e] at h
+    have ht' : t < r := by simpa [prodR] using ht
+    have hm := residues_mem d r L cap G hL h t ht'
+    have e2 : Lane.leafAt.go [(r, d)] t = (t : ℤ) * d := rfl
+    rw [e2]
+    exact hm
+  | (r, d) :: (r2, d2) :: rest, G, t, h, ht => by
+    have e : Lane.leafAt.go ((r, d) :: (r2, d2) :: rest) t
+        = ((t % r : ℕ) : ℤ) * d + Lane.leafAt.go ((r2, d2) :: rest) (t / r) := rfl
+    rw [e]
+    have ht0 : t < r * prodR ((r2, d2) :: rest) := ht
+    have hr : 0 < r := by
+      rcases Nat.eq_zero_or_pos r with h0 | h0
+      · rw [h0, Nat.zero_mul] at ht0; exact absurd ht0 (Nat.not_lt_zero _)
+      · exact h0
+    have ht2 : t / r < prodR ((r2, d2) :: rest) := Nat.div_lt_of_lt_mul ht0
+    have e3 : Widths.levelRes L cap ((r, d) :: (r2, d2) :: rest) = (do
+        let A ← Widths.residues d r L cap
+        let B ← Widths.levelRes L cap ((r2, d2) :: rest)
+        if A.length * B.length ≤ cap then some (Widths.sumMod L A B) else none) := rfl
+    rw [e3] at h
+    cases hA : Widths.residues d r L cap with
+    | none => rw [hA] at h; exact absurd h (by simp)
+    | some A =>
+      cases hB : Widths.levelRes L cap ((r2, d2) :: rest) with
+      | none => rw [hA, hB] at h; exact absurd h (by simp)
+      | some B =>
+        rw [hA, hB] at h
+        change (if A.length * B.length ≤ cap then some (Widths.sumMod L A B) else none) = some G at h
+        split at h
+        · injection h with h
+          subst h
+          rw [toNat_add_emod _ _ L hL]
+          exact sumMod_mem L A B (residues_mem d r L cap A hL hA (t % r) (Nat.mod_lt t hr))
+            (levelRes_mem L cap hL ((r2, d2) :: rest) B (t / r) hB ht2)
+        · exact absurd h (by simp)
+
+/-- **A lane `laneWidth` passes reads leaves of width `w`**, at every period and offset between its extremes. -/
+theorem laneWidth_sound {S : Ty} {w lo hi run : Nat} {l : Lane} {exact : Bool}
+    (h : Widths.laneWidth S w lo hi l.b run l.e l.lv exact = some true)
+    {t o : Nat} (ht : t < l.periods) (ho : o < run)
+    (hlo : (lo : Int) ≤ l.leafAt t o) (hhi : l.leafAt t o ≤ hi) :
+    Widths.wAt S (l.leafAt t o).toNat = w := by
+  unfold Widths.laneWidth at h
+  by_cases hS : S.leaves ≤ hi
+  · rw [if_pos hS] at h; exact absurd h (by simp)
+  rw [if_neg hS] at h
+  have hnn : 0 ≤ l.leafAt t o := le_trans (by exact_mod_cast Nat.zero_le lo) hlo
+  have hcast : ((l.leafAt t o).toNat : ℤ) = l.leafAt t o := Int.toNat_of_nonneg hnn
+  have hj1 : lo ≤ (l.leafAt t o).toNat := by omega
+  have hj2 : (l.leafAt t o).toNat ≤ hi := by omega
+  have hjS : (l.leafAt t o).toNat < S.leaves := by omega
+  split at h
+  · rename_i x hx
+    have hm := wAt_mem_rangeWidths S lo (hi + 1) _ hj1 (by omega) hjS
+    rw [hx, List.mem_singleton] at hm
+    rw [hm]
+    simpa using h
+  · have hspec := cover_spec S lo (hi + 1) (by omega) (by omega)
+    generalize hc : Widths.cover S lo (hi + 1) = c at h hspec
+    obtain ⟨c1, off⟩ := c
+    cases c1
+    case array n f =>
+      dsimp only at h hspec
+      obtain ⟨hoff, hend, -, hw⟩ := hspec
+      split at h
+      · exact absurd h (by simp)
+      · rename_i hf
+        have hL : 0 < f.leaves := by
+          rcases Nat.eq_zero_or_pos f.leaves with h0 | h0
+          · exact absurd (by rw [h0]; rfl) hf
+          · exact h0
+        split at h
+        · rename_i R hR
+          split at h
+          · rename_i hall
+            rw [hw _ (by omega) (by omega), wAt_array n f _ hL]
+            rw [List.all_eq_true] at hall
+            refine beq_iff_eq.1 (hall _ ?_)
+            unfold Widths.laneRes at hR
+            cases hO : Widths.residues l.e run f.leaves Widths.RCAP with
+            | none => rw [hO] at hR; exact absurd hR (by simp)
+            | some O =>
+              cases hG : Widths.levelRes f.leaves Widths.RCAP l.lv with
+              | none => rw [hO, hG] at hR; exact absurd hR (by simp)
+              | some G =>
+                rw [hO, hG] at hR
+                change (if O.length * G.length ≤ Widths.RCAP then some ((Widths.sumMod f.leaves O G).map
+                  fun x => (((l.b - (off : ℤ)) % (f.leaves : ℤ)).toNat + x) % f.leaves) else none) = some R at hR
+                split at hR
+                · injection hR with hR
+                  subst hR
+                  have hx := residues_mem l.e run f.leaves Widths.RCAP O hL hO o ho
+                  have hy := levelRes_mem f.leaves Widths.RCAP hL l.lv G t hG (by rw [← periods_prodR]; exact ht)
+                  refine List.mem_map.2 ⟨_, sumMod_mem f.leaves O G hx hy, ?_⟩
+                  have hsub : (((l.leafAt t o).toNat - off : ℕ) : ℤ) = l.leafAt t o - off := by
+                    rw [Nat.cast_sub (by omega), hcast]
+                  have e : l.leafAt t o - off = (l.b - off) + ((o : ℤ) * l.e + Lane.leafAt.go l.lv t) := by
+                    show l.b + (o : ℤ) * l.e + Lane.leafAt.go l.lv t - off = _
+                    ring
+                  rw [← toNat_add_emod _ _ _ hL, ← toNat_add_emod _ _ _ hL, ← e, ← hsub, ← Int.natCast_mod,
+                    Int.toNat_natCast]
+                · exact absurd hR (by simp)
+          · split at h <;> exact absurd h (by simp)
+        · exact absurd h (by simp)
+    all_goals exact absurd h (by simp)
+
 /-! ## A part -/
 
 /-- **A part the width check passes names leaves of the widths its type gives them.** -/
@@ -332,41 +483,7 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
       exact (eqRange_sound _ t a S base n w w' ha hb h k hk).symm
   | grid run lanes =>
     have hgr : ∀ l ∈ lanes, l.periods = lanes[0]!.periods := hi
-    unfold Widths.partOk at h
-    dsimp (config := { zeta := false }) only at h
-    extract_lets laneOk jp at h
-    have hjp : ∀ w₁ w₁', (jp ()).run w₁ = .ok true w₁' →
-        Widths.wAt S ((Part.grid run lanes).get k).j = Widths.wAt t (a + k) := by
-      intro w₁ w₁' hj'
-      unfold jp at hj'
-      obtain ⟨r, w₂, hloop, hj'⟩ := m_bind hj'
-      obtain ⟨r1, r2⟩ := r
-      refine (walk_loop_gen _ _ (fun k' => ∀ S', (srcOf B below).ty? ((Part.grid run lanes).get k').p
-          ((Part.grid run lanes).get k').i = some S' →
-          Widths.wAt S' ((Part.grid run lanes).get k').j = Widths.wAt t (a + k')) w₁ w₂ _ ?_ hloop).elim
-        (fun hl => hl.1 k hk S hS) (fun hr => ?_)
-      · intro k' s₀ st s₀' hf
-        try dsimp only at hf
-        obtain ⟨u, s₁, -, hf⟩ := m_bind hf
-        try dsimp only at hf
-        split at hf
-        · rename_i S' hS'
-          by_cases hc : (Widths.wAt S' ((Part.grid run lanes).get k').j != Widths.wAt t (a + k')) = true
-          · rw [ite_eq_left hc] at hf
-            exact Or.inl (m_pure hf).1.symm
-          · rw [ite_eq_right hc] at hf
-            refine Or.inr ⟨(m_pure hf).1.symm, fun S'' hS'' => ?_⟩
-            rw [hS'] at hS''
-            injection hS'' with hS''
-            subst hS''
-            simpa using hc
-        · rename_i hne
-          exact Or.inr ⟨(m_pure hf).1.symm, fun S'' hS'' => absurd hS'' (hne S'')⟩
-      · dsimp only at hr hj'
-        subst hr
-        dsimp only at hj'
-        exact absurd (m_pure hj').1 (by simp)
-    clear_value jp
+    have hqn : ∀ l ∈ lanes, ∀ t' < (lanes[0]?.map Lane.periods).getD 0, ∀ o < run, 0 ≤ l.leafAt t' o := hq
     change k < lanes.size * run * ((lanes[0]?.map Lane.periods).getD 0) at hk
     change a + lanes.size * run * ((lanes[0]?.map Lane.periods).getD 0) ≤ t.leaves at ha
     have hgpos : 0 < lanes.size := by
@@ -375,25 +492,31 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
       · exact h0
     have hP : (lanes[0]?.map Lane.periods).getD 0 = lanes[0]!.periods := by
       rw [Array.getElem?_eq_getElem hgpos, getElem!_pos lanes 0 hgpos]; rfl
-    rw [hP] at hk ha
+    rw [hP] at hk ha hqn
     have hrun : 0 < run := by
       rcases Nat.eq_zero_or_pos run with h0 | h0
       · rw [h0] at hk; simp at hk
       · exact h0
-    have hak : a + k < t.leaves := Nat.lt_of_lt_of_le (Nat.add_lt_add_left hk a) ha
     have hm : k % (lanes.size * run) / run < lanes.size :=
       Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm run]; exact Nat.mod_lt _ (Nat.mul_pos hgpos hrun))
     have hlmem : lanes[k % (lanes.size * run) / run]! ∈ lanes := by
       rw [getElem!_pos lanes _ hm]; exact Array.getElem_mem hm
+    have ht0 : k / (lanes.size * run) < lanes[0]!.periods := Nat.div_lt_of_lt_mul hk
     have ht' : k / (lanes.size * run) < (lanes[k % (lanes.size * run) / run]!).periods := by
-      rw [hgr _ hlmem]; exact Nat.div_lt_of_lt_mul hk
+      rw [hgr _ hlmem]; exact ht0
     have hmem := Walk.leafAt_mem (lanes[k % (lanes.size * run) / run]!) (Nat.mod_lt k hrun) ht'
-    split at h
-    · rename_i wd hwd
-      by_cases hall : lanes.all (laneOk wd) = true
-      · rw [Array.all_eq_true] at hall
-        have hl := hall _ hm
-        rw [← getElem!_pos lanes _ hm] at hl
+    have hnn := hqn _ hlmem _ ht0 _ (Nat.mod_lt k hrun)
+    unfold Widths.partOk at h
+    cases ht with
+    | none => exact (m_throw h).elim
+    | some wd =>
+      have hwd : Widths.wAt t (a + k) = wd := hht wd rfl
+      dsimp only at h
+      split at h
+      · rename_i hall
+        rw [Array.all_eq_true] at hall
+        have hv := hall _ (by rw [Array.size_map]; exact hm)
+        rw [Array.getElem_map, ← getElem!_pos lanes _ hm] at hv
         change (srcOf B below).ty? (lanes[k % (lanes.size * run) / run]!).p
           (lanes[k % (lanes.size * run) / run]!).i = some S at hS
         change (srcOf B below).homo? (lanes[k % (lanes.size * run) / run]!).p
@@ -402,20 +525,27 @@ theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w
           < S.leaves at hj
         change Widths.wAt S ((lanes[k % (lanes.size * run) / run]!).leafAt (k / (lanes.size * run))
           (k % run)).toNat = Widths.wAt t (a + k)
-        generalize lanes[k % (lanes.size * run) / run]! = l at hl hmem hS hhomo hj ⊢
-        rcases hbd : l.bounds run with ⟨lo, hi'⟩
-        rw [hbd] at hmem
-        simp only [laneOk, hS, hbd, Bool.or_eq_true, beq_iff_eq] at hl
-        rw [homo_wAt t wd hwd (a + k) hak]
-        rcases hl with h1 | h1
-        · exact homo_wAt S wd (by rw [← hhomo]; exact h1) _ hj
-        · have hm1 := wAt_mem_rangeWidths S lo.toNat (hi'.toNat + 1) _ (Int.toNat_le_toNat hmem.1)
-            (Nat.lt_succ_of_le (Int.toNat_le_toNat hmem.2)) hj
-          rw [h1, List.mem_singleton] at hm1
-          exact hm1
-      · rw [ite_eq_right hall] at h
-        exact hjp _ _ h
-    · exact hjp _ _ h
+        generalize lanes[k % (lanes.size * run) / run]! = l at hv hmem hnn hS hhomo hj ht' ⊢
+        rw [hwd]
+        rw [hS] at hv
+        dsimp only at hv
+        by_cases hh : ((srcOf B below).homo? l.p l.i == some wd) = true
+        · have hw : Widths.homo S = some wd := by rw [← hhomo]; simpa using hh
+          exact homo_wAt S wd hw _ hj
+        · rw [if_neg hh] at hv
+          rcases hbd : l.bounds run with ⟨lo, hi'⟩
+          rw [hbd] at hmem hv
+          dsimp only at hv
+          have hlw : Widths.laneWidth S wd lo.toNat hi'.toNat l.b run l.e l.lv true = some true := by
+            simpa using hv
+          have hlo : ((lo.toNat : ℕ) : ℤ) ≤ l.leafAt (k / (lanes.size * run)) (k % run) := by
+            rcases le_or_lt 0 lo with h0 | h0
+            · rw [Int.toNat_of_nonneg h0]; exact hmem.1
+            · rw [Int.toNat_of_nonpos h0.le]; exact_mod_cast hnn
+          exact laneWidth_sound hlw ht' (Nat.mod_lt k hrun) hlo (le_trans hmem.2 (Int.self_le_toNat hi'))
+      · split at h
+        · exact absurd (m_pure h).1 (by simp)
+        · exact (m_throw h).elim
   | strided p i base inner os is n =>
     change (srcOf B below).ty? p i = some S at hS
     change (srcOf B below).homo? p i = Widths.homo S at hhomo
