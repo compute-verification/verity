@@ -3,7 +3,7 @@ module
 public import Properties.Verity.Game
 public import Properties.Spot.Labels
 public import Spot.RecordText
-public import Flock.Registered
+public import Spot.OneStageZk
 
 /-!
 # What ties the inference-only policy's clause to the committed files
