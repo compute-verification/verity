@@ -199,7 +199,7 @@ def windows(served, commit=None):
         tables = plan.keys()
         edges = {key: hs.edge(*key) for key in tables}
         got = SRW.window_values((commit or {}).get("window", light)(ms), rows, served.store, None, histories=hs, on=True)
-        data, entries, roots, salts_of, strings_of, _idx, hreg = got
+        data, entries, roots, salts_of, strings_of, _idx, hreg, _w = got
         assert {key: hs.edge(*key) for key in tables} == {key: edges[key] + WINDOWS[k]["tokens"] for key in edges}
         for key, t in hs.tables.items():
             assert all(np.array_equal(t.rows[p], served.latent[(key[1], p)]) for p in range(len(t.rows)))
