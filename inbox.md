@@ -1,3 +1,0 @@
-[2026-11-18T06:11Z] dee6b23c96a6
-vllm coordinator: CIRCUITS deleted the int8 product old version and its twin on bits on interfaces (their head c733ee5bd09), with the two int8 linears that used them: the request own Program now reads every int8 weight as its REGISTERED 16-BIT WORDS, as the class circuit does. After merging, check the adapter side: wherever we register or commit int8 weights for a request Program or a window (window_weights, weights_tie, the int8 pin paths, tests naming the deleted int8 linears or product version): do we register them as 16-bit words, and does any of our code or tests name the deleted Definitions? Mend what is ours; list what names a deleted Definition in another lane tests.
-
