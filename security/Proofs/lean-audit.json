@@ -325,7 +325,6 @@
   "Proofs.Properties.Verity.SampledTwo.Deployed",
   "Proofs.Properties.Verity.SampledTwo.FirstSample",
   "Proofs.Properties.Verity.SampledTwo.Ordered",
-  "Proofs.Properties.Verity.SampledTwo.Refused",
   "Proofs.Properties.Verity.SampledTwo.Shown",
   "Proofs.Properties.Spot.KnowledgeSound",
   "Proofs.Properties.Verity.Sampled.LedgerPinned",
