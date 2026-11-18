@@ -2346,6 +2346,7 @@ def terms(r: Mapping[str, Any], subprotocol: Mapping[str, Any] | None) -> list[s
            if counted else [])
     premise = place.get("trusted-device") or place.get("trusted-host")   # a record made before the premise's rename
     out += [f"trusted-device {premise}"] if premise else []
+    out += [f"{name} {why}" for name, why in (place.get("unchecked") or {}).items()]
     if isinstance(w, Mapping) and w.get("held"):
         out.append(f"its weights {w['held']}, not concurrently with the block")
     if isinstance(w, Mapping) and w.get("share"):

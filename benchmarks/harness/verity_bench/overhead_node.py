@@ -50,7 +50,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import kit, nsys
-from verity_bench.checked_by import PIECE
+from verity_bench.kit_report import PIECE
 from verity_bench import overhead as O
 
 HARNESS = Path("benchmarks/pouw/harness")
