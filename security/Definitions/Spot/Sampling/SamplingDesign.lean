@@ -45,11 +45,6 @@ variable {n : ℕ}
 
 /-! ## Bernoulli samples -/
 
-/-- Each unit sampled independently with probability `num / den`. -/
-abbrev bernoulli (n num den : ℕ) [NeZero den] : SamplingDesign n where
-  Ω := Fin n → Fin den
-  draw ω := Finset.univ.filter fun u => (ω u).val < num
-
 /-- Each unit `u` sampled independently with probability `num u / den`. -/
 abbrev bernoulliOf (num : Fin n → ℕ) (den : ℕ) [NeZero den] : SamplingDesign n where
   Ω := Fin n → Fin den

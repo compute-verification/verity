@@ -8,10 +8,10 @@
 #   check/, check2/  fixture.py's buffers for NVFP4 and MXFP4 at 128x128x1024 and 256x384x2048 (needs verity and numpy)
 #   dev.py, run.sh, toolchain.txt (nvcc's version and every flag, none of them FTZ or fast-math), source.txt (the verity
 #                    commit and the header's), MANIFEST.sha256
-# Usage: bash verity/protocols/experimental/pearl_c4/prover/kernels/build.sh [OUT]   (default /tmp/pearl-c4-ship; C9 names CUDA 12.9, default /usr/local/cuda-12.9)
+# Usage: bash verity/protocols/experimental/pearl_c4/prover/kernels/build.sh [OUT]   (default /tmp/pearl-c4-ship; CUDA_HOME names CUDA 12.9)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../../../../.." && pwd)
-C9=${C9:-/usr/local/cuda-12.9}; OUT=${1:-/tmp/pearl-c4-ship}
+C9=${CUDA_HOME:?set CUDA_HOME to a CUDA 12.9 toolkit}; OUT=${1:-/tmp/pearl-c4-ship}
 HASH_BRANCH=cursor/pouw-hash-sm120-9569
 HASH_COMMIT=71086532
 HASH_SHA256=9e861db9227b2267256cf642cbce06dfe807ddfa8b94db42f6dbb199ef1a63cc

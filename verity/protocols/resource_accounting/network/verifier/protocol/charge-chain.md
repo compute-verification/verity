@@ -84,7 +84,7 @@ execution phase: two rows, the charging proof block's two reads (each a frame-v3
 charges only an execution phase that sends decisions alone. Advice v1 sends one of them, **n_order**, the order entries: one for
 each arrival that deviates from release order, under the client's ingress.
 
-The other three are always 0 under v1. Every hit is the replay's block pool's, past the pool bound too, the replay
+The other three are always 0 under v1. No hit is sent (the slice's class has no eviction), the replay
 derives preemptions and the attested O forces each lag row, so the advice code (`advice_code.codec`) refuses an execution phase
 that sends hits, resumes or lag bits. `ChargeCount_v2{N, H, O, L}` charges the whole execution phase: its decisions and the
 hits' and order entries' counts with their values, as one `window_code` segment with one count and one finish, then its
@@ -208,17 +208,15 @@ and `certifier-window-difftest` holds them to it: the network attester's program
 them an execution phase whose length terms charge 2^20 − 1 bits and one charging 2^20, which it refuses.
 
 **The slice.** The compile slice's class runs inside the pool bound with the network attester's ingress, so its
-execution phases send no order entries, and v1's send no hits. A session where the pool's eviction changed a hit is
-outside the class: the slice's cache never evicts, so its rows aren't the served ones and ``rows`` refuses. Such a
-session needs a pool slice (`CompileSlice_v4` on, `verity_vllm.compiler.compile_slice_v4`), and no pool slice charges
-the length terms yet. `CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-charge` as above, which counts no length
+execution phases send no order entries, and v1's send no hits. A session where the pool's eviction or a preemption changed
+the schedule is outside the class and refused: the slice's cache never evicts, so its rows aren't the served ones and
+``rows`` refuses. `CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-charge` as above, which counts no length
 terms. `CompileSlice_v7` (`verity_vllm.compiler.compile_slice_v7`, the served execution phases' slice except under the attested
 tick) charges them with `ChargeLink_v2{D, 0, 0, K}`: a length slot for each of ``cert``'s K arrival slots, qen its
 ``a_valid``, mt its attested max_tokens ``a_mt`` and olen its attested output length, so no slot is free witness. What
 holds ``cert`` to the attested record is a stand-in, the honest cert row under the network attester's salt, until max_tokens
 is read from the attested body; the circuit bounds max_tokens only from above, so a lower one the output still fits
-passes at a lower charge until then. `compile_slice_zk` checks ``cert``'s b‖c against that stand-in, as it does the
-arrivals the replay loads. A class whose execution phases send order entries or length terms (or a code's that sends hits) does
+passes at a lower charge until then. A class whose execution phases send order entries or length terms (or a code's that sends hits) does
 the following:
 - It calls `window_charge.build_link(C, N, H, O, L, book, row_in, row_out, en, bits, hen, short, oen, p, r, qen, mt,
   olen)` over `window-charge`'s rows (`window_charge.reads()`), in place of `charge_chain.build_link` over
