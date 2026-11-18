@@ -62,9 +62,6 @@
     {"file": "adapters/vllm/verity_vllm/compiler/advice_check.py", "count": 3},
     {"file": "adapters/vllm/verity_vllm/compiler/cache_step.py", "count": 2},
     {"file": "adapters/vllm/verity_vllm/compiler/compile_slice.py", "count": 2},
-    {"file": "adapters/vllm/verity_vllm/compiler/compile_slice_v4.py", "count": 4},
-    {"file": "adapters/vllm/verity_vllm/compiler/compile_slice_v5.py", "count": 6},
-    {"file": "adapters/vllm/verity_vllm/compiler/compile_slice_v6.py", "count": 15},
     {"file": "adapters/vllm/verity_vllm/compiler/replay_chain.py", "count": 22},
     {"file": "adapters/vllm/verity_vllm/compiler/replay_step.py", "count": 31},
     {"file": "adapters/vllm/verity_vllm/config.py", "count": 34},
@@ -2782,7 +2779,6 @@
     {"file": "verity/protocols/proofs/flock/prover/pod/93-rec-honest-session.sh", "count": 2},
     {"file": "verity/protocols/proofs/flock/prover/pod/93-zk-tree-from.sh", "count": 2},
     {"file": "verity/protocols/proofs/flock/prover/pod/challenger.sh", "count": 1},
-    {"file": "benchmarks/proof_throughput/gemm_hill.py", "count": 1},
     {"file": "verity/protocols/proofs/flock/prover/pod/lean_verdicts.py", "count": 2},
     {"file": "verity/protocols/proofs/flock/prover/pod/rec_inner.py", "count": 13},
     {"file": "verity/protocols/proofs/flock/prover/pod/rec_reprice.py", "count": 11},
@@ -3187,6 +3183,7 @@
     {"file": "security/Proofs/Spot/Sampling/Work.lean", "count": 6},
     {"file": "verity/protocols/interface/charge/window_charge.py", "count": 58},
     {"file": "verity/protocols/interface/charge/arith_encode.py", "count": 9},
+    {"file": "benchmarks/proof_throughput/gemm_hill.py", "count": 1},
     {"file": "benchmarks/pouw/served_zk/job.sh", "count": 21}
   ]
 }
