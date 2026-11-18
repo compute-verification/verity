@@ -698,22 +698,23 @@ def _leaving(s: Snapshot, leaves: list[Leave] | None, acts: list[Action], chain:
     ready = {r.number: r for r in s.ready}
     taken = {m for a in acts if isinstance(a, Build) for m in a.members}
     holds = {m: h for c in (*chain, *kept) for m, h in zip(c.members, c.heads)}
-    newest = _newest(_outcomes(s, acts), {r.number: r.head for r in s.ready})
+    outcomes = _outcomes(s, acts)
+    newest = _newest(outcomes, {r.number: r.head for r in s.ready})
     for r in s.ready:
         o = newest.get(r.number)
         if r.number in taken or r.number in settled or holds.get(r.number) == r.head or (o is not None and o.state == PASS):
             continue
         cause, why = (("in flight", f"a candidate holds it at {holds[r.number][:12]}, an older head: its new head waits for "
                                     "that one to leave the chain") if r.number in holds else
-                      blocked or _left(s, r, newest, ready, bool(kept), tried))
+                      blocked or _left(s, r, newest, outcomes, ready, bool(kept), tried))
         leaves.append(Leave(r.number, r.head, cause, why))
     return acts
 
 
-def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], ready: dict[int, Ready], kept: bool, t: _Tried
-          ) -> tuple[str, str]:
-    """Why a tick that tried ``t`` built ready PR ``r`` into no candidate (``newest``: `_newest` of the ready PRs; ``kept``: a
-    staged batch stays staged), as a `Leave`'s (cause, why)."""
+def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], outcomes: list[Outcome], ready: dict[int, Ready], kept: bool,
+          t: _Tried) -> tuple[str, str]:
+    """Why a tick that tried ``t`` built ready PR ``r`` into no candidate (``newest``: `_newest` of the ready PRs, from
+    ``outcomes``; ``kept``: a staged batch stays staged), as a `Leave`'s (cause, why)."""
     o = newest.get(r.number)
     full = ("chain full", f"main's chain is full at --depth {s.depth}")
     aside = ("set aside", "set aside after its check kept erring: it goes behind the PRs waiting")
@@ -736,7 +737,7 @@ def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], ready: dict[int, Re
         return "Lean input beside a staged batch", ("it changes a Lean input, and a Lean batch is staged: no batch beside it "
                                                     "takes one until it is on main's chain")
     if r.lean:
-        first = _goes_first(t.pool, newest, t.room, t.leans)
+        first = _goes_first(t.pool, newest, outcomes, t.room, t.leans)
         if t.lean and any(m in s.pinned for m in t.lean) and r.number not in s.pinned:
             return "Lean limit", "pinned Lean PRs go first: a Lean batch holds them alone while one waits"
         if t.lean and (_wide(r, s.wide) or any(_wide(ready[m], s.wide) for m in t.lean)):
@@ -1317,8 +1318,14 @@ def _owner_why(c: Candidate) -> str:
 
 
 def _told(c: Candidate, outcomes: list[Outcome]) -> bool:
-    """Whether ``c``'s lone member was set aside at its head before: its owner and infra were rung then."""
-    return any(o.state == INFRA and (c.members[0], c.heads[0]) in zip(o.members, o.heads) for o in outcomes)
+    """Whether ``c``'s lone member was set aside at its head before (`_set_aside`): its owner and infra were rung then."""
+    return _set_aside(c.members[0], c.heads[0], outcomes)
+
+
+def _set_aside(number: int, head: str, outcomes: list[Outcome]) -> bool:
+    """Whether PR ``number`` was set aside at ``head`` before: an infra outcome of ``outcomes`` holds it there.  It stays so
+    until it has a new head, as a clean check at that head lands it."""
+    return any(o.state == INFRA and (number, head) in zip(o.members, o.heads) for o in outcomes)
 
 
 def _waiting(s: Snapshot, ready: dict[int, Ready], chain: list[Candidate], landed: set[int], outcomes: list[Outcome],
@@ -1370,7 +1377,7 @@ def _next(s: Snapshot, pool: list[Ready], outcomes: list[Outcome], chain: list[C
             [r for r in pool if not r.lean or s.lean or r in pinned], outcomes, s.batch, s.batch, s.wide):
         return (), ""
     if s.records and members and _goes_first(
-            pool, newest, len(chain) < s.depth if room is None else room, _leans(chain, built)):
+            pool, newest, outcomes, len(chain) < s.depth if room is None else room, _leans(chain, built)):
         return (), ""
     wide = [m for c in chain for m in c.members if m in built and _wide(built[m], s.wide)]
     aside = [c.members[0] for c in chain if s.records and len(c.members) == 1 and _told(c, outcomes)
@@ -1390,7 +1397,8 @@ def _leans(chain: list[Candidate], built: dict[int, Ready]) -> tuple[int, ...]:
     return tuple(m for c in chain for m in c.members if m in built and built[m].lean)
 
 
-def _goes_first(pool: list[Ready], newest: dict[int, Outcome], room: bool, leans: tuple[int, ...]) -> Ready | None:
+def _goes_first(pool: list[Ready], newest: dict[int, Outcome], outcomes: list[Outcome], room: bool, leans: tuple[int, ...]
+                ) -> Ready | None:
     """The PR of ``pool`` with no Lean change that changes a Lean input (`Ready.lean_input`), which a batch may take (`_takes`),
     first in rank, that no Lean batch opens ahead of with a records run (`_next`), or None.  It goes first while a batch of
     PRs with no Lean change could take it now, main's chain having ``room`` under `depth`; or while the chain holds a Lean
@@ -1398,8 +1406,10 @@ def _goes_first(pool: list[Ready], newest: dict[int, Outcome], room: bool, leans
     full chain while it waited, which kept it out of every build for its run, is followed by no other while that batch is
     on the chain.  On a full chain holding no Lean change it waits beside the batch staged, as no batch could take it.  A
     batch already ahead of it when it began to wait, on main's chain or staged, that a red or infra outcome below drops and
-    `_restack` stages again with the same or fewer members is no new batch for it, so it is staged again without this."""
-    waiting = [r for r in pool if r.lean_input and not r.lean and _takes(r, newest)]
+    `_restack` stages again with the same or fewer members is no new batch for it, so it is staged again without this.  One
+    set aside at its head (`_set_aside`, of ``outcomes``) goes first no more until it has a new head: it is batched as any PR,
+    and holds no Lean batch back, so a PR whose check keeps erring can't keep stopping them."""
+    waiting = [r for r in pool if r.lean_input and not r.lean and _takes(r, newest) and not _set_aside(r.number, r.head, outcomes)]
     return waiting[0] if waiting and (room or leans) else None
 
 
