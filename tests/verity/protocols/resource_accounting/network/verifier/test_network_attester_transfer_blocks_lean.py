@@ -37,7 +37,7 @@ class Case:
         self.lw, self.sample, self.syncs, self.tmp = lw, sample, syncs, tmp
         self.certificates = [r.certificate for r in opening.records]
         self.delivered = standin.prove(lw, opening, sample, syncs, tmp / "honest")
-        self.findings, refused = standin.lean(self.delivered.proof, circuit_sha512=standin.circuit_sha512(self.delivered),
+        self.findings, refused = standin.lean(self.delivered.proof,
                                               program=lw.program, partition=lw.partition)
         assert refused is None
         self._files = itertools.count()
@@ -212,8 +212,7 @@ def test_a_disagreement_or_a_case_the_lean_cant_state_rejects(tmp_path, monkeypa
     """The switch names whose verdict is the record's (`by`), the other's accept bit is `reference`'s; where the two
     differ, or the Lean has no case (a key other than an `LmsKey`), the execution phase is rejected with deadline 0."""
     c = _network_attester(tmp_path)
-    run = lambda lw=c.lw: lw.verify(c.sample, c.certificates, c.syncs, c.delivered,
-                                    circuit_sha512=standin.circuit_sha512(c.delivered))
+    run = lambda lw=c.lw: lw.verify(c.sample, c.certificates, c.syncs, c.delivered)
     lean = run()
     assert lean["by"] == "lean" and lean["accepted"] and lean["reference"] == {"accepted": True}
     monkeypatch.setattr(SVC, "OF_RECORD", "python")

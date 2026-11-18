@@ -10,8 +10,7 @@ Remote's plain sibling (`Core.Site.Registration.Composite.plain`, the inference-
 is refused by name until its soundness is proved (`plainRefusal`): `Verity.PlainSoundness` takes the rows check's target
 as a hypothesis, and no compiled check carries the rows check's id.
 
-    product IDS [--challenger-key-sha512 H [--challenger-retired FILE]] id | check PARAMS COMMITMENT EVIDENCE | serve
-                                                                     IDS: the subprotocols' ids, comma-separated
+    product IDS id | check PARAMS COMMITMENT EVIDENCE | serve        IDS: the subprotocols' ids, comma-separated
 
 The command after `IDS` is the core CLI's (`CoreProtocol.Cli`), of the composite `ofIds IDS`.
 -/
@@ -21,7 +20,6 @@ public import CoreOnsite
 public import CoreProtocol.Cli
 public import CoreProtocol.Site
 public import CoreRemote
-public import VStarRecursive.ChallengerPin
 meta import CoreOnsite
 meta import CoreProtocol.Cli
 meta import CoreProtocol.Site
@@ -65,20 +63,12 @@ def ofIds (ids : List String) : Except String BlobProtocol :=
         .error (s!"[{", ".intercalate ids}] is no composite's subprotocols ({"; ".intercalate named})" ++
           ": protocol soundness covers only those composites")
 
-/-- The builder and the members of the composite `P` is, by its id; `none` for no composite. -/
-def buildOf (P : BlobProtocol) : Option ((List BlobProtocol → BlobProtocol) × List BlobProtocol) :=
-  if P.id == Core.Onsite.protocol.id then some (Core.Onsite.protocolOf, Core.Onsite.components)
-  else if P.id == Core.Remote.V1.protocol.id then some (Core.Remote.V1.protocolOf, Core.Remote.V1.components)
-  else none
-
-/-- `product IDS ...`: the core CLI of `ofIds IDS`, its members under the challenger's pin when given
-(`VStar.Recursive.ChallengerPin.compositeMain`); 64 when `IDS` is refused or missing. -/
+/-- `product IDS ...`: the core CLI of `ofIds IDS`; 64 when `IDS` is refused or missing. -/
 def main (args : List String) : IO UInt32 := do
   match args with
   | ids :: rest =>
-    match ofIds ((ids.splitOn ",").filter (· ≠ "")) >>= fun P => (buildOf P).elim (.error s!"{P.id} has no builder") .ok with
-    | .ok (mk, cs) =>
-      VStar.Recursive.ChallengerPin.compositeMain mk cs rest
+    match ofIds ((ids.splitOn ",").filter (· ≠ "")) with
+    | .ok P => P.main rest
     | .error e => IO.eprintln s!"product: {e}"; return 64
   | [] => IO.eprintln "usage: product IDS id | check PARAMS COMMITMENT EVIDENCE | serve"; return 64
 
@@ -91,11 +81,6 @@ private def remoteIds : List String := Core.Remote.components.map (·.id)
 private def remoteV1Ids : List String := Core.Remote.V1.components.map (·.id)
 
 #guard composites.map (·.1.id) == ["verity/onsite/v1", "verity/remote/v1"]
-#guard composites.all fun (P, _) => (buildOf P).isSome
--- no composite's member is a composite: the challenger's pin replaces members at the list's top level only
-#guard composites.all fun (_, xs) => xs.all fun i => !(composites.map (·.1.id)).contains i
--- the pin replaces SPOT alone: a PoUW period member would need its own (`PouwVerifier.Period.pinned`)
-#guard composites.all fun (_, xs) => !xs.contains Spot.ChallengerPin.PERIOD
 #guard onsiteIds.all known.contains && remoteV1Ids.all known.contains
 #guard known.length == (onsiteIds ++ remoteV1Ids).eraseDups.length
 
