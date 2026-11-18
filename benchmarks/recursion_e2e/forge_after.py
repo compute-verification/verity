@@ -81,7 +81,7 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
     reg = ph["registered"][port]
     pos = reg["positions"]
     rows, salts = table_rows(inst, text, port, len(pos))
-    wb, schema = int(port_.get("word_bits", 16)), port_.get("row_schema", RG.SCHEMA)
+    wb, schema = int(port_.get("word_bits", 16)), port_.get("row_schema", RV.SCHEMA)
     def bc(row, salt):
         return RG._INST.commit_string(RG._INST.default_key, RV.row_digest(row, wb, schema), salt)
     honest = bc(rows[0], salts[0])

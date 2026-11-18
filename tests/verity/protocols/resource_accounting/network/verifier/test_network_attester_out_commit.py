@@ -163,7 +163,7 @@ def test_wrong_domain_width_or_rows(signed):
     out, key = signed
     _refused("out-domain", _record(out), key, shape=_shape(_program(ROWS, WORDS + 1), WORDS, ROWS))
     _refused("out-domain", _record(out), key, shape=O.OutShape(SHAPE.program, "outs", WORDS, ROWS))
-    for shape in (_shape(words=1), _shape(words=128), _shape(word_bits=32), _shape(schema=G.SCHEMA)):
+    for shape in (_shape(words=1), _shape(words=128), _shape(word_bits=32), _shape(schema=RV.SCHEMA)):
         _refused("out-width", _record(out), key, shape=shape)
     _refused("out-rows", _record(out), key, shape=_shape(rows=ROWS - 1))
     with pytest.raises(ValueError, match="an OutShape"):
@@ -203,7 +203,7 @@ def test_flipped_byte(signed, field, name, at):
 
 @pytest.mark.parametrize("field, value, name", [
     ("rows", ROWS + 1, "out-rows"), ("words", WORDS + 1, "out-width"), ("word_bits", 32, "out-width"),
-    ("value", "outs", "out-domain"), ("row_schema", G.SCHEMA, "out-width"), ("direction", "ingress", "out-link"),
+    ("value", "outs", "out-domain"), ("row_schema", RV.SCHEMA, "out-width"), ("direction", "ingress", "out-link"),
 ])
 def test_edited_field(signed, field, value, name):
     out, key = signed

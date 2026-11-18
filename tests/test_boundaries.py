@@ -1098,7 +1098,6 @@ SPOT_VERIFIER = ("verity.protocols.proofs.spot.verifier",)
 #: format or a re-export is read where it is defined (`verity.commitments`, `verity.circuits`), and verifier code stays in
 #: the verifier.
 SPOT_VERIFIER_IMPORTERS = (
-    "adapters/vllm/verity_vllm/compiler/served_rows.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_stop.py",
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
