@@ -1415,10 +1415,49 @@
    "ValueError: definition 'TPair_v1' node 1: an input node (Input32_v1) appears only in the root's body"
   ],
   [
+   "a v1 descriptor",
+   "ValueError: E_SCHEMA: a verity-ir/descriptor/v1 descriptor holds no Boolean bodies, and only verity-ir/descriptor/v2 is read; encode the program again"
+  ],
+  [
+   "a v0 descriptor",
+   "ValueError: E_SCHEMA: a verity-ir/descriptor/v0 descriptor holds no Boolean bodies, and only verity-ir/descriptor/v2 is read; encode the program again"
+  ],
+  [
+   "a Boolean map that is not an object",
+   "ValueError: E_BODY_KEY: `boolean` is list, not an object of descriptor ids"
+  ],
+  [
+   "a word primitive with no Boolean body",
+   "ValueError: E_BODY_MISSING: the word primitives ['TAdd32_v1'] have no Boolean body in `boolean`"
+  ],
+  [
+   "a Boolean map key that is no word primitive",
+   "ValueError: E_BODY_KEY: `boolean` names ['TPair_v1'], which are no word primitive among `definitions`"
+  ],
+  [
+   "a Boolean body that is no definition",
+   "ValueError: E_BODY_NOT_BOOLEAN: TAdd32_v1's body 'Absent_v1' is no definition"
+  ],
+  [
+   "a Boolean body of another signature",
+   "ValueError: E_BODY_NOT_BOOLEAN: TAdd32_v1's body StandIn[TWiden16]_v1 is not a Boolean Definition of its bit signature"
+  ],
+  [
+   "a word body",
+   "ValueError: E_BODY_NOT_BOOLEAN: TAdd32_v1's body TPair_v1 is not a Boolean Definition of its bit signature"
+  ],
+  [
    "a RegisteredInput node inside a Definition",
    "ValueError: definition 'TPair_v1' node 1: an input node (RegisteredInput32_v1) appears only in the root's body"
   ]
  ],
+ "boolean_map": {
+  "TAdd32_v1": "StandIn[TAdd32]_v1",
+  "TSum2_v1": "StandIn[TSum2]_v1",
+  "TSum4_v1": "StandIn[TSum4]_v1",
+  "TSum6_v1": "StandIn[TSum6]_v1",
+  "TWiden16_v1": "StandIn[TWiden16]_v1"
+ },
  "input_ids": [
   [
    "Input16_v1",

@@ -347,6 +347,16 @@ REJECT = [
     ("a primitive with a parameter name twice", lambda d: d["definitions"]["TAdd32_v1"]["params"][1].__setitem__(0, "a"),
      "signature differs from the registry"),
     ("an Input node inside a Definition", lambda d: _inner_input(d, "Input32_v1"), "appears only in the root's body"),
+    ("a v1 descriptor", lambda d: d.update(schema="verity-ir/descriptor/v1"), "E_SCHEMA"),
+    ("a v0 descriptor", lambda d: d.update(schema="verity-ir/descriptor/v0"), "E_SCHEMA"),
+    ("a Boolean map that is not an object", lambda d: d.update(boolean=[]), "E_BODY_KEY"),
+    ("a word primitive with no Boolean body", lambda d: d["boolean"].pop("TAdd32_v1"), "E_BODY_MISSING"),
+    ("a Boolean map key that is no word primitive", lambda d: d["boolean"].__setitem__("TPair_v1", d["boolean"]["TAdd32_v1"]),
+     "E_BODY_KEY"),
+    ("a Boolean body that is no definition", lambda d: d["boolean"].__setitem__("TAdd32_v1", "Absent_v1"), "E_BODY_NOT_BOOLEAN"),
+    ("a Boolean body of another signature", lambda d: d["boolean"].__setitem__("TAdd32_v1", d["boolean"]["TWiden16_v1"]),
+     "E_BODY_NOT_BOOLEAN"),
+    ("a word body", lambda d: d["boolean"].__setitem__("TAdd32_v1", "TPair_v1"), "E_BODY_NOT_BOOLEAN"),
     ("a RegisteredInput node inside a Definition", lambda d: _inner_input(d, "RegisteredInput32_v1"), "appears only in the root's body"),
 ]
 
@@ -444,6 +454,7 @@ def build() -> dict:
         "alias_reader": {"node": 12, "arg": 0, "refs": [list(r) for r in _root_nodes(D)[12].args[0].refs]},
         "definition_digest": [[fid, codec.definition_digest(e, desc)] for fid, e in sorted(desc["definitions"].items())],
         "decoder_rejects": rejects,
+        "boolean_map": desc["boolean"],
         "input_ids": [[i, bool(INPUT_ID.fullmatch(i))] for i in INPUT_IDS],
         "input_lowering": [[t, [[n.fn.id, n.form, list(n.axes), n.n] for n in Program(_identity(t)).root.body.nodes]] for t in LOWERINGS],
         "program": {"root": D.root.id, "input_nodes": [[k, n.fn.id, n.n] for k, n in enumerate(D.root.body.nodes) if is_input(n.fn)],
@@ -633,6 +644,17 @@ def test_the_definition_digest(live, decoded):
         assert codec.definition_digest(v0["definitions"][fid]) == digest
     root = canonical_entry(desc, desc["root"])["body"]["nodes"][12]["args"][0]["refs"]
     assert "alias" not in json.dumps(root) and expand(root) == VECTORS["alias_reader"]["refs"]
+
+
+def test_the_boolean_map(live, decoded):
+    """§4.9: the map's keys are the word primitives among `definitions`, sorted, and each body is among them too; the program
+    digest covers it."""
+    assert live["boolean_map"] == VECTORS["boolean_map"], REWRITE
+    desc = json.loads(VECTORS["descriptor"])
+    assert list(desc["boolean"]) == sorted(desc["boolean"]) == sorted(decoded.boolean)
+    assert all(b in desc["definitions"] for b in desc["boolean"].values())
+    moved = {**desc, "boolean": {**desc["boolean"], "TAdd32_v1": desc["boolean"]["TSum2_v1"]}}
+    assert codec.program_digest(moved) != codec.program_digest(desc)
 
 
 @pytest.mark.parametrize("label,edit,why", REJECT, ids=[r[0] for r in REJECT])
