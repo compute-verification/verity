@@ -120,8 +120,8 @@ def test_a_result_that_names_no_fingerprint_and_no_file_is_written_byte_for_byte
     w.measurement("wall", 1.5, "s", mark="measured")
     text = (tmp_path / kit.RESULT).read_text()
     assert text == json.dumps({"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": [
-        {"name": "wall", "value": 1.5, "unit": "s", "mark": "measured", "commit": SHA, "run": RUN, "ci95": None,
-         "target": None, "verdict": None, "inputs": ["measured"], "host": stamp}], "validation": {
+        {"name": "wall", "value": 1.5, "unit": "s", "mark": "measured", "version": 1, "commit": SHA, "run": RUN,
+         "ci95": None, "target": None, "verdict": None, "inputs": ["measured"], "host": stamp}], "validation": {
         "status": "passed", "checker": "a benchmark", "detail": "4 of 4 gates hold", "evidence": ["out/gates.json"]}},
         indent=1) + "\n"
     assert not {"workload_fingerprint", *kit.FILES} & json.loads(text).keys()
