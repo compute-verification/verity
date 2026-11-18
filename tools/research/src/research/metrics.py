@@ -1,12 +1,15 @@
 """`research metrics`: the console's Metrics tab (/console/metrics) as text, from the site's GET /api/metrics, and a
 loop's readings sent to it with POST /api/metrics.
 
-  research metrics show [ID ...] [--owner HANDLE] [--json]   each metric a metrics.toml on main declares (one beside
+  research metrics show [ID ...] [--owner HANDLE] [--kind system|platform] [--json]
+                                                            each metric a metrics.toml on main declares (one beside
                                                             each benchmark's script: benchmarks/README.md's
                                                             "Metrics"), as ID@vN where its version N is above 1,
                                                             or by a former id (`was`): its latest value, changes over
-                                                            7 and 30 days, age and standing; --json gives each its
-                                                            `version`, 1 where the site's report gives none
+                                                            7 and 30 days, age and standing, each breakdown (`under`)
+                                                            indented under its main number; --kind keeps one kind;
+                                                            --json gives each its `version`, 1 where the site's
+                                                            report gives none, and its `kind`, system where none
   research metrics send [--command SCRIPT] [--commit SHA] [--dry-run] --metric ID (--value N | --why TEXT) --time ISO
                         [--mark M] [--target N] [--period P] [--over O] [--member M] [--run R]
                                                             one reading, or with no --metric the readings on stdin
@@ -52,6 +55,7 @@ REGISTRY_FILE = "metrics.toml"
 REGISTRY_SKIP = frozenset({".git", ".lake", ".venv", "node_modules", "__pycache__", "target", "build", "dist"})
 KEY_PREFIX = "vsk_"   # the site reads a bearer with it as a site key, and any other as a Cursor identity
 MARKS = ("measured", "modeled", "partial")   # kit.MARKS
+KINDS = ("system", "platform")   # a row's `kind`, tests/test_metrics_registry.py's KINDS
 #: every key the door takes (the site's lib/console/metrics/readings.ts, KEYS): it refuses a reading with any other
 KEYS = ("metric", "time", "value", "mark", "unit", "ci95", "target", "verdict", "why", "period", "over", "member", "run",
         "commit", "command")
@@ -228,21 +232,30 @@ def _standing(m: dict) -> str:
     return latest["verdict"] + (f" (target {_num(latest['target'])})" if latest.get("target") is not None else "")
 
 
+def _shown(m: dict, shown: set[str]) -> list[str]:
+    latest = m.get("latest")
+    head = f"{m['id']}{'' if m['version'] == 1 else '@v' + str(m['version'])}  @{m['owner']}  {m['title']}"
+    if m.get("under") and m["under"] not in shown:
+        head += f"  (under {m['under']})"
+    if not latest:
+        return [head, f"  not recorded yet; measured by: {m['command']}"]
+    ci = latest.get("ci95")
+    value = _num(latest["value"]) + (f" [{_num(ci[0])}, {_num(ci[1])}]" if ci else "") + f" {m['unit']}"
+    stale = ", stale" if m.get("stale") else ""
+    return [head,
+            f"  {value}  7d {_change(m.get('change7d'))}  30d {_change(m.get('change30d'))}  age {_age(m.get('ageMs'))}"
+            f" (every {m['every']}{stale})  {_standing(m)}".rstrip(),
+            f"  run {latest['run']}" + (f" at {latest['commit'][:12]}" if latest.get("commit") else "")]
+
+
 def show(report: dict) -> str:
     lines = []
+    shown = {m["id"] for m in report["metrics"]}
     for m in report["metrics"]:
-        latest = m.get("latest")
-        head = f"{m['id']}{'' if m['version'] == 1 else '@v' + str(m['version'])}  @{m['owner']}  {m['title']}"
-        if not latest:
-            lines += [head, f"  not recorded yet; measured by: {m['command']}"]
+        if m.get("under") in shown:
             continue
-        ci = latest.get("ci95")
-        value = _num(latest["value"]) + (f" [{_num(ci[0])}, {_num(ci[1])}]" if ci else "") + f" {m['unit']}"
-        stale = ", stale" if m.get("stale") else ""
-        lines += [head,
-                  f"  {value}  7d {_change(m.get('change7d'))}  30d {_change(m.get('change30d'))}  age {_age(m.get('ageMs'))}"
-                  f" (every {m['every']}{stale})  {_standing(m)}".rstrip(),
-                  f"  run {latest['run']}" + (f" at {latest['commit'][:12]}" if latest.get("commit") else "")]
+        lines += _shown(m, shown)
+        lines += ["    " + x for b in report["metrics"] if b.get("under") == m["id"] for x in _shown(b, shown)]
     if not report["metrics"]:
         lines.append("no metric is declared yet")
     lines += [f"refused: {r['id']}: {r['why']}" for r in report.get("refused") or []]
@@ -259,6 +272,8 @@ def main(argv: list[str], route: Route | None = None, stdin=None) -> int:
     s = sub.add_parser("show")
     s.add_argument("ids", nargs="*", metavar="ID")
     s.add_argument("--owner", action="append", default=[], metavar="HANDLE", help="only this lead's; repeat for more")
+    s.add_argument("--kind", choices=KINDS, help="only system metrics (they measure Verity) or platform ones (they "
+                   "measure the project); a row that gives none is system")
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("send", help="send readings with the panels key; with no --metric, a JSON reading or list on stdin")
     s.add_argument("--command", help="the script that computed them, as its metrics.toml row names it")
@@ -289,6 +304,7 @@ def main(argv: list[str], route: Route | None = None, stdin=None) -> int:
         report = (route or Route(ns.url, _key())).call()
         for m in report["metrics"]:
             m.setdefault("version", 1)
+            m.setdefault("kind", "system")
         named = {i: m["id"] for m in report["metrics"] for i in [*m.get("was", []), m["id"]]}
         missing = [i for i in ns.ids if i not in named]
         if missing:
@@ -296,7 +312,8 @@ def main(argv: list[str], route: Route | None = None, stdin=None) -> int:
                              "them; benchmarks/README.md's \"Metrics\" says where a row goes)")
         ids = {named[i] for i in ns.ids}
         report["metrics"] = [m for m in report["metrics"]
-                             if (not ns.ids or m["id"] in ids) and (not ns.owner or m["owner"] in ns.owner)]
+                             if (not ns.ids or m["id"] in ids) and (not ns.owner or m["owner"] in ns.owner)
+                             and (not ns.kind or m["kind"] == ns.kind)]
         print(json.dumps(report, indent=1, ensure_ascii=False) if ns.json else show(report))
         return 0
     except (RouteError, SlackError) as e:
