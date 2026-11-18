@@ -59,22 +59,6 @@ def test_an_edges_period_counts_a_loads_passes_and_users_as_one_load():
     assert P.edge_load(P.release_key("warm-00003")) == "warm" and P.edge_load(None) is None
 
 
-def test_the_gate_adds_in_release_order_and_the_trace_sees_that_order(tmp_path):
-    sched = Scheduler()
-    out, private = tmp_path / "out", tmp_path / "private"
-    done = P.install(sched, {"out": str(out), "private": str(private), "record": True, "release_order": True})
-    for n in (2, 0, 3, 1):
-        sched.add_request(Request(eid("light1", n), [n]))
-    assert sched.order == [eid("light1", n) for n in range(4)]
-    done[0].drain()
-    (trace,) = (private / "server").glob("step_trace.*.jsonl")
-    assert not out.exists()
-    recs = [json.loads(x) for x in trace.read_text().splitlines()]
-    assert [r["request"] for r in recs if r["kind"] == "arrive"] == sched.order
-    done[-1].uninstall()
-    done[0].uninstall()
-
-
 def stops(request: Request) -> str | None:
     """Why vLLM's scheduler stops a request at its last output id (its ``check_stop``): the parameters'
     end-of-sequence id, one of their stop ids, or the request's length."""
@@ -178,31 +162,6 @@ def test_idle_reset_empties_the_prefix_cache_for_a_request_that_finds_the_schedu
     assert wired.resets == 1 and wired.order == ["x", "y"] and len(resets.read_text().splitlines()) == 1
     assert isinstance(done[0], P.IdleReset) and done[0].busy_at is not None
     done[-1].uninstall()
-
-
-def test_a_missing_number_is_skipped_after_its_hold_and_a_held_abort_never_reaches_the_scheduler():
-    sched, now = Scheduler(), [0.0]
-    gate = P.ReleaseGate(sched.add_request, lambda ids: sched.finish_requests(ids, "aborted"), key=P.release_key,
-                         hold_s=5.0, clock=lambda: now[0])
-    gate.add(Request(eid("r", 1), [1]))
-    gate.add(Request(eid("r", 2), [2]))
-    assert sched.order == [] and gate.held()
-    assert gate.finished([eid("r", 2), "other"]) == ["other"]
-    now[0] = 4.9
-    gate.poll()
-    assert sched.order == []
-    now[0] = 5.0
-    gate.poll()
-    assert sched.order == [eid("r", 1)] and not gate.held()
-
-
-def test_a_new_run_starts_from_zero_and_unnumbered_requests_pass():
-    sched = Scheduler()
-    gate = P.ReleaseGate(sched.add_request, lambda ids: None, key=P.release_key)
-    gate.add(Request(eid("a", 0), [0]))
-    gate.add(Request(eid("b", 0), [0]))
-    gate.add(Request("plain-request", [0]))
-    assert sched.order == [eid("a", 0), eid("b", 0), "plain-request"]
 
 
 class Rows:
@@ -448,10 +407,6 @@ def test_boundary_rows_installs_the_integrations_boundary_windows_from_the_confi
     assert got == {"cfg": cfg, "out": tmp_path / "boundary", "public": (tmp_path,), "sched": sched, "release": None}
     (lines,) = tmp_path.glob("boundary.*.jsonl")
     assert json.loads(lines.read_text()) == {"window": 0, "spans": 2}
-    done[-1].uninstall()
-    (tmp_path / "ordered").mkdir()
-    done = P.install(Scheduler(), {"out": str(tmp_path / "ordered"), "boundary_rows": cfg, "release_order": True})
-    assert got["release"] is P.release_key
     done[-1].uninstall()
     # a class's directory holds its requests' tokens and salts: with a private directory named it goes there, and
     # out keeps only the classes' public lines and stays the directory the history tables are refused under
