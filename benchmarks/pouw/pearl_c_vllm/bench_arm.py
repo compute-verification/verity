@@ -1,6 +1,7 @@
-"""Pearl-C (``pearl-c-sm120-v1-h3``) as a `verity-bench` experimental arm (``--arm-module pearl_c_vllm.bench_arm:PEARL_C``
-with ``benchmarks/pouw`` on ``PYTHONPATH``), on one RTX PRO 6000; with ``PEARLC_KERNEL`` the tree's
-``verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90``, ``pearl-c-h100-v1-h3`` on one H100 or H200.
+"""A useful-work scheme's kernels as a `verity-bench` experimental arm (``--arm-module pearl_c_vllm.bench_arm:PEARL_C``
+with ``benchmarks/pouw`` on ``PYTHONPATH``) on one card: the arm takes the scheme's registered name (``PearlCArm(NAME)``;
+`PEARL_C` is ``pearl-plus``'s) and serves the PoUW kernel scheme that scheme runs on the leased card
+(`PearlCArm.kernel`: ``pearl-c-sm120-v1-h3`` on an RTX PRO 6000, ``pearl-c-h100-v1-h3`` on an H100 or H200).
 
 The arm serves the preset's model in BF16 with every linear computed and committed by `pouw_pearl_c_device.PearlCDeviceRun`,
 installed as `e2e.install` does (sites by type, the kernel directory's cubin, the fixed operands' roots, the epoch from a
@@ -15,9 +16,9 @@ each call's noise is seeded by its index across the epoch, so no two of the engi
 against x·Wᵀ within `ERR` rel RMS, the same call's commitment twice bit for bit, and the ``hash_leaf``-omitted negative
 control changing the transcript root.
 
-Env: ``PEARLC_KERNEL`` (default the tree's ``verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's
-build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule),
-``PEARLC_SCHEME`` (default the kernel directory's record, `KERNEL_SCHEMES`), ``PEARLC_BENCH_EPOCH``. The salt coin
+Env: ``PEARLC_KERNEL`` (default the tree's directory of the kernel scheme on the card, `kernel_directory`), ``PEARLC_CUBIN``
+(default the directory's build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the
+served schedule), ``PEARLC_BENCH_EPOCH``. The salt coin
 is a challenger's held in this process (``in-process``, a cost measurement) unless ``PEARLC_CHALLENGER_GATE`` (infra's gate
 as an ssh command under the lane's gate key) and ``PEARLC_CHALLENGER_PEER`` (this node's name in the challenger host's
 peers) are set: then it is a live session's on the auditor device, reserved at install with its salt coin alone
@@ -36,13 +37,20 @@ from typing import Any
 from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
-#: the sm_120 kernel's directory, the default kernel
-SM120 = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
+#: the tree's kernel directories, one per kernel scheme family and build target (`kernel_directory`)
+KERNELS = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels"
 settings = of(__file__)
 #: `e2e.gate`'s bound on served y against x·Wᵀ (rel RMS), Pearl's FP8 quantization noise
 ERR = 0.08
-#: the scheme each of the tree's kernel directories runs (`pouw_pearl_c_device.SCHEMES`' device records)
-KERNEL_SCHEMES = {"pearl_c_sm120": "pearl-c-sm120-v1-h3", "pearl_c_sm90": "pearl-c-h100-v1-h3"}
+
+
+def kernel_directory(scheme: str, card: str) -> Path:
+    """The tree's kernel directory of the PoUW kernel scheme ``scheme`` on the card ``card`` (its short name): its
+    family's, built for the card's target (``pearl_c_sm90`` for ``pearl-c-h100-v1-h3`` on an H200)."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SchemeId
+    from verity_bench.schemes import arch
+
+    return KERNELS / f"{SchemeId.parse(scheme).family.replace('-', '_')}_{arch(card).removesuffix('a').replace('_', '')}"
 
 
 class _Coins:
@@ -202,10 +210,11 @@ class PearlCArm:
     #: `PearlCDeviceRun`'s options beside the install's
     run_options: dict[str, Any] = {}
 
-    def __init__(self) -> None:
-        self.kernel_dir = Path(settings.PEARLC_KERNEL or SM120)
+    def __init__(self, protocol: str | None = None) -> None:
+        """``protocol`` is the useful-work scheme's registered name; an arm built only for its gate (`gate`) names none."""
+        self.protocol = protocol
+        self._kernel: tuple[str, Path] | None = None
         self.cubin = settings.PEARLC_CUBIN
-        self.scheme = settings.PEARLC_SCHEME or KERNEL_SCHEMES.get(self.kernel_dir.name, "pearl-c-sm120-v1-h3")
         self.schedule = settings.PEARLC_SCHEDULE
         self.epoch = settings.PEARLC_BENCH_EPOCH
         self.gate_command = settings.PEARLC_CHALLENGER_GATE
@@ -213,6 +222,31 @@ class PearlCArm:
         self.lane = settings.PEARLC_CHALLENGER_LANE
         self.run = self.stack = self.weights = self.session = None
         self.coins: dict[str, Any] = {"source": "in-process"}
+
+    def kernel(self, card: str | None = None) -> tuple[str, Path]:
+        """The kernel scheme and kernel directory the arm serves with, fixed at the first call: the scheme
+        `verity_bench.schemes.kernel_scheme` derives from the arm's useful-work scheme and the card ``card`` (its short
+        name; where None, the leased card's, `kit.card_short` of the run's stamp), and its directory ``PEARLC_KERNEL``
+        or the tree's (`kernel_directory`)."""
+        if self._kernel is None:
+            from verity_bench import kit
+            from verity_bench.schemes import kernel_scheme
+
+            if self.protocol is None:
+                raise ValueError(f"{self.id} names no useful-work scheme: build it as {type(self).__name__}(NAME), NAME "
+                                 "a registered compute scheme's name")
+            card = card or kit.card_short(kit.host_stamp()["card"])
+            scheme = kernel_scheme(self.protocol, card)
+            self._kernel = scheme, Path(settings.PEARLC_KERNEL or kernel_directory(scheme, card))
+        return self._kernel
+
+    @property
+    def scheme(self) -> str:
+        return self.kernel()[0]
+
+    @property
+    def kernel_dir(self) -> Path:
+        return self.kernel()[1]
 
     def install(self, target: Any) -> "PearlCArm":
         return self
@@ -392,10 +426,8 @@ class PearlCWholeArm(PearlCArm):
     #: the options measured on pearl_c_sm120 alone (B̃'s prefetch is its pipeline's), which another kernel's arm leaves out
     RTX_ONLY = ("whole_prefetch_b", "whole_eager")
 
-    def __init__(self) -> None:
-        super().__init__()
-        if self.kernel_dir.name != "pearl_c_sm120":
-            self.run_options = {k: v for k, v in self.run_options.items() if k not in self.RTX_ONLY}
+    def __init__(self, protocol: str | None = None) -> None:
+        super().__init__(protocol)
         for option, env in (("whole_defer_a", "PEARLC_WHOLE_DEFER_A"), ("whole_fork_stats", "PEARLC_WHOLE_FORK_STATS"),
                             ("lag_ends", "PEARLC_LAG_ENDS"), ("whole_tree_sm", "PEARLC_WHOLE_TREE_SM"),
                             ("aside_ends", "PEARLC_ASIDE_ENDS"), ("whole_prefetch_b", "PEARLC_WHOLE_PREFETCH_B")):
@@ -429,6 +461,8 @@ class PearlCWholeArm(PearlCArm):
         from verity_vllm.engine import handle
         from verity_torch.pouw.pearl_c.whole import WholeStep
 
+        if self.kernel_dir.name != "pearl_c_sm120":
+            self.run_options = {k: v for k, v in self.run_options.items() if k not in self.RTX_ONLY}
         super().ready(target)
         self.whole = WholeStep(self.run, self.stack, handle.model_runner(target.engine.vllm), target.hooks)
         self.whole.prepare()
@@ -455,5 +489,5 @@ class PearlCWholeArm(PearlCArm):
         return out
 
 
-PEARL_C = PearlCArm()
-PEARL_C_WHOLE = PearlCWholeArm()
+PEARL_C = PearlCArm("pearl-plus")
+PEARL_C_WHOLE = PearlCWholeArm("pearl-plus")
