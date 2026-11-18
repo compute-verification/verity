@@ -453,16 +453,19 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
 
 def start_quick(driver: Landing, sha: str, base: str, avoid: Iterable[str] = ()) -> dict | None:
     """Launch candidate ``sha``'s quick tier since ``base`` (`Landing.launch_quick`: `queue.QUICK_TIER` on its own merge, as a
-    `research run`) on one of the queue's machines, the one its sha picks, so a start again takes the same one, but of those
-    ``avoid`` doesn't name (the machine its tier before ended in infra on, ``erred_on``) where that leaves any.  The record to
+    `research run`) on one of the queue's machines, of those ``avoid`` doesn't name (the machine its tier before ended in infra
+    on, ``erred_on``) where that leaves any: the one with a free check slot now (`Landing.place_quick`), so it doesn't wait in
+    one machine's line while another's slots stand free, or the one its sha picks when no machine's slots could be read.  The record to
     keep: ``ids`` (none while its detached launch runs, ``launch`` then), ``tip``, ``base``, ``at``, ``on``, ``steps``
     (`QUICK_STEP`) and ``gate`` (`QUICK`), which `judge` reads by `_quick`.  None, logged, when it registered no run or
     ``driver`` launches nothing (a dry run, or its queue's shadow)."""
     if not driver.on:
         raise ValueError("a candidate's quick tier needs the queue's machines: build the Landing with drive.toml's `on`")
     ms = elsewhere(driver.on, avoid).split(",")
-    on = ms[int(sha[:8], 16) % len(ms)]
-    what = f"the quick tier of candidate {sha[:12]} since {base[:12]} on {on}"
+    placed, why = driver.place_quick(",".join(ms))
+    on = placed if placed in ms else ms[int(sha[:8], 16) % len(ms)]
+    what = f"the quick tier of candidate {sha[:12]} since {base[:12]} on {on}" + (
+        f" ({why})" if placed in ms else f" (by its sha: {why})" if why else "")
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None

@@ -52,11 +52,13 @@ NEW = json.dumps({"guarantees": {"G": {"owner": "@lean", "type_hash": "new"}}}) 
 
 @pytest.fixture()
 def fast(tmp_path, monkeypatch):
-    """`audit_records` against a stand-in package `pkg`, a held-open slot tree and a fake check.py whose `--update`
-    writes `NEW` over the tree's record; `sync` restores the committed record, as the real one does from ROOT's files."""
+    """`audit_records` against a stand-in package `pkg` and its requirer `pkg/Req`, a held-open slot tree and a fake
+    check.py whose `--update` writes `NEW` over `pkg`'s record and leaves `pkg/Req`'s as committed; `sync` restores the
+    committed records, as the real one does from ROOT's files."""
     root = tmp_path / "root"
-    (root / "pkg").mkdir(parents=True)
+    (root / "pkg" / "Req").mkdir(parents=True)
     (root / "pkg" / "lean-audit.json").write_text(OLD)
+    (root / "pkg" / "Req" / "lean-audit.json").write_text(OLD)
     cache = tmp_path / "cache"
     tree = cache / LC.RECORDS / "local"
     (tree / "pkg").mkdir(parents=True)
@@ -76,7 +78,9 @@ def fast(tmp_path, monkeypatch):
     monkeypatch.setattr(LC, "git", lambda *a: None)
 
     def sync(_closure, _files, t):
+        (t / "pkg" / "Req").mkdir(parents=True, exist_ok=True)
         (t / "pkg" / "lean-audit.json").write_text(OLD)
+        (t / "pkg" / "Req" / "lean-audit.json").write_text(OLD)
         return 0
 
     monkeypatch.setattr(LC, "sync", sync)
@@ -86,7 +90,8 @@ def fast(tmp_path, monkeypatch):
     def run(argv, **kw):
         calls.append((argv, kw.get("cwd")))
         for at in named(argv) if "--update" in argv else []:
-            (Path(at) / "lean-audit.json").write_text(NEW)
+            if Path(at).name == "pkg":
+                (Path(at) / "lean-audit.json").write_text(NEW)
         return type("P", (), {"returncode": 0})()
 
     monkeypatch.setattr(LC.subprocess, "run", run)
@@ -160,10 +165,9 @@ def test_a_refused_build_slot_takes_the_dev_cache_path_on_the_checkout_and_its_r
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
     said = []
     assert LC.audit_records("pkg", tmp_path / "deps", update=True, log=said.append) == 0
-    assert [(named(a), cwd) for a, cwd in calls] == [([str(root / "pkg")], root), ([str(root / "pkg/Req")], root)]
-    assert all("--dev-cache" in a and "--no-replay" in a for a, _ in calls), "both steps take the --dev-cache path"
-    assert "--update" in calls[0][0] and "--update" not in calls[1][0], "a requirer is checked, never updated"
-    assert calls[1][0][calls[1][0].index("--out") + 1] == str(run_dir / "lean-audit" / "requirer-pkg_Req")
+    assert [(named(a), cwd) for a, cwd in calls] == [([str(root / "pkg"), str(root / "pkg/Req")], root)]
+    assert "--dev-cache" in calls[0][0] and "--no-replay" in calls[0][0], "the one check.py takes the --dev-cache path"
+    assert "--update" in calls[0][0], "a requirer is updated by the check.py that judges it, as PKG is"
     assert any("taking the --dev-cache path" in s for s in said)
     assert not (tree / ".lock").exists(), "the slot tree is never touched"
     assert (run_dir / "lean-audit" / "record" / "lean-audit.json").read_text() == NEW, "the same keep as the slot path"
@@ -401,8 +405,8 @@ def pair(tmp_path, monkeypatch):
 def test_one_update_regenerates_a_requirer_failing_only_on_record_differences_and_its_commit_runs_nothing(
         pair, tmp_path, monkeypatch, hold):
     """A change to what both `security`'s and `security/Properties`' guarantees read moves both locks: one `--records
-    Security --update` run regenerates and keeps both, each audited on the records regenerated before it, and keeps each
-    pass under the regenerated locks, so a commit of both records needs no run of either package. Each package's
+    Security --update` run regenerates and keeps both, in one check.py that judges each on the locks it found, and keeps
+    each pass under the regenerated locks, so a commit of both records needs no run of either package. Each package's
     `inputs_key` is the commit's, though the `--dev-cache` path's check.py rewrites the locks in the checkout."""
     root, calls, _ = pair
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", hold)
@@ -416,14 +420,13 @@ def test_one_update_regenerates_a_requirer_failing_only_on_record_differences_an
     assert LC.audit_records(S, tmp_path / "deps", update=True, log=said.append) == 0
     doc = json.loads((run_dir / "result.json").read_text())
     assert {p: doc["records"][p]["inputs_key"] for p in (S, P)} == before
-    assert [(p, up) for p, up, _ in calls] == [(S, True), (P, False), (P, True)], "the requirer is updated after it fails"
-    assert calls[1][2] == {S: BUILT[S], P: record("old")}, "the requirer is audited on PKG's regenerated record"
+    assert [(p, up) for p, up, _ in calls] == [(S, True), (P, True)], "one check.py updates PKG and its requirer"
+    assert calls[1][2] == {S: record("old", ["proofs"]), P: record("old")}, "each is judged on the locks it found"
     out = run_dir / "lean-audit"
     kept = {S: out / "record" / S / LC.LOCK, P: out / "record" / P / LC.LOCK}
     assert {p: k.read_text() for p, k in kept.items()} == BUILT and (out / "record" / LC.LOCK).read_text() == BUILT[S]
     for p in (S, P):
         assert sum(f"commit it over {p}/{LC.LOCK}" in s for s in said) == 1, f"one line says what to commit {p}'s record over"
-    assert any(f"{P} requires {S}, and every failure of its records is a record difference" in s for s in said)
     assert json.loads((run_dir / "result.json").read_text())["validation"]["status"] == "passed"
     for p, k in kept.items():
         (root / p / LC.LOCK).write_bytes(k.read_bytes())
@@ -573,26 +576,24 @@ def test_a_check_py_whose_failure_is_not_only_its_packages_own_fails_each_of_the
     assert any("is not only its packages' own failures" in s for s in said)
 
 
-def test_a_requirer_one_check_py_fails_only_on_record_differences_still_gets_its_update(proved, tmp_path):
-    """`--records s/proofs --update`: PKG's check.py takes `--update`, so the two packages whose guarantees it proves share
-    the next, which audits `s/proofs` once for both. The one that fails there only on record differences is audited
-    again with `--update`, in a check.py of its own, and its record is kept; the other passed and is not audited again."""
+def test_one_check_py_with_update_regenerates_the_requirer_whose_records_moved(proved, tmp_path):
+    """`--records s/proofs --update`: PKG and the two packages whose guarantees it proves share one check.py with
+    `--update`, which builds, samples and seals `s/proofs` once. The requirer whose record moved has it regenerated and
+    kept by that check.py; the other's is unchanged, and it passes."""
     root, calls, _ = proved
     (root / P / LC.LOCK).write_text(record("old", ["../proofs"]))
     said, out = [], tmp_path / "out"
     assert LC.audit_records("s/proofs", tmp_path / "deps", update=True, out=out, log=said.append) == 0
-    assert [(p, up) for p, up, _ in calls] == [("s/proofs", True), (S, False), (P, False), (P, True)]
-    assert LC.subprocess.run.audits == [["s/proofs"], [S, "s/proofs", P], [P, "s/proofs"]]
+    assert [(p, up) for p, up, _ in calls] == [("s/proofs", True), (S, True), (P, True)]
+    assert LC.subprocess.run.audits == [["s/proofs", S, P]]
     assert (out / "record" / P / LC.LOCK).read_text() == BUILT[P] and not (out / "record" / S / LC.LOCK).exists()
     assert (root / P / LC.LOCK).read_text() == BUILT[P], "outside a recorded run the record is written back"
     got = outcome_line(said)
     assert got["outcome"] == LC.REGENERATED
     assert {q: r["outcome"] for q, r in got["records"].items()} == {"s/proofs": LC.PASS, S: LC.PASS, P: LC.REGENERATED}
     work = [s for s in said if re.match(r"lean-records: \S+: check\.py exit \d+ in \d+ s on ", s)]
-    assert [s.split(": check.py")[0] for s in work] == ["lean-records: s/proofs", f"lean-records: {S}+{P}",
-                                                        f"lean-records: {P}"], \
-        "one line for each check.py, each in the one form, which `research lean-times` sums"
-    assert "audited again with --update" in work[2]
+    assert [s.split(": check.py")[0] for s in work] == [f"lean-records: s/proofs+{S}+{P}"], \
+        "one line for the one check.py, in the form `research lean-times` sums"
 
 
 def test_packages_whose_reports_check_py_would_write_in_one_directory_never_share_a_check_py(monkeypatch):
@@ -601,17 +602,18 @@ def test_packages_whose_reports_check_py_would_write_in_one_directory_never_shar
     each; a package proving the guarantees of both is the same package, and they share one."""
     provers = {"x/lean": ["x/proofs"], "y/lean": ["x/proofs"], "z/a": ["x/proofs"], "z/b": ["x/proofs"], "w/proofs": []}
     monkeypatch.setattr(LC, "provers", lambda p, *_: provers.get(p, []))
-    assert LC.batches(["x/lean", "z/a", "z/b"], "x/lean", False, None) == [(False, ["x/lean", "z/a", "z/b"])]
-    assert LC.batches(["x/lean", "z/a", "y/lean", "z/b"], "x/lean", False, None) == [(False, ["x/lean", "z/a"]),
-                                                                                    (False, ["y/lean", "z/b"])]
-    assert LC.batches(["z/a", "w/proofs", "z/b"], "z/a", False, None) == [(False, ["z/a"]), (False, ["w/proofs"]),
-                                                                          (False, ["z/b"])]
-    assert LC.batches(["w/proofs", "x/a-b", "y/a.b"], "w/proofs", False, None) == [(False, ["w/proofs", "x/a-b"]),
-                                                                                  (False, ["y/a.b"])]
-    said = []
-    assert LC.batches(["x/lean", "z/a", "z/b"], "x/lean", True, None) == [(True, ["x/lean"]), (False, ["z/a", "z/b"])]
-    assert LC.batches(["x/lean", "z/a"], "x/lean", True, Path("MOVES.json"), said.append) == [(True, ["x/lean", "z/a"])]
-    assert len(said) == 1 and "z/a requires x/lean: check.py --update --moved on it from its first audit" in said[0]
+    assert LC.batches(["x/lean", "z/a", "z/b"], False) == [(False, ["x/lean", "z/a", "z/b"])]
+    assert LC.batches(["x/lean", "z/a", "y/lean", "z/b"], False) == [(False, ["x/lean", "z/a"]), (False, ["y/lean", "z/b"])]
+    assert LC.batches(["z/a", "w/proofs", "z/b"], False) == [(False, ["z/a"]), (False, ["w/proofs"]), (False, ["z/b"])]
+    assert LC.batches(["w/proofs", "x/a-b", "y/a.b"], False) == [(False, ["w/proofs", "x/a-b"]), (False, ["y/a.b"])]
+
+
+def test_with_update_pkg_and_its_requirers_share_one_check_py_that_updates_each():
+    """Under `--update` the batches are those of a run without it, each taking `--update`: PKG has no check.py of its own,
+    so the package proving its and its requirers' guarantees is built, sampled and sealed once."""
+    assert LC.batches(["x/lean", "z/a", "z/b"], True) == [(True, ["x/lean", "z/a", "z/b"])]
+    for todo in (["x/lean", "z/a", "y/lean", "z/b"], ["z/a", "w/proofs", "z/b"]):
+        assert LC.batches(todo, True) == [(True, ps) for _, ps in LC.batches(todo, False)], todo
 
 
 def test_a_requirer_failing_for_another_reason_fails_and_without_update_none_is_updated(pair, tmp_path):
@@ -620,7 +622,7 @@ def test_a_requirer_failing_for_another_reason_fails_and_without_update_none_is_
     said = []
     out = tmp_path / "out"
     assert LC.audit_records(S, tmp_path / "deps", update=True, out=out, log=said.append) == 1
-    assert [(p, up) for p, up, _ in calls] == [(S, True), (P, False)], "no --update on a requirer that fails otherwise"
+    assert [(p, up) for p, up, _ in calls] == [(S, True), (P, True)], "a requirer takes --update, and fails all the same"
     assert not (out / "record" / P).exists() and (out / "record" / S / LC.LOCK).read_text() == BUILT[S]
     assert any(f"{P} requires {S}" in s and "not only on record differences" in s for s in said)
     assert (root / P / LC.LOCK).read_text() == record("old")
@@ -703,10 +705,8 @@ def test_a_records_run_names_at_launch_the_packages_it_audits_in_order_before_it
     said.clear()
     assert LC.audit_records(P, tmp_path / "deps", out=tmp_path / "out2", log=said.append, rebuild=True) == 0
     assert launched() == [line.format(f"{P} and {S} together (with s/proofs)")], "a requirer's run audits PKG's records too"
-    assert LC.audits(["s/proofs", S, P], "s/proofs") == f"s/proofs and {S} and {P} together", \
+    assert LC.audits(["s/proofs", S, P]) == f"s/proofs and {S} and {P} together", \
         "a prover's own run audits it once, beside the packages that name it"
-    assert LC.audits([S, P], S, update=True) == f"{S} (with s/proofs), then {P}", \
-        "under --update PKG has a check.py of its own, and its requirers the next"
     monkeypatch.setattr(LC, "reused", lambda todo, files, log: {S: ("its records ran on these inputs", None)})
     said.clear()
     assert LC.audit_records(S, tmp_path / "deps", out=tmp_path / "out3", log=said.append) == 0
@@ -719,14 +719,14 @@ def test_a_records_run_names_at_launch_the_packages_it_audits_in_order_before_it
 
 
 def test_a_requirer_that_differs_beside_another_package_is_regenerated_too(pair, tmp_path):
-    """`settles` re-audits a requirer with `--update` only when it alone failed; when a package audited beside it (its
-    `proved_in` one) differs too, both records check.py wrote are kept, and the run still ends `regenerated`."""
+    """A requirer updated by the check.py that judges it, beside a package (its `proved_in` one) that differs too: every
+    record check.py wrote is kept, and the run still ends `regenerated`."""
     root, calls, other = pair
     other.add("proofs")
     said = []
     out = tmp_path / "out"
     assert LC.audit_records(P, tmp_path / "deps", update=True, out=out, log=said.append) == 0
-    assert [(p, up) for p, up, _ in calls] == [(P, True), (S, False)], "no --update on a requirer that didn't fail alone"
+    assert [(p, up) for p, up, _ in calls] == [(P, True), (S, True)]
     assert {q: (out / "record" / q / LC.LOCK).read_text() for q in (P, S, "s/proofs")} == {**BUILT, "s/proofs": PROOFS}
     got = outcome_line(said)
     assert got["outcome"] == LC.REGENERATED
@@ -743,7 +743,7 @@ def test_a_package_failing_for_another_reason_keeps_no_record_though_update_wrot
     said = []
     out = tmp_path / "out"
     assert LC.audit_records(S, tmp_path / "deps", update=True, out=out, log=said.append) == 1
-    assert [(p, up) for p, up, _ in calls] == [(S, True), (P, False), (P, True)]
+    assert [(p, up) for p, up, _ in calls] == [(S, True), (P, True)]
     assert not (out / "record" / S / LC.LOCK).exists() and not (out / "record" / LC.LOCK).exists()
     assert (out / "record" / P / LC.LOCK).read_text() == BUILT[P]
     assert (root / S / LC.LOCK).read_text() == record("old", ["proofs"]), "the failed record is not written back"
@@ -764,8 +764,7 @@ def test_a_rename_a_requirers_unwitnessed_entry_reads_regenerates_it_in_one_upda
     hold such a statement's hash, which the build under the new name no longer has. check.py fails that as
     `witnesses.unwitnessed-changed`, no record difference, unless `--moved` says the text under the old names is the
     record's, and it reads `--moved` only with `--update`. So `--records Security --update --moved` audits the requirer
-    with `--update --moved` from the first, and both records are regenerated; with the requirer's first audit left without
-    them, as before, it failed there, never reached `regenerates`, and the PR could not pass its records."""
+    with `--update --moved`, and both records are regenerated; without `--moved` the requirer fails on the rename."""
     root, calls, _ = pair
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", hold)
     (root / P / LC.LOCK).write_text(unwitnessed("old"))
@@ -804,7 +803,6 @@ def test_a_rename_a_requirers_unwitnessed_entry_reads_regenerates_it_in_one_upda
     assert {q: (out / "record" / q / LC.LOCK).read_text() for q in (S, P)} == {S: BUILT[S], P: unwitnessed("new")}
     got = outcome_line(said)
     assert (got["outcome"], got["records"][P]["outcome"]) == (LC.REGENERATED, LC.REGENERATED)
-    assert any(f"{P} requires {S}: check.py --update --moved on it from its first audit" in s for s in said)
 
     calls.clear()
     mine.clear()
@@ -812,7 +810,7 @@ def test_a_rename_a_requirers_unwitnessed_entry_reads_regenerates_it_in_one_upda
     for q, text in ((S, record("old", ["proofs"])), (P, unwitnessed("old"))):
         (root / q / LC.LOCK).write_text(text)
     assert LC.audit_records(S, tmp_path / "deps", update=True, out=tmp_path / "out2", log=said.append) == 1
-    assert mine == [(False, None)], "without --moved the requirer fails on its first audit and is not updated"
+    assert mine == [(True, None)], "without --moved the requirer's --update audit fails on the rename"
     assert outcome_line(said)["records"][P]["outcome"] == LC.FAILED
 
 
@@ -1740,28 +1738,21 @@ def test_a_second_sampled_mismatch_in_the_check_py_several_packages_share_fails_
         LC.FAILED, LC.FAILED, LC.FAILED, {})
 
 
-@pytest.mark.parametrize("which, runs, status, outcome", [
-    ({1, 3}, [(True, True), (True, False), (False, False), (False, True)], 1, LC.FAILED),
-    ({2}, [(True, True), (True, False), (True, True), (False, True)], 0, LC.REGENERATED),
-], ids=["after-the-shared-check-py-ran-twice", "after-it-ran-once"])
-def test_a_requirers_update_runs_once_more_only_when_the_check_py_it_shared_did_not(proved, tmp_path, monkeypatch, which,
-                                                                                    runs, status, outcome):
-    """`--records s/proofs --update` with one requirer's record to regenerate: PKG's check.py, the one its two requirers
-    share, then that requirer's own with `--update`. A requirer's own check.py goes on from the one it shared. After the
-    shared one ran twice on a sampled mismatch, the requirer's reads no artifact cache either, and a mismatch there is
-    the second: it fails the requirer. After the shared one ran once, the requirer's runs once more on a mismatch."""
-    root, calls, _ = proved
+@pytest.mark.parametrize("which, status, outcome", [({0}, 0, LC.REGENERATED), ({0, 1}, 1, LC.FAILED)],
+                         ids=["once", "twice"])
+def test_under_update_a_sampled_mismatch_runs_the_one_check_py_once_more_with_update(proved, tmp_path, monkeypatch, which,
+                                                                                    status, outcome):
+    """`--records s/proofs --update` with one requirer's record to regenerate is one check.py with `--update`; a sampled
+    mismatch runs it once more, with `--update` and no artifact cache, and a mismatch there too fails the run."""
+    root, _, _ = proved
     (root / P / LC.LOCK).write_text(record("old", ["../proofs"]))
     kept_module(tmp_path / "cache" / LC.RECORDS / "local" / "s" / "proofs")
     argvs = sampled_in(monkeypatch, which)
     said, out = [], tmp_path / "out"
     assert LC.audit_records("s/proofs", tmp_path / "deps", update=True, out=out, log=said.append) == status
-    assert [("--artifacts" in a, "--update" in a) for a in argvs] == runs, \
+    assert [("--artifacts" in a, "--update" in a) for a in argvs] == [(True, True), (False, True)], \
         "each check.py: whether it reads the artifact cache, whether it takes --update"
-    got = outcome_line(said)
-    assert (got["outcome"], got["records"][P]["outcome"], got["records"][S]["outcome"]) == (outcome, outcome, LC.PASS)
-    twice = [s for s in said if s.startswith(f"lean-records: {P}: check.py exit") and "audited again with --update, twice" in s]
-    assert len(twice) == (which == {2}) and (out / "mismatched" / "s_props").is_dir() == (which == {2})
+    assert outcome_line(said)["records"][P]["outcome"] == outcome
 
 
 @pytest.fixture()
