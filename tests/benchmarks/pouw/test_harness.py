@@ -711,14 +711,24 @@ def test_a_queue_job_accepts_any_listed_gpu_and_records_it():
         I.check({**ENV, "CUDA_VISIBLE_DEVICES": "0"}, 0, 1, table[6], node + ",GPU-nope")
 
 
-def test_the_card_must_be_an_rtx_pro_6000_sm120_with_188_sms_or_an_h200_sm90_with_132():
+def test_the_card_is_the_one_its_card_file_records_for_its_name():
     assert I.check_card("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "595.91.07")["arch"] == "sm_120a"
     assert I.check_card("NVIDIA H200", "9.0", 132, "570.133.20")["arch"] == "sm_90a"
-    for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "570.86"),
-                ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H100 80GB HBM3", "9.0", 132, "570.1"),
+    assert I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "580.173.02")["arch"] == "sm_90a"
+    for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "575.1"),
+                ("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "570.86"),
+                ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H100 80GB HBM3", "12.0", 132, "570.1"),
                 ("NVIDIA H200", "9.0", 132, "unknown"), ("NVIDIA H200", "9.0", 132, "")):
         with pytest.raises(I.IdentityError, match="not the card"):
             I.check_card(*bad)
+
+
+def test_a_card_whose_target_has_no_oldest_driver_is_refused_by_name():
+    with pytest.raises(I.IdentityError, match=r"NVIDIA B200 \(b200-sxm-180gb\) builds for sm_100a, and "
+                                              r"identity.MIN_DRIVER has no oldest driver for sm_100a: add it"):
+        I.check_card("NVIDIA B200", "10.0", 148, "580.1")
+    with pytest.raises(I.IdentityError, match="NVIDIA GeForce RTX 5090.*add"):
+        I.check_card("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1")
 
 
 # ---- operands, shapes, sets -----------------------------------------------------------------------------------------------------

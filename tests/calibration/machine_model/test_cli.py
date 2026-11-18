@@ -8,7 +8,7 @@ import pytest
 
 from verity_machine_model.adopt import adopt
 from verity_machine_model.cli import main
-from verity_machine_model.model import DATA, census, device, devices, model, vector
+from verity_machine_model.model import DATA, census, device, device_of, devices, model, vector
 from verity_machine_model.resolve import resolve
 
 RUN = "r20261016-000000-0000"
@@ -178,3 +178,28 @@ def test_solve_and_attacks_say_a_device_has_no_price_vector():
         for cmd in ("solve", "attacks"):
             with pytest.raises(SystemExit, match=f"^{d}: no price vector is solved on this device"):
                 main(["--device", d, cmd])
+
+
+def test_a_card_reads_the_device_whose_model_is_that_cards():
+    assert device_of("rtx-pro-6000-server") == DATA == device("sm_120")
+    assert device_of("h200-sxm-141gb") == device("sm_90")
+    assert device_of("b200-sxm-180gb") == device("sm_100")
+    assert main(["--card", "h200-sxm-141gb", "theta"]) == main(["--device", "sm_90", "theta"]) == 0
+
+
+def test_a_card_no_device_models_is_refused_by_name_not_read_as_another_of_its_target():
+    with pytest.raises(SystemExit, match=r"no measured model for h100-sxm-80gb \(sm_90a\): the machine model's devices "
+                                         r"are sm_120, the rtx-pro-6000-server, sm_90, the h200-sxm-141gb, sm_100, the "
+                                         r"b200-sxm-180gb"):
+        main(["--card", "h100-sxm-80gb", "theta"])
+    with pytest.raises(SystemExit, match="no card 'h100'"):
+        device_of("h100")
+    with pytest.raises(SystemExit, match="one of --device, --card or --data"):
+        main(["--device", "sm_90", "--card", "h200-sxm-141gb", "theta"])
+
+
+def test_each_data_centre_reading_names_the_card_its_device_models():
+    from verity_machine_model.dc_reading import FAMILIES
+    from verity_machine_model.model import card
+
+    assert {f.key: card(f.data)["short"] for f in FAMILIES} == {f.key: f.gpu.lower() for f in FAMILIES}

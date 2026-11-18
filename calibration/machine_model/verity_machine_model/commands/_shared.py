@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 from verity_machine_model import eps as E
-from verity_machine_model.model import devices
+from verity_machine_model.model import device_cards
 
 
 def device_help() -> str:
-    return f"the device: {', '.join(devices())} (default sm_120, data/ itself; the others data/devices/sm_NN/)"
+    held = ", ".join(f"{d} (the {sku})" for d, sku in device_cards().items())
+    return f"the device: {held} (default sm_120, data/ itself; the others data/devices/sm_NN/)"
 
 
 def pct(x: float | None) -> str:
