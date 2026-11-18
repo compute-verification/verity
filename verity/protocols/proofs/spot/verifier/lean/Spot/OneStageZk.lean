@@ -1309,6 +1309,10 @@ private def rootsT (roots : List (String × String)) (name : String) : Option (A
 #guard whyT (rootsOf keyedT (recordT 5 [("t/c0/y", "aa"), ("t/y", "bb")])) == OWN_FIELD "t/c0" "y"
 #guard whyT (rootsOf keyedT (recordT 5 [("t/y", "bb"), ("t/c1/x", "cc"), ("t/c0/y", "aa")])) == OWN_FIELD "t/c0" "y"
 #guard rootsT [("t/c0/x", "aa"), ("t/y", "bb")] "t/c0" == some #[("x", "aa")]
+#guard whyT (rootsOf #[memberT "W" #[(0, 1)], memberT "W/c0" #[(1, 2)]] (recordT 2 [("W/y", "aa")])) ==
+  NAME_TEMPLATE "W"
+#guard whyT (rootsOf #[memberT "W/c0" #[(0, 1)], memberT "W" #[(1, 2)]] (recordT 2 [])) == NAME_TEMPLATE "W"
+#guard whyT (rootsOf #[memberT "W/c0" #[(0, 1)], memberT "V" #[(1, 2)]] (recordT 2 [("W/y", "aa"), ("V/y", "bb")])) == ""
 #guard whyT (publicPorts (recordT 2 [("t/c0/y", "aa"), ("t/y", "bb")])) == OWN_FIELD "t/c0" "y"
 #guard whyT (publicPorts (recordT 2 [("t/c0/x", "aa"), ("t/y", "bb")])) == ""
 #guard (memberT "m" #[(2, 4), (7, 8)]).count == 3

@@ -907,6 +907,12 @@ NOT_ONE_MEMBER = ("public file: the registration's roots are not one member's: t
                   "a registration whose ports are bare, or are all one window member's, <member>/<port>")
 
 
+def name_template(name: str) -> str:
+    """`OneStageZk.NAME_TEMPLATE`."""
+    return (f"roots: the member {name}'s name is another member's template: a root {name}/<field> would read both as the "
+            "member's own port and as the window's tree of the template's field")
+
+
 def own_field(name: str, field: str) -> str:
     """`OneStageZk.OWN_FIELD`."""
     return (f"roots: the member {name} holds a root of its own at {field}, a field its template has a window's tree of: a "

@@ -476,6 +476,8 @@ def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[d
     if type(roots) is not list:
         raise _Refused("roots: the registration's roots are not a list")
     ts = _templates(ms)
+    if (n := next((n for n in ms if n in ts), None)) is not None:
+        raise _Refused(DK.name_template(n))
     out: dict[str, list[dict[str, Any]]] = {name: [] for name in ms}
     for r in roots:
         port = r.get("port") if isinstance(r, dict) else None

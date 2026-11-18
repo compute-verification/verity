@@ -396,6 +396,15 @@ def test_a_members_own_output_port_reads_its_templates_field_tree():
         DK.public_ports({"roots": [RECORD["roots"][0], {**tree, "port": "a/out"}]})
     assert str(e.value) == DK.own_field(A, "out")
     assert set(DK.public_ports({"roots": [RECORD["roots"][0], {**tree, "port": "a/o0"}]})) == {"out", "o0"}
+
+
+def test_a_member_named_as_another_members_template_is_refused():
+    """Members ``a`` and ``a/c0``: a root ``a/out`` would be the member ``a``'s own port and template ``a``'s tree of
+    ``out`` at once, so the window is refused by name in either order of the members (`OneStageZk.NAME_TEMPLATE`)."""
+    for units in ({"a": [[0, 2]], A: [[2, 5]]}, {A: [[0, 2]], "a": [[2, 5]]}):
+        with pytest.raises(ValueError) as e:
+            M.slices(units, RECORD | {"roots": [{**RECORD["roots"][0], "port": "a/out"}]})
+        assert str(e.value) == DK.name_template("a")
     strata = P.strata(PROGRAM, QUERY)
     named = header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "o0": "cc" * 64},
                                 "roots": {"out": ROOTS[B][0], "o0": "33" * 64}})

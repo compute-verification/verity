@@ -386,6 +386,11 @@ def OWN_FIELD (name field : String) : String :=
   s!"roots: the member {name} holds a root of its own at {field}, a field its template has a window's tree of: a " ++
     "member reads its template's field at the window's one tree, which every wire into the field reads"
 
+/-- The refusal of a member `name` that is another member's template (`rootsOf`). -/
+def NAME_TEMPLATE (name : String) : String :=
+  s!"roots: the member {name}'s name is another member's template: a root {name}/<field> would read both as the " ++
+    "member's own port and as the window's tree of the template's field"
+
 /-- The member `name`'s own roots `roots` name no field its template has a window's tree of among `ft`
 (`fieldTreesOf`), refused by name (`OWN_FIELD`): else `ownFieldsOf` keeps the member's own tree there while a wire
 from the field reads the window's (`fieldRootIn`), two trees where the wire ties one. -/
@@ -1235,12 +1240,14 @@ writer names a member's ports `<name>/<port name>`, and that rule is the prover'
 `<template>/<field>` of a member's template (`templatesOf`) is the window's tree of the template's field, which
 `fieldTreesOf` reads, and is no member's own. Any other root that is no member's refuses, and one that is two members'
 (a name holds `/`s, so one port can read as two members'), and a row tables' root (`ROW_TABLES`), and a member's own
-root at a field its template has a window's tree of (`ownFieldsHeld`). So every other root
+root at a field its template has a window's tree of (`ownFieldsHeld`), and a member whose name is another member's
+template (`NAME_TEMPLATE`), whose roots would read as that template's trees too. So every other root
 of a record this reads is exactly one member's, by a function of the parameters' members and the record alone, and a
 member's statement reads no other (`Member.slice`). One pass over the record's roots. -/
 def rootsOf (ms : Array Member) (rec : Json) : V (Std.HashMap String (Array Json)) := do
   let .arr rs := getD rec "roots" | throw "roots: the registration's roots are not a list"
   let ts := templatesOf (ms.toList.map (·.name))
+  if let some m := ms.find? (ts.contains ·.name) then throw (NAME_TEMPLATE m.name)
   let acc ← rs.foldlM (rootStep ts) (ms.foldl (fun acc m => acc.insert m.name #[]) {})
   let ft := fieldTreesOf ts rec
   ms.forM fun m => ownFieldsHeld ft m.name (acc.getD m.name #[])
