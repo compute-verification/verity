@@ -58,8 +58,8 @@
     (SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz) and publishes to OUT what the rehearsal front does (``session.json``,
     ``bundle.tgz`` and ``status.json``, through the leak guard), with the front's exits: 0 when the gate's check
     accepted the run.
-  - The piece's steps close a session that no ``close`` ended before they read the kept run (`attester_piece.close_open`): the same
-    wait and the same kept files, nothing published.
+  - ``close`` is the one thing that ends a session for the piece: a step that finds one still open refuses, naming it,
+    and reads no kept run.
   - The piece answers for a session's run as for a rehearsal's, only when the gate's check accepted the whole run
     (`rehearsed`). One connection the relay failed closed, one cut from s + D on at the session's end, one refused at
     a full queue or one execution phase the relay faulted, whichever load it carried, leaves every window of the

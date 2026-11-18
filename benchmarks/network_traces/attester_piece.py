@@ -688,31 +688,6 @@ def said(got: dict) -> int:
     return 0 if got.get("verdict") == "accept" else 1
 
 
-def close_open(serve_dir: Path, *, sleep: Callable[[float], object] = time.sleep) -> None:
-    """The piece's guard for a relay session nobody closed (no `close` ran after the load): its end awaited and its
-    fetch and `SESSION` kept as `close` keeps them, with nothing published. Nothing where none is open; `NotRun` when
-    it can't be closed."""
-    import attester_front as F
-    keep = serve_dir / PRIVATE
-    opened = F.open_sessions(keep)
-    if not opened:
-        return
-    if len(opened) > 1:
-        raise NotRun(f"{len(opened)} relay sessions open under {keep}, not one: the run's load goes through one")
-    (keep / "held").mkdir(mode=0o700, exist_ok=True)
-    hold = Path(tempfile.mkdtemp(dir=keep / "held", prefix="close-"))
-    try:
-        b = F.session_args(opened[0], keep, hold)
-        b.close = lambda h: F.ended_fetch(b, keep, h, sleep)
-        doc, _ = SS._session(b, b"", [], keep, hold)
-        shutil.copyfile(hold / "session.json", keep / doc["run"] / SESSION)
-    except SS.Refused as e:
-        raise NotRun(f"relay session {opened[0]['run']}, which no close ended, couldn't be closed here: {e}") from None
-    finally:
-        rm(hold)
-    print(f"relay session {doc['run']} closed here: no close ran after the load (attester_front.py close)", flush=True)
-
-
 def settle(serve_dir: Path, window: int, d: Path, limit: str,
            step: Callable[[Path], tuple[dict | None, Path | None]]) -> dict | None:
     """``step``'s answer: its files written to a fresh hold under SERVE_DIR/`PRIVATE`/held (``step`` is given it), an
@@ -721,12 +696,15 @@ def settle(serve_dir: Path, window: int, d: Path, limit: str,
     hold then released to DIR by the leak guard; None where the split's
     chain step accepted. The case is this step's: one an earlier step left goes first, and one written here goes
     unless the step ends with its files released. `NotRun` (SIGTERM included, naming ``limit``) for a step that can't
-    run."""
+    run, and before ``step`` for a relay session no close ended."""
     was, unpacked, hold = signal.signal(signal.SIGTERM, ended(limit)), None, None
     case, released = serve_dir / CASES / CASE, False
     try:
         case.unlink(missing_ok=True)
-        close_open(serve_dir)
+        import attester_front as F
+        if opened := F.open_sessions(serve_dir / PRIVATE):
+            raise NotRun(f"relay session {opened[0]['run']} is open under {serve_dir / PRIVATE}: no close ended it after "
+                         "the load (attester_front.py close, CERTIFIER_CLOSE)")
         if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
             raise NotRun(f"no network attester run kept under {serve_dir / PRIVATE}: the run's load didn't go through the "
                          "network attester's front (CERTIFIER_FRONT unset, or the gate, its tunnel or ssh failed)")

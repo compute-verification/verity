@@ -537,45 +537,27 @@ def test_a_session_the_gates_check_refused_is_closed_and_kept_and_the_piece_does
         CP.rm(unpacked)
 
 
-def test_the_pieces_steps_close_a_relay_session_nobody_closed_before_they_read_the_kept_run(tmp_path, monkeypatch,
-                                                                                            capsys):
+def test_a_pieces_step_on_a_relay_session_nobody_closed_refuses_naming_it_and_reads_no_kept_run(tmp_path, monkeypatch):
+    """``close`` alone ends a session for the piece: a step that finds one open refuses by its run and the close, leaves
+    the session open, and doesn't run; after the close, the step reads the session's kept run."""
     _session_gate(tmp_path, monkeypatch, [LISTENING])
     serve, keep = tmp_path / "serve", tmp_path / "serve" / CP.PRIVATE
     assert F.main(_front(tmp_path, *SESSION_FLAGS)) == 0
-    _statuses(tmp_path, [LISTENING, ENDED])
-    slept = []
-    CP.close_open(serve, sleep=slept.append)
-    assert slept == [F.SS.POLL_S] and CP.kept_run(serve) == RUN and F.open_sessions(keep) == []
-    assert sorted(p.name for p in (keep / RUN).iterdir()) == ["fetch.tar.gz", F.RELAY, CP.SESSION, "start.json"]
-    assert (keep / RUN / "fetch.tar.gz").stat().st_mode & 0o777 == 0o600
-    assert json.loads((keep / RUN / CP.SESSION).read_text())["gate"] == f"research@{GATE_HOST}"
-    # nothing is published and no hold is left: the guard keeps, and a close is what publishes
-    assert list((keep / "held").iterdir()) == [] and list((tmp_path / "out").iterdir()) == []
-    assert f"relay session {RUN} closed here: no close ran" in capsys.readouterr().out
-    asked = len(_asked(tmp_path))
-    CP.close_open(serve)
-    assert len(_asked(tmp_path)) == asked
-    # a step closes it first: by the time it reads the kept run, the session's fetch is the kept one
-    again, seen = tmp_path / "serve-step", []
-    assert F.main(_front(tmp_path, *SESSION_FLAGS, serve="serve-step")) == 0
-    _statuses(tmp_path, [ENDED])
+    seen = []
 
     def step(hold: Path):
-        seen.append((CP.kept_run(again), F.open_sessions(again / CP.PRIVATE)))
+        seen.append((CP.kept_run(serve), F.open_sessions(keep)))
         raise CP.NotRun("the step's own")
 
+    with pytest.raises(CP.NotRun, match=f"relay session {RUN} is open under .*: no close ended it after the load "
+                                        r"\(attester_front.py close, CERTIFIER_CLOSE\)"):
+        CP.settle(serve, K, tmp_path / "dir", "CERTIFIER_TIMEOUT", step)
+    assert seen == [] and [d["run"] for d in F.open_sessions(keep)] == [RUN]
+    _statuses(tmp_path, [ENDED])
+    assert F.main(["close", str(serve), str(tmp_path / "out-close")]) == 0
     with pytest.raises(CP.NotRun, match="the step's own"):
-        CP.settle(again, K, tmp_path / "dir", "CERTIFIER_TIMEOUT", step)
+        CP.settle(serve, K, tmp_path / "dir", "CERTIFIER_TIMEOUT", step)
     assert seen == [(RUN, [])]
-    # a session the gate's fetch fails for can't be closed: the step doesn't run, and the session stays open
-    third = tmp_path / "serve-no-fetch"
-    assert F.main(_front(tmp_path, *SESSION_FLAGS, serve="serve-no-fetch")) == 0
-    (tmp_path / "no-fetch").touch()
-    with pytest.raises(CP.NotRun, match=f"relay session {RUN}, which no close ended, couldn't be closed here: .*fetch"):
-        CP.settle(third, K, tmp_path / "dir", "CERTIFIER_TIMEOUT", step)
-    assert len(seen) == 1 and [d["run"] for d in F.open_sessions(third / CP.PRIVATE)] == [RUN]
-    assert list((third / CP.PRIVATE / "held").iterdir()) == []
-
 
 def test_a_local_gates_relay_session_is_this_trees_gate_its_unit_a_relay_each_way(tmp_path, monkeypatch):
     """``--gate local``: this tree's gate takes the front's request on the scratch host under the serve dir's private,
