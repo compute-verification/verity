@@ -1390,22 +1390,21 @@ def member_reads(members: Sequence[CS.Member], registered: Registered | None,
     return [_reads_of(m.template, a, m.n, index, dict(m.rows + m.outs)) for m, a in zip(members, own_units(members, ranges))]
 
 
-def supplied(registered: Registered | None, entries: Mapping[str, Mapping[str, Any]], program: str, *,
-             module: Any) -> dict[str, Any]:
+def supplied(registered: Registered | None, entries: Mapping[str, Mapping[str, Any]], program: str) -> dict[str, Any]:
     """The values a period's table reads and verdicts read (`committed_reads`), by name, each one row filled from the entry
     of its table's parameter alone (``entries``, core's ``Registered.entry()`` by parameter, as the verifier pinned it):
     the root's and the domain id's 64 bytes as a `Digest` port's 32 words (`digest_words`) and 1 as one word, each
-    committed as core's ``registered_value.Registered`` (``module``, core's ``one_stage.registered`` as the caller passes it)
-    under ``program`` (the period's partition digest) at its public salts (``supplied_salts``), so the prover and the
-    verifier make the same value and the prover chooses none of it. A history table is a parameter of its own, its entry
-    the verifier's pin of its root (`verity.commitments.periods.history`). A table whose parameter has no entry has none."""
+    committed as ``registered_value.Registered`` under ``program`` (the period's partition digest) at its public salts
+    (``supplied_salts``), so the prover and the verifier make the same value and the prover chooses none of it. A history
+    table is a parameter of its own, its entry the verifier's pin of its root (`verity.commitments.periods.history`). A
+    table whose parameter has no entry has none."""
     out = {}
     for t in (registered.readable.values() if registered is not None else ()):
         if (e := entries.get(t.param)) is None:
             continue
         for of, row in zip(SUPPLIED, (digest_words(bytes.fromhex(e["root"])), digest_words(bytes.fromhex(e["domain"])), [1])):
             name = supplied_param(t, of)
-            out[name] = module.Registered.commit(program, name, [row], RV.supplied_salts(program, name, 1), schema=V2)
+            out[name] = RV.Registered.commit(program, name, [row], RV.supplied_salts(program, name, 1), schema=V2)
     return out
 
 
@@ -2469,7 +2468,7 @@ def registered_reads(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, M
     reads = committed_reads(reg)
     if not reads:
         return {}
-    pins = {**pins, **{v: x.entry() for v, x in supplied(reg, pins, w.partition_digest, module=registered).items()}}
+    pins = {**pins, **{v: x.entry() for v, x in supplied(reg, pins, w.partition_digest).items()}}
     out: dict[str, dict[str, Any]] = {}
     index = _ReadIndex(reads)
     for m, a in zip(w.members, own_units(w.members, ranges_of(doc["templates"], order_of(doc)))):
@@ -2641,14 +2640,13 @@ class Window:
         if self.advice is not None:
             self.advice = advice_binding(self.advice["compiler"], self.advice["advice"]["root"], self.advice["advice"]["bits"])
 
-    def supply(self, module: Any) -> None:
+    def supply(self) -> None:
         """Add its tables' supplied values (`supplied`) to ``registered``, from its tables' parameters' committed values (each
-        with core's ``entry()``, a history table's `history.HistoryTable.entry`) under the period's partition digest,
-        ``module`` core's ``one_stage.registered`` as the caller passes it."""
+        with core's ``entry()``, a history table's `history.HistoryTable.entry`) under the period's partition digest."""
         reg = dict(self.registered or {})
         tables = (self.circuit.registered or Registered({})).readable.values()
         entries = {p: v.entry() for p, v in reg.items() if p in {t.param for t in tables}}
-        self.registered = {**reg, **supplied(self.circuit.registered, entries, self.window.partition_digest, module=module)}
+        self.registered = {**reg, **supplied(self.circuit.registered, entries, self.window.partition_digest)}
 
     def give(self, param: str, rows: Sequence[bytes], module: Any) -> None:
         """Add ``param``, one of its circuit's ``Registered.supplied``, to ``registered``: ``rows`` its bytes for each unit

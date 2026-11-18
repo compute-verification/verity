@@ -417,7 +417,7 @@ def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low,
                                                        [os.urandom(192) for _ in range(len(v))],
                                                        word_bits=bits, schema=schema)}
     win = IF.Window(c, RUN, DESIGN, 64, registered=values, forms=WR.FORMS)
-    win.supply(CR)
+    win.supply()
     rows.record(win)
     bad = {}
     for fn, n in c.templates:

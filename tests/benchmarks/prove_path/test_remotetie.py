@@ -77,7 +77,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.words import chunk_words, ids_words
 
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as REG
 from verity.commitments import randomness as RND
 from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
 from verity.circuits.codec import canonical_json
@@ -292,7 +292,7 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     ``registration.json``), and the verifier's own window from its records."""
     c, out = toy.low.circuit, tmp_path_factory.mktemp("window")
     win = IF.Window(c, RUN, SAMPLING_DESIGN, 64, registered={**toy.values, **_reuse(toy, toy.h1.W)}, forms=WRS.FORMS)
-    win.supply(G)
+    win.supply()
     toy.rows.record(win)
     committed = win.close()
     prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0}}

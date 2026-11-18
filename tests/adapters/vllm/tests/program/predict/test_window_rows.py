@@ -730,7 +730,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
     s0 = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows_, *_read(store)))
     rows = WR.Rows(low, [s0, slots[1]], values)
     win = IF.Window(low.circuit, RUN, DESIGN, 64, registered=values, forms=WR.FORMS)
-    win.supply(CR)
+    win.supply()
     rows.record(win)
     bad: dict[str, list[int]] = {}
     for fn, n in low.circuit.templates:
@@ -894,7 +894,7 @@ def test_two_windows_differing_in_occupancy_and_lengths_have_one_public_record(w
     for name, (state, slots) in _two(window).items():
         vals = {**values, SS.SCAN_STATE: state}
         win = IF.Window(low.circuit, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
-        win.supply(CR)
+        win.supply()
         WR.Rows(low, slots, vals).record(win)
         c = win.close()
         prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
@@ -919,7 +919,7 @@ def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_ve
                            window=RUN)
     vals = {**values, SS.SCAN_STATE: state}
     win = IF.Window(c, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
-    win.supply(CR)
+    win.supply()
     WR.Rows(low, slots, vals).record(win)
     win.write(win.close(), tmp_path, {}, registrar=REG)
     rec = json.loads((tmp_path / "registration.json").read_text())
