@@ -222,7 +222,7 @@ Cheat = Callable[[Session], Iterable]
 def drive(s: Session, cheat: Cheat = lambda s: ()) -> None:
     """Every window: the control's appends, the strategy's, one pass over both's reads, and the boundary; then every
     window closed and verified. A strategy's skips and forgeries are set at window 0, before the control's moves they
-    change. The books' first refusal ends the session."""
+    change. The books' first refusal ends the session, kept in `s.refused`."""
     try:
         s.start()
         for t in range(WINDOWS):
@@ -231,7 +231,7 @@ def drive(s: Session, cheat: Cheat = lambda s: ()) -> None:
             s.boundary()
         s.finish()
     except Over:
-        pass
+        assert s.refused is not None, "Over ends a session only at a refusal of the books, which `_call` records first"
 
 
 def plain_stacking(s: Session) -> Iterable:
