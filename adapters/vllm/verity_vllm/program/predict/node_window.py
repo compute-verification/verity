@@ -156,7 +156,7 @@ class NodeWindow:
     ``stand_ins``, the module docstring's."""
 
     def __init__(self, fn: Any, families: Mapping[str, Lowering] | None = None, grain: Grain = _GRAIN, name: str = NAME,
-                 coord: int = 1, provable: bool = True, stand_ins: bool = False) -> None:
+                 coord: int = 1, stand_ins: bool = False) -> None:
         self.fn, self.name, self.coord, self.stand_ins = fn, name, coord, stand_ins
         self.families = dict(FAMILIES if families is None else families)
         self.params = [p for p, _ in fn.signature()[0]]
@@ -165,7 +165,7 @@ class NodeWindow:
         if WEIGHTS not in self.params or bad:
             raise Unexpressible(f"{name}: inputs {bad or self.params}; the node window takes the prompt, the weights record and "
                                 f"{PEERS}* partials")
-        self.b = _Builder(grain, 1, provable)
+        self.b = _Builder(grain, 1, True)
         weights = dict(fn.signature()[0])[WEIGHTS]
         labels = [label for label, _ in weights.fields]
         self.fields = _spans(f"{name}: weight", weights.fields)
@@ -784,9 +784,9 @@ FAMILIES: dict[str, Lowering] = {
 
 
 def node_window(fn: Any, families: Mapping[str, Lowering] | None = None, grain: Grain = _GRAIN, name: str = NAME,
-                coord: int = 1, provable: bool = True, stand_ins: bool = False) -> tuple[IF.Circuit, NodeWindow]:
+                coord: int = 1, stand_ins: bool = False) -> tuple[IF.Circuit, NodeWindow]:
     """Program ``fn``'s window (module docstring) and the frame that lowered it."""
-    w = NodeWindow(fn, families, grain, name, coord, provable, stand_ins).lower()
+    w = NodeWindow(fn, families, grain, name, coord, stand_ins).lower()
     return w.circuit(), w
 
 
