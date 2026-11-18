@@ -311,7 +311,7 @@ refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet (a two-
 | R1-R8 on a docket | `verifier.check` | `registration` (`OneStage`) | `registration.check` |
 | The audit record | `verifier.audit_record` | `Record.record` | `audit.audit_record` |
 | A docket's whole run | `verifier.run` | `Run.run` | the stream's own outcome |
-| A two-stage outcome | `Stream.outcome` (`_audit_two`) | `Run.run`'s symbol; it accepts a two-stage run whose every check passes while `SecondStage.FORM` is on, ahead of the form's proof | the two records' join |
+| A two-stage outcome | `Stream.outcome` (`_audit_two`) | `Run.run`'s symbol; it accepts a two-stage run (levels 2) whose every check passes, ahead of its proof | the two records' join |
 | Round 2's statements | `second_stage.check` | `SecondStage.checkAny`, which only `Run.run` reaches | `check_twin` |
 | A two-stage outcome's completeness | `second_stage.complete` | none yet | `complete_twin` |
 
