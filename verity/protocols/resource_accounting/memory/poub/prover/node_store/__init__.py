@@ -18,3 +18,5 @@ Terms are the design's (store, block, tier, registration, receipt, pass, window,
 - `verify`: `verify_opening`, the verifier's side of one opening, the reference the store's openings are tested
   against.
 """
+
+__all__: list[str] = []

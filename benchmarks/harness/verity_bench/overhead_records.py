@@ -172,14 +172,18 @@ def _json(store: Any, files: str, path: str) -> dict:
     return json.loads((Path(store.fetch(files, paths=[path])) / path).read_text())
 
 
-def trial_why(store: Any, attempt: Mapping, files: str, run: str) -> str | None:
+def trial_why(store: Any, attempt: Mapping, run: str) -> str | None:
     """Why `run` is never of record as a trial: its result says ``trial`` or its attempt set `kit.TRIAL`; or why its
-    result can't tell."""
+    result can't tell. The result is the attempt's `result` art, whose meta is the run's `kit.RESULT`: its run files
+    hold only the files it lists."""
 
+    art = (attempt.get("outputs") or {}).get("result")
+    if not art:
+        return f"{run} has no result art, so not whether it is a trial"
     try:
-        result = _json(store, files, kit.RESULT)
+        result = store.get_manifest(art).meta
     except Exception as ex:  # noqa: BLE001 - the store's NotFound, named in the why
-        return f"{run}'s {kit.RESULT} can't be read ({type(ex).__name__}: {ex}), so not whether it is a trial"
+        return f"{run}'s result {art} can't be read ({type(ex).__name__}: {ex}), so not whether it is a trial"
     return kit.trial_why(run, attempt, result)
 
 
@@ -206,7 +210,7 @@ def of_record(store: Any, run: str) -> tuple[dict | None, list[str]]:
         doc = _json(store, files, "out/overhead.json")
     except (OSError, ValueError, KeyError) as ex:
         return None, [f"{run} has no readable out/overhead.json ({type(ex).__name__}: {ex})"]
-    whys = [why] if (why := trial_why(store, attempt, files, run)) else []
+    whys = [why] if (why := trial_why(store, attempt, run)) else []
     if doc.get("schema") != O.RUN_SCHEMA:
         whys.append(f"{run}'s overhead.json is {doc.get('schema')!r}, not {O.RUN_SCHEMA}")
     if RUN_RECORD not in [lab.value for lab in store.labels(run, key=RUN_OF_RECORD)]:
@@ -277,7 +281,7 @@ def store_points(store: Any, run: str, by: str = BY) -> str:
     record; the version it replaces is labelled `superseded_by` it."""
 
     attempt, files = run_files(store, run, "points")
-    if attempt is None or (why := trial_why(store, attempt, files, run)):
+    if attempt is None or (why := trial_why(store, attempt, run)):
         raise ValueError(files if attempt is None else why)
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(store.fetch(files, paths=["out/points.json"])) / "out" / "points.json"

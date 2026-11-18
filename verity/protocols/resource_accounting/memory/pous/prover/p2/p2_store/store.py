@@ -98,16 +98,23 @@ from typing import Any
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from verity.protocols.resource_accounting.memory.pous.verifier.p2_v1 import reference
-
-from verity.protocols.resource_accounting.memory.pous.verifier import setup, verifier
-from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag
-from verity.protocols.resource_accounting.memory.pous.verifier.layout import TensorLayout
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (P2, POINT, SHA512_CTR, P2Params, decode_segment, encode_segment,
-                                                    expand_prefix, stream)
 from verity.circuits import requirement
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.commitments.rowleaf import sha512_row_v2_prefix
+from verity.protocols.resource_accounting.memory.pous.verifier import setup, verifier
+from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag
+from verity.protocols.resource_accounting.memory.pous.verifier.layout import TensorLayout
+from verity.protocols.resource_accounting.memory.pous.verifier.p2_v1 import reference
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (
+    P2,
+    POINT,
+    SHA512_CTR,
+    P2Params,
+    decode_segment,
+    encode_segment,
+    expand_prefix,
+    stream,
+)
 
 HERE = Path(__file__).resolve().parent
 LAYOUT_JSON = HERE / "store-layout.json"
@@ -691,7 +698,6 @@ class GpuEncoder:
 
     def __init__(self, params: P2Params, salt: bytes, lib: str, device: int) -> None:
         import torch
-
         from p2_store.gpu import Kernels
 
         torch.cuda.set_device(device)
@@ -929,7 +935,6 @@ def _decoder(params: P2Params, salt: bytes, lib: str | None) -> Any:
         return lambda s, c: decode_segment(params, None, salt, s,
                                            [c[i * params.block_bytes:(i + 1) * params.block_bytes] for i in range(params.blocks_per_segment)])
     import torch
-
     from p2_store.gpu import Kernels
 
     K = Kernels(lib, "", reference.Params.of(params), expand_prefix(params, salt))
@@ -1011,7 +1016,6 @@ def spot_cmd(a: argparse.Namespace) -> int:
     gpu = None
     if a.p2_lib:
         import torch
-
         from p2_store.gpu import Kernels
 
         gpu = (torch, Kernels(a.p2_lib, "", reference.Params.of(params), prefix))

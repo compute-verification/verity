@@ -71,6 +71,7 @@ import served_verdicts as SV  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 from benchmarks.network_traces import network_attester_chain as WC  # noqa: E402
 from verity import device as S  # noqa: E402
+from verity.protocols.registration.verifier import site_log as L  # noqa: E402
 from verity.protocols.registration.verifier import registration as REG  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
@@ -132,7 +133,7 @@ def site_registration(held: str = CERT_KEY["public"], placed: str | None = None,
     ``held`` for its network attester cert0, and the log placing cert0, its key ``placed`` (``held`` unless given), on
     node0's uplink."""
     log = REG.chain(composite, [REG.site(
-        locs=(S.Loc("site0", "site", time_unit=S.TIME_UNIT), S.Loc("node0", "host", "site0", chip=NODE0.chip),
+        locs=(S.Loc("site0", "site", time_unit=L.TIME_UNIT), S.Loc("node0", "host", "site0", chip=NODE0.chip),
               S.Loc("cert0", "certifier", "site0", "auditor", key=held if placed is None else placed,
                     scheme=S.SCHEMES[0])),
         links=(S.Link("uplink0", ("node0", "cert0"), 100_000, 100_000),
