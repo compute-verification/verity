@@ -50,7 +50,7 @@ def run():
         w = (("a.weight", torch.randint(-128, 128, (6, 40), dtype=torch.int8, generator=g)),
              ("b.weight", torch.randint(-128, 128, (3, 24), dtype=torch.int8, generator=g)))
         ex.emit(H.Declared("card", {"eager": True}, (POUS.name, poub.BANDWIDTH.name), {"pous": S.settings(POUS, {})}))
-        ex.emit(H.RegisteredValues(w, operands={"a.weight": 0, "b.weight": 1}))
+        ex.emit(H.MemoryChanged("registered", values=w, operands={"a.weight": 0, "b.weight": 1}))
         yield SimpleNamespace(storage=storage, early=early, late=poub.BANDWIDTH.attach(ex, {}))
 
 

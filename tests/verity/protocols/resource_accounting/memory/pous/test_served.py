@@ -59,7 +59,7 @@ def run(monkeypatch):
     ex.emit(H.Declared("card", {"eager": True}, (POUS.name,), {"pous": S.settings(POUS, {})}))
     plain = {n: t.clone() for n, t in w.items()}
     values = (("a.weight", w["a.weight"]), ("a.weight_scale", torch.ones(6, 1)), ("b.weight", w["b.weight"]))
-    ex.emit(H.RegisteredValues(values, operands={"b.weight": 1, "a.weight": 0}))
+    ex.emit(H.MemoryChanged("registered", values=values, operands={"b.weight": 1, "a.weight": 0}))
     return s, ex, plain
 
 
@@ -102,7 +102,7 @@ def test_no_weight_outlives_its_call_and_no_registered_tensor_is_kept_alive(monk
     ex.emit(H.Declared("card", {"eager": True}, (POUS.name,), {"pous": S.settings(POUS, {})}))
     w = torch.randint(-128, 128, (6, 40), dtype=torch.int8, generator=g)
     registered = weakref.ref(w)
-    ex.emit(H.RegisteredValues((("a.weight", w),), operands={"a.weight": 0}))
+    ex.emit(H.MemoryChanged("registered", values=(("a.weight", w),), operands={"a.weight": 0}))
     del w
     assert registered() is None and POUS.keeps_weight_copy is False
     [kernel] = [r.kernel for r in ex.filed(H.ComputeBlockWith)]
@@ -117,7 +117,7 @@ def every_event(values) -> tuple:
     whose dispatch reads only the hook (`verity_vllm.messages.Exchange.emit`)."""
     pool = torch.zeros(2 * 2 * 16 * 64, dtype=torch.float16)
     got = (H.Declared("card", {"eager": True}, (POUS.name,), {"pous": S.settings(POUS, {})}),
-           H.RegisteredValues(values, operands={n: i for i, (n, _) in enumerate(values)}),
+           H.MemoryChanged("registered", values=values, operands={n: i for i, (n, _) in enumerate(values)}),
            H.RangesDeclared(2, 16, 256, 1, (pool,)), H.InputArrived("a", 3, 0), H.StepBegan(0, ("a",), 1),
            H.MemoryChanged("allocated", (0,), input="a"), H.MemoryChanged("written", (0,), offset=0, count=3), H.PhaseOpened(0, 0),
            H.BlockResult("b", "x", 0, None), H.BlockDue("b", 1, {"n": 1}, "int8", {"x": None}), H.StepComputed(0),
@@ -156,7 +156,8 @@ def test_its_settings_are_checked_where_every_setting_is_and_its_launchers_value
         served.Served(P2, {"experimental": True}).install(Exchange())
     s = served.Served(P2, CTX)
     with pytest.raises(RuntimeError, match="before the run declared its settings"):
-        s.registered(H.RegisteredValues((("a.weight", torch.zeros(1, 1, dtype=torch.int8)),), operands={"a.weight": 0}))
+        s.registered(H.MemoryChanged("registered", values=(("a.weight", torch.zeros(1, 1, dtype=torch.int8)),),
+                                     operands={"a.weight": 0}))
 
 
 def test_the_scheme_requires_eager_attaches_through_the_exchange_and_is_refused_a_bound():
@@ -197,7 +198,7 @@ def decoded_bits(monkeypatch, point, weights):
     s, ex = served.Served(P2, CTX), Exchange()
     s.install(ex)
     ex.emit(H.Declared("card", {"eager": True}, (POUS.name,), {"pous": S.settings(POUS, {})}))
-    ex.emit(H.RegisteredValues(tuple(weights.items()), operands={n: i for i, n in enumerate(weights)}))
+    ex.emit(H.MemoryChanged("registered", values=tuple(weights.items()), operands={n: i for i, n in enumerate(weights)}))
     pb = s.store.params.payload_bytes
     assert all(0 < (t.numel() * t.element_size()) % pb for t in plain.values())        # each ends inside its last block
     [kernel] = [r.kernel for r in ex.filed(H.ComputeBlockWith)]

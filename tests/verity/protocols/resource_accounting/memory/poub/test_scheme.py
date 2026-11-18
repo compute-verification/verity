@@ -87,7 +87,8 @@ def test_every_event_on_its_hooks_passes_the_binder_and_its_own_are_still_handle
     ex, w = Exchange(), torch.zeros(4096, dtype=torch.uint8)
     b = poub.POUB.attach(ex, ctx({"passes": False, "kv": False}))
     pool = torch.zeros(2 * 2 * 16 * 64, dtype=torch.float16)
-    sent = (H.Declared("card", {}), H.RegisteredValues((("a.weight", w),)), H.RangesDeclared(2, 16, 256, 1, (pool,)),
+    sent = (H.Declared("card", {}), H.MemoryChanged("registered", values=(("a.weight", w),)),
+            H.RangesDeclared(2, 16, 256, 1, (pool,)),
             H.InputArrived("a", 3, 0), H.StepBegan(0, ("a",), 1), H.MemoryChanged("allocated", (0,), input="a"),
             H.MemoryChanged("written", (0,), offset=0, count=3),
             H.PhaseOpened(0, 0), H.BlockResult("b", "x", 0, None), H.BlockDue("b", 1, {"n": 1}, "int8", {}),

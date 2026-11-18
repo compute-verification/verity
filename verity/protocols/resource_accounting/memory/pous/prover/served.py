@@ -8,8 +8,8 @@ weight store (`weight_store`), and the adapter's hooks emit the events and answe
   `check_settings`); what the launcher passes in ``ctx`` is checked when it is attached (`launcher_refusals`): the
   auditor's coin source (``salt_source``), ``libp2v1.so``'s directory (``p2_lib``) and ``experimental``, none of them an
   application's setting, since a coin fixed in an application would be no live coin and a path is the machine's;
-* ``memory``: at `RegisteredValues`, ``W`` is the values a block reads as its weight operand (``operands``), in the order
-  of their blocks' keys; the commitment to it
+* ``memory``: at the registered values (`MemoryChanged` ``registered``), ``W`` is the values a block reads as its
+  weight operand (``operands``), in the order of their blocks' keys; the commitment to it
   (`weight_store.commit`) before any salt exists, the salt from the auditor's coin flipped after it
   (`weight_store.salt_from`, `weight_store.salt`), ``C*`` encoded on the weights' device (`weight_store.encode`), and a
   `ReleaseValue` for each weight of ``W``, whose ``restore`` decodes it from ``C*``;
@@ -20,7 +20,7 @@ weight store (`weight_store`), and the adapter's hooks emit the events and answe
 It is the report (`verity.protocols.resource_accounting.scheme`) of its run: ``commitment`` (``W``'s, the salt, ``C*``'s root), ``record``, ``summary``,
 and ``release``, which frees ``C*`` when the workload stops. The vLLM adapter's memory hook hands it the weights and
 the blocks: after ``load_model`` it attaches the runner's linear sites once a scheme computes blocks, emits
-`RegisteredValues` with each site's weight as an operand, then releases what was asked (`engine/kv_blocks.py`).
+the registered values (`MemoryChanged`) with each site's weight as an operand, then releases what was asked (`engine/kv_blocks.py`).
 """
 from __future__ import annotations
 
@@ -127,7 +127,7 @@ class Served:
         self.settings = dict(event.settings[NAME])
 
     def registered(self, event: Any) -> None:
-        if not self.own(event, H.RegisteredValues):
+        if not self.own(event, H.MemoryChanged) or event.change != "registered":
             return
         from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 

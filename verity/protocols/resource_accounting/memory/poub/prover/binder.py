@@ -3,7 +3,7 @@ adapter's exchange it is installed on, under `NAME`.  It patches nothing of the 
 adapter's, emitted from one in-process engine (the scheduler and the model runner share one `NodeMemory`).
 
 ~~~text
-RegisteredValues                    each weight tensor a region (kind weights, tier hbm), registered once
+MemoryChanged registered            each weight tensor a region (kind weights, tier hbm), registered once
 RangesDeclared                      the KV pool, a region per store (a layer's KV cache), every page filler (with
                                     kv=False, unregistered)
 MemoryChanged allocated             kv_alloc of the pages (with kv=False, none)
@@ -50,7 +50,7 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     PoubReceipt,
 )
 from verity.protocols.resource_accounting.memory.poub.scheme import POUB
-from verity.hooks import EVENTS, MemoryChanged, RangesDeclared, RegisteredValues, StepBegan, StepEnded
+from verity.hooks import EVENTS, MemoryChanged, RangesDeclared, StepBegan, StepEnded
 
 __all__ = ["Binder", "Every", "WeightRegion", "model_weights"]
 
@@ -170,7 +170,7 @@ class WeightRegion:
 
 
 def model_weights(values: Sequence[tuple[str, Any]]) -> list[WeightRegion]:
-    """Every registered value (`RegisteredValues.values`) as the identity codec holds it."""
+    """Every registered value (`MemoryChanged.values`) as the identity codec holds it."""
     return [WeightRegion(name, t, f"param:{name}") for name, t in values]
 
 
@@ -222,7 +222,7 @@ class Every:
 
 class Binder:
     """The store's subscriber.  ``weights(values)`` lists the weight regions from the registered values
-    (`RegisteredValues.values`; default `model_weights`);
+    (`MemoryChanged.values`; default `model_weights`);
     ``reader(segments)``, if given, returns the step's aligned segments' roots (by segment number), or the pass's root
     when it built the whole tree, for `end_pass`; ``fifo`` reuses freed pages in the order they were freed.
     ``messages()``, polled at each pass's start, returns the verifier's messages since the last poll (`Inbox`, or
@@ -262,7 +262,7 @@ class Binder:
 
     # --- registration -----------------------------------------------------------------------------------------------
 
-    def on_values(self, e: RegisteredValues) -> None:
+    def on_values(self, e: MemoryChanged) -> None:
         room = self.weight_blocks
         for w in self.weights(e.values):
             b = TorchBacking.of_tensor(w.tensor, self.block_bytes)
@@ -334,7 +334,7 @@ class Binder:
         elif isinstance(e, MemoryChanged) and e.change == "written":
             if self.kv:
                 self._writes.append(Append(e.ranges[0], e.offset, e.count))
-        elif isinstance(e, RegisteredValues):
+        elif isinstance(e, MemoryChanged) and e.change == "registered":
             self.on_values(e)
         elif isinstance(e, RangesDeclared):
             self.on_ranges(e)

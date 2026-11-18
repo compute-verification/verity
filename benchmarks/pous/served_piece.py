@@ -459,7 +459,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
             bw = None if bw_party is None else ex.attach(BANDWIDTH)
             ex.answer(H.Declared(bw_card or str(dev), {"eager": True}, tuple(ex.attached),
                                  {n: dict(v) for n, v in ex.attached.items()}))
-            ex.emit(H.RegisteredValues(tuple(values.items()), operands={n: i for i, n in enumerate(values)}))
+            ex.emit(H.MemoryChanged("registered", values=tuple(values.items()), operands={n: i for i, n in enumerate(values)}))
         except NoSalt as e:
             why = _unnamed(f"the memory attester on {mc.ATTESTER_MACHINE} drew no salt for the setup: {e}", node,
                            party)[:1000]
