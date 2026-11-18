@@ -88,11 +88,11 @@ theorem bernFactor_zero_div (num den : ℕ) :
 
 /-- A Bernoulli sample of rate `q = num/den` meets the design condition with `π_u = q`. -/
 theorem bernoulli_design {num den : ℕ} [NeZero den] (h : num ≤ den) :
-    (bernoulli n num den).Design fun _ => (num : ℝ) / den := by
+    Design (Verity.SamplingDesign.bernoulli n num den) fun _ => (num : ℝ) / den := by
   intro B
   have hden : 0 < den := Nat.pos_of_ne_zero (NeZero.ne den)
-  show (bernoulli n num den).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (num : ℝ) / den))
-  calc (bernoulli n num den).missProb B = (((den - num : ℕ) : ℝ≥0∞) / den) ^ B.card := by
+  show (Verity.SamplingDesign.bernoulli n num den).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (num : ℝ) / den))
+  calc (Verity.SamplingDesign.bernoulli n num den).missProb B = (((den - num : ℕ) : ℝ≥0∞) / den) ^ B.card := by
         rw [bernoulli_escape h, bernFactor_zero_div]
     _ ≤ ENNReal.ofReal (Real.exp (-((num : ℝ) / den))) ^ B.card :=
         pow_le_pow_left₀ zero_le (natFrac_le_exp h hden) _
@@ -186,9 +186,9 @@ theorem ofReal_exp_bernRate {num den : ℕ} (h : num < den) (k : ℕ) :
 
 /-- A Bernoulli sample meets the design condition with equality at `π_u = −ln(1 − q)`. -/
 theorem bernoulli_design_exact {num den : ℕ} [NeZero den] (h : num < den) :
-    (bernoulli n num den).Design fun _ => bernRate num den := by
+    Design (Verity.SamplingDesign.bernoulli n num den) fun _ => bernRate num den := by
   intro B
-  show (bernoulli n num den).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, bernRate num den))
+  show (Verity.SamplingDesign.bernoulli n num den).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, bernRate num den))
   refine le_of_eq ?_
   rw [bernoulli_escape h.le, Finset.sum_const, nsmul_eq_mul, ofReal_exp_bernRate h]
 
@@ -399,12 +399,12 @@ theorem harm_budget_rate {π h : Fin n → ℝ} {err : ℕ → ℝ≥0∞} (hπ 
 rate `q = num/den`, the session accepts with at least `K` wrong steps in total with probability at
 most `(1 − q)^K + Σ_t err_t`. -/
 theorem harm_count {num den : ℕ} [NeZero den] (hq : num < den) {err : ℕ → ℝ≥0∞} (K : ℕ) {N : ℕ}
-    (P : Play n N) (hL : P.SamplingDesigns fun L => L = SamplingDesign.bernoulli n num den) (hD : P.Drawn err) :
+    (P : Play n N) (hL : P.SamplingDesigns fun L => L = Verity.SamplingDesign.bernoulli n num den) (hD : P.Drawn err) :
     P.prEv (fun _ => 1) (fun acc x => acc = true ∧ (K : ℝ) ≤ x) 0 ≤
       SamplingDesign.bernFactor num den 0 ^ K + ∑ m ∈ range N, err m := by
   have key := harm_budget (π := fun _ => SamplingDesign.bernRate num den) (h := fun _ => (1 : ℝ))
     (SamplingDesign.bernRate_nonneg hq) (fun _ => (mul_one _).le) (K : ℝ) P
-    (Play.SamplingDesigns.mono (fun L (hL : L = SamplingDesign.bernoulli n num den) => by
+    (Play.SamplingDesigns.mono (fun L (hL : L = Verity.SamplingDesign.bernoulli n num den) => by
       subst hL; exact SamplingDesign.bernoulli_design_exact hq) P hL) hD
   rwa [mul_comm (SamplingDesign.bernRate num den) (K : ℝ), SamplingDesign.ofReal_exp_bernRate hq] at key
 
@@ -416,13 +416,13 @@ noncomputable def kStar (num den : ℕ) (p : ℝ) : ℝ := Real.log (1 / (1 - p)
 `k*(p)` wrong steps with probability at most `1 − p + Σ_t err_t`. -/
 theorem harm_count_kstar {num den : ℕ} [NeZero den] (h0 : 0 < num) (hq : num < den) {p : ℝ} (hp : p < 1)
     {err : ℕ → ℝ≥0∞} {H : ℝ} (hH : kStar num den p ≤ H) {N : ℕ} (P : Play n N)
-    (hL : P.SamplingDesigns fun L => L = SamplingDesign.bernoulli n num den) (hD : P.Drawn err) :
+    (hL : P.SamplingDesigns fun L => L = Verity.SamplingDesign.bernoulli n num den) (hD : P.Drawn err) :
     P.prEv (fun _ => 1) (fun acc x => acc = true ∧ H ≤ x) 0 ≤
       ENNReal.ofReal (1 - p) + ∑ m ∈ range N, err m := by
   have hr := SamplingDesign.bernRate_pos h0 hq
   have key := harm_budget (π := fun _ => SamplingDesign.bernRate num den) (h := fun _ => (1 : ℝ)) hr.le
     (fun _ => (mul_one _).le) H P
-    (Play.SamplingDesigns.mono (fun L (hL : L = SamplingDesign.bernoulli n num den) => by
+    (Play.SamplingDesigns.mono (fun L (hL : L = Verity.SamplingDesign.bernoulli n num den) => by
       subst hL; exact SamplingDesign.bernoulli_design_exact hq) P hL) hD
   refine key.trans (add_le_add (ENNReal.ofReal_le_ofReal ?_) le_rfl)
   have h1p : 0 < 1 - p := sub_pos.2 hp
@@ -461,7 +461,7 @@ theorem oneShot_prEv (L : SamplingDesign n) (B : Finset (Fin n)) :
 /-- **The count budget is tight**: a single Bernoulli round over `B` with no drawn-unit error
 accepts with `|B|` wrong steps with probability exactly `(1 − q)^{|B|}`. -/
 theorem harm_count_tight {num den : ℕ} [NeZero den] (h : num ≤ den) (B : Finset (Fin n)) :
-    (oneShot (SamplingDesign.bernoulli n num den) B).prEv (fun _ => 1)
+    (oneShot (Verity.SamplingDesign.bernoulli n num den) B).prEv (fun _ => 1)
         (fun acc x => acc = true ∧ (B.card : ℝ) ≤ x) 0 =
       SamplingDesign.bernFactor num den 0 ^ B.card := by
   rw [oneShot_prEv, SamplingDesign.bernoulli_escape h]

@@ -18,8 +18,8 @@ OUT=${OUT:?run under research run}
 : "${CLOCK_RELOCK_MEM_MHZ:?set the memory clock to relock in MHz, clock.memory of the RTX PRO 6000 card}"
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export PYTHONDONTWRITEBYTECODE=1
-NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-[ -x "$NVCC" ] || NVCC=$(command -v nvcc)
+NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "clock_ceiling.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+[ -x "$NVCC" ] || { echo "clock_ceiling.sh: no nvcc at $NVCC" >&2; exit 2; }
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT

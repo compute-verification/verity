@@ -2,13 +2,16 @@ module
 
 public import Definitions.Certifier.AttesterScheme
 public import Proofs.Certifier.Cells
+public import Proofs.Flock.Claims.Finder
 
 /-!
-# The client's views, read off the network attester's code
+# The network attester's scheme: its break term and the client's views
 
 `clientViewReads` proves `NetTiming.Attester.ClientViewReads`: the trusted attester runs its code, whose cells are
 `clientView` of the schedule, the data and the fail cells (`certifierCode_eq`), and a fail cell lies below its
-connection's cells (`failCell_lt`), so below its cap.
+connection's cells (`failCell_lt`), so below its cap. `breaksWithinTerm` proves `NetTiming.Attester.BreaksWithinTerm`: a
+break is a collision `findColl` finds among evaluations of `H`, which the runs' finder outputs, and `ecrBound` bounds
+the finder's probability by definition.
 -/
 
 @[expose] public section
@@ -35,5 +38,20 @@ theorem clientViewReads : ClientViewReads := by
   funext c
   beta_reduce
   split <;> simp_all
+
+theorem breaksWithinTerm : BreaksWithinTerm := by
+  intro ph Chan _ ρ op hop Root Coin Complete fixed hcharge H S _ _ play q hlog
+  show ENNReal.ofReal (Claims.Pr fun s => (Claims.findColl (play s).calls).isSome = true) ≤
+    Claims.ecrBound H (callsFinder play) q
+  have h1 : Claims.Pr (fun s => (Claims.findColl (play s).calls).isSome = true) ≤ (callsFinder play).Pr H := by
+    unfold Claims.Finder.Pr
+    refine Claims.Pr_mono fun s hs => ?_
+    obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 hs
+    exact ⟨u, v, huv, Claims.findColl_spec H _ (hlog s) u v huv⟩
+  refine (ENNReal.ofReal_le_ofReal h1).trans ?_
+  unfold Claims.ecrBound
+  split_ifs with h
+  · exact ENNReal.ofReal_le_ofReal (h.1.trans (div_le_div_of_nonneg_right h.2 (by positivity)))
+  · exact le_top
 
 end NetTiming.Attester

@@ -42,7 +42,7 @@ theorem covers_iff (w : Spot.Wires.Wire) (r : Row) :
     (w.indexOf r.tid r.unit r.port r.row).isSome = true ↔
       w.reader = r.tid ∧ w.port = r.port ∧ w.start ≤ r.unit ∧ r.unit < w.start + w.readerUnits ∧
         w.cut0 ≤ r.row ∧ r.row < w.cut0 + w.cuts := by
-  unfold Spot.Wires.Wire.indexOf
+  unfold Circuits.Wire.indexOf
   split
   · rename_i h
     simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h

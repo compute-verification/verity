@@ -60,6 +60,11 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "verity/protocols/resource_accounting/compute/pouw/verifier/coins.py", "verity/protocols/resource_accounting/compute/pouw/verifier/core_check.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/verifier.py",
           "verity/protocols/proofs/spot/verifier/one_stage/docket.py",
+          # held_bandwidth.py reads its rate from the card's data sheet through the harness kit's one reader
+          # (`kit.datasheet_bandwidth`), which loads the card files by `verity.device`
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
+          "verity/device.py", "calibration/hardware/cards",
           "verity/protocols/proofs/spot/verifier/one_stage/draw.py",
           "verity/protocols/proofs/spot/verifier/one_stage/verdict.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/protocol.py", "verity/protocols/resource_accounting/compute/pouw/verifier/salt.py",

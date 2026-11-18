@@ -5369,6 +5369,44 @@
         "tests/adapters/vllm/tests/compiler/test_network_attester_charge_rows.py": "tests/verity/protocols/resource_accounting/network/prover/test_network_attester_charge_rows.py",
         "tests/adapters/vllm/tests/compiler/test_network_attester_window_charge_rows.py": "tests/verity/protocols/resource_accounting/network/prover/test_network_attester_window_charge_rows.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/harness/specs/llama31-8b-fp8-1gpu-bandwidth-served-r6.toml": "benchmarks/harness/specs/llama31-8b-fp8-1gpu-bandwidth-served-reps6.toml",
+        "benchmarks/harness/specs/llama32-1b-fp8-1gpu-bandwidth-served-h200.toml": "benchmarks/harness/specs/llama32-1b-fp8-1gpu-bandwidth-served.toml"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/harness/specs/glm53-flock-steady-head-block-h200-walk.toml": "benchmarks/harness/specs/glm53-flock-steady-head-block-walk.toml",
+        "benchmarks/harness/specs/glm53-flock-steady-head-block-h200.toml": "benchmarks/harness/specs/glm53-flock-steady-head-block.toml",
+        "benchmarks/harness/specs/llama32-1b-flock-steady-gemm-h200-walk.toml": "benchmarks/harness/specs/llama32-1b-flock-steady-gemm-walk.toml",
+        "benchmarks/harness/specs/llama32-1b-flock-steady-gemm-h200.toml": "benchmarks/harness/specs/llama32-1b-flock-steady-gemm.toml",
+        "benchmarks/harness/specs/llama31-8b-fp8-rtx-served-arm.toml": "benchmarks/harness/specs/llama31-8b-fp8-served-arm.toml",
+        "benchmarks/harness/specs/llama32-1b-1gpu-stock-served-h100.toml": "benchmarks/harness/specs/llama32-1b-1gpu-stock-served.toml",
+        "benchmarks/harness/specs/qwen3-8b-bf16-rtx-served-arm-eager.toml": "benchmarks/harness/specs/qwen3-8b-bf16-served-arm-eager.toml",
+        "benchmarks/harness/specs/qwen3-8b-bf16-rtx-served-arm.toml": "benchmarks/harness/specs/qwen3-8b-bf16-served-arm.toml"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm/run.sh": "benchmarks/pouw/masked_gemm/run.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm/run.sh": "benchmarks/pouw/floored_gemm/run.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm/tb_run.sh": "benchmarks/pouw/floored_gemm/tb_run.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/aprun.sh": "benchmarks/pouw/edited_gemm/aprun.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/cpvrun.sh": "benchmarks/pouw/edited_gemm/cpvrun.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/crun.sh": "benchmarks/pouw/edited_gemm/crun.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/profile.sh": "benchmarks/pouw/edited_gemm/profile.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/run.sh": "benchmarks/pouw/edited_gemm/run.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/serve.sh": "benchmarks/pouw/served_zk/serve.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/job.sh": "benchmarks/pouw/served_zk/job.sh",
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/run.sh": "benchmarks/pouw/served_zk/run.sh"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/README.md": "benchmarks/pouw/served_zk/README.md"
+      }
     }
   ]
 }

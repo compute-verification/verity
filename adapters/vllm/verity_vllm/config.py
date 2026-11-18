@@ -8,8 +8,8 @@
   and every reader takes the file through :func:`workload_file`, which fetches it by that id and checks the digest.
 * **What runs.**  :class:`RowConfig`, a row's one config (its file ``workloads/<row>.json``: the workload and the pinned
   :class:`RowEngine`), the done source a row of record must declare (``DONE_SOURCES``, :func:`done_source_refusal`: its public
-  cap), the row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), the target table
-  (``TARGETS``), the protocol-set grammar (``PROTOCOLS``, :func:`parse_protocols`), and :class:`EnginePin`, the pinned
+  cap), the row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), a row's target
+  card (:func:`target_card`, the card files'), the protocol-set grammar (``PROTOCOLS``, :func:`parse_protocols`), and :class:`EnginePin`, the pinned
   engine record every engine is built from: model, full revision and checkpoint role, checked against
   ``manifests/checkpoints.json``.
 * **How a stage runs.**  :class:`BuildConfig`, :class:`MatchConfig` and :class:`CommitConfig`: defaults in code,
@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import copy
+import functools
 import hashlib
 import importlib
 import json
@@ -42,11 +43,11 @@ from verity_vllm.records import workload as workload_record
 
 #: The names the library's other modules read here.
 __all__ = [
-    "CARD_FILES", "CHECKPOINTS", "DEFAULT_ROW_PROTOCOLS", "DTYPES", "MANIFESTS", "RECORDS", "ROOT", "TARGETS", "TARGET_NUM_SMS", "VLLM",
+    "CARD_FILES", "CHECKPOINTS", "DEFAULT_ROW_PROTOCOLS", "DTYPES", "MANIFESTS", "RECORDS", "ROOT", "VLLM",
     "WORKLOADS", "WORKLOAD_SCHEMA", "BuildConfig", "CommitConfig", "card_arch", "cuda_arch", "EnginePin", "MatchConfig", "RowConfig", "RowEngine",
     "RowId", "RunEnv", "UsageError", "checkpoint_dir", "checkpoint_entries", "checkpoints_hf_home", "done_source_refusal",
     "group", "option", "parse_protocols", "row_batch", "row_execution", "row_file", "row_path", "row_target", "row_tokens",
-    "row_world", "rows_of_record", "run_store", "vllm_revision", "workload_arg", "workload_file", "workload_files",
+    "row_world", "rows_of_record", "run_store", "target_card", "target_cc", "target_num_sms", "target_tokens", "vllm_revision", "workload_arg", "workload_file", "workload_files",
 ]
 
 #: The source tree holding the ``verity_vllm`` package, ``manifests/`` and ``workloads/``.
@@ -61,7 +62,7 @@ CARD_FILES = ROOT.parents[1] / "calibration/hardware/cards"
 
 def card_arch(sku: str) -> str:
     """Card `sku`'s `arch` (sm_90a), refused unless it is a GPU card's sm_<major><minor>[a|f]."""
-    from verity.device import compute_capability, load_card  # read here: the pipeline's top-level process has no `verity`
+    from verity.device import compute_capability, load_card
 
     card = load_card(sku, directory=CARD_FILES)
     compute_capability(card)
@@ -135,21 +136,41 @@ def environ_snapshot() -> Any:
 #: Row-id dtype token -> the checkpoint weight format the row serves.
 DTYPES: dict[str, str] = {"bf16": "bfloat16", "fp8": "float8_e4m3fn", "int8": "int8"}
 
-#: Row-id target token -> the device class's compute capability.  Extend by name; an unknown token is a refusal, not a guess.
-TARGETS: dict[str, tuple[int, int]] = {
-    "l40s": (8, 9), "l40": (8, 9), "l4": (8, 9), "rtx4090": (8, 9),
-    "a100": (8, 0),
-    "a10": (8, 6), "a10g": (8, 6), "a40": (8, 6),
-    "h100": (9, 0), "h200": (9, 0), "h20": (9, 0),
-    "b200": (10, 0), "gb200": (10, 0),
-    "rtxpro6000": (12, 0),
-}
+@functools.cache
+def _gpu_cards() -> tuple[dict, ...]:
+    from verity.device import load_card, skus
 
-#: Row-id target token -> the device class's SM count, for the classes where it is fixed by the class: such a row declares its whole
-#: Build target (capability + SM count) by its id, so its Build derives for it on any host, a GPU-free one included.  A class whose SM
-#: count varies by part (h100 SXM 132 / PCIe 114) is not listed: its Build target is the host GPU's unless the workload declares one.
-#: The H200 is 132 SMs as SXM and as NVL.
-TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188, "h200": 132}
+    return tuple(load_card(sku, directory=CARD_FILES) for sku in skus("gpu", directory=CARD_FILES))
+
+
+def _token(card: dict) -> str:
+    return str(card.get("short", "")).replace("-", "")
+
+
+def target_tokens() -> list[str]:
+    """The row-id target tokens: each GPU card file's `short` without its hyphens (rtx-pro-6000 is ``rtxpro6000``)."""
+    return sorted(_token(c) for c in _gpu_cards())
+
+
+def target_card(token: str) -> dict:
+    """The GPU card file a row id's target token names (`target_tokens`); a token no card file names is refused by name: its
+    rows wait for a card file in ``CARD_FILES``. A row's whole Build target (capability and SM count) is its card's, so its Build
+    derives on any host, a GPU-free one included."""
+    found = [c for c in _gpu_cards() if _token(c) == token]
+    if len(found) != 1:
+        raise UsageError(f"row target {token!r}: no GPU card file names it (the targets are {target_tokens()}, each a card's `short` "
+                         f"without hyphens); its rows wait for a card file under {CARD_FILES}")
+    return found[0]
+
+
+def target_cc(token: str) -> tuple[int, int]:
+    from verity.device import compute_capability
+
+    return compute_capability(target_card(token))
+
+
+def target_num_sms(token: str) -> int:
+    return int(target_card(token)["sm"]["count"]["value"])
 
 ROW_FIELDS = ("model", "dtype", "target", "world", "batch", "max_input", "max_output", "arrivals", "sampling", "execution")
 _ROW_INT_PREFIX = {"world": "tp", "batch": "b", "max_input": "i", "max_output": "o"}

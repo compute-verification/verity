@@ -17,7 +17,7 @@ weight store (`weight_store`), and the adapter's hooks emit the events and answe
   from ``C*`` into a fresh buffer and hands it inward, so the blocks inside it read what PoUS stores. It is filed after
   PoUW's (an executor's), so it runs outside it.
 
-It is the `verity.hooks.Commits` of its run: ``commitment`` (``W``'s, the salt, ``C*``'s root), ``record``, ``summary``,
+It is the report (`verity.protocols.resource_accounting.scheme`) of its run: ``commitment`` (``W``'s, the salt, ``C*``'s root), ``record``, ``summary``,
 and ``release``, which frees ``C*`` when the workload stops. The vLLM adapter's memory hook hands it the weights and
 the blocks: after ``load_model`` it attaches the runner's linear sites once a scheme computes blocks, emits
 `RegisteredValues` with each site's weight as an operand, then releases what was asked (`engine/kv_blocks.py`).

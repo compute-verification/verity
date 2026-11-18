@@ -81,7 +81,9 @@ if [ -z "$LIB" ]; then
       "$(nvidia-smi -i "${GPU_LEASE_UUID:-0}" --query-gpu=name --format=csv,noheader 2> /dev/null | head -1)" 2>&1) \
       || { echo "POUS: no answer: ARCH is not given and the card's record doesn't give it: $ARCH"; exit 3; }
   fi
-  ARCH=$ARCH bash "$ROOT/verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \
+  TOOLKIT=$(python3 "$ROOT/benchmarks/kernels/machine.py" toolkit 13.0) \
+    || { echo "POUS: no answer: no CUDA 13.0 toolkit to build libp2v1.so with (machine.py, above)"; exit 3; }
+  ARCH=$ARCH CUDA_HOME=$TOOLKIT bash "$ROOT/verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \
     || { tail -20 "$DIR/build.log"; echo "POUS: no answer: libp2v1.so doesn't build (build.log)"; exit 3; }
   LIB=$S/p2/lib
   stamp "built libp2v1.so"

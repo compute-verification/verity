@@ -385,10 +385,13 @@ def test_the_pearl_plus_arms_turn_it_on_by_name_inside_vllms_server_at_the_jobs_
         assert "verity_schemes = verity_vllm.pipeline.scheme_plugin:register" in S.entry_points(S.ARMS[arm])
     assert '[ -n "${SCHEME_SETTINGS:-}" ] && count+=(--scheme-settings "$SCHEME_SETTINGS")' in (S.HERE / "run.sh").read_text()
     private = tmp_path / "p"
-    with pytest.raises(SystemExit, match=r"^the arm's schemes need pearl-plus\.kernel, pearl-plus\.session, gate: "):
+    with pytest.raises(SystemExit, match=r"^the arm's schemes need pearl-plus\.kernel, gate: "):
         S.server_env(S.ARMS["pearl-plus"], tmp_path, tmp_path, None, 1.0, 1.0, private=private,
                      schemes={"pearl-plus": {"challenger": "auditor:7000"}})
     own = PEARL_PLUS_JOB["pearl-plus"]
+    with pytest.raises(SystemExit, match="^--scheme-settings: pearl-plus: challenger and session go together"):
+        S.server_env(S.ARMS["pearl-plus"], tmp_path, tmp_path, None, 1.0, 1.0, private=private,
+                     schemes={"gate": "gate-cmd", "pearl-plus": {k: v for k, v in own.items() if k != "session"}})
     with pytest.raises(SystemExit, match="^--scheme-settings: pearl-plus: coins and challenger are both set"):
         S.server_env(S.ARMS["pearl-plus"], tmp_path, tmp_path, None, 1.0, 1.0, private=private,
                      schemes={"gate": "gate-cmd", "pearl-plus": {**own, "coins": "in-process"}})
@@ -432,7 +435,7 @@ def test_only_an_arm_that_names_the_open_gate_takes_it_and_its_server_hears_whic
     assert rule == {"catch_up": "open", "arm": "prod-tick"}
     tick = {"bucket_us": 100_000, "sat_us": 7_761, "free_us": 9_485, "rule": rule}
     env = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0, private=tmp_path / "p")
-    assert NA.tick_config(tick_settings(env), "the settings", feed=False)["catch_up"] == "open"
+    assert NA.tick_config(tick_settings(env), "the settings")["catch_up"] == "open"
 
 
 def test_the_boundary_rows_arm_keeps_the_prefix_cache_on_and_hands_the_plugin_its_object(tmp_path: Path):
