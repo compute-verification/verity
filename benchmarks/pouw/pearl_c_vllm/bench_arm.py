@@ -278,7 +278,8 @@ class PearlCArm:
 
     def ready(self, target: Any) -> None:
         from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
-        from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
+        from verity.protocols.compose import schemes
+        from verity.protocols.resource_accounting.scheme import declared
         from verity.hooks import ComputeBlockWith
         from verity_vllm import messages
         from verity_vllm.protocols.linear import vllm_site
@@ -306,7 +307,8 @@ class PearlCArm:
             opening = self.session.open(f"pouw:{scheme}", weights_root(roots))
             commitment = self.session.commitment
             self.coins = {"source": "challenger", "session": self.session.carried, "pass_index": self.session.k,
-                          "salt_after": epoch_open_root(weights_root(roots), self.session.k).hex()}
+                          "salt_after": declared(schemes.get("pearl-plus"), "salt_open_root")(weights_root(roots),
+                                                                                             self.session.k).hex()}
         else:
             coins = _Coins(self.epoch)
             opening, commitment = coins.open("salt", weights_root(roots)), coins.commitment
