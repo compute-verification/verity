@@ -57,7 +57,8 @@ verity bench prove layers --flock R --zk R --sampling R --recursion R
   steady-state types' median seconds a witness bit. A total is called measured only when every block type is measured
   at steady state. When a block type has no figure the totals leave its proving out and are called partial, naming each
   such type with its share of the blocks, and of the MACs where the census holds them (a type with no time has no
-  share of the proving time). Otherwise a total is modeled. The proof server's verifier's seconds are given where a
+  share of the proving time). A total that prices a block type at a larger block's rate (`bounded_by`) is partial too:
+  measured rows and an upper bound on the rest, which its line says. Otherwise a total is modeled. The proof server's verifier's seconds are given where a
   steady-state row holds them, and "not measured" where none does. The served MACs the census holds in no proof block
   are in no figure, and the totals give their share.
 - **The share of the proving time that rests on rows timed above the host's cores:** the types priced from a row

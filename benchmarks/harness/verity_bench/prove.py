@@ -8,7 +8,7 @@ card) replaces the block types of the served rows it recuts. A block type of a w
 bits its proof is (`proved_as`, at its own statics) and its kind's largest block in the census, where that one is at
 least as large in every measure (`bounded_by`). A type's steady-state rate is read by its own id, else by its
 `proved_as`, else by its `bounded_by` (`rated_as`); a rate read by `bounded_by` is a larger block's, an upper bound on
-the type's cost and not a measurement of it, and the totals say when they include one.
+the type's cost and not a measurement of it, and a total that includes one is `partial` and says so.
 
 **A proof system** (`ProofSystem`) turns a census into a `Table`: a row a block type with the blocks of it proved a
 served token, the prover GPU-seconds a block and where that figure is from (`SOURCES`, best first):
@@ -54,7 +54,8 @@ on rows timed at more cores than the stated host's. Their range's other end
 prices every type not measured at steady state at the steady-state types' median seconds a witness bit. The totals are
 `measured` only when every block type is measured at steady state, `partial` when a type has no figure (they leave its
 proving out, so they name each such type with its share of the blocks, and of the MACs where the census holds them: a
-type with no time has no share of the proving time), and `modeled` otherwise.
+type with no time has no share of the proving time) or is priced at a larger block's rate (`bounded_by`: they hold an
+upper bound on its proving, and name each such type), and `modeled` otherwise.
 
 **The Lean verifier's seconds and the proof's bytes** are a block's too, from the statements the Lean verifier was
 run on (`LeanVerify`, a `lean-verify` record: one statement of a block type that the Lean verifier's `verify` accepted, each
@@ -434,7 +435,8 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     GPU-seconds. The totals are `measured` only when every block type is measured at steady state, and `partial` when a
     type has no figure: `missing` then names each such type, the most blocks first, with its share of the blocks, and
     of the MACs where every row holds them (a type with no time has no share of the proving time). `bounded` names each
-    type priced at a larger block's steady-state rate (`BOUNDED_BY`), which makes every total an upper bound. `planned` is the
+    type priced at a larger block's steady-state rate (`BOUNDED_BY`), which makes every total an upper bound and
+    `partial`: measured rows and a bound on the rest, not a measurement of the workload. `planned` is the
     same blocks at their sampling plan's own prices, where the plan states them (`_planned`). `above_cores` is the
     share of the proving time that rests on steady-state rows timed at more cores than the table's host holds
     (`_above_cores`), and `off_node` how many of the steady-state rows that price a type ran with their card on
@@ -488,12 +490,12 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     missing = [{"block": r.block, "per_token": r.per_token, "block_share": share(r.per_token, blocks),
                 "mac_share": None if macs is None or r.macs is None else share(r.per_token * r.macs, macs)}
                for r in sorted(table.rows, key=lambda r: -r.per_token) if r.cost.seconds is None]
-    if missing:
+    bounded = [{"block": r.block, "bounded_by": r.cost.rated_as[1]} for r in table.rows
+               if r.cost.seconds is not None and r.cost.rated_as and r.cost.rated_as[0] == BOUNDED_BY]
+    if missing or bounded:
         status = "partial"
     else:
         status = "measured" if table.rows and all(r.cost.source == STEADY for r in table.rows) else "modeled"
-    bounded = [{"block": r.block, "bounded_by": r.cost.rated_as[1]} for r in table.rows
-               if r.cost.seconds is not None and r.cost.rated_as and r.cost.rated_as[0] == BOUNDED_BY]
     unread = [{"record": s.record, "run": s.run, "type": s.type, "definition": s.definition, "provers": s.provers,
                "cores": s.cores, "seconds": s.seconds / s.blocks if s.measured else None, "why": s.refused}
               for s in table.unread]

@@ -287,7 +287,7 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
     lines += _lean_rows(doc, rows)
     p = doc["periods"]
     lines += ["", (f"Per monitoring period, over all compute ({p['gates_basis']}); every total is the table's ratio scaled, "
-              f"not measured at that size{', and partial as that ratio is' if t['missing'] else ''}:"), "",
+              f"not measured at that size{', and partial as that ratio is' if t['status'] == 'partial' else ''}:"), "",
               "| compute | period | serving GPUs | served AND gates | prover GPUs | prover GPU-seconds |",
               "| --- | --- | --- | --- | --- | --- |"]
     lines += [f"| {x['compute']} | {x['period']} | {_n(x['serving_gpus'])} | {_n(x['served_gates'])} | {_n(x['prover_gpus'])} | "

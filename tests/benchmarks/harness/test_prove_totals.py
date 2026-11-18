@@ -178,12 +178,18 @@ def test_the_totals_price_a_word_block_at_its_definition_on_bits_and_say_when_a_
                                                  "type's cost, not a measurement of it; `attn-first` ")
     assert got[HEAD_END]["note"].startswith("`attn-end` ") and out["unread"] == []
     t = out["totals"]
-    assert t["status"] == "measured" and t["bounded"] == [{"block": first(5, 128), "bounded_by": big}]
+    assert t["status"] == "partial" and t["missing"] == [] and t["bounded"] == [{"block": first(5, 128), "bounded_by": big}]
     page = {"workload": "toy", "model": "Toy", "provers": 1, "cores": 10, "inputs": [], "refused": [], "macs_in_blocks": 1.0,
             **out, "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
             "periods": {"gates_basis": "stated", "only": None, "rows": []}}
-    assert ("measured: steady-state measurements cover 100.0% of its proving time; an upper bound, since 1 block type(s) "
-            "are priced at a larger block's rate (bounded by)\n") in R.render(page)
+    text = R.render(page)
+    assert ("- prover GPUs per serving GPU: 4.25, partial: steady-state measurements cover 100.0% of its proving time; an "
+            "upper bound, since 1 block type(s) are priced at a larger block's rate (bounded by)\n") in text
+    assert "not measured at that size, and partial as that ratio is:" in text and "- partial:" not in text
+    (m,) = R.measurements(page | {"workload": "llama32-1b"}, {"benchmarks/prover-gpu-seconds-per-token": "gpu_seconds_per_token"})
+    assert m["mark"] == "partial" and m["inputs"][0].startswith(
+        "partial: steady-state measurements cover 100.0% of the proving time; an upper bound, since 1 block type(s) are "
+        "priced at a larger block's rate (bounded by)")
 
     plain = P.report(PF.Flock(rows, SESSIONS, "art:card").table(P.Census.of(without_names(on_bits()))), 1.0)
     assert {r["block"]: r["source"] for r in plain["rows"]} == {
