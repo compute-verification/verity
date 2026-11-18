@@ -181,6 +181,7 @@ BANDWIDTH = S.register(S.Scheme(
     needs=frozenset({"receipts"}),
     depends=("pous",),
     pieces={"prover": S.Launch(optional=("host", "command"), development="host")},
+    answers="verity.protocols.resource_accounting.memory.poub.prover.p2_stage.bandwidth:ANSWERS",
     record="bandwidth",
     symbol="Q_cert",
     published=("bytes", Fraction(1, 8)),
@@ -241,6 +242,7 @@ POUB = S.register(S.Scheme(
     keeps_weight_copy=True,
     **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
                     S.Lacks("not a kernel scheme")),
+    answers=S.Lacks("its verifier answers the session live, an event a line; no piece keeps a session to answer later"),
 ))
 
 #: a freed range is reused as late as the workload allows, so one freed inside a window is not written again in it
