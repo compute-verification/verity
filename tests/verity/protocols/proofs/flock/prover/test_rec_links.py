@@ -13,6 +13,7 @@ import pytest
 from verity_flock import rec_links as R
 
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-rec-links"
@@ -61,14 +62,14 @@ def test_the_registered_table_opens_row_by_row_under_the_verifiers_domain_and_re
     reg = R.register(prog, links)
     n = reg.leaves
     assert n == R.grid(17) == 18 and reg.value == R.VALUE and reg.words == R.ROW_WORDS
-    dom = G.domain(prog, R.VALUE, R.ROW_WORDS, n)
+    dom = RV.domain(prog, R.VALUE, R.ROW_WORDS, n)
     for i in range(n):
         assert G.verify_read(dom, reg.root, i, reg.bcs[i], reg.path(i))
         assert R.decode(b"".join(x.to_bytes(2, "little") for x in reg.rows[i])) == (links[i] if i < 17 else None)
     forged = R.register(prog, [R.LinkEntry(9, 0, 2, 0)] + links[1:], reg.salts)
     assert forged.bcs[0] != reg.bcs[0] and forged.bcs[1:] == reg.bcs[1:]
     assert not G.verify_read(dom, reg.root, 0, forged.bcs[0], reg.path(0))
-    assert not G.verify_read(G.domain("cd" * 64, R.VALUE, R.ROW_WORDS, n), reg.root, 1, reg.bcs[1], reg.path(1))
+    assert not G.verify_read(RV.domain("cd" * 64, R.VALUE, R.ROW_WORDS, n), reg.root, 1, reg.bcs[1], reg.path(1))
     assert R.register(prog, links).root != reg.root
 
 

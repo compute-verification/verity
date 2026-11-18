@@ -23,6 +23,7 @@ from verity.commitments import hm96
 from verity_flock import circuit as FC
 from verity_flock import inner_registered as IR
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 pytestmark = pytest.mark.slow
 N = 8
@@ -93,13 +94,13 @@ def test_register_commits_the_description_table_as_its_registration(staged):
     own = json.loads((d / IR.OWN).read_text())
     assert own["ports"].keys() == {"cs", "x", "out"} and own["ports"]["x"]["reads"] == list(range(N))
     e = own["ports"]["cs"]
-    dom = G.domain(staged.meta["program_sha512"], IR.VALUE, 64, 1)
+    dom = RV.domain(staged.meta["program_sha512"], IR.VALUE, 64, 1)
     assert own["format"] == G.READS and e["reads"] == [0] * N and (e["leaves"], e["words"], e["word_bits"]) == (1, 64, 16)
     assert e["domain"] == dom.domain_id.hex() and e["root"] == got["cs"]["root"]
     _, tabs = IR.tables(d)
     bc = tabs["cs"]["bcs"][0]
     assert G.verify_read(dom, bytes.fromhex(e["root"]), 0, bc, b""), "the statement's b || c opens the registered root at 0"
-    assert G.Registered.commit(staged.meta["program_sha512"], IR.VALUE, staged.desc.tolist(), tabs["cs"]["salts"]).bcs == (bc,)
+    assert RV.Registered.commit(staged.meta["program_sha512"], IR.VALUE, staged.desc.tolist(), tabs["cs"]["salts"]).bcs == (bc,)
 
 
 def test_the_description_port_is_the_one_row_every_instance_reads(staged):
@@ -154,7 +155,7 @@ def test_claim_writes_another_description_with_the_registered_paths(staged):
     assert head(other)["registered"] == head(honest)["registered"] and head(other) == dict(head(other, "inst"), rows=False)
     _, tabs = IR.tables(other)
     root = bytes.fromhex(json.loads((honest / IR.OWN).read_text())["ports"]["cs"]["root"])
-    assert not G.verify_read(G.domain(staged.meta["program_sha512"], IR.VALUE, 64, 1), root, 0, tabs["cs"]["bcs"][0], b"")
+    assert not G.verify_read(RV.domain(staged.meta["program_sha512"], IR.VALUE, 64, 1), root, 0, tabs["cs"]["bcs"][0], b"")
 
 
 # --- the Lean verifier's description check (`Registered.checkDescription`, D14) -------------------------------------------

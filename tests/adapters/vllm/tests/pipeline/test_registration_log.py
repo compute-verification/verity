@@ -14,6 +14,7 @@ from verity.circuits.program import Program
 from verity.circuits.types import Array, RecordType, Value
 from verity.commitments import hm96
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity_vllm.pipeline import registration_log as RL
 
@@ -64,7 +65,7 @@ def test_one_entry_per_theta_parameter_as_registered_commit_makes_it():
         name, bits, salts = e["value"], G.width(program, e["value"]), out["salts"][e["value"]]
         assert G.shape(program, name, e["words"]) == e["leaves"] and e.get("word_bits", 16) == bits
         rows = VALUES[name].reshape(-1, e["words"]).tolist()
-        assert G.Registered.commit(rec["program"], name, rows, [salts[i * N:(i + 1) * N] for i in range(e["leaves"])],
+        assert RV.Registered.commit(rec["program"], name, rows, [salts[i * N:(i + 1) * N] for i in range(e["leaves"])],
                                    word_bits=bits).entry() == e
     assert _case()[2]["digest"] != out["digest"]                 # hiding: fresh salts, other roots
 

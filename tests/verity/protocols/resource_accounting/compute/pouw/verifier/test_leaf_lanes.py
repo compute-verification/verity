@@ -14,6 +14,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import see
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import segment as SG
 from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
+from verity.protocols.proofs.spot.prover import produced as PP
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
@@ -102,9 +103,9 @@ def test_every_statements_partials_are_registered_reads_and_an_unregistered_row_
         assert got == ({LL.PARTIALS: ln} if kind == LL.LANE else {f"p{x}": x for x in range(32)})
     reg, pd = "ab" * 64, "12" * 64
     rows = [[ln, 7] for ln in range(4)]
-    mine = PR.commit(pd, LL.PARTIALS, rows, reg, schema=G.SCHEMA_V2)
-    resalted = PR.commit(pd, LL.PARTIALS, rows, reg, schema=G.SCHEMA_V2)
-    elsewhere = PR.commit(pd, LL.PARTIALS, rows, "cd" * 64, schema=G.SCHEMA_V2)
+    mine = PP.commit(pd, LL.PARTIALS, rows, reg, schema=G.SCHEMA_V2)
+    resalted = PP.commit(pd, LL.PARTIALS, rows, reg, schema=G.SCHEMA_V2)
+    elsewhere = PP.commit(pd, LL.PARTIALS, rows, "cd" * 64, schema=G.SCHEMA_V2)
 
     def opens(t, position, row):
         return G.verify_read(mine.domain, mine.root, position, t.bcs[row], t.path(position), G.SCHEMA_V2)
@@ -192,10 +193,10 @@ def test_a_known_port_opens_only_its_content():
     root = bytes.fromhex(port["root"])
 
     def opens(row, s):
-        t = PR.commit(pd, "pub3", [row], reg, [s], schema=G.SCHEMA_V2)
+        t = PP.commit(pd, "pub3", [row], reg, [s], schema=G.SCHEMA_V2)
         return G.verify_read(dom, root, 0, t.bcs[0], t.path(0), G.SCHEMA_V2)
 
-    assert opens([7, 3], salt) and PR.commit(pd, "pub3", [[7, 3]], reg, [salt], schema=G.SCHEMA_V2).bcs[0].hex() == bc
+    assert opens([7, 3], salt) and PP.commit(pd, "pub3", [[7, 3]], reg, [salt], schema=G.SCHEMA_V2).bcs[0].hex() == bc
     assert not opens([7, 4], salt), "a lane whose index isn't the verifier's"
     assert not opens([7, 3], bytes(192)), "the verifier's content under another salt"
     f = LL.registered_file({}, {}, {}, known_ports={LL.PUB: port})
@@ -207,7 +208,7 @@ def test_a_known_port_opens_only_its_content():
 
 def test_a_statements_registered_file_reads_each_value_at_its_row_under_its_root():
     reg, pd = "ab" * 64, "12" * 64
-    parts = PR.commit(pd, LL.PARTIALS, [[ln, 0] for ln in range(4)], reg, schema=G.SCHEMA_V2)
+    parts = PP.commit(pd, LL.PARTIALS, [[ln, 0] for ln in range(4)], reg, schema=G.SCHEMA_V2)
     entries = {LL.PARTIALS: PR.entry(pd, LL.PARTIALS, 4, 2, reg), LL.RECEIPT: {**parts.entry(), "domain": "00" * 64}}
     roots = {LL.PARTIALS: parts.root.hex(), LL.RECEIPT: "ff" * 64}
     f = LL.registered_file(LL.reads(8, 16, "combine"), entries, roots, {LL.PARTIALS: G.SCHEMA_V2})

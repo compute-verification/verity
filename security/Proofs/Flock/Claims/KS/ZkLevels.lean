@@ -393,7 +393,7 @@ table `j`'s rep `k`'s level-`ℓ` rows at one position that differ are two `Open
 flattened `ℓ − 1`-th recursive cap of the rep's proof, each SHA-512 input of them in the run's verifier log: its verdict
 accepts with SHA-512 answered within that log (`acc_within`), so level `ℓ`'s Merkle check passed on those rows at those
 positions (`zkLevels_verifyWithM`), and the check, carried back to `OC`, logged them (`merkleCheck_logs`). -/
-theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j k ℓ q : ℕ} {a b : List 𝔽}
     (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (ha : (q, a) ∈ zkRawLevelRowsJ (Claims.run sha512 P (V true) x ω r).seen j k ℓ)
@@ -518,7 +518,7 @@ table `j`'s rep `k`'s level-`ℓ` rows at one position that differ are two `Open
 flattened `ℓ − 1`-th recursive cap of the rep's proof, each SHA-512 input of them in the run's verifier log: its verdict
 accepts with SHA-512 answered within that log (`acc_within`), so level `ℓ`'s Merkle check passed on those rows at those
 positions (`zkLevels_verifyWithM`), and the check, carried back to `OC`, logged them (`merkleCheck_logs`). -/
-theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem zk_levelClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j k ℓ q : ℕ} {a b : List 𝔽}
     (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (ha : (q, a) ∈ zkRawLevelRowsJ (Claims.run sha512 P (V true) x ω r).seen j k ℓ)

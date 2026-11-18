@@ -68,24 +68,24 @@ variable {α β σ : Type}
 
 /-- **Equal runs that send `N` bodies**: the same result, and where it returns, `N ≤ n` bodies sent in all and a value
 with `P`. -/
-def EqAt (n N : ℕ) (P : α → Prop) (x y : Except String α × Array Claims.Msg) : Prop :=
+def EqAt (n N : ℕ) (P : α → Prop) (x y : Except String α × Array Hash.Msg) : Prop :=
   x = y ∧ ∀ a L, x = (.ok a, L) → L.size = N ∧ N ≤ n ∧ P a
 
-theorem eqAt_refl {n N : ℕ} {P : α → Prop} {x : Except String α × Array Claims.Msg}
+theorem eqAt_refl {n N : ℕ} {P : α → Prop} {x : Except String α × Array Hash.Msg}
     (h : ∀ a L, x = (.ok a, L) → L.size = N ∧ N ≤ n ∧ P a) : EqAt n N P x x := ⟨rfl, h⟩
 
-theorem EqAt.mono {n N : ℕ} {P Q : α → Prop} {x y : Except String α × Array Claims.Msg} (h : EqAt n N P x y)
+theorem EqAt.mono {n N : ℕ} {P Q : α → Prop} {x y : Except String α × Array Hash.Msg} (h : EqAt n N P x y)
     (hPQ : ∀ a, P a → Q a) : EqAt n N Q x y :=
   ⟨h.1, fun a L e => ⟨(h.2 a L e).1, (h.2 a L e).2.1, hPQ a (h.2 a L e).2.2⟩⟩
 
-theorem EqAt.cast {n N N' : ℕ} {P : α → Prop} {x y : Except String α × Array Claims.Msg} (h : EqAt n N P x y)
+theorem EqAt.cast {n N N' : ℕ} {P : α → Prop} {x y : Except String α × Array Hash.Msg} (h : EqAt n N P x y)
     (e : N = N') : EqAt n N' P x y := e ▸ h
 
-theorem bind_go_err {x : TMW PS α} {f : α → TMW PS β} {t : Transcript} {l l' : Array Claims.Msg} {e : String}
+theorem bind_go_err {x : TMW PS α} {f : α → TMW PS β} {t : Transcript} {l l' : Array Hash.Msg} {e : String}
     (h : (x.run t).go l = (.error e, l')) : ((x >>= f).run t).go l = (.error e, l') := by
   rw [StateT.run_bind, go_bind, h]
 
-theorem eqAt_bind {n N M : ℕ} {P : α → Prop} {Q : β → Prop} {x y : PS α} {f g : α → PS β} {l : Array Claims.Msg}
+theorem eqAt_bind {n N M : ℕ} {P : α → Prop} {Q : β → Prop} {x y : PS α} {f g : α → PS β} {l : Array Hash.Msg}
     (hxy : EqAt n N P (x.go l) (y.go l))
     (hfg : ∀ a l', x.go l = (.ok a, l') → l'.size = N → N ≤ n → P a → EqAt n M Q ((f a).go l') ((g a).go l')) :
     EqAt n M Q ((x >>= f).go l) ((y >>= g).go l) := by
@@ -100,7 +100,7 @@ theorem eqAt_bind {n N M : ℕ} {P : α → Prop} {Q : β → Prop} {x y : PS α
 
 /-- **A bind of equal runs**, the continuations equal from each return. -/
 theorem eqAt_bindT {n N M : ℕ} {P : α × Transcript → Prop} {Q : β × Transcript → Prop} {x y : TMW PS α}
-    {f g : α → TMW PS β} {t : Transcript} {l : Array Claims.Msg} (hxy : EqAt n N P ((x.run t).go l) ((y.run t).go l))
+    {f g : α → TMW PS β} {t : Transcript} {l : Array Hash.Msg} (hxy : EqAt n N P ((x.run t).go l) ((y.run t).go l))
     (hfg : ∀ a t' l', l'.size = N → N ≤ n → P (a, t') →
       EqAt n M Q (((f a).run t').go l') (((g a).run t').go l')) :
     EqAt n M Q (((x >>= f).run t).go l) (((y >>= g).run t).go l) := by
@@ -109,7 +109,7 @@ theorem eqAt_bindT {n N M : ℕ} {P : α × Transcript → Prop} {Q : β × Tran
 
 /-- **A Ligerito bind of equal runs.** -/
 theorem eqAt_bindL {n N M : ℕ} {P : (α × LigState) × Transcript → Prop} {Q : (β × LigState) × Transcript → Prop}
-    {x y : LP PS α} {f g : α → LP PS β} {st : LigState} {t : Transcript} {l : Array Claims.Msg}
+    {x y : LP PS α} {f g : α → LP PS β} {st : LigState} {t : Transcript} {l : Array Hash.Msg}
     (hxy : EqAt n N P (((x.run st).run t).go l) (((y.run st).run t).go l))
     (hfg : ∀ a st' t' l', l'.size = N → N ≤ n →
       P ((a, st'), t') → EqAt n M Q ((((f a).run st').run t').go l') ((((g a).run st').run t').go l')) :
@@ -117,13 +117,13 @@ theorem eqAt_bindL {n N M : ℕ} {P : (α × LigState) × Transcript → Prop} {
   rw [StateT.run_bind, StateT.run_bind]
   exact eqAt_bindT hxy fun p t' l' h1 h2 h3 => hfg p.1 p.2 t' l' h1 h2 h3
 
-theorem eqAt_pureT (a : α) (t : Transcript) {l : Array Claims.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n) :
+theorem eqAt_pureT (a : α) (t : Transcript) {l : Array Hash.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n) :
     EqAt n N (fun _ => True) (((pure a : TMW PS α).run t).go l) (((pure a : TMW PS α).run t).go l) :=
   eqAt_refl fun _ L h => by
     obtain ⟨-, rfl⟩ := Prod.mk.inj h
     exact ⟨hl, hN, trivial⟩
 
-theorem eqAt_pureP {P : α × Transcript → Prop} (a : α) (t : Transcript) {l : Array Claims.Msg} {n N : ℕ}
+theorem eqAt_pureP {P : α × Transcript → Prop} (a : α) (t : Transcript) {l : Array Hash.Msg} {n N : ℕ}
     (hl : l.size = N) (hN : N ≤ n) (hP : P (a, t)) :
     EqAt n N P (((pure a : TMW PS α).run t).go l) (((pure a : TMW PS α).run t).go l) :=
   eqAt_refl fun _ L h => by
@@ -132,14 +132,14 @@ theorem eqAt_pureP {P : α × Transcript → Prop} (a : α) (t : Transcript) {l 
     exact ⟨hl, hN, hP⟩
 
 theorem eqAt_purePL {P : (α × LigState) × Transcript → Prop} (a : α) (st : LigState) (t : Transcript)
-    {l : Array Claims.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n) (hP : P ((a, st), t)) :
+    {l : Array Hash.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n) (hP : P ((a, st), t)) :
     EqAt n N P ((((pure a : LP PS α).run st).run t).go l) ((((pure a : LP PS α).run st).run t).go l) :=
   eqAt_refl fun _ L h => by
     obtain ⟨e, rfl⟩ := Prod.mk.inj h
     obtain rfl := Except.ok.inj e
     exact ⟨hl, hN, hP⟩
 
-theorem eqAt_pureL (a : α) (st : LigState) (t : Transcript) {l : Array Claims.Msg} {n N : ℕ} (hl : l.size = N)
+theorem eqAt_pureL (a : α) (st : LigState) (t : Transcript) {l : Array Hash.Msg} {n N : ℕ} (hl : l.size = N)
     (hN : N ≤ n) :
     EqAt n N (fun _ => True) ((((pure a : LP PS α).run st).run t).go l) ((((pure a : LP PS α).run st).run t).go l) :=
   eqAt_refl fun _ L h => by
@@ -147,18 +147,18 @@ theorem eqAt_pureL (a : α) (st : LigState) (t : Transcript) {l : Array Claims.M
     exact ⟨hl, hN, trivial⟩
 
 /-- **A step that sends nothing**, the same on both sides. -/
-theorem eqAt_silentT {x : TMW PS α} {t : Transcript} {l : Array Claims.Msg} {n N : ℕ}
+theorem eqAt_silentT {x : TMW PS α} {t : Transcript} {l : Array Hash.Msg} {n N : ℕ}
     (hx : ∀ a t' l', (x.run t).go l = (.ok (a, t'), l') → l' = l) (hl : l.size = N) (hN : N ≤ n) :
     EqAt n N (fun _ => True) ((x.run t).go l) ((x.run t).go l) :=
   eqAt_refl fun p L h => by
     obtain rfl := hx p.1 p.2 L h
     exact ⟨hl, hN, trivial⟩
 
-theorem eqAt_liftTM (x : TM α) (t : Transcript) {l : Array Claims.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n) :
+theorem eqAt_liftTM (x : TM α) (t : Transcript) {l : Array Hash.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n) :
     EqAt n N (fun _ => True) (((liftTM x : TMW PS α).run t).go l) (((liftTM x : TMW PS α).run t).go l) :=
   eqAt_silentT (fun _ _ _ h => (congrArg Prod.snd ((liftTM_go x t l).symm.trans h)).symm) hl hN
 
-theorem eqAt_liftV (v : V α) (t : Transcript) {l : Array Claims.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n) :
+theorem eqAt_liftV (v : V α) (t : Transcript) {l : Array Hash.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n) :
     EqAt n N (fun _ => True) (((StateT.lift (monadLift v : PS α) : TMW PS α).run t).go l)
       (((StateT.lift (monadLift v : PS α) : TMW PS α).run t).go l) := by
   refine eqAt_silentT (fun a t' l' h => ?_) hl hN
@@ -168,14 +168,14 @@ theorem eqAt_liftV (v : V α) (t : Transcript) {l : Array Claims.Msg} {n N : ℕ
   obtain ⟨-, rfl⟩ := Prod.mk.inj e3
   exact (Prod.mk.inj e4).2.symm
 
-theorem eqAt_getT (t : Transcript) {l : Array Claims.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n) :
+theorem eqAt_getT (t : Transcript) {l : Array Hash.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n) :
     EqAt n N (fun _ => True) (((get : TMW PS Transcript).run t).go l) (((get : TMW PS Transcript).run t).go l) :=
   eqAt_refl fun _ L h => by
     obtain ⟨-, rfl⟩ := Prod.mk.inj h
     exact ⟨hl, hN, trivial⟩
 
 /-- **A Ligerito step of the session's monad**, lifted. -/
-theorem eqAt_liftT {x : TMW PS α} {st : LigState} {t : Transcript} {l : Array Claims.Msg} {n N : ℕ}
+theorem eqAt_liftT {x : TMW PS α} {st : LigState} {t : Transcript} {l : Array Hash.Msg} {n N : ℕ}
     (h : EqAt n N (fun _ => True) ((x.run t).go l) ((x.run t).go l)) :
     EqAt n N (fun _ => True) ((((liftT x : LP PS α).run st).run t).go l) ((((liftT x : LP PS α).run st).run t).go l) := by
   refine eqAt_refl fun p L e => ?_
@@ -186,7 +186,7 @@ theorem eqAt_liftT {x : TMW PS α} {st : LigState} {t : Transcript} {l : Array C
   exact ⟨(h.2 _ _ e1).1, (h.2 _ _ e1).2.1, trivial⟩
 
 /-- **A Ligerito step that sends nothing.** -/
-theorem eqAt_lsilent {x : LP PS α} (hx : LSilent x) (st : LigState) (t : Transcript) {l : Array Claims.Msg} {n N : ℕ}
+theorem eqAt_lsilent {x : LP PS α} (hx : LSilent x) (st : LigState) (t : Transcript) {l : Array Hash.Msg} {n N : ℕ}
     (hl : l.size = N) (hN : N ≤ n) :
     EqAt n N (fun _ => True) (((x.run st).run t).go l) (((x.run st).run t).go l) :=
   eqAt_refl fun p L h => by
@@ -202,7 +202,7 @@ theorem tsilent_liftTM (x : TM α) : TSilent (liftTM x : TMW PS α) :=
 
 /-- **A bind after a step that sends nothing**: the continuations from the same bodies. -/
 theorem eqAt_tsilent_bind {x : TMW PS α} (hx : TSilent x) {f g : α → TMW PS β} {t : Transcript}
-    {l : Array Claims.Msg} {n M : ℕ} {Q : β × Transcript → Prop}
+    {l : Array Hash.Msg} {n M : ℕ} {Q : β × Transcript → Prop}
     (hfg : ∀ a t', EqAt n M Q (((f a).run t').go l) (((g a).run t').go l)) :
     EqAt n M Q (((x >>= f).run t).go l) (((x >>= g).run t).go l) := by
   rw [StateT.run_bind, StateT.run_bind, go_bind, go_bind]
@@ -216,7 +216,7 @@ theorem eqAt_tsilent_bind {x : TMW PS α} (hx : TSilent x) {f g : α → TMW PS 
 
 /-- **A Ligerito bind after a step that sends nothing.** -/
 theorem eqAt_lsilent_bind {x : LP PS α} (hx : LSilent x) {f g : α → LP PS β} {st : LigState} {t : Transcript}
-    {l : Array Claims.Msg} {n M : ℕ} {Q : (β × LigState) × Transcript → Prop}
+    {l : Array Hash.Msg} {n M : ℕ} {Q : (β × LigState) × Transcript → Prop}
     (hfg : ∀ a st' t', EqAt n M Q ((((f a).run st').run t').go l) ((((g a).run st').run t').go l)) :
     EqAt n M Q ((((x >>= f).run st).run t).go l) ((((x >>= g).run st).run t).go l) := by
   rw [StateT.run_bind, StateT.run_bind, StateT.run_bind, StateT.run_bind, go_bind, go_bind]
@@ -233,13 +233,13 @@ theorem eqAt_lsilent_bind {x : LP PS α} (hx : LSilent x) {f g : α → LP PS β
 /-- **A loop of equal steps**: step `i`, from `L + g i ≤ n` bodies, yields after `L + g (i + 1)`; the loops over
 `[0:k]` end after `L + g k`. -/
 theorem eqAt_forIn {n : ℕ} (body body' : ℕ → σ → TMW PS (ForInStep σ)) (L : ℕ) (g : ℕ → ℕ) (k : ℕ)
-    (hb : ∀ i < k, ∀ (s : σ) (t : Transcript) (l : Array Claims.Msg), l.size = L + g i → L + g i ≤ n →
+    (hb : ∀ i < k, ∀ (s : σ) (t : Transcript) (l : Array Hash.Msg), l.size = L + g i → L + g i ≤ n →
       EqAt n (L + g (i + 1)) (fun p => ∃ u, p.1 = .yield u) (((body i s).run t).go l) (((body' i s).run t).go l))
-    (s : σ) (t : Transcript) (l : Array Claims.Msg) (hl : l.size = L + g 0) (hL : L + g 0 ≤ n) :
+    (s : σ) (t : Transcript) (l : Array Hash.Msg) (hl : l.size = L + g 0) (hL : L + g 0 ≤ n) :
     EqAt n (L + g k) (fun _ => True) (((forIn [:k] s body).run t).go l) (((forIn [:k] s body').run t).go l) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn_eq_forIn_range']
   simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
-  suffices key : ∀ j a (s : σ) (t : Transcript) (l : Array Claims.Msg), a + j = k → l.size = L + g a →
+  suffices key : ∀ j a (s : σ) (t : Transcript) (l : Array Hash.Msg), a + j = k → l.size = L + g a →
       L + g a ≤ n → EqAt n (L + g k) (fun _ => True)
         (((forIn (List.range' a j) s body).run t).go l) (((forIn (List.range' a j) s body').run t).go l) from
     key k 0 s t l (by omega) hl hL
@@ -260,15 +260,15 @@ theorem eqAt_forIn {n : ℕ} (body body' : ℕ → σ → TMW PS (ForInStep σ))
 
 /-- **A Ligerito loop of equal steps.** -/
 theorem eqAt_forInL {n : ℕ} (body body' : ℕ → σ → LP PS (ForInStep σ)) (L : ℕ) (g : ℕ → ℕ) (k : ℕ)
-    (hb : ∀ i < k, ∀ (s : σ) (st : LigState) (t : Transcript) (l : Array Claims.Msg), l.size = L + g i →
+    (hb : ∀ i < k, ∀ (s : σ) (st : LigState) (t : Transcript) (l : Array Hash.Msg), l.size = L + g i →
       L + g i ≤ n → EqAt n (L + g (i + 1)) (fun p => ∃ u, p.1.1 = .yield u)
         ((((body i s).run st).run t).go l) ((((body' i s).run st).run t).go l))
-    (s : σ) (st : LigState) (t : Transcript) (l : Array Claims.Msg) (hl : l.size = L + g 0) (hL : L + g 0 ≤ n) :
+    (s : σ) (st : LigState) (t : Transcript) (l : Array Hash.Msg) (hl : l.size = L + g 0) (hL : L + g 0 ≤ n) :
     EqAt n (L + g k) (fun _ => True) ((((forIn [:k] s body).run st).run t).go l)
       ((((forIn [:k] s body').run st).run t).go l) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn_eq_forIn_range']
   simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
-  suffices key : ∀ j a (s : σ) (st : LigState) (t : Transcript) (l : Array Claims.Msg), a + j = k →
+  suffices key : ∀ j a (s : σ) (st : LigState) (t : Transcript) (l : Array Hash.Msg), a + j = k →
       l.size = L + g a → L + g a ≤ n → EqAt n (L + g k) (fun _ => True)
         ((((forIn (List.range' a j) s body).run st).run t).go l)
         ((((forIn (List.range' a j) s body').run st).run t).go l) from
@@ -290,12 +290,12 @@ theorem eqAt_forInL {n : ℕ} (body body' : ℕ → σ → LP PS (ForInStep σ))
 
 /-- **A loop over an array of equal steps**: step `k`, from `g k ≤ n` bodies, yields after `g (k + 1)`. -/
 theorem eqAt_forIn_array {n : ℕ} (xs : Array α) (body body' : α → σ → PS (ForInStep σ)) (g : ℕ → ℕ)
-    (hb : ∀ k (hk : k < xs.size), ∀ (s : σ) (l : Array Claims.Msg), l.size = g k → g k ≤ n →
+    (hb : ∀ k (hk : k < xs.size), ∀ (s : σ) (l : Array Hash.Msg), l.size = g k → g k ≤ n →
       EqAt n (g (k + 1)) (fun r => ∃ u, r = .yield u) ((body xs[k] s).go l) ((body' xs[k] s).go l))
-    (s : σ) (l : Array Claims.Msg) (hl : l.size = g 0) (hL : g 0 ≤ n) :
+    (s : σ) (l : Array Hash.Msg) (hl : l.size = g 0) (hL : g 0 ≤ n) :
     EqAt n (g xs.size) (fun _ => True) ((forIn xs s body).go l) ((forIn xs s body').go l) := by
   rw [← Array.forIn_toList, ← Array.forIn_toList]
-  suffices key : ∀ (ys : List α) (j : ℕ) (s : σ) (l : Array Claims.Msg), xs.toList.drop j = ys →
+  suffices key : ∀ (ys : List α) (j : ℕ) (s : σ) (l : Array Hash.Msg), xs.toList.drop j = ys →
       j ≤ xs.size → l.size = g j → g j ≤ n →
       EqAt n (g xs.size) (fun _ => True) ((forIn ys s body).go l) ((forIn ys s body').go l) from
     key xs.toList 0 s l (by simp) (Nat.zero_le _) hl hL
@@ -330,12 +330,12 @@ section Asks
 
 variable (coin : ℕ → ℕ → F128) (n : ℕ)
 
-theorem asksCut_round_go (c : ByteArray) (l : Array Claims.Msg) :
+theorem asksCut_round_go (c : ByteArray) (l : Array Hash.Msg) :
     ((asksCut coin n).round c).go l =
       ((if n ≤ l.size then throw "past the openings" else pure (coin l.size) : PS (ℕ → F128)).go
         (l.push (Claims.toMsg c))) := rfl
 
-theorem squeezeP_cut_ok (kind : UInt8) {k : ℕ} (hk : k ≠ 0) (t : Transcript) {l : Array Claims.Msg}
+theorem squeezeP_cut_ok (kind : UInt8) {k : ℕ} (hk : k ≠ 0) (t : Transcript) {l : Array Hash.Msg}
     (hl : l.size < n) :
     ((squeezeP (asksCut coin n) kind k).run t).go l =
       (.ok ((Array.range k).map (coin l.size), afterSq t kind k (coin l.size)),
@@ -344,7 +344,7 @@ theorem squeezeP_cut_ok (kind : UInt8) {k : ℕ} (hk : k ≠ 0) (t : Transcript)
   rw [go_bind, asksCut_round_go, ite_eq_right (show ¬ n ≤ l.size by omega)]
   rfl
 
-theorem squeezeP_cut_err (kind : UInt8) {k : ℕ} (hk : k ≠ 0) (t : Transcript) {l : Array Claims.Msg}
+theorem squeezeP_cut_err (kind : UInt8) {k : ℕ} (hk : k ≠ 0) (t : Transcript) {l : Array Hash.Msg}
     (hl : n ≤ l.size) :
     ((squeezeP (asksCut coin n) kind k).run t).go l =
       (.error "past the openings", l.push (Claims.toMsg (framed t kind k))) := by
@@ -353,7 +353,7 @@ theorem squeezeP_cut_err (kind : UInt8) {k : ℕ} (hk : k ≠ 0) (t : Transcript
   rfl
 
 /-- **A squeeze sends one body**, and returns only before round `n`. -/
-theorem eqAt_squeezeP (kind : UInt8) {k : ℕ} (hk : k ≠ 0) (t : Transcript) {l : Array Claims.Msg} {N : ℕ}
+theorem eqAt_squeezeP (kind : UInt8) {k : ℕ} (hk : k ≠ 0) (t : Transcript) {l : Array Hash.Msg} {N : ℕ}
     (hl : l.size = N) :
     EqAt n (N + 1) (fun _ => True) (((squeezeP (asksCut coin n) kind k).run t).go l)
       (((squeezeP (asksCut coin n) kind k).run t).go l) := by
@@ -365,18 +365,18 @@ theorem eqAt_squeezeP (kind : UInt8) {k : ℕ} (hk : k ≠ 0) (t : Transcript) {
     obtain ⟨-, rfl⟩ := Prod.mk.inj h
     exact ⟨by simp [hl], by omega, trivial⟩
 
-theorem eqAt_sampleVecP {k : ℕ} (hk : k ≠ 0) (t : Transcript) {l : Array Claims.Msg} {N : ℕ} (hl : l.size = N) :
+theorem eqAt_sampleVecP {k : ℕ} (hk : k ≠ 0) (t : Transcript) {l : Array Hash.Msg} {N : ℕ} (hl : l.size = N) :
     EqAt n (N + 1) (fun _ => True) (((sampleVecP (asksCut coin n) k).run t).go l)
       (((sampleVecP (asksCut coin n) k).run t).go l) :=
   eqAt_squeezeP coin n 2 hk t hl
 
-theorem eqAt_sampleP (t : Transcript) {l : Array Claims.Msg} {N : ℕ} (hl : l.size = N) :
+theorem eqAt_sampleP (t : Transcript) {l : Array Hash.Msg} {N : ℕ} (hl : l.size = N) :
     EqAt n (N + 1) (fun _ => True) (((sampleP (asksCut coin n)).run t).go l)
       (((sampleP (asksCut coin n)).run t).go l) := by
   unfold sampleP
   exact eqAt_bindT (eqAt_squeezeP coin n 1 one_ne_zero t hl) fun _ t' _ h1 h2 _ => eqAt_pureT _ t' h1 h2
 
-theorem eqAt_sampleKP (t : Transcript) {l : Array Claims.Msg} {N : ℕ} (hl : l.size = N) :
+theorem eqAt_sampleKP (t : Transcript) {l : Array Hash.Msg} {N : ℕ} (hl : l.size = N) :
     EqAt n (N + 1) (fun _ => True) (((sampleKP (asksCut coin n)).run t).go l)
       (((sampleKP (asksCut coin n)).run t).go l) := by
   unfold sampleKP
@@ -387,7 +387,7 @@ theorem eqAt_link (rootB publics : Array ByteArray) (hn : 1 ≤ n) :
       (((asksCut coin n).link rootB publics).go #[]) := by
   refine eqAt_refl fun a L h => ?_
   have e : ((asksCut coin n).link rootB publics).go #[] =
-      (.ok (coin 0), (#[] : Array Claims.Msg).push (FlockDeploy.linkBody rootB.toList publics.toList)) := by
+      (.ok (coin 0), (#[] : Array Hash.Msg).push (FlockDeploy.linkBody rootB.toList publics.toList)) := by
     show ((if n ≤ 0 then throw "past the openings" else pure (coin 0) : PS (ℕ → F128)).go _) = _
     rw [ite_eq_right (show ¬ n ≤ 0 by omega)]
     rfl
@@ -397,30 +397,30 @@ theorem eqAt_link (rootB publics : Array ByteArray) (hn : 1 ≤ n) :
 
 /-! ### Ligerito's sends -/
 
-theorem eqAt_lsampleKP (st : LigState) (t : Transcript) {l : Array Claims.Msg} {N : ℕ} (hl : l.size = N) :
+theorem eqAt_lsampleKP (st : LigState) (t : Transcript) {l : Array Hash.Msg} {N : ℕ} (hl : l.size = N) :
     EqAt n (N + 1) (fun _ => True) ((((liftT (sampleKP (asksCut coin n)) : LP PS F256).run st).run t).go l)
       ((((liftT (sampleKP (asksCut coin n)) : LP PS F256).run st).run t).go l) :=
   eqAt_liftT (eqAt_sampleKP coin n t hl)
 
-theorem eqAt_lsampleP (st : LigState) (t : Transcript) {l : Array Claims.Msg} {N : ℕ} (hl : l.size = N) :
+theorem eqAt_lsampleP (st : LigState) (t : Transcript) {l : Array Hash.Msg} {N : ℕ} (hl : l.size = N) :
     EqAt n (N + 1) (fun _ => True) ((((liftT (sampleP (asksCut coin n)) : LP PS F128).run st).run t).go l)
       ((((liftT (sampleP (asksCut coin n)) : LP PS F128).run st).run t).go l) :=
   eqAt_liftT (eqAt_sampleP coin n t hl)
 
-theorem eqAt_lsampleVecP {k : ℕ} (hk : k ≠ 0) (st : LigState) (t : Transcript) {l : Array Claims.Msg} {N : ℕ}
+theorem eqAt_lsampleVecP {k : ℕ} (hk : k ≠ 0) (st : LigState) (t : Transcript) {l : Array Hash.Msg} {N : ℕ}
     (hl : l.size = N) :
     EqAt n (N + 1) (fun _ => True)
       ((((liftT (sampleVecP (asksCut coin n) k) : LP PS (Array F128)).run st).run t).go l)
       ((((liftT (sampleVecP (asksCut coin n) k) : LP PS (Array F128)).run st).run t).go l) :=
   eqAt_liftT (eqAt_sampleVecP coin n hk t hl)
 
-theorem eqAt_liftTML (x : TM α) (st : LigState) (t : Transcript) {l : Array Claims.Msg} {N : ℕ} (hl : l.size = N)
+theorem eqAt_liftTML (x : TM α) (st : LigState) (t : Transcript) {l : Array Hash.Msg} {N : ℕ} (hl : l.size = N)
     (hN : N ≤ n) :
     EqAt n N (fun _ => True) ((((liftT (liftTM x) : LP PS α).run st).run t).go l)
       ((((liftT (liftTM x) : LP PS α).run st).run t).go l) :=
   eqAt_liftT (eqAt_liftTM x t hl hN)
 
-theorem eqAt_challengeP (split : Bool) (st : LigState) (t : Transcript) {l : Array Claims.Msg} {N : ℕ}
+theorem eqAt_challengeP (split : Bool) (st : LigState) (t : Transcript) {l : Array Hash.Msg} {N : ℕ}
     (hl : l.size = N) :
     EqAt n (N + 1) (fun _ => True) ((((challengeP (asksCut coin n) split).run st).run t).go l)
       ((((challengeP (asksCut coin n) split).run st).run t).go l) := by
@@ -437,7 +437,7 @@ theorem eqAt_challengeP (split : Bool) (st : LigState) (t : Transcript) {l : Arr
     exact eqAt_pureL _ st₅ t₅ h1 h2
 
 theorem eqAt_oodIntroP (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : ℕ} (hdim : dim ≠ 0) (st : LigState)
-    (t : Transcript) {l : Array Claims.Msg} {N : ℕ} (hl : l.size = N) :
+    (t : Transcript) {l : Array Hash.Msg} {N : ℕ} (hl : l.size = N) :
     EqAt n (N + 2) (fun _ => True) ((((oodIntroP (asksCut coin n) nonce g dim).run st).run t).go l)
       ((((oodIntroP (asksCut coin n) nonce g dim).run st).run t).go l) := by
   unfold oodIntroP
@@ -450,7 +450,7 @@ theorem eqAt_oodIntroP (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : 
   exact eqAt_lsilent (lsilent_modify _) st₆ t₆ h1 h2
 
 theorem eqAt_queryP (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit) (hq : lv.q ≠ 0)
-    (st : LigState) (t : Transcript) {l : Array Claims.Msg} {N : ℕ} (hl : l.size = N) (hN : N ≤ n) :
+    (st : LigState) (t : Transcript) {l : Array Hash.Msg} {N : ℕ} (hl : l.size = N) (hN : N ≤ n) :
     EqAt n (N + 2) (fun _ => True) ((((queryP (asksCut coin n) nonce ms lv cm).run st).run t).go l)
       ((((queryP (asksCut coin n) nonce ms lv cm).run st).run t).go l) := by
   unfold queryP
@@ -470,14 +470,14 @@ variable (coin : ℕ → ℕ → F128) (n : ℕ)
 
 /-- A refusal, whatever follows it. -/
 theorem eqAt_throwT (err : String) {f g : α → TMW PS β} {Q : β × Transcript → Prop} (t : Transcript)
-    (l : Array Claims.Msg) {M : ℕ} :
+    (l : Array Hash.Msg) {M : ℕ} :
     EqAt n M Q ((((throw err : TMW PS α) >>= f).run t).go l) ((((throw err : TMW PS α) >>= g).run t).go l) := by
   have e : ((throw err : TMW PS α).run t).go l = (.error err, l) := rfl
   rw [bind_go_err e, bind_go_err e]
   exact eqAt_refl fun _ _ h => by simp at h
 
 theorem eqAt_rankCheckP (m kLog : ℕ) (prior : Array (List F128)) (words : List ℕ) (t : Transcript)
-    {l : Array Claims.Msg} {N : ℕ} (hl : l.size = N) (hN : N ≤ n) :
+    {l : Array Hash.Msg} {N : ℕ} (hl : l.size = N) (hN : N ≤ n) :
     EqAt n N (fun _ => True) (((rankCheckP m kLog prior words : TMW PS Unit).run t).go l)
       (((rankCheckP m kLog prior words : TMW PS Unit).run t).go l) := by
   refine eqAt_silentT (fun a t' l' h => ?_) hl hN
@@ -492,7 +492,7 @@ theorem eqAt_rankCheckP (m kLog : ℕ) (prior : Array (List F128)) (words : List
 /-- **The cut's zerocheck at masked values agreeing where sent**: `round1_ab`'s and `round1_c`'s after its `2` sends,
 residual round `i`'s after `3 + i`, the finals after `3 + (m − 6)`, each where that many bodies are at most `n`. -/
 theorem zerocheckCut_eqAt {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray) (lay : Zk.PadLayout)
-    (mk mk' : ℕ → F128) (t : Transcript) {l : Array Claims.Msg} {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
+    (mk mk' : ℕ → F128) (t : Transcript) {l : Array Hash.Msg} {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
     (hab : L + 2 ≤ n → ∀ i < 64, mk (lay.r1ab i) = mk' (lay.r1ab i) ∧ mk (lay.r1c i) = mk' (lay.r1c i))
     (hml : ∀ i < m - 6, L + 3 + i ≤ n → mk (lay.ml i 0) = mk' (lay.ml i 0) ∧ mk (lay.ml i 1) = mk' (lay.ml i 1))
     (hf : L + 3 + (m - 6) ≤ n → mk lay.fa = mk' lay.fa ∧ mk lay.fb = mk' lay.fb ∧ mk lay.fc = mk' lay.fc) :
@@ -533,7 +533,7 @@ theorem zerocheckCut_eqAt {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray
 /-- **The cut's lincheck at masked values agreeing where sent**: lincheck round `j`'s after its `2 + j` sends, `z_partial`
 after `2 + (k_log − 6)`. -/
 theorem lincheckCut_eqAt (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (mk mk' : ℕ → F128) (zc : ZcOut)
-    (t : Transcript) {l : Array Claims.Msg} {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
+    (t : Transcript) {l : Array Hash.Msg} {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
     (hlc : ∀ j < c.kLog - 6, L + 2 + j ≤ n → mk (lay.lc j 0) = mk' (lay.lc j 0) ∧ mk (lay.lc j 1) = mk' (lay.lc j 1))
     (hzp : L + 2 + (c.kLog - 6) ≤ n → ∀ i < 64, mk (lay.zp i) = mk' (lay.zp i)) :
     EqAt n (L + 3 + (c.kLog - 6)) (fun _ => True)
@@ -563,7 +563,7 @@ theorem lincheckCut_eqAt (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (mk mk
 
 /-- **The ring switch at switched vectors agreeing where sent**: claim `k`'s after `k` sends. -/
 theorem ringSwitchCut_eqAt (sv sv' : ℕ → Array F128) (claims : Array Claim) (hc : claims.size ≠ 0) (t : Transcript)
-    {l : Array Claims.Msg} {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
+    {l : Array Hash.Msg} {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
     (hsv : ∀ k < claims.size, L + k ≤ n → sv k = sv' k) :
     EqAt n (L + claims.size + 1) (fun _ => True)
       (((ringSwitchCut (asksCut coin n) sv claims).run t).go l)
@@ -584,7 +584,7 @@ theorem ringSwitchCut_eqAt (sv sv' : ℕ → Array F128) (claims : Array Claim) 
 /-- **The cut's PIOP at sources agreeing where sent**: the zerocheck's, the lincheck's and the ring switch's reads, each
 at its send count. -/
 theorem piopCut_eqAt (st : Setup) (hm : 14 ≤ st.m) (lay : Zk.PadLayout) (src src' : RepSrc) (cap root : ByteArray)
-    (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) (t : Transcript) {l : Array Claims.Msg}
+    (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) (t : Transcript) {l : Array Hash.Msg}
     {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
     (hab : L + 2 ≤ n → ∀ i < 64, src.masked (lay.r1ab i) = src'.masked (lay.r1ab i) ∧
       src.masked (lay.r1c i) = src'.masked (lay.r1c i))
@@ -616,7 +616,7 @@ theorem piopCut_eqAt (st : Setup) (hm : 14 ≤ st.m) (lay : Zk.PadLayout) (src s
 
 /-- A Ligerito refusal, whatever follows it. -/
 theorem eqAt_throwL (err : String) {f g : α → LP PS β} {Q : (β × LigState) × Transcript → Prop} (st : LigState)
-    (t : Transcript) (l : Array Claims.Msg) {M : ℕ} :
+    (t : Transcript) (l : Array Hash.Msg) {M : ℕ} :
     EqAt n M Q (((((throw err : LP PS α) >>= f).run st).run t).go l)
       (((((throw err : LP PS α) >>= g).run st).run t).go l) := by
   have e : (((((throw err : LP PS α) >>= f).run st).run t).go l) = (.error err, l) := rfl
@@ -629,7 +629,7 @@ message `j`'s after `2 + j`, the pair's sums after `2 + k_0`, and the restart's 
 after `k_0 + 4`; it sends `k_0 + 7 + 11 R` bodies. -/
 theorem ligeritoCut_eqAt (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit) (b : Array F128)
     (lay : Zk.PadLayout) (src src' : RepSrc) (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (hR : 2 ≤ sch.levels.size)
-    (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) (t : Transcript) {l : Array Claims.Msg} {L : ℕ}
+    (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) (t : Transcript) {l : Array Hash.Msg} {L : ℕ}
     (hl : l.size = L) (hL : L ≤ n)
     (hood : L + 1 ≤ n → src.masked (lay.lgOod 0) = src'.masked (lay.lgOod 0))
     (hmsg : ∀ j < sch.k0, L + 2 + j ≤ n → ∀ i < 4, src.masked (lay.lgMsg j i) = src'.masked (lay.lgMsg j i))
@@ -779,7 +779,7 @@ theorem tsilent_liftV (v : V α) : TSilent (StateT.lift (monadLift v : PS α) : 
 /-- **The cut's inner proof at sources agreeing where sent**: `ρ`, `σ` after `1` send, `τ`'s commitment after `2`, `Y`
 after `3`, `τ` and its salt after `4`; it sends `4` bodies. -/
 theorem innerCut_eqAt (lay : Zk.PadLayout) (ic : InnerCommit) (finalC : F128) (src src' : RepSrc)
-    (cons : Array (String × Zk.Lin)) (t : Transcript) {l : Array Claims.Msg} {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
+    (cons : Array (String × Zk.Lin)) (t : Transcript) {l : Array Hash.Msg} {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
     (hrs : L + 1 ≤ n → src.rhoIn = src'.rhoIn ∧ src.sigmaIn = src'.sigmaIn)
     (htc : L + 2 ≤ n → src.tauCom = src'.tauCom) (hy : L + 3 ≤ n → src.y = src'.y)
     (hT : L + 4 ≤ n → src.tau = src'.tau ∧ src.tauSalt = src'.tauSalt) :
@@ -870,7 +870,7 @@ variable (coin : ℕ → ℕ → F128) (n : ℕ)
 `repSends` bodies. -/
 theorem repCut_eqAt (st : Setup) (sch : Schedule) (hs : SchOk st sch) (rep : ℕ) (dom : ByteArray) (cm0 : Commit)
     (extras : Array Claim) (ic : InnerCommit) (src src' : RepSrc) (prior : Array (List F128)) (words : List ℕ)
-    (t : Transcript) {l : Array Claims.Msg} {B : ℕ} (hl : l.size = B) (hB : B ≤ n)
+    (t : Transcript) {l : Array Hash.Msg} {B : ℕ} (hl : l.size = B) (hB : B ≤ n)
     (hA : RepAgree n B st sch extras src src') :
     EqAt n (B + repSends st sch extras) (fun _ => True)
       (((repCut (asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch rep dom cm0 extras ic src prior words).run t).go l)
@@ -914,21 +914,21 @@ theorem padsTreeCut_quiet (h : ByteArray → ByteArray) (N : ℕ) (src : RepSrc)
   sim_walk [leafWith_sim quietS hh]
 
 theorem eqAt_quiet_bind {n M : ℕ} {Q : β → Prop} {v : V α} {x : PS α} (hq : quietS.R v x) {f g : α → PS β}
-    {l : Array Claims.Msg} (hfg : ∀ a, v = .ok a → EqAt n M Q ((f a).go l) ((g a).go l)) :
+    {l : Array Hash.Msg} (hfg : ∀ a, v = .ok a → EqAt n M Q ((f a).go l) ((g a).go l)) :
     EqAt n M Q ((x >>= f).go l) ((x >>= g).go l) := by
   rw [go_bind, go_bind, hq l]
   cases v with
   | error e => exact ⟨rfl, fun a L h => by simp at h⟩
   | ok a => exact hfg a rfl
 
-theorem eq_quiet_bind {v : V α} {x : PS α} (hq : quietS.R v x) {f g : α → PS β} {l : Array Claims.Msg}
+theorem eq_quiet_bind {v : V α} {x : PS α} (hq : quietS.R v x) {f g : α → PS β} {l : Array Hash.Msg}
     (hfg : ∀ a, v = .ok a → (f a).go l = (g a).go l) : (x >>= f).go l = (x >>= g).go l := by
   rw [go_bind, go_bind, hq l]
   cases v with
   | error e => rfl
   | ok a => exact hfg a rfl
 
-theorem eq_of_eqAt_bind {n N : ℕ} {P : α → Prop} {x y : PS α} {f g : α → PS β} {l : Array Claims.Msg}
+theorem eq_of_eqAt_bind {n N : ℕ} {P : α → Prop} {x y : PS α} {f g : α → PS β} {l : Array Hash.Msg}
     (hxy : EqAt n N P (x.go l) (y.go l)) (hfg : ∀ a l', x.go l = (.ok a, l') → (f a).go l' = (g a).go l') :
     (x >>= f).go l = (y >>= g).go l := by
   rw [go_bind, go_bind, ← hxy.1]
@@ -937,7 +937,7 @@ theorem eq_of_eqAt_bind {n N : ℕ} {P : α → Prop} {x y : PS α} {f g : α �
   | error err => rfl
   | ok a => exact hfg a l' hx
 
-theorem eqAt_purePS {P : α → Prop} (a : α) {l : Array Claims.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n)
+theorem eqAt_purePS {P : α → Prop} (a : α) {l : Array Hash.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n)
     (hP : P a) : EqAt n N P ((pure a : PS α).go l) ((pure a : PS α).go l) := by
   refine eqAt_refl fun b L h => ?_
   rw [JsonRT.go_pure] at h

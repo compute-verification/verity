@@ -244,7 +244,7 @@ def PlainSlotQ {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l�
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
-    (x : Claims.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+    (x : Hash.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (hdec : PlainHDec L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
     (P : Claims.Prover Ω) (ω : Ω) (C : Fin (wordLen false x) → List 𝔽) (r : Fin 2)
     (ℓ : Fin (l₀ :: l₁ :: rest).length) (j : ℕ) (u : plainTape x) : Prop :=
@@ -256,7 +256,7 @@ theorem plainAlignQ_of_slot {spec : SessionSpec} {st : Stmt} {L : Layout st} {m 
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
     {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
     {hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts} {I : Exec.Inputs} {d : Json}
-    {x : Claims.Msg} {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)}
+    {x : Hash.Msg} {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)}
     {hdec : PlainHDec L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn} {hw : 2 * spec.mPts ≤ 65536} {Ω : Type}
     {P : Claims.Prover Ω} {ω : Ω} {C : Fin (wordLen false x) → List 𝔽} {r : Fin 2}
     {ℓ : Fin (l₀ :: l₁ :: rest).length} {j : ℕ} {u : plainTape x}
@@ -267,7 +267,7 @@ theorem plainAlignQ_of_slot {spec : SessionSpec} {st : Stmt} {L : Layout st} {m 
 /-- **The simulated strategy reaches each plain fork slot after `plainJ r ℓ` coins**: `PlainForkAlign` with
 `PlainSlotQ` for `PlainAlignQ`, at every plain statement in scope, its one table's `fast100` schedule and the plain
 decoders where the outputs are public and where they are hidden under hm96 leaves. -/
-def PlainSlotAlign (x : Claims.Msg) : Prop :=
+def PlainSlotAlign (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (h : tables false x = [(spec, st)]) (d : Json) (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -286,7 +286,7 @@ def PlainSlotAlign (x : Claims.Msg) : Prop :=
         (plain_hdecHAt hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r ℓ
         (plainJ (tables_head_one h) hsch r ℓ).val u)
 
-theorem plainForkAlign_of_slot {x : Claims.Msg} (h : PlainSlotAlign x) : PlainForkAlign x :=
+theorem plainForkAlign_of_slot {x : Hash.Msg} (h : PlainSlotAlign x) : PlainForkAlign x :=
   fun s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω =>
     ⟨fun hh C r ℓ u => plainAlignQ_of_slot
         ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω).1 hh C r ℓ u),
@@ -300,7 +300,7 @@ def PlainSlotQK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : Lay
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
-    (x : Claims.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+    (x : Hash.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
     (hdec : PlainHDecK keep L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
     (P : Claims.Prover Ω) (ω : Ω) (C : Fin (wordLen false x) → List 𝔽) (r : Fin 2)
     (ℓ : Fin (l₀ :: l₁ :: rest).length) (j : ℕ) (u : plainTape x) : Prop :=
@@ -313,7 +313,7 @@ theorem plainAlignQ_of_slotK (keep : Bool → Bool) {spec : SessionSpec} {st : S
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
     {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
     {hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts} {I : Exec.Inputs} {d : Json}
-    {x : Claims.Msg} {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)}
+    {x : Hash.Msg} {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)}
     {hdec : PlainHDecK keep L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn} {hw : 2 * spec.mPts ≤ 65536} {Ω : Type}
     {P : Claims.Prover Ω} {ω : Ω} {C : Fin (wordLen false x) → List 𝔽} {r : Fin 2}
     {ℓ : Fin (l₀ :: l₁ :: rest).length} {j : ℕ} {u : plainTape x}
@@ -322,7 +322,7 @@ theorem plainAlignQ_of_slotK (keep : Bool → Bool) {spec : SessionSpec} {st : S
   advRSL_le_forkC _ _ _ _ _ m k0 l₀ l₁ rest ext hk0 hm _ _ _ r ℓ.val j _ h
 
 /-- `PlainSlotAlign` at `VK keep`. -/
-def PlainSlotAlignK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
+def PlainSlotAlignK (keep : Bool → Bool) (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
     (h : tables false x = [(spec, st)]) (d : Json) (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
@@ -342,7 +342,7 @@ def PlainSlotAlignK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
         (plainJ (x := x) (tables_head_one h) hsch r ℓ).val u)
 
 /-- `plainForkAlign_of_slot` at `VK keep`. -/
-theorem plainForkAlign_of_slotK (keep : Bool → Bool) {x : Claims.Msg} (h : PlainSlotAlignK keep x) : PlainForkAlignK keep x :=
+theorem plainForkAlign_of_slotK (keep : Bool → Bool) {x : Hash.Msg} (h : PlainSlotAlignK keep x) : PlainForkAlignK keep x :=
   fun s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω =>
     ⟨fun hh C r ℓ u => plainAlignQ_of_slotK keep
         ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω).1 hh C r ℓ u),

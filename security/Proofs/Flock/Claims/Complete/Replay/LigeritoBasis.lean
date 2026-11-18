@@ -177,7 +177,7 @@ theorem claims_xsize (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22
         (hpts r hr) (fun t => fOf r[t.val]!) (fun t => rfl) v hv).x_size
 
 /-- **At the deployed relation, every claim a rep opens has `m − 6` coordinates.** -/
-theorem _root_.FlockComplete.Run.claims_xsize {H : Claims.Msg → Claims.Msg} (o : Run H Readable.relation) {i : ℕ}
+theorem _root_.FlockComplete.Run.claims_xsize {H : Hash.Msg → Hash.Msg} (o : Run H Readable.relation) {i : ℕ}
     (hi : i < o.tabs.size) (r : ℕ) : ∀ c ∈ o.claims i r, c.x.size = o.tabs[i]!.m - 6 := by
   obtain ⟨st, hsts, hwf, hrw, -, -⟩ := o.model
   obtain ⟨st', hsts', hspec, h22, -⟩ := o.table
@@ -196,7 +196,7 @@ theorem _root_.FlockComplete.Run.claims_xsize {H : Claims.Msg → Claims.Msg} (o
     (o.sess_points hspec)
 
 /-- **`BasisOk` at the deployed relation**: at every rep, the verifier's basis is the batched basis's extension. -/
-theorem basisOk_relation (H : Claims.Msg → Claims.Msg) : BasisOk H Readable.relation := by
+theorem basisOk_relation (H : Hash.Msg → Hash.Msg) : BasisOk H Readable.relation := by
   intro o i hi r _ q e y hqe hy
   obtain ⟨⟨hn7, -⟩, hsm⟩ := fast100_dims _ _ (o.sch_fast100 hi)
   have hn : (o.sch i).n = o.tabs[i]!.m - 7 := by rw [hn7, hsm]

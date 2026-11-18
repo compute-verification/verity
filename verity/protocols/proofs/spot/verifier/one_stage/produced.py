@@ -3,12 +3,12 @@ against the one root the record names (a served H1 leaf proved as its 32 lanes a
 leaf's lane partials, `pouw.leaf_lanes`).
 
 A *produced value* is rows the prover computes after the sample from what it committed before it (H1's partials: lane l's
-share of the leaf's receipt, row l), committed as a registered value's rows are (`registered.Registered.commit`, in the
+share of the leaf's receipt, row l), committed as a registered value's rows are (`registered_value.Registered.commit`, in the
 row format of the ports that read them) under its own domain. It is never a statement's output: outputs are public and at
 most 16 bits, and a partial is 8,320 bits at K = 4096. It stays hidden: the statements read it as inputs under the tree's
 hiding salts, and only their check bits leave.
 
-* **The domain** (`domain`) is a registered value's (`registered.domain`) with ``"produced": D`` in its binding, D the
+* **The domain** (`domain`) is a registered value's (`registered_value.domain`) with ``"produced": D`` in its binding, D the
   digest of the docket whose sample the values follow (`registration.digest`): a produced tree opens under no
   other docket's domain, so a leaf's partials are refused in any other leaf's, window's or prover's session, and a
   registered value's root (whose binding never has ``produced``) opens under none.
@@ -38,6 +38,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from verity.commitments import registered_value as RV
 from verity.commitments import hm96
 from verity.commitments.merkle import CommitmentDomain
 
@@ -45,7 +46,7 @@ from . import registered as G
 
 FORMAT = "verity/registration/produced/v1"
 KEYS = ("draw", "format", "openings", "produced", "registration")
-PRODUCED_KEY = G.PRODUCED_KEY
+PRODUCED_KEY = RV.PRODUCED_KEY
 _HEX = re.compile(r"[0-9a-f]+")
 
 
@@ -58,16 +59,9 @@ def _hex_bc(s: Any) -> bool:
 
 
 def domain(program: str, value: str, words: int, leaves: int, word_bits: int, docket: str) -> CommitmentDomain:
-    """``registered.domain``'s, with ``"produced": registration`` (the registration's digest, lowercase hex of 64 bytes)
+    """``registered_value.domain``'s, with ``"produced": registration`` (the registration's digest, lowercase hex of 64 bytes)
     in its binding."""
-    return G.domain(program, value, words, leaves, word_bits, produced=docket)
-
-
-def commit(program: str, value: str, rows: Sequence[Sequence[int]], docket: str, salts: Sequence[bytes] | None = None,
-           word_bits: int = G.WORD_BITS, schema: str = G.SCHEMA) -> G.Registered:
-    """The prover's produced tree: ``rows`` committed as a registered value's under `domain`, its `entry()` the record's
-    and its `statement` the opened reads."""
-    return G.Registered.commit(program, value, rows, salts, word_bits, schema, produced=docket)
+    return RV.domain(program, value, words, leaves, word_bits, produced=docket)
 
 
 def record(docket: str, draw: str, produced: Sequence[Mapping[str, Any]],
@@ -78,14 +72,14 @@ def record(docket: str, draw: str, produced: Sequence[Mapping[str, Any]],
             "openings": {v: [[int(p), bc] for p, bc in rows] for v, rows in openings.items()}}
 
 
-def rows_of(tree: G.Registered, positions: Sequence[int] | None = None) -> list[tuple[int, str]]:
+def rows_of(tree: RV.Registered, positions: Sequence[int] | None = None) -> list[tuple[int, str]]:
     """The openings of ``tree``'s rows at ``positions`` (default: every row), each ``(position, b || c hex)``."""
     ps = range(tree.leaves) if positions is None else sorted(set(positions))
     return [(p, tree.bcs[p].hex()) for p in ps]
 
 
 def entry(program: str, value: str, leaves: int, words: int, docket: str,
-          word_bits: int = G.WORD_BITS) -> dict[str, Any]:
+          word_bits: int = RV.WORD_BITS) -> dict[str, Any]:
     """The verifier's own ``{"leaves", "words", "word_bits", "domain"}`` of the produced value ``value``, ``leaves`` rows
     of ``words`` leaves of ``word_bits``, as the protocol states its shape: what `check` holds the record's entry to."""
     return {"leaves": int(leaves), "words": int(words), "word_bits": int(word_bits),
@@ -97,7 +91,7 @@ def port(value: str, e: Mapping[str, Any], root: str, rows: Sequence[int | None]
     proof block, None where the proof block doesn't read it): ``e`` its entry (`entry`, or a registered value's from the accepted
     docket) and ``root`` the accepted record's."""
     return {"value": value, "root": root, "leaves": int(e["leaves"]), "words": int(e["words"]),
-            "word_bits": int(e.get("word_bits", G.WORD_BITS)), "domain": e["domain"], **G.schema_entry(schema),
+            "word_bits": int(e.get("word_bits", RV.WORD_BITS)), "domain": e["domain"], **G.schema_entry(schema),
             "reads": list(rows)}
 
 
@@ -119,8 +113,8 @@ def check(rec: Any, docket: str, draw: str, mine: Mapping[str, Mapping[str, Any]
     if rec["draw"] != draw:
         add("P-draw")
     got = rec["produced"]
-    width_keys = sorted((*G.ENTRY_KEYS, G.WIDTH_KEY))
-    if not isinstance(got, list) or not all(isinstance(e, dict) and sorted(e) in (sorted(G.ENTRY_KEYS), width_keys) for e in got):
+    width_keys = sorted((*RV.ENTRY_KEYS, RV.WIDTH_KEY))
+    if not isinstance(got, list) or not all(isinstance(e, dict) and sorted(e) in (sorted(RV.ENTRY_KEYS), width_keys) for e in got):
         add("P-produced")
         return tuple(codes)
     names = [e["value"] for e in got]
@@ -141,9 +135,9 @@ def check(rec: Any, docket: str, draw: str, mine: Mapping[str, Mapping[str, Any]
             add("P-words")
         if e["domain"] != want["domain"]:
             add("P-domain")
-        b = e.get(G.WIDTH_KEY)
-        if (G.WIDTH_KEY not in e and want["word_bits"] != G.WORD_BITS) or (
-                G.WIDTH_KEY in e and not (type(b) is int and b == want["word_bits"] and b != G.WORD_BITS)):
+        b = e.get(RV.WIDTH_KEY)
+        if (RV.WIDTH_KEY not in e and want["word_bits"] != RV.WORD_BITS) or (
+                RV.WIDTH_KEY in e and not (type(b) is int and b == want["word_bits"] and b != RV.WORD_BITS)):
             add("P-word_bits")
     return tuple(codes)
 
@@ -195,12 +189,12 @@ def shared(want: Mapping[str, Mapping[int, str]], verdicts: Mapping[str, Mapping
 
 
 def known_port(program: str, value: str, row: Sequence[int], salt: bytes, docket: str,
-               word_bits: int = G.WORD_BITS, schema: str = G.SCHEMA_V2) -> tuple[dict[str, Any], tuple[int, str]]:
+               word_bits: int = RV.WORD_BITS, schema: str = G.SCHEMA_V2) -> tuple[dict[str, Any], tuple[int, str]]:
     """A port the verifier registers at known content (H1's lane: its salt, position, roots and index, its admit bits, and
     every statement's ``ok``): ``row`` committed under the known ``salt`` as the one row of a produced value's tree
-    (`commit`), so a session's row of it opens the root only as that content. The ``--registered`` port reading its row
+    (under `domain`), so a session's row of it opens the root only as that content. The ``--registered`` port reading its row
     0 (`port`) and its opening ``(0, b || c hex)``."""
-    t = commit(program, value, [row], docket, [salt], word_bits, schema)
+    t = RV.Registered.commit(program, value, [row], [salt], word_bits, schema, produced=docket)
     return port(value, t.entry(), t.root.hex(), [0], schema), (0, t.bcs[0].hex())
 
 
@@ -213,5 +207,5 @@ def opened(rec: Mapping[str, Any], session_registered: Mapping[str, str | None] 
     return () if all(got.get(v) == r for v, r in want.items()) else ("P-opened",)
 
 
-__all__ = ["FORMAT", "KEYS", "PRODUCED_KEY", "check", "commit", "domain", "entry", "known_port", "opened", "port",
+__all__ = ["FORMAT", "KEYS", "PRODUCED_KEY", "check", "domain", "entry", "known_port", "opened", "port",
            "record", "rows_of", "shared", "wanted"]

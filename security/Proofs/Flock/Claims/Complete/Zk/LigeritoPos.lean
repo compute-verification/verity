@@ -398,7 +398,7 @@ theorem zkLigeritoWith_pos (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) 
   · rw [show t.k + 3 + sch.k0 = t.k + 2 + sch.k0 + 1 by omega, ← er₉, ← ek₉]
     exact hnρ₁
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The run's masked Ligerito, by coin position**, at table 0's `--zk` schedule: its record is the coins of the rounds
 the ring switch left it, and it ends `k0 + 7 + 11 R` rounds on with nothing pending; those rounds issued one coin, then

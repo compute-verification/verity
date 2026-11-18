@@ -106,7 +106,7 @@ structure RecRaw where
 def RFORMAT : String := "flock-verify-rec-statement/v4"
 
 /-- **The statement's canonical bytes**: Flock's statement's (`Raw.encode`) as one field, then the recursive flags'. -/
-def RecRaw.encode (w : RecRaw) : Claims.Msg :=
+def RecRaw.encode (w : RecRaw) : Hash.Msg :=
   encStr RFORMAT ++ encBytes ⟨w.base.encode.toArray⟩ ++ encOpt encBytes w.recInner ++ encOpt encNat w.recPart ++
     encOpt encBytes w.recBindings ++ encOpt encBytes w.recRows ++ encOpt encBytes w.innerCircuit ++
     encOpt encBytes w.innerPublic ++ encOpt encBytes w.innerPartition ++ encOpt encBytes w.innerCoins ++
@@ -147,12 +147,12 @@ def RecRaw.read : Rd RecRaw := do
     innerProgram⟩
 
 /-- **The statement's decoder**: `RecRaw.read` on all of `x`, kept only when its encoding is `x`. -/
-def decodeRec (x : Claims.Msg) : Option RecRaw :=
+def decodeRec (x : Hash.Msg) : Option RecRaw :=
   match RecRaw.read.run x with
   | some (w, []) => if w.encode = x then some w else none
   | _ => none
 
-theorem decodeRec_encode {x : Claims.Msg} {w : RecRaw} (h : decodeRec x = some w) : w.encode = x := by
+theorem decodeRec_encode {x : Hash.Msg} {w : RecRaw} (h : decodeRec x = some w) : w.encode = x := by
   unfold decodeRec at h
   split at h
   · split_ifs at h with he
@@ -161,7 +161,7 @@ theorem decodeRec_encode {x : Claims.Msg} {w : RecRaw} (h : decodeRec x = some w
   · cases h
 
 /-- **The decoder is injective.** -/
-theorem decodeRec_injective {x y : Claims.Msg} {w : RecRaw} (hx : decodeRec x = some w) (hy : decodeRec y = some w) :
+theorem decodeRec_injective {x y : Hash.Msg} {w : RecRaw} (hx : decodeRec x = some w) (hy : decodeRec y = some w) :
     x = y :=
   (decodeRec_encode hx).symm.trans (decodeRec_encode hy)
 
@@ -323,13 +323,13 @@ def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
   pure (spec, sts)
 
 /-- The statement's inputs: a statement of the masked verifier only. -/
-def insO (x : Claims.Msg) : Option RecIns := do
+def insO (x : Hash.Msg) : Option RecIns := do
   let w ← decodeRec x
   if w.base.zk = false then none
   w.ins.toOption
 
 /-- The statement's inputs and its recursive setup. -/
-def setupO (x : Claims.Msg) : Option (RecIns × SessionSpec × Array Stmt) := do
+def setupO (x : Hash.Msg) : Option (RecIns × SessionSpec × Array Stmt) := do
   let s ← insO x
   let (spec, sts) ← s.setup.toOption
   pure (s, spec, sts)
@@ -342,7 +342,7 @@ theorem RecIns.setup_read {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; assumption)
 
-theorem setupO_some {x : Claims.Msg} {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
+theorem setupO_some {x : Hash.Msg} {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (h : setupO x = some (s, spec, sts)) : insO x = some s ∧ s.setup = .ok (spec, sts) := by
   unfold setupO at h
   cases hi : insO x with
@@ -356,7 +356,7 @@ theorem setupO_some {x : Claims.Msg} {s : RecIns} {spec : SessionSpec} {sts : Ar
       exact ⟨rfl, hsu⟩
 
 /-- What the verifier reads of the statement's bytes as Flock's (`Readable.Read`). -/
-def readOfO (x : Claims.Msg) : Option Readable.Read := (insO x).map fun s => s.base.read
+def readOfO (x : Hash.Msg) : Option Readable.Read := (insO x).map fun s => s.base.read
 
 theorem RecRaw.ins_base {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) : w.base.ins = .ok s.base := by
   unfold RecRaw.ins at h
@@ -365,7 +365,7 @@ theorem RecRaw.ins_base {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) : w.base.i
   all_goals first | (cases h; done) | (cases h; assumption)
 
 /-- A statement of the outer verifier is read as masked. -/
-theorem readOfO_zk {x : Claims.Msg} {r : Readable.Read} (h : readOfO x = some r) : r.zk = true := by
+theorem readOfO_zk {x : Hash.Msg} {r : Readable.Read} (h : readOfO x = some r) : r.zk = true := by
   unfold readOfO insO at h
   obtain ⟨s, hs, rfl⟩ := Option.map_eq_some_iff.1 h
   obtain ⟨w, -, hw⟩ := Option.bind_eq_some_iff.1 hs
@@ -383,7 +383,7 @@ theorem readOfO_zk {x : Claims.Msg} {r : Readable.Read} (h : readOfO x = some r)
 /-! ## Flock's statements and the V* parts' -/
 
 /-- Flock's statement reader reads Flock's format string first. -/
-theorem read_format {x : Claims.Msg} {p : Raw × Claims.Msg} (h : FlockDeploy.Raw.read.run x = some p) :
+theorem read_format {x : Hash.Msg} {p : Raw × Hash.Msg} (h : FlockDeploy.Raw.read.run x = some p) :
     ∃ r, rdStr.run x = some (FlockDeploy.FORMAT, r) := by
   unfold FlockDeploy.Raw.read at h
   simp only [StateT.run_bind] at h
@@ -396,7 +396,7 @@ theorem read_format {x : Claims.Msg} {p : Raw × Claims.Msg} (h : FlockDeploy.Ra
     · (simp [hs, e] at h) <;> cases h
 
 /-- A V* part's statement reader reads its format string first. -/
-theorem RecRaw.read_format {x : Claims.Msg} {p : RecRaw × Claims.Msg} (h : RecRaw.read.run x = some p) :
+theorem RecRaw.read_format {x : Hash.Msg} {p : RecRaw × Hash.Msg} (h : RecRaw.read.run x = some p) :
     ∃ r, rdStr.run x = some (RFORMAT, r) := by
   unfold RecRaw.read at h
   simp only [StateT.run_bind] at h
@@ -411,7 +411,7 @@ theorem RecRaw.read_format {x : Claims.Msg} {p : RecRaw × Claims.Msg} (h : RecR
 theorem formats_ne : FlockDeploy.FORMAT ≠ RFORMAT := by decide
 
 /-- **No statement is both Flock's and a V* part's**: the two encodings' first fields, their format strings, differ. -/
-theorem decodeRec_none {x : Claims.Msg} {w : Raw} (h : FlockDeploy.decode x = some w) : decodeRec x = none := by
+theorem decodeRec_none {x : Hash.Msg} {w : Raw} (h : FlockDeploy.decode x = some w) : decodeRec x = none := by
   unfold FlockDeploy.decode at h
   split at h
   · rename_i w' hr
@@ -425,35 +425,35 @@ theorem decodeRec_none {x : Claims.Msg} {w : Raw} (h : FlockDeploy.decode x = so
     · rfl
   · cases h
 
-theorem decode_none {x : Claims.Msg} {w : RecRaw} (h : decodeRec x = some w) : FlockDeploy.decode x = none := by
+theorem decode_none {x : Hash.Msg} {w : RecRaw} (h : decodeRec x = some w) : FlockDeploy.decode x = none := by
   cases hd : FlockDeploy.decode x with
   | none => rfl
   | some v => rw [decodeRec_none hd] at h; cases h
 
 /-- A statement that decodes as no V* part's has no recursive setup. -/
-theorem setupO_none {x : Claims.Msg} (h : decodeRec x = none) : setupO x = none := by
+theorem setupO_none {x : Hash.Msg} (h : decodeRec x = none) : setupO x = none := by
   unfold setupO insO
   simp [h]
 
 /-- A statement that decodes as no Flock statement sets up no session of Flock's. -/
-theorem setupOf_none {zk : Bool} {x : Claims.Msg} (h : FlockDeploy.decode x = none) : FlockDeploy.setupOf zk x = none := by
+theorem setupOf_none {zk : Bool} {x : Hash.Msg} (h : FlockDeploy.decode x = none) : FlockDeploy.setupOf zk x = none := by
   unfold FlockDeploy.setupOf FlockDeploy.insOf
   simp [h]
 
-theorem decodeRec_of_setupO {x : Claims.Msg} {p : RecIns × SessionSpec × Array Stmt} (h : setupO x = some p) :
+theorem decodeRec_of_setupO {x : Hash.Msg} {p : RecIns × SessionSpec × Array Stmt} (h : setupO x = some p) :
     ∃ w, decodeRec x = some w := by
   cases hd : decodeRec x with
   | none => rw [setupO_none hd] at h; cases h
   | some w => exact ⟨w, rfl⟩
 
-theorem decodeRec_of_readOfO {x : Claims.Msg} {r : Readable.Read} (h : readOfO x = some r) :
+theorem decodeRec_of_readOfO {x : Hash.Msg} {r : Readable.Read} (h : readOfO x = some r) :
     ∃ w, decodeRec x = some w := by
   unfold readOfO insO at h
   cases hd : decodeRec x with
   | none => simp [hd] at h
   | some w => exact ⟨w, rfl⟩
 
-theorem decode_of_readOf {zk : Bool} {x : Claims.Msg} {r : Readable.Read} (h : FlockDeploy.readOf zk x = some r) :
+theorem decode_of_readOf {zk : Bool} {x : Hash.Msg} {r : Readable.Read} (h : FlockDeploy.readOf zk x = some r) :
     ∃ w, FlockDeploy.decode x = some w := by
   unfold FlockDeploy.readOf FlockDeploy.insOf at h
   cases hd : FlockDeploy.decode x with
@@ -461,8 +461,8 @@ theorem decode_of_readOf {zk : Bool} {x : Claims.Msg} {r : Readable.Read} (h : F
   | some w => exact ⟨w, rfl⟩
 
 /-- What a deployed parser parses, its reader reads. -/
-theorem read_of_parseOf {rel : Readable.Parsed → Readable.Relation} {rd : Claims.Msg → Option Readable.Read}
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (h : Readable.parseOf rel rd x = some s) : ∃ r, rd x = some r := by
+theorem read_of_parseOf {rel : Readable.Parsed → Readable.Relation} {rd : Hash.Msg → Option Readable.Read}
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (h : Readable.parseOf rel rd x = some s) : ∃ r, rd x = some r := by
   unfold Readable.parseOf Readable.parseBytes at h
   cases hr : rd x with
   | none => simp [hr] at h

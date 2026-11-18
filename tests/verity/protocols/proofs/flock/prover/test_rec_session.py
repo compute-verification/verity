@@ -22,8 +22,9 @@ from types import SimpleNamespace
 
 import pytest
 from verity.circuits import population as PN
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+from verity.commitments import registered_value as RV
 from verity.commitments import domains as DM
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, docket as R
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ops.boolean import gf2k as G
 from verity.circuits.ops.boolean.gf2k import mul
@@ -536,7 +537,7 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
     binds = {**roots, "stacked": random.Random(2).randbytes(64 << 7)}
     program, part = _partition()
     stage = _toy_circuit(tmp_path, 8)[0].parent
-    desc = RG.Registered.commit(part["program"], "prog", [[1, 2, 3]])
+    desc = RV.Registered.commit(part["program"], "prog", [[1, 2, 3]])
     with_desc = IR.bind(stage, program, part, [desc.entry()])
     assert IR.meta(stage)[IR.REGISTRATION_KEY] == R.digest(with_desc) and IR.bound(stage) == with_desc
     with pytest.raises(ValueError, match="carries no stacked entry: R was not registered at staging"):
@@ -554,7 +555,7 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
     again = _toy_circuit(tmp_path / "again", 8)[0].parent
     IR.bind(again, program, part, [desc.entry()])
     assert _registered_top(again, binds["stacked"], 6) == (registration, bound, reg), "the circuit and the salts alone"
-    dom = RG.domain(registration["program"], RL.STACKED, RL.ROW_WORDS, 128)
+    dom = RV.domain(registration["program"], RL.STACKED, RL.ROW_WORDS, 128)
     assert registration["format"] == DM.REGISTRATION and entry == \
         {"value": "stacked", "root": entry["root"], "leaves": 128, "words": 64, "domain": dom.domain_id.hex()}
     assert reg["top"] == [b.hex() for b in RL.commit_top(binds["stacked"], [bytes.fromhex(s) for s in reg["salts"]])]
@@ -658,7 +659,7 @@ def test_serve_refuses_to_start_without_the_stacked_entry_meta_binds(tmp_path):
     with pytest.raises(ValueError, match="META binds no circuit registration"):
         serve()
     program, part = _partition()
-    IR.bind(stage, program, part, [RG.Registered.commit(part["program"], "prog", [[1, 2, 3]]).entry()])
+    IR.bind(stage, program, part, [RV.Registered.commit(part["program"], "prog", [[1, 2, 3]]).entry()])
     with pytest.raises(ValueError, match="carries no stacked entry"):
         serve()
     registration, _, _ = _registered_top(stage, random.Random(2).randbytes(64 << 7), 6)
@@ -897,7 +898,7 @@ def test_rs_opening_registers_its_messages_in_the_verifiers_round_order(stacked_
 
     def opens(i: int, reg) -> bool:
         e = own[f"m{i}"]
-        dom = RG.domain(program, f"rec-opening-c{i}", reg.words, 1)
+        dom = RV.domain(program, f"rec-opening-c{i}", reg.words, 1)
         return e["domain"] == dom.domain_id.hex() and RG.verify_read(dom, bytes.fromhex(e["root"]), 0, reg.bcs[0], reg.path(0))
 
     for i, x in enumerate(msgs):
@@ -905,7 +906,7 @@ def test_rs_opening_registers_its_messages_in_the_verifiers_round_order(stacked_
         assert reg.value == f"rec-opening-c{i}" and reg.bcs[0].hex() == x["commits"][0] and opens(i, reg)
         assert own[f"m{i}"] == RR.commits_entry(program, f"rec-opening-c{i}", reg.words, [bytes.fromhex(x["commits"][0])])
     def swap(i: int, j: int):
-        return RG.Registered.commit(program, f"rec-opening-c{i}", regs[f"m{j}"].rows, regs[f"m{j}"].salts)
+        return RV.Registered.commit(program, f"rec-opening-c{i}", regs[f"m{j}"].rows, regs[f"m{j}"].salts)
 
     assert opens(0, swap(0, 0)) and opens(1, swap(1, 1))
     assert not opens(0, swap(0, 1)) and not opens(1, swap(1, 0))
