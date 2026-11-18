@@ -119,7 +119,7 @@ OTHER_NAMES = (r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|Moore|Littl
 #: network attester's registered response cap); SPOT's served cap S, in prose; a soft
 #: cap in prose (a logit's, or a resource limit's); a cap counted in bytes, MiB, GiB or words, as its name says (a memory
 #: or buffer cap); a CUDA compute capability as the tests name one (``cap80``, ``cap90_fa2``); the served-commit
-#: profile's cap on the CTAs one launch hashes; FA3's cap on its number of splits; a machine record's cap on a job's minutes
+#: profile's cap on the CTAs one launch hashes; FA3's cap on its number of splits; a machine record's cap on a job's minutes; the unread ratchet's caps file, by its name
 CAP_SENSES = {
     "a request's length cap": r"(?<![^\W_])(?:max_tokens_cap|cap_exhausted|stopped_before_cap)(?![^\W_])",
     "a soft cap": r"(?i:(?<!\w)soft[ -]caps?(?!\w))",
@@ -131,6 +131,7 @@ CAP_SENSES = {
     "FA3's split cap": r"(?<![^\W_])(?:split_cap|SPLIT_CAP)(?![^\W_])",
     "SPOT's served cap": r"(?<!\w)served cap(?!\w)",
     "a job's time cap": r"(?<![^\W_])job_cap_minutes(?![^\W_])",
+    "the unread ratchet's caps file": r"(?<![^\W_])unread[-_]caps(?![^\W_])",
 }
 OTHER_SENSES = re.compile("|".join((OTHER_NAMES, *CAP_SENSES.values())))
 #: the live proof block's files, which name no Pearl term: each request's cap, its public ``max_tokens``, in the table
@@ -199,6 +200,9 @@ OWN_CAPS = {
     **dict.fromkeys(LIVE_CAPS, "the live proof block's caps, its requests' public `max_tokens`; a session's cap"),
     **dict.fromkeys(REQUEST_CAPS, "a request's length cap, its `max_tokens`"),
     **dict.fromkeys(SOFTCAP_CAPS, "a logit soft cap, the softcapped attention chain's `CAP`"),
+    **dict.fromkeys(("tools/verity/lean/", "tests/tools/verity/lean/", "tests/tools/check/test_lean_"),
+                    "the Lean check's caps: the unread ratchet's on an area's wholly unread modules (`unread-caps.json`) "
+                    "and a lock's counts' (`tests/test_lean_packages.py`); Pearl's is PoUW's"),
 }
 #: Pearl's `CAP`, which the table spells as a word, so no longer term holds it ("over-cap", "cap check", `capOK` and
 #: `Device.cap` are terms of their own)
@@ -815,6 +819,16 @@ def test_a_cap_of_pous_or_poub_is_another_sense_and_pearl_s_beside_it_is_not() -
         assert said(theirs + pearls, path) == pearl
     assert said(theirs + pearls, "verity/protocols/resource_accounting/compute/pouw/verifier/pearl.py") == [(1, "cap"), (1, "cap"), (1, "caps"), *pearl]
     assert [w.split("'")[1] for _, w in sites(pearls, "verity/protocols/resource_accounting/memory/poub/verifier/audit.py")] == [o for _, o in pearl]
+
+
+def test_the_unread_ratchet_s_cap_is_the_lean_check_s_own_and_pearl_s_beside_it_is_not() -> None:
+    """The Lean check's files' "cap" and the unread ratchet's caps file by its name anywhere; Pearl's spellings everywhere."""
+    theirs = "an area above its cap fails the run, naming its count, its caps and `unread-caps.json`; unread_caps"
+    pearls = "\nPearl's: capOK, Device.cap, CAP, an over-cap tile, the cap check"
+    pearl = [(2, "capOK"), (2, "Device.cap"), (2, "CAP"), (2, "over-cap"), (2, "cap check")]
+    for path in ("tools/verity/lean/lean_changed.py", "tools/verity/lean/README.md", "tests/tools/check/test_lean_records.py"):
+        assert said(theirs + pearls, path) == pearl
+    assert said(theirs + pearls, "AGENTS.md") == [(1, "cap"), (1, "caps"), *pearl]
 
 
 def test_a_row_table_s_cap_is_its_number_of_leaves_and_pearl_s_beside_it_is_not() -> None:
