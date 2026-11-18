@@ -9,7 +9,8 @@
 # STAGE=build|gate|all (default all); REPS (default 15); SHAPES, NCU_SHAPES (name:m:n:k:C); FG_ARMS.
 set -uo pipefail
 export O=${OUT:?}
-export PATH=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2
+export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
 export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm
 # the references import their siblings as verity's modules, from the clone's root
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}
