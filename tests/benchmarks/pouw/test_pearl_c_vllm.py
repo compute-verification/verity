@@ -698,6 +698,27 @@ def test_the_pinned_ring_hands_out_disjoint_regions_and_frees_them_in_order(monk
     assert not ring.live and ring.take(1000)[0][:2] == [0, 1000]
 
 
+def test_an_attached_pearl_plus_after_its_first_step_holds_the_run_the_harness_gate_reads(monkeypatch):
+    """`Attached.run` after the first step with tokens is the device run `verity_bench.vllm.runner._pearl_c_gate` checks,
+    with every name that gate and `bench_arm.PearlCArm.gate` read on it, its ``weights_root`` in the commits the run
+    itself made."""
+    rng = np.random.default_rng(41)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    cls = PPDR.PearlCDeviceRun
+    served = _Steps(monkeypatch, PPD.Kernel(R90, H100Dev(), "0" * 64), weights, [[(0, 8), (1, 8)]])
+    assert served.scheme.run is None
+    served.step()
+    run = served.scheme.run
+    assert isinstance(run, cls) and isinstance(run.schedule.name, str) and run.omit == frozenset()
+    assert all(callable(getattr(run, f)) for f in ("begin", "end", "gemm", "poison", "epoch_calls"))
+    assert isinstance(run.details, dict) and run.scheme is not None
+    assert {w: x.tensor.data_ptr() for w, x in run.weights.items()} == {w: t.data_ptr() for w, t in weights.items()}
+    assert run.commits["weights_root"] == run.epoch.weights_root.hex() and "registration" in run.commits
+    assert run.commits.get("coin_source", "in-process") == "in-process"
+    served.release()
+
+
 def test_a_step_over_one_pass_is_refused_before_its_forward(monkeypatch):
     """`passes.step_tokens`: weights of n 256 and 128 take 4 + 2 tiles a 64-row tile, so a pass of 32 tiles holds 5 tile
     rows (320 tokens) and one of 512 screened rows 256 tokens over its two calls a step: a step is held to 256 tokens
