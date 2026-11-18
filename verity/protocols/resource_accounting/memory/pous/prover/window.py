@@ -4,7 +4,8 @@
 workers, which stage from them as they do from an adapter's.
 
 `SetupIntegration` is the setup's statements (each a sampled block's decode against the store's registered row), an
-`Integration`: its `circuit()` and its `run(window)`.
+`Integration`: its `circuit()` and its `run(window)`. `session_units` is a session's units in the registered circuit, its
+circuit alone: no values are recorded for it yet.
 """
 from __future__ import annotations
 
@@ -15,7 +16,10 @@ import numpy as np
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import bits as EB
-from verity.commitments.periods.interface import Circuit, Read, Registered, Window
+from verity.circuits.defs import bind
+from verity.commitments.crypto import lms as R
+from verity.commitments.gates.embedding import read as table_read
+from verity.commitments.periods.interface import Circuit, Read, Registered, Table, TableOpening, TableRead, Window, Wire
 from verity.protocols.resource_accounting.memory.pous.verifier.setup_proof import BASE, OK, SLOT, base, leaf_bytes
 
 from . import answer_circuit, decode_circuit, session_circuit, verdict_circuit
@@ -26,6 +30,8 @@ from .setup_proof import payload_bytes, place, setup_unit, unit_inputs
 DEFINITIONS = (decode_circuit, answer_circuit, verdict_circuit, session_circuit)
 #: the setup's registered parameters: the store's blocks and W's rows
 STORE, WEIGHTS = "store", "weights"
+#: the session's: the store's blocks as a table of one block a row, and the memory attester's public key
+STORE_TABLE, ATTESTER_KEY = "store/blocks", "attester-key"
 
 
 class SetupIntegration:
@@ -101,3 +107,46 @@ class SetupIntegration:
 def _bit_rows(rows: Sequence[bytes]) -> np.ndarray:
     """Byte strings as bits in byte order, bit t being bit t mod 8 of byte ⌊t/8⌋, one row each."""
     return np.unpackbits(np.frombuffer(b"".join(rows), dtype=np.uint8).reshape(len(rows), -1), axis=1, bitorder="little")
+
+
+def coin_bound(rounds: dict[str, int]) -> tuple:
+    """STAND-IN, the one place the session's coin-bound inputs are declared: ``ji`` (``pous.session.round_coin(j)``, 96
+    bits) of each round's unit and ``tok`` (``pous.session.round_key(j)``, 32 bits) of each opening, ``head``
+    (``pous.session.header()``) and ``ctx`` (``pous.session.context()``) of the signed digest's unit, each to be
+    circuits' ``CoinInput<w>_v1`` entry, which the verifier computes from the released commitment and coin openings.
+    Until that input exists they are declared nowhere, so they stay rows the prover fills: nothing binds them, and a
+    circuit built here proves nothing about the coins. ``rounds`` is each round template's units by descriptor id."""
+    return ()
+
+
+def session_units(k: int, head: int, limit_ns: int, block_bytes: int, blocks: int, params: R.Params = R.DEPLOYED) -> Circuit:
+    """A session of ``k`` rounds over a store of ``blocks`` blocks of ``block_bytes`` bytes, as units of the registered
+    circuit, in the order its wires run (each writer before its readers):
+
+        PousSessionDigest_v1{k, head, limit_ns}  1 unit    (head, ctx, the records rows) -> (ok, m, the records rows)
+        PousSessionSig_v1{N, W, H}               1 unit    key: the registered key; m: the digest's m by wire
+        EmbeddingRead_v2{blocks, block_bytes/2}  k units   round j's opening of the store's table at its index
+        PousRound_v2{block_bytes, 0}             ⌈k/2⌉     round j = 2u: records row u by wire, row from opening j
+        PousRound_v2{block_bytes, 1}             ⌊k/2⌋     round j = 2u + 1: the same, at the record's second slot
+
+    The store's table and the key are registered values; the coin-bound inputs are `coin_bound`'s."""
+    dig = bind(session_circuit.PousSessionDigest, K=k, HEAD=head, LIMIT=limit_ns)
+    sig = bind(session_circuit.PousSessionSig, N=params.N, W=params.W, H=params.H)
+    opener = table_read(blocks, block_bytes // 2)
+    slots = [(bind(session_circuit.PousRound, N=block_bytes, SLOT=s), (k - s + 1) // 2) for s in (0, 1)]
+    slots = [(t, n) for t, n in slots if n]
+    d, g, o = (descriptor_id(t) for t in (dig, sig, opener))
+    wires = [Wire(g, "m", d, "o1", 0, (1,), 0, (0,))]
+    for s, (t, n) in enumerate(slots):
+        r = descriptor_id(t)
+        wires += [Wire(r, "records", d, f"o{2 + u}", u, (1,), 0, (0,)) for u in range(n)]
+        wires.append(Wire(r, "row", o, "o0", 0, (n,), s, (2,)))
+    key_words = (16 + params.N) // 2
+    registered = Registered(
+        {STORE: blocks * block_bytes // 2, ATTESTER_KEY: key_words},
+        tables=(Table(STORE_TABLE, STORE, 0, block_bytes // 2, blocks),),
+        reads=(Read(g, "key", ATTESTER_KEY, 0, (1,), 0, (0,)),),
+        roots=(TableRead(o, "root", STORE_TABLE, "root", 0, k), TableRead(o, "domain", STORE_TABLE, "domain", 0, k)),
+        openings=(TableOpening(o, STORE_TABLE, "tok", ("row", "salt", "path"), "o1", 0, k, row="o0"),))
+    coin_bound({descriptor_id(t): n for t, n in slots})
+    return Circuit("pous-session", ((dig, 1), (sig, 1), (opener, k), *slots), wires=tuple(wires), registered=registered)

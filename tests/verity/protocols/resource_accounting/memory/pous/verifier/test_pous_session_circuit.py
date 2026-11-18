@@ -29,10 +29,6 @@ def _bits(data: bytes) -> list[int]:
     return [(b >> k) & 1 for b in data for k in range(8)]
 
 
-def _int(v: int, width: int) -> list[int]:
-    return [(v >> t) & 1 for t in range(width)]
-
-
 def _flip(b: bytes, at: int = 0, bit: int = 0) -> bytes:
     return b[:at] + bytes([b[at] ^ 1 << bit]) + b[at + 1:]
 
@@ -163,3 +159,22 @@ def test_the_signed_digest_unit_agrees_with_its_reference() -> None:
     out = np.asarray(E.evaluate_batch(bind(S.PousSessionDigest, K=K, HEAD=n, LIMIT=c.limit_ns), *cols))
     assert out.reshape(len(cases), -1).tolist() == [[ok, *_bits(mm), *(b for r in rs for b in _bits(r))]
                                                      for ok, mm, rs in want]
+
+
+@pytest.mark.slow
+def test_the_door_takes_the_sessions_units_in_wire_order() -> None:
+    """The session's units as `window.session_units` lays them out (digest, signature, the store's openings, the rounds)
+    make one Program through the door (`wired_population_program`), and the signature ranked before the digest it reads
+    is refused. Building the Program takes about two minutes at toy size; nothing cheaper runs the door's rank and port
+    rules over these units."""
+    from verity.commitments.periods.interface import Circuit
+    from verity.protocols.resource_accounting.memory.pous.prover import window as W
+
+    c = W.session_units(3, 8, 1000, 264, 2, R.Params(R.TOY_N, 1, 1, toy=True))
+    assert [t.split("{")[0] for t in c.ids] == ["PousSessionDigest_v1", "PousSessionSig_v1", "EmbeddingRead_v2",
+                                                "PousRound_v2", "PousRound_v2"]
+    assert list(c.units.values()) == [1, 1, 3, 2, 1]
+    c.program()
+    (dig, _), (sig, _), *rest = c.templates
+    with pytest.raises(ValueError, match="at or after reader"):
+        Circuit("pous-session", ((sig, 1), (dig, 1), *rest), wires=c.wires, registered=c.registered).program()
