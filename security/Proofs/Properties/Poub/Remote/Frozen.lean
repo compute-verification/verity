@@ -204,10 +204,11 @@ theorem frz_boundary {s : State} {now : Nat} {r : Result} {s' : State} (he : bou
          | (refine keepsF_trans (keepsF_modify _ _ _ (keepW_of ?_ ?_)) (keepsF_push _ _ ?_) <;>
              first | exact ⟨rfl, rfl, rfl, rfl, rfl⟩ | exact id | rfl))
 
-theorem frz_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s' : State}
-    (he : append s root count = .ok (r, s')) : Frz s s' := by
+theorem frz_append {s : State} {root : ByteArray} {count : Int} {origin : _root_.Poub.Origin} {slot : Option Nat} {r : Result} {s' : State}
+    (he : append s root count origin slot = .ok (r, s')) : Frz s s' := by
   unfold append at he
-  repeat' split at he
+  repeat' (first | split at he | (dsimp only at he; split at he))
+  all_goals (try simp only [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at he)
   all_goals (try dsimp only at he)
   all_goals cases he
   all_goals first
@@ -364,7 +365,7 @@ theorem frz_step {s : State} {e : Event} {r : Result} {s' : State} (h : Inv s) (
   cases e with
   | start now => injection he with he; exact frz_start he
   | boundary now => injection he with he; exact frz_boundary he
-  | append root count => exact frz_append he
+  | append root count origin slot => exact frz_append he
   | release runs withdrawn => injection he with he; exact frz_release he
   | receive t i root runs change st now => injection he with he; exact frz_receive h hdf hm he
   | close t now => exact frz_close he
@@ -443,10 +444,47 @@ theorem appendOf_extend (A more : Array Append) (j : Nat) (hmono : Monotone' ((A
 
 theorem checkOpening_congr (reg : Registration) (digest : ByteArray) (A A' : Array Append) (w : WindowRecord)
     (rc : Receipter) (i p : Nat) (o : Opening)
-    (h : appendOf A' (w.passes[i]!.plan.block p) = appendOf A (w.passes[i]!.plan.block p)) :
+    (h : appendOf A' (w.passes[i]!.plan.block p) = appendOf A (w.passes[i]!.plan.block p))
+    (ho : ∀ a, appendOf A (w.passes[i]!.plan.block p) = some a →
+      originLeaf reg digest A' a (w.passes[i]!.plan.block p) = originLeaf reg digest A a (w.passes[i]!.plan.block p)) :
     checkOpening reg digest A' w rc i p o = checkOpening reg digest A w rc i p o := by
+  have ho' : (appendOf A (w.passes[i]!.plan.block p)).bind (originLeaf reg digest A' · (w.passes[i]!.plan.block p)) =
+      (appendOf A (w.passes[i]!.plan.block p)).bind (originLeaf reg digest A · (w.passes[i]!.plan.block p)) := by
+    cases hA : appendOf A (w.passes[i]!.plan.block p) with
+    | none => rfl
+    | some a => exact ho a hA
   unfold checkOpening
-  simp only [Id.run, h]
+  simp only [Id.run, h, ho']
+
+/-- A re-key's origin leaf is the same on appends that extend `A`, once `A` holds an append in its origin's slot. -/
+theorem originLeaf_extend (reg : Registration) (digest : ByteArray) (A more : Array Append) (a : Append) (j : Nat)
+    (ha : ∀ m, a.origin = .rekey m → ∃ k, ∃ hk : k < A.size, A[k].slot = m) :
+    originLeaf reg digest (A ++ more) a j = originLeaf reg digest A a j := by
+  unfold originLeaf
+  cases hor : a.origin with
+  | fresh => rfl
+  | registered x => rfl
+  | rekey m =>
+    dsimp only
+    obtain ⟨k, hk, hs⟩ := ha m hor
+    cases hf : A.find? (·.slot == m) with
+    | none =>
+      rw [Array.find?_eq_none] at hf
+      exact absurd (by simp [hs]) (hf _ (Array.getElem_mem hk))
+    | some b => rw [Array.find?_append, hf]; rfl
+
+/-- The append holding a block, if a re-key, has its origin's slot held by an append before it (`InvOn.origins`). -/
+theorem appendOf_held {s : State} (h : Inv s) {j : Nat} {a : Append} (ha : appendOf s.appends j = some a) :
+    ∀ m, a.origin = .rekey m → ∃ k, ∃ hk : k < s.appends.size, s.appends[k].slot = m := by
+  have h' : InvOn _ _ _ _ _ _ _ _ _ _ := h
+  unfold appendOf at ha
+  dsimp only at ha
+  split at ha
+  · cases ha
+  · obtain ⟨hk, rfl⟩ := Array.getElem?_eq_some_iff.1 ha
+    intro m hm
+    obtain ⟨k', hk', hs⟩ := h'.origins _ hk m hm
+    exact ⟨k', by omega, hs⟩
 
 theorem record_pass (s : State) (t i : Nat) (hi : i < (s.record t).passes.size) :
     (s.record t).passes[i]!.plan = s.windows[t]!.plans[i]! ∧ i < s.windows[t]!.roots.size := by
@@ -531,7 +569,7 @@ theorem recordKeptAfterSample : RecordKeptAfterSample := by
       checkOpening reg reg.digest (s.appends ++ more) (s.record t) (receipterOf reg (s.record t) i) i p o =
       checkOpening reg reg.digest s.appends (s.record t) (receipterOf reg (s.record t) i) i p o := by
     intro i p o hi hp
-    apply checkOpening_congr
+    refine checkOpening_congr _ _ _ _ _ _ _ _ _ ?_ fun a ha => originLeaf_extend _ _ _ _ _ _ (appendOf_held hI₁ ha)
     apply appendOf_extend
     · rw [← happ]; exact firsts_mono hI
     · intro k hk hk'

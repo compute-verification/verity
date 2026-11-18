@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# flock-circuit's smallest proof, rope-head d64 at 4 instances, on CPU and the card, each honest record given to the Lean verifier.
+# flock-circuit's smallest proof, rope-head d64 at 4 instances, on CPU and the card, each honest record given to the Lean verifier;
+# exits non-zero when either selftest fails (60-circuit.sh's SELFTEST FAILED line names it).
 # usage, from the tree root under research run (OUT), the same tree and machine for both steps:
 #   SM=90 [DRV=580] 62-circuit-gpu-smoke.sh prepare   no card: the toolkit (CUDA_TK, else the machine record's 13.3, else 13.3
 #                                                     unpacked under SMOKE_WORK, no root), the input set,
 #                                                     the prover's GPU build (DRV: the driver's major version, when nvidia-smi can't run)
 #                                                     and the Lean verifier, all under SMOKE_WORK (default $HOME/flock-smoke)
 #   SM=90 62-circuit-gpu-smoke.sh run                 the card: the selftest build (incremental on prepare's), the CPU and GPU
-#                                                     selftests with records, their proofs compared, the Lean verdicts
+#                                                     selftests with records (the card's own gpu_proofs_match_cpu case), the Lean verdicts
 # SM is the target's architecture as a compute capability, 90 for sm_90 (H100), 120 for sm_120 (RTX PRO 6000); GPU=0: CPU only.
 set -uo pipefail
 STEP=${1:?usage: 62-circuit-gpu-smoke.sh prepare|run}
@@ -49,9 +50,7 @@ run)
     $(verifier_env) "$W/bin/verity-verify-proof" verify --statement verity/flock-circuit+seed-injection --circuit "$D/stage/circuit.txt" --public "$D/stage/pub-4.bin" \
       $( [ -d "$D/stage/tables" ] && echo --tables "$D/stage/tables" ) --session "$R/s-$dev/honest" | grep '^VERDICT ' | sed "s/^/LEAN-$dev /"
   done
-  [ -d "$D/records-gpu" ] && for f in "$D"/records-cpu/honest.rep*.proof; do
-    g=$D/records-gpu/$(basename "$f"); cmp -s "$f" "$g" && echo "SAME $(basename "$f")" || echo "DIFFER $(basename "$f") $(stat -c%s "$f") $(stat -c%s "$g" 2>/dev/null)"
-  done
+  grep -h '"case":"gpu_proofs_match_cpu"' "$D/selftest-gpu.txt" 2>/dev/null | cut -c1-300 | sed 's/^/MATCH /'
   echo "SMOKE minutes: build+selftest $(( (t1 - t0) / 60 )), lean verify $(( ($(date +%s) - t1) / 60 ))"
   exit $rc
   ;;

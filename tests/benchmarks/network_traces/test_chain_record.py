@@ -225,6 +225,54 @@ def test_no_block_entry_is_written_for_an_answer_the_period_check_accepts(tmp_pa
         "the chain is scan accepted: only an accepted chain carries a K")
 
 
+def _tied_chain(tmp_path, rests: list[str]) -> SimpleNamespace:
+    """`_chain_of` whose scan's honest round's registration names ``rests`` tied, with a launcher's job that claims a
+    tied form, which the report never reads."""
+    steps = _chain_of(tmp_path)
+    Path(steps.scan).write_text(json.dumps({"ok": True, "T": 1, "rounds": {"honest-0": {"audit": {
+        "window_accepted": True, "rests_on_period_check": rests}}}}))
+    Path(steps.job).write_text(json.dumps(json.loads(Path(steps.job).read_text()) | {"tied_form": "claimed"}))
+    return steps
+
+
+def _form(steps) -> str:
+    got = cr.report(steps)
+    assert f"Tied form: {got['tied_form']}" in cr.markdown(got)
+    return got["tied_form"]
+
+
+def test_the_tied_form_is_not_run_where_the_scan_ran_no_round(tmp_path):
+    steps = _tied_chain(tmp_path, ["prog"])
+    steps.scan = None
+    assert _form(steps) == cr.TIED_FORM["not run"] == "not run"
+
+
+def test_the_tied_form_is_untied_where_the_scans_registration_names_no_tied_value(tmp_path, period):
+    steps = _tied_chain(tmp_path, [])
+    case = period.case("accept", 1)
+    steps.period_answer = _period(tmp_path / "period", case, period.reference(case))
+    assert _form(steps) == cr.TIED_FORM["untied"] == "not registered, the entries are the prover's word"
+
+
+def test_the_tied_form_is_unchecked_without_an_accepting_answer_on_its_own_case(tmp_path, period):
+    steps = _tied_chain(tmp_path, ["prog"])
+    assert _form(steps) == cr.TIED_FORM["unchecked"] == "registered, not checked here"
+    case, answer = period.case("accept", 1), period.reference(period.case("accept", 1))
+    steps.period_answer = _period(tmp_path / "mixed", period.case("accept", 0), answer)
+    assert _form(steps) == cr.TIED_FORM["unchecked"]
+    steps.period_answer = _period(tmp_path / "refused", case, answer | {"verdict": "reject"})
+    assert _form(steps) == cr.TIED_FORM["unchecked"]
+
+
+def test_the_tied_form_is_answered_where_the_period_check_accepted_its_own_case(tmp_path, period):
+    steps = _tied_chain(tmp_path, ["prog"])
+    case = period.case("accept", 1)
+    steps.period_answer = _period(tmp_path / "period", case, period.reference(case))
+    assert _form(steps) == cr.TIED_FORM["answered"] == (
+        "registered, and a period answer accepts its case (progTied, stateTied), which this record doesn't hold to "
+        "this scan")
+
+
 def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_one_a_leak_or_a_missing_record(tmp_path):
     steps = _steps(tmp_path, {"profile": "advice", "rc": {"n2": None, "scan": "0"}, "scan_only": True})
     n2_summary, steps.n2 = steps.n2, None
@@ -378,6 +426,7 @@ def test_the_attester_only_path_needs_no_scan_names_its_stubs_and_counts_the_tam
     assert got["negatives_refused"] == {"rehearsal/c1/late": True, "rehearsal/c1/extra": True, "tie/token": True,
                                         "n2/tampered": True}
     assert "on the certifier-only path" in cr.markdown(got) and "Stubbed:" in cr.markdown(got)
+    assert f"tie/token: refused by {cr.IO_TIE_PROTOTYPE}" in cr.markdown(got)
     ep["chain"]["tie"]["runs"]["token"] = {"verdict": "accepted", "ok": False}
     Path(steps.endpoint).write_text(json.dumps(ep))
     assert cr.report(steps)["negatives_refused"]["tie/token"] is False
