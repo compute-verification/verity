@@ -1,4 +1,4 @@
-"""``--admit tick`` (`serve_admit.TickGate`): the certified tick in front of a vLLM-like FCFS scheduler, run in simulated
+"""``--admit tick`` (`verity.protocols.resource_accounting.network.prover.admission.TickGate`): the certified tick in front of a vLLM-like FCFS scheduler, run in simulated
 physical time, so that the batches can be compared across wall-clock jitter and against the rule in logical time alone;
 what isn't certified (unnumbered, late, missing, aborted, a new run, a stalled or broken watermark); the watermark's
 lines, as the network attester's own code writes them (`line`), and the releases they name lost; and serve-openai's
