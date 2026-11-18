@@ -21,7 +21,7 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
 from verity.circuits.population import wired_population_program
 from verity.commitments.periods import interface as IF
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as R
 
 from test_audit_two_members import RUN, fixed
 
