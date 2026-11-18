@@ -110,7 +110,7 @@ def test_a_wrong_row_scalar_changes_the_outputs(tmp_path):
 
 @pytest.mark.slow
 def test_the_circuit_description_accounts_for_every_cut_word(tmp_path):
-    """IR1 (the Python half; the Rust verifier refuses the rest, `flock-ir-block selftest`): the circuit description's CUT line
+    """IR1, the Python half: the circuit description's CUT line
     lists each unit's cut ports and the native tail; every cut word is computed exactly once, by a unit or by the tail, from words
     defined before. The instance header only counts them."""
     import json
