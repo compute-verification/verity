@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# The SASS opcode census of a node's binaries: every file with device code under the given roots, disassembled with
-# `cuobjdump -sass`, one process an architecture of a binary (`-arch`) and $JOBS at once, its opcodes counted by
-# `sass_count.py` and its architectures' counts joined into the binary's, and the opcodes the machine model doesn't price
-# counted by `diff_menu.py record`. CPU only; no GPU. Writes under $OUT:
+# The SASS opcode census of a node's binaries: every file with device code under the given roots, its ELFs extracted
+# (`cuobjdump -xelf all`, into a work directory under TMPDIR) and disassembled with `cuobjdump -sass` in runs of
+# consecutive ELFs, $JOBS runs at once, each run's opcodes counted by `sass_count.py` and the runs' counts joined in order
+# into the binary's, and the opcodes the machine model doesn't price counted by `diff_menu.py record`. CPU only; no GPU.
+# Writes under $OUT:
 #   toolkit.txt    cuobjdump and nvcc --version
 #   corpus.tsv     a line a binary kept: sha256, bytes, the architectures it holds, its path
 #   counts/*.json  `sass_count.py count` for each binary (every architecture it holds)
@@ -30,10 +31,9 @@ JOBS=${JOBS:-$(nproc)}
 CACHE=${SASS_CENSUS_CACHE-${HOME:+$HOME/.cache/verity/sass-census}}
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
-mkdir -p "$OUT/counts" "$WORK/lelf" "$WORK/sha256" "$WORK/parts"
+mkdir -p "$OUT/counts" "$WORK/lelf" "$WORK/sha256" "$WORK/parts" "$WORK/elf"
 { "$CUOBJDUMP" --version; "$NVCC" --version; } >"$OUT/toolkit.txt" 2>&1
 VERSION=$(python3 "$HERE/sass_count.py" version --tool "$("$CUOBJDUMP" --version 2>&1)" "$HERE/dump.sh" "$HERE/sass_count.py")
-"$CUOBJDUMP" --help 2>&1 | grep -o "'sm_[0-9]*[a-z]\?'" | tr -d "'" | sort -u >"$WORK/allowed"
 
 roots=("$@")
 [ ${#roots[@]} -gt 0 ] || roots=("$(dirname "$BIN")" /usr/lib/x86_64-linux-gnu "$HERE/../../../")
@@ -66,9 +66,8 @@ find "$WORK/scan" -type f -exec cat {} + | sort -t$'\t' -k1,1n | cut -f2- | sort
 wc -l <"$OUT/corpus.tsv" >"$OUT/corpus.count"
 echo "dump: $(cat "$OUT/corpus.count") binaries with device code, found in ${SECONDS}s"
 
-# A binary whose count the cache holds is read from it; the rest are split into units, one an architecture.
+# A binary whose count the cache holds is read from it; the rest have their ELFs extracted and are cut into units.
 : >"$WORK/fresh"
-: >"$WORK/units"
 while IFS=$'\t' read -r sha bytes archs f; do
   src="$(basename "$f")@$sha"
   entry=
@@ -82,22 +81,24 @@ while IFS=$'\t' read -r sha bytes archs f; do
     fi
   fi
   printf '%s\t%s\t%s\n' "$sha" "$f" "$entry" >>"$WORK/fresh"
-  mkdir -p "$WORK/parts/$sha"
-  python3 "$HERE/sass_count.py" units --size "$bytes" --allowed "$WORK/allowed" <"$WORK/lelf/$sha" \
-    | while IFS=$'\t' read -r w arch; do printf '%s\t%s\t%s\t%s\n' "$w" "$sha" "$arch" "$f"; done >>"$WORK/units"
+  mkdir -p "$WORK/parts/$sha" "$WORK/elf/$sha"
+  (cd "$WORK/elf/$sha" && "$CUOBJDUMP" -xelf all "$(readlink -f "$f")" >/dev/null 2>&1) || true
 done <"$OUT/corpus.tsv"
-echo "dump: $(wc -l <"$WORK/units") units of $(wc -l <"$WORK/fresh") binaries to disassemble, $JOBS at once"
+python3 "$HERE/sass_count.py" plan --jobs "$JOBS" --work "$WORK" >"$WORK/units" || exit 1
+echo "dump: $(wc -l <"$WORK/units") units of $(wc -l <"$WORK/fresh") binaries to disassemble, $JOBS at once," \
+  "extracted by ${SECONDS}s"
 
 export CUOBJDUMP HERE WORK
 unit() {
   set -o pipefail
-  IFS=$'\t' read -r _ sha arch f <<<"$1"
+  IFS=$'\t' read -r _ sha i f <<<"$1"
   src="$(basename "$f")@$sha"
-  if [ "$arch" = - ]; then
+  if [ "$i" = - ]; then
     "$CUOBJDUMP" -sass "$f" 2>/dev/null | python3 "$HERE/sass_count.py" count --source "$src" >"$WORK/parts/$sha/-.json"
   else
-    "$CUOBJDUMP" -sass -arch "$arch" "$f" 2>/dev/null \
-      | python3 "$HERE/sass_count.py" count --source "$src" --arch "$arch" >"$WORK/parts/$sha/$arch.json"
+    while IFS= read -r c; do "$CUOBJDUMP" -sass "$c" 2>/dev/null || exit 1; done <"$WORK/parts/$sha/$i.list" \
+      | python3 "$HERE/sass_count.py" count --source "$src" >"$WORK/parts/$sha/$i.json" \
+      && xargs -d '\n' rm -f <"$WORK/parts/$sha/$i.list"
   fi || printf '%s\n' "$sha" >>"$WORK/failed"
 }
 export -f unit
@@ -114,8 +115,7 @@ while IFS=$'\t' read -r sha f entry; do
   if [ -f "$WORK/parts/$sha/-.json" ]; then
     mv "$WORK/parts/$sha/-.json" "$OUT/counts/$sha.json"
   else
-    python3 "$HERE/sass_count.py" join --source "$(basename "$f")@$sha" --lelf "$WORK/lelf/$sha" \
-      "$WORK/parts/$sha"/*.json >"$OUT/counts/$sha.json" || { printf '%s\t%s\n' "$sha" "$f" >>"$OUT/failed.txt"; continue; }
+    python3 "$HERE/sass_count.py" join --source "$(basename "$f")@$sha" "$WORK/parts/$sha"/*.json >"$OUT/counts/$sha.json" || { printf '%s\t%s\n' "$sha" "$f" >>"$OUT/failed.txt"; continue; }
   fi
   if [ -n "$entry" ]; then
     mkdir -p "$(dirname "$entry")" && cp "$OUT/counts/$sha.json" "$entry.$$" && mv "$entry.$$" "$entry"

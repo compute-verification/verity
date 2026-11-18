@@ -1,5 +1,5 @@
-"""sass_census's dump.sh end to end over a stub cuobjdump that serves the sample listing: a binary dumped one architecture
-at a time counts as when dumped whole, and a second run reads its count from the cache and says so."""
+"""sass_census's dump.sh end to end over a stub cuobjdump that serves the sample listing: a binary dumped one run of its
+ELFs at a time counts as when dumped whole, and a second run reads its count from the cache and says so."""
 from __future__ import annotations
 
 import json
@@ -14,21 +14,26 @@ ROOT = Path(__file__).resolve().parents[3]
 DUMP = ROOT / "calibration" / "pouw" / "sass_census" / "dump.sh"
 FIX = Path(__file__).resolve().parent / "fixtures" / "sass_census_sample.sass"
 
+#: a cuobjdump whose binary holds three ELFs, the sample's two architectures and its first again
 STUB = """#!{python}
 import pathlib, sys
 a = sys.argv[1:]
 with open({log!r}, "a") as f:
-    f.write(" ".join(a[:-1]) + "\\n")
-if a[0] in ("--version", "--help"):
-    print("stub cuobjdump 1" if a[0] == "--version" else "'sm_90a','sm_100a'")
+    f.write(" ".join(a[:-1] + [pathlib.Path(a[-1]).name]) + "\\n")
+head, *secs = pathlib.Path({fix!r}).read_text().split("Fatbin elf code:")
+elf = [head + "Fatbin elf code:" + secs[0]] + ["Fatbin elf code:" + s for s in (secs[1], secs[0])]
+names = ["lib.1.sm_90a.cubin", "lib.2.sm_100a.cubin", "lib.3.sm_90a.cubin"]
+if a[0] == "--version":
+    print("stub cuobjdump 1")
 elif a[0] == "-lelf":
-    print("ELF file    1: lib.1.sm_90a.cubin\\nELF file    2: lib.2.sm_100a.cubin")
+    print("".join(f"ELF file    {{i}}: {{n}}\\n" for i, n in enumerate(names, 1)), end="")
+elif a[0] == "-xelf":
+    for n, t in zip(names, elf):
+        pathlib.Path(n).write_text(t)
+elif a[-1].endswith(".cubin"):
+    sys.stdout.write(pathlib.Path(a[-1]).read_text())
 else:
-    text = pathlib.Path({fix!r}).read_text()
-    if "-arch" in a:
-        arch = a[a.index("-arch") + 1]
-        text = "".join("Fatbin elf code:" + s for s in text.split("Fatbin elf code:")[1:] if "arch = " + arch + "\\n" in s)
-    sys.stdout.write(text)
+    sys.stdout.write("".join(elf))
 """
 
 
@@ -39,7 +44,7 @@ def dump(tmp_path: Path, out: Path, cache: Path, stub: Path) -> subprocess.Compl
                           check=False)
 
 
-def test_dump_splits_by_architecture_and_reads_a_cached_count_back(tmp_path):
+def test_dump_splits_a_binary_into_its_elfs_and_reads_a_cached_count_back(tmp_path):
     log = tmp_path / "calls.log"
     stub = tmp_path / "cuobjdump"
     stub.write_text(STUB.format(python=sys.executable, log=str(log), fix=str(FIX)))
@@ -52,9 +57,10 @@ def test_dump_splits_by_architecture_and_reads_a_cached_count_back(tmp_path):
     cold = dump(tmp_path, tmp_path / "cold", tmp_path / "cache", stub)
     assert cold.returncode == 0, cold.stderr
     sass = [ln for ln in log.read_text().splitlines() if ln.startswith("-sass")]
-    assert sorted(sass) == ["-sass -arch sm_100a", "-sass -arch sm_90a"]
-    with FIX.open() as f:
-        whole = json.dumps(sass_count.count(f, f"libtest.so@{sha}"))
+    assert sorted(sass) == ["-sass lib.1.sm_90a.cubin", "-sass lib.2.sm_100a.cubin", "-sass lib.3.sm_90a.cubin"]
+    head, *secs = FIX.read_text().split("Fatbin elf code:")
+    text = head + "".join("Fatbin elf code:" + s for s in (secs[0], secs[1], secs[0]))
+    whole = json.dumps(sass_count.count(text.splitlines(keepends=True), f"libtest.so@{sha}"))
     assert (tmp_path / "cold" / "counts" / f"{sha}.json").read_text() == whole
     assert not (tmp_path / "cold" / "cached.tsv").exists() and "read from the cache" not in cold.stdout
 

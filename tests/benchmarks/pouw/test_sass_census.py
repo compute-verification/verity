@@ -46,27 +46,32 @@ def test_count_reads_each_architectures_opcodes():
     assert "BRA" in a90["ops"] and a90["ops"]["BRA"][0] == 1
 
 
-def test_join_of_each_architectures_count_is_the_whole_binarys():
-    whole = FIX.read_text()
-    lelf = ["ELF file    1: lib.1.sm_90a.cubin", "ELF file    2: lib.2.sm_100a.cubin"]
-    order = [a for a, _ in sass_count.elfs(lelf)]
-    parts = [json.loads(json.dumps(sass_count.count(whole.splitlines(), "lib@ab", arch))) for arch in reversed(order)]
-    assert json.dumps(sass_count.join(parts, "lib@ab", order)) == json.dumps(sass_count.count(whole.splitlines(), "lib@ab"))
-    try:
-        sass_count.join(parts + parts[:1], "lib@ab", order)
-    except ValueError as e:
-        assert "sm_100a is in two parts" in str(e)
-    else:
-        raise AssertionError("join took one architecture from two parts")
+def test_join_of_runs_of_elfs_in_order_is_the_whole_binarys_count():
+    head, *secs = FIX.read_text().split("Fatbin elf code:")
+    # three ELFs, the first architecture's again after the second's, so one architecture's count spans two parts
+    elf = [head + "Fatbin elf code:" + secs[0]] + ["Fatbin elf code:" + s for s in (secs[1], secs[0])]
+    whole = json.dumps(sass_count.count("".join(elf).splitlines(keepends=True), "lib@ab"))
+    for cuts in ([], [1], [2], [1, 2]):
+        bounds = [0, *cuts, len(elf)]
+        parts = [json.loads(json.dumps(sass_count.count("".join(elf[a:b]).splitlines(keepends=True), "lib@ab")))
+                 for a, b in zip(bounds, bounds[1:])]
+        assert json.dumps(sass_count.join(parts, "lib@ab")) == whole, cuts
+    one = sass_count.count(elf[0].splitlines(), "x")["archs"]["sm_90a"]["instrs"]
+    assert json.loads(whole)["archs"]["sm_90a"]["instrs"] == 2 * one
 
 
-def test_units_split_a_binary_by_architecture_unless_cuobjdump_cannot():
-    lelf = [f"ELF file {i}: lib.{i}.{a}.cubin" for i, a in enumerate(["sm_90", "sm_100", "sm_90", "sm_90"], 1)]
-    assert sass_count.elfs(lelf) == [("sm_90", 3), ("sm_100", 1)]
-    assert sass_count.units(800, lelf, {"sm_90", "sm_100"}) == [(600, "sm_90"), (200, "sm_100")]
-    # an architecture `-arch` doesn't take, or a single one, is dumped whole, as one unit
-    assert sass_count.units(800, lelf, {"sm_90"}) == [(800, None)]
-    assert sass_count.units(800, lelf[:1], {"sm_90"}) == [(800, None)] == sass_count.units(800, [], set())
+def test_plan_cuts_each_binary_into_runs_of_its_elfs_in_order():
+    lelf = ["", "ELF file    1: lib.1.sm_90.cubin", "ELF file    2: lib.2.sm_100.cubin", "ELF file   10: lib.10.sm_90.cubin"]
+    assert sass_count.elfs(lelf) == ["lib.1.sm_90.cubin", "lib.2.sm_100.cubin", "lib.10.sm_90.cubin"]
+    es = [("x", 10**7), ("y", 1), ("z", 1), ("w", 1)]
+    for jobs in (1, 2, 64):
+        units = sass_count.plan([("a", 999, es), ("b", 50, None)], jobs)
+        runs = [u for u in units if u[1] == "a"]
+        assert [u[2] for u in runs] == list(range(len(runs)))
+        assert [n for u in runs for n in u[3]] == ["x", "y", "z", "w"]
+        assert [u for u in units if u[1] == "b"] == [(50, "b", 0, None)]  # no ELFs: dumped whole
+    # the large ELF is a unit of its own, the small ones share one
+    assert [u[3] for u in sass_count.plan([("a", 999, es)], 1)] == [["x"], ["y", "z", "w"]]
 
 
 def test_cache_key_reads_the_version_the_binary_and_its_source(tmp_path):

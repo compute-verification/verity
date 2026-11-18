@@ -4,8 +4,8 @@
 section names (`arch = sm_90a`, `code for sm_100a`), its functions, its instructions, and each dotted opcode's count
 with its first instruction as an example (`IMMA.16832.S8.S8`: `R4, R8, R6, R4`). `merge` folds those objects into one
 census an architecture: every dotted opcode, its count, the sources it appears in, an example, and its base opcode.
-`units`, `join`, `version` and `key` are dump.sh's: a binary split into one disassembly an architecture, its parts
-joined into the whole binary's count, and where that count is kept between runs.
+`elfs`, `plan`, `join`, `version` and `key` are dump.sh's: binaries cut into runs of their ELFs to disassemble in
+parallel, the runs' counts joined into each binary's, and where that count is kept between runs.
 
     cuobjdump -sass lib.so | python sass_count.py count --source libcublasLt > lt.json
     python sass_count.py merge counts/*.json > census.json
@@ -66,37 +66,58 @@ def count(lines: Iterable[str], source: str, only: str | None = None) -> dict:
     return {"source": source, "archs": archs}
 
 
-def elfs(lelf: Iterable[str]) -> list[tuple[str, int]]:
-    """The architectures a `cuobjdump -lelf` listing names, in the order of their first ELF, each with its ELF count."""
-    n: dict[str, int] = {}
-    for line in lelf:
-        for arch in re.findall(r"sm_[0-9]*[a-z]?", line):
-            n[arch] = n.get(arch, 0) + 1
-    return list(n.items())
+def elfs(lelf: Iterable[str]) -> list[str]:
+    """The ELF files a `cuobjdump -lelf` listing names, in its order, the order a dump of the whole binary meets them."""
+    return [m.group(1) for line in lelf if (m := re.match(r"\s*ELF file\s+\d+:\s+(\S+)", line))]
 
 
-def units(size: int, lelf: Iterable[str], allowed: set[str]) -> list[tuple[int, str | None]]:
-    """How dump.sh disassembles one binary of `size` bytes: one `cuobjdump -sass -arch A` a listed architecture, each
-    weighed by its share of the ELFs, or the whole binary at once (None) when it lists one architecture or one that
-    `cuobjdump -arch` doesn't take (`allowed`)."""
-    archs = elfs(lelf)
-    if len(archs) < 2 or any(a not in allowed for a, _ in archs):
-        return [(size, None)]
-    total = sum(k for _, k in archs)
-    return [(size * k // total, a) for a, k in archs]
+#: what setting up one ELF costs `cuobjdump -sass`, in bytes of SASS it disassembles in that time
+PER_ELF = 100_000
 
 
-def join(parts: list[dict], source: str, order: list[str]) -> dict:
-    """One binary's `count` from its architectures' (each `count --arch A` of `cuobjdump -sass -arch A`), the
-    architectures in `order`, the order a whole-binary dump meets them, so it equals the whole binary's `count`."""
+def plan(binaries: list[tuple[str, int, list[tuple[str, int]] | None]], jobs: int
+         ) -> list[tuple[int, str, int, list[str] | None]]:
+    """dump.sh's units: each binary (its sha, its bytes, and its extracted ELFs' names and bytes in their order, None when
+    they couldn't be extracted) cut into runs of consecutive ELFs weighing about 1/(8 jobs) of the whole each, so no unit
+    outlasts the rest; a binary without ELFs is one unit (None), dumped whole. Each unit: weight, sha, index, ELFs."""
+    def weight(e: tuple[str, int]) -> int:
+        return e[1] + PER_ELF
+    total = sum(sum(map(weight, es)) if es else size for _, size, es in binaries)
+    target = max(1, total // (8 * max(1, jobs)))
+    out: list[tuple[int, str, int, list[str] | None]] = []
+    for sha, size, es in binaries:
+        if not es:
+            out.append((size, sha, 0, None))
+            continue
+        run: list[str] = []
+        w = i = 0
+        for e in es:
+            run.append(e[0])
+            w += weight(e)
+            if w >= target:
+                out.append((w, sha, i, run))
+                run, w, i = [], 0, i + 1
+        if run:
+            out.append((w, sha, i, run))
+    return out
+
+
+def join(parts: list[dict], source: str) -> dict:
+    """One binary's `count` from its parts' in order (each a `count` of a run of its ELFs, in the binary's order): each
+    architecture's functions, instructions and opcodes summed, an opcode's example the first part's that has it, and the
+    architectures in the order the parts first meet them, so it equals a `count` of the whole binary's dump."""
     archs: dict[str, dict] = {}
     for p in parts:
         for arch, a in p["archs"].items():
-            if arch in archs:
-                raise ValueError(f"{source}: {arch} is in two parts")
-            archs[arch] = a
-    rank = {a: i for i, a in enumerate(order)}
-    return {"source": source, "archs": dict(sorted(archs.items(), key=lambda kv: (rank.get(kv[0], len(rank)), kv[0])))}
+            t = archs.setdefault(arch, {"funcs": 0, "instrs": 0, "ops": {}})
+            t["funcs"] += a["funcs"]
+            t["instrs"] += a["instrs"]
+            for op, (n, ex) in a["ops"].items():
+                if (e := t["ops"].get(op)) is None:
+                    t["ops"][op] = [n, ex]
+                else:
+                    e[0] += n
+    return {"source": source, "archs": archs}
 
 
 def version(files: list[Path], tool: str) -> str:
@@ -158,12 +179,12 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("count")
     c.add_argument("--source", required=True)
     c.add_argument("--arch", help="count only this architecture's sections")
-    u = sub.add_parser("units", help="a binary's units of disassembly from its `cuobjdump -lelf` listing on stdin")
-    u.add_argument("--size", type=int, required=True)
-    u.add_argument("--allowed", type=Path, required=True, help="the architectures `cuobjdump -arch` takes, one a line")
-    j = sub.add_parser("join", help="one binary's count from its architectures' counts")
+    u = sub.add_parser("plan", help="dump.sh's units under its work directory: `weight sha index path` a line, and each "
+                                    "unit's ELFs in WORK/parts/SHA/INDEX.list")
+    u.add_argument("--jobs", type=int, required=True)
+    u.add_argument("--work", type=Path, required=True)
+    j = sub.add_parser("join", help="one binary's count from its parts' counts, in order")
     j.add_argument("--source", required=True)
-    j.add_argument("--lelf", type=Path, required=True, help="the binary's `cuobjdump -lelf` listing")
     j.add_argument("files", type=Path, nargs="+")
     v = sub.add_parser("version", help="the dump's version")
     v.add_argument("--tool", required=True, help="cuobjdump --version's text")
@@ -179,13 +200,22 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     if a.cmd == "count":
         json.dump(count(sys.stdin, a.source, a.arch), sys.stdout)
-    elif a.cmd == "units":
-        allowed = set(a.allowed.read_text().split())
-        for w, arch in units(a.size, sys.stdin, allowed):
-            print(f"{w}\t{arch or '-'}")
+    elif a.cmd == "plan":
+        binaries, paths = [], {}
+        for line in (a.work / "fresh").read_text().splitlines():
+            sha, path = line.split("\t")[:2]
+            paths[sha] = path
+            names = elfs((a.work / "lelf" / sha).read_text().splitlines())
+            d = a.work / "elf" / sha
+            ok = names and len(set(names)) == len(names) and all((d / n).is_file() for n in names)
+            binaries.append((sha, Path(path).stat().st_size, [(n, (d / n).stat().st_size) for n in names] if ok else None))
+        for w, sha, i, run in plan(binaries, a.jobs):
+            if run is not None:
+                (a.work / "parts" / sha / f"{i:06d}.list").write_text("".join(f"{a.work / 'elf' / sha / n}\n"
+                                                                              for n in run))
+            print(f"{w}\t{sha}\t{'-' if run is None else f'{i:06d}'}\t{paths[sha]}")
     elif a.cmd == "join":
-        order = [arch for arch, _ in elfs(a.lelf.read_text().splitlines())]
-        json.dump(join([json.loads(f.read_text()) for f in a.files], a.source, order), sys.stdout)
+        json.dump(join([json.loads(f.read_text()) for f in a.files], a.source), sys.stdout)
     elif a.cmd == "version":
         print(version(a.files, a.tool))
     elif a.cmd == "key":
