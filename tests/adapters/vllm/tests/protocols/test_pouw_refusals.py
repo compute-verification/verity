@@ -31,7 +31,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import dev
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES, pearl_c_scheme
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import feed as PF
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.operands import quantize
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PK
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.lanes import (
@@ -329,21 +328,12 @@ def test_a_kernel_directory_without_one_cubin_is_refused_and_its_one_cubin_is_ta
         PK._the_cubin(tmp_path)
 
 
-def test_a_certifier_given_fewer_coin_bytes_than_it_asks_for_opens_no_window():
-    """The refusal is held from its counts on: the words before them are a retired term, which this file doesn't add."""
-    with pytest.raises(PF.FeedError, match=f" gave {PF.ROOT_BYTES - 1} bytes for {PF.ROOT_BYTES}$"):
-        PF.InProcessCertifier(lambda n: bytes(n - 1)).open(0, bytes(PF.ROOT_BYTES), bytes(PF.ROOT_BYTES), 1)
-    cert = PF.InProcessCertifier(bytes)
-    assert cert.open(0, bytes(PF.ROOT_BYTES), bytes(PF.ROOT_BYTES), 1) == bytes(PF.ROOT_BYTES)
-    assert list(cert.windows) == [0]
-
-
 def _coin_pass() -> tuple[Challenger, dict]:
     """A challenger and a pass of no matmul and no weight whose coins are its commitment and its salt coin, opened after
     zeros."""
     ch = Challenger(0, random.Random(0).randbytes)
     return ch, {"schema": CC.MANIFEST_SCHEMA, "matmuls": [], "weights": {}, "coins": ch.commitment.to_json(),
-                "salt_opening": ch.open("salt", bytes(PF.ROOT_BYTES)).to_json()}
+                "salt_opening": ch.open("salt", bytes(64)).to_json()}
 
 
 def test_a_pass_whose_coins_do_not_parse_is_refused_in_those_words():

@@ -7313,7 +7313,7 @@ def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credi
     It names no weights without ``--model`` (the gate refuses a root its registry lacks). ``period close`` closes it."""
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
     from verity.commitments.crypto import lms
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 
     A = _auditor()
     (tmp_path / "var" / "sessions").mkdir(parents=True)

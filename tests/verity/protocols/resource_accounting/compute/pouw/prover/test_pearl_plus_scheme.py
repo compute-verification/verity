@@ -13,7 +13,7 @@ from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.compute.pouw import scheme as PS
 from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import tensors as T
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as Wn
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as Wn
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PSALT
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_tile import PearlCTileRead
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_tile import PearlPlusTile
