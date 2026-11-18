@@ -180,7 +180,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/resource_accounting/compute/pouw/scheme.py", "verity/hooks.py", "verity/protocol.py",
           # served_step.undeclared names every declared scheme with an option, so compose.schemes.load imports each
           # declaration (test_pearl_c_vllm_run); Pearl+'s imports the adapters' pearl_plus_op and messages
-          "verity/config.py", "verity/party.py", "verity/protocols/experimental/dither",
+          "verity/config.py", "verity/party.py", "verity/release.py", "verity/protocols/experimental/dither",
           "verity/protocols/resource_accounting/memory/poub/scheme.py", "verity/protocols/resource_accounting/memory/poub/verifier",
           "verity/protocols/resource_accounting/memory/pous",
           "verity/protocols/workload_classification/__init__.py", "verity/protocols/workload_classification/training_detection/__init__.py",
