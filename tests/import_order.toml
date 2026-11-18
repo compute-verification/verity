@@ -666,6 +666,7 @@ paths = [
 ]
 loads = [
     "verity/commitments",
+    "verity/protocols/resource_accounting/memory/pous/prover",
     "verity/protocols/resource_accounting/scheme.py",
 ]
 

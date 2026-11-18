@@ -9,22 +9,46 @@ certificate is P2's at the store's block count (`verifier.period.certificate`): 
 `Pous.SecurityProofs.P2SlackFamilyUncond`, in abstract M1 with no named assumption; above, `periodHeldAt`, which takes
 `P2RingRoundSecureWide` and `RingDeviceAt`. Onsite's soundness takes PoUS's target, `PousSound`, as a premise. A device's
 whole chip and its side channels' capacity over a round are counted in the state the ring game bounds
-(`ResourceAccounting.RealizesState`). The vLLM adapter attaches it as ``pous:p2-16448/v4``: it reads the declared build
-(``declared``) and the registered weights once resident (``memory``), and computes each linear's block with the weight
-decoded from `C*` (``blocks``).
+(`ResourceAccounting.RealizesState`); the help `perfect-isolation` admits is a known charge nothing bounds yet, so
+`bound` refuses PoUS. Its own term is `Pous.Params.εMax` (`POUS_TERM`). Its sides: over is the credited store,
+`⌊ρ·|C|⌋` bits with ρ = 18/19 (`Scheme.stateBound`); under is the bits the device holds. On a served run
+(`prover/served.py`) it reads its settings from the declared build (``declared``), the registered weights once resident
+(``memory``), and computes each linear's block with the weight decoded from `C*` (``blocks``); the vLLM adapter's
+option ``pous:p2-16448/v4`` holds it until that attach is live.
 
 **The wipe** is decided by `MemoryChallenger.WipeProtocol.protocol` (`attester/lean/MemoryAttester/WipeProtocol.lean`),
 whose row bounds the foreign bits a server may still hold after an accepted wipe, from above: a device's game with no
 block in the circuit and no adapter option. `Pous.SecurityProofs.StreamedWipe` is proved with no named assumption;
-onsite's soundness takes the wipe's target, `WipeSound`, as a premise.
+onsite's soundness takes the wipe's target, `WipeSound`, as a premise. Its sides: over is the prior content's bits kept,
+under is zero. Its own term is unsaid: `Pous.Guarantees.StreamedWipe`'s compression term `k·C(N,g+1)·2^(M+E)/2^(q+(g+1)b)`
+and `Adv_PRF` depend on the run's parameters, which a term said as one number can't carry.
 """
 
 from __future__ import annotations
+
+from fractions import Fraction
+from typing import Any
 
 from verity.commitments import domains
 from verity.protocols.resource_accounting.scheme import Charge, Order, Scheme, register
 
 TRUSTED_DEVICE = "Verity.Assumptions.TrustedDevice"
+#: PoUS's own term, `δscheme`: P2's ideal-model ε, `Pous.Params.εMax` = 2^-λ at λ = `Pous.Params.secParam` = 128, beside
+#: the audit's own δ = `Pous.Params.δ` = 1/100, which is the sample's
+POUS_TERM = "Pous.Params.εMax"
+#: what PoUS's help is bounded by once something bounds it: `perfect-isolation` (`schemes.p2.P2_CLAIMS`) has no Lean name
+HELP_BOUND = "perfect-isolation (a claim of schemes.p2.P2_CLAIMS; no Lean statement bounds the help yet)"
+
+
+def _pous_requests(ctx: Any) -> Any:
+    from verity.protocols.resource_accounting.memory.pous.prover import served
+    return served.requests(ctx)
+
+
+def _pous_attach(exchange: Any, ctx: Any) -> None:
+    from verity.protocols.resource_accounting.memory.pous.prover import served
+    return served.attach(exchange, ctx)
+
 
 POUS = register(Scheme(
     name="pous",
@@ -35,8 +59,9 @@ POUS = register(Scheme(
                  "Pous.Period.RingDeviceAt"),
     log=(Order("weights", "salt"), Order("store", "challenges")),
     charges=(Charge("chip", "ResourceAccounting.RealizesState"),
-             Charge("side-channels", "ResourceAccounting.RealizesState")),
-    settings={"challenges": 320},
+             Charge("side-channels", "ResourceAccounting.RealizesState"),
+             Charge("help", HELP_BOUND, bounded=False)),
+    settings={"challenges": 320, "salt_source": "", "p2_lib": "", "experimental": False},
     option="pous:p2-16448/v4",
     hooks=("declared", "memory", "blocks"),
     requires={
@@ -48,6 +73,9 @@ POUS = register(Scheme(
         "coins-at-rate": "the memory attester's coin tree, committed before the session",
         "one-design": "its own: `challenges` indices of C*'s blocks, uniform, revealed one at a time",
     },
+    delta_scheme=Fraction(1, 2**128),
+    requests=_pous_requests,
+    attach=_pous_attach,
 ))
 
 WIPE = register(Scheme(

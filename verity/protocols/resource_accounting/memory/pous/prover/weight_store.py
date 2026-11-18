@@ -43,10 +43,22 @@ from typing import Any
 P2_STORE = Path(__file__).resolve().parent / "p2" / "p2_store"
 
 
+def registered(scheme: str) -> Any:
+    """The registered scheme ``scheme`` (`verifier.schemes`), None when none is."""
+    from verity.protocols.resource_accounting.memory.pous.verifier import schemes as pous_schemes
+    return pous_schemes.REGISTRY.get(scheme)
+
+
 def geometry(scheme: str) -> Any:
     """The point's geometry at one segment: the registered scheme's (its width, prime and ``2^16`` blocks a segment)."""
     from verity.protocols.resource_accounting.memory.pous.verifier import schemes as pous_schemes
     return pous_schemes.get(scheme).params
+
+
+def salt(source: bytes, commitment: bytes) -> bytes:
+    """The salt from the auditor's coin ``source``, flipped after ``commitment`` (`setup.sample_salt`)."""
+    from verity.protocols.resource_accounting.memory.pous.verifier import setup
+    return setup.sample_salt(source, commitment)
 
 
 def load_package(name: str, directory: Path) -> None:
