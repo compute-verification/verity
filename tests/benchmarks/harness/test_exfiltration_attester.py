@@ -279,7 +279,7 @@ def test_the_output_count_is_beside_the_sums_that_take_it_at_zero(tmp_path, list
         reader().SERVE_NAMED,
         ("the link responses, execution phase 3, class 0: charged its whole schedule on each of its 4 rows: the "
         "schedule was not handed"),
-        (f"`out/registrations.jsonl` of {HOLDER} says its registrations were checked under the network certifier's key "
+        (f"`out/registrations.jsonl` of {HOLDER} says its registrations were checked under the network attester's key "
         f"whose SHA-512 is {'5a' * 64}, in the session {'c3' * 32}: the reader holds neither, and compares them with "
         "nothing")]
     bare = E.build(store=recorded(tmp_path / "bare", planned=False).store, root=REPO)
