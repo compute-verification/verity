@@ -409,7 +409,9 @@ def test_a_refused_report_names_each_failing_step_and_its_why_and_a_scan_that_ex
     assert stand_in["why"] == {"n2": "stand-in: the simulated link"}
 
 
-def test_k_counts_the_audits_sample_and_free_inputs_and_the_networks_terms_once_a_period(tmp_path):
+def test_k_counts_the_audits_sample_and_free_inputs_and_the_networks_terms_once_a_period(tmp_path, monkeypatch):
+    """K sums its terms once each is computed; the advice's is not established (its charge is the compiler's cap, its
+    length private), so the served record's K is open, never a sum that reads None as 0."""
     h = cr.pooled_k([{"units": 6, "drawn": 6, "free": 2, "jitter": 4}], Fraction(1, 100),
                      {"advice": 8, "syncs": 0, "cells": 6})
     assert (h["Fmax"], h["terms"]["faulty_sets"], h["K"]) == (5, 15, 8 + 6 + 80 + 15 + 2 + 4)
@@ -431,10 +433,14 @@ def test_k_counts_the_audits_sample_and_free_inputs_and_the_networks_terms_once_
     audit = cr.audit_of(tmp_path)
     assert (audit["units"], audit["drawn"], audit["free"]) == (4, 2, 96) and "jitter" not in audit
     cert = {"sync_bits": 7.0, "verdict": "accepted", "windows": 3, "window_buckets": 60}
-    assert cr.network_terms(cert, {"advice_bits": {"derived": 40, "v0_total": 90}}) == {"advice": 40, "syncs": 21,
-                                                                                        "cells": 0}
-    assert cr.network_terms(cert, {"advice_bits": {"derived": None, "v0_total": 90}})["advice"] == 90
-    d1 = cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}}, [audit])
+    for bits in ({"derived": 40, "v0_total": 90}, {"derived": None, "v0_total": 90}, {}):
+        assert cr.network_terms(cert, {"advice_bits": bits}) == {"advice": None, "syncs": 21, "cells": 0}
+    not_established = cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}}, [audit])["K"]
+    assert set(not_established) == {"open", "network"} and not_established["open"].startswith("not established")
+    assert not_established["open"] == "not established: the network's term advice"
+    assert not_established["network"]["advice"] is None
+    monkeypatch.setattr(cr, "network_terms", lambda c, e: {"advice": 40, "syncs": 21, "cells": 0})
+    d1 = cr.d1_terms(cert, {}, {}, {}, {}, [audit])
     k = d1["K"][f"{2.0 ** -20:.3g}"]
     assert k["Fmax"] == math.ceil(20 * math.log(2) * 2) and k["K"] == sum(k["terms"].values())
     import leak_bounds as lb
