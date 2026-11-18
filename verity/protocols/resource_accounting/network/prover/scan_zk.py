@@ -247,6 +247,7 @@ from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA, produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as RG
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
 from verity.protocols.resource_accounting.network.verifier.scan_answer import _found, window_answer
 from verity.commitments import randomness as RND
@@ -604,7 +605,7 @@ def tree_port(kind: str, reg: ADV.Committed, reads: list[int], reads_from: int) 
     n = len(reg.rows)
     e = {"leaves": n, "words": reg.n_bits // 16, "word_bits": 16, "domain": tree_domain(reg).domain_id.hex()}
     port = produced.port(value(kind), e, reg.root.hex(), reads, _schema(reg))
-    return port | ({REG.READS_FROM: int(reads_from)} if reads_from else {})
+    return port | ({RV.READS_FROM: int(reads_from)} if reads_from else {})
 
 
 def tree_entry(kind: str, reg: ADV.Committed, positions) -> dict:
@@ -621,7 +622,7 @@ def state_reads(ports: Sequence[Mapping[str, dict]]) -> dict:
     for ps in ports:
         for p in ("o0", "sin", "o1"):
             if p in ps and ps[p]["value"] == value("state"):
-                at.setdefault(p, {}).update({ps[p].get(REG.READS_FROM, 0) + i: r for i, r in enumerate(ps[p]["reads"])})
+                at.setdefault(p, {}).update({ps[p].get(RV.READS_FROM, 0) + i: r for i, r in enumerate(ps[p]["reads"])})
     runs = {}
     for p, got in sorted(at.items()):
         lo, hi = min(got), max(got) + 1
@@ -651,7 +652,7 @@ def tree_refusal(port: dict, reg: ADV.Committed, entry: dict, bcs: list[bytes | 
         if bc is None or not scheme.verify_path(ADV.PORT, root, n, p, row_leaf(
                 d, p, ADV.INST.tree_leaf(reg.key, bc), _schema(reg)), nodes):
             return f"registered reads: table row {r} does not open the registered root at position {p}"
-    base = int(port.get(REG.READS_FROM, 0))
+    base = int(port.get(RV.READS_FROM, 0))
     for i, (r, want) in enumerate(zip(refs, port["reads"], strict=True)):
         if entry["positions"][r] != want:
             return (f"registered reads: unit {base + i} reads position {entry['positions'][r]}, and the verifier's "
@@ -829,16 +830,16 @@ def _v3c_refused(window: Path, why: str) -> SystemExit:
 def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
     """V3c's `SCAN_STATE` (network attestation's `blocks.SCAN_STATE`): its registration's one ``registered`` entry of
     it, its rows and salts the prover's `SCAN_STATE_FILE`, under the domain one-stage's R7 holds a value of the execution
-    phase to (`registered.domain` of the registration's ``program``, the entry's words and leaves, and the open root its
+    phase to (`registered_value.domain` of the registration's ``program``, the entry's words and leaves, and the open root its
     ``window`` names as ``run``), held to the entry's root and domain and to the scan's ``states``."""
     named = [e for e in rec.get("registered") or () if e.get("value") == SCAN_STATE]
     if len(named) != 1:
         raise _v3c_refused(window, f"its registration's registered values name {SCAN_STATE} {len(named)} times, not "
                                    "once: register the scan's state as a value of the audit's Program")
     (e,) = named
-    if int(e.get(REG.WIDTH_KEY, REG.WORD_BITS)) != REG.WORD_BITS:
-        raise _v3c_refused(window, f"its {SCAN_STATE}'s words are {e[REG.WIDTH_KEY]} bits, not the scan's "
-                                   f"{REG.WORD_BITS}")
+    if int(e.get(RV.WIDTH_KEY, RV.WORD_BITS)) != RV.WORD_BITS:
+        raise _v3c_refused(window, f"its {SCAN_STATE}'s words are {e[RV.WIDTH_KEY]} bits, not the scan's "
+                                   f"{RV.WORD_BITS}")
     n, W = int(e["leaves"]), int(e["words"])
     if n != len(states) or 16 * W != len(states[0]):
         raise _v3c_refused(window, f"its {SCAN_STATE} is {n} rows of {16 * W} bits, not the scan's {len(states)} "
@@ -848,7 +849,7 @@ def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
         raise _v3c_refused(window, f"its registration's window names no open root (``run``), which its {SCAN_STATE}'s "
                                    "domain binds")
     try:
-        dom = REG.domain(rec.get("program", ""), SCAN_STATE, W, n, window=run)
+        dom = RV.domain(rec.get("program", ""), SCAN_STATE, W, n, window=run)
     except ValueError as x:
         raise _v3c_refused(window, f"its registration's window's open root: {x}") from None
     data = (window / SCAN_STATE_FILE).read_bytes()
@@ -1171,12 +1172,12 @@ def wired(members) -> list[str]:
         [f"view {b}" for b in sorted(state) if o2 and o2.get(b) != state[b]]
 
 
-def empty_start(program: str, cls: IS.Class) -> REG.Registered:
+def empty_start(program: str, cls: IS.Class) -> RV.Registered:
     """The start of a run's first execution phase, as the verifier computes it: the empty state's row as one-stage's
     registered value `CARRY` of the Program with digest ``program``, a row/v2 row under the public salt of a value the
-    verifier fills (`registered.supplied_salts`). Nothing of it is the prover's, so the verifier pins its root."""
-    return REG.Registered.commit(program, CARRY, [_words(IS.encode(cls, IS.empty(cls)))],
-                                 REG.supplied_salts(program, CARRY, 1), schema=BitRowLeaf.hiding_schema)
+    verifier fills (`registered_value.supplied_salts`). Nothing of it is the prover's, so the verifier pins its root."""
+    return RV.Registered.commit(program, CARRY, [_words(IS.encode(cls, IS.empty(cls)))],
+                                 RV.supplied_salts(program, CARRY, 1), schema=BitRowLeaf.hiding_schema)
 
 
 def window_of(whole: SimpleNamespace, w: int, start, claimed: list[int] | None = None) -> SimpleNamespace:
@@ -2091,10 +2092,10 @@ def frame_leaf(earlier: dict, start: dict) -> dict:
     """A start's leaf on the staged files of two execution phases' honest rounds: ``earlier``, the one before's staged
     ``last`` member, whose statement commits its o1 as a frame port of one leaf, so that port's root is that leaf as
     Flock's statement frames it; ``start``, this one's staged start member, whose ``sin`` row's b‖c one-stage's
-    registered read frames at leaf 0 of that port's domain (`registered.leaf`, the leaf Lean's registered reads
+    registered read frames at leaf 0 of that port's domain (`registered_value.leaf`, the leaf Lean's registered reads
     open). The two leaves, and whether they and the two rows' b‖c are the same bytes."""
     fv, dom = earlier["header"]["frame_v3"], ADV.domain(frame_binding(earlier["set"], 1, "o1"), 1)
-    read = REG.leaf(dom, 0, start["bcs"][0]["sin"], BitRowLeaf.hiding_schema).hex()
+    read = RV.leaf(dom, 0, start["bcs"][0]["sin"], BitRowLeaf.hiding_schema).hex()
     return {"statement": fv["roots"]["o1"], "registered_read": read,
             "same": (read == fv["roots"]["o1"] and dom.domain_id.hex() == fv["domain_ids"]["o1"]
                      and start["bcs"][0]["sin"] == earlier["bcs"][0]["o1"])}

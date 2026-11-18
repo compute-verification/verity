@@ -27,9 +27,11 @@
 # --run-keys is a development run's: the memory attester is demo.sh's own on this node, under a key it makes for the
 # run in SERVE_DIR/private/run-keys/wipe (0700), removed when the wipe ends, and trusted for this run alone, so
 # served.json says key_pin run and trusted-device reads rehearsal. It is refused beside WIPE_KEY_SHA512, WIPE_ADDRESS,
-# WIPE_CHALLENGER or WIPE_COMMAND. Further arguments go to demo.sh. The Lean judge (wipe-protocol) is built before the card is checked, in a
-# scratch copy of verity/, which holds every package it requires (WIPE_PROTOCOL_EXE names one built already), never in
-# this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
+# WIPE_CHALLENGER or WIPE_COMMAND. Further arguments go to demo.sh. The Lean judge (wipe-protocol) starts building before the card is
+# asked for, in a scratch copy of verity/, which holds every package it requires (WIPE_PROTOCOL_EXE names one built
+# already), never in this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile; it builds beside the
+# lease and the wipe, which waits for it only to answer (its lock beside it, `lean_ready.sh`), and one that doesn't
+# build ends the piece after the wipe with its own error and exit 7; the build's start is stamped too. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
 # summary.json, which names the program that decided and its host under `decided_by`, the SHA-512 of the challenger key
 # the session was signed under, `key_sha512`, and whether it is the pinned one, `key_pinned`), lake-build.log,
 # answer.json (wipe.json's answer, whatever its verdict), served.json (the serve dir and window the wipe precedes,
@@ -88,11 +90,28 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the pinned key,
     { tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ --warning=no-file-changed verity || [ $? = 1 ]; } \
       | tar -C "$S" -x || { echo "WIPE FAILED: verity/ doesn't copy for wipe-protocol's build"; exit 7; }
     export PATH="$HOME/.elan/bin:$PATH"
-    command -v lake >/dev/null 2>&1 || bash "$ROOT/tools/verity/lean/setup.sh" "$S/$L" > "$DIR/lake-setup.log" 2>&1
-    (cd "$S/$L" && lake build wipe-protocol) > "$DIR/lake-build.log" 2>&1 \
-      || { tail -20 "$DIR/lake-build.log"; echo "WIPE FAILED: wipe-protocol doesn't build ($DIR/lake-build.log)"; exit 7; }
     export WIPE_PROTOCOL_EXE=$S/$L/.lake/build/bin/wipe-protocol
-    stamp "built wipe-protocol"
+    BUILT=${WIPE_PROTOCOL_EXE%/*}
+    mkdir -p "$BUILT"
+    # the lock is taken before the build starts and held by the build alone, so the answer waits for its end
+    exec {LOCK}>"$BUILT/wipe-protocol.lock"
+    flock -x "$LOCK"
+    stamp "the Lean build starts"
+    (
+      command -v lake >/dev/null 2>&1 \
+        || (exec {LOCK}>&- && bash "$ROOT/tools/verity/lean/setup.sh" "$S/$L") > "$DIR/lake-setup.log" 2>&1
+      if (cd "$S/$L" && exec {LOCK}>&- && exec lake build wipe-protocol) > "$DIR/lake-build.log" 2>&1; then
+        : > "$BUILT/wipe-protocol.ok"
+        stamp "built wipe-protocol"
+      else
+        { tail -20 "$DIR/lake-build.log"; echo "WIPE FAILED: wipe-protocol doesn't build ($DIR/lake-build.log)"; } \
+          > "$BUILT/failed"
+        stamp "wipe-protocol didn't build"
+      fi
+    ) &
+    BUILDING=$!
+    exec {LOCK}>&-
+    trap 'kill "$BUILDING" 2> /dev/null || :; rm -rf "$S"' EXIT
   fi
   if [ -z "${GPU_LEASE_UUID:-}" ]; then
     LEASE=(gpu-lease)
@@ -130,6 +149,12 @@ else
     ${DEMO_ARGS[@]+"${DEMO_ARGS[@]}"} || rc=$?
 fi
 stamp "the wipe exit $rc"
+if [ -e "${WIPE_PROTOCOL_EXE:-}.lock" ] \
+   && ! bash "$ROOT/benchmarks/pous/lean_ready.sh" "${WIPE_PROTOCOL_EXE%/*}" wipe-protocol true 2> /dev/null; then
+  cat "${WIPE_PROTOCOL_EXE%/*}/failed"
+  stamp "the piece stops: wipe-protocol didn't build"
+  exit 7
+fi
 KEY_PIN=run
 [ -n "$RUN_KEYS" ] || [ -z "$PIN" ] || [ "$PIN" != "$PINNED" ] || KEY_PIN=configuration
 HEADLINE=$(python3 - "$DIR" "$SERVE_DIR" "$WINDOW" "$NODE" "$CARD" "${WIPE_OWN_LEASE:+own}" "$rc" "$KEY_PIN" <<'EOF'
