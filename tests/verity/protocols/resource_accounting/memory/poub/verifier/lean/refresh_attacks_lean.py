@@ -93,8 +93,8 @@ class Session(R.Refresh):
                     else [self.store.payload(j) for j in range(b.first, b.first + b.count)])
         self.named[name] = self._rekey(payloads, list(b.salts), self.slot_of(("rekey", k)), {"append": o}, b.first, b)
 
-    def read(self, *what) -> None:
-        self.run(Plan(_canonical(self.runs(w) for w in what), self.store.extent))
+    def read(self, *what) -> object:
+        return self.run(Plan(_canonical(self.runs(w) for w in what), self.store.extent))
 
     def held_reads(self) -> int:
         """Receipts backed by a stored form the prover holds: a pass's reads less the blocks whose stored form is the
@@ -153,14 +153,16 @@ Cheat = Callable[[Session], Iterable]
 def drive(s: Session, cheat: Cheat = lambda s: ()) -> None:
     """Every window: the control's appends, the strategy's, one pass over both's reads, and the boundary; then every
     window closed and verified with the Lean's openings. A strategy's skips and forgeries are set at window 0, before
-    the control's moves they change."""
+    the control's moves they change. A pass the books refuse ends the session there: the window can't end."""
     s.start()
     for t in range(WINDOWS):
         reads = control(s)
         extra = tuple(cheat(s))
         if s.stopped:
             return
-        s.read(*reads, *extra)
+        got = s.read(*reads, *extra)
+        if got == M.REFUSED or getattr(got, "accepted", True) is False:
+            return
         s.boundary()
     s.finish_lean()
 
@@ -384,6 +386,7 @@ def table(server: D.Server) -> str:
         v = play(server, r.cheat)
         rows.append((r.name, r.rule, v.outcome, "-" if v.event is None else f"{v.kind} (event {v.event})",
                      "-" if v.free is None else str(v.free)))
+        print(" | ".join(rows[-1]), file=sys.stderr, flush=True)
     return _grid(rows)
 
 
