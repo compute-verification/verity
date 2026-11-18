@@ -92,3 +92,11 @@ def test_laundering_every_chunk_is_caught_and_one_chunk_is_a_rate() -> None:
     assert one.caught + len(one.free) == one.trials and set(one.free) <= {2}
     assert all(f <= c for f, c in zip(one.free, one.sample))
     assert 0 < one.bound < 1
+
+
+@pytest.mark.slow
+@needs_refresh
+def test_the_ordinal_rota_accepts_either_origin_the_prover_picks_after_a_coin() -> None:
+    """lean's `prefix_origin_reads_key` on this mirror's rota: a re-key's origin, G or F again, picked after F's re-key's
+    coin, is accepted either way and earns no receipt; what it leaks is the pick, which the slot schedule removes."""
+    assert ra.origin_choice() == {"G": ra.Outcome(True, None, 0), "F": ra.Outcome(True, None, 0)}
