@@ -42,7 +42,7 @@ def s_of(rate: float) -> float:
     return rate * REF_MHZ / MHZ / REF
 
 
-# Measured: sq.sh's median at 4 waves. Modelled: cycles a warp-squaring.
+# Measured: `rate_squaring sq`'s median at 4 waves. Modelled: cycles a warp-squaring.
 GPU = {
     "FOLD 0, the red team's form (measured)": s_of(5.079e10),
     "FOLD 5, column-chained (measured best)": s_of(6.531e10),
@@ -51,7 +51,7 @@ GPU = {
     "column form, multiply pipe only (152 x 4.02)": s_of(rate_of_cycles(152 * 4.02)),
     "Karatsuba, multiply pipe only (124 x 4.02)": s_of(rate_of_cycles(124 * 4.02)),
 }
-# Squarings/s a physical core (ifma.sh: G = 1, both threads of 24 cores), and the IFMA-only port
+# Squarings/s a physical core (`rate_squaring ifma`: G = 1, both threads of 24 cores), and the IFMA-only port
 # bound (130 IFMA per 8 words on two ports at the host card's `clock.turbo`), over the host card's `cpu.sockets` ×
 # `cpu.cores` cores; the node's VM shows fewer.
 HOST = {"none": 0.0, f"IFMA measured, {HOST_CORES} cores": HOST_CORES * 2.84e8,
