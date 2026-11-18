@@ -17,6 +17,7 @@ public import Definitions.Certifier.Guarantees.Carried
 public import Definitions.Certifier.Guarantees.MonitoringPeriodChecked
 public import Proofs.Certifier.Lemmas
 public import Proofs.Certifier.Occupancy
+public import Proofs.Certifier.AttesterScheme
 public import Proofs.Certifier.Counting
 public import Proofs.Certifier.Advice
 public import Proofs.Certifier.Ingress

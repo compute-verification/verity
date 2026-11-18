@@ -9,8 +9,9 @@
 #      ZK_UNITS="fp8-coord:K=6144 router-row" (served types instead of A6's coordinates, zk_cost.py's --units: ZK_SIZES then
 #      defaults to half,full, ZK_SAMPLES to c:dev+nofw,8:dev+nofw+fw,64:dev+nofw+fw, ZK_ARMS to dev,nofw,fw; overhead instead of fit)
 #      ZK_STAGE_ONLY=1 (with ZK_UNITS: stage on this node's CPUs, keep the records, no CUDA, build or GPU)
-#      ZK_SM (the prover's target, from nvidia-smi unless given)  ZK_CARD=rtx-pro-6000-server (the card whose datasheet
-#      peak divides; the overhead step refuses one whose arch isn't the run's GPU's; an H200: ZK_CARD=h200-sxm-141gb)
+#      ZK_SM (the prover's target, from nvidia-smi unless given)  ZK_CARD, with ZK_UNITS and no default (the card file
+#      whose datasheet peak divides: rtx-pro-6000-server, or h200-sxm-141gb on an H200; the overhead step refuses one whose
+#      arch isn't the run's GPU's)
 #      LEASE_MAX_MIN=30 (one GPU lease a point)
 #      ZK_VERIFY=0 (no Lean verify: the sessions' prices alone, each accepted by its ZK server)
 #      FLOCK_WORK=/workspace/jobs/proof-throughput (the CUDA prover's build and venv, as proof_throughput's job.sh keeps them)
@@ -22,6 +23,8 @@ set -uo pipefail
 PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 for o in ZK_DRAWS:ZK_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
   || { echo "zk-cost: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
+[ -z "${ZK_UNITS:-}" ] || [ -n "${ZK_CARD:-}" ] \
+  || { echo "zk-cost: ZK_UNITS needs ZK_CARD, the run's GPU's card file (rtx-pro-6000-server, h200-sxm-141gb)" >&2; exit 2; }
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 PT_WORK=${PT_WORK:-/workspace/cache/proof-throughput}
@@ -121,7 +124,7 @@ if [ "$rc" = 0 ]; then
     ZK verify --lean "$LEAN" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
     [ "${PIPESTATUS[0]}" = 0 ] || rc=1
   fi
-  if [ -n "${ZK_UNITS:-}" ]; then ZK overhead --card "${ZK_CARD:-rtx-pro-6000-server}" 2>&1 | tee -a "$O/zk.log"
+  if [ -n "${ZK_UNITS:-}" ]; then ZK overhead --card "$ZK_CARD" 2>&1 | tee -a "$O/zk.log"
   else ZK fit 2>&1 | tee -a "$O/zk.log"; fi
 fi
 keep
