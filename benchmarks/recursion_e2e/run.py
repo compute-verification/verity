@@ -38,7 +38,6 @@ HERE = Path(__file__).resolve().parent
 
 #: the job's command before its KEY=VALUE arguments, run from the tree's root; a caller of `main` may wrap it (`job`)
 JOB = ("bash", "benchmarks/recursion_e2e/job.sh")
-NODE = "vy-nebius-1"
 STEPS = RP.ORDER
 E2E = (*RP.E2E_STEPS, "negative")
 KIND = "bench/recursion-e2e/v1"
@@ -65,13 +64,11 @@ FORGE_AFTER = ("coef", "dirs", "message")
 FORGED = {"message": "alg", "sum": "L0,L3,alg", "comb": "alg", "top": "L3", "top-salt": "L0", "coef": "L0", "dirs": "L0",
           "filler": "alg"}
 
-# Where a run goes. 85's CPU prover needs no GPU, so a run behind the ZK server (and --cpu) goes straight to a CPU node that takes
-# plain runs, pinned to CORES; the SLOT_ONLY nodes take runs only through slots.
-# `--on auto` (AUTO) is research run's queue itself, which places the run on a node of its choosing: it takes the queue's
-# options but no --queue, and a CPU run there may land on a CPU node.
+# Where a run goes: `--on auto` (AUTO, the default) is research run's queue itself, which places the run on a node of its
+# choosing: it takes the queue's options but no --queue, and a CPU run there may land on a CPU node. `--on MACHINE` queues it
+# on that machine; with `--direct`, a CPU run (85's CPU prover needs no GPU) is a plain run there, pinned to CORES, which
+# research run's launcher refuses on a machine that takes runs only through its slots.
 AUTO = "auto"
-CPU_NODE, PLAIN_CPU_NODES = "vy-nebius-cpu-2", ("vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5")
-SLOT_ONLY = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1")
 CPU_WORK = "/workspace/cache/rec-bench"
 
 STAGES = {
@@ -149,13 +146,12 @@ def cpu_run(a) -> bool:
 
 
 def on(a) -> str:
-    """The machine: --on (AUTO: research run's queue places it), else a plain CPU node for a CPU run and the GPU node's
-    queue for a GPU one."""
-    m = a.on or (CPU_NODE if cpu_run(a) else NODE)
-    if m in PLAIN_CPU_NODES and not cpu_run(a):
-        raise SystemExit(f"--on {m}: a CPU node has no GPU; --oprove-gpu 1 and GPU modes need a GPU node")
-    if m in SLOT_ONLY and cpu_run(a):
-        raise SystemExit(f"--on {m}: takes runs only through its slots; a CPU run goes to one of {', '.join(PLAIN_CPU_NODES)}")
+    """The machine: --on, else AUTO (research run's queue places it); a --direct run names its machine and is a CPU run."""
+    m = a.on or AUTO
+    if a.direct and m == AUTO:
+        raise SystemExit("--direct: a plain run names its machine, --on MACHINE (one that takes plain runs)")
+    if a.direct and not cpu_run(a):
+        raise SystemExit(f"--direct --on {m}: a plain run has no GPU host; --oprove-gpu 1 and GPU modes are queued runs")
     return m
 
 
@@ -202,7 +198,8 @@ def forge_after(a) -> list[str]:
 
 def direct(a) -> bool:
     """A plain run on a CPU node (``research run --on``, pinned to --cores), not a queued job."""
-    return on(a) in PLAIN_CPU_NODES
+    on(a)
+    return a.direct
 
 
 def job_env(a: argparse.Namespace) -> list[str]:
@@ -367,9 +364,11 @@ def main(argv: list[str] | None = None, job: tuple[str, ...] = JOB) -> int:
                        help="V*'s prover: 0 the CPU prover (auto under the ZK server: node 1's lease pool stops a lease whose "
                             "GPU idles about 10 min, as it does during a release through the ZK server), 1 the GPU one under a lease")
         p.add_argument("--on", "--node", dest="on", default="", metavar="MACHINE",
-                       help=f"default {CPU_NODE} for a CPU run (behind the ZK server on the CPU prover, or --cpu), a plain run there; "
-                            f"else {NODE}'s queue; {AUTO}: research run's queue places it")
-        p.add_argument("--cores", default="0-31", help="a plain run's cores on its CPU node (taskset -c; default 0-31)")
+                       help=f"the machine's queue (default {AUTO}: research run's queue places it); with --direct, a plain run there")
+        p.add_argument("--direct", action="store_true",
+                       help="a CPU run (behind the ZK server on the CPU prover, or --cpu) as a plain run on --on MACHINE, "
+                            "pinned to --cores, not a queued job")
+        p.add_argument("--cores", default="0-31", help="a --direct run's cores on its CPU node (taskset -c; default 0-31)")
         p.add_argument("--preemptible", action="store_true",
                        help="queue the run preemptible (a guest on a node that admits guests only so)")
         p.add_argument("--mem-gb", type=int, default=0, help="the run's memory (default mem_gb: 128 with an oprove behind the ZK server, else 64)")
