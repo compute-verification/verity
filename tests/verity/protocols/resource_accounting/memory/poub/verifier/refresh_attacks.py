@@ -25,7 +25,7 @@ from poub_fakes import Clock, Entropy
 from test_appends import NODE, P512, SOURCE, pages, payload, salts
 
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
-from verity.protocols.resource_accounting.memory.poub.prover.rota import Rota
+from verity.protocols.resource_accounting.memory.poub.verifier.rota import Rota
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, schedule
 from verity.protocols.resource_accounting.memory.poub.verifier.audit import AuditRun, Params
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan

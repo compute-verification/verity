@@ -56,7 +56,7 @@ def uniform_rota(born_window: int, lifetime: int) -> int:
 
 
 #: The one place the replay reads the rota from: the first credited window of a written chunk, as a function of its
-#: birth window and L.  The prover's rota (`poub/prover/rota.py`, on MERGE2's branch, not `main`) starts credit at the same
+#: birth window and L.  The schedule (`poub/verifier/rota.py`) starts credit at the same
 #: window; when the verifier's side has a rota, this names it.
 ROTA = uniform_rota
 
