@@ -14,6 +14,12 @@ def judge(period: Path, monkeypatch) -> list[dict]:
     gave."""
     doc = json.loads((period / "period.json").read_text())
     (period / "period.json").write_text(json.dumps(doc | {"tools": {"wipe-protocol": "wipe-protocol"}}))
+    return stand_in(monkeypatch)
+
+
+def stand_in(monkeypatch) -> list[dict]:
+    """The Lean judge ``wipe-protocol``, whoever names it (a period's tools, the attach's ``judge``), stood in through
+    ``monkeypatch``; the list returned gets each answer it gave."""
     wipes, given, run = [], [], wipe_run.run
 
     def ran(*args, **kw):
