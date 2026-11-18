@@ -134,8 +134,8 @@ def test_the_weights_registration(monkeypatch):
     monkeypatch.setenv("VERITY_WEIGHTS_HASH", "host")
     com = O.committer(run_id="pins")
     com.model = _Model()
-    com.weights_tree = {"scheme": R.NAME, "key": WEIGHTS_KEY.hex()}           # a re-registration takes the registration's key
-    w = com.register_weights()
+    com.weights_tree = {"scheme": R.NAME, "key": WEIGHTS_KEY.hex()}           # a replay re-registers under the recorded key
+    w = com.register_weights(replay=True)
     assert (w["root"], w["tensors"], w["bytes"]) == (WEIGHTS_ROOT, 4, 23857)
     assert sha256(repr(sorted((k, v) for k, v in com.weights_tree.items() if k != "key")).encode()) == WEIGHTS_TREE
 
