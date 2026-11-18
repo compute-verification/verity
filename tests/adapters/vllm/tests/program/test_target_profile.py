@@ -46,7 +46,7 @@ def test_default_profile_is_the_admitted_sm89_record_and_canonical():
     assert p.compute_capability == (8, 9) and p.num_sms == 128 and p.batch_invariant and p.attention_backend is None
     assert p.capability_str == "8.9" and p.sm_arch == "sm_89"
     assert p.canonical() == canonical_bytes(p.to_json()) and TargetProfile.from_json(json.loads(p.canonical())) == p
-    assert TargetProfile(compute_capability=[8, 9]) == p  # list vs tuple canonicalise to the same profile
+    assert TargetProfile.default().with_overrides(compute_capability=[8, 9]) == p  # list vs tuple canonicalise to the same profile
 
 
 def test_canonical_bytes_are_compact_sorted_ascii_json_with_a_set_as_its_sorted_list():
@@ -93,7 +93,7 @@ def test_profile_rejects_unknown_and_invalid_fields():
     with pytest.raises(ValueError):
         TargetProfile.from_json({"compute_capability": [8, 9], "gpu_name": "L40S"})
     with pytest.raises(ValueError):
-        TargetProfile(num_sms=0)
+        TargetProfile.default().with_overrides(num_sms=0)
     with pytest.raises(ValueError):
         parse_target_arg('{"VLLM_ATTENTION_BACKEND": "TRITON_ATTN"}')  # a dead env var is not a profile field
 
@@ -173,10 +173,10 @@ def test_tampered_wrapper_is_refused():
     d = art.to_json()
     d["target_profile"]["compute_capability"] = [9, 0]  # relabel the target without rebuilding
     forged = ArtifactIdentity.from_json(d)
-    bad = reuse_mismatches(forged, TargetProfile(compute_capability=(9, 0)), APPLIC)
+    bad = reuse_mismatches(forged, TargetProfile.default().with_overrides(compute_capability=(9, 0)), APPLIC)
     assert bad and bad[0].startswith(f"identity {art.identity} does not match its components")
     with pytest.raises(ApplicabilityError):
-        check_reuse(forged, TargetProfile(compute_capability=(9, 0)), APPLIC)
+        check_reuse(forged, TargetProfile.default().with_overrides(compute_capability=(9, 0)), APPLIC)
 
 
 def test_parse_target_arg_overrides_the_default():
@@ -184,7 +184,7 @@ def test_parse_target_arg_overrides_the_default():
     p = parse_target_arg('{"compute_capability": [9, 0]}')
     assert p.compute_capability == (9, 0) and p.num_sms == 128
     assert parse_target_arg('{"attention_backend": "TRITON_ATTN"}').attention_backend == "TRITON_ATTN"
-    assert TargetProfile.default().env() == {"VLLM_BATCH_INVARIANT": "1"} and TargetProfile(batch_invariant=False).env() == {"VLLM_BATCH_INVARIANT": "0"}
+    assert TargetProfile.default().env() == {"VLLM_BATCH_INVARIANT": "1"} and TargetProfile.default().with_overrides(batch_invariant=False).env() == {"VLLM_BATCH_INVARIANT": "0"}
 
 
 L40S = {"multi_processor_count": 142, "compute_capability": "8.9"}
@@ -215,7 +215,7 @@ def test_compiled_profile_declares_the_execution_and_keeps_eager_digests():
     e = TargetProfile.default()
     assert "compilation" not in e.to_json() and e.modelled_engine() == {"enforce_eager": True} and e.engine_args() == {}
     c = TargetProfile.from_json({**e.to_json(), "compilation": "piecewise"})
-    assert c.execution_label == "bi-compiled" and TargetProfile(batch_invariant=False, compilation="piecewise").execution_label == "compiled"
+    assert c.execution_label == "bi-compiled" and TargetProfile.default().with_overrides(batch_invariant=False, compilation="piecewise").execution_label == "compiled"
     assert c.with_overrides(compute_capability=(9, 0), flash_attn_version=2).execution_label == "bi-compiled-fa2"
     # `piecewise` = vLLM's DEFAULT compiled configuration for serving (no precision-cast emulation): its Program is P_compiled;
     # `piecewise-emu` = the separate declared specialization with Inductor emulate_precision_casts (a different numerical computation)
@@ -237,7 +237,7 @@ def test_compiled_profile_declares_the_execution_and_keeps_eager_digests():
     assert c.to_json()["compilation"] == "piecewise" and c.digest() != e.digest()
     assert TargetProfile.from_json(c.to_json()) == c and TargetProfile.from_json(e.to_json()).digest() == e.digest()
     with pytest.raises(ValueError):
-        TargetProfile(compilation="full")
+        TargetProfile.default().with_overrides(compilation="full")
     assert parse_target_arg('{"compilation": "piecewise"}').execution_label == "bi-compiled"
 
 
@@ -245,7 +245,7 @@ def test_a_compiled_profile_declares_its_program_and_its_claim_in_these_words():
     """The two texts of a compiled profile's engine block: the claim whole, and the derivation but for one word, a term the Glossary
     retires, which named here would be one more site of it.  A Build that writes the block puts them in the artifact's identity, and
     components compose only where their blocks are equal, so a word of them changes here too.  They name no module and cite nothing."""
-    me = TargetProfile(compilation="piecewise").modelled_engine()
+    me = TargetProfile.default().with_overrides(compilation="piecewise").modelled_engine()
     assert sorted(me) == ENGINE_BLOCK_KEYS
     head = "P_compiled: one registered relation per Inductor-generated kernel of the "
     tail = (" artifact (GEMM/attention/lm_head existing Definitions; fused norm/act/RoPE regions new Definitions), applicability pinned by the "
@@ -262,11 +262,11 @@ def test_a_compiled_profile_declares_its_program_and_its_claim_in_these_words():
 def test_the_other_compiled_profiles_declare_theirs_in_these_words():
     """The same two texts of the other two compiled profiles, whole, and for the same reason: the profile that emulates the precision
     casts declares a derivation of its own under the claim above, and the breakable profile declares both its own."""
-    emulating = TargetProfile(compilation="piecewise-emu").modelled_engine()
+    emulating = TargetProfile.default().with_overrides(compilation="piecewise-emu").modelled_engine()
     assert sorted(emulating) == ENGINE_BLOCK_KEYS
     assert emulating["program_derivation"] == "eager module-forward trace (the emulation performs the eager roundings inside the fused kernels)"
-    assert emulating["claim"] == TargetProfile(compilation="piecewise").modelled_engine()["claim"]
-    breakable = TargetProfile(batch_invariant=False, compilation="breakable").modelled_engine()
+    assert emulating["claim"] == TargetProfile.default().with_overrides(compilation="piecewise").modelled_engine()["claim"]
+    breakable = TargetProfile.default().with_overrides(batch_invariant=False, compilation="breakable").modelled_engine()
     assert sorted(breakable) == ENGINE_BLOCK_KEYS
     assert breakable["program_derivation"] == "the eager Program's Definitions, each captured launch-dependent selection at the step's padded tokens"
     assert breakable["claim"] == "the eager kernels replayed from breakable CUDA graphs (no torch.compile): eager's Definitions at the capture size"
@@ -275,10 +275,10 @@ def test_the_other_compiled_profiles_declare_theirs_in_these_words():
 def test_breakable_profile_applies_vllms_breakable_graphs_at_its_capture_sizes():
     """`compilation="breakable"`: execution label `compiled`, engine args the CUDA-graph mode and capture sizes (no Inductor config),
     VLLM_USE_BREAKABLE_CUDAGRAPH set, and a declared engine block of mode NONE at those capture sizes for GM-01."""
-    b = TargetProfile(batch_invariant=False, compilation="breakable")
+    b = TargetProfile.default().with_overrides(batch_invariant=False, compilation="breakable")
     assert b.execution_label == "compiled" and b.env()["VLLM_USE_BREAKABLE_CUDAGRAPH"] == "1"
     sizes = [1, 2, 4, *range(8, 256, 8), *range(256, 513, 16)]
-    assert b.graph_capture_sizes() == tuple(sizes) and TargetProfile(compilation="piecewise").graph_capture_sizes() == ()
+    assert b.graph_capture_sizes() == tuple(sizes) and TargetProfile.default().with_overrides(compilation="piecewise").graph_capture_sizes() == ()
     assert b.engine_args() == {"enforce_eager": False, "compilation_config": {"cudagraph_mode": "FULL_AND_PIECEWISE",
                                                                               "cudagraph_capture_sizes": sizes}}
     assert b.engine_args(execution=False) == {}
@@ -286,7 +286,7 @@ def test_breakable_profile_applies_vllms_breakable_graphs_at_its_capture_sizes()
     assert me["enforce_eager"] is False and me["compilation"]["profile"] == "breakable"
     assert {k: me["compilation"][k] for k in ("mode", "cudagraph_mode", "capture_sizes")} == \
         {"mode": "NONE", "cudagraph_mode": "FULL_AND_PIECEWISE", "capture_sizes": sizes}
-    assert "VLLM_USE_BREAKABLE_CUDAGRAPH" not in TargetProfile(batch_invariant=False, compilation="piecewise").env()
+    assert "VLLM_USE_BREAKABLE_CUDAGRAPH" not in TargetProfile.default().with_overrides(batch_invariant=False, compilation="piecewise").env()
     assert TargetProfile.from_json(b.to_json()) == b
 
 
@@ -303,7 +303,7 @@ def test_fp8_block_gemm_declares_the_cutlass_kernel_and_keeps_undeclared_digests
     assert f.fp8_block_gemm_kernel() == "CutlassFp8BlockScaledMMKernel"
     assert f.execution_label == "bi-eager"          # the kernel choice is not another execution: the row id is unchanged
     with pytest.raises(ValueError):
-        TargetProfile(fp8_block_gemm="deepgemm")
+        TargetProfile.default().with_overrides(fp8_block_gemm="deepgemm")
     # declared vs applied: the selected kernel must be CUTLASS on every FP8 linear; absent / another class / no FP8 linears = mismatch
     applied = _applied(f, compute_capability=[9, 0], num_sms=132, tuned_gemm_arch_family="hopper", fp8_block_gemm_kernel="CutlassFp8BlockScaledMMKernel")
     assert profile_mismatches(f, applied) == []
@@ -328,7 +328,7 @@ def test_moe_backend_pins_the_triton_experts_and_keeps_undeclared_digests():
     assert parse_target_arg('{"moe_backend": "triton"}', base=e) == t
     for v in ("auto", "deep_gemm", "TRITON"):
         with pytest.raises(ValueError):
-            TargetProfile(moe_backend=v)
+            TargetProfile.default().with_overrides(moe_backend=v)
     applied = _applied(t, moe_experts_class="TritonExperts")
     assert profile_mismatches(t, applied) == []
     for got in ("DeepGemmExperts", None, "<mixed>"):
@@ -365,7 +365,7 @@ def test_the_engine_refuses_another_experts_class_than_the_declared_one(monkeypa
     import types
 
     from verity_vllm.engine import build as B
-    t = TargetProfile(moe_backend="triton")
+    t = TargetProfile.default().with_overrides(moe_backend="triton")
     monkeypatch.setattr(B.torch.cuda, "get_device_properties",
                         lambda i: types.SimpleNamespace(major=t.compute_capability[0], minor=t.compute_capability[1], multi_processor_count=t.num_sms))
     monkeypatch.setattr(B, "flash_attn_versions", lambda model: {t.effective_flash_attn_version()})
@@ -437,7 +437,7 @@ def test_moe_construction_is_a_declared_and_bound_static_never_applied_to_the_en
     """`moe_construction` (None = indexed-read-ordered, `padded` = MoeFfnFixedL_v1 per token) is a Program static:
     an undeclared profile serialises exactly as before (no key, digest unchanged); `padded` changes the digest; it is NOT an engine knob
     (`engine_args` unchanged), NOT judged by `profile_mismatches` (nothing is read back: never attested), and one spelling only."""
-    e = TargetProfile()
+    e = TargetProfile.default()
     assert "moe_construction" not in e.to_json() and TargetProfile.from_json(e.to_json()).digest() == e.digest()
     assert e.effective_moe_construction() == "indexed-read-ordered" and e.moe_construction_declaration()["declared_explicitly"] is False
     p = e.with_overrides(moe_construction="padded")
@@ -456,7 +456,7 @@ def test_moe_construction_is_a_declared_and_bound_static_never_applied_to_the_en
     assert i.effective_moe_construction() == "indexed-read" and i.moe_construction_declaration()["definitions"][0] == "MoeRouterTopK_v1{E,TOPK,VPT}"
     for bad in ("MOE-01", "fixed-slot", "Padded", True, 1):
         with pytest.raises(ValueError):
-            TargetProfile(moe_construction=bad)
+            TargetProfile.default().with_overrides(moe_construction=bad)
     # never attested: the read-back has no such field and the declared profile is not mismatched by its absence
     applied = _applied(p)
     assert profile_mismatches(p, applied) == [] and profile_mismatches(e, applied) == []
@@ -468,8 +468,27 @@ def test_moe_construction_is_a_declared_and_bound_static_never_applied_to_the_en
 def test_a_profile_s_card_is_its_card_file_s_capability_and_sm_count_and_absent_from_its_json_when_unnamed():
     named = TargetProfile(compute_capability=(9, 0), num_sms=132, card="h100-sxm-80gb")
     assert named.to_json()["card"] == "h100-sxm-80gb" and TargetProfile.from_json(named.to_json()) == named
-    assert "card" not in TargetProfile().to_json() and named.digest() != named.with_overrides(card=None).digest()
+    assert "card" not in TargetProfile.default().to_json() and named.digest() != named.with_overrides(card=None).digest()
     with pytest.raises(ValueError, match=r"card 'h200-sxm-141gb' is compute capability \[9, 0\] with 132 SMs"):
         TargetProfile(compute_capability=(9, 0), num_sms=128, card="h200-sxm-141gb")
     with pytest.raises(KeyError, match="no card 'no-such-card'"):
         TargetProfile(compute_capability=(9, 0), num_sms=132, card="no-such-card")
+
+
+@pytest.mark.parametrize("card, cc, sms, name", [("h200-sxm-141gb", (9, 0), 132, "NVIDIA H200"),
+                                                 ("rtx-pro-6000-server", (12, 0), 188, "NVIDIA RTX PRO 6000 Blackwell Server Edition")])
+def test_a_card_alone_is_the_profile_s_capability_sm_count_and_device_name_serialised_as_if_stated(card, cc, sms, name):
+    read = TargetProfile(card=card)
+    assert (read.compute_capability, read.num_sms, read.device_name) == (cc, sms, name)
+    assert read.canonical() == TargetProfile(compute_capability=cc, num_sms=sms, card=card).canonical()
+    assert parse_target_arg(json.dumps({"card": card}), base=TargetProfile.default()) == read
+    assert TargetProfile.default().device_name is None
+
+
+def test_a_profile_names_its_card_or_states_both_facts_a_device_reported():
+    for given in ({}, {"compute_capability": (9, 0)}, {"num_sms": 132}):
+        with pytest.raises(ValueError, match="a TargetProfile names its card"):
+            TargetProfile(**given)
+    with pytest.raises(ValueError, match=r"card 'xeon-6776p-2s' .* is no target: a target's card is a GPU's"):
+        TargetProfile(card="xeon-6776p-2s")
+    assert TargetProfile.from_gpu_document({"multi_processor_count": 132}) is None

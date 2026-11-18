@@ -941,7 +941,7 @@ def test_class_g_plans_a_long_prompt_as_its_prefill_chunks_each_at_the_launch_it
     assert [c[c.index("--out") + 1] for c in cmds] == [str(tmp_path / trace_dir(u)) for u in plan.requests]
     assert trace_dir(plan.requests[2]) == trace_dir(summary["requests"][2]) != trace_dir({**summary["requests"][2], "chunks": []})
     for u, c in zip(plan.requests, cmds):
-        assert c[c.index("--device-name") + 1] == reg.phi.target["device_name"] == "NVIDIA H200"
+        assert json.loads(c[c.index("--target") + 1])["card"] == reg.phi.target["card"] == "h200-sxm-141gb" and "--device-name" not in c
         assert c[c.index("--max-model-len") + 1] == str(max(2048, u.LP + u.T))
         ctx = parse_launch_context(c[c.index("--launch-context") + 1])
         assert (ctx.get("chunks", []), len(ctx["batch_by_step"])) == (list(u.chunks), len(u.launch))
@@ -1130,7 +1130,7 @@ def test_class_g_compiles_a_window_under_async_scheduling_with_the_row_it_discar
     ({"max_num_seqs": 0}, {}, "engine arg max_num_seqs 0, not a stated value of at most 256"),
     ({"enable_prefix_caching": None}, {}, "engine arg enable_prefix_caching None, not stated True or False"),
     ({}, {"tp": {"world": 4}}, "world 4, not 8"),
-    ({}, {"target": {"device_name": "NVIDIA H100 80GB HBM3"}}, "device_name 'NVIDIA H100 80GB HBM3', not 'NVIDIA H200'"),
+    ({}, {"target": {"card": "h100-sxm-80gb"}}, "device_name 'NVIDIA H100 80GB HBM3', not 'NVIDIA H200'"),
 ])
 def test_class_g_is_the_one_registration_without_batch_invariance_that_compiles(engine, edit, fact, tmp_path):
     with pytest.raises(Unexpressible, match=re.escape(f"a target without batch invariance outside class G ('eager'), whose launches the "

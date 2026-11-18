@@ -191,6 +191,7 @@ def test_roots_read_each_request_s_computed_tokens_only() -> None:
     moved[1][6, 0] ^= 1
     d = RB.roots_diff(want, RB.roots(moved, {"a": ([5, 6], 6), "b": ([5, 7], 4)}, 4))
     assert d["differing"] == 1 and d["first"] == ["a"] and not d["roots_equal"]
+    assert RB.roots_diff(want, want)["roots_equal"] and not any(v in json.dumps(d) for v in want.values())
 
 
 @pytest.mark.parametrize("dtype, row", [("bfloat16", 576 * 2), ("uint8", 656)])

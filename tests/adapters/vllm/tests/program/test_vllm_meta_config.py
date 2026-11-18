@@ -25,7 +25,7 @@ def _engine_args_seen(monkeypatch, **kw) -> dict:
 
 
 def test_a_compiled_class_g_target_reaches_the_meta_config_with_enforce_eager_once(monkeypatch):
-    target = TargetProfile(batch_invariant=False, compilation="breakable", async_scheduling=True)
+    target = TargetProfile.default().with_overrides(batch_invariant=False, compilation="breakable", async_scheduling=True)
     args = target.engine_args()
     assert args["enforce_eager"] is False and "compilation_config" in args
     seen = _engine_args_seen(monkeypatch, **args)
@@ -34,7 +34,7 @@ def test_a_compiled_class_g_target_reaches_the_meta_config_with_enforce_eager_on
 
 
 def test_an_eager_target_s_engine_args_reach_the_meta_config_unchanged(monkeypatch):
-    args = TargetProfile(async_scheduling=False).engine_args()
+    args = TargetProfile.default().with_overrides(async_scheduling=False).engine_args()
     assert "enforce_eager" not in args
     seen = _engine_args_seen(monkeypatch, **args)
     assert seen["enforce_eager"] is True and seen["async_scheduling"] is False

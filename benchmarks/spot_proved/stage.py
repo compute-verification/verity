@@ -1704,7 +1704,7 @@ def main() -> int:
     elif a.rows_past_keys:
         cap.only = long_rows(cap, a.rows_past_keys)
         print(f"rows past {a.rows_past_keys} keys (token: keys): {cap.only}", flush=True)
-    profile = TargetProfile(compute_capability=tuple(map(int, a.cc.split("."))), batch_invariant=False)
+    profile = TargetProfile.default().with_overrides(compute_capability=tuple(map(int, a.cc.split("."))), batch_invariant=False)
     report: dict = {"capture": a.capture, "step": a.step, "ranks": cap.ranks, "root": cap.root, "coins": cap.coins.hex(),
                     "layers": cap.layers, "checks": {r: cap.meta[r]["check"] for r in cap.ranks}, "types": {},
                     "allreduce_tree": cap.tree or "the registry's GLM53_H200_TREE, not read off this node",
