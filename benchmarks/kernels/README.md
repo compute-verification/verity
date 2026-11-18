@@ -12,6 +12,7 @@ Definition before anything is timed; nothing here changes a committed format, an
 | `steady_walk.py`, `metrics.toml` | the metric `kernels/witness-walk-on-card-over-host`: a statement's GPU-seconds with the witness's units walked on the card over walked on the host, one member a pair of steady specs read from the store's runs: GLM-5.3's head block (`glm53-flock-steady-head-block-h200` and its `-walk` sibling) and Llama 3.2 1B's `Gemm_v2` block (`llama32-1b-flock-steady-gemm-h200` and its `-walk` sibling) (its suite: `tests/benchmarks/kernels/steady_walk`) |
 | `ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh` | the ship frame, below |
 | `job_nvcc.sh` | the nvcc a job's own library compiles with off the card, outside a ship |
+| `smoke_h100.sh` | the kernels' part of a smoke run on one H100: each hm96 leaf kernel that takes its salts as data (Pearl-C for sm_90a, the row engine and slot commit, the z/y commit, `commit_gpu`) held on the card to its reference for the same salt bytes, and each build's machine-code gate; `--dry` runs what a CPU can. No timing |
 
 Each directory is also a test suite, run on the CPU from the tree's root:
 
