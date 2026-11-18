@@ -29,9 +29,9 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity import hooks as H
-from verity.protocols.resource_accounting.compute.pouw.prover import workload
-from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import runs_on
-from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
+from verity.channel import Int, Json, Schema
+from verity.protocols.resource_accounting.compute.pouw.prover import serving, workload
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import runs_on
 from verity.protocol import Channel, Role
 from verity.protocols.resource_accounting.scheme import VERIFIER, Block, Charge, Lacks, Order, Scheme, Term, register
 
@@ -112,11 +112,10 @@ def spend_epoch(private: str | os.PathLike[str]) -> int:
     directory, before it is returned: a killed server's number is never handed out again, so no later server opens a
     session on a root already used (the gate's one session a root); a number may be skipped."""
     path = Path(private) / EPOCH_FILE
-    try:
-        text = path.read_text()
-    except FileNotFoundError:
+    if not path.exists():
         k = 0
     else:
+        text = path.read_text()
         if not re.fullmatch(r"(0|[1-9][0-9]*)\n", text) or int(text) >= 2**64 - 1:
             raise ValueError(f"pearl-plus: {path} holds {text[:40]!r}, not the last salt epoch number spent below 2^64 - 1: "
                              "refused rather than risk a number already used")
@@ -177,6 +176,7 @@ class Attached:
         self.declared: H.Declared | None = None
         self.weights: dict[int, H.Handle] | None = None
         self.run: Any = None
+        """The open epoch's device run, which benchmarks' harness gate reads (`verity_bench.vllm.runner._pearl_c_gate`)."""
         self.session: Any = None
         self.reserved: dict[str, Any] | None = None
         self.epochs = 0
@@ -441,9 +441,15 @@ def attach(exchange: Any, ctx: Any) -> Attached:
     return on
 
 
+#: the challenger's salt coin for salt epoch k, opened after its root (`salt.epoch_open_root`; `coins.CoinOpening`)
+PEARL_SALT = Schema("PearlSalt", 1, "coins", {"epoch": Int(0, (1 << 64) - 1), "opening": Json(1 << 12)})
+
+
 PEARL_PLUS = register(Scheme(
     name="pearl-plus",
-    messages=workload.MESSAGES,
+    # H1Registration is H1's, not Pearl+'s: vLLM's codec (`verity_vllm.messages.types`) finds a type only on a declared
+    # scheme, and H1 has none
+    messages=tuple(m for m in workload.MESSAGES if m.type in ("PoUWScheme", "PearlPass", "H1Registration")),
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
     blocks=(Block("PearlPlusTile_v1", tile_macs), Block("PearlCTileRead_v1", tile_macs)),
@@ -474,14 +480,15 @@ PEARL_PLUS = register(Scheme(
     record="work",
     symbol="V",
     published=("MACs", Fraction(1)),
-    channel_schemas=Lacks("no Schema is declared for PearlSalt"),
+    channel_schemas=(PEARL_SALT,),
     check=Lacks("Pearl+'s verifier of record is its owner's to declare"),
-    premises=Lacks("Pearl+'s premises are its owner's to name"),
+    premises=("Verity.Vocab.PouwSound", "Pouw.PearlPlus.Setting.ChargeHolds"),
     reader=Lacks("the record's work row is H1's (W_cert, in work); Pearl+'s reader is its owner's to declare"),
     tables=("pearl-a", "pearl-y", "pearl-b"),
     output_format="bf16",
     product_family="fp8-e4m3-rowwise",
     y_committed=True,
-    salt_open_root=epoch_open_root,
+    salt_open_root=serving.epoch_open_root,
     kernels=runs_on(KERNEL),
+    keeps_weight_copy=True,
 ))
