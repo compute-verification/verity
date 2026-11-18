@@ -13,8 +13,8 @@
 # PEARLC_KERNEL: the kernel directory (default verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120, on an RTX PRO 6000;
 # verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90 on an H100 or H200, its cubin sent as pearl_c_sm90.cubin, and
 # ARMS' default stock-fp8@compiled,pouw-pearl-c-whole); the leased GPU must be its.
-# GPUS: the GPUs the lease may take (gpu-lease --on), SPEC (default llama31-8b-1gpu-pearl-c-whole-served, on the card the
-# driver reports; SPEC@CARD names one), POINT,
+# GPUS: the GPUs the lease may take (gpu-lease --on), SPEC (default llama31-8b-1gpu-pearl-c-whole-served on an H100 or
+# H200, llama31-8b-1gpu-pouw-protocol-served on an RTX PRO 6000; SPEC@CARD names the card), POINT,
 # WARMUPS (2), REPS (3), MAX_MIN (the lease, 20), MEM_GB (the lease's host memory, 16);
 # GPU_LEASE_TIMED=1 for rows taken inside a booked clean window
 # (gpu-lease --timed). The node's pinned-vLLM Python is env.sh's VENV. numabind.py is
@@ -34,7 +34,7 @@ case $K in
   pearl_c_sm90) GPU_NAME="H100|H200"; GPU_CC=9.0
     ARMS=${ARMS:-stock-fp8@compiled,pouw-pearl-c-whole}; SPEC=${SPEC:-llama31-8b-1gpu-pearl-c-whole-served} ;;
   *) GPU_NAME="RTX PRO 6000 Blackwell"; GPU_CC=12.0
-    ARMS=${ARMS:-stock-fp8@compiled,stock-fp8,pouw:pearl-c-sm120-v1-h3}; SPEC=${SPEC:-llama31-8b-1gpu-pearl-c-whole-served} ;;
+    ARMS=${ARMS:-stock-fp8@compiled,stock-fp8,pouw:pearl-c-sm120-v1-h3}; SPEC=${SPEC:-llama31-8b-1gpu-pouw-protocol-served} ;;
 esac
 POINT=${POINT:-b8-p512-mixed}; NSYS=${NSYS:-1}
 export ARMS SPEC POINT NSYS GPU_NAME GPU_CC
