@@ -30,7 +30,6 @@ LINES: dict[tuple[str, ...], list[tuple[str, list[str], Any, Any]]] = {
         ("revision", ["--revision", "abc"], "abc", None),
         ("max_model_len", ["--max-model-len", "512"], 512, 2048),
         ("target", ["--target", "{}"], "{}", None),
-        ("device_name", ["--device-name", "a device"], "a device", None),
         ("sampling", ["--sampling", "greedy"], "greedy", None),
         ("workload", ["--workload", "w.json"], "w.json", None),
         ("tp", ["--tp", "2"], 2, 1),

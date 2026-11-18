@@ -2,7 +2,9 @@
 scan of served traffic is `tests/adapters/vllm/tests/program/predict/test_window_rows.py`'s, at the adapter's classes."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -14,7 +16,7 @@ SCAN = IS.Class(B=512, r=4, lanes=2, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO
 
 @dataclass(frozen=True)
 class Window:
-    scan: IS.Class = SCAN
+    scan: Any = field(default_factory=lambda: SimpleNamespace(shape=asdict(SCAN)))
     buckets: int = 2
     slots: int = 2
 

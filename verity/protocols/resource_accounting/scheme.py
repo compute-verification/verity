@@ -190,13 +190,15 @@ class Port:
     """An external port the scheme reads (``input``) or writes (``output``), laid out as the field ``field`` of the
     public signature of its block's Definition ``definition``: the scan's state row, the released bytes' positions.
     ``layout``, when declared, gives the port's `Layout` at a public shape (named integers, as `Block.cost` reads), which
-    an adapter's lowering reads through `layout` when it builds a circuit; no guarantee reads it."""
+    an adapter's lowering reads through `layout` when it builds a circuit; no guarantee reads it. ``value``, where the
+    port's rows are a registered value, is that value's name."""
 
     name: str
     direction: Literal["input", "output"]
     definition: str
     field: str
     layout: Callable[[Mapping[str, int]], Layout] | None = None
+    value: str = ""
 
 
 @dataclass(frozen=True)
