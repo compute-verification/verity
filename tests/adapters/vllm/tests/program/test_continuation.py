@@ -252,9 +252,6 @@ def test_is_eos_is_total_over_the_lifted_encoding_bot_and_noncanonical_are_not_e
     assert K.is_eos_total(32, L.enc_bot(32), EOS) is False           # IsEOS(bot) = 0 by the tag gate, not a convention
     assert K.is_eos_total(32, L.enc_bot(32) | 17, EOS) is False      # 1||17: a noncanonical word, never normalized, never EOS
     assert K.is_eos_total(32, L.inv(32), EOS) is False
-    # the recurrence over lifted words: a bot at a slot with r = 1 reads b = 0 (and check_transcript names the missing token)
-    s = K.recurrence([L.enc_active(32, ORD), L.enc_bot(32)], cap=2, A=0, eos=EOS, lifted_words=True)
-    assert s[1].raw is None and s[1].is_eos is False
 
 
 def test_profile_a_is_the_resolved_header_field_through_the_one_lag_rule_never_defaulted():

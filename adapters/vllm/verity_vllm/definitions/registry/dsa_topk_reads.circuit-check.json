@@ -273,5 +273,8 @@
   "DsaPositionsMerge_v2{M=8,K=2048}": {
    "sha512": "5ed7f6ebc638d3a5ea42164825c09ed8f6c4e78c026789f0a52cd062d03d28177ccb80b751b43a3885b38c8d602ddf396e699bf4987a623d7c78957fb33a6682"
   }
+ },
+ "struct_max_gates": {
+  "DsaPositionsSlot_v2": 4096
  }
 }
