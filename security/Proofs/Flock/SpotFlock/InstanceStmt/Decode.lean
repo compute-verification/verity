@@ -253,6 +253,27 @@ theorem slice_A : Widths.sliceWidth (.array 2 (.value 16)) 0 2 = some 16 := by
   simp only [leaves_V, rangeWidths_V]
   decide
 
+theorem rangeWidths_A : Widths.rangeWidths (.array 2 (.value 16)) 0 2 = [16] := by
+  rw [Widths.rangeWidths]
+  simp only [leaves_V, rangeWidths_V]
+  decide
+
+/-- The return's one part reads node 0 first, at its own width 16. -/
+theorem firstReads_one (params : Array (String × Ty)) (form fn axes n nxs offsets recut count) :
+    Widths.firstReads #[some 16] ⟨params, .array 2 (.value 16), ⟨[⟨form, fn, #[], .array 2 (.value 16), axes, n, nxs⟩]⟩,
+      ⟨#[.affine false 0 0 2], #[0], count⟩, offsets, recut⟩ = #[some 16] := by
+  obtain ⟨s', hs'⟩ : ∃ s', Std.Stream.next? (Std.toStream (#[0] : Array ℕ)) = some (0, s') := ⟨_, rfl⟩
+  simp [Widths.firstReads, Widths.wAt, hs', leaves_V]
+
+/-- A 16-bit input node of 2 leaves, first read at 16 bits, read whole at 16 bits: `recutOk` admits it, taking no step. -/
+theorem recutOk_one (params : Array Ty) (hp first : Array (Option ℕ)) (hf : (first[0]?).join = some 16) (w : ℕ) :
+    (Widths.recutOk { params, nodes := #[.array 2 (.value 16)], hp, hn := #[some 16], below := 1, inp := #[some 16], first }
+      (.array 2 (.value 16)) (some 16) 0 (.affine false 0 0 2)).run w = .ok (some true) w := by
+  unfold Widths.recutOk
+  generalize hD : Widths.DEPTH = D
+  obtain ⟨D, rfl⟩ : ∃ k, D = k + 1 := ⟨D - 1, by subst hD; rfl⟩
+  simp [Widths.Src.inW?, Widths.bySlices, rangeWidths_A, hf, Widths.recut, leaves_A, Widths.sliceOf, Part.count]
+
 /-- A body of one node without arguments, of type `Array 2 (Value 16)` as its return is, returning that node's leaves
 `0 … 1` as one part, reads no leaf at another width. -/
 theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
@@ -284,7 +305,7 @@ theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
         · exact .inl rfl
       · exact .inl rfl
     rcases hi with hi | hi <;>
-    simp only [hi, hs', Widths.bodyBad, List.size_toArray, List.length_cons, List.length_nil, Nat.zero_add,
+    simp only [hi, hs', firstReads_one, recutOk_one _ _ #[some 16] rfl, Widths.bodyBad, List.size_toArray, List.length_cons, List.length_nil, Nat.zero_add,
       List.getElem!_toArray, List.getElem!_eq_getElem?_getD, Widths.seqBad, Widths.partOk, Widths.Src.ty?,
       Array.getElem?_map, List.map_toArray, List.map_cons, List.map_nil, List.getElem?_toArray, Widths.Src.homo?,
       homo_A, Part.count, slice_A, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true, gt_iff_lt, Nat.div_pos_iff, List.cons_append,

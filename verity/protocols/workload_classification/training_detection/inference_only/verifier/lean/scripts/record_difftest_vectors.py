@@ -128,7 +128,6 @@ BROKEN = {
     "params": ["gamma", "alpha", "pin-value"],
     "program": ["program-text"],
     "not-topological": ["forward"],
-    "recut-unread": [],
     "record": ["record-text", "record-list"],
     "trusted": ["trusted-keys", "chain", "run-unknown"],
     "run-program": ["run-program"],
@@ -150,7 +149,7 @@ BROKEN = {
 WAYS = [(stage, how) for stage, hows in BROKEN.items() for how in hows]
 #: the stages that refuse a case before SPOT reads its wires: such a case carries no wires for SPOT's reader
 EARLY = ("instance", "params", "program", "not-topological", "record", "trusted", "run-program", "run-circuit",
-         "templates", "own-rows", "recut-unread")
+         "templates", "own-rows")
 #: the circuits a broken case tries for one that has what its way breaks
 TRIES = 40
 
@@ -962,10 +961,7 @@ def shaped() -> list[dict]:
     refuses is edited into the accepted record and refused with the declarations (`inputs`).
 
     Then `Norm`'s batch split into two root nodes (`SPLITS`, `split`): side by side and with `Gemm`'s between, each
-    taken with the served shape's verdict, and with the record one unit short of their sum, refused (`templates`).
-
-    Last, `read_in_leaves` with its input node registered at twice its reader's width (`recut`), refused
-    (`recut-unread`)."""
+    taken with the served shape's verdict, and with the record one unit short of their sum, refused (`templates`)."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -1157,20 +1153,7 @@ def shaped() -> list[dict]:
               48 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + k,
               reroot=split(apart), broken="templates" if short else None,
               edit=(lambda d: d["templates"][2].__setitem__(1, d["templates"][2][1] - 1)) if short else None)
-    first("a read at another width", read_in_leaves(),
-          48 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + len(SPLITS),
-          held=("weights/wide",), committed=("weights/wide",), pins=[], policy={}, reroot=recut, broken="recut-unread")
     return out
-
-
-def recut(nodes: list, desc: dict) -> None:
-    """`read_in_leaves`' input node, a batch of 32 `Input16_v1`, as 16 of `Input32_v1`, its reader's references
-    unchanged: each 16-bit leaf it reads is half of a 32-bit gate (`refs.recut`), which the record check refuses
-    (`recut-unread`)."""
-    desc["callees"].append("Input32_v1")
-    desc["definitions"]["Input32_v1"] = {"form": "primitive", "id": "Input32_v1", "params": [], "ret": ["Value", 32]}
-    desc["types"] += [t for t in (["Value", 32], ["Array", 16, ["Value", 32]]) if t not in desc["types"]]
-    nodes[0].update(fn=len(desc["callees"]) - 1, n=16, out=desc["types"].index(["Array", 16, ["Value", 32]]))
 
 
 def _registered(root: str, n: int, bits: int, stated: int | None = None) -> tuple:
@@ -2217,7 +2200,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones, `shaped()`'s and `edged()`'s."""
-    return len(EDGED) + COUNT + 33 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + 1 + len(SPLITS) + 1
+    return len(EDGED) + COUNT + 33 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + 1 + len(SPLITS)
 
 
 def results(case: dict) -> dict:

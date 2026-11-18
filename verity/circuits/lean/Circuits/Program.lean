@@ -1462,6 +1462,10 @@ def decode (bytes : ByteArray) : V Prog := do
       let c := st.defs[d.body.nodes[k]!.fn]!
       if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
         throw s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
+  -- a gate is one leaf of its width: no layout has an operand of part of a gate (PROTOCOL.md §6, `Program.circuit`)
+  if !rd.body.recut.isEmpty then
+    throw (s!"recut-gates: input nodes {rd.body.recut.toList.map (·.1)} are read in leaves of part of their width, " ++
+      "which the gate layout doesn't lay out")
   let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
   return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8 }
 
@@ -1514,6 +1518,10 @@ def decodeOf (read : Option (Except String Json)) : V Prog := do
       let c := st.defs[d.body.nodes[k]!.fn]!
       if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
         throw s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
+  -- a gate is one leaf of its width: no layout has an operand of part of a gate (PROTOCOL.md §6, `Program.circuit`)
+  if !rd.body.recut.isEmpty then
+    throw (s!"recut-gates: input nodes {rd.body.recut.toList.map (·.1)} are read in leaves of part of their width, " ++
+      "which the gate layout doesn't lay out")
   let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
   return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8 }
 
@@ -1566,6 +1574,10 @@ def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
       let c := st.defs[d.body.nodes[k]!.fn]!
       if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
         throw s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
+  -- a gate is one leaf of its width: no layout has an operand of part of a gate (PROTOCOL.md §6, `Program.circuit`)
+  if !rd.body.recut.isEmpty then
+    throw (s!"recut-gates: input nodes {rd.body.recut.toList.map (·.1)} are read in leaves of part of their width, " ++
+      "which the gate layout doesn't lay out")
   let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
   return { defs := st.defs, index := st.index, root, programFn, sha512 := ← sha512 (← canon bare).toUTF8 }
 

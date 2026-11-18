@@ -85,9 +85,6 @@ theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
   rcases h2 : decodeProgram i.program with e | P <;> simp only [h2] at h
   · cases h
   simp only [pure, Except.pure] at h
-  by_cases h3r : (!(P.defs[P.root]!).body.recut.isEmpty) = true
-  · simp only [h3r, ite_true, throw, throwThe, MonadExceptOf.throw] at h; cases h
-  simp only [h3r, Bool.false_eq_true, ite_false] at h
   by_cases h3 : P.orderViolation.isSome = true
   · simp only [h3, ite_true, throw, throwThe, MonadExceptOf.throw] at h; cases h
   simp only [h3, Bool.false_eq_true, ite_false] at h
