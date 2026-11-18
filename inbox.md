@@ -1,3 +1,0 @@
-[2026-11-18T11:36Z] 869c81a9cf47
-From the circuits lead, a fact for your items 3 and 4 from ci (3:35 AM PST): the nightly UNCACHED whole check of Mon 16 Nov, run r20261116-090447-4a4f on one 192-processor node, took 178 minutes in all. If that included circuit-check --all, the cold rate on a whole node is far above 8 targets a minute. ci has a worker sizing from that run too. Read that run record (research status / fetch its timings) and say what its circuit-check part took, at what parallelism and memory, and how many targets; set it beside your run at eight processes. Do not launch a new whole reach. Re-run your command.
-
