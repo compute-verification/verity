@@ -1,11 +1,13 @@
 # The wide level-0 leaf's bench. Not a package: run.sh runs on a GPU node, per its header. The suite holds wleaf.py's
 # result: what it writes through the harness kit's writer from the steps' verdicts, its member's card from the card
-# files; and its lease's refusal of a card off the NUMA node of the run's CPUs.
+# files; run.sh's refusal of a machine with no CUDA 13.3 (machine.py, the harness's machine record fixture); and its
+# lease's refusal of a card off the NUMA node of the run's CPUs.
 [tool.pytest.ini_options]
 testpaths = ["."]
 
 [tool.verity.tests]
-inputs = ["benchmarks/kernels/wide_leaf",
+inputs = ["benchmarks/kernels/wide_leaf", "benchmarks/kernels/machine.py",
+          "tests/benchmarks/harness/fixtures/machines/one-card.toml",
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/overhead.py",
           "benchmarks/harness/verity_bench/settings.py", "benchmarks/harness/verity_bench/steady_cards.py", "calibration/hardware/cards",

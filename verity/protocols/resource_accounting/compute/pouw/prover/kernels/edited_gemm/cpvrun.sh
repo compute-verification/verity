@@ -11,7 +11,8 @@
 #     -- bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/cpvrun.sh
 set -uo pipefail
 export O=${OUT:?}
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2  # CUDA_HOME, else the run's machine's
+export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
 export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm
 # the references import their siblings as verity's modules, from the clone's root
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}

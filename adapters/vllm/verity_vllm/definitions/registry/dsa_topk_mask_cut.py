@@ -45,13 +45,21 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
-
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import NOT, ZERO, add, and_reduce, compress_columns, const_bits, sub
+from verity.circuits.boolean.forms import (
+    NOT,
+    ZERO,
+    add,
+    and_reduce,
+    compress_columns,
+    const_bits,
+    sub,
+)
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
 from verity_vllm.definitions.registry.boolean_dsa_topk import decode, key
 from verity_vllm.definitions.registry.dsa_topk import check_statics

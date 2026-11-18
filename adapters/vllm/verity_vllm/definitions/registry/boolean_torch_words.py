@@ -24,7 +24,20 @@
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, shl_window, shr, sub
+from verity.circuits.boolean.forms import (
+    NOT,
+    ONE,
+    OR,
+    ZERO,
+    add,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+    shl_window,
+    shr,
+    sub,
+)
 from verity.circuits.boolean.trace import definition
 from verity.circuits.ops.boolean.scalar import gt_u, select
 from verity.circuits.silicon import fp

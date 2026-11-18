@@ -8,8 +8,7 @@ public import Proofs.Properties.Verity.Sampled.Target
 
 `Verity.SoundnessAt .remote` for a vocabulary whose sampled fields are the deployment's sessions (`Sampled.Deployed`,
 `Sampled.Covers`), from the union bound over remote's three subprotocols (`remote_soundness_of_subprotocols`): SPOT's
-target by `Sampled.spotSound_of_targets` (the coupling at each session), PoUW's (`Vocab.PouwSound .remote`) as given,
-and the statement on the committed circuit (`GateARow`) passed on as given. Each
+target by `Sampled.spotSound_of_targets` (the coupling at each session), PoUW's (`Vocab.PouwSound .remote`) as given. Each
 hypothesis is one its goal proves; once each is a theorem, the conclusion holds by applying this one to them.
 -/
 
@@ -22,12 +21,13 @@ variable {ι α : Type} [Fintype α] {d : ResourceAccounting.Device ι}
 /-- **Soundness at remote, from the targets still open**: remote's compiled verifier accepts files that passed the
 commit phase's check while one of its three claims fails with probability at most their errors summed, for a vocabulary
 whose sampled fields read the constructions `K` at the deployment's sessions `S`, wherever each session's coupling,
-PoUW's target and `GateARow` hold. -/
+PoUW's target hold. -/
 theorem remote_soundness_of_targets (V : Vocab d α) {K : Sampled.Constructions V}
     {S : ByteArray → Array ByteArray → Option Sampled.Live} (hD : Sampled.Deployed V K S)
-    (hCov : Sampled.Covers V .remote S) (hC : ∀ θ F A, S θ F = some A → Sampled.CouplingTarget V .remote K A θ F)
-    (hW : V.PouwSound .remote) (hG : GateARow) :
+    (hCov : Sampled.Covers V .remote S) (hTwo : Sampled.TwoStageBound V .remote)
+    (hC : ∀ θ F A, S θ F = some A → Sampled.CouplingTarget V .remote K A θ F)
+    (hW : V.PouwSound .remote) :
     V.SoundnessAt .remote :=
-  remote_soundness_of_subprotocols ι α d V (Sampled.spotSound_of_targets V .remote hD hCov hC) hW hG
+  remote_soundness_of_subprotocols ι α d V (Sampled.spotSound_of_targets V .remote hD hCov hTwo hC) hW
 
 end Verity

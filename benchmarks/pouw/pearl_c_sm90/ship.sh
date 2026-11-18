@@ -3,11 +3,12 @@
 # gates pass), and
 #   check/               fixture.py's inputs and expected buffers (needs verity and numpy)
 #   run.py, source.txt (the verity commit and the status of the trees the ship is built from), MANIFEST.sha256
-# Usage: bash benchmarks/pouw/pearl_c_sm90/ship.sh [OUT]   (default /tmp/pearl-c-sm90-ship; CUDA names the toolkit, as for
-#        build.sh)
+# Usage: bash benchmarks/pouw/pearl_c_sm90/ship.sh [OUT]   (default /tmp/pearl-c-sm90-ship; the toolkit CUDA_HOME, else the
+#        machine's 13.0, benchmarks/kernels/machine.py's)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 OUT=${1:-/tmp/pearl-c-sm90-ship}
+CUDA_HOME=$(python3 "$ROOT/benchmarks/kernels/machine.py" toolkit 13.0); export CUDA_HOME
 bash "$HERE/../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh" "$OUT"
 (cd "$ROOT" && uv run python benchmarks/pouw/pearl_c_sm90/fixture.py "$OUT/check")
 cp "$HERE/../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py" "$OUT/"

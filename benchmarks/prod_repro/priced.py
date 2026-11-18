@@ -31,6 +31,9 @@ from bisect import bisect_left
 from collections.abc import Sequence
 from pathlib import Path
 
+from verity.device import load_card, skus
+
+CARDS = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
 METRIC = "vllm/prod-serving-cost-glm53"
 #: the id a priced point goes under, which the serving cost's door declares
 PRICED = "benchmarks/serving-cost-priced"
@@ -428,7 +431,7 @@ def point(priced: dict, below: dict, tested_by: str, units_from: str, member: st
 
 
 def price(out: Path, u: dict, *, tested_by: str, units_from: str, ours: Sequence[str] = OURS,
-          reference: str = "prod-trace", stock: str = "prod", model: str = "glm-5.3", card: str = "h200",
+          card: str, reference: str = "prod-trace", stock: str = "prod", model: str = "glm-5.3",
           pu: dict | None = None, name: str = PRICED) -> dict:
     """Each served arm of ``ours`` priced over ``reference`` (`layer`, with its measured and step-adjusted layers
     beside it), and the first one's point under ``name`` over ``stock`` (`point`) with its ``member``; where none
@@ -512,9 +515,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ours", nargs="+", default=list(OURS))
     ap.add_argument("--tested-by")
     ap.add_argument("--model", default="glm-5.3")
-    ap.add_argument("--card", default="h200")
+    ap.add_argument("--card", required=True, help="the served card's `short` in calibration/hardware/cards, a member's name part")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
+    shorts = {load_card(sku, directory=CARDS).get("short") for sku in skus("gpu", directory=CARDS)}
+    if a.card not in shorts:
+        raise SystemExit(f"--card {a.card!r} is the `short` of no GPU card file under {CARDS}: one of {sorted(x for x in shorts if x)}")
     rep = json.loads((a.out / "prod_repro.json").read_text()) if (a.out / "prod_repro.json").is_file() else {}
     r = price(a.out, units(a.units), tested_by=a.tested_by or rep.get("run") or "not named", units_from=a.units.name,
               ours=a.ours, reference=a.reference, stock=a.stock, model=a.model, card=a.card,

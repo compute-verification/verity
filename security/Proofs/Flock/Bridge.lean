@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Bridge.PortRoots
 public import Proofs.Flock.Bridge.PopMatches
 public import Proofs.Flock.Bridge.Targets
-public import Properties.Verity.GateARow
+public import Proofs.Flock.Bridge.GateARow
 public import Proofs.Flock.Bridge.FilePart.Owned
 public import Proofs.Flock.Bridge.FilePart.Inst
 public import Proofs.Flock.Bridge.Lowers

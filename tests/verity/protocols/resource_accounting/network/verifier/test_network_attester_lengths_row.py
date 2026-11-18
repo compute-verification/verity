@@ -16,7 +16,7 @@ import pytest
 
 import signers
 from verity.protocols.resource_accounting.network.verifier import connection_rows as CR
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
 from verity.protocols.resource_accounting.network.verifier.certificate import Issuer
@@ -214,8 +214,8 @@ def test_the_verdict_and_the_row_slot_by_slot():
 def test_the_blocks_ands():
     """The proof block's ANDs at the bindings circuit-check pins: a row of the tests' schedule, and a slot and
     sixteen at 4,096-byte cells with u32 places and 18-bit counts, a slot's gates their difference's fifteenth."""
-    assert HC.ands(LR.block(SH)) == ANDS_TESTS
-    one, sixteen = (HC.ands(LR.block(LR.Shape(k, 4096, 32, 18))) for k in (1, 16))
+    assert GB.ands(LR.block(SH)) == ANDS_TESTS
+    one, sixteen = (GB.ands(LR.block(LR.Shape(k, 4096, 32, 18))) for k in (1, 16))
     assert (one, sixteen) == (ANDS_ONE, ANDS_SIXTEEN) and (sixteen - one) % 15 == 0
     assert (sixteen - one) // 15 == ANDS_A_SLOT
 
@@ -287,7 +287,7 @@ def test_an_honest_row_passes(signed):
         assert _refusal(opened, head, domains, CR.LENGTHS, [row for _, _, row in got], reads_from=3) is None
         for b in blocks:
             assert b.arguments(SH) == LR.arguments(SH, b.requests, b.fails) and \
-                b.output_bits(SH)[:32] == HC._int_bits(ACCEPT, 16) + HC._int_bits(b.failures, 16)
+                b.output_bits(SH)[:32] == GB._int_bits(ACCEPT, 16) + GB._int_bits(b.failures, 16)
             read = LR.reads(opened.table(CR.LENGTHS), b.position)
             assert read.words == WR.words(b.lengths) and read.entry["value"] == f"{LINK}/lengths/{window}"
     opened, _, _, requests = signed[0]

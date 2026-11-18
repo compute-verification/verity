@@ -1,19 +1,19 @@
 module
 
 public import Properties.Verity.Game
-public import Properties.Verity.GateARow
 public import Spot.RecordText
 
 /-!
 # What ties the inference-only policy's clause to the committed files
 
 The game's clause for the inference-only policy (`Verity.Vocab.Holds` at `.inferenceOnly`) is on the Program the
-policy's compiled check judges, and is proved of the case as sent. Two named `Prop`s, stated and not proved, say what
-ties it to the committed files.
+policy's compiled check judges, and is proved of the case as sent. It says nothing of the committed files until two
+statements hold, one proved and one a named `Prop` stated and not proved.
 
-`GateARow`, `Γ`'s unit: in the game's circuit of a committed file (`Flock.Bridge.circuitOfFile`) every unit has one
-gate for each of its file's rows. The policy's `Γ` counts rows of the committed circuit a block, and PoUW's claim
-counts that circuit's gates (`Verity.Vocab.computed`), so with it the two count one thing.
+`Flock.Bridge.GateARow`, `Γ`'s unit, proved (`Flock.Bridge.gateARow`): in the game's circuit of a committed file
+(`Flock.Bridge.circuitOfFile`) every unit has one gate for each of its file's rows. The policy's `Γ` counts rows of the
+committed circuit a block, and PoUW's claim counts that circuit's gates (`Verity.Vocab.computed`), so with it the two
+count one thing.
 
 `Vocab.ReadsByPath`, the wires: a wire is one commitment. Its writer's output field is one tree (one root for each
 writer template and output field), and a reader's wired row is a reference with a path into that tree, at the leaf
