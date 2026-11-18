@@ -160,12 +160,12 @@ theorem countFresh_zero {c : LiveCommitment} {log : List String} {roots : Roots}
 sessions are on two windows, the roots of the first session `sampleCoins` reads (from `firstCoins`, under the
 parameters' key, on the boundary's window) show no coin of the second stage's family after the interior's digest. -/
 def FirstUnshown (C : CaseOf) : Prop :=
-  ∀ o, FormAccepts C o → ∀ p c e key d₁ d₂ cm roots, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key →
+  ∀ o, FormAccepts C o → ∀ p c e key d₁ d₂ cm log, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key →
     firstSamples key p c e = some d₁ → secondSamples p e = some d₂ → d₁.window ≠ d₂.window →
     trustedChallengePhaseOf (Spot.getD (firstCoins e) "ledger") (Json.mkObj [("root", Json.str d₁.window)]) d₁.key
       (Spot.getD (firstCoins e) "pins") (Spot.getD (firstCoins e) "main") (Spot.getD (firstCoins e) "session") =
-        .ok (cm, roots) →
-    VStar.Recursive.SampledTwo.interiorShown roots d₂.label d₂.after = false
+        .ok (cm, log) →
+    VStar.Recursive.SampledTwo.interiorShown (Spot.Challenger.byFamily cm log) d₂.label d₂.after = false
 
 /-- **`SecondAlone` from the first session's roots.** -/
 theorem secondAlone_of (C : CaseOf) (hU : FirstUnshown C) : SecondAlone C := by
@@ -247,7 +247,7 @@ def SessionMatches (C : CaseOf) : Prop :=
 
 /-- **`FirstUnshown` from the form's check**, where it reads the cut's session (`SessionMatches`). -/
 theorem firstUnshown_of (C : CaseOf) (hC : CaseIsSent C) (hM : SessionMatches C) : FirstUnshown C := by
-  intro o ha p c e key d₁ d₂ cm roots hcase hkey hd₁ hd₂ hw hts
+  intro o ha p c e key d₁ d₂ cm log hcase hkey hd₁ hd₂ hw hts
   obtain ⟨c₂, hi₂, hch₂, hwin₂, hafter⟩ := secondSamples_parts hd₂
   obtain ⟨hdig, hf⟩ := hM o ha p c e c₂ hcase hi₂
   obtain ⟨bp, hb, hbw, hkey₁⟩ := firstSamples_executionPhase hd₁

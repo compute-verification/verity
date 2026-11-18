@@ -719,9 +719,26 @@ def test_the_card_is_the_one_its_card_file_records_for_its_name():
     for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "575.1"),
                 ("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "570.25.99"),
                 ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H100 80GB HBM3", "12.0", 132, "570.1"),
+                ("NVIDIA H200", "10.0", 132, "570.1"), ("NVIDIA H200", "9.0", 132, "525.60.12"),
                 ("NVIDIA H200", "9.0", 132, "unknown"), ("NVIDIA H200", "9.0", 132, "")):
         with pytest.raises(I.IdentityError, match="not the card"):
             I.check_card(*bad)
+
+
+def test_the_h100_is_its_card_files_sm90a_with_132_sms_and_its_gates_oldest_driver():
+    assert I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "525.60.13")["arch"] == "sm_90a"
+    with pytest.raises(I.IdentityError, match=r"driver '525\.60\.12', need 525\.60\.13 or later"):
+        I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "525.60.12")
+    with pytest.raises(I.IdentityError, match=r"compute capability 12\.0, not 9\.0"):
+        I.check_card("NVIDIA H100 80GB HBM3", "12.0", 132, "580.173.02")
+    with pytest.raises(I.IdentityError, match="114 SMs, not 132"):
+        I.check_card("NVIDIA H100 80GB HBM3", "9.0", 114, "580.173.02")
+
+
+def test_a_name_no_card_file_holds_is_refused_by_that_name():
+    for name in ("NVIDIA H100 PCIe", "NVIDIA RTX PRO 6000", "H200", ""):
+        with pytest.raises(I.IdentityError, match=f"not the card: 0 GPU card files under .* have {re.escape(repr(name))}"):
+            I.check_card(name, "9.0", 132, "580.173.02")
 
 
 def test_a_card_with_no_card_or_architecture_file_is_refused_by_name(tmp_path, monkeypatch):

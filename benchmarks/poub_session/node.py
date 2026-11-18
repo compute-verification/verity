@@ -207,7 +207,7 @@ def main() -> int:
     ap.add_argument("--connect", default="127.0.0.1:7781")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--plan", default="honest")
-    ap.add_argument("--node", default="vy-nebius/rtx-pro-6000/serving")
+    ap.add_argument("--node", required=True, help="the node the session registers (`machine.py session-node`)")
     ap.add_argument("--seed", type=int, default=20261018)
     ap.add_argument("--warmup-ms", type=float, default=2500.0)
     ap.add_argument("--engines-dir", type=Path, required=True)

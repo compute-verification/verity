@@ -161,6 +161,12 @@ def test_the_plugin_site_declares_the_edges_beside_the_step_trace(tmp_path):
                    "[vllm.general_plugins]\nverity_tp_edge = tp_edge:register\n"]
 
 
+def test_a_scratch_directory_inside_the_runs_output_is_refused(tmp_path):
+    """The edges' records, their KV digests and the step outputs are written under --scratch."""
+    with pytest.raises(SystemExit, match="^--scratch .* which leaves the node"):
+        T.restore(SimpleNamespace(served=str(tmp_path / "served"), scratch=str(tmp_path / "out" / "s"), out=str(tmp_path / "out")))
+
+
 def test_each_edges_record_is_copied_out_of_the_scratch_directory_into_the_private_one(tmp_path):
     for e in (4, 9):
         d = tmp_path / "scratch" / f"edge-{e:06d}"
@@ -174,8 +180,9 @@ def test_each_edges_record_is_copied_out_of_the_scratch_directory_into_the_priva
     got = T.copy_edges(tmp_path / "scratch", kept)
     assert [g["edge"] for g in got] == [4, 9] and got[0]["trace_step"] == 3 and got[0]["blocks"] == 3
     assert got[1]["dir"] == str(tmp_path / "scratch" / "edge-000009")
-    assert got[0]["files"]["digests.rank0.bin"] == 1 and len(got[0]["kv_root"]) == 128
-    assert got[0]["kv_root"] != got[1]["kv_root"]
+    assert got[0]["files"]["digests.rank0.bin"] == 1 and not any("kv_root" in g for g in got)
+    recs = [json.loads((kept / f"edge-{e:06d}" / "edge.json").read_text()) for e in (4, 9)]
+    assert T.kv_equal(recs[0], recs[0]) and not T.kv_equal(recs[0], recs[1])
     assert sorted(p.name for p in kept.rglob("*")) == ["edge-000004", "edge-000009", "edge.json", "edge.json", "outputs.jsonl"]
     assert (kept / "outputs.jsonl").read_text() == '{"step":3,"out":{}}\n'
 

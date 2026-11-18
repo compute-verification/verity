@@ -83,6 +83,7 @@ from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_pl
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.compiled_merge import _bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline import commit_coins as CC, poub_session as RS  # noqa: E402
+from verity_vllm.pipeline.research_outputs import TOKENS_DIGESTS  # noqa: E402
 
 if TYPE_CHECKING:
     from verity_vllm.acquire.sources import call_boundary_plan as CBP
@@ -1284,6 +1285,7 @@ def main(args: Options) -> None:
 
     rows: list[dict] = []
     step_rows: list[dict] = []
+    digests: list[dict] = []
     tokens_ref: dict | None = None
     decl = None
     decls: dict[str, dict] = {}
@@ -1352,7 +1354,6 @@ def main(args: Options) -> None:
                 "step_wall_s": r["step_wall_s"], "step_wall_prefill_s": r["step_wall_s"][0],
                 "step_wall_decode_mean_s": statistics.fmean(r["step_wall_s"][1:]) if len(r["step_wall_s"]) > 1 else None,
                 "tokens_equal_ref": r["tokens"] == tokens_ref,
-                "tokens_digest": hashlib.sha256(json.dumps(r["tokens"], default=str, separators=(",", ":")).encode()).hexdigest(),   # cross-process pairing (compiled rows)
                 "gpu_mem": {"torch_max_allocated_gb": torch.cuda.max_memory_allocated() / 2**30, "torch_reserved_gb": torch.cuda.memory_reserved() / 2**30, "nvidia_smi_used_mib": nvidia_smi_used_mib()},
                 "host_mem_kb": {"rss_before": rss0, "rss_after": rss1, "hwm": hwm},
                 "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -1429,6 +1430,8 @@ def main(args: Options) -> None:
                 for i, wsec in enumerate(r["step_wall_s"]):
                     step_rows.append({"pair": pair, "arm": arm, "step": i, "wall_s": wsec})
             rows.append(row)
+            digests.append({"pair": pair, "arm": arm, "tokens_digest": hashlib.sha256(
+                json.dumps(r["tokens"], default=str, separators=(",", ":")).encode()).hexdigest()})
             extra = ""
             if rc is not None:
                 sp = rc.spans["total_s"]
@@ -1445,6 +1448,7 @@ def main(args: Options) -> None:
         with (out / "steps.jsonl").open("w") as f:
             for rw in step_rows:
                 f.write(json.dumps(rw, default=str) + "\n")
+        (out / TOKENS_DIGESTS).write_text("".join(json.dumps(d) + "\n" for d in digests))
 
     # repeated graph replay must be covered, not only compilation/warm-up: re-read the code
     # objects LOADED in this process after the LAST measured run and compare with the build-time snapshot (compile + autotune + capture):

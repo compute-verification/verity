@@ -51,10 +51,13 @@ ship_cuda() {
   "$ROOT/benchmarks/kernels/ship_probe.sh" || exit 1
 }
 
-# FLAGS: SHIP_NVCC's command line for a cubin of the arch $1 (sm_90a, sm_120a): no FTZ, fast-math, FMA contraction or
-# approximate division or square root, and no line info, so a cubin's bytes don't depend on the directory it's built in
+# FLAGS: SHIP_NVCC's command line for a cubin of the arch $1 (sm_90a, sm_120a), its -gencode from $1's architecture file
+# (machine.py gencode): no FTZ, fast-math, FMA contraction or approximate division or square root, and no line info, so
+# a cubin's bytes don't depend on the directory it's built in
 ship_cubin_flags() {
-  FLAGS=(-O3 -std=c++17 -gencode "arch=compute_${1#sm_},code=$1" -fmad=false -Xptxas -v -cubin)
+  local gencode
+  gencode=$(python3 "$ROOT/benchmarks/kernels/machine.py" gencode "$1") || exit 1
+  FLAGS=(-O3 -std=c++17 -gencode "$gencode" -fmad=false -Xptxas -v -cubin)
   case " ${FLAGS[*]} " in
     *ftz*|*fast-math*|*fast_math*|*prec-div*|*prec-sqrt*|*lineinfo*) echo "a refused flag: ${FLAGS[*]}" >&2; exit 1;;
   esac

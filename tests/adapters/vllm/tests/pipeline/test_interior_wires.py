@@ -99,7 +99,7 @@ def _first(members):
                       sampler=lambda sampling_design, n: next(draws) if sampling_design["law"] == "subset" else [0] * len(sampling_design["strata"]))
     window = _boundary_window()
     c = CS.commit(window, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
-                            "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salt_key=SALT)
+                            "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}])
     reg = stream.register(CS.registration(c, {"stand_in": "boundary"}, None, registrar=R), CS.expected_ports(window),
                           leaf_layer=CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)}))
     return stream, reg, stream.select(reg)
@@ -124,8 +124,9 @@ def test_a_wired_port_is_its_writers_output_rows_and_registers_on_the_challenger
     it = IR.interior(per, CELLS, reg.digest, first.units, row=ROW, wires=WIRES)
     w = it.committed.window
     mw, mt, _mx = w.members
-    assert (mt.wired, mt.wired_trees, dict(mt.tables)["idx"]) == ((("idx", "o0", (0, 1)),), False, Q)
-    assert w.held(mt, "idx") == mw.port("o0") and mt.port("idx") not in it.ports and mw.port("o0") in it.ports
+    assert ({(x.port, x.writer, x.out) for x in mt.wired}, w.reads(mt, "idx").tolist(), dict(mt.tables)["idx"]) == (
+        {("idx", mw.template, "o0")}, [0, 1], Q)
+    assert w.tree(mt, "idx") == w.tree(mw, "o0") in it.ports and mt.port("idx") not in it.ports
     assert it.committed.refs[1][:, 2].tolist() == [0, 1]
     assert it.ports == IR.interior_ports(members, CELLS, reg.digest, first.units, WIRES)
     assert _refused(lambda: IR.register(stream, first, it, ports=IR.interior_ports(members, CELLS, reg.digest,

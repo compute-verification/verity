@@ -33,10 +33,11 @@ from verity_vllm.pipeline import boundary_tables as BT
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import interior_rows as IR
 from verity_vllm.pipeline import serving_rows as SRW
+from tests.fixed_salts import fixed
 
 #: two templates of one shape, (x0, best, idx: one I32) -> I32: `A` stands for the unit reading ``c``, `B` for ``i``'s
 A, B = bind(DF.TokenSelectCombineV2, V=64, C=64), bind(DF.TokenSelectCombineV2, V=32, C=32)
-SPANS, Q, SALT, ROW, DELTA = 3, 2, bytes(range(32)), "interior-indices-test", 2.0 ** -40
+SPANS, Q, ROW, DELTA = 3, 2, "interior-indices-test", 2.0 ** -40
 #: `A`'s units a span, the rows of ``i`` a span, and the batches of `B` that each read them
 NC, W, G = 3, 2, 2
 CELLS = (NC, G * W)
@@ -116,7 +117,7 @@ def _first(links=LINKS):
                       sampler=lambda sampling_design, n: next(draws) if sampling_design["law"] == "subset" else [0] * len(sampling_design["strata"]))
     window = _boundary_window()
     c = CS.commit(window, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
-                            "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salt_key=SALT)
+                            "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salts_of=fixed(window))
     reg = stream.register(CS.registration(c, {"stand_in": "boundary"}, None, registrar=R), CS.expected_ports(window),
                           leaf_layer=CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)}))
     return stream, reg, stream.select(reg)
@@ -136,7 +137,7 @@ def operands():
 
 
 def _interior(reg, first, per, **kw) -> IR.Interior:
-    return IR.interior(per, CELLS, reg.digest, first.units, row=ROW, **{"salt_key": SALT, "links": LINKS, **kw})
+    return IR.interior(per, CELLS, reg.digest, first.units, row=ROW, **{"links": LINKS, **kw})
 
 
 def test_an_index_port_is_rows_of_the_value_the_verifier_fills_from_its_own_bytes(staged):
@@ -232,7 +233,7 @@ def test_an_operand_row_is_the_one_row_every_unit_at_it_replayed(operands):
         best[W:] = best[:W]
         p[1] = replace(p[1], data={**p[1].data, "rows": {**p[1].data["rows"], "best": best}})
     wide = replace(OPERANDS[0], per=NC + 1)
-    it = IR.interior(per, CELLS, reg.digest, first.units, row=ROW, salt_key=SALT, links=(wide, *OPERANDS[1:3], shared))
+    it = IR.interior(per, CELLS, reg.digest, first.units, row=ROW, links=(wide, *OPERANDS[1:3], shared))
     c, w = it.committed, it.committed.window
     ref = c.given[w.members[1].port("best")]
     assert ref.positions == (0, 1, 0, 1, 2, 3, 2, 3) and len(ref.value.rows) == Q * W
@@ -259,21 +260,21 @@ def test_the_links_are_the_ones_round_2_derives_from_the_replay_block(staged):
         IR.links(P.population_program(BLOCK, SPANS), KEY, reg.record, MEMBERS[:1], CELLS[:1])
 
 
-def test_an_interior_without_a_test_key_salts_its_own_ports_and_leaves_a_linked_ports_to_its_value(staged):
-    """Serving gives no test key: every salt is fresh from the OS but a linked port's, whose rows keep their value's.
-    So the interior commits, a supplied value's entry is the keyed interior's (its salts are public), an operand's
-    root is new each time while its rows, words and domain stand, and a port of the interior's own gets a new root
-    each time. The stream registers the operands' interior made that way."""
+def test_an_interior_salts_its_own_ports_fresh_and_leaves_a_linked_ports_to_its_value(staged):
+    """Every salt is fresh from the OS but a linked port's, whose rows keep their value's. So two interiors of one sample
+    register a supplied value's entry alike (its salts are public), an operand's root is new each time while its rows,
+    words and domain stand, and a port of the interior's own gets a new root each time. The stream registers the
+    operands' interior made that way."""
     _stream, reg, first = staged
     per = [_spans(s) for s in first.units]
-    keyed, one, two = (_interior(reg, first, per, **kw) for kw in ({}, {"salt_key": None}, {"salt_key": None}))
-    entries = [{e["value"]: e for e in it.record["registered"]} for it in (keyed, one, two)]
+    one, two = (_interior(reg, first, per) for _ in range(2))
+    entries = [{e["value"]: e for e in it.record["registered"]} for it in (one, two)]
     assert all(list(got) == [x.value for x in LINKS] for got in entries)
     for x in SUPPLIES:
-        assert entries[0][x.value] == entries[1][x.value] == entries[2][x.value]
+        assert entries[0][x.value] == entries[1][x.value]
     for x in OPERANDS:
-        a, b = entries[1][x.value], entries[2][x.value]
-        assert a["root"] != b["root"] and {**a, "root": None} == {**b, "root": None} == {**entries[0][x.value], "root": None}
+        a, b = entries[0][x.value], entries[1][x.value]
+        assert a["root"] != b["root"] and {**a, "root": None} == {**b, "root": None}
     roots = [{r["port"]: r["root"] for r in it.record["roots"]} for it in (one, two)]
     w = one.committed.window
     own = [m.port(o) for m in w.members for o, _w in m.outs]
@@ -283,7 +284,7 @@ def test_an_interior_without_a_test_key_salts_its_own_ports_and_leaves_a_linked_
         ref = one.committed.given[w.members[k].port(x.port)]
         assert ref.value.entry() == entries[1][x.value]
     stream, reg, first = _first(OPERANDS)
-    it = _interior(reg, first, [_spans(s) for s in first.units], links=OPERANDS, salt_key=None)
+    it = _interior(reg, first, [_spans(s) for s in first.units], links=OPERANDS)
     assert IR.register(stream, first, it, registered=IR.link_words(OPERANDS),
                        schemas=IR.link_schemas(MEMBERS, OPERANDS)).digest
 

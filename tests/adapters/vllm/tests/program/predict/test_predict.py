@@ -200,7 +200,7 @@ def test_dsa_refuses_outside_its_domain(tmp_path):
     with pytest.raises(Unexpressible, match=re.escape("tensor parallel world 2 (TP8, the worlds a Build has traced)")):
         build_program(Phi.from_json({**phi.to_json(), "tp": {"world": 2, "rank": 0}}), "step")
     with pytest.raises(Unexpressible, match=re.escape("a target without a device name")):
-        build_program(Phi.from_json({**phi.to_json(), "target": {k: v for k, v in phi.target.items() if k != "device_name"}}), "step")
+        build_program(Phi.from_json({**phi.to_json(), "target": {k: v for k, v in phi.target.items() if k != "card"}}), "step")
 
 
 def test_the_execution_label_names_the_batch_invariance(tmp_path):
