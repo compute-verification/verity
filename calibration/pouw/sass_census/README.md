@@ -25,8 +25,8 @@ without `.sh`, with the rest of its arguments:
 The census itself needs a CPU node with the CUDA toolkit, and the rates a B200 or an H200:
 
 ~~~text
-research run --on MACHINE --cwd source -- bash calibration/pouw/sass_census/run.sh dump [ROOT ...]
-research run --on MACHINE --cwd source -- bash calibration/pouw/sass_census/dump.sh [ROOT ...]     # the same job
+research run --on NODE --project verity --source . --cwd source --pool research --as compute-research -- bash calibration/pouw/sass_census/run.sh dump [ROOT ...]
+research run --on NODE --project verity --source . --cwd source --pool research --as compute-research -- bash calibration/pouw/sass_census/dump.sh [ROOT ...]     # the same job
 research run --on MACHINE --project verity --source <tree> --cwd source --timeout 30m \
   --env GPU_LEASE_WHO=LANE -- bash calibration/pouw/sass_census/rates.sh
 ~~~
