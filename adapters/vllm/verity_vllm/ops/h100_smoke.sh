@@ -1,21 +1,28 @@
 #!/usr/bin/env bash
 # Does: serves ONE window of bf16 Llama 3.2 1B (unsloth at 9535bd9b) on the H100 through serve-openai with its rows-sha512 Commit and seals it, then opens the sealed bundle against its record on the CPU.
 # Does NOT show: a recompute on a processor (the replay is the sealed bundle opened against its record), an audit, or a traced Build on the H100.
-# Needs: CUDA_HOME (12.9), HF_HOME (/workspace/hf), PYTHONPATH, VERITY_PROTOCOLS_CONFIG (all set here), CUDA_VISIBLE_DEVICES from the lease; the norm tap (no hidden tap: the row's manifest names no hidden class).
+# Needs: PY (default the node's /workspace/venv312/bin/python, both branches), CUDA_HOME (12.9, machine.py's), HF_HOME (/workspace/hf), PYTHONPATH, VERITY_PROTOCOLS_CONFIG (all set here), CUDA_VISIBLE_DEVICES from the lease; the norm tap (no hidden tap: the row's manifest names no hidden class).
 # Writes: the serve's directory, the private directory (keys, salts) and every log under SR, outside the run's directory; under $OUT only smoke.txt, the last line.
 #   research run --on vy-h100-1 --cwd source -- taskset -c 0-9 bash adapters/vllm/verity_vllm/ops/h100_smoke.sh   (DRY=1: off the card)
 set -euo pipefail
 TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd); cd "$TREE"
 ROW=llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager
 MODEL=unsloth/Llama-3.2-1B REV=9535bd9b1d1dea6acafbdc4813b728796aeb28da
-DRY=${DRY:-0}
+DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python}
 NSO=/workspace/cp/norm_tap/build/verity_norm_tap.so
+SERVER= SCRATCH=
+stop() {
+  if [ -n "$SERVER" ] && kill -0 "$SERVER" 2> /dev/null; then kill -INT "$SERVER"; wait "$SERVER" || true; fi
+  if [ "$DRY" = 1 ] && [ -n "$SCRATCH" ]; then rm -rf "$SCRATCH"; fi
+}
+trap stop EXIT; trap 'exit 130' INT; trap 'exit 143' TERM
 if [ "$DRY" = 1 ]; then
-  PY=$TREE/.venv/bin/python SR=$(mktemp -d)/smoke
+  SCRATCH=$(mktemp -d) SR=$SCRATCH/smoke
 else
-  PY=/workspace/venv312/bin/python SR=/workspace/research/vllm-servedproof/serve-root/smoke-${RESEARCH_RUN_ID:-local}
-  export CUDA_HOME=/usr/local/cuda-12.9 HF_HOME=/workspace/hf HF_HUB_OFFLINE=1
-  export PATH=/workspace/venv312/bin:$CUDA_HOME/bin:$PATH
+  SR=/workspace/research/vllm-servedproof/serve-root/smoke-${RESEARCH_RUN_ID:-local}
+  CUDA_HOME=$("$PY" benchmarks/kernels/machine.py toolkit 12.9) || { echo "SMOKE REFUSED toolkit: the machine lists no CUDA 12.9 (machine.py, above)"; exit 3; }
+  export CUDA_HOME HF_HOME=/workspace/hf HF_HUB_OFFLINE=1
+  export PATH=$(dirname "$PY"):$CUDA_HOME/bin:$PATH
   SNAP=$HF_HOME/hub/models--unsloth--Llama-3.2-1B/snapshots/$REV
   [ -s "$NSO" ] || { echo "SMOKE REFUSED norm tap: no $NSO; build it outside the lease (no card):" \
     "cd $TREE/adapters/vllm && CUDA_HOME=$CUDA_HOME CARD_SKU=h100-sxm-80gb bash verity_vllm/ops/pod_norm_tap.sh"; exit 3; }
@@ -73,13 +80,16 @@ fi
 
 (cd adapters/vllm && exec "$PY" -m verity_vllm.pipeline.cli "${SERVE[@]}") > "$SR/serve.log" 2>&1 &
 SERVER=$!
+listened=0
 for _ in $(seq 1 120); do
-  kill -0 "$SERVER" 2> /dev/null || { say "SMOKE FAILED serve: exited before it listened ($SR/serve.log)"; exit 1; }
-  curl -sf "http://127.0.0.1:$PORT/v1/models" > /dev/null 2>&1 && break
+  kill -0 "$SERVER" 2> /dev/null || { say "SMOKE FAILED serve: exited before it listened (tail $SR/serve.log)"; exit 1; }
+  curl -sf "http://127.0.0.1:$PORT/v1/models" > /dev/null 2>&1 && { listened=1; break; }
   sleep 5
 done
-"$PY" "${LOAD[@]}" > "$SR/load.log" 2>&1 || { kill -INT "$SERVER"; wait "$SERVER" || true; say "SMOKE FAILED request ($SR/load.log)"; exit 1; }
-kill -INT "$SERVER"; wait "$SERVER" || { say "SMOKE FAILED stop: the server's exit ($SR/serve.log)"; exit 1; }
+[ "$listened" = 1 ] || { say "SMOKE FAILED serve: the server did not listen on port $PORT within 10 minutes (tail $SR/serve.log)"; exit 1; }
+"$PY" "${LOAD[@]}" > "$SR/load.log" 2>&1 || { say "SMOKE FAILED request ($SR/load.log)"; exit 1; }
+kill -INT "$SERVER"; s=0; wait "$SERVER" || s=$?; SERVER=
+[ "$s" = 0 ] || { say "SMOKE FAILED stop: the server's exit ($SR/serve.log)"; exit 1; }
 said=$("$PY" - "$D/windows/w0" <<'EOF'
 import json, sys
 from verity_vllm.pipeline import deferred_rows as DR
