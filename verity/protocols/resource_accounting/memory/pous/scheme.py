@@ -31,6 +31,7 @@ from fractions import Fraction
 from typing import Any
 
 from verity.commitments import domains
+from verity.protocols.resource_accounting.memory.pous.prover import workload
 from verity.protocols.resource_accounting.scheme import Charge, Order, Scheme, register
 
 TRUSTED_DEVICE = "Verity.Assumptions.TrustedDevice"
@@ -53,6 +54,7 @@ def _pous_attach(exchange: Any, ctx: Any) -> None:
 
 POUS = register(Scheme(
     name="pous",
+    messages=workload.MESSAGES,
     protocol=domains.POUS_P2_RUN,
     resource="memory",
     blocks=(),

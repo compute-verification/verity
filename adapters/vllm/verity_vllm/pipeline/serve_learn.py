@@ -108,8 +108,8 @@ def warmed(com: Any, llm: Any, opts: Any) -> Any:
     """The server's committer ``com`` over ``llm`` (a `verity_vllm.LLM`) once its plans are learned (`warm_up`, its requests
     parsed as ``--protocol`` parses a completion), what the pass learned in its ``learn_warmup``."""
     from verity_vllm.engine.handle import engine_of
-    from verity_vllm.pipeline.serve_protocol import PROTOCOLS
+    from verity_vllm.pipeline.serve_protocol import framings
 
-    proto = PROTOCOLS[opts.protocol](opts.force_include_usage)
+    proto = framings()[opts.protocol](opts.force_include_usage)
     com.learn_warmup = warm_up(engine_of(llm), com, opts, getattr(proto, "base", proto))
     return com

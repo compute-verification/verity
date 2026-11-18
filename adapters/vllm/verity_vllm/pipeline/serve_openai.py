@@ -21,7 +21,7 @@ is the reference: under ``--protocol vllm`` (the default) a request is parsed by
 validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamResponse``, serialized the way its
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
-each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a network
+each other and the server records the result at start. ``--protocol ids`` (the network attester's declared framing, `serve_protocol.framings`) answers a network
 attester's id request (exactly ``id_form.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
 scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
 engine fails stops after its ids so far and the connection closes, with no ``[DONE]`` and no text (its reason only in
@@ -147,8 +147,9 @@ from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, engine_id_
 from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, param_of,
                                                records_mirror, served_statics, user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop
-from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
-                                                 VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
+from verity_vllm.pipeline.serve_protocol import (PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
+                                                 VllmProtocol, error_body, framing_agrees, framings, http_chunk, sse,
+                                                 usage_of)
 
 NO_REQUEST_LINE = ("the request's first line isn't `METHOD target HTTP/1.0` or `HTTP/1.1`, one space between and nothing "
                    "after")
@@ -185,11 +186,11 @@ class Options:
     served_model_name: str | None = option("--served-model-name", default=None, help="the name /v1/models lists (default --model)")
     hf_home: str | None = option("--hf-home", env="HF_HOME", default=None, help="the checkpoint store (default $HF_HOME)")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the Commit's run id (default $RESEARCH_RUN_ID)")
-    protocol: str = option("--protocol", choices=tuple(PROTOCOLS), default="vllm",
+    protocol: str = option("--protocol", choices=tuple(framings()), default="vllm",
                            help="vllm: vLLM's own request and response classes; plain: the same framing without them; ids: a "
                                 "network attester's id requests streamed in the scan's id form, raw, and every other request as vllm "
-                                "(serve_protocol.IdsProtocol)")
-    id_payload: int = option("--id-payload", type=int, default=ID_PAYLOAD,
+                                "(the network attester's declared framing, Scheme.framings)")
+    id_payload: int | None = option("--id-payload", type=int, default=None,
                              help="--protocol ids: each id event's bytes, the network attester's cell payload B − 9 (default 503: the scan's "
                                   "B = 512)")
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
@@ -588,14 +589,14 @@ class _Route:
 
 def network_admission(loop: EngineLoop, sched: Any, opts: Any) -> tuple[Any, H.Front]:
     """``--admit release-order`` or ``tick``: the network attester's admission, attached to this process's exchange by
-    its scheme (`messages.attester`). Returns the admission hook (under ``tick``, the one the build put on ``sched``
+    the scheme that provides admission (`messages.providing`). Returns the admission hook (under ``tick``, the one the build put on ``sched``
     where it did, after the attester's gate, `loop.gate`; else None) and the attester's frontend."""
     from verity_vllm.engine import admission
     cfg: dict[str, Any] = {"order": opts.admit, "hold_ms": opts.admit_hold_ms}
     if opts.admit == "tick":
         cfg |= {f"{k}_us": int(round(float(getattr(opts, f"tick_{k}_ms")) * 1000)) for k in ("bucket", "sat", "free")}
-    got = M.attester().attach(M.current(), {"admit": cfg, "source": "--admit", "submit": loop.submit, "abort": loop.abort,
-                                            "take": loop.tick})
+    got = M.current().attach(M.providing("admission"), admit=cfg, source="--admit", submit=loop.submit, abort=loop.abort,
+                             take=loop.tick)
     loop.gate = got.gate
     if loop.gate is not None:
         loop.hook = admission.install(sched)
@@ -746,7 +747,8 @@ def main(opts: Options) -> int:
     day, session = SD.declare(opts, out), SR.session_of(opts, out)
     llm, com = build(opts, session, row := RW.of(opts))
     engine = llm.vllm.llm_engine
-    proto = PROTOCOLS[opts.protocol](opts.force_include_usage, **({"payload": opts.id_payload} if opts.protocol == "ids" else {}))
+    given = {} if opts.protocol in PROTOCOLS or opts.id_payload is None else {"payload": opts.id_payload}
+    proto = framings()[opts.protocol](opts.force_include_usage, **given)
     reference = getattr(proto, "base", proto)
     framing = framing_agrees(reference) if isinstance(reference, VllmProtocol) else None
     defaults: dict[str, Any] = {}                            # vLLM's neutral defaults: the request brings its sampling
