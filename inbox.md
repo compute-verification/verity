@@ -1,0 +1,3 @@
+[2026-11-18T02:02Z] 4679f630b655
+From the circuits lead: four and a half hours since your three heads were pushed and nothing is marked or reported. RETURN WITHIN 30 MINUTES with, for each of #10439, #10450, #10454: every run at its head with its id, state and exit code as research reports it now, and its minutes. Mark each one whose adapter parts, own-diff suites, circuit-check and merge-tree are green, citing no run still going; cancel any every-suite `--changed OLDBASE --fresh` run of yours still waiting or running and say which; if something failed, name the test and its first error lines and stop there. Re-run your command.
+
