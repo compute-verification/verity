@@ -50,8 +50,6 @@ from fractions import Fraction
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from verity.protocols.resource_accounting.compute.pouw.scheme import KERNEL
-
 if TYPE_CHECKING:
     from arm import GateResult, OperandSet, Shape, Work
 
@@ -63,7 +61,7 @@ KERNEL = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "com
 #: Pearl+'s id in the door (`verity_bench.overhead.SCHEMES`), and the arm's name in its transcripts' paths
 SCHEME = "pearl-plus"
 #: the served scheme the arm runs: the kernel scheme Pearl+ runs on the H100 (`kernel_schemes.resolve`), the kernel's
-SERVED = KERNEL
+SERVED = "pearl-c-h100-v1-h3"
 #: the stock scaling the door times beside it, its useful output's (`baselines.FAMILIES`)
 FAMILY = "fp8-e4m3-rowwise"
 #: the build target the kernel's cubin is for (its card file's `arch`, `identity.check_card`)
