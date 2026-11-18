@@ -90,7 +90,9 @@ theorem landing_bits {j tr : Json} {c : Case} (h : read j tr = .ok c)
     {D : Verity.Circuit} {at_ : Fin D.N → ℕ}
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P)
       (c.W.templates.map (·.1)).toArray = .ok rs)
-    (hT : Templates c.f.P rs c.W) (hOwn : OwnRows c.f.P rs c.W) (hAl : Aligned c.f.P rs c.W S)
+    (hT : Templates c.f.P rs c.W) (hOwn : OwnRows c.f.P rs c.W)
+    (hSh : ∀ r l g lo hi, SharedLeaf c.f.P g → RowLeaf c.f.P rs c.W r l g lo hi →
+      S.writerOf r.tid r.unit r.port r.row = none) (hAl : Aligned c.f.P rs c.W S)
     (hL : LaysOut c.f.P rs c.W S D at_) (hS : Spot.Wires.check c.W = .ok S) {r : Row} {a : Fin D.N}
     (ha : a ∈ landing c.f.P rs c.W S at_ r) :
     (∃ t ∈ c.f.ts, t.tid = r.tid ∧ ∃ row ∈ t.rows, row.1 = r.port) ∧ r.row < c.W.cutsOf r.tid r.port ∧
@@ -119,7 +121,7 @@ theorem landing_bits {j tr : Json} {c : Case} (h : read j tr = .ok c)
   rw [hp] at hko
   refine ⟨⟨t, ht, htid, _, hrowm, hp⟩, hrow, ?_⟩
   obtain ⟨ρ, hρ⟩ := ranked hS
-  have hle := landing_le c.f.P rs c.W S D at_ hOwn hAl hL (leafWide hP hO hrs) (returnsOwn hP hrs hT hS)
+  have hle := landing_le c.f.P rs c.W S D at_ hOwn hSh hAl hL (leafWide hP hO hrs) (returnsOwn hP hrs hT hS)
     (unitsComputed hP hrs) (portsNamed hrs hT) (outFits hP hrs hT hS hts₀ hwh) ρ hρ r sc hu i hi' hp
   have hrb := rowBits_eq c.W hnd ht (List.Nodup.of_append_left (hnames t ht)) hrowm
   dsimp only at hrb
@@ -140,7 +142,7 @@ theorem block_fresh (hFR : FreshRows) {j tr : Json} {c : Case} (h : read j tr = 
     {d : Verity.RegisteredCircuit} (hd : Served form c d) (u : Fin d.n) :
     InferenceOnly.freshInput d (d.𝓘.gates u) ≤ (form.summarize c).fresh := by
   classical
-  obtain ⟨P, doc, Wt, S, rs, at_, hdec, -, -, -, -, -, -, hS, hrs, hT, -, hAl, -, -, hL, hNm, hD⟩ := hd
+  obtain ⟨P, doc, Wt, S, rs, at_, hdec, -, -, -, -, -, -, hS, hrs, hT, -, hAl, -, hHU, hSR, hL, hNm, hD⟩ := hd
   obtain rfl : c.f.P = P := Except.ok.inj ((decode_of_read h).symm.trans hdec)
   obtain rfl : c.wired = S := Except.ok.inj ((wired_of_read h).symm.trans hS)
   have hS : Spot.Wires.check c.W = .ok c.wired := hS
@@ -155,13 +157,17 @@ theorem block_fresh (hFR : FreshRows) {j tr : Json} {c : Case} (h : read j tr = 
   obtain ⟨-, -, -, -, hO, -⟩ := program_of_read h
   have hO := InferenceOnlyVerifier.Record.SecurityProofs.ownRuns_of_edgeFree hO hNE
   have hOwn : OwnRows c.f.P rs c.W := ownRows_holds hP hO hrs
+  have hSh : ∀ r l g lo hi, SharedLeaf c.f.P g → RowLeaf c.f.P rs c.W r l g lo hi →
+      c.wired.writerOf r.tid r.unit r.port r.row = none := fun r l g lo hi hs hrl => by
+    obtain ⟨p, hp⟩ := hSR g hs
+    exact hHU r (by rw [hp r l lo hi hrl]; rfl)
   obtain ⟨ρ, hρ⟩ := ranked hS
   obtain ⟨f, pin, hf, hc⟩ := read_front h
   have hland : ∀ a ∈ d.D.into (d.𝓘.gates u) \ d.θ, ∃ r : Row, c.slot r.tid r.unit = some u.val ∧
       c.rowKind r ≠ Kind.inside ∧ c.rowKind r ≠ Kind.theta ∧ a ∈ landing c.f.P rs c.W c.wired at_ r := by
     intro a ha
     obtain ⟨ha1, ha2⟩ := Finset.mem_sdiff.1 ha
-    obtain ⟨r, hs, hni, hh, hl⟩ := reads_land hOwn hL (unitsComputed hP hrs) (operandsOwn hP hO hrs hT hS)
+    obtain ⟨r, hs, hni, hh, hl⟩ := reads_land hOwn hSh hL (unitsComputed hP hrs) (operandsOwn hP hO hrs hT hS)
       (returnsOwn hP hrs hT hS) (portsNamed hrs hT) hρ
       (fun tid u sc tid' u' sc' g hu hu' h1 h2 h1' h2' => unit_of_gate hP hrs hu hu' h1 h2 h1' h2') hD
       (fun tid u sc hu => (slot_of_unit h hrs hu).imp fun s hs => hs.1) hNm
@@ -188,7 +194,7 @@ theorem block_fresh (hFR : FreshRows) {j tr : Json} {c : Case} (h : read j tr = 
     intro x hx
     obtain ⟨a, ha, rfl⟩ := Finset.mem_image.1 hx
     obtain ⟨hs, hni, hnt, hl⟩ := hrow a ha
-    obtain ⟨h1, h2, -⟩ := landing_bits h hNE hrs hT hOwn hAl hL hS hl
+    obtain ⟨h1, h2, -⟩ := landing_bits h hNE hrs hT hOwn hSh hAl hL hS hl
     exact ⟨h1, h2, hs, hni, hnt⟩)
   refine le_trans ?_ hbound
   show d.D.width (d.D.into (d.𝓘.gates u) \ d.θ) ≤ _
@@ -198,7 +204,7 @@ theorem block_fresh (hFR : FreshRows) {j tr : Json} {c : Case} (h : read j tr = 
   refine Finset.sum_le_sum fun x hx => ?_
   obtain ⟨a, ha, rfl⟩ := Finset.mem_image.1 hx
   obtain ⟨-, -, -, hl⟩ := hrow a ha
-  obtain ⟨-, -, hle⟩ := landing_bits h hNE hrs hT hOwn hAl hL hS hl
+  obtain ⟨-, -, hle⟩ := landing_bits h hNE hrs hT hOwn hSh hAl hL hS hl
   refine le_trans (Finset.sum_le_sum_of_subset ?_) hle
   intro b hb
   obtain ⟨hbA, hbφ⟩ := Finset.mem_filter.1 hb

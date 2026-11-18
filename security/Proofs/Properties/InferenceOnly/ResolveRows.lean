@@ -280,6 +280,30 @@ theorem strided_get (n base inner cnt d : ℕ) :
   show (⟨false, n, ((base : Int) + ((d / inner : ℕ) : Int) * 0 + ((d % inner : ℕ) : Int) * 1).toNat⟩ : Ref) = _
   rw [Int.mul_zero, Int.add_zero, Int.mul_one, ← Int.natCast_add, Int.toNat_natCast]
 
+/-- Reference `d` of a part read with outer stride `os` and inner stride 1 is leaf `d mod inner` of its run
+`d / inner`, the run starting at `base + (d / inner) · os`. -/
+theorem strided_get_own (n base inner os cnt d : ℕ) :
+    (Part.strided false n (base : Int) inner (os : Int) 1 cnt).get d =
+      ⟨false, n, base + d / inner * os + d % inner⟩ := by
+  show (⟨false, n, ((base : Int) + ((d / inner : ℕ) : Int) * (os : Int) + ((d % inner : ℕ) : Int) * 1).toNat⟩
+    : Ref) = _
+  rw [Int.mul_one, ← Int.natCast_mul, ← Int.natCast_add, ← Int.natCast_add, Int.toNat_natCast]
+
+/-- With the outer stride at least the inner run, two references of a part that read one leaf are one. -/
+theorem own_index_inj {inner os d d' : ℕ} (hin : 0 < inner) (hos : inner ≤ os)
+    (h : d / inner * os + d % inner = d' / inner * os + d' % inner) : d = d' := by
+  have hr : d % inner < os := Nat.lt_of_lt_of_le (Nat.mod_lt _ hin) hos
+  have hr' : d' % inner < os := Nat.lt_of_lt_of_le (Nat.mod_lt _ hin) hos
+  have hpos : 0 < os := Nat.lt_of_lt_of_le hin hos
+  have e : ∀ a r, r < os → (a * os + r) / os = a := fun a r hr => by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ hpos, Nat.div_eq_of_lt hr, Nat.zero_add]
+  have ha : d / inner = d' / inner :=
+    calc d / inner = (d / inner * os + d % inner) / os := (e _ _ hr).symm
+      _ = (d' / inner * os + d' % inner) / os := by rw [h]
+      _ = d' / inner := e _ _ hr'
+  have hm : d % inner = d' % inner := by rw [ha] at h; omega
+  rw [← Nat.div_add_mod d inner, ← Nat.div_add_mod d' inner, ha, hm]
+
 section
 variable (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
   (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (hown : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
