@@ -5,11 +5,30 @@ from research.store.tool import Tool
 POINT_FLAGS = ("--spec", "--point", "--identity")
 
 
-def parse_point(argv: list[str]) -> dict[str, str]:
-    """The point's flags wherever they sit: a queued run records its wrapper's argv (`gpu-lease 1 --wait ... -- bash
-    benchmarks/harness/run_point.sh --spec S --point P --identity I`), which the generic parse reads as positionals after
-    `--`, so `identity`, the key the resume lookup matches on, would never be recorded."""
+def _launched(argv: list[str]) -> dict[str, str]:
+    """The point a `verity-bench run SPEC [--point P] [--again P]` launch runs, planned in the launching checkout (whose
+    commit `research run --source` ships) as the run will plan it; nothing where it names no one point."""
 
+    from verity_bench import cli, jobs, steady_plan, steady_spec
+
+    start = next(i for i, token in enumerate(argv) if token.endswith("verity-bench")) + 2
+    try:
+        args = cli._parser().parse_args(["run", *argv[start:]])
+        root = jobs.repository_root()
+        plan = (steady_plan.make_plan(args.spec, root=root, lookup=lambda *_: (None, None))
+                if steady_spec.is_steady(args.spec) else jobs.make_plan(args.spec, root=root, lookup=lambda *_: None))
+        item = jobs.to_run(jobs.again(plan, args.again), args.point)
+    except (ValueError, SystemExit):
+        return {}
+    return {"spec": args.spec, "point": item.point.id, "identity": item.identity}
+
+
+def parse_point(argv: list[str]) -> dict[str, str]:
+    """The point's flags wherever they sit, or the point a `verity-bench run SPEC` launch runs (`_launched`): `identity`
+    is the key the resume lookup matches on, which the generic parse would never record."""
+
+    if any(token.endswith("verity-bench") and argv[i + 1:i + 2] == ["run"] for i, token in enumerate(argv)):
+        return _launched(argv)
     out = {}
     for i, token in enumerate(argv[:-1]):
         if token in POINT_FLAGS:
