@@ -96,6 +96,16 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     "benchmarks/network_e2e/traces/traffic.py",
     # the record of the value settings in force that an arm's meta.json and a replay's replay.json hold
     "adapters/vllm/verity_vllm/settings.py",
+    # every file the writers keep on the node matches research_outputs.PRIVATE (tests/test_private_names.py): the
+    # list, the modules it imports, and the replay ladder's writer
+    "adapters/vllm/verity_vllm/pipeline/research_outputs.py",
+    "adapters/vllm/verity_vllm/pipeline/cli.py",
+    "adapters/vllm/verity_vllm/config.py",
+    "adapters/vllm/verity_vllm/log.py",
+    "adapters/vllm/verity_vllm/query/__init__.py",
+    "adapters/vllm/verity_vllm/query/manifest/__init__.py",
+    "adapters/vllm/verity_vllm/query/manifest/format.py",
+    "benchmarks/replay_ladder/ladder.py",
     # a point's member carries its card's record's `short`, the record found by the name nvidia-smi gives the card
     "verity/device.py",
     "calibration/hardware/cards",
