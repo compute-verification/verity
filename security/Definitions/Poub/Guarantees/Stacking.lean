@@ -218,8 +218,9 @@ error is the stacked one:
 
 **The reading.** Refresh keeps every credited key fresh and every credited payload seasoned, so a pass's tiles carry
 no carrier and the rebuild bound needs no `C`: that step is `ResourceAccounting.Assumptions.SeasonedRebuilds`, the
-premise that gives this hypothesis from `RateSketch.LifetimeCappedAll`, `RateSketch.Seasoned` and
-`RateSketch.ChoosesBefore`. A re-key commits no payload of its own: its payload is its origin's, by reference, at the
+premise that gives this hypothesis (`RateSketch.RebuildsWithin`) from `RateSketch.JoinsInOrder`,
+`RateSketch.LifetimeCappedAll`, `RateSketch.Seasoned`, `RateSketch.OriginsFixed` and `RateSketch.ChoosesBefore`
+(`RefreshedRunConservationSeasoned`). A re-key commits no payload of its own: its payload is its origin's, by reference, at the
 origin the public rota names, so in the game its choices are its origin's. A re-key whose stored form encodes another
 payload (a laundered origin) is a tile whose receipts are not correct on the committed store, paid in this bound's
 sampling term as any such tile is, unless its sectors are rebuilt, which `X` counts. The order is the session's own,
@@ -259,8 +260,9 @@ def RefreshedRunConservationSketchDeployed : Prop :=
 its rebuild bound given by `ResourceAccounting.Assumptions.SeasonedRebuilds` under refresh's three conditions on the
 session's own layout, per session: every block a pass reads is read within `life` windows of the one its append joined
 (`RateSketch.LifetimeCappedAll`), has a payload committed at the registration or `life` or more windows before the pass
-(`RateSketch.Seasoned`), and each append's choices read only the coins of the appends before `seen` of it
-(`RateSketch.ChoosesBefore`; at a re-key, its payload is its origin's, by reference, at the origin the rota names). It
+(`RateSketch.Seasoned`, at the origins `seen` the session declares), and each append's choices read only the coins of
+the appends before its origin (`RateSketch.ChoosesBefore`, with the appends joining in order, `RateSketch.JoinsInOrder`,
+and the declared origins the map `s` fixed before every coin, `RateSketch.OriginsFixed`; at a re-key, its payload is its origin's, by reference, at the origin the rota names). It
 is for one scheme, which payloads may be credited is the layout's, a parameter, and a registered block counts as born
 before the session against this session's coins only.
 
@@ -271,16 +273,18 @@ def RefreshedRunConservationSeasoned : Prop :=
     (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
     (slot : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Fin N ↪ Fin T × Fin M)
     (joined : (Ω × (Fin T → Ca)) × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin T → ℕ)
-    (seen : Fin T → Fin T)
+    (seen : (Ω × (Fin T → Ca)) × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin T → Fin T) (s : Fin T → Fin T)
     (A : RateSketch.SketchDeployedRun n P N 128 ρ 512 S L q 16 G 2773),
     7 ≤ n → 0 < P → 0 < N →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
     (∀ w η j ι, Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) →
-    Assumptions.SeasonedRebuilds (fun _ (_ : Ω × (Fin T → Ca)) => A) (fun c _ => slot c) joined choose seen X life →
+    Assumptions.SeasonedRebuilds (fun _ (_ : Ω × (Fin T → Ca)) => A) (fun c _ => slot c) joined choose seen s X life →
     RateSketch.LifetimeCappedAll (fun c (_ : Ω × (Fin T → Ca)) => slot c) joined life →
+    RateSketch.JoinsInOrder joined →
     RateSketch.Seasoned (fun c (_ : Ω × (Fin T → Ca)) => slot c) joined seen life →
-    RateSketch.ChoosesBefore choose seen →
+    RateSketch.OriginsFixed seen s →
+    RateSketch.ChoosesBefore choose s →
     pr (fun x : (Ω × (Fin T → Ca)) × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctOn
         (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w) (x.2 w).1 (x.2 w).2.1) ∧

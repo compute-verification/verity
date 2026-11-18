@@ -3277,6 +3277,14 @@
   "ResourceAccounting.RateSketch.Seasoned": {
    "owner": "@proofs",
    "due": "2026-12-04"
+  },
+  "ResourceAccounting.RateSketch.JoinsInOrder": {
+   "owner": "@proofs",
+   "due": "2026-12-04"
+  },
+  "ResourceAccounting.RateSketch.OriginsFixed": {
+   "owner": "@proofs",
+   "due": "2026-12-04"
   }
  },
  "ids": {
@@ -3407,7 +3415,9 @@
    "ResourceAccounting.Assumptions.SketchHashBudget",
    "ResourceAccounting.Assumptions.SketchRank",
    "ResourceAccounting.RateSketch.ChoosesBefore",
+   "ResourceAccounting.RateSketch.JoinsInOrder",
    "ResourceAccounting.RateSketch.LifetimeCappedAll",
+   "ResourceAccounting.RateSketch.OriginsFixed",
    "ResourceAccounting.RateSketch.Seasoned"
   ]
  },
@@ -27801,7 +27811,7 @@
    "Slowdown.Cut.SecurityProofs.HECharged": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry (ValuesInjective, NoSharedPair), under the named (H) and (E) (security/Definitions/Assumptions.lean), with the fresh-input budget k on a set G of a partition's blocks only: the blocks outside G are charged whole, at the MACs each holds whole, and what all the blocks read outside θ is a total T. It is not about the code of the inference-only policy's check; nothing joins it to a verdict yet.",
    "Pous.SecurityProofs.StreamedWipeMeets96GiB": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, on any card whose device memory fills a segment or more, the 96 GiB device among them, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryAttester.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "ResourceAccounting.SecurityProofs.RefreshedRunConservationSketchDeployed": "frozen (no-function,hash): It is ResourceAccounting.SecurityProofs.StackedRunConservationSketchDeployed's game (a store per pass made by the append-coin rule, RateSketch.coinStore) for pass devices that rebuild at most X bits at every store (RateSketch.RebuildsWithin), with no carrier term and no C, under the named assumptions KeyBinding, SketchRank and SketchHashBudget: the session's own order of appends and coins, per session, for one scheme; a re-key's payload is its origin's, by reference, and a stored form that does not encode its committed payload is paid in the sampling term; abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code.",
-   "ResourceAccounting.SecurityProofs.RefreshedRunConservationSeasoned": "frozen (no-function,hash): It is ResourceAccounting.SecurityProofs.RefreshedRunConservationSketchDeployed with its rebuild bound given by ResourceAccounting.Assumptions.SeasonedRebuilds under refresh's three conditions on the session's own layout, per session (RateSketch.LifetimeCappedAll, RateSketch.Seasoned, RateSketch.ChoosesBefore): for one scheme, which payloads may be credited the layout's, a parameter, and a registered block born before the session against this session's coins only; abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code."
+   "ResourceAccounting.SecurityProofs.RefreshedRunConservationSeasoned": "frozen (no-function,hash): It is ResourceAccounting.SecurityProofs.RefreshedRunConservationSketchDeployed with its rebuild bound given by ResourceAccounting.Assumptions.SeasonedRebuilds under refresh's conditions on the session's own layout, per session (RateSketch.LifetimeCappedAll, RateSketch.Seasoned at the declared origins, RateSketch.JoinsInOrder, RateSketch.OriginsFixed, RateSketch.ChoosesBefore): for one scheme, which payloads may be credited the layout's, a parameter, and a registered block born before the session against this session's coins only; abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

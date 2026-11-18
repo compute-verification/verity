@@ -255,8 +255,10 @@ def RegisteredCircuitRequirement : Prop :=
 `RegisteredCircuitRequirement`'s audit, binding and bound under refresh: every credited key is fresh (the lifetime cap
 holds for every tile a pass reads, the registration's included: `RateSketch.LifetimeCappedAll`, in place of
 `RateSketch.LifetimeCapped`), every credited payload is seasoned (`RateSketch.Seasoned`: committed at the registration
-or `L` or more windows before the pass, a re-key inheriting its origin's birth at `seen`), and each append's choices
-read only the coins of the appends before `seen` of it (`RateSketch.ChoosesBefore`: at a fresh append the append-coin
+or `L` or more windows before the pass, a re-key inheriting its origin's birth at the origin `seen` it declares), the
+appends join windows in order (`RateSketch.JoinsInOrder`), the declared origins are the map `s` fixed before every coin
+(`RateSketch.OriginsFixed`), and each append's choices read only the coins of the appends before `s` of it
+(`RateSketch.ChoosesBefore`: at a fresh append the append-coin
 rule; at a re-key, that its commitment is its origin's, the code's re-key carrying its origin's payload by reference
 at the origin the public rota names). Under those, `ResourceAccounting.Assumptions.SeasonedRebuilds` takes the place
 of `ResourceAccounting.Assumptions.CircuitCarriers`: every pass device rebuilds at most `X_r·τ` bits of all its tiles,
@@ -279,7 +281,8 @@ def RefreshedCircuitRequirement : Prop :=
     (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
     (layout : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Fin N ↪ Fin T × Fin M)
     (steer : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a)
-    (joined : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin T → ℕ) (seen : Fin T → Fin T)
+    (joined : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin T → ℕ) (seen : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin T → Fin T)
+    (s : Fin T → Fin T)
     (A : RateSketch.SketchSummaryRun a n P N 128 ρ 512 S (Lr * τ) q 16 G 2773)
     {V K Dv : Type} [DecidableEq V] [DecidableEq K] (W : Requirement.Wiring V)
     (p : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Placement Dv V)
@@ -293,11 +296,13 @@ def RefreshedCircuitRequirement : Prop :=
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
     (∀ s w η j pre, Assumptions.SketchHashBudget (((A.session s).window w η).device j pre) (qr * τ)) →
-    Assumptions.SeasonedRebuilds (fun c y => A.session (steer c y)) layout joined choose seen (Xr * τ) L →
+    Assumptions.SeasonedRebuilds (fun c y => A.session (steer c y)) layout joined choose seen s (Xr * τ) L →
     Assumptions.SteeredLayout layout steer →
     RateSketch.LifetimeCappedAll layout joined L →
+    RateSketch.JoinsInOrder joined →
     RateSketch.Seasoned layout joined seen L →
-    RateSketch.ChoosesBefore choose seen →
+    RateSketch.OriginsFixed seen s →
+    RateSketch.ChoosesBefore choose s →
     (∀ x, (p x).Deadlines (bind x) τ ∧ (∀ w j w' j', w < w' ∨ w = w' ∧ j < j' → bind x w j < bind x w' j') ∧
       ∀ w j,
         let e := (p x).toExecution

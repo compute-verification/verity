@@ -1171,13 +1171,13 @@ theorem RefreshedRunConservationSketchDeployed :
 
 theorem RefreshedRunConservationSeasoned :
     ResourceAccounting.Guarantees.RefreshedRunConservationSeasoned := by
-  intro n P N ρ S L q G X qtot T M life ε δ Ω Ca Ch _ _ enc choose slot joined seen A hn hP hN hrank hKB hB hS
-    hcap hseas hcb
+  intro n P N ρ S L q G X qtot T M life ε δ Ω Ca Ch _ _ enc choose slot joined seen s A hn hP hN hrank hKB hB hS
+    hcap hord hseas hfix hcb
   rcases isEmpty_or_nonempty (Ω × (Fin T → Ca)) with hE | ⟨y⟩
   · refine le_trans (le_of_eq ?_) (zero_le _)
     simp only [Pous.pr, Verity.Game.prCoin, Verity.Game.avg, Finset.univ_eq_empty, Finset.sum_empty]
   exact RefreshedRunConservationSketchDeployed n P N ρ S L q G X qtot T M ε δ enc choose slot A hn hP hN hrank hKB hB
-    (fun w η j ι c σ Es R O => hS hcap hseas hcb ⟨w, η, σ, j, ι⟩ c y Es R O)
+    (fun w η j ι c σ Es R O => hS hord hcap hseas hfix hcb ⟨w, η, σ, j, ι⟩ c y Es R O)
 
 /-- **PoUB with relaying side sources on a programmed store, with stacking**,
 `ResourceAccounting.Guarantees.StackedRunConservationRelay`. -/
