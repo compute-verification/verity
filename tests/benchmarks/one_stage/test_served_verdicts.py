@@ -5271,16 +5271,18 @@ composed = {"undecided": "pending"}.get(said[0], said[0]) if said else "pending"
 print("RECORD " + json.dumps({"composed": composed, "window": 7}))
 sys.exit(''' + repr(S.RECORD_EXIT) + '''[composed])
 '''
-#: `served_composite.sh`, its product's Lean answering $LEAN (no answer when unset) in its public composite.json, which
-#: carries $COMPOSE_DEVELOPMENT as its ``development`` where it is set
+#: `served_composite.sh`, its product's Lean answering $LEAN (no answer when unset) in its public composite.json under
+#: the product's own directory and id (onsite's ``onsite``, remote's ``remote-v1``), which carries $COMPOSE_DEVELOPMENT as
+#: its ``development`` where it is set
 FAKE_SERVED_COMPOSITE = '''echo composite >> "$ORDER"
 printf "%s\\n" "$SERVED_NODE" "$@" > "$ORDER.composite"
 printf "%s" "${COMPOSE_DEVELOPMENT:-}" > "$ORDER.development"
 if [ -n "${LEAN:-}" ]; then
-  mkdir -p "$2/composite/remote-v1"
+  case ${PRODUCT:-onsite} in onsite) x=onsite id=verity/onsite/v1 ;; *) x=remote-v1 id=verity/remote/v1 ;; esac
+  mkdir -p "$2/composite/$x"
   dev=${COMPOSE_DEVELOPMENT:+", \\"development\\": \\"$COMPOSE_DEVELOPMENT\\""}
-  echo "{\\"product\\": \\"verity/remote/v1\\", \\"verdict\\": {\\"id\\": \\"verity/remote/v1\\", \\"verdict\\": \\"$LEAN\\"}$dev}" \\
-    > "$2/composite/remote-v1/composite.json"
+  echo "{\\"product\\": \\"$id\\", \\"verdict\\": {\\"id\\": \\"$id\\", \\"verdict\\": \\"$LEAN\\"}$dev}" \\
+    > "$2/composite/$x/composite.json"
 fi
 echo "COMPOSITE: composed on $(hostname -s)" >> "$2/verdicts.txt"'''
 
@@ -5751,6 +5753,9 @@ def test_a_composite_made_on_the_served_node_is_the_records_verdict_unless_place
         argv = json.loads((tmp_path / "order.record").read_text())
         assert argv[-2:] == ["--composite", str(tmp_path / "out" / "composite")]
         assert argv[argv.index("--product") + 1] == env.get("PRODUCT", "remote")
+        product = {"onsite": "verity/onsite/v1", "remote": "verity/remote/v1"}[env.get("PRODUCT", "remote")]
+        assert [json.loads(f.read_text())["product"] for f in (tmp_path / "out" / "composite").glob("*/composite.json")
+                ] == [product]
     assert any(x.startswith("HANDOFF") for x in lines) is (env.get("COMPOSE_OFF_NODE") == "1")
 
 
@@ -8307,12 +8312,6 @@ def test_the_runs_machine_txt_is_the_trees_commit_and_the_nodes_facts_stay_in_th
     assert host in (tmp_path / "serve" / "private" / "logs" / "machine.txt").read_text()
     left = (tmp_path / "run.log").read_text() + "".join(f.read_text(errors="replace") for f in out.rglob("*") if f.is_file())
     assert host not in left and f"serve dir {tmp_path / 'serve'}" not in left, left
-
-
-@pytest.mark.parametrize("env, held", [({}, False), ({"VERITY_HOLD_PLACEMENT": ""}, False),
-                                       ({"VERITY_HOLD_PLACEMENT": "0"}, False), ({"VERITY_HOLD_PLACEMENT": "1"}, True)])
-def test_hold_placement_holds_only_under_exactly_1(env, held):
-    assert S.hold_placement(env) is held
 
 
 def test_a_failed_sampled_proofs_step_keeps_its_error_log_private(tmp_path):

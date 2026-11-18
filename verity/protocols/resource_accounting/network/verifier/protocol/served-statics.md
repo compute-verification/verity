@@ -59,6 +59,7 @@ So a served-class proof block fits 2^27 up to G = 64, four proof blocks an execu
 
 **Open.**
 - vLLM's serve call (`commit_served`) registers at G = P. It is to pass the tie's G.
-- `benchmarks/prove_path/served_statics_zk.py` takes the Programs' statics from the honest rows, as compile(advice) lays
-  out a step whose advice's rows they are, and checks them natively against each step's committed positions
-  (`served_tie_window.statics_held`). The verifier is to compile them from the advice.
+- No zero-knowledge proof of either tie runs, and nothing the verifier accepts rests on one. Both are Definitions with
+  pinned costs. `benchmarks/prove_path/served_tie_window.py` checks the routed tie natively, in plain, on a sealed
+  execution phase's real rows, and checks the statics against each step's committed positions (`statics_held`), taking
+  them from the honest rows. The verifier is to compile them from the advice.

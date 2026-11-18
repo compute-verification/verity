@@ -402,6 +402,7 @@ PERIOD_CIRCUIT = "verity/window-circuit/v1"
 # Not yet read from here: composition (onsite, remote)
 ONSITE_PROTOCOL = "verity/onsite/v1"
 REMOTE_PROTOCOL = "verity/remote/v0"
+REMOTE_V1_PROTOCOL = "verity/remote/v1"
 
 # Not yet read from here: served periods (`verity.commitments.periods`, the bytes say window)
 VLLM_ADVICE_WINDOWS_ADVICE = "verity-vllm/advice-windows/advice/v1"
