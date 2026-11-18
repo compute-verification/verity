@@ -26,8 +26,8 @@ from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (
     CLASS,
     GRAIN,
-    OTHER,
-    WINDOW,
+    FULL,
+    FULL_LATER,
     _blocks,
     _bytes,
     _label,
@@ -83,11 +83,11 @@ def test_an_fa3_head_is_v20s_calls_reading_a_key_and_a_value_row_a_position():
     """Position p's heads (T = p + 1, one key block) are `Attention_v20`'s Calls, `AttnBlockFirst_v1{NVIS=T}` at FA3's dot and
     `AttnHeadEnd_v1` at FA3's reciprocal, a unit a head each (2 slots, 2 layers, 4 heads: 16 a T); the first block reads its
     keys and values a row a position (`_reads_its_keys_and_values`), and the end its block's running sum and output. Two
-    windows of the class are one circuit, blocks included, with the weights and the scan state pinned no input row is free,
+    windows of the fixed load are one circuit, blocks included, with the weights and the scan state pinned no input row is free,
     and every wire reads its own slot at its step or before."""
     reg = _registered()
-    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
-    other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN)
+    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*FULL)), CLASS, GRAIN)
+    other = window_circuit(reg, S.compile_steps(reg, *S._session(*FULL_LATER)), CLASS, GRAIN)
     assert _bytes(circuit) == _bytes(other) and _blocks(circuit) == _blocks(other)
     n: Counter[str] = Counter()
     for fn, k in circuit.templates:
@@ -122,11 +122,11 @@ HEAD = "AttentionHead_v2{{T={},D=16,BN=128}}"
 
 def test_an_attention_with_no_cut_is_its_heads_each_reading_a_key_and_a_value_row_a_position():
     """`Attention_v2`'s position p (T = p + 1) is `AttentionHead_v2{T}`, a unit a head (16 a T), reading the keys and values
-    v20's first block reads (`_reads_its_keys_and_values`). Two windows of the class are one circuit, no input row is free,
+    v20's first block reads (`_reads_its_keys_and_values`). Two windows of the fixed load are one circuit, no input row is free,
     and every wire reads its own slot at its step or before."""
     reg = _registered(GUARDED)
-    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
-    other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN)
+    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*FULL)), CLASS, GRAIN)
+    other = window_circuit(reg, S.compile_steps(reg, *S._session(*FULL_LATER)), CLASS, GRAIN)
     assert _bytes(circuit) == _bytes(other) and _blocks(circuit) == _blocks(other)
     n = {_label(fn): k for fn, k in circuit.templates}
     assert {t: k for t, k in n.items() if t.startswith(("Attention", "AttnBlock", "AttnHeadEnd"))} == {

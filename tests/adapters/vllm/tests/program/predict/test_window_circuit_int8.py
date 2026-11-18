@@ -21,7 +21,7 @@ from tests.program.predict.test_window_circuit import (
     CLASS,
     ROPE,
     SCAN_PIN,
-    WINDOW,
+    FULL,
     _alone,
     _checkpoint,
     _label,
@@ -67,7 +67,7 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     The window holds the norm both o_proj and down_proj write, cut at its residual add after down_proj (module docstring);
     its lowering registers the weights and the scan state."""
     reg = _registered()
-    window = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
+    window = window_circuit(reg, S.compile_steps(reg, *S._session(*FULL)), CLASS, GRAIN)
     add = "RMSNormFusedCudaAdd_v2{N=64,C=64,AT=0,R=8}"
     assert {t: k for fn, k in window.templates if (t := _label(fn)).startswith("RMSNormFused")} == {
         "RMSNormFusedCuda_v2{N=64}": 20, add: 20, "RMSNormFusedCudaTail_v1{N=64}": 20}
