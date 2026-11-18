@@ -479,7 +479,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
 
 
 def test_the_config_a_declared_schemes_arm_hands_passes_that_schemes_own_settings_check():
-    """A protocol arm whose entry names a declared scheme (`messages.option`) hands it settings it takes, read as
+    """A protocol arm whose entry is a declared scheme's name hands it settings it takes, read as
     `verity_vllm.LLM` reads them (`option_settings`) and checked by the scheme's own `settings`: its in-process coins
     the string its settings say, ``coins = "in-process"``, or, where the spec gives one, its challenger's address alone."""
     from verity.protocols.resource_accounting.scheme import settings
@@ -489,15 +489,15 @@ def test_the_config_a_declared_schemes_arm_hands_passes_that_schemes_own_setting
     spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
     arm = next(a for a in resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings) if a.protocols)
     entry, = arm.protocols
-    scheme = messages.option(entry)
-    assert scheme is not None and scheme.name == "pearl-plus"
+    scheme = messages.declarations.load()[entry]
+    assert entry == scheme.name == "pearl-plus"
     environ = {"PEARLC_KERNEL": "/tree/kernels/pearl_c_sm90", "PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90.cubin"}
     config = protocols_config(arm, environ)
     own = option_settings(entry, config)
     assert own == {"kernel": environ["PEARLC_KERNEL"], "cubin": environ["PEARLC_CUBIN"], "coins": "in-process"}
     assert settings(scheme, own)["coins"] == "in-process"
-    live = replace(arm, protocols_config={"pouw": {**arm.protocols_config["pouw"], "challenger": "10.0.0.7:7000",
-                                                   "lane": "benchmarks", "peer": "node-1"}})
+    live = replace(arm, protocols_config={"pearl-plus": {**arm.protocols_config["pearl-plus"], "challenger": "10.0.0.7:7000",
+                                                         "lane": "benchmarks", "peer": "node-1"}})
     own = option_settings(entry, protocols_config(live, environ))
     assert "coins" not in own and settings(scheme, own)["challenger"] == "10.0.0.7:7000"
 
@@ -524,10 +524,35 @@ def test_a_served_schemes_gate_refuses_by_name_where_its_device_run_is_not_found
         assert gate["passed"] is False and gate["provided"] is True and gate["scheme"] == "pearl-plus"
         assert "could not find the served scheme pearl-plus's device run" in gate["refused"]
     run = object.__new__(PearlCDeviceRun)
+    run.retain_dir = None
     monkeypatch.setattr(E, "_pearl_c_gate", lambda r, s: {"passed": r is run and s == "pearl-plus", "provided": True})
     assert engine(arm, SimpleNamespace(run=run)).custom_gate() == {"passed": True, "provided": True}
     h1 = replace(arm, protocols=("pouw:eps1-sm120-h1fx1",))
     assert engine(h1, None).custom_gate() == {"passed": True, "provided": False}
+
+
+def test_the_harness_gate_is_refused_on_a_run_that_retains_its_passes(monkeypatch, tmp_path):
+    """The gate's call check begins and ends passes of its own, each retained (`passes.pass_dir`) on a run that retains:
+    on a retained Pearl+ run, three steps with the gate after the first left 15 pass directories against 2 passes listed.
+    So the harness refuses the gate by name on a run with a retain directory, and no pass directory is added."""
+    from verity_torch.pouw.pearl_c.passes import pass_dir
+    from verity_torch.pouw.pearl_c.run_device import PearlCDeviceRun
+
+    from verity_bench.vllm import engine as E
+
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
+    arm = next(a for a in resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings) if a.protocols)
+    run = object.__new__(PearlCDeviceRun)
+    run.retain_dir, run.retained = tmp_path / "passes", 1
+    (run.retain_dir / "pass-00000").mkdir(parents=True)
+    monkeypatch.setattr(E, "_pearl_c_gate", lambda r, s: (Path(pass_dir(r)).mkdir(), {"passed": True, "provided": True})[1])
+    got = object.__new__(E._VllmEngine)
+    got.arm, got.obj, got.served = arm, None, E._served_scheme(arm)
+    got.llm = SimpleNamespace(protocols=None, scheme=SimpleNamespace(run=run))
+    with pytest.raises(SystemExit, match="the harness gate begins and ends passes of its own; it can't run on a run that "
+                                         "retains its passes"):
+        got.custom_gate()
+    assert sorted(p.name for p in run.retain_dir.iterdir()) == ["pass-00000"]
 
 
 def test_the_readme_states_the_contract_the_code_keeps():

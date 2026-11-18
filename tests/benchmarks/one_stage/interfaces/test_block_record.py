@@ -172,8 +172,8 @@ def _accepting_report() -> tuple[dict, dict]:
     p0 = _load("block-record-r2-period0")
     profile = {"levels": [{"name": "unit", "size": 1024}], "drawn": {"unit": 2}}
     rows = {}
-    for name, key in R.RUNNER_KEYS.items():
-        lg = p0["legs"][name]
+    for name in ("integrity", "pouw", "pous", "bandwidth", "certifier"):
+        lg, key = p0["legs"][name], R.RUNNER_KEYS[name]
         q = {"integrity": {"bound": 299}, "pouw": {"work": {"credited": 262144, "credited_tiles": 128}},
              "pous": {"s_bits": 0, "certified": False, "eps": "0"}, "bandwidth": {"q_bytes": 6963200, "eps": lg["error"]},
              "certifier": {"K": 15764, "windows": 1, "eps": "1/100"}}[name]
@@ -242,6 +242,27 @@ def test_each_row_its_scheme_bounds_not_carries_why_beside_it_and_keeps_its_verd
     assert again["legs"]["pous"]["answer"]["verdict"] == "undecided"
     assert again["legs"]["pous"]["answer"]["reason"] == legs["pous"]["unbounded"]["why"]
     assert again["composed"]["legs"] == {k: "undecided" if k == "pous" else "accept" for k in R.SUBPROTOCOLS}
+
+
+def test_a_piece_that_refused_to_run_shows_undecided_by_its_sentence_never_accepted_nor_dropped() -> None:
+    """A refusal to run (the wipe on a busy card) is in the record by name: undecided with its sentence, its value
+    null and held at no δ, neither accepted nor missing, and a record that says otherwise is refused."""
+    report, _ = _accepting_report()
+    busy = {"verdict": R.REFUSED, "reason": "card 0 is busy: another process holds it", "owner": "memory-accounting"}
+    rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE,
+                        extra={"wipe": {"row": busy, "server": report["node"], "runs": ["r"]}})
+    lg = rec["legs"]["wipe"]
+    assert lg["answer"]["verdict"] == "undecided" and lg["refused"] == busy["reason"]
+    assert lg["answer"]["reason"] == f"refused to run: {busy['reason']}" and lg["quantity"]["value"] is None
+    assert not any(at["holds"] for at in lg["at"].values())
+    assert rec["composed"]["legs"]["wipe"] == "undecided" and "wipe" not in rec["composed"]["missing"]
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert R.check(rec) == {}
+    forged = copy.deepcopy(rec)
+    forged["legs"]["wipe"]["answer"]["verdict"] = "accept"
+    assert "subprotocol:wipe" in R.check(forged)
+    with pytest.raises(ValueError, match="says why it refused"):
+        R.subprotocol("wipe", {"verdict": R.REFUSED}, server="n0", runs=["r"])
 
 
 def test_pous_writes_its_state_bound_and_a_record_under_the_older_name_still_reads() -> None:
@@ -440,3 +461,30 @@ def test_a_period_s_blocks_are_core_s_block_count() -> None:
     for p in periods.values():
         assert p["blocks_per_machine"] == block_count(p["seconds"], window_s)
         assert p["blocks"] == block_count(p["seconds"], window_s, machines)
+
+
+def test_the_subprotocols_are_the_onsite_applications_components_through_their_rows_and_the_stored_words() -> None:
+    """`SUBPROTOCOLS` and `RUNNER_KEYS` are the onsite application's components through each declaration's ``record``
+    and the format's `STORED`; the schema, data on disk, requires exactly them."""
+    import tomllib
+
+    from verity.protocols.compose import schemes
+    legs = SCHEMA["properties"]["legs"]
+    assert tuple(legs["required"]) == R.SUBPROTOCOLS == tuple(R.RUNNER_KEYS) == R.PRODUCTS["onsite"]
+    assert set(legs["properties"]) == set(R.SUBPROTOCOLS)
+    listed = tomllib.loads(R.ONSITE_APPLICATION.read_text())["protocols"]
+    io, spot = schemes.get("inference-only"), schemes.get("sampled-proofs")
+    assert "inference-only" in listed and isinstance(io.resource, R.S.Lacks) and io.record not in R.STORED
+    assert io.record not in R.RUNNER_KEYS.values(), "inference-only charges nothing and the format keeps no row of it"
+    assert isinstance(spot.resource, R.S.Lacks) and R.RUNNER_KEYS[R.STORED[spot.record]] == spot.record
+    assert R.RUNNER_KEYS["certifier"] == schemes.get("network-attester").record == "communication"
+
+
+def test_a_component_no_scheme_declares_is_a_subprotocol_only_under_a_stored_word(tmp_path, monkeypatch) -> None:
+    app = tmp_path / "onsite.toml"
+    app.write_text('protocols = ["pouw", "nonesuch"]\n')
+    monkeypatch.setattr(R, "ONSITE_APPLICATION", app)
+    with pytest.raises(ValueError, match="nonesuch: no scheme declares it and block_record.STORED has no row stored"):
+        R._runner_keys()
+    app.write_text('protocols = ["pouw"]\n')
+    assert R._runner_keys() == {"pouw": "work"}

@@ -7,7 +7,7 @@
   against the execution phase's coin commitment as the challenger published it (``--coins``, not the pass's copy; a live session's
   when its scheme is `window.LIVE_SCHEME`, `epoch_coins`), as the salt coin, opened after the fixed operands' root (a live
   session's after its salt execution phase's root), and the salt must be the manifest's.  A pass recorded before the execution
-  phase's coins (a v1 manifest, which carries a beacon instead) is refused, as the Lean `PouwCheck.PearlPlus` refuses it.
+  phase's coins (a v1 manifest, which carries a beacon instead) is refused, as the Lean `PouwVerifier.PearlPlus` refuses it.
 - **The call indices** are each below 2^32 and none twice (`credit.passes_distinct`: ``call-range``, ``repeated-call``);
   `served_passes.py` holds a run's passes of one salt to distinct indices too.
 - **The records** (each matmul's real rows, width, excluded and voluntary rows; each fixed operand's excluded and voluntary rows)
@@ -79,7 +79,7 @@ nothing the verdict accepts.
 - ``node`` (`node_draw`, the default): 32 bytes of the Lean verifier's coins on this node (``uniform/io-getrandombytes``),
   a development sample no verdict of record takes.
 
-**The coin record** (``record``, `COIN_SCHEMA`) is what every reader of the sample reads, the Lean `PouwCheck.PearlPlus`
+**The coin record** (``record``, `COIN_SCHEMA`) is what every reader of the sample reads, the Lean `PouwVerifier.PearlPlus`
 among them; it is written before any replay, and once asked for a sample is never asked again (`ASKED`):
 
     {"schema": "verity-pouw/pearl-plus-coin/v2",
@@ -105,7 +105,7 @@ session holds a sample no reader takes.
 Prints one line, ``ACCEPT …`` or ``REJECT …``, naming the pass's run and the manifest (`transcript`, as the panel's
 ``--transcript`` takes it), writes ``verify.json`` beside the manifest, and exits 0 only on acceptance, or with
 ``--expect-reject`` (a negative control's pass) only on rejection.  An ACCEPT is replay-verified (development shortcut; the
-protocol's check is a ZK proof, PouwCheck).
+protocol's check is a ZK proof, PouwVerifier).
 """
 from __future__ import annotations
 
@@ -126,6 +126,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.commitments import Commitment, Opening, VerificationLimits, verify_opening
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
@@ -149,7 +150,6 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.window import LI
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.scheme import declared
 from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveCommitment
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.commitments import registered_value as RV
 from verity.errors import ProtocolError
 from verity.commitments.randomness import derive
@@ -611,7 +611,7 @@ def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: t
         have = {**e, "word_bits": e.get(RV.WIDTH_KEY, RV.WORD_BITS)}
         if bad := [k for k in x if type(have.get(k)) is not type(x[k]) or have[k] != x[k]]:
             raise ValueError(f"W's {v}: its {', '.join(bad)} not the {_owner(v)}'s")
-    return {"record": REG.digest(w), "tables": len(want), **({} if tied else {"weights": WEIGHTS_UNTIED})}
+    return {"record": DD.digest(w), "tables": len(want), **({} if tied else {"weights": WEIGHTS_UNTIED})}
 
 
 def load_class(load: Any) -> tuple[int, int, int]:

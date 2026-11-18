@@ -17,13 +17,13 @@ from types import SimpleNamespace
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity import config as K
 from verity.protocol import Channel, Role
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
-from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.channel import Refused
 import verity_cli as V
 from verity_cli import run as R
@@ -34,7 +34,7 @@ TABLE = (Path(__file__).parent, "step0")
 REG = R.registry(TABLE)
 D = sys.modules[TABLE[1]]
 COMMIT = "a" * 40
-ONSITE = ("sampled-proofs", "certifier", "pouw", "pous", "bandwidth", "inference-only", "wipe")
+ONSITE = ("sampled-proofs", "network-attester", "pouw", "pous", "bandwidth", "inference-only", "wipe")
 REMOTE = ("sampled-proofs", "pearl-plus", "inference-only")
 REMOTE_V0 = ("sampled-proofs", "pouw", "inference-only")
 
@@ -78,7 +78,7 @@ def channel(cfg, source, to):
 
 
 #: a pin the toy's onsite configuration accepts: the network attester's key for the network attester's sessions
-PIN = {"party": "network-certifier", "protocol": "certifier", "scheme": K.SCHEMES[0], "key-sha512": "5a" * 64}
+PIN = {"party": "network-attester", "protocol": "network-attester", "scheme": K.SCHEMES[0], "key-sha512": "5a" * 64}
 
 
 def pinned(**fields) -> dict:
@@ -93,9 +93,9 @@ REFUSALS = {
     "no-protocol": lambda c: c.update(protocols=[]),
     "unknown-protocol": lambda c: c.update(protocols=[*ONSITE, "telepathy"]),
     "repeated": lambda c: c.update(protocols=["sampled-proofs", "sampled-proofs"]),
-    "requires": lambda c: c.update(protocols=["certifier"]),
+    "requires": lambda c: c.update(protocols=["network-attester"]),
     "order": lambda c: c.update(protocols=list(ONSITE[::-1])),
-    "composite": lambda c: c.update(protocols=["sampled-proofs", "certifier"]),
+    "composite": lambda c: c.update(protocols=["sampled-proofs", "network-attester"]),
     "unknown-workload": lambda c: c["workload"].update(name="mainframe"),
     "unknown-params": lambda c: c.update(protocols=list(REMOTE), params={SP.IDS["pous"]: {}}),
     "tie": lambda c: c.update(params={"verity/certifier/v0": {"tie": False}}),
@@ -114,7 +114,7 @@ REFUSALS = {
     "missing-channel": lambda c: c["channel"].remove(channel(c, "firewall", "verifier")),
     "repeated-channel": lambda c: c["channel"].append(dict(channel(c, "firewall", "verifier"))),
     "dial": lambda c: channel(c, "firewall", "verifier").update(dial="both"),
-    "placement": lambda c: party(c, "network-certifier").update(machine="auditor-2"),
+    "placement": lambda c: party(c, "network-attester").update(machine="auditor-2"),
     "pin-hash": lambda c: c.update(pin=[PIN | {"key-sha512": "5A" * 64}]),
     "pin-scheme": lambda c: c.update(pin=[PIN | {"scheme": "ed25519"}]),
     "pin-party": lambda c: c.update(pin=[PIN | {"party": "oracle"}]),
@@ -130,17 +130,17 @@ def test_a_configuration_is_refused_by_name(name):
 
 
 def test_a_requirement_listed_after_its_dependent_is_refused_naming_both():
-    later = ["certifier", "sampled-proofs", *(p for p in ONSITE if p not in ("certifier", "sampled-proofs"))]
+    later = ["network-attester", "sampled-proofs", *(p for p in ONSITE if p not in ("network-attester", "sampled-proofs"))]
     with pytest.raises(Refused) as e:
         K.check(edit(lambda c: c.update(protocols=later)), REG.components, REG.workloads)
-    assert (e.value.name, str(e.value)) == ("order", "order: certifier requires sampled-proofs, so protocols lists "
-                                                     "sampled-proofs before certifier")
+    assert (e.value.name, str(e.value)) == ("order", "order: network-attester requires sampled-proofs, so protocols lists "
+                                                     "sampled-proofs before network-attester")
     assert K.check(edit(lambda c: c.update(protocols=list(ONSITE))), REG.components, REG.workloads)["protocols"] == \
         list(ONSITE)
 
 
-@pytest.mark.parametrize("protocols", [("sampled-proofs",), ("sampled-proofs", "certifier"), ("pouw",), ONSITE[:-1],
-                                       ("sampled-proofs", "certifier", "pouw"), ("sampled-proofs", "wipe"),
+@pytest.mark.parametrize("protocols", [("sampled-proofs",), ("sampled-proofs", "network-attester"), ("pouw",), ONSITE[:-1],
+                                       ("sampled-proofs", "network-attester", "pouw"), ("sampled-proofs", "wipe"),
                                        ("sampled-proofs", "pouw"), ONSITE[:-2]])
 def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
     assert refused(edit(lambda c: c.update(protocols=list(protocols)))) == "composite"
@@ -203,8 +203,8 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
 
 #: The onsite configuration's hash with neither the network attester's bound on a response's tokens nor its lengths
 #: rows' form set: a configuration that sets neither keeps it.
-UNBOUNDED_ONSITE = ("1cd21b0103bf0bf930af8d251e8d8f0a12153d66d56dfbc7d1583b1d3133c87f"
-                    "151b5f774ed98718aabd3453ed9e947fbab982e2b8a107459dbfc1d1d099e17a")
+UNBOUNDED_ONSITE = ("8daf0ab60a5eb01beed4dfb36480f9c7987ee64cd42a5cb16d5b67a62e9ad76c"
+                    "327a964b93f8e0a222dc9ff9b2e32d4900ca516410e3fc42857fa06c19ba697b")
 
 
 def bounded(tokens):
@@ -319,9 +319,9 @@ def test_config_check_and_hash_print_the_hash(capsys):
     ok = capsys.readouterr().out.split()
     assert R.config_main(["hash", str(EXAMPLE)], REG) == 0
     assert ok == ["ok", capsys.readouterr().out.strip()]
-    assert R.config_main(["new", "--workload", "toy", "--protocols", "certifier"], REG) == 2
+    assert R.config_main(["new", "--workload", "toy", "--protocols", "network-attester"], REG) == 2
     assert capsys.readouterr().out.startswith("refused requires:")
-    assert R.config_main(["new", "--workload", "toy", "--protocols", "sampled-proofs,certifier"], REG) == 2
+    assert R.config_main(["new", "--workload", "toy", "--protocols", "sampled-proofs,network-attester"], REG) == 2
     assert capsys.readouterr().out.startswith("refused composite:")
 
 
@@ -404,7 +404,7 @@ class StandIn(D.Machine):
 
     def audit(self, i, registration, challenger, zk_server):
         v = self._of("sampled-proofs", i)
-        answer = {"verdict": v, "commitment": RG.digest(json.loads(registration))}
+        answer = {"verdict": v, "commitment": DD.digest(json.loads(registration))}
         write(self.state / "record" / f"w{i}" / "sampled-proofs" / "answer.json", answer)
         return answer, case(v)
 
@@ -418,7 +418,7 @@ def registry(verdicts: dict | None = None, attester_rc: int = 0) -> R.Registry:
         write(state / "blocks" / "attester-session" / "relay.json", {"periods": len(periods(state))})
         return attester_rc
 
-    parties = {**REG.parties, "certifier": {**REG.parties["certifier"], "network-certifier": network_attester}}
+    parties = {**REG.parties, "network-attester": {**REG.parties["network-attester"], "network-attester": network_attester}}
     return R.Registry(REG.components, REG.workloads, REG.workers, parties, REG.order,
                       functools.partial(D.live, machine=lambda c, s: StandIn(c, s, verdicts or {})))
 
@@ -446,13 +446,13 @@ def test_every_party_here_accepts(tmp_path, capsys):
     line = lines[0]
     assert line["components"] == dict.fromkeys(ONSITE, "accept")
     assert line["product"] == "verity/onsite/v0" and line["coins"] == "simulated" and line["block"] == 0
-    assert line["registration"] == RG.digest({"period": 0})
+    assert line["registration"] == DD.digest({"period": 0})
     assert any("Faithful" in u for u in line["simulated"]) and any(COMMIT in u for u in line["simulated"])
     assert said(out, "VERDICT") == lines
-    assert said(out) == [{"party": "network-certifier", "exit": 0},
+    assert said(out) == [{"party": "network-attester", "exit": 0},
                          *({"party": p, "refused": None} for p in ("challenger", "firewall", "verifier", "workers"))]
     state = tmp_path / "state"
-    relay = [json.loads(x) for x in (state / "transcripts" / "network-certifier.jsonl").read_text().splitlines()]
+    relay = [json.loads(x) for x in (state / "transcripts" / "network-attester.jsonl").read_text().splitlines()]
     assert [(x["file"], x["kind"]) for x in relay] == [("blocks/attester-session/relay.json", "private")]
     assert (state / "challenger" / "host" / "ledger.json").exists()
     kept = state / "runs" / "local" / "runs" / "1"
@@ -469,12 +469,12 @@ def test_a_subprotocol_that_rejects_rejects(tmp_path, who):
 
 @pytest.mark.parametrize("how, status", [("silent", "absent"), ("error", "error")])
 def test_a_subprotocol_with_no_answer_never_accepts(tmp_path, how, status):
-    rc, lines = run(tmp_path, registry({("certifier", 0): how}))
-    assert rc == 1 and lines[0]["verdict"] == "reject" and lines[0]["components"]["certifier"] == status
+    rc, lines = run(tmp_path, registry({("network-attester", 0): how}))
+    assert rc == 1 and lines[0]["verdict"] == "reject" and lines[0]["components"]["network-attester"] == status
 
 
 def test_a_check_that_faults_fails_the_run_with_no_verdict(tmp_path, capsys):
-    rc, lines = run(tmp_path, registry({("certifier", 0): "raise"}))
+    rc, lines = run(tmp_path, registry({("network-attester", 0): "raise"}))
     assert rc == 2 and lines == []
     assert {"party": "verifier", "refused": "party-died"} in said(capsys.readouterr().out)
 
@@ -483,7 +483,7 @@ def test_remotes_verdict_covers_exactly_its_subprotocols(tmp_path, capsys):
     rc, lines = run(tmp_path, registry(), cfg=config(REMOTE))
     assert rc == 0 and lines[0]["components"] == {c: "accept" for c in REMOTE}
     assert lines[0]["product"] == "verity/remote/v1"
-    assert "network-certifier" not in capsys.readouterr().out
+    assert "network-attester" not in capsys.readouterr().out
 
 
 def test_remotes_development_composite_is_no_composite():
@@ -567,7 +567,7 @@ def test_an_audit_that_is_unavailable_is_its_periods_error(tmp_path):
 
 def test_an_entry_that_fails_stops_the_run(tmp_path, capsys):
     rc, lines = run(tmp_path, registry(attester_rc=3))
-    assert rc == 2 and lines == [] and said(capsys.readouterr().out) == [{"party": "network-certifier", "exit": 3}]
+    assert rc == 2 and lines == [] and said(capsys.readouterr().out) == [{"party": "network-attester", "exit": 3}]
 
 
 def test_workers_that_cant_serve_leave_no_verdict(tmp_path, capsys):
@@ -582,10 +582,10 @@ def test_a_party_placed_elsewhere_is_refused(tmp_path, capsys):
 
 
 def test_parties_apart_meet_only_at_a_configured_listen_port(tmp_path, capsys):
-    auditor = config(challenger="auditor-1", network_certifier="auditor-1", verifier="auditor-1")
+    auditor = config(challenger="auditor-1", network_attester="auditor-1", verifier="auditor-1")
     rc, _ = run(tmp_path, registry(), "--on", "auditor-1", cfg=auditor)
     captured = capsys.readouterr()
-    assert rc == 2 and said(captured.out) == [{"party": "network-certifier", "exit": 0}]
+    assert rc == 2 and said(captured.out) == [{"party": "network-attester", "exit": 0}]
     assert "refused listen: the verifier dials firewall, workers" in captured.err
     prover = tmp_path / "prover"
     prover.mkdir()
@@ -597,19 +597,19 @@ def test_parties_apart_meet_only_at_a_configured_listen_port(tmp_path, capsys):
                                                                            "workers": "127.0.0.1:7002"}
 
 
-AUDITOR = {"challenger": "auditor-1", "network_certifier": "auditor-1", "verifier": "auditor-1"}
+AUDITOR = {"challenger": "auditor-1", "network_attester": "auditor-1", "verifier": "auditor-1"}
 
 
 def entry_seeing_local(seen: list) -> R.Registry:
     reg = registry()
-    attester = reg.parties["certifier"]["network-certifier"]
+    attester = reg.parties["network-attester"]["network-attester"]
 
     def entry(cfg, state, local):
         seen.append(local)
         return attester(cfg, state, local)
 
-    return dataclasses.replace(reg, parties={**reg.parties, "certifier": {**reg.parties["certifier"],
-                                                                         "network-certifier": entry}})
+    return dataclasses.replace(reg, parties={**reg.parties, "network-attester": {**reg.parties["network-attester"],
+                                                                         "network-attester": entry}})
 
 
 def test_each_on_names_a_machine_this_host_stands_for_and_every_party_there_runs_as_one_host(tmp_path, capsys):
@@ -617,7 +617,7 @@ def test_each_on_names_a_machine_this_host_stands_for_and_every_party_there_runs
     rc, lines = run(tmp_path, entry_seeing_local(seen), "--on", "auditor-1", "--on", "local", cfg=config(**AUDITOR))
     assert rc == 0 and [x["verdict"] for x in lines] == ["accept"] and seen == [True]
     assert {x["party"] for x in said(capsys.readouterr().out)} == {
-        "network-certifier", "challenger", "firewall", "verifier", "workers"}
+        "network-attester", "challenger", "firewall", "verifier", "workers"}
     assert "challenger shares this host (auditor-1, local) with the developer's firewall, workers: Faithful and " \
            "Secret unmet" in lines[0]["simulated"]
     assert json.loads((tmp_path / "state" / "run.json").read_text())["machines"] == ["auditor-1", "local"]
@@ -643,13 +643,13 @@ def test_the_record_says_simulated_coins_when_the_challenger_shares_the_provers_
 @pytest.mark.parametrize("machines, local", [(["auditor-1"], False), (["auditor-1", "local"], True)])
 def test_a_party_process_runs_as_one_host_with_the_machines_it_is_given(tmp_path, monkeypatch, machines, local):
     seen: list = []
-    reg = dataclasses.replace(REG, parties={**REG.parties, "certifier": {
-        **REG.parties["certifier"], "network-certifier": lambda cfg, state, local: seen.append(local) or 0}})
+    reg = dataclasses.replace(REG, parties={**REG.parties, "network-attester": {
+        **REG.parties["network-attester"], "network-attester": lambda cfg, state, local: seen.append(local) or 0}})
     monkeypatch.setattr(R, "registry", lambda *a: reg)
     path, state = tmp_path / "config.toml", tmp_path / "state"
     path.write_text(K.render(config(**AUDITOR)))
     state.mkdir()
-    assert R.party_main([str(path), str(state), "network-certifier", *machines]) == 0 and seen == [local]
+    assert R.party_main([str(path), str(state), "network-attester", *machines]) == 0 and seen == [local]
 
 
 def test_the_processes_runner_hands_each_party_every_machine_and_the_runs_commit_and_tree(tmp_path, monkeypatch):
@@ -780,51 +780,51 @@ def test_verity_run_with_no_table_is_refused_by_name(tmp_path, capsys, monkeypat
 
 
 def test_the_attester_and_the_policy_are_declared_from_their_manifests():
-    attester, policy = REG.components["certifier"], REG.components["inference-only"]
+    attester, policy = REG.components["network-attester"], REG.components["inference-only"]
     assert (policy.id, policy.parties, policy.channels) == (IO.ID, IO.MANIFEST.parties, IO.MANIFEST.channels)
     assert (attester.id, attester.channels) == (NC.ID, NC.MANIFEST.channels)
     assert [r for r in NC.MANIFEST.parties if r not in attester.parties] == [NC.MANIFEST.role(NC.WORKERS)]
     assert all(r in NC.MANIFEST.parties for r in attester.parties)
-    assert set(D.PARTIES["certifier"]) == {r.name for r in attester.parties}
+    assert set(D.PIECES["network-attester"]) == {r.name for r in attester.parties}
     assert [r.name for r in D.TOY.parties] == [NC.WORKERS]
-    assert NC.WORKERS not in {p for ps in D.PARTIES.values() for p in ps}
+    assert NC.WORKERS not in {p for ps in D.PIECES.values() for p in ps}
 
 
 def test_the_table_holds_what_the_listed_components_need():
-    assert REG.components["certifier"].needs <= REG.workloads["toy"].provides
+    assert REG.components["network-attester"].needs <= REG.workloads["toy"].provides
     assert os.path.basename(D.__file__) == "step0.py"
-    live = {p for ps in D.PARTIES.values() for p, e in ps.items() if e == D.LIVE} | {
+    live = {p for ps in D.PIECES.values() for p, e in ps.items() if e == D.LIVE} | {
         r.name for w, (decl, e) in D.WORKLOADS.items() if e == D.LIVE for r in decl.parties}
     assert live == set(D.ROLES)
-    decided_live = {c for c, ps in D.PARTIES.items() if ps.get("verifier") == D.LIVE}
+    decided_live = {c for c, ps in D.PIECES.items() if ps.get("verifier") == D.LIVE}
     assert decided_live - {"sampled-proofs"} == set(D.CHECKS)
 
 
-GATE = {"certifier": {"gate": "bash gate.sh", "peer": "local"}}
+GATE = {"network-attester": {"gate": "bash gate.sh", "peer": "local"}}
 
 
 def starting_first(events: list, writes: dict | None = GATE, reg: R.Registry | None = None, within: int = 600
                    ) -> R.Registry:
     reg = reg or registry()
-    attester = reg.parties["certifier"]["network-certifier"]
+    attester = reg.parties["network-attester"]["network-attester"]
 
     def serve(cfg, state):
         events.append("serve")
         attester(cfg, state, True)
         if writes is not None:
-            (state / "public" / "network-certifier").mkdir(parents=True, exist_ok=True)
-            (state / "public" / "network-certifier" / "bindings.json").write_text(json.dumps(writes))
+            (state / "public" / "network-attester").mkdir(parents=True, exist_ok=True)
+            (state / "public" / "network-attester" / "bindings.json").write_text(json.dumps(writes))
 
     def stop(cfg, state):
         events.append("stop")
-        (state / "public" / "network-certifier" / "ledger.jsonl").write_text("{}\n")
+        (state / "public" / "network-attester" / "ledger.jsonl").write_text("{}\n")
 
     def live(cfg, state, here):
         events.append(("live", sorted(here), json.loads((state / R.BINDINGS).read_text())))
         return reg.live(cfg, state, here)
 
-    start = R.Start({"certifier": ("gate", "peer")}, serve, stop, within)
-    return dataclasses.replace(reg, live=live, starts={"network-certifier": start})
+    start = R.Start({"network-attester": ("gate", "peer")}, serve, stop, within)
+    return dataclasses.replace(reg, live=live, starts={"network-attester": start})
 
 
 def test_a_party_the_table_starts_first_runs_before_every_other_and_is_stopped_once_the_run_ends(tmp_path, capsys,
@@ -835,13 +835,13 @@ def test_a_party_the_table_starts_first_runs_before_every_other_and_is_stopped_o
     out = capsys.readouterr().out
     assert rc == 0 and [x["verdict"] for x in lines] == ["accept"]
     assert events == ["serve", ("live", ["challenger", "firewall", "verifier", "workers"],
-                                {"network-certifier": GATE}), "stop"]
-    assert said(out, "STARTED") == [{"party": "network-certifier", "writes": {"certifier": ["gate", "peer"]}}]
-    assert said(out)[-1] == {"party": "network-certifier", "exit": 0}
+                                {"network-attester": GATE}), "stop"]
+    assert said(out, "STARTED") == [{"party": "network-attester", "writes": {"network-attester": ["gate", "peer"]}}]
+    assert said(out)[-1] == {"party": "network-attester", "exit": 0}
     assert out.index("VERDICT ") < out.rindex("PARTY ")
-    transcript = (tmp_path / "state" / "record" / "transcripts" / "network-certifier.jsonl").read_text()
-    assert {json.loads(x)["file"] for x in transcript.splitlines()} >= {"public/network-certifier/bindings.json",
-                                                                        "public/network-certifier/ledger.jsonl"}
+    transcript = (tmp_path / "state" / "record" / "transcripts" / "network-attester.jsonl").read_text()
+    assert {json.loads(x)["file"] for x in transcript.splitlines()} >= {"public/network-attester/bindings.json",
+                                                                        "public/network-attester/ledger.jsonl"}
     assert json.loads((tmp_path / "state" / "run.json").read_text())["tree"] == "tree.tar"
 
 
@@ -854,8 +854,8 @@ def test_a_party_started_first_that_writes_no_bindings_in_time_is_refused_and_st
     rc, lines = run(tmp_path, starting_first(events, writes=None))
     captured = capsys.readouterr()
     assert rc == 2 and lines == [] and events == ["serve", "stop"]
-    assert said(captured.out) == [{"party": "network-certifier", "exit": 0}]
-    assert "verity run: refused bindings: network-certifier wrote no " in captured.err
+    assert said(captured.out) == [{"party": "network-attester", "exit": 0}]
+    assert "verity run: refused bindings: network-attester wrote no " in captured.err
     assert "within 600 s, so no party that reads it starts" in captured.err
 
 
@@ -870,35 +870,35 @@ def test_a_party_started_first_is_stopped_when_a_later_party_fails(tmp_path, cap
 
     rc, lines = run(tmp_path, dataclasses.replace(reg, live=failing))
     assert rc == 2 and lines == [] and events == ["serve", "live", "stop"]
-    assert said(capsys.readouterr().out) == [{"party": "network-certifier", "exit": 0}]
+    assert said(capsys.readouterr().out) == [{"party": "network-attester", "exit": 0}]
 
 
 @pytest.mark.parametrize("wrote, why", [
-    (None, "network-certifier ended before it wrote"),
+    (None, "network-attester ended before it wrote"),
     ("{", "isn't JSON"),
-    ({"certifier": {"gate": "g"}}, "not a table per subprotocol of strings and integers keyed"),
-    ({"certifier": {"gate": "g", "peer": 1.5}}, "not a table per subprotocol of strings and integers keyed"),
+    ({"network-attester": {"gate": "g"}}, "not a table per subprotocol of strings and integers keyed"),
+    ({"network-attester": {"gate": "g", "peer": 1.5}}, "not a table per subprotocol of strings and integers keyed"),
     ({"pouw": {"gate": "g", "peer": "p"}}, "not a table per subprotocol of strings and integers keyed"),
 ])
 def test_bindings_a_party_ends_before_writing_or_writes_other_than_it_declares_are_refused(tmp_path, wrote, why):
-    start = R.Start({"certifier": ("gate", "peer")}, lambda c, s: None, lambda c, s: None)
+    start = R.Start({"network-attester": ("gate", "peer")}, lambda c, s: None, lambda c, s: None)
     if wrote is not None:
-        (tmp_path / "public" / "network-certifier").mkdir(parents=True)
-        (tmp_path / "public" / "network-certifier" / "bindings.json").write_text(
+        (tmp_path / "public" / "network-attester").mkdir(parents=True)
+        (tmp_path / "public" / "network-attester" / "bindings.json").write_text(
             wrote if isinstance(wrote, str) else json.dumps(wrote))
     with pytest.raises(Refused) as e:
-        R.wait_bindings(tmp_path, "network-certifier", start, lambda: False)
+        R.wait_bindings(tmp_path, "network-attester", start, lambda: False)
     assert e.value.name == "bindings" and why in e.value.detail
 
 
 def test_bindings_that_give_all_a_party_writes_run_it_where_they_say_and_some_are_refused():
     reg = starting_first([])
-    chosen = ["network-certifier", "workers"]
-    assert R.starting(reg, chosen, {}) == ["network-certifier"]
-    assert R.starting(reg, chosen, {"network-certifier": GATE}) == []
+    chosen = ["network-attester", "workers"]
+    assert R.starting(reg, chosen, {}) == ["network-attester"]
+    assert R.starting(reg, chosen, {"network-attester": GATE}) == []
     with pytest.raises(Refused) as e:
-        R.starting(reg, chosen, {"network-certifier": {"certifier": {"gate": "g"}}})
-    assert e.value.name == "binding" and "gives network-certifier.certifier.gate of what network-certifier writes" \
+        R.starting(reg, chosen, {"network-attester": {"network-attester": {"gate": "g"}}})
+    assert e.value.name == "binding" and "gives network-attester.network-attester.gate of what network-attester writes" \
         in e.value.detail
 
 
@@ -906,8 +906,8 @@ def test_a_dry_run_says_what_a_party_started_first_writes(tmp_path, capsys):
     assert run(tmp_path, starting_first([]), "--dry-run")[0] == 0
     out = capsys.readouterr().out
     plans = {x["party"]: x for x in said(out, "PLAN")}
-    assert plans["network-certifier"]["writes"] == {"certifier": ["gate", "peer"]}
-    assert all("writes" not in x for p, x in plans.items() if p != "network-certifier")
+    assert plans["network-attester"]["writes"] == {"network-attester": ["gate", "peer"]}
+    assert all("writes" not in x for p, x in plans.items() if p != "network-attester")
 
 
 def test_a_start_process_serves_until_verity_run_stops_it_then_calls_its_stop(tmp_path, monkeypatch):
@@ -917,13 +917,13 @@ def test_a_start_process_serves_until_verity_run_stops_it_then_calls_its_stop(tm
         events.append("serve")
         os.kill(os.getpid(), R.signal.SIGTERM)
 
-    reg = dataclasses.replace(REG, starts={"network-certifier": R.Start({}, serve, lambda c, s: events.append("stop"))})
+    reg = dataclasses.replace(REG, starts={"network-attester": R.Start({}, serve, lambda c, s: events.append("stop"))})
     monkeypatch.setattr(R, "registry", lambda *a: reg)
     path = tmp_path / "config.toml"
     path.write_text(K.render(config()))
     handler = R.signal.getsignal(R.signal.SIGTERM)
     try:
-        assert R.main(["start", str(path), str(tmp_path), "network-certifier", "local"]) == 0
+        assert R.main(["start", str(path), str(tmp_path), "network-attester", "local"]) == 0
     finally:
         R.signal.signal(R.signal.SIGTERM, handler)
     assert events == ["serve", "stop"]
@@ -942,7 +942,7 @@ def test_each_party_here_gets_a_key_made_for_the_run(tmp_path):
     rc, _ = run(tmp_path, registry())
     s = tmp_path / "state"
     assert rc == 0
-    for p in ("challenger", "firewall", "network-certifier", "verifier", "workers"):
+    for p in ("challenger", "firewall", "network-attester", "verifier", "workers"):
         mine = json.loads((s / "parties" / p / "key.json").read_text())
         public = json.loads((s / "public" / p / "key.json").read_text())
         half = R.lms.public_key(R.lms.keygen(R.lms.Params(*mine["params"]), bytes.fromhex(mine["seed"])))
