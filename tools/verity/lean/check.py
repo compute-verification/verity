@@ -7564,6 +7564,8 @@ def main(argv: list[str]) -> int:
     if a.ask:
         print_ask(*ask_lines({rel(p): pins(p) for p in pkgs}, steps))
         return 0
+    args = [*(f for f, on in (("--build", a.build), ("--closure", a.closure), ("--no-replay", a.no_replay),
+                              ("--update", a.update)) if on), *(rel(p) for p in pkgs if p in named)]
     if a.build and not (a.artifacts or a.no_artifacts or a.fresh or a.dev_cache) and (kept := kept_artifacts(a.repo)) \
             and sandboxed():
         update = " --update" if a.update else ""
@@ -7573,8 +7575,6 @@ def main(argv: list[str]) -> int:
                         for p in pkgs if p in named)
               + f"or pass --artifacts {kept}, or --no-artifacts to build cold on purpose", file=sys.stderr, flush=True)
         return 2
-    args = [*(f for f, on in (("--build", a.build), ("--closure", a.closure), ("--no-replay", a.no_replay),
-                              ("--update", a.update)) if on), *(rel(p) for p in pkgs if p in named)]
     have = reserved() if a.facts_from is None and steps else None
     if have and (why := memory_refusal(pkgs, have, steps=steps,
                                        run=BELOW_FLOOR_AUDIT.format(gb="{gb}", args=" ".join(args)))):

@@ -45,7 +45,7 @@ the lock's sections, each naming the docstring with the detail. This is the work
   check, `check.py PKG`, runs in the merge queue's check; run it by hand only on a machine of your own.
 - **The fast path is not owed before a mark**; once `verity lean try` passes, run it for what the candidate's records run
   can't write (below) or to see a changed record early: `lean_changed.py --records PKG --update` through `research run`
-  (the README's line) regenerates PKG's records and its requirers',
+  (the README's commands have the line) regenerates PKG's records and its requirers',
   with the `--update` printout the landing DM carries, without a build of your own (`lean_changed.py`'s docstring).
   `--on auto` places it: never name a node, and never launch one run on two nodes to race them (cancel a duplicate).
   Don't wrap it in `slot.py`: where it lands, the runner takes the slot. Commit each record it kept under
@@ -104,8 +104,8 @@ the lock's sections, each naming the docstring with the detail. This is the work
 - **Watch upstream for what you assume**: a named assumption or hand proof a pinned dependency could prove gets an
   `upstream.watch` entry; on a new hit, say in the PR whether it discharges the assumption, and `--ack` it
   (`upstream.py`'s docstring).
-- **A changed record is a changed claim**: an `--update` change you didn't mean is your edit changing what that
-  guarantee says. Undo it, or say so in the PR and paste the printout.
+- **A changed record is a changed claim**: an `--update` change you didn't mean is your edit changing that
+  guarantee. Undo it, or say so in the PR with the printout.
 - **A move is not a change**: `check.py --update --moved MOVES.json PKG` on the record as it was (the README's "The
   records"; the fast path's `--records PKG --update --moved MOVES.json` takes it to PKG's requirers too). A lift needs
   no map.
