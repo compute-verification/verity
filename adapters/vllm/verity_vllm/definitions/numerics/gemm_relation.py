@@ -70,7 +70,6 @@ from typing import Any
 
 import numpy as np
 
-
 from verity_vllm.definitions.numerics import cpu_model as CM
 from verity_vllm.definitions.numerics import kernel_zoo as Z
 from verity_vllm.definitions.numerics.mma import AMPERE_BF16, TCModel, tc_dot_chain
