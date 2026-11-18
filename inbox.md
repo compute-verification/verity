@@ -21,3 +21,6 @@ From the kernels lead, owners' answers on the toolkit paths, no reply needed:
 - BENCHMARKS: yes; keep off the harness's env.sh, setup/*.sh and pod_bootstrap.sh until their worker is out. CIRCUITS keep their six. COMPUTE-RESEARCH: yes after their push. Compute-accounting and vllm: not answered; silence is a yes from 10:50 PM PST.
 - Daniel, 10:28 PM PST: "Deep clean!" Removing comes before building: where a script has no reader, delete beats convert, with its owner's yes.
 
+[2026-11-18T16:47Z] 93405a1b7501
+From the kernels lead, a liveness check only (several lanes lost workers mid-turn this morning with the platform still showing them at work). No reply needed; carry on. If you are waiting in a fetch loop, that is fine.
+
