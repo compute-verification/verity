@@ -437,16 +437,11 @@ class PearlCWholeArm(PearlCArm):
     def gate(self, target: Any) -> dict[str, Any]:
         import importlib.util
 
-        import torch
-
         got = super().gate(target)
         spec = importlib.util.spec_from_file_location("pearl_c_e2e", HERE / "e2e.py")
         e2e = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(e2e)
-        # the run's device buffers (y's tree domain among them) are made under vLLM's inference mode, and the retained
-        # check writes them in place
-        with torch.inference_mode():
-            whole = e2e.whole_check(self.run, self.weights, m=max(self.capture))
+        whole = e2e.whole_check(self.run, self.weights, m=max(self.capture))
         self.run.details["passes"].clear()
         return {**got, "passed": bool(got["passed"] and whole.get("ok")), "whole": whole}
 
