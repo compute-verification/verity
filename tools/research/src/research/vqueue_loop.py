@@ -629,6 +629,13 @@ class Past:
         """The loop's own candidates, each pushed build's line by its sha (a build whose enqueue failed is one too)."""
         return {r["sha"]: r for r in self.of("build") if r.get("sha")}
 
+    def lineage(self, sha: str) -> list[str]:
+        out: list[str] = []
+        while sha and sha not in out:
+            out.append(sha)
+            sha = next((r["replaces"] for r in reversed(self.of("build", sha)) if r.get("replaces")), "")
+        return out
+
     def slim(self, sha: str) -> tuple[bool, dict | None]:
         """Whether the run beside ``sha``'s check was started, and the newest record of it (`vqueue_slim.start`)."""
         recs = self.of("slim", sha)
@@ -1371,16 +1378,27 @@ class World:
 
     def _lands(self, c: str) -> bool:
         """Whether ``c`` is an open PR's head, its current one or an older one, whose own land verdict there counts and no hold
-        keeps (`StoreLabels.lands`, without its owners' verdicts), in the labels this tick reads."""
+        keeps (`StoreLabels.lands`, without its owners' verdicts), nor one at a later head of that PR (`_voided`), in the
+        labels this tick reads."""
         for n in self.labels.at(c):
             if n not in self.open():
                 continue
             try:
-                if self.labels.lands(n, c):
+                if self.labels.lands(n, c) and not self._voided(n, c):
                     return True
             except QueueError as e:
                 self.log(f"research queue vqueue: #{n}'s verdicts at {c[:12]} can't be read, so no carry trusts it now: {e}")
         return False
+
+    def _voided(self, n: int, c: str) -> str | None:
+        """The later head of #``n`` than ``c`` whose hold voids ``c``'s land for whatever carries from it (`carry.voided`): a head
+        whose reviewers' newest verdicts hold it (`unreviewed`), logged; None when none does."""
+        held = [h for h, labs in self.labels._other_heads(n, c, vocab.REVIEWED).items()
+                if (unreviewed(self.labels._verified(n, h, labs)[0], ()) or "").startswith("held")]
+        if later := carry.voided(self.repo, c, held):
+            self.log(f"research queue vqueue: #{n}'s land at {c[:12]} trusts no merge of it: the hold at {later[:12]}, a later "
+                     "head, voids it")
+        return later
 
     def wide(self) -> frozenset[int]:
         """The PRs the wide file names (`WIDE`), parsed and refused as the priority file is (`priority_list`): none while it is
@@ -2651,6 +2669,8 @@ class Tick:
     #: build pushed, or what it went on when no member merged, which a later build naming it as its base goes on; None for a
     #: name built nowhere, on which nothing is built
     rebuilds: dict[str, str | None] = field(default_factory=dict)
+    restaged: frozenset[str] = frozenset()
+    began: float = 0.0
     #: `main` fetched again, the first time this tick a notice needed it (`Loop._landed`)
     fetched: str | None = None
     #: whether a detached job of the steps after an advance runs (`Loop._moved`)
@@ -3042,7 +3062,8 @@ class Loop:
                 if again is not None and isinstance(rec, dict) and "verdict" in rec:
                     j = again()[0]
             if json.dumps(rec, sort_keys=True) != was:
-                self.write(got := self._line(n, main, origin, "slim", **line, why=f"judged {v.state}", record=rec, done=True))
+                self.write(got := self._line(n, main, origin, "slim", **line, why=f"judged {v.state}", record=rec, done=True,
+                                             failed=v.failed))
                 wrote.append(got)
         if gates and j.verdict.state == LIST_FAILED and v.state == PENDING:
             return replace(j, slim=v, record=rec)
@@ -3121,14 +3142,16 @@ class Loop:
             self.timing(self.steps.line(self.last, {**g2, "cached": self.reads.hits if self.reads is not None else 0}))
 
     def _tick(self) -> list[dict]:
-        steps = self.steps
-        past = Past.read(self.log_path, self.now() - WINDOW_S)
+        steps, began = self.steps, self.now()
+        past = Past.read(self.log_path, began - WINDOW_S)
         self.last = max(past.tick, self.last) + 1
         steps.lap("log")
         t = self.snapshot(past, self.last)
+        t.began = began
         if self.dry_run:
             self.out(self.summary(t))
         actions = list(self.decide(t.snap))
+        t.restaged = frozenset(a.replaces for a in actions if isinstance(a, Build) and a.records and a.replaces)
         steps.lap("decide")
         if self.dry_run:
             self.out("\n".join(f"would {_name(a)}: {a}" for a in actions) or "nothing to do")
@@ -3265,7 +3288,8 @@ class Loop:
                                                     **({"base": outcome.base} if outcome.base else {}),
                                                     **({"inherited": [_failed_doc(f) for f in outcome.inherited]}
                                                        if outcome.inherited else {})},
-                "failed": [{"task": f.task, "key": f.key, **({"tests": sorted(f.tests)} if f.tests else {})} for f in failed],
+                "failed": [{"task": f.task, "key": f.key, **({"tests": sorted(f.tests)} if f.tests else {}),
+                            **({"kind": f.kind} if f.kind else {})} for f in failed],
                 **({"origin_main": origin} if origin != main else {}), **extra}
 
     def write(self, rec: dict) -> None:
@@ -3278,14 +3302,15 @@ class Loop:
     def _leaves(self, t: Tick) -> list[dict]:
         """A `leave` line for each PR marked ready that this tick's candidates leave out: of those `World.ready` admits and
         takes no further (`World.held_out`), of those held for a red of `main`'s check (`held`), then of the PRs it took
-        (`left_out`), each (PR, head, cause) once."""
-        seen = {(r.get("number"), h, r.get("cause")) for r in t.past.of("leave") for h in r.get("heads") or ()}
+        (`left_out`), each (PR, head, cause, why) once: a reason whose words change while its cause holds, another PR it waits
+        for, is logged again."""
+        seen = {(r.get("number"), h, r.get("cause"), r.get("why")) for r in t.past.of("leave") for h in r.get("heads") or ()}
         out = []
         for n, head, cause, why in [*((n, *x) for n, x in sorted(self.world.held_out.items())),
                                     *((n, *x) for n, x in sorted(self.held.items())),
                                     *((x.number, x.head, x.cause, x.why) for x in self.left_out(t.snap))]:
-            if (n, head, cause) not in seen:
-                seen.add((n, head, cause))
+            if (n, head, cause, why) not in seen:
+                seen.add((n, head, cause, why))
                 out.append(self.record(t, "leave", number=n, heads=[head], why=why, cause=cause))
         return out
 
@@ -3335,7 +3360,8 @@ class Loop:
         tip, merged, recs = self._merged(t, a.members, base)
         if not merged:
             t.rebuilds.update((k, base) for k in (a.replaces, a.name) if k is not None)
-            recs.append(self.record(t, "build", base=base, priority=a.priority, why="no member merges onto its base", **again))
+            recs.append(self.record(t, "build", base=base, priority=a.priority, why="no member merges onto its base", **again,
+                                    **self._restaged(t, a, None, [])[1]))
             return recs
         tip, adopted = self._pushed(t, tip, base, merged)
         t.rebuilds.update((k, tip) for k in (a.replaces, a.name) if k is not None)
@@ -3343,8 +3369,22 @@ class Loop:
                 "priority": a.priority, **({"adopted": True} if adopted else {}), **again, **self._moves(merged),
                 **({"apart": True} if a.apart else {})}
         if a.records:
-            return [*recs, *self._staged(t, line, "its records run first: its check waits for it")]
+            kept, cancelled = self._restaged(t, a, tip, merged)
+            return [*recs, *self._staged(t, {**line, **cancelled}, "its records run first: its check waits for it", kept)]
         return self._enqueue(t, recs, line)
+
+    def _restaged(self, t: Tick, a: Build, tip: str | None, merged: list[Member]) -> tuple[dict | None, dict]:
+        old = next((c for c in t.snap.candidates if c.sha == a.replaces), None) if a.replaces in t.restaged else None
+        rec = t.records.get(old.sha) if old is not None and old.records is not None else None
+        if not rec or "launch" in rec or old.records.state not in (PENDING, PASS):
+            return None, {}
+        if tip is not None and [m.pr for m in merged] == list(old.members) and self.records.same_inputs(
+                self.world.repo, old.sha, tip):
+            return dict(rec), {}
+        if old.records.state != PENDING or not (ids := list(rec.get("ids") or ())):
+            return None, {}
+        failed = self.world.cancel_runs(ids, f"vqueue: candidate {old.sha[:12]} was dropped: {vqueue.BASE_DROPPED}")
+        return None, {"records_cancelled": ids, **({"records_cancel_failed": failed} if failed else {})}
 
     def _merged(self, t: Tick, members: Iterable[int], base: str) -> tuple[str, list[Member], list[dict]]:
         """PRs ``members`` merged in order onto ``base`` (`World.build`): (the tip, the members merged, the skip records of
@@ -3395,11 +3435,18 @@ class Loop:
         moves = [{"pr": m.pr, **self.world.certified[m.pr]} for m in merged if m.pr in self.world.certified]
         return {"moves": moves} if moves else {}
 
-    def _staged(self, t: Tick, line: dict, why: str) -> list[dict]:
+    def _staged(self, t: Tick, line: dict, why: str, kept: dict | None = None) -> list[dict]:
         """Pushed build ``line`` staged off main's chain: its build line logged with ``records_first``, its records run
-        started and its check not, so the planner builds nothing on it (`vqueue.decide`)."""
-        return [self.record(t, "build", **line, why=why, enqueued=False, records_first=True, done=True),
-                *self._regenerate(t, line)]
+        started and its check not, so the planner builds nothing on it (`vqueue.decide`).  With ``kept``, the record of the
+        records run of the staged batch it rebuilds on another base, every member merged and its Lean inputs that batch's
+        (`_restaged`), that run is its own, still running or passed, and none is started."""
+        if kept is None:
+            return [self.record(t, "build", **line, why=why, enqueued=False, records_first=True, done=True),
+                    *self._regenerate(t, line)]
+        carried = f"{line['replaces'][:12]}'s records run, its Lean inputs this tree's"
+        return [self.record(t, "build", **line, why=f"{why}: {carried}", enqueued=False, records_first=True, done=True),
+                self.record(t, "regenerate", sha=line["sha"], base=line["base"], members=line["members"], heads=line["heads"],
+                            why=f"started: {carried}", record=kept, done=True)]
 
     def _enqueue(self, t: Tick, recs: list[dict], line: dict) -> list[dict]:
         """Start pushed candidate ``line["sha"]``'s check: enqueued, its build line (``line``) logged after ``recs``, and the run
@@ -3410,7 +3457,8 @@ class Loop:
         except (QueueError, OSError, subprocess.SubprocessError) as e:  # pushed: the next tick reads it as not enqueued
             return [*recs, self.record(t, "build", **line, enqueued=False, done=True, error=str(e)[-600:])]
         return [*recs, self.record(t, "build", **line, enqueued=True, done=True),
-                *self._start(t, line["sha"], line["base"], {"members": line["members"], "heads": line["heads"]})]
+                *self._start(t, line["sha"], line["base"], {"members": line["members"], "heads": line["heads"]},
+                             replaces=line.get("replaces"))]
 
     def _onto(self, t: Tick, c: Candidate, recs: list[dict], line: dict) -> list[dict]:
         """`_enqueue` of ``line``, the candidate `Commit` puts on main's chain for staged batch ``c``, kept with the record of
@@ -3445,7 +3493,8 @@ class Loop:
         merge's Lean inputs are ``c``'s (`vqueue_records.same_inputs`), the records commit made on ``c`` is carried onto the
         merge and checked in ``c``'s place as above (the merge itself when there is none); else the merge is staged again
         in ``c``'s place, its records run first; and when no member merges, ``c`` is dropped and its members built again.
-        The bookkeeping its records run repaired is told to `lean` and each owner a warning names (`_bookkeeping`).  A
+        A batch staged with the records run of the batch it rebuilt (`_staged`'s ``kept``) has the records made on that
+        batch carried onto it, as onto a merge.  The bookkeeping its records run repaired is told to `lean` and each owner a warning names (`_bookkeeping`).  A
         records commit that can't be made, or that the merge gate won't vouch for, is held: logged, and rung to `CI` once,
         and ``c`` is dropped once it is held `pending_s` (`vqueue.decide`).  The candidate whose check it starts is kept
         for the builds the tick makes on it (`_onto`)."""
@@ -3471,9 +3520,11 @@ class Loop:
                                              f"{c.sha[:12]}'s records were regenerated on {c.base[:12]}, and {differ}: "
                                              "staged again, its records run first")]
             onto, line = tip, {**line, **moved}
-        got = self.records.commit(w.slim_driver(), c.sha, rid, c.members, **({"onto": onto} if onto else {})) \
+        made = (t.records.get(c.sha) or {}).get("tip") or c.sha
+        onto = onto or (c.sha if made != c.sha else None)
+        got = self.records.commit(w.slim_driver(), made, rid, c.members, **({"onto": onto} if onto else {})) \
             if self.records is not None and rid else "its records run passed, but its record names no run"
-        if got is None and onto is None:
+        if got is None and onto in (None, c.sha):
             return self._onto(t, c, [], {**line, "why": f"its records run {rid} regenerated nothing: checked as built"})
         if got is None:
             tip, adopted = self._pushed(t, onto, a.base, merged)
@@ -3491,8 +3542,9 @@ class Loop:
             tip = adopted
         else:
             w.push(tip, branch(tip))
-        why = f"{c.sha[:12]}'s records, which {rid} regenerated, committed on it" if onto is None else \
-            f"{c.sha[:12]}'s records, which {rid} regenerated, carried onto its members merged again onto {a.base[:12]}"
+        why = (f"{c.sha[:12]}'s records, which {rid} regenerated, committed on it" if onto is None else
+               f"{made[:12]}'s records, which {rid} regenerated, carried onto it" if onto == c.sha else
+               f"{made[:12]}'s records, which {rid} regenerated, carried onto its members merged again onto {a.base[:12]}")
         return self._onto(t, c, [*recs, *self._bookkeeping(t, c, tip, told)],
                           {**line, "sha": tip, "why": why, "repairs": c.sha, "files": files,
                            **({"adopted": True} if adopted else {})})
@@ -3543,7 +3595,8 @@ class Loop:
             return [self.record(t, "bookkeeping", **line, done=False)]
         return [self.record(t, "bookkeeping", **line, posted=self._say(t, "bookkeeping", text, to, sha=tip), done=True)]
 
-    def _start(self, t: Tick, sha: str, base: str, line: dict, why: str = "started", avoid: Iterable[str] = ()) -> list[dict]:
+    def _start(self, t: Tick, sha: str, base: str, line: dict, why: str = "started", avoid: Iterable[str] = (),
+               replaces: str | None = None, carry: Iterable[str] = ()) -> list[dict]:
         """The run beside candidate ``sha``'s check started (`vqueue_slim.start`, off the machines ``avoid`` names where it
         has others), its record logged; a start that fails is
         logged with no record, which `vqueue_slim.judge` reads as infra.  A base still in flight lends the record of its
@@ -3554,11 +3607,14 @@ class Loop:
         began = dict(t.committed.values())
         below = began[base] if base in began else \
             t.judged[base].record if base not in (t.main, t.advanced) and base in t.judged else None
+        of = t.past.lineage(replaces) if replaces else []
         return [self._started(t.n, t.main, t.origin, {**line, "sha": sha, "base": base}, why, below,
-                              _lent(t.judged, t.below, t.main, t.advanced), avoid)]
+                              _lent(t.judged, t.below, t.main, t.advanced), avoid, of,
+                              [r for r in t.past.lines if r.get("sha") in of], carry, t.began)]
 
     def _started(self, n: int, main: str, origin: str, line: dict, why: str = "started", below: dict | None = None,
-                 lent: Lent | None = None, avoid: Iterable[str] = ()) -> dict:
+                 lent: Lent | None = None, avoid: Iterable[str] = (), of: Iterable[str] = (), older: Iterable[dict] = (),
+                 carry: Iterable[str] = (), since: float | None = None) -> dict:
         d = self.world.slim_driver()                       # drive.toml naming no machines stops the tick: no run is infra
         if self._quick(line):
             try:
@@ -3572,8 +3628,11 @@ class Loop:
         try:
             audit = self._audit_from(d, main, line, below, lent)
             suites = self._suites_from(d, main, line, below, lent)
-            after = self.slim.replaced(Past.read(self.log_path, self.now() - self.slim.CARRY_WAIT_S).lines,
-                                       line.get("members") or (), self.now()) if self.gate in CHECKS else {}
+            after = {}
+            if self.gate in CHECKS:
+                window = self.now() - self.slim.CARRY_WAIT_S
+                after = {**self.slim.replaced([*older, *Past.read(self.log_path, min(window, since or window)).lines],
+                                              line.get("members") or (), self.now(), of), **dict.fromkeys(carry, self.now())}
             with self.steps("launch"):
                 rec, error = self.slim.start(d, line["sha"], line["base"],
                                              **({"shards": self.shards} if self.gate in CHECKS else {}),
@@ -3771,6 +3830,8 @@ class Loop:
         ids = list(rec.get("ids") or ())
         failed = w.cancel_runs(ids, why) if ids else {}
         regen = (t.records.get(c.sha) or {}) if c.records is not None and c.records.state == PENDING else {}
+        if c.sha in t.restaged and "launch" not in regen:
+            regen = {}
         rids = list(regen.get("ids") or ())
         rfailed = w.cancel_runs(rids, why) if rids else {}
         w.push("", branch(c.sha), c.sha)
@@ -3904,7 +3965,8 @@ class Loop:
         infra, or leaves it running; while graph2's verdict is another (a task still runs, or one failed), the infra keys are
         rerun here (graph2's `rerun`).  The infra results so far are set aside (`Past.since`), so it is pending until graph2
         says something newer, and a run beside it that ended in infra, or failed only where its machine failed it
-        (`vqueue._erred`), is started again on its machines but those its runs failed on (``erred_on``)."""
+        (`vqueue._erred`), is started again on its machines but those its runs failed on (``erred_on``), carrying those runs
+        (`vqueue_slim.start`'s ``after``), so only what they didn't pass runs again."""
         j, line = t.judged[c.sha], dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads)
         built = t.past.built(c.sha) or {}
         priority = built.get("priority") if isinstance(built.get("priority"), int) else 0
@@ -3914,13 +3976,15 @@ class Loop:
         rec = self.record(t, "retry", **line, priority=priority, why=f"{c.verdict.state}: {j.note or 'enqueued again'}",
                           failed=vqueue._erred(c.verdict), mark=j.mark, counts=counts, enqueued=True, done=True,
                           **({"rerun": said} if said is not None else {}))
-        again = self._start(t, c.sha, c.base, line, "started again", avoid=(j.record or {}).get("erred_on") or ()) if (
+        again = self._start(t, c.sha, c.base, line, "started again", avoid=(j.record or {}).get("erred_on") or (),
+                            carry=(j.record or {}).get("ids") or ()) if (
             j.slim is not None and (j.slim.state == INFRA or vqueue._erred(j.slim))) else []
         return [rec, *again]
 
     def _rerun(self, a: Rerun, c: Candidate, t: Tick) -> list[dict]:
         """Run ``a.keys`` afresh (graph2's `rerun`), their results so far set aside (`Past.since`) so each reads pending until
-        it has a newer one; a key of the run beside the check starts that run again.  Without graph2's `rerun`, logged as
+        it has a newer one; a key of the run beside the check starts that run again, carrying its runs' passes
+        (`vqueue_slim.start`'s ``after``), so only what they didn't pass runs again.  Without graph2's `rerun`, logged as
         absent: the policy takes the rerun as done, and its failure stands."""
         w, line = self.world, dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads)
         j = t.judged[c.sha]
@@ -3937,7 +4001,8 @@ class Loop:
                                 keys=list(a.keys), absent=True, done=False)]
         stopped = list(_running(j).get("ids") or ()) if set(a.keys) & beside else []
         stop_failed = w.cancel_runs(stopped, f"vqueue: candidate {c.sha[:12]}'s failure is rerun afresh") if stopped else {}
-        again = self._start(t, c.sha, c.base, line, "started again: its failure is rerun") if set(a.keys) & beside else []
+        again = self._start(t, c.sha, c.base, line, "started again: its failure is rerun",
+                            carry=(j.record or {}).get("ids") or ()) if set(a.keys) & beside else []
         whose = "the lone member's own failures" if len(c.members) == 1 else "no member's files meet the failures"
         return [self.record(t, "rerun", **line, why=f"{whose}, afresh: {said or 'the run beside'}",
                             failed=failed, keys=list(a.keys), counts=counts, done=True,

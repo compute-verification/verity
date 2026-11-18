@@ -291,9 +291,9 @@ def backend_class(serving):
 
 
 def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) -> None:
-    from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier
-
     import sheets
+
+    from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier
 
     sock, _ = lsock.accept()
     lsock.close()

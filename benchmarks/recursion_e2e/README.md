@@ -123,7 +123,8 @@ them, so a cancelled run's rows are still read.
 - **Peak memory**: the prover process's peak RSS (`/usr/bin/time -v` over the invocation) and the leased GPU's memory in
   use, sampled every half second (`gpu-mib.txt`, a lower bound). For CPU steps, each tool's `/usr/bin/time -v` peak RSS.
 - **CPU steps** (`icheck`, `vstage`, `vcap`, `oreplay`, `lean`, `negative`): each tool's `/usr/bin/time -v` wall, median
-  and [min, max] over the repeats. Lean's verify also splits into `inputs`, `setup` and the verification's own checks. The pod script
+  and [min, max] over the repeats: `REPEAT` of `vstage`, `vcap` and `lean`, whose medians the pipeline sum adds, and one of
+  `icheck` and `oreplay`, which no metric reads. Lean's verify also splits into `inputs`, `setup` and the verification's own checks. The pod script
   runs `vstage`'s statements and `lean`'s verifications `JOBS` at a time (4 here), so each one's wall is measured under its
   neighbours' load. The step's whole wall (`lean step`) is what an auditor waits, and it is what the pipeline sum adds.
   `stage <name>` rows carry what `rec_vstage` printed of each proof block (template, rows, lowering seconds, circuit bytes).
