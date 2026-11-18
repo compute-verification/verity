@@ -428,7 +428,9 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
             + (f" as candidate {sha[:12]}'s check" if n else f" beside candidate {sha[:12]}'s check")
             + (f", {LEAN_STEP} {audit_from[:12]}'s" if audit_from else "")
             + (f", the suites keyed as in {suites_from[:12]} its check's" if suites_from else "")
-            + (f", {HEAVY_PART}'s shard on {heavy_on}" if heavy_on else ""))
+            + (f", {HEAVY_PART}'s shard on {heavy_on}" if heavy_on else "")
+            + (f", each shard first on what its predecessor's took ({'; '.join(','.join(p) or '-' for p in prefer)})"
+               if any(prefer) else ""))
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None

@@ -434,6 +434,8 @@ def test_a_rebuilds_shards_name_their_predecessors_machines_first_and_take_anoth
                                                                                                          steps, **kw)
     rec = start(h.d, sha, base, shards=3, prefer=[["m4"], [], ["m2", "m9"]])
     assert machines == ["m4,m1,m2,m3", "m2,m3,m4,m1", "m2,m3,m4,m1"] and rec["prefer"] == [["m4"], [], ["m2", "m9"]]
+    assert any(x.endswith(f"as candidate {sha[:12]}'s check, each shard first on what its predecessor's took (m4; -; m2,m9): "
+                          "r-post-0 r-post-1 r-post-2") for x in world.logs), world.logs
     start(h.d, sha, base, shards=3, prefer=[["m4"]], avoid=["m4"])
     assert machines[3:] == ["m1,m2,m3", "m2,m3,m1", "m3,m1,m2"]
     assert start(h.d, sha, base, shards=1, prefer=[["m3"]])["prefer"] == [["m3"]] and machines[6] == "m3,m1,m2,m4"
