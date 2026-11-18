@@ -31,6 +31,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.channel import Refused
 from verity.runtime.stream import Side
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
@@ -904,6 +905,19 @@ def _bandwidth(tmp_path, record=lambda request: request, **kw):
 def test_a_bandwidth_session_naming_no_card_off_cuda_is_refused_by_name(served, tmp_path, monkeypatch):
     with pytest.raises(SP.Refusal, match="name it with --bw-card$"):
         _run(served, tmp_path, monkeypatch, **(_bandwidth(tmp_path) | {"bw_card": None}))
+
+
+def test_the_bandwidth_audit_beside_storage_not_saying_whether_it_keeps_a_weight_copy_is_refused_by_name(
+        served, tmp_path, monkeypatch):
+    """The exchange checks each attach against what is already attached: a copy of the bandwidth audit's declaration
+    with ``keeps_weight_copy`` unsaid, attached after PoUS's storage on the piece's exchange, is refused by both names."""
+    monkeypatch.setattr(SP, "BANDWIDTH", dataclasses.replace(SP.BANDWIDTH,
+                                                             keeps_weight_copy=SP.messages.schemes.UNDECLARED))
+    with pytest.raises(Refused) as e:
+        _run(served, tmp_path, monkeypatch, **_bandwidth(tmp_path))
+    assert e.value.name == "bandwidth" and e.value.detail.startswith(
+        "pous is storage (it needs the workload's store) and bandwidth's declaration does not say whether it keeps a "
+        "weight-derived copy (keeps_weight_copy is undeclared)")
 
 
 def test_the_held_sessions_request_is_the_auditors_session():
