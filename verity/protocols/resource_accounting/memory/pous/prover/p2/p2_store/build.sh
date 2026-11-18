@@ -4,7 +4,7 @@
 #   research run --on auto --cwd source -- bash verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh
 #
 # P2's prover's libp2v1.so (p2_store's), unchanged, by its own Makefile (FAST's default: v4 keys by p2keys4.cuh, p2sq.cuh's
-# Karatsuba squaring), at ARCH (default sm_90a) with CGBN at p2_gpu/CGBN.commit. Writes into OUT (default $OUT):
+# Karatsuba squaring), at ARCH (default the `arch` of CARD's card record, CARD default h200-sxm-141gb) with CGBN at p2_gpu/CGBN.commit. Writes into OUT (default $OUT):
 #   lib/libp2v1.so, lib/libp2v1.so.ptxas   the library and ptxas's report (registers, spills)
 #   lib/libp2v1.so.cubins/                 the library's cubins (ship.sh's ship_cubins)
 #   elf.txt                                cuobjdump --list-elf: the SASS targets the library holds
@@ -17,7 +17,12 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../../../../../../../../benchmarks/kernels/ship.sh"
-OUT=${1:-${OUT:?usage: build.sh OUT}}; ARCH=${ARCH:-sm_90a}
+OUT=${1:-${OUT:?usage: build.sh OUT}}
+if [ -z "${ARCH:-}" ]; then
+  ROOT=$(cd "$HERE/../../../../../../../.." && pwd)
+  ARCH=$(PYTHONPATH="$ROOT" python3 -c 'import sys; from pathlib import Path; from verity.device import load_card
+print(load_card(sys.argv[1], directory=Path(sys.argv[2]))["arch"])' "${CARD:-h200-sxm-141gb}" "$ROOT/calibration/hardware/cards")
+fi
 P2=$(dirname verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/Makefile)
 ship_stage "$P2" "$(dirname verity/protocols/resource_accounting/memory/pous/prover/p2/p2_gpu/p2dec.cu)" verity/commitments/cuda
 P2=$SRC/$P2
