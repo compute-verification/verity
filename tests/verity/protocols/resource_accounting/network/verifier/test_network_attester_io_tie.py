@@ -26,10 +26,13 @@ from verity.commitments.gates.frame_v3 import _part, opens
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import row_leaf
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT, network_attester as W, network_attester_rows as WR
+from verity.circuits.boolean import benes as BN
 from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 from verity.protocols.resource_accounting.network.verifier.grid import Certifier
+
+import standin
 
 #: the circuits' shape: three bucket rows of 4 lanes of r = 2 slots, each bucket's 4 port rows of 4 ids from a session
 #: of 8 steps, M = 16 routed positions
@@ -124,8 +127,8 @@ def commit(shape: IT.Shape, link: Link, window: int, seed: bytes = b"w", order: 
                                 link.order if order is None else order)
     cells = [c for t in range(shape.T) for c in link.rows[window * shape.T + t]]
     cd, pd = IT.domain(_h(b"cells" + seed), shape.T), IT.domain(_h(b"port" + seed), len(link.port))
-    cs = [IT.fake_salt(seed + b"c", t) for t in range(shape.T)]
-    ps = [IT.fake_salt(seed + b"p", s) for s in range(len(link.port))]
+    cs = [standin.fake_salt(seed + b"c", t) for t in range(shape.T)]
+    ps = [standin.fake_salt(seed + b"p", s) for s in range(len(link.port))]
     levels = IT.rows_levels(pd.domain_id, link.port, ps)
     opened = [IT.open_port(levels, link.port, ps, st) for st in steps]
     return IT.Instance(shape, tuple(cells), tuple(cs), IT.rows_root(cd.domain_id, IT.bucket_rows(shape, cells), cs),
@@ -250,7 +253,7 @@ def test_the_map_is_the_network_attesters_slots():
 def test_a_rows_root_is_its_domains_tree_and_a_path_opens_its_row():
     for count in (2, 3, 5, 8):
         dom = IT.domain(_h(b"d"), count)
-        rows, salts = [bytes([i]) * 40 for i in range(count)], [IT.fake_salt(b"s", i) for i in range(count)]
+        rows, salts = [bytes([i]) * 40 for i in range(count)], [standin.fake_salt(b"s", i) for i in range(count)]
         leaves = [row_leaf(dom, i, GB.hiding_value(r, s), IT.SCHEMA) for i, (r, s) in enumerate(zip(rows, salts))]
         root = IT.rows_root(dom.domain_id, rows, salts)
         assert root == tree_levels(dom, leaves)[-1][0]
@@ -456,7 +459,7 @@ def test_the_ports_reads_are_the_commits_registration():
     rows."""
     link = small()
     inst, count = commit(SMALL, link, 0), len(link.port)
-    binding, salts = _h(b"portw"), [IT.fake_salt(b"wp", s) for s in range(count)]
+    binding, salts = _h(b"portw"), [standin.fake_salt(b"wp", s) for s in range(count)]
     assert ADV.commit(link.port, 32 * SMALL.P, binding, salts).root == inst.port_root
     assert ADV.domain(binding, count).domain_id == IT.domain(binding, count).domain_id == inst.port_domain
     ports = IT.port_reads(inst.steps, inst.port_root, inst.port_domain, count, SMALL.P, reads_from=3)
@@ -490,7 +493,7 @@ def test_a_port_that_isnt_the_commits_is_refused(link, big):
         return replace(big, **{field: _set(getattr(big, field), t, tuple(value))})
 
     for name, inst in {"a row": at("port", _set(big.port[t], 1, bytes(row))),
-                       "a salt": at("port_salts", _set(big.port_salts[t], 1, IT.fake_salt(b"x", 0))),
+                       "a salt": at("port_salts", _set(big.port_salts[t], 1, standin.fake_salt(b"x", 0))),
                        "a sibling": at("paths", _set(big.paths[t], 1, tuple(path))),
                        "a step": at("steps", steps),
                        "another commitment's root": replace(big, port_root=other.port_root)}.items():
@@ -564,13 +567,13 @@ def test_the_benes_network_routes_every_permutation():
         for _ in range(20):
             perm = list(range(n))
             rng.shuffle(perm)
-            bits, D = IT.benes(perm), n.bit_length() - 1
+            bits, D = BN.benes(perm), n.bit_length() - 1
             assert len(bits) == (2 * D - 1) << (D - 1)
-            out = IT.benes_apply(list(range(n)), bits)
+            out = BN.benes_apply(list(range(n)), bits)
             assert all(out[perm[i]] == i for i in range(n))
     for bad in ([0], [0, 0, 1, 2], [0, 1, 2]):
         with pytest.raises(ValueError, match="permutation"):
-            IT.benes(bad)
+            BN.benes(bad)
 
 
 def _bits(rows):
@@ -614,12 +617,12 @@ def test_the_route_circuit_is_its_reference():
     for _ in range(3):
         perm = list(range(1 << D))
         rng.shuffle(perm)
-        cases.append(IT.benes(perm))
+        cases.append(BN.benes(perm))
     cases.append([rng.randrange(2) for _ in range(len(cases[0]))])
-    fn = bind(IT.IoTieRoute, W=W_, D=D)
+    fn = bind(BN.IoTieRoute, W=W_, D=D)
     out = np.asarray(evaluate_bits(fn, _bits([[b for x in xs for b in x]] * len(cases)), _bits(cases)))
     for bits, o in zip(cases, out.reshape(len(cases), 1 << D, W_)):
-        assert o.tolist() == IT.benes_apply(xs, bits)
+        assert o.tolist() == BN.benes_apply(xs, bits)
 
 
 def _build_flat_route(C, S, *e):
@@ -647,7 +650,7 @@ def _build_flat_route(C, S, *e):
     return run([list(x) for x in e[:-1]])
 
 
-FLAT_ROUTE = _part("IoTieRouteFlat", ("W", "D"), IT._sig_route, _build_flat_route, "IoTieRoute's flat trace")
+FLAT_ROUTE = _part("IoTieRouteFlat", ("W", "D"), BN._sig_route, _build_flat_route, "IoTieRoute's flat trace")
 
 
 def test_the_recursive_route_is_the_flat_one():
@@ -656,13 +659,13 @@ def test_the_recursive_route_is_the_flat_one():
     nodes, so a deep network is built once a depth (IoTieRequestIds{4096, 16, 1, 512, 6}'s sort is D = 14)."""
     rng = random.Random(7)
     for W_, D in ((1, 1), (5, 1), (3, 2), (8, 3), (9, 4), (36, 4), (44, 5), (2, 6)):
-        new, flat = bind(IT.IoTieRoute, W=W_, D=D), bind(FLAT_ROUTE, W=W_, D=D)
+        new, flat = bind(BN.IoTieRoute, W=W_, D=D), bind(FLAT_ROUTE, W=W_, D=D)
         n = (2 * D - 1) << (D - 1)
         assert GB.ands(new) == GB.ands(flat) == W_ * n
         xs = _bits([[rng.randrange(2) for _ in range(W_ << D)] for _ in range(16)])
         bits = _bits([[rng.randrange(2) for _ in range(n)] for _ in range(16)])
         assert np.array_equal(np.asarray(evaluate_bits(new, xs, bits)), np.asarray(evaluate_bits(flat, xs, bits)))
-    deep = bind(IT.IoTieRoute, W=46, D=14)
+    deep = bind(BN.IoTieRoute, W=46, D=14)
     assert [nd.form for nd in deep.body.nodes] == ["batch", "call", "call", "batch"]
     assert GB.ands(deep) == 46 * (27 << 13)
 
@@ -710,7 +713,7 @@ def test_two_ids_swapped_with_the_routing_that_matches_them_are_refused():
     ea, eb = inst.map[a].e, inst.map[b].e
     perm[ea], perm[eb] = perm[eb], perm[ea]
     assert not IT.bucket_reference(swapped, t)
-    assert _content([(inst, t, IT.switches(inst, t)), (swapped, t, IT.benes(perm)),
+    assert _content([(inst, t, IT.switches(inst, t)), (swapped, t, BN.benes(perm)),
                      (swapped, t, IT.switches(swapped, t))]) == [1, 0, 0]
 
 
@@ -721,7 +724,7 @@ def _tz(x: int) -> int:
 def test_the_parts_ands():
     """Each composite is its parts: what the cost table in PROTOCOL.md extrapolates from."""
     sh, a = SMALL, GB.ands
-    route, cell = a(bind(IT.IoTieRoute, W=sh.W, D=sh.D)), a(bind(IT.IoTieCell, B=sh.B))
+    route, cell = a(bind(BN.IoTieRoute, W=sh.W, D=sh.D)), a(bind(IT.IoTieCell, B=sh.B))
     assert route == sh.W * sh.switches
     for N, D, E in ((sh.R, sh.D, sh.E), (12, 5, 20), (100, 7, 96)):
         assert a(bind(IT.IoTieMatch, N=N, D=D, E=E)) == N * (131 + D - _tz(E)) - 1

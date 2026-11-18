@@ -26,8 +26,9 @@ guarantee `audit_executionPhase_split_of_record` is stated over), on its own so 
   deterministic prover strategy, the exact probability of an outcome over the verifier's coins, and the uniform average
   and probability;
 * `SamplingDesign`, a sampling design over units, and its missProb (`L.missProb B`), the probability that its sample misses a set, both core's
-  (`Verity.SamplingDesign`, `Definitions.Core.Draw`); `SamplingDesign.prod`, the calls' sampling designs each sampled on its own coins, the product distribution that
-  distinct contexts give (M1);
+  (`Verity.SamplingDesign`, `Definitions.Core.Draw`); `SamplingDesign.prod`, core's product of designs by kind, here
+  each call a kind sampled by its own design on its own coins, the product distribution that distinct contexts give
+  (M1);
 * `auditReg`: the registration, then the coin of the sampling design at that registration, then the session on its sample (C1);
 * `WUnit`, `slice`, `seqCalls`, `executionPhaseSession`: a window's units (a call and a unit of that call), a call's share of a
   sample, and the calls' sessions in order;
@@ -179,11 +180,6 @@ section Window
 
 variable {C : ℕ} {n : Fin C → ℕ}
 
-/-- **The product distribution** (M1): each call samples by its own sampling design, on its own coins. -/
-def SamplingDesign.prod (L : (c : Fin C) → SamplingDesign (Fin (n c))) : SamplingDesign (WUnit n) where
-  Ω := (c : Fin C) → (L c).Ω
-  draw ω := Finset.univ.sigma fun c => (L c).draw (ω c)
-
 /-- Call `c`'s share of a window's sample. -/
 def slice (S : Finset (WUnit n)) (c : Fin C) : Finset (Fin (n c)) :=
   Finset.univ.filter fun u => (⟨c, u⟩ : WUnit n) ∈ S
@@ -330,7 +326,7 @@ the context `digest(R)` (A4, `prf/sha-512`), from a fresh uniform source (A5), w
 (M1), on every family. For the service's sample it holds at `η = 0` on the copy-closed sets (`CopyClosed`). -/
 def MissProbWithin {Reg : Type} (Lw : Reg → SamplingDesign (WUnit n)) (L : Reg → (c : Fin C) → SamplingDesign (Fin (n c)))
     (𝓑 : Finset (WUnit n) → Prop) (η : ℝ≥0∞) : Prop :=
-  ∀ R B, 𝓑 B → (Lw R).missProb B ≤ (SamplingDesign.prod (L R)).missProb B + η
+  ∀ R B, 𝓑 B → (Lw R).missProb B ≤ (Verity.SamplingDesign.prod (L R)).missProb B + η
 
 /-- **What the served pass committed**, as the window's units read it, fixed before the window's registration:
 * `anchor p`: the words the served pass committed for the inputs (activations and weights) of the tile at position
