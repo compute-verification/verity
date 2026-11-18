@@ -366,4 +366,52 @@ theorem heldFrom_cover {ds : List Decl} {theta : String → Bool} {tid port : St
         · cases h
       · cases h
 
+/-- The rows `sharedDecide` checks of the shared argument `s`: its port's cuts, 1 where it finds no port. -/
+def sharedCuts (P : Prog) (rs : Array TRange) (ts : List Spot.RecordText.Tmpl) (W : Spot.Wires.Wiring) (s : Shared) :
+    Nat :=
+  ((rs.find? (·.node == s.node)).bind fun r => (ts.find? (·.tid == r.template)).bind fun t =>
+    ((P.defs[t.defn]!).params[s.arg]?).map fun (port, _) => W.cutsOf r.template port).getD 1
+
+/-- **What the stage decides**: where some run is shared, every row of every argument that reads one is held
+(`sharedRow`), and two rows' marks of one input node are one. -/
+theorem decide_rows {P : Prog} {ts : List Spot.RecordText.Tmpl} {W : Spot.Wires.Wiring} {ds : List Decl}
+    {theta : String → Bool} (h : sharedDecide P ts W ds theta = some true) (hne : (sharedRuns P).isEmpty = false) :
+    ∃ sh rs, sharedOf P = some sh ∧
+      Flock.TemplateQuery.evaluate (Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs ∧
+      ∀ s ∈ sh, ∀ c < sharedCuts P rs ts W s, ∃ m, sharedRow P rs ts W ds theta s c = some (some m) ∧
+        ∀ s' ∈ sh, ∀ c' < sharedCuts P rs ts W s', ∀ m', sharedRow P rs ts W ds theta s' c' = some (some m') →
+          m.1 = m'.1 → m = m' := by
+  unfold sharedDecide at h
+  simp only [hne, Bool.false_eq_true, ↓reduceIte] at h
+  split at h
+  · simp at h
+  · simp at h
+  · rename_i sh rs hsh hrs
+    split at h
+    · simp at h
+    split at h
+    · simp at h
+    rename_i h2 h1
+    have hall := Option.some.inj h
+    have hmem : ∀ s ∈ sh, ∀ c < sharedCuts P rs ts W s, ∃ m, sharedRow P rs ts W ds theta s c = some (some m) := by
+      intro s hs c hc
+      match hr : sharedRow P rs ts W ds theta s c with
+      | none =>
+        exact absurd (List.any_eq_true.2 ⟨sharedRow P rs ts W ds theta s c, List.mem_map.2 ⟨(s, c),
+          List.mem_flatMap.2 ⟨s, hs, List.mem_map.2 ⟨c, List.mem_range.2 hc, rfl⟩⟩, rfl⟩, by rw [hr]; rfl⟩) h1
+      | some none =>
+        exact absurd (List.any_eq_true.2 ⟨sharedRow P rs ts W ds theta s c, List.mem_map.2 ⟨(s, c),
+          List.mem_flatMap.2 ⟨s, hs, List.mem_map.2 ⟨c, List.mem_range.2 hc, rfl⟩⟩, rfl⟩, by rw [hr]; rfl⟩) h2
+      | some (some m) => exact ⟨m, rfl⟩
+    refine ⟨sh, rs, hsh, hrs, fun s hs c hc => ?_⟩
+    obtain ⟨m, hm⟩ := hmem s hs c hc
+    refine ⟨m, hm, fun s' hs' c' hc' m' hm' he => ?_⟩
+    have h1' := List.all_eq_true.1 hall m (List.mem_filterMap.2 ⟨sharedRow P rs ts W ds theta s c,
+      List.mem_map.2 ⟨(s, c), List.mem_flatMap.2 ⟨s, hs, List.mem_map.2 ⟨c, List.mem_range.2 hc, rfl⟩⟩, rfl⟩,
+      by rw [hm]; rfl⟩)
+    have := List.all_eq_true.1 h1' m' (List.mem_filterMap.2 ⟨sharedRow P rs ts W ds theta s' c',
+      List.mem_map.2 ⟨(s', c'), List.mem_flatMap.2 ⟨s', hs', List.mem_map.2 ⟨c', List.mem_range.2 hc', rfl⟩⟩, rfl⟩,
+      by rw [hm']; rfl⟩)
+    simpa [he] using this
+
 end InferenceOnlyVerifier.Record.SecurityProofs
