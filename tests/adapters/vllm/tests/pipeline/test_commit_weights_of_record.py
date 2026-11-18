@@ -52,7 +52,8 @@ RECORD_LINE = ("[delta] weights of record ({kind}): root {root} fields {pinned}/
 WARNING_LINE = "[delta] WARNING weights of record not derived: {error}"
 PIN_LINE = ("[delta] checkpoint_binding (WEIGHTS PIN, pair {pair}): {verdict} root {root} (record for Program {program}) compared {compared} "
             "mismatched {mismatched} missing 0 unpinned {unpinned} shards pinned {shards}{why}")
-BASE_FILES = ["declaration_stand_in.json", "runs.jsonl", "steps.jsonl", "summary.json", "summary.md", "verdict.json", "versions.json"]
+BASE_FILES = ["declaration_stand_in.json", "runs.jsonl", "steps.jsonl", "summary.json", "summary.md", "tokens_digests.jsonl", "verdict.json",
+              "versions.json"]
 
 
 def record_of(model: M.Model, **more: Any) -> Record:
@@ -411,7 +412,7 @@ def test_the_served_source_is_attached_to_the_committer_before_its_attachment_of
     ended = served(tmp_path, capsys)
     [com] = M.MADE
     [(_, attached, before, source), (_, of_record, digest, told, manifest, classes)] = ORDER
-    assert attached is com and of_record is com and before is None and told is source and isinstance(source, Served)
+    assert attached is com and of_record is com and before == com.host.program_digest != digest and told is source and isinstance(source, Served)
     assert source.build == MANIFEST and manifest == MANIFEST and classes == SERVED_CLASSES
     assert digest == com.program_digest == program_field(MANIFEST["program_digest"])
     assert com.calls == ["register_weights", *WARMUP] and serving.handed == [] and setup_lines(ended) == []
@@ -455,5 +456,5 @@ def test_the_stamp_is_told_of_the_manifest_a_commit_is_given(tmp_path, serving, 
     source = f"derived in-process from {root}/build_request x /checkpoint"
     assert handed(serving, "stamp_of_record_set") == ((derived(serving, source), root), {"manifest": str(manifest)})
     [(_, com, digest, told, of_manifest, _)] = ORDER
-    assert com is M.MADE[0] and told is None and of_manifest == MANIFEST and digest is None and not hasattr(com, "program_digest")
+    assert com is M.MADE[0] and told is None and of_manifest == MANIFEST and digest == com.program_digest == com.host.program_digest
 
