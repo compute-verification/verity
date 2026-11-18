@@ -512,26 +512,34 @@ def test_every_puts_an_edge_each_period_of_a_loads_serving_and_none_between_load
 
 
 class FakePool:
-    """A stand-in `KvPool`: its bytes, and a take whose root is the key and the rank's bytes, so that ranks holding the
-    same bytes agree."""
+    """A stand-in `KvPool`: its bytes, and a take whose root is its salts and its bytes, so that ranks holding the same
+    bytes under the same salt file agree."""
 
     def __init__(self, kv_caches, num_blocks):
         self.data, self.num_blocks = bytes(kv_caches), num_blocks
         self.nbytes, self.storages, self.views, self.rows = len(self.data), [self.data], [0, 1], [0, 1]
         self.takes: list[tuple] = []
+        self.salts = None
 
     def host(self):
         return bytearray(self.nbytes)
 
-    def take(self, host=None, group=9, key=bytes(32), fingerprint=True):
-        self.takes.append((key, fingerprint))
+    def salt_rows(self):
+        return {"kv.0": 1}
+
+    def salted(self, path):
+        self.salts = [B.SF.read(path, "kv.0")]
+        return self
+
+    def take(self, host=None, fingerprint=True):
+        self.takes.append((self.salts[0], fingerprint))
         if host is not None:
             host[:] = self.data
-        return {"root": (key + self.data).hex(), "tables": [], "hash_kernel_ms": 2.0, "copy_ms": 3.0 if host is not None
-                else None, "bytes": self.nbytes, "fingerprint": None}
+        return {"root": (self.salts[0] + self.data).hex(), "tables": [], "hash_kernel_ms": 2.0,
+                "copy_ms": 3.0 if host is not None else None, "bytes": self.nbytes, "fingerprint": None}
 
 
-def test_each_rank_hashes_its_pool_under_the_edges_key_and_keeps_its_part(monkeypatch):
+def test_each_rank_hashes_its_pool_under_the_pools_salt_file_and_keeps_its_part(monkeypatch, tmp_path):
     pytest.importorskip("numpy")
     monkeypatch.setattr(B, "KvPool", FakePool)
     monkeypatch.setattr(B, "RANKS", {})
@@ -541,17 +549,48 @@ def test_each_rank_hashes_its_pool_under_the_edges_key_and_keeps_its_part(monkey
     with pytest.raises(ValueError, match="copy is one of"):
         B.rank_pool(ex.workers[0], 4, "some")
     init = ex.collective_rpc(B.rank_pool, args=(4, "first"))
-    assert [(r["rank"], r["bytes"], r["host_bytes"], r["rows"]) for r in init] == [(0, 2, 2, True), (1, 2, 0, True),
-                                                                                  (2, 2, 0, True)]
-    assert all(B.RANKS[r]["kv"].takes == [(bytes(32), False)] for r in range(3))
-    got = ex.collective_rpc(B.rank_take, args=(b"k" * 32,))
-    assert [g["root"] for g in got] == [(b"k" * 32 + bytes([7, 7])).hex()] * 2 + [(b"k" * 32 + bytes([7, 8])).hex()]
+    assert [(r["rank"], r["bytes"], r["host_bytes"], r["rows"], r["salt_rows"]) for r in init] == [
+        (0, 2, 2, True, {"kv.0": 1}), (1, 2, 0, True, {"kv.0": 1}), (2, 2, 0, True, {"kv.0": 1})]
+    path = B.draw_salts(tmp_path / B.SALTS, init[0]["salt_rows"])
+    salt = B.SF.read(path, "kv.0")
+    ex.collective_rpc(B.rank_salted, args=(str(path),))
+    assert all(B.RANKS[r]["kv"].takes == [(salt, False)] for r in range(3))
+    got = ex.collective_rpc(B.rank_take)
+    assert [g["root"] for g in got] == [(salt + bytes([7, 7])).hex()] * 2 + [(salt + bytes([7, 8])).hex()]
     assert [(g["copied_bytes"], g["copy_ms"]) for g in got] == [(2, 3.0), (0, None), (0, None)]
-    assert B.RANKS[0]["host"] == bytearray([7, 7]) and B.RANKS[0]["kv"].takes[-1] == (b"k" * 32, False)
+    assert B.RANKS[0]["host"] == bytearray([7, 7]) and B.RANKS[0]["kv"].takes[-1] == (salt, False)
     assert set(B.RANKS[1]["rows"]) == {"runner", "rng"} and B.RANKS[1]["rows"]["runner"]["leaves"]
     assert all(g["runner_bytes"] > 0 for g in got)
     every = ex.collective_rpc(B.rank_pool, args=(4, "all"))
     assert [r["host_bytes"] for r in every] == [2, 2, 2]
+
+
+def test_kv_root_equal_for_equal_rows_under_the_pools_salt_file(tmp_path):
+    """The pool's calls hashed by `row_tables.step_roots`, the device kernels' CPU twin, under the salts `KvPool.salted`
+    reads: equal rows give equal roots in two pools reading one salt file, and a changed byte or another draw doesn't."""
+    torch = pytest.importorskip("torch")
+    RT = pytest.importorskip("verity_vllm.commit.row_tables")
+    gen = torch.Generator().manual_seed(0)
+    a = [torch.randint(-128, 128, (3, 8), generator=gen, dtype=torch.int8) for _ in range(2)]
+    b = [x.clone() for x in a]
+    c = [x.clone() for x in a]
+    c[1][2, 5] += 1
+
+    def root(p):
+        return b"".join(RT.step_roots(bytes(64), 0, {op: (ids, x.numpy(), s.numpy()) for op, (ids, x, s) in call.items()},
+                                      salts=ys).root for call, ys in zip(p.calls, p.salts))
+
+    rows = B.KvPool(a, 3, group=1).salt_rows()
+    assert rows == {"kv.0": 3, "kv.1": 3}
+    salts = B.draw_salts(tmp_path / B.SALTS, rows)
+    assert (salts.stat().st_mode & 0o777) == 0o700
+    ra, rb, rc = (root(B.KvPool(x, 3, group=1).salted(salts)) for x in (a, b, c))
+    assert ra == rb and ra != rc
+    assert root(B.KvPool(a, 3, group=1).salted(B.draw_salts(tmp_path / "again", rows))) != ra
+    with pytest.raises(ValueError, match="not this pool's calls"):
+        B.KvPool(a, 3, group=2).salted(salts)
+    with pytest.raises(RuntimeError, match="salted"):
+        B.KvPool(a, 3).take()
 
 
 def test_a_blocks_fingerprint_reads_each_layer_at_its_own_width():

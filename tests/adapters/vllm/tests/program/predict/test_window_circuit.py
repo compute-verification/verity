@@ -333,7 +333,7 @@ def state_row(scan, fields) -> list[int]:
 def test_the_scan_state_row_is_ingress_scans_and_its_wide_read_is_one_row_a_slot():
     """The scan state row a slot reads is `ingress_scan.layout`'s, its head then each lane's fields, ``occ`` (the slot's
     occupancy word, 1 when its Program starts at the row's boundary) among them: at the class of record (4 lanes, KO 64,
-    the scan's cells of record) 9,353 u16 words, lane j's fields 37,387 bits apart. `ScanSlots_v3` reads it whole, one
+    the scan's cells of record) 9,353 u16 words, lane j's fields 37,387 bits apart. `ScanSlots_v3` takes it whole, one
     registered row a slot, and gives every lane's first token (2 words), slot (2,050 at 1,024 prompt ids), occupancy word
     (2) and head (4), of which a slot's lane's four are wired: its unit is 1 + 4·4 rows, 12 of them unread. A row packed by
     the layout (`state_row`) reads back each lane's fields, ids at `io_shell.position`, and its first position's token and
@@ -1183,7 +1183,7 @@ def test_the_tiny_class_circuit_is_one_wired_program_of_registered_rows_with_no_
     circuit, prog, query = tiny_wired
     assert prog.annotations["free"] == []
     assert root_kinds(circuit, prog) == {"read": 17, "table read": 2, "opening": 3}
-    assert prog.fn.gates == 110_483_188
+    assert prog.fn.gates == 110_338_484
     assert query["params"]["templates"] == circuit.ids
 
 

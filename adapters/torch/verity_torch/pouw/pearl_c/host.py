@@ -15,6 +15,7 @@ import threading
 from collections import deque
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import nullcontext
 from functools import partial
 from pathlib import Path
 from typing import Any, ClassVar
@@ -25,6 +26,7 @@ from verity.commitments.merkle import domain_message
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
+    HM96_SALT,
     activation_binding,
     hm96_kernel_constants,
     rows_domain,
@@ -71,6 +73,19 @@ def _put(t: Any, data: bytes) -> None:
     import torch
     host = torch.frombuffer(bytearray(data), dtype=torch.uint8)
     t[:len(data)].copy_(host.pin_memory() if t.is_cuda else host, non_blocking=t.is_cuda)
+
+
+def fresh_into(dst: Any, n: int, raw: int | None = None) -> None:
+    """`n` leaves' hm96 salts into device bytes `dst`, `HM96_SALT` bytes a leaf in leaf order, fresh from the operating
+    system and never derived; on raw stream `raw` where given (a lane's or a replay's), else the current stream.  The pinned
+    staging copy is torch's to keep alive until the copy is done."""
+    import torch
+    host = torch.frombuffer(bytearray(os.urandom(HM96_SALT * n)), dtype=torch.uint8)
+    if not dst.is_cuda:
+        dst[:host.numel()].copy_(host)
+        return
+    with torch.cuda.stream(torch.cuda.ExternalStream(raw, device=dst.device)) if raw is not None else nullcontext():
+        dst[:host.numel()].copy_(host.pin_memory(), non_blocking=True)
 
 
 def _constants(device: Any) -> Any:

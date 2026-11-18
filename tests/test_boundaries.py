@@ -147,7 +147,7 @@ BENCHMARKS_IMPORTERS = {
     **dict.fromkeys((
         "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/bench.py", "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
-        "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py", "verity/protocols/proofs/flock/prover/python/verity_flock/ir_bench.py",
+        "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/register.py",
         "tests/verity/protocols/proofs/flock/prover/test_backend_bench.py", "tests/verity/protocols/proofs/flock/prover/test_class_statement.py",
         "tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py",
@@ -1042,7 +1042,6 @@ def _adapter_importers(texts: dict[str, str], modules: tuple[str, ...], shared: 
 #: attaches through `verity_vllm.messages` and `verity.hooks`, and its own code moves to its package.
 RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/acquire/h1_commit.py",
-    "adapters/vllm/verity_vllm/check/replay/pouw_circuit.py",
     "adapters/vllm/verity_vllm/commit/history_tables_device.py",
     "adapters/vllm/verity_vllm/commit/row_tables_device.py",
     "adapters/vllm/verity_vllm/definitions/registry/catalog.circuit-check.py",
@@ -1050,7 +1049,6 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/expert_rows.py",
     "adapters/vllm/verity_vllm/pipeline/expert_tables.py",
     "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
-    "adapters/vllm/verity_vllm/pipeline/serve_pearl.py",
     "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
     "adapters/vllm/verity_vllm/program/predict/node_window_values.py",
     "adapters/vllm/verity_vllm/program/predict/window_class.py",
@@ -1062,6 +1060,7 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pouw_circuit.py",
 )
 
 
@@ -1234,10 +1233,6 @@ WORLD_PATHS_ALLOWED: dict[str, str] = {
     "circuits/silicon/instructions.py":
         "circuits: each instruction's source string cites the probe run that measured it",
     "circuits/silicon/models.py": "circuits: each model's source string cites the probe run that measured it",
-    "protocols/proofs/spot/prover/cost/inputs.py":
-        "proofs: `MEASURED`, the sampling plan's measured inputs, read by default until every caller passes them",
-    "protocols/proofs/spot/prover/cost/transformer.py":
-        "proofs: a table row saying `SERVERS` is assumed, not in the census",
 }
 
 
@@ -1866,6 +1861,23 @@ def test_a_file_in_no_place_imports_the_standard_library_alone() -> None:
     assert not offenders, ("Python of verity in no `place` of tests/import_order.toml only groups packages and imports the "
                            "standard library alone: give a new package its place, with what it loads, or move what the "
                            "file needs out of it:\n" + "\n".join(offenders))
+
+
+def test_ports_imports_no_unit_and_no_verifier_imports_it() -> None:
+    listing = _listing()
+    assert _place("verity/ports.py", listing.places) is None, "verity/ports.py is in no place of tests/import_order.toml"
+    assert not [n for n, _, _ in _imports(SRC / "ports.py") if n.split(".")[0] not in sys.stdlib_module_names], \
+        "verity/ports.py imports the standard library alone"
+    offenders = []
+    for path in _sources():
+        rel = path.relative_to(ROOT).as_posix()
+        place = _place(rel, listing.places)
+        if _trusted(rel) is None and (place is None or not _trusted_place(listing.places[place])):
+            continue
+        text = path.read_text(encoding="utf-8")
+        offenders += [f"{rel}:{line}" for name, line, _ in _imports(path) if name == "verity.ports"]
+        offenders += [rel] if re.search(r"from verity import [^\n]*\bports\b", text) else []
+    assert not offenders, "no verifier or device imports verity.ports: take a port from the caller:\n" + "\n".join(offenders)
 
 
 def test_the_listing_is_what_its_generator_writes() -> None:

@@ -3,6 +3,8 @@
 # d9105ea80, numpy, safetensors),
 # the native taps (FA2 matReq tap; FA3 on sm_90; the default-on workload taps), the pinned checkpoints, and a readiness record.
 #
+#   bash adapters/vllm/verity_vllm/ops/pod_bootstrap.sh --record-venv PATH   (record PATH, an environment made before the
+#     bootstrap recorded its own, as this user's pinned-vLLM environment, and exit: nothing else is touched)
 #   research run --on <machine> --project verity --source <verity checkout> -- bash -c "cd adapters/vllm && bash verity_vllm/ops/pod_bootstrap.sh [--cases B0[,B1]] [--out DIR] [--cpu|--gpu] [--dry-run]"
 #
 # Idempotent: every step checks before it builds.  Runs from this directory (the shipped tree's adapters/vllm).  Fails closed with
@@ -24,6 +26,8 @@
 #     record is unchanged (no "mode" key = gpu).  `--dry-run` prints the resolved mode and the steps it would run, touches nothing, exits 0.
 #   Headers: in gpu mode, after step 2, the CUDA library headers torch reads that CUDA_HOME's toolkit lacks come from the
 #     environment's NVIDIA wheels (CPATH, cuda_headers.sh; one line says which), and a header in neither fails BOOTSTRAP_FAIL_HEADERS.
+#   Record: once vLLM is installed, the environment's path goes in ${XDG_STATE_HOME:-$HOME/.local/state}/verity-bench/venv
+#     (`record_venv`), which benchmarks/harness/env.sh reads where a launch names no environment.
 #   Outputs: $OUT/readiness.json (schema verity-vllm/readiness/v1: checks{ok, value|error}, identities, measurements network/disk/memory),
 #     $OUT/{pip,cuda_headers,checkpoints,fa2_tap,fa3_tap,fa2_tap_guarded,fa3_tap_guarded,norm_tap,router_tap}.log, $OUT/bootstrap.fail on a
 #     failure, $OUT/staged-<case> for a checkpoint this run staged (and its `staged` label in the store); the last stdout line is BOOTSTRAP-OK.
@@ -46,8 +50,21 @@ OWN_CACHES=()
 export HF_HOME=${HF_HOME:-$WORK/hf}
 export PYTHONPATH=$ROOT:$CORE:$RESEARCH${PYTHONPATH:+:$PYTHONPATH}
 export VERITY_TREE=$ROOT
-CASES=B0; OUT=$ROOT/out/bootstrap; MODE=auto; DRY_RUN=0
-while [ $# -gt 0 ]; do case "$1" in --cases) CASES=$2; shift 2;; --out) OUT=$2; shift 2;; --cpu) MODE=cpu; shift;; --gpu) MODE=gpu; shift;; --dry-run) DRY_RUN=1; shift;; *) echo "unknown arg $1" >&2; exit 2;; esac; done
+CASES=B0; OUT=$ROOT/out/bootstrap; MODE=auto; DRY_RUN=0; RECORD_VENV=
+# this user's pinned-vLLM environment, for a launch that names none (benchmarks/harness/env.sh reads it): its path, one line
+VENV_RECORD=${XDG_STATE_HOME:-${HOME:+$HOME/.local/state}}
+VENV_RECORD=${VENV_RECORD:+$VENV_RECORD/verity-bench/venv}
+record_venv() {  # PATH: the environment, which holds bin/python
+  local v
+  [ -n "$VENV_RECORD" ] || { echo "BOOTSTRAP_FAIL_VENV_RECORD: neither XDG_STATE_HOME nor HOME is set, so there is no record" >&2; return 3; }
+  v=$(cd "$1" 2>/dev/null && pwd -P) && [ -x "$v/bin/python" ] \
+    || { echo "BOOTSTRAP_FAIL_VENV_RECORD: no Python at $1/bin/python, so nothing is recorded" >&2; return 3; }
+  mkdir -p "$(dirname "$VENV_RECORD")" && printf '%s\n' "$v" > "$VENV_RECORD.tmp" && mv "$VENV_RECORD.tmp" "$VENV_RECORD" \
+    || { echo "BOOTSTRAP_FAIL_VENV_RECORD: cannot write $VENV_RECORD" >&2; return 3; }
+  echo "[bootstrap] recorded $v in $VENV_RECORD"
+}
+while [ $# -gt 0 ]; do case "$1" in --cases) CASES=$2; shift 2;; --out) OUT=$2; shift 2;; --cpu) MODE=cpu; shift;; --gpu) MODE=gpu; shift;; --dry-run) DRY_RUN=1; shift;; --record-venv) RECORD_VENV=${2:?--record-venv PATH}; shift 2;; *) echo "unknown arg $1" >&2; exit 2;; esac; done
+[ -z "$RECORD_VENV" ] || { record_venv "$RECORD_VENV"; exit; }
 if [ "$MODE" = auto ]; then
   if command -v nvidia-smi >/dev/null 2>&1; then MODE=gpu; else MODE=cpu; echo "[bootstrap] no nvidia-smi on PATH: cpu mode (--gpu forces the GPU path, --cpu forces this one)"; fi
 fi
@@ -107,6 +124,7 @@ uv pip show --python "$PY" torchcodec 2>/dev/null | grep -qx "Version: ${TORCHCO
 # guarded as pip's are: a spawned child (serve-openai's seal process) imports it again as __mp_main__
 printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nif __name__ == "__main__":\n    sys.exit(main())\n' "$PY" > "$VENV/bin/verity-vllm" \
   && chmod +x "$VENV/bin/verity-vllm" || fail VENV "cannot write $VENV/bin/verity-vllm"
+record_venv "$VENV" >>"$OUT/pip.log" || fail VENV_RECORD "cannot record $VENV in $VENV_RECORD"
 [ "${#OWN_CACHES[@]}" -eq 0 ] || rm -rf "${OWN_CACHES[@]}"
 # the CUDA library headers torch reads, which every tap build below includes: the toolkit's, else the wheels just installed
 if [ "$MODE" = gpu ]; then
@@ -188,7 +206,7 @@ if [ "$CC" = "9.0" ]; then
   VENV=$VENV bash verity_vllm/ops/pod_fa3_tap.sh >"$OUT/fa3_tap.log" 2>&1; grep -q '^FA3-TAP-OK' "$OUT/fa3_tap.log" || fail FA3_TAP "$(tail -2 "$OUT/fa3_tap.log")"
   log "$(grep '^FA3-TAP-OK' "$OUT/fa3_tap.log" | tail -1)"
 fi
-if [ "${ROW_TAPS:-1}" = 1 ]; then       # the taps config.CommitConfig runs by default, at the paths cli.MACHINE names
+if [ "${ROW_TAPS:-1}" = 1 ]; then       # the taps config.CommitConfig runs by default (a row names each .so: config.RunEnv)
   VENV=$VENV FA2_TAP_ROW_GUARD=1 FA2_TAP_HDIMS=${FA2_TAP_HDIMS:-64,96,128,256} bash verity_vllm/ops/pod_fa2_tap.sh >"$OUT/fa2_tap_guarded.log" 2>&1; grep -q '^FA2-TAP-OK' "$OUT/fa2_tap_guarded.log" || fail FA2_TAP_GUARDED "$(tail -2 "$OUT/fa2_tap_guarded.log")"
   log "$(grep '^FA2-TAP-OK' "$OUT/fa2_tap_guarded.log" | tail -1)"
   if [ "$CC" = "9.0" ]; then

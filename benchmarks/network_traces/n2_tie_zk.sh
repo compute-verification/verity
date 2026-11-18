@@ -13,20 +13,24 @@
 #      (--debug-clear)  N2_DRY=1 (the instances and references only)  N2_CLASS (--class: test, served or warden)
 #      N2_WARDEN_RUN (--warden-run, N2_CLASS=warden's network attester run, an absolute path on the node)  N2_WINDOWS
 # (--windows)      N2_GPU=1 (--gpu)  FLOCK_WORK (N2_GPU's build, /workspace/jobs/proof-throughput by default)
-# Kept in $OUT/n2tie: the driver's records and logs, the public files and everything the verifier received; never a
-# prover's file (inst-*, prover-instances.bin) nor a circuit (its pin is kept), nor a session's archive.
+# Kept in $OUT/n2tie: the driver's summary (verdicts, costs and counts) and the tie's public parameters (its Program and
+# partition, stager/). What the verifier received stays in $W: the inputs (each request's place, its prompt length and
+# the cells each window received), the outcome records naming their digest, and the verifier's registered reads. The
+# rule is by kind of file: a built-in member's made-up requests stay in $W as a served run's do.
 set -uo pipefail
 export HZ_CONFIGS=n2tie HZ_MEM_GB=${N2_MEM_GB:?}
 if [ "${N2_GPU:-0}" = 1 ]; then
   [ -n "${CUDA_VISIBLE_DEVICES:-}" ] || { echo "N2_GPU=1 needs the run's leased GPU (a job of one GPU)" >&2; exit 7; }
   export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || exit 7
   unset CARGO_TARGET_DIR
-  for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
-    [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x "$c/usr/local/cuda-13.3/bin/nvcc" ] \
-      && export CUDA_TK=$c/usr/local/cuda-13.3
-  done
-  C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
   G=${RESEARCH_RUN_DIR:?}/out/build-gpu; mkdir -p "$G"
+  # CUDA 13.3: CUDA_TK where given, else the machine's toolkit at 13.3 (benchmarks/kernels/machine.py), else the one
+  # verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh finds or unpacks under FLOCK_WORK
+  [ -n "${CUDA_TK:-}" ] || CUDA_TK=$(python3 benchmarks/kernels/machine.py toolkit 13.3 2> "$G/cuda.log") \
+    || { CUDA_TK=; ( . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh ) >> "$G/cuda.log" 2>&1 \
+         && . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$G/cuda.log" 2>&1; }
+  [ -n "${CUDA_TK:-}" ] || { echo "N2_GPU=1: no CUDA 13.3 on this node ($G/cuda.log)" >&2; exit 7; }
+  export CUDA_TK; C13=$CUDA_TK; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
   OUT=$G bash verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM=${SM:-120} > "$G/build.txt" 2>&1
   FLOCK_PROVE=$(sed -n 's/^BINARY=//p' "$G/build.txt" | tail -1)
   FLOCK_SELFTEST=$(sed -n 's/^SELFTEST_BINARY=//p' "$G/build.txt" | tail -1)
@@ -62,7 +66,7 @@ fi
 rc=${PIPESTATUS[0]}
 [ -n "$SMI" ] && kill "$SMI"
 mkdir -p "$OUT/n2tie"
-(cd "$W/n2tie" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name prover-instances.bin ! -path '*/archive/*' \
-  -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/n2tie/")
+(cd "$W/n2tie" && for f in summary.json stager/program.json stager/partition.json; do
+  [ -f "$f" ] && cp --parents "$f" "$OUT/n2tie/"; done)
 log "n2tie: done, rc $rc"
 exit "$rc"

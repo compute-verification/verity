@@ -188,8 +188,6 @@ PUBLIC = {
     "verity_vllm.pipeline.cut_plugin": "I1: the carried pool's cut at each window edge under vLLM's own OpenAI server: its "
                                        "general plugin (register, an edge of the engine core's seam) and ASGI middleware "
                                        "(SentFeed), configured by VERITY_CUT, which the trace corpus's cut traces serve under",
-    "verity_vllm.pipeline.serve_pearl": "I1: serve-openai's Pearl+ arm (PearlWindows), its --protocols-config (config_of, "
-                                        "CONFIG) and where a serve dir holds each window's epoch (DIR)",
     "verity_vllm.pipeline.scheme_plugin": "I1: schemes turned on by name inside vLLM's own OpenAI server: its general "
                                           "plugin (register) and ASGI middleware (Front), configured by VERITY_PROTOCOLS, "
                                           "which serve-tax's tick arms and the trace corpus serve under",
@@ -270,7 +268,7 @@ PUBLIC = {
     "verity_vllm.commit.scheme": "I7: the Commit path's vllm-v1 commitment scheme: its leaves, folds and roots (pos_leaf, "
                                  "POS_LEAF_TAG), which benchmarks/commitments prices",
     "verity_vllm.commit.step_rows": "I7: the Commit's rows-sha512 scheme over a step's stream: its row and key sizes, domains, "
-                                    "levels and roots (ROW_BYTES, KEY_BYTES, tensor_root, keyed_tensor_root, run_program_digest), "
+                                    "levels and roots (ROW_BYTES, KEY_BYTES, fresh_tensor_salts, tensor_root, run_program_digest), "
                                     "which benchmarks/served_commit times and benchmarks/serve_tax and benchmarks/one_stage "
                                     "commit under",
     "verity_vllm.commit.store_dump": "I7: a GPU-tree committer's committed store on disk, and back as a CPU store that opens and "

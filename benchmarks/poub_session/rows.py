@@ -114,7 +114,7 @@ def whole_store(backend: device.GpuBackend, rows: int, rng: np.random.Generator,
                     differ += len(bad)
                     wrong += bad[:8 - len(wrong)]
     want = b"".join(want)
-    salts = [device.store_salt(backend.salt_key, seed, c) for c in range(s.blocks // device.PER_LEAF)]
+    salts = backend.pass_salts(seed, s.blocks // device.PER_LEAF)
     tree = rb.tree(seed, s.plan, [want[64 * j:64 * (j + 1)] for j in range(s.blocks)], salts)
     same = root == tree.commitment.root
     return {"blocks": s.blocks, "receipts": s.blocks - differ, "first_wrong": wrong, "root": same,

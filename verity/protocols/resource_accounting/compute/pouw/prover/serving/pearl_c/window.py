@@ -46,6 +46,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     rows_domain,
     weight_binding,
 )
+from verity.protocols.resource_accounting.scheme import declared
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
@@ -98,19 +99,25 @@ def coins_of(option: Any, reserved: Any = None) -> dict[str, Any]:
             "closed": option.info().get("challenger"), "manifest_head": session_head(c)}
 
 
+def tables() -> tuple[str, ...]:
+    """W's tables, of A rows, y and B rows: Pearl+'s (`Scheme.tables`)."""
+    from verity.protocols.resource_accounting.compute.pouw.scheme import PEARL_PLUS
+    return declared(PEARL_PLUS, "tables")
+
+
 def a_value(s: int, c: int) -> str:
     """Round ``s``'s call ``c``'s A rows."""
-    return f"pearl-a/{s}/{c}"
+    return f"{tables()[0]}/{s}/{c}"
 
 
 def y_value(s: int, c: int) -> str:
     """Round ``s``'s call ``c``'s y."""
-    return f"pearl-y/{s}/{c}"
+    return f"{tables()[1]}/{s}/{c}"
 
 
 def b_value(w: int) -> str:
     """Weight ``w``'s B rows."""
-    return f"pearl-b/{w}"
+    return f"{tables()[2]}/{w}"
 
 
 def _hm96(man: Mapping[str, Any], s: int) -> None:

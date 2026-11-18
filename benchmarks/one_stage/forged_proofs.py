@@ -24,7 +24,6 @@ import argparse
 import json
 import os
 import shutil
-import socket
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -77,13 +76,9 @@ def stage_case(st, rows: dict, flip: tuple[int, ...], d: Path, set_name: str) ->
              indices=list(range(N)))
 
 
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def main() -> int:
+    from verity_bench import kit
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True, help="flock-circuit, the proving build (sha512, glue)")
     ap.add_argument("--lean", required=True, help="verity-verify-proof")
@@ -114,7 +109,7 @@ def main() -> int:
         if flip:
             os.environ["FC_ZK_SELF_CHECK"] = "skip"
         try:
-            record, live = a0.session(a.bin, sd, N, f"subset:{N}", free_port(), d / "run", zk=True)
+            record, live = a0.session(a.bin, sd, N, f"subset:{N}", kit.free_port(), d / "run", zk=True)
         finally:
             os.environ.pop("FC_ZK_SELF_CHECK", None)
         lean = a0.lean_verify(a.lean, sd, N, d / "run", zk=True)

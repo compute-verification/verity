@@ -203,10 +203,10 @@ COUNTS = "spot-two-stage-counts/v1"
 PROOF_DEADLINE_S = 86400.0
 
 
-def interior_values(member: CS.Member) -> tuple[tuple[str, str], ...]:
-    """The interior values of a replay side that commits the check template's units as one window member
-    (`ml.windows.rows`): each port's name and schema, in the member's order."""
-    return tuple((member.port(p), member.schema(p)) for p in CS.port_leaves(member))
+def interior_values(window: CS.Binding) -> tuple[tuple[str, str], ...]:
+    """The interior values of a replay side that commits the check template's units as one interior window: each of
+    the window's trees (`Binding.trees`) and its schema, in the window's order."""
+    return tuple((t, s) for t, (s, _n) in window.trees.items())
 
 
 @dataclass(frozen=True)
@@ -678,8 +678,7 @@ class Design:
     def window(self, boundary: str, sample: Sequence[int]) -> CS.Binding:
         """The interior window of the replay sample ``sample`` after the boundary docket ``boundary``
         (`interior_rows.interior_window`): public items alone."""
-        return IR.interior_window(self.members, self.cells, boundary, sample, self.wires,
-                                  IR.link_values(self.links, len(sample)), self.rows)
+        return IR.interior_window(self.members, self.cells, boundary, sample, self.wires, self.links, self.rows)
 
 
 def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlinked: bool = False,
@@ -721,8 +720,7 @@ def rule_of(layout: BR.Layout, replay: str, k: int | Mapping[str, int],
     (`design`'s ``unlinked``): its first stage samples as any class's does."""
     d = design(layout, unlinked=True)
     w = d.window("00", [0])
-    return Rule(replay, k, tuple(v for m in w.members for v in interior_values(m)), proof_deadline,
-                IR.span_values(d.links))
+    return Rule(replay, k, interior_values(w), proof_deadline, IR.span_values(d.links))
 
 
 def second_need(stream: S.Stream, q: int) -> int:

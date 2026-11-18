@@ -3,7 +3,7 @@ integration's pin, on the same node, workload and SLO.
 
     serve_tax.py plan --model-id ID --c4 C4.json.gz --rates NAME=R,... [--span-s 90] [--requests N] --out PLAN.jsonl
     serve_tax.py run --arm ARM --model-id ID --c4 C4.json.gz --rates NAME=R,... [--checkpoint DIR] [--reps 3] [--span-s 90]
-                     [--requests N] [--plan PLAN.jsonl] [--window-s S] [--kv-window-s S]
+                     [--requests N] [--plan PLAN.jsonl] [--window-s S]
                      [--tick-ms SAT,FREE | --tick-from STEP_TRACE|RECORD_ARM_DIR] --out DIR
     serve_tax.py run --arm ARM --model-id ID --client vllm-bench --loads NAME[=RUNG+RUNG...],... [--dataset NAME=FILE]
                      [--checkpoint DIR] [--reps 3] [--private DIR] --out DIR
@@ -50,18 +50,13 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``bi-eager``: ``eager`` with ``VLLM_BATCH_INVARIANT=1``, the committing path's execution with nothing committed;
 - ``record``: the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`, the recorder serve-openai uses), in
   the engine core, written by a thread of its own (`servetax_plugin`);
-- ``release-order``: requests added in the network attester's release order (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder` in the engine
-  core, `servetax_plugin.ReleaseGate`), the client standing in for the network attester, which numbers them in send order;
 - ``tick``: the certified tick (`verity.protocols.resource_accounting.network.prover.admission.TickGate` under vLLM's server, `verity_vllm.pipeline.scheme_plugin`), τ_sat and
   τ_free given or calibrated on a ``record`` trace (`tick`), the client standing in for the network attester (`corpus.StandIn`);
 - ``tokens``: each window's tokens committed: every prompt id and every sampled id, 4 bytes a token, in ``rows-sha512``
   rows (`verity_vllm.commit.step_rows`), hashed off the engine loop at each window's close (`servetax_plugin.TokenCommit`).
-- ``kv``: the paged KV cache committed at window edges (every ``--kv-window-s``): the whole pool, between two steps, in
-  ``rows-sha512`` rows of 1 MiB hashed on the GPU on a side stream ordered after the step by an event, with no hook inside
-  a CUDA graph (`servetax_plugin.KvEdge`);
 - ``tokens-only``: ``record`` with each Commit period's tokens committed as ``tokens`` commits them, without the tick;
 - ``boundary``: ``tokens-only`` with the boundary commitment at each replay block's edge (every ``--edges-every-s``
-  seconds of a load): the engine drains, the KV pool is hashed where it lies by the row-table kernels under a fresh key
+  seconds of a load): the engine drains, the KV pool is hashed where it lies by the row-table kernels under its salts
   and copied to pinned host memory (on the ranks ``--kv-copy`` names), and the scheduler's state and each rank's runner
   rows and generators are taken, all kept until the next edge (`servetax_plugin.edges_of`, `boundary.rank_take`).
 - ``boundary-rows``: ``record`` with the two-stage audit's boundary commitment at serve, each window's finished
@@ -331,11 +326,8 @@ ARMS = {
     "record": Arm("compiled", "+ the scheduler's step trace (StepTrace)", plugin=("record",)),
     "record-ids": Arm("record", "+ each request's prompt ids and served ids, which a replay of vLLM's client's pass reads",
                       plugin=("record", "ids")),
-    "release-order": Arm("record", "+ admission in the network attester's release order", plugin=("record", "release_order")),
     "tick": Arm("record", "+ admission on the certified tick", plugin=("record",), tick=True),
     "tokens": Arm("tick", "+ each window's tokens committed (rows-sha512)", plugin=("record", "tokens"), tick=True),
-    "kv": Arm("tokens", "+ the paged KV cache hashed in place at each window edge", plugin=("record", "tokens", "kv"),
-              tick=True),
     "restore-base": Arm("record", "+ seeded sampling, each sampled token's logprob returned", plugin=("record",),
                         sampling="seeded", logprobs=True),
     "restore-pause": Arm("restore-base", "+ a replay block's boundary state taken at each edge (drained, copied, hashed, "
@@ -827,7 +819,7 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
     return [*line, *(x for x in added if x not in seed)]
 
 
-def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float,
+def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float,
                edges: dict | None = None, boundary_rows: dict | None = None, check: str | None = None,
                private: Path | None = None, front: str = PYTHON, schemes: dict | None = None) -> dict[str, str]:
     """The server's environment: the job's, with on its path only what the arm's plugins need (`entry_points`): the
@@ -860,7 +852,7 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
             raise SystemExit("this arm's boundary commitment needs its check template, and the model names none "
                              "(Model.check): --boundary-rows, a JSON object with check (run.sh: BOUNDARY_ROWS)")
     if arm.plugin:
-        env[PLUGIN_ENV] = json.dumps({"out": str(d), "window_s": window_s, "kv_window_s": kv_window_s,
+        env[PLUGIN_ENV] = json.dumps({"out": str(d), "window_s": window_s,
                                       **{k: True for k in arm.plugin}, **(edges if arm.edges and edges else {}),
                                       **({"private": str(private)} if private else {}),
                                       **({"boundary_rows": rows} if rows else {})})
@@ -928,12 +920,6 @@ def check_scheme_settings(arm: str, given: dict | list | None, lifetimes: int) -
     if len(set(sessions)) < len(sessions):
         raise SystemExit(f"--scheme-settings: arm {arm} is served in {lifetimes} server lifetimes and a reserved session "
                          "opens once: give a list of one object a lifetime, each with its own reserved session")
-
-
-def tick_feed(d: Path) -> Path:
-    """The feed file a tick arm's server writes in its directory ``d`` (`network.prover.admission.feed_file`)."""
-    from verity.protocols.resource_accounting.network.prover.admission import feed_file
-    return Path(feed_file(str(d)))
 
 
 def value_settings(env: dict[str, str] | None = None) -> dict:
@@ -1662,7 +1648,7 @@ def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int,
     (`SAMPLED`), each naming its client as its ``user`` (``tag``) and, where ``seeded``, sending that user's seed
     in server lifetime ``lifetime`` (`user_seed`). The client sends no completion of its own before
     the pass (no ready check: `wait_ready` has waited), so every completion it sends is in its result, and request k's
-    X-Request-Id is ``{tag}-{k}``, the form the release-order arm reads its release number from
+    X-Request-Id is ``{tag}-{k}``, the form an edge reads its load from
     (`servetax_plugin.release_key`). It names the served model in every request and takes its tokenizer from the
     checkpoint; for its synthetic datasets it first asks the server's ``/tokenize``, which the engine never sees,
     whether the server counts the first prompt's tokens as it does, and trims every prompt to the server's count
@@ -2049,7 +2035,10 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     site = plugin_site(out / ".site", arm)
-    port = corpus().free_port()
+    kit()
+    from verity_bench import kit as bench
+
+    port = bench.free_port()
     front = front_end(arm, getattr(a, "published_frontend", None))
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context, front,
                        published_args(getattr(a, "published_args", None)), limits=held is None)
@@ -2058,7 +2047,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     BODY_EXTRA.update({"logprobs": 0} if arm.logprobs else {})
     edges = edge_config(arm, model, a, rates, load_tag(next(iter(passes)), 1, True) if bench else None)
     try:
-        env = server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, edges, a.boundary_rows, model.check, private,
+        env = server_env(arm, srv, site, tick, a.window_s, edges, a.boundary_rows, model.check, private,
                          front, lifetime_settings(getattr(a, "scheme_settings", None), a.lifetime))
         check_plugins(env, arm)
     except SystemExit:
@@ -2070,7 +2059,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
             "model": model.ref, "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "front_end": front,
-            "plugin": list(arm.plugin), "env": arm.env, "settings": value_settings(env), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
+            "plugin": list(arm.plugin), "env": arm.env, "settings": value_settings(env), "tick": tick, "window_s": a.window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
             "lifetime": a.lifetime, "left_out": a.leave_out, "private": str(private) if records(arm) or not bench else None,
             "general": entry_points(arm),
             "boundary_rows": ({"window_s": a.window_s, "check": model.check, **(a.boundary_rows or arm.rows)}
@@ -2354,11 +2343,11 @@ def announced(proc: subprocess.Popen, what: str, log: Path) -> dict:
         raise RuntimeError(f"{what} ended before it listened ({log})") from None
 
 
-def runs_ended(feed: Path) -> int:
-    """The network attester's runs whose watermark the tick's feed (`scheme_plugin.Front`) has seen end."""
-    if not feed.exists():
-        return 0
-    return sum(1 for x in feed.read_text().splitlines() if '"end"' in x and json.loads(x).get("end"))
+def runs_ended(d: Path) -> int:
+    """The network attester's runs whose watermark end the tick arm's server's front has logged in its directory ``d``
+    (``tick.PID.jsonl``, `network.prover.admission.FrontFeed`)."""
+    return sum(1 for f in d.glob("tick.*.jsonl") for x in f.read_text().splitlines()
+               if '"end"' in x and json.loads(x).get("end"))
 
 
 def hold_ends(server: int | None, front: int | None, ended: int, left_s: float | None) -> tuple[str, bool] | None:
@@ -2448,11 +2437,14 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
     srv = out / "server"
     srv.mkdir(parents=True, exist_ok=True)
     site = plugin_site(out / ".site", arm)
-    port = corpus().free_port()
+    kit()
+    from verity_bench import kit as bench
+
+    port = bench.free_port()
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context_of(loads, a.max_model_len))
     front = front_argv(port, a.front, cell_payload(cells), srv / "front.jsonl")
     try:
-        env = server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, private=private)
+        env = server_env(arm, srv, site, tick, a.window_s, private=private)
         check_plugins(env, arm)
     except SystemExit:
         shutil.rmtree(out / ".site", ignore_errors=True)
@@ -2479,7 +2471,7 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
         print(f"[serve-tax] {a.arm}: the engine is up in {rec['startup_s']} s and the id front listens on loopback "
               f"port {a.front}: held for the network certifier's run", flush=True)
         while True:
-            why = hold_ends(server.poll(), fronted.poll(), runs_ended(tick_feed(srv)),
+            why = hold_ends(server.poll(), fronted.poll(), runs_ended(srv),
                             None if stop_at is None else stop_at - now())
             if why is not None:
                 break
@@ -4976,7 +4968,6 @@ def main(argv: list[str] | None = None) -> int:
                         "out; a request unanswered by then is cut and counted unserved")
     r.add_argument("--startup-s", type=float, default=1800.0)
     r.add_argument("--window-s", type=float, default=600.0, help="the Commit period the tokens arm closes at")
-    r.add_argument("--kv-window-s", type=float, default=600.0, help="the window edge the kv arm hashes the KV cache at")
     r.add_argument("--boundary-rows", type=json.loads, metavar="JSON",
                    help="a boundary commitment's object in place of the arm's own: check, per_prompt, per_output, "
                         "drained, inline, verdicts, ids, tables, stop (the serve's stop rule: ids, max_model_len, outputs)")

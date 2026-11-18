@@ -63,7 +63,7 @@
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
 # env: FLOCK_WORK=/workspace/jobs/rec-reprice  TAG=k4096  K=4096 (GemmCoordinate_v2's contraction)  N=2048 (instances: the
 #      population program's every unit, rec_reprice.py)
-#      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
+#      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM (GPU=1: the target's compute capability)  WARM=1  RUNS=3  PCPUS=16
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
 #              ..; a name without its part, alg, names every part)
 #      FORGE="message sum comb top top-salt coef dirs" (vstage)  JOBS=4 (vstage)  INNER_LOOPBACK=1 (inner)
@@ -125,6 +125,7 @@ unset CARGO_TARGET_DIR
 # redistributable CUDA_REDIST archives (sha256-checked) are unpacked once under $FW, and their runtime is the prover's
 CUDA_REDIST=${CUDA_REDIST:-13.3.1}; export CUDA_TK=${CUDA_TK:-$FW/cuda-$CUDA_REDIST}
 GPU=${GPU:-1}; GPUF=; [ $GPU = 1 ] && GPUF=--gpu
+[ $GPU = 0 ] || [ -n "${SM:-}" ] || { echo "REFUSED: GPU=1 builds for SM, the compute capability of the target (120 for sm_120): give it"; exit 2; }
 if [ $GPU = 1 ] && [ ! -x $CUDA_TK/bin/nvcc ]; then
   exec 7>$FW/cuda.lock; flock 7
   [ -x $CUDA_TK/bin/nvcc ] || python3 - $CUDA_REDIST $CUDA_TK > $O/cuda-redist.log 2>&1 <<'EOF' || { cat $O/cuda-redist.log; exit 1; }
@@ -157,7 +158,7 @@ EOF
   exec 7>&-
 fi
 export PATH=$CUDA_TK/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
-SM=${SM:-120}; N=${N:-2048}; K=${K:-4096}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS))
+SM=${SM:-}; N=${N:-2048}; K=${K:-4096}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS))
 CPUS=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
 NC=$(echo $CPUS | tr ',' '\n' | wc -l); PC=${PCPUS:-16}; [ $PC -ge $NC ] && PC=$(( NC / 2 ))
 PCPU=$(echo $CPUS | cut -d, -f1-$PC); VCPU=$(echo $CPUS | cut -d, -f$((PC + 1))-)
@@ -1158,6 +1159,13 @@ lean)
       --program $DD/stage/program.json > $O/lean/inner-statement.log 2> $O/lean/inner-statement.err
     echo "inner-statement lean exit $?"
   fi
+  # REC_LINKS=1: the inner statement declares links and is given no --registered tree port, so Lean refuses it (ZK_LEAN's
+  # and the inner statement's part) by checkLinked's name; that refusal is what passes, and any other verdict fails
+  LINKS_RC=0
+  refused_by_links() {
+    if grep -qs "and no tree port (tree) reads it by path" $O/lean/$1.log $O/lean/$1.err; then echo "lean $1: refused by name: a link row no tree port reads"
+    else echo "lean $1: REC_LINKS=1 and not refused by checkLinked  <- FAILS"; LINKS_RC=1; fi
+  }
   # fail closed: every statement vstage staged or oprove kept a session of, ZK_LEAN's, and the inner statement's
   PARTS=$( { [ -d $DD/v ] && (cd $DD/v && find . -name inst.bin -printf '%h\n' | sed 's:^\./::; s:/:-:g')
     for S in $(ls -d $DD/v-sess/*/ 2>/dev/null | sed 's:/$::'); do basename $S; done; } | sort -uV | while read -r l; do want $l && echo $l; done)
@@ -1165,14 +1173,16 @@ lean)
     case $l in forged-*) continue ;; esac
     want $l && for w in $NEGS; do PARTS="$PARTS forged-inner-$w-$l"; done
   done
-  [ "${ZK_LEAN:-0}" = 1 ] && PARTS="$PARTS zk"
-  [ -f $DD/stage/circuit.txt ] && PARTS="$PARTS inner-statement"
+  for p in $([ "${ZK_LEAN:-0}" = 1 ] && echo zk) $([ -f $DD/stage/circuit.txt ] && echo inner-statement); do
+    if [ "${REC_LINKS:-0}" = 1 ]; then refused_by_links $p; else PARTS="$PARTS $p"; fi
+  done
   if [ "${LEVELS:-}" = none ] && [ -z "$PARTS" ]; then echo "lean: LEVELS=none and no ZK_LEAN: no part to check"
   else cp $DD/v-sess/*.live $O/lean/ 2>/dev/null
     # the challenger's record of a zk_served oprove (rec-run.jsonl), its forgeries' own (rec-run-<name>.jsonl) and RETRY's
     # name, which lean_verdicts.py composes V*'s parts over
     cp $DD/v-sess/rec-run*.jsonl $DD/v-sess/retried.txt $O/lean/ 2>/dev/null
     python3 verity/protocols/proofs/flock/prover/pod/lean_verdicts.py $([ -s $O/lean/rows.json ] && echo "--compose $LEAN_BIN") $O/lean $PARTS; LEAN_RC=$?; fi
+  [ $LINKS_RC = 0 ] || LEAN_RC=1
   ;;
 esac
 summary

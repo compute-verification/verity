@@ -27,12 +27,12 @@ else:
     torch = pytest.importorskip("torch")
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import handoff as HO
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import kept as KP
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
 

@@ -280,7 +280,6 @@ writers = [
 readers = [
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_openai.py", find = "option\\(\"--(protocols|protocols-config)\"" },
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "def config_of|config_of\\(opts\\.protocols_config\\)" },
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_pearl.py", find = "def config_of|config_of\\(opts\\.protocols_config\\)" },
 ]
 
 [[message]]
@@ -290,7 +289,7 @@ writers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--h1-prover \"\\$D/private/h1\"" },
 ]
 readers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "option\\(\"--h1-prover\"|prover=opts\\.gate\\.h1_prover" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "option\\(\"--h1-prover\"|prover=opts\\.h1\\.h1_prover" },
 ]
 
 [[message]]
@@ -302,7 +301,7 @@ writers = [
 ]
 readers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "^tie\\(\\) \\{|window_commit \\\"\\$D/h1/w\\$K/window-commit\\.json\\\"" },
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "option\\(\"--h1-window-commit\"|WindowTie\\(opts\\.gate\\.h1_window_commit" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "option\\(\"--h1-window-commit\"|WindowTie\\(opts\\.h1\\.h1_window_commit" },
 ]
 
 [[message]]
@@ -372,7 +371,7 @@ readers = [
 type = "PearlPass"
 today = "Pearl+'s passes (`pearl/w<k>/served.json`, `coins.json`, `pass-NNNNN/`)"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_pearl.py", find = "\"coins\\.json\"|\"served\\.json\"" },
+    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/scheme.py", find = "\"coins\\.json\"|\"served\\.json\"" },
 ]
 readers = [
     { lane = "compute-accounting", file = "benchmarks/pouw/pearl_c_vllm/served_passes.py", find = "passes / \"served\\.json\"\\)\\.read_text" },
@@ -384,7 +383,6 @@ readers = [
 type = "PoUWValues"
 today = "the adapter calls PoUW's prover package (`verity.protocols.resource_accounting.compute.pouw.prover`: `schemes.pearl_c`, `circuit.h1window`, `circuit.ncp2`, ...)"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_pearl.py", find = "verity\\.protocols\\.accounting\\.pouw\\.prover" },
     { lane = "compute-accounting", file = "adapters/vllm/verity_vllm/protocols/pouw/__init__.py", find = "verity\\.protocols\\.accounting\\.pouw\\.prover" },
 ]
 readers = [

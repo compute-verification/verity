@@ -59,22 +59,6 @@ def test_an_edges_period_counts_a_loads_passes_and_users_as_one_load():
     assert P.edge_load(P.release_key("warm-00003")) == "warm" and P.edge_load(None) is None
 
 
-def test_the_gate_adds_in_release_order_and_the_trace_sees_that_order(tmp_path):
-    sched = Scheduler()
-    out, private = tmp_path / "out", tmp_path / "private"
-    done = P.install(sched, {"out": str(out), "private": str(private), "record": True, "release_order": True})
-    for n in (2, 0, 3, 1):
-        sched.add_request(Request(eid("light1", n), [n]))
-    assert sched.order == [eid("light1", n) for n in range(4)]
-    done[0].drain()
-    (trace,) = (private / "server").glob("step_trace.*.jsonl")
-    assert not out.exists()
-    recs = [json.loads(x) for x in trace.read_text().splitlines()]
-    assert [r["request"] for r in recs if r["kind"] == "arrive"] == sched.order
-    done[-1].uninstall()
-    done[0].uninstall()
-
-
 def stops(request: Request) -> str | None:
     """Why vLLM's scheduler stops a request at its last output id (its ``check_stop``): the parameters'
     end-of-sequence id, one of their stop ids, or the request's length."""
@@ -180,70 +164,12 @@ def test_idle_reset_empties_the_prefix_cache_for_a_request_that_finds_the_schedu
     done[-1].uninstall()
 
 
-def test_a_missing_number_is_skipped_after_its_hold_and_a_held_abort_never_reaches_the_scheduler():
-    sched, now = Scheduler(), [0.0]
-    gate = P.ReleaseGate(sched.add_request, lambda ids: sched.finish_requests(ids, "aborted"), key=P.release_key,
-                         hold_s=5.0, clock=lambda: now[0])
-    gate.add(Request(eid("r", 1), [1]))
-    gate.add(Request(eid("r", 2), [2]))
-    assert sched.order == [] and gate.held()
-    assert gate.finished([eid("r", 2), "other"]) == ["other"]
-    now[0] = 4.9
-    gate.poll()
-    assert sched.order == []
-    now[0] = 5.0
-    gate.poll()
-    assert sched.order == [eid("r", 1)] and not gate.held()
-
-
-def test_a_new_run_starts_from_zero_and_unnumbered_requests_pass():
-    sched = Scheduler()
-    gate = P.ReleaseGate(sched.add_request, lambda ids: None, key=P.release_key)
-    gate.add(Request(eid("a", 0), [0]))
-    gate.add(Request(eid("b", 0), [0]))
-    gate.add(Request("plain-request", [0]))
-    assert sched.order == [eid("a", 0), eid("b", 0), "plain-request"]
-
-
 class Rows:
     def __init__(self, n: int, k: int):
         self.shape = (n, k)
 
     def __getitem__(self, s: slice) -> "Rows":
         return Rows(len(range(*s.indices(self.shape[0]))), self.shape[1])
-
-
-class Launched:
-    def __init__(self):
-        self.done = False
-
-    def ready(self) -> bool:
-        return self.done
-
-    def kernel_ms(self) -> float:
-        return 2.0
-
-
-def test_kv_edge_keeps_at_most_inflight_chunks_out_and_reports_each_edge_once():
-    now, got, out = [0.0], [], []
-
-    def launch(edge, rows):
-        out.append((edge, rows.shape[0], Launched()))
-        return out[-1][2]
-
-    kv = P.KvEdge(10.0, got.append, chunk_rows=2, inflight=1, clock=lambda: now[0], launch=launch)
-    kv.rows = lambda caches: [Rows(5, 8)]
-    kv.tick(None)
-    assert out == []
-    now[0] = 10.0
-    for _ in range(3):
-        kv.tick(None)
-        assert sum(not o[2].done for o in out) == 1
-        out[-1][2].done = True
-    kv.tick(None)
-    assert [o[:2] for o in out] == [(0, 2), (0, 2), (0, 1)]
-    assert got == [{"edge": 0, "bytes": 40, "chunks": 3, "kernel_ms": 6.0, "gb_per_s": round(40 / 6.0 / 1e6, 1), "span_s": 0.0,
-                    "t": got[0]["t"]}]
 
 
 def test_token_commit_commits_each_window_prompt_and_sampled_ids_in_order():
@@ -284,28 +210,6 @@ def test_served_ids_keeps_each_finished_requests_prompt_ids_and_served_ids(tmp_p
     done[-1].uninstall()
     sched.add_request(Request(eid("agentic@2-r2-u0", 0), [1]))
     assert not done[0].open
-
-
-def test_kv_edge_starts_at_the_first_step_with_a_kv_cache_outside_a_capture():
-    ticks, capturing = [], [False]
-
-    class Edge:
-        def tick(self, kv):
-            ticks.append(kv)
-
-    made = []
-    run = P._kv_runner(lambda self: "out", {"out": "."}, capturing=lambda: capturing[0],
-                       edge_of=lambda: made.append(1) or Edge())
-    runner = NS()
-    assert run(runner) == "out" and not made
-    runner.kv_caches = []
-    run(runner)
-    runner.kv_caches, capturing[0] = ["kv"], True
-    run(runner)
-    assert not made
-    capturing[0] = False
-    run(runner), run(runner)
-    assert made == [1] and ticks == [["kv"], ["kv"]]
 
 
 def test_history_tables_start_on_rank_0_at_the_first_step_with_a_kv_cache_outside_a_capture(monkeypatch):
@@ -397,8 +301,8 @@ def test_tables_that_cant_start_fail_every_step_and_a_refused_cache_stops_the_en
 
 
 class RankExecutor:
-    """A stand-in tensor-parallel executor: three ranks answering `boundary.rank_pool` and `boundary.rank_take`, rank 2's
-    root different."""
+    """A stand-in tensor-parallel executor: three ranks answering `boundary.rank_pool`, `boundary.rank_salted` and
+    `boundary.rank_take`, rank 2's root different."""
 
     def __init__(self):
         self.calls: list = []
@@ -408,12 +312,14 @@ class RankExecutor:
 
         self.calls.append((fn.__name__, args))
         if fn is B.rank_pool:
-            return [{"rank": r, "bytes": 10} for r in (1, 0)]
+            return [{"rank": r, "bytes": 10, "salt_rows": {"kv.0": 2}} for r in (1, 0)]
+        if fn is B.rank_salted:
+            return [{"rank": r, "build_s": 0.5 + r} for r in (1, 0)]
         return [{"rank": r, "root": "aa" if r < 2 else "bb", "hash_kernel_ms": 4.0 + r, "copy_ms": 9.0 if r == 0 else None,
                  "copied_bytes": 10 if r == 0 else 0, "kv_s": 0.5, "runner_s": 0.1 * r} for r in (2, 0, 1)]
 
 
-def test_a_tensor_parallel_edge_takes_each_ranks_part_through_collective_rpc(monkeypatch):
+def test_a_tensor_parallel_edge_takes_each_ranks_part_through_collective_rpc(monkeypatch, tmp_path):
     import boundary as B
     import pytest
 
@@ -425,12 +331,15 @@ def test_a_tensor_parallel_edge_takes_each_ranks_part_through_collective_rpc(mon
     with pytest.raises(RuntimeError, match="no save_kv"):
         P.ranks_take(core, {"out": "x", "save_kv": [1]}, NS(scheduled=7), None, None, [None], lambda: now[0],
                      record=recs.append)
-    take = P.ranks_take(core, {"out": "x", "kv_copy": "first"}, NS(scheduled=7), None, None, ["medium2"],
-                        lambda: now[0], key=lambda: b"k" * 32, record=recs.append)
-    assert calls == [("rank_pool", (4, "first"))] and recs[0]["ranks"][0] == {"rank": 1, "bytes": 10}
+    take = P.ranks_take(core, {"out": "x", "kv_copy": "first", "kv_dir": str(tmp_path / "kv")}, NS(scheduled=7), None,
+                        None, ["medium2"], lambda: now[0], record=recs.append)
+    salts = tmp_path / "kv" / B.SALTS
+    assert calls == [("rank_pool", (4, "first")), ("rank_salted", (str(salts),))]
+    assert B.SF.params(salts) == {"kv.0": 2} and recs[0]["ranks"][0] == {"rank": 1, "bytes": 10}
+    assert recs[0]["build_s"] == 1.5
     now[0] = 12.5
     take(NS(edge=0), {"edge": 0, "due_t": 12.0, "drained_t": 12.25, "drain_calls": 2})
-    assert calls[-1] == ("rank_take", (b"k" * 32,))
+    assert calls[-1] == ("rank_take", ())
     r = recs[-1]
     assert (r["edge"], r["load"], r["next_step"], r["drain_s"], r["pause_s"]) == (0, "medium2", 7, 0.25, 0.25)
     assert [x["rank"] for x in r["ranks"]] == [0, 1, 2] and r["state_requests_bytes"] == 3
@@ -451,7 +360,8 @@ def test_a_tensor_parallel_engine_takes_an_edge_each_period_of_each_loads_servin
     monkeypatch.setattr(B, "capture", lambda core, runner=True: {"requests": b""})
     core = NS(scheduler=sched, model_executor=RankExecutor(), batch_queue=[])
     now, steps = [0.0], []
-    edges = P.edges_of(core, {"out": str(tmp_path), "every_s": 30.0, "kv_copy": "first"}, lambda: now[0])
+    edges = P.edges_of(core, {"out": str(tmp_path), "private": str(tmp_path / "p"), "every_s": 30.0, "kv_copy": "first"},
+                       lambda: now[0])
 
     def step(t: float) -> None:
         now[0] = t
@@ -497,10 +407,6 @@ def test_boundary_rows_installs_the_integrations_boundary_windows_from_the_confi
     assert got == {"cfg": cfg, "out": tmp_path / "boundary", "public": (tmp_path,), "sched": sched, "release": None}
     (lines,) = tmp_path.glob("boundary.*.jsonl")
     assert json.loads(lines.read_text()) == {"window": 0, "spans": 2}
-    done[-1].uninstall()
-    (tmp_path / "ordered").mkdir()
-    done = P.install(Scheduler(), {"out": str(tmp_path / "ordered"), "boundary_rows": cfg, "release_order": True})
-    assert got["release"] is P.release_key
     done[-1].uninstall()
     # a class's directory holds its requests' tokens and salts: with a private directory named it goes there, and
     # out keeps only the classes' public lines and stays the directory the history tables are refused under

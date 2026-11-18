@@ -5,10 +5,10 @@ it, and the SM clock. Their certified load, pooled over the step and the GPU's 4
 placement), is read by machine_model's `capacity`: filler MMAs with their fold's
 lane instructions, lane-chain steps if the filler ran any, and served MMAs, at f_max and at the run clock.
 
-With --lfill it reads dcap's lfill lines instead (capfill_fold_probe.sh): each one's window beside the pump alone and
+With --lfill it reads dcap's lfill lines instead: each one's window beside the pump alone and
 beside the pump and the lane filler (lines from a -DPF_LANE build, now retired, carry its lane
-instructions a pump MMA as pf_lane). With --dfill, dcap's dfill lines (capfill_co_probe.sh): the step beside the pump on a
-split, or co-scheduled on every SM. With --fstep, dcap's fstep lines (capfill_fstep_probe.sh): the step through flin
+instructions a pump MMA as pf_lane). With --dfill, dcap's dfill lines: the step beside the pump on a
+split, or co-scheduled on every SM. With --fstep, dcap's fstep lines: the step through flin
 beside the pump, co-scheduled on every SM.
 
   python3 benchmarks/pouw/filler/capacity_of.py RUN_OUT_DIR [--fold duo] [--lane-per-mma X] [--served-fold none] [--json]
@@ -27,11 +27,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "calibration" / "ma
 from verity_machine_model import capacity as C
 from verity_machine_model import eps as E
 
+from verity.device import load_card, number
+from verity_bench import kit
+
 #: what the tests read
 __all__ = ["E", "dfill_rows", "fstep_rows", "lfill_rows", "main"]
 
-F_MAX_MHZ = 2430.0  # sm_120's maximum SM clock, the credit's
-SMS = 188
+_CARD = load_card("rtx-pro-6000-server", directory=kit.cards_directory())
+F_MAX_MHZ = float(number(_CARD["clock"]["sm"]))  # sm_120's maximum SM clock, the credit's
+SMS = int(number(_CARD["sm"]["count"]))
 MACS_A_MMA = 4096
 
 
@@ -149,9 +153,9 @@ def fstep_rows(pi: E.Machine, recs: list[dict], fold: str = "duo", served_fold: 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="capacity_of.py", description=__doc__.split("\n")[0])
     ap.add_argument("out", type=Path, nargs="?", help="a scored run's arm dir (its score.json)")
-    ap.add_argument("--lfill", type=Path, help="dcap lfill lines (capfill_fold_probe.sh's lfill.jsonl)")
-    ap.add_argument("--dfill", type=Path, help="dcap dfill lines, split or co (capfill_co_probe.sh's co.jsonl)")
-    ap.add_argument("--fstep", type=Path, help="dcap fstep lines (capfill_fstep_probe.sh's fstep.jsonl)")
+    ap.add_argument("--lfill", type=Path, help="dcap lfill lines")
+    ap.add_argument("--dfill", type=Path, help="dcap dfill lines, split or co")
+    ap.add_argument("--fstep", type=Path, help="dcap fstep lines")
     ap.add_argument("--fold", default="duo")
     ap.add_argument("--served-fold", default="none")
     ap.add_argument("--lane-per-mma", type=float, default=0.0, help="lane-chain warp instructions a filler MMA")

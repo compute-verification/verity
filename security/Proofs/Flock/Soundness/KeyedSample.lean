@@ -23,21 +23,21 @@ the pool (`card_pool_mem`).
 * `subsetOn_eq`, `subsetOn_misses`: the per-swap loop as a list recursion, and its `HashMap` read through a permutation.
 * `loopK_le`: swap `i` on its own uniform stream samples uniformly over the pool `π '' [i, n)`, so the loop escapes `B` with
   at most `C(n − i − |B|, c)/C(n − i, c)`.
-* `SamplingDesign.subsetOn_escape_le`: over independent uniform streams, one per swap, `Key.subset` misses `B` with at most the
+* `SamplingDesign.subsetOn_missProb_le`: over independent uniform streams, one per swap, `Key.subset` misses `B` with at most the
   uniform `k`-subset's missProb.
 
 The window (`PlanDraw.executionPhase`, `plan.draw` for each call under one key, admission refusing a repeated call index):
 
 * `sampleAll_eq`, `sampleK_eq_sampleOn`: the calls' samples are one sample over the window's flat strata (`flat`), and on the key
   it is `sampleOn` on the key's streams, stratum `p`'s swap `i` at index `("s", *context, i)`.
-* `SamplingDesign.sampleOn_escape_le`: **C per-call samples form one stratified sampling design**. Over independent uniform streams, one per stratum
+* `SamplingDesign.sampleOn_missProb_le`: **C per-call samples form one stratified sampling design**. Over independent uniform streams, one per stratum
   and swap, the window sample misses `B` with at most `(SamplingDesign.stratified σ k hk).missProb B`, for strata that describe `σ`'s
   (`PlanStrata`).
-* `SamplingDesign.keyedExecutionPhase`, `SamplingDesign.keyedExecutionPhase_escape_le`: **tier 3**. The live window sample, on the key derived from a verifier
+* `SamplingDesign.keyedExecutionPhase`, `SamplingDesign.keyedExecutionPhase_missProb_le`: **tier 3**. The live window sample, on the key derived from a verifier
   secret of `S` bytes, escapes `B` with at most `(SamplingDesign.stratified σ k hk).missProb B + η`, under A4
   (`Assumptions.KeyedStreamsUniform`) for the test `executionPhaseTest` and swap indices with distinct framings. As for
   `Flock.Draw.subset`, it holds for every number of bytes `L` read per swap, and the unbounded Python stream is the limit.
-* `Randomness.frames_inj'`, `SamplingDesign.executionPhaseIdx_inj`, `SamplingDesign.keyedExecutionPhase_escape_le_of_names`: a frame parses uniquely, so the
+* `Randomness.frames_inj'`, `SamplingDesign.executionPhaseIdx_inj`, `SamplingDesign.keyedExecutionPhase_missProb_le_of_names`: a frame parses uniquely, so the
   swap indices' framings are distinct when the calls are admitted and each call's stratum names are distinct. So tier 3
   holds from the sample's own checks, with every swap index framed in under `2^64` bytes.
 * `SamplingDesign.keyedExecutionPhase_audit_of_record`, `SamplingDesign.keyedExecutionPhase_extraction_audit_of_record`: **step 4**, the window pins on the live
@@ -362,7 +362,7 @@ open scoped ENNReal
 
 /-- **`Key.subset` escapes no more often than the uniform `k`-subset**: over independent uniform streams, one per swap,
 the spec's per-swap sampler returns a sample missing `B` with probability at most `C(n − |B|, k)/C(n, k)`. -/
-theorem subsetOn_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
+theorem subsetOn_missProb_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
     prCoin (fun G : Fin k → Fin L → Fin 256 =>
         ∃ D, Randomness.subsetOn k n (KeyedSample.streamsOf G) = some D ∧ ∀ u ∈ B, u.val ∉ D) ≤
       (Verity.SamplingDesign.subset n k hk).missProb B := by
@@ -383,7 +383,7 @@ theorem subsetOn_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
     _ ≤ ((n - 0 - B'.card).choose k : ℝ≥0∞) / ((n - 0).choose k : ℝ≥0∞) :=
         KeyedSample.loopK_le n k L B' hB'n k 0 (Equiv.refl ℕ) (by omega) hk (fun t ht => ht)
           (fun t ht => absurd ht (Nat.not_lt_zero t))
-    _ = (Verity.SamplingDesign.subset n k hk).missProb B := by rw [Verity.SamplingDesign.subset_escape, hcard, Nat.sub_zero]
+    _ = (Verity.SamplingDesign.subset n k hk).missProb B := by rw [Verity.SamplingDesign.subset_missProb, hcard, Nat.sub_zero]
 
 end Spot.Sampling.SamplingDesign
 
@@ -539,7 +539,7 @@ def executionPhaseStreams {k : Fin M → ℕ} {L : ℕ} (F : (p : Fin M) → Fin
 
 /-- **The window sample escapes no more often than `SamplingDesign.stratified`**: over independent uniform streams, one per stratum
 and swap, it returns a sample missing `B` with at most the stratified sampling design's missProb. -/
-theorem sampleOn_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+theorem sampleOn_missProb_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (WS : List (List Part × PlanDraw.Stratum)) (hWS : PlanStrata σ k WS) (L : ℕ) (B : Finset (Fin n)) :
     prCoin (fun F : (p : Fin M) → Fin (k p) → Fin L → Fin 256 =>
         ∃ D, KeyedSample.sampleOn (executionPhaseStreams F) WS 0 = some D ∧ ∀ u ∈ B, u.val ∉ D) ≤
@@ -569,11 +569,11 @@ theorem sampleOn_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ 
         prCoin_pi_forall (Ω := fun p => Fin (k p) → Fin L → Fin 256) univ (fun p (G : Fin (k p) → Fin L → Fin 256) =>
           ∃ D, subsetOn (k p) (stratum σ p).card (KeyedSample.streamsOf G) = some D ∧ ∀ j ∈ Bl p, j.val ∉ D)
     _ ≤ ∏ p, (Verity.SamplingDesign.subset (stratum σ p).card (k p) (hk p)).missProb (Bl p) :=
-        Finset.prod_le_prod fun p _ => subsetOn_escape_le _ _ _ (hk p) (Bl p)
+        Finset.prod_le_prod fun p _ => subsetOn_missProb_le _ _ _ (hk p) (Bl p)
     _ ≤ (stratified σ k hk).missProb B := by
-        rw [stratified_escape]
+        rw [stratified_missProb]
         refine Finset.prod_le_prod fun p _ => ?_
-        rw [Verity.SamplingDesign.subset_escape]
+        rw [Verity.SamplingDesign.subset_missProb]
         have hcard : (B.filter (σ · = p)).card ≤ (Bl p).card := by
           obtain ⟨_, hn', himg⟩ := hW p (hp p)
           have hsub : (B.filter (σ · = p)).map Fin.valEmbedding ⊆ (Bl p).image fun j => (U p).getD j.val 0 := by
@@ -645,7 +645,7 @@ theorem uniformSecret_id (S : ℕ) : Assumptions.UniformSecret (fun ω : Fin S �
 
 /-- **Tier 3 for the PoUW window sample**: on a uniform window secret (A5), under A4 for the sample's missProb test, the live
 window sample escapes `B` with at most `SamplingDesign.stratified`'s missProb plus `η`, for every number of bytes `L` read per swap. -/
-theorem keyedExecutionPhase_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+theorem keyedExecutionPhase_missProb_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (calls : List PlanDraw.Call) (hWS : PlanStrata σ k (KeyedSample.flat calls)) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec) (L : ℕ) (domain : String)
     (context : List (String × Part)) (η : ℝ≥0∞)
@@ -658,7 +658,7 @@ theorem keyedExecutionPhase_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ)
   set WS := KeyedSample.flat calls with hWSdef
   obtain ⟨hlen, hW⟩ := hWS
   rcases B.eq_empty_or_nonempty with rfl | ⟨b, hb⟩
-  · rw [stratified_escape_empty]
+  · rw [stratified_missProb_empty]
     exact (SampleExec.prCoin_le_one _).trans le_self_add
   · -- the missProb event is the test on the key's streams
     have hkey : ∀ ω : Ω, Disjoint ((keyedExecutionPhase (n := n) sec domain context calls L).draw ω) B →
@@ -695,7 +695,7 @@ theorem keyedExecutionPhase_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ)
     have hunif : prCoin (fun f : (j : Fin (∑ p, k p)) → Fin ((fun _ => L) j) → Fin 256 =>
         executionPhaseTest WS k B fun j => ⟨Array.ofFn fun b => UInt8.ofFin (f j b)⟩) ≤ (stratified σ k hk).missProb B := by
       rw [KeyedSample.prCoin_eq_avg_ind, ← SampleExec.avg_equiv e', ← KeyedSample.prCoin_eq_avg_ind]
-      refine le_trans (prCoin_mono fun F hF => ?_) (sampleOn_escape_le σ k hk WS ⟨hlen, hW⟩ L B)
+      refine le_trans (prCoin_mono fun F hF => ?_) (sampleOn_missProb_le σ k hk WS ⟨hlen, hW⟩ L B)
       obtain ⟨D, hD, hmiss⟩ := hF
       refine ⟨D, ?_, hmiss⟩
       rw [← hD]
@@ -975,10 +975,10 @@ theorem executionPhaseIdx_inj (calls : List PlanDraw.Call) (k : Fin M → ℕ) (
     exact (Fin.heq_ext_iff (congrArg k hfst)).2 hi
   exact (finSigmaFinEquiv (n := k)).symm.injective hxx
 
-/-- **Tier 3 for the PoUW window sample, from the sample's own checks**: `keyedExecutionPhase_escape_le` with its distinct framings
+/-- **Tier 3 for the PoUW window sample, from the sample's own checks**: `keyedExecutionPhase_missProb_le` with its distinct framings
 from admission, distinct stratum names within each call, and swap indices framed in under `2^64` bytes. A window that
 admission refuses samples every unit. -/
-theorem keyedExecutionPhase_escape_le_of_names (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+theorem keyedExecutionPhase_missProb_le_of_names (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (calls : List PlanDraw.Call) (hWS : PlanStrata σ k (KeyedSample.flat calls)) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec) (L : ℕ) (domain : String)
     (context : List (String × Part)) (η : ℝ≥0∞) (hnames : ∀ c ∈ calls, (c.strata.map (·.name)).Nodup)
@@ -989,10 +989,10 @@ theorem keyedExecutionPhase_escape_le_of_names (σ : Fin n → Fin M) (k : Fin M
     (keyedExecutionPhase (n := n) sec domain context calls L).missProb B ≤ (stratified σ k hk).missProb B + η := by
   classical
   by_cases hadm : (calls.map fun c => frames c.index).Nodup
-  · exact keyedExecutionPhase_escape_le σ k hk calls hWS sec hsec L domain context η
+  · exact keyedExecutionPhase_missProb_le σ k hk calls hWS sec hsec L domain context η
       (executionPhaseIdx_inj calls k hWS.1 hadm hnames hsmall) hA4 B
   · rcases B.eq_empty_or_nonempty with rfl | ⟨b, hb⟩
-    · rw [stratified_escape_empty]
+    · rw [stratified_missProb_empty]
       exact (SampleExec.prCoin_le_one _).trans le_self_add
     · refine le_trans (le_of_eq_of_le (b := 0) ?_ zero_le) zero_le
       refine le_antisymm ((prCoin_mono (q := fun _ => False) fun ω hd => ?_).trans prCoin_false.le) zero_le
@@ -1019,7 +1019,7 @@ variable {n M : ℕ} {cl : Fin n → Finset (Fin n)} {Reg : Type} {session : Fin
 /-- **The PoUW window audit on the live keyed sample, at the sizing of record** (step 4): the audit accepts while the unsound
 tiles do at least 0.1% of the work, or the unsound y cells are at least 0.1% of them, with probability at most
 `2^-40 + η + ε_ks + ε_bind`. It is `audit_executionPhase_split_of_record_of_le_slack` at `L := keyedExecutionPhase sec domain context calls L`,
-whose missProb `keyedExecutionPhase_escape_le_of_names` bounds by the product distribution's plus `η`: one `η` for every `B`, A4's for the
+whose missProb `keyedExecutionPhase_missProb_le_of_names` bounds by the product distribution's plus `η`: one `η` for every `B`, A4's for the
 sample's missProb tests (`executionPhaseTest`), which cost the same for every `B`.
 
 The key's context is the receipt digest, so the sample depends on the registration: it holds per strategy, for the context
@@ -1045,7 +1045,7 @@ theorem keyedExecutionPhase_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (ca
         (audit ((keyedExecutionPhase (n := n) sec domain context calls L).closure cl) Reg session) σ' ≤
       ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks + εbind :=
   audit_executionPhase_split_of_record_of_le_slack
-    (fun B => keyedExecutionPhase_escape_le_of_names σ _ (executionPhaseK_le σ call w f 27713) calls hWS sec hsec L domain context η
+    (fun B => keyedExecutionPhase_missProb_le_of_names σ _ (executionPhaseK_le σ call w f 27713) calls hWS sec hsec L domain context η
       hnames hsmall hA4 B) A hks hlink hW hone hN hfy σ'
 
 /-- **The claim of record: the PoUW window audit on the live keyed sample at the compiled layer** (randomized extractor):
@@ -1070,11 +1070,11 @@ theorem keyedExecutionPhase_extraction_audit_of_record {C : ℕ} (σ : Fin n →
         (audit ((keyedExecutionPhase (n := n) sec domain context calls L).closure cl) Reg session) σ' ≤
       ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks (reg σ') (cont σ') + εbind (reg σ') (cont σ') :=
   extraction_audit_executionPhase_split_of_record_of_le_slack
-    (fun B => keyedExecutionPhase_escape_le_of_names σ _ (executionPhaseK_le σ call w f 27713) calls hWS sec hsec L domain context η
+    (fun B => keyedExecutionPhase_missProb_le_of_names σ _ (executionPhaseK_le σ call w f 27713) calls hWS sec hsec L domain context η
       hnames hsmall hA4 B) A hks hlink hW hone hN hfy σ'
 
 /-- **The claim of record on the real, receipt-keyed game**: the key's context `ctx R` is the digest of the
-registration's receipt, so the sample is `auditReg`'s. Strategy by strategy (`prob_auditReg`), it is
+registration's receipt, so the sample is `Pouw.Window.auditReg`'s. Strategy by strategy (`prob_auditReg`), it is
 `keyedExecutionPhase_extraction_audit_of_record` at `ctx (reg σ)`, with A4 and the analysis taken for every registration and one `η`
 for all of them. -/
 theorem keyedExecutionPhaseReg_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C)
@@ -1093,11 +1093,11 @@ theorem keyedExecutionPhaseReg_extraction_audit_of_record {C : ℕ} (σ : Fin n 
     (hks : ∀ R, (A R).KnowledgeSound (εks R)) (hlink : ∀ R, (A R).BindSound (εbind R)) (hW : 0 < totalWork σ w)
     (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card)
     (hN : 0 < totalWork σ v) (hfy : ∀ s, 27713 * v s * (stratum σ s).card ≤ f s * totalWork σ v)
-    (σ' : Strategy (auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session)) :
+    (σ' : Strategy (Pouw.Window.auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session)) :
     prob (fun o => o.1 = true ∧
         (totalWork σ w ≤ 1000 * unsoundWork σ w cl ((A σ'.1).incorrect ((A σ'.1).committedOf (atReg σ'))) ∨
           totalWork σ v ≤ 1000 * unsoundWork σ v cl ((A σ'.1).incorrect ((A σ'.1).committedOf (atReg σ')))))
-        (auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session) σ' ≤
+        (Pouw.Window.auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session) σ' ≤
       ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks σ'.1 (reg (atReg σ')) (cont (atReg σ')) +
         εbind σ'.1 (reg (atReg σ')) (cont (atReg σ')) := by
   rw [prob_auditReg]
@@ -1119,11 +1119,11 @@ theorem keyedExecutionPhaseReg_audit_of_record {C : ℕ} (σ : Fin n → Fin M) 
     (hks : ∀ R, (A R).KnowledgeSound εks) (hlink : ∀ R, (A R).BindSound εbind) (hW : 0 < totalWork σ w)
     (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card)
     (hN : 0 < totalWork σ v) (hfy : ∀ s, 27713 * v s * (stratum σ s).card ≤ f s * totalWork σ v)
-    (σ' : Strategy (auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session)) :
+    (σ' : Strategy (Pouw.Window.auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session)) :
     prob (fun o => o.1 = true ∧
         (totalWork σ w ≤ 1000 * unsoundWork σ w cl ((A σ'.1).incorrect ((A σ'.1).committedOf (atReg σ'))) ∨
           totalWork σ v ≤ 1000 * unsoundWork σ v cl ((A σ'.1).incorrect ((A σ'.1).committedOf (atReg σ')))))
-        (auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session) σ' ≤
+        (Pouw.Window.auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session) σ' ≤
       ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks + εbind := by
   rw [prob_auditReg]
   exact keyedExecutionPhase_audit_of_record σ call w v f calls hWS sec hsec L domain (ctx σ'.1) η hnames hsmall (hA4 σ'.1)

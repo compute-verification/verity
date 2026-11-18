@@ -13,9 +13,6 @@ directory its files go to, ``private``, the directory on the node for its files 
 - ``idle_reset``: `IdleReset`, the prefix cache emptied for a request that arrives after the scheduler has held none
   for `IDLE_RESET_S`, each reset a line of ``prefix_resets.PID.jsonl``: a load's passes each start from an empty
   cache on a server whose reset route the client can't reach (the certified tick's server answers its allow-list);
-- ``release_order``: `ReleaseGate`, the requests added to the scheduler in the network attester's release order
-  (its frontend, through `verity_vllm.messages.attester`), their release numbers read from their X-Request-Id (``{run}-{n}``, as `serve_tax`'s client
-  numbers them, standing in for the network attester's headers);
 - ``tokens``: `TokenCommit`, each window's tokens (every prompt id at its request's arrival and every sampled id) committed
   in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
 - ``boundary_rows`` (an object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``,
@@ -38,7 +35,7 @@ and with ``edges_s`` (seconds after the first request whose id holds ``edge_tag`
 (`edges.PID.jsonl`: the drain, the pause and its parts, the KV pool's root, sizes, and unless ``busy`` is false the GPU's
 busy time each step since the last edge) is written off the engine loop. With the uniprocess executor, so are its
 `boundary.dump_core` and block fingerprints (``private``/server/edges/) and its state (``kv_dir``, by default that
-directory, /edge-K.state.pkl), and the KV pool's bytes at the edges ``save_kv`` names to ``kv_dir``/edge-K.kv; from the first edge ``save_kv`` names to the last edge, each
+directory, /edge-K.state.pkl, beside the KV pool's salt file, `boundary.SALTS`), and the KV pool's bytes at the edges ``save_kv`` names to ``kv_dir``/edge-K.kv; from the first edge ``save_kv`` names to the last edge, each
 step's sampled tokens and their logprobs' bits go to ``private``/server/edges/outputs.PID.jsonl. With a tensor-parallel executor each
 rank keeps its part in its own process (`ranks_take`), copied to host memory on the ranks ``kv_copy`` names.
 
@@ -59,14 +56,10 @@ from pathlib import Path
 from typing import Any
 
 ENV = "VERITY_SERVETAX"
-#: how long the engine core waits on its input queue at a time while the release gate holds requests and nothing runs
-POLL_S = 0.01
 #: how long a scheduler holds no request before `IdleReset` empties the prefix cache for the next. A client's passes
 #: are further apart than this (`serve_tax.IDLE_S`); a scheduler that sits empty this long inside a pass is emptied
 #: there too, which the record of the resets shows
 IDLE_RESET_S = 5.0
-#: the model runners whose ``execute_model`` the KV edge follows: V1's and Model Runner V2's, whichever the engine builds
-RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 
 _PLUGIN: list[Any] = []
 
@@ -119,61 +112,6 @@ class IdleReset:
         self.busy_at = self.clock()
 
 
-class ReleaseGate:
-    """The scheduler's ``add_request`` in release order: each request's (run, n) from its engine id (``key``), submitted to
-    the network attester's release order that forwards it to ``add`` once every earlier number of its run has come or passed (an
-    abort of a held one, or ``hold_s`` without it). The order's skip timers fire from `poll`, which the engine core calls
-    at each schedule and while it waits on its input with requests held."""
-
-    def __init__(self, add: Callable[[Any], Any], abort: Callable[[list[str]], Any], *, hold_s: float = 5.0,
-                 key: Callable[[str], tuple[str, int] | None], clock: Callable[[], float] = time.monotonic) -> None:
-        from verity_vllm import messages
-
-        self.key_of, self.clock = key, clock
-        self.timers: list[tuple[float, Callable[[], None]]] = []
-        self.order = messages.providing("admission").attach(messages.Exchange(), {
-            "settings": {"order": "release-order", "hold_ms": round(hold_s * 1000)}, "submit": lambda adm: add(adm.request),
-            "abort": lambda engine_id: abort([engine_id]),
-            "schedule": lambda delay, fn: self.timers.append((self.clock() + delay, fn))}).front
-        self.headers = self.order.headers
-
-    def add(self, request: Any) -> None:
-        k = self.key_of(request.request_id)
-        release = None
-        if k is not None:
-            release = self.order.key({self.headers[0]: str(k[1]), self.headers[1]: k[0]})
-        self.order.submit(_Admission(request, request.request_id, release))
-
-    def finished(self, ids: str | Iterable[str] | None) -> list[str] | None:
-        """Of the requests the engine core finishes from outside (aborts), those not held here, for the scheduler."""
-        if ids is None:
-            return None
-        ids = [ids] if isinstance(ids, str) else list(ids)
-        held = {adm.engine_id for adm in self.order.held.values()}
-        for rid in ids:
-            if rid in held:
-                self.order.abort(rid)
-        return [rid for rid in ids if rid not in held]
-
-    def poll(self) -> None:
-        now = self.clock()
-        due = [t for t in self.timers if t[0] <= now]
-        if due:
-            self.timers = [t for t in self.timers if t[0] > now]
-            for _, fn in due:
-                fn()
-
-    def held(self) -> bool:
-        return bool(self.order.held)
-
-
-class _Admission:
-    __slots__ = ("request", "engine_id", "release")
-
-    def __init__(self, request: Any, engine_id: str, release: tuple[str, int] | None) -> None:
-        self.request, self.engine_id, self.release = request, engine_id, release
-
-
 #: vLLM's OpenAI server's engine request id around the client's X-Request-Id: ``cmpl-{X-Request-Id}-{choice}-{8 hex}``
 ENGINE_ID = re.compile(r"^(?:cmpl|chatcmpl)-(.+)-\d+-[0-9a-f]{8}$")
 
@@ -197,7 +135,7 @@ def release_key(engine_id: str) -> tuple[str, int] | None:
 
 class TokenCommit:
     """Each window's tokens, 4 bytes each (little-endian u32) in the order the engine core saw them, committed as
-    ``rows-sha512`` rows under a fresh salt key (`step_rows.keyed_tensor_root`) on a thread of its own when the window
+    ``rows-sha512`` rows under fresh salts (`step_rows.tensor_root`) on a thread of its own when the window
     closes (`tick`, at the first schedule ``window_s`` after it opened, and at exit). ``sink`` gets each window's record."""
 
     def __init__(self, window_s: float, sink: Callable[[dict], None], clock: Callable[[], float] = time.monotonic,
@@ -276,120 +214,11 @@ class ServedIds:
 
 
 def rows_root(window: int, data: bytes) -> bytes:
-    """``data``'s root as ``rows-sha512`` rows (`step_rows.keyed_tensor_root`) under a fresh salt key."""
+    """``data``'s root as ``rows-sha512`` rows (`step_rows.tensor_root`) under fresh salts."""
     from verity_vllm.commit import step_rows
 
     entry = ["tokens", "u32", [len(data) // 4], len(data)]
-    return step_rows.keyed_tensor_root(bytes(step_rows.ID_BYTES), window, entry, data, os.urandom(step_rows.KEY_BYTES))
-
-
-class KvEdge:
-    """At each window edge (`tick`, at the model runner's first step ``window_s`` after the last edge), the paged KV cache
-    hashed where it lies: each distinct storage under its layers' tensors, viewed as rows of ``row_bytes``, hashed by the
-    GPU's row-table kernels (`row_tables_device.step_roots`: SHA-512 row digests, hm96 leaves, frame trees) on their side
-    stream, behind an event on the serving stream, in chunks of at most ``chunk_rows`` rows, so that nothing waits on the
-    host. The kernels' work is per 1,024-byte segment, so the row size changes the planning on the host, not the hashing;
-    their scratch is 64 bytes a segment, so at most ``inflight`` chunks are out at a time, the next launched at a later
-    step once one is done. The whole pool is hashed, free blocks too: an upper bound on hashing the blocks live at the
-    edge. A block that a step after the edge writes before the side stream reads it is hashed as written: a measurement of
-    the cost, not a commitment of the state. ``sink`` gets each edge's record once its last chunk is done (bytes, kernel
-    ms, the edge's span from its first launch to its last chunk's reaping). ``launch(edge, rows)`` hashes one chunk and
-    returns what `row_tables_device.step_roots` returns (``ready()``, ``kernel_ms()``)."""
-
-    def __init__(self, window_s: float, sink: Callable[[dict], None], row_bytes: int = 1 << 20, chunk_rows: int = 4096,
-                 inflight: int = 2, clock: Callable[[], float] = time.monotonic,
-                 launch: Callable[[int, Any], Any] | None = None) -> None:
-        self.window_s, self.sink, self.clock, self.launch = float(window_s), sink, clock, launch or launch_rows
-        self.row_bytes, self.chunk_rows, self.inflight = int(row_bytes), int(chunk_rows), int(inflight)
-        self.edge = 0
-        self.last = clock()
-        self.todo: list[tuple[int, Any]] = []        # (edge, chunk) not yet launched
-        self.out: list[tuple[int, Any, int]] = []    # (edge, pending, bytes) launched, not yet reaped
-        self.edges: dict[int, dict[str, Any]] = {}   # edge -> its totals until its last chunk is reaped
-
-    def rows(self, kv_caches: Iterable[Any]) -> list[Any]:
-        """Each distinct storage under the KV cache as (n, row_bytes) int8 rows (a last partial row dropped)."""
-        import torch
-
-        seen: dict[int, Any] = {}
-        for t in kv_caches:
-            for x in (t if isinstance(t, (list, tuple)) else (t,)):
-                s = x.untyped_storage()
-                if s.data_ptr() in seen:
-                    continue
-                flat = torch.empty(0, dtype=torch.int8, device=x.device).set_(s)
-                k = self.row_bytes
-                seen[s.data_ptr()] = flat[: flat.numel() // k * k].view(-1, k)
-        return list(seen.values())
-
-    def tick(self, kv_caches: Iterable[Any]) -> None:
-        self.reap()
-        if self.clock() - self.last >= self.window_s:
-            self.last = self.clock()
-            chunks = [r[lo:lo + self.chunk_rows] for r in self.rows(kv_caches) for lo in range(0, r.shape[0], self.chunk_rows)]
-            self.edges[self.edge] = {"chunks": len(chunks), "left": len(chunks), "bytes": 0, "kernel_ms": 0.0,
-                                     "start": self.clock()}
-            self.todo += [(self.edge, c) for c in chunks]
-            self.edge += 1
-        while self.todo and len(self.out) < self.inflight:
-            edge, c = self.todo.pop(0)
-            self.out.append((edge, self.launch(edge, c), c.shape[0] * c.shape[1]))
-
-    def reap(self, wait: bool = False) -> None:
-        while self.out and (wait or self.out[0][1].ready()):
-            edge, p, nbytes = self.out.pop(0)
-            e = self.edges[edge]
-            e["bytes"] += nbytes
-            e["kernel_ms"] += p.kernel_ms()
-            e["left"] -= 1
-            if e["left"] == 0:
-                del self.edges[edge]
-                ms = e["kernel_ms"]
-                self.sink({"edge": edge, "bytes": e["bytes"], "chunks": e["chunks"], "kernel_ms": round(ms, 3),
-                           "gb_per_s": round(e["bytes"] / ms / 1e6, 1) if ms else None,
-                           "span_s": round(self.clock() - e["start"], 4), "t": time.time()})
-            if wait and not self.out and self.todo:
-                edge, c = self.todo.pop(0)
-                self.out.append((edge, self.launch(edge, c), c.shape[0] * c.shape[1]))
-
-
-def launch_rows(edge: int, rows: Any) -> Any:
-    """One chunk of (n, K) int8 rows hashed by the row-table kernels on their side stream, timed."""
-    import torch
-
-    from verity_vllm.commit import row_tables_device as RTD
-
-    ids = [("kv", i) for i in range(rows.shape[0])]
-    scales = rows.new_zeros(rows.shape[0], dtype=torch.float32)
-    return RTD.step_roots(bytes(64), edge, {"kv": (ids, rows, scales)}, timing=True)
-
-
-def _kv_runner(execute: Callable[..., Any], cfg: Mapping[str, Any], capturing: Callable[[], bool] | None = None,
-               edge_of: Callable[[], KvEdge] | None = None) -> Callable[..., Any]:
-    """The model runner's ``execute_model``, then `KvEdge.tick` on its KV cache. The edge, and its window, start at the
-    first step with a KV cache: the engine's startup runs the model before it has one (the memory profile) and while
-    it captures CUDA graphs, when nothing may launch on another stream."""
-    state: dict[str, Any] = {}
-    if capturing is None:
-        import torch
-
-        capturing = torch.cuda.is_current_stream_capturing
-
-    def make() -> KvEdge:
-        edge = KvEdge(float(cfg.get("kv_window_s", cfg.get("window_s", 600))),
-                      _lines(Path(cfg["out"]) / f"kv_edges.{os.getpid()}.jsonl"))
-        atexit.register(edge.reap, True)
-        return edge
-
-    def execute_model(self: Any, *args: Any, **kwargs: Any) -> Any:
-        out = execute(self, *args, **kwargs)
-        kv = getattr(self, "kv_caches", None)
-        if kv and not capturing():
-            if "edge" not in state:
-                state["edge"] = (edge_of or make)()
-            state["edge"].tick(kv)
-        return out
-    return execute_model
+    return step_rows.tensor_root(bytes(step_rows.ID_BYTES), window, entry, data, step_rows.fresh_tensor_salts(len(data)))
 
 
 def _public(cfg: Mapping[str, Any]) -> tuple[Path, ...]:
@@ -601,6 +430,7 @@ def local_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: li
     save_kv = set(int(k) for k in cfg.get("save_kv", (0,)))
     kv_dir = Path(cfg.get("kv_dir") or d)
     kv_dir.mkdir(parents=True, exist_ok=True)
+    kv.salted(B.draw_salts(kv_dir / B.SALTS, kv.salt_rows()))
     record = _lines(out / f"edges.{pid}.jsonl")
     t = clock()
     kv.take()
@@ -671,11 +501,11 @@ def local_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: li
 
 
 def ranks_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: list[float] | None, load: list,
-               clock: Callable[[], float], key: Callable[[], bytes] = lambda: os.urandom(32),
-               record: Callable[[dict], None] | None = None) -> Callable[[Any, dict], None]:
+               clock: Callable[[], float], record: Callable[[dict], None] | None = None) -> Callable[[Any, dict], None]:
     """`edges_of`'s take for a tensor-parallel executor, whose ranks the engine core reaches only through
-    ``collective_rpc``: the engine core's state taken here, and on every rank its KV pool hashed under a fresh key, the
-    same on every rank, so that ranks holding the same bytes give the same root (`boundary.rank_take`), copied to host
+    ``collective_rpc``: the engine core's state taken here, and on every rank its KV pool hashed under the pool's salts,
+    drawn here once into ``kv_dir`` and read by every rank, so that ranks holding the same bytes give the same root
+    (`boundary.rank_salted`, `boundary.rank_take`), copied to host
     memory on the ranks ``kv_copy`` names (`boundary.KV_COPY`), and its runner rows and generators taken. Each part is
     kept where it was taken until the next edge replaces it; nothing is written but the edge's record, and the record's
     pause runs to the engine core's next step."""
@@ -689,7 +519,13 @@ def ranks_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: li
     record = record or _lines_behind(Path(cfg["out"]) / f"edges.{os.getpid()}.jsonl")
     t = clock()
     init = rpc(B.rank_pool, args=(len(pool.blocks), cfg.get("kv_copy", "all")))
-    record({"hash_build_s": clock() - t, "ranks": init})
+    rows = [r.pop("salt_rows") for r in init]
+    if any(x != rows[0] for x in rows):
+        raise RuntimeError(f"the ranks' pools hash different rows, so no salt file serves them all: {rows}")
+    kv_dir = Path(cfg.get("kv_dir") or _kept(cfg, "edges"))
+    salts = B.draw_salts(kv_dir / B.SALTS, rows[0])
+    built = rpc(B.rank_salted, args=(str(salts),))
+    record({"hash_build_s": clock() - t, "ranks": init, "build_s": max(r["build_s"] for r in built)})
     pool_bytes = sum(r["bytes"] for r in init)
     kept: dict[str, Any] = {}
 
@@ -699,7 +535,7 @@ def ranks_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: li
         kept["state"] = B.capture(core, runner=False)
         kept["state"]["next_step"] = trace.scheduled
         t1 = clock()
-        ranks = sorted(rpc(B.rank_take, args=(key(),)), key=lambda r: r["rank"])
+        ranks = sorted(rpc(B.rank_take), key=lambda r: r["rank"])
         t2 = clock()
         roots = {r.pop("root") for r in ranks}
         copied = [r["copy_ms"] for r in ranks if r["copy_ms"] is not None]
@@ -731,8 +567,7 @@ def _edge_step(orig: Callable[[Any], Any], cfg: Mapping[str, Any]) -> Callable[[
 
 def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
     """The changes ``cfg`` names on one scheduler, innermost first: the step trace, then the served ids, each request's
-    hold to its length and the idle reset, the tokens' commit and the boundary commitment, then the release gate
-    (outside them, so that they see a request when the gate adds it)."""
+    hold to its length and the idle reset, the tokens' commit and the boundary commitment."""
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
 
@@ -831,44 +666,10 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
 
         sink = _lines(out / f"boundary.{pid}.jsonl")
         kept = Path(cfg["private"]) if cfg.get("private") else out
-        released = release_key if cfg.get("release_order") else None
-        done.append(BoundaryWindows.of(cfg["boundary_rows"], kept / "boundary", sink, released, public=_public(cfg))
+        done.append(BoundaryWindows.of(cfg["boundary_rows"], kept / "boundary", sink, public=_public(cfg))
                     .install(sched, hooks))
-    if cfg.get("release_order"):
-        add, finish = sched.add_request, sched.finish_requests
-        gate = ReleaseGate(add, lambda ids: finish(ids, _aborted()), key=release_key, hold_s=float(cfg.get("hold_s", 5.0)))
-
-        def gated_add(orig):
-            return lambda request, *a, **kw: gate.add(request)
-
-        def gated_schedule(orig):
-            def wrapped(*a, **kw):
-                gate.poll()
-                return orig(*a, **kw)
-            return wrapped
-
-        def gated_finish(orig):
-            return lambda request_ids, finished_status: orig(gate.finished(request_ids), finished_status)
-
-        hooks.wrap(sched, "add_request", gated_add)
-        hooks.wrap(sched, "schedule", gated_schedule)
-        hooks.wrap(sched, "finish_requests", gated_finish)
-        hooks.patch(sched, "_verity_release", gate)
-        done.append(gate)
-    if cfg.get("kv"):
-        import torch
-
-        from verity_torch.pouw import RowTableLibrary
-
-        RowTableLibrary.of(torch, torch.cuda.current_device())
     done.append(hooks)
     return done
-
-
-def _aborted() -> Any:
-    from vllm.v1.request import RequestStatus
-
-    return RequestStatus.FINISHED_ABORTED
 
 
 def _init(init: Callable[..., None], cfg: Mapping[str, Any]) -> Callable[..., None]:
@@ -878,23 +679,6 @@ def _init(init: Callable[..., None], cfg: Mapping[str, Any]) -> Callable[..., No
     return __init__
 
 
-def _input(orig: Callable[[Any], None]) -> Callable[[Any], None]:
-    """`EngineCoreProc._process_input_queue` while the release gate holds requests and nothing runs: wait on the input
-    queue ``POLL_S`` at a time, firing the gate's skip timers between, instead of blocking until the next request."""
-    def _process_input_queue(self: Any) -> None:
-        gate = getattr(self.scheduler, "_verity_release", None)
-        while gate is not None and gate.held() and not self.has_work() and self.is_running():
-            try:
-                req = self.input_queue.get(timeout=POLL_S)
-            except queue.Empty:
-                gate.poll()
-                continue
-            self._handle_client_request(*req)
-            gate.poll()
-        return orig(self)
-    return _process_input_queue
-
-
 def register() -> None:
     """Install `config`'s changes on every V1 scheduler this process builds. Idempotent."""
     cfg = config()
@@ -902,19 +686,9 @@ def register() -> None:
         return
     from verity_vllm.engine.hooks import Hooks
     from vllm.v1.core.sched.scheduler import Scheduler
-    from vllm.v1.engine.core import EngineCoreProc
 
     hooks = Hooks(tag="serve-tax")
     hooks.wrap(Scheduler, "__init__", lambda init: _init(init, cfg))
-    if cfg.get("release_order"):
-        hooks.wrap(EngineCoreProc, "_process_input_queue", _input)
-    if cfg.get("kv"):
-        import importlib
-
-        for name in RUNNERS:
-            runner = getattr(importlib.import_module(name), "GPUModelRunner", None)
-            if runner is not None:
-                hooks.wrap(runner, "execute_model", lambda execute: _kv_runner(execute, cfg))
     if (cfg.get("boundary_rows") or {}).get("tables"):
         from vllm.v1.worker.gpu.model_runner import GPUModelRunner
 

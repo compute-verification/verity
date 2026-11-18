@@ -82,7 +82,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
     },
     "compute-accounting": {
         # Needs, outside pouw's verifier/: the matmul domain's error (`DomainError`).
-        "verity_vllm/check/replay/pouw_circuit.py": ("resource_accounting.compute.pouw.verifier.protocol.DomainError",),
+        "verity_vllm/protocols/pouw/pouw_circuit.py": ("resource_accounting.compute.pouw.verifier.protocol.DomainError",),
     },
     "memory-accounting": {
         # `protocols/pous.py` reads the schemes for its refusals, setup's salt draw, and the period's certificate and gaps

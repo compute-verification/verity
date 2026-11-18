@@ -3,9 +3,9 @@ r"""Serve-time hashing of DSA long rows' table reads: what serving's row-table c
 ``hm96-sha512/row-seg/v1`` rows a step commits on a side stream) costs for one decode step's reads at batch ``--batch``, on one
 GPU, and its CPU twin's rate on one thread.
 
-    research run --on NODE --gpus 1 --cwd source -- bash -lc 'cd adapters/vllm && export PATH=/usr/local/cuda/bin:$PATH \
-        PYTHONPATH=.:../..:../../tools/research/src:../../tools/config && /workspace/jobs/venv312/bin/python3 \
-        ../../benchmarks/commitments/table_read_commit.py --batch 1,16'
+    research run --on NODE --gpus 1 --cwd source -- bash -lc 'cd adapters/vllm && PY=/workspace/jobs/venv312/bin/python3 \
+        && export PATH=$($PY ../../benchmarks/kernels/machine.py toolkit 13.0)/bin:$PATH \
+        PYTHONPATH=.:../..:../../tools/research/src:../../tools/config && $PY ../../benchmarks/commitments/table_read_commit.py --batch 1,16'
 
 A long row reads ``--reads`` history rows a layer from its request's table for the layer (``EmbeddingRead_v2{V=2^17,H=576}``),
 and each read commits four fresh rows (`ROWS`): the history row it opens, the row's salt, its path (17 siblings of 64 bytes) and
@@ -43,6 +43,7 @@ import hashlib
 import json
 import os
 import platform
+import shutil
 import statistics
 import subprocess
 import sys
@@ -58,7 +59,6 @@ import torch
 from verity_config.settings import SHARED
 from verity_vllm.commit import row_tables as RTB
 from verity_vllm.commit import row_tables_device as D
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import row_table_nvcc
 from verity_torch.pouw import row_table_side_stream
 
 RESULT_SCHEMA = "research/result/v0.1"
@@ -364,8 +364,8 @@ def main(argv: list[str] | None = None) -> int:
     started = time.perf_counter()
     ctx = hashlib.sha512(b"table-read-commit/context").digest()
     gpu = torch.cuda.is_available()
-    nvcc_v = subprocess.run([row_table_nvcc(), "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:] \
-        if row_table_nvcc() else None
+    nvcc_v = subprocess.run([nvcc, "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:] \
+        if (nvcc := shutil.which("nvcc")) else None
     summary: dict[str, Any] = {
         "gpu": torch.cuda.get_device_name() if gpu else None,
         "capability": list(torch.cuda.get_device_capability()) if gpu else None, "cpu": cpu_name(), "cpus": os.cpu_count(),

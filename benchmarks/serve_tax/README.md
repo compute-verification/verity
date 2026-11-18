@@ -16,12 +16,10 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
 | `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
 | `record` | the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`), written by a thread of its own | `compiled` |
-| `release-order` | requests added in the network attester's release order (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder`, in the engine core) | `record` |
 | `tick` | admission on the certified tick (`verity_vllm.pipeline.scheme_plugin`, the network attester's scheme turned on by name), τ calibrated on `record` | `record` |
 | `tokens` | each window's tokens, 4 bytes each, committed in `rows-sha512` rows off the engine loop | `tick` |
-| `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
 | `tokens-only` | each Commit period's tokens committed as `tokens` commits them, without the tick | `record` |
-| `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
+| `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under salts fixed for its life and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
 | `boundary-rows` | the two-stage audit's boundary commitment at serve, vLLM's prefix cache left on: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
 | `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`), and prefix caching off, which the tables need | `boundary-rows` |
@@ -487,14 +485,13 @@ On a node with the pinned vLLM venv, under `research run`, the C4 shard `benchma
 research run --on NODE --source . --cwd source --send C4.json.gz --env CAPACITY=1 -- bash benchmarks/serve_tax/run.sh
 # the arms at three loads, then the replay of the record arm's saturated load
 research run --on NODE --source . --cwd source --send C4.json.gz \
-  --env 'ARMS=compiled eager record release-order tick tokens kv' --env RATES=light=R1,medium=R2,saturated=R3 \
+  --env 'ARMS=compiled eager record tick tokens kv' --env RATES=light=R1,medium=R2,saturated=R3 \
   --env REPLAY=saturated -- bash benchmarks/serve_tax/run.sh
 ~~~
 
-`run.sh`'s header lists its parameters (the model, reps, the loads' span, the Commit period and the KV edge's window).
-`MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint; `kv` there needs the
-edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
-The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.scheme_plugin` and the corpus client's stand-in attester,
+`run.sh`'s header lists its parameters (the model, reps, the loads' span and the Commit period).
+`MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint.
+The `tick` and `tokens` arms need `verity_vllm.pipeline.scheme_plugin` and the corpus client's stand-in attester,
 and refuse a tree without them. `tick-certifier` is two jobs: the node's (`SIDE=server`, in `run.sh`'s header),
 then the network attester's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
@@ -598,7 +595,7 @@ ours (Pearl+'s kernel is sm_90's), and the find-load and the pair run on the sam
    ~~~text
    uv run python -c 'import json, sys
    from verity_vllm.pipeline.commit_coins import ChallengerGate
-   from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.window import reserve_salt
+   from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.window import reserve_salt
    g = ChallengerGate(sys.argv[1]); print(json.dumps(reserve_salt(g.call, g.ledger, sys.argv[2], sys.argv[3], 0)[0]))' \
      "$GATE" LANE PEER
    ~~~
@@ -667,10 +664,6 @@ replay matches serving's values only when both picked the same; a window served 
 replay with it. A finished run's large files (`plan.jsonl`, `client.jsonl`) are
 evicted to its files artifact (`run-files.evicted.json` names it) after custody; `research data fetch ART --path GLOB
 --to RUN_DIR` puts them back first.
-
-The `kv` arm hashes the whole pool, free blocks too, at each edge: an upper bound on hashing the blocks live there, and a
-measurement of the cost, not a commitment of the state (a block written after the edge before the side stream reads it
-is hashed as written). With a KV window shorter than the Commit's, its tax scales down with the window's length.
 
 A restore arm (`EDGES_S`, `SAVE_KV`, `RESTORE`, `NUM_GPU_BLOCKS` in `run.sh`'s header) takes its edges at fixed seconds
 after its load's first request. Each edge first drains: the engine core schedules nothing until both batches in flight

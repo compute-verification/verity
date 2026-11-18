@@ -53,13 +53,10 @@ FIX = (f"a leaf's salt is fresh operating-system bytes, one draw a leaf ({FRESH}
 #: {file that still names a keyed derivation: the lane that switches it to fresh salts}
 ALLOWED: dict[str, str] = {
     "adapters/torch/verity_torch/pouw/h1/registered_device.py": "@compute-accounting",
-    "adapters/torch/verity_torch/pouw/pearl_c/ends.py": "@compute-accounting",
-    "adapters/torch/verity_torch/pouw/pearl_c/run_device.py": "@compute-accounting",
     # the step rows' processor twin is ruled (RULED's native_rows.cu); the registered weights' `tensor_key` expansion here is not
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
     "verity/commitments/hm96/batch.py": "@proofs",
-    "verity/protocols/experimental/dither/prover/dither.py": "@compute-accounting",
     "verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs": "@proofs",
     "verity/protocols/proofs/flock/prover/live/src/zk_server.rs": "@proofs",
     "verity/protocols/proofs/flock/prover/python/verity_flock/zk_server.py": "@proofs",
@@ -73,10 +70,9 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py": "@compute-accounting",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/requests.py": "@compute-accounting",
+    "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/requests.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/ncp.py": "@compute-accounting",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/weights.py": "@compute-accounting",
 }

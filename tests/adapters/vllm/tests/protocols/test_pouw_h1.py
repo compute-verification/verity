@@ -27,16 +27,16 @@ else:
 from verity.circuits.refs import runs
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import seeds as SD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, commit_rows, salt_of
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, commit_rows, hm96_salt, salt_of
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
 from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
@@ -1455,11 +1455,11 @@ def test_the_challenger_setting_is_where_h1s_coins_come_from(tmp_path, monkeypat
 
 @pytest.mark.parametrize("n,width,nonce", [(1, 7, 0), (64, 68, RQ.REQUESTS_NONCE + 3), (37, 6144, RQ.TABLES_NONCE + 3 * 2175 + 2)])
 def test_hiding_rows_is_core_commit_rows_with_its_salts_drawn_as_one_stream(n, width, nonce):
-    """`pouw_h1_requests.hiding_rows`, which H1's tables commit through, is `audit.commit_rows` under hm96 at the same salt
-    key and nonce, leaf for leaf: its one RFC 8439 stream is `audit.hm96_salt`'s chunks."""
+    """`pouw_h1_requests.hiding_rows`, which H1's tables commit through, is `audit.commit_rows` under hm96 with the salts
+    `audit.hm96_salt` gives at the same key and nonce, leaf for leaf: its one RFC 8439 stream is those salts' chunks."""
     rng, key = random.Random(n), hashlib.sha256(b"key").digest()
     values = [rng.randbytes(width) for _ in range(n)]
-    want = commit_rows(SALT, 5, values, hash=HM96, salt_key=key, nonce=nonce)
+    want = commit_rows(SALT, 5, values, hash=HM96, salts=[hm96_salt(key, nonce, i) for i in range(n)])
     got = RQ.hiding_rows(SALT, 5, values, key, nonce)
     assert got.commitment == want.commitment and all(got.open(i) == want.open(i) for i in range(n))
 
@@ -1476,5 +1476,5 @@ def test_a_rounds_request_and_slot_tables_are_core_commit_rows():
              RQ.requests_binding(SALT, r), RQ.REQUESTS_NONCE + r),
             (RQ.slot_table(SALT, r, t, owners, KEY), [RQ.slot_leaf(o) for o in owners] + [RQ.EMPTY_SLOT] * (t - 25),
              RQ.slots_binding(SALT, r), RQ.SLOTS_NONCE + r)):
-        want = commit_rows(binding, r, values, hash=HM96, salt_key=KEY, nonce=nonce)
+        want = commit_rows(binding, r, values, hash=HM96, salts=[hm96_salt(KEY, nonce, i) for i in range(t)])
         assert got.commitment == want.commitment and all(got.open(i) == want.open(i) for i in range(t))

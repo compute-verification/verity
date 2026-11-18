@@ -763,10 +763,10 @@ def test_the_verifier_tie_tests_tie_is_the_audits_on_their_toys():
     code = f"""
 import sys
 sys.path[:0] = [{str(HERE)!r}, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r}]
+import test_pearltie as TP, test_remotetie as TR, window_tie as WT  # first: records_audit puts one_stage's settings first
 import records_audit as RA
 from verity.circuits.codec import descriptor_id
 import json
-import test_pearltie as TP, test_remotetie as TR, window_tie as WT
 pearl, h1 = TP.make_toy(), TR.make_toy()
 doc = json.loads(json.dumps(pearl.low.circuit.declared()))
 own = {{TP.SS.SCAN_STATE: pearl.values[TP.SS.SCAN_STATE].entry()}}

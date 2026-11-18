@@ -3,10 +3,10 @@
 The executor at each linear layer's ``quant_method.apply`` (``EXECUTES``; innermost, `protocol_options.SITES`).  In the
 composition's weight phase, with the model untouched and no coin opened, `commit_weights` finds the linear layers by
 type (vLLM's ``LinearBase``, `linear_types`) and commits every layer's int7 weight rows (`verity.protocols.resource_accounting.compute.pouw.verifier.audit.commit_rows`).
-`install` then asks the execution phase's challenger (the setting ``coins``, or under ``ncp-v2`` and Pearl-C the auditor device's
+`install` then asks the execution phase's challenger (the setting ``coins``, or under ``ncp-v2`` the auditor device's
 session, ``challenger``: `pouw_h1_window.salt_session`) for its salt coin, opened after those roots' weights root, and
-starts the execution phase from it (`verity.protocols.resource_accounting.compute.pouw.verifier.audit.Epoch.start`, which refuses any other coin; Pearl-C's
-`pouw_pearl_c_host.epoch_of`, a live session's under the same rules), and replaces each ``apply`` through the
+starts the execution phase from it (`verity.protocols.resource_accounting.compute.pouw.verifier.audit.Epoch.start`, which refuses any other coin, a live
+session's under the same rules), and replaces each ``apply`` through the
 composition's tagged `Hooks`.  There is no beacon and no salt without a coin.  Each call of a replaced
 ``apply(layer, x, bias)`` is one unit of the run's workload:
 
@@ -20,30 +20,20 @@ composition's tagged `Hooks`.  There is no beacon and no salt without a coin.  E
 Its commitment to the weights of record is made first, in the composition's weight phase (`commit_weights`: every
 layer's weight root); `commitment` is the scheme, the salt, the weights root the salt is derived from, the execution phase's coin
 commitment and its salt coin's opening and, once closed,
-the transcript root with its unit and tile counts.  Pearl-C's also says what it claims of the weights (``registration``,
-`weights_claim`): the executor applies no keyed rotation and reads no curated list, so it claims nothing about which
-weights were served.  Pearl-C commits one pass per engine step, a step held to what one pass takes (`pouw_pass`), each
-retained in its own directory under ``transcript_dir`` when given.  The audit (sampling tiles, opening
+the transcript root with its unit and tile counts.  The audit (sampling tiles, opening
 them) is `verity.protocols.resource_accounting.compute.pouw.verifier.audit`'s, after the run.  Beside SPOT the composition asks
-`verity.protocols.resource_accounting.compute.pouw.prover.circuit` (registered as ``pouw``, `scheme.register_circuits`), and only ``ncp-v2`` has a circuit; Pearl-C has none, and
-runs beside SPOT only in an execution phase whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
+`verity.protocols.resource_accounting.compute.pouw.prover.circuit` (registered as ``pouw``, `scheme.register_circuits`), and only ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay samples each call's units under
-its execution phase's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
+its execution phase's key, regenerates them and checks each against its template (`protocols.pouw.pouw_circuit`).
 Under H1 + fx1 (``eps1-sm120-h1fx1``, `pouw_h1`) on the eager int8_exact row nothing is executed in the linear's place
 (`executes`): the arm serves its own y, and each call is recorded as its own Program, compiled to H1 tile units
 (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.compile`), with its seed group's roots and its positions.
-Under the lead (``lead-blc4a-t64-rot``, `lead`) on the same arm, the setting ``backend`` (the lead's kernel,
-`lead.LeadBackend`) computes each call's y on its coins, taken after the call's root(A_j), in place of
-the arm's ``scaled_mm`` (`engine.int8_experts.PlainGemm.gemm`). Each engine step's forward is one pass and one execution phase,
-whose salt follows its key's leaf, the weights' root and its call count, and is published at the step's end
-(`lead.LeadRun`).
 What is a placeholder is listed in `info` (``placeholder``).
 """
 from __future__ import annotations
 
 import functools
-import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cache
@@ -58,18 +48,13 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     DomainError,
     Epoch,
     finish_window,
+    fresh_salts,
     H1_CHALLENGER,
     H1_SCHEME,
     H1Run,
     HM96,
-    HM96_WEIGHTS,
     host_array,
     in_process_draw,
-    LEAD_BACKEND,
-    lead_refusals,
-    LEAD_SCHEME,
-    lead_in_process_certifier,
-    LeadRun,
     Matmul,
     MatmulRun,
     NCP_CIRCUIT_SCHEMES,
@@ -77,16 +62,8 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     NCP_SCHEMES,
     NcpCircuitRun,
     NcpRun,
-    PEARL_C_CALL_CAPACITY,
-    pearl_c_refusals,
-    pearl_c_salt_key,
-    pearl_c_schedule,
-    pearl_c_scheme,
-    PEARL_C_SCHEMES,
-    PearlCKernel,
     program_salt,
     quantize,
-    QuantizedRows,
     ROUND0,
     run_matmul,
     salt_session,
@@ -99,66 +76,49 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     Workload,
 )
 
-from verity_torch.pouw import PearlCDeviceRun, hook_steps, pearl_c_weight_roots  # importing it hands PoUW its tensors and H1's device
+import verity_torch.pouw  # noqa: F401 -- importing it hands PoUW its tensors and H1's device
 from verity import hooks as H
-from verity.protocols.compose import schemes as declarations
-from verity.protocols.resource_accounting import scheme as RS
 from verity_vllm.protocols.interface import BUILD_BOUND, Context, Option, Target
 from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity_vllm.protocols.pouw import h1_settings as PHS
 from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 
 
-__all__ = ["PearlCDeviceRun", "Settings", "challenged", "cuts", "h1_run", "keeps_weight_copy", "linear_types", "pearl_c_salt_key", "refusals",
-           "requests"]
+__all__ = ["Settings", "challenged", "h1_run", "keeps_weight_copy", "linear_types", "refusals", "requests"]
 
 NAME = "pouw"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
 EXECUTES = ("LinearBase.quant_method.apply",)
 #: The schemes this adapter's executor computes. ``ncp-v2`` is NCP-INT as a circuit (`verity.protocols.resource_accounting.compute.pouw.prover.circuit`): each call is its
-#: own `NcpLinear_v1` Program call, reading its weight's `NcpWeight_v1` call (`pouw_circuit`).  Pearl-C on sm_120 and sm_90a
-#: (`pouw_pearl_c_device.SCHEMES`) runs on the device only, through GPU 1's kernel pipeline (settings ``kernel``, ``cubin``).
-#: H1 + fx1 (`pouw_h1.SCHEME`) runs beside the int8_exact arm, which serves y itself; the lead (`lead.SCHEME`)
-#: computes y in the arm's place, through its ``backend``.
-EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", *PEARL_C_SCHEMES, H1_SCHEME, LEAD_SCHEME)
+#: own `NcpLinear_v1` Program call, reading its weight's `NcpWeight_v1` call (`pouw_circuit`).
+#: H1 + fx1 (`pouw_h1.SCHEME`) runs beside the int8_exact arm, which serves y itself.
+EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", H1_SCHEME)
 CHALLENGED = PHS.CHALLENGED
 #: The weight dtypes the executor reads (it quantizes them itself); any other, an FP8 checkpoint's float8 above all, is refused
 UNQUANTIZED = ("bfloat16", "float16", "float32")
 #: A quantized linear's parameters beside (or instead of) its weight: a layer carrying one is refused whatever its weight's
 #: dtype, and a packed one (compressed-tensors' ``weight_packed``) has no ``weight`` to read at all.
 QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_point", "weight_packed")
-KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
+KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "start_forward",
         "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs", "period", "unit", "ks",
-        "backend", "draw_session", "commit_record")
+        "draw_session", "commit_record")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
 #: (`pouw_device.commit_call(on="fused")`, held to `pouw_native` leaf for leaf by its gate)
 DEVICES = ("cuda",)
-#: The transforms Pearl-C's executor applies to a checkpoint's weights before committing them: none.  The keyed 8-block
-#: rotation (`registration.ROTATION_8`) is not built on the device, so served FP8 registers only a curated unrotated
-#: checkpoint, and no curated list is wired here.
-SERVED_TRANSFORMS: tuple[str, ...] = ()
-#: What Pearl-C's commitment says of weights that are not registered (`weights_claim`)
-UNREGISTERED = "nothing about which weights were served: the checkpoint is not registered"
 
 
 def schemes() -> tuple[str, ...]:
-    return tuple(sorted({*NCP_SCHEMES, *NCP_CIRCUIT_SCHEMES, *PEARL_C_SCHEMES, H1_SCHEME, LEAD_SCHEME}))
-
-
-def cuts(scheme: str) -> bool:
-    """Whether an execution phase's circuit can be cut at ``scheme``'s sites, reading the tables each executed call
-    commits in place of its computation (`window_class.PearlTables`): Pearl-C's, whose calls commit their A rows and y."""
-    return scheme in PEARL_C_SCHEMES
+    return tuple(sorted({*NCP_SCHEMES, *NCP_CIRCUIT_SCHEMES, H1_SCHEME}))
 
 
 def keeps_weight_copy(scheme: str) -> bool:
     """True where the executor keeps a weight-derived copy across forwards, so its GEMMs would not read what POUS decodes:
-    Pearl-C's B̃, formed once per install (`pouw_pearl_c_device.PearlCDeviceRun`), and ncp-v2's weight sides, committed at
-    each weight's first call and reused (`NcpCircuitRun.sides`), and the lead's, which its backend loads once per install
-    (`lead.LeadBackend.load`).  ncp-v1 forms its operands per call from the weight it is handed."""
-    return scheme in {*PEARL_C_SCHEMES, *NCP_CIRCUIT_SCHEMES, LEAD_SCHEME}
+    ncp-v2's weight sides, committed at
+    each weight's first call and reused (`NcpCircuitRun.sides`).  ncp-v1 forms its operands per call from the weight it
+    is handed."""
+    return scheme in NCP_CIRCUIT_SCHEMES
 
 
 def executes(scheme: str) -> tuple[str, ...]:
@@ -178,15 +138,10 @@ class Settings:
     draws: int | None = None
     #: ``ncp-v2``'s negative control, None for an honest run: ``tile`` commits and opens word 7 of every tile of the first
     #: call with its low bit flipped, so whatever the execution phase's fresh sample, a sampled tile is wrong
-    #: (`check.replay.pouw_circuit.tamper_tiles`); ``bias`` commits and serves the first biased call with bias word 0's low
+    #: (`protocols.pouw.pouw_circuit.tamper_tiles`); ``bias`` commits and serves the first biased call with bias word 0's low
     #: bit flipped
     tamper: str | None = None
     device: str | None = None
-    #: Pearl-C on sm_120: the kernel directory (the run tree's ``verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120``) and build.sh's cubin
-    kernel: str | None = None
-    cubin: str | None = None
-    #: Pearl-C on sm_120: the schedule each pass runs under (the ``pearl-plus`` scheme's setting ``schedule``), serial by default
-    schedule: str = "serial"
     #: ``ncp-v2``: the anchored forward index the install's first pass takes.  A salt's first execution phase starts at 0; a second
     #: served execution phase under the same salt starts at the verifier's `anchors.SaltWindows.next_forward`, so no call index
     #: repeats across the salt's execution phases (a repeat would reuse a noise key, and `SaltWindows.open` refuses it)
@@ -199,34 +154,31 @@ class Settings:
     #: ``decode_query_len`` orders a step's rows, `h1_hooks.batch_order`), whose ``execute_model`` gets each step's
     #: scheduler output, the requests it admits and schedules among it; and the execution phase's round coins, a `LiveRecord` over a
     #: live challenger's round family (`verity.protocols.resource_accounting.compute.pouw.verifier.window.live_challenger`), which opens round s's coin
-    #: after round s's root.  Pearl-C's device path ends each pass at that ``execute_model`` too
-    #: (`pearl_c.passes.hook_steps`), for a caller whose committer patched it before the option's install
+    #: after round s's root
     runner: Any = None
     rounds: Any = None
-    #: H1's salt and round coins (``ncp-v2``'s and Pearl-C's salt) from the auditor device's challenger, ``HOST:PORT``
+    #: H1's salt and round coins (``ncp-v2``'s salt) from the auditor device's challenger, ``HOST:PORT``
     #: (`pouw_h1_challenger`); ``coins`` and ``rounds`` held in this process in its place are for tests, and credit
     #: nothing; ``session`` is the challenger gate's reply for the execution phase: ncp-v2's its open answer for the execution phase's
-    #: Commit (`pouw_h1_challenger.session_of`), H1's and Pearl-C's its reserve answer (`pouw_h1_window.reserved_of`),
-    #: which the install opens itself, on H1's execution phase-open root or Pearl-C's weights' root (`pouw_h1_settings.OPENS`)
+    #: Commit (`pouw_h1_challenger.session_of`), H1's its reserve answer (`pouw_h1_window.reserved_of`),
+    #: which the install opens itself, on H1's execution phase-open root (`pouw_h1_settings.OPENS`)
     challenger: str | None = None
     session: Mapping[str, Any] | None = None
     #: H1's admissions (`pouw_h1_requests.ADMISSIONS`): None or ``round-0``, admit in round 0 only (the live tiles
     #: are fixed before the first coin), or ``per-round``
     admission: str | None = None
-    #: H1's and Pearl-C's ``gate(session, root)``: the challenger gate's open of the reserved session on that root
+    #: H1's ``gate(session, root)``: the challenger gate's open of the reserved session on that root
     #: (`pouw_h1_window.Gate`; `pouw_h1_window.Window`, `pouw_h1_window.salt_session`)
     gate: Any = None
     #: H1's served tables (`pouw_h1_served.Served`): each call's and the weights' registered values, under the round roots;
     #: ``graphs`` the engine's CUDA-graph capture sizes, none when eager (`pouw_h1_static.graph_pad`)
     served: Any = None
     graphs: tuple[int, ...] = ()
-    #: Pearl-C's: the lane's open period before ``session``'s reserve, or None (`pouw_h1_window.reserve_salt`, `period_reason`)
+    #: the lane's open period before ``session``'s reserve, or None (`pouw_h1_window.reserve_salt`, `period_reason`)
     period: Mapping[str, Any] | None = None
     #: H1's execution phase Program's tile unit (`pouw_h1_settings.UNITS`; None is v1's) and the K's it records (`pouw_h1_hooks.layers`)
     unit: str | None = None
     ks: tuple[int, ...] | None = None
-    #: the lead's kernel (`lead.LeadBackend`: ``load``, ``call``, ``words``)
-    backend: Any = None
     #: H1's sample session: the gate's reserve answer for the execution phase's sampling coin, opened withheld (`pouw_h1_window.DrawSession`)
     draw_session: Mapping[str, Any] | None = None
     #: H1's Commit record named at the execution phase's close in place of its tap's (`pouw_h1_commit.CommitRecord`), or None
@@ -257,22 +209,13 @@ class Settings:
         device = raw.get("device")
         if device is not None and device not in DEVICES:
             raise ValueError(f"pouw setting 'device' is one of {', '.join(DEVICES)}")
-        kernel, cubin = raw.get("kernel"), raw.get("cubin")
-        if any(p is not None and not isinstance(p, str) for p in (kernel, cubin)):
-            raise ValueError("pouw settings 'kernel' and 'cubin' are path strings")
-        schedule = raw.get("schedule", "serial")
-        RS.settings(declarations.get("pearl-plus"), {"schedule": schedule})
         start = raw.get("start_forward", 0)
         if not isinstance(start, int) or isinstance(start, bool) or start < 0:
             raise ValueError("pouw setting 'start_forward' is a non-negative integer (the salt's SaltWindows.next_forward)")
-        backend = raw.get("backend")
-        if backend is not None and not all(callable(getattr(backend, f, None)) for f in LEAD_BACKEND):
-            raise ValueError(f"pouw setting 'backend' is the lead's kernel (`lead.LeadBackend`): "
-                             f"{', '.join(LEAD_BACKEND)}")
         (rows, steps, runner, rounds, challenger, session, admission, gate, served, graphs, period, unit, ks, draw_session,
          commit_record) = PHS.of(raw)
-        return cls(coins, retain, tdir, draws, tamper, device, kernel, cubin, schedule, start, rows, steps, runner, rounds,
-                   challenger, session, admission, gate, served, graphs, period, unit, ks, backend, draw_session, commit_record)
+        return cls(coins, retain, tdir, draws, tamper, device, start, rows, steps, runner, rounds,
+                   challenger, session, admission, gate, served, graphs, period, unit, ks, draw_session, commit_record)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -284,17 +227,7 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     except ValueError as e:
         out.append(str(e))
     else:
-        if scheme in PEARL_C_SCHEMES and (settings.device != "cuda" or not settings.kernel):
-            out.append(f"{scheme}: runs on the device only, so it needs the pouw settings 'device': 'cuda' and 'kernel'")
-        if scheme in PEARL_C_SCHEMES:
-            try:
-                pearl_c_schedule(settings.schedule, pearl_c_scheme(scheme))
-            except ValueError as e:
-                out.append(str(e))
-        elif settings.schedule != "serial":
-            out.append(f"{scheme}: the pouw setting 'schedule' is Pearl-C's; this executor runs serially")
         out += PHS.refusals(scheme, settings, ctx.stage, ctx.filled_of(NAME))
-        out += lead_refusals(scheme, settings)
         if settings.start_forward and scheme not in NCP_CIRCUIT_SCHEMES:
             out.append(f"{scheme}: the pouw setting 'start_forward' anchors the circuit-backed executor's forward indices "
                        f"({', '.join(NCP_CIRCUIT_SCHEMES)}); this executor counts its own from 0")
@@ -318,12 +251,11 @@ def linear_types() -> tuple[type, ...]:
 
 
 #: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's
-#: replay (`check.replay.pouw_circuit.around`) before the composition closes.
+#: replay (`protocols.pouw.pouw_circuit.around`) before the composition closes.
 _CIRCUIT_RUNS: dict[str, tuple[NcpCircuitRun, dict[str, int]]] = {}
-# The prover's hm96 salt key per entry outside Pearl-C, whose install takes none: its weight trees' salts, read by `install`,
-# never in the record (published commitments without it fail its root check), once a process, one execution phase
-# (`commit_weights`).
-_SALT_KEYS: dict[str, bytes] = {}
+# The prover's int7 weight-row salts per entry, by linear, fresh from the OS at the entry's first commit; never in the record (published
+# commitments without them fail their root check), once a process, one execution phase (`commit_weights`).
+_WEIGHT_SALTS: dict[str, dict[int, Any]] = {}
 
 
 def circuit_run(entry: str) -> tuple[NcpCircuitRun, dict[str, int]] | None:
@@ -373,8 +305,7 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
     """The scheme and the executed sites, the linear layers by type in module order (a layer's ordinal is its weight id),
     with their (n, k); ValueError names every layer outside the scheme's domain, sharing a quant method or quantized."""
     entry = f"{NAME}:{scheme}"
-    s = (None if scheme in NCP_CIRCUIT_SCHEMES else pearl_c_scheme(scheme) if scheme in PEARL_C_SCHEMES
-         else ncp_scheme(scheme))
+    s = None if scheme in NCP_CIRCUIT_SCHEMES else ncp_scheme(scheme)
     types = linear_types()
     layers: list[Any] = [m for m in target.model.modules() if isinstance(m, types)]
     if not layers:
@@ -393,8 +324,6 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
             continue
         n, k = layer.weight.shape
         shapes[w] = (n, k)
-        if scheme in PEARL_C_SCHEMES:
-            bad += pearl_c_refusals(scheme, {w: (n, k)})
         try:
             if s is None:
                 _traced_as(scheme, 16, k, n)
@@ -413,53 +342,33 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
 def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     """The composition's first phase, with the model untouched and no coin opened: every linear layer's int7 weight rows
     committed (`verity.protocols.resource_accounting.compute.pouw.verifier.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``.
-    Under H1 and the lead, the int8_exact arm's int8 weight rows as they are served, once a process
+    Under H1, the int8_exact arm's int8 weight rows as they are served, once a process
     (`pouw_h1_hooks.committed`).
 
-    Outside Pearl-C the rows' hm96 key is `_SALT_KEYS[entry]`, sampled from the OS at the entry's first commit and reused by
-    every later commit of its weights for the process's life, which is one execution phase (one `Challenger`). The salt is keyed by
+    The rows' hm96 salts are `_WEIGHT_SALTS[entry]`, fresh from the OS at the entry's first commit and reused by every later
+    commit of its weights for the process's life, which is one execution phase (one `Challenger`). The salt is keyed by
     the weights' root (`audit.salt_of`), so a salt's later execution phases and the device and host settings must commit the
-    weights to one root. The key is fixed before `install` opens the salt coin, and is never derived from public data."""
-    if scheme in (H1_SCHEME, LEAD_SCHEME):
+    weights to one root. The salts are fixed before `install` opens the salt coin, and are never derived from public data."""
+    if scheme == H1_SCHEME:
         ks = Settings.of(target.context.settings_of(NAME)).ks
         return PHK.committed(PHK.layers(target.model, linear_types(), ks, scheme=scheme))
     entry = f"{NAME}:{scheme}"
     _, layers, shapes = _layers(scheme, target)
-    if scheme in PEARL_C_SCHEMES:
-        settings = Settings.of(target.context.settings_of(NAME))
-        device_roots = pearl_c_weight_roots(PearlCKernel.load(cast(str, settings.kernel), settings.cubin),
-                                        {w: m.weight for w, m in enumerate(layers)}, scheme)
-        return {"weight_roots": {str(w): r.hex() for w, r in device_roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
-    key, roots = _SALT_KEYS.setdefault(entry, os.urandom(32)), {}
+    salts, roots = _WEIGHT_SALTS.setdefault(entry, {}), {}
     for w, layer in enumerate(layers):
         b, _ = quantize(host_array(layer.weight))
-        roots[str(w)] = commit_rows(weight_binding(w), -2, [b[j].tobytes() for j in range(b.shape[0])], HM96, key,
-                                    HM96_WEIGHTS + w).commitment.root.hex()
+        roots[str(w)] = commit_rows(weight_binding(w), -2, [b[j].tobytes() for j in range(b.shape[0])], HM96,
+                                    salts.setdefault(w, fresh_salts(b.shape[0]))).commitment.root.hex()
     return {"weight_roots": roots, "shapes": {str(w): list(v) for w, v in shapes.items()}}
-
-
-def weights_claim(scheme: Any, curated: bool = False, needs_gamma_fold: bool = False) -> dict[str, Any]:
-    """What served FP8 (Pearl-C) claims of the weights it serves, the commitment's ``registration``.  It claims registered
-    weights only when `SERVED_TRANSFORMS` pass the registered-weights rule (`registration.check_registration`, Pearl-C4's
-    too); a keyed transform would take its key from the execution phase's salt coin (`registration.rotation_key`).  Otherwise the
-    claim says it is about nothing (`UNREGISTERED`) and names the refusal, and serving goes on: the salt is still the
-    challenger's live coin (`Epoch.start`), so what the sample establishes of the work is unchanged."""
-    out: dict[str, Any] = {"transforms": list(SERVED_TRANSFORMS), "curated": curated}
-    try:
-        scheme.check_registration(SERVED_TRANSFORMS, curated, needs_gamma_fold)
-    except DomainError as e:
-        return {**out, "registered": False, "claims": UNREGISTERED, "refused": str(e)}
-    return {**out, "registered": True}
 
 
 def challenged(settings: Mapping[str, Mapping[str, Any]], enabled: Any, epoch: int = 0) -> dict[str, dict[str, Any]]:
     """`settings` (the loaded protocols config) with PoUW's ``coins`` a challenger of `epoch` held in this process
     (`verity.protocols.resource_accounting.compute.pouw.verifier.coins.Challenger`, its coins the Lean verifier's, `pouw.verifier.coins`) when
     `enabled` (the protocol set) has PoUW, for a pipeline that is its run's own auditor (it replays and judges what it
-    served); a config's own ``coins``, or its auditor device's ``challenger`` (the coins' one source), is kept alone. The
-    lead takes no salt coin (its coins come off its coin link), so under it nothing is added."""
+    served); a config's own ``coins``, or its auditor device's ``challenger`` (the coins' one source), is kept alone."""
     out = {k: dict(v) for k, v in settings.items()}
-    takes_salt = any(str(e).partition(":")[0] == NAME and str(e).partition(":")[2] != LEAD_SCHEME for e in (enabled or ()))
+    takes_salt = any(str(e).partition(":")[0] == NAME for e in (enabled or ()))
     if takes_salt and not {"coins", "challenger"} & set(out.get(NAME, {})):
         out.setdefault(NAME, {})["coins"] = Challenger(epoch, verifier_coins)
     return out
@@ -468,8 +377,6 @@ def challenged(settings: Mapping[str, Mapping[str, Any]], enabled: Any, epoch: i
 def install(scheme: str, target: Target) -> Option:
     entry = f"{NAME}:{scheme}"
     settings = Settings.of(target.context.settings_of(NAME))
-    if scheme == LEAD_SCHEME:
-        return _install_lead(entry, settings, target)
     if settings.coins is None and not (scheme in CHALLENGED and settings.challenger is not None):
         raise ValueError(f"{entry}: no 'coins' setting: the epoch's salt is its challenger's salt coin, opened after the "
                          "weights' root, and there is no beacon")
@@ -479,22 +386,16 @@ def install(scheme: str, target: Target) -> Option:
     committed = target.weight_commitments.get(entry) or commit_weights(scheme, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
-    session, device, k, end_pass = None, scheme in PEARL_C_SCHEMES, None, None
+    session = None
     if settings.challenger is not None:
-        session, commitment, opening, salt, carried, k = salt_session(entry, settings, weights_root(roots), device)
+        session, commitment, opening, salt, carried, _ = salt_session(entry, settings, weights_root(roots), False)
     else:
         commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
         salt = Epoch.start(declared, roots, commitment, opening).salt
     with closed_on_error(session):
-        if device:
-            run = PearlCDeviceRun(s, entry, PearlCKernel.load(cast(str, settings.kernel), settings.cubin),
-                                      {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
-                                      schedule=settings.schedule, pass_index=k)
-            run.commits["registration"], end_pass = weights_claim(s), run.end_pass
-        else:
-            run = (NcpCircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
-                   else NcpRun(s, entry, settings, roots, salt, _SALT_KEYS.setdefault(entry, os.urandom(32))))
-            run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
+        run = (NcpCircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
+               else NcpRun(s, entry, settings, roots, salt))
+        run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
         if session is not None:
             run.commits.update(coin_source=H1_CHALLENGER, session=carried)
         if isinstance(run, NcpCircuitRun):
@@ -502,9 +403,7 @@ def install(scheme: str, target: Target) -> Option:
         h = target.hooks(entry)
         for w, layer in enumerate(layers):
             h.wrap(layer.quant_method, "apply", functools.partial(_executor, run, w))
-        if device:
-            hook_steps(h, run, PEARL_C_CALL_CAPACITY, settings.transcript_dir, settings.runner)
-    return Option(name=entry, hooks=h, commits=run.commits, details=run.details, end_pass=end_pass,
+    return Option(name=entry, hooks=h, commits=run.commits, details=run.details,
                   release=run.finish if session is None else lambda: finish_window(run, session))
 
 
@@ -577,38 +476,6 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     h = target.hooks(entry)
     PHK.wire(run, h, layers, settings.runner, settings.rows, settings.ks)
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=lambda: finish_window(run, session))
-
-
-def _install_lead(entry: str, settings: Settings, target: Target) -> Option:
-    """The lead on the int8_exact arm (`lead.LeadRun`): the layers H1 records, each one's weight loaded into the
-    setting ``backend`` and its ``gemm`` the run's call, so the arm quantizes each call's rows and the lead serves its y;
-    each engine step's calls are one pass, published at the step's end (`pearl_c.passes.hook_steps`), and at release. The
-    coins are this process's (`lead.feed.InProcessCertifier`) and credit nothing."""
-    layers = PHK.layers(target.model, linear_types(), scheme=LEAD_SCHEME)
-    off = [f"linear {w}: {type(m.quant_method).__name__} has no gemm" for w, m in enumerate(layers)
-           if not hasattr(type(m.quant_method), "gemm")]
-    if off:
-        raise ValueError(f"{entry} refused at install: " + "; ".join(off))
-    committed = target.weight_commitments.get(entry) or commit_weights(LEAD_SCHEME, target)
-    roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
-    run = LeadRun(entry, settings.backend, lead_in_process_certifier(), weights_root(roots),
-                     [(int(m.weight.shape[0]), int(m.weight.shape[1])) for m in layers],
-                     rank=target.rank, world=target.context.world)
-    for w, layer in enumerate(layers):
-        settings.backend.load(w, layer)
-    h = target.hooks(entry)
-    for w, layer in enumerate(layers):
-        h.patch(layer.quant_method, "gemm", _lead_gemm(run, w))
-    hook_steps(h, run, len(layers))
-    return Option(name=entry, hooks=h, commits=run.commits, details=run.details, end_pass=run.end_pass, release=run.finish)
-
-
-def _lead_gemm(run: Any, w: int) -> Any:
-    """Linear ``w``'s ``gemm(layer, xq, s_a)``: the arm's quantized rows served by the lead (`serving.run_matmul`)."""
-
-    def gemm(layer: Any, xq: Any, s_a: Any) -> Any:
-        return run_matmul(run, w, QuantizedRows(xq, s_a), layer)
-    return gemm
 
 
 def _named(model: Any, layers: list[Any]) -> dict[int, str]:

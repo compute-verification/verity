@@ -90,7 +90,7 @@ class _LiveSession:
 
     def __init__(self, gate: str, peer: str, epoch: int, lane: str, run: Any = None) -> None:
         from verity_vllm.pipeline.commit_coins import ChallengerGate
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
         self.gate = ChallengerGate(gate, run)
         self.reserved, self.period = PHW.reserve_salt(self.gate.call, self.gate.ledger, lane, peer, epoch)
@@ -98,7 +98,7 @@ class _LiveSession:
         self.carried: dict[str, Any] = {}
 
     def open(self, entry: str, root: bytes) -> Any:
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
         self.client, self.commitment, opening, _, self.carried = PHW.open_session(
             entry, self.gate.call, self.reserved["session"], root, self.k)
@@ -120,7 +120,7 @@ def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: 
     answers), ``session`` (the reserve answer), ``gate`` and ``period`` (the lane's open period the reserve joined), its
     in-process ``coins`` dropped. Returns the settings and the reserve answer: `pouw` itself and None when neither is
     given, the coins then in-process. ValueError when one is given without the other, or the reserve is refused."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
     if (gate, peer) == (None, None):
         return pouw, None
@@ -155,7 +155,7 @@ class LiveDraw:
     def __call__(self, root: bytes, asking: Any) -> tuple[bytes, dict[str, Any]]:
         from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
         from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
         lines = self.gate.ledger()
         period = PHW.open_period(lines, self.lane)
@@ -278,7 +278,8 @@ class PearlCArm:
 
     def ready(self, target: Any) -> None:
         from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
-        from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
+        from verity.protocols.compose import schemes
+        from verity.protocols.resource_accounting.scheme import declared
         from verity.hooks import ComputeBlockWith
         from verity_vllm import messages
         from verity_vllm.protocols.linear import vllm_site
@@ -300,13 +301,14 @@ class PearlCArm:
         kernel = PPD.Kernel.load(str(self.kernel_dir), self.cubin)
         if self.gate_command is not None:
             self.session = _LiveSession(self.gate_command, self.peer, self.epoch, self.lane)
-        salt_key = PPD.no_salt_key(scheme)
-        roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=salt_key)
+        weight_salts = PPDR.fresh_weight_salts(weights)
+        roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=weight_salts)
         if self.session is not None:
             opening = self.session.open(f"pouw:{scheme}", weights_root(roots))
             commitment = self.session.commitment
             self.coins = {"source": "challenger", "session": self.session.carried, "pass_index": self.session.k,
-                          "salt_after": epoch_open_root(weights_root(roots), self.session.k).hex()}
+                          "salt_after": declared(schemes.get("pearl-plus"), "salt_open_root")(weights_root(roots),
+                                                                                             self.session.k).hex()}
         else:
             coins = _Coins(self.epoch)
             opening, commitment = coins.open("salt", weights_root(roots)), coins.commitment
@@ -315,7 +317,7 @@ class PearlCArm:
         try:
             run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots,
                                       commitment, opening, schedule=self.schedule,
-                                      capacity=tiles, flag_rows=rows, salt_key=salt_key,
+                                      capacity=tiles, flag_rows=rows, weight_salts=weight_salts,
                                       pass_index=None if self.session is None else self.session.k, **self.run_options)
         except BaseException:
             if self.session is not None:

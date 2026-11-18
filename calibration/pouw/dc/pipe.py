@@ -204,7 +204,7 @@ def eps_tensor_l32(census_dirs: list[Path], rates: list[dict], rho5: float) -> d
            "T1": 1 - w / rho5}
     rt = max((b for b in (best(rates, 0, 32), best(rates, 3, 32)) if b), key=lambda r: r["slots_per_clk"], default=None)
     out["honest_config"] = {k: honest.get(k) for k in ("nb", "lw", "mi")}
-    bounds = {"bandwidth": h} | ({"round_trip": min(h, rt["slots_per_clk"] / rho5)} if rt else {})
+    bounds = {"load_bandwidth": h} | ({"round_trip": min(h, rt["slots_per_clk"] / rho5)} if rt else {})
     if rt:
         out["round_trip_config"] = {k: rt.get(k) for k in ("nb", "lw", "mi", "arm")}
     for name, t in bounds.items():
@@ -274,7 +274,7 @@ def text(res: dict) -> str:
         lines += ["", (f"eps_tensor at L = 32, honest's measured TMEM stage {e['honest_TMEM_stage']:.2f} words/SM/clk "
                        f"({e['honest_fraction']:.4f} of rho_T5; the probes' LP assumed "
                        f"{e['region_balanced_probes']:.4f} and gave {e['eps_probes_lp']:.4f}): T1 {e['T1']:.4f}")]
-        for name in ("bandwidth", "round_trip"):
+        for name in ("load_bandwidth", "round_trip"):
             c = e.get(name)
             if c:
                 lines.append(f"- adversary capped by {name.replace('_', ' ')}: t {c['t']:.4f}, tcgen05 "

@@ -109,7 +109,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
 - `served_verdicts.sh` (with `served_verdicts.py`): one served window through every subprotocol, in one job on an H200 node
   from a clone of the tree (`bash benchmarks/one_stage/served_verdicts.sh`). It serves
-  Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
+  Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal`, the network attester scheme's order `release-order`), sends a
   few greedy requests from the network attester's traffic generator, and seals each window. Before the first request, the committer
   registers its weights under its own key (`prove_path.py weights-registration`). Without a docket, `NO WEIGHTS
   REGISTRATION` is printed and every weight read counts free. On the window holding the most requests, none carried, it runs
@@ -288,7 +288,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   and per proof-block Definition its count in the prefill step and the decode steps, output bits
   and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
   and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
-  `verity/protocols/proofs/spot/prover/cost/glm53.py`). `block_recut.sh ART` makes a stored census again from its families (its
+  `calibration/sampling_plan/glm53.py`). `block_recut.sh ART` makes a stored census again from its families (its
   `census-rank<r>.json`) with this tree's proof-block templates, sizing and `block_census.py`, for a change to the cut or to a
   family's proof blocks that needs no Commit Build, and writes `compare.json` against the planner's card.
   `m1_unit.py` builds one family's proof block through Flock's circuit prover's `UnitStager`, flat or `--structural`, and with `--bin`
@@ -421,8 +421,8 @@ cp -r $WORK/out-flock $WORK/out-zk $WORK/out-sampling . && rm -rf "$WORK"
 `gpu-lease 1 --wait --on $A5_CARD --cores $A5_CORES --` in place of `taskset -c $A5_CORES`. The script leases `A5_CARD`
 for its Match capture and its Commit, and every lease it takes names `A5_CORES`, without which it refuses before any
 build; with no `gpu-lease` it takes that card directly. `gpu-lease status` shows each lease under `GPU_LEASE_WHO`;
-unset, the script records its leases as `vllm-sha512`. Unless `CUDA_HOME` is set, the script takes the first of
-`/usr/local/cuda-12.9`, `/usr/local/cuda-12`, `/usr/local/cuda-13.0` and `/usr/local/cuda` that has `nvcc`. Where that
+unset, the script records its leases as `vllm-sha512`. Unless `CUDA_HOME` is set, the script takes the machine's toolkit
+at 12.9, else at 13.0, else its default (`benchmarks/kernels/machine.py toolkit`). Where that
 toolkit lacks the CUDA math libraries' headers, it takes them from the venv's NVIDIA wheels, as the bootstrap's norm and
 router tap builds do. Each run's record is its `OUT`, which the printer reads as a directory, as it reads a
 `research run`'s id. The three `OUT` directories are inside `WORK`, so the last line copies them to the current

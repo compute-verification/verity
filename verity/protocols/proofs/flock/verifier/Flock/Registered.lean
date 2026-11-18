@@ -314,11 +314,18 @@ def checkLinked (c : Circuit) (own : Array Port) : V Unit := do
     if !own.any fun r => r.name == name && r.tree.isSome then
       throw s!"registered reads: link row {name} reads another unit's outputs, and no tree port ({TREE_KEY}) reads it by path in its writer template's output field's tree"
 
+/-- The output field a link row reads in its writer template's tree: the writer's whole output row, as `HmLinks.checkUnit`
+requires of every link, which the class circuits name `out`. -/
+def OUT_FIELD : String := "out"
+
 /-- Tree port `reg`'s reads at the statement's units `indices`, from the verifier's program `P`: each unit reads, at the
 link row of `reg`'s name, the leaf of its writer (`HmLinks.writerOf`) in the writer template's tree (`HmLinks.treeLeaf`),
-the writer's template `reg`'s. Its work is the statement's units, each found from the root body's nodes. -/
+the writer's template `reg`'s; a tree port of another field than `OUT_FIELD` is refused. Its work is the statement's
+units, each found from the root body's nodes. -/
 def treeReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (reg : Port) : V Port := do
-  let some (t, _) := reg.tree | return reg
+  let some (t, f) := reg.tree | return reg
+  if f != OUT_FIELD then
+    throw s!"registered reads: tree port {reg.name} reads {t}'s {f} tree, and a link row reads its writer's whole output row, field {OUT_FIELD} (HmLinks.checkUnit)"
   let some (_, lo, _) := (← HmLinks.parse c).find? fun (p, _, _) => (c.ports.getD p default).name == reg.name
     | throw s!"registered reads: tree port {reg.name} is no link row of the circuit (META links)"
   let ns := HmLinks.nodes P
@@ -350,13 +357,16 @@ name exactly `own`'s ports, each a port of the circuit and a table of a shared-r
 value's row at its stated position, opens the registered root through its path, and every instance reads, by its ref,
 the position the verifier's program reads for its unit (`checkPort`; `FlockProofs.Registered`: `check_ok`); every link row
 is a tree port reading its writer template's output field's tree (`checkLinked`). Without
-`own`, a statement that names registered reads is refused: its rows would be checked against no root. With `own`, the
+`own`, a statement that names registered reads is refused: its rows would be checked against no root; so is one that
+declares links, which no tree port reads. With `own`, the
 units must be `derived`: a unit's position is the verifier's, but which unit an instance is comes from its label, which
 binds nothing unless the verifier derived it. -/
 def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bool) : V Unit := do
   let hdr := pub.header.getObjVal? "registered"
   let some own := own
-    | if hdr.isOk then throw "registered reads: the statement reads registered values, and the verifier holds no registered roots (--registered)"
+    | do
+      if hdr.isOk then throw "registered reads: the statement reads registered values, and the verifier holds no registered roots (--registered)"
+      checkLinked c #[]
   if !derived then
     throw "registered reads: the statement's units are taken as stated, and a read's position binds only as far as its unit does: the verifier derives them from its own program (--partition, --program)"
   let .ok (.obj kvs) := hdr

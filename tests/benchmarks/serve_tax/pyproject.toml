@@ -9,7 +9,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # a test file that starts a program the read guard can't trace (bash, around run.sh): keyed on the suite's whole tree
 untraced = ["test_serve_tax.py", "test_profile.py"]
-# `servetax_plugin` on a stand-in scheduler (tests/test_plugin.py): the integration's step trace and release order, and
+# `servetax_plugin` on a stand-in scheduler (tests/test_plugin.py): the integration's step trace, and
 # the modules they import; the driver and the replay read the run's id and paths through verity_config's SHARED settings;
 # an arm names another benchmark's vLLM plugin by its file in this tree, which the driver's test checks is there; the
 # serving cost is the benchmark kit's paired ratio, and its result.json the kit's writer's; the client's shim to the
@@ -54,6 +54,8 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     "verity/protocols/resource_accounting/compute/pouw/verifier/protocol.py",
     "adapters/vllm/verity_vllm/commit/__init__.py",
     "adapters/vllm/verity_vllm/commit/history_tables.py",
+    # the KV pool's roots under its salt file (tests/test_boundary.py), on the row-table kernels' CPU twin
+    "adapters/vllm/verity_vllm/commit/row_tables.py",
     "adapters/vllm/verity_vllm/engine/sampler_capture.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_logits.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",

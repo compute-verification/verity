@@ -16,10 +16,11 @@ this module is imported):
 
 from __future__ import annotations
 
-import socket
 import sys
 from contextlib import contextmanager, nullcontext
 from typing import Any
+
+from verity.ports import free_port as _free_port
 
 from verity_vllm.engine import env as engine_env
 
@@ -31,14 +32,6 @@ from torch import nn  # noqa: E402
 PIN = {"model": "HuggingFaceTB/SmolLM2-135M", "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2", "dtype": "bfloat16"}
 #: the engine args a compiled `TargetProfile.engine_args()` adds for the execution it serves; `make_vllm_config` sets its own
 COMPILED_KEYS = ("enforce_eager", "compilation_config")
-
-
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
 
 
 def make_vllm_config(model: str = PIN["model"], revision: str = PIN["revision"], dtype: str = PIN["dtype"], max_model_len: int = 2048,

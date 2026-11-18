@@ -129,17 +129,6 @@ def test_the_kit_finds_a_card_by_its_driver_name_only_through_the_devices_lookup
     assert not kit.is_card("NVIDIA H200", "h200", directory=tmp_path)
 
 
-def test_a_members_card_part_is_one_gpu_card_files_short(tmp_path):
-    assert kit.card_named_short("h200")["sku"] == "h200-sxm-141gb"
-    with pytest.raises(SystemExit, match=r"^0 GPU card files under .* have `short` 'NVIDIA H200': one of \[.*'h200'"):
-        kit.card_named_short("NVIDIA H200")
-    h200 = (CARD_FILES / "h200-sxm-141gb.toml").read_text()
-    for sku in ("h200-sxm-141gb", "h200-twin"):
-        (tmp_path / f"{sku}.toml").write_text(h200.replace('sku = "h200-sxm-141gb"', f'sku = "{sku}"'))
-    with pytest.raises(SystemExit, match="^2 GPU card files"):
-        kit.card_named_short("h200", directory=tmp_path)
-
-
 @pytest.mark.parametrize("card, short", [("NVIDIA H200", "h200"), ("NVIDIA H200, NVIDIA H200", "h200"),
                                          ("NVIDIA H100 80GB HBM3", "h100"), ("NVIDIA RTX PRO 6000 Blackwell Server Edition",
                                                                              "rtx-pro-6000"), ("NVIDIA B200", "b200")])
@@ -193,7 +182,12 @@ def test_a_session_on_a_card_two_node_files_carry_is_refused_by_name(tmp_path):
     assert kit.session_node("NVIDIA H200", "serving", kind="h200-sxm-141gb-x2") == "local/h200-sxm-141gb-x2/serving"
 
 
-def test_the_data_sheets_memory_bandwidth_is_read_from_the_card_and_refused_where_the_card_has_none():
+def test_the_data_sheets_memory_bandwidth_is_read_from_the_card_and_refused_where_the_card_has_none(tmp_path):
     assert kit.datasheet_bandwidth("NVIDIA H200") == 4_800_000_000_000
+    assert kit.datasheet_bandwidth("NVIDIA H100 80GB HBM3") == 3_350_000_000_000
+    text = (kit.cards_directory() / "h100-sxm-80gb.toml").read_text(encoding="utf-8")
+    (tmp_path / "h100-sxm-80gb.toml").write_text(
+        "".join(line for line in text.splitlines(keepends=True) if not line.startswith("datasheet_bandwidth")),
+        encoding="utf-8")
     with pytest.raises(SystemExit, match="^the card record h100-sxm-80gb .* has no memory.datasheet_bandwidth"):
-        kit.datasheet_bandwidth("NVIDIA H100 80GB HBM3")
+        kit.datasheet_bandwidth("NVIDIA H100 80GB HBM3", directory=tmp_path)

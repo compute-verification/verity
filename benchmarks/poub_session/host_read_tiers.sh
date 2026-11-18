@@ -56,7 +56,8 @@ SIZES=${SIZES:-8 12 16} GIB=${GIB:-700} CHUNK_BLOCKS=${CHUNK_BLOCKS:-65536} GPUS
 DRIVER_CPUS=${DRIVER_CPUS:-48-87} LEASE_MIN=${LEASE_MIN:-30} GRANT_S=${GRANT_S:-300} MEM_GB=${MEM_GB:-300}
 CLEAR_MIB=${CLEAR_MIB:-1024} CLEAR_WAIT_S=${CLEAR_WAIT_S:-120} SIZE_MIN_S=${SIZE_MIN_S:-240} TAIL_S=${TAIL_S:-90}
 SAMPLE_MS=${SAMPLE_MS:-2000} SAMPLE_CPUS=${SAMPLE_CPUS:-88-95}
-ARCH=${ARCH:-120a} CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
+ARCH=${ARCH:-120a}
+CUDA_HOME=${CUDA_HOME:-$(python3 benchmarks/kernels/machine.py toolkit 13.0)}
 PY=${PY:-/workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python}
 GPU_LEASE=${GPU_LEASE:-/workspace/pouw/infra/bin/gpu-lease} SMI=${SMI:-nvidia-smi}
 PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}   # as host_read.sh runs host_read.py

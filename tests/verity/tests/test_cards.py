@@ -56,6 +56,20 @@ def test_each_gpu_has_one_short_name() -> None:
                      "rtx-pro-6000-server": "rtx-pro-6000"}
 
 
+def test_a_card_is_found_by_its_short_name_and_a_name_no_one_card_has_is_refused(tmp_path) -> None:
+    assert {s: S.gpu_card_called(s, directory=CARD_FILES)["sku"] for s in ("h200", "rtx-pro-6000")} == {
+        "h200": "h200-sxm-141gb", "rtx-pro-6000": "rtx-pro-6000-server"}
+    for name in ("NVIDIA H200", "rtxpro6000", "l40s", "h200-sxm-141gb"):
+        with pytest.raises(KeyError, match=rf"^\"0 GPU card files under .* have `short` {re.escape(repr(name))}: the shorts "
+                                           r"are \['b200', 'h100', 'h200', 'rtx-pro-6000'\]"):
+            S.gpu_card_called(name, directory=CARD_FILES)
+    h200 = (CARD_FILES / "h200-sxm-141gb.toml").read_text()
+    for sku in ("h200-sxm-141gb", "h200-twin"):
+        (tmp_path / f"{sku}.toml").write_text(h200.replace('sku = "h200-sxm-141gb"', f'sku = "{sku}"'))
+    with pytest.raises(KeyError, match="^\"2 GPU card files"):
+        S.gpu_card_called("h200", directory=tmp_path)
+
+
 @pytest.mark.parametrize("sku", skus("gpu", directory=CARD_FILES))
 def test_the_driver_names_are_each_sourced(sku: str) -> None:
     """`driver`, the product strings the driver reports for the card (`nvidia-smi --query-gpu=name`): a list, empty
@@ -109,7 +123,7 @@ MEASURED_ONLY = {"gpu": {"store.l15", "store.l1i", "store.l0i", "store.const_l0"
 
 #: The entries one card of a kind holds alone, each with its card: a ceiling only that card's protocol states, built on
 #: its MEASURED_ONLY entries, so no other card of the kind has what it sums.
-ONE_CARD = {"gpu": {"store.chip": "rtx-pro-6000-server", "memory.datasheet_bandwidth": "h200-sxm-141gb"}}
+ONE_CARD = {"gpu": {"store.chip": "rtx-pro-6000-server"}}
 
 
 @pytest.mark.parametrize("kind", CARD_KINDS)
