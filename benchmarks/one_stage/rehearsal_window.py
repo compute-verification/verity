@@ -52,7 +52,7 @@ def advice_compile() -> Any:
 
 def serve_dir(d: Path, phi: dict, cls: Any, engine: dict) -> bytes:
     """The stand-in serve dir at `d` (module docstring) -> its window 0's advice, I1's canonical bytes."""
-    import verity.protocols.resource_accounting.network.verifier.advice as I1
+    import verity_vllm.pipeline.advice_code.format as I1
 
     users = [f"fixed.{j:05d}" for j in range(cls.slots)]
     (d / "advice" / "w0").mkdir(parents=True)

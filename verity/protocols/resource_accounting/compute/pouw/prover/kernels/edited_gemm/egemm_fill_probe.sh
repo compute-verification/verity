@@ -11,8 +11,7 @@
 #     --env GPU_LEASE_WHO=LANE -- bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/egemm_fill_probe.sh
 set -uo pipefail
 export O=${OUT:?}
-CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2  # CUDA_HOME, else the run's machine's
-export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
+export PATH=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}/bin:$PATH
 export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm
 export B; B=$(mktemp -d /tmp/egfill.XXXXXX); trap 'rm -rf "$B"' EXIT
 export ARMS=${ARMS:-"plain,e_plains,e_l7qs,fx05_l7qs,fx1_l7qs,fx15_l7qs,fx2_l7qs,fx3_l7qs,fx45_l7qs"}

@@ -91,12 +91,12 @@ def test_a_network_attester_runs_release_is_its_cells_and_its_forged_row_is_the_
     assert releases == list(link.releases) and lens == tz.SPAN
     real = SimpleNamespace(cells=cells, records=link.records, releases=releases)
     f = tz.forge(real)
-    rd = tz.phases(tie, real, tz.advice(lens, tz.received(real)), f)
+    rd = tz.phases(tie, real, tz.inputs(lens, tz.received(real)), f)
     assert f.window == 0 and rd.windows[0].rows[f.bucket] != cells[0].rows[f.bucket]
     assert [x.words for x in rd.windows] == [[1] * tz.T] * 2 and all(all(x.opens) for x in rd.windows)
     assert "does not open" in rd.windows[0].held and rd.windows[1].held is None
     assert [x.expect for x in rd.windows] == [0, 1]
-    honest = tz.phases(tie, real, tz.advice(lens, tz.received(real)))
+    honest = tz.phases(tie, real, tz.inputs(lens, tz.received(real)))
     assert [x.expect for x in honest.windows] == [1, 1] and all(x.held is None for x in honest.windows)
 
 
@@ -157,7 +157,7 @@ def test_a_member_fails_on_what_the_scan_reads_as_leaked_not_on_a_find_across_th
     key = next(k for k in sorted(held_pieces) if len(set(pieces[k])) > 2)
     piece = pieces[key]
     res = {"windows": [{"as_expected": True}] * len(rd.windows),
-           "tie": {"accepted": list(tz.EXPECT["honest"]), "advice": tz.TS.digest(rd.advice), "link": tz.LINK,
+           "tie": {"accepted": list(tz.EXPECT["honest"]), "inputs": tz.TS.digest(rd.inputs), "link": tz.LINK,
                    "registrations": [{}] * len(rd.windows)}}
 
     def member(body: bytes, out):

@@ -85,3 +85,34 @@ def test_any_other_connection_is_relayed_byte_for_byte():
 def test_a_payload_below_an_id_event_is_refused():
     with pytest.raises(ValueError, match="an id event is at least"):
         R.Front(("127.0.0.1", 1), 137, request_of=request_of, stream_ids=stream_ids)
+
+
+def test_the_process_serves_the_relay_until_stopped():
+    """`process`, called as a launcher calls it with the readers `READERS` names in order, is `run`: an id request is
+    answered as `Front` answers it, and setting ``stop`` ends it."""
+    assert R.READERS == ("server-request", "stream-token-ids")
+
+    async def go() -> bytes:
+        upstream = await scripted(SCRIPT, [])
+        stop, at = asyncio.Event(), asyncio.get_running_loop().create_future()
+        async with upstream:
+            relay = asyncio.ensure_future(R.process(request_of, stream_ids)(
+                upstream.sockets[0].getsockname()[:2], ("127.0.0.1", 0), P, stop=stop, announce=at.set_result))
+            reader, writer = await asyncio.open_connection(*await at)
+            writer.write(released())
+            await writer.drain()
+            got = await reader.read()
+            writer.close()
+            stop.set()
+            await relay
+        return got
+
+    assert asyncio.run(go()) == b"".join(id_event(t, P) for t in (7, 8, 9)) + TRAILER
+
+
+def test_the_network_scheme_registers_the_relay_and_its_request():
+    from verity.protocols.resource_accounting import scheme
+    from verity.protocols.resource_accounting.network import scheme as network
+
+    assert scheme.PROCESSES["id-relay"] is R.process
+    assert (network.START_ID_RELAY.process, network.START_ID_RELAY.readers) == ("id-relay", R.READERS)

@@ -2319,7 +2319,7 @@ def test_run_sh_serves_the_arms_lifetimes_in_the_order_named_then_turned_round_o
 
 def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anything():
     assert run_sh("--bogus") == (2, "serve-tax: unknown flag --bogus (--model, --arms, --loads, --dataset NAME=FILE, --reps, "
-                                    "--target, --json)\n")
+                                    "--target, --json, --profile NAME, --feature ARM, --find-load)\n")
     assert run_sh("--model") == (2, "serve-tax: --model takes a value\n")
     # the default arms end in the two-stage serve's launch line, which is the arm's data: the job names no object
     for flags in (("--model", "glm53"), ("--model", "glm53", "--arms", "compiled compiled-again", "--json")):

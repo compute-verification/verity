@@ -4,7 +4,7 @@ The Programs at a boundary b read the scan's state row S_{b − 1} (`ingress_sca
 state's at b = 0: NS u16 words, its fields bit-packed least significant bit first in `ingress_scan.layout`'s order, slot
 j's ``j.<field>``. A slot's Program reads its ``occ`` (a 0/1 word: 1 when the slot carries a request whose Program starts
 at b), its prompt's length ``fields``, its ``max_tokens`` and its ``ids`` (prompt position p at `io_shell.position`'s
-index), through `boolean_io_shell.ScanSlots_v2` (`bridge`), which also gives each lane its first position's token and the
+index), through `boolean_io_shell.ScanSlots_v3` (`bridge`), which also gives each lane its first position's token and the
 slot it carries on. The window's registered `SCAN_STATE` is the rows
 `ingress_scan.window_state` gives for its window: for the window of ``buckets`` buckets from scan bucket t0, the
 scan's rows t0 − 1 … t0 + buckets − 2, its row a S_{t0 + a − 1}, the one the Programs anchored at the window's bucket a
@@ -44,11 +44,11 @@ def words(cls: IS.Class) -> int:
 
 
 def bridge(cls: IS.Class, prompt: int) -> Any:
-    """`boolean_io_shell.ScanSlots_v2` at ``cls``'s state row for prompts of at most ``prompt`` ids: each lane's occupancy
+    """`boolean_io_shell.ScanSlots_v3` at ``cls``'s state row for prompts of at most ``prompt`` ids: each lane's occupancy
     word, prompt length, ``max_tokens`` and ids where `ingress_scan.layout` puts them."""
     lay = IS.layout(cls)
     at = {f: tuple(lay[f"{j}.{f}"][0] for j in range(cls.NR)) for f in ("occ", "fields", "max_tokens", "ids")}
-    return bind(BIO.ScanSlotsV2, NS=words(cls), NP=prompt, IDB=cls.IDB, K0=cls.K0, K=cls.K, OCC=at["occ"], LP=at["fields"],
+    return bind(BIO.ScanSlotsV3, NS=words(cls), NP=prompt, IDB=cls.IDB, K0=cls.K0, K=cls.K, OCC=at["occ"], LP=at["fields"],
                 MAX=at["max_tokens"], IDS=at["ids"])
 
 
