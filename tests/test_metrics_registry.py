@@ -4,7 +4,7 @@ owner's prefix, an owner the handle registry knows and whose `owns` there covers
 words (a headline `title`, a short `unit` and a one-sentence `axis`), a direction, an `every` in minutes, hours or days,
 and a command naming scripts that exist, with the declaring file's directory recording the metric under its id. Each
 row's `version` says what changed above 1, its unit is pinned to its version (`PINS`), the kit's `VERSIONS` is the rows
-above 1, and no row carries a version key until the site's reader takes them. A whole-tree invariant, since it reads the
+above 1, a `runs` is `control`, and no row carries a version key or `runs` until the site's reader takes them. A whole-tree invariant, since it reads the
 handle registry and the benchmarks and loops the commands run."""
 from __future__ import annotations
 
@@ -24,7 +24,9 @@ NAME = REGISTRY_FILE
 RETIRED = "benchmarks/metrics.toml"
 HANDLES = ".agents/skills/using-slack/registry.json"
 REQUIRED = frozenset({"id", "title", "owner", "unit", "axis", "better", "command", "every"})
-OPTIONAL = frozenset({"floor", "goal", "tags", "version", "changed", "was"})
+OPTIONAL = frozenset({"floor", "goal", "tags", "version", "changed", "was", "runs"})
+#: `runs`'s one value: the row runs on the control pod itself (infra/control/metrics_rerun.py's CONTROL)
+RUNS = "control"
 #: each row's version and unit as last pinned, so a unit changes only with its version
 PINS = "tests/metric_pins.json"
 PIN = "uv run python tests/test_metrics_registry.py --pin"
@@ -33,6 +35,9 @@ VERSION_KEYS = ("version", "changed", "was")
 #: whether the site's reader (infra's) takes `VERSION_KEYS`: the site refuses a metric with a key its reader doesn't
 #: take, so until it does no row may carry one; set True once it takes them
 SITE_TAKES_VERSIONS = True
+#: whether the site's reader takes `runs` on a row: until it does, the site refuses a row that carries it and the door doesn't
+#: list it, so the rerun loop never runs it; set True once it takes it
+SITE_TAKES_RUNS = False
 #: a title's least and most words, and a unit's most, a rate's two sides (either side of " a ") counted apart
 TITLE_WORDS, UNIT_WORDS = (3, 6), 3
 _ID = re.compile(r"^[a-z][a-z0-9-]*/[a-z0-9][a-z0-9.-]*$")
@@ -101,6 +106,9 @@ def _problems(m: dict, handles: set[str], where: str) -> list[str]:
         out.append(f"floor is {m['floor']!r}, not a number")
     if "tags" in m and not (isinstance(m["tags"], list) and all(isinstance(t, str) for t in m["tags"])):
         out.append("tags is not a list of words")
+    if "runs" in m and m["runs"] != RUNS:
+        out.append(f"runs is {m['runs']!r}, not {RUNS!r}: give runs = {RUNS!r} for a row only the control pod can run, and "
+                   "none for one a node runs")
     out += _versioned(m)
     scripts, home = _SCRIPT.findall(str(m.get("command", ""))), ROOT / where
     missing = [f"its command's script {s} doesn't exist" for s in scripts if not (ROOT / s).is_file()]
@@ -190,13 +198,17 @@ def test_a_row_that_breaks_a_rule_is_refused() -> None:
     here = "benchmarks/serve_tax"
     assert _problems(good, {"vllm"}, here) == ["nothing under benchmarks/serve_tax/ records a measurement named 'vllm/x'"]
     assert _problems({**good, "id": "vllm/serving-cost-glm53"}, {"vllm"}, here) == []
-    bad = {**good, "id": "infra/serving-cost-glm53", "better": "smaller", "every": "weekly", "floor": "3", "colour": 1}
+    bad = {**good, "id": "infra/serving-cost-glm53", "better": "smaller", "every": "weekly", "floor": "3", "colour": 1,
+           "runs": "node"}
     assert _problems(bad, {"vllm", "infra"}, here) == [
         "has unknown key colour", "id 'infra/serving-cost-glm53' is not under its owner's prefix vllm/",
         "better is 'smaller', not lower or higher",
         "every is 'weekly', not a count of minutes, hours or days such as 5m, 12h or 7d",
-        "floor is '3', not a number", "nothing under benchmarks/serve_tax/ records a measurement named "
-        "'infra/serving-cost-glm53'"]
+        "floor is '3', not a number",
+        "runs is 'node', not 'control': give runs = 'control' for a row only the control pod can run, and none for one a "
+        "node runs",
+        "nothing under benchmarks/serve_tax/ records a measurement named 'infra/serving-cost-glm53'"]
+    assert _problems({**good, "id": "vllm/serving-cost-glm53", "runs": "control"}, {"vllm"}, here) == []
     assert _problems({**good, "owner": "nobody", "command": "echo"}, {"vllm"}, here) == [
         f"owner 'nobody' is no handle in {HANDLES}",
         "its command names no script under benchmarks/, calibration/, applications/, infra/ or tools/"]
@@ -482,8 +494,9 @@ def test_versions_hold_a_raised_row_and_nothing_else() -> None:
         "  add the line 'vllm/y': 3,", "  delete the line 'vllm/y': 2, (its row's version is 3)"]
 
 
-def _site_refused(rows: list[tuple[str, dict]], takes: bool = SITE_TAKES_VERSIONS) -> list[str]:
-    return [] if takes else [f"  {f}: {m.get('id')}: {k}" for f, m in rows for k in VERSION_KEYS if k in m]
+def _site_refused(rows: list[tuple[str, dict]], takes: bool = SITE_TAKES_VERSIONS,
+                  keys: tuple[str, ...] = VERSION_KEYS) -> list[str]:
+    return [] if takes else [f"  {f}: {m.get('id')}: {k}" for f, m in rows for k in keys if k in m]
 
 
 def test_no_row_carries_a_version_key_until_the_site_takes_them() -> None:
@@ -497,6 +510,16 @@ def test_the_site_check_holds_each_version_key_until_flipped() -> None:
     rows = [("f", {"id": "vllm/x", "version": 2, "changed": "A new clock.", "was": ["vllm/old"]}), ("g", {"id": "vllm/y"})]
     assert _site_refused(rows, takes=False) == ["  f: vllm/x: version", "  f: vllm/x: changed", "  f: vllm/x: was"]
     assert _site_refused(rows, takes=True) == []
+    rows = [("f", {"id": "ci/x", "runs": "control"}), ("g", {"id": "ci/y"})]
+    assert _site_refused(rows, False, ("runs",)) == ["  f: ci/x: runs"] and _site_refused(rows, True, ("runs",)) == []
+
+
+def test_no_row_carries_runs_until_the_site_takes_it() -> None:
+    held = _site_refused(_metrics(_files())[0], SITE_TAKES_RUNS, ("runs",))
+    assert not held, ("the site refuses a metric with a key its reader doesn't take, so the door wouldn't list these rows and "
+                      "the rerun loop would never run them, and its reader (infra's) doesn't take runs yet: once it takes "
+                      "runs = \"control\", set SITE_TAKES_RUNS = True in tests/test_metrics_registry.py, and until then drop "
+                      "it from these rows:\n" + "\n".join(held))
 
 
 def pin() -> int:
