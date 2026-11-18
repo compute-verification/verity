@@ -134,12 +134,15 @@ def test_a_word_primitive_without_a_body_is_refused_by_name():
 
 
 def test_a_catalogue_primitive_with_no_body_is_refused_by_name_and_never_priced():
+    from verity.circuits.defs import PrimitiveDefinition
     from verity.circuits.ops import words as W
     from verity.circuits.program import NoBooleanBody
 
     params, ret = W.PouwAdd64Hi.signature()
-    with pytest.raises(NoBooleanBody, match="PouwAdd64Hi_v1"):
-        _wrap("CountNoBody", params, ret, lambda B, S, *a: B.call(W.PouwAdd64Hi, *a))
+    # an evaluator of `verity`'s own makes it a catalogue primitive to the suite's lookup, which gives it no stand-in
+    bodiless = PrimitiveDefinition("CountBodiless", 1, params, ret, W.PouwAdd64Hi.evaluate, register=False)
+    with pytest.raises(NoBooleanBody, match="CountBodiless_v1"):
+        _wrap("CountNoBody", params, ret, lambda B, S, *a: B.call(bodiless, *a))
 
 
 def test_the_vectors_are_the_counts():
