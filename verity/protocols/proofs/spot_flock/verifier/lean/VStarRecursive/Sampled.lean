@@ -183,10 +183,10 @@ def protocol : Core.BlobProtocol where
 #guard match paramsOfJson (Json.mkObj [("levels", Json.num 1), ("boundary", Json.mkObj [])]) with
   | .error e => e.startsWith "levels-shape"
   | .ok _ => false
-#guard match paramsOfJson (Json.mkObj [("law", Json.mkObj [])]) with
+#guard match paramsOfJson (Json.mkObj [("values", Json.mkObj [])]) with
   | .error e => e == s!"the parameters name no proofs: {V1_REFUSED}"
   | .ok _ => false
-#guard match paramsOfJson (Json.mkObj [("levels", Json.num 1), ("law", Json.mkObj [])]) with
+#guard match paramsOfJson (Json.mkObj [("levels", Json.num 1), ("values", Json.mkObj [])]) with
   | .error e => e == s!"the parameters name no proofs: {V1_REFUSED}"
   | .ok _ => false
 #guard match evidenceOf "{\"form\":\"two-stage\"}".toUTF8 with
@@ -195,7 +195,7 @@ def protocol : Core.BlobProtocol where
 #guard match evidenceOf "{\"form\":\"recursive\"}".toUTF8 with
   | .error e => e == RECURSIVE_REFUSED
   | .ok _ => false
-#guard match paramsOfJson (Json.mkObj [("form", ONE_STAGE), ("law", Json.mkObj [])]) with
+#guard match paramsOfJson (Json.mkObj [("form", ONE_STAGE), ("values", Json.mkObj [])]) with
   | .error e => e == s!"the parameters name no proofs: {V1_REFUSED}"
   | .ok _ => false
 #guard match evidenceOf "{\"form\":\"one-stage\",\"verdicts\":{}}".toUTF8 with
