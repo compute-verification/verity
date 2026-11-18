@@ -383,7 +383,7 @@ def test_the_engine_serves_the_next_windows_while_a_seal_is_held(tmp_path, monke
     wins = records(out, "windows.jsonl")
     assert [w["window"] for w in wins] == [0, 1, 2] and all(w["seal"] == {"row_dir": str(out / "windows" / f"w{w['window']}"),
                                                                       "off_loop": True} for w in wins)
-    assert not (out / "seals.jsonl").exists() and len(records(tmp_path / "OUT", sc.REQUEST_USERS)) == 3
+    assert not (out / "seals.jsonl").exists() and len(records(tmp_path / "OUT", "windows.jsonl")) == 3
     assert not (tmp_path / "OUT" / "requests.jsonl").exists(), "the requests' ids stay in the serve dir"
     assert not s.windows.summary()["passed"] and s.windows.summary()["seals"]["awaiting"] == 3
     held.set()

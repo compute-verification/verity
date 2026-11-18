@@ -333,6 +333,7 @@ def test_a_closing_entry_waits_for_its_own_class():
     assert set(stale([other], gaps([other], [p]), closing)) == {("sm_120", "SHFL.BFLY"), ("sm_120", "LOP3.LUT")}
 
 
+@pytest.mark.slow
 def test_the_cover_reads_every_source():
     """Each kind of program is read (so a moved file can't silently drop one), each declared catch-all is priced at its
     statement's π*, and each CLOSING entry names a device the model has."""

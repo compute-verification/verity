@@ -11,6 +11,8 @@ from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
 from verity.protocol import DELTAS
+from verity.protocols.resource_accounting import scheme as S
+from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER
 
 PROTOCOL = "verity/certifier/v0"
 #: the block record's δs (``verity/block-record/v2``'s ``at``): a leg's attestation holds at δ where its error is at
@@ -44,7 +46,20 @@ def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], so
     return {"protocol": PROTOCOL, "owner": owner, "server": server, "source": source,
             "answer": {k: answer.get(k) for k in ("verdict", "reason", "commitment", "public")},
             "quantity": {"symbol": "K", "value": K, "unit": "bits", "windows": int(pub["windows"])},
-            "error": str(eps), "error_from": BLOCK_ERROR_FROM, "at": at, "runs": list(runs)}
+            "error": str(eps), "error_from": BLOCK_ERROR_FROM, "at": at, "runs": list(runs)} | _declared()
+
+
+def _declared() -> dict[str, Any]:
+    """The leg's ``premises`` and ``unbounded`` as the block record writes them for a declared scheme, read from
+    `NETWORK_ATTESTER`: its premises by name (or why its declaration does not say them), and `S.unbounded`'s refusal.
+    A ValueError once the declaration bounds it, since the bound is then the answer's profile's, which no answer carries."""
+    p = NETWORK_ATTESTER.premises
+    refused = S.unbounded(NETWORK_ATTESTER)
+    if refused is None:
+        raise ValueError(f"{NETWORK_ATTESTER.name}'s declaration now bounds it: the record reads the bound from the "
+                         "answer's profile (`bound`), so the answer carries those inputs and the leg reads them")
+    return {"premises": p.why if isinstance(p, S.Lacks) else list(p),
+            "unbounded": {"why": str(refused), "terms": list(refused.terms)}}
 
 
 __all__ = ["BLOCK_DELTAS", "BLOCK_ERROR_FROM", "PROTOCOL", "block_leg"]

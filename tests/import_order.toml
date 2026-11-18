@@ -527,6 +527,7 @@ loaded_by = [
 [[place]]
 paths = [
     "verity/protocols/registration/verifier/registration.py",
+    "verity/protocols/registration/verifier/site_log.py",
 ]
 trusted = true
 loads = [
@@ -858,6 +859,7 @@ loads = [
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/resource_accounting/network/scheme.py",
     "verity/protocols/resource_accounting/network/verifier",
+    "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
 
