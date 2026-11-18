@@ -11,7 +11,7 @@ public import Proofs.Flock.SpotFlock.WiredKS
 sampled verifier at its stage order, its second stage reading the coins of `R x` rounds, is knowledge sound at SHA-512
 on the challenger's bytes uniform at each of its two calls and seven facts of its code. A second stage of one round
 (`SamplingDeploy.Order.stage`) is `SamplingDeploy.ksTwo_atOrder`'s code (`SamplingDeploy.codeTwoAt_eq_stage`). Its
-witnesses are `Flock.SecurityProofs.SampledKSTwo_honest` and `Claims.SamplingGeneric.compilerKSTwo_nontrivial`.
+witnesses are `Flock.SecurityProofs.SampledKSTwo_honest` and `Flock.SecurityProofs.SampledKSTwo_nontrivial`.
 
 `Flock.SecurityProofs.SpotKSTwo : Flock.Guarantees.SpotKSTwo` is the same at SPOT[Flock]'s code at the connected
 program (`SpotFlock.codeConnected`). The verifier, the sessions, their rounds, the samples and the frame are

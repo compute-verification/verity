@@ -87,7 +87,7 @@ Current terms and notation, one line each, ``- **Term** (area): definition. Code
 - **Network attester**: an auditor-trusted device on each node's uplink, untrusted by the developer (`verity.protocols.resource_accounting.network.attester`), which attests the traffic it carries in network attestations and scrubs its timing; every node uplink passes through one. It is an *active warden* in network steganography's sense, altering the traffic to close covert channels where a passive warden only watches, but "network attester" is its one name: "warden" appears only in that phrase, and "tap" never names it.
 - **Node lease** (jobs): a node's own deadline (`~/.research/lease`), after which it stops once every run on it has custody.
 - **Noise period** (Dither): L′, the period of Dither's noise along K, a length; a segment is L/L′ noise periods.
-- **Nontrivial lemma**: a guarantee's companion showing the guarantee fails for a verifier that accepts everything.
+- **Nontrivial lemma**: a guarantee's companion that builds an instance of the guarantee where its conclusion fails.
 - **Off-gate step** (landing): a step of the check off the merge gate (`off_gate`, `warn_steps`), whose red holds nothing.
 - **Operation** (circuits): a Definition whose own definition is gates (floating-point constants, SHA-512's round constants, the MUFU tables), one pinned, versioned list. Code: `verity.circuits.operations`, `operations.program_data`.
 - **Pairs within reach** (training): π(S) = Σ_m |S ∩ W_m|·|S ∩ X_m|, the weight–activation pairs of one matmul in S, and Π_θ(k) the most of them k wires can cut off from the inputs outside θ. Code: `Slowdown.Cut.Work.pi`.
