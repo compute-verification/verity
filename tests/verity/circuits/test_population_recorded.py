@@ -25,6 +25,7 @@ from typing import Any
 
 import pytest
 
+import stand_in  # noqa: F401  (the test primitives' Boolean bodies, also when run as a script)
 from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition
 from verity.circuits.population import mixed_population_program, population_program
