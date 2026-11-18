@@ -5,7 +5,8 @@ description: >
   `--cwd clone` for a job that writes into the tree),
   write what to keep under `$OUT` (the run dir's `out/`), and keep scratch, caches and build
   trees in a `mktemp -d` directory outside the run dir. Custody uploads the run's own logs and records, all of `$OUT`, the files
-  `--declared-output GLOB` names, and other files only up to 256 MiB; the rest it lists by path, size and sha256 without bytes.
+  `--declared-output GLOB` names, and other files only up to 256 MiB; the rest it lists by path, size and sha256 without bytes,
+  and a private file (a salt or key, research/store/private.py) it refuses and leaves on the machine.
   Use when writing or launching a
   `research run` command, a job's custody upload is slow or huge, custody printed "trimmed N undeclared file(s)", or a run's
   output is missing from its run record.
@@ -20,7 +21,11 @@ there when the workload exits and publishes to the store:
 - each `--declared-output GLOB` (quote it; `fnmatch` on paths relative to the run dir, so `*` crosses `/`);
 - other files in path order up to 256 MiB in all (`custody.UNDECLARED_LIMIT_BYTES`, kept for older launches; it drops to 0
   once lanes declare their outputs). The rest are listed in `meta.trimmed` by path, size and sha256, and custody prints
-  `custody trimmed N undeclared file(s)`; a trimmed file is still pinned by hash, so changing it breaks `.custody`.
+  `custody trimmed N undeclared file(s)`; a trimmed file is still pinned by hash, so changing it breaks `.custody`;
+- never a private file, whatever names it (`research/store/private.py`: salt keys, salts, a Pearl+ pass's `pass-NNNNN/` retain
+  directory, a JSON file holding `hm96_salt_key`). Custody stores the rest, prints `custody REFUSED N private file(s)`, lists
+  each in `custody-refused.json` and `.custody`, and leaves it on the machine, never evicted; `research status RUN` says so. Keep
+  such files out of the run dir; to change the list, add a line there in a reviewed change.
 
 A run that ended without custody preserving it (the upload failed, custody was off, its runner died) is only its directory
 on the machine: the retention collector lists such runs apart, and where a machine's collector takes them
