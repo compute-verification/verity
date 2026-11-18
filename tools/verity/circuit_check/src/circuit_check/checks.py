@@ -1785,6 +1785,31 @@ def vector_class(r: dict) -> str | None:
     return "edge-only" if any((x.get("compared") or 0) > 0 for x in recs) else "none"
 
 
+#: how a Definition target was compared with its reference on random vectors (`compared_by`), best first
+COMPARED_BY = ("lowering", "kernel", "other", "none")
+
+
+def compared_by(r: dict) -> dict:
+    """A Definition target's result by what compared it with the reference on a random vector: ``lowering`` when a Flock lowering
+    (a ``c-flock:`` realization that lowered) did, else ``kernel`` when a kernel did, else ``other`` (a word view, a template's
+    target), else ``none``, with ``reason`` (``budget``: over the whole-Definition budget; ``units``: lowered as its template's
+    units; ``edge-only``; ``other``) and ``why``, the Flock lowering's own reason.  ``realizations``: those that compared it."""
+    recs = [x for c in _corrs(r) for x in c.get("realizations", ())]
+    lowerings = [x for x in recs if str(x.get("via", "")).startswith("c-flock:")]
+    lowerings += r["lowering"] if isinstance(r.get("lowering"), list) else []
+    ran = [(x.get("via") or x.get("target"), x) for x in [*recs, *r.get("target_equivalence", ()),
+                                                           *(x for x in lowerings if x not in recs)] if (x.get("random") or 0) > 0]
+    names = sorted({str(v) for v, _ in ran})
+    if any(str(v).startswith("c-flock:") and x.get("lowered") for v, x in ran):
+        return {"by": "lowering", "realizations": names}
+    if ran:
+        return {"by": "kernel" if any(str(v).startswith("kernel:") for v, _ in ran) else "other", "realizations": names}
+    why = "; ".join(str(x["reason"]) for x in lowerings if not x.get("lowered") and x.get("reason"))
+    reason = ("edge-only" if any((x.get("compared") or 0) > 0 for x in recs) else "budget" if "whole-Definition budget" in why
+              else "units" if "template's units" in why else "other")
+    return {"by": "none", "realizations": [], "reason": reason, "why": why}
+
+
 def classified(r: dict) -> dict:
     """A target's result with a warning when it is `vector_class` ``edge-only`` (``vectors/edge-only``) or ``none``
     (``vectors/none``): its semantics were held to no random vector, a property left unchecked, as every warning is."""
