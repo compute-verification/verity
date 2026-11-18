@@ -11,6 +11,7 @@ public import Proofs.Properties.InferenceOnly.RecordRows
 public import Proofs.Properties.InferenceOnly.RecordShared
 public import Proofs.Properties.InferenceOnly.RecordTemplates
 public import Proofs.Properties.InferenceOnly.RecordWhole
+public import Proofs.Properties.InferenceOnly.RecordWire
 public import Mathlib.Tactic
 
 /-!
@@ -371,8 +372,8 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
 /-- **A wired row holds its output** (`OutFits`), of a record whose wires pass the check's `unwhole`: the writer's
 field at the wire's offset is the row's bits (`wired_row`), and a unit, its parameter by name, and a field of a word
 or more by its first word are each one (`unitAt_fun`, `portsNamed`, `fieldWord_inj`). -/
-theorem outFits {tids : Array String} (hP : ReadProg P)
-    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs)
+theorem outFits (hP : ReadProg P)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
     (hwh : unwhole P ts (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S = none) :
