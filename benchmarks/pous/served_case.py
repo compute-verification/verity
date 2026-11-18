@@ -142,12 +142,19 @@ def wipe_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = m
 def judged(case: Mapping[str, Any], answer: dict[str, Any], exe: str | os.PathLike | None) -> dict[str, Any]:
     """``answer``, or with ``exe`` (the component's Lean, `pous-run-protocol` or `wipe-protocol`) the Lean's answer on
     ``case`` (`period.serve`), refused unless it agrees with ``answer`` but for the reason."""
-    if exe is None:
-        return answer
+    return answer if exe is None else agreed(lean_answer(case, exe), answer, exe)
+
+
+def lean_answer(case: Mapping[str, Any], exe: str | os.PathLike) -> dict[str, Any]:
+    """``exe``'s answer on ``case`` (`period.serve`); `Refused` when it gives none."""
     try:
-        lean = period.serve(exe, [case])[0]
+        return period.serve(exe, [case])[0]
     except (OSError, IndexError, ValueError, subprocess.CalledProcessError) as e:
         raise Refused(f"{exe} doesn't answer the case: {type(e).__name__}: {e}"[:1000]) from None
+
+
+def agreed(lean: dict[str, Any], answer: Mapping[str, Any], exe: str | os.PathLike) -> dict[str, Any]:
+    """``lean``, ``exe``'s answer, refused unless it is the Python's ``answer`` but for the reason."""
     _need({k: v for k, v in lean.items() if k != "reason"} == {k: v for k, v in answer.items() if k != "reason"},
           f"{exe} answers the case {lean.get('verdict')} ({lean.get('reason')}), its Python {answer['verdict']} "
           f"({answer['reason']})")

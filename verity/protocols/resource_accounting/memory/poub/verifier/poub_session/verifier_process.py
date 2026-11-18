@@ -15,9 +15,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[7]))
 
 from verity.commitments.crypto import lms
 from verity.commitments.scheme import DIGEST_BYTES
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.resource_accounting.memory.poub.verifier import coins, timing
 from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier
-from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 
 ROOT = Path(__file__).resolve().parents[7]
 SERVE = ROOT / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "serve.py"

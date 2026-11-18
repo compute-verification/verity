@@ -309,8 +309,8 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     test signer), in a temporary directory with the test signer's leaf state, removed once the sessions are signed.  Each
     session's live coins and session id are `os.urandom`'s, or `seeded_session(seed, j)` with `seed`, which only a
     test-signed audit on the logical clock takes (`SEEDED_ONLY`)."""
-    from verity.protocols.resource_accounting.memory.pous.verifier import audit as pous_audit
     from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+    from verity.protocols.resource_accounting.memory.pous.verifier import audit as pous_audit
     from verity.protocols.resource_accounting.memory.pous.verifier.protocol import StorageProfile
 
     if seed is not None and not (isinstance(clock, LogicalClock) and signer == "test"):
