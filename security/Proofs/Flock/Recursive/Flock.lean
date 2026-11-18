@@ -478,12 +478,12 @@ theorem accepts_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg') zo.dj zo.y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     {qF qS qW qR : ℝ} (τ : Strategy (zo.game dg N)) (hCR : zo.CR dg N k Rw qF qS qW qR τ) :
     prob (fun o => LiveAcceptsZKR zo.I zo.own o ∧ ¬ zo.Good (zo.layer dg N k Rw τ)) (zo.game dg N) τ ≤
-      zo.bound dg N (SamplingDesign.subset nv nv le_rfl) k Rw M ρ t' qF qS qW qR τ := by
+      zo.bound dg N (Verity.SamplingDesign.subset nv nv le_rfl) k Rw M ρ t' qF qS qW qR τ := by
   classical
   by_cases hG : zo.Good (zo.layer dg N k Rw τ)
   · exact (prob_mono (fun o h => h.2 hG) _ _).trans ((prob_false _ _).le.trans zero_le)
   have h1 : prob (fun o => Disjoint o.2.1 (zo.badUnits dg N k Rw τ)) (zo.game dg N) τ ≤
-      (SamplingDesign.subset nv nv le_rfl).miss 1 :=
+      (Verity.SamplingDesign.subset nv nv le_rfl).miss 1 :=
     (prob_auditLive_sample _ τ fun S => Disjoint S (zo.badUnits dg N k Rw τ)).trans_le
       ((execOS_subset_full_escape src (zo.badUnits_nonempty dg N k Rw τ hG)).trans_le zero_le)
   have h2 := zk_session_regSampledR zo.I zo.ht zo.own zo.dj zo.y₀ zo.wr dg N zo.hcH hU zo.hpub
@@ -522,7 +522,7 @@ abbrev live : SamplingDesign nv := SamplingDesign.execOS (n := nv) samplingDesig
 
 /-- The model's full sample. It reads nothing of the sampling design but its unit count; the argument is there so that
 `(Vs j).samplingDesign.model` names it. -/
-abbrev model (_samplingDesign : VSamplingDesign nv) : SamplingDesign nv := SamplingDesign.subset nv nv le_rfl
+abbrev model (_samplingDesign : VSamplingDesign nv) : SamplingDesign nv := Verity.SamplingDesign.subset nv nv le_rfl
 
 end VSamplingDesign
 
