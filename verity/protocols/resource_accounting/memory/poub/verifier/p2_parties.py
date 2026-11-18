@@ -90,6 +90,7 @@ from verity.protocols.resource_accounting.memory.pous.attester import challenger
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 
+from .. import DEADLINE_NS, SCHEME
 from . import audit, p2, p2_lean, pooled
 from . import coins as C
 from . import period as P
@@ -97,7 +98,7 @@ from .p2_lean import Lean, LeanError
 from .receipts import Plan
 
 MODULE = "verity.protocols.resource_accounting.memory.poub.verifier.p2_parties"
-PROTOCOL = "verity/remote-bandwidth/p2/v0"
+PROTOCOL = SCHEME.protocol
 ID, VERSION = PROTOCOL, 1
 VERIFIER, PROVER = "verifier", "prover"
 COIN_BYTES = 64
@@ -120,7 +121,7 @@ LINES = {PROVER: {"request": "Request", "root": "Root", "openings": "Openings"},
 CASE_DIGESTS = "case-digests.txt"
 """The file under a party's ``private/`` that `_keep` appends each session's `case_digest` to."""
 REQUEST_KEYS = ("deadline_ns", "node", "passes", "samples", "window_ns", "windows")
-SESSION = {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 * 10**9, "windows": 6}
+SESSION = {"deadline_ns": DEADLINE_NS, "passes": 4, "samples": 1024, "window_ns": 20 * 10**9, "windows": 6}
 """The auditor's session parameters, which a request must carry as they are (`params_of`): the served bandwidth piece's
 (`benchmarks/pous/held_bandwidth.py`'s defaults, over the store the PoUS piece holds), six windows of at least 20 s,
 four passes each, 1,024 openings a window and an allowance of 1 s. At δ = 2^-40 an accepted session's ε is
@@ -1044,7 +1045,7 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
 
 GOAL = CS.ONSITE_GOAL
 #: PoUB's P2 session's name in a deployment configuration: in its `protocols` and a binding's table
-COMPONENT = "bandwidth"
+COMPONENT = SCHEME.name
 #: its `[[pin]]` names PoUS's key: it signs the close with the memory attester's PoUS key
 CLOSER_PARTY = "bandwidth-verifier"
 
