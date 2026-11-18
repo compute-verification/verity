@@ -13,12 +13,14 @@
 #    growing. It keeps each packet's first 54 bytes, the least a TCP packet's headers are over IPv4 in the loopback's
 #    Ethernet frame, so it holds no content byte of any flow. It holds the headers of every TCP flow on the loopback
 #    meanwhile, other programs' among them, so it stays in the job's temporary directory, which is deleted.
-# 2. The run: the rehearsal, with its offline check; its run directory is $OUT/run.
+# 2. The run: the rehearsal, with its offline check, in the job's temporary directory, since its records and salts are
+#    the prover's. $OUT/run keeps its public files alone: the deployment, the endpoints, the cells, the certified
+#    records' heads, the check and the network attester's log.
 # 3. What is kept of the capture: $OUT/run.pcap, its packets on the run's two ports, the stand-in front's and the
 #    relay's (`endpoints.json`), headers alone. The filter reads a packet's ports in the 54 bytes kept of it: it
 #    finds IPv4's there, under at most 16 bytes of IP options, and never IPv6's, so it keeps no IPv6 packet. The
 #    front and the relay listen on IPv4's loopback.
-# 4. The reader: `capture_flows.py` on $OUT/run.pcap and $OUT/run. The front and the relay share the loopback's address,
+# 4. The reader: `capture_flows.py` on $OUT/run.pcap and the run, which it reads records and all. The front and the relay share the loopback's address,
 #    so the front's is given with its port; the load's connections to the relay are among the other flows. Its result
 #    is $OUT/capture_flows.json and its table $OUT/capture_flows.txt, also printed.
 # The exit is the reader's (0 read, 2 refused) where the rehearsal's check accepted its run; 1 where it didn't, the
@@ -56,8 +58,12 @@ until grep -q "listening on" "$W/tcpdump.log"; do
   sleep 0.2
 done
 
-"$PY" -m verity.protocols.resource_accounting.network.attester.network_attester_serve rehearse --fake --watermark --out "$OUT/run" ${form[@]+"${form[@]}"} "$@"
+"$PY" -m verity.protocols.resource_accounting.network.attester.network_attester_serve rehearse --fake --watermark --out "$W/run" ${form[@]+"${form[@]}"} "$@"
 rehearsed=$?
+mkdir -p "$OUT/run"
+for f in deployment.json endpoints.json cells.jsonl certified.jsonl check.json warden.json; do
+  [ -f "$W/run/$f" ] && cp "$W/run/$f" "$OUT/run/"
+done
 
 # tcpdump gets its packets a little after they pass: the last are in the file only once it has stopped growing
 size=-1
@@ -66,7 +72,7 @@ kill -INT "$CAPTURE_PID"; wait "$CAPTURE_PID"; CAPTURE_PID=
 
 ends=$("$PY" -c 'import json, sys
 e, d = (json.load(open(p)) for p in sys.argv[1:])
-print(*e["upstream"], *e["listen"], d["params"]["egress"])' "$OUT/run/endpoints.json" "$OUT/run/deployment.json") \
+print(*e["upstream"], *e["listen"], d["params"]["egress"])' "$W/run/endpoints.json" "$W/run/deployment.json") \
   || { log "the rehearsal left no deployment or no endpoints"; exit 1; }
 read -r front port relay listen ran <<< "$ends"
 [ "$ran" = "$EGRESS" ] || { log "the run's egress form is $ran, not EGRESS's ($EGRESS)"; exit 1; }
@@ -74,7 +80,7 @@ tcpdump -r "$W/lo.pcap" -w "$OUT/run.pcap" "tcp port $port or tcp port $listen" 
   || { log "the capture couldn't be read back"; exit 1; }
 
 "$PY" "$HERE/capture_flows.py" --capture "$OUT/run.pcap" --server "$front:$port" --certifier "$relay" \
-  --run "$OUT/run" --out "$OUT/capture_flows.json" | tee "$OUT/capture_flows.txt"
+  --run "$W/run" --out "$OUT/capture_flows.json" | tee "$OUT/capture_flows.txt"
 read=${PIPESTATUS[0]}
 [ "$rehearsed" = 0 ] || { log "the rehearsal's check didn't accept its run (exit $rehearsed)"; exit 1; }
 exit "$read"

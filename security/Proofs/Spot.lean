@@ -7,6 +7,7 @@ public import Proofs.Spot.Pointer
 public import Proofs.Spot.Leakage
 public import Proofs.Spot.Work
 public import Proofs.Spot.Sampling.Scheme
+public import Proofs.Spot.Sampling.Levels
 public import Proofs.Spot.Instance
 public import Proofs.Spot.Oblivious
 public import Proofs.Spot.Transfer

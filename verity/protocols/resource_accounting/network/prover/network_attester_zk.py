@@ -285,7 +285,7 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     value = committed_value(sg.program_sha512, at.head, other, words.tolist())
     _w, salts, entry = value.statement(range(n))
     set_name = f"{st.iset.name}-{name}"
-    got = st.stage({"row": words}, out, os.urandom(32), salts={port: mr.salts, other: salts},
+    got = st.stage({"row": words}, out, salts={port: mr.salts, other: salts},
                    indices=range(sg.base, sg.base + n), set_name=set_name, tables={"row": words},
                    refs={"row": list(range(n))}, registered={port: mr.entry, other: entry})
     outs = M.np.asarray(got["outs"]["o0"], dtype=M.np.uint16)

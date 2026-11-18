@@ -93,7 +93,7 @@ class _Committer:
     def attach_source(self, src: Any) -> None:
         self.sources.append(src)
 
-    def register_weights(self) -> dict[str, Any]:
+    def register_weights(self, replay: bool = False) -> dict[str, Any]:
         self.registered.append(self.model)
         return {"root": ROOT, "tensors": len(list(self.model.named_parameters()))}
 

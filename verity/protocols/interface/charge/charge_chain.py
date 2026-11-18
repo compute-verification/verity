@@ -17,14 +17,14 @@ each window has a produced value `VALUE` of two rows, its carry-in and its carry
 first, then four zero bits (`arith_encode._CARRY`'s fields in order).
 
 **The carry.** Window w's row 0 is window w − 1's row 1 under the same salt (`charge_rows.commit_window(carry=…)`), so its opening
-b‖c is the same, and the verifier checks they're equal (`charge_rows.check_chain`). Window 0's row 0 is the priors' row under its
-public salt (`charge_rows.start_salt`), whose opening the verifier computes (`charge_rows.start_opening`). Row 1 is under a fresh salt.
+b‖c is the same, and the verifier checks they're equal (`network.verifier.charge_check.check_chain`). Window 0's row 0 is the priors' row under its
+public salt (`charge_rows.start_salt`), whose opening the verifier computes (`charge_check.start_opening`). Row 1 is under a fresh salt.
 
 **Why a restart is refused.** The verifier holds window 0's carry-in to the priors (`CH-first`) and each later
 window's to the last one's carry-out (`CH-carry`), on every session, and the proof block holds each window's carry-out
 to its charge's carry' from its carry-in (ok). So, window by window, the carry each window is charged from is the one
 `code_v1` carries over the whole session. A prover that restarts the counts mid-session, at the priors or at counts
-fitted to the window, either breaks the chain, which `charge_rows.check_chain` refuses, or claims a proof block whose ok is 0, which
+fitted to the window, either breaks the chain, which `network.verifier.charge_check.check_chain` refuses, or claims a proof block whose ok is 0, which
 fails that proof block's proof as any false proof block does. A carry row's padding needs no check: window 0's is the
 priors' row, and every later one a proved proof block's carry-out.
 
@@ -119,6 +119,21 @@ def session(N: int, book: dict, windows: Sequence[tuple[Sequence[int], Sequence[
 def reads() -> dict[str, dict[str, int]]:
     """The charging proof block's rows: `carry_in` 0 and `carry_out` 1."""
     return {VALUE: {"carry_in": 0, "carry_out": 1}}
+
+
+def check_rows(windows: Sequence[Sequence[bytes]], start: bytes) -> str | None:
+    """How a session's carry rows join, given each window's two openings b‖c in order and the session's first carry
+    row's opening `start`: None, or why not. `CH-rows`: a window isn't 2 carry rows; `CH-first`: the first carry-in
+    isn't `start`; `CH-carry`: a window's carry-in isn't the previous window's carry-out."""
+    for w, rows in enumerate(windows):
+        if len(rows) != 2:
+            return f"CH-rows: window {w} has {len(rows)} carry rows, not 2"
+    if windows and bytes(windows[0][0]) != start:
+        return "CH-first: the session's first carry isn't the book's priors under their public salt"
+    for w in range(1, len(windows)):
+        if bytes(windows[w][0]) != bytes(windows[w - 1][1]):
+            return f"CH-carry: window {w}'s carry-in isn't window {w - 1}'s carry-out"
+    return None
 
 
 # --- the circuit ------------------------------------------------------------------------------------------------------
@@ -301,6 +316,6 @@ def size(N: int) -> dict[str, int]:
 
 
 __all__ = ["ChargeLink", "LENGTH_BITS", "ROW_BITS", "SliceCharge", "VALUE", "WORD_BITS", "book_fields", "book_of", "book_values",
-           "build_link", "carry_of", "check_length_slots", "encode",
+           "build_link", "carry_of", "check_length_slots", "check_rows", "encode",
            "evaluate_links", "ints", "link_arguments", "link_unit", "reads", "reference_link", "row",
            "session", "size", "unrow"]
