@@ -44,7 +44,6 @@ import hashlib
 import json
 import os
 import shutil
-import socket
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -64,12 +63,6 @@ from verity.commitments.periods import flock_inputs as FI, rows as CS  # noqa: E
 from verity_e2e_demo import replay_bundle as RB  # noqa: E402
 
 FORMAT = "verity/prove-bundle/v0"
-
-
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 def hold(doc: dict, payload: bytes, wdir: Path) -> tuple[dict[str, bool], dict]:
@@ -155,12 +148,14 @@ def session(a, mm: dict, draw: dict, sdir: Path, zk_server: bool = True, forged:
             lean_pool: ThreadPoolExecutor | None = None) -> dict:
     """One `--zk` session of member ``mm`` served ``draw``, and Lean's verdict on it: with ``lean_pool``, a future of
     it, so that the next session proves while Lean verifies this one."""
+    from verity_bench import kit
+
     sdir.mkdir(parents=True, exist_ok=True)
     (sdir / "draw.json").write_text(json.dumps(draw, sort_keys=True))
     env = a0.prover_env(a.zk_server if zk_server else None, mm["st"])
     if forged:
         env["FC_ZK_SELF_CHECK"] = "skip"
-    record, live = a0.session(a.bin, mm["st"], mm["m"].n, f"subset:{draw['k']}", free_port(), sdir, sample_file=sdir / "draw.json",
+    record, live = a0.session(a.bin, mm["st"], mm["m"].n, f"subset:{draw['k']}", kit.free_port(), sdir, sample_file=sdir / "draw.json",
                               zk=True, env=env, prove_timeout=a.session_timeout)
     served = (record or {}).get("unit_draw") or {}
 
