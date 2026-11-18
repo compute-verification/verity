@@ -558,7 +558,7 @@ fold_build() {
 }
 
 # stage_inner NAME PLAIN: the inner statement (N instances of GemmCoordinate_v2{K}, the population program of that template
-# under Q_template_instance, rec_reprice.py: the partition's every unit, so the full sample over it proves every unit of the
+# under Q_template_instances, rec_reprice.py: the partition's every unit, so the full sample over it proves every unit of the
 # statement, which check 5 requires) staged into $DD/NAME from its cache $DD/NAME-cache, its trees' leaves plain SHA-512 when
 # PLAIN is 1; its records in $O/NAME. Never tiled (FLOCK_GEMM_TILE): a tile's circuit names its size class as its template,
 # which no template query lists, and at K = 4096 a 4x4 tile does not fit a block anyway. Every instance's own rows
@@ -589,7 +589,7 @@ stage_inner() {
 }
 
 # inner_partition: the verifier's copies of what the inner statement binds, into $DD/stage (rec_reprice.py partition): the
-# partition object (Q_template_instance over the population program, partition.json) and that program (program.json), which
+# partition object (Q_template_instances over the population program, partition.json) and that program (program.json), which
 # STEP=lean's statement check reads, and the full sample over them (rec_live.full_draw: the stratified sampling design at K = the
 # population, every unit; draw.json), which the rec proxy answers Register with
 inner_partition() {
