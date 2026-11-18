@@ -143,10 +143,11 @@ def registration_record(program, partition: Mapping, entries: Sequence[Mapping])
     """The circuit registration over ``program`` (a core ``Program``) and its ``verity/partition/v1`` object ``partition``,
     registering ``entries`` (`Registered.entry`): one-stage ``registration.record`` with the sampling design ``stratified`` over the
     population, the statement's scheme, no served roots and the `WINDOW` (the module docstring)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+    from verity.protocols.proofs.spot.prover import docket as DK
 
     query = partition["query"]
-    return R.record(program, query, {"law": "stratified", "k": P.units(program, query)}, FC.SCHEME, [], WINDOW,
+    return DK.record(program, query, {"law": "stratified", "k": P.units(program, query)}, FC.SCHEME, [], WINDOW,
                     partition=partition, registered=list(entries))
 
 

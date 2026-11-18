@@ -16,6 +16,7 @@ from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.prover.served import ServedTree, register_served
 
@@ -55,7 +56,7 @@ def _ports(prog: Program) -> dict:
 def _record(prog: Program, entries, window=SERVED, previous=None, roots=None):
     ports = _ports(prog)
     roots = roots or [{"port": p, "root": "ab" * 64, **ports[p]} for p in ports]
-    return R.record(prog, Q, SAMPLING_DESIGN, SCHEME, roots, window, previous=previous, registered=entries), ports
+    return DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, roots, window, previous=previous, registered=entries), ports
 
 
 def _tree(prog: Program) -> tuple[RV.Registered, ServedTree]:
@@ -117,7 +118,7 @@ def test_a_32_bit_tree_names_its_width():
     part = P.partition(prog, q)
     ports = {"x": {"leaves": len(POS), "domain": R.window_domain(part["program"], P.digest(part), "x", "hm96-sha512/row/v1",
                                                                   len(POS), "r-served")}}
-    rec = R.record(prog, q, SAMPLING_DESIGN, SCHEME, [{"port": "x", "root": "ab" * 64, **ports["x"]}], SERVED, registered=sr.registered)
+    rec = DK.record(prog, q, SAMPLING_DESIGN, SCHEME, [{"port": "x", "root": "ab" * 64, **ports["x"]}], SERVED, registered=sr.registered)
     assert R.check(rec, prog, q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values).ok
     with pytest.raises(ValueError, match="16-bit leaves, and the program's parameter is 5 rows of 2 32-bit"):
         register_served(prog, q, [dataclasses.replace(tree, word_bits=16)])
@@ -131,14 +132,14 @@ def test_an_earlier_outputs_tree_keeps_its_port():
     part = P.partition(prog, Q)
     dom = R.window_domain(part["program"], P.digest(part), "prev.out", "hm96-sha512/row/v1", len(TABLE), "r-earlier")
     first, ports = _record(prog, [reg.entry()])
-    earlier = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, [*first["roots"], {"port": "prev.out", "root": "cd" * 64, "leaves": len(TABLE),
+    earlier = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, [*first["roots"], {"port": "prev.out", "root": "cd" * 64, "leaves": len(TABLE),
                                                                "domain": dom}], {**SERVED, "row": 6}, registered=[reg.entry()])
     out = ServedTree("W", "cd" * 64, len(TABLE), 2, dom, output=(DD.digest(earlier), "prev.out"))
     sr = register_served(prog, Q, [out], log=[earlier])
     assert sr.outputs == {"W": {"record": DD.digest(earlier), "port": "prev.out"}}
     assert sr.registered == [{**reg.entry(), "root": "cd" * 64, "domain": dom}]
     assert {e["domain"] for e in sr.ports.values()} == {dom} and {e["root"] for e in sr.ports.values()} == {"cd" * 64}
-    rec = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=DD.digest(earlier),
+    rec = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=DD.digest(earlier),
                    registered=sr.registered)
     assert R.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, outputs=sr.outputs, log=[earlier]).ok
     for bad, why in ((dataclasses.replace(out, root="ce" * 64), "not port 'prev.out'"),
@@ -159,13 +160,13 @@ def test_a_reused_tree_takes_an_earlier_records_registered_value():
     dom = "da" * 64
     theirs = {**reg.entry(), "value": "a/16@0", "root": "cd" * 64, "domain": dom}
     first, ports = _record(prog, [reg.entry()])
-    earlier = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[theirs])
+    earlier = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[theirs])
     tree = ServedTree("W", "cd" * 64, len(TABLE), 2, dom, reused=(DD.digest(earlier), "a/16@0"))
     sr = register_served(prog, Q, [tree], log=[earlier], window_root="a7" * 64)
     assert sr.outputs == {"W": {"record": DD.digest(earlier), "value": "a/16@0"}}
     assert sr.registered == [{**reg.entry(), "root": "cd" * 64, "domain": dom}]
     assert {e["domain"] for e in sr.ports.values()} == {dom} and {e["root"] for e in sr.ports.values()} == {"cd" * 64}
-    rec = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=DD.digest(earlier),
+    rec = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=DD.digest(earlier),
                    registered=sr.registered)
     assert R.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, outputs=sr.outputs, log=[earlier],
                    window_root="a7" * 64).ok
@@ -178,7 +179,7 @@ def test_a_reused_tree_takes_an_earlier_records_registered_value():
                      (dataclasses.replace(tree, reused=("ab" * 64,)), "reused is")):
         with pytest.raises(ValueError, match=why):
             register_served(prog, Q, [bad], log=[earlier])
-    short = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[{**theirs, "words": 1}])
+    short = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[{**theirs, "words": 1}])
     with pytest.raises(ValueError, match="the log holds no record"):
         register_served(prog, Q, [dataclasses.replace(tree, reused=(DD.digest(short), "a/16@0"))], log=[short])
 
@@ -290,7 +291,7 @@ def test_r7_counts_a_bit_row_trees_rows_in_its_format():
     part = P.partition(wide, q)
     ports = {"x": {"leaves": len(POS), "domain": R.window_domain(part["program"], P.digest(part), "x", "hm96-sha512/row/v1",
                                                                   len(POS), "r-served")}}
-    rec = R.record(wide, q, SAMPLING_DESIGN, SCHEME, [{"port": "x", "root": "ab" * 64, **ports["x"]}], SERVED, registered=sr.registered)
+    rec = DK.record(wide, q, SAMPLING_DESIGN, SCHEME, [{"port": "x", "root": "ab" * 64, **ports["x"]}], SERVED, registered=sr.registered)
     assert R.check(rec, wide, q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values).ok
     assert R.check(rec, wide, q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, schemas=sr.schemas).ok
 

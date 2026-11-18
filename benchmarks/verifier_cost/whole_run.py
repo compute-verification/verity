@@ -63,7 +63,7 @@ def case(shape: str, n: int) -> dict:
     sampling_design = f"stratified-rate:2/{s.population}"
     named, table = T.service.params_sampling_design(sampling_design, s.program, s.query, None)
     sampled = T.DR.derive(s.program, s.query, named, table)
-    rec = T.R.record(s.program, s.query, named, T.SCHEME, [{"port": p, "root": T.ROOTS[p], **s.ports[p]} for p in s.ports],
+    rec = T.DK.record(s.program, s.query, named, T.SCHEME, [{"port": p, "root": T.ROOTS[p], **s.ports[p]} for p in s.ports],
                      T.WINDOW, leaf_layer=T.LEAF, work_table=table)
     params = {"anchors": [], "delta": "1/10", "law": sampling_design, "leaf_layer": T.LEAF, "log": [], "partition": None,
               "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": T.SCHEME,

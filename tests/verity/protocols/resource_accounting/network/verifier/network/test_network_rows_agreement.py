@@ -22,11 +22,11 @@ import pytest
 import verity_difftest as D
 from tests.verity.protocols.resource_accounting.network.attester.relay_runs import SESSION, _run
 from verity.protocols.resource_accounting.network.attester import network_attester_serve as ws
-from verity.protocols.resource_accounting.network.verifier import blob_files as bf, io_tie as IT, lean_audit as LA
+from verity.protocols.resource_accounting.network.verifier import blob_files as bf, io_tie as IT
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR, period_check
 from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
 from verity.protocols.resource_accounting.network.verifier.network_attester import (
-    DATA, END, INTEGER_FIELDS, W63K4, NetworkAttesterParams, cell, read_cell)
+    DATA, END, W63K4, NetworkAttesterParams, cell, read_cell)
 
 LEAN = Path(__file__).resolve().parents[7] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "lean"
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
@@ -48,19 +48,8 @@ def served(out: Path, params: NetworkAttesterParams = W63K4, windows: int = 2) -
 
 
 def case(run: Path) -> dict:
-    """The run's ``network-rows`` case, a record or certified record the run lacks left out of its commitment."""
     dep = json.loads((run / "deployment.json").read_text())
-    params = NetworkAttesterParams(**dep["params"])
-    key = RF.read_public(dep["key"])
-    certified, _ = RC.read_certified(run / "certified.jsonl")
-    raw = {(name, r.window): r for name, rs in RC.read_records(run, params).items() for r in rs}
-    body = [LA.encode(x) for w in range(dep["windows"]) for name, (link, d) in RC.CERTIFIED.items()
-            for x in (raw.get((name, w)), certified.get((link, d, w))) if x is not None]
-    p, cap = key.params, params.max_tokens_cap
-    schedule = {k: dep["params"][k] for k in INTEGER_FIELDS} | ({} if cap is None else {"max_tokens_cap": cap})
-    return {"params": {"key": key.public.hex(), "link": dep["link"], "lms": {"H": p.H, "N": p.N, "W": p.W, "toy": p.toy},
-                       "schedule": schedule, "session": dep["session"], "windows": dep["windows"]},
-            "commitment": b"".join(body).hex(), "evidence": b"{}".hex()}
+    return RC.rows_audit_case(run, dep, NetworkAttesterParams(**dep["params"]))
 
 
 def python(run: Path) -> list[str]:
@@ -193,12 +182,15 @@ def change_record(run: Path) -> Path:
 
 def test_network_rows_and_the_python_check_decide_each_run_alike(tmp_path):
     """Each case's two verdicts: the honest run, the run republished under another key and the deployment naming one
-    window fewer accepted by both; a forged certificate, a record changed under its head, a record or a certified
-    record missing, a grid re-cut, re-clocked or reordered and signed, another session, another key and a window more
-    than the run holds refused by both. Every disagreement is reported with both verdicts. By design: a run under a
+    window fewer accepted by both; a forged certificate, a record changed under its head, a grid re-cut, re-clocked
+    or reordered and signed, another session and another key refused by both, and a record or a certified record
+    missing or a window more than the run holds refused by the Python check and by the case's builder before
+    `network-rows`.
+    Every disagreement is reported with both verdicts. By design: a run under a
     `max_tokens_cap` the Python check accepts and `network-rows` refuses by name; a run whose egress cell isn't
-    id-form the Python audit refuses and `network-rows` accepts; and a bytes-form run the Python check accepts and
-    `network-rows` refuses."""
+    id-form the Python audit refuses and `network-rows` accepts; and a bytes-form run the Python check accepts, the
+    case's builder refuses by name and `network-rows`, handed it as an id-form run's, refuses. The relay check, running it, names no `lean-disagrees` on any of them, and its `lean` is
+    accepted on exactly those `network-rows` accepts and not covered on the capped and bytes-form runs."""
     exe = str(D.build(LEAN, "network-rows"))
     honest = served(tmp_path / "honest")
     resigned = republished(honest, tmp_path / "resigned")
@@ -209,15 +201,12 @@ def test_network_rows_and_the_python_check_decide_each_run_alike(tmp_path):
         "one window fewer": (edit_deployment(copied(honest, tmp_path / "fewer"), lambda d: d | {"windows": 1}), True),
         "forged certificate": (forge_certificate(copied(honest, tmp_path / "forged")), False),
         "record changed under its head": (change_record(copied(honest, tmp_path / "changed")), False),
-        "missing record": (drop_record(copied(honest, tmp_path / "no-record"), RC.FAILS, 1), False),
-        "missing certified record": (drop_certified(copied(honest, tmp_path / "no-cert"), RC.LINK, 1), False),
         "re-cut": (republished(honest, tmp_path / "re-cut", responses0(recut)), False),
         "re-clocked": (republished(honest, tmp_path / "re-clocked", responses0(reclock)), False),
         "reordered": (republished(honest, tmp_path / "reordered", responses0(reorder)), False),
         "another session": (edit_deployment(copied(honest, tmp_path / "session"), lambda d: d | {"session": "11" * 32}),
                             False),
         "another key": (edit_deployment(copied(honest, tmp_path / "key"), lambda d: d | {"key": other_key}), False),
-        "a window more": (edit_deployment(copied(honest, tmp_path / "more"), lambda d: d | {"windows": 3}), False),
     }
     verdicts = {}
     for name, (run, _) in runs.items():
@@ -227,6 +216,15 @@ def test_network_rows_and_the_python_check_decide_each_run_alike(tmp_path):
     assert not disagree, "python's refusals and network-rows' verdict differ: " + json.dumps(disagree, indent=1)
     wrong = {n: verdicts[n] for n, (_, accept) in runs.items() if (verdicts[n][1] == "accept") != accept}
     assert not wrong, "both checks agree on a verdict the case isn't: " + json.dumps(wrong, indent=1)
+
+    for run, why in ((drop_record(copied(honest, tmp_path / "no-record"), RC.FAILS, 1), "fails window 1 has no record"),
+                     (drop_certified(copied(honest, tmp_path / "no-cert"), RC.LINK, 1),
+                      "requests window 1 has no certified record"),
+                     (edit_deployment(copied(honest, tmp_path / "more"), lambda d: d | {"windows": 3}),
+                      "requests window 2 has no record")):
+        assert python(run), run
+        with pytest.raises(ValueError, match=f"^{why}$"):
+            case(run)
 
     capped = served(tmp_path / "capped", replace(W63K4, max_tokens_cap=4))
     assert python(capped) == []
@@ -240,5 +238,17 @@ def test_network_rows_and_the_python_check_decide_each_run_alike(tmp_path):
 
     bytes_run = served(tmp_path / "bytes", replace(W63K4, egress="bytes"))
     assert python(bytes_run) == []
-    got = lean(exe, bytes_run, tmp_path / "case-bytes")
+    with pytest.raises(ValueError, match="^the rows audit's schedule is the id egress form's, not 'bytes''s$"):
+        case(bytes_run)
+    dep = json.loads((bytes_run / "deployment.json").read_text())
+    as_id = RC.rows_audit_case(bytes_run, dep, replace(NetworkAttesterParams(**dep["params"]), egress="id"))
+    got = period_check.lean_check(exe, as_id, tmp_path / "case-bytes")
     assert (got["verdict"], got["reason"]) == ("reject", "requests window 0: the certified head isn't the record's"), got
+
+    accepted = {"honest", "resigned", "one window fewer", "not id"}
+    for name, run in [*((n, r) for n, (r, _) in runs.items()), ("not id", not_id_run), ("capped", capped),
+                      ("bytes", bytes_run)]:
+        result = RC.check(run, rows_exe=Path(exe))
+        assert not [p for p in result["problems"] if p.startswith("lean-disagrees")], (name, result["problems"])
+        assert (result["lean"] == "accepted") == (name in accepted), (name, result["lean"])
+        assert result["lean"].startswith("not-covered: ") == (name in ("capped", "bytes")), (name, result["lean"])

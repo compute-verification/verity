@@ -105,7 +105,7 @@ def commit_rank_window(rank: Rank, values: Rows, *, run: str, law: Mapping[str, 
                    [_elements(outs[p], w) for (p, _), w in zip(lay.outs, lay.widths[len(lay.rows):])])
     committed = win.close()
     d = Path(out)
-    res = win.write(committed, d, {}, registrar=SRW.R)
+    res = win.write(committed, d, {}, registrar=SRW.DK)
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (d / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     (d / "partition.json").write_text(json.dumps(SRW.partition_doc(win.window, {}), indent=1) + "\n")

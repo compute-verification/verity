@@ -1,7 +1,7 @@
 """attester-piece: the network attester's piece of `served_verdicts.sh` (its ``CERTIFIER_CMD``), and the front that puts
 the active network attester in front of serve-openai there (its ``CERTIFIER_FRONT``).
 
-    python attester_piece.py front PORT SERVE_DIR OUT --peer NAME [--gate USER@HOST | --gate local] [--key KEY]
+    python attester_piece.py front PORT SERVE_DIR OUT --peer NAME --gate USER@HOST|local [--key KEY]
         [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--scan-class w63k4] [--height 10]
         [--minutes M] [--bucket-ms MS] [--warmup N]
     python attester_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--rows EXE] [--draw K]
@@ -11,7 +11,7 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
     python attester_piece.py period SERVE_DIR WINDOW DIR V3C [--lean EXE] [--rows EXE]
     python attester_piece.py relay --listen PORT --to PORT
     python attester_piece.py front PORT SERVE_DIR OUT --peer NAME --session --client-port PORT --windows N
-        [--gate ...] [--key KEY] [--scan-class w63k4] [--height H] [--minutes M] [--bucket-ms MS]
+        --gate ... [--key KEY] [--scan-class w63k4] [--height H] [--minutes M] [--bucket-ms MS]
     python attester_piece.py close SERVE_DIR OUT
 
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
@@ -71,9 +71,9 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
      its private side, `chain_witness`): every window request's release and streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the network attester run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/protocols/resource_accounting/network/verifier/lean); its answer is the piece's, an accept's profile
-     with its ``placement`` (`placement`): the machine the network attester ran on, and the machine that ran each of
-     the piece's own steps, the chain and the period check, each read from the machine as it runs the step (`ran_on`).
-     The names are labels: the piece establishes no `trusted-device` and gives no bound on that ground (`UNMET`).
+     with its ``placement`` (`placement`): each machine by the party the configuration puts on it, never a host's
+     name, and the piece's own steps' machines `UNNAMED`. The names are labels: the piece establishes no
+     `trusted-device` and gives no bound on that ground (`UNMET`).
   DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ; never the scan's answers, the
   endpoint's report, the report's counts or a step's summary, which are private) and the execution phase's five
   attestations (`CERTIFICATES`, `certificates`: the three records' attestations and the two row registrations' of the
@@ -187,11 +187,17 @@ ROWS = "verity/network-rows/v1"
 (PREMISE,) = schemes.get("network-attester").assumptions
 #: What a placement says of it, word for word, followed by ``; `` and the names
 UNMET = "unmet: this piece establishes no trusted-device and gives no bound on that ground"
+#: the front's refusal without ``--gate``
+NO_GATE = ("--gate is unset: USER@HOST, the gate's, which `verity run` passes from the binding "
+           "network-attester.network-attester.gate, or local, the network attester on this machine under a key made for the run")
 #: the front's refusal without ``--peer``
 NO_PEER = ("--peer is unset: the served node's name in the gate's peers file, which `verity run` passes from the "
            "binding network-attester.network-attester.peer")
-#: the machine of a chain step whose `CHAINED` names none
-UNNAMED = "a machine the chain step did not name"
+#: a placement's machines, each by the configuration's party on it (`[[party]] name`): the piece is handed hosts
+#: (``--gate``, ``--peer``) and no configuration's machine names, and a host's name is not public
+PROVER_MACHINE, ATTESTER_MACHINE = "the prover's machine", "the network attester's machine"
+#: the machine of one of the piece's own steps, the chain's checks and samples or the period check
+UNNAMED = "a machine the piece does not name"
 #: the front's public outcome, copied beside the kept fetch
 SESSION = "session.json"
 #: What DIR/chain gets of the chain's out/, by file: its JSON with only the key paths named (``a.b`` b under a, ``*``
@@ -215,8 +221,7 @@ CASES = Path("private") / "pieces" / "certifier"
 CERTIFICATES = "certificates.json"
 #: the scan class of V3c's default window class (`served_verdicts.sh`'s V3C_CLASS)
 V3C_SCAN_CLASS = "w63k4"
-#: the split piece's chain step's accept, which its period step reads: V3c's directory, and the machine the chain
-#: step ran on as that machine names itself (``ran_on``)
+#: the split piece's chain step's accept, which its period step reads: V3c's directory
 CHAINED = "chain.json"
 #: the logs `served_verdicts.sh` and `served_verdicts.py` write in DIR, which a refusal keeps
 LOGS = ("piece.log", "chain.log", "period.log")
@@ -267,6 +272,8 @@ def front(a: argparse.Namespace, *, sleep: Callable[[float], object] = time.slee
         a.tunnel = lambda ssh, port: [sys.executable, str(Path(__file__).resolve()), "relay", "--listen", str(port),
                                       "--to", str(a.port)]
     try:
+        if a.gate is None:
+            raise SS.Refused(NO_GATE)
         if a.peer is None:
             raise SS.Refused(NO_PEER)
         a.gate = SS.gate_at(a.gate)
@@ -432,6 +439,8 @@ def open_session(a: argparse.Namespace, keep: Path, out: Path, *, sleep: Callabl
     relay listens. Exit 0 then, 2 when the session isn't started (the reason in OUT/session.json), 1 when it ended
     before its relay listened."""
     try:
+        if a.gate is None:
+            raise SS.Refused(NO_GATE)
         if a.peer is None:
             raise SS.Refused(NO_PEER)
         a.gate = SS.gate_at(a.gate)
@@ -571,46 +580,36 @@ def kept_ingress(serve_dir: Path) -> tuple[object, dict, list[tuple[int, list]]]
     return params, io, phases
 
 
-def ran_on(chained: Path | None = None) -> dict[str, str]:
-    """Which machine ran each of the piece's own steps, by the name each machine gives itself as it runs the step:
-    this one for the period check and its proofs' challenges, and for the chain's checks and samples too unless
-    ``chained``, the split's `CHAINED`, was written by a chain step, which names its own machine there."""
-    here = socket.gethostname()
-    if chained is None:
-        return {"chain": here, "period": here}
-    return {"chain": json.loads(chained.read_text()).get("ran_on") or UNNAMED, "period": here}
-
-
-def placement(serve_dir: Path, run: str, steps: dict[str, str] | None = None) -> dict:
-    """Which machine ran each party and each of the piece's own steps, as labels read from the run: the network
-    attester ran on the gate's machine (the kept `SESSION`'s ``gate``; ``local`` is the developer's node), and
-    ``steps`` (`ran_on`, this machine by default) names the machine that ran the chain's checks and samples and the one
-    that ran the period check and its proofs' challenges. This piece establishes no `trusted-device` and gives no bound
-    on that ground (`UNMET`), whatever the names say. ``kind`` is ``prover-node`` where the attester ran on the
-    developer's node, else ``not-placed``. ``links`` are the node's to the gate, and K counts the attested one
-    alone."""
+def placement(serve_dir: Path, run: str) -> dict:
+    """Which machine ran each party and each of the piece's own steps, as labels: the network attester ran on its own
+    machine (`ATTESTER_MACHINE`) unless the kept `SESSION`'s ``gate`` is ``local``, the prover's (`PROVER_MACHINE`),
+    and the piece's steps on `UNNAMED`. No host's name is read. This piece establishes no `trusted-device` and gives
+    no bound on that ground (`UNMET`), whatever the names say. ``kind`` is ``prover-node`` where the attester ran on
+    the developer's node, under a key made for the run (``key_pin`` ``run``, its key and coins made on ``coins_on``),
+    else ``not-placed``. ``links`` are the node's to the gate, and K counts the attested one alone."""
     kept = serve_dir / PRIVATE / run
     if not (kept / SESSION).is_file():
         raise NotRun(f"{kept} has no {SESSION}, which names the gate the network attester ran on: keep the run with this "
                      "tree's front")
-    gate = json.loads((kept / SESSION).read_text())["gate"]
-    node = SS.served_peer(kept / "fetch.tar.gz") or socket.gethostname()
-    steps = ran_on() if steps is None else steps
-    host = node if gate == "local" else gate.rpartition("@")[2]
-    names = ((f"the network certifier ran on the developer's node {node} (the front's --gate local)" if gate == "local"
-              else f"the network certifier ran on {host}, not the developer's {node}")
-             + f"; the chain's checks and samples ran on {steps['chain']}, and the period check and its proofs' "
-               f"challenges on {steps['period']}")
-    where = {"parties": {"network_certifier": host, "prover": node, "verifier": steps["period"]}, "steps": dict(steps),
+    local = json.loads((kept / SESSION).read_text())["gate"] == "local"
+    node, steps = PROVER_MACHINE, {"chain": UNNAMED, "period": UNNAMED}
+    host = node if local else ATTESTER_MACHINE
+    ran = (f"the network attester is the auditor's device on a machine the developer does not control, and here it "
+           f"is not: it ran on {node} under a key made for the run (the front's --gate local)"
+           if local else f"the network attester ran on {host}, not on {node}")
+    names = (f"{ran}; the chain's checks and samples ran on {steps['chain']}, and the period check and its proofs' "
+             f"challenges on {steps['period']}")
+    where = {"parties": {"network_certifier": host, "prover": node, "verifier": steps["period"]}, "steps": steps,
              PREMISE: f"{UNMET}; {names}"}
-    if gate == "local":
-        return {"kind": "prover-node", **where, "links": [], "uncounted": f"every link of {node}'s"}
+    if local:
+        return {"kind": "prover-node", **where, "key_pin": "run", "coins_on": node, "links": [],
+                "uncounted": f"every link of {node}"}
     return {"kind": "not-placed", **where,
             "links": [{"name": "certified", "from": host, "to": node, "counted": True,
-                       "via": "the network certifier's tunnel to the endpoint's port"},
+                       "via": "the network attester's tunnel to the endpoint's port"},
                       {"name": "gate", "from": node, "to": host, "counted": False,
                        "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
-            "uncounted": f"every link of {node}'s but the certified one"}
+            "uncounted": f"every link of {node} but the certified one"}
 
 
 def window_requests(serve_dir: Path, window: int) -> list[dict]:
@@ -1078,9 +1077,9 @@ def close_open(serve_dir: Path, *, sleep: Callable[[float], object] = time.sleep
 
 
 def settle(serve_dir: Path, window: int, d: Path, limit: str,
-           step: Callable[[Path], tuple[dict | None, Path | None]], chained: Path | None = None) -> dict | None:
+           step: Callable[[Path], tuple[dict | None, Path | None]]) -> dict | None:
     """``step``'s answer: its files written to a fresh hold under SERVE_DIR/`PRIVATE`/held (``step`` is given it), an
-    accept's profile with its `placement` (with the machines that ran the piece's steps, `ran_on` of ``chained``), the
+    accept's profile with its `placement`, the
     hold's period files made the case under SERVE_DIR/`CASES` and the hold's attestations (`write_case`), and the
     hold then released to DIR by the leak guard; None where the split's
     chain step accepted. The case is this step's: one an earlier step left goes first, and one written here goes
@@ -1099,7 +1098,7 @@ def settle(serve_dir: Path, window: int, d: Path, limit: str,
         got, unpacked = step(hold)
         if got is not None:
             if isinstance(got.get("profile"), dict):
-                where = placement(serve_dir, kept_run(serve_dir), ran_on(chained))
+                where = placement(serve_dir, kept_run(serve_dir))
                 got = got | {"profile": got["profile"] | {"placement": where}}
             (hold / "answer.json").write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
         write_case(hold, case)
@@ -1177,7 +1176,7 @@ def chain_step(a: argparse.Namespace) -> int:
         return refuse(d, str(e))
     if got is not None:
         return said(got)
-    (d / CHAINED).write_text(json.dumps({"chain": "accepted", "ran_on": socket.gethostname(), "v3c": str(v3c)},
+    (d / CHAINED).write_text(json.dumps({"chain": "accepted", "v3c": str(v3c)},
                                         indent=1, sort_keys=True) + "\n")
     print(f"CERTIFIER-CHAIN accepted on V3c's window {v3c / 'window'}: the period step checks its period.json",
           flush=True)
@@ -1200,7 +1199,7 @@ def period_step(a: argparse.Namespace) -> int:
         return decide(serve_dir, a.window, hold, chain=None, check=lambda c, p: period_check(exe, c, p),
                       rows=own_rows(rows), case=v3c_case(v3c))
     try:
-        got = settle(serve_dir, a.window, d, "CERTIFIER_PERIOD_TIMEOUT", step, d / CHAINED)
+        got = settle(serve_dir, a.window, d, "CERTIFIER_PERIOD_TIMEOUT", step)
     except NotRun as e:
         return refuse(d, str(e))
     return said(got)
@@ -1213,7 +1212,7 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("port", type=int)
     f.add_argument("serve_dir", type=Path)
     f.add_argument("out", type=Path)
-    f.add_argument("--gate", default=SS.GATE, help="USER@HOST, the gate's; or local, the dry run's")
+    f.add_argument("--gate", help="USER@HOST, the gate's; or local, the network attester on this machine")
     f.add_argument("--key", type=Path, default=SS.KEY)
     f.add_argument("--peer", help="the served node's name in the gate's peers file")
     f.add_argument("--prompts", type=int, default=PROMPTS)

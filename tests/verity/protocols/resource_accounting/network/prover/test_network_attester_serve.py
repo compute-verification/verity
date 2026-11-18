@@ -495,7 +495,7 @@ def test_a_session_serves_its_length_to_clients_not_its_own_and_its_check_accept
 
         def __init__(self, argv, **kw):
             a = ws.parser().parse_args(argv[2:])
-            assert a.command == "serve" and ws._params(a) == p
+            assert a.command == "serve" and ws._params(a) == p and a.session == SESSION.hex()
             served.append((a, _run(a.out, a.key, requests, responses, windows=a.windows, params=p,
                                    id_payload=p.payload, arrive=dict(enumerate(arrive)))))
             own.update(json.loads((a.out / "client.json").read_text()))
@@ -508,6 +508,7 @@ def test_a_session_serves_its_length_to_clients_not_its_own_and_its_check_accept
         poll = wait
 
     monkeypatch.setattr(ws, "subprocess", types.SimpleNamespace(Popen=Serve, PIPE=None))
+    monkeypatch.setattr(ws, "secrets", types.SimpleNamespace(token_hex=lambda n: SESSION[:n].hex()))
     assert ws.rehearse(args) == 0
     ((a, relay),) = served
     out = args.out

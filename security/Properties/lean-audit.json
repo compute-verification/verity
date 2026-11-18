@@ -53,6 +53,7 @@
   "Properties.Spot.Rate",
   "Properties.Spot.MonitoringPeriod",
   "Properties.Spot.MonitoringPeriodLedger",
+  "Properties.Spot.ChallengerLog",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryAttester",
   "Properties.Pous.Wipe",
@@ -342,6 +343,27 @@
    "digest": "cb340bc9849e55341a23e61cfb347c028250c423c59bbc2c8da6b952df8038cf",
    "issue": "TRN-103",
    "due": "2026-11-30"
+  },
+  "InferenceOnlyVerifier.Record.SecurityProofs.EdgeFreeReads": {
+   "owner": "@lean",
+   "issue": "LEAN-186",
+   "due": "2026-11-30",
+   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies",
+   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it"
+  },
+  "InferenceOnlyVerifier.Record.SecurityProofs.FinishTemplates": {
+   "owner": "@lean",
+   "issue": "LEAN-186",
+   "due": "2026-11-30",
+   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies",
+   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it"
+  },
+  "InferenceOnlyVerifier.Record.SecurityProofs.OwnRowsEdges": {
+   "owner": "@lean",
+   "issue": "LEAN-186",
+   "due": "2026-11-30",
+   "waits": "InferenceOnlyVerifier.SecurityProofs.ServedComplies",
+   "why": "ServedComplies takes Record.LaidOut and Record.Counts, which form_laidOut and form_counts prove from it"
   },
   "MemoryAttester.Properties.CountRan": {
    "owner": "@network-accounting",
@@ -894,11 +916,32 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Spot.Challenger.CutMeans": {
+   "owner": "@lean",
+   "issue": "LEAN-186",
+   "due": "2026-11-30",
+   "waits": "Verity.remote_soundness_of_subprotocols",
+   "why": "the code's challenger log is the core's log; unproved; read by no guarantee yet"
+  },
+  "Spot.Challenger.KeyedBySlotMeans": {
+   "owner": "@lean",
+   "issue": "LEAN-186",
+   "due": "2026-11-30",
+   "waits": "Verity.remote_soundness_of_subprotocols",
+   "why": "the code's challenger log is the core's log; unproved; read by no guarantee yet"
+  },
   "Verity.Vocab.BandwidthAuditSound": {
    "owner": "@memory-accounting",
    "digest": "0ba14a8edc194d4a0149201841d2bb1f8546486d4829928a3f14a2193301d417",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "Verity.Vocab.CutIsRegistered": {
+   "owner": "@proofs",
+   "issue": "LEAN-186",
+   "due": "2026-11-18",
+   "waits": "Verity.remote_soundness_of_subprotocols",
+   "why": "the unwired Program and positions are the cut of the registered wired Program; open until the registration's check exists"
   },
   "Verity.Vocab.InferenceOnlySound": {
    "owner": "@lean",
@@ -912,6 +955,13 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.Vocab.PositionsCarry": {
+   "owner": "@proofs",
+   "issue": "LEAN-186",
+   "due": "2026-11-24",
+   "waits": "Verity.remote_soundness_of_subprotocols",
+   "why": "`named` is given, not defined: if it names no gate's place, `Carries` holds of every unit; needs, with the registration's check, every input gate of a wired reader row named and each place naming at most one gate"
+  },
   "Verity.Vocab.PousSound": {
    "owner": "@memory-accounting",
    "digest": "285adfe9935dfe33bdce1d341ec6b6e39323fe2971f5d22b7512f0cf828d5bda",
@@ -923,6 +973,13 @@
    "digest": "0a60981392f438a2bfc08c5989f3ff49c86ef53a15b10cc5e9a074dad8d30d80",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "Verity.Vocab.ReadsByPath": {
+   "owner": "@lean",
+   "issue": "LEAN-238",
+   "due": "2026-11-24",
+   "waits": "Verity.remote_soundness_of_subprotocols",
+   "why": "remote soundness concludes the policy on the case as sent; its conclusion on the committed files waits on it"
   },
   "Verity.Vocab.SpotSound": {
    "owner": "@proofs",
@@ -941,12 +998,6 @@
    "digest": "0cd2ace1aa9508d51f8785e7321099c129982a972ade0670af90a86b8da98a75",
    "issue": "LEAN-186",
    "due": "2026-11-30"
-  },
-  "Verity.Vocab.WiresSound": {
-   "owner": "@lean",
-   "digest": "0c489865a6d45dcdae0b5bf99e6fc00e8fa7d1535279d17ba21ebcd2ec65994f",
-   "issue": "LEAN-238",
-   "due": "2026-11-24"
   },
   "Verity.Wipe.SurvivorBound": {
    "owner": "@soundness",
@@ -1033,7 +1084,7 @@
    "ResourceAccounting.Compose.PrefixOf",
    "ResourceAccounting.Compose.Scope"
   ],
-  "Verity.remote_soundness_of_subprotocols": ["Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound", "Verity.Vocab.WiresSound"]
+  "Verity.remote_soundness_of_subprotocols": ["Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound"]
  },
  "meaning": [
   "Properties.Flock.Circuit.CircuitOf",
@@ -2475,6 +2526,7 @@
     "Definitions.Core.Compiler",
     "Properties.Verity.Committed",
     "Properties.Spot.Wires",
+    "Properties.Spot.Labels",
     "Spot.FilePart",
     "Spot.RecordText",
     "Definitions.Compose.JointLive",
@@ -2483,7 +2535,7 @@
     "VStarRecursive.Sampled"
    ],
    "except": ["Properties.Verity.LedgerPinned"],
-   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (ResourceAccounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), a window's files as its members' side by side (`Properties.Verity.ExecutionPhaseFiles`, whose circuit is the compiler's `Circuit.append`, `Definitions.Core.Compiler`), the one vocabulary's shared definitions (ResourceAccounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy, and its claim on the Program its compiled check judges, `Properties.Remote.PolicyHeld`; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the challenger's coin tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string); the two statements that tie the policy's clause to the committed files (`Properties.Verity.Committed`) read a wiring's rows (`Properties.Spot.Wires`), a file's rows a unit (`Spot.FilePart`) and the record's text as SPOT's reader reads it (`Spot.RecordText`), never over a proof"
+   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (ResourceAccounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), a window's files as its members' side by side (`Properties.Verity.ExecutionPhaseFiles`, whose circuit is the compiler's `Circuit.append`, `Definitions.Core.Compiler`), the one vocabulary's shared definitions (ResourceAccounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy, and its claim on the Program its compiled check judges, `Properties.Remote.PolicyHeld`; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the challenger's coin tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string); the two statements that tie the policy's clause to the committed files (`Properties.Verity.Committed`) read a wiring's rows (`Properties.Spot.Wires`) and a wired row's label (`Properties.Spot.Labels`), a file's rows a unit (`Spot.FilePart`) and the record's text as SPOT's reader reads it (`Spot.RecordText`), never over a proof"
   },
   "Properties.Core": {
    "imports": ["Definitions.Core", "CoreProtocol.Site", "RegistrationLog.SiteCheck"],
@@ -2541,7 +2593,7 @@
    "sealed": true
   },
   "Properties.Spot": {
-   "imports": ["Spot"],
+   "imports": ["Spot", "Circuits.Wire", "Definitions.Core.Label", "Definitions.Core.Challenger"],
    "except": [
     "Properties.Spot.Draw",
     "Properties.Spot.Bits",
@@ -2555,7 +2607,7 @@
     "Properties.Spot.HistoryTable",
     "Properties.Spot.MonitoringPeriodLedger"
    ],
-   "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
+   "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib, and of `security` only the core's label and challenger log (Definitions.Core.Label, Definitions.Core.Challenger), which import nothing, read with the wire they name (Circuits.Wire)"
   },
   "Properties.Spot.Draw": {
    "imports": ["Definitions.Claims", "Spot"],
@@ -15998,13 +16050,13 @@
    }
   },
   "CoreOnsite": {
-   "digest": "34a4b299f87d077f147bc2718732189cb3d5d12615b80c1b46ef096ce27f9a73",
+   "digest": "66161573f31ff80028ff08eec8a0307ac3327bb327313316f36007f70ee2b45c",
    "definitions": {
-    "Core.Onsite.components": "853b712f57725e87c39bfe8bf1e8dc18ff7e54a349cf449d86e3e3829f38ab06",
-    "Core.Onsite.protocol": "0e07f330e559bb81509c5e3c7d9aa51bad8dc41b5d349f96e409d0beac624152",
+    "Core.Onsite.components": "7dadf9ecac00b5161750471b7b25c8f2bf8f3cfb01a4c6dd751579fbeeb728cd",
+    "Core.Onsite.protocol": "64b09769d6abf6bf0bb5b8d188c40d503bb6821ff7b816f6e8a2970514b817cc",
     "Core.Onsite.store": "443632f68722fc502f08cd174cd6c40fc63b828234e6464de14468492b754d61",
     "Core.Onsite.tied": "0ae498cd481ac4da91607545750ab364af517e7dc293f97674ea2f2e05d2cb16",
-    "Core.Onsite.ties": "f9bdeb44feebc9d3e7c783b058295b50d790262911fefb101e7218cb98f4bbfd"
+    "Core.Onsite.ties": "a02339ebfb90c8e1b8d57129ed3b415c4f13bfac7ff7c4ef9d0a3e3c196d2abd"
    }
   },
   "CoreProtocol.Blobs": {
@@ -16237,7 +16289,7 @@
    }
   },
   "CoreProtocol.Site": {
-   "digest": "fe5c4f4598c3d639232e80eebab7b03b0100f30f4ebcdf24f60013d09b9243dc",
+   "digest": "8c305ae80c5cb2accd4d4957b34cba092b11874a54ea5bdd1f23e49a662ff058",
    "definitions": {
     "Core.Site": "2a3c07003f1e6c7bd6fe76f03f4d6653cbc9d1e2ebcb824862bc03b22c4e61e9",
     "Core.Site.Boundary": "469c58ecf7869a988ee7461c486b8bba89fc9d20e455e84c47b9165cdde685f5",
@@ -16331,7 +16383,7 @@
     "Core.Site.Registration.Auditor.timebases": "3af9430e366c880ac91f6a6c53edb11db3b5325c47d74c2d575bc76950e6859b",
     "Core.Site.Registration.Auditor.tolerance": "912f8c3c39c023cdc58b823e80ade3e95050ce49ce78e226f7d1b9786cfa253d",
     "Core.Site.Registration.Composite": "0c7b37ad296e9c3a9c5d6419612339b1136a099e152be7113b23011974bbef31",
-    "Core.Site.Registration.Composite.onsite": "d6a912f3c2377a00bca971e93cf149b79b7442637f9bba7b3982ef7c5b038d3a",
+    "Core.Site.Registration.Composite.onsite": "933be2d98ef36515dfe332712c7b716b3a530213051cbf25ab4ace335a7bfd54",
     "Core.Site.Registration.Composite.remote": "bee7907c6e62d13dadf7a00e50b34cef602396692864305943e2f69c8449c7ac",
     "Core.Site.Registration.Digests": "bb847dc0b2a027451de17008edf9687e00a47e19a2e85ac406986006a3f740f6",
     "Core.Site.Registration.Digests.entry": "8a14a5d840b54c0c3fc7616993766b21905ac806ad2a683d7056b9b83e30b226",
@@ -17251,7 +17303,7 @@
    }
   },
   "Definitions.Core.Site": {
-   "digest": "433a36a4e74a69fc2990aad9f783ed1860f407b00e772276a13947d767def559",
+   "digest": "ec1e3d04004f8f064263934255b307f1821daeab198cf8d19c0118011e63cee9",
    "definitions": {
     "Verity.Registration": "19abeebc07b97795968bf46f58273cd0f421c08a96fa7f67c8af825c0732d9c1",
     "Verity.Registration.Auditor": "0eccdb25cfcd9d9873be71f46a46039096838de39fd1507e6ee31fe8bcc0fbc3",
@@ -17268,7 +17320,7 @@
     "Verity.Registration.Builder.B": "4ea94ec6c82857314aba12667f0e9088a8fcc16ec4983f80cb1ef4ad53c7a54f",
     "Verity.Registration.Complete": "9b81ca23b67509d06f24d7dbbe6347471151233c8faae64aedb9b366437bb2d4",
     "Verity.Registration.Composite": "e2f6823d5fa8fca82f2f9a54a9478aac12799c5dfa9badcf3990d402ef7b9363",
-    "Verity.Registration.Composite.onsite": "a3732978de6cc3c9902e6f4183bb8312cb9567d3357e48ab08a1ff647f515d03",
+    "Verity.Registration.Composite.onsite": "9751a92410f8b149761ffa1e52a6fd27fdcbb97a4b6e6a3679882f408176f918",
     "Verity.Registration.Composite.plain": "212d4c4c597cbe0688fc64cb40c41da623ec479a111da7f026e57ca641868368",
     "Verity.Registration.Composite.remote": "fc05e2083693a78e9b467c652be7d3d931dfd491b1762b6a1c415241487134b0",
     "Verity.Registration.Declared": "a5072072b5f757074f9a19637e0ed20f2f3e1bf4629e4cbe1eec93ebb60f0287",

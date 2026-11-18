@@ -14,6 +14,7 @@ from verity.circuits import population as PN
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.types import Value as Bits
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
@@ -54,7 +55,7 @@ def test_r2_registers_another_nonempty_partition(population, mixed, counts):
     assert P.units(other, query) == sum(counts)
     assert P.digest(P.partition(other, query)) != P.digest(P.partition(own, query))
     ports = _ports(own, query)
-    rec = R.record(own, query, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": "ab" * 64, **w} for p, w in ports.items()], WINDOW,
+    rec = DK.record(own, query, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": "ab" * 64, **w} for p, w in ports.items()], WINDOW,
                    leaf_layer="ee" * 64)
     assert R.check(rec, own, query, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64).ok
     v = R.check(rec, other, query, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64)

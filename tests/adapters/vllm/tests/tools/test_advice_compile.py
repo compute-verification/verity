@@ -284,7 +284,7 @@ def test_the_registration_states_the_dsa_top_k_environment_the_engines_build_set
 
 
 GLM53 = ("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42")
-H200 = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, "device_name": "NVIDIA H200", "moe_backend": "triton"}
+H200 = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, "card": "h200-sxm-141gb", "moe_backend": "triton"}
 
 
 def test_an_fp8_checkpoint_reaches_predict_dsa_as_float8_e4m3fn_and_a_config_stating_none_is_refused_as_before():

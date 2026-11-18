@@ -23,8 +23,8 @@ from verity_bench.cli import main
 #: the row's card its own reading and every other model's a member, or ``members``, every reading a member
 METRICS = {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C own",
            "benchmarks/pearl-plus-gamma-l-h200": "pearl-plus/h200/L own",
-           "benchmarks/pearl-plus-gamma-c": "pearl-plus/h100/C members",
-           "benchmarks/pearl-plus-gamma-l": "pearl-plus/h100/L members"}
+           "benchmarks/pearl-plus-gamma-c-h100": "pearl-plus/h100/C members",
+           "benchmarks/pearl-plus-gamma-l-h100": "pearl-plus/h100/L members"}
 
 if __name__ == "__main__":
     sys.exit(main(["overhead", *sys.argv[1:]], metrics=METRICS))

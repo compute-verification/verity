@@ -1,15 +1,19 @@
 # prove_path
 
 The prove path (`prove_path.py`, `run.sh`), an execution phase's audit from its records alone (`records_audit.py`) and the cost
-model's class-of-record execution phase (`window_cost.py`, `class_rows.py`, and `class_size.py`, the class circuit's padded size), and what they read from the measurements and the
-served-rows tie's runs on a sealed served execution phase:
+model's class-of-record execution phase (`window_cost.py`, `class_rows.py`, and `class_size.py`, the class circuit's padded size), what they read from the measurements, and the
+served rows' two ties:
 
 - `sources.json` and the checkpoint manifests it names: the served models' sources, which `prove_path.py` reads.
 - The class probes (`llama32_1b_*.json`, `glm53_silu_mul_v2_*.json`), each a Program lowered at a small class, which
   `window_cost.py` projects.
-- `served_tie_window.py`: the served rows' tie (`served_tie.ServedRowsTie_v2`) on a sealed served execution phase's real rows.
-- `served_tie_zk.py`, `served_statics_zk.py`, `served_tie_zk.sh`: the routed served-rows tie, and the served rows held to
-  their Programs' statics, proved in zero knowledge on a sealed served execution phase, on a CPU machine.
+- `served_tie_window.py`: the routed tie (`served_tie.ServedRowsTie_v2`) checked natively, in plain, on a sealed served
+  execution phase's real rows.
+- `served_statics_zk.py cost`: the statics tie's (`served_statics.ServedStaticsTie_v1`) proof block ANDs and Flock block
+  at each class, the table of the network verifier's `protocol/served-statics.md`.
+
+Both ties are Definitions with pinned costs. No zero-knowledge proof of either runs, and nothing the verifier accepts
+rests on one.
 - `e2e_chains/`: the status of every protocol's end-to-end chain behind the prove path's "What an accepted audit means".
 
 ## The shell entry points

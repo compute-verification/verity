@@ -53,6 +53,37 @@ CUT = {"name": "split", "label": "a toy cut", "replaces": ["Add_v1, Norm_v1"],
 SESSIONS = (PF.Session(GEMM64, 20, 0.5, 2.0, 1 << 15), PF.Session("Other_v1{N=2}", 22, 2.0, 2.0, 1 << 13))
 
 
+def first(nvis: int, bn: int, v: int = 1) -> str:
+    """An attention row's first key block in its word version (`v=1`) or on bits (`v=2`), as the census names it."""
+
+    return f'AttnBlockFirst_v{2 * v - 1}{{D=64,NVIS={nvis},BN={bn},DOT={{"fn":"HopperBF16WgmmaDot16_v{v}"}}}}'
+
+
+HEAD_END, HEAD_END_BITS = 'AttnHeadEnd_v1{D=64,INV={"fn":"Fa3InvSum_v1"}}', 'AttnHeadEnd_v2{D=64,INV={"fn":"Fa3InvSum_v2"}}'
+
+
+def on_bits() -> dict[str, Any]:
+    """One request of 8 tokens in word Definitions, each naming its Definition on bits as `block_census.proved` writes
+    them: the 190-key first block, the largest of its kind; a 5-key one it bounds; and a head end that also carries a
+    `bounded_by`, so a rate of its own id is seen to win over both."""
+
+    def block(k_log: int, ands: int, n: int, **names: str) -> dict:
+        return {"k_log": k_log, "ands": ands, "of": {"Attention_v4": "split"}, "prefill": n, "decode": 0, "macs": 0,
+                **names}
+
+    return {"tokens": {"prefill": 8, "decode": 0}, "per_request": {"circuit_macs": 800, "macs": 800}, "definitions": {
+        first(190, 192): block(26, 10**7, 2, proved_as=first(190, 192, 2)),
+        first(5, 128): block(22, 10**5, 30, proved_as=first(5, 128, 2), bounded_by=first(190, 192, 2)),
+        HEAD_END: block(20, 1000, 4, proved_as=HEAD_END_BITS, bounded_by=first(190, 192, 2))}}
+
+
+def without_names(doc: dict[str, Any]) -> dict[str, Any]:
+    """`doc` as a census stored before the census named each block's Definition on bits."""
+
+    return doc | {"definitions": {s: {k: v for k, v in d.items() if k not in (P.PROVED_AS, P.BOUNDED_BY)}
+                                  for s, d in doc["definitions"].items()}}
+
+
 def steady(type_: str, definition: str, run: str, blocks: int, gpu: float | None, *, full: int = 8, k_log: int = 20,
            verify: float | None = None, refused: str | None = None, provers: int = 1, art: str | None = None,
            cores: int = P.HOST_CORES, form: str | None = None) -> PF.Steady:

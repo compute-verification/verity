@@ -45,15 +45,14 @@ the lock's sections, each naming the docstring with the detail. This is the work
   check, `check.py PKG`, runs in the merge queue's check; run it by hand only on a machine of your own.
 - **The fast path is not owed before a mark**; once `verity lean try` passes, run it for what the candidate's records run
   can't write (below) or to see a changed record early: `lean_changed.py --records PKG --update` through `research run`
-  (the README's commands have the line) regenerates PKG's records and its requirers',
-  with the `--update` printout the landing DM carries, without a build of your own (`lean_changed.py`'s docstring).
-  `--on auto` places it: never name a node, and never launch one run on two nodes to race them (cancel a duplicate).
-  Don't wrap it in `slot.py`: where it lands, the runner takes the slot. Commit each record it kept under
-  `lean-audit/record/`. No merge check accepts its result. It repairs a slot tree another run left mid-way: never
-  delete or copy one. `--allow CODE:ENTRY` takes a finding ruled open, cured before the mark, as known: it stays red
+  (the README's line) regenerates PKG's records and its requirers', with its `--update` printout, without a build of
+  your own. `--on auto` sends it, and a try, only where a kept tree holds the package built, else refuses with the
+  ways on; name a node only as that says, and never race one run on two nodes. Don't wrap it in `slot.py`: the runner
+  takes the slot. Commit each record it kept under `lean-audit/record/`; no merge check accepts its result. It repairs
+  a slot tree another run left mid-way: never delete or copy one. `--allow CODE:ENTRY` takes a finding ruled open, cured before the mark, as known: it stays red
   (exit 3, no pass), and its regenerated record goes to `allowed-record/`, never `record/`.
-- **A Lean pool at 0 is closed on that machine**: a request for it is refused as it arrives, saying why, never left
-  to wait. Run it where `lean_slot.py --status` lists a slot of that pool.
+- **A Lean pool at 0 is closed on that machine**: a request for it is refused at once, saying why; run it where
+  `lean_slot.py --status` lists a slot of that pool.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean
   /tmp/scratch/Probe.lean`): `#print axioms X`, `example … := by exact?`, or
   `trace_state` before a `sorry`. Probe what you build on too: a section `variable` typed through a local notation can
@@ -63,10 +62,10 @@ the lock's sections, each naming the docstring with the detail. This is the work
   [Loogle](https://loogle.lean-lang.org). A lemma another package proves is imported or moved, not proved again.
 - **A slow declaration**: measure (`set_option profiler true in`; `#count_heartbeats in` in a Mathlib package), then fix
   the proof: `simp only [...]` outside terminal calls, a split-out lemma, a smaller `decide`.
-- **A timeout at `whnf` reported at a theorem's first line** is a term's elaboration, not one tactic. A common cause:
-  an argument states at a definition (`saltOf o`) what the lemma asks at a structure's field (`c.salt o`), and the
-  unifier unfolds the definition and walks everything `o` holds. Prove the field is the function once
-  (`(code …).salt = saltOf := rfl`), rewrite with it, and hand the lemma each premise in the form it states.
+- **A timeout at `whnf` reported at a theorem's first line** is a term's elaboration, not a tactic's. Often an
+  argument gives at a definition (`saltOf o`) what the lemma asks at a field (`c.salt o`), and the unifier unfolds
+  everything `o` holds: prove `(code …).salt = saltOf := rfl` once, rewrite with it, and pass each premise in the
+  lemma's form.
 - **`X.congr_simp is declared by a replayed module and by one it imports`**: `simp` realized a structure constructor's
   congruence lemma Mathlib had already. Don't unfold a `→+` or `→*` in `simp`; prove its `_apply` lemma by `rfl` and simp
   with that.
@@ -92,13 +91,11 @@ the lock's sections, each naming the docstring with the detail. This is the work
 
 ## Assumptions and guarantees
 
-- **An assumption** (AGENTS.md "Lean") is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`
-  (a module or a list of them: `security/Properties` also lists `Properties/Assumptions.lean`, for one stated over the
-  code, which the spec can't import), or in a module under it that reads less than the root module (`Assumptions/Flock.lean`,
-  since the root module reads InferenceOnly); an area's other premises live in its `Definitions/<Area>/Assumptions` (Flock's in
-  `Proofs/Flock/Soundness/Assumptions` for now), each owner in the lock. Its docstring opens with its claim id,
-  which its lock entry carries as `id` (`tools/verity/lean/claim_ids.py` writes the table from id to Lean name), and gives
-  its rationale; a ledger points to it.
+- **An assumption** is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`
+  (a module or a list of them), or in a module under it that reads less than the root module; an area's other premises
+  live in its `Definitions/<Area>/Assumptions` (Flock's in `Proofs/Flock/Soundness/Assumptions` for now), each owner
+  in the lock. Its docstring opens with its claim id, which its lock entry carries as `id`, and gives its rationale; a
+  ledger points to it.
 - **List what you cite**: a guarantee a ledger, table or PR cites as proved is in `guarantees`, its record committed with
   the proof.
 - **Watch upstream for what you assume**: a named assumption or hand proof a pinned dependency could prove gets an
@@ -127,6 +124,7 @@ fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkL
 - A PR that adds proof modules no guarantee reads yet sets its area's entry in the unread ratchet's file to the
   check's count in its own diff, with no room (`unread.py`'s `ratchet`, whose failure names the file and prints the
   entry), and lists in its body each module, the guarantee that will read it and the date that guarantee is listed by.
+  Its records run (`lean_changed.py --records security`) runs that ratchet and fails on it before the mark.
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; each `merge.py:` warning names an entry it took from one side, so read
   them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean", the lock), and says why: do what it
@@ -138,15 +136,15 @@ fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkL
 
 ## Standing rulings
 
-Their history is in the decisions log.
-
 - A guarantee is a proved `Prop` under named assumptions, with no third status; proving an assumption removes it from
   every guarantee that took it. Lean is the one source of truth for what we assume.
 - Named assumptions are the few real ones (a hash's collision resistance, the auditor's devices), in the lock's
   `assumptions_module`; any other premise is `domain` or `open`, and a `Prop` a statement only reads is `open` by its
-  entry's `why` (the README's lock sections). A named `Prop` counted only as an antecedent inside a premise an honest
-  witness concludes is that premise's scope: `domain`, its `why` saying what it restricts there, and no witness is
-  asked to conclude it.
+  entry's `why` (the README's lock sections). A `Prop` no guarantee takes, which a listed guarantee's stronger conclusion
+  waits on, is `open` by hand with `waits` naming that guarantee beside its owner, issue, due date and `why`; `--update`
+  keeps it and adds none, and the check refuses it once a guarantee takes it. A named `Prop` counted only as an
+  antecedent inside a premise an honest witness concludes is that premise's scope: `domain`, its `why` saying what it
+  restricts there, and no witness is asked to conclude it.
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is

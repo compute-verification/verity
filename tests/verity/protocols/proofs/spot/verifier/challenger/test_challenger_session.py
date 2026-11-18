@@ -14,6 +14,7 @@ from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier.challenger import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
 XOR8 = PrimitiveDefinition("A5CoinsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
@@ -61,7 +62,7 @@ def _record() -> dict:
     ports = _ports()
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
     program = PN.mixed_population_program([(t, COUNTS[P.template_id(t)]) for t in WINDOW])
-    return R.record(program, QUERY, S.selection_sampling_design(RULE, sum(COUNTS.values()), D.strata_sizes(program, QUERY)), S.SCHEME, roots,
+    return DK.record(program, QUERY, S.selection_sampling_design(RULE, sum(COUNTS.values()), D.strata_sizes(program, QUERY)), S.SCHEME, roots,
                     {"kind": "served", "run": RUN, "row": 0}, work_table=S.selection_table(RULE, program, QUERY, None))
 
 

@@ -45,6 +45,8 @@ score's FMUL (-inf times L).
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from verity.circuits.defs import bind, composite
 from verity.circuits.ops import scalar as SC
@@ -53,8 +55,8 @@ from verity.circuits.ops.prims import ZERO32, HopperBF16WgmmaDot16, const
 from verity.circuits.refs import Coll as _Coll
 from verity.circuits.refs import array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
+from verity.device import compute_capability, load_card, skus
 
-from verity_vllm.config import card_at
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import NEG_INF32, scale_log2_bits
@@ -273,18 +275,28 @@ def Fa2TrainBwdHead(B, S, do, q, k, v, o, lse):
     return tuple_of(_Coll(rows_t, concat(dq)), _Coll(rows_t, concat(dk)), _Coll(rows_t, concat(dv)))
 
 
+def sms_at(cc: tuple[int, int]) -> int:
+    """The SMs of the one GPU card file at compute capability ``cc``, read when a head is bound so that loading this module reads no
+    card; ValueError, naming them, where none or several cards are at it."""
+    cards = Path(__file__).resolve().parents[5] / "calibration/hardware/cards"
+    found = [c for c in (load_card(s, directory=cards) for s in skus("gpu", directory=cards)) if compute_capability(c) == tuple(cc)]
+    if len(found) != 1:
+        raise ValueError(f"cc {tuple(cc)}: {len(found)} GPU card files under {cards} are at it ({sorted(c['sku'] for c in found)})")
+    return int(found[0]["sm"]["count"]["value"])
+
+
 def train_sdpa_backward(B: int, H: int, T: int, D: int, cc: tuple[int, int]):
     """The head Definition of torch's flash attention backward at (B, H, T, D) on cc 12.0 under deterministic algorithms, bound
-    (`TRAIN_SDPA_BWD`, the dQ buffers ceil(SMs / (B H)), the SMs those of the card at the caller's ``cc`` (`config.card_at`), which
+    (`TRAIN_SDPA_BWD`, the dQ buffers ceil(SMs / (B H)), the SMs those of the card at the caller's ``cc`` (`sms_at`), which
     torch divides by B * H under deterministic algorithms, at most the T / BN a row's parts can fill: more buffers are the same circuit); ValueError at a
     shape the capture doesn't cover."""
     blocks = TRAIN_SDPA_BWD.get((B, H, T, D))
     if blocks is None:
         raise ValueError(f"(B, H, T, D) = {(B, H, T, D)} is not captured: torch's flash attention backward is fitted at "
                          f"{sorted(TRAIN_SDPA_BWD)}")
-    sms = int(card_at(cc)["sm"]["count"]["value"])
+    sms = sms_at(cc)
     return bind(Fa2TrainBwdHead, T=T, D=D, BM=blocks[0], BN=blocks[1], NS=min(-(-sms // (B * H)), T // blocks[1]))
 
 
 __all__ = ["CONFORMANCE", "Fa2TrainBwdDkDv", "Fa2TrainBwdDq", "Fa2TrainBwdHead", "Fa2TrainBwdKey", "Fa2TrainBwdKeyFirst",
-           "Fa2TrainBwdPre", "Fa2TrainBwdRow", "LOG2E", "TRAIN_SDPA_BWD", "train_sdpa_backward"]
+           "Fa2TrainBwdPre", "Fa2TrainBwdRow", "LOG2E", "TRAIN_SDPA_BWD", "sms_at", "train_sdpa_backward"]

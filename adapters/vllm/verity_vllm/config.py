@@ -45,7 +45,7 @@ from verity_vllm.records import workload as workload_record
 __all__ = [
     "CARD_FILES", "CHECKPOINTS", "DEFAULT_ROW_PROTOCOLS", "DTYPES", "MANIFESTS", "RECORDS", "ROOT", "VLLM",
     "WORKLOADS", "WORKLOAD_SCHEMA", "BuildConfig", "CommitConfig", "card_arch", "cuda_arch", "EnginePin", "MatchConfig", "RowConfig", "RowEngine",
-    "RowId", "RunEnv", "UsageError", "CONTENT", "card_at", "checkpoint_digest", "checkpoint_dir", "checkpoint_entries", "checkpoints_hf_home", "done_source_refusal",
+    "RowId", "RunEnv", "UsageError", "CONTENT", "checkpoint_digest", "checkpoint_dir", "checkpoint_entries", "checkpoints_hf_home", "done_source_refusal",
     "group", "option", "parse_protocols", "row_batch", "row_execution", "row_file", "row_path", "row_target", "row_tokens",
     "row_world", "rows_of_record", "run_store", "target_card", "target_cc", "target_num_sms", "target_tokens", "vllm_revision", "workload_arg", "workload_file", "workload_files",
 ]
@@ -160,18 +160,6 @@ def target_card(token: str) -> dict:
     if len(found) != 1:
         raise UsageError(f"row target {token!r}: no GPU card file names it (the targets are {target_tokens()}, each a card's `short` "
                          f"without hyphens); its rows wait for a card file under {CARD_FILES}")
-    return found[0]
-
-
-def card_at(cc: tuple[int, int]) -> dict:
-    """The one GPU card file whose `arch` is compute capability ``cc``; refused by name (UsageError) where none or several are, so
-    a figure a Definition reads off the card of a capability is never another card's."""
-    from verity.device import compute_capability
-
-    found = [c for c in _gpu_cards() if compute_capability(c) == tuple(cc)]
-    if len(found) != 1:
-        raise UsageError(f"cc {tuple(cc)}: {len(found)} GPU card files under {CARD_FILES} are at it "
-                         f"({sorted(c['sku'] for c in found)}); name the card, not the capability")
     return found[0]
 
 

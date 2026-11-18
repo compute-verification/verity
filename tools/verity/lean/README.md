@@ -47,7 +47,8 @@ python tools/verity/lean/unread.py --out DIR --build
   Properties gap)
 python tools/verity/lean/lean_changed.py --records security --unread-facts
   the same with no build of its own: the records run's audits of security and security/Proofs leave the facts, and it
-  ends with the `unread.py --facts F --facts G` line that reads them
+  ends with lean-audit's ratchet on them, as every records run that audits them does unless --no-unread-count; an area
+  above its cap fails the run, naming the area, its count, its cap and its modules
 uv run tools/verity/lean/claim_ids.py [--write]
   the claim ids' table from the ids the locks' premise entries carry: exit 1 naming each row it would change, or write it
 python tools/verity/lean/merge.py --install
@@ -175,7 +176,9 @@ keeps or drops from and never adds to.
   the build or of a package it requires. A domain hypothesis is part of what its guarantee says, with a one-line
   `why`, or `cites` the listed guarantee whose statement it is; every other premise is open, with the Linear `issue`
   that discharges it and its `due` date, written by hand. A `Prop` a statement reads without taking it is open only by
-  an entry that gives a `why`, for each guarantee that reads it (`on_read`). Each has an `owner` and a `digest`, so a
+  an entry that gives a `why`, for each guarantee that reads it (`on_read`). A `Prop` no guarantee takes or reads is
+  open only by an entry that `waits` on the listed guarantee whose stronger conclusion waits on it, with its `issue`,
+  `due` and a `why`; it fails once a guarantee takes it (`waiting`). Each has an `owner` and a `digest`, so a
   change to a premise or to what it reads fails under its own name. An entry may carry `id`, the claim id that names
   it (`trusted-device`, `cr/sha-512`), written by hand and never renamed; `claim_ids.py` writes the table from each id
   to its Lean names, `verity/commitments/claim_ids.json`, from these. `open_seed`, `open_default_issue` and

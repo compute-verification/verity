@@ -52,6 +52,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     proofs as PF,
     docket as R,
 )
+from verity.protocols.proofs.spot.prover import docket as DK
 
 from test_challenger_difftest import Ledger, TreeSession, _pinned, lms_verify
 from test_difftest import (LEAF, PAIR, RECEIVED, SCHEME, STAND_IN_CIRCUIT, TRIPLE, V2_TABLES, WINDOW, Setup,
@@ -97,7 +98,7 @@ class Audit:
         s = self.s = Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]),
                            P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
-        self.rec = R.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF)
+        self.rec = DK.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF)
         held = None
         while held != set(sampled):
             ch, sample, _ = _challenger_sample(rng, s, DESIGN, self.rec, trees=0)

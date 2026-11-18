@@ -9,12 +9,15 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = [
     "test_network_attester_transfer_blocks_lean.py",
     "test_network_attester_period.py",
+    "test_network_attester_relay_lean.py",
     "test_network_attester_registered.py",
     "test_network_attester_service.py",
     "test_network_attester_tie_service.py",
 ]
 # the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in
-inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions"]
+# and the network attester's runs (`relay_runs`), which the relay check's rows audit outcomes are read on
+inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions",
+          "tests/verity/protocols/resource_accounting/network/attester/relay_runs.py"]
 # check runs it as three parts by test id (`lean-suites:verity/protocols/resource_accounting/network/verifier:K/3`, `suites.py`'s
 # `id_part_of`), each collecting every file and running the tests whose node id hashes to K, so that ci.toml's plans spread it
 # over three shards: in one process it ran longest of the one-process suites beside the security analysis's audit

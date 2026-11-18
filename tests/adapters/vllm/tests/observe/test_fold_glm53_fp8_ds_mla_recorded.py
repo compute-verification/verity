@@ -27,7 +27,6 @@ from pathlib import Path
 
 import pytest
 from verity.circuits.codec import descriptor_id, encode_program
-from verity.protocols.resource_accounting.network.verifier import advice as I1
 
 from tests.observe import test_fold_glm53_dsa_launches as B
 from verity_vllm.check.match import program_compare as PC
@@ -40,6 +39,7 @@ from verity_vllm.observe.fold.patterns import dsa_flashmla as F
 from verity_vllm.observe.fold.resolve_log import load_profile
 from verity_vllm.observe.fold.resolver import Compute, Group, spec_label
 from verity_vllm.observe.log import read_log
+from verity_vllm.pipeline.advice_code import format as I1
 from verity_vllm.program.predict import aot
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.phi import Phi, _refuse_unstated
@@ -125,7 +125,7 @@ BF16_DIGEST = "72169a2ef982ffe8fa2152c9548e93235afad8df0d9d2213831f2f43e25a8cf9"
 
 def test_the_bf16_cache_s_launches_fold_as_before():
     ctx = B._ctx(B.TWO, slots=[5, 70])
-    ctx.header = dataclasses.replace(ctx.header, profile={"gpu": {"multi_processor_count": 132}})
+    ctx.header = dataclasses.replace(ctx.header, profile={"gpu": {"compute_capability": "9.0", "multi_processor_count": 132}})
     made = [D.DsaNormRope().match(B._norm(), ctx), D.DsaQ().match(B._q(), ctx), D.DsaIndexShare().match(B._share(), ctx),
             D.DsaSparseMla().match(B._mla(**B.MLA_DEFAULT, **B._halves())[0], ctx), D.DsaNormRope().match(B._norm(indexer=False), ctx)]
     others = [p for p in D.dsa_patterns() if type(p).__module__ in (D.__name__, F.__name__)

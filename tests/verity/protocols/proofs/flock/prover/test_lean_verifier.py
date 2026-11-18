@@ -86,26 +86,26 @@ def test_no_escape_hatches():
                       "names one):\n" + "\n".join(hits))
 
 
-AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
+AUDIT = PROOFS / "Spot" / "Sampling"
+INSTANCES = PROOFS / "Flock" / "SpotFlock" / "Sampling"
 AUDIT_STATEMENTS = PROOFS / "Flock" / "Lemmas" / "Audit.lean"
-AUDIT_IMPORTS = re.compile(r"(Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game(?:\.|$)|"
-                           r"Proofs\.Flock\.Soundness\.Audit\.|Proofs\.Flock\.Lemmas\.Audit$)")
+AUDIT_IMPORTS = re.compile(r"(Mathlib\.|Definitions\.|Proofs\.Core\.|Proofs\.Flock\.Soundness\.Game(?:\.|$)|"
+                           r"Proofs\.Spot\.Sampling\.|Proofs\.Flock\.Lemmas\.Audit$)")
 IMPORT = re.compile(r"(?:public )?(?:meta )?import (?:all )?(\S+)")
 
 
 def test_audit_layer_is_abstract():
-    """The audit theorems import only the interaction model, Mathlib, each other, Flock's spec (`Definitions.Flock.*`, which
-    the lock's layers hold to itself and Mathlib) and their lifted statements
-    (`Proofs.Flock.Lemmas.Audit`, which imports only Mathlib), so any backend can instantiate them.
-    The Flock instantiations are the only files that import Flock's theorems:
+    """SPOT's sampling theorems (`Proofs.Spot.Sampling`) import only Mathlib, the definitions, the core's proofs, the
+    interaction model, each other and their lifted statements (`Proofs.Flock.Lemmas.Audit`, which imports only Mathlib), so
+    any backend can instantiate them. Flock's instantiations sit beside them in `Proofs.Flock.SpotFlock.Sampling`:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
     `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
     two composed) and `FlockWork.lean` (the executable's work rule). No proof is admitted."""
     files = sorted(AUDIT.glob("*.lean"))
     flock = {"Flock.lean", "FlockCompiled.lean", "FlockBatched.lean", "FlockBatchedAcc.lean", "FlockLink.lean",
              "FlockLinked.lean", "FlockWork.lean"}
-    assert files and flock <= {p.name for p in files}
-    bad = [f"{p.name}: {line}" for p in files if p.name not in flock for line in p.read_text().splitlines()
+    assert files and flock <= {p.name for p in INSTANCES.glob("*.lean")} and not flock & {p.name for p in files}
+    bad = [f"{p.name}: {line}" for p in files for line in p.read_text().splitlines()
            if (m := IMPORT.match(line)) and not AUDIT_IMPORTS.match(m[1])]
     assert not bad, bad
     statements = [m[1] for line in AUDIT_STATEMENTS.read_text().splitlines() if (m := IMPORT.match(line))]

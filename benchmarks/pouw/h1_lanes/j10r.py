@@ -55,7 +55,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # no
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR  # noqa: E402
 from verity.protocols.proofs.spot.prover import produced as PP  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 
 if TYPE_CHECKING:
     from verity_flock.class_statement import UnitStager
@@ -170,7 +170,7 @@ def after_sample(ctx: Ctx, leaf: RN.Leaf, roots: tuple) -> tuple[list, list]:
 
 def world(ctx: Ctx, name: str, leaf: RN.Leaf, regs: dict, roots: tuple, partials: list, carries: list,
           oks: list) -> World:
-    rec = R.record(ctx.reg.program, ctx.reg.query, {"law": "subset", "k": 1}, RN.SCHEME, [],
+    rec = DK.record(ctx.reg.program, ctx.reg.query, {"law": "subset", "k": 1}, RN.SCHEME, [],
                    {"kind": "stand-in", "harness": "h1_lanes/j10r", "leaf": leaf.position}, partition=ctx.reg.part,
                    registered=[regs[v].entry() for v in REGISTERED])
     d = DD.digest(rec)

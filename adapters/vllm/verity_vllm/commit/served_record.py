@@ -139,12 +139,13 @@ class SamplerInputsSource:
 
 
 class StepInputPort:
-    """The committer source that starts every step's stream with the step-input port the served-rows tie and
-    IO-TIE's ``IoTieRequest`` read (`verity_vllm.compiler.served_tie`): the step's input ids, then its positions,
-    each ``T`` little-endian i64s (IB = PB = 8), zero past the step's N scheduled tokens, ``T`` the engine's token budget
-    (``max_num_batched_tokens``). So the ids are the stream's bytes [0, 8T) and the positions [8T, 16T), at fixed leaves of
-    the step's tree when 8T is a whole number of chunks (refused otherwise). A pre-hook on the top model takes them from
-    its call (``input_ids``, ``positions``) before any module of it commits."""
+    """The committer source that starts every step's stream with the step-input port the served-rows tie's Definition
+    and IO-TIE's ``IoTieRequest`` read (`verity_vllm.compiler.served_tie`; no proof of the served-rows tie runs, so
+    today the rows registered at serve time are the prover's word): the step's input ids, then its positions, each ``T``
+    little-endian i64s (IB = PB = 8), zero past the step's N scheduled tokens, ``T`` the engine's token budget
+    (``max_num_batched_tokens``). So the ids are the stream's bytes [0, 8T) and the positions [8T, 16T), at fixed leaves
+    of the step's tree when 8T is a whole number of chunks (refused otherwise). A pre-hook on the top model takes them
+    from its call (``input_ids``, ``positions``) before any module of it commits."""
 
     short_name = "step_input_port"
     own_names = frozenset(PORT_NAMES)

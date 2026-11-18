@@ -209,7 +209,9 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots, why_not_pearl  # noqa: E402, F401
 from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU  # noqa: E402
+from verity.circuits import partition_query as PQ  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments.periods import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
@@ -1190,10 +1192,10 @@ def per_unit(s: dict) -> dict[str, dict]:
 
 
 def template_bits(mine: Any, sets: Mapping[str, tuple]) -> dict[str, int]:
-    """The bits one unit of each of the window's templates commits (`partition._template_bits`), by template."""
+    """The bits one unit of each of the window's templates commits (`partition_query._template_bits`), by template."""
     from verity_vllm.pipeline import serving_rows as SRW
 
-    return {m.template: P._template_bits(SRW.template(m.template).fn if m.schemas else sets[m.template][1]) for m in mine.members}
+    return {m.template: PQ._template_bits(SRW.template(m.template).fn if m.schemas else sets[m.template][1]) for m in mine.members}
 
 
 def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits: int, delta: float,
@@ -1860,7 +1862,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))
     lap("close")
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)}}
-    win.write(c, a.out, prov, registrar=R, previous=previous)
+    win.write(c, a.out, prov, registrar=DK, previous=previous)
     scan_state_opening(values[SS.SCAN_STATE], Path(a.out) / scan_state_file)
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}

@@ -418,10 +418,10 @@ these three. -/
 abbrev Composite : Type := List String
 
 /-- **Onsite**, the composite of an auditor with devices at the datacenter: network certification, the inference-only
-policy, PoUS, PoUW, PoUB, SPOT and the wipe. Its log's boundary links the auditor's certifiers split and its
+policy, PoUS, PoUW by Pearl+'s run verdict, PoUB, SPOT and the wipe. Its log's boundary links the auditor's certifiers split and its
 memory the auditor's challengers reach (`Site.Entry.Covered`, `Site.Entry.Reached`). -/
 def Composite.onsite : Composite :=
-  ["verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
+  ["verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/pearl-plus/v1",
     "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"]
 
 /-- **Remote**, the composite of an auditor with no devices at the datacenter: the inference-only policy, PoUW by

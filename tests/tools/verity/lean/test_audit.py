@@ -4407,6 +4407,37 @@ def test_an_open_entry_that_gives_a_why_lists_a_prop_a_statement_reads_and_none_
         assert new["open"]["P.Held"]["digest"] != digest
 
 
+def test_an_open_entry_that_waits_on_a_guarantee_lists_a_prop_no_guarantee_takes_and_an_update_never_adds_one():
+    """A `Prop` no guarantee takes or reads, whose stronger conclusion a listed guarantee waits on, is listed by hand
+    under `open` with `waits` and a `why`: its digest is the build's walk of it, an update keeps it and adds none, and it
+    fails when it changes, when its owner, issue, due date or `why` is missing, when it waits on no listed guarantee, and
+    once a guarantee takes it."""
+    walk = {"P.Wired": [{"name": "P.Wired", "kind": "def", "module": "P.Defs", "sha256": "7" * 64}]}
+    now = holding() | {"assumption_reads": walk}
+    pol = A.judge(TWO, now, FILES, update=True)[1]
+    assert "P.Wired" not in pol.get("open", {}), "an update adds no such entry"
+    waits = {"owner": "@lean", "issue": "LEAN-238", "due": "2026-11-24", "waits": "P.t",
+             "why": "P.t's conclusion on the committed files waits on it"}
+    written = pol | {"open": {"P.Wired": waits}}
+    assert [(x.code, x.entry) for x in A.judge(written, now, FILES)[0]] == [("open.unrecorded", "P.Wired")]
+    kept = A.judge(written, now, FILES, update=True)[1]
+    entry = kept["open"]["P.Wired"]
+    assert entry == waits | {"digest": entry["digest"]} and kept["guarantees"] == pol["guarantees"]
+    assert list(entry) == ["owner", "digest", "issue", "due", "waits", "why"]
+    assert A.judge(kept, now, FILES) == ([], kept) and A.judge(kept, now, FILES, update=True) == ([], kept)
+    changed = holding() | {"assumption_reads": {"P.Wired": [walk["P.Wired"][0] | {"sha256": "8" * 64}]}}
+    assert [x.code for x in A.judge(kept, changed, FILES)[0]] == ["open.digest"]
+    for bad, code in [({k: v for k, v in entry.items() if k != "issue"}, "open.form"),
+                      ({k: v for k, v in entry.items() if k != "owner"}, "open.form"),
+                      (entry | {"why": "two\nlines"}, "open.form"), (entry | {"waits": "P.w"}, "open.waits")]:
+        assert [x.code for x in A.judge(kept | {"open": {"P.Wired": bad}}, now, FILES)[0]] == [code], bad
+    plain = {k: v for k, v in entry.items() if k not in ("waits", "why")}
+    assert [x.code for x in A.judge(kept | {"open": {"P.Wired": plain}}, now, FILES)[0]] == ["open.unread"]
+    taken = taking(now) | {"pins": {n: p | {"premises": [{"binder": "s", "head": "P.Wired", "module": "P.Defs"}]}
+                                    if n == "P.u" else p for n, p in now["pins"].items()}}
+    assert "open.waits-taken" in {x.code for x in A.judge(kept, taken, FILES)[0]}
+
+
 def test_an_open_entry_that_rests_on_a_read_gives_its_issue_its_due_date_its_owner_and_one_line_of_why():
     """Such an entry is a person's: it owes the issue that discharges it and its due date, both, an owner, and a `why` of
     one line, whether or not a statement takes its `Prop`, and each failure takes a person."""
@@ -9140,7 +9171,7 @@ def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure
     for m in ("Init", "Old", "A", "Unrelated"):
         (cache / f"{m}.json").write_text("{}")
         os.utime(cache / f"{m}.json", (1000, 1000))
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None: {m: m for m in facts["graph"]})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
     argv = []
 
@@ -9166,7 +9197,7 @@ def test_a_replay_reports_the_seconds_of_each_part_outside_the_kernels_phases(tm
     monkeypatch.setattr(A.time, "monotonic", lambda: clock[0])
     facts = {"graph": {"A": {"imports": []}, "B": {"imports": ["A"]}}, "modules": ["A", "B"], "axioms": []}
 
-    def keys(facts, toolchain, digest=None):
+    def keys(facts, toolchain, digest=None, walked=None):
         clock[0] += 3
         return {m: m for m in facts["graph"]}
 
@@ -9179,7 +9210,8 @@ def test_a_replay_reports_the_seconds_of_each_part_outside_the_kernels_phases(tm
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
     monkeypatch.setattr(A, "run", run)
     fails, stats = A.replay_step(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, tmp_path / "cache")
-    assert fails == [] and stats["seconds"] == {"keys": 3, "wait": 0, "plan": 0, "touch": 0, "lean": 7, "store": 0}
+    assert fails == [] and stats["seconds"] == {"keys": 3, "keys-walks": 0, "keys-hash": 0, "keys-jobs": 0, "keys-lock": 0, "keys-held": 0, "wait": 0, "plan": 0, "touch": 0, "lean": 7,
+                                             "store": 0}
     monkeypatch.setattr(A, "replay_first", lambda pkg: [{"module": "B", "threads": 1, "why": "w"}])
     fails, stats = A.replay_in_steps(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, tmp_path / "cache")
     assert fails == [] and stats["seconds"]["first-keys"] == 3 and stats["seconds"]["keys"] == 3
@@ -9191,7 +9223,7 @@ def test_an_unsealed_replay_reuses_the_cache_but_writes_nothing(tmp_path, monkey
     may reuse the shared cache but writes nothing: neither a new entry for a module it checked, nor a touch of a reused
     entry's mtime. With ``store`` true (a sealed audit) it stores and touches, so the test is not vacuous."""
     facts = {"graph": {"A": {"imports": []}, "B": {"imports": ["A"]}}, "modules": ["A", "B"], "axioms": []}
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None: {m: m for m in facts["graph"]})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
 
     def run(cmd, cwd, log, timeout=None):
@@ -9231,7 +9263,7 @@ def test_an_unsealed_audit_leaves_the_shared_replay_cache_unchanged(tmp_path, mo
     own = {"lean": "v0", "modules": ["P"], "declarations": 1, "axioms": [], "escapes": [], "oleans": [],
            "graph": {"P": {"imports": []}}, "files": {"P": "P.lean"}, "pins": {}}
     monkeypatch.setattr(A, "facts_of", lambda *a, keep=True, sealed=None: dict(own))
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None: {"P": "pkey"})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None: {"P": "pkey"})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
 
     def run(cmd, cwd, log, timeout=None):
@@ -9697,7 +9729,7 @@ def test_a_replay_checks_each_listed_module_in_a_step_of_its_own_and_the_last_st
              "axioms": []}
     first = [{"module": "P.Wide", "threads": 64, "why": "w"}, {"module": "P.Heavy", "threads": 2, "why": "w"},
              {"module": "P.Gone", "threads": 1, "why": "w"}]
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None: {m: m for m in facts["graph"]})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
     monkeypatch.setenv("LEAN_NUM_THREADS", "8")
     calls, rejected = [], set()

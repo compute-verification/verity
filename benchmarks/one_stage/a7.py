@@ -88,6 +88,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier import audit, cod
 from verity.protocols.resource_accounting.memory.poub.verifier import schedule as SC  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 from verity.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
@@ -710,7 +711,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
     window = {"kind": "stand-in", "of": "check 3 of the remote session's drawn receipts (a7.py, check3_audit), on the stand-in's store",
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]} for m in members},
               "link": "opening.plan_link: the plan row by its b || c; every other witness row inside the unit"}
-    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = DK.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for m in members:
@@ -968,7 +969,7 @@ def main() -> int:
     window = {"kind": "stand-in", "of": WINDOW_OF,
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]} for m in members},
               "link": "none: no served run; vllm's Store backend and its served values replace these"}
-    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = DK.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for c in canons.values():

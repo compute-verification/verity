@@ -71,6 +71,7 @@ from verity.protocols.resource_accounting.memory.poub.prover import opening_prov
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, opening as C3, receipts  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
@@ -263,7 +264,7 @@ def audit_round(a, sg, m: dict, rs, c3, draws, out: Path, port: int) -> dict:
                                       f"{rs.store.registration.blocks}-chunk registered store",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "opening.plan_link: the plan row by its b || c to the verifier's own copy of the pass's plan"}
-    rec = R.record(sg.program, sg.query, sampling_design, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
+    rec = DK.record(sg.program, sg.query, sampling_design, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, sg.program, sg.query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json(),
               f"statement/{name}": a7.statement_checks(m, rec, want)}

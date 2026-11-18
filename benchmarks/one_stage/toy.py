@@ -41,7 +41,8 @@ from pathlib import Path
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import registered_value as RV
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
@@ -354,5 +355,5 @@ def write(c: CS.Committed, out, provenance: Mapping, *, previous: str | None = N
     """``c``'s window files in ``out``, its registration after ``previous``, what the committer hands over: -> the
     registration record."""
     CS.write(c, out, dict(provenance), {"toy": "two-stage", "members": [m.key for m in c.window.members]},
-             kind="stand-in", registered=registered, registrar=R, previous=previous, index_salt=index_salt)
+             kind="stand-in", registered=registered, registrar=DK, previous=previous, index_salt=index_salt)
     return json.loads((Path(out) / "registration.json").read_text())

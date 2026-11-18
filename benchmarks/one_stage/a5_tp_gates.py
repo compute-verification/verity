@@ -85,7 +85,8 @@ from verity.circuits.ops import fp32 as W  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.commitments.periods import rows as CS  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
@@ -271,7 +272,7 @@ def commit(out: Path, mine: CS.Binding, parts: dict, r: int, altered: bool = Fal
         entries.append([[m.base + i, m.base + i + 1, f"synthetic/{q}", 0, 0, COLLECTIVES[k], m.key, i, i] for i in range(m.n)])
     c = CS.commit(mine, data, salts_of=salts_of)
     CS.write(c, out, {"of": provenance(parts, r), "committer": {"module": "a5_tp_gates.py"}},
-             IX.index_doc(mine.members, entries, mine.run), kind="stand-in", registered=registered, registrar=R)
+             IX.index_doc(mine.members, entries, mine.run), kind="stand-in", registered=registered, registrar=DK)
     return c
 
 

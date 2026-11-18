@@ -39,7 +39,7 @@ from verity.commitments.gates import embedding as EMB
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods.interface import digest_words
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 from verity.commitments import registered_value as RV
@@ -205,7 +205,7 @@ def _boundary() -> tuple[dict, dict, str]:
     window = _boundary_window()
     c = CS.commit(window, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
                             "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salts_of=fixed(window))
-    return (CS.registration(c, {"stand_in": "boundary"}, None, registrar=R), CS.expected_ports(window),
+    return (CS.registration(c, {"stand_in": "boundary"}, None, registrar=DK), CS.expected_ports(window),
             CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)}))
 
 

@@ -19,6 +19,7 @@ from verity.circuits.types import Array, Value
 from verity.commitments import history as HT
 from verity.commitments.gates.rowleaf import digest_bits
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R, verifier as V
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import registered_value as RV
 
 from test_registered import SAMPLING_DESIGN, MIX, POS, Q, SCHEME, SERVED, TABLE
@@ -82,11 +83,11 @@ def _case(hist_rows=None):
     w = RV.Registered.commit(pd, "W", TABLE)
     if hist_rows is None:
         resolved = HT.resolve(HT.roots_of(leaf, history), SUPPLIED)
-        base = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry()], leaf_layer=leaf)
+        base = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry()], leaf_layer=leaf)
         hist = G.supplied_value(prog, "hist", G.sources(resolved)["hist"], base, ["hist"])
     else:
         hist = RV.Registered.commit(pd, "hist", hist_rows, RV.supplied_salts(pd, "hist", 2), word_bits=16)
-    rec = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry(), hist.entry()], leaf_layer=leaf)
+    rec = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry(), hist.entry()], leaf_layer=leaf)
     check = {"program": prog, "query": Q, "sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "leaf_layer": leaf,
              "registered": {"W": 2, "hist": 512}, "supplied": SUPPLIED, "history": history}
     return rec, check, hist, root, dom

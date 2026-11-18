@@ -25,7 +25,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     H1Run,
     in_process_draw,
     Matmul,
-    NCP_CIRCUIT_SCHEMES,
     NCP_SCHEMES,
     program_salt,
     ROUND0,
@@ -60,7 +59,7 @@ KEYS = ("coins", "retain_steps", "transcript_dir", "rows", "steps", "runner", "r
 
 
 def schemes() -> tuple[str, ...]:
-    return tuple(sorted({*NCP_SCHEMES, *NCP_CIRCUIT_SCHEMES, H1_SCHEME}))
+    return tuple(sorted({*NCP_SCHEMES, H1_SCHEME}))
 
 
 def executes(scheme: str) -> tuple[str, ...]:
