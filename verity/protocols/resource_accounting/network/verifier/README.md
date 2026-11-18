@@ -289,8 +289,12 @@ A spec-level reference for network attestation's timing channel:
   ``load``, ingress), committed as a registered value under the network attester's own salts at the reading port's
   leaf width and row format, its root in a head the network attester signs for the session's first execution phase
   (`TransferHead`, `registration`); every other row into the host is the scan's state, with no head of its own.
-  `check_registration` reads it for the transfer it expects (`benchmarks/one_stage/a5_network_attester.py` calls it; no
-  verifier does yet), and `port` the verifier's own
+  `check_registration` reads it for the transfer it expects (`benchmarks/one_stage/a5_network_attester.py` and
+  `blocks.pins` call it). The check of a run's load, one registration of each value of its shape's manifest
+  (`load_check.manifest`) under the deployment's key and session, is the Lean verifier's:
+  `NetworkVerifier.Load.loadCheck`, the `load` function of `network-records verdicts`, which `relay_check.check_load`
+  asks and whose verdict it gives, with `check_registration` its reference in the agreement test
+  (`tests/verity/protocols/resource_accounting/network/verifier/network/test_network_load_agreement.py`). `port` is the verifier's own
   `--registered` port of the value at the signed root (the load relayed and committed as it crosses,
   `verity/protocols/resource_accounting/network/attester/load_relay.py`);
 - the class circuit's check (`blocks`): a circuit record is one host's class execution phase circuit, and which host runs which
