@@ -29,6 +29,7 @@ from collections.abc import Collection, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.commitments.identity import identity_digest, identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
@@ -38,13 +39,8 @@ from verity.circuits.program import Program
 from verity.commitments.domains import FLOCK_CIRCUIT_BINDING, HM96_SHA512_ROW_V1
 from verity_flock.input_sets import InputSet
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
-from verity.protocols.proofs.spot.verifier.one_stage import (
-    audit,
-    partition as P,
-    docket as R,
-    served as SV,
-    verifier as V,
-)
+from verity.protocols.proofs.spot.verifier.one_stage import audit, partition as P, docket as R, verifier as V
+from verity.protocols.proofs.spot.prover import served as SV
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import file_sha512 as sha512_file, verifier_env
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
@@ -800,7 +796,7 @@ def main() -> int:
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     if a.bind:
         checks["bindings"] = bindings(st["meta"], header, rec, proof_block_class(a.set, a.m0_pythonpath, out))
-    summary["registration_digest"] = R.digest(rec)
+    summary["registration_digest"] = DD.digest(rec)
     summary["partition_digest"] = rec["partition"]
     summary["checks_before_draw"] = {k: v["ok"] for k, v in checks.items()}
     if not all(c["ok"] for c in checks.values()) or not summary["template_program"]["ok"]:
@@ -837,7 +833,7 @@ def main() -> int:
     neg["registration-domain-not-the-layout's"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, RND.parse_design(f"subset:{a.k + 1}"), SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-law-not-the-agreement's"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(dict(rec, previous=R.digest(rec)), program, query, sampling_design, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
+    v = V.check(dict(rec, previous=DD.digest(rec)), program, query, sampling_design, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
     neg["second-registration-for-the-window"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(dict(rec, leaf_layer=None), program, query, sampling_design, SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}

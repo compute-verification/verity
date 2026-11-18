@@ -65,12 +65,12 @@ from typing import Any
 
 import jsonschema
 import pytest
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity import device as SITE
 from verity.commitments.periods import interface as IF
 from verity.protocols.registration.verifier import registration as RL
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
 from verity.protocols.resource_accounting.memory.poub.verifier import ledger
 from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER
@@ -825,7 +825,7 @@ def test_a_piece_that_ran_gives_its_answer_and_one_that_wrote_none_errs(tmp_path
 def test_a_piece_runs_within_its_limit_and_one_out_of_time_or_refused_says_so(tmp_path):
     """Each piece runs under `timeout` at ``<COMPONENT>_TIMEOUT``, else ``PIECE_TIMEOUT``: one that runs out of it (exit
     124, which the fake `timeout` gives for the limit ``0``) errs naming the limit, and one that writes ``refused.txt``
-    instead of an answer is missing with the refusal as why."""
+    instead of an answer is refused with the refusal as its reason."""
     bin_ = tmp_path / "bin"
     bin_.mkdir()
     (bin_ / "timeout").write_text(f'#!/bin/sh\necho "$3" >> {tmp_path}/limits\n[ "$3" = 0 ] && exit 124\nshift 3\nexec "$@"\n')
@@ -837,8 +837,7 @@ def test_a_piece_runs_within_its_limit_and_one_out_of_time_or_refused_says_so(tm
     assert got["bandwidth"] == {"verdict": "error", "rc": 124,
                                 "reason": "its piece ran (exit 124, out of time at 0) and wrote no answer; "
                                           "its log is bandwidth/piece.log"}
-    assert got["pous"] == {"verdict": "missing", "rc": 3,
-                           "why": "its piece refused to run: PoUS REFUSED: the card has a compute process"}
+    assert got["pous"] == {"verdict": "refused", "rc": 3, "reason": "PoUS REFUSED: the card has a compute process"}
 
 
 def test_a_piece_that_left_a_file_that_is_not_json_errs_about_no_server_and_the_next_piece_still_runs(tmp_path):
@@ -1041,8 +1040,8 @@ WIPE_REJECT = {"protocol": W.PROTOCOL, "verdict": "reject", "reason": "a read ca
 def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_server(tmp_path, monkeypatch, capsys, case):
     """`record` takes the wipe out of ``record_missing`` only when its answer accepts and its served.json names the
     record's node: served on another server it stays missing (``elsewhere``), an accepting answer with no served.json
-    names no server and stays missing (``unserved``), a wipe that wrote no answer (served_wipe.sh refused) stays missing
-    with its issue, and one whose answer rejects makes the record reject with no block record."""
+    names no server and stays missing (``unserved``), a wipe that wrote no answer (served_wipe.sh refused) is undecided
+    by its sentence, and one whose answer rejects makes the record reject with no block record."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     wipe = tmp_path / "pieces" / "wipe"
@@ -1070,14 +1069,36 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
         assert rec["legs"]["wipe"]["server"] == "vy-dc-h200" and rec["legs"]["wipe"]["quantity"]["value"] == 4096
         assert rec["legs"]["wipe"]["runs"] == ["r1"] and rec["composed"]["legs"]["wipe"] == "accept"
         return
+    if case == "refused":
+        assert line["record_missing"] == ["bandwidth", "certifier", "pous", "pouw"] and "the wipe" not in line["missing"]
+        assert rec["legs"]["wipe"]["answer"]["verdict"] == "undecided" and rec["legs"]["wipe"]["refused"] == \
+            "WIPE REFUSED: the card has a compute process"
+        return
     assert line["record_missing"] == ["bandwidth", "certifier", "pous", "pouw", "wipe"]
     if case == "elsewhere":
         assert rec["legs"]["wipe"]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == ["wipe"]
-    elif case == "unserved":
-        assert rec["legs"]["wipe"] is None and "the wipe" not in line["missing"]
     else:
-        assert rec["legs"]["wipe"] is None
-        assert line["missing"]["the wipe"] == "its piece refused to run: WIPE REFUSED: the card has a compute process"
+        assert rec["legs"]["wipe"] is None and "the wipe" not in line["missing"]
+
+
+def test_a_piece_that_refused_to_run_is_a_refused_row_by_its_sentence_and_its_line_is_not_accepted(tmp_path, monkeypatch,
+                                                                                                    capsys):
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
+    pous = tmp_path / "pieces" / "pous"
+    pous.mkdir(parents=True)
+    (pous / "refused.txt").write_text("PoUS REFUSED: the card has a compute process\n")
+    (tmp_path / "serve").mkdir()
+    rc = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1",
+                 "--sampled-proofs", str(tmp_path / "audit"), "--pieces", str(tmp_path / "pieces"),
+                 "--out", str(tmp_path / "record"), "--node", "vy-dc-h200"])
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    row = json.loads((tmp_path / "record" / "verdicts.json").read_text())["protocols"]["space"]
+    assert (row["verdict"], row["reason"]) == ("refused", "PoUS REFUSED: the card has a compute process")
+    leg = json.loads((tmp_path / "record" / "block-record.json").read_text())["legs"]["pous"]
+    assert leg["answer"]["reason"] == "refused to run: PoUS REFUSED: the card has a compute process"
+    assert rc == 2 and line["composed"] == "pending" and line["verdicts"]["PoUS"] == "refused"
+    assert "PoUS" not in line["missing"] and "pous" not in line["record_missing"]
 
 
 #: an accepted core answer of each piece's subprotocol, its public outputs the block record's subprotocol certificate, the
@@ -1277,7 +1298,7 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
 
 #: the toy docket R of the window the record tests' SPOT audit sampled against
 WINDOW_RECORD = {"format": "toy-registration", "window": 1}
-WINDOW_DIGEST = REG.digest(WINDOW_RECORD)
+WINDOW_DIGEST = DD.digest(WINDOW_RECORD)
 
 
 def _window_case(audit: Path, rec: Mapping[str, Any] = WINDOW_RECORD) -> Path:
@@ -1350,8 +1371,8 @@ def test_a_rejection_with_a_case_naming_no_digest_is_taken(tmp_path):
 
 
 @pytest.mark.parametrize("change, why", [
-    ({"window": REG.digest({**WINDOW_RECORD, "window": 2})},
-     f"its verity/sampled-proofs/v1 case names ['{REG.digest({**WINDOW_RECORD, 'window': 2})}'], not this window's"),
+    ({"window": DD.digest({**WINDOW_RECORD, "window": 2})},
+     f"its verity/sampled-proofs/v1 case names ['{DD.digest({**WINDOW_RECORD, 'window': 2})}'], not this window's"),
     ({"window": None}, "its verity/sampled-proofs/v1 case names no record, not this window's"),
     ({"commitment": "ab" * 64}, "its commitment is not the bind of its cases' digests"),
     ({"cases": []}, "its verity/sampled-proofs/v1 case names no record, not this window's"),
@@ -1393,7 +1414,7 @@ def test_a_composite_of_another_window_is_refused_whatever_its_lean_said(tmp_pat
     ({"onsite": ("verity/onsite/v0", "accept")}, "accept", "pending", 2, "0 composites of the remote check"),
     ({"remote-v1": ("verity/remote/v1", "accept")}, "reject", "reject", 1, "verity/remote/v1's Lean check"),
     ({"remote-v1": ("verity/remote/v1", "reject")}, None, "reject", 1, "verity/remote/v1's Lean check"),
-    ({"remote-v1": ("verity/remote/v1", "accept", {"window": REG.digest({**WINDOW_RECORD, "window": 2})})}, "accept",
+    ({"remote-v1": ("verity/remote/v1", "accept", {"window": DD.digest({**WINDOW_RECORD, "window": 2})})}, "accept",
      "pending", 1, "remote-v1/composite.json is refused, not this window's composite: its verity/sampled-proofs/v1 case"),
 ])
 def test_the_records_verdict_is_the_compiled_lean_composites_and_its_exit_0_only_for_its_accept(
@@ -1581,11 +1602,10 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     record the case commits to: the summary and audit record the served node wrote don't enter it, so editing or deleting
     them leaves the row as it was, while without --sampled-lean the row follows them. The row and the line name its
     source, and PoUW's, still read from its piece's answer file, as the served node wrote it, which its edit changes."""
-    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
-    answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": R.digest(LEAN_RECORD)}
+    answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": DD.digest(LEAN_RECORD)}
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
     monkeypatch.setenv("ANSWER", json.dumps(answer))
     rc, line, rows = _recorded(tmp_path, argv, capsys)
@@ -1620,11 +1640,10 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
 
 
 def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_covers(tmp_path, monkeypatch, capsys):
-    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
-    answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": R.digest(LEAN_RECORD)}
+    answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": DD.digest(LEAN_RECORD)}
     monkeypatch.setenv("SEEN", str(tmp_path / "seen.json"))
     monkeypatch.setenv("ANSWER", json.dumps(answer))
     _rc, _line, rows = _recorded(tmp_path, argv, capsys)
@@ -2459,7 +2478,7 @@ def test_a_tied_pearlplus_piece_is_the_windows_own_epoch_and_says_so(tmp_path, c
     doc = S.pearlplus(tmp_path / "a", window, verified, tie=w)
     assert (doc["verdict"], doc["reasons"], doc["why"]) == (S.UNCLAIMED, [], S.PEARLPLUS_WHY_TIED_IN_PROCESS)
     assert doc["coins"] == {**S.PEARLPLUS_COINS_IN_PROCESS, "epoch": S.PEARLPLUS_EPOCH_TIED_IN_PROCESS}
-    assert (doc["load"], doc["tie"]) == ({"window_steps": 3}, {"record": REG.digest(PEARL_WREC)})
+    assert (doc["load"], doc["tie"]) == ({"window_steps": 3}, {"record": DD.digest(PEARL_WREC)})
     for name, d in (("served.json", window), ("v.json", verified)):
         (tmp_path / name).write_text(json.dumps(d))
     assert S.main(["pearlplus", str(tmp_path / "cli"), "--served", str(tmp_path / "served.json"), "--verify",
@@ -3581,8 +3600,8 @@ else:
         open(os.environ["ORDER"] + ".commit", "w").write("\\n".join(tail))
         w = json.load(open(tail[1]))
         if "--pearl-passes" in a:
-            from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
-            r = {{"format": "toy", "previous": "ef" * 64 if os.environ.get("BREAK_CHAIN") else REG.digest(w)}}
+            from verity.commitments import docket_digest as DD
+            r = {{"format": "toy", "previous": "ef" * 64 if os.environ.get("BREAK_CHAIN") else DD.digest(w)}}
         else:
             r = {{"format": "toy", "after": w}}
         (out / "registration.json").write_text(json.dumps(r))
@@ -3735,10 +3754,10 @@ UNREAD = "so the split network attester's chain and period check, which read it,
     ("refused", f"V3c's window commit at class {W63K4} refused (exit 2): prove_path.py window-commit: the row dir holds no "
                 f"window K, {UNREAD}"),
 ])
-def test_a_commit_out_of_time_or_refused_leaves_the_network_attesters_row_missing_saying_which(tmp_path, cut, said):
+def test_a_commit_out_of_time_or_refused_leaves_the_network_attesters_row_refused_saying_which(tmp_path, cut, said):
     """A window commit that `timeout` stops (a stub of it exiting 124) or that is refused leaves the split network
     attester nothing to read: its chain doesn't start, and its piece's refusal says which, with the limit and what to
-    set for a timeout, so the record's row is missing with that reason rather than CERTIFIER_CMD unset."""
+    set for a timeout, so the record's row is refused with that reason rather than missing for CERTIFIER_CMD unset."""
     if cut == "timeout":
         _script(tmp_path / "stops" / "timeout",
                 f'case "$*" in *window_commit.py*) exit 124 ;; esac\nexec {tmp_path}/bin/timeout "$@"')
@@ -3749,8 +3768,7 @@ def test_a_commit_out_of_time_or_refused_leaves_the_network_attesters_row_missin
     assert rc == 16 and "chain" not in order, (lines, order)
     pieces = tmp_path / "out" / "pieces"
     assert (pieces / "certifier" / "refused.txt").read_text().strip() == said
-    assert S.piece_row("communication", pieces) == {"verdict": "missing", "owner": "network-accounting",
-                                                     "why": f"its piece refused to run: {said}"}
+    assert S.piece_row("communication", pieces) == {"verdict": "refused", "owner": "network-accounting", "reason": said}
 
 
 @pytest.mark.parametrize("args, extra, line", [
@@ -3869,7 +3887,7 @@ def _tied_commit(tmp_path: Path, bound: str | None, sampling_design: dict | None
     log = [{"window": 7, "kind": "registration", "file": "w7/registration.json", "digest": "aa" * 64}]
     if bound is not None:
         log.append({"window": 7, "kind": "record", "file": "w7/record.json",
-                    "digest": REG.digest(r if bound == "same" else {**r, "after": None})})
+                    "digest": DD.digest(r if bound == "same" else {**r, "after": None})})
     _write(d / "h1", "log.jsonl", log)
 
 
@@ -4504,7 +4522,7 @@ def test_under_pearlplus_tie_the_pieces_tie_commits_the_window_cut_at_pearls_lin
     the serve dir."""
     run, order = _pearl_tie(tmp_path)
     d = tmp_path / "serve"
-    w = REG.digest(PEARL_WREC)
+    w = DD.digest(PEARL_WREC)
     assert run.returncode == 0 and order == ["compiler", "advice", "window-commit"], (run.stdout, run.stderr, order)
     assert run.stdout.splitlines()[-1].startswith(
         f"PEARL-TIE: window-commit class {W63K4}, its circuit cut at Pearl+'s linears: W {w[:16]}…, R ")
@@ -4523,7 +4541,7 @@ def test_under_pearlplus_tie_the_pieces_tie_commits_the_window_cut_at_pearls_lin
     ({"FAIL_COMMIT": "1"}, 16,
      f"PEARL-TIE: window-commit class {W63K4} refused (exit 2): prove_path.py window-commit: the row dir holds no window 7"),
     ({"BREAK_CHAIN": "1"}, 16, f"PEARL-TIE: window-commit's registration R is chained after {'ef' * 8}…, not right after "
-                               f"Pearl+'s W {REG.digest(PEARL_WREC)[:16]}…"),
+                               f"Pearl+'s W {DD.digest(PEARL_WREC)[:16]}…"),
     ({"PEARLPLUS_TIE": ""}, 3, "PEARL-TIE: PEARLPLUS_TIE or V3C_CLASS is empty"),
     ({"V3C_LAW": ""}, 3, "PEARL-TIE: V3C_LAW is empty: the tied window's rule is the launch's, a stratified rate"),
 ])
@@ -4629,9 +4647,10 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
     assert {f: gated[gated.index(f) + 1] for f in ("--challenger-gate", "--challenger-peer", "--challenger-lane")} == {
         "--challenger-gate": GATE, "--challenger-peer": "vy-dc-h200", "--challenger-lane": "compute-accounting"}
     assert gated.count("--protocols") == 1 and "--h1-prover" not in gated
-    assert "--pearl-users" not in argv and "--pearl-users" not in gated
+    assert "users" not in json.loads(gated[gated.index("--protocols-config") + 1])["pouw"]
     _rc, fronted = _serve_argv(tmp_path / "fronted", {**PEARL_TIES, **cubin, **live, "CERTIFIER_FRONT": "true"})
-    assert fronted[fronted.index("--pearl-users") + 1] == r"fixed\.[0-9]+" and fronted.count("--pearl-users") == 1
+    assert json.loads(fronted[fronted.index("--protocols-config") + 1])["pouw"]["users"] == r"fixed\.[0-9]+"
+    assert "--pearl-users" not in fronted and fronted.count("--protocols-config") == 1
     calls, d = (tmp_path / "calls").read_text().splitlines(), tmp_path / "serve" / "pearlplus"
     assert [c.split("prove_path/prove_path.py ", 1)[-1] for c in calls[-4:-2]] == [
         f"serve-phi --model unsloth/Llama-3.2-1B --revision 9535bd9b1d1dea6acafbdc4813b728796aeb28da --out {d}/serve-phi.json",
@@ -4697,7 +4716,7 @@ def _pearl_tied_commit(tmp_path: Path, chained: bool = True) -> None:
     (d / "pearlplus" / "w7").mkdir(parents=True)
     (d / "pearlplus" / "w7" / "registration.json").write_text(json.dumps(PEARL_WREC))
     (d / "pearlplus" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
-    r = {"format": "toy", "previous": REG.digest(PEARL_WREC) if chained else "ef" * 64, "law": TIED_SAMPLING_DESIGN}
+    r = {"format": "toy", "previous": DD.digest(PEARL_WREC) if chained else "ef" * 64, "law": TIED_SAMPLING_DESIGN}
     (vw / "registration.json").write_text(json.dumps(r))
     (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
 
@@ -4713,7 +4732,7 @@ def test_under_pearlplus_tie_v3c_audits_the_commit_tied_to_pearls_w_with_records
     circuit = (tmp_path / "order.circuit").read_text().split("\n")
     assert circuit[circuit.index("--pearl-tables") + 1] == "pearl-c-h100-v1-h3", circuit
     assert any(x.startswith(f"WINDOW-CIRCUIT class {W63K4}, cut at Pearl+'s linears: ") for x in lines), lines
-    w = REG.digest(PEARL_WREC)
+    w = DD.digest(PEARL_WREC)
     assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} in Pearl+'s piece, its registration chained right after "
                                f"Pearl+'s window record W before Pearl+'s coin (W {w[:16]}…, R "), lines
     assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(tmp_path / "serve" / "pearlplus" / "w7" / "registration.json"),
@@ -4731,7 +4750,7 @@ def test_under_pearlplus_tie_v3c_audits_no_commit_not_chained_right_after_w(tmp_
     rc, lines, order, _limits = _v3c(tmp_path, **PEARL_TIES, CERTIFIER_CHAIN_CMD=None, CERTIFIER_PERIOD_CMD=None)
     assert (rc, order) == (16, ["window-circuit"]), lines
     assert lines[-1] == (f"WINDOW-COMMIT class {W63K4}: window-commit's registration R is chained after {'ef' * 8}…, not "
-                         f"right after Pearl+'s W {REG.digest(PEARL_WREC)[:16]}…")
+                         f"right after Pearl+'s W {DD.digest(PEARL_WREC)[:16]}…")
 
 
 @pytest.mark.parametrize("extra, line", [
@@ -6368,7 +6387,7 @@ def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
     exe = tmp_path / "vstar-recursive"
     exe.write_text(FAKE_SAMPLED_LEAN)
     exe.chmod(0o755)
-    answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": REG.digest(LEAN_RECORD)}
+    answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": DD.digest(LEAN_RECORD)}
     gate_env = {"PATH": f"{_hosts(tmp_path)}:{Path(sys.executable).parent}:/usr/bin:/bin", "HOST": "vy-auditor-2",
                 "SAMPLED_EXE": str(exe), "SEEN": str(tmp_path / "seen.json"), "ANSWER": json.dumps(answer),
                 "GIT_DIR": str(tmp_path / "no-git"), "CHECK_SCOPE": "none"}
@@ -6419,7 +6438,7 @@ def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_
     assert composed["composed_on"] == {"host": socket.gethostname(), "served_node": False, "from": S.HANDED_FROM,
                                        "tree": GATE_PIN, "tree_on": "remote"}
     row = composed["protocols"]["integrity"]
-    assert row["answer_from"] == S.LEAN_HERE and row["answer"]["commitment"] == REG.digest(LEAN_RECORD), row
+    assert row["answer_from"] == S.LEAN_HERE and row["answer"]["commitment"] == DD.digest(LEAN_RECORD), row
     seen = json.loads((tmp_path / "seen.json").read_text())
     assert seen["argv"][5:] == [str(scratch / "serve" / b) for b in BLOBS]
     assert not scratch.exists() and list((gate / "var" / "scratch").iterdir()) == []
@@ -7539,15 +7558,29 @@ def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
     python = (f"case \"$*\" in *NETWORK_ATTESTER*) exec {sys.executable} \"$@\" ;; esac; printf '%s\\n' \"$*\" >> {tmp_path}/calls; case \"$*\" in *prove_path.py\\ class-circuit*) "
               f"while [ $# -gt 0 ]; do [ \"$1\" = --out ] && printf '{{}}\\n' > \"$2\"; shift; done; exit 0;; "
               f"*prove_path.py\\ serve-phi*|*served_verdicts.py\\ pearlplus-period*) exit 0;; esac; "
+              "case \"$*\" in *serve-openai*) [ -z \"$SERVE_SAYS\" ] || printf '%s\\n' \"$SERVE_SAYS\";; esac; "
               f"printf '%s\\n' \"$@\" > {tmp_path}/argv; exit 1")
     for path, body in ((venv / "python", python), (bin_ / "sleep", "exit 0")):
         path.write_text(f"#!/bin/sh\n{body}\n")
         path.chmod(0o755)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
            "OUT": str(tmp_path / "out"), "VY_CHALLENGER_1_HOST": CHALLENGER_HOST, **env}
-    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
-                        capture_output=True).returncode
-    return rc, (tmp_path / "argv").read_text().splitlines() if (tmp_path / "argv").exists() else []
+    run = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
+                         capture_output=True)
+    (tmp_path / "run.log").write_bytes(run.stdout + run.stderr)
+    return run.returncode, (tmp_path / "argv").read_text().splitlines() if (tmp_path / "argv").exists() else []
+
+
+def test_a_serve_that_never_listens_is_said_by_its_exception_and_exit_and_no_line_of_its_log_leaves(tmp_path):
+    """A serve that exits before listening is said by its last exception's class and its exit status: no line of its
+    log, which holds the host's address and paths, reaches the run's output or its stdout and stderr."""
+    log = ["distributed_init_method=tcp://10.1.2.3:41234 backend=nccl", "/workspace/hf/models--secret/snapshots/abc",
+           "verity_vllm.pipeline.cli.UsageError: --day-log /workspace/secret-day.log"]
+    rc, _ = _serve_argv(tmp_path, {"H1_GATE": "", "SERVE_SAYS": "\n".join(log)})
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+    assert rc == 10 and "SERVE: not listening (UsageError, exit 1): its log is in the run's private directory" in said, said
+    left = (tmp_path / "run.log").read_text() + "".join(f.read_text(errors="replace") for f in (tmp_path / "out").rglob("*") if f.is_file())
+    assert not [x for x in ("10.1.2.3", "secret", "--day-log") if x in left], left
 
 
 NO_HOST = ("PREFLIGHT: VY_CHALLENGER_1_HOST is unset, the address of the host the default gate command reaches (ssh -i "

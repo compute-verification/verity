@@ -56,6 +56,7 @@ from typing import Any, Callable, Iterator
 
 import verity_difftest as DT
 from verity_difftest import protocol as PR
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier.one_stage import (
@@ -234,7 +235,7 @@ class Records:
         try:
             body = json.loads(path.read_text())
             rec = body.get("registration", body) if path.name == "audit.json" else body
-            self.by_digest.setdefault(R.digest(rec), (rec, str(path.relative_to(root))))
+            self.by_digest.setdefault(DD.digest(rec), (rec, str(path.relative_to(root))))
         except (ValueError, KeyError, TypeError, AttributeError):
             pass
 
@@ -585,7 +586,7 @@ def python(c: Case) -> dict:
         return public_outcome(R.matches_public(c.rec, x["scheme"], x["roots"], x["domains"], x["population"]).to_json())
     p, rec, e = c.params, c.rec, json.loads(DT.canonical(strings(c.evidence)))
     program = c.program
-    digest = bytes.fromhex(R.digest(rec))
+    digest = bytes.fromhex(DD.digest(rec))
     delta = Fraction(p["delta"])
     out = lambda verdict, reason=None, public=None, profile=None: PR.outcome(  # noqa: E731
         DM.ONE_STAGE_PROTOCOL, verdict, reason, digest, public, profile)
@@ -804,7 +805,7 @@ def a0(run: Run) -> Iterator[Case]:
             params={"law": {"k": k + 1, "law": "subset"}}),
         "second-registration-for-the-window": lambda v: c.but(
             "second-registration-for-the-window", "negative", recorded_codes(v, "registration", src),
-            rec={**rec, "previous": R.digest(rec)}, params={"log": [rec]}),
+            rec={**rec, "previous": DD.digest(rec)}, params={"log": [rec]}),
         "registration-null-leaf-layer (R4)": lambda v: c.but(
             "registration-null-leaf-layer (R4)", "negative", recorded_codes(v, "registration", src),
             rec={**rec, "leaf_layer": None}),
@@ -1035,7 +1036,7 @@ A0_TOOLS = {"m0-verifier": "flock-circuit serve (M0, eb90718f)",
 def copies_against(p: dict, rec: dict, run: Run) -> dict[str, str]:
     """Each replayed audit of the same record (by run): its copies equal `p`, or the parameters in which they differ."""
     out = {}
-    for x in run.audits.get(R.digest(rec), []):
+    for x in run.audits.get(DD.digest(rec), []):
         differ = sorted(k for k in set(p) | set(x.params) if p.get(k) != x.params.get(k))
         out[x.run] = "equal" if not differ else f"differ in {', '.join(differ)}"
     return out
@@ -1052,7 +1053,7 @@ def a2_unaudited(run: Run) -> Iterator[Case]:
     base = "out/a2"
     rec = json.loads(tar_member(run, "inputs/served.tar", "registration.json"))
     receipt = run.json(f"{base}/receipt.json")
-    if receipt.get("registration") != R.digest(rec):
+    if receipt.get("registration") != DD.digest(rec):
         raise Gap(f"{base}/receipt.json does not name inputs/served.tar's registration.json")
     argv = traced_argv(run, "benchmarks/one_stage/a2.py")
     k, delta = int(option(argv, "--k", 256)), float(option(argv, "--delta", 2.0 ** -20))
@@ -1401,7 +1402,7 @@ def a4_unaudited(run: Run) -> Iterator[Case]:
     base = "out/a4"
     summary = run.json(f"{base}/summary.json")
     rec = json.loads(tar_member(run, "inputs/served.tar", "registration.json"))
-    if R.digest(rec) != summary.get("registration") or R.digest(rec) != run.json(f"{base}/receipt.json").get("registration"):
+    if DD.digest(rec) != summary.get("registration") or DD.digest(rec) != run.json(f"{base}/receipt.json").get("registration"):
         raise Gap(f"inputs/served.tar's registration.json is not the one {base}/summary.json and receipt.json name")
     program, query, partition, ports, leaf_layer, _, _, prov = a4_copies(run, base, summary, rec)
     prov["record"] = "inputs/served.tar's registration.json (the receipt's)"
@@ -1442,9 +1443,9 @@ def serving_bundle(run: Run) -> Iterator[Case]:
     digest) with the leaf layer from the bundle itself, and no sample. Its `registration-v0.json`, the window's record in
     `verity/one-stage/registration/v0`, is a format neither side reads."""
     rec = run.json("registration.json")
-    audits = run.audits.get(R.digest(rec)) or []
+    audits = run.audits.get(DD.digest(rec)) or []
     if not audits:
-        raise Gap(f"no replayed run audited registration {R.digest(rec)[:16]}, whose verifier's copies would read it")
+        raise Gap(f"no replayed run audited registration {DD.digest(rec)[:16]}, whose verifier's copies would read it")
     leaf_layer, how = bundle_leaf_layer(run)
     groups: dict[str, list[Case]] = {}
     for b in audits:
@@ -1549,7 +1550,7 @@ def registered_gemm(run: Run) -> Iterator[Case]:
         cases: dict[str, Callable[[dict], Case]] = {}
         if registered and run.has(f"{d}/own-lean-reads-another-root-of-W.json"):
             other = run.json(f"{d}/own-lean-reads-another-root-of-W.json")["ports"][port]["root"]
-            later = {**rec, "window": {**rec["window"], "window": 99}, "previous": R.digest(rec),
+            later = {**rec, "window": {**rec["window"], "window": 99}, "previous": DD.digest(rec),
                      "registered": [{**x, "root": other} if x["value"] == value else x for x in rec["registered"]]}
             nm = "registration-re-registers-W-under-another-root (R7-held)"
             cases[nm] = lambda v, c=c, nm=nm, later=later, held=list(log): c.but(
@@ -1742,7 +1743,7 @@ def served_window(run: Run) -> Iterator[Case]:
             raise Gap(f"{path}: an outcome without an audit (late)")
         if service and body.get("order") != 0:
             raise Gap(f"{path}: order {body.get('order')}, a log the run did not keep")
-        if R.digest(a["registration"]) != R.digest(rec):
+        if DD.digest(a["registration"]) != DD.digest(rec):
             raise Gap(f"{path}: not the request's registration")
         sessions = list(body.get("sessions") or []) if service else []
         e = evidence(a, instances=len(a["proved_units"]), sessions=sessions, session_roots=None, served=None)
@@ -1842,7 +1843,7 @@ def served_audit(run: Run) -> Iterator[Case]:
         side = "other" if name == "foreign-commit" else "request"
         a = run.json(path)
         rec = a["registration"]
-        if R.digest(rec) != R.digest(run.json(f"out/{side}/registration.json")):
+        if DD.digest(rec) != DD.digest(run.json(f"out/{side}/registration.json")):
             raise Gap(f"{path}: not out/{side}/registration.json")
         program, query, ports, how = copies(side, rec)
         if PO.program_sha512(program) != rec["program"]:
@@ -2366,7 +2367,7 @@ def main() -> int:
                 results.append(_row(c, lean, py, {**compare(c, lean, py), "record": whole}))
                 f.write(json.dumps({"name": c.name, "r7": c.r7, "case": case}) + "\n")
                 if c.kind == "audit" and c.public is None and driver not in UNRECORDED:
-                    audits[R.digest(c.rec)].append(c)
+                    audits[DD.digest(c.rec)].append(c)
         info["cases"] = len(cases)
         print(f"{run.id} {driver}: {info['status']} {len(cases)} cases", file=sys.stderr, flush=True)
 

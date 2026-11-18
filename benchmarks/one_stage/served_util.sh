@@ -238,10 +238,10 @@ for _ in $(seq 1 1500); do
   kill -0 "$srv" 2>/dev/null || break
   sleep 2
 done
-log() { grep -aE "SERVE-OPENAI|UTIL (engine|row)|\[engine\]|H1|declare|Error|error|refus|Traceback" "$SCR/serve.log" | grep -av prompt | tail -${1:-40} > "$OUT/serve.log.txt"; }
 if [ "$up" != 1 ]; then
-  log 80; say "SERVE: not listening: $(grep -am1 -E 'UsageError|Error|refus' "$SCR/serve.log" | cut -c1-400)"
-  "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1; wait "$srv"; [ -n "$drawer" ] && kill "$drawer"; exit 10
+  "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1; wait "$srv"; rc=$?
+  say "SERVE: $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" not-listening "$SCR/serve.log" "$rc")"
+  [ -n "$drawer" ] && kill "$drawer"; exit 10
 fi
 spid=$(ss -Hltnp "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
 say "SERVE $(grep -am1 'SERVE-OPENAI listening' "$SCR/serve.log" | cut -c1-200) (pid ${spid:-unknown})"
@@ -270,7 +270,6 @@ wait "$srv"; say "SERVE stopped (exit $?)"
 reap
 [ -n "$drawer" ] && { kill "$drawer"; say "STANDIN draws $(wc -l < "$OUT/standin_samples.txt") ($STANDIN_SAMPLES, the step-input port only)"; }
 trap - TERM INT
-log
 "$NSYS" export --type sqlite --force-overwrite=true -o "$SCR/prof.sqlite" "$SCR/prof.nsys-rep" > "$OUT/nsys_export.txt" 2>&1
 say "EXPORT (exit $?): $(du -sh "$SCR/prof.nsys-rep" "$SCR/prof.sqlite" 2>/dev/null | tr '\n' ' ')"
 cp "$SCR/prof.nsys-rep" "$OUT/"
