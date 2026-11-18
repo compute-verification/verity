@@ -103,42 +103,17 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/program/predict/steps.py": ("resource_accounting.network.verifier.advice",),
         # The compiler's (`verity_vllm/compiler/`): the replay step's and chain's circuits and row forms, the charge's
         # book and code (`charge_chain`, `arith_encode`), the IO tie's routing, the advice's form (its reader, constants
-        # and error) and head_check's circuit helpers (`_Consts`, `_coll`, `ands`), until network attestation's workload side
-        # offers them.
+        # and error), until network attestation's workload side offers them.
         "verity_vllm/compiler/advice_check.py": (
             "resource_accounting.network.verifier.advice.FINISHES", "resource_accounting.network.verifier.advice.MalformedAdvice",
             "resource_accounting.network.verifier.advice.VERSION", "resource_accounting.network.verifier.advice.WIDTH_BITS",
-            "resource_accounting.network.verifier.advice._Reader", "resource_accounting.network.verifier.head_check._Consts",
-            "resource_accounting.network.verifier.head_check._coll", "resource_accounting.network.verifier.head_check.ands",
-        ),
-        "verity_vllm/compiler/cache_step.py": (
-            "resource_accounting.network.verifier.head_check._Consts", "resource_accounting.network.verifier.head_check._coll",
-            "resource_accounting.network.verifier.head_check.ands",
-        ),
-        "verity_vllm/compiler/cache_step_v3.py": (
-            "resource_accounting.network.verifier.head_check._Consts", "resource_accounting.network.verifier.head_check._coll",
-            "resource_accounting.network.verifier.head_check.ands",
+            "resource_accounting.network.verifier.advice._Reader",
         ),
         "verity_vllm/compiler/compile_slice.py": (
             "resource_accounting.network.verifier.arith_encode", "resource_accounting.network.verifier.charge_chain",
         ),
-        "verity_vllm/compiler/compile_slice_v4.py": (
-            "resource_accounting.network.verifier.head_check._Consts", "resource_accounting.network.verifier.head_check._coll",
-            "resource_accounting.network.verifier.head_check.ands",
-        ),
-        "verity_vllm/compiler/compile_slice_v5.py": (
-            "resource_accounting.network.verifier.head_check._Consts", "resource_accounting.network.verifier.head_check._coll",
-            "resource_accounting.network.verifier.head_check.ands",
-        ),
-        "verity_vllm/compiler/compile_slice_v6.py": (
-            "resource_accounting.network.verifier.head_check._Consts", "resource_accounting.network.verifier.head_check._coll",
-            "resource_accounting.network.verifier.head_check.ands",
-        ),
         "verity_vllm/compiler/compile_slice_v7.py": ("resource_accounting.network.verifier.charge_chain",),
-        "verity_vllm/compiler/served_statics.py": ("resource_accounting.network.verifier.head_check",),
-        "verity_vllm/compiler/served_tie.py": (
-            "resource_accounting.network.verifier.head_check", "resource_accounting.network.verifier.io_tie",
-        ),
+        "verity_vllm/compiler/served_tie.py": ("resource_accounting.network.verifier.io_tie",),
         "verity_vllm/protocols/poub/binder.py": ("resource_accounting.memory.poub.verifier.audit.Tiles",),
         "verity_vllm/protocols/poub/remote.py": (
             "resource_accounting.memory.poub.verifier.audit", "resource_accounting.memory.poub.verifier.codec",
