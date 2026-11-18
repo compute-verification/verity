@@ -55,6 +55,7 @@ from verity.commitments import hm96
 from verity.commitments.gates import embedding as EMB
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods.interface import digest_words
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 
@@ -428,7 +429,7 @@ def supplied(program: str, links: Sequence[Link], q: int, entries: Sequence[Mapp
         else:
             rows = [(x & 0xFFFF, x >> 16) for _ in range(q) for x in s.index]
         out.append(RG.Registered.commit(program, s.value, rows, RG.supplied_salts(program, s.value, len(rows)),
-                                        schema=(schemas or {}).get(s.value, RG.SCHEMA_V2)))
+                                        schema=(schemas or {}).get(s.value, SCHEMA_HM96_SHA512_ROW_V2)))
     return tuple(out)
 
 
