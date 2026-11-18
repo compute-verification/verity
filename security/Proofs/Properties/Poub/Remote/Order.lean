@@ -172,7 +172,7 @@ theorem sample_keeps {s : State} {e : Event} {r : Result} {s₁ : State} (he : s
   cases e with
   | start now => injection he with he; exact (no_sample (keep_start he) h0 h1).elim
   | boundary now => injection he with he; exact (no_sample (keep_boundary he) h0 h1).elim
-  | append root count => exact (no_sample (keep_append he) h0 h1).elim
+  | append root count origin slot => exact (no_sample (keep_append he) h0 h1).elim
   | release runs withdrawn => injection he with he; exact (no_sample (keep_release he) h0 h1).elim
   | receive t₁ i root runs change st now => injection he with he; exact (no_sample (keep_receive he) h0 h1).elim
   | close t' now => exact close_keeps he h0 h1
