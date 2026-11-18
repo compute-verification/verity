@@ -1575,7 +1575,7 @@ def _recorded(tmp_path: Path, argv: list[str], capsys) -> tuple[int, dict, dict]
 def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_unchanged(
         tmp_path, monkeypatch, capsys, edit):
     """Off the served node, `record --sampled-lean` takes SPOT's row from this host's own run of its Lean on the
-    hand-off's v2 case in the form ``one-stage``, handed the case's files and its proof blob, the answer tied to the
+    hand-off's v2 case at one level, handed the case's files and its proof blob, the answer tied to the
     record the case commits to: the summary and audit record the served node wrote don't enter it, so editing or deleting
     them leaves the row as it was, while without --sampled-lean the row follows them. The row and the line name its
     source, and PoUW's, still read from its piece's answer file, as the served node wrote it, which its edit changes."""
@@ -1595,7 +1595,7 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     seen = json.loads((tmp_path / "seen.json").read_text())
     w = tmp_path / "serve" / "sampled-proofs-served" / "window"
     assert seen["argv"][:2] == ["sampled", "check"] and seen["argv"][5:] == [str(w / "m0" / "p0.bin")]
-    assert json.loads(seen["files"]["params.json"]) == {"form": "one-stage", "proofs": {}, "verifier": "toy"}
+    assert json.loads(seen["files"]["params.json"]) == {"levels": 1, "proofs": {}, "verifier": "toy"}
     assert json.loads(seen["files"]["commitment.bin"]) == LEAN_RECORD
     plain = [x for x in argv if x not in ("--sampled-lean", "--sampled-exe", argv[-1])]
     _rc, _line, node_rows = _recorded(tmp_path, plain, capsys)
@@ -2837,7 +2837,7 @@ def test_the_pearlplus_piece_holds_the_verifiers_sample_to_its_sample_session(tm
         seen.append((window, key.public, pins, main))
         if case == "untrusted":
             raise Ch.CoinError("the auditor's ledger opens no challenger session for this window")
-        return Ch.LiveCommitment.from_json(signed), {Wd.DRAW: (root,)}
+        return Ch.LiveCommitment.from_json(signed), (Ch.Entry("recorded", Wd.DRAW, 0, root, 0, 1),)
     monkeypatch.setattr(Ch, "trusted_session_of", trusted)
 
     def withheld_on(ledger, window):
