@@ -62,7 +62,6 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Session.lean": "@proofs",
     "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Values.lean": "@proofs",
     "verity/protocols/proofs/recursion/verifier/zk_server/ZkServer/Loop.lean": "@proofs",
-    "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py": "@proofs",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cuh": "@kernels",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh": "@kernels",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py": "@compute-accounting",
