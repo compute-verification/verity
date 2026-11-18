@@ -90,7 +90,7 @@ structure Integrity where
   delta : Ratio
   /-- Members actually sampled at each level, all passed, in level order. -/
   drawn : Array (String × Nat)
-  /-- The credited blocks, the blocks a scheme credits (`Verity.Scheme`'s), by their number among the first level's
+  /-- The credited blocks, the blocks a scheme credits (`Verity.Scheme.Block`), by their number among the first level's
   members. Each is a block of the first level and of every later one (`creditedProblem`). -/
   credited : Array Nat := #[]
   deriving BEq, DecidableEq, Repr
