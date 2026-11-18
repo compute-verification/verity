@@ -520,8 +520,10 @@ unit's verdict word to 1, which is what an opening's verdict and a check's `ok` 
 refused inside the proof, since its row opens no root the verifier holds.
 
 **A block** (`restrict`). A maximal run of in(S) of one width whose gates are supplied-input gates of one parameter of C is
-a parameter of the block bound `supplied`; a run ends where the parameter does. Its entry carries C's mark with
-`"of": [name, lo, hi]`, the leaves of C's parameter it covers, and `bits` the part's (`supplied.part`). The leaves a block's
+a parameter of the block bound `supplied`, named `<name>/p<i>`; a run ends where the parameter does or skips a leaf. Its
+entry carries C's mark with `"of": [name, lo, hi]`, the leaves of C's parameter it covers (`0 <= lo < hi`, inside the
+value's bits), and `bits` the part's (`supplied.part`); a block's decoder checks the part as it checks C's mark, with
+`bits` the part's in place of the value's (`E_SUPPLIED_MARK`, `E_SUPPLIED_WIDTH`). The leaves a block's
 held outputs are held to join in(S) as such a part. The listing's binding of such an input bit is `supplied`. A block that
 reads one leaf of an input reads that leaf alone: the key of an opening reads i_j's low half, leaf 2 of
 `pous.session.round_coin/v1` under `halves`, and no other function gives i_j.
