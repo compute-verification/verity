@@ -40,6 +40,8 @@ pub mod proved_scope;
 pub mod pure_block;
 pub mod record_text;
 pub mod run_record;
+#[cfg(any(test, feature = "seed-injection"))]
+mod seed_injection;
 #[cfg(feature = "glue")]
 pub mod tables;
 pub mod tree_from;

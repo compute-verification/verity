@@ -10,7 +10,10 @@
 # (gate-build.txt). A refusal stops the run. Under the lease: ffill fma and ffill chain (conformance/), then probe.py run
 # (probes/: rows.jsonl, gate.json, times.jsonl) with nvidia-smi sampled every 200 ms (env/smi.csv). After it, on the CPU:
 # ffill_ref.py check (conformance/check.json). Exit: 0 conformant, 1 build, SASS check or gate refused, 3 not conformant,
-# 2 wrong device or no nvcc. DC_BUILD_ONLY=1 stops after the checks (a machine with CUDA 13.0 and the H200).
+# 2 wrong device or no nvcc. DC_BUILD_ONLY=1 stops after the checks (a machine with CUDA 13.0; with no card, DC_SKU
+# names the card file to build for, calibration/hardware/cards/SKU.toml). The card's record's `arch` is the target, its
+# architecture file nvcc's -gencode (probe.py arch, gencode); ffill's forms are sm_90a's, and another card is refused
+# before anything is built.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -20,21 +23,20 @@ export PYTHONDONTWRITEBYTECODE=1
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "ffill.sh: no nvcc (CUDA 13.0 has sm_90a)" >&2; exit 2; }
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
+CARD=(${DC_SKU:+--sku "$DC_SKU"})
+ARCH=$(python3 "$PROBE" arch "${CARD[@]}") || exit 2
+[ "$ARCH" = sm_90a ] || { echo "ffill.sh: the card's target is $ARCH, and ffill's forms are sm_90a's only: nothing built" >&2; exit 2; }
 
 if [ "${DC_LEASED:-}" != 1 ]; then
   WORK=$(mktemp -d)
   trap 'rm -rf "$WORK"' EXIT
   mkdir -p "$OUT/sass" "$OUT/env" "$OUT/probes" "$OUT/conformance"
   "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
-  if [ "${DC_BUILD_ONLY:-}" != 1 ]; then
-    nvidia-smi -q >"$OUT/env/nvidia-smi.txt" 2>&1
-    have=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
-    [ "${have%%.*}" = 9 ] || { echo "ffill.sh: needs compute capability 9.x, the device reports '$have'" >&2; exit 2; }
-  fi
-  GENCODE=$(python3 "$PROBE" gencode) || exit 1
+  [ "${DC_BUILD_ONLY:-}" = 1 ] || nvidia-smi -q >"$OUT/env/nvidia-smi.txt" 2>&1
+  GENCODE=$(python3 "$PROBE" gencode "${CARD[@]}") || exit 1
   "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" "$HERE/ffill.cu" -o "$WORK/ffill" >"$OUT/build.log" 2>&1 \
     || { cat "$OUT/build.log" >&2; exit 1; }
-  python3 "$PROBE" build --out "$WORK" "$HERE/probes/sm90_wgmma.cu" \
+  python3 "$PROBE" build "${CARD[@]}" --out "$WORK" "$HERE/probes/sm90_wgmma.cu" \
     >"$WORK/built" 2>>"$OUT/build.log" || { cat "$OUT/build.log" >&2; exit 1; }
 
   sass="$OUT/sass/ffill.sass"
