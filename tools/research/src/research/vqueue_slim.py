@@ -83,7 +83,7 @@ from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, KILLED_SAYS, 
                       NOT_STARTED, OWN_TRAIN, PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
                       _suite_log, elsewhere, implicated, killed, lean_errors, not_run, shard_machines, shard_passed, shard_steps,
                       step_named, step_paths, step_records, suite_named, suite_pyproject, suite_rows, tree_root, unread_suites)
-from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, QueueError, _git, allowed, judge_report, tier_report
+from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, NotStarted, QueueError, _git, allowed, judge_report, tier_report
 from .reds import named
 from .store.fixtures import REPLICA_MAP, entries
 from .vqueue import FAIL, INFRA, KINDS, LIST_FAILED, MACHINE_KINDS, PASS, PENDING, STATES, Failed, Verdict, meets
@@ -281,16 +281,17 @@ def heavy_shards(driver: Landing, sha: str, n: int, doc: dict | None = None) -> 
     return set(range(1, n + 1))
 
 
-def replaced(lines: Iterable[dict], members: Iterable[int], now: float) -> dict[str, float]:
+def replaced(lines: Iterable[dict], members: Iterable[int], now: float, of: Iterable[str] = ()) -> dict[str, float]:
     """The runs a check of a candidate holding ``members`` replaces (`start`'s ``after``), each by when the loop cancelled it:
-    of each line of the loop's log (``lines``) in the last `CARRY_WAIT_S` that cancelled the check of a candidate sharing a
+    of each line of the loop's log (``lines``) that cancelled the check of a candidate ``of`` names (those it rebuilds,
+    `vqueue.Build.replaces`), whatever its age, or, in the last `CARRY_WAIT_S`, of a candidate sharing a
     member, a drop's or one's that cancelled a check still launching at its drop (`Loop._launched`), its runs
     (``beside_cancelled``, those that had ended already among them) but one its cancel left running (`KEEP_RUNS`), which
     no wait would see end."""
-    want, out = set(members), {}
+    want, of, out = set(members), set(of), {}
     for r in lines:
         at = _epoch(r.get("at"))
-        if at is None or now - at > CARRY_WAIT_S or not want & set(r.get("members") or ()):
+        if at is None or not (r.get("sha") in of or now - at <= CARRY_WAIT_S and want & set(r.get("members") or ())):
             continue
         kept = {i for i, why in (r.get("beside_cancel_failed") or {}).items() if str(why).startswith("left running")}
         for rid in r.get("beside_cancelled") or ():
@@ -377,7 +378,8 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     logged, when it registered no run (a shard that registered none stops the others), or when ``driver`` launches nothing (a
     dry run, or its queue's shadow).  Every launch leaves out the tests the loop's list ``deselect`` names (`deselection`), each
     shard's alike; the nightly uncached check, which reads no list, runs them.
-    With ``after`` (`replaced`: the runs of dropped candidates' checks it replaces, by when each was cancelled), it names them
+    With ``after`` (`replaced`: the runs of dropped candidates' checks it replaces, by when each was cancelled; or, started
+    again, its own check's runs, by when it was), it names them
     to its launch (`CARRY_ENV`, ``carry``), so its check reuses their passes first, and launches only once `left` finds each
     one's record or `CARRY_WAIT_S` has passed since its cancel: until then the record holds ``wait`` and no ids, and the
     `judge` that finds the wait over launches it, ``at`` then, naming each run it went without (``carry_without``)."""
@@ -426,16 +428,19 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
 
 def start_quick(driver: Landing, sha: str, base: str, avoid: Iterable[str] = ()) -> dict | None:
     """Launch candidate ``sha``'s quick tier since ``base`` (`Landing.launch_quick`: `queue.QUICK_TIER` on its own merge, as a
-    `research run`) on one of the queue's machines, the one its sha picks, so a start again takes the same one, but of those
-    ``avoid`` doesn't name (the machine its tier before ended in infra on, ``erred_on``) where that leaves any.  The record to
+    `research run`) on one of the queue's machines, of those ``avoid`` doesn't name (the machine its tier before ended in infra
+    on, ``erred_on``) where that leaves any: the one with a free check slot now (`Landing.place_quick`), so it doesn't wait in
+    one machine's line while another's slots stand free, or the one its sha picks when no machine's slots could be read.  The record to
     keep: ``ids`` (none while its detached launch runs, ``launch`` then), ``tip``, ``base``, ``at``, ``on``, ``steps``
     (`QUICK_STEP`) and ``gate`` (`QUICK`), which `judge` reads by `_quick`.  None, logged, when it registered no run or
     ``driver`` launches nothing (a dry run, or its queue's shadow)."""
     if not driver.on:
         raise ValueError("a candidate's quick tier needs the queue's machines: build the Landing with drive.toml's `on`")
     ms = elsewhere(driver.on, avoid).split(",")
-    on = ms[int(sha[:8], 16) % len(ms)]
-    what = f"the quick tier of candidate {sha[:12]} since {base[:12]} on {on}"
+    placed, why = driver.place_quick(",".join(ms))
+    on = placed if placed in ms else ms[int(sha[:8], 16) % len(ms)]
+    what = f"the quick tier of candidate {sha[:12]} since {base[:12]} on {on}" + (
+        f" ({why})" if placed in ms else f" (by its sha: {why})" if why else "")
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None
@@ -473,7 +478,7 @@ def _quick(driver: Landing, rec: dict) -> Verdict:
     status, on = {"state": st, "rc": rc}, rec.get("on") or driver.on
     res, why = tier_report(got[0], ids[0], on, status)
     if why is not None:
-        return _keep(_erred(rec), _down(rec, f"{why}"))
+        return _keep(_erred(rec), _down(rec, f"{why}", launch=isinstance(why, NotStarted)))
     covers = allowed(driver.repo, base)
     if (why := judge_report(res, ids[0], on, tip, status, covers)) is None:
         return _keep(rec, Verdict(PASS), [QUICK_STEP])

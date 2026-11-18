@@ -45,17 +45,14 @@ the lock's sections, each naming the docstring with the detail. This is the work
   check, `check.py PKG`, runs in the merge queue's check; run it by hand only on a machine of your own.
 - **The fast path is not owed before a mark**; once `verity lean try` passes, run it for what the candidate's records run
   can't write (below) or to see a changed record early: `lean_changed.py --records PKG --update` through `research run`
-  (the README's commands have the line) regenerates PKG's records and its requirers',
-  with the `--update` printout the landing DM carries, without a build of your own (`lean_changed.py`'s docstring).
-  `--on auto` places it: never name a node, and never launch one run on two nodes to race them (cancel a duplicate).
-  Don't wrap it in `slot.py`: where it lands, the runner takes the slot. Commit each record it kept under
-  `lean-audit/record/`. No merge check accepts its result. It repairs a slot tree another run left mid-way: never
-  delete or copy one. `--allow CODE:ENTRY` takes a finding ruled open, cured before the mark, as known: it stays red
+  (the README's line) regenerates PKG's records and its requirers', with its `--update` printout, without a build of
+  your own. `--on auto` sends it, and a try, only where a kept tree holds the package built, else refuses with the
+  ways on; name a node only as that says, and never race one run on two nodes. Don't wrap it in `slot.py`: the runner
+  takes the slot. Commit each record it kept under `lean-audit/record/`; no merge check accepts its result. It repairs
+  a slot tree another run left mid-way: never delete or copy one. `--allow CODE:ENTRY` takes a finding ruled open, cured before the mark, as known: it stays red
   (exit 3, no pass), and its regenerated record goes to `allowed-record/`, never `record/`.
-- **A full record**: `check.py --build --update PKG` through `research run` (the README's line), unwrapped, leaves it
-  at `lean-audit/audit-TAG/lean-audit.json`.
-- **A Lean pool at 0 is closed on that machine**: a request for it is refused as it arrives, saying why, never left
-  to wait. Run it where `lean_slot.py --status` lists a slot of that pool.
+- **A Lean pool at 0 is closed on that machine**: a request for it is refused at once, saying why; run it where
+  `lean_slot.py --status` lists a slot of that pool.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean
   /tmp/scratch/Probe.lean`): `#print axioms X`, `example … := by exact?`, or
   `trace_state` before a `sorry`. Probe what you build on too: a section `variable` typed through a local notation can
@@ -65,10 +62,10 @@ the lock's sections, each naming the docstring with the detail. This is the work
   [Loogle](https://loogle.lean-lang.org). A lemma another package proves is imported or moved, not proved again.
 - **A slow declaration**: measure (`set_option profiler true in`; `#count_heartbeats in` in a Mathlib package), then fix
   the proof: `simp only [...]` outside terminal calls, a split-out lemma, a smaller `decide`.
-- **A timeout at `whnf` reported at a theorem's first line** is a term's elaboration, not one tactic. A common cause:
-  an argument states at a definition (`saltOf o`) what the lemma asks at a structure's field (`c.salt o`), and the
-  unifier unfolds the definition and walks everything `o` holds. Prove the field is the function once
-  (`(code …).salt = saltOf := rfl`), rewrite with it, and hand the lemma each premise in the form it states.
+- **A timeout at `whnf` reported at a theorem's first line** is a term's elaboration, not a tactic's. Often an
+  argument gives at a definition (`saltOf o`) what the lemma asks at a field (`c.salt o`), and the unifier unfolds
+  everything `o` holds: prove `(code …).salt = saltOf := rfl` once, rewrite with it, and pass each premise in the
+  lemma's form.
 - **`X.congr_simp is declared by a replayed module and by one it imports`**: `simp` realized a structure constructor's
   congruence lemma Mathlib had already. Don't unfold a `→+` or `→*` in `simp`; prove its `_apply` lemma by `rfl` and simp
   with that.
@@ -106,8 +103,8 @@ the lock's sections, each naming the docstring with the detail. This is the work
 - **Watch upstream for what you assume**: a named assumption or hand proof a pinned dependency could prove gets an
   `upstream.watch` entry; on a new hit, say in the PR whether it discharges the assumption, and `--ack` it
   (`upstream.py`'s docstring).
-- **A changed record is a changed claim**: an `--update` change you didn't mean is your edit changing what that
-  guarantee says. Undo it, or say so in the PR and paste the printout.
+- **A changed record is a changed claim**: an `--update` change you didn't mean is your edit changing that
+  guarantee. Undo it, or say so in the PR with the printout.
 - **A move is not a change**: `check.py --update --moved MOVES.json PKG` on the record as it was (the README's "The
   records"; the fast path's `--records PKG --update --moved MOVES.json` takes it to PKG's requirers too). A lift needs
   no map.
@@ -129,6 +126,7 @@ fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkL
 - A PR that adds proof modules no guarantee reads yet sets its area's entry in the unread ratchet's file to the
   check's count in its own diff, with no room (`unread.py`'s `ratchet`, whose failure names the file and prints the
   entry), and lists in its body each module, the guarantee that will read it and the date that guarantee is listed by.
+  Its records run (`lean_changed.py --records security`) runs that ratchet and fails on it before the mark.
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; each `merge.py:` warning names an entry it took from one side, so read
   them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean", the lock), and says why: do what it
@@ -139,8 +137,6 @@ fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkL
   a guarantee that only moved (`--update --moved MOVES.json`, which the run lacks).
 
 ## Standing rulings
-
-Their history is in the decisions log.
 
 - A guarantee is a proved `Prop` under named assumptions, with no third status; proving an assumption removes it from
   every guarantee that took it. Lean is the one source of truth for what we assume.

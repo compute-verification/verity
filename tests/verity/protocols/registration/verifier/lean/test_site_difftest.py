@@ -1,12 +1,12 @@
 """The Site in code (`Core.Site`, `CoreProtocol/Site.lean`, and its check, `RegistrationLog/SiteCheck.lean`, served by
-`site-difftest`) held to its Python mirror,
-`verity.device`: an entry's refusal against the log before it (`site_refusal`, `Registration.Entry.refusal`), a whole
-log's check and fold (`site_check`, `Registration.check`), and the views of a log's site, unchecked (`site_views`), its
-devices' models read against an auditor at the site's unit of time. Both sides take the digests that are deployed, so
-every head, digest and refusal is compared.
+`site-difftest`) held to its Python mirror, `verity.device` and the site log (`site_log`): an entry's refusal against
+the log before it (`site_refusal`, `Registration.Entry.refusal`), a whole log's check and fold (`site_check`,
+`Registration.check`), and the views of a log's site, unchecked (`site_views`), its devices' models read against an
+auditor at the site's unit of time. Both sides take the digests that are deployed, so every head, digest and refusal
+is compared.
 
 The inputs are logs that start from each composite's first entry, the lifecycle example's site, followed by up to two of
-its later entries (`tests/verity/tests/test_device.py`'s `ENTRIES`, copied here: every refusal an entry gets on its
+its later entries (`test_site_log.py`'s `ENTRIES`, copied here: every refusal an entry gets on its
 own and an accepted entry). Each entry is changed at random a few times (a field of a location, link or sheet, an
 element dropped, repeated or added, the head it follows), and checked against auditors whose sheets, tolerances, keys
 and figures for hosts and memory vary. They also come as malformed JSON: a node replaced or deleted, or a key added.
@@ -24,8 +24,8 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.device import (COMPOSITES, KINDS, OPERAND_CLASSES, OUTSIDE, OWNERS, SCHEMES, TIERS, Auditor,
-                                  DeviceFigures, Entry, HostFigures, Link, Loc, Malformed, MemoryFigures, Refused,
-                                  Registration, Sheet, Site, check, genesis, refusal)
+                                  DeviceFigures, HostFigures, Link, Loc, Malformed, MemoryFigures, Sheet, Site)
+from verity.protocols.registration.verifier.site_log import Entry, Refused, Registration, check, genesis, of_log, refusal
 
 PACKAGE = (Path(__file__).resolve().parents[6] / "verity" / "protocols" / "registration" / "verifier" / "lean")
 EXE = "site-difftest"
@@ -64,7 +64,7 @@ def _view(s: Site, auditor: Auditor, i: str) -> dict:
 def ref_views(j):
     _input(j, ("auditor", "log"))
     auditor, log = Auditor.of_json(j["auditor"]), Registration.of_json(j["log"])
-    s = Site.of_log(log)
+    s = of_log(log)
     return {"boundary": [k.id for k in s.boundary()],
             "ids": {i: _view(s, auditor, i) for i in [*(x.id for x in s.locs), OUTSIDE, "nowhere"]},
             "units": list(s.units)}
@@ -394,7 +394,7 @@ def test_the_sample_site(server):
     assert views["ids"]["hbm0"]["host"] == "node0" and views["ids"]["cert0"]["host"] is None
     assert server.call("site_views", j) == ("output", D.canonical(views))
     j = {"auditor": AUDITOR["onsite"].to_json(), "log": log.to_json()}
-    assert ref_check(j) == {"head": log.head, "site": Site.of_log(log).to_json()}
+    assert ref_check(j) == {"head": log.head, "site": of_log(log).to_json()}
     assert server.call("site_check", j) == ("output", D.canonical(ref_check(j)))
     empty = {"auditor": AUDITOR["onsite"].to_json(), "log": Registration("onsite").to_json()}
     assert server.call("site_check", empty) == ("output", D.canonical({"head": GENESIS_ONSITE,
@@ -418,7 +418,7 @@ def test_an_auditors_host(server):
         assert server.call("site_refusal", j) == ("output", D.canonical(ref_refusal(j)))
     log = log.append(housed)
     j = {"auditor": AUDITOR["onsite"].to_json(), "log": log.to_json()}
-    assert ref_check(j) == {"head": log.head, "site": Site.of_log(log).to_json()}
+    assert ref_check(j) == {"head": log.head, "site": of_log(log).to_json()}
     assert server.call("site_check", j) == ("output", D.canonical(ref_check(j)))
     views = ref_views(j)
     assert views["ids"]["vm0"]["host"] is None and views["ids"]["chal9"]["host"] is None
@@ -452,7 +452,7 @@ def test_a_rational_of_4301_digits(server):
     j = {"auditor": replace(AUDITOR["onsite"], tolerance=Fraction(n + 1, n)).to_json(), "log": log.to_json()}
     assert j["auditor"]["tolerance"] == over == sheet.to_json()["figures"]["clock"] == log.to_json()["entries"][0][
         "locs"][0]["time_unit"]
-    assert ref_check(j) == {"head": log.head, "site": Site.of_log(log).to_json()}
+    assert ref_check(j) == {"head": log.head, "site": of_log(log).to_json()}
     assert server.call("site_check", j) == ("output", D.canonical(ref_check(j)))
     views = ref_views(j)
     assert views["ids"]["gpu9"]["device"]["rate"]["tc"] == 64 * GHZ + 1 and views["ids"]["gpu9"]["sheet"] == sheet.to_json()

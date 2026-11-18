@@ -7,7 +7,8 @@ verifier's mean seconds over the window, and whether the provers' statement cach
 quarters' hit rates and the rule), which a prover still building statements in its last quarter fails without voiding the
 row; and the CPUs its processes could run on (``cores``: this process's affinity as a count, a list and the NUMA nodes
 that hold them, on a made-up node directory). A templated staging is proved with its unit placed, and verified under its
-own statement. The Lean verdict is on the row's Program when one is given, and the row keeps what the verdict says of it.
+own statement. The Lean verdict is on the row's Program when one is given, and the row keeps what the verdict says of it; a bound
+circuit's partition object is handed to it, and a bound statement judged without one is refused before it is proved.
 A row whose sessions ran another statement version than it asked for (a prover that ignores ``--wide-leaf``, or one that
 runs the wide leaf unasked) or name none is void."""
 from __future__ import annotations
@@ -90,11 +91,15 @@ class Device:
         return None
 
 
-def stand_ins(monkeypatch, tmp_path: Path, tmpl_unit: Path | None = None, made: list[dict] | None = None, **server) -> None:
-    """``made`` gets the keyword arguments each `ProofServer` was made with."""
+def stand_ins(monkeypatch, tmp_path: Path, tmpl_unit: Path | None = None, made: list[dict] | None = None,
+              partition: dict | None = None, **server) -> None:
+    """``made`` gets the keyword arguments each `ProofServer` was made with; ``partition`` is the circuit's META binding
+    (by default the provisional unit cover's)."""
     d = tmp_path / "staged"
     d.mkdir()
     (d / "stage.json").write_text(json.dumps({"n": 1, "k_log": 34}))
+    meta = {"partition": partition or {"rule": SR.FC.PARTITION_RULE, "digest": "c0"}}
+    (d / "circuit.txt").write_text(f"FLOCK-CIRCUIT\nMETA {json.dumps(meta)}\n")
     monkeypatch.setattr(SR, "staged", lambda z, t, tu: (SimpleNamespace(pin="pin", tmpl_unit=tmpl_unit), 1, d))
     monkeypatch.setattr(SR, "Device", Device)
 
@@ -340,7 +345,7 @@ def test_a_wide_leaf_rows_lean_verdict_is_under_the_versions_statement(monkeypat
     got = []
 
     class Lean:
-        def __init__(self, lean, d, out, statement, program):
+        def __init__(self, lean, d, out, statement, program, partition):
             got.append(statement)
 
         def close(self):
@@ -355,7 +360,7 @@ def test_a_templated_statements_lean_verdict_is_under_its_statement(monkeypatch,
     got = []
 
     class Lean:
-        def __init__(self, lean, d, out, statement, program):
+        def __init__(self, lean, d, out, statement, program, partition):
             got.append(statement)
 
         def close(self):
@@ -408,6 +413,49 @@ def test_lean_is_handed_the_rows_program_and_the_row_keeps_what_its_verdict_says
     assert (v["accepted"], v["why"]) == (False, refusal) and not set(SR.PROGRAM_FIELDS) & set(v)
     archived, verify = cmds
     assert str(program) not in archived and "--program" not in verify
+
+
+def test_a_bound_statement_hands_lean_its_partition_and_is_refused_without_it(monkeypatch, tmp_path):
+    """A circuit whose META binds a ``verity/partition/v1`` digest: with ``--lean-partition`` the object is archived and
+    handed to `verify` by its key (``--partition``); without it the row is refused before any proof server is made, with
+    the option to give in its message. An unbound circuit is judged without one, as before."""
+    bound = {"rule": SR.FC.PARTITION_V1, "digest": "c3f0296a993800c1" + "0" * 112}
+    cmds, made = [], []
+
+    class Child:
+        pid = 0
+
+        def __init__(self, cmd, **kw) -> None:
+            cmds.append(cmd)
+            self.stdout = io.StringIO(f"VERDICT {json.dumps({'accepted': '--partition' in cmd, 'why': ''})}\n")
+
+    def put(cmd, **kw):
+        cmds.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "".join(f"key-{Path(f).name} {f}\n" for f in cmd[3:]), "")
+
+    monkeypatch.setattr(SR.tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(SR.subprocess, "run", put)
+    monkeypatch.setattr(SR.subprocess, "Popen", Child)
+    monkeypatch.setattr(SR.os, "wait4", lambda pid, options: (pid, 0, SimpleNamespace(ru_utime=0.0, ru_stime=0.0, ru_maxrss=0)))
+    for d in ("handed", "refused", "unbound"):
+        (tmp_path / d).mkdir()
+    partition = tmp_path / "partition.json"
+    lean = ("--lean", "verifier", "--lean-sessions", "1", "--lean-program", str(tmp_path / "program.json"))
+    rc, row = run(monkeypatch, tmp_path / "handed", *lean, "--lean-partition", str(partition), partition=bound)
+    archived, verify = cmds
+    assert (rc, [v["accepted"] for v in row["lean"]]) == (0, [True])
+    assert archived[-1] == str(partition) and verify[verify.index("--partition") + 1] == "key-partition.json"
+    del cmds[:]
+    rc, row = run(monkeypatch, tmp_path / "refused", *lean, partition=bound, made=made)
+    staged = tmp_path / "refused" / "staged"
+    assert (rc, cmds, made, "lean" in row) == (1, [], [], False)
+    assert row["error"] == (f"ValueError: {staged / 'circuit.txt'} binds the verity/partition/v1 object c3f0296a993800c1… in "
+                            "its META, and Lean `verify` refuses every session without the verifier's copy of it: give "
+                            f"--lean-partition {staged / 'partition.json'} (served_units/stage.py writes it beside a bound "
+                            "statement)")
+    rc, row = run(monkeypatch, tmp_path / "unbound", *lean)
+    archived, verify = cmds
+    assert (rc, "--partition" in verify, str(partition) in archived) == (0, False, False)
 
 
 @pytest.mark.parametrize("statement", [SR.STATEMENT_ID + SR.WIDE_LEAF, SR.STATEMENT_ID])

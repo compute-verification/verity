@@ -170,8 +170,8 @@ class Store:
 
     def held(self) -> Any:
         """`period_prover.EncodedStore` of what this setup left: the setup case is built from ``C*`` as held now."""
-        from verity.protocols.resource_accounting.memory.pous.verifier import period
         from verity.protocols.resource_accounting.memory.pous.prover import period_prover
+        from verity.protocols.resource_accounting.memory.pous.verifier import period
         return period_prover.EncodedStore(self.point, self.published(), Blocks(self), self.digests,
                                           period.setup_case(self.params, self.commitment, self.salt, self.segments()))
 

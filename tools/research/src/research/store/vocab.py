@@ -97,6 +97,7 @@ VERIFIED_BY = "verified_by"                           # a ledger row's free-text
 SAME_DEVICE = "same_device"
 BELOW_BAR = "below_bar"                               # verified, but its whole-proof bound misses the tables' 2^-128 bar
 OUTCOME = "outcome"
+HOT_CARD = "hot_card"                                 # the card a run was timed on, which the driver reports as thermally slowed
 COMMIT_MAP = "commit_map"                             # on a commit-map/v1 artifact: whether the history rewrite it records applies
 CUSTODY = "custody"                                   # on a run id: whether `research data custody --triage` needs more of it
 CUSTODY_VALUES = ("waived", "never-ran", "needed")
@@ -351,7 +352,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(GOAL, GROUP_RESULT, TEXT, "the outcome or done-condition the run or artifact is evidence for, as its lane names it (O1-live, O2-proof)"),
     _k(REPLAY_SET, GROUP_RESULT, TEXT, "the replay set a run or artifact belongs to, as AREA/TIER: TIER re-verify (its preserved records "
        "checked again at a new commit, bit for bit) or re-run (our code's timed result run again); one label per area that cites it "
-       "(`research data select --label replay_set=network-certifier/re-verify`, `research replay`)", pattern=r"[a-z0-9][a-z0-9-]*/(re-verify|re-run)"),
+       "(`research data select --label replay_set=network-attester/re-verify`, `research replay`)", pattern=r"[a-z0-9][a-z0-9-]*/(re-verify|re-run)"),
     _k(REPLAY_EXPECT, GROUP_RESULT, TEXT, "the change a replay at current main should show instead of the recorded verdict, with --ref "
        "naming the ruling: `refused: FORM` (the verifier now refuses that form) or `blocked: GATE` (fail-closed refuses the "
        "session kind until GATE, e.g. V3)", pattern=r"(refused|blocked): \S.*"),
@@ -419,6 +420,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "kept, and it was deleted), so the run cannot be re-run or audited from its source; the ref is the note that says how"),
     _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
+    _k(HOT_CARD, GROUP_VERIFICATION, TEXT, "on a timed run, by whoever judged its card: a sentence naming the node and card it was "
+       "timed on and what the driver reported (its thermal-slowdown counter far above its neighbours'), so the timing may be "
+       "throttled; the result stays; never a bool or empty"),
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head; a record only, which no merge waits on",
        GRANT_ROLES),
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
@@ -535,6 +539,8 @@ def check(name: str, value: Any) -> str | None:
         return f"{name}={value!r} is a string; the key's form is {k.form} (`research data label` converts it; other writers must store the {k.form})"
     if k.form in (INT, NUMBER) and isinstance(value, str):
         return f"{name}={value!r} is not {'an int' if k.form == INT else 'a number'}"
+    if name == HOT_CARD and not (isinstance(value, str) and value.strip()):
+        return f"{name}={scalar_text(value)!r}: the value names the card (node and card) and says what the driver reported, as a non-empty sentence"
     return k.check(value)
 
 

@@ -362,6 +362,7 @@ def _over_the_cap_by_its_mends(name: str, case: dict) -> None:
     assert case["fires"], case
 
 
+@pytest.mark.slow
 def test_dead_pairs_are_over_the_cap():
     """Dead pairs: positions where a row of A and a row of B are both dead, so the product is fixed before the salt. On
     rows that put liveness's k/64 dead entries in whole promotion groups, at the same positions in A and B, with signs
@@ -494,6 +495,7 @@ def _raised_case(k: int, n: int, groups: int, units: int, m: int = 8192, run: in
             "credit": float(per_word), "bound": float((1 - G0) * (1 - RHO) * per_word), "fires": _fires(credit, cost)}
 
 
+@pytest.mark.slow
 def test_raised_adder_groups_are_over_the_cap():
     """Raised adder: six planted entries in a promotion group, at the same positions in every row of A and of B, make the
     group's last three atoms add a constant whatever else they hold (`_raised_rows`), so a W1 program runs one atom of
@@ -506,6 +508,7 @@ def test_raised_adder_groups_are_over_the_cap():
     _over_the_cap_by_its_mends("raised adder", _raised_case(k=8192, n=8192, groups=20, units=1, fill="zero"))
 
 
+@pytest.mark.slow
 def test_planted_cross_group_skips_are_over_the_cap():
     """The cross-group class on operands an adversary chooses, with a program that only skips. `test_cross_group_joint_skips_
     stay_within_the_gap` rests on W1 charging a fragment whole, so that a program saves an atom only where every word the
@@ -577,12 +580,14 @@ def _over_the_cap(name: str, case: dict) -> None:
         f"{case['cap']:.0f}")
 
 
+@pytest.mark.slow
 def test_live_raisers_are_over_the_cap():
     """Four raisers at 432 (the 416/448 boundary) in each of 16 groups: no entry is salt-dead, and the tile's debit
     exceeds its cap by its forced zeros alone."""
     _over_the_cap("live raisers at 432", _live_raiser_case(k=8192, groups=16, raisers=4, at=432.0))
 
 
+@pytest.mark.slow
 def test_sub_rule_raisers_are_over_the_cap():
     """Five raisers at 368 (the 352/384 boundary, below a reviewer's 384 rule) in each of 14 groups: the tile's debit
     exceeds its cap by its forced zeros alone."""
