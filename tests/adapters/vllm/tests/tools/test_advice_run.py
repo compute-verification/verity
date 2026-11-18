@@ -72,16 +72,19 @@ def test_every_prompt_fits_the_prompt_limit_in_the_chat_template():
     assert len(AR.prompt_ids(_Tok(), filler, 232, "Say hello.", 256)) == 256
 
 
+H200 = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": True, "card": "h200-sxm-141gb"}
+
+
 def test_the_runs_target_states_what_the_engine_ran():
-    device = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": True}
+    device = H200
     record = {"effective": {"batch_invariant": False}, "engine_kwargs": {"moe_backend": "triton"}}
-    assert AR.target_of(device, record, "NVIDIA H200") == {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False,
-                                                           "moe_backend": "triton", "device_name": "NVIDIA H200"}
-    assert AR.target_of(device, {}, "NVIDIA H200") == {**device, "device_name": "NVIDIA H200"}
+    assert AR.target_of(device, record) == {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False,
+                                            "card": "h200-sxm-141gb", "moe_backend": "triton"}
+    assert AR.target_of(device, {}) == device
     compiled = {"effective": {"batch_invariant": False, "enforce_eager": False, "breakable_cudagraph": True}}
-    assert AR.target_of(device, compiled, "NVIDIA H200")["compilation"] == "breakable"
+    assert AR.target_of(device, compiled)["compilation"] == "breakable"
     eager = {"effective": {"batch_invariant": False, "enforce_eager": True, "breakable_cudagraph": True}}
-    assert "compilation" not in AR.target_of(device, eager, "NVIDIA H200")
+    assert "compilation" not in AR.target_of(device, eager)
 
 
 def _class_g_phi(execution: str | None = None, effective: dict | None = None, max_model_len: int = 131072):
@@ -97,7 +100,7 @@ def _class_g_phi(execution: str | None = None, effective: dict | None = None, ma
     eager = opts["execution"] == "eager"
     record = {"engine_kwargs": {**kw, "enforce_eager": eager}, "execution": opts["execution"],
               "effective": {"batch_invariant": False, "enforce_eager": eager, "breakable_cudagraph": True, **(effective or {})}}
-    target = AR.target_of({"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": True}, record, "NVIDIA H200")
+    target = AR.target_of(H200, record)
     tp, engine = AC.engine_of({"engine_record": record}, 7)
     phi = Phi(model={"repo": model, "revision": revision, "hf_config": json.loads(pinned_hf_config(model, revision).read_text())},
               target=target, execution=record["execution"], tp=tp, engine=engine)

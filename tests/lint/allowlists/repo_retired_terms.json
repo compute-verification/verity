@@ -470,6 +470,7 @@
     {"file": "applications/onsite_compute.toml", "count": 5},
     {"file": "applications/onsite_full.toml", "count": 5},
     {"file": "applications/onsite_network.toml", "count": 5},
+    {"file": "applications/onsite_network_front.toml", "count": 10},
     {"file": "applications/remote.toml", "count": 5},
     {"file": "infra/control/cloud_watch.py", "count": 3},
     {"file": "infra/slack-events/README.md", "count": 1},

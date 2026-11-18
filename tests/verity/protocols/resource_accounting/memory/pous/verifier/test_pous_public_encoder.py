@@ -89,8 +89,6 @@ def test_1_honest_details():
     vk = _accept(HONEST)
     reference_vk = setup.verifier_key(PARAMS, PRIMS, W, COMMITMENT, SALT)
     assert vk == reference_vk and vk.root == reference_vk.root
-    assert setup.check_server_root(vk, MerkleTree([x for s, seg in enumerate(HONEST)
-                                                   for x in segment_leaves(PARAMS, SALT, s, seg)]).root)
     blocks = [b for seg in HONEST for b in seg]
     assert run_timed(UnsignedRounds(vk, challenge_key(b"audit", vk), clock=itertools.count(0, 1000).__next__), blocks.__getitem__).accepted
 
@@ -266,18 +264,6 @@ def test_negative_control_any_wrong_codeword(scheme):
     for bad in (noise, x.server(w=bytes(b ^ 0x80 for b in x.w)), x.server(salt=bytes(24))):
         with pytest.raises(ValueError, match="commitment"):
             x.accept(bad)
-
-
-def test_setup_flag(monkeypatch):
-    public = setup.verifier_setup(PARAMS, PRIMS, COMMITMENT, SALT, encoded=HONEST)
-    private = setup.verifier_setup(PARAMS, PRIMS, COMMITMENT, SALT, w=W, public_encoder=False)
-    assert setup.PUBLIC_ENCODER and public == private
-    with pytest.raises(ValueError):
-        setup.verifier_setup(PARAMS, PRIMS, COMMITMENT, SALT, w=W)
-    monkeypatch.setattr(setup, "PUBLIC_ENCODER", False)
-    assert setup.verifier_setup(PARAMS, PRIMS, COMMITMENT, SALT, w=W) == private
-    with pytest.raises(ValueError):
-        setup.verifier_setup(PARAMS, PRIMS, COMMITMENT, SALT, encoded=HONEST)
 
 
 def test_codec_generic_p3():

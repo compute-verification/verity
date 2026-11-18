@@ -40,7 +40,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   scan's answers held by `NetworkCheck.Period`). `leak_scan.py`, in
   `prover/` too, is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with
-  the vLLM adapter's `verity_vllm.pipeline.window_chain` (a served endpoint's Commit periods as one I1 v0 advice),
+  `benchmarks/network_e2e/window_chain.py` (a served endpoint's Commit periods as one I1 v0 advice),
   `leak_guard.py` (the record's leak guard, below) and `prover/released_keys.py` (the keys a record releases, each declared public by name, below).
   `prover/block_attester.py` writes a period's accepted answer into the block record.
   `served_session.py` is the served session's runbook (below).

@@ -1957,15 +1957,16 @@ def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, A
     accepted = a["verdict"] == "accept"
     verdict, reason = a["verdict"], a["reason"]
     if accepted and a["protocol"] == ONE_STAGE_PROTOCOL and a["public"].get("complete") is not True:
+        unread = None
         try:
             rec = next((_json(f) for f in (out / "window" / "audit.json", out / "audit.json") if f.is_file()), None)
-        except ValueError:
-            rec = None
+        except ValueError as e:
+            rec, unread = None, f"its public `complete` is not true, and its audit record does not parse: {e}"[:600]
         verdicts = rec.get("verdicts") if isinstance(rec, dict) else None
         null = sorted(k for k, v in verdicts.items() if isinstance(v, dict) and v.get("accepted") is None) \
             if isinstance(verdicts, dict) else []
-        verdict, reason = NOT_COMPLETE, ("its accept is not complete: " + (
-            f"its audit record has no verdict of {', '.join(null)}" if null else "its public `complete` is not true"))
+        verdict, reason = NOT_COMPLETE, "its accept is not complete: " + (
+            unread or (f"its audit record has no verdict of {', '.join(null)}" if null else "its public `complete` is not true"))
     return {"protocol": a["protocol"], "owner": owner, "verdict": verdict, "reason": reason,
             "commitment": a["commitment"], "quantity": a["public"] if accepted else None,
             "delta": (a["profile"] or {}).get("delta") if isinstance(a["profile"], dict) else None,
