@@ -937,48 +937,6 @@ def test_piece_counts_are_what_the_design_says():
 
 # --- verity/flock-ir-frame/v3: the frame-v3 binding --------------------------------------------------------------------------
 
-@pytest.mark.slow
-def test_frame_plans_take_the_largest_run_that_fits():
-    """RoPE and SiLU·mul read whole chunks; an RMSNorm block holds runs of its chunks' compressions (fused: 4 of 16, its four
-    warps' elements; Triton: 8 of 16, one warp's), within 2^22 bits."""
-    from verity_flock import ir_frame as F
-
-    rope = TM.subcircuit("rope-head", D=64)
-    pl = F.plan(REG.module("rope-head").frame_lowering(rope), rope)
-    assert (pl.G, pl.nb, pl.chunk_nb, pl.comp_slots, pl.units_per_block, pl.unit_pos0, pl.k_log) == (2, 2, 2, 8, 64, 64, 20)
-    assert pl.wiring[0] == [(0, 0), (0, 64), (1, 0), (1, 64)]
-    silu = TM.subcircuit("silu-mul", I=8192)
-    low = REG.module("silu-mul").frame_lowering(silu)
-    pl = F.plan(low, silu)
-    assert low.units.n == 4096 and (pl.G, pl.nb, pl.chunk_nb, pl.comp_slots, pl.units_per_block, pl.unit_pos0, pl.k_log) == (1, 16, 16, 32, 256, 256, 22)
-    assert pl.comps[3][0] == [(0, 3, 0), (0, 19, 0)]
-    fused = TM.subcircuit("rmsnorm-fused-cuda", N=2048, EPS=1e-5)
-    pl = F.plan(REG.module("rmsnorm-fused-cuda").lowering(fused), fused)
-    assert (pl.nb, pl.chunk_nb, pl.G, pl.chunk_slots, pl.chunks_per_comp, pl.units_per_block, pl.k_log) == (4, 16, 1, 8, 6, 4, 22)
-    assert pl.comps[1] == ([(p, c, 1) for p in range(3) for c in (0, 2)], [4, 5, 6, 7])
-    triton = TM.subcircuit("rmsnorm-triton", N=2048, EPS=1e-5)
-    pl = F.plan(REG.module("rmsnorm-triton").lowering(triton), triton)
-    assert (pl.nb, pl.chunk_nb, pl.G, pl.chunk_slots, pl.units_per_block, pl.unit_pos0, pl.k_log) == (8, 16, 1, 2, 1, 1, 22)
-
-
-def test_frame_staging_commits_rows_and_outputs(tmp_path):
-    import json
-
-    import blake3
-    from verity.commitments.rowleaf import ROLE_X, blake3_row_key
-
-    s = InputSet.open(SLICES / "rope-head-d64")
-    path = REG.module("rope-head").stage(s, 0, 1, tmp_path)
-    head, body = path.read_bytes().split(b"\n", 1)
-    h = json.loads(head)
-    assert h["format"] == "flock-ir-frame/v3" and h["scheme"] == "frame-v3/blake3-keyed" and h["units"] == 32
-    assert sorted(h["frame_v3"]["roots"]) == ["cs", "out", "x"] and h["frame_v3"]["schemas"]["x"] == "blake3-keyed/row/v2"
-    x = IL.flat_ports(s, s.subcircuit.inputs, 0, 1)
-    row0 = x[0, :64].astype("<u2").tobytes()
-    assert body[:128] == row0
-    assert body[256:256 + 32] == blake3.blake3(row0, key=blake3_row_key(ROLE_X)).digest()
-    assert h["blocks"] == [[[[0, 0, 0, 0], [0, 1, 0, 0], None, None], list(range(32)) + [None] * 32]]
-
 
 # --- attention: tensor-core k-steps as units, the softmax native -------------------------------------------------------------
 
@@ -1022,31 +980,6 @@ def test_attention_units_are_tensor_core_steps():
     cuts = IL.cut_words(low, fin)
     _res, cut_out, ok = low.evaluate(fin, cuts)
     assert ok == (1 << U.n) - 1 and (cut_out == cuts).all()
-
-
-def test_attention_frame_places_a_block_per_16_keys(tmp_path):
-    """A 16-key group per block: run slots [K keys | V keys] (one key = one run of two BLAKE3 blocks), unit slots [QK steps | PV
-    columns]; keys past T are empty run slots, their QK steps empty unit slots, and a PV step's masked port reads the empty
-    slot; the query is a public port and the tail computes the outputs, which the file carries."""
-    import json
-
-    from verity_flock import ir_frame as F
-
-    s = InputSet.open(SLICES / "attention-head-fa2-d64-bn128")
-    mod = REG.module("attention-head")
-    assert mod.key_count(s) == 129
-    low = mod.lowering_for_set(s)
-    pl = F.plan_tc(low, s.subcircuit)
-    assert (pl.nb, pl.chunk_slots, pl.units_per_block, pl.unit_pos0, pl.k_log, pl.public_ports, len(pl.comps)) == (2, 32, 128, 128, 22, [0], 9)
-    runs, units = pl.comps[8]
-    assert runs[0] == (1, 16, 0) and runs[1:16] == [None] * 15 and runs[16] == (2, 16, 0) and units[4:64] == [None] * 60
-    assert pl.wiring[5] == [(1, 32 + 2 * t) for t in range(16)] and pl.wiring[64 + 7] == [(16 + t, 14) for t in range(16)]
-    path = mod.stage(s, 0, 1, tmp_path)
-    head, body = path.read_bytes().split(b"\n", 1)
-    h = json.loads(head)
-    assert h["public_ports"] == [0] and h["outputs"] == "tail" and h["layout"]["ret_group"] is None and len(h["blocks"]) == 9
-    out = np.frombuffer(body[-4 * h["cut_words"] - 128:-4 * h["cut_words"]], dtype="<u2")
-    assert (out == s.port("out")[0]).all()
 
 
 def test_hopper_wgmma_piece_is_the_ir_primitive():

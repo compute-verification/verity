@@ -12,9 +12,8 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
     `unit.py`: the pinned lowering of one tensor-core transition unit.
   - `ir_lower.py`: the generic Program lowering, a Definition composed from the per-op circuit pieces of `fp.py` (over
     `gf2.py`); `tail_pieces.py`: circuits for the primitives a template's proof blocks leave outside.
-  - `templates/`: one lowering per subcircuit template; `ir_frame.py` (`verity/flock-ir-frame/v3`) and `ir_sampling.py`
-    (`verity/flock-ir-sampling/v1`): their frame-v3 statements, archived like the pure-block backends (BLAKE3 row
-    digests, not in the Lean verifier).
+  - `templates/`: one lowering per subcircuit template; `ir_sampling.py`: the sampling template's lane unit and the
+    native cut words of `verity/flock-ir-sampling/v1`.
   - `partition_units.py`: every size class of an arbitrary partition (`verity.circuits.units`) lowered and checked against the
     reference evaluator; `boolean_export.py`: a served workload's leaf templates, or one census subcircuit (`subcircuit`, the catalog's blob), as Boolean
     circuits (a derived format, not a statement); `circuit_types.py` (`verity/circuit-type/v1`): each distinct sub-circuit once, the object the Boolean
@@ -37,7 +36,7 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
     one `serve --zk --queue -` per block type; a session's verdict of record runs off the provers' path.
   - `instance_file.py`: a spine input set's range as the instance file (`flock-pure-instances/v1`) a cell's prover and verifier
     read, with its frame-v3 statement commitments.
-  - `bench.py`, `ir_bench.py`, `register.py`, `instances.py`: the benchmark sweeps, cell registration and the bench's
+  - `bench.py`, `register.py`, `instances.py`: the benchmark sweeps, cell registration and the bench's
     frozen input sets.
 - `live/`: the Rust crate `flock-live`, which the pod scripts drop into a Flock `b684b12` checkout as
   `crates/flock-live`: the prover and verifier binaries (`flock-circuit`, `flock-pure`, `flock-ir-frame`,

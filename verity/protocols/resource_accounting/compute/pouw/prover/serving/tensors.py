@@ -145,6 +145,14 @@ class PearlCDevice(Protocol):
         """The most tokens one step's forward can carry in one pass of ``run``."""
         ...
 
+    runs: dict[str, Any]
+    """The live runs `linear_op`'s body reads, by the attached scheme's build key."""
+
+    def linear_op(self) -> Callable[..., Any]:
+        """``verity_pouw::pearl_plus_linear(x, weight, bias, entry, w) -> y``: one call as one dispatcher op, whose body
+        is ``runs[entry].gemm(w, x, weight, bias)``, what a Match capture records."""
+        ...
+
 
 _tensors: Callable[[], Tensors] | None = None
 _h1: Callable[[], H1Device] | None = None

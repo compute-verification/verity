@@ -7,6 +7,7 @@ the files that hold one on its private side."""
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -161,16 +162,15 @@ def test_the_chain_keeps_a_step_s_whole_registrations_on_its_private_side(tmp_pa
                "egress/warden-registration.json": whole, "tie/w0-registration.json": {"roots": []},
                "honest/circuit.txt": "c", "honest/inst-4.bin": "i", "honest/archive/answers.json": whole,
                "honest/archive/session.json": {}})
-    copy = block("chain_record.sh", "WHOLE=(", "}")
-    got = run(copy + 'keep "$W/scan" "$OUT/scan"', W=step.parent, OUT=out, Q=q)
+    got = run(block("chain_record.sh", "WHOLE=(", "}") + kept("SCANOUT", "scan"), W=step.parent, OUT=out, Q=q,
+              SCANOUT=step)
     assert got.returncode == 0, got.stderr
     private = ["scan/answers.json", "scan/egress/warden-registration.json",
                "scan/honest/verifier/warden-registration-egress-0.json",
                "scan/honest/verifier/warden-registration-ingress-0.json",
                "scan/tampered/verifier/warden-registration-egress-0-tampered.json"]
     assert sorted(p.relative_to(q / "witness").as_posix() for p in (q / "witness").rglob("*") if p.is_file()) == private
-    assert published(out) == ["scan/honest/registered.json", "scan/honest/registration.json", "scan/summary.json",
-                              "scan/tie/w0-registration.json"]
+    assert published(out) == ["scan/summary.json"]
     assert not [p for p in out.rglob("*") if p.is_file() and b"17" * 64 in p.read_bytes()]
 
 
@@ -198,6 +198,43 @@ def test_n2_tie_zk_keeps_its_verdicts_and_public_parameters_and_never_its_inputs
 def test_the_chains_tie_step_keeps_its_verdicts_and_public_parameters_and_never_its_inputs(tmp_path):
     w, out = tmp_path / "W", tmp_path / "OUT"
     put(w / "tie", TIE_RUN)
-    got = run(block("chain_record.sh", '  echo $? > "$W/tie.rc"; mkdir', "    [ -f"), W=w, OUT=out)
+    got = run(block("chain_record.sh", "WHOLE=(", "}") + kept('W/tie', "tie"), W=w, OUT=out, Q=tmp_path / "q")
     assert got.returncode == 0, got.stderr
     assert published(out) == [f"tie/{f}" for f in TIE_KEPT]
+
+
+def kept(source: str, step: str) -> str:
+    """chain_record.sh's own call of ``keep`` for ``step``, whose files are under ``$source``."""
+    (line,) = re.findall(rf'keep "\${source}" "\$OUT/{step}"[^;\n]*', (HERE / "chain_record.sh").read_text())
+    return line + "\n"
+
+
+#: an N2 run's directory: its summary and public parameters, and what its verifier received
+N2_RUN = {"summary.json": {"ok": True}, "stager/program.json": {"units": 1}, "stager/partition.json": {"program": "p"},
+          "honest/verifier/w000-registration.json": {"roots": [{"root": "ab" * 64}]},
+          "honest/verifier/w000-certificates.json": [{"window": 0}], "honest/verifier/w000-syncs.json": [],
+          "honest/verifier/w000-delivered.json": {"salts": {"0": {"pub": "cd" * 32}}},
+          "honest/verifier/w000-outcome.json": {"public": {"verdict": 1}}, "honest/verifier/period.json": {"units": [0]},
+          "honest/verifier/w000-pub-1.bin": "p", "honest/verifier/w000-session-s-session.json": {}}
+
+
+def test_n2_zk_keeps_its_summary_and_public_parameters_and_nothing_the_verifier_received(tmp_path):
+    w, out = tmp_path / "W", tmp_path / "OUT"
+    put(w / "n2zk", N2_RUN)
+    got = run(block("n2_zk.sh", 'mkdir -p "$OUT/n2zk"', "  [ -f"), W=w, OUT=out)
+    assert got.returncode == 0, got.stderr
+    assert published(out) == [f"n2zk/{f}" for f in TIE_KEPT]
+
+
+def test_the_chains_n2_and_scan_steps_keep_their_summaries_and_the_scans_program_alone(tmp_path):
+    """The chain releases N2's summary alone (its one file `released_keys.json` classifies) and the scan's summary and
+    joint Program (the attester piece's period case reads both); what each step's verifier received stays in $W."""
+    w, out, q = tmp_path / "W", tmp_path / "OUT", tmp_path / "q"
+    put(w / "n2", N2_RUN)
+    put(w / "scan", {"summary.json": {"ok": True}, "joint/program.json": {"units": 2},
+                     "honest-0/verifier/program.json": {"units": 3}, "honest-0/verifier/openings.json": [{"o0": 1}],
+                     "honest-0/registration.json": {"window": {"units": {"cells": [[1, 4]]}}}})
+    code = block("chain_record.sh", "WHOLE=(", "}") + kept("N2OUT", "n2") + kept("SCANOUT", "scan")
+    got = run(code, OUT=out, Q=q, N2OUT=w / "n2", SCANOUT=w / "scan")
+    assert got.returncode == 0, got.stderr
+    assert published(out) == ["n2/summary.json", "scan/joint/program.json", "scan/summary.json"]

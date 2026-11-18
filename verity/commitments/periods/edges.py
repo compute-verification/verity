@@ -299,6 +299,8 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
             w, l0, radix, steps = _lane_wire(q, k0, L, ln, cnt)
         except Refusal as x:
             raise Refusal(rows if str(x) == "edge-rows" else str(x)) from None
+        if len(radix) != len(steps) or 0 in radix:
+            raise Refusal("edge-rows")
         if w >= k:
             raise Refusal("not-topological")
         wn = R.nodes[w]

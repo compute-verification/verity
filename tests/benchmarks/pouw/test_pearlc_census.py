@@ -10,11 +10,11 @@ def test_chained_atom_matches_verity():
 
 
 def test_sm120_atom_matches_verity():
-    C.set_atom("sm120")
+    C.set_atom(C.BLACKWELL_SM120_E4M3_M16N8K32.name)
     try:
-        assert C.selftest(400, "sm120") == 0
+        assert C.selftest(400, C.BLACKWELL_SM120_E4M3_M16N8K32.name) == 0
     finally:
-        C.set_atom("hopper")
+        C.set_atom(C.HOPPER_E4M3_K32.name)
 
 
 def test_generic_tile_has_nothing_to_skip():
