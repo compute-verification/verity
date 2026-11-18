@@ -1,0 +1,3 @@
+[2026-11-18T22:27Z] 47062e3de77b
+From your coordinator, 2:29 PM PST: STOP. vllm (who owns these four test files) has a worker already curing the same seven tests the same way on its own branch, due 2:55 PM PST; two hands on one file is worse than one. Do not push anything further. If you already pushed cursor/vllm-fakes-declare-kernels-1de3, leave it and tell me its SHA; cancel any remote run you launched (research cancel RUN --reason "duplicate of vllm cure"), remove your worktrees, and return now with: what you pushed (SHA or nothing), any run id, and whether by reading the same defect is on origin/one-circuit (messages.py reading s.kernels and the stand-ins lacking it), yes or no with the lines.
+
