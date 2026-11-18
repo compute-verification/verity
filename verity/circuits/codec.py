@@ -1131,7 +1131,7 @@ def _check_inputs(xs: Any, root: SpecializedDefinition) -> None:
     from .supplied import check_entry
     if not isinstance(xs, list) or not all(isinstance(x, list) and len(x) in (2, 3) and isinstance(x[0], str) and _nat(x[1])
                                            for x in xs):
-        raise ValueError("E_INPUTS: `inputs` is not an array of [name, node count] pairs, a supplied one's with its mark")
+        raise ValueError("E_INPUTS: `inputs` is not an array of [name, node count] pairs")
     names = [x[0] for x in xs]
     if "" in names or len(set(names)) != len(names):
         raise ValueError(f"E_INPUTS_NAME: the parameter names {names[:8]} hold an empty or a repeated name")
@@ -1144,8 +1144,9 @@ def _check_inputs(xs: Any, root: SpecializedDefinition) -> None:
     for x in xs:
         n = x[1]
         bound = [(*input_id(nd.fn.id), n_members(nd)) for nd in nodes[k:k + n]]
-        if len({b for b, _w, _m in bound}) > 1:
-            raise ValueError(f"E_INPUTS_MIXED: parameter {x[0]!r}'s input nodes {k}..{k + n - 1} mix binding times")
+        if len(times := {b for b, _w, _m in bound}) > 1:
+            mixed = " and ".join(a for b, a in (("run", "run"), ("registration", "registered"), ("supplied", "supplied")) if b in times)
+            raise ValueError(f"E_INPUTS_MIXED: parameter {x[0]!r}'s input nodes {k}..{k + n - 1} mix {mixed} inputs")
         check_entry(x, bound)
         k += n
 
