@@ -55,11 +55,13 @@ RTX_BUILD = ["-O3", "-gencode", "arch=compute_120a,code=sm_120a", "-std=c++17", 
 
 
 def build_line(tmp_path: Path, card: str, **env: str) -> tuple[subprocess.CompletedProcess, list[str] | None]:
-    """sq.sh with `nvcc` and `nvidia-smi` stand-ins (exported functions, ahead of the toolkit sq.sh puts on PATH): the
-    card `nvidia-smi` names, and the arguments nvcc was handed (None when it wasn't), its build failing so nothing runs."""
+    """sq.sh with `nvcc` and `nvidia-smi` stand-ins (exported functions, ahead of the toolkit sq.sh puts on PATH) and
+    CUDA_HOME a stand-in toolkit, as on a machine with no record: the card `nvidia-smi` names, and the arguments nvcc
+    was handed (None when it wasn't), its build failing so nothing runs."""
     argv = tmp_path / "nvcc.argv"
     fns = {"BASH_FUNC_nvcc%%": f'() {{ printf "%s\\n" "$@" > {argv}; return 1; }}',
            "BASH_FUNC_nvidia-smi%%": f'() {{ echo "{card}"; }}'}
+    env = {"CUDA_HOME": str(tmp_path / "toolkit"), **env}
     done = subprocess.run(["bash", str(HERE / "sq.sh")], cwd=ROOT, capture_output=True, text=True,
                           env={"PATH": "/usr/bin:/bin", "RESEARCH_RUN_DIR": str(tmp_path), **fns, **env})
     if not argv.is_file():
@@ -79,6 +81,12 @@ def test_the_build_at_120a_is_the_rtx_pro_6000_build_word_for_word(tmp_path, car
 def test_hopper_or_arch_90a_builds_for_sm_90a(tmp_path, card, env):
     done, got = build_line(tmp_path, card, **env)
     assert (done.returncode, got) == (4, [a.replace("120a", "90a") for a in RTX_BUILD])
+
+
+def test_no_toolkit_13_0_is_refused_before_the_build(tmp_path):
+    done, got = build_line(tmp_path, "NVIDIA H200", CUDA_HOME="")
+    assert (done.returncode, got) == (3, None)
+    assert "no CUDA toolkit 13.0: set CUDA_HOME" in done.stderr
 
 
 def test_a_card_the_name_does_not_tell_is_refused_before_the_build(tmp_path):

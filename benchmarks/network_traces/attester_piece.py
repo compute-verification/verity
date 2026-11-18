@@ -173,15 +173,17 @@ sys.path[:0] = [str(HERE)]
 sys.path.append(str(TREE))  # for benchmarks.network_traces
 import served_session as SS  # noqa: E402
 
+from verity.protocols.compose import schemes  # noqa: E402
+
 #: where the front keeps the gate's fetch and the piece its private files, under the serve dir
 PRIVATE = Path("private") / "certifier"
 #: the endpoint's records the chain reads (network_e2e `chain.ENDPOINT`)
 ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
-PROTOCOL = "verity/certifier/v0"
+PROTOCOL = schemes.get("network-attester").protocol
 #: the protocol ``network-rows`` answers, step 1's rows audit of the network attester's records
 ROWS = "verity/network-rows/v1"
 #: the named assumption the attester's guarantee reads (`NetworkCheck.Period`): the attester is the auditor's device
-PREMISE = "trusted-device"
+(PREMISE,) = schemes.get("network-attester").assumptions
 #: What a placement says of it, word for word, followed by ``; `` and the names
 UNMET = "unmet: this piece establishes no trusted-device and gives no bound on that ground"
 #: the front's refusal without ``--peer``

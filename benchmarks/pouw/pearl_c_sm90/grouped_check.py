@@ -11,8 +11,9 @@ experts are grouped), then one `pouw_pearl_c_grouped.gemm_grouped` call under ea
 deferred and deferred-a): ``grouped-P`` under serial, ``grouped-S-P`` under S, run eagerly; and with ``--graphs`` (the default)
 each again with the run's graphs, ``grouped[-S]-graph-P``, after `WARM_GRAPHS` calls in a pass of its own, so the retained call
 replays its layout's lane graphs (it must have).  Each grouped pass must agree with the dense one
-byte for byte: y, and the manifests less their run name (the transcript and records roots, every A root, record and file
-digest), with every call's A rows file read and compared.  Then the arms are timed interleaved, rep by rep (the order rotated),
+byte for byte: y, and the manifests less their run name and what fresh salts make differ (`SALTED`: the A, tile and y
+salts, and the trees, roots and leaves over them), so the records root, every record, B's side and every rows file's digest,
+with every call's A and y rows files read and compared.  Then the arms are timed interleaved, rep by rep (the order rotated),
 the pearl arms in fresh unretained passes under their schedule, each sample closed only after the side lanes
 (`glm53_timing.timed`), beside the stock grouped arms that build (`stock_arms`), each checked against x·Wᵀ.  SCRATCH/NxK gets
 ``capture.json`` and ``coins.json``, for glm53_passes.py verify; DIR gets ``grouped.json``, with each pass's public fields
@@ -63,14 +64,29 @@ def public_of(manifest: Path) -> dict:
     return {"manifest_sha256": hashlib.sha256(raw).hexdigest(), **{k: man[k] for k in PUBLIC if k in man}}
 
 
+#: what two passes over the same rows hold apart, each drawing its own salts: the pass's, a call's and its y's
+SALTED = {"pass": ("leaves", "tree_t", "salts_t", "commitment"), "call": ("root_a", "salts", "tree"),
+          "y": ("root", "tree", "salts")}
+
+
+def _unsalted(m: dict) -> dict:
+    """Manifest `m` less `SALTED`."""
+    def call(u: dict) -> dict:
+        y = {"y": {k: v for k, v in u["y"].items() if k not in SALTED["y"]}} if "y" in u else {}
+        return {k: v for k, v in u.items() if k not in SALTED["call"]} | y
+    return {k: v for k, v in m.items() if k not in SALTED["pass"]} | {"matmuls": [call(u) for u in m["matmuls"]]}
+
+
 def _same(a: Path, b: Path) -> list[str]:
-    """Where two retained passes differ: their manifests less the run name and the schedule the pass ran under (its lanes,
-    which commit nothing), and every call's A rows file."""
-    ma, mb = (json.loads((p / "manifest.json").read_text()) for p in (a, b))
+    """Where two retained passes differ: their manifests less the run name, the schedule the pass ran under (its lanes,
+    which commit nothing) and `SALTED`, and every call's A and y rows files."""
+    ma, mb = (_unsalted(json.loads((p / "manifest.json").read_text())) for p in (a, b))
     out = [k for k in sorted(set(ma) | set(mb)) if k not in ("run", "schedule") and ma.get(k) != mb.get(k)]
     for x, y in zip(ma["matmuls"], mb["matmuls"]):
-        if (a / x["rows"]["path"]).read_bytes() != (b / y["rows"]["path"]).read_bytes():
-            out.append(f"matmul {x['index']} rows")
+        for name, fx, fy in (("rows", x["rows"], y["rows"]), *((("y rows", x["y"]["rows"], y["y"]["rows"]),)
+                                                                if "y" in x and "y" in y else ())):
+            if (a / fx["path"]).read_bytes() != (b / fy["path"]).read_bytes():
+                out.append(f"matmul {x['index']} {name}")
     return out
 
 

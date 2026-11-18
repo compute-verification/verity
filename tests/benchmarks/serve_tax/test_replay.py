@@ -601,7 +601,7 @@ def test_glm53s_two_stage_launch_settings_say_what_the_arm_and_the_model_say(tmp
                "logits": {"private": S.PRIVATE}, "tables": {"layers": 1, "private": S.PRIVATE}}
 
     def handed(rows: dict | None) -> dict:
-        env = S.server_env(two, tmp_path, tmp_path / "site", None, 3600.0, 600.0, boundary_rows=rows, check=glm.check,
+        env = S.server_env(two, tmp_path, tmp_path / "site", None, 3600.0, boundary_rows=rows, check=glm.check,
                            private=tmp_path / "private")
         return json.loads(env[S.PLUGIN_ENV])["boundary_rows"]
 

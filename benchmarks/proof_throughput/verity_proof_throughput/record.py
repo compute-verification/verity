@@ -15,7 +15,10 @@ PORT = 7710
 
 
 def card_slug(card: str) -> str:
-    return "cpu" if card == "none" else "-".join(card.lower().split()).removeprefix("nvidia-")
+    from verity_bench import kit
+    from verity_bench.overhead import CARD_FILES
+
+    return "cpu" if card == "none" else kit.card_short(card, directory=CARD_FILES)
 
 
 def member(workload: str, card: str, provers: int) -> str:
@@ -54,7 +57,8 @@ def _sh(root: Path, script: str, env: dict[str, str], log: Path) -> subprocess.P
                             stdout=log.open("w"), stderr=subprocess.STDOUT)
 
 
-def run(root: Path, out: Path, workload: str, B: int, provers: Sequence[int], cores: Sequence[str], node: str, prove_run: str,
+def run(root: Path, out: Path, workload: str, B: int, provers: Sequence[int], cards: Sequence[str], cores: Sequence[str],
+        node: str, prove_run: str,
         start: Callable[[Path, str, dict[str, str], Path], subprocess.Popen] = _sh) -> dict[int, list[dict]]:
     points: dict[int, list[dict]] = {}
     for n in sorted(provers):
@@ -62,9 +66,10 @@ def run(root: Path, out: Path, workload: str, B: int, provers: Sequence[int], co
         for i in range(n):
             d = out / f"provers-{n}" / f"prover-{i}"
             env = {"WORKLOAD": workload, "B": str(B), "OUT": str(d), "RESULT": str(d / "result.json"),
-                   "PT_PROVER_NODE": node, "SESSIONS_LOCK": str(d / "sessions.lock"), "LEASE_CORES": cores[i],
-                   "PORT": str(PORT + i)}
-            group.append({"dir": str(d.relative_to(out)), "path": d, "proc": start(root, "job.sh", env, d / "job.out")})
+                   "PT_PROVER_NODE": node, "SESSIONS_LOCK": str(d / "sessions.lock"), "LEASE_CARD": cards[i],
+                   "LEASE_CORES": cores[i], "PORT": str(PORT + i)}
+            group.append({"dir": str(d.relative_to(out)), "path": d, "card": cards[i], "cores": cores[i],
+                          "proc": start(root, "job.sh", env, d / "job.out")})
         for p in group:
             p["prover_rc"] = p.pop("proc").wait()
         for p in group:
@@ -88,11 +93,18 @@ def write(w, out: Path, workload: str, B: int, points: dict[int, list[dict]]) ->
 
     failed = []
     for n, group in sorted(points.items()):
+        try:
+            name = member(workload, w.stamp["card"], n)
+        except SystemExit as e:
+            failed.append(f"{n} prover(s): no reading, the card {w.stamp['card']!r} has no member name: {e}")
+            print(failed[-1])
+            continue
         value, why = throughput(group)
         results = [rel(p) for p in group if p.get("result")]
-        extra = {"workload": workload, "model": MODEL[workload], "values": VALUES, "B": B, "provers": n, "results": results}
+        extra = {"workload": workload, "model": MODEL[workload], "values": VALUES, "B": B, "provers": n, "results": results,
+                 "leases": [{"card": p["card"], "cores": p["cores"]} for p in group]}
         m = w.measurement(METRIC, value, UNIT, why=None if value is not None else why, mark="measured",
-                          member=member(workload, w.stamp["card"], n), extra=extra)
+                          member=name, extra=extra)
         print(json.dumps({k: m.get(k) for k in ("name", "value", "unit", "member")} | {"why": why}))
         if value is None:
             failed.append(f"{n} prover(s): {why}")

@@ -166,7 +166,7 @@ def served_under(arm: str | None, site: Path, private: Path | None) -> dict[str,
     if fixed and all(job.get(k) == v for k, v in fixed.items()):
         S.check_plugins(job, ours)
         return {}
-    under = S.server_env(ours, site, S.plugin_site(site, ours), None, 0.0, 0.0, private=private)
+    under = S.server_env(ours, site, S.plugin_site(site, ours), None, 0.0, private=private)
     S.check_plugins(under, ours)
     return under
 

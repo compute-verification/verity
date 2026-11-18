@@ -19,6 +19,7 @@ import pytest
 
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R, verifier as V
+from verity.commitments import randomness as RND
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
@@ -69,7 +70,7 @@ def _window(d: Path, n: int = 4):
     runs = ({"start": 0, "count": n, "writer": G8ID, "out": "o0", "radix": [n], "base": 0, "step": [1]},)
     circuit = I.Circuit("history", ((G8, n),),
                         registered=I.Registered({}, histories=(I.History("latent", "program", G8ID, "o0", 8, runs, 16),)))
-    win = I.Window(circuit, RUN, D.parse_design(SAMPLING_DESIGN), 2, registered={"latent": table})
+    win = I.Window(circuit, RUN, RND.parse_design(SAMPLING_DESIGN), 2, registered={"latent": table})
     win.record(G8, [x, w], [y])
     c = win.close(salts_of=fixed(win))
     win.write(c, d, {"label": "test"}, registrar=R)

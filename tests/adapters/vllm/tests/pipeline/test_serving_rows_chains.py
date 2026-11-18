@@ -40,7 +40,7 @@ from verity_vllm.definitions.registry import sparse_mla as M
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
 
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity_flock.class_statement import UnitStager
 
@@ -126,7 +126,7 @@ def window(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK, design: dict | None = No
     """The window of ``s``'s rows over ``tmpls`` (`members`) under ``design`` (one unit of each template by default)."""
     ms = members(s, tmpls, per_chunk)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*IF.listed_program(defs, ()), design or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
+    return CS.Binding(*IF.listed_program(defs, ()), design or RND.parse_design("stratified:1"), "ab" * 32, tuple(ms))
 
 
 def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:

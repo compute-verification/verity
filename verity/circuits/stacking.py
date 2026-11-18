@@ -1,4 +1,4 @@
-"""The stacking property (`verity/stacking-property` v1): P(c, R_in, L) on a Program, read with its census (`census`,
+"""The stacking property (`verity/stacking-property` v2): P(c, R_in, L) on a Program, read with its census (`census`,
 verity/census/v1: its steps, its primitives' instances, and each root value's producer, bits and readers).
 
 A carrier is an audited block whose contents were chosen after the seed and hold another block's encoding. Such an encoding
@@ -110,7 +110,7 @@ from verity.circuits.refs import Affine, Concat, Explicit, Grid, Refs, Strided
 from verity.circuits.types import Array, Tuple, Type
 
 TAG = "verity/stacking-property"
-VERSION = 1
+VERSION = 2
 SCHEMA = f"{TAG}/v{VERSION}"
 
 BUDGETED = ("roundings", "compare_select", "gathers", "folds")

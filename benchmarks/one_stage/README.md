@@ -288,7 +288,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   and per proof-block Definition its count in the prefill step and the decode steps, output bits
   and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
   and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
-  `verity/protocols/proofs/spot/prover/cost/glm53.py`). `block_recut.sh ART` makes a stored census again from its families (its
+  `calibration/sampling_plan/glm53.py`). `block_recut.sh ART` makes a stored census again from its families (its
   `census-rank<r>.json`) with this tree's proof-block templates, sizing and `block_census.py`, for a change to the cut or to a
   family's proof blocks that needs no Commit Build, and writes `compare.json` against the planner's card.
   `m1_unit.py` builds one family's proof block through Flock's circuit prover's `UnitStager`, flat or `--structural`, and with `--bin`
@@ -391,7 +391,10 @@ leases are recorded for. `A5_STEPS=LO-HI`, optional, is the prover's batch: it s
 `scope.steps` to the request steps [LO, HI), so the window's proof blocks, which each layer's Flock statement holds
 (unset, or the file's own `1-8`, the file's [1, 8), 880 proof blocks); with other steps, the zero-knowledge layer's
 sampling design is `rate:1/1`, every proof block, in place of `subset:880`, and every member the table writes ends in
-the batch (`-b16` for 1-16). `--out DIR` names where the results go (default `./out`, or the run's `out/` in a
+the batch (`-b16` for 1-16). `A5_KEEP=DIR`, optional, a new directory outside `WORK`, keeps the sampling
+run's served window (its `serving-rows`, the prover's files included) there on the machine, for
+`benchmarks/recursion_e2e/stage.sh WINDOW=DIR UNITS=A-B`: the recursion over N of its proof blocks, whose served values it
+commits again under plain leaves, not the served commitment. `--out DIR` names where the results go (default `./out`, or the run's `out/` in a
 `research run`), and `--dry-run` makes every check and prints each step's command without running it. What it does:
 before anything is downloaded or built, it refuses a missing setting, a card that is not an H200, under 96 GB of host
 memory available, cores this job may not run on, under 96 GB free under `WORK`, a `WORK` that is not empty and results
