@@ -132,7 +132,7 @@ class ReleaseGate:
         self.key_of, self.clock = key, clock
         self.timers: list[tuple[float, Callable[[], None]]] = []
         self.order = messages.attester().attach(messages.Exchange(), {
-            "admit": {"order": "release-order", "hold_ms": hold_s * 1000}, "submit": lambda adm: add(adm.request),
+            "settings": {"order": "release-order", "hold_ms": round(hold_s * 1000)}, "submit": lambda adm: add(adm.request),
             "abort": lambda engine_id: abort([engine_id]),
             "schedule": lambda delay, fn: self.timers.append((self.clock() + delay, fn))}).front
         self.headers = self.order.headers
