@@ -41,3 +41,31 @@ def test_a_vllm_point_on_a_booked_card_leases_that_card_on_its_cores(monkeypatch
             main(["run", name, *argv])
         assert "unrecognized arguments" in capsys.readouterr().err
     assert len(commands) == 2
+
+
+def test_a_booked_point_s_research_run_flags_name_its_slot_cards_end_and_bound_and_are_timed(tmp_path):
+    """A booked period's point (`jobs.booked`): its slot of the pool, the spec's max_minutes as the bound `--end` must fit,
+    `--timed`; a vLLM point's run leases the booked cards, a steady-state point's names its one card to its node side, which
+    leases it; a booking of the wrong number of cards, or a spec with no bound, is refused."""
+
+    from dataclasses import replace
+
+    from steady_standins import tree
+    from verity_bench import steady_plan
+    from verity_bench.vllm.presets import Admission
+
+    root = Path(__file__).resolve().parents[3]
+    spec = jobs.make_plan("llama32-1b-fp8-1gpu-bandwidth-served-h200", root=root, commit="a" * 40,
+                          lookup=lambda identity, commit: None).spec
+    end = "2026-11-19T05:00:00Z"
+    assert jobs.booked(spec, "gpu", "g2", end, [2]) == [
+        "--pool", "gpu", "--slot", "g2", "--card", "2", "--end", end, "--timeout", "120m", "--timed"]
+    with pytest.raises(ValueError, match=r"runs on 1 card\(s\), and the booking names 2: \[2, 3\]"):
+        jobs.booked(spec, "gpu", "g2", end, [2, 3])
+    with pytest.raises(ValueError, match="has no admission max_minutes"):
+        jobs.booked(replace(spec, admission=Admission(None, None, None)), "gpu", "g2", end, [2])
+    steady_root, path = tree(tmp_path)
+    steady = steady_plan.make_plan(steady_root / path, root=steady_root, lookup=lambda s, i, identity: (None, None)).spec
+    minutes = steady.admission.max_minutes
+    assert jobs.booked(steady, "gpu", "g1", end, [3]) == [
+        "--pool", "gpu", "--slot", "g1", "--env", "GPU_LEASE_ON=3", "--end", end, "--timeout", f"{minutes}m", "--timed"]

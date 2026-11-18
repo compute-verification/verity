@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from pathlib import Path
 
+from verity.protocols.compose import schemes as table
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.pous.scheme import POUS, POUS_TERM, WIPE
 from verity.protocols.resource_accounting.memory.pous.verifier import period, schemes, wipe_period
@@ -14,7 +15,7 @@ LOCKS = (ROOT / "security" / "lean-audit.json", ROOT / "security" / "Properties"
 
 
 def test_found_by_name_at_their_verifiers_ids() -> None:
-    assert S.get("pous") is POUS and S.get("wipe") is WIPE
+    assert table.get("pous") is POUS and table.get("wipe") is WIPE
     assert (POUS.protocol, WIPE.protocol) == (period.PROTOCOL, wipe_period.PROTOCOL)
     assert POUS.unit == WIPE.unit == "bits"
 

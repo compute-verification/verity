@@ -40,7 +40,7 @@ gives the same guarantee and leaves the scan's chain as it is.
 - Its charge is `charge_chain.build_link(C, D, book, cin, cout, en, bits)`, `ChargeLink_v1{D}`, over the decisions
   the execution phase loads (next section). `book` is `book_fields(D)`, the public tables without the carry. `bits` are `adv`'s
   D decisions, and en_i = i < its `count`. Its ok is the verdict's `code` bit, and its bits are held to c_w (`charge`).
-- The verifier runs `charge_rows.check_chain` on the charge rows' openings.
+- The verifier runs `charge_check.check_chain` on the charge rows' openings.
 - The prover commits each execution phase with `commit_window(program, book, carry', registration, carry=previous)`.
 
 ## One carry for proof blocks and execution phases
@@ -159,7 +159,7 @@ bit first, and the 149 bits are zero-padded to a 160-bit row (`ROW_BITS`). The s
 run 0, pos 0 and rank 0. The carry is chained as `replay-charge`'s above, under its own produced value `window-charge`:
 - two rows, the carry-in and the carry-out;
 - execution phase 0's carry-in under the value's public salt;
-- the verifier's `CH-first`, `CH-carry` and `CH-rows` (`charge_rows.window_check_chain`).
+- the verifier's `CH-first`, `CH-carry` and `CH-rows` (`charge_check.window_check_chain`).
 
 `ChargeLink_v2{N, H, O, L}` is `ChargeCount_v2` run from row 0, and its ok also requires that carry' is row 1. After
 each decision, each hit, and each order entry's gap and rank step, the carried words are committed. So no AND operand

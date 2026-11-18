@@ -22,12 +22,13 @@ Each job is the command of a `research run` from a pushed commit, on a node with
 
 ~~~text
 research run --on H200 --project verity --source /workspace --cwd source --custody-ttl 12h \
-  --timeout 60m --env GPU_LEASE_WHO=dc -- bash calibration/pouw/dc/run.sh sm90
-research run --on B200 ... -- bash calibration/pouw/dc/run.sh sm100
-research run --on H200 ... -- bash calibration/pouw/dc/run.sh sm90jb   # the stress of the H200's rows: probes only
+  --timeout 60m --env GPU_LEASE_WHO=dc -- bash calibration/pouw/dc/run.sh
+research run --on B200 ... -- bash calibration/pouw/dc/run.sh
+research run --on H200 ... --env DC_JBREAK=1 -- bash calibration/pouw/dc/run.sh   # the stress of the H200's rows: probes only
 ~~~
 
-A run builds and SASS-gates everything before it touches the GPU, and `DC_BUILD_ONLY=1` builds and gates without one.
+A run builds and SASS-gates everything before it touches the GPU, and `DC_BUILD_ONLY=1` builds and gates without one (on a node
+with no GPU, `DC_CARD` names the card to build for).
 Its results are not kept here: the analyses print them from a run's `out/`.
 
 ## What is not covered
