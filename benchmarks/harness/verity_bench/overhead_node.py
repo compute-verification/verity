@@ -353,7 +353,7 @@ def parse(argv: Sequence[str] | None) -> argparse.Namespace:
     sub = p.add_subparsers(dest="command", required=True)
     for name in ("points", "run"):
         s = sub.add_parser(name)
-        s.add_argument("--card", required=True, choices=list(O.CARDS))
+        s.add_argument("--card", required=True, choices=list(O.cards()))
         s.add_argument("--uuid", required=True, help="the leased GPU's UUID, which bench.py must find")
         s.add_argument("--out", type=Path, required=True)
         s.add_argument("--run-dir", type=Path, required=True)

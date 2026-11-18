@@ -198,10 +198,9 @@ def _overhead_store(args: Any) -> Any:
 
 
 def _overhead_node(args: Any) -> str:
-    node = args.on or overhead_records.NODES.get(args.card)
-    if node is None:
-        raise ValueError(f"--on NODE: the {args.card} has no default node")
-    return node
+    if args.on is None or args.card is None:
+        raise ValueError("--on NODE --card CARD: a launch names its GPU node and the card's `short` there")
+    return args.on
 
 
 def _overhead_points(args: Any) -> int:
@@ -241,8 +240,8 @@ def _overhead_parser(commands: Any) -> None:
     sub = door.add_subparsers(dest="overhead_command", required=True, metavar="STEP")
 
     def common(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--card", default="h200", choices=list(overhead.CARDS))
-        p.add_argument("--on", metavar="NODE", help="the GPU node (default: the card's, overhead_records.NODES)")
+        p.add_argument("--card", choices=list(overhead.cards()), help="the card's `short`; a launch needs it")
+        p.add_argument("--on", metavar="NODE", help="the GPU node, a machine with the card; a launch needs it")
         p.add_argument("--gpu", metavar="INDEX", help="lease this GPU of the node alone (gpu-lease --on)")
         p.add_argument("--cores", metavar="CPUS", help="pin the run to these CPUs of the node (gpu-lease --cores)")
         p.add_argument("--model", default=overhead.KERNEL_MODEL, choices=list(overhead.MODELS))
