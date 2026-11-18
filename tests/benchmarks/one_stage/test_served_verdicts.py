@@ -8310,3 +8310,35 @@ def test_the_runs_machine_txt_is_the_trees_commit_and_the_nodes_facts_stay_in_th
                                        ({"VERITY_HOLD_PLACEMENT": "0"}, False), ({"VERITY_HOLD_PLACEMENT": "1"}, True)])
 def test_hold_placement_holds_only_under_exactly_1(env, held):
     assert S.hold_placement(env) is held
+
+
+def test_a_failed_sampled_proofs_step_keeps_its_error_log_private(tmp_path):
+    """The launcher's call to the path prover's runner names its keep under the serve dir's private logs; the runner,
+    failing at its first tool, leaves that tool's error log there and nothing of it under the published output."""
+    script = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    call = next(line for line in script.splitlines() if "bash benchmarks/prove_path/run.sh" in line)
+    keep = re.search(r'PP_KEEP="([^"]+)"', call)
+    assert keep and keep[1].startswith("$LOGS/sampled-proofs"), call
+    assert re.search(r'^LOGS=\$D/private/logs$', script, re.M)
+    tree, home, serve, out = (tmp_path / n for n in ("tree", "home", "serve", "out"))
+    (tree / "benchmarks" / "prove_path").mkdir(parents=True)
+    shutil.copy(HERE.parents[2] / "benchmarks" / "prove_path" / "run.sh", tree / "benchmarks" / "prove_path" / "run.sh")
+    bin_ = home / ".local" / "bin"
+    bin_.mkdir(parents=True)
+    (bin_ / "uv").write_text("#!/bin/sh\necho 'uv sync: resolution failed' >&2\nexit 1\n")
+    (bin_ / "lake").write_text("#!/bin/sh\nexit 0\n")
+    for f in bin_.iterdir():
+        f.chmod(0o755)
+    (serve / "windows" / "w0").mkdir(parents=True)
+    logs = serve / "private" / "logs"
+    env = {"PATH": f"{bin_}:/usr/bin:/bin", "HOME": str(home), "PP_SERVE_RUN": str(serve),
+           "PP_SERVE_ROWS": str(serve / "windows" / "w0"), "PP_KEEP": keep[1].replace("$LOGS", str(logs)),
+           "OUT": str(out / "sampled-proofs")}
+    r = subprocess.run(["bash", "benchmarks/prove_path/run.sh"], cwd=tree, env=env, capture_output=True, text=True,
+                       stdin=subprocess.DEVNULL)
+    assert r.returncode == 5, r.stdout + r.stderr
+    kept = Path(env["PP_KEEP"])
+    assert "resolution failed" in (kept / "sync.log").read_text()
+    assert kept.stat().st_mode & 0o777 == 0o700
+    assert not any("resolution failed" in f.read_text() for f in out.rglob("*") if f.is_file())
+    assert not list(out.rglob("*.log"))
