@@ -1380,13 +1380,13 @@ def _seg(registered: Registered | None, wires: Sequence[Wire] = (),
 
 
 def member_reads(members: Sequence[CS.Member], registered: Registered | None,
-                 order: Sequence[tuple[str, int, int]] | None = None) -> list[dict[str, tuple[str, list[int], np.ndarray]]]:
+                 ranges: Sequence[tuple[str, int, int]]) -> list[dict[str, tuple[str, list[int], np.ndarray]]]:
     """Each of ``members``' ports a committed read fills (`committed_reads`), as `Window.close` commits them and
-    `registered_reads` opens them, each member's own units its circuit's ``order``'s (`own_units`): by port, the parameter, the distinct
+    `registered_reads` opens them, each member's own units by its circuit's ``ranges`` (`own_units`, `ranges_of`): by port, the parameter, the distinct
     registered rows its units read in first-read order and each unit's ref into them (`_reads_of`, which refuses a read
     covering part of a member). The work is per member and the reads that cover it, never per read for every member."""
     index = _ReadIndex(committed_reads(registered))
-    return [_reads_of(m.template, a, m.n, index, dict(m.rows + m.outs)) for m, a in zip(members, own_units(members, order))]
+    return [_reads_of(m.template, a, m.n, index, dict(m.rows + m.outs)) for m, a in zip(members, own_units(members, ranges))]
 
 
 def supplied(registered: Registered | None, entries: Mapping[str, Mapping[str, Any]], program: str, *,
@@ -1645,6 +1645,11 @@ class Circuit:
         return list(self._ids)
 
     @property
+    def ranges(self) -> tuple[tuple[str, int, int], ...]:
+        """Its ranges of units in its wired Program's root order (`ranges_of`)."""
+        return ranges_of(list(self.units.items()), self.order)
+
+    @property
     def layouts(self) -> dict[str, tuple[RowLayout, int]]:
         """Each template's layout and units, by descriptor id."""
         return {tid: (lay, n) for tid, (_fn, lay, n) in self._by_id.items()}
@@ -1805,16 +1810,15 @@ WIDTH_AT_ROOT = ("a root batch of a template no record names (a WordBits or Bits
 
 
 class Units:
-    """A wired Program's batches of its templates (`Circuit.program`), each the next range of its order (each template one
-    range where it states none), in root order: ``ranges``, each ``(descriptor id, first unit of the partition, first own
+    """A wired Program's batches of its templates (`Circuit.program`), each the next of its ``ranges`` (`ranges_of`), in
+    root order: ``ranges``, each ``(descriptor id, first unit of the partition, first own
     unit, units)``. Refused (ValueError, `WIDTH_AT_ROOT`) where a root batch is not the next of the order's ranges."""
 
-    def __init__(self, program: Any, query: Mapping[str, Any], templates: Sequence[tuple[str, int]],
-                 order: Sequence[tuple[str, int, int]] | None) -> None:
-        want = list(order) if order is not None else [(t, 0, n) for t, n in templates]
+    def __init__(self, program: Any, query: Mapping[str, Any], ranges: Sequence[tuple[str, int, int]]) -> None:
+        want = list(ranges)
         got = CS.template_partition(program, query).ranges
         if [(t, n) for _k, t, _g, n in got] != [(t, n) for t, _a, n in want]:
-            names = {t for t, _ in templates}
+            names = {t for t, _a, _n in want}
             extra = sorted({t for _k, t, _g, _n in got} - names)
             raise ValueError(f"the wired Program's {len(got)} root batches are not its order's {len(want)} ranges"
                              + (f": {', '.join(extra)} is {WIDTH_AT_ROOT}" if extra else ""))
@@ -1838,20 +1842,21 @@ class Units:
         return np.searchsorted(self._g, units, side="right") - 1
 
 
-def own_units(members: Sequence[CS.Member], order: Sequence[tuple[str, int, int]] | None = None) -> list[int]:
-    """Each of ``members``' (in the partition's order) first own unit: members tile the ranges of ``order`` in turn (`Units`),
-    or with none each template's units in the members before it."""
-    out, seen, ranges = [], {}, iter(order or ())
+def ranges_of(templates: Sequence[tuple[str, int]], order: Sequence[tuple[str, int, int]] | None) -> tuple[tuple[str, int, int], ...]:
+    """A circuit's ranges of units, each ``(descriptor id, first own unit, units)`` in root order: its ``order``'s, or each
+    of ``templates`` (``(descriptor id, units)``) one range where it states none, as its wired Program batches them."""
+    return tuple(order) if order is not None else tuple((t, 0, int(n)) for t, n in templates)
+
+
+def own_units(members: Sequence[CS.Member], ranges: Sequence[tuple[str, int, int]]) -> list[int]:
+    """Each of ``members``' (in the partition's order) first own unit: members tile ``ranges`` (`ranges_of`) in turn."""
+    out, it = [], iter(ranges)
     t, a, left = None, 0, 0
     for m in members:
-        if order is None:
-            out.append(seen.get(m.template, 0))
-            seen[m.template] = out[-1] + m.n
-            continue
         if not left:
-            t, a, left = next(ranges, (None, 0, 0))
+            t, a, left = next(it, (None, 0, 0))
         if m.template != t or m.n > left:
-            raise ValueError(f"{m.key}: {m.n} units of {m.template}, not the next of the order's range of {t}")
+            raise ValueError(f"{m.key}: {m.n} units of {m.template}, not the next of the range of {t}")
         out.append(a)
         a, left = a + m.n, left - m.n
     return out
@@ -1873,7 +1878,7 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
     cuts, index = cuts or {}, _ReadIndex(reads)
     lays = {descriptor_id(fn): (layout(fn), n) for fn, n in templates}
     check_wires(lays, wires, cuts, order)
-    units = Units(program, query, [(t, n) for t, (_l, n) in lays.items()], order)
+    units = Units(program, query, ranges_of([(t, n) for t, (_l, n) in lays.items()], order))
     by: dict[str, list[Wire]] = {}
     for w in wires:
         by.setdefault(w.reader, []).append(w)
@@ -2451,7 +2456,7 @@ def registered_reads(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, M
     pins = {**pins, **{v: x.entry() for v, x in supplied(reg, pins, w.partition_digest, module=registered).items()}}
     out: dict[str, dict[str, Any]] = {}
     index = _ReadIndex(reads)
-    for m, a in zip(w.members, own_units(w.members, order_of(doc))):
+    for m, a in zip(w.members, own_units(w.members, ranges_of(doc["templates"], order_of(doc)))):
         got = _reads_of(m.template, a, m.n, index, dict(m.rows + m.outs))
         if not got:
             continue
@@ -2715,7 +2720,7 @@ class Window:
         if missing:
             raise ValueError(f"units recorded / in the circuit by template: {missing}; a period closes over all of them")
         committed = _ReadIndex(committed_reads(self.circuit.registered))
-        own, cat, by, values = own_units(self.window.members, self.circuit.order), {}, self.circuit._by_id, self.registered or {}
+        own, cat, by, values = own_units(self.window.members, self.circuit.ranges), {}, self.circuit._by_id, self.registered or {}
         public = {supplied_param(t, of) for t in (self.circuit.registered or Registered({})).tables for of in SUPPLIED}
         carried: dict[str, bytes] = {}
         read_by, wanted = [], {}
@@ -2845,7 +2850,7 @@ class Window:
                 res.append(mine[g][lo:lo + n])
                 continue
             k, a = int(kv.get(p, 1)), np.empty((n, w), dtype=np.uint16)
-            for m, mlo in zip(self.window.members, own_units(self.window.members, self.circuit.order)):
+            for m, mlo in zip(self.window.members, own_units(self.window.members, self.circuit.ranges)):
                 if m.template != tid or mlo >= lo + n or mlo + m.n <= lo:
                     continue
                 s, e = max(lo, mlo), min(lo + n, mlo + m.n)
@@ -2870,7 +2875,7 @@ class Window:
         return res
 
     def _units(self) -> Units:
-        return Units(self.window.program, self.window.query, list(self.circuit.units.items()), self.circuit.order)
+        return Units(self.window.program, self.window.query, self.circuit.ranges)
 
     def labels(self) -> dict[str, Any]:
         """``index.json``: per member, each recorded run of its units with its label, ``[lo, hi, label]`` over global indices,
@@ -2897,7 +2902,7 @@ class Window:
             return out
 
         return {"format": LABELS, "run": self.run, "members": [{"name": m.key, "labels": of(m, lo)} for m, lo
-                                                                in zip(self.window.members, own_units(self.window.members, self.circuit.order))]}
+                                                                in zip(self.window.members, own_units(self.window.members, self.circuit.ranges))]}
 
     def circuit_record(self) -> dict[str, Any]:
         """The period's ``circuit.json`` (`circuit_record`), its members stated by its cap and the circuit's wires, each
