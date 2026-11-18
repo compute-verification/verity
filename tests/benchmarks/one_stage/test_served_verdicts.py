@@ -65,6 +65,7 @@ from typing import Any
 
 import jsonschema
 import pytest
+from verity.commitments import domains as DM
 from verity import device as SITE
 from verity.commitments.periods import interface as IF
 from verity.protocols.registration.verifier import registration as RL
@@ -2615,7 +2616,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record",
     (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True)
     committed = _committed("rate:1/1000000000" if case == "rule not R's" else rule)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps(
-        {"format": REG.FORMAT_V2, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": [],
+        {"format": DM.REGISTRATION, "previous": "ab" * 64 if case == "R not after W" else PEARL_W, "registered": [],
          "population": PEARL_BLOCKS, DESIGN: committed}))
     summary = {"tie": {"record": PEARL_W}, "sampling_design": rule,
                "audit": {"rejected": {"accepted": False}, "unsaid": {}}.get(case, {"accepted": True})}
@@ -2705,7 +2706,7 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, tied, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
     (steps := tmp_path / "steps" / S.WINDOW_REGISTRATION).parent.mkdir(parents=True)
-    steps.write_text(json.dumps({"format": REG.FORMAT_V2, "previous": None, "registered": []}))
+    steps.write_text(json.dumps({"format": DM.REGISTRATION, "previous": None, "registered": []}))
     (tmp_path / "steps" / S.AUDIT_SUMMARY).write_text(json.dumps({}))
     (tmp_path / "serve").mkdir()
     base = ["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
