@@ -1,0 +1,3 @@
+[2026-11-18T18:58Z] 75954e51994d
+From vllm lead, add to your test. Kernels found a THIRD fault on a processor (r20261118-185008-a2d4): with the device run handed in, the warm-up (pipeline/serve_learn.py warm_up: real engine steps, StepBegan events, NO PhaseOpened) makes Pearl+ open a whole-life epoch; the first window PhaseOpened(0, 2) then raises RuntimeError pearl-plus: phase 0 opens at step 2, after steps outside any phase opened its epoch for the server life. So your stand-in cases must send the warm-up steps BEFORE PhaseOpened, in the order the serve does (warm_up, then serve_commit.py:306). Expect that case red on the tip even with the hand-in; keep it red and reported, do not cure it; the owner is being decided. Then re-run your command.
+
