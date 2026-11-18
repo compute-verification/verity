@@ -13,3 +13,11 @@
 "llama32-1b-fp8-1gpu-bandwidth-served-h200" = { spec = "llama32-1b-fp8-1gpu-bandwidth-served", card = "h200" }
 "llama31-8b-1gpu-pearl-c-whole-served-h200" = { spec = "llama31-8b-1gpu-pearl-c-whole-served", card = "h200" }
 "llama32-1b-1gpu-pearl-c-whole-served-h100" = { spec = "llama32-1b-1gpu-pearl-c-whole-served", card = "h100" }
+"glm53-flock-steady-head-block-h200-walk" = { spec = "glm53-flock-steady-head-block-walk", card = "h200" }
+"glm53-flock-steady-head-block-h200" = { spec = "glm53-flock-steady-head-block", card = "h200" }
+"llama32-1b-flock-steady-gemm-h200-walk" = { spec = "llama32-1b-flock-steady-gemm-walk", card = "h200" }
+"llama32-1b-flock-steady-gemm-h200" = { spec = "llama32-1b-flock-steady-gemm", card = "h200" }
+"llama31-8b-fp8-rtx-served-arm" = { spec = "llama31-8b-fp8-served-arm", card = "rtx-pro-6000" }
+"llama32-1b-1gpu-stock-served-h100" = { spec = "llama32-1b-1gpu-stock-served", card = "h100" }
+"qwen3-8b-bf16-rtx-served-arm-eager" = { spec = "qwen3-8b-bf16-served-arm-eager", card = "rtx-pro-6000" }
+"qwen3-8b-bf16-rtx-served-arm" = { spec = "qwen3-8b-bf16-served-arm", card = "rtx-pro-6000" }

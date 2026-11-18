@@ -9,7 +9,7 @@ import Proofs.Flock.Soundness.Game
 
 * `SamplingDesign.bernoulliOf num den` samples unit `u` independently with probability `num u / den`. A set escapes with
   `∏_{u ∈ B} (1 − num u / den)` (`bern_escape_toReal`), and unit `u` is sampled with `num u / den` (`bern_incl_toReal`).
-  `SamplingDesign.bernoulli` is its case of one `num` for every unit.
+  `Verity.SamplingDesign.bernoulli` is its case of one `num` for every unit.
 * `restrict L S` is `L` seen on the units of `S` alone, numbered in increasing order. Its missProb of `B` is `L`'s missProb
   of `B`'s image (`restrict_escape`), so its expected number of samples is `∑_{u ∈ S} incl(u)` (`meanSamples_restrict`).
 -/

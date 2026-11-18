@@ -30,14 +30,15 @@ from typing import Any
 
 from verity_vllm.config import (
     ROOT,
-    TARGETS,
     CommitConfig,
     MatchConfig,
     RowConfig,
     RunEnv,
+    UsageError,
     row_execution,
     row_path,
     row_target,
+    target_cc,
 )
 from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
@@ -89,8 +90,11 @@ def jit_key(py: str, cuda_home: str, row: str, tree: str) -> str | None:
                 return None
             parts.append([name, hashlib.sha256(Path(rec[0]).read_bytes()).hexdigest()])
         ver = re.search(rb"^#define CUDA_VERSION (\d+)", Path(cuda_home, "include", "cuda.h").read_bytes(), re.M)
-        cc = TARGETS.get(row_target(row) or "")
-        if not ver or not cc:
+        try:
+            cc = target_cc(row_target(row) or "")
+        except UsageError:
+            return None
+        if not ver:
             return None
         parts += [["cuda", ver.group(1).decode()], ["cc", f"{cc[0]}.{cc[1]}"]]
         for p in sorted(Path(tree, "verity_vllm").rglob("*.py")):
