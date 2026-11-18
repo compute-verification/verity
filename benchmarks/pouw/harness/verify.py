@@ -18,8 +18,10 @@ The records and `panel.py append`'s arguments keep the name ``verifier``.
       [--tier 2a|2b] [--hypothesis TEXT] [--parent ART|VARIANT] [--outcome O --reason TEXT] [--by LANE]
       [--publish [--push] [--store ROOT]] [--no-ledger]
 
-The run's directory is RESULT_JSON's (bench.py gives it to arms as ``ctx["out_dir"]``); --run-id defaults to
-RESEARCH_RUN_ID and --commit to RESEARCH_SOURCE_SHA. RESULT_JSON is rewritten in place unless --out names another file.
+The run's directory is RESULT_JSON's (bench.py gives it to arms as ``ctx["out_dir"]``); the transcripts are in the
+passes directory RESULT_JSON names (``args.passes``, `bench.py --passes`: private, outside the run's directory), and each
+command writes what it decided under the run's ``verdicts/`` (``{verdicts}``), which is all of a pass the run keeps;
+--run-id defaults to RESEARCH_RUN_ID and --commit to RESEARCH_SOURCE_SHA. RESULT_JSON is rewritten in place unless --out names another file.
 Exit 0 only if every panel row has an accepted transcript and every command exited 0; 1 otherwise (each row says why);
 2 on a usage error.
 
@@ -195,10 +197,29 @@ def harness_control(result: dict, name: str, label: str, v: dict | None) -> dict
     return v | {"control": "negative/" + v["transcript"][len("transcripts/"):]} if dumped else v
 
 
+def passes_of(result: dict, run_dir: Path) -> Path:
+    """The run's passes directory (`bench.py --passes`), which holds every transcript; refused inside the run's directory."""
+    named = (result.get("args") or {}).get("passes")
+    if not named or named == "None":
+        raise UsageError("the result names no passes directory (bench.py --passes): its arms kept no transcript to verify")
+    passes, run = Path(named).resolve(), run_dir.resolve()
+    if passes == run or run in passes.parents or passes in run.parents:
+        raise UsageError(f"the passes directory {passes} shares the run's directory {run}: a pass never goes under it")
+    return passes
+
+
+def verdicts_dir(run_dir: Path, rel: str) -> Path:
+    """Where the commands judging the transcript at `rel` (relative to the passes directory) write what they decided."""
+    d = run_dir / "verdicts" / Path(rel).parent
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def verify(result: dict, run_dir: Path, run_id: str, commit: str | None, log, every: bool = False) -> dict:
-    """Runs every arm's verifier and writes each panel row's verdict into it (`every`: each arm row's); returns the step's
-    record."""
+    """Runs every arm's verifier on the transcripts in the run's passes directory and writes each panel row's verdict into
+    it (`every`: each arm row's); returns the step's record."""
     runner = Runner(run_dir, log)
+    passes = None
     rows = []
     for name, label, p in panel_rows(result, every):
         arm = (result.get("arms") or {}).get(name) or {}
@@ -214,10 +235,13 @@ def verify(result: dict, run_dir: Path, run_id: str, commit: str | None, log, ev
             if not c:
                 raise UsageError("no verifier commit: pass --commit or set RESEARCH_SOURCE_SHA")
             rel = fill(v["transcript"], {"arm": name, "shape": label})
-            path = run_dir / rel
-            values = {"python": sys.executable, "run_dir": str(run_dir), "run_id": run_id, "commit": c, "arm": name}
+            passes = passes or passes_of(result, run_dir)
+            path = passes / rel
+            values = {"python": sys.executable, "run_dir": str(run_dir), "passes": str(passes), "run_id": run_id,
+                      "commit": c, "arm": name, "verdicts": str(verdicts_dir(run_dir, ""))}
             if v["per"] == "shape":
-                values |= {"shape": label, "transcript": str(path), "dir": str(path.parent)}
+                values |= {"shape": label, "transcript": str(path), "dir": str(path.parent),
+                           "verdicts": str(verdicts_dir(run_dir, rel))}
             recs = []
             for cmd in v["commands"]:
                 recs.append(runner.run([fill(x, values) for x in cmd]))
@@ -226,10 +250,11 @@ def verify(result: dict, run_dir: Path, run_id: str, commit: str | None, log, ev
             verdict |= judge(path, recs, v["per"]) | {"commit": c, "path": rel, "commands": [r["n"] for r in recs]}
             if v.get("control"):
                 crel = fill(v["control"], {"arm": name, "shape": label})
-                cpath = run_dir / crel
+                cpath = passes / crel
                 crecs = recs
                 if v["per"] == "shape":
-                    cvals = values | {"transcript": str(cpath), "dir": str(cpath.parent)}
+                    cvals = values | {"transcript": str(cpath), "dir": str(cpath.parent),
+                                      "verdicts": str(verdicts_dir(run_dir, crel))}
                     crecs = [runner.run([fill(x, cvals) for x in cmd], control=True) for cmd in v["commands"]]
                 cv = judge_control(cpath, crecs)
                 verdict["control"] = {"path": crel, **{k: cv[k] for k in ("rejected", "why", "sha256") if k in cv}}

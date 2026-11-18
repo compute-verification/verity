@@ -317,8 +317,9 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
                   --grain $($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["grain"])' $O/tie-fixture.json)
                   --cap $TCAP --run-id $id)
     mkdir -p $O/$name
-    $WT commit "${common[@]}" --key-file $W/$name-key --registration-out $O/$name/registration.json --out $W/$name-window \
+    $WT commit "${common[@]}" --registration-out $W/$name-registration.json --out $W/$name-window \
       "${commit[@]}" | tee $O/$name/commit.json || return 1
+    cp $W/$name-registration.json $O/$name/registration.json
     $WT verify "${common[@]}" --registration $O/$name/registration.json --out $O/$name/verifier | tee $O/$name/verify.json || return 1
     c=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["circuit"])' $O/$name/verifier/tie.json) || return 1
     run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/verifier/tie.json) || return 1

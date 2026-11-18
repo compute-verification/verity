@@ -125,7 +125,7 @@ structure Params where
   `window.activations.values` (`Record.windowReads`), as the caller names them; none by default -/
   windowValues : Array String := #[]
   /-- the blocks a scheme credits, by their number among the first level's members (`Core.Integrity.credited`), as
-  memory-accounting's resolver returns them; the check refuses them unless each is a block of the first level and of
+  `verity.protocols.resource_accounting.scheme.credited` returns them; the check refuses them unless each is a block of the first level and of
   every later one -/
   credited : Array Nat := #[]
 

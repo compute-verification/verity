@@ -15,6 +15,7 @@ public import Definitions.Core.Levels
 public import Definitions.Core.CircuitLevels
 public import Definitions.Core.LevelsCount
 public import Definitions.Core.LevelsCredited
+public import Definitions.Core.LevelsKinds
 public import Definitions.Core.Scheme
 public import Definitions.Core.ZkCompiler
 public import Definitions.Core.Challenger
@@ -54,7 +55,8 @@ the ones here.
   (`Definitions.Registration`).
 * Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Levels` (a sample drawn
   level by level, outer blocks then inner blocks; `LevelsCount`, its count at δ; `CircuitLevels`, those of a circuit's
-  nested partitions), `Challenger`, `Decisive`.
+  nested partitions; `LevelsKinds`, the first level drawn by kind), `Challenger` (the log's order, the cut, coin
+  families and values derived from the log's prefix), `Decisive`.
 * Memory checking: `MemCheck` (a multiset's fingerprint and a key's print over a finite field).
 * A check moved inside proofs: `InProofs` (an accepted run leaves fewer than `K₀` proof blocks failing a check).
 * Word semantics: `Scalar`, `Prims`, `Fp32`, `TC` (the tensor cores); `NaiveStrassen` (two tilings in the tensor-core

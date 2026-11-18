@@ -26,7 +26,6 @@ untraced = [
     "test_chain_record.py",
     "test_chain_record_guard.py",
     "test_kept_scan.py",
-    "test_negatives.py",
     "test_out_request_values.py",
     "test_scan_zk_challenger.py",
     "test_scan_zk_lean_one.py",

@@ -48,7 +48,7 @@ def profile(docket: Mapping[str, Any], draw: Mapping[str, Any], delta: float,
     """The audit's integrity profile under any of the four sampling designs. The work sampling design is the
     stratified sampling design at its sizes (Lean `SamplingDesign.work`), so its profile is the same `Stratified`
     one, counting the sampled proof blocks (a closure proves more, and only helps). ``credited`` is the first-level
-    numbers memory-accounting's resolver returns; it refuses them unless each is a block of every level
+    numbers `resource_accounting.scheme.credited` returns; it refuses them unless each is a block of every level
     (`profile.CREDITED_UNSPLIT`)."""
     if draw["law"] == "subset":
         sampling_design = Subset(draw["k"])

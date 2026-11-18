@@ -2,14 +2,15 @@
 port's row width (`window_builder.weight_param`: ``weights/<label>@<words>``), and a weight is a value like any other, its
 rows committed under the committer's secret salts (`weight_value`), a hiding commitment.
 
-The committer registers its weights once per model and key, before the first window's coins (`weights_registration`, a
+The committer registers its weights once per model, before the first window's coins (`weights_registration`, a
 `records.weights_registration`): each weight parameter's root, refused for a weight whose served words aren't the
 checkpoint's pinned shards' (the checkpoint tie is the committer's own check). The verifier pins those roots and never a
 root it computes: it holds the registration to its own weights record's shapes (`weights_record`, each weight parameter's
 value, leaves, words and domain and no root; `registration_pins`), so what it learns of the weights is each weight's size
 and its hiding root. `verity-vllm advice --weights-of-record` records the registration's roots as each window's, and a
-window's committer commits the words it serves under the same key (`weight_values`), so a weight served otherwise
-has another root and its reads are free (`interface.input_count`). A serve puts the registration first in its registration
+window's committer commits the words it serves under the registration's salts, which the registration drew fresh from the
+OS and keeps in its salt file (`verity.commitments.salt_file`, ``<R>.salts`` beside ``<R>.json``), and refuses a weight
+served otherwise by name, publishing nothing of it (`weight_values`). A serve puts the registration first in its registration
 log as a record of its own (`deployment_record`). On a serve tied to Pearl+, Pearl+'s window record W is chained after it;
 no other record names it.
 
@@ -23,10 +24,14 @@ zero-knowledge registration proof ties them to the checkpoint's public shards an
 """
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import salt_file as SF
 from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
@@ -44,9 +49,6 @@ from .window_circuit import WindowClass, class_program, lower
 
 #: the class `weights_record` reads the weights record and the weight parameters of: every class's are the model's, at a grain
 WEIGHTS_CLASS = WindowClass(1, 2, 2)
-#: the salt nonce of the first weight parameter a committer commits under its key, each next one the next (`weight_nonces`):
-#: above every nonce PoUW and the request tables take (`pouw.h1.served`, `pouw.h1.requests`, below 2^62)
-WEIGHTS_NONCE = 1 << 62
 #: what a deployment's first registration record registers, as its header's ``kind`` states (`deployment_record`)
 DEPLOYMENT = "weights"
 _GRAIN = Grain()
@@ -120,24 +122,23 @@ def _table_words(f: dict[str, Any], served: Any) -> np.ndarray:
     return a.view(np.uint16)
 
 
-def weight_value(program: str, param: str, words: Any, key: bytes, nonce: int, keep_rows: bool = False) -> G.Registered:
+def weight_value(program: str, param: str, words: Any, salts: bytes | None = None, keep_rows: bool = False) -> G.Registered:
     """Weight parameter ``param``'s registered value: its rows (``words`` in rows of its width) committed as core's
     `registered.Registered` commits ``hm96-sha512/row/v2`` rows, or a table's ``hm96-sha512/row-seg/v1`` rows (the leaves
     its opening reads in-circuit, `gates.embedding`), with `pouw.h1.registered.commit` (on the GPU where this process has
-    one) under ``program``, the weights record's program digest, row j salted `audit.hm96_salt(key, nonce, j)` of the
-    committer's secret 32-byte ``key``: a hiding commitment, so its root says nothing of the weight to anyone without the
-    key, a verifier holding a candidate checkpoint included. ``keep_rows``: hold the rows (a window's committer, which
+    one) under ``program``, the weights record's program digest, row j under ``salts``' 192 bytes j (the registration's,
+    `salt_file`), or fresh OS bytes: a hiding commitment, so its root says nothing of the weight to anyone without the
+    salts, a verifier holding a candidate checkpoint included. ``keep_rows``: hold the rows (a window's committer, which
     opens them)."""
-    if not isinstance(key, bytes) or len(key) != 32:
-        raise ValueError("a weight's salts are derived from the committer's 32-byte key")
-    return registered_commit(program, param, _rows(param, words), key, int(nonce), keep_rows=keep_rows,
-                      schema=G.SCHEMA_SEG if _param(param)[2] else G.SCHEMA_V2)
+    rows = _rows(param, words)
+    ys = os.urandom(len(rows) * SF.SALT_BYTES) if salts is None else bytes(salts)
+    return registered_commit(program, param, rows, bytes(32), 0, keep_rows=keep_rows, row_salts=ys,
+                             schema=G.SCHEMA_SEG if _param(param)[2] else G.SCHEMA_V2)
 
 
-def weight_nonces(params: Any) -> dict[str, int]:
-    """Each weight parameter's salt nonce under the committer's key: `WEIGHTS_NONCE` plus its place among ``params``'
-    weight parameters (`weight_params`), so no two take one salt."""
-    return {p: WEIGHTS_NONCE + i for i, p in enumerate(weight_params(params))}
+def value_salts(v: G.Registered) -> bytes:
+    """A weight's rows' salts as `weight_value` committed them, concatenated: what its salt file holds."""
+    return b"".join(v.salts)
 
 
 def _fields(registered: Any) -> tuple[Any, list[tuple[str, list[int], int]]]:
@@ -215,19 +216,40 @@ def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: s
             "unrooted": _unrooted(rec, of, shapes)}
 
 
-def weight_values(registered: Any, served: Any, key: bytes, grain: Grain = _GRAIN, keep_rows: bool = False,
-                  served_params: Any = ()) -> dict[str, G.Registered]:
-    """The weights a committer serves, committed (a window's committer or the registration's): each weight
-    parameter the class circuit registers at ``grain`` or ``served_params`` names (`_weights`) whose field ``served`` names
-    (its words, as `check.weights_of_record` composes the field), its `weight_value` under ``key`` at its nonce
-    (`weight_nonces`), its rows held with ``keep_rows`` (a served window's committer, `serving_rows.after_commit`'s
-    ``weight_values``). So a window's root for a weight is the registered one (`weights_registration`, given the same
-    ``served_params``, whose nonces are of them all) exactly when it serves the registered words, and the verifier's pin
-    holds the reads of no other (`interface.input_count`)."""
+def weight_values(registered: Any, served: Any, registration: str | Path | None, grain: Grain = _GRAIN,
+                  keep_rows: bool = False, served_params: Any = ()) -> dict[str, G.Registered]:
+    """The weights a committer serves, committed: each weight parameter the class circuit registers at ``grain`` or
+    ``served_params`` names (`_weights`) whose field ``served`` names (its words, as `check.weights_of_record` composes the
+    field), its `weight_value`, its rows held with ``keep_rows`` (a served window's committer, `serving_rows.after_commit`'s
+    ``weight_values``). Under the registration at ``registration`` (`weights_registration`'s file): each rooted weight under
+    the salts of its salt file (``<R>.salts``), and refused (ValueError) by name, before anything of it leaves, where that
+    root is not the registered one (other words served) or the registration doesn't name the weight; one it leaves unrooted
+    under fresh salts, its reads free. With no ``registration`` (a window no registration pins), every weight under fresh
+    salts, its reads free (`interface.input_count`)."""
     r, _fields, params, of = _weights(registered, grain, served_params)
-    nonces = weight_nonces(params)
-    return {p: weight_value(r.digest, p, served[name], key, nonces[p], keep_rows) for name in sorted(of) if name in served
-            for p in of[name]}
+    if registration is None:
+        return {p: weight_value(r.digest, p, served[name], None, keep_rows) for name in sorted(of) if name in served
+                for p in of[name]}
+    reg = WeightsRegistration.of(json.loads(Path(registration).read_text()), str(registration))
+    salts = SF.beside(registration)
+    out: dict[str, G.Registered] = {}
+    bad: dict[str, str] = {}
+    for name in sorted(of):
+        if name not in served:
+            continue
+        for p in of[name]:
+            if p in reg.values:
+                v = weight_value(r.digest, p, served[name], SF.read(salts, p), keep_rows)
+                if v.root.hex() != reg.values[p]["root"]:
+                    bad[p] = "served words whose root under the registration's salts is not the registered one"
+                out[p] = v
+            elif p in reg.unrooted:
+                out[p] = weight_value(r.digest, p, served[name], None, keep_rows)
+            else:
+                bad[p] = "not in the registration"
+    if bad:
+        raise ValueError(f"weights refused, nothing of them published: {bad}")
+    return out
 
 
 def record_words(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None = None,
@@ -242,15 +264,16 @@ def record_words(registered: Any, checkpoint_dir: str, checkpoints_manifest: str
     return out
 
 
-def weights_registration(registered: Any, key: bytes, checkpoint_dir: str, served: Any = None,
+def weights_registration(registered: Any, salts_to: str | Path, checkpoint_dir: str, served: Any = None,
                          checkpoints_manifest: str | None = None, kv_cache_dtype: str = "auto",
                          grain: Grain = _GRAIN, tables: Any = None, served_params: Any = ()) -> dict[str, Any]:
-    """The committer's registration of the weights it serves (`records.weights_registration`), written once per model and
-    key before the first window's coins and pinned by the verifier (core's ``registration.check(pinned=...)``,
+    """The committer's registration of the weights it serves (`records.weights_registration`), written once per model
+    before the first window's coins and pinned by the verifier (core's ``registration.check(pinned=...)``,
     ``records_audit.py --registered`` and ``--pins``, `registration_pins`): each weight parameter the class circuit
     registers at ``grain``, and each of ``served_params`` (a served window's record's, `_weights`), its `weight_value` under
-    ``key`` at its nonce (`weight_nonces`), its entry core's `registered.Registered.entry()`. The key never leaves the
-    committer: the registration names no salt.
+    fresh OS salts, its entry core's `registered.Registered.entry()`. The salts go to the salt file ``salts_to``
+    (`salt_file.write`; ``salt_file.beside(R)`` for a registration written to ``R``), the committer's alone: the
+    registration names no salt.
 
     The checkpoint tie is the committer's own: each field is composed from the checkpoint's pinned shards, and a field
     ``served`` (the words the committer serves, by field, as `check.weights_of_record` composes them) names other words
@@ -262,16 +285,16 @@ def weights_registration(registered: Any, key: bytes, checkpoint_dir: str, serve
     engine serves, by the record's table name: ``cos_sin``, the rotary table), refused by name unless they are within its
     bound (`_table_words`); a table ``tables`` doesn't name leaves its parameters unrooted."""
     r, fields, params, of = _weights(registered, grain, served_params)
-    nonces = weight_nonces(params)
     entries: dict[str, dict[str, Any]] = {}
+    salts: dict[str, bytes] = {}
     refused: dict[str, str] = {}
 
     def register(name: str, words: np.ndarray) -> None:
         for p in of[name]:
-            v = weight_value(r.digest, p, words, key, nonces[p])
+            v = weight_value(r.digest, p, words)
             if v.words * v.leaves != params[p]:
                 raise ValueError(f"{p}: {v.words * v.leaves} words of record, and the circuit registers {params[p]}")
-            entries[p] = v.entry()
+            entries[p], salts[p] = v.entry(), value_salts(v)
 
     def commit(name: str, words: np.ndarray) -> None:
         if not of.get(name):
@@ -305,6 +328,7 @@ def weights_registration(registered: Any, key: bytes, checkpoint_dir: str, serve
     if refused:
         raise ValueError(f"no weight registered: {refused} (a committer registers a weight only as the checkpoint's pinned "
                          "shards hold it, an analytic table only within its bound)")
+    SF.write(salts_to, salts)
     return WeightsRegistration(program=r.digest, repo=model["repo"], revision=model["revision"], grain=asdict(grain),
                                values=entries, unrooted=_unrooted(rec, of, entries)).dump()
 
@@ -337,7 +361,7 @@ def deployment_record(registration: Any) -> dict[str, Any]:
     which no record registers and whose reads stay free. A serve writes it before its first request. On a serve tied to
     Pearl+, Pearl+'s window record W names it as ``previous`` (`registration.digest`), so there a weight's root is in the
     log's first record before W. No other record names it: a window's own record is chained after its W or after nothing,
-    and H1's W after nothing, as before. It states what the registration states and nothing of the key. ValueError unless
+    and H1's W after nothing, as before. It states what the registration states and nothing of the salts. ValueError unless
     ``registration`` is one (`records.weights_registration`) whose values are all weight parameters'."""
     reg = WeightsRegistration.of(registration, "the weights registration")
     for p in (*reg.values, *reg.unrooted):
@@ -349,5 +373,5 @@ def deployment_record(registration: Any) -> dict[str, Any]:
             "previous": None}
 
 
-__all__ = ["DEPLOYMENT", "WEIGHTS_CLASS", "WEIGHTS_NONCE", "Grain", "WeightsRegistration", "deployment_record", "record_words",
-           "registration_pins", "weight_nonces", "weight_value", "weight_values", "weights_record", "weights_registration"]
+__all__ = ["DEPLOYMENT", "WEIGHTS_CLASS", "Grain", "WeightsRegistration", "deployment_record", "record_words",
+           "registration_pins", "value_salts", "weight_value", "weight_values", "weights_record", "weights_registration"]
