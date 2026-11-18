@@ -143,7 +143,8 @@ inputs = ["tools/config/verity_config", "verity/protocols/resource_accounting/co
           "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/layout.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py",
           "verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py", "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/sources.json",
           "benchmarks/prove_path/llama32_1b_tg_l0_step1.json",
-          "adapters/vllm/manifests/checkpoints.json", "adapters/vllm/manifests/checkpoints-int8.json", "benchmarks/one_stage"]
+          "adapters/vllm/manifests/checkpoints.json", "adapters/vllm/manifests/checkpoints-int8.json",
+          "adapters/vllm/manifests/checkpoints-local.json", "benchmarks/one_stage"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
