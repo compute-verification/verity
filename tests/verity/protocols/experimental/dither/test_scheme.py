@@ -35,7 +35,7 @@ def test_attach_waits_on_its_kernels() -> None:
         DS.DITHER.attach(object(), {})
 
 
-def test_it_says_why_it_declares_no_tables_output_format_or_y_commitment() -> None:
-    for field in ("tables", "number_format", "y_committed"):
+def test_it_says_why_it_declares_no_tables_output_format_y_commitment_or_salt_root() -> None:
+    for field in ("tables", "number_format", "y_committed", "salt_open_root"):
         with pytest.raises(LookupError, match=f"dither declares no {field}: experimental: no application lists dither"):
             S.declared(DS.DITHER, field)

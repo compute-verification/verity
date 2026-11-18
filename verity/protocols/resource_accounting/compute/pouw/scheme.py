@@ -30,6 +30,7 @@ from typing import Any
 
 from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover import workload
+from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
 from verity.protocol import Channel, Role
 from verity.protocols.resource_accounting.scheme import VERIFIER, Block, Charge, Lacks, Order, Scheme, Term, register
 
@@ -473,4 +474,7 @@ PEARL_PLUS = register(Scheme(
     channel_schemas=Lacks("no Schema is declared for PearlSalt"),
     record_owner="compute-accounting",
     tables=("pearl-a", "pearl-y", "pearl-b"),
+    number_format="bf16",
+    y_committed=True,
+    salt_open_root=epoch_open_root,
 ))

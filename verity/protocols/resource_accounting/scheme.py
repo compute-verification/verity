@@ -262,7 +262,8 @@ class Scheme:
     is the protocol id it carries inside a composite where that differs from ``protocol``, None where it is the same.
     ``tables``, the names of the value tables its run registers in the window record, a value of table ``t`` named
     ``t/...``; ``number_format``, the number format of the output y its blocks hand the served model (``bf16``); and
-    ``y_committed``, whether each of its calls commits that y.
+    ``y_committed``, whether each of its calls commits that y; and ``salt_open_root``, the root its salt coin is
+    opened after, a function of the weights' root and the salt epoch's number.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     is a `Lacks` saying so: it is in the one table with its parties and record, and `bound` and `credited` refuse it by
@@ -304,6 +305,7 @@ class Scheme:
     tables: tuple[str, ...] | Lacks = UNDECLARED
     number_format: str | Lacks = UNDECLARED
     y_committed: bool | Lacks = UNDECLARED
+    salt_open_root: Callable[[bytes, int], bytes] | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
