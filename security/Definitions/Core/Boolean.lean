@@ -98,8 +98,9 @@ decreasing_by all_goals assumption
 def eval (a : Fin C.N → Bool) : Fin C.N → Bool :=
   C.run fun g => if (C.op g).isInput then some (a g) else none
 
-/-- A Boolean circuit is a circuit of one-bit gates. -/
-def toCircuit (B : Circuit) : Verity.Circuit where
+/-- A Boolean circuit is a circuit of one-bit gates. Reducible, so that a gate's width is `1` and its index a gate of
+`B` wherever simp and instances look. -/
+@[reducible] def toCircuit (B : Circuit) : Verity.Circuit where
   N := B.N
   w _ := 1
   isInput g := (B.op g).isInput
