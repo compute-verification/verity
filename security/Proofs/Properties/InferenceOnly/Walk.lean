@@ -553,6 +553,55 @@ theorem leafAt_mem (l : Lane) {run t o : Nat} (ho : o < run) (ht : t < l.periods
   · rw [Int.add_assoc]; exact Int.add_le_add_left (Int.add_le_add h1.1 h2.1) _
   · rw [Int.add_assoc]; exact Int.add_le_add_left (Int.add_le_add h1.2 h2.2) _
 
+private theorem one_top {r : Nat} (d : Int) (hr : 0 < r) : ∃ t < r, (t : Int) * d = ((r : Int) - 1) * max d 0 := by
+  by_cases hd : 0 ≤ d
+  · refine ⟨r - 1, by omega, ?_⟩
+    rw [Int.max_eq_left hd, Nat.cast_sub hr]
+    rfl
+  · refine ⟨0, hr, ?_⟩
+    rw [Int.max_eq_right (by omega)]
+    simp
+
+private theorem go_top : ∀ (lv : List (Nat × Int)), 0 < prodR lv → ∃ t < prodR lv, Lane.leafAt.go lv t = hiS lv
+  | [], _ => ⟨0, by simp [prodR], by simp [Lane.leafAt.go, hiS]⟩
+  | [(r, d)], hp => by
+    simp only [prodR, Nat.mul_one] at hp ⊢
+    obtain ⟨t, ht, he⟩ := one_top d hp
+    exact ⟨t, ht, by simp only [Lane.leafAt.go, hiS, Int.add_zero]; exact he⟩
+  | (r, d) :: (r2, d2) :: rest, hp => by
+    simp only [prodR] at hp ⊢
+    have hr : 0 < r := Nat.pos_of_mul_pos_right hp
+    have hq : 0 < r2 * prodR rest := Nat.pos_of_mul_pos_left hp
+    obtain ⟨t1, ht1, he1⟩ := one_top d hr
+    obtain ⟨t2, ht2, he2⟩ := go_top ((r2, d2) :: rest) (by simpa only [prodR] using hq)
+    simp only [prodR] at ht2
+    refine ⟨t1 + r * t2, ?_, ?_⟩
+    · calc t1 + r * t2 < r + r * t2 := by omega
+        _ = r * (t2 + 1) := by rw [Nat.mul_add, Nat.mul_one, Nat.add_comm]
+        _ ≤ r * (r2 * prodR rest) := Nat.mul_le_mul_left _ ht2
+    · have e1 : (t1 + r * t2) % r = t1 := by rw [Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt ht1]
+      have e2 : (t1 + r * t2) / r = t2 := by
+        rw [Nat.add_mul_div_left _ _ hr, Nat.div_eq_of_lt ht1, Nat.zero_add]
+      have e : Lane.leafAt.go ((r, d) :: (r2, d2) :: rest) (t1 + r * t2)
+          = (((t1 + r * t2) % r : Nat) : Int) * d + Lane.leafAt.go ((r2, d2) :: rest) ((t1 + r * t2) / r) := rfl
+      rw [e, e1, e2, he1, he2]
+      rfl
+
+/-- **A lane reaches its greatest bound**: at some period and offset its leaf is `(l.bounds run).2`. -/
+theorem leafAt_top (l : Lane) {run : Nat} (hrun : 0 < run) (hp : 0 < l.periods) :
+    ∃ t < l.periods, ∃ o < run, l.leafAt t o = (l.bounds run).2 := by
+  have hpr : l.periods = prodR l.lv := by
+    simp only [Lane.periods, periods_foldl, Nat.one_mul]
+  rw [hpr] at hp ⊢
+  obtain ⟨t, ht, he⟩ := go_top l.lv hp
+  obtain ⟨o, ho, heo⟩ := one_top l.e hrun
+  refine ⟨t, ht, o, ho, ?_⟩
+  have hb : l.bounds run = (l.b + loS ((run, l.e) :: l.lv), l.b + hiS ((run, l.e) :: l.lv)) := by
+    simp only [Lane.bounds]; exact bounds_foldl _ _ _
+  rw [hb]
+  show l.b + (o : Int) * l.e + Lane.leafAt.go l.lv t = l.b + (((run : Int) - 1) * max l.e 0 + hiS l.lv)
+  rw [he, heo, Int.add_assoc]
+
 
 /-- What a grid the decoder accepts holds: one part, lanes of one period count, each inside its collection. -/
 theorem gridChecks_ok {j g : Lean.Json} {run : Nat} {lanes : Array Lane} {leaves : Bool → Nat → Option Nat}

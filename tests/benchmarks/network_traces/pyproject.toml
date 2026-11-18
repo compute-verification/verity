@@ -56,7 +56,7 @@ inputs = ["applications/onsite_full.toml", "calibration/hardware/cards", "calibr
           "benchmarks/spot_figures/cards", "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/figure1.py",
           "benchmarks/spot_figures/total_cost.py", "benchmarks/spot_figures/second_stage.py",
           "benchmarks/spot_figures/breakeven",
-          "adapters/vllm/workloads", "benchmarks/network_e2e/chain.py",
+          "adapters/vllm/workloads", "benchmarks/network_e2e/chain.py", "benchmarks/network_e2e/window_chain.py",
           "verity/protocols/compose/verifier/live_challenger",
           "verity/protocols/proofs/spot/verifier/challenger/challenger_session.py",
           "verity/protocols/proofs/spot/prover/audit/local_challenger.py",
@@ -80,12 +80,10 @@ inputs = ["applications/onsite_full.toml", "calibration/hardware/cards", "calibr
           # across its package and the PyTorch adapter's; demo_stub's `verity-vllm advice` and the encodings' replay
           # read the vLLM package too. Both packages are listed whole, as they move often. SPOT's
           # prove_path, which test_kept_scan imports with the records_audit it imports, reads its sources' list.
-          # test_attester_term runs `verity bench certifier_term`'s runner, test_block_attester holds the block attester to
-          # the block record's period-0 fixture, and test_attester_piece holds the CLI's served_table, with the run's
-          # `Start` it imports, to scan_zk's scan class.
+          # test_attester_term runs `verity bench certifier_term`'s runner, and test_attester_piece holds the CLI's
+          # served_table, with the run's `Start` it imports, to scan_zk's scan class.
           "adapters/vllm/verity_vllm", "adapters/torch/verity_torch",
           "benchmarks/certifier_term/run.py",
-          "tests/benchmarks/one_stage/interfaces/fixtures/block-record-r2-period0.json",
           "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/records_audit.py",
           "benchmarks/prove_path/sources.json", "tools/verity/cli/verity_cli/served_table.py",
           "tools/verity/cli/verity_cli/run.py", "tools/verity/cli/verity_cli/__init__.py",

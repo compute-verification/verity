@@ -14,7 +14,7 @@
 # and the inference-only case from the window's records audit
 # (SERVE_DIR/v3c-w*/audit; in a run without V3c whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl,
 # `served_verdicts.sh`'s step 3's,
-# SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ read off the case's own division
+# SERVE_DIR/private/logs/sampled-proofs/keep/served), the latter with the policy's α and Γ read off the case's own division
 # (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's H1 log through R's previous record,
 # or, on a serve with no H1 log, the serve's own records walked back from R's previous to its first (on a
 # serve tied to Pearl+, the window's W and the serve's first record, which a compose hand-off carries);
@@ -70,6 +70,7 @@ TPY=${TPY:-$TREE/.venv/bin/python}
 [ -x "$TPY" ] || TPY=$PY
 P=$D/private/composite
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
+. "$(dirname "${BASH_SOURCE[0]}")/placement.sh" || exit 2  # hold_placement
 dev=()
 if [ -n "${COMPOSE_DEVELOPMENT:-}" ]; then
   dev=(--development "$COMPOSE_DEVELOPMENT")
@@ -77,7 +78,7 @@ if [ -n "${COMPOSE_DEVELOPMENT:-}" ]; then
 elif [ -n "${COMPOSE_ON_NODE:-}" ]; then
   say "COMPOSITE ON-NODE: $COMPOSE_ON_NODE"
 elif [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
-  if [ "${VERITY_HOLD_PLACEMENT:-}" != 1 ]; then
+  if ! hold_placement; then
     say "COMPOSITE ON-NODE: composed on the served node (SERVED_NODE), which the prover controls"
   elif [ "${COMPOSE_OFF_NODE:-1}" != 0 ]; then
     say "COMPOSITE refused: this is the served node (SERVED_NODE), which the prover controls, so a composite here claims" \
@@ -139,7 +140,7 @@ if [ -f benchmarks/one_stage/served_cases.py ]; then
   [ -n "${ALPHA:-}" ] && [ -n "${GAMMA:-}" ] && ag=(--alpha "$ALPHA" --gamma "$GAMMA")
   where=(--serve-dir "$D")
   compgen -G "$D/v3c-w*/audit/window/case.json" > /dev/null || [ -f "$D/h1/log.jsonl" ] \
-    || { [ -f "$D/sampled-proofs-served/window/case.json" ] && where=(--audit "$D/sampled-proofs-served"); }
+    || { [ -f "$D/private/logs/sampled-proofs/keep/served/window/case.json" ] && where=(--audit "$D/private/logs/sampled-proofs/keep/served"); }
   "$TPY" benchmarks/one_stage/served_cases.py "${where[@]}" --private "$D/private" "${ag[@]}" > "$P/served_cases.log" 2>&1
   rc=$?
   grep -hE '^(CASE|NOT_WRITTEN|NOT_STARTED) \{' "$P/served_cases.log" | "$PY" -c '

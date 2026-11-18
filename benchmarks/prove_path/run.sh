@@ -94,12 +94,14 @@
 # From a clone of the tree, with 64 GB of memory, the outputs in $OUT (default $RESEARCH_RUN_DIR/out, outside a research run
 # out/prove_path under the clone); $OUT/ran_with.txt is the line naming the run's coins and parameters (prove_path.py ran-with):
 #   PP_LLAMA=DIR bash benchmarks/prove_path/run.sh
-# Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records), the binaries' sha256; never the
+# Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records) of a records audit, an
+# audit's summaries in their public form (public_log.py summaries), the binaries' sha256; never the
 # advice or its opening (the prover's, private: the verifier is handed the opening, the named gap), a prover's file (inst-*,
 # *-private.bin: the rows and their salts), a circuit (its pin is), a request value (the stand-in's workload.json, its prompts)
 # nor a serve's own records (serve.json, windows.jsonl: only vLLM's mirror publishes them, through serve_mirror.PUBLIC).
 # The rest goes to PP_KEEP=DIR (0700, refused under $OUT or the run dir; without it, scratch removed at exit): a window's
-# registration, commit.json, partition and the files beside them, the advice's length, the tools' logs and error output,
+# registration, commit.json, partition and the files beside them, an audit's own records whole (its summaries with the
+# advice's length and what is counted from it, its copy of the registration, its sessions), the tools' logs and error output,
 # the machine's shape, and the commit's and audits' logs whole: $OUT and stdout get their lines as public_log.py lets
 # them go.
 set -uxo pipefail
@@ -202,20 +204,23 @@ export RUST_MIN_STACK=$((64 << 20))
 TIME=$([ -x /usr/bin/time ] && echo "/usr/bin/time -v")
 PP="$PY benchmarks/prove_path/prove_path.py"
 
-keep() {  # NAME: $W/NAME's records into $O/NAME, among them the circuit each drawn member was proved on (window/m<k>/circuit.txt)
-  mkdir -p $O/$1
+keep() {  # NAME [public]: $W/NAME's records into $O/NAME, among them the circuit each drawn member was proved on
+          # (window/m<k>/circuit.txt); with public, into $K/NAME, and $O/NAME gets only their summaries' public form
+  local to=$O/$1; [ "${2:-}" = public ] && to=$K/$1
+  mkdir -p $to
   (cd $W/$1 && find . -type f \( ! -name circuit.txt -o -path './window/m*/circuit.txt' \) ! -name 'inst-*' ! -name 'm*-inst-*' ! -path './*/archive/*' \
     ! -path './builds/*' ! -path './proof-edits/*/sessions/*' ! -path './proof-edits/mutants/*/*' ! -path './proof-edits/*/member/*' -print0 \
-    | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} $O/$1/)
+    | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} $to/)
   # a case's blobs name its files in $W, which the EXIT trap removes: name the kept copies instead
-  (cd $O/$1 && find . -name '*.json' -print0 | xargs -0 -r grep -lZ '"blobs"' \
+  (cd $to && find . -name '*.json' -print0 | xargs -0 -r grep -lZ '"blobs"' \
     | xargs -0 -r $PY -c 'import json,sys
 w, o = sys.argv[1:3]
 for f in sys.argv[3:]:
     c = json.load(open(f))
     if isinstance(c, dict) and isinstance(c.get("blobs"), list):
         c["blobs"] = [o + b[len(w):] if isinstance(b, str) and b.startswith(w) else b for b in c["blobs"]]
-        open(f, "w").write(json.dumps(c, sort_keys=True))' "$W/$1/" "$(cd $O/$1 && pwd)/")
+        open(f, "w").write(json.dumps(c, sort_keys=True))' "$W/$1/" "$(cd $to && pwd)/")
+  [ "${2:-}" != public ] || python3 "$PL" summaries $to $O/$1
 }
 run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, then the verifier's audit; RUN is the committed
          # run's arguments (--tp-commit DIR --build-root DIR, --bundle DIR --row-dir DIR --workload F, or --serve-run DIR
@@ -249,7 +254,8 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   if [ -n "${PP_RECORDS:-}" ] && [ -n "${REC_RUN:-}" ]; then   # the window's audit from its records alone
     records $name $part $forged
     local rc=$?
-    keep $name
+    keep $name   # whole: served_verdicts.sh takes the served arm's records audit from $OUT/served
+
     return $rc
   fi
   $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \
@@ -258,7 +264,7 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   local rc=$?
   python3 "$PL" $K/$name/audit.log > $O/$name/audit.log
   grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; python3 "$PL" $K/$name/audit.err | tail -25
-  keep $name
+  keep $name public
   return $rc
 }
 records() {  # NAME PARTITION [--forged]: records_audit.py on the served window REC_RUN's window REC_K, the registered compiler

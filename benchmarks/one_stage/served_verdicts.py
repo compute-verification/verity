@@ -1408,13 +1408,14 @@ def graded_by(row: Mapping[str, Any]) -> str | None:
     return said if isinstance(said, str) and said else None
 
 
-def declared_unchecked(protocol: Any) -> str:
+def declared_unchecked(protocol: Any, said: str = "") -> str:
     """What of its run no auditor-side entry checks, as the scheme declared under ``protocol`` says (its declaration's
-    ``unchecked``), or empty."""
+    ``unchecked``, each sentence alone, `scheme.sentences`), less what ``said`` says already, or empty."""
     from verity.protocols.compose import schemes
 
-    return next((u for n in schemes.DECLARATIONS
-                 if (s := schemes.get(n)).protocol == protocol and (u := getattr(s, "unchecked", ""))), "")
+    declared = next((schemes.S.sentences(s) for n in schemes.DECLARATIONS
+                     if (s := schemes.get(n)).protocol == protocol), ())
+    return "; ".join(w for w in declared if w not in said)
 
 
 def ran_by(key: str, row: Mapping[str, Any], product: str) -> dict[str, Any]:
@@ -2494,7 +2495,7 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
         elif v == "accept":
             t = terms(r, (subprotocols or {}).get(k))
             s = ("accept" if server is not None else "accept, naming no server: not carried") + (f" ({'; '.join(t)})" if t else "")
-            if unchecked := declared_unchecked(r.get("protocol")):
+            if unchecked := declared_unchecked(r.get("protocol"), "; ".join(t)):
                 s += f", {unchecked}"
             if str(r.get("answer_from") or "").startswith(PEARLPLUS_FROM):
                 s += f", {PEARLPLUS_SAID}"

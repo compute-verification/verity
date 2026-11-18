@@ -258,10 +258,28 @@ def test_the_party_follows_period_json(tmp_path) -> None:
     assert WP.placement("n0", "n0", OTHER)["kind"] == "prover-node" and WP.placement("n0", "a", OTHER)["kind"] == "own-host"
     simulated = WP.placement("n0", "n0", OTHER, simulated=True)
     assert simulated["kind"] == "simulated" and simulated[WP.PREMISE] == (
-        f"{mc.UNCOMMITTED} (no configuration); the memory attester ran as a process of its own on the developer's node n0, standing in for a "
-        "host the developer doesn't control")
-    with pytest.raises(ValueError, match="simulated placement runs the memory attester on the developer's node"):
+        f"{mc.UNCOMMITTED} (no configuration); the memory attester ran as a process of its own on the prover's machine, standing in "
+        "for a machine the developer doesn't control")
+    with pytest.raises(ValueError, match="simulated placement runs the memory attester on the prover's machine"):
         WP.placement("n0", "a", OTHER, simulated=True)
+
+
+@pytest.mark.parametrize("tools, streamer", [({}, "build"), ({"wipe-stream": "/exec/wipe_stream"}, "/exec/wipe_stream")])
+def test_a_native_challenger_here_runs_the_streamer_the_period_names(tmp_path, tools, streamer) -> None:
+    """A challenger on this node streaming natively is started with period.json's `tools.wipe-stream`, a streamer built
+    where programs run, and builds its own beside its key (`--streamer build`) only when none is named."""
+    period = tmp_path / "periods" / "p0"
+    period.mkdir(parents=True)
+    (period / "period.json").write_text(json.dumps({"tools": tools, "wipe": {"streamer": "native", "threads": 4}}))
+    started = []
+
+    def side_of(doc, node, key, local, what=None):
+        started.append(local)
+        raise LookupError("started")
+
+    with pytest.raises(LookupError, match="started"):
+        wipe_run.subprotocol(period, "n0", tmp_path / "out", side_of=side_of)
+    assert started == [WP.command(tmp_path / "periods" / "wipe-challenger", ("--streamer", streamer, "--threads", "4"))]
 
 
 AUDITOR = "vy-auditor-2"
@@ -284,8 +302,8 @@ def test_a_rehearsal_on_the_prover_node_names_another_host_and_has_no_bound() ->
     names say `own-host`, and the premise is a rehearsal's all the same, with the key custody left out of the bound."""
     where = WP.placement("node-a", "on-node-rehearsal", OTHER, **UNDER)
     assert where["kind"] == "own-host" and not WP.holds(where)
-    assert where[WP.PREMISE] == (f"{REHEARSAL} (configuration {CONF}); the memory attester ran on on-node-rehearsal, "
-                                 "not the developer's node-a")
+    assert where[WP.PREMISE] == (f"{REHEARSAL} (configuration {CONF}); "
+                                 "the memory attester ran on the memory attester's machine, not on the prover's machine")
     assert W.uncertified(where, None) == [f"key custody: {where[WP.PREMISE]}"]
     assert not WP.holds(WP.placement("node-a", "on-node-rehearsal", None, **UNDER))
 
@@ -297,8 +315,8 @@ def test_the_auditor_host_under_its_pinned_key_reads_the_match_and_never_holds()
     assert where["kind"] == "own-host" and not WP.holds(where)
     assert W.uncertified(where, None) == [f"key custody: {where[WP.PREMISE]}"]
     assert where[WP.PREMISE] == (f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins for "
-                                 "memory-challenger's wipe sessions; the memory attester ran on vy-auditor-2, not the "
-                                 "developer's vy-dc-h200")
+                                 "memory-challenger's wipe sessions; "
+                                 "the memory attester ran on the memory attester's machine, not on the prover's machine")
 
 
 @pytest.mark.parametrize("key", [PINNED, OTHER])
@@ -343,17 +361,17 @@ def side_pin() -> list[dict[str, str]]:
 CONTROL = {"name": "control", "to": "outside", "via": "eth0 192.0.2.13: ssh"}
 
 
-def _side(tmp_path, wipe: dict, pins: list | None = None) -> tuple[Path, Callable[..., Side]]:
+def _side(tmp_path, wipe: dict, pins: list | None = None, host: str = "auditor") -> tuple[Path, Callable[..., Side]]:
     """A period whose challenger is `wipe_side.py` on a host of its own, its key the pinned one unless `wipe` says,
     under the committed configuration `CONF` with `pins` (by default none), and what hands the wipe that side."""
     period = tmp_path / "periods" / "p0"
     period.mkdir(parents=True)
-    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor",
+    (period / "period.json").write_text(json.dumps({"challenger_host": host,
                                                     "deployment": {"configuration": CONF, "pins": pins or []},
                                                     "wipe": {"trusted_sha512": wipe_side.key_sha512()} | wipe}))
     device = tmp_path / "device"
     device.mkdir()
-    side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    side = Side(host, (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
 
     def side_of(doc, node, key, local, what=None):
         assert (key, what) == ("wipe", "the wipe"), "the wipe's side is period.json's challenger.wipe"
@@ -366,7 +384,7 @@ def _side(tmp_path, wipe: dict, pins: list | None = None) -> tuple[Path, Callabl
 BOUND = {"streamer": "python", "host": "auditor", "address": "auditor:7000", "command": ["true"]}
 
 
-def _attach(tmp_path, side_of, *, pins=..., configuration=CONF, trusted=None, judge=None):
+def _attach(tmp_path, side_of, *, pins=..., configuration=CONF, trusted=None, judge=None, node="n0"):
     """The wipe scheme's attach (`WIPE.attach`) in its piece's process, bound to the challenger on `auditor`, with
     what a launcher hands it (the configuration's pin of `wipe_side.py`'s key by default); the case and record go under
     `tmp_path/private`."""
@@ -375,7 +393,7 @@ def _attach(tmp_path, side_of, *, pins=..., configuration=CONF, trusted=None, ju
     ctx = {"settings": S.settings(WIPE, {"store": "python"}), **wipe_served.FACTS, **BOUND, "private": private,
            "process": H.PIECE, "side_of": side_of,
            "pins": side_pin() if pins is ... else pins, "configuration": configuration, "trusted": trusted,
-           "node": "n0", "judge": judge}
+           "node": node, "judge": judge}
     return WIPE.attach(None, ctx), private
 
 
@@ -393,7 +411,7 @@ def test_the_subprotocol_with_the_challenger_on_its_own_host(tmp_path, monkeypat
     assert answer["public"]["certified"] is False and answer["public"]["memory_bits"] == M
     assert answer["profile"]["placement"]["trusted-device"] == (
         f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins for memory-challenger's wipe "
-        "sessions; the memory attester ran on auditor, not the developer's n0")
+        "sessions; the memory attester ran on the memory attester's machine, not on the prover's machine")
     case = json.loads((out / "wipe.case.json").read_text())
     assert sorted(case) == ["commitment", "evidence", "params"]
     assert json.loads(bytes.fromhex(case["evidence"]))["egress_mib"] is None
@@ -404,10 +422,10 @@ def test_the_subprotocol_with_the_challenger_on_its_own_host(tmp_path, monkeypat
                                          "outside_bits": 0, "segments": W.SEGMENTS, "tier": W.TIER,
                                          "trusted_sha512": wipe_side.key_sha512()}
     control, challenger = record["placement"]["links"]
-    assert control == WP.link("control", "n0", "outside", CONTROL["via"])
-    assert challenger["name"] == "challenger" and challenger["ends"] == ["n0", "auditor"]
-    assert challenger["via"] == f"{record['report']['connection']['local']} to {record['report']['connection']['peer']}"
-    assert challenger["via"].startswith("127.0.0.1:") and challenger["counted_by"] is None
+    assert control == WP.link("control", mc.PROVER_MACHINE, "outside", CONTROL["via"])
+    assert challenger["name"] == "challenger" and challenger["ends"] == [mc.PROVER_MACHINE, mc.ATTESTER_MACHINE]
+    assert challenger["via"] == wipe_run.CHALLENGER_LINK and challenger["counted_by"] is None
+    assert record["report"]["connection"]["local"].startswith("127.0.0.1:")    # the addresses: in the private record
     assert answer["profile"]["placement"] == record["placement"]
     assert record["placement"]["graded_by"] == wipe_run.GRADED_BY and record["placement"]["unchecked"] == dict(mc.UNCHECKED)
     assert wipe_run.GRADED_BY.endswith("; not certified: survivors bounded by nothing")
@@ -424,15 +442,17 @@ def test_the_subprotocol_with_the_challenger_on_its_own_host(tmp_path, monkeypat
     s = wipe_run.summary(record)
     assert (s["t0"], s["t1"]) == (window["t0"], window["t1"]) and s["uncertified"] == gaps and s["k"] == W.READS
     key, = case["params"]["trusted"]
-    assert s["decided_by"] == record["decided_by"] == {"program": "wipe-protocol", "host": socket.gethostname()}
+    assert s["decided_by"] == record["decided_by"] == {"program": "wipe-protocol", "host": mc.PROVER_MACHINE}
     assert s["key_sha512"] == record["report"]["key_sha512"] == hashlib.sha512(bytes.fromhex(key)).hexdigest()
     assert s["key_sha512"] == wipe_side.key_sha512() and s["key_pinned"] is record["report"]["key_pinned"] is True
 
 
-def test_who_decided_is_the_leans_file_name_or_python_on_this_host(tmp_path) -> None:
+def test_who_decided_is_the_leans_file_name_or_python_on_the_provers_machine(tmp_path) -> None:
     """`period.decided_by`, what a piece's summary says of its verdict: the Lean by its executable's name, wherever it
-    was built, and `python` when none answered, each on the host that ran it."""
-    host = socket.gethostname()
+    was built, and `python` when none answered, each on the prover's machine, never by a name the machine gives
+    itself."""
+    host = mc.PROVER_MACHINE
+    assert socket.gethostname() not in json.dumps(decided_by(None))
     assert decided_by(tmp_path / "scratch" / ".lake" / "build" / "bin" / "wipe-protocol") == {
         "program": "wipe-protocol", "host": host}
     assert decided_by("pous-run-protocol") == {"program": "pous-run-protocol", "host": host}
@@ -594,7 +614,7 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_still_a_rehearsal(tmp_path,
     assert record["report"]["key_pinned"] is True and record["report"]["key_sha512"] == wipe_side.key_sha512()
     where = record["placement"]
     assert answer["profile"]["placement"] == where and where["kind"] == "own-host" and not WP.holds(where)
-    assert where[WP.PREMISE] == f"{REHEARSAL} (configuration {CONF}); the memory attester ran on auditor, not the developer's n0"
+    assert where[WP.PREMISE] == f"{REHEARSAL} (configuration {CONF}); the memory attester ran on the memory attester's machine, not on the prover's machine"
     assert record["uncertified"][0] == f"key custody: {where[WP.PREMISE]}"
 
 
@@ -752,3 +772,21 @@ def test_the_threshold_is_past_the_streamed_wipes_own_bound(labels: int, k: int)
     p = sw.WipeParams(labels, k, 1, W.LIMIT_NS, (("gpu", labels * sw.LABEL_BYTES + (1 << 30)),))
     q, _ = sw.retained_bits(labels, k, W.memory_bits(p), 0, -128)
     assert q <= W.certify(p, 0)["foreign_bits"] < W.memory_bits(p), (labels, k, q)
+
+
+def test_no_machine_name_reaches_the_wipes_answer(tmp_path, monkeypatch) -> None:
+    """An accepted wipe with the node and the memory attester's host each distinctively named: no byte of the answer the
+    piece returns (its placement, the premise and the links among it) holds either name or this machine's own; the placement names the machines by their parties (`memory_attester.machines`), and
+    the premise reads as it does under any names."""
+    node, host = "node-zq7-distinct", "attester-xk4-distinct"
+    _, side_of = _side(tmp_path, {"links": [CONTROL]}, side_pin(), host=host)
+    wipe_judge.stand_in(monkeypatch)
+    got, _ = _attach(tmp_path, side_of, judge="wipe-protocol", node=node)
+    assert got.answer["verdict"] == "accept", got.answer
+    said = json.dumps(got.answer)
+    for name in (node, host, node.encode().hex(), socket.gethostname(), "127.0.0.1"):
+        assert name not in said, name
+    where = got.answer["profile"]["placement"]
+    assert where["parties"] == {"memory_attester": mc.ATTESTER_MACHINE, "prover": mc.PROVER_MACHINE,
+                                "verifier": mc.PROVER_MACHINE} and where["kind"] == "own-host"
+    assert where[WP.PREMISE].endswith(f"the memory attester ran on {mc.ATTESTER_MACHINE}, not on {mc.PROVER_MACHINE}")

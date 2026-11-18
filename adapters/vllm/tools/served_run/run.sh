@@ -95,8 +95,8 @@ env = {k: fill(str(v), k) for k, v in placed.items()
 # where an application's record is composed is the runner's default, by its product and VERITY_HOLD_PLACEMENT
 if run == "settings":
     env.pop("COMPOSE_OFF_NODE", None)
-elif held.get("VERITY_HOLD_PLACEMENT") == "1" and "VERITY_HOLD_PLACEMENT" not in given:
-    env["VERITY_HOLD_PLACEMENT"] = "1"
+elif "VERITY_HOLD_PLACEMENT" in held and "VERITY_HOLD_PLACEMENT" not in given:
+    env["VERITY_HOLD_PLACEMENT"] = held["VERITY_HOLD_PLACEMENT"]  # carried as set: the runner's one reader judges it
 send = [fill(s, f"{run} run's send") for s in r.get("send", [])]
 for name in send:
     if not Path(name).is_file():

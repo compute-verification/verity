@@ -57,6 +57,7 @@ export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$
 export FC_COINS=tree FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 CHALLENGER_REPO=$REPO CHALLENGER_WORK=$FW/challengers/${RESEARCH_RUN_ID:-local-$$} CHALLENGER_PY=python3
 . verity/protocols/proofs/flock/prover/pod/challenger.sh
+. verity/protocols/proofs/flock/prover/pod/selftest.sh
 GI=${CUDA_VISIBLE_DEVICES:-0}; GI=${GI%%,*}
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
@@ -292,9 +293,9 @@ prove)
       echo "$b replay exit $?"
       rm -rf $DD/sess/$b-zk; mkdir -p $DD/sess && cp -r $LAST $DD/sess/$b-zk && du -sb $LAST/* > $O/prove/$b-zk/session-sizes.txt
     fi
-    taskset -c $PCPU $(dirname $B)/flock-circuit-selftest selftest --zk --gpu --instances $D/inst-$N.bin --circuit $D/circuit.txt \
-      --only prover_is_deterministic ${PIN_T:+--expect-transcript $PIN_T} > $O/prove/$b-det.txt 2> $O/prove/$b-det.err
-    echo "$b determinism exit $?"; grep NEG $O/prove/$b-det.txt | cut -c1-600
+    selftest_run $b/prover_is_deterministic $O/prove/$b-det.txt $O/prove/$b-det.err \
+      taskset -c $PCPU $(dirname $B)/flock-circuit-selftest selftest --zk --gpu --instances $D/inst-$N.bin --circuit $D/circuit.txt \
+      --only prover_is_deterministic ${PIN_T:+--expect-transcript $PIN_T}
     [ -n "$PIN_T" ] || PIN_T=$(grep -o '"transcript_sha256":"[0-9a-f]*"' $O/prove/$b-det.txt | cut -d'"' -f4)
   done
   ;;
@@ -309,4 +310,5 @@ lean)
   ;;
 esac
 summary
+selftest_end
 exit ${LEAN_RC:-0}
