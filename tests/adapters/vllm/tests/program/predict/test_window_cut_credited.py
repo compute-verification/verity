@@ -123,16 +123,16 @@ def test_the_blocks_count_is_the_sum_of_its_bodies():
 
 @pytest.mark.slow
 def test_the_block_on_bits_is_its_words_and_the_scheme():
-    """The block on bits (each word primitive its body in the block's Boolean map) computes what the block computes on
-    words, and that is `pearl_plus_tile.reference`: on an honest tile (ok 1) and with y's word flipped at its sign, at the
+    """The block on bits (each word primitive its body in the block's Boolean map) computes what the tile's Program
+    computes on words, and that is `pearl_plus_tile.reference`: on an honest tile (ok 1) and with y's word flipped at its sign, at the
     lowest bit of its BF16 word and below it (ok 0). Slow: the block on bits is hundreds of millions of gates, the only
     check that the bodies the count reads compute the tile."""
-    _program, _part, _c, b = credited()
+    program, _part, _c, b = credited()
     vectors = _vectors()
     words = [_ports(args) for args, _ref in vectors]
     want = [_reference(ref) for _args, ref in vectors]
     assert want[0][-1] == 1 and [w[-1] for w in want[1:]] == [0, 0, 0]
-    assert [list(evaluate(b.program.fn, *w)) for w in words] == want
+    assert [list(evaluate(program.fn, *(_flat(a) for a in args))) for args, _ref in vectors] == want
     bits = block_circuit(b.program.fn, boolean_table(b.program))
     got = evaluate_words(bits, *(np.asarray([w[i] for w in words], dtype=np.uint64) for i in range(len(words[0]))))
     assert got.reshape(len(vectors), -1).tolist() == want
