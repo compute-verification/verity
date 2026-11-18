@@ -656,7 +656,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/live.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/public_rows.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled_rows.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_sample.py",
