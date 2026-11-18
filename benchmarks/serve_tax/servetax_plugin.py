@@ -37,8 +37,8 @@ and with ``edges_s`` (seconds after the first request whose id holds ``edge_tag`
 (`edges_of`, `boundary.Edges`): it drains, takes the state between two steps, and goes on. Each edge's record
 (`edges.PID.jsonl`: the drain, the pause and its parts, the KV pool's root, sizes, and unless ``busy`` is false the GPU's
 busy time each step since the last edge) is written off the engine loop. With the uniprocess executor, so are its
-`boundary.dump_core` and block fingerprints (``edges/``) and its state (``kv_dir``/edge-K.state.pkl), and the KV pool's
-bytes at the edges ``save_kv`` names to ``kv_dir``/edge-K.kv; from the first edge ``save_kv`` names to the last edge, each
+`boundary.dump_core` and block fingerprints (``private``/server/edges/) and its state (``kv_dir``, by default that
+directory, /edge-K.state.pkl), and the KV pool's bytes at the edges ``save_kv`` names to ``kv_dir``/edge-K.kv; from the first edge ``save_kv`` names to the last edge, each
 step's sampled tokens and their logprobs' bits go to ``private``/server/edges/outputs.PID.jsonl. With a tensor-parallel executor each
 rank keeps its part in its own process (`ranks_take`), copied to host memory on the ranks ``kv_copy`` names.
 
@@ -590,7 +590,7 @@ def local_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: li
     import boundary as B
 
     out = Path(cfg["out"])
-    d = out / "edges"
+    d = _kept(cfg, "edges")
     d.mkdir(parents=True, exist_ok=True)
     pid = os.getpid()
     sched, _kvm, pool, runner = B.parts(core)
