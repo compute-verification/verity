@@ -263,6 +263,7 @@ def _lean(*args: str) -> tuple[dict | None, str]:
 NO_TREE = "and no tree port (tree) reads it by path"
 NOT_OPEN = "does not open"
 NO_ROOTS = "the verifier holds no registered roots"
+NO_READ = "the verifier's program reads no row of"
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -343,8 +344,11 @@ def test_the_sampled_proofs_own_setup_refuses_each_cheat(staged):
         key = "wrong_field" if reads == "wrong_field" else name
         verdicts[key] = g.get("output", {}).get("refused", g)
         print("session_setup", key, verdicts[key])
-    for cheat in ("made_up", "wrong_salt", "other_leaf", "other_words", "wrong_field"):
-        assert verdicts[cheat] is not None, (cheat, verdicts)
+    # its tree ports come with no reads, so every reader is refused by its instances' reads (checkPort), the honest one
+    # included; the cheats' rows open no leaf of the registered tree
+    for name, why in (("honest", NO_READ), ("own", NO_READ), ("made_up", NOT_OPEN), ("wrong_salt", NOT_OPEN),
+                      ("other_leaf", NO_READ), ("other_words", NOT_OPEN), ("wrong_field", NO_READ)):
+        assert verdicts[name] is not None and why in verdicts[name], (name, verdicts)
 
 
 @pytest.mark.skipif(not (os.environ.get("FLOCK_CIRCUIT") and Path(os.environ["FLOCK_CIRCUIT"]).exists()),
