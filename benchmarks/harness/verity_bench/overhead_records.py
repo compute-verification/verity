@@ -187,16 +187,12 @@ def trial_why(store: Any, attempt: Mapping, run: str) -> str | None:
     return kit.trial_why(run, attempt, result)
 
 
-def _superseded(store: Any, target: str) -> list[str]:
-    return [str(lab.value) for lab in store.labels(target, key=SUPERSEDED_BY)]
-
-
 def current_points(store: Any, card: str, model: str = O.KERNEL_MODEL, precision: str = "fp8") -> str | None:
     """The points art of record of a card, model and precision: the newest such art labelled, and not superseded."""
 
     found = [art for art in records(store).get(POINTS_RECORD, []) if art.startswith("art:")
              and {k: store.get_manifest(art).meta.get(k) for k in ("card", "model", "precision")}
-             == {"card": card, "model": model, "precision": precision} and not _superseded(store, art)]
+             == {"card": card, "model": model, "precision": precision} and not kit.superseded(store, art)]
     return max(found, key=lambda art: store.get_manifest(art).meta.get("version", 0), default=None)
 
 
@@ -223,7 +219,7 @@ def of_record(store: Any, run: str) -> tuple[dict | None, list[str]]:
         m = store.get_manifest(art)
         if POINTS_RECORD not in [lab.value for lab in store.labels(art, key=RUN_OF_RECORD)]:
             whys.append(f"its points {art} aren't of record")
-        if later := _superseded(store, art):
+        if later := kit.superseded(store, art):
             whys.append(f"its points {art} are superseded by {', '.join(later)}: time it at the current points")
         if m.payload is None or m.payload.sha256 != doc.get("points_sha256"):
             whys.append(f"the points it was timed at aren't {art}'s")

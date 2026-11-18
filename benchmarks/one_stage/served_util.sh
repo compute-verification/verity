@@ -51,6 +51,7 @@
 # profile, the GPU's identity, the tools' output, the step trace, serve.json, summary.json, pauses.jsonl, the loads'
 # timings files, request bodies, outputs, sealed windows (deleted once measured) and the H1 transcripts stay in
 # UTIL_ROOT/scratch/<run id>.
+# PYSPY's analysis (pyspy_steps.json) and the nsys profile stay on the node: timings and code paths, none of the public kinds.
 set -uo pipefail
 for o in STANDIN_DRAWS:STANDIN_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
   || { echo "served-util: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
