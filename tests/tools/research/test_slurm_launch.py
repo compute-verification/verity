@@ -201,3 +201,25 @@ def test_payload_sh_refuses_properties_without_a_machine(site):
     r = subprocess.run(["bash", str(slurm.PAYLOAD_SH), "HEAD", "--properties", "x", "--", "true"], cwd=site["src"], capture_output=True,
                        text=True)
     assert r.returncode == 2 and "--properties is the copy of --machine NAME's table" in r.stderr
+
+
+def test_a_launch_asks_whether_a_machine_is_slurms_from_its_one_record_and_loads_no_register(tmp_path, monkeypatch):
+    """Rule: only a Slurm node's launch turns aside, and finding that out reads the machine's own record; weakening: every
+    `research run --on NAME` loads the whole register, and with it the notes sync, before it launches."""
+    from research import cli
+    from research.pods import registry
+
+    d = tmp_path / "machines.d"
+    d.mkdir()
+    (d / "n-0.toml").write_text(NODE)
+    (d / "vy-x.toml").write_text('provider = "ssh"\nhost = "h"\nuser = "u"\n')
+    (d / "bad.toml").write_text('provider = "slurm"\n')
+    monkeypatch.setenv(registry.REGISTRY_ENV, str(d))
+
+    def loaded(*a, **k):
+        raise AssertionError("the whole register was loaded")
+
+    monkeypatch.setattr(registry, "merged", loaded)
+    monkeypatch.setattr(cli.remote, "load_machines", loaded)
+    assert cli._slurm_machine("n-0")["via"] == "vy-via"
+    assert cli._slurm_machine("vy-x") is None and cli._slurm_machine("absent") is None and cli._slurm_machine("bad") is None

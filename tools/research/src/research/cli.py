@@ -484,7 +484,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         print("research run: --machine NAME names the machine a --local-only run is already on (a Slurm job's node); --on NAME "
               "names the machine itself", file=sys.stderr)
         return 2
-    if ns.on not in (None, "auto") and not ns.claimed and (m := remote.load_machines().get(ns.on)) and m.get("provider") == "slurm":
+    if ns.on not in (None, "auto") and not ns.claimed and (m := _slurm_machine(ns.on)):
         from .pods import slurm
 
         return slurm.launch(ns, harness_opts, command, m)
@@ -563,6 +563,15 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
 
 def _exit_on_sigterm(signum: int, _frame: object) -> None:
     raise SystemExit(128 + signum)
+
+
+def _slurm_machine(name: str) -> dict | None:
+    """Machine `name`'s record where the register here holds it as a Slurm cluster's node, else None. It reads that one file
+    and syncs nothing, so a launch on any other machine loads the register only where it always did."""
+    from .pods import registry
+
+    m = registry.recorded(name, remote.machines_path())
+    return m if m and m.get("provider") == "slurm" and not registry.validate(name, m) else None
 
 
 def _copy_properties(name: str, run_dir: Path) -> None:

@@ -350,14 +350,24 @@ def properties_copy(name: str, entry: dict) -> str | None:
             "[properties]\n" + "".join(f"{_toml_key(k)} = {_toml_value(v)}\n" for k, v in props.items()))
 
 
-def recorded_properties(name: str, machines_toml: Path) -> str | None:
-    """`properties_copy` of machine `name` as the register here holds it; None where the register is off or holds no record of
-    it, or the record has no `[properties]`."""
+def recorded(name: str, machines_toml: Path) -> dict | None:
+    """Machine `name`'s record as the register here holds it now, read from its one file: nothing is cloned or synced and no
+    other record is read. None where the register is off, holds no record of it, or the record doesn't parse."""
     d = registry_dir(machines_toml)
     entry = d / f"{name}.toml" if d else None
     if not (entry and entry.is_file()):
         return None
-    return properties_copy(name, tomllib.loads(entry.read_text()))
+    try:
+        return tomllib.loads(entry.read_text())
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return None
+
+
+def recorded_properties(name: str, machines_toml: Path) -> str | None:
+    """`properties_copy` of machine `name` as the register here holds it; None where it holds no record of it (`recorded`) or
+    the record has no `[properties]`."""
+    entry = recorded(name, machines_toml)
+    return properties_copy(name, entry) if entry is not None else None
 
 
 def write_entry(d: Path, name: str, entry: dict) -> Path:
