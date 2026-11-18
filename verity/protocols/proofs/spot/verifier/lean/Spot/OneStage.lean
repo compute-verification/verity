@@ -124,8 +124,9 @@ structure Params where
   /-- the window values the record's checks hold the verifiers' reads of to their entries in the record's
   `window.activations.values` (`Record.windowReads`), as the caller names them; none by default -/
   windowValues : Array String := #[]
-  /-- the blocks a scheme credits, by their number among the first level's members (`Core.Integrity.credited`); the
-  check refuses them unless each is a block of the first level and of every later one -/
+  /-- the blocks a scheme credits, by their number among the first level's members (`Core.Integrity.credited`), as
+  memory-accounting's resolver returns them; the check refuses them unless each is a block of the first level and of
+  every later one -/
   credited : Array Nat := #[]
 
 structure Commitment where

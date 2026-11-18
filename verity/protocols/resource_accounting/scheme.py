@@ -205,13 +205,6 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
     return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), scheme.delta_scheme)
 
 
-def credited(scheme: Scheme, units: Mapping[int, str]) -> frozenset[int]:
-    """The numbers among the profile's first-level members (``units``: each member's number to its Definition) of the
-    blocks ``scheme`` credits, which a SPOT verifier takes as its `Params.credited` (Lean `Scheme.Placed.credited`)."""
-    raise NotImplementedError(f"{scheme.name}: the credited numbers wait on the scheme's blocks being blocks of the "
-                              "registered circuit's first level (Scheme.Placed), which no scheme's are yet")
-
-
 #: the registered schemes, by name: a scheme's package registers it when imported
 SCHEMES: dict[str, Scheme] = {}
 
@@ -244,4 +237,4 @@ def get(name: str) -> Scheme:
 
 
 __all__ = ["PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Order", "Port", "Scheme", "bound",
-           "credited", "get", "register", "register_process", "settings"]
+           "get", "register", "register_process", "settings"]
