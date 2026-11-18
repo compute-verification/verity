@@ -6,9 +6,9 @@ block's cost reads the record's kept width (``K_KEPT``, `UnitRecord.k_kept`) bes
 Definition's K, which is the unit's padded width. The cost is of a tile whose every cell is credited: filler, excluded and
 given-up rows credit none (`UnitRecord.credited`).
 
-On a served run (`attach`) it computes every linear block with its device run (`verity.hooks.ComputeBlockWith`), the
-workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), over the weight operands the run registers
-(``memory``): one epoch a Commit phase (`PhaseOpened` to `PhaseClosed`), or one for the server's life where no phase
+On a served run (`attach`) it computes every linear block with its device run (a `verity.hooks.Kernel`, filed with
+``exchange.compute_with``), the workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), over the weight
+operands the run registers (``memory``): one epoch a Commit phase (`PhaseOpened` to `PhaseClosed`), or one for the server's life where no phase
 arrives (`Attached.step`); outside an epoch a block is the workload's own. At a Match capture (``ctx["stage"]``
 ``capture``) each call is one dispatcher op, ``verity_pouw::pearl_plus_linear`` (`serving.tensors.PearlCDevice.linear_op`),
 in the first-stage linear's form, which the capture records; its coins are in-process and credit nothing. It ends the run's pass once each step's blocks
@@ -485,7 +485,7 @@ def attach(exchange: Any, ctx: Any) -> Attached:
     exchange.subscribe(PEARL_PLUS.name, "declared", on.declare)
     exchange.subscribe(PEARL_PLUS.name, "memory", on.registered)
     exchange.subscribe(PEARL_PLUS.name, "steps", on.step)
-    exchange.request(PEARL_PLUS.name, H.ComputeBlockWith(on.kernel))
+    exchange.compute_with(PEARL_PLUS.name, on.kernel)
     return on
 
 

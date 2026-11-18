@@ -271,7 +271,6 @@ class PearlCArm:
         from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
         from verity.protocols.compose import schemes
         from verity.protocols.resource_accounting.scheme import declared
-        from verity.hooks import ComputeBlockWith
         from verity_vllm import messages
         from verity_vllm.protocols.linear import vllm_site
         from verity_vllm.protocols.linear.api import Arm as StackArm
@@ -321,7 +320,7 @@ class PearlCArm:
         bad = stack.refusals()
         if bad:
             raise RuntimeError(f"{scheme} refuses the model: " + "; ".join(bad))
-        messages.current().request(run.entry, ComputeBlockWith(stack))
+        messages.current().compute_with(run.entry, stack)
         vllm_site.attach(sites, target.hooks)
         spec = PassSpec(hashing=True, schedule=self.schedule, run_id=settings.RESEARCH_RUN_ID)
         stack.activate(StackArm("pearlc", "bf16", run.entry, spec=spec))

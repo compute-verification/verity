@@ -93,6 +93,7 @@ class _Exchange:
     def __init__(self) -> None:
         self.subscribed: dict[str, list] = {}
         self.filed: list = []
+        self.kernels: list = []
 
     def subscribe(self, name: str, hook: str, fn) -> None:
         assert name == "pearl-plus" and hook in PS.PEARL_PLUS.hooks
@@ -100,6 +101,9 @@ class _Exchange:
 
     def request(self, name: str, request) -> None:
         self.filed.append((name, request))
+
+    def compute_with(self, name: str, kernel) -> None:
+        self.kernels.append((name, kernel))
 
     def emit(self, event) -> None:
         for fn in self.subscribed.get(event.hook, ()):
@@ -164,17 +168,17 @@ def test_the_memory_hooks_other_events_leave_it_as_it_was(monkeypatch) -> None:
 
 def test_attach_computes_each_linear_block_with_its_run(monkeypatch) -> None:
     ex, run = _attached(monkeypatch)
-    [(name, req)] = ex.filed
-    assert name == "pearl-plus" and isinstance(req, H.ComputeBlockWith)
-    assert req.kernel(_due(), lambda given: given or "stock") == "stock"
+    [(name, kernel)] = ex.kernels
+    assert name == "pearl-plus" and not ex.filed
+    assert kernel(_due(), lambda given: given or "stock") == "stock"
     ex.emit(H.StepBegan(0))
-    assert req.kernel(_due(), lambda given: "stock") == "stock"
+    assert kernel(_due(), lambda given: "stock") == "stock"
     ex.emit(H.StepBegan(1, ("a",), 8))
-    assert req.kernel(_due(), lambda given: "stock") == "y"
+    assert kernel(_due(), lambda given: "stock") == "y"
     assert run.calls == [(3, "x", "w", None)]
     for fmt in ("e4m3", "fp16", "fp32", "int8"):
         with pytest.raises(ValueError, match=rf"block model.layers.0.qkv's weight is {fmt}, and its kernel reads \('bf16',\)"):
-            req.kernel(_due(fmt), lambda given: "stock")
+            kernel(_due(fmt), lambda given: "stock")
 
 
 def test_a_pass_ends_at_each_steps_computed_and_a_step_over_one_is_refused(monkeypatch) -> None:
@@ -202,23 +206,23 @@ def _phased(monkeypatch) -> tuple[_Exchange, list[_Run], PS.Attached]:
 
 def test_each_phase_is_one_epoch_and_its_root_may_come_after_the_next_opens(monkeypatch) -> None:
     ex, runs, on = _phased(monkeypatch)
-    [(_, req)] = ex.filed
+    [(_, kernel)] = ex.kernels
     p0, p1, root = b"\x01" * 64, b"\x02" * 64, b"\x0a" * 64
     ex.emit(H.PhaseOpened(0, 0))
     ex.emit(H.StepBegan(0, ("a",), 8))
-    assert req.kernel(_due(), lambda given: "stock") == "y"
+    assert kernel(_due(), lambda given: "stock") == "y"
     ex.emit(H.StepComputed(0))
     ex.emit(H.StepEnded(0))
     ex.emit(H.PhaseClosed(0, 0, p0))
     assert runs[0].finished and runs[0].passes == 1 and on.run is None
     ex.emit(H.StepBegan(1, ("a",), 8))
-    assert req.kernel(_due(), lambda given: "stock") == "stock" and len(runs) == 1
+    assert kernel(_due(), lambda given: "stock") == "stock" and len(runs) == 1
     ex.emit(H.StepEnded(1))
     ex.emit(H.PhaseOpened(1, 2))
     ex.emit(H.PhaseCommitted(0, root))
     assert on.run is runs[1] and not runs[1].finished
     ex.emit(H.StepBegan(2, ("a",), 8))
-    assert req.kernel(_due(), lambda given: "stock") == "y" and runs[1].calls == [(3, "x", "w", None)]
+    assert kernel(_due(), lambda given: "stock") == "y" and runs[1].calls == [(3, "x", "w", None)]
     ex.emit(H.StepComputed(2))
     ex.emit(H.StepEnded(2))
     ex.emit(H.PhaseClosed(1, 2, p1))
@@ -378,12 +382,12 @@ def test_a_capture_records_each_call_as_one_op_on_in_process_coins(monkeypatch) 
     monkeypatch.setattr(_Device, "runs", {}, raising=False)
     ex = _Exchange()
     on = PS.PEARL_PLUS.attach(ex, {**IN_PROCESS, "stage": "capture", "build": "build-7"})
-    [(_, req)] = ex.filed
+    [(_, kernel)] = ex.kernels
     ex.emit(H.MemoryChanged("registered", values=(("model.layers.0.qkv.weight", W0),),
                             operands={"model.layers.0.qkv.weight": 3}))
     ex.emit(H.StepBegan(0, ("a",), 8))
     assert _Device.runs == {"build-7": on.run}
-    assert req.kernel(_due(), lambda given: "stock") == "y"
+    assert kernel(_due(), lambda given: "stock") == "y"
     assert ops == [("x", "w", None, "build-7", 3)] and on.run.calls == [(3, "x", "w", None)]
     on.release()
     assert _Device.runs == {}
@@ -659,16 +663,16 @@ def test_with_users_the_front_s_phase_serves_no_epoch_and_the_tied_workload_s_ph
     front's phase opens no epoch and takes no coins, so the one epoch (the period's one salt session) is the tied phase's,
     and its root committed after the front's is taken without one."""
     ex, runs, on = _users(monkeypatch)
-    [(_, req)] = ex.filed
+    [(_, kernel)] = ex.kernels
     ex.emit(H.PhaseOpened(0, 0))
     ex.emit(H.StepBegan(0, ("e-front",), 8))
-    assert req.kernel(_due(), lambda given: "stock") == "stock" and runs == []
+    assert kernel(_due(), lambda given: "stock") == "stock" and runs == []
     ex.emit(H.StepEnded(0))
     ex.emit(H.PhaseClosed(0, 0, b"\x01" * 64))
     ex.emit(H.PhaseOpened(1, 1))
     ex.emit(H.PhaseCommitted(0, b"\x0a" * 64))
     ex.emit(H.StepBegan(1, ("e-fixed", "e-fixed2"), 8))
-    assert req.kernel(_due(), lambda given: "stock") == "y" and len(runs) == 1
+    assert kernel(_due(), lambda given: "stock") == "y" and len(runs) == 1
     ex.emit(H.StepComputed(1))
     ex.emit(H.StepEnded(1))
     ex.emit(H.PhaseClosed(1, 1, b"\x02" * 64))
