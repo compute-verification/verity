@@ -5,7 +5,7 @@
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
         [--retain host|device [--retain-device-gb 32] [--release-after spot,pouw_h1 [--draws-dir DIR]]]
         [--required-manifest PREDICTED/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
-        [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
+        [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb GB (with --seal)]
         [--copy-records-to $OUT] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--protocols pouw:pearl-c-h100-v1-h3 --precision bfloat16 --protocols-config JSON
@@ -233,10 +233,10 @@ class Options:
     window_gb: float = option("--window-gb", type=float, default=32.0,
                               help="close a Commit window once its steps have committed this many GB, which bounds its sealed "
                                    "bundle (0: no bound)")
-    disk_floor_gb: float = option("--disk-floor-gb", type=float, default=300.0,
-                                  help="--seal: refuse to start unless OUT's filesystem has this many GB free beyond one window "
-                                       "(--window-gb), and stop cleanly (no new requests) rather than seal a window that would "
-                                       "leave less (0: no floor)")
+    disk_floor_gb: float | None = option("--disk-floor-gb", type=float, default=None,
+                                         help="--seal (required with it: a fact of the machine's disk): refuse to start unless "
+                                              "OUT's filesystem has this many GB free beyond one window (--window-gb), and stop "
+                                              "cleanly (no new requests) rather than seal a window that would leave less (0: no floor)")
     copy_records_to: str | None = option("--copy-records-to", default=None,
                                          help="copy the public records (serve_commit.MIRRORED; never requests.jsonl or the step "
                                               "traces) into this directory (the run's $OUT) after each block closes and at the stop")
@@ -762,7 +762,10 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("order tick adds each request at its step; --window-requests would hold it past that")
     if (c := served_class(opts))["R"] < opts.max_num_seqs:
         raise UsageError(f"--served-rows-class R {c['R']} is under --max-num-seqs {opts.max_num_seqs}: a full step's rows wouldn't fit")
-    if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb, opts.switch_interval_ms) < 0:
+    if opts.seal and opts.disk_floor_gb is None:
+        raise UsageError("--seal needs --disk-floor-gb: the GB --out's filesystem keeps free beyond one window, which only the "
+                         "machine's disk can say (0: no floor)")
+    if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb or 0, opts.switch_interval_ms) < 0:
         raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
