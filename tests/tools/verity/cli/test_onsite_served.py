@@ -336,7 +336,7 @@ def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one
                                                     "CERTIFIER_PERIOD_CMD", "V3C_CLASS", "CLASSES"}
     assert device.runs == T.GATE
     gates = [e for ps in REG.parties.values() for e in ps.values() if e.runs == T.GATE]
-    assert len(gates) == 6
+    assert len(gates) == 7
     assert all((e.scripts, e.binds, e.optional, e.variables(cfg, BINDINGS)) == ((), (), (), {}) for e in gates)
     principal = {p["name"]: p["principal"] for p in cfg["party"]}
     assert all(principal[p] == "auditor" for ps in REG.parties.values() for p, e in ps.items() if e.runs == T.GATE)

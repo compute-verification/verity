@@ -517,7 +517,7 @@ the figures: this page keeps none.
 ## The application
 
 **No run of record of the remote verifier yet:** `remote-v1 check` (to be `verity verify remote`) has none. The remote application
-is `applications/remote.toml` (`applications/README.md`), which `verity run` doesn't accept yet: Pearl+ has no piece. The vLLM served
+is `applications/remote.toml` (`applications/README.md`), every party of which `verity run --dry-run` resolves. The vLLM served
 run runs both halves on one served run, PoUW's as a development run:
 
 - the vLLM served run (`adapters/vllm/tools/served_run/README.md`): Llama-3.2-1B INT8 served by vLLM on one H200, its
