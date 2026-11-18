@@ -74,6 +74,10 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import (
 SCHEME = "verity/remote-bandwidth/coins/v1"
 CHALLENGE, OPENINGS, APPEND = "poub/challenge", "poub/openings", "poub/append"
 LABELS = (CHALLENGE, OPENINGS, APPEND)
+FORMER = {"challenge": CHALLENGE, "openings": OPENINGS, "append": APPEND}
+"""Each label's former name, the one release logs written from 21 Oct 2026 until the `poub/` labels reached `main`
+carry: read as that label by what reads those logs (`auditor_line`, `gate_whatif`), never sent or committed under.
+Deleted once no line of record or gate what-if is to be recomputed over a release log of that range."""
 COIN_BYTES = 32
 APPENDS = 1024
 """A session's append coins unless it names its own: one an append, so a session appends at most this many times."""
@@ -408,7 +412,7 @@ def lean_answer(piece: str, request: Mapping[str, Any], python: Any) -> Any:
     return got
 
 
-__all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "LABELS", "OPENINGS", "RELEASED_FORM", "Released", "SCHEME",
-           "SessionCoins", "UNWRITTEN", "Undecided", "WINDOW_DOMAIN", "coin", "coin_reason", "families", "layout_reason",
-           "lean_answer", "local", "openings_coins", "received_reason", "released", "released_reason", "trusted",
-           "undecided", "window", "window_root"]
+__all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "FORMER", "LABELS", "OPENINGS", "RELEASED_FORM", "Released",
+           "SCHEME", "SessionCoins", "UNWRITTEN", "Undecided", "WINDOW_DOMAIN", "coin", "coin_reason", "families",
+           "layout_reason", "lean_answer", "local", "openings_coins", "received_reason", "released", "released_reason",
+           "trusted", "undecided", "window", "window_root"]
