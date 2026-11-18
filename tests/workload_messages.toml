@@ -380,27 +380,6 @@ readers = [
 ]
 
 [[message]]
-type = "PoUSSetup"
-today = "PoUS's Setup: `protocols.install(model, Context(enabled=[pous:...]))`, store these weights as P2's C*"
-writers = [
-    { lane = "memory-accounting", file = "benchmarks/pous/served_piece.py", find = "PO\\.install\\(model, ctx\\)|PO\\.adapter\\(\\\"pous\\\"\\)|PO\\.Context\\(" },
-]
-readers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/protocols/__init__.py", find = "^def install\\(|^def adapter\\(" },
-    { lane = "memory-accounting", file = "adapters/vllm/verity_vllm/protocols/pous.py", find = "^def install\\(" },
-]
-
-[[message]]
-type = "PoUSStore"
-today = "PoUS's store, the answer to PoUS's Setup: `comp.get(\"pous\").store` (its commitment, salt, root, segments, published point) and `opt.prover(())`, which answers the memory attester's rounds"
-writers = [
-    { lane = "memory-accounting", file = "adapters/vllm/verity_vllm/protocols/pous.py", find = "^    def prover\\(|^    def segments\\(|^    def published\\(" },
-]
-readers = [
-    { lane = "memory-accounting", file = "benchmarks/pous/served_piece.py", find = "opt = comp\\.get\\(\"pous\"\\)|s = opt\\.store|opt\\.prover\\(\\(\\)\\)|inputs = \\(s\\.commitment" },
-]
-
-[[message]]
 type = "CommittedRows"
 today = "the run's committed step-input rows and their salts (`served_rows/w<k>.json`)"
 writers = [

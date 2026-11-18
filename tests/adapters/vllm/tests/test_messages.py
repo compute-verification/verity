@@ -17,7 +17,7 @@ from verity_vllm.pipeline import advice as A
 
 
 def test_every_declared_message_is_a_type():
-    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows", "PoUSStore"} <= M.types().types
+    assert {"RunTotals", "Run", "Request", "ServingConfiguration", "CommittedRows", "PoUWValues"} <= M.types().types
 
 
 def test_a_type_no_protocol_declares_is_refused():

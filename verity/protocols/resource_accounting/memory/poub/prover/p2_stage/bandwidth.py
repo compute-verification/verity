@@ -49,7 +49,6 @@ ended in the prover's error, writes none.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import multiprocessing as mp
 import os
@@ -73,7 +72,6 @@ sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/pous
 sys.path.insert(0, str(STAGE))
 
 from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
-from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import coins, p2, p2_case, p2_parties, receipts
@@ -363,9 +361,7 @@ def _segment_paths(args: tuple) -> dict[int, tuple[bytes, ...]]:
     rows = Path(rows_path).read_bytes()
     if len(rows) != DIGEST * bps:
         raise ValueError(f"{rows_path} is not {bps} row digests")
-    head = b"\x00" + tag(salt_value(salt), s).to_bytes(32, "little")
-    level = [hashlib.sha512(head + v.to_bytes(2, "little") + rows[DIGEST * v:DIGEST * (v + 1)]).digest()
-             for v in range(bps)]
+    level = V.row_leaves(salt, s, rows)
     levels = [level]
     while len(level) > 1:
         level = [V.node_hash(level[i], level[i + 1]) for i in range(0, len(level), 2)]
