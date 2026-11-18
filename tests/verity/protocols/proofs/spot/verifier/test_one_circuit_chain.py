@@ -236,7 +236,7 @@ def prove_block(member: Any) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as d:
         d = Path(d)
         (d / "circuit.txt").write_text(text)
-        iset = SimpleNamespace(name=f"block-{member.base}", subcircuit=SimpleNamespace(id=meta["subcircuit"], inputs=[], outputs=[]))
+        iset = SimpleNamespace(name=f"block-{member.base}", subcircuit=SimpleNamespace(id=meta["unit"], inputs=[], outputs=[]))
         FC.write(text, iset, 0, n, d / f"inst-{n}.bin", d / f"pub-{n}.bin", indices=list(range(member.base, member.base + n)),
                  rows=rows, outs=outs)
         with socket.socket() as s:
