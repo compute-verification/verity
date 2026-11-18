@@ -152,6 +152,8 @@ KEEP = False
 #: whether a hand change that meets a line the branch changed keeps the branch's side of that hunk (`hand_ours`,
 #: `--hand-ours`) instead of stopping the crossing as `conflicted` at step `hand`
 HAND_OURS = False
+#: from this many moves on, `carry` says first how many there are and how to cross them in parts
+MANY_MOVES = 20
 #: the clone's worktree lock, in its git directory, under the name `research.gates.WORKTREES_LOCK` gives it: a scratch
 #: worktree is added and forgotten holding it alone, and every fetch the queue runs holds it shared.
 #: Nothing here takes train.lock, which `research.queue.worktrees_locked` takes before this lock, never after
@@ -884,9 +886,15 @@ def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str 
     if not moves:
         return {"branch": branch, "head": head, "crossed": [], "skipped": [], "status": "no-moves",
                 "plain": {"status": "clean", "files": []}, "error": f"no move to cross: merge {main or onto} as usual"}
+    if len(moves) >= MANY_MOVES:
+        print(f"restack.py: {branch} lacks {len(moves)} moves, each crossed in turn (a line as each starts). Where this "
+              f"is too slow, carry it in parts: name the first few with --move-commit, in order, and run again on the "
+              f"result. They are, oldest first: {' '.join(rev(m, cwd)[:12] for m, *_ in moves)}", file=sys.stderr, flush=True)
     for i, (move, script, args) in enumerate(moves):
         SCRIPT, SCRIPT_ARGS = script, tuple(args)
         last = i == len(moves) - 1
+        print(f"restack.py: {branch}: move {i + 1} of {len(moves)}, {rev(move, cwd)[:12]} "
+              f"({shlex.join([script, *args])})", file=sys.stderr, flush=True)
         r = restack(tip, move, onto if last else None, base if len(moves) == 1 else None, python, cwd,
                     pins=pins and last, main=main)
         ours += [f for f in r.get("hand_ours", []) if f not in ours]
