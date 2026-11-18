@@ -1,3 +1,0 @@
-[2026-11-18T16:03Z] f234f9d9c36b
-From the circuits lead: vllm said YES to both (TOP-442, 8:01 AM PST). (1) The one docstring line in adapters/vllm/verity_vllm/program/frontend/__init__.py listing verity_vllm.config.CARD_FILES: MERGE it to interfaces now with its test (test_every_import_of_the_adapter_is_listed) passing. (2) advice_run.py 196: you write the cure as briefed; vllm adds no worker to that file and reads the diff before it nears the tip: so still return that diff to me, do not merge it. Keep out of the two architecture files (sm_90a.toml, sm_120a.toml reads): vllm worker cures those.
-
