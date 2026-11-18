@@ -6,13 +6,14 @@ import json
 
 from pathlib import Path
 from verity.protocols.resource_accounting.network.verifier import (blob_files as bf, connection_rows_check as CRC,
-    load_check as LK, record_files as RF, network_attester_rows as WR)
+    lean_audit as LA, load_check as LK, record_files as RF, network_attester_rows as WR)
 from verity.protocols.resource_accounting.network.verifier.certificate import (CertifiedRecord, CertifiedStart, Direction, LmsKey,
     record_head)
 from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
 from verity.protocols.resource_accounting.network.verifier.record_files import certified_from_json, unpack_record
-from verity.protocols.resource_accounting.network.verifier.network_attester import END, FAIL, REFUSED, NetworkAttesterParams, audit
+from verity.protocols.resource_accounting.network.verifier.network_attester import (END, FAIL, INTEGER_FIELDS, REFUSED,
+    NetworkAttesterParams, audit)
 
 PROOF_DEADLINE_S = 600.0
 
@@ -61,6 +62,30 @@ def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], Certifi
             record = certified_from_json(doc)
             got[(record.link, record.direction, record.window)] = record
     return got, refused
+
+
+def rows_audit_case(run: Path, dep: dict, params: NetworkAttesterParams) -> dict:
+    """The run's ``network-rows`` case (`NetworkVerifier.RowsAudit`) as `period_check.lean_check` writes it: the
+    params of the deployment ``dep`` at its schedule ``params``, the commitment of the records and certified records
+    in ``run``, and no evidence (``{}``). ValueError naming an execution phase's record or certified record the run
+    lacks, or a schedule in another egress form than the id form."""
+    if params.egress != "id":
+        raise ValueError(f"the rows audit's schedule is the id egress form's, not {params.egress!r}'s")
+    key = RF.read_public(dep["key"])
+    certified, _ = read_certified(run / "certified.jsonl")
+    raw = {(name, r.window): r for name, rs in read_records(run, params).items() for r in rs}
+    body = []
+    for w in range(dep["windows"]):
+        for name, (link, direction) in CERTIFIED.items():
+            r, c = raw.get((name, w)), certified.get((link, direction, w))
+            if r is None or c is None:
+                raise ValueError(f"{name} window {w} has no {'record' if r is None else 'certified record'}")
+            body += [LA.encode(r), LA.encode(c)]
+    p, limit = key.params, params.max_tokens_cap
+    schedule = {k: dep["params"][k] for k in INTEGER_FIELDS} | ({} if limit is None else {"max_tokens_cap": limit})
+    return {"params": {"key": key.public.hex(), "link": dep["link"], "lms": {"H": p.H, "N": p.N, "W": p.W, "toy": p.toy},
+                       "schedule": schedule, "session": dep["session"], "windows": dep["windows"]},
+            "commitment": b"".join(body).hex(), "evidence": b"{}".hex()}
 
 
 def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
