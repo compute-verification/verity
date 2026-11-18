@@ -49,9 +49,9 @@ sys.exit(h(json.load(open(sys.argv[1]))) is not False)' "$PRED/manifest.json" \
   || { say "SMOKE FAILED manifest: it names the hidden class, and this smoke attaches no hidden tap"; exit 1; }
 
 SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT" --precision bfloat16
-  --run-id "smoke-${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal --max-num-batched-tokens 512 --window-steps 256
+  --run-id "smoke-${RESEARCH_RUN_ID:-local}" --seal --max-num-batched-tokens 512 --window-steps 256
   --required-manifest "$PRED/manifest.json" --norm-tap-so "$NSO" --window-requests 1
-  --max-model-len 512 --window-gb 4 --disk-floor-gb 5 --seal-hold-gb 8 --seal-warm-gb 0)
+  --window-gb 4 --disk-floor-gb 5 --seal-hold-gb 8)
 LOAD=(adapters/vllm/tools/served_run/serve_load.py --port "$PORT" --model "$MODEL" --varied 1 --rate 1000 --max-tokens 4
   --prompt-range 16:24 --seed 1 --out "$SR/load.jsonl")
 
@@ -75,9 +75,9 @@ from verity_vllm import settings
 from verity_vllm.commit.committer import native_ext, native_jit
 from verity_vllm.config import cuda_arch
 sku, home = settings.card_sku(), settings.cuda_home()
-missing = [p for p in native_jit.source_paths(native_ext.HERE) if not os.path.exists(p)]
-assert not missing, missing
-print(f"COMMITTER SETTINGS READ: CARD_SKU {sku}, arch {cuda_arch(sku)}, CUDA_HOME {home}, the native collector's sources present")
+ext = native_ext.ext()
+assert not native_jit.missing_bindings(ext, os.path.join(native_ext.HERE, "native_collect.cpp"))
+print(f"COMMITTER BUILT ITS NATIVE COLLECTOR: CARD_SKU {sku}, arch {cuda_arch(sku)}, CUDA_HOME {home}, every binding present")
 EOF
   "$PY" - "${LOAD[@]}" <<'EOF'
 import runpy, sys
@@ -85,7 +85,7 @@ a = runpy.run_path(sys.argv[1])["parser"]().parse_args(sys.argv[2:])
 assert a.varied == 1 and not a.fixed, a
 print("LOAD PARSED:", a.varied, "request(s), max_tokens", a.max_tokens)
 EOF
-  echo "SMOKE DRY OK; not exercised off the card: the model load, the committer's construction and its native collector's JIT build, the request, the seal and the open"
+  echo "SMOKE DRY OK; not exercised off the card: the model load, the committer's construction over the engine, the request, the seal and the open"
   exit 0
 fi
 
