@@ -5269,6 +5269,11 @@
       "paths": {
         "adapters/vllm/verity_vllm/pipeline/id_relay.py": "verity/protocols/resource_accounting/network/prover/id_relay.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml": "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served.toml"
+      }
     }
   ]
 }
