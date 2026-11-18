@@ -26,7 +26,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c im
 from verity_torch.pouw.pearl_c.host import joined  # noqa: E402
 
 SCHEME = "pearl-c-h100-v1-h3"
-SALT_KEY = bytes(range(100, 132))
 STEPS = ["pd_commit_gm_851", "stats_s5", "eprime", "form_s5_g", "gemm_words_g_d", "pa", "gemm_pearlc_g_d", "pd_tiles_g_979"]
 
 
@@ -261,14 +260,12 @@ def device_run(experts: int, n: int = 128, k: int = 1024, retain=None, schedule=
     weights = {w: torch.from_numpy(rng.standard_normal((n, k)).astype(np.float32) * 0.05).to(torch.bfloat16)
                for w in range(experts)}
     kernel = PPD.Kernel(R, dev or RecordingDev(), "0" * 64)
-    try:
-        roots = PPDR.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
-    except NotImplementedError as e:   # the served call's supplier of its trees' salts is not written
-        pytest.xfail(f"compute-accounting's goal: Pearl+ hands the leaf kernels their salts ({e})")
+    salts = {w: hashlib.shake_256(b"salts_b %d" % w).digest(HM96_SALT * n) for w in weights}   # one install's, run to run
+    roots = PPDR.weight_roots(kernel, weights, SCHEME, weight_salts=salts)
     ch = Challenger(0, np.random.default_rng(7).bytes)
     coins = ch.commitment, ch.open("salt", weights_root(roots))
     run = PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, capacity=1 << 12,
-                              schedule=schedule, salt_key=SALT_KEY)
+                              schedule=schedule, weight_salts=salts)
     run.begin(retain=retain)
     return run, weights
 
@@ -408,8 +405,8 @@ def test_each_calls_table_is_its_layouts_with_its_keys_leaves_and_pass_offsets(s
 
 def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_path, monkeypatch):
     """grouped_check's `_same` over a grouped call's retained pass under ``deferred-a`` and its units called alone under the
-    serial schedule: their manifests (each unit's y root too) differ in the schedule they ran under alone, which it doesn't
-    count, and a changed A rows file it does.  The recording stand-in runs no GEMM, so a call alone's y is whatever
+    serial schedule: their manifests less what each pass's fresh salts make differ (`SALTED`) differ in the schedule they
+    ran under alone, which it doesn't count, and a changed A rows file it does.  The recording stand-in runs no GEMM, so a call alone's y is whatever
     ``torch.empty`` left: zeroed, as the grouped call's buffers start."""
     C = load("pearl_c_sm90/grouped_check.py")
     empty = torch.empty
@@ -424,7 +421,9 @@ def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_
     run.end_pass()
     alone.end_pass()
     a, b = (json.loads((tmp_path / d / "manifest.json").read_text()) for d in ("alone", "grouped"))
-    assert [kk for kk in a if a[kk] != b.get(kk)] == ["schedule"] and all("y" in u for u in b["matmuls"])
+    ua, ub = C._unsalted(a), C._unsalted(b)
+    assert [kk for kk in ua if ua[kk] != ub.get(kk)] == ["schedule"] and all("y" in u for u in b["matmuls"])
+    assert a["salts_t"] != b["salts_t"] and a["matmuls"][0]["salts"] != b["matmuls"][0]["salts"]
     assert C._same(tmp_path / "alone", tmp_path / "grouped") == []
     rows = tmp_path / "grouped" / b["matmuls"][1]["rows"]["path"]
     rows.write_bytes(bytes(c ^ 1 for c in rows.read_bytes()))

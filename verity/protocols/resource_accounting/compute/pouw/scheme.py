@@ -40,7 +40,7 @@ def tile_macs(shape: Mapping[str, int]) -> int:
 #: run), ``cubin`` its cubin, ``schedule`` the schedule each pass runs under (`serving.SCHEDULES`),
 #: ``transcript_dir`` where passes are retained, the salt's source, ``coins`` (``in-process``: a challenger held in this
 #: process, crediting nothing) or ``challenger`` (the auditor device's, HOST:PORT) with ``session`` (the gate's reserve
-#: answer, which the launcher's ``ctx["gate"]`` opens), and ``tie-uniform``
+#: answer, which the launcher's ``ctx["gate"]``, the gate in its own words, opens), and ``tie-uniform``
 SETTINGS: dict[str, Any] = {"tie-uniform": False, "kernel": "", "cubin": "", "schedule": "serial", "transcript_dir": "",
                             "coins": "", "challenger": "", "session": {}}
 COINS = ("", "in-process")
@@ -126,7 +126,7 @@ def requests(ctx: Any) -> tuple[H.RequireProperty, ...]:
 class Attached:
     """Pearl+ on one served run's exchange: the run's declaration (``declared``), its linear weights (``memory``), each
     step's ``steps`` events, and every linear block computed by the device run (`kernel`). What the adapter reads of it
-    (`verity.hooks.Commits`): ``commitment`` the run's commitment, which the composition's record hashes, ``record``
+    (a report, `verity.protocols.resource_accounting.scheme`): ``commitment`` the run's commitment, which the composition's record hashes, ``record``
     and ``summary`` beside it, and `release`, which finishes the run once serving ends."""
 
     def __init__(self, ctx: Mapping[str, Any]) -> None:
@@ -139,8 +139,8 @@ class Attached:
             raise ValueError("pearl-plus: neither 'coins' nor 'challenger' is among its settings (ctx['settings']): the salt is "
                              "the challenger's salt coin, opened after the weights' root, and there is no beacon")
         if self.own["challenger"] and not callable(self.gate):
-            raise ValueError("pearl-plus: with a 'challenger', its launcher passes ctx['gate'], gate(session, root): the "
-                             "gate's open of the reserved session on the salt epoch's root (serving.h1.window.Gate)")
+            raise ValueError("pearl-plus: with a 'challenger', its launcher passes ctx['gate'], the auditor device's "
+                             "challenger gate in its own words, gate(*words) -> answer (commit_coins.ChallengerGate.call)")
         if self.own["challenger"] and self.private is None:
             raise ValueError("pearl-plus: with a 'challenger', its launcher passes ctx['private'], the scheme's private "
                              "directory: the salt epoch's number must survive a restart, or a later server would open a "
@@ -233,7 +233,8 @@ class Attached:
         roots = device.weight_roots(kernel, weights, name)
         k, carried = None, None
         if own["challenger"]:
-            given = SimpleNamespace(challenger=own["challenger"], session=dict(own["session"]), gate=self.gate)
+            given = SimpleNamespace(challenger=own["challenger"], session=dict(own["session"]),
+                                    gate=SV.gate_of(self.gate))
             self.session, coins, opening, _, carried, k = SV.salt_session(OPTION, given, SV.weights_root(roots), True,
                                                                           epoch=spend_epoch(self.private))
         else:
@@ -252,6 +253,25 @@ class Attached:
             if not run.cur.matmuls:
                 run.begin()
         return run
+
+
+def served_record(d: str | os.PathLike[str]) -> dict[str, Any]:
+    """A served run's report as vLLM's scheme plugin writes it (``out/schemes/pearl-plus/``: ``configuration.json``,
+    ``summary.json``, ``commitment.json``), read as the served verdicts' Pearl+ piece reads ``served.json``: its
+    ``arm``, ``passes`` (`pearl_c.window.served_passes`), ``coins`` (`pearl_c.window.coins_of`, the gate's reserve answer
+    its ``session`` setting), pass limit and pass ends. What only the load's driver measures (``generate_s``, the
+    requests and their tokens, ``ok``) is not in it, and a pass's ``manifest`` is there only where it was retained."""
+    import json
+
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PW
+
+    configuration, summary, commitment = (json.loads((Path(d) / f"{n}.json").read_text())
+                                          for n in ("configuration", "summary", "commitment"))
+    own = configuration.get("settings") or {}
+    held = SimpleNamespace(commitment=lambda: commitment, info=lambda: summary)
+    return {"arm": configuration["record"]["entry"], "retained": bool(own.get("transcript_dir")),
+            "max_step_tokens": summary.get("max_step_tokens"), "pass_ends": summary.get("pass_ends"),
+            "passes": PW.served_passes(summary.get("passes") or []), "coins": PW.coins_of(held, own.get("session") or None)}
 
 
 def attach(exchange: Any, ctx: Any) -> Attached:

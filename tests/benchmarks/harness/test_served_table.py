@@ -16,7 +16,7 @@ COMMIT_SPEC = "llama31-8b-fp8-1gpu-commit-served"
 ADDED = calendar.timegm((2026, 10, 24, 1, 0, 0))
 COMMIT = served_table.Protocol("Commit", (COMMIT_SPEC,), "commit@compiled", "stock-fp8", own_arm="commit")
 BY_SPEC = {
-    "protocols": (served_table.Protocol("PoUS bandwidth audit", ("llama31-8b-fp8-1gpu-bandwidth-served-r6",),
+    "protocols": (served_table.Protocol("PoUS bandwidth audit", ("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000",),
                                         "bandwidth-audit", None), COMMIT),
     "factors": served_table.Protocol("conversion factor", ("llama31-8b-fp8-1gpu-compiled-full",), served_table.SERVED,
                                      "stock-fp8"),
@@ -26,8 +26,8 @@ LIVE_ARM, LIVE_CONTROL = "dither-a@x", "exact-fused"
 # Time per output token by arm; every arm slows by the same factor each rep, so the paired ratios are exact.
 SCALE = {"stock-fp8": 2.0, "commit": 2.4, "stock-fp8@compiled": 1.0, "commit@compiled": 1.2, "bandwidth-audit": 1.0,
          "pouw:pearl-c-h100-v1-h3": 12.4}
-R6, BIG, SMALL = ("llama31-8b-fp8-1gpu-bandwidth-served-r6", "llama31-8b-fp8-1gpu-bandwidth-served-h200",
-                  "llama32-1b-fp8-1gpu-bandwidth-served-h200")
+R6, BIG, SMALL = ("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000", "llama31-8b-fp8-1gpu-bandwidth-served-reps6@h200",
+                  "llama32-1b-fp8-1gpu-bandwidth-served")
 WIDTH_H200 = "llama31-8b-fp8-1gpu-commit-served-width@h200"
 POUW, POUW_H100, POUW_ARM = ("benchmarks/served-overhead-pouw", "llama32-1b-1gpu-pouw-protocol-served@h100",
                              "pouw:pearl-c-h100-v1-h3")
@@ -227,7 +227,7 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
     assert line.startswith(f"| Commit | {RTX} | `{COMMIT_SPEC}` | b8-p512-mixed |")
     assert "| 1.500× ± 0.000 | 1.500× ± 0.000 | 1.500× ± 0.000 | 3 | r20261024-030000-0002 |" in line
     assert "served Commit at b8 \\| mechanism evidence only / no pinned sm_120 build" in line
-    assert ("| PoUS bandwidth audit | — | `llama31-8b-fp8-1gpu-bandwidth-served-r6` | b8-p512-mixed | — | — | — | — "
+    assert ("| PoUS bandwidth audit | — | `llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000` | b8-p512-mixed | — | — | — | — "
             "| no passing run |") in markdown
     assert "r20261024-030000-0005" in markdown.split("Passed over")[1]
 
@@ -487,7 +487,7 @@ def test_under_a_research_run_the_served_table_records_its_metrics(tmp_path, mon
     monkeypatch.setattr(served_table, "FACTORS", BY_SPEC["factors"])
     monkeypatch.setattr(served_table, "BREAKDOWNS", BY_SPEC["breakdowns"])
     metrics = {"benchmarks/served-overhead-commit": f"{COMMIT_SPEC}/b8-p512-mixed",
-               "benchmarks/served-overhead-pous-bandwidth-audit": "llama31-8b-fp8-1gpu-bandwidth-served-r6/b8-p512-mixed"}
+               "benchmarks/served-overhead-pous-bandwidth-audit": "llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000/b8-p512-mixed"}
 
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     assert main(["served-table"], metrics=metrics) == 0 and not list(tmp_path.rglob(kit.RESULT))
@@ -505,7 +505,7 @@ def test_under_a_research_run_the_served_table_records_its_metrics(tmp_path, mon
     assert commit["value"] == pytest.approx((1.2 * 1.25 - 1) * 100) and commit["ci95"] == pytest.approx([50.0, 50.0])
     assert commit["inputs"] == ["measured", "r20261024-020000-0001", art]
     assert (commit["protocol"], commit["device"], commit["reps"], commit["caveats"]) == ("Commit", RTX, 3, "no pinned sm_120 build")
-    assert pous["value"] is None and pous["why"] == ("no served ratio at llama31-8b-fp8-1gpu-bandwidth-served-r6/b8-p512-mixed: "
+    assert pous["value"] is None and pous["why"] == (f"no served ratio at {R6}/b8-p512-mixed: "
                                                      "no passing run of it in the store")
     assert got["measurement_files"] == [served_render.TABLE]
     assert json.loads((run_dir / served_render.TABLE).read_text())["schema"] == served_table.SCHEMA
@@ -637,7 +637,7 @@ def test_a_metric_of_members_only_leaves_every_other_metrics_readings_byte_for_b
     metrics = _served_overhead_metrics()
     before = served_render.measurements(table, {k: v for k, v in metrics.items() if k != POUW})
     assert hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest() == (
-        "c1149f548cd05469475102ceba333171c5ec4fea48dac2c7c27acc8dace55bbc")
+        "d50ef6dae84589eca812f209a93d096b8be477f32c57c6dd01c5ddba4f9974c3")
     table["rows"].append(_row("PoUW served on sm_90a", POUW_H100, 12.4, "llama-3.2-1b-h100"))
     after = served_render.measurements(table, metrics)
     assert [m for m in after if m["name"] != POUW] == before

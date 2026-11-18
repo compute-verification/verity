@@ -89,6 +89,24 @@ def _lanes(units, cl, tp, inputs: list[int], made_up=None):
     return ins, want, rows
 
 
+def _one_draw(d: Path, n: int) -> tuple[dict, dict]:
+    """One fresh salt per instance per port (``own``'s rows), and the same draw at each shared table row's first reader (the
+    honest and ``wrong_salt`` rows), the layout read from ``d``'s public file: a wired staging of the same circuit and source
+    identities. ``wrong_salt``'s rows then differ from the honest ones only where it cheats."""
+    names = [p[0] for p in _meta(d)["ports"]]
+    head, body = (d / f"pub-{n}.bin").read_bytes().split(b"\n", 1)
+    counts = [json.loads(head)["shared_rows"][x] for x in names]
+    o = 128 * sum(counts)
+    refs = [int.from_bytes(body[o + 4 * k:o + 4 * k + 4], "little") for k in range(n * len(names))]
+    own = {x: [os.urandom(192) for _ in range(n)] for x in names}
+    firsts = {x: {} for x in names}
+    for k in range(n):
+        for j, x in enumerate(names):
+            firsts[x].setdefault(refs[k * len(names) + j], k)
+    shared = {x: [own[x][firsts[x][r]] for r in range(c)] for x, c in zip(names, counts)}
+    return own, shared
+
+
 def _stage(topo, d: Path, wired: bool):
     """The program, its partition and the stagings: honest (with `Wiring`), and with ``wired`` the two cheats (layer 1's x reads
     layer 0's outputs flipped; the honest rows under link salts of their own) and the honest lanes with every instance's own
@@ -107,17 +125,20 @@ def _stage(topo, d: Path, wired: bool):
     (d / "partition.json").write_text(json.dumps(PO.build(program, query), sort_keys=True))
     (d / "program.desc").write_bytes(canonical_json(encode_program(program)))
     wiring = CS.Wiring(program, query, list(range(tp.population)))
-    st = {"honest": CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "honest", packed=True, wiring=wiring)}
     if not wired:
+        st = {"honest": CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "honest", packed=True, wiring=wiring)}
         st["plain"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "plain", packed=True)
     else:
         flip = {N + t: (lambda w: w[:-N_OUT] + [1 - b for b in w[-N_OUT:]]) for t in range(N)}
-        st["made_up"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs, flip), d / "made_up", packed=True,
-                                 wiring=replace(wiring, strict=False))
+        st = {"made_up": CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs, flip), d / "made_up", packed=True,
+                                  wiring=replace(wiring, strict=False))}
+        own, shared = _one_draw(d / "made_up", tp.population)
+        st["honest"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "honest", packed=True, wiring=wiring,
+                                salts=shared)
         st["wrong_salt"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "wrong_salt", packed=True,
-                                    wiring=replace(wiring, writer_salts=False))
+                                    wiring=replace(wiring, writer_salts=False), salts=shared)
         st["own"] = CS.stage(units, SPEC, shape, cl, _lanes(units, cl, tp, inputs), d / "own", packed=True, wiring=wiring,
-                             share_rows=False)
+                             share_rows=False, salts=own)
         text = (d / "honest" / "circuit.txt").read_text()
         (d / "links.json").write_text(json.dumps(CS.links_file(program, query, text, wiring.indices)))
     return fn, program, query, tp, st

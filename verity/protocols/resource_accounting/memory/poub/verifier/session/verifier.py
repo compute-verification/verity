@@ -93,7 +93,7 @@ Its process is `verity/protocols/resource_accounting/memory/poub/verifier/poub_s
 the LMS verify a served or gate session's signatures are checked with, and the challenger's process `--challenger
 serve` starts.
 
-    python verifier_process.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
+    python verifier_process.py --port 7781 --out OUT --figures FIGURES.json [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
                                [--registry REGISTRY.json] [--lean-exe PATH]
                                [--paced K:T_MS:SAMPLES:WINDOWS[:F] ...] [--transcript DIR]
                                [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
@@ -101,7 +101,7 @@ serve` starts.
                                [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
                                 --challenger-period P --challenger-main FILE [--challenger-minutes M]]
     python verifier_process.py --registry REGISTRY.json --close NODE_HEX
-    python verifier_process.py --memory-of VERIFIER_JSON [--host-bytes N]
+    python verifier_process.py --memory-of VERIFIER_JSON --figures FIGURES.json [--host-bytes N]
 """
 from __future__ import annotations
 
@@ -1589,18 +1589,22 @@ def save_registry(path: Path | None, registry: audit.Registry | dict) -> None:
         tmp.replace(path)
 
 
-def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: Verify | None = None,
+def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
          served_verify: Verify | None = None, serve: Sequence[str] | None = None) -> int:
-    """The verifier's process on `argv` (the command line's by default), for the node of `figures`. A gate session's
+    """The verifier's process on `argv` (the command line's by default), for the node whose figures `--figures` names
+    (`timing.Figures.to_json`'s form), which it refuses to run without but to close a registration. A gate session's
     signatures are checked with `verify` and a served one's with `served_verify` (`challengers.of`), and `--challenger
     serve` starts the challenger's process `serve`,
-    which the process's entry hands in with the figures
+    which the process's entry hands in
     (`verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py`): without them, those two refuse
     the run."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=7781)
     ap.add_argument("--out", type=Path, help="required unless --close")
+    ap.add_argument("--figures", type=Path, metavar="FILE",
+                    help="the node's figures, as `timing.Figures.to_json` writes them (`benchmarks/poub_session/"
+                         "sheets.py NODE`); required unless --close")
     ap.add_argument("--windows", type=int, default=7)
     ap.add_argument("--window-ms", type=float, default=1000.0)
     ap.add_argument("--samples", type=int, default=2773)
@@ -1690,7 +1694,16 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
                          "session's paced line with --ingress-bytes-per-s (`recorded_paced`), and exit")
     a = ap.parse_args(argv)
-    a.hbm_bytes = figures.hbm_bytes if a.hbm_bytes is None else a.hbm_bytes
+    figures = None
+    if a.figures is None and a.close is None:
+        ap.error("--figures FILE: the node's figures, which every ledger term reads, are handed in "
+                 "(`benchmarks/poub_session/sheets.py NODE` writes them from the node's data sheets)")
+    if a.figures is not None:
+        try:
+            figures = timing.Figures.of_json(json.loads(a.figures.read_text()))
+        except (OSError, ValueError) as e:
+            ap.error(f"--figures {a.figures}: {e}")
+        a.hbm_bytes = figures.hbm_bytes if a.hbm_bytes is None else a.hbm_bytes
     capacities = None
     if a.node is not None:
         if a.disk_bytes_per_s or a.link_bytes_per_s or a.disk_burst_bytes is not None or a.link_burst_bytes is not None:

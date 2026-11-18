@@ -10,8 +10,8 @@ from verity_bench.vllm.arms import resolve_arms
 from verity_bench.vllm.engine import arm_execution, engine_args
 from verity_bench.vllm.presets import resolve_spec, served
 
-R6, BIG, SMALL = ("llama31-8b-fp8-1gpu-bandwidth-served-r6", "llama31-8b-fp8-1gpu-bandwidth-served-h200",
-                  "llama32-1b-fp8-1gpu-bandwidth-served-h200")
+R6, BIG, SMALL = ("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000", "llama31-8b-fp8-1gpu-bandwidth-served-reps6@h200",
+                  "llama32-1b-fp8-1gpu-bandwidth-served")
 
 
 def _engines(name: str) -> dict[str, dict[str, Any]]:

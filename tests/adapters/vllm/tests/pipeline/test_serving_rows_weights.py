@@ -12,7 +12,7 @@ import re
 import numpy as np
 import pytest
 from verity_vllm.check.replay.index import ProgramIndex
-from verity_vllm.pipeline import serving_rows as SRW, weight_rows as WT
+from verity_vllm.pipeline import chain_rows as CH, serving_rows as SRW, weight_rows as WT
 from verity_vllm.program.predict import window_weights as WW
 
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as R
@@ -122,11 +122,12 @@ def test_the_committer_commits_each_read_by_reference_as_the_lean_verifier_opens
                                {p: v.entry() for p, v in values.items()}, registered=REG)
     assert {k: (e["ports"]["in1"]["reads"], e["ports"]["in1"]["root"]) for k, e in lean.items()} == {
         k: (e["in1"]["positions"], roots[e["in1"]["value"]]) for k, e in entries.items()}
-    res = CS.write(CS.commit(window, got), tmp_path, {"registered_roots": roots}, {}, registered=entries,
+    valued = WT.valued(window, got)
+    res = CS.write(CS.commit(valued, CH.held_rows(valued, got)), tmp_path, {"registered_roots": roots}, {}, registered=entries,
                    registrar=R)
     assert [m["registered"]["in1"] for m in res["members"]] == [{"value": e["in1"]["value"], "positions": e["in1"]["positions"]}
                                                                  for e in entries.values()]
-    assert not any("value_rows" in m for m in res["members"]) and set(res["registered_paths"]) == set(roots)
+    assert all(m["value_rows"] == ["in1"] for m in res["members"]) and set(res["registered_paths"]) == set(roots)
     assert IF.registered_roots(json.loads((tmp_path / "registration.json").read_text())["window"]) == roots
 
 

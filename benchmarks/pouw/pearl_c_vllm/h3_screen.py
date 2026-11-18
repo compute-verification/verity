@@ -59,8 +59,8 @@ def capture(args) -> int:
     if bad:
         raise SystemExit(f"{args.scheme} refuses the screen's weights: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
-    salt_key = PPD.no_salt_key(args.scheme)
-    roots = PPDR.weight_roots(kernel, weights, args.scheme, salt_key=salt_key)
+    weight_salts = PPDR.fresh_weight_salts(weights)
+    roots = PPDR.weight_roots(kernel, weights, args.scheme, weight_salts=weight_salts)
     challenger = Challenger(0, verifier.coins)
     opening = challenger.open("salt", weights_root(roots))
     xs = [torch.randn(m, weights[w].shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, m in CALLS]
@@ -68,7 +68,7 @@ def capture(args) -> int:
     dumps = ("seeds_a", "seed_a", "ea_codes", "rowdig_a")
     for name, (graphs, omit) in PASSES.items():
         run = PPDR.PearlCDeviceRun(s, f"pouw:{args.scheme}", kernel, weights, roots, challenger.commitment, opening, graphs=graphs,
-                                  salt_key=salt_key)
+                                  weight_salts=weight_salts)
         d = out / name
         try:
             run.begin(retain=str(d), run=settings.RESEARCH_RUN_ID or "h3-screen")

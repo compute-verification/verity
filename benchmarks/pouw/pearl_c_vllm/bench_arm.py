@@ -300,8 +300,8 @@ class PearlCArm:
         kernel = PPD.Kernel.load(str(self.kernel_dir), self.cubin)
         if self.gate_command is not None:
             self.session = _LiveSession(self.gate_command, self.peer, self.epoch, self.lane)
-        salt_key = PPD.no_salt_key(scheme)
-        roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=salt_key)
+        weight_salts = PPDR.fresh_weight_salts(weights)
+        roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=weight_salts)
         if self.session is not None:
             opening = self.session.open(f"pouw:{scheme}", weights_root(roots))
             commitment = self.session.commitment
@@ -315,7 +315,7 @@ class PearlCArm:
         try:
             run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots,
                                       commitment, opening, schedule=self.schedule,
-                                      capacity=tiles, flag_rows=rows, salt_key=salt_key,
+                                      capacity=tiles, flag_rows=rows, weight_salts=weight_salts,
                                       pass_index=None if self.session is None else self.session.k, **self.run_options)
         except BaseException:
             if self.session is not None:

@@ -564,7 +564,7 @@ theorem unequalCost_needs_le : ¬ ∀ (n : ℕ) (w : Fin n → ℝ) (ρ a A C δ
             ((∑ u, w u * unitCost f o (w u)) / (ρ ^ 2 * C) * (1 - A / C) -
               (⌊Real.logb ρ (A / a)⌋₊ + 1) * unitCost f o A) ≤ cost L fun u => unitCost f o (w u) := by
   intro h
-  have hmeets : MeetsTarget (SamplingDesign.subset 0 0 le_rfl) (Fin.elim0 : Fin 0 → ℝ) 1 (1 / 2) := fun B hB => by
+  have hmeets : MeetsTarget (Verity.SamplingDesign.subset 0 0 le_rfl) (Fin.elim0 : Fin 0 → ℝ) 1 (1 / 2) := fun B hB => by
     rw [Finset.eq_empty_of_isEmpty B, Finset.sum_empty] at hB
     norm_num at hB
   have hΛ : Real.log (1 / 2 : ℝ)⁻¹ = Real.log 2 := by norm_num

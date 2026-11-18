@@ -56,7 +56,7 @@ if [[ -z "${PH_NO_CUTLASS:-}" ]]; then
   [[ "$got" == "$CUTLASS_COMMIT" ]] || { echo "CUTLASS at $got, want $CUTLASS_COMMIT ($CUTLASS_TAG)" >&2; exit 2; }
 fi
 
-ARCH=(-gencode "arch=compute_${PH_ARCH#sm_},code=$PH_ARCH")
+ARCH=(-gencode "$(python3 "$MACHINE" gencode "$PH_ARCH")")
 FLAGS=(-O3 -std=c++17 "${ARCH[@]}" -Xcompiler -fPIC --expt-relaxed-constexpr)  # ptxas gets -arch $PH_ARCH -m 64, as pinned
 CUT=(-I"$CUTLASS_DIR/include" -I"$CUTLASS_DIR/tools/util/include" -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1)
 

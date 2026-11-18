@@ -14,6 +14,7 @@ that window's visible failure, and serve-openai refuses what the arm can't serve
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import shlex
@@ -126,10 +127,10 @@ class Run(PP.EpochCalls, PassEnds):
 
     lag_ends = False
 
-    def __init__(self, s, entry, kernel, weights, roots, coins, opening, schedule="serial", salt_key=None, pass_index=None):
+    def __init__(self, s, entry, kernel, weights, roots, coins, opening, schedule="serial", pass_index=None, *, weight_salts):
         workload = Workload(tuple(Matmul(w, Shape(16, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
         self.epoch = PPD.epoch_of(workload, roots, coins, opening, pass_index)
-        self.scheme, self.entry, self.salt, self.salt_key, self.coins = s, entry, self.epoch.salt, salt_key, coins
+        self.scheme, self.entry, self.salt, self.weight_salts, self.coins = s, entry, self.epoch.salt, weight_salts, coins
         self.weights = {str(w): {"n": t.shape[0], "k": t.shape[1], "root": roots[w].hex()} for w, t in weights.items()}
         self.commits = {"scheme": s.name, "salt": self.salt.hex(), "weights_root": self.epoch.weights_root.hex(),
                         "coins": coins.to_json(), "salt_opening": opening.to_json()}
@@ -179,17 +180,22 @@ class Run(PP.EpochCalls, PassEnds):
         self.finished = True
 
 
+def _root(w, weight_salts):
+    """The stand-in's root of weight ``w``: its id, then a digest of the B salts it was handed."""
+    return bytes([w + 1]) * 32 + hashlib.sha256(weight_salts[w]).digest()
+
+
 @pytest.fixture(autouse=True)
 def _device_run_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
     monkeypatch.setattr(PP, "model_runners", lambda: (Forward,))
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
-    monkeypatch.setattr(PPDR, "weight_roots", lambda kernel, weights, scheme, salt_key=None: {
-        w: bytes([w + 1]) * 32 + salt_key for w in weights})
+    monkeypatch.setattr(PPDR, "weight_roots", lambda kernel, weights, scheme, *, weight_salts: {
+        w: _root(w, weight_salts) for w in weights})
     monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPDR.weight_roots)
     monkeypatch.setattr(PPDR, "PearlCDeviceRun", Run)
     monkeypatch.setattr(pouw, "PearlCDeviceRun", Run)
-    monkeypatch.setattr(pouw, "_SALT_KEYS", {})
+    monkeypatch.setattr(pouw, "_WEIGHT_SALTS", {})
     monkeypatch.setattr(verifier, "coins", random.Random(0).randbytes)
     monkeypatch.setattr(verifier, "executable", lambda: Path("lean"))
     RUNS.clear()
@@ -238,7 +244,7 @@ def test_each_window_is_one_epoch_a_pass_a_step_numbered_as_the_toys_and_its_w_r
         W = PWR.write(tmp_path / f"W{k}.json", served["passes"], range(CLASS.outputs))
         assert W["window"]["salt"] == RUNS[k].salt.hex() and W["window"]["entry"] == SPL.ENTRY
         manifests = [json.loads(Path(p["manifest"]).read_text()) for p in served["passes"]]
-        key, entries = RUNS[k].salt_key, iter(W["registered"])
+        entries = iter(W["registered"])
         for s in range(CLASS.outputs):
             for c in range(CALLS):
                 u, i = manifests[s]["matmuls"][c], s * CALLS + c
@@ -253,16 +259,16 @@ def test_each_window_is_one_epoch_a_pass_a_step_numbered_as_the_toys_and_its_w_r
                                                  sa).commitment.root.hex()
                 assert ey["root"] == SY.commit_y(y16.tobytes(), u["n"], RUNS[k].salt, i, sy)[0].hex()
         assert [(e["value"], e["root"], (e["leaves"], e["words"])) for e in entries] == [
-            (PEARL.b(c), (bytes([c + 1]) * 32 + key).hex(), SHAPES[c]) for c in range(CALLS)]
-        salts.append((RUNS[k].salt, key))
-        roots = {w: bytes([w + 1]) * 32 + key for w in range(CALLS)}
+            (PEARL.b(c), _root(c, RUNS[k].weight_salts).hex(), SHAPES[c]) for c in range(CALLS)]
+        salts.append(RUNS[k].salt)
+        roots = {w: _root(w, RUNS[k].weight_salts) for w in range(CALLS)}
         assert RUNS[k].epoch.weights_root == weights_root(roots)
         assert {**line["pouw_pearl"], "seconds": None} == {
             "entry": SPL.ENTRY, "window": k, "steps": CLASS.outputs, "passes": CLASS.outputs, "calls": CLASS.outputs * CALLS,
             "salt": RUNS[k].salt.hex(), "weights_root": weights_root(roots).hex(), "coin_source": "in-process",
             "served": f"{SPL.DIR}/w{k}/served.json", "seconds": None}
         assert d.stat().st_mode & 0o777 == 0o700 and RUNS[k].finished
-    assert salts[0][0] != salts[1][0] and salts[0][1] != salts[1][1]
+    assert salts[0] != salts[1]
     assert srv.windows.summary()["pouw_pearl"] == {"windows": 2, "served": 2, "passes": 4, "calls": 16, "failed": [],
                                                    "closing": []}
     assert hooks.live(SPL.ENTRY) == () and "execute_model" not in vars(runner) and vars(Forward)["execute_model"] is original
