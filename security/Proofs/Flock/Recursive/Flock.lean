@@ -37,7 +37,7 @@ session accepts (`Accepts`), and the decoded witness is each session's value lay
 * `ZkOuter.Good`: a layer with no incorrect proof block whose every unit reads, at each of its registered reads, the registrant's
   value (`RegAgree`). `rd` records those values, the hidden circuit's rows as registered and the values the verifier
   registers itself (its coins, the comb `coef`).
-* `execOS_subset_full_mem`, `execOS_subset_full_escape`: V*'s live sampling design, the full sample, samples every unit at every value
+* `execOS_subset_full_mem`, `execOS_subset_full_missProb`: V*'s live sampling design, the full sample, samples every unit at every value
   of the source's bytes, so it escapes no nonempty set of units, with no assumption on those bytes (A3).
 * `ZkOuter.accepts_le`: an accepted session whose layer is not `Good` is at most `bound` likely: the sample misses every
   bad unit (`miss 1`, which the full sample never does); or a sampled proof block computes wrongly or reads a registered value
@@ -224,7 +224,7 @@ theorem execOS_subset_full_mem {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] 
 
 /-- **The full sample escapes no nonempty set of units**: every sample holds every unit (`execOS_subset_full_mem`), with
 no assumption on the source's bytes. -/
-theorem execOS_subset_full_escape {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
+theorem execOS_subset_full_missProb {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) {B : Finset (Fin n)} (hB : B.Nonempty) :
     (SamplingDesign.execOS (n := n) t (.subset n) n).missProb B = 0 := by
   obtain ⟨u, hu⟩ := hB
@@ -469,7 +469,7 @@ theorem off_le {qR : ℝ} (τ : Strategy (zo.game dg N))
 
 /-- **V*'s session at one history, at one strategy**: an accepted outcome at which V*'s value layer is not `Good` is at
 most `bound` likely. The bad units are fixed by the strategy: the sample misses them all, which the full sample never does
-(`execOS_subset_full_escape`, no assumption on the source's bytes), or meets an incorrect proof block or a registered-value
+(`execOS_subset_full_missProb`, no assumption on the source's bytes), or meets an incorrect proof block or a registered-value
 disagreement at the registrant's leaf (`zk_session_regSampledR`), or an off-leaf registered read (`off_le`). -/
 theorem accepts_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     (zo : ZkOuter mPts nv J Reg' c hU hscope (SamplingDesign.execOS (n := nv) src (.subset nv) nv))
@@ -485,7 +485,7 @@ theorem accepts_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (
   have h1 : prob (fun o => Disjoint o.2.1 (zo.badUnits dg N k Rw τ)) (zo.game dg N) τ ≤
       (Verity.SamplingDesign.subset nv nv le_rfl).miss 1 :=
     (prob_auditLive_sample _ τ fun S => Disjoint S (zo.badUnits dg N k Rw τ)).trans_le
-      ((execOS_subset_full_escape src (zo.badUnits_nonempty dg N k Rw τ hG)).trans_le zero_le)
+      ((execOS_subset_full_missProb src (zo.badUnits_nonempty dg N k Rw τ hG)).trans_le zero_le)
   have h2 := zk_session_regSampledR zo.I zo.ht zo.own zo.dj zo.y₀ zo.wr dg N zo.hcH hU zo.hpub
     (Layout.scopeOkH_of_scopeOk hscope) _ zo.hDraw zo.hTags zo.hRec hk hRw hM hρ hr ht' zo.rd τ hCR.1 hCR.2.1
   have h3 := zo.off_le dg N τ hCR.2.2

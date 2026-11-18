@@ -68,6 +68,6 @@ def test_the_boundary_record_format_is_the_one_levels_reads_as_two():
 def test_sampled_case_is_at_one_level():
     case = {"params": {"proofs": {}}, "evidence": b'{"proofs":[]}'.hex(), "commitment": "00"}
     got = SC.with_levels(case)
-    assert got["params"]["form"] == "one-stage"
+    assert got["params"]["levels"] == 1
     with pytest.raises(SC.Refused):
         SC.with_levels(got)

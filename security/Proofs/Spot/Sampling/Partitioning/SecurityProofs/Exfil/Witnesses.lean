@@ -28,7 +28,7 @@ theorem certifies_full (n : ℕ) (b : Fin n → ℕ) {δ ℓ : ℝ} (hδ : 0 < �
     intro B hB
     have h1 := hB.card_pos
     have h2 : B.card ≤ n := by simpa using Finset.card_le_univ B
-    rw [Verity.SamplingDesign.subset_escape, Nat.choose_eq_zero_of_lt (n := n - B.card) (k := n) (by omega), Nat.cast_zero,
+    rw [Verity.SamplingDesign.subset_missProb, Nat.choose_eq_zero_of_lt (n := n - B.card) (k := n) (by omega), Nat.cast_zero,
       ENNReal.zero_div]
   have hδ' : (0 : ℝ≥0∞) < ENNReal.ofReal δ := ENNReal.ofReal_pos.2 hδ
   unfold CertifiesLeak
