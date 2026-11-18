@@ -24,9 +24,11 @@ under that key and no other is not stated here:
   `verity/onsite/v1` holds `verity/certifier/v0`, `verity/inference-only/v0`, `verity/pous/p2/v4/run`,
   `verity/pouw/pearl-plus/v1`, `verity/remote-bandwidth/p2/v0`, `verity/sampled-proofs/v1` and `verity/wipe/v0`;
   `verity/remote/v1` holds `verity/inference-only/v0`, `verity/pouw/pearl-plus/v1` and `verity/sampled-proofs/v1`.
-  Of those, SPOT alone names the challenger's key in Lean: Pearl+'s run verdict (`PouwVerifier.PearlPlus.Protocol`)
-  reads its live coins as a commitment's root and openings (`Spot.Challenger.LiveCommitment`), with no key, so no Lean
-  check binds that root to the challenger's key.
+  Every Lean member that reads a challenger's key is pinned: of those, SPOT alone reads one. Pearl+'s run verdict
+  (`PouwVerifier.PearlPlus.Protocol`) reads none: it opens its salt and sample coins against the root of a live
+  commitment in the files it is handed (`Spot.Challenger.liveReason`, which takes no key), and no Lean check binds that
+  commitment to the challenger's key; its key is compared in Python (`served_verdicts.pearlplus_of_record`, on the
+  compose node too).
 
 The window's root needs no comparison of its own: the coins are read only from the ledger's open whose root is the
 parameters' window root, in a ledger checked under the case's key (`Spot.Challenger.auditedOpen`), withheld on that root
