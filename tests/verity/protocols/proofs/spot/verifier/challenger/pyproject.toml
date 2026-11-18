@@ -16,6 +16,8 @@ artifacts = [
 # The scripts under `benchmarks/` the moved audit commands still load off `sys.path`, and what their `benchmarks/` suites read
 inputs = [
     "verity",
+    # the test primitives' stand-in Boolean bodies, which the conftest loads
+    "tests/verity/circuits/stand_in.py",
     "benchmarks/one_stage",
     "benchmarks/prove_path",
     "calibration/sampling_plan",
