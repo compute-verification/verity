@@ -135,7 +135,12 @@ class Program:
 
     @property
     def circuit(self) -> Circuit:
+        """The gate layout. Refused (ValueError) while the root reads an input node recut (`refs.recut`): a gate is one
+        leaf of its width, and the layout has no operand of part of a gate."""
         if self._circuit is None:
+            if self.root.body.recut:
+                raise ValueError(f"recut-gates: input nodes {sorted(self.root.body.recut)} are read in leaves of part of "
+                                 "their width, which the gate layout doesn't lay out")
             self._circuit = Circuit(self.root)
         return self._circuit
 
