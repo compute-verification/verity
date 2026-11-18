@@ -512,10 +512,8 @@ def kept_artifacts(repo: Path) -> Path | None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     store = module.cache_dir() / "lean-artifacts"
-    try:
-        return store if any((store / sibling("module_keys").INDEX).iterdir()) else None
-    except OSError:
-        return None
+    keys = store / sibling("module_keys").INDEX
+    return store if keys.is_dir() and any(keys.iterdir()) else None
 
 
 #: per auditing thread, the largest resident set of any process `run` has waited for since `took` last recorded it
