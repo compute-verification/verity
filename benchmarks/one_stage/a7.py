@@ -554,9 +554,7 @@ def stage(defn, S, rows, args: list[dict], name: str, out: Path, base: int, boun
     words = [RU.row_words(S, rows, a) for a in args]
     data = {r: np.asarray([w[r] for w in words], dtype=np.uint16) for r, _b, _ps in rows}
     set_name = f"{st.iset.name}-c0"
-    iset = SimpleNamespace(**{**vars(st.iset), "name": set_name})
-    salt_key = hashlib.sha256(f"verity/one-stage/a7/salts\0{name}".encode()).digest()
-    salts = FC.stage_salts(iset, 0, n, st.ports, salt_key)
+    salts = FC.stage_salts(0, n, st.ports)
     for i, a in enumerate(args):
         for r, b, ps in rows:
             if salt_of is not None:
@@ -567,7 +565,7 @@ def stage(defn, S, rows, args: list[dict], name: str, out: Path, base: int, boun
             if c is not None:
                 kind, idx = c
                 salts[r][i] = canons[kind]["salts"][idx]
-    got = st.stage(data, out / "c0", salt_key, salts=salts, indices=range(base, base + n), set_name=set_name)
+    got = st.stage(data, out / "c0", salts=salts, indices=range(base, base + n), set_name=set_name)
     d = out / "c0"
     (d / "inst.bin").rename(d / f"inst-{n}.bin")
     (d / "pub.bin").rename(d / f"pub-{n}.bin")
