@@ -17,7 +17,6 @@ module's docstring says what it holds.
 | --- | --- |
 | H1 | [`h1/`](h1/README.md) |
 | Pearl-C | `pearl_c/` |
-| NCP (`ncp-v1`, `ncp-v2`) | `ncp.py` |
 
 The live coins every scheme's window draws (its challenger, sample session, request rows and salt names) are in
 `coins/`.

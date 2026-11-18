@@ -29,6 +29,7 @@ def test_cursor_runs_the_hook_before_every_task_call_direct_or_dynamic():
     entries = json.loads((ROOT / ".cursor/hooks.json").read_text())["hooks"]["preToolUse"]
     assert len({e["command"] for e in entries}) == 1 and entries[0]["command"].endswith(" guard task_hook.py")
     assert sorted(e["matcher"] for e in entries) == ["CallDynamicTool", "Task", "^MCP:"]
+    assert all(e["failClosed"] is True for e in entries), "a hook that crashes or times out refuses the call"
 
 
 def test_a_task_call_through_the_dynamic_tool_wrapper_is_judged_like_a_direct_one(tmp_path):

@@ -296,7 +296,7 @@ open Flock
 
 /-! ## The table error at one table -/
 
-theorem εtable_one {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables zk x = [(spec, st)]) :
+theorem εtable_one {zk : Bool} {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables zk x = [(spec, st)]) :
     εtable zk x = tableErr zk spec st := by
   unfold εtable
   rw [h, List.map_singleton, List.sum_singleton]
@@ -310,7 +310,7 @@ theorem shape_model {st : Stmt} (L : FlockSoundness.Layout st) (spec : SessionSp
 
 /-- **The plain table error at one table**: the old `tableError` at table 0's model statement's shape and its
 `fast100` schedule is the deployed `ε_table`. -/
-theorem εtable_one_plain {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
+theorem εtable_one_plain {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     {sch : FlockSoundness.Accounting.Schedule} (hsch : FlockSoundness.Accounting.fast100 st.m = some sch)
     (L : FlockSoundness.Layout st) :
     FlockSoundness.Accounting.tableError sch ((L.model (FlockSoundness.Refine.regionsOf st)).shape spec.mPts) =
@@ -323,7 +323,7 @@ open FlockSoundness.Discharge.ZkSession in
 `m` and shape over a field of order `2^128`, is at most the deployed `ε_table`, whose inner proof's error is `innerUp`
 (`εInner_le_innerUp`). -/
 theorem bound_le_εtable_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] (hF : Fintype.card F = 2 ^ 128)
-    {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) {mPts : ℕ}
+    {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) {mPts : ℕ}
     (T : TabZK F mPts) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35)
     (hsch : T.sch = FlockSoundness.Accounting.m1Schedule st.wideLeaf st.m) (ht : T.t = FlockSoundness.Accounting.m1Pad st.wideLeaf st.m)
     (he : T.e = 2) (hS : T.S.shape mPts = acct spec st) (hN : T.N ≤ 2 ^ 13) (hq : T.q = 168)
@@ -363,7 +363,7 @@ theorem weightNat_cast (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) :
   simp [Nat.cast_list_sum, List.map_map, Function.comp_def]
 
 /-- **Table 0's weight and the other tables' share of `k`** fit in the weight (`lens_le_weights`). -/
-theorem weight_split {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+theorem weight_split {zk : Bool} {x : Hash.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables zk x).head? = some (spec, st)) :
     tableWeight zk st + 4 * (N₀ zk x - tableLen zk st) / Real.exp 1 ≤ weight zk x := by
   unfold weight N₀
@@ -381,7 +381,7 @@ theorem weight_split {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stm
 of weight `k`, at two fork events a round, leave level 0's `2·2^{d₀}·Q₀` of the weight unused, since `k < 4·N₀/e + 1`
 fits in the weight's `2 + 4·2^{d₀}/e` (`kFits_all`): escapes of total weight up to `2·2^{d₀}·Q₀` more, with at most
 two fork events a round in all, still fit. -/
-theorem plain_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
+theorem plain_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Hash.Msg) {spec : SessionSpec}
     {st : Stmt} (h0 : (tables false x).head? = some (spec, st)) {sch : FlockSoundness.Accounting.Schedule}
     (hsch : FlockSoundness.Accounting.fast100 st.m = some sch) :
     ((2 : ℕ) : ℝ) * ((deployPlain rel).k x + ∑ i : Fin 2 × Fin sch.levels.length, Claims.Flock.cOf sch (i.2.val + 1)) +
@@ -428,7 +428,7 @@ theorem plain_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claim
 schedule `sch`, when no two of them share a round: the fork events' weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ`, within the
 weight's `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ`, and `k < 4·N₀/e + 1` within its `2 + 4·2^{d₀}/e` (`kFits_all`). -/
 theorem oldEsc_fitsFork_plain (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
+    (x : Hash.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables false x).head? = some (spec, st))
     {sch : FlockSoundness.Accounting.Schedule} (hsch : FlockSoundness.Accounting.fast100 st.m = some sch)
     (j : Fin 2 → Fin sch.levels.length → Fin ((deployPlain rel).V.k x))
     (hj : ∀ r ℓ r' ℓ', j r ℓ = j r' ℓ' → r = r' ∧ ℓ = ℓ')
@@ -465,7 +465,7 @@ table 0's model statement is the deployed `ε_table` (`εtable_one_plain`), and 
 the term of escapes whose fork and one-run events bound them at the tape (`oldEsc_term`). -/
 theorem epsSL_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
     {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : FlockSoundness.Model.Arith F K) (Hc : List UInt8 → D)
-    (E : FlockSoundness.Merkle.Enc (List F) D) (Lf : FlockSoundness.Merkle.Leaf (List F) Sl D Hc) {x : Claims.Msg}
+    (E : FlockSoundness.Merkle.Enc (List F) D) (Lf : FlockSoundness.Merkle.Leaf (List F) Sl D Hc) {x : Hash.Msg}
     {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)]) (L : FlockSoundness.Layout st)
     (m k0 : ℕ) (l₀ l₁ : FlockSoundness.Accounting.Level) (rest : List FlockSoundness.Accounting.Level) (ext : ℕ)
     (hsch : FlockSoundness.Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -474,7 +474,7 @@ theorem epsSL_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [F
     (cap₀ : FlockSoundness.Model.Cap D)
     (σ : FlockSoundness.Game.Strategy (sessAfterL A Hc E Lf (L.model (FlockSoundness.Refine.regionsOf st))
       ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal spec.mPts pre post cap₀))
-    {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (V : Claims.Verifier Coin)
+    {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Hash.Msg → Hash.Msg) (V : Claims.Verifier Coin)
     (P : Claims.Prover Ω) (j : Fin 2 → Fin (l₀ :: l₁ :: rest).length → Fin (V.k x))
     (ev : Fin 2 → Fin (l₀ :: l₁ :: rest).length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
     (ev₁ : Ω → (Fin (V.k x) → Coin) → Prop)
@@ -520,7 +520,7 @@ old escapes' term, when each fork term's mean `Adv` is at most its fork event's 
 at most the one-run event's: the mean of each root is at most the root of the mean (`mean_sum_sqrt_mul_le`). -/
 theorem mean_epsSL_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
     {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : FlockSoundness.Model.Arith F K) (Hc : List UInt8 → D)
-    (E : FlockSoundness.Merkle.Enc (List F) D) (Lf : FlockSoundness.Merkle.Leaf (List F) Sl D Hc) {x : Claims.Msg}
+    (E : FlockSoundness.Merkle.Enc (List F) D) (Lf : FlockSoundness.Merkle.Leaf (List F) Sl D Hc) {x : Hash.Msg}
     {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)]) (L : FlockSoundness.Layout st)
     (m k0 : ℕ) (l₀ l₁ : FlockSoundness.Accounting.Level) (rest : List FlockSoundness.Accounting.Level) (ext : ℕ)
     (hsch : FlockSoundness.Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -529,7 +529,7 @@ theorem mean_epsSL_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field 
     (cap₀ : FlockSoundness.Model.Cap D) {τ : Type} [Fintype τ] [Nonempty τ]
     (σ : τ → FlockSoundness.Game.Strategy (sessAfterL A Hc E Lf (L.model (FlockSoundness.Refine.regionsOf st))
       ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal spec.mPts pre post cap₀))
-    {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (V : Claims.Verifier Coin)
+    {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Hash.Msg → Hash.Msg) (V : Claims.Verifier Coin)
     (P : Claims.Prover Ω) (j : Fin 2 → Fin (l₀ :: l₁ :: rest).length → Fin (V.k x))
     (ev : Fin 2 → Fin (l₀ :: l₁ :: rest).length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
     (ev₁ : Ω → (Fin (V.k x) → Coin) → Prop)
@@ -571,7 +571,7 @@ has Flock ZK's schedule, when no two of them share a round and the pads' weight 
 domain: the fork events' weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ + 2·N_p² + 2`, within the weight's
 `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2`, and `k < 4·N₀/e + 1` within `4·2^{d₀}/e` and level 0's `2·2^{d₀}·Q₀ ≥ 2`. -/
 theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables true x).head? = some (spec, st))
+    (x : Hash.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables true x).head? = some (spec, st))
     (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) {sch : FlockSoundness.Accounting.Schedule}
     (hsch : sch = FlockSoundness.Accounting.m1Schedule st.wideLeaf st.m) (Np : ℕ)
     (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0))
@@ -656,11 +656,11 @@ theorem epsSZ_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [F
     (Hs : Hashes F D Sl) {mPts : ℕ} (T : TabZK F mPts)
     (pre post : List ((Fin 2 → Fin mPts → F) → FlockSoundness.Game (OutZC F D Sl)))
     (cap₀ : FlockSoundness.Model.Cap D) (σ : FlockSoundness.Game.Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀)))
-    {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) (h25 : 25 ≤ st.m)
+    {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) (h25 : 25 ≤ st.m)
     (h35 : st.m ≤ 35) (hsch : T.sch = FlockSoundness.Accounting.m1Schedule st.wideLeaf st.m)
     (ht : T.t = FlockSoundness.Accounting.m1Pad st.wideLeaf st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st)
     (hN : T.N ≤ 2 ^ 13) (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ)
-    {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (V : Claims.Verifier Coin)
+    {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Hash.Msg → Hash.Msg) (V : Claims.Verifier Coin)
     (P : Claims.Prover Ω) (j : Claims.Flock.IZ T.sch.levels.length → Fin (V.k x))
     (ev : Claims.Flock.IZ T.sch.levels.length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
     (ev₁ : Ω → (Fin (V.k x) → Coin) → Prop)
@@ -708,11 +708,11 @@ theorem mean_epsSZ_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field 
     (pre post : List ((Fin 2 → Fin mPts → F) → FlockSoundness.Game (OutZC F D Sl)))
     (cap₀ : FlockSoundness.Model.Cap D) {τ : Type} [Fintype τ] [Nonempty τ]
     (σ : τ → FlockSoundness.Game.Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀)))
-    {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) (h25 : 25 ≤ st.m)
+    {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) (h25 : 25 ≤ st.m)
     (h35 : st.m ≤ 35) (hsch : T.sch = FlockSoundness.Accounting.m1Schedule st.wideLeaf st.m)
     (ht : T.t = FlockSoundness.Accounting.m1Pad st.wideLeaf st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st)
     (hN : T.N ≤ 2 ^ 13) (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ)
-    {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (V : Claims.Verifier Coin)
+    {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Hash.Msg → Hash.Msg) (V : Claims.Verifier Coin)
     (P : Claims.Prover Ω) (j : Claims.Flock.IZ T.sch.levels.length → Fin (V.k x))
     (ev : Claims.Flock.IZ T.sch.levels.length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
     (ev₁ : Ω → (Fin (V.k x) → Coin) → Prop)

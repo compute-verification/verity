@@ -1172,8 +1172,7 @@ def test_local_runs_the_nodes_session_on_one_card_with_the_verifier_beside_it_an
     assert env["NODE_ARGS"] == f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap}"
     assert env["SESSION_NODE"] == "local/h200-sxm-141gb-x1/serving"
     assert (env["PACED"], env["PACE_PASS_MS"]) == ("1:1000:2773:7", "0"), "run.sh passes the form, once"
-    assert env["VERIFIER_ARGS"] == (f"--node {env['RESEARCH_RUN_DIR']}/{M.NODE_FILE} "
-                                    f"--hbm-bytes {GPU_HBM['h200-sxm-141gb-x1']}")
+    assert "VERIFIER_ARGS" not in env, "the verifier states its node and its HBM from FIGURES"
     assert (env["JITTER_MS"], env["QUANTILE"]) == ("50", "max")
     assert (env["NODE_WORKSPACE"], env["HF_HOME"], env["UV_CACHE_DIR"], env["GPU_LEASE_DIR"]) == (
         str(work), str(work / "hf"), str(work / "cache/uv"), str(work / "gpu-lease"))
@@ -1239,7 +1238,7 @@ def test_a_card_two_node_files_carry_is_named_with_local_node(monkeypatch, tmp_p
 ], ids=["accepted", "refused"])
 def test_an_h100_runs_the_session_on_the_card_alone_and_prints_no_share(store, capsys, work, record, why, monkeypatch,
                                                                         tmp_path):
-    """Where no node file carries the H100, no host of it is on record: the session runs on its 80 GiB, with no `--node`
+    """Where no node file carries the H100, no host of it is on record: the session runs on its 80 GiB, with no figures
     for the verifier, and its verdict is printed with no share."""
     for f in M.NODE_FILES.glob("*.toml"):
         if f.stem != "h100-sxm-80gb-x1":
@@ -1249,7 +1248,7 @@ def test_an_h100_runs_the_session_on_the_card_alone_and_prints_no_share(store, c
     assert bench(store, "--local", run=machine) == 1
     ((_, env),) = machine.runs()
     assert env["ENGINE_ARGS"] == "--step-hz 2 --align-steps --arena-gib 58 --util 0.88"
-    assert env["VERIFIER_ARGS"] == f"--hbm-bytes {80 * GIB}"
+    assert "VERIFIER_ARGS" not in env
     assert env["SESSION_NODE"] == "local/h100-sxm-80gb/serving"
     text, doc, _ = printed(capsys)
     assert text[0].startswith(f"memory: no number: {why}") and doc["value"] is None

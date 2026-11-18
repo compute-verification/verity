@@ -54,7 +54,8 @@ class RegisteredValues:
 @dataclass(frozen=True)
 class InputArrived:
     """``steps``: input ``input`` of ``length`` values arrived, at ``step``, with the ``headers`` it came with (names
-    lower-cased) and its ``first_line``."""
+    lower-cased), its ``first_line`` and the ``user`` it names (None where it names none).  ``user`` is the input's own
+    value: a scheme keeps it to itself."""
 
     hook: ClassVar[str] = "steps"
     input: str
@@ -62,6 +63,7 @@ class InputArrived:
     step: int
     headers: Mapping[str, str] = field(default_factory=dict)
     first_line: str = ""
+    user: str | None = None
 
 
 @dataclass(frozen=True)
@@ -197,16 +199,6 @@ class RangeFreed:
 
 
 @dataclass(frozen=True)
-class OutputReleased:
-    """``steps``: output ``index`` of input ``input`` left the workload at ``step``."""
-
-    hook: ClassVar[str] = "steps"
-    input: str
-    index: int
-    step: int
-
-
-@dataclass(frozen=True)
 class OutputsComplete:
     hook: ClassVar[str] = "steps"
     input: str
@@ -215,7 +207,7 @@ class OutputsComplete:
 
 #: every event a served run emits, each read through its ``hook``
 EVENTS = (Declared, RegisteredValues, InputArrived, StepBegan, StepComputed, StepEnded, ValueProduced, BlockDue, RangesDeclared,
-          RangeAllocated, RangeWritten, RangeFreed, OutputReleased, OutputsComplete, PhaseOpened, PhaseClosed, PhaseCommitted)
+          RangeAllocated, RangeWritten, RangeFreed, OutputsComplete, PhaseOpened, PhaseClosed, PhaseCommitted)
 
 
 @dataclass(frozen=True)
@@ -366,7 +358,7 @@ type Request = (RequireProperty | ComputeBlockWith | StartOnBoundary | StartBesi
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle",
-           "Broken", "ENGINE", "FRONT", "FixRanges", "Front", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
+           "Broken", "ENGINE", "FRONT", "FixRanges", "Front", "InputArrived", "Kernel", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

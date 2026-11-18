@@ -99,7 +99,7 @@ theorem outRowPorts_of_hidden {r : Read} {sts : Array Stmt} (hs : r.tablesOf = s
 end Hidden
 
 /-- `outRowPorts_of_hidden` at a statement the parser read. -/
-theorem outRowPorts_hidden {decode : Claims.Msg → Option Read} {x : Claims.Msg} {p : Parsed}
+theorem outRowPorts_hidden {decode : Hash.Msg → Option Read} {x : Hash.Msg} {p : Parsed}
     (hx : parseBytes decode x = some p) (ht : p.tags.typed = false) (hpi : p.publicInputs = none)
     (hh : p.tags.hiddenOutputs = true) {t : ℕ} (htl : t < p.sts.size)
     (hv1 : ∀ q ∈ p.sts[t].c.ports.toList, q.v2 = false) :

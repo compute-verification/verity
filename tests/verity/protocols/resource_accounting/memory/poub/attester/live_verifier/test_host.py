@@ -137,8 +137,7 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
         "--transcript": str(svc.scratch / RUN / "transcripts"), "--challenger": "gate",
         "--challenger-ssh": SSH, "--challenger-peer": "auditor-host", "--challenger-pin": KEY,
         "--challenger-period": "memory-line-1", "--challenger-main": str(svc.main), "--figures": str(FIGURES_FILE),
-        "--figures-sha512": FIGURES.sha512(), "--host-bytes": "1843153879040",
-        "--ingress-bytes-per-s": "4400000000.0"}
+        "--figures-sha512": FIGURES.sha512(), "--ingress-bytes-per-s": "4400000000.0"}
     assert argv[i:] == ["--paced", "2:8000:40:2", "4:16000:40:2"]
     assert "run" in refused(call(svc, PACED, units, token="cd34")) and units.started == [f"vy-verifier@{RUN}.service"]
     assert [p.name for p in svc.runs.iterdir()] == [RUN]
@@ -165,6 +164,23 @@ def test_a_run_for_a_peer_naming_no_figures_is_refused_before_anything_starts(sv
     svc.config.write_text(json.dumps(settings))
     units = Units()
     assert refused(call(svc, PACED, units)).startswith("the peer 'gpu-node' names no figures in /etc/vy/verifier.json")
+    assert units.started == [] and list(svc.runs.iterdir()) == []
+
+
+@pytest.mark.parametrize("change, why", [
+    (lambda peer: peer.pop("ingress_bytes_per_s"), "names no ingress_bytes_per_s in /etc/vy/verifier.json"),
+    (lambda peer: peer.update(host_bytes=1), "names host_bytes in /etc/vy/verifier.json, which its figures carry"),
+    (lambda peer: peer.update(hbm_bytes=1), "names hbm_bytes in /etc/vy/verifier.json, which its figures carry"),
+])
+def test_a_run_for_a_peer_without_its_ingress_rate_or_with_a_capacity_beside_its_figures_is_refused(svc, change, why):
+    """The ingress rate the paced line charges is the auditor's configuration's: a peer naming none, which would be
+    charged as 0, starts nothing.  The node's HBM and host DRAM are its figures', pinned by their digest: a peer still
+    naming either beside them starts nothing either."""
+    settings = json.loads(svc.config.read_text())
+    change(settings["peers"]["gpu-node"])
+    svc.config.write_text(json.dumps(settings))
+    units = Units()
+    assert why in refused(call(svc, PACED, units))
     assert units.started == [] and list(svc.runs.iterdir()) == []
 
 
@@ -209,8 +225,9 @@ def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_ho
     assert (a.out, a.registry, a.transcript) == (svc.runs / RUN / "out", svc.registry, svc.scratch / RUN / "transcripts")
     assert (a.challenger, a.challenger_ssh, a.challenger_peer, a.challenger_pin, a.challenger_period,
             a.challenger_main) == ("gate", SSH, "auditor-host", KEY, "memory-line-1", svc.main)
-    assert (a.host_bytes, a.ingress_bytes_per_s, a.hbm_bytes, a.lean_exe, a.host) == (
-        1843153879040, 4.4e9, FIGURES.hbm_bytes, None, "127.0.0.1")
+    assert (a.ingress_bytes_per_s, a.lean_exe, a.host) == (4.4e9, None, "127.0.0.1")
+    assert not {"host_bytes", "hbm_bytes", "disk_burst_bytes", "link_burst_bytes"} & set(vars(a)), \
+        "the node's HBM, host DRAM and bursts are its figures'"
     for spec in a.paced or []:
         V.pace_of(spec, 17.0)
 
@@ -218,9 +235,11 @@ def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_ho
 def test_a_peers_figures_file_that_is_not_the_one_its_digest_pins_is_refused_before_the_verifier_listens(
         svc, monkeypatch, tmp_path, capsys):
     """The file at the peer's `figures` path, wherever it lies, is held to the `figures_sha512` root's configuration
-    names: a lenient one (half the squaring ceiling, half S_chip) is an argument error, and nothing listens."""
+    names: a lenient one (half the squaring ceiling, half S_chip, half the host's DRAM) is an argument error, and
+    nothing listens."""
     lenient = tmp_path / "lenient.json"
     lenient.write_text(json.dumps({**FIGURES.to_json(), "gpu_chip_bytes": FIGURES.gpu_chip_bytes // 2,
+                                   "host_dram_bytes": FIGURES.host_dram_bytes // 2,
                                    "gpu_squarings_per_s": {w: r / 2 for w, r in FIGURES.gpu_squarings_per_s.items()}}))
     settings = json.loads(svc.config.read_text())
     settings["peers"]["gpu-node"]["figures"] = str(lenient)

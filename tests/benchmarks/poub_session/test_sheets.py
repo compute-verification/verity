@@ -66,16 +66,20 @@ def test_a_verifier_started_without_figures_is_refused_by_name(tmp_path, monkeyp
 def test_a_figures_file_not_the_one_its_pinned_digest_names_is_refused_and_a_record_names_the_figures_it_read(
         tmp_path, monkeypatch, capsys):
     """`--figures-sha512` holds the file to the digest the verifier's configuration pins: a lenient file (half the
-    squaring ceiling, half S_chip) is refused before the process listens.  The pinned file is read, and the record
-    the process writes, here a refused registration's, carries the figures whole and their digest."""
+    squaring ceiling, half S_chip, half the host's DRAM) is refused before the process listens.  The pinned file is
+    read, and the record the process writes, here a refused registration's, carries the figures whole and their
+    digest, the ingress rate beside them, and says whether they were pinned: unpinned, as where both parties run on
+    the developer's machine, it says they weren't."""
     from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier as V
 
     fixture = timing.Figures.of_json(json.loads(FIXTURE.read_text()))
     lenient = tmp_path / "lenient.json"
     lenient.write_text(json.dumps({**fixture.to_json(), "gpu_chip_bytes": fixture.gpu_chip_bytes // 2,
+                                   "host_dram_bytes": fixture.host_dram_bytes // 2,
                                    "gpu_squarings_per_s": {w: r / 2 for w, r in fixture.gpu_squarings_per_s.items()}}))
     out = tmp_path / "out"
-    pinned = ["verifier_process.py", "--out", str(out), "--check-workers", "0", "--figures-sha512", fixture.sha512()]
+    pinned = ["verifier_process.py", "--out", str(out), "--check-workers", "0", "--ingress-bytes-per-s", "4.4e9",
+              "--figures-sha512", fixture.sha512()]
     monkeypatch.setattr(sys, "argv", [*pinned, "--figures", str(lenient)])
     with pytest.raises(SystemExit) as e:
         VP.main()
@@ -108,4 +112,9 @@ def test_a_figures_file_not_the_one_its_pinned_digest_names_is_refused_and_a_rec
     record = json.loads((out / "verifier.json").read_text())
     assert record["refused"] == "refused here"
     assert (record["figures"], record["figures_sha512"]) == (json.loads(FIXTURE.read_text()), fixture.sha512())
+    assert (record["figures_pinned"], record["ingress_bytes_per_s"]) == (True, 4.4e9)
+    monkeypatch.setattr(sys, "argv", [*pinned[:-2], "--figures", str(FIXTURE)])
+    assert VP.main() == 3
+    unpinned = json.loads((out / "verifier.json").read_text())
+    assert (unpinned["figures_sha512"], unpinned["figures_pinned"]) == (fixture.sha512(), False)
     assert timing.Figures.of_json(json.loads(lenient.read_text())).sha512() != fixture.sha512()

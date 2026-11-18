@@ -60,7 +60,7 @@ open Flock FlockDeploy
 
 namespace FlockComplete.ZkTables
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The statement the verifier parsed** at a good case: it parses, is untyped, has no public input ports, its tables
 are the case's, and the witness satisfies it. -/
@@ -176,7 +176,7 @@ theorem Case.traceR1CS (c : Case H Readable.relation) {i : ℕ} (hi : i < c.sts.
 
 /-- **Each table's honest trace satisfies its block R1CS** (`TraceR1CS` at `traces`), at every honest masked run of
 the deployed relation of any number of tables. -/
-theorem traceR1CS_goal (H : Claims.Msg → Claims.Msg) :
+theorem traceR1CS_goal (H : Hash.Msg → Hash.Msg) :
     ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ x < 2 ^ o.tabs[i]!.m,
       (((traces o.sts o.w)[i]!).az[x]! && ((traces o.sts o.w)[i]!).bz[x]!) = ((traces o.sts o.w)[i]!).z[x]! := by
   intro o i hi x hx

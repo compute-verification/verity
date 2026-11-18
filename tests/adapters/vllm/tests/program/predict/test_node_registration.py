@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 from verity.circuits.codec import canonical_json
 from verity.commitments import hm96
+from verity.commitments import salt_file as SF
 
 from tests.pipeline.test_cpu_replay import _shard
 from tests.program.predict.test_predict import TINY, _phi
@@ -32,7 +33,7 @@ assert _spec is not None and _spec.loader is not None
 REF = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(REF)
 
-WORLD, PREFIX, GEO, WK = 2, "inner.model.", bytes(64), bytes(range(64))
+WORLD, PREFIX, GEO = 2, "inner.model.", bytes(64)
 SHAPE = {"LP": 4, "T": 2}
 PHI = _phi(TINY, tp={"world": WORLD, "rank": 0})
 NODE = build_node_program(PHI, "request", **SHAPE)
@@ -85,17 +86,19 @@ def commit(tmp_path, monkeypatch):
     for r in range(WORLD):
         bdir = RB.path(out, 0, rank=r)
         (bdir / "weights" / "extra").mkdir(parents=True)
-        names, troots, extra = [], [], {}
+        names, troots, extra, wsalts = [], [], {}, {}
         for i, (name, a) in enumerate(served[r].items() if r == 0 else reversed(served[r].items())):
             raw = np.ascontiguousarray(a).reshape(-1).view(np.uint8)
             names.append([name, DTYPE[a.dtype.itemsize * 8][0], list(a.shape), int(raw.size)])
-            troots.append(step_rows.tensor_root(GEO, i, names[-1], raw, WK))
+            wsalts[name] = step_rows.fresh_tensor_salts(int(raw.size))
+            troots.append(step_rows.tensor_root(GEO, i, names[-1], raw, wsalts[name]))
             if name not in CKPT:
                 extra[name] = i
                 raw.tofile(bdir / "weights" / "extra" / f"{i}.bin")
-        tree = step_rows.weights_tree(GEO, names, troots, WK) | {"extra": extra}
+        tree = step_rows.weights_tree(GEO, names, troots) | {"extra": extra}
         roots[r] = tree["root"]
         (bdir / "weights" / "tree.json").write_text(json.dumps(tree))
+        SF.write(SF.beside(bdir / "weights" / "tree.json"), wsalts)
         (bdir / "context.json").write_text(json.dumps({"pair": 0, "tp": {"world": WORLD, "rank": r}, "replay": cfg}))
         bundles.append({"pair": 0, "rank": r, "manifest_sha256": _seal(bdir)})
     (out / "replay_deferred.json").write_text(json.dumps({"world": WORLD, "bundles": bundles}))

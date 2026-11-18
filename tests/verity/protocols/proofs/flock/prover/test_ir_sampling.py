@@ -3,7 +3,6 @@ lane unit against the IR composites it is lowered from, a row's words against th
 (a row whose last BLAKE3 chunk is short included), the staged file's units, the native words, the pin, and the negatives."""
 from __future__ import annotations
 
-import os
 import random
 
 import numpy as np
@@ -14,16 +13,10 @@ from verity_flock import ir_lower as IL
 from verity_flock import ir_sampling as S
 
 P = pytest.importorskip("verity_vllm.definitions.registry.prims")
-from verity.circuits.evaluation import evaluate  # noqa: E402
-from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.ops import fp32 as F  # noqa: E402
-from verity.circuits.ops.scalar import SelectF32  # noqa: E402
 from verity_flock import lowerings  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
-from synthetic_sets import synthetic_set  # noqa: E402
-from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_vllm.definitions.registry import ref_prims as RP  # noqa: E402
-from verity_vllm.definitions.registry import sampling as SM  # noqa: E402
 
 REG = lowerings.registry("C-Flock")
 SPECIAL = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7FC00123, 0x7F800001, 0xFFC00000, 0xFF800007, 1, 0x80000001,
@@ -92,8 +85,12 @@ def ir_walk(target, args, resolved):
     return call, t
 
 
+def _def(V: int):
+    return TM.subcircuit(S.TEMPLATE, V=V).definition()
+
+
 def lane_reference(V, x, temp, rcp, skip, noisy, kbit, g, best, best_i, i):
-    tl, ms, gs = S._composites(V)
+    tl, ms, gs = S._composites(_def(V))
     call, t = ir_walk(tl, [x, temp, rcp, skip], {})
     scaled = t[call.returns[0]]
     call, t = ir_walk(ms, [i, scaled, 0], {f"BitAtx{V}_v1": kbit})
@@ -108,7 +105,7 @@ def lane_reference(V, x, temp, rcp, skip, noisy, kbit, g, best, best_i, i):
 
 def test_lane_unit_matches_the_ir_composites():
     V = 1024
-    low = S.lane(V)
+    low = S.lane(_def(V))
     rng = random.Random(7)
     vecs = []
     for _ in range(4000):
@@ -124,52 +121,11 @@ def test_lane_unit_matches_the_ir_composites():
 
 
 def test_the_lane_is_the_pinned_one():
-    low = S.lane(128256)
+    low = S.lane(_def(128256))
     assert S.pin_digest(low) == REG.module(S.TEMPLATE).PIN == S.PIN
-    assert S.pin_digest(S.lane(64)) == S.PIN
+    assert S.pin_digest(S.lane(_def(64))) == S.PIN
     head = low.unit_text.split("\n", 1)[0].split()
     assert head[0] == IL.FORMAT and head[1] == S.UNIT and int(head[2]) <= 1 << 13
-
-
-def _set(tmp_path, V, n=3):
-    sub = TM.subcircuit(S.TEMPLATE, V=V)
-    return InputSet.open(synthetic_set(sub, n, 20260926, tmp_path)["path"])
-
-
-def _replay_scan(masked, g, noisy, V):
-    """``GumbelSelectF32``'s scan replayed from its Definition with the circuits' primitives: every lane's carry out."""
-    y0 = SelectF32.evaluate(noisy, F.F32AddFtz.evaluate(masked[0], g[0]), masked[0])
-    carry = (y0, 0, 1)
-    out = [carry]
-    for v in range(1, V):
-        call, t = ir_walk(SM.GumbelSelectStep, [*carry, masked[v], 0, noisy], {"GumbelNoiseLane_v1": g[v]})
-        carry = tuple(t[r] for r in call.returns[:3])
-        out.append(carry)
-    return out
-
-
-@pytest.mark.parametrize("V", [1056, 1280])
-@pytest.mark.slow
-def test_row_words_match_the_ir_evaluator(tmp_path, V):
-    s = _set(tmp_path, V)
-    logits, sc, outs = S.instances(s, 0, s.n)
-    for i in range(s.n):
-        args = [int(sc[p][i]) for p in S.PUBLIC_PORTS]
-        cuts, tok = S.row_words(logits[i], *args)
-        row = [int(x) for x in logits[i]]
-        assert tok == evaluate(bind(SM.GumbelTopPTokenSelect, V=V), row, *args)[0] == int(outs[i])
-        lane = cuts[len(S.SCALARS) + len(S.INIT):].reshape(V, len(S.LANE)).astype(np.int64)
-        scaled = evaluate(bind(SM.TemperatureScale, V=V), row, args[3])
-        assert list(lane[:, 2]) == list(scaled)
-        masked = evaluate(bind(SM.TopPMask, V=V), list(scaled), args[0], args[4])
-        assert list(np.where(lane[:, 0] == 1, lane[:, 2], S.NEG_INF)) == list(masked)
-        keep = SM.topp_mask_word(V).evaluate(*scaled, args[0], args[4])
-        assert [(keep >> v) & 1 for v in range(V)] == list(lane[:, 0])
-        key = SM.GumbelStreamKey.evaluate(args[1], args[2])
-        assert all(SM.GumbelNoiseLane.evaluate(key, v) == lane[v, 1] for v in range(0, V, 5))
-        assert list(cuts[:4]) == S.row_scalars(args[3]) and list(cuts[4:7]) == [0, 0, 0]
-        carries = _replay_scan(list(masked), list(lane[:, 1]), S.row_scalars(args[3])[3], V)
-        assert [tuple(int(x) for x in lane[v, 3:6]) for v in range(V)] == carries
 
 
 def test_supports_and_relation():
@@ -184,7 +140,7 @@ def test_supports_and_relation():
 
 def test_a_mutated_circuit_description_is_caught_by_the_ir_comparison():
     V = 64
-    low = S.lane(V)
+    low = S.lane(_def(V))
     rng = random.Random(3)
     vecs = []
     for _ in range(1500):
@@ -203,7 +159,4 @@ def test_a_mutated_circuit_description_is_caught_by_the_ir_comparison():
         outs, _ = IL.evaluate_layout(lay, ports, len(vecs))
         caught += sum([int(o[n]) for o in outs] != w for n, w in enumerate(want)) > 0
     assert caught >= 16                               # a third of the spread-out mutations (the rest sit in rare paths)
-
-
-CAPTURED = os.environ.get("VERITY_CAPTURED_101_GUMBEL")
 

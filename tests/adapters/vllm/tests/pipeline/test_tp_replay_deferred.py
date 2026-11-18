@@ -113,7 +113,7 @@ def _rank_shards(rank):
 
 @pytest.fixture
 def rank_weights(tmp_path):
-    from tests.pipeline.test_cpu_replay import _shard, weights_tree
+    from tests.pipeline.test_cpu_replay import _shard, weights_tree, write_salts
 
     ckd = tmp_path / "ck"
     ckd.mkdir()
@@ -121,7 +121,9 @@ def rank_weights(tmp_path):
     _shard(ckd / "model.safetensors", PARTS)
 
     def tree(rank):
-        return weights_tree({name: ("bfloat16", a) for name, a in _rank_shards(rank).items()}) | {"extra": {}}
+        t = weights_tree({name: ("bfloat16", a) for name, a in _rank_shards(rank).items()}) | {"extra": {}}
+        write_salts(tmp_path, t)
+        return t
 
     return ckd, tree
 
@@ -158,7 +160,7 @@ def test_a_ranks_deepgemm_linears_and_absorbed_kv_b_open_as_vllm_rewrites_them_a
     requantised kv_b_proj (`fp8_ue8m0`).  Composed as the Build's roles name them (its Program fields less the index's wrapper prefix),
     every registered tensor of the rank opens against the committed root; without the roles the four requantised fields differ from
     the checkpoint's words and the absorbed two have no checkpoint tensor (GLM-5.3 B1 TP8's rank 0: 978 and 156 of 2275)."""
-    from tests.pipeline.test_cpu_replay import weights_tree
+    from tests.pipeline.test_cpu_replay import weights_tree, write_salts
 
     G, NH, DN, DV, L, Q, rank = 128, 2, 128, 128, 256, 256, 1
     rng = np.random.default_rng(5)
@@ -192,6 +194,7 @@ def test_a_ranks_deepgemm_linears_and_absorbed_kv_b_open_as_vllm_rewrites_them_a
               f"{A}.W_UV": ("bfloat16", FU.absorbed(kw, ks, G, NH // WORLD, DN, DV, "W_UV")),
               "model.norm.weight": ("bfloat16", ckt["model.norm.weight"][1])}
     tree = weights_tree(served) | {"extra": {}}
+    write_salts(tmp_path, tree)
 
     pre = "inner.model."
     wr = {f"{pre}{A}.q_b_proj.weight": {"role": "fp8_w_requant_ue8m0"}, f"{pre}{A}.q_b_proj.weight_scale_inv": {"role": "fp8_ws_requant_ue8m0"},
@@ -216,7 +219,7 @@ def test_a_dsv4_ranks_padded_sink_and_stream_broadcast_open_as_vllm_makes_them_a
     hc_attn_fn_broadcast the sum of hc_attn_fn's four streams in f32 (`derived_weights`).  Composed by the Build's roles, both open
     against the committed root; without them the sink is no shard of the checkpoint's and the broadcast has no checkpoint tensor
     (DeepSeek-V4-Pro B1 TP8's rank 0: every layer's sink unopened, so its 2,033 sampled FlashMlaDecode picks not evaluated)."""
-    from tests.pipeline.test_cpu_replay import weights_tree
+    from tests.pipeline.test_cpu_replay import weights_tree, write_salts
 
     HEADS, NH, M, H, rank = 8, 16, 6, 32, 1
     rng = np.random.default_rng(9)
@@ -234,6 +237,7 @@ def test_a_dsv4_ranks_padded_sink_and_stream_broadcast_open_as_vllm_makes_them_a
     broadcast = ((np.float32(0) + streams[:, 0] + streams[:, 1]) + streams[:, 2]) + streams[:, 3]
     served = {f"{L0}.attn.attn_sink": padded, f"{L0}.hc_attn_fn": fn, f"{L0}.hc_attn_fn_broadcast": broadcast}
     tree = weights_tree({name: ("float32", a) for name, a in served.items()}) | {"extra": {}}
+    write_salts(tmp_path, tree)
 
     pre = "inner.model."
     wr = {f"{pre}{L0}.attn.attn_sink": {"role": "dsv4.attn_sink", "NH": NH}, f"{pre}{L0}.hc_attn_fn_broadcast": {"role": "mhc.fn_broadcast", "HC": 4, "H": H}}

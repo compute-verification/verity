@@ -41,8 +41,19 @@ def test_the_hook_emits_each_point_as_a_steps_event():
     step(sched)
     step(sched)
     assert seen == [H.InputArrived("a", 0, 0),
-                    H.StepBegan(0, ("a",), 1, 0), H.OutputReleased("a", 0, 0), H.StepEnded(0),
-                    H.StepBegan(1, ("a",), 1, 0), H.OutputReleased("a", 1, 1), H.OutputsComplete("a", 1), H.StepEnded(1)]
+                    H.StepBegan(0, ("a",), 1, 0), H.StepEnded(0),
+                    H.StepBegan(1, ("a",), 1, 0), H.OutputsComplete("a", 1), H.StepEnded(1)]
+
+
+def test_an_arrival_carries_the_user_the_server_gave_and_none_without_one():
+    ex, seen = messages.Exchange(), []
+    ex.subscribe("s", "steps", lambda e: isinstance(e, H.InputArrived) and seen.append(e))
+    sched = Outputs()
+    hook = admission.install(sched, ex)
+    hook.arrive("a", "POST /v1/completions HTTP/1.1", {}, "u-7")
+    sched.add_request(Req("a"))
+    sched.add_request(Req("b"))
+    assert [(e.input, e.user) for e in seen] == [("a", "u-7"), ("b", None)]
 
 
 def test_a_gated_request_finished_from_outside_never_reaches_the_scheduler():
