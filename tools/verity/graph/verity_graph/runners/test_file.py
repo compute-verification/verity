@@ -39,9 +39,9 @@ CHILD = GUARD / "child"
 REGISTRY = "artifacts.json"
 #: pytest with the guard's directory on `sys.path` (`suites._PYTEST`)
 PYTEST = "import sys, pytest; sys.path.append(sys.argv.pop(1)); sys.exit(pytest.main(sys.argv[1:]))"
-#: what a test never inherits: a machine runner's `RESEARCH_*` and PYTHONPYCACHEPREFIX (`suites.RUNNER_PREFIX`, `RUNNER_ENV`), and
-#: the guard's own variables, which a suite this runs inside of sets
-DROP_PREFIXES, DROP = ("RESEARCH_", "VERITY_SUITE_"), ("PYTHONPYCACHEPREFIX",)
+#: what a test never inherits: a machine runner's `RESEARCH_*`, PYTHONPYCACHEPREFIX and the kit's trial switch
+#: (`suites.RUNNER_PREFIX`, `RUNNER_ENV`), and the guard's own variables, which a suite this runs inside of sets
+DROP_PREFIXES, DROP = ("RESEARCH_", "VERITY_SUITE_"), ("PYTHONPYCACHEPREFIX", "VERITY_BENCH_TRIAL")
 THREAD_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS")
 #: pytest's exits that are results: every test passed, or none was collected; a test failed, or collecting stopped
 PASS, FAIL = (0, 5), (1, 2)

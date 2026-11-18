@@ -2,8 +2,8 @@
 selection less what ``adapters/vllm/ruff.toml`` already selects, and less line length; ``print`` flagged in the library),
 run from ``adapters/vllm`` on the whole integration with the ruff the root ``dev`` group pins.
 
-Findings are keyed as ``test_ruff.py`` keys them.  ``ruff check --config tests/lint/ruff_vllm.toml --fix --extend-ignore I001
-PATH`` fixes some; the import sort (I001) touches most files, so it runs once, in a change of its own.  A library ``print`` is
+Findings are keyed as ``test_ruff.py`` keys them.  ``ruff check --config ../../tests/adapters/vllm/tests/lint/ruff_vllm.toml
+--fix --extend-ignore I001 PATH`` fixes some; the import sort (I001) touches most files, so it runs once, in a change of its own.  A library ``print`` is
 a diagnostic for the logger, or what a command prints, which ``pipeline/cli.py`` writes.  Delete the entry each fix makes
 stale.
 
@@ -47,8 +47,8 @@ def scan() -> tuple[R.Violation, ...]:
 
 def test_no_new_findings() -> None:
     R.assert_no_new(NAME, scan(), RULE,
-                    "Fix the code (`ruff check --config tests/lint/ruff_vllm.toml --fix PATH` from adapters/vllm fixes "
-                    "some; a library `print` becomes a logger call, or goes through pipeline/cli.py when "
+                    "Fix the code (`ruff check --config ../../tests/adapters/vllm/tests/lint/ruff_vllm.toml --fix PATH` "
+                    "from adapters/vllm fixes some; a library `print` becomes a logger call, or goes through pipeline/cli.py when "
                     "it is what a command prints).")
 
 

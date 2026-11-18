@@ -17,6 +17,7 @@ from verity_bench.proof_layers_result import (
     SCHEMA,
     Result,
 )
+from verity_bench.spot_status import WIRES
 
 # ---- printing and writing ------------------------------------------------------------------------------------------------
 
@@ -72,7 +73,9 @@ def render(results: Sequence[Result]) -> str:
         build = "—" if r.build_s is None else f"{r.build_s:.0f} s a build, wall ({r.build_what}; build cache: {r.build_cache})"
         lines.append(f"| {LAYERS[r.layer]} | {r.workload} | {proof} | {r.device if read else '—'} | "
                      f"{r.eps_delta if read else '—'} | {cells[0]} | {r.lean} | {cells[1]} | {cells[2]} | {build} |")
-    lines += ["", *(f"- {LAYERS[r.layer]}: no number: {r.why}" for r in results if r.why)]
+    lines += ["", *([f"- ε at δ: {WIRES}"] if any(r.status == "read" and "incorrect proof blocks" in r.eps_delta
+                                                  for r in results) else []),
+              *(f"- {LAYERS[r.layer]}: no number: {r.why}" for r in results if r.why)]
     lines += [f"- {LAYERS[r.layer]}: {n}" for r in results for n in r.notes]
     return "\n".join(lines).rstrip()
 

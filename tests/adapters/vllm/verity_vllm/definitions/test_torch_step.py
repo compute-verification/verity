@@ -12,7 +12,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
@@ -20,6 +19,7 @@ from verity.circuits.ops.boolean import cast as CA
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import mufu as BMU
+
 from verity_vllm.definitions.numerics import program_walk as PW
 from verity_vllm.definitions.numerics import torch_kernels as TK
 from verity_vllm.definitions.numerics import torch_step as NS

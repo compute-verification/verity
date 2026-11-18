@@ -16,14 +16,18 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.se
 
 def y_tree(run: Any, y: Any, index: int) -> Any:
     """Call `index`'s tree over its real rows `y` (BF16, m x n) as uint8 bytes in `commit_y`'s layout, its root the last
-    node: on a device by the run's `DeviceTrees`, on the CPU by `commit_y`."""
+    node, on y's device: by the run's `DeviceTrees` where its kernels take rows of k = n words, else (on the CPU, or a width
+    such as GLM-5.3's merged q_a/kv_a projection's 2,624) by `commit_y` itself, the tree a device tree is held to."""
     import torch
-    if not y.is_cuda:
-        tree = commit_y(_bytes(y.contiguous().view(torch.uint8)), y.shape[1], run.salt, index, run.salt_key)[1]
-        return torch.frombuffer(bytearray(tree), dtype=torch.uint8)
-    if run._y_trees is None:
-        run._y_trees = DeviceTrees(run)
-    return run._y_trees(y, index)
+    if y.is_cuda:
+        if run._y_trees is None:
+            run._y_trees = DeviceTrees(run)
+        tree = run._y_trees(y, index)
+        if tree is not None:
+            return tree
+    host = commit_y(_bytes(y.contiguous().view(torch.uint8)), y.shape[1], run.salt, index, run.salt_key)[1]
+    tree = torch.frombuffer(bytearray(host), dtype=torch.uint8)
+    return tree.to(y.device) if y.is_cuda else tree
 
 
 class DeviceTrees:
@@ -31,23 +35,27 @@ class DeviceTrees:
     (`run.Pipeline.row_digests`) over y's rows widened to FP32 a chunk at a time (exact, as `f32_rows`), the hm96 leaves at
     nonce `HM96_Y` + index and the frame leaves under the call's `y_domain` (`hm_level0`), its pads and its levels, on the
     current stream, into a tree that starts as the pass's poison byte where the pass has one.  One pipeline a width n, y's
-    rows its rows of k = n words, so n is a k the kernels take; its first tree is held to `commit_y` over a fixed
-    `Y_CHECK_ROWS`-row y."""
+    rows its rows of k = n words, so only where n is a k the kernels take (elsewhere None, no tree, and the kernels' refusal
+    in `refused`); its first tree is held to `commit_y` over a fixed `Y_CHECK_ROWS`-row y."""
 
     pipes: dict[int, Any]
+    refused: dict[int, str]
 
     def __init__(self, run: Any) -> None:
-        self.run, self.pipes = run, {}
+        self.run, self.pipes, self.refused = run, {}, {}
         self.dom = _zeros(64, run.device)
 
     def __call__(self, y: Any, index: int) -> Any:
-        return self._tree(self.pipe(y.shape[1], index), y.contiguous(), index)
+        p = self.pipe(y.shape[1], index)
+        return None if p is None else self._tree(p, y.contiguous(), index)
 
     def pipe(self, n: int, index: int) -> Any:
-        """Width `n`'s pipeline, made and held to `commit_y` at its first use."""
+        """Width `n`'s pipeline, made and held to `commit_y` at its first use; None where the kernels refuse rows of k = n
+        words."""
         if n not in self.pipes:
             p = self._pipe(n)
-            self._check(p, n, index)
+            if p is not None:
+                self._check(p, n, index)
             self.pipes[n] = p
         return self.pipes[n]
 
@@ -57,7 +65,8 @@ class DeviceTrees:
             return R.Pipeline(run.kernel.dev, R.BM, R.BM, n, run.variant, {"dom_b": self.dom.data_ptr(), **run.const_keys}, 0, 0,
                               bufs={"tree_b": 0, "segdig_b": 0})
         except ValueError as e:
-            raise ValueError(f"y's device tree hashes y's rows as the kernels' rows of k = {n} words: {e}") from None
+            self.refused[n] = str(e)
+            return None
 
     def _tree(self, p: Any, y: Any, index: int) -> Any:
         import torch

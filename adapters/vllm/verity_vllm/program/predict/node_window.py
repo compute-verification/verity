@@ -62,8 +62,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.refs import Refs, runs
 from verity.commitments.periods import interface as IF
-from verity_vllm.definitions.registry import b1_tp2 as B1T
 
+from verity_vllm.definitions.registry import b1_tp2 as B1T
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.query.program_view import spec_base, spec_statics
 
@@ -153,7 +153,10 @@ class NodeWindow:
     """Program ``fn`` (one rank's request Program in the registered rank form) lowered into ``b``'s units by ``families``
     (module docstring): ``lower()`` walks its nodes, ``circuit()`` settles and emits the window, ``census()`` reports it.
     ``coord`` is the width of a ``COORDS`` GEMM's coordinates (1: the serving rows' coordinate, `serving_templates.coordinate`);
-    ``stand_ins``, the module docstring's."""
+    ``stand_ins``, the module docstring's. A form with more inputs or other step ends names them in `INPUTS` and `ENDS`."""
+
+    INPUTS: tuple[str, ...] = (PROMPT, WEIGHTS)
+    ENDS: frozenset[str] = SELECTS
 
     def __init__(self, fn: Any, families: Mapping[str, Lowering] | None = None, grain: Grain = _GRAIN, name: str = NAME,
                  coord: int = 1, provable: bool = True, stand_ins: bool = False) -> None:
@@ -161,9 +164,9 @@ class NodeWindow:
         self.families = dict(FAMILIES if families is None else families)
         self.params = [p for p, _ in fn.signature()[0]]
         self._bits = {p: next(iter(t.width_set())) for p, t in fn.signature()[0] if p != WEIGHTS and len(t.width_set()) == 1}
-        bad = [p for p in self.params if p not in (PROMPT, WEIGHTS) and not p.startswith(PEERS)]
+        bad = [p for p in self.params if p not in self.INPUTS and not p.startswith(PEERS)]
         if WEIGHTS not in self.params or bad:
-            raise Unexpressible(f"{name}: inputs {bad or self.params}; the node window takes the prompt, the weights record and "
+            raise Unexpressible(f"{name}: inputs {bad or self.params}; the node window takes {', '.join(self.INPUTS)} and "
                                 f"{PEERS}* partials")
         self.b = _Builder(grain, 1, provable)
         weights = dict(fn.signature()[0])[WEIGHTS]
@@ -172,7 +175,7 @@ class NodeWindow:
         self._firsts = [f[0] for f in self.fields]
         self.b.weights = tuple((label, s[1], e[1] - s[1]) for label, s, e in zip(labels, self.fields, self.fields[1:]))
         nodes = fn.body.nodes
-        ends = [j for j, n in enumerate(nodes) if _family(n) in SELECTS]
+        ends = [j for j, n in enumerate(nodes) if _family(n) in self.ENDS]
         self.steps = max(1, len(ends))
         self._step_of = [min(bisect.bisect_left(ends, j), self.steps - 1) for j in range(len(nodes))]
         self.meta: dict[int, tuple[int, int, int, list[tuple[int, int, int]] | None]] = {}

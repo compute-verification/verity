@@ -9,6 +9,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import tables
 
     return [
@@ -24,6 +25,7 @@ def _table_read_roots() -> list[Any]:
     by): one row of 2^6 one-word entries, `exp2_lut127`'s 2^8 entries of two words, and 2^10 one-word entries in 16 rows."""
     from verity.circuits.boolean import table as BT
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import tables
 
     out: list[Any] = []

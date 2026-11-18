@@ -3,7 +3,8 @@ module
 public import Proofs.Properties.Verity.Sampled.Record
 public import Proofs.Properties.Verity.Sampled.Record.Session
 public import Proofs.Properties.Verity.Recursive.ScheduleInner
-public import Proofs.Properties.Verity.Recursive.PartStatement
+public import Proofs.Flock.Claims.Recursion.DeploySessions
+public import Proofs.Properties.Verity.Sampled.RawFits
 import all Init.Data.String.Defs
 
 /-!

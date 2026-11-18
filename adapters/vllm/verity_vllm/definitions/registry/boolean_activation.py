@@ -23,11 +23,19 @@ from __future__ import annotations
 from functools import lru_cache
 
 from verity.circuits import boolean as BL
-from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.types import Array
-from verity.circuits.silicon import fp
-from verity.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, or_reduce, sub
+from verity.circuits.boolean.forms import (
+    NOT,
+    ZERO,
+    and_reduce,
+    const_bits,
+    or_reduce,
+    sub,
+)
 from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.silicon import fp
+from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import dense as D
 from verity_vllm.definitions.registry import prims as P
 

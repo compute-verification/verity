@@ -15,6 +15,7 @@ public import Proofs.Flock.Claims.Complete.Zk.Discharge
 public import Proofs.Flock.Claims.Complete.Zk.Link
 public import Proofs.Flock.Claims.Complete.Zk.Json.QSort
 public import Proofs.Flock.Claims.Complete.Zk.Json.Record
+public import Proofs.Flock.Claims.Complete.Zk.Json.RecordSize
 public import Proofs.Flock.Claims.Complete.Zk.Json.Decode
 public import Proofs.Flock.Claims.Complete.Zk.Json.Session
 public import Proofs.Flock.Claims.Complete.Zk.Json.Goals
@@ -61,6 +62,7 @@ public import Proofs.Flock.Claims.Complete.Zk.Level0Honest
 public import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
 public import Proofs.Flock.Claims.Complete.Zk.Level0Opens
 public import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
+public import Proofs.Flock.Claims.Complete.Zk.RoundBytes
 public import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at

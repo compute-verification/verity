@@ -34,7 +34,7 @@ POLICY = "lean-audit.json"
 
 
 def regenerate(pkg: str) -> str:
-    return f"python3 tools/verity/lean/check.py --build --update {pkg}"
+    return f"python3 tools/verity/lean/lean_changed.py --records {pkg} --update"
 
 
 def programs() -> Path:

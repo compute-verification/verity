@@ -55,7 +55,7 @@ untraced = [
 # default the sampling plan's: the break-even planner's case, which it builds from Figure 1's lines (figure1.py,
 # total_cost.py, the second stage's bound it imports and the cards they read); where asked, the census's request and
 # GPU peak at the workload card's MACs a token.
-inputs = ["calibration/census/deployments.json", "calibration/census/adversary.json", "calibration/census/hardware.json",
+inputs = ["calibration/hardware/cards", "calibration/census/deployments.json", "calibration/census/adversary.json", "calibration/census/hardware.json",
           "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml",
           "benchmarks/spot_figures/cards", "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/figure1.py",
           "benchmarks/spot_figures/total_cost.py", "benchmarks/spot_figures/second_stage.py",
@@ -85,12 +85,15 @@ inputs = ["calibration/census/deployments.json", "calibration/census/adversary.j
           # compile_slice_zk's compiler read the vLLM package too. Both packages are listed whole, as they move often. SPOT's
           # prove_path, which test_kept_scan imports with the records_audit it imports, reads its sources' list.
           # test_attester_term runs `verity bench certifier_term`'s runner, test_block_attester holds the block attester to
-          # the block record's period-0 fixture, and test_attester_piece holds the CLI's served_table to scan_zk's scan class.
+          # the block record's period-0 fixture, and test_attester_piece holds the CLI's served_table, with the run's
+          # `Start` it imports, to scan_zk's scan class.
           "adapters/vllm/verity_vllm", "adapters/torch/verity_torch",
           "benchmarks/certifier_term/run.py",
           "tests/benchmarks/one_stage/interfaces/fixtures/block-record-r2-period0.json",
           "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/records_audit.py",
-          "benchmarks/prove_path/sources.json", "tools/verity/cli/verity_cli/served_table.py", "benchmarks/network_traces",
+          "benchmarks/prove_path/sources.json", "tools/verity/cli/verity_cli/served_table.py",
+          "tools/verity/cli/verity_cli/run.py", "tools/verity/cli/verity_cli/__init__.py",
+          "tools/verity/cli/verity_cli/settings.py", "benchmarks/network_traces",
           # record.py writes its metric through the harness kit's writer, whose settings are verity_config's
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",

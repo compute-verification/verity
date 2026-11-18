@@ -20,8 +20,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-
-from verity_config import verity_settings as settings
 from verity.circuits import boolean as BL
 from verity.circuits import evaluation as E
 from verity.circuits.boolean.trace import Traced, trace
@@ -29,6 +27,8 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import resolve
 from verity.circuits.types import Array
+from verity_config import verity_settings as settings
+
 from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
 from verity_vllm.definitions.registry import dsa_topk_mask as M
 from verity_vllm.definitions.registry import dsa_topk_mask_cut as X

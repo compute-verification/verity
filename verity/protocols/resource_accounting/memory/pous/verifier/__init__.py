@@ -10,3 +10,5 @@ replayed against the real labels).  `protocol` is the generic protocol over any 
 `CapacityBound`, `TimedAudit`, `StorageProfile`), and `schemes` the registered schemes behind it (the band first).
 The memory attester, which signs its rounds, is the device's: `verity.protocols.resource_accounting.memory.pous.attester.memory_attester`.
 """
+
+__all__: list[str] = []

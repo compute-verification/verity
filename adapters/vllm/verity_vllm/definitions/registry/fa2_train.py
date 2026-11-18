@@ -28,16 +28,29 @@ expf(lse_s - LSE) times the split's O.  An empty split is O 0 and LSE -inf.
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.defs import bind, composite
 from verity.circuits.ops import scalar as SC
 from verity.circuits.ops.gemm import DotBf16 as DotBf16V2
-from verity.circuits.ops.prims import HopperBF16WgmmaDot16, ZERO32, const
-from verity.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
+from verity.circuits.ops.prims import ZERO32, HopperBF16WgmmaDot16, const
+from verity.circuits.refs import (
+    Affine,
+    Explicit,
+    array_of,
+    concat,
+    strided_view,
+    tuple_of,
+)
+from verity.circuits.refs import Coll as _Coll
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.b1 import NEG_INF32, ZERO16, _lane, scale_log2_bits
+from verity_vllm.definitions.registry.b1 import (
+    NEG_INF32,
+    ZERO16,
+    _lane,
+    scale_log2_bits,
+)
 from verity_vllm.definitions.registry.dsv4_moe import Ex2Approx
 from verity_vllm.definitions.registry.moe import NvExpf
 from verity_vllm.definitions.registry.prims import A16, BF16, F32

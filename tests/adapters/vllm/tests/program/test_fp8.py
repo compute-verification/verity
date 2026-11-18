@@ -20,11 +20,11 @@ import numpy as np
 import pytest
 from verity.circuits import Program, bind
 from verity.circuits.evaluation import evaluate_region
+
+from tests.program.capture_check import coll_range as _coll_range
 from verity_vllm.definitions.numerics import fp8_twins
 from verity_vllm.definitions.registry import fp8 as F
 from verity_vllm.definitions.registry import prims as P
-
-from tests.program.capture_check import coll_range as _coll_range
 
 DATA = Path(__file__).parent / "data"
 

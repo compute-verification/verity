@@ -30,7 +30,6 @@ truncation's saturation: torch CPU's (x86's ``cvttss2si``) is INT64_MIN for a Na
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.defs import primitive
 from verity.circuits.types import Value
 

@@ -201,7 +201,6 @@ class EncodedRows:
         self.kernels.raised()
         self._counts = torch.zeros(3, dtype=torch.int64, device=rows.device)
         self._high: list[tuple[int, Any]] = []
-        self.blocks_decoded = 0
         self.sketch: Any = None
 
     @property
@@ -221,7 +220,6 @@ class EncodedRows:
         high = (c[:, :8] == 0xFF).all(dim=1)
         self._counts[:2] += torch.stack(((m[:, :LEAD] != 0).any(dim=1).sum(), high.sum()))
         self._high.append((j0, high))
-        self.blocks_decoded += j1 - j0
         return m
 
     def decode_into(self, offset: int, size: int, out: Any, *, end: bool = False) -> None:

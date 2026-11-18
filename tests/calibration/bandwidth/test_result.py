@@ -42,4 +42,23 @@ def test_a_wrong_byte_or_no_record_writes_no_number_and_exits_5(tmp_path, monkey
 def test_the_metric_is_the_registered_one():
     metric, = tomllib.loads((HERE / "metrics.toml").read_text())["metric"]
     assert metric["id"] == result.METRIC and metric["unit"] == "GB a second"
-    assert "run_write_host.sh" in metric["command"] and "result.py" in (HERE / "run_write_host.sh").read_text()
+    assert metric["command"].endswith("-- bash calibration/bandwidth/run.sh write_host")
+    assert 'result.py" write_host "$O"' in (HERE / "run.sh").read_text()
+
+
+@pytest.mark.parametrize("probe, first, rest", [("chip", "chip.json", ["ur.jsonl", "build.txt"]),
+                                                ("write_gpu", "write.jsonl", ["build.txt", "rc.txt"])])
+@pytest.mark.parametrize("rc, wrote, status", [(0, True, "passed"), (3, True, "failed"), (0, False, "failed")])
+def test_a_device_probe_writes_its_programs_check_as_the_validation_and_no_number(tmp_path, monkeypatch, probe, first,
+                                                                                 rest, rc, wrote, status):
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    out = tmp_path / "out"
+    out.mkdir()
+    for f in ([first] if wrote else []) + rest:
+        (out / f).write_text("{}\n")
+    assert result.record_probe(probe, out, rc) == 0
+    doc = json.loads((tmp_path / "result.json").read_text())
+    assert doc["measurements"] == [] and doc["validation"]["status"] == status
+    assert doc["validation"]["evidence"] == ([f"out/{first}"] if wrote else [])
+    assert doc["measurement_files"] == [f"out/{f}" for f in ([first] if wrote else []) + rest]
+    assert doc["validation"]["detail"].startswith(f"{result.PROBES[probe][0]} exited {rc}: ")

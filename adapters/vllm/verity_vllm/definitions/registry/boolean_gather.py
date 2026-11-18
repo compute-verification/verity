@@ -65,12 +65,12 @@ from operator import xor
 from typing import Any
 
 from verity.circuits import boolean as BL
-from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.refs import Coll, concat, strided_view
-from verity.circuits.types import Array
 from verity.circuits.boolean.forms import add, const, const_bits
 from verity.circuits.boolean.gather import gather
 from verity.circuits.boolean.trace import definition, part
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll, concat, strided_view
+from verity.circuits.types import Array
 
 from . import b1
 from . import prims as P

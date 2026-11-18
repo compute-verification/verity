@@ -25,9 +25,11 @@ decode     ctl.json brings the registration's key and the arena's first block in
 stop       ctl.json's stop: each phase's steps, tokens and step times (`summary`) to --out/engine.<g>.json, and exit
 ~~~
 
-Every step's wall time, tokens and phase (ctl.json's, or plain-baseline for the first --plain-s) go to
---out/engine.<g>.steps.jsonl. The probe and the hash are the gate that decoding at the store's indices gives back the
-served bytes, bit for bit, before anything is timed.
+Every step's wall time, token count, requests running and phase (ctl.json's, or plain-baseline for the first --plain-s)
+go to --out/engine.<g>.steps.jsonl. The probe and the hash are the gate that decoding at the store's indices gives back
+the served bytes, bit for bit, before anything is timed. The probe's tokens and the IPC handle stay in --dir:
+--out/engine.<g>.json keeps the export without its handle and the probe's verdict with each request's token count
+(`keep.export_kept`, `keep.checks_kept`).
 
     VLLM_ENABLE_V1_MULTIPROCESSING=0 CUDA_VISIBLE_DEVICES=3 python engine.py --gpu 3 --dir B --out OUT --kv kv.so
 """
@@ -47,8 +49,10 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/cuda_lib.py").parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import cuda_lib
+import keep
 
 BLOCK = 4096
 GIB = 1 << 30
@@ -433,7 +437,8 @@ def main() -> int:
         if len(steps) % 64 == 0:
             log.flush()
     log.close()
-    out = {"schema": "verity/remote-session/engine/v0", **info, "checks": checks, "args": vars(a) | {"dir": str(d),
+    out = {"schema": "verity/remote-session/engine/v0", **keep.export_kept(info), "checks": keep.checks_kept(checks),
+           "args": vars(a) | {"dir": str(d),
            "out": str(a.out)}, "decode_calls": hooks.calls if hooks else 0, "phases": summary(steps),
            "errors": sum(1 for s in steps if "error" in s)}
     write_json(a.out / f"engine.{g}.json", out)

@@ -26,9 +26,11 @@ ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "
                                   "DISCREPANCIES.md", "CHANGELOG.md"})
 #: The Glossary, at the root only: no directory holds a glossary.
 ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
-#: Layout/spec documents left in place by the layout migration; a human folds them into PROTOCOL.md / README.md.
+#: Layout/spec documents left in place by the layout migration, which a human folds into PROTOCOL.md / README.md, and the
+#: retired-terms lints' table of older names, which left the Glossary.
 ALLOWED_EXTRA = (
     "security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
+    "tests/lint/retired_terms.md",
 )
 #: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. Flock
 #: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network attester's sections (``protocol/<topic>.md``, each
@@ -47,10 +49,8 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 256 * 1024
-#: The one Glossary: every term, the notation and the older names. Its table of older names is the list
-#: `tests/test_retired_terms.py` scans the tree for, so it grows by an entry with each retired name, and none can go while
-#: its term is retired.
-GLOSSARY_SIZE_CAP = 112 * 1024
+#: The one Glossary: every current term and the notation.
+GLOSSARY_SIZE_CAP = 35_184
 #: A skill is loaded into an agent's context whole, so it states the current procedure and rules, never their history
 #: (`.agents/skills/authoring-skills/`).
 SKILL_SIZE_CAP = 16 * 1024
@@ -183,7 +183,7 @@ def markdown_over_cap(path: str, size: int) -> str | None:
 def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -> None:
     soundness = "security/Proofs/Flock/Soundness/"
     assert markdown_over_cap("README.md", MD_SIZE_CAP) is None and markdown_over_cap("a/PROTOCOL.md", MD_SIZE_CAP + 1) is None
-    assert markdown_over_cap("GLOSSARY.md", MD_SIZE_CAP + 1) is None
+    assert markdown_over_cap("GLOSSARY.md", GLOSSARY_SIZE_CAP) is None
     assert markdown_over_cap("GLOSSARY.md", GLOSSARY_SIZE_CAP + 3).endswith(", 3 bytes over; move detail to the notes store (cite it by note:<id>)")
     assert markdown_over_cap("a/README.md", MD_SIZE_CAP + 100) == (
         "a/README.md: 48 KB > 48 KB, 100 bytes over; move detail to the notes store (cite it by note:<id>)")

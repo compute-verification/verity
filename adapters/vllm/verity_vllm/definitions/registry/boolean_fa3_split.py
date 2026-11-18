@@ -11,6 +11,7 @@ DOT is `gemm.HopperBF16WgmmaDot16_v2` and INV `boolean_attention.Fa3InvSum_v2` o
 from __future__ import annotations
 
 from verity.circuits.defs import bind
+
 from verity_vllm.definitions.registry import boolean_attention as BAt
 from verity_vllm.definitions.registry import boolean_sparse_mla_split as BX
 from verity_vllm.definitions.registry import fa3_split as F

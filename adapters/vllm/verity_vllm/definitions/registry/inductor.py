@@ -50,18 +50,27 @@ Registered functions (all `Name_v1`):
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.defs import bind, composite
 from verity.circuits.ops.prims import ZERO32
 from verity.circuits.ops.scalar import F32BitsShl23, F32Neg, F32Sat
 from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import sparse_mla_split as SMS
 from verity_vllm.definitions.registry.b1 import ZERO16, f32c
 from verity_vllm.definitions.registry.fa3_check_inf import AttentionHeadV4, AttnBlockV4
-from verity_vllm.definitions.registry.moe import (C_252, C_HALF, C_LOG2E_HI, C_LOG2E_LO, C_LOG2E_OVER_252, C_MAGIC, C_NEG_MAGIC_BIAS,
-                                              ONE32, F32FmaRm)
+from verity_vllm.definitions.registry.moe import (
+    C_252,
+    C_HALF,
+    C_LOG2E_HI,
+    C_LOG2E_LO,
+    C_LOG2E_OVER_252,
+    C_MAGIC,
+    C_NEG_MAGIC_BIAS,
+    ONE32,
+    F32FmaRm,
+)
 from verity_vllm.definitions.registry.prims import BF16, F32
 
 #: bf16 columns per thread per chunk the PTX was read at: one 4-, 8- or 16-byte vector load

@@ -25,13 +25,13 @@ import struct
 import torch
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
-from verity_vllm.definitions.registry.sampling import SPLIT_COUNTS
-
 from verity_torch.frontend.rules.base import OpRule, RuleInfo
 from verity_torch.frontend.rules.common import dtype_is, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_torch.frontend.strided_views import _tensor_type
 from verity_torch.frontend.value_types import shape_of
+
+from verity_vllm.definitions.registry.sampling import SPLIT_COUNTS
+from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
 BF16 = torch.bfloat16
 

@@ -161,7 +161,7 @@ PAGE_SECTIONS = ("## The problem", "## Background", "## The design the rules wan
                  "## Sources")
 REPLY_CALLOUT = ('<callout icon="✍️" color="yellow_bg">\n'
                  "\t**Your reply.** Write below this line: a decision, a question or a change. "
-                 "Top relays it to the lane, which answers under your text starting with its handle.\n"
+                 "Top relays it to the lane, which answers in a comment starting with its handle.\n"
                  "</callout>\n")                                 # top's asks relay reads the text after the bold line
 SKILL_ASKING = ".agents/skills/asking-daniel/SKILL.md"
 WAIT_EVERY_S = 30
@@ -3069,7 +3069,7 @@ def check_length(reg: dict, ch: str, text: str, limit: int) -> None:
         return
     if found := vocabulary.retired(plain(text)):
         print("research msg: retired term(s), posted anyway: " + "; ".join(f"{t!r}: write {w}" for t, w in found)
-              + " (GLOSSARY.md's older names; a name quoted in backticks is kept)", file=sys.stderr)
+              + " (tests/lint/retired_terms.md; a name quoted in backticks is kept)", file=sys.stderr)
     if (n := len(plain(text).split())) <= limit:
         return
     if n > 2 * limit:

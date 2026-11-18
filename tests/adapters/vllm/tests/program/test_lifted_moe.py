@@ -30,6 +30,7 @@ from verity.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.circuits.defs import composite
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.numerics import serve3_reference as ref
 from verity_vllm.definitions.registry import b1, moe
 from verity_vllm.definitions.registry import lifted as L

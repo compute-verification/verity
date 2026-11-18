@@ -12,10 +12,10 @@ it is an f32 subnormal, so only such operands tell the three contractions apart.
 from __future__ import annotations
 
 import numpy as np
-
-from verity.circuits.ops.scalar import F32Fmaxf, F32_NAN_PTX
-from verity.circuits.silicon.models import GroupSum
 from verity.circuits.kernels import tc as TC
+from verity.circuits.ops.scalar import F32_NAN_PTX, F32Fmaxf
+from verity.circuits.silicon.models import GroupSum
+
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics.moe_twins import nv_expf_bits
 from verity_vllm.definitions.registry import mhc as M

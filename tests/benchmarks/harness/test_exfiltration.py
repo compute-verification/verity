@@ -58,7 +58,8 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     assert "- **the compute audit's part: 14,240 GB** (modeled)" in out and "## Inputs" in out
     assert "- row `(i) honest`, at the planner's assumed prices: 17,800 GB, at β = 5.542%" in out
     assert "- **the network attester's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response)" in out
-    assert "\n\n## SPOT's resampling holes in the code that ran\n" in out and "- label: **SPOT**\n" in out
+    assert "\n\n## SPOT's holes in the code that ran\n" in out and "- label: **SPOT**\n" in out
+    assert "- wires between proof blocks: open: each sampled block on its own inputs; the wires between blocks are not held\n" in out
     assert "\n- redrawn sample: " in out and "\n- re-committed execution phase: " in out and ": closed\n" not in out
     code, out, _ = run("--json", "--share", "0.097", "--network-check-share", "0")
     doc = json.loads(out)

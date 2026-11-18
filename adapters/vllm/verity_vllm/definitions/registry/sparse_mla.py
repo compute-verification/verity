@@ -34,6 +34,10 @@ Registered functions (all `Name_v1`):
   SparseMlaHeadKeysWire{NVIS,W,C}                 (kv: NVIS x W bf16) -> NVIS x W bf16; its input, the one writer of
                                                   column block C of a key block's rows
   SparseMlaHeadEnd{DV,INV}                        (l[4], o[DV]) -> DV bf16; the head's epilogue, the chain's last unit
+  SparseMlaHeadBlockLive{DR,DV,NVIS,FIRST,BN,DOT,SCALE}  SparseMlaHeadBlock's parameters, then live: 16 bits -> its outputs
+                                                  where live's bit 0 is 1, zeros where it is 0 (a decode step past the stop)
+  SparseMlaHeadKeysWireLive{NVIS,W,C}             (kv: NVIS x W bf16, live: 16 bits) -> SparseMlaHeadKeysWire's output
+                                                  where live's bit 0 is 1, zeros where it is 0
   SparseMla{T,NH,DR,DV,BN,DOT,INV,SCALE}          (q_nope: NH x DV, q_rope: NH x DR, kv: T x (DV+DR)) -> NH x DV bf16
 
 T is the row's valid count (at most `index_topk`), kv its selected rows in order; `SPARSE_MLA_GLM53` holds GLM-5.3's statics.
@@ -55,12 +59,12 @@ units that read them.
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.defs import bind, composite
-from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.circuits.types import Array, Tuple
 from verity.circuits.ops.gemm import DotBf16 as DotBf16V2
 from verity.circuits.ops.prims import const
+from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.registry import hopper
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import _lane
@@ -385,6 +389,66 @@ def SparseMlaHeadEnd(B, S, l, o):
     return head_end(word_steps(B), S.INV, l, o)
 
 
+#: the masked units' added parameter, the last: the step before's select's ``o1`` as a row holds it, its bit 0 the step's bit
+#: and the 15 above it the zeros a return field of fewer than 16 bits is padded with (`interface._width`), which no unit reads
+LIVE = "live"
+BIT = Value(1)
+LIVE_WORD = Array(16, BIT)
+_LIVE_CONF = ("model-untested: {0}'s (its conformance); the mask is protocol-defined, each output word {1}(live[0], word, +0) "
+              "after it")
+
+
+def live_words(B, select, zero, live, out):
+    """``out`` word for word where ``live``'s bit 0 is 1 and ``zero`` where it is 0: ``select(live[0], word, zero)`` on each
+    word of it (``zero``'s type), one Call or one batch of them; on bits a select is one AND a bit."""
+    live = Coll(BIT, live.refs.slice(0, 1))
+    if out.type == zero.type:
+        return B.call(select, live, out, zero)
+    n = out.type.leaves // zero.type.leaves
+    return B.batch(select, live, Coll(Array(n, zero.type), out.refs), zero, axes=(None, 0, None)).reshape(out.type)
+
+
+def _head_block_live_type(S, bf16=BF16, f32=F32):
+    params, ret = _head_block_type(S, bf16, f32)
+    return params + ((LIVE, LIVE_WORD),), ret
+
+
+@composite("SparseMlaHeadBlockLive", 1, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "SCALE"], _head_block_live_type,
+           conformance=_LIVE_CONF.format("SparseMlaHeadBlock_v1", "SelectF32_v1"))
+def SparseMlaHeadBlockLive(B, S, q_nope, q_rope, kv, *rest):
+    """A decode step's key block switched by its step's bit, bit 0 of ``live``, the last parameter (`LIVE_WORD`): one Call of
+    `SparseMlaHeadBlock_v1` at the same statics on the other parameters, then each word of its running max, lanes and O
+    selected by that bit (`SelectF32_v1(live[0], word, +0)`): the block's outputs where it is 1 and zeros where it is 0,
+    whatever ``kv`` holds. ``live`` is an input row like the block's others, wired from the step before's select's ``o1``;
+    the mask is this Definition's own, so its text and hash are not the block's."""
+    from verity.circuits.ops.scalar import SelectF32
+
+    *state, live = rest
+    blk = bind(SparseMlaHeadBlock, DR=S.DR, DV=S.DV, NVIS=S.NVIS, FIRST=S.FIRST, BN=S.BN, DOT=S.DOT, SCALE=S.SCALE)
+    r = B.call(blk, q_nope, q_rope, kv, *state)
+    zero = B.call(const(32, 0))
+    return tuple_of(*(live_words(B, SelectF32, zero, live, r[i]) for i in range(3)))
+
+
+def _head_keys_live_type(S, bf16=BF16):
+    params, ret = _head_keys_type(S, bf16)
+    return params + ((LIVE, LIVE_WORD),), ret
+
+
+@composite("SparseMlaHeadKeysWireLive", 1, ["NVIS", "W", "C"], _head_keys_live_type,
+           conformance=_LIVE_CONF.format("SparseMlaHeadKeysWire_v1", "SelectBf16_v1"))
+def SparseMlaHeadKeysWireLive(B, S, kv, live):
+    """A decode step's writer of column block C of a key block's rows switched by its step's bit, bit 0 of ``live``, the last
+    parameter (`LIVE_WORD`): one Call of `SparseMlaHeadKeysWire_v1` at the same statics, then each word selected by that bit
+    (`SelectBf16_v1(live[0], word, +0)`): the rows where it is 1 and zeros where it is 0.  In a chain cut at P it is the one
+    unit of a key block that reads the cache; the scores and values units read its output row, so past the stop they read
+    zero keys."""
+    from verity.circuits.ops.scalar import SelectBf16
+
+    r = B.call(bind(SparseMlaHeadKeysWire, NVIS=S.NVIS, W=S.W, C=S.C), kv)
+    return live_words(B, SelectBf16, B.call(const(16, 0)), live, r)
+
+
 def chain_cols(DV: int, cols: int | None) -> int:
     """The columns of each column block a chain of a row of DV output columns ends in: DV (one block) for whole key blocks
     (``cols`` None), else ``cols``, refused unless it divides DV."""
@@ -454,7 +518,8 @@ def SparseMla(B, S, q_nope, q_rope, kv):
 
 
 SPARSE_MLA_COMPOSITES = [SparseMlaBlock, SparseMlaHead, SparseMlaHeadBlock, SparseMlaHeadScores, SparseMlaHeadValues,
-                         SparseMlaHeadScoresCols, SparseMlaHeadKeysWire, SparseMlaHeadEnd, SparseMla]
+                         SparseMlaHeadScoresCols, SparseMlaHeadKeysWire, SparseMlaHeadEnd, SparseMlaHeadBlockLive,
+                         SparseMlaHeadKeysWireLive, SparseMla]
 #: each family serving stages as its cut, never whole, with the cut at a binding's statics (circuit-check's ``block`` holds
 #: each unit to the Flock block in the Call's place)
 CUTS = {"SparseMla_v1": head_chain}

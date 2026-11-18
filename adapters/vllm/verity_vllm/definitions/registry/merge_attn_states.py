@@ -30,6 +30,7 @@ from verity.circuits.defs import bind, composite
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import F32Eq, F32Fabs, F32Fmaxf
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.moe import NvExpf
 from verity_vllm.definitions.registry.prims import BF16, F32

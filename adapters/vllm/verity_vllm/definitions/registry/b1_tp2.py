@@ -28,8 +28,8 @@ from typing import Any
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.prims import BF16, I32
 from verity_vllm.definitions.registry.b1 import (
     B1_CONFIG,
     ZERO16,
@@ -46,6 +46,7 @@ from verity_vllm.definitions.registry.b1 import (
     layer_weights_type,
     weights_type,
 )
+from verity_vllm.definitions.registry.prims import BF16, I32
 
 B1_TP2_CONFIG: dict[str, Any] = dict(B1_CONFIG, TP=2)
 

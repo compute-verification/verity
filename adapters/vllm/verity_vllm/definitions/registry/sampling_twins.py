@@ -7,7 +7,14 @@ from __future__ import annotations
 
 import math
 
-from verity_vllm.definitions.registry.sampling import M32, ONE_BITS, _f, _ftz, _log1pf_from_sum, _u
+from verity_vllm.definitions.registry.sampling import (
+    M32,
+    ONE_BITS,
+    _f,
+    _ftz,
+    _log1pf_from_sum,
+    _u,
+)
 
 
 def add_rz_ftz_v1_model(a: int, b: int) -> int:

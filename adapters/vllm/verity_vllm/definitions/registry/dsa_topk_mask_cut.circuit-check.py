@@ -21,6 +21,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     mask whole, its 14 bits in a u16 word.  And the picks the cut serves, each round's over 8 blocks' counts at TOPK 2,048
     (`plan(131072, 2048)`), over `MAX_GATES` and each held to its digest pin."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
 
     return [
@@ -46,6 +47,7 @@ def _mask_calls_roots() -> list[Any]:
     the mask whole.  And the units as served at TOPK 2,048, each held to its digest pin: a block of 16,384 keys, the row's
     first and one past its start, and the longest row masked whole, 40,960 keys."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
 
     return [bind(X.DsaTopKMaskBlockV2, N=8, AT=0, TOPK=4), bind(X.DsaTopKMaskBlockV2, N=6, AT=8, TOPK=4),
@@ -58,6 +60,7 @@ def _pick_calls_roots() -> list[Any]:
     (reaching each of its pieces), and each round's over 8 blocks' counts at TOPK 2,048, as the cut serves them, over
     `targets.MAX_GATES` and each held to its digest pin."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
 
     return [*(bind(X.DsaTopKDigitPickV2, M=2, K=k, TOPK=4) for k in (0, 1, 3)),

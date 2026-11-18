@@ -69,6 +69,50 @@ def test_wait_returns_the_runs_own_exit_once_it_ends(tmp_path, capsys, end, rc):
     assert "machine unreachable (rc 255); still waiting" in err and "research: run r1 " in err
 
 
+def test_wait_prints_each_line_the_slot_adds_while_the_run_waits_for_a_place(tmp_path, capsys):
+    """Five tries waiting together on one machine for a Lean place printed nothing for minutes and looked hung."""
+    rd = tmp_path / "r1"
+    rd.mkdir()
+    _status(rd, "running", None)
+    head = ["lean-slot: all 2 Lean audit slot(s) of pool build are taken; waiting, with no time limit, and retrying every 5 s (S)",
+            "lean-slot:   build-0 held by lean 3 min"]
+    heard = iter([[], head, head, [*head, "lean-slot: 1 Lean audit(s) ahead in line; waiting, with no time limit, and retrying "
+                                          "every 5 s (S)"]])
+    clock = Clock()
+    steps = [None, None, None, None, lambda d: _status(d, "done", 0)]
+    assert wait_remote("r1", rd, every_s=5, fetch=_waiter(rd, steps), sleep=clock.sleep, clock=clock,
+                       said=lambda d: next(heard)) == 0
+    err = [ln for ln in capsys.readouterr().err.splitlines() if ln.startswith("research: run r1: ")]
+    assert err == [f"research: run r1: {ln}" for ln in (*head, "lean-slot: 1 Lean audit(s) ahead in line; waiting, with no time "
+                                                                 "limit, and retrying every 5 s (S)")], "each line once, as it appears"
+
+
+def test_slot_lines_gives_the_slots_lines_and_nothing_when_the_machine_is_not_read(tmp_path, monkeypatch, capsys):
+    """Rule: `--wait` relays what the slot says and never ends on a machine it could not read; weakening: an ssh that fails to
+    start ends the wait with a traceback."""
+    import subprocess
+
+    assert remote.slot_lines(tmp_path) == [], "a run launched on no machine has none"
+    (tmp_path / "remote.json").write_text(json.dumps({"remote_run_dir": "/w/runs/r1", "host": "h", "port": 22}))
+    monkeypatch.setattr(remote, "ssh_argv", lambda host, port, user="root": ["ssh", host])
+    out = b"slot: waiting for r0\nlean-slot: build-0 held by lean 3 min\n"
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout: subprocess.CompletedProcess(ssh, 0, out, b""))
+    assert remote.slot_lines(tmp_path) == ["slot: waiting for r0", "lean-slot: build-0 held by lean 3 min"]
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout: subprocess.CompletedProcess(ssh, 1, b"", b""))
+    assert remote.slot_lines(tmp_path) == [], "grep found none"
+
+    def fails(error):
+        def run(ssh, argv, timeout):
+            raise error
+        return run
+
+    for error, said in ((subprocess.TimeoutExpired("ssh", 30), "was not read in 30 s"), (OSError("no ssh here"), "was not read (no ssh here)")):
+        monkeypatch.setattr(remote, "ssh_run", fails(error))
+        assert remote.slot_lines(tmp_path) == []
+        assert said in capsys.readouterr().err
+
+
+
 @pytest.mark.parametrize("max_s, fetch_s", [(waitcap.WAIT_LIMIT_S, 0.0), (waitcap.WAIT_LIMIT_S, 45.0), (300.0, 0.0)],
                          ids=["limit", "slow-fetches", "wait-max"])
 def test_wait_stops_at_its_limit_with_the_run_still_going_and_says_how_to_check_back(tmp_path, capsys, max_s, fetch_s):
@@ -110,3 +154,27 @@ def test_wait_max_may_lower_the_limit_and_never_raise_it(capsys, flags, says):
     assert cmd_run(["--on", "no-such-machine", "--project", "p", *flags, "--", "true"]) == 2
     assert says in capsys.readouterr().err
     assert waitcap.max_s(None) == waitcap.WAIT_LIMIT_S == 1200 and waitcap.max_s(600) == 600
+
+
+def test_wait_exit_takes_a_number_a_thread_now_holds_as_exited():
+    """A process that exited can leave its number to another process's thread before the wait asks for it: the kernel then
+    refuses the pidfd with EINVAL, where a number nobody holds gets ESRCH. Both mean the process has exited."""
+    import threading
+
+    from waits import wait_exit
+
+    tid, started, release = [], threading.Event(), threading.Event()
+
+    def hold() -> None:
+        tid.append(threading.get_native_id())
+        started.set()
+        release.wait()
+
+    t = threading.Thread(target=hold)
+    t.start()
+    try:
+        started.wait()
+        assert wait_exit(tid[0]) == "gone already"
+    finally:
+        release.set()
+        t.join()

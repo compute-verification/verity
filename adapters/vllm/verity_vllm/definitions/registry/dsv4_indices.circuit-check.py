@@ -11,6 +11,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     is not bound: each slot spells its own 32-bit literals, and each `Const32[...]_v1` a body reaches is a target of its own
     (8,333 there)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsv4_indices as X
 
     S = X.DSV4_INDICES

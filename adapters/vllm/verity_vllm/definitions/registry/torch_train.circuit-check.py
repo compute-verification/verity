@@ -12,6 +12,7 @@ def _boolean_roots() -> list[Any]:
     composites reach their In and Out parts)."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import mufu as BMU
+
     from verity_vllm.definitions.registry import torch_train as TT
 
     ex2 = bind(BMU.MufuEx2Ftz)

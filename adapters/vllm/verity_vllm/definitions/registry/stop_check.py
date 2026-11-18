@@ -21,6 +21,7 @@ from collections.abc import Sequence
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import stop_rule as X
 from verity_vllm.definitions.registry.prims import BIT, I32
 

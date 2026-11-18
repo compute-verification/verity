@@ -137,7 +137,7 @@ class SessionIntegration:
         """Each unit's rows as bytes (a port's words, `octets`) and its outputs: the one-bit ok as a 16-bit integer, m and
         the records rows as bytes."""
         for group in self._templates():
-            def rows(values):
+            def rows(values, group=group):
                 return np.frombuffer(b"".join(values), dtype=np.uint8).reshape(len(group), -1)
             inputs = [rows([u.rows[p] for u in group]) for p in range(len(group[0].rows))]
             outputs = [np.array([u.outputs[0][0] for u in group], dtype=np.uint16),

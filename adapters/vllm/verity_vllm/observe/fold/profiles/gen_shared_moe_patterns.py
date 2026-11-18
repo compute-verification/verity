@@ -490,6 +490,7 @@ def served_gate_spec(tp, K: int, N: int, M: int, tier: str) -> tuple[Any, tuple[
     """The Build's gate Definition (`vllm_bindings.bf16_gemm.LlBf16GemmRule` / `CublasRouterRule`) at (K, N, M) on `tier`, or None
     when vLLM dispatches another tier there, the cuBLAS shape and M have no captured route, or the target is not the H200 default."""
     from verity_vllm.definitions.registry import bf16_gemm_check
+    from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_device_name
 
     if tuple(tp.compute_capability) != (9, 0) or tp.batch_invariant:
         return None
@@ -501,7 +502,7 @@ def served_gate_spec(tp, K: int, N: int, M: int, tier: str) -> tuple[Any, tuple[
     dot = T.tensor_core_dot(tp)
     if kernel == "splitk":
         return bind(ll_bf16.LlBf16SplitKGemmWord, N=N, K=K, DOT=dot, **statics), ("ll_bf16_gemm",)
-    route = bf16_gemm_check.default_cublas_route("router", M, K, N)
+    route = bf16_gemm_check.default_cublas_route("router", M, K, N, active_device_name())
     if route is None:
         return None
     if route[0] == "splitk":

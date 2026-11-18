@@ -31,17 +31,27 @@ from __future__ import annotations
 
 from functools import cache
 
+from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind, composite
-from verity.circuits.refs import Coll, array_of, coll_concat
-from verity.circuits.types import Array
 from verity.circuits.ops import fp32 as W
 from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.refs import Coll, array_of, coll_concat
 from verity.circuits.silicon import fp
-from verity.circuits.boolean import trace as TR
+from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import dense as D
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.boolean_norms import (BF16, F32, PackF32, UnpackF32, _on_bits, _on_word, _rcp_n,
-                                                        _traced, _word_view)
+from verity_vllm.definitions.registry.boolean_norms import (
+    BF16,
+    F32,
+    PackF32,
+    UnpackF32,
+    _on_bits,
+    _on_word,
+    _rcp_n,
+    _traced,
+    _word_view,
+)
 
 __all__ = ["MeanTriton", "NarrowF32ToBf16", "RsqrtF32", "mean_triton_calls"]
 

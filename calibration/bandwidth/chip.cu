@@ -6,7 +6,7 @@
 //             xor: 8 instructions, 128 bytes), looped; cycles per instruction against the code's bytes, for one warp
 //             and for four (one a scheduler), on one SM.  Knees: the L0 instruction cache (per scheduler), the SM's L1
 //             instruction cache, any level between it and L2.  The kernels are PTX that bwchip writes and ptxas
-//             assembles (run_chip.sh, which checks each cubin's SASS holds the 8·N steps).
+//             assembles (`run.sh chip`, which checks each cubin's SASS holds the 8·N steps).
 //   icache8   icache with 8 chains (16 instructions a step), and icachef with 8 chains of FFMA (8 a step, issuable every
 //             cycle): code a warp can issue faster than integer code, for an L0 that 4 chains leave hidden.
 //   unified   whether code evicts constants: the constant bank chased, N steps of code, the bank chased again.
@@ -60,7 +60,7 @@ __host__ __device__ constexpr uint32_t imm(uint32_t i) {
   return i & 0x7fffffffu;
 }
 
-// nvcc takes minutes over straight-line code this long, so bwchip writes each kernel as PTX (--emit DIR), run_chip.sh
+// nvcc takes minutes over straight-line code this long, so bwchip writes each kernel as PTX (--emit DIR), `run.sh chip`
 // assembles it with ptxas (seconds) and records its SASS, and the sweeps load the cubins.
 static const int ICACHE_STEPS[] = {16,  32,  48,  64,  96,  128, 192,  256,  320,  384,  448,  512,  640,  768,
                                    832, 896, 960, 1024, 1088, 1152, 1280, 1536, 2048, 3072, 4096, 6144, 8192};

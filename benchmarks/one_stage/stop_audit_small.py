@@ -72,7 +72,7 @@ def committed(v: int = 128, outputs: int = 32, spans: int = 6, nonce: str = SERV
     """The class's commitment: ``spans`` requests under `stop_rule`, alternately ended at the stop id and at
     ``max_tokens``, in the window of the serve ``nonce``. ``check``: another check template than `TokenSelect_v4{V}`."""
     check = BR.check_template(template(v)) if check is None else check
-    L = BR.Layout(check, 0, 1, BR.cap(len(PROMPT)), outputs, spans, BR.run_root(nonce, 0), stop=stop_rule(outputs), held=True)
+    L = BR.Layout(check, 0, 1, len(PROMPT), outputs, spans, BR.run_root(nonce, 0), stop=stop_rule(outputs), held=True)
     return BR.commit([BR.Span(f"r{i}", PROMPT, SAMPLING, *ENDS[i % len(ENDS)]) for i in range(spans)], L, 0)
 
 

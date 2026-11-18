@@ -24,6 +24,7 @@ from verity.circuits.refs import (
     strided_view,
 )
 from verity.circuits.types import Array, Value
+
 from verity_vllm.definitions.replay import _substitute_scattered, replayer, substitute
 
 V32 = Value(32)

@@ -55,6 +55,8 @@ def test_boot_gives_a_checkout_that_tracks_no_hooks_file_a_fail_closed_one_and_l
     hooks = cursor_reads(tmp_path / "ws/.cursor/hooks.json")["hooks"]
     (entry,) = hooks["beforeShellExecution"]
     assert entry == {"command": f"python3 {tmp_path / 'opt'}/shell_hook.py", "timeout": 10, "failClosed": True}
+    assert hooks["preToolUse"] == [{"command": f"python3 {tmp_path / 'opt'}/task_hook.py", "matcher": m, "timeout": 10,
+                                    "failClosed": True} for m in ("Task", "CallDynamicTool", "^MCP:")]
     assert hooks["stop"] == [{"command": f"python3 {tmp_path / 'opt'}/stop_hook.py", "timeout": 60}]
     assert git("status", "--porcelain") == ""
     hook = subprocess.run(entry["command"].split(), input=json.dumps({"hook_event_name": "beforeShellExecution",

@@ -3,9 +3,12 @@ mapping's call names of the FP8 serving port, and the fused-MoE config under bat
 from __future__ import annotations
 
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import hopper as H
-from verity_vllm.definitions.registry.fp8 import ScaledMmFp8BlockSharedScale, ScaledMmFp8BlockSharedScaleV3
 
+from verity_vllm.definitions.registry import hopper as H
+from verity_vllm.definitions.registry.fp8 import (
+    ScaledMmFp8BlockSharedScale,
+    ScaledMmFp8BlockSharedScaleV3,
+)
 
 #: each restated GEMM by the Definition it restates (bound in its place under `fp8_scale_construction = shared-per-block`)
 SHARED_SCALE = {"ScaledMmFp8Block_v1": ScaledMmFp8BlockSharedScale}

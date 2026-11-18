@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import calendar
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -198,8 +199,11 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
                                log=logged.append, **BY_SPEC)
 
     remote = producer.store.remote.describe()
-    assert logged == [f"pulled 3 labels from {remote} (0 of 3 were here)",
-                      f"pulled 5 attempts started since r20261023 from {remote} (0 of 5 were here)"]
+    stamp = r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"
+    assert re.fullmatch(rf"{stamp} pulling labels from {re.escape(remote)} into .+", logged[0])
+    assert re.fullmatch(rf"{stamp} pulled 3 labels from {re.escape(remote)} \(0 of 3 were here, 0 of them from the "
+                        r"labels pack\): listed in \d+ s, synced in \d+ s", logged[1])
+    assert logged[2:] == [f"pulled 5 attempts started since r20261023 from {remote} (0 of 5 were here)"]
     rows = _commit_rows(table)
     b8, b32 = rows["b8-p512-mixed"], rows["b32-p512-mixed"]
     assert (b8["run"], b8["art"], b8["reps"]) == ("r20261024-030000-0002", newest_b8, 3)

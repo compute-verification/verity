@@ -424,6 +424,19 @@ def test_a_store_with_no_remote_is_refused_before_any_pr_is_listed_and_the_refus
     assert f"--store-read -- research queue cross --repo {Q.REPO}`" in str(refused.value)
 
 
+def test_a_clone_whose_origin_names_no_repository_is_refused_naming_repo_and_repo_gets_past_it(tmp_path, monkeypatch, capsys):
+    _git(tmp_path, "init", "-q", str(clone := tmp_path / "clone"))
+    _git(clone, "remote", "add", "origin", str(tmp_path / "verity.git"))
+    monkeypatch.chdir(clone)
+    (cfg := tmp_path / "no-remote.toml").write_text("")
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    assert Q.main(["cross", "--store", str(tmp_path / "store")]) == 1
+    assert capsys.readouterr().err.strip().endswith(": pass --repo")
+    with pytest.raises(SystemExit) as past:
+        Q.main(["cross", "--repo", Q.REPO, "--store", str(tmp_path / "store")])
+    assert "the evidence store has no remote here" in str(past.value)
+
+
 def test_the_push_never_pushes_main_checked_or_next_whatever_a_pr_names(tmp_path):
     """A crossing whose PR names `main`, `checked`, `next` or a full ref as its branch is never pushed, before any git runs."""
     report = {"main": "0" * 40, "moves": [], "crossed": [

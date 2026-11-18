@@ -32,8 +32,9 @@ from verity.circuits.boolean import table as BT
 from verity.circuits.boolean.forms import const_bits
 from verity.circuits.boolean.trace import definition
 from verity.circuits.ops.boolean import int8 as BI
-from verity.circuits.types import Array
 from verity.circuits.ops.boolean.versions import sigma_lift
+from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import int8_exact as IE
 
 BIT = BL.BIT

@@ -72,12 +72,12 @@ STAGE = (ROOT / "verity/protocols/resource_accounting/memory/poub/prover/p2_stag
 sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py").parents[1]))
 sys.path.insert(0, str(STAGE))
 
+from verity.commitments.merkle import merkle_depth
+from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover
+from verity.protocols.resource_accounting.memory.poub.verifier import coins, p2, p2_case, p2_parties, receipts
 from verity.protocols.resource_accounting.memory.pous.verifier import verifier as V
 from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover
-from verity.protocols.resource_accounting.memory.poub.verifier import coins, p2, p2_case, p2_parties, receipts
-from verity.commitments.merkle import merkle_depth
 
 BLOCK, UNIT = p2.BLOCK_BYTES, p2.UNIT_BLOCKS
 SALT = receipts.SALT_BYTES

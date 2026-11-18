@@ -17,6 +17,7 @@ import struct
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry.moe import (
     MoeExpertGemm,

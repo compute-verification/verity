@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import pytest
 from verity import device as ST
 from verity.protocols.registration.verifier import registration as G
+from verity.protocols.registration.verifier import site_log as L
 
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_day as SD
@@ -73,7 +74,7 @@ def test_serve_openai_declares_the_day_in_the_registration_log_before_the_model_
     with pytest.raises(RuntimeError, match="the model would load here"):
         so.main(_opts(tmp_path, *_day(tmp_path, 2, PROGRAM, "--day-blocks", "t0, t1")))
     composite, log = seen["log"]
-    entry = G.Declaration(2, PROGRAM, ("t0", "t1"), ST.genesis("onsite"))
+    entry = G.Declaration(2, PROGRAM, ("t0", "t1"), L.genesis("onsite"))
     assert composite == "onsite" and log == [entry]
     assert G.check(ST.Auditor(), composite, log).view().declared(2) == dataclasses.replace(entry, previous="")
     assert seen["file"] == {"day": 2, "program": PROGRAM, "blocks": ["t0", "t1"],

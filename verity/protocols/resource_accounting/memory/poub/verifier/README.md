@@ -42,5 +42,4 @@ the Lean verifier beside the books (below). Not all of it is zero knowledge yet:
   the seed only on the stacking property's (`audit.PostSeedVerdict`); without them it credits the node's reads of its
   registered store. Only `benchmarks/one_stage/a7.py` proves the units.
 
-[`DESIGN.md`](DESIGN.md) holds the entry points, which side is the definition and why the Lean decides alone, replaying a
-recorded session, and what each module does.
+Why the Lean verifier decides alone is in `session/verifier.py`, and replaying a recorded session in its `--transcript`.

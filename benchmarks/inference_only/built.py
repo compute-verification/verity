@@ -247,15 +247,14 @@ def need_lake() -> None:
 
 
 def lake_built(exe: str) -> Path:
-    """The package's executable ``exe``, built first with `lake`."""
+    """The package's executable ``exe``, built first with `lake` under the tree's Lake build lock (`verifier.executable`)."""
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+    if shutil.which("lake") is None:
+        raise NoLake
     try:
-        build = subprocess.run(["lake", "build", exe], cwd=PACKAGE, capture_output=True, text=True)
-    except FileNotFoundError:
-        raise NoLake from None
-    if build.returncode:
-        raise RuntimeError(f"`lake build {exe}` in {PACKAGE.relative_to(P.ROOT)} failed:\n"
-                           + (build.stdout + build.stderr)[-2000:])
-    return PACKAGE / ".lake/build/bin" / exe
+        return V.executable(exe, PACKAGE)
+    except V.LeanError as e:
+        raise RuntimeError(f"`lake build {exe}` in {PACKAGE.relative_to(P.ROOT)} failed:\n{e}") from None
 
 
 def timed(argv: list[str], stdout: Path, clock: Callable[[], float] = time.perf_counter,

@@ -31,6 +31,8 @@ from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, W
 sys.path.insert(0, str(((Path(__file__).resolve().parents[3] / "benchmarks" / "prove_path"))))
 from verity.protocols.proofs.spot.prover.audit import class_size as CZ  # noqa: E402
 
+SOURCES = json.loads((Path(__file__).resolve().parents[3] / "benchmarks" / "prove_path" / "sources.json").read_text())
+
 #: adapters/vllm's `tests.program.predict.test_steps.TINY` and its grain in test_window_circuit
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
@@ -93,26 +95,26 @@ def test_v19s_heads_are_key_blocks():
 
 
 def test_size_prices_the_measured_units_and_refuses_the_unmeasured(monkeypatch):
-    s = CZ.size({"Gemm_v2{K=2048,N=1}": 3, "OutCollect_v1{KO=64,FIRST=true}": 1}, times=2)
+    s = CZ.size({"Gemm_v2{K=2048,N=1}": 3, "OutCollect_v1{KO=64,FIRST=true}": 1}, SOURCES, times=2)
     assert (s["units"], s["ands"], s["m"]) == (8, 6 * 1_053_595 + 2 * 155, math.ceil(math.log2(6 * 2**24 + 2 * 2**22)))
-    ands, k, src = CZ.measured("AttnBlockFirst_v1{D=64,NVIS=72,BN=128}")
+    ands, k, src = CZ.measured("AttnBlockFirst_v1{D=64,NVIS=72,BN=128}", SOURCES)
     assert (ands, k) == (round(4_526_991 + (5_664_223 - 4_526_991) * 8 / 16), 25) and "interpolated" in src
-    assert CZ.measured("AttnBlockFirst_v1{D=64,NVIS=17,BN=128}")[:2] == (1_231_456, 24)
-    assert [CZ.measured(f"AttnBlockFirst_v1{{D=64,NVIS={v},BN=128}}")[1] for v in (4, 5, 15, 16, 33, 34, 90, 91, 128)] == [
+    assert CZ.measured("AttnBlockFirst_v1{D=64,NVIS=17,BN=128}", SOURCES)[:2] == (1_231_456, 24)
+    assert [CZ.measured(f"AttnBlockFirst_v1{{D=64,NVIS={v},BN=128}}", SOURCES)[1] for v in (4, 5, 15, 16, 33, 34, 90, 91, 128)] == [
         22, 23, 23, 24, 24, 25, 25, 26, 26]
     assert [CZ.rows_k(r) for r in (3, 8, 9, 16, 17, 32, 33, 64, 65, 128, 129, 256, 257)] == [
         22, 22, 23, 23, 24, 24, 25, 25, 26, 26, 27, 27, 28]
     with pytest.raises(ValueError, match=r"no measured ANDs or k_log at Llama-3.2-1B for Gemm_v2\{K=4096,N=16\}, Foo_v1\{\}"):
-        CZ.size({"Gemm_v2{K=4096,N=16}": 1, "SlotEntry_v1{KO=64,IDB=17,NP=1024}": 1, "Foo_v1{}": 1})
+        CZ.size({"Gemm_v2{K=4096,N=16}": 1, "SlotEntry_v1{KO=64,IDB=17,NP=1024}": 1, "Foo_v1{}": 1}, SOURCES)
     monkeypatch.setitem(CZ.MEASURED, "Foo_v1{}", (1, CZ.rows_k(257), "a unit of 257 rows"))
     with pytest.raises(ValueError, match=r"Foo_v1\{\} \(2\^28\): an instance needs a block past 2\^27 bits"):
-        CZ.size({"Gemm_v2{K=2048,N=1}": 4, "Foo_v1{}": 2})
-    assert [CZ.measured(f"TokenFeed_v1{{NP={n},FIRST=false}}")[:2] for n in (1024, 2048)] == [(62, 23), (62, 24)]
-    assert [CZ.measured(lab)[:2] for lab in ("ScanSlots_v2{NS=9353,NP=1024,IDB=17,K0=12,K=45}",
+        CZ.size({"Gemm_v2{K=2048,N=1}": 4, "Foo_v1{}": 2}, SOURCES)
+    assert [CZ.measured(f"TokenFeed_v1{{NP={n},FIRST=false}}", SOURCES)[:2] for n in (1024, 2048)] == [(62, 23), (62, 24)]
+    assert [CZ.measured(lab, SOURCES)[:2] for lab in ("ScanSlots_v2{NS=9353,NP=1024,IDB=17,K0=12,K=45}",
                                              "OutCollect_v1{KO=64,FIRST=true}", "OutCollect_v1{KO=64,FIRST=false}",
                                              "SlotEntry_v1{KO=64,IDB=17,NP=1024}")] == [
         (120, 24), (155, 22), (2_141, 22), (5_676, 22)]
-    assert [CZ.measured(lab)[:2] for lab in ("SelectCollect_v1{V=128256,C=16,KO=64,FIRST=true}",
+    assert [CZ.measured(lab, SOURCES)[:2] for lab in ("SelectCollect_v1{V=128256,C=16,KO=64,FIRST=true}",
                                              "SelectCollect_v1{V=128256,C=16,KO=64,FIRST=false}",
                                              "SelectEntry_v1{V=128256,C=16,KO=64,FIRST=false,IDB=17,NP=1024}")] == [
         (1_346_657 + 155, 26), (1_346_657 + 2_141, 26), (1_346_657 + 2_141 + 5_676, 26)]

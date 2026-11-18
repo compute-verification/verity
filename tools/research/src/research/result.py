@@ -36,6 +36,9 @@ ENV_RUN_DIR = "RESEARCH_RUN_DIR"
 # so a source-identity precheck inside the workload cannot derive it); set by launch_request from request.json remote.source_sha and by
 # the local runner from --tree-sha.  Absent when the run has no declared tree.
 ENV_SOURCE_SHA = "RESEARCH_SOURCE_SHA"
+# the registered name of the machine a run was launched onto (remote.launch), whose `[properties]`, where its record has them,
+# are the run's inputs/NAME.toml (pods.registry.properties_copy).  Absent on a local run.
+ENV_MACHINE = "RESEARCH_MACHINE"
 # every job's oneDNN is held off AMX, unless the job or the runner's environment names the variable.  On a CPU with AMX (the flags
 # `amx_bf16 amx_tile`) oneDNN's AMX kernel now and then returns wrong values for a bf16 matrix product whose process is preempted.
 # Under this limit oneDNN runs the AVX-512 bf16 kernels instead, the ones a CPU with `avx512_bf16` and no AMX runs anyway.  oneDNN

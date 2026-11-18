@@ -23,6 +23,10 @@ from __future__ import annotations
 import torch
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
+from verity_torch.frontend.derive import refuse
+from verity_torch.frontend.rules.base import OpRule, RuleInfo, StateRule
+from verity_torch.frontend.rules.common import call_args, known, shape
+
 from verity_vllm.definitions.numerics.flashmla_twin import (
     num_sm_parts,
     request_splits,
@@ -32,10 +36,6 @@ from verity_vllm.definitions.registry import dsv4_compressor as C
 from verity_vllm.definitions.registry import dsv4_indexer as I
 from verity_vllm.definitions.registry import dsv4_qnorm_insert as Q
 from verity_vllm.definitions.registry.flashmla import FLASHMLA_DSV4
-
-from verity_torch.frontend.derive import refuse
-from verity_torch.frontend.rules.base import OpRule, RuleInfo, StateRule
-from verity_torch.frontend.rules.common import call_args, known, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
     launch_sequences_of,

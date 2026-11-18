@@ -18,11 +18,22 @@ Four of `topp_word_gates`' primitives get their Boolean versions here (`BitXor_v
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.forms import (
+    NOT,
+    ONE,
+    OR,
+    ZERO,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+    sub,
+)
 from verity.circuits.boolean.trace import definition
+from verity.circuits.ops.boolean.versions import sigma_lift
 from verity.circuits.silicon import fp
 from verity.circuits.types import Array
-from verity.circuits.ops.boolean.versions import sigma_lift
+
 from verity_vllm.definitions.registry import gumbel_boolean  # noqa: F401  (the log's and the lane's Boolean versions, which σ reads)
 from verity_vllm.definitions.registry import topp_stages as T
 from verity_vllm.definitions.registry import topp_word_gates as TG

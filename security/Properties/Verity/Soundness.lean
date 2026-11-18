@@ -85,7 +85,8 @@ def SoundnessOf : Prop :=
 target by its name. If SPOT, PoUW, the inference-only policy, PoUS, PoUB-P2, the network attester and the
 wipe each meet their target at onsite, then the probability that onsite's compiled verifier accepts files that passed
 the commit phase's check while one of the period's claims fails (more than an `ε` share of the units unbound in the
-extractor's transcript, fewer than `W` gates computed after their coin, a case of the policy whose Program doesn't
+extractor's transcript, fewer than `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles at the credit Pearl+'s check
+published, a case of the policy whose Program doesn't
 meet the policy, fewer than `S` bits held on average, fewer than `Q` bits read, more than `K` bits through the network
 attesters, or foreign content kept across the wipe past its survivor threshold) is at most the seven errors at that
 strategy summed. -/

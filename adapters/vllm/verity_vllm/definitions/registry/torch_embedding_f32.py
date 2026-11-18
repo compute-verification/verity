@@ -41,15 +41,36 @@ from typing import Any
 from verity.circuits.defs import bind, composite
 from verity.circuits.ops.fp32 import F32AddV2
 from verity.circuits.ops.prims import const
-from verity.circuits.ops.scalar import BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectF32, SelectI32
+from verity.circuits.ops.scalar import (
+    BitAnd,
+    BitNot,
+    BitOr,
+    I32Add,
+    I32Eq,
+    I32Le,
+    SelectF32,
+    SelectI32,
+)
 from verity.circuits.refs import Coll, Strided, array_of, broadcast, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.evidence import EVIDENCE
 
 from .dsa import I32Sub, U32And
 from .flashmla import U32Ge
-from .torch_embedding import (CHUNK, FEATURE_MAX, M_MAX, NROWS, _fields, _gather, _refuse_ranges, _statics, id_bits, position_bits,
-                              sort_net)
+from .torch_embedding import (
+    CHUNK,
+    FEATURE_MAX,
+    M_MAX,
+    NROWS,
+    _fields,
+    _gather,
+    _refuse_ranges,
+    _statics,
+    id_bits,
+    position_bits,
+    sort_net,
+)
 
 __all__ = ["EmbeddingGradF32", "EmbeddingGradF32Move", "EmbeddingGradF32Route", "EmbeddingGradF32Run",
            "EmbeddingGradF32SegmentStep", "EmbeddingGradF32Slot", "EmbeddingGradF32Sort", "EmbeddingGradF32Step",

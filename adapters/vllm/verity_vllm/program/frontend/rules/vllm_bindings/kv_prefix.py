@@ -5,12 +5,12 @@ from __future__ import annotations
 import torch
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array, Value
-
 from verity_torch.frontend.derive import refuse
 from verity_torch.frontend.rules.base import RuleInfo, StateRule
+from verity_torch.frontend.rules.bindings.operands import BF16
 from verity_torch.frontend.rules.common import CACHED_PREFIX as STATE
 from verity_torch.frontend.rules.common import dtype_is, known, shape
-from verity_torch.frontend.rules.bindings.operands import BF16
+
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
 __all__ = ["layout_of"]

@@ -33,14 +33,35 @@ from __future__ import annotations
 from fractions import Fraction
 
 from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.ops.scalar import (
+    F32_NAN_PTX,
+    BitAnd,
+    BitNot,
+    BitOr,
+    F32BitsShl23,
+    F32Eq,
+    F32Fabs,
+    F32Fmaxf,
+    F32IsFinite,
+    F32Neg,
+    F32Sat,
+)
 from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.circuits.ops.scalar import F32_NAN_PTX, BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32Fabs, F32Fmaxf, F32IsFinite, F32Neg, F32Sat
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import ref_prims as R
-from verity_vllm.definitions.registry.prims import BF16, BIT, F32, I32, _decode, f32_of, bits_of
+from verity_vllm.definitions.registry.prims import (
+    BF16,
+    BIT,
+    F32,
+    I32,
+    _decode,
+    bits_of,
+    f32_of,
+)
 
 SEMANTIC_ID = "moe/FusedMoE@v1"
 

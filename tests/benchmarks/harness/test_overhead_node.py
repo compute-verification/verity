@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 
 import pytest
 from overhead_standins import (
@@ -213,3 +214,72 @@ def test_a_timed_run_refuses_points_that_arent_a_finished_sweep_of_its_card(tmp_
     rc, run_dir = node_run(tmp_path, node, bad, "stock")
     assert rc == 1 and node.calls == []
     assert "isn't a finished" in json.loads((run_dir / "result.json").read_text())["validation"]["detail"]
+
+
+# ---- phases ------------------------------------------------------------------------------------------------------------------
+
+POINTS_FIELDS = {"schema", "card", "model", "precision", "families", "rule", "rounds", "identity", "c", "l",
+                 "best_flop_per_ms", "times_ms", "tflops", "linears", "error"}
+RUN_FIELDS = {"schema", "scheme", "family", "card", "model", "points_art", "points_sha256", "cpu_sm_s_per_core_s", "points",
+              "whys", "bench_exit", "identity", "clocks", "bridge", "sass_gate_ok", "arm", "reports", "traced_prime",
+              "verify_exit"}
+
+
+@pytest.fixture
+def ticks(monkeypatch):
+    """A clock a second a reading, from 2026-11-18T00:00:00Z."""
+
+    t = iter(range(1_794_960_000, 1_794_960_000 + 10_000))
+    monkeypatch.setattr(overhead_node, "CLOCK", lambda: float(next(t)))
+
+
+def test_a_sweep_records_its_phases_beside_every_field_it_had(tmp_path, ticks, capsys):
+    node = Node(tmp_path)
+    out, run_dir = tmp_path / "r1" / "out", tmp_path / "r1"
+    assert overhead_node.main(["points", "--card", "h200", "--uuid", UUID, "--out", str(out), "--run-dir", str(run_dir),
+                               "--run-id", "r1", "--build-s", "12.5"], run=node) == 0
+    points = json.loads((out / "points.json").read_text())
+    assert set(points) == POINTS_FIELDS | {"phases"}
+    rounds = [f"round {i:02d} (m = {', '.join(map(str, r['ms']))})" for i, r in enumerate(points["rounds"])]
+    assert points["phases"] == [{"name": "build", "seconds": 12.5}, *({"name": n, "seconds": 1.0} for n in rounds)]
+    log = capsys.readouterr().out
+    assert f"2026-11-18T00:00:00Z phase {rounds[0]} start" in log and f"2026-11-18T00:00:01Z phase {rounds[0]} end" in log
+
+
+def test_a_timed_run_records_its_phases_beside_every_field_it_had(tmp_path, scheme, ticks):
+    points = node_points(tmp_path, Node(tmp_path))
+    rc, run_dir = node_run(tmp_path, Node(tmp_path), points, "pearl-plus", "art:" + "b" * 64, extra=["--build-s", "3"])
+    doc = json.loads((run_dir / "out" / "overhead.json").read_text())
+    assert rc == 0 and set(doc) == RUN_FIELDS | {"phases"}
+    exports = [f"nsys export {i:02d} ({r['report']})" for i, r in enumerate(doc["reports"])]
+    assert [p["name"] for p in doc["phases"]] == ["build", "bench.py under nsys", *exports, "verify.py, every row",
+                                                  "γ at each point"]
+    assert doc["phases"][0] == {"name": "build", "seconds": 3.0} and {p["seconds"] for p in doc["phases"][1:]} == {1.0}
+
+
+def test_a_refused_run_records_the_phases_it_ran(tmp_path):
+    bad = tmp_path / "points.json"
+    bad.write_text(json.dumps({"schema": O.POINTS_SCHEMA, "card": "rtx-pro-6000", "c": 512, "l": 64}))
+    rc, run_dir = node_run(tmp_path, Node(tmp_path), bad, "stock", extra=["--build-s", "2"])
+    assert rc == 1 and json.loads((run_dir / "out" / "overhead.json").read_text())["phases"] == [
+        {"name": "build", "seconds": 2.0}]
+
+
+def test_a_bench_process_is_split_by_its_own_stages_and_what_is_left_outside_its_shapes():
+    phases = overhead_node.Phases(None, clock=iter([0.0, 100.0]).__next__)
+    with phases("round 00"):
+        pass
+    phases.bench("round 00", {"shapes": [{"wall_s": {"warmup": 10.0, "timed": 30.0}},
+                                         {"wall_s": {"warmup": 5.0, "timed": 25.0, "traced": 5.0}}]})
+    assert phases.list == [{"name": "round 00", "seconds": 100.0}, {"name": "round 00: warmup", "seconds": 15.0},
+                           {"name": "round 00: timed", "seconds": 55.0}, {"name": "round 00: traced", "seconds": 5.0},
+                           {"name": "round 00: outside its shapes", "seconds": 25.0}]
+
+
+def test_the_runner_keeps_the_log_as_written_and_stamps_each_shape_it_starts(tmp_path, ticks, capsys):
+    log = tmp_path / "round" / "bench.log"
+    log.parent.mkdir()
+    rc = overhead_node._run([sys.executable, "-u", "-c", "import sys; print('sass gate: pass'); print('shape m1-n2-k3', "
+                             "file=sys.stderr, flush=True); print('exit 0')"], log)
+    assert rc == 0 and log.read_text().splitlines() == ["sass gate: pass", "shape m1-n2-k3", "exit 0"]
+    assert capsys.readouterr().out == "2026-11-18T00:00:00Z round/bench.log: shape m1-n2-k3\n"

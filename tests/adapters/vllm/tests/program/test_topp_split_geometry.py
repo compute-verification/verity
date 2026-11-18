@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+
 from verity_vllm.definitions.registry import topp_geometry
 from verity_vllm.definitions.registry import topp_split as TS
 
