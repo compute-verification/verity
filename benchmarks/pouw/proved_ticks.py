@@ -21,7 +21,7 @@ compiled):
   instructions, 17.025641, and 0.4207% skippable, so B_♭ = 17.097571.
 - 4 · SMs · f_max: the credit is T_cred = B_♭/f_max a unit on one SMSP (`ResourceAccounting.TS.Model.credit`), and a GPU's
   4 · SMs SMSPs share the window's units. SMs is data/table.toml's (188 on sm_120), f_max the family's
-  card's `clock.sm` (`FMAX_MHZ`; the card its model.toml names).
+  card's `clock.sm` (`fmax_mhz`; the card its model.toml names).
 - ε, PoUW's headline at the sheet: outside δ = 2^-40, an accepted window takes at least (1 − ε) · T_cred a unit over
   every route. ε (Corollary D3's) is what any other route, skipped work and luck can save against ♭, so the figure
   is (1 − ε) of ♭'s block-ticks, not ♭'s. `SHEET_EPS` is 5.860%, `Sm120SheetHeadline`'s (with A5b: receipt
@@ -65,7 +65,7 @@ import eps_budget as EB
 from verity.device import number
 from verity_machine_model import headline
 from verity_machine_model.eps import PRODUCTS, design, honest, table
-from verity_machine_model.model import card, device
+from verity_machine_model.model import card, data_device, device
 
 #: what the tests read
 __all__ = [
@@ -74,9 +74,12 @@ __all__ = [
 ]
 
 SMSPS = 4                          # SMSPs an SM
-#: each family's f_max, the sheet's highest SM clock (A1): SPEC's P1, the family's card's `clock.sm` (Lean's
-#: `ResourceAccounting.TS.Headline.Sm120.ds120.fmax`)
-FMAX_MHZ = {"sm_120": int(number(card(device("sm_120"))["clock"]["sm"]))}
+def fmax_mhz(family: str) -> int:
+    """``family``'s f_max, the sheet's highest SM clock (A1): SPEC's P1, the family's card's `clock.sm` (Lean's
+    `ResourceAccounting.TS.Headline.Sm120.ds120.fmax`)."""
+    return int(number(card(device(family))["clock"]["sm"]))
+
+
 #: PoUW's headline ε at the data sheet, H1 + fx1 on DS-120: `ResourceAccounting.SecurityProofs.TS.Sm120SheetHeadline`
 SHEET_EPS = 5860 / 100000
 KINDS = tuple(f"mac:{p}" for p in PRODUCTS)
@@ -97,11 +100,11 @@ class Sheet:
     fmax_mhz: float
 
 
-def sheet(family: str = "sm_120") -> Sheet:
-    if family not in FMAX_MHZ:
-        raise ValueError(f"no data-sheet f_max for {family}: add the sheet's highest SM clock to FMAX_MHZ")
+def sheet(family: str | None = None) -> Sheet:
+    """``family``'s data-sheet reading; None: the family the machine model's data holds (`data_device`), the headline's."""
+    family = family or data_device()
     f = headline.spec()["family"][family]
-    return Sheet(family, f["sheet"]["vector"], f["design"], table(device(family)).sms, FMAX_MHZ[family])
+    return Sheet(family, f["sheet"]["vector"], f["design"], table(device(family)).sms, fmax_mhz(family))
 
 
 def unit_cycles(s: Sheet) -> float:
