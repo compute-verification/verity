@@ -75,7 +75,7 @@ CORES=$(nproc) && LEAN_TIMEOUT=${LEAN_TIMEOUT:-$(( CORES >= 96 ? 3600 : 3600 * 9
 # no lease of its own: gpu-lease isn't re-entrant, so a second lease of the held card would wait forever
 [ -z "${GPU_LEASE_UUID:-}" ] || GPU=${GPU_LEASE_UUID%%,*}
 PROTOCOL=pearl-plus
-SPEC=benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml
+SPEC=benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served.toml
 SP=benchmarks/pouw/pearl_c_vllm/served_passes.py
 PIECE=$OUT/pieces/pouw REC=$OUT/record
 # a run's share is read from the files it wrote alone, never an earlier run's left in the same place

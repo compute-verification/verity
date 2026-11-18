@@ -49,9 +49,9 @@ private theorem getD_mkObj_none {l : List (String × Json)} {k : String}
        all_goals rfl)
 
 /-- **The entry a second stage adds to a run's answer** is none, or one named `interior`. -/
-private theorem interiorAudit_staged {form : Bool} {i : Spot.Run.Input} {sample : Array Nat}
+private theorem interiorAudit_staged {i : Spot.Run.Input} {sample : Array Nat}
     {inner : Option (Spot.Run.Interior × Json × Json × Json × Nat)} {acc : Bool} {staged : List (String × Json)}
-    (h : Spot.Run.interiorAudit form i sample inner = .ok (acc, staged)) :
+    (h : Spot.Run.interiorAudit i sample inner = .ok (acc, staged)) :
     staged = [] ∨ ∃ e, staged = [("interior", e)] := by
   cases inner with
   | none =>
@@ -80,7 +80,7 @@ set_option maxHeartbeats 8000000 in
 /-- **A run's answer, at either switch** (`Spot.Run.run_decided`'s, with the second stage's audit): refused at a step,
 or past the population, R1–R7, the sample of record on the bytes it was handed and that sample's own check, its answer
 listing that sample as its `draw` before whatever the second stage's audit adds. -/
-private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j) :
+private theorem run_path {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
     ∃ n rule samplingDesign workTable, nat? (getD i.record "population") = some n ∧ ¬(n == 0) = true ∧ i.rule.over n
@@ -94,7 +94,7 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
             workTable i.closure i.source = .ok (draw, rest, read) ∧
           ¬(!(Draw.checkDraw draw (getD i.record "population") derived).isEmpty) = true ∧
           ∃ inner acc₂ staged receipt symbol pub audit,
-            Spot.Run.interiorAudit form i ((Draw.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
+            Spot.Run.interiorAudit i ((Draw.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
             j = Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read), ("symbol", symbol),
               ("public", pub), ("audit", audit)] ++ staged) := by
   unfold Spot.Run.run at h
@@ -113,7 +113,7 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
 whose symbol is `accept` drew the sample of record (`Select.select` under `Select.resolve`'s rule and the work table
 `Rule.tableOver` expands) on the bytes it was handed, held it to the registration (`Draw.checkDraw` under the
 sampling design `Rule.over` gives the population), and lists it as its `draw`. -/
-theorem run_sample {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run.run i form = .ok run)
+theorem run_sample {i : Spot.Run.Input} {run : Json} (h : Spot.Run.run i = .ok run)
     (ha : Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true) :
     ∃ n rule samplingDesign workTable derived resolved draw rest read,
       nat? (getD i.record "population") = some n ∧
@@ -157,10 +157,10 @@ rule gives its population), and listed it as
 its `draw`; and the sampling design the last step held the interior audit's sample to (`secondCheck` at `samplingDesign`) is
 `Select.secondSamplingDesign` of `draw`'s proved units, over the replay block's cells under the interior's query at the rule's
 counts. -/
-theorem accepted_secondSamplingDesign {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem accepted_secondSamplingDesign {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
-    ∃ c₂ ξ₂ r i run samplingDesign, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i true = .ok run ∧
+    (h : checkBlobsAtInner p c ξ e bs = .accept pub prof) :
+    ∃ c₂ ξ₂ r i run samplingDesign, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i = .ok run ∧
       secondCheck p.audit.base.verifier p.audit.base.delta c₂ samplingDesign ξ₂ { e.interior.base with verdicts := r.out } =
         .accept pub prof ∧
       ∃ j₁ n rule samplingDesign₁ workTable derived resolved draw rest read, readBack c.record = .ok j₁ ∧
@@ -179,7 +179,7 @@ theorem accepted_secondSamplingDesign {form : Bool} {p : Params} {c : OneStage.C
           Select.replayCells p.replay p.interior.verifier.query = .ok ns ∧
           Select.templateIds p.interior.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
           samplingDesign = Select.secondSamplingDesign ((Draw.proved draw).map Int.toNat) ns ks := by
-  obtain ⟨-, c₂, ξ₂, r, i, run, hi, hr, -, -, hj, samplingDesign, hl, htwo⟩ := accepted_steps h
+  obtain ⟨c₂, ξ₂, r, i, run, hi, hr, -, -, hj, samplingDesign, hl, htwo⟩ := accepted_steps h
   obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, hio, hj₁, -⟩ := inputAt_ok hi
   obtain ⟨n, rule, samplingDesign₁, workTable, derived, resolved, draw, rest, read, hn, hrule, hlaw, htab, hder, hres, hsel,
     hchk, hd⟩ := run_sample hr hj

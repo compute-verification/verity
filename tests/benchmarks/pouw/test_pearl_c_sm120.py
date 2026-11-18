@@ -167,7 +167,7 @@ def test_kernel_constants_match_the_reference():
     assert int(n256, 16) == P.f32_to_bf16(P.NOISE_NORM * 32) and int(n16, 16) == P.f32_to_bf16(C.LINE_NORM_V1 * 32)
     block = F.unit_block(b"s" * 32, b"b" * 64, 7)
     assert len(block) == RUN.TIMING_KEYS["unit"] == 104 and block[96:] == (7).to_bytes(8, "little")
-    assert "unit[24] | (uint64_t)unit[25] << 32" in HASH_SOURCE and 'keys["unit"] + 96' in (HERE / "run.py").read_text()
+    assert "unit[24] | (uint64_t)unit[25] << 32" in HASH_SOURCE
     variants = dict(re.findall(r'"([\w-]+)": (\d)', re.search(r"VARIANT_G = \{[^}]*\}", run).group(0)))
     assert {k: int(v) for k, v in variants.items()} == {SM120.name: SM120.g, SM120_UNPROMOTED.name: 0}
     promoted = {g for _, _, _, _, g, *_ in gemms() if g}
@@ -195,7 +195,7 @@ def test_launch_passes_what_a_fresh_args_would():
     for p, i, grid, stream, want in [
             (p16, i16, (2, 3), None, (0x1234, 2, 3, 1, 256, 1, 1, 99, 7)),
             ((5,), (1024, 4096), 188, 9, (0x1234, 188, 1, 1, 256, 1, 1, 99, 9)),
-            ((), RUN.nonce_args(0xFFFF_FFFF_8000_0001), [4, 5, 6], None, (0x1234, 4, 5, 6, 256, 1, 1, 99, 7)),
+            ((), (-0x7FFF_FFFF, -1), [4, 5, 6], None, (0x1234, 4, 5, 6, 256, 1, 1, 99, 7)),
             ((-1, 1 << 64 | 5), (1 << 31, (1 << 32) - 1, 1 << 40 | 3, -(1 << 33)), 1, None, (0x1234, 1, 1, 1, 256, 1, 1, 99, 7))]:
         dev.launch("k", grid, 256, 99, p=p, i=i, stream=stream)
         fresh = RUN.Args()
@@ -369,7 +369,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     if name == "s512_heads":
         return {}
     if name == "hm_leaves":
-        return {0: 64 * i[0], 1: 64 * i[0], 2: 32, 3: 128 + 192 * 256 * 64, 5: 8}
+        return {0: 64 * i[0], 1: 64 * i[0], 2: RUN.HM_SALT * i[0], 3: 128 + 192 * 256 * 64}
     if name == "s512_frame_leaves":
         return {0: 64 * i[1], 1: 64}
     if name == "s512_pads":
@@ -381,7 +381,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     if name.startswith("pd_commit_"):
         rows, k, _, m = i[:4]
         return {0: 4 * rows * k, 1: 64 * rows, 2: 64 * (2 * RUN.pow2(rows) - 1), 3: 32 * rows, 4: 32 * rows, 5: 104, 6: 64,
-                7: 32, 8: 128 + 192 * 256 * 64, 9: 16, 10: 32, 11: 32, 12: 32 * m}
+                7: RUN.HM_SALT * rows, 8: 128 + 192 * 256 * 64, 9: 16, 10: 32, 11: 32, 12: 32 * m}
     if name.startswith("pd_tree_"):
         rows, m = i[0], i[3]
         return {2: 64 * (2 * RUN.pow2(rows) - 1), 5: 104, 6: 64, 10: 32, 11: 32, 12: 32 * m}
@@ -472,14 +472,10 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     rows = [json.loads(x) for x in r.stdout.splitlines()]
     assert [x["kind"] for x in rows] == ["env", "mem", "check"] and rows[0]["uuid"] == UUID and rows[0]["cc"] == [12, 0]
     assert all(not v["pearl_c_ok"] and v["failed"] for v in rows[2]["variants"].values())
-    # each tree's hm96 salt nonce is the fixture's: B's HM96_WEIGHTS + its weight, A's read from the unit block, the tiles'
-    # the transcript's
+    # each hm96 leaf launch reads its own tree's salts (`track` holds every launch's 192 bytes a leaf to its buffer)
     evs = [json.loads(x) for x in log.read_text().splitlines()]
-    unit = {ev["ptr"] for ev in evs if ev["op"] == "alloc" and ev["bytes"] == 104}
-    nonces = {(tuple(ev["i"][1:3]), ev["p"][5] - 96 in unit) for ev in evs if ev["op"] == "launch" and ev["name"] == "hm_leaves"}
-    assert json.loads((small_fixture / "check.json").read_text())["weight"] == F.WEIGHT != 0
-    assert nonces == {(RUN.nonce_args(F.HM96_WEIGHTS + F.WEIGHT), False), ((0, 0), True),
-                      (RUN.nonce_args(F.HM96_TRANSCRIPT), False)}, nonces
+    leaves = {(ev["p"][2], ev["i"][0]) for ev in evs if ev["op"] == "launch" and ev["name"] == "hm_leaves"}
+    assert len({at for at, _ in leaves}) == len(leaves) >= 2, leaves
 
     log = tmp_path / "launches.jsonl"
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
@@ -594,7 +590,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
     elif ev["op"] == "launch":
         name, p, i = ev["name"], ev["p"], ev["i"]
         for slot, n in needs(name, p, i).items():
-            if not p[slot] and ((name, slot) in {("lines", 2), ("lines", 3), ("lines", 4), ("s512_seeds", 2), ("hm_leaves", 5)}
+            if not p[slot] and ((name, slot) in {("lines", 2), ("lines", 3), ("lines", 4), ("s512_seeds", 2)}
                                 or name.startswith("pd_tree_") and slot == 12):
                 continue
             assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)

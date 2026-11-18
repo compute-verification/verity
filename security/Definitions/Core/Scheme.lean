@@ -8,11 +8,15 @@ public import Definitions.Core.LevelsCredited
 Every resource accounting protocol states its guarantee through these, and defines none of its own:
 
 * `Scheme`: what a protocol supplies to the proof layers. Its blocks, the units the audit samples; each block's
-  cost, the resource credited for it; its charges, the resource it can't tie to a block; the runs the verifier
-  accepts, with the resource each used and the resource each was credited; its conditions on the verifier's log; the
+  cost, the resource it stands for; its charges, the resource it can't tie to a block; the runs the verifier
+  accepts, with each run's two sides, `over` and `under`, in one unit; its conditions on the verifier's log; the
   blocks of a run that are incorrect; the event that breaks one of its own assumptions, with that event's probability
-  bound; and its charge inequality: in an accepted run whose log meets its conditions and that breaks nothing, the
-  uncredited resource is at most the cost of the incorrect blocks plus its charges.
+  bound; and its charge inequality: in an accepted run whose log meets its conditions and that breaks nothing, `over`
+  exceeds `under` by at most the cost of the incorrect blocks plus its charges. The scheme says which of its
+  quantities is which side. A scheme that bounds a resource used beyond what was credited (egress) sets `over` the
+  resource used and `under` the resource credited; a scheme that bounds what is credited by what was spent (useful
+  work) sets `over` the credit and `under` the spend. The sides are naturals: a guarantee with a factor rescales its
+  own side into the common unit, and the structure carries no factor.
 * `Scheme.missable`: the largest cost of a block set a sample misses with probability above a cutoff.
 * `AuditBound`: what the audit gives every scheme, in the form a scheme reads. At every cutoff `δ`, a run is accepted
   while the sample misses its incorrect blocks with probability at most `δ`, with probability at most `δ + ε`, `ε`
@@ -20,7 +24,7 @@ Every resource accounting protocol states its guarantee through these, and defin
   values are correct outside a set the sample would likely have hit. A scheme that bounds something other than a
   cost (the bits an accepted record can carry) reads this directly.
 * `Scheme.GetsBack`: what a scheme gets back from the audit, a named `Prop`. At cutoff `δ`, an accepted run whose
-  log meets the scheme's conditions leaves more than the missable cost plus the charges uncredited with probability at
+  log meets the scheme's conditions has `over` above `under` by more than the missable cost plus the charges with probability at
   most `δ` plus the audit's error plus the scheme's own term.
 * `Scheme.AccountingLayer`: the accounting layer's theorem, stated. For every scheme, `AuditBound` at its accepted
   runs and incorrect blocks, with its break event bounded by its own term, gives `GetsBack` at every cutoff.
@@ -51,7 +55,7 @@ structure Scheme where
   /-- The blocks: the units the audit samples. -/
   Block : Type
   [fintype : Fintype Block]
-  /-- The resource credited for a block. -/
+  /-- The resource a block stands for. -/
   cost : Block → ℕ
   /-- The charges: resource the scheme can't tie to a block, the sum of its charges' bounds. -/
   charges : ℕ
@@ -59,10 +63,10 @@ structure Scheme where
   Run : Type
   /-- The verifier accepts the run. -/
   accepts : Run → Prop
-  /-- The resource the run used. -/
-  used : Run → ℕ
-  /-- The resource the run was credited. -/
-  credited : Run → ℕ
+  /-- The run's larger side: the resource used (egress), or the credit (useful work). -/
+  over : Run → ℕ
+  /-- The run's smaller side: the resource credited (egress), or the spend (useful work). -/
+  under : Run → ℕ
   /-- The run's log meets the scheme's conditions: each entry it names is logged before, or after, the coin or other
   logged event it names. -/
   logOK : Run → Prop
@@ -72,9 +76,9 @@ structure Scheme where
   breaks : Run → Prop
   /-- The scheme's own term: the bound on the probability of `breaks`. -/
   δscheme : ℝ≥0∞
-  /-- The charge inequality: in an accepted run whose log meets the conditions and that breaks nothing, the
-  uncredited resource is at most the cost of the incorrect blocks plus the charges. -/
-  charge : ∀ r, accepts r → logOK r → ¬ breaks r → used r ≤ credited r + ∑ b ∈ incorrect r, cost b + charges
+  /-- The charge inequality: in an accepted run whose log meets the conditions and that breaks nothing, `over`
+  exceeds `under` by at most the cost of the incorrect blocks plus the charges. -/
+  charge : ∀ r, accepts r → logOK r → ¬ breaks r → over r ≤ under r + ∑ b ∈ incorrect r, cost b + charges
 
 attribute [instance] Scheme.fintype
 
@@ -86,10 +90,10 @@ noncomputable def missable (S : Scheme) (L : SamplingDesign S.Block) (δ : ℝ�
   (Finset.univ.filter fun T : Finset S.Block => δ < L.missProb T).sup fun T => ∑ b ∈ T, S.cost b
 
 /-- **What a scheme gets back**: under the sampling design `L` and the audit game's probability `pr`, at cutoff `δ`
-an accepted run whose log meets the conditions leaves more than the missable cost plus the charges uncredited with
-probability at most `δ + ε + δscheme`, `ε` the audit's error. -/
+an accepted run whose log meets the conditions has `over` above `under` by more than the missable cost plus the
+charges with probability at most `δ + ε + δscheme`, `ε` the audit's error. -/
 def GetsBack (S : Scheme) (L : SamplingDesign S.Block) (pr : (S.Run → Prop) → ℝ≥0∞) (δ ε : ℝ≥0∞) : Prop :=
-  pr (fun r => S.accepts r ∧ S.logOK r ∧ S.credited r + S.missable L δ + S.charges < S.used r) ≤ δ + ε + S.δscheme
+  pr (fun r => S.accepts r ∧ S.logOK r ∧ S.under r + S.missable L δ + S.charges < S.over r) ≤ δ + ε + S.δscheme
 
 /-- **The accounting layer's theorem** (stated). For every scheme, sampling design and probability on its runs that is
 monotone and subadditive: the audit's bound at the scheme's accepted runs and incorrect blocks, and the scheme's break

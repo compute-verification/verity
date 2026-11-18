@@ -1,7 +1,9 @@
 """The engine against the CPU reference (``verity.commitments``), bit for bit: row digests on random rows at edge sizes
-(every variant), hm96 leaves under both salt forms and fused with their units' frame leaves, frame leaves, unit frame
-tables, levels (a front child, strided trees), pads and roots, and on a CUDA device a layout group's rows
-(``layout_rows``: the benchmarks pass one layer of commit_slots' frozen H200 layout) on sampled slots. ``report`` runs them all; the benchmarks'
+(every variant), hm96 leaves under the caller's salts (a buffer of its own, and a view of a wider one read in place) and
+fused with their units' frame leaves, frame leaves, unit frame tables, levels (a front child, strided trees), pads and roots, and on a CUDA device a layout group's rows
+(``layout_rows``: the benchmarks pass one layer of commit_slots' frozen H200 layout) on sampled slots. Every salt here is a
+public test value, drawn from the check's seeded generator and handed to the engine as data, as a prover hands its fresh
+ones. ``report`` runs them all; the benchmarks'
 ``benchmarks/torch_gpu/sha512_rows/check_gpu.py`` runs it on a CUDA device and writes check.json, and the tests call the
 same functions on the host twin.
 """
@@ -16,7 +18,6 @@ import numpy as np
 
 
 from verity.commitments import hm96
-from verity.commitments.crypto.chacha20 import keystream
 from verity.commitments.cuda.sha512_rows import engine as E
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
@@ -29,7 +30,6 @@ from verity.commitments.rowleaf import (
 
 INST = hm96.SHA512
 KEY = INST.default_key
-SALT_KEY = bytes(range(32, 64))
 ROOTS_SCHEMA = "frame-v3-sha512/root/v1"
 EDGE_BYTES = (0, 1, 13, 110, 111, 112, 127, 128, 129, 239, 240, 1023, 1024, 1025, 2048)
 LEAF_MINB = {False: (1, 2), True: (0,)}   # the leaf kernels checked on a device, and on the host twin
@@ -46,10 +46,6 @@ def row_digest(row: bytes) -> bytes:
     if row:
         assert d == sha512_row_v2_digest(row, 8 * len(row))
     return d
-
-
-def salt(key: bytes, nonce: int, r: int) -> bytes:
-    return keystream(key, nonce, 3 * r, 3)
 
 
 class Dev:
@@ -102,10 +98,13 @@ FUSED_RANK0 = (1 << 24) - 2                            # the proof blocks' ranks
 
 
 def check_leaves(engine: E.Engine, slots: int = 3, seed: int = 2) -> dict[str, Any]:
-    """hm96 leaves under a salt key and under given salts, two domains, ranks and positions of 1 to 8 bytes (a frame leaf's
-    rest of prefix and value one chunk up to 6 bytes each, q <= 47, else two); and fused: five rows each a proof block alone, whose
-    slot-tree leaves (ranks FUSED_RANK0 + d, from ``frame_table``) the leaf kernel writes, the other seven rows' leaves
-    compacted."""
+    """hm96 leaves under given salts, two domains, ranks and positions of 1 to 8 bytes (a frame leaf's rest of prefix and
+    value one chunk up to 6 bytes each, q <= 47, else two): the leaf of row g in slot s is the reference's
+    (``hm96.SHA512``'s commit string and tree leaf) under the 192 bytes at ``salts[g, s]``. The salts are read from a buffer
+    of their own ((G, S, 192)), and in place from a view of a wider one whose rows and slots lie the other way round
+    (``strided``: a (slots + 2, G + 3, 192) buffer's inner part, transposed), which gives the same leaves; and fused: five
+    rows each a proof block alone, whose slot-tree leaves (ranks FUSED_RANK0 + d, from ``frame_table``) the leaf kernel
+    writes, the other seven rows' leaves compacted."""
     rng = np.random.default_rng(seed)
     tensors, rows = random_tensors(rng, slots), random_rows()[:12]
     dev = Dev(engine)
@@ -114,46 +113,39 @@ def check_leaves(engine: E.Engine, slots: int = 3, seed: int = 2) -> dict[str, A
     did_of_row = [g % 2 for g in range(G)]
     rank = [(0, 1, 2, 255, 256, 65535, 65536, 70000, 1 << 40, 1 << 48, (1 << 40) - 1, (1 << 64) - 15)[g] for g in range(G)]
     position = [r + 7 * (g % 3) for g, r in enumerate(rank)]
-    salt_row = [1000 + 3 * g for g in range(G)]
     table = engine.rows(rows, [dev.put(t) for t in tensors])
-    lt = engine.leaf_table([d.domain_id for d in doms], did_of_row, rank, position, salt_row, SCHEMA_HM96_SHA512_ROW_V2)
+    lt = engine.leaf_table([d.domain_id for d in doms], did_of_row, rank, position, SCHEMA_HM96_SHA512_ROW_V2)
     x = engine.row_digests(table)
-    nonce0 = 5
-    ys = np.zeros((G, slots, 192), dtype=np.uint8)
-    for g in range(G):
-        for s in range(slots):
-            ys[g, s] = np.frombuffer(rng.bytes(192), dtype=np.uint8)
+    wide = rng.integers(0, 256, (slots + 2, G + 3, 192), dtype=np.uint8)
+    ys = np.ascontiguousarray(wide[1:1 + slots, 2:2 + G].transpose(1, 0, 2))
+    inner = dev.put(wide)[1:1 + slots, 2:2 + G]
+    given, strided = dev.put(ys), (inner.transpose(1, 0, 2) if engine.host else inner.permute(1, 0, 2))
     units, n_rest = 5, G - 5
     slot_dom = domain("slots", 1 << 25)
     frames = engine.frame_table([slot_dom.domain_id], FUSED_RANK0, units)
     dest = engine.u32s(np.asarray(FUSED_DEST, dtype=np.uint32))
-    bad_key = bad_given = bad_fused = 0
+    bad_given = bad_strided = bad_fused = 0
     for minb in LEAF_MINB[engine.host]:
-        got_key = E.digests(engine.leaves(lt, x, E.SaltKey(SALT_KEY, nonce0), minb=minb))
-        got_given = E.digests(engine.leaves(lt, x, dev.put(ys), minb=minb))
+        got_given = E.digests(engine.leaves(lt, x, given, minb=minb))
+        got_strided = E.digests(engine.leaves(lt, x, strided, minb=minb))
         run = engine._words(slots, units)
-        rest = E.digests(engine.leaves(lt, x, E.SaltKey(SALT_KEY, nonce0), engine._words(n_rest, slots), minb, frames, dest,
-                                       run))
+        rest = E.digests(engine.leaves(lt, x, strided, engine._words(n_rest, slots), minb, frames, dest, run))
         run_d = E.digests(run)
         for g in range(G):
             for s in range(slots):
                 xr = row_digest(ref_rows(tensors, rows, s)[g])
-                for y, got in ((salt(SALT_KEY, nonce0 + s, salt_row[g]), got_key), (ys[g, s].tobytes(), got_given)):
-                    h = INST.tree_leaf(KEY, INST.commit_string(KEY, xr, y))
-                    want = doms[did_of_row[g]].leaf(rank[g], position[g], SCHEMA_HM96_SHA512_ROW_V2, h)
-                    bad = got[g * slots + s] != want
-                    if got is got_key:
-                        bad_key += bad
-                        d = FUSED_DEST[g]
-                        if d < units:
-                            u = FUSED_RANK0 + d
-                            bad_fused += run_d[s * units + d] != slot_dom.leaf(u, u, E.ROOT_SCHEMA, want)
-                        else:
-                            bad_fused += rest[(d - units) * slots + s] != want
-                    else:
-                        bad_given += bad
+                h = INST.tree_leaf(KEY, INST.commit_string(KEY, xr, ys[g, s].tobytes()))
+                want = doms[did_of_row[g]].leaf(rank[g], position[g], SCHEMA_HM96_SHA512_ROW_V2, h)
+                bad_given += got_given[g * slots + s] != want
+                bad_strided += got_strided[g * slots + s] != want
+                d = FUSED_DEST[g]
+                if d < units:
+                    u = FUSED_RANK0 + d
+                    bad_fused += run_d[s * units + d] != slot_dom.leaf(u, u, E.ROOT_SCHEMA, want)
+                else:
+                    bad_fused += rest[(d - units) * slots + s] != want
     return {"rows": G, "slots": slots, "leaf_minb": list(LEAF_MINB[engine.host]),
-            "mismatches": {"salt_key": bad_key, "salts": bad_given, "fused": bad_fused}}
+            "mismatches": {"salts": bad_given, "strided": bad_strided, "fused": bad_fused}}
 
 
 def check_trees(engine: E.Engine, seed: int = 3) -> dict[str, Any]:
@@ -221,24 +213,27 @@ def layout_rows(group: Any) -> tuple[list[int], list[list[tuple[int, int, int]]]
 
 def check_layout(engine: E.Engine, sources: Sequence[int], rows: Sequence[Sequence[tuple[int, int, int]]], slots: int,
                  sample: Sequence[int], seed: int = 4) -> dict[str, Any]:
-    """A layout's rows (``layout_rows``) at ``slots`` slots: every row's digest and leaf on the sampled slots."""
+    """A layout's rows (``layout_rows``) at ``slots`` slots, under salts drawn on the device from the check's seeded
+    generator (test values): every row's digest and leaf on the sampled slots."""
     torch = engine.torch
     gen = torch.Generator(device=engine.device).manual_seed(seed)
     dev_tensors = [torch.randint(0, 256, (slots, n), dtype=torch.uint8, device=engine.device, generator=gen) for n in sources]
     table = engine.rows(rows, dev_tensors)
     G = len(rows)
     dom = domain("layout-unit", 1)
-    lt = engine.leaf_table([dom.domain_id], [0] * G, [0] * G, None, list(range(G)))
+    lt = engine.leaf_table([dom.domain_id], [0] * G, [0] * G)
     x = engine.row_digests(table)
     xs = E.digests(x)
-    ls = [E.digests(engine.leaves(lt, x, E.SaltKey(SALT_KEY), minb=m)) for m in LEAF_MINB[engine.host]]
+    salts = torch.randint(0, 256, (G, slots, 192), dtype=torch.uint8, device=engine.device, generator=gen)
+    ls = [E.digests(engine.leaves(lt, x, salts, minb=m)) for m in LEAF_MINB[engine.host]]
     bad_x = bad_l = 0
     for s in sample:
         host = [t[s:s + 1].cpu().numpy() for t in dev_tensors]
+        ys = salts[:, s].cpu().numpy()
         for g, row in enumerate(ref_rows(host, rows, 0)):
             xr = row_digest(row)
             bad_x += xs[g * slots + s] != xr
-            h = INST.tree_leaf(KEY, INST.commit_string(KEY, xr, salt(SALT_KEY, s, g)))
+            h = INST.tree_leaf(KEY, INST.commit_string(KEY, xr, ys[g].tobytes()))
             want = dom.leaf(0, 0, SCHEMA_HM96_SHA512_ROW_V2, h)
             bad_l += sum(got[g * slots + s] != want for got in ls)
     return {"slots": slots, "rows": G, "sampled_slots": list(sample), "leaf_minb": list(LEAF_MINB[engine.host]),

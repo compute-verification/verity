@@ -166,6 +166,14 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
     out := out ++ [wire]
   return out
 
+/-- **An explicit part of a root node's argument names a node that is no input node**: an edge the derivation
+refuses (`edge-rows`), which a reader that checks parts before deriving refuses by the same name. -/
+def explicitEdge (P : Prog) : Bool :=
+  let nodes := (P.defs[P.root]!).body.nodes
+  (List.range nodes.size).any fun k => !isInputNode P k && (nodes[k]!).args.any fun a => a.seq.parts.any fun
+    | .explicit it => it.any fun r => !r.p && r.i < nodes.size && !isInputNode P r.i
+    | _ => false
+
 /-- **The wires the Program's root states**, under the ranges `rs` and the record's wiring `W` (its templates and
 cuts): the module docstring's rule, in the root's node, argument and part order, or the first refusal. -/
 def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except String (List Spot.Wires.Wire) := do
@@ -242,6 +250,10 @@ private def refuses (P : Prog) (W : Spot.Wires.Wiring) (code : String) : Bool :=
 #guard refuses (toy row2 #[.affine false 1 0 2, .affine false 1 2 1, .affine false 1 3 1]) (toyWiring [])
   "edge-parts"
 #guard refuses (toy row2 #[.affine false 3 0 4]) (toyWiring []) "not-topological"
+#guard explicitEdge (toy row2 #[.explicit #[⟨false, 1, 0⟩, ⟨false, 1, 1⟩, ⟨false, 1, 2⟩, ⟨false, 1, 3⟩]])
+#guard refuses (toy row2 #[.explicit #[⟨false, 1, 0⟩, ⟨false, 1, 1⟩, ⟨false, 1, 2⟩, ⟨false, 1, 3⟩]]) (toyWiring [])
+  "edge-rows"
+#guard !explicitEdge (toy row2 #[.affine false 1 0 4])
 #guard refuses (toy (.tuple #[.value 8, .value 24]) #[.affine false 1 0 4]) (toyWiring [("B", [("x", 2)])])
   "edge-width"
 

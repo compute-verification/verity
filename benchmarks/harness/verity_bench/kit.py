@@ -10,7 +10,7 @@
   clock lock, lease and the rest), each with the command that read it, from ``directory/<name>.toml``, checked field by field;
   with neither given, the run's own machine's, which `research run --on` put in ``$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml``.
 - `toolkit(version)`: the CUDA toolkit's directory at that version, ``$CUDA_HOME`` where set and not another, else the run's machine's
-  `[properties]`'; `card_arch(name)`: the `arch` of the card `card_short` finds, and
+  `[properties]`'; `card_sku(name)` and `card_arch(name)`: the `sku` and `arch` of the card `card_short` finds, and
   `machine_arch()` the run's machine's card's.
   `benchmarks/kernels/machine.py` prints both for a shell script.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
@@ -240,6 +240,11 @@ def _card_named(name: str, directory: Path) -> dict:
     return found[0]
 
 
+def card_sku(name: str, *, directory: Path | None = None) -> str:
+    """The ``sku`` of the card record `card_short` finds for ``name``: its file's name in ``directory``."""
+    return _card_named(name, directory or cards_directory())["sku"]
+
+
 def card_arch(name: str, *, directory: Path | None = None) -> str:
     """The ``arch`` of the card record `card_short` finds for ``name``: the target (``sm_90a``) machine code is built for."""
     return _card_named(name, directory or cards_directory())["arch"]
@@ -384,7 +389,7 @@ def wrong_card(workload: str, short: str, card: str, *, directory: Path | None =
         return None
     want = " or ".join(d["value"] for c in _gpu_cards(directory) if c.get("short") == short for d in c.get("driver", ()))
     return (f"the card is a {card}, not the {short} of spec {workload!r} ({want}): run it on a node whose card is a "
-            f"{want}, or use the spec for this card")
+            f"{want}, or name this card where the spec lists it (`SPEC@CARD`)")
 
 
 # ---- the paired ratio --------------------------------------------------------------------------------------------------------

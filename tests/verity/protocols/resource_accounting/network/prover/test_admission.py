@@ -112,3 +112,12 @@ def test_the_name_is_the_network_attesters_declaration():
     ex = Exchange()
     tick().install(ex)
     assert {n for n, _ in ex.requests} == {n for n, _, _ in ex.subscribers} == {NETWORK_ATTESTER.name}
+
+
+def test_a_step_that_computes_nothing_leaves_the_tick_where_it_was():
+    g = tick().gate
+    g.take({"run": RUN, "key": "k", "n": 0})
+    g.on(H.StepBegan(0, (), 0, 1))
+    assert (g.T, g.steps) == (0, 0)
+    g.on(H.StepBegan(1, ("k",), 1, 1))
+    assert g.steps == 1 and g.T == NA.Tick(**TICK).step(True)
