@@ -2,7 +2,7 @@
 `subset:k` of its n units, priced by Flock `prove --zk` on the CPU nodes instead of the GPU fit, and the share of
 each template's units the budget certifies.
 
-    uv run python verity/protocols/proofs/spot/prover/cost/cpu_budget.py --plan PLAN.json --slots 17 --hours 2.5 [--out DIR]
+    uv run python calibration/sampling_plan/cpu_budget.py --plan PLAN.json --slots 17 --hours 2.5 [--out DIR]
 
 * **A statement** holds up to `UNITS` sampled proof blocks of one template, at no more cost than one, since Flock pads a
   statement to 8 instance slots. Its m is k_log + 3, with k_log the one Flock's composer gives the unit

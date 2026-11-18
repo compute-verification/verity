@@ -27,7 +27,7 @@ from verity.protocols.proofs.spot.prover import workload as spot
 from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme as schemes
 
-__all__ = ["Exchange", "append", "body", "build", "close", "current", "declaring", "line", "lines", "providing", "read", "write"]
+__all__ = ["Exchange", "append", "body", "build", "close", "current", "declaring", "line", "lines", "option", "providing", "read", "write"]
 
 type Subscriber = Callable[[Any], None]
 
@@ -223,6 +223,12 @@ def _one(what: str, has: Callable[[schemes.Scheme], bool]) -> schemes.Scheme:
 def providing(role: str) -> schemes.Scheme:
     """The one declared scheme that provides ``role`` (`Scheme.provides`); `LookupError` naming those that do otherwise."""
     return _one(f"provides {role!r}", lambda s: role in s.provides)
+
+
+def option(entry: str | None) -> schemes.Scheme | None:
+    """The declared scheme whose option is ``entry`` (``name:scheme``, `Scheme.option`), which a launcher attaches by
+    name; None when none is."""
+    return next((s for s in declarations.load().values() if entry and s.option == entry), None)
 
 
 def declaring(port: str) -> schemes.Scheme:

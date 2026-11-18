@@ -35,7 +35,7 @@ core's `Stratified.harm_bound` and `count_bound`, and `pooled` bounds the incorr
 blocks. `handoff` is the plan as the GPU loop registers it: one `IntegrityMonitoringPeriod` window a subcircuit, or the block as one
 window under the `work:1` sampling design.
 
-    uv run python verity/protocols/proofs/spot/prover/cost/transformer.py --out DIR [--model small|large] [--share S] [--delta D]
+    uv run python calibration/sampling_plan/transformer.py --out DIR [--model small|large] [--share S] [--delta D]
 """
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ from fractions import Fraction
 from math import ceil, log
 from pathlib import Path
 
-from verity.protocols.proofs.spot.prover.cost.inputs import CARDS, I, cap, observations
+from inputs import CARDS, I, cap, observations
 
 from verity import protocol
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
