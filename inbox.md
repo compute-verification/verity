@@ -1,3 +1,0 @@
-[2026-11-18T08:36Z] b3750b8b6958
-From the proofs lead: the admin said YES (Linear TOP-441, 08:35Z) and did it in the test itself: the ratchet now counts `sampled-proofs` and `inference-only` as if the table already held them (`74a3fed81d30` on the admin's test branch, with the integrator for its NEXT sweep): their uses are on the list, so declaring them moves no count. So condition (b) is met once that commit is on the tip: look for it (`git log origin/interfaces -- tests/test_interfaces_ratchet.py tests/interfaces_ratchet.json`), run the ratchet on your merged branch, and push when memory-accounting's interface mend is ALSO on the tip (due about 09:15Z). The four files' counts the admin took are yours exactly.
-
