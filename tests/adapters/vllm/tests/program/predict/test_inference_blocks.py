@@ -16,7 +16,7 @@ from verity.commitments import advice as AC
 from verity.commitments.periods import interface as IF
 
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import WINDOW, _circuit, _labels, held
+from tests.program.predict.test_window_circuit import FULL, WINDOW, _circuit, _labels, held
 from tests.program.predict.test_window_circuit_fa3 import H200, LLAMA_1B
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import inference_blocks as IB
@@ -37,7 +37,7 @@ def _registered(config: dict = S.TINY):
 
 @pytest.fixture(scope="module")
 def window():
-    return _circuit(WINDOW), PROGRAM
+    return _circuit(FULL), PROGRAM
 
 
 def _slots(circuit, rs) -> dict[str, np.ndarray]:
@@ -93,6 +93,20 @@ def test_every_block_has_c_gates_and_k_fresh_input_bits(window):
     gates, fresh = _unrolled(circuit, _slots(circuit, IB.rows(circuit, program)))
     assert gates == [c, c] and fresh == [k, k] and k == 4548 * 16
     assert {r.param for r in circuit.registered.reads if r.param.split("/", 1)[0] != WEIGHTS} == {SCAN_STATE}
+
+
+def test_a_served_windows_blocks_of_their_own_positions_are_refused_by_name():
+    """A served window's blocks are a request each of its own positions (WINDOW's 5 and 4), not blocks of one gate count,
+    so the partition and the block counts' session refuse them by name rather than give a slot an equal share."""
+    from verity_vllm.program.predict import block_counts as BC
+
+    circuit = _circuit(WINDOW)
+    with pytest.raises(ValueError, match="a served window's blocks are a request each of its own positions"):
+        IB.budgets(circuit)
+    doc = {**circuit.description(), "name": circuit.name, "partition": "",
+           "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
+    with pytest.raises(ValueError, match="a served window's blocks, a request each of its own positions, have no one"):
+        BC.session(doc)
 
 
 def test_the_statement_is_the_budgets_and_padded_counts_under_a_hiding_root(window):

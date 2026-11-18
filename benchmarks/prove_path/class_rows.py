@@ -129,8 +129,8 @@ def main(argv=None) -> int:
             cls = WindowClass(*map(int, a.probe.split(",")))
             circuit = class_circuit(reg, cls, 1)
         else:
-            built, program = WC.class_program(reg, cls), WC.class_program
-            WC.class_program = lambda r, c: built if c == cls else program(r, c)
+            built, program = WC.class_program(reg, cls.positions), WC.class_program
+            WC.class_program = lambda r, n: built if n == cls.positions else program(r, n)
             circuit = class_circuit(reg, cls)
             check_provable(circuit)
     t1 = time.perf_counter()

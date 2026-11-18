@@ -109,9 +109,9 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Callable, Iterable, Iterator
 
-from verity.circuits import boolean as BL
 from verity.circuits import ports
 from verity.circuits.codec import MAX_SAFE_INT, _static_json, canonical_json, descriptor_id, jcs_domain_error
+from verity.circuits.count import gate
 from verity.circuits.defs import CompositeDefinition, BodyNode, PrimitiveDefinition, bind, recut_unread
 from verity.circuits.intervals import Intervals, contains, full, norm, ref_intervals, total
 from verity.circuits.layout import resolve
@@ -732,13 +732,10 @@ class BooleanWork:
 
     @staticmethod
     def _primitive(fn: PrimitiveDefinition) -> Work | str:
-        gk = BL.gate_kind(fn)
-        if gk is not None:
-            kind, n = gk
-            return {CUDA: (max(1, n - 1), n - 1 if kind == "and" else 0)}
-        if BL.is_constant_bit(fn) or input_id(fn.id):
-            return {}
-        return fn.id
+        g = gate(fn)
+        if g is None:
+            return fn.id
+        return {CUDA: (g.gates, g.ands)} if g.gates else {}
 
     def _composite(self, fn: Any, kids: Counter) -> Work | str:
         out: dict[str, list[int]] = {}

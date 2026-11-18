@@ -1,13 +1,14 @@
-"""I2's served window as one Circuit (`verity.commitments.periods.interface`): the window *class's* circuit, every
+"""I2's served window as one Circuit (`verity.commitments.periods.interface`): a Program a served request, every
 unit's output a committed row and every input row wired or registered.
 
-A window class (`WindowClass`, N1's scan class) has a fixed number of slots a network timestep: ``lanes`` slots at each
-boundary, one every ``every`` scan buckets from the window's start, ``slots`` in all, each of at most ``prompt`` prompt ids and
-``outputs`` outputs. Slots are lane-major: slot 2j + b at the class of record is boundary b's lane j, anchored at bucket 16b.
-Its circuit is one class Program a slot, whatever the traffic (`class_circuit`): the Build's greedy request Program at one
-prompt row and P - 1 decode steps, P = prompt + outputs - 1 positions, every position computing the whole stack, the LM head and
-the token select, position p attending to keys 0..p. So the circuit is a function of the class alone: which slots carry a
-request, arrival steps, prompt lengths, output lengths and key counts are values, never structure.
+A window class (`WindowClass`, N1's scan class) is the network attester's envelope: ``lanes`` slots at each boundary, one
+every ``every`` scan buckets from the window's start, ``slots`` in all, each of at most ``prompt`` prompt ids and ``outputs``
+outputs. Slots are lane-major: slot 2j + b at the class of record is boundary b's lane j, anchored at bucket 16b. The circuit
+is public, its size and shape included: a served window's circuit is a Program a request (`lower` with ``compiled``), the
+Build's greedy request Program at one prompt row and n - 1 decode steps, n = its prompt + outputs - 1 positions, every
+position computing the whole stack, the LM head and the token select, position p attending to keys 0..p; a lane with no
+request has no Program. The class circuit (`class_circuit`), every slot's Program at the class's P = prompt + outputs - 1
+positions, is the fixed load's, at which PoUW's tables are read (`FixedLoad`). Arrival steps are values, never structure.
 
 A slot's request comes from the network attester's scan: boundary b's Programs read the scan's state row before it
 (`scan_state.SCAN_STATE`, registered) through `boolean_io_shell.ScanSlots_v3` (`scan_state.bridge`), which gives each lane
@@ -25,11 +26,12 @@ the anchor and the egress never renders. A collector's rows and an entry's are a
 a proof block of their own, so none is a unit of its own. The state rows and the entries are the circuit's external ports.
 A slot's Program
 hands all its outputs to the scan at its anchor, which carries them across windows (`SC_GROUP`), so no Program runs into the
-next window. `window_circuit(registered, compiled, cls, grain, placed=...)` refuses a window the class's slots don't take and
+next window. `window_circuit(registered, compiled, cls, grain, placed=...)` refuses a window past the class's envelope and
 emits its circuit.
 
-`class_circuit` walks the class Program's nodes in order and lowers each to units at ``grain``, once a slot: node j's units
-of slot 0, then of slot 1 and so on, each allocation's slots side by side in its template (`window_builder`, which holds
+`lower` walks the longest Program's nodes in order and lowers each to units at ``grain``, once a slot that has it (the
+Programs longest first, each a prefix of the longest): node j's units of slot 0, then of slot 1 and so on, each
+allocation's slots side by side in its template (`window_builder`, which holds
 the units, their feeds and weight reads, and wires them). Every unit reads its writers' rows as they hold them:
 
 - `Embedding_v1{V, H}` is the registered read `EmbeddingRead_v2{V, H}` (`commitments.gates.embedding`): its ``root`` and
@@ -132,7 +134,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from itertools import product
 from typing import Any
 
 from verity.circuits.codec import descriptor_id
@@ -144,15 +145,17 @@ from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 
 from . import scan_state as SS
 from .build import Unexpressible
-from .steps import RequestUnit, request_program
+from .steps import RequestUnit, advice_of, request_program
 from .window_builder import WEIGHTS, Grain, Row, _Builder, check_provable, inference
 from .window_class import (
     CLASS_OF_RECORD,
     GREEDY,
     FixedLoad,
     PearlTables,
+    Request,
     Tables,
     WindowClass,
+    requests_of,
     takes,
 )
 from .window_cut import ROW_FORMAT, cut_values, linears
@@ -164,10 +167,10 @@ NAME = "verity-vllm/window"
 _GRAIN = Grain()
 
 
-def class_program(registered: Any, cls: WindowClass) -> Any:
-    """The class's request Program (a `build.BuildResult`): the Build's greedy request at one prompt row and
-    ``cls.positions`` - 1 decode steps, in the registered compiler's form."""
-    return request_program(registered, RequestUnit(-1, "", 1, cls.positions - 1, GREEDY, None, 0))
+def class_program(registered: Any, n: int) -> Any:
+    """The request Program of ``n`` positions (a `build.BuildResult`): the Build's greedy request at one prompt row and
+    ``n`` - 1 decode steps, in the registered compiler's form."""
+    return request_program(registered, RequestUnit(-1, "", 1, n - 1, GREEDY, None, 0))
 
 
 def stop_ids(registered: Any) -> tuple[int, ...]:
@@ -177,13 +180,15 @@ def stop_ids(registered: Any) -> tuple[int, ...]:
 
 @dataclass(frozen=True)
 class Lowered:
-    """A class circuit with what its lowering knows (`window_rows` fills its units from it): the class Program's function, each
-    slot's lowered Program (node j's output as the rows that hold it, ``outs[j]``) and each template's runs of units by their
-    (slot, step), ``(at, count, slot, step)``."""
+    """A window's circuit with what its lowering knows (`window_rows` fills its units from it): the longest Program's
+    function, each slot's lowered Program (node j's output as the rows that hold it, ``outs[j]``), each template's runs of
+    units by their (slot, step), ``(at, count, slot, step)``, and in a served window's, each slot's request's index among
+    the window's requests (`window_class.takes`), none in a class circuit's."""
     circuit: IF.Circuit
     fn: Any
     programs: tuple[_Program, ...]
     spans: dict[str, list[tuple[int, int, int, int]]]
+    requests: tuple[int, ...] | None = None
 
     @property
     def cut(self) -> frozenset[int]:
@@ -192,23 +197,31 @@ class Lowered:
 
 
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
-                  tables: FixedLoad | None = None) -> IF.Circuit:
+                  tables: FixedLoad | None = None, requests: Sequence[Request] | None = None) -> IF.Circuit:
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of the
     scan state row before its anchor (`WindowClass.anchor`), each allocation's slots side by side in its template; its blocks'
     slots are the slots. Its registered parameters are the weights (`window_builder.weight_param`) and ``SCAN_STATE``'s
     ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`), and with ``tables`` H1's
     tables (`Tables`) or Pearl+'s (`PearlTables`). A window's circuit is every slot's; ``programs`` is the first slots only, a probe's census
-    (`class_size`)."""
-    return lower(registered, cls, programs, grain, tables=tables).circuit
+    (`class_size`). With ``requests``, the served window's circuit instead (`lower`)."""
+    return lower(registered, cls, programs, grain, tables=tables, requests=requests).circuit
 
 
 def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
-          tables: FixedLoad | None = None) -> Lowered:
+          tables: FixedLoad | None = None, requests: Sequence[Request] | None = None) -> Lowered:
     """`class_circuit`'s circuit with its lowering (`Lowered`). With ``tables``,
     refused unless the class is one boundary; with H1's, unless round 0's rows (each slot's prompt) fit a table's ``m`` rows
     a call and every position has ``tables.calls`` int8 linears of K = ``tables.k``; with Pearl+'s, unless every position's
-    linears are the first's (`window_cut.linears`)."""
-    programs = cls.slots if programs is None else programs
+    linears are the first's (`window_cut.linears`). With ``requests`` (`window_class.takes`, `window_class.requests_of`),
+    the served window's circuit: a Program a request of the request's own positions, longest first, reading its lane at
+    its anchor, so it holds exactly the requests' positions; refused with ``tables`` or ``programs``, or for a window of
+    no request."""
+    if requests is not None and (tables is not None or programs is not None):
+        raise Unexpressible("a served window's circuit is every request's Program, reading no tables")
+    if requests is not None and not requests:
+        raise Unexpressible("a window of no request has no circuit")
+    order = sorted(range(len(requests)), key=lambda i: -requests[i].positions) if requests is not None else None
+    programs = len(order) if order is not None else cls.slots if programs is None else programs
     if not 1 <= programs <= cls.slots:
         raise Unexpressible(f"{programs} Programs in a window of a class of {cls.slots} slots")
     if isinstance(tables, Tables) and (len(cls.boundaries) != 1 or cls.slots * cls.prompt > tables.m):
@@ -221,14 +234,34 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     except ValueError as e:
         raise Unexpressible(f"{cls}: its slots aren't a scan state row's lanes ({e})") from None
     entry = bind(IO.SlotEntry, KO=cls.outputs, IDB=cls.scan.IDB, NP=cls.prompt, STOP=stop_ids(registered))
-    b, fn = _Builder(grain, programs), class_program(registered, cls).program.fn
-    layout = linears(fn, tables.words, grain.rows) if isinstance(tables, PearlTables) else None
-    progs = [_Program(b, fn, cls, f"class Program {k}", k, scan, entry, tables, layout) for k in range(programs)]
-    for (j, node), r in product(enumerate(fn.body.nodes), progs):
-        r.lower(j, node)
+    b = _Builder(grain, programs)
+    if order is None:
+        fn = class_program(registered, cls.positions).program.fn
+        layout = linears(fn, tables.words, grain.rows) if isinstance(tables, PearlTables) else None
+        progs = [_Program(b, fn, cls, f"class Program {k}", k, scan, entry, tables, layout) for k in range(programs)]
+        fns = [fn] * programs
+    else:
+        assert requests is not None
+        layout, built = None, {n: class_program(registered, n).program.fn for n in {r.positions for r in requests}}
+        fns = [built[requests[i].positions] for i in order]
+        fn = fns[0]
+        progs = [_Program(b, f, cls, f"request {i}'s Program", k, scan, entry, at=requests[i])
+                 for k, (i, f) in enumerate(zip(order, fns))]
+        ids = [n.fn.id for n in fn.body.nodes]
+        for i, f in zip(order, fns):
+            if [n.fn.id for n in f.body.nodes] != ids[:len(f.body.nodes)]:
+                raise Unexpressible(f"request {i}'s Program of {requests[i].positions} positions is no prefix of the "
+                                    f"longest's, {requests[order[0]].positions}")
+    ends = [len(f.body.nodes) for f in fns]
+    for j, node in enumerate(fn.body.nodes):
+        active = sum(1 for e in ends if e > j)
+        b.among, b.ending = (0, active), sum(1 for e in ends if e > j + 1)
+        for r, f in zip(progs[:active], fns):
+            r.lower(j, f.body.nodes[j])
+    b.among = b.ending = None
     for r in progs:
-        if r.position != cls.positions:
-            raise Unexpressible(f"{r.name}: {r.position} positions, not its class's {cls.positions}")
+        if r.position != r.positions:
+            raise Unexpressible(f"{r.name}: {r.position} positions, not its {r.positions}")
         if isinstance(tables, Tables) and set(r.quants) != {tables.calls}:
             raise Unexpressible(f"{r.name}: int8 linears of K = {tables.k} by position {r.quants}, not H1's {tables.calls} "
                                 "calls a round")
@@ -247,29 +280,54 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
                         tuple(openings), values=(*held, SS.SCAN_STATE),
                         formats={v: ROW_FORMAT for v in held} if layout is not None else {})
     wires = tuple(IF.coalesce(b.wires))
-    starts = {tid: [at - slot * n for at, n, slot, _step in runs] for tid, runs in b.spans.items()}
-    entry_unit = progs[0].entry_unit
-    assert entry_unit is not None, f"{progs[0].name}: no select at its last position, whose unit makes the slot's entry"
+    entry_units = {r.entry_unit[0] for r in progs if r.entry_unit is not None}
+    if len(entry_units) != 1 or any(r.entry_unit is None for r in progs):
+        raise Unexpressible(f"the Programs' entries are units of {sorted(entry_units)}, not each one of one template")
     circuit = IF.Circuit(NAME, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
-                         external=(f"{descriptor_id(scan)}/state", f"{entry_unit[0]}/o0"),
-                         wires=wires, cuts=b.cuts, registered=reg, order=IF.ordered(b.units, wires, starts) if wires else None,
-                         blocks=IF.Blocks(programs, cls.positions, tuple(inference(b.spans, programs))))
-    return Lowered(circuit, fn, tuple(progs), b.spans)
+                         external=(f"{descriptor_id(scan)}/state", f"{entry_units.pop()}/o0"),
+                         wires=wires, cuts=b.cuts, registered=reg, order=IF.ordered(b.units, wires, b.starts) if wires else None,
+                         blocks=IF.Blocks(programs, max(r.positions for r in progs), tuple(inference(b.spans, programs))))
+    return Lowered(circuit, fn, tuple(progs), b.spans, None if order is None else tuple(order))
+
+
+@dataclass(frozen=True)
+class WindowCompiler:
+    """The registered window compiler, ``compile(advice) -> C``: its one input is the advice, a bit string only it
+    interprets (its code: `steps.advice_of`), of at most ℓ = ``registered.cap_bits`` bits, refused past it by name; the
+    model (``registered``), the envelope (``cls``) and the ``grain`` are the compiler's own. C is a greedy Program a request
+    of the advice's prompt and outputs (`window_class.requests_of`, `lower`); the certified bodies and the scan state are
+    C's inputs, never the compiler's."""
+    registered: Any
+    cls: WindowClass
+    grain: Grain = _GRAIN
+
+    def lower(self, advice: bytes) -> Lowered:
+        """`__call__`'s circuit with its lowering (`Lowered`)."""
+        if type(advice) is not bytes:
+            raise Unexpressible(f"the advice is a bit string, bytes, not a {type(advice).__name__}")
+        return lower(self.registered, self.cls, None, self.grain,
+                     requests=requests_of(advice_of(self.registered, advice), self.cls))
+
+    def __call__(self, advice: bytes) -> IF.Circuit:
+        return self.lower(advice).circuit
 
 
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
                    placed: Sequence[tuple[int, int | None]] | None = None,
                    tables: FixedLoad | None = None) -> IF.Circuit:
-    """``compiled``'s window (`steps.Compiled`, of ``registered``) as ``cls``'s circuit, every slot's class Program whatever
-    its traffic, refused where the class's slots don't take the window: nothing of the window reaches the circuit.
-    ``placed`` is each request's anchor bucket and the bucket of its last output, in its request order, as the network
-    attester's scan placed it (the end None: unchecked); by default every request is at the window's first boundary, its
-    end unchecked. A last output past the window's end is the scan's to carry (module docstring). With ``tables``, H1's
-    tables read (`Tables`) or the circuit cut at its linears (`PearlTables`), refused unless the window is the fixed load."""
-    takes(compiled, cls, placed, tables)
+    """``compiled``'s window (`steps.Compiled`, of ``registered``) as its circuit, refused where it is past ``cls``'s envelope
+    (`takes`): a Program a request, each of the request's own positions (`lower`). ``placed`` is each request's anchor bucket
+    and the bucket of its last output, in its request order, as the network attester's scan placed it (the end None:
+    unchecked); by default every request is at the window's first boundary, its end unchecked. A last output past the
+    window's end is the scan's to carry (module docstring). With ``tables``, H1's tables read (`Tables`) or the circuit cut
+    at its linears (`PearlTables`), ``cls``'s class circuit, refused unless the window is the fixed load."""
+    if tables is None:
+        return class_circuit(registered, cls, None, grain, requests=takes(compiled, cls, placed))
+    takes(compiled, cls, placed)
+    tables.held(compiled, cls)
     return class_circuit(registered, cls, None, grain, tables)
 
 
-__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Row", "Tables", "WEIGHTS",
-           "WindowClass", "check_provable", "class_circuit", "class_program", "lower", "stop_ids", "takes",
-           "window_circuit"]
+__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Request", "Row", "Tables", "WEIGHTS",
+           "WindowClass", "WindowCompiler", "check_provable", "class_circuit", "class_program", "lower", "requests_of", "stop_ids",
+           "takes", "window_circuit"]

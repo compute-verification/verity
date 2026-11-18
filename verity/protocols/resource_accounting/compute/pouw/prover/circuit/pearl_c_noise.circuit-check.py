@@ -19,7 +19,8 @@ def _pearl_c_noise_roots() -> list[Any]:
     """-h3's four hashes (one SHA-512 compression each; the row seed two, each a unit of its own), a line's integer, norm
     root, scale, code and codes, and a noise line, on words and on bits: static-free, so they are catalog roots anyway, and
     here so each is checked whatever its size. A compression's word form reaches its byte primitive, and the scale and the
-    code theirs. Then a row's digest, its two block Definitions, and a row's line, the two with K small."""
+    code theirs. Then a row's digest, its two block Definitions, and a row's line, the two with K small; and each byte
+    primitive's Boolean body (`BYTE_BODIES`)."""
     from verity.circuits.defs import bind
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_c_noise as N
 
@@ -32,4 +33,4 @@ def _pearl_c_noise_roots() -> list[Any]:
             bind(N.PearlCLineCodesV2), bind(N.PearlCNoiseLineV2),
             bind(N.PearlCRowBlock), bind(N.PearlCShaBlock), bind(N.PearlCRowDigest, K=40), bind(N.PearlCRowLine, K=40),
             bind(N.PearlCRowBlockV2), bind(N.PearlCShaBlockV2), bind(N.PearlCRowDigestV2, K=40),
-            bind(N.PearlCRowLineV2, K=40)]
+            bind(N.PearlCRowLineV2, K=40), *(bind(d) for d in N.BYTE_BODIES.values())]

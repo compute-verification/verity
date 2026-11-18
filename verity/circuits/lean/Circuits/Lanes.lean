@@ -21,7 +21,8 @@ def partLanes : Part → Nat × List Lane
   | .explicit _ => (0, [])
   | .grid run lanes => (run, lanes.toList)
 
-/-- The digits of period `t` in levels `lv`, innermost first, the last unbounded. -/
+/-- The digits of period `t` in levels `lv`, innermost first, the last unbounded: `Lane.leafAt`'s, which `laneWire` reads one
+of. -/
 def laneDigits (t : Nat) : List (Nat × Int) → List Nat
   | [] => []
   | [_] => [t]
@@ -50,7 +51,7 @@ def laneWire (run : Nat) (lanes : List Lane) (k0 L len n : Nat) : Except String 
   let ln := lanes[j]!
   if ln.p || o0 + len > run || !(len == 1 || ln.e == 1) then throw "edge-rows"
   let ds := laneDigits t0 ln.lv
-  let leaf : Int := ln.b + (o0 : Int) * ln.e + ((ds.zip ln.lv).map fun (d, _, st) => (d : Int) * st).sum
+  let leaf := ln.leafAt t0 o0
   if leaf < 0 then throw "edge-rows"
   if n ≤ 1 || L == 0 then return (ln.i, leaf.toNat, [max n 1], [0])
   if L % (g * run) != 0 then
@@ -77,13 +78,11 @@ def fieldIx (t : Ty) (o : Nat) : Option Nat :=
     (if acc.2.1 ≤ o && o < acc.2.1 + ty.leaves && acc.1.isNone then some acc.2.2 else acc.1,
       acc.2.1 + ty.leaves, acc.2.2 + 1)) (none, 0, 0)).1
 
-/-- Reference `k` of the grid `(run, lanes)`: its lane's collection and its leaf. -/
+/-- Reference `k` of the grid `(run, lanes)`: its lane's collection and its leaf (`Lane.leafAt`, as `Part.get`'s grid). -/
 def partLeafAt (run : Nat) (lanes : List Lane) (k : Nat) : Option (Bool × Nat × Int) :=
   let g := lanes.length
   if run == 0 || g == 0 then none else
   let ln := lanes[k % (g * run) / run]!
-  let ds := laneDigits (k / (g * run)) ln.lv
-  some (ln.p, ln.i, ln.b + ((k % (g * run) % run : Nat) : Int) * ln.e +
-    ((ds.zip ln.lv).map fun (d, _, st) => (d : Int) * st).sum)
+  some (ln.p, ln.i, ln.leafAt (k / (g * run)) (k % run))
 
 end Flock.Program
