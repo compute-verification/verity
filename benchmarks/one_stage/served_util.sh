@@ -88,7 +88,7 @@ if [ "${1:-}" != leased ]; then
       "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") > "$SCR/predict_row.json" 2> "$SCR/predict_row.err"
     prc=$?
     [ "$prc" = 0 ] && [ -f "$PRED/predicted.json" ] \
-      || { say "PREDICT-ROW $ROW_ID refused (exit $prc): $(grep -v '^\[predict\]' "$SCR/predict_row.err" | tail -2 | cut -c1-600)"; exit 3; }
+      || { say "PREDICT-ROW $ROW_ID refused $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" failed "$prc" "$SCR/predict_row.err")"; exit 3; }
     say "PREDICT-ROW $ROW_ID into $PRED: $(cut -c1-300 "$SCR/predict_row.json")"
   fi
   if [ "$ARM" = h1 ]; then
@@ -96,7 +96,7 @@ if [ "${1:-}" != leased ]; then
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
       | sh -s -- -y --default-toolchain none > "$SCR/lean.txt" 2>&1
     (cd "$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" && lake build pouw-verifier-difftest) >> "$SCR/lean.txt" 2>&1
-    lrc=$?; say "LEAN pouw-verifier-difftest built (exit $lrc): $(tail -1 "$SCR/lean.txt" | cut -c1-200)"
+    lrc=$?; say "LEAN pouw-verifier-difftest built (exit $lrc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" said "$lrc" "$SCR/lean.txt" | cut -c1-200)"
     [ "$lrc" = 0 ] || exit 4
   fi
   if [ "${PYSPY:-0}" = 1 ] && [ ! -x "$ROOT/tools/pyspy/bin/py-spy" ]; then
@@ -133,14 +133,13 @@ export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/con
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=${VERITY_RETAIN:-host} HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,clocks.applications.graphics,power.limit,memory.used --format=csv > "$SCR/gpu.txt" 2>&1
-args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision verity_int8 --run-id "${RESEARCH_RUN_ID:-local}"
-      --window-requests "$SEQS" --max-num-seqs "$SEQS"
-      --max-num-batched-tokens "$T" --max-model-len 1088 --window-steps 1 --no-prefix-caching)
+args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --window-requests "$SEQS" --max-num-seqs "$SEQS"
+      --max-num-batched-tokens "$T" --max-model-len 1088 --window-steps 1)
 [ "$ARM" = graphs ] || [ "$ARM" = async ] || args+=(--required-manifest "$PRED/manifest.json")
 [ -n "${PROTOCOLS_CONFIG:-}" ] && args+=(--protocols-config "$PROTOCOLS_CONFIG")
 [ -n "${RELEASE_AFTER:-}" ] && args+=(--retain device --retain-device-gb "${RETAIN_DEVICE_GB:-32}" --release-after "$RELEASE_AFTER")
-commit=(--scheme rows-sha512 --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
-        --window-gb 32 --seal-hold-gb "${SEAL_HOLD_GB:-32}" --seal-warm-gb 0 --disk-floor-gb "${DISK_FLOOR_GB:-20}")
+commit=(--hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
+        --seal-hold-gb "${SEAL_HOLD_GB:-32}" --disk-floor-gb "${DISK_FLOOR_GB:-20}")
 serve=("$PY" -m verity_vllm.pipeline.cli serve-openai)
 case $ARM in
   stock) args+=(--no-commit) ;;
@@ -255,7 +254,7 @@ load "$WARM" 7 warm; say "WARM $WARM requests (exit $?)"
   --gpu-metrics-devices=cuda-visible --gpu-metrics-frequency="${GPU_HZ:-10000}" --gpu-metrics-set=gh100 > "$SCR/nsys_start.txt" 2>&1
 say "CAPTURE start (exit $?)"
 load "$N" 1 main; lrc=$?
-say "MAIN $N requests (exit $lrc): $(tail -1 "$SCR/main.log" | cut -c1-200)"
+say "MAIN $N requests (exit $lrc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" said "$lrc" "$SCR/main.log" | cut -c1-200)"
 "$NSYS" stop --session="$SESS" > "$SCR/nsys_stop.txt" 2>&1
 say "CAPTURE stop (exit $?)"
 # the server's own stop drains its seals; nsys's shutdown signals the whole tree, the spawned sealer with it
