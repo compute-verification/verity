@@ -29,6 +29,8 @@ from verity.protocols.resource_accounting.network.verifier.link_frame import DAT
 from verity.protocols.resource_accounting.network.verifier.network_attester import END
 from tests.verity.protocols.resource_accounting.network.attester import relay_runs as tws
 from verity.protocols.resource_accounting.network.prover import network_attester_zk as wz
+from verity.protocols.resource_accounting.network.attester import network_attester_serve as NS
+from verity.protocols.compose.verifier.live_challenger import auditor as G
 from benchmarks.network_traces import zk_drivers
 
 zk_drivers.install()
@@ -78,6 +80,65 @@ def run(tmp_path_factory):
 @pytest.fixture(scope="module")
 def at(run):
     return wz.attestation(run, UNITS)
+
+
+#: what no published file of a network attester run holds: a record's head (its frames' root, ``root`` there, and
+#: counts) and the attester's salt over it, a cells' registration's wiring and a line's cost
+NOT_PUBLISHED = ("head", "salt_c", "frames_root", "counts", "wiring", "cost")
+
+
+def keys_of(doc) -> set[str]:
+    if isinstance(doc, dict):
+        return set(doc) | {k for v in doc.values() for k in keys_of(v)}
+    return {k for v in doc for k in keys_of(v)} if isinstance(doc, list) else set()
+
+
+def test_the_one_publisher_publishes_the_gates_lines_and_no_head_salt_wiring_or_cost(run, tmp_path, capsys):
+    """`auditor.py publish`, the gate's publisher and every runner's, on the rehearsed run once its check accepts:
+    the deployment's public keys, the certificates and the cells' registrations, and no key or value of a head, its
+    salt, a wiring or a cost."""
+    witness = tmp_path / "run"
+    shutil.copytree(run, witness)
+    assert NS.main(["check", "--run", str(witness)]) == 0
+    capsys.readouterr()
+    assert G.main(["publish", str(witness), str(tmp_path / "out")]) == 0
+    outcome = json.loads(capsys.readouterr().out)
+    assert outcome["verdict"]["accepted"] and "unruled" not in outcome
+    out = tmp_path / "out"
+    assert sorted(p.name for p in out.iterdir()) == ["cells-certificates.jsonl", "cells-registrations.jsonl",
+                                                    "certificates.jsonl", "deployment.json"]
+    certified = [json.loads(x) for x in (witness / "certified.jsonl").read_text().splitlines()]
+    cells = [json.loads(x) for x in (witness / "cells.jsonl").read_text().splitlines()]
+    private = {c["salt_c"] for c in certified} | {c["head"]["root"] for c in certified} | \
+        {json.dumps(c["registration"]["wiring"]) for c in cells}
+    for p in out.iterdir():
+        text = p.read_text()
+        docs = [json.loads(x) for x in text.splitlines()] if p.suffix == ".jsonl" else [json.loads(text)]
+        assert not keys_of(docs) & set(NOT_PUBLISHED), p.name
+        assert not any(v.strip('"') in text for v in private), p.name
+
+
+def test_the_drivers_summary_holds_no_cost_wiring_opened_slot_or_head(run, tmp_path, monkeypatch):
+    """``prove --dry``'s ``summary.json``, which its runner keeps in the run's output: the counts, the statement's public
+    parameters and the registration's hiding root, and no cost, wiring, opened slot or head, by key or by value. The
+    stager and the staging are stood in for, at the members' own reads."""
+    monkeypatch.setattr(wz, "stager", lambda M, B, n, out: SimpleNamespace(
+        n=n, base=0, lower_s=0.0, defn=SimpleNamespace(id="toy"),
+        st=SimpleNamespace(meta={"k_log": 22, "vus_per_block": 2}, pin="0" * 16)))
+    monkeypatch.setattr(wz, "stage", lambda M, sg, at, name: {
+        "port": "p", "ands": 1, "stage_s": 0.0, "units": "0" * 16, "opens": [True, False],
+        "predicted": None if wz.MEMBERS[name][1] else f"refused: {wz.WHY[name]}"})
+    out = tmp_path / "out"
+    assert wz.main(["prove", "--dry", "--run", str(run), "--units", str(UNITS), "--out", str(out)]) == 0
+    text = (out / "summary.json").read_text()
+    summary = json.loads(text)
+    at = wz.attestation(run, UNITS)
+    assert summary["registration_root"] == at.registration["root"] and summary["units"] == UNITS
+    assert not keys_of(summary) & {*NOT_PUBLISHED, "warden_cost", "warden_costs", "registration", "connection",
+                                   "pads", "reads", "positions", "slots", "data_rows"}
+    certified = [json.loads(x) for x in (run / "certified.jsonl").read_text().splitlines()]
+    assert at.registration["wiring"] not in text and not any(c["head"]["root"] in text for c in certified)
+    assert all(m["predicted_opens"] == 1 for m in summary["members"].values())
 
 
 def test_prove_holds_the_stagers_shape_to_flocks_zk_shape_before_it_stages(run, tmp_path, monkeypatch):

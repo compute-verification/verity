@@ -56,16 +56,6 @@
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_profiler_stop"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_repo_modules"},
     {"file": "verity_vllm/commitments/vllm_v1", "kind": "package-name", "symbol": "<package>", "detail": "vllm_v1"},
-    {"file": "verity_vllm/compiler/cache_step_v3.py", "kind": "module-name", "symbol": "<module>", "detail": "cache_step_v3"},
-    {"file": "verity_vllm/compiler/compile_slice_v4.circuit-check.py", "kind": "def-name", "symbol": "<module>", "detail": "_network_compile_slice_v4_roots"},
-    {"file": "verity_vllm/compiler/compile_slice_v4.py", "kind": "module-name", "symbol": "<module>", "detail": "compile_slice_v4"},
-    {"file": "verity_vllm/compiler/compile_slice_v5.circuit-check.py", "kind": "def-name", "symbol": "<module>", "detail": "_network_compile_slice_v5_roots"},
-    {"file": "verity_vllm/compiler/compile_slice_v5.py", "kind": "module-name", "symbol": "<module>", "detail": "compile_slice_v5"},
-    {"file": "verity_vllm/compiler/compile_slice_v6.circuit-check.py", "kind": "def-name", "symbol": "<module>", "detail": "_network_compile_slice_v6_roots"},
-    {"file": "verity_vllm/compiler/compile_slice_v6.circuit-check.py", "kind": "def-name", "symbol": "<module>", "detail": "_network_page_copy_v1_roots"},
-    {"file": "verity_vllm/compiler/compile_slice_v6.circuit-check.py", "kind": "def-name", "symbol": "<module>", "detail": "_network_pool_chain_v1_roots"},
-    {"file": "verity_vllm/compiler/compile_slice_v6.py", "kind": "def-name", "symbol": "_pool_body", "detail": "v0"},
-    {"file": "verity_vllm/compiler/compile_slice_v6.py", "kind": "module-name", "symbol": "<module>", "detail": "compile_slice_v6"},
     {"file": "verity_vllm/compiler/compile_slice_v7.circuit-check.py", "kind": "def-name", "symbol": "<module>", "detail": "_network_compile_slice_v7_roots"},
     {"file": "verity_vllm/compiler/compile_slice_v7.py", "kind": "module-name", "symbol": "<module>", "detail": "compile_slice_v7"}
   ]

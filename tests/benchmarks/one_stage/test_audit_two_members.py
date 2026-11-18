@@ -56,7 +56,8 @@ import pytest
 from verity.commitments import coin_tree as CT
 from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import members as M, proofs as PF, docket as R
+from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.defs import bind
@@ -125,7 +126,7 @@ def _window(d: Path, flipped: bool = False, own: str | None = None) -> Path:
     values = {} if own is None else {own: REG.Registered.commit(program_digest(circuit.program()[0]), own,
                                                                 data[0][1].view(np.uint16).tolist(), schema=REG.SCHEMA_V2,
                                                                 window=RUN)}
-    win = IF.Window(circuit, RUN, D.parse_design(DESIGN), 4, registered=values)
+    win = IF.Window(circuit, RUN, RND.parse_design(DESIGN), 4, registered=values)
     for t, k, (x, w, sx, sw) in zip(TEMPLATES, KS, data):
         ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
         out = np.asarray(evaluate_batch(t, *ins, kernel="reference"), dtype=np.uint16)
@@ -205,7 +206,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     and says it wrote the case in the per-member form; SPOT's answer on the audit accepts with both in its public
     outputs."""
     window = _window(tmp_path / "window")
-    assert RA.verifier_window(window, RULE, None)[0].law == D.parse_design(DESIGN) and S.SamplingDesign(RULE).text == RULE
+    assert RA.verifier_window(window, RULE, None)[0].law == RND.parse_design(DESIGN) and S.SamplingDesign(RULE).text == RULE
     with pytest.raises(ValueError, match="a fixed count"):
         RA.verifier_window(window, DESIGN, None)
     rc, row, out, said = _audit(tmp_path, window, binaries, more={"FLOCK_CHALLENGER": "0"})
@@ -244,7 +245,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert not missing, missing
     case = json.loads((out / "window" / "case-v2.json").read_text())
     assert len(case["params"]["proofs"]["members"]) == 2 and "challenger" not in case["params"]
-    assert json.loads((out / "window" / "case-sampled.json").read_text())["params"]["form"] == "one-stage"
+    assert json.loads((out / "window" / "case-sampled.json").read_text())["params"]["levels"] == 1
 
 
 def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case(tmp_path, binaries):

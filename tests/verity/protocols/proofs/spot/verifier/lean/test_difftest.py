@@ -3607,7 +3607,7 @@ SAMPLE_INPUTS = st.one_of(
               SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd"]) | JSON))
 DRAW = D.Port(PIECES, "draw", draw, SAMPLE_INPUTS, package=PACKAGE)
 RAN_OUT = D.Port(PIECES, "ran_out", ran_out, SAMPLE_INPUTS, package=PACKAGE)
-#: Sampling design texts `draw.parse_design` or `draw.parse_rate` refuses or reads oddly: digits of other scripts, signs, spaces, a
+#: Sampling design texts `randomness.parse_design` or `randomness.parse_rate` refuses or reads oddly: digits of other scripts, signs, spaces, a
 #: second separator, leading zeros, a missing or zero argument.
 ODD_SAMPLING_DESIGN_TEXTS = ["subset:", "subset", "", "subset:\u0663", "work:\u00b2", "stratified:\uff11", "bernoulli:1/\u0662",
                  "bernoulli:\u00b9/2", "bernoulli:01/04", "bernoulli:0/0", "bernoulli:3/2", "bernoulli:1", "bernoulli:1/2/3",
@@ -7059,8 +7059,9 @@ def test_an_output_reuse_takes_a_pearl_plus_domain_verbatim(pieces):
 
     for name, binding, nonce in (("pearl-a/0/0", PA.activation_binding(salt, u), u),
                                  ("pearl-y/0/0", tagged(PEARL_Y_ROWS, salt, u), (1 << 61) + u)):
-        tree = PA.commit_rows(binding, u, [b"".join(w.to_bytes(4, "little") for w in r) for r in s._rows("T", 2)[0]],
-                              PA.HM96, salt_key=bytes(range(32)), nonce=nonce)
+        rows = [b"".join(w.to_bytes(4, "little") for w in r) for r in s._rows("T", 2)[0]]
+        tree = PA.commit_rows(binding, u, rows, PA.HM96, salts=[hashlib.shake_256(f"salt {nonce} {i}".encode()).digest(PA.HM96_SALT)
+                                                                for i in range(len(rows))])
         theirs = {**mine, "value": name, "root": tree.commitment.root.hex(), "domain": tree.domain.domain_id.hex()}
         assert theirs["domain"] != mine["domain"]
 

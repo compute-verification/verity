@@ -25,6 +25,7 @@ from verity_vllm.definitions.registry import cuda_rmsnorm_split as NS
 from verity_vllm.definitions.registry import dsa_norm as DN
 from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.definitions.registry import tp_allreduce_split as TS
+from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
@@ -165,7 +166,7 @@ def test_the_sum_of_squares_then_the_apply_blocks_compute_the_row_s_outputs(serv
     assert sum(m.n for m in blocks) == 2 * nh
     k = next(k for k, (src, _g) in enumerate(ST.PARTS[family][-1][1]) if src == "mid")
     for m in blocks:
-        assert m.wired == ((f"in{k}", "o0", tuple((m.base + i - 2) // nh for i in range(m.n))),)
+        assert CH.writer_units(ms, m) == ((f"in{k}", "o0", tuple((m.base + i - 2) // nh for i in range(m.n))),)
     got = SRW.read_all(ms, rows, x["store"], None)
     scales = []
     for m, (g, _e) in zip(ms, got):
@@ -174,7 +175,7 @@ def test_the_sum_of_squares_then_the_apply_blocks_compute_the_row_s_outputs(serv
             assert ev(sumsq(False), words(g["rows"], m.rows, ts.packed[:len(m.rows)])).tolist() == scale.tolist()
             scales.append(g["outs"][m.outs[0][0]][0])
         else:
-            for port, out, writers in m.wired:
+            for port, out, writers in CH.writer_units(ms, m):
                 assert all(g["rows"][port][i].tobytes() == scales[u].tobytes() for i, u in enumerate(writers))
             outs = np.concatenate([g["outs"][p] for p, _w in m.outs], axis=1)
             assert ev(apply(False), words(g["rows"], m.rows, ta.packed[:len(m.rows)])).astype(np.uint16).tolist() == outs.tolist()

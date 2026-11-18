@@ -287,8 +287,6 @@ class Arm:
     attester: bool = False
     #: what of a served deployment the arm leaves off, in words (`parts_of`)
     off: tuple[str, ...] = ()
-    #: the tick rule's catch-up forms that only a measurement may take (`tick_rule`) and that this arm measures
-    catch_ups: tuple[str, ...] = ()
     #: the application's component the arm serves and the settings it serves it at, as ``--feature`` names them
     #: (`feature_of`): what a profile's job finds the arm by
     feature: Feature | None = None
@@ -375,8 +373,7 @@ ARMS = {
     "prod-tick": Arm("prod", "+ admission on the certified tick, its releases and watermark from a stand-in release "
                      "front on the node: prod-all-on's tick with nothing recorded and no edge, its client sending each user's seed as "
                      "prod-all-on's does", plugin=("idle_reset",), published=True, tick=True, seeds=True, off=("the network attester's egress pacing", "useful-work kernels",
-                                                     "commitment of values", "the record", "the edge snapshot"),
-                     catch_ups=("open",)),
+                                                     "commitment of values", "the record", "the edge snapshot")),
     "prod-all-on": Arm("prod-record", "+ admission on the certified tick, its releases and watermark from a stand-in "
                        "release front on the node (`release_front`: admission real, no answer paced), and the edge "
                        "snapshot every --edges-every-s seconds as a server would take it, every rank's KV cache hashed "
@@ -388,8 +385,9 @@ ARMS = {
                               plugin=("record", "ids"), env={**TOPK_ENV, "VERITY_DSA_TOPK": "canonical-bisect"},
                               general=TOPK, published=True),
 }
-#: Pearl+ on every linear block inside vLLM's own server, eager, as its scheme requests
-PEARL_PLUS = Feature("pearl-plus", (("tie-uniform", False),))
+#: Pearl+ on every linear block inside vLLM's own server, eager, as its scheme requests; at its declared settings'
+#: defaults, which `feature` fills through the component's own check
+PEARL_PLUS = Feature("pearl-plus")
 ARMS["pearl-plus"] = Arm("compiled", "+ Pearl+ on every linear block, turned on by name inside vLLM's own server, eager",
                          ("--enforce-eager",), schemes=("pearl-plus",), feature=PEARL_PLUS)
 ARMS["prod-pearl-plus"] = replace(ARMS["pearl-plus"], parent="prod", published=True)
@@ -881,8 +879,8 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
 
 
 #: what the job states for each scheme an arm turns on by name, beyond its declared settings' defaults: Pearl+'s kernel
-#: directory and the auditor device's challenger with the session its gate reserved
-SCHEME_NEEDS = {"pearl-plus": ("kernel", "challenger", "session")}
+#: directory and the auditor device's challenger (the session that goes with it is Pearl+'s own check's)
+SCHEME_NEEDS = {"pearl-plus": ("kernel", "challenger")}
 
 
 def scheme_config(arm: Arm, given: dict | None) -> dict:
@@ -904,6 +902,32 @@ def scheme_config(arm: Arm, given: dict | None) -> dict:
         return {"gate": given["gate"], **{n: settings(schemes.get(n), given[n]) for n in arm.schemes}}
     except ValueError as e:
         raise SystemExit(f"--scheme-settings: {e}") from None
+
+
+def lifetime_settings(given: dict | list | None, lifetime: int | None) -> dict | None:
+    """The job's ``--scheme-settings`` for server lifetime ``lifetime`` (``--lifetime``, 1 when None): an object is
+    every lifetime's, a list holds one object a lifetime, in order, since a reserved session opens once (the gate
+    refuses a second open of a reserve) and each lifetime's server opens its own."""
+    if not isinstance(given, list):
+        return given
+    k = lifetime or 1
+    if not 1 <= k <= len(given) or not isinstance(given[k - 1], dict):
+        raise SystemExit(f"--scheme-settings: a list holds one object a server lifetime, and it has {len(given)}, "
+                         f"not one for lifetime {k}")
+    return given[k - 1]
+
+
+def check_scheme_settings(arm: str, given: dict | list | None, lifetimes: int) -> None:
+    """Refuses, before any GPU is held, the job's ``--scheme-settings`` where arm ``arm``'s schemes would refuse them
+    at a server lifetime's start (`scheme_config`), or where two of its ``lifetimes`` would open one reserved session."""
+    if not ARMS[arm].schemes:
+        return
+    each = [scheme_config(ARMS[arm], lifetime_settings(given, k)) for k in range(1, lifetimes + 1)]
+    sessions = [json.dumps(c[n].get("session"), sort_keys=True) for c in each for n in ARMS[arm].schemes
+                if c[n].get("session")]
+    if len(set(sessions)) < len(sessions):
+        raise SystemExit(f"--scheme-settings: arm {arm} is served in {lifetimes} server lifetimes and a reserved session "
+                         "opens once: give a list of one object a lifetime, each with its own reserved session")
 
 
 def tick_feed(d: Path) -> Path:
@@ -1954,17 +1978,12 @@ def private_dir(a: argparse.Namespace) -> Path:
     return private
 
 
-def tick_rule(name: str, text: str) -> dict:
-    """``--tick-rule``'s JSON for arm ``name``, with ``arm`` set where its catch-up is one only a measurement takes
-    (``open``: the gate open from the start, which orders nothing). Refused where the arm doesn't name it
-    (`Arm.catch_ups`)."""
+def tick_rule(text: str) -> dict:
+    """``--tick-rule``'s JSON, the rule's token term ``{"token_ns": N}`` and nothing else."""
     rule = json.loads(text)
-    if rule.get("catch_up") != "open":
-        return rule
-    if "open" not in ARMS[name].catch_ups:
-        raise SystemExit(f"arm {name}: catch_up 'open' opens the tick's gate, which then orders nothing, and only an arm "
-                         "that names it in Arm.catch_ups measures it")
-    return rule | {"arm": name}
+    if not isinstance(rule, dict) or set(rule) - {"token_ns"}:
+        raise SystemExit(f"--tick-rule: the rule's token term, {{\"token_ns\": N}}, and nothing else, not {text}")
+    return rule
 
 
 def corpus_only(arm: Arm) -> str | None:
@@ -2026,7 +2045,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
         print(f"[serve-tax] plan: {len(plan)} requests in {time.monotonic() - t:.1f} s", flush=True)
     tick = tick_args(a.tick_from, a.tick_ms) if arm.tick else None
     if tick and a.tick_rule:
-        tick["rule"] = tick_rule(a.arm, a.tick_rule)
+        tick["rule"] = tick_rule(a.tick_rule)
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     site = plugin_site(out / ".site", arm)
@@ -2040,7 +2059,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     edges = edge_config(arm, model, a, rates, load_tag(next(iter(passes)), 1, True) if bench else None)
     try:
         env = server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, edges, a.boundary_rows, model.check, private,
-                         front, getattr(a, "scheme_settings", None))
+                         front, lifetime_settings(getattr(a, "scheme_settings", None), a.lifetime))
         check_plugins(env, arm)
     except SystemExit:
         shutil.rmtree(out / ".site", ignore_errors=True)
@@ -2191,10 +2210,8 @@ def tick_counts(recs: list[dict]) -> dict:
     by = {}
     for k in sorted(held):
         by[str(k)] = by.get(str(k), 0) + 1
-    bits = sum(r["bits"] for r in recs if r.get("event") == "catch_up")
     return {"admitted": len(held), "deferred": sum(k > 0 for k in held), "held_steps": by,
-            "admitting_steps": sum("admitted" in r for r in recs), "events": events,
-            **({"catch_up_bits": round(bits, 1)} if bits else {})}
+            "admitting_steps": sum("admitted" in r for r in recs), "events": events}
 
 
 def topk_calls(d: Path | None) -> dict[str, int]:
@@ -4565,7 +4582,8 @@ def profile_run(a: argparse.Namespace) -> dict:
             "args": ["--no-enable-prefix-caching"] if "prefix-cache-off" in ours else []}
 
 
-def profile_plan(profile: str, model_id: str, words: Sequence[str] | None, find_load: bool) -> dict[str, str]:
+def profile_plan(profile: str, model_id: str, words: Sequence[str] | None, find_load: bool,
+                 scheme_settings: dict | list | None = None) -> dict[str, str]:
     """What run.sh serves for ``--profile``, as its variables: ``--find-load``, stock alone over the profile's
     ladder (`profiles.rungs`) in one lifetime of `FIND_REPS` reps;
     ``--feature NAME [KEY=VALUE ...]``, stock and the arm that serves that component at those settings (`feature`) at
@@ -4593,6 +4611,12 @@ def profile_plan(profile: str, model_id: str, words: Sequence[str] | None, find_
     refused = refusals(arm)
     changes = sorted({r["change"] for r in refused if r["change"]}, key=list(OURS_CHANGES).index)
     can = all(r["change"] for r in refused)
+    if can and ARMS[arm].schemes and (tp := tp_size(MODELS[model_id])) > 1:
+        raise NotImplementedError(f"vllm/scheme-on-in-vllm-server: arm {arm} turns {', '.join(ARMS[arm].schemes)} on "
+                                  f"inside vLLM's server, which vllm's scheme plugin does on one GPU, and {model_id} "
+                                  f"serves on {tp} (--tensor-parallel-size {tp})")
+    if can:
+        check_scheme_settings(arm, scheme_settings, FEATURE_LIFETIMES)
     return plan | {"ARMS": f"{stock} {arm}" if can else "", "LOADS": f"{load}={point}", "REPS": str(FEATURE_REPS),
                    "LIFETIMES": str(FEATURE_LIFETIMES), "OURS": ",".join(changes) if can else ""}
 
@@ -4970,9 +4994,10 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--scheme-settings", type=json.loads, metavar="JSON",
                    help="an arm that turns schemes on by name inside vLLM's server (pearl-plus): gate, infra's challenger "
                         "gate command, and each scheme's settings under its name (pearl-plus: kernel DIR, challenger "
-                        "HOST:PORT, session, the gate's reserve answer); ignored by the other arms")
-    r.add_argument("--tick-rule", metavar="JSON", help="the tick arms: a rule other than the registered one, "
-                   "the network attester's token_ns and catch_up")
+                        "HOST:PORT, session, the gate's reserve answer), or a list of one such object a server lifetime, "
+                        "picked by --lifetime (`lifetime_settings`); ignored by the other arms")
+    r.add_argument("--tick-rule", metavar="JSON", help="the tick arms: the rule's token term, "
+                   "{\"token_ns\": N}")
     r.add_argument("--side", choices=(SERVER, CLIENT),
                    help="an arm behind the network certifier: the side this command serves, the engine and the id "
                         "front on the node, or the network attester, its shim and vLLM's client on the network attester's host "
@@ -5072,6 +5097,9 @@ def main(argv: list[str] | None = None) -> int:
                     "(sampled-proofs levels=2), served beside stock at the profile's load by the arm of ours that serves "
                     "it (`feature`); a name no component has, or a setting it doesn't declare, is refused by name"),
     pr.add_argument("--find-load", action="store_true", help="stock alone over the ladder: where it saturates")
+    pr.add_argument("--scheme-settings", type=json.loads, metavar="JSON",
+                    help="plan: the job's --scheme-settings (run.sh: SCHEME_SETTINGS), checked for the feature's arm "
+                         "before any GPU is held (check_scheme_settings)")
     pr.add_argument("--out", type=Path, help="result: write the run's result there (the kit's report), and "
                     "find_load.json with --find-load")
     c = sub.add_parser("checkpoint", help="the model's pinned snapshot under HF_HOME")
@@ -5101,7 +5129,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if a.cmd == "profile":
         if a.step == "plan":
-            plan = profile_plan(a.profile, a.model_id, a.feature, a.find_load)
+            plan = profile_plan(a.profile, a.model_id, a.feature, a.find_load, a.scheme_settings)
             print("\n".join(f"{k}={shlex.quote(v)}" for k, v in plan.items()))
             return 0
         rc, _, text = profile_result(a.dirs, a.profile, a.model_id, a.feature, a.find_load, a.out)

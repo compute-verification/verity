@@ -7,12 +7,12 @@
 #
 #   CUDA_HOME=DIR tests/verity/protocols/resource_accounting/compute/pouw/prover/fixtures/sass_gate/zstd_entry.sh [OUT]
 #
-# Needs nvcc (CUDA_HOME/bin), cuobjdump (POUW_CUDA_BIN, else beside nvcc) and objcopy. OUT defaults to the fixture.
+# Needs nvcc (CUDA_HOME/bin), cuobjdump (beside nvcc) and objcopy. OUT defaults to the fixture.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 out=$(realpath "${1:-$here/zstd_entry.fatbin}")
 nvcc=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.3 toolkit}/bin/nvcc
-cuobjdump=${POUW_CUDA_BIN:-$(dirname "$nvcc")}/cuobjdump
+cuobjdump=$(dirname "$nvcc")/cuobjdump
 "$nvcc" --version | grep -q 'release 13\.3' || { echo "zstd_entry.sh: the fixture is CUDA 13.3's; $nvcc is $("$nvcc" --version | tail -1)" >&2; exit 2; }
 w=$(mktemp -d); trap 'rm -rf "$w"' EXIT
 mkdir "$w/size" "$w/plain"

@@ -11,8 +11,8 @@
 set -uo pipefail
 OUT=${OUT:?run under research run}
 SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-[ -x "$NVCC" ] || NVCC=$(command -v nvcc)
+NVCC=${NVCC:-$(python3 "$SRC/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "search.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+[ -x "$NVCC" ] || { echo "search.sh: no nvcc at $NVCC" >&2; exit 2; }
 CUOBJDUMP=$(dirname "$NVCC")/cuobjdump
 PROBE="$SRC/../opcode_probe/probe.py"
 ARCH=$(python3 "$PROBE" arch) || exit 2

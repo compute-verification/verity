@@ -39,9 +39,9 @@ L=$FW/cache/pc-read-gadget; mkdir -p $L || exit 1
 unset CARGO_TARGET_DIR
 { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$RG_PINNED rayon=$RAYON_NUM_THREADS slices=${SLICES:-} slice_wait_s=${SLICE_WAIT_S:-}"
   free -g | head -2; cat /proc/loadavg; } > $O/host.txt 2>&1
-python3 verity/protocols/proofs/flock/prover/pod/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $O/others_cores.txt --every 10 &
+python3 benchmarks/proof_throughput/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $O/others_cores.txt --every 10 &
 SAMPLER=$!
-python3 verity/protocols/proofs/flock/prover/pod/gemm_hill.py cores --cpus $RG_PINNED --out $O/slice_cores.tsv --every 10 &
+python3 benchmarks/proof_throughput/gemm_hill.py cores --cpus $RG_PINNED --out $O/slice_cores.tsv --every 10 &
 CORES=$!
 trap 'kill $SAMPLER $CORES 2>/dev/null; rm -rf $S' EXIT
 [ -x /usr/bin/time ] || { apt-get install -y -qq time >/dev/null 2>&1 || { apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq time >/dev/null 2>&1; }; }

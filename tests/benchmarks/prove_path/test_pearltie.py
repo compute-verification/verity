@@ -69,6 +69,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c im
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, Workload, activation_binding, commit_rows, fresh_salts, weight_binding
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
+from verity.commitments import randomness as RND
 from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
@@ -90,7 +91,7 @@ CALLS = 4
 SALT = bytes(range(100, 164))
 #: the audited window's run root
 RUN = "ab" * 64
-SAMPLING_DESIGN = D.parse_design("stratified:1")
+SAMPLING_DESIGN = RND.parse_design("stratified:1")
 PROMPT = [(7 * i + 3) % 500 for i in range(CLASS.prompt)]
 #: the flipped bit: round 1's o-projection's (call 1) A row 0, its first word's high half (the BF16 of x's first element)
 FLIP = (PEARL.a(1, 1), 0, 1)

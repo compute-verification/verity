@@ -46,7 +46,9 @@
 # refuses what the profile has on, the result is `cannot run` in the refusal's words and the job exits 1, as for an
 # arm whose run refuses it; where a change on our side alone lets the same prompts through, ARM is served with it
 # (OURS, its label in the result) as the second line, stock unchanged. The passes are planned within the model's
-# cap_minutes (BUDGET_MIN and STOP_AT, the earlier of the given and the cap).
+# cap_minutes (BUDGET_MIN and STOP_AT, the earlier of the given and the cap). An arm that turns a scheme on inside
+# vLLM's server (pearl-plus) takes SCHEME_SETTINGS, serve_tax.py run's --scheme-settings, a list of one object a server
+# lifetime under a profile (each lifetime opens its own reserved session); the plan checks it before any GPU is held.
 # PASS_PROMPTS=NAME=N,... makes a pass of load NAME send N prompts at every rung in place of the load's own, and
 # NAME=Kx K prompts for each request its rung holds in flight (serve_tax.parse_pass_prompts): for a ladder past the
 # rungs the load's own prompts can hold, and the same for every arm of a cost. SAMPLED=1 has every request sampled at
@@ -271,7 +273,7 @@ if [ -n "${PROFILE:-}" ] && [ "${1:-}" != leased ]; then
   # stock arm and the model's minutes (CAP_MIN), within which the arms' passes are planned. No arm where the feature
   # cannot run and no change on our side lets the profile through: its result is written now, and no GPU is held
   plan=$("$PY" "$here/serve_tax.py" profile plan --profile "$PROFILE" --model-id "$MODEL_ID" ${FEATURE:+--feature "${FEATURE[@]}"} \
-    ${FIND_LOAD:+--find-load}) || exit 2
+    ${FIND_LOAD:+--find-load} ${SCHEME_SETTINGS:+--scheme-settings "$SCHEME_SETTINGS"}) || exit 2
   eval "$plan"
   { [ -n "${BUDGET_MIN:-}" ] && [ "$BUDGET_MIN" -le "$CAP_MIN" ]; } || BUDGET_MIN=$CAP_MIN
   export ARMS LOADS REPS LIFETIMES OURS STOCK CAP_MIN BUDGET_MIN

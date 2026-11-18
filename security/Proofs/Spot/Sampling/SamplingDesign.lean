@@ -199,13 +199,13 @@ theorem avg_bern {num den : ℕ} [NeZero den] (h : num ≤ den) (a : ℝ≥0∞)
 `B` is the product over `B` of each unit's Bernoulli factor. -/
 theorem bernoulli_avg_prod {num den : ℕ} [NeZero den] (h : num ≤ den) (f : Fin n → ℝ≥0∞)
     (B : Finset (Fin n)) :
-    avg (fun ω : (bernoulli n num den).Ω => ∏ u ∈ B ∩ (bernoulli n num den).draw ω, f u) =
+    avg (fun ω : (Verity.SamplingDesign.bernoulli n num den).Ω => ∏ u ∈ B ∩ (Verity.SamplingDesign.bernoulli n num den).draw ω, f u) =
       ∏ u ∈ B, bernFactor num den (f u) := by
   classical
-  have key : ∀ ω : (bernoulli n num den).Ω, ∏ u ∈ B ∩ (bernoulli n num den).draw ω, f u =
+  have key : ∀ ω : (Verity.SamplingDesign.bernoulli n num den).Ω, ∏ u ∈ B ∩ (Verity.SamplingDesign.bernoulli n num den).draw ω, f u =
       ∏ u, (if u ∈ B then (if (ω u).val < num then f u else 1) else 1) := by
     intro ω
-    have hB : B ∩ (bernoulli n num den).draw ω = B.filter fun u => (ω u).val < num := by
+    have hB : B ∩ (Verity.SamplingDesign.bernoulli n num den).draw ω = B.filter fun u => (ω u).val < num := by
       ext u; simp
     rw [hB, Finset.prod_filter, Finset.prod_ite_mem, Finset.univ_inter]
   simp only [key]
@@ -225,14 +225,14 @@ theorem bernoulli_avg_prod {num den : ℕ} [NeZero den] (h : num ≤ den) (f : F
 
 /-- **The Bernoulli missProb**: `((den − num)/den)^|B|`. -/
 theorem bernoulli_escape {num den : ℕ} [NeZero den] (h : num ≤ den) (B : Finset (Fin n)) :
-    (bernoulli n num den).missProb B = bernFactor num den 0 ^ B.card := by
+    (Verity.SamplingDesign.bernoulli n num den).missProb B = bernFactor num den 0 ^ B.card := by
   classical
   rw [← Finset.prod_const, ← bernoulli_avg_prod h (fun _ => 0) B, missProb, ← avg_ite_eq_prCoin]
   refine congrArg avg (funext fun ω => ?_)
   rw [Finset.prod_const, Finset.inter_comm]
-  by_cases hd : Disjoint ((bernoulli n num den).draw ω) B
+  by_cases hd : Disjoint ((Verity.SamplingDesign.bernoulli n num den).draw ω) B
   · simp [hd, Finset.disjoint_iff_inter_eq_empty.1 hd]
-  · have : ((bernoulli n num den).draw ω ∩ B).card ≠ 0 := by
+  · have : ((Verity.SamplingDesign.bernoulli n num den).draw ω ∩ B).card ≠ 0 := by
       rw [Ne, Finset.card_eq_zero, ← Finset.disjoint_iff_inter_eq_empty]; exact hd
     simp [hd, zero_pow this]
 

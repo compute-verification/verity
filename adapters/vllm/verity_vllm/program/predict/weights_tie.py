@@ -60,8 +60,10 @@ import numpy as np
 from verity.commitments import salt_file as SF
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.periods import interface as IF
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from verity_vllm.check import weights_of_record as WR
@@ -219,7 +221,7 @@ class Tie:
     def supplied_values(self, program: str) -> dict[str, G.Registered]:
         """Each chain's supplied values committed as core's ``registered.Registered`` under ``program`` (the window's
         partition digest) at their public salts, so the committer and the verifier make the same value."""
-        return {n: G.Registered.commit(program, n, [row], G.supplied_salts(program, n, 1), schema=G.SCHEMA_V2)
+        return {n: G.Registered.commit(program, n, [row], G.supplied_salts(program, n, 1), schema=SCHEMA_HM96_SHA512_ROW_V2)
                 for c in self.chains for n, row in c.supplied().items()}
 
     def digest(self, design: dict[str, Any], cap: int) -> str:
@@ -232,7 +234,7 @@ class Tie:
     def design(self) -> dict[str, Any]:
         """The design the window registers: work over every unit, which the audit's stream samples at the rate N/N, since a
         unit left unproved breaks its chain."""
-        return D.parse_design(f"work:{self.units()}")
+        return RND.parse_design(f"work:{self.units()}")
 
     def record(self, win: IF.Window, rows: dict[str, np.ndarray], forge_digest: bool = False) -> None:
         """Record every unit into ``win``, each row unit's data its parameter's row of ``rows`` (by parameter, ``(leaves,
@@ -462,7 +464,7 @@ def main(a: CommitOptions | VerifyOptions | PinsOptions) -> int:
     x = a.x
     manifest = x.manifest or str(CHECKPOINTS)
     grain = Grain(*(int(g) for g in x.grain.split(","))) if x.grain else _GRAIN
-    registered, design = _registered(x.phi, x.default_seed), D.parse_design(x.design) if x.design else None
+    registered, design = _registered(x.phi, x.default_seed), RND.parse_design(x.design) if x.design else None
     if isinstance(a, CommitOptions):
         served = WW.record_words(registered, a.served_dir, a.served_manifest) if a.served_dir else None
         registration, t, win = commit(registered, SF.beside(a.registration_out), x.checkpoint_dir, manifest, design=design, cap=x.cap,
