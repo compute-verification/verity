@@ -1,3 +1,0 @@
-[2026-11-18T13:40Z] fb72a7f79d0b
-ONEWIRE: LAYERNAME's edges branch moved: cursor/proofs-layername-edge-units-a3e91c at 30685c2fc13 (edgesOf on an Array accumulator fece09ce218; lean's statement branch merged bb5aaabae78; Python reader 49655ba0f19). MERGE its head into yours before your next push. NOTE its finding: on that branch and the tip all three served roots STOP IN THE PARSER (Program.parse, E_REINTERPRET unchecked: references read leaf by leaf past 1,048,576 leaves), so no served root reaches the wires' check in Lean there: measure your stage costs on the SYNTHETIC of the untied class's shape, and say so.
-
