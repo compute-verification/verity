@@ -102,3 +102,12 @@ def test_each_way_to_load_a_file_is_seen():
                        ('log("ported by modules.py")', set())]:
         assert _named("x.py", line, names, loaders) == want, line
     assert _named("setup.sh", '#!/bin/sh\n# modules.py ports\npython3 "$here/siblings.py"\n', names, loaders) == {"siblings.py"}
+
+
+def test_the_finder_scripts_are_in_no_key_and_the_table_is():
+    """`finder_dates.py` and `finder_gate.py` judge a day and a change from git alone, beside the audit, so a change to
+    either reruns no audit; the finder walk's table, which every audit's `Facts.lean` walks by, is in every key."""
+    tool = set(LA.tool_files(LA.COMMON.tracked_files()))
+    assert not {f"{LA.LEAN_TOOL}finder_dates.py", f"{LA.LEAN_TOOL}finder_gate.py"} & tool
+    assert {"finder_dates.py", "finder_gate.py"} <= set(LA.NOT_READ)
+    assert {f"{LA.LEAN_TOOL}{f}" for f in ("finder-walk.json", "Facts.lean", "check.py", "lean_audit.py")} <= tool

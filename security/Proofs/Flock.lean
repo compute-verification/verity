@@ -50,6 +50,7 @@ public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.KSTable
 public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.SamplingGeneric.TwoAt
+public import Proofs.Flock.SamplingGeneric.TwoAtNontrivial
 public import Proofs.Flock.SamplingGeneric.Guarantees
 public import Proofs.Flock.SamplingGeneric.TwoOneWaitNumbers
 public import Proofs.Flock.SamplingGeneric.TwoOffClassAt

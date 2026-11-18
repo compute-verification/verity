@@ -182,7 +182,7 @@ def TwoSubprotocol (V : Vocab d α) (k : Verity.Registration.Composite) (TwoAt :
 theorem twoSubprotocol (V : Vocab d α) (k : Verity.Registration.Composite) (TwoAt : ByteArray → Prop)
     (S₂ : ByteArray → Array ByteArray → Option Live₂) : TwoSubprotocol V k TwoAt S₂ := by
   intro hKS hCov hC θ F c σ hP
-  unfold Vocab.error ResourceAccounting.condError
+  unfold Vocab.error ResourceAccounting.condError Vocab.errorBound
   beta_reduce
   split_ifs with hE
   swap

@@ -276,6 +276,8 @@ NOT_READ = {
     "axiom_probe.py": "the axiom probe of `verity lean try`, which `lean_changed.py` and the CLI load",
     "claim_ids.py": "`verity.claims`' table of each claim id's premises, written from the locks by a command of its own",
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
+    "finder_dates.py": "the `choosing` entries past their due dates, for drive to run after each landing with its clock",
+    "finder_gate.py": "drive's landing gate on the finder walk's table and the `choosing` entries, which runs `main`'s copy",
     "lean_changed.py": "the Lean fast path, which runs beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
     "modules.py": "the codemod onto Lean's module system, which the ratchet and the merge driver load",

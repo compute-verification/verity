@@ -1,0 +1,8 @@
+name = "finders"
+defaultTargets = ["Finders"]
+
+[leanOptions]
+autoImplicit = false
+
+[[lean_lib]]
+name = "Finders"

@@ -1,0 +1,19 @@
+{
+  "what": "The finder walk's table (Facts.lean's finderFacts, check.py's choosing): each collision premise or event with the positions of its finder arguments (heads); the constructors of which the walk reads only the finder's output fields (fields); the constants it refuses by name, a finding at each (refuse); those it passes by name, going on into their arguments (pass); and, beside the structures of the fields rows, the types a finder argument may have (types: a game, its strategy, and the Option of a pair an output map returns). Every name is Lean's and every position a finder's, or the check fails (choosing.table). finder_gate.py holds it to only refusing more.",
+  "heads": {
+    "Claims.ExpectedCR": [1],
+    "Claims.Finder.Pr": [1],
+    "Claims.StrictBirthday": [1],
+    "FlockSoundness.Assumptions.SHA512CRExpected": [3, 4, 5],
+    "FlockSoundness.Assumptions.SHA512CRStrict": [3, 4, 5],
+    "FlockSoundness.StrictCR.FindsColl": [3, 4, 5],
+    "Hash.Assumptions.LmsUnforgeable": [4]
+  },
+  "fields": {
+    "Claims.Finder.mk": ["out"],
+    "Hash.Assumptions.LmsForger.mk": ["key", "out"]
+  },
+  "refuse": ["Classical.choice", "Encodable.choose", "Nat.find"],
+  "pass": ["Classical.propDecidable", "Lean.Loop.forIn", "Multiset.toList", "WellFounded.extrinsicFix"],
+  "types": ["Option", "Verity.Game", "Verity.Game.Strategy"]
+}

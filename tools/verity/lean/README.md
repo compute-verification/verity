@@ -193,6 +193,27 @@ keeps or drops from and never adds to.
   (`trust-list.json`), which `tests/test_trust_list.py` holds every deployed guarantee to, outside its gap; a
   definition still by choice that its record's `premises.choosing` names (the lock's `choosing`) is one of its open
   premises.
+- `choosing`: {definition: {`owner`, `issue`, `due`}}, the definitions a collision finder picks its pair by choice
+  through, which only a person adds to (`choosing_failures`). `Facts.lean`'s walk (`finderFacts`) follows each finder a
+  statement hands a collision premise into the definitions it unfolds to, reading values only, by the table
+  `finder-walk.json`: the premises with their finder arguments (`heads`), the constructors of which it reads some fields
+  (`fields`), the constants it refuses (`refuse`) and passes (`pass`) by name, and the types a finder argument may have
+  beside the `fields` rows' structures (`types`). A guarantee's record lists what its finders reach under
+  `premises.choosing`, a record difference when it changes. A definition the section doesn't list fails
+  (`choosing.unlisted`: restate it as a search of data the finder holds, or soundness lists it); an entry no finder
+  reaches fails until `--update` or the records run drops it (`choosing.passed`); a malformed entry, a walk that hit its
+  bound, or a table Lean doesn't match (a name no constant of the environment, a position no argument of a finder type)
+  always fails, under `--update` too, and drops no entry (`choosing.form`, `choosing.unfinished`, `choosing.table`).
+  `--update --moved` carries an entry to its new name only when the definition is the one the lock's `reads` records
+  under its new name or its old one, as the review compares definitions (`carried_choosing`); otherwise the new name is
+  `choosing.unlisted`. A
+  deployed guarantee's gap holds `choice:<head>` for each premise under which it, or a guarantee it cites, hands a
+  finder reaching a listed definition. Two scripts read git alone: `finder_gate.py MAIN HEAD --json`, a landing gate
+  in drive (`tools/check/drive.toml`), refuses a change that refuses less or lists more against its merge base
+  with `MAIN` (a `pass` or `types` row added; a `refuse` row, head or position dropped; a `fields` row added or
+  narrowed; an entry added; a `due` moved later); and `finder_dates.py --now ISO --json` lists the entries past their
+  `due` at drive's clock, the form for drive to run after each landing, where they ring their owner and lean and hold
+  nothing (drive does not run it yet).
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside (`record_scope`).
 - `escapes`: every declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`,
@@ -203,7 +224,15 @@ keeps or drops from and never adds to.
   `claims.witnesses`, a reason under `claims.not`, or its guarantee under `claims.generic` (`claim_failures`).
 - `witnesses`, `unwitnessed`, `witnesses_assumed`: a guarantee of an acceptance or an exclusion has `honest` and
   `nontrivial` witnesses, or an `unwitnessed` entry, which only shrinks (`witness_failures`, `witness_scope`,
-  `assumed_failures`).
+  `assumed_failures`). Where an honest witness is bounded by the vocabulary's published error (a direct use of
+  `Vocab.error` or `Vocab.delta`), each target (its vocabulary, parameters, files and commitments, and subprotocol,
+  `Facts.lean`'s `targets`) has a lemma under the entry's `below_one` concluding `Verity.Vocab.ErrorBelowOne` of
+  `Properties.Verity.Game` there, the bound below 1 at the honest strategy, or is listed in an `unwitnessed` entry
+  {type_hash, missing: below_one, targets, owner, why}: a bound of 1 or more holds of every prover (`error_failures`,
+  refused as `witnesses.honest-error`). The lemma binds the witness's own parameters and vocabulary by `∀` or names
+  them, and may choose the files and commitments by `∃` only where the witness binds them. The walk unfolds only a
+  part naming a constant of a module that declares or imports the error's; one that runs out of depth or budget or
+  raises is `witnesses.targets-unread`, and `--update` keeps the entry whole.
 - `compile_time`: the modules that must run code while they compile, one by one, each with its `why` and the `digest`
   of its file as it was reviewed (`listings`, `scans`). None may declare a guarantee or a definition a guarantee reads,
   so a proof-only tactic belongs in a module of its own. The package has a `lakefile.toml`, not a `lakefile.lean`.

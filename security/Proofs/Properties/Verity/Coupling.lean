@@ -631,7 +631,7 @@ the run's (its verdict accepting while its claim fails, which `PeriodRun.Sound` 
 within `δ`) or the rest of the event (`BreakBound`, whose forgery term `Unforgeable` bounds by `ε_forge`). -/
 theorem target_of_periods : TargetOfPeriods := by
   intro ι α _ d V acc k b h θ F c σ
-  unfold Vocab.error ResourceAccounting.condError
+  unfold Vocab.error ResourceAccounting.condError Vocab.errorBound
   split_ifs with hcr
   · classical
     obtain ⟨-, -, hcr, hun⟩ := hcr
