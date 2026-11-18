@@ -104,7 +104,7 @@ theorem execOS_escape_le_Pa (n kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype �
     (Spot.Sampling.SamplingDesign.execOS (n := n) src (.subset kd) n).missProb B ≤
       ENNReal.ofReal (d.Pa P (B.map Fin.valEmbedding)) := by
   refine (Spot.Sampling.SamplingDesign.execOS_subset_escape_le n kd hkd Lb src hA3 B).trans (le_of_eq ?_)
-  rw [Spot.Sampling.SamplingDesign.subset_escape, Pa_subset hd hP, hn,
+  rw [Verity.SamplingDesign.subset_escape, Pa_subset hd hP, hn,
     window_zero (n := n) (B := B.map Fin.valEmbedding) fun v hv => by
       obtain ⟨a, -, rfl⟩ := Finset.mem_map.1 hv
       exact a.2,
@@ -136,7 +136,7 @@ theorem execOS_miss_le_miss (n kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype �
   unfold Verity.SamplingDesign.miss
   refine iSup₂_le fun B hB => ?_
   exact (Spot.Sampling.SamplingDesign.execOS_subset_escape_le n kd hkd Lb src hA3 B).trans
-    (Spot.Sampling.SamplingDesign.escape_le_miss (Spot.Sampling.SamplingDesign.subset n kd hkd) hB)
+    (Spot.Sampling.SamplingDesign.escape_le_miss (Verity.SamplingDesign.subset n kd hkd) hB)
 
 /-- **At the deployment**: at a statement `x` that parses to `s` with a `SubsetDesign` over `n` proof blocks of one
 class, `EndToEnd`'s sampling term is at most `missAt D K₀ x`, the δ of the claims' `KSCount`. -/

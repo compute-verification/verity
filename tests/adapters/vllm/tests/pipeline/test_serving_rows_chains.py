@@ -25,6 +25,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity_flock.class_statement import UnitStager
+from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods import wiring as WI
 from verity_vllm.pipeline import chain_rows as CH
@@ -125,7 +126,7 @@ def window(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK, design: dict | None = No
     """The window of ``s``'s rows over ``tmpls`` (`members`) under ``design`` (one unit of each template by default)."""
     ms = members(s, tmpls, per_chunk)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*CS.population_program(defs, several=True), design or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
+    return CS.Binding(*IF.listed_program(defs, ()), design or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
 
 
 def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:
@@ -219,7 +220,7 @@ def test_a_chain_row_also_holds_each_key_block_as_its_scores_and_values_units():
     assert all(m.wired_trees == (CH.kind(SRW.template(m.template)) not in ("scores", "values")) for m in ms)
     got = read(s, ms, tmpls)
     ws = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
-    WI.salts(ms, ws, {m.port(q): bytes(m.n * WI.SALT_BYTES) for m in ms for q, _w in m.outs})
+    CH.check_held(ms, [g for g, _e in got])
     for m, (g, _e) in zip(ms, got):
         stager(m.template).reference_check(g["rows"], g["outs"])
     (e,) = [m for m in ms if m.template == tmpls[4]]
@@ -243,7 +244,7 @@ def test_each_later_block_and_end_is_wired_to_the_block_before_it():
             assert m.wired == (("in3", "o0", prev), ("in4", "o1", prev), ("in5", "o2", prev))
         else:
             assert m.wired == (("in0", "o1", prev), ("in1", "o2", prev))
-    WI.validate(ms)
+    CH.validate(ms)
 
 
 def test_the_units_read_the_twin_s_states_whose_end_is_the_served_row():
@@ -252,8 +253,7 @@ def test_the_units_read_the_twin_s_states_whose_end_is_the_served_row():
     s = Served(n=2)
     ms = members(s)
     got = read(s, ms)
-    words = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
-    WI.salts(ms, words, {m.port(q): bytes(m.n * WI.SALT_BYTES) for m in ms for q, _w in m.outs})
+    CH.check_held(ms, [g for g, _e in got])
     unit, S = units(ms, TMPLS, rows=2), TOY
     at = {u: key for key, u in unit.items()}
     vs = M.visits(S["T"], S["BN"])
@@ -321,7 +321,7 @@ def test_a_row_at_the_served_statics_reads_and_wires_its_32_units():
     assert ms[2].wired == tuple((f"in{g}", o, tuple(unit[(0, h, 2)] for h in range(8))) for g, o in ((0, "o1"), (1, "o2")))
     got = read(s, ms, tmpls)
     words = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
-    WI.salts(ms, words, {m.port(q): bytes(m.n * WI.SALT_BYTES) for m in ms for q, _w in m.outs})
+    CH.check_held(ms, [g for g, _e in got])
     assert words[ms[2].port("o0")].reshape(-1).tolist() == s.y.tolist()
 
 
@@ -330,7 +330,7 @@ def test_a_window_of_one_row_commits_and_its_wires_hold():
     s = Served()
     w = window(s)
     got = read(s, w.members)
-    c = CS.commit(w, [g for g, _e in got], salt_key=bytes(32))
+    c = CS.commit(w, [g for g, _e in got])
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     assert WI.check(w.members, publics) == {}
     j = next(j for j, m in enumerate(w.members) if m.template == B16 and m.n > 1)
@@ -349,7 +349,7 @@ def test_a_window_of_one_row_commits_and_its_wires_hold():
     assert list(WI.check(w.members, {**publics, m.key: bytes(body)})) == [m.key]
     bad = [dict(g, rows={**g["rows"], "in5": g["rows"]["in5"] ^ np.uint16(1)}) if i == j else g for i, (g, _e) in enumerate(got)]
     with pytest.raises(ValueError, match=re.escape(f"{m.key}: a in5 row is not the o2 row")):
-        CS.commit(w, bad, salt_key=bytes(32))
+        CS.commit(w, bad)
 
 
 def composed(t: str, d: Path) -> UnitStager:

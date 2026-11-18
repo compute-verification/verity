@@ -215,3 +215,32 @@ def test_the_import_alone_loads_no_registry_module():
                        env=dict(os.environ))
     assert r.returncode == 0, r.stderr[-4000:]
     assert json.loads(r.stdout.splitlines()[-1]) == {"loaded": [], "before": None, "after": ON_DEMAND}
+
+
+def _json_values(rng, depth: int = 0):
+    """JSON values of every kind a declaration file can hold, as `json.loads` gives them."""
+    leaves = [None, True, False, 0, -1, 10 ** 12, 2 ** 63 + 5, -0.0, 1.5, 1e-7, 1e21, 0.1 + 0.2, "", "note", "é",
+              "\u2028", "\U0001f600", "\x00\x1f\x7f", '"\\/']
+    k = rng.randrange(8 if depth < 3 else 6)
+    if k < 6:
+        return rng.choice(leaves)
+    n = rng.randrange(4)
+    if k == 6:
+        return [_json_values(rng, depth + 1) for _ in range(n)]
+    return {rng.choice(["c", "k", "n", "note", "Z", "é", "\U0001f600", "a b", ""]) + str(i): _json_values(rng, depth + 1)
+            for i in range(n)}
+
+
+def test_a_declaration_s_digest_is_its_bytes_as_compact_sorted_ascii_json():
+    import hashlib
+    import random
+
+    rng = random.Random(0)
+    docs = [{"c": 10 ** 12, "k": 10 ** 12, "n": 40, "note": "anything else the declaration holds"}, {"c": 0, "k": 0, "n": 0}]
+    docs += [{"c": rng.randrange(10 ** 15), "k": rng.randrange(10 ** 15), "n": rng.randrange(10 ** 6),
+              **{f"x{i}": _json_values(rng) for i in range(rng.randrange(6))}} for _ in range(500)]
+    for doc in docs:
+        doc = json.loads(json.dumps(doc))
+        want = json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
+        assert codec.canonical_json(doc) == want
+        assert BC.declaration(doc)[0] == hashlib.sha512(want).hexdigest()

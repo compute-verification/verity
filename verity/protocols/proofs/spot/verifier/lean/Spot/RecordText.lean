@@ -15,8 +15,8 @@ instance, no trusted input, no pin. A check of such a record is built on them, a
 names them, so that the check and the statement read one definition.
 
 * **The record's wiring** (`wiring`): the Program's templates (`templatesOf`), the text's `cuts` (`cutsOf`, none
-  where it states none) and the wires the Program's root states (`Spot.Edges.edgesOf`), with no order: the text
-  states no wire, and SPOT's check places the templates.
+  where it states none), the wires the Program's root states (`Spot.Edges.edgesOf`) and the order of the root's
+  ranges (`orderOf`): the text states no wire and no order.
 * **The templates** (`templatesOf`): the text names the Program by its SHA-512, and its `templates`, `[id, units]`
   each, are the templates of the root's nodes that are no input, each once, in the order of its first node, its
   units its nodes' members summed (`rangesAt`, `unitsOf`); a root node of a composite keyed as an input id is
@@ -585,14 +585,24 @@ def slot (P : Prog) (doc : Json) (tid : String) (u : Nat) : Option Nat :=
 def Tmpl.wired (t : Tmpl) : Spot.Wires.Template :=
   { units := t.units, rows := t.rows.map fun (p, w, o) => (p, ⟨w, o⟩), outs := t.outs }
 
-/-- **The record's wiring**: the Program's templates (`templatesOf`), the text's cuts (`cutsOf`) and the wires the
-Program's root states under the templates' ranges (`Spot.Edges.edgesOf`, whose refusal it is), with no order. -/
+/-- The root's ranges in node order as an order of units' ranges, `(template, first unit, units)` each, a template's
+units counted from 0 in its own ranges: the root is topological, so every wire it states runs forward in it. -/
+def orderOf (rs : Array Flock.TemplateQuery.TRange) : List (String × Nat × Nat) :=
+  (rs.foldl (fun (acc : List (String × Nat) × List (String × Nat × Nat)) r =>
+    let b := (acc.1.lookup r.template).getD 0
+    ((r.template, b + r.count) :: acc.1.filter (·.1 != r.template), acc.2 ++ [(r.template, b, r.count)]))
+    ([], [])).2
+
+/-- **The record's wiring**: the Program's templates (`templatesOf`), the text's cuts (`cutsOf`), the wires the
+Program's root states under the templates' ranges (`Spot.Edges.edgesOf`, whose refusal it is), and the ranges' order
+(`orderOf`). -/
 def wiring (P : Prog) (doc : Json) : Except String Spot.Wires.Wiring := do
   let ts ← templatesOf P doc
   let rs ← match Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (ts.map (·.tid)).toArray with
     | .ok rs => pure rs
     | .error _ => throw "templates"
-  let W : Spot.Wires.Wiring := { templates := ts.map fun t => (t.tid, t.wired), cuts := ← cutsOf doc, wires := [] }
+  let W : Spot.Wires.Wiring :=
+    { templates := ts.map fun t => (t.tid, t.wired), cuts := ← cutsOf doc, wires := [], order := some (orderOf rs) }
   return { W with wires := ← Spot.Edges.edgesOf P rs W }
 
 /-- **What the record's text declares a row to hold**: of the row `r`, by the Program's templates (`templatesOf`),

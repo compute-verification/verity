@@ -25,7 +25,7 @@ the failure each SHA-512 compression of the prover's buys, a guess's 2^-8r besid
 below r on one of a block's 128 sectors (`sign_rank_at_most`, exact through F2: `gf2_rank_at_most`).  `sketch_failure`
 is a session's, and `grind_compressions` what one grinding try costs.
 
-`python -m verity.protocols.resource_accounting.memory.poub.verifier.timing` prints the grid of the report, ending with what would bring
+`python -m verity.protocols.resource_accounting.memory.poub.verifier.timing FIGURES_JSON` prints the grid of the report, for a node's figures,, ending with what would bring
 λ and μ_chip under 0.05% (wider receipts, a larger store, a flush a pass).
 """
 
@@ -49,86 +49,6 @@ S = 1_000_000_000
 JITTER_DOMAIN = b"verity/remote-bandwidth/timing-jitter/v0\0"
 SECTOR_BYTES = 32
 SECTORS = BLOCK_BYTES // SECTOR_BYTES
-GPUS = 8
-"""A node's RTX PRO 6000s (8 of them, on a host of two Xeon 6776P sockets).  The prover is the whole node,
-one undifferentiated resource, so each unprefixed rate and capacity below is the node's, the
-sum over its devices; the `GPU_` and `HOST_` constants are one device's."""
-GPU_SHA512_PER_S = 7.0e9
-"""One RTX PRO 6000's SHA-512 compressions a second: block-sha512's 33 a block over 2,097,152 blocks in 9.87 ms."""
-SHA512_PER_S = GPUS * GPU_SHA512_PER_S
-"""The node's SHA-512 compressions a second, its GPUs'.  The host's cores' rate is not measured and not in it."""
-GPU_READ_BYTES_PER_S = 1.539e12
-"""One RTX PRO 6000's measured HBM read rate: the fastest bare read of an encoded store measured on it, 1,539.26 GB/s
-in an honest session's prover, rounded down.  The word codec's 1.488e12 is a slower kernel's."""
-GPU_SPEC_BYTES_PER_S = 1.597568e12
-"""The RTX PRO 6000 Server Edition's specified memory bandwidth, the card's `memory.bandwidth`: the bus's own rate, 512
-bits at two transfers a clock of the 12,481 MHz memory clock, 1,597.568 GB/s (the product page's 1,597 GB/s rounds
-it), which no measured kernel reaches."""
-HOST_READ_BYTES_PER_S = 606.8e9
-"""The host DRAM's measured read rate: 8 GPUs' pinned H2D and 56 CPU readers at once, 319.2 + 287.6 GB/s, the most any
-reader mix measured; DRAM caps the sum, not the root complex."""
-HOST_SPEC_BYTES_PER_S = 819.2e9
-"""The host DRAM's specified read bandwidth: 16 channels of DDR5-6400."""
-READ_BYTES_PER_S = GPUS * GPU_READ_BYTES_PER_S + HOST_READ_BYTES_PER_S
-"""R measured: the node's read capacity over every registered tier, its GPUs' HBM and its host DRAM, each at its
-measured rate.  A store in HBM alone reads at `GPUS · GPU_READ_BYTES_PER_S` and leaves host DRAM's share idle."""
-SPEC_BYTES_PER_S = GPUS * GPU_SPEC_BYTES_PER_S + HOST_SPEC_BYTES_PER_S
-"""R specified, the headline: every tier at its datasheet rate."""
-GPU_WRITE_BYTES_PER_S = GPU_SPEC_BYTES_PER_S
-"""One RTX PRO 6000's write ceiling, the fastest a fill can write labels into its memory: the bus's own rate,
-1,597.568 GB/s (`GPU_SPEC_BYTES_PER_S`), 4.5% above every write measured on it.  Labels
-derived on the device were written at 1,528.98 GB/s by TMA bulk stores and 1,526.48 by 16-byte evict-first stores, a
-constant at 1,521.88 by the driver's memset, and labels streamed in over its PCIe 5.0 x16 at 56.39 GB/s by the copy
-engines and 51.40 by zero copy (`calibration/bandwidth/write.cu`).  A ceiling must bound every prover, and a measured
-rate bounds only the kernels tried, so the sheet's rate stands.  A fill of codec labels
-derived from a seed is bounded lower, by the labeller: the node's `SQUARINGS_PER_S[width]` over the codec's
-`encode_squarings` a block (`audit.Rebuild`), about 1.05 GB/s a GPU under `codec.DEFAULT`."""
-HOST_WRITE_BYTES_PER_S = HOST_SPEC_BYTES_PER_S
-"""The host DRAM's write ceiling: its specified 819.2 GB/s, 16 channels of DDR5-6400, above every write measured on it.
-16 cores of one socket, all a guest got on a loaded node, wrote labels at 207.69 GB/s by non-temporal AVX-512 stores,
-88.16 by `rep stosb` and 82.35 by cached stores (`calibration/bandwidth/write_host.c`); a GPU streams labels in at
-57.25 GB/s over its link (D2H, `calibration/bandwidth/write.cu`), and 8 links at PCIe 5.0 x16's 63 GB/s are below the
-DRAM's rate.  The sheet's rate stands for `GPU_WRITE_BYTES_PER_S`'s reason, and so does its bound on derived labels.
-No DPU write ceiling is stated: no BlueField-3 fill rate is measured, only its coverage, and the datacenter model reads
-an unset rate as infinite, timing a DPU's wipe by its links."""
-GPU_CHIP_BYTES = 263_163_904
-"""One RTX PRO 6000's on-chip storage at most: 188 SMs' registers, L1 and shared memory, L1.5, instruction caches,
-uniform registers and warp state, its L2, TLB and 1 MiB of buffers (`calibration/bandwidth/chip.cu`)."""
-HOST_CHIP_BYTES = 1_000_341_504
-"""The host's on-chip storage at most, bounded for the whole host, two Xeon 6776P sockets of 64 cores each, whatever
-share of them its VM gets (the measured node's guest sees 2 × 48): each socket's 336 MiB of L3 and 2 MiB of uncore queues, and
-each core's 2 MiB of L2, 48 KiB of L1d, 64 KiB of L1i and 64 KiB of registers and buffers. The cache sizes are the
-guest's CPUID topology on that host type (its lscpu), and the 128 cores the host's
-(`calibration/rate_squaring/gamma.py`). The 64 KiB a core and 2 MiB a socket are allowances, not an enumeration: two
-threads' architectural state with AMX tiles (about 11 KiB each), the physical register files and the load, store and
-fill buffers; and the memory controllers', UPI's and PCIe's queues."""
-CHIP_BYTES = GPUS * GPU_CHIP_BYTES + HOST_CHIP_BYTES
-"""S_chip, the node's: every GPU's on-chip storage and the host's caches."""
-LINK_BURST_BYTES = 6_291_456
-"""One link burst, what the node's boundary link can land in its memory at once beyond the link's rate: its TCP
-receive buffer at most, `net.ipv4.tcp_rmem`'s max on the measured node (eth0's ring, 1,024 descriptors at a 1,500-byte MTU,
-holds less)."""
-GPU_SQUARINGS_PER_S = {"p1024": 1.67 * 1.499e10, "p512": 1.567 * 5.13e10}
-"""Assumption 5 stated per width, one RTX PRO 6000's share of the node: s·(1 + h) over the reference, s the best form
-on the GPU less its MOV and SEL and h the host's 128 cores at their IFMA bound over 8 reference GPUs.
-The reference is codec-mix's 5.13e10 at 512 bits and `kv.cu`'s 1.499e10 at 1,024.  At
-1,024 bits the best form is `kv.cu`'s FOLD 6 at ILP 1, 2.044e10 a second (1.364× the reference), so s =
-1.364 × 2463/2262 ≈ 1.485 and s·(1 + h) = 1.67 at h = 12.5%, up from `sq.cu`'s FOLD 6 and 1.597 (s = 1.42).
-A higher ceiling only raises μ_rebuild, from 0.062% to
-0.065% of the node's measured R (γ +0.003 points), so the raise is the conservative direction.  The MOV/SEL-free form
-is modeled, not built, and stays below the conservative reading, Karatsuba's own model (s = 1.68, 1.885× with the
-host)."""
-SQUARINGS_PER_S = {width: GPUS * rate for width, rate in GPU_SQUARINGS_PER_S.items()}
-"""C_sq, the node's stated squaring ceiling per width, the sum over its devices: each GPU at s times the reference and
-the host at s·h times the 8 GPUs' reference, above its IFMA bound h."""
-GPU_HBM_BYTES = 96 * 2 ** 30
-"""One RTX PRO 6000's memory, 96 GiB (the card's `store.dram`)."""
-DISK_BYTES_PER_S = 4.311e9
-"""The node's disks' measured read rate, the host card's `disk.read`: each disk's highest second under reads made to
-exhaust it, summed.  It is β of the premise `ResourceAccounting.Remote.Held.Assumptions.Disks`, not a ceiling: the disks'
-ceiling, the server's PCIe lanes, would charge more than any store.  How much of a paced line's ingress charge is its
-disks (`session.verifier.ingress_bursts`)."""
-
 
 @dataclass(frozen=True, slots=True)
 class Figures:
@@ -136,7 +56,9 @@ class Figures:
     GPU's and the host's read rates (measured and specified) and on-chip storage, one GPU's memory, SHA-512 rate and
     squaring ceiling per width, the disks' measured read rate and one link burst.  Each unprefixed property is the node's, the
     sum over its devices.  A read rate is of plain reads: the encoded store's words are never constant, so the GPU's
-    compression engine reads it no faster than plain bytes.  A write ceiling is its tier's specified rate (`GPU_WRITE_BYTES_PER_S`'s reason)."""
+    compression engine reads it no faster than plain bytes.  A write ceiling is its tier's specified rate: a ceiling
+    must bound every prover, and a measured rate bounds only the kernels tried.  A session's figures are a parameter of
+    its verifier, handed in as `to_json` writes them (`--figures`)."""
     gpus: int
     gpu_read_bytes_per_s: float
     gpu_spec_bytes_per_s: float
@@ -182,36 +104,54 @@ class Figures:
     def squarings_per_s(self) -> dict[str, float]:
         return {width: self.gpus * rate for width, rate in self.gpu_squarings_per_s.items()}
 
+    def to_json(self) -> dict:
+        return {f: dict(getattr(self, f)) if f == "gpu_squarings_per_s" else getattr(self, f) for f in FIGURES}
+
     @classmethod
-    def of_sheets(cls, node: Mapping, gpu: Mapping, host: Mapping, *, gpu_chip_bytes: int = GPU_CHIP_BYTES,
-                  gpu_sha512_per_s: float = GPU_SHA512_PER_S, gpu_squarings_per_s: Mapping[str, float] | None = None,
-                  link_burst_bytes: int = LINK_BURST_BYTES) -> Figures:
+    def of_json(cls, j: object) -> Figures:
+        """A node's figures handed in, in `to_json`'s form: exactly its keys, counts and byte sizes integers, rates
+        positive numbers."""
+        if type(j) is not dict or sorted(j) != sorted(FIGURES):
+            raise ValueError(f"a node's figures are an object of exactly {', '.join(sorted(FIGURES))}")
+        squarings = j["gpu_squarings_per_s"]
+        if type(squarings) is not dict or not all(type(w) is str for w in squarings):
+            raise ValueError("gpu_squarings_per_s maps each codec width to one GPU's squaring ceiling")
+        for k in FIGURES:
+            for v in squarings.values() if k == "gpu_squarings_per_s" else (j[k],):
+                whole = k == "gpus" or k.endswith("_bytes")
+                if type(v) is bool or type(v) not in ((int,) if whole else (int, float)) or not v > 0:
+                    raise ValueError(f"{k} is a positive {'integer' if whole else 'number'}, not {v!r}")
+        return cls(**{k: dict(squarings) if k == "gpu_squarings_per_s" else (j[k] if k == "gpus" or k.endswith("_bytes")
+                                                                             else float(j[k])) for k in FIGURES})
+
+    @classmethod
+    def of_sheets(cls, node: Mapping, gpu: Mapping, host: Mapping, *, gpu_sha512_per_s: float,
+                  gpu_squarings_per_s: Mapping[str, float], link_burst_bytes: int,
+                  gpu_chip_bytes: int | None = None) -> Figures:
         """A node's figures from its registration's data sheets, each as parsed TOML (`verity.device`'s `load_node`
-        and `load_card`): the node's `device.count`; its GPU card's `memory.read`, `memory.bandwidth` and
+        and `load_card`): the node's `device.count`; its GPU card's `memory.read`, `memory.bandwidth`, `store.chip` and
         `store.dram`; its host card's `memory.read`, `memory.bandwidth`, `store.chip` and `disk.read`.  The figures no
-        sheet states are handed in, each defaulting to this module's: one GPU's on-chip storage, SHA-512 rate and
-        squaring ceiling, and one link burst."""
+        sheet states are handed in: one GPU's SHA-512 rate and squaring ceiling per width, and one link burst; and one
+        GPU's on-chip storage where its card states no `store.chip`."""
         for part, card in (("device", gpu), ("host", host)):
             if node[part]["sku"] != card["sku"]:
                 raise ValueError(f"the node's {part} is {node[part]['sku']!r} and the card handed in is "
                                  f"{card['sku']!r}: hand in the {part} card the node names")
 
         def value(sheet: Mapping, section: str, key: str) -> int | float:
+            if key not in sheet.get(section, {}):
+                raise ValueError(f"the card {sheet['sku']} states no {section}.{key}, which a node's figures read")
             return sheet[section][key]["value"]
 
-        squarings = GPU_SQUARINGS_PER_S if gpu_squarings_per_s is None else gpu_squarings_per_s
         return cls(int(value(node, "device", "count")), float(value(gpu, "memory", "read")),
-                   float(value(gpu, "memory", "bandwidth")), gpu_chip_bytes, int(value(gpu, "store", "dram")),
-                   gpu_sha512_per_s, dict(squarings), float(value(host, "memory", "read")),
-                   float(value(host, "memory", "bandwidth")), int(value(host, "store", "chip")),
-                   float(value(host, "disk", "read")), link_burst_bytes)
+                   float(value(gpu, "memory", "bandwidth")),
+                   int(value(gpu, "store", "chip")) if gpu_chip_bytes is None else gpu_chip_bytes,
+                   int(value(gpu, "store", "dram")), gpu_sha512_per_s, dict(gpu_squarings_per_s),
+                   float(value(host, "memory", "read")), float(value(host, "memory", "bandwidth")),
+                   int(value(host, "store", "chip")), float(value(host, "disk", "read")), link_burst_bytes)
 
 
-RTX_PRO_6000_NODE = Figures(GPUS, GPU_READ_BYTES_PER_S, GPU_SPEC_BYTES_PER_S, GPU_CHIP_BYTES, GPU_HBM_BYTES,
-                            GPU_SHA512_PER_S, GPU_SQUARINGS_PER_S, HOST_READ_BYTES_PER_S, HOST_SPEC_BYTES_PER_S,
-                            HOST_CHIP_BYTES, DISK_BYTES_PER_S, LINK_BURST_BYTES)
-"""The measured node's figures, the constants above: 8 RTX PRO 6000s on a host of two Xeon 6776P sockets.  Each one a
-sheet states is the sheet's value (`Figures.of_sheets` on `rtx-pro-6000-server-x8`)."""
+FIGURES = tuple(Figures.__dataclass_fields__)
 
 
 def deadline(pass_ns: int, *, gap_ns: int = 0, down_ns: int, up_ns: int, jitter_ns: int = 0) -> int:
@@ -588,7 +528,7 @@ def _grid(fig: Figures) -> None:
     hbm_rate = fig.gpus * fig.gpu_read_bytes_per_s
     print(f"# the stated claim (§1, §10), T = {t_s} s by default, 20 s and 1 s the options: the worst window's whole γ_t "
           "over its own span at R measured and at spec, and over a 10 min horizon of W windows the pooled μ_sample and "
-          f"the whole γ, on one node of {fig.gpus} RTX PRO 6000s and their host (R = {fig.read_bytes_per_s / 1e12:.4f} TB/s "
+          f"the whole γ, on one node of {fig.gpus} GPUs and their host (R = {fig.read_bytes_per_s / 1e12:.4f} TB/s "
           f"measured, {fig.spec_bytes_per_s / 1e12:.4f} at spec, S_chip = {fig.chip_bytes:,} B), the default codec at the node's "
           f"stated ceiling, δ = 2^{math.log2(audit.DELTA):.0f} (it reads {ledger.DELTA_FORM}), g = 50 µs, "
           "J = 0.05 ms.  Over every tier, the store is GB a GPU of each GPU's HBM "
@@ -677,10 +617,14 @@ def _grid(fig: Figures) -> None:
               f"2^{log2(sketch_failure(p, rows=64)):.2f} |")
 
 
-__all__ = ["CHIP_BYTES", "DISK_BYTES_PER_S", "GPUS", "GPU_CHIP_BYTES", "GPU_HBM_BYTES", "GPU_READ_BYTES_PER_S",
-           "GPU_SHA512_PER_S", "GPU_SPEC_BYTES_PER_S", "GPU_SQUARINGS_PER_S", "GPU_WRITE_BYTES_PER_S", "HOST_CHIP_BYTES",
-           "HOST_READ_BYTES_PER_S", "HOST_SPEC_BYTES_PER_S", "HOST_WRITE_BYTES_PER_S", "LINK_BURST_BYTES",
-           "READ_BYTES_PER_S", "RTX_PRO_6000_NODE", "SPEC_BYTES_PER_S", "SQUARINGS_PER_S", "Figures", "log2"]
+__all__ = ["FIGURES", "Figures", "log2"]
 
 if __name__ == "__main__":
-    _grid(RTX_PRO_6000_NODE)
+    import json
+    import sys
+
+    if len(sys.argv) != 2:
+        sys.exit("usage: python -m verity.protocols.resource_accounting.memory.poub.verifier.timing FIGURES_JSON "
+                 "(a node's figures, `benchmarks/poub_session/sheets.py NODE` writes them)")
+    with open(sys.argv[1]) as f:
+        _grid(Figures.of_json(json.load(f)))
