@@ -480,23 +480,28 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 
 #: what a train check's shard books in its slot (`shard_ask_gib`), in GiB as a slot's mem= and book= are: the first row all of
 #: whose names the shard's parts hold (a name with a colon is that part, one without any part of that job; lean-agreement
-#: counts only where it runs), each the most such a shard's check scope held (its memory.peak) plus 15%, up to the next 10
-#: GiB, or where a row says so the memory its suites' workers need or the slice it must fit. ci.toml's plans place the
-#: parts; slot.py books the larger of this and the slot line's book= (`booked`), and no grant passes the booking (`slot_mem_gb`)
+#: counts only where it runs, and the security analysis's proofs only where the run's change meets a Lean input, since
+#: elsewhere every audit's verdict is reused and nothing replays), each the most such a shard's check scope held (its
+#: memory.peak) plus 15%, up to the next 10 GiB, or where a row says so the memory its suites' workers need or the slice it
+#: must fit. Every other row is at most 230, so that three shards fit a 755 GB machine's check slice and its third slot opens:
+#: only a Lean step's floor (`tools/verity/lean/reserve.json`) books more, and only where that step runs. ci.toml's plans
+#: place the parts; slot.py books the larger of this and the slot line's book= (`booked`), and no grant passes the booking
+#: (`slot_mem_gb`)
 SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
     # the agreement beside lean-build, Flock suite: 406 + 13%, not 15%, so that it fits vy-nebius-cpu-8's 468 GiB user slice,
     # whose train line takes such shards and, placed there by the train minimum, a larger ask would never start
     (("lean-agreement",), 460),
-    (("lean-audit:security/Proofs",), 330),                      # security/Proofs replayed beside pytest, suites: 282 + 15%
-    # circuit-check granted the slot once alone: 292 + 15%; beside it, what `cc_mem_gb` leaves lean-suites holds vLLM's two
-    # thirds and the rest of lean-suites (105 + 15%)
-    (("circuit-check",), 340),
-    # ci.toml's groups of lean-suites where no row above holds them: twice (`groups` gives lean-suites half the slot) what the
-    # group's parts held running alone, + 15%, which their workers fit at their worker_gb
-    (("lean-suites:verity-flock:1/6",), 290),                    # beside pytest, Flock's first two sixths, vLLM's first third: 124
-    (("lean-suites:verity-flock:3/6",), 270),                    # beside lean-build, Flock's other four sixths: 115
-    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 250),   # beside the Rust build, vLLM's other two thirds: 105
-    (("pytest", "lean-suites"), 240),                            # pytest whole beside the parallel suites: 208 + 15%
+    # security/Proofs replayed beside pytest, suites: 282 + 15%, over the replay's floor (`reserve.json`'s REPLAY_ARKLIB_GIB)
+    (("lean-audit:security/Proofs",), 330),
+    # circuit-check, off the merge gate, runs in what `cc_mem_gb` leaves beside the rest and is granted the slot once alone
+    # (`grant_when_alone`), so it books no more than the cap
+    (("circuit-check",), 230),
+    # ci.toml's groups of lean-suites where no row above holds them, at the cap: their workers fit what `groups` gives
+    # lean-suites at their worker_gb
+    (("lean-suites:verity-flock:1/6",), 230),                    # beside pytest, Flock's first two sixths, vLLM's first third
+    (("lean-suites:verity-flock:3/6",), 230),                    # beside lean-build, Flock's other four sixths
+    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 230),   # beside the Rust build, vLLM's other two thirds
+    (("pytest", "lean-suites"), 230),                            # pytest whole beside the parallel suites
     (("lean-build", "lean-audit"), 130),                         # lean-build, the rest of the audit, Flock suite: 110 + 15%
     (("lean-build",), 130),                                      # lean-build and the Flock suite alone: 110 + 15%
     (("pytest",), 160),                                          # pytest's other suites alone: 134 + 15%
@@ -504,13 +509,13 @@ SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
 )
 
 
-def shard_ask_gib(parts: list[str] | None, need: list[str]) -> int | None:
+def shard_ask_gib(parts: list[str] | None, need: list[str], lean: bool = True) -> int | None:
     """The GiB a train check's shard of ``parts`` books (`SHARD_ASKS_GIB`), lean-agreement counting only when ``need`` (the
-    steps the run is sent what they need for) holds it; None for a whole check or a shard no row covers, where the slot
-    line's book= stands."""
+    steps the run is sent what they need for) holds it, and security/Proofs' audit only with ``lean`` (the run's change meets
+    a Lean input); None for a whole check or a shard no row covers, where the slot line's book= stands."""
     if parts is None:
         return None
-    held = {p for p in parts if p != "lean-agreement" or p in need}
+    held = {p for p in parts if (p != "lean-agreement" or p in need) and (p != "lean-audit:security/Proofs" or lean)}
     held |= {p.partition(":")[0] for p in held}
     return next((gib for names, gib in SHARD_ASKS_GIB if all(n in held for n in names)), None)
 
@@ -1467,7 +1472,14 @@ def record(argv: list[str]) -> int:
     if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
         need = [s for s in need if parts is not None and s in parts]
     min_mem = train_gb(priority, pool, parts, combining)
-    ask = shard_ask_gib(parts, need) if min_mem else None
+    lean = True
+    if min_mem and parts is not None and (files := tracked_files(ROOT)) is not None:
+        from research.queue import QueueError
+        from research.vqueue import meets
+        from research.vqueue_slim import lean_inputs
+        with contextlib.suppress(QueueError):
+            lean = meets(changed, lean_inputs([*files, *changed]))
+    ask = shard_ask_gib(parts, need, lean) if min_mem else None
     pair, both, after = None, [], 0
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
@@ -2193,9 +2205,11 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     slot_gb = slot_mem_gb()
     with_cc = only is None or "circuit-check" in names
     # pytest and lean-suites run at once, each with this share: what circuit-check beside them both leaves, halved; beside
-    # circuit-check alone the other half is circuit-check's (`cc_mem_gb`), and alone in the slot pytest has all of it
+    # circuit-check alone the other half is circuit-check's (`cc_mem_gb`), and alone in the slot pytest has all of it, as
+    # lean-suites has all that circuit-check leaves in a shard without pytest, the audit or the agreement
+    alone = only is not None and "lean-suites" in names and not names & {"pytest", "lean-audit", "lean-agreement"}
     tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // (
-        2 if with_lean or with_cc else 1)
+        2 if (with_lean or with_cc) and not alone else 1)
     # the commit the run was sent as its suites' lender (`LEND_FILE`): each suite step leaves out what its check answers for
     lend = out / "inputs" / LEND_FILE
     # the run's base (`BASE_FILE`), where the verified queue reads the allowances: the tests they name run as expected failures

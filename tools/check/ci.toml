@@ -127,7 +127,8 @@ group = 7
 # audit and two with the Rust build; and benchmarks/one_stage's seven, the part holding its longest test beside the audit and
 # the rest (`lean-suites:*`) with the Rust build. A shard runs the parts of one suite it holds as one run
 # (`check.suite_args`), on as many xdist workers as its lane's memory holds (`suites.py`'s `wide_workers`) less what each
-# one-process suite beside it reserves, and `check.SHARD_ASKS_GIB` books each group what its parts held at their peak. Beside
+# one-process suite beside it reserves, and `check.SHARD_ASKS_GIB` books each group what its parts held at their peak, at
+# most 230 GiB so that three shards fit a machine. Beside
 # the audit go too the core evaluation's and the protocols' check suites, and beside lean-build vstar_cli's. Beside the rest
 # circuit-check has only what `SIBLINGS_GB` leaves it until they end (`check.cc_mem_gb`, `grant_when_alone`), so the longer
 # they run, the longer a cold circuit-check, and its shard's slot holds them back; the 5-pod plan gives it a shard of its own.

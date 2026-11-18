@@ -2012,7 +2012,7 @@ def test_two_ordinary_shards_run_in_the_shares_of_one_slot_and_the_heavy_part_ke
     check = _check()
     heavy, flock, build = (check.shard_ask_gib(p, []) for p in (["pytest", "lean-audit:security/Proofs"],
                                                                ["pytest", "lean-suites:verity-flock:1/6"], ["lean-build"]))
-    assert (heavy, flock, build) == (330, 290, 130)
+    assert (heavy, flock, build) == (330, 230, 130)
     (tmp_path / "slots").write_text("c 0-95 only=trains mem=300 share=150 scope=1\nc2 0-95 only=trains mem=300 share=150 scope=1\n"
                                     "t 96-191 only=trains mem=300 book=200 scope=1\n")
     ran = _shard(monkeypatch, tmp_path, [1000])

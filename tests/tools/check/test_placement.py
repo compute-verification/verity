@@ -12,6 +12,7 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 import pytest
+from research import vqueue
 
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location("repo_check_placement", ROOT / "tools" / "check" / "check.py")
@@ -196,8 +197,10 @@ def test_a_slice_that_can_t_be_read_skips_only_a_shard_with_an_ask_and_no_limit_
 
 
 def test_record_places_a_shard_by_the_ask_it_books_and_refuses_where_none_holds_it(monkeypatch, capsys):
-    """`record` works out the shard's ask before it places it, and books what it placed by: the reused audit's shard (330 GiB)
-    skips the free 234 GiB machine listed first, and asks 330 there; a whole train check takes the small one, as before."""
+    """`record` works out the shard's ask before it places it, and books what it placed by: the audit's shard of a change that
+    meets a Lean input (330 GiB) skips the free 234 GiB machine listed first, and asks 330 there; a whole train check takes
+    the small one, as before."""
+    monkeypatch.setattr(vqueue, "meets", lambda files, inputs: True)
     docs = {SMALL: sliced(234), BIG: sliced(468)}
     monkeypatch.setattr(CHECK, "read_slots", lambda names: json.loads(json.dumps({n: docs[n] for n in names})))
     monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
