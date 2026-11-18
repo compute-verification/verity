@@ -105,18 +105,23 @@ def lift (P : Prog) (start : Array Nat) (boolean : Std.HashMap String String) : 
     else break
   return out.qsort (·.1 < ·.1)
 
-/-- **The front of block `units`'s circuit** (the module docstring), the units in any order and each once. -/
-def front (P : Prog) (units : Array Nat) (boolean : Std.HashMap String String) : V Front := do
+/-- The units' root nodes, members and activations, in the order given, and S. -/
+def members (P : Prog) (units : Array Nat) : V (Array (Nat × Nat × Scope) × Array (Nat × Nat)) := do
   if units.isEmpty then throw "a block has at least one unit"
   if (sortDedup units).size != units.size then throw "a block names each of its units once"
-  let root := P.defs[P.root]!
   let mut S := #[]
-  let mut members := #[]
+  let mut ms := #[]
   for u in units do
     let (k, m) ← unitAt P u
     let sc := P.child P.rootScope k m
     S := S.push (sc.off, sc.off + (P.defs[sc.d]!).gates)
-    members := members.push (k, m, sc)
+    ms := ms.push (k, m, sc)
+  return (ms, S)
+
+/-- **The front of block `units`'s circuit** (the module docstring), the units in any order and each once. -/
+def front (P : Prog) (units : Array Nat) (boolean : Std.HashMap String String) : V Front := do
+  let root := P.defs[P.root]!
+  let (members, S) ← members P units
   let mut ins := #[]
   let mut outs := #[]
   for (k, m, sc) in members do
@@ -133,6 +138,260 @@ def front (P : Prog) (units : Array Nat) (boolean : Std.HashMap String String) :
   let port := fun g => do return ({ gate := g, width := ← width P g } : Port)
   return { ranges := S.qsort (·.1 < ·.1), ins := ← (sortDedup ins).mapM port, outs := ← (sortDedup outs).mapM port,
            lift := ← lift P (members.map fun (k, _, _) => (root.body.nodes[k]!).fn) boolean }
+
+/-! ### The block's Program on bits -/
+
+private theorem sizeOf_lt_mem {fs : Array Ty} {t : Ty} (h : t ∈ fs) : sizeOf t < 1 + sizeOf fs := by
+  have := Array.sizeOf_lt_of_mem h
+  omega
+
+private theorem sizeOf_snd_lt_mem {fs : Array (String × Ty)} {f : String × Ty} (h : f ∈ fs) :
+    sizeOf f.2 < 1 + sizeOf fs := by
+  have := Array.sizeOf_lt_of_mem h
+  obtain ⟨k, t⟩ := f
+  simp only [Prod.mk.sizeOf_spec] at this ⊢
+  omega
+
+/-- `bit_type`: the Boolean type whose word view is `t`, each `Value<w>` as `Array<w, Value<1>>` and `Value<1>` a bit. -/
+def bitTy : Ty → Ty
+  | .value w => if w == 1 then .value 1 else .array w (.value 1)
+  | .array n e => .array n (bitTy e)
+  | .tuple fs => .tuple (fs.attach.map fun f => bitTy f.1)
+  | .record fs => .record (fs.attach.map fun f => (f.1.1, bitTy f.1.2))
+termination_by t => t
+decreasing_by
+  all_goals simp only [Ty.array.sizeOf_spec, Ty.tuple.sizeOf_spec, Ty.record.sizeOf_spec]
+  · omega
+  · exact sizeOf_lt_mem f.2
+  · exact sizeOf_snd_lt_mem f.2
+
+/-- `bit_offsets`: word leaf `j` of `t` as its first bit in `bitTy t` and its width, each leaf `w` consecutive bits in leaf
+order. -/
+def bitAt (t : Ty) : Nat → Nat × Nat :=
+  match Widths.homo t with
+  | some w => fun j => (j * w, w)
+  | none =>
+    let ws := t.widths
+    let pre := ws.foldl (fun a w => a.push (a.back! + w)) #[0]
+    fun j => (pre[j]!, ws[j]!)
+
+/-- A body's references on bits: each word reference as the bits it occupies, an affine run over a collection of one width
+an affine run of bits, every other part its bits named one by one. `at_ p i` is collection `(p, i)`'s `bitAt`. -/
+def liftSeq (at_ : Bool → Nat → Nat → Nat × Nat) (homo : Bool → Nat → Option Nat) (s : Seq) : Seq :=
+  let expand := fun (q : Part) => (Array.range q.count).foldl (fun a k =>
+    let r := q.get k
+    let (o, w) := at_ r.p r.i r.j
+    a ++ (Array.range w).map fun t => ({ p := r.p, i := r.i, j := o + t } : Ref)) #[]
+  Seq.ofParts <| s.parts.map fun q => match q with
+    | .affine p i b c => match homo p i with
+      | some w => .affine p i (b * w) (c * w)
+      | none => .explicit (expand q)
+    | q => .explicit (expand q)
+
+/-- Bit references as a part each run of consecutive leaves of one collection. -/
+def runs (rs : Array Ref) : Seq := Id.run do
+  let mut ps : Array Part := #[]
+  let mut cur : Option (Bool × Nat × Nat × Nat) := none
+  for r in rs do
+    match cur with
+    | some (p, i, b, c) =>
+      if p == r.p && i == r.i && b + c == r.j then cur := some (p, i, b, c + 1)
+      else
+        ps := ps.push (.affine p i b c)
+        cur := some (r.p, r.i, r.j, 1)
+    | none => cur := some (r.p, r.i, r.j, 1)
+  if let some (p, i, b, c) := cur then ps := ps.push (.affine p i b c)
+  return Seq.ofParts ps
+
+/-- A lifted Definition's descriptor key: its word's, with the static `IR="boolean"` after its own (`versions.lift`). -/
+def liftedKey (key : String) : String :=
+  if key.endsWith "}" then String.mk key.toList.dropLast ++ ",IR=\"boolean\"}" else key ++ "{IR=\"boolean\"}"
+
+/-- Word composite `d` on bits (`versions.lift_body`): every type `bitTy`, every reference `liftSeq`, each node calling
+`fnOf` of its Definition, a word primitive's node a Call of its Boolean Definition, and the offsets and gate count from
+the callees' `gatesOf`. -/
+def liftDef (d : Defn) (fnOf : Nat → Nat) (primOf : Nat → Bool) (gatesOf : Nat → Nat) : Defn :=
+  let b := d.body
+  let tyOf := fun (p : Bool) (i : Nat) =>
+    if p then (d.params[i]?.map (·.2)).getD (.value 1) else (b.nodes[i]?.map (·.out)).getD (.value 1)
+  let pAt := d.params.map fun (_, t) => bitAt t
+  let nAt := b.nodes.map fun x => bitAt x.out
+  let at_ := fun (p : Bool) (i : Nat) => ((if p then pAt[i]? else nAt[i]?).getD fun _ => (0, 0))
+  let homo := fun p i => Widths.homo (tyOf p i)
+  let lseq := liftSeq at_ homo
+  let nodes := b.nodes.map fun x =>
+    let f := fnOf x.fn
+    let args := x.args.mapIdx fun i a =>
+      let ty := bitTy a.ty
+      let dims := match x.form with
+        | .batch => match x.axes[i]? with
+          | some (some ax) => ty.axisDims ax
+          | _ => none
+        | .scan => if 1 ≤ i && i ≤ x.nxs then (match ty with | .array ln e => some (ln, e.leaves) | _ => none) else none
+        | _ => none
+      ({ ty, seq := lseq a.seq, dims } : Arg)
+    { x with fn := f, args, out := bitTy x.out, form := if x.form == .prim && !primOf f then .call else x.form }
+  let offsets := nodes.foldl (fun o x => o.push (o.back! + (if x.form == .prim then 1 else x.members * gatesOf x.fn))) #[0]
+  let params := d.params.map fun (n, t) => (n, bitTy t)
+  let ret := bitTy d.ret
+  { d with key := liftedKey d.key, params, ret, gates := offsets.back!,
+           paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := ret.leaves,
+           body := { params, retType := ret, nodes, ret := lseq b.ret, offsets } }
+
+/-- The block Definition's descriptor key, until circuits' rule for the block's root is written. -/
+def BLOCK : String := "Block_v1"
+
+/-- **The block's Program** (`restrict`'s Program value, which `Flock.Lower.lower` takes): `P` with every word composite
+the units reach lifted to bits (`liftDef`) and the block Definition last, whose index is the result's `root`. Its
+parameters are the input ports and its return the output ports, each port its bits, in increasing C index; its nodes are
+the units, in increasing C index, each a Call of its lifted Definition, reading a port's bits or an earlier unit's return
+bits. `boolean` is C's Boolean map: a word primitive's key to its Boolean Definition's, which is a gate or a composite with
+one-bit parameters and return that reaches no word primitive, or is refused. -/
+def program (P : Prog) (units : Array Nat) (boolean : Std.HashMap String String) : V Prog := do
+  let units := units.qsort (· < ·)
+  let (ms, S) ← members P units
+  let root := P.defs[P.root]!
+  let isWordPrim := fun (d : Defn) => d.prim && !isInputId d.key && !isBit d
+  let bound := P.defs.foldl (fun n d => n + d.body.nodes.size + 1) 1
+  let mut seen : Std.HashSet Nat := {}
+  let mut todo := ms.map fun (k, _, _) => (root.body.nodes[k]!).fn
+  let mut at_ := 0
+  let mut toB : Std.HashMap Nat Nat := {}
+  for _ in [0:bound] do
+    if h : at_ < todo.size then
+      let d := todo[at_]
+      at_ := at_ + 1
+      if seen.contains d then continue
+      seen := seen.insert d
+      let defn := P.defs[d]!
+      if isWordPrim defn then
+        let some bk := boolean[defn.key]?
+          | throw s!"the lift to bits: word primitive '{defn.key}' has no Boolean Definition in C's Boolean map"
+        let some bi := P.index[bk]? | throw s!"the lift to bits: '{defn.key}''s Boolean Definition '{bk}' is not in C"
+        let bd := P.defs[bi]!
+        if !(bd.ret.widths.all (· == 1) && bd.params.all fun (_, t) => t.widths.all (· == 1)) || (bd.prim && !isBit bd) then
+          throw s!"the lift to bits: '{defn.key}''s Boolean Definition '{bk}' is neither a gate nor a composite on bits"
+        toB := toB.insert d bi
+        todo := todo.push bi
+      else if !defn.prim then
+        todo := todo ++ defn.body.nodes.map (·.fn)
+    else break
+  if at_ < todo.size then throw "the lift to bits: a walk of more steps than this verifier follows"
+  let order := seen.toArray.qsort (· < ·)
+  let mut wordy : Std.HashMap Nat Bool := {}
+  for d in order do
+    let defn := P.defs[d]!
+    if defn.prim then wordy := wordy.insert d (isWordPrim defn)
+    else
+      let mut w := false
+      for x in defn.body.nodes do
+        match wordy[x.fn]? with
+        | some b => w := w || b
+        | none => throw s!"the lift to bits: '{defn.key}' calls a Definition decoded after it"
+      wordy := wordy.insert d w
+  for (_, bi) in toB do
+    if wordy[bi]?.getD true then throw s!"the lift to bits: Boolean Definition '{(P.defs[bi]!).key}' reaches a word primitive"
+  let fnOf := fun (d : Nat) => toB[d]?.getD d
+  let mut defs := P.defs
+  let mut index := P.index
+  for d in order do
+    if wordy[d]?.getD false && !(P.defs[d]!).prim then
+      let ds := defs
+      let l := liftDef (P.defs[d]!) fnOf (fun f => (ds[f]!).prim) (fun f => (ds[f]!).gates)
+      if let some j := index[l.key]? then
+        if j != d then throw s!"the lift to bits: '{l.key}' is already a Definition of C"
+      defs := defs.set! d l
+      index := index.insert l.key d
+  let mut read := #[]
+  for (k, m, _) in ms do
+    for g in ← operands P P.rootScope root.body.nodes[k]! m do
+      if !inside S g then read := read.push g
+  let ins ← (sortDedup read).mapM fun g => do return (g, ← width P g)
+  let mut inIdx : Std.HashMap Nat Nat := {}
+  for (g, _) in ins do inIdx := inIdx.insert g inIdx.size
+  let mut made : Std.HashMap Nat (Nat × Nat) := {}
+  let mut nodes : Array Node := #[]
+  let mut outs : Array Nat := #[]
+  for t in [0:ms.size] do
+    let (k, m, sc) := ms[t]!
+    let x := root.body.nodes[k]!
+    let c := P.defs[x.fn]!
+    let ops ← operands P P.rootScope x m
+    let mut args : Array Arg := #[]
+    let mut pos := 0
+    for (_, pt) in c.params do
+      let mut rs : Array Ref := #[]
+      for w in pt.widths do
+        let g := ops[pos]!
+        pos := pos + 1
+        match inIdx[g]? with
+        | some i => rs := rs ++ (Array.range w).map fun b => ({ p := true, i, j := b } : Ref)
+        | none => match made[g]? with
+          | some (u, o) => rs := rs ++ (Array.range w).map fun b => ({ p := false, i := u, j := o + b } : Ref)
+          | none => throw s!"unit {units[t]!} reads gate {g} of the block that no earlier unit returns"
+      args := args.push { ty := bitTy pt, seq := runs rs }
+    let f := fnOf x.fn
+    let lc := defs[f]!
+    nodes := nodes.push { form := if lc.prim then .prim else .call, fn := f, args, out := bitTy c.ret }
+    if c.prim then
+      if !made.contains sc.off then made := made.insert sc.off (t, 0)
+      outs := outs.push sc.off
+    else
+      let ra := bitAt c.ret
+      for j in [0:c.outLeaves] do
+        let g ← resolve P sc (c.body.ret.get j)
+        if inside S g then
+          outs := outs.push g
+          if !made.contains g then made := made.insert g (t, (ra j).1)
+  let outPorts ← (sortDedup outs).mapM fun g => do return (g, ← width P g)
+  let mut ret : Array Ref := #[]
+  for (g, w) in outPorts do
+    let (u, o) := made[g]!
+    ret := ret ++ (Array.range w).map fun b => ({ p := false, i := u, j := o + b } : Ref)
+  let params := ins.map fun (g, w) => (s!"g{g}", bitTy (.value w))
+  let retType := Ty.tuple (outPorts.map fun (_, w) => bitTy (.value w))
+  let ds := defs
+  let offsets := nodes.foldl (fun o x => o.push (o.back! + (if x.form == .prim then 1 else (ds[x.fn]!).gates))) #[0]
+  let blk : Defn := { key := BLOCK, id := BLOCK, prim := false, params, ret := retType, gates := offsets.back!,
+                      paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := retType.leaves,
+                      body := { params, retType, nodes, ret := runs ret, offsets } }
+  if index.contains BLOCK then throw s!"'{BLOCK}' is already a Definition of C"
+  return { P with defs := defs.push blk, index := index.insert BLOCK defs.size, root := defs.size }
+
+/-- A Definition as the `block_program` and `definition` pieces show it: types, gates, and each node's and the return's
+references one by one. -/
+def defJson (P : Prog) (d : Defn) : Json :=
+  let refs := fun (s : Seq) => Json.arr (s.toArray.map Ref.toJson)
+  Json.mkObj [("key", .str d.key), ("params", .arr (d.params.map (·.2.toJson))), ("ret", d.ret.toJson),
+    ("gates", toJson d.gates), ("refs", refs d.body.ret),
+    ("nodes", .arr (d.body.nodes.map fun x => Json.mkObj [("form", .str x.form.name),
+      ("fn", .str (P.defs[x.fn]!).key), ("out", x.out.toJson), ("n", toJson x.members),
+      ("args", .arr (x.args.map fun a => Json.mkObj [("ty", a.ty.toJson), ("refs", refs a.seq),
+        ("dims", match a.dims with | some (d, l) => Json.arr #[toJson d, toJson l] | none => .null)]))]))]
+
+/-- The `block_program` piece: `{descriptor, units, boolean}`, `boolean` a word primitive's key to its Boolean Definition's
+key, to `{block, lifted}`: the block Definition and each lifted Definition by key (`defJson`). -/
+def programPiece (j : Json) : Except String Json := do
+  let some d := (j.getObjValAs? String "descriptor").toOption | throw "descriptor is not a string"
+  let some us := (j.getObjValAs? (Array Nat) "units").toOption | throw "units is not a list of naturals"
+  let .ok (.obj bo) := j.getObjVal? "boolean" | throw "boolean is not an object"
+  let mut boolean : Std.HashMap String String := {}
+  for (k, v) in bo.toArray do
+    let Json.str s := v | throw s!"boolean['{k}'] is not a string"
+    boolean := boolean.insert k s
+  let P ← decode d.toUTF8
+  let Q ← program P us boolean
+  let lifted := (Q.defs.extract 0 P.defs.size).toList.filter (·.key.endsWith "IR=\"boolean\"}")
+  return Json.mkObj [("block", defJson Q Q.defs[Q.root]!),
+    ("lifted", Json.mkObj (lifted.map fun x => (x.key, defJson Q x)))]
+
+/-- The `definition` piece: `{descriptor, key}` to `defJson` of that Definition of the decoded descriptor. -/
+def definitionPiece (j : Json) : Except String Json := do
+  let some d := (j.getObjValAs? String "descriptor").toOption | throw "descriptor is not a string"
+  let some k := (j.getObjValAs? String "key").toOption | throw "key is not a string"
+  let P ← decode d.toUTF8
+  let some i := P.index[k]? | throw s!"no Definition '{k}'"
+  return defJson P P.defs[i]!
 
 /-- The `block_front` piece: `{descriptor, units, boolean}` (the descriptor's text, the block's units, C's Boolean map as an
 object from a word primitive's key to its Boolean Definition's) to `{ranges, ins, outs, lift}`, each port `[gate, width]`. -/
