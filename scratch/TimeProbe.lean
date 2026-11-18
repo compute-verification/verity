@@ -47,28 +47,10 @@ def main (args : List String) : IO UInt32 := do
     let r ← IO.lazyPure f
     let b ← IO.monoMsNow
     say s!"{what}: {r}, {b - a} ms"; return r
-  let _ ← timed s!"pairwiseDisjointSorted on all {wires.length} wires" fun _ => Spot.Wires.pairwiseDisjointSorted wires
-  let o0 ← IO.monoMsNow
-  let o ← match (← IO.lazyPure fun _ => Spot.Wires.orderOf W) with
-    | .ok o => pure o
-    | .error r => say s!"orderOf: REFUSED {r.code.name}"; return 1
-  say s!"orderOf: {o.length} ranges, {(← IO.monoMsNow) - o0} ms"
-  let i0 ← IO.monoMsNow
-  let ix ← IO.lazyPure fun _ => Spot.Wires.orderIndex o
-  say s!"orderIndex: {ix.size} templates, {(← IO.monoMsNow) - i0} ms"
-  for n in [1000, 2000, 4000, 8000] do
-    let ws := wires.take n
-    let p ← timed s!"orderedWire (shipped) on the first {n} wires" fun _ => ws.all (Spot.Wires.orderedWire o)
-    let q ← timed s!"orderedWireAt (trial) on the first {n} wires" fun _ => ws.all (Spot.Wires.orderedWireAt ix)
-    let same := ws.all fun w => Spot.Wires.orderedWire o w == Spot.Wires.orderedWireAt ix w
-    say s!"  same verdict: {p == q}, same on every wire: {same}"
-  let _ ← timed s!"orderedWireAt (trial) on all {wires.length} wires" fun _ => wires.all (Spot.Wires.orderedWireAt ix)
-  let c0 ← IO.monoMsNow
-  let oc ← IO.lazyPure fun _ => Spot.Wires.orderCodeAt W
-  say s!"orderCodeAt (trial, from orderOf): {(← IO.monoMsNow) - c0} ms, {match oc with | none => "none" | some r => s!"{r.code.name} at {r.wire}"}"
+  let _ ← timed s!"Spot.Wires.pairwiseDisjoint (compiled as proofs' pairwiseDisjointFast) on all {wires.length} wires" fun _ => Spot.Wires.pairwiseDisjoint wires
   let a1 ← IO.monoMsNow
   let chk ← IO.lazyPure fun _ => Spot.Wires.check W
-  say s!"Spot.Wires.check (the trial's): {(← IO.monoMsNow) - a1} ms, {match chk with | .ok _ => "ok" | .error r => s!"{r.code.name} at {r.wire}"}"
+  say s!"Spot.Wires.check (compiled as proofs' checkFast): {(← IO.monoMsNow) - a1} ms, {match chk with | .ok _ => "ok" | .error r => s!"{r.code.name} at {r.wire}"}"
   let s : Spot.Wires.Summary := ⟨wires, wires.map (Spot.Wires.rowWords W)⟩
   say s!"summary built "
   say s!"unwhole (leaf-widths): {(unwhole f.P f.ts f.leaves s).getD "none"}"
