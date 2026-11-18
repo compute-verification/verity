@@ -1,5 +1,6 @@
 module
 
+public import Mathlib.Data.Finset.Card
 public import Properties.Spot.Edges
 
 /-! # Proof that a root `Spot.Edges.edgesOf` accepts is within the parts bound (`Properties.Spot.Edges`)
@@ -61,6 +62,8 @@ theorem edgesOf_partsWithin {P : Prog} {rs : Array Flock.TemplateQuery.TRange} {
   intro k hk j hj
   have hk' := List.all_eq_true.mp hp k (List.mem_range.mpr hk)
   rw [Array.all_eq_true] at hk'
+  refine ⟨_, List.nodup_dedup _, fun x => List.mem_dedup, ?_⟩
+  rw [← List.card_toFinset]
   exact argPartsOk_card (hk' j hj)
 
 end Properties.Spot.Edges

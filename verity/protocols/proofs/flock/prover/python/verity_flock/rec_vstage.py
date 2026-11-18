@@ -77,7 +77,6 @@ import functools
 import gc
 import json
 import os
-import shutil
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -718,11 +717,6 @@ def forge_top(d: Path, level: dict, tops: O.TopValue, kind: str, i: int = 0) -> 
     salt = tops.reg.salts[at]
     set_salt(d / "inst.bin", text, "out", i, salt, bytes([salt[0] ^ 1]) + salt[1:])
     return {**rec, "salt_byte0": [salt[0], salt[0] ^ 1]}
-
-
-def _copy_verifier(src: Path, dst: Path) -> None:
-    for f in VERIFIER_FILES:
-        shutil.copyfile(src / f, dst / f)
 
 
 @_without_gc

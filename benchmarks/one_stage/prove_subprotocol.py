@@ -739,22 +739,6 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     return member, program, query, out / "registered.json"
 
 
-def n2_member(name: str, key: tuple[int, int, int], insts: Sequence, pubs: Sequence[Sequence[int]],
-              oks: Sequence[int] | None = None) -> Member:
-    """N2's head checks (`n2_zk`'s ``NetworkHeadCheckRows`` around `head_check.unit(L, T, COUNTS)`, ``key``) as one
-    member: instance i's ``pub`` and ``wit`` rows (`n2_zk.rows_of`), ``pub`` held to ``pubs[i]`` (the verifier's own
-    `n2_zk.public_words`: the registered root, the execution phase, the signed digest), ``o0`` required to ``oks[i]`` (default
-    every check passes)."""
-    from verity.protocols.resource_accounting.network.prover import n2_zk as N
-
-    bits = N.row_bits(N.HC.unit(key[0], key[1], bool(key[2])))
-    words = [N.rows_of(i) for i in insts]
-    values = {r: np.asarray([w[r] for w in words], dtype=np.uint16) for r in N.ROWS}
-    oks = [1] * len(insts) if oks is None else list(oks)
-    return Member(name, N.unit(key), [(r, V2, bits[r], [r]) for r in N.ROWS], [(V2, (0,))], values,
-                  held={"pub": np.asarray(pubs, dtype=np.uint16)}, expect={"o0": np.asarray(oks, dtype=np.uint16)[:, None]})
-
-
 # --- served Definitions -----------------------------------------------------------------------------------------------
 
 #: the statics of the Llama models the served path runs (Llama-3.2-1B, Llama-3.1-8B; RoPE base 500000)

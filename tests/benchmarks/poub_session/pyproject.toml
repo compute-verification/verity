@@ -100,8 +100,13 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/poub_session/
           # CPU test loads without the adapter
           "verity/protocols/resource_accounting/memory/poub/prover/node_store", "benchmarks/poub_session",
           # keep.py: the private names it refuses, the vLLM integration's one list, and the one matcher it loads by path
-          "adapters/vllm/verity_vllm/pipeline/private_names.json", "adapters/vllm/verity_vllm/pipeline/private_names.py",
-          "adapters/vllm/verity_vllm/pipeline/research_outputs.py"]
+          "adapters/vllm/verity_vllm/pipeline/private_names.json",
+          "adapters/vllm/verity_vllm/pipeline/private_names.py",
+          "adapters/vllm/verity_vllm/pipeline/research_outputs.py",
+          # test_refresh_glue.py: refresh_result.py writes its result through the harness kit's writer
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
+          "tools/config/verity_config"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
