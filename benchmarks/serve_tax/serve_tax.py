@@ -1730,10 +1730,9 @@ def source_commit() -> str | None:
     `.git`), else the checkout's HEAD; None where none says."""
     if SHARED.RESEARCH_SOURCE_SHA or SHARED.RESEARCH_SOURCE_COMMIT:
         return SHARED.RESEARCH_SOURCE_SHA or SHARED.RESEARCH_SOURCE_COMMIT
-    try:
-        p = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True)
-    except OSError:
+    if shutil.which("git") is None:
         return None
+    p = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True)
     return p.stdout.strip() if p.returncode == 0 else None
 
 
