@@ -212,7 +212,7 @@ def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None
 
 def _integrity() -> dict:
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
-         "public": {"bound": 2, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
+         "public": {"bound": 2, "complete": True, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
          "profile": {"levels": [{"name": "unit", "size": 4}], "drawn": {"unit": 2}, "delta": "1/100"}}
     return S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent"))
 

@@ -40,10 +40,11 @@ cargo build --release -p flock-live $FEAT --bin flock-gpu-link -j $TH > $O/build
 B=$F/target/release/flock-gpu-link; sha256sum $B | tee $O/binary.sha256
 [ "$MODE" = build ] && exit 0
 G=; [ "$GPU" = 1 ] && G=--gpu
+. $SRC/verity/protocols/proofs/flock/prover/pod/selftest.sh
 if [ "$MODE" = all ] || [ "$MODE" = selftest ]; then
   for v in ${VUS:-8 64}; do
-    $B selftest --vus $v > $O/selftest-cpu-$v.txt 2>&1; grep -h SELFTEST $O/selftest-cpu-$v.txt
-    [ -n "$G" ] && { $B selftest --vus $v --gpu > $O/selftest-gpu-$v.txt 2>&1; grep -h SELFTEST $O/selftest-gpu-$v.txt; grep -h '"pass":false' $O/selftest-gpu-$v.txt | cut -c1-400; }
+    selftest_run cpu-$v $O/selftest-cpu-$v.txt $O/selftest-cpu-$v.err $B selftest --vus $v
+    [ -n "$G" ] && selftest_run gpu-$v $O/selftest-gpu-$v.txt $O/selftest-gpu-$v.err $B selftest --vus $v --gpu
   done
 fi
 if [ "$MODE" = serve ]; then
@@ -63,4 +64,4 @@ if [ "$MODE" = all ] || [ "$MODE" = prove ]; then
     [ -n "${SP:-}" ] && { kill $SP; wait $SP 2>/dev/null; unset SP; }
   done
 fi
-true
+selftest_end

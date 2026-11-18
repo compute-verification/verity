@@ -2727,7 +2727,6 @@
     {"file": "verity/protocols/proofs/flock/prover/live/src/zk_hooks.rs", "count": 29},
     {"file": "verity/protocols/proofs/flock/prover/live/src/zk_server.rs", "count": 19},
     {"file": "verity/protocols/proofs/flock/prover/live/src/zk_veil.rs", "count": 7},
-    {"file": "verity/protocols/proofs/flock/prover/pod/10-link.sh", "count": 1},
     {"file": "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh", "count": 1},
     {"file": "verity/protocols/proofs/flock/prover/pod/76-read-gadget.sh", "count": 2},
     {"file": "verity/protocols/proofs/flock/prover/pod/80-rec-inner.sh", "count": 5},
