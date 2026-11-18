@@ -25,10 +25,10 @@ def _on(monkeypatch, card: str) -> None:
     monkeypatch.setattr(kit, "host_stamp", lambda: {"card": card})
 
 
-def _two_cards(tmp_path, extra: str = "") -> Path:
+def _two_cards(tmp_path, top: str = "", tables: str = "") -> Path:
     base = (SPEC_ROOT / "llama31-8b-fp8-1gpu.toml").read_text()
     path = tmp_path / "spec.toml"
-    path.write_text(base.replace('cards = ["rtx-pro-6000"]', 'cards = ["rtx-pro-6000", "h200"]' + extra))
+    path.write_text(base.replace('cards = ["rtx-pro-6000"]', 'cards = ["rtx-pro-6000", "h200"]' + top) + tables)
     return path
 
 
@@ -66,13 +66,13 @@ def test_a_card_the_spec_doesnt_list_is_refused_by_name_named_or_found(monkeypat
 
 
 def test_card_settings_take_the_specs_place_on_their_card_alone_and_name_only_its_cards(tmp_path):
-    path = _two_cards(tmp_path, '\nsetup = "benchmarks/harness/run_point.sh"\n[card_settings.h200]\n'
-                                'setup = "benchmarks/harness/setup/pearl_c_sm90.sh"\nenv = { ARM_KNOB = "sm90" }\n'
-                                '[card_settings.h200.admission]\nmax_minutes = 120\n')
+    path = _two_cards(tmp_path, '\nsetup = "benchmarks/harness/run_point.sh"',
+                      '\n[card_settings.h200]\nsetup = "benchmarks/harness/setup/pearl_c_sm90.sh"\n'
+                      'env = { ARM_KNOB = "sm90" }\n[card_settings.h200.admission]\nmax_minutes = 45\n')
     rtx, h200 = resolve_spec(f"{path.with_suffix('')}@rtx-pro-6000.toml"), resolve_spec(f"{path.with_suffix('')}@h200.toml")
-    assert (dict(rtx.env), rtx.setup, rtx.admission.max_minutes) == ({}, "benchmarks/harness/run_point.sh", None)
+    assert (dict(rtx.env), rtx.setup, rtx.admission) == ({}, "benchmarks/harness/run_point.sh", load_spec(path).admission)
     assert (dict(h200.env), h200.setup, h200.admission.max_minutes) == (
-        {"ARM_KNOB": "sm90"}, "benchmarks/harness/setup/pearl_c_sm90.sh", 120)
+        {"ARM_KNOB": "sm90"}, "benchmarks/harness/setup/pearl_c_sm90.sh", 45)
     assert rtx.config_sha256 != h200.config_sha256
     path.write_text(path.read_text().replace("[card_settings.h200]", "[card_settings.h100]")
                     .replace("[card_settings.h200.admission]", "[card_settings.h100.admission]"))

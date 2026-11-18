@@ -373,7 +373,7 @@ def test_a_point_refuses_a_card_that_is_not_its_specs_before_anything_is_timed(t
     else:
         assert stop.value.code == 2 and (
             f"the card is a {card}, not the h200 of spec 'llama31-8b-fp8-1gpu' (NVIDIA H200): run it on a node whose "
-            "card is a NVIDIA H200, or use the spec for this card") in capsys.readouterr().err
+            "card is a NVIDIA H200, or name this card where the spec lists it (`SPEC@CARD`)") in capsys.readouterr().err
 
 
 def test_a_local_checkpoint_is_bound_by_the_files_a_loader_reads_not_the_hub_snapshots_metadata(tmp_path):
