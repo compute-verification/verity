@@ -96,7 +96,8 @@
 #   PP_LLAMA=DIR bash benchmarks/prove_path/run.sh
 # Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records), the binaries' sha256; never the
 # advice or its opening (the prover's, private: the verifier is handed the opening, the named gap), a prover's file (inst-*,
-# *-private.bin: the rows and their salts), a circuit (its pin is) nor a request value (the stand-in's workload.json, its prompts).
+# *-private.bin: the rows and their salts), a circuit (its pin is), a request value (the stand-in's workload.json, its prompts)
+# nor a serve's own records (serve.json, windows.jsonl: only vLLM's mirror publishes them, through serve_mirror.PUBLIC).
 set -uxo pipefail
 PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../one_stage/public_files.py
 for v in PP_LLAMA PP_SERVE_RUN PP_SERVE_ROWS; do
@@ -274,9 +275,11 @@ if [ -n "${PP_TP:-}" ]; then
 elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
   D=${PP_SERVE_ROWS:-${PP_LLAMA:-}}
   [ -d "$D" ] || { echo "no row dir ${D:-(PP_SERVE_ROWS or PP_LLAMA)}: give the Commit's row dir on this node"; exit 8; }
-  served() {  # NAME SERVE_RUN K: the served window's honest and forged audits, its public records and its compiler kept
+  served() {  # NAME SERVE_RUN K: the served window's honest and forged audits, its registration's public form and its compiler
+              # kept; serve.json and windows.jsonl stay in SERVE_RUN, where records() reads them
     mkdir -p $O/$1-records
-    cp $2/serve.json $2/windows.jsonl $2/advice/w$3/registration.json $O/$1-records/
+    python3 "$(dirname "$PUBF")/served_verdicts.py" public-registration $2/advice/w$3/registration.json \
+      > $O/$1-records/registration.json || { rm -f $O/$1-records/registration.json; return 1; }
     $PP compiler --serve-run $2 ${PP_TARGET:+--target $PP_TARGET} "${TG[@]}" | tee $O/$1-records/compiler.json || return 1
     local src="--serve-run $2 --window $3 --row-dir $D ${PP_TARGET:+--target $PP_TARGET}"
     REC_NAME=$1 REC_RUN=$2 REC_K=$3
