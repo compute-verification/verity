@@ -140,6 +140,7 @@ def test_vectors_name_what_exists(name):
     assert len(set(v.rows)) == len(v.rows) and set(v.rows) <= set(ROWS)
     assert {k for k, _ in v.credits} <= set(c)
     assert not v.superseded_by or v.superseded_by in vectors()
+    assert not v.catch_all or v.catch_all in c, "a vector's catch-all is a class of its census"
 
 
 def test_attacks_are_a_file_per_family():

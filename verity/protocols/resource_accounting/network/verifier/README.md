@@ -156,8 +156,9 @@ A spec-level reference for network attestation's timing channel:
   hold each request's prompt_len to the advice's and which the ingress tie's verdict (`tie_service.IoTieVerdict`) is
   built from. It has the reference, the lanes the verifier computes from the advice and the network attester's release
   (`lanes`, `Release`), and the proof block's Boolean Definition (`IoTieRequest`: one `IoTieRequestFrame` and
-  `IoTieRequestStep` a cell, `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) adds the
-  Commit's `c00.input/ids` rows to the same scan and holds every prompt id to them;
+  `IoTieRequestStep` a cell, `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) would add the
+  Commit's `c00.input/ids` rows to the same scan and hold every prompt id to them: a reference on a fake upstream
+  Commit, run by no driver;
 - the capacity counts;
 - the egress side of the step-indexed scan (`egress`, N2) on a fake upstream, in no Spec: one proof block a link and
   bucket t (`EgressBucket`) that reads the scan's slot state S_t, a registered read, and computes the bucket's row of
