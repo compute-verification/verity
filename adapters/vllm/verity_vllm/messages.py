@@ -52,6 +52,11 @@ class Exchange:
         """The workload's step: 0 before serving begins."""
         return 0 if self._step is None else self._step
 
+    @property
+    def next_step(self) -> int:
+        """The step the workload schedules next, which a step being scheduled is until its `StepBegan`."""
+        return 0 if self._step is None else self._step + 1
+
     @step.setter
     def step(self, value: int) -> None:
         self._step = value
