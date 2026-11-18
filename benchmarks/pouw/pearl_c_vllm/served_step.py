@@ -126,16 +126,16 @@ def _patch_engine(llm) -> None:
 
 
 def undeclared(entries) -> str | None:
-    """Why a protocol arm of ``entries`` can't run: the first entry that is no declared scheme's option
+    """Why a protocol arm of ``entries`` can't run: the first entry that is no declared scheme's name
     (`compose.schemes`), as the RTX PRO 6000's Pearl-C and Pearl-C4's are none, which no served path serves; None when
     there is none."""
     from verity.protocols.compose import schemes
 
-    options = {s.option: s.name for s in schemes.load().values() if s.option}
+    names = [n for n, s in schemes.load().items() if s.option]
     for e in entries:
-        if e not in options:
-            return (f"{e} is no declared scheme's option ({', '.join(f'{n}: {o}' for o, n in options.items())}), so no "
-                    "served arm runs it; its kernel's own benchmarks (bench_arm.py, e2e.py) run it directly")
+        if e not in names:
+            return (f"{e} is no declared scheme's name ({', '.join(names)}), so no served arm runs it; its kernel's own "
+                    "benchmarks (bench_arm.py, e2e.py) run it directly")
     return None
 
 
@@ -152,7 +152,7 @@ def _engine(spec_name: str, arm_id: str):
     arm = next(x for x in arms if x.id == arm_id)
     if why := undeclared(arm.protocols):
         raise SystemExit(f"served_step.py: {why}")
-    if settings.PEARLC_CHALLENGER_GATE and schemes.get("pearl-plus").option in arm.protocols:
+    if settings.PEARLC_CHALLENGER_GATE and "pearl-plus" in arm.protocols:
         raise SystemExit("served_step.py: PEARLC_CHALLENGER_GATE is set, but an engine attaches Pearl+ with its coins "
                          "in-process and no challenger gate; unset it here, or serve a live session with served_passes.py serve")
     preset, eager = arm_execution(arm, preset, eager)
