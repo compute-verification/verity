@@ -10,6 +10,7 @@ public import Definitions.Spot.Exfiltration
 public import Definitions.Spot.SamplePressure
 public import Definitions.Spot.ChiPool
 public import Definitions.Spot.Sampling.Layer
+public import Definitions.Spot.Sampling.Scheme
 public import Definitions.Spot.Limits
 import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power

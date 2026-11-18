@@ -149,9 +149,8 @@ def stage_chain(d: Path) -> dict:
     CS.cache_slot_circuits()
     CS._CTX["max_statement_bits"] = 1 << 35
     wiring = CS.Wiring(prog, query, list(range(tp.population)))
-    key = hashlib.sha256(b"verity/flock/rec-reprice/chain-salts\0" + str(tp.population).encode()).digest()
     d.mkdir(parents=True, exist_ok=True)
-    rec = CS.stage(units, SPEC, shape, cl, chain_lanes(units, cl, tp, f"rec-reprice/chain/{tp.population}"), d, key,
+    rec = CS.stage(units, SPEC, shape, cl, chain_lanes(units, cl, tp, f"rec-reprice/chain/{tp.population}"), d,
                    wiring=wiring, share_rows=False)
     text = (d / "circuit.txt").read_text()
     links = CS.links_file(prog, query, text, wiring.indices)

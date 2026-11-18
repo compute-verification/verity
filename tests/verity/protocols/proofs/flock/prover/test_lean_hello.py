@@ -160,7 +160,7 @@ def _staged(out: Path, layout: str | None) -> list[str]:
     from verity_flock import class_statement as CS
 
     args, rows, _kw = _toy(0)
-    CS.UnitStager(*args, **({"layout": layout} if layout else {})).stage(rows, out, b"k" * 32)
+    CS.UnitStager(*args, **({"layout": layout} if layout else {})).stage(rows, out)
     return ["--statement", TMPL if layout else "verity/flock-circuit", "--circuit", str(out / "circuit.txt"), "--public",
             str(out / "pub.bin")]
 

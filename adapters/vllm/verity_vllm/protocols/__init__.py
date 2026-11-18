@@ -24,7 +24,7 @@ weights (`at_commit`), and after its warm-ups, so every ``apply`` an executor se
 **Refused** (`refusals`): an unknown protocol; a scheme its package does not register, or an adapter not on this tree;
 a protocols config naming a protocol the run does not enable; a set at TP > 1 (each rank would install its own, which is
 not wired); two executors at one site; beside SPOT, an executor whose protocol package has no circuit for its
-scheme (`CIRCUITS`, `traced_as`: every PoUW scheme but ``ncp-v2``), unless the window's circuit is cut at its sites (`CUT`,
+scheme (`circuit_registry`, `traced_as`: every PoUW scheme but ``ncp-v2``), unless the window's circuit is cut at its sites (`CUT`,
 below); with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (``keeps_weight_copy``); and
 whatever an adapter refuses for its context (SPOT outside the Commit stage, for one).
 
@@ -39,9 +39,9 @@ record's digest (`Composition.verdict`); it is of record like any other, because
 Program describes: POUS's decode is bit-identical and leaves the circuit untouched, and an executor is refused until its
 protocol package has a circuit for its scheme (``traced_as``).
 
-**Circuits.**  What SPOT traces an executor's computation as is its protocol package's (`CIRCUITS`: for PoUW,
-`verity.protocols.resource_accounting.compute.pouw.prover.circuit`, whose ``SCHEMES`` have a circuit and whose ``traced_as(scheme, m, k, n)`` is the circuit of one
-executed call).  The selector admits an executor beside SPOT only for a scheme with a circuit, and `traced_as`
+**Circuits.**  What SPOT traces an executor's computation as is what its protocol package registers under the
+protocol's name (`scheme.register_circuits`: ``schemes``, those with a circuit, and ``traced_as(scheme, m, k, n)``, the
+circuit of one executed call; PoUW registers ``pouw``).  The selector admits an executor beside SPOT only for a scheme with a circuit, and `traced_as`
 gives the Commit the circuit of each executed call.  An executor with none whose calls commit tables a window's circuit
 can be cut at (an adapter's ``cuts``: Pearl-C's, whose calls commit their A rows and y) is admitted only when the
 SPOT setting ``cut`` (`CUT`) names it: serve-openai's Commit windows under Pearl+ (`serve_pearl`), whose
@@ -60,6 +60,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
 from verity import hooks as H
+from verity.protocols.resource_accounting import scheme as schemes
 from verity_vllm import config
 from verity_vllm.engine import hooks
 from verity_vllm.protocols.interface import Context, Installed, Option, Target
@@ -72,7 +73,7 @@ __all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Cont
            "adapter", "driver",
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
-           "parse", "refusals", "refused", "register_weights", "requests", "undeclared", "weights_view", "CIRCUITS",
+           "parse", "refusals", "refused", "register_weights", "requests", "undeclared", "weights_view",
            "CUT", "circuit_registry", "traced_as"]
 
 #: protocol -> its adapter module in this package
@@ -86,9 +87,6 @@ DRIVERS = {"poub": "poub"}
 #: module boundary, outside every site, and its replay evaluates Definitions, never an executor.  `config.PROTOCOLS`, the
 #: install order, is innermost first at every site.
 SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
-#: protocol -> the module of its protocol package that says what SPOT traces its executed computation as:
-#: ``SCHEMES`` (the schemes with a circuit) and ``traced_as(scheme, m, k, n)`` (one executed call's circuit, None without one)
-CIRCUITS = {"pouw": "verity.protocols.resource_accounting.compute.pouw.prover.circuit"}
 #: the SPOT setting naming the executor whose sites the window's circuit is cut at (`refusals`)
 CUT = "cut"
 RECORD_SCHEMA = PROTOCOL_COMPOSITION_SCHEMA
@@ -150,15 +148,10 @@ def load_settings(value: str | Path | Mapping[str, Any] | None) -> dict[str, dic
     return {str(k): dict(v) for k, v in doc.items()}
 
 
-def circuit_registry(name: str) -> ModuleType | None:
-    """Protocol ``name``'s circuit registry (`CIRCUITS`), None when it declares none; `Refused` when it is not installed."""
-    module = CIRCUITS.get(name)
-    if module is None:
-        return None
-    try:
-        return importlib.import_module(module)
-    except ModuleNotFoundError as e:
-        raise refused([f"{name}: its circuit registry {module} is not installed ({e.name})"]) from e
+def circuit_registry(name: str) -> schemes.Circuits | None:
+    """The circuits protocol ``name``'s package registered by that name (`scheme.register_circuits`), None when it
+    registered none: its adapter's import registers them."""
+    return schemes.CIRCUITS.get(name)
 
 
 def traced_as(entry: str, m: int, k: int, n: int) -> Any:
@@ -227,13 +220,9 @@ def from_engine(ctx: Context, llm: Any, *, epoch: int = 0) -> Context:
     return dataclasses.replace(ctx, settings=settings, filled={})
 
 
-def _has_circuit(name: str, scheme: str, out: list[str]) -> bool:
-    try:
-        reg = circuit_registry(name)
-    except _refused() as r:
-        out.extend(r.reasons)
-        return False
-    return reg is not None and scheme in reg.SCHEMES
+def _has_circuit(name: str, scheme: str) -> bool:
+    reg = circuit_registry(name)
+    return reg is not None and scheme in reg.schemes
 
 
 def refusals(ctx: Context) -> tuple[str, ...]:
@@ -269,7 +258,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             if site in executors:
                 out.append(f"{entry}: {site} already has an executor, {executors[site]}; a site has one")
             executors.setdefault(site, entry)
-        if sites and sampled and not _has_circuit(name, scheme, out):
+        if sites and sampled and not _has_circuit(name, scheme):
             if not getattr(mod, "cuts", lambda s: False)(scheme):
                 out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, "
                            f"so SPOT would trace it as the stock computation (refused until the option names one: "
