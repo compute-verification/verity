@@ -22,8 +22,8 @@ spec's setup exports) as serve-openai's ``--protocols-config`` takes them for th
 the scheme's own settings alone, the server setting each epoch's coins and its transcript dir itself.
 
 ``serve`` builds the spec's preset (`verity_bench`'s ``engine_args``) with its Pearl-C arm's declared scheme attached by
-name on the build's exchange (`pearl_c_arm`: ``--arm``, else the spec's one, whose entry is the scheme's option,
-`messages.option`; `scheme_settings`), one epoch for the run, its salt coin the in-process challenger's, and its
+name on the build's exchange (`pearl_c_arm`: ``--arm``, else the spec's one, whose entry is the scheme's name,
+`messages.named`; `scheme_settings`), one epoch for the run, its salt coin the in-process challenger's, and its
 ``transcript_dir`` DIR, so each pass is retained in its own ``DIR/pass-NNNNN``; the challenger's coin commitment goes to
 ``DIR/coins.json`` once the scheme is released.  With ``PEARLC_CHALLENGER_GATE``, ``PEARLC_CHALLENGER_PEER`` and
 ``PEARLC_PRIVATE`` set the epoch's salt coin is a live session's on the auditor device instead (the scheme reserves it
@@ -245,21 +245,21 @@ def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
 
 
 def undeclared(entries) -> str | None:
-    """Why a served arm of ``entries`` can't run: the first entry that is no declared scheme's option
-    (`messages.option`), as the RTX PRO 6000's Pearl-C and Pearl-C4's are none, which no served path serves; None when
-    there is none."""
-    from verity_vllm import messages as M
+    """Why a served arm of ``entries`` can't run: the first entry that is no declared scheme's name (`compose.schemes`), as
+    the RTX PRO 6000's Pearl-C and Pearl-C4's are none, which no served path serves; None when there is none."""
+    from verity.protocols.compose import schemes
 
+    names = [n for n, s in schemes.load().items() if s.option]
     for e in entries:
-        if M.option(e) is None:
-            return (f"{e} is no declared scheme's option, so no served arm runs it; its kernel's own benchmarks "
-                    "(bench_arm.py, e2e.py) run it directly")
+        if e not in names:
+            return (f"{e} is no declared scheme's name ({', '.join(names)}), so no served arm runs it; its kernel's own "
+                    "benchmarks (bench_arm.py, e2e.py) run it directly")
     return None
 
 
 def pearl_c_arm(spec, name: str | None = None):
     """The spec's arm ``name`` that attaches schemes (``protocols``), else its one; SystemExit naming them when it has none, several
-    or not ``name``, naming its entry when it is no declared scheme's option (`undeclared`), and naming its entries
+    or not ``name``, naming its entry when it is no declared scheme's name (`undeclared`), and naming its entries
     unless they are one, the scheme it attaches by name."""
     from verity_bench.vllm import arms as A
 
@@ -272,7 +272,7 @@ def pearl_c_arm(spec, name: str | None = None):
     if why := undeclared(picked[0].protocols):
         raise SystemExit(f"served_passes.py: {why}")
     if len(picked[0].protocols) != 1:
-        raise SystemExit(f"served_passes.py: a served arm attaches one declared scheme by its option; {picked[0].id} is "
+        raise SystemExit(f"served_passes.py: a served arm attaches one declared scheme by its name; {picked[0].id} is "
                          f"{list(picked[0].protocols)}")
     return picked[0]
 
@@ -286,8 +286,8 @@ def scheme_settings(arm, scheme, transcript_dir: Path | None) -> tuple[dict, dic
     from verity_bench.vllm import arms as A
 
     # read with no protocol enabled, so no in-process challenger flips coins the scheme samples per epoch itself
-    pouw = A.protocols_config(dataclasses.replace(arm, protocols=()), os.environ).get("pouw", {})
-    own = {k: v for k, v in pouw.items() if k in scheme.settings}
+    given = A.protocols_config(dataclasses.replace(arm, protocols=()), os.environ).get(scheme.name, {})
+    own = {k: v for k, v in given.items() if k in scheme.settings}
     if transcript_dir is not None:
         own["transcript_dir"] = str(transcript_dir)
     if not settings.PEARLC_CHALLENGER_GATE:
@@ -336,7 +336,7 @@ def serve(args: argparse.Namespace) -> int:
 
     spec = P.resolve_spec(args.spec)
     arm = pearl_c_arm(spec, args.arm)
-    scheme = M.option(arm.protocols[0])
+    scheme = M.named(arm.protocols[0])
     preset = spec.preset
     engine = RN.engine_args(preset, arm.precision or preset.precision, resident=False, eager=True)
     if args.max_num_batched_tokens:
@@ -673,12 +673,12 @@ def arm(args: argparse.Namespace) -> int:
     from verity_vllm import messages as M
 
     picked = pearl_c_arm(P.resolve_spec(args.spec), args.arm)
-    scheme = M.option(picked.protocols[0])
+    scheme = M.named(picked.protocols[0])
     # read with no protocol enabled, so no in-process challenger flips coins the server samples per epoch itself
-    pouw = A.protocols_config(dataclasses.replace(picked, protocols=()), os.environ).get("pouw", {})
-    doc = {"pouw": {k: v for k, v in pouw.items() if k in scheme.settings}}
+    given = A.protocols_config(dataclasses.replace(picked, protocols=()), os.environ).get(scheme.name, {})
+    doc = {scheme.name: {k: v for k, v in given.items() if k in scheme.settings}}
     Path(args.out).write_text(json.dumps(doc, indent=1) + "\n")
-    print(f"arm {picked.id}: --protocols-config {args.out}, pouw {sorted(doc['pouw'])}", flush=True)
+    print(f"arm {picked.id}: --protocols-config {args.out}, {scheme.name} {sorted(doc[scheme.name])}", flush=True)
     return 0
 
 

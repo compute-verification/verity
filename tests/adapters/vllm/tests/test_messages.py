@@ -451,6 +451,12 @@ def test_storage_beside_one_that_declares_no_copy_and_a_copy_without_storage_are
     assert store.attached == ["storage", "storage"] and copy.attached == ["keeps-copy", "keeps-copy"]
 
 
+def test_storage_beside_the_network_attester_is_not_refused_for_a_weight_copy():
+    pous, attester = M.named("pous"), M.named("network-attester")
+    assert attester.keeps_weight_copy is False and M.storage(pous)
+    assert M.weight_copy_refusals([pous, attester]) == M.weight_copy_refusals([attester, pous]) == []
+
+
 def test_the_declared_storage_and_weight_copy_schemes_are_refused_together():
     pous, pearl = M.named("pous"), M.named("pearl-plus")
     assert pearl.keeps_weight_copy is True and M.storage(pous) and not M.storage(M.named("wipe"))

@@ -71,6 +71,12 @@ def test_its_check_is_the_network_period_programs_answer_unchanged_and_refuses_a
         NS.NETWORK_ATTESTER.check("network-rows", case, tmp_path, said({**reject, "protocol": "verity/network-rows/v1"}))
 
 
+def test_it_declares_it_keeps_no_weight_derived_copy() -> None:
+    from verity.protocols.resource_accounting import scheme as S
+
+    assert S.declared(NS.NETWORK_ATTESTER, "keeps_weight_copy") is False
+
+
 def test_cost_is_output_bits() -> None:
     cost = NS.NETWORK_ATTESTER.blocks[NS.DEFINITIONS.index(ResponseTieStop)].cost
     assert cost({"O": 4}) == 176

@@ -2722,7 +2722,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ppe.add_argument("piece_dir", type=Path)
     ppe.add_argument("--gate", required=True)
     ppe.add_argument("--name")
-    ppe.add_argument("--scheme", default="pearl-c-h100-v1-h3")
+    ppe.add_argument("--scheme", help="default: the kernel of Pearl+'s declared option")
     described = ppe.add_mutually_exclusive_group()
     described.add_argument("--cubin", type=Path)
     described.add_argument("--circuit-record", type=Path, help="the served window's circuit record (PEARLPLUS-CIRCUIT's), "
@@ -2948,7 +2948,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 0
             if not a.name:
                 raise ValueError("pearlplus-period open needs --name")
-            doc = pearlplus_period_open(a.piece_dir, a.gate, a.name, a.scheme, a.cubin, a.circuit_record)
+            from verity.protocols.compose import schemes
+
+            scheme = a.scheme or schemes.get("pearl-plus").option.partition(":")[2]
+            doc = pearlplus_period_open(a.piece_dir, a.gate, a.name, scheme, a.cubin, a.circuit_record)
         except (OSError, RuntimeError, ValueError, KeyError) as e:
             said = "RULE not read" if a.verb == "rule" else "PERIOD refused"
             print(f"{said}: {type(e).__name__}: {e}"[:1200], flush=True)
