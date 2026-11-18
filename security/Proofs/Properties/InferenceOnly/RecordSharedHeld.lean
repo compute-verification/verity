@@ -4,6 +4,7 @@ public import Proofs.Properties.InferenceOnly.RecordShared
 public import Proofs.Properties.InferenceOnly.RecordUnits
 public import Proofs.Properties.InferenceOnly.RecordDeclared
 public import Proofs.Properties.InferenceOnly.RecordTemplates
+public import Proofs.Properties.InferenceOnly.RecordLeafWide
 
 /-!
 # Shared runs held: the proof
@@ -709,26 +710,83 @@ theorem run_eq_of_gate {P : Prog} {parts : List Part} {R : Runs} (h : runsOf P p
   · omega
   · omega
 
+/-- **A shared run lies in its node's leaves.** -/
+def SharedInNode : Prop :=
+  ∀ (P : Prog), Properties.Record.SecurityProofs.ReadProg P → OwnRuns P → ∀ R, rowRuns P = some R →
+    ∀ x ∈ R.shared, x.2.1 + x.2.2 ≤ ((P.defs[P.root]!).body.nodes[x.1]!).out.leaves
+
 /-- **A unit's parameter leaf in a shared run is read by a part of its argument over that run.** A leaf of member `m`
 of a unit node `k`, parameter `i`, that lies in a shared run `x` of `rowRuns`: the node has that argument, and one of
-its parts is a run of `x` (`partRun`), strided parts and parts read more than once included. Open: the leaf lemma of
-`ResolveRows` (`LeafAt`, `arg_leaf`) with the shared case, and `runsOf_eqOrApart`, prove it. -/
+its parts is a run of `x` (`partRun`), strided parts and parts read more than once included. -/
 def LeafPart : Prop :=
-  ∀ (P : Prog), Properties.Record.SecurityProofs.ReadProg P → ∀ R, rowRuns P = some R →
+  ∀ (P : Prog), Properties.Record.SecurityProofs.ReadProg P → OwnRuns P → ∀ R, rowRuns P = some R →
     ∀ k, k < (P.defs[P.root]!).body.nodes.size →
       InferenceOnlyVerifier.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false →
       (((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch) →
       ∀ m, m < ((P.defs[P.root]!).body.nodes[k]!).members → ∀ i t g,
         i < (P.defs[(P.child P.rootScope k m).d]!).params.size →
+        t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves →
         Flock.Program.resolve P (P.child P.rootScope k m) (⟨true, i, t⟩ : Flock.Program.Ref) = .ok g →
         ∀ x ∈ R.shared, (P.defs[P.root]!).body.offsets[x.1]! + x.2.1 ≤ g →
           g < (P.defs[P.root]!).body.offsets[x.1]! + x.2.1 + x.2.2 →
           i < ((P.defs[P.root]!).body.nodes[k]!).args.size ∧
             ∃ q ∈ (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts.toList, ∃ b, partRun P q = some (x, b)
 
+/-- **`LeafPart`, where shared runs lie in their nodes' leaves**: the leaf is in a part's run of an input node
+(`unit_leaf`), and that run and `x` hold one gate, so they are one run (`node_of_gate`, `run_eq_of_gate`). -/
+theorem leafPart_of (hIN : SharedInNode) : LeafPart := by
+  intro P hP hO R hR k hk hu hf m hm i t g hi ht hres x hx hlo hhi
+  obtain ⟨hov, hlayb⟩ := Properties.Record.SecurityProofs.read_walk hP
+  have hP' := hP
+  obtain ⟨⟨bytes, hdec⟩, -⟩ := hP'
+  obtain ⟨hroot, -, hL, -, -, -⟩ := Properties.SecurityProofs.Resolve.decoded_walk bytes P hdec hov hlayb
+  obtain ⟨-, -, hnode⟩ := Properties.SecurityProofs.Resolve.decoded_root bytes P hdec k hk
+  have hia : i < ((P.defs[P.root]!).body.nodes[k]!).args.size := by
+    rw [hnode.1]
+    exact hi
+  obtain ⟨n, j, hleaf, hn, hj, ho, hg⟩ := Properties.SecurityProofs.Resolve.unit_leaf bytes P hdec hov hlayb hO hk hu
+    hf hm hia ht ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off
+  have hgn := hg g hres
+  obtain ⟨qi, base, count, hq, hrun, h1, h2, hjj⟩ := hleaf
+  have hpos := Properties.SecurityProofs.Resolve.run_pos hrun h1 h2
+  obtain ⟨⟨y, b⟩, hpy⟩ : ∃ yb, partRun P ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]!) = some yb := by
+    cases hp : partRun P ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]!) with
+    | none => simp [runOf, hp] at hrun
+    | some yb => exact ⟨yb, rfl⟩
+  have hy : y = (n, base, count) := by simpa [runOf, hpy] using hrun
+  subst hy
+  obtain ⟨-, runs, hrr, hro⟩ := rowRuns_own hO
+  rw [hR] at hrr
+  cases hrr
+  obtain ⟨hunit, hpart⟩ := Properties.SecurityProofs.Resolve.part_mem hk hu hia hq
+  have hqm := List.mem_flatMap.2 ⟨_, hunit, hpart⟩
+  obtain ⟨hx0, q', hq', b', hpx⟩ := runsOf_shared hro hx
+  obtain ⟨-, hxn, hxin, hxf⟩ := runOf_some (show runOf P q' = some x by simp [runOf, hpx])
+  have hxl := hIN P hP hO R hR x hx
+  obtain ⟨-, hc, hno⟩ := Properties.SecurityProofs.Resolve.decoded_root bytes P hdec x.1 hxn
+  have hprim : (P.defs[((P.defs[P.root]!).body.nodes[x.1]!).fn]!).prim = true := by
+    have h0 := hxin
+    unfold Desc.isInputNode at h0
+    exact (Bool.and_eq_true_iff.1 h0).1
+  obtain ⟨hleaves, hg1, -⟩ := Properties.SecurityProofs.Resolve.input_node _ _ hc hno hprim hxf
+  have hox : (P.defs[P.root]!).body.offsets[x.1 + 1]! =
+      (P.defs[P.root]!).body.offsets[x.1]! + ((P.defs[P.root]!).body.nodes[x.1]!).out.leaves := by
+    rw [(hL P.root hroot.1 hroot.2).2.2 x.1 hxn, hg1, hleaves, Nat.mul_one]
+  have hjb : base ≤ j ∧ j < base + count := by
+    rw [hjj]
+    exact ⟨Nat.le_add_right _ _, Nat.add_lt_add_left (Nat.mod_lt _ hpos) _⟩
+  obtain ⟨hn1, hj1⟩ := Properties.SecurityProofs.Resolve.node_of_gate P (hL P.root hroot.1) hroot.2 hxn hn
+    (j := g - (P.defs[P.root]!).body.offsets[x.1]!) (by omega) hj hox ho (by omega)
+  have hxy := run_eq_of_gate hro hq' hqm hpx hpy hx0 hpos (jx := g - (P.defs[P.root]!).body.offsets[x.1]!)
+    (jy := j) ⟨by omega, by omega⟩ hjb ⟨hn1, hj1⟩
+  refine ⟨hia, _, ?_, b, by rw [hxy]; exact hpy⟩
+  rw [getElem!_pos _ qi hq]
+  exact Array.mem_toList_iff.2 (Array.getElem_mem hq)
+
 /-- **`SharedHeld`, from the stage, where a shared leaf is read by a part over its run** (`LeafPart`). -/
-theorem sharedHeld_of (h3 : LeafPart) : SharedHeld := by
+theorem sharedHeld_of (hNE : EdgeFreeReads) (h3 : LeafPart) : SharedHeld := by
   intro j tr c rs hread hrs g hg
+  have hO : OwnRuns c.f.P := ⟨(program_of_read hread).2.2.2.2.1, hNE _ _ _ hread⟩
   obtain ⟨R, ⟨xi, xb, xn⟩, hR, hx, hlo, hhi⟩ := hg
   have hP := Properties.Record.SecurityProofs.readProg_of_read hread
   obtain ⟨hin, hsh⟩ := read_shared hread
@@ -754,7 +812,18 @@ theorem sharedHeld_of (h3 : LeafPart) : SharedHeld := by
         sharedRow c.f.P rs' c.f.ts c.W c.x.decls c.isTheta s cc = some (some m) →
           m.1 = xi ∧ fillAt c.x.decls r = some (.read m.2.1) ∧ c.isTheta m.2.1 = true := by
     intro r l lo hi hrl
-    obtain ⟨sc, hU, pi, hpi, hport, hrw, -, hres, -, -⟩ := hrl
+    obtain ⟨sc, hU, pi, hpi, hport, hrw, hl, hres, -, -⟩ := hrl
+    have hsz := Properties.Record.SecurityProofs.inRow_size (c.f.P.defs[sc.d]!) pi (c.W.cutsOf r.tid r.port) r.row hrw
+    have ht : r.row * ((c.f.P.defs[sc.d]!).params[pi]!.2.leaves / c.W.cutsOf r.tid r.port) + l <
+        ((c.f.P.defs[sc.d]!).params[pi]!).2.leaves := by
+      have hl' : l < (c.f.P.defs[sc.d]!).params[pi]!.2.leaves / c.W.cutsOf r.tid r.port := by
+        rw [← hsz]
+        exact hl
+      have h1 := Nat.mul_div_le (c.f.P.defs[sc.d]!).params[pi]!.2.leaves (c.W.cutsOf r.tid r.port)
+      have h2 := Nat.mul_le_mul_right ((c.f.P.defs[sc.d]!).params[pi]!.2.leaves / c.W.cutsOf r.tid r.port)
+        (show r.row + 1 ≤ c.W.cutsOf r.tid r.port from hrw)
+      rw [Nat.add_one_mul] at h2
+      omega
     obtain ⟨i, mm, hi, htm, hmm, hu, hsc⟩ := hU
     have hri : rs'[i]! = rs'[i] := getElem!_pos rs' i hi
     rw [hri] at htm hmm hsc
@@ -770,7 +839,7 @@ theorem sharedHeld_of (h3 : LeafPart) : SharedHeld := by
       unfold InferenceOnlyVerifier.Desc.isInputNode
       simp [hkey]
     subst hsc
-    obtain ⟨hargs, q, hq, b, hpr⟩ := h3 c.f.P hP R hR _ hK hu' hfK mm (by rw [← hcK]; exact hmm) pi _ g hpi hres
+    obtain ⟨hargs, q, hq, b, hpr⟩ := h3 c.f.P hP hO R hR _ hK hu' hfK mm (by rw [← hcK]; exact hmm) pi _ g hpi ht hres
       (xi, xb, xn) hx hlo hhi
     have hc' : (sharedRuns c.f.P).contains (xi, xb, xn) = true := by
       rw [hsr]
