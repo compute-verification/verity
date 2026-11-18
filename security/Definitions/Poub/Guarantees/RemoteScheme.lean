@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Core.Scheme
+public import Definitions.Poub.Remote.Scheme
 public import Definitions.Poub.Guarantees.RemoteSketch
 
 /-!
@@ -102,13 +102,13 @@ open scoped ENNReal
 /-- **The bits read, through the scheme, at any sketch bound.** On any trace whose receipts' sketch fails on an
 accepted outcome with probability at most `δs` (`SketchBound`), and any sampling design `D` on its receipts at whose
 accepted outcomes and wrong receipts the audit's bound holds at error `ε` (`AuditBound`, the uniform probability on the
-outcomes), the scheme `T.scheme b δs` gets back at every cutoff `δ`: an accepted outcome credits its planned blocks'
-bits beyond the bits read on the node and the missable cost with probability at most `δ + ε + δs`. -/
+outcomes, `Run.prE`), the scheme `T.scheme b δs` gets back at every cutoff `δ`: an accepted outcome credits its planned
+blocks' bits beyond the bits read on the node and the missable cost with probability at most `δ + ε + δs`. -/
 def ReadsGetsBack : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (T : Trace Ω) (b : ℕ) (δs : ℝ) (D : Verity.SamplingDesign (Fin T.passes × Fin T.blocks))
     (ε : ℝ≥0∞),
-    Verity.AuditBound D (fun p : Ω → Prop => ENNReal.ofReal (Pouw.pr p)) T.accepts T.wrong ε → SketchBound T δs →
-    ∀ δ, (T.scheme b (ENNReal.ofReal δs)).GetsBack D (fun p : Ω → Prop => ENNReal.ofReal (Pouw.pr p)) δ ε
+    Verity.AuditBound D (ResourceAccounting.Remote.Run.prE (Ω := Ω)) T.accepts T.wrong ε → SketchBound T δs →
+    ∀ δ, (T.scheme b (ENNReal.ofReal δs)).GetsBack (fun _ => D) (ResourceAccounting.Remote.Run.prE (Ω := Ω)) δ ε
 
 /-- **The bits read, through the scheme, at the deployed receipts.** `ReadsGetsBack` on a trace over a remote
 session's sketch outcomes under `SketchBoundDeployed`'s premises, at its term `δSketch 216 513 Q P N εrank`. -/
@@ -121,8 +121,8 @@ def ReadsGetsBackDeployed : Prop :=
     ∑ j, G j ≤ Q + P → ∑ j, qtot j ≤ Q →
     ResourceAccounting.Assumptions.SketchHashRandom A (((Q : ℝ) + P) ^ 2 / 2 ^ 513) → KeyBudget A qtot → Receipted A T →
     Present A T →
-    Verity.AuditBound D (fun p : Outcome β Hs N 128 → Prop => ENNReal.ofReal (Pouw.pr p)) T.accepts T.wrong ε →
-    ∀ δ, (T.scheme b (ENNReal.ofReal (δSketch 216 513 Q P N εrank))).GetsBack D
-      (fun p : Outcome β Hs N 128 → Prop => ENNReal.ofReal (Pouw.pr p)) δ ε
+    Verity.AuditBound D (ResourceAccounting.Remote.Run.prE (Ω := Outcome β Hs N 128)) T.accepts T.wrong ε →
+    ∀ δ, (T.scheme b (ENNReal.ofReal (δSketch 216 513 Q P N εrank))).GetsBack (fun _ => D)
+      (ResourceAccounting.Remote.Run.prE (Ω := Outcome β Hs N 128)) δ ε
 
 end ResourceAccounting.Guarantees.Remote

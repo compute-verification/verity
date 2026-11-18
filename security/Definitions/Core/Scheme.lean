@@ -5,8 +5,9 @@ public import Definitions.Core.LevelsCredited
 /-!
 # A scheme: what a resource accounting protocol supplies, and what it gets back
 
-A resource accounting protocol is to state its guarantee through these and define none of its own. No guarantee is proved
-through an instance yet: each still stands in its own form.
+A resource accounting protocol is to state its guarantee through these and define none of its own. One guarantee is proved
+through an instance, PoUB's bits read on a session's trace (`ResourceAccounting.Guarantees.Remote.ReadsGetsBack`); every
+other still stands in its own form.
 
 * `Scheme`: what a protocol supplies to the proof layers. Its blocks, the units the audit samples; each block's
   cost, the resource it stands for; its charges, the resource it can't tie to a block; the runs the verifier

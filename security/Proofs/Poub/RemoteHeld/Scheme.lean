@@ -25,20 +25,20 @@ variable {Ω : Type} [Fintype Ω]
 
 /-- `SketchBound T δs` bounds the scheme's break event by `δs`. -/
 theorem breaks_le {T : Trace Ω} {δs : ℝ} (h : SketchBound T δs) (b : ℕ) (δ' : ℝ≥0∞) :
-    ENNReal.ofReal (Pouw.pr (α := Ω) (T.scheme b δ').breaks) ≤ ENNReal.ofReal δs :=
+    ResourceAccounting.Remote.Run.prE (Ω := Ω) (T.scheme b δ').breaks ≤ ENNReal.ofReal δs :=
   ENNReal.ofReal_le_ofReal h
 
 /-- At `δs ≥ 0`, the scheme's break event bounded by `δs` is `SketchBound T δs`. -/
 theorem sketchBound_of_breaks {T : Trace Ω} {δs : ℝ} (hδ : 0 ≤ δs) (b : ℕ) (δ' : ℝ≥0∞)
-    (h : ENNReal.ofReal (Pouw.pr (α := Ω) (T.scheme b δ').breaks) ≤ ENNReal.ofReal δs) : SketchBound T δs :=
+    (h : ResourceAccounting.Remote.Run.prE (Ω := Ω) (T.scheme b δ').breaks ≤ ENNReal.ofReal δs) : SketchBound T δs :=
   (ENNReal.ofReal_le_ofReal_iff hδ).1 h
 
 /-- **The bits read, through the scheme, at any sketch bound**
 (`ResourceAccounting.Guarantees.Remote.ReadsGetsBack`). -/
 theorem ReadsGetsBack : ResourceAccounting.Guarantees.Remote.ReadsGetsBack := by
   intro Ω _ T b δs D ε haud hk δ
-  refine Verity.Scheme.accountingLayer (T.scheme b (ENNReal.ofReal δs)) D
-    (fun p : Ω → Prop => ENNReal.ofReal (Pouw.pr p)) ε ?_ ?_ haud (breaks_le hk b _) δ
+  refine Verity.Scheme.accountingLayer (T.scheme b (ENNReal.ofReal δs)) (fun _ => D)
+    (ResourceAccounting.Remote.Run.prE (Ω := Ω)) ε ?_ ?_ haud (breaks_le hk b _) δ
   · exact fun p q h => ENNReal.ofReal_le_ofReal (pr_mono (α := Ω) h)
   · exact fun p q => (ENNReal.ofReal_le_ofReal (pr_or_le (α := Ω) p q)).trans ENNReal.ofReal_add_le
 
