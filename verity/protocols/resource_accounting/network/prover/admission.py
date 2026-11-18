@@ -184,14 +184,14 @@ class ReleaseOrder:
 
 def watermark_line(line: bytes, last: tuple[int, ...] | None = None) -> tuple[int, int, tuple[int, ...]]:
     """(t, n, lost) of one watermark line, ``t n``, any lost releases and its newline, as the network attester's own
-    reader reads it (`verity.protocols.resource_accounting.network.verifier.release.read_watermark`): bucket t has closed, the releases of
+    reader reads it (`verity.release.read_watermark`): bucket t has closed, the releases of
     buckets up to t are exactly those numbered below n, and each of ``lost`` is a release of bucket t that its server
     connection lost on the way, which won't come. `ValueError` unless it follows ``last``, the line before it (its
     (t, n)): t one past last's (0 first), n at least last's, and the lost rising from last's n to below n, so no line
     names a release an earlier line counted and each lost one is named once."""
     # Imported where a line is read, not with the module, which an adapter loads in each of its serving processes and
     # which imports only the stdlib and this package.
-    from verity.protocols.resource_accounting.network.verifier.release import (
+    from verity.release import (
         read_watermark,
     )
     return read_watermark(line, last)
@@ -778,9 +778,7 @@ class Admitter:
             off()
 
 
-def feed_file(directory: str, name: str | None = None) -> str:
-    """The file in a server's feed directory (`hooks.FRONT`'s ``ctx["feed"]``) that the scheme ``name``'s front appends
-    to and its engine reads."""
+def _feed(directory: str, name: str | None = None) -> str:
     return os.path.join(directory, f"{name or scheme_name()}.jsonl")
 
 
@@ -792,10 +790,9 @@ class FeedReader:
 
     def __call__(self) -> list[dict[str, Any]]:
         if self.fd is None:
-            try:
-                self.fd = os.open(self.path, os.O_RDONLY)
-            except FileNotFoundError:
-                return []
+            if not os.path.exists(self.path):
+                return []                                # its writer has appended nothing yet
+            self.fd = os.open(self.path, os.O_RDONLY)
         data = self.tail
         while chunk := os.read(self.fd, 1 << 16):
             data += chunk
@@ -816,20 +813,21 @@ def _log_to(directory: str | None) -> Callable[[dict[str, Any]], None] | None:
 
 def engine(settings: Mapping[str, Any], feed: str, name: str | None = None) -> Admitter:
     """The engine's side (`hooks.ENGINE`): the tick gate (`Admitter` under ``tick`` with ``settings``, `tick_config`'s),
-    reading the records the front appends to its feed file (`feed_file` in ``feed``)."""
+    reading the records the front appends to its feed file in the directory ``feed``."""
     return Admitter({**settings, "order": "tick"}, source=f"{name or scheme_name()}'s settings",
-                    pull=FeedReader(feed_file(feed, name)), log=_log_to(settings.get("log")))
+                    pull=FeedReader(_feed(feed, name)), log=_log_to(settings.get("log")))
 
 
 class FrontFeed:
     """The front's side (`hooks.FRONT`) where the engine runs in another process: `TickAdmit` on the front's hooks,
-    appending its records to the feed file (`feed_file`) the engine's gate reads. Each input that arrives with a release
+    appending its records to the feed file the engine's gate reads, and each release and watermark end, as the feed
+    has them, to ``log`` (the scheme's ``log`` directory's ``tick.PID.jsonl``) as it comes. Each input that arrives with a release
     is that release, its key the input; a malformed or repeated one is refused (`hooks.RefuseInput`); one complete at
     the front at step 0 never reached the engine and is passed; the watermark's route and its lost releases' refusals
     are `TickAdmit.attach`'s."""
 
-    def __init__(self, feed: str, name: str | None = None) -> None:
-        self.path = feed_file(feed, name)
+    def __init__(self, feed: str, name: str | None = None, log: str | None = None) -> None:
+        self.path, self.log = _feed(feed, name), _log_to(log)
         self.admit = TickAdmit(lambda adm: None, lambda key: None, self._append)
         self.inputs: dict[str, tuple[str, int]] = {}
 
@@ -839,6 +837,8 @@ class FrontFeed:
             os.write(fd, json.dumps(rec, separators=(",", ":")).encode() + b"\n")
         finally:
             os.close(fd)
+        if self.log is not None and ("key" in rec or rec.get("end")):
+            self.log(rec)
 
     def attach(self, exchange: Any, name: str | None = None) -> FrontFeed:
         name = name or scheme_name()

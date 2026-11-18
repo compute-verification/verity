@@ -8,7 +8,13 @@
 #                  the Lean verifier (elan under KEEP/home, `lake build poub-verifier`), a vLLM venv (KEEP/vllm) and the
 #                  pinned checkpoint (KEEP/work/hf). A second setup job takes up where the first stopped.
 #   STAGE=session  `verity bench memory --local` from what setup kept, as a trial (VERITY_BENCH_TRIAL=1: no metric's
-#                  line), its records copied to result/session/.
+#                  line), its records copied to result/session/. vLLM's engine builds FlashInfer's sampler at its start
+#                  (nvcc, ninja and g++, into ~/.cache/flashinfer), so the session builds and loads it first, with the
+#                  engine's own CUDA_HOME, PATH and CXX, and a build that fails is refused by name before any lease.
+#
+# NVIDIA's nvcc packages are not a whole toolkit: what the sampler's build asks beyond them (curand.h, and the link
+# names libcudart.so and stubs/libcuda.so) is `jit_kit`, the mark `jit`, which either stage makes where it is missing,
+# so a KEEP whose setup predates it needs no second setup job.
 #
 # The tree is the payload's (SEND= infra/vcf/payload.sh's archive, in the job's directory) or else VERITY_COMMIT's tarball
 # from GitHub; the commit is handed to the bench as RESEARCH_SOURCE_SHA, since the tree has no .git. The last line printed
@@ -34,6 +40,19 @@ say() { echo "$(date -u +%H:%M:%SZ) $*"; }
 fail() { WHY=$1; exit "${2:-1}"; }
 got() { REACHED=$([ "$REACHED" = nothing ] && echo "$1" || echo "$REACHED, $1"); say "reached $1"; }
 have() { [ -f "$KEEP/done/$1" ]; }
+jit_kit() {
+  have jit && return
+  uv pip install -q --python "$KEEP/cuda/bin/python" "nvidia-curand==10.4.0.35" > "$J/result/jit.log" 2>&1 ||
+    fail "NVIDIA's curand package can't be installed ($(tail -1 "$J/result/jit.log"))"
+  [ -f "$CUDA_HOME/include/curand.h" ] || fail "the curand package put no include/curand.h under $CUDA_HOME"
+  [ -e "$CUDA_HOME/lib64" ] || ln -s lib "$CUDA_HOME/lib64"
+  # the linker's names: the runtime under its unversioned name, and the driver's library as a stub of its soname,
+  # as a toolkit's lib64/stubs has it (the driver's own libcuda.so.1 is what loads)
+  ln -sf libcudart.so.13 "$CUDA_HOME/lib/libcudart.so" && mkdir -p "$CUDA_HOME/lib/stubs" &&
+    gcc -shared -Wl,-soname,libcuda.so.1 -o "$CUDA_HOME/lib/stubs/libcuda.so" -x c /dev/null >> "$J/result/jit.log" 2>&1 ||
+    fail "the link names can't be made under $CUDA_HOME/lib ($(tail -1 "$J/result/jit.log"))"
+  touch "$KEEP/done/jit"
+}
 
 {
   echo "node ${SLURMD_NODENAME:-$(hostname -s)}, job ${SLURM_JOB_ID:-none}, gpus ${SLURM_JOB_GPUS:-${CUDA_VISIBLE_DEVICES:-none}}, $(nproc) CPUs"
@@ -109,7 +128,7 @@ if [ "$STAGE" = setup ]; then
       uv pip install -q --python "$KEEP/cuda/bin/python" "${CU_PKGS[@]}" > "$J/result/cuda.log" 2>&1 ||
       fail "NVIDIA's nvcc packages can't be installed ($(tail -1 "$J/result/cuda.log"))"
   fi
-  CUDA_HOME=$KEEP/cuda/lib/python3.12/site-packages/nvidia/cu13
+  CUDA_HOME=$("$KEEP/cuda/bin/python" -c 'import nvidia.cu13 as m; print(m.__path__[0])') || fail "no nvidia.cu13 in $KEEP/cuda"
   [ -x "$CUDA_HOME/bin/nvcc" ] || fail "the nvcc package put no bin/nvcc under $CUDA_HOME"
   [ -e "$CUDA_HOME/lib64" ] || ln -s lib "$CUDA_HOME/lib64"
   if [ -n "${CXX_FROM_CONDA:-}" ] || ! command -v g++ > /dev/null; then
@@ -130,6 +149,7 @@ if [ "$STAGE" = setup ]; then
   export PATH=$CUDA_HOME/bin:$KEEP/cuda/bin:$PATH
   "$CUDA_HOME/bin/nvcc" --version | tail -2 || fail "nvcc doesn't run"
   touch "$KEEP/done/nvcc"; got "nvcc $("$CUDA_HOME/bin/nvcc" --version | sed -n 's/.*release \([0-9.]*\),.*/\1/p') and ninja $(ninja --version)"
+  jit_kit
 
   # run.sh's own flags and sources (its node-run build), for this card's sm
   FLAGS=(-O3 -gencode "arch=compute_$SM,code=sm_$SM" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
@@ -165,12 +185,22 @@ fi
 # STAGE=session
 for s in tree-env nvcc lean vllm checkpoint; do have "$s" || fail "setup hasn't kept $s at $COMMIT: run STAGE=setup again" 3; done
 got "what setup kept at $COMMIT"
-CUDA_HOME=$KEEP/cuda/lib/python3.12/site-packages/nvidia/cu13
+CUDA_HOME=$("$KEEP/cuda/bin/python" -c 'import nvidia.cu13 as m; print(m.__path__[0])') || fail "no nvidia.cu13 in $KEEP/cuda" 3
 # shellcheck source=/dev/null
 [ -f "$KEEP/cc.sh" ] && . "$KEEP/cc.sh"
 mkdir -p "$KEEP/work"
 echo "$CARD" > "$KEEP/work/allowed-gpus"
-export CUDA_HOME PATH=$CUDA_HOME/bin:$KEEP/cuda/bin:$PATH VLLM_PY=$KEEP/vllm/bin/python LOCAL_WORK=$KEEP/work \
+export CUDA_HOME PATH=$CUDA_HOME/bin:$KEEP/cuda/bin:$PATH
+jit_kit
+CXX=$(command -v g++) || fail "no g++ on the PATH: run STAGE=setup again"
+export CXX
+timeout "$(left)" "$KEEP/vllm/bin/python" -c '
+from flashinfer.jit.sampling import gen_sampling_module
+s = gen_sampling_module(); s.build_and_load(); print("loaded", s.build_dir)' > "$J/result/sampler.log" 2>&1 ||
+  fail "FlashInfer's sampler, which vLLM's engine builds at its start, doesn't build here: $(grep -m1 -E 'error|cannot find' "$J/result/sampler.log" || tail -1 "$J/result/sampler.log") (result/sampler.log)"
+got "FlashInfer's sampler built and loaded (nvcc $("$CUDA_HOME/bin/nvcc" --version | sed -n 's/.*release \([0-9.]*\),.*/\1/p'), ninja $(ninja --version), $("$CXX" --version | head -1))"
+say "CUDA_HOME=$CUDA_HOME CXX=$CXX nvcc=$(command -v nvcc) ninja=$(command -v ninja)"
+export VLLM_PY=$KEEP/vllm/bin/python LOCAL_WORK=$KEEP/work \
   LEAN_EXE=$T/$LEAN_PKG/.lake/build/bin/poub-verifier RESEARCH_SOURCE_SHA=$COMMIT VERITY_BENCH_TRIAL=1 GPU=$CARD \
   GPU_LEASE_ALLOWED_FILE=$KEEP/work/allowed-gpus
 say "verity bench memory --local on card $CARD (sm_$SM), $(( $(left) / 60 )) min left"

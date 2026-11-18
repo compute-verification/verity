@@ -26,6 +26,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from verity.circuits import population as PN
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.evaluation.batch import evaluate_batch
@@ -39,6 +40,7 @@ from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, int
 from verity_vllm.pipeline import long_row as LR
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.circuits import replay_links as RL
 
 RUN = "0" * 128
 
@@ -122,8 +124,8 @@ def test_the_layout_takes_it_inline_and_round_two_links_and_wires_each_units_ope
     fn = defs[descriptor_id(L.replay)]
     cs = SS._callers_of(defs, fn)
     assert None not in cs.template
-    assert all(SS._node_links(cs, fn, k, node) is not None for k, node in enumerate(fn.body.nodes))
-    assert all(SS._node_wires(cs, fn, k, node) is not None for k, node in enumerate(fn.body.nodes))
+    assert all(RL._node_links(cs, fn, k, node) is not None for k, node in enumerate(fn.body.nodes))
+    assert all(RL._node_wires(cs, fn, k, node) is not None for k, node in enumerate(fn.body.nodes))
     wires = {(x.template.partition("{")[0], x.port, x.writer.partition("{")[0], x.wport)
              for x, _per, _runs in SS.wire_runs(defs, descriptor_id(L.replay))}
     assert {("DsaPositionsChunk_v1", "slots", "DsaPositionsMerge_v2", "o0"),
@@ -232,7 +234,7 @@ def test_its_links_are_the_ones_round_two_derives_and_its_window_takes_them() ->
         values = IL.link_values(links, q)
         w = IR.interior_window(ms, cells, "00", list(range(q)), wires, links, rows)
         assert [m.n for m in w.members] == [q * n for n in cells]
-        want = P.mixed_population_program([(x, q * n) for x, n in zip(L.templates, cells, strict=True)], values=values)
+        want = PN.mixed_population_program([(x, q * n) for x, n in zip(L.templates, cells, strict=True)], values=values)
         digests.append(P.program_digest(w.program))
         assert digests[-1] == P.program_digest(want)
     assert digests[0] != digests[1]
@@ -342,7 +344,7 @@ def test_a_sampled_spans_units_commit_as_its_interior() -> None:
     it = IR.interior(sampled, cells, "00" * 64, [0, 2], **kw)
     w = it.committed.window
     assert [(m.template, m.n) for m in w.members] == [(m.template, 2 * n) for m, n in zip(ms, cells, strict=True)]
-    want = P.mixed_population_program([(x, 2 * n) for x, n in zip(L.templates, cells, strict=True)],
+    want = PN.mixed_population_program([(x, 2 * n) for x, n in zip(L.templates, cells, strict=True)],
                                       values=IL.link_values(links, 2))
     assert P.program_digest(w.program) == P.program_digest(want)
     assert [e["value"] for e in it.record["registered"]] == [f"{key}/{p}" for p in PARAMS]

@@ -1,5 +1,5 @@
 """``--admit tick`` in the corpus: the client's stand-in network attester, and the network attester's release headers
-and watermark as `verity.protocols.resource_accounting.network.verifier.release` makes them, against the server's real `scheme_plugin.Front`;
+and watermark as `verity.release` makes them, against the server's real `scheme_plugin.Front`;
 which traces take the tick, τ's calibration on a trace's busy cycle, the checkpoint's stop ids, the hook's record of the
 KV pool, and what the summary keeps of a tick trace, a network attester trace's releases taken from the server's feed and checked
 against the attester's log."""
@@ -8,11 +8,9 @@ from __future__ import annotations
 import asyncio
 import io
 import json
-from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
-from verity.protocols.resource_accounting.network.prover.admission import feed_file
 
 
 async def app(scope, receive, send):
@@ -89,7 +87,7 @@ def test_stand_in_speaks_the_servers_tick_feed(tmp_path, mod, exchange):
 
     answer = asyncio.run(serve())
     assert answer[0]["status"] == 200 and c.done(3)
-    assert tp.FeedReader(sa.feed_file(str(tmp_path)))() == [{"key": "req-00000", "run": "ab12", "n": 0, "bucket": 0},
+    assert tp.FeedReader(sa.FrontFeed(str(tmp_path)).path)() == [{"key": "req-00000", "run": "ab12", "n": 0, "bucket": 0},
                                      {"key": "req-00001", "run": "ab12", "n": 1, "bucket": 0},
                                      {"key": "req-00002", "run": "ab12", "n": 2, "bucket": 2},
                                      {"run": "ab12", "t": 0, "n": 2}, {"run": "ab12", "t": 1, "n": 2},
@@ -327,7 +325,7 @@ def test_the_servers_feed_reads_the_network_attesters_releases_and_watermark(tmp
     corpus = mod("corpus")
     sa, tp = corpus.tick_modules()
     monkeypatch.syspath_prepend(str(corpus.ROOT))
-    from verity.protocols.resource_accounting.network.verifier import release
+    from verity import release
     feed_mw, run = front(sa, tp, tmp_path), bytes.fromhex(RUN)
 
     def line(t: int, n: int) -> bytes:
@@ -341,7 +339,7 @@ def test_the_servers_feed_reads_the_network_attesters_releases_and_watermark(tmp
         return await watermark(feed_mw, asgi(release.watermark_head(run)), [line(0, 2), line(1, 2), line(2, 3)])
 
     assert asyncio.run(serve())[0]["status"] == 200
-    assert tp.FeedReader(sa.feed_file(str(tmp_path)))() == [{"key": "req-00000", "run": RUN, "n": 0, "bucket": 0},
+    assert tp.FeedReader(sa.FrontFeed(str(tmp_path)).path)() == [{"key": "req-00000", "run": RUN, "n": 0, "bucket": 0},
                                      {"key": "req-00001", "run": RUN, "n": 1, "bucket": 0},
                                      {"key": "req-00002", "run": RUN, "n": 2, "bucket": 2},
                                      {"run": RUN, "t": 0, "n": 2}, {"run": RUN, "t": 1, "n": 2},
@@ -360,9 +358,9 @@ def network_attester_trace(root, released: dict[int, tuple[int, int]], schedule:
               "egress_cells": 4, "failed": None, "cut": False} for o, (n, a) in released.items()]
     (d / "warden" / "warden.json").write_text(json.dumps({"connections": conns,
                                                           "watermark": {"last": [3, 2], "lost": [], "error": None}}))
-    feed = [{"key": "a", "run": RUN, "n": 0, "bucket": 0}, {"key": "b", "run": RUN, "n": 1, "bucket": 1},
-            {"run": RUN, "t": 0, "n": 1}, {"run": RUN, "t": 1, "n": 2}, {"run": RUN, "end": True}]
-    Path(feed_file(str(d / "raw"))).write_text("".join(json.dumps(x) + "\n" for x in feed))
+    logged = [{"key": "a", "run": RUN, "n": 0, "bucket": 0}, {"key": "b", "run": RUN, "n": 1, "bucket": 1},
+              {"run": RUN, "end": True}]
+    (d / "raw" / "tick.2.jsonl").write_text("".join(json.dumps(x) + "\n" for x in logged))
     return d
 
 
@@ -370,7 +368,7 @@ def test_summary_takes_a_network_attester_traces_releases_from_the_server_where_
     summary = mod("summary")
     network_attester_trace(tmp_path, {1: (0, 0), 2: (1, 1)}, mod("corpus").NETWORK_ATTESTER_SCHEDULE)
     t = summary.summarize(tmp_path)["traces"]["warden-heavy"]
-    assert t["tick"]["releases"] == {"from": f"the server's feed (raw/{Path(feed_file('')).name})", "run": RUN, "released": 2,
+    assert t["tick"]["releases"] == {"from": "the server's front's log (raw/tick.PID.jsonl)", "run": RUN, "released": 2,
                                      "agree": 2, "unlogged": 0, "disagree": 0, "disagreeing": []}
     assert t["tick"]["steps"] == 2 and t["warden"]["connections"] == 2
     for trace in ("warden-heavy", "warden-heavy.admitted", "warden-heavy.released"):

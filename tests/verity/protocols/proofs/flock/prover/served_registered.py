@@ -1,4 +1,4 @@
-"""A served tree registered as a port (`verity.protocols.proofs.spot.verifier.one_stage.served`), on a statement Flock
+"""A served tree registered as a port (`verity.protocols.proofs.spot.prover.served`), on a statement Flock
 proves: the end-to-end fixture of `test_lean_served_registered.py`, beside it in Flock's tests (which may import core).
 
 The program (`program`) is `N` RoPE d64 template instances, instance `i` reading row `POS[i]` of the served tree `cs_table`
@@ -38,7 +38,8 @@ from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G
-from verity.protocols.proofs.spot.verifier.one_stage.served import ServedTree, register_served
+from verity.commitments import registered_value as RV
+from verity.protocols.proofs.spot.prover.served import ServedTree, register_served
 
 N = 32
 ROWS = 40
@@ -50,7 +51,7 @@ OUT_VALUE = "rope_out"
 WORDS = 64
 SEED = 20261020
 #: `--schema`'s names for the row formats a served tree may be
-FORMATS = {"v1": G.SCHEMA, "v2": G.SCHEMA_V2, "seg": G.SCHEMA_SEG}
+FORMATS = {"v1": RV.SCHEMA, "v2": G.SCHEMA_V2, "seg": G.SCHEMA_SEG}
 
 
 def program() -> tuple[Program, dict]:
@@ -71,7 +72,7 @@ def program() -> tuple[Program, dict]:
             P.template_instance_query(template))
 
 
-def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
+def stage(out: Path, seed: int = SEED, schema: str = RV.SCHEMA) -> dict:
     from verity_flock import circuit as FC
     from verity_flock import subcircuit_templates as TM
     from synthetic_sets import synthetic_set
@@ -83,7 +84,7 @@ def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
     s = InputSet.open(synthetic_set(TM.rope_head(64), N, seed, out / "set")["path"])
     low = FC.lowering_for_set(s)
     x = np.asarray(s.port("x", 0, N), np.uint16).reshape(N, -1)
-    bits = {} if schema == G.SCHEMA else {"port_bits": [16 * x.shape[1], 16 * WORDS],
+    bits = {} if schema == RV.SCHEMA else {"port_bits": [16 * x.shape[1], 16 * WORDS],
                                           "seg_ports": frozenset({"cs"} if schema == G.SCHEMA_SEG else ())}
     text = FC.compose(low, s.subcircuit, partition=P.digest(part), program=P.program_digest(prog), statics=FC.set_statics(s),
                       **bits)
@@ -99,14 +100,14 @@ def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
     table = np.random.default_rng(seed).integers(0, 1 << 16, (ROWS, WORDS))
     for i, p in enumerate(POS):
         table[p] = cs[i]
-    reg = G.Registered.commit(P.program_digest(prog), VALUE, table.tolist(), schema=schema)
+    reg = RV.Registered.commit(P.program_digest(prog), VALUE, table.tolist(), schema=schema)
     positions, refs = G.table(POS)
     rows, salts, entry = reg.statement(positions)
-    bit_rows = G.SCHEMA if schema == G.SCHEMA else G.SCHEMA_V2
-    reg_x = G.Registered.commit(P.program_digest(prog), "x", x.tolist(), schema=bit_rows)
+    bit_rows = RV.SCHEMA if schema == RV.SCHEMA else G.SCHEMA_V2
+    reg_x = RV.Registered.commit(P.program_digest(prog), "x", x.tolist(), schema=bit_rows)
     x_rows, x_salts, x_entry = reg_x.statement(range(N))
     outs = np.asarray(s.port("out", 0, N), np.uint16).reshape(N, -1)
-    reg_out = G.Registered.commit(P.program_digest(prog), OUT_VALUE, outs.tolist(), schema=bit_rows)
+    reg_out = RV.Registered.commit(P.program_digest(prog), OUT_VALUE, outs.tolist(), schema=bit_rows)
     out_rows, out_salts, out_entry = reg_out.statement(range(N))
     FC.write(text, s, 0, N, out / f"inst-{N}.bin", out / f"pub-{N}.bin", list(range(N)), share_rows=True,
              outs={"out": np.asarray(out_rows, np.uint16)},
@@ -114,7 +115,7 @@ def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
              salts={"x": x_salts, "cs": salts, "out": out_salts},
              registered={"cs": entry, "x": x_entry, "out": out_entry})
     tree, x_tree = ServedTree.of(reg), ServedTree.of(reg_x)
-    out_port = {**reg_out.entry(), **G.width_entry(G.WORD_BITS), **G.schema_entry(bit_rows), "reads": list(range(N))}
+    out_port = {**reg_out.entry(), **RV.width_entry(RV.WORD_BITS), **RV.schema_entry(bit_rows), "reads": list(range(N))}
     (out / "served.json").write_text(json.dumps(dataclasses.asdict(tree), sort_keys=True))
     (out / "served-x.json").write_text(json.dumps(dataclasses.asdict(x_tree), sort_keys=True))
     (out / "out-port.json").write_text(json.dumps(out_port, sort_keys=True))

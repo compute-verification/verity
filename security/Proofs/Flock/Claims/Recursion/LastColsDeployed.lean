@@ -40,7 +40,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-! ## A step that accepts decides -/
 
 /-- **A step that accepts decides**, within its own calls. -/
-theorem next_acc_decide {zk : Bool} {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} {as : List Claims.Msg}
+theorem next_acc_decide {zk : Bool} {H : Hash.Msg → Hash.Msg} {x : Hash.Msg} {as : List Hash.Msg}
     {cs : List Coin} (h : ((next zk x as cs).eval H).1 = .acc) :
     ∃ s spec sts link c₁ mids f, act zk x as cs = .decide s spec sts link c₁ mids f ∧
       Runs H (decision zk s x link c₁ mids f) () (((next zk x as cs).eval H).2.map Prod.fst) := by
@@ -59,9 +59,9 @@ theorem next_acc_decide {zk : Bool} {H : Claims.Msg → Claims.Msg} {x : Claims.
 
 /-- **A decision reads the link from the first message, its coin from the first coin, and pairs the messages between
 the first and the last with their coins.** -/
-theorem act_decide_parts {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+theorem act_decide_parts {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
     ∃ a₁ rest crest, as = a₁ :: rest ∧ cs = c₁ :: crest ∧ linkOf a₁ = some link ∧
       mids = (rest.dropLast.map List.tail).zip crest.dropLast := by
   unfold act at h
@@ -106,10 +106,10 @@ theorem exists_mem_snd_ne {α β : Type} : ∀ {L₁ L₂ : List (α × β)}, L�
 
 /-! ## The coins of two records under one custody -/
 
-theorem coins_of_forall₂ {R : Round → Claims.Msg × Coin → Prop} :
-    ∀ {rs : List Round} {ms : List (Claims.Msg × Coin)}, List.Forall₂ R rs ms →
+theorem coins_of_forall₂ {R : Round → Hash.Msg × Coin → Prop} :
+    ∀ {rs : List Round} {ms : List (Hash.Msg × Coin)}, List.Forall₂ R rs ms →
       (∀ rd am, R rd am → rd.coins = am.2.vals rd.n) →
-      rs.map Round.coins = List.zipWith (fun n (am : Claims.Msg × Coin) => am.2.vals n) (rs.map Round.n) ms
+      rs.map Round.coins = List.zipWith (fun n (am : Hash.Msg × Coin) => am.2.vals n) (rs.map Round.n) ms
   | [], [], .nil, _ => rfl
   | rd :: _, am :: _, .cons hab h, hR => by
     simp only [List.map_cons, List.zipWith_cons_cons, hR rd am hab, coins_of_forall₂ h hR]
@@ -145,7 +145,7 @@ theorem streams_sizes_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Ar
 by stream**, whatever hashes each verdict ran with. -/
 theorem streams_coins_eq (hs hs' : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record record' : String}
     {proofs proofs' : Array ByteArray} {lv lv' : Live} {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin}
-    {mids : List (Claims.Msg × Coin)}
+    {mids : List (Hash.Msg × Coin)}
     (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv)
     (hv' : verifyWithM hs' spec (tabsOf sts) record' proofs' = .ok ()) (hl' : liveOf spec record' = .ok lv')
     (hc : custody spec lv link c₁ mids = .ok ()) (hc' : custody spec lv' link' c₁' mids = .ok ()) :
@@ -308,9 +308,9 @@ theorem rawCols_keys {hs hs' : Hashes Flock.V} {seen seen' : Claims.Seen} {f f' 
 
 /-- **A plain decision's reps open a column only as a Merkle opening** of table 0's level 0 within the calls `L` its
 verdict ran in: `plain_opening_raw` at a decision, before the run that made it. -/
-theorem plain_opening_at {x : Claims.Msg} {seen : Claims.Seen} {L : List (Claims.Msg × Claims.Msg)} {s : Ins}
+theorem plain_opening_at {x : Hash.Msg} {seen : Claims.Seen} {L : List (Hash.Msg × Hash.Msg)} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (hs : setupOf false x = some (s, spec, sts))
+    {mids : List (Hash.Msg × Coin)} {f : Final} (hs : setupOf false x = some (s, spec, sts))
     (hf : lastFinal seen = some f) (hc : checks false s spec x link c₁ mids f = .ok ())
     (hv : verdictM false (hashesIn (L.map Prod.fst)) spec (tabsOf sts) f.record f.proofs = .ok ())
     {q : ℕ} {u : List 𝔽} (hu : (q, u) ∈ plainRawCols seen) :
@@ -407,7 +407,7 @@ theorem plain_opening_at {x : Claims.Msg} {seen : Claims.Seen} {L : List (Claims
 
 /-- **Two last messages the deployed plain verifier accepts after the same rounds and coins, that differ in table 0's
 opened columns, collide among the two decisions' calls**, at SHA-512. -/
-theorem plain_cols_tied {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.Msg} {cs : List Coin}
+theorem plain_cols_tied {x : Hash.Msg} {ms : List Hash.Msg} {l l' : Hash.Msg} {cs : List Coin}
     (hc : cs.length = ms.length + 1)
     (hacc : ((next false x (ms ++ [l]) cs).eval sha512).1 = .acc)
     (hacc' : ((next false x (ms ++ [l']) cs).eval sha512).1 = .acc)
@@ -446,7 +446,7 @@ theorem plain_cols_tied {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.M
   have hw' := verdict_within hvr'
   generalize hL₁ : ((next false x (b :: ms'' ++ [l]) cs).eval sha512).2 = L₁ at hw ⊢
   generalize hL₂ : ((next false x (b :: ms'' ++ [l']) cs).eval sha512).2 = L₂ at hw' ⊢
-  have hmsg : ∀ l₀ : Claims.Msg,
+  have hmsg : ∀ l₀ : Hash.Msg,
       (RecDeploy.plainView (b :: ms'' ++ [l₀]) cs).msgs.map Prod.fst = b :: ms'' ++ [l₀] := by
     intro l₀
     unfold RecDeploy.plainView

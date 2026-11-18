@@ -51,6 +51,7 @@ import keyed
 import numpy as np
 import pytest
 from test_lean_rec_coins import built, restaged  # noqa: F401
+from verity.circuits import population as PN
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate_call
@@ -314,7 +315,7 @@ def _f1_sample() -> dict:
     """The verifier's sample of the gate's inner session (`rec_live.full_draw`, as `rec_reprice.py partition` writes it):
     the stratified sampling design at K = the population over its own population program and template query, every unit."""
     t = bind(G.GemmCoordinate, K=4096, **G.GEMM_HOPPER)
-    return RL.full_draw(P.population_program(t, 2), P.template_instance_query(t))
+    return RL.full_draw(PN.population_program(t, 2), P.template_instance_query(t))
 
 
 class _Runs(dict):

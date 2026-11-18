@@ -63,7 +63,7 @@
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
 # env: FLOCK_WORK=/workspace/jobs/rec-reprice  TAG=k4096  K=4096 (GemmCoordinate_v2's contraction)  N=2048 (instances: the
 #      population program's every unit, rec_reprice.py)
-#      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
+#      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM (GPU=1: the target's compute capability)  WARM=1  RUNS=3  PCPUS=16
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
 #              ..; a name without its part, alg, names every part)
 #      FORGE="message sum comb top top-salt coef dirs" (vstage)  JOBS=4 (vstage)  INNER_LOOPBACK=1 (inner)
@@ -125,6 +125,7 @@ unset CARGO_TARGET_DIR
 # redistributable CUDA_REDIST archives (sha256-checked) are unpacked once under $FW, and their runtime is the prover's
 CUDA_REDIST=${CUDA_REDIST:-13.3.1}; export CUDA_TK=${CUDA_TK:-$FW/cuda-$CUDA_REDIST}
 GPU=${GPU:-1}; GPUF=; [ $GPU = 1 ] && GPUF=--gpu
+[ $GPU = 0 ] || [ -n "${SM:-}" ] || { echo "REFUSED: GPU=1 builds for SM, the compute capability of the target (120 for sm_120): give it"; exit 2; }
 if [ $GPU = 1 ] && [ ! -x $CUDA_TK/bin/nvcc ]; then
   exec 7>$FW/cuda.lock; flock 7
   [ -x $CUDA_TK/bin/nvcc ] || python3 - $CUDA_REDIST $CUDA_TK > $O/cuda-redist.log 2>&1 <<'EOF' || { cat $O/cuda-redist.log; exit 1; }
@@ -157,7 +158,7 @@ EOF
   exec 7>&-
 fi
 export PATH=$CUDA_TK/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
-SM=${SM:-120}; N=${N:-2048}; K=${K:-4096}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS))
+SM=${SM:-}; N=${N:-2048}; K=${K:-4096}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS))
 CPUS=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
 NC=$(echo $CPUS | tr ',' '\n' | wc -l); PC=${PCPUS:-16}; [ $PC -ge $NC ] && PC=$(( NC / 2 ))
 PCPU=$(echo $CPUS | cut -d, -f1-$PC); VCPU=$(echo $CPUS | cut -d, -f$((PC + 1))-)
@@ -557,7 +558,7 @@ fold_build() {
 }
 
 # stage_inner NAME PLAIN: the inner statement (N instances of GemmCoordinate_v2{K}, the population program of that template
-# under Q_template_instance, rec_reprice.py: the partition's every unit, so the full sample over it proves every unit of the
+# under Q_template_instances, rec_reprice.py: the partition's every unit, so the full sample over it proves every unit of the
 # statement, which check 5 requires) staged into $DD/NAME from its cache $DD/NAME-cache, its trees' leaves plain SHA-512 when
 # PLAIN is 1; its records in $O/NAME. Never tiled (FLOCK_GEMM_TILE): a tile's circuit names its size class as its template,
 # which no template query lists, and at K = 4096 a 4x4 tile does not fit a block anyway. Every instance's own rows
@@ -588,7 +589,7 @@ stage_inner() {
 }
 
 # inner_partition: the verifier's copies of what the inner statement binds, into $DD/stage (rec_reprice.py partition): the
-# partition object (Q_template_instance over the population program, partition.json) and that program (program.json), which
+# partition object (Q_template_instances over the population program, partition.json) and that program (program.json), which
 # STEP=lean's statement check reads, and the full sample over them (rec_live.full_draw: the stratified sampling design at K = the
 # population, every unit; draw.json), which the rec proxy answers Register with
 inner_partition() {

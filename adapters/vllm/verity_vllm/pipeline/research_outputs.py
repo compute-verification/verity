@@ -40,6 +40,8 @@ No entry holds a private file (`private`), wherever it sits, and these stay on t
   length, sampling parameters, rows a step and emitted ids), its served ids (`ids.*jsonl*`), its step outputs
   (`outputs.*jsonl*`: sampled ids and logprob bits), a replay's tokens and logprobs (`replay_tokens.jsonl*`,
   `replay_logprobs.jsonl*`, `alone_tokens.jsonl*`) and the load's client records (`load*.jsonl`);
+- a Commit's served tokens' unsalted digests (`tokens_digests.jsonl`), its run table (`runs.jsonl`, which carried them before) and
+  a session's memory map (`memory_map.jsonl`: its lines' digests of KV block payloads);
 - where each rank ran, its process and device (`topology.json`), and when each process ran (`timeline.jsonl`,
   `timeline_report.json`).
 A check that reads them runs where they are: the regression harness takes such a candidate as row dirs, not as Attempts.
@@ -57,7 +59,6 @@ Stdlib only; never raises out of `main` (an outputs.json that could not be writt
 """
 from __future__ import annotations
 
-import fnmatch
 import json
 import os
 import re
@@ -65,15 +66,16 @@ import shutil
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from verity_vllm.check.match.rank_match import RECORDER_DIGESTS
 from verity_vllm.config import option, row_batch
+from verity_vllm.pipeline import private_names
 from verity_vllm.pipeline.cli import write
 from verity_vllm.query.manifest.format import tp_ranks_fold_digest
 
-__all__ = ["COMMANDS", "main"]
+__all__ = ["COMMANDS", "PRIVATE", "main"]
 
 SCHEMA = "research/outputs/v0.1"
 MAX_FILE = 512 << 20                      # per file; the required-value manifest of a long row is ~100+ MB
@@ -81,17 +83,19 @@ NEVER = ("instances.json.gz", "log.jsonl.gz")
 PLANE_SUFFIXES = (".npy", ".npz", ".pt", ".bin", ".safetensors")
 
 KINDS = {"build": "vllm-build/v1", "plan": "vllm-commit-plan/v1", "match": "vllm-match-record/v1", "commit": "vllm-verdict/v1", "replay": "vllm-verdict/v1"}
-#: never in a stage's outputs (`private`): the replay bundles and the slim keeps, which hold clear values
-KEPT_APART = ("replay_bundle_p", "replay_slim_p")
+#: the private names as plain data, with the one matcher every keeper uses (`private_names.private`)
+PRIVATE_NAMES = private_names.LIST
+#: never in a stage's outputs (`private`): the replay bundles and the slim keeps, which hold clear values; nor the files
+#: PRIVATE names, wherever they sit: request values, where each rank ran and when each process ran
+KEPT_APART, PRIVATE = private_names.load()
 #: a Commit's served tokens' digests, a line of each run's (`pipeline.commit`), compared across processes on the node
 #: (`pipeline.compiled_merge`): unsalted, so kept apart from `runs.jsonl`
 TOKENS_DIGESTS = "tokens_digests.jsonl"
 #: `pipeline.commit --tensor-digests`' unsalted digest of every retained tensor a step, compared across pairs on the node
 TENSOR_DIGESTS = "tensor_digests_pair*.json"
-#: nor these files, wherever they sit: request values, where each rank ran and when each process ran
-PRIVATE = ("tokens.json", "tokens_p*.json", TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS, "match_stoch.json", "sampled_replay*.json", "requests.jsonl", "step_trace.*",
-           "ids.*jsonl*", "outputs.*jsonl*", "replay_tokens.jsonl*", "replay_logprobs.jsonl*", "alone_tokens.jsonl*",
-           "advice_trace.jsonl", "load*.jsonl", "topology.json", "timeline.jsonl", "timeline_report.json")
+if not {TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS} <= set(PRIVATE):
+    raise RuntimeError(f"{PRIVATE_NAMES} lists {sorted({TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS} - set(PRIVATE))} as "
+                       "private: add them to its `private`")
 
 BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "build_workload/descriptor.json.gz", "manifest.json",
                "target_family.build.json", "target_family.json",
@@ -170,8 +174,7 @@ def program_digest(d: Path, row: str = "") -> dict[str, Any]:
 
 def private(rel: str) -> bool:
     """Whether the evidence dir's file `rel` stays on the node: under a replay bundle or a slim keep, or a file PRIVATE names."""
-    parts = PurePosixPath(rel).parts
-    return any(q.startswith(KEPT_APART) for q in parts) or any(fnmatch.fnmatchcase(parts[-1], p) for p in PRIVATE)
+    return private_names.private(rel, (KEPT_APART, PRIVATE))
 
 
 def _eligible(p: Path) -> bool:

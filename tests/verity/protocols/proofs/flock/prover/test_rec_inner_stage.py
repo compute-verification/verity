@@ -33,7 +33,7 @@ def test_the_inner_statement_binds_the_partition_object_beside_it(tmp_path):
     program = json.loads((out / "program.json").read_text())
     assert meta["partition"] == {"rule": P.FORMAT, "digest": P.digest(part)} and meta["program_sha512"] == part["program"]
     assert program_digest(program) == part["program"]
-    assert part["query"] == {"name": "Q_template_instance", "version": 0, "params": {"template": next(iter(meta["program_digests"]))}}
+    assert part["query"] == {"name": "Q_template_instances", "version": 0, "params": {"templates": [next(iter(meta["program_digests"]))]}}
     assert (res["partition_digest"], res["program_sha512"]) == (P.digest(part), part["program"])
     if not BIN.exists():
         pytest.skip("the Lean verifier is not built")
@@ -55,7 +55,7 @@ def _window(src: Path, n: int, part: dict, d: Path) -> bytes:
     d.mkdir()
     (d / "m0-private.bin").write_bytes(body[:-len(public)])
     (d / "m0-public.bin").write_bytes(public)
-    mem = {"k": 0, "template": next(iter(meta["program_digests"])), "n": n, "base": 0,
+    mem = {"k": 0, "template": next(iter(meta["program_digests"])), "n": n, "base": 0, "own": 0,
            "ports": [list(p[:2]) for p in meta["ports"]], "input_ports": meta["input_ports"],
            "out_ports": [list(p) for p in meta["out_ports"]], "frame_v3": json.loads(head)["frame_v3"],
            "public_sha512": hashlib.sha512(public).hexdigest(),

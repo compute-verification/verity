@@ -55,7 +55,7 @@ import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -125,16 +125,31 @@ class _Group:
     first_unit: int
 
 
+class _GraphKey(NamedTuple):
+    """What a captured graph serves: a group's add (``k``) at a slot count, the plan's pass size and leaf kernel, the SMs
+    its leaf grid was sized to (``sms``, 0 for the whole device's), and the strides it read its salts at, a row's and a
+    slot's."""
+    k: int
+    slots: int
+    temp_bytes: int
+    leaf_minb: int
+    sms: int
+    row_stride: int
+    slot_stride: int
+
+
 @dataclass(frozen=True)
 class _Graph:
     """A group's add captured as one CUDA graph: it reads its tensors' addresses and slot strides from ``addr`` ((2,
     tensors) int64 on the device, filled before each replay), and its ``n`` leaf launches ``nodes`` read their salts from
-    the buffer ``resalt`` points them at, each where it was captured reading the buffer at ``salts`` (an address)."""
+    the buffer ``resalt`` points them at, each where it was captured reading the buffer at ``salts`` (an address), at
+    ``strides`` (the bytes from a row's salts to the next row's and from a slot's to the next slot's)."""
     graph: Any
     addr: Any
     nodes: Any
     n: int
     salts: int
+    strides: tuple[int, int]
 
 
 def driver_bindings(torch: Any) -> tuple[Any, Any]:
@@ -306,7 +321,7 @@ class Plan:
             self.stream = None
         else:
             self.stream = self.partition.stream() if self.partition else self.torch.cuda.Stream(self.device)
-        self._graphs: dict[tuple[int, ...], _Graph] = {}
+        self._graphs: dict[_GraphKey, _Graph] = {}
         self._pool: Any = None
         self._frontiers: dict[int, Any] = {}
         self._open: StepCommitter | None = None
@@ -459,7 +474,7 @@ class Plan:
         after another on that stream), reading its tensors' addresses from its ``addr`` and its salts from ``salts`` ((G,
         slots, 192), ``StepCommitter._by_row``) until ``resalt`` points it at the next add's. A graph keeps the leaf grid
         it was captured with and the strides it read its salts at, so ``sms`` and those strides are in its key."""
-        key = (sc.k, sc.slots, self.temp_bytes, self.leaf_minb, self.sms, int(salts.stride(0)), int(salts.stride(1)))
+        key = _GraphKey(sc.k, sc.slots, self.temp_bytes, self.leaf_minb, self.sms, int(salts.stride(0)), int(salts.stride(1)))
         if key not in self._graphs:
             torch = self.torch
             if self._pool is None:
@@ -475,7 +490,8 @@ class Plan:
                 g.capture_end()
             g.instantiate()
             n = -(-sc.slots // self.per_pass(grp.shape, sc.slots))
-            self._graphs[key] = _Graph(g, addr, self.engine.graph_leaf_nodes(g.raw_cuda_graph(), n), n, salts.data_ptr())
+            self._graphs[key] = _Graph(g, addr, self.engine.graph_leaf_nodes(g.raw_cuda_graph(), n), n, salts.data_ptr(),
+                                       (int(salts.stride(0)), int(salts.stride(1))))
         return self._graphs[key]
 
     def empty(self, *shape: int) -> Any:
@@ -723,7 +739,8 @@ class StepCommitter:
             gr = plan.graph(self, grp, tensors, salts)
             gr.addr.copy_(torch.tensor([base, stride], dtype=torch.int64).pin_memory(), non_blocking=True)
             with plan.partition.current() if plan.partition else contextlib.nullcontext():
-                plan.engine.resalt(gr.graph.raw_cuda_graph_exec(), gr.nodes, gr.n, gr.salts, salts.data_ptr())
+                plan.engine.resalt(gr.graph.raw_cuda_graph_exec(), gr.nodes, gr.n, gr.salts, salts, grp.shape.rows, self.slots,
+                                   gr.strides)
             gr.graph.replay()
             done = torch.cuda.Event(blocking=True)
             done.record(plan.stream)

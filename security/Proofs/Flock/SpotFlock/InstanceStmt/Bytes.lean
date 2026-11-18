@@ -217,6 +217,6 @@ def rawOf (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) : FlockDeploy.Raw :=
 def raw (r : Run) : FlockDeploy.Raw := rawOf r (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash
 
 /-- **The two-instance reference statement** of run `r`. -/
-def x (r : Run) : Claims.Msg := (raw r).encode
+def x (r : Run) : Hash.Msg := (raw r).encode
 
 end SpotFlock.InstanceStmt

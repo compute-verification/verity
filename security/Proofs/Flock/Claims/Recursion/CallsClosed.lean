@@ -144,7 +144,7 @@ private theorem forall₂_mem_r {α β : Type} {R : α → β → Prop} :
       exact ⟨a, by simp [ha], hr⟩
 
 /-- **A reader's stream has at most its rep's rounds.** -/
-theorem recStreams_size_le {spec : SessionSpec} {sts : Array Stmt} {ms : List Claims.Msg} {cs : List Coin} {R : ℕ}
+theorem recStreams_size_le {spec : SessionSpec} {sts : Array Stmt} {ms : List Hash.Msg} {cs : List Coin} {R : ℕ}
     (hR : ∀ y ∈ repLens spec sts, y ≤ R) : ∀ a ∈ recStreams spec sts ms cs, a.size ≤ R := by
   intro a ha
   unfold recStreams at ha
@@ -154,7 +154,7 @@ theorem recStreams_size_le {spec : SessionSpec} {sts : Array Stmt} {ms : List Cl
   exact (cutLens_getD_length_le _ _ k).trans (getD_le_of_forall hR k)
 
 /-- **A rep has at most `2200` rounds at a plain session in scope.** -/
-theorem repLens_le_in {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hin : PlainIn x s spec sts) :
+theorem repLens_le_in {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hin : PlainIn x s spec sts) :
     ∀ y ∈ repLens spec sts, y ≤ 2200 := by
   intro y hy
   unfold repLens at hy
@@ -167,8 +167,8 @@ theorem repLens_le_in {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Arr
   exact RecDeploy.repSchedAt_length_le spec _ hr'.1 (by omega)
 
 /-- **The substitutions keep a record's streams readable.** -/
-theorem arr_streams_jAt_ok {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} {recs₀ : Array Json} (hf : Record.arr f.j "streams" = .ok recs₀) :
+theorem arr_streams_jAt_ok {H : Hash.Msg → Hash.Msg} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} {recs₀ : Array Json} (hf : Record.arr f.j "streams" = .ok recs₀) :
     ∃ recs, Record.arr (jAt H spec sts c₁ mids f) "streams" = .ok recs := by
   unfold jAt coinSubJ fillCoins
   simp only [mapRounds, setPoints]
@@ -178,9 +178,9 @@ theorem arr_streams_jAt_ok {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} 
 
 /-- **The decided record's streams at the reader's record**: at most one a rep stream, each of at most `R` rounds where
 every rep has at most `R`. -/
-theorem jAt_recJ_streams {H : Claims.Msg → Claims.Msg} {spec spec' : SessionSpec} {sts sts' : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {ms : List Claims.Msg} {cs : List Coin}
-    {ps : Array Flock.Proof} {mids : List (Claims.Msg × Coin)} {x : Claims.Msg} {R : ℕ}
+theorem jAt_recJ_streams {H : Hash.Msg → Hash.Msg} {spec spec' : SessionSpec} {sts sts' : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {ms : List Hash.Msg} {cs : List Coin}
+    {ps : Array Flock.Proof} {mids : List (Hash.Msg × Coin)} {x : Hash.Msg} {R : ℕ}
     (hR : ∀ y ∈ repLens spec sts, y ≤ R) :
     ∃ sj, Record.arr (jAt H spec' sts' c₁ mids ⟨x, recJ spec sts link c₁ ms cs ps, ps⟩) "streams" = .ok sj ∧
       sj.size ≤ spec.repStreams.size ∧ ∀ s ∈ sj, ∀ rj, Record.arr s "rounds" = .ok rj → rj.size ≤ R := by
@@ -214,10 +214,10 @@ open Flock
 
 /-- **A decision's SHA-512 calls at a plain session in scope, on every run: at most `2^24`**, at the session the setup
 returns against `H`: at most `128` files, `128` streams of at most `2200` rounds, and `64` tables of two reps. -/
-theorem decisionAtS_calls_in {rd : Claims.Msg → Option FinalP} (H : Claims.Msg → Claims.Msg) {x : Claims.Msg}
+theorem decisionAtS_calls_in {rd : Hash.Msg → Option FinalP} (H : Hash.Msg → Hash.Msg) {x : Hash.Msg}
     {s₀ : Ins} {spec₀ : SessionSpec} {sts₀ : Array Stmt} (hin : PlainIn x s₀ spec₀ sts₀)
-    {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec spec' : SessionSpec} {sts sts' : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalP}
+    {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec spec' : SessionSpec} {sts sts' : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalP}
     (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
     (hw : ((setupM Claims.Hashes.oc s.read).run.eval H).1 = .ok (spec', sts')) :
     ((decisionAtS s spec' sts' x link c₁ mids f).run.eval H).2.length ≤ 2 ^ 24 := by

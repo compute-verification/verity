@@ -43,13 +43,13 @@ and what follows the session, `e`, at a position the projection reaches is withi
 stop averaged over the tapes from that stop, the rounds' error from a position the projection reaches is within the
 charge from the next stop, over the tapes from the position; the play's end costs nothing. -/
 theorem avg_roundsErrK_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Type} (D : PosDecoders g σ R Reg)
-    (J : ℕ) (γ : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (Γ : Game Exchange → ℝ≥0∞)
-    (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Claims.Msg g)
+    (J : ℕ) (γ : Pos g σ Hash.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (Γ : Game Exchange → ℝ≥0∞)
+    (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Hash.Msg g)
     (hγ : ∀ q, Pos.Reached Ks₀ q → ∀ s, D.sub J q.modes = some s → γ q J s ≤ Γ q.g')
-    {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞}
+    {e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞}
     (he : ∀ q, Pos.Reached Ks₀ q → e q ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) q.toStop) (N : ℕ) :
     ∀ p, Pos.Reached Ks₀ p → Pos.resample (roundsErrK D J γ e N) p ≤ Pos.resample (Pos.stopCharge Γ) p := by
-  have key : ∀ (G : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (p : Pos g σ Claims.Msg (Fin R)),
+  have key : ∀ (G : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞) (p : Pos g σ Hash.Msg (Fin R)),
       (∀ z : CoinTape p.g' p.s', G (p.withTape z) ≤
         Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) (p.withTape z).toStop) →
       Pos.resample G p ≤ Pos.resample (Pos.stopCharge Γ) p := fun G p h =>
@@ -89,13 +89,13 @@ and `γ` at each submission decoded there are within `Γ` at the stop's node, an
 the charge from its position's next stop averaged over the tapes from that stop, so is the session's error from a
 position the projection reaches. -/
 theorem sessionErrK_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Type} (D : PosDecoders g σ R Reg)
-    (J : ℕ) (γ : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (Γ : Game Exchange → ℝ≥0∞)
-    (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Claims.Msg g)
+    (J : ℕ) (γ : Pos g σ Hash.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (Γ : Game Exchange → ℝ≥0∞)
+    (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Hash.Msg g)
     (hγ : ∀ q, Pos.Reached Ks₀ q → ∀ s, D.sub J q.modes = some s → γ q J s ≤ Γ q.g')
-    (γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (hγL : ∀ q, Pos.Reached Ks₀ q → γL q ≤ Γ q.g')
-    {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞}
+    (γL : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞) (hγL : ∀ q, Pos.Reached Ks₀ q → γL q ≤ Γ q.g')
+    {e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞}
     (he : ∀ q, Pos.Reached Ks₀ q → e q ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) q.toStop) (N : ℕ)
-    (p : Pos g σ Claims.Msg (Fin R)) (hp : Pos.Reached Ks₀ p) :
+    (p : Pos g σ Hash.Msg (Fin R)) (hp : Pos.Reached Ks₀ p) :
     sessionErrK D J γ γL e N p ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) p.toStop :=
   calc sessionErrK D J γ γL e N p
       = γL p.toStop + Pos.resample (roundsErrK D J γ e N) p.toStop.consume := rfl
@@ -110,9 +110,9 @@ theorem sessionErrK_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Ty
 charge from its position's next stop averaged over the tapes from that stop, what follows past a stop the projection
 reaches, over the tapes from the stop, is within the charge from the stop, which leaves the stop's own node out. -/
 theorem resample_consume_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} (Γ : Game Exchange → ℝ≥0∞)
-    (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Claims.Msg g) {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞}
+    (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Hash.Msg g) {e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞}
     (he : ∀ q, Pos.Reached Ks₀ q → e q ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) q.toStop)
-    (s : Pos g σ Claims.Msg (Fin R)) (hs : Pos.Reached Ks₀ s) :
+    (s : Pos g σ Hash.Msg (Fin R)) (hs : Pos.Reached Ks₀ s) :
     Pos.resample e s.consume ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) s :=
   calc Pos.resample e s.consume
       ≤ avg (fun z : CoinTape s.consume.g' s.consume.s' =>
@@ -133,13 +133,13 @@ theorem resample_consume_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} (Γ 
 holds one of its proof blocks, with what follows taken past the session's closing round's stop
 (`resample_consume_le`); else what follows, which is within the charge from the same position. -/
 theorem memberErrK_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Type} (D : PosDecoders g σ R Reg)
-    (J : ℕ) (γ : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (Γ : Game Exchange → ℝ≥0∞)
-    (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Claims.Msg g)
+    (J : ℕ) (γ : Pos g σ Hash.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (Γ : Game Exchange → ℝ≥0∞)
+    (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Hash.Msg g)
     (hγ : ∀ q, Pos.Reached Ks₀ q → ∀ s, D.sub J q.modes = some s → γ q J s ≤ Γ q.g')
-    (γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (hγL : ∀ q, Pos.Reached Ks₀ q → γL q ≤ Γ q.g')
-    {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞}
+    (γL : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞) (hγL : ∀ q, Pos.Reached Ks₀ q → γL q ≤ Γ q.g')
+    {e : Pos g σ Hash.Msg (Fin R) → ℝ≥0∞}
     (he : ∀ q, Pos.Reached Ks₀ q → e q ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) q.toStop) (N : ℕ)
-    (p : Pos g σ Claims.Msg (Fin R)) (hp : Pos.Reached Ks₀ p) :
+    (p : Pos g σ Hash.Msg (Fin R)) (hp : Pos.Reached Ks₀ p) :
     ∀ b : Bool, memberErrK D J γ γL e N p b ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) p.toStop
   | true => sessionErrK_le D J γ Γ hret Ks₀ hγ γL hγL (e := fun q => Pos.resample e q.toStop.consume)
       (fun q hq => resample_consume_le Γ hret Ks₀ he q.toStop (.toStop hq)) N p hp
@@ -150,12 +150,12 @@ projection reaches and its `γ` at each submission decoded there are within `Γ`
 errors from a position the projection reaches are within the charge from the position's next stop, averaged over the
 tapes from that stop. -/
 theorem seqErr_le {g : Game Exchange} {σ : Strategy g} {Reg : Type} {R nJ : ℕ} (D : ℕ → PosDecoders g σ R Reg)
-    (γ : ℕ → Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
-    (γL : ℕ → (mPts : ℕ) → Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (S : Finset (Fin nJ)) (Rg : Reg)
-    (Γ : Game Exchange → ℝ≥0∞) (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Claims.Msg g)
+    (γ : ℕ → Pos g σ Hash.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
+    (γL : ℕ → (mPts : ℕ) → Pos g σ Hash.Msg (Fin R) → ℝ≥0∞) (S : Finset (Fin nJ)) (Rg : Reg)
+    (Γ : Game Exchange → ℝ≥0∞) (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Hash.Msg g)
     (hγ : ∀ i J q, Pos.Reached Ks₀ q → ∀ s, (D i).sub J q.modes = some s → γ i q J s ≤ Γ q.g')
     (hγL : ∀ i mPts q, Pos.Reached Ks₀ q → γL i mPts q ≤ Γ q.g') :
-    ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ) (p : Pos g σ Claims.Msg (Fin R)), Pos.Reached Ks₀ p →
+    ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ) (p : Pos g σ Hash.Msg (Fin R)), Pos.Reached Ks₀ p →
       seqErr D γ γL S Rg i l p ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) p.toStop
   | [], _, _, _ => zero_le
   | m :: l, i, p, hp =>
@@ -177,8 +177,8 @@ node, the play's end costs nothing, the start leaves the tape from the first sto
 stops' term over the window is within the charge along a play over a uniform tape. -/
 theorem executionPhaseErr_le_of_charge (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
-    {γ : ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞}
-    {γL : ℕ → (mPts : ℕ) → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℝ≥0∞} {b : ℝ≥0∞}
+    {γ : ℕ → Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞}
+    {γL : ℕ → (mPts : ℕ) → Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → ℝ≥0∞} {b : ℝ≥0∞}
     (Γ : Game Exchange → ℝ≥0∞) (hret : ∀ a, Γ (.ret a) = 0) (hF : ExecutionPhaseFirstStopFresh V θ F c W rd σ M)
     (hS : ∀ H : CoinTape (V.game θ F c) σ → ℝ≥0∞,
       avg (fun ω : (W.extend M.widening).L.Ω => H (M.start ω)) = avg H)

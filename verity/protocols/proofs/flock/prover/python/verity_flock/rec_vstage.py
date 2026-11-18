@@ -82,7 +82,9 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+from verity.circuits.codec import descriptor_id
 from verity.circuits.ops.boolean import gf2k as G
+from verity.circuits.population import wired_population_program
 
 from . import rec_algebra as A
 from . import rec_cap as RC
@@ -92,6 +94,7 @@ from . import rec_outer as O
 from . import rec_residuals as RR
 from . import rec_sparse as SP
 from . import rec_vstar as V
+from verity.commitments.domains import REGISTERED_READS_V0
 
 TABLE = "circuit"
 FORGERIES = ("message", "sum", "comb", "top", "top-salt", "coef", "dirs", "filler")
@@ -198,11 +201,11 @@ def message_rounds(public: dict, private: dict, sh: A.Shape, streams: list[str] 
 def messages(program: str, mrs: list[dict], ports: list[tuple[str, str]] | None = None) -> tuple[dict, dict]:
     """The prover's registrations of the message rounds and the verifier's own entries of them (from the ``c_k`` alone), by
     port: ``ports`` (port, value) a round, default ``m<i>`` as ``rec-c<i>``."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+    from verity.commitments import registered_value as RV
 
     regs, own = {}, {}
     for i, ((port, value), mr) in enumerate(zip(ports or [(f"m{i}", f"rec-c{i}") for i in range(len(mrs))], mrs, strict=True)):
-        reg = RG.Registered.commit(program, value, mr["rows"], mr["salts"])
+        reg = RV.Registered.commit(program, value, mr["rows"], mr["salts"])
         own[port] = RR.commits_entry(program, value, len(mr["rows"][0]), mr["commits"])
         if own[port]["root"] != reg.entry()["root"]:
             raise ValueError(f"round {i}: the prover's rows are not the rows its c_k commit")
@@ -309,7 +312,7 @@ def opening_messages(public: dict, private: dict, sh: A.Shape, program: str) -> 
 
 
 def stage_stacked(public: dict, private: dict, program: str, sr: SimpleNamespace, chain: O.Chain, coefs: dict, claim, out: Path,
-                  evaluate: bool = True, claim_own: dict | None = None, version: int = 1) -> dict:
+                  evaluate: bool = True, claim_own: dict | None = None, version: int | str = "wired") -> dict:
     """R's levels as RecOpen statements on the chain (their units `rec_outer.stacked_name`, their tops
     ``rec-top-stacked-L<level>``, their population programs at ``version``) and its registered opening
     (`rec_residuals.stage_opening`): the stacked stream's messages (`opening_messages`), ``claim`` the prover's
@@ -357,7 +360,7 @@ def shared_rows(algebra, stacked=(), tops=()) -> dict:
     for nm, e in ports.items():
         if site(first.setdefault(e["value"], e)) != site(e):
             raise ValueError(f"the shared rows register {e['value']} twice: {nm} is not the first entry of that value")
-    return {"format": "verity/registered-reads/v0", "ports": ports}
+    return {"format": REGISTERED_READS_V0, "ports": ports}
 
 
 def staged_shared_rows(v: Path) -> dict:
@@ -506,6 +509,7 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
     import numpy as np
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.commitments import registered_value as RV
     from verity.circuits.codec import canonical_json, encode_program
 
     from . import circuit as FC
@@ -541,8 +545,8 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
     table = RLK.table(links)
     N = len(table)
     defn = LK.definition(UB, PB)
-    program_ = P.population_program(defn, N)
-    part = P.partition(program_, P.template_instance_query(defn))
+    program_, query = wired_population_program([(defn, N)], {"templates": [[descriptor_id(defn), N]]})
+    part = P.partition(program_, query)
     prog = P.program_sha512(program_)
     reg = RLK.register(prog, links, salts)
     rin = RR.verifier_value(prog, LK.IN_VALUE, [LK.expected(tin.root)] * N)
@@ -579,7 +583,7 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
         agrees = [bool((int(ok) >> i) & 1) and got[i].astype(np.uint16).tolist() == ref[i][0] + ref[i][1] for i in range(N)]
     in_rows, in_salts, in_entry = rin.statement(range(N))
     out_rows, out_salts, out_entry = rout.statement(range(N))
-    private = {p: G.Registered.commit(prog, f"rec-link-{p}", tables[p].tolist()) for p in LK.ROWS[1:]}
+    private = {p: RV.Registered.commit(prog, f"rec-link-{p}", tables[p].tolist()) for p in LK.ROWS[1:]}
     read = lambda e: {**e, "word_bits": 16, "reads": list(range(N))}  # noqa: E731
     own = {"format": G.READS, "ports": {"trow": read(reg.entry()), **{p: read(r.entry()) for p, r in private.items()},
                                         "rin": read(rin.entry()), "rout": read(rout.entry())}}
@@ -637,11 +641,11 @@ def acc_salts(path: Path, n: int) -> list[bytes]:
 
 def forge_chain(chain: O.Chain, row: int) -> O.Chain:
     """The prover's running sums with row ``row`` one bit off (its first word), every other row and every salt honest."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+    from verity.commitments import registered_value as RV
 
     rows = [list(r) for r in chain.reg.rows]
     rows[row][0] ^= 1
-    return O.Chain(RG.Registered.commit(chain.reg.program, O.ACC_VALUE, rows, list(chain.reg.salts)), dict(chain.at))
+    return O.Chain(RV.Registered.commit(chain.reg.program, O.ACC_VALUE, rows, list(chain.reg.salts)), dict(chain.at))
 
 
 def _offsets(data: bytes, circuit_text: str, port: str, row: int) -> tuple[int, int]:
@@ -724,7 +728,7 @@ def _copy_verifier(src: Path, dst: Path) -> None:
 @_without_gc
 def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, algebra: bool = True, forge: str | None = None,
           evaluate: bool = True, pts: dict | None = None, salts: Path | None = None, cap=None, sparse: tuple | None = None,
-          version: int = 1, part_jobs: int = 1) -> dict:
+          version: int | str = "wired", part_jobs: int = 1) -> dict:
     """V*'s statements over the inner session ``inner``: the levels ``levels`` (None: every level) and, with ``algebra``, the
     algebra, honest under ``out``; with ``forge``, that forgery's statements alone under ``out/forged-<forge>`` (the module
     docstring). ``salts``: the running sums' salts file (`acc_salts`; None: fresh ones). ``cap`` (`rec_shape.Cap`): refuse a

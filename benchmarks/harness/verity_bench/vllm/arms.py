@@ -122,29 +122,39 @@ def plugin(arm: Arm) -> Any | None:
 def build_bound(arm: Arm, world: int = 1) -> tuple[str, ...]:
     """The arm's protocol entries whose served computation is a row Build's: each that requires a property with
     ``fixes`` (`protocol_options.requests`). An entry whose protocol `verity_vllm.protocols` refuses (unknown, or its
-    adapter not importable here) requests nothing, and the engine's own build refuses it by name."""
+    adapter not importable here) requests nothing, and the engine's own build refuses it by name; a declared scheme's name
+    is attached by name, never installed, and requests nothing here."""
 
-    if not arm.protocols:
+    from verity_bench.vllm.presets import declared_schemes
+
+    installed = tuple(e for e in arm.protocols if e not in declared_schemes())
+    if not installed:
         return ()
     from verity.errors import Refused
     from verity_vllm import protocols as PO
 
-    for entry in arm.protocols:
+    for entry in installed:
         try:
             PO.adapter(entry.partition(":")[0])
         except Refused as e:
             log.info("arm %r: protocol entry %r refused (%s), so it binds no Build here; the engine's build refuses it",
                      arm.id, entry, e)
-    ctx = PO.Context(stage="serve", enabled=arm.protocols, world=world)
+    ctx = PO.Context(stage="serve", enabled=installed, world=world)
     return tuple(dict.fromkeys(entry for entry, r in PO.requests(ctx) if getattr(r, "fixes", False)))
 
 
 def _protocol_arm(name: str, settings: ArmSettings | None = None) -> Arm:
     """A protocol arm: the preset's precision and stock FP8 as its control, unless its `ArmSettings` say otherwise."""
 
+    from verity_bench.vllm.presets import declared_schemes, former_arm
+
+    if now := former_arm(name):
+        raise ValueError(f"benchmark arm {name!r} is {now!r} now: the engine attaches the declared scheme by its name, and "
+                         "a stored run under the former id reads under the new one")
     entries = tuple(x for x in name.split("+") if x)
-    if not entries or any(":" not in e for e in entries):
-        raise ValueError(f"unknown benchmark arm {name!r}; use a built-in, protocol:scheme, or --arm-module")
+    if not entries or any(":" not in e and e not in declared_schemes() for e in entries):
+        raise ValueError(f"unknown benchmark arm {name!r}; use a built-in, protocol:scheme, a declared scheme's name, or "
+                         "--arm-module")
     s = settings or ArmSettings()
     control = "stock-fp8" if s.control is None else None if s.control == NO_CONTROL else s.control
     config = {k: dict(v) for k, v in s.protocols_config.items()} or None
@@ -167,8 +177,10 @@ def served_variant(name: str, settings: ArmSettings | None = None) -> Arm:
 
 def protocols_config(arm: Arm, environ: Mapping[str, str]) -> dict[str, dict[str, Any]]:
     """The arm's protocols config as `verity_vllm.LLM` takes it: each ``"$NAME"`` value read from `environ` (a missing
-    one raises, naming it), and PoUW's ``coins`` an in-process challenger of epoch 0 (`pouw.challenged`) when PoUW is
-    enabled, since its install takes the epoch's salt from a live coin and a config can't carry one."""
+    one raises, naming it). An entry that is a declared scheme's name gets that scheme's in-process coins
+    as its settings say them, ``coins = "in-process"``, unless the spec gives its ``challenger``; any other PoUW entry
+    gets an in-process challenger of epoch 0 (`pouw.challenged`), since its install takes the epoch's salt from a live
+    coin."""
 
     def expand(value: Any, where: str) -> Any:
         if isinstance(value, str) and value.startswith("$"):
@@ -179,9 +191,15 @@ def protocols_config(arm: Arm, environ: Mapping[str, str]) -> dict[str, dict[str
         return value
 
     config = {p: {k: expand(v, f"{p}.{k}") for k, v in s.items()} for p, s in (arm.protocols_config or {}).items()}
+    from verity_bench.vllm.presets import declared_schemes
     from verity_vllm.protocols.pouw import challenged
 
-    return challenged(config, arm.protocols)
+    declared = [e for e in arm.protocols if e in declared_schemes()]
+    for entry in declared:
+        own = config.setdefault(entry, {})
+        if not own.get("challenger"):
+            own.setdefault("coins", "in-process")
+    return challenged(config, [e for e in arm.protocols if e not in declared])
 
 
 def resolve_arms(names: str | list[str] | tuple[str, ...], module_specs: tuple[str, ...] = (),

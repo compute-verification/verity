@@ -116,6 +116,27 @@ def test_a_session_on_the_pass_clock_runs_one_schedule(monkeypatch):
     assert [w["draws_sent_ns"] for w in seen[:2]] == [22, 42]
 
 
+class Stalled(RuntimeError):
+    pass
+
+
+@pytest.mark.parametrize("side, step", [(prover.ProverSide, "register"), (TickingBackend, "run_pass")])
+def test_a_prover_that_raises_at_its_first_step_ends_the_run_with_what_it_raised(monkeypatch, side, step):
+    """A stand-in prover that raises before its hello or at its first pass, ending its thread: the run raises that
+    error, the verifier woken by the stream's end where it waits on a frame and on the pass clock where it waits on a
+    pass, never left waiting on a prover that is gone."""
+    hooked: list = []
+    monkeypatch.setattr(threading, "excepthook", hooked.append)
+
+    def stalled(self, *args, **kw):
+        raise Stalled(f"the stand-in's {step}")
+
+    monkeypatch.setattr(side, step, stalled)
+    with pytest.raises(Stalled, match=f"^the stand-in's {step}$"):
+        run("honest")
+    assert [type(a.exc_value) for a in hooked] == [Stalled]
+
+
 def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(monkeypatch):
     """The capacity is the verifier's, and the prover's calibration can only raise it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
@@ -127,74 +148,30 @@ def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(mon
     assert fast["ledger"]["measured"]["capacity_bytes_per_s"] == fast["ledger"]["spec"]["capacity_bytes_per_s"] == 1e20
 
 
-def test_a_node_handed_in_is_the_ledgers_and_a_report_still_only_raises_it(monkeypatch):
-    """A node handed in (`Verifier(node=...)`, `--node`) takes `ledger.Node.stated`'s place: `timing`'s node handed in
-    is the default's, a node of twice the rates doubles both capacities, and a slower reported read lowers neither.
-    The ledger publishes the node whole (`capacities`), which `ledger.Node.of_json` reads back.  A node handed in
-    beside disk or link ceilings, or without the HBM and DRAM tiers, is refused."""
+def test_the_ledgers_node_is_its_figures_and_a_report_still_only_raises_it(monkeypatch):
+    """The ledger's node is `ledger.Node.stated` of the verifier's figures: figures of twice the rates double both
+    capacities, and a slower reported read lowers neither.  The ledger publishes the node whole (`capacities`), which
+    `ledger.Node.of_json` reads back."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (default,), _ = run("honest", read_bytes_per_s=1.0)
-    (same,), _ = run("honest", read_bytes_per_s=1.0, node=ledger.Node.stated(FIGURES))
-    assert same["ledger"]["inputs"]["capacities"] == default["ledger"]["inputs"]["capacities"] == (
-        ledger.Node.stated(FIGURES).to_json())
-    fast = dataclasses.replace(ledger.Node.stated(FIGURES), spec_bytes_per_s=2 * FIGURES.spec_bytes_per_s,
-                               read_bytes_per_s=2 * FIGURES.read_bytes_per_s)
-    (r,), _ = run("honest", read_bytes_per_s=1.0, node=fast)
+    assert ledger.Node.of_json(default["ledger"]["inputs"]["capacities"]) == ledger.Node.stated(FIGURES)
+    fast = dataclasses.replace(FIGURES, gpu_spec_bytes_per_s=2 * FIGURES.gpu_spec_bytes_per_s,
+                               gpu_read_bytes_per_s=2 * FIGURES.gpu_read_bytes_per_s,
+                               host_spec_bytes_per_s=2 * FIGURES.host_spec_bytes_per_s,
+                               host_read_bytes_per_s=2 * FIGURES.host_read_bytes_per_s)
+    (r,), _ = run("honest", read_bytes_per_s=1.0, figures=fast)
     assert r["ledger"]["measured"]["capacity_bytes_per_s"] == 2 * FIGURES.read_bytes_per_s
     assert r["ledger"]["spec"]["capacity_bytes_per_s"] == 2 * FIGURES.spec_bytes_per_s
-    assert ledger.Node.of_json(r["ledger"]["inputs"]["capacities"]) == fast
-    kw = {"figures": FIGURES, "source": bytes(32), "windows": 3, "window_ns": 20, "samples": 6, "delta": 2.0 ** -40, "jitter_ns": 10}
-    with pytest.raises(ValueError, match="its own disk and link"):
-        verifier.Verifier(None, **kw, node=ledger.Node.stated(FIGURES), disk_bytes_per_s=4.4e9)
-    with pytest.raises(ValueError, match="states its tiers"):
-        verifier.Verifier(None, **kw, node=dataclasses.replace(ledger.Node.stated(FIGURES), tiers={}))
+    assert ledger.Node.of_json(r["ledger"]["inputs"]["capacities"]) == ledger.Node.stated(fast)
 
 
-def test_the_process_hands_its_node_file_to_the_verifier_and_refuses_a_bad_one_before_it_listens(
-        tmp_path, monkeypatch, capsys):
-    """`main`'s `--node FILE` reaches `Verifier(node=...)` as `ledger.Node.of_json` reads it.  A file that holds no
-    node, a node without the HBM and DRAM tiers, or a node beside a disk or link flag is an argument error before the
-    process listens, not a traceback once the prover has connected."""
-    class Listened(Exception):
-        pass
-
-    def refuse(host, port):
-        raise Listened
-
-    def main(node: object, *flags: str) -> None:
-        f = tmp_path / "node.json"
-        f.write_text(json.dumps(node))
-        verifier.main(["--out", str(tmp_path / "out"), "--check-workers", "0", "--node", str(f),
-                       "--figures", str(FIGURES_FILE), *flags])
-
-    monkeypatch.setattr(verifier.wire, "listen", refuse)
-    fast = dataclasses.replace(ledger.Node.stated(FIGURES), read_bytes_per_s=2 * FIGURES.read_bytes_per_s)
-    one_tier = fast.to_json()
-    del one_tier["tiers"]["dram"]
-    for node, flags, why in (({"tiers": {}}, (), "a node's capacities are an object of exactly"),
-                             (one_tier, (), "states its tiers"),
-                             (fast.to_json(), ("--disk-bytes-per-s", "4.4e9"), "drop --disk-* and --link-*"),
-                             (fast.to_json(), ("--link-burst-bytes", "1"), "drop --disk-* and --link-*")):
-        with pytest.raises(SystemExit) as e:
-            main(node, *flags)
-        assert e.value.code == 2 and why in capsys.readouterr().err
-    handed = {}
-
-    class Server:
-        def accept(self):
-            return None, ("prover", 0)
-
-    def made(conn, **kw):
-        handed.update(kw)
-        raise Listened
-
-    monkeypatch.setattr(verifier.wire, "listen", lambda host, port: Server())
-    monkeypatch.setattr(verifier.wire, "Conn", lambda sock: None)
-    monkeypatch.setattr(verifier, "Verifier", made)
-    monkeypatch.setattr(verifier.sys, "setswitchinterval", lambda s: None)
-    with pytest.raises(Listened):
-        main(fast.to_json())
-    assert handed["node"] == fast and handed["disk_bytes_per_s"] == 0.0
+def test_the_process_takes_no_node_file_beside_its_figures(tmp_path, capsys):
+    """The process's node is its figures' (`--figures`, pinned by `--figures-sha512`): a launcher still handing it a
+    node file is an argument error before it listens."""
+    with pytest.raises(SystemExit) as e:
+        verifier.main(["--out", str(tmp_path / "out"), "--check-workers", "0", "--node", str(tmp_path / "node.json"),
+                       "--figures", str(FIGURES_FILE)])
+    assert e.value.code == 2 and "unrecognized arguments: --node" in capsys.readouterr().err
 
 
 def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypatch):
@@ -1171,13 +1148,18 @@ def greeted(lifetime: int | None, deferred: bool, *, hello: dict | None = None, 
         return {k: x for k, x in (head | (hello or {})).items() if k not in drop}
 
     p.conn.send = lambda head, body=b"": send(greet(head) if head["type"] == "hello" else head, body)
-    heard = []
+    heard, raised = [], []
 
     def prove() -> None:
         try:
             p.register(codec=P512)
         except wire.Closed as e:
             heard.append(str(e))
+        except BaseException as e:
+            raised.append(e)
+            b.shutdown(socket.SHUT_RDWR)
+            b.close()
+            raise
 
     th = threading.Thread(target=prove, daemon=True)
     th.start()
@@ -1188,6 +1170,11 @@ def greeted(lifetime: int | None, deferred: bool, *, hello: dict | None = None, 
         v.register()
     except ValueError as e:
         refused = e
+    except wire.Closed:
+        if not raised:
+            raise
+        th.join()
+        raise raised[0]
     th.join()
     v.stop()
     return v, refused, heard

@@ -57,6 +57,8 @@
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
 # with PROVER_ARGS such as --kv-every and --kv-pool. Its passes take the CPU's time, so JITTER_MS must cover one.
+# On a card (no CPU, SERVE unset or node) CODEC defaults to the deployed codec (`codec.DEFAULT`), and p512/kK is the other
+# codec kv.cu is built for (KV_DEFS); SERVE=row's Commit registers the deployed codec only.
 # LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it (default: the
 # windows of WINDOW_MS in 30 s, or a paced session's groups, `audit.lifetime_windows`).
 #
@@ -73,7 +75,7 @@
 # (the default) or servedrop:K. SERVE=row runs row ROW's Commit under the audit, `verity-vllm row run ROW CHECKPOINT
 # REPO REV` with the checkpoint `verity-vllm epoch resolve ROW` names and REMOTE_VERIFIER at the verifier: its Commit
 # puts the store binder on its engine and proves the store in lockstep with its first instrumented run, a pass an
-# engine step (`verity_vllm.protocols.poub.remote.CommitSession`: one GPU, synchronous scheduling declared
+# engine step (`verity.protocols.resource_accounting.memory.poub.prover.commit_session.CommitSession`: one GPU, synchronous scheduling declared
 # in the row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). ROW is a row
 # id whose file `verity_vllm.config.row_file` finds (ROW_FILE: that file instead): a stored row whose target declares
 # the synchronous scheduling a session needs, such as
@@ -89,9 +91,8 @@
 #      no GPU visible (STAGES, default
 #      build,commit, in a config run, CONFIG_RUN default 1: the Build, the word check and one instrumented Commit,
 #      the run the session audits; BUILD_GPU=1 leaves the Build to the lease) in SWEEP_DIR (default: scratch removed
-#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; the Commit's three public records are kept in
-#      out/row: commit/verdict.json, commit/steps.jsonl and commit/remote_session.json; nothing else of the sweep, which
-#      holds committed values, salts, token digests and the run's logs). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
+#      at exit, as the native collector's build, NATIVE_COLLECT_BUILD; never inside the run's directory: the row's
+#      public records, keep.py's ROW, are kept in out/row, and nothing else of it). Every `row run` gets VLLM_PY as its stages' interpreter (--py: PY may be the fill's venv, which
 #      holds no vLLM), CUDA_HOME/bin (--cuda-bin) and ROW_ARGS (such as --norm-tap-so PATH);
 #   3. ROLE=both: builds the Lean verifier (LEAN_EXE: that executable instead), starts the verifier on VERIFIER_CPUS
 #      and goes on once it listens;
@@ -131,9 +132,9 @@
 # work while its lease is held to a lease program whose text names --cores: PROVER_CPUS and, under ROLE=both,
 # VERIFIER_CPUS, which the lease counts with every other lease's against the node's CPU quota (75 where they pass
 # it under NOWAIT=1); to a program that names none it declares none, and says so. A served line's CUDA_HOME defaults
-# to CUDA_ROOT/cuda-V (CUDA_ROOT default /usr/local) for the CUDA version V the prover's torch is built for, else
-# cuda-MAJOR, else cuda-13.0, else cuda, and is refused (exit 3) where its nvcc is not V's major version; any other
-# line's to the machine's toolkit at 13.0. ROLE=prover takes PORT; ROLE=both and
+# to the machine's toolkit at the CUDA version V the prover's torch is built for (13.0 where it has no torch), and is
+# refused (exit 3) where the machine lists none at V or its nvcc is not V's major version; any other line's to the
+# machine's toolkit at 13.0. ROLE=prover takes PORT; ROLE=both and
 # ROLE=verifier pick one nothing listens on when it is not stated. Scratch is under TMPDIR (default /tmp), removed
 # at exit.
 #
@@ -154,20 +155,18 @@
 #
 # SERVE=node serves the whole node: a vLLM engine a leased GPU (`engine.py`), and the prover (`node.py`) registers
 # their weights arenas as the store, where they are served, the engines decoding each weight as they use it
-# (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). VERIFIER_ARGS=--host-bytes N puts the serving
-# node's host DRAM (its MemTotal) in the memory line. Its cores default to this process's: the first quarter the
+# (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). Its cores default to this process's: the first quarter the
 # engines' (ENGINE_CPUS), under ROLE=both the last quarter the verifier's, the rest the prover's, all declared to a lease
 # program that takes --cores. PACED (K:T_MS:DRAWS:WINDOWS a session of PLAN, `verifier.py --paced`) and PACE_PASS_MS
 # make the sessions paced; ROLE=both SERVE=node, the node's session on this machine with its verifier and a local
 # challenger beside it, defaults them to 1:1000:2773:7 (seven stretches of a second, a live coin a pass) and 0 (the
 # pass its calibration measured), builds the Lean verifier before the lease, as a served line does, and ends by the
-# verdict line. VERIFIER_ARGS='--node FILE --hbm-bytes N' states the node the share is of (default: the figures').
-# The verifier reads the audited node's figures from FIGURES, by default out/figures.json, which `sheets.py NODE_KIND`
+# verdict line. The verifier reads the audited node's figures, its HBM and host DRAM among them, from FIGURES, by default out/figures.json, which `sheets.py NODE_KIND`
 # writes, NODE_KIND a node file's name (ROLE=both on a GPU: the node file of this machine's card). The north-star run,
 # the verifier on a second node's CPUs:
 #
 #   ROLE=verifier PEER=PROVER_NODE PORT=7799 SESSIONS=2 WINDOWS=7 WINDOW_MS=60000 SAMPLES=33273 QUANTILE=max \
-#     JITTER_MS=50 NODE_KIND=rtx-pro-6000-server-x8 VERIFIER_ARGS='--host-bytes 1843153879040' \
+#     JITTER_MS=50 NODE_KIND=rtx-pro-6000-server-x8 \
 #     bash benchmarks/poub_session/run.sh                         # 16 CPUs
 #   ROLE=prover PORT=7799 SERVE=node PLAN=honest,skip:0.0625 ENGINE_CPUS=0-23 PROVER_CPUS=24-47 \
 #     ENGINE_ARGS='--step-hz 2 --align-steps' NODE_ARGS='--decode-s 60 --warm-openings 33273' \
@@ -210,14 +209,11 @@ PY=${PY:-$(first_of -x "$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python" ${VPY:+"$V
 [ -x "$PY" ] || refuse "PY=$PY is not an executable"
 export PY PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 if [ -z "${CUDA_HOME:-}" ] && [ -n "$SERVED" ]; then
-  # the toolkit of the CUDA version the prover's torch is built for, where the node has it
-  CUDA_ROOT=${CUDA_ROOT:-/usr/local}
+  # the machine's toolkit at the CUDA version the prover's torch is built for (13.0 where it has no torch to ask)
   TV=$("$VPY" -c 'import torch; print(torch.version.cuda or "")' 2> /dev/null)
   TM=${TV%%.*}
-  [ "$TV" = 13.0 ] && TV=
-  TOOLKITS=(${TV:+"$CUDA_ROOT/cuda-$TV"} ${TM:+"$CUDA_ROOT/cuda-$TM"} "$CUDA_ROOT/cuda-13.0" "$CUDA_ROOT/cuda")
-  CUDA_HOME=$(first_of -d "${TOOLKITS[@]}") ||
-    refuse "no CUDA toolkit: CUDA_HOME is not set, and none of ${TOOLKITS[*]} is a directory"
+  CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit "${TV:-13.0}") ||
+    refuse "no CUDA toolkit ${TV:-13.0}: CUDA_HOME is not set, and the machine's record lists none (machine.py, above)"
   # the Commit's collector is built by torch's JIT, which checks no nvcc against the CUDA torch is built for
   NV=$("$CUDA_HOME/bin/nvcc" --version 2> /dev/null | sed -n 's/.*release \([0-9]*\)\..*/\1/p')
   [ -z "$TM" ] || [ "$NV" = "$TM" ] || refuse "the vLLM venv's torch is built for CUDA $TM, and $CUDA_HOME's nvcc is" \
@@ -231,6 +227,24 @@ B=$(mktemp -d "${TMPDIR:-/tmp}/remote-session.XXXXXX") || exit 3
 SV= # ROLE=both's verifier of a served session, a process group of its own
 trap '[ -n "$SV" ] && kill -- "-$SV" 2> /dev/null; rm -rf "$B"' EXIT
 export B RS GIB=${GIB:-16}
+# The codec a card's session registers and its kv.so is built for: CODEC, default the deployed one, read here from
+# the codec's module and written nowhere in this script (CPU= and SERVE=tiny default to p512/k2 below). kv.cu's build fixes the width and masking, the registration's key the
+# rounds. p1024 squares by FOLD 6 as the paged build does (benchmarks/vllm_encoded/stack.sh's KVDEFS); p512 is kv.cu's
+# plain build. Each build of the session's kv.so reads KV_DEFS, node.sh's too.
+DEPLOYED=$("$PY" -c 'from verity.protocols.resource_accounting.memory.poub.verifier import codec; print(codec.DEFAULT.name)') ||
+  refuse "$PY cannot read the deployed codec (verifier/codec.py's DEFAULT)"
+export CARD_CODEC=${CODEC:-$DEPLOYED}
+case $CARD_CODEC in
+  p1024/k[2-8]/masked) KV_DEFS="-DKV_FIELD=1024 -DKV_MASK=1 -DKV_FOLD6=1" ;;
+  p512/k[2-8]) KV_DEFS="-DKV_FIELD=512" ;;
+  *) KV_DEFS= ;;
+esac
+export KV_DEFS
+if [ "$ROLE" != verifier ] && [ -z "${CPU:-}" ] && [ "${SERVE:-}" != tiny ]; then
+  [ -n "$KV_DEFS" ] || refuse "CODEC=$CARD_CODEC: a card's session is built at p1024/kK/masked or p512/kK, K from 2 to 8"
+  [ "${SERVE:-}" != row ] || [ "$CARD_CODEC" = "$DEPLOYED" ] ||
+    refuse "SERVE=row's Commit registers the deployed $DEPLOYED, not CODEC=$CARD_CODEC"
+fi
 [ "$ROLE" != both ] || [ -z "${LEAN_EXE:-}" ] || [ -x "$LEAN_EXE" ] || refuse "LEAN_EXE=$LEAN_EXE is not an executable"
 lean_exe() { # LEAN_EXE, else the Lean verifier built in its package
   [ -n "${LEAN_EXE:-}" ] && return 0
@@ -337,6 +351,18 @@ if [ "$ROLE" != prover ] && [ -z "${CLOSE:-}" ]; then
   fi
   VERIFY+=(--figures "$FIGURES")
 fi
+eval "KEYARGS=(${VERIFIER_ARGS:-})"
+for ((k = 0; k < ${#KEYARGS[@]}; k++)); do
+  case ${KEYARGS[k]} in
+    --challenger-key=*) KEYDIR=${KEYARGS[k]#*=} ;;
+    --challenger-key) KEYDIR=${KEYARGS[k + 1]:-} ;;
+    *) continue ;;
+  esac
+  case $(realpath -m "$KEYDIR")/ in
+    "$(realpath -m "$RESEARCH_RUN_DIR")"/*) refuse "--challenger-key $KEYDIR is inside the run's directory, which custody" \
+      "uploads: the challenger's key directory holds its seed; give one outside it" ;;
+  esac
+done
 if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
   mkdir -p "$(dirname "$REGISTRY")" || exit 3
@@ -431,20 +457,19 @@ card_free() { # NOWAIT=1 with GPU: 75 where a compute process is on those cards,
 }
 if [ -n "$SERVED" ]; then
   card_free || exit 75
-  keep_row() { # the Commit's public records, by path, into out/row: the rest of the sweep is private
+  keep_row() { # the row's public records (keep.py's ROW), into out/row
     [ -d "$SWEEP/$ROW" ] || return 0
-    local f
-    mkdir -p "$O/row"
-    for f in commit/verdict.json commit/steps.jsonl commit/remote_session.json; do
-      [ -f "$SWEEP/$ROW/$f" ] && (cd "$SWEEP/$ROW" && cp --parents "$f" "$O/row/")
-    done
-    return 0
+    "$PY" $RS/keep.py row "$SWEEP/$ROW" "$O/row"
   }
   drop_connection() { # a verifier still waiting for its prover ends at a connection opened and dropped
     (exec 3<> "/dev/tcp/127.0.0.1/$PORT") 2> /dev/null
   }
   if [ "$SERVED" = row ]; then
     SWEEP=${SWEEP_DIR:-$B/sweep}
+    case $(realpath -m "$SWEEP")/ in
+      "$(realpath -m "$RESEARCH_RUN_DIR")"/*) refuse "SWEEP_DIR=$SWEEP is inside the run's directory, which custody uploads:" \
+        "the row's Commit directory holds private files (its tokens, replays and timelines); give a scratch directory" ;;
+    esac
     mkdir -p "$SWEEP" || refuse "SWEEP_DIR=$SWEEP can't be made"
     export NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-$B/nc_build} CONFIG_RUN=${CONFIG_RUN:-1}
     read -r CK REPO REV _ < <("$VV" epoch resolve "$ROW")
@@ -461,7 +486,8 @@ major, minor = json.load(open(sys.argv[1]))["engine"]["target"]["compute_capabil
 print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
         [[ $KV_ARCH =~ ^sm_[0-9]+a?$ ]] || refuse "KV_ARCH=$KV_ARCH is no card's architecture (sm_90), and the row's target" \
           "declares no compute_capability to build kv.cu for: state KV_ARCH, or KV_LIB=cpu"
-        nvcc -O3 -arch="$KV_ARCH" -std=c++17 -Xcompiler -fPIC -shared -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" \
+        # shellcheck disable=SC2086
+        nvcc -O3 -arch="$KV_ARCH" -std=c++17 -Xcompiler -fPIC -shared $KV_DEFS -o "$B/kv.so" \
           verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.build.log" 2>&1 ||
           { tail -40 "$O/kv.build.log"; echo "run.sh: kv.cu's build for $KV_ARCH failed (KV_LIB=cpu encodes on the CPU)"; exit 4; }
         sha256sum "$B/kv.so" > "$O/libs.sha256"
@@ -559,17 +585,16 @@ fi
       | head -1)" 2>&1) || { echo "run.sh: no node for the session to register: $SNODE"; exit 3; }
     nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
       --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
-    CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i "${GPU_LEASE_UUID%%,*}" | head -1)
-    SM=${CC/./}
-    [[ $SM =~ ^[0-9]+$ ]] || { echo "run.sh: the leased card names no compute capability ($CC)"; exit 4; }
-    [ "${CC%%.*}" -ge 9 ] && SM+=a
-    FLAGS=(-O3 -gencode "arch=compute_$SM,code=sm_$SM" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
+    ARCH=$(python3 benchmarks/kernels/machine.py arch "$(nvidia-smi --query-gpu=name --format=csv,noheader \
+      -i "${GPU_LEASE_UUID%%,*}" | head -1)" 2>&1) && GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$ARCH" 2>&1) ||
+      { echo "run.sh: no build target for the leased card: ${GENCODE:-$ARCH}"; exit 4; }
+    FLAGS=(-O3 -gencode "$GENCODE" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
     nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/resource_accounting/memory/poub/prover/poub_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
-    nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
+    nvcc "${FLAGS[@]}" $KV_DEFS -o "$B/kv.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
     wait $S || { tail -40 "$O/session.ptxas"; exit 4; }
     wait $K || { tail -40 "$O/kv.ptxas"; exit 4; }
     sha256sum "$B"/*.so > "$O/libs.sha256"
-    DEV=(--lib "$B/session.so" --kv "$B/kv.so" --gib "$GIB")
+    DEV=(--lib "$B/session.so" --kv "$B/kv.so" --gib "$GIB" --codec "$CARD_CODEC")
   fi
   V=
   if [ "$ROLE" = both ]; then

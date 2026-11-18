@@ -1,5 +1,6 @@
-"""The vLLM adapter's PoUB session on its Commit (`remote.CommitSession`, ``--remote-verifier HOST:PORT``): the engine
-arguments and targets it serves and refuses, the store binder it installs before the build, its check of the built engine,
+"""PoUB's session on the vLLM adapter's Commit (`commit_session.CommitSession`, the process ``poub-session``,
+``--remote-verifier HOST:PORT``), on the adapter's exchange: the engine
+arguments and targets it serves and refuses, the store binder it attaches before the build, its check of what the build declared,
 and its audit run in lockstep with the Commit's instrumented run (`lockstep`: each pass's engine step the run's next
 step), over a CPU store and PoUB's verifier on a thread.  PoUB's serving loop under it, and the helpers these tests share
 with its tests (`PassClock`, `verifying`, `store`, `engine`, `TickingBackend`), are PoUB's prover's
@@ -40,14 +41,16 @@ from verity.protocols.resource_accounting.memory.poub.verifier.session import ve
 from verity import hooks as H
 from verity.channel import Refused
 from verity_vllm import messages
-from verity_vllm.protocols.poub import remote
+from verity.protocols.resource_accounting import scheme as schemes
+from verity.protocols.resource_accounting.memory.poub import scheme as poub
+from verity.protocols.resource_accounting.memory.poub.prover import commit_session as remote
 
 VLLM_TESTS = Path(__file__).resolve().parents[3]  # tests/adapters/vllm, where the adapter's tests import as `tests`
 
 
 def test_the_commits_session_requests_the_engine_it_serves_and_refuses_the_rest():
     """The session requires one GPU, synchronous steps and no prefix caching, and fixes the KV pool at ``kv_pages``;
-    a build declaring otherwise is refused under the session's name."""
+    a build declaring otherwise is refused under the scheme's name."""
     cs = remote.CommitSession("127.0.0.1:7781", kv_pages=8)
     assert {(r.property, r.value) for r in cs.requests() if isinstance(r, H.RequireProperty)} == {
         ("world", 1), ("async_steps", False), ("prefix_cache", False)}
@@ -57,8 +60,8 @@ def test_the_commits_session_requests_the_engine_it_serves_and_refuses_the_rest(
     for bad in ({"world": 2}, {"async_steps": True}, {"async_steps": None}, {"prefix_cache": True}):
         ex = messages.Exchange()
         for r in cs.requests():
-            ex.request("poub-session", r)
-        with pytest.raises(Refused, match="poub-session"):
+            ex.request(poub.POUB.name, r)
+        with pytest.raises(Refused, match="poub"):
             ex.answer(H.Declared("", {**good, **bad}))
     cs.target(type("T", (), {"async_scheduling": False})())
     for t in (None, type("T", (), {"async_scheduling": None})()):
@@ -92,20 +95,43 @@ class Binding:
         return {"weights": 3}
 
 
-def test_the_commits_session_installs_a_binder_of_its_store_before_the_build(monkeypatch):
-    """`CommitSession.install` files the session's requests and makes the store's binder with no passes of its own and
-    the KV outside the store, over the session's store and its ``weight_blocks``, and keeps what its `install` returns;
+def test_the_process_is_registered_by_its_scheme_and_refuses_an_adapter_that_hands_it_no_exchange():
+    """`poub-session` is `POUB`'s process, the prover's `CommitSession` loaded on its first call; without the build's
+    exchange its `install` raises `NotImplementedError` naming the goal, and its gate is declared and not built."""
+    start = schemes.PROCESSES[poub.SESSION_PROCESS]
+    assert remote.PROCESS == poub.SESSION_PROCESS == "poub-session" and poub.SESSION_PROCESS in poub.POUB.processes
+    cs = start("127.0.0.1:7781", kv_pages=8, log=lambda m: None)
+    assert isinstance(cs, remote.CommitSession) and cs.kv_pages == 8
+    with pytest.raises(NotImplementedError, match="memory-accounting/memory-protocols-declared: .*exchange"):
+        cs.install()
+    with pytest.raises(NotImplementedError, match="memory-accounting/memory-protocols-declared: .*Exchange.ready"):
+        cs.gate()
+
+
+def test_the_commits_session_attaches_a_binder_of_its_store_before_the_build(monkeypatch):
+    """`CommitSession.install` attaches `POUB` on the build's exchange: the store's binder with no passes of its own and
+    the KV outside the store, over the session's store and its ``weight_blocks``, kept as the attach returns it, the
+    session's requests filed under the scheme's name, and the scheme declared by the build with its settings;
     `before_build` checks the target and installs, leaving the engine arguments as they are, and installs nothing for a
     target it refuses."""
-    monkeypatch.setattr(remote, "Binder", Binding)
-    cs = remote.CommitSession("127.0.0.1:7781", kv_pages=8, weight_blocks=5)
+    monkeypatch.setattr(poub, "prover", lambda name: {"binder": Binding}[name])
+    messages.close()
+    cs = remote.CommitSession("127.0.0.1:7781", exchange=messages.current, kv_pages=8, weight_blocks=5)
     assert cs.binder is None
     cs.install()
     assert isinstance(cs.binder, Binding) and cs.binder.calls == ["install"]
     assert cs.binder.made == ((cs.store,), {"passes": False, "weight_blocks": 5, "kv": False})
+    ex = messages.current()
+    assert ex.requests == [("poub", r) for r in cs.requests()] and H.FixRanges(8) in cs.requests()
+    assert dict(ex.attached) == {"poub": {"refresh": False, "passes": False, "kv": False, "weight_blocks": 5, "window": 0}}
+    assert ex.reports["poub"] is cs.binder and cs.settings() == {"passes": False, "kv": False, "weight_blocks": 5}
+    assert cs.declared is None
+    declared = H.Declared("", {"world": 1, "async_steps": False, "prefix_cache": False, "in_process": True})
+    ex.answer(declared)
+    assert cs.declared is declared
 
     messages.close()
-    cs = remote.CommitSession("127.0.0.1:7781", kv_pages=None)
+    cs = remote.CommitSession("127.0.0.1:7781", exchange=messages.current, kv_pages=None)
     ekw = {"engine_args": {"max_model_len": 128}, "target": type("T", (), {"async_scheduling": False})()}
     cs.before_build(ekw)
     assert ekw["engine_args"] == {"max_model_len": 128}
@@ -113,68 +139,76 @@ def test_the_commits_session_installs_a_binder_of_its_store_before_the_build(mon
     messages.close()
     assert isinstance(cs.binder, Binding) and cs.binder.made == ((cs.store,), {"passes": False, "weight_blocks": None, "kv": False})
 
-    cs = remote.CommitSession("127.0.0.1:7781")
+    cs = remote.CommitSession("127.0.0.1:7781", exchange=messages.current)
     with pytest.raises(SystemExit, match="declare \"async_scheduling\": false"):
         cs.before_build({"engine_args": {}, "target": None})
     assert cs.binder is None
 
 
-def built(core: Any = True, asynchronous: bool = False, prefix: bool = False, tp: int = 1, client: bool = True) -> Any:
-    """A stand-in for a built engine as `CommitSession.check` reads it: the engine's client of its core (none without
-    ``client``) with the core it holds in this process (``core``, None when it runs in another), and the scheduler's,
-    the cache's and the parallel configuration's one field each."""
-    def names(**kw: Any) -> Any:
-        return type("N", (), kw)()
-
-    config = names(scheduler_config=names(async_scheduling=asynchronous), cache_config=names(enable_prefix_caching=prefix),
-                   parallel_config=names(tensor_parallel_size=tp))
-    return names(llm_engine=names(vllm_config=config, **({"engine_core": names(engine_core=core)} if client else {})))
+def built(in_process: Any = None, asynchronous: Any = False, prefix: bool = False, tp: int = 1) -> H.Declared:
+    """What a build declares on the exchange as `CommitSession.check` reads it: whether the steps overlap, the prefix
+    cache, the tensor parallel size, and, where a build says it (``in_process`` not None), whether its steps are
+    taken in this process."""
+    said = {} if in_process is None else {"in_process": in_process}
+    return H.Declared("", {"async_steps": asynchronous, "prefix_cache": prefix, "world": tp, **said})
 
 
-def test_the_commits_session_checks_the_built_engine_and_registers_its_filler():
-    """`CommitSession.check` after the build: it refuses, with every reason in order, an engine whose core is in
-    another process, that schedules asynchronously, caches prefixes or has a tensor parallel size other than 1, and a
+def test_the_commits_session_checks_the_declared_engine_and_registers_its_filler():
+    """`CommitSession.check` after the build, from what it declared: it refuses, with every reason in order, an engine
+    whose core is in another process (no runner in this one, or declared so), that schedules asynchronously (or does not say), caches
+    prefixes or has a tensor parallel size other than 1, and a
     store that registered a KV pool; else it registers ``filler_gib`` GiB of filler on the runner's device, in whole
     bytes rounded down (none at 0), logs the binder's stats and returns them."""
     said: list[str] = []
     cs = remote.CommitSession("127.0.0.1:7781", filler_gib=0.3, log=said.append)
-    cs.binder = Binding()
+    cs.binder, cs.declared = Binding(), built()
     runner = type("Runner", (), {"device": "cuda:0"})()
-    assert cs.check(built(), runner) == {"weights": 3}
+    assert cs.check(None, runner) == {"weights": 3}
     assert cs.binder.calls == [("register_filler", 322_122_547, "cuda:0"), "stats"]
     assert said == ["[delta] remote session: the store binder on the engine, {'weights': 3}"]
 
     cs = remote.CommitSession("127.0.0.1:7781", log=said.append)
-    cs.binder = Binding()
-    assert cs.check(built(), runner) == {"weights": 3} and cs.binder.calls == ["stats"] and len(said) == 2
+    cs.binder, cs.declared = Binding(), built()
+    assert cs.check(None, runner) == {"weights": 3} and cs.binder.calls == ["stats"] and len(said) == 2
 
     head = "--remote-verifier: the engine is not one the session serves: "
-    whys = [("the engine core in another process", built(core=None)), ("the engine core in another process", built(client=False)),
-            ("async scheduling resolved on", built(asynchronous=True)), ("prefix caching on", built(prefix=True)),
+    whys = [("the engine core in another process", built(in_process=False)),
+            ("async scheduling not declared off", built(asynchronous=True)), ("async scheduling not declared off", built(asynchronous=None)),
+            ("prefix caching on", built(prefix=True)),
             ("tensor parallel size 2", built(tp=2)), ("tensor parallel size 0", built(tp=0)),
-            ("the engine core in another process; async scheduling resolved on; prefix caching on; tensor parallel size 4",
-             built(core=None, asynchronous=True, prefix=True, tp=4))]
-    for why, llm in whys:
+            ("the engine core in another process; async scheduling not declared off; prefix caching on; tensor parallel size 4",
+             built(in_process=False, asynchronous=True, prefix=True, tp=4))]
+    for why, declared in whys:
+        cs.declared = declared
         with pytest.raises(SystemExit) as e:
-            cs.check(llm, runner)
+            cs.check(None, runner)
         assert str(e.value) == head + why
-    cs.store = store()
+    cs.declared = built(in_process=True)
     with pytest.raises(SystemExit) as e:
-        cs.check(built(), runner)
+        cs.check(None, None)
+    assert str(e.value) == head + "the engine core in another process"
+    cs.store, cs.declared = store(), built()
+    with pytest.raises(SystemExit) as e:
+        cs.check(None, runner)
     assert str(e.value) == head + "a KV pool registered (served writes stay outside the registration)"
     assert cs.binder.calls == ["stats"] and len(said) == 2
 
 
 def test_the_commits_session_names_the_step_that_comes_first():
-    """`CommitSession.check` before `install`, and `end` before `begin`, each raise a `RuntimeError` naming the step
-    that comes first; an engine the session doesn't serve is refused before `check` asks for its binder."""
+    """`CommitSession.check` before the build declared its engine, then before `install`, and `end` before `begin`,
+    each raise a `RuntimeError` naming the step that comes first; an engine the session doesn't serve is refused before
+    `check` asks for its binder."""
     cs = remote.CommitSession("127.0.0.1:7781", log=lambda m: None)
     runner = type("Runner", (), {"device": "cuda:0"})()
+    with pytest.raises(RuntimeError, match="once the build has declared it"):
+        cs.check(None, runner)
+    cs.declared = built()
     with pytest.raises(RuntimeError) as early:
-        cs.check(built(), runner)
+        cs.check(None, runner)
     assert str(early.value) == "the Commit's session checks its engine once its binder is installed (`install`)"
+    cs.declared = built(prefix=True)
     with pytest.raises(SystemExit, match="^--remote-verifier: the engine is not one the session serves: prefix caching on$"):
-        cs.check(built(prefix=True), runner)
+        cs.check(None, runner)
     with pytest.raises(RuntimeError) as early:
         cs.end()
     assert str(early.value) == "the Commit's session ends once it has begun (`begin`)"

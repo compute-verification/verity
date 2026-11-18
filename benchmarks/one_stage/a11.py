@@ -72,6 +72,7 @@ import a0  # noqa: E402
 import a6  # noqa: E402
 import a11_kinds as K  # noqa: E402
 import r2_population as R2  # noqa: E402
+from verity.commitments import docket_digest as DD
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
 from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.circuits.evaluation.reference import evaluate_region  # noqa: E402
@@ -200,9 +201,8 @@ def fold_values(vdir: Path, profile_name: str, roles: Path | None, last_step: in
     the whole log's first steps)."""
     from verity_vllm.check import fold_compare
     from verity_vllm.check.fold_compare import SnapshotStore, Values, _attach_specs, load_profile
-    from verity_vllm.observe.events import RunHeader, StepStart
+    from verity_vllm.observe.events import StepStart
     from verity_vllm.observe.fold.fold import fold
-    from verity_vllm.observe.fold.patterns.pouw import with_protocols
     from verity_vllm.observe.log import read_log
     t0 = time.time()
     for dt in ("float8_e4m3fn", "float8_e5m2", "float8_e8m0fnu"):
@@ -213,8 +213,7 @@ def fold_values(vdir: Path, profile_name: str, roles: Path | None, last_step: in
         if last_step is not None and isinstance(e, StepStart) and e.step > last_step:
             break
         events.append(e)
-    header = next((e for e in events if isinstance(e, RunHeader)), None)
-    res = fold(events, with_protocols(profile, header), strict=None, with_program=False)
+    res = fold(events, profile, strict=None, with_program=False)
     _attach_specs(res)
     store = SnapshotStore(vdir / "rank0")
     weights = (weights_cls or Weights)(res.params[-1][1], profile, vdir / "ckpt", roles, vdir / "rank0" / "cos_sin_cache.npy")
@@ -946,7 +945,7 @@ def main() -> int:
         checks[f"twin/{m['name']}"] = {"ok": ok, "codes": [] if ok else ["twin"], "detail": m["st"]["twin"]}
     receipt = R.receipt(rec, "one-stage-e2e verifier (a11.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-    summary.update(population=n_all, partition=pd, registration=R.digest(rec), law=rec["law"],
+    summary.update(population=n_all, partition=pd, registration=DD.digest(rec), law=rec["law"],
                    checks_before_draw={c: v["ok"] for c, v in checks.items()})
     if not all(v["ok"] for v in checks.values()):
         summary["checks"] = checks
@@ -957,7 +956,7 @@ def main() -> int:
     # the verifier's stratified sample, by its own Lean over its own program and partition object on a development
     # challenger's coins; each member serves its share
     p = a0.challenger_sample(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
-                                    "--stratified", str(k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
+                                    "--stratified", str(k)], rec["law"], n_all, DD.digest(rec), out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     served, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}

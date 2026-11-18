@@ -20,7 +20,7 @@ in the payload and holds only public structure, hiding commitments and paths bes
   carries one) is a sample under it over the registered population, of exactly the bundle's units (`check` against the
   docket).
 * ``weights``: the registered values the units read (core's ``one_stage.registered``, as `verity.protocols.resource_accounting.memory.pous.prover.served_weights`
-  registers the seeded weights: ``registered.domain(program, value, words, leaves, word_bits)``, rows in
+  registers the seeded weights: ``registered_value.domain(program, value, words, leaves, word_bits)``, rows in
   ``hm96-sha512/row/v2``): ``{program, values: [{value, root, leaves, words, word_bits, domain, row_schema}]}``.
 * ``commitment``: the serving steps' commitment (kernels' commit call, `commit_slots`: step tree over
   slot trees over unit trees over rows, only each unit's outputs committed, one row ``hm96-sha512/row/v2`` under its own
@@ -90,6 +90,7 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG
+from verity.commitments import registered_value as RV
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import gemm as BG
@@ -508,7 +509,7 @@ class WindowLocate:
                 raise ValueError(f"{port}: a registered read is the port's one piece")
             p = pieces[0]
             e = self.weights[p.value].entry()
-            nbytes = e["words"] * e.get("word_bits", REG.WORD_BITS) // 8
+            nbytes = e["words"] * e.get("word_bits", RV.WORD_BITS) // 8
             flat = p.row * (self.stride(p.value) if self.stride else nbytes) + p.offset
             if p.nbytes != nbytes or flat % nbytes:
                 raise ValueError(f"{port}: {p} is not one whole {nbytes}-byte row of {p.value}")
@@ -716,7 +717,7 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitmen
     (`BINDINGS`), which every template must bind. ``coords(label, offset)``: a unit's coordinates from its label and its
     offset in its labelled run. ``reads(coords, template, port)``: the ``(value, position)`` a unit's port reads of a
     registered value; ``weights``: those values, the prover's side (``program``, ``schema``, ``entry()``, ``path(position)``
-    and the row's string, ``string(position)`` or ``bcs[position]``: `registered.Registered`). ``draw``: the sample's ``sampling_design``,
+    and the row's string, ``string(position)`` or ``bcs[position]``: `registered_value.Registered`). ``draw``: the sample's ``sampling_design``,
     ``source`` and ``receipt`` (default ``{"source": "fixture"}``; a live sample without its receipt is refused). ``workers``:
     processes rebuilding the opened (step, slot) subtrees, one each.
 
@@ -1055,7 +1056,7 @@ def check(doc: Mapping[str, Any], payload: bytes, *, docket: Mapping[str, Any] |
                 bad[f"root:{port}"] = "not the registration's root"
     values = {v["value"]: v for v in doc["weights"]["values"]}
     for name, v in values.items():
-        dom = REG.domain(doc["weights"]["program"], name, v["words"], v["leaves"], v.get("word_bits", REG.WORD_BITS))
+        dom = RV.domain(doc["weights"]["program"], name, v["words"], v["leaves"], v.get("word_bits", RV.WORD_BITS))
         if dom.domain_id.hex() != v["domain"]:
             bad[f"value:{name}"] = "its domain is not the registered-value rule's over its entry"
     com = _check_commitment(doc, bad, docket)
@@ -1065,9 +1066,9 @@ def check(doc: Mapping[str, Any], payload: bytes, *, docket: Mapping[str, Any] |
         v = values.get(q.get("value"))
         if v is None or not isinstance(q.get("position"), int):
             return False
-        schema = v.get("row_schema", REG.SCHEMA)
+        schema = v.get("row_schema", RV.SCHEMA)
         bc = bytes.fromhex(q["string"])
-        d = REG.domain(doc["weights"]["program"], v["value"], v["words"], v["leaves"], v.get("word_bits", REG.WORD_BITS))
+        d = RV.domain(doc["weights"]["program"], v["value"], v["words"], v["leaves"], v.get("word_bits", RV.WORD_BITS))
         return string_of(schema, crow, csalt) == bc and REG.verify_read(d, bytes.fromhex(v["root"]), q["position"], bc,
                                                                          bytes.fromhex(q["path"]), schema)
     for unit in doc["units"]:
@@ -1105,9 +1106,9 @@ def check(doc: Mapping[str, Any], payload: bytes, *, docket: Mapping[str, Any] |
                     bad[key] = why
             elif r["registered"] is not None:
                 v = values.get(r["registered"]["value"])
-                d = v and REG.domain(doc["weights"]["program"], v["value"], v["words"], v["leaves"], v.get("word_bits", REG.WORD_BITS))
+                d = v and RV.domain(doc["weights"]["program"], v["value"], v["words"], v["leaves"], v.get("word_bits", RV.WORD_BITS))
                 if v is None or not REG.verify_read(d, bytes.fromhex(v["root"]), r["registered"]["position"], bc,
-                                                    bytes.fromhex(r["registered"]["path"]), v.get("row_schema", REG.SCHEMA)):
+                                                    bytes.fromhex(r["registered"]["path"]), v.get("row_schema", RV.SCHEMA)):
                     bad[key] = "its registered path does not reach the value's root"
             elif com is None:
                 bad[key] = "the commitment it opens against can't be read"
@@ -1139,7 +1140,7 @@ def step_digest(reg: Mapping[str, Any]) -> str:
     return identity_digest_sha512(STEP_FORMAT, dict(reg)).hex()
 
 
-def step_registration(com: Commitment, weights: Mapping[str, REG.Registered], sampling_design: Mapping[str, Any], *, run: str,
+def step_registration(com: Commitment, weights: Mapping[str, RV.Registered], sampling_design: Mapping[str, Any], *, run: str,
                       program: str, block: int, step: int, read_steps: bool = False) -> dict[str, Any]:
     """The registration of step ``(block, step)`` of ``com`` (the prover's records) under ``sampling_design``, naming the registered
     values ``weights`` its blocks read; ``read_steps``: and the root of every step of ``block`` up to ``step`` (`STEPS_KEY`),

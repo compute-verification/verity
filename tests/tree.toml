@@ -128,6 +128,10 @@ path = "verity/channel.py"
 means = "what two parties exchange messages over: a message and its types, and the configuration's Channel"
 
 [[tree]]
+path = "verity/release.py"
+means = "the formats of a network attester's release of a request: its headers and its watermark"
+
+[[tree]]
 path = "verity/device.py"
 means = "the registered hardware"
 
@@ -142,6 +146,10 @@ means = "reads a configuration, the file `verity run CONFIG` takes (a .toml in a
 [[tree]]
 path = "verity/errors.py"
 means = "the shared exception classes"
+
+[[tree]]
+path = "verity/ports.py"
+means = "a loopback port the OS has free"
 
 [[tree]]
 path = "verity/hooks.py"
@@ -212,6 +220,10 @@ means = "SPOT, the Sample-and-PrOve Transform, with the integrity profile"
 protocol = true
 
 [[tree]]
+path = "verity/protocols/proofs/spot/scheme.py"
+means = "the sampled proofs as a scheme that charges nothing, registered as sampled-proofs"
+
+[[tree]]
 path = "verity/protocols/proofs/spot/verifier/challenger/"
 means = "the challenger's program, which the auditor's device runs"
 
@@ -263,9 +275,17 @@ means = "network attestation: the network attester and its guarantee"
 protocol = true
 
 [[tree]]
+path = "verity/protocols/resource_accounting/network/scheme.py"
+means = "the network attester as a resource scheme, registered as network-attester"
+
+[[tree]]
 path = "verity/protocols/workload_classification/training_detection/inference_only/"
 means = "the inference-only policy's check"
 protocol = true
+
+[[tree]]
+path = "verity/protocols/workload_classification/training_detection/inference_only/scheme.py"
+means = "the inference-only check as a scheme that charges nothing, registered as inference-only"
 
 [[tree]]
 path = "verity/protocols/registration/"

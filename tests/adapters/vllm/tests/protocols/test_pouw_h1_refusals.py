@@ -54,6 +54,7 @@ import dataclasses
 import gzip
 import hashlib
 import io
+import itertools
 import json
 import os
 import pickle
@@ -98,8 +99,10 @@ import verity_torch.pouw.h1.receipts as RC
 import verity_torch.pouw.h1.registered_device as RGD
 import verity_torch.pouw.h1.tables_device as TBD
 from verity.circuits.codec import canonical_json
+from verity.commitments.crypto import lms
 from verity.circuits.refs import Affine, Strided
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
@@ -107,7 +110,6 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import window as
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
     commit_rows,
-    hm96_salt,
     salt_of,
     weights_root,
 )
@@ -115,6 +117,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Cha
 from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError, LiveRecord
+from verity.commitments import registered_value as RV
 
 import verity_vllm.protocols.pouw.h1_hooks as PHK
 import verity_vllm.protocols.pouw.h1_ranks as PHR
@@ -124,10 +127,8 @@ from tests.protocols import test_pouw_h1_commit as TC
 from tests.protocols import test_pouw_h1_handoff as TH
 from tests.protocols import test_pouw_h1_ranks as TR
 from tests.protocols import test_pouw_h1_served as TS
-from tests.protocols import test_pouw_pearl_c_served as PCS
 from tests.protocols.test_pouw_h1 import (
     AUDITOR,
-    KEY,
     RESERVED,
     SALT,
     K,
@@ -149,6 +150,7 @@ from tests.protocols.test_pouw_h1 import (
 from verity_vllm import protocols as PO
 from verity_vllm.errors import Refused
 from verity_vllm.protocols import pouw
+from verity.commitments import docket_digest as DD
 
 #: what `LiveOpening.from_json` says of a coin that is no opening
 NO_OPENING = ("a live coin opening is {after, coin, epoch, index, label, path, salt}: integers, a string, lowercase hex and "
@@ -168,8 +170,8 @@ def window():
 
 def _tables(run):
     """The window's request and slot tables as the honest prover committed them, by round."""
-    return ({r: RQ.request_table(SALT, r, run.rows, run.admitted.get(r, []), KEY) for r in range(run.steps)},
-            {r: RQ.slot_table(SALT, r, run.rows, run.owners[r], KEY) for r in range(run.steps)})
+    return ({r: RQ.request_table(SALT, r, run.rows, run.admitted.get(r, []), run._salts) for r in range(run.steps)},
+            {r: RQ.slot_table(SALT, r, run.rows, run.owners[r], run._salts) for r in range(run.steps)})
 
 
 def _committed(run, tables, slots):
@@ -190,8 +192,8 @@ def _calls(run, s):
 
 def _wide(run):
     """Round 0's slot table with slot 0's leaf five bytes long, which opens under the table and is no slot leaf."""
-    return RQ.hiding_rows(RQ.slots_binding(SALT, 0), 0, [b"\1\0\0\0\0"] + [RQ.EMPTY_SLOT] * (run.rows - 1), KEY,
-                          RQ.SLOTS_NONCE)
+    return RQ.hiding_rows(RQ.slots_binding(SALT, 0), 0, [b"\1\0\0\0\0"] + [RQ.EMPTY_SLOT] * (run.rows - 1),
+                          os.urandom(192 * run.rows))
 
 
 def test_an_entry_whose_first_slot_names_another_request_or_none_or_does_not_open_is_refused(window):
@@ -204,7 +206,7 @@ def test_an_entry_whose_first_slot_names_another_request_or_none_or_does_not_ope
     requests, slots = _tables(run)
     for slot, named in ((0, "request 0"), (5, "no request")):
         moved = dataclasses.replace(e1, slot=slot)
-        table = RQ.request_table(SALT, 1, run.rows, [moved, e2], KEY)
+        table = RQ.request_table(SALT, 1, run.rows, [moved, e2], PV.RunSalts())
         log, own = _committed(run, {**requests, 1: table}, slots)
         assert RQ.request_reason(log, own, SALT, run.rows, moved, _opening(table, 1, 0), _opening(slots[1], 1, slot),
                                  RQ.PER_ROUND) == (
@@ -301,13 +303,13 @@ def test_an_admission_off_the_list_a_slot_leaf_of_another_width_and_a_round_past
             RQ.slot_owner(leaf)
     assert RQ.slot_owner(RQ.EMPTY_SLOT) is None and RQ.slot_owner(RQ.slot_leaf(6)) == 6
     with pytest.raises(ValueError, match="^round 1 admits 3 requests, past its 2 leaves$"):
-        RQ.request_table(SALT, 1, 2, run.requests, KEY)
-    assert RQ.request_table(SALT, 1, 3, run.requests, KEY).commitment.count == 3
+        RQ.request_table(SALT, 1, 2, run.requests, PV.RunSalts())
+    assert RQ.request_table(SALT, 1, 3, run.requests, PV.RunSalts()).commitment.count == 3
 
 
 def test_a_table_of_no_rows_is_cores_empty_tree():
     """`hiding_rows` of no values is `audit.commit_rows` of none: the domain's empty root over a count of 0."""
-    got = RQ.hiding_rows(SALT, 5, [], KEY, 9)
+    got = RQ.hiding_rows(SALT, 5, [], b"")
     assert got.commitment == commit_rows(SALT, 5, [], hash=HM96, salts=[]).commitment
     assert got.commitment.count == 0
 
@@ -335,16 +337,14 @@ def test_a_sample_session_or_a_period_without_what_it_goes_with_is_refused():
     name."""
     def refused(entry, settings):
         return PO.refusals(PO.Context(stage="serve", enabled=(entry,), settings=settings))
-    other = {"pouw": {"coins": Challenger(0, CH.entropy(0))}}
     period = {"period": "p1", "lane": "vllm"}
-    for entry, settings in ((_entry(), _settings()), ("pouw:ncp-v1", other)):
+    for entry, settings in ((_entry(), _settings()),):
         assert refused(entry, settings) == ()
         no_window = (f"{entry}: the pouw setting 'draw_session' is the draw session of H1's window "
                      f"({PH.SCHEME}) on the challenger at 'challenger'")
         assert refused(entry, {"pouw": {**settings["pouw"], "draw_session": {"session": CH.session_id(0xd)}}}) == (no_window,)
-        no_install = (f"{entry}: the pouw setting 'period' is the lane's open period that a Pearl-C install's "
-                      "reserved session joins, so it goes with 'challenger' and 'session', for pearl-c-sm120-v1-h3, "
-                      "pearl-c-sm120-unpromoted-v1-h3, pearl-c-h100-v1-h3 only")
+        no_install = (f"{entry}: the pouw setting 'period' is a Pearl-C install's, and no scheme this adapter installs is "
+                      "one: Pearl+ is attached by its name")
         assert refused(entry, {"pouw": {**settings["pouw"], "period": period}}) == (no_install,)
 
 
@@ -447,8 +447,7 @@ def _driven(*steps, salt=SALT, admission=RQ.PER_ROUND, **kw):
     """`test_pouw_h1._admitted_run`'s window of 3 rounds over two linears, unclosed, after `admitting` took each of the
     scheduler outputs ``steps`` and both linears served the step's rows."""
     rng, runner = np.random.default_rng(12), Runner()
-    run = PH.H1Run("t", salt, {0: "q", 1: "o"}, [(32, K), (40, K)], 32, 3, rounds=_rounds(), key=KEY, admission=admission,
-                   **kw)
+    run = PH.H1Run("t", salt, {0: "q", 1: "o"}, [(32, K), (40, K)], 32, 3, rounds=_rounds(), admission=admission, **kw)
     step = PHK.admitting(run, runner.execute_model, runner)
     for so in steps:
         step(so)
@@ -922,7 +921,7 @@ def test_a_served_weight_that_is_not_its_linears_int8_codes_and_scales_refuses_t
     (n, k), (codes, scales) = TS.SHAPES[0], TS._weights()[0]
     weight, scale = {"int16-codes": (codes.to(torch.int16), scales), "five-scales": (codes, scales[:5]),
                      "no-scales": (codes, None)}[off]
-    run = PH.H1Run("t", TS.SALT, TS.MODULES, TS.SHAPES, TS.T, TS.STEPS, key=KEY,
+    run = PH.H1Run("t", TS.SALT, TS.MODULES, TS.SHAPES, TS.T, TS.STEPS,
                    served=SV.Served(TS.TILE, TS._unit(), TS.BLOCKS, window=TS.W1))
     call = run.record(0, TS._codes(np.random.default_rng(3), TS.SERVED, k), torch.ones(TS.SERVED), weight, scale)
     assert call is not None and call.index == 0
@@ -967,38 +966,101 @@ def test_a_periods_weights_are_each_linears_int8_codes_and_scales_at_an_even_k()
     circuit = hashlib.sha512(b"a declared Program").hexdigest()
     codes: np.ndarray = np.zeros((3, 4), np.int8)
     scales: np.ndarray = np.ones(3, "<f4")
-    period = SV.register_weights(circuit, [(3, 4)], {0: (codes, scales)}, KEY)
+    period = SV.register_weights(circuit, [(3, 4)], {0: (codes, scales)}, TS.WKEY)
     assert sorted(period.registered) == [4] and period.registered[4].leaves == 3
     with pytest.raises(ValueError, match="^K = 5: a row's codes are whole u16 words$"):
-        SV.register_weights(circuit, [(3, 5)], {0: (np.zeros((3, 5), np.int8), scales)}, KEY)
+        SV.register_weights(circuit, [(3, 5)], {0: (np.zeros((3, 5), np.int8), scales)}, TS.WKEY)
     for weight in ((codes.astype(np.int16), scales), (codes[:2], scales), (codes, scales[:2])):
         with pytest.raises(ValueError, match="^linear 0's weight is not its 3 × 4 int8 codes and 3 scales$"):
-            SV.register_weights(circuit, [(3, 4)], {0: weight}, KEY)
+            SV.register_weights(circuit, [(3, 4)], {0: weight}, TS.WKEY)
     with pytest.raises(ValueError, match="^linear 1's weight is not its 2 × 4 int8 codes and 2 scales$"):
-        SV.register_weights(circuit, [(3, 4), (2, 4)], {0: (codes, scales), 1: (codes, scales)}, KEY)
+        SV.register_weights(circuit, [(3, 4), (2, 4)], {0: (codes, scales), 1: (codes, scales)}, TS.WKEY)
 
 
 def test_a_value_holds_one_row_for_each_of_its_rows():
     """`pouw_h1_registered.commit` takes the rows a value holds only when there is one for each row it commits."""
     circuit = hashlib.sha512(b"a declared Program").hexdigest()
     words: np.ndarray = np.arange(12, dtype=np.uint16).reshape(3, 4)
-    held = NR.commit(circuit, "v", words, KEY, 5, rows=NR.Rows(words, 3))
+    ys = os.urandom(3 * 192)
+    held = NR.commit(circuit, "v", words, ys, rows=NR.Rows(words, 3))
     assert held.leaves == 3 and [list(row) for row in held.rows] == words.tolist()
     for rows in (NR.Rows(words[:2], 2), [0, 1, 2, 3]):
         with pytest.raises(ValueError, match=f"^{len(rows)} rows held for a value of 3$"):
-            NR.commit(circuit, "v", words, KEY, 5, rows=rows)
+            NR.commit(circuit, "v", words, ys, rows=rows)
+
+
+#: a Pearl-C pass's weights, its salt session and the auditor's challenger key over that session's ledger (five leaves:
+#: reserve, open, record, close, end)
+SALT_ROOTS = {0: b"\x05" * 64}
+SALT_SID = CH.session_id(1)
+SALT_PRIVATE, SALT_KEY = CH.challenger_key(3, H=5)
+
+
+def _salt_only(seed: int) -> LC.LiveChallenger:
+    """A Pearl-C salt session's challenger: the salt coin alone, derived from `seed`."""
+    return LC.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, CH.entropy(seed))
+
+
+class _SaltSession:
+    """Session `SALT_SID` of the challenger gate `gate` (`challenger_host.Gate`, its ledger under `SALT_KEY`), reserved
+    with `families` and, once the gate opens it (`open`), served by `challenger` on a socket pair with its record and
+    close signed under `SALT_KEY` at the gate's next leaves. `end` has the gate end it over its ``out/`` once its client
+    has closed it; `tree` is its tree as the gate's ``fetch`` gives it."""
+
+    def __init__(self, tmp_path, monkeypatch, gate, families, challenger):
+        self.gate, self.challenger, self.monkeypatch = gate, challenger, monkeypatch
+        self.tree = tmp_path / "session"
+        self.directory = self.tree / "out"
+        self.reason: str | None = None
+        self.client: Any = None
+        self._thread: threading.Thread | None = None
+        gate.reserve(SALT_SID, families)
+
+    def open(self, sid, root):
+        assert sid == SALT_SID and self.client is None
+        reply = self.gate.open(sid, root)
+        self.directory.mkdir(parents=True)
+        (self.directory / R.HELLOS).write_text("")
+        session = R.open_session(self.challenger, SALT_KEY, f"{CH.HOST}.{sid}",
+                                 lambda m: lms.sign_at(SALT_PRIVATE, self.gate.take(), m).encode(), self.directory, sid)
+        ours, theirs = socket.socketpair()
+        self._thread = threading.Thread(target=self._serve, args=(ours, session), daemon=True)
+        self._thread.start()
+        self.client = R.RemoteChallenger(theirs)
+        self.monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at, secret=None: self.client))
+        return {**reply, "commitment": self.challenger.commitment.root.hex()}
+
+    def _serve(self, sock, session):
+        with sock:
+            self.reason = R.serve(sock, session, itertools.count().__next__)
+
+    def end(self):
+        assert self._thread is not None, "end before open"
+        self._thread.join()
+        self.gate.end(SALT_SID, self.directory, self.reason is None)
+        return self.reason
+
+
+def _salt_ended_over(out, families, root, **override):
+    """A ledger of one session `SALT_SID` reserved with `families`, opened on `root` and ended over `out` with its end's
+    fields replaced by `override`: what a gate would sign for a session served otherwise."""
+    g = CH.Gate(SALT_PRIVATE, SALT_KEY)
+    g.reserve(SALT_SID, families)
+    g.open(SALT_SID, root)
+    g.end(SALT_SID, out, **override)
+    return g.ledger()
 
 
 def _salt_pass(tmp_path, monkeypatch, challenger, after=None):
-    """A Pearl-C pass over `test_pouw_pearl_c_served`'s weights, epoch 0, with what `salt_session_reason` reads of the
+    """A Pearl-C pass over `SALT_ROOTS`, epoch 0, with what `salt_session_reason` reads of the
     pass its install records, and its session on a gate's ledger: reserved with the salt coin alone, opened on the
     epoch's root R, served by ``challenger``, its salt coin taken after ``after`` (R unless given), closed by its
     client and ended. The pass, the gate, the session, R."""
-    gate = CH.Gate(PCS.PRIVATE, PCS.KEY)
-    session = PCS._GateSession(tmp_path, monkeypatch, gate, Wd.SALT_FAMILIES, challenger)
-    weights = weights_root(PCS.ROOTS)
+    gate = CH.Gate(SALT_PRIVATE, SALT_KEY)
+    session = _SaltSession(tmp_path, monkeypatch, gate, Wd.SALT_FAMILIES, challenger)
+    weights = weights_root(SALT_ROOTS)
     root = PS.epoch_open_root(weights, 0)
-    answer = session.open(PCS.SID, root.hex())
+    answer = session.open(SALT_SID, root.hex())
     opening = LiveRecord(session.client, Wd.SALT).record(root if after is None else after)
     session.client.close()
     assert session.end() is None
@@ -1013,8 +1075,8 @@ def test_a_pearl_c_pass_is_held_to_a_hex_weights_root_and_to_coins_and_a_salt_co
     """`salt_session_reason` refuses a pass whose weights' root isn't 128 lowercase hex before it looks for a session,
     one whose coins or salt opening don't parse, and one whose salt opening isn't the session's salt coin 0 opened
     after its epoch's root: opened after another root, another coin of the epoch, or a coin that doesn't open."""
-    served_pass, gate, session, _root = _salt_pass(tmp_path, monkeypatch, PCS.salt_only(5))
-    ledger, fetch = gate.ledger(), {PCS.SID: session.tree}.get
+    served_pass, gate, session, _root = _salt_pass(tmp_path, monkeypatch, _salt_only(5))
+    ledger, fetch = gate.ledger(), {SALT_SID: session.tree}.get
 
     def why(**edit):
         return PHC.salt_session_reason({**served_pass, **edit}, ledger, fetch)
@@ -1040,18 +1102,18 @@ def test_a_pearl_c_passs_session_signs_the_salt_coin_alone_and_logs_its_epochs_r
     claimed the salt coin alone the signed coins still say otherwise."""
     for name in ("another-root", "a-round-beside"):
         (tmp_path / name).mkdir()
-    served_pass, gate, session, root = _salt_pass(tmp_path / "another-root", monkeypatch, PCS.salt_only(6),
+    served_pass, gate, session, root = _salt_pass(tmp_path / "another-root", monkeypatch, _salt_only(6),
                                                   after=bytes(range(64)))
-    assert PHC.salt_session_reason(served_pass, gate.ledger(), {PCS.SID: session.tree}.get) == (
-        f"session {PCS.SID}'s signed log does not show the epoch root alone as the root its salt coin followed")
+    assert PHC.salt_session_reason(served_pass, gate.ledger(), {SALT_SID: session.tree}.get) == (
+        f"session {SALT_SID}'s signed log does not show the epoch root alone as the root its salt coin followed")
     served_pass, gate, session, root = _salt_pass(tmp_path / "a-round-beside", monkeypatch,
                                                   Wd.live_challenger(0, 1, CH.entropy(7)))
-    fetch, released = {PCS.SID: session.tree}.get, {Wd.ROUND: 0, Wd.SALT: 1}
+    fetch, released = {SALT_SID: session.tree}.get, {Wd.ROUND: 0, Wd.SALT: 1}
     assert PHC.salt_session_reason(served_pass, gate.ledger(), fetch) == (
-        f"session {PCS.SID} released {released}, not its one salt coin: a refused pass")
-    claimed = PCS._ended_over(session.directory, Wd.SALT_FAMILIES, root.hex(), released={Wd.SALT: 1})
+        f"session {SALT_SID} released {released}, not its one salt coin: a refused pass")
+    claimed = _salt_ended_over(session.directory, Wd.SALT_FAMILIES, root.hex(), released={Wd.SALT: 1})
     assert PHC.salt_session_reason(served_pass, claimed, fetch) == (
-        f"session {PCS.SID}'s signed coins: the coin commitment's coins are not a Pearl-C salt session's: its salt "
+        f"session {SALT_SID}'s signed coins: the coin commitment's coins are not a Pearl-C salt session's: its salt "
         "coin alone")
 
 
@@ -1210,22 +1272,18 @@ def _reached(monkeypatch, *clients):
 
 
 def test_a_session_whose_salt_coin_does_not_open_is_closed_and_the_refusal_raised(monkeypatch):
-    """`session` (ncp-v2's) and `opened` (a reserved session the gate opens) reach the challenger, then ask its salt
-    coin after their root. Where that coin does not open, the session they reached is closed and the challenger's
-    refusal is raised as it was."""
+    """`opened` (a reserved session the gate opens) reaches the challenger, then asks its salt coin after its root. Where
+    that coin does not open, the session it reached is closed and the challenger's refusal is raised as it was."""
     live = Wd.live_challenger(0, 3, CH.entropy(1)).commitment
     sid, root = CH.session_id(1), hashlib.sha512(b"a root").digest()
     answer = {"session": sid, "seq": 0, "root": root.hex(), "commitment": live.root.hex()}
-    clients = [_Client(live), _Client(live)]
-    tries = _reached(monkeypatch, *clients)
-    for client, reach in zip(clients, (
-            lambda: PHW.session("pouw:test", AUDITOR, 3, root, answer),
-            lambda: PHW.opened("pouw:test", AUDITOR, 3, lambda s, r: answer, sid, root, "the window's open root"))):
-        with pytest.raises(CoinError) as refused:
-            reach()
-        assert str(refused.value) == "the challenger refused: that coin is open"
-        assert client.asked == [(Wd.SALT, 0, root)] and client.closed == 1
-    assert tries == [(AUDITOR, None), (AUDITOR, None)]
+    client = _Client(live)
+    tries = _reached(monkeypatch, client)
+    with pytest.raises(CoinError) as refused:
+        PHW.opened("pouw:test", AUDITOR, 3, lambda s, r: answer, sid, root, "the window's open root")
+    assert str(refused.value) == "the challenger refused: that coin is open"
+    assert client.asked == [(Wd.SALT, 0, root)] and client.closed == 1
+    assert tries == [(AUDITOR, None)]
 
 
 @pytest.mark.parametrize("answer", [{"withheld": False, "signed": True}, {"signed": True}, {"withheld": 1, "signed": True},
@@ -1510,7 +1568,7 @@ def _ranks(*ranks, cls=TR.FakeRank):
 
 
 def _install(executor, **kw):
-    return PHR.install(None, executor=executor, rows=32, steps=4, key=KEY, entry="t", **kw)
+    return PHR.install(None, executor=executor, rows=32, steps=4, entry="t", **kw)
 
 
 def test_a_multiprocess_window_is_refused_before_a_rank_is_installed_when_its_salt_or_its_ranks_dont_fit():
@@ -1660,20 +1718,19 @@ def test_the_hosts_table_roots_take_n_rows_of_8_bit_codes_and_n_32_bit_words():
     for c, w in ((codes[0], words[:1]), (codes.astype(np.int16), words), (codes, words.astype(np.uint16)),
                  (codes, np.zeros(3, np.uint32)), (codes, words.reshape(2, 1))):
         with pytest.raises(ValueError) as refused:
-            TBD.host_roots([(bytes(64), 0, c, w)], KEY)
+            TBD.host_roots([(bytes(64), bytes(2 * 192), c, w)])
         assert str(refused.value) == (f"codes {c.shape} of {c.dtype} and words {w.shape} of {w.dtype} are not (n, K) "
                                       "8-bit and (n,) 32-bit")
 
 
 def test_the_hosts_libraries_are_refused_where_no_cxx_compiler_is_on_the_path(monkeypatch):
-    """The host's twins of the device's hashing are built with the system's C++ compiler, the first of g++, c++ and
-    clang++ on the path. With none there, each library is refused by what is missing."""
-    asked: list[str] = []
-    monkeypatch.setattr(RGD.shutil, "which", lambda name: asked.append(name))
+    """The host's twins of the device's hashing are built with the serving device's C++ compiler. With none, each library
+    is refused by what is missing."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as pouw_device
+    monkeypatch.setattr(pouw_device, "compiler", lambda: None)
     for lib in (RGD.host_lib, RGD.zy_host_lib):
-        with pytest.raises(RuntimeError, match=r"^no C\+\+ compiler on the path$"):
+        with pytest.raises(RuntimeError, match=r"^no C\+\+ compiler configured or on the path$"):
             lib.__wrapped__()
-    assert asked == ["g++", "c++", "clang++"] * 2
 
 
 def test_a_compiled_call_shape_is_whole_tiles_and_its_units_in_one_seed_group(window, monkeypatch):
@@ -1814,7 +1871,7 @@ def test_a_window_that_holds_no_tree_of_a_rounds_table_has_none_a_named_record_r
 
     def refusal():
         window = CT.registration(run, previous)
-        return CT.reused(run, window, {**record, "previous": CT.REG.digest(window)})
+        return CT.reused(run, window, {**record, "previous": DD.digest(window)})
     ids = served.ids.pop(1)
     assert refusal() == (f"the window registers no round 1's input-ids table, so no Commit record reuses it as "
                          f"{CR.commit_ids(1)}")
@@ -1835,39 +1892,41 @@ def test_a_values_rows_in_a_host_tensor_are_committed_as_the_same_rows_in_an_arr
     words: np.ndarray = np.arange(12, dtype=np.uint16).reshape(3, 4)
     tensor = torch.from_numpy(words.view(np.uint8).copy()).view(torch.uint16)
     assert tensor.dtype == torch.uint16 and tuple(tensor.shape) == (3, 4)
-    of_array = NR.commit(circuit, "v", words, KEY, 7, keep_rows=True)
-    of_tensor = NR.commit(circuit, "v", tensor, KEY, 7, keep_rows=True)
-    assert isinstance(of_array, DN.G.Registered) and isinstance(of_tensor, DN.G.Registered)
+    ys = os.urandom(3 * 192)
+    of_array = NR.commit(circuit, "v", words, ys, keep_rows=True)
+    of_tensor = NR.commit(circuit, "v", tensor, ys, keep_rows=True)
+    assert isinstance(of_array, RV.Registered) and isinstance(of_tensor, RV.Registered)
     assert of_tensor.root == of_array.root and of_tensor.leaves == 3
     assert [bytes(row) for row in of_tensor.rows] == [bytes(row) for row in of_array.rows]
     for other in (tensor.view(torch.int16), tensor.view(torch.uint8), tensor[0]):
         with pytest.raises(ValueError, match="^a registered value is at least one row of 16-bit words, every row the "
                                              "same width$"):
-            NR.commit(circuit, "v", other, KEY, 7)
+            NR.commit(circuit, "v", other, ys)
 
 
 def test_the_tables_of_a_call_that_served_no_rows_are_rebuilt_from_no_record_and_read_no_kept_file(tmp_path):
     """`zy_value` and `a_value` rebuild a call's ``zy@<c>`` and its step's ``a/<K>@<s>`` from what the prover kept. A
     call that served no rows kept nothing, so no file of it is read: its z table is the rows of no record over the
-    window's slots, at the call's zy nonce, and its A table zero codes of scale 0 over them, at its a nonce, each
-    bound to the window's root."""
+    window's slots, under the run's salts at the call's zy nonce, and its A table zero codes of scale 0 over them, at its
+    a nonce, each bound to the window's root."""
     circuit, root = hashlib.sha512(b"a declared Program").hexdigest(), "ab" * 64
     layout = {"m": 32, "tile": PH.TILE, "linears": [("q", K, 32)], "calls": [("q",)]}
     win = {"layout": layout, "shape": {"prefix": "h1/"}, "program": circuit, "root": root,
            "record": {"calls": [{"index": 0, "n": 32, "k": K, "served": 0, "rows": 0}]}}
-    value = DN.zy_value(win, tmp_path, KEY, 0)
+    salts = PV.RunSalts()
+    value = DN.zy_value(win, tmp_path, salts, 0)
     no_z: np.ndarray = np.zeros((0, 32), "<i4")
     no_y: np.ndarray = np.zeros((0, 32), np.int16)
     words = SV.record_words(no_z, no_y, 32, PH.TILE)
-    same = NR.commit(circuit, "h1/zy@0", words, KEY, SV.nonce(0, "zy"), keep_rows=True, window=root)
-    assert isinstance(same, DN.G.Registered) and (value.value, value.leaves, value.root) == ("h1/zy@0", 1, same.root)
-    assert value.root != NR.commit(circuit, "h1/zy@0", words, KEY, SV.nonce(0, "zy")).root
+    same = NR.commit(circuit, "h1/zy@0", words, salts.at(SV.nonce(0, "zy"), 1), keep_rows=True, window=root)
+    assert isinstance(same, RV.Registered) and (value.value, value.leaves, value.root) == ("h1/zy@0", 1, same.root)
+    assert value.root != NR.commit(circuit, "h1/zy@0", words, salts.at(SV.nonce(0, "zy"), 1)).root
     assert not np.count_nonzero(words)
     no_codes: np.ndarray = np.zeros((0, K), np.int8)
     zero = SV.Served.a_words(SimpleNamespace(m=32), SimpleNamespace(k=K), no_codes, np.zeros(0, "<f4"))
-    table = DN.a_value(win, tmp_path, KEY, 0)
-    same = NR.commit(circuit, f"h1/a/{K}@0", zero, KEY, SV.nonce(0, "a"), keep_rows=True, window=root)
-    assert isinstance(same, DN.G.Registered) and (table.value, table.root) == (f"h1/a/{K}@0", same.root)
+    table = DN.a_value(win, tmp_path, salts, 0)
+    same = NR.commit(circuit, f"h1/a/{K}@0", zero, salts.at(SV.nonce(0, "a"), len(zero)), keep_rows=True, window=root)
+    assert isinstance(same, RV.Registered) and (table.value, table.root) == (f"h1/a/{K}@0", same.root)
     assert table.leaves == same.leaves == len(zero) and not np.count_nonzero(zero)
     assert list(tmp_path.iterdir()) == []
 
@@ -1876,7 +1935,7 @@ def test_a_statements_port_that_reads_no_row_at_a_sampled_proof_block_is_refused
     """`call_rows` takes each port's row at each sampled proof block from credit's file. A port whose reads begin
     past a sampled proof block reads no row there: the call's rows are refused by the port and the call, before a
     value is read."""
-    reg = {"ports": {CR.PUB_PORT: {DN.G.READS_FROM: 2, "reads": [0, 1], "value": "pub"}}}
+    reg = {"ports": {CR.PUB_PORT: {RV.READS_FROM: 2, "reads": [0, 1], "value": "pub"}}}
     with pytest.raises(Refused, match=f"^port {CR.PUB_PORT} reads no row at a drawn unit of call 3$"):
         DN.call_rows({}, 3, [2, 1], reg, {}, None, None)
 
@@ -1887,7 +1946,7 @@ def test_the_hosts_commit_of_a_value_takes_one_192_byte_salt_a_row():
     words: np.ndarray = np.zeros((3, 4), np.uint16)
     for salts in (b"", b"s" * 191, b"s" * 192, b"s" * (3 * 192 + 1)):
         with pytest.raises(ValueError, match=f"^one 192-byte salt per row: {len(salts)} bytes for 3 rows$"):
-            RGD.host_commit(words, KEY, 7, salts, bytes(64))
+            RGD.host_commit(words, salts, bytes(64))
 
 
 def test_records_said_to_be_on_a_cuda_device_are_viewed_where_they_are_and_only_that_view_takes_their_z_table():
@@ -1895,7 +1954,7 @@ def test_records_said_to_be_on_a_cuda_device_are_viewed_where_they_are_and_only_
     tiles over every slot is a u16 view of them where they are, the words the host path builds. `take_z` hands a
     call's waiting z table to its value's registration only for that view: for another call, for rows on the host,
     of another type, not contiguous, at another address or of another shape it gives none and the table still waits;
-    for the view it gives the table's domain id and nonce, once."""
+    for the view it gives the table's domain id and salts, once."""
     rows, n = 64, 32
     records = (torch.arange(2 * W.ZR.ZY_BYTES) % 251).to(torch.uint8).reshape(2, W.ZR.ZY_BYTES)
     on = records.as_subclass(TS._OnDevice)
@@ -1904,7 +1963,8 @@ def test_records_said_to_be_on_a_cuda_device_are_viewed_where_they_are_and_only_
     assert words.dtype == torch.uint16 and words.is_cuda and words.data_ptr() == records.data_ptr()
     assert isinstance(host, np.ndarray) and np.array_equal(words.view(torch.uint8).numpy().view("<u2"), host)
     call, did = SimpleNamespace(index=3), hashlib.sha512(b"the z table's domain").digest()
-    held = (3, on, did, 9)
+    salts = bytes(range(192)) * 2
+    held = (3, on, did, salts)
     run = SimpleNamespace(_zy=held)
     assert TBD.take_z(SimpleNamespace(), call, words) is None
     assert TBD.take_z(run, SimpleNamespace(index=4), words) is None and run._zy is held
@@ -1913,7 +1973,7 @@ def test_records_said_to_be_on_a_cuda_device_are_viewed_where_they_are_and_only_
     others: list[Any] = [host, words.as_subclass(torch.Tensor), words.view(torch.uint8), words[:, ::2], copy, words[:1]]
     for other in others:
         assert TBD.take_z(run, call, other) is None and run._zy is held
-    assert TBD.take_z(run, call, words) == (did, 9) and run._zy is None
+    assert TBD.take_z(run, call, words) == (did, salts) and run._zy is None
     assert TBD.take_z(run, call, words) is None
 
 
@@ -1944,19 +2004,16 @@ def test_a_window_on_the_gpu_path_hashed_by_the_hosts_twins_registers_what_numpy
     tables: list[tuple[str, ...]] = []
 
     class Value:
-        def __init__(self, words, key, nonce, row_salts, domain_id, public=None, also=None):
+        def __init__(self, words, row_salts, domain_id, public=None, also=None):
             on = bool(getattr(words, "is_cuda", False))
             rows = words.view(torch.uint8).numpy().view("<u2") if on else words
             values.append((on, public is not None, also is not None))
             if also is not None:
-                # H1's prover still names its tables' salts by key and nonce; `host_zy` takes them as data, so this
-                # stand-in hands it the bytes the prover's own tables derive
-                value, call = (b"".join(hm96_salt(key, at, j) for j in range(len(rows))) for at in (nonce, also[1]))
-                self.z, *made = RGD.host_zy(rows, value, domain_id, (also[0], call))
+                self.z, *made = RGD.host_zy(rows, row_salts, domain_id, also)
                 self.made = tuple(made)
             else:
                 salts = row_salts if public is None else RGD.host_public_salts(public[0], public[1], len(rows), public[2])
-                self.z, self.made = None, RGD.host_commit(rows, key, nonce, salts, domain_id)
+                self.z, self.made = None, RGD.host_commit(rows, salts, domain_id)
 
         def ready(self):
             return False
@@ -1968,9 +2025,9 @@ def test_a_window_on_the_gpu_path_hashed_by_the_hosts_twins_registers_what_numpy
             return self.z
 
     class Tables:
-        def __init__(self, laid, key, names=("a", "z")):
+        def __init__(self, laid, names=("a", "z")):
             tables.append(names)
-            roots = TBD.host_roots(laid, key)
+            roots = TBD.host_roots(laid)
             self.roots, self.ready, self.names = (lambda: roots), (lambda: False), names
 
     @contextmanager
@@ -2072,7 +2129,7 @@ def test_a_rank_call_with_no_rows_or_off_the_programs_order_refuses_the_windows_
                           (row(1, 0, 0, served={}), "call 1 (step 0, linear 0) is off the declared Program's order"),
                           (row(past, TS.STEPS, 0, served={}),
                            f"call {past} (step {TS.STEPS}, linear 0) is off the declared Program's order")):
-        run = PH.H1Run("t", SALT, TS.MODULES, TS.SHAPES, TS.T, TS.STEPS, key=KEY,
+        run = PH.H1Run("t", SALT, TS.MODULES, TS.SHAPES, TS.T, TS.STEPS,
                        served=SV.Served(TS.TILE, TS._unit(), TS.BLOCKS, window=TS.W1))
         PHR.ingest(run, [shipped])
         index = shipped["call"]["index"]
@@ -2493,7 +2550,7 @@ def test_a_host_library_that_returns_nonzero_is_refused_by_what_it_was_asked(mon
         monkeypatch.setattr(module, name, lambda: refuses)
     words: np.ndarray = np.zeros((3, 512), np.uint16)
     with pytest.raises(ValueError, match=r"^rr_commit_host refused the value's layout \(3\)$"):
-        RGD.host_commit(words, KEY, 7, None, bytes(64))
+        RGD.host_commit(words, bytes(3 * 192), bytes(64))
     with pytest.raises(ValueError, match=r"^zy_commit_host refused the records' layout \(3\)$"):
         RGD.host_zy(words, bytes(3 * 192), bytes(64), (bytes(64), bytes(3 * 192)))
     for ok in (False, True):
@@ -2501,7 +2558,7 @@ def test_a_host_library_that_returns_nonzero_is_refused_by_what_it_was_asked(mon
             RGD.host_public_salts(b"a salt head", 5, 3, ok)
     codes: np.ndarray = np.zeros((2, K), np.int8)
     with pytest.raises(ValueError, match=r"^rt_step_host refused the table's layout \(3\)$"):
-        TBD.host_roots([(bytes(64), 0, codes, np.zeros(2, np.uint32))], KEY)
+        TBD.host_roots([(bytes(64), bytes(2 * 192), codes, np.zeros(2, np.uint32))])
 
 
 def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_their_kernels_dont_build(monkeypatch):

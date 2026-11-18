@@ -48,14 +48,14 @@ with `bits` written into its opening and consumed has as its log `pre`, then the
 then the rest (`RoundsReach.release`, whose trace ends at such a position). -/
 theorem release_past {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray} {k : ℕ}
     {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game Exchange} {pre : List Release} {i s n : ℕ}
-    {b : ByteArray} {Ks₀ : Fin R → DigestCut Claims.Msg g} {q : Pos g σ Claims.Msg (Fin R)}
+    {b : ByteArray} {Ks₀ : Fin R → DigestCut Hash.Msg g} {q : Pos g σ Hash.Msg (Fin R)}
     {s'' : Strategy (optOpenK k fs ts f i s n b ts[i]?)}
-    {Ks : Fin R → DigestCut Claims.Msg (optOpenK k fs ts f i s n b ts[i]?)}
+    {Ks : Fin R → DigestCut Hash.Msg (optOpenK k fs ts f i s n b ts[i]?)}
     {x'' : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s''}
     {back'' : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s'' → CoinTape g σ}
     (hq : q = ⟨optOpenK k fs ts f i s n b ts[i]?, s'', Ks, x'', back''⟩) (hi : q.Inv Ks₀)
     (hf : ∀ log, f log = finish sg θ F c rq (pre ++ log)) (hT : TreesOf pre ts) (hS : Served pre i s n)
-    {bits : List Bool} (hE : ¬ EmptyAt (finish sg θ F c rq) q.g' bits) {r : Pos g σ Claims.Msg (Fin R)}
+    {bits : List Bool} (hE : ¬ EmptyAt (finish sg θ F c rq) q.g' bits) {r : Pos g σ Hash.Msg (Fin R)}
     (hr : (q.rewrite (writeOpening (finish sg θ F c rq) q.s' bits)).consume.Past r) :
     ∃ L, (CoinTape.run g σ r.tape).log = pre ++ ⟨.opening i s n, b, bits⟩ :: L := by
   subst hq
@@ -76,12 +76,12 @@ where each round's reading picks only openings the device serves, off the openin
 on the tape of any position past the position with `bits` written into its opening and consumed releases `bits` at an
 opening the rounds whose cuts the position fixes pick (`LoggedAt`; `RoundsReach.stop_logged`, whose trace ends at
 such a position). -/
-theorem stop_logged_past {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
+theorem stop_logged_past {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Hash.Msg}
     {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
-    (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {Ks₀ : Fin R → DigestCut Claims.Msg g}
-    {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀) (hS : StopsAt P rv sg θ F c rq q)
+    (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {Ks₀ : Fin R → DigestCut Hash.Msg g}
+    {q : Pos g σ Hash.Msg (Fin R)} (hi : q.Inv Ks₀) (hS : StopsAt P rv sg θ F c rq q)
     (hK : ¬ ∀ j, q.Ks j = .skip) {bits : List Bool} (hE : ¬ EmptyAt (finish sg θ F c rq) q.g' bits)
-    {r : Pos g σ Claims.Msg (Fin R)}
+    {r : Pos g σ Hash.Msg (Fin R)}
     (hr : (q.rewrite (writeOpening (finish sg θ F c rq) q.s' bits)).consume.Past r) :
     LoggedAt P q bits (CoinTape.run g σ r.tape).log := by
   obtain ⟨pre, f, a, hf, L, -, h⟩ := hS
@@ -108,10 +108,10 @@ variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R nJ : ℕ} {D :
 
 /-- **The stop after a member's session's end is where `StopsAt` says**, from a log and the close after it, where the
 stop its session starts at is and each round's reading picks only openings (`StopsAt.next` at each consumed stop). -/
-theorem MemberReach.stopsAt {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
+theorem MemberReach.stopsAt {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Hash.Msg}
     {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n) {i : ℕ}
-    {m : Flock.Guarantees.MemberV5 Reg nJ} {p q : Pos g σ Claims.Msg (Fin R)}
+    {m : Flock.Guarantees.MemberV5 Reg nJ} {p q : Pos g σ Hash.Msg (Fin R)}
     {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} (h : MemberReach D M BL B S Rg i m p q out)
     (hS : StopsAt P rv sg θ F c rq p.toStop) : StopsAt P rv sg θ F c rq q.toStop :=
   h.keeps (fun q => StopsAt P rv sg θ F c rq q.toStop) hS (fun q φ hq => StopsAt.next hP hq φ) fun q hq => by
@@ -129,7 +129,7 @@ and the member's proof files at its end; and the play on the tape of any positio
 position the last member's session ends at is one) releases `pts`' bits at an opening the rounds whose cuts the first
 stop fixes pick, and each answered submission's coins at an opening the rounds whose cuts its stop fixes pick
 (`firstStop_logged` and `RoundsReach.answers_logged`, at a member of a window). -/
-theorem MemberReach.logged {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Claims.Msg}
+theorem MemberReach.logged {P : Fin R → List Release → Frame → Prop} {rv : Fin R → Exchange → Option Hash.Msg}
     {sg : Signer} {θ : ByteArray} {F : Array ByteArray} {c rq : ByteArray}
     (hP : ∀ j pre fr, P j pre fr → ∃ i s n, fr = .opening i s n)
     (hPS : ∀ j pre i s n, P j pre (.opening i s n) → Served pre i s n) {i : ℕ}
@@ -141,12 +141,12 @@ theorem MemberReach.logged {P : Fin R → List Release → Frame → Prop} {rv :
     (hM : ∀ q s x, (M.member i (memberPts m)).round q (memberTabs S Rg m) s x =
       writeOpening (finish sg θ F c rq) q.s' (bitsOf s x))
     (hB : ∀ g' s x, ¬ B i g' (memberTabs S Rg m) s x → ¬ EmptyAt (finish sg θ F c rq) g' (bitsOf s x))
-    {Ks₀ : Fin R → DigestCut Claims.Msg g} {p q r : Pos g σ Claims.Msg (Fin R)}
+    {Ks₀ : Fin R → DigestCut Hash.Msg g} {p q r : Pos g σ Hash.Msg (Fin R)}
     {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} (h : MemberReach D M BL B S Rg i m p q out)
     (hqr : q.Past r) (hi : p.Inv Ks₀) (hS : StopsAt P rv sg θ F c rq p.toStop)
     (hK : ¬ ∀ j, p.toStop.Ks j = .skip) :
     ∃ (pts : Fin 2 → Fin (memberPts m) → 𝔽)
-      (as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ (memberTabs S Rg m)) × (Fin s.n → 𝔽)))),
+      (as : List (Pos g σ Hash.Msg (Fin R) × ((s : SubmitJ (memberTabs S Rg m)) × (Fin s.n → 𝔽)))),
       out = ⟨(D i).root p.toStop.modes, pts, as.foldl (fun rs a =>
         addRoundJ rs a.2.1.tab a.2.1.rep (roundOf m.dg a.2.1.bytes a.2.1.n a.2.2)) (fun _ _ => []),
           (D i).files q⟩ ∧
@@ -211,11 +211,11 @@ no statement and no session in the play, has `I` at the next place and the same 
 structure MemberSteps (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
-    (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ →
-      Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop) : Prop where
+    (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → ℕ →
+      Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → Prop) : Prop where
   start : ∀ ω r, I ω r 0 (Pos.root (roundCuts V θ F c rd) (M.start ω))
   step : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Flock.Guarantees.MemberV5 ByteArray W.nJ)
-    (p q r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds))
+    (p q r : Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds))
     (out : LiveOutJ (memberTabs ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) m) (memberPts m)),
     ((W.extend M.widening).joint t).ms[i]? = some m → (m.part ((W.extend M.widening).L.draw ω)).Nonempty →
     I ω r i p → p.Inv (roundCuts V θ F c rd) →
@@ -227,10 +227,10 @@ structure MemberSteps (k : Verity.Registration.Composite) (P : Exchange → Prop
     I ω r (i + 1) q.toStop.consume ∧ FlockSoundness.Discharge.ZkHidden.AcceptsZKP m.I m.own
       (m.wr (m.part ((W.extend M.widening).L.draw ω)) (executionPhaseReg V θ F c W rd σ D) out)
   skip : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Flock.Guarantees.MemberV5 ByteArray W.nJ)
-    (p r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)),
+    (p r : Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds)),
     ((W.extend M.widening).joint t).ms[i]? = some m → ¬ (m.part ((W.extend M.widening).L.draw ω)).Nonempty →
     I ω r i p → I ω r (i + 1) p
-  ends : ∀ (ω : (W.extend M.widening).L.Ω) (r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)),
+  ends : ∀ (ω : (W.extend M.widening).L.Ω) (r : Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds)),
     (Pos.root (roundCuts V θ F c rd) (M.start ω)).Past r →
     V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
       P (CoinTape.run (V.game θ F c) σ r.tape) →
@@ -244,8 +244,8 @@ each member. -/
 theorem memberDecodes_of_stops (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
-    (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ →
-      Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
+    (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → ℕ →
+      Pos (V.game θ F c) σ Hash.Msg (Fin W.rounds) → Prop)
     (hP : ∀ j pre fr, rd.round j pre fr → ∃ i s n, fr = .opening i s n)
     (h : MemberSteps V θ F c k P W t rd σ D M BL B I) :
     MemberDecodes V θ F c k P W t rd σ D M BL B fun ω r i p =>

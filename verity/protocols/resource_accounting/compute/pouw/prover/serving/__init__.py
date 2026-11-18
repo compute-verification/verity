@@ -1,12 +1,12 @@
 """PoUW's serving side: what runs beside a served model to commit its matrix multiplies, one directory a scheme (`h1`,
-`pearl_c`, and `ncp` for ``ncp-v1`` and ``ncp-v2``), the live coins the schemes' windows draw (`coins`), and the calls'
+`pearl_c`), the live coins the schemes' windows draw (`coins`), and the calls'
 operands, devices and circuits beside them.
 
 A workload reaches it only through the names this module exports. Per call there are two:
 
 * `run_matmul(run, site, x, weight, bias)`: run this matrix multiply under PoUW, y = x weightᵀ (+ bias), served and
-  committed by ``run`` (a `MatmulRun`): ``ncp-v1`` (`NcpRun`), ``ncp-v2`` (`NcpCircuitRun`) or a workload's own (Pearl-C's run
-  on the device is the workload's).
+  committed by ``run`` (a `MatmulRun`): a workload's own (Pearl-C's run on the device is the
+  workload's).
 * `observe_matmul(run, site, x, weight, y, ...)`: a matrix multiply the workload served itself, recorded by ``run`` (a
   `MatmulObserver`), which computes nothing: H1 (`H1Run`), whose ``x`` is the int8 arm's s8 rows. The workload hands
   H1 its arm's GEMM and dequantization first (`use_int8_arm`, `int8_arm.Int8Arm`).
@@ -33,21 +33,12 @@ _SERVING = f"{_PROVER}.serving"
 #: each exported name's module and attribute, read from it at every lookup (never cached here), so an import inside a
 #: function sees the module's current attribute
 _LAZY = {
-    "NcpRun": (f"{_SERVING}.ncp", "NcpRun"),
-    "NcpCircuitRun": (f"{_SERVING}.ncp", "NcpCircuitRun"),
-    "NcpSettings": (f"{_SERVING}.ncp", "NcpSettings"),
-    "LayerRows": (f"{_SERVING}.ncp", "LayerRows"),
-    "weight_operands": (f"{_SERVING}.ncp", "weight_operands"),
-    "QUANTIZER": (f"{_SERVING}.ncp", "QUANTIZER"),
-    "quantize": (f"{_SERVING}.operands", "quantize"),
-    "host_array": (f"{_SERVING}.ncp", "host"),
     "use_int8_arm": (f"{_SERVING}.int8_arm", "use"),
     "use_tensors": (f"{_SERVING}.tensors", "use"),
     "use_h1_device": (f"{_SERVING}.tensors", "use_h1"),
     "H1Run": (f"{_SERVING}.h1", "H1Run"),
     "PearlCKernel": (f"{_SERVING}.pearl_c.kernel", "Kernel"),
     "PearlC": (f"{_PROVER}.schemes.pearl_c", "PearlC"),
-    "H100": (f"{_PROVER}.schemes.pearl_c_device", "H100"),
     "reserve_salt": (f"{_SERVING}.coins.window", "reserve_salt"),
     "gate_of": (f"{_SERVING}.coins.window", "gate_of"),
     "served_passes": (f"{_SERVING}.pearl_c.window", "served_passes"),
@@ -67,7 +58,7 @@ _LAZY = {
     "H1_CHALLENGER": (f"{_SERVING}.h1", "CHALLENGER"),
     "H1_SCHEME": (f"{_SERVING}.h1", "SCHEME"),
     "H1_TILE": (f"{_SERVING}.h1", "TILE"),
-    "H1_WEIGHT_KEY": (f"{_SERVING}.h1", "WEIGHT_KEY"),
+    "H1_WEIGHT_SALTS": (f"{_SERVING}.h1", "WEIGHT_SALTS"),
     "HM96": (f"{_POUW}.verifier.audit", "HM96"),
     "HM96_WEIGHTS": (f"{_POUW}.verifier.audit", "HM96_WEIGHTS"),
     "Matmul": (f"{_POUW}.verifier.protocol", "Matmul"),
@@ -87,6 +78,7 @@ _LAZY = {
     "draw_challenger": (f"{_POUW}.verifier.window", "draw_challenger"),
     "finish_window": (f"{_SERVING}.coins.window", "finish"),
     "fresh_salts": (f"{_POUW}.verifier.audit", "fresh_salts"),
+    "epoch_open_root": (f"{_POUW}.verifier.salt", "epoch_open_root"),
     "h1_weight_root": (f"{_SERVING}.h1", "weight_root"),
     "in_process_draw": (f"{_SERVING}.coins.window", "in_process_draw"),
     "live_challenger": (f"{_POUW}.verifier.window", "live_challenger"),
@@ -218,15 +210,6 @@ def ready_verifier() -> Any:
     return verifier.executable()
 
 
-def pearl_c_salt_key(scheme: str) -> bytes:
-    """Refused: Pearl+ keys no salt.  B's rows are salted from the weights' registration (`pearl_c.weight_row_salts`) and
-    every other leaf with fresh bytes, which the device run takes as data (``weight_roots``' and ``PearlCDeviceRun``'s
-    ``weight_salts``)."""
-    raise NotImplementedError(f"{scheme}: Pearl+ keys no salt.  This name stays only for vLLM's adapter, which imports it "
-                              "(adapters/vllm/verity_vllm/protocols/pouw/__init__.py, its Pearl-C arm, @vllm), and goes "
-                              "with that arm's deletion")
-
-
 def __getattr__(name: str) -> Any:
     if name in _FAMILIES:
         from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import names
@@ -242,5 +225,5 @@ def __dir__() -> list[str]:
     return sorted({*globals(), *_LAZY, *_FAMILIES})
 
 
-__all__ = ["MatmulObserver", "MatmulRun", "in_process_coins", "observe_matmul", "pearl_c_salt_key",
-           "ready_verifier", "run_matmul", "verifier_coins", *_LAZY, *_FAMILIES]
+__all__ = ["MatmulObserver", "MatmulRun", "in_process_coins", "observe_matmul", "ready_verifier",
+           "run_matmul", "verifier_coins", *_LAZY, *_FAMILIES]

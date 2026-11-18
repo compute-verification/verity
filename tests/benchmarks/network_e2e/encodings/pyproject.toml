@@ -28,12 +28,42 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
           "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
           "verity/protocols/proofs/spot/verifier/one_stage/produced.py",
+          "verity/protocols/proofs/spot/prover/produced.py",
           "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
           "adapters/vllm/verity_vllm/errors.py",
           # test_tick serves the replay's scheduler behind the vLLM integration's certified-tick gate (`serve_admit`)
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/pipeline/__init__.py",
           "adapters/vllm/verity_vllm/pipeline/serve_admit.py", "adapters/vllm/verity_vllm/engine/__init__.py",
           "adapters/vllm/verity_vllm/engine/hooks.py",
+          # the gate is the engine's admission (`verity_vllm.engine.admission`), with the engine driver, the runner's and
+          # the scheduler's steps it imports and the messages it speaks (with the integration's declared settings, which
+          # the exchange reads its attach context from), on network attestation's admission and its
+          # scheme, which reads the scheme interface, the registry of schemes, SPOT's workload and the hook types
+          "adapters/vllm/verity_vllm/engine/admission.py", "adapters/vllm/verity_vllm/engine/engine_driver.py",
+          "adapters/vllm/verity_vllm/engine/runner_step.py", "adapters/vllm/verity_vllm/engine/scheduler_step.py",
+          "adapters/vllm/verity_vllm/messages.py", "adapters/vllm/verity_vllm/settings.py", "verity/channel.py", "verity/release.py", "verity/hooks.py", "verity/protocol.py",
+          "verity/protocols/resource_accounting/scheme.py", "verity/protocols/compose/__init__.py",
+          "verity/protocols/compose/schemes.py", "verity/protocols/proofs/spot/prover/__init__.py",
+          "verity/protocols/proofs/spot/prover/workload.py",
+          # the registry of schemes (`compose.schemes`) loads every declared scheme, the sampled proofs' among them, whose
+          # declaration reads SPOT's parties, its challenger and its one-stage docket, and the configuration's types
+          "verity/config.py", "verity/party.py", "verity/protocols/proofs/spot/verifier/parties.py",
+          "verity/protocols/proofs/spot/verifier/challenger/__init__.py",
+          "verity/protocols/proofs/spot/verifier/challenger/challenger.py",
+          "verity/protocols/proofs/spot/verifier/challenger/coins.py",
+          "verity/protocols/proofs/spot/verifier/challenger/remote.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/docket.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/draw.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/verdict.py",
+          # test_served_window compiles the served run's windows against the compile slice's fixtures
+          "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w1.json",
+          "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w1_class.json",
+          "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212.json",
+          "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212_class.json",
+          "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212_class_async.json",
+          # test_arith_vectors' coders charge a window through the interface's charge circuits
+          "verity/protocols/interface/__init__.py", "verity/protocols/interface/charge",
           # the replay, the derived rules, the coder and advice v1's codec are the vLLM integration's advice code, which
           # replay.py, derived.py, code.py, code_v1.py and v1.py import and re-export
           "adapters/vllm/verity_vllm/pipeline/advice_code",

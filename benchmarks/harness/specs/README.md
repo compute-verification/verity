@@ -25,7 +25,8 @@ verity-bench check SPEC    # exit 0 only when every point has a passing run
 SPEC is a spec's id or its path, and `SPEC@CARD` names the card a run is on. Without one, a run is on the spec's one card,
 else on the card the driver reports, and a card the spec doesn't list is refused by name. A point's identity holds its
 card. A spec id from before its spec named no card (`llama32-1b-1gpu-pouw-protocol-served-h100`) names a stored run's spec
-alone: `verity_bench/data/former_spec_ids.toml` says which spec and card it is now, and no launch takes it. `tests/` checks that every pinned preset resolves as the vLLM integration's engine spec to
+alone: `verity_bench/data/former_spec_ids.toml` says which spec and card it is now, and no launch takes it. Its
+`[retired]` names each spec deleted with no successor, and a launch of one is refused with why. `tests/` checks that every pinned preset resolves as the vLLM integration's engine spec to
 its checkpoint pin, and that every spec and sweep here has its line below.
 
 ## Stock serving
@@ -49,12 +50,10 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 
 ## PoUW
 
-- `llama31-8b-1gpu-pouw-protocol-served`: Pearl-C against batch-invariant eager and compiled stock FP8, in one run.
-- `llama31-8b-1gpu-pouw-protocol-served-b32`: the same at batch 32 alone, with 6 reps.
 - `llama31-8b-1gpu-pearl-c-whole-served`: Pearl-C's whole-step graph arm against compiled stock FP8 on one H200. It
   refuses the RTX PRO 6000, where its whole step served Pearl-C on sm_120, no declared scheme (compute-accounting's to
   declare); its runs there before are its record's (`pearl-c-whole-step`), read as `...@rtx-pro-6000`.
-- `llama32-1b-1gpu-pouw-protocol-served`: Pearl+ (`pouw:pearl-c-h100-v1-h3`, `pearl_c_sm90`'s kernel from its setup)
+- `llama32-1b-1gpu-pouw-protocol-served`: Pearl+ (the arm `pearl-plus`, the declared scheme by its name, `pearl_c_sm90`'s kernel from its setup)
   on Llama-3.2-1B's BF16 checkpoint on one H200 or H100, against eager and compiled stock FP8 at batch 32, 8,192 tokens a
   step (`served_pearlplus.sh`'s step).
 - `llama32-1b-1gpu-pearl-c-whole-served`: the same on one H100 with the whole-step arm beside its three arms: the ceiling
@@ -81,6 +80,8 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   with ten cores, the units walked on the host.
 - `llama32-1b-flock-steady-gemm-walk`: the same point with the units' level walk on the card (`FC_UNIT_WALK=1`);
   with the one above, the same metric's Llama member.
+- `llama32-1b-flock-steady-small`: Llama 3.2 1B's census block types other than its attention, each under its
+  census name, at one prover on one H200 with ten cores.
 
 ## Sweeps
 

@@ -79,7 +79,7 @@ theorem sha512_hashOf : Flock.Bridge.Spec.HashOf Verity.sha512 := fun x => by
   rw [hx]
   rfl
 
-theorem sha512Msg_length (m : Claims.Msg) : (Claims.Sampling.sha512Msg m).length = 64 := by
+theorem sha512Msg_length (m : Hash.Msg) : (Claims.Sampling.sha512Msg m).length = 64 := by
   rw [Claims.Sampling.sha512Msg, bs_length, Flock.Sha512.hash_size]
 
 /-- **A port's row message hashes to its registered schema's `Hash.RowLeaf` digest** under SHA-512, whichever of
@@ -260,7 +260,7 @@ variable {hU} in
 SHA-512, at `placeAt`'s verifier, root and rank, its row holding the opened bit at the place's offset, at files that
 load to the commitment's data and pass the ports and roots check. -/
 theorem opens_rowLeaf (hL : Loads D n pi pub I) (hA : Ready I) {i : ℕ} {b : Bool}
-    {m : Claims.Msg} (h : (Cd D hU n pi pub).Opens Claims.Sampling.sha512Msg (roots D n pub) ⟨i, b, m⟩ = true) :
+    {m : Hash.Msg} (h : (Cd D hU n pi pub).Opens Claims.Sampling.sha512Msg (roots D n pub) ⟨i, b, m⟩ = true) :
     ∃ p, placeAt D hU n pi pub i = some p ∧ ∃ o : Hash.RowLeaf.Opening,
       Hash.RowLeaf.accepts Verity.sha512 Verity.sha512 p.verifier p.root p.rank o ∧ o.row[p.offset]? = some b := by
   have hR := hA.roots hL
@@ -410,7 +410,7 @@ theorem placeOf_words {i : ℕ} {r : Flock.Bridge.RowAt} (hr : Flock.Bridge.rowO
 
 /-- **An opening the deployed commitment accepts is a `Hash.RowLeaf` opening at the registered place**: under
 SHA-512, at `placeAt`'s verifier, root and rank, its row holding the opened bit at the place's offset. -/
-theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : Claims.Msg}
+theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : Hash.Msg}
     (h : A.Cd.Opens Claims.Sampling.sha512Msg A.roots ⟨i, b, m⟩ = true) :
     ∃ p, A.placeAt i = some p ∧ ∃ o : Hash.RowLeaf.Opening,
       Hash.RowLeaf.accepts Verity.sha512 Verity.sha512 p.verifier p.root p.rank o ∧ o.row[p.offset]? = some b :=
@@ -465,9 +465,9 @@ only that the coin commitment's families hold the family v2's parameters name; t
 only the record's rounds (`LogOpensRecorded`), is v2's record check's, which refuses a session whose coin tree opens a
 round its record doesn't give (`Instance.logOpensRecorded`). -/
 theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
-    (reg : (A : Live) → Option Claims.Msg → A.Reg)
-    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (reg : (A : Live) → Option Hash.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Hash.Msg)
     (hFP : I.FamiliesPinned .remote)
     (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)) .remote)
     (hW : I.base.PouwSound .remote) :
@@ -498,9 +498,9 @@ definition. `Deployed` is `Instance.deployed` at the openings every instance has
 coupling at each session is `couplingTarget_at`'s, its log premise discharged by v2's record check
 (`Instance.logOpensRecorded`). -/
 theorem spotSound_deployedReady (I : Instance d α) (K₀ : Constructions I.base) (k : Verity.Registration.Composite)
-    (reg : (A : Live) → Option Claims.Msg → A.Reg)
-    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (reg : (A : Live) → Option Hash.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Hash.Msg)
     (hSr : I.SessionRegistered k)
     (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ k reg record recordDigest)) k) :
     (I.vocab (I.constructionsAt K₀ k reg record recordDigest)).SpotSound k :=
@@ -543,9 +543,9 @@ composite has verified; the premise stands for that until the period check reads
 bits that leave the device during the wipe are the vocabulary's (`Verity.Wipe.egress`), which no statement yet ties
 to the network attester's count over the wipe's span. -/
 theorem onsite_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
-    (reg : (A : Live) → Option Claims.Msg → A.Reg)
-    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (reg : (A : Live) → Option Hash.Msg → A.Reg)
+    (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Hash.Msg)
+    (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Hash.Msg)
     (hFP : I.FamiliesPinned .onsite)
     (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ .onsite reg record recordDigest)) .onsite)
     (hW : I.base.PouwSound .onsite) (hI : I.base.InferenceOnlySound .onsite)

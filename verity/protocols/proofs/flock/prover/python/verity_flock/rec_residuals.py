@@ -52,8 +52,10 @@ from types import SimpleNamespace
 import numpy as np
 from verity.commitments import hm96
 from verity.circuits import boolean as BL
-from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
+from verity.commitments.domains import REC_V1_VERIFIER_SALT, REC_V1_ZERO_RESIDUAL_SALT
 from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.population import wired_population_program
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array
@@ -76,8 +78,8 @@ OUT_WORDS = 128
 F_WORDS = 8
 ROW_CHUNK = 64
 LEAVES = 3 ** 7
-ZERO_SALT = b"verity/rec-v1/zero-residual-salt/v1"
-VERIFIER_SALT = b"verity/rec-v1/verifier-salt/v1"
+ZERO_SALT = REC_V1_ZERO_RESIDUAL_SALT.encode()
+VERIFIER_SALT = REC_V1_VERIFIER_SALT.encode()
 ZERO_VALUE = "rec-residuals-zero"
 V_VALUE = "rec-v"
 # the META key that says the statement is over a holo shape's parts (`rec_algebra.Shape.holo`), written only when true: the
@@ -422,22 +424,22 @@ def verifier_salts(program: str, value: str, n: int) -> list[bytes]:
 
 
 def verifier_value(program: str, value: str, rows: list[list[int]]):
-    """A value the verifier registers itself (`registered.Registered`): rows it computes from the inner session's public record,
+    """A value the verifier registers itself (`registered_value.Registered`): rows it computes from the inner session's public record,
     the inner statement and its own coins, under `verifier_salts`. Its entry is then a function of those rows alone, which the
     verifier's reads file names, and the prover's table rows and salts are the same registration's."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+    from verity.commitments import registered_value as RV
 
-    return RG.Registered.commit(program, value, rows, verifier_salts(program, value, len(rows)))
+    return RV.Registered.commit(program, value, rows, verifier_salts(program, value, len(rows)))
 
 
 def commits_entry(program: str, value: str, words_: int, bcs: list[bytes]) -> dict:
-    """The verifier's own entry of a registered value it knows only by its rows' ``b || c`` (`registered.Registered.entry`'s
+    """The verifier's own entry of a registered value it knows only by its rows' ``b || c`` (`registered_value.Registered.entry`'s
     fields): its domain and the root of its tree over them."""
+    from verity.commitments import registered_value as RV
     from verity.commitments.merkle import tree_levels
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 
-    dom = RG.domain(program, value, words_, len(bcs))
-    root = tree_levels(dom, [RG.leaf(dom, i, bc) for i, bc in enumerate(bcs)])[-1][0]
+    dom = RV.domain(program, value, words_, len(bcs))
+    root = tree_levels(dom, [RV.leaf(dom, i, bc) for i, bc in enumerate(bcs)])[-1][0]
     return {"value": value, "root": root.hex(), "leaves": len(bcs), "words": int(words_), "domain": dom.domain_id.hex()}
 
 
@@ -451,8 +453,8 @@ def statement(S: dict, name: str, n: int, holo: bool = False) -> SimpleNamespace
 
     t0 = time.perf_counter()
     defn = definition(S)
-    program = P.population_program(defn, n)
-    part = P.partition(program, P.template_instance_query(defn))
+    program, query = wired_population_program([(defn, n)], {"templates": [[descriptor_id(defn), n]]})
+    part = P.partition(program, query)
     prog = P.program_sha512(program)
     sub = subcircuit(S, name)
     key = {"name": name, "n": n, "holo": holo, "definition": sub.program_digests(None)[defn.id]}
@@ -475,7 +477,7 @@ def write(st: SimpleNamespace, reads: dict, vs: list[list[int]], out_dir, evalua
     """The statement (`statement`) on its instances, written to ``out_dir``: the circuit, the prover's ``inst.bin``, the
     verifier's ``pub.bin``, ``program.json``, ``partition.json`` and the reads file ``registered.json``.
 
-    ``reads``: per row port, ``(registration, positions)``, the prover's registered value (`registered.Registered`) and each
+    ``reads``: per row port, ``(registration, positions)``, the prover's registered value (`registered_value.Registered`) and each
     instance's row of it; ``vs``: each instance's v (F elements), which the verifier registers as `V_VALUE` (`verifier_value`),
     instance i reading row i. ``own``: per row port the verifier's own entry (default the registration's), which its reads file
     names; the outputs are the verifier's zero rows, registered under its own salts."""
@@ -495,6 +497,7 @@ def write_rows(st: SimpleNamespace, reads: dict, vrows: list[list[int]], out_dir
     Returns what every such statement costs and holds, with each instance's reference output (``ref``)."""
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+    from verity.commitments import registered_value as RV
 
     n, low, sub, text, names = st.n, st.low, st.sub, st.text, st.names
     if set(reads) != set(names) or len(vrows) != n or any(len(pos) != n for _, pos in reads.values()):
@@ -514,7 +517,7 @@ def write_rows(st: SimpleNamespace, reads: dict, vrows: list[list[int]], out_dir
     if evaluate and low is not None:
         got, _cut, ok = low.evaluate(np.concatenate([tables[nm] for nm in names] + [vt], axis=1).astype(np.uint64))
         agrees = [bool((int(ok) >> i) & 1) and got[i].astype(np.uint16).tolist() == ref[i] for i in range(n)]
-    zero = RG.Registered.commit(st.prog, st.zero_value, [[0] * st.out_words for _ in range(n)],
+    zero = RV.Registered.commit(st.prog, st.zero_value, [[0] * st.out_words for _ in range(n)],
                                 salts=zero_salts(st.zero_value, n))
     out_rows, salts["out"], registered["out"] = zero.statement(range(n))
     entries["out"] = {**zero.entry(), "word_bits": 16, "reads": list(range(n))}

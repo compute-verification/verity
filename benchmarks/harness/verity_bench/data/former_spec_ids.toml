@@ -17,7 +17,23 @@
 "glm53-flock-steady-head-block-h200" = { spec = "glm53-flock-steady-head-block", card = "h200" }
 "llama32-1b-flock-steady-gemm-h200-walk" = { spec = "llama32-1b-flock-steady-gemm-walk", card = "h200" }
 "llama32-1b-flock-steady-gemm-h200" = { spec = "llama32-1b-flock-steady-gemm", card = "h200" }
+"llama32-1b-flock-steady-small-h200" = { spec = "llama32-1b-flock-steady-small", card = "h200" }
 "llama31-8b-fp8-rtx-served-arm" = { spec = "llama31-8b-fp8-served-arm", card = "rtx-pro-6000" }
 "llama32-1b-1gpu-stock-served-h100" = { spec = "llama32-1b-1gpu-stock-served", card = "h100" }
 "qwen3-8b-bf16-rtx-served-arm-eager" = { spec = "qwen3-8b-bf16-served-arm-eager", card = "rtx-pro-6000" }
 "qwen3-8b-bf16-rtx-served-arm" = { spec = "qwen3-8b-bf16-served-arm", card = "rtx-pro-6000" }
+
+# Each arm id a run was recorded under before its arm took the declared scheme's name, as the arm id it is now
+# (`presets.former_arm`). A stored run's points read under the new id; no launch takes a former arm id. The specs that ran
+# it moved their config digests with it (llama32-1b-1gpu-pouw-protocol-served@h200, @h100 and
+# llama32-1b-1gpu-pearl-c-whole-served), which no lookup of a stored run reads.
+[former_arms]
+"pouw:pearl-c-h100-v1-h3" = "pearl-plus"
+
+# Each spec deleted with no successor, as why a launch of it is refused (`presets.retired_spec`); its stored runs read
+# under its id.
+[retired]
+"llama31-8b-1gpu-pouw-protocol-served" = """served Pearl-C on sm_120 (`pouw:pearl-c-sm120-v1-h3`), which is no declared \
+scheme: declaring one is compute-accounting's"""
+"llama31-8b-1gpu-pouw-protocol-served-b32" = """served Pearl-C on sm_120 (`pouw:pearl-c-sm120-v1-h3`), which is no \
+declared scheme: declaring one is compute-accounting's"""

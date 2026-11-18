@@ -50,8 +50,6 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``bi-eager``: ``eager`` with ``VLLM_BATCH_INVARIANT=1``, the committing path's execution with nothing committed;
 - ``record``: the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`, the recorder serve-openai uses), in
   the engine core, written by a thread of its own (`servetax_plugin`);
-- ``release-order``: requests added in the network attester's release order (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder` in the engine
-  core, `servetax_plugin.ReleaseGate`), the client standing in for the network attester, which numbers them in send order;
 - ``tick``: the certified tick (`verity.protocols.resource_accounting.network.prover.admission.TickGate` under vLLM's server, `verity_vllm.pipeline.scheme_plugin`), τ_sat and
   τ_free given or calibrated on a ``record`` trace (`tick`), the client standing in for the network attester (`corpus.StandIn`);
 - ``tokens``: each window's tokens committed: every prompt id and every sampled id, 4 bytes a token, in ``rows-sha512``
@@ -328,7 +326,6 @@ ARMS = {
     "record": Arm("compiled", "+ the scheduler's step trace (StepTrace)", plugin=("record",)),
     "record-ids": Arm("record", "+ each request's prompt ids and served ids, which a replay of vLLM's client's pass reads",
                       plugin=("record", "ids")),
-    "release-order": Arm("record", "+ admission in the network attester's release order", plugin=("record", "release_order")),
     "tick": Arm("record", "+ admission on the certified tick", plugin=("record",), tick=True),
     "tokens": Arm("tick", "+ each window's tokens committed (rows-sha512)", plugin=("record", "tokens"), tick=True),
     "restore-base": Arm("record", "+ seeded sampling, each sampled token's logprob returned", plugin=("record",),
@@ -923,12 +920,6 @@ def check_scheme_settings(arm: str, given: dict | list | None, lifetimes: int) -
     if len(set(sessions)) < len(sessions):
         raise SystemExit(f"--scheme-settings: arm {arm} is served in {lifetimes} server lifetimes and a reserved session "
                          "opens once: give a list of one object a lifetime, each with its own reserved session")
-
-
-def tick_feed(d: Path) -> Path:
-    """The feed file a tick arm's server writes in its directory ``d`` (`network.prover.admission.feed_file`)."""
-    from verity.protocols.resource_accounting.network.prover.admission import feed_file
-    return Path(feed_file(str(d)))
 
 
 def value_settings(env: dict[str, str] | None = None) -> dict:
@@ -1657,7 +1648,7 @@ def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int,
     (`SAMPLED`), each naming its client as its ``user`` (``tag``) and, where ``seeded``, sending that user's seed
     in server lifetime ``lifetime`` (`user_seed`). The client sends no completion of its own before
     the pass (no ready check: `wait_ready` has waited), so every completion it sends is in its result, and request k's
-    X-Request-Id is ``{tag}-{k}``, the form the release-order arm reads its release number from
+    X-Request-Id is ``{tag}-{k}``, the form an edge reads its load from
     (`servetax_plugin.release_key`). It names the served model in every request and takes its tokenizer from the
     checkpoint; for its synthetic datasets it first asks the server's ``/tokenize``, which the engine never sees,
     whether the server counts the first prompt's tokens as it does, and trims every prompt to the server's count
@@ -1871,11 +1862,8 @@ def source_commit() -> str | None:
 
 
 def file_digest(p: Path, algorithm: str = "sha256") -> str:
-    h = hashlib.new(algorithm)
     with open(p, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 24), b""):
-            h.update(chunk)
-    return h.hexdigest()
+        return hashlib.file_digest(f, algorithm).hexdigest()
 
 
 #: the ranks that copy their KV pool to host memory at an edge (`boundary.KV_COPY`, which this module doesn't import)
@@ -1948,21 +1936,22 @@ def outside(private: Path, out: Path, flag: str = "--private") -> Path:
 
 #: the run's statement of what its launchers keep on the node, at its directory's root (`stated`)
 PRIVATE_PATHS = "private-paths.json"
-#: the names of what the launchers keep only in a private directory: no file or directory of a run's own has one
-PRIVATE_NAMES = ("plan.jsonl", "plan.base.jsonl", "capture/", "edges/", "step_trace.*.jsonl*", "ids.*.jsonl*",
-                 "outputs.jsonl", "outputs.*.jsonl*", "replay_steps.jsonl*", "replay_tokens.jsonl*",
-                 "replay_logprobs.jsonl*", "*.state.pkl", "*.fp.npy", "*.kv")
 
 
 def stated(private: Path) -> None:
     """``private`` added to the run's `PRIVATE_PATHS`, under research run where its directory is made:
-    ``{"schema": "private-paths/v1", "private": [each private directory, absolute], "names": PRIVATE_NAMES}``."""
+    ``{"schema": "private-paths/v1", "private": [each private directory, absolute], "names": [...]}``, the names
+    the adapter's list (`verity_vllm.pipeline.research_outputs.PRIVATE`) calls private."""
     held = SHARED.RESEARCH_RUN_DIR
     if not held or not Path(held).is_dir():
         return
+    if str(ROOT / "adapters/vllm") not in sys.path:
+        sys.path.insert(0, str(ROOT / "adapters/vllm"))
+    from verity_vllm.pipeline.research_outputs import PRIVATE
+
     f = Path(held) / PRIVATE_PATHS
     was = json.loads(f.read_text())["private"] if f.is_file() else []
-    doc = {"schema": "private-paths/v1", "private": sorted({*was, str(private)}), "names": list(PRIVATE_NAMES)}
+    doc = {"schema": "private-paths/v1", "private": sorted({*was, str(private)}), "names": list(PRIVATE)}
     f.write_text(json.dumps(doc, indent=1) + "\n")
 
 
@@ -2044,10 +2033,9 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     site = plugin_site(out / ".site", arm)
-    kit()
-    from verity_bench import kit as bench
+    from verity.ports import free_port
 
-    port = bench.free_port()
+    port = free_port()
     front = front_end(arm, getattr(a, "published_frontend", None))
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context, front,
                        published_args(getattr(a, "published_args", None)), limits=held is None)
@@ -2352,11 +2340,11 @@ def announced(proc: subprocess.Popen, what: str, log: Path) -> dict:
         raise RuntimeError(f"{what} ended before it listened ({log})") from None
 
 
-def runs_ended(feed: Path) -> int:
-    """The network attester's runs whose watermark the tick's feed (`scheme_plugin.Front`) has seen end."""
-    if not feed.exists():
-        return 0
-    return sum(1 for x in feed.read_text().splitlines() if '"end"' in x and json.loads(x).get("end"))
+def runs_ended(d: Path) -> int:
+    """The network attester's runs whose watermark end the tick arm's server's front has logged in its directory ``d``
+    (``tick.PID.jsonl``, `network.prover.admission.FrontFeed`)."""
+    return sum(1 for f in d.glob("tick.*.jsonl") for x in f.read_text().splitlines()
+               if '"end"' in x and json.loads(x).get("end"))
 
 
 def hold_ends(server: int | None, front: int | None, ended: int, left_s: float | None) -> tuple[str, bool] | None:
@@ -2446,10 +2434,9 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
     srv = out / "server"
     srv.mkdir(parents=True, exist_ok=True)
     site = plugin_site(out / ".site", arm)
-    kit()
-    from verity_bench import kit as bench
+    from verity.ports import free_port
 
-    port = bench.free_port()
+    port = free_port()
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context_of(loads, a.max_model_len))
     front = front_argv(port, a.front, cell_payload(cells), srv / "front.jsonl")
     try:
@@ -2480,7 +2467,7 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
         print(f"[serve-tax] {a.arm}: the engine is up in {rec['startup_s']} s and the id front listens on loopback "
               f"port {a.front}: held for the network certifier's run", flush=True)
         while True:
-            why = hold_ends(server.poll(), fronted.poll(), runs_ended(tick_feed(srv)),
+            why = hold_ends(server.poll(), fronted.poll(), runs_ended(srv),
                             None if stop_at is None else stop_at - now())
             if why is not None:
                 break
@@ -4468,11 +4455,23 @@ def components() -> dict:
     return MANIFESTS
 
 
+def settings_of(name: str, params: dict[str, Any]) -> dict[str, Any] | Exception:
+    """Component ``name``'s settings at ``params`` as its own check returns them, its defaults filled; the check's
+    refusal where it refuses them: `verity.config`'s `verity.channel.Refused`, or the ValueError of a protocol's own
+    parameters check (SPOT's `spot_params_of`)."""
+    from verity.channel import Refused
+
+    try:
+        return dict(components()[name].params(params))
+    except (Refused, ValueError) as e:
+        return e
+
+
 def feature_of(words: Sequence[str]) -> Feature:
     """``--feature NAME [KEY=VALUE ...]`` as an application states it: NAME one of its components (`components`),
     each KEY=VALUE a line of that component's ``[params."<id>"]``, VALUE read as TOML (a bare word that isn't TOML is a
-    string), the settings as the component's own check returns them, its defaults filled. Refused by name for a name no
-    component has or a setting the component doesn't declare."""
+    string), the settings as the component's own check returns them (`settings_of`). Refused by name for a name no
+    component has or a setting the component refuses."""
     name, *given = words
     table = components()
     if name not in table:
@@ -4485,12 +4484,11 @@ def feature_of(words: Sequence[str]) -> Feature:
             raise SystemExit(f"--feature {name}: {w!r} is no KEY=VALUE")
         try:
             params[key] = tomllib.loads(f"v = {text}")["v"]
-        except tomllib.TOMLDecodeError:
+        except tomllib.TOMLDecodeError as e:
+            print(f"[serve-tax] --feature {name}: {key}={text!r} is no TOML ({e}), read as that string", file=sys.stderr)
             params[key] = text
-    try:
-        settings = table[name].params(params)
-    except Exception as e:  # noqa: BLE001 - the component's check refuses in its own words (`verity.channel.Refused`)
-        raise SystemExit(f"--feature {name}: {e}") from None
+    if isinstance(settings := settings_of(name, params), Exception):
+        raise SystemExit(f"--feature {name}: {settings}")
     return Feature(name, tuple(sorted(settings.items())))
 
 
@@ -4501,11 +4499,8 @@ def feature(words: Sequence[str], stock: str) -> str:
     want = feature_of(words)
     for n in profile_features(stock):
         if (f := ARMS[n].feature) is not None and f.name == want.name:
-            try:
-                if feature_of([f.name, *(f"{k}={json.dumps(v)}" for k, v in f.settings)]) == want:
-                    return n
-            except SystemExit:
-                continue
+            if feature_of([f.name, *(f"{k}={json.dumps(v)}" for k, v in f.settings)]) == want:
+                return n
     raise NotImplementedError(f"benchmarks/serving-profiles-first-number: no arm over {stock} serves {want}")
 
 

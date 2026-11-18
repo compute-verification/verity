@@ -22,15 +22,16 @@ from typing import Any
 
 from verity_config.settings import VALUE, WHERE, Registry, Setting, csv
 
-#: the steps job.sh repeats, each of which REPEAT_<STEP> may set (job.sh's ``reps``)
-REPEATED = ("icheck", "vstage", "vcap", "oreplay", "lean")
+#: the steps job.sh repeats, each of which REPEAT_<STEP> may set (job.sh's ``reps``): those whose medians the metrics read
+#: (``rec_profile.summary``); icheck and oreplay run once
+REPEATED = ("vstage", "vcap", "lean")
 
 S = Setting
 REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     # ---- the job's own (job.sh)
     S("STEPS", csv, ("build", "inner", "icheck", "vstage", "vcap", "oprove", "oreplay", "lean", "negative"), VALUE,
       "the steps the job runs, in rec_profile.ORDER's order"),
-    S("REPEAT", int, 3, VALUE, "each CPU step's invocations"),
+    S("REPEAT", int, 3, VALUE, "each repeated step's invocations (REPEATED)"),
     *(S(f"REPEAT_{s.upper()}", int, None, VALUE, f"the {s} step's invocations; unset, REPEAT") for s in REPEATED),
     S("MODES", csv, ("zk_server",), VALUE, "oprove's prover sides; the last one's releases are the ones oreplay and lean read"),
     S("OPROVE_WARM", int, 0, VALUE, "warm releases per V* statement, untimed"),
@@ -65,6 +66,8 @@ REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     S("TREE_SECRET_FILE", str, None, WHERE, "TREE_FROM's session secret, a file of hex (85's TREE_SECRET_FILE)"),
     S("TAG", str, None, WHERE, "85's data/TAG directory; unset, rb-<run id>"),
     S("FLOCK_WORK", str, "/workspace/jobs/rec-bench", WHERE, "85's work tree: its caches and data"),
+    S("SM", str, None, VALUE, "the compute capability 85 builds its GPU prover for (120 for sm_120); unset, the run's machine's "
+      "card's (benchmarks/kernels/machine.py arch)"),
     S("CUDA_TK", str, None, WHERE, "the CUDA toolkit 85 builds the prover with, a path; the build records the binary's sha256"),
     S("WARM_FROM", str, None, WHERE, "a warm cargo tree 85 builds from, read only; the build records the binary's sha256"),
     # ---- research run's

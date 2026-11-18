@@ -20,9 +20,11 @@ from types import SimpleNamespace as NS
 import pytest
 
 from verity.circuits.codec import canonical_json
+from verity.commitments import domains as DM
 from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier import service as S
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS
+from verity.commitments import docket_digest as DD
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -176,7 +178,7 @@ def test_the_stop_streams_answer_carries_its_audit_records_complete(tmp_path, mo
     r = _resume(first)
     got, _ = _audit(first)
     a = SA.answer_of(r, got)
-    assert (a["verdict"], a["reason"], a["protocol"]) == ("accept", None, SA.R.PROTOCOL)
+    assert (a["verdict"], a["reason"], a["protocol"]) == ("accept", None, DM.ONE_STAGE_PROTOCOL)
     assert a["commitment"] == first["stop"]["registration"]
     units, others = sorted(first["stop"]["units"]), set(a["public"]) - {"bound", "complete", "per_template"}
     assert len(others) == 2 and "proved" in others and all(a["public"][k] == units for k in others)
@@ -196,7 +198,7 @@ def test_an_answer_names_what_refused_it_or_that_no_record_was_written():
     r = NS(stream=NS(delta=0.5), docket=NS(digest="ab" * 64))
     entry = {"accepted": False, "checks": {"proved": {"ok": True}},
              "verdicts": {SA.LEAN: {"accepted": True}, SA.BOUNDARY_AUDIT: {"accepted": False}, SA.STOP_RULE: {"accepted": None}}}
-    reject = {"commitment": "ab" * 64, "profile": None, "protocol": SA.R.PROTOCOL, "public": None, "verdict": "reject"}
+    reject = {"commitment": "ab" * 64, "profile": None, "protocol": DM.ONE_STAGE_PROTOCOL, "public": None, "verdict": "reject"}
     assert SA.answer_of(r, {"accepted": False, "audit": entry}) == {**reject, "reason": f"verdicts: {SA.BOUNDARY_AUDIT}"}
     none = {**reject, "reason": "the stop stream refused the outcome"}
     assert SA.answer_of(r, {"accepted": False, "refused": {"codes": ["sessions"]}}) == none
@@ -361,12 +363,12 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
         log = list(r.first.stream.log) if log is None else log
         key, main = holds.get(name, (ours, T.FC.MAIN))
         previous = mine["stop"]["record"]["previous"]
-        logged = previous in [SA.R.digest(rec) for rec in log]
+        logged = previous in [DD.digest(rec) for rec in log]
         read = SA.link(mine, NS(layout=r.layout, stream=NS(log=log, key=key, main=tuple(main))), outcome)
         assert (read["window"], read["family"]) == (r.layout.run, blocks), name
         family = stop.get("family", blocks)
         order = T.TS.stop_order(key, main, mine["stop"]["evidence"], r.layout.run, family, previous,
-                                SA.R.digest(mine["stop"]["record"]), bytes.fromhex(mine["stop"]["read"]), T.AC.lms_verify)
+                                DD.digest(mine["stop"]["record"]), bytes.fromhex(mine["stop"]["read"]), T.AC.lms_verify)
         audit = SA.boundary_audit(previous, outcome)
         lean = SA.V.lean("across", {**read, "family": family})
         assert "refused" not in lean, (name, lean)
@@ -376,7 +378,7 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
         assert ("why" in lean["audit"]) == (audit["accepted"] is False or (audit["accepted"] is True and audit["complete"] is not True)), (name, lean)
         assert lean["case"] == case == (2 if not logged or order is not None else 3 if audit["accepted"] is not True
                                         else 4 if audit["complete"] is not True else 1), (name, lean)
-        assert (lean["earlier"], lean["later"]) == (previous, SA.R.digest(mine["stop"]["record"])), name
+        assert (lean["earlier"], lean["later"]) == (previous, DD.digest(mine["stop"]["record"])), name
         assert why is None or why in lean["order"]["why"], (name, lean)
         assert (order is None) == (why is None), (name, order)
 
@@ -388,9 +390,9 @@ def _python(read: dict, outcome: dict | None) -> tuple[bool, str | None, bool | 
     `Record.across`'s names, and `boundary_audit`'s ``accepted`` and ``complete``."""
     previous = read["later"]["previous"]
     order = T.TS.stop_order(T.FC.pinned_key(), T.FC.MAIN, read["coins"], read["window"], read["family"], previous,
-                            SA.R.digest(read["later"]), bytes.fromhex(read["read"]), T.AC.lms_verify)
+                            DD.digest(read["later"]), bytes.fromhex(read["read"]), T.AC.lms_verify)
     audit = SA.boundary_audit(previous, outcome)
-    return previous in [SA.R.digest(rec) for rec in read["log"]], _generic(order), audit["accepted"], audit["complete"]
+    return previous in [DD.digest(rec) for rec in read["log"]], _generic(order), audit["accepted"], audit["complete"]
 
 
 def _reaches(boundary: str, pairs: list[tuple[str, str]]) -> list[bool]:
@@ -450,7 +452,7 @@ def test_lean_and_the_python_agree_on_a_list_of_reads_across_streams(tmp_path, m
     assert {k for k, v in stopped["audit"]["verdicts"].items() if v["accepted"] is None} == {SA.REQUEST_ROW, SA.STOP_RULE}
     whole = {**stopped, "audit": {**stopped["audit"], "complete": True}}
     third = {**s["record"], "previous": stop}
-    tie = SA.R.digest(third)
+    tie = DD.digest(third)
     window = r.layout.run
     # what every read here is read under, as `link` writes them: the test's challenger's key and its copy of main's history
     held = {"key": T.FC.pinned_key().to_json(), "main": list(T.FC.MAIN)}
@@ -464,7 +466,7 @@ def test_lean_and_the_python_agree_on_a_list_of_reads_across_streams(tmp_path, m
                  "coins": one.evidence(tie), "family": family[tie], "read": got[tie].hex(), **held})
     first, second = chain("chain", (boundary, 1), (stop, 2), (tie, 2))
     assert set(first) == set(second) == set(SA.link(handoff, r.first, accepted))
-    assert [SA.R.digest(x) for x in second["log"]] == [boundary, stop]
+    assert [DD.digest(x) for x in second["log"]] == [boundary, stop]
     _, late = chain("third-first", (boundary, 1), (tie, 1), (stop, 2))
     a, b, c = (first, accepted), (second, stopped), ({**second, "audit": whole["audit"]}, whole)
     unaudited = ({**first, "audit": None}, None)
@@ -500,7 +502,7 @@ def test_lean_and_the_python_agree_on_a_list_of_reads_across_streams(tmp_path, m
         lean = SA.across_all(anchor, [x for x, _ in reads], None if last is None else last["audit"])
         assert "refused" not in lean and lean["boundary"] == anchor and len(lean["links"]) == len(reads), (name, lean)
         mine = [_python(x, outcome) for x, outcome in reads]
-        pairs = [(x["later"]["previous"], SA.R.digest(x["later"])) for x, _ in reads]
+        pairs = [(x["later"]["previous"], DD.digest(x["later"])) for x, _ in reads]
         reaches, ends = _reaches(anchor, pairs), _ends(pairs)
         final = SA.boundary_audit(ends[0], last) if len(ends) == 1 else {"accepted": False, "complete": None}
         assert lean["last"] == (ends[0] if len(ends) == 1 else None), (name, lean)
@@ -510,7 +512,7 @@ def test_lean_and_the_python_agree_on_a_list_of_reads_across_streams(tmp_path, m
             assert got["logged"]["accepted"] is logged, (name, got)
             assert (got["audit"]["accepted"], got["audit"]["complete"]) == (audit, complete), (name, got)
             assert got["order"] == ({"accepted": True} if order is None else {"accepted": False, "why": order}), (name, got)
-            assert got["reaches"] is reach and (got["earlier"], got["later"]) == (x["later"]["previous"], SA.R.digest(x["later"])), (name, got)
+            assert got["reaches"] is reach and (got["earlier"], got["later"]) == (x["later"]["previous"], DD.digest(x["later"])), (name, got)
             if name == "the chain":
                 assert {k: v for k, v in got.items() if k != "reaches"} == SA.V.lean("across", x), (name, got)
         want = (2 if any(not reach or not logged or order is not None for (logged, order, _, _), reach in zip(mine, reaches))

@@ -4,8 +4,8 @@ prover's registrations of them.
 
 A level's openings share one shape (its rows' lanes, ``H = depth - c`` siblings below its top of ``2^c`` nodes), so each level
 is one template, ``RecOpen{LANES, H}``, and one statement over that level's openings of both reps, in rep and query order
-(M0 proves one template per statement). Its program is `population_program` of the template over the level's openings, its
-partition that program's ``Q_template_instance`` v0. Every instance reads seven registered rows: the opened row ``row`` and
+(M0 proves one template per statement). Its program is `wired_population_program` of the template over the level's openings, its
+partition that program's ``Q_template_instances`` v0. Every instance reads seven registered rows: the opened row ``row`` and
 its ``aux`` (its siblings: `rec_open.pack`), its coefficients ``coef`` and the position's low bits ``dirs``, which the
 verifier registers itself, ``out``, ``acc`` in and ``acc_out`` out (`HmOut`). The statement has no public input.
 
@@ -152,7 +152,7 @@ class TopValue:
         """``tops``: each rep's top at the level (`rec_vstar.tops`); a top two reps share (level 0's ``root_B``) is one run of
         rows. Refused when the prover's registration is not the value the recorded ``b || c`` commit. ``value``: another
         table's name for it (default `top_value_name`)."""
-        from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+        from verity.commitments import registered_value as RV
 
         runs: list[V.Top] = []
         first = {}
@@ -162,7 +162,7 @@ class TopValue:
             first[rep] = sum(len(u.nodes) for u in runs[:runs.index(t)])
         value = value or top_value_name(level)
         rows = [r for t in runs for r in RL.top_rows(b"".join(t.nodes))]
-        reg = G.Registered.commit(program, value, rows, [s for t in runs for s in t.salts])
+        reg = RV.Registered.commit(program, value, rows, [s for t in runs for s in t.salts])
         own = RR.commits_entry(program, value, R.OUT_WORDS, [b for t in runs for b in t.bcs])
         if own["root"] != reg.entry()["root"]:
             raise ValueError(f"level {level}: the prover's tops are not the ones the ZK server committed")
@@ -192,14 +192,14 @@ class Chain:
     @classmethod
     def build(cls, program: str, queries: list[V.Query], coefs: dict[tuple[int, int, int], list[int]],
               salts: list[bytes] | None = None) -> "Chain":
-        from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+        from verity.commitments import registered_value as RV
 
         by = {(q.rep, q.level, q.j): q for q in queries}
         order = chain_order(queries)
         rows = [[0] * R.ACC_WORDS]
         for key in order:
             rows.append(R.acc_ref(rows[-1], coefs[key], R.words(by[key].row)))
-        return cls(G.Registered.commit(program, ACC_VALUE, rows, salts), {k: p for p, k in enumerate(order)})
+        return cls(RV.Registered.commit(program, ACC_VALUE, rows, salts), {k: p for p, k in enumerate(order)})
 
     def sums(self, position: int) -> list[int]:
         """Row ``position``'s two running sums."""
@@ -211,15 +211,27 @@ class Chain:
         return min(ps), max(ps) + 1
 
 
+def population(defn, n: int, version: int | str):
+    """A level's population program and its template query: a new level's wired one, or a recorded level's at 1 or 0."""
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.population import population_program, wired_population_program
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+
+    if version == "wired":
+        return wired_population_program([(defn, n)], {"templates": [[descriptor_id(defn), n]]})
+    return population_program(defn, n, version=version), P.template_instance_query(defn)
+
+
 def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, int], list[int]], tops: TopValue,
-          name: str | None = None, version: int = 1) -> dict:
+          name: str | None = None, version: int | str = "wired") -> dict:
     """One level's statement, the verifier's own files beside the prover's (``out_dir``), and what it costs. ``chain``: the
     prover's running sums; ``coefs``: each opening's ``coef`` words (the verifier's); ``tops``: the level's committed tops;
-    ``name``: its unit's name (default `unit_name`; R's levels `stacked_name`); ``version``: its population program's
-    (`partition.population_program`; 0 restages a level recorded before v1). The openings' positions are the ones the
+    ``name``: its unit's name (default `unit_name`; R's levels `stacked_name`); ``version``: its population program's,
+    `wired_population_program`'s ("wired"), or 1 or 0 to restage a level recorded under `population.population_program`. The openings' positions are the ones the
     verifier's query coins give (`rec_vstage.coefficients` checks them), so ``dirs`` is the verifier's too."""
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.commitments import registered_value as RV
 
     LANES, H, qs = level["LANES"], level["H"], level["queries"]
     n = len(qs)
@@ -227,8 +239,7 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
         raise ValueError(f"level {level['level']}: openings of hm96-sha512/v1 leaves; RecOpen opens plain SHA-512 leaves "
                          f"(flock-leaf/sha512-unsalted)")
     defn = R.definition(LANES, H)
-    program_ = P.population_program(defn, n, version=version)
-    query = P.template_instance_query(defn)
+    program_, query = population(defn, n, version)
     part = P.partition(program_, query)
     prog = P.program_sha512(program_)
     keys = [(q.rep, q.level, q.j) for q in qs]
@@ -268,8 +279,8 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
     salts = {"acc": acc_salts, "coef": coef_salts, "dirs": dirs_salts, "out": out_salts, "acc_out": out_acc_salts}
     registered = {"out": entry, "acc": acc_entry, "coef": coef_entry, "dirs": dirs_entry, "acc_out": out_acc_entry}
     after = tops.own["value"].removeprefix("rec-top-")
-    private = {"row": G.Registered.commit(prog, f"rec-rows-{after}", rows.tolist()),
-              "aux": G.Registered.commit(prog, f"rec-aux-{after}", aux.tolist())}
+    private = {"row": RV.Registered.commit(prog, f"rec-rows-{after}", rows.tolist()),
+              "aux": RV.Registered.commit(prog, f"rec-aux-{after}", aux.tolist())}
     for port, reg in private.items():
         _rows, salts[port], registered[port] = reg.statement(range(n))
         own["ports"][port] = read(reg.entry(), range(n))

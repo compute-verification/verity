@@ -58,8 +58,8 @@ GATES = Path("benchmarks/slowdown/data/hardware.toml")
 TABLE = "out/overhead-table.json"
 #: the unit of every γ `record` writes
 GAMMA_UNIT = "busy SM-seconds over stock's, less one: a fraction, not a percent"
-#: each model but the kernel model as the words that open its member, `MODEL-CARD` (`measurements`)
-MEMBER_MODEL = {"llama3.2-1b": "llama-3.2-1b"}
+#: each model as the words that open its member, `MODEL-CARD` (`measurements`)
+MEMBER_MODEL = {"llama3.1-70b": "llama-3.1-70b", "llama3.2-1b": "llama-3.2-1b"}
 
 Executor = Callable[[Sequence[str], Path], int]
 
@@ -172,19 +172,19 @@ def _json(store: Any, files: str, path: str) -> dict:
     return json.loads((Path(store.fetch(files, paths=[path])) / path).read_text())
 
 
-def trial_why(store: Any, attempt: Mapping, files: str, run: str) -> str | None:
+def trial_why(store: Any, attempt: Mapping, run: str) -> str | None:
     """Why `run` is never of record as a trial: its result says ``trial`` or its attempt set `kit.TRIAL`; or why its
-    result can't tell."""
+    result can't tell. The result is the attempt's `result` art, whose meta is the run's `kit.RESULT`: its run files
+    hold only the files it lists."""
 
+    art = (attempt.get("outputs") or {}).get("result")
+    if not art:
+        return f"{run} has no result art, so not whether it is a trial"
     try:
-        result = _json(store, files, kit.RESULT)
+        result = store.get_manifest(art).meta
     except Exception as ex:  # noqa: BLE001 - the store's NotFound, named in the why
-        return f"{run}'s {kit.RESULT} can't be read ({type(ex).__name__}: {ex}), so not whether it is a trial"
+        return f"{run}'s result {art} can't be read ({type(ex).__name__}: {ex}), so not whether it is a trial"
     return kit.trial_why(run, attempt, result)
-
-
-def _superseded(store: Any, target: str) -> list[str]:
-    return [str(lab.value) for lab in store.labels(target, key=SUPERSEDED_BY)]
 
 
 def current_points(store: Any, card: str, model: str = O.KERNEL_MODEL, precision: str = "fp8") -> str | None:
@@ -192,7 +192,7 @@ def current_points(store: Any, card: str, model: str = O.KERNEL_MODEL, precision
 
     found = [art for art in records(store).get(POINTS_RECORD, []) if art.startswith("art:")
              and {k: store.get_manifest(art).meta.get(k) for k in ("card", "model", "precision")}
-             == {"card": card, "model": model, "precision": precision} and not _superseded(store, art)]
+             == {"card": card, "model": model, "precision": precision} and not kit.superseded(store, art)]
     return max(found, key=lambda art: store.get_manifest(art).meta.get("version", 0), default=None)
 
 
@@ -206,7 +206,7 @@ def of_record(store: Any, run: str) -> tuple[dict | None, list[str]]:
         doc = _json(store, files, "out/overhead.json")
     except (OSError, ValueError, KeyError) as ex:
         return None, [f"{run} has no readable out/overhead.json ({type(ex).__name__}: {ex})"]
-    whys = [why] if (why := trial_why(store, attempt, files, run)) else []
+    whys = [why] if (why := trial_why(store, attempt, run)) else []
     if doc.get("schema") != O.RUN_SCHEMA:
         whys.append(f"{run}'s overhead.json is {doc.get('schema')!r}, not {O.RUN_SCHEMA}")
     if RUN_RECORD not in [lab.value for lab in store.labels(run, key=RUN_OF_RECORD)]:
@@ -219,7 +219,7 @@ def of_record(store: Any, run: str) -> tuple[dict | None, list[str]]:
         m = store.get_manifest(art)
         if POINTS_RECORD not in [lab.value for lab in store.labels(art, key=RUN_OF_RECORD)]:
             whys.append(f"its points {art} aren't of record")
-        if later := _superseded(store, art):
+        if later := kit.superseded(store, art):
             whys.append(f"its points {art} are superseded by {', '.join(later)}: time it at the current points")
         if m.payload is None or m.payload.sha256 != doc.get("points_sha256"):
             whys.append(f"the points it was timed at aren't {art}'s")
@@ -262,7 +262,7 @@ def gamma_rows(store: Any) -> list[dict]:
                    "gamma_weight_side_bound": p.get("gamma_weight_side_bound"), "aa": p.get("aa"),
                    "epsilon": p.get("epsilon"), "perplexity": p.get("perplexity"), "gate": p.get("gate"),
                    "linears": p.get("linears"), "commits_y": None if arm is None else bool(arm.get("commits_y")),
-                   "note": O.y_note(arm)}
+                   "note": O.row_note(arm, doc.get("card"))}
             why = whys + list(p.get("whys") or [])
             row |= {"of_record": not why, "why": "; ".join(why) or None}
             best[(row["scheme"], row["card"], row["model"], name)] = row
@@ -277,7 +277,7 @@ def store_points(store: Any, run: str, by: str = BY) -> str:
     record; the version it replaces is labelled `superseded_by` it."""
 
     attempt, files = run_files(store, run, "points")
-    if attempt is None or (why := trial_why(store, attempt, files, run)):
+    if attempt is None or (why := trial_why(store, attempt, run)):
         raise ValueError(files if attempt is None else why)
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(store.fetch(files, paths=["out/points.json"])) / "out" / "points.json"
@@ -350,23 +350,39 @@ def build(store: Any = None, *, root: Path | None = None, local_only: bool = Fal
     return {"schema": "verity-bench/overhead-table/v1", "census": c, "covers": O.covers(), "rows": rows}
 
 
+#: what a metric's row says of its readings: ``own``, the kernel model's on the row's card is the metric's own reading;
+#: ``members``, every reading is a member
+READINGS = ("own", "members")
+
+
+def metric_row(row: str) -> tuple[str, str, str, bool]:
+    """A metric's row, ``scheme/card/point own`` or ``scheme/card/point members``: its scheme, card and point, and whether
+    it has an own reading; ValueError otherwise."""
+    where, _, readings = row.partition(" ")
+    parts = where.split("/")
+    if len(parts) != 3 or readings not in READINGS:
+        raise ValueError(f"metric row {row!r} is not 'scheme/card/point {' or '.join(READINGS)}'")
+    return parts[0], parts[1], parts[2], readings == "own"
+
+
 def measurements(table: Mapping, metrics: Mapping[str, str]) -> list[dict]:
-    """The measurements `record` writes: for each of `metrics`, an id for the γ of a row named ``scheme/card/point``, and
-    for each model that row's γ of record with its interval (the kernel model's as the metric's own reading, every other
-    model's as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the scheme gate (`overhead.GAMMA_MAX`)
-    as its target, from its run and its points' art, with its note, whether its run timed y's commitment (`commits_y`,
-    where the row says) and what the γ is over; where the table has no γ of record there, no value and why."""
+    """The measurements `record` writes: for each of `metrics`, an id for the γ of a row (`metric_row`), and for each
+    model that row's γ of record with its interval (the kernel model's on the row's card as the metric's own reading
+    where the row says ``own``, every other as its `member`, `MEMBER_MODEL`'s words and the card), measured, held to the
+    scheme gate (`overhead.GAMMA_MAX`) as its target, from its run and its points' art, with its note, whether its run
+    timed y's commitment (`commits_y`, where the row says) and what the γ is over; where the table has no γ of record
+    there, no value and why."""
 
     rows = {(r["scheme"], r["card"], r["model"], r["point"]): r for r in table["rows"]}
     out = []
     for name, row in metrics.items():
-        scheme, card, point = row.split("/")
+        scheme, card, point, has_own = metric_row(row)
         for model in O.MODELS:
-            own = model == O.KERNEL_MODEL
+            own = has_own and model == O.KERNEL_MODEL
             r = rows.get((scheme, card, model, point))
             g = (r or {}).get("gamma") or {}
             m: dict[str, Any] = {"name": name, "unit": GAMMA_UNIT, "mark": "measured", "target": O.GAMMA_MAX,
-                                 "extra": {"covers": table["covers"] if own else O.covers(model)}}
+                                 "extra": {"covers": table["covers"] if model == O.KERNEL_MODEL else O.covers(model)}}
             if not own:
                 m["member"] = f"{MEMBER_MODEL[model]}-{card}"
             if r is None or not r["of_record"] or g.get("gamma") is None:

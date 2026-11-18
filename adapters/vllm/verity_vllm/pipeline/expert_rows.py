@@ -394,7 +394,7 @@ def _stack(slices: Callable, x: Row, store: Any, weights: Callable, arrive: int,
 def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[str, int] | None, slices: Callable,
                   committer: Mapping[str, Any]) -> dict[str, Any]:
     """Each table the window's reads read, committed from the weights served (each layer's stack as ``slices`` reads it,
-    `serving_rows._slices`; `table_words`) as core's ``registered.Registered`` of ``hm96-sha512/row-seg/v1`` rows with its rows
+    `serving_rows._slices`; `table_words`) as core's ``registered_value.Registered`` of ``hm96-sha512/row-seg/v1`` rows with its rows
     held, under the salts of ``committer``'s registration at the ``program`` it names (`committer`), by parameter.  Refused for
     a table the registration holds no salts for, and, publishing none of them, where any table's root is not its registered
     one (`_registered`)."""
@@ -419,8 +419,8 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
             g = json.dumps(x[2]["args"][arg])
             if held is None or held[0] != g:
                 held = (g, _stack(slices, x, store, weights, int((arrivals or {}).get(x[0], 0)), arg, 8 if of == "w" else 32))
-            out[param] = registered_commit(committer["program"], param, table_words(held[1], of, E, N, K, G_, n, b), bytes(32), 0,
-                                           keep_rows=True, row_salts=ys, schema=SCHEMA_HM96_SHA512_ROW_SEG)
+            out[param] = registered_commit(committer["program"], param, table_words(held[1], of, E, N, K, G_, n, b), ys,
+                                           keep_rows=True, schema=SCHEMA_HM96_SHA512_ROW_SEG)
     return _registered(out, committer)
 
 
@@ -449,7 +449,7 @@ def _registered(got: Mapping[str, Any], committer: Mapping[str, Any]) -> Mapping
 
 def commit_bnk(committer: Mapping[str, Any], label: str, K: int, field: Callable[[], np.ndarray]) -> Any:
     """The rank's ``(B, K, N)`` weight ``label`` in (B, N, K) order (`bnk_param`, `bnk_words` of ``field()``, its elements as
-    served), committed as core's ``registered.Registered`` of ``hm96-sha512/row/v2`` rows with its rows held, under
+    served), committed as core's ``registered_value.Registered`` of ``hm96-sha512/row/v2`` rows with its rows held, under
     the salts of ``committer``'s registration at the program it names, once a process: a value this process committed is
     handed back as held and ``field`` is not called.  Refused for a parameter the registration holds no salts for, and for one
     whose root is not the registered one (`_registered`), which is then not held."""
@@ -461,7 +461,7 @@ def commit_bnk(committer: Mapping[str, Any], label: str, K: int, field: Callable
     ys = _salts(committer, param)
     at = (str(committer["salts"]), str(committer["program"]), param)
     if at not in _BNK:
-        v = registered_commit(at[1], param, bnk_words(field()), bytes(32), 0, keep_rows=True, row_salts=ys)
+        v = registered_commit(at[1], param, bnk_words(field()), ys, keep_rows=True)
         _BNK[at] = _registered({param: v}, committer)[param]
     return _BNK[at]
 
@@ -490,8 +490,8 @@ def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callab
             if words is None:
                 words = shard()
             V, start = committer["vocab"][param]
-            new[at] = registered_commit(at[1], param, shard_words(words, V, start, b), bytes(32), 0, keep_rows=True,
-                                        row_salts=ys, schema=SCHEMA_HM96_SHA512_ROW_SEG)
+            new[at] = registered_commit(at[1], param, shard_words(words, V, start, b), ys, keep_rows=True,
+                                        schema=SCHEMA_HM96_SHA512_ROW_SEG)
         out[param] = _SHARDS.get(at) or new[at]
     _registered({at[2]: v for at, v in new.items()}, committer)
     _SHARDS.update(new)

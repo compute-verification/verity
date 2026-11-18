@@ -1,6 +1,7 @@
 """The session's node figures, read from the node's data sheets: its node file and the GPU and host cards it names
 (`verity.device`'s `load_node` and `load_card`), through `timing.Figures.of_sheets`, with the figures no sheet states
-(`UNSHEETED`).  `python sheets.py NODE` writes them as the verifier's `--figures` reads them."""
+(`UNSHEETED`).  `python sheets.py NODE` writes them as the verifier's `--figures` reads them, and `python sheets.py --sha512
+NODE` their digest, as its `--figures-sha512` pins it."""
 
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.device import load_card, load_node, node_kinds  # noqa: E402
+from verity.device import load_card, load_node, node_kinds, number  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import timing  # noqa: E402
 
 CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
@@ -31,7 +32,8 @@ UNSHEETED = {
 }
 # No figure here is measured on an H200 or H100 node, nor its card's on-chip storage counted: their sessions read the
 # RTX PRO 6000 node's (its card's `store.chip` for the GPU's), as the measured node's.
-UNSHEETED |= {kind: UNSHEETED["rtx-pro-6000-server-x8"] | {"gpu_chip_bytes": 263_163_904}
+UNSHEETED |= {kind: UNSHEETED["rtx-pro-6000-server-x8"]
+              | {"gpu_chip_bytes": int(number(load_card("rtx-pro-6000-server", directory=CARD_FILES)["store"]["chip"]))}
               for kind in ("h200-sxm-141gb-x1", "h100-sxm-80gb-x1")}
 """Per node kind, the figures a session's ledger reads that no data sheet states."""
 
@@ -57,12 +59,15 @@ def figures(node: str, *, count: int | None = None) -> timing.Figures:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if len(args) != 1:
-        print("usage: sheets.py NODE: the figures of a node of kind NODE (a node file's name under "
-              "calibration/hardware/nodes), as the session verifier's --figures reads them", file=sys.stderr)
+    digest = args[:1] == ["--sha512"]
+    if len(args) != 1 + digest:
+        print("usage: sheets.py [--sha512] NODE: the figures of a node of kind NODE (a node file's name under "
+              "calibration/hardware/nodes), as the session verifier's --figures reads them, or (--sha512) their "
+              "digest, which its --figures-sha512 pins", file=sys.stderr)
         return 2
     try:
-        print(json.dumps(figures(args[0]).to_json(), sort_keys=True))
+        fig = figures(args[-1])
+        print(fig.sha512() if digest else json.dumps(fig.to_json(), sort_keys=True))
     except ValueError as e:
         print(f"sheets.py: {e}", file=sys.stderr)
         return 3

@@ -48,11 +48,11 @@ open _root_.Flock (V SessionSpec Stmt)
 
 /-- **A link message's roots** at the setup `spec`: its tables' level-0 roots (`FlockDeploy.linkOf`), each named by its
 table, in table order. -/
-def commitOf (spec : SessionSpec) (m : Claims.Msg) : Option (List (String × ByteArray)) :=
+def commitOf (spec : SessionSpec) (m : Hash.Msg) : Option (List (String × ByteArray)) :=
   (FlockDeploy.linkOf m).map fun (rootB, _) => spec.tables.toList.zip rootB
 
 /-- **A round message's release**: its bytes after the tag `0`. -/
-def roundOf : Claims.Msg → Option ByteArray
+def roundOf : Hash.Msg → Option ByteArray
   | 0 :: c => some ⟨c.toArray⟩
   | _ => none
 
@@ -62,7 +62,7 @@ def proofsOf (spec : SessionSpec) (ps : Array ByteArray) : List ByteArray :=
   (spec.repStreams.toList.zip ps.toList).map fun ((i, r, _), b) => proofFrame spec.tables[i]! r b
 
 /-- **A last message's `Proof` frames** at the setup `spec`: its proof files (`FlockDeploy.finalOf`). -/
-def finishOf (spec : SessionSpec) (m : Claims.Msg) : Option (List ByteArray) :=
+def finishOf (spec : SessionSpec) (m : Hash.Msg) : Option (List ByteArray) :=
   (FlockDeploy.finalOf m).map fun f => proofsOf spec f.proofs
 
 /-- **The rep streams' domain frames** at the setup `spec`, each its transcript domain's (`Frames.domainFrame`), as the
@@ -92,7 +92,7 @@ def seenAfter (seen : List String) : Kind → List String
 
 /-- **The frames the relay sends for the model message `m` at a slot of kind `k`**, at the setup `spec`, where the
 streams whose rounds came before are `seen`. -/
-def encK (spec : SessionSpec) (seen : List String) : Kind → Claims.Msg → List ByteArray
+def encK (spec : SessionSpec) (seen : List String) : Kind → Hash.Msg → List ByteArray
   | .hello, m => [⟨m.toArray⟩]
   | .commit, m => match commitOf spec m with
     | some roots => [commitFrame spec.sigma roots]
@@ -107,21 +107,21 @@ def encK (spec : SessionSpec) (seen : List String) : Kind → Claims.Msg → Lis
 
 /-- **The model's frames over the slots `ks`**, after the rounds of the streams `seen`: at each model slot the next of
 the messages `ms`, encoded at its kind. -/
-def encT (spec : SessionSpec) : List String → List Kind → List Claims.Msg → List (List ByteArray)
+def encT (spec : SessionSpec) : List String → List Kind → List Hash.Msg → List (List ByteArray)
   | _, [], _ => []
   | seen, k :: ks, ms =>
     if isModel k then encK spec seen k (ms.headD []) :: encT spec (seenAfter seen k) ks ms.tail
     else encT spec (seenAfter seen k) ks ms
 
 /-- **The model's frames at the setup**: its messages `ms` at the schedule's model slots, in order. -/
-def encOf (spec : SessionSpec) (sts : Array Stmt) (ms : List Claims.Msg) : List (List ByteArray) :=
+def encOf (spec : SessionSpec) (sts : Array Stmt) (ms : List Hash.Msg) : List (List ByteArray) :=
   encT spec [] (tmplOf (.ok (spec, sts))) ms
 
 /-- **What the relay read at a model slot of kind `k` is the model message `m`'s**, where the streams whose rounds came
 before are `seen`: at the `Hello`, its nonce makes `m`; at the `Commit`, the roots `Level0.commit` bound, where it bound
 any, are `m`'s; at a `Round`, the release its rep's frame returned, where it returned one, is `m`'s as it leaves
 (`leaveOf`); at the `Finish`, where the hold's barrier passes, the loop's own proofs are `m`'s. -/
-def EnvOk (spec : SessionSpec) (seen : List String) : Kind → Env → Claims.Msg → Prop
+def EnvOk (spec : SessionSpec) (seen : List String) : Kind → Env → Hash.Msg → Prop
   | .hello, e, m => Hello.msg spec e.nonce = m
   | .commit, e, m => ∀ roots, e.commit = .ok roots → commitOf spec m = some roots
   | .round stream _, e, m => ∀ c, e.round = .ok c → ∃ c', roundOf m = some c' ∧ c = leaveOf spec seen stream c'
@@ -144,7 +144,7 @@ def relaySteps (hold : Bool) (ins : List (ByteArray × Env)) : List (Kind × Sta
 
 /-- **What the relay read at each model slot is the model's message there**, the messages `ms` in order, after the
 rounds of the streams `seen`. -/
-def EnvPre (spec : SessionSpec) : List String → List (Kind × State × Placed × Env) → List Claims.Msg → Prop
+def EnvPre (spec : SessionSpec) : List String → List (Kind × State × Placed × Env) → List Hash.Msg → Prop
   | _, [], _ => True
   | seen, (k, _, _, e) :: tl, ms =>
     if isModel k then EnvOk spec seen k e (ms.headD []) ∧ EnvPre spec (seenAfter seen k) tl ms.tail
@@ -374,7 +374,7 @@ theorem step_frame {hold : Bool} {st : State} {pl : Placed} {k : Kind} {e : Env}
     cases hx
 
 theorem step_hello {hold : Bool} {spec : SessionSpec} {sts : Array Stmt} {seen : List String} {st : State}
-    {pl : Placed} {e : Env} {m : Claims.Msg} (h : st.stop = none) (hs : e.setup = .ok (spec, sts))
+    {pl : Placed} {e : Env} {m : Hash.Msg} (h : st.stop = none) (hs : e.setup = .ok (spec, sts))
     (he : Hello.msg spec e.nonce = m) :
     (stepK hold st pl (some (tagOf .hello)) (.ok .hello) e).sent <+: encK spec seen .hello m ∧
       ((stepK hold st pl (some (tagOf .hello)) (.ok .hello) e).go = true →
@@ -405,7 +405,7 @@ theorem step_hello {hold : Bool} {spec : SessionSpec} {sts : Array Stmt} {seen :
     rw [hs'] at hx
     cases hx
 
-theorem step_finish {spec : SessionSpec} {seen : List String} {st : State} {pl : Placed} {e : Env} {m : Claims.Msg}
+theorem step_finish {spec : SessionSpec} {seen : List String} {st : State} {pl : Placed} {e : Env} {m : Hash.Msg}
     (hb : ∀ why, (e.barrier (some why)).isSome) (he : e.barrier none = none → finishOf spec m = some e.proofs) :
     (stepK true st pl (some (tagOf .finish)) (.ok .finish) e).sent <+: encK spec seen .finish m ∧
       ((stepK true st pl (some (tagOf .finish)) (.ok .finish) e).go = true →
@@ -423,7 +423,7 @@ theorem step_finish {spec : SessionSpec} {seen : List String} {st : State} {pl :
 /-- **At a model slot of the held relay what leaves is a prefix of the message's frames**, and all of them where the
 session goes on, where what the relay read there is the message's (`EnvOk`). -/
 theorem step_model {spec : SessionSpec} {sts : Array Stmt} {seen : List String} {st : State} {pl : Placed}
-    {k : Kind} {e : Env} {m : Claims.Msg} (h : st.stop = none) (hsl : slot st pl = some k) (hm : isModel k = true)
+    {k : Kind} {e : Env} {m : Hash.Msg} (h : st.stop = none) (hsl : slot st pl = some k) (hm : isModel k = true)
     (hσ : SetupOk spec st) (hs : e.setup = .ok (spec, sts)) (hb : ∀ why, (e.barrier (some why)).isSome)
     (he : EnvOk spec seen k e m) :
     (stepK true st pl (some (tagOf k)) (.ok k) e).sent <+: encK spec seen k m ∧
@@ -467,7 +467,7 @@ theorem prefix_cons_inv {α : Type} {a : α} {l ks : List α} (h : a :: l <+: ks
 the setup's, after the rounds of the streams `seen`, where the slots that come are a prefix of `ks` and what the relay
 read at each model slot is the message's there. -/
 theorem relayPre_sched {spec : SessionSpec} {sts : Array Stmt} :
-    ∀ (es : List Env) (st : State) (pl : Placed) (seen : List String) (ks : List Kind) (ms : List Claims.Msg),
+    ∀ (es : List Env) (st : State) (pl : Placed) (seen : List String) (ks : List Kind) (ms : List Hash.Msg),
       st.stop = none → SetupOk spec st → (∀ e ∈ es, e.setup = .ok (spec, sts)) →
       (∀ e ∈ es, ∀ why, (e.barrier (some why)).isSome) → (schedTrace true st pl es).map (·.1) <+: ks →
       EnvPre spec seen (schedSteps true st pl es) ms → RelayPre (schedTrace true st pl es) (encT spec seen ks ms)
@@ -512,7 +512,7 @@ theorem relayPre_sched {spec : SessionSpec} {sts : Array Stmt} :
 answer of the auditor, at the setup `spec`, `sts` the relay reads, where what the relay read at each model slot is the
 model's message there, in order (`EnvPre`), what left at each model slot is that message's frames (`encOf`), the last
 possibly cut (`RelayPre`). -/
-theorem relayPre_of_env {spec : SessionSpec} {sts : Array Stmt} (ins : List (ByteArray × Env)) (ms : List Claims.Msg)
+theorem relayPre_of_env {spec : SessionSpec} {sts : Array Stmt} (ins : List (ByteArray × Env)) (ms : List Hash.Msg)
     (hs : ∀ p ∈ ins, p.2.setup = .ok (spec, sts)) (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome)
     (he : EnvPre spec [] (relaySteps true ins) ms) : RelayPre (relayTrace true ins) (encOf spec sts ms) := by
   obtain ⟨hsub, -⟩ := out_sched true {} {} ins (.inr ⟨rfl, reach_init⟩) hb
@@ -534,7 +534,7 @@ theorem proofsOf_length (spec : SessionSpec) (ps : Array ByteArray) :
   simp only [proofsOf, List.length_map, List.length_zip, Array.length_toList]
   omega
 
-theorem finishOf_length {spec : SessionSpec} {m : Claims.Msg} {ps : List ByteArray} (h : finishOf spec m = some ps) :
+theorem finishOf_length {spec : SessionSpec} {m : Hash.Msg} {ps : List ByteArray} (h : finishOf spec m = some ps) :
     ps.length ≤ spec.repStreams.size := by
   unfold finishOf at h
   rcases hf : FlockDeploy.finalOf m with _ | f
@@ -543,7 +543,7 @@ theorem finishOf_length {spec : SessionSpec} {m : Claims.Msg} {ps : List ByteArr
     exact proofsOf_length spec f.proofs
 
 /-- **A model slot sends at most one frame per rep stream, and one more.** -/
-theorem encK_length (spec : SessionSpec) (seen : List String) (k : Kind) (m : Claims.Msg) :
+theorem encK_length (spec : SessionSpec) (seen : List String) (k : Kind) (m : Hash.Msg) :
     (encK spec seen k m).length ≤ spec.repStreams.size + 1 := by
   unfold encK
   split
@@ -561,7 +561,7 @@ theorem encK_length (spec : SessionSpec) (seen : List String) (k : Kind) (m : Cl
     omega
 
 theorem weave_encT_length (spec : SessionSpec) (ctl : Kind → ByteArray) :
-    ∀ (seen : List String) (ks : List Kind) (ms : List Claims.Msg),
+    ∀ (seen : List String) (ks : List Kind) (ms : List Hash.Msg),
       (weave ctl ks (encT spec seen ks ms)).length ≤ ks.length * (spec.repStreams.size + 1)
   | _, [], _ => by simp [weave]
   | seen, k :: ks, ms => by
@@ -582,7 +582,7 @@ def relayB (spec : SessionSpec) (sts : Array Stmt) : Nat :=
   (tmplOf (.ok (spec, sts))).length * (spec.repStreams.size + 1)
 
 /-- **The model's frames at the setup, woven with its control frames, are at most `relayB` long.** -/
-theorem weave_encOf_length (spec : SessionSpec) (sts : Array Stmt) (ms : List Claims.Msg) :
+theorem weave_encOf_length (spec : SessionSpec) (sts : Array Stmt) (ms : List Hash.Msg) :
     (weave (ctlOf (.ok (spec, sts))) (tmplOf (.ok (spec, sts))) (encOf spec sts ms)).length ≤ relayB spec sts :=
   weave_encT_length spec _ [] _ ms
 
@@ -599,7 +599,7 @@ theorem envOk_commit {spec : SessionSpec} {seen : List String} {e : Env} {rootB 
   simp only [commitOf, FlockComplete.linkOf_linkBody hr hp hrb hpb, Option.map_some, h roots hc]
 
 /-- **At a round message**, `EnvOk` where the release the rep's frame returned is the message's as it leaves. -/
-theorem envOk_round {spec : SessionSpec} {seen : List String} {e : Env} {stream : String} {n : Nat} {m : Claims.Msg}
+theorem envOk_round {spec : SessionSpec} {seen : List String} {e : Env} {stream : String} {n : Nat} {m : Hash.Msg}
     (h : ∀ c, e.round = .ok c → ∃ c', 0 :: c'.data.toList = m ∧ c = leaveOf spec seen stream c') :
     EnvOk spec seen (.round stream n) e m := by
   intro c hc

@@ -1,5 +1,5 @@
 """charge_rows: `ChargeLink_v1`'s carry rows committed window to window and the verifier's chain check over their
-openings (`network.verifier.charge_check`): code_v1's charges over whole streams, and a restarted carry refused wherever
+openings (`network.prover.charge_check`): code_v1's charges over whole streams, and a restarted carry refused wherever
 the prover puts it."""
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ import pytest
 from verity.commitments import hm96
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.interface.charge import arith_encode as AE, charge_chain as CC
-from verity.protocols.proofs.spot.verifier.one_stage import produced
-from verity.protocols.resource_accounting.network.verifier import charge_check as CK
+from verity.protocols.proofs.spot.prover import produced as PP
+from verity.protocols.resource_accounting.network.prover import charge_check as CK
 from verity.protocols.resource_accounting.network.prover import charge_rows as CR
 
 FIXTURE = Path(__file__).parents[1] / "verifier" / "fixtures" / "arith_encode_vectors.json"
@@ -44,7 +44,7 @@ def _chain(book, rows_out, start=None):
     values = []
     for w, out in enumerate(rows_out):
         if w == 0 and start is not None:
-            values.append(produced.commit(PROGRAM, CC.VALUE, [CC.row(start[0]), CC.row(out)], REGISTRATION,
+            values.append(PP.commit(PROGRAM, CC.VALUE, [CC.row(start[0]), CC.row(out)], REGISTRATION,
                                           [start[1], hm96.SHA512.fresh_salt()], CC.WORD_BITS, SCHEMA))
         else:
             values.append(CR.commit_window(PROGRAM, book, CC.carry_of(out), REGISTRATION, values[-1] if values else None))
@@ -86,12 +86,12 @@ def test_a_reset_carry_is_refused():
         assert (ok, length) == (1, cheap)
         assert CC.evaluate_links(N, [(cb, CC.encode(reset), CC.encode(nxt), *wins[1])]) == [(1, cheap)]
         for salt in (hm96.SHA512.fresh_salt(), CR.start_salt(PROGRAM)):
-            forged = produced.commit(PROGRAM, CC.VALUE, [CC.row(CC.encode(reset)), CC.row(CC.encode(nxt))],
+            forged = PP.commit(PROGRAM, CC.VALUE, [CC.row(CC.encode(reset)), CC.row(CC.encode(nxt))],
                                      REGISTRATION, [salt, hm96.SHA512.fresh_salt()], CC.WORD_BITS, SCHEMA)
             got = CK.check_chain([CR.openings(honest[0]), CR.openings(forged)], PROGRAM, book)
             assert got == "CH-carry: window 1's carry-in isn't window 0's carry-out"
         assert CC.evaluate_links(N, [(cb, in0, CC.encode(reset), *wins[0])])[0][0] == 0
-    same_rows = produced.commit(PROGRAM, CC.VALUE, [honest[0].rows[1], CC.row(out1)], REGISTRATION,
+    same_rows = PP.commit(PROGRAM, CC.VALUE, [honest[0].rows[1], CC.row(out1)], REGISTRATION,
                                 [hm96.SHA512.fresh_salt(), hm96.SHA512.fresh_salt()], CC.WORD_BITS, SCHEMA)
     assert CK.check_chain([CR.openings(honest[0]), CR.openings(same_rows)], PROGRAM, book).startswith("CH-carry")
 

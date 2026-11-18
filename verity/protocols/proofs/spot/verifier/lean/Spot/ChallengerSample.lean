@@ -50,13 +50,17 @@ def DRAW_FORM : String :=
   "a draw's coin evidence is {ledger, main, pins, segment, session}: the auditor's ledger, the verifier's copy of " ++
   "main's first-parent history, the host's pins log, the draw's coins (Segment.to_json) and the challenger session's files"
 
+def LOG_COMMITTED : String :=
+  "the challenger's release log holds a root committed with no coin: a sample's session draws a coin after every root"
+
 /-- The coins of family `label` that the session the auditor's ledger opens on `window` (its open root, lowercase hex)
 under `key` released after `after`, read from `coins`, in order: the bytes a sample reads. The session must be a withheld
-one (`withheldOn`). -/
+one (`withheldOn`) whose log commits no root (`LOG_COMMITTED`). -/
 def sampleCoins (key : ChallengerKey) (window label : String) (after : ByteArray) (coins : Json) : V ByteArray := do
   unless keys? coins == some #["ledger", "main", "pins", "segment", "session"] do throw DRAW_FORM
   let (c, log) ← trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
     (getD coins "pins") (getD coins "main") (getD coins "session")
+  if log.any (·.kind == .committed) then throw LOG_COMMITTED
   unless withheldOn (getD coins "ledger") window do throw WITHHELD
   let segment := getD coins "segment"
   unless jsonStrIs (getD segment "label") label do

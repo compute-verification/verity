@@ -1,7 +1,6 @@
 """The harness kit: the calls benchmarks' runners share, each written once.
 
 - `lease(gpus, minutes, on=None, cores=None)`: the `gpu-lease` argv a job's command follows, with its bound.
-- `free_port()`: a loopback port the system has free now, for a server a runner starts.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `card_short(name)`: the card's name in a measurement's member, from the one card record under `cards_directory()` whose
@@ -80,7 +79,6 @@ import platform
 import re
 import shlex
 import shutil
-import socket
 import statistics
 import subprocess
 import sys
@@ -143,12 +141,6 @@ def lease(gpus: int, minutes: float, *, on: str | None = None, cores: str | None
             "--max-min", str(math.ceil(minutes)), "--"]
 
 
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 # ---- the host stamp ----------------------------------------------------------------------------------------------------------
 
 
@@ -162,13 +154,13 @@ def _run(argv: Sequence[str]) -> tuple[int, str]:
     return r.returncode, r.stdout if r.returncode == 0 else r.stderr or r.stdout
 
 
-def _commit() -> str | None:
-    """The commit of the tree the job runs: the one `research run` shipped, else this checkout's HEAD; None where neither
-    says."""
+def commit(root: Path | None = None) -> str | None:
+    """The commit of the tree the job runs: the one `research run` shipped, else the HEAD of the checkout at `root` (this
+    file's where None); None where neither says."""
 
     if sha := settings.RESEARCH_SOURCE_SHA:
         return sha
-    rc, out = _run(["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"])
+    rc, out = _run(["git", "-C", str(root or Path(__file__).resolve().parent), "rev-parse", "HEAD"])
     return out.strip() or None if rc == 0 else None
 
 
@@ -211,7 +203,7 @@ def host_stamp() -> dict:
         "card": ", ".join(dict.fromkeys(g["name"] for g in gpus)) or "none",
         "gpus": [{"uuid": g["uuid"], "sm_mhz": _mhz(g["clocks.sm"]), "mem_mhz": _mhz(g["clocks.mem"])} for g in gpus],
         "driver": ", ".join(dict.fromkeys(g["driver_version"] for g in gpus)) or None,
-        "cuda": cuda, "node": platform.node(), "commit": _commit()}
+        "cuda": cuda, "node": platform.node(), "commit": commit()}
     if why:
         stamp["why"] = why
     return stamp
@@ -252,18 +244,6 @@ def card_record(name: str, *, directory: Path | None = None) -> dict:
 def card_short(name: str, *, directory: Path | None = None) -> str:
     """The ``short`` of `card_record`'s record for ``name``."""
     return card_record(name, directory=directory)["short"]
-
-
-def card_named_short(short: str, *, directory: Path | None = None) -> dict:
-    """The GPU card record in ``directory`` (`cards_directory` by default) whose ``short`` is ``short``, a member's card
-    part as a record stored it; refused, naming the shorts there are, unless exactly one has it."""
-    directory = directory or cards_directory()
-    cards = _gpu_cards(directory)
-    held = [c for c in cards if c.get("short") == short]
-    if len(held) != 1:
-        raise SystemExit(f"{len(held)} GPU card files under {directory} have `short` {short!r}: one of "
-                         f"{sorted(c['short'] for c in cards if c.get('short'))}")
-    return held[0]
 
 
 def card_sku(name: str, *, directory: Path | None = None) -> str:
@@ -456,14 +436,17 @@ def toolkit(version: str) -> str:
     """The directory of CUDA toolkit `version` (major.minor, as a machine's `[properties]` write it): ``$CUDA_HOME`` where it
     is set and its ``version.json``, where it has one, is that version; else the one the run's machine's properties
     (`machine_properties()`) list at exactly that version, the version asked for and not the first listed. Refused by name
-    otherwise, as `NotListed` where the properties list none."""
+    otherwise, as `NotListed` where the properties list none, and where ``$CUDA_HOME``'s ``version.json`` gives no
+    ``cuda.version``."""
     from verity_config.settings import SHARED
 
     if home := SHARED.get("CUDA_HOME"):
-        try:
-            said = json.loads((Path(home) / "version.json").read_text())["cuda"]["version"]
-        except (OSError, ValueError, KeyError, TypeError):
+        if not (said_in := Path(home) / "version.json").is_file():
             return home
+        try:
+            said = json.loads(said_in.read_text())["cuda"]["version"]
+        except (ValueError, KeyError, TypeError) as e:
+            raise SystemExit(f"CUDA_HOME={home}: {said_in} gives no cuda.version ({type(e).__name__}: {e})") from None
         if said == version or said.startswith(f"{version}."):
             return home
     try:
@@ -526,7 +509,12 @@ def wrong_card(workload: str, short: str, card: str, *, directory: Path | None =
     directory = directory or cards_directory()
     if is_card(card, short, directory=directory):
         return None
-    want = " or ".join(d["value"] for c in _gpu_cards(directory) if c.get("short") == short for d in c.get("driver", ()))
+    from verity.device import gpu_card_called
+
+    try:
+        want = " or ".join(d["value"] for d in gpu_card_called(short, directory=directory).get("driver", ()))
+    except KeyError as e:
+        return f"spec {workload!r} names no one card: {e.args[0]}"
     return (f"the card is a {card}, not the {short} of spec {workload!r} ({want}): run it on a node whose card is a "
             f"{want}, or name this card where the spec lists it (`SPEC@CARD`)")
 
@@ -613,6 +601,14 @@ def is_trial(environ: Mapping[str, str] | None = None) -> bool:
     this process's environment."""
 
     return (settings.get(TRIAL, environ) or "0") != "0"
+
+
+def superseded(store: Any, target: str) -> list[str]:
+    """What supersedes a record's run or art: the values of its `served_table.SUPERSEDED_BY` labels, empty where none."""
+
+    from verity_bench.served_table import SUPERSEDED_BY
+
+    return [str(lab.value) for lab in store.labels(target, key=SUPERSEDED_BY)]
 
 
 def trial_attempt(attempt: Mapping[str, Any]) -> bool:

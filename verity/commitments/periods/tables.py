@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from verity.commitments import row_table as RT
+from verity.commitments import registered_value as RV, row_table as RT
 
 from verity.commitments.periods import rows as CS
 
@@ -72,9 +72,9 @@ def registered_reads(window: CS.Binding, publics: Mapping[str, bytes], *, regist
         if m.key in bad or t.port in bad or any(s is None for s in ss):
             raise ValueError(f"{m.key}: {t.port}'s rows do not hold among the members' strings: {bad}")
         port = {"value": t.port, "root": RT.RowTable(window.table_domain(k), ss).root.hex(), "leaves": t.n, "words": t.words,
-                "word_bits": registered.WORD_BITS, "domain": window.table_domain(k).domain_id.hex(),
-                registered.SCHEMA_KEY: registered.SCHEMA_SEG, "reads": [m.links[j][1] for j in m.link_refs],
-                registered.READS_FROM: m.base}
+                "word_bits": RV.WORD_BITS, "domain": window.table_domain(k).domain_id.hex(),
+                RV.SCHEMA_KEY: registered.SCHEMA_SEG, "reads": [m.links[j][1] for j in m.link_refs],
+                RV.READS_FROM: m.base}
         out[m.key] = {"format": registered.READS_V1, "ports": {CS.LINKED: port}}
     return out
 

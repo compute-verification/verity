@@ -43,7 +43,7 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveOpening, LiveRecord
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity_torch.pouw import credit_gate_device as CGD
 
 from tests.protocols import challenger_host as CH
@@ -740,7 +740,7 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     r0 = ev["rounds"][0]
     assert r0["request_table"] == c["request_table"] == run._tables[0].commitment.root.hex()
     assert r0["requests"] == CR.requests_root(bytes.fromhex(r0["request_table"]), bytes.fromhex(ids0["root"])).hex()
-    assert ids0["domain"] == G.domain(run.served.program_digest, ids0["value"], ids0["words"], ids0["leaves"],
+    assert ids0["domain"] == RV.domain(run.served.program_digest, ids0["value"], ids0["words"], ids0["leaves"],
                                       session=auditor.session_id).domain_id.hex()
 
 
@@ -1028,7 +1028,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     root, digest = auditor.window["root"], _circuit()
     for port, e in got["registered"]["ports"].items():
         held = CR.is_held(e["value"])
-        assert e["domain"] == G.domain(digest, e["value"], e["words"], e["leaves"], window=None if held else root
+        assert e["domain"] == RV.domain(digest, e["value"], e["words"], e["leaves"], window=None if held else root
                                        ).domain_id.hex(), port
     failed = _credit(auditor, rec, st, run=_verifier(drawn, reject=drawn[-1:]))
     assert failed["window"][0] == "failed" and failed["credit"] is None
@@ -1354,15 +1354,16 @@ def test_a_credit_bit_changed_after_the_sampling_coin_is_refused(periodic):
     assert credited(c, no_z) == ("credit", CR.no_z(0))
 
 
-def test_the_salt_key_and_a_calls_values_outlive_the_close_in_the_provers_directory_only(tmp_path):
-    """DRAWN1: with a prover directory the run keeps its salt key and each served call's A rows, scales and z/y records
-    there, owner-only, past the close; the run's published output (its transcript) holds neither the key's bytes nor
-    its hex; and the call's A and z tables rebuilt from them have the roots its manifest row carries, so a sampled proof block
-    opens after the close, while a kept row changed afterwards is refused."""
-    prover, out, key = tmp_path / "prover", tmp_path / "out", bytes(range(32))
+def test_the_salts_and_a_calls_values_outlive_the_close_in_the_provers_directory_only(tmp_path):
+    """DRAWN1: with a prover directory the run keeps its fresh salts (the salt file `pouw_h1_prover.SALTS`) and each
+    served call's A rows, scales and z/y records there, owner-only, past the close; the run's published output (its
+    transcript) holds no salt's bytes nor their hex; and the call's A and z tables rebuilt from them have the roots its
+    manifest row carries, so a sampled proof block opens after the close, while a kept row changed afterwards is
+    refused."""
+    prover, out = tmp_path / "prover", tmp_path / "out"
     salt = hashlib.sha512(b"salt").digest()
     rounds = LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)
-    run = PH.H1Run("t", salt, {0: "q"}, [(64, K)], ROWS, 1, transcript_dir=str(out), rounds=rounds, key=key,
+    run = PH.H1Run("t", salt, {0: "q"}, [(64, K)], ROWS, 1, transcript_dir=str(out), rounds=rounds,
                    prover=str(prover))
     layer = Linear(64, 1, None)
     x = (torch.randn(3, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
@@ -1371,11 +1372,15 @@ def test_the_salt_key_and_a_calls_values_outlive_the_close_in_the_provers_direct
     run.record(0, xq, s_a, layer.weight, layer.weight_scale, zy)
     run.finish()
     del run
-    assert PV.key_of(prover) == key
+    kept_salts = PV.salts_of(prover)
+    a_nonce = RQ.TABLES_NONCE + RQ.TABLE_NONCES["a"]
+    salts = [kept_salts.at(a_nonce, ROWS)[192 * j:192 * (j + 1)] for j in range(ROWS)]
+    assert len(set(salts)) == ROWS
     assert stat.S_IMODE(prover.stat().st_mode) == 0o700
     assert all(stat.S_IMODE(p.stat().st_mode) == 0o600 for p in prover.rglob("*") if p.is_file())
     published = [p for p in out.rglob("*") if p.is_file()]
-    assert published and not any(key in p.read_bytes() or key.hex().encode() in p.read_bytes() for p in published)
+    assert published and not any(y in p.read_bytes() or y.hex().encode() in p.read_bytes() for p in published
+                                 for y in salts)
     record = json.loads((out / PH.CALLS_FILE).read_text())
     assert PV.locate(record["calls"], 1) == (0, 1)
     opened = PV.open_call(prover, record, 0, salt)

@@ -10,7 +10,7 @@ import pytest
 from verity.commitments import hm96
 from verity.protocols.interface.charge import arith_encode as AE
 from verity.protocols.interface.charge import charge_chain as CC
-from verity.protocols.proofs.spot.verifier.one_stage import produced
+from verity.protocols.proofs.spot.prover import produced as PP
 
 from tests.compiler.test_network_attester_compile_slice import BOOK
 from tests.compiler.test_network_attester_compile_slice_w212 import (
@@ -21,7 +21,7 @@ from tests.compiler.test_network_attester_compile_slice_w212 import (
     _load,
 )
 from verity_vllm.compiler import compile_slice as CS
-from verity.protocols.resource_accounting.network.verifier import charge_check as CK
+from verity.protocols.resource_accounting.network.prover import charge_check as CK
 from verity.protocols.resource_accounting.network.prover import charge_rows as CR
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 
@@ -94,7 +94,7 @@ def test_a_chosen_carry_is_refused(x):
     ok = CR.commit_window(PROGRAM, BOOK, honest.carry, REGISTRATION, carry=before)
     assert CK.check_chain([CR.openings(before), CR.openings(ok)], PROGRAM, BOOK) is None
     for salt in (hm96.SHA512.fresh_salt(), CR.start_salt(PROGRAM)):
-        forged = produced.commit(PROGRAM, CC.VALUE, [CC.row(CC.encode(FITTED)), CC.row(CC.encode(restart.carry))],
+        forged = PP.commit(PROGRAM, CC.VALUE, [CC.row(CC.encode(FITTED)), CC.row(CC.encode(restart.carry))],
                                  REGISTRATION, [salt, hm96.SHA512.fresh_salt()], CC.WORD_BITS, SCHEMA)
         got = CK.check_chain([CR.openings(before), CR.openings(forged)], PROGRAM, BOOK)
         assert got == "CH-carry: window 1's carry-in isn't window 0's carry-out"

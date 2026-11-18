@@ -27,7 +27,9 @@ from verity_vllm.pipeline.advice_code import format as I1
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import advice_windows as AW
+from verity_vllm.pipeline import research_outputs as RO
 from verity_vllm.pipeline import serve_commit as sc
+from verity_vllm.pipeline import serve_mirror as sm
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import window_advice as WA
@@ -114,7 +116,7 @@ class Server:
         self.runner = Runner()
         self.engine = self.engine_of(self.runner, abort_after)
         self.engine.client_goes = self.client_goes
-        self.trace = sc.advice_trace(out, self.engine.sched)
+        self.trace = so.advice_trace(out, self.engine.sched)
         self.windows = sc.CommitWindows(Committer(self.runner), out, run_id="t", window_steps=window_steps, eos_ids=[Tokenizer.eos_token_id],
                                         clock=lambda: 0.0, wall=lambda: 0.0, marks=self.trace.window)
         self.loop, self.admitted = so.EngineLoop(self.engine, self.windows), {}
@@ -186,14 +188,15 @@ def test_the_server_records_each_requests_user_and_the_scheduler_trace_with_its_
     assert records(out, "step_trace.jsonl")[0]["step_root"]          # the committer's trace is still its own file
 
 
-def test_request_users_is_requests_jsonls_engine_id_and_user_alone_and_is_mirrored(tmp_path):
+def test_request_users_is_requests_jsonls_engine_id_and_user_alone_and_stays_in_the_serve_dir(tmp_path):
     out = _served(tmp_path)
     reqs, users = records(out, "requests.jsonl"), records(out, sc.REQUEST_USERS)
     assert len(users) == sum(map(len, WAVES)) and all(set(u) == {"engine_id", "user"} for u in users)
     assert [(u["engine_id"], u["user"]) for u in users] == [(r["engine_id"], r["user"]) for r in reqs]
     assert None in {u["user"] for u in users}                      # a body with no `user` is recorded as such, not dropped
-    sc.Mirror(out, tmp_path / "OUT")()
-    assert (tmp_path / "OUT" / sc.REQUEST_USERS).read_bytes() == (out / sc.REQUEST_USERS).read_bytes()
+    sm.Mirror(out, tmp_path / "OUT")()
+    assert (tmp_path / "OUT" / "windows.jsonl").exists() and not (tmp_path / "OUT" / sc.REQUEST_USERS).exists()
+    assert RO.private(sc.REQUEST_USERS)
 
 
 def test_each_commit_windows_advice_is_committed_and_compiles_to_the_steps_it_served(tmp_path):

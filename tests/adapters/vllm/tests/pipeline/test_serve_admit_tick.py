@@ -18,7 +18,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity import release as REL
 
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Tokenizer
 from verity_vllm import messages
@@ -525,7 +525,7 @@ def test_watermark_lines_as_the_network_attester_sends_them():
     bad: list[dict] = []
     w = na.Watermark("ab", bad.append)
     assert not w.feed(line(0, 0) + line(2, 0)) and not w.feed(line(3, 0))
-    assert bad[-1]["error"].startswith("watermark (2, 0) after (0, 0)")
+    assert bad[-1]["error"].startswith("watermark-tick: watermark (2, 0) after (0, 0)")
     cut: list[dict] = []
     w = na.Watermark("ab", cut.append)
     w.feed(line(0, 0) + line(1, 0)[:1])
@@ -538,8 +538,8 @@ def test_a_line_whose_lost_releases_are_not_its_buckets_is_refused_and_breaks_th
     bucket (at least 5, below its n), named once, in rising order."""
     last, good = (2, 5), line(3, 9, [6, 8])
     assert na.watermark_line(good, last) == (3, 9, (6, 8))
-    outside = "watermark \\(3, 9\\) after \\(2, 5\\): its lost releases {} rise from 5 below n"
-    form = "a watermark line is 't n', any lost releases and a newline"
+    outside = "watermark-lost: watermark \\(3, 9\\) after \\(2, 5\\): its lost releases {} rise from 5 below n"
+    form = "watermark-form: a watermark line is 't n', any lost releases and a newline"
     for bad, why in ((good[:-1] + b" 9\n", outside.format("\\[6, 8, 9\\]")),           # a lost release at n
                      (good[:-1] + b" 12\n", outside.format("\\[6, 8, 12\\]")),         # above n
                      (line(3, 9, [4, 6]), outside.format("\\[4, 6\\]")),               # below the n of the line before
@@ -559,7 +559,7 @@ def test_a_line_whose_lost_releases_are_not_its_buckets_is_refused_and_breaks_th
     g.mark(1)
     assert not g.watermark.feed(line(1, 3, [0]))     # release 0 is bucket 0's, which line 0 counted as not lost
     assert g.gate.counts["watermark_errors"] == 1 and g.gate.lost == set() and g.sched.added == ["r0"]
-    assert g.gate.opened == "the watermark broke: watermark (1, 3) after (0, 1): its lost releases [0] rise from 1 below n"
+    assert g.gate.opened == "the watermark broke: watermark-lost: watermark (1, 3) after (0, 1): its lost releases [0] rise from 1 below n"
     assert not g.watermark.feed(line(1, 3))          # the stream is closed: nothing after the refused line is read
 
 
@@ -648,7 +648,7 @@ def test_serve_openais_frontend_answers_a_lost_release_and_forgets_them_when_the
     assert admit.key(head(2)) == (RUN, 2) and admit.key(head(1, "cd")) == ("cd", 1)
     assert len(q) == 4 and admit.summary() == {"numbered": 1, "unordered": 0, "passed": 0, "lost": 2, "watermarks": 1, "runs": 2}
     assert not w.feed(line(1, 3, [1]))                   # release 1 is bucket 0's: the watermark breaks, and the gate opens
-    assert q[4:] == [("tick", {"run": RUN, "error": "watermark (1, 3) after (0, 2): its lost releases [1] rise from 2 below n"})]
+    assert q[4:] == [("tick", {"run": RUN, "error": "watermark-lost: watermark (1, 3) after (0, 2): its lost releases [1] rise from 2 below n"})]
     assert admit.key(head(1)) == (RUN, 1) and len(got) == 1     # the open gate adds every request at once, so it comes in
 
 
@@ -911,8 +911,8 @@ def test_serve_openai_names_a_header_as_the_network_attester_does():
             assert na.release_of(hd.header_fields(fields)) == (RUN, 3, 1), (pre, post)
 
 
-def test_the_flag_takes_tick_with_the_engine_class_step_times_under_the_schemes_name():
-    base = ["--model", "m", "--revision", "r", "--no-commit"]
+def test_the_flag_takes_tick_with_the_engine_class_step_times_under_the_schemes_name(tmp_path):
+    base = ["--model", "m", "--revision", "r", "--no-commit", "--out", str(tmp_path)]
     name = messages.providing("admission").name
     times = ["--protocols-config", json.dumps({name: {"order": "tick", "sat_us": 27_500, "free_us": 41_000}})]
     opts = cli.parse("serve-openai", [*base, *times], environ={})

@@ -25,73 +25,29 @@ LANES = {
 
 KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
     "proofs": {
-        # Needs, outside spot's verifier/ and device/: the registered rows' record (`Registered`, its schemas, domains and
-        # widths), the docket's and partition's digests and template ids, the sampling design's parsers, the second stage's
-        # row links, registration's `Declaration`, and the challenger's client types (`CoinError`, `LiveOpening`, `LiveRecord`).
-        "verity_vllm/commit/registered_rows.py": ("proofs.spot.verifier.one_stage.registered",),
-        "verity_vllm/compiler/replay_chain.py": (
-            "proofs.spot.verifier.one_stage.produced", "proofs.spot.verifier.one_stage.registered",
-        ),
+        # Needs, outside spot's verifier/ and device/: the docket's and partition's digests and template ids, the sampling
+        # design's rate table, the second stage's row links, registration's `Declaration`, and the challenger's client
+        # types (`CoinError`, `LiveOpening`, `LiveRecord`).
         "verity_vllm/pipeline/advice.py": ("registration.verifier.registration",),
-        "verity_vllm/pipeline/boundary_rows.py": (
-            "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.partition",
-            "proofs.spot.verifier.second_stage",
-        ),
-        "verity_vllm/pipeline/boundary_stop.py": (
-            "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.served",
-        ),
+        "verity_vllm/pipeline/boundary_rows.py": ("proofs.spot.verifier.one_stage.docket",),
+        "verity_vllm/pipeline/boundary_stop.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/commit_coins.py": (
-            "proofs.spot.verifier.challenger.challenger", "proofs.spot.verifier.challenger.challenger.CoinError",
-            "proofs.spot.verifier.challenger.challenger.LiveOpening", "proofs.spot.verifier.challenger.challenger.live_reason",
+            "proofs.spot.verifier.challenger.challenger", "proofs.spot.verifier.challenger.challenger.live_reason",
             "proofs.spot.verifier.challenger.remote",
         ),
-        "verity_vllm/pipeline/edge.py": ("proofs.spot.verifier.one_stage.registered",),
-        "verity_vllm/pipeline/interior_links.py": (
-            "proofs.spot.verifier.one_stage.registered", "proofs.spot.verifier.second_stage",
-        ),
         "verity_vllm/pipeline/interior_rows.py": ("proofs.spot.verifier.one_stage.docket",),
-        "verity_vllm/pipeline/registration_log.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/serve_day.py": ("registration.verifier.registration",),
-        "verity_vllm/pipeline/serve_tie.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/serving_rows.py": (
-            "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.partition",
-            "proofs.spot.verifier.one_stage.registered", "proofs.spot.verifier.service",
+            "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.service",
         ),
-        "verity_vllm/pipeline/window_sampling_design.py": ("proofs.spot.verifier.one_stage.draw",),
         "verity_vllm/program/predict/weights_tie.py": (
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.draw",
-            "proofs.spot.verifier.one_stage.registered",
-        ),
-        "verity_vllm/program/predict/window_rows.py": ("proofs.spot.verifier.one_stage.registered",),
-        "verity_vllm/program/predict/window_weights.py": (
-            "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.registered",
-        ),
-        # The compiler's served rows (`verity_vllm/compiler/served_rows.py`): the Lean verifier's `--registered` port form
-        # (`produced.port`, `registered.READS_FROM`), until SPOT's workload side offers the registered-port format.
-        "verity_vllm/compiler/served_rows.py": (
-            "proofs.spot.verifier.one_stage.produced", "proofs.spot.verifier.one_stage.registered",
         ),
         "verity_vllm/protocols/pouw/h1_ranks.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
         "verity_vllm/protocols/pouw/h1_settings.py": ("proofs.spot.verifier.challenger.challenger.LiveRecord",),
     },
-    "network-accounting": {
-        # Needs: PoUB's receipt plan (`Plan`, `PER_LEAF`, salts), codec and memory-map format outside poub's verifier/.
-        "verity_vllm/protocols/poub/remote.py": (
-            "resource_accounting.memory.poub.verifier.audit", "resource_accounting.memory.poub.verifier.codec",
-        ),
-    },
-    "compute-accounting": {
-        # Needs, outside pouw's verifier/: the matmul domain's error (`DomainError`).
-        "verity_vllm/protocols/pouw/pouw_circuit.py": ("resource_accounting.compute.pouw.verifier.protocol.DomainError",),
-    },
-    "memory-accounting": {
-        # `protocols/pous.py` reads the schemes for its refusals, setup's salt draw, and the period's certificate and gaps
-        # for its details; the store, its encode and decode and the period are pous's prover's (`weight_store`).
-        "verity_vllm/protocols/pous.py": (
-            "resource_accounting.memory.pous.verifier.period", "resource_accounting.memory.pous.verifier.schemes",
-            "resource_accounting.memory.pous.verifier.schemes.p2", "resource_accounting.memory.pous.verifier.setup",
-        ),
-    },
+    "network-accounting": {},
+    "memory-accounting": {},
 }
 
 

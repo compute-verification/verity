@@ -45,8 +45,8 @@ open Classical in
 /-- **What an aborting run of `W` reads at rep `r`'s level `ℓ + 1` position `q`** (`rdAt` at `W`, with the level columns
 read by `lc`): where it accepts, the rows its level columns hold at `q`; nothing elsewhere. -/
 noncomputable def rdAtW (W : Claims.Verifier Coin)
-    (lc : Claims.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)) {Ω A : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) (keep : Ω → (Fin (W.k x) → Coin) → A → Bool) (r ℓ q lanes : ℕ) (ω : Ω)
+    (lc : Hash.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)) {Ω A : Type} (P : Claims.Prover Ω)
+    (x : Hash.Msg) (keep : Ω → (Fin (W.k x) → Coin) → A → Bool) (r ℓ q lanes : ℕ) (ω : Ω)
     (d : (Fin (W.k x) → Coin) × A) : Finset (Fin (2 ^ lanes) → 𝔽) :=
   if (Claims.Recursion.abortRun sha512 P W x keep ω d).out = .acc then
     (((lc x (Claims.Recursion.abortRun sha512 P W x keep ω d).seen r (ℓ + 1)).filter
@@ -61,7 +61,7 @@ of wide columns `D` doesn't decode as good, for any read sets `rdD` holding what
 with probability at most `ε_table`, a collision among its calls, the read sets' misses of `w`, and opening a position
 of the word off the table at `D`'s columns. -/
 def RdAllAt {T : Type} (D : Claims.Flock.Deploy Coin (List 𝔽) T)
-    (lc : Claims.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)) : Prop :=
+    (lc : Hash.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)) : Prop :=
   ∀ x, ¬ Claims.Flock.NoAcc sha512 D.V x →
     ∃ (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (m k0 : ℕ)
       (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ),
@@ -93,8 +93,8 @@ def RdAllAt {T : Type} (D : Claims.Flock.Deploy Coin (List 𝔽) T)
 
 /-- **An accepted run of `W` has no level columns at or past its schedule's last level** (`plainRawLevelCols_top`'s
 form, at the level columns `lc`). -/
-def LevelTopAt (W : Claims.Verifier Coin) (lc : Claims.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)) : Prop :=
-  ∀ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (c : Fin (W.k x) → Coin),
+def LevelTopAt (W : Claims.Verifier Coin) (lc : Hash.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)) : Prop :=
+  ∀ {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (c : Fin (W.k x) → Coin),
     (Claims.run sha512 P W x ω c).out = .acc →
     ∀ {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule},
       setupOf false x = some (s, spec, sts) → sts[0]? = some st → fast100 st.m = some sch →
@@ -104,8 +104,8 @@ open Classical in
 /-- **A cap position's read sets at `W`, linearly** (`Pr_rdAt_le_capHit`'s form, at `rdAtW W lc`): at `CpDep`'s
 position `i`, the chance an aborting run reads something there other than the plurality single reading after the
 position's round is at most its `FC` hits and `1/(M+1)`. -/
-def CapHitAt (W : Claims.Verifier Coin) (lc : Claims.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)) : Prop :=
-  ∀ {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (P : Claims.Prover Ω) (x : Claims.Msg)
+def CapHitAt (W : Claims.Verifier Coin) (lc : Hash.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)) : Prop :=
+  ∀ {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (P : Claims.Prover Ω) (x : Hash.Msg)
     (keep : Ω → (Fin (W.k x) → Coin) → A → Bool) (M : ℕ) (i : Fin (CpDep.width x)) (lanes : ℕ) (ω : Ω),
     (Claims.Pr fun d => (rdAtW W lc P x keep ((Fintype.equivFin (DepIdx x)).symm i).1.val
         ((Fintype.equivFin (DepIdx x)).symm i).2.1.val ((Fintype.equivFin (DepIdx x)).symm i).2.2.val lanes ω d).Nonempty ∧
@@ -118,8 +118,8 @@ def CapHitAt (W : Claims.Verifier Coin) (lc : Claims.Msg → Claims.Seen → ℕ
         ∃ u v, (Claims.Recursion.FC sha512 W CpDep P x keep M i.pos).out (i, ω, s.1, s.2) = some (u, v) ∧
           Claims.Collision sha512 u v) + 1 / ((M : ℝ) + 1)
 
-theorem mem_rdAtW {W : Claims.Verifier Coin} {lc : Claims.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)}
-    {Ω A : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {keep : Ω → (Fin (W.k x) → Coin) → A → Bool}
+theorem mem_rdAtW {W : Claims.Verifier Coin} {lc : Hash.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)}
+    {Ω A : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {keep : Ω → (Fin (W.k x) → Coin) → A → Bool}
     {r ℓ q lanes : ℕ} {ω : Ω} {d : (Fin (W.k x) → Coin) × A} {u : Fin (2 ^ lanes) → 𝔽} :
     u ∈ rdAtW W lc P x keep r ℓ q lanes ω d ↔ keep ω d.1 d.2 = true ∧
       (Claims.run sha512 P W x ω d.1).out = .acc ∧
@@ -153,7 +153,7 @@ elsewhere, on each tape, the chance that the run as it aborts ties a collision a
 position, that it reads there anything but the plurality single reading after the slot's fork round. The bound is
 `hall` at the refuser's runs with those read sets and tables, averaged over the refuser's last coin (`Pr_refSample`). -/
 theorem tableBoundAbortLin_of_rdAll {T : Type} (D : Claims.Flock.Deploy Coin (List 𝔽) T)
-    (lc : Claims.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)) (hk : ∀ x, D.V.k x = (V false).k x)
+    (lc : Hash.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)) (hk : ∀ x, D.V.k x = (V false).k x)
     (hεt : ∀ x, 0 ≤ D.εtable x) (hcs : Claims.Recursion.CoinsShown sha512 D.V decCoin)
     (hal : Claims.Recursion.AccLast sha512 D.V)
     (hdf : Claims.Recursion.DecideFree sha512 D.V) (hrf : Claims.Recursion.Refusable sha512 D.V)
@@ -381,7 +381,7 @@ theorem tableBoundAbortLinK_of_rdAll (keepV : Bool → Bool) :
 /-! ## At the deployed reader `VR rd` -/
 
 /-- **`actR` asks a coin only where the plain verifier does.** -/
-theorem actR_coin {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem actR_coin {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {c : Coin} (h : actR rd x as cs = .coin c) : act false x as cs = .coin c := by
   unfold actR at h
   split at h
@@ -391,8 +391,8 @@ theorem actR_coin {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : Lis
   · split at h <;> cases h
 
 /-- **`nextR` answers a message only where the plain verifier answers it.** -/
-theorem next_msg_of_nextR (rd : Claims.Msg → Option FinalP) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg}
-    {as : List Claims.Msg} {cs : List Coin} {m : Claims.Msg} (h : ((nextR rd x as cs).eval H).1 = .msg m) :
+theorem next_msg_of_nextR (rd : Hash.Msg → Option FinalP) (H : Hash.Msg → Hash.Msg) {x : Hash.Msg}
+    {as : List Hash.Msg} {cs : List Coin} {m : Hash.Msg} (h : ((nextR rd x as cs).eval H).1 = .msg m) :
     ((next false x as cs).eval H).1 = .msg m := by
   cases hact : actR rd x as cs with
   | rej => simp [nextR, hact, Claims.OC.eval] at h
@@ -407,12 +407,12 @@ theorem next_msg_of_nextR (rd : Claims.Msg → Option FinalP) (H : Claims.Msg �
 
 /-- **`VR rd` shows each round's coin**: it answers a message only where the plain verifier does
 (`next_msg_of_nextR`). -/
-theorem coinsShown_VR (rd : Claims.Msg → Option FinalP) (H : Claims.Msg → Claims.Msg) :
+theorem coinsShown_VR (rd : Hash.Msg → Option FinalP) (H : Hash.Msg → Hash.Msg) :
     Claims.Recursion.CoinsShown H (VR rd) decCoin :=
   fun x as cs c m hl h => coinsShown_V H false x as cs c m hl (next_msg_of_nextR (cs := cs ++ [c]) rd H h)
 
 /-- **`VR rd` never accepts `[0]` last**: past a coin it is a coin request, and with no coin `decR` reads none. -/
-theorem refusable_VR (rd : Claims.Msg → Option FinalP) (H : Claims.Msg → Claims.Msg) :
+theorem refusable_VR (rd : Hash.Msg → Option FinalP) (H : Hash.Msg → Hash.Msg) :
     Claims.Recursion.Refusable H (VR rd) := fun x =>
   ⟨[0], fun as cs => by
     show ((nextR rd x (as ++ [[0]]) cs).eval H).1 ≠ .acc
@@ -436,8 +436,8 @@ theorem refusable_VR (rd : Claims.Msg → Option FinalP) (H : Claims.Msg → Cla
 /-- **The table bound at any plain record whose verifier is `VR rd`**, from the reader's bound, top and cap facts at
 `lc` and `VR rd`'s `AccLast` and `DecideFree`: `tableBoundAbortLin_of_rdAll` with `VR rd`'s coins and refusal
 (`coinsShown_VR`, `refusable_VR`). -/
-theorem tableBoundAbortLin_VR {T : Type} (rd : Claims.Msg → Option FinalP) (D : Claims.Flock.Deploy Coin (List 𝔽) T)
-    (hV : D.V = VR rd) (hεt : ∀ x, 0 ≤ D.εtable x) (lc : Claims.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽))
+theorem tableBoundAbortLin_VR {T : Type} (rd : Hash.Msg → Option FinalP) (D : Claims.Flock.Deploy Coin (List 𝔽) T)
+    (hV : D.V = VR rd) (hεt : ∀ x, 0 ≤ D.εtable x) (lc : Hash.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽))
     (hal : Claims.Recursion.AccLast sha512 (VR rd)) (hdf : Claims.Recursion.DecideFree sha512 (VR rd))
     (hall : RdAllAt D lc) (htopL : LevelTopAt (VR rd) lc) (hcap : CapHitAt (VR rd) lc) :
     Claims.Recursion.TableBoundAbortLin sha512 D (wordLen false) (wide false) CpDep :=

@@ -158,6 +158,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier.session import ve
 from verity.protocols.resource_accounting.memory.poub.verifier.poub_session import verifier_process as VP  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, pooled, timing  # noqa: E402
+from verity.device import load_node, number  # noqa: E402
 from verity.protocol import no_bound  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch  # noqa: E402
@@ -168,7 +169,8 @@ import sheets  # noqa: E402
 FIGURES = sheets.figures("rtx-pro-6000-server-x8")
 """The figures of the node the gate's sessions ran on, from its data sheets (`sheets.figures`)."""
 
-RATES = {"disk_bytes_per_s": FIGURES.disk_bytes_per_s, "link_bytes_per_s": 5e10}
+RATES = {"disk_bytes_per_s": FIGURES.disk_bytes_per_s, "link_bytes_per_s": float(number(load_node(
+    "rtx-pro-6000-server-x8", directory=sheets.NODE_FILES, cards_directory=sheets.CARD_FILES)["interface"]["eth0"]["rate"]) / 8)}
 """The node's rates a gate run's line is read at, bytes a second (`line.Rates`): its disks' measured read
 (the host card's `disk.read`, `Disks`' β), which Identity leaves in, charged in both forms, and its boundary links beyond
 them, link-charged (54.311e9 in all)."""
@@ -570,7 +572,8 @@ def union_error(rows: list[dict]) -> dict:
 def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     """Whether the run's registered store is `model`'s ({name, checkpoint_sha512}, from `source`): the verifier's
     binding (verifier.json's `binding`, in a record made while the verifier could bind it) held the hello's payload root
-    to the root of the store the pinned checkpoint lays out under the verifier's payload key, the Lean verifier deciding it (`lean`, its
+    to the root of the store the pinned checkpoint lays out under the verifier's payload key (only a record from before
+    the payload key became the prover's has one: the verifier now sends no key and binds nothing), the Lean verifier deciding it (`lean`, its
     `hold`'s answer: bound, at that root), that root is the registration's, and the binding's model is `model`.
     `bound` says whether it is. A run with no binding, or with no model to hold one to, is unbound: its store is the
     developer's choice (`store`), which the line is then conditional on (`premise`, `STORE_PREMISE`), and `ok`.

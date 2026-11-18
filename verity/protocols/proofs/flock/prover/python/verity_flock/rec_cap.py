@@ -24,8 +24,9 @@ from types import SimpleNamespace
 
 import numpy as np
 from verity.circuits import boolean as BL
-from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.population import wired_population_program
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array
@@ -136,6 +137,7 @@ def stage(tops, out_dir: Path, evaluate: bool = True) -> dict:
     ``registered.json``. Instance ``i`` reads row ``i``."""
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.commitments import registered_value as RV
 
     level = level_of(tops.own["value"])
     N = tops.own["leaves"]
@@ -144,8 +146,8 @@ def stage(tops, out_dir: Path, evaluate: bool = True) -> dict:
     if level and (sorted(tops.first) != [0, 1] or tops.first[0] != 0 or not 0 < tops.first[1] < N):
         raise ValueError(f"RecCap at level {level} holds rep 0's top then rep 1's, not reps' rows {tops.first} of {N}")
     defn = definition()
-    program_ = P.population_program(defn, N)
-    part = P.partition(program_, P.template_instance_query(defn))
+    program_, query = wired_population_program([(defn, N)], {"templates": [[descriptor_id(defn), N]]})
+    part = P.partition(program_, query)
     prog = P.program_sha512(program_)
     rows, top_salts, top_entry = tops.reg.statement(range(N))
     rows = np.array(rows, np.uint16)
@@ -157,7 +159,7 @@ def stage(tops, out_dir: Path, evaluate: bool = True) -> dict:
     if evaluate:
         got, _cut, ok = low.evaluate(rows.astype(np.uint64))
         agrees = [bool((int(ok) >> i) & 1) and got[i].astype(np.uint16).tolist() == want[i] for i in range(N)]
-    zero = G.Registered.commit(prog, ZERO_VALUE, [[0] * OUT_WORDS for _ in range(N)], salts=RR.zero_salts(ZERO_VALUE, N))
+    zero = RV.Registered.commit(prog, ZERO_VALUE, [[0] * OUT_WORDS for _ in range(N)], salts=RR.zero_salts(ZERO_VALUE, N))
     out_rows, out_salts, out_entry = zero.statement(range(N))
     sub = subcircuit(N, level)
     text = FC.compose(low, sub, partition=P.digest(part), program=prog)

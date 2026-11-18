@@ -44,9 +44,9 @@ def out(tmp_path_factory) -> tuple[O.AttestedOut, O.PublicKey]:
 
 def test_the_manifest_states_the_attester_and_spots_two() -> None:
     m = NC.MANIFEST
-    assert (m.protocol, m.version) == (domains.CERTIFIER_PROTOCOL, 1) and m.protocol == SP.IDS["certifier"]
-    assert [r.name for r in m.parties] == ["network-certifier", "workers", "verifier"]
-    assert m.role(NC.NETWORK_ATTESTER) == Role("network-certifier", "auditor", per="link",
+    assert (m.protocol, m.version) == (domains.CERTIFIER_PROTOCOL, 1) and m.protocol == SP.IDS["network-attester"]
+    assert [r.name for r in m.parties] == ["network-attester", "workers", "verifier"]
+    assert m.role(NC.NETWORK_ATTESTER) == Role("network-attester", "auditor", per="link",
                                                 needs=("clock", "coins", "signing-key"))
     assert [m.role(p) for p in (NC.WORKERS, NC.VERIFIER)] == [SP.MANIFEST.role(p) for p in (SP.WORKERS, SP.VERIFIER)]
     assert [(m.role(p).principal, m.role(p).per) for p in (NC.WORKERS, NC.VERIFIER)] == [("developer", "one"),
@@ -56,8 +56,8 @@ def test_the_manifest_states_the_attester_and_spots_two() -> None:
 def test_the_attester_sends_the_opening_to_the_workers_and_the_record_to_the_verifier() -> None:
     m = NC.MANIFEST
     assert [(c.sender, c.receiver, c.messages, c.after, c.carries_coins, c.latency_ms) for c in m.channels] == [
-        ("network-certifier", "workers", ("out-opening", "records", "cells-salts"), (), False, None),
-        ("network-certifier", "verifier", ("out-record", "certificate", "registration", "deployment", "groups"), (),
+        ("network-attester", "workers", ("out-opening", "records", "cells-salts"), (), False, None),
+        ("network-attester", "verifier", ("out-record", "certificate", "registration", "deployment", "groups"), (),
          False, None)]
     assert m.peers(NC.NETWORK_ATTESTER) == ("verifier", "workers")
     assert {t: m.registry.kind(t) for t in m.registry.types} == {

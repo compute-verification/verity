@@ -71,7 +71,7 @@ open Flock Transcript FlockComplete FlockDeploy JsonRT FlockComplete.Replay Floc
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The extra claims' ring-switch algebra at a run**: at every table, each extra claim's switched vector of the
 table's trace meets its value. -/
@@ -209,7 +209,7 @@ theorem repChecksAt_of (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase)
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables, from the per-table premises at every good case (`StmtAt`, `ProverRunsAt`, `RepShapedAt`), the
 extra claims' algebra (`RsExtrasAt`), and per rep the masked Ligerito and the inner proof (`LgInnerAt`). -/
-theorem completeR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) 
+theorem completeR (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) 
     (h64 : JsonRT.Out64 H) (hS : ∀ c : Case H rel, StmtAt c) (hPR : ∀ c : Case H rel, ProverRunsAt c)
     (hR : ∀ c : Case H rel, RepShapedAt c) (hX : ∀ o : Run H rel, RsExtrasAt o)
     (hC : ∀ o : Run H rel, LgInnerAt H rel o) (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) :
@@ -221,7 +221,7 @@ theorem completeR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Rea
 share, with error `δc H`, at any number of tables: the statement's premise at one table (`StmtOkZk`), the prover's
 pieces and the rep proofs' shapes per table (`ProverRunsAt`, `RepShapedAt`), and per rep the masked Ligerito and the
 inner proof (`LgInnerAt`). -/
-theorem completeRel (H : Claims.Msg → Claims.Msg) (h64 : JsonRT.Out64 H)
+theorem completeRel (H : Hash.Msg → Hash.Msg) (h64 : JsonRT.Out64 H)
     (hS : JsonRT.StmtOkZk H Readable.relation) (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c)
     (hR : ∀ c : Case H Readable.relation, RepShapedAt c) (hC : ∀ o : Run H Readable.relation, LgInnerAt H _ o)
     (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk Readable.relation) :=
@@ -235,7 +235,7 @@ def LgInnerJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → LgInnerAt H rel o
 share, with error `δc H`, at any number of tables: from `complete_zk_relation`'s premises, and at
 several tables the prover's pieces (`ProverRunsJ`), the proof files' (`RepShapedJ`), and per rep the masked Ligerito
 and the inner proof (`LgInnerJ`). -/
-theorem completeJRel (H : Claims.Msg → Claims.Msg) (h64 : JsonRT.Out64 H)
+theorem completeJRel (H : Hash.Msg → Hash.Msg) (h64 : JsonRT.Out64 H)
     (hS : JsonRT.StmtOkZk H Readable.relation) (hR : JsonRT.RepShapedZk H Readable.relation)
     (hPR : JsonRT.ProverRunsZk H Readable.relation) (hLg : FlockComplete.LigeritoZk H Readable.relation)
     (hIn : FlockComplete.Inner H Readable.relation) (hPRJ : ProverRunsJ H Readable.relation)

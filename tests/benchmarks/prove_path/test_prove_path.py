@@ -52,6 +52,8 @@ from typing import Any
 
 import pytest
 
+from verity.commitments import docket_digest as DD
+from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, docket as R
 from verity.commitments import randomness as RND
@@ -174,7 +176,7 @@ def test_the_advice_must_be_in_the_registration_the_challengers_stream_drew_afte
     rec = _rec("11" * 64)
     drawn = R.receipt(rec, A5.CHALLENGER, received="0")
     assert PP.advice_before_draw(drawn, rec, _bound(rec)) == {"ok": True, "codes": [], "detail": {
-        "drawn_after": R.digest(rec), "registration": R.digest(rec), "received": "0"}}
+        "drawn_after": DD.digest(rec), "registration": DD.digest(rec), "received": "0"}}
     late = _rec("22" * 64)
     assert PP.advice_before_draw(drawn, late, _bound(late))["codes"] == ["after-the-draw"]
     assert PP.advice_before_draw(R.receipt(rec, "one-stage-e2e verifier (a5.py)"), rec, _bound(rec))["codes"] == ["after-the-draw"]
@@ -1514,7 +1516,7 @@ def test_a_served_runs_weights_registration_is_the_committers_under_fresh_salts(
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.window_weights import Grain
 
-    grain = Grain(gemm_words=512, rows=9, select=64)
+    grain = Grain(gemm_words=512, rows=18, select=64)
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
     run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
     run.mkdir()
@@ -1578,7 +1580,7 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     """``weights-registration --deployment-record FILE`` writes the committer's registration also as the first record of the
     serve's registration log (`window_weights.deployment_record`): a `verity/registration/v2` record chained after nothing
     that registers each rooted weight parameter's entry as the docket states it, by name, and names the unrooted
-    ones in its header, with nothing of the key; the command says its digest (`registration.digest`), which Pearl+'s W
+    ones in its header, with none of its salts; the command says its digest (`registration.digest`), which Pearl+'s W
     names as its ``previous`` on a serve tied to it. So each weight's root is in the log's first record under its value's
     name, where the inference-only policy's check looks a registered parameter up, by name and root, in the log it is
     given (its Lean's `isTheta`). Without the flag no such record is
@@ -1590,7 +1592,7 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.window_weights import Grain
 
-    grain = Grain(gemm_words=512, rows=9, select=64)
+    grain = Grain(gemm_words=512, rows=18, select=64)
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
     run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
     run.mkdir()
@@ -1606,8 +1608,8 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     assert PP.main(argv) == 0 and "deployment" not in json.loads(capsys.readouterr().out) and not first.exists()
     assert PP.main([*argv, "--deployment-record", str(first)]) == 0
     reg, rec, said = json.loads(out.read_text()), json.loads(first.read_text()), json.loads(capsys.readouterr().out)
-    assert rec == WW.deployment_record(reg) and said["deployment"] == R.digest(rec) and said["roots"] == 16
-    assert (rec["format"], rec["protocol"], rec["previous"]) == (R.FORMAT_V2, R.PROTOCOL, None)
+    assert rec == WW.deployment_record(reg) and said["deployment"] == DD.digest(rec) and said["roots"] == 16
+    assert (rec["format"], rec["protocol"], rec["previous"]) == (DM.REGISTRATION, DM.ONE_STAGE_PROTOCOL, None)
     assert [e["value"] for e in rec["registered"]] == sorted(reg["values"])
     assert {e["value"]: e for e in rec["registered"]} == reg["values"]
     assert all(set(e) == {"value", "root", "leaves", "words", "domain"} for e in rec["registered"])
@@ -1615,7 +1617,7 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
                                  "model": {"repo": serve["model"], "revision": serve["revision"]},
                                  "unrooted": sorted(reg["unrooted"])}
     assert rec["deployment"]["unrooted"] and not {e["value"] for e in rec["registered"]} & set(reg["unrooted"])
-    assert key.read_bytes().hex() not in first.read_text()
+    assert all(SF.read(SF.beside(out), q, [0]).hex() not in first.read_text() for q in reg["values"])
     stem = next(iter(reg["values"])).rpartition("@")[0]
     for name in ("x", f"{stem}@192/bnk", f"{stem}@3072/b0/table", f"{stem}@192/b0/vocab"):
         odd = {**reg, "values": {**reg["values"], name: {**next(iter(reg["values"].values())), "value": name}}}
@@ -1638,7 +1640,7 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.window_weights import Grain
 
-    grain = Grain(gemm_words=512, rows=9, select=64)
+    grain = Grain(gemm_words=512, rows=18, select=64)
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
     run, hf, ck = tmp_path / "serve", tmp_path / "tiny-int8.json", tmp_path / "ck" / "snap"
     run.mkdir()
@@ -1966,7 +1968,8 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
 
     monkeypatch.setattr(PP.I2Compiler, "load", loaded)
     monkeypatch.setattr(WC, "takes", lambda *a, **k: None)
-    monkeypatch.setattr(WC, "lower", lambda *a, **k: None)
+    monkeypatch.setattr(WC, "lower", lambda *a, **k: SimpleNamespace(circuit=None))
+    monkeypatch.setattr(WC, "check_provable", lambda *a, **k: None)
     (tmp_path / "advice.bin").write_bytes(s.data)
     with pytest.raises(Loaded):
         PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
@@ -2029,9 +2032,9 @@ def test_window_commit_without_the_attesters_reader_or_state_file_is_refused_by_
 
 
 def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
-    """`h1_tie`: with ``--window-registration`` W, H1's docket of the window, and ``--h1-key``, window-commit's
+    """`h1_tie`: with ``--window-registration`` W, H1's docket of the window, and ``--h1-prover``, window-commit's
     circuit reads W's tables (`window_class.Tables` of the serve's H1 window Program); none without W. Refused by name
-    without the key, for a W under another Program, and where H1's rounds aren't the class's outputs. The verifier's
+    without the prover's directory, for a W under another Program, and where H1's rounds aren't the class's outputs. The verifier's
     window-circuit, which holds no key (not ``key``), reads the same tables."""
     from verity_vllm.program.predict.window_circuit import Tables
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
@@ -2042,13 +2045,13 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
     (tmp_path / "w.json").write_text(json.dumps({"program": "p" * 128, "registered": []}))
 
     def tie(cls=cls, **kw):
-        args = {"serve_run": str(serve), "window_registration": str(tmp_path / "w.json"), "h1_key": "key", **kw}
+        args = {"serve_run": str(serve), "window_registration": str(tmp_path / "w.json"), "h1_prover": "prover", **kw}
         return PP.h1_tie(argparse.Namespace(**args), cls)
     assert PP.h1_tie(argparse.Namespace(window_registration=None), cls) is None
     w, meta, tables = tie()
     assert w["program"] == meta["program_digest"] and tables == Tables(64, 8, 2)
-    with pytest.raises(ValueError, match="give --h1-key"):
-        tie(h1_key=None)
+    with pytest.raises(ValueError, match="give --h1-prover"):
+        tie(h1_prover=None)
     verifier = argparse.Namespace(serve_run=str(serve), window_registration=str(tmp_path / "w.json"))
     assert PP.h1_tie(verifier, cls, key=False) == (w, meta, tables)
     (tmp_path / "other.json").write_text(json.dumps({"program": "q" * 128}))
@@ -2086,7 +2089,8 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
     """`pearl_tie`: with ``--pearl-passes DIR`` (Pearl+'s ``pearl/w<k>/``) and ``--window-registration`` W, Pearl+'s
     window record, window-commit's circuit is cut at its linears under W's scheme (`window_class.PearlTables`) and reads
     the retained passes' manifests at their rounds; `h1_tie` then stands aside. Refused by name without W, beside
-    ``--h1-key``, for a W of no Pearl-C scheme, and where the rounds retained aren't the class's outputs."""
+    ``--h1-prover``, for a W whose entry isn't Pearl+'s declared option (H1's, another Pearl-C kernel's, the FP4 kernel's) or
+    whose scheme isn't its entry's, and where the rounds retained aren't the class's outputs."""
     from verity_vllm.program.predict.window_circuit import PearlTables
 
     d, cls = tmp_path / "q", SimpleNamespace(outputs=2)
@@ -2096,10 +2100,13 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
         (m := tmp_path / f"m{i}.json").write_text(json.dumps({"salt": f"s{i}"}))
         mans.append({"pass": 4 + i, "units": 1, "manifest": str(m)})
     (d / "served.json").write_text(json.dumps({"passes": [{"pass": 3, "units": 0}, *mans]}))
-    (tmp_path / "w.json").write_text(json.dumps({"window": {"scheme": "pearl-c-h100-v1-h3"}, "registered": []}))
+    def record(name, entry, scheme):
+        (tmp_path / name).write_text(json.dumps({"window": {"entry": entry, "scheme": scheme}, "registered": []}))
+        return str(tmp_path / name)
+    record("w.json", "pouw:pearl-c-h100-v1-h3", "pearl-c-h100-v1-h3")
 
     def tie(cls=cls, **kw):
-        args = {"pearl_passes": str(d), "window_registration": str(tmp_path / "w.json"), "h1_key": None, **kw}
+        args = {"pearl_passes": str(d), "window_registration": str(tmp_path / "w.json"), "h1_prover": None, **kw}
         return PP.pearl_tie(argparse.Namespace(**args), cls)
     assert PP.pearl_tie(argparse.Namespace(window_registration="w"), cls) is None
     assert PP.h1_tie(argparse.Namespace(window_registration="w", pearl_passes=str(d)), cls) is None
@@ -2110,11 +2117,19 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
     assert [m["salt"] for m in got] == ["s0", "s1"] and rounds == [0, 1] and tables == PearlTables("pearl-c-h100-v1-h3")
     with pytest.raises(ValueError, match="give --window-registration W"):
         tie(window_registration=None)
-    with pytest.raises(ValueError, match="--h1-key is H1's prover key"):
-        tie(h1_key="key")
+    with pytest.raises(ValueError, match="--h1-prover is H1's prover directory"):
+        tie(h1_prover="prover")
     (tmp_path / "h1.json").write_text(json.dumps({"program": "p" * 128}))
     with pytest.raises(ValueError, match="is no Pearl\\+ window record"):
         tie(window_registration=str(tmp_path / "h1.json"))
+    with pytest.raises(ValueError, match="its entry pouw:pearl-c-nvfp4-v0 is not Pearl\\+'s declared option "
+                                         "pouw:pearl-c-h100-v1-h3"):
+        tie(window_registration=record("c4.json", "pouw:pearl-c-nvfp4-v0", "pearl-c-nvfp4-v0"))
+    with pytest.raises(ValueError, match="its entry pouw:pearl-c-sm120-v1-h3 is not Pearl\\+'s declared option "
+                                         "pouw:pearl-c-h100-v1-h3"):
+        tie(window_registration=record("sm120.json", "pouw:pearl-c-sm120-v1-h3", "pearl-c-sm120-v1-h3"))
+    with pytest.raises(ValueError, match="its scheme pearl-c-sm120-v1-h3 is not the one its entry pouw:pearl-c-h100-v1-h3 names"):
+        tie(window_registration=record("other.json", "pouw:pearl-c-h100-v1-h3", "pearl-c-sm120-v1-h3"))
     (d / "retention.json").write_text(json.dumps({"rounds": [1, 2]}))
     with pytest.raises(ValueError, match=r"retained rounds \[1, 2\]"):
         tie()

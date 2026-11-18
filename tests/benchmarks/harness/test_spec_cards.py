@@ -101,6 +101,17 @@ def test_a_refused_card_is_a_card_the_spec_doesnt_list_and_its_refusal_says_why(
             load_spec(path)
 
 
+@pytest.mark.parametrize("spec", ["llama31-8b-1gpu-pouw-protocol-served", "llama31-8b-1gpu-pouw-protocol-served-b32"])
+def test_a_retired_spec_refuses_every_launch_by_name_and_its_stored_runs_read_under_its_id(spec):
+    for named in (spec, f"{spec}@rtx-pro-6000", f"{spec}@h200"):
+        with pytest.raises(ConfigError, match=rf"^spec '{spec}' is refused: served Pearl-C on sm_120 "
+                                              r"\(`pouw:pearl-c-sm120-v1-h3`\), which is no declared scheme: declaring "
+                                              r"one is compute-accounting's$"):
+            resolve_spec(named)
+    assert not (SPEC_ROOT / f"{spec}.toml").exists() and spec not in presets.former_specs()
+    assert presets.current_spec(spec) == spec and served_table._on_card(spec, "rtx-pro-6000") == spec
+
+
 def test_a_spec_argument_names_its_card_after_an_at_by_id_or_recorded_path():
     assert split_card(POUW) == (POUW, None)
     assert split_card(f"{POUW}@h100") == (POUW, "h100")
@@ -138,6 +149,19 @@ def test_no_launch_path_takes_a_former_id(old, monkeypatch, capsys):
             main(argv)
         said = capsys.readouterr().err + str(refused.value)
         assert f"`{spec}@{card}`" in said, argv
+
+
+def test_a_former_arm_id_is_a_declared_schemes_name_now_and_typed_by_hand_is_refused_naming_it():
+    from verity_bench.vllm.arms import resolve_arms
+
+    former = tomllib.loads(FORMER_IDS.read_text())["former_arms"]
+    assert former == {"pouw:pearl-c-h100-v1-h3": "pearl-plus"}
+    for old, now in former.items():
+        assert presets.former_arm(old) == now and now in presets.declared_schemes()
+        with pytest.raises(ValueError, match=rf"benchmark arm '{old}' is '{now}' now"):
+            resolve_arms([old])
+        assert not [s for s in VLLM_SPECS if old in load_spec(s).arms], old
+    assert presets.former_arm("pearl-plus") is None and "pearl-plus" in load_spec(POUW).arms
 
 
 def test_a_run_recorded_under_a_former_id_is_read_as_its_spec_on_its_card():

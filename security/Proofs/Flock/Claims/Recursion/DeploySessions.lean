@@ -569,12 +569,6 @@ theorem coin_bytes_ne_nil (c : Coin) : c.bytes ≠ [] := by
 
 /-! ## The outer verifier's answers -/
 
-theorem VO_k_pos (xO : Msg) : 0 < VO.k xO := by
-  show 0 < (match setupO xO with | some (_, spec, sts) => 2 + FlockDeploy.rounds true spec sts | none => 1)
-  split
-  · exact Nat.add_pos_left Nat.two_pos _
-  · exact Nat.one_pos
-
 /-- **The outer verifier answers a message only at a coin**, with the coin's bytes. -/
 theorem nextO_msg (H : Msg → Msg) {xO : Msg} {as : List Msg} {cs : List Coin} {m : Msg}
     (h : ((nextO xO as cs).eval H).1 = .msg m) : ∃ c, actO xO as cs = .coin c ∧ m = c.bytes := by

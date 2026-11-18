@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import calendar
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,8 @@ import pytest
 from verity_bench import served_render, served_table
 from verity_bench.cli import main
 from verity_bench.vllm.arms import Arm
-from verity_bench.vllm.presets import FORMER_SPECS, expand_sweep, load_spec, resolve_spec
+from verity_bench.vllm import presets
+from verity_bench.vllm.presets import FORMER_SPECS, expand_sweep, resolve_spec
 from verity_bench.vllm.runner import run_benchmark
 
 COMMIT_SPEC = "llama31-8b-fp8-1gpu-commit-served"
@@ -29,6 +31,8 @@ SCALE = {"stock-fp8": 2.0, "commit": 2.4, "stock-fp8@compiled": 1.0, "commit@com
 R6, BIG, SMALL = ("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000", "llama31-8b-fp8-1gpu-bandwidth-served-reps6@h200",
                   "llama32-1b-fp8-1gpu-bandwidth-served")
 WIDTH_H200 = "llama31-8b-fp8-1gpu-commit-served-width@h200"
+#: POUW_ARM is the arm id the PoUW spec's runs were recorded under before the arm took the declared scheme's name
+#: (`presets.former_arm`), which the stand-in run of record keeps
 POUW, POUW_H100, POUW_ARM = ("benchmarks/served-overhead-pouw", "llama32-1b-1gpu-pouw-protocol-served@h100",
                              "pouw:pearl-c-h100-v1-h3")
 #: the id the PoUW spec's H100 runs were recorded under before its spec named no card (`presets.FORMER_IDS`)
@@ -200,8 +204,11 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
                                log=logged.append, **BY_SPEC)
 
     remote = producer.store.remote.describe()
-    assert logged == [f"pulled 3 labels from {remote} (0 of 3 were here)",
-                      f"pulled 5 attempts started since r20261023 from {remote} (0 of 5 were here)"]
+    stamp = r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"
+    assert re.fullmatch(rf"{stamp} pulling labels from {re.escape(remote)} into .+", logged[0])
+    assert re.fullmatch(rf"{stamp} pulled 3 labels from {re.escape(remote)} \(0 of 3 were here, 0 of them from the "
+                        r"labels pack\): listed in \d+ s, synced in \d+ s", logged[1])
+    assert logged[2:] == [f"pulled 5 attempts started since r20261023 from {remote} (0 of 5 were here)"]
     rows = _commit_rows(table)
     b8, b32 = rows["b8-p512-mixed"], rows["b32-p512-mixed"]
     assert (b8["run"], b8["art"], b8["reps"]) == ("r20261024-030000-0002", newest_b8, 3)
@@ -607,19 +614,16 @@ def test_the_bandwidth_audits_member_specs_are_its_record_spec_on_one_h200_and_t
         for name in ("arms", "arm_modules", "arm_settings", "sweep", "reps", "eager", "warmups", "max_warmups", "setup",
                      "admission"):
             assert getattr(member, name) == getattr(r6, name), (spec, name)
-        settings = {k: v for k, v in member.preset.engine_settings.items() if k != "batch_invariant"}
-        assert settings == dict(r6.preset.engine_settings), spec
+        assert dict(member.preset.engine_settings) == dict(r6.preset.engine_settings), spec
         assert dict(member.env) == {k: v for k, v in r6.env.items() if k != "FLASHINFER_CUDA_ARCH_LIST"}, spec
         assert (member.preset.gpu_id, member.preset.gpu_count, member.preset.precision, member.preset.vllm_pin) == (
             "h200", 1, r6.preset.precision, r6.preset.vllm_pin), spec
     big, small = resolve_spec(BIG).preset, resolve_spec(SMALL).preset
-    assert (big.model, big.revision, big.case, big.model_digest) == (
-        r6.preset.model, r6.preset.revision, r6.preset.case, r6.preset.model_digest)
+    assert (big.model, big.revision, big.case) == (r6.preset.model, r6.preset.revision, r6.preset.case)
     pinned = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200").preset
-    assert (small.model, small.revision, small.case, small.model_digest) == (
-        pinned.model, pinned.revision, pinned.case, None)
+    assert (small.model, small.revision, small.case) == (pinned.model, pinned.revision, pinned.case)
     [protocol] = [p for p in served_table.PROTOCOLS if p.record == "pous-bandwidth-audit"]
-    assert protocol.members == (("llama-3.1-8b-h200", BIG), ("llama-3.2-1b-h200", SMALL))
+    assert [(m.name, m.key) for m in protocol.members] == [("llama-3.1-8b-h200", BIG), ("llama-3.2-1b-h200", SMALL)]
 
 
 def _row(protocol: str, spec: str, mean: float, member: str | None = None) -> dict:
@@ -638,7 +642,7 @@ def test_a_metric_of_members_only_leaves_every_other_metrics_readings_byte_for_b
     before = served_render.measurements(table, {k: v for k, v in metrics.items() if k != POUW})
     assert hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest() == (
         "d50ef6dae84589eca812f209a93d096b8be477f32c57c6dd01c5ddba4f9974c3")
-    table["rows"].append(_row("PoUW served on sm_90a", POUW_H100, 12.4, "llama-3.2-1b-h100"))
+    table["rows"].append(_row("Pearl+ served", POUW_H100, 12.4, "llama-3.2-1b-h100"))
     after = served_render.measurements(table, metrics)
     assert [m for m in after if m["name"] != POUW] == before
     [pouw] = [m for m in after if m["name"] == POUW]
@@ -676,6 +680,8 @@ def test_the_pouw_metric_is_its_members_readings_from_their_records_runs_and_nev
     assert got["by"][POUW, "llama-3.2-1b-h100"]["value"] is None
     assert got["validation"]["status"] == "passed" and got["validation"]["detail"].startswith("2 of 2 metrics")
 
+    [pearl] = [p for p in served_table.PROTOCOLS if p.record == "pouw-served-sm90"]
+    assert pearl.arm == "pearl-plus" == presets.former_arm(POUW_ARM) != POUW_ARM
     producer.ran("r20261117-221551-8a0b", FORMER_H100, "b32-p512-mixed", _pouw("b32-p512-mixed", H100))
     producer.label("r20261117-221551-8a0b", "run_of_record", "pouw-served-sm90", "2026-11-17T23:00:00Z")
     member = table("after")["by"][POUW, "llama-3.2-1b-h100"]

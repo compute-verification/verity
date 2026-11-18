@@ -7,7 +7,7 @@ tie").
 bucket t's S = L·R slots of B bytes (a slot no connection holds B zero bytes), each an `hm96-sha512/row/v2` row under
 the network attester's fresh salt in its `frame-v3-sha512` tree under the network attester's domain
 (`network_attester_rows.domain`: the session, the link, ingress and the window), whose root the network attester's signed head
-names (`network_attester_rows.CellsHead`). The tie registers that root with the challenger (`IngressTie.registration`, on the head
+names (`network_attester_rows.CellsHead`). The prover registers that root with the challenger (`n2_tie_zk.registration`, on the head
 `network_attester_rows.check_registration` reads off the network attester's signed registration); the rows and their salts are
 the prover's, which the network attester hands it privately, and the challenger and the verifier see the root. A
 registration is one execution phase, its `window` provenance `{"kind": "served", "window": w}` held to the
@@ -71,6 +71,8 @@ from functools import cached_property, lru_cache
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
@@ -81,8 +83,8 @@ from verity.protocols.resource_accounting.network.verifier import service as SVC
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, produced, proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, proofs as PF
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
@@ -364,7 +366,7 @@ class IngressTie:
 
     @cached_property
     def _program(self) -> Program:
-        return P.population_program(self.unit, self.T)
+        return PN.population_program(self.unit, self.T)
 
     @cached_property
     def _partition(self) -> dict[str, Any]:
@@ -411,15 +413,6 @@ class IngressTie:
 
     # the challenger
 
-    def registration(self, head: WR.CellsHead, previous: str | None = None) -> dict[str, Any]:
-        """One-stage's record of the execution phase: the network attester's root of its rows, from its head
-        (`network_attester_rows.check_registration`'s, the network attester's signed registration as the challenger reads it),
-        and nothing of the rows. Raises `ValueError` on a head of another link, direction, schedule or session."""
-        self._held(head)
-        roots = [{"port": VALUE, "root": head.root.hex(), **self.ports(head.window)[VALUE]}]
-        return R.record(self._program, self.query, {"law": "subset", "k": self.T}, S.SCHEME, roots,
-                        self.provenance(head.window), previous=previous)
-
     def register(self, stream: S.Stream, record: Mapping[str, Any]) -> S.WindowCommitmentRecord:
         """`stream.register` with the window's own ports, after holding its `window` provenance to exactly
         `{"kind": "served", "window": order}`."""
@@ -428,19 +421,19 @@ class IngressTie:
             raise S.Refused(Verdict(False, ("window",), {"window": {"expected": self.provenance(window)}}))
         return stream.register(record, self.ports(window))
 
-    def known_tree(self, head: WR.CellsHead, port: str, rows: Sequence[bytes]) -> G.Registered:
+    def known_tree(self, head: WR.CellsHead, port: str, rows: Sequence[bytes]) -> RV.Registered:
         """Port `port`'s rows (one a unit, each its bytes) as the value the verifier registers at known content on
-        `head`'s execution phase (`known`): row t under its public salt (`registered.supplied_salts`) in a tree whose
+        `head`'s execution phase (`known`): row t under its public salt (`registered_value.supplied_salts`) in a tree whose
         domain binds the registered Program and the network attester's root. The prover commits its own rows of `port` the same
         way, so they open the verifier's root only where they are its rows."""
         if port not in KNOWN or len(rows) != self.T:
             raise ValueError(f"a known value is one of {KNOWN}, one row a unit of the window's {self.T}")
         program, value = self._partition["program"], f"{head.value}/{VERIFIER}/{port}"
-        return G.Registered.commit(program, value, [WR.words(r) for r in rows],
-                                   G.supplied_salts(program, value, self.T), G.WORD_BITS, SCHEMA,
+        return RV.Registered.commit(program, value, [WR.words(r) for r in rows],
+                                   RV.supplied_salts(program, value, self.T), RV.WORD_BITS, SCHEMA,
                                    window=head.root.hex())
 
-    def known(self, head: WR.CellsHead, lanes: Sequence[Sequence[Q.Lane]] | None) -> dict[str, G.Registered] | None:
+    def known(self, head: WR.CellsHead, lanes: Sequence[Sequence[Q.Lane]] | None) -> dict[str, RV.Registered] | None:
         """The values the verifier registers at known content on `head`'s execution phase (`known_tree`): ``pub``, row t
         the public row of bucket t's `lanes` (`public_arguments`), and ``o0``, every row the output word 1. None
         without a public row for every bucket."""
@@ -463,8 +456,8 @@ class IngressTie:
             return None
         ports = {REGISTERED: WR.bucket_port(head, self.params, reads_from)}
         for p, v in known.items():
-            ports[p] = produced.port(v.value, v.entry(), v.root.hex(), list(range(self.T)), SCHEMA) \
-                | ({G.READS_FROM: int(reads_from)} if reads_from else {}) \
+            ports[p] = RV.port(v.value, v.entry(), v.root.hex(), list(range(self.T)), SCHEMA) \
+                | ({RV.READS_FROM: int(reads_from)} if reads_from else {}) \
                 | {KNOWN_KEY: {"rows": [list(r) for r in v.rows], "salts": [s.hex() for s in v.salts]}}
         return WR.reads_file(ports)
 
@@ -632,13 +625,13 @@ class IngressTie:
             reg = log[w] if w < len(log) else None
             if reg is None or reg.get("window") != self.provenance(w):
                 break
-            body = outcomes.get(R.digest(reg))
+            body = outcomes.get(DD.digest(reg))
             verdict = ((body or {}).get("audit") or {}).get("verdicts", {}).get(VERIFIER) or {}
             ok.append(body is not None and body["symbol"] == S.ACCEPT and body["public"].get("inputs") == name
                       and verdict.get("decided_by") == "proof")
         held = len(log) == len(ok) == n and framed and released
         accepted = tuple(held and x for x in ok) + (False,) * (len(log) - len(ok))
-        return IoTieVerdict(self.link, tuple(R.digest(r) for r in log), name, accepted)
+        return IoTieVerdict(self.link, tuple(DD.digest(r) for r in log), name, accepted)
 
 
 @dataclass(frozen=True)
@@ -666,7 +659,7 @@ class Ties:
 
     def registrations(self, link: str) -> tuple[str, ...]:
         self._on(link)
-        return tuple(R.digest(r) for r in self.stream.log)
+        return tuple(DD.digest(r) for r in self.stream.log)
 
     def verdict(self, link: str, inputs: IngressInputs, profile: AdvisedProfile) -> IoTieVerdict:
         self._on(link)

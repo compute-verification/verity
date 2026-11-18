@@ -223,6 +223,8 @@ class _Group:
         self.sets = [{x: self.b[x] for x in ROTATED}, *({x: _zeros(size[x], run.device) for x in ROTATED} for _ in range(ring - 1))]
         self.done, self.turn = [None] * ring, 0
         ptrs = {**{x: t.data_ptr() for x, t in self.b.items()}, **{x: t.data_ptr() for x, t in self.stacked.items()}}
+        R.salts_at(ptrs["salts_a"], "salts_a", self.rows, self.b["salts_a"].numel())
+        ptrs["salts_a"] = (ptrs["salts_a"], size["salts_a"])
         self.grouped = G.Grouped(R, run.kernel.dev, self.n, self.k, len(self.ws), self.rows, self.count, ptrs, run.const_keys)
         self.poisoned = None
         self.width = -(-size["meta"] // 64) * 64

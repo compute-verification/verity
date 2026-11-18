@@ -18,12 +18,10 @@ BASH = shutil.which("bash")
 
 
 def _tools(tmp_path: Path) -> str:
-    """A PATH of only the programs env.sh runs, so no `lake` installed on this machine is on it."""
+    """A PATH of none of this machine's programs (env.sh runs only the launch's Python), so no `lake` installed here is
+    on it."""
     tools = tmp_path / "tools"
-    if not tools.is_dir():
-        tools.mkdir()
-        for name in ("awk", "tr"):
-            (tools / name).symlink_to(shutil.which(name))
+    tools.mkdir(exist_ok=True)
     return str(tools)
 
 
@@ -31,8 +29,8 @@ def _sourced(tmp_path: Path, *names: str, path: str | None = None) -> dict[str, 
     path = path or _tools(tmp_path)
     venv = tmp_path / "venv"
     (venv / "bin").mkdir(parents=True, exist_ok=True)
-    (venv / "bin" / "python").write_text("#!/bin/sh\n")
-    (venv / "bin" / "python").chmod(0o755)
+    if not (venv / "bin" / "python").exists():
+        (venv / "bin" / "python").symlink_to(sys.executable)
     env = {"PATH": path, "HOME": str(tmp_path), "VERITY_BENCH_VENV": str(venv), "CUDA_HOME": str(tmp_path)}
     printed = " ".join(f'"${n}"' for n in names)
     ran = subprocess.run([BASH, "-c", f". benchmarks/harness/env.sh && printf '%s\\n' {printed}"], cwd=ROOT, env=env,
@@ -177,10 +175,11 @@ def test_a_launch_that_names_no_environment_takes_the_one_the_bootstrap_recorded
 def test_a_point_script_names_no_nodes_directory_and_no_card_by_name(script):
     """The toolkit is the kit's (`machine.py toolkit`), the card's arch its file's (`machine.py arch`), the Python the
     launch's, and a cache the user's: a script that names one of our nodes' paths, or tells a card by its name, refuses
-    every other machine."""
+    every other machine; one that branches on an architecture's name holds a toolkit no machine's record gives."""
     text = (ROOT / script).read_text()
     assert "/workspace" not in text and "/usr/local/cuda" not in text
     assert not re.search(r"\*(H100|H200|\"RTX PRO 6000\")\*", text)
+    assert not re.search(r"(==|!=)\s*\"?sm_\d", text)
 
 
 def test_lake_is_on_the_path_from_elan_when_nothing_else_puts_it_there(tmp_path):
