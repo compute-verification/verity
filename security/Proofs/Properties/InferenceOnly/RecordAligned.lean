@@ -190,12 +190,11 @@ theorem unit_param_out {P : Prog} {ts : Array String} {rs : Array TRange} (hP : 
   obtain ⟨hov, hbl⟩ := read_walk hP
   obtain ⟨k, m, hk, hnode, hform, hm, hargs, rfl⟩ := unit_member hP hrs hu
   obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
-  obtain ⟨n, j, ⟨q, base, count, -, hrun, -, -, -⟩, hn, hj, ho, hres⟩ :=
+  obtain ⟨n, j, hleaf, hn, hj, ho, hres⟩ :=
     Resolve.unit_leaf bytes P hdec hov hbl hO hk hnode hform hm (hargs i hi) ht
       ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off
   have hgn := hres g hg
-  obtain ⟨-, -, hin, -⟩ := runOf_some hrun
-  have hin' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true := hin
+  have hin' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true := Resolve.leafAt_input hleaf
   have hne : n ≠ k := by
     intro e
     rw [e, hnode] at hin'
