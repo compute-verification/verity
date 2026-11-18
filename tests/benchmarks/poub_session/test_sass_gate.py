@@ -1,6 +1,6 @@
 """`sass_gate.py`, rows.sh's gate on the kernels a 64-row pass adds: it passes the builds as ptxas and cuobjdump
 report them at each arch it has a table for (the default one, and the one capped at 128 registers, where sm_120a's
-receipt grid spills up to 32 bytes), keeps each kernel's record and listing, and refuses a kernel of the seven that is
+receipt grid spills up to 32 bytes), keeps each kernel's record and listing, and refuses a kernel of the nine that is
 missing, compiled for another arch or one with no table, holding local memory
 past its bound, sketching with another tensor-core form or none, or holding floating point that isn't a whole
 integer division; with --no-leaf64, the leaf pass's two if the build has either, and none if it has neither. Every
@@ -23,14 +23,24 @@ SYMBOL = {"sketch64_pass_kernel": "_ZN2rb20sketch64_pass_kernelEPK5uint4mmS2_PmP
           "signs_kernel<64>": "_ZN2rb12signs_kernelILi64EEEvNS_10StreamHeadEPj",
           "chain_prepare_kernel<64>": "_ZN2rb20chain_prepare_kernelILi64EEEvjPKmPhPj",
           "leaf_pass64_kernel": "_ZN2rb18leaf_pass64_kernelEPK5uint4mmS2_PmS3_PjjS4_",
-          "leaf_consumer64_kernel": "_ZN2rb22leaf_consumer64_kernelEPK5uint4mmS2_PmS3_PjS3_mmiim"}
+          "leaf_consumer64_kernel": "_ZN2rb22leaf_consumer64_kernelEPK5uint4mmS2_PmS3_PjS3_mmiim",
+          "pass_consumer_at_kernel<64>": "_ZN2rb23pass_consumer_at_kernelILi64EEEvPK5uint4mmmPKjPmPjS6_mmiim",
+          "subtree64_receipts_at_kernel": "_ZN2rb28subtree64_receipts_at_kernelEPK5uint4mmPKmiS2_Pmm"}
+#: the kernels of a shard whose store indices are not its positions, each its counterpart's code but for the offset
+AT = {"pass_consumer_at_kernel<64>": "pass_consumer_kernel<64>", "subtree64_receipts_at_kernel": "subtree64_receipts_kernel"}
+
+
+def with_at(kernels: dict) -> dict:
+    return {**kernels, **{a: kernels[b] for a, b in AT.items()}}
+
+
 #: main's kernels beside them, which the gate leaves to same_sass.py: one at the register limit with a frame and
 #: spills, and one sketching through another tensor-core form
 OTHERS = {"_ZN2rb20pass_consumer_kernelILi16EEEvPK5uint4mmPKjPmPjS6_mmiim": (255, 160, 172, 224, ["STL [R1+0x10], R4"]),
           "_ZN2rb13sketch_kernelILb0EEEvPK5uint4S3_mS3_Pi": (100, 0, 0, 0, ["HFMA2.MMA R4, R5, R6, R7"])}
 DIVISION = ["I2F.U32.RP R0, R9", "MUFU.RCP R0, R0", "F2I.FTZ.U32.TRUNC.NTZ R3, R0"]
 #: each kernel's (registers, stack frame, spill stores, spill loads) and instructions, the default build's shape
-DEFAULT = {"sketch64_pass_kernel": (149, 0, 0, 0, DIVISION + ["IMMA.16832.S8.S8 R56, R36.ROW, R116.COL, R56"] * 32),
+DEFAULT = with_at({"sketch64_pass_kernel": (149, 0, 0, 0, DIVISION + ["IMMA.16832.S8.S8 R56, R36.ROW, R116.COL, R56"] * 32),
            "pass_consumer_kernel<64>": (255, 160, 172, 224, DIVISION + ["I2F.U64.RP R2, R8", "MUFU.RCP R2, R2",
                                                                        "F2I.U64.TRUNC R4, R2", "LDL R4, [R1+0x8]"]
                                         + ["IMMA.16832.S8.S8 R56, R36.reuse.ROW, R116.COL, R56"] * 32),
@@ -38,10 +48,10 @@ DEFAULT = {"sketch64_pass_kernel": (149, 0, 0, 0, DIVISION + ["IMMA.16832.S8.S8 
            "signs_kernel<64>": (79, 256, 0, 0, ["STL.64 [R1+0x40], R6"]),
            "chain_prepare_kernel<64>": (128, 304, 44, 44, ["LDL.64 R6, [R1+0x40]"]),
            "leaf_pass64_kernel": (232, 0, 0, 0, DIVISION + ["IMMA.16832.S8.S8 R56, R36.ROW, R116.COL, R56"] * 32),
-           "leaf_consumer64_kernel": (240, 0, 0, 0, DIVISION + ["IMMA.16832.S8.S8 R56, R36.ROW, R116.COL, R56"] * 32)}
+           "leaf_consumer64_kernel": (240, 0, 0, 0, DIVISION + ["IMMA.16832.S8.S8 R56, R36.ROW, R116.COL, R56"] * 32)})
 SPILL = ["STL [R1], R3", "LDL R3, [R1]"]
-CAPPED = {**DEFAULT, "sketch64_pass_kernel": (128, *DEFAULT["sketch64_pass_kernel"][1:]),
-          "subtree64_receipts_kernel": (127, *DEFAULT["subtree64_receipts_kernel"][1:])}
+CAPPED = with_at({**DEFAULT, "sketch64_pass_kernel": (128, *DEFAULT["sketch64_pass_kernel"][1:]),
+                  "subtree64_receipts_kernel": (127, *DEFAULT["subtree64_receipts_kernel"][1:])})
 #: sm_120a's forms: a 32-bit divisor in a uniform register, a 16-bit division (on uniform registers, and on plain
 #: ones), and a constant loaded through HFMA2
 DIVISION_U = ["UI2F.U32.RP UR4, UR6", "MUFU.RCP R2, UR4", "F2I.FTZ.U32.TRUNC.NTZ R5, R2"]
@@ -65,7 +75,7 @@ LEAF_DIVISIONS = ["UI2F.U32.RP UR4, UR5", "MUFU.RCP R2, UR4", "F2I.FTZ.U32.TRUNC
 CONSTANTS = ["HFMA2 R3, -RZ, RZ, 0, 0", "HFMA2 R11, -RZ, RZ, 0, 7.62939453125e-06"]
 IMMAS = ["IMMA.16832.S8.S8 R52, R36.ROW, R118.COL, R52"] * 32
 #: the default build's shape at sm_120a, and the capped one's, where the receipt kernels spill
-SM120 = {"sketch64_pass_kernel": (162, 0, 0, 0, DIVISION_U + DIVISION16_U + IMMAS),
+SM120 = with_at({"sketch64_pass_kernel": (162, 0, 0, 0, DIVISION_U + DIVISION16_U + IMMAS),
          "pass_consumer_kernel<64>": (255, 112, 128, 160, DIVISION_U + DIVISION + ["I2F.U64.RP R0, R4", "MUFU.RCP R0, R0",
                                                                                  "F2I.U64.TRUNC R2, R2",
                                                                                  "LDL R4, [R1+0x8]"] + IMMAS),
@@ -73,9 +83,9 @@ SM120 = {"sketch64_pass_kernel": (162, 0, 0, 0, DIVISION_U + DIVISION16_U + IMMA
          "signs_kernel<64>": (128, 368, 0, 0, ["STL.64 [R1+0x40], R6"] + CONSTANTS),
          "chain_prepare_kernel<64>": (128, 352, 92, 92, ["LDL.64 R6, [R1+0x40]"] + CONSTANTS * 6),
          "leaf_pass64_kernel": (255, 64, 64, 64, LEAF_DIVISIONS + SPILL + IMMAS),
-         "leaf_consumer64_kernel": (255, 72, 88, 72, DIVISION_U + DIVISION + SPILL + IMMAS)}
-SM120_CAPPED = {**SM120, "sketch64_pass_kernel": (128, 24, 24, 32, SM120["sketch64_pass_kernel"][4] + SPILL),
-                "subtree64_receipts_kernel": (128, *SM120["subtree64_receipts_kernel"][1:])}
+         "leaf_consumer64_kernel": (255, 72, 88, 72, DIVISION_U + DIVISION + SPILL + IMMAS)})
+SM120_CAPPED = with_at({**SM120, "sketch64_pass_kernel": (128, 24, 24, 32, SM120["sketch64_pass_kernel"][4] + SPILL),
+                        "subtree64_receipts_kernel": (128, *SM120["subtree64_receipts_kernel"][1:])})
 BUILDS = {"default": (DEFAULT, "sm_90a"), "128 registers": (CAPPED, "sm_90a"), "sm_120a": (SM120, "sm_120a"),
           "sm_120a, 128 registers": (SM120_CAPPED, "sm_120a")}
 
@@ -134,7 +144,7 @@ def test_the_cli_writes_the_record_and_each_kernels_listing_and_exits_0(tmp_path
     assert sorted(p.name for p in listings.iterdir()) == sorted(
         ["sketch64_pass_kernel.sass", "pass_consumer_kernel_64.sass", "subtree64_receipts_kernel.sass",
          "signs_kernel_64.sass", "chain_prepare_kernel_64.sass", "leaf_pass64_kernel.sass",
-         "leaf_consumer64_kernel.sass"])
+         "leaf_consumer64_kernel.sass", "pass_consumer_at_kernel_64.sass", "subtree64_receipts_at_kernel.sass"])
     listing = (listings / "sketch64_pass_kernel.sass").read_text().splitlines()
     assert listing[1] == "/*0000*/ I2F.U32.RP R0, R9 ; /* 0x0000007424387237 */" and len(listing) == 1 + 2 * 35
 
@@ -216,7 +226,7 @@ def test_the_gate_refuses(case):
 
 def test_a_kernel_compiled_for_another_arch_or_absent_from_the_listing_is_refused(tmp_path):
     _, problems = sass_gate.gate(*build(DEFAULT, arch="sm_120a"))
-    assert len(problems) == 7 and all("compiled for sm_120a, want sm_90a" in p for p in problems)
+    assert len(problems) == 9 and all("compiled for sm_120a, want sm_90a" in p for p in problems)
     funcs, problems = sass_gate.gate(*build(DEFAULT, arch="sm_100a"), arch="sm_100a")
     assert funcs == {} and len(problems) == 1 and "no table for sm_100a" in problems[0]
     ptxas, _ = build(DEFAULT)
@@ -237,13 +247,13 @@ def test_a_kernels_name_is_the_sources():
     assert sass_gate.short("_ZN2rb20sketch16_pass_kernelEPK5uint4mmPKjPmPjjS6_") == "sketch16_pass_kernel"
 
 
-def test_a_build_without_the_leaf_pass64_define_wants_five_and_refuses_the_leaf_pass_s_two(tmp_path):
-    five = {k: v for k, v in DEFAULT.items() if k not in sass_gate.LEAF64}
-    funcs, problems = sass_gate.gate(*build(five), leaf64=False)
+def test_a_build_without_the_leaf_pass64_define_wants_seven_and_refuses_the_leaf_pass_s_two(tmp_path):
+    seven = {k: v for k, v in DEFAULT.items() if k not in sass_gate.LEAF64}
+    funcs, problems = sass_gate.gate(*build(seven), leaf64=False)
     assert problems == [] and set(funcs) == sass_gate.WANT - sass_gate.LEAF64
-    assert sass_gate.gate(*build(five))[1] == [
+    assert sass_gate.gate(*build(seven))[1] == [
         "kernels missing from the build: ['leaf_consumer64_kernel', 'leaf_pass64_kernel']"]
-    _, problems = sass_gate.gate(*build({**five, "leaf_pass64_kernel": DEFAULT["leaf_pass64_kernel"]}), leaf64=False)
+    _, problems = sass_gate.gate(*build({**seven, "leaf_pass64_kernel": DEFAULT["leaf_pass64_kernel"]}), leaf64=False)
     assert problems == ["a build without -DLEAF_PASS64 has the 64-row leaf pass's kernels: ['leaf_pass64_kernel']"]
     ptxas, sass = build(DEFAULT)
     (tmp_path / "p.txt").write_text(ptxas)
