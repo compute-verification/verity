@@ -5,8 +5,7 @@ S * batch <= num_SMs, and the keep set its kernels compute depends on S (`verity
 request's batch-mates would pick its nucleus at top_p < 1.  `install` wraps `_apply_topp_split` so every launch runs at
 `topp_geometry.registered_splits(num_SMs)` whatever the batch: it hands vLLM's doubling loop num_sm = S * batch, at which the loop
 stops at exactly S.  The stats and partials workspaces are sized for 64 rows of 32 splits, so every batch the split pipeline serves
-fits.  The collector reads each launch's S back from the kernels' constexpr (`commit.committer.topp_splits`) and the Match holds it
-to the registered S (`check.match.sampler_geometry`).
+fits.  The Match holds the split count each fold TokenSelect carries to the registered S (`check.match.sampler_geometry`).
 
 The pin is always on.  Importing this module `arm`\\ s it, as `engine.sparse_mla` arms its switch: it is installed when vLLM's module
 is imported, and nothing is imported for it.  The driver (`engine.build.build_engine`) and each tensor-parallel rank
