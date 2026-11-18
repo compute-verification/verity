@@ -79,4 +79,44 @@ def roundTrip : Bool := match tmpl with
     | .error _ => false
   | .error _ => false
 
+/-! ## A scan
+
+`ExampleScanAdd3_v1`: a 3-bit ripple adder as a `scan` of `ExampleAddStep_v1` (carry in, one bit of each word, returns the
+carry and the sum bit) over `x` and `y`, its carry in a constant 0; it returns the three sum bits, then the carry out:
+`x + y`. Its template is the step's Definition, the adder's (the scan as two `CALL`s: the first iteration on the constant,
+then two more, each reading the previous one's carry) and the root's. -/
+
+def SCAN_DESC : String := r#"{"annotations":{},"callees":["Xor2_v1","And2_v1","Const1[0x0]_v1","ExampleAddStep_v1","Input1_v1","ExampleScanAdd3_v1"],"definitions":{"And2_v1":{"form":"primitive","id":"And2_v1","params":[["x",["Array",2,["Value",1]]]],"ret":["Value",1]},"Const1[0x0]_v1":{"form":"primitive","id":"Const1[0x0]_v1","params":[],"ret":["Value",1]},"ExampleAddStep_v1":{"bindings":{},"form":"composite","id":"ExampleAddStep_v1","body":{"params":[["c",["Value",1]],["a",["Value",1]],["b",["Value",1]]],"nodes":[{"args":[{"refs":{"concat":[{"affine":["p",1,0,1]},{"affine":["p",2,0,1]}]},"type":1}],"fn":0,"form":"primitive","out":0},{"args":[{"refs":{"concat":[{"affine":["n",0,0,1]},{"affine":["p",0,0,1]}]},"type":1}],"fn":0,"form":"primitive","out":0},{"args":[{"refs":{"concat":[{"affine":["p",1,0,1]},{"affine":["p",2,0,1]}]},"type":1}],"fn":1,"form":"primitive","out":0},{"args":[{"refs":{"concat":[{"affine":["n",0,0,1]},{"affine":["p",0,0,1]}]},"type":1}],"fn":1,"form":"primitive","out":0},{"args":[{"refs":{"concat":[{"affine":["n",2,0,1]},{"affine":["n",3,0,1]}]},"type":1}],"fn":0,"form":"primitive","out":0}],"ret":{"concat":[{"affine":["n",4,0,1]},{"affine":["n",1,0,1]}]},"ret_type":["Tuple",[["Value",1],["Value",1]]]}},"ExampleScanAdd3_v1":{"bindings":{},"form":"composite","id":"ExampleScanAdd3_v1","body":{"params":[["x",["Array",3,["Value",1]]],["y",["Array",3,["Value",1]]]],"nodes":[{"args":[],"fn":2,"form":"primitive","out":0},{"args":[{"refs":{"affine":["n",0,0,1]},"type":0},{"refs":{"affine":["p",0,0,3]},"type":2},{"refs":{"affine":["p",1,0,3]},"type":2}],"fn":3,"form":"scan","n":3,"n_xs":2,"out":4}],"ret":{"concat":[{"affine":["n",1,1,3]},{"affine":["n",1,0,1]}]},"ret_type":["Array",4,["Value",1]]}},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Root[ExampleScanAdd3Program_v1]_v1":{"bindings":{},"form":"composite","id":"Root[ExampleScanAdd3Program_v1]_v1","body":{"params":[],"nodes":[{"args":[],"axes":[],"fn":4,"form":"batch","n":3,"out":2},{"args":[],"axes":[],"fn":4,"form":"batch","n":3,"out":2},{"args":[{"refs":{"affine":["n",0,0,3]},"type":2},{"refs":{"affine":["n",1,0,3]},"type":2}],"fn":5,"form":"call","out":3}],"ret":{"affine":["n",2,0,4]},"ret_type":["Array",4,["Value",1]]}},"Xor2_v1":{"form":"primitive","id":"Xor2_v1","params":[["x",["Array",2,["Value",1]]]],"ret":["Value",1]}},"program_fn":"ExampleScanAdd3Program_v1","root":"Root[ExampleScanAdd3Program_v1]_v1","schema":"verity-ir/descriptor/v1","types":[["Value",1],["Array",2,["Value",1]],["Array",3,["Value",1]],["Array",4,["Value",1]],["Tuple",[["Value",1],["Array",3,["Value",1]]]],["Tuple",[["Value",1],["Value",1]]]]}"#
+
+def scanTmpl : V Tmpl.Tmpl := do
+  let P ← Program.decode SCAN_DESC.toUTF8
+  let some d := P.index["ExampleScanAdd3_v1"]? | throw "no ExampleScanAdd3_v1"
+  Lower.lower P d #[16] #[16]
+
+#guard match scanTmpl with
+  | .ok t => match Tmpl.parse (Lower.renderLines t) with
+    | .ok t' => Lower.render t' == Lower.render t
+    | .error _ => false
+  | .error _ => false
+
+#guard match scanTmpl with
+  | .ok t => match TmplUnit.read t .lenient with
+    | .ok _ => true
+    | .error _ => false
+  | .error _ => false
+
+-- the step, the adder with the scan's two calls, the root
+#guard match scanTmpl with
+  | .ok t => t.defs.size == 3 && t.root == 2 && (t.defs[1]!).calls.size == 2 &&
+      (t.defs[1]!).calls.map (·.count) == #[1, 2]
+  | .error _ => false
+
+-- every input: `x + y`
+#guard match scanTmpl with
+  | .ok t => (List.range 8).all fun x => (List.range 8).all fun y =>
+      match outputs t 4 (bits x 3 ++ bits y 3) with
+      | .ok bs => word bs == x + y
+      | .error _ => false
+  | .error _ => false
+
 end Flock.Test.Lower
