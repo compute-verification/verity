@@ -59,7 +59,6 @@ Stdlib only; never raises out of `main` (an outputs.json that could not be writt
 """
 from __future__ import annotations
 
-import fnmatch
 import json
 import os
 import re
@@ -67,11 +66,12 @@ import shutil
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from verity_vllm.check.match.rank_match import RECORDER_DIGESTS
 from verity_vllm.config import option, row_batch
+from verity_vllm.pipeline import private_names
 from verity_vllm.pipeline.cli import write
 from verity_vllm.query.manifest.format import tp_ranks_fold_digest
 
@@ -83,18 +83,16 @@ NEVER = ("instances.json.gz", "log.jsonl.gz")
 PLANE_SUFFIXES = (".npy", ".npz", ".pt", ".bin", ".safetensors")
 
 KINDS = {"build": "vllm-build/v1", "plan": "vllm-commit-plan/v1", "match": "vllm-match-record/v1", "commit": "vllm-verdict/v1", "replay": "vllm-verdict/v1"}
-#: the private names as plain data, which other keepers (`benchmarks/poub_session/keep.py`) read by path
-PRIVATE_NAMES = Path(__file__).with_name("private_names.json")
-_NAMES = json.loads(PRIVATE_NAMES.read_text(encoding="utf-8"))
-#: never in a stage's outputs (`private`): the replay bundles and the slim keeps, which hold clear values
-KEPT_APART = tuple(_NAMES["kept_apart"])
+#: the private names as plain data, with the one matcher every keeper uses (`private_names.private`)
+PRIVATE_NAMES = private_names.LIST
+#: never in a stage's outputs (`private`): the replay bundles and the slim keeps, which hold clear values; nor the files
+#: PRIVATE names, wherever they sit: request values, where each rank ran and when each process ran
+KEPT_APART, PRIVATE = private_names.load()
 #: a Commit's served tokens' digests, a line of each run's (`pipeline.commit`), compared across processes on the node
 #: (`pipeline.compiled_merge`): unsalted, so kept apart from `runs.jsonl`
 TOKENS_DIGESTS = "tokens_digests.jsonl"
 #: `pipeline.commit --tensor-digests`' unsalted digest of every retained tensor a step, compared across pairs on the node
 TENSOR_DIGESTS = "tensor_digests_pair*.json"
-#: nor these files, wherever they sit: request values, where each rank ran and when each process ran
-PRIVATE: tuple[str, ...] = tuple(_NAMES["private"])
 if not {TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS} <= set(PRIVATE):
     raise RuntimeError(f"{PRIVATE_NAMES} lists {sorted({TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS} - set(PRIVATE))} as "
                        "private: add them to its `private`")
@@ -176,8 +174,7 @@ def program_digest(d: Path, row: str = "") -> dict[str, Any]:
 
 def private(rel: str) -> bool:
     """Whether the evidence dir's file `rel` stays on the node: under a replay bundle or a slim keep, or a file PRIVATE names."""
-    parts = PurePosixPath(rel).parts
-    return any(q.startswith(KEPT_APART) for q in parts) or any(fnmatch.fnmatchcase(parts[-1], p) for p in PRIVATE)
+    return private_names.private(rel, (KEPT_APART, PRIVATE))
 
 
 def _eligible(p: Path) -> bool:

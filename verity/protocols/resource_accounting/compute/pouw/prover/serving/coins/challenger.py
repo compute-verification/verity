@@ -3,7 +3,9 @@ verifier's check that a served window's coins are that challenger's.
 
 * **Serving** (`pouw_h1_window`): a window takes its salt, round and sampling coins from one session of the auditor device's
   challenger, H1's opened on the window's open root and ncp-v2's after the weights' root.
-* **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
+* **Checking** (`trusted_rounds_reason`, and `session_reason` without a trusted ledger): the verifier's program, run by
+  the developer's side (`pouw_h1_gpu --check-challenger`, from `served_verdicts pouw`; no entry of the auditor's runs it
+  yet), reads the challenger's directory from the challenger's own run
   (its ``out/``, fetched whole), never from the prover's bundle, under its own challenger key (`pinned_key`),
   and the auditor's signed ledger, which opens and ends the one session of the window (`remote.trusted_session`): the coin
   commitment the challenger signed and the roots its signed release log shows it received. The window's coins must be
