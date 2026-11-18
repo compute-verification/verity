@@ -149,7 +149,9 @@ theorem receive_W {s : State} {c a : Array ByteArray} {t i : Int} {root : ByteAr
     intro x hx hx'
     dsimp only [jp] at hx
     dsimp only [jp', W] at hx'
-    simp only [State.deadline, Properties.Poub.staleBelow_staleOf, State.isReleased] at hx hx'
+    simp only [State.deadline, Properties.Poub.staleBelow_staleOf, State.isReleased,
+      Properties.Poub.joinsAnother_joinsOf, Properties.Poub.refreshRefusal_refusalOf,
+      Properties.Poub.probationPush_pushOf] at hx hx'
     repeat' (split at hx <;> (try simp only [*] at hx'))
     all_goals (cases hx; cases hx'; exact ⟨rfl, rfl⟩)
   split at h₁ <;> split at h₂
