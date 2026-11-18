@@ -37,7 +37,6 @@ FIX = (f"a leaf's salt is fresh operating-system bytes, one draw a leaf ({FRESH}
 ALLOWED: dict[str, str] = {
     "adapters/torch/verity_torch/pouw/h1/registered_device.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/ends.py": "@compute-accounting",
-    "adapters/torch/verity_torch/pouw/pearl_c/host.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/run_device.py": "@compute-accounting",
     "adapters/vllm/verity_vllm/commit/committer/native_rows.cu": "@vllm",
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
