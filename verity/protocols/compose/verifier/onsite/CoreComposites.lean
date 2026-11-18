@@ -70,10 +70,7 @@ def main (args : List String) : IO UInt32 := do
   match args with
   | ids :: rest =>
     match ofIds ((ids.splitOn ",").filter (· ≠ "")) with
-    | .ok P =>
-      match ← VStar.Recursive.ChallengerPin.parse rest with
-      | (some pin, rest) => (VStar.Recursive.ChallengerPin.composite pin P).main rest
-      | (none, rest) => P.main rest
+    | .ok P => VStar.Recursive.ChallengerPin.compositeMain P rest
     | .error e => IO.eprintln s!"product: {e}"; return 64
   | [] => IO.eprintln "usage: product IDS id | check PARAMS COMMITMENT EVIDENCE | serve"; return 64
 

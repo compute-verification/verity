@@ -99,4 +99,10 @@ def parse : List String → IO (Option Pin × List String)
     | rest => pure (some { sha512 := h }, rest)
   | rest => pure (none, rest)
 
+/-- The command line of a composite `P` (`Core.BlobProtocol.main`), under the pin `parse` reads ahead of it. -/
+def compositeMain (P : Core.BlobProtocol) (args : List String) : IO UInt32 := do
+  match ← parse args with
+  | (some pin, rest) => (composite pin P).main rest
+  | (none, rest) => P.main rest
+
 end VStar.Recursive.ChallengerPin
