@@ -474,7 +474,8 @@ PEARL_PLUS = register(Scheme(
     channel_schemas=Lacks("no Schema is declared for PearlSalt"),
     record_owner="compute-accounting",
     tables=("pearl-a", "pearl-y", "pearl-b"),
-    number_format="bf16",
+    output_format="bf16",
+    product_family="fp8-e4m3-rowwise",
     y_committed=True,
     salt_open_root=epoch_open_root,
 ))
