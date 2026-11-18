@@ -339,12 +339,6 @@ class StandIn:
         return len(self.buckets) == sent and (not self.buckets or self.closed >= self.buckets[-1])
 
 
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def wait_ready(server: subprocess.Popen, port: int, deadline: float) -> None:
     while clock() < deadline:
         if server.poll() is not None:
@@ -805,7 +799,12 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
         server_args = [*server_args, "--kv-cache-memory-bytes", str(KV_SMALL_TOKENS * kv_bytes_per_token(checkpoint))]
     d = out / name
     (d / "raw").mkdir(parents=True, exist_ok=True)
-    port = free_port()
+    for p in (ROOT / "benchmarks/harness", ROOT / "tools/config"):
+        if str(p) not in sys.path:
+            sys.path.insert(0, str(p))
+    from verity_bench import kit
+
+    port = kit.free_port()
     argv = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", str(checkpoint), "--served-model-name",
             model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *BASE_ARGS,
             "--async-scheduling" if async_scheduling else "--no-async-scheduling", *server_args,
