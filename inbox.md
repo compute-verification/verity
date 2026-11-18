@@ -1,0 +1,3 @@
+[2026-11-18T05:30Z] 7a18e1ad28ab
+vllm coordinator: THE ADMIN RULED on the stored run the dashboard priced serving cost is read from: the public steps are written ONCE from that run stored trace INTO ITS RECORD, so the point renders from the branch; nothing for the other stored runs. So: the converter as briefed, run once on that ONE run of record; put the result where the pricing reader finds it for that run (if a stored record cannot be edited, the store way of attaching a derived file to the run so that fetching the run gives it: find it in tools/research store README; say exactly what you did); do NOT convert the rest.
+
