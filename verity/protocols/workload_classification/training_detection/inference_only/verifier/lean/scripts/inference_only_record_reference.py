@@ -377,13 +377,11 @@ def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dic
         assert all(lands_whole(leaves, out) for leaves in filled)
 
 
-def wires_of(templates: list[Template], rec: dict, desc: dict) -> tuple[list[dict], dict]:
-    """The record's wiring (`RecordText.wiring`): the record's cuts and the wires the Program's root states
-    (`verity.commitments.periods.edges`), refused (`wires`) where it refuses them or as
-    `verity.commitments.periods.interface.check_wires` refuses them."""
-    import verity.commitments.periods.interface as IF
+def program_wires(desc: dict, tids, cuts) -> list[dict]:
+    """The wires the Program's root states under the templates `tids` and the record's `cuts`, as a record states a
+    wire (`Spot.Edges.edgesOf`, by `verity.commitments.periods.edges`); a `ValueError` naming its refusal."""
     from verity.commitments.periods.edges import edges
-    by = {t.tid for t in templates}
+    by = set(tids)
     nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
     ranges, at = [], 0
     for k, x in enumerate(nodes):
@@ -392,16 +390,24 @@ def wires_of(templates: list[Template], rec: dict, desc: dict) -> tuple[list[dic
             n = x["n"] if x["form"] == "batch" else 1
             ranges.append([k, tid, at, n])
             at += n
+    if not isinstance(cuts, dict):
+        raise ValueError("the record states its cuts as an object")
+    got = edges(desc, ranges, {"templates": {t: {} for t in by}, "cuts": cuts})
+    if "refusal" in got:
+        raise ValueError(got["refusal"])
+    return got["wires"]
+
+
+def wires_of(templates: list[Template], rec: dict, desc: dict) -> tuple[list[dict], dict]:
+    """The record's wiring (`RecordText.wiring`): the record's cuts and the wires the Program's root states
+    (`program_wires`), refused (`wires`) where it refuses them or as
+    `verity.commitments.periods.interface.check_wires` refuses them."""
+    import verity.commitments.periods.interface as IF
     cuts = rec.get("cuts", {})
     lays = {t.tid: (IF.RowLayout(tuple((p, w) for p, w, _ in t.rows), tuple(t.outs), (), tuple(n for *_, n in t.rows)),
                     t.units) for t in templates}
     try:
-        if not isinstance(cuts, dict):
-            raise ValueError("the record states its cuts as an object")
-        got = edges(desc, ranges, {"templates": {t.tid: {} for t in templates}, "cuts": cuts})
-        if "refusal" in got:
-            raise ValueError(got["refusal"])
-        wires = tuple(IF.Wire.of(x) for x in got["wires"])
+        wires = tuple(IF.Wire.of(x) for x in program_wires(desc, (t.tid for t in templates), cuts))
         IF.check_wires(lays, wires, IF._cuts(cuts), None)
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise Malformed("wires") from e
