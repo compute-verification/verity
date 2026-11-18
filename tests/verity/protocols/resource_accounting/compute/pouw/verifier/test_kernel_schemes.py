@@ -42,3 +42,13 @@ def test_a_family_only_an_experimental_package_builds_is_registered_only_by_it()
         schemes.register("pearl-c", schemes.BUILDERS["pearl-c"])
     with pytest.raises(KeyError, match="which no PoUWScheme builds"):
         schemes.get("ncp-v2")
+
+
+def test_the_serving_facade_exports_the_tables_families_as_the_vllm_adapter_reads_them():
+    from verity.protocols.resource_accounting.compute.pouw.prover import serving
+
+    assert serving.NCP_CIRCUIT_SCHEMES == ("ncp-v2", "ncp-v2-shift24")
+    assert serving.PEARL_C_SCHEMES == ("pearl-c-sm120-v1-h3", "pearl-c-sm120-unpromoted-v1-h3", "pearl-c-h100-v1-h3")
+    assert serving.NCP_SCHEMES == ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4", "pearl-c-sm120-v1-h3", "pearl-c-h100-v1-h3",
+                                   "pearl-c-nvfp4-v0")
+    assert serving.pearl_c_scheme is schemes.get and serving.pearl_c_scheme("pearl-c-h100-v1-h3").name == "pearl-c-h100-v1-h3"
