@@ -107,7 +107,8 @@ def run(task: dict, work: Path) -> dict:
         (work / TIMINGS).write_text(json.dumps({n: {} for n in names}))
         part = ["--files", files, "--timings", str(work / TIMINGS)]
     argv = [sys.executable, str(ROOT / SUITES), *names, "--lean-built", "--json", str(work / REPORT), "--logs", str(work / LOGS),
-            "--timeouts", "--jobs", str(max(1, int(r["cores"]))), "--mem-gb", str(r["mem_gb"]), *part]
+            "--timeouts", "--jobs", str(jobs := max(1, int(r["cores"]))),
+            *(["--why-serial", "the task's resources give it one core"] if jobs == 1 else []), "--mem-gb", str(r["mem_gb"]), *part]
     rc = call(["bash", "-c", ELAN + shlex.join(argv)], work, ROOT)
     if rc < 0 or rc > 128:
         return {"status": "error", "detail": {"error": f"suites.py was killed (exit {rc})"}}

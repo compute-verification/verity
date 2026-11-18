@@ -6,6 +6,7 @@ the verifier's own registered roots at the positions its own program reads.
 -/
 module
 
+public import Circuits.Lanes
 public import Flock.Canon
 public import Flock.HmRow
 
@@ -35,12 +36,10 @@ def SCHEMAS : List String := [HmRow.ROW_SCHEMA, HmRow.ROW_SCHEMA_V2, HmRow.ROW_S
 
 /-- The keys a `FORMAT` file holds. -/
 def FILE_KEYS : List String := ["format", "ports"]
-/-- The key of a tree port: `{template, field}`, the one tree of the writer template's output field its link row reads
-by path, its positions its writers' leaves in that tree from C, the verifier's program (`withPositions`). -/
-def TREE_KEY : String := "tree"
-/-- The keys a `FORMAT` file's port holds; `known` is `RegKnown.KNOWN_KEY`, `param` `PARAM_KEY`. -/
+/-- The keys a `FORMAT` file's port holds; `known` is `RegKnown.KNOWN_KEY`, `param` `PARAM_KEY`. No key says which tree
+a row of in(S) reads: C does (`OneCircuit.io`, `treeReads`). -/
 def PORT_KEYS : List String :=
-  ["value", "root", "leaves", "words", WIDTH_KEY, "domain", SCHEMA_KEY, "known", "param", TREE_KEY]
+  ["value", "root", "leaves", "words", WIDTH_KEY, "domain", SCHEMA_KEY, "known", "param"]
 
 /-- Every key of the object `j` is one of `keys`. -/
 def keysIn (j : Json) (keys : List String) : Bool :=
@@ -80,8 +79,7 @@ neither (`words` none, `wordBits` 16) has rows of 16-bit words, the port's own. 
 in whole SHA-512 blocks (`rowWords`); a `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1` row is a bit row of exactly
 `words · wordBits` bits, as the circuit's port of that schema is. The reads are `readsRel` from unit `readsFrom` on: unit
 `readsFrom + i` reads `readsRel[i]`, and every other unit reads nothing (`readAt`; `reads`, the population-long array).
-A tree port (`tree`, the writer template and output field) states no reads: the verifier's program gives them
-(`withPositions`). -/
+The file states no reads: the verifier's program gives them (`withPositions`). -/
 structure Port where
   name : String
   value : String
@@ -93,7 +91,8 @@ structure Port where
   readsRel : Array (Option Nat)
   schema : String := HmRow.ROW_SCHEMA
   readsFrom : Nat := 0
-  tree : Option (String × String) := none
+  /-- the template parameter it reads (`PARAM_KEY`), empty when it is the port's name -/
+  param : String := ""
   deriving Inhabited
 
 /-- The position every unit reads, from unit 0: none for each unit below `readsFrom`, then `readsRel`. The verifier
@@ -144,12 +143,8 @@ def portsOf (j : Json) : V (Array Port) := do
     if !SCHEMAS.contains schema then throw s!"{ctx}: port {name}: {SCHEMA_KEY} is one of {SCHEMAS}, not {schema}"
     if schema != HmRow.ROW_SCHEMA && words.isNone then
       throw s!"{ctx}: port {name}: a {schema} row is a bit row of its words' bits, and the port names no words"
-    let tree ← if !J.has e TREE_KEY then pure none else do
-      let tj ← J.get e TREE_KEY ctx
-      if !keysIn tj ["template", "field"] then
-        throw s!"{ctx}: port {name}: a tree port's {TREE_KEY} is {"{"}template, field{"}"}"
-      pure (some (← J.str tj "template" ctx, ← J.str tj "field" ctx))
-    return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, readsRel := #[], schema, tree }
+    let param ← if J.has e "param" then J.str e "param" ctx else pure ""
+    return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, readsRel := #[], schema, param }
 
 /-- The first port of `ps` whose name a later port has. -/
 def dupName? : List Port → Option String
@@ -296,15 +291,92 @@ def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (r
         throw s!"registered reads: port {reg.name}: unit {u} reads position {positions.getD (ref t np p i) 0}, and the verifier's program reads {want}"
       | _ => throw s!"registered reads: port {reg.name}: the verifier's program reads no row of {reg.value} in unit {u}"
 
+/-- Definition `fn` of `P` is an input bound at registration (`RegisteredInput<w>_v1`). -/
+def regDef (P : Program.Prog) (fn : Nat) : Bool :=
+  match P.defs[fn]? with
+  | some f => f.prim && f.binding == some Program.REGISTRATION
+  | none => false
+
+/-- The root's nodes of `P`. -/
+def rootNodes (P : Program.Prog) : Array Program.Node := ((P.defs[P.root]?).map (·.body.nodes)).getD #[]
+
+/-- Root node `k` of `P` is a registered input. -/
+def regNode (P : Program.Prog) (k : Nat) : Bool := ((rootNodes P)[k]?).any (regDef P ·.fn)
+
+/-- A port's template parameter (`PARAM_KEY`) as its name and, for `name[i]`, row `i` of an array of rows. -/
+def paramRow (param : String) : String × Option Nat :=
+  match param.splitOn "[" with
+  | [p, r] => match r.splitOn "]" with
+    | [d, ""] => match d.toNat? with
+      | some i => (p, some i)
+      | none => (param, none)
+    | _ => (param, none)
+  | _ => (param, none)
+
 end Registered
 
 namespace OneCircuit
 
+open Registered (regNode paramRow)
+
+/-- Member `m` of root node `k` reads its parameter `param` (`paramRow`) at a registered input node's row: the node
+the row (its leaf over the row's leaves) and the row's leaves, from the argument's part holding the member's row (`Program.laneWire`).
+A form with no closed form here (an explicit part, a row across parts or lanes) is refused by name. -/
+def regRow (P : Program.Prog) (k m : Nat) (param : String) : V (Nat × Nat × Nat) := do
+  let ctx := s!"registered reads: parameter {param} of root node {k}"
+  let node := (Registered.rootNodes P)[k]!
+  let f := P.defs[node.fn]!
+  let (p, row) := paramRow param
+  let some i := (List.range f.params.size).find? (f.params[·]!.1 == p) | throw s!"{ctx}: {f.key} has no parameter {p}"
+  let ty := f.params[i]!.2
+  let (t0, len) ← match row, ty with
+    | none, _ => pure (0, ty.leaves)
+    | some r, .array n e => if r < n then pure (r * e.leaves, e.leaves) else throw s!"{ctx}: row {r} of {n}"
+    | some _, _ => throw s!"{ctx}: a row of a parameter that is no array"
+  let a := node.args[i]!
+  let x ← match a.dims with
+    | none => pure t0
+    | some (d, Lb) =>
+      if Lb == 0 || t0 % Lb + len > Lb then throw (notDerived s!"pos : {ctx}: a row across members")
+      pure ((t0 / Lb * d) * Lb + t0 % Lb + m * Lb)
+  let some j := (List.range a.seq.parts.size).find? fun j =>
+      a.seq.starts[j]! ≤ x && x < a.seq.starts[j]! + a.seq.parts[j]!.count
+    | throw s!"{ctx}: argument index {x} is in no part"
+  let q := a.seq.parts[j]!
+  let s0 := a.seq.starts[j]!
+  if x + len > s0 + q.count then throw (notDerived s!"pos : {ctx}: a row across parts")
+  let (run, lanes) := Program.partLanes q
+  let (w, leaf, _, _) ← match Program.laneWire run lanes (x - s0) 0 len 1 with
+    | .ok v => pure v
+    | .error _ => throw (notDerived s!"pos : {ctx}: a row of no lane's run (an explicit part, or across lanes)")
+  if !regNode P w then throw s!"{ctx}: member {m} reads root node {w}, which is no registered input"
+  if len == 0 || leaf % len != 0 then throw s!"{ctx}: member {m} reads leaf {leaf} of node {w}, off its rows of {len}"
+  return (w, leaf / len, len)
+
 /-- **theta's positions**: `pos : C -> Partition -> Block -> Port -> Position`, the row of the registered value
-`reg` each unit of `indices` reads at `reg`'s port, from C's edges into its registered input node (`P`) and the
-partition, in O(C's description). The code's Core `RegisteredCircuit.pos`, restricted to the boundary. -/
-def pos (_P : Program.Prog) (_indices : Array Nat) (reg : Registered.Port) : V Registered.Port :=
-  throw (notDerived s!"pos : C -> Partition -> Block -> Port -> Position (port {reg.name}, value {reg.value})")
+`reg` each unit of `indices` reads at `reg`'s parameter (`regRow`), a function of C (`P`): the registered input node's
+leaf over the row's leaves, the leaf order of its tree. Every unit reads one node, whose rows are `reg.leaves`. Its
+work is the statement's units, each found from the root's nodes and its argument's parts. The code's Core
+`RegisteredCircuit.pos`, restricted to registered values. -/
+def pos (P : Program.Prog) (indices : Array Nat) (reg : Registered.Port) : V Registered.Port := do
+  let ns := HmLinks.nodes P
+  let param := if reg.param.isEmpty then reg.name else reg.param
+  let first := indices.foldl min (indices.getD 0 0)
+  let mut rel : Array (Option Nat) := Array.replicate (indices.foldl max 0 + 1 - first) none
+  let mut node : Option Nat := none
+  for u in indices do
+    let some (k, m) := HmLinks.unitAt ns u | throw s!"registered reads: port {reg.name}: unit {u} is no unit"
+    let (w, r, len) ← regRow P k m param
+    if node.any (· != w) then
+      throw s!"registered reads: port {reg.name}: units read registered nodes {node.getD 0} and {w}, and a port is one value"
+    if node.isNone then
+      let wn := (Registered.rootNodes P)[w]!
+      let rows := (P.defs[wn.fn]!).outLeaves * wn.members / len
+      if rows != reg.leaves then
+        throw s!"registered reads: port {reg.name}: {reg.value} holds {reg.leaves} rows, and C's registered node {w} {rows}"
+    node := some w
+    rel := rel.set! (u - first) (some r)
+  return { reg with readsRel := rel, readsFrom := first }
 
 end OneCircuit
 
@@ -312,43 +384,55 @@ namespace Registered
 
 open Lean (Json)
 
-/-- The output field a link row reads in its writer template's tree: the writer's whole output row, as `HmLinks.checkUnit`
-requires of every link, which the class circuits name `out`. -/
-def OUT_FIELD : String := "out"
+/-- The name of the one tree holding template `t`'s output field `j`, in every root, domain and file. -/
+def fieldTree (t : String) (j : Nat) : String := s!"{t}/o{j}"
 
-/-- Tree port `reg`'s reads at the statement's units `indices`, from the verifier's program `P`: each unit reads, at the
-link row of `reg`'s name, the leaf of its writer (`HmLinks.writerOf`) in the writer template's tree (`HmLinks.treeLeaf`),
-the writer's template `reg`'s; a tree port of another field than `OUT_FIELD` is refused. Its work is the statement's
-units, each found from the root body's nodes. -/
-def treeReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (reg : Port) : V Port := do
-  let some (t, f) := reg.tree | return reg
-  if f != OUT_FIELD then
-    throw s!"registered reads: tree port {reg.name} reads {t}'s {f} tree, and a link row reads its writer's whole output row, field {OUT_FIELD} (HmLinks.checkUnit)"
-  let some (_, lo, _) := (← OneCircuit.io c P).find? fun (p, _, _) => (c.ports.getD p default).name == reg.name
-    | throw s!"registered reads: tree port {reg.name} is no row of in(S)'s layout (OneCircuit.io)"
+/-- Row `reg` of in(S)'s layout (`OneCircuit.io`, its first parameter leaf `lo`) at the statement's units `indices`,
+from the verifier's program `P`: each unit reads the leaf of its writer (`HmLinks.writerOf`) in the writer
+template's output tree (`HmLinks.treeLeaf`), and `reg` must be that tree (`fieldTree`), one for every unit: a row of
+in(S) with a root of its own, or of another tree, is refused by name. A writer of more than one output field is
+refused: the row reads its writer's whole output (`HmLinks.checkUnit`). Where no unit of `indices` has a writer, the
+row is an ordinary input row and `reg` is returned unread. Its work is the statement's units, each found from the
+root body's nodes. -/
+def treeReads (P : Program.Prog) (indices : Array Nat) (lo : Nat) (reg : Port) : V Port := do
   let ns := HmLinks.nodes P
+  let body := (P.defs[P.root]!).body
   let first := indices.foldl min (indices.getD 0 0)
   let mut rel : Array (Option Nat) := Array.replicate (indices.foldl max 0 + 1 - first) none
+  let mut wired := 0
   for u in indices do
-    let some v ← HmLinks.writerOf P ns u lo
-      | throw s!"registered reads: tree port {reg.name}: unit {u}'s leaf {lo} is no unit's output"
-    let some (t', leaf) := HmLinks.treeLeaf P ns v
-      | throw s!"registered reads: tree port {reg.name}: unit {u}'s writer {v} is outside the program's units"
-    if t' != t then
-      throw s!"registered reads: tree port {reg.name} reads {t}'s tree, and unit {u}'s writer, unit {v}, is {t'}'s"
+    let some v ← HmLinks.writerOf P ns u lo | continue
+    let some (t, leaf) := HmLinks.treeLeaf P ns v
+      | throw s!"registered reads: row {reg.name} of in(S): unit {u}'s writer {v} is outside the program's units"
+    let some (k, _) := HmLinks.unitAt ns v | throw s!"registered reads: row {reg.name} of in(S): unit {v} is no unit"
+    let fs := Program.fieldsOf (P.defs[body.nodes[k]!.fn]!).ret
+    if fs.length != 1 then
+      throw s!"registered reads: row {reg.name} of in(S) reads unit {v} of {t}, of {fs.length} output fields, and a row reads its writer's whole output, one field's tree"
+    if reg.value != fieldTree t 0 then
+      throw s!"registered reads: row {reg.name} of in(S) is committed as {reg.value}, and C wires it from {fieldTree t 0}: a crossing wire is committed once, in its writer's output field's tree, and the reader's row opens that tree by path"
     rel := rel.set! (u - first) (some leaf)
+    wired := wired + 1
+  if wired == 0 then return reg
+  if wired != indices.size then
+    throw s!"registered reads: row {reg.name} of in(S): {wired} of the statement's {indices.size} units read it from a writer, and a row is one tree's"
   return { reg with readsRel := rel, readsFrom := first }
 
 /-- The verifier's registered reads `own` with every port's reads derived at the statement's circuit `c` and public file
-`pub` from C, the verifier's program `program`: a tree port's by `treeReads`, a registered value's by
-`OneCircuit.pos`; without the program every port is refused. -/
+`pub` from C, the verifier's program `program`: a row of in(S) (`OneCircuit.io`) by `treeReads`, a registered value's
+by `OneCircuit.pos`; without the program every port is refused. -/
 def withPositions (c : Circuit) (pub : Public) (program : Option ByteArray) (own : Option (Array Port)) :
     V (Option (Array Port)) := do
   let some own := own | return none
   let some b := program | throw "registered reads: a port's reads are derived from C, the verifier's program (--program)"
   let P ← Program.decode b
   let indices ← unitIndices pub
-  some <$> own.mapM fun reg => if reg.tree.isSome then treeReads c P indices reg else OneCircuit.pos P indices reg
+  let rows ← OneCircuit.io c P
+  some <$> own.mapM fun reg =>
+    match rows.find? fun (p, _, _) => (c.ports.getD p default).name == reg.name with
+    | some (_, lo, _) => do
+      let r ← treeReads P indices lo reg
+      if r.readsRel.isEmpty then OneCircuit.pos P indices reg else pure r
+    | none => OneCircuit.pos P indices reg
 
 /-- The statement's registered reads against the verifier's own `own` (`--registered`). The header's `registered` must
 name exactly `own`'s ports, each a port of the circuit and a table of a shared-row file: every table row's `b ‖ c`, as the
@@ -452,25 +536,6 @@ def PARAM_KEY : String := "param"
 def paramsOf (j : Json) : V (Array String) := do
   let .ok (.obj kvs) := j.getObjVal? "ports" | throw "registered reads: ports is not an object"
   kvs.toArray.mapM fun (name, e) => if J.has e PARAM_KEY then J.str e PARAM_KEY "registered reads" else pure name
-
-/-- Definition `fn` of `P` is an input bound at registration (`RegisteredInput<w>_v1`). -/
-def regDef (P : Program.Prog) (fn : Nat) : Bool :=
-  match P.defs[fn]? with
-  | some f => f.prim && f.binding == some Program.REGISTRATION
-  | none => false
-
-/-- The root's nodes of `P`. -/
-def rootNodes (P : Program.Prog) : Array Program.Node := ((P.defs[P.root]?).map (·.body.nodes)).getD #[]
-
-/-- Root node `k` of `P` is a registered input. -/
-def regNode (P : Program.Prog) (k : Nat) : Bool := ((rootNodes P)[k]?).any (regDef P ·.fn)
-
-/-- The root nodes a reference part reads (`n` space; the root has no parameters). -/
-def partNodes : Program.Part → Array Nat
-  | .affine p i _ _ => if p then #[] else #[i]
-  | .strided p i _ _ _ _ _ => if p then #[] else #[i]
-  | .explicit it => (it.filter (!·.p)).map (·.i)
-  | .grid _ lanes => (lanes.filter (!·.p)).map (·.i)
 
 /-- A root node's argument reads a registered input: a part of it reads a `RegisteredInput<w>_v1` root node. -/
 def argReads (P : Program.Prog) (a : Program.Arg) : Bool := a.seq.parts.any fun q => (partNodes q).any (regNode P)

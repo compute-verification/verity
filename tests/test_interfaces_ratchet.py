@@ -83,6 +83,19 @@ KEPT = {"scheme_name_tables": {
     "calibration/pouw/dc/archs.py":
         "the tensor-form probe's one table of what it is written for on each architecture, keyed by the "
         "architecture's name (top, 18 Nov)",
+    "calibration/machine_model/verity_machine_model/cover.py":
+        "the script's own table of which per-family table of the SASS instruction reference to read for an "
+        "architecture, which no architecture file states (top, 18 Nov)",
+    "calibration/machine_model/verity_machine_model/lean_headline_dc.py":
+        "the names in the text of the generated Lean headline files, which hold it byte for byte (top, 18 Nov)",
+    "calibration/machine_model/verity_machine_model/skip.py":
+        "one build's static instruction counts of the peel kernels, a measurement of that build (top, 18 Nov)",
+    "calibration/pouw/theory/fold_min.py":
+        "each device's headline design and the certificate rows it is checked against, the script's results, which "
+        "no card or architecture file states (top, 18 Nov)",
+    "calibration/pouw/theory/fold_routes.py":
+        "the honest fold's instructions a word and the certificate's weights per device, read off the design files "
+        "(top, 18 Nov)",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh":
         "the kernel's one line stating its own target, which `build.sh --arch` reads (top, 18 Nov)",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh":
@@ -97,11 +110,17 @@ KEPT = {"scheme_name_tables": {
     "benchmarks/pouw/pearl_c_vllm/served_step.sh": "a refusal quoting a scheme's registered id (top, 18 Nov)",
     "benchmarks/pouw/pearl_c4/ship.sh":
         "a pinned commit message, whose hash is every rebuilt ship's launch path (top, 18 Nov)",
+    "benchmarks/pouw/harness/native/build.sh":
+        "the NVFP4 units and the CUTLASS baselines stating their one target, the block-scaled `mma.sync`, which no "
+        "architecture file states (top, 18 Nov)",
     "verity/commitments/cuda/commit_slots/slots.py":
         "a key of a pinned fixture, `commit-slots-v1.json`, whose digest a suite pins (top, 18 Nov)",
     "benchmarks/pouw/hidden_zk/registered.sh":
         "the registered semantics' name its template is generated at, an `INSTRUCTIONS` key of `verity/circuits/silicon` "
-        "(compute-accounting, 18 Nov)"}}
+        "(compute-accounting, 18 Nov)"},
+    "scheme_package_imports": {
+    "benchmarks/memory/refresh.py":
+        "a benchmark of the bandwidth audit reads the bandwidth audit's own codec and memory map (top, 18 Nov)"}}
 #: a toolkit's directory written out: under `/usr/local` or `/opt`, any path to a `cuda-<version>` directory (a file
 #: named so, `cuda-13.3.sh`, is not one), and pip's toolkit under `site-packages` (kernels' pattern, 18 Nov)
 CUDA = re.compile(r"(?<![\w.-])(?:/usr/local/cuda|/opt/cuda)"

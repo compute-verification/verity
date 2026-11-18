@@ -125,7 +125,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import queue
 import shutil
 import signal
@@ -147,7 +146,8 @@ from verity_vllm.pipeline import (commit_coins as CC, seal_process as SP, serve_
                                    serve_learn as SL, serve_release as RL, serve_day as SD, serve_poub as SR,
                                    serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.scheme_plugin import write_reports
-from verity_vllm.pipeline.serve_admit import Admission, Delta, engine_id_of, keep_scheduler_rows, new_http_id
+from verity_vllm.pipeline.serve_admit import (Admission, Delta, admission_order, admission_settings, engine_id_of, keep_scheduler_rows,
+                                              new_http_id, protocols_doc)
 from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, param_of, served_statics,
                                                user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop, advice_trace
@@ -578,24 +578,6 @@ class _Route:
         return self.answer
 
 
-def protocols_doc(opts: Any) -> dict[str, dict[str, Any]]:
-    """``--protocols-config``: a JSON object, or a JSON file, ``{name: {...}}``."""
-    from verity_vllm.protocols import load_settings
-
-    v = opts.protocols_config
-    return load_settings(json.loads(v) if v and v.lstrip().startswith("{") else v or None)
-
-
-def admission_settings(opts: Any) -> dict[str, Any]:
-    """The admission scheme's settings: ``--protocols-config``'s entry under its name."""
-    return protocols_doc(opts).get(M.providing("admission").name, {})
-
-
-def admission_order(opts: Any) -> str:
-    """The admission's order, its settings' ``order``: ``arrival`` where they name none."""
-    return admission_settings(opts).get("order", "arrival")
-
-
 def listed(opts: Any, out: Path) -> list[tuple[Any, dict[str, Any]]]:
     """``--protocols``' entries in their order, each the declared scheme it names (`messages.named`) with its settings:
     ``--protocols-config``'s entry under its name (`option_settings`), with what the serve holds of the keys the scheme declares: its passes under
@@ -625,7 +607,7 @@ def listed(opts: Any, out: Path) -> list[tuple[Any, dict[str, Any]]]:
 def private() -> str | None:
     """The directory outside the run output each scheme keeps its own under: ``VERITY_PROTOCOLS_CONFIG``'s ``private``,
     as `scheme_plugin` hands it."""
-    return (settings.get("VERITY_PROTOCOLS_CONFIG") or {}).get("private")
+    return settings.get("VERITY_PROTOCOLS_CONFIG").get("private")
 
 
 def scheme_refusal(opts: Any, found: list[tuple[Any, dict[str, Any]]]) -> str | None:
@@ -750,7 +732,7 @@ def no_slice_record(windows: CommitWindows | None) -> dict[str, str]:
 
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
-              usage: Callable[[Any], Any] = shutil.disk_usage, environ: Mapping[str, str] = os.environ) -> None:
+              usage: Callable[[Any], Any] = shutil.disk_usage, environ: Mapping[str, str] | None = None) -> None:
     """What would fail after the model has loaded, refused before it."""
     if opts.window_steps < 1:
         raise UsageError("--window-steps is at least 1")

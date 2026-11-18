@@ -9,15 +9,17 @@ meta import Flock.Test.RegProgram
 meta import Lean.Data.Json
 
 /-!
-Tree ports: a link row read by path in its writer template's output field's tree. On `Flock.Test.RegProgram`'s program a
-unit's leaf in its template's trees (`HmLinks.treeLeaf`) is its rank among the template's units in root order, counted
-from the nodes, and a unit's writer (`HmLinks.writerOf`) is the unit whose output it reads. A tree port states no reads,
-a statement's reads come from the program (`withTrees`), the honest reader's positions pass `badInstance` and a reader
-that refers to another writer's row (the shared-tree toy's `ra`) does not; a link row passes `checkLinked` only as a tree
-port. On a registered tree of two real leaves, a reader's table rows open it only as committed: a row with one bit
-flipped (the toy's `rb`), the writer's value under a fresh salt (`mc`) and the rows' paths swapped (`rd`) are refused by
-`badRow`. A wire strided on the reader's side too (`Circuits.Wire.leafAt` with reader steps) gives each reader unit the leaf
-of the one index reading it, and refuses a unit read twice, a cut, a row past 0 and steps that are not one a digit.
+Rows of in(S): a reader's row read by path in its writer template's output field's tree. On `Flock.Test.RegProgram`'s
+program a unit's leaf in its template's trees (`HmLinks.treeLeaf`) is its rank among the template's units in root order,
+counted from the nodes, and a unit's writer (`HmLinks.writerOf`) is the unit whose output it reads. A port of the
+registered file states neither reads nor a tree (`PORT_KEYS`): `treeReads` derives a row's reads from the program, and
+refuses a row committed under a root of its own, or another tree's (`fieldTree`), so a reader's input that is not its
+writer's output does not verify. The honest reader's positions pass `badInstance` and a reader that refers to another
+writer's row does not. On a registered tree of two real leaves, a reader's table rows open it only as committed: a row
+with one bit flipped (the toy's `rb`), the writer's value under a fresh salt (`mc`) and the rows' paths swapped (`rd`)
+are refused by `badRow`. A wire strided on the reader's side too (`Circuits.Wire.leafAt` with reader steps) gives each
+reader unit the leaf of the one index reading it, and refuses a unit read twice, a cut, a row past 0 and steps that are
+not one a digit.
 -/
 
 @[expose] public section
@@ -45,57 +47,59 @@ def fnOf (v : Nat) : Option Nat := (unitAt ns v).map fun (k, _) => ((prog.defs[p
 
 def hex64 : Json := Json.str (String.ofList (List.replicate 128 'a'))
 
-def portJ (reads : List (Option Nat)) (tree : Option Json) : Json :=
-  Json.mkObj ([("value", Json.str "rope/out"), ("root", hex64), ("leaves", toJson 16), ("domain", hex64),
-    ("reads", toJson reads)] ++ (tree.map fun t => [("tree", t)]).getD [])
-
-def treeJ : Json := Json.mkObj [("template", Json.str "rope"), ("field", Json.str "out")]
+def portJ (value : String) (extra : List (String × Json) := []) : Json :=
+  Json.mkObj ([("value", Json.str value), ("root", hex64), ("leaves", toJson 16), ("domain", hex64)] ++ extra)
 
 def fileJ (ports : List (String × Json)) : Json := Json.mkObj [("format", Json.str FORMAT), ("ports", Json.mkObj ports)]
 
-def x : Registered.Port := match ofJson (fileJ [("x", portJ [] (some treeJ))]) with
+def refused (j : Json) : Bool := (ofJson j).toOption.isNone
+
+-- the reader statement's units [8, 16), for `badInstance`
+def units : Array Nat := (Array.range 8).map (· + 8)
+/-- The template of the writer of unit `u`'s leaf 0, by C. -/
+def wkey (u : Nat) : String :=
+  (((HmLinks.writerOf prog ns u 0).toOption.join.bind (HmLinks.treeLeaf prog ns ·)).map (·.1)).getD ""
+
+-- unit 19 (a `TSum4` of the root) reads at leaf 0 unit 5's output, a `TCol` of one output field
+def x : Registered.Port := match ofJson (fileJ [("x", portJ (fieldTree (wkey 19) 0))]) with
   | .ok ps => ps.getD 0 default
   | .error _ => default
 
-def refused (j : Json) : Bool := (ofJson j).toOption.isNone
+-- a port states no reads and names no tree: C gives both
+#guard x.readsRel.isEmpty && x.value == fieldTree (wkey 19) 0 && wkey 19 != ""
+#guard refused (fileJ [("x", portJ (fieldTree (wkey 19) 0) [("reads", toJson [0])])])
+#guard refused (fileJ [("x", portJ (fieldTree (wkey 19) 0)
+  [("tree", Json.mkObj [("template", Json.str (wkey 19)), ("field", Json.str "o0")])])])
 
--- a tree port names its tree and states no reads
-#guard x.tree == some ("rope", "out") && x.readsRel.isEmpty
-#guard refused (fileJ [("x", portJ [some 0] (some treeJ))])
-#guard refused (fileJ [("x", portJ [] (some (Json.mkObj [("template", Json.str "rope")])))])
+-- every port's reads are derived from the verifier's program: without it every port is refused
+#guard (withPositions default default none (some #[x])).toOption.isNone
+#guard ((withPositions default default none none).toOption.map (·.isNone)) == some true
 
--- without tree ports the registered reads are as given; a tree port needs the verifier's program
-#guard ((withTrees default default none (some #[{ x with tree := none }])).toOption.join.map (·.size)) == some 1
-#guard (withTrees default default none (some #[x])).toOption.isNone
+-- unit 19 reads leaf 0 of its writer's tree, derived from C
+#guard ((treeReads prog #[19] 0 x).toOption.map fun r => (r.readsRel, r.readsFrom)) == some (#[some 0], 19)
+-- the crossing cheat: the reader's `x` committed under a root of its own is refused by name
+#guard match treeReads prog #[19] 0 { x with value := "r/x" } with
+  | .error e => e.startsWith s!"registered reads: row x of in(S) is committed as r/x, and C wires it from {fieldTree (wkey 19) 0}"
+  | .ok _ => false
+-- a row whose units read no writer is an ordinary input row, returned unread; one some of whose units do is refused
+#guard (treeReads prog #[0] 0 x).toOption.map (·.readsRel.isEmpty) == some true
+#guard (treeReads prog #[0, 19] 0 x).toOption.isNone
+-- unit 13 reads a `TPair`, of two output fields: a row reads its writer's whole output, one field's tree
+#guard match treeReads prog #[13] 0 x with
+  | .error e => (e.splitOn "of 2 output fields").length == 2
+  | .ok _ => false
 
--- the toy's reader statement (units [8, 16), instance i its row i, `x` port 0 of 2): unit 8 + i reads writer leaf 7 - i
 def resolved : Registered.Port := { x with readsRel := (Array.range 8).map fun i => some (7 - i), readsFrom := 8 }
 def tabs : Tables := { counts := #[8, 8], starts := #[0, 8], refs := (Array.range 8).flatMap fun i => #[i, i] }
-def units : Array Nat := (Array.range 8).map (· + 8)
 #guard badInstance resolved tabs 2 0 8 8 ((Array.range 8).map (7 - ·)) units == none
 #guard badInstance resolved tabs 2 0 8 8 (#[6] ++ (Array.range 7).map (6 - ·)) units == some 0
 
--- a link row is a tree port
+-- in(S)'s layout needs the block circuit's template in C
 def inP : Flock.Port := { name := "x", words := 4, chunks := 1, nb := 0 }
 def outP : Flock.Port := { name := "out", words := 4, chunks := 1, nb := 0 }
-def links : Json := Json.mkObj [("links", Json.arr #[Json.mkObj [("port", Json.str "x"), ("leaves", toJson [0, 4])]])]
-def linked : Circuit :=
-  { (default : Circuit) with
-    ports := #[inP, outP]
-    outRowPorts := #[1]
-    metaJ := links }
-def ok? (r : V Unit) : Bool := r.toOption.isSome
-#guard ok? (HmLinks.parse linked >>= fun _ => pure ())
-#guard ok? (checkLinked linked #[x])
-#guard !ok? (checkLinked linked #[{ x with tree := none }])
-#guard !ok? (checkLinked linked #[{ x with name := "y" }])
-#guard ok? (checkLinked { linked with metaJ := Json.null } #[])
--- without registered reads, a statement that declares links is refused, and one that declares none is not
-#guard !ok? (Registered.check linked default none false)
-#guard ok? (Registered.check { linked with metaJ := Json.null } default none false)
--- a link row reads its writer's whole output row: a tree port of another field is refused by name
-#guard match treeReads linked prog #[] { x with tree := some ("rope", "aux") } with
-  | .error e => e.startsWith "registered reads: tree port x reads rope's aux tree"
+def block : Circuit := { (default : Circuit) with ports := #[inP, outP], outRowPorts := #[1] }
+#guard match OneCircuit.io block prog with
+  | .error e => e.startsWith "one-circuit: not derived yet: io : a block circuit that names no template"
   | .ok _ => false
 
 def dom : ByteArray := ByteArray.mk (Array.replicate 64 7)
@@ -130,5 +134,36 @@ def sw : Circuits.Wire :=
 #guard { sw with rstep := [1] }.leafAt 0 0 == none
 #guard { sw with cuts := 2 }.leafAt 0 0 == none
 #guard { sw with base := -1 }.leafAt 2 0 == none
+
+-- theta: a registered weight of 4 rows (node 0) read by T's two units (node 1) at rows 1 and 2, and by unit 2 (node 2)
+-- from node 1's output, no registered input
+def r16 : Program.Ty := .value 16
+def rw2 : Program.Ty := .array 2 r16
+def regP : Program.Prog :=
+  let regIn : Program.Defn :=
+    { key := "RegisteredInput16_v1", id := "RegisteredInput16_v1", prim := true, params := #[], ret := rw2,
+      binding := some Program.REGISTRATION, gates := 1, paramLeaves := 0, outLeaves := 2 }
+  let t : Program.Defn :=
+    { key := "T", id := "T", prim := true, params := #[("w", rw2)], ret := r16, gates := 1, paramLeaves := 2,
+      outLeaves := 1 }
+  let nodes : Array Program.Node := #[{ form := .batch, fn := 0, args := #[], out := .array 4 rw2, n := 4 },
+    { form := .batch, fn := 1, out := .array 2 r16, n := 2,
+      args := #[{ ty := .array 2 rw2, seq := Program.Seq.ofParts #[.affine false 0 2 4], dims := some (2, 2) }] },
+    { form := .call, fn := 1, out := r16, args := #[{ ty := rw2, seq := Program.Seq.ofParts #[.affine false 1 0 2] }] }]
+  let root : Program.Defn :=
+    { key := "R", id := "R", prim := false, params := #[], ret := r16, gates := 0, paramLeaves := 0, outLeaves := 1,
+      body := { params := #[], retType := r16, nodes := nodes, ret := default, offsets := #[0, 0, 2] } }
+  { defs := #[regIn, t, root], index := {}, root := 2, programFn := "", sha512 := .empty }
+def theta : Registered.Port := { x with name := "w", value := "theta", leaves := 4 }
+
+#guard ((OneCircuit.pos regP #[0, 1] theta).toOption.map fun r => (r.readsRel, r.readsFrom)) == some (#[some 1, some 2], 0)
+#guard ((OneCircuit.pos regP #[1] theta).toOption.map fun r => (r.readsRel, r.readsFrom)) == some (#[some 2], 1)
+-- row 1 of w (`name[i]`), one leaf a row: the weight's 8 rows, leaves 3 and 5
+#guard ((OneCircuit.pos regP #[0, 1] { theta with name := "w1", param := "w[1]", leaves := 8 }).toOption.map
+  (·.readsRel)) == some #[some 3, some 5]
+-- a value of another row count than C's node, a unit reading no registered input, a parameter T lacks
+#guard (OneCircuit.pos regP #[0, 1] { theta with leaves := 3 }).toOption.isNone
+#guard (OneCircuit.pos regP #[2] theta).toOption.isNone
+#guard (OneCircuit.pos regP #[0] { theta with name := "v" }).toOption.isNone
 
 end Flock.Test.WiredPorts

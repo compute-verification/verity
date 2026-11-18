@@ -204,7 +204,7 @@ def test_nvfp4_coordinate_replays_every_recorded_rtx5090_vector() -> None:
 
 def test_the_s8_coordinate_scales_as_steps_int8_linear_and_the_row_is_its_coordinates() -> None:
     """`ScaledMmS8Coordinate_v1` is bf16_rn((f32_rn(acc) * sx) * sw) on the exact integer sum, `benchmarks/ppl/steps.py`'s
-    `int8_linear` order (numpy's float32 products), and `ScaledMmS8_v3` is the coordinates over W's rows. Some rows' scales
+    `int8_linear` order (numpy's float32 products), and `ScaledMmS8_v1` is the coordinates over W's rows. Some rows' scales
     are searched for so that `sw` first (CUTLASS c2x's order) rounds to another bf16 word: random scales almost never tell
     the two orders apart."""
     import numpy as np
@@ -237,8 +237,7 @@ def test_the_s8_coordinate_scales_as_steps_int8_linear_and_the_row_is_its_coordi
     coord = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
     got = E.evaluate_batch(coord, u8(x), u32(sx), u8(w[:, 0]), u32(sw[:, 0]), kernel="reference")
     assert np.array_equal(got.astype(np.uint64), want[:, 0])
-    row = E.evaluate_batch(bind(G.ScaledMmS8V3, K=K, N=N, **G.GEMM_SM120_S8), u8(x), u32(sx), w.view("<u2"),
-                           np.ascontiguousarray(sw).view("<u2").reshape(n, N, 2), kernel="reference")
+    row = E.evaluate_batch(bind(G.ScaledMmS8, K=K, N=N, **G.GEMM_SM120_S8), u8(x), u32(sx), u8(w), u32(sw), kernel="reference")
     assert np.array_equal(row.astype(np.uint64), want)
     accw = E.evaluate_batch(bind(G.GemmAccumulatorS8, K=K, **G.GEMM_SM120_S8), u8(x), u8(w[:, 0]), kernel="reference")
     assert np.array_equal(accw.astype(np.uint32).view(np.int32), acc[:, 0])
@@ -260,9 +259,8 @@ def test_the_s8_row_on_u16_words_is_the_row_on_the_codes_and_scales_they_hold() 
         b = np.ascontiguousarray(a).view(np.uint8).reshape(n, N, m, 2).astype(np.uint16)
         return b[..., 0] | b[..., 1] << 8
 
-    coord = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
-    want = np.stack([E.evaluate_batch(coord, x.view(np.uint8), sx.view(np.uint32), w[:, j].view(np.uint8), sw[:, j].view(np.uint32),
-                                      kernel="reference") for j in range(N)], axis=1)
+    want = E.evaluate_batch(bind(G.ScaledMmS8, K=K, N=N, **G.GEMM_SM120_S8), x.view(np.uint8), sx.view(np.uint32),
+                            w.view(np.uint8), sw.view(np.uint32), kernel="reference")
     got = E.evaluate_batch(bind(G.ScaledMmS8V3, K=K, N=N, **G.GEMM_SM120_S8), x.view(np.uint8), sx.view(np.uint32),
                            words(w, K // 2), words(sw[:, :, None], 2), kernel="reference")
     assert np.array_equal(got, want)
@@ -499,7 +497,7 @@ FAMILIES = [(G.DotBf16, 16, G.GEMM_HOPPER), (G.GemmCoordinate, 16, G.GEMM_AMPERE
             (G.PvRowPad, 16, {"T": 1, "D": 2, **G.GEMM_HOPPER}), (G.Gemm, 16, {"N": 3, **G.GEMM_AMPERE}),
             (G.GemmCoordinateE4m3, 32, G.GEMM_SM120_E4M3), (G.GemmCoordinateNvf4, 64, G.GEMM_SM120_NVF4),
             (G.GemmCoordinateMxf4, 64, G.GEMM_SM120_MXF4), (G.GemmAccumulatorS8, 32, G.GEMM_SM120_S8),
-            (G.ScaledMmS8Coordinate, 32, G.GEMM_SM120_S8), (G.ScaledMmS8V3, 32, {"N": 2, **G.GEMM_SM120_S8}),
+            (G.ScaledMmS8Coordinate, 32, G.GEMM_SM120_S8), (G.ScaledMmS8, 32, {"N": 2, **G.GEMM_SM120_S8}),
             (G.ScaledMmS8CoordinateRows, 32, {"R": 1, **G.GEMM_SM90_S8}),
             (G.ScaledMmS8ResidualCoordinateRows, 32, {"R": 1, **G.GEMM_SM90_S8})]
 S8_FAMILIES = FAMILIES[9:]
@@ -535,14 +533,15 @@ def test_the_s8_definitions_refuse_k_from_2_17(defn, k, rest) -> None:
 #: (gates, standalone program digest) at valid K, recorded before `bind` refused any K: the refusals change no gate of a K
 #: they admit. The s8 Definitions at K = 2^17 - 32, the largest they admit.
 VALID = {
-    bind(G.DotBf16, K=48, **G.GEMM_HOPPER): (4, "0ff626e0396e9b12f29c519e092261491771bc1403e63195431b9592220c17c64a3853633c2ca9a0f00e7783444b6fe17e8159f79d0a349c55551e7fc352730a"),
-    bind(G.GemmCoordinate, K=8960, **G.GEMM_AMPERE): (562, "239bc2a3c130cb7496b07bb590c4a2bf55957b6214b17a9ff629abd5b9c83211eb4e484d7440a2815407528ff5c64e623b9470dba081874f8e2df9c8792d9b3e"),
-    bind(G.Gemm, K=1536, N=3, **G.GEMM_AMPERE): (294, "588acc04cbf29bd700425da767dba4c3a5f7aa8fc9a6407c30de4251895151378c86d2f08db89302ba661656780b2e416c92db938bffd458b95e4a59aaac6c55"),
-    bind(G.GemmCoordinateE4m3, K=8192, **G.GEMM_SM120_E4M3): (258, "b9a41ad5ff51169a596a3b73d5e64bc2ee29dce9562ea7c318c8c7f42459a8621bbf5573b9afc0354a38b4efd2bb8bfc309c29d62083f211d6ba9d88dd6a938b"),
-    bind(G.GemmCoordinateNvf4, K=2048, **G.GEMM_SM120_NVF4): (34, "546196109f4e09acc4b44308a38098cf5295f3c359df7cf364b45af67c95b005ff95d02cdc73e7a9724c93b7c3e712a706a27dfc1406c0992463015ceca6bfcc"),
-    bind(G.GemmCoordinateMxf4, K=2048, **G.GEMM_SM120_MXF4): (34, "26e9e86cb631488f8531c90d6f5e60eaa90ca3e488d43633fdfbe80a884cca7d7198984bb5573fbe4d24e49c9110e40c2748f0300e8ac4ebbd171a6399f92bbc"),
-    bind(G.GemmAccumulatorS8, K=131040, **G.GEMM_SM120_S8): (4096, "6c58a4fdb90b9e4029279a9a762e9370f102143753eaa4d262be60a456a8abb3c1a941ab01051f71eb8b5f089d1f3a5f996c67c9ea2b8e6eeb1746d54f662991"),
-    bind(G.ScaledMmS8Coordinate, K=131040, **G.GEMM_SM120_S8): (4100, "dfa0738a72365f7920185ffdb6da23d8d17ffd6fb4ba384c5c5cb1f0833cf16e1ca1c14cd78c75c8e3199d531cb438ecaa1cba5b0a1e328fed08ed29314fcabd"),
+    bind(G.DotBf16, K=48, **G.GEMM_HOPPER): (4, "8f946b10f35bf34338323cf6b0ab0e1dbcbbd4e05892c978556e6ed941030557adb97ffed8578657f06943ffe8c8e1073422c5533424be5d3e402ef74293e48a"),
+    bind(G.GemmCoordinate, K=8960, **G.GEMM_AMPERE): (562, "5c2b00d64e6a7458cc8cb8459d5f21a76e141b456dd611ea35b5687c4035ea81c288d25a5e742054640ff027d8ee014ec554e13f0617d38085a7c4dd75301018"),
+    bind(G.Gemm, K=1536, N=3, **G.GEMM_AMPERE): (294, "d3bfe430114b5bd0c6b498264b468ad09bc8f22c2ddc6d44e3547f140e0e98cf19e5c46f8245b6917e171967376c0a2cc33344a29f3a09b2c43b72bd35c98dde"),
+    bind(G.GemmCoordinateE4m3, K=8192, **G.GEMM_SM120_E4M3): (258, "df644a102f474de1dca77509900cdbf01dd40383c7018c6246b6cd7e1b17732ac988edfeb9c7f2f57ea5ab0d47714cda629e547d469206f7fc4a228b2662332d"),
+    bind(G.GemmCoordinateNvf4, K=2048, **G.GEMM_SM120_NVF4): (34, "aada8b8917ee9ebf5dae236714d25ade3aee1ffb425b756dbfb630ba22474fbd9ce5de86dea96ceb779c2b446680db3d2b2c788082552104f8516ad487336413"),
+    bind(G.GemmCoordinateMxf4, K=2048, **G.GEMM_SM120_MXF4): (34, "6ebf174520623781f6cadc732b32bafbba6e9bfd748fb2ea5fb9c74ceace331cffd1cd816be74e800088687fba16b6a9675ae8e3fcd29e98a630e8475fc8280a"),
+    bind(G.GemmAccumulatorS8, K=131040, **G.GEMM_SM120_S8): (4096, "92b8428e02f1ecf5a9411174714b83a5b816249b0d807260f4635f71861d2ea6ce9b5ab0d21e0adf2caea1d86ebdfc157a957031fabd5227c785d79eb382aa59"),
+    bind(G.ScaledMmS8Coordinate, K=131040, **G.GEMM_SM120_S8): (4100, "fb47e6cd26c67d287218d590e48d28d381ff94982aaf7350752b4d0707fcf766563743b331d8e75d9ed2bc515dcc27f749a72fd3a8765bbc012ac0173dab0863"),
+    bind(G.ScaledMmS8, K=131040, N=2, **G.GEMM_SM120_S8): (8200, "cd3cf7230d92db5498bb42c5d3fd2d68a5263dafa5bc0289b143f5e8af2253e7cc6f4ce0b33fed0f8444a4c2337044ee58b54d6b868f01eebc5e29e0f284fd57"),
 }
 
 
@@ -573,7 +572,7 @@ def test_s8_gemm_binds_the_registered_step_for_every_card_that_computes_it_and_r
     for model in (HOPPER_SM90_S8_K32, BLACKWELL_SM100_S8_K32, BLACKWELL_SM120_S8_M16N8K32):
         assert G.s8_gemm(model) == G.GEMM_SM120_S8 == {"DOT": P.BlackwellS8ImmaDot32}
     assert G.GEMM_SM90_S8 == G.GEMM_SM120_S8
-    for defn, rest in ((G.GemmAccumulatorS8, {}), (G.ScaledMmS8Coordinate, {}), (G.ScaledMmS8V3, {"N": 2})):
+    for defn, rest in ((G.GemmAccumulatorS8, {}), (G.ScaledMmS8Coordinate, {}), (G.ScaledMmS8, {"N": 2})):
         assert bind(defn, K=512, **rest, **G.GEMM_SM90_S8).id == bind(defn, K=512, **rest, **G.GEMM_SM120_S8).id
     for model in (BLACKWELL_SM120_S8_M16N8K32_WRAP, replace(HOPPER_SM90_S8_K32, satfinite=False),
                   BLACKWELL_SM120_U8S8_M16N8K32, replace(HOPPER_SM90_S8_K32, k_per_instruction=16)):

@@ -112,6 +112,37 @@ def test_no_weight_outlives_its_call_and_no_registered_tensor_is_kept_alive(monk
     assert len(handed) == 1 and handed[0]() is None
 
 
+def every_event(values) -> tuple:
+    """One of each `verity.hooks.EVENTS`, in a served run's order: whatever the adapter can hand a subscriber of a hook,
+    whose dispatch reads only the hook (`verity_vllm.messages.Exchange.emit`)."""
+    pool = torch.zeros(2 * 2 * 16 * 64, dtype=torch.float16)
+    got = (H.Declared("card", {"eager": True}, (POUS.name,), {"pous": S.settings(POUS, {})}),
+           H.RegisteredValues(values, operands={n: i for i, (n, _) in enumerate(values)}),
+           H.RangesDeclared(2, 16, 256, 1, (pool,)), H.InputArrived("a", 3, 0), H.StepBegan(0, ("a",), 1),
+           H.RangeAllocated((0,), "a"), H.RangeWritten(0, 0, 3), H.PhaseOpened(0, 0),
+           H.ValueProduced("b", "x", 0, None), H.BlockDue("b", 1, {"n": 1}, "int8", {"x": None}), H.StepComputed(0),
+           H.StepEnded(0), H.OutputsComplete("a", 0), H.RangeFreed((0,)), H.PhaseClosed(0, 0, b""),
+           H.PhaseCommitted(0, bytes(64)))
+    assert {type(e) for e in got} == set(H.EVENTS)
+    return got
+
+
+def test_every_event_on_its_hooks_passes_its_handlers_and_its_own_are_still_handled(monkeypatch):
+    """vLLM's KV cache declaring its ranges (`RangesDeclared`) rides the hook PoUS's weights do (``memory``): every
+    event of the hooks it subscribes to passes, its own are handled, and what is no event is refused by name."""
+    monkeypatch.setattr(ws, "geometry", lambda scheme: SMALL)
+    w = torch.randint(-128, 128, (6, 40), dtype=torch.int8, generator=torch.Generator().manual_seed(7))
+    s, ex = served.Served(P2, CTX), Exchange()
+    s.install(ex)
+    for e in every_event((("a.weight", w),)):
+        ex.emit(e)
+    assert s.commitment()["commitment"] == ws.commit(P2, {"a.weight": w})[1].hex() and s.settings == {"challenges": 320}
+    for hook in ("declared", "memory"):
+        for fn in ex.subscribers[hook]:
+            with pytest.raises(TypeError, match=r"pous:.*: dict is no event of a served run"):
+                fn({"values": ()})
+
+
 def test_its_settings_are_checked_where_every_setting_is_and_its_launchers_values_when_attached():
     assert S.settings(POUS, {}) == {"challenges": 320}
     with pytest.raises(ValueError, match="challenges is a positive integer, not 0"):

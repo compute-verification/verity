@@ -160,13 +160,13 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int | None = None,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, then=None,
         transcript: Path | None = None, challenger=None, appends: int | None = None, store=None,
-        groups_per_coin: int = 1, figures: timing.Figures = FIGURES, **kv):
+        groups_per_coin: int = 1, figures: timing.Figures = FIGURES, refresh: tuple = (), **kv):
     """The verifier's sessions and the prover's over one registration, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
     (by default as the prover's hello says, `Verifier.appends_of`), `groups_per_coin` windows a sample; `then(v)` once
     they end. With `store` (a `poub.store.Store`) the prover's blocks are that store's, and its ledgers
-    are on the node of `figures`. A prover that raises before the verifier has answered ends the run at once with
-    what it raised."""
+    are on the node of `figures`; `refresh` sets each session's refresh (`Verifier.refresh`, off where it names
+    none). A prover that raises before the verifier has answered ends the run at once with what it raised."""
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, store.blocks if store else blocks, random.Random(7),
@@ -194,7 +194,8 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     v = verifier.Verifier(vconn, figures=figures, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
                           lifetime=lifetime, host_bytes=host_bytes, transcript=transcript,
-                          challenger=challenger, appends=appends, groups_per_coin=groups_per_coin)
+                          challenger=challenger, appends=appends, groups_per_coin=groups_per_coin,
+                          refresh=refresh)
     try:
         v.register()
         allowance = v.allowance(v.ping(4))

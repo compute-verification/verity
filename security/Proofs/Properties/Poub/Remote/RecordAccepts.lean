@@ -148,7 +148,7 @@ def window1 (reg : Registration) (c root : ByteArray) : WindowRecord :=
 def opening1 (reg : Registration) (c : ByteArray) : Opening :=
   let s := seed c 0 reg.digest
   ⟨0, 0, zeros Codec.BLOCK_BYTES, leaf1 reg s, zeros SALT_BYTES, zeroPath (treeDomain s (Plan.whole 1)),
-    zeros SALT_BYTES, zeroPath reg.payloadDomain, .empty, .empty⟩
+    zeros SALT_BYTES, zeroPath reg.payloadDomain, .empty, .empty, none⟩
 
 theorem checks_one (reg : Registration) (c : ByteArray) (hB : reg.blocks = 1) (hk : reg.key.codec = honestCodec)
     (hroot : reg.payloadRoot = zeroRoot reg.payloadDomain 0 (hidden (zeroPayload reg.key) (zeros SALT_BYTES))) :
@@ -181,7 +181,7 @@ theorem checks_one (reg : Registration) (c : ByteArray) (hB : reg.blocks = 1) (h
     exact Nat.sub_pos_of_lt hlt
   refine checkOpening_of (pr := ⟨root1 reg (seed c 0 reg.digest), Plan.whole 1, none⟩) (j := 0)
     (y := leaf1 reg (seed c 0 reg.digest)) (payload := zeroPayload reg.key) rfl rfl rfl (zeros_size _) rfl
-    (zeros_size _) (zeros_size _) ?_ hb0 (by rw [hB]; decide) rfl ?_ ?_ (decode_zeroPayload reg.key hj hfp) ?_ rfl
+    (zeros_size _) (zeros_size _) ?_ hb0 (by rw [hB]; decide) rfl ?_ ?_ (decode_zeroPayload reg.key hj hfp) ?_ rfl rfl
   · intro x hx
     simp only [opening1, zeroPath, Array.mem_append, Array.mem_replicate] at hx
     rcases hx with ⟨-, rfl⟩ | ⟨-, rfl⟩ <;> exact zeros_size 64
@@ -228,7 +228,8 @@ theorem run_accepts (reg : Registration) (hB : reg.blocks = 1) (c0 c1 root : Byt
     _root_.Poub.Session.State.releaseCoin, _root_.Poub.Session.State.deadline,
     _root_.Poub.Session.State.staleBelow, _root_.Poub.Session.State.record,
     _root_.Poub.Session.State.outcome, _root_.Poub.Session.Win.receipts, Poub.Session.live,
-    Poub.Session.cover, params1, hB,
+    Poub.Session.cover, _root_.Poub.Session.State.joinsAnother, _root_.Poub.Session.State.refreshRefusal,
+    _root_.Poub.Session.State.probationPush, params1, hB,
     hroot, plan_length, hdraw, hcheck, _root_.Poub.Session.RECEIPT_LIMIT,
     _root_.Poub.Session.STEP_LIMIT, DIGEST_BYTES]
   refine ⟨_, _, rfl, ?_, ?_⟩

@@ -52,7 +52,7 @@ def render(results: Sequence[Result]) -> str:
     parameters (and the JSON's ``audit`` is false regardless); each benchmark result's ``ran with:`` line; the table; then why each
     benchmark result without a number has none. With no number in any benchmark result its first line says so (`run` exits 1)."""
 
-    lines = [] if has_number(results) else ["prove layers: no number: " + "; ".join(f"{r.layer}: {r.why}" for r in results)]
+    lines = [] if has_number(results) else ["prove layers: no number: " + "; ".join(f"{r.layer}: {r.why or r.uncounted}" for r in results)]
     lines.append("The proof benchmark by layer: the benchmark result for each layer, read from its own run's output "
                  "(`verity bench prove layers`).")
     if not all(r.ran_with.startswith("ran with: coins deployed challenger; parameters deployed") for r in results):
@@ -110,7 +110,7 @@ def measured(results: Sequence[Result], metrics: Mapping[str, str], batch: str |
             r = by_layer[layer]
             build = figure == "build_s"
             value = getattr(r, figure) if r.accepted and (r.build_cache != NOT_STATED if build else r.per_block) else None
-            why = None if value is not None else r.why or (
+            why = None if value is not None else r.why or (None if build else r.uncounted) or (
                 "its output gives no build step's wall (steps.txt)" if build and r.build_s is None else
                 "its steps.txt states no build cache: line, so not whether the build reused a cache" if build else
                 f"{r.workload.split(':')[0]}: its figures are a statement's, not a proof block's" if r.statements else

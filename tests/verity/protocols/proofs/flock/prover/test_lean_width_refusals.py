@@ -27,12 +27,12 @@ def _tile_window(bits: bool) -> str:
                                                      {"type": 0, "refs": {"strided": ["n", 0, 0, 1, 0, 0, 1]}}]}]}
     tile = {"params": [["a", row], ["zy", word]], "ret_type": word, "ret": {"strided": ["p", 1, 0, 1, 0, 0, 1]},
             "nodes": []}
-    return json.dumps({"annotations": {}, "callees": ["Input16_v1", "Tile_v1", "Input1_v1"], "definitions": {
+    return json.dumps({"annotations": {}, "boolean": {}, "callees": ["Input16_v1", "Tile_v1", "Input1_v1"], "definitions": {
         "Input16_v1": {"form": "primitive", "id": "Input16_v1", "params": [], "ret": word},
         "Input1_v1": {"form": "primitive", "id": "Input1_v1", "params": [], "ret": ["Value", 1]},
         "R_v1": {"form": "composite", "id": "R_v1", "bindings": {}, "body": root},
         "Tile_v1": {"form": "composite", "id": "Tile_v1", "bindings": {}, "body": tile}},
-        "program_fn": "R_v1", "root": "R_v1", "schema": "verity-ir/descriptor/v1",
+        "program_fn": "R_v1", "root": "R_v1", "schema": "verity-ir/descriptor/v2",
         "types": [word, row, ["Array", 2, word]]}, sort_keys=True, separators=(",", ":"))
 
 

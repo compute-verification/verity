@@ -77,7 +77,7 @@ def under(prefix: str, table: Mapping[str, Any]) -> dict[str, Any]:
     return {f"{prefix}.{k}": v for k, v in table.items()}
 
 
-#: a Program's descriptor (``verity-ir/descriptor/v1``): the circuit, every field of it structure
+#: a Program's descriptor (``verity-ir/descriptor/v2``): the circuit, every field of it structure
 DESCRIPTOR = {"**": S}
 #: a registered value's entry (`registered_value.Registered.entry`)
 ENTRY = {"value": S, "root": M, "leaves": S, "words": S, "word_bits": S, "domain": S}
@@ -137,7 +137,7 @@ STEP = {"verdict": O, "in_the_clear": S, "eps_at_delta": O,
         "eps_at_delta.incorrect_at_delta.*": O}
 #: the chain's report less what `attester_piece.PUBLIC` drops: its verdict, each `STEPS` step's and what the path stubs
 REPORT = {
-    "schema": S, "verdict": O, "path": S, "scope": S, "stubbed[]": S, "negatives_refused.*": O,
+    "schema": S, "verdict": O, "path": S, "scope": S, "stubbed[]": S, "negatives_refused.*": O, "tied_form": O,
     **{k: v for s in STEPS for k, v in under(f"steps.{s}", STEP).items()},
     "steps.endpoint.**": ENDPOINT,
 }

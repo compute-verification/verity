@@ -16,13 +16,18 @@ import json
 import re
 from collections import Counter
 from dataclasses import replace
+from functools import partial
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pytest
+from verity.circuits import boolean as BL
+from verity.circuits import census as CE
 from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.ops.boolean import versions as V
 from verity.circuits.population import wired_population_program
 from verity.circuits.program import is_input
 from verity.circuits.refs import Concat, Explicit, Grid, runs
@@ -40,6 +45,7 @@ from verity_vllm.check import weights_of_record as WR
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.program import model as M
+from verity_vllm.program.predict import block_counts as BC
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
@@ -1331,3 +1337,24 @@ def test_the_tiny_class_wired_program_is_its_members_fed_by_hand(tiny_wired):
     minute): only the whole class holds every wire kind."""
     circuit, prog, _ = tiny_wired
     wired_matches_by_hand(circuit, prog)
+
+
+@pytest.mark.slow
+def test_every_tiny_class_template_lifts_to_its_block_circuit_from_the_programs_boolean_table(tiny_wired):
+    """Each template's block circuit, from the Program's one Boolean table: Boolean, its census gates the Count's by
+    `gate_table`, and every composite it reaches σ of its word Definition. Only the whole class reaches composites whose
+    callees have no Boolean version of their own (the lift's recursion), and its hand pieces."""
+    circuit, prog, _ = tiny_wired
+    table = V.boolean_table(prog)
+    assert len(table) == 137
+    memo: dict = {}
+    version = partial(V.block_circuit, table=table, memo=memo)
+    counts, unpriced = V.gate_table([fn for fn, _ in circuit.templates])
+    assert not unpriced
+    for fn, _n in circuit.templates:
+        bits = version(fn)
+        assert BL.is_boolean(bits) and CE.boolean_gates([bits]) == [BC.gates(fn, counts)[0]], descriptor_id(fn)
+        for word in V._reachable([fn]).values():
+            if not isinstance(word, PrimitiveDefinition) and not BL.is_boolean(word):
+                got = V.sigma_check(word, version(word), version)
+                assert got["ok"], (descriptor_id(word), got["mismatches"])

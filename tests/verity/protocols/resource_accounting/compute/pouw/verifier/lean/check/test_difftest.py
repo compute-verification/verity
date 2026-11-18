@@ -734,7 +734,7 @@ def test_rounds(pass_server):
     print(f"pouw-verifier-difftest rounds: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(ROUNDED.items()))}")
     assert "accept" in ROUNDED
-    for part in ("is opened twice", "was opened before its root was recorded", "was never opened", ": coin is epoch #",
+    for part in ("is opened twice", "was opened with no root recorded before it", "has no coin opened after it", ": coin is epoch #",
                  ": coin does not open", ": coin was not opened after", "the verifier's challenger key is malformed",
                  "the round roots are not", "the round coins are not a list", ": a live coin opening is",
                  "the coin commitment's ", "not trusted: no challenger close record",

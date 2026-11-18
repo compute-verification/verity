@@ -85,6 +85,7 @@ public import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 public import Flock.TmplOrder
 public import Flock.NetAt
 public import Proofs.Flock.Soundness.TmplValue
+public import Proofs.Flock.Soundness.Lower
 public import Proofs.Flock.Soundness.TmplValueUnit
 public import Proofs.Flock.Soundness.TmplUnitNet
 public import Proofs.Flock.Soundness.TmplReads

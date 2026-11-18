@@ -24,6 +24,7 @@ untraced = [
     "test_hm96_leaves.py",
     "test_inner_registered.py",
     "test_lean_coin_tree.py",
+    "test_lean_compose.py",
     "test_lean_forged_proofs.py",
     "test_lean_hidden_outputs.py",
     "test_lean_out_group_slot.py",

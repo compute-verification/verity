@@ -592,7 +592,7 @@ def test_run_itself_refuses_a_party_on_another_host_with_no_key_pinned(monkeypat
         raise ConnectionError("the session started")
     monkeypatch.setattr(wipe_run, "session", session)
     there, here = Side("auditor", ("true",)), Side("n0", ("true",))
-    with pytest.raises(ValueError, match=r"no key is pinned \(trusted_sha512\) with the memory attester on auditor"):
+    with pytest.raises(ValueError, match=r"no key is pinned \(trusted_sha512\) with the memory attester on the memory attester's machine"):
         wipe_run.run("n0", SMALL, party=there)
     assert not started
     for party, pin in ((there, "ab" * 64), (here, None)):

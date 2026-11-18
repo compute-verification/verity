@@ -37,6 +37,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import cached_property
+from pathlib import Path
 from typing import Any, NamedTuple
 
 POINTS_SCHEMA = "verity-bench/overhead-points/v1"
@@ -239,6 +240,21 @@ def card(gpu: str) -> Gpu:
         return cards()[gpu]
     except KeyError:
         raise ValueError(f"no card {gpu!r}: the door measures on {', '.join(cards())} (verity_bench.overhead.DOOR)") from None
+
+
+def machine_card(machine: str, directory: Path) -> Gpu:
+    """The door's GPU on `machine`: the one `DOOR` entry whose card is the `card` of the machine's record's `[properties]`
+    (`kit.machine_properties`, ``directory/<machine>.toml``); refused by name where the record gives no card, or one the
+    door doesn't measure on."""
+    from verity_bench import kit
+
+    sku = kit.machine_properties(machine, directory=directory)["card"]["value"]
+    found = [c for c in DOOR if c.sku == sku]
+    if len(found) != 1:
+        raise ValueError(f"machine {machine!r}: its record's [properties] give card {sku!r} ({directory}/{machine}.toml), "
+                         f"which {'no' if not found else 'more than one'} GPU the door measures on has (the door's: "
+                         f"{', '.join(f'{c.gpu} ({c.sku})' for c in DOOR)}, verity_bench.overhead.DOOR)")
+    return found[0]
 
 
 #: the libraries a card's bridge serves (`bench.py --bridge`), by the bridge's name for each

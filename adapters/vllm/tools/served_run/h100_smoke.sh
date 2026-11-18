@@ -86,11 +86,16 @@ if [ "$SCHEME" = pearl-plus ]; then
   PYTHONPATH=$SPP "$PY" "$SP" arm --spec llama32-1b-1gpu-pouw-protocol-served@h100 --out "$SR/pearlplus-config.json" > "$SR/pearlplus-arm.log" 2>&1 \
     || { say "SMOKE FAILED pearl-plus arm: served_passes.py arm ($SR/pearlplus-arm.log)"; cat "$SR/pearlplus-arm.log"; exit 1; }
   echo "PEARL+ CONFIG: $(tail -1 "$SR/pearlplus-arm.log")"
+  "$PY" - "$SR/pearlplus-config.json" <<'EOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+json.dump({**d, "network-attester": {**d.get("network-attester", {}), "order": "release-order"}}, open(sys.argv[1], "w"))
+EOF
   PP=(--protocols pearl-plus --protocols-config "$SR/pearlplus-config.json")
   [ -z "${PEARLC_CHALLENGER_GATE:-}" ] || PP+=(--challenger-gate "$PEARLC_CHALLENGER_GATE"
     --challenger-peer "$PEARLC_CHALLENGER_PEER" --challenger-lane "$PEARLC_CHALLENGER_LANE")
   LOAD=(adapters/vllm/tools/served_run/serve_load.py --port "$PORT" --model "$MODEL" --fixed "$slots" --window-steps "$STEPS"
-    --prompt-range "$prompt:$prompt" --seed 1 --out "$SR/load.jsonl")
+    --prompt-range "$prompt:$prompt" --release "$(tr -d - < /proc/sys/kernel/random/uuid)" --seed 1 --out "$SR/load.jsonl")
 fi
 SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT" --precision bfloat16
   --run-id "smoke-${RESEARCH_RUN_ID:-local}" --seal --max-num-batched-tokens 512 --window-steps "$STEPS"
