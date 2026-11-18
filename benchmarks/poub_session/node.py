@@ -224,6 +224,8 @@ def main() -> int:
     ap.add_argument("--layout-workers", type=int, default=16, help="--model-dir's hashing processes")
     ap.add_argument("--rows", type=int, default=None, choices=device.rb.ROWS,
                     help="the registration's sketch rows k_s, sent in the hello (default: the receipt kind's, 16)")
+    ap.add_argument("--codec", default=device.rcodec.DEFAULT.name,
+                    help="the registration's codec; --kv's kv.so must be built at its width and masking")
     device.add_arguments(ap)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -262,7 +264,7 @@ def main() -> int:
                        warmup_ns=round(a.warmup_ms * 1e6), defer_openings=not a.overlap_openings,
                        log=log)
         out["overlap_openings"] = a.overlap_openings
-        cal = p.register(rows=a.rows)
+        cal = p.register(codec=wire.codec_named(a.codec), rows=a.rows)
         log(f"node: registered, calibration {json.dumps(cal)}")
         out.update({"calibration": cal, "gates": backend.gates, "calibration_trace": backend.calibration_trace,
                     "registration": wire.registration_json(p.registration), "sessions": []})

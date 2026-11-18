@@ -57,6 +57,8 @@
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
 # with PROVER_ARGS such as --kv-every and --kv-pool. Its passes take the CPU's time, so JITTER_MS must cover one.
+# On a card (no CPU, SERVE unset or node) CODEC defaults to the deployed p1024/k3/masked, and p512/kK is the other
+# codec kv.cu is built for (KV_DEFS); SERVE=row's Commit registers the deployed codec only.
 # LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it (default: the
 # windows of WINDOW_MS in 30 s, or a paced session's groups, `audit.lifetime_windows`).
 #
@@ -227,9 +229,22 @@ B=$(mktemp -d "${TMPDIR:-/tmp}/remote-session.XXXXXX") || exit 3
 SV= # ROLE=both's verifier of a served session, a process group of its own
 trap '[ -n "$SV" ] && kill -- "-$SV" 2> /dev/null; rm -rf "$B"' EXIT
 export B RS GIB=${GIB:-16}
-# kv.cu's defines at the session's codec, p1024 masked, squaring by FOLD 6 as the paged build does
-# (benchmarks/vllm_encoded/stack.sh's KVDEFS): each build of the session's kv.so reads them here, node.sh's too
-export KV_DEFS="-DKV_FIELD=1024 -DKV_MASK=1 -DKV_FOLD6=1"
+# The codec a card's session registers and its kv.so is built for: CODEC, default the deployed p1024/k3/masked (CPU=
+# and SERVE=tiny default to p512/k2 below). kv.cu's build fixes the width and masking, the registration's key the
+# rounds. p1024 squares by FOLD 6 as the paged build does (benchmarks/vllm_encoded/stack.sh's KVDEFS); p512 is kv.cu's
+# plain build. Each build of the session's kv.so reads KV_DEFS, node.sh's too.
+export CARD_CODEC=${CODEC:-p1024/k3/masked}
+case $CARD_CODEC in
+  p1024/k[2-8]/masked) KV_DEFS="-DKV_FIELD=1024 -DKV_MASK=1 -DKV_FOLD6=1" ;;
+  p512/k[2-8]) KV_DEFS="-DKV_FIELD=512" ;;
+  *) KV_DEFS= ;;
+esac
+export KV_DEFS
+if [ "$ROLE" != verifier ] && [ -z "${CPU:-}" ] && [ "${SERVE:-}" != tiny ]; then
+  [ -n "$KV_DEFS" ] || refuse "CODEC=$CARD_CODEC: a card's session is built at p1024/kK/masked or p512/kK, K from 2 to 8"
+  [ "${SERVE:-}" != row ] || [ "$CARD_CODEC" = p1024/k3/masked ] ||
+    refuse "SERVE=row's Commit registers the deployed p1024/k3/masked, not CODEC=$CARD_CODEC"
+fi
 [ "$ROLE" != both ] || [ -z "${LEAN_EXE:-}" ] || [ -x "$LEAN_EXE" ] || refuse "LEAN_EXE=$LEAN_EXE is not an executable"
 lean_exe() { # LEAN_EXE, else the Lean verifier built in its package
   [ -n "${LEAN_EXE:-}" ] && return 0
@@ -546,7 +561,7 @@ fi
     wait $S || { tail -40 "$O/session.ptxas"; exit 4; }
     wait $K || { tail -40 "$O/kv.ptxas"; exit 4; }
     sha256sum "$B"/*.so > "$O/libs.sha256"
-    DEV=(--lib "$B/session.so" --kv "$B/kv.so" --gib "$GIB")
+    DEV=(--lib "$B/session.so" --kv "$B/kv.so" --gib "$GIB" --codec "$CARD_CODEC")
   fi
   V=
   if [ "$ROLE" = both ]; then
