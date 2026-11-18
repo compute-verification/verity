@@ -805,9 +805,10 @@ theorem remote_soundness_deployed (I : Instance d α) (K : Constructions I.base)
     (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hO : I.OpensAt)
     (hRg : I.RegisteredFiles) (hSa : I.SessionAt .remote)
     (hC : ∀ θ F A, I.sessions θ F = some A → CouplingTarget (I.stage K) .remote (I.liftStage K) A θ F)
+    (hTwo : TwoStageBound (I.vocab K) .remote)
     (hW : I.base.PouwSound .remote) (hWi : (I.vocab K).WiresSound .remote) (hG : Verity.GateARow) :
     (I.vocab K).SoundnessAt .remote :=
-  Verity.remote_soundness_of_targets (I.vocab K) (I.deployed K hKr hKf hO) (I.covers K .remote hRg hSa)
+  Verity.remote_soundness_of_targets (I.vocab K) (I.deployed K hKr hKf hO) (I.covers K .remote hRg hSa) hTwo
     (fun θ F A h => I.couplingTarget_lift K .remote (hC θ F A h)) (I.pouwSound_of_base K .remote hW) hWi hG
 
 /-- **`remote_soundness_deployed` at the binding's constructions** (`Binding.withBinding`): any constructions with
@@ -817,11 +818,12 @@ theorem remote_soundness_deployed_withBinding (I : Instance d α) (K₀ : Constr
     (hC : ∀ θ F A, I.sessions θ F = some A →
       CouplingTarget (I.stage (Binding.withBinding K₀ I.pinned I.dev)) .remote
         (I.liftStage (Binding.withBinding K₀ I.pinned I.dev)) A θ F)
+    (hTwo : TwoStageBound (I.vocab (Binding.withBinding K₀ I.pinned I.dev)) .remote)
     (hW : I.base.PouwSound .remote) (hWi : (I.vocab (Binding.withBinding K₀ I.pinned I.dev)).WiresSound .remote)
     (hG : Verity.GateARow) :
     (I.vocab (Binding.withBinding K₀ I.pinned I.dev)).SoundnessAt .remote :=
   remote_soundness_deployed I (Binding.withBinding K₀ I.pinned I.dev) (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl) hO hRg
-    hSa hC hW hWi hG
+    hSa hC hTwo hW hWi hG
 
 /-- **`remote_soundness_deployed` at the deployment's constructions** (`Instance.constructionsAt`): the coupling at
 each session is `couplingTarget_at`'s, so of it what is left is the device's log opening only the record's rounds
@@ -832,12 +834,13 @@ theorem remote_soundness_deployedAt (I : Instance d α) (K₀ : Constructions I.
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg) (hO : I.OpensAt)
     (hRg : I.RegisteredFiles) (hSa : I.SessionAt .remote)
     (hOR : I.LogOpensRecorded .remote)
+    (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)) .remote)
     (hW : I.base.PouwSound .remote)
     (hWi : (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).WiresSound .remote)
     (hG : Verity.GateARow) :
     (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
   remote_soundness_deployed I _ (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl) hO hRg hSa
-    (I.couplingTarget_at K₀ .remote reg record recordDigest hOR) hW hWi hG
+    (I.couplingTarget_at K₀ .remote reg record recordDigest hOR) hTwo hW hWi hG
 
 /-! ## An instance: v2's reading on the idle device -/
 
