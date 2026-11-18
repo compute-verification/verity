@@ -109,7 +109,7 @@ def Run.released (s : Run) (label : String) (after : ByteArray) : ByteArray :=
     match releasedLogOf c s.log with
     | .error _ => .empty
     | .ok log =>
-      (releasedAfter log label after).foldl (fun acc i => match c.position label i with
+      (releasedAfter log label after).foldl (fun acc (i : Nat) => match c.position label i with
         | some p => acc ++ s.coins p
         | none => acc) .empty
 
