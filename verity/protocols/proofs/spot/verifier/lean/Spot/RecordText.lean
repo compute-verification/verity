@@ -581,9 +581,9 @@ def slot (P : Prog) (doc : Json) (tid : String) (u : Nat) : Option Nat :=
     | .error _ => none
   | .error _ => none
 
-/-- A template as SPOT's wiring reads it. -/
+/-- A template as SPOT's wiring reads it: one output row `out`, its fields' rows end to end. -/
 def Tmpl.wired (t : Tmpl) : Spot.Wires.Template :=
-  { units := t.units, rows := t.rows.map fun (p, w, o) => (p, ⟨w, o⟩), outs := t.outs }
+  { units := t.units, rows := t.rows.map fun (p, w, o) => (p, ⟨w, o⟩), outs := [("out", (t.outs.map (·.2)).sum)] }
 
 /-- The root's ranges in node order as an order of units' ranges, `(template, first unit, units)` each, a template's
 units counted from 0 in its own ranges: the root is topological, so every wire it states runs forward in it. -/

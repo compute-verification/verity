@@ -62,6 +62,8 @@ theorem finish_text {f : Front} {pin : String → Option String} {c : Case} (h :
           · cases h
           split at h
           · cases h
+          split at h
+          · cases h
           · rename_i g hg
             split at h
             · cases h

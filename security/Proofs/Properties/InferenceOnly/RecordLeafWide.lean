@@ -179,12 +179,12 @@ theorem rowLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.Securi
 /-- **A leaf of a unit's output row is a gate as wide as the leaf** (`LeafWide`, its second clause). -/
 theorem outLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
-    {sc : Scope} {out : String} {l g lo hi : ℕ} (hu : UnitAt P rs tid u sc) (ho : OutLeaf P sc out l g lo hi) :
+    {sc : Scope} {off l g lo hi : ℕ} (hu : UnitAt P rs tid u sc) (ho : OutLeaf P sc off l g lo hi) :
     ∃ p ops sc', P.gate g = .ok (p, ops, sc') ∧ (P.defs[p]!).ret = .value (hi - lo) := by
   by_cases hp : (P.defs[sc.d]!).prim = true
   · -- a unit of a primitive: its one output leaf is its own gate
     obtain ⟨w, hw, -, hall⟩ := outLeaf_prim hP hrs hu hp
-    obtain ⟨-, -, hg0, hlo0, hhi0⟩ := hall out l g lo hi ho
+    obtain ⟨-, -, hg0, hlo0, hhi0⟩ := hall off l g lo hi ho
     obtain ⟨k, m, hk, -, hm, hsc, -, hg1, -⟩ := prim_unit hP hrs hu hp
     have hlt : g < (P.defs[P.root]!).gates := by
       rw [hg0, hsc]
@@ -209,7 +209,7 @@ theorem outLeaf_wide (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.Securi
     have hdlt : (P.child P.rootScope k m).d < P.defs.size := (Resolve.good_d P hroot hB _ hgood).1
     obtain ⟨hrt, hbw⟩ := hW _ hdlt hpf
     obtain ⟨hbp, hcount, -⟩ := (hD _ hdlt).1.2 hpf
-    obtain ⟨f, -, hf, hl, hres, -, hhi⟩ := ho
+    obtain ⟨f, -, hf, -, hl, hres, -, hhi⟩ := ho
     have hl' : l < (fieldsOf (P.defs[(P.child P.rootScope k m).d]!).ret)[f]!.leaves := by
       rw [← widths_size]
       exact hl

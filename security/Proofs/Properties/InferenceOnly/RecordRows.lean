@@ -20,10 +20,10 @@ A unit reads through its parameters, and the record cuts each parameter into row
   its parameters (`Resolve.ret_within`), and an output row's leaf is a leaf of the return (`outRow_lt`).
 * `operandsOwn`: what a gate of a unit reads is an earlier gate of the unit or a leaf of one of its rows
   (`Resolve.gate_within`, and `prim_unit_operands` for a unit of a primitive).
-* `ownRows_holds`: a leaf of a unit's row is an input gate, and no gate is a leaf of two rows or two leaves of
-  one. A unit's parameter leaf resolves to a gate of an input node (`Resolve.unit_leaf`), no two to one gate
-  (`Resolve.unit_leaf_inj`); the root node and the member say which unit, the parameter which port, and the leaf
-  which row and which leaf of it.
+* `ownRows_holds`: a leaf of a unit's row is an input gate, and no gate but a leaf of a shared run is a leaf of two
+  rows or two leaves of one. A unit's parameter leaf resolves to a gate of an input node (`Resolve.unit_leaf`), no
+  two to one gate but a leaf of a shared run (`Resolve.unit_leaf_inj`); the root node and the member say which unit,
+  the parameter which port, and the leaf which row and which leaf of it.
 * `ranked`: the wires `Spot.Wires.check` accepts rank the units, every row's writer below the row's unit.
 -/
 
@@ -200,7 +200,7 @@ theorem returnsOwn (hP : ReadProg P)
     have hgood : Resolve.Good P (P.child P.rootScope k m) :=
       Resolve.good_child P (parent := P.rootScope)
         (by show Resolve.Good P (.top P.root 0 none); unfold Resolve.Good; exact ⟨rfl, rfl, rfl⟩) hk rfl hc hm rfl
-    obtain ⟨f, -, hf, hl, hres, -, -⟩ := ho
+    obtain ⟨f, -, hf, -, hl, hres, -, -⟩ := ho
     obtain ⟨-, hcallee, -⟩ := Resolve.decoded_root bytes P hdec k hk
     obtain ⟨hbp, hcount, -⟩ := hcallee.2 hc
     have ht : (outRow (P.defs[(P.child P.rootScope k m).d]!) f).1 + l <
@@ -269,7 +269,7 @@ private theorem row_ext (r r' : Row) (h1 : r.tid = r'.tid) (h2 : r.unit = r'.uni
   simp_all
 
 /-- **Every unit's rows are its own input gates** (`OwnRows`): a leaf of a reader row is an input gate, and a gate
-is a leaf of one row at most, at one place. -/
+is a leaf of one row at most, at one place, unless it is a leaf of a shared run. -/
 theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs) :
     OwnRows P rs W := by
@@ -286,9 +286,7 @@ theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.Secur
       (Nat.lt_of_lt_of_eq hip hargs.symm) ht ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn
       (P.child P.rootScope rs[j]!.node m).off
     have hgx := hg g hres
-    obtain ⟨q, base, count, -, hrun, -, -, -⟩ := hleaf
-    obtain ⟨-, -, hinp, -⟩ := InferenceOnlyVerifier.Record.SecurityProofs.runOf_some hrun
-    have hinp' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true := hinp
+    have hinp' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true := Resolve.leafAt_input hleaf
     have hmono := Resolve.offsets_mono P P.root (hL P.root hr) hrp (n + 1) (P.defs[P.root]!).body.nodes.size
       (by omega) (Nat.le_refl _)
     have hend : (P.defs[P.root]!).body.offsets[(P.defs[P.root]!).body.nodes.size]! = (P.defs[P.root]!).gates :=
@@ -310,10 +308,14 @@ theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.Secur
     obtain ⟨j', m', hj', htj', huj', rfl, hk', hnode', hform', hm', hargs'⟩ := unit_place hP hrs hu'
     have ht := inRow_lt _ i _ r.row l hrow hl
     have ht' := inRow_lt _ i' _ r'.row l' hrow' hl'
-    obtain ⟨hkk, hmm, hii, htt⟩ := Resolve.unit_leaf_inj bytes P hdec hov hlay hO hk hk' hnode hnode' hform hform'
+    rcases Resolve.unit_leaf_inj bytes P hdec hov hlay hO hk hk' hnode hnode' hform hform'
       hm hm' (Nat.lt_of_lt_of_eq hip hargs.symm) (Nat.lt_of_lt_of_eq hip' hargs'.symm) ht ht'
       ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn (P.child P.rootScope rs[j]!.node m).off
-      ((P.defs[P.root]!).body.nodes[rs[j']!.node]!).fn (P.child P.rootScope rs[j']!.node m').off hres hres'
+      ((P.defs[P.root]!).body.nodes[rs[j']!.node]!).fn (P.child P.rootScope rs[j']!.node m').off hres hres' with
+      ⟨hkk, hmm, hii, htt⟩ | hsh
+    swap
+    · exact Or.inr hsh
+    left
     have hjj : j = j' := by
       rcases Nat.lt_trichotomy j j' with h | h | h
       · have := ranges_sorted hr hfirst hir hrs hj hj' h
@@ -342,7 +344,7 @@ unit. -/
 theorem ranked (hS : Spot.Wires.check W = .ok S) : ∃ ρ : String × ℤ → ℕ, Ranked S ρ := by
   obtain ⟨ρ, hρ⟩ := Spot.Wires.check_ranked hS
   refine ⟨ρ, ?_⟩
-  intro r wt wu out hw
+  intro r wt wu out off hw
   exact hρ _ _ (Spot.Wires.writerOf_reads hS hw)
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs

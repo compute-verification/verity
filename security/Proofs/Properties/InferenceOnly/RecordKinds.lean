@@ -151,7 +151,7 @@ fill one row), at the row's index, where `sameSlot` is sound (`sameSlot_sound`).
 theorem inside_writer {j tr : Json} {c : Case} (h : read j tr = .ok c) (r : Row)
     (hk : c.rowKind r = Kind.inside) :
     (c.wired.writerOf r.tid r.unit r.port r.row).isSome = true ∧
-      ∀ wt wu out s s', c.wired.writerOf r.tid r.unit r.port r.row = some (wt, wu, out) →
+      ∀ wt wu out off s s', c.wired.writerOf r.tid r.unit r.port r.row = some (wt, wu, out, off) →
         c.slot r.tid r.unit = some s → c.slot wt wu.toNat = some s' → s' = s := by
   obtain ⟨f, pin, hf, hc⟩ := read_front h
   obtain ⟨rfl, hg, text, htext, hx, hcuts, hwires⟩ := finish_text hc
@@ -200,8 +200,8 @@ theorem inside_writer {j tr : Json} {c : Case} (h : read j tr = .ok c) (r : Row)
           refine ⟨w, by rw [hS]; exact hwm, ?_⟩
           rw [hidx']
           rfl
-        · intro wt wu out s s' hw hs hs'
-          obtain ⟨w', hw'm, idx', hidx'', rfl, rfl, rfl⟩ := writerOf_wire hchk hw
+        · intro wt wu out off s s' hw hs hs'
+          obtain ⟨w', hw'm, idx', hidx'', rfl, rfl, rfl, -⟩ := writerOf_wire hchk hw
           -- the writer's wire is wire `i`
           have hw'e : w' = w := by
             rw [hwires] at hw'm

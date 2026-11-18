@@ -2,14 +2,16 @@ module
 
 public import Proofs.Properties.InferenceOnly.LeafWidthsResolve
 public import Proofs.Properties.InferenceOnly.RecordFields
+public import Proofs.Properties.InferenceOnly.RecordInputs
 public import Proofs.Properties.InferenceOnly.RecordLanding
 public import Proofs.Properties.InferenceOnly.RecordLeafWide
 public import Proofs.Properties.InferenceOnly.RecordPrim
 public import Proofs.Properties.InferenceOnly.RecordRead
 public import Proofs.Properties.InferenceOnly.RecordRows
+public import Proofs.Properties.InferenceOnly.RecordShared
 public import Proofs.Properties.InferenceOnly.RecordTemplates
 public import Proofs.Properties.InferenceOnly.RecordWhole
-public import Proofs.Properties.InferenceOnly.RecordWide
+public import Proofs.Properties.InferenceOnly.RecordWire
 public import Mathlib.Tactic
 
 /-!
@@ -21,9 +23,12 @@ rows do not line up, and this module states what a record it accepts has, in the
 * `aligned` (`Aligned`): a leaf of the writer's row lies inside one leaf of the reader's row, or the reader's unit
   returns no leaf of the row.
 * `filled` (`Filled`): every bit of a leaf of a wired row is a bit of a leaf of the writer's row.
+* `outFits` (`OutFits`): the writer's field a wired row reads has no more bits than the row.
+* `sharedUnwired_of_read` (`SharedUnwired`, which `aligned` takes): no row on a leaf of a shared run has a writer,
+  from `SharedHeld` and `held_unwired`.
 
-Both read `wired_row`, what the check has tested of a row with a writer: the row and the writer's output row have
-the same bits, and either the reader's parameter has leaves of one bit and is none of what its Definition passes on,
+Both read `wired_row`, what the check has tested of a row with a writer: the row and the writer's field at the wire's
+offset have the same bits, and either the reader's parameter has leaves of one bit and is none of what its Definition passes on,
 or each row's leaves are of one width and the writer's divides the reader's.
 
 * Where the widths divide, the rows are leaves of one width each over the same bits (`bitAt_const`), so leaf `l'` of
@@ -186,12 +191,11 @@ theorem unit_param_out {P : Prog} {ts : Array String} {rs : Array TRange} (hP : 
   obtain ⟨hov, hbl⟩ := read_walk hP
   obtain ⟨k, m, hk, hnode, hform, hm, hargs, rfl⟩ := unit_member hP hrs hu
   obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
-  obtain ⟨n, j, ⟨q, base, count, -, hrun, -, -, -⟩, hn, hj, ho, hres⟩ :=
+  obtain ⟨n, j, hleaf, hn, hj, ho, hres⟩ :=
     Resolve.unit_leaf bytes P hdec hov hbl hO hk hnode hform hm (hargs i hi) ht
       ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off
   have hgn := hres g hg
-  obtain ⟨-, -, hin, -⟩ := runOf_some hrun
-  have hin' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true := hin
+  have hin' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[n]!) = true := Resolve.leafAt_input hleaf
   have hne : n ≠ k := by
     intro e
     rw [e, hnode] at hin'
@@ -238,11 +242,11 @@ variable {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.
 theorem outLeaf_intro {ts : Array String} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {f l : ℕ} (hf : f < (fieldsOf (P.defs[sc.d]!).ret).length)
-    (hl : l < (outRow (P.defs[sc.d]!) f).2.size) :
-    ∃ g, OutLeaf P sc ("o" ++ toString f) l g (bitAt (outRow (P.defs[sc.d]!) f).2 l)
+    (hb : 0 < Spot.Bits.bitsOf (fieldsOf (P.defs[sc.d]!).ret)[f]!) (hl : l < (outRow (P.defs[sc.d]!) f).2.size) :
+    ∃ g, OutLeaf P sc (Spot.Edges.fieldWord (P.defs[sc.d]!).ret f) l g (bitAt (outRow (P.defs[sc.d]!) f).2 l)
       (bitAt (outRow (P.defs[sc.d]!) f).2 l + (outRow (P.defs[sc.d]!) f).2[l]!) := by
   obtain ⟨g, hg⟩ := unit_ret_ok hP hrs hu (outRow_lt _ f l hf hl)
-  exact ⟨g, f, rfl, hf, hl, hg, rfl, rfl⟩
+  exact ⟨g, f, rfl, hf, hb, hl, hg, rfl, rfl⟩
 
 /-- A leaf of a unit's reader row is a leaf of the record's circuit, at its bits in the row. -/
 theorem rowLeaf_intro {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
@@ -261,22 +265,23 @@ theorem rowLeaf_intro {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyV
 /-! ## A parameter that is not passed on -/
 
 /-- **A leaf of a parameter the check holds closed is no leaf its unit returns.** The parameter is none of what the
-unit's Definition passes on. A leaf a unit of a composite returns is a gate of the unit, which no leaf of a
-parameter is, or a leaf of a parameter the Definition passes on, and a gate is one leaf of one parameter of the
-unit at most. A unit of a primitive returns its own gate. -/
+unit's Definition passes on, and the leaf is no leaf of a shared run. A leaf a unit of a composite returns is a gate
+of the unit, which no leaf of a parameter is, or a leaf of a parameter the Definition passes on, and a gate that is
+no leaf of a shared run is one leaf of one parameter of the unit at most. A unit of a primitive returns its own
+gate. -/
 theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t g : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves)
     (hg : Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g)
-    (hn : i ∉ (passedOn P)[sc.d]?.getD (List.range (P.defs[sc.d]!).params.size)) {out : String} {l lo up : ℕ}
-    (ho : OutLeaf P sc out l g lo up) : False := by
+    (hn : i ∉ (passedOn P)[sc.d]?.getD (List.range (P.defs[sc.d]!).params.size)) (hsh : ¬ SharedLeaf P g)
+    {off l lo up : ℕ} (ho : OutLeaf P sc off l g lo up) : False := by
   have hout := unit_param_out hP hO hrs hu hi ht hg
   by_cases hp : (P.defs[sc.d]!).prim = true
   · obtain ⟨-, h1, h2⟩ := returnsOwn_prim hP hrs hu hp ho
     omega
   · have hp' : (P.defs[sc.d]!).prim = false := by simpa using hp
-    obtain ⟨f, -, hf, hl, hres, -, -⟩ := ho
+    obtain ⟨f, -, hf, -, hl, hres, -, -⟩ := ho
     have hlt : (outRow (P.defs[sc.d]!) f).1 + l < (P.defs[sc.d]!).body.ret.count := by
       rw [((unit_callee hP hrs hu).2 hp').2.1]
       exact outRow_lt _ f l hf hl
@@ -290,10 +295,12 @@ theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : Inferenc
     · omega
     · obtain ⟨hd, -⟩ := Resolve.good_d P hroot hB _ hgood
       rw [hprm _ hd hp'] at hi' hj'
-      obtain ⟨-, -, hii, -⟩ := Resolve.unit_leaf_inj bytes P hdec hov hbl hO hk hk hnode hnode hform hform hm hm
+      rcases Resolve.unit_leaf_inj bytes P hdec hov hbl hO hk hk hnode hnode hform hform hm hm
         (hargs i hi) (hargs i' hi') ht hj'
         ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off
-        ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off hg hres'
+        ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off hg hres' with ⟨-, -, hii, -⟩ | hs
+      swap
+      · exact hsh hs
       subst hii
       apply hn
       unfold passOf at hmem
@@ -303,72 +310,83 @@ theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : Inferenc
 /-! ## The two rows of a wire -/
 
 /-- **What the record check has tested of a row with a writer.** The row is a row of a parameter of its unit, and
-its writer's row an output row of the writer's unit; the two rows have the same bits; and either the parameter has
-leaves of one bit and is none of what the unit's Definition passes on, or each row's leaves are of one width and
-the writer's divides the reader's. The check tests a wire on the text's templates `ts`, whose ids are apart
-(`tmpls_named`), each the text's reading of its Definition (`templatesOf_tmplOf`), and a unit's Definition is its
-template's (`unit_tmpl`). -/
+the word the row's index reads from is the first word of a field of the writer's return of a word or more; the row and that field have
+the same bits; and either the parameter has leaves of one bit and is none of what the unit's Definition passes on, or
+each side's leaves are of one width and the writer's divides the reader's. The check tests a wire on the text's
+templates `ts`, whose ids are apart (`tmpls_named`), each the text's reading of its Definition
+(`templatesOf_tmplOf`), with the words `Spot.Wires.check` gives its row (`mem_rowWords`), and a unit's Definition is
+its template's (`unit_tmpl`). -/
 theorem wired_row {tids : Array String} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
-    (hwh : unwhole ts
-      (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S.wires = none) {r : Row} {wt : String} {wu : ℤ}
-    {out : String} (hw : S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out)) :
+    (hwh : unwhole P ts (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S = none) {r : Row}
+    {wt : String} {wu : ℤ} {out : String} {off : ℕ}
+    (hw : S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out, off)) :
     ∃ sc sc' i f, UnitAt P rs r.tid r.unit sc ∧ 0 ≤ wu ∧ UnitAt P rs wt wu.toNat sc' ∧
       i < (P.defs[sc.d]!).params.size ∧ (P.defs[sc.d]!).params[i]!.1 = r.port ∧
-      f < (fieldsOf (P.defs[sc'.d]!).ret).length ∧ out = "o" ++ toString f ∧ r.row < W.cutsOf r.tid r.port ∧
+      f < (fieldsOf (P.defs[sc'.d]!).ret).length ∧ Spot.Edges.fieldWord (P.defs[sc'.d]!).ret f = off ∧
+      0 < Spot.Bits.bitsOf (fieldsOf (P.defs[sc'.d]!).ret)[f]! ∧ r.row < W.cutsOf r.tid r.port ∧
       (inRow (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row).2.foldl (· + ·) 0 =
         (outRow (P.defs[sc'.d]!) f).2.foldl (· + ·) 0 ∧
       ((Flock.Program.Widths.homo (P.defs[sc.d]!).params[i]!.2 = some 1 ∧
           i ∉ (passedOn P)[sc.d]?.getD (List.range (P.defs[sc.d]!).params.size)) ∨
         ∃ a o, Flock.Program.Widths.homo (P.defs[sc.d]!).params[i]!.2 = some a ∧
           Flock.Program.Widths.homo (fieldsOf (P.defs[sc'.d]!).ret)[f]! = some o ∧ o ≠ 0 ∧ a % o = 0) := by
-  obtain ⟨w, hwm, rt, wtT, p, ow, hrd, hpt, hwr, hwo, -, -, hlr, hlw, hlp, hlo, hrow, hwd, hk0, hko, hkw, hur, h0,
-    huw, -⟩ := wire_of_writer hS hw
+  obtain ⟨w, hwm, rt, wtT, p, ow, hrd, hpt, hwr, -, -, -, hlr, hlw, hlp, -, hrow, -, hko, hkw, hur, h0, huw, x, -, -,
+    hoff⟩ := wire_of_writer hS hw
   obtain ⟨hur', hTr⟩ := hT r.tid rt (mem_of_lookup _ _ _ hlr)
   obtain ⟨sc, hsc⟩ := (hur' r.unit).1 hur
   obtain ⟨-, h16, hrows, -⟩ := hTr r.unit sc hsc
-  obtain ⟨huw', hTw⟩ := hT wt wtT (mem_of_lookup _ _ _ hlw)
+  obtain ⟨huw', -⟩ := hT wt wtT (mem_of_lookup _ _ _ hlw)
   obtain ⟨sc', hsc'⟩ := (huw' wu.toNat).1 huw
-  obtain ⟨-, -, -, houts⟩ := hTw _ sc' hsc'
   obtain ⟨i, hi, hpi, hwords, houter⟩ := (hrows r.port p).1 (mem_of_lookup _ _ _ hlp)
-  obtain ⟨f, hf, hof, hn⟩ := (houts out ow).1 (mem_of_lookup _ _ _ hlo)
   obtain ⟨tr, htr, htid, -, hdr, -⟩ := unit_tmpl hP hts hrs hsc
   obtain ⟨tw, htw, hwid, -, hdw, -⟩ := unit_tmpl hP hts hrs hsc'
   have hi' : i < (P.defs[tr.defn]!).params.size := by
     rw [hdr]
     exact hi
-  have hf' : f < (fieldsOf (P.defs[tw.defn]!).ret).length := by
-    rw [hdw]
-    exact hf
   have e1 : (P.defs[tr.defn]!).params[i] = (P.defs[sc.d]!).params[i]! := by
     rw [← getElem!_pos (P.defs[tr.defn]!).params i hi', hdr]
-  have e2 : (fieldsOf (P.defs[tw.defn]!).ret)[f] = (fieldsOf (P.defs[sc'.d]!).ret)[f]! := by
-    rw [← getElem!_pos (fieldsOf (P.defs[tw.defn]!).ret) f hf', hdw]
   have hp' : (P.defs[tr.defn]!).params[i].1 = w.port := by
     rw [e1, hpt]
     exact hpi.symm
   have hs : ∀ t ∈ ts, InferenceOnlyVerifier.Record.SecurityProofs.Shaped P t := fun t ht => by
     obtain ⟨x, hx⟩ := templatesOf_tmplOf hts t ht
     exact shaped_of_tmplOf hx
-  have hspec := whole_spec (tmpls_named hts).1 hs hwh (by rw [(Spot.Wires.check_sound hS).1]; exact hwm) htr htw
-    (htid.trans hrd.symm) (hwid.trans hwr.symm) hi' hp' hf' (hwo.trans hof)
-  rw [e1, e2, hdr] at hspec
-  refine ⟨sc, sc', i, f, hsc, h0, hsc', hi, hpi.symm, hf, hof, hrow, ?_, hspec.2⟩
+  obtain ⟨f, hf, hfw, hb, h16f, hwhole⟩ := whole_spec (tmpls_named hts).1 hs hwh (mem_rowWords hS hwm) htr htw
+    (htid.trans hrd.symm) (hwid.trans hwr.symm) hi' hp' x
+  rw [e1, hdr, hdw] at hwhole
+  rw [hdw] at hf hfw hb h16f
+  have hn : Spot.Wires.rowWords W w = p.words / W.cutsOf r.tid r.port := by
+    simp only [Spot.Wires.rowWords, hrd, hpt, hlr, hlp]
+  refine ⟨sc, sc', i, f, hsc, h0, hsc', hi, hpi.symm, hf, hfw.trans hoff.symm, hb, hrow, ?_, hwhole⟩
   rw [outRow_bits, inRow_bits _ _ _ _ (by rw [← houter]; exact hko) hrow]
   obtain ⟨m, hm⟩ := h16 i hi
   have hA : bitsOf (P.defs[sc.d]!).params[i]!.2 = 16 * p.words := by omega
-  have hB : p.words = W.cutsOf r.tid r.port * ow := by
-    have h1 := Nat.div_add_mod p.words (W.cutsOf r.tid r.port)
-    rw [hkw, hwd, Nat.add_zero] at h1
-    exact h1.symm
-  have hC : bitsOf (fieldsOf (P.defs[sc'.d]!).ret)[f]! = 16 * ow := by
-    rw [hn, bitsOf_eq]
-    exact hspec.1
-  have hD : 16 * p.words = W.cutsOf r.tid r.port * (16 * ow) := by
-    rw [hB, Nat.mul_left_comm]
-  rw [hA, hD, Nat.mul_div_cancel_left _ hk0, hC]
+  have hC : bitsOf (fieldsOf (P.defs[sc'.d]!).ret)[f]! = 16 * (p.words / W.cutsOf r.tid r.port) := by
+    rw [bitsOf_eq, h16f, hn]
+  rw [hA, hC, Nat.mul_div_assoc _ (Nat.dvd_of_mod_eq_zero hkw)]
+
+/-- **A wired row holds its output** (`OutFits`), of a record whose wires pass the check's `unwhole`: the writer's
+field at the wire's offset is the row's bits (`wired_row`), and a unit, its parameter by name, and a field of a word
+or more by its first word are each one (`unitAt_fun`, `portsNamed`, `fieldWord_inj`). -/
+theorem outFits (hP : ReadProg P)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
+    (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
+    (hts : templatesOf P doc = .ok ts)
+    (hwh : unwhole P ts (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S = none) :
+    OutFits P rs W S := by
+  intro r wt wu out off sc sc' i f hw _ hsc hsc' hi hp hoff hf hb
+  obtain ⟨sc₀, sc₀', i₀, f₀, hsc₀, -, hsc₀', hi₀, hp₀, hf₀, hoff₀, hb₀, -, hbits, -⟩ :=
+    wired_row hP hrs hT hS hts hwh hw
+  have e1 := unitAt_fun P rs _ _ _ _ hsc₀ hsc
+  have e2 := unitAt_fun P rs _ _ _ _ hsc₀' hsc'
+  subst e1 e2
+  have e3 : i₀ = i := portsNamed hrs hT _ _ _ i₀ i hsc₀ hi₀ hi (hp₀.trans hp.symm)
+  have e4 : f₀ = f := fieldWord_inj _ hf₀ hf hb₀ hb (hoff₀.trans hoff.symm)
+  subst e3 e4
+  exact Nat.le_of_eq hbits.symm
 
 /-! ## Aligned and Filled -/
 
@@ -377,15 +395,19 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityPro
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
-    (hwh : unwhole ts
-      (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S.wires = none) : Aligned P rs W S := by
+    (hwh : unwhole P ts
+      (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S = none)
+    (hSh : SharedUnwired P rs W S) : Aligned P rs W S := by
   intro r l' g' lo' up' hwl
-  obtain ⟨wt, wu, out, sc₁, hw, -, hu₁, hout₁⟩ := hwl
-  obtain ⟨sc, sc', i, f, hsc, -, hsc', hi, hp, hf, rfl, hrow, hbits, hwhole⟩ := wired_row hP hrs hT hS hts hwh hw
-  have hout : OutLeaf P sc' ("o" ++ toString f) l' g' lo' up' := by
+  obtain ⟨wt, wu, o, off, sc₁, hw, -, hu₁, hout₁⟩ := hwl
+  obtain ⟨sc, sc', i, f, hsc, -, hsc', hi, hp, hf, hoff, hb, hrow, hbits, hwhole⟩ := wired_row hP hrs hT hS hts hwh hw
+  have hout : OutLeaf P sc' off l' g' lo' up' := by
     rw [← unitAt_fun P rs wt wu.toNat sc₁ sc' hu₁ hsc']
     exact hout₁
-  obtain ⟨hl', -, rfl, rfl⟩ := outLeaf_data hout
+  obtain ⟨f₁, hf₁w, hf₁, hb₁, hl', -, hlo, hhi⟩ := hout
+  have e : f = f₁ := fieldWord_inj _ hf hf₁ hb hb₁ (hoff.trans hf₁w.symm)
+  rw [← e] at hl' hlo hhi
+  subst hlo hhi
   rcases hwhole with ⟨-, hnot⟩ | ⟨a, o, ha, ho, ho0, hdiv⟩
   · -- the parameter is not passed on: the unit returns no leaf of the row
     refine Or.inr fun l g lo up hrl _ _ hpass => ?_
@@ -395,7 +417,9 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityPro
       exact hout₂
     obtain ⟨hl, hres, -, -⟩ := rowLeaf_data (portsNamed hrs hT) hsc hi hp hrl
     rw [inRow_size _ _ _ _ hrow] at hl
-    exact closed_not_returned hP hO hrs hsc hi (inRow_get _ i _ _ l hrow hl).1 hres hnot hret
+    refine closed_not_returned hP hO hrs hsc hi (inRow_get _ i _ _ l hrow hl).1 hres hnot (fun hs => ?_) hret
+    rw [hSh r l g lo up hs hrl] at hw
+    cases hw
   · -- each row's leaves are of one width, and the writer's divides the reader's
     obtain ⟨c, rfl⟩ := Nat.dvd_of_mod_eq_zero hdiv
     have hR := inRow_const (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row (o * c) hrow ha
@@ -423,17 +447,28 @@ theorem filled (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
-    (hwh : unwhole ts
-      (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S.wires = none) : Filled P rs W S := by
+    (hwh : unwhole P ts
+      (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S = none) : Filled P rs W S := by
   intro r l g lo up hsome hrl b _ hb2
-  obtain ⟨⟨wt, wu, out⟩, hw⟩ := Option.isSome_iff_exists.1 hsome
-  obtain ⟨sc, sc', i, f, hsc, h0, hsc', hi, hp, hf, rfl, hrow, hbits, -⟩ := wired_row hP hrs hT hS hts hwh hw
+  obtain ⟨⟨wt, wu, out, off⟩, hw⟩ := Option.isSome_iff_exists.1 hsome
+  obtain ⟨sc, sc', i, f, hsc, h0, hsc', hi, hp, hf, hoff, hbf, hrow, hbits, -⟩ := wired_row hP hrs hT hS hts hwh hw
   obtain ⟨hl, -, rfl, rfl⟩ := rowLeaf_data (portsNamed hrs hT) hsc hi hp hrl
   have hb : b < bitAt (outRow (P.defs[sc'.d]!) f).2 (outRow (P.defs[sc'.d]!) f).2.size := by
     rw [bitAt_size, ← hbits, ← bitAt_size]
     exact Nat.lt_of_lt_of_le hb2 (bitAt_leaf_le _ l hl)
   obtain ⟨l', hl', h1, h2⟩ := leaf_of_bit _ _ (Nat.le_refl _) b hb
-  obtain ⟨g', hg'⟩ := outLeaf_intro hP hrs hsc' hf hl'
-  exact ⟨l', g', _, _, ⟨wt, wu, _, sc', hw, h0, hsc', hg'⟩, h1, h2⟩
+  obtain ⟨g', hg'⟩ := outLeaf_intro hP hrs hsc' hf hbf hl'
+  exact ⟨l', g', _, _, ⟨wt, wu, out, off, sc', hw, h0, hsc', by rw [← hoff]; exact hg'⟩, h1, h2⟩
+
+/-- **No row on a leaf of a shared run has a writer** (`SharedUnwired`), on a record `read` accepts, given that every
+such row is held (`SharedHeld`): the check holds no row that has a writer (`held_unwired`). -/
+theorem sharedUnwired_of_read (hSH : InferenceOnlyVerifier.Record.SecurityProofs.SharedHeld) {j tr : Json}
+    {c : InferenceOnlyVerifier.Record.Case} (h : InferenceOnlyVerifier.Record.read j tr = .ok c)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P) (c.W.templates.map (·.1)).toArray =
+      .ok rs) :
+    SharedUnwired c.f.P rs c.W c.wired := by
+  intro r l g lo hi hs hrl
+  obtain ⟨p, hp⟩ := hSH j tr c rs h hrs g hs
+  exact held_unwired h r (by rw [hp r l lo hi hrl]; rfl)
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs

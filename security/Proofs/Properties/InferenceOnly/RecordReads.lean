@@ -61,7 +61,10 @@ variable {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.
 gate on which a read of a row lands, the row one of a unit of slot `u`, not inside the block (`inside`) and not
 held. `inside` is any set of rows each of which has a writer, the writer in the row's slot where both have one;
 every unit has a slot, a held row has no writer, and a gate lies in one unit. -/
-theorem reads_land (hO : OwnRows P rs W) (hL : LaysOut P rs W S D at_) (hU : UnitsComputed P rs)
+theorem reads_land (hO : OwnRows P rs W)
+    (hSh : ∀ r l g lo hi, SharedLeaf P g → RowLeaf P rs W r l g lo hi →
+      S.writerOf r.tid r.unit r.port r.row = none)
+    (hL : LaysOut P rs W S D at_) (hU : UnitsComputed P rs)
     (hOp : OperandsOwn P rs W) (hR : ReturnsOwn P rs W) (hN : PortsNamed P rs) {ρ : String × ℤ → ℕ}
     (hρ : Ranked S ρ)
     (hA : ∀ tid u sc tid' u' sc' g, UnitAt P rs tid u sc → UnitAt P rs tid' u' sc' → sc.off ≤ g →
@@ -71,8 +74,8 @@ theorem reads_land (hO : OwnRows P rs W) (hL : LaysOut P rs W S D at_) (hU : Uni
     (hslot : ∀ tid u sc, UnitAt P rs tid u sc → ∃ s, slot tid u = some s)
     {held : Row → Bool} {θ : Finset (Fin D.N)} (hNm : Names P rs W held at_ θ)
     (hheld : ∀ r, held r = true → S.writerOf r.tid r.unit r.port r.row = none) (inside : Row → Prop)
-    (hin : ∀ r, inside r → (S.writerOf r.tid r.unit r.port r.row).isSome ∧ ∀ wt wu out s s',
-      S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out) → slot r.tid r.unit = some s →
+    (hin : ∀ r, inside r → (S.writerOf r.tid r.unit r.port r.row).isSome ∧ ∀ wt wu out off s s',
+      S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out, off) → slot r.tid r.unit = some s →
       slot wt wu.toNat = some s' → s' = s)
     (u : Fin n) (a : Fin D.N) (ha : a ∈ D.into (U.gates u)) (hθ : a ∉ θ) :
     ∃ r, slot r.tid r.unit = some u.val ∧ ¬ inside r ∧ held r = false ∧ a ∈ landing P rs W S at_ r := by
@@ -125,10 +128,10 @@ theorem reads_land (hO : OwnRows P rs W) (hL : LaysOut P rs W S D at_) (hU : Uni
       by_cases hins : inside r
       · -- a row inside the block: the read lands where a leaf of its writer's output row lands
         obtain ⟨hsome, hsame⟩ := hin r hins
-        obtain ⟨l', g', lo', hi', hwl, -, -, hla'⟩ := lands_wired_row hO hN hrl hsome hla
-        obtain ⟨wt, wu, out, sc', hw, h0, hu', hol⟩ := hwl
+        obtain ⟨l', g', lo', hi', hwl, -, -, hla'⟩ := lands_wired_row hO hSh hN hrl hsome hla
+        obtain ⟨wt, wu, o, out, sc', hw, h0, hu', hol⟩ := hwl
         obtain ⟨s', hs'⟩ := hslot wt wu.toNat sc' hu'
-        have hss : s' = u.val := hsame wt wu out _ _ hw hs hs'
+        have hss : s' = u.val := hsame wt wu o out _ _ hw hs hs'
         rw [hss] at hs'
         rcases hR wt wu.toNat sc' out l' g' lo' hi' hu' hol with ⟨h1, h2⟩ | ⟨r', l'', lo'', hi'', ht, hun, hrl'⟩
         · exfalso
@@ -136,7 +139,7 @@ theorem reads_land (hO : OwnRows P rs W) (hL : LaysOut P rs W S D at_) (hU : Uni
           exact hnot (hmem a (hblock wt wu.toNat sc' hu' u.val hs' a (by omega) (by omega)))
         · have hlt : ρ (r'.tid, (r'.unit : ℤ)) < k := by
             rw [← hk, ht, hun, Int.toNat_of_nonneg h0]
-            exact hρ r wt wu out hw
+            exact hρ r wt wu o out hw
           exact ih _ hlt r' l'' g' lo'' hi'' rfl hrl' (by rw [ht, hun]; exact hs') hla'
       · by_cases hh : held r = true
         · -- a held row: the read lands on the leaf itself, which θ holds
@@ -144,9 +147,10 @@ theorem reads_land (hO : OwnRows P rs W) (hL : LaysOut P rs W S D at_) (hU : Uni
           have hnone := hheld r hh
           have hnw : ¬ Wired P rs W S o := by
             rintro ⟨r₁, l₁, lo₁, hi₁, hsome, hrl₁⟩
-            obtain ⟨e, -⟩ := hO.2 r₁ l₁ lo₁ hi₁ r l lo hi o hrl₁ hrl
-            rw [e, hnone] at hsome
-            cases hsome
+            obtain ⟨e, -⟩ | hs := hO.2 r₁ l₁ lo₁ hi₁ r l lo hi o hrl₁ hrl
+            · rw [e, hnone] at hsome
+              cases hsome
+            · simp [hSh r₁ l₁ o lo₁ hi₁ hs hrl₁] at hsome
           have e := lands_unwired hnw hla
           rw [← e] at hrl
           exact hθ ((hNm a).2 ⟨r, l, lo, hi, hh, hrl⟩)
