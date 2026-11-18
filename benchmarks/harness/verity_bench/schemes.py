@@ -23,7 +23,7 @@ def useful_work(name: str) -> registry.Scheme:
     compute = sorted(n for n, s in registry.SCHEMES.items() if s.resource == "compute")
     if name not in compute:
         raise ValueError(f"--protocol {name!r} is no registered compute scheme; registered: {', '.join(compute)}")
-    return registry.get(name)
+    return registry.SCHEMES[name]
 
 
 def served(scheme: registry.Scheme) -> registry.Scheme:
