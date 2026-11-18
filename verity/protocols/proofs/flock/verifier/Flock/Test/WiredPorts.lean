@@ -22,6 +22,7 @@ namespace Flock.Test.WiredPorts
 open Lean (Json toJson)
 open Flock Flock.Registered
 open Flock.Test.RegProgram (plain)
+open Flock.HmLinks (NodeUnits unitAt count)
 
 def prog : Program.Prog := (Program.decode plain).toOption.getD default
 def ns : List NodeUnits := HmLinks.nodes prog
