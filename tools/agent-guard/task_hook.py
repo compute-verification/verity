@@ -84,7 +84,8 @@ def nested_task(value, depth: int = 0):
     if isinstance(value, str) and value.lstrip()[:1] in ("{", "["):
         try:
             value = json.loads(value)
-        except ValueError:
+        except ValueError as e:
+            print(f"task_hook: an argument that looks like JSON isn't, so no Task call is read in it ({e})", file=sys.stderr)
             return None
     if depth > 8:
         return None
@@ -94,8 +95,10 @@ def nested_task(value, depth: int = 0):
             if isinstance(inner, str):
                 try:
                     inner = json.loads(inner)
-                except ValueError:
-                    pass
+                except ValueError as e:
+                    print(f"task_hook: a Task call's arguments are a string that isn't JSON, so none is read ({e})",
+                          file=sys.stderr)
+                    inner = {}
             return inner if inner is not None else {}
         value = list(value.values())
     if isinstance(value, list):

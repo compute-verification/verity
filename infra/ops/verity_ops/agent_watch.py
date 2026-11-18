@@ -2588,7 +2588,9 @@ class Watch:
         self.learn_tried[agent], self.learn_left = t, self.learn_left - 1
         try:
             info = {"name": self.names[agent]} if agent in self.names else self.api.get(f"/v1/agents/{agent}") or {}
-        except (urllib.error.URLError, OSError, ValueError):
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            print(f"{iso(t)} run ends: the record of {agent} was not read ({type(e).__name__}: {e}), so only its brief is",
+                  file=sys.stderr, flush=True)
             info = {}
         if info.get("repos") and not verity(info):
             return {}
