@@ -206,7 +206,7 @@ PUBLIC = {
     "verity_vllm.pipeline.advice_code.derived": "I1: advice v1's derived rules (the walk, the prefixes, the tie), which the "
                                                 "network attester's derived vectors are held to",
     "verity_vllm.pipeline.advice_code.window_code": "I1: advice v1's window code and its codebook",
-    "verity_vllm.pipeline.advice_code.format": "I1: advice v0, what serving decided as one canonical bit string, its "
+    "verity_vllm.compiler.advice_format": "I1: advice v0, what serving decided as one canonical bit string, its "
                                                "records, encode and decode, and its bits by window, which "
                                                "benchmarks/network_e2e, compile_cost and one_stage's rehearsal measure",
     "verity_vllm.compiler.replay_step": "I1: one scheduler step of the compiler's replay (its statics, inputs, state, "

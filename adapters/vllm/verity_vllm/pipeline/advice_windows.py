@@ -65,7 +65,7 @@ from verity.commitments.periods import interface as IF
 from verity_vllm.config import option, workload_arg
 
 TRACED = "verity-vllm/advice-windows/traced-of-record/v0"
-I1 = "verity_vllm.pipeline.advice_code.format"
+I1 = "verity_vllm.compiler.advice_format"
 SCHEME = IF.ADVICE_SCHEME
 ROW_BITS = IF.ADVICE_ROW_BITS
 _DIGEST = re.compile(r"^[0-9a-f]{128}$")

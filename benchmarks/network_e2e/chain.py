@@ -1,9 +1,9 @@
 """The network chain's steps after N2 and the proofs, over varied traffic: the advice (I1 v0,
-`verity_vllm.pipeline.advice_code.format`), its bits per execution phase (v0's `bits_by_window` beside the derived rules'
+`verity_vllm.compiler.advice_format`), its bits per execution phase (v0's `bits_by_window` beside the derived rules'
 residual, `encodings/derived.py`) and the prove path's audit of a committed run's step units compiled from that advice
 (`benchmarks/prove_path`). Each stage's result says what it stood on; `stubs` lists what is still a stand-in.
 
-* **The advice**: I1 v0 (`verity_vllm.pipeline.advice_code.format`), bound to the runs only on the advice profile, by
+* **The advice**: I1 v0 (`verity_vllm.compiler.advice_format`), bound to the runs only on the advice profile, by
   the honest run's attested I/O (``io.json``): every advice request is an attested request (its ``user``), once.
 * **Bits per execution phase** (`bits`), T the honest run's egress window in buckets: v0's (I1's
   `bits_by_window`) and, given the registered serving config (`derived.Config`'s fields, or a step
@@ -47,7 +47,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import window_chain as WC  # noqa: E402
-from verity_vllm.pipeline.advice_code import format as I1  # noqa: E402
+from verity_vllm.compiler import advice_format as I1  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments import advice as AC  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402

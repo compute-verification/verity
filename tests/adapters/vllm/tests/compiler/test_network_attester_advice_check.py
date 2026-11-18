@@ -11,7 +11,7 @@ import itertools
 import random
 
 import pytest
-from verity_vllm.pipeline.advice_code import format as V
+from verity_vllm.compiler import advice_format as V
 from tests.adapters.vllm.tests.pipeline.test_advice_format import (
     FIXTURE,
     RANDOM,

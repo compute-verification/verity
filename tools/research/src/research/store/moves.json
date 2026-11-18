@@ -5501,6 +5501,11 @@
         "security/Definitions/Certifier/AttesterScheme.lean": "security/Definitions/ResourceAccounting/Network/AttesterScheme.lean",
         "security/Proofs/Certifier/AttesterScheme.lean": "security/Proofs/ResourceAccounting/Network/AttesterScheme.lean"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/pipeline/advice_code/format.py": "adapters/vllm/verity_vllm/compiler/advice_format.py"
+      }
     }
   ]
 }

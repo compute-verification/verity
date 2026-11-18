@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity_vllm.pipeline.advice_code import format as I1
+from verity_vllm.compiler import advice_format as I1
 from verity_vllm.pipeline import window_advice as WA
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "network_e2e"))

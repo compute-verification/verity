@@ -1049,7 +1049,7 @@ step proof blocks), and that they agree with the attested I/O (the tie proof blo
 the ingress counts and the advice; no N2 proof block does yet. The advice's length is the leak, charged as `A_c` in the
 accepted-runs bound.
 
-This section attacks that claim through its parts: the advice codec (the adapter's `verity_vllm.pipeline.advice_code.format`, with `encode`,
+This section attacks that claim through its parts: the advice codec (the adapter's `verity_vllm.compiler.advice_format`, with `encode`,
 `decode` and `bits`), the I/O tie proof block (`io_tie`) and the compiler
 (`verity_vllm.program.predict.compile_steps`). It gives the argument, every assumption the argument rests on, what
 each attack costs under the design, and the adversarial cases each part's tests must carry.

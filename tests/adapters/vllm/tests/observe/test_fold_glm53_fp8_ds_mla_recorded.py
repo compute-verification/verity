@@ -39,7 +39,7 @@ from verity_vllm.observe.fold.patterns import dsa_flashmla as F
 from verity_vllm.observe.fold.resolve_log import load_profile
 from verity_vllm.observe.fold.resolver import Compute, Group, spec_label
 from verity_vllm.observe.log import read_log
-from verity_vllm.pipeline.advice_code import format as I1
+from verity_vllm.compiler import advice_format as I1
 from verity_vllm.program.predict import aot
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.phi import Phi, _refuse_unstated
