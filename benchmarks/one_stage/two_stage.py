@@ -1067,6 +1067,13 @@ def _round_two_own(replay: Program, key: str, sample: Sequence[int], window: CS.
     return own
 
 
+def round_two(python: Mapping[str, Any] | None, lean: Sequence[str] | None) -> dict[str, Any]:
+    """Round 2's verdict of record: the Python twin's verdict ``python`` (`second_stage.check_twin`'s JSON) held to the
+    statement codes ``lean`` the Lean verifier's run of the stream gave (`second_stage.held_to_lean`)."""
+    codes = SS.held_to_lean(None if python is None else python["codes"], lean)
+    return {"ok": codes == [], "codes": codes}
+
+
 def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_dir: Path, source: Callable[[dict], dict],
                  brec: dict, irec: dict, sample: list[int], second: tuple[dict, dict, dict], reads: dict[str, dict],
                  proofs: dict, out: Path, provenance: dict, *, replay: tuple[Program, str],
@@ -1107,6 +1114,10 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
         stmts = statements(out / "audit", window)
         (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
         got["pins"] = pins(proofs, stmts)
+        own = _round_two_own(*replay, sample, window, irec, brec, s["draw"], record, proofs, tie)
+        got["round_two_python"] = SS.check_twin(True, own, stmts).to_json()
+        got["round_two_negatives"] = {name: SS.check_twin(True, own, tampered).ok is False
+                                      for name, tampered in (("dropped", stmts[:-1]), ("none", None))}
     return s, ok, record, got, stmts
 
 
@@ -1500,7 +1511,7 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
             with SC.capture(out / "run-input.json") if form_case else contextlib.nullcontext():
                 summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
             codes = summary["outcome"].get("statements")
-            summary["round_two"] = None if codes is None else {"ok": codes == [], "codes": codes}
+            summary["round_two"] = None if codes is None else round_two(summary.get("round_two_python"), codes)
             if form_case:
                 summary["form_case"] = SC.from_run(out)
         ok = held(s, summary.get("round_two"), summary.get("outcome"), summary.get("pins"))

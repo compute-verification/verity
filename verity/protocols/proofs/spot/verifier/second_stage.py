@@ -1,10 +1,11 @@
 """Round 2's statement check, as the verifier's `Spot.SecondStage` defines it, which the difftest's
 `second_statements` holds this to: a two-stage run's second-stage sessions held, each by its statement, to the interior
 docket and to the second sample's cells. Its verdict of record is the Lean's (`SecondStage.checkAny`, inside
-`Run.run`), which no interface here reaches on its own: `check` and `complete` raise (`verifier.not_written`), and
-`check_twin` and `complete_twin` are their Python twins, the difftest's references. `service.Stream` adds the twin's
-check to the interior docket's audit record as `checks.statements` (`attach`), the Python side `Run.run` is held
-to, and the outcome is `Run.run`'s. The parts and their cells, a statement, its codes and the form's switch are the Lean's
+`Run.run`), which no interface here reaches on its own: `check` is the Python twin's verdict held to the codes the
+Lean's run gave (`DISAGREE` where they differ), `complete` raises (`verifier.not_written`), and `check_twin` and
+`complete_twin` are the Python twins, the difftest's references. `service.Stream` adds the twin's check to the
+interior docket's audit record as `checks.statements` (`attach`), the Python side `Run.run` is held to, and the
+outcome is `Run.run`'s. The parts and their cells, a statement, its codes and the form's switch are the Lean's
 (its module docstring).
 
 A statement is one second-stage session's: ``{"template", "header", "draw", "registered"}``, the template its circuit is
@@ -1671,10 +1672,23 @@ def check_twin(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdi
     return c.verdict()
 
 
-def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
-    """Round 2's verdict of record on `statements`: the Lean `SecondStage.checkAny`'s, which only `Run.run` reaches, so
-    this raises (`verifier.not_written`); `check_twin` is its Python twin."""
-    return V.not_written("check", "Spot.SecondStage.checkAny")
+def held_to_lean(python: Sequence[str] | None, lean: Sequence[str] | None) -> list[str]:
+    """The codes of round 2's verdict of record, given the Python twin's codes and the Lean's (`Run.run`'s
+    `statements` check): the Lean's where the two are the same list, else `DISAGREE` alone; None for either, a run
+    that gave no answer, is a disagreement too."""
+    same = python is not None and lean is not None and list(python) == list(lean)
+    return list(lean) if same and lean is not None else [V.DISAGREE]
+
+
+def check(allow: bool, own: Own, statements: Sequence[Any] | None, lean: Sequence[str] | None) -> Verdict:
+    """Round 2's verdict of record on `statements`: `check_twin`'s held to `lean`, the codes the Lean `Run.run` gave
+    its `SecondStage.checkAny` of the same run, failing with `DISAGREE` alone where they differ."""
+    v = check_twin(allow, own, statements)
+    if held_to_lean(v.codes, lean) == list(v.codes):
+        return v
+    c = _Collect()
+    c.fail(V.DISAGREE, {"lean": None if lean is None else list(lean), "python": list(v.codes)})
+    return c.verdict()
 
 
 def complete(form: bool, request_definition: bool, records: Sequence[Mapping[str, Any] | None]) -> bool:
@@ -1695,7 +1709,8 @@ def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]
 
 __all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "RETURN_WHY", "WIRED_KEY", "Checked", "Link", "Own", "Part",
            "Rows", "Run", "Width", "Wire",
-           "at_run", "attach", "blank_reads", "blank_run", "check", "check_twin", "complete", "complete_twin", "inputs_failure", "interior_order_ok",
+           "at_run", "attach", "blank_reads", "blank_run", "check", "check_twin", "complete", "complete_twin", "held_to_lean",
+           "inputs_failure", "interior_order_ok",
            "interior_reads", "interior_root", "link_runs", "links_of",
            "own_draw", "parts", "port_binding", "replay_links", "replay_returns", "replay_rows", "replay_widths",
            "replay_wires", "returns_ok", "row_at", "rows_of",

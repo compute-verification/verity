@@ -316,13 +316,26 @@ def test_a_two_stage_outcome_is_complete_only_on_the_form_the_request_definition
     assert not SS.complete_twin(1, True, [whole]) and not SS.complete_twin(True, "yes", [whole])
 
 
-def test_no_python_decides_a_two_stage_outcome():
-    """Round 2's check and a two-stage outcome's completeness of record are the Lean's, which no interface here reaches:
-    each raises naming the goal (`verifier.not_written`), and their Python twins answer only beside it."""
-    whole = {"accepted": True, "complete": True}
-    for call in (lambda: SS.check(True, None, None), lambda: SS.complete(True, True, [whole])):
-        with pytest.raises(NotImplementedError, match=V.GOAL):
-            call()
+def test_round_two_is_the_twin_held_to_the_lean_and_completeness_is_the_leans(monkeypatch):
+    """`second_stage.check`: the Python twin's verdict held to the codes the Lean's run gave. The same codes pass, those
+    of a tampered input (no statements) too; the Lean's codes differing from the twin's, or the Lean giving none, fail
+    with `DISAGREE` alone. Completeness of record is the Lean's, which no interface here reaches: `complete` raises
+    naming the goal (`verifier.not_written`)."""
+    seen = []
+    check = SS.check_twin
+    monkeypatch.setattr(SS, "check_twin", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
+    _two_stage_outcome(_stream(), lambda s, second: [s])
+    (own, (s,)), = seen
+    assert SS.check(True, own, [s], []).ok
+    for lean in (["second-read"], None):
+        v = SS.check(True, own, [s], lean)
+        assert not v.ok and v.codes == (V.DISAGREE,) and v.detail[V.DISAGREE] == {"lean": lean, "python": []}
+    refused = check(True, own, None).codes
+    assert refused and SS.check(True, own, None, list(refused)).codes == refused
+    assert SS.check(True, own, None, []).codes == (V.DISAGREE,)
+    assert SS.held_to_lean(None, []) == SS.held_to_lean([], None) == [V.DISAGREE]
+    with pytest.raises(NotImplementedError, match=V.GOAL):
+        SS.complete(True, True, [{"accepted": True, "complete": True}])
     assert V.GOAL == "proofs/spot-two-stage-sound"
 
 
