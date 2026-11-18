@@ -1,5 +1,5 @@
-# The protocols' ontology, way B: written by `python3 tools/move/ontology_paths.py --way B`, run by
-# `python3 tools/move/layout.py --map tools/move/ontology_paths_map.toml`. Edit the script, not this file.
+# The protocols' ontology, way B, applied by
+# `python3 tools/move/layout.py --map tools/move/ontology_paths_map.toml`.
 #
 # - `policy/` becomes `workload_classification/`, with `inference_only` under `training_detection/`;
 # - `accounting/` becomes `resource_accounting/`, grouped by resource: `compute/pouw`, `memory/pous`,
