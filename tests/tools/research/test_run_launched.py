@@ -244,7 +244,7 @@ def test_a_launcher_whose_first_delivery_dropped_reports_the_refusal_not_launche
     monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **k: ["sh", str(fakessh)])
     monkeypatch.setattr(remote.time, "sleep", lambda s: go.release())     # the back-off between deliveries: the runner goes on
     try:
-        rc = _run(tmp_path, "--no-such-harness-flag")
+        rc = _run(tmp_path, "--grace", "soon")
         err = capsys.readouterr().err
         [rid] = [p.name for p in (tmp_path / "runs").iterdir()]
         wait_exit(int((tmp_path / "lr.pid").read_text()))

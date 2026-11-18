@@ -1408,7 +1408,7 @@ def test_on_auto_says_when_the_run_should_start_and_warns_or_refuses_a_late_one(
         read["docs"] = lines[line]
         rc = main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", *flags, "--", "pytest", "-q"])
         err = capsys.readouterr().err.splitlines()
-        return rc, [e[len(head):] for e in err if e.startswith(head) and not e.startswith(head + "spilled to ")]
+        return rc, [e[len(head):] for e in err if e.startswith(head) and not e.startswith((head + "spilled to ", head + "it is cut "))]
 
     late = (f"it isn't expected to start within 10 min: it should start in about 40 min on {at}: 7 waiting ahead (the oldest "
             f"for 29 min) for the 5 slots that run there")
@@ -1517,13 +1517,14 @@ def test_a_launch_the_first_choice_refuses_as_one_that_can_start_no_run_lands_on
     assert launched[0]["run_id"] != launched[1]["run_id"] and refused == started, "the same job, each run with its own pair"
     why = refusal[1]
     said = [line for line in capsys.readouterr().err.splitlines() if "--on auto: " in line or " launched on " in line]
+    cap = "research run --on auto: it is cut 60 min after it starts, the default cap: `research run --timeout 2h`"
     assert [line.split(", from ")[0].split(" (")[0] for line in said] == [
         f"research run --on auto: spilled to {CPU1}'s research pool", f"research run --on auto: it starts now on {CPU1}'s research pool",
-        f"research run --on auto: passed over {CPU1}, which can start no run",
+        cap, f"research run --on auto: passed over {CPU1}, which can start no run",
         f"research run --on auto: spilled to {CPU5}'s research pool", f"research run --on auto: it starts now on {CPU5}'s research pool",
-        f"research: run {launched[1]['run_id']} launched on {CPU5}"]
-    assert said[2] == f"research run --on auto: passed over {CPU1}, which can start no run ({why}); placing the job again without it"
-    assert f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in said[3], "the second placement says why the first is out"
+        cap, f"research: run {launched[1]['run_id']} launched on {CPU5}"]
+    assert said[3] == f"research run --on auto: passed over {CPU1}, which can start no run ({why}); placing the job again without it"
+    assert f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in said[4], "the second placement says why the first is out"
     assert docs[CPU1] == pool(slot("r0"), slot("r1")), "what was read is not rewritten"
 
 
