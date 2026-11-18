@@ -9,7 +9,8 @@
 #   A5_CARD=N A5_CORES=CPUS WORK=DIR GPU_LEASE_WHO=NAME [A5_STEPS=LO-HI] bash benchmarks/one_stage/proof_layers.sh [--out DIR] [--dry-run]
 #
 # from the tree's root. Settings:
-#   A5_CARD        the H200's index, as nvidia-smi numbers the cards (gpu-lease's --on)
+#   A5_CARD        the card's index, as nvidia-smi numbers the cards (gpu-lease's --on): one whose card file is the
+#                  served row's registered target (row_card.py)
 #   A5_CORES       the CPUs every step runs on (taskset -c, gpu-lease's --cores), e.g. 40-59
 #   WORK           a new or empty directory for the bootstrap's environment, the partition files and the three runs,
 #                  removed when the script ends, success or failure, after their records are copied to --out
@@ -25,7 +26,8 @@
 #                  time's report (STEP.time), and steps.log
 #   --dry-run      every check, then each step's line; nothing runs and nothing is made
 # Refused before anything is downloaded or built, each in one line with its fix: a setting missing; not the tree's root;
-# nvidia-smi, taskset, python3 or cargo missing; card A5_CARD not an H200 (the runs serve on one, sm_90); under 96 GB of
+# nvidia-smi, taskset, python3 or cargo missing; card A5_CARD's card file not the served row's registered target
+# (row_card.py); under 96 GB of
 # host memory available (MemAvailable: on a shared node the others' memory is not this job's); A5_CORES not a CPU list
 # this job may run on; under 96 GB free under WORK (75 GB left beside WORK's peak of about 21 GB); WORK not empty;
 # results already in --out. Each run's steps.log has what the job used.
@@ -61,8 +63,11 @@ for t in nvidia-smi taskset python3; do
 done
 command -v cargo >/dev/null || [ -x "$HOME/.cargo/bin/cargo" ] \
   || refuse "no cargo: Flock's prover builds with it (verity/protocols/proofs/flock/prover/pod/60-circuit.sh); install Rust (https://rustup.rs) and rerun"
+ROW=$(sed -n 's/^ROW=\${ROW:-\(.*\)}$/\1/p' benchmarks/one_stage/a5_llama1b_h200.sh)
+[ -n "$ROW" ] || refuse "no ROW=\${ROW:-...} line in a5_llama1b_h200.sh: its runs' served row is read from there"
 card=$(nvidia-smi --query-gpu=name --format=csv,noheader -i "$A5_CARD" 2>/dev/null | head -1)
-[[ $card == *H200* ]] || refuse "card $A5_CARD is ${card:-not one nvidia-smi names}, not an H200: the runs serve on one H200 (sm_90); set A5_CARD to an H200's index"
+PYTHONPATH=. python3 benchmarks/one_stage/row_card.py "$ROW" ${card:+"$card"} \
+  || refuse "card $A5_CARD is not one $ROW serves on; set A5_CARD to such a card's index"
 mem_gb=$(awk '/^MemAvailable:/ {print int($2 * 1024 / 1e9)}' /proc/meminfo)
 [ "${mem_gb:-0}" -ge 96 ] || refuse "${mem_gb:-0} GB of host memory available, not 96: the bootstrap's native builds need most of that of their own; wait for other jobs to end or run on another machine"
 python3 - "$A5_CORES" <<'EOF' || exit 2

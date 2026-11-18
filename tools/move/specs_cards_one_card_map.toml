@@ -1,0 +1,41 @@
+# The specs that run on one card, named for none: what `tools/move/layout.py --map tools/move/specs_cards_one_card_map.toml`
+# moves and rewrites. Each lists its one card (a vLLM spec's `cards`, a steady-state spec's `card`) and loses it from its
+# name; a stored run's spec id of any resolves through `benchmarks/harness/verity_bench/data/former_spec_ids.toml`. A
+# steady-state point's identity names no spec id (`steady_spec.point_identity`), so its runs stay its own. The format is
+# `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+
+[paths]
+"benchmarks/harness/specs/glm53-flock-steady-head-block-h200-walk.toml" = "benchmarks/harness/specs/glm53-flock-steady-head-block-walk.toml"
+"benchmarks/harness/specs/glm53-flock-steady-head-block-h200.toml" = "benchmarks/harness/specs/glm53-flock-steady-head-block.toml"
+"benchmarks/harness/specs/llama32-1b-flock-steady-gemm-h200-walk.toml" = "benchmarks/harness/specs/llama32-1b-flock-steady-gemm-walk.toml"
+"benchmarks/harness/specs/llama32-1b-flock-steady-gemm-h200.toml" = "benchmarks/harness/specs/llama32-1b-flock-steady-gemm.toml"
+"benchmarks/harness/specs/llama31-8b-fp8-rtx-served-arm.toml" = "benchmarks/harness/specs/llama31-8b-fp8-served-arm.toml"
+"benchmarks/harness/specs/llama32-1b-1gpu-stock-served-h100.toml" = "benchmarks/harness/specs/llama32-1b-1gpu-stock-served.toml"
+"benchmarks/harness/specs/qwen3-8b-bf16-rtx-served-arm-eager.toml" = "benchmarks/harness/specs/qwen3-8b-bf16-served-arm-eager.toml"
+"benchmarks/harness/specs/qwen3-8b-bf16-rtx-served-arm.toml" = "benchmarks/harness/specs/qwen3-8b-bf16-served-arm.toml"
+
+[retired]
+paths = ["benchmarks/harness/specs/glm53-flock-steady-head-block-h200-walk.toml",
+         "benchmarks/harness/specs/glm53-flock-steady-head-block-h200.toml",
+         "benchmarks/harness/specs/llama32-1b-flock-steady-gemm-h200-walk.toml",
+         "benchmarks/harness/specs/llama32-1b-flock-steady-gemm-h200.toml",
+         "benchmarks/harness/specs/llama31-8b-fp8-rtx-served-arm.toml",
+         "benchmarks/harness/specs/llama32-1b-1gpu-stock-served-h100.toml",
+         "benchmarks/harness/specs/qwen3-8b-bf16-rtx-served-arm-eager.toml",
+         "benchmarks/harness/specs/qwen3-8b-bf16-rtx-served-arm.toml"]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# former spec ids), files whose bytes a digest pins, the archive, `move_check.py` and its test, and `tests/tree.toml`.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**", "archive/**",
+           "tools/check/tests/test_move_check.py", "tools/check/move_check.py",
+           "tools/research/src/research/store/moves.json", "tests/tree.toml",
+           "benchmarks/harness/verity_bench/data/former_spec_ids.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[modules]

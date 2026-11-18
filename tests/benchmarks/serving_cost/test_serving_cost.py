@@ -508,3 +508,103 @@ def test_price_refuses_arms_the_capture_did_not_serve(store, tmp_path):
     with pytest.raises(SystemExit, match="the capture served none of prod-record-bisect: give --ours an arm it served"):
         S.main(["price", "--capture", CAPTURE, "--minify", MINIFY, "--ours", "prod-record-bisect", "--out",
                 str(tmp_path / "price")])
+
+
+STEPS_RUN, OLDER_STEPS_RUN = "r20261118-000110-0010", "r20261118-000120-0011"
+
+
+class LabelStore:
+    """A stand-in for the store `labels_store` gives: its index's `labels` table, nothing pulled."""
+
+    def __init__(self, labels: list[tuple[str, str, str, str]]):
+        import sqlite3
+
+        self.db = sqlite3.connect(":memory:")
+        self.db.execute("CREATE TABLE labels(target TEXT, key TEXT, value TEXT, by TEXT, ts TEXT, ref TEXT, path TEXT)")
+        self.db.executemany("INSERT INTO labels VALUES (?, ?, ?, 'benchmarks', ?, NULL, ?)",
+                            [(t, k, v, ts, f"{t}/{ts}") for t, k, v, ts in labels])
+        self.index = self
+
+    def sql(self, query: str, params: tuple = ()) -> list[tuple]:
+        return self.db.execute(query, params).fetchall()
+
+
+def steps_moved_out(store: dict[str, Path], tmp: Path, run: str) -> None:
+    """The capture's public steps moved into a record of `run`'s, as `serve_tax.py steps-of-trace --to` lays them."""
+
+    d = record(tmp, run, None)
+    for f in sorted((store[CAPTURE] / "out").glob(S.STEPS)):
+        dst = d / "out" / f.relative_to(store[CAPTURE] / "out")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        f.rename(dst)
+    store[run] = d
+
+
+def labelled(monkeypatch, labels: list[tuple[str, str, str, str]]) -> None:
+    monkeypatch.setattr(S, "labels_store", lambda: LabelStore(labels))
+
+
+def test_price_reads_a_captures_steps_from_the_record_labelled_steps_of_it_and_prices_as_its_own(
+        store, tmp_path, monkeypatch, capsys):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path)
+    assert price(tmp_path / "own") == 0
+    (own,) = result(tmp_path / "own")["measurements"]
+    steps_moved_out(store, tmp_path / "steps", STEPS_RUN)
+    assert not any((store[CAPTURE] / "out").glob(S.STEPS))
+    labelled(monkeypatch, [(STEPS_RUN, S.STEPS_OF, CAPTURE, "2026-11-18T05:54:14Z"),
+                           (STEPS_RUN, "note", f"public steps of {CAPTURE}", "2026-11-18T05:34:40Z")])
+    capsys.readouterr()
+    out = tmp_path / "price"
+    assert price(out) == 0
+    said = capsys.readouterr().out
+    assert f"capture run {CAPTURE} holds no public steps; its steps are run {STEPS_RUN}'s" in said
+    assert "newest" not in said
+    r = result(out)
+    (m,) = r["measurements"]
+    assert m["value"] == own["value"] and m["inputs"] == [own["mark"], CAPTURE, STEPS_RUN, MINIFY]
+    assert r["workload_fingerprint"]["steps"] == STEPS_RUN
+    assert not any((store[CAPTURE] / "out").glob(S.STEPS))
+    assert not any(p.is_symlink() for p in (store[CAPTURE] / "out").rglob("*"))
+
+
+def test_price_takes_the_newest_of_two_records_labelled_steps_of_a_capture_and_says_so(
+        store, tmp_path, monkeypatch, capsys):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path)
+    steps_moved_out(store, tmp_path / "steps", STEPS_RUN)
+    store[OLDER_STEPS_RUN] = record(tmp_path / "older", OLDER_STEPS_RUN, None)
+    labelled(monkeypatch, [(OLDER_STEPS_RUN, S.STEPS_OF, CAPTURE, "2026-11-18T05:00:00Z"),
+                           (STEPS_RUN, S.STEPS_OF, CAPTURE, "2026-11-18T06:00:00Z"),
+                           ("r20261118-000130-0012", S.STEPS_OF, CAPTURE, "2026-11-18T07:00:00Z"),
+                           ("r20261118-000130-0012", S.STEPS_OF, "r20261118-000140-0013", "2026-11-18T08:00:00Z")])
+    assert price(tmp_path / "price") == 0
+    said = capsys.readouterr().out
+    assert (f"its steps are run {STEPS_RUN}'s (labelled `steps_of={CAPTURE}` at 2026-11-18T06:00:00Z), the newest of "
+            f"2 so labelled (also {OLDER_STEPS_RUN})") in said
+
+
+def test_price_refuses_a_capture_with_neither_its_own_steps_nor_a_record_labelled_steps_of_it(
+        store, tmp_path, monkeypatch):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path)
+    steps_moved_out(store, tmp_path / "steps", STEPS_RUN)
+    labelled(monkeypatch, [(STEPS_RUN, S.STEPS_OF, "r20261118-000140-0013", "2026-11-18T05:54:14Z")])
+    with pytest.raises(SystemExit, match=f"capture run {CAPTURE} holds no public steps .*, and no record is labelled "
+                                         f"`steps_of={CAPTURE}`: make one with `benchmarks/serve_tax/serve_tax.py "
+                                         f"steps-of-trace RUN_OUT --to DIR` over run {CAPTURE}'s fetched out/"):
+        price(tmp_path / "price")
+
+
+def test_price_refuses_a_record_labelled_steps_of_a_capture_that_holds_no_steps(store, tmp_path, monkeypatch):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path)
+    steps_moved_out(store, tmp_path / "steps", STEPS_RUN)
+    store[OLDER_STEPS_RUN] = record(tmp_path / "older", OLDER_STEPS_RUN, None)
+    labelled(monkeypatch, [(OLDER_STEPS_RUN, S.STEPS_OF, CAPTURE, "2026-11-18T09:00:00Z")])
+    with pytest.raises(SystemExit, match=f"run {OLDER_STEPS_RUN} is labelled `steps_of={CAPTURE}` but holds no "
+                                         "public steps"):
+        price(tmp_path / "price")
+
+
+def test_price_of_a_capture_holding_its_own_steps_reads_no_label(store, tmp_path, monkeypatch):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path)
+    monkeypatch.setattr(S, "labels_store", lambda: pytest.fail("read the labels"))
+    assert price(tmp_path / "price") == 0
+    assert "steps" not in result(tmp_path / "price")["workload_fingerprint"]

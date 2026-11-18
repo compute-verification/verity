@@ -6,7 +6,8 @@
 # (instruction/compute/scheduler/warp sections) for R in PF_NCU_R. Clocks are read, never set.
 set -uo pipefail
 export O=${OUT:?}
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4  # the machine's toolkit at 13.0
+export PATH=$CUDA_HOME/bin:$PATH
 D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/foldprobe.XXXXXX); trap 'rm -rf "$B"' EXIT
 export PF_R_LIST=${PF_R_LIST:-"1 2 3 4 6 8"} PF_NCU_R=${PF_NCU_R:-"1 2 4"} PF_S=${PF_S:-256}

@@ -121,7 +121,7 @@ theorem bernFactor_zero (num den : ℕ) [NeZero den] :
 theorem bernoulli_miss_eq {n num den : ℕ} [NeZero den] (h : num ≤ den) (B : Finset (Fin n)) :
     Claims.Pr (fun ω : Fin n → Fin den => Disjoint (univ.filter fun u => (ω u).val < num) B) =
       (((den - num : ℕ) : ℝ) / den) ^ B.card := by
-  have := Pr_miss_eq (SamplingDesign.bernoulli n num den) B
+  have := Pr_miss_eq (Verity.SamplingDesign.bernoulli n num den) B
   rw [SamplingDesign.bernoulli_escape h, ENNReal.toReal_pow, bernFactor_zero num den] at this
   exact this
 

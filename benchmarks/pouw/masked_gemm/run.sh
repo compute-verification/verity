@@ -5,11 +5,12 @@
 # under a second lease, whatever the gate said (the table marks an arm whose gate failed). Clocks are read, never set.
 #
 #   research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEASE_WHO=LANE \
-#     --send verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
+#     --send benchmarks/pouw/masked_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
 # STAGE=build|gate|all (default all); REPS (default 11); SHAPES (name:m:n:k); MG_ARMS.
 set -uo pipefail
 export O=${OUT:?}
-export PATH=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2
+export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
 export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm
 # the references import their siblings as verity's modules, from the clone's root
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}

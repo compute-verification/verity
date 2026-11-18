@@ -128,8 +128,8 @@ private theorem readsK_same {β : Type} (ctx : String) {e e' : Json} (h : Same e
 
 /-- `portsOf`'s reading of one port, with each read of the port's entry an argument. -/
 private def portV (v1 : Bool) (name : String) (kin : Bool) (has : String → Bool) (nat : String → V Nat)
-    (str : String → V String) (rds : (Array (Option Nat) → V Registered.Port) → V Registered.Port) :
-    V Registered.Port := do
+    (str : String → V String) (get : String → V Json)
+    (rds : (Array (Option Nat) → V Registered.Port) → V Registered.Port) : V Registered.Port := do
   let ctx := "registered reads"
   if v1 && !kin then
     throw s!"{ctx}: port {name}: a {Registered.FORMAT} port holds keys of {Registered.PORT_KEYS} and no other"
@@ -152,13 +152,18 @@ private def portV (v1 : Bool) (name : String) (kin : Bool) (has : String → Boo
   if schema != HmRow.ROW_SCHEMA && words.isNone then
     throw s!"{ctx}: port {name}: a {schema} row is a bit row of its words' bits, and the port names no words"
   rds fun reads => do
+    let tree ← if !has Registered.TREE_KEY then pure none else do
+      let tj ← get Registered.TREE_KEY
+      if !Registered.keysIn tj ["template", "field"] || !reads.isEmpty then
+        throw s!"{ctx}: port {name}: a tree port's {Registered.TREE_KEY} is {"{"}template, field{"}"} and its reads are empty: the verifier's program gives them"
+      pure (some (← J.str tj "template" ctx, ← J.str tj "field" ctx))
     return { name, value := ← str "value", root, leaves, words, wordBits, domain, readsRel := reads, schema,
-             readsFrom }
+             readsFrom, tree }
 
 /-- One port's reading, of its name and its entry. -/
 private def portE (v1 : Bool) (p : String × Json) : V Registered.Port :=
   portV v1 p.1 (Registered.keysIn p.2 Registered.PORT_KEYS) (J.has p.2) (fun k => J.nat p.2 k "registered reads")
-    (fun k => J.str p.2 k "registered reads") (readsK "registered reads" p.2)
+    (fun k => J.str p.2 k "registered reads") (fun k => J.get p.2 k "registered reads") (readsK "registered reads" p.2)
 
 private theorem portE_same (v1 : Bool) (name : String) {e e' : Json} (h : Same e e') :
     portE v1 (name, e) = portE v1 (name, e') := by
@@ -170,10 +175,14 @@ private theorem portE_same (v1 : Bool) (name : String) {e e' : Json} (h : Same e
   have h4 : readsK (β := Registered.Port) "registered reads" e = readsK "registered reads" e' :=
     funext fun k => readsK_same _ h k
   show portV v1 name (Registered.keysIn e Registered.PORT_KEYS) (J.has e) (fun k => J.nat e k "registered reads")
-      (fun k => J.str e k "registered reads") (readsK "registered reads" e) =
+      (fun k => J.str e k "registered reads") (fun k => J.get e k "registered reads") (readsK "registered reads" e) =
     portV v1 name (Registered.keysIn e' Registered.PORT_KEYS) (J.has e') (fun k => J.nat e' k "registered reads")
-      (fun k => J.str e' k "registered reads") (readsK "registered reads" e')
+      (fun k => J.str e' k "registered reads") (fun k => J.get e' k "registered reads") (readsK "registered reads" e')
   rw [keysIn_same h, h1, h2, h3, h4]
+  unfold portV
+  rcases get_same h Registered.TREE_KEY "registered reads" with ⟨x, e₁, e₂⟩ | ⟨a, b, e₁, e₂, hs⟩
+  · simp only [e₁, e₂]
+  · simp only [e₁, e₂, bind, Except.bind, keysIn_same hs, str_same hs]
 
 /-! ## The file's ports -/
 
@@ -196,6 +205,8 @@ private def portsV (fmt : V String) (kin : Bool) (tail : Bool → V (Array Regis
     throw s!"{ctx}: a {Registered.FORMAT} file holds the keys {Registered.FILE_KEYS} and no other"
   tail v1
 
+-- `rfl` unfolds `portsOf` and its restatement whole
+set_option maxHeartbeats 1000000 in
 private theorem ports_view (j : Json) :
     Registered.portsOf j = portsV (J.str j "format" "registered reads") (Registered.keysIn j Registered.FILE_KEYS)
       (fun v1 => portsTail v1 (j.getObjVal? "ports")) := rfl

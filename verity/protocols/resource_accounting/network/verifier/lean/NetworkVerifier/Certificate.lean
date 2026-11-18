@@ -6,7 +6,7 @@ public import Identity.Tagged
 /-!
 # The network certificate's encodings (record v2)
 
-Executable forms of `verity/protocols/accounting/certifier/verifier/certificate.py`, whose module docstring is the
+Executable forms of `verity/protocols/resource_accounting/network/verifier/certificate.py`, whose module docstring is the
 spec: the frame tree (`frameLeaf`, `node`, `empty`, `depth`, `framesRoot`, `openFrame`, `verifyFrame`) over a window's real frames
 (`realFrames`), the parameters digest (`parametersDigest`, the manifest's identity bytes through `Flock.canonUtf8`), the record head's
 encoding and digest (`RecordHead.encode`, `RecordHead.digest`, `recordHead`), the digest a certificate signs, the record

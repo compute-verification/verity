@@ -322,19 +322,19 @@ SETTINGS = {"bucket_us": 100_000, "sat_us": 30_000, "free_us": 40_000, "hold_ms"
 
 
 def test_the_tick_config_names_the_registered_rule_by_default_and_refuses_another_it_does_not_know():
-    assert {k: na.tick_config(SETTINGS, "s", feed=False)[k] for k in ("token_ns", "catch_up")} == {
+    assert {k: na.tick_config(SETTINGS, "s")[k] for k in ("token_ns", "catch_up")} == {
         "token_ns": 0, "catch_up": "quiet"}
     for bad in ({"token_ns": -1}, {"token_ns": 1.5}, {"catch_up": "wall"}):
         with pytest.raises(ValueError, match="token_ns a non-negative integer"):
-            na.tick_config(SETTINGS | bad, "s", feed=False)
+            na.tick_config(SETTINGS | bad, "s")
 
 
 def test_the_tick_config_refuses_the_open_gate_unless_a_benchmark_arm_names_it():
     cfg = SETTINGS | {"catch_up": "open"}
     for unnamed in (cfg, cfg | {"arm": ""}):
         with pytest.raises(ValueError, match="catch_up 'open' opens the gate"):
-            na.tick_config(unnamed, "s", feed=False)
-    assert na.tick_config(cfg | {"arm": "prod-tick"}, "s", feed=False)["catch_up"] == "open"
+            na.tick_config(unnamed, "s")
+    assert na.tick_config(cfg | {"arm": "prod-tick"}, "s")["catch_up"] == "open"
 
 
 def test_a_missing_release_no_line_names_lost_holds_the_later_ones_until_its_skip_and_comes_late():

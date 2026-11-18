@@ -17,8 +17,8 @@ It needs no GPU; `--device sm_90` gives the H200's.
 
 ## Run it
 
-Each job is the command of a `research run` from a pushed commit, on a node with the card, CUDA 13.0
-(`/usr/local/cuda-13.0`) and driver ≥ 580. `run.sh` is the job for one family:
+Each job is the command of a `research run` from a pushed commit, on a node with the card, the machine's
+toolkit at 13.0 and driver ≥ 580. `run.sh` is the job for one family:
 
 ~~~text
 research run --on H200 --project verity --source /workspace --cwd source --custody-ttl 12h \
