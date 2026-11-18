@@ -86,6 +86,7 @@ from typing import Any, BinaryIO
 from verity.channel import Body, Message, Schema
 from verity.party import Finish, Identity, Received, Send, Timer
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Start, Starter
+from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
@@ -126,9 +127,9 @@ SESSION = {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 *
 four passes each, 1,024 openings a window and an allowance of 1 s. At δ = 2^-40 an accepted session's ε is
 δ + 6,144/2^64 (`EPS_TERMS`), about 9.1e-13, which leaves out Σ_t adv_t (SHA-512 stream as PRF: not priced, not
 assumed)."""
-DELTA = 2.0 ** -40
-"""PoUB-P2's δ, its own (`P2Session.DELTA`): each window's profile δ and the pooled bound's.  It is not PoUB's
-`audit.DELTA`, and not at an error of 2^-100."""
+DELTA = float(WINDOW_DELTA)
+"""PoUB-P2's δ, the proof system's per-window δ (`profile.WINDOW_DELTA`, 2^-40; `P2Session.DELTA` in the Lean): each
+window's profile δ and the pooled bound's.  It is not PoUB's `audit.DELTA`, and not at an error of 2^-100."""
 REFUSED = {"refused": True}
 DISAGREEMENT = "disagreement"
 #: The samples a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
