@@ -234,4 +234,15 @@ def NO_TEMPLATE : String := "partition: META program_digests does not name the c
   | .error e => e
   | .ok _ => "") == "blocks-range"
 
+def blocks (obj : Json) : Except String (Option (Array (Nat × Nat))) := HmRow.blocksOf obj Flock.Test.DescOfProg.pops
+
+-- a reader's blocks: only once they cover the population
+#guard (blocks (withBlocks five (pairs [(0, 2), (2, 5)]))).toOption == some (some #[(0, 2), (2, 5)])
+#guard (blocks five).toOption == some none
+#guard [pairs [(0, 2), (2, 6)], pairs [(0, 2), (2, 4)], pairs [(0, 2), (3, 5)], pairs [(0, 0)]].map
+  (fun b => match blocks (withBlocks five b) with | .error e => code e | .ok _ => "") ==
+  ["blocks-range", "blocks-gap", "blocks-gap", "blocks-form"]
+-- over another program than the verifier's, no blocks
+#guard (match blocks (withBlocks template chain) with | .error e => e | .ok _ => "") == NOT_THE_OBJECTS
+
 end Flock.Test.ProgramHeld

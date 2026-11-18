@@ -1133,7 +1133,8 @@ def blockPair (p : Json) : Option (Nat × Nat) :=
 /-- `blocks-form`'s refusal. -/
 def BLOCKS_FORM : String := "partition: blocks-form: blocks is not a non-empty list of pairs [lo, hi], 0 <= lo < hi"
 
-/-- A partition object's `blocks` (`b`, the value at the key) as `[lo, hi)` unit ranges, none where it has none. -/
+/-- A partition object's `blocks` (`b`, the value at the key) as `[lo, hi)` unit ranges, none where it has none; their
+form only, so a reader takes them from `blocksOf`. -/
 def blocksIn (b : Option Json) : V (Option (Array (Nat × Nat))) :=
   match b with
   | none => pure none
@@ -1464,6 +1465,13 @@ private def templateStrata (samplingDesign : String) (obj : Json) (program : Byt
     | .error e => throw s!"partition: {e}"
   checkBlocksCover obj (TemplateQuery.population rs)
   return (Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)), TemplateQuery.population rs)
+
+/-- The partition object's `blocks`, only once they cover the population the query derives from the verifier's own
+`program` (`templateStrata`); none where it has none. A reader of `blocks` takes them here, never from the object. -/
+def blocksOf (obj : Json) (program : ByteArray) : V (Option (Array (Nat × Nat))) := do
+  let some b := (obj.getObjVal? "blocks").toOption | pure none
+  discard <| templateStrata "blocks" obj program
+  blocksIn (some b)
 
 /-- `stratified:K` expanded over the verifier's own program and partition object (`draw.derive`), and the population. -/
 def stratifiedSamplingDesign (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.SamplingDesign × Nat) := do
