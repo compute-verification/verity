@@ -1316,7 +1316,7 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     for d in (bare, renamed):
         shutil.copytree(audit, d)
     (bare / "window" / "program.json").unlink()
-    (renamed / "window" / "program.json").write_text(json.dumps({**p["program"], "name": "other"}))
+    (renamed / "window" / "program.json").write_text(json.dumps({**p["program"], "inputs": [[n + "'", k] for n, k in p["program"]["inputs"]]}))
     for window, audited_by, why in [
             (other.dir, _audited(other.dir, tmp_path / "xa"), f"commits no {TIED} its circuit reads"),
             (unbound, audit, "is not the circuit record the registration binds"),
