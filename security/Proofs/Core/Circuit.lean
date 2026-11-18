@@ -138,6 +138,45 @@ theorem mem_incorrect {X : C.Trace} {u : Fin n} : u ∈ P.incorrect X ↔ ¬ P.C
   classical
   simp [incorrect]
 
+theorem mem_boundary {g : Fin C.N} :
+    g ∈ P.boundary ↔ g ∈ P.committed ∧ (C.isInput g = false ∨ ∃ h, g ∈ C.reads h) := by
+  classical
+  simp only [boundary, io, Finset.mem_biUnion, Finset.mem_univ, true_and, Finset.mem_filter]
+  constructor
+  · rintro ⟨u, hc, hu | ⟨h, -, hgh⟩⟩
+    · refine ⟨hc, Or.inl ?_⟩
+      cases hi : C.isInput g
+      · rfl
+      · exact absurd ((P.input_iff g).2 hi) (by simp [hu])
+    · exact ⟨hc, Or.inr ⟨h, hgh⟩⟩
+  · rintro ⟨hc, hi | ⟨h, hgh⟩⟩
+    · obtain ⟨u, hu⟩ := Option.ne_none_iff_exists'.1 fun hn => by simp [(P.input_iff g).1 hn] at hi
+      exact ⟨u, hc, Or.inl hu⟩
+    · have hh : C.isInput h = false := by
+        cases hi : C.isInput h
+        · rfl
+        · simp [C.input_reads h hi] at hgh
+      obtain ⟨u, hu⟩ := Option.ne_none_iff_exists'.1 fun hn => by simp [(P.input_iff h).1 hn] at hh
+      exact ⟨u, hc, Or.inr ⟨h, hu, hgh⟩⟩
+
+theorem boundary_subset_committed : P.boundary ⊆ P.committed := fun _ hg => (P.mem_boundary.1 hg).1
+
+/-- **How the boundary and the committed wires differ**: exactly by the input gates that no gate reads. -/
+theorem mem_committed_sdiff_boundary {g : Fin C.N} :
+    g ∈ P.committed \ P.boundary ↔ C.isInput g = true ∧ ∀ h, g ∉ C.reads h := by
+  rw [Finset.mem_sdiff, P.mem_boundary]
+  constructor
+  · rintro ⟨hc, hb⟩
+    refine ⟨?_, fun h hgh => hb ⟨hc, Or.inr ⟨h, hgh⟩⟩⟩
+    cases hi : C.isInput g
+    · exact absurd ⟨hc, Or.inl hi⟩ hb
+    · rfl
+  · rintro ⟨hi, hr⟩
+    refine ⟨by simp [committed, hi], ?_⟩
+    rintro ⟨-, hi' | ⟨h, hgh⟩⟩
+    · simp [hi] at hi'
+    · exact hr h hgh
+
 theorem mem_cone {T : Finset (Fin C.N)} {u : Fin n} {t g : Fin C.N} (ht : t ∈ T) (hg : C.Feeds g t)
     (hu : P.unit g = some u) : u ∈ P.cone T := by
   classical
