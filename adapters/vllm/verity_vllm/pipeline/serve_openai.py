@@ -125,7 +125,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import queue
 import shutil
 import signal
@@ -750,7 +749,7 @@ def no_slice_record(windows: CommitWindows | None) -> dict[str, str]:
 
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
-              usage: Callable[[Any], Any] = shutil.disk_usage, environ: Mapping[str, str] = os.environ) -> None:
+              usage: Callable[[Any], Any] = shutil.disk_usage, environ: Mapping[str, str] | None = None) -> None:
     """What would fail after the model has loaded, refused before it."""
     if opts.window_steps < 1:
         raise UsageError("--window-steps is at least 1")

@@ -269,8 +269,10 @@ SETTINGS: dict[str, Setting] = _declare(
     S("NCCL_MIN_NCHANNELS", str, None, VALUE, "the fewest channels NCCL uses"),
     S("NCCL_NTHREADS", str, None, VALUE, "NCCL's CUDA threads per block, one block a channel"),
     S("NCCL_PROTO", str, None, VALUE, "the protocols NCCL may use"),
+    S("OUT", str, None, WHERE, "the research run's output directory, which custody uploads whole (`serve_guard.inside_run`)"),
     S("PYTHONPATH", str, None, WHERE, "the interpreter's module search path, which the source identity records as the environment "
       "holds it"),
+    S("RESEARCH_RUN_DIR", str, None, WHERE, "the research run's directory, which custody uploads (`serve_guard.inside_run`)"),
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run this process is part of"),
     S("RESEARCH_SOURCE_SHA", str, None, WHERE, "the commit of the tree the research runner shipped, which the source identity takes "
       "where `--sha` names none and a row's records carry"),
