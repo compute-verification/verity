@@ -16,7 +16,7 @@ import pytest
 
 from verity.protocols.resource_accounting.network.verifier import id_form as IDF, io_tie as IT
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
-from verity.protocols.resource_accounting.network.verifier.release import RUN_ID_BYTES, with_release
+from verity.release import RUN_ID_BYTES, with_release
 
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
@@ -314,7 +314,7 @@ def test_the_gates_demo_traffic_through_the_network_attester_is_the_demo_stand_i
     the bytes the network attester attested, every connection ends within the two execution phases 24 tokens take at D
     = 27, and the check accepts the run."""
     from verity.protocols.resource_accounting.network.verifier import relay_check as RC
-    from verity.protocols.resource_accounting.network.verifier.release import release_of
+    from verity.release import release_of
     prompts = S.prompts(4)
     req = {"device": "warden", "requests": None, "tokens": 24, "height": 10, "minutes": 4, "scan": True,
            "prompts": True, "temperature": 0.0, "top_p": 1.0}
