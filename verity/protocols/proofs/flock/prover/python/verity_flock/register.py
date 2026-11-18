@@ -16,7 +16,7 @@ import json
 import math
 from pathlib import Path
 
-from .bench import PER_PROOF_LOG2
+from .circuit_bench import PER_PROOF_LOG2
 
 
 def _run(d: Path) -> dict:
