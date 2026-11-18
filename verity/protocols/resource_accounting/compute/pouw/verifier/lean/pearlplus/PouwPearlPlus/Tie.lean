@@ -29,6 +29,11 @@ the fixed operands: it is held to the calls alone, as it was then, and the answe
 one that registers a ``pearl-b/`` value is refused (`V1_WEIGHTS`), and a W stating any other version is refused
 (`UNKNOWN_VERSION`).
 
+Given the window's registration record R instead (`isRegistration`: a one-stage docket, which names its program), the
+tie is the same over R: each call's A rows and y are among R's registered values, which reuse W's entries, and each fixed
+operand's B rows are the entries of R's ``window`` header's `PEARL_B` (`registeredB`), which R must hold
+(`R_UNTIED_WEIGHTS`); every mismatch is named as R's, and the answer is `{record: digest(R), tables}`. R states no version.
+
 An entry that names no ``word_bits`` is at `registered.WORD_BITS` (16). The answer is `{record: digest(W), tables}`, with
 `weights` for a version-1 W; the first mismatch is Python's `ValueError`, in its words. Every JSON comparison is by a
 match (`Want.holds`).
@@ -145,22 +150,58 @@ where
             ("words", .nat u.n), ("word_bits", .nat 32), ("domain", .str dy)])]
       pure (out ++ (← go rs ps))
 
+/-- `verify_run.is_registration`: the record the passes are held to is the window's registration record R (a one-stage
+docket, which names its program), not Pearl+'s own window record W. -/
+def isRegistration (w : Json) : Bool := match w with
+  | .obj _ => (get? w "program").isSome
+  | _ => false
+
+/-- `verify_run.PEARL_B`: R's window header key holding the fixed operands' B rows. -/
+def PEARL_B : String := "pearl_b"
+/-- `verify_run.R_UNTIED_WEIGHTS`: why an R whose header holds no B rows is refused. -/
+def R_UNTIED_WEIGHTS : String :=
+  "R registers no weight's B rows (its window holds no pearl_b: a registration written before R registered them)"
+
+/-- The entry's ``pearl-b/`` value, if it is a B rows entry. -/
+def pearlBValue? (e : Json) : Option String := match e with
+  | .obj _ => match get? e "value" with
+    | some (.str v) => if v.startsWith "pearl-b/" then some v else none
+    | _ => none
+  | _ => none
+
+/-- `verify_run._registered_b`: R's B rows, its window header's `PEARL_B` entries; refused for an R that registers a
+``pearl-b/`` value among its own values, whose header holds none (`R_UNTIED_WEIGHTS`), or one that is no B rows. -/
+def registeredB (r : Json) (regs : List Json) : Except String (List Json) := do
+  if let some b := regs.findSome? pearlBValue? then
+    throw s!"R registers {b} among its values: R's B rows are its window's {PEARL_B} entries"
+  let bs := match get? r "window" with
+    | some win@(.obj _) => get? win PEARL_B
+    | _ => none
+  let some (.arr xs) := bs | throw R_UNTIED_WEIGHTS
+  if xs.isEmpty then throw R_UNTIED_WEIGHTS
+  unless xs.all (pearlBValue? · |>.isSome) do throw s!"R's window's {PEARL_B} holds an entry that is no pearl-b/ value"
+  pure xs.toList
+
 /-- `tie(w, passes, rounds, dropped)`: W's digest and the number of tables it ties, with `WEIGHTS_UNTIED` for a
-version-1 W, or the first mismatch. -/
+version-1 W, or the first mismatch. Given the window's registration record R (`isRegistration`), the same tie over R's
+registered values and its header's B rows (`registeredB`), named as R's, and R's digest. -/
 def tieOf (w : Json) (passes : List (Json × Pass)) (rounds : Option (List Nat)) (dropped : List Nat) :
     Except String Tied := do
+  let onR := isRegistration w
+  let who := if onR then "R" else "W"
   let regs ← match w, get? w "registered" with
     | .obj _, some (.arr es) =>
       if fieldIs (get? w "format") Flock.WindowRecord.FORMAT_V2 then pure es.toList
-      else throw s!"W is no {Flock.WindowRecord.FORMAT_V2} record with registered values"
-    | _, _ => throw s!"W is no {Flock.WindowRecord.FORMAT_V2} record with registered values"
-  let tied := (← wVersion w) == W_VERSION
+      else throw s!"{who} is no {Flock.WindowRecord.FORMAT_V2} record with registered values"
+    | _, _ => throw s!"{who} is no {Flock.WindowRecord.FORMAT_V2} record with registered values"
+  let tied ← if onR then pure true else do pure ((← wVersion w) == W_VERSION)
+  let entries ← if onR then do pure (regs ++ (← registeredB w regs)) else pure regs
   let mut got : List (String × Json) := []
-  for e in regs do
+  for e in entries do
     let v := match e with | .obj _ => get? e "value" | _ => none
     if let some (.str v) := v then
       if TIE_PREFIXES.any (fun t => v.startsWith t) then
-        if (got.lookup v).isSome then throw s!"W registers {v} twice"
+        if (got.lookup v).isSome then throw s!"{who} registers {v} twice"
         got := got ++ [(v, e)]
   if !tied then
     if let some (b, _) := got.find? (·.1.startsWith "pearl-b/") then
@@ -172,16 +213,16 @@ def tieOf (w : Json) (passes : List (Json × Pass)) (rounds : Option (List Nat))
       !(TIE_CALLS.any (fun t => v.startsWith t) && skip.contains ((v.splitOn "/")[1]?.getD ""))
   if let x :: xs := extra then
     let first := xs.foldl (fun m y => if y < m then y else m) x
-    throw s!"W registers {first}, no {tieOwner first} of the run's"
+    throw s!"{who} registers {first}, no {tieOwner first} of the run's"
   if let some (b, _) := want.find? (·.1.startsWith "pearl-b/") then
     if !got.any (·.1.startsWith "pearl-b/") then
       throw s!"{UNTIED_WEIGHTS}, so the run's rootB is no W's ({b} first)"
   for (v, x) in want do
-    let some e := got.lookup v | throw s!"W registers no {v}"
+    let some e := got.lookup v | throw s!"{who} registers no {v}"
     let held (k : String) : Json :=
       if k == "word_bits" then (get? e k).getD (.num ⟨REGISTERED_WORD_BITS, 0⟩) else (get? e k).getD .null
     let bad := x.filterMap fun (k, want) => if want.holds (held k) then none else some k
-    if !bad.isEmpty then throw s!"W's {v}: its {", ".intercalate bad} not the {tieOwner v}'s"
+    if !bad.isEmpty then throw s!"{who}'s {v}: its {", ".intercalate bad} not the {tieOwner v}'s"
   pure { record := ← Flock.WindowRecord.digestHex w, tables := want.length,
          weights := if tied then none else some WEIGHTS_UNTIED }
 

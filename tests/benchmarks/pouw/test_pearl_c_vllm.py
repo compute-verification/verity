@@ -2084,6 +2084,55 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
     assert f"on its 4 tables, {VR.WEIGHTS_UNTIED}" in doc["line"]
 
 
+def registration_record(w: dict, pearl_b: bool = True) -> dict:
+    """The window's registration record R chained right after W, as today's window commit writes it (a one-stage v2 docket
+    whose registered values are the circuit's: W's calls' entries, which it reuses, beside a value of its own), with W's
+    B rows in its ``window`` header's ``pearl_b`` where ``pearl_b`` (the writer's option)."""
+    calls = [e for e in w["registered"] if not e["value"].startswith("pearl-b/")]
+    bs = [e for e in w["registered"] if e["value"].startswith("pearl-b/")]
+    return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "program": "ab" * 64, "query": "cd" * 64,
+            "partition": "ef" * 64, "population": 4, "law": {"law": "subset", "k": 1}, "scheme": "frame-v3-sha512/hm96-sha512",
+            "roots": [], "leaf_layer": None, "anchors": [],
+            "window": {"kind": "served", "run": "r-1", **({VR.PEARL_B: bs} if pearl_b else {})},
+            "registered": calls, "previous": REG.digest(w)}
+
+
+def test_the_run_verdict_holds_the_windows_registration_record_r_to_its_calls_and_its_headers_b_rows(tmp_path):
+    """Given the window's registration record R in W's place, the tie reads each call's A rows and y from R's registered
+    values and each weight's B rows from R's ``window`` header's ``pearl_b``, and names R's digest; ``served_passes.py
+    verify --tie R`` accepts it too. An R whose header holds no B rows is refused by name (`R_UNTIED_WEIGHTS`), as is one
+    that registers B among its values, one whose header holds an entry that is no B rows, and one whose A, y or B entry
+    differs from the run's or misses one, each named as R's."""
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    coins, w, man = published(path), window_record(path), json.loads(path.read_text())
+    r = registration_record(w)
+    got = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=r, test_instance=True)
+    assert got["answer"]["verdict"] == "accept" and got["answer"]["public"]["tie"] == {"record": REG.digest(r), "tables": 6}
+    assert f"tied to R {REG.digest(r)[:16]} on its 6 tables" in got["line"]
+    (rfile := tmp_path / "r.json").write_text(json.dumps(r))
+    rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json", "--manifest", str(path), "--tie", str(rfile))
+    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(r), "tables": 6}, doc["line"]
+    b0, b1 = r["window"][VR.PEARL_B]
+
+    def header(*bs: dict) -> dict:
+        return {**r, "window": {**r["window"], VR.PEARL_B: list(bs)}}
+
+    cases = [(registration_record(w, pearl_b=False), VR.R_UNTIED_WEIGHTS),
+             (header(), VR.R_UNTIED_WEIGHTS),
+             ({**r, "registered": [*r["registered"], b0]}, "R registers pearl-b/0 among its values"),
+             (header(b0, b1, {"value": "pearl-a/0/0"}), "R's window's pearl_b holds an entry that is no pearl-b/ value"),
+             (header(b0), "R registers no pearl-b/1"),
+             (header(b0, b1, b0), "R registers pearl-b/0 twice"),
+             (header({**b0, "root": man["weights"]["1"]["root"]}, b1), "R's pearl-b/0: its root not the weight's"),
+             ({**r, "registered": [{**e, "root": man["matmuls"][1]["root_a"]} if e["value"] == "pearl-a/0/0" else e
+                                   for e in r["registered"]]}, "R's pearl-a/0/0: its root not the call's"),
+             ({**r, "registered": [e for e in r["registered"] if e["value"] != "pearl-y/0/1"]}, "R registers no pearl-y/0/1"),
+             ({**r, "format": REG.FORMAT}, f"R is no {REG.FORMAT_V2} record")]
+    for bad, why in cases:
+        got = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=bad, test_instance=True)
+        assert got["answer"]["verdict"] == "reject" and why in got["answer"]["reason"], (why, got["line"])
+
+
 @pytest.mark.slow
 def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_credits_them(tmp_path):
     """``retain --window-record W`` on a serve of a warm-up pass, a pass without calls and two timed passes: it drops the
