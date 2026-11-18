@@ -67,8 +67,10 @@ builder itself (``.build``), for the word primitive's piece and for an activatio
   folds each stage to wiring with no AND (`forms`' AND of a constant is no gate).
 * `sum_mod`: a sum of weighted columns mod 2^width by full adders, a carry out of the top column dropped. The dot's partial
   products (y's sign bit complemented, Baugh–Wooley), −128 · Σ y and the three-operand bytes are each one such sum.
-* the 8-bit forms, the 64-bit add's halves and `noise_byte`: `forms.add`'s ripple; Ch and Maj one AND a bit; the sigmas and
-  the pack wiring and XORs, no AND; `PouwI32ToF32Rn_v2` is `fp.s32_to_f32`, the circuit of `S32ToF32Rn_v2`.
+* the 8-bit forms and `noise_byte`: `forms.add`'s ripple; the pack wiring, no AND.
+* SHA-512's words (the 64-bit add's halves, Ch, Maj and the sigma halves): `verity.circuits.boolean.sha512`'s gates on
+  the 64-bit word hi:lo, the add's ripple uncommitted, so its halves are 31 and 63 ANDs, Ch and Maj 32, the sigmas none.
+* `PouwI32ToF32Rn_v2` is `fp.s32_to_f32`, the circuit of `S32ToF32Rn_v2`.
 """
 from __future__ import annotations
 
@@ -80,6 +82,7 @@ from verity.circuits.ops.boolean import scalar as BS
 from verity.circuits.ops.boolean.sqrt import f32_sqrt_rn, isqrt
 from verity.circuits.boolean.forms import (NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, maj,
                                            multiply, mux, or_reduce, shl_window, sub)
+from verity.circuits.boolean import sha512 as SH
 from verity.circuits.boolean.trace import definition
 
 from verity.circuits.ops import words as W
@@ -90,9 +93,9 @@ __all__ = ["PouwAdd64Hi", "PouwAdd64Lo", "PouwAdd8", "PouwAddSub8", "PouwBf16Neg
            "PouwNegBetaSum16", "PouwNoiseByte", "PouwPackBE4", "PouwRotl64Hi", "PouwRotl64Lo", "PouwSha512BigSigma0Hi",
            "PouwSha512BigSigma0Lo", "PouwSha512BigSigma1Hi", "PouwSha512BigSigma1Lo", "PouwSha512SmallSigma0Hi",
            "PouwSha512SmallSigma0Lo", "PouwSha512SmallSigma1Hi", "PouwSha512SmallSigma1Lo", "PouwSqAcc", "PouwSqCeil",
-           "PouwSqGe", "PouwSub8", "PouwWindowWord", "PouwXor32", "SIGMAS", "add64_hi", "add_sub8", "chi32", "dot16_u8s8",
+           "PouwSqGe", "PouwSub8", "PouwWindowWord", "PouwXor32", "add_sub8", "chi32", "dot16_u8s8",
            "e_tilde", "f32_sqrt_rn", "form_x", "form_x3", "isqrt", "neg_beta_sum16", "noise_byte", "pack_be4", "rotl64",
-           "salt_dead", "sigma", "sq_acc", "sq_ceil", "sq_ge", "square", "sum_mod", "up48", "window", "window_word"]
+           "salt_dead", "sq_acc", "sq_ceil", "sq_ge", "square", "sum_mod", "up48", "window", "window_word"]
 
 BIT = BL.BIT
 F32 = U32 = Array(32, BIT)
@@ -408,33 +411,9 @@ def dot16_u8s8(C, acc, *xy):
     return sum_mod(C, _const_cols(cols, -len(x) * 255 * 128, 32), 32)
 
 
-def add64_hi(C, ahi, alo, bhi, blo):
-    """``PouwAdd64Hi_v1``: ahi + bhi + the carry out of alo + blo, mod 2^32."""
-    carry = add(C, alo, blo, width=32, carry_out=True)[32]
-    return add(C, ahi, bhi, carry, width=32)
-
-
-def _rotr(x, c):
-    return [x[(i + c) % 64] for i in range(64)]
-
-
-def _shr(x, c):
-    return [x[i + c] if i + c < 64 else ZERO for i in range(64)]
-
-
-#: SHA-512's Σ0, Σ1, σ0 and σ1 on the 64-bit word, each three rotations or shifts XORed: wiring, no AND
-SIGMAS = {"BigSigma0": ((_rotr, 28), (_rotr, 34), (_rotr, 39)), "BigSigma1": ((_rotr, 14), (_rotr, 18), (_rotr, 41)),
-          "SmallSigma0": ((_rotr, 1), (_rotr, 8), (_shr, 7)), "SmallSigma1": ((_rotr, 19), (_rotr, 61), (_shr, 6))}
-
-
-def sigma(name):
-    """The builder of SHA-512's ``name`` (`SIGMAS`) on hi:lo, all 64 bits LSB first."""
-
-    def build(C, hi, lo):
-        x = list(lo) + list(hi)
-        a, b, c = (op(x, n) for op, n in SIGMAS[name])
-        return [p ^ q ^ r for p, q, r in zip(a, b, c)]
-    return build
+#: SHA-512's Σ0, Σ1, σ0 and σ1 by their words' names
+_SIGMAS = {"BigSigma0": SH.big_sigma0, "BigSigma1": SH.big_sigma1, "SmallSigma0": SH.small_sigma0,
+          "SmallSigma1": SH.small_sigma1}
 
 
 def _def(word, build, ret, doc):
@@ -452,18 +431,18 @@ PouwAdd8 = _def(W.PouwAdd8, lambda C, b, f: add(C, _s8(b), f, width=8), U8, "b +
 PouwSub8 = _def(W.PouwSub8, lambda C, b, f: sub(C, _s8(b), f, 8)[0], U8, "b − f mod 256")
 PouwAddSub8 = _def(W.PouwAddSub8, add_sub8, U8, "b + f − g mod 256")
 PouwNegBetaSum16 = _def(W.PouwNegBetaSum16, neg_beta_sum16, U32, "acc − 128·Σ s8(y) over 16 entries, mod 2^32")
-PouwAdd64Lo = _def(W.PouwAdd64Lo, lambda C, alo, blo: add(C, alo, blo, width=32), U32, "the low half of a 64-bit sum")
-PouwAdd64Hi = _def(W.PouwAdd64Hi, add64_hi, U32, "the high half of a 64-bit sum")
-PouwCh32 = _def(W.PouwCh32, lambda C, e, f, g: [z ^ C.AND(x, y ^ z) for x, y, z in zip(e, f, g)], U32,
-                "SHA-512's Ch on one half, bit by bit e ? f : g")
-PouwMaj32 = _def(W.PouwMaj32, lambda C, a, b, c: [maj(C, x, y, z) for x, y, z in zip(a, b, c)], U32,
-                 "SHA-512's Maj on one half")
+PouwAdd64Lo = _def(W.PouwAdd64Lo, lambda C, alo, blo: SH.add2(C, alo, blo, every=None), U32,
+                   "the low half of a 64-bit sum")
+PouwAdd64Hi = _def(W.PouwAdd64Hi, lambda C, ahi, alo, bhi, blo: SH.add2(C, alo + ahi, blo + bhi, every=None)[32:], U32,
+                   "the high half of a 64-bit sum")
+PouwCh32 = _def(W.PouwCh32, SH.ch, U32, "SHA-512's Ch on one half, bit by bit e ? f : g")
+PouwMaj32 = _def(W.PouwMaj32, SH.maj, U32, "SHA-512's Maj on one half")
 
 
 def _sigma_half(name, half):
-    build = sigma(name)
+    f = _SIGMAS[name]
     return _def(getattr(W, f"PouwSha512{name}{half}"),
-                (lambda C, hi, lo: build(C, hi, lo)[32:]) if half == "Hi" else (lambda C, hi, lo: build(C, hi, lo)[:32]),
+                (lambda C, hi, lo: f(lo + hi)[32:]) if half == "Hi" else (lambda C, hi, lo: f(lo + hi)[:32]),
                 U32, f"SHA-512's {name} on hi:lo, its {half.lower()} half")
 
 
