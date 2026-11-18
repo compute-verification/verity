@@ -117,11 +117,17 @@ def _pous(params: Mapping[str, Any]) -> dict[str, Any]:
 _CLASS = re.compile(r"[1-9][0-9]*,[1-9][0-9]*,[1-9][0-9]*")
 
 
+#: Pearl+'s settings that are the application's parameters, which its hash covers; its other settings are values a
+#: launch gives `attach` (a kernel's path, the challenger's address). Provisional, until the interface says which is which.
+PEARLPLUS_PARAMS = ("tie-uniform",)
+
+
 def _pearlplus_params(params: Mapping[str, Any]) -> dict[str, Any]:
-    """Pearl+'s served piece: its scheme's settings (`scheme.settings`), and ``class``, the table's own."""
+    """Pearl+'s served piece: its scheme's settings that are the application's (`PEARLPLUS_PARAMS`, checked by
+    `scheme.settings`), and ``class``, the table's own."""
     own = {k: v for k, v in params.items() if k != "class"}
-    if extra := sorted(set(own) - set(PEARL_PLUS.settings)):
-        known = ", ".join(["class", *sorted(PEARL_PLUS.settings)])
+    if extra := sorted(set(own) - set(PEARLPLUS_PARAMS)):
+        known = ", ".join(["class", *PEARLPLUS_PARAMS])
         raise Refused("unknown-key", f"[params.\"{SP.IDS['pearl-plus']}\"]: {', '.join(extra)} (known: {known})")
     if "class" in params and not (isinstance(params["class"], str) and _CLASS.fullmatch(params["class"])):
         raise Refused("params", f"class is SLOTS,PROMPT,OUTPUTS, three positive integers, not {params['class']!r}")
@@ -129,7 +135,7 @@ def _pearlplus_params(params: Mapping[str, Any]) -> dict[str, Any]:
         own = settings(PEARL_PLUS, own)
     except ValueError as e:
         raise Refused("params", str(e)) from None
-    return {**({"class": params["class"]} if "class" in params else {}), **own}
+    return {**({"class": params["class"]} if "class" in params else {}), **{k: own[k] for k in PEARLPLUS_PARAMS}}
 
 
 _COMMIT = re.compile(r"[0-9a-f]{40}")
