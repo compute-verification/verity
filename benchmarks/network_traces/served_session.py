@@ -65,10 +65,10 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
   rebuilt there from `USERS` and the attested I/O (``--io``: ``io``'s file, or ``-`` for stdin; a file under the run
   dir, ``--out``'s directory as research run's ``$OUT`` is, is moved to ``--keep`` first, since custody publishes the
   run dir), runs `chain_record.served_endpoint` on that
-  copy (`verity-vllm advice`, then the advice bound to the attested I/O and rebuilt from it), and writes to ``--out``
-  its report.json and `RECORDS`. It writes nothing unless serve.json shows the endpoint served with `ENDPOINT`'s flags
-  and no published file holds a request's prompt ids, a trace's arrive, step or finish record, or a request-valued
-  field (`valued`).
+  copy (`verity-vllm advice`, then the advice bound to the attested I/O and rebuilt from it), keeps its report whole in
+  ``--keep`` (`ART`, 0600) and writes to ``--out`` one file, `ART`, the step's public document: the fields
+  `chain_record.ENDPOINT_PUBLIC` lists, each with its kind, and no other. It writes nothing unless serve.json shows the
+  endpoint served with `ENDPOINT`'s flags.
 * **chain** runs chain_record.sh's network attester path on the kept fetch (CR_PATH=warden,
   CR_GATES=KEEP/RUN/fetch.tar.gz), with
   the endpoint's report (``--endpoint``, ``endpoint``'s art), or a dry rehearsal's endpoint records (KEEP/RUN/endpoint
@@ -104,7 +104,8 @@ attested I/O, not the prover's record of it. The attested I/O is ``io``'s file, 
 reaches the served node over a private route (``endpoint --io -`` on an ssh stdin, or a ``--send`` the step moves out of
 the run dir), never through a run's custody, and the served node already holds its values. The check then runs on the
 developer's node, and the chain's report says so (`chain_record.NETWORK_ATTESTER_SERVED_STUBBED`). Its art (``--endpoint ART``,
-``endpoint``'s ``$OUT``) is report.json, windows.jsonl and serve.json.
+``endpoint``'s ``$OUT``) is report.json, the step's public document alone; what reads more (the whole report,
+windows.jsonl, serve.json) reads ``--keep`` on the served node.
 
 The runs (the lane's gate key is on `AUDITOR`, a CPU node; KEEP is the lane's gate directory there; a run that asks
 the gate takes the challenger host's address from where it is launched, ``--env`` below):
@@ -208,16 +209,12 @@ CONTEXT = 512
 #: engine_id and its network attester user (null for a body that sent none), a line in requests.jsonl's order:
 #: requests.jsonl less its values
 USERS = "request_users.jsonl"
-#: the endpoint's records its art publishes beside the endpoint step's report.json, from the serve dir
-RECORDS = ("windows.jsonl", "serve.json")
+#: the endpoint step's report: in ``--out``, its public document (`chain_record.endpoint_public`); in ``--keep``, whole
+ART = "report.json"
 #: what the endpoint step reads in the serve dir, which stays there
 SERVED = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json", USERS)
 #: the attested I/O file `io` writes in KEEP/RUN and the endpoint step reads
 CERTIFIED = "certified-io.json"
-#: a record that holds a request's values: a scheduler trace's record of these kinds (`verity_vllm.engine.step_trace`)
-TRACED = ("arrive", "step", "finish")
-#: or a record with one of these fields: the trace's, requests.jsonl's and the attested I/O's request values
-VALUED = ("prompt_len", "sampling", "seed", "rows", "emitted", "prompt_ids", "streamed_ids", "prompt", "output")
 HAND_START = ("serve-openai run directly (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record, with the served node's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
@@ -225,7 +222,7 @@ HAND_START = ("serve-openai run directly (--required-manifest "
               "staging, on by default under windowed staging, is what --retain-exclude needs, and the collector refuses "
               "VERITY_STAGING_BOUNDED=0 beside it. Its --copy-records-to copies requests.jsonl and advice_trace.jsonl "
               "too, so it is left off or points at a private dir on the served node: the serve dir's records stay "
-              "there, and the endpoint's art is `endpoint`'s $OUT, its report.json, windows.jsonl and serve.json")
+              "there, and the endpoint's art is `endpoint`'s $OUT, its report.json, the step's public document alone")
 
 
 class Refused(Exception):
@@ -670,8 +667,8 @@ def rebuild(src: Path, dest: Path, records: list[dict], eos: list[int]) -> Path:
     by, lines = {r["user"]: r for r in records}, []
     for m in map(json.loads, filter(str.strip, (src / USERS).read_text().splitlines())):
         if (r := by.pop(m["user"], None)) is None:
-            raise Refused(f"{USERS}: engine request {m['engine_id']}'s user {m['user']!r} is no certified request left "
-                          "(none sent, not the network attester's, or an earlier line's)")
+            raise Refused(f"{USERS} line {len(lines) + 1}: its user is no certified request left (none sent, not the "
+                          "network attester's, or an earlier line's)")
         lines.append(json.dumps({"engine_id": m["engine_id"], "user": m["user"], "prompt_ids": r["prompt"],
                                  "streamed_ids": r["output"], "finish": finish(r["output"], r["max_tokens"], set(eos))}))
     fd = os.open(dest / "requests.jsonl", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -693,27 +690,6 @@ def served_as(serve: dict, port: int) -> list[str]:
         if (have is None) if v is None else str(have) != v:
             off.append(f"{w}{' ' + v if v else ''} (serve.json: {have!r})")
     return off
-
-
-def valued(data: bytes, marks: list[bytes]) -> str | None:
-    """Why `data`, a JSON document or JSON lines, isn't published: it holds one of ``marks`` (a request's prompt ids,
-    or a request-valued field's name at any depth), or a record (the document, or one of its lines) that is a trace's
-    `TRACED` record or has a `VALUED` field; None when it holds none."""
-    if any(m in data for m in marks):
-        return "a request's prompt ids or a request-valued field"
-    try:
-        docs = [json.loads(data)]
-    except ValueError:
-        try:
-            docs = [json.loads(x) for x in data.splitlines() if x.strip()]
-        except ValueError:
-            return "a line that isn't JSON, so it isn't read for request values"
-    for d in docs:
-        if isinstance(d, dict) and d.get("kind") in TRACED:
-            return f"a scheduler trace's {d['kind']} record"
-        if isinstance(d, dict) and (fields := sorted(set(d) & set(VALUED))):
-            return f"a record with {', '.join(fields)}"
-    return None
 
 
 def endpoint(a: argparse.Namespace) -> int:
@@ -746,7 +722,8 @@ def endpoint(a: argparse.Namespace) -> int:
     doc = json.load(sys.stdin) if given is None else json.loads(given.read_text())
     dep, io = doc["deployment"], doc["io"]
     if not io.get("accepted"):
-        raise Refused(f"--io: the network attester run's I/O doesn't read whole off its cells: {io.get('violations', [])[:3]}")
+        raise Refused(f"--io: the network attester run's I/O doesn't read whole off its cells: "
+                      f"{len(io.get('violations') or [])} violation(s)")
     eos = [int(t) for t in a.eos_ids.split(",")]
     ep = rebuild(src, keep / "records", io["records"], eos)
     sys.path[:0] = [str(TREE), str(TREE / "adapters" / "vllm"), str(HERE)]
@@ -755,18 +732,16 @@ def endpoint(a: argparse.Namespace) -> int:
     rep = CR.served_endpoint(dep, io, ep, eos) | {"at": CR.SERVED_NODE}
     step = CR.network_attester_endpoint_step(rep)
     rep["verdict"] = step["verdict"]
-    publish = {"report.json": (json.dumps(rep, indent=1, sort_keys=True, default=str) + "\n").encode(),
-               **{f: (src / f).read_bytes() for f in RECORDS}}
-    ps = [json.loads(x).get("prompt_ids") or [] for x in (src / "requests.jsonl").read_text().splitlines() if x.strip()]
-    marks = [*needles(ps + [r["prompt"] for r in io["records"]]),
-             *(f'"{k}"'.encode() for k in ("prompt_len", "sampling", "emitted", "prompt_ids", "streamed_ids"))]
-    if held := [f"{f}: {why}" for f, d in publish.items() if (why := valued(d, marks))]:
-        raise Refused(f"{'; '.join(held)}, which the endpoint's art never publishes: nothing written")
+    fd = os.open(keep / ART, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(json.dumps(rep, indent=1, sort_keys=True, default=str) + "\n")
+    try:
+        public = CR.endpoint_public(step)
+    except ValueError as e:
+        raise Refused(f"{e}: nothing written") from None
     out.mkdir(parents=True, exist_ok=True)
-    for f, d in publish.items():
-        (out / f).write_bytes(d)
-    print(json.dumps({"verdict": rep["verdict"], "why": step["why"], "warden_run": rep["warden_run"],
-                      "advice": step["advice"], "published": sorted(publish), "kept": str(keep)}), flush=True)
+    (out / ART).write_text(json.dumps(public, indent=1, sort_keys=True) + "\n")
+    print(json.dumps(public, sort_keys=True), flush=True)
     return 0 if rep["verdict"] == "accepted" else 1
 
 
@@ -843,7 +818,8 @@ def parser() -> argparse.ArgumentParser:
     q = sub.add_parser("chain")
     q.add_argument("--run", required=True)
     q.add_argument("--keep", type=Path, default=KEEP)
-    q.add_argument("--endpoint", help="endpoint's art (its report.json), or a dry rehearsal's endpoint records")
+    q.add_argument("--endpoint", help="endpoint's art (its report.json, the step's public document), the whole report.json "
+                   "in endpoint's --keep, or a dry rehearsal's endpoint records")
     q.add_argument("--eos-ids")
     q.add_argument("--draw", type=int, help="the scan's K sampled proof blocks (every proof block by default)")
     q.add_argument("--coins", choices=("verifier", "gate"), default="verifier")

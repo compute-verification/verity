@@ -12,7 +12,8 @@
 # env: SC_MEM_GB (scan_zk.sh's)  SC_LATE_MS (default 800)  SC_PERIOD_REF (needed when the tree has no period)
 #      SC_CLASS (default test; w63k4 with SC_PROMPT_MAX=32, SC_MAX_TOKENS=4 and SC_LATE_MS past its 2.7 s delay)
 # Kept in $OUT: honest/ and late/ (each scan_zk.sh's out/: the rehearsal's public files and the scan's kept files) and
-# period/ (each case's files and period.json).
+# period/ (each case's files and period.json). What scan_period.py reads of each run is scan_zk.sh's SC_KEEP, in
+# $W/keep (0700, outside the run dir), removed with $W when this job exits.
 set -uo pipefail
 export HZ_CONFIGS=sczk HZ_MEM_GB=${SC_MEM_GB:?}
 SC_CACHE=${SC_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -38,18 +39,18 @@ declare -A rc
 for run in honest late; do
   mkdir -p "$W/$run"
   log "period: scan_zk.sh on the $run rehearsal"
-  RESEARCH_RUN_DIR=$W/$run SC_FIRST_MS=$([ "$run" = late ] && echo "${SC_LATE_MS:-800}" || echo 100) \
+  RESEARCH_RUN_DIR=$W/$run SC_KEEP=$W/keep/$run SC_FIRST_MS=$([ "$run" = late ] && echo "${SC_LATE_MS:-800}" || echo 100) \
     bash benchmarks/network_traces/scan_zk.sh > "$OUT/scan-$run.log" 2>&1
   rc[$run]=$?
   cp -r "$W/$run/out" "$OUT/$run"
   log "period: the $run run, scan_zk.sh rc ${rc[$run]}: $(grep -h '^SCZK .*answers:' "$OUT/$run/sczk.log" | cut -c1-600)"
 done
-NP=$P/verity/protocols/resource_accounting/network/verifier/lean/.lake/build/bin/network-period
+K=$W/keep NP=$P/verity/protocols/resource_accounting/network/verifier/lean/.lake/build/bin/network-period
 PYTHONPATH=$PYTHONPATH:$SRC/tools/difftest/python "$PY" -m verity.protocols.resource_accounting.network.prover.scan_period \
   --mirror "$P/tests/verity/protocols/resource_accounting/network/verifier/network/period_case.py" --lean "$NP" --out "$OUT/period" \
-  "honest=$OUT/honest/warden,$OUT/honest/sczk" "late=$OUT/late/warden,$OUT/late/sczk" \
-  "tampered=$OUT/honest/warden,$OUT/honest/sczk,tampered" "chain=$OUT/honest/warden,$OUT/honest/sczk,chain" \
-  "forged=$OUT/honest/warden,$OUT/honest/sczk,forged" 2>&1 | tee -a "$OUT/period.log"
+  "honest=$K/honest/warden,$K/honest/sczk" "late=$K/late/warden,$K/late/sczk" \
+  "tampered=$K/honest/warden,$K/honest/sczk,tampered" "chain=$K/honest/warden,$K/honest/sczk,chain" \
+  "forged=$K/honest/warden,$K/honest/sczk,forged" 2>&1 | tee -a "$OUT/period.log"
 p=${PIPESTATUS[0]}
 log "period: scans ${rc[honest]} ${rc[late]}, period check $p"
 [ "${rc[honest]}" = 0 ] && [ "${rc[late]}" = 0 ] && exit "$p"

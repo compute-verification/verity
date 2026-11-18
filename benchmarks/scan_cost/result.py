@@ -1,6 +1,7 @@
 """The scan's cost from one scan's kept files (README.md): two numbers, the stages they are made of, and the guard.
 
-    result.py write RUN_DIR --scan-exit RC    after run.sh's scan: RUN_DIR/out/scan_cost.json and the run's result.json
+    result.py write RUN_DIR --scan-exit RC --keep KEEP
+                                              after run.sh's scan: RUN_DIR/out/scan_cost.json and the run's result.json
     result.py table DOC                       a document's round, a session a line and a stage a column
     result.py compare CANDIDATE [--to DOC]    a candidate beside the baseline (baseline.json's run), or beside DOC
     result.py baseline [--lock DOC]           the baseline, or DOC's run written as the baseline
@@ -10,8 +11,10 @@ document is fetched from the evidence store (`research data show`, `research dat
 
 **What is read.** Everything is the scan's own (`benchmarks/network_traces/scan_zk.sh`), under RUN_DIR/out:
 `sczk/summary.json` (the class, the execution phases, T and the tick, and for each session of each honest round its
-prover's seconds, its staging and the Lean verifier's wall), each of those sessions' `prove.log`
-and `lean-verify.log` (the stages), `sczk/answers.json` (the guard), `host.txt` (the cores the job had) and
+prover's seconds, its staging and the Lean verifier's wall), each of those sessions' `prove.log` and `lean-verify.log`
+(the stages, durations only: a child's logs are witness, so the scan keeps them outside RUN_DIR, in its SC_KEEP's
+`sczk/`, which `--keep` names), the summary's `answers` (the guard: each execution phase's verdict, reason and
+public part, which scan_zk takes from its private `answers.json` inside the job), `host.txt` (the cores the job had) and
 `lean.jsonl` (each Lean verifier process's core and CPU seconds, `SC_LEAN_ONE`).
 
 **The numbers.** The round is the group's honest rounds, one an execution phase, each a registration of its own:
@@ -167,18 +170,18 @@ def honest(summary: dict) -> list[str]:
     return [f"honest-{w}" for w in summary.get("windows") or [0]]
 
 
-def sessions(out: Path, summary: dict, verified: dict) -> list[dict]:
+def sessions(keep: Path, summary: dict, verified: dict) -> list[dict]:
     """The honest rounds' sessions, round by round in their members' order, each with its summary's figures, its logs'
-    stages and its Lean verifier process's CPU seconds (`verified`, `_verifier`'s lines by archive); a session of a
-    group of more than one is named ``<round>/<member>``."""
+    stages (under the scan's keep, `keep`) and its Lean verifier process's CPU seconds (`verified`, `_verifier`'s
+    lines by archive); a session of a group of more than one is named ``<round>/<member>``. Refused where a session the
+    summary lists has no log in the keep."""
     rounds, rows = honest(summary), []
     for rname in rounds:
         rnd, members = summary["rounds"][rname], summary["members"][rname]
         blocks, part = {m["name"]: m["n"] for m in members}, []
         for name, t in rnd["audit"]["timing"].items():
-            logs = out / "sczk" / rname / f"session-{name}"
-            text = {f: (logs / f).read_text(encoding="utf-8", errors="replace") if (logs / f).is_file() else ""
-                    for f in ("prove.log", "lean-verify.log")}
+            logs = keep / "sczk" / rname / f"session-{name}"
+            text = {f: _log(logs / f, rname, name) for f in ("prove.log", "lean-verify.log")}
             live = t.get("timing") or {}
             part.append({"member": name if len(rounds) == 1 else f"{rname}/{name}", "blocks": blocks.get(name),
                          "k_log": live.get("k_log"), "dense_m": live.get("dense_m"),
@@ -190,6 +193,13 @@ def sessions(out: Path, summary: dict, verified: dict) -> list[dict]:
         rows += [{k: v for k, v in r.items() if k != "_at"}
                  for r in sorted(part, key=lambda r: order.get(r["_at"], len(order)))]
     return rows
+
+
+def _log(path: Path, rname: str, name: str) -> str:
+    if not path.is_file():
+        raise Refused(f"no {path}: the summary lists session {name} of {rname}, and its stages are read from its "
+                      "log in the scan's keep (scan_zk.sh's SC_KEEP, which run.sh makes and passes as --keep)")
+    return path.read_text(encoding="utf-8", errors="replace")
 
 
 # ---- the guard ---------------------------------------------------------------------------------------------------------------
@@ -205,16 +215,18 @@ def pinned(cls: str, pins: dict | None = None) -> dict:
     return pins[cls]
 
 
-def _phases(out: Path) -> list[dict]:
-    """The answers the scan kept, one an execution phase of the group (`answers.json`)."""
-    return _json(out / "sczk" / "answers.json").get("windows") or []
+def _phases(summary: dict) -> list[dict]:
+    """The scan's answers, one an execution phase of the group in its order (the summary's `answers`)."""
+    if not isinstance(summary.get("answers"), dict):
+        raise Refused("the scan's summary holds no answers: the scan answered no execution phase")
+    return [a for _, a in sorted(summary["answers"].items(), key=lambda x: int(x[0]))]
 
 
 def sample(summary: dict, phases: list[dict]) -> str | None:
     """How much of the round its answers say was proved: every unit, or how many of the round's; None with no
     answer to read it from."""
     units = sum(m["n"] for m in summary["members"][honest(summary)[0]])
-    proved = {len(((w.get("answer") or {}).get("public") or {}).get("proved") or []) for w in phases}
+    proved = {len((w.get("public") or {}).get("proved") or []) for w in phases}
     if not proved:
         return None
     return "every unit" if proved == {units} else f"{min(proved)} of {units} units"
@@ -226,13 +238,12 @@ def guard(out: Path, summary: dict, scan_exit: int, pins: dict | None = None) ->
     group = summary["group"]
     try:
         want = pinned(summary["setup"], pins)
-        phases = _phases(out)
+        phases = _phases(summary)
     except Refused as e:
         return {"holds": False, "scan_exit": scan_exit, "why": [*why, str(e)]}
     if len(phases) != group:
-        why.append(f"answers.json holds {len(phases)} execution phases' answers, and the group is {group}")
-    for i, w in enumerate(phases):
-        answer = w.get("answer") or {}
+        why.append(f"the summary holds {len(phases)} execution phases' answers, and the group is {group}")
+    for i, answer in enumerate(phases):
         if answer.get("verdict") != "accept":
             why.append(f"execution phase {i}'s answer is {answer.get('verdict')!r}: {answer.get('reason')}")
         elif answer.get("public") != want:
@@ -255,27 +266,30 @@ def _sum(rows: list[dict], *keys: str) -> float | None:
     return None if None in vals or not vals else round(sum(vals), 3)
 
 
-def document(out: Path, scan_exit: int, run: str | None = None, commit: str | None = None, pins: dict | None = None) -> dict:
-    """A scan's kept files under `out` as the benchmark's document: its identity and settings, the guard, each
-    session with its stages, the round's sums, and the numbers (None where the round does not give one)."""
+def document(out: Path, keep: Path, scan_exit: int, run: str | None = None, commit: str | None = None,
+             pins: dict | None = None) -> dict:
+    """A scan's kept files under `out`, its sessions' logs under `keep`, as the benchmark's document: its identity and
+    settings, the guard, each session with its stages, the round's sums, and the numbers (None where the round does not
+    give one)."""
     summary = _json(out / "sczk" / "summary.json")
     rounds = summary.get("rounds") or {}
     for r in honest(summary):
         if not isinstance(rounds.get(r), dict) or "audit" not in rounds[r]:
             raise Refused(f"{out / 'sczk' / 'summary.json'} holds no {r} round with its audit: the scan did not reach it")
     try:
-        return _document(out, summary, scan_exit, run, commit, pins)
+        return _document(out, keep, summary, scan_exit, run, commit, pins)
     except (KeyError, TypeError, ValueError) as e:
         raise Refused(f"{out}'s kept files lack what the honest rounds are read by ({type(e).__name__}: {e}): the scan "
                       "did not finish them") from None
 
 
-def _document(out: Path, summary: dict, scan_exit: int, run: str | None, commit: str | None, pins: dict | None) -> dict:
+def _document(out: Path, keep: Path, summary: dict, scan_exit: int, run: str | None, commit: str | None,
+              pins: dict | None) -> dict:
     group, ticks, tick_ms = summary["group"], summary["T"], summary["params"]["bucket_ms"]
     phase_s = group * ticks * tick_ms / 1000
     verifier, verified = _verifier(out)
-    rows = sessions(out, summary, verified)
-    answers = _phases(out) if (out / "sczk" / "answers.json").is_file() else []
+    rows = sessions(keep, summary, verified)
+    answers = _phases(summary) if isinstance(summary.get("answers"), dict) else []
     rnd = {"sessions_s": _sum(rows, "session_s"), "staging_s": _sum(rows, "stage_s"),
            **{k: _sum(rows, "prover", k) for k in STAGES}, "lean_cpu_s": _sum(rows, "lean_cpu_s"),
            "lean_s": _sum(rows, "lean_verify_s"), **{f"lean_{k}": _sum(rows, "lean", k) for k in LEAN_STAGES}}
@@ -331,7 +345,7 @@ def _put(path: Path, doc: dict) -> None:
     os.replace(tmp, path)
 
 
-def write(run_dir: Path, scan_exit: int) -> tuple[dict | None, bool, str]:
+def write(run_dir: Path, scan_exit: int, keep: Path) -> tuple[dict | None, bool, str]:
     """The run's records of a scan whose kept files are under `run_dir/out`: `out/scan_cost.json` and the run's
     `result.json`, its validation the guard and its fingerprint the identity with the group, then, where the result
     stands (the guard holds and the round has its proving seconds), each measurement through the kit's writer.
@@ -339,7 +353,7 @@ def write(run_dir: Path, scan_exit: int) -> tuple[dict | None, bool, str]:
     out, run = run_dir / "out", settings.RESEARCH_RUN_ID
     stamp = kit.host_stamp()
     try:
-        doc = document(out, scan_exit, run, stamp["commit"])
+        doc = document(out, keep, scan_exit, run, stamp["commit"])
     except Refused as e:
         doc, holds, detail = None, False, f"no round to measure: {e}"
     else:
@@ -347,7 +361,7 @@ def write(run_dir: Path, scan_exit: int) -> tuple[dict | None, bool, str]:
         holds = doc["guard"]["holds"] and doc["numbers"]["proving"] is not None
         detail = "the guard holds" if holds else "the guard does not hold: " + "; ".join(doc["guard"]["why"]) \
             if not doc["guard"]["holds"] else "the guard holds, and the summary lacks a session's seconds or staging: no number"
-    kept = [f"out/{DOC}", "out/sczk/answers.json"] if doc is not None else []
+    kept = [f"out/{DOC}", "out/sczk/summary.json"] if doc is not None else []
     _put(run_dir / kit.RESULT, {
         "schema": kit.RESULT_SCHEMA, "run_id": run,
         "workload_fingerprint": {"benchmark": "scan_cost", **({**doc["identity"], "group": doc["group"]} if doc else {})},
@@ -496,6 +510,7 @@ def main(argv: list[str] | None = None, *, call: Callable = subprocess.run) -> i
     w = sub.add_parser("write", help="a scan's document and the run's result.json")
     w.add_argument("run_dir", type=Path)
     w.add_argument("--scan-exit", type=int, required=True, help="the exit of the scan that left out/sczk")
+    w.add_argument("--keep", type=Path, required=True, help="the scan's SC_KEEP, which holds its sessions' logs")
     sub.add_parser("table", help="a document's round, a session a line").add_argument("doc")
     c = sub.add_parser("compare", help="a candidate beside the baseline; refuses differing identities")
     c.add_argument("candidate")
@@ -505,7 +520,7 @@ def main(argv: list[str] | None = None, *, call: Callable = subprocess.run) -> i
     a = ap.parse_args(argv)
     try:
         if a.command == "write":
-            doc, holds, detail = write(a.run_dir, a.scan_exit)
+            doc, holds, detail = write(a.run_dir, a.scan_exit, a.keep)
             print(f"scan_cost: {detail}" if doc is None else f"{table(doc)}\nscan_cost: {detail}")
             return 0 if holds else 1
         if a.command == "table":

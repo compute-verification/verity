@@ -95,6 +95,8 @@ def test_the_scan_reads_v3cs_trees_at_its_roots_and_proves_no_block_round(tmp_pa
     summary = json.loads((out / "summary.json").read_text())
     assert summary["v3c"] == {"window": str(window), "trees": sorted(["state", *sz.lane_kinds(S.cls)])}
     assert summary["roots"]["0"]["state"] == state["root"] and set(summary["members"]) == set(h.rounds)
+    assert not {"admitted", "anchors", "responses", "cells", "unread", "wiring", "cost", "head"} & set(summary), \
+        "the run's output holds no connection's admission, answer length, cell count, opened slot, wiring, cost or head"
 
 
 def _rewrite(window: Path, f: str, change) -> None:
