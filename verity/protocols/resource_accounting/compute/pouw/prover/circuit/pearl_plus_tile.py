@@ -7,7 +7,7 @@ auditor reads only the verifier's own registered rows and the proof, never a row
          salt: u8[32], root: u8[64], unit: u32, rows: Array<TM, u32>, col: u32, eb: Array<TN, e4m3[32]>,
          fa, fb: Array<K, e4m3[32]>, g: Array<32, f32[32]>, troot, tdomain: u8[64], tpos: Array<D, bit>) -> ok: bit
         `PearlPlusTileCore_v2`'s ok and `PearlPlusTileLeaf_v1` of its digest, and-ed
-    PearlPlusTileCore_v1{K,TM,TN,N,RHO,RHOR,DEV}       on words; _v2 its σ
+    PearlPlusTileCore_v2{K,TM,TN,N,RHO,RHOR,DEV}       on bits: the σ of the core's word body
         (a, b, y, cert, salt, root, unit, rows, col, eb, fa, fb, g) -> (digest: u8[64], ok: bit)
     PearlPlusTileLeaf_v1{D}                             on bits
         (x: u8[64], y: u8[192], root, domain: u8[64], pos: Array<D, bit>, path: Array<D, u8[64]>) -> bit
@@ -49,7 +49,8 @@ one-tile measurement takes, ``verity-verify-proof --zk --registered`` a statemen
   - **private rows**: the certificates ``cert``, the hm96 salt ``hsalt`` and the path ``path``.
   - **``ok``**, the one output, registered at known content 1, so a proof the verifier accepts is one whose unit computed 1.
 
-The core has a word form, so a fixture tile is evaluated on words against the scheme (`reference`); the unit is on bits
+The core is one registered Definition, its σ: its word body is an unregistered Definition the σ lifts and names as its
+word view, through which a fixture tile is evaluated on words against the scheme (`reference`); the unit is on bits
 only, as H1's tile unit is (`h1tile`).  Every Definition the unit Calls is a σ, a Boolean gadget or a Call of them, so the
 unit is laid out in units under 65,536 ANDs (`pearl_c_call.units`).
 """
@@ -91,7 +92,7 @@ from . import leaves as L
 from verity.circuits.ops import words as W
 
 __all__ = ["PUBLIC", "PearlPlusAdmit", "PearlPlusAdmitV2", "PearlPlusSaltDead", "PearlPlusSaltDeadV2", "PearlPlusTile",
-           "PearlPlusTileCore", "PearlPlusTileCoreV2", "PearlPlusTileLeaf", "leaf_reference", "reference", "statement_rows",
+           "PearlPlusTileCoreV2", "PearlPlusTileLeaf", "leaf_reference", "reference", "statement_rows",
            "tile"]
 
 F32, U32, BIT, I32 = Value(32), Value(32), Value(1), Value(32)
@@ -243,14 +244,14 @@ def _core_body(B, S, a, b, y, cert, salt, root, unit, rows, col, eb, fa, fb, g):
     return tuple_of(digest, ok)
 
 
-PearlPlusTileCore = CompositeDefinition(
+_CORE = CompositeDefinition(
     "PearlPlusTileCore", 1, ("K", "TM", "TN", "N", "RHO", "RHOR", "DEV"), lambda S: (_core_params(S), Tuple(BYTES64, BIT)),
-    _core_body, refuse=_refuse_k, conformance="protocol-defined; equal to `pearl_plus_tile.reference` on its fixture tiles "
+    _core_body, refuse=_refuse_k, register=False, conformance="protocol-defined; equal to `pearl_plus_tile.reference` on its fixture tiles "
                                               "(tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_pearl_plus_tile.py)",
     doc="A drawn -h3 tile on words: its rows formed against the salt's noise (`PearlCRowA`, `PearlCRowB`), and (the "
         "sha512/row-seg/v1 digest of its C̃ and U, ok: every row admitted, the tile's and each row's cap, and each row's "
         "served y its committed y at column tile col).")
-PearlPlusTileCoreV2 = _on_bits(PearlPlusTileCore, 2)
+PearlPlusTileCoreV2 = _on_bits(_CORE, 2)
 
 
 # ---- the leaf and the unit ----------------------------------------------------------------------------------------------
@@ -295,7 +296,7 @@ def _tile_sig(S):
 
 
 def _core_statics(S) -> dict:
-    return {k: getattr(S, k) for k in PearlPlusTileCore.statics}
+    return {k: getattr(S, k) for k in PearlPlusTileCoreV2.statics}
 
 
 def _tile_body(B, S, a, b, y, cert, hsalt, path, salt, root, unit, rows, col, eb, fa, fb, g, troot, tdomain, tpos):
