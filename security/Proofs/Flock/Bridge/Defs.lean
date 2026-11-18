@@ -63,7 +63,7 @@ The Flock session's units, read as the sampling claims' statement, partition, co
 
 namespace Flock.Bridge
 
-open FlockSoundness.Audit
+open Spot.Sampling
 
 /-- The Boolean-profile gates one Flock gate lowers to: three for a row, one for any other. -/
 def gateSize {N : ℕ} : Verity.Boolean.Op N → ℕ

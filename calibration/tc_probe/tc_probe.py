@@ -1685,9 +1685,8 @@ def record(out: Path, instruction: str, device: str, results: dict, declared: li
     if not declared or which is None:
         return
     from verity_bench import kit
-    from verity_bench.overhead import CARD_FILES
     src = results[which]
-    card = kit.card_short(device, directory=CARD_FILES)
+    card = kit.card_short(device)
     words = src["asserted_elements"] if which == "canary" else src["total_asserted_elements"]
     fields = {"instruction": instruction, "card": card, "words_compared": words, "model": declared[0], "tiles": which}
     m = kit.writer(out).measurement(METRIC, src["total_mismatches_by_model"][declared[0]], "words", mark="measured",

@@ -78,6 +78,7 @@ def row(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndar
 
 def check_targets(rng: np.random.Generator) -> list:
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsa_norm as DN
 
     return [bind(DN.DsaRMSNorm, N=256, EPS=1e-5), bind(DN.DsaRMSNorm, N=2048, EPS=1e-6)]

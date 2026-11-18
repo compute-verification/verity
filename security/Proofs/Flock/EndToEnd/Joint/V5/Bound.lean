@@ -30,7 +30,7 @@ The proofs of `JointSampledV5`, `JointShareV5` and `JointPooledV5` (`Joint/V5/St
 
 namespace Flock.Guarantees
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open scoped ENNReal
@@ -175,7 +175,7 @@ end Flock.Guarantees
 
 namespace Flock.SecurityProofs
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden Flock.Guarantees
 open scoped ENNReal

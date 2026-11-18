@@ -2319,7 +2319,7 @@ def test_run_sh_serves_the_arms_lifetimes_in_the_order_named_then_turned_round_o
 
 def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anything():
     assert run_sh("--bogus") == (2, "serve-tax: unknown flag --bogus (--model, --arms, --loads, --dataset NAME=FILE, --reps, "
-                                    "--target, --json)\n")
+                                    "--target, --json, --profile NAME, --feature SCHEME, --find-load)\n")
     assert run_sh("--model") == (2, "serve-tax: --model takes a value\n")
     # the default arms end in the two-stage serve's launch line, which is the arm's data: the job names no object
     for flags in (("--model", "glm53"), ("--model", "glm53", "--arms", "compiled compiled-again", "--json")):
@@ -2395,6 +2395,6 @@ def test_a_card_no_record_lists_in_its_driver_is_refused_naming_what_to_add(monk
                                          r"\{ value = \"NVIDIA Z9 80GB\", source = \.\.\. \} to its one record's `driver` "
                                          r"and give it a `short`.*<sku>\.toml"):
         S.member(S.MODELS["llama32-1b"], "record", "compiled")
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": ""})
     with pytest.raises(SystemExit, match="0 card records"):
-        S.card_record("")
-    assert S.card_record("NVIDIA H200")["sku"] == "h200-sxm-141gb"
+        S.member(S.MODELS["llama32-1b"], "record", "compiled")

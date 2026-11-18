@@ -168,15 +168,13 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   when they are one. Negatives on one sampled chunk: no registered reads, another root, its units reading another row, a
   port committed afresh (`registered_negatives`), and a verdict reporting another root. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
   context); `a5_row_tables.py` is their stand-in.
-* **Wiring across statements** (`commit.wiring`, `HmOut` ``Wiring``): a w13 coordinate's K-chunks
-  (`pipeline.kchunk_rows`) are three templates, each chunk's ``acc`` row the output row of the chunk before it, committed under
-  that row's salt. Lean's links hold only inside a statement, so after the sample each sampled proof block's wires are held on the public
-  bodies the leaf layer binds (`wiring.check_drawn`, Lean's `Wires.Summary.drawnOk`: the two rows' strings are one), and a
-  sampled chunk's ``acc`` is then the committed output of the chunk that wrote it, sampled or not. A unit whose wired row is
-  not its writer's is incorrect in the wired flattening, so the sampled proof blocks' wires are the check; every unit's
-  (`wiring.check`) is recorded beside it as the reference (``wiring_reference``), never gating. A sparse-MLA row's key blocks read the state before them, and its combines its splits' partials and lses, the same way
-  (`pipeline.chain_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
-  two of a combine's slots, and flip a wired row's string in its reader's public body.
+* **Wiring across statements** (`commit.wiring`): a w13 coordinate's K-chunks (`pipeline.kchunk_rows`) are three
+  templates, each chunk's ``acc`` row the output row of the chunk before it. Each (template, output field) is one tree, and
+  a wired port commits nothing: a sampled chunk's verify reads its ``acc`` rows at its writer template's root, at the
+  leaves the wiring gives in closed form (`rows.own_reads`), each opened by its path (`rows.shared_entries`), so its
+  ``acc`` is the committed output of the chunk that wrote it, sampled or not. A sparse-MLA row's key blocks read the state
+  before them, and its combines its splits' partials and lses, the same way (`pipeline.chain_rows`, `a5_sparse_mla.py`
+  its stand-in).
 * **Values tied to an earlier docket** (``a.tie``, records_audit's ``--tie``): a window whose population program takes
   values ahead of its templates' parameters (`program_values`, a served window's H1 tables or Pearl+'s committed rows)
   registers them as the values of the earlier record that registered them first (one-stage's ``outputs``: PoUW H1's
@@ -253,7 +251,6 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
 )  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.commitments.periods import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
-from verity.commitments.periods import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
 #: what a plain audit covers until proofs' multi-table coverage lands (`Flock.ProvedScope`, `ProvedScope.sampleDesign`)
@@ -556,51 +553,6 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
               "verified": verified,
               "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
     return result, neg, record
-
-
-def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) -> dict[str, dict]:
-    """The verifier's wiring check (`HmLinks`, `wiring.check_drawn`) on altered wires, each with the units it alters sampled: the first
-    wire's unit 0 reading another unit's row, neither its writer's nor its own, of its words where one is (``words``: same,
-    else other; rotating the writers is the honest wire at one unit a member or on a fan-out), two wires of one output swapped (a split's partial read into another combine slot), and a wired row's string
-    flipped in its reader's public body (a partial that is not the one its writer committed), its unit 0 sampled."""
-    neg: dict[str, dict] = {}
-    k = next((k for k, m in enumerate(members) if m.wired), None)
-    if k is None:
-        return neg
-
-    def rewired(j: int, wired: tuple) -> list[CS.Member]:
-        return [replace(m, wired=wired) if i == j else m for i, m in enumerate(members)]
-
-    (p, o, ws), *rest = members[k].wired
-    def units(j: int) -> range:
-        return range(members[j].base, members[j].base + members[j].n)
-
-    words, me = dict(members[k].rows)[p], members[k].base
-
-    def others(same: bool) -> Iterator[int]:
-        return (x.base + i for x in members if not same or dict(x.out_rows).get(o) == words for i in range(x.n)
-                if x.base + i not in (ws[0], me))
-
-    same = next(others(True), None)
-    other = same if same is not None else next(others(False), None)
-    if other is not None:
-        neg["chunk-wired-to-another-unit (§16.13)"] = {
-            "refused": bool(WI.check_drawn(rewired(k, ((p, o, (other, *ws[1:])), *rest)), publics, [me])),
-            "words": "same" if same is not None else "other"}
-    swap = next(((j, a, b) for j, m in enumerate(members) for a in range(len(m.wired)) for b in range(a + 1, len(m.wired))
-                 if m.wired[a][1] == m.wired[b][1] and m.wired[a][2] != m.wired[b][2]), None)
-    if swap is not None:
-        j, a, b = swap
-        w = list(members[j].wired)
-        w[a], w[b] = (w[a][0], w[a][1], w[b][2]), (w[b][0], w[b][1], w[a][2])
-        neg["partial-wired-to-another-combine-slot (§16.13)"] = {
-            "refused": bool(WI.check_drawn(rewired(j, tuple(w)), publics, units(j)))}
-    m = members[k]
-    body = bytearray(publics[m.key])
-    body[WI.string_at(m, body, p, 0)] ^= 1
-    neg["wired-row-not-its-writer-s-output (§16.13)"] = {
-        "refused": bool(WI.check_drawn(members, {**publics, m.key: bytes(body)}, [m.base]))}
-    return neg
 
 
 def many_rows(reads: Mapping[str, Mapping[str, Any]], mm: dict) -> bool:
@@ -956,9 +908,6 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
-    if any(m.wired for m in mine.members):
-        bad = WI.check(mine.members, publics)
-        summary["wiring_reference"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
     w = rec.get("window", {})
     checks["source"] = source(w)
     summary["source"], summary["commitment"] = w.get("kind"), w.get("commitment")
@@ -980,11 +929,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # docket's own roots, since Lean takes registered reads only when they name every port or bind the rest: a port
     # those reads leave out is bound to the docket's root and domain of its rows, which the checks above held its
     # header's to (`REG.bind_ports`), never a port the window's registered circuit record declares registered
-    # (`--interface`: the record the audit holds by SHA-512); a member holding a wired port in its writer's tree (no tree
-    # of its own) reads it at its writer's root, a registered read those reads name and so never bound, its other ports
-    # at their own; the docket's root and domain of such a port's rows are its writer's port's (`Binding.held`)
-    held = {m.key: {"format": REG.READS_V1, "ports": {}} for m in mine.members if m.wired and not m.wired_trees}
-    reads = CS.own_reads({**held, **(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}),
+    # (`--interface`: the record the audit holds by SHA-512); a member with ports in shared trees reads each at its
+    # tree's root, at the leaf its wiring gives (`Binding.tree`, `Binding.reads`), a registered read those reads name
+    reads = CS.own_reads({**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}),
                           **(registered or {})}, mine, roots, registered=REG)
     iface = served / "circuit.json"
     iface = iface if iface.is_file() and hashlib.sha512(iface.read_bytes()).hexdigest() == summary.get("circuit") else None
@@ -992,8 +939,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         if mm["m"].key in reads:
             m = mm["m"]
             fv_roots = mm["header"]["frame_v3"]["roots"]
-            own = REG.bind_ports(reads[m.key], fv_roots, {p: {"root": roots[mine.held(m, p)]["root"],
-                                                              "domain": want[mine.held(m, p)]["domain"]} for p in fv_roots})
+            own = REG.bind_ports(reads[m.key], fv_roots, {p: {"root": roots[mine.tree(m, p)]["root"],
+                                                              "domain": want[mine.tree(m, p)]["domain"]} for p in fv_roots})
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
             mm["st"]["registered_file"].write_text(json.dumps(own, sort_keys=True))
             if iface is not None:
@@ -1028,14 +975,6 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / SAMPLE_FILE).write_text(json.dumps(union_sample, sort_keys=True))
     after: dict[str, dict] = {}
-    if any(m.wired for m in mine.members):
-        bad = WI.check_drawn(mine.members, publics, union_sample["units"])
-        after["wiring"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
-        if bad:
-            summary.update(checks={**checks, **after})
-            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-            print("A5 " + json.dumps({"refused_after_draw": {"wiring": False}, "checks": after}, default=str))
-            return summary, False
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
     proving: dict[str, dict] = {}   # by member key, what the summary's timing adds to its statement (`proving_of`)
     linked = None       # the first sampled chunk whose registered reads name a value of more than one row (`many_rows`),
@@ -1162,7 +1101,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
                 "served": [m.base + u for u in draw_t.get("units", []) if m.base + u in drawn_units],  # a closure's are `proved`
-                "roots": {mine.held(m, p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
+                "roots": {mine.tree(m, p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
                 "proved": a0.proved_units(mm["header"], live or {}), "instances": (live or {}).get("instances", 0),
                 "statement": {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                               "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
@@ -1350,7 +1289,6 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             parts.append(workers.submit(name, functools.partial(history_root, name, wrong)))
         v = outside_the_partition(union_sample, rec, sampled_design, n_all)
         parts.append({"draw-outside-the-partition": a0.negative(v)})
-        parts.append(wiring_negatives(mine.members, publics))
         if proved:
             v = V.check_proved(union_sample, proved[1:], len(proved) - 1)
             parts.append({"proved-set-short-of-the-draw": a0.negative(v)})
@@ -1594,11 +1532,12 @@ def link_members(members: Sequence[dict]) -> list[tuple[list[list[int]], int]]:
     return [([[mm["m"].base, mm["m"].base + mm["m"].n]], int(mm["st"]["meta"]["vus_per_block"])) for mm in members]
 
 
-def per_member(members: Sequence[dict], zk: bool) -> bool:
-    """Whether the audit's case is of the per-member form (`members_proof`): a window of several members, its sessions
-    `--zk`. Its docket's check reads the members (`link_members`), as v2's check of that case does
-    (`OneStageZk.membersParamsOfJson`); the one statement's form names none."""
-    return len(members) >= 2 and zk
+def per_member(members: Sequence[dict], zk: bool, one: bool = False) -> bool:
+    """Whether the audit's case is of the per-member form (`members_proof`): a window of several members, or of one
+    whose sessions ran on a caller's stage's challenger session (``one``), its sessions `--zk`. Its docket's check reads
+    the members (`link_members`), as v2's check of that case does (`OneStageZk.membersParamsOfJson`); the one
+    statement's form names none."""
+    return (len(members) >= 2 or one) and zk
 
 
 def link_points(sampling_design: dict, population: int, members: Sequence[dict]) -> dict:
@@ -1672,7 +1611,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: 
 
     if len(members) < 2 and not one:
         return None
-    if not per_member(members, zk):
+    if not per_member(members, zk, one):
         return "v2 verifies --zk sessions; this audit's are plain"
     sdirs = {got["mm"]["m"].key: got["sdir"] for got in done}
     out, tables = [], {}

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import re
 import shutil
 import subprocess
@@ -57,8 +56,6 @@ class Plan:
 
 CompletionLookup = Callable[[str, str], str | None]
 Executor = Callable[[Sequence[str], Path], int]
-#: a direct point's launch: the plan, the spec's source, the point, the root and the node to its `research run` argv
-DirectCommand = Callable[[Plan, str | Path, PlannedPoint, Path, str], list[str]]
 
 
 def repository_root(start: str | Path | None = None) -> Path:
@@ -73,7 +70,12 @@ def _commit(root: Path) -> str:
     recorded = settings.RESEARCH_SOURCE_SHA
     if recorded:
         return recorded
-    return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True,
+                                       stderr=subprocess.DEVNULL).strip()
+    except (OSError, subprocess.CalledProcessError):
+        raise ValueError(f"{root} is no git checkout and RESEARCH_SOURCE_SHA is unset, so nothing says which commit this "
+                         "tree is: run under `research run`, which sets it (--tree-sha for a tree without .git)") from None
 
 
 def _file_sha256(path: Path) -> str:
@@ -268,24 +270,6 @@ def _relative_spec(source: str | Path, root: Path) -> str:
         raise ValueError("a recorded benchmark spec must be inside the source tree") from None
 
 
-QUEUE_KINDS = {1: "vllm-bench-1gpu"}
-# A point writes its records, out/ and what its setup builds (a few MB; the venv and model cache are shared). The
-# queue's default 20 GB request would hold every point once the node's disk nears research disk-hold's 80%.
-POINT_DISK_GB = 5
-
-
-def queue_kind(gpu_count: int) -> str:
-    """The queue kind (infra/cluster/kinds/benchmarks.toml) whose shape gives a point's job its CPUs and memory."""
-
-    try:
-        return QUEUE_KINDS[gpu_count]
-    except KeyError:
-        raise ValueError(
-            f"no queue kind for a {gpu_count}-GPU spec: register one in infra/cluster/kinds/benchmarks.toml "
-            "and name it in verity_bench.jobs.QUEUE_KINDS"
-        ) from None
-
-
 def point_environment(spec: ResolvedSpec | SteadySpec) -> dict[str, str]:
     """What a point's job must run under: the spec's `env`, and its `setup` script (`run_point.sh` sources it before the
     point's Python starts) as VERITY_BENCH_SETUP."""
@@ -303,39 +287,59 @@ def check_point_environment(spec: ResolvedSpec | SteadySpec, environ: Mapping[st
                          "launch points with `verity-bench run SPEC`, which forwards them")
 
 
-#: the GPU nodes whose GPUs `--direct` may take: each has its GPU slots in GPU_SLOTS, one per GPU (the nebius nodes and
-#: the eight-card H200 nodes g0-g7, the single-GPU VMs g0). A slot gives a run its CPUs and no GPU: the run takes
-#: its GPUs from the node's gpu-lease
-DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-dc-h200-2", "vy-dc-h200-3", "vy-dc-b200", "vy-spot-glm53",
-                "vy-h200x8-1", "vy-h100-1")
-GPU_SLOTS = "/workspace/research/locks/gpu/slots"
-#: how long a direct point waits for one of those slots where its launch states no end: as long as a pool's run waits for
-#: a slot (`research run --pool`'s --pool-wait, `slot_only.POOL_WAIT_S`)
-DIRECT_WAIT_S = 14400
-#: how far short of a stated end a direct point's wait stops: slot.py tries for a slot every 20 s (its POLL_S), and one
-#: that counts --run-max from taking the slot may take it a try past --wait-max, so the run ends before the end
-#: whichever slot.py the node runs
-SLOT_GRACE_S = 60
+def lease_host() -> bool:
+    """Whether gpu-lease hands out every GPU of this machine (research's `GPU_LEASE_HOST_FILE`, which the machine's setup
+    writes): a run there sees no GPU until it takes a lease."""
+
+    from research.remote import GPU_LEASE_HOST_FILE
+
+    return Path(GPU_LEASE_HOST_FILE).exists()
 
 
-def _env_flags(spec: ResolvedSpec) -> list[str]:
-    flags = []
-    if venv := settings.VERITY_BENCH_VENV:
-        flags += ["--env", f"VERITY_BENCH_VENV={venv}"]
-    if kit.is_trial():
-        flags += ["--env", f"{kit.TRIAL}=1"]
-    for name, setting in point_environment(spec).items():
-        flags += ["--env", f"{name}={setting}"]
-    return flags
+def _lease(spec: ResolvedSpec) -> list[str]:
+    """A vLLM point's wait for its cards where gpu-lease hands them out (`lease_host`): the spec's GPUs for its admission
+    max_minutes, of the cards GPU_LEASE_ON lists and on the CPUs GPU_LEASE_CORES lists where they are set, preemptible as
+    a guest's GPU job must be. Elsewhere none, and none in a job that holds its lease already (GPU_LEASE_UUID: the
+    queue's, `research run --gpus N`'s): the point runs on the cards its job was given."""
+
+    if settings.GPU_LEASE_UUID or not lease_host():
+        return []
+    if spec.admission.max_minutes is None:
+        raise ValueError(f"spec {spec.id!r} has no admission max_minutes, which bounds the point's GPU lease")
+    *lease, end = kit.lease(spec.preset.gpu_count, spec.admission.max_minutes, on=settings.GPU_LEASE_ON,
+                            cores=settings.GPU_LEASE_CORES)
+    return [*lease, "--preemptible", end]
 
 
-def _point_command(source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
-    return [
-        "bash", "benchmarks/harness/run_point.sh",
-        "--spec", _relative_spec(source, root),
-        "--point", item.point.id,
-        "--identity", item.identity,
-    ]
+def _steady_card() -> list[str]:
+    """A steady-state point's card where GPU_LEASE_ON names one (`steady_node --card`): its node side takes the lease."""
+
+    on = settings.GPU_LEASE_ON
+    if on is None:
+        return []
+    if not on.isdigit():
+        raise ValueError(f"GPU_LEASE_ON={on!r}: a steady-state point's lease is of one card, named by its index")
+    return ["--card", on]
+
+
+def point_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
+    """The point in this process's own run, on the machine it was started on, with the spec's env and setup: a vLLM
+    point's `run_point.sh` in its lease (`_lease`), a steady-state point's `steady_point.sh`, which takes its own."""
+
+    env = ["env", *(f"{name}={setting}" for name, setting in point_environment(plan.spec).items())]
+    flags = ["--spec", _relative_spec(source, root), "--point", item.point.id, "--identity", item.identity]
+    if isinstance(plan.spec, SteadySpec):
+        return [*env, "bash", "benchmarks/harness/steady_point.sh", *flags, *_steady_card()]
+    return [*_lease(plan.spec), *env, "bash", "benchmarks/harness/run_point.sh", *flags]
+
+
+def booked(end: float | None, cores: str | None) -> list[str]:
+    """A booked period's launch: the run takes the slot of the booked `cores`, and isn't started unless the spec's
+    max_minutes fit before `end`. `research run` has neither (`--pool` takes the first free slot, `--timeout` is a length,
+    not an end), so it is the launcher's, not the harness's."""
+
+    raise NotImplementedError("infra's launcher goal infra/booked-launch: `research run` taking a booked period, its end "
+                              "and its slot by the slot's cores")
 
 
 def vllm_spec(plan: Plan) -> ResolvedSpec:
@@ -346,123 +350,38 @@ def vllm_spec(plan: Plan) -> ResolvedSpec:
     return plan.spec
 
 
-def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
-    spec = vllm_spec(plan)
-    command = [
-        "research", "run",
-        "--queue",
-        "--kind", queue_kind(spec.preset.gpu_count),
-        # A guest's GPU job must be; a stopped point reruns whole when requeued, and resume skips only passing points.
-        "--preemptible",
-        "--source", str(root),
-        "--project", "verity",
-        "--campaign", "vllm-bench",
-        "--gpus", str(spec.preset.gpu_count),
-        "--gpu-model", spec.preset.gpu_id,
-        "--disk-gb", str(POINT_DISK_GB),
-        "--cwd", "source",
-        "--require-result",
-        "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
-    ]
-    if spec.admission.max_minutes is not None:
-        command += ["--max-min", str(spec.admission.max_minutes)]
-    return [*command, *_env_flags(spec), "--", *_point_command(source, item, root)]
+def to_run(plan: Plan, point: str | None = None) -> PlannedPoint:
+    """The one point a run runs: `point`, else the spec's only point, else the one point `--again` names."""
 
-
-def direct_minutes(spec: ResolvedSpec | SteadySpec, node: str) -> float:
-    """The spec's admission max_minutes, which bounds a direct point's run, slot and lease, once `node` is a GPU node."""
-
-    if node not in DIRECT_NODES:
-        raise ValueError(f"--direct {node}: not a GPU node with gpu slots ({', '.join(DIRECT_NODES)}), so a point there "
-                         f"gets no GPU; a GPU node that has {GPU_SLOTS} joins verity_bench.jobs.DIRECT_NODES")
-    if spec.admission.max_minutes is None:
-        raise ValueError(f"--direct needs spec {spec.id!r}'s admission max_minutes: it bounds the run, its slot and its "
-                         "GPU lease")
-    return spec.admission.max_minutes
-
-
-def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign: str, tool: str,
-             env: Sequence[str], job: Sequence[str], store_read: bool = False, cores: str | None = None,
-             end: float | None = None, now: Callable[[], float] = time.time) -> list[str]:
-    """`job` as a recorded `research run --on NODE` through one of the node's GPU slots, for a node whose launcher takes
-    only slot runs: the one form of a direct point's launch, whatever the point's spec. The run waits for its slot at
-    most until `end` (seconds since the epoch, a booked period's end) less the spec's admission `max_minutes`, or
-    `DIRECT_WAIT_S` where the launch states no end, and then has `max_minutes` from taking it (slot.py's `--wait-max`
-    and `--run-max`); its timeout is the two together. With an `end`, the wait stops `SLOT_GRACE_S` short of it, so
-    the run ends before `end` whichever slot.py the node runs. One whose `max_minutes` don't fit before `end` at its
-    launch is refused here. `tool` records the run; `env` is its `--env` flags; `store_read` gives the job
-    a read-only key to the store for the run's length (`research run --store-read`), for a job that fetches from it.
-    `cores` (`34-43`), a booked slot's: the slot taker runs under `taskset -c CORES`, and takes only a slot within its
-    own CPUs, so it takes that slot or waits for it; without it, the first free slot."""
-
-    run_s = direct_minutes(spec, node) * 60
-    wait_s = DIRECT_WAIT_S if end is None else math.floor(end - now()) - run_s - SLOT_GRACE_S
-    if wait_s <= 0:
-        raise ValueError(f"a point of spec {spec.id!r} runs for up to {run_s / 60:g} min (its admission max_minutes), "
-                         f"which don't fit before its end, {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(end))}: it "
-                         "would not finish, so it isn't launched. State a later end, or a smaller max_minutes")
-    return [
-        "research", "run",
-        "--on", node,
-        "--project", "verity",
-        "--campaign", campaign,
-        "--source", str(root),
-        "--cwd", "source",
-        "--timeout", f"{wait_s + run_s:g}",
-        "--require-result",
-        "--tool", tool,
-        *(["--store-read"] if store_read else []),
-        *env,
-        "--",
-        *(["taskset", "-c", cores] if cores else []),
-        "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/check/slot.py", "--by", "benchmarks",
-        "--wait-max", f"{wait_s:g}", "--run-max", f"{run_s:g}",
-        "--",
-        *job,
-    ]
-
-
-def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path, node: str, *,
-                   card: int | None = None, cores: str | None = None, end: float | None = None,
-                   now: Callable[[], float] = time.time) -> list[str]:
-    """The point as a `research run --on NODE` through one of the node's GPU slots (`slot_run`, by `end` where given),
-    its GPUs from the node's gpu-lease, of the booked `card` alone and on the booked slot's `cores` where given: the
-    queued point's tool, identity and environment."""
-
-    spec = vllm_spec(plan)
-    minutes = direct_minutes(spec, node)
-    # Without --max-min a lease has no end, which gpu-lease refuses while a booked period lies ahead; a guest's GPU job is
-    # preemptible, as the queued point's is.
-    lease = ["gpu-lease", str(spec.preset.gpu_count), "--wait", *(["--on", str(card)] if card is not None else []),
-             *(["--cores", cores] if cores else []), "--max-min", f"{minutes:g}", "--preemptible", "--"]
-    return slot_run(spec, root, node, campaign="vllm-bench", tool="verity_bench.tool:VLLM_BENCH_POINT",
-                    env=_env_flags(spec), job=[*lease, *_point_command(source, item, root)], cores=cores, end=end,
-                    now=now)
+    ids = [item.point.id for item in plan.points]
+    if point is None:
+        named = [item.point.id for item in plan.points if item.again]
+        if len(ids) != 1 and len(named) != 1:
+            raise ValueError(f"spec {plan.spec.id!r} has {len(ids)} points ({', '.join(ids)}) and a run runs one: name it "
+                             "with --point")
+        point = ids[0] if len(ids) == 1 else named[0]
+    found = [item for item in plan.points if item.point.id == point]
+    if not found:
+        raise ValueError(f"--point {point}: not a point of spec {plan.spec.id!r}, whose points are {', '.join(ids)}")
+    return found[0]
 
 
 def _execute(command: Sequence[str], root: Path) -> int:
     return subprocess.run(command, cwd=root, check=False).returncode
 
 
-def dispatch(plan: Plan, source: str | Path, *, root: Path | None = None, execute: Executor = _execute,
-             direct: str | None = None, command: DirectCommand = direct_command) -> int:
-    """Launch one recorded research run for each incomplete point and each point named again (`again`), in the spec's
-    order: queued, or with `direct` on that
-    node's GPU slots, each as `command` gives it (a vLLM point's `direct_command`; a steady-state point's is
-    `steady_plan.direct_command`). Each launch returns once its run has started on the node, where the runs take the
-    slots in turn. The first launch that fails stops the rest; its exit code, or 0."""
+def dispatch(plan: Plan, source: str | Path, *, point: str | None = None, root: Path | None = None,
+             execute: Executor = _execute) -> int:
+    """Run the spec's one point (`to_run`) in this process's own run, on the machine it was started on
+    (`point_command`), unless a passing run stands for it and `--again` doesn't name it; the point's exit code, or 0."""
 
     root = root or repository_root()
-    if direct is not None:
-        direct_minutes(plan.spec, direct)
-    for item in plan.points:
-        if item.passing_run is not None and not item.again:
-            continue
-        argv = research_command(plan, source, item, root) if direct is None else command(plan, source, item, root, direct)
-        rc = execute(argv, root)
-        if rc:
-            return rc
-    return 0
+    item = to_run(plan, point)
+    if item.passing_run is not None and not item.again:
+        print(f"verity-bench: point {item.point.id} of spec {plan.spec.id!r} has its passing run {item.passing_run}, so "
+              f"nothing runs (--again {item.point.id} runs it again)", file=sys.stderr)
+        return 0
+    return execute(point_command(plan, source, item, root), root)
 
 
 def write_resolved(plan: Plan, path: Path) -> None:

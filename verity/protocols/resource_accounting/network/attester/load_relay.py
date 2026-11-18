@@ -54,8 +54,7 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   every hm96 salt is the operating system's (A3 in
   ``security/Definitions/Assumptions/Flock.lean``), so nothing rests on a stream generator. ``--witness`` is
   where they go, every value's in manifest order, its rows in order (each value's `Transfer.witness`): the prover's
-  alone, 4.85 GB at H200 (25,284,864 rows). `keyed_salts` is interface 1's prover-side derivation (Flock's
-  ``hm96_salt``), here only to hold this commit to interface 1's fixture roots.
+  alone, 4.85 GB at H200 (25,284,864 rows).
 * **The domain** is a parameter, by default the one the verifier derives (`transfer_rows.domain`: the reading program's
   digest ``--program``, the value's leaf width, a value held across windows dropping only the window), interface 1's.
 * **The attester's key** is ``--key``'s (`attester_key.load_key`'s layout), one LMS leaf a value (733 at H200), in
@@ -89,7 +88,6 @@ from verity.commitments import hm96
 from verity.commitments.hm96 import batch as HB
 from verity.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain, _uint, merkle_depth
 from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix
-from verity.commitments.crypto import chacha20
 from verity.protocols.resource_accounting.network.verifier import transfer_rows as TR
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction, Issuer
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
@@ -293,18 +291,6 @@ def plan(values: Sequence[Value], fmt: str = "plain", shape: Shape | None = None
 def os_salts(value: int, first: int, n: int) -> bytes:
     """The attester's salts: `n` rows' 192 bytes each, fresh from the operating system."""
     return os.urandom(SALT_BYTES * n)
-
-
-@dataclass(frozen=True)
-class keyed_salts:
-    """Interface 1's prover-side salts (Flock's ``hm96_salt``): row r of the value at manifest index i, ChaCha20 blocks
-    3r .. 3r + 2 under `key` with nonce i. Only to hold this commit to interface 1's fixture roots."""
-
-    key: bytes
-
-    def __call__(self, value: int, first: int, n: int) -> bytes:
-        k = SALT_BYTES // chacha20.BLOCK_BYTES
-        return chacha20.keystream(self.key, value, k * first, k * n)
 
 
 class Frame:

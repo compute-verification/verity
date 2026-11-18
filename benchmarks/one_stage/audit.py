@@ -9,7 +9,7 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 * **The boundary** (`toy.boundary`): N replay blocks' ingress and egress rows under fresh salts, registered on the stream
   (`Stream.register`, held to the challenger's own window), and the first stage's sample S of Q of them.
 * **The interior** (`toy.interior`): S replayed from the boundary's ingress rows, committed template-major and wired as the
-  replay block's edges, each wired port its writer's output, one tree a value (`Member.wired_trees` off), each link
+  replay block's edges, each wired port a leaf of its writer template's output tree, one tree a value, each link
   member's boundary port under the boundary's salts at S, registered on the stream after the
   boundary (`Stream.register_interiors`); its window names the boundary registration and S, which the verifier holds it to
   (`source_of`). The stream's second stage samples ``--k`` proof blocks in each (replay block, template) cell.
@@ -154,8 +154,8 @@ def stage_of(docket: S.WindowCommitmentRecord, sample: S.Draw) -> dict:
 
 def own_ports(window: T.CS.Binding, sampled: list[int]) -> list[str]:
     """The interior registration's own ports the sessions read: the port holding each port but its link port of each
-    member the second stage sampled a unit of (`Binding.held`: a wired port's, its writer's output port), each once."""
-    return sorted({window.held(m, p) for t, m in enumerate(window.members) if any(m.base <= u < m.base + m.n for u in sampled)
+    member the second stage sampled a unit of (`Binding.tree`: a wired port's, its writer template's output tree), each once."""
+    return sorted({window.tree(m, p) for t, m in enumerate(window.members) if any(m.base <= u < m.base + m.n for u in sampled)
                    for p, _ in m.all_rows if p != T.link(t)})
 
 
@@ -176,7 +176,7 @@ def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.C
     (`pins`, ``files``). Honest: every Lean verdict accepted, the sessions' registered reads the verifier's own, every
     negative refused, a5's record accepted or refusing only the reads of the interior's own ports (`own_reads_only`),
     round 2 ``r2`` accepting the statements, and the stream's outcome ``o`` accepted or refused by round 2's two-stage
-    form alone, while `second_stage.FORM` is off (`two_stage.held`). ``--altered``: Lean's verify refused both link
+    form alone, where `second_stage.FORM` is off (`two_stage.held`). ``--altered``: Lean's verify refused both link
     members (m0, m4) by `ALTERED` and accepted the fold and flips, round 2 refuses the statements, and the outcome
     refuses."""
     audit, why = s.get("audit") or {}, (s.get("audit") or {}).get("why") or {}

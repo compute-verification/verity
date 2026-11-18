@@ -178,8 +178,12 @@ HERE = (Path(__file__).resolve().parent)
 FORMAT = "verity-vllm/two-stage/stage1/v0"
 CHALLENGER = "two_stage.py on the auditor's challenger's coins"
 FIRST_STAGE = "stage1.json"
-#: what round 2 refuses every two-stage run by while the form is off (`second_stage.FORM`)
+#: what round 2 refused every two-stage run by while the form's switch was off (`second_stage.FORM`)
 FORM_REFUSED = "two-stage-form"
+#: what an accepted two-stage outcome says of its form: the verifier accepts it ahead of its proof (`second_stage.FORM`),
+#: and no guarantee is quoted for a two-stage run
+NOT_COVERED = ("the two-stage form is not yet proved: the verifier accepts it ahead of its proof, and no guarantee "
+               "covers a two-stage run")
 #: whether the replay block is the class's registered request Definition. It is `boundary_rows`' stand-in (module
 #: docstring), so no outcome here is complete (`second_stage.complete`), whatever its audit records say of themselves
 REQUEST_DEFINITION = False
@@ -581,12 +585,11 @@ def stop_order(key: Ch.ChallengerKey | None, main: Sequence[str], evidence: Mapp
     if why is not None:
         return f"the stop sample's coins: {why}"
     try:
-        Ch.trusted_session_of(evidence["ledger"], {"root": window_root}, key, evidence["pins"], list(main),
-                              evidence["session"], verify)
+        _, log = Ch.trusted_session_of(evidence["ledger"], {"root": window_root}, key, evidence["pins"], list(main),
+                                       evidence["session"], verify)
     except Ch.CoinError as e:
         return str(e)
-    received = [bytes.fromhex(e["root"]) for e in map(json.loads, evidence["session"]["log"][1:])
-                if e.get("event") == "root"]
+    received = [e.root for e in log if e.kind == "recorded"]
     first_, then = ([i for i, r in enumerate(received) if r == x] for x in (before, after))
     for name, coins in (("class's boundary", first_), ("stop", then)):
         if not coins:
@@ -872,7 +875,7 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
     record commits, and a port that reads a parameter it commits, reads that port of ``boundary``, at the root, leaves
     and domain that record gives it, unit j of the i-th sampled block its row ``sample[i]·per + at[j]``
     (`interior_rows.Return.rows`, `interior_rows.Input.rows`); a wired port its writer's
-    output port of the interior record, and any other its own, each unit its own leaf (`rows.Binding.held`). A read's
+    output tree of the interior record, and any other its own, each unit its own leaf (`rows.Binding.tree`). A read's
     verdict of registered tables (``d.verdicts``) reads its value as a link's port does, so a verdict the interior
     registers no such value for is refused by name and never read at the read's own port. A return
     round 1's record doesn't commit is read at its own port too: round 2 refuses that read (``second-read``), and
@@ -892,7 +895,7 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
                 ports[p] = LK.reads(boundary, y.value, words, m.schema(p), y.rows(sample), m.base, registered=REG)
                 continue
             if x is None:
-                ports[p] = LK.reads(interior, window.held(m, p), words, m.schema(p), window.held_leaves(m, p), m.base,
+                ports[p] = LK.reads(interior, window.tree(m, p), words, m.schema(p), window.reads(m, p).tolist(), m.base,
                                     registered=REG)
                 continue
             if x.value not in values:
@@ -929,11 +932,11 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
         member_stager(template_fn(m.template), m, bind).stage(
             rows, at, REFERENCE_KEY, indices=range(m.base, m.base + m.n),
             tables={r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16) for r, w in m.rows},
-            refs={r: np.asarray(window.held_leaves(m, r)) for r in rows})
+            refs={r: window.refs(m, r) for r in rows})
         (at / "inst.bin").unlink()
         with open(at / "pub.bin", "rb") as f:
             header = json.loads(f.readline())
-        reads = LK.reads_file({p: {"value": linked.get((m.template, p), window.held(m, p)), "words": int(words),
+        reads = LK.reads_file({p: {"value": linked.get((m.template, p), window.tree(m, p)), "words": int(words),
                                    "word_bits": REG.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
                                for p, words in m.all_rows}, registered=REG)
         read = read_record(template_fn(m.template), at / "circuit.txt", header["circuit_sha512"])
@@ -1022,20 +1025,13 @@ def pins(proofs: Mapping[str, Any], stmts: Sequence[Mapping[str, Any]]) -> dict[
     return {x["template"]: named.get(x["template"]) == x["header"].get("circuit_sha512") for x in stmts}
 
 
-def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Binding, irec: Mapping[str, Any],
-              brec: Mapping[str, Any], drawn: Sequence[int], stmts: Sequence[Mapping[str, Any]],
-              record: Mapping[str, Any], proofs: Mapping[str, Any], tie: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """Round 2's verdict of record on the sessions (`second_stage.check`, the form allowed): the Lean's, which raises
-    until an interface reaches it (`verifier.not_written`); `round_two_twin` is its Python twin."""
-    return SS.check(True, _round_two_own(replay, key, sample, window, irec, brec, drawn, record, proofs, tie),
-                    stmts).to_json()
-
-
 def round_two_twin(replay: Program, key: str, sample: Sequence[int], window: CS.Binding, irec: Mapping[str, Any],
                    brec: Mapping[str, Any], drawn: Sequence[int], stmts: Sequence[Mapping[str, Any]],
                    record: Mapping[str, Any], proofs: Mapping[str, Any],
                    tie: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """`round_two`'s Python twin (`second_stage.check_twin`), for tests only."""
+    """Round 2's statement check by its Python twin (`second_stage.check_twin`), for tests only: the verdict of record is
+    the Lean verifier's, inside the stream's run (`Run.run`), whose statement codes the outcome carries (``outcome``'s
+    ``statements``) and the summary's ``round_two`` reads from it."""
     return SS.check_twin(True, _round_two_own(replay, key, sample, window, irec, brec, drawn, record, proofs, tie),
                          stmts).to_json()
 
@@ -1078,13 +1074,13 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     the boundary docket ``brec`` and its replay sample: `a5.audit` of the stream's second sample ``second`` (its
     sample, sampling design and the interior docket's receipt), each member's session verified against ``reads`` (by member
     key, the verifier's own ``--registered`` files), the audit record, and each session's statement held to round 2
-    (`round_two`, over the replay block ``replay``, its Program and descriptor id) at the params ``proofs``. ``tie``:
+    (round 2, over the replay block ``replay``, its Program and descriptor id) at the params ``proofs``. ``tie``:
     the verifier's other copies the interior docket's check takes beside the boundary record (`a5.tie`: the
     values it registers, their schemas, its window root). -> (a5's summary, its acceptance, the audit record, what the
     run reports, the sessions' statements: None without a sample). The audit record is a5's own of the interior, decided
     as the stream decides the interior's before round 2's check is attached to it (a5's ``drawn``), so it is not the
     run's outcome: the report's ``accepted`` and ``record`` are that record's (``record``: the checks it fails, and
-    ``own_reads``, that it took those reads as the stream's records do), ``round_two`` is round 2's with the form
+    ``own_reads``, that it took those reads as the stream's records do), the summary's ``round_two`` is round 2's, from the outcome's statement codes, with the form
     allowed, and the outcome is the stream's (`outcome_of`). The report names what the proof
     server refused, in flock-circuit's words, where a session never ran."""
     a5 = _a5()
@@ -1110,7 +1106,6 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
         stmts = statements(out / "audit", window)
         (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
         got["pins"] = pins(proofs, stmts)
-        got["round_two"] = round_two(*replay, sample, window, irec, brec, s["draw"], stmts, record, proofs, tie)
     return s, ok, record, got, stmts
 
 
@@ -1147,6 +1142,7 @@ def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: Sequenc
     audits = {"interior": body["audit"], "replay_sample": (body.get("replay_sample") or {}).get("audit")}
     return {"accepted": o.accepted, "record": o.record, "symbol": body["symbol"],
             "complete": o.accepted is True and complete(list(audits.values())),
+            "not_covered": NOT_COVERED if o.accepted is True else None,
             **{k: None if r is None else sorted(x for x, c in r["checks"].items() if not c["ok"]) for k, r in audits.items()},
             "registered": {k: ((r or {}).get("checks") or {}).get("registered") for k, r in audits.items()},
             "statements": ((body["audit"].get("checks") or {}).get("statements") or {}).get("codes")}
@@ -1157,7 +1153,7 @@ def held(s: Mapping[str, Any], r2: Mapping[str, Any] | None, o: Mapping[str, Any
     """Whether an honest second stage held: every check before the sample passed, every session's circuit file is the
     one its template's params name (`pins`, ``files``), every Lean verdict accepted, the sessions' registered reads
     the verifier's own, every negative refused, round 2 ``r2`` accepting the statements, and the stream's outcome ``o``
-    accepted or refused by round 2's two-stage form alone (`FORM_REFUSED`, while `second_stage.FORM` is off): the
+    accepted, or refused by round 2's two-stage form alone (`FORM_REFUSED`, where `second_stage.FORM` is off): the
     interior's audit record failing no check but round 2's, by that code at most, and the replay sample's none. A
     run whose interior docket registers a value a replay block's input may not read (`INPUTS_REFUSED`, in
     ``r2``'s codes or the outcome's) never held, whatever else it reports: its sessions proved replay blocks over inputs
@@ -1502,6 +1498,8 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
                 import sampled_two_case as SC
             with SC.capture(out / "run-input.json") if form_case else contextlib.nullcontext():
                 summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
+            codes = summary["outcome"].get("statements")
+            summary["round_two"] = None if codes is None else {"ok": codes == [], "codes": codes}
             if form_case:
                 summary["form_case"] = SC.from_run(out)
         ok = held(s, summary.get("round_two"), summary.get("outcome"), summary.get("pins"))

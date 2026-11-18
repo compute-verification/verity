@@ -56,7 +56,7 @@ order (`JointAuditV5.sessions`, `seqG`); sessions run at once are not this subpr
 
 namespace Verity.Sampled
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open FlockSoundness.Discharge.Tables (LiveOutJ)
@@ -293,7 +293,7 @@ noncomputable def extend (S : Widening) : ExecutionPhase where
 
 /-- **The window's sample's sampling design**: the registration's sampling design over the population, as `Spot.Draw.sampleUnits` samples it on
 the device's bytes in order (`Flock.Bridge.execSel`); a sample that fails samples every proof block. -/
-noncomputable def L : FlockSoundness.Audit.SamplingDesign W.nJ := Flock.Bridge.execSel (n := W.nJ) W.src W.samplingDesign W.nJ
+noncomputable def L : Spot.Sampling.SamplingDesign W.nJ := Flock.Bridge.execSel (n := W.nJ) W.src W.samplingDesign W.nJ
 
 /-- The window's sample is Flock's window's, at any budget. -/
 theorem joint_L (t : ℕ) : (W.joint t).L = W.L := rfl
@@ -519,12 +519,12 @@ finders' terms; `ExecutionPhase.ks` (`JointShareV5`, under the roots guard) boun
 members' terms summed and their roots terms, each roots finder's premise its own term, the strict birthday bound
 each two-continuation finder, `FinderCR` the read finder and `LmsUnforgeable` the forger. -/
 theorem spotSound_of_executionPhase {K : ExecutionPhaseConstructions V} {S : ByteArray → Array ByteArray → Option ExecutionPhase}
-    (hD : ExecutionPhaseDeployed V K S) (hCov : ExecutionPhaseCovers V k S)
+    (hD : ExecutionPhaseDeployed V K S) (hCov : ExecutionPhaseCovers V k S) (hTwo : TwoStageBound V k)
     (hC : ∀ θ F W, S θ F = some W → ExecutionPhaseCouplingTarget V k K W θ F) : V.SpotSound k := by
   intro θ F c σ
   by_cases hP : ∃ p, ParamsAt θ p
   swap
-  · exact recursiveForm_refused V k θ hP F c σ
+  · exact recursiveForm_bound V k hTwo θ hP F c σ
   unfold Vocab.error ResourceAccounting.condError
   beta_reduce
   split_ifs with hE

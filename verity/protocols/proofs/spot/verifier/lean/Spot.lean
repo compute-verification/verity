@@ -52,12 +52,12 @@ public import Spot.MonitoringPeriod
 public import Spot.MonitoringPeriodAudit
 public import Spot.Wires
 public import Spot.RecordText
+public import Spot.Edges
 public import Spot.HistoryTable
 public import Spot.WiresSpan
 public import Spot.WiresOrder
 public import Spot.WiresSound
 public import Spot.WiresComplete
-public import Spot.WiresSampled
 public import Spot.Interval
 public import Spot.FactorUpper
 public import Spot.TwoStageCheck

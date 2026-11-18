@@ -7,23 +7,33 @@ from __future__ import annotations
 
 import json
 import random
-
 from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.bits import compile as compile_bits
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
 from verity.circuits.ops.boolean.versions import boolean_version
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_c_forming as F
+from verity.circuits.ops.prims import (
+    BlackwellE4m3QmmaDot32,
+    HopperBF16WgmmaDot16,
+    HopperE4m3QgmmaDot32,
+)
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pc8
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import (
+    pearl_c_forming as F,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import (
+    pearl_c as C,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import (
+    pearl_kw as P,
+)
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import (
+    DEVICES,
+)
 
 #: each device record's atom and promotion period as the Definitions' statics (G = 0: no promotion)
 ATOMS = {"h100": (HopperE4m3QgmmaDot32, 4), "sm120": (BlackwellE4m3QmmaDot32, 4), "sm120-unpromoted": (BlackwellE4m3QmmaDot32, 0)}

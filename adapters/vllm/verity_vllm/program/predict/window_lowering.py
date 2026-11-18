@@ -16,6 +16,7 @@ from verity.circuits.refs import Refs, runs
 from verity.circuits.types import Tuple
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
+
 from verity_vllm.definitions.registry import int8_exact as IX
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.definitions.registry import rmsnorm_fused_split as NS
@@ -25,7 +26,6 @@ from verity_vllm.definitions.registry.dead_free import (
     TokenSelectGroupsV1,
 )
 from verity_vllm.definitions.registry.fa3_check_inf import AttentionV20
-
 from verity_vllm.pipeline.tp.grain import GROUP
 
 from . import scan_state as SS
@@ -99,7 +99,7 @@ class _Program:
         self.norms: dict[int, tuple[Row, ...]] = {}
         #: each attention cut by key block: its cut's plan (`_plan`) and each Call's first unit, a unit a head
         self.heads: dict[int, tuple[Any, tuple[tuple[str, int], ...]]] = {}
-        #: the slot's `ScanSlots_v2` unit, each position's `SelectCollect_v1` unit but the last and its `SelectEntry_v1` unit
+        #: the slot's `ScanSlots_v3` unit, each position's `SelectCollect_v1` unit but the last and its `SelectEntry_v1` unit
         self.scan_unit: tuple[str, int] | None = None
         self.collects: list[tuple[str, int]] = []
         self.entry_unit: tuple[str, int] | None = None
@@ -202,7 +202,7 @@ class _Program:
         self.outs[j] = [(0, H, Row(tid, u, "o0", H))]
 
     def _token(self, tok: Any) -> tuple[Row, ...]:
-        """The next position's token: the first's its lane's of the scan state row the slot's `ScanSlots_v2` reads at its
+        """The next position's token: the first's its lane's of the scan state row the slot's `ScanSlots_v3` reads at its
         anchor (with the slot it carries, its occupancy word and its head), below the class's prompt limit every other's
         `TokenFeed_v1`'s (its slot its predecessor's, ``sel`` the previous position's select), past it the previous select.
         With ``tables``, that row is held to the position's row of its round's input-ids table (`Tables.at`)."""
@@ -361,7 +361,7 @@ class _Program:
         for s0, m, count in ((0, n, full), (full * n, rest, int(rest > 0))):
             if not count:
                 continue
-            tid, u = self.b.unit(bind(node.fn.defn, **{**b, "N": m}), count)
+            tid, u = self.b.unit(IX.scaled_mm_words(K, m), count)
             self.b.feed(tid, "x", u, count, xs)
             self.b.feed(tid, "sx", u, count, ss)
             self.b.read(tid, "w", u, (count,), lo + s0 * K // 2, (m * K // 2,))

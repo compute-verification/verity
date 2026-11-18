@@ -134,7 +134,7 @@ A bound of S served bits charges a replay block at most F S, F the grain's fan-o
 Definition's return (`second_stage.returned_bits`, Lean `SecondStage.returnedBits`: each returned output field of each
 proof block on 16-bit words of its own) and a two-stage docket carries (`ExecutionPhaseCommitmentRecord.returned`);
 `plancheck.two` refuses a served cap below them.
-Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
+Round 2: `second_stage` (Lean `SecondStage`); its `FORM` is on: a two-stage run whose every check passes is accepted, ahead of the form's proof. A boundary record may commit a
 step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
 refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). What a replay
 block returns is read only at the boundary record's port for it: an interior docket that registers a value of
@@ -159,7 +159,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 
 ## Where things are
 
-- **The Lean.** Today it sits in Flock's soundness package, `security/Proofs/Flock/Soundness/Audit/`,
+- **The Lean.** Today it sits in Flock's soundness package, `security/Proofs/Spot/Sampling/`,
   whose `README.md` lists every theorem; `Audit/Flock*.lean` instantiate them for Flock.
   The two-stage design's certificate is `Claims.SamplingGeneric.compilerKSTwo` (`Claims.SamplingTwo`).
 - **The executable sample** is the Lean verifier's `verity/commitments/lean/Commitments/Draw.lean` (`verity-verify-proof draw`): the
@@ -209,7 +209,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`one_stage.closing`, `challenger.members_tree_reason`). The parameters may name the members' wiring beside them
   (`proofs.wiring`, SPOT's `Spot.Wires.Wiring`, refused where `Spot.Wires.check` refuses it), and the check then holds
   every wired row of every proof block of the sample to its writer's output row in the members' public files
-  (`OneStageZk.wiresHeld`, the `members_wires` piece); `one_stage.members` leaves a wiring `Outside`.
+  (`OneStageZk.fieldRoots`: a wired port reads its writer's output field's tree); `one_stage.members` leaves a wiring `Outside`.
 - **A monitoring period's sessions in the auditor's ledger** (`Spot/MonitoringPeriod.lean`, Lean only; the Python it is held
   to is a reference in `lean/tests/test_period_difftest.py`): from the ledger's signed lines, under the auditor's
   challenger key, every session of a lane that the ledger opens on a root during a monitoring period, whatever its
@@ -289,7 +289,7 @@ refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet raises
 | R1-R8 on a docket | `verifier.check` | `registration` (`OneStage`) | `registration.check` |
 | The audit record | `verifier.audit_record` | `Record.record` | `audit.audit_record` |
 | A docket's whole run | `verifier.run` | `Run.run` | the stream's own outcome |
-| A two-stage outcome | `Stream.outcome` (`_audit_two`) | `Run.run`'s symbol; it refuses every two-stage run while `SecondStage.FORM` is off | the two records' join |
+| A two-stage outcome | `Stream.outcome` (`_audit_two`) | `Run.run`'s symbol; it accepts a two-stage run whose every check passes while `SecondStage.FORM` is on, ahead of the form's proof | the two records' join |
 | Round 2's statements | `second_stage.check` | `SecondStage.checkAny`, which only `Run.run` reaches | `check_twin` |
 | A two-stage outcome's completeness | `second_stage.complete` | none yet | `complete_twin` |
 

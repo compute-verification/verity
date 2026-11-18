@@ -12,7 +12,7 @@ refusal, and runs the Lean on it.
 The cases: `tagged` over bytes, strings (non-ASCII among them) and integers past 64 bits; the bindings and `weights_root`
 over random weight-root maps; domain ids under both frame hashes with bindings, owners and counts out of range; the roots of
 random row and tile-digest trees under `sha256`, `sha512` and `hm96-sha512` (rows of several segments, values of the wrong
-size, missing or short salt keys); openings of those trees, honest and tampered (value, path, position, root, count, schema,
+size, missing, miscounted or wrong-sized salts, one a row in rank order); openings of those trees, honest and tampered (value, path, position, root, count, schema,
 path and value lengths); execution phase coin openings from a `Challenger`, honest and tampered to hit each of `coin_reason`'s
 refusals and each refusal of the JSON forms; `salt_of` and `Epoch.unverified`'s salt over random coins, seeds (empty among
 them), execution phases and weights' roots; `Epoch.start`'s salt and `draw_coin`'s coin from honest and tampered openings, and a sample
@@ -104,37 +104,59 @@ def generate(seed: int = 0) -> list[dict]:
         return [rng.randbytes(rng.choice([0, 1, 7, 8, 64, 100, 1023, 1024, 1025, 2100] if rng.random() < 0.3 else [rng.randrange(80)]))
                 for _ in range(n)]
 
-    def salt_key() -> bytes | None:
-        return rng.choice([rng.randbytes(32)] * 8 + [None, rng.randbytes(31)])
+    def salts_for(h: str, n: int) -> list[bytes] | None:
+        """One salt a row for an hm96 tree, none for a plain one, and now and then a list the Lean refuses."""
+        good = [rng.randbytes(audit.HM96_SALT) for _ in range(n)] if h == audit.HM96 else None
+        bad = rng.choice([None, [rng.randbytes(audit.HM96_SALT) for _ in range(n + 1)],
+                          [rng.randbytes(rng.choice([0, 191, 193])) for _ in range(max(n, 1))]])
+        return good if rng.random() < 0.9 else bad
 
-    def nonce() -> int:
-        return rng.choice([0, 1, 5, 1 << 62, 1 << 63, (1 << 64) - 1, rng.randrange(1 << 64)])
+    def salted(h: str, rows: list[bytes], salts: list[bytes] | None, public: bool) -> list[bytes]:
+        """A tree's values from its rows and their salts, as the Lean's `commitRows` takes them."""
+        if h == audit.HM96:
+            if salts is None or len(salts) != len(rows) or any(len(y) != audit.HM96_SALT for y in salts):
+                raise ValueError(f"an {audit.HM96} tree takes one {audit.HM96_SALT}-byte salt a row")
+            return [r + y for r, y in zip(rows, salts)]
+        if salts is not None:
+            raise ValueError(f"a plain {h} tree takes no salts")
+        if not public:
+            raise ValueError(f"a plain {h} tree is not hiding")
+        return rows
+
+    def commit_rows(b: bytes, o: int, rows: list[bytes], h: str, salts: list[bytes] | None, digests: bool,
+                    public: bool) -> MerkleTree:
+        values = salted(h, rows, salts, public)
+        return MerkleTree(audit.rows_domain(b, o, len(values), h, digests), dict(enumerate(values)), lambda _: audit.ROW_SCHEMA)
+
+    def hexes(salts: list[bytes] | None) -> list[str] | None:
+        return None if salts is None else [y.hex() for y in salts]
 
     trees = []
     for _ in range(COUNTS["commit_rows"]):
         h = rng.choice(["sha256", "sha512", "hm96-sha512", "hm96-sha512"])
         digests = rng.random() < 0.4
-        b, o, rows, key, nn = binding(), owner(), rows_for(h, digests), salt_key(), nonce()
+        b, o, rows = binding(), owner(), rows_for(h, digests)
+        salts = salts_for(h, len(rows))
         public = rng.random() < 0.8
-        res = _outcome(lambda: audit.commit_rows(b, o, rows, h, key, nn, digests, public).commitment.root.hex())
+        res = _outcome(lambda: commit_rows(b, o, rows, h, salts, digests, public).commitment.root.hex())
         add("commit_rows", {"binding": b.hex(), "owner": o, "rows": [r.hex() for r in rows], "hash": h,
-                            "salt_key": None if key is None else key.hex(), "nonce": nn, "digests": digests,
-                            "public": public}, res)
+                            "salts": hexes(salts), "digests": digests, "public": public}, res)
         if "ok" in res and rows:
-            trees.append((b, o, h, digests, audit.commit_rows(b, o, rows, h, key, nn, digests, public), audit.ROW_SCHEMA))
+            trees.append((b, o, h, digests, commit_rows(b, o, rows, h, salts, digests, public), audit.ROW_SCHEMA))
 
     for _ in range(COUNTS["transcript"]):
         h = rng.choice(["sha256", "sha512", "hm96-sha512", "hm96-sha512"])
-        salt, wr, key = rng.randbytes(32), rng.randbytes(64), rng.randbytes(rng.choice([32] * 9 + [31]))
+        salt, wr = rng.randbytes(32), rng.randbytes(64)
         digs = rows_for(h, True)
+        salts = salts_for(h, len(digs))
 
         def root() -> str:
-            values = [d + audit.hm96_salt(key, audit.HM96_TRANSCRIPT, i) for i, d in enumerate(digs)] if h == audit.HM96 else digs
+            values = salted(h, digs, salts, True)
             epoch = SimpleNamespace(salt=salt, weights_root=wr)
             tree = MerkleTree(audit.transcript_domain(epoch, len(values), h), dict(enumerate(values)), lambda _: audit.TILE_SCHEMA)
             return tree.commitment.root.hex()
         add("transcript", {"salt": salt.hex(), "weights_root": wr.hex(), "digests": [d.hex() for d in digs], "hash": h,
-                           "salt_key": key.hex()}, _outcome(root))
+                           "salts": hexes(salts)}, _outcome(root))
 
     def flip(b: bytes) -> bytes:
         if not b:

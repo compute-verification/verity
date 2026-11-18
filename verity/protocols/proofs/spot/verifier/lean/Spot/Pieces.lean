@@ -32,6 +32,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   (`SecondStage.interiorReads`);
 * `replay_links`: the design's links, from the replay block's Definition in a program (`SecondStage.replayLinks`);
 * `replay_wires`: the design's wires, from the replay block's Definition in a program (`SecondStage.replayWires`);
+* `edges`: the wires a Program's root states, read off its nodes (`Edges.edgesOf`);
 * `replay_rows`: the rows the design's links' and wires' units read, from the replay block's Definition in a program
   (`SecondStage.replayRows`);
 * `replay_returns`: the names the replay block's return has in the boundary registration's record, from its
@@ -87,8 +88,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   verifier's key and a record as `from_json` reads them, with `record_message`, and `trusted_reason`.
 * `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_day`, `challenger_head`,
   `challenger_session`, `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its
-  close as `from_json` reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the
-  auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `ledger_head`, the ledger's
+  close as `from_json` reads it, with `close_message`; `log_chain`, `released_log_of` and `by_family`; `audited_session`,
+  the auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `ledger_head`, the ledger's
   published heads; `trusted_session_of` and `credited_session`, a window counted toward its
   period's circuit, each over `pinned_session`: a session from a commit the host's pins log records and the auditor's
   first-parent list of main holds.
@@ -116,8 +117,6 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   (`MonitoringPeriod.checkWith`, `MonitoringPeriod.stubInner`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and sampled rows' writers.
-* `wires_drawn`, `wires_drawn_unrolled`: the wire check on the sampled proof blocks alone (`Wires.Summary.drawnOk`, each sampled
-  wired row's public string its writer's) and on the reference's entries whose unit is sampled.
 * `public_units`: whether a public file's `units.indices` are exactly given units, ascending (`PublicUnits.exactly`),
   which the per-member form holds each statement's file to.
 * `link_points`: each member's fewest and most sampled proof blocks under a sampling design over the samples that end, and the members whose
@@ -159,11 +158,11 @@ public import Spot.Produced
 public import Spot.HiddenSample
 public import Spot.PartitionRef
 public import Spot.Returned
-public import Spot.WiresSampled
 public import Spot.OneStageZk
 public import Spot.HistoryTable
 public import Spot.PublicUnits
 public import Spot.LinkPoints
+public import Spot.Edges
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -979,6 +978,26 @@ def replayWires (j : Json) : V Json := do
     | some ws => Json.arr (ws.map SecondStage.Wire.toJson)
     | none => .null
 
+/-- `periods.edges`' input to the wires a Program's root states (`Edges.edgesOf`): a program object, its ranges
+(`[node, template, first, count]` each) and a wiring (`Wires.Wiring.ofJson`'s); `{"wires": [...]}` or
+`{"refusal": code}`. -/
+def edges (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let .arr rj := getD j "ranges" | throw "ranges is not a list"
+  let rs ← rj.mapM fun r => match r with
+    | .arr #[k, .str t, f, c] => match k.getNat?, f.getNat?, c.getNat? with
+      | .ok k, .ok f, .ok c => pure ({ node := k, template := t, first := f, count := c } : Flock.TemplateQuery.TRange)
+      | _, _, _ => throw "a range is [node, template, first, count]"
+    | _ => throw "a range is [node, template, first, count]"
+  let w ← Wires.Wiring.ofJson (getD j "wiring")
+  return match Edges.edgesOf p.prog rs w with
+    | .error e => Json.mkObj [("refusal", Json.str e)]
+    | .ok ws => Json.mkObj [("wires", Json.arr (ws.toArray.map fun e => Json.mkObj [("reader", Json.str e.reader),
+        ("port", Json.str e.port), ("writer", Json.str e.writer), ("out", Json.str e.out), ("at", Lean.toJson e.start),
+        ("radix", Lean.toJson e.radix), ("base", Lean.toJson e.base), ("step", Lean.toJson e.step),
+        ("cut", Json.arr #[Lean.toJson e.cut0, Lean.toJson e.cuts])]))]
+
 /-- `second_stage.replay_rows`' input to the rows the design's links' and wires' units read
 (`SecondStage.replayRows`): a program object and the replay block's descriptor id in it (`replay`). -/
 def replayRows (j : Json) : V Json := do
@@ -1086,7 +1105,7 @@ def table : List (String × (Json → V Json)) :=
    ("check_proved", checkProved),
    ("select_second", selectSecond), ("second_statements", secondStatements),
    ("second_interior_reads", secondInteriorReads), ("replay_links", replayLinks),
-   ("replay_wires", replayWires), ("replay_rows", replayRows), ("replay_widths", replayWidths),
+   ("replay_wires", replayWires), ("edges", edges), ("replay_rows", replayRows), ("replay_widths", replayWidths),
    ("replay_returns", replayReturns),
    ("replay_returned", replayReturned), ("second_schedule", secondSchedule),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
@@ -1118,8 +1137,6 @@ def table : List (String × (Json → V Json)) :=
    ("period_asked", MonitoringPeriod.askedPiece), ("period_check", MonitoringPeriod.checkPiece),
    ("period_check_stub", MonitoringPeriod.checkStubPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
-   ("wires_drawn", Wires.pieceSampled), ("wires_drawn_unrolled", Wires.pieceSampledRef),
-   ("members_wires", OneStageZk.membersWiresPiece),
    ("public_units", PublicUnits.piece),
    ("link_points", LinkPoints.piece),
    ("history_root", HistoryTable.rootPiece), ("history_check", HistoryTable.checkPiece),

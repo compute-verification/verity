@@ -5,12 +5,11 @@ import json
 import os
 
 import numpy as np
-from verity_vllm.definitions.numerics import cuda_rmsnorm_rows as R
 
 from tests import fake_vllm
 from tests.properties import glm53_cuda_rmsnorm_capture_gpu as X
+from verity_vllm.definitions.numerics import cuda_rmsnorm_rows as R
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity_vllm.pipeline.cli import MACHINE
 from verity_vllm.records.property_record import REGISTRY, digest_of
 
 
@@ -92,12 +91,12 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     sass_ok = [True]
 
     def stub_sass(out):
-        assert os.environ["PATH"].split(":")[:2] == [os.path.dirname(X.sys.executable), MACHINE["RunEnv.cuda_bin"]]
+        assert os.environ["PATH"].split(":")[:2] == [os.path.dirname(X.sys.executable), "/a/toolkit/bin"]
         return {"ok": sass_ok[0], "nvcc": ["Build cuda_13.0"]}
 
     monkeypatch.setattr(X, "sass", stub_sass)
     monkeypatch.setenv("PATH", os.environ["PATH"])
-    monkeypatch.delenv("CUDA_HOME", raising=False)
+    monkeypatch.setenv("CUDA_HOME", "/a/toolkit")
     for k in SERVED_DEFAULTS:
         monkeypatch.setenv(k, "0")
     _stub_envs(monkeypatch)
@@ -114,7 +113,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["ok"] and doc["digest"] == digest_of(doc) and len(doc["cases"]) == 24
     assert doc["env_cleared"] == {k: "0" for k in SERVED_DEFAULTS} and doc["served"]["ok"] is True
-    assert doc["env"]["CUDA_HOME"] == MACHINE["RunEnv.cuda_home"]
+    assert doc["env"]["CUDA_HOME"] == "/a/toolkit"
     assert {c["eps"] for c in doc["cases"] if c["N"] == 6144} == {1e-5}
     assert {c["eps"] for c in doc["cases"] if c["N"] == 7168} == {1e-6}
     assert "GLM53-CUDA-RMSNORM GO served=True sass=True cases=24 errors=0" in capsys.readouterr().out

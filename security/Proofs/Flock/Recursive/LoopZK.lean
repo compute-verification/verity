@@ -88,8 +88,8 @@ noncomputable def loopReal {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.
     Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) :=
   (u.1.1.1,
     Flock.ZkServer.run s (reqs u.1.1.1 u.1.1.2 (zkServerStrings (msgs u.1.1.1 u.1.1.2)
-        fun i => FlockSoundness.Audit.SamplingDesign.streamOf (u.1.2 i)))
-      (List.ofFn fun i => FlockSoundness.Audit.SamplingDesign.streamOf (u.1.2 i)),
+        fun i => Spot.Sampling.SamplingDesign.streamOf (u.1.2 i)))
+      (List.ofFn fun i => Spot.Sampling.SamplingDesign.streamOf (u.1.2 i)),
     (OuterZK.LoopSessions.atWorker m stmt wit).viewAt Claims.ZKMal.CoinOpen.shaH OuterZK.loopK
       ((OuterZK.loopRef L₀ src).swP vs).prover Vs
       (OuterZK.wctxAt msgs u.1.1.1 u.1.1.2 fun i => ZkView.saltOfBytes (u.1.2 i))
@@ -221,7 +221,7 @@ noncomputable def loopSent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.
     Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) :=
   (u.1.1.1,
     (T (_root_.Flock.Guarantees.zkServerStrings (msgs u.1.1.1 u.1.1.2)
-      fun i => FlockSoundness.Audit.SamplingDesign.streamOf (u.1.2 i)), true),
+      fun i => Spot.Sampling.SamplingDesign.streamOf (u.1.2 i)), true),
     (LoopSessions.atWorker m stmt wit).viewAt Claims.ZKMal.CoinOpen.shaH loopK ((loopRef L₀ src).swP vs).prover Vs
       (wctxAt msgs u.1.1.1 u.1.1.2 fun i => ZkView.saltOfBytes (u.1.2 i))
       (θ u.1.1.1 (_root_.Flock.Guarantees.zkServerCommits (msgs u.1.1.1 u.1.1.2) fun i => ZkView.saltOfBytes (u.1.2 i)))
@@ -244,7 +244,7 @@ theorem loopReal_eq_sent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Lo
     _root_.Flock.Guarantees.loopReal vs L₀ src s reqs msgs m stmt wit Vs θ u =
       loopSent vs L₀ src T msgs m stmt wit Vs θ u := by
   unfold _root_.Flock.Guarantees.loopReal loopSent
-  rw [hF () () () u.1.1.1 u.1.1.2 fun i => FlockSoundness.Audit.SamplingDesign.streamOf (u.1.2 i)]
+  rw [hF () () () u.1.1.1 u.1.1.2 fun i => Spot.Sampling.SamplingDesign.streamOf (u.1.2 i)]
 
 /-- **The whole view at the session loop is close to the simulated one**, where the ZK server sends the schedule's
 transcript (`loopSent`): V*'s statements at the worker's context are within their error of their public statements'

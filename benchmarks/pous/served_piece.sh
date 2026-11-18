@@ -77,8 +77,8 @@ if [ -z "$LIB" ]; then
     || { echo "POUS: no answer: setarch -R is refused on this node, so libp2v1.so doesn't build here: build it where" \
            "it is allowed (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh) and name its directory in P2_LIB"; exit 3; }
   if [ -z "${ARCH:-}" ]; then
-    ARCH=$(PYTHONPATH="$ROOT:$ROOT/benchmarks/harness" python3 -m verity_bench.kit card \
-      "$(nvidia-smi -i "${GPU_LEASE_UUID:-0}" --query-gpu=name --format=csv,noheader 2> /dev/null | head -1)" arch 2>&1) \
+    ARCH=$(python3 "$ROOT/benchmarks/kernels/machine.py" arch \
+      "$(nvidia-smi -i "${GPU_LEASE_UUID:-0}" --query-gpu=name --format=csv,noheader 2> /dev/null | head -1)" 2>&1) \
       || { echo "POUS: no answer: ARCH is not given and the card's record doesn't give it: $ARCH"; exit 3; }
   fi
   ARCH=$ARCH bash "$ROOT/verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \

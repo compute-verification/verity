@@ -1213,7 +1213,7 @@ def test_the_arena_is_most_of_the_cards_memory_from_its_sheet(store, work, card,
 @pytest.mark.parametrize("name, sheets", [("NVIDIA H200", ("h200-sxm-141gb", "h200-sxm-141gb-x1")),
                                           ("NVIDIA RTX PRO 6000 Blackwell Server Edition",
                                            ("rtx-pro-6000-server", "rtx-pro-6000-server-x8")),
-                                          ("NVIDIA H100 80GB HBM3", ("h100-sxm-80gb", None))])
+                                          ("NVIDIA H100 80GB HBM3", ("h100-sxm-80gb", "h100-sxm-80gb-x1"))])
 def test_the_card_is_the_card_file_holding_its_name_and_the_node_the_one_file_carrying_that_card(name, sheets):
     assert M.sheet_of(name) == sheets
 
@@ -1235,9 +1235,14 @@ def test_a_card_two_node_files_carry_is_named_with_local_node(monkeypatch, tmp_p
      "of calibration/hardware/nodes/ carries h100-sxm-80gb, so no host of it is on record and no share is printed"),
     (a_local_record(a_refused_session(), arena=58), "the verifier refused session 0 at pass group 2"),
 ], ids=["accepted", "refused"])
-def test_an_h100_runs_the_session_on_the_card_alone_and_prints_no_share(store, capsys, work, record, why):
-    """No node file carries the H100, so no host of it is on record: the session runs on its 80 GiB, with no `--node`
+def test_an_h100_runs_the_session_on_the_card_alone_and_prints_no_share(store, capsys, work, record, why, monkeypatch,
+                                                                        tmp_path):
+    """Where no node file carries the H100, no host of it is on record: the session runs on its 80 GiB, with no `--node`
     for the verifier, and its verdict is printed with no share."""
+    for f in M.NODE_FILES.glob("*.toml"):
+        if f.stem != "h100-sxm-80gb-x1":
+            (tmp_path / f.name).write_text(f.read_text())
+    monkeypatch.setattr(M, "NODE_FILES", tmp_path)
     machine = Machine(card="NVIDIA H100 80GB HBM3, 9.0", record=record)
     assert bench(store, "--local", run=machine) == 1
     ((_, env),) = machine.runs()
@@ -1469,7 +1474,7 @@ def test_local_states_the_arena_its_engine_recorded_and_not_its_own_arguments(st
      3),
     (Machine(card="NVIDIA A100-SXM4-80GB, 8.0"), f"0 card records under {M.CARD_FILES} have 'NVIDIA A100-SXM4-80GB', "
      "the card nvidia-smi names here, in `driver`: add { value = \"NVIDIA A100-SXM4-80GB\", source = ... } to its one "
-     "record's `driver`, adding its <sku>.toml there", 3),
+     "record's `driver` and give it a `short`", 3),
     (Machine(fetch_rc=1), "unsloth/Llama-3.2-1B@9535bd9b1d1d (config.json, generation_config.json, model.safetensors, "
      "special_tokens_map.json, tokenizer.json, tokenizer_config.json) couldn't be fetched into", 3),
     (Machine(rc=5), "the node's session failed (run.sh exited 5)", 3),

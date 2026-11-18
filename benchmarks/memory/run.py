@@ -522,7 +522,7 @@ def sheet_of(name: str) -> tuple[str, str | None]:
         node = load_node(kind, directory=NODE_FILES, cards_directory=CARD_FILES)
         return node["device"]["sku"], kind
     try:
-        sku = kit.card(name, directory=CARD_FILES)["sku"]
+        sku = kit.card_sku(name, directory=CARD_FILES)
     except SystemExit as e:
         raise CouldNotRun(f"{e}; and a node file of it to calibration/hardware/nodes/ for a share; a result against a "
                           "sheet not on main is not comparable, and its digest says so") from None

@@ -50,8 +50,8 @@ command -v nvdisasm > /dev/null || for d in /usr/local/cuda*/bin; do
   [ -x "$d/nvdisasm" ] && { PATH=$PATH:$d; break; }
 done
 if [ -z "${ARCH:-}" ]; then
-  ARCH=$(PYTHONPATH="$TREE:$TREE/benchmarks/harness" python3 -m verity_bench.kit card \
-    "$(nvidia-smi --query-gpu=name --format=csv,noheader -i "${CARDS%%,*}" 2> /dev/null)" arch 2>&1) \
+  ARCH=$(python3 "$TREE/benchmarks/kernels/machine.py" arch \
+    "$(nvidia-smi --query-gpu=name --format=csv,noheader -i "${CARDS%%,*}" 2> /dev/null)" 2>&1) \
     || { say "PREFLIGHT: ARCH is not given and the card's record doesn't give it: $ARCH"; exit 3; }
   ARCH=${ARCH#sm_}
 fi

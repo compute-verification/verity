@@ -242,7 +242,7 @@ if [ "$DEMO_STORE" = cuda ]; then
   nvidia-smi -q -d MEMORY,CLOCK,PERFORMANCE >> "$O/gpu.txt" 2>&1 || true
   NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader ${CUDA_VISIBLE_DEVICES:+-i "$CUDA_VISIBLE_DEVICES"} | head -1)
   if [ "$DEMO_CARD" != any ]; then
-    SKU=$(PYTHONPATH="$PWD:$PWD/benchmarks/harness" python3 -m verity_bench.kit card "$NAME" sku 2>&1) || { echo "REFUSED: $SKU"; exit 3; }
+    SKU=$(python3 benchmarks/kernels/machine.py sku "$NAME" 2>&1) || { echo "REFUSED: $SKU"; exit 3; }
     [ "$SKU" = "$DEMO_CARD" ] || { echo "REFUSED: the GPU is '$NAME', a $SKU, not a $DEMO_CARD"; exit 3; }
   fi
 fi

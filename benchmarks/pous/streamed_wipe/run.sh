@@ -14,7 +14,7 @@ export O=${RESEARCH_RUN_DIR:-$PWD}/out; mkdir -p "$O"
 ROOT=$(cd ../../.. && pwd)
 export PYTHONPATH=$ROOT:$ROOT/tools/difftest/python${PYTHONPATH:+:$PYTHONPATH}
 PY=${PY:-python3}
-card_of() { PYTHONPATH="$ROOT:$ROOT/benchmarks/harness" "$PY" -m verity_bench.kit card "$1" "$2" 2>&1; }
+card_of() { "$PY" "$ROOT/benchmarks/kernels/machine.py" "$2" "$1" 2>&1; }
 
 if [ "${1:-}" = leased ]; then
   S=$2

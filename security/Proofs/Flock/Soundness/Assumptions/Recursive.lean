@@ -40,7 +40,7 @@ the `security` package builds without `security_proofs`, does not import it: `Pr
 namespace Flock.Assumptions
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 
 /-- Obligation: discharged by VBridge G (`Proofs.Flock.VBridge`), with `VCommits` derived there from acceptance
