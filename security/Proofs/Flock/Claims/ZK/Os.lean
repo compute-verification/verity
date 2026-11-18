@@ -98,21 +98,21 @@ def dec (O : OsTape R lay) : ((k : Fin O.reps ⊕ Fin O.taps) → Fin (O.Ls k) �
 /-- Rep `i`'s frame's bytes on the tape `ρ`: its stream, as bytes. A rep from `reps` on has no stream and reads
 none, which the frame refuses (`samplesWith_refuses`). -/
 def frameBytes (O : OsTape R lay) (ρ : R) (i : ℕ) : ByteArray :=
-  if h : i < O.reps then FlockSoundness.Audit.SamplingDesign.streamOf ((O.e.symm ρ).1 ⟨i, h⟩) else ByteArray.empty
+  if h : i < O.reps then Spot.Sampling.SamplingDesign.streamOf ((O.e.symm ρ).1 ⟨i, h⟩) else ByteArray.empty
 
 /-- The release whose rep `i` reads stream `i` of the tape at its start. -/
 def release {W : Type} (O : OsTape R lay) (L : LeanRelease W R) : LeanRelease W R :=
   { L with draws := O.frameBytes }
 
 theorem frameBytes_of_lt (O : OsTape R lay) (ρ : R) (i : Fin O.reps) :
-    O.frameBytes ρ i = FlockSoundness.Audit.SamplingDesign.streamOf ((O.e.symm ρ).1 i) :=
+    O.frameBytes ρ i = Spot.Sampling.SamplingDesign.streamOf ((O.e.symm ρ).1 i) :=
   dif_pos i.isLt
 
 /-- Rep `i`'s frame reads exactly the bytes its samples take. -/
 theorem frameBytes_size (O : OsTape R lay) (ρ : R) (i : Fin O.reps) :
     (O.frameBytes ρ i).size = _root_.Flock.ZkServer.Frame.sampleBytes (lay i) := by
   rw [frameBytes_of_lt]
-  exact FlockSoundness.Audit.SampleExec.size_streamOf _
+  exact Spot.Sampling.SampleExec.size_streamOf _
 
 end OsTape
 
@@ -157,7 +157,7 @@ theorem Pr_os_prod {Ω Tp A ι : Type} [Fintype Ω] [Fintype Tp] [Fintype A] [Fi
       _ = FlockSoundness.Game.prCoin E + η :=
           congrArg (· + η) (FlockSoundness.ZK.prCoin_congr_equiv (Equiv.prodComm A Tp) E)
   have hE : FlockSoundness.Game.prCoin E ≠ ⊤ :=
-    ne_top_of_le_ne_top ENNReal.one_ne_top (FlockSoundness.Audit.SampleExec.prCoin_le_one E)
+    ne_top_of_le_ne_top ENNReal.one_ne_top (Spot.Sampling.SampleExec.prCoin_le_one E)
   exact (ENNReal.toReal_mono (ENNReal.add_ne_top.2 ⟨hE, hη⟩) h).trans_eq (ENNReal.toReal_add hE hη)
 
 /-- **`ZkServer.zk_deferred` at the operating system's bytes**: the server's tape the bytes of a byte source, read one

@@ -764,7 +764,8 @@ class RunEnv:
     sweep_dir: str = option("--sweep-dir", env="SWEEP_DIR", help="rows live in <sweep-dir>/<row>")
     hf_home: str = option("--hf-home", env="HF_HOME")
     cuda_home: str = option("--cuda-home", env="CUDA_HOME")
-    cuda_bin: str = option("--cuda-bin", help="put on the stages' PATH after the interpreter's directory")
+    cuda_bin: str | None = option("--cuda-bin", default=None,
+                                  help="put on the stages' PATH after the interpreter's directory (default: <cuda-home>/bin)")
     native_collect_build: str | None = option("--native-collect-build", env="NATIVE_COLLECT_BUILD", default=None,
                                               help="collector build dir (default: the release's, else --native-collect-default)")
     native_collect_default: str = option("--native-collect-default")

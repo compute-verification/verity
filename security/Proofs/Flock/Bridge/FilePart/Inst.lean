@@ -14,7 +14,7 @@ stacked copies is read exactly when its template input is.
 
 namespace Flock.Bridge.FilePart
 
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge.Placed
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge.Placed
 
 /-! ## `uniform`'s circuit and partition -/
 

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.ExecSampleOS
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Spot.Sampling.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -26,7 +26,9 @@ exact uniform sample `r ∈ [0, den)` from the stream (`Flock.Draw.uniform`, rej
 
 @[expose] public section
 
-namespace FlockSoundness.Audit.SampleExec
+namespace Spot.Sampling.SampleExec
+
+open FlockSoundness
 
 open Flock.Draw Game
 open scoped ENNReal
@@ -220,9 +222,11 @@ theorem bernLoop_append (num den : ℕ) (a b : ByteArray) : ∀ (l : List ℕ) (
       rw [SamplingDesign.uniform_append den a b _ pos r p hu _ (by rw [ByteArray.size_append]; omega)]
       exact ih _ _ _ h
 
-end FlockSoundness.Audit.SampleExec
+end Spot.Sampling.SampleExec
 
-namespace FlockSoundness.Audit.SamplingDesign
+namespace Spot.Sampling.SamplingDesign
+
+open FlockSoundness
 
 open Game Finset
 open scoped ENNReal
@@ -343,4 +347,4 @@ theorem execOS_bernoulli_escape_le (n num den : ℕ) [NeZero den] (h : num ≤ d
   execOS_escape_le_of t _ n B _ (fun hB => by rw [hB, bernoulli_escape_empty h])
     (sampleOS_bernoulli_escape_le n num den h L t ht B)
 
-end FlockSoundness.Audit.SamplingDesign
+end Spot.Sampling.SamplingDesign

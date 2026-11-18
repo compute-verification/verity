@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.EndToEnd.Joint.Bound
-public import Proofs.Flock.Soundness.Audit.StratifiedProj
+public import Proofs.Spot.Sampling.StratifiedProj
 
 /-! SPOT's joint stratified bound, per sampling block and pooled over a period:
 `Flock.SecurityProofs.JointStratified : Flock.Guarantees.JointStratified` and

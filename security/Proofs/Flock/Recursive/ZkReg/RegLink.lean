@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -33,7 +33,7 @@ extracted opening and `wo c`, which a one-trial finder outputs (`regFinderZC`, a
 
 namespace FlockSoundness.Discharge.ZkReg
 
-open Game Model Accounting Extract LinkFinder Audit Audit.Partition ZkSession ZkLink StrictCR
+open Game Model Accounting Extract LinkFinder Spot.Sampling Spot.Sampling.Partition ZkSession ZkLink StrictCR
 open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
