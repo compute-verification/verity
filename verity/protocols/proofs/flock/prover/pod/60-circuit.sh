@@ -14,7 +14,8 @@
 #      binary's default, seed coins; a selftest build always seeds)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-export FC_COINS=${FC_COINS:-tree}
+# a selftest seeds unless FC_COINS is given: its statement (`circuitSelftest`) and its forged-seed case read the seed
+[ "${MODE:-selftest}" = selftest ] || export FC_COINS=${FC_COINS:-tree}
 REPO=$(pwd); I=${RESEARCH_RUN_DIR:-/tmp/fc}/inputs; O=${RESEARCH_RUN_DIR:-/tmp/fc}/out; W=${FLOCK_WORK:-/workspace}/flock-circuit; mkdir -p $O $W
 MODE=${MODE:-selftest}; G=${GPU:-1}; Z=; [ "${ZK:-0}" = 1 ] && Z=--zk; TY=; [ "${TYPED:-0}" = 1 ] && TY=--typed
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}

@@ -504,7 +504,7 @@ def test_credit(pass_server):
 
 
 def test_honest_j10r_windows_are_credited(pass_server):
-    """The compiled `Credit.window` credits honest J10-R windows (`window_instance`'s ``j10r``: J10-R units, two row tiles
+    """The compiled `Credit.executionPhase` credits honest J10-R windows (`window_instance`'s ``j10r``: J10-R units, two row tiles
     a call), as the Python verifier does: the code fact `Proofs.Pouw.MonitoringPeriodJ10R.Honest`'s `j10r_meets` takes as `hacc`.
     `test_credit` replays these cases but holds only the two sides to each other. A window whose calls all carry credit
     bit false is credited with nothing, so the test asks only that some of them credit a call."""
