@@ -3,6 +3,11 @@ module
 public import Flock.TemplateQuery
 public import Spot.Bits
 public import Spot.Wires
+meta import Flock.Program
+meta import Flock.TemplateQuery
+meta import Spot.Bits
+meta import Spot.Wires
+meta import Std.Data.HashMap
 
 /-!
 # The wires a Program's root states
@@ -108,7 +113,7 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
   if cuts == 0 || n % cuts != 0 || bitsOf ty % cuts != 0 then throw "edge-rows"
   let len := n / cuts
   let M := node.members
-  let mut out := []
+  let mut out : List Spot.Wires.Wire := []
   for j in [0:cuts] do
     let t0 := j * len
     let (x0, L) ← match a.dims with
@@ -139,8 +144,10 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
     let some (f, fl, fb) := fieldAt wd.ret (l0 % LW) | throw "edge-rows"
     if fl != len || (cnt > 1 && S % (LW : Int) != 0) then throw "edge-rows"
     if fb != bitsOf ty / cuts then throw "edge-width"
-    out := out ++ [{ reader := rt, port, writer := wt, out := "o" ++ toString f, start := rb + lo, radix := [cnt],
-      base := ((wb + l0 / LW : Nat) : Int), step := [S / (LW : Int)], cut0 := j, cuts := 1 }]
+    let wire : Spot.Wires.Wire :=
+      { reader := rt, port := port, writer := wt, out := "o" ++ toString f, start := rb + lo, radix := [cnt],
+        base := ((wb + l0 / LW : Nat) : Int), step := [S / (LW : Int)], cut0 := j, cuts := 1 }
+    out := out ++ [wire]
   return out
 
 /-- **The wires the Program's root states**, under the ranges `rs` and the record's wiring `W` (its templates, cuts
@@ -149,7 +156,7 @@ def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except Stri
   if partsOf P > partsBound P rs W then throw "edge-parts"
   let fu := firstUnits rs
   let nodes := (P.defs[P.root]!).body.nodes
-  let mut out := []
+  let mut out : List Spot.Wires.Wire := []
   for k in [0:nodes.size] do
     if isInputNode P k then continue
     let node := nodes[k]!
@@ -168,20 +175,23 @@ private def v16 : Ty := .value 16
 private def row2 : Ty := .array 2 v16
 
 private def prim (key : String) (ret : Ty) : Defn :=
-  { key, id := key, prim := true, params := #[("x", row2)], ret, gates := 1, paramLeaves := 2, outLeaves := ret.leaves }
+  { key := key, id := key, prim := true, params := #[("x", row2)], ret := ret, gates := 1, paramLeaves := 2,
+    outLeaves := ret.leaves }
 
 private def batch (fn n : Nat) (parts : Array Part) (out : Ty) : Node :=
-  { form := .batch, fn, args := #[{ ty := .array n row2, seq := Flock.Program.Seq.ofParts parts, dims := some (n, 2) }],
-    out := .array n out, n }
+  { form := .batch, fn := fn, out := .array n out, n := n,
+    args := #[{ ty := .array n row2, seq := Flock.Program.Seq.ofParts parts, dims := some (n, 2) }] }
 
 /-- Inputs, then A (2 members) reading them, B (2) reading A's outputs by `bParts`, and A (2) reading B's. -/
 private def toy (aRet : Ty) (bParts : Array Part) : Prog :=
-  let input : Defn := { key := "Input16_v1", id := "Input16_v1", prim := true, params := #[], ret := v16, gates := 1,
-    paramLeaves := 0, outLeaves := 1 }
+  let input : Defn :=
+    { key := "Input16_v1", id := "Input16_v1", prim := true, params := #[], ret := v16, gates := 1, paramLeaves := 0,
+      outLeaves := 1 }
   let nodes := #[{ form := .batch, fn := 0, args := #[], out := .array 4 v16, n := 4 },
     batch 1 2 #[.affine false 0 0 4] aRet, batch 2 2 bParts row2, batch 1 2 #[.affine false 2 0 4] aRet]
-  let root : Defn := { key := "R", id := "R", prim := false, params := #[], ret := row2, gates := 0, paramLeaves := 0,
-    outLeaves := 2, body := { params := #[], retType := row2, nodes, ret := default, offsets := #[] } }
+  let root : Defn :=
+    { key := "R", id := "R", prim := false, params := #[], ret := row2, gates := 0, paramLeaves := 0, outLeaves := 2,
+      body := { params := #[], retType := row2, nodes := nodes, ret := default, offsets := #[] } }
   { defs := #[input, prim "A" aRet, prim "B" row2, root], index := {}, root := 3, programFn := "", sha512 := .empty }
 
 private def toyRanges : Array TRange :=
@@ -189,15 +199,16 @@ private def toyRanges : Array TRange :=
 
 private instance : Inhabited Spot.Wires.Wire :=
   ⟨{ reader := "", port := "", writer := "", out := "", start := 0, radix := [], base := 0, step := [], cut0 := 0,
-    cuts := 1 }⟩
+     cuts := 1 }⟩
 
 private def toyWiring (cuts : List (String × List (String × Nat))) (wires : Nat) : Spot.Wires.Wiring :=
   let t (n : Nat) : Spot.Wires.Template := { units := n, rows := [("x", ⟨2, 2⟩)], outs := [("o0", 2)] }
-  { templates := [("A", t 4), ("B", t 2)], cuts, wires := (List.range wires).map fun _ => default }
+  { templates := [("A", t 4), ("B", t 2)], cuts := cuts, wires := (List.range wires).map fun _ => default }
 
 private def wire (r w o : String) (start : Nat) (radix : List Nat) (base : Int) (step : List Int) (cut0 : Nat) :
     Spot.Wires.Wire :=
-  { reader := r, port := "x", writer := w, out := o, start, radix, base, step, cut0, cuts := 1 }
+  { reader := r, port := "x", writer := w, out := o, start := start, radix := radix, base := base, step := step,
+    cut0 := cut0, cuts := 1 }
 
 private def gives (P : Prog) (W : Spot.Wires.Wiring) (ws : List Spot.Wires.Wire) : Bool :=
   match edgesOf P toyRanges W with
