@@ -26,7 +26,10 @@ reads or that C returns, each in increasing index of C (`ports`).
 
 **The object** (`restrict`): the Program whose root
 - has a parameter for each maximal run of in(S) of one width and one binding, in order, `p<i>` of type `Array<n, Value<w>>`,
-  bound at registration when its gates are `RegisteredInput` gates of C and per run otherwise;
+  bound at registration when its gates are `RegisteredInput` gates of C, supplied when they are `SuppliedInput` gates
+  of C (one parameter of C's, consecutive leaves: named `<name>/p<i>`, its mark C's part of it, `supplied.part`), and
+  per run otherwise. A supplied input one unit expands reaches the block's other units by wire: the block holding the
+  expanding unit takes the part, and a block of readers alone takes the expansion's rows as wires;
 - then has the units' root nodes of C in C's order, each as C has it when the block holds all of its members, and one call
   node a member, in member order, when it holds some (a unit is one member); each argument leaf names the parameter leaf
   of its gate of in(S), or the earliest leaf of the block's nodes whose gate it is, the leaves spelled as the maximal runs
