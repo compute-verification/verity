@@ -4,8 +4,8 @@ u's output row): layer 0's statement (``writers``) opens its output rows at thei
 them, each link row the writer's leaf by path (a tree port). The honest staging's link rows have their writers' output rows'
 `b || c`; a prover that gives layer 1 a made-up input, and one that commits the right value under a salt of its own, stage the
 same circuit with link rows that differ, as do a reader whose read is moved to another unit's leaf (``other_leaf``) and one
-whose link row is a row of other words under its writer's salt (``other_words``); the honest reader's link may name an
-offset in its writer's row the program doesn't give (``wrong_offset``), its tree port a width other than its writer
+whose link row is a row of other words under its writer's salt (``other_words``); the honest reader's link may start at
+a word of its writer's row where no return field starts (``wrong_offset``), its tree port a width other than its writer
 row's or none, and it may be staged as an inner statement with plain leaves (``plain_leaves``). The Lean verifier
 (`verity-verify-proof statement --program --registered`, when a Lean toolchain is present) accepts the writers and the
 honest readers and refuses every cheat, a linked statement without its program, and one without registered reads; a
@@ -14,6 +14,7 @@ staged without. When ``FLOCK_CIRCUIT`` names a build of ``flock-circuit``, the l
 with its own links file. Linking binds a public topology; it does not hide the topology."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import random
@@ -203,15 +204,20 @@ def _edit(src: Path, dst: Path, n: int, port: str, refs: dict) -> None:
 
 
 def _edit_meta(src: Path, dst: Path, edit) -> None:
-    """``src``'s statement with its circuit's META changed by ``edit`` (in place on the parsed object), every other byte
-    unchanged."""
+    """``src``'s statement with its circuit's META changed by ``edit`` (in place on the parsed object) and the circuit's
+    digest restated wherever the statement names it, every other byte unchanged."""
     shutil.copytree(src, dst)
-    head, line, rest = (src / "circuit.txt").read_text().split("\n", 2)
+    old = (src / "circuit.txt").read_bytes()
+    head, line, rest = old.decode().split("\n", 2)
     meta = json.loads(line[5:])
     edit(meta)
     compact = '": ' not in line
-    (dst / "circuit.txt").write_text("\n".join([head, "META " + json.dumps(meta, separators=(",", ":") if compact else None),
-                                                rest]))
+    new = "\n".join([head, "META " + json.dumps(meta, separators=(",", ":") if compact else None), rest]).encode()
+    (dst / "circuit.txt").write_bytes(new)
+    was, now = hashlib.sha256(old).hexdigest().encode(), hashlib.sha256(new).hexdigest().encode()
+    for f in dst.iterdir():
+        if f.is_file() and f.name != "circuit.txt" and was in (b := f.read_bytes()):
+            f.write_bytes(b.replace(was, now))
 
 
 @pytest.fixture(scope="module")
