@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.InferenceOnly.RecordShared
 public import Proofs.Properties.InferenceOnly.RecordUnits
+public import Proofs.Properties.InferenceOnly.RecordDeclared
 
 /-!
 # Shared runs held: the proof
@@ -11,6 +12,11 @@ public import Proofs.Properties.InferenceOnly.RecordUnits
 which `Properties.Record.UnitAt` counts over the ranges before its own, is the one `sharedPlan` counts over the
 ranges that start before its own (`u0_eq`). Two runs `runsOf` admits are one run or share no leaf
 (`runsOf_eqOrApart`): sorted, a run and the one after it are, so every two are (`before_of_sorted`).
+
+A record `read` accepts passed the stage (`finish_shared`). Where `heldFrom` holds a row from unit `u` to `e`, a
+declaration that reads `p`, θ, covers the row at each of those units (`heldFrom_cover`), so, no two declarations
+covering one row, it is what fills the row (`RecordDeclared.fillAt_of_covers`), and the row is held as that read
+(`heldAt_read`).
 -/
 
 @[expose] public section
@@ -251,5 +257,113 @@ theorem runsOf_eqOrApart {P : Prog} {parts : List Part} {R : Runs} (h : runsOf P
       exact pairwise_mem hsym (hsorted.imp fun {x y} => hR x y) _ (hmem q a ba hq ha h0) _
         (hmem q' b bb hq' hb h0') hab
   · cases h
+
+open Spot.RecordText (Row Decl Fill inputsOf fillAt)
+
+/-- **A record `read` accepts passed the `shared-unheld` stage**, over the declarations and the θ it holds. -/
+theorem finish_shared {f : Front} {pin : String → Option String} {c : Case} (h : finish f pin = .ok c) :
+    c.f = f ∧ inputsOf f.ts c.W f.doc = .ok c.x ∧ sharedHeld f.P f.ts c.W c.x.decls c.isTheta = true := by
+  unfold finish at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  split at h
+  · cases h
+  · split at h
+    · split at h
+      · cases h
+      · split at h
+        · cases h
+        · rename_i x hx
+          split at h
+          · cases h
+          · rename_i hs
+            split at h
+            · cases h
+            split at h
+            · cases h
+            · split at h
+              · cases h
+              · cases h
+                refine ⟨rfl, hx, ?_⟩
+                show sharedHeld f.P f.ts _ x.decls (fun p => ((thetaOf f.T f.doc x).lookup p).getD false) = true
+                simpa using hs
+    · cases h
+
+theorem read_shared {j tr : Lean.Json} {c : Case} (h : read j tr = .ok c) :
+    inputsOf c.f.ts c.W c.f.doc = .ok c.x ∧ sharedHeld c.f.P c.f.ts c.W c.x.decls c.isTheta = true := by
+  obtain ⟨f, pin, -, hc⟩ := read_front h
+  obtain ⟨hf, hx, hs⟩ := finish_shared hc
+  rw [hf]
+  exact ⟨hx, hs⟩
+
+/-- **A row filled by a registered read of `p`, θ, is held as that read.** -/
+theorem heldAt_read {c : Case} {r : Row} {p : String} (hf : fillAt c.x.decls r = some (.read p))
+    (ht : c.isTheta p = true) : c.heldAt r = some (.read p) := by
+  simp [Case.heldAt, hf, Spot.RecordText.Inputs.declares, ht]
+
+theorem cover_bounds {w : Circuits.Wire} {tid port : String} {u c : Nat}
+    (hu : (w.indexOf tid u port c).isSome = true) : w.start ≤ u ∧ u < w.start + w.readerUnits := by
+  unfold Circuits.Wire.indexOf at hu
+  split at hu
+  · rename_i hc
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+    exact ⟨hc.1.1.1.2, hc.1.1.2⟩
+  · simp at hu
+
+/-- A wire that covers a row at reader unit `u` covers it at every unit it reads. -/
+theorem cover_at {w : Circuits.Wire} {tid port : String} {u v c : Nat}
+    (hu : (w.indexOf tid u port c).isSome = true) (h1 : w.start ≤ v) (h2 : v < w.start + w.readerUnits) :
+    (w.indexOf tid v port c).isSome = true := by
+  unfold Circuits.Wire.indexOf at hu ⊢
+  split at hu
+  · rename_i hc
+    split
+    · rfl
+    · rename_i hn
+      apply absurd _ hn
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at hc ⊢
+      exact ⟨⟨⟨⟨⟨hc.1.1.1.1.1, hc.1.1.1.1.2⟩, h1⟩, h2⟩, hc.1.2⟩, hc.2⟩
+  · simp at hu
+
+/-- **Where `heldFrom` holds a row, a registered read of `p`, θ, covers it at every unit it visits.** -/
+theorem heldFrom_cover {ds : List Decl} {theta : String → Bool} {tid port : String} {c u0 e : Nat} {p : String}
+    {g : List (Nat × Int)} {gb : Int} : ∀ fuel u, heldFrom ds theta tid port c u0 e p g gb fuel u = some true →
+      ∀ v, u ≤ v → v < e → theta p = true ∧ ∃ d ∈ ds, (d.w.indexOf tid v port c).isSome = true ∧ d.fill = .read p := by
+  intro fuel
+  induction fuel with
+  | zero =>
+    intro u h v huv hve
+    unfold heldFrom at h
+    split at h
+    · omega
+    · cases h
+  | succ fuel ih =>
+    intro u h v huv hve
+    unfold heldFrom at h
+    split at h
+    · omega
+    · simp only at h
+      split at h
+      · rename_i d hd
+        split at h
+        · rename_i q hq
+          split at h
+          · cases h
+          · rename_i hok
+            simp only [Bool.not_eq_true', Bool.and_eq_false_iff, beq_iff_eq, decide_eq_true_eq, not_or,
+              Bool.not_eq_false] at hok
+            split at h
+            · cases h
+            · split at h
+              · have hc := List.find?_some hd
+                have hb := cover_bounds hc
+                by_cases hv : v < min e (d.w.start + d.w.readerUnits)
+                · refine ⟨?_, d, List.mem_of_find?_eq_some hd, cover_at hc (by omega) (by omega), ?_⟩
+                  · simp_all
+                  · rw [hq]
+                    simp_all
+                · exact ih _ h v (by omega) hve
+              · simp_all
+        · cases h
+      · cases h
 
 end InferenceOnlyVerifier.Record.SecurityProofs
