@@ -24,13 +24,13 @@ DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, Io
 
 def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
     """The scheme on a served run's ``exchange``. With ``admit`` in ``ctx``, its admission (`prover.admission.Admitter`,
-    the configuration ``admit`` with ``ctx``'s ``source``, ``submit``, ``abort``, ``take``, ``pull``, ``log`` and
-    ``clock``), installed and returned; without, the id relay beside the workload (`START_ID_RELAY`)."""
+    the configuration ``admit`` with ``ctx``'s ``source``, ``submit``, ``abort``, ``take``, ``pull``, ``log``,
+    ``clock`` and ``schedule``), installed and returned; without, the id relay beside the workload (`START_ID_RELAY`)."""
     if "admit" not in ctx:
         for r in requests(ctx):
             exchange.request(NETWORK_ATTESTER.name, r)
         return None
-    kw = {k: ctx[k] for k in ("source", "submit", "abort", "take", "pull", "log", "clock") if k in ctx}
+    kw = {k: ctx[k] for k in ("source", "submit", "abort", "take", "pull", "log", "clock", "schedule") if k in ctx}
     return Admitter(ctx["admit"], **kw).install(exchange, NETWORK_ATTESTER.name)
 
 
