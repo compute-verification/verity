@@ -12,8 +12,6 @@ import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 
-import numpy as np
-
 from verity.commitments import MerkleTree
 from verity.protocols.resource_accounting.memory.poub.verifier.rota import REKEY_MAX, Origin, Schedule
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, receipts
@@ -284,6 +282,9 @@ class Refresh:
         key = (t, pending, len(store.appends), len(store.pending), len(self.held))
         if self._plan is not None and self._plan[0] == key:
             return self._plan[1]
+        # here, not at the top: the attester host imports this module on a Python with no site-packages
+        import numpy as np
+
         held = np.fromiter(self.held.values(), dtype=np.int64, count=len(self.held))
         registered = held < n
         keep = registered & (t < self.schedule.lifetime)
