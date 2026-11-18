@@ -459,6 +459,7 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_sparse.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstage.py",
     "verity/protocols/proofs/spot/prover/audit/local_challenger.py",
+    "verity/protocols/proofs/spot/prover/served.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1window.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/lowering/h1unit.py",
