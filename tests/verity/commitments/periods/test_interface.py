@@ -536,6 +536,34 @@ def test_a_wired_port_commits_no_tree_and_its_table_is_its_writers_leaves(monkey
         CS.commit(w, rows, salts_of=fixed(w))
 
 
+def _leaves_and_reroots(win: I.Window, c: CS.Committed) -> tuple[int, int]:
+    """The period's hidden leaves (its trees' leaves, `Binding.trees`) and its members' header roots that are no tree of
+    the period (`Committed.frame_entry`'s roots made again from a member's public strings)."""
+    w = win.window
+    roots = {r.hex() for r in c.roots.values()}
+    return (sum(w.trees[t][1] for t in c.roots),
+            sum(r not in roots for k in range(len(w.members)) for r in c.frame_entry(k)["roots"].values()))
+
+
+def test_a_boundary_value_is_committed_once_at_its_writer_and_the_header_roots_left_counted():
+    """`chain`: the wired ``x`` commits no leaf of its readers, so the period's leaves are member 0's ``x``, each member's
+    ``w`` and the one ``o0`` tree; each layer's weight declared a registered value its units read (`Read`) commits no
+    leaf of the period. Each member's header still names a root made again from its public strings for every port
+    that is not its own tree: ``x`` of each reader, ``o0`` of each member of the 4-member template, and ``w`` read from
+    the registered value."""
+    (xs, ws), outs = chain_values()
+    win = I.Window(chain(), RUN, SAMPLING_DESIGN, 2)
+    win.record(GEMM, [xs, ws], outs, {"chain": 0})
+    assert _leaves_and_reroots(win, win.close(salts_of=fixed(win))) == (2 + 4 * 2 + 8, 3 + 4)
+    weights = np.stack([ws[layer * REQUESTS].reshape(256) for layer in range(LAYERS)])
+    theta = I.Registered({"weights": LAYERS * 256},
+                         reads=(I.Read(GID, "w", "weights", 0, (STEPS, LAYERS, REQUESTS), 0, (0, 256, 0)),))
+    win = I.Window(replace(chain(), registered=theta), RUN, SAMPLING_DESIGN, 2,
+                   registered={"weights": Bound("weights", weights)})
+    win.record(GEMM, [xs, None], outs, {"chain": 0})
+    assert _leaves_and_reroots(win, win.close(salts_of=fixed(win))) == (2 + 8, 3 + 4 + 4)
+
+
 def _held_window(d: Path, monkeypatch) -> tuple[CS.Binding, CS.Committed, dict]:
     """`chain_given`, each wired member a shared-row one reading its ``x`` in its writer template's tree (a table of the
     leaves it reads, each unit's ref its leaf's row) and its ``w`` a table of its own: committed and written under ``d`` ->

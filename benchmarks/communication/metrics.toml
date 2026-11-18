@@ -2,7 +2,7 @@
 # enforces it.
 
 # run on the control pod itself (`runs`): it reads Linear with the app's LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET
-# (response.py), which the pod holds and no CPU node does
+# (response.py), which the pod holds and no CPU node does, and which the pod's list of its rows names for them
 [[metric]]
 id = "top/lead-response-p90-minutes"
 title = "Lead response time, slowest tenth"

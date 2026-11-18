@@ -54,7 +54,7 @@ def kind(command: list[str]) -> str:
         return "check shards"
     if "lean_changed.py" in text and "--records" in command:
         return "Lean records"
-    if "quick_tier.py" in text or (SUITES_PY.search(text) and "--quick" in text):
+    if "quick_tier.py" in text or (SUITES_PY.search(text) and ("--quick" in text or "--changed" in text and "--slow" not in text)):
         return "quick suites"
     return "other"
 
