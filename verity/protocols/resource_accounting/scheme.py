@@ -40,7 +40,8 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`), and
   ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`), and
   ``messages``, the message types its workload writes and reads on disk (`verity.channel.Schema`s), which an adapter's
-  codec reads by the scheme's name.
+  codec reads by the scheme's name, and ``framings``, the completion framings it serves by name, each built over the
+  adapter's own framing (``framing(base=..., **settings)``).
 
 What it gets back: `bound` gives `Bound`, `GetsBack`'s numbers; `credited` gives `Placed.credited`, the first-level blocks
 the integrity profile's ``credited`` takes.
@@ -203,6 +204,7 @@ class Scheme:
     attach: Callable[[Any, Any], Any] = _attaches_nothing
     processes: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
     messages: tuple[Any, ...] = ()
+    framings: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):

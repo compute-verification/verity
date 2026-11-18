@@ -16,6 +16,7 @@ from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBu
 from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Port, Scheme, register
 from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover import id_relay, workload
+from verity.protocols.resource_accounting.network.prover.ids_protocol import IdsProtocol
 from verity.protocols.resource_accounting.network.prover.admission import Admitter
 
 DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, IoTieContent, IoTieBucket, IoTieRequest,
@@ -51,6 +52,7 @@ def requests(ctx: Mapping[str, Any]) -> tuple[Any, ...]:
 NETWORK_ATTESTER = register(Scheme(
     name="network-attester",
     messages=workload.MESSAGES,
+    framings={IdsProtocol.name: IdsProtocol},
     protocol="verity/certifier/v0",
     resource="egress",
     blocks=tuple(Block(d.id, output_bits(d)) for d in DEFINITIONS),
