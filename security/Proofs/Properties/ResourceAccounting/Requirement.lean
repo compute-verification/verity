@@ -52,9 +52,6 @@ section Instance
 
 variable (i : Instance)
 
-theorem mem_ran {v : ℕ} : v ∈ i.ran ↔ v < i.width.size ∧ (v ∈ i.registered ∨ (i.step.getD v none).isSome) := by
-  simp [Instance.ran]
-
 theorem ran_nodup : i.ran.Nodup := List.nodup_range.filter _
 
 theorem mem_live {t v : ℕ} : v ∈ i.live t ↔

@@ -943,18 +943,6 @@ theorem EncodeCost : ResourceAccounting.Guarantees.Gates.EncodeCost := by
   intro F k B E e εnum εden q hS hC hE hε hk hp hp4 hn
   exact encodeCost_ge (encodeBound_of hS hC hE hε hk hp hp4) hn q
 
-set_option exponentiation.threshold 1100 in
-/-- A root's squarings at p1024: `⌊log₂((p + 1)/4)⌋ = 1021`. -/
-theorem p1024_squarings : p1024.squarings = 1021 := by
-  have h8 : (2 : ℕ) ^ 1024 = 2 ^ 1021 * 8 := by rw [show (8 : ℕ) = 2 ^ 3 by norm_num, ← pow_add]
-  have hN : 1021 < (2 : ℕ) ^ 1021 := Nat.lt_two_pow_self
-  unfold Field.squarings Field.p
-  rw [Nat.log_eq_iff (by norm_num), show (2 : ℕ) ^ (1021 + 1) = 2 ^ 1021 * 2 from pow_succ 2 1021]
-  simp only [p1024]
-  rw [h8]
-  generalize (2 : ℕ) ^ 1021 = N at hN ⊢
-  omega
-
 /-! ## The premises' floor
 
 `SquaringFloor` and `ChainSum` keep the falsified `EncodeChainHardness`'s floor (`ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66`,
