@@ -5407,6 +5407,13 @@
       "paths": {
         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/README.md": "benchmarks/pouw/served_zk/README.md"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/flock/prover/pod/gemm_hill.py": "benchmarks/proof_throughput/gemm_hill.py",
+        "verity/protocols/proofs/flock/prover/pod/gemm_slowdown.py": "benchmarks/proof_throughput/gemm_slowdown.py",
+        "tests/verity/protocols/proofs/flock/prover/test_gemm_hill.py": "tests/benchmarks/proof_throughput/test_gemm_hill.py"
+      }
     }
   ]
 }
