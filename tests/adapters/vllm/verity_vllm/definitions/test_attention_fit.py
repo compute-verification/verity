@@ -78,9 +78,9 @@ def _check(T: int) -> None:
         s = min(j for j, n in enumerate(nodes) if n.fn.id == dot)
         assert all(n.fn.id == dot for n in nodes[s:]) and not any(n.fn.id == dot for n in nodes[:s])
         got = [e["nodes"] for e in es]
-        assert got[0] == [0, s] and got[-1][1] == len(nodes)
+        assert got[0][0] == 0 and got[-1][1] == len(nodes)
         if len(nodes) - s == BN // 16:
-            assert got[1:] == [[a, a + K_STEPS] for a in range(s, len(nodes), K_STEPS)], path
+            assert got == [[0, s]] + [[a, a + K_STEPS] for a in range(s, len(nodes), K_STEPS)], path
 
 
 def _restricted_equal(T: int) -> None:
@@ -123,9 +123,9 @@ def test_a_full_key_block_is_cut_as_its_softmax_step_and_its_PV_chunks():
 
 @pytest.mark.slow
 def test_the_class_of_records_most_keys_are_thirty_blocks_a_head():
-    """At 1,087 keys (a first block of 127 keys, then five of 192): 29 blocks, each key block its softmax step and its P·V
-    chunks, the short block's last chunk four k-steps, and each restricted block equal to C there; the 200-key case has no
-    short first block cut."""
+    """At 1,087 keys (a first block of 127 keys, then five of 192): 29 blocks, each full key block its softmax step and its
+    P·V chunks, the short block packed to its rows (its softmax step with a first k-step, then three and four), and each
+    restricted block equal to C there; the 200-key case has no short block cut."""
     assert len(blocks(MAX_T)) == 29
     assert sorted(len(es) for es in _key_blocks(MAX_T).values()) == [3, 5, 5, 5, 5, 5]
     _check(MAX_T)
