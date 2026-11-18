@@ -6644,11 +6644,11 @@ def renamed_current(policy: dict, moved: dict[str, str] | Callable[[str], str] |
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
           log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
-          replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
+          replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all", write_unread: bool = False,
           bookkeeping: str | None = None, facts_out: Path | None = None, seals: "Seals | None" = None,
           store: bool | None = None, facts_cache: Path | None = None, facts_reuse: bool = False,
           matched=lambda ok: None, sample_matched=lambda q: None, base: list[dict] | None = None,
-          defer: bool = False, write_unread: bool = False) -> dict:
+          defer: bool = False) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). With ``build``, a random sample of the
     modules the build didn't compile is compiled again from their sources against the seal and compared with the seal's
     copies (`sampled_recompile`; the report's `sampled`), in `background` beside the replay, and the verdict waits for it
@@ -7638,14 +7638,13 @@ def main(argv: list[str]) -> int:
                             ready=lambda q: (built[q].wait(), q in passed)[1] if q in built else None, owner=a.owner,
                             name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache,
                             closure=a.closure, kept_facts=a.facts if a.facts != "named" else "own" if mine else "none",
-                            bookkeeping=due, seals=run_seals,
+                            bookkeeping=due, seals=run_seals, write_unread=a.unread_facts and a.facts_only is None,
                             facts_cache=(a.facts_only or a.facts_cache).resolve()
                             if (a.facts_only or a.facts_cache) and mine else None,
                             facts_reuse=a.facts_cache is not None,
                             matched=lambda ok: (ok and matching.add(pkg), sample_done[pkg].set()),
                             sample_matched=lambda q: (sample_done[q].wait(), q in matching)[1] if q in sample_done else None,
-                            base=bases.get(pkg), defer=bool(moved),
-                            write_unread=a.unread_facts and a.facts_only is None)
+                            base=bases.get(pkg), defer=bool(moved))
         finally:
             if a.facts_from is None and not built[pkg].is_set():
                 seal(pkg)

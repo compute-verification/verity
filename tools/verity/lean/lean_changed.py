@@ -2219,9 +2219,10 @@ def check_argv(ats: list[Path], out: Path, update: bool, moved: Path | None, own
     only by the key a tree computes: `read_cached_facts`); the run is still a records audit, never the kernel replay. With
     ``unread``, `--unread-facts`."""
     return [sys.executable, str(AUDIT_PY), *(["--dev-cache"] if dev else []), "--build", "--no-replay", "--no-runs",
+            *(["--unread-facts"] if unread else []),
             "--facts", "named" if own else "none", *(["--artifacts", str(artifacts)] if artifacts else []),
             *(["--facts-cache", str(facts_cache)] if facts_cache else []), *(["--tree", str(tree)] if tree else []),
-            *(["--update"] if update else []), *(["--unread-facts"] if unread else []),
+            *(["--update"] if update else []),
             *(["--moved", str(moved.resolve())] if moved and update else []), "--out", str(out), *map(str, ats)]
 
 
