@@ -294,7 +294,7 @@ def releasedLogOf (c : LiveCommitment) (log : List String) : V Log := do
     let some bytes := (Flock.unhex root).toOption | throw LOG_MALFORMED
     let some received := nat? (getD r "received_at") | throw LOG_MALFORMED
     let some released := nat? (getD s "released_at") | throw LOG_MALFORMED
-    let n := (counts[k]?.map (·.2)).getD 0
+    let n : Nat := (counts[k]?.map (·.2)).getD 0
     unless ok && int? (getD r "index") == some (n : Int) && int? (getD s "index") == some (n : Int) &&
         jsonStrIs (getD s "label") label && jsonStrIs (getD s "after") root && root.length == 128 do
       throw LOG_MALFORMED
