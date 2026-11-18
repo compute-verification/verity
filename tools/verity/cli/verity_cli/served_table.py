@@ -482,9 +482,23 @@ def _bandwidth_piece(cfg, params, bound):
             "BANDWIDTH_CMD": f'"$PY" {BANDWIDTH_SCRIPT} collect --serve-dir "$1" --window "$2" --out "$3"'}
 
 
+_PEARLPLUS_LIVE = {"gate": "PEARLC_CHALLENGER_GATE", "peer": "PEARLC_CHALLENGER_PEER", "key-sha512": "H1_KEY_SHA512"}
+
+
 def _pearlplus(cfg, params, bound):
-    hooks = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "PEARLC_CHALLENGER_GATE": bound["gate"],
-             "PEARLC_CHALLENGER_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"]}
+    """With no gate bound the gate variables are set empty, since unset served_verdicts.sh takes the lane's gate: Pearl+'s
+    epoch coins are then an in-process challenger's on the workload's machine, its verdict claims none, and the run is a
+    development one."""
+    hooks = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote"}
+    if given := [k for k in _PEARLPLUS_LIVE if k in bound]:
+        if lacking := [k for k in _PEARLPLUS_LIVE if k not in bound]:
+            raise Refused("unbound", f"Pearl+'s live challenger takes {', '.join(_PEARLPLUS_LIVE)} together, and the "
+                                     f"deploy bindings bind {', '.join(given)} without "
+                                     f"{', '.join(f'{CHALLENGER}.pearl-plus.{k}' for k in lacking)}: bind them, or "
+                                     f"none for coins flipped on the workload's machine")
+        hooks |= {v: bound[k] for k, v in _PEARLPLUS_LIVE.items()}
+    else:
+        hooks |= {"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "", "DEVELOPMENT": "1"}
     hooks |= {v: bound[k] for k, v in (("lane", "PEARLC_CHALLENGER_LANE"), ("main-file", "MAIN_FILE")) if k in bound}
     if "class" in params:
         w = cfg["workload"]["params"]
@@ -564,10 +578,12 @@ PARTIES: dict[str, dict[str, Piece]] = {
     "pearl-plus": {
         CHALLENGER: Piece("pearl-plus", CHALLENGER, GATE, "the gate: each epoch's Pearl+ salt from a session of its own"),
         WORKERS: Piece("pearl-plus", WORKERS, SERVED_WINDOW, "Pearl+ on the workload's engine (POUW=pearlplus, "
-                       "PEARLPLUS_TIE=1): each engine step's passes retained under the gate's salts, Pearl+'s window "
+                       "PEARLPLUS_TIE=1): each engine step's passes retained under the gate's salts when its gate is "
+                       "bound, else under an in-process challenger's on the workload's machine in a development run "
+                       "whose Pearl+ verdict claims none, Pearl+'s window "
                        "record tied to the execution phase, then its verdict and the Lean verifier "
                        "(served_pearlplus.sh)", scripts=(PEARLPLUS_SCRIPT,), reaches=CHALLENGER,
-                       binds=("gate", "peer", "key-sha512"), optional=("lane", "main-file"), hooks=_pearlplus),
+                       optional=("gate", "peer", "key-sha512", "lane", "main-file"), hooks=_pearlplus),
         VERIFIER: Piece("pearl-plus", VERIFIER, CHECK, "Pearl+'s row"),
     },
     "inference-only": {
@@ -829,8 +845,9 @@ def remote_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
                                     f"{line.get('composed')!r})") \
         or line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None) \
         or (f"not accepted: {', '.join(held)}" if held else None)
+    on, workload = gate_coins_on(cfg, bindings_of(state)), {p["name"]: p["machine"] for p in cfg["party"]}[WORKERS]
     return {"block": report.get("window"), "components": components, "product": REMOTE, "reason": reason,
-            "registration": None, "coins": coins_of(cfg),
+            "registration": None, "coins": "simulated" if workload in on.values() else coins_of(cfg), "coins_on": on,
             "verdict": "undecided" if verdict == "accept" and held else verdict}
 
 
@@ -883,9 +900,17 @@ def coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, s
             for x in PARTIES.get(c, {}).values() if x.development}
 
 
+def gate_coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
+    """The machine each listed component's challenger coins are flipped on, for the workers' pieces whose gate is
+    optional: the challenger's where its gate is bound, else the workload's."""
+    at = {p["name"]: p["machine"] for p in cfg["party"]}
+    return {c: at[CHALLENGER] if "gate" in x._bindings(bindings) else at[WORKERS] for c in cfg["protocols"]
+            if (x := PARTIES.get(c, {}).get(WORKERS)) and x.reaches == CHALLENGER and "gate" in x.optional}
+
+
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     """The pieces of the parties ``here`` (module docstring): each runtime party's run beside the served window; the
-    served window when the workload's party is here; a gate's side as started by the gate; and the onsite check (`remote_check` under remote) when the verifier is here, its line with each memory attester's `trusted-device`
+    execution phase when the workload's party is here; a gate's side as started by the gate; and the onsite check (`remote_check` under remote) when the verifier is here, its line with each memory attester's `trusted-device`
     premise as `placement` read it from the challenger's outcome here (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
     binding is missing, and raised while a runtime party's `held` does, before anything starts."""
     bindings = bindings_of(state)
