@@ -51,7 +51,7 @@ sample size is the block's `k s_T`, read from the block's sample, not chosen her
   `k s_T` images.
 * `TileStratumAcceptProb`, proved (`Proofs.Pouw.MonitoringPeriodJ10R.Stratum`): the tile coordinate at a uniform permutation misses
   a set `B` of the sampling block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)`,
-  which is how `SamplingDesign.stratified σ k hk`'s coordinate `s_T` misses it (`Spot.Sampling.SamplingDesign.stratified_proj_escape`,
+  which is how `SamplingDesign.stratified σ k hk`'s coordinate `s_T` misses it (`Spot.Sampling.SamplingDesign.stratified_proj_missProb`,
   the per-stratum projection of the joint sample; `tileStratumAcceptProb_eq_proj` joins the two). So the period's tile coin
   is the block's sample restricted to the tile stratum, and the bound below, about the period's game, which samples its
   permutation uniformly, needs no premise to be about that sample.
@@ -162,9 +162,9 @@ noncomputable def tileDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB �
 
 /-- **The tile coordinate at a uniform permutation is the stratum's sample**: it misses a set `B` of the sampling
 block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)` for `n_s` the stratum's size and
-`m_s` its proof blocks in `B`, the factor of `s_T` in `Spot.Sampling.SamplingDesign.stratified_escape`. Proved:
+`m_s` its proof blocks in `B`, the factor of `s_T` in `Spot.Sampling.SamplingDesign.stratified_missProb`. Proved:
 `SecurityProofs.tileStratumAcceptProb` (`Proofs.Pouw.MonitoringPeriodJ10R.Stratum`). Its twin on the sampling design's side is
-`SamplingDesign.stratified_proj_escape`: `SamplingDesign.stratified σ k hk`'s coordinate `s` misses `B` with the same factor,
+`SamplingDesign.stratified_proj_missProb`: `SamplingDesign.stratified σ k hk`'s coordinate `s` misses `B` with the same factor,
 `prCoin (fun ω => Disjoint (ω s).1 B) = C(|stratum σ s| − |B.filter (σ · = s)|, k s) / C(|stratum σ s|, k s)`, and
 `SecurityProofs.tileStratumAcceptProb_eq_proj` equates the two, so the period's tile coin is the block's sample at the tile
 stratum. -/

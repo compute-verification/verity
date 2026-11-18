@@ -62,7 +62,7 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
     the certified tick, on the server's feed directory (`prover.admission.FrontFeed`, `prover.admission.engine`)."""
     s = settings(ctx.get("settings", {}))
     if ctx.get("process") == H.FRONT:
-        return FrontFeed(ctx["feed"]).attach(exchange, NETWORK_ATTESTER.name)
+        return FrontFeed(ctx["feed"], log=s["log"]).attach(exchange, NETWORK_ATTESTER.name)
     if ctx.get("process") == H.ENGINE:
         return engine(s, ctx["feed"]).install(exchange, NETWORK_ATTESTER.name)
     if s["order"] == "arrival":
