@@ -131,7 +131,6 @@ files = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/bench.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/ir_bench.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/register.py",
 ]
 
@@ -401,7 +400,6 @@ paths = [
 ]
 loads = [
     "verity/commitments/crypto",
-    "verity/commitments/periods",
     "verity/protocols/proofs/spot/verifier",
 ]
 

@@ -62,7 +62,6 @@ __all__ = ["analyze", "census", "Device", "JI_ROW", "kept", "main", "OWN_ROW", "
 
 MARGIN = analyze.MARGIN
 SMSPS = 4
-DEVICE = {"sm90": "sm_90", "sm100": "sm_100"}
 HONEST = {"sm90": "IGMMA_S8_N256", "sm100": "UTCIMMA_M128_N256"}
 LD_HONEST = "LDTM_32X32B_X32"
 #: mma.sync probes: (kind, depth). sync_e4m3_k32 is emulated on sm_90 (2 HMMA.16816 + 4 FADD): no kind of its own.
@@ -374,7 +373,7 @@ def tables(dev: Device) -> str:
     fam = dev.family
     honest = HONEST[fam]
     rho, rho_form = dev.rho_T()
-    out = [f"## {DEVICE[fam]}: runs {' '.join(dev.runs)}", ""]
+    out = [f"## {fam}: runs {' '.join(dev.runs)}", ""]
     for r, c in dev.clocks.items():
         if c:
             out.append(f"- {r}: SM clock f_max {c['f_max']} MHz at default clocks, median {c['f_median']} and least "
@@ -505,7 +504,7 @@ def with_notes(d: Path, rows: list[dict[str, str]]) -> list[dict[str, str]]:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("family", choices=tuple(DEVICE))
+    p.add_argument("family", choices=tuple(HONEST))
     p.add_argument("outs", type=Path, nargs="+")
     p.add_argument("--write", type=Path, help="the device directory (machine_model's data/devices/sm_90 or sm_100)")
     a = p.parse_args(argv)
