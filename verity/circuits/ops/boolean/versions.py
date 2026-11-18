@@ -670,45 +670,6 @@ def dry_run(program) -> dict:
                             "list": nb["list"] + [{"id": w, "kind": "wrapper"} for w in wrappers]}}
 
 
-def gate_table(fns, bodies: Mapping[str, FunctionDefinition] | None = None) -> tuple[dict[str, int], list[str]]:
-    """The gate table of the primitives ``fns`` reach (each Definition visited once; no input): each by its descriptor key, its
-    two-input Boolean gates as `census` counts a Definition's Boolean work (an n-input And or Xor n - 1, a Not 1, a constant bit
-    or an input 0) through its Boolean version (`boolean_version`, the primitive itself where it is Boolean); and, sorted, the
-    keys of those it can't price: no Boolean version, or one that reaches a primitive that is no gate. The one table a count
-    of (c, k)-inference blocks reads (`InferenceOnlyCheck.Count`'s ``table``). Given ``bodies`` (a Program's Boolean map), a word
-    primitive is priced by its body there and never by the lookup."""
-    from verity.circuits import census as CE
-    from verity.circuits.program import is_input
-
-    prims: dict[str, Any] = {}
-    seen: set[int] = set()
-    todo = list(fns)
-    while todo:
-        fn = todo.pop()
-        if id(fn) in seen:
-            continue
-        seen.add(id(fn))
-        if isinstance(fn, PrimitiveDefinition):
-            if not is_input(fn):
-                prims[descriptor_id(fn)] = fn
-        else:
-            todo += [nd.fn for nd in fn.body.nodes]
-    table: dict[str, int] = {}
-    unpriced, keys, versions = [], [], []
-    for key, p in sorted(prims.items()):
-        try:
-            versions.append(p if BL.is_boolean(p) else boolean_version(p) if bodies is None else bodies[key])
-            keys.append(key)
-        except LookupError:
-            unpriced.append(key)
-    for key, got in zip(keys, CE.boolean_gates(versions)):
-        if isinstance(got, str):
-            unpriced.append(key)
-        else:
-            table[key] = got
-    return table, sorted(unpriced)
-
-
 def load_program(path: Path):
     from verity.circuits.codec import decode_program, program_digest
     opener = gzip.open if str(path).endswith(".gz") else open
@@ -719,7 +680,7 @@ def load_program(path: Path):
 
 
 __all__ = ["BooleanBody", "NoBooleanVersion", "boolean_table", "block_circuit", "boolean_version", "catalog_loader", "made_on_demand", "bit_offsets", "lift", "lift_body", "sigma_lift", "sigma_check",
-           "boolean_function", "purity", "dry_run", "derived_calls", "gate_table", "load_program", "word_descriptor",
+           "boolean_function", "purity", "dry_run", "derived_calls", "load_program", "word_descriptor",
            "write_word"]
 
 

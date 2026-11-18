@@ -117,17 +117,17 @@ def block_work(cls: tuple[int, int, int], model: str) -> dict[str, int]:
 def policy(doc: Mapping[str, Any], pins: Mapping[str, str]) -> dict[str, Any]:
     """The session policy of the record ``doc`` under θ = ``pins``: its block Definition and slots, `c` and `k`, the
     gate table and each template's gates a unit."""
-    from verity.circuits.ops.boolean.versions import gate_table
+    from verity.circuits import count as K
     # block_counts registers the vLLM adapter's catalog with the Boolean-versions lookup as it loads
     from verity_vllm.program.predict import block_counts as BC
 
-    fn, m, steps = BC.session(doc)
-    table, unpriced = gate_table([fn])
+    program, m, steps = BC.session(doc)
+    fn, table = program.fn, K.table(program)
     memo: dict = {}
     c, missing = BC.gates(fn, table, memo)
-    if unpriced or missing:
+    if missing:
         raise ValueError(f"{doc.get('name')}: a block reaches primitives the gate table doesn't price, so its gates "
-                         f"aren't known: {sorted({*unpriced, *missing})}")
+                         f"aren't known: {sorted(missing)}")
     import inference_only as IO
 
     by_template = {t: BC.gates(BC.resolve(t), table, memo)[0] for t, _ in doc["templates"]}
