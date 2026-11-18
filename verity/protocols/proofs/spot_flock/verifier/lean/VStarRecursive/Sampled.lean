@@ -130,12 +130,78 @@ def formOf {α β : Type} : α ⊕ β → String
 /-- The refusal of evidence of the form `ef` under parameters of the form `pf`. -/
 def MISMATCH (pf ef : String) : String := s!"the evidence's form is {ef}, and the parameters' is {pf}"
 
-/-- That form's check; evidence of another form than the params' rejects (`MISMATCH`). -/
+/-- The name of a two-level accept's coarse level: the replay blocks. -/
+def BOUNDARY_LEVEL : String := "replay"
+
+/-- How many members a sampling design samples. -/
+def designCount : Core.SamplingDesign → Nat
+  | .subset k => k
+  | .stratified ss => ss.foldl (fun n s => n + s.k) 0
+  | .work k _ => k
+  | .bernoulli _ => 0
+
+/-- A two-level accept's coarse level and how many of its members are sampled: the replay blocks, the boundary
+registration's population (`c`) under the replay grain's query, at the first stage's sampling design as the run of
+record derives it (`Select.Rule.samplingDesignOver`, `Draw.derive`). None where that design has no profile. -/
+def boundaryLevel (p : SampledTwo.Params) (c : OneStage.Commitment) : Option (Core.Level × Nat) := do
+  let v := p.boundary.verifier
+  let n ← nat? (getD c.record "population")
+  let rule ← p.rule.over n (Select.strataSizes v.program v.query)
+  let design ← (rule.samplingDesignOver n).toOption
+  let table ← (p.rule.tableOver v.program v.query v.workTable).toOption
+  let draw ← Record.profileSample (← (Draw.derive v.program v.query design table).toOption)
+  let partition := match getD c.record "partition" with | .str s => s | _ => ""
+  pure ({ name := BOUNDARY_LEVEL, query := some partition, size := n, draw := some draw }, designCount draw)
+
+/-- A two-stage accept with its coarse level (`boundaryLevel`) before the interior's, coarse to fine. -/
+def withBoundary (p : SampledTwo.Params) (c : OneStage.Commitment) :
+    Core.Outcome OneStage.Public Core.Integrity → Core.Outcome OneStage.Public Core.Integrity
+  | .accept pub prof =>
+    match boundaryLevel p c with
+    | some (l, k) => .accept pub { prof with levels := #[l] ++ prof.levels, drawn := #[(l.name, k)] ++ prof.drawn }
+    | none => .reject "two-stage: the boundary's sampling design has no profile"
+  | o => o
+
+theorem withBoundary_accept {p : SampledTwo.Params} {c : OneStage.Commitment}
+    {o : Core.Outcome OneStage.Public Core.Integrity} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : withBoundary p c o = .accept pub prof) : ∃ prof', o = .accept pub prof' := by
+  cases o with
+  | accept pub' prof' =>
+    unfold withBoundary at h
+    split at h
+    · cases h; exact ⟨_, rfl⟩
+    · cases h
+  | reject _ => cases h
+  | undecided _ => cases h
+
+/-- The refusal of an accept whose profile lists `got` levels where the parameters' form is `n` levels'. -/
+def LEVELS_PROFILE (n got : Nat) : String :=
+  s!"levels-profile-mismatch: the parameters' form is {n} level(s), and the accept's profile lists {got}"
+
+/-- An accept whose profile's levels list is `n` long; any other refused (`LEVELS_PROFILE`). -/
+def levelsHeld (n : Nat) : Core.Outcome OneStage.Public Core.Integrity → Core.Outcome OneStage.Public Core.Integrity
+  | .accept pub prof => if prof.levels.size = n then .accept pub prof else .reject (LEVELS_PROFILE n prof.levels.size)
+  | o => o
+
+theorem levelsHeld_accept {n : Nat} {o : Core.Outcome OneStage.Public Core.Integrity} {pub : OneStage.Public}
+    {prof : Core.Integrity} (h : levelsHeld n o = .accept pub prof) : o = .accept pub prof ∧ prof.levels.size = n := by
+  cases o with
+  | accept pub' prof' =>
+    unfold levelsHeld at h
+    split at h
+    · cases h; exact ⟨rfl, by assumption⟩
+    · cases h
+  | reject _ => cases h
+  | undecided _ => cases h
+
+/-- That form's check, its accept's profile listing that form's levels (`levelsHeld`): one, or two for the two-stage
+form, whose coarse level is the boundary's (`withBoundary`); evidence of another form than the params' rejects
+(`MISMATCH`). -/
 def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match p, e with
-  | .inl p, .inl e => Caller.gate c.record p.base.verifier (OneStageZk.checkBlobs p c e bs)
-  | .inr p, .inr e => SampledTwo.checkBlobs p c e bs
+  | .inl p, .inl e => levelsHeld 1 (Caller.gate c.record p.base.verifier (OneStageZk.checkBlobs p c e bs))
+  | .inr p, .inr e => levelsHeld 2 (withBoundary p c (SampledTwo.checkBlobs p c e bs))
   | p, e => .reject (MISMATCH (formOf p) (formOf e))
 
 def protocol : Core.BlobProtocol where
@@ -204,5 +270,16 @@ def protocol : Core.BlobProtocol where
 #guard match paramsOfJson (Json.mkObj [("form", RECURSIVE), ("recursive", Json.mkObj [])]) with
   | .error e => e == RECURSIVE_REFUSED
   | .ok _ => false
+#guard match levelsHeld 2 (.accept ⟨#[], #[], 0, none, true⟩
+    { programs := #[], prescribed := #[], linked := false, covered := #[], delta := ⟨1, 2⟩, drawn := #[],
+      levels := #[{ name := "unit", query := none, size := 4, draw := some (.subset 2) }] }) with
+  | .reject r => r == "levels-profile-mismatch: the parameters' form is 2 level(s), and the accept's profile lists 1"
+  | _ => false
+#guard match levelsHeld 1 (.accept ⟨#[], #[], 0, none, true⟩
+    { programs := #[], prescribed := #[], linked := false, covered := #[], delta := ⟨1, 2⟩, drawn := #[],
+      levels := #[{ name := "unit", query := none, size := 4, draw := some (.subset 2) }] }) with
+  | .accept _ _ => true
+  | _ => false
+#guard designCount (.stratified #[⟨"a", 3, 1⟩, ⟨"b", 5, 2⟩]) == 3
 
 end VStar.Recursive.Sampled
