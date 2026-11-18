@@ -1290,7 +1290,7 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
       ∃ samplingDesign d n, Registered p.verifier c.record samplingDesign ∧ Drawn e.draw (getD c.record "population") samplingDesign ∧
         UnitsRead p c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileSample samplingDesign = some d ∧ nat? (getD c.record "population") = some n ∧
-        pub = publicOf p e samplingDesign d n ∧ prof = profileOf p c e d n := by
+        pub = publicOf p e samplingDesign d n ∧ prof = profileOf p c e d n ∧ prof.creditedProblem = none := by
   unfold OneStage.check
   simp only []
   by_cases h1 : Docket.check c.record p.verifier = #[]
@@ -1322,15 +1322,25 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
           · simp only [reduceCtorEq, false_iff]
             rintro ⟨samplingDesign', d', n', -, -, -, -, -, hn', -⟩
             cases hn'
-          · simp only [Core.Outcome.accept.injEq]
-            constructor
-            · rintro ⟨rfl, rfl⟩
-              exact ⟨samplingDesign, d, n, hreg, hdr, hu, hva, hpd, rfl, rfl, rfl⟩
-            · rintro ⟨samplingDesign', d', n', hreg', -, -, -, hd', hn', rfl, rfl⟩
+          · split
+            next r hcp =>
+              simp only [reduceCtorEq, false_iff]
+              rintro ⟨samplingDesign', d', n', hreg', -, -, -, hd', hn', -, rfl, hc⟩
               obtain rfl := uniq samplingDesign' hreg'
               rw [hpd] at hd'; cases hd'
               cases hn'
-              exact ⟨rfl, rfl⟩
+              have hcp' : (profileOf p c e d n).creditedProblem = some r := hcp
+              rw [hcp'] at hc; cases hc
+            next hcp =>
+              simp only [Core.Outcome.accept.injEq]
+              constructor
+              · rintro ⟨rfl, rfl⟩
+                exact ⟨samplingDesign, d, n, hreg, hdr, hu, hva, hpd, rfl, rfl, rfl, hcp⟩
+              · rintro ⟨samplingDesign', d', n', hreg', -, -, -, hd', hn', rfl, rfl, -⟩
+                obtain rfl := uniq samplingDesign' hreg'
+                rw [hpd] at hd'; cases hd'
+                cases hn'
+                exact ⟨rfl, rfl⟩
         · simp only [reduceCtorEq, false_iff]
           rintro ⟨samplingDesign', d', n', -, -, -, hva, -⟩
           have := (verdictOf_accept _).2 hva
@@ -1368,9 +1378,9 @@ theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (sampl
     (hr : Registered p.verifier c.record samplingDesign)
     (hd : Drawn e.draw (getD c.record "population") samplingDesign)
     (hu : UnitsRead p c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileSample samplingDesign = some d)
-    (hn : nat? (getD c.record "population") = some n) :
+    (hn : nat? (getD c.record "population") = some n) (hc : (profileOf p c e d n).creditedProblem = none) :
     OneStage.check p c e = .accept (publicOf p e samplingDesign d n) (profileOf p c e d n) :=
-  (acceptMeans_iff p c e _ _).2 ⟨samplingDesign, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl⟩
+  (acceptMeans_iff p c e _ _).2 ⟨samplingDesign, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl, hc⟩
 
 /-- Naming no window value, the opened roots are the record's own reads less its ports' at their own roots. -/
 theorem openedRoots_nil (rec : Json) (vs : Array (String × Json)) :
@@ -1413,9 +1423,9 @@ theorem acceptMeans_unnamed (p : Params) (c : Commitment) (e : Evidence) (pub : 
       VerdictsAccept e.verdicts ∧
       Record.profileSample samplingDesign = some d ∧ nat? (getD c.record "population") = some n ∧
       pub = publicOf p e samplingDesign d n ∧ prof = profileOf p c e d n := by
-  obtain ⟨samplingDesign, d, n, hr, hd, hu, rest⟩ := acceptMeans p c e pub prof h
+  obtain ⟨samplingDesign, d, n, hr, hd, hu, hv, hp, hn, hpub, hprof, -⟩ := acceptMeans p c e pub prof h
   rw [hw] at hu
-  exact ⟨samplingDesign, d, n, hr, hd, (unitsProved_nil c e).1 hu, rest⟩
+  exact ⟨samplingDesign, d, n, hr, hd, (unitsProved_nil c e).1 hu, hv, hp, hn, hpub, hprof⟩
 
 /-- `acceptMeans`'s honest witness, not yet proved: a one-stage run naming no window value that the check accepts. Its
 theorem names the run: a registration that keeps R1–R8, an honest sample of its sampling design, the record and the
@@ -1450,7 +1460,7 @@ theorem digestIsRecord's : DigestIsRecord's := by
 
 theorem bernoulliBounds : BernoulliBounds := by
   intro p c e pub prof h r l hl hd
-  obtain ⟨samplingDesign, d, n, -, -, -, -, -, -, rfl, rfl⟩ := acceptMeans p c e pub prof h
+  obtain ⟨samplingDesign, d, n, -, -, -, -, -, -, rfl, rfl, -⟩ := acceptMeans p c e pub prof h
   simp only [profileOf, List.mem_toArray, List.mem_singleton] at hl
   subst hl
   simp only [Option.some.injEq] at hd
