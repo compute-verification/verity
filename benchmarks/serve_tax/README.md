@@ -525,8 +525,10 @@ never a flag or a machine's name. The same command runs on a machine that is not
 place under `XDG_CACHE_HOME` unless given, and the commit is research run's `--tree-sha` or `RESEARCH_SOURCE_COMMIT`, with
 no `.git` needed. A tree that none of these names is refused before anything is served.
 
-- `--find-load` serves stock alone over its load's own rungs (`LOADS`), requests in flight up to the profile's prompts.
-  It says where output tokens a second stop rising and prints the file's line for this host's card, the profile's
+- `--find-load` serves stock alone over the profile's ladder where it has one, the users of a sessions profile
+  (`[profiles.coding-agent.ladder]`: users from `start`, each rung `factor` times the last, up to `most`), and over
+  its load's own rungs (`LOADS`) otherwise, requests in flight up to the profile's prompts. It says where output tokens
+  a second stop rising (on a ladder, the fewest users past which the next rung rises by less than its `gain`) and prints the file's line for this host's card, the profile's
   version raised by one and the digest `tests/benchmarks/harness/test_profiles.py` then pins. It edits no file. A
   profile whose load is still `not found yet` refuses `--feature` until that line is in.
 - `--feature SCHEME` names a registered useful-work scheme (`pearl-plus`, `dither`), read from the one table of schemes
