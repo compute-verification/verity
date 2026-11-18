@@ -21,10 +21,18 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 N, W, L = 16, 6, 2
 
 
+def differing(d: dict | None):
+    """A disagreement on the session's record as the fields the Lean's and the books' records differ in."""
+    if not d or d.get("event") != "record":
+        return d
+    lean, books = (d[side].get("record") or {} for side in ("lean", "python"))
+    return {k: (lean.get(k), books.get(k)) for k in sorted(set(lean) | set(books)) if lean.get(k) != books.get(k)}
+
+
 @pytest.mark.parametrize("plan", ["honest", "kv:2"])
 def test_a_refresh_session_is_accepted_and_its_prover_records_the_rekeys(plan):
     (r,), (p,) = H.run(plan, blocks=N, windows=W, samples=64, lifetime=L, refresh=(True,), kv_every=4, kv_pool=8)
-    assert r["accepted"] and r["refresh"] is True, (r["failure"], r.get("disagreement"))
+    assert r["accepted"] and r["refresh"] is True, (r["failure"], differing(r.get("disagreement")))
     rk = p["refresh"]
     assert rk["appends"] >= W - 1 and rk["encoded"] == rk["blocks"] > 0 and rk["encode_ns"] > 0
     if plan == "honest":
